@@ -123,14 +123,15 @@ class Problems:
     # each closed an incident or a finding, then had to remember to clear its task and resolve its Kiosk fault —
     # and to agree with source_gone() on which states end a Problem. The state decides here, once; the callers get
     # back the fault actions to carry out.
-    def close_incident(self, iid: int, state: str, now_iso: str, note: str = "", **fields) -> list[dict]:
+    def close_incident(self, iid: int, state: str, now_iso: str, note: str = "", who: str | None = None, **fields) -> list[dict]:
         """The incident ends in `state` (closed now). When that state ends its Problem (Incident.ANSWERED_OR_CLEARED)
-        its open task closes too — done by a person, or cleared — and its Kiosk fault is to be resolved with `note`."""
+        its open task closes too — done by a person, or cleared — and its Kiosk fault is to be resolved with `note`, by
+        `who` when a person did it (review 29: a Telegram Done showed "resolved … by VESTA Agent" on the card)."""
         self.store.update_incident(iid, state=state, closed_at=now_iso, **fields)
         if state not in Incident.ANSWERED_OR_CLEARED:
             return []
         status = DONE if state == Incident.DONE else CLEARED
-        return [result.resolved(tid, note) for tid in self.clear_source("incident", iid, status=status)]
+        return [result.resolved(tid, note, who) for tid in self.clear_source("incident", iid, status=status)]
 
     def close_finding(self, finding: dict, day: str, note: str = "") -> list[dict]:
         """The night check no longer sees a finding: it closes, its task is cleared, its Kiosk fault resolved."""
@@ -225,9 +226,11 @@ class Problems:
         self.store.reopen_finding(last["id"], f.severity, f.summary, f.detail, day, seen)
         return last["id"]
 
-    def closed_in_kiosk(self, task_id: int) -> int | None:
+    def closed_in_kiosk(self, task_id: int, said: str = "Closed in the VESTA Kiosk") -> int | None:
         """A person closed the task's fault in the VESTA Kiosk: the task closes, and so does the incident
-        it came from (the alert desk stops chasing it). Returns that incident's id, for its messages."""
+        it came from (the alert desk stops chasing it). Returns that incident's id, for its messages. `said`: who and
+        when, as kiosk_words.closed writes it — the desk's check after it says it again (review 29: "Closed in the
+        Kiosk, but …" had lost the person)."""
         task = self.store.task(task_id)
         self.close(task_id, CLOSED_IN_KIOSK)
         kind, sid = self._source(task)
@@ -238,13 +241,13 @@ class Problems:
                 # skipped the check a Done button gets — the door still unlocked, it stayed closed for good. The alert
                 # desk reads it again once (quiet_after_done), when its rule names its states
                 p = json.loads(inc.get("payload") or "{}")
-                p["check_quiet"] = "Closed in the Kiosk"
+                p["check_quiet"] = said
                 self.store.update_incident(sid, state=Incident.DONE, reply="Closed in the VESTA Kiosk",
                                            closed_at=self.store.now(), payload=json.dumps(p))
                 return sid
         return None
 
-    def reopened_in_kiosk(self, task_id: int, by: str = "") -> int | None:
+    def reopened_in_kiosk(self, task_id: int, by: str = "", said: str | None = None) -> int | None:
         """A person reopened a closed task's fault in the VESTA Kiosk: the task is open again, theirs until they close
         it (the night check's "gone" never closes it); its incident, if any, opens again and its facility manager is
         asked at once (the alert desk: payload "kiosk_reopened"). Returns that incident's id.
@@ -257,7 +260,7 @@ class Problems:
             inc = self.store.incident(sid)
             if inc and inc.get("closed_at"):
                 p = json.loads(inc.get("payload") or "{}")
-                p["kiosk_reopened"] = by or "a person"
+                p["kiosk_reopened"] = said or by or "a person"     # kiosk_words.reopened: who and when, said once
                 p.pop("check_quiet", None)
                 self.store.update_incident(sid, closed_at=None, reply=None, state=Incident.ASKED,
                                            asked_at=self.store.now(), assignee="fm", payload=json.dumps(p))

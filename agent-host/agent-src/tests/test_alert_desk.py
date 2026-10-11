@@ -253,13 +253,19 @@ def test_a_lock_gone_from_unlocked_to_jammed_is_never_cleared(store):
         assert not _tick(store, villa, minutes).get("cleared")
 
 
-def test_an_offline_device_is_as_fine_to_the_desk_as_to_its_rule(store):
-    # architecture review 23: one lock of three offline for days kept the incident open for good — the rule itself, not
-    # listing "unavailable", treats a dead lock as fine; one that lists it does not
+def test_a_device_that_does_not_answer_keeps_the_alert_open_and_says_so_once(store):
+    # owner's choice, architecture review 29 (reversing review 23's "no stricter than the rule"): the same offline lock
+    # was "Cleared: … is unavailable" here and "VESTA cannot check this one" after a Done — never "over" without proof
     timeline = {"lock.front_door": [(T0 - timedelta(minutes=10), "unlocked"), (T0 + timedelta(minutes=90), "locked")],
                 "lock.back_door": [(T0 - timedelta(days=2), "unavailable")]}
     iid = _left_unlocked(store, entities=LOCKS)
-    assert _tick(store, Villa(**timeline), 101)["cleared"] == [iid]
+    out = _tick(store, Villa(**timeline), 101)
+    assert not out["cleared"] and store.incident(iid)["closed_at"] is None
+    (said,) = [s for s in out["send"] if s["to"] == "fm"]
+    assert said["status"] == "back_door does not answer: VESTA cannot tell if it is right. Still open."
+    assert not [s for s in _tick(store, Villa(**timeline), 106)["send"] if "does not answer" in s.get("status", "")]  # once
+    timeline["lock.back_door"].append((T0 + timedelta(minutes=95), "locked"))                    # it answers, and is right
+    assert _tick(store, Villa(**timeline), 120)["cleared"] == [iid]
     store2 = Store(store.path + "-2")
     desk.intake(store2, event(entities=LOCKS, mode="state", bad_states=BAD + ["unavailable"]), T0, mode_reader=lambda: "x")
     desk.intake(store2, event(phase="abandoned", entities=LOCKS, mode="state", bad_states=BAD + ["unavailable"],

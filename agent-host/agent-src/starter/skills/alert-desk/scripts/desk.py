@@ -447,9 +447,24 @@ def seen_again(store: Store, now: datetime, client, clear_minutes: float, out: d
             now_states = client.states(ents)
         except Exception:  # noqa: BLE001 — Home Assistant not readable now: the next tick
             return closed
-        # ⚠️ NO STRICTER THAN THE RULE (architecture review 23): a rule that does not list "unavailable" treats a dead lock
-        # as fine — one lock of three offline for days kept the incident open for good
-        if not all(out_of(now_states.get(e) or {}, bad, now, clear_minutes, offline_ok="unavailable" not in bad) for e in ents):
+        # ⚠️ A DEVICE THAT DOES NOT ANSWER IS NOT "OVER" (owner's choice, architecture review 29 — reversing review 23's
+        # "no stricter than the rule"): the same offline lock was "Cleared: door is unavailable" here and "VESTA cannot
+        # check this one" after a Done. It stays open, said once, until the device answers and is right.
+        p = json.loads(inc.get("payload") or "{}")
+        mute = [e for e in ents if (now_states.get(e) or {}).get("state") in (None, "unavailable", "unknown")
+                and (now_states.get(e) or {}).get("state") not in bad]
+        if mute:
+            if not p.get("silent_told"):
+                names = ", ".join(((now_states.get(e) or {}).get("attributes") or {}).get("friendly_name") or e for e in mute)
+                store.update_incident(inc["id"], payload=json.dumps({**p, "silent_told": True}))
+                for role in recipients(inc["severity"]):
+                    out["send"].append(R.message(role, **about(inc, f"{names} {'does' if len(mute) == 1 else 'do'} not "
+                                                                    "answer: VESTA cannot tell if it is right. Still open."),
+                                                 incident=inc["id"], stage="update"))
+            continue
+        if p.get("silent_told"):
+            store.update_incident(inc["id"], payload=json.dumps({k: v for k, v in p.items() if k != "silent_told"}))
+        if not all(out_of(now_states.get(e) or {}, bad, now, clear_minutes) for e in ents):
             continue
         said = "; ".join(f"{(now_states[e].get('attributes') or {}).get('friendly_name') or e} is {now_states[e]['state']}"
                          for e in ents)
@@ -539,7 +554,7 @@ def reply(store: Store, iid: int, text: str, sender_role: str, now: datetime, pa
         out["send"].append(here("Already closed", "closed")); return out
     if t.startswith("done"):
         out["actions"] += Problems(store).close_incident(iid, Incident.DONE, now.isoformat(),
-                                                         f"Done by {who} on Telegram.", reply=text)
+                                                         f"Done by {who} on Telegram.", who=name, reply=text)
         # ⚠️ A PROMISE THE CODE KEEPS (architecture review 23): "will check it stays quiet" was written since 0.9.0 and
         # nothing ever checked — a Done on a door still unlocked closed it for good. The tick reads it again (quiet_after_done)
         # read again whatever the rule: still bad, it reopens; not knowable, the people asked are told (still_there)
@@ -584,10 +599,13 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
         if p.get("kiosk_reopened"):
             # ⚠️ A FAULT A PERSON REOPENED IN THE KIOSK (architecture review 25): the facility manager is asked at once,
             # its buttons back — the ladder runs from now
-            by = p.pop("kiosk_reopened")
+            said = p.pop("kiosk_reopened")
             store.update_incident(inc["id"], payload=json.dumps(p))
-            out["send"].append(R.message("fm", **about(inc, f"Reopened in the Kiosk by {by} on {{time}}: please look again."),
-                                         stage="reminder", incident=inc["id"], buttons=True))
+            # who and when the Kiosk recorded, in the one wording (vesta_shared.kiosk_words; review 29) — an older
+            # record held only the name
+            said = said if said.startswith("Reopened in the VESTA Kiosk") else \
+                f"Reopened in the VESTA Kiosk by {said} on {{time}}. Please look again."
+            out["send"].append(R.message("fm", **about(inc, said), stage="reopened", incident=inc["id"], buttons=True))
             continue
         if p.get("unreached") and inc["state"] in (Incident.ASKED, Incident.REASKED):
             # ⚠️ NOBODY OF THE FACILITY MANAGER'S RECEIVED IT (architecture review 25): Telegram refused every chat of

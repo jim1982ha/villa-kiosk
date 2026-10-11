@@ -210,3 +210,72 @@ def test_an_old_alert_whose_device_is_gone_after_done_still_says_it_cannot_check
     out = desk.tick(store, T0 + timedelta(minutes=20), client=Villa())
     (fm,) = [s for s in out["send"] if s["to"] == "fm"]
     assert fm["status"].endswith("Note: VESTA cannot check this one; lock.door does not answer.")
+
+
+# ---------------------------------------------------------------------- review 29
+def test_a_rename_step_from_the_kiosk_is_a_persons_title_and_an_old_ticket_is_presumed_theirs():
+    from vesta_agent.kiosk import person_titled
+    k, doc = kiosk_holding(
+        {"id": "va-1", "title": "Pump at 2 %", "status": "open", "updates": [
+            {"at": "2026-10-09T01:00:00Z", "status": "open", "photoIds": []}]},                  # before 0.12.151
+        {"id": "va-2", "title": "Pump — part ordered", "status": "open", "updates": [
+            {"at": "2026-10-09T01:00:00Z", "status": "open", "by": "VESTA Agent", "title": "Pump at 9 %", "photoIds": []},
+            {"at": "2026-10-10T01:00:00Z", "status": "open", "by": "Facility manager", "kind": "retitled",
+             "title": "Pump — part ordered", "was": "Pump at 9 %", "photoIds": []}]})
+    assert person_titled(ticket(doc, "va-1")) and person_titled(ticket(doc, "va-2"))
+    assert run(k.update_ticket("va-1", "Pump at 0 %")) and run(k.update_ticket("va-2", "Pump at 0 %"))
+    assert ticket(doc, "va-1")["title"] == "Pump at 2 %" and ticket(doc, "va-2")["title"] == "Pump — part ordered"
+    assert ticket(doc, "va-1")["updates"][-1]["kind"] == "reading"                  # its reading under the title, never over
+
+
+def test_who_resolved_and_who_reopened_are_the_cards(tmp_path):
+    k, doc = kiosk_holding({"id": "va-1", "title": "Door", "status": "resolved", "resolvedAt": "2026-10-10T09:10:00Z",
+                            "updates": [{"at": "2026-10-10T09:10:00Z", "status": "resolved", "by": "Facility manager",
+                                         "who": "Wayan", "photoIds": []}]})
+    assert run(k.held_tickets())["va-1"]["by"] == "Wayan"                          # the name typed, as the card says it
+    k2, doc2 = kiosk_holding({"id": "va-2", "title": "Door", "status": "open", "updates": []})
+    assert run(k2.resolve_ticket("va-2", note="Done by JM on Telegram.", who="JM"))
+    assert ticket(doc2, "va-2")["updates"][-1]["who"] == "JM"                       # never only "by VESTA Agent"
+
+
+def test_a_reopen_of_a_fault_closed_days_ago_is_heard(tmp_path):
+    from datetime import datetime, timedelta, timezone
+    k, told = FakeKiosk(), []
+    v, st, tid = _closed_night_fault(tmp_path, k, told)
+    with st.db:                                                                     # closed five days ago
+        st.db.execute("UPDATE tasks SET done_at=? WHERE id=?", ((datetime.now(timezone.utc) - timedelta(days=5)).isoformat(), tid))
+    k.closed_meta["t-pump"] = {"reopened_by": "Owner", "reopened_at": "2099-01-01T00:00:00.000Z"}
+    run(v.tickets.repair())
+    assert st.task(tid)["status"] == "open" and told and told[0].startswith("Reopened in the VESTA Kiosk by Owner on 01/01/2099 00:00: ")
+
+
+def test_a_person_who_renames_a_fault_to_the_agents_own_words_keeps_it():
+    # only the rename step tells it apart: the title equals the agent's, yet the person chose it
+    from vesta_agent.kiosk import person_titled
+    t = {"id": "va-3", "title": "Pump at 9 %", "status": "open", "updates": [
+        {"at": "1", "status": "open", "by": "VESTA Agent", "title": "Pump at 9 %", "photoIds": []},
+        {"at": "2", "status": "open", "by": "Owner", "kind": "retitled", "title": "Pump at 9 %", "was": "Pump at 9 %",
+         "photoIds": []}]}
+    assert person_titled(t)
+
+
+def test_an_old_closed_fault_picked_up_again_is_left_to_the_person(tmp_path):
+    # the retry of a close that did not land is for two days; past them, a fault a person moved is theirs
+    from datetime import datetime, timedelta, timezone
+    k, told = FakeKiosk(), []
+    v, st, tid = _closed_night_fault(tmp_path, k, told)
+    with st.db:
+        st.db.execute("UPDATE tasks SET done_at=? WHERE id=?", ((datetime.now(timezone.utc) - timedelta(days=5)).isoformat(), tid))
+    run(v.tickets.repair())
+    assert "t-pump" not in k.resolved and st.task(tid)["status"] != "open" and told == []
+
+
+def test_a_done_on_telegram_resolves_the_fault_by_the_person(tmp_path):
+    store = Store(str(tmp_path / "s.sqlite"))
+    ev = {"blueprint": "critical_condition", "rule_id": "automation.d", "incident_id": "automation.d-1", "phase": "opened",
+          "severity": "critical", "label": "Door", "entities": ["lock.d"], "summary": "Door unlocked", "mode": "state",
+          "bad_states": ["unlocked"]}
+    iid = desk.intake(store, ev, T0, mode_reader=lambda: "x")["incident_id"]
+    out = desk.reply(store, iid, "Done", "fm", T0 + timedelta(minutes=5), name="Fabien")
+    (res,) = [a for a in out["actions"] if a["action"] == "ticket.resolve"]
+    assert res["who"] == "Fabien"

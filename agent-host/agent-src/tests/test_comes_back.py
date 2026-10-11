@@ -168,7 +168,7 @@ def test_a_door_closed_in_the_kiosk_is_read_again_as_a_done_is(tmp_path):
     out = desk.tick(store, datetime.now(timezone.utc) + timedelta(minutes=11), client=Villa())
     assert out["not_quiet"] == [iid]
     (fm,) = [s for s in out["send"] if s["to"] == "fm"]
-    assert fm["status"] == "Closed in the Kiosk, but Door still reads unlocked: still open. VESTA keeps watching it."
+    assert fm["status"] == "Closed in the VESTA Kiosk, but Door still reads unlocked: still open. VESTA keeps watching it."
 
 
 def test_an_alert_back_again_says_home_assistants_latest_words_and_brings_its_picture(tmp_path):
@@ -200,4 +200,4 @@ def test_a_returning_fault_the_kiosk_never_had_is_made_with_its_check_note(tmp_p
     tid, _ = pb.open_task("finding", fid, "PM-ENERGY-CHANGE", "sensor.onsen_energy", "Onsen pump low",
                           "Look at the pump's strainer.")
     assert run(v.tickets.reopen({"task_id": tid, "title": "Onsen pump low (again: 2 times in 7 days)", "note": "Back again."}))
-    assert k.notes[-1] == "Check: Look at the pump's strainer."
+    assert k.notes[-1] == "What to do: Look at the pump's strainer."

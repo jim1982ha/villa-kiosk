@@ -39,7 +39,7 @@ class FakeKiosk:
         self.titles[f"t{len(self.tickets)}"] = self.agent_titles[f"t{len(self.tickets)}"] = title
         return f"t{len(self.tickets)}"
 
-    async def resolve_ticket(self, tid, note=None) -> bool:
+    async def resolve_ticket(self, tid, note=None, who=None) -> bool:
         self.resolved.append(tid)
         return True
 
@@ -54,7 +54,8 @@ class FakeKiosk:
         return True
 
     def _person_titled(self, tid) -> bool:
-        return tid in self.agent_titles and self.titles.get(tid) != self.agent_titles[tid]
+        # as Kiosk.person_titled: a ticket on which the agent never said its title is the person's (review 29)
+        return tid not in self.agent_titles or self.titles.get(tid) != self.agent_titles[tid]
 
     async def held_tickets(self) -> dict[str, dict]:
         return {t: {"status": s, "title": self.titles.get(t, ""), "agent_title": self.agent_titles.get(t),

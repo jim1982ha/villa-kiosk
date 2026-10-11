@@ -46,7 +46,7 @@ def finding_name(finding: dict) -> str | None:
 
 #: What a notice about an incident is (its history line, vesta_agent/notice.py): the first one, a reminder to the same
 #: people, an escalation to others, any other update (an answer, a closing).
-STAGES = ("new", "reminder", "escalated", "update", "back", "still", "closed")
+STAGES = ("new", "reminder", "escalated", "update", "back", "still", "reopened", "closed")
 
 
 #: What a bottom line says beyond its stage (vesta_agent/layout.py draws it): a person asked for help; a closure VESTA
@@ -90,8 +90,9 @@ def message(to: str, text: str, *, status: str | None = None, incident: int | No
 
 
 def fault_note(check: str | None) -> str | None:
-    """A Kiosk fault's note: what to check on site, labelled ("Check: …"), or None."""
-    return f"Check: {check}" if check else None
+    """A Kiosk fault's note: what to do on site, labelled as the alert says it on Telegram ("What to do: …"), or None
+    (review 29: "Check: Check the device named…" — the label repeated the check's own first word)."""
+    return f"What to do: {check}" if check else None
 
 
 def fault(summary: str, *, task_id: int | None = None, check: str | None = None, entity_id: str | None = None) -> dict:
@@ -105,9 +106,9 @@ def reopened(task_id: int, title: str, note: str = "") -> dict:
     return {"action": "ticket.reopen", "task_id": int(task_id), "title": title[:200], "note": note[:500]}
 
 
-def resolved(task_id: int, note: str | None = None) -> dict:
-    """A task's fault resolved in the VESTA Kiosk."""
-    return {"action": "ticket.resolve", "task_id": task_id, "note": note or None}
+def resolved(task_id: int, note: str | None = None, who: str | None = None) -> dict:
+    """A task's fault resolved in the VESTA Kiosk — by `who` when a person did it (their name on the card)."""
+    return {"action": "ticket.resolve", "task_id": task_id, "note": note or None, **({"who": who} if who else {})}
 
 
 def snapshot(entity_id: str, incident: int) -> dict:

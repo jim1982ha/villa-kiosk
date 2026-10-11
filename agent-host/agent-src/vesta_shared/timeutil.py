@@ -65,6 +65,12 @@ def day_label(d: date, weekday: bool = False, long: bool = False, year: bool = F
     return f"{out} {d.year}" if year else out
 
 
+def moment_label(d: datetime, zone: "str | ZoneInfo") -> str:
+    """A moment as every notice writes it: "11/10/2026 07:05", in the villa's time (vesta_agent/notice.when)."""
+    t = d.astimezone(ZoneInfo(zone) if isinstance(zone, str) else zone)
+    return f"{day_label(t.date(), numeric=True)} {t:%H:%M}"
+
+
 def day_time_label(d: datetime, weekday: bool = False, year: bool = False) -> str:
     """A day and a time: "5 Oct, 09:30" (weekday: "Mon 5 Oct, 09:30")."""
     return f"{day_label(d, weekday=weekday, year=year)}, {d:%H:%M}"

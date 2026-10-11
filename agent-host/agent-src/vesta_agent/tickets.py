@@ -10,7 +10,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Awaitable, Callable
 
-from vesta_shared import result
+from vesta_shared import kiosk_words, result
 from vesta_shared.problems import CLEARED, Problems
 
 from .outcome_words import ticket_title
@@ -19,29 +19,14 @@ log = logging.getLogger("vesta.outcome")
 
 
 def kiosk_close_note(ticket: dict, zone: str) -> str:
-    """The note a fault closed in the VESTA Kiosk leaves on its alert's messages: "Closed in the VESTA Kiosk by Facility
-    manager on 10/10/2026 17:13" — the profile and the moment the Kiosk recorded; the moment noticed without them."""
-    from datetime import datetime
-    from .notice import when
-    by = f" by {ticket['by']}" if ticket.get("by") else ""
-    try:
-        at = when(datetime.fromisoformat(str(ticket.get("resolved_at")).replace("Z", "+00:00")), zone)
-    except ValueError:
-        at = "{time}"
-    return f"Closed in the VESTA Kiosk{by} on {at}."
+    """The note a fault closed in the VESTA Kiosk leaves on its alert's messages: "Closed in the VESTA Kiosk by Wayan on
+    10/10/2026 17:13." — who (the name typed, else the profile) and when the Kiosk recorded (vesta_shared.kiosk_words)."""
+    return kiosk_words.closed(ticket.get("by") or "", ticket.get("resolved_at"), zone) + "."
 
 
-def kiosk_reopen_note(ticket: dict, summary: str, zone: str) -> str:
-    """What the facility manager reads when a person reopened a night check's fault in the VESTA Kiosk: "Reopened in the
-    VESTA Kiosk by Owner on 10/10/2026 17:13: Pool pump weak. Please look again." """
-    from datetime import datetime
-    from .notice import when
-    by = f" by {ticket['reopened_by']}" if ticket.get("reopened_by") else ""
-    try:
-        at = f" on {when(datetime.fromisoformat(str(ticket.get('reopened_at')).replace('Z', '+00:00')), zone)}"
-    except ValueError:
-        at = ""
-    return f"Reopened in the VESTA Kiosk{by}{at}: {summary}. Please look again."
+def kiosk_reopen_note(ticket: dict, summary: str | None, zone: str) -> str:
+    """What the facility manager reads when a person reopened a fault in the VESTA Kiosk (vesta_shared.kiosk_words)."""
+    return kiosk_words.reopened(ticket.get("reopened_by") or "", ticket.get("reopened_at"), zone, summary)
 
 
 class Tickets:
@@ -90,7 +75,7 @@ class Tickets:
         """ticket.resolve {task_id | ticket_id, note?}: the Kiosk's ticket resolved."""
         task = self._store().task(int(a.get("task_id") or 0)) if a.get("task_id") else None
         uid = (task or {}).get("todo_uid") or a.get("ticket_id")
-        if uid and self.kiosk.enabled and await self.kiosk.resolve_ticket(uid, note=a.get("note")):
+        if uid and self.kiosk.enabled and await self.kiosk.resolve_ticket(uid, note=a.get("note"), **({"who": a["who"]} if a.get("who") else {})):
             log.info("Kiosk ticket %s resolved", uid)
             return True
         return False
@@ -122,7 +107,8 @@ class Tickets:
                 await self.reopen({"task_id": t["id"], "title": t.get("summary") or ""})
                 continue
             if uid and states.get(uid) == "resolved":
-                iid = problems.closed_in_kiosk(t["id"])
+                iid = problems.closed_in_kiosk(t["id"], kiosk_words.closed(held[uid].get("by") or "",
+                                                                           held[uid].get("resolved_at"), self.timezone))
                 if iid:
                     # who and when, as a button's footer says it (owner, 2026-10-10): the Kiosk's own record of the close
                     await self.settle_alert(iid, kiosk_close_note(held.get(uid) or {}, self.timezone))
@@ -141,15 +127,20 @@ class Tickets:
         # land was taken for a reopening, and its facility manager told to look again at a job just taken) — its task
         # opens again and the facility manager is asked: an alert's by the desk (Problems.reopened_in_kiosk), a night
         # check's fault here (review 26: it told nobody)
+        # ⚠️ A REOPENING IS HEARD WHATEVER THE FAULT'S AGE (architecture review 29): the two days were for retrying a
+        # close, and silenced "Reopen fault" on a fault closed three days before — open in the Cockpit for good, nobody told
         recent = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
         for t in store.tasks(None):
             uid = t.get("todo_uid")
-            if t["status"] != "open" and (t.get("done_at") or "") >= recent and uid and states.get(uid) not in (None, "resolved"):
-                if _before(t.get("done_at"), held[uid].get("reopened_at")):
-                    if not problems.reopened_in_kiosk(t["id"], held[uid].get("reopened_by") or "") and self.tell_fm:
-                        await self.tell_fm(kiosk_reopen_note(held[uid], t.get("summary") or held[uid]["title"], self.timezone))
-                    log.info("Kiosk ticket %s reopened by a person: its task is open again", uid)
-                elif await self.kiosk.resolve_ticket(uid, note="Closed: the problem is over."):
+            if t["status"] == "open" or not uid or states.get(uid) in (None, "resolved"):
+                continue
+            if _before(t.get("done_at"), held[uid].get("reopened_at")):
+                if not problems.reopened_in_kiosk(t["id"], held[uid].get("reopened_by") or "",
+                                                  kiosk_reopen_note(held[uid], None, self.timezone)) and self.tell_fm:
+                    await self.tell_fm(kiosk_reopen_note(held[uid], t.get("summary") or held[uid]["title"], self.timezone))
+                log.info("Kiosk ticket %s reopened by a person: its task is open again", uid)
+            elif (t.get("done_at") or "") >= recent:
+                if await self.kiosk.resolve_ticket(uid, note="Closed: the problem is over."):
                     states[uid] = "resolved"
                     cleared += 1
         if closed or cleared:

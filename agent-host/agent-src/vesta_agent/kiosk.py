@@ -45,11 +45,19 @@ REOPENED, RETITLED, READING = "reopened", "retitled", "reading"
 OLD_TITLE_NOTE = "Now: "            # this agent's title step before the kinds (0.12.150 and earlier), still read
 
 
+#: Who the Kiosk names on a step the agent wrote (its proxy stamps it); a step written here, not yet through it, has none.
+AGENT_BY = "VESTA Agent"
+
+
+def _mine(u: dict) -> bool:
+    return (u.get("by") or AGENT_BY) == AGENT_BY
+
+
 def agent_title(t: dict) -> str | None:
-    """The title the agent last gave ticket `t` — from its steps (each says the title it gave), or an old "Now: …" note;
-    None when its steps never said (a ticket written before 0.12.151)."""
+    """The title the agent last gave ticket `t` — from its own steps (each says the title it gave), or an old "Now: …"
+    note; None when its steps never said (a ticket written before 0.12.151)."""
     for u in reversed([u for u in t.get("updates") or [] if isinstance(u, dict)]):
-        if isinstance(u.get("title"), str) and u["title"]:
+        if isinstance(u.get("title"), str) and u["title"] and _mine(u):
             return u["title"]
         if not u.get("kind") and str(u.get("note") or "").startswith(OLD_TITLE_NOTE):
             return str(u["note"])[len(OLD_TITLE_NOTE):][:200]
@@ -57,10 +65,17 @@ def agent_title(t: dict) -> str | None:
 
 
 def person_titled(t: dict) -> bool:
-    """A person changed the ticket's title in the Kiosk: it is no longer the one the agent last gave it.
-    ⚠️ THEIRS STAYS (architecture review 26): every night the agent wrote its own back over "Front door — part ordered"."""
+    """A person gave the ticket its title: the Kiosk's rename step says so (2.496.324), else it is no longer the one the
+    agent last gave it; a ticket on which the agent never said its title is presumed the person's.
+    ⚠️ THEIRS STAYS (architecture review 26): every night the agent wrote its own back over "Front door — part ordered".
+    ⚠️ READ, NOT GUESSED (review 29): a person's rename left no step — an old ticket's title was overwritten once."""
+    for u in reversed([u for u in t.get("updates") or [] if isinstance(u, dict)]):
+        if u.get("kind") == RETITLED and not _mine(u):
+            return True                                            # the last rename was a person's
+        if isinstance(u.get("title"), str) and u["title"] and _mine(u):
+            break                                                  # the agent titled it after any person did
     mine = agent_title(t)
-    return mine is not None and str(t.get("title") or "") != mine
+    return mine is None or str(t.get("title") or "") != mine
 
 
 class Kiosk:
@@ -178,10 +193,11 @@ class Kiosk:
             return str(ups[-1].get(key) or "") if ups else ""
         def reopened(t: dict) -> dict:
             ups = [u for u in t.get("updates") or [] if isinstance(u, dict) and u.get("kind") == REOPENED]
-            return {"reopened_at": str(ups[-1].get("at") or ""), "reopened_by": str(ups[-1].get("by") or "")} if ups else {}
+            return {"reopened_at": str(ups[-1].get("at") or ""),
+                    "reopened_by": str(ups[-1].get("who") or ups[-1].get("by") or "")} if ups else {}
         return {t["id"]: {"status": str(t.get("status") or ""), "title": str(t.get("title") or ""),
                           "agent_title": agent_title(t), "resolved_at": str(t.get("resolvedAt") or ""),
-                          "by": last(t, "by"), **reopened(t)}
+                          "by": last(t, "who") or last(t, "by"), **reopened(t)}     # who did it, as the card says it
                 for t in data.get("tickets") or [] if isinstance(t, dict) and isinstance(t.get("id"), str)}
 
     async def update_ticket(self, tid: str, title: str) -> bool:
@@ -226,7 +242,7 @@ class Kiosk:
             return False
         return await self._edit(change)
 
-    async def resolve_ticket(self, tid: str, note: str | None = None) -> bool:
+    async def resolve_ticket(self, tid: str, note: str | None = None, who: str | None = None) -> bool:
         """Mark one of the agent's tickets resolved (the FM answered Done). False when it is gone or closed."""
         def change(data: dict) -> bool:
             tickets = list(data.get("tickets") or [])
@@ -238,6 +254,8 @@ class Kiosk:
                     upd = {"at": now, "status": "resolved", "photoIds": []}
                     if note:
                         upd["note"] = note[:500]
+                    if who:
+                        upd["who"] = who[:80]       # the person, on the card (faultWhen: who, else by)
                     tickets[i] = dict(t, status="resolved", resolvedAt=now,
                                       updates=list(t.get("updates") or []) + [upd])
                     data["tickets"] = tickets

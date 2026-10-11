@@ -226,4 +226,4 @@ def test_the_result_builder_refuses_buttons_without_their_incident():
     with pytest.raises(ValueError):
         R.message("fm", "x", buttons=True)
     assert R.fault("Door open", task_id=3, check="the lock", entity_id="a,b") == {
-        "action": "ticket", "summary": "Door open", "task_id": 3, "note": "Check: the lock", "entity_id": None}
+        "action": "ticket", "summary": "Door open", "task_id": 3, "note": "What to do: the lock", "entity_id": None}

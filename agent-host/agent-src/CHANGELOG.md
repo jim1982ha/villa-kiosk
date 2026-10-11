@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.147 (11 October 2026)
+
+- Review 29: tickets.repair hears a Kiosk "reopened" step at any age (the 2 days only retry a failed close);
+  vesta_shared/kiosk_words is the one wording of a Kiosk close / reopen (who and the Kiosk's time; timeutil.moment_label
+  the one moment format); Problems.closed_in_kiosk / reopened_in_kiosk carry it; stage "reopened". kiosk.person_titled
+  reads the Kiosk's rename step (by ≠ VESTA Agent), and a ticket with no agent title is the person's; held_tickets
+  who-or-by; ticket.resolve carries who (desk Done --name). desk.seen_again: a silent device keeps the incident open,
+  said once (silent_told) — reverses review 23 by the owner's choice. result.fault_note "What to do: ".
+
 ## 0.6.146 (11 October 2026)
 
 - vesta_shared/message_format.py: the ONE shape of alerts and reports (title, "To:", sections; document / titled /

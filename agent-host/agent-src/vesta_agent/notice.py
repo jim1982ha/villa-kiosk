@@ -29,6 +29,7 @@ from __future__ import annotations
 import re
 
 from vesta_shared.message_format import INCIDENT_TITLE, TO
+from vesta_shared.timeutil import moment_label
 
 from datetime import datetime, timezone
 from typing import Callable
@@ -39,7 +40,8 @@ from zoneinfo import ZoneInfo
 #: ⚠️ WHAT WAS SENT, TO WHOM (owner, 2026-10-11, the laundry door's #21: "redundant and at different places, hard to
 #: understand"): "First time seen on …, to the Owner" read as who had seen it; "For: the Owner, P2 Incident" as a list.
 STAGES = {"new": "Alert sent", "reminder": "Reminder sent", "escalated": "Escalation sent", "update": "Update sent",
-          "back": "Came-back alert sent", "still": "Still-there alert sent", "closed": "Closing note sent"}
+          "back": "Came-back alert sent", "still": "Still-there alert sent", "reopened": "Reopen request sent",
+          "closed": "Closing note sent"}
 #: The title's word for a notice of this stage (owner, 2026-10-11: a closing message headed "New #9" — "is it a
 #: closure or not?"; then: "mention if it's a new or an existing alert, no more Follow Up wording anywhere"): the
 #: message says what IT is; a notice without a stage goes by the incident's history.
@@ -65,8 +67,8 @@ def _kept(history: list[dict]) -> list[dict]:
 
 
 def when(at: datetime, zone: str) -> str:
-    """A moment as every notice says it: 09/10/2026 13:12, in the villa's time."""
-    return at.astimezone(ZoneInfo(zone)).strftime(WHEN)
+    """A moment as every notice says it: 09/10/2026 13:12, in the villa's time (timeutil.moment_label: one format)."""
+    return moment_label(at, zone)
 
 
 class Notices:

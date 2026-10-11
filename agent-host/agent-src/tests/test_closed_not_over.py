@@ -71,7 +71,7 @@ def test_a_close_the_desk_cannot_check_says_so_with_what_the_device_reads(tmp_pa
     out = desk.tick(store, datetime.now(timezone.utc) + timedelta(minutes=11),
                     client=Villa(**{"lock.door": ("unlocked", T0)}))
     (fm,) = [s for s in out["send"] if s["to"] == "fm"]
-    assert fm["status"] == "Closed in the Kiosk. Note: VESTA cannot check this one; door reads unlocked."
+    assert fm["status"] == "Closed in the VESTA Kiosk. Note: VESTA cannot check this one; door reads unlocked."
     assert fm["stage"] == "closed" and store.incident(iid)["closed_at"]
 
 
@@ -102,7 +102,7 @@ def test_a_fault_a_person_reopens_in_the_kiosk_stays_open_and_the_facility_manag
     assert st.incident(iid)["closed_at"] is None
     out = desk.tick(st, datetime.now(timezone.utc))
     (fm,) = [s for s in out["send"] if s["to"] == "fm"]
-    assert fm["status"] == "Reopened in the Kiosk by Owner on {time}: please look again." and fm["keyboard"]
+    assert fm["status"] == "Reopened in the VESTA Kiosk by Owner on 01/01/2099 00:00. Please look again." and fm["keyboard"]
 
 
 # ---------------------------------------------------------------------- 3 · a settled copy says "Closed"
