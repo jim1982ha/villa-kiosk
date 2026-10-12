@@ -1897,6 +1897,16 @@ export class EntityVisuals {
    *  routing's room-highlight both read this on their next pass, not
    *  retroactively — same as every other config-driven visual here. */
   setResolvedRooms(rooms: Record<string, string>): void {
+    // ⚠️ AND A FRAME, NOT ONLY THE MARK (owner, 2026-10-12: "when I move the
+    // mouse over the villa, without hovering anything or moving the camera,
+    // badges regroup or open into cards"). The render loop draws on demand, and
+    // this setter marked the layout dirty without asking for a frame — so a
+    // regrouping by room waited, computed but undrawn, until some unrelated
+    // frame. A buttonless mouse move is one (SceneManager wakes the loop on any
+    // pointer event): the owner watched the mouse "move" badges that had in
+    // fact been regrouped minutes before, by a room recompute on Home
+    // Assistant's reconnect or registry change. One frame per recompute (a few
+    // a minute at most) is the whole cost.
     this.resolvedRooms = rooms;
     // MUST mark dirty (regression from 2.113.0's frame-skip). roomOf() reads
     // this map, and it is what every grouping/clustering decision keys on —
@@ -1910,6 +1920,7 @@ export class EntityVisuals {
     // event happened to dirty the layout, which is the reported "badges sit
     // on top of each other for a few seconds, then rearrange by themselves".
     this.markLayoutDirty();
+    this.requestRender();
   }
 
   /** Geometric room fallback: which real drawn room polygon this entity's
@@ -2548,6 +2559,7 @@ export class EntityVisuals {
   setIconZoomFit(fitRadius: number): void {
     this.iconZoomFitRadius = fitRadius > 0 ? fitRadius : 0;
     this.markLayoutDirty();               // cullLabels reads it (syncIconZoomToRung): an input of the layout
+    this.requestRender();                 // and draw it — a mark alone waits for the next unrelated frame (tests/oracles/layout_frames.mjs)
   }
 
   /** Applies an already-derived zoom scale, snapped onto the zoom lattice. */
