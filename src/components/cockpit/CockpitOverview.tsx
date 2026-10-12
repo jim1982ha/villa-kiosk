@@ -31,6 +31,7 @@ import { CATEGORY_LABELS, CATEGORY_ICONS } from "@/config/EntityCategories";
 import { categoryChipStyle } from "@/components/common/categoryChip";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { fetchLogbookEvents } from "@/ha/HALogbookAPI";
+import { useRoomFloors } from "@/config/useRoomFloors";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import { useVillaAttention } from "./useVillaAttention";
 import { storeLookSource } from "@/utils/deviceActivity";
@@ -55,7 +56,9 @@ export default function CockpitOverview({ onOpenEntity, doors }: {
   /** `doors.updates`: the updates count is drawn only with it. */
   doors: Doors;
 }) {
-  const { entities, ws, entityFloorNumbers } = useHA();
+  const { entities, ws } = useHA();
+  // Each room's floor: the villa's one answer (config/devicePlace), the category lists' too.
+  const roomFloors = useRoomFloors();
   const { config, resolvedRooms } = useConfig();
   // How every device looks, read from the store (utils/deviceActivity) — a
   // tile's "N on" is its POWER count.
@@ -84,8 +87,8 @@ export default function CockpitOverview({ onOpenEntity, doors }: {
     [selectableIds, entities, config.entityMap],
   );
   const roomGroups = useMemo(
-    () => buildRoomGroups(selectableIds, resolvedRooms, config.sh3dRooms, entityFloorNumbers),
-    [selectableIds, resolvedRooms, config.sh3dRooms, entityFloorNumbers],
+    () => buildRoomGroups(selectableIds, resolvedRooms, roomFloors),
+    [selectableIds, resolvedRooms, roomFloors],
   );
   const floorGroups = useMemo(() => buildFloorGroups(roomGroups), [roomGroups]);
 

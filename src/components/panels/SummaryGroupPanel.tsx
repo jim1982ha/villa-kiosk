@@ -30,7 +30,8 @@ import { TOGGLEABLE_DOMAINS } from "@/utils/quickAction";
 import type { HassEntity } from "@/types/ha.types";
 import type { Category } from "@/types/scene.types";
 import { bucketByFloor, bucketByRoom, summaryRows } from "@/config/summaryRows";
-import { buildRoomGroups } from "@/components/cockpit/cockpitData";
+import { useRoomFloors } from "@/config/useRoomFloors";
+import { floorOfRoom } from "@/config/devicePlace";
 import { NO_ROOM_LABEL } from "@/config/roomKey";
 
 // The group's shape is config/summaryGroups' (this screen only draws one).
@@ -130,7 +131,8 @@ export default function SummaryGroupPanel({
   // Entities on the 3D map; anything else exists only in Home Assistant and
   // is listed last and tinted (config/VillaModel).
   const { mappedEntityIds } = useVillaModel();
-  const { entities, suppressedEntityIds, hiddenInHaEntityIds, callService, entityFloorNumbers } = useHA();
+  const { entities, suppressedEntityIds, hiddenInHaEntityIds, callService } = useHA();
+  const roomFloors = useRoomFloors();
   const { config, resolvedRooms } = useConfig();
   // Each row's badge is a PNG baked from the theme's tokens — see the hook.
   const theme = useResolvedTheme();
@@ -227,10 +229,8 @@ export default function SummaryGroupPanel({
   function renderRooms(list: typeof rows) {
     const rooms = bucketByRoom(list, (e) => e.entity_id, roomOf);
     if (!byFloor) return rooms.map(renderRoom);
-    // Each room's floor, by the Cockpit's own rule (cockpitData.buildRoomGroups).
-    const floorOfRoom = new Map(buildRoomGroups(list.map((e) => e.entity_id), resolvedRooms, config.sh3dRooms,
-      entityFloorNumbers).map((g) => [g.room, g.floor]));
-    return bucketByFloor(rooms, (room) => floorOfRoom.get(room) ?? null).map(([floor, floorRooms]) => {
+    // Each room's floor: the villa's one answer (config/devicePlace), the Cockpit's too.
+    return bucketByFloor(rooms, (room) => floorOfRoom(roomFloors, room)).map(([floor, floorRooms]) => {
       const onFloor = new Set(floorRooms.flatMap(([, members]) => members.map((e) => e.entity_id)));
       return (
         <div key={String(floor)} className="summary-floor">

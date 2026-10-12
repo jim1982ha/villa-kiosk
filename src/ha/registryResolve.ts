@@ -9,7 +9,7 @@
 // five pieces of state, with no test; tests/oracles/storeys.mjs reached only
 // resolveEntityFloor. Pure now: tests/oracles/registry_resolve.mjs.
 
-import { resolveEntityFloor } from "@/config/EntityMap";
+import { haFloorNumber } from "@/config/devicePlace";
 import type {
   HassAreaRegistryEntry, HassDeviceRegistryEntry, HassEntityRegistryEntry, HassFloorRegistryEntry,
 } from "@/types/ha.types";
@@ -40,7 +40,7 @@ export function entityRegistryFacts(rows: readonly HassEntityRegistryEntry[]): E
 /**
  * Each entity's area NAME and floor NUMBER, by HA's inheritance: its own
  * area_id, else its device's; the area's floor (named, see
- * EntityMap.resolveEntityFloor for why the name beats HA's optional `level`).
+ * devicePlace.haFloorNumber for why the name beats HA's optional `level`).
  * Entities with neither are left out, not guessed.
  */
 export function entityPlaces(
@@ -61,7 +61,7 @@ export function entityPlaces(
     if (area.name) areaNames[r.entity_id] = area.name;
     const floor = area.floor_id ? floorById.get(area.floor_id) : undefined;
     if (floor) {
-      const n = resolveEntityFloor(floor.name, floor.level, null);
+      const n = haFloorNumber(floor.name, floor.level);
       if (n != null) floorNumbers[r.entity_id] = n;
     }
   }

@@ -11,7 +11,8 @@ import { stateLabelFor } from "@/config/BinarySensorClasses";
 import { categoryMembers, type CategoryMembers } from "@/config/activeDevices";
 import { deviceLook, groupLook, type LookSource } from "@/utils/deviceActivity";
 import { displayLabelFor } from "@/config/EntityMap";
-import { roomKey, NO_ROOM_LABEL } from "@/config/roomKey";
+import { NO_ROOM_LABEL } from "@/config/roomKey";
+import { floorOfRoom } from "@/config/devicePlace";
 import { byRoomOrder } from "@/config/summaryRows";
 import type { HassEntity, RawLogbookEntry } from "@/types/ha.types";
 import type { Category, EntityMapping } from "@/types/scene.types";
@@ -65,27 +66,15 @@ export interface RoomGroup {
   entityIds: string[];
 }
 
-/** Devices bucketed by resolved room, each joined to its floor. HA's own
- *  Floor assignment wins whenever any device in the room has one (via
- *  entityFloorNumbers — see HAStateStore.tsx); the floor-plan's own per-room
- *  `floor` value (sh3dRooms, matched by room NAME) is the fallback for
- *  whatever HA hasn't organised into a Floor yet — same "HA wins, geometry
- *  is the fallback" precedence resolvedRooms itself already uses. Reported:
- *  a room whose devices' Areas were all correctly on "2F" in HA still fell
- *  into the floor pivot's "Other" bucket, because the floor-plan's OWN
- *  drawn-room data (sh3dRooms) was the only signal ever read for storey —
- *  it either had no entry matching this room's name, or disagreed with a
- *  since-reorganised HA Floor. Alphabetical with "Other" always last, same
- *  convention SummaryGroupPanel's own room grouping uses. */
+/** Devices bucketed by resolved room, each joined to ITS floor — config/devicePlace's one answer,
+ *  decided over every device of the villa (it used to be decided here, from the devices of this
+ *  list only, so two lists could file one room on two floors). Alphabetical with "Other" always
+ *  last, the order every by-room list uses (summaryRows.byRoomOrder). */
 export function buildRoomGroups(
   selectableIds: readonly string[],
   resolvedRooms: Record<string, string>,
-  sh3dRooms: { name: string; floor?: number }[] | undefined,
-  entityFloorNumbers: Record<string, number>,
+  floors: ReadonlyMap<string, number | null>,
 ): RoomGroup[] {
-  const floorByRoom = new Map<string, number>();
-  for (const r of sh3dRooms ?? []) floorByRoom.set(roomKey(r.name), r.floor ?? 1);
-
   const idsByRoom = new Map<string, string[]>();
   for (const id of selectableIds) {
     const room = resolvedRooms[id]?.trim() || NO_ROOM_LABEL;
@@ -94,11 +83,7 @@ export function buildRoomGroups(
     idsByRoom.set(room, list);
   }
   return [...idsByRoom.entries()]
-    .map(([room, entityIds]) => {
-      const haFloor = entityIds.map((id) => entityFloorNumbers[id]).find((f) => f != null);
-      const floor = room === NO_ROOM_LABEL ? null : (haFloor ?? floorByRoom.get(roomKey(room)) ?? null);
-      return { room, count: entityIds.length, entityIds, floor };
-    })
+    .map(([room, entityIds]) => ({ room, count: entityIds.length, entityIds, floor: floorOfRoom(floors, room) }))
     .sort((a, b) => byRoomOrder(a.room, b.room));
 }
 

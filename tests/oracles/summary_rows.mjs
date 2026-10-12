@@ -39,7 +39,7 @@ ck("one order for every by-room list — \"Other\" last even after a room alphab
      (panel.match(/title=\{anyOn \? "Turn all off" : "Turn all on"\}/g) ?? []).length === 1
      && /headerActions=\{bulk && <BulkToggle devices=\{toggleables\}/.test(panel)
      && /\{bulk && <BulkToggle devices=\{toggleables\.filter\(\(e\) => onFloor\.has\(e\.entity_id\)\)\}/.test(panel));
-  ck("  ...a floor is decided by the Cockpit's own rule (buildRoomGroups), not a second one", /buildRoomGroups\(/.test(panel));
+  ck("  ...a floor is the villa's one answer (devicePlace, through useRoomFloors), not a second rule", /useRoomFloors\(\)/.test(panel) && /floorOfRoom\(roomFloors, room\)/.test(panel));
   ck("the top bar's category list and the Cockpit's category tiles group by floor; a room or floor list does not",
      /entityIds: categoryGroupEntityIds \}\}\s*byFloor/.test(read("pages/Dashboard.tsx"))
      && /byCategory: t\.pivot === "category"/.test(read("components/cockpit/CockpitOverview.tsx"))
