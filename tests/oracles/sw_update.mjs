@@ -8,7 +8,7 @@ import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
-const { switchToWaiting, whenUpdateReady } = await import("@/utils/swUpdate");
+const { switchToWaiting, whenUpdateReady, keepCheckingForUpdates, CHECK_EVERY_MS } = await import("@/utils/swUpdate");
 
 const worker = (state = "installed") => {
   const ls = [], sent = [];
@@ -57,12 +57,31 @@ console.log("\n  offering an update that arrives while the app is open:");
   ck("an update already waiting is offered at once", already === 1);
 }
 
+console.log("\n  an app left open keeps asking for a new build:");
+{
+  // owner, 2026-10-12: the notice appeared only after a refresh — the browser asks only when the page loads
+  let asked = 0, timer = null, shown = null, unhandled = 0;
+  process.on("unhandledRejection", () => { unhandled++; });
+  const reg = { update: () => { asked++; return asked === 2 ? Promise.reject(new Error("offline")) : Promise.resolve(); } };
+  keepCheckingForUpdates(reg, (check, ms) => { timer = { check, ms }; }, (check) => { shown = check; });
+  ck("it asks on a timer, every 10 minutes", timer?.ms === CHECK_EVERY_MS && CHECK_EVERY_MS === 600000);
+  timer.check();
+  ck("  ...each tick asks the server", asked === 1);
+  shown();
+  ck("it asks again when the app comes back on screen", asked === 2);
+  await new Promise((r) => setTimeout(r, 0));
+  ck("a failed check (no route to the add-on) is silent", unhandled === 0);
+}
+
 console.log("\n  who uses it:");
 {
   const src = (f) => readFileSync(new URL(`../../${f}`, import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\/|(^|[^:])\/\/.*$/gm, "$1");
   const sw = src("src/utils/swUpdate.ts"), main = src("src/main.tsx");
   ck("startup switches at once when an update is already waiting (the wall tablet's nightly reload)",
      /getRegistration\(\)\.then\(\(reg\) => \{\s*if \(reg && reg\.waiting && controlled\(\)\) void switchToWaiting\(reg, \(\) => location\.reload\(\)\)/.test(sw));
+  ck("the registered worker is kept checked, through wrapped browser timers (never a bare setInterval)",
+     /keepCheckingForUpdates\(\s*reg,\s*\(check, ms\) => \{ window\.setInterval\(check, ms\); \}/.test(sw)
+     && /visibilitychange/.test(sw));
   ck("main.tsx registers through it, never under Home Assistant", /if \("serviceWorker" in navigator && !insideHa\) startServiceWorker\("\.\/sw\.js"\)/.test(main)
      && !/serviceWorker\.register\(/.test(main));
   const worker = src("public/sw.js");

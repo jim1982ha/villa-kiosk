@@ -28,6 +28,36 @@ export type Registration = {
   installing: Worker | null;
   addEventListener(type: "updatefound", listener: () => void): void;
 };
+/** The one call that asks the server for a newer worker (ServiceWorkerRegistration.update). */
+export type Checkable = { update(): Promise<unknown> };
+
+/** How often an OPEN app asks whether a new build was published. */
+export const CHECK_EVERY_MS = 10 * 60_000;
+
+/**
+ * Keep asking, while the app stays open, whether a new build was published.
+ *
+ * ⚠️ THE BROWSER ONLY ASKS WHEN THE PAGE LOADS (owner, 2026-10-12: "I need to
+ * refresh at least once before seeing the popup"). A worker is re-checked on a
+ * navigation, never on a timer, so a wall tablet that never reloads learned of
+ * an update only at the next refresh — which is what the notice is there to
+ * spare. Every CHECK_EVERY_MS, and each time the app comes back on screen; a
+ * new worker found this way installs in the background and whenUpdateReady
+ * offers it. Offline (no route to the add-on), a check simply fails, silently.
+ *
+ * The timer and the "back on screen" hook are passed in (tests drive them);
+ * startServiceWorker wraps the browser's — never pass `setInterval` bare.
+ */
+export function keepCheckingForUpdates(
+  reg: Checkable,
+  every: (check: () => void, ms: number) => void,
+  onShown: (check: () => void) => void,
+  ms = CHECK_EVERY_MS,
+): void {
+  const check = () => { reg.update().catch(() => {}); };
+  every(check, ms);
+  onShown(check);
+}
 
 /** How long to wait for the new worker to activate before reloading anyway:
  *  a reload alone still lands on the new build once the old page is gone. */
@@ -102,6 +132,13 @@ export function startServiceWorker(url: string): void {
         readyReg = reg;
         listeners.forEach((l) => l());
       });
+      keepCheckingForUpdates(
+        reg,
+        (check, ms) => { window.setInterval(check, ms); },
+        (check) => document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "visible") check();
+        }),
+      );
     }).catch((err) => {
       console.warn("[SW] registration failed", err);
     });
