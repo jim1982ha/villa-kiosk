@@ -1,3 +1,13 @@
+## 2.496.339
+
+### Changed
+- Advanced Settings → Devices now lists EVERY device once — including the ones linked to a 3D object by hand, which used to disappear from this list into Villa → "Bound 3D objects". A hand-linked device says so under its entity id ("3D object: …"). Its name and display settings are edited there, and only there.
+- Villa → "Bound 3D objects" keeps the link itself: which entity each object shows, and Unlink. The device's settings are no longer repeated there.
+- The search in Devices finds a device by the name the map shows (and by its id, room or 3D object) — not by a stored name nobody sees.
+
+### Fixed
+- "Change entity" (the pencil, or "Point it there") is now one action: every 3D object showing the old entity moves to the new one, your settings move with it, your own name is kept, and no row of the old entity is left behind. Without a name of your own, the device is called by Home Assistant's name.
+
 ## 2.496.338
 
 ### Fixed
