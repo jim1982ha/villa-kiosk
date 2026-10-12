@@ -1,3 +1,8 @@
+## 2.496.329
+
+### Fixed
+- The "point this 3D object at another entity" box (2.496.327) now really appears. It showed only for a device in the "removed" list, and a tile whose entity was renamed in Home Assistant is often not in it. It now shows whenever you open the edit button of a tile whose entity Home Assistant no longer has (Advanced Settings → Devices, under the search). "Point it there" moves the tile to the new entity, including a 3D object you had linked to the old name by hand.
+
 ## 2.496.328
 
 ### Fixed
