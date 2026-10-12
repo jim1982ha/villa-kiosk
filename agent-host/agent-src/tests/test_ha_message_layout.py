@@ -82,6 +82,19 @@ def test_the_styles_are_the_ones_the_agent_finds_in_the_same_text():
         assert (_styled(piece, kind) if TELEGRAM[kind] else html.escape(piece, quote=False)) in _render(*CASES[0])
 
 
+def test_to_is_the_rules_own_else_the_villa_wide_audience_else_the_roles():
+    # owner, 2026-10-12: "To:" is set in ONE place for every alert (input_text.vesta_alert_audience); a rule that names
+    # its own audience keeps it; without the helper (or before HA has it) the roles
+    src = ("{%- set vm_title, vm_to, vm_text, vm_status = 'T', r, 'x', '' -%}"
+           "{% include 'vesta_message.jinja' ignore missing %}")
+    t = _env().from_string(src)
+    helper = lambda e: "JM, Fabien" if e == "input_text.vesta_alert_audience" else "unknown"
+    assert "\nTo: Owner\n" in t.render(r="Owner", states=helper)
+    assert "\nTo: JM, Fabien\n" in t.render(r="", states=helper)
+    assert "\nTo: Owner, Facility Manager\n" in t.render(r="", states=lambda e: "unknown")
+    assert "\nTo: Owner, Facility Manager\n" in t.render(r="")                  # no states() at all (not HA)
+
+
 def test_a_missing_file_draws_nothing_so_the_blueprint_sends_plain_text():
     src = "{% include 'no_such_file.jinja' ignore missing %}"
     assert _env().from_string(src).render() == ""

@@ -1,3 +1,10 @@
+## 0.12.178
+
+What you will see:
+- Nothing yet. The layout file Home Assistant draws its alerts with (vesta_message.jinja) can now take the "To:" line
+  from one villa-wide setting, "VESTA alert audience" (Settings → Helpers), whenever a rule names no audience of its
+  own. Copy the new file to config/custom_templates/ and reload the templates to use it.
+
 ## 0.12.177
 
 What you will see:

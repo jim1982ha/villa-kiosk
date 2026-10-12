@@ -14,14 +14,20 @@
         Status:
         <blockquote><i>⚠️ New alert</i></blockquote>
 
+    "To:" is vm_to when a rule names who it is for; empty, it is the villa-wide input_text.vesta_alert_audience (one
+    place for every alert, owner 2026-10-12), and "Owner, Facility Manager" when that helper does not exist.
+
     The tags are the agent's style table (message_format.TELEGRAM: title underline, item blockquote, note blockquote +
     italic); its test (tests/test_ha_message_layout.py) fails when this file and the agent's layout differ. Text is
     escaped here, once: Telegram's HTML refuses a bare "<", ">" or "&". -#}
 {%- macro vm_escape(s) -%}{{ (s | default('', true) | string | trim) | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') }}{%- endmacro -%}
+{%- set vm_r = vm_to | default('', true) | string | trim -%}
+{%- if not vm_r and states is defined -%}{%- set vm_r = states('input_text.vesta_alert_audience') | trim -%}{%- endif -%}
+{%- if vm_r in ['', 'unknown', 'unavailable'] -%}{%- set vm_r = 'Owner, Facility Manager' -%}{%- endif -%}
 {%- set vm_t = vm_text | default('', true) | string | trim -%}
 {%- set vm_s = vm_status | default('', true) | string | trim -%}
 <u>{{ vm_escape(vm_title) }}</u>
-To: {{ vm_escape(vm_to) }}
+To: {{ vm_escape(vm_r) }}
 {%- if vm_t %}
 <blockquote>{{ vm_escape(vm_t) }}</blockquote>
 {%- endif %}

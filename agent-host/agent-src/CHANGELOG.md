@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.172 (12 October 2026)
+
+- homeassistant/custom_templates/vesta_message.jinja: an empty vm_to is input_text.vesta_alert_audience (the one
+  villa-wide "To:" of every alert), "Owner, Facility Manager" without it; test_ha_message_layout covers the three cases.
+
 ## 0.6.171 (12 October 2026)
 
 - notice.addressed: the one rule for the names of a "To:" line and a history line — the people, a role's word only
