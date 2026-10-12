@@ -39,19 +39,26 @@ console.log("  one edit at a time:");
 {
   // a name the owner chose ("A" would read as light.a's own fallback — see the next block)
   const named = apply(cfg(), me.patchMapping("light.a", { label: "Desk lamp" }));
-  const c = apply(named, me.remapMapping("light.a", "light.b"));
+  const c = apply(named, me.repointDevice("light.a", "light.b"));
   ck("remap: the mapping moves to the new entity, its settings kept",
      !c.entityMap["light.a"] && c.entityMap["light.b"]?.label === "Desk lamp" && c.entityMap["light.b"].entityId === "light.b");
   ck("remap: the mesh is bound to the new entity", c.meshBindings["light.a"] === "light.b");
   // owner, 2026-10-12: the fallback made from the OLD id passed for a chosen name under the new one
   const fb = apply({ ...cfg(), entityMap: { "light.hall_lamp": { entityId: "light.hall_lamp", type: "light", label: "hall lamp", badgeColor: "#f00" } } },
-                   me.remapMapping("light.hall_lamp", "light.reading_lamp"));
+                   me.repointDevice("light.hall_lamp", "light.reading_lamp"));
   ck("remap: a name made from the OLD id is left behind (the new entity shows Home Assistant's)",
      fb.entityMap["light.reading_lamp"] && !("label" in fb.entityMap["light.reading_lamp"]), fb.entityMap["light.reading_lamp"]);
   ck("  …its other settings still move", fb.entityMap["light.reading_lamp"]?.badgeColor === "#f00");
-  ck("remap: to itself, to nothing, or from nothing — no change",
-     [me.remapMapping("light.a", "light.a"), me.remapMapping("light.a", ""), me.remapMapping("light.q", "light.b")]
-       .every((e) => J(e(cfg())) === "{}"));
+  ck("remap: to itself or to nothing — no change",
+     [me.repointDevice("light.a", "light.a"), me.repointDevice("light.a", "")].every((e) => J(e(cfg())) === "{}"));
+  // architecture review 2026-10-12, candidate 1: ONE "change entity" — the second edit left the old row behind
+  const orphan = apply(cfg(), me.repointDevice("light.q", "light.b"));
+  ck("remap from a device with no settings (an object HA lost): the object still moves, a row is made for the new one",
+     orphan.meshBindings["light.q"] === "light.b" && orphan.entityMap["light.b"]?.entityId === "light.b" && !orphan.entityMap["light.q"]);
+  const kept = apply({ ...cfg(), entityMap: { ...cfg().entityMap, "light.b": { entityId: "light.b", type: "light", label: "Reading", badgeColor: "#0f0" } } },
+                     me.repointDevice("light.a", "light.b"));
+  ck("remap onto a device that already has settings: its own name stays, the moved settings win",
+     kept.entityMap["light.b"].label === "Reading" && kept.entityMap["light.b"].badgeColor === "#0f0" && !kept.entityMap["light.a"]);
 }
 {
   const detected = [{ entityId: "light.a", type: "light", label: "dup" }, { entityId: "fan.live", type: "fan", label: "F" },
@@ -89,22 +96,25 @@ console.log("\n  a removed device's 3D object, pointed at another entity:");
   ck("an object already pointed at an entity HA has is not", o("light.old_name", { "light.old_name": "light.new_name" }) === null);
   ck("an object pointed at another missing entity still is", o("light.old_name", { "light.old_name": "light.also_gone" }) === "light.old_name");
   // what "Point it there" applies: the object named after the old id now resolves to the new entity
-  const c = apply({ ...cfg(), meshBindings: { lamp_mesh: "light.a", hand_bound: "light.old_name" } },
-                  me.repointObjects("light.old_name", "light.new_name", { attributes: { friendly_name: "New" } }));
+  const c = apply({ ...cfg(), entityMap: { ...cfg().entityMap, "light.old_name": { entityId: "light.old_name", type: "light", label: "old name" } }, meshBindings: { lamp_mesh: "light.a", hand_bound: "light.old_name" } },
+                  me.repointDevice("light.old_name", "light.new_name", { attributes: { friendly_name: "New" } }));
   ck("pointed: an object bound to the old entity BY HAND moves too",
      em.resolveMeshToMapping("hand_bound", c.entityMap, c.meshBindings)?.entityId === "light.new_name");
   ck("pointed: other objects' bindings are untouched", c.meshBindings.lamp_mesh === "light.a");
-  ck("pointed: to itself or to nothing, no change", J(me.repointObjects("light.a", "light.a")(cfg())) === "{}" && J(me.repointObjects("light.a", "")(cfg())) === "{}");
+  ck("pointed: to itself or to nothing, no change", J(me.repointDevice("light.a", "light.a")(cfg())) === "{}" && J(me.repointDevice("light.a", "")(cfg())) === "{}");
   ck("pointed: the object resolves to the new entity",
      em.resolveMeshToMapping("light.old_name", c.entityMap, c.meshBindings)?.entityId === "light.new_name");
-  ck("pointed: the new entity gets a mapping labelled from Home Assistant", c.entityMap["light.new_name"]?.label === "New");
+  ck("pointed: the old entity leaves no row behind (repointObjects left it stranded)", !c.entityMap["light.old_name"]);
+  ck("pointed: the new entity stores no name of its own — it is called by Home Assistant's, live",
+     c.entityMap["light.new_name"] && !("label" in c.entityMap["light.new_name"])
+     && em.labelOf("light.new_name", c.entityMap, { "light.new_name": { attributes: { friendly_name: "New" } } }) === "New");
 }
 
 {
   // pin the caller (2.496.327 tested its rule and asked the wrong list): the screen asks with the MODEL's objects
   const ed = readFileSync(new URL("../../src/components/settings/ConfigEditor.tsx", import.meta.url), "utf8");
   ck("Advanced Settings asks with the model's objects and re-points them all",
-     /orphanObjectSearched\(search, sceneEntityIds,/.test(ed) && /useVillaModel\(\)/.test(ed) && /repointObjects\(removedId,/.test(ed));
+     /orphanObjectSearched\(search, sceneEntityIds,/.test(ed) && /useVillaModel\(\)/.test(ed) && /repointDevice\(removedId,/.test(ed) && /repointDevice\(oldKey, newId,/.test(ed));
 }
 
 console.log("\n  two edits in the same moment:");
@@ -116,7 +126,7 @@ console.log("\n  two edits in the same moment:");
   ck("(the old shape, for contrast: the second edit erases the first)", staleSecond.entityMap["light.a"].label === "A");
   const c = apply(snapshot, me.patchMapping("light.a", { label: "X" }), me.patchMapping("light.a", { badgeColor: "#f00" }));
   ck("each edit reads the config the previous one left: both land", c.entityMap["light.a"].label === "X" && c.entityMap["light.a"].badgeColor === "#f00");
-  const d = apply(snapshot, me.bindMesh("m2", "fan.x"), me.remapMapping("light.a", "light.b"));
+  const d = apply(snapshot, me.bindMesh("m2", "fan.x"), me.repointDevice("light.a", "light.b"));
   ck("a bind then a remap: both land", d.meshBindings.m2 === "fan.x" && d.meshBindings["light.a"] === "light.b" && !!d.entityMap["fan.x"]);
 }
 

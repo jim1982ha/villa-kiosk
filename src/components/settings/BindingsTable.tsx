@@ -17,19 +17,21 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Plus } from "lucide-react";
+import { useEntityLabel } from "@/hooks/useEntityLabel";
 import EntityPicker from "./EntityPicker";
 import BindingRow from "./BindingRow";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
-import { addMapping, bindMesh, patchMapping, unbindMesh } from "@/config/mappingEdits";
+import { addMapping, bindMesh, unbindMesh } from "@/config/mappingEdits";
 import { loadMeshCatalog } from "@/utils/meshCatalog";
 import { inferTypeFromEntityId } from "@/config/EntityMap";
 import { unshownEntities } from "@/config/deviceGroups";
 import { useDeviceIdentity } from "@/config/VillaModel";
 import { ShowAll, useTruncated } from "@/components/common/TruncatedList";
-import type { EntityMapping } from "@/types/scene.types";
 
 export default function BindingsTable() {
+  // THE name a device is shown by (useEntityLabel) — this list printed HA's raw friendly_name.
+  const entityLabel = useEntityLabel();
   const { config, update } = useConfig();
   const { entities, suppressedEntityIds, entityAreaNames } = useHA();
   const [showBound, setShowBound] = useState(false);
@@ -85,8 +87,6 @@ export default function BindingsTable() {
   const bind = useCallback((mesh: string, entityId: string) =>
     update(bindMesh(mesh, entityId, entitiesRef.current[entityId])), [update]);
   const unbind = useCallback((mesh: string) => update(unbindMesh(mesh)), [update]);
-  const patchMeta = useCallback((entityId: string, change: Partial<EntityMapping>) =>
-    update(patchMapping(entityId, change)), [update]);
 
   return (
     <div>
@@ -95,8 +95,8 @@ export default function BindingsTable() {
           were another section — it is this section's way to add an entity. */}
       <p className="muted body-text">
         Each bound 3D object controls a Home Assistant entity when tapped in the
-        villa: change its entity or its display settings here, without reloading
-        the model. To prepare an entity whose 3D object is not in the model yet,
+        villa: change which entity here, without reloading the model — its name
+        and display settings are with the device, in Devices. To prepare an entity whose 3D object is not in the model yet,
         add it below — its settings apply as soon as a model with an object
         named after its entity ID is uploaded.
       </p>
@@ -156,14 +156,8 @@ export default function BindingsTable() {
           key={mesh}
           mesh={mesh}
           entityId={config.meshBindings[mesh]}
-          meta={config.entityMap[config.meshBindings[mesh]]}
-          // This row's own entity, not the whole map — the category dropdown
-          // cannot be resolved without its device_class, and a narrow slice
-          // keeps the row's memoisation intact.
-          entity={entities[config.meshBindings[mesh]]}
           onBind={bind}
           onUnbind={unbind}
-          onPatch={patchMeta}
         />
       ))}
 
@@ -244,7 +238,7 @@ export default function BindingsTable() {
               style={{ gap: 12, padding: "8px 0", borderTop: "1px solid var(--hairline)" }}
             >
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: "var(--text-sm)" }}>{entities[id]?.attributes.friendly_name || id}</div>
+                <div style={{ fontSize: "var(--text-sm)" }}>{entityLabel(id)}</div>
                 <div style={{ fontSize: "var(--text-2xs)", color: "var(--text-secondary)", wordBreak: "break-all" }}>
                   {id}
                 </div>

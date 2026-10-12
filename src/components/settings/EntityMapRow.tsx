@@ -39,6 +39,9 @@ interface Props {
    *  a label/room the user wants to re-point at the renamed entity via
    *  "Change entity ID". See ConfigEditor's stale-cleanup banner. */
   stale?: boolean;
+  /** 3D objects linked to this device by name (by hand, or by "change entity") — said under its id,
+   *  since this one list now holds hand-linked devices too (config/deviceRecord). */
+  objects?: readonly string[];
   expanded: boolean;
   editing: boolean;
   /** Only meaningful when `editing` — the parent always passes undefined for
@@ -59,7 +62,7 @@ interface Props {
 }
 
 function EntityMapRow({
-  entryKey, mapping, entity, stale, expanded, editing, remapNewId, matchedRowRef,
+  entryKey, mapping, entity, stale, objects, expanded, editing, remapNewId, matchedRowRef,
   onToggleExpanded, onStartRemap, onRemapChange, onRemapApply, onRemapCancel, onRemove, onPatch,
 }: Props) {
   // Draft state is now scoped to THIS ROW's own component instance (one hook
@@ -128,7 +131,14 @@ function EntityMapRow({
               if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggleExpanded(entryKey); }
             }}
           >
-            <span className="entity-id-text">{m.entityId}</span>
+            <span className="entity-id-text">
+              {m.entityId}
+              {!!objects?.length && (
+                <span className="muted entity-id-link" title="This device's 3D object, linked by name">
+                  {" "}· 3D object: {objects.join(", ")}
+                </span>
+              )}
+            </span>
             <span className="entity-id-actions">
               <button
                 className="icon-btn"

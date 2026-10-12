@@ -51,28 +51,32 @@ export function addMapping(entityId: string, entity?: Pick<HassEntity, "attribut
 }
 
 /**
- * Point a 3D object (the mesh named `oldKey`) at a different entity without
- * rebuilding the model: a mesh binding oldKey → newId, and the mapping moved
- * to newId (its settings kept). The mesh stays in the scene; only the entity
- * it controls changes.
+ * "Change entity": every 3D object that shows `oldId` now shows `newId` — the object named after
+ * the old id (bound by that name) AND every object bound to it by hand — and the device's settings
+ * move with it, leaving no row behind (architecture review 2026-10-12, candidate 1: this was two
+ * edits, remapMapping and repointObjects, and the second left `entityMap[oldId]` stranded).
+ *
+ * ⚠️ THE NAME MOVES ONLY IF IT IS ONE (owner, 2026-10-12: a light re-pointed after its rename in HA
+ * was titled with its OLD id over HA's "Patio2F Center"). The fallback made from the old id no
+ * longer reads as a fallback under the new id, so it passed for the owner's own name everywhere.
+ * With no name of the owner's, none is stored: the device is called by Home Assistant's live name.
  */
-export function remapMapping(oldKey: string, newId: string): ConfigEdit {
+export function repointDevice(oldId: string, newId: string, entity?: Pick<HassEntity, "attributes">): ConfigEdit {
   return (config) => {
-    const entry = config.entityMap[oldKey];
-    if (!newId || newId === oldKey || !entry) return {};
-    const { [oldKey]: _moved, ...rest } = config.entityMap;
-    // ⚠️ THE NAME MOVES ONLY IF IT IS ONE (owner, 2026-10-12: a light re-pointed
-    // after its rename in HA was titled with its OLD id, "corridor corridor and
-    // stairs2f light terrace…", over HA's "Patio2F Center"). The fallback made
-    // from the old id no longer reads as a fallback under the new id, so it
-    // passed for the owner's own name everywhere (displayLabelFor). Left behind,
-    // the new entity is called by Home Assistant's name.
-    const { label, ...settings } = entry;
-    const moved = isOwnLabel(oldKey, label) ? { ...settings, label } : settings;
-    return {
-      entityMap: { ...rest, [newId]: { ...moved, entityId: newId } as EntityMapping },
-      meshBindings: { ...config.meshBindings, [oldKey]: newId },
-    };
+    if (!oldId || !newId || oldId === newId) return {};
+    const meshBindings: Record<string, string> = { ...config.meshBindings, [oldId]: newId };
+    for (const [mesh, id] of Object.entries(meshBindings)) if (id === oldId) meshBindings[mesh] = newId;
+    const { [oldId]: entry, ...rest } = config.entityMap;
+    const target = rest[newId] ?? createDefaultMapping(newId, {
+      friendlyName: entity?.attributes.friendly_name as string | undefined,
+    });
+    const { label: oldLabel, ...settings } = entry ?? ({} as Partial<EntityMapping>);
+    const { label: targetLabel, ...targetSettings } = target;
+    const label = isOwnLabel(oldId, oldLabel) ? oldLabel
+      : rest[newId] && isOwnLabel(newId, targetLabel) ? targetLabel : undefined;
+    const moved = { ...targetSettings, ...settings, entityId: newId } as EntityMapping;
+    if (label !== undefined) moved.label = label;
+    return { meshBindings, entityMap: { ...rest, [newId]: moved } };
   };
 }
 
@@ -102,21 +106,6 @@ export function bindMesh(meshName: string, entityId: string, entity?: Pick<HassE
     meshBindings: { ...config.meshBindings, [meshName]: entityId },
     entityMap: addMapping(entityId, entity)(config).entityMap ?? config.entityMap,
   });
-}
-
-/**
- * Point every 3D object that shows `oldId` at `newId`: the object named after
- * it (bound by that name, as remapMapping does) AND any object the owner bound
- * to it by hand — the map shows the same tile for both, so "point it there"
- * must move both (Advanced Settings, dismissedEntities.orphanObjectSearched).
- */
-export function repointObjects(oldId: string, newId: string, entity?: Pick<HassEntity, "attributes">): ConfigEdit {
-  return (config) => {
-    if (!oldId || !newId || oldId === newId) return {};
-    const meshBindings: Record<string, string> = { ...config.meshBindings, [oldId]: newId };
-    for (const [mesh, id] of Object.entries(meshBindings)) if (id === oldId) meshBindings[mesh] = newId;
-    return { meshBindings, entityMap: addMapping(newId, entity)(config).entityMap ?? config.entityMap };
-  };
 }
 
 /** Unbind a 3D object. The entity's mapping is kept. */
