@@ -10,7 +10,7 @@ import { join } from "node:path";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done, tsFiles } from "../consistency/check.mjs";
 const { ENTITY_DOMAINS } = await import("@/types/ha.types");
-const { inferTypeFromEntityId } = await import("@/config/EntityMap");
+const { inferTypeFromEntityId, labelField } = await import("@/config/EntityMap");
 
 
 ck("every listed type is inferred from its entity_id domain, and nothing else is",
@@ -29,5 +29,19 @@ ck("the label commits one way: half a second after typing, or at once on leaving
    /useDraftCommit<string>\(\(_k, value\) => onPatch\(\{ label: value \}\), 500\)/.test(mf) && /onBlur=\{\(\) => label\.flush\("v"\)\}/.test(mf));
 ck("the linked entity is described once, truthfully (ring AND an on/off switch — it was 'ring only' in one table)",
    /placeholder=\{[^}]*ring and an on\/off switch/.test(mf) && ![mf, br, er].some((x) => /placeholder=[^>]*ring only/.test(x)));
+
+// owner, 2026-10-12: the Label field printed the entity-id fallback as if typed, while the title above it
+// read Home Assistant's own name
+{
+  const id = "light.hall_lamp_left";
+  const auto = labelField(id, "Hall Lamp Left", "Reading lamp");
+  ck("the label made from the entity id shows as an EMPTY field…", auto.value === "", auto);
+  ck("  …with the name actually shown in grey, and where it comes from", auto.placeholder === "Reading lamp — from Home Assistant", auto.placeholder);
+  ck("  …the underscore form of the fallback too", labelField(id, "hall_lamp_left", "Reading lamp").value === "");
+  ck("a name the owner typed shows as it is", labelField(id, "Desk light", "Reading lamp").value === "Desk light");
+  ck("no Home Assistant name yet: the id's own name, said so", /— from its entity id$/.test(labelField(id, undefined).placeholder));
+  ck("the field uses it (value and placeholder)", /labelField\(entityId, m\.label,/.test(mf) && /value=\{label\.drafts\.v \?\? named\.value\}/.test(mf)
+     && /placeholder=\{named\.placeholder\}/.test(mf));
+}
 
 done("✅ one list of device types, one editor for a device");

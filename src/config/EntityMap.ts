@@ -146,9 +146,9 @@ function looksLikeRawFallbackLabel(entityId: string, label: string): boolean {
  * upgraded live to the current HA friendly_name, or failing that a properly
  * Title-Cased/deduped version of the id — so an entity bound early in model
  * load doesn't stay stuck with an ugly name forever even once a perfectly
- * good one is available. Advanced Settings' own Label EDIT FIELD deliberately
- * does NOT go through this — editing shows the exact raw stored value, not a
- * live-computed stand-in for it.
+ * good one is available. Advanced Settings' own Label EDIT FIELD does not go
+ * through this either — it shows what is STORED (labelField), and the
+ * auto-fallback as what it is: no name of the owner's.
  *
  * A live HA friendly_name is normally trusted verbatim (assumed already
  * human-written) — but some integrations, and any YAML/UI entity with no
@@ -165,6 +165,27 @@ export function displayLabelFor(
   const fn = friendlyName?.trim();
   if (fn) return looksLikeRawSlug(fn) ? prettifyRaw(fn) : fn;
   return prettifyEntitySlug(entityId);
+}
+
+/**
+ * What Advanced Settings' Label field shows: the name the owner typed, if any,
+ * else an empty field whose grey placeholder is the name actually shown, and
+ * where it comes from.
+ *
+ * ⚠️ THE FIELD SHOWED A NAME NOBODY TYPED (owner, 2026-10-12: "the Label
+ * is wrong — was it edited by hand?"). A mapping made before Home Assistant's name arrived stores the
+ * entity-id fallback; every screen replaces it with HA's name (displayLabelFor),
+ * but the field printed it as if it were the owner's choice, contradicting the
+ * title above it. Typing still stores the owner's own name, as before.
+ */
+export function labelField(
+  entityId: string, storedLabel: string | undefined, friendlyName?: string,
+): { value: string; placeholder: string } {
+  if (storedLabel && !looksLikeRawFallbackLabel(entityId, storedLabel)) {
+    return { value: storedLabel, placeholder: "Label" };
+  }
+  const shown = displayLabelFor(entityId, undefined, friendlyName);
+  return { value: "", placeholder: `${shown} — from ${friendlyName?.trim() ? "Home Assistant" : "its entity id"}` };
 }
 
 /**

@@ -18,6 +18,7 @@ import EntityPicker from "./EntityPicker";
 import { useDraftCommit } from "@/hooks/useDraftCommit";
 import { CATEGORY_ORDER, CATEGORY_LABELS, effectiveCategory, subjectOf } from "@/config/EntityCategories";
 import { CONFIRM_GATE_TYPES } from "@/utils/quickAction";
+import { labelField } from "@/config/EntityMap";
 import { ENTITY_DOMAINS, type HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 
@@ -51,6 +52,8 @@ export default function MappingFields({ entityId, mapping, entity, onPatch, cell
   const intensity = useDraftCommit<number>((_k, ratio) => onPatch({ lightIntensityRatio: ratio }), 500);
   const { draftField, m } = useMappingDraft(mapping, onPatch);
 
+  // The owner's own name, or empty with the name actually shown in grey (EntityMap.labelField)
+  const named = labelField(entityId, m.label, entity?.attributes.friendly_name as string | undefined);
   const ratio = intensity.drafts.v ?? m.lightIntensityRatio ?? 0;
   const pct = Math.round(ratio * 100);
   return (
@@ -72,8 +75,8 @@ export default function MappingFields({ entityId, mapping, entity, onPatch, cell
       {cell("label", "Label", (
         // Saved half a second after typing stops, or at once on leaving the field.
         <input style={selectStyle ? { ...selectStyle, cursor: "text", flex: 1, minWidth: 80 } : undefined}
-          placeholder="Label" title="Display name"
-          value={label.drafts.v ?? m.label}
+          placeholder={named.placeholder} title="Display name — leave empty to use Home Assistant's name"
+          value={label.drafts.v ?? named.value}
           onChange={(e) => label.draft("v", e.target.value)}
           onBlur={() => label.flush("v")} />
       ), { wide: true })}

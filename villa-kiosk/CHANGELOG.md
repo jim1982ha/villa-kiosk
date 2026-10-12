@@ -1,3 +1,8 @@
+## 2.496.331
+
+### Fixed
+- Advanced Settings → Devices: a device's "Label" field no longer shows a name nobody typed. When the Kiosk only made a temporary name from the entity id (before Home Assistant's name had arrived), the field is now empty, with the name actually shown in grey — e.g. "Reading lamp — from Home Assistant". Typing in it still gives the device your own name; clearing it goes back to Home Assistant's.
+
 ## 2.496.330
 
 ### Fixed
