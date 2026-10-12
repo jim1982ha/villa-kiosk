@@ -1,3 +1,20 @@
+## 0.12.175
+
+What you will see:
+- Every Telegram message the agent sends on its own now has the same layout and the same style as an alert: an
+  underlined title, "To:" with the names, the text in a quote, then "Status:" in italics. Until now, these messages
+  arrived as "For: … / ------- / … / -------" with no style at all:
+  - an approval request (now titled "Approval request"), and every copy of it once someone answers;
+  - "The siren cannot be requested" (now "Siren request");
+  - "… cannot be reached on Telegram" (now "Not reachable on Telegram");
+  - a fault reopened in the Kiosk ("Fault reopened in the Kiosk"), the siren switched off ("Siren"), the AI out of
+    credit ("The AI cannot answer") and a report that could not be prepared ("Report not prepared").
+- "To:" on these messages names everyone the message went to, the same in every chat, as on alerts and reports.
+- After you press a button on a report or an answer, what happened shows under "Status:" instead of under a "-------"
+  line.
+- An alert is named the same way everywhere: "#23", as in its title "#23-P2 (new)". The daily report's "Still open"
+  list, the concierge's status answer and the alert desk's replies said "Incident #23".
+
 ## 0.12.174
 
 What you will see:
