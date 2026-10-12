@@ -1,3 +1,8 @@
+## 2.496.327
+
+### Fixed
+- A device you removed from Advanced Settings (because Home Assistant no longer had it, e.g. after renaming it there) no longer leads to "No entities match" when you open its tile's edit button. Settings now say it was removed, and let you point its 3D object at the entity's new name ("Point it there"): the tile then shows the new entity.
+
 ## 2.496.326
 
 ### Added
