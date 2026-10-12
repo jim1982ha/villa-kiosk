@@ -787,8 +787,14 @@
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   border-radius: 14px; background: var(--bg-input);
 }
+/* ⚠️ BASIS 0, NOT auto (owner, 2026-10-12: on a phone "Outdoor Terrace Light
+   Terrace" pushed its switch onto a second line, alone at the left). The row
+   wraps — only so the switch's "Unlock …?" can open on its own line — and a
+   wrapping row places an item at its BASIS before shrinking it: with `auto`
+   that was the full name's width, so a long name wrapped the switch instead of
+   ending in "…". From 0 the button only grows into the space the switch leaves. */
 .summary-entity-main {
-  flex: 1 1 auto; min-width: 0;
+  flex: 1 1 0; min-width: 0;
   display: flex; align-items: center; gap: 12px;
   padding: 10px 12px; border-radius: 14px;
   background: transparent; border: none; cursor: pointer;
