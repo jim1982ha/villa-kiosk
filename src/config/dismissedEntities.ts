@@ -21,6 +21,29 @@ export function dismissedEntitySet(
 }
 
 /**
+ * The removed device a search names, when its 3D object is still unlinked —
+ * so Advanced Settings can offer to point that object at another entity.
+ *
+ * ⚠️ A DEAD END, REPORTED FROM THE FIELD (2026-10-12): an entity renamed in
+ * Home Assistant, then "Remove"d as no longer in HA, kept its tile on the map
+ * (by design, see EntityVisuals.badgeEligible) — and the tile's edit shortcut
+ * opened this list on "No entities match", because a removed row is hidden and
+ * the "change entity" pencil lived on that row. The object could only be
+ * re-pointed by finding it again in tap mode.
+ *
+ * Exact id only (a removed device is reached by its id, from its tile's edit
+ * shortcut or typed whole); null once the object is bound to something.
+ */
+export function removedObjectSearched(
+  search: string,
+  dismissed: ReadonlySet<string>,
+  meshBindings: Readonly<Record<string, string>>,
+): string | null {
+  const id = search.trim();
+  return id && dismissed.has(id) && !meshBindings[id] ? id : null;
+}
+
+/**
  * Removing a device, as ONE operation that cannot be half-performed.
  *
  * ⚠️ THE RULE WAS CENTRALISED FOR READING AND SCATTERED FOR WRITING, AND THAT

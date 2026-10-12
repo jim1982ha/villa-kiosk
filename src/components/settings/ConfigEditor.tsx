@@ -20,10 +20,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ShowAll, useTruncated } from "@/components/common/TruncatedList";
 import { Search } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
-import { dismissedEntitySet } from "@/config/dismissedEntities";
-import { forgetMappings, patchMapping, remapMapping } from "@/config/mappingEdits";
+import { dismissedEntitySet, removedObjectSearched } from "@/config/dismissedEntities";
+import { bindMesh, forgetMappings, patchMapping, remapMapping } from "@/config/mappingEdits";
 import { useHA } from "@/ha/HAStateStore";
 import EntityMapRow from "./EntityMapRow";
+import EntityPicker from "./EntityPicker";
 import type { EntityMapping } from "@/types/scene.types";
 
 export default function ConfigEditor({ initialSearch }: { initialSearch?: string } = {}) {
@@ -152,6 +153,21 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
     setRemapNewId(undefined);
   }, [update]);
 
+  // A removed device, named whole in the filter (its tile's edit shortcut does
+  // exactly that): its row is hidden, so offer the one thing left to do with
+  // its 3D object — point it at another entity (dismissedEntities.ts).
+  const removedId = useMemo(
+    () => (entries.length === 0 ? removedObjectSearched(search, dismissedSet, config.meshBindings) : null),
+    [entries.length, search, dismissedSet, config.meshBindings],
+  );
+  const [repointTo, setRepointTo] = useState<string | undefined>(undefined);
+  const repoint = useCallback(() => {
+    if (!removedId || !repointTo || repointTo === removedId) return;
+    update(bindMesh(removedId, repointTo, entities[repointTo]));
+    setRepointTo(undefined);
+    setSearch(repointTo);
+  }, [removedId, repointTo, update, entities]);
+
   const startRemap = useCallback((key: string) => { setRemapKey(key); setRemapNewId(undefined); }, []);
   const cancelRemap = useCallback(() => { setRemapKey(null); setRemapNewId(undefined); }, []);
 
@@ -204,7 +220,28 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
         </p>
       )}
 
-      {allEntries.length > 0 && entries.length === 0 && (
+      {removedId ? (
+        <div className="config-stale-notice config-repoint">
+          <div>
+            <strong>{removedId} was removed: Home Assistant no longer has it.</strong>
+            <div className="muted body-text" style={{ marginTop: 2 }}>
+              Its 3D object is still in the model and shows as unavailable on the
+              map. If the entity was renamed, point the object at its new name.
+            </div>
+            <div className="remap-row" style={{ marginTop: 8 }}>
+              <div className="remap-picker">
+                <EntityPicker value={repointTo} onChange={setRepointTo} hideCurrentLabel
+                  placeholder="The entity this 3D object is now…" />
+              </div>
+              <div className="remap-actions">
+                <button className="btn primary" disabled={!repointTo || repointTo === removedId} onClick={repoint}>
+                  Point it there
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : allEntries.length > 0 && entries.length === 0 && (
         <p className="muted body-text mt">No entities match “{search}”.</p>
       )}
 

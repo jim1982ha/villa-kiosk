@@ -66,6 +66,22 @@ console.log("  one edit at a time:");
   ck("forget: the mapping goes AND the decision is recorded", !c.entityMap["light.a"] && c.dismissedEntityIds.includes("light.a"));
 }
 
+console.log("\n  a removed device's 3D object, pointed at another entity:");
+{
+  const de = await import("@/config/dismissedEntities");
+  const em = await import("@/config/EntityMap");
+  const gone = new Set(["light.old_name"]);
+  ck("its exact id, searched, names it", de.removedObjectSearched(" light.old_name ", gone, {}) === "light.old_name");
+  ck("part of the id does not", de.removedObjectSearched("light.old", gone, {}) === null);
+  ck("a device not removed does not", de.removedObjectSearched("light.a", gone, {}) === null);
+  ck("an object already pointed elsewhere does not", de.removedObjectSearched("light.old_name", gone, { "light.old_name": "light.new_name" }) === null);
+  // what "Point it there" applies: the object named after the old id now resolves to the new entity
+  const c = apply(cfg(), me.bindMesh("light.old_name", "light.new_name", { attributes: { friendly_name: "New" } }));
+  ck("pointed: the object resolves to the new entity",
+     em.resolveMeshToMapping("light.old_name", c.entityMap, c.meshBindings)?.entityId === "light.new_name");
+  ck("pointed: the new entity gets a mapping labelled from Home Assistant", c.entityMap["light.new_name"]?.label === "New");
+}
+
 console.log("\n  two edits in the same moment:");
 {
   // The defect: both built from the SAME snapshot, the second erased the first.
