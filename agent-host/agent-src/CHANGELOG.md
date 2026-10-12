@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.169 (12 October 2026)
+
+- ONE LAYOUT for every message sent on its own (owner, 2026-10-12): `layout.render` has one path — a heading (title +
+  "To:" + an incident's history) is laid out with `message_format.document`; without one (an answer to the asker),
+  the text then "Status:". The "For: … / -------" layout is gone: `Poster.post` heads a message about no incident
+  with its `title` (`message_format.titled`; UNTITLED "Message from VESTA" as the last resort) and "To:" naming
+  everyone it went to (`also`), in the asker's chat too when it has a title. Titles: approvals.TITLE "Approval
+  request", outcome.SIREN_TITLE "Siren request", and the engine's own sends (unreachable, fault reopened, siren, AI
+  out of credit, report not prepared). A "For: …" heading recorded before is drawn under UNTITLED; `layout.legacy`
+  also reads a text in the shape. A single history line longer than half the message is cut (it could exceed it).
+- `messaging.incident_tag` is "#N" (was "Incident #N"); `messaging.RULE` is gone, and `incident_message` (a skill
+  edited before 0.12.142) joins its status as a paragraph. alert-desk: "There is no alert #N."
+- Test: every engine-written message is in the layout and styled (test_people_routing; proven red by two mutations).
+
 ## 0.6.168 (12 October 2026)
 
 - reports: compose.py owner-weekly --page P attaches P (the fm-weekly page) to the owner's lines, in the AI's result

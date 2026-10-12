@@ -141,7 +141,7 @@ def test_a_press_in_a_private_chat_is_answered_there_and_its_buttons_go(agent):
     assert replies and all(chat == FM for chat, _, _ in replies)           # never the group
     (chat, m, text), = agent.tg.edits
     assert (chat, m) == (FM, mid)
-    assert text.startswith("🚨 Incident #1: pump stopped\n-------\nDone pressed by FM on ")    # what, then who and when, under a line
+    assert text.startswith("🚨 Incident #1: pump stopped\n\nStatus:\nDone pressed by FM on ")    # what, then who and when, under "Status:"
     assert re.search(r" on \d\d/\d\d/\d{4} \d\d:\d\d\.$", text)
 
 

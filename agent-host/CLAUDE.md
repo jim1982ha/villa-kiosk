@@ -296,9 +296,12 @@ Decisions of 2026-09-30 (owner):
   cannot be checked. Every Kiosk step records the profile (`by`) and the typed name (`who`).
 - Messages, 0.12.152 (owner, 2026-10-11; reviews 27–28): `vesta_shared/message_format.py` is the ONE shape of every
   alert and report and the ONE style table (TELEGRAM) — another channel is another table; no other module names a style
-  (test). An alert: `notice.heading` + `layout._incident`; one incident = one picture in every chat
+  (test). An alert: `notice.heading` + `layout.render`; one incident = one picture in every chat
   (`IncidentThread.sync` after every result, buttons kept per copy). A report is titled as data (`title=`), the agent
-  writes "To:" and its pages. Chat replies and approval requests keep the "For:" layout (owner's choice).
+  writes "To:" and its pages. 0.12.175 (owner, 2026-10-12, reversing the earlier "For:" choice for approvals): ONE
+  layout for every message sent on its own — `layout.render` has one path, a message about no incident is headed by
+  its title (approvals.TITLE, outcome.SIREN_TITLE, the engine's own; UNTITLED last) and "To:"; only an answer to the
+  asker has no heading. `incident_tag` is "#N". Never reintroduce "For:" or a "-------" line.
 - No PDF (owner, 2026-09-30): the reports are self-contained HTML pages sent
   as attachments. Chromium was ~480 MB of a 1.1 GB image for this alone.
 - ⚠️ The Dockerfile's layer order is what an update costs the Yellow: agent

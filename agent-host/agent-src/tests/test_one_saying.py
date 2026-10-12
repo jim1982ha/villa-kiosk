@@ -123,7 +123,9 @@ def test_the_bottom_line_shows_the_stage_by_its_icon():
     assert bottom("#3-P2 (existing)\nTo: JM", "x", "unchecked") == "⚠️ ⚙️ x"         # ☑️ only on a closure
     # a copy sent before 0.12.152 ("For: JM, P2 Incident: Follow Up #3") is never drawn half old, half new: it gets
     # the new heading whole when it changes (Notices.retitle — test_an_old_copy_gets_the_new_heading_whole)
-    assert layout.render(layout.parts(head="For: JM", body="Weekly report", status="Sent")).endswith("\n-------\nSent")
+    # a "For: JM" heading recorded before 0.12.175 is laid out in the one layout, under UNTITLED (owner, 2026-10-12)
+    assert layout.render(layout.parts(head="For: JM", body="Weekly report", status="Sent")) == \
+        "Message from VESTA\nTo: JM\nWeekly report\n\nStatus:\nSent"
     # a new status brings its own mark: "Need help" replaced by "Done pressed" is no longer 🆘
     helped = layout.parts(head="#3-P2 (closed)\nTo: JM", body="b", status="Need help pressed", mark="help")
     assert layout.render(layout.changed(helped, status="Done pressed by Jim.")).endswith("\n✅ Done pressed by Jim.")
@@ -150,7 +152,9 @@ def test_need_help_and_an_unchecked_closure_carry_their_icon_end_to_end(tmp_path
 def test_telegram_shows_the_title_underlined_the_alert_quoted_and_the_status_quoted_in_italics():
     # owner, 2026-10-11: "the first line underlined", "text inside each section in quote style", "everything below the
     # Status line in italic" — Telegram's own markers over the text sent as it is (no markup to break on "<" or "_")
+    from vesta_agent import layout
     from vesta_agent.telegram import Telegram
+    from vesta_shared.message_format import telegram_entities
     from vesta_shared.messaging import tg_len
     tg, calls = Telegram("t0k3n"), []
 
@@ -164,7 +168,7 @@ def test_telegram_shows_the_title_underlined_the_alert_quoted_and_the_status_quo
     text = f"#1-P2 (existing)\nTo: Jim\n{alert}\n\nStatus:\n{history}\n\n{bottom}"
     asyncio.run(tg.send(1, text))
     asyncio.run(tg.edit(1, 7, text))
-    asyncio.run(tg.send(1, "For: JM\n-------\nWeekly report\n-------\nSent"))
+    asyncio.run(tg.send(1, "The pool is fine: 27 °C."))                          # an answer to a person: no heading
     (m1, d1), (m2, d2), (m3, d3) = calls
 
     def at(part):
@@ -177,10 +181,15 @@ def test_telegram_shows_the_title_underlined_the_alert_quoted_and_the_status_quo
         {"type": "blockquote", "offset": at(bottom), "length": tg_len(bottom)},
         {"type": "italic", "offset": at(bottom), "length": tg_len(bottom)}]
     assert m2 == "editMessageText" and d2["entities"] == d1["entities"]
-    assert "entities" not in d3                                                   # not an incident's message: as it is
+    assert "entities" not in d3                                                   # not in the layout: as it is
+    # every other message sent on its own is in the same layout, so styled the same (owner, 2026-10-12: one layout)
+    request = layout.render(layout.parts(head="Approval request\nTo: JM", lead="Intrusion suspected.", body="Turn on Siren?",
+                                         status="Waiting for approval by the owner"))
+    assert request == ("Approval request\nTo: JM\nIntrusion suspected.\nTurn on Siren?\n\nStatus:\n"
+                       "Waiting for approval by the owner")
+    assert [e["type"] for e in telegram_entities(request)] == ["underline", "blockquote", "blockquote", "italic"]
     # the first alert: no history yet, its status alone under "Status:"
     first = "#1-P2 (new)\nTo: Jim\nDoor unlocked\n\nStatus:\n⚠️ New alert"
-    from vesta_shared.message_format import telegram_entities
     assert [e["type"] for e in telegram_entities(first)] == ["underline", "blockquote", "blockquote", "italic"]
 
 

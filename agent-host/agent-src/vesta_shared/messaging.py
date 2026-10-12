@@ -72,23 +72,16 @@ def fmt_money(amount: float, currency: str) -> str:
 # message), and a reminder repeated half of the alert.
 
 def incident_tag(iid: int | str) -> str:
-    """How an incident is named in every chat and report: "Incident #10"."""
-    return f"Incident #{iid}"
-
-
-#: The line between a notice's parts: its heading, the alert, where it stands (vesta_agent/notice.py, incident_thread.py).
-RULE = "-------"
+    """How an incident is named in every chat and report: "#10" — its number as an alert's title writes it ("#10-P2
+    (new)", vesta_agent/notice.py). ⚠️ ONE NAME (owner, 2026-10-12): the title said "#23-P2" and the reports, the
+    concierge and a replaced copy said "Incident #23"."""
+    return f"#{iid}"
 
 
 def incident_message(status: str, details: str = "") -> str:
-    """The body of a notice about an incident: the original alert (`details`), then — under a line — where it stands
-    (`status`; "{time}" in it is the villa's time when it is sent). Its number, who it is for and its earlier notices
-    are the heading the engine writes (vesta_agent/notice.py); what to answer is the buttons under it (owner,
-    2026-10-10: "never mention any redundant text like Reply Done or Need help").
-
-    ⚠️ THE ALERT FIRST, WHERE IT STANDS LAST (owner, 2026-10-10): "the update of the message shall appear at the bottom,
-    after a ------- line", with its time. A button pressed later replaces that last part (IncidentThread.close).
-    Since 0.12.142 a skill gives the status apart (vesta_shared.result.message status=) and the engine lays the parts out
-    (vesta_agent/layout.py): this stays only for a skill edited before, which still joins them."""
+    """The text of a notice about an incident written by a skill edited before 0.12.142, which still joins its alert
+    (`details`) and where it stands (`status`). Since then a skill gives the status apart (vesta_shared.result.message
+    status=) and the engine lays the parts out (vesta_agent/layout.py, the one layout). Kept so such a skill still runs:
+    its status is a paragraph of its alert — no "-------" line, which was a second layout (owner, 2026-10-12)."""
     body, status = (details or "").strip(), status.strip()
-    return f"{body}\n{RULE}\n{status}" if body and status else body or status
+    return f"{body}\n\n{status}" if body and status else body or status

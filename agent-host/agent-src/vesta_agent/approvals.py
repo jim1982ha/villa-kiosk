@@ -21,6 +21,9 @@ from .policy import Decision
 
 log = logging.getLogger("vesta.approvals")
 
+#: An approval request's title, above "To:" (message_format: the one layout of every message sent on its own).
+TITLE = "Approval request"
+
 #: A device still on its way after an approval (a curtain says "closed" until it has finished moving): looked at this
 #: often, for this long; then the request says done or not done. A restart takes it up again (resume).
 FOLLOW_EVERY_S, FOLLOW_FOR_S = 5, 90
@@ -89,7 +92,7 @@ class Approvals:
         are (incident_thread.py), under the heading every message of the agent's carries — in the asking chat too."""
         n = 0
         for chat in msg.chats:
-            if await self.post(chat, msg.text, status=msg.status, lead=head, roles={msg.to} if msg.to else (),
+            if await self.post(chat, msg.text, status=msg.status, lead=head, roles={msg.to} if msg.to else (), title=TITLE,
                                keyboard=msg.keyboard, thread=approval_thread(msg.approval_id), origin=origin):
                 n += 1
         if not n:

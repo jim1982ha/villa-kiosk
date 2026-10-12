@@ -1,28 +1,38 @@
 """A message's layout: the one place that says how a message of the agent's is laid out, and how it changes.
 
-    P2 Incident #18 · Follow Up · for JM       ← head: the incident, who it is for, its history (notice.Notices)
-    -------
+    #18-P2 (existing)                          ← head: its title — the incident, or what it is ("Approval request")
+    To: JM                                     ←       who it is for; then an incident's history (notice.Notices)
     Intrusion suspected: 2 sensors in 5 min    ← lead: why it is asked (kept when the body changes)
     Turn on Siren?                             ← body: the alert, the action — or what became of it
-    -------
-    Waiting for approval by the owner (…)      ← status: where it stands, replaced by a press, an expiry, a clearing
+    (empty line)
+    Status:                                    ← the history, then where it stands: replaced by a press, an expiry,
+    ⚠️ Waiting for approval by the owner          a clearing
 
-⚠️ PARTS, NEVER A RE-CUT TEXT (architecture review 19, 2026-10-10). A message was sent as one text and cut apart again at
-its "-------" lines to be updated: an approved siren request lost its intrusion warning (the warning and the action were
-one middle part, replaced whole), an alert whose own text holds a "-------" line lost its end at a press, and a copy
-without a heading had two statuses stacked. The thread's record now keeps the parts; a change replaces one part and
-renders the message again. `legacy` reads a record written before (0.12.141 and earlier) — once, when it changes.
+⚠️ ONE LAYOUT (owner, 2026-10-12: "make sure the formatting is uniquely and centrally defined"). An alert was laid out in
+the shape above, but every other message the agent sent on its own (an approval request, "the siren cannot be
+requested", a person Telegram refuses) went as "For: JM / ------- / … / ------- / status" — a shape Telegram's style
+table (vesta_shared.message_format) does not know, so it arrived with no underline, no quote, no italics. Every message
+is now `message_format.document`; one without a heading (an answer to the person who asked) is its text and "Status:".
+
+⚠️ PARTS, NEVER A RE-CUT TEXT (architecture review 19, 2026-10-10). A message was sent as one text and cut apart again to
+be updated: an approved siren request lost its intrusion warning. The thread's record keeps the parts; a change replaces
+one part and renders the message again. `legacy` reads a record written before (0.12.141 and earlier) — once, when it
+changes; a "For: …" heading recorded before 0.12.175 is laid out under UNTITLED.
 """
 from __future__ import annotations
 
 import re
 
-from vesta_shared.message_format import INCIDENT_TITLE, MARK_ICONS, STAGE_ICONS, STATUS, TO, document
-from vesta_shared.messaging import RULE, TELEGRAM_LIMIT, tg_len
+from vesta_shared.message_format import (INCIDENT_TITLE, MARK_ICONS, STAGE_ICONS, STATUS, TO, UNTITLED, document,
+                                         parts as shape_parts)
+from vesta_shared.messaging import TELEGRAM_LIMIT, tg_len
 
 from .delivery import fit
 
-SEP = f"\n{RULE}\n"
+#: The line a message recorded before 0.12.142 was cut at (its heading, its alert, its status): read by `legacy` only.
+OLD_RULE = "\n-------\n"
+#: A heading recorded before 0.12.175: "For: JM".
+OLD_FOR = "For: "
 PARTS = ("head", "lead", "body", "status", "mark")
 
 #: An incident message's stage, as its title says it, shown again at the head of its bottom line (owner, 2026-10-11:
@@ -60,49 +70,36 @@ MIDDLE_FLOOR = 300
 
 
 def render(p: dict, limit: int | None = None) -> str:
-    """The text Telegram shows: head, then lead and body, then status — each under a line, in ONE message of `limit`
-    characters (4,096; a photo's or a file's caption 1,024 — the message's own `limit` when it recorded one). The status is
-    kept whole and the head's first line too; the head's oldest history lines go first when room is short (replaced by
-    "… N earlier"), then the middle is shortened (architecture review 15, 20).
+    """The text Telegram shows, in ONE message of `limit` characters (4,096; a photo's or a file's caption 1,024 — the
+    message's own `limit` when it recorded one): the title and "To: …", the lead and body, then "Status:" with the
+    history and where it stands (message_format.document). Without a heading (an answer to the person who asked): the
+    text, then "Status:". The status and the title are kept whole; the oldest history lines go first when room is short
+    ("- … N earlier notices"), then the middle is shortened (architecture review 15, 20).
 
-    ⚠️ NEVER A NEGATIVE ROOM (architecture review 20): a head and a status longer than the limit asked fit() for a negative
-    size, which never returns — the agent would have stopped answering."""
+    ⚠️ NEVER A NEGATIVE ROOM (architecture review 20): a heading and a status longer than the limit asked fit() for a
+    negative size, which never returns — the agent would have stopped answering."""
     limit = int(limit or p.get("limit") or TELEGRAM_LIMIT)
     status = fit(stage_line(p.get("head") or "", (p.get("status") or "").strip(), p.get("mark")), max(limit // 4, 40))
     lines = [x for x in (p.get("head") or "").strip().split("\n") if x]
-    if lines and INCIDENT_TITLE.fullmatch(lines[0]):
-        return _incident(lines, p, status, limit)
+    if lines and lines[0].startswith(OLD_FOR):
+        lines = [UNTITLED, TO + lines[0][len(OLD_FOR):]] + lines[1:]
     middle = "\n".join(x.strip() for x in (p.get("lead"), p.get("body")) if x and x.strip())
-    floor = min(MIDDLE_FLOOR, tg_len(middle))
-    dropped, head_cap = 0, max(limit // 2, 40)        # the head never takes more than half the message
-
-    def joined() -> str:                               # the head as sent: "… N earlier notices" under its first line
-        more = [f"- … {dropped} earlier notice{'s' if dropped > 1 else ''}"] if dropped else []
-        return "\n".join(lines[:1] + more + lines[1:])
-    while len(lines) > 1 and (tg_len(joined()) > head_cap or tg_len(joined()) + tg_len(status) + 2 * len(SEP) + floor > limit):
-        lines.pop(1)                                   # the oldest notice of the history first
-        dropped += 1
-    head = fit(joined(), head_cap) if lines else ""
-    room = max(limit - tg_len(head) - tg_len(status) - 2 * len(SEP), 20)
-    return SEP.join(x for x in (head, fit(middle, room) if middle else "", status) if x)
-
-
-def _incident(lines: list[str], p: dict, status: str, limit: int) -> str:
-    """An alert in the owner's order (owner, 2026-10-11), written in the one shape (vesta_shared.message_format): its
-    title and "To: …", the alert, then "Status:" with the history and where it stands. The oldest history lines go first
-    when room is short ("- … N earlier notices"), then the alert is shortened."""
+    if not lines:
+        tail = f"\n\n{STATUS}:\n{status}" if status else ""
+        return fit(middle, max(limit - tg_len(tail), 20)) + tail if middle else tail.lstrip("\n")
     title, to, history = lines[0], (lines[1] if len(lines) > 1 else TO), lines[2:]
     to = to[len(TO):] if to.startswith(TO) else to.removeprefix(TO.strip()).strip()
-    middle = "\n".join(x.strip() for x in (p.get("lead"), p.get("body")) if x and x.strip())
-    floor, dropped = min(MIDDLE_FLOOR, tg_len(middle)), 0
+    floor, dropped, cap = min(MIDDLE_FLOOR, tg_len(middle)), 0, None
 
     def framed(mid: str) -> str:
         more = [f"- … {dropped} earlier notice{'s' if dropped > 1 else ''}"] if dropped else []
         hist = "\n".join(history[:1] + more + history[1:])
-        return document(title, to, [(None, [mid]), (STATUS, [hist, status])])
+        return document(title, to, [(None, [mid]), (STATUS, [fit(hist, cap) if cap and hist else hist, status])])
     while len(history) > 1 and tg_len(framed("")) + floor > limit:
-        history.pop(1)                                 # the oldest after the first alert, which always stays
+        history.pop(1)                                 # the oldest after the first notice, which always stays
         dropped += 1
+    if tg_len(framed("")) + floor > limit:
+        cap = max(limit // 2, 40)                      # one history line longer than half the message: cut itself
     room = max(limit - tg_len(framed("")) - 1, 20)
     return framed(fit(middle, room) if middle else "")
 
@@ -115,12 +112,24 @@ def changed(p: dict, *, status: str | None = None, body: str | None = None, mark
 
 
 def legacy(text: str) -> dict:
-    """The parts of a message recorded as text only (before 0.12.142): its head when it starts with "For: ", its status
-    when it has three parts. Read once, when that message changes; never for a message sent since."""
-    pieces = (text or "").rstrip().split(SEP)
-    head = pieces.pop(0) if len(pieces) > 1 and pieces[0].startswith("For: ") else ""
+    """The parts of a message recorded as text only: in the one shape (its title and "To:" its head, its last "Status:"
+    block its status), or cut at "-------" lines (before 0.12.142: its head when it starts with "For: ", its status when
+    it has three parts). Read once, when that message changes; never for a message sent since."""
+    text = (text or "").rstrip()
+    if shape_parts(text):
+        title, _, rest = text.partition("\n")
+        to, _, rest = rest.partition("\n")
+        probe = "\n\n" + rest
+        at = probe.rfind(f"\n\n{STATUS}:\n")
+        body, notes = (probe[:at], probe[at + len(STATUS) + 4:]) if at >= 0 else (rest, "")
+        blocks = [x for x in notes.split("\n\n") if x.strip()]
+        history = blocks[0] if blocks and blocks[0].startswith("- ") else ""
+        status = blocks[-1] if blocks and blocks[-1] != history else ""
+        return parts(body=body.strip("\n"), status=status, head="\n".join(x for x in (title, to, history) if x))
+    pieces = text.split(OLD_RULE)
+    head = pieces.pop(0) if len(pieces) > 1 and pieces[0].startswith(OLD_FOR) else ""
     status = pieces.pop() if len(pieces) > 1 else ""
-    return parts(body=SEP.join(pieces), status=status, head=head)
+    return parts(body=OLD_RULE.join(pieces), status=status, head=head)
 
 
 def of(record: dict) -> dict:

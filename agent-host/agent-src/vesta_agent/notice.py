@@ -11,7 +11,10 @@ and the one heading every such message carries (owner, 2026-10-11, the order and
     (empty line)
     ⚠️ ⚙️ Reminder: no answer after 15 min                         ← a quote, in italics
 
-A message about no incident is headed "For: Jean-Marie".
+A message about no incident is headed the same way, by its title (owner, 2026-10-12: one layout):
+
+    Approval request
+    To: Jean-Marie
 
 "To" names the people of the message's role (`to`: owner or fm) as the Rules page's People list names them — never a
 group, which is only where they read it; without a role, the people of the roles the chat is listed with. In a private
@@ -28,7 +31,8 @@ from __future__ import annotations
 
 import re
 
-from vesta_shared.message_format import INCIDENT_TITLE, TO
+from vesta_shared.message_format import INCIDENT_TITLE, TO, UNTITLED, titled
+from vesta_shared.messaging import incident_tag
 from vesta_shared.timeutil import moment_label
 
 from datetime import datetime, timezone
@@ -102,7 +106,7 @@ class Notices:
         return self._for(chat, to)
 
     def heading(self, chat: int, incident: int | None = None, to=None, stage: str | None = None,
-                also: list[str] | None = None) -> str:
+                also: list[str] | None = None, title: str | None = None) -> str:
         """The heading of a notice to `chat` (about `incident`), as it stands before this notice is recorded — its lines,
         which the layout places (layout.py: the title and "To …:" on top, the history under "Status:"):
 
@@ -113,10 +117,11 @@ class Notices:
 
         "To:" names everyone the incident went to — every earlier notice's people, and `also`, this notice's — the same
         line in every chat (owner, 2026-10-11: one incident, one picture; it named only the chat's reader before).
-        A message about no incident: "For: Jim"."""
+        A message about no incident: its `title` (UNTITLED when it has none), and "To:" naming `also`, else the chat's
+        people of `to`."""
         who = ', '.join(self._for(chat, to)) or 'this chat'
         if incident is None:
-            return f"For: {who}"
+            return titled(title or UNTITLED, list(also or []) or self._for(chat, to), "")
         history = self.state.incident_history(incident)
         everyone = list(dict.fromkeys([n for h in history for n in self._names(h)] + list(also or [])))
         who = ', '.join(everyone) or who
@@ -128,7 +133,7 @@ class Notices:
         lines = [f"- … {h['dropped']} earlier notice{'s' if h['dropped'] > 1 else ''}" if h.get("dropped") else
                  f"- {STAGES.get(h.get('stage'), 'Sent')} {when(datetime.fromisoformat(h['at']), self.tz)} "
                  f"to {', '.join(self._names(h)) or 'nobody'}" for h in history]
-        return "\n".join([f"#{incident}{f'-{p}' if p else ''} ({word})", f"{TO}{who}", *lines])
+        return "\n".join([f"{incident_tag(incident)}{f'-{p}' if p else ''} ({word})", f"{TO}{who}", *lines])
 
     def word(self, incident: int, stage: str | None = None, history: bool = True) -> str:
         """The title's word for a notice about `incident`: what the notice is (`stage`) — else what the incident is

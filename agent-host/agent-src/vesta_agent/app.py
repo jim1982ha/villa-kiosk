@@ -141,7 +141,7 @@ class Vesta:
         self.chat_jobs = ChatJobs(self.delivery, self._safe, self.state, settings.timezone)     # a job asked for in a chat, start to end
         self.actions = Actions(self.policy, self.state, self.writer_factory, names=self.name_of, related=self.related_entities,
                                executed=lambda *a: self.siren.executed(*a))
-        self.siren = Siren(self.policy, self.state, self.actions, self._tell_owner_text)
+        self.siren = Siren(self.policy, self.state, self.actions, self._tell_owner_siren)
         # a script's result carried out (outcome.py), with the alert buttons and the Kiosk's tickets as their own modules
         # what each chat shows of an incident (incident_thread.py), and an alert's buttons and their press
         self.thread = IncidentThread(self.state, settings.timezone, edit=(self.delivery.edit if self.tg else None),
@@ -150,7 +150,8 @@ class Vesta:
                                     thread=self.thread, run_job=self.run_code_job)
         self.tickets = Tickets(kiosk=self.kiosk, state=self.state, store_path=settings.store_path,
                                settle_alert=self.thread.close, timezone=settings.timezone,
-                               tell_fm=lambda text: self.outcome.carry_out({"send": [{"to": "fm", "text": text}]}))
+                               tell_fm=lambda text: self.outcome.carry_out({"send": [{"to": "fm", "text": text,
+                                                                                 "title": "Fault reopened in the Kiosk"}]}))
         # a fault offered in a chat, start to end (fault_offers.py, review 32)
         self.fault_offers = FaultOffers(self.state, self.delivery, self.tickets,
                                         lambda chat: self.s.in_folder(f"chats/{chat}").out_dir)
@@ -771,8 +772,8 @@ class Vesta:
             await self.refresh_server_tools()
         return self.server_tools
 
-    async def _tell_owner_text(self, text: str) -> None:
-        await self.outcome.carry_out({"send": [{"to": "owner", "text": text}]})
+    async def _tell_owner_siren(self, text: str) -> None:
+        await self.outcome.carry_out({"send": [{"to": "owner", "text": text, "title": "Siren"}]})
 
     async def _tell_unreachable(self, chat: int, error: str) -> None:
         """⚠️ TOLD ON TELEGRAM, ONCE (architecture review 25): only the VESTA Agent page named a person Telegram refuses —
@@ -784,7 +785,7 @@ class Vesta:
         who = " / ".join(dict.fromkeys(names))
         fix = (f"they open a private chat with @{self.bot_username or 'the bot'} and press Start (or send /start) once"
                if chat > 0 else "add the bot to the group again, or put the group's new id in People")
-        await self.outcome.carry_out({"send": [{"to": "owner", "text": f"{who} cannot be reached on Telegram: Telegram "
+        await self.outcome.carry_out({"send": [{"to": "owner", "title": "Not reachable on Telegram", "text": f"{who} cannot be reached on Telegram: Telegram "
                                                 f"refuses the agent's messages. Until {fix}, their messages go nowhere."}]},
                                      skip=[int(chat)])
         log.info("Told the owner that chat %s cannot be reached", chat)
@@ -801,7 +802,8 @@ class Vesta:
         if last and now - datetime.fromisoformat(last) < timedelta(hours=12):
             return
         self.state.mark_owner_told(problem, now.isoformat())
-        await self.outcome.carry_out({"send": [{"to": "owner", "text": text}]}, skip=already_told)
+        await self.outcome.carry_out({"send": [{"to": "owner", "title": "The AI cannot answer", "text": text}]},
+                                     skip=already_told)
 
     async def housekeeping(self) -> None:
         if not self.server_tools and _now_local(self.s.timezone).minute % 10 == 0:

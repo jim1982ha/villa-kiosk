@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Awaitable, Callable
 
-from vesta_shared.message_format import fill_to, pages
+from vesta_shared.message_format import UNTITLED, fill_to, pages, titled
 
 from . import layout
 from .notice import when
@@ -37,18 +37,25 @@ class Poster:
         # "{time}": the moment it says what happened, as every notice writes one (10/10/2026 15:04, the villa's time)
         now = when(datetime.now(timezone.utc), self.tz)
         text, status, lead = (x.replace("{time}", now) for x in (text, status or "", lead or ""))
-        head = self.notices.heading(chat, incident, roles, stage, also) if self.notices and not plain and not (
-            origin and origin.holds and chat == origin.chat) else ""
-        # ⚠️ A REPORT IS TITLED AS DATA (owner, 2026-10-11, review 28): the agent writes its title and "To:" — everyone
-        # it went to (`also`), the same in every chat, the asker in their own chat too — and cuts a long one into whole
-        # messages "(1/2)", "(2/2)"; it carries no other heading. A text a skill already wrote in the shape, with "To:"
-        # left for the agent, is filled the same way (vesta_shared.message_format).
+        # ⚠️ ONE LAYOUT (owner, 2026-10-12): every message sent on its own is headed by its title and "To:" — an alert's
+        # "#9-P2 (new)", a report's, an approval's "Approval request"; the last resort UNTITLED (notice.heading) — and a
+        # message given a title carries it in the asker's chat too. Only an answer to the person who asked, or a
+        # `plain` one, has no heading. A report is titled as data (owner, 2026-10-11, review 28): the agent writes its
+        # title and "To:" — everyone it went to (`also`), the same in every chat — and cuts a long one into whole
+        # messages "(1/2)", "(2/2)". A text a skill already wrote in the shape, with "To:" left for the agent, is filled.
+        answering = bool(origin and origin.holds and chat == origin.chat)
         names = (also or (self.notices.recipients(chat, roles) if self.notices else [])) if incident is None else []
-        if incident is None and not plain and title:
-            return await self._pages(chat, title, names, text, keyboard, document, photo, origin)
         filled = fill_to(text, names) if incident is None and not plain else None
+        head = ""
         if filled is not None:
-            text, head = filled, ""
+            text = filled
+        elif incident is None and not plain and (title or (self.notices and not answering)):
+            title = title or UNTITLED
+            if not (status or lead or thread is not None):
+                return await self._pages(chat, title, names, text, keyboard, document, photo, origin)
+            head = titled(title, names, "")
+        elif incident is not None and self.notices and not plain and not answering:
+            head = self.notices.heading(chat, incident, roles, stage, also)
         p = layout.parts(body=text, status=status, head=head, lead=lead, mark=mark)
         # ⚠️ A CAPTION IS 1,024 CHARACTERS (architecture review 20): laid out for 4,096, a long incident's snapshot went as a
         # photo and a separate text — only the text was recorded, so the next snapshot left the old photo behind

@@ -13,7 +13,8 @@ import pytest
 
 import yaml
 
-from helpers import body, make_agent, settings
+from helpers import body, make_agent, settings, status as status_of
+from vesta_shared.message_format import UNTITLED
 from telegram_fake import BOT
 from vesta_agent import button_data, status, tool_access
 from vesta_agent.delivery import Delivery
@@ -39,8 +40,10 @@ def test_a_message_for_a_role_reaches_every_chat_of_it_once_under_its_heading(tm
     assert done["sent"] == 3 and [c for c, _, _ in v.tg.sent] == [JM, FABIEN, GROUP]
     # who it is for: the PEOPLE of the role, never the group they read it in
     # a private chat names its own person, a group every person of the role (owner, 2026-10-10)
-    heads = {c: t.split("\n")[0] for c, t, _ in v.tg.sent}
-    assert heads == {JM: "For: JM_FM", FABIEN: "For: Fabien_FM", GROUP: "For: JM_FM, Fabien_FM"}
+    # under its title (UNTITLED: none was given), "To:" naming everyone it went to, the same in every chat — as an
+    # alert's and a report's (owner, 2026-10-11: one picture; 2026-10-12: one layout for every message)
+    heads = {c: t.split("\n")[1] for c, t, _ in v.tg.sent}
+    assert heads == {JM: "To: JM_FM, Fabien_FM", FABIEN: "To: JM_FM, Fabien_FM", GROUP: "To: JM_FM, Fabien_FM"}
     assert all(body(t) == "Pool pump offline." for _, t, _ in v.tg.sent)
     v.tg.sent.clear()
     run(v.outcome.carry_out({"send": [{"to": "owner", "text": "Siren off."}, {"to": "fm", "text": "Siren off."}]}))
@@ -61,7 +64,7 @@ def test_an_approval_for_the_owner_reaches_every_chat_where_the_owner_can_press_
     run(v.on_ha_event("telegram_callback", press))            # in his own private chat Fabien is the Owner he is listed as
     # every copy, in every chat, says who refused and when — its buttons gone (one mechanism: incident_thread.py)
     assert sorted(c for c, _, _ in v.tg.edits) == sorted([FABIEN, JM])
-    assert all(re.search(r"\n-------\nRefused by Fabien_O on \d\d/\d\d/\d{4} \d\d:\d\d\. Nothing was done\.$", t)
+    assert all(re.search(r"\n\nStatus:\nRefused by Fabien_O on \d\d/\d\d/\d{4} \d\d:\d\d\. Nothing was done\.$", t)
                for _, _, t in v.tg.edits)
 
 
@@ -137,10 +140,10 @@ def test_in_a_private_chat_the_persons_own_role_decides_in_a_group_the_least(tmp
 def test_the_for_line_names_the_role_the_message_is_for(tmp_path):
     s = settings(str(tmp_path))
     n = Notices(State(s.state_path), lambda: Policy({"people": PEOPLE}), "UTC")
-    assert n.heading(JM, to="owner") == "For: JM_O"                   # his own chat: him, never Fabien
-    assert n.heading(GROUP, to="fm") == "For: JM_FM, Fabien_FM"
+    assert n.heading(JM, to="owner") == f"{UNTITLED}\nTo: JM_O"       # his own chat: him, never Fabien
+    assert n.heading(GROUP, to="fm", title="Approval request") == "Approval request\nTo: JM_FM, Fabien_FM"
     alone = Notices(State(s.state_path), lambda: Policy({"people": [PEOPLE[4]]}), "UTC")
-    assert alone.heading(GROUP, to="owner") == "For: the Owner"          # a group alone: its role, capitalised
+    assert alone.heading(GROUP, to="owner") == f"{UNTITLED}\nTo: the Owner"   # a group alone: its role, capitalised
 
 
 def test_a_chat_listed_for_both_roles_is_headed_for_both(tmp_path):
@@ -150,8 +153,39 @@ def test_a_chat_listed_for_both_roles_is_headed_for_both(tmp_path):
                                          {"telegram_id": GROUP, "name": "Group_O", "role": "owner"},
                                          {"telegram_id": GROUP, "name": "Group_FM", "role": "fm"}]})
     run(v.outcome.carry_out({"send": [{"to": "owner", "text": "Door unlocked."}, {"to": "fm", "text": "Door unlocked."}]}))
-    heads = {c: t.split("\n")[0] for c, t, _ in v.tg.sent}
-    assert heads == {JM: "For: JM_O", GROUP: "For: JM_O, Fabien_FM", FABIEN: "For: Fabien_FM"}
+    heads = {c: t.split("\n")[1] for c, t, _ in v.tg.sent}
+    assert heads == {JM: "To: JM_O, Fabien_FM", GROUP: "To: JM_O, Fabien_FM", FABIEN: "To: Fabien_FM"}
+
+
+def test_every_message_the_agent_sends_on_its_own_is_in_the_one_layout_and_styled(tmp_path):
+    # owner, 2026-10-12: "check that the formatting of the telegram notifications is uniquely and centrally defined" —
+    # an approval request, "the siren cannot be requested", a person Telegram refuses, a fault reopened in the Kiosk, the
+    # siren switched off, the AI out of credit and an untitled message went as "For: … / -------", which Telegram's style
+    # table does not know: no underline, no quote, no italics. Each now has its title, "To:", its text and "Status:".
+    from vesta_shared import result as R
+    from vesta_shared.message_format import telegram_entities
+    v = make_agent(tmp_path, {"people": PEOPLE, "act_enabled": True, "siren_entity": "switch.siren",
+                              "allowed_services": {"light.turn_on": "owner"}})
+    _, msg = v.actions.request("light", "turn_on", "light.pool", {}, None, None)
+    run(v.outcome.ask(msg))                                                     # an approval request
+    press = {"id": "cb", "data": button_data.make(button_data.APPROVAL, msg.approval_id, "n"), "chat_id": JM,
+             "user_id": JM, "message": {"message_id": 1001, "chat": {"id": JM}, "text": msg.text}, "bot": BOT}
+    run(v.on_ha_event("telegram_callback", press))                              # …and every copy settled
+    run(v.outcome.carry_out({"siren_gate": R.siren(True, "Intrusion suspected.", ("owner",))}, "alert-desk"))
+    run(v._tell_unreachable(FABIEN, "403"))                                     # a person Telegram refuses
+    run(v.tickets.tell_fm("A fault was reopened in the Kiosk."))
+    run(v._tell_owner_siren("Siren switched off."))
+    run(v._tell_owner("credit", []))
+    run(v.outcome.carry_out({"send": [{"to": "fm", "text": "Something with no title."}]}))
+    texts = [t for _, t, _ in v.tg.sent] + [t for _, _, t in v.tg.edits]
+    titles = {t.split("\n", 1)[0] for t in texts}
+    assert {"Approval request", "Siren request", "Not reachable on Telegram", "Fault reopened in the Kiosk", "Siren",
+            "The AI cannot answer", UNTITLED} <= titles, titles
+    for t in texts:
+        assert t.split("\n")[1].startswith("To: ") and "-------" not in t and not t.startswith("For:"), t
+        kinds = [e["type"] for e in telegram_entities(t)]
+        assert kinds[0] == "underline" and "blockquote" in kinds, (t, kinds)
+    assert all("Status:" in t for _, _, t in v.tg.edits)                         # a decision under "Status:"
 
 
 def test_the_agents_own_approvals_and_warnings_carry_the_heading_in_every_chat(tmp_path):
@@ -160,14 +194,15 @@ def test_the_agents_own_approvals_and_warnings_carry_the_heading_in_every_chat(t
                               "allowed_services": {"light.turn_on": "owner", "cover.open_cover": "any"}})
     _, msg = v.actions.request("light", "turn_on", "light.pool", {}, None, None)
     run(v.outcome.ask(msg))
-    assert {c: t.split("\n")[0] for c, t, _ in v.tg.sent} == {FABIEN: "For: Fabien_O", JM: "For: JM_O"}
+    assert {c: t.split("\n", 2)[:2] for c, t, _ in v.tg.sent} == {FABIEN: ["Approval request", "To: Fabien_O"],
+                                                                  JM: ["Approval request", "To: JM_O"]}
     v.tg.sent.clear()
     _, msg = v.actions.request("cover", "open_cover", "cover.pool", {}, v.policy().person(JM), JM)
     run(v.outcome.ask(msg))
     (chat, text, _), = v.tg.sent
     # asked here, and still in the agent's layout (owner, 2026-10-10): heading, the action, then where it stands
-    assert chat == JM and text.startswith("For: ") and re.search(
-        r"\n-------\nWaiting for approval by the owner or the facility manager \(asked on \d\d/\d\d/\d{4} \d\d:\d\d, "
+    assert chat == JM and text.startswith("Approval request\nTo: ") and re.search(
+        r"\n\nStatus:\nWaiting for approval by the owner or the facility manager \(asked on \d\d/\d\d/\d{4} \d\d:\d\d, "
         r"expires in 15 min\)\.$", text)
 
 
@@ -264,7 +299,7 @@ def test_a_request_answered_at_once_leaves_one_message_in_the_askers_chat(tmp_pa
              "message": {"message_id": req_n, "chat": {"id": JM}, "text": req}, "bot": BOT}
     run(v.on_ha_event("telegram_callback", press))
     (_, mid, settled), = v.tg.edits
-    assert len(v.tg.sent) == 1 and mid == req_n and re.search(r"\n-------\nRefused by JM on .*Nothing was done\.$", settled)
+    assert len(v.tg.sent) == 1 and mid == req_n and re.search(r"\n\nStatus:\nRefused by JM on .*Nothing was done\.$", settled)
 
 
 def test_the_siren_that_cannot_be_requested_says_so_in_the_agents_layout(tmp_path):
@@ -272,12 +307,12 @@ def test_the_siren_that_cannot_be_requested_says_so_in_the_agents_layout(tmp_pat
     v = make_agent(tmp_path, {"people": PEOPLE, "siren_entity": "switch.siren"})          # acting is off: refused
     run(v.outcome.carry_out({"siren_gate": R.siren(True, "Intrusion suspected.", ("owner", "fm"))}, "alert-desk"))
     texts = [t for _, t, _ in v.tg.sent]
-    assert texts and all(t.startswith("For: ") and "\n-------\nIntrusion suspected.\n-------\nThe siren cannot be requested: "
-                         in t for t in texts)
+    assert texts and all(t.startswith("Siren request\nTo: ") and "\nIntrusion suspected.\n\nStatus:\nThe siren cannot be "
+                         "requested: " in t for t in texts)
 
 
 def test_an_approved_request_says_what_happened_and_who_approved_it_never_the_retry_words(tmp_path):
-    # owner, 2026-10-10: "For: JM / Opened Bedroom3 Curtain. / Approved by JM on …" — and only the asker's chat
+    # owner, 2026-10-10: "JM / Opened Bedroom3 Curtain. / Approved by JM on …" — and only the asker's chat
     from vesta_agent.actions import Decision, done_words
     names = {"cover.bedroom3": "Bedroom3 Curtain"}.get
     d = Decision(True, "", "any", "cover", "open_cover", ["cover.bedroom3"], {})
@@ -286,9 +321,10 @@ def test_an_approved_request_says_what_happened_and_who_approved_it_never_the_re
         "Bedroom3 Curtain did not open: it reads closed."                     # never claims what did not happen
     assert "retry" not in done_words(d, names, {"ok": False, "failed": True})
     from vesta_agent import layout
-    req = layout.parts(head="For: JM", body="Open Bedroom3 Curtain (final state: open)?", status="Waiting for approval by the owner")
+    req = layout.parts(head="Approval request\nTo: JM", body="Open Bedroom3 Curtain (final state: open)?",
+                       status="Waiting for approval by the owner")
     assert layout.render(layout.changed(req, status="Approved by JM on 10/10/2026 17:13.", body="Opened Bedroom3 Curtain.")) == \
-        "For: JM\n-------\nOpened Bedroom3 Curtain.\n-------\nApproved by JM on 10/10/2026 17:13."
+        "Approval request\nTo: JM\nOpened Bedroom3 Curtain.\n\nStatus:\nApproved by JM on 10/10/2026 17:13."
 
 
 def test_a_request_shown_in_the_askers_chat_is_not_announced_again(tmp_path, monkeypatch):
@@ -337,8 +373,8 @@ def test_a_curtain_still_moving_is_said_to_be_and_the_request_says_opened_once_i
         await v.approvals.idle()
     run(go())
     first, last = v.tg.edits[0][2], v.tg.edits[-1][2]
-    assert "\n-------\nOpening " in first and "\n-------\nApproved by JM on " in first     # on its way, right away
-    assert "\n-------\nOpened " in last and "did not" not in last and last.split("\n-------\n")[-1].startswith("Approved by JM")
+    assert "\nOpening " in first and "\n\nStatus:\nApproved by JM on " in first     # on its way, right away
+    assert "\nOpened " in last and "did not" not in last and status_of(last).startswith("Approved by JM")
 
 
 def test_the_ai_is_told_what_is_waiting_and_what_was_decided_never_left_to_its_memory(tmp_path):
@@ -404,7 +440,7 @@ def test_a_follow_cut_by_a_restart_is_taken_up_again(tmp_path, monkeypatch):
         await v.approvals.idle()
     run(restart())
     assert v.state.approval(msg.approval_id)["status"] == "done"
-    assert v.tg.edits and "\n-------\nOpened " in v.tg.edits[-1][2]
+    assert v.tg.edits and body(v.tg.edits[-1][2]).startswith("Opened ")
 
 
 def test_an_expired_request_says_so_and_a_long_wait_is_still_seen_by_the_ai(tmp_path):
@@ -417,7 +453,7 @@ def test_an_expired_request_says_so_and_a_long_wait_is_still_seen_by_the_ai(tmp_
     assert run(v.approvals.expire(now=in3h)) == 0
     assert run(v.approvals.expire(now=in3h + timedelta(hours=3))) == 1
     (_, _, text), = v.tg.edits
-    assert re.search(r"\n-------\nExpired on \d\d/\d\d/\d{4} \d\d:\d\d: nothing was done\.$", text)
+    assert re.search(r"\n\nStatus:\nExpired on \d\d/\d\d/\d{4} \d\d:\d\d: nothing was done\.$", text)
     assert v.state.approval(msg.approval_id)["status"] == "expired"
 
 
@@ -487,9 +523,8 @@ def test_approve_pressed_as_the_owner_does_it_ends_in_one_verdict_everywhere(tmp
     _press(v, msg)
     assert v.tg.toasts[-1][1] == "Approved: on its way."
     texts = [t for _, _, t in v.tg.edits]
-    assert "\n-------\nOpening " in texts[0]                                   # right away: on its way, who, when
-    body, status = texts[-1].split("\n-------\n")[1:]
-    assert body.startswith("Opened ") and status.startswith("Approved by JM on ")
+    assert body(texts[0]).startswith("Opening ")                              # right away: on its way, who, when
+    assert body(texts[-1]).startswith("Opened ") and status_of(texts[-1]).startswith("Approved by JM on ")
     assert v.state.approval(msg.approval_id)["status"] == "done" and " — approved, and done (by JM on " in v.approvals.now()
 
 
@@ -534,11 +569,11 @@ def test_a_press_the_rules_now_refuse_is_told_as_such_never_failed(tmp_path):
 def test_a_long_incidents_snapshot_is_one_message_and_nothing_hangs():
     # architecture review 20: a caption is 1,024 characters; a head and a status past the limit must never hang render
     from vesta_agent import layout
-    head = "For: JM, P1 Incident: Follow Up #9\n" + "\n".join(f"Notice {i:02d} on 10/10/2026 10:00, to JM, Fabien" for i in range(20))
+    head = "#9-P1 (existing)\nTo: JM, Fabien\n" + "\n".join(f"- Notice {i:02d} on 10/10/2026 10:00, to JM, Fabien" for i in range(20))
     text = layout.render(layout.parts(head=head, body="Camera snapshot"), 1000)
-    assert len(text) <= 1000 and "Camera snapshot" in text and "earlier notice" in text and text.startswith("For: JM, P1")
-    assert "Notice 19 " in text and "Notice 00 " not in text                    # the newest kept, the oldest dropped
-    huge = layout.render(layout.parts(head="For: X\n" + "y" * 9000, body="z", status="s" * 9000), 4096)
+    assert len(text) <= 1000 and "Camera snapshot" in text and "earlier notice" in text and text.startswith("#9-P1")
+    assert "Notice 19 " in text and "Notice 00 " in text and "Notice 01 " not in text   # the first and the newest kept
+    huge = layout.render(layout.parts(head="Approval request\nTo: X\n" + "y" * 9000, body="z", status="s" * 9000), 4096)
     assert len(huge) <= 4096 + 10
 
 

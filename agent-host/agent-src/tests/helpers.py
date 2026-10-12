@@ -133,28 +133,22 @@ def run_terms(who="x", profile="auto", limit_usd=1.0, tools=()):
 
 
 def body(text: str) -> str:
-    """A notice's body: what follows its heading — an incident's alert and what is under it ("#9-P2 (new)", "To …:"), or
-    what follows "For: …" and its "-------" (vesta_agent/notice.py, layout.py)."""
-    from vesta_shared.message_format import INCIDENT_TITLE
-    from vesta_shared.messaging import RULE
+    """A notice's body: what follows its heading — its title and "To: …" (vesta_agent/notice.py, layout.py: the one
+    layout of every message sent on its own); an answer without a heading is all body."""
+    from vesta_shared.message_format import TO
     first, _, rest = text.partition("\n")
-    if INCIDENT_TITLE.fullmatch(first):
-        return rest.partition("\n")[2]
-    return text.split(f"{RULE}\n", 1)[1] if f"{RULE}\n" in text else text
+    second, _, after = rest.partition("\n")
+    return after if first.strip() and second.startswith(TO.strip()) else text
 
 
 def status(text: str) -> str:
-    """Where a notice says it stands: its last part, under the last "-------" (messaging.incident_message — the alert
-    first, the status last; a press's note replaces it: vesta_agent/layout.py)."""
-    from vesta_shared.message_format import INCIDENT_TITLE, STATUS
-    from vesta_shared.messaging import RULE
+    """Where a notice says it stands: the last block under its last "Status:" (the alert or the request first, the
+    history, where it stands last; a press's note replaces it: vesta_agent/layout.py)."""
+    from vesta_shared.message_format import MARK_ICONS, STAGE_ICONS, STATUS
     from vesta_agent.layout import STAGE_WORDS
-    from vesta_shared.message_format import MARK_ICONS, STAGE_ICONS
-    if INCIDENT_TITLE.fullmatch(text.partition("\n")[0]) and f"\n\n{STATUS}:\n" in text:
-        last = text.rsplit(f"\n\n{STATUS}:\n", 1)[1].rsplit("\n\n", 1)[-1]     # its last block: where it stands
-    else:
-        parts = text.split(f"\n{RULE}\n")            # heading / alert / status
-        last = parts[-1] if len(parts) >= 3 else ""
+    label = f"\n\n{STATUS}:\n"
+    probe = "\n\n" + text if text.startswith(f"{STATUS}:\n") else text
+    last = probe.rsplit(label, 1)[1].rsplit("\n\n", 1)[-1] if label in probe else ""
     # the icon in front (layout.stage_line) is the stage again — pinned by test_one_saying, set aside here; a bottom
     # line that is only the stage ("⚠️ New alert") says nothing of its own
     for word, icon in STAGE_ICONS.items():

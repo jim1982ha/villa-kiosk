@@ -105,7 +105,8 @@ class AiJobs:
             log.warning("AI job %s did not run: %s", name, problem)
             made = await self.run_without_ai(skill, job, problem, origin, folder)
             if to and not made:
-                await self.outcome.carry_out({"send": [{"to": job_to(job, origin), "text": for_job(name, problem)}]},
+                await self.outcome.carry_out({"send": [{"to": job_to(job, origin), "title": "Report not prepared",
+                                                        "text": for_job(name, problem)}]},
                                              origin=origin)
             return
         log.info("AI job %s done (%s USD%s)", name, res.cost_usd,

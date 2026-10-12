@@ -99,7 +99,7 @@ def test_when_its_steps_fail_too_the_chat_reads_why(jobs, monkeypatch):
     jobs.steps_sent[0] = False
     sk, job = jobs.j.find("rep-weekly")
     asyncio.run(jobs.j.run(sk, job, Origin(ASKER, JOB)))
-    assert jobs.d.sent == [(ASKER, for_job("rep-weekly", "busy"))]
+    assert jobs.d.sent == [(ASKER, f"Report not prepared\nTo: this chat\n{for_job('rep-weekly', 'busy')}")]
 
 
 def test_a_job_not_set_up_says_so_the_same_way_everywhere(jobs):

@@ -9,7 +9,7 @@ import os
 import pytest
 import yaml
 
-from helpers import copy_skill, make_agent, settings
+from helpers import body, copy_skill, make_agent, settings
 from ai_fake import FakeAI
 from telegram_fake import BOT, FakeTelegram
 from ha_fake import FakeHA, tool
@@ -255,8 +255,11 @@ def test_a_report_asked_for_in_a_chat_that_fails_is_one_message_saying_why(agent
     # "ended without a result" — two messages for one failure. Its reason is its result: it replaces the wait.
     tg = _asked_in_chat(agent, tmp_path, monkeypatch, page=False, fails="busy")
     assert len(tg.deleted) == 1 and tg.edits == []
-    assert [t for _, t, _ in tg.sent][1:] == ["The fm-weekly report could not be prepared: Anthropic's servers were "
-                                              "overloaded or down. It will run again at its next time."]
+    (said,) = [t for _, t, _ in tg.sent][1:]
+    # titled as every message the agent sends on its own, in the asker's chat too (owner, 2026-10-12: one layout)
+    assert said.startswith("Report not prepared\nTo: ") and body(said) == (
+        "The fm-weekly report could not be prepared: Anthropic's servers were overloaded or down. It will run again at "
+        "its next time.")
 
 
 def test_the_ai_is_never_told_sent_for_a_message_telegram_refused(agent):

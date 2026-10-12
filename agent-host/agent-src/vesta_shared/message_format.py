@@ -11,12 +11,14 @@ Every alert and every report is written as plain text in this shape:
     - P3 Onsen pump used 0.12 kWh/day …            ← an item                    (its lines, up to an empty line)
 
     Still open:
-    - Incident #5 · ⚠️ House Pump Power …
+    - #5 · ⚠️ House Pump Power …
 
     - P2 Motion1 Occupancy battery at 7%: replace now.
 
-An alert ("#1-P2 (existing)" / "To: Jim" / the alert / "Status:" / its history / where it stands) is the same shape:
-vesta_agent/notice.py writes its heading, vesta_agent/layout.py lays it out with `document`.
+An alert ("#1-P2 (existing)" / "To: Jim" / the alert / "Status:" / its history / where it stands) is the same shape,
+and so is every other message the agent sends on its own ("Approval request" / "To: JM" / … / "Status:" / where it
+stands): vesta_agent/notice.py writes its heading, vesta_agent/layout.py lays it out with `document` — the ONE layout
+(owner, 2026-10-12: "uniquely and centrally defined"; a "For: … / -------" layout lived beside it until 0.12.175).
 
 `parts` reads the shape back from the text as it is finally sent — the daily digest is written by the AI, in the
 facility manager's language, so the style is never trusted to the writer: it is found in the text. Each channel says
@@ -30,6 +32,9 @@ import re
 from .messaging import tg_len
 
 TO = "To: "
+#: The title of a message about no incident whose sender gave it none (an AI's message sent without one; a heading
+#: "For: …" recorded before 0.12.175). Every message the agent sends on its own has a title: this is the last resort.
+UNTITLED = "Message from VESTA"
 #: An alert's first line: "#9-P2 (existing)" (vesta_agent/notice.py).
 INCIDENT_TITLE = re.compile(r"#\d+(?:-P\d)? \((new|existing|closed)\)")
 #: The label of an alert's where-it-stands section (vesta_agent/layout.py).

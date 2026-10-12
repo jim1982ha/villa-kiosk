@@ -122,7 +122,7 @@ def test_a_person_reads_the_reason_and_the_owner_is_told_once(agent, monkeypatch
     to_owner = [t for c, t, _ in agent.tg.sent if c == OWNER_CHAT]
     assert to_fm == [api_errors.FOR_PERSON["credit"]] * 2
     assert [body(t) for t in to_owner] == [api_errors.NEEDS_THE_OWNER["credit"]]          # once, not at every reply
-    assert to_owner[0].startswith("For: ")                             # sent on its own: its heading (notice.py)
+    assert to_owner[0].startswith("The AI cannot answer\nTo: ")      # sent on its own: its title and "To:" (one layout)
     assert not any("API Error" in t or "{" in t for _, t, _ in agent.tg.sent)
 
 
@@ -235,7 +235,7 @@ def test_a_report_the_ai_cannot_make_is_made_from_its_figures_and_says_why(agent
 def test_a_step_that_fails_stops_the_report_and_an_old_file_never_stands_in(agent, monkeypatch):
     to_fm = _report_without_ai(agent, monkeypatch, fail=True, stale=True)
     # not "999 kWh": last week's figures; sent on its own, so under its heading (notice.py) as every such message
-    assert [body(t) for t in to_fm] == [api_errors.for_job("rep-weekly", "credit")] and to_fm[0].startswith("For: ")
+    assert [body(t) for t in to_fm] == [api_errors.for_job("rep-weekly", "credit")] and to_fm[0].startswith("Report not prepared\nTo: ")
     from vesta_agent import status
     (row,) = [r for r in status.costs(agent.state)["runs"] if r.get("without_ai")]
     assert row["without_ai"]["sent"] == 0 and row["without_ai"]["failed"] == "week.py"
@@ -259,7 +259,7 @@ def test_a_report_asked_for_while_the_ai_is_down_is_a_button_that_needs_no_ai(ag
     asyncio.run(go())
     said = "Making the Weekly report without the AI, from its figures and charts: it will be sent here."
     assert agent.tg.toasts == [("cb1", said)]
-    assert agent.tg.edits == [(FM, agent.tg.next_id - 1, f"No credit.\n-------\n{said}")]   # its buttons gone, it says so
+    assert agent.tg.edits == [(FM, agent.tg.next_id - 1, f"No credit.\n\nStatus:\n{said}")]   # its buttons gone, it says so
     assert [t for c, t, _ in agent.tg.sent if c == FM][1] == \
         "287 kWh this week. (Made without the AI: The Anthropic account has run out of credit.)"
 

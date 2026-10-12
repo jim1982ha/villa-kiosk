@@ -48,6 +48,9 @@ HA_SENT_WAIT_S = (0.5, 1.0, 2.0)
 
 log = logging.getLogger("vesta.outcome")
 
+#: The title of "the siren cannot be requested", above "To:" (message_format: the one layout).
+SIREN_TITLE = "Siren request"
+
 
 #: What a script result can ask the engine to carry out — the keys carry_out reads. ⚠️ ONE LIST
 #: (architecture review, 0.12.38): the model's run_skill_script tool kept its own copy, so a key added here
@@ -216,10 +219,11 @@ class Outcome:
             if not msg:
                 said, told = f"The siren cannot be requested: {answer}", 0
                 for chat in route.target("owner"):
-                    told += bool(await self.poster.post(chat, gate_prompt, status=said, roles={"owner"}, origin=origin))
+                    told += bool(await self.poster.post(chat, gate_prompt, status=said, roles={"owner"}, origin=origin,
+                                                                       title=SIREN_TITLE))
                 if not told:
                     for chat in route.target("fm"):          # no chat of the owner's has it: the facility manager's do
-                        await self.poster.post(chat, gate_prompt, status=said, roles={"fm"}, origin=origin)
+                        await self.poster.post(chat, gate_prompt, status=said, roles={"fm"}, origin=origin, title=SIREN_TITLE)
         for a in res.get("actions") or []:
             kind = (a or {}).get("action")
             try:

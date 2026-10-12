@@ -818,7 +818,7 @@ def test_the_morning_digest_says_what_is_new_and_still_open_as_problems_answer_i
     assert "Pool Power silent" in new and "Spa Power silent" not in text          # closed again: not news
     assert text.count("Humid cellar") == 1                                         # noted once, not open twice
     still = rest.split("\nStill open:\n")[1]
-    assert still.split("\n\n") == ["- Incident #1 · Leak in the kitchen", "- P3 Door battery low"]   # each item a block
+    assert still.split("\n\n") == ["- #1 · Leak in the kitchen", "- P3 Door battery low"]   # each item a block
     # owner, 2026-10-11: the one shape — title, "To:" for the agent to fill, labels; no "Still open: N. An alert: press…"
     assert text.startswith("V, daily report on 05/10/2026.\nTo:\n\nNew since yesterday:\n- ") and "press Done" not in text
 

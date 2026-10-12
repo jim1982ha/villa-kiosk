@@ -56,8 +56,9 @@ The decision is one of:
 
 ## One message per incident per chat
 
-Every message about an incident starts with `Incident #N · <where it stands>`, then repeats the original
-alert and what to check, then what to answer when someone is still asked. A chat shows only an incident's
+Every message about an incident is titled `#N-P2 (new)` (or `existing`, `closed`), then "To:" with the people it
+went to, the original alert and what to check, then "Status:" with what was sent and where it stands; the engine
+writes the title, "To:" and "Status:" (the skill gives the text and the status apart). A chat shows only an incident's
 latest message: the engine deletes the earlier ones when a new one lands, Home Assistant's own alert
 included (it is rewritten with the incident's number as soon as the desk knows it).
 

@@ -110,7 +110,7 @@ def test_a_message_past_telegrams_48_hours_becomes_a_pointer(agent):
     agent.tg.refuse.add("delete")
     tick(agent, 20)
     first_fm = next(n for n, (c, _t, _k) in enumerate(agent.tg.sent, start=1001) if c == FM_CHAT)
-    assert (FM_CHAT, first_fm, "Incident #1 · see the newer message below.") in agent.tg.edits
+    assert (FM_CHAT, first_fm, "#1 · see the newer message below.") in agent.tg.edits
 
 
 def test_the_owner_and_the_fm_in_one_chat_get_one_message_with_the_buttons(agent):
@@ -236,24 +236,24 @@ def test_the_kiosk_answer_gives_who_closed_a_fault_and_when():
 
 
 def test_a_press_puts_where_it_stands_last_in_place_of_the_old_status():
-    # owner, 2026-10-10: "the update of the message (when clicked) shall appear at the bottom, after a ------- line",
-    # with its time — never stacked under an older status
+    # owner, 2026-10-10: "the update of the message (when clicked) shall appear at the bottom", with its time — never
+    # stacked under an older status; under "Status:" since 2026-10-12 (one layout, the "-------" line retired)
     from vesta_agent import layout
-    reminder = layout.parts(head="For: JM_FM", body="Door left open\nWhat to do: close it",
+    reminder = layout.parts(head="Approval request\nTo: JM_FM", body="Door left open\nWhat to do: close it",
                             status="Reminder: no answer after 15 min")
     assert layout.render(layout.changed(reminder, status="Done pressed by JM_O on 10/10/2026 15:04")) == \
-        "For: JM_FM\n-------\nDoor left open\nWhat to do: close it\n-------\nDone pressed by JM_O on 10/10/2026 15:04"
+        "Approval request\nTo: JM_FM\nDoor left open\nWhat to do: close it\n\nStatus:\nDone pressed by JM_O on 10/10/2026 15:04"
     new = layout.parts(head="#14-P2 (closed)\nTo: JM_FM", body="Door left open")
     assert layout.render(layout.changed(new, status="Done pressed by JM_O on 10/10/2026 15:04")) == \
         "#14-P2 (closed)\nTo: JM_FM\nDoor left open\n\nStatus:\n✅ Done pressed by JM_O on 10/10/2026 15:04"
     # architecture review 19: the parts are kept, never cut out of the text — an alert holding its own "-------" line
     # keeps its end at a press, and a request's lead (why it is asked) stays when its body says what became of it
-    odd = layout.parts(head="For: JM_FM", body="Pump log:\n-------\nstopped at 03:00")
-    assert layout.render(layout.changed(odd, status="Done")).endswith("Pump log:\n-------\nstopped at 03:00\n-------\nDone")
-    siren = layout.parts(head="For: the Owner", lead="Intrusion suspected: 2 sensors.", body="Turn on Siren?",
+    odd = layout.parts(head="Siren request\nTo: JM_FM", body="Pump log:\n\nStatus:\nstopped at 03:00")
+    assert layout.render(layout.changed(odd, status="Done")).endswith("Pump log:\n\nStatus:\nstopped at 03:00\n\nStatus:\nDone")
+    siren = layout.parts(head="Approval request\nTo: the Owner", lead="Intrusion suspected: 2 sensors.", body="Turn on Siren?",
                          status="Waiting for approval")
     assert layout.render(layout.changed(siren, status="Approved by JM", body="Turned on Siren.")) == \
-        "For: the Owner\n-------\nIntrusion suspected: 2 sensors.\nTurned on Siren.\n-------\nApproved by JM"
+        "Approval request\nTo: the Owner\nIntrusion suspected: 2 sensors.\nTurned on Siren.\n\nStatus:\nApproved by JM"
 
 
 def test_home_assistants_cleared_in_time_message_says_cleared_with_its_time(agent):

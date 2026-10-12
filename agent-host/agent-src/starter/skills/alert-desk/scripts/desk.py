@@ -543,7 +543,7 @@ def reply(store: Store, iid: int, text: str, sender_role: str, now: datetime, pa
     inc = store.incident(iid)
     out = {"send": [], "actions": []}
     if not inc:
-        out["send"].append(R.message("here", f"There is no {incident_tag(iid)}.")); return out
+        out["send"].append(R.message("here", f"There is no alert {incident_tag(iid)}.")); return out
     t = text.strip().lower()
     who = name or {"owner": "the owner", "fm": "the facility manager"}.get(sender_role, sender_role)
 
