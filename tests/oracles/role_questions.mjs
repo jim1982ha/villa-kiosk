@@ -77,19 +77,26 @@ console.log("\n  the signed-in badge:");
   ck("  ...every profile has one, and no two share it",
      ROLE_ORDER.every((r) => ROLE_INITIALS[r]) && new Set(ROLE_ORDER.map((r) => ROLE_INITIALS[r])).size === ROLE_ORDER.length);
   const hud = readFileSync(new URL("../../src/components/hud/HUD.tsx", import.meta.url), "utf8");
-  ck("  ...the badge is the role's letters, opens the profile switch, and comes after Settings",
-     /className="icon-btn hud-role-badge"\s*onClick=\{beginSwitch\}/.test(hud)
-     && /\{ROLE_INITIALS\[role\]\}/.test(hud)
-     && hud.indexOf('aria-label="Settings"') < hud.indexOf("hud-role-badge")
-     && !/hud-profile/.test(hud));
-  // The phone menu (2.496.246): the same badge on a "Log out" row, and the
-  // colour legend reached from "Label size (?)" instead of its own row.
-  const menu = hud.slice(hud.indexOf('className="hud-menu"'));
-  const logout = menu.slice(menu.lastIndexOf("{role && ("), menu.indexOf("<span>Log out</span>") + 1);
-  ck("the phone menu's last row is the same round badge and 'Log out', opening the profile switch",
-     menu.includes("<span>Log out</span>") && !menu.includes("Switch profile")
-     && /beginSwitch\(\)/.test(logout) && /className=\{`role-glyph\$\{ROLE_INITIALS\[role\]\.length > 1/.test(logout)
-     && /className=\{`role-glyph/.test(hud.slice(hud.indexOf("hud-role-badge"))), logout.slice(0, 300));
+  // Owner, 2026-10-12: on a roomy screen the badge OPENS a menu — Settings, then "Logout (<role>)" —
+  // and Settings has no icon of its own beside it. The phone's menu ends with the SAME rows, written once.
+  const code = hud.replace(/\{\/\*[\s\S]*?\*\/\}/g, "").replace(/\/\*[\s\S]*?\*\//g, "");
+  const inline = code.slice(code.indexOf('className="hud-right-inline'), code.indexOf('className="hud-group hud-overflow"'));
+  ck("  ...the badge is the role's letters and opens the account menu; Settings has no icon of its own",
+     /className=\{`icon-btn hud-role-badge/.test(inline) && /onClick=\{\(\) => account\.setOpen\(\(o\) => !o\)\}/.test(inline)
+     && /aria-haspopup="menu"/.test(inline) && /\{ROLE_INITIALS\[role\]\}/.test(inline)
+     && !/aria-label="Settings"/.test(inline) && !/hud-profile/.test(hud));
+  ck("  ...the menu is the shared rows", /\{accountRows\(\(\) => account\.setOpen\(false\)\)\}/.test(inline));
+  const rows = code.slice(code.indexOf("const accountRows"), code.indexOf("</>", code.indexOf("const accountRows")));
+  ck("the shared rows: Settings, then 'Logout (<role>)' with the role's badge, opening the profile switch",
+     rows.indexOf("<span>Settings</span>") > 0 && rows.indexOf("<span>Settings</span>") < rows.indexOf("Logout (")
+     && /<span>Logout \(\{ROLE_LABELS\[role\]\}\)<\/span>/.test(rows) && /beginSwitch\(\)/.test(rows)
+     && /className=\{`role-glyph\$\{ROLE_INITIALS\[role\]\.length > 1/.test(rows), rows.slice(0, 300));
+  // The phone menu (2.496.246): it ends with the same rows; the colour legend is reached from "Label size (?)".
+  const menu = code.slice(code.indexOf('className="hud-group hud-overflow"'));
+  ck("  ...and the phone's menu ends with them — no second copy of either row",
+     /\{accountRows\(\(\) => setMenuOpen\(false\)\)\}/.test(menu) && (code.match(/<span>Settings<\/span>/g) ?? []).length === 1
+     && (code.match(/Logout \(/g) ?? []).length === 1 && !code.includes("<span>Log out</span>") && !menu.includes("Switch profile"));
+  const logout = rows;
   const help = menu.slice(menu.indexOf('className="hud-menu-help"') - 200, menu.indexOf("<span>Label size</span>") + 80);
   ck("  ...and 'Label size (?)' opens the map-colours legend; the 'Map colours' row is gone",
      /setLegendOpen\(true\)/.test(help) && /<CircleHelp size=\{18\}/.test(help) && !menu.includes("<span>Map colours</span>"), help);

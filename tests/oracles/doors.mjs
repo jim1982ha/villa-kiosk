@@ -52,7 +52,7 @@ ck("  ...and no longer re-asks those capabilities itself",
 ck("no window's visibility is implied by a callback being passed (no `? () => … : undefined`)",
    !/onOpen(Agent|Facility)=\{[^}]*\? /.test(dash) && !/onOpen(Agent|Facility)\?:/.test(hud) && !/onOpenAgent\?:/.test(cockpit));
 ck("the top bar draws Settings and the agent's robot from doors — and no Facility button (its tabs are the Cockpit's)",
-   (hud.match(/\{doors\.facility && \(/g) ?? []).length === 0 && (hud.match(/\{doors\.settings && \(/g) ?? []).length === 2
+   (hud.match(/\{doors\.facility && \(/g) ?? []).length === 0 && (hud.match(/\{doors\.settings && \(/g) ?? []).length === 1   // ONE Settings row, shared by both menus (accountRows, 2.496.335)
    && !/\{onOpenFacility && \(|\{canOpenSettings && \(/.test(hud));
 ck("the Cockpit's updates count and agent footer read doors, not roleCan",
    /if \(!doors\.updates\) return null;/.test(cockpit) && !/roleCan\(role, "seeUpdates"\)/.test(cockpit) && /doors\.agent \? \(/.test(cockpit));

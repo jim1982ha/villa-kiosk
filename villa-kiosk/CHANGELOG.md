@@ -1,3 +1,9 @@
+## 2.496.335
+
+### Changed
+- Desktop and tablet: clicking the round role badge at the top right (O, FM, G) opens a menu with two rows — "Settings", then "Logout (Owner)" (your role's name). The separate Settings gear beside the badge is gone.
+- Phone menu: "Log out" now reads "Logout (Owner)" (your role's name) — the same two rows as the desktop menu, which still lead to the profile screen.
+
 ## 2.496.334
 
 ### Changed

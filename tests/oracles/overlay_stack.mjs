@@ -25,7 +25,11 @@ const unregistered = surfaces.filter((f) => !REGISTERS.test(read(f))).map((f) =>
 ck(`every surface registers on the stack (${surfaces.length} files)`, surfaces.length >= 10 && unregistered.length === 0, unregistered);
 
 const hud = read(join(SRC, "components/hud/HUD.tsx"));
-ck("the overflow menu and the Rooms dial are on it", /useBackToClose\(\(\) => setMenuOpen\(false\), menuOpen\)/.test(hud) && /useBackToClose\(\(\) => setRadial\(null\), radial !== null\)/.test(hud));
+// both HUD dropdowns (the phone's overflow menu, the desktop's account menu, 2.496.335) through useHudMenu
+ck("the overflow menu, the account menu and the Rooms dial are on it",
+   /function useHudMenu\(\) \{[\s\S]{0,120}useBackToClose\(\(\) => setOpen\(false\), open\)/.test(hud)
+   && /= useHudMenu\(\);[\s\S]{0,400}const account = useHudMenu\(\);/.test(hud)
+   && /useBackToClose\(\(\) => setRadial\(null\), radial !== null\)/.test(hud));
 ck("the Rooms menu is on it", /useBackToClose\(onClose\);/.test(read(join(SRC, "components/teleport/TeleportMenu.tsx"))));
 const dash = read(join(SRC, "pages/Dashboard.tsx"));
 ck("the auto-reload asks the stack, and keeps no list of its own",
