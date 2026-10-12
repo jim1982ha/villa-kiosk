@@ -122,7 +122,7 @@ console.log("\n  a camera that stops (owner, 2026-10-08: badges behind the kitch
   const r = rig();
   const shown = [r.badge("cam.a", 4), r.badge("cam.b", 6), r.badge("cam.c", 8), r.badge("cam.d", 10)];
   for (const b of shown) r.walls.add(b.id);
-  const gate = new LayoutGate();
+  const gate = new LayoutGate(() => {});   // frames are not this test's question (layout_gate.mjs)
   let view = 0, frames = 0;
   const frame = (viewChanged) => {
     if (viewChanged) view++;

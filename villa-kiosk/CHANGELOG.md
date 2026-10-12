@@ -1,3 +1,8 @@
+## 2.496.337
+
+### Fixed
+- Badges on the map are redrawn the moment anything changes them — for every cause, not only the room recompute fixed in 2.496.332 — so nothing waits for your next mouse movement to appear. (Under the hood: telling the map "the badges changed" now also asks it to redraw, in one step.)
+
 ## 2.496.336
 
 ### Changed

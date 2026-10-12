@@ -12,14 +12,34 @@
 // walls stayed drawn. The sweep's oracle stepped every frame and could not see this gate; now
 // tests/oracles/occlusion_sweep.mjs drives the real gate and the real wall step together.
 
+//
+// ⚠️ A MARK IS A FRAME (owner, 2026-10-12, architecture review of that day, candidate 2). The render
+// loop draws on demand, so a mark with no frame left a new layout computed and undrawn until some
+// unrelated frame — the owner saw badges regroup "under the mouse" after a room recompute (2.496.332).
+// Marking and asking for the frame were two calls every caller had to remember; `markDirty` now asks
+// for the frame itself, through the one port it is given. The ONE exception is named:
+// `markDirtyInFrame`, for a caller running inside the frame that will draw the change (the badge
+// rescale during the layout pass, or just before an idle frame) — asking there re-arms the loop
+// forever (EntityVisuals.notifyRenderScaleChanged explains the loop).
+
 export class LayoutGate {
   private dirty = true;
   private last: Float32Array | null = null;
   private w = -1;
   private h = -1;
+  /** Ask the render loop for a frame (FrameRequests.repaint, through EntityVisuals). */
+  private readonly frame: () => void;
 
-  /** Something that can change where or whether a badge draws has happened: run on the next frame. */
-  markDirty(): void { this.dirty = true; }
+  constructor(frame: () => void) {
+    this.frame = frame;
+  }
+
+  /** Something that can change where or whether a badge draws has happened: run the layout on the
+   *  next frame, and ask for that frame. */
+  markDirty(): void { this.dirty = true; this.frame(); }
+
+  /** The same mark, from inside the frame that will draw it — no frame asked (see the header). */
+  markDirtyInFrame(): void { this.dirty = true; }
 
   /** Must the layout run for this view? True when dirty or the view changed; it then records the
    *  view and clears the mark. `m`: the 16 numbers of the view-projection matrix; `w`, `h`: the
