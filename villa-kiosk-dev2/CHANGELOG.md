@@ -1,3 +1,8 @@
+## 2.496.340
+
+### Fixed
+- Every device list is now the same window, whichever way you open it — the bottom bar's tiles (Lights…), a long press on a category in the top bar, the Cockpit's tiles, a room on the map, the Facility checks. Whenever its devices are on more than one floor, it shows them under "1F", "2F" with each floor's "Turn all on / off" button; a list of one room or one floor stays a list of rooms. Until now only the top bar and the Cockpit's category tiles grouped by floor, so the bottom bar's "Lights" looked different.
+
 ## 2.496.339
 
 ### Changed
