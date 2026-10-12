@@ -221,7 +221,8 @@ def test_one_incident_one_picture_in_every_chat(tmp_path):
     shown = {c: r["text"] for c, r in v.thread.shown(5).items()}
     assert set(shown) == {GROUP, FM, JM2} and len(set(shown.values())) == 1, shown       # the group's copy too
     text = shown[GROUP]
-    assert text.startswith("#5 (existing)\nTo: the Owner, Fabien, JM\n") and text.endswith("⚠️ ⚙️ Reminder: no answer after 15 min")
+    # the people only: the owner's role is a group with nobody in it (owner, 2026-10-12: never "the Owner, Fabien, JM")
+    assert text.startswith("#5 (existing)\nTo: Fabien, JM\n") and text.endswith("⚠️ ⚙️ Reminder: no answer after 15 min")
     # the group was not sent the reminder: its copy was edited quietly, and keeps its buttons
     assert not [c for c, _, _ in v.tg.sent[3:] if c == GROUP]
     group = v.thread.shown(5)[GROUP]

@@ -37,7 +37,7 @@ from datetime import datetime, timezone
 from typing import Awaitable, Callable
 
 from . import layout
-from .notice import when
+from .notice import addressed, when
 from .posting import Poster
 from .routing import Origin, Routing
 
@@ -131,8 +131,8 @@ class Outcome:
                     going.setdefault(int(incident_of(item)), []).extend(names)
                 else:
                     sent_to.setdefault(id(item), []).extend(names)
-            going = {k: list(dict.fromkeys(v)) for k, v in going.items()}
-            sent_to = {k: list(dict.fromkeys(v)) for k, v in sent_to.items()}
+            going = {k: addressed(v) for k, v in going.items()}
+            sent_to = {k: addressed(v) for k, v in sent_to.items()}
         posted: dict[int, list[int]] = {}               # incident → the chats this result showed it in, the last one last
         # Home Assistant's own messages first: the desk's messages below then replace them where both land
         for h in res.get("ha_messages") or []:

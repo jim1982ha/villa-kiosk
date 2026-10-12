@@ -146,6 +146,25 @@ def test_the_for_line_names_the_role_the_message_is_for(tmp_path):
     assert alone.heading(GROUP, to="owner") == f"{UNTITLED}\nTo: the Owner"   # a group alone: its role, capitalised
 
 
+def test_to_names_the_people_and_a_roles_word_only_when_nobody_is_named(tmp_path):
+    # owner, 2026-10-12: "#25-P2 (closed) / To: the Owner, Fabien, JM" — the owner's role was a group with no person in
+    # it, and its word was merged with the facility manager's names. A role's word only when no person is named at all.
+    from vesta_agent.notice import addressed
+    assert addressed(["the Owner", "Fabien", "JM", "Fabien"]) == ["Fabien", "JM"]
+    assert addressed(["the Owner", "the Facility Manager"]) == ["the Owner", "the Facility Manager"]
+    v = make_agent(tmp_path, {"people": [{"telegram_id": GROUP, "name": "Villa group", "role": "owner"},
+                                         {"telegram_id": FABIEN, "name": "Fabien", "role": "fm"},
+                                         {"telegram_id": JM, "name": "JM", "role": "fm"}]})
+    run(v.outcome.carry_out({"send": [{"to": "owner", "text": "Door unlocked.", "title": "Door"},
+                                      {"to": "fm", "text": "Door unlocked.", "title": "Door"}]}))
+    # two messages: the owner's went to the group only (nobody named: its role's word), the facility manager's to two people
+    assert sorted(t.split("\n")[1] for _, t, _ in v.tg.sent) == ["To: Fabien, JM", "To: Fabien, JM", "To: the Owner"]
+    # one incident sent to both: ONE "To:" for it, the people only — in every chat, and in its history line
+    v.notices.record(25, "new", [(GROUP, "owner"), (FABIEN, "fm"), (JM, "fm")])
+    head = v.notices.heading(GROUP, 25, "owner", "closed")
+    assert head.split("\n")[1] == "To: Fabien, JM" and head.split("\n")[2].endswith(" to Fabien, JM"), head
+
+
 def test_a_chat_listed_for_both_roles_is_headed_for_both(tmp_path):
     # architecture review 18: the one copy kept for a group of both roles was headed for the owner's people only
     v = make_agent(tmp_path, {"people": [{"telegram_id": JM, "name": "JM_O", "role": "owner"},

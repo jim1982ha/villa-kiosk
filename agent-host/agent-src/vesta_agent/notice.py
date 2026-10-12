@@ -54,6 +54,15 @@ EXISTING = "existing"
 #: A role in a heading when no person of it is listed (owner, 2026-10-10: "the Facility Manager", capitals)
 ROLE_WORDS = {"owner": "the Owner", "fm": "the Facility Manager"}
 WHEN = "%d/%m/%Y %H:%M"
+
+
+def addressed(names) -> list[str]:
+    """The names a "To:" line or a history line says, once each: the people — a role's word ("the Owner") only when no
+    person is named at all. ⚠️ NEVER BOTH (owner, 2026-10-12: "To: the Owner, Fabien, JM"): a chat listed for a role
+    with no person in it (a group) gave its role's word, merged with the names of the other chats."""
+    out = list(dict.fromkeys(n for n in names if n))
+    people = [n for n in out if n not in ROLE_WORDS.values()]
+    return people or out
 #: An incident's history kept: its first notice, a line counting those dropped, and the latest ones (review 28: after
 #: 20 notices the first alert vanished without a word).
 HISTORY_KEPT = 20
@@ -121,9 +130,9 @@ class Notices:
         people of `to`."""
         who = ', '.join(self._for(chat, to)) or 'this chat'
         if incident is None:
-            return titled(title or UNTITLED, list(also or []) or self._for(chat, to), "")
+            return titled(title or UNTITLED, addressed(list(also or []) or self._for(chat, to)), "")
         history = self.state.incident_history(incident)
-        everyone = list(dict.fromkeys([n for h in history for n in self._names(h)] + list(also or [])))
+        everyone = addressed([n for h in history for n in self._names(h)] + list(also or []))
         who = ', '.join(everyone) or who
         try:
             p = self.severity(int(incident))
@@ -187,4 +196,4 @@ class Notices:
                 out += self._for(int(chat), roles or None) if self.policy().knows_chat(int(chat)) else []
             except Exception:  # noqa: BLE001 — a policy that cannot be read: the names written then
                 return list(h.get("to") or [])
-        return list(dict.fromkeys(out)) if h.get("chats") else list(h.get("to") or [])
+        return addressed(out) if h.get("chats") else addressed(h.get("to") or [])

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.171 (12 October 2026)
+
+- notice.addressed: the one rule for the names of a "To:" line and a history line — the people, a role's word only
+  when nobody is named (owner, 2026-10-12: "To: the Owner, Fabien, JM"). Used by Notices.heading (incident and not),
+  Notices._names and Outcome's merged recipients. Test: test_people_routing (red without it).
+
 ## 0.6.170 (12 October 2026)
 
 - homeassistant/custom_templates/vesta_message.jinja: the one layout (message_format) in Telegram's HTML, for the alerts

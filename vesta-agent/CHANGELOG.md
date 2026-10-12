@@ -1,3 +1,11 @@
+## 0.12.177
+
+What you will see:
+- "To:" on an alert, a report or any message the agent sends names the people it went to, never a mix of a role and
+  names. An alert sent to the Owner's group (no person listed in it) and to Fabien and JM read "To: the Owner, Fabien,
+  JM"; it now reads "To: Fabien, JM", and its history lines say the same. "the Owner" or "the Facility Manager" is
+  written only when no person is named at all.
+
 ## 0.12.176
 
 What you will see:
