@@ -29,7 +29,7 @@ import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { TOGGLEABLE_DOMAINS } from "@/utils/quickAction";
 import type { HassEntity } from "@/types/ha.types";
 import type { Category } from "@/types/scene.types";
-import { bucketByFloor, bucketByRoom, summaryRows } from "@/config/summaryRows";
+import { bucketByRoom, floorSections, summaryRows } from "@/config/summaryRows";
 import { useRoomFloors } from "@/config/useRoomFloors";
 import { floorOfRoom } from "@/config/devicePlace";
 import { NO_ROOM_LABEL } from "@/config/roomKey";
@@ -73,15 +73,11 @@ interface Props {
    *  (Lights, AC, Unavailable devices, Facility…) isn't room-scoped, so it's
    *  omitted there rather than guessed at. See config/haScenes.ts. */
   roomScenes?: HaSceneInfo[];
-  /** Group the rooms under their floor ("1F", "2F"), each floor with its own
-   *  "Turn all on/off" on its line — the top bar's category list (owner,
-   *  2026-10-12). */
-  byFloor?: boolean;
 }
 
 /**
  * "Turn all on/off" for a set of devices, behind the same second tap — the
- * header's (the whole group) and each floor's (byFloor) are this one control.
+ * header's (the whole group) and each floor's (floorSections) are this one control.
  * Bulk-toggling many devices from one tap is easy to trigger by accident, so it
  * asks first, the LockPanel unlock pattern. Icon-only: the text cost too much
  * width, on a phone above all; the icon carries the direction (Power = will
@@ -126,7 +122,7 @@ function BulkToggle({ devices, looks }: { devices: HassEntity[]; looks: LookSour
 
 export default function SummaryGroupPanel({
   group, canControl, onClose, onOpenEntity, hideBulkToggle,
-  filterSuppressed = true, roomScenes, byFloor,
+  filterSuppressed = true, roomScenes,
 }: Props) {
   // Entities on the 3D map; anything else exists only in Home Assistant and
   // is listed last and tinted (config/VillaModel).
@@ -228,9 +224,11 @@ export default function SummaryGroupPanel({
    *  sections share (each had the same block written out until 2.496.263). */
   function renderRooms(list: typeof rows) {
     const rooms = bucketByRoom(list, (e) => e.entity_id, roomOf);
-    if (!byFloor) return rooms.map(renderRoom);
-    // Each room's floor: the villa's one answer (config/devicePlace), the Cockpit's too.
-    return bucketByFloor(rooms, (room) => floorOfRoom(roomFloors, room)).map(([floor, floorRooms]) => {
+    // Under "1F", "2F" whenever the list spans floors — whoever opened it (summaryRows.floorSections);
+    // each room's floor is the villa's one answer (config/devicePlace), the Cockpit's too.
+    const floors = floorSections(rooms, (room) => floorOfRoom(roomFloors, room));
+    if (!floors) return rooms.map(renderRoom);
+    return floors.map(([floor, floorRooms]) => {
       const onFloor = new Set(floorRooms.flatMap(([, members]) => members.map((e) => e.entity_id)));
       return (
         <div key={String(floor)} className="summary-floor">

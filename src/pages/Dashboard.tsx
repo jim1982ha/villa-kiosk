@@ -796,7 +796,6 @@ export default function Dashboard() {
       {categoryGroup && (
         <SummaryGroupPanel
           group={{ title: CATEGORY_LABELS[categoryGroup], icon: CATEGORY_ICONS[categoryGroup], entityIds: categoryGroupEntityIds }}
-          byFloor
           canControl={canControl}
           onClose={() => go({ type: "closeList" })}
           onOpenEntity={openFromList}
