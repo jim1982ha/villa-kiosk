@@ -1,3 +1,8 @@
+## 2.496.333
+
+### Fixed
+- Changing a device to another entity (the pencil in Advanced Settings) no longer carries over the temporary name the Kiosk had made from the OLD entity id. The device now shows Home Assistant's name for the new entity. A name you typed yourself still moves with it.
+
 ## 2.496.332
 
 ### Fixed

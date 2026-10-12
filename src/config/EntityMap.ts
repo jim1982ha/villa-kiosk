@@ -122,6 +122,12 @@ function labelFromEntityId(entityId: string, friendlyName?: string): string {
  *  friendly_name) has arrived over the websocket — this label then sits
  *  permanently in config, indistinguishable from a deliberate customisation,
  *  even though a proper name was available moments later. */
+/** A label the OWNER gave (or Home Assistant's own name, as stored) — not the
+ *  fallback the Kiosk made from this entity id. */
+export function isOwnLabel(entityId: string, label: string | undefined): boolean {
+  return !!label && !looksLikeRawFallbackLabel(entityId, label);
+}
+
 function looksLikeRawFallbackLabel(entityId: string, label: string): boolean {
   // Compare NORMALISED forms (underscores → spaces, whitespace collapsed,
   // lower-cased) on BOTH sides. Normalising only the entity_id — as this did
