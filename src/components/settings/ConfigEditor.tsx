@@ -20,9 +20,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ShowAll, useTruncated } from "@/components/common/TruncatedList";
 import { Search } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
-import { dismissedEntitySet, removedObjectSearched } from "@/config/dismissedEntities";
-import { bindMesh, forgetMappings, patchMapping, remapMapping } from "@/config/mappingEdits";
+import { dismissedEntitySet, orphanObjectSearched } from "@/config/dismissedEntities";
+import { forgetMappings, patchMapping, remapMapping, repointObjects } from "@/config/mappingEdits";
 import { useHA } from "@/ha/HAStateStore";
+import { useVillaModel } from "@/config/VillaModel";
 import EntityMapRow from "./EntityMapRow";
 import EntityPicker from "./EntityPicker";
 import type { EntityMapping } from "@/types/scene.types";
@@ -30,6 +31,7 @@ import type { EntityMapping } from "@/types/scene.types";
 export default function ConfigEditor({ initialSearch }: { initialSearch?: string } = {}) {
   const { config, update, resolvedRooms } = useConfig();
   const { entities, connected } = useHA();
+  const { sceneEntityIds } = useVillaModel();
   // Seed the filter when opened from a device panel's edit shortcut, so that
   // entity's row is shown immediately.
   const [search, setSearch] = useState(initialSearch ?? "");
@@ -153,17 +155,19 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
     setRemapNewId(undefined);
   }, [update]);
 
-  // A removed device, named whole in the filter (its tile's edit shortcut does
-  // exactly that): its row is hidden, so offer the one thing left to do with
-  // its 3D object — point it at another entity (dismissedEntities.ts).
+  // A 3D object whose entity Home Assistant no longer has, named whole in the
+  // filter (its tile's edit shortcut does exactly that): it has no row, so
+  // offer the one thing left to do — point it at another entity
+  // (dismissedEntities.orphanObjectSearched). Only while HA's list is loaded.
   const removedId = useMemo(
-    () => (entries.length === 0 ? removedObjectSearched(search, dismissedSet, config.meshBindings) : null),
-    [entries.length, search, dismissedSet, config.meshBindings],
+    () => (entries.length === 0 && haReady
+      ? orphanObjectSearched(search, sceneEntityIds, (id) => !!entities[id], config.meshBindings) : null),
+    [entries.length, haReady, search, sceneEntityIds, entities, config.meshBindings],
   );
   const [repointTo, setRepointTo] = useState<string | undefined>(undefined);
   const repoint = useCallback(() => {
     if (!removedId || !repointTo || repointTo === removedId) return;
-    update(bindMesh(removedId, repointTo, entities[repointTo]));
+    update(repointObjects(removedId, repointTo, entities[repointTo]));
     setRepointTo(undefined);
     setSearch(repointTo);
   }, [removedId, repointTo, update, entities]);
@@ -223,10 +227,11 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
       {removedId ? (
         <div className="config-stale-notice config-repoint">
           <div>
-            <strong>{removedId} was removed: Home Assistant no longer has it.</strong>
+            <strong>Home Assistant has no entity {removedId}.</strong>
             <div className="muted body-text" style={{ marginTop: 2 }}>
-              Its 3D object is still in the model and shows as unavailable on the
-              map. If the entity was renamed, point the object at its new name.
+              A 3D object in the model is named after it, so it shows as
+              unavailable on the map. If the entity was renamed, point the
+              object at its new name.
             </div>
             <div className="remap-row" style={{ marginTop: 8 }}>
               <div className="remap-picker">

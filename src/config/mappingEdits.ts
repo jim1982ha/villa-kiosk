@@ -96,6 +96,21 @@ export function bindMesh(meshName: string, entityId: string, entity?: Pick<HassE
   });
 }
 
+/**
+ * Point every 3D object that shows `oldId` at `newId`: the object named after
+ * it (bound by that name, as remapMapping does) AND any object the owner bound
+ * to it by hand — the map shows the same tile for both, so "point it there"
+ * must move both (Advanced Settings, dismissedEntities.orphanObjectSearched).
+ */
+export function repointObjects(oldId: string, newId: string, entity?: Pick<HassEntity, "attributes">): ConfigEdit {
+  return (config) => {
+    if (!oldId || !newId || oldId === newId) return {};
+    const meshBindings: Record<string, string> = { ...config.meshBindings, [oldId]: newId };
+    for (const [mesh, id] of Object.entries(meshBindings)) if (id === oldId) meshBindings[mesh] = newId;
+    return { meshBindings, entityMap: addMapping(newId, entity)(config).entityMap ?? config.entityMap };
+  };
+}
+
 /** Unbind a 3D object. The entity's mapping is kept. */
 export function unbindMesh(meshName: string): ConfigEdit {
   return (config) => {

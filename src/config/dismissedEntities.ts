@@ -21,26 +21,32 @@ export function dismissedEntitySet(
 }
 
 /**
- * The removed device a search names, when its 3D object is still unlinked —
+ * The 3D object a search names whose entity Home Assistant no longer has —
  * so Advanced Settings can offer to point that object at another entity.
  *
  * ⚠️ A DEAD END, REPORTED FROM THE FIELD (2026-10-12): an entity renamed in
- * Home Assistant, then "Remove"d as no longer in HA, kept its tile on the map
- * (by design, see EntityVisuals.badgeEligible) — and the tile's edit shortcut
- * opened this list on "No entities match", because a removed row is hidden and
- * the "change entity" pencil lived on that row. The object could only be
- * re-pointed by finding it again in tap mode.
+ * Home Assistant kept its tile on the map (by design, see
+ * EntityVisuals.badgeEligible), and the tile's edit shortcut opened this list
+ * on "No entities match": its row was gone, and the "change entity" pencil
+ * lived on that row. 2.496.327 offered the fix only to ids in the "removed"
+ * list — and the villa's tile was not in it (the model names the object, and
+ * auto-detection adopts only entities HA still has, so a renamed one may never
+ * have had a row at all). Decided from what the map SHOWS instead: an object
+ * of the loaded model resolves to this id, and HA does not know it.
  *
- * Exact id only (a removed device is reached by its id, from its tile's edit
- * shortcut or typed whole); null once the object is bound to something.
+ * Exact id only (the tile's edit shortcut passes it whole); null once the
+ * object is bound to an entity Home Assistant has.
  */
-export function removedObjectSearched(
+export function orphanObjectSearched(
   search: string,
-  dismissed: ReadonlySet<string>,
+  sceneEntityIds: ReadonlySet<string>,
+  inHa: (id: string) => boolean,
   meshBindings: Readonly<Record<string, string>>,
 ): string | null {
   const id = search.trim();
-  return id && dismissed.has(id) && !meshBindings[id] ? id : null;
+  if (!id || !sceneEntityIds.has(id) || inHa(id)) return null;
+  const bound = meshBindings[id];
+  return bound && inHa(bound) ? null : id;
 }
 
 /**
