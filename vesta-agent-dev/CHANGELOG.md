@@ -1,3 +1,10 @@
+## 0.12.174
+
+What you will see:
+- The Monday weekly message to the owner now comes with the weekly page attached (the same page the facility
+  manager receives), and its last line says "Details in the attached page." Before, it pointed to a page only the
+  facility manager was sent.
+
 ## 0.12.173
 
 What you will see:
