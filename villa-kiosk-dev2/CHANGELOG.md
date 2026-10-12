@@ -1,3 +1,8 @@
+## 2.496.338
+
+### Fixed
+- A room is now on the same floor in every device list — the Cockpit's "By floor" and "By room", and a category's list grouped by floor. It used to depend on which devices the list held, so the same room could show under 1F in one list and 2F in another. A room's floor is Home Assistant's (the floor most of its devices are on), else the floor plan's, else "Other". The map's 1F/2F view is unchanged: a badge stays on the storey its 3D object is on.
+
 ## 2.496.337
 
 ### Fixed
