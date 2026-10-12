@@ -110,3 +110,35 @@ def test_the_check_sensor_reads_ok_with_this_file_and_missing_without_it(tmp_pat
     assert empty.from_string(state).render() == "missing"
     (tmp_path / "vesta_message.jinja").write_text("<b>{{ vm_title }}</b>", encoding="utf-8")
     assert empty.from_string(state).render() == "changed"
+
+
+def _status(stage, status="", who="", at=None) -> str:
+    """The bottom line the file writes for a rule that gives its stage (vm_stage), in plain text."""
+    src = ("{%- set vm_title, vm_to, vm_text, vm_status = 'T', 'R', 'x', s -%}{%- set vm_stage, vm_who = g, w -%}"
+           "{% include 'vesta_message.jinja' ignore missing %}")
+    out = _env().from_string(src).render(s=status, g=stage, w=who, **({"now": lambda: at} if at else {}))
+    return html.unescape(re.sub(r"</?(u|blockquote|i)>", "", out)).split(f"\n{STATUS}:\n", 1)[1]
+
+
+def test_the_bottom_line_is_said_in_the_agents_own_words_for_every_stage():
+    # architecture review, 2026-10-13: the same Done read "✅ Done - JM" on a job Home Assistant sent and "✅ Done pressed
+    # by JM on 12/10/2026 17:13." on the agent's alerts — Home Assistant copied the words by hand into every rule
+    from datetime import datetime, timezone
+    from vesta_agent.layout import stage_line
+    from vesta_shared.message_format import PRESSED
+    from vesta_shared.timeutil import moment_label
+    head = {"new": "#1-P2 (new)", "existing": "#1-P2 (existing)", "closed": "#1-P2 (closed)", "help": "#1-P2 (existing)"}
+    mark = {"help": "help"}
+    for stage in head:
+        for status in ("", "Reminder: no answer after 15 min"):
+            if stage == "help" and not status:
+                continue                                            # Need help is always said (who, or what to do)
+            assert _status(stage, status) == stage_line(head[stage], status, mark.get(stage)), (stage, status)
+    at = datetime(2026, 10, 13, 9, 2, tzinfo=timezone.utc)
+    for stage, label in (("closed", "Done"), ("help", "Need help")):
+        said = PRESSED.format(label=label, name="JM", time=moment_label(at, "UTC"))
+        assert _status(stage, "", "JM", at) == stage_line(head[stage], said, mark.get(stage))
+        assert _status(stage, "Tick it on the Jobs tab.", "JM", at) == \
+            stage_line(head[stage], f"{said} Tick it on the Jobs tab.", mark.get(stage))
+    assert _status("closed", "", "JM", at) == "✅ Done pressed by JM on 13/10/2026 09:02."
+    assert _status("", "⚠️ written by hand") == "⚠️ written by hand"         # a rule saved before: as it is

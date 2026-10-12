@@ -55,9 +55,6 @@ class Settings:
     _policy_cache: dict = field(default_factory=dict, repr=False)
     # a run's own folder under out/ (in_folder); "" for the engine's own work
     run_folder: str = ""
-    # the modes the person's own words switched on for this request (skills.Skill.modes): its scripts read them
-    # (VESTA_MODES) — a page that must carry what a mode asked for can refuse without it
-    request_modes: str = ""
     # the web searches this run made so far (JSON list of the queries): its scripts read them (VESTA_WEB_SEARCHES) — a
     # page that used the web must name its sources, asked for or not
     web_searches: str = ""

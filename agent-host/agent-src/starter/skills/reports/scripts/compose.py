@@ -57,7 +57,8 @@ from vesta_shared.messaging import TELEGRAM_CAPTION, fmt_money, incident_tag  # 
 from vesta_shared.message_format import document, split_title  # noqa: E402  (the one shape: title, To:, sections)
 from vesta_shared.axis import is_flat, label as axis_label, nice_axis  # noqa: E402  (the one axis rule)
 from vesta_shared.store import Incident, Store  # noqa: E402
-from vesta_shared.timeutil import day_label, day_time_label, villa_date  # noqa: E402  (the one day format)
+from vesta_shared.timeutil import day_label, day_time_label, lasting, villa_date  # noqa: E402  (the one day format, duration)
+from vesta_shared import periods  # noqa: E402  (the period kinds and their words: investigate.py's)
 from vesta_shared.problems import Problems  # noqa: E402  (what is still open: one owner)
 from investigation_facts import KEY_MAX, facts as investigation_facts  # noqa: E402  (what the records establish)
 
@@ -489,20 +490,19 @@ def page(facts: dict, notes: dict, limit: str | None = None, without_ai: str | N
         chart_pairs=lambda r: Markup(pairs(r)), without_ai=without_ai)
 
 
-#: what an unusual period IS, by its kind (investigate.py's period kinds, any device): the band's word and colour. One
-#: table — the bands, their labels and the legend under the chart all read it.
+#: the colour of an unusual period's band, by its kind (its word: vesta_shared.periods, the one table of the kinds and
+#: their words) — the bands, their labels and the legend under the chart all read band_of.
 #: ⚠️ PLAIN WORDS, COLOURS APART (owner, 2026-10-12: "what is supply? what is stop-start? … too similar colours"):
 #: each kind its own hue, none the readings' green or the usual line's blue.
-BANDS = (("no power", "read 0: no power reached it", "var(--crit)"),
-         ("offline", "stopped reporting", "var(--ink2)"), ("no value", "stopped reporting", "var(--ink2)"),
-         ("stops and restarts", "kept stopping and restarting", "var(--c5)"),
-         ("running", "ran longer or harder than usual", "var(--warn)"))
+BAND_COLOURS = {periods.NO_POWER: "var(--crit)", periods.OFFLINE: "var(--ink2)", periods.NO_VALUE: "var(--ink2)",
+                periods.RESTARTS: "var(--c5)", periods.RUNNING: "var(--warn)"}
 OTHER_BAND = ("unusual", "var(--crit)")
 READINGS, USUAL = "var(--acc)", "var(--c3)"           # the device's own line, and its usual: never a band's colour
 
 
 def band_of(kind: str) -> tuple[str, str]:
-    return next(((word, colour) for k, word, colour in BANDS if str(kind).startswith(k)), OTHER_BAND)
+    word = periods.band(kind)
+    return (word, BAND_COLOURS[periods.base(kind)]) if word else OTHER_BAND
 
 
 def timechart(series: list, unit: str, zone: ZoneInfo, marks: list = (), normals: list = ()) -> str:
@@ -628,7 +628,7 @@ LANE_H, LANE_LABEL = 22, 12
 #: what each band or mark of the strip is: its legend word and colour — the strip and its legend read this one table
 #: ("off" is the empty lane: nothing drawn)
 LANE_STYLE = {"on": ("on or open", "var(--acc)", "band"), "other": ("in another state", "var(--c4)", "band"),
-              "offline": ("not reporting", "var(--ink2)", "band"),
+              "offline": (periods.band(periods.OFFLINE), "var(--ink2)", "band"),
               "went": ("another device stopped reporting", "var(--crit)", "mark"),
               "can_act": ("an automation that can switch something ran", "var(--warn)", "mark"),
               "unproven": ("an automation we could not read ran", "var(--c5)", "mark")}
@@ -680,11 +680,6 @@ def strip(lanes: list[dict], start: datetime, end: datetime, zone: ZoneInfo) -> 
     return _framed("".join(out))
 
 
-def _lasting(seconds) -> str:
-    s = int(round(float(seconds)))
-    return f"{s} s" if s < 90 else f"{s // 60} min" if s < 5400 else f"{s // 3600} h {s % 3600 // 60} min"
-
-
 def normal_words(ref: dict, unit: str) -> str:
     """investigate.py's normal of a device, in plain sentences (owner, 2026-10-12: "54.3 runs a day, usually 9 s …
     doesn't seem proper English"): how often it starts, how long a run lasts, what it reads running and at rest."""
@@ -697,9 +692,9 @@ def normal_words(ref: dict, unit: str) -> str:
     per_day = ref.get("runs_per_day")
     if isinstance(per_day, (int, float)) and per_day > 0 and "run_median_s" in ref:
         out.append(f"Usually ({when}) it started about {per_day:.0f} time{'s' if round(per_day) != 1 else ''} a day; "
-                   f"a run usually lasted {_lasting(ref['run_median_s'])}"
-                   + (f" and never more than {_lasting(ref['run_longest_s'])}"
-                      if _lasting(ref.get("run_longest_s", ref["run_median_s"])) != _lasting(ref["run_median_s"])
+                   f"a run usually lasted {lasting(ref['run_median_s'])}"
+                   + (f" and never more than {lasting(ref['run_longest_s'])}"
+                      if lasting(ref.get("run_longest_s", ref["run_median_s"])) != lasting(ref["run_median_s"])
                       else "") + ".")
     level = [f"while running it read about {_nice(float(ref['level_median']))}{u}" if "level_median" in ref else "",
              f"at rest about {_nice(float(ref['rest_median']))}{u}" if "rest_median" in ref else ""]
@@ -960,10 +955,10 @@ def _investigation(a) -> int:
               "4 to 6 sentences (what happened, the most likely cause and its evidence, what to check first). Shorten it in the "
               "notes and run this again; the details belong in the other fields.", file=sys.stderr)
         return 1
-    # ⚠️ WEB RESEARCH SHOWS ITS SOURCES (owner, 2026-10-11: the page of a web-researched investigation named none). When
-    # the person's words switched it on (the agent's VESTA_MODES), the page is refused until it lists them, and every
-    # lead from the web carries its verdict against the records.
-    # ANY web search the AI made for this investigation (the agent's VESTA_WEB_SEARCHES) needs its pages listed (owner,
+    # ⚠️ WEB RESEARCH SHOWS ITS SOURCES (owner, 2026-10-11: the page of a web-researched investigation named none): the
+    # page is refused until it lists them, and every lead from the web carries its verdict against the records.
+    # ANY web search the AI made for this investigation, in any of its turns (the agent's VESTA_WEB_SEARCHES, kept on disk:
+    # vesta_agent/command_request.py) needs its pages listed (owner,
     # 2026-10-11: "include the sources, when web_search tool is used")
     searches = web_searches()
     sources = web_pages(notes)

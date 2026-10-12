@@ -47,7 +47,7 @@ create table if not exists continuations(
   used integer not null default 0,
   invoked text,                     -- the command skill the answer it continues was called for (review 32)
   inv text,                         -- and the investigation it belongs to: its offers, its page
-  modes text                        -- and the modes the request's words switched on (skills.Skill.modes)
+  modes text                        -- unused since 0.12.179 (skill.yaml `modes` retired): kept for older files
 );
 -- a fault the AI offered in a chat, created only when a person presses its button (owner, 2026-10-11)
 create table if not exists ticket_offers(
@@ -100,6 +100,7 @@ KV_FAMILIES: dict[str, str] = {
     "hasent:": RECORDS,             # Home Assistant's own messages (also cleared after 24 hours as they are written)
     "saved_by_model:": RECORDS,     # a file the AI saved (its run folder is deleted with the out folder's files)
     "owner_told:": RECORDS,         # when the owner was last told of a problem (a 12-hour pause)
+    "request_searches:": RECORDS,   # a command skill's request's web searches, for its page (command_request.py)
     "job:": CURRENT,                # a scheduled job's last slot: the Overview's "last run", one per job
     "jobrun:": CURRENT,             # a scheduled run in progress: one left at start was cut by a stop (scheduler.py)
     "chatjob:": CURRENT,            # a job asked for in a chat, in progress: one left at start was cut (chat_jobs.py)
@@ -364,6 +365,18 @@ class State:
     def saved_by_model(self, name: str) -> bool:
         return self.get(f"saved_by_model:{name}") is not None
 
+    def keep_request_searches(self, inv: str, queries: list[str]) -> None:
+        """A command skill's request's web searches so far (command_request.Searches): its page must list their sources,
+        whichever of its turns made them — an update in between included."""
+        self.put(f"request_searches:{inv}", json.dumps(list(queries)))
+
+    def request_searches(self, inv: str) -> list[str]:
+        try:
+            kept = json.loads(self.get(f"request_searches:{inv}") or "[]")
+        except ValueError:
+            return []
+        return [str(q) for q in kept] if isinstance(kept, list) else []
+
     # ------------------------------------------------------------------ own messages
     # ⚠️ HOW A PRESS OR A REPLY IS KNOWN TO BE FOR THE AGENT. Home Assistant and the
     # agent share one bot, so "the bot sent it" says nothing: the agent keeps the id of
@@ -513,15 +526,14 @@ class State:
 
     # ------------------------------------------------------------------ continue
     def new_continuation(self, chat_id: int, session_id: str, requested_by: int | None,
-                         invoked: str | None = None, inv: str | None = None, modes: list[str] | None = None) -> str:
+                         invoked: str | None = None, inv: str | None = None) -> str:
         """⚠️ A CONTINUE CARRIES WHAT IT CONTINUES (review 32): the command skill its answer was called for and the
         investigation it belongs to — kept per chat, a "thanks" in between made the old Continue lose its skill."""
         cid = secrets.token_urlsafe(9)
         with self._lock:
-            self.db.execute("insert into continuations(id, created_at, chat_id, session_id, requested_by, invoked, inv, "
-                            "modes) values(?,?,?,?,?,?,?,?)",
-                            (cid, utcnow().isoformat(), int(chat_id), session_id, requested_by, invoked, inv,
-                             ",".join(modes or [])))
+            self.db.execute("insert into continuations(id, created_at, chat_id, session_id, requested_by, invoked, inv) "
+                            "values(?,?,?,?,?,?,?)",
+                            (cid, utcnow().isoformat(), int(chat_id), session_id, requested_by, invoked, inv))
             self.db.commit()
         return cid
 

@@ -227,26 +227,11 @@ class Skill:
     deliver: dict[str, str] = field(default_factory=dict)
     # how to write it, the skill's own example ("/investigate why did …?"): said to a person who sent the command alone
     usage: str = ""
-    # ⚠️ A MODE THE PERSON'S OWN WORDS SWITCH ON (owner, 2026-10-11: web research "only if the user mention it in the
-    # request"): name → {"words": [...], "on": what the AI is told when the request holds one of them (skill.yaml
-    # said_on), "off": else (said_off)}.
-    # The engine only matches the words (Skill.modes_for); what each mode means is the skill's own text.
-    modes: dict[str, dict] = field(default_factory=dict)
     # ⚠️ ITS OWN BRAIN AND LIMIT (owner, 2026-10-11): an investigation run on the villa's everyday brain (Economy, haiku)
     # skipped steps and misread its own figures. A command skill may name the brain its answers use (economy / auto /
     # performance) and its limit per answer; everything else keeps the Rules page's.
     brain: str | None = None
     limit_usd: float | None = None
-
-    def active_modes(self, text: str) -> list[str]:
-        """The modes one of whose words the request holds (whole words, any case)."""
-        return [name for name, m in self.modes.items()
-                if any(re.search(rf"(?<!\w){re.escape(w)}(?!\w)", text or "", re.I) for w in m["words"])]
-
-    def modes_for(self, text: str) -> list[str]:
-        """What the AI is told of each mode for this request: its `on` text when one of its words is in it, else `off`."""
-        on = set(self.active_modes(text))
-        return [said for name, m in self.modes.items() if (said := (m["on"] if name in on else m["off"]))]
 
     @property
     def skill_md(self) -> str:
@@ -290,15 +275,6 @@ def parse_skill(name: str, path: str) -> Skill:
                 sk.limit_usd = -1.0
             if not 0.05 <= sk.limit_usd <= 20:
                 raise SkillError("limit_usd: a number of US$ per answer, from 0.05 to 20")
-    for name, m in (raw.get("modes") or {}).items():
-        if not sk.command:
-            raise SkillError("modes: only a skill with a command has them (they read the request that called it)")
-        words = (m or {}).get("words") if isinstance(m, dict) else None
-        if not isinstance(words, list) or not words or not all(isinstance(w, str) and w.strip() for w in words):
-            raise SkillError(f"modes: {name} needs `words`, a list of the words that switch it on")
-        # said_on / said_off — never `on:` / `off:`, which YAML reads as true / false
-        sk.modes[str(name)] = {"words": [w.strip() for w in words], "on": str(m.get("said_on") or "").strip(),
-                               "off": str(m.get("said_off") or "").strip()}
     deliver = raw.get("deliver") or {}
     if deliver:
         if not sk.command:
@@ -800,7 +776,6 @@ def script_env(settings) -> dict:
         "VESTA_STATE": settings.state_path,
         "VILLA_TZ": settings.timezone,
         "TZ": settings.timezone,
-        "VESTA_MODES": getattr(settings, "request_modes", "") or "",
         "VESTA_WEB_SEARCHES": getattr(settings, "web_searches", "") or "",
     }
 

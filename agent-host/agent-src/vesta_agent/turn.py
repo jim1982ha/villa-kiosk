@@ -94,15 +94,14 @@ class Turns:
 
     async def chat(self, person, chat: int, prompt: str, *, resume: str | None = None,
                    asked: str | None = None, image: tuple[str, str] | None = None,
-                   invoked: str | None = None, inv: str | None = None, modes: list[str] | None = None,
-                   brain: str | None = None, limit_usd: float | None = None) -> TurnResult:
+                   request=None) -> TurnResult:
         """A person's message (or a Continue) answered in `chat`. The chat keeps one folder: its turns take turns
-        (app.lock), and a Continue reads what the turn before it saved."""
-        terms = chat_terms(self.s, self.policy(), await self.server_tools(), person, chat, brain, limit_usd)
-        from dataclasses import replace
-        run_settings = replace(self.s.in_folder(f"chats/{chat}"), request_modes=",".join(modes or []))
-        return await self._run(terms, run_settings, prompt, person, Origin(chat, CONVERSATION),
-                               resume, asked, [chat], image, invoked, inv)
+        (app.lock), and a Continue reads what the turn before it saved. `request`: the command skill's request it answers
+        (command_request.Request): its skill's own brain and limit, its id and web searches for the toolbox."""
+        terms = chat_terms(self.s, self.policy(), await self.server_tools(), person, chat,
+                           request.brain if request else None, request.limit_usd if request else None)
+        return await self._run(terms, self.s.in_folder(f"chats/{chat}"), prompt, person, Origin(chat, CONVERSATION),
+                               resume, asked, [chat], image, request)
 
     async def job(self, name: str, cfg: dict, prompt: str, origin: Origin | None, run_settings,
                   told: list[int]) -> TurnResult:
@@ -112,8 +111,8 @@ class Turns:
         return await self._run(terms, run_settings, prompt, None, origin, None, None, told)
 
     async def _run(self, terms: Terms, run_settings, prompt, person, origin, resume, asked, told: list[int],
-                   image=None, invoked: str | None = None, inv: str | None = None) -> TurnResult:
-        tb = self.toolbox(set(terms.tools), run_settings, invoked, inv)
+                   image=None, request=None) -> TurnResult:
+        tb = self.toolbox(set(terms.tools), run_settings, request)
         kit = tb.for_run(person, origin)
         res = await runner.run(run_settings, self.system_prompt(), prompt, kit, terms, self.state, resume=resume, asked=asked,
                                image=image)

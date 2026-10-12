@@ -35,6 +35,8 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from vesta_shared import script, skill_settings  # noqa: E402  (client, store, zone: one set-up for every skill script)
+from vesta_shared import periods as kinds  # noqa: E402  (the period kinds and their words, read by the report page too)
+from vesta_shared.timeutil import lasting  # noqa: E402  (the one duration wording)
 
 OFFLINE = {"unavailable"}                 # the device does not answer
 # ⚠️ WHAT A CONTROL CAN PROVE (architecture review 32 follow-up, 2026-10-11): an on/off control that stayed OFF the whole
@@ -69,18 +71,6 @@ def at(t: datetime, zone: ZoneInfo, day: bool = False) -> str:
     """A moment as the answer writes it: "09/10 03:09:46" (with the day when the period spans several)."""
     t = t.astimezone(zone)
     return f"{t:%d/%m %H:%M:%S}" if day else f"{t:%H:%M:%S}"
-
-
-def lasting(seconds: float) -> str:
-    """A duration in words a person reads: "47 min", "1 h 46 min", "8 s"."""
-    s = int(round(seconds))
-    if s < 90:
-        return f"{s} s"
-    m = s // 60
-    if m < 60:
-        return f"{m} min"
-    h, m = divmod(m, 60)
-    return f"{h} h {m} min" if m else f"{h} h"
 
 
 def number(state) -> float | None:
@@ -184,15 +174,15 @@ def periods(rows: list[tuple[datetime, str]], end: datetime, on_above: float | N
     device usually reads a little at rest), "offline", "no value", or the state itself for a non-numeric entity."""
     def kind(state: str) -> str:
         if state in OFFLINE:
-            return "offline"
+            return kinds.OFFLINE
         if state in NO_VALUE:
-            return "no value"
+            return kinds.NO_VALUE
         v = number(state)
         if v is None or on_above is None:
             return state
         if v > on_above:
-            return "running"
-        return "no power" if v == 0 else "idle"
+            return kinds.RUNNING
+        return kinds.NO_POWER if v == 0 else kinds.IDLE
 
     out: list[dict] = []
     for i, (t, s) in enumerate(rows):
@@ -242,16 +232,16 @@ def normal(rows: list[tuple[datetime, str]], end: datetime, on_above: float | No
     """The entity's own normal over the baseline days: how often and how long it runs, at what level."""
     ps = periods(rows, end, on_above)
     days = max((end - rows[0][0]).total_seconds() / 86400, 0.5) if rows else 1
-    runs = [p for p in ps if p["kind"] == "running"]
+    runs = [p for p in ps if p["kind"] == kinds.RUNNING]
     out = {"days": round(days, 1), "runs_per_day": round(len(runs) / days, 1)}
     if runs:
         secs = sorted(p["seconds"] for p in runs)
         out |= {"run_median_s": statistics.median(secs), "run_longest_s": secs[-1],
                 "level_median": round(statistics.median(p["mean"] for p in runs if "mean" in p), 1)}
-    rest = [p["mean"] for p in ps if p["kind"] == "idle" and "mean" in p]
+    rest = [p["mean"] for p in ps if p["kind"] == kinds.IDLE and "mean" in p]
     if rest:
         out["rest_median"] = round(statistics.median(rest), 2)
-    off = [p for p in ps if p["kind"] in ("offline", "no power")]
+    off = [p for p in ps if p["kind"] in (kinds.OFFLINE, kinds.NO_POWER)]
     out["offline_or_no_power_s"] = sum(p["seconds"] for p in off)
     return out
 
@@ -289,7 +279,7 @@ def running_per_hour(ps: list[dict], start: datetime, end: datetime, base: list[
 
     def ran(periods_: list[dict], a: datetime, b: datetime) -> float:
         return sum(max(0.0, (min(p["end"], b) - max(p["start"], a)).total_seconds())
-                   for p in periods_ if p["kind"] == "running") / 60
+                   for p in periods_ if p["kind"] == kinds.RUNNING) / 60
     days = int(baseline_days)
     bins = []
     for a in edges:
@@ -417,7 +407,7 @@ def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_da
         attrs = (names.get(eid) or {}).get("attributes") or {}
         part = {"entity_id": eid, "running_above": on, "normal": ref, "lines": lines,
                 "periods": [_saved(p) for p in shown[:MAX_LINES]], **({"cut": cut.isoformat()} if cut else {}),
-                "label": attrs.get("friendly_name") or eid, "runs": sum(1 for p in ps if p["kind"] == "running")}
+                "label": attrs.get("friendly_name") or eid, "runs": sum(1 for p in ps if p["kind"] == kinds.RUNNING)}
         if eid.split(".")[0] in CONTROL_DOMAINS:
             seen = {str(v) for _, v in base_rows + rows if str(v) not in OFFLINE | NO_VALUE}
             part["control"] = "off" if seen and seen <= OFF_STATES else "on" if seen and seen <= ON_STATES else None
@@ -477,16 +467,16 @@ def _cycles(ps: list[dict]) -> list[dict]:
     out, i = [], 0
     while i < len(ps):
         j = i
-        while j < len(ps) and ps[j]["kind"] in ("running", "idle") and ps[j]["seconds"] < th("cycle_short_s"):
+        while j < len(ps) and ps[j]["kind"] in (kinds.RUNNING, kinds.IDLE) and ps[j]["seconds"] < th("cycle_short_s"):
             j += 1
         group = ps[i:j]
-        runs = [p for p in group if p["kind"] == "running"]
+        runs = [p for p in group if p["kind"] == kinds.RUNNING]
         if len(runs) >= th("cycle_min_runs") and len(group) >= th("cycle_min_periods"):
             levels = [p["mean"] for p in runs if "mean" in p]
             nth = runs[int(th("cycle_min_runs")) - 1]           # the run that makes it cycling: an alert there
             out.append({"alert": {"rule": f"it starts {th('cycle_min_runs'):g} times in a row, each run shorter than "
                                           f"{lasting(th('cycle_short_s'))}", "at": nth["start"]},
-                        "kind": f"stops and restarts {len(runs)} times", "start": group[0]["start"],
+                        "kind": kinds.restarts(len(runs)), "start": group[0]["start"],
                         "end": group[-1]["end"], "seconds": (group[-1]["end"] - group[0]["start"]).total_seconds(),
                         **({"mean": sum(levels) / len(levels), "min": min(p["min"] for p in runs),
                             "max": max(p["max"] for p in runs)} if levels else {}),
@@ -506,7 +496,7 @@ def _notable(ps: list[dict], ref: dict, on: float | None) -> list[dict]:
     out = []
     for p in ps:
         why, alerts = [], []
-        if p["kind"] == "running":
+        if p["kind"] == kinds.RUNNING:
             limit = max(longest * th("longer_ratio"), longest + th("longer_extra_s")) if longest else None
             if limit and p["seconds"] > limit:
                 why.append(f"longer than its longest usual run ({lasting(longest)})")
@@ -521,11 +511,11 @@ def _notable(ps: list[dict], ref: dict, on: float | None) -> list[dict]:
                 why.append(f"only {p['mean'] / level:.0%} of its usual running level")
                 alerts.append((th("level_change_gap_s"), f"it stays below {th('level_low_ratio'):.0%} of its usual "
                                                          f"running level for {lasting(th('level_change_gap_s'))}"))
-        elif p["kind"] == "no power" and rest and rest > 0 and p["seconds"] >= th("offline_min_s"):
+        elif p["kind"] == kinds.NO_POWER and rest and rest > 0 and p["seconds"] >= th("offline_min_s"):
             why.append(f"it read 0 instead of its usual {rest:g} at rest")
             alerts.append((th("offline_min_s"), f"it reads 0 for {lasting(th('offline_min_s'))}"))
-        elif p["kind"] in ("offline", "no value") and p["seconds"] >= th("offline_min_s"):
-            why.append("it stopped reporting" if p["kind"] == "offline" else "it reported no value")
+        elif p["kind"] in (kinds.OFFLINE, kinds.NO_VALUE) and p["seconds"] >= th("offline_min_s"):
+            why.append("it " + kinds.did(p["kind"]))
             alerts.append((th("offline_min_s"), f"it stops reporting for {lasting(th('offline_min_s'))}"))
         if why:
             p["why"] = "; ".join(why)
@@ -535,7 +525,7 @@ def _notable(ps: list[dict], ref: dict, on: float | None) -> list[dict]:
         if fired:
             s, rule = min(fired)
             p["alert"] = {"rule": rule, "at": p["start"] + timedelta(seconds=s)}
-        ordinary = not why and p["kind"] in ("running", "idle") and p["seconds"] < th("ordinary_max_s") \
+        ordinary = not why and p["kind"] in (kinds.RUNNING, kinds.IDLE) and p["seconds"] < th("ordinary_max_s") \
             and len(ps) > th("ordinary_hide_over")
         if not ordinary:
             out.append(p)

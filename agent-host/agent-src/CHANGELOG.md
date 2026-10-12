@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.173 (13 October 2026)
+
+Architecture review, 2026-10-13 (owner: "fully proceed"):
+- vesta_shared.timeutil.lasting is the one duration wording; vesta_shared.periods the investigation's period kinds and
+  their words (sentence and chart band), read by investigate.py, investigation_facts.py and compose.py (three
+  `lasting` copies, two word tables before). Test: test_investigate (red with the old 5400 s rule).
+- command_request.Requests: a command skill's request (its skill, id, brain and limit, web searches) from its first turn
+  to its Continue; the searches are records (state.keep_request_searches, "request_searches:"), so a restart before a
+  Continue keeps them. skill.yaml `modes` retired (no skill declared it; VESTA_MODES gone). Test: test_ticket_offer
+  (a restart between a stopped /investigate and its Continue).
+- message_format holds STAGE_WORDS (was layout.py) and PRESSED, the Done / Need help sentence (alert_buttons);
+  homeassistant/custom_templates/vesta_message.jinja writes a status from its stage (vm_stage, vm_who) in the same
+  words and icons. Test: test_ha_message_layout compares it with layout.stage_line for every stage.
+
 ## 0.6.172 (12 October 2026)
 
 - homeassistant/custom_templates/vesta_message.jinja: an empty vm_to is input_text.vesta_alert_audience (the one

@@ -141,19 +141,6 @@ def _with_investigate(tmp_path):
     return v
 
 
-def _with_a_moded_investigate(tmp_path):
-    """The investigate skill given a mode, as any command skill may declare one (skill.yaml `modes`): the engine's
-    mechanism is generic — the investigation itself has none since 2026-10-12 (it always searches the web)."""
-    import yaml
-    v = _with_investigate(tmp_path)
-    path = os.path.join(v.s.skills_dir, "investigate", "skill.yaml")
-    spec = yaml.safe_load(open(path))
-    spec["modes"] = {"web_research": {"words": ["internet", "web", "online", "en ligne"],
-                                      "said_on": "Web research: ON", "said_off": "Web research: off"}}
-    open(path, "w").write(yaml.safe_dump(spec))
-    return v
-
-
 def test_investigate_is_refused_without_its_command_and_given_with_it(tmp_path, monkeypatch):
     # owner, 2026-10-11: "only triggered when user mentions /investigation in the question (and never if not)"
     from ai_fake import FakeAI
@@ -436,46 +423,6 @@ def test_the_command_alone_shows_the_skills_own_example_and_off_says_so(tmp_path
     assert "The investigate skill is switched off on this villa" in v.tg.sent[-1][1]
 
 
-def test_a_mode_is_switched_by_the_persons_own_words(tmp_path, monkeypatch):
-    # a command skill's `modes` (generic since 2026-10-11): the engine matches the words the skill declares; the AI is
-    # told ON or off
-    from ai_fake import FakeAI
-    v = _with_a_moded_investigate(tmp_path)
-    ai = FakeAI("ok").install(monkeypatch)
-    run(v.converse(JM, v.policy().person(JM), "why did the heater stop?", invoked="investigate"))
-    assert "Web research: off" in ai.runs[0]["prompt"] and "Web research: ON" not in ai.runs[0]["prompt"]
-    n = len(ai.runs)
-    run(v.converse(JM, v.policy().person(JM), "why did the heater stop? you can use internet", invoked="investigate"))
-    assert "Web research: ON" in ai.runs[n]["prompt"]
-    n = len(ai.runs)
-    run(v.converse(JM, v.policy().person(JM), "see the website of the heater", invoked="investigate"))
-    assert "Web research: off" in ai.runs[n]["prompt"]                      # a word, never part of one
-
-
-def test_the_requests_modes_reach_the_skills_scripts(tmp_path, monkeypatch):
-    # a skill's scripts know the modes the request switched on (VESTA_MODES)
-    from ai_fake import FakeAI
-    from vesta_agent.skills import script_env
-    v = _with_a_moded_investigate(tmp_path)
-    seen = []
-
-    async def act(call):
-        seen.append(call["folder"])
-    ai = FakeAI("ok", act=act).install(monkeypatch)
-    captured = {}
-    real = v.turns._run
-
-    async def spy(terms, run_settings, *a, **k):
-        captured.setdefault("envs", []).append(script_env(run_settings)["VESTA_MODES"])
-        return await real(terms, run_settings, *a, **k)
-    v.turns._run = spy
-    run(v.converse(JM, v.policy().person(JM), "the heater, use internet", invoked="investigate"))
-    assert captured["envs"] == ["web_research", "web_research"]                  # its page follow-up keeps the mode
-    captured.clear()
-    run(v.converse(JM, v.policy().person(JM), "the heater", invoked="investigate"))
-    assert captured["envs"] == ["", ""]
-
-
 def test_an_investigation_uses_its_own_brain_while_every_other_answer_keeps_the_villas(tmp_path, monkeypatch):
     # owner, 2026-10-11: the investigation ran on the villa's Economy brain (haiku) and skipped steps
     from ai_fake import FakeAI
@@ -515,6 +462,35 @@ def test_a_web_search_the_ai_made_reaches_the_runs_scripts(tmp_path, monkeypatch
     got = [json.loads(s["content"][0]["text"])["searched"] for s in said]
     assert got[0] == ""                                                     # no search yet: nothing said
     assert json.loads(got[1]) == ["centrifugal pump runs without stopping"]
+
+
+def test_an_investigation_keeps_its_web_searches_across_a_restart_before_its_continue(tmp_path, monkeypatch):
+    # architecture review, 2026-10-13: the searches were held in memory only — an update between a stopped /investigate
+    # and its Continue forgot them, and the page (compose.py: "searched, so list the sources") went out without sources
+    import json
+    from ai_fake import FakeAI
+    from helpers import make_skill, restarted
+    from vesta_agent import runner
+    v = _with_investigate(tmp_path)
+    make_skill(v.s.skills_dir, "echo", {"tools": [], "scripts": {"env.py": {"description": "says its environment",
+                                                                           "commands": {"show": "its environment"}}}},
+               {"env.py": "import json, os\nprint(json.dumps({'searched': os.environ.get('VESTA_WEB_SEARCHES', '')}))\n"})
+    said, stop = [], {"now": True}
+
+    async def act(call):
+        if stop["now"]:
+            await call["web_search"]("pump runs without stopping causes")
+        else:
+            said.append(await call["call"]("run_skill_script", {"skill": "echo", "script": "env.py", "args": ["show"]}))
+    FakeAI(lambda call: runner.RunResult("ok", "sess-1", stop["now"], 0.01, []), act=act).install(monkeypatch)
+    run(v.converse(JM, v.policy().person(JM), "the pump", invoked="investigate"))      # searches, stops at its limit
+    (cont_data,) = [b["callback_data"] for _, _, kb in v.tg.sent if kb for row in kb["inline_keyboard"] for b in row
+                    if b["callback_data"].startswith("c:")]
+    v = restarted(v)                                                                     # an update in between
+    stop["now"] = False
+    run(v.on_ha_event("telegram_callback", {"id": "cb", "data": cont_data, "chat_id": JM, "user_id": JM, "bot": BOT,
+                                            "message": {"message_id": 1001, "chat": {"id": JM}, "text": "x"}}))
+    assert said and json.loads(json.loads(said[0]["content"][0]["text"])["searched"]) == ["pump runs without stopping causes"]
 
 
 def test_the_log_says_how_long_each_script_and_the_whole_answer_took(tmp_path, monkeypatch, caplog):

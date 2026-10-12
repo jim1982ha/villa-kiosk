@@ -43,6 +43,13 @@ STATUS = "Status"
 #: existing, closed — or what the skill marked (vesta_shared.result.MARKS).
 STAGE_ICONS = {"new": "⚠️", "existing": "⚠️ ⚙️", "closed": "✅"}
 MARK_ICONS = {"help": "🆘", "unchecked": "☑️"}
+#: The bottom line of a stage that has none of its own (the first alert says only what Home Assistant said).
+STAGE_WORDS = {"new": "New alert", "existing": "Still open", "closed": "Closed: nothing more to do"}
+#: What a pressed Done / Need help leaves on its message ("{time}": the villa's time then, timeutil.moment_label).
+#: ⚠️ ONE WORDING (architecture review, 2026-10-13): Home Assistant's own job messages said "✅ Done - JM" and
+#: "🆘 Help requested - JM" where the agent's said "Done pressed by JM on 12/10/2026 17:13." — the HA template
+#: (homeassistant/custom_templates/vesta_message.jinja) carries these tables too, and its test holds it to them.
+PRESSED = "{label} pressed by {name} on {time}."
 #: Sections whose items are notes — what happened, said by the agent — rather than the things reported.
 NOTE_SECTIONS = frozenset({STATUS})
 

@@ -17,15 +17,36 @@
     "To:" is vm_to when a rule names who it is for; empty, it is the villa-wide input_text.vesta_alert_audience (one
     place for every alert, owner 2026-10-12), and "Owner, Facility Manager" when that helper does not exist.
 
+    The bottom line is said by its STAGE, in the agent's own words (architecture review, 2026-10-13: a job's Done read
+    "✅ Done - JM" here and "✅ Done pressed by JM on 12/10/2026 17:13." under the agent's alerts). A rule sets
+    vm_stage — 'new', 'existing', 'closed' or 'help' — and this file writes its icon (message_format.STAGE_ICONS,
+    MARK_ICONS) before vm_status, or the stage's own words when there is no status (STAGE_WORDS). With vm_who (who
+    pressed Done or Need help), the line says it as the agent does (PRESSED), then vm_status:
+        {%- set vm_stage, vm_who, vm_status = 'help', 'JM', 'Tick it on the Jobs tab.' -%}
+        →  🆘 Need help pressed by JM on 13/10/2026 09:02. Tick it on the Jobs tab.
+    Without vm_stage, vm_status is written as it is (a rule saved before 2026-10-13).
+
     The tags are the agent's style table (message_format.TELEGRAM: title underline, item blockquote, note blockquote +
-    italic); its test (tests/test_ha_message_layout.py) fails when this file and the agent's layout differ. Text is
-    escaped here, once: Telegram's HTML refuses a bare "<", ">" or "&". -#}
+    italic); its test (tests/test_ha_message_layout.py) fails when this file and the agent's layout or words differ.
+    Text is escaped here, once: Telegram's HTML refuses a bare "<", ">" or "&". -#}
 {%- macro vm_escape(s) -%}{{ (s | default('', true) | string | trim) | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') }}{%- endmacro -%}
 {%- set vm_r = vm_to | default('', true) | string | trim -%}
 {%- if not vm_r and states is defined -%}{%- set vm_r = states('input_text.vesta_alert_audience') | trim -%}{%- endif -%}
 {%- if vm_r in ['', 'unknown', 'unavailable'] -%}{%- set vm_r = 'Owner, Facility Manager' -%}{%- endif -%}
 {%- set vm_t = vm_text | default('', true) | string | trim -%}
 {%- set vm_s = vm_status | default('', true) | string | trim -%}
+{%- set vm_icons = {'new': '⚠️', 'existing': '⚠️ ⚙️', 'closed': '✅', 'help': '🆘'} -%}
+{%- set vm_words = {'new': 'New alert', 'existing': 'Still open', 'closed': 'Closed: nothing more to do'} -%}
+{%- set vm_g = vm_stage | default('', true) | string | trim -%}
+{%- if vm_g in vm_icons -%}
+{%- set vm_p = vm_who | default('', true) | string | trim -%}
+{%- if vm_p -%}
+{%- set vm_at = now().strftime('%d/%m/%Y %H:%M') if now is defined else '' -%}
+{%- set vm_said = '{label} pressed by {name} on {time}.' | replace('{label}', 'Need help' if vm_g == 'help' else 'Done') | replace('{name}', vm_p) | replace('{time}', vm_at) -%}
+{%- set vm_s = (vm_said ~ ' ' ~ vm_s) | trim -%}
+{%- endif -%}
+{%- set vm_s = vm_icons[vm_g] ~ ' ' ~ (vm_s or vm_words.get(vm_g, '')) -%}
+{%- endif -%}
 <u>{{ vm_escape(vm_title) }}</u>
 To: {{ vm_escape(vm_r) }}
 {%- if vm_t %}

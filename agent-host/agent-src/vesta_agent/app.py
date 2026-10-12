@@ -58,6 +58,7 @@ from .tickets import Tickets
 from .policy import NOT_REGISTERED, Person, Policy, problems as policy_problems
 from .routing import Origin, Routing
 from .scheduler import Scheduler
+from .command_request import Request, Requests
 from .fault_offers import FaultOffers
 from .skills import SEEDED, Skills, script_env
 from .state import State
@@ -153,6 +154,7 @@ class Vesta:
                                tell_fm=lambda text: self.outcome.carry_out({"send": [{"to": "fm", "text": text,
                                                                                  "title": "Fault reopened in the Kiosk"}]}))
         # a fault offered in a chat, start to end (fault_offers.py, review 32)
+        self.requests = Requests(self.state, self.skills)   # a command skill's request, its turns (command_request.py)
         self.fault_offers = FaultOffers(self.state, self.delivery, self.tickets,
                                         lambda chat: self.s.in_folder(f"chats/{chat}").out_dir)
         # a voice message's words (voice.py): the skill prepares the audio, Home Assistant reads it
@@ -179,7 +181,6 @@ class Vesta:
                            turns=self.turns, safe=self._safe)
         self.bot_username: str | None = None
         self._locks: dict[int, asyncio.Lock] = {}
-        self._web_searches: dict[str, list] = {}      # inv → its web searches (toolbox: every turn of one investigation)
         self._kiosk_read = 0.0            # when the Kiosk's faults were last read (housekeeping)
         self._pack = None
         self._pack_mtime = None
@@ -242,21 +243,16 @@ class Vesta:
             return None
         return out
 
-    def toolbox(self, allowed: set[str] | None = None, settings=None, invoked: str | None = None,
-                inv: str | None = None) -> Toolbox:
+    def toolbox(self, allowed: set[str] | None = None, settings=None, request: Request | None = None) -> Toolbox:
         """`allowed`: what the AI may use this time (turn.Terms.tools); None: everything switched on. `settings`: the
-        run's own (config.Settings.in_folder: its files' folder); the agent's without one."""
-        searched = None
-        if inv:
-            # one investigation's web searches, whichever of its turns made them (its page follow-up, a Continue)
-            searched = self._web_searches.setdefault(inv, [])
-            while len(self._web_searches) > 50:
-                self._web_searches.pop(next(iter(self._web_searches)))
+        run's own (config.Settings.in_folder: its files' folder); the agent's without one. `request`: the command
+        skill's request this turn answers (command_request.py): its skill, its id, its web searches so far."""
         return Toolbox(settings=settings or self.s, policy=self.policy(), reader=self.reader, actions=self.actions,
                        skills=self.skills, ask=self.approvals.ask, server_tools=self.server_tools, state=self.state,
                        ticket=self.tickets.create if self.kiosk.enabled else None,
-                       carry_out=self.outcome.carry_out, start_job=self.jobs.start, allowed=allowed, invoked=invoked, inv=inv,
-                       searched=searched)
+                       carry_out=self.outcome.carry_out, start_job=self.jobs.start, allowed=allowed,
+                       invoked=request.name if request else None, inv=request.inv if request else None,
+                       searched=request.searched if request else None)
 
     def lock(self, chat_id: int) -> asyncio.Lock:
         return self._locks.setdefault(int(chat_id), asyncio.Lock())
@@ -542,21 +538,24 @@ class Vesta:
     async def converse(self, cid: int, person: Person | None, text: str,
                        resume: str | None = "auto", is_continue: bool = False, voice: bool = False,
                        image: tuple[str, str] | None = None, held=None, invoked: str | None = None,
-                       inv: str | None = None, modes: list[str] | None = None):
+                       request: Request | None = None):
         """`image`: a photo the person sent (base64, mime), `text` its caption: the AI looks at it. `held`: the chat's
-        "typing…" taken when the message arrived (handle_message), carried on until the answer goes."""
+        "typing…" taken when the message arrived (handle_message), carried on until the answer goes. `invoked`: the
+        command skill the person's "/command" called (a new request); `request`: the one a Continue continues."""
+        if request is None and not is_continue:
+            request = self.requests.begin(invoked)
         async with self.delivery.typing(cid, held=held) as answered:
-            await self._converse(cid, person, text, resume, is_continue, voice, answered, image, invoked, inv, modes)
+            await self._converse(cid, person, text, resume, is_continue, voice, answered, image, request)
 
-    async def _converse(self, cid, person, text, resume, is_continue, voice, answered, image=None, invoked=None, inv=None,
-                        modes=None):
+    async def _converse(self, cid, person, text, resume, is_continue, voice, answered, image=None,
+                        request: Request | None = None):
         async with self.lock(cid):
             self.chat_jobs.turn(cid)                         # a job started now belongs to this turn (chat_jobs.py)
             if resume == "auto":
                 # ⚠️ A COMMAND'S SKILL STARTS A FRESH CONVERSATION (owner, 2026-10-11, 20:00): "/investigation" in a chat
                 # that already held the morning's answer about the same pump was answered from it in 19 s — no reading
                 # at all, no page. With nothing earlier to lean on, the only way to answer is to do the skill's work.
-                resume = None if invoked and not is_continue else self._resume_for(cid)
+                resume = None if request and not is_continue else self._resume_for(cid)
             lang = LANG.get(person.language, person.language) if person else "English"
             if is_continue:
                 prompt = "Continue exactly where you stopped. Do not repeat what you already wrote."
@@ -569,16 +568,12 @@ class Vesta:
                 prompt = (f"{said[0].upper() + said[1:]} from {person.name if person else 'someone'} (role "
                           f"{person.role if person else '?'}; language saved for them: {lang}) in the {self.policy().chat_label(cid)}:\n"
                           f"\"\"\"{text}\"\"\"")
-            # a skill only its command starts (skills.Skill.command): this turn's, or — for a Continue — the one its
-            # button carries (state.new_continuation), with its investigation `inv`: when it began, its offers
-            if not is_continue:
-                inv = f"{time.time():.3f}" if invoked else None
-                sk = self.skills.get(invoked) if invoked else None
-                if sk is not None:
-                    # its modes, as the person's own words set them (skill.yaml `modes`): said before the request
-                    modes = "".join(f"{m}\n" for m in sk.modes_for(text))
-                    prompt = (f"{person.name if person else 'The person'} wrote /{sk.command}: this is a request for the "
-                              f"{sk.name} skill. Read it with read_skill and follow it.\n{modes}\n{prompt}")
+            # a skill only its command starts (skills.Skill.command): this turn's request, or — for a Continue — the one
+            # its button carries (state.new_continuation): its id, its offers, its web searches (command_request.py)
+            sk = request.skill if request else None
+            if sk is not None and not is_continue:
+                prompt = (f"{person.name if person else 'The person'} wrote /{sk.command}: this is a request for the "
+                          f"{sk.name} skill. Read it with read_skill and follow it.\n\n{prompt}")
             if not is_continue:
                 checked = await asyncio.to_thread(self.before_answer)
                 if checked:
@@ -586,21 +581,16 @@ class Vesta:
             pol = self.policy()
             # what this person may make the AI use here, the chat's brain and limit, its folder: turn.py decides
             asked = None if is_continue else (f"[photo] {text}".strip() if image else text)
-            if not is_continue:
-                modes = self.skills.get(invoked).active_modes(text) if invoked and self.skills.get(invoked) else []
-            called = self.skills.get(invoked) if invoked else None      # its own brain and limit, if it names them
             began = time.monotonic()
-            res = await self.turns.chat(person, cid, prompt, resume=resume, asked=asked, image=image, invoked=invoked,
-                                        inv=inv, modes=modes, brain=called.brain if called else None,
-                                        limit_usd=called.limit_usd if called else None)
+            # a request's own brain and limit, if its skill names them (turn.Turns.chat)
+            res = await self.turns.chat(person, cid, prompt, resume=resume, asked=asked, image=image, request=request)
             if res.session_id:
                 self.state.set_session(cid, res.session_id)
             log.info("Answered %s in chat %s (%s, %.0f s)%s", person.name if person else "system", cid,
                      f"{res.cost_usd:.3f} USD" if isinstance(res.cost_usd, (int, float)) else "cost unknown",
                      time.monotonic() - began, f", error {res.error}" if res.error else "")
-            sk = self.skills.get(invoked) if invoked else None
             if sk is not None and sk.deliver and not (res.problem or res.error or res.stopped_at_limit):
-                res = await self._delivered(sk, cid, person, res, asked or "", inv, modes)
+                res = await self._delivered(request, cid, person, res, asked or "")
             answer = (res.text or "").strip()               # an empty answer sends nothing (a request said it all)
             if not answer and not res.sent and not res.approvals and res.earlier:
                 answer = res.earlier                        # ended on a tool call with nothing sent: its last words
@@ -627,7 +617,8 @@ class Vesta:
                     keyboard = ai_down.keyboard(res.problem, off.buttons)
             if res.stopped_at_limit and res.session_id:
                 cont = self.state.new_continuation(cid, res.session_id, person.telegram_id if person else None,
-                                                   invoked=invoked, inv=inv, modes=modes)
+                                                   invoked=request.name if request else None,
+                                                   inv=request.inv if request else None)
                 answer = (answer + "\n\n" if answer else "") + \
                     f"Stopped: this answer reached the {res.limit_usd:g} USD limit per reply."
                 keyboard = {"inline_keyboard": [[{"text": "Continue", "callback_data": button_data.make(button_data.CONTINUE, cont)}]]}
@@ -651,19 +642,20 @@ class Vesta:
             self.fault_offers.delivered(offered_ids, mid)
             await self.chat_jobs.replied(cid, mid)            # this turn's jobs: their waiting message, their "typing…"
 
-    async def _delivered(self, sk, cid: int, person, res, asked: str, inv: str | None, modes: list[str] | None = None):
+    async def _delivered(self, request: Request, cid: int, person, res, asked: str):
         """⚠️ WHAT A COMMAND SKILL'S ANSWER CARRIES, CHECKED — NEVER LEFT TO THE AI (owner, 2026-10-11: "make sure this
         always trigger the full use of the skill — HTML report in the response and buttons to create and cancel a
         ticket creation"). skill.yaml `deliver`: the page the answer must have sent (missing: the AI is sent back to it
         once, then the person is told), and a fault always offered — one per investigation `inv` (fault_offers)."""
         import dataclasses
+        sk, inv = request.skill, request.inv
         page, account = sk.deliver.get("page"), sk.deliver.get("fault_offer")
         if page and page not in res.attached:
             log.info("Chat %s: /%s answered without %s: the AI is sent back to make it", cid, sk.command, page)
             again = await self.turns.chat(
                 person, cid, f"Your answer has not sent {page}: every /{sk.command} answer carries it. Make it now and send "
                              f"it with send_message (attachment {page}), as the {sk.name} skill says. Write nothing else.",
-                resume=res.session_id, invoked=sk.name, inv=inv, modes=modes, brain=sk.brain, limit_usd=sk.limit_usd)
+                resume=res.session_id, request=request)
             # ⚠️ THE FOLLOW-UP'S OWN OUTCOME GOES ON (review 32): merged by hand, it lost its stop at the limit (no Continue)
             # and its problem (no credit read as "the page could not be made")
             res = dataclasses.replace(
@@ -742,8 +734,7 @@ class Vesta:
             return await p.toast("Only the person who asked can continue this answer.")
         await p.toast("Continuing.")
         await self.converse(p.chat, p.person, "", resume=cont["session_id"], is_continue=True,
-                            invoked=cont.get("invoked"), inv=cont.get("inv"),
-                            modes=[m for m in (cont.get("modes") or "").split(",") if m])
+                            request=self.requests.resume(cont.get("invoked"), cont.get("inv")))
 
     async def _press_ticket(self, p: "Press") -> None:
         await self.fault_offers.press(p)

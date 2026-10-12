@@ -53,7 +53,6 @@ HEAD_WORDS = {"new": "new", "closed": "closed"}
 EXISTING = "existing"
 #: A role in a heading when no person of it is listed (owner, 2026-10-10: "the Facility Manager", capitals)
 ROLE_WORDS = {"owner": "the Owner", "fm": "the Facility Manager"}
-WHEN = "%d/%m/%Y %H:%M"
 
 
 def addressed(names) -> list[str]:

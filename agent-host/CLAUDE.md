@@ -307,6 +307,11 @@ Decisions of 2026-09-30 (owner):
   included `ignore missing`) and falls back to its plain text whenever `sensor.vesta_message_layout`
   (`homeassistant/packages/vesta_message.yaml`) is not "ok" or Telegram refuses; test_ha_message_layout holds both to
   message_format. Never make a blueprint's alert wait on the agent (option C was rejected for that reason).
+  0.12.179: a blueprint gives a STAGE (vm_stage new / existing / closed / help, vm_who for a press), never the status
+  words or icons: the jinja writes them from message_format's STAGE_ICONS, MARK_ICONS, STAGE_WORDS and PRESSED.
+- Architecture review 2026-10-13 (0.12.179): `command_request.Requests` is a command skill's request across its turns
+  (web searches kept as records); `vesta_shared.periods` + `timeutil.lasting` are the investigation's kinds, words and
+  durations for both skill folders. skill.yaml `modes` is retired.
 - No PDF (owner, 2026-09-30): the reports are self-contained HTML pages sent
   as attachments. Chromium was ~480 MB of a 1.1 GB image for this alone.
 - ⚠️ The Dockerfile's layer order is what an update costs the Yellow: agent

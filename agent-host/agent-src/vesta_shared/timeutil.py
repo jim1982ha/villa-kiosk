@@ -98,3 +98,18 @@ WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", 
 
 def weekday_name(d: date) -> str:
     return WEEKDAYS[d.weekday()]
+
+
+def lasting(seconds: float) -> str:
+    """A duration in words a person reads: "8 s", "47 min", "1 h 15 min", "2 h".
+
+    ⚠️ ONE DURATION WORDING (architecture review, 2026-10-13): the investigation's lines said "1 h 15 min" and its page,
+    just above the AI's reading of them, "75 min" for the same outage — three copies, two rules."""
+    s = int(round(float(seconds)))
+    if s < 90:
+        return f"{s} s"
+    m = s // 60
+    if m < 60:
+        return f"{m} min"
+    h, m = divmod(m, 60)
+    return f"{h} h {m} min" if m else f"{h} h"

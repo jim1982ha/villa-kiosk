@@ -318,7 +318,7 @@ def _page(tmp_path, notes, searches=None, readings=True):
     compose = os.path.join(STARTER_SKILLS, "reports", "scripts", "compose.py")
     r = subprocess.run([sys.executable, compose, "investigation", "--notes", str(tmp_path / "n.json"), *args,
                         "--out", str(tmp_path / "p.html")], capture_output=True, text=True,
-                       env={**os.environ, "PYTHONPATH": PYTHONPATH, "VESTA_MODES": "",
+                       env={**os.environ, "PYTHONPATH": PYTHONPATH,
                             "VESTA_WEB_SEARCHES": json.dumps(searches) if searches else ""})
     page = (tmp_path / "p.html").read_text() if (tmp_path / "p.html").exists() else ""
     return r.returncode, r.stderr, page, (json.loads(r.stdout) if r.returncode == 0 else {})
@@ -503,7 +503,7 @@ def test_the_key_line_gives_the_longest_periods_per_device_and_says_how_many_mor
     blips = [{"name": "Gate", "kind": "offline", "start": T(9, h), "end": T(9, h, 2), "seconds": 120} for h in range(12)]
     long = {"name": "Boiler", "kind": "running", "start": T(9, 13), "end": T(9, 18), "seconds": 18000}
     key = mod.key_line(blips + [long], hm)
-    assert len(key) <= mod.KEY_MAX and "Boiler: ran 13:00–18:00 (5 h 0 min)" in key        # the longest, wherever
+    assert len(key) <= mod.KEY_MAX and "Boiler: ran 13:00–18:00 (5 h)" in key        # the longest, wherever
     assert key.endswith("more.") and key.index("Gate") < key.index("Boiler")               # devices in time order
     assert len(mod.key_line([{**long, "name": "N" * 300}], hm)) <= mod.KEY_MAX
 
@@ -690,8 +690,24 @@ def test_every_band_kind_has_its_own_word_and_colour():
     assert compose.band_of("stops and restarts 8 times")[0] == "kept stopping and restarting"
     assert compose.band_of("running")[0] == "ran longer or harder than usual" and compose.band_of("open")[0] == "unusual"
     # owner, 2026-10-12: "you are using too similar colour": every kind its own, none the readings' or the usual's
-    colours = [c for _, _, c in compose.BANDS if c != "var(--ink2)"]
+    colours = [c for c in compose.BAND_COLOURS.values() if c != "var(--ink2)"]
     assert len(set(colours)) == len(colours) and not {compose.READINGS, compose.USUAL} & set(colours)
+
+
+def test_a_period_is_said_the_same_by_the_lines_the_ai_reads_and_by_the_page():
+    # architecture review, 2026-10-13: the AI's reading quoted investigate.py's "offline for 1 h 15 min" while the
+    # page's facts said "stopped reporting … 75 min" for the same outage — three duration rules and two word tables
+    sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
+    import compose
+    import investigation_facts
+    from vesta_shared import periods
+    import investigate as lines
+    for seconds, said in ((45, "45 s"), (600, "10 min"), (4500, "1 h 15 min"), (7200, "2 h"), (9000, "2 h 30 min")):
+        assert lines.lasting(seconds) == investigation_facts.lasting(seconds) == compose.lasting(seconds) == said
+    for kind in (periods.NO_POWER, periods.OFFLINE, periods.NO_VALUE, periods.RUNNING, periods.restarts(8)):
+        assert investigation_facts.did(kind) == periods.did(kind) and compose.band_of(kind)[0] == periods.band(kind)
+        assert periods.base(kind) in compose.BAND_COLOURS
+    assert periods.did(periods.restarts(8)) == "stopped and restarted 8 times"
 
 
 def test_the_web_contribution_is_always_there_and_says_when_no_web_page_was_used(tmp_path):

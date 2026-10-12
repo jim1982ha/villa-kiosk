@@ -24,7 +24,9 @@ from __future__ import annotations
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from vesta_shared.timeutil import day_time_label        # the one day format
+from vesta_shared import periods                         # the period kinds and their words (investigate.py's)
+from vesta_shared.periods import did
+from vesta_shared.timeutil import day_time_label, lasting  # the one day format, the one duration wording
 
 
 def _on(a: dict) -> str:
@@ -32,23 +34,6 @@ def _on(a: dict) -> str:
     named = [t.get("name") or t.get("id") for t in a.get("targets") or []]
     return ", ".join(named[:6]) + (f" and {len(named) - 6} more" if len(named) > 6 else "") if named else \
         "(" + ", ".join(a.get("changes") or []) + ")"
-
-
-def lasting(seconds) -> str:
-    s = int(round(float(seconds)))
-    return f"{s} s" if s < 90 else f"{s // 60} min" if s < 5400 else f"{s // 3600} h {s % 3600 // 60} min"
-
-
-#: what a device did in a period of each kind (investigate.py's kinds), as a person says it
-DID = (("running", "ran"), ("no power", "had no power"), ("offline", "stopped reporting"),
-       ("no value", "reported no value"), ("stops and restarts", "stopped and restarted"))
-
-
-def did(kind: str) -> str:
-    for k, words in DID:
-        if str(kind).startswith(k):
-            return words + str(kind)[len("stops and restarts"):] if k == "stops and restarts" else words
-    return str(kind)
 
 
 def _t(iso) -> datetime | None:
@@ -124,7 +109,7 @@ def facts(data: dict | None, around: dict | None, notes: dict | None = None) -> 
     for f in flagged:
         rows.append({"at": f["start"], "pill": "unusual",
                      "text": f"{f['name']} {did(f['kind'])} "
-                             f"{'in' if f['kind'].startswith('stops and restarts') else 'for'} {lasting(f['seconds'])}, "
+                             f"{'in' if periods.base(f['kind']) == periods.RESTARTS else 'for'} {lasting(f['seconds'])}, "
                              f"until {clock(f['end'])} — {f['why']}"})
         al = f.get("alert") or {}
         fired = _t(al.get("at"))

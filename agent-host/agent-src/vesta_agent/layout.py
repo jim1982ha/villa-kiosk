@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import re
 
-from vesta_shared.message_format import (INCIDENT_TITLE, MARK_ICONS, STAGE_ICONS, STATUS, TO, UNTITLED, document,
+from vesta_shared.message_format import (INCIDENT_TITLE, MARK_ICONS, STAGE_ICONS, STAGE_WORDS, STATUS, TO, UNTITLED, document,
                                          parts as shape_parts)
 from vesta_shared.messaging import TELEGRAM_LIMIT, tg_len
 
@@ -37,11 +37,9 @@ PARTS = ("head", "lead", "body", "status", "mark")
 
 #: An incident message's stage, as its title says it, shown again at the head of its bottom line (owner, 2026-10-11:
 #: "clearly see if this message is a new alert, a follow-up, or a closure — no more follow-up expected"). Taken from the
-#: title's word (notice.Notices), never decided twice: a copy retitled "(closed)" shows ✅ at once. STAGE_ICONS and
-#: MARK_ICONS (a person pressed Need help; closed, but VESTA could not check it) live in vesta_shared.message_format,
-#: the one place of the messages' shape and style.
-#: A bottom line for a stage that has none of its own: the first alert says only what Home Assistant said.
-STAGE_WORDS = {"new": "New alert", "existing": "Still open", "closed": "Closed: nothing more to do"}
+#: title's word (notice.Notices), never decided twice: a copy retitled "(closed)" shows ✅ at once. STAGE_ICONS,
+#: STAGE_WORDS and MARK_ICONS (a person pressed Need help; closed, but VESTA could not check it) live in
+#: vesta_shared.message_format, the one place of the messages' shape and style.
 def _word(head: str) -> str | None:
     """The stage word of an incident message's heading ("new", "existing", "closed"); None for any other message (a
     copy sent before 0.12.152 gets the new heading the first time it changes: notice.Notices.retitle)."""

@@ -388,22 +388,6 @@ def test_the_investigate_skill_answers_to_its_one_command():
     assert sk.commands() == {"/investigate": "investigate"} and sk.get("investigate").command == "investigate"
 
 
-def test_a_mode_belongs_to_a_command_skill_and_needs_its_words(tmp_path):
-    from vesta_agent.skills import SkillError, parse_skill
-    d = tmp_path / "s"
-    (d / "scripts").mkdir(parents=True)
-    (d / "SKILL.md").write_text("x")
-    for raw, ok in (("command: look\nmodes:\n  deep:\n    words: [deep]\n    said_on: A\n    said_off: B\n", True),
-                    ("modes:\n  deep:\n    words: [deep]\n", False),                      # no command
-                    ("command: look\nmodes:\n  deep:\n    said_on: A\n", False)):          # no words
-        (d / "skill.yaml").write_text("description: x\n" + raw)
-        if ok:
-            assert parse_skill("s", str(d)).modes_for("go deep") == ["A"]
-        else:
-            with pytest.raises(SkillError):
-                parse_skill("s", str(d))
-
-
 def test_a_skills_brain_is_one_the_rules_know(tmp_path):
     from vesta_agent.skills import SkillError, parse_skill
     d = tmp_path / "s"
