@@ -2,7 +2,7 @@
 """reports: the composer — the chat texts, and the weekly and monthly pages from their facts.
 
   compose.py fm-daily      --pack pack.json --store S [--as-of D]                 -> text (chat)
-  compose.py owner-weekly  --pack pack.json --store S --energy week.json          -> 3 lines (chat)
+  compose.py owner-weekly  --pack pack.json --store S --energy week.json [--page P] -> 3 lines (chat), page attached
   compose.py fm-weekly     --facts facts.json [--notes notes.json] --out page.html
   compose.py owner-monthly --facts facts.json [--notes notes.json] --out page.html
   compose.py investigation --notes investigation.json [--data timeline.json] [--around around.json] --out investigation.html
@@ -145,7 +145,9 @@ def fm_daily(pack: KnowledgePack, store: Store, as_of: date) -> str:
     return document(title(pack.villa, "daily", as_of), "", sections)
 
 
-def owner_weekly(pack: KnowledgePack, store: Store, energy: dict) -> str:
+def owner_weekly(pack: KnowledgePack, store: Store, energy: dict, page: bool = False) -> str:
+    """The owner's Monday lines. `page`: the facility manager's weekly page goes with them (owner, 2026-10-12: the
+    lines said "Details in the FM weekly page", a page only the facility manager was sent)."""
     inc = [i for i in store.incident_occurrences()            # every run, a reopened alert's included
            if energy["start"] <= villa_date(i["opened_at"], pack.time_zone or "UTC").isoformat() <= energy["end"]]
     p1 = sum(1 for i in inc if i["severity"] == "P1")
@@ -161,7 +163,8 @@ def owner_weekly(pack: KnowledgePack, store: Store, energy: dict) -> str:
         ("Energy this week", [f"- {kwh}{vs}{cost}."]),
         ("Alerts and problems", [f"- {len(inc)} alert(s), {p1} critical, {alerts_open} still open; {open_tasks} "
                                  f"maintenance problem(s) open.",
-                                 "- All quiet." if not still and not p1 else "- Details in the FM weekly page."])])
+                                 "- All quiet." if not still and not p1 else "- Details in the attached page." if page
+                                 else "- The facility manager has the details in their weekly page."])])
 
 
 # ---------------------------------------------------------------- the charts
@@ -842,6 +845,7 @@ def main(argv=None):
     ap.add_argument("--energy"); ap.add_argument("--as-of")
     ap.add_argument("--facts"); ap.add_argument("--notes"); ap.add_argument("--out"); ap.add_argument("--data")
     ap.add_argument("--around")
+    ap.add_argument("--page", help="owner-weekly: the weekly page sent with the lines")
     ap.add_argument("--finish", choices=["here", "owner", "fm"], help="the job's on_limit step: send the page")
     ap.add_argument("--since"); ap.add_argument("--limit")
     ap.add_argument("--no-ai", metavar="WHY", help="the job's without_ai step: the AI could not run (WHY, in words)")
@@ -923,12 +927,14 @@ def main(argv=None):
             print(f"fm-daily: {e}", file=sys.stderr)
             return 1
     else:
-        doc = owner_weekly(pack, store, json.load(open(a.energy)))
+        doc = owner_weekly(pack, store, json.load(open(a.energy)), page=bool(a.page))
+    attached = {"attachment": os.path.basename(a.page)} if a.page else {}
     if mode == "no_ai":
         # a job's without_ai step: the message is sent as written, saying it was made without the AI; a long one is cut
         # into whole messages by the agent (posting.py), never here
-        print(json.dumps({"send": [send(a.finish, doc + "\n\n" + without_ai_note(a.no_ai))]}, indent=1)); return 0
-    print(json.dumps({"message": for_the_ai(doc)}, indent=1)); return 0
+        print(json.dumps({"send": [send(a.finish, doc + "\n\n" + without_ai_note(a.no_ai), **attached)]}, indent=1))
+        return 0
+    print(json.dumps({"message": for_the_ai(doc), **attached}, indent=1)); return 0
 
 
 def _investigation(a) -> int:

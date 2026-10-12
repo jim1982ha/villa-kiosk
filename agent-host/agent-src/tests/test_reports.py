@@ -831,6 +831,36 @@ def test_the_owners_weekly_line_counts_alerts_apart_from_maintenance(tmp_path):
     assert "2 still open; 2 maintenance problem(s) open" in text                  # not "4 FM task(s)"
 
 
+def test_the_owners_monday_lines_carry_the_weekly_page_they_point_to(tmp_path, monkeypatch, capsys):
+    # owner, 2026-10-12: "Details in the FM weekly page." reached the owner group with no page — only the facility
+    # manager was sent it. The lines now go with that page, on schedule and without the AI.
+    sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
+    import json as _json
+    import yaml
+    import compose
+    pack, store = _problems_villa(tmp_path)
+    week = {"start": "2026-09-28", "end": "2026-10-04", "total_kwh": None}
+    assert "- Details in the attached page." in compose.owner_weekly(pack, store, week, page=True)
+    assert "attached" not in compose.owner_weekly(pack, store, week)          # no page sent: no page promised
+    (tmp_path / "week.json").write_text(_json.dumps(week))
+    (tmp_path / "fm_weekly.html").write_text("<html></html>")
+    monkeypatch.setattr(compose.script, "Context", lambda a: type("C", (), {"pack": pack, "store": store,
+                                                                            "day": staticmethod(lambda d: None)})())
+    base = ["owner-weekly", "--pack", "p", "--energy", str(tmp_path / "week.json"), "--page", str(tmp_path / "fm_weekly.html")]
+    assert compose.main(base) == 0
+    out = _json.loads(capsys.readouterr().out)
+    assert out["attachment"] == "fm_weekly.html" and "attached page" in out["message"]["text"]
+    assert compose.main(base + ["--finish", "owner", "--no-ai", "no credit."]) == 0
+    sent = _json.loads(capsys.readouterr().out)["send"][0]
+    assert sent["attachment"] == "fm_weekly.html" and "attached page" in sent["text"]
+    # the job's own steps name the page the fm-weekly step wrote
+    job = next(j for j in yaml.safe_load(open(os.path.join(STARTER_SKILLS, "reports", "skill.yaml")))["schedule"]
+               if j["name"] == "fm-weekly")
+    steps = [x["run"] if isinstance(x, dict) else x for x in job["without_ai"]]
+    assert "--out fm_weekly.html" in steps[2] and "--page fm_weekly.html" in steps[3]
+    assert "--page" in job["prompt"] and "attachment=" in job["prompt"]
+
+
 def test_every_field_the_page_prints_is_one_facts_gives(tmp_path):
     # architecture review 13: facts.json → about forty template fields, checked by nobody — a renamed field printed
     # a blank. A field the page only TESTS may be absent (an optional "error"); one it PRINTS may not.

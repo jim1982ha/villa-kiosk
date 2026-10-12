@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.168 (12 October 2026)
+
+- reports: compose.py owner-weekly --page P attaches P (the fm-weekly page) to the owner's lines, in the AI's result
+  (`attachment`) and in the without_ai step; the line says "Details in the attached page." (without --page: "The
+  facility manager has the details in their weekly page."). The fm-weekly job's prompt and without_ai step pass it.
+
 ## 0.6.167 (12 October 2026)
 
 - compose._framed lays every <text> of a chart over it as page text (.chart .ax, 13 px; 11 px under 480 px wide).

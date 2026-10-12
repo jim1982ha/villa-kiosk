@@ -15,11 +15,11 @@ scripts:
     commands:
       fm-daily: the facility manager's morning message
       fm-weekly: the weekly page, from its figures and the readings
-      owner-weekly: the owner's three Monday lines
+      owner-weekly: the owner's three Monday lines, with the weekly page (--page)
       owner-monthly: the monthly report, from its figures and the readings
       investigation: an investigation's page (the investigate skill's account and charts) and its short message
     job_only: {fm-daily: fm-daily, fm-weekly: fm-weekly, owner-monthly: owner-monthly}
-    flags: {--energy: infile, --facts: infile, --notes: infile, --data: infile, --around: infile, --as-of: date, --out: outfile}
+    flags: {--energy: infile, --facts: infile, --notes: infile, --data: infile, --around: infile, --page: infile, --as-of: date, --out: outfile}
     inject: [pack, store, zone]
 # AI jobs: each `name` is the key of its model and spending limit in policy.yaml settings.jobs (VESTA
 # Agent page → Rules → AI jobs); a job that policy.yaml does not name does not run. `default` is what
@@ -57,14 +57,14 @@ schedule:
       - {skill: roi-energy, run: "energy_period.py --period week --out week.json"}
       - "facts.py fm-weekly --energy week.json --out facts.json"
       - "compose.py fm-weekly --facts facts.json --out fm_weekly.html --finish {to} --no-ai {why}"
-      - {run: "compose.py owner-weekly --energy week.json --finish owner --no-ai {why}", on_schedule_only: true}
+      - {run: "compose.py owner-weekly --energy week.json --page fm_weekly.html --finish owner --no-ai {why}", on_schedule_only: true}
     prompt: >-
       It is Monday 08:00. Read the reports skill and make the facility manager's weekly report, following its
       steps "A weekly or monthly report": the week's energy, facts.py fm-weekly, your readings from the clues,
       the playbook and Home Assistant, saved in notes.json (in {fm_language}), compose.py fm-weekly, then
       send_message to fm with the page attached, title= and text= the `message` compose.py printed. On schedule
-      only, then send the owner the owner-weekly `message` (compose.py owner-weekly --energy week.json): title= as
-      it is, text= in {owner_language}, its layout kept (section labels, an empty line between items);
+      only, then send the owner the owner-weekly `message` (compose.py owner-weekly --energy week.json --page
+      fm_weekly.html) with the same page attached (attachment= the `attachment` it printed): title= as it is, text= in {owner_language}, its layout kept (section labels, an empty line between items);
       when the report was asked for in a chat, the page is the whole answer: send nothing else.
   - when: "1 08:00"
     name: owner-monthly
