@@ -274,13 +274,17 @@ button.cockpit-attention-row.tappable { cursor: pointer; }
   padding: 8px 0; font-size: var(--text-sm);
 }
 .telemetry-row + .telemetry-row { border-top: 1px solid var(--hairline); }
-.telemetry-row > .telemetry-kind { flex: 0 0 auto; font-weight: 600; }
-.telemetry-row > .telemetry-meta { flex: 0 0 auto; font-size: var(--text-2xs); }
-.telemetry-row > .telemetry-time { flex: 0 0 auto; font-size: var(--text-2xs); }
-/* `anywhere` rather than `break-word`: it may break mid-token to avoid an
-   overflow, but unlike `break-all` it still prefers ordinary word boundaries
-   whenever the line has room for them. */
-.telemetry-row > .telemetry-summary { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.telemetry-row > .telemetry-kind { flex: 0 0 auto; font-weight: 600; white-space: nowrap; }
+.telemetry-row > .telemetry-meta { flex: 0 0 auto; font-size: var(--text-2xs); white-space: nowrap; }
+.telemetry-row > .telemetry-time { flex: 0 0 auto; font-size: var(--text-2xs); white-space: nowrap; }
+/* ONE LINE PER EVENT, every row the same height (owner, 2026-10-12): the
+   summary ends in "…" when it does not fit — its full text is the span's
+   tooltip, and Copy/Download give every field. It used to wrap, so a frames
+   event took three lines and a sync event one. */
+.telemetry-row > .telemetry-summary {
+  flex: 1; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 
 @media (max-width: 640px) {
   /* Give the summary the whole of its own line instead of the sliver left

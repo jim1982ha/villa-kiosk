@@ -1,3 +1,10 @@
+## 2.496.334
+
+### Changed
+- "Model north offset" and its "Set North" button moved from Settings to Advanced Settings → Villa, right under the villa's coordinates. It still applies at once.
+- Advanced Settings → Villa → "Bound 3D objects" is now one section: a single paragraph says what it does and how to prepare an entity whose 3D object is not in the model yet, with the entity picker right under it ("Pre-configure a new entity" was a second heading in smaller print).
+- Device telemetry: each event takes one line, all rows the same height; a summary that does not fit ends in "…" (hover it for the full text; Copy and Download still give every field).
+
 ## 2.496.333
 
 ### Fixed

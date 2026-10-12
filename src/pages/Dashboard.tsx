@@ -873,6 +873,7 @@ export default function Dashboard() {
           // there is nothing to restore and nothing to decide.
           onBack={() => closeSurface("configEditor")}
           onModelChanged={() => setModelKey((k) => k + 1)}
+          viewHeadingDeg={manager ? () => manager.viewHeadingDeg() : undefined}
         />
       )}
     </VillaModelProvider>

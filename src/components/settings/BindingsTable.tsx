@@ -90,21 +90,18 @@ export default function BindingsTable() {
 
   return (
     <div>
+      {/* ONE section, one voice (owner, 2026-10-12): "Pre-configure a new
+          entity" sat under its own smaller heading and finer print, as if it
+          were another section — it is this section's way to add an entity. */}
       <p className="muted body-text">
-        Each bound object controls a Home Assistant entity when tapped in the
-        villa. Change the entity or its display settings without reloading the
-        model.
+        Each bound 3D object controls a Home Assistant entity when tapped in the
+        villa: change its entity or its display settings here, without reloading
+        the model. To prepare an entity whose 3D object is not in the model yet,
+        add it below — its settings apply as soon as a model with an object
+        named after its entity ID is uploaded.
       </p>
 
       <div style={{ marginBottom: 20 }}>
-        <label style={{ display: "block", marginBottom: 6, fontSize: "var(--text-sm)", fontWeight: 500 }}>
-          Pre-configure a new entity
-        </label>
-        <p className="muted body-text" style={{ fontSize: "var(--text-2xs)", marginBottom: 10 }}>
-          Sets the label and panel type for an entity whose 3D object is named
-          after its entity ID. Useful to configure in advance — it activates
-          automatically when the matching model is uploaded.
-        </p>
         <div className="row" style={{ gap: 8, alignItems: "flex-start" }}>
           <div style={{ flex: 1 }}>
             <EntityPicker
