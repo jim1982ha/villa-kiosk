@@ -302,6 +302,11 @@ Decisions of 2026-09-30 (owner):
   layout for every message sent on its own — `layout.render` has one path, a message about no incident is headed by
   its title (approvals.TITLE, outcome.SIREN_TITLE, the engine's own; UNTITLED last) and "To:"; only an answer to the
   asker has no heading. `incident_tag` is "#N". Never reintroduce "For:" or a "-------" line.
+  0.12.176 (owner, 2026-10-12: a critical alert must never depend on the agent): Home Assistant formats its own
+  alerts with `agent-src/homeassistant/custom_templates/vesta_message.jinja` (the same layout in Telegram's HTML,
+  included `ignore missing`) and falls back to its plain text whenever `sensor.vesta_message_layout`
+  (`homeassistant/packages/vesta_message.yaml`) is not "ok" or Telegram refuses; test_ha_message_layout holds both to
+  message_format. Never make a blueprint's alert wait on the agent (option C was rejected for that reason).
 - No PDF (owner, 2026-09-30): the reports are self-contained HTML pages sent
   as attachments. Chromium was ~480 MB of a 1.1 GB image for this alone.
 - ⚠️ The Dockerfile's layer order is what an update costs the Yellow: agent

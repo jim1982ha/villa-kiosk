@@ -1,0 +1,32 @@
+{#- VESTA message layout — the VESTA Agent's one layout (vesta_shared/message_format.py), for the alerts Home Assistant
+    sends itself, with telegram_bot.send_message parse_mode: html. Copy to /config/custom_templates/, then call the
+    action homeassistant.reload_custom_templates.
+
+    Used by INCLUDE, never import, and always "ignore missing": a missing file renders nothing and the blueprint sends
+    its plain text instead — an alert never depends on this file.
+        {%- set vm_title, vm_to, vm_text, vm_status = '🔥 Mains phase overload', 'Owner', 'Phase C 4450 W', '⚠️ New alert' -%}
+        {% include 'vesta_message.jinja' ignore missing %}
+    gives:
+        <u>🔥 Mains phase overload</u>
+        To: Owner
+        <blockquote>Phase C 4450 W</blockquote>
+
+        Status:
+        <blockquote><i>⚠️ New alert</i></blockquote>
+
+    The tags are the agent's style table (message_format.TELEGRAM: title underline, item blockquote, note blockquote +
+    italic); its test (tests/test_ha_message_layout.py) fails when this file and the agent's layout differ. Text is
+    escaped here, once: Telegram's HTML refuses a bare "<", ">" or "&". -#}
+{%- macro vm_escape(s) -%}{{ (s | default('', true) | string | trim) | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') }}{%- endmacro -%}
+{%- set vm_t = vm_text | default('', true) | string | trim -%}
+{%- set vm_s = vm_status | default('', true) | string | trim -%}
+<u>{{ vm_escape(vm_title) }}</u>
+To: {{ vm_escape(vm_to) }}
+{%- if vm_t %}
+<blockquote>{{ vm_escape(vm_t) }}</blockquote>
+{%- endif %}
+{%- if vm_s %}
+
+Status:
+<blockquote><i>{{ vm_escape(vm_s) }}</i></blockquote>
+{%- endif %}

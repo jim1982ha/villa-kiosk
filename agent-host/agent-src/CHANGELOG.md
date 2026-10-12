@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.170 (12 October 2026)
+
+- homeassistant/custom_templates/vesta_message.jinja: the one layout (message_format) in Telegram's HTML, for the alerts
+  Home Assistant sends itself (telegram_bot.send_message parse_mode html), used by `{% include … ignore missing %}`
+  with vm_title / vm_to / vm_text / vm_status; escapes & < > once. homeassistant/packages/vesta_message.yaml:
+  sensor.vesta_message_layout ("ok" / "missing" / "changed", every minute) — a blueprint formats only while it is ok.
+- tests/test_ha_message_layout.py holds the file to message_format.document and the TELEGRAM style table, and the
+  sensor to the file (proven red by changing either side alone).
+
 ## 0.6.169 (12 October 2026)
 
 - ONE LAYOUT for every message sent on its own (owner, 2026-10-12): `layout.render` has one path — a heading (title +
