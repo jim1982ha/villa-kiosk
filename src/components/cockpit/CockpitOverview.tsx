@@ -68,7 +68,9 @@ export default function CockpitOverview({ onOpenEntity, doors }: {
   // SummaryGroupPanel, the same device-list modal every other "all the
   // devices in X" view in the app already opens (room clusters on the map,
   // the bottom Summary bar's tiles), rather than a bespoke list here.
-  const [pivotDrill, setPivotDrill] = useState<{ label: string; entityIds: string[]; icon: ComponentType<{ size?: number | string }> } | null>(null);
+  // `byCategory`: a CATEGORY tile's list is grouped by floor, like the top bar's (owner, 2026-10-12);
+  // a room or a floor tile is already one place.
+  const [pivotDrill, setPivotDrill] = useState<{ label: string; entityIds: string[]; icon: ComponentType<{ size?: number | string }>; byCategory: boolean } | null>(null);
   const canControl = roleCan(role, "controlEntities");
   // Closing a fault from here is Facility work: the profiles that manage it.
   const canCloseFaults = roleCan(role, "manageFacility");
@@ -174,7 +176,7 @@ export default function CockpitOverview({ onOpenEntity, doors }: {
               key={`${t.key}:${theme}`}
               type="button"
               className="cockpit-category-tile"
-              onClick={() => setPivotDrill({ label: t.label, entityIds: t.entityIds, icon: Icon })}
+              onClick={() => setPivotDrill({ label: t.label, entityIds: t.entityIds, icon: Icon, byCategory: t.pivot === "category" })}
               aria-label={`Show ${t.label}'s devices — ${tileLine(t.stats)}`}
             >
               <div
@@ -223,6 +225,7 @@ export default function CockpitOverview({ onOpenEntity, doors }: {
     {pivotDrill && createPortal(
       <SummaryGroupPanel
         group={{ title: pivotDrill.label, icon: pivotDrill.icon, entityIds: pivotDrill.entityIds }}
+        byFloor={pivotDrill.byCategory}
         canControl={canControl}
         onClose={() => setPivotDrill(null)}
         onOpenEntity={(id) => { setPivotDrill(null); onOpenEntity(id); }}

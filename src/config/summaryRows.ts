@@ -36,6 +36,28 @@ export function bucketByRoom<T>(items: readonly T[], idOf: (t: T) => string, roo
   return [...buckets.entries()].sort(([a], [b]) => byRoomOrder(a, b));
 }
 
+/**
+ * bucketByRoom's rooms, gathered under their floor (owner, 2026-10-12: a
+ * category's list "per Floor", each floor with its own "Turn all on/off").
+ * Floors ascending; rooms with no floor (null) last, in the order bucketByRoom
+ * gave them. `floorOf` answers per ROOM — the Cockpit's own rule
+ * (cockpitData.buildRoomGroups: Home Assistant's Floor first, the floor plan's
+ * per-room floor as the fallback), so the two screens cannot file a room on
+ * different floors.
+ */
+export function bucketByFloor<T>(
+  rooms: readonly [string, T[]][], floorOf: (room: string) => number | null,
+): [number | null, [string, T[]][]][] {
+  const floors = new Map<number | null, [string, T[]][]>();
+  for (const r of rooms) {
+    const f = floorOf(r[0]);
+    const list = floors.get(f) ?? [];
+    list.push(r);
+    floors.set(f, list);
+  }
+  return [...floors.entries()].sort(([a], [b]) => (a ?? Infinity) - (b ?? Infinity));
+}
+
 export interface SummaryRows {
   /** In Home Assistant and drawn on the map. */
   onMap: HassEntity[];

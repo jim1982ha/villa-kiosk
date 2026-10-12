@@ -23,13 +23,15 @@ import { badgeImage } from "@/babylon/badgeIcons";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
 import { effectiveCategory, subjectOf } from "@/config/EntityCategories";
-import { deviceLook, groupLook, storeLookSource } from "@/utils/deviceActivity";
+import { deviceLook, groupLook, storeLookSource, type LookSource } from "@/utils/deviceActivity";
 import { bulkSwitchPlan } from "@/config/activeDevices";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { TOGGLEABLE_DOMAINS } from "@/utils/quickAction";
 import type { HassEntity } from "@/types/ha.types";
 import type { Category } from "@/types/scene.types";
-import { bucketByRoom, summaryRows } from "@/config/summaryRows";
+import { bucketByFloor, bucketByRoom, summaryRows } from "@/config/summaryRows";
+import { buildRoomGroups } from "@/components/cockpit/cockpitData";
+import { NO_ROOM_LABEL } from "@/config/roomKey";
 
 // The group's shape is config/summaryGroups' (this screen only draws one).
 export type { SummaryGroup } from "@/config/summaryGroups";
@@ -70,6 +72,46 @@ interface Props {
    *  (Lights, AC, Unavailable devices, Facility…) isn't room-scoped, so it's
    *  omitted there rather than guessed at. See config/haScenes.ts. */
   roomScenes?: HaSceneInfo[];
+  /** Group the rooms under their floor ("1F", "2F"), each floor with its own
+   *  "Turn all on/off" on its line — the top bar's category list (owner,
+   *  2026-10-12). */
+  byFloor?: boolean;
+}
+
+/**
+ * "Turn all on/off" for a set of devices, behind the same second tap — the
+ * header's (the whole group) and each floor's (byFloor) are this one control.
+ * Bulk-toggling many devices from one tap is easy to trigger by accident, so it
+ * asks first, the LockPanel unlock pattern. Icon-only: the text cost too much
+ * width, on a phone above all; the icon carries the direction (Power = will
+ * turn on, PowerOff = will turn off) and the tooltip spells it out. "On" is
+ * POWER (groupLook's onCount), and the switch is config/activeDevices' — one
+ * call PER DOMAIN. Nothing for fewer than two devices: a row's own switch is
+ * that control already.
+ */
+function BulkToggle({ devices, looks }: { devices: HassEntity[]; looks: LookSource }) {
+  const { callService } = useHA();
+  const [confirming, setConfirming] = useState(false);
+  if (devices.length < 2) return null;
+  const anyOn = groupLook(devices.map((e) => deviceLook(e.entity_id, looks)), { showingDevices: true }).onCount > 0;
+  const run = () => {
+    for (const call of bulkSwitchPlan(devices.map((e) => e.entity_id), !anyOn, TOGGLEABLE_DOMAINS)) {
+      void callService(call.domain, call.service, {}, { entity_id: call.entityIds });
+    }
+    setConfirming(false);
+  };
+  return confirming ? (
+    <InlineConfirm confirmLabel={anyOn ? "Turn off?" : "Turn on?"} onConfirm={run} onCancel={() => setConfirming(false)} />
+  ) : (
+    <button
+      className="icon-btn"
+      onClick={() => setConfirming(true)}
+      title={anyOn ? "Turn all off" : "Turn all on"}
+      aria-label={anyOn ? "Turn all off" : "Turn all on"}
+    >
+      {anyOn ? <PowerOff size={18} /> : <Power size={18} />}
+    </button>
+  );
 }
 
 // ⚠️ THE SECOND PRETTIFIER AND THE SECOND OFF-SET ARE BOTH GONE. The prettifier
@@ -83,12 +125,12 @@ interface Props {
 
 export default function SummaryGroupPanel({
   group, canControl, onClose, onOpenEntity, hideBulkToggle,
-  filterSuppressed = true, roomScenes,
+  filterSuppressed = true, roomScenes, byFloor,
 }: Props) {
   // Entities on the 3D map; anything else exists only in Home Assistant and
   // is listed last and tinted (config/VillaModel).
   const { mappedEntityIds } = useVillaModel();
-  const { entities, suppressedEntityIds, hiddenInHaEntityIds, callService } = useHA();
+  const { entities, suppressedEntityIds, hiddenInHaEntityIds, callService, entityFloorNumbers } = useHA();
   const { config, resolvedRooms } = useConfig();
   // Each row's badge is a PNG baked from the theme's tokens — see the hook.
   const theme = useResolvedTheme();
@@ -100,10 +142,6 @@ export default function SummaryGroupPanel({
   const looks = storeLookSource(entities, config);
   const { role } = useProfile();
   const entityLabel = useEntityLabel();
-  // Bulk-toggling an entire group (potentially dozens of devices) from one
-  // tap is easy to trigger by accident — require an explicit second tap
-  // before it actually fires, same pattern as LockPanel's unlock confirm.
-  const [confirming, setConfirming] = useState(false);
   const { ask: askScene, dialog: sceneDialog } = useSceneConfirm();
 
   const roomOf = (id: string) => resolvedRooms[id]?.trim() ?? "";
@@ -115,19 +153,9 @@ export default function SummaryGroupPanel({
     entities, mapped: mappedEntityIds, suppressed: suppressedEntityIds, filterSuppressed,
     mayListUnmapped: roleCan(role, "listUnmappedDevices"),
   });
-  // "On" is POWER (a group's onCount — devices switched on), and the bulk
-  // switch is config/activeDevices': one call PER DOMAIN (the first row's
-  // domain used to be sent for every row — a light command to a switch).
-  const anyOn = groupLook(toggleables.map((e) => deviceLook(e.entity_id, looks)), { showingDevices: true }).onCount > 0;
-
   const Icon = group.icon;
-
-  const doToggleAll = () => {
-    for (const call of bulkSwitchPlan(toggleables.map((e) => e.entity_id), !anyOn, TOGGLEABLE_DOMAINS)) {
-      void callService(call.domain, call.service, {}, { entity_id: call.entityIds });
-    }
-    setConfirming(false);
-  };
+  // Who may switch a whole set at once — the header's and every floor's BulkToggle.
+  const bulk = !hideBulkToggle && canControl;
 
   return (
     <BasePanel
@@ -138,25 +166,7 @@ export default function SummaryGroupPanel({
       // Same idea as Settings' theme buttons living in ITS header: the one
       // action that applies to the WHOLE group belongs where it's always
       // visible, not scrolled past a long, room-grouped device list.
-      headerActions={!hideBulkToggle && canControl && toggleables.length > 1 && (
-        confirming ? (
-          <InlineConfirm confirmLabel={anyOn ? "Turn off?" : "Turn on?"}
-            onConfirm={doToggleAll} onCancel={() => setConfirming(false)} />
-        ) : (
-          // Icon-only — the text label ("Turn all on/off") cost too much
-          // horizontal space in the header, especially on a phone. The icon
-          // itself carries the direction (Power = will turn on, PowerOff =
-          // will turn off); the tooltip/aria-label still spell it out.
-          <button
-            className="icon-btn"
-            onClick={() => setConfirming(true)}
-            title={anyOn ? "Turn all off" : "Turn all on"}
-            aria-label={anyOn ? "Turn all off" : "Turn all on"}
-          >
-            {anyOn ? <PowerOff size={18} /> : <Power size={18} />}
-          </button>
-        )
-      )}
+      headerActions={bulk && <BulkToggle devices={toggleables} looks={looks} />}
     >
       {rows.length === 0 && <div className="muted body-text">No devices in this group.</div>}
 
@@ -215,12 +225,32 @@ export default function SummaryGroupPanel({
   /** One list, ROOM-grouped — the renderer the on-map, off-map and not-in-HA
    *  sections share (each had the same block written out until 2.496.263). */
   function renderRooms(list: typeof rows) {
-    return bucketByRoom(list, (e) => e.entity_id, roomOf).map(([room, members]) => (
+    const rooms = bucketByRoom(list, (e) => e.entity_id, roomOf);
+    if (!byFloor) return rooms.map(renderRoom);
+    // Each room's floor, by the Cockpit's own rule (cockpitData.buildRoomGroups).
+    const floorOfRoom = new Map(buildRoomGroups(list.map((e) => e.entity_id), resolvedRooms, config.sh3dRooms,
+      entityFloorNumbers).map((g) => [g.room, g.floor]));
+    return bucketByFloor(rooms, (room) => floorOfRoom.get(room) ?? null).map(([floor, floorRooms]) => {
+      const onFloor = new Set(floorRooms.flatMap(([, members]) => members.map((e) => e.entity_id)));
+      return (
+        <div key={String(floor)} className="summary-floor">
+          <div className="summary-floor-heading">
+            <span>{floor != null ? `${floor}F` : NO_ROOM_LABEL}</span>
+            {bulk && <BulkToggle devices={toggleables.filter((e) => onFloor.has(e.entity_id))} looks={looks} />}
+          </div>
+          {floorRooms.map(renderRoom)}
+        </div>
+      );
+    });
+  }
+
+  function renderRoom([room, members]: [string, HassEntity[]]) {
+    return (
       <div key={room}>
         <div className="summary-room-heading">{room}</div>
         <div className="summary-entity-grid">{members.map(renderRow)}</div>
       </div>
-    ));
+    );
   }
 
   function renderRow(e: HassEntity) {
