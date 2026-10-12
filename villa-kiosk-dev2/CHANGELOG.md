@@ -1,3 +1,8 @@
+## 2.496.330
+
+### Fixed
+- The "A new version of VESTA is ready" notice now appears on an app that stays open (the wall tablet), without a refresh first. The app used to learn of a new version only when its page loaded; it now asks every 10 minutes, and each time it comes back on screen. With no route to Home Assistant, the check simply waits for the next one.
+
 ## 2.496.329
 
 ### Fixed
