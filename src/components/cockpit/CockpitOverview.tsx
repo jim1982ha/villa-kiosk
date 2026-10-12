@@ -31,6 +31,7 @@ import { CATEGORY_LABELS, CATEGORY_ICONS } from "@/config/EntityCategories";
 import { categoryChipStyle } from "@/components/common/categoryChip";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { fetchLogbookEvents } from "@/ha/HALogbookAPI";
+import { useRoomFloors } from "@/config/useRoomFloors";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import { useVillaAttention } from "./useVillaAttention";
 import { storeLookSource } from "@/utils/deviceActivity";
@@ -55,7 +56,9 @@ export default function CockpitOverview({ onOpenEntity, doors }: {
   /** `doors.updates`: the updates count is drawn only with it. */
   doors: Doors;
 }) {
-  const { entities, ws, entityFloorNumbers } = useHA();
+  const { entities, ws } = useHA();
+  // Each room's floor: the villa's one answer (config/devicePlace), the category lists' too.
+  const roomFloors = useRoomFloors();
   const { config, resolvedRooms } = useConfig();
   // How every device looks, read from the store (utils/deviceActivity) — a
   // tile's "N on" is its POWER count.
@@ -68,9 +71,7 @@ export default function CockpitOverview({ onOpenEntity, doors }: {
   // SummaryGroupPanel, the same device-list modal every other "all the
   // devices in X" view in the app already opens (room clusters on the map,
   // the bottom Summary bar's tiles), rather than a bespoke list here.
-  // `byCategory`: a CATEGORY tile's list is grouped by floor, like the top bar's (owner, 2026-10-12);
-  // a room or a floor tile is already one place.
-  const [pivotDrill, setPivotDrill] = useState<{ label: string; entityIds: string[]; icon: ComponentType<{ size?: number | string }>; byCategory: boolean } | null>(null);
+  const [pivotDrill, setPivotDrill] = useState<{ label: string; entityIds: string[]; icon: ComponentType<{ size?: number | string }> } | null>(null);
   const canControl = roleCan(role, "controlEntities");
   // Closing a fault from here is Facility work: the profiles that manage it.
   const canCloseFaults = roleCan(role, "manageFacility");
@@ -84,8 +85,8 @@ export default function CockpitOverview({ onOpenEntity, doors }: {
     [selectableIds, entities, config.entityMap],
   );
   const roomGroups = useMemo(
-    () => buildRoomGroups(selectableIds, resolvedRooms, config.sh3dRooms, entityFloorNumbers),
-    [selectableIds, resolvedRooms, config.sh3dRooms, entityFloorNumbers],
+    () => buildRoomGroups(selectableIds, resolvedRooms, roomFloors),
+    [selectableIds, resolvedRooms, roomFloors],
   );
   const floorGroups = useMemo(() => buildFloorGroups(roomGroups), [roomGroups]);
 
@@ -176,7 +177,7 @@ export default function CockpitOverview({ onOpenEntity, doors }: {
               key={`${t.key}:${theme}`}
               type="button"
               className="cockpit-category-tile"
-              onClick={() => setPivotDrill({ label: t.label, entityIds: t.entityIds, icon: Icon, byCategory: t.pivot === "category" })}
+              onClick={() => setPivotDrill({ label: t.label, entityIds: t.entityIds, icon: Icon })}
               aria-label={`Show ${t.label}'s devices — ${tileLine(t.stats)}`}
             >
               <div
@@ -225,7 +226,6 @@ export default function CockpitOverview({ onOpenEntity, doors }: {
     {pivotDrill && createPortal(
       <SummaryGroupPanel
         group={{ title: pivotDrill.label, icon: pivotDrill.icon, entityIds: pivotDrill.entityIds }}
-        byFloor={pivotDrill.byCategory}
         canControl={canControl}
         onClose={() => setPivotDrill(null)}
         onOpenEntity={(id) => { setPivotDrill(null); onOpenEntity(id); }}

@@ -58,6 +58,19 @@ export function bucketByFloor<T>(
   return [...floors.entries()].sort(([a], [b]) => (a ?? Infinity) - (b ?? Infinity));
 }
 
+/**
+ * The floors a device list is shown under — or null when its rooms are all on ONE floor (a room's
+ * list, a floor's list), which then stays a plain list of rooms. Decided by the LIST, not by who
+ * opened it (owner, 2026-10-12: the bottom bar's "Lights" and the top bar's "Lights" opened two
+ * different windows, because each opener had to switch the grouping on, and one did not).
+ */
+export function floorSections<T>(
+  rooms: readonly [string, T[]][], floorOf: (room: string) => number | null,
+): [number | null, [string, T[]][]][] | null {
+  const floors = bucketByFloor(rooms, floorOf);
+  return floors.length > 1 ? floors : null;
+}
+
 export interface SummaryRows {
   /** In Home Assistant and drawn on the map. */
   onMap: HassEntity[];

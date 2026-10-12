@@ -22,7 +22,10 @@ ck("the type list is written once (types/ha.types)", copies.length === 1 && copi
 
 const read = (p) => readFileSync(new URL(`../../src/components/settings/${p}`, import.meta.url), "utf8");
 const mf = read("MappingFields.tsx"), br = read("BindingRow.tsx"), er = read("EntityMapRow.tsx");
-ck("both tables render a device's fields through MappingFields", /<MappingFields /.test(br) && /<MappingFields /.test(er));
+// architecture review 2026-10-12, candidate 1: ONE editor for a device's fields — its row in Devices.
+// The Villa tab's bound-objects row keeps the LINK only (it carried the same fields).
+ck("a device's fields are edited in ONE table (Devices), the bound-objects row holds the link only",
+   /<MappingFields /.test(er) && !/<MappingFields|import MappingFields/.test(br));
 const own = [br, er].map((s) => [/effectiveCategory\(/, /lightIntensityRatio/, /motionEntityId/, /requireConfirm/].filter((r) => r.test(s)).length);
 ck("  ...and neither renders type, category, intensity, the confirm box or the motion sensor itself", own.every((n) => n === 0), own);
 ck("the label commits one way: half a second after typing, or at once on leaving the field",

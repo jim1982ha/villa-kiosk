@@ -753,7 +753,8 @@ export class EntityVisuals {
   //      not a fresh heap allocation per badge per frame.
   // The grouping ALGORITHM is untouched — same inputs, same world-space /
   // zoom-only decision, same outputs. Only allocation and scheduling change.
-  private readonly gate = new LayoutGate();
+  /** The badge layout's gate — marking it asks for the frame that draws the mark (layoutGate.ts). */
+  private readonly gate = new LayoutGate(() => this.requestRender());
   /** Grow-only store of ShownLabel objects, reused across frames. Kept
    *  SEPARATE from `shown` (which is truncated to the live count each pass) so
    *  truncation cannot drop the objects and force reallocation next frame. */
@@ -777,7 +778,7 @@ export class EntityVisuals {
    *  badge visibly stale, so every caller that touches label content, the
    *  label set, scale, floor or category filtering calls this. */
   private markLayoutDirty(): void {
-    this.gate.markDirty();
+    this.gate.markDirty();   // and the frame that draws it (layoutGate.ts)
   }
   private pulseT = 0;
   /** Scratch for animatePulse — see its comment. */
@@ -1905,8 +1906,8 @@ export class EntityVisuals {
     // frame. A buttonless mouse move is one (SceneManager wakes the loop on any
     // pointer event): the owner watched the mouse "move" badges that had in
     // fact been regrouped minutes before, by a room recompute on Home
-    // Assistant's reconnect or registry change. One frame per recompute (a few
-    // a minute at most) is the whole cost.
+    // Assistant's reconnect or registry change. The mark now asks for the frame
+    // itself (layoutGate.ts): one frame per recompute, a few a minute at most.
     this.resolvedRooms = rooms;
     // MUST mark dirty (regression from 2.113.0's frame-skip). roomOf() reads
     // this map, and it is what every grouping/clustering decision keys on —
@@ -1920,7 +1921,6 @@ export class EntityVisuals {
     // event happened to dirty the layout, which is the reported "badges sit
     // on top of each other for a few seconds, then rearrange by themselves".
     this.markLayoutDirty();
-    this.requestRender();
   }
 
   /** Geometric room fallback: which real drawn room polygon this entity's
@@ -2559,7 +2559,6 @@ export class EntityVisuals {
   setIconZoomFit(fitRadius: number): void {
     this.iconZoomFitRadius = fitRadius > 0 ? fitRadius : 0;
     this.markLayoutDirty();               // cullLabels reads it (syncIconZoomToRung): an input of the layout
-    this.requestRender();                 // and draw it — a mark alone waits for the next unrelated frame (tests/oracles/layout_frames.mjs)
   }
 
   /** Applies an already-derived zoom scale, snapped onto the zoom lattice. */
@@ -2687,14 +2686,14 @@ export class EntityVisuals {
 
   /** Scale every badge container by user-size × zoom, around its anchor point. */
   private applyIconScale(requestFrame = true): void {
-    // Scale feeds labelBoxes' every dimension.
-    this.markLayoutDirty();
+    // Scale feeds labelBoxes' every dimension. `requestFrame: false` = the caller is inside (or just
+    // before) the frame that draws it — see notifyRenderScaleChanged for the loop a frame there makes.
+    if (requestFrame) this.markLayoutDirty(); else this.gate.markDirtyInFrame();
     const s = this.effectiveScale();
     for (const lbl of this.labels.values()) {
       lbl.container.scaleX = s;
       lbl.container.scaleY = s;
     }
-    if (requestFrame && this.labels.size) this.requestRender();
   }
 
   /** The engine's hardware scaling changed (easeResolution's quality valve, or

@@ -21,7 +21,9 @@ import { ShowAll, useTruncated } from "@/components/common/TruncatedList";
 import { Search } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { dismissedEntitySet, orphanObjectSearched } from "@/config/dismissedEntities";
-import { forgetMappings, patchMapping, remapMapping, repointObjects } from "@/config/mappingEdits";
+import { forgetMappings, patchMapping, repointDevice } from "@/config/mappingEdits";
+import { deviceRows, rowMatches } from "@/config/deviceRecord";
+import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useHA } from "@/ha/HAStateStore";
 import { useVillaModel } from "@/config/VillaModel";
 import EntityMapRow from "./EntityMapRow";
@@ -65,11 +67,6 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Only show entities that are NOT already handled by a mesh binding.
-  const boundEntityIds = useMemo(
-    () => new Set(Object.values(config.meshBindings)),
-    [config.meshBindings],
-  );
   // Dismissed-and-still-absent-from-HA entities are filtered out entirely (see
   // AppConfig.dismissedEntityIds): auto-detection re-adds a row for any mesh
   // named like an entity_id, so without this the rows the owner just removed
@@ -79,10 +76,11 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
     () => dismissedEntitySet(config.dismissedEntityIds, entities),
     [config.dismissedEntityIds, entities],
   );
-  const allEntries = useMemo(
-    () => Object.entries(config.entityMap)
-      .filter(([key]) => !boundEntityIds.has(key) && !dismissedSet.has(key)),
-    [config.entityMap, boundEntityIds, dismissedSet],
+  // EVERY stored device, hand-linked or not — one row each (config/deviceRecord). A device bound
+  // to an object used to leave this list for the Villa tab's, with the same fields.
+  const allRows = useMemo(
+    () => deviceRows(config.entityMap, config.meshBindings, dismissedSet),
+    [config.entityMap, config.meshBindings, dismissedSet],
   );
   // Entries Home Assistant has never heard of. This map only ever GREW —
   // auto-detection adds a row for any mesh named like an entity ID and nothing
@@ -97,8 +95,8 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
   const haReady = connected && Object.keys(entities).length > 0;
   const staleIds = useMemo(() => {
     if (!haReady) return [] as string[];
-    return allEntries.map(([id]) => id).filter((id) => !entities[id]);
-  }, [haReady, allEntries, entities]);
+    return allRows.map((r) => r.id).filter((id) => !entities[id]);
+  }, [haReady, allRows, entities]);
   const staleSet = useMemo(() => new Set(staleIds), [staleIds]);
 
   // Both Remove buttons on this screen go through the ONE operation — see
@@ -109,19 +107,13 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
   // the others".
   const removeStale = useCallback(() => update(forgetMappings(staleIds)), [staleIds, update]);
 
-  // Live filter by entity id, label or resolved room — the auto-detected list
-  // is long. Room is no longer part of the mapping itself (see
-  // ConfigContext's resolvedRooms — it's HA's own Area assignment now,
-  // falling back to GLB geometry), so it's looked up per row rather than
-  // read off `m`.
-  const entries = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return allEntries;
-    return allEntries.filter(([key, m]) =>
-      key.toLowerCase().includes(q)
-      || (m.label ?? "").toLowerCase().includes(q)
-      || (resolvedRooms[key] ?? "").toLowerCase().includes(q));
-  }, [allEntries, search, resolvedRooms]);
+  // Live filter by entity id, the NAME THE MAP SHOWS, room, or a linked object (deviceRecord.rowMatches):
+  // it filtered on the stored label, entity-id fallbacks included, which nobody sees.
+  const entityLabel = useEntityLabel();
+  const entries = useMemo(
+    () => allRows.filter((r) => rowMatches(r, search, entityLabel(r.id), resolvedRooms[r.id] ?? "")),
+    [allRows, search, entityLabel, resolvedRooms],
+  );
 
   // ⚠️ THE FIRST FEW, NOT A COLLAPSE, and applied AFTER the filter above — so
   // typing narrows the list and the top of the RESULTS is what shows. This
@@ -146,11 +138,14 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
   // staying in the fault picker, the offline count and readiness.
   const remove = useCallback((key: string) => update(forgetMappings([key])), [update]);
 
-  /** Redirect a GLB mesh to a different HA entity without rebuilding the
-   *  model — see mappingEdits.remapMapping. */
+  /** "Change entity": the device's objects and settings move to another entity, without rebuilding
+   *  the model — mappingEdits.repointDevice, the one edit for it. */
+  // Latest entities for the stable callback below (its HA name seeds a device made from nothing).
+  const entitiesRef = useRef(entities);
+  entitiesRef.current = entities;
   const remapEntity = useCallback((oldKey: string, newId: string) => {
     if (!newId || newId === oldKey) return;
-    update(remapMapping(oldKey, newId));
+    update(repointDevice(oldKey, newId, entitiesRef.current[newId]));
     setRemapKey(null);
     setRemapNewId(undefined);
   }, [update]);
@@ -167,7 +162,7 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
   const [repointTo, setRepointTo] = useState<string | undefined>(undefined);
   const repoint = useCallback(() => {
     if (!removedId || !repointTo || repointTo === removedId) return;
-    update(repointObjects(removedId, repointTo, entities[repointTo]));
+    update(repointDevice(removedId, repointTo, entities[repointTo]));
     setRepointTo(undefined);
     setSearch(repointTo);
   }, [removedId, repointTo, update, entities]);
@@ -203,7 +198,7 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
         </div>
       )}
 
-      {allEntries.length > 0 && (
+      {allRows.length > 0 && (
         <div className="config-search">
           <Search size={16} />
           <input
@@ -216,7 +211,7 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
         </div>
       )}
 
-      {allEntries.length === 0 && (
+      {allRows.length === 0 && (
         <p className="muted body-text mt">
           No auto-detected entities yet. Upload a GLB whose objects are named
           after HA entity IDs, or pre-configure one in the
@@ -246,7 +241,7 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
             </div>
           </div>
         </div>
-      ) : allEntries.length > 0 && entries.length === 0 && (
+      ) : allRows.length > 0 && entries.length === 0 && (
         <p className="muted body-text mt">No entities match “{search}”.</p>
       )}
 
@@ -264,11 +259,12 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
             </tr>
           </thead>
           <tbody>
-            {shown.visible.map(([key, m0]) => (
+            {shown.visible.map(({ id: key, mapping: m0, objects }) => (
               <EntityMapRow
                 key={key}
                 entryKey={key}
                 mapping={m0}
+                objects={objects}
                 entity={entities[key]}
                 stale={staleSet.has(key)}
                 expanded={expandedKeys.has(key)}

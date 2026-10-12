@@ -1,3 +1,28 @@
+## 2.496.340
+
+### Fixed
+- Every device list is now the same window, whichever way you open it — the bottom bar's tiles (Lights…), a long press on a category in the top bar, the Cockpit's tiles, a room on the map, the Facility checks. Whenever its devices are on more than one floor, it shows them under "1F", "2F" with each floor's "Turn all on / off" button; a list of one room or one floor stays a list of rooms. Until now only the top bar and the Cockpit's category tiles grouped by floor, so the bottom bar's "Lights" looked different.
+
+## 2.496.339
+
+### Changed
+- Advanced Settings → Devices now lists EVERY device once — including the ones linked to a 3D object by hand, which used to disappear from this list into Villa → "Bound 3D objects". A hand-linked device says so under its entity id ("3D object: …"). Its name and display settings are edited there, and only there.
+- Villa → "Bound 3D objects" keeps the link itself: which entity each object shows, and Unlink. The device's settings are no longer repeated there.
+- The search in Devices finds a device by the name the map shows (and by its id, room or 3D object) — not by a stored name nobody sees.
+
+### Fixed
+- "Change entity" (the pencil, or "Point it there") is now one action: every 3D object showing the old entity moves to the new one, your settings move with it, your own name is kept, and no row of the old entity is left behind. Without a name of your own, the device is called by Home Assistant's name.
+
+## 2.496.338
+
+### Fixed
+- A room is now on the same floor in every device list — the Cockpit's "By floor" and "By room", and a category's list grouped by floor. It used to depend on which devices the list held, so the same room could show under 1F in one list and 2F in another. A room's floor is Home Assistant's (the floor most of its devices are on), else the floor plan's, else "Other". The map's 1F/2F view is unchanged: a badge stays on the storey its 3D object is on.
+
+## 2.496.337
+
+### Fixed
+- Badges on the map are redrawn the moment anything changes them — for every cause, not only the room recompute fixed in 2.496.332 — so nothing waits for your next mouse movement to appear. (Under the hood: telling the map "the badges changed" now also asks it to redraw, in one step.)
+
 ## 2.496.336
 
 ### Changed

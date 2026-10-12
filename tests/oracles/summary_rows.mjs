@@ -4,7 +4,7 @@ import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
-const { summaryRows, bucketByRoom, bucketByFloor, byRoomOrder } = await import("@/config/summaryRows");
+const { summaryRows, bucketByRoom, bucketByFloor, floorSections, byRoomOrder } = await import("@/config/summaryRows");
 const { NO_ROOM_LABEL } = await import("@/config/roomKey");
 
 const E = (id, state = "on") => ({ entity_id: id, state, attributes: {} });
@@ -39,11 +39,16 @@ ck("one order for every by-room list — \"Other\" last even after a room alphab
      (panel.match(/title=\{anyOn \? "Turn all off" : "Turn all on"\}/g) ?? []).length === 1
      && /headerActions=\{bulk && <BulkToggle devices=\{toggleables\}/.test(panel)
      && /\{bulk && <BulkToggle devices=\{toggleables\.filter\(\(e\) => onFloor\.has\(e\.entity_id\)\)\}/.test(panel));
-  ck("  ...a floor is decided by the Cockpit's own rule (buildRoomGroups), not a second one", /buildRoomGroups\(/.test(panel));
-  ck("the top bar's category list and the Cockpit's category tiles group by floor; a room or floor list does not",
-     /entityIds: categoryGroupEntityIds \}\}\s*byFloor/.test(read("pages/Dashboard.tsx"))
-     && /byCategory: t\.pivot === "category"/.test(read("components/cockpit/CockpitOverview.tsx"))
-     && /byFloor=\{pivotDrill\.byCategory\}/.test(read("components/cockpit/CockpitOverview.tsx")));
+  ck("  ...a floor is the villa's one answer (devicePlace, through useRoomFloors), not a second rule", /useRoomFloors\(\)/.test(panel) && /floorOfRoom\(roomFloors, room\)/.test(panel));
+  // owner, 2026-10-12: the bottom bar's "Lights" and the top bar's "Lights" were two windows — each
+  // opener had to switch the grouping on. The LIST decides: under floors whenever it spans them.
+  ck("a list spanning floors is shown under them", floorSections(rooms, (r) => fl[r] ?? null)?.length === 3);
+  ck("  ...a list on ONE floor (a room, a floor) stays a list of rooms", floorSections([["Kitchen", [1]], ["Pool", [2]]], (r) => fl[r]) === null
+     && floorSections([["Bath", [1]]], (r) => fl[r]) === null);
+  ck("  ...the window asks the list, and no opener passes a switch",
+     /const floors = floorSections\(rooms,/.test(panel) && !/byFloor/.test(panel)
+     && !/byFloor/.test(read("pages/Dashboard.tsx")) && !/byFloor|byCategory/.test(read("components/cockpit/CockpitOverview.tsx"))
+     && !/byFloor/.test(read("components/hud/SummaryBar.tsx")) && !/byFloor/.test(read("components/fm/FacilitySections.tsx")));
 }
 
 done("✅ a device list's rows are config/summaryRows'");
