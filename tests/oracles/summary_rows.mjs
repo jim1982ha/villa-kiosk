@@ -1,9 +1,10 @@
 // Which rows a device list shows (config/summaryRows, 2.496.276) — by value.
 // It was the body of SummaryGroupPanel.tsx, pinned by one regex.
 import { register } from "node:module";
+import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
-const { summaryRows, bucketByRoom, byRoomOrder } = await import("@/config/summaryRows");
+const { summaryRows, bucketByRoom, bucketByFloor, byRoomOrder } = await import("@/config/summaryRows");
 const { NO_ROOM_LABEL } = await import("@/config/roomKey");
 
 const E = (id, state = "on") => ({ entity_id: id, state, attributes: {} });
@@ -25,4 +26,24 @@ const rooms = { "light.a": "Kitchen", "light.b": "", "sensor.c": "Bath " };
 const b = bucketByRoom(r.rows, (e) => e.entity_id, (id) => rooms[id] ?? "");
 ck("by room, alphabetical, the no-room bucket last", b.map(([k]) => k).join() === `Bath,Kitchen,${NO_ROOM_LABEL}`, b.map(([k]) => k));
 ck("one order for every by-room list — \"Other\" last even after a room alphabetically past it", [NO_ROOM_LABEL, "Pool", "Zebra house", "Bar"].sort(byRoomOrder).join() === `Bar,Pool,Zebra house,${NO_ROOM_LABEL}`);
+// owner, 2026-10-12: a category's list grouped by floor, each floor with its own "Turn all on/off"
+{
+  const rooms = [["Bath", [1]], ["Kitchen", [2]], ["Pool", [3]], [NO_ROOM_LABEL, [4]]];
+  const fl = { Bath: 2, Kitchen: 1, Pool: 1 };
+  const f = bucketByFloor(rooms, (r) => fl[r] ?? null);
+  ck("by floor, ascending, the no-floor rooms last", f.map(([k]) => String(k)).join() === "1,2,null", f.map(([k]) => k));
+  ck("  ...each floor keeps its rooms in by-room order", f[0][1].map(([r]) => r).join() === "Kitchen,Pool");
+  const read = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
+  const panel = read("components/panels/SummaryGroupPanel.tsx");
+  ck("ONE 'Turn all on/off' control, for the header and each floor (BulkToggle)",
+     (panel.match(/title=\{anyOn \? "Turn all off" : "Turn all on"\}/g) ?? []).length === 1
+     && /headerActions=\{bulk && <BulkToggle devices=\{toggleables\}/.test(panel)
+     && /\{bulk && <BulkToggle devices=\{toggleables\.filter\(\(e\) => onFloor\.has\(e\.entity_id\)\)\}/.test(panel));
+  ck("  ...a floor is decided by the Cockpit's own rule (buildRoomGroups), not a second one", /buildRoomGroups\(/.test(panel));
+  ck("the top bar's category list and the Cockpit's category tiles group by floor; a room or floor list does not",
+     /entityIds: categoryGroupEntityIds \}\}\s*byFloor/.test(read("pages/Dashboard.tsx"))
+     && /byCategory: t\.pivot === "category"/.test(read("components/cockpit/CockpitOverview.tsx"))
+     && /byFloor=\{pivotDrill\.byCategory\}/.test(read("components/cockpit/CockpitOverview.tsx")));
+}
+
 done("✅ a device list's rows are config/summaryRows'");

@@ -1,3 +1,8 @@
+## 2.496.336
+
+### Changed
+- A category's device list — opened by a long press on a category in the top bar, or from a "By category" tile in the Cockpit — is now grouped by floor ("1F", "2F"), with the rooms under each floor. Each floor has its own "Turn all on / Turn all off" button at the right of its "1F"/"2F" line, asking for the same confirmation as the one at the top of the window (only where the floor has at least two devices that can be switched).
+
 ## 2.496.335
 
 ### Changed
