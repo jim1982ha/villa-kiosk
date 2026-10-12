@@ -1,3 +1,8 @@
+## 2.496.328
+
+### Fixed
+- In a device list (Lights, a room, …) on a phone, a long device name no longer pushes its on/off switch onto a second line: the switch always stays at the end of the row, and the name ends in "…" when it does not fit.
+
 ## 2.496.327
 
 ### Fixed
