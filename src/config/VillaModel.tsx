@@ -35,6 +35,10 @@ export interface VillaSets {
   mappedEntityIds: Set<string>;
   /** Entities the owner removed and HA no longer knows (dismissedEntitySet). */
   dismissedIds: Set<string>;
+  /** The entities the loaded model's 3D objects resolve to, as they are —
+   *  dismissed ones INCLUDED (Advanced Settings offers to re-point an object
+   *  whose entity Home Assistant no longer has). */
+  sceneEntityIds: Set<string>;
   /** Every entity a profile can see at all (hidden and diagnostic ones out). */
   visibleEntities: Record<string, HassEntity>;
 }
@@ -48,7 +52,8 @@ export function useVillaSets(sceneEntityIds: Set<string>): VillaSets {
     () => effectiveMapped(sceneEntityIds, config.entityMap, dismissedIds), [sceneEntityIds, config.entityMap, dismissedIds]);
   const visibleEntities = useMemo(
     () => visibleEntitiesOf(entities, suppressedEntityIds), [entities, suppressedEntityIds]);
-  return useMemo(() => ({ mappedEntityIds, dismissedIds, visibleEntities }), [mappedEntityIds, dismissedIds, visibleEntities]);
+  return useMemo(() => ({ mappedEntityIds, dismissedIds, visibleEntities, sceneEntityIds }),
+    [mappedEntityIds, dismissedIds, visibleEntities, sceneEntityIds]);
 }
 
 export interface VillaModel extends VillaSets {

@@ -70,16 +70,33 @@ console.log("\n  a removed device's 3D object, pointed at another entity:");
 {
   const de = await import("@/config/dismissedEntities");
   const em = await import("@/config/EntityMap");
-  const gone = new Set(["light.old_name"]);
-  ck("its exact id, searched, names it", de.removedObjectSearched(" light.old_name ", gone, {}) === "light.old_name");
-  ck("part of the id does not", de.removedObjectSearched("light.old", gone, {}) === null);
-  ck("a device not removed does not", de.removedObjectSearched("light.a", gone, {}) === null);
-  ck("an object already pointed elsewhere does not", de.removedObjectSearched("light.old_name", gone, { "light.old_name": "light.new_name" }) === null);
+  const scene = new Set(["light.old_name", "light.a"]);
+  const ha = (id) => id === "light.a" || id === "light.new_name";
+  const o = (q, b = {}) => de.orphanObjectSearched(q, scene, ha, b);
+  ck("an object of the model whose entity HA no longer has, searched whole, is offered", o(" light.old_name ") === "light.old_name");
+  ck("  ...whether or not it was ever in the removed list (the villa's case: it was not)", o("light.old_name") === "light.old_name");
+  ck("part of the id is not", o("light.old") === null);
+  ck("an entity HA has is not (it has its row)", o("light.a") === null);
+  ck("an id no object of the model carries is not", de.orphanObjectSearched("light.typo", scene, ha, {}) === null);
+  ck("an object already pointed at an entity HA has is not", o("light.old_name", { "light.old_name": "light.new_name" }) === null);
+  ck("an object pointed at another missing entity still is", o("light.old_name", { "light.old_name": "light.also_gone" }) === "light.old_name");
   // what "Point it there" applies: the object named after the old id now resolves to the new entity
-  const c = apply(cfg(), me.bindMesh("light.old_name", "light.new_name", { attributes: { friendly_name: "New" } }));
+  const c = apply({ ...cfg(), meshBindings: { lamp_mesh: "light.a", hand_bound: "light.old_name" } },
+                  me.repointObjects("light.old_name", "light.new_name", { attributes: { friendly_name: "New" } }));
+  ck("pointed: an object bound to the old entity BY HAND moves too",
+     em.resolveMeshToMapping("hand_bound", c.entityMap, c.meshBindings)?.entityId === "light.new_name");
+  ck("pointed: other objects' bindings are untouched", c.meshBindings.lamp_mesh === "light.a");
+  ck("pointed: to itself or to nothing, no change", J(me.repointObjects("light.a", "light.a")(cfg())) === "{}" && J(me.repointObjects("light.a", "")(cfg())) === "{}");
   ck("pointed: the object resolves to the new entity",
      em.resolveMeshToMapping("light.old_name", c.entityMap, c.meshBindings)?.entityId === "light.new_name");
   ck("pointed: the new entity gets a mapping labelled from Home Assistant", c.entityMap["light.new_name"]?.label === "New");
+}
+
+{
+  // pin the caller (2.496.327 tested its rule and asked the wrong list): the screen asks with the MODEL's objects
+  const ed = readFileSync(new URL("../../src/components/settings/ConfigEditor.tsx", import.meta.url), "utf8");
+  ck("Advanced Settings asks with the model's objects and re-points them all",
+     /orphanObjectSearched\(search, sceneEntityIds,/.test(ed) && /useVillaModel\(\)/.test(ed) && /repointObjects\(removedId,/.test(ed));
 }
 
 console.log("\n  two edits in the same moment:");
