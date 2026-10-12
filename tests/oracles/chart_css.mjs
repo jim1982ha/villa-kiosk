@@ -58,5 +58,19 @@ ck("the shared chart rules live in ONE stylesheet", owners.size === 1, [...owner
 const dead = ["sparkline", "spark-grid", "spark-axis"].filter((c) => rules.some((r) => new RegExp(`\\.${c}\\b`).test(r.sel)));
 ck("no rule for a class nothing renders (Sparkline was deleted in 2.496.144)", dead.length === 0, dead);
 
+// A device row in a list (SummaryGroupPanel): the row wraps (for the switch's
+// "Unlock …?" line), and a wrapping flex line places each item at its BASIS
+// before shrinking it. Owner, 2026-10-12: with `flex: 1 1 auto` a long name
+// (basis = its full width) pushed the switch onto a second line on a phone.
+{
+  const basis = (flex, content) => { const b = (flex || "").trim().split(/\s+/)[2] ?? "auto"; return b === "auto" ? content : parseFloat(b); };
+  const main = resolve(["summary-entity-main"], "flex")?.v;
+  const sw = 48 + 10, gap = 10;                          // .summary-entity-toggle width + margin, the row's gap
+  const longName = 38 + 12 + 600 + 12 + 18 + 24;          // badge, gaps, a name 600 px wide, chevron, padding
+  const fits = (w) => basis(main, longName) + gap + sw <= w;
+  ck("a long device name leaves the switch on its line, at phone width (320 px)", fits(320), main);
+  ck("  ...the switch itself never shrinks", /^0 0 /.test(resolve(["summary-entity-toggle"], "flex")?.v ?? ""));
+}
+
 console.log(fail ? `\n❌ ${fail} failed` : "\n✅ chart styles resolve as intended");
 process.exit(fail ? 1 : 0);
