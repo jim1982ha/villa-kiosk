@@ -1,3 +1,16 @@
+## 0.12.179
+
+What you will see:
+- An investigation page says a duration one way: "1 h 15 min" everywhere, where the facts above VESTA's reading said
+  "75 min" for the same outage. The words for what a device did (ran, had no power, stopped reporting) are the same in
+  the facts and on the chart.
+- An investigation stopped at its cost limit keeps the web searches it already made when the agent is updated before
+  you press Continue: its page still lists their sources.
+- Once you copy the new vesta_message.jinja to config/custom_templates/ and reload the templates, the alerts and job
+  messages Home Assistant sends end with the agent's own words: a job's Done reads "✅ Done pressed by JM on
+  13/10/2026 09:02." (it said "✅ Done - JM"), Need help "🆘 Need help pressed by JM on …". The rules are updated in
+  Home Assistant after the new file is in place.
+
 ## 0.12.178
 
 What you will see:
