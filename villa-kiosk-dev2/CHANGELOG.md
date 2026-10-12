@@ -1,3 +1,8 @@
+## 2.496.332
+
+### Fixed
+- Moving the mouse over the villa (without hovering a device or moving the camera) no longer makes badges regroup or open into cards. Those changes had already happened, when the Kiosk recomputed which room each device is in (after Home Assistant reconnects or its areas change), but the 3D view was not redrawn until the next movement. The view is now redrawn as soon as the rooms are recomputed.
+
 ## 2.496.331
 
 ### Fixed
