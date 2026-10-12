@@ -1,3 +1,12 @@
+## 0.12.176
+
+What you will see:
+- Nothing changes on Telegram yet. This version carries the two files that let Home Assistant send its own alerts in
+  the same layout as the agent's (an underlined title, "To:", the alert quoted, "Status:" in italics), without the
+  agent being involved: `vesta_message.jinja` (the layout) and `vesta_message.yaml` (a check that reads "ok" while the
+  layout is installed and right). A blueprint uses them only once switched on, and sends its plain text whenever they
+  are missing or Telegram refuses the formatted message.
+
 ## 0.12.175
 
 What you will see:
