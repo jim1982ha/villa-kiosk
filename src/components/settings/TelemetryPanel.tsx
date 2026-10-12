@@ -490,7 +490,7 @@ export default function TelemetryPanel() {
                     way. Older events predate the field and just show nothing. */}
                 {shortUA(e.ua)}{e.role ? ` · ${e.role}` : ""}{e.v ? ` · v${e.v}` : ""}
               </span>
-              <span className="telemetry-summary">{summarise(e)}</span>
+              <span className="telemetry-summary" title={summarise(e)}>{summarise(e)}</span>
               <span className="muted telemetry-time">
                 {e.at?.replace("T", " ").replace("+00:00", "Z") ?? ""}
               </span>

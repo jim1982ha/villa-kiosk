@@ -14,7 +14,7 @@
 import type { AppConfig } from "./AppConfig";
 import type { EntityMapping } from "@/types/scene.types";
 import type { HassEntity } from "@/types/ha.types";
-import { createDefaultMapping } from "./EntityMap";
+import { createDefaultMapping, isOwnLabel } from "./EntityMap";
 import { forgetEntities } from "./dismissedEntities";
 
 /** A change to the config, computed from the config it applies to. */
@@ -61,8 +61,16 @@ export function remapMapping(oldKey: string, newId: string): ConfigEdit {
     const entry = config.entityMap[oldKey];
     if (!newId || newId === oldKey || !entry) return {};
     const { [oldKey]: _moved, ...rest } = config.entityMap;
+    // ⚠️ THE NAME MOVES ONLY IF IT IS ONE (owner, 2026-10-12: a light re-pointed
+    // after its rename in HA was titled with its OLD id, "corridor corridor and
+    // stairs2f light terrace…", over HA's "Patio2F Center"). The fallback made
+    // from the old id no longer reads as a fallback under the new id, so it
+    // passed for the owner's own name everywhere (displayLabelFor). Left behind,
+    // the new entity is called by Home Assistant's name.
+    const { label, ...settings } = entry;
+    const moved = isOwnLabel(oldKey, label) ? { ...settings, label } : settings;
     return {
-      entityMap: { ...rest, [newId]: { ...entry, entityId: newId } },
+      entityMap: { ...rest, [newId]: { ...moved, entityId: newId } as EntityMapping },
       meshBindings: { ...config.meshBindings, [oldKey]: newId },
     };
   };

@@ -51,6 +51,8 @@ interface Props {
   focusEntityId?: string;
   /** A GLB/room-data upload changed the model — remount the canvas to load it. */
   onModelChanged: () => void;
+  /** The heading the 3D view looks along, in degrees (SceneManager.viewHeadingDeg) — what "Set North" adopts. */
+  viewHeadingDeg?: () => number | null;
 }
 
 /** Villa coordinates (drive sun tracking). Applies live on blur rather than
@@ -87,6 +89,50 @@ function VillaCoordinates() {
     </div>
   );
 }
+/** Which way the model faces (owner, 2026-10-12: moved here from Settings, below
+ *  the villa's coordinates — both place the villa on the real Earth, and the sun
+ *  is drawn from the two together). The sun and moon are computed from the
+ *  coordinates and the clock, but their direction assumes the MODEL's +Z points
+ *  north, and a GLB's heading is whatever its floor-plan export produced: this
+ *  turns the whole sky to match. Ships at 0 rather than a seeded guess, which
+ *  would be right for one villa only. Applies live, like everything on this tab. */
+function NorthOffset({ viewHeadingDeg }: { viewHeadingDeg?: () => number | null }) {
+  const { config, update } = useConfig();
+  const deg = config.northOffsetDeg;
+  return (
+    <>
+      <label style={{ marginTop: 14 }}>Model north offset · {deg}°</label>
+      {/* One control in two forms on one row: the slider sets the offset by
+          hand, the button measures it from the view. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <input
+          type="range" min={0} max={359} step={1} value={deg}
+          aria-label="Model north offset"
+          style={{ flex: "1 1 auto", minWidth: 0 }}
+          onChange={(e) => update({ northOffsetDeg: Number(e.target.value) })}
+        />
+        <button
+          className="btn"
+          // keeps its 44px target: flex would otherwise squeeze the padding out on a phone
+          style={{ flexShrink: 0, whiteSpace: "nowrap" }}
+          disabled={!viewHeadingDeg}
+          onClick={() => {
+            const h = viewHeadingDeg?.();
+            if (h != null) update({ northOffsetDeg: Math.round(h) });
+          }}
+        >
+          Set North
+        </button>
+      </div>
+      <p className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-xs)" }}>
+        Face the villa's real north side and press Set North, or drag the slider
+        until the shadows match. Only fixes which wall the light comes from —
+        sunrise and sunset times are already right.
+      </p>
+    </>
+  );
+}
+
 /** Long enough to finish typing a coordinate; blur/Enter commit at once. */
 const COORD_COMMIT_MS = 1500;
 
@@ -128,7 +174,7 @@ function LogoutAllSection() {
   );
 }
 
-export default function ConfigEditorModal({ onBack, focusEntityId, onModelChanged }: Props) {
+export default function ConfigEditorModal({ onBack, focusEntityId, onModelChanged, viewHeadingDeg }: Props) {
   // Focus trap + Escape + focus restore (see useModalA11y).
   const dialogRef = useModalA11y(onBack);
   const { role } = useProfile();
@@ -218,6 +264,7 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
               <p className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-xs)" }}>
                 Drives sun position and day/night for this villa.
               </p>
+              <NorthOffset viewHeadingDeg={viewHeadingDeg} />
 
               {/* No collapse: `BindingsTable` already opens on its three counts
                   with the lists themselves behind their own toggles, so this

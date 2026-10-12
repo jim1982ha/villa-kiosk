@@ -55,7 +55,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
   // restore is a type error, not a silent gap (tests/oracles/settings_baseline.mjs).
   const SETTINGS_KEYS = [
     "badgeStyle", "eyeHeight", "highlightInteractive", "naturalScrolling",
-    "northOffsetDeg", "render", "showSummaryBar", "siteTitle", "theme",
+    "render", "showSummaryBar", "siteTitle", "theme",
     "walkSpeed",
   ] as const;
   const slice = useDraftedSlice(SETTINGS_KEYS);
@@ -284,61 +284,6 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
           type="range" min={0.3} max={2} step={0.1} value={v.render.lightPoolIntensity}
           onChange={(e) => applyRender({ lightPoolIntensity: Number(e.target.value) })}
         />
-
-        {/* The sun and moon are computed from the villa's real coordinates and
-            clock, but the direction vector assumes the MODEL's +Z axis points
-            north — and a GLB's heading is whatever its floor-plan export
-            produced. This turns the whole sky to match. Ships at 0 rather than
-            a seeded guess, which would be right for one villa only. */}
-        {/* Label and button share a row: they are one control in two forms —
-            the slider states the offset, the button MEASURES it — so putting
-            them together says that, and buys back the vertical space the old
-            stacked button and four-line paragraph took in a modal that already
-            scrolls on a phone. `gap` plus wrap keeps them legible if the label
-            grows (it carries a live value) rather than crushing the button
-            below --touch-min. */}
-        <label style={{ marginTop: 14 }}>
-          Model north offset · {v.northOffsetDeg}°
-        </label>
-        {/* The button rides the SLIDER's line, not the title's: they are one
-            control in two forms — the slider sets the offset by hand, the
-            button measures it from the view — so they belong on the same row,
-            and the title stays a title. The slider takes the remaining width
-            via flex:1 rather than a percentage, so the button's fixed box is
-            subtracted rather than guessed at. */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <input
-            type="range" min={0} max={359} step={1} value={v.northOffsetDeg}
-            style={{ flex: "1 1 auto", minWidth: 0 }}
-            onChange={(e) => slice.set({ northOffsetDeg: Number(e.target.value) }, { now: true })}
-          />
-          {/* The one-tap path, and the reason the slider is not the only one:
-              the operator knows which way their villa faces, not what the
-              offset is in degrees. Turn the view toward the real north side,
-              press this, and the heading becomes the answer — viewHeadingDeg. */}
-          <button
-            className="btn"
-            // Flex shrinks items within a line before it wraps them, so without
-            // this the phone tier would squeeze `.btn`'s 18px padding out and
-            // leave a sub-44px target, the one thing --touch-min exists to
-            // prevent. minWidth:0 on the slider is its counterpart: a flex item
-            // will not shrink below its intrinsic width without it, which would
-            // push the button off the row instead.
-            style={{ flexShrink: 0, whiteSpace: "nowrap" }}
-            disabled={!manager}
-            onClick={() => {
-              const deg = manager?.viewHeadingDeg();
-              if (deg != null) slice.set({ northOffsetDeg: Math.round(deg) }, { now: true });
-            }}
-          >
-            Set North
-          </button>
-        </div>
-        <p className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-2xs)" }}>
-          Face the villa's real north side and press Set North, or drag the
-          slider until the shadows match. Only fixes which wall the light comes
-          from — sunrise and sunset times are already right.
-        </p>
 
         <p className="muted body-text" style={{ marginTop: 10, fontSize: "var(--text-2xs)" }}>
           Badge size — {config.entityIconScale.toFixed(2)}× — is set with

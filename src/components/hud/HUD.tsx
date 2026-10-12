@@ -108,6 +108,18 @@ function useClock(): string {
   return fmtChartTime(now);
 }
 
+/** A HUD dropdown's open state: closed by an outside tap, Escape and Back (it
+ *  goes on the one list of what is open — see overlayOpen), and by the
+ *  action chosen in it. The phone's overflow menu and the desktop's account
+ *  menu are both this. */
+function useHudMenu() {
+  const [open, setOpen] = useState(false);
+  useBackToClose(() => setOpen(false), open);
+  const ref = useRef<HTMLDivElement | null>(null);
+  useOutsideClose([ref], open, () => setOpen(false));
+  return { open, setOpen, ref };
+}
+
 export default function HUD({
   currentFloor, floorsAvailable, onShowFloor, onOpenTeleport, onNavigateRoom,
   doors, onOpenSettings, onMove,
@@ -285,13 +297,11 @@ export default function HUD({
   // which of the two renderings is visible (same breakpoint as the rest of
   // the compact bar), this state only drives the dropdown. Closes on outside
   // tap and Escape, and after any action is chosen.
-  const [menuOpen, setMenuOpen] = useState(false);
-  // Back closes it, as it closes every other surface (and puts it on the one
-  // list of what is open — see overlayOpen).
-  useBackToClose(() => setMenuOpen(false), menuOpen);
+  const { open: menuOpen, setOpen: setMenuOpen, ref: menuRef } = useHudMenu();
+  // The desktop's account menu under the role badge (owner, 2026-10-12): the
+  // same dropdown, the same closing rules, the same two rows (accountRows).
+  const account = useHudMenu();
   const [legendOpen, setLegendOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement | null>(null);
-  useOutsideClose([menuRef], menuOpen, () => setMenuOpen(false));
 
   // The view toggle + default-view anchor (and their tap-vs-hold gesture) live
   // in <ViewControls>, rendered either here or inside the SummaryBar.
@@ -302,6 +312,41 @@ export default function HUD({
     connection === "connected" ? "online" : connection === "connecting" ? "connecting" : "offline";
   // The same status as a .status-dot's tone — the phone menu's role badge.
   const connTone = connClass === "online" ? "on" : connClass === "connecting" ? "pending" : "danger";
+
+  /** Settings, then "Logout (<role>)": the rows the phone's menu ends with and
+   *  the desktop's account menu holds — written once (owner, 2026-10-12). The
+   *  logout row wears the role's round badge with the connection dot, and goes
+   *  to the profile screen (beginSwitch: the villa stays loaded under the PIN
+   *  pad). `close`: the menu it sits in. */
+  const accountRows = (close: () => void) => (
+    <>
+      {doors.settings && (
+        <button
+          role="menuitem"
+          className="hud-menu-item"
+          onClick={() => { close(); onOpenSettings(); }}
+        >
+          <Settings size={18} />
+          <span>Settings</span>
+        </button>
+      )}
+      {role && (
+        <button
+          role="menuitem"
+          className="hud-menu-item"
+          onClick={() => { close(); beginSwitch(); }}
+          title={`Signed in as ${ROLE_LABELS[role]} · Connection: ${connection}`}
+          aria-label={`Signed in as ${ROLE_LABELS[role]}, connection ${connection} — log out`}
+        >
+          <span className="hud-menu-glyph" aria-hidden="true">
+            <span className={`role-glyph${ROLE_INITIALS[role].length > 1 ? " two" : ""}`}>{ROLE_INITIALS[role]}</span>
+            <span className={`status-dot ${connTone}`} />
+          </span>
+          <span>Logout ({ROLE_LABELS[role]})</span>
+        </button>
+      )}
+    </>
+  );
 
   const toggleCategory = (cat: Category) =>
     update({
@@ -552,24 +597,28 @@ export default function HUD({
                 explains those very colours. See .hud-cat-help.) */}
             {/* (The first-person / bird's-eye switch moved to the left
                 column, under 1F/2F — see .hud-left-col below.) */}
-            {doors.settings && (
-              <button className="icon-btn" onClick={onOpenSettings} title="Settings" aria-label="Settings">
-                <Settings size={24} />
-              </button>
-            )}
             {/* Who is signed in, as ONE round badge, last on the right
-                (2.496.242): the role's letter(s) in place of the name + exit
-                arrow. Same action as before — the profile switch, which keeps
-                the villa loaded under the PIN pad (ProfileContext.beginSwitch). */}
+                (2.496.242): the role's letter(s). It opens the account menu —
+                Settings, then Logout — the same rows as the phone's menu
+                (owner, 2026-10-12: Settings no longer has its own icon here). */}
             {role && (
-              <button
-                className="icon-btn hud-role-badge"
-                onClick={beginSwitch}
-                title={`Signed in as ${ROLE_LABELS[role]} — switch profile`}
-                aria-label={`Signed in as ${ROLE_LABELS[role]} — switch profile`}
-              >
-                <span aria-hidden="true" className={`role-glyph${ROLE_INITIALS[role].length > 1 ? " two" : ""}`}>{ROLE_INITIALS[role]}</span>
-              </button>
+              <div className="hud-account" ref={account.ref}>
+                <button
+                  className={`icon-btn hud-role-badge${account.open ? " active" : ""}`}
+                  onClick={() => account.setOpen((o) => !o)}
+                  title={`Signed in as ${ROLE_LABELS[role]} — settings and logout`}
+                  aria-label={`Signed in as ${ROLE_LABELS[role]} — settings and logout`}
+                  aria-haspopup="menu"
+                  aria-expanded={account.open}
+                >
+                  <span aria-hidden="true" className={`role-glyph${ROLE_INITIALS[role].length > 1 ? " two" : ""}`}>{ROLE_INITIALS[role]}</span>
+                </button>
+                {account.open && (
+                  <div className="hud-menu" role="menu" aria-label="Settings and profile">
+                    {accountRows(() => account.setOpen(false))}
+                  </div>
+                )}
+              </div>
             )}
           </div>
 
@@ -590,10 +639,9 @@ export default function HUD({
               aria-haspopup="menu"
               aria-expanded={menuOpen}
             >
-              {/* The SAME gear as the desktop bar's Settings button above, on
-                  purpose: this button is where Settings lives on a phone, so
-                  swapping it for an overflow glyph made one control look like
-                  two different things depending on the width of the screen. */}
+              {/* A gear: this button is where Settings lives on a phone (on a
+                  roomy screen it is in the role badge's menu, with the same
+                  rows — accountRows). */}
               <Settings size={24} />
             </button>
             {menuOpen && (
@@ -674,36 +722,9 @@ export default function HUD({
                   {viewMode === "overview" ? <PersonStanding size={18} /> : <MapIcon size={18} />}
                   <span>{viewMode === "overview" ? "First-person view" : "Bird's-eye view"}</span>
                 </button>
-                {doors.settings && (
-                  <button
-                    role="menuitem"
-                    className="hud-menu-item"
-                    onClick={() => { setMenuOpen(false); onOpenSettings(); }}
-                  >
-                    <Settings size={18} />
-                    <span>Settings</span>
-                  </button>
-                )}
-                {/* The same round badge as the desktop bar's (O, FM, G), and
-                    the same action: back to the PIN pad (beginSwitch). Who is
-                    signed in and the connection to Home Assistant are said by
-                    the badge and its dot (owner, 2.496.247) — the menu's
-                    "Signed in as …" header line repeated both and is gone. */}
-                {role && (
-                  <button
-                    role="menuitem"
-                    className="hud-menu-item"
-                    onClick={() => { setMenuOpen(false); beginSwitch(); }}
-                    title={`Signed in as ${ROLE_LABELS[role]} · Connection: ${connection}`}
-                    aria-label={`Signed in as ${ROLE_LABELS[role]}, connection ${connection} — log out`}
-                  >
-                    <span className="hud-menu-glyph" aria-hidden="true">
-                      <span className={`role-glyph${ROLE_INITIALS[role].length > 1 ? " two" : ""}`}>{ROLE_INITIALS[role]}</span>
-                      <span className={`status-dot ${connTone}`} />
-                    </span>
-                    <span>Log out</span>
-                  </button>
-                )}
+                {/* Settings, then Logout — the rows the desktop's account
+                    menu holds too (accountRows). */}
+                {accountRows(() => setMenuOpen(false))}
               </div>
             )}
           </div>

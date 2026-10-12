@@ -178,6 +178,9 @@
    roomy screens where the inline buttons fit; the compact-bar media query
    below swaps the two. */
 .hud-overflow { position: relative; display: none; }
+/* The desktop's role badge and its account menu (Settings, Logout) — the same
+   .hud-menu dropdown as the phone's, anchored under the badge. */
+.hud-account { position: relative; display: flex; }
 .hud-menu {
   position: absolute; top: calc(100% + 8px); right: 0;
   min-width: 210px;

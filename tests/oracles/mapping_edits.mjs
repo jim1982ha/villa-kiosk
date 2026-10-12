@@ -37,10 +37,18 @@ console.log("  one edit at a time:");
   ck("add: an entity already mapped is left as it is", J(me.addMapping("light.a")(cfg())) === "{}");
 }
 {
-  const c = apply(cfg(), me.remapMapping("light.a", "light.b"));
+  // a name the owner chose ("A" would read as light.a's own fallback — see the next block)
+  const named = apply(cfg(), me.patchMapping("light.a", { label: "Desk lamp" }));
+  const c = apply(named, me.remapMapping("light.a", "light.b"));
   ck("remap: the mapping moves to the new entity, its settings kept",
-     !c.entityMap["light.a"] && c.entityMap["light.b"]?.label === "A" && c.entityMap["light.b"].entityId === "light.b");
+     !c.entityMap["light.a"] && c.entityMap["light.b"]?.label === "Desk lamp" && c.entityMap["light.b"].entityId === "light.b");
   ck("remap: the mesh is bound to the new entity", c.meshBindings["light.a"] === "light.b");
+  // owner, 2026-10-12: the fallback made from the OLD id passed for a chosen name under the new one
+  const fb = apply({ ...cfg(), entityMap: { "light.hall_lamp": { entityId: "light.hall_lamp", type: "light", label: "hall lamp", badgeColor: "#f00" } } },
+                   me.remapMapping("light.hall_lamp", "light.reading_lamp"));
+  ck("remap: a name made from the OLD id is left behind (the new entity shows Home Assistant's)",
+     fb.entityMap["light.reading_lamp"] && !("label" in fb.entityMap["light.reading_lamp"]), fb.entityMap["light.reading_lamp"]);
+  ck("  …its other settings still move", fb.entityMap["light.reading_lamp"]?.badgeColor === "#f00");
   ck("remap: to itself, to nothing, or from nothing — no change",
      [me.remapMapping("light.a", "light.a"), me.remapMapping("light.a", ""), me.remapMapping("light.q", "light.b")]
        .every((e) => J(e(cfg())) === "{}"));

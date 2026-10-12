@@ -1,3 +1,31 @@
+## 2.496.335
+
+### Changed
+- Desktop and tablet: clicking the round role badge at the top right (O, FM, G) opens a menu with two rows — "Settings", then "Logout (Owner)" (your role's name). The separate Settings gear beside the badge is gone.
+- Phone menu: "Log out" now reads "Logout (Owner)" (your role's name) — the same two rows as the desktop menu, which still lead to the profile screen.
+
+## 2.496.334
+
+### Changed
+- "Model north offset" and its "Set North" button moved from Settings to Advanced Settings → Villa, right under the villa's coordinates. It still applies at once.
+- Advanced Settings → Villa → "Bound 3D objects" is now one section: a single paragraph says what it does and how to prepare an entity whose 3D object is not in the model yet, with the entity picker right under it ("Pre-configure a new entity" was a second heading in smaller print).
+- Device telemetry: each event takes one line, all rows the same height; a summary that does not fit ends in "…" (hover it for the full text; Copy and Download still give every field).
+
+## 2.496.333
+
+### Fixed
+- Changing a device to another entity (the pencil in Advanced Settings) no longer carries over the temporary name the Kiosk had made from the OLD entity id. The device now shows Home Assistant's name for the new entity. A name you typed yourself still moves with it.
+
+## 2.496.332
+
+### Fixed
+- Moving the mouse over the villa (without hovering a device or moving the camera) no longer makes badges regroup or open into cards. Those changes had already happened, when the Kiosk recomputed which room each device is in (after Home Assistant reconnects or its areas change), but the 3D view was not redrawn until the next movement. The view is now redrawn as soon as the rooms are recomputed.
+
+## 2.496.331
+
+### Fixed
+- Advanced Settings → Devices: a device's "Label" field no longer shows a name nobody typed. When the Kiosk only made a temporary name from the entity id (before Home Assistant's name had arrived), the field is now empty, with the name actually shown in grey — e.g. "Reading lamp — from Home Assistant". Typing in it still gives the device your own name; clearing it goes back to Home Assistant's.
+
 ## 2.496.330
 
 ### Fixed
