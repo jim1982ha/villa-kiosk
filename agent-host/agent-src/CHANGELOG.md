@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.179 (13 October 2026)
+
+Owner, 2026-10-13 (review 4): reports/SKILL.md said the digest's numbers let "a reply '3 done' close the right one" —
+no typed reply ever closed anything. Corrected there and in compose's comment; villa-concierge/SKILL.md tells the AI a
+typed "#9 done" closes nothing (the Done button under the alert does; a fault closes in the Kiosk). Text only.
+
 ## 0.6.178 (13 October 2026)
 
 Owner, 2026-10-13 (review 4, #1): a proposal is answered with /proposal — the monthly page asked for "accept 3" and

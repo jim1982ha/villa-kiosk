@@ -109,6 +109,8 @@ alert-desk gate.
   are answered only with the /proposal command ("/proposal accept 3", "/proposal later 3",
   "/proposal ignore 3"); a plain "accept 3" records nothing — tell the owner to write it so.
   Nothing is applied by the agent.
+- "#9 done" (or "3 done") typed in a chat closes nothing: an alert is closed with the Done button under its own
+  message, a maintenance fault in the VESTA Kiosk. Say so; never say it was noted or closed.
 
 ## Villa mode
 

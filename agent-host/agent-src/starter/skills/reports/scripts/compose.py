@@ -133,8 +133,8 @@ def fm_daily(pack: KnowledgePack, store: Store, as_of: date) -> str:
     if noted:
         sections.append(("Also noted (no action needed yet)", [f"- {p['title']}" for p in view["new"] if p["incident"] in noted]))
     if open_now:
-        # ⚠️ AN INCIDENT NUMBER ONLY WHERE "#N done" WORKS: an alert's incident number. It used to print task numbers,
-        # which no reply could close; a maintenance finding is closed in the VESTA Kiosk instead. (Owner, 2026-10-11: the
+        # ⚠️ AN ALERT'S NUMBER, TO FIND ITS MESSAGE: it is closed with Done under that message — a typed "#9 done" closes
+        # nothing (no reply ever did). It used to print task numbers; a maintenance finding is closed in the VESTA Kiosk. (Owner, 2026-10-11: the
         # line "Still open: 6. An alert: press Done … the rest: close it in the VESTA Kiosk" gave no useful indication.)
         alerts = [p for p in open_now if p["incident"]]
         sections.append(("Still open", [f"- {incident_tag(p['incident'])} · {p['title'][:160]}" for p in alerts]

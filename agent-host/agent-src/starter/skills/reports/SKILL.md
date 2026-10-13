@@ -30,7 +30,8 @@ figures; compose.py lays the page out and checks your sentences.
 | On demand | either | the period asked for (`--end` for a past one) | the steps below |
 
 The FM reads the digest on a phone in the morning: new items first, then the
-open tasks with their numbers so a reply "3 done" closes the right one. The
+alerts still open with their numbers ("#9"), so the right alert is found — it is
+closed with Done under its own message, never by a typed reply. The
 owner reads the monthly as proof that the villa was looked after: what was
 found, what was done, what it cost, what VESTA suggests, and how much of the
 villa is actually measured (never hide the unmetered share).
