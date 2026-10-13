@@ -496,7 +496,9 @@ def test_a_proposal_says_how_to_answer_and_its_long_names_wrap(tmp_path):
         {"id": 4, "title": "Create the missing setting for Weather station", "detail": "No nominal voltage", "benefit": "Enables one rule"}]}}}
     page = compose.page(facts, {})
     assert 'class="btn"' not in page
-    assert "To answer, write in the chat: <b>accept 4</b>, <b>later 4</b> or <b>ignore 4</b>." in page
+    # owner, 2026-10-13: answered with the /proposal command only — "accept 4" alone could mean anything
+    assert ("To answer, write in the chat: <b>/proposal accept 4</b>, <b>/proposal later 4</b> or "
+            "<b>/proposal ignore 4</b>.") in page and "Proposal 4</span>" in page
     assert "No nominal voltage. Enables one rule." in page
     assert ".wrap{overflow-wrap:anywhere}" in page and ".asset > .st{justify-self:start}" in page
 

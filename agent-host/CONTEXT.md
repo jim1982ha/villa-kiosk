@@ -32,3 +32,7 @@ _Avoid_: hint, signal, alert
 Something wrong in the villa that someone has to deal with: seen by the night check (a finding) or raised by a VESTA rule (an incident), with the facility manager's task about it and its fault in the VESTA Kiosk. Open until it clears by itself, or a person answers it (Done) or closes its fault in the Kiosk.
 _Avoid_: issue, ticket (the Kiosk's record of it), task (the facility manager's job about it)
 
+
+**Proposal**:
+Something VESTA suggests in the monthly report (a saving, an alert to retune), with its own number for good. The owner answers it with /proposal: accept, later (shown again) or ignore (never suggested again).
+_Avoid_: suggestion, recommendation, idea

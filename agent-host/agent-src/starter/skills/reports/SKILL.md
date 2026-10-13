@@ -90,8 +90,8 @@ clues point to, not the whole villa. If the limit stops you, the page is still s
   it as PDF.
 - Devices with no room and missing helpers are listed under
   "monitoring health" and "what would help" so nothing silently disappears.
-- Proposals carry their store id; the reply "accept N / later N / ignore N" is
-  handled by villa-concierge.
+- Proposals carry their store id; the owner answers with "/proposal accept N", "/proposal
+  later N" or "/proposal ignore N" (the proposals skill).
 - Asked again, make the page again: the figures and this skill may have changed.
 
 ## What each page contains

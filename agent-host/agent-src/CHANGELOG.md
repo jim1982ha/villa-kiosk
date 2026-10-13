@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.178 (13 October 2026)
+
+Owner, 2026-10-13 (review 4, #1): a proposal is answered with /proposal — the monthly page asked for "accept 3" and
+nothing recorded it (`Store.decide_proposal` had no caller since 0.12.68).
+- New starter skill `proposals` (skill.yaml `command: proposal`, the /investigate mechanism): `answer.py answer
+  --number N --choice accept|later|ignore` — accepted / open / ignored; the reply names the proposal and says what it
+  was; the owner only. A run's scripts know who asks: `Settings.asker` → VESTA_ASKER (a conversation's Origin now
+  carries the person's role, as a job's did). `Store.add_proposal` keeps one proposal per title whatever its answer.
+- report.html: "Proposal N" and "/proposal accept N…"; reports, roi-energy and villa-concierge SKILL.md say /proposal.
+- Tests: test_proposals (through the real /proposal command; owner only; a wrong number; answering again; ignored is
+  never made again; "accept 3" alone refused), test_reports, test_config_and_skills (seven starter skills).
+
 ## 0.6.177 (13 October 2026)
 
 Architecture review 4, 2026-10-13 (owner: "implement #3 and #4"):

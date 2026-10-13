@@ -105,9 +105,10 @@ alert-desk gate.
   power. Which room?". Ask it once in the owner chat. The answer becomes
   the owner's to set in Home Assistant (the agent does not change the registry).
   Until then the device is listed as "room unknown" in the reports.
-- Proposals: the reports carry "VESTA suggests" items with a number. "accept 3",
-  "later 3", "ignore 3" call `Store.decide_proposal`. Accepted items are tracked
-  in the next report. Nothing is applied by the agent.
+- Proposals: the monthly report carries "VESTA suggests" items with a number. They
+  are answered only with the /proposal command ("/proposal accept 3", "/proposal later 3",
+  "/proposal ignore 3"); a plain "accept 3" records nothing — tell the owner to write it so.
+  Nothing is applied by the agent.
 
 ## Villa mode
 

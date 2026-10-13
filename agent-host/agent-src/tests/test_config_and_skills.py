@@ -67,12 +67,13 @@ def test_behaviour_settings_reload_live_and_bad_values_fall_back(tmp_path):
 # ---------------------------------------------------------------------- skills as files
 def test_the_starter_skills_all_load():
     names = sorted(Skills(os.path.join(STARTER_DIR, "skills")).all())
-    assert names == ["alert-desk", "investigate", "preventive-maintenance", "reports", "roi-energy", "villa-concierge"]
+    assert names == ["alert-desk", "investigate", "preventive-maintenance", "proposals", "reports", "roi-energy",
+                     "villa-concierge"]
 
 
 def test_seeded_once_and_a_deleted_skill_stays_deleted(tmp_path):
     sk = Skills(str(tmp_path / "skills"), os.path.join(STARTER_DIR, "skills"))
-    assert len(sk.seed()) == 6
+    assert len(sk.seed()) == 7
     import shutil
     shutil.rmtree(tmp_path / "skills" / "roi-energy")
     assert sk.seed() == []                      # the record, not the folders, says it was done
@@ -90,7 +91,7 @@ def test_a_new_starter_skill_reaches_a_villa_installed_before_it_and_a_deleted_o
             shutil.copytree(os.path.join(STARTER_DIR, "skills", name), skills / name)
     (skills / SEEDED).write_text("The starter skills were copied here once.\n")
     sk = Skills(str(skills), os.path.join(STARTER_DIR, "skills"))
-    assert sk.seed() == ["investigate"]
+    assert sk.seed() == ["investigate", "proposals"]                        # both added after that villa was made
     assert "investigate" in sk.all() and "roi-energy" not in sk.all()
     assert (skills / OFFERED).exists() and sk.seed() == []
     shutil.rmtree(skills / "investigate")                                  # deleted by the owner in turn
@@ -385,7 +386,8 @@ def test_the_agent_keeps_its_last_good_rules_when_the_file_cannot_be_read(tmp_pa
 def test_the_investigate_skill_answers_to_its_one_command():
     # owner, 2026-10-11: "remove /investigation key word, and only allow /investigate"
     sk = Skills(os.path.join(STARTER_DIR, "skills"))
-    assert sk.commands() == {"/investigate": "investigate"} and sk.get("investigate").command == "investigate"
+    assert sk.commands() == {"/investigate": "investigate", "/proposal": "proposals"}   # owner, 2026-10-13: /proposal
+    assert sk.get("investigate").command == "investigate"
 
 
 def test_a_skills_brain_is_one_the_rules_know(tmp_path):

@@ -318,7 +318,9 @@ class Store:
 
     # proposals -------------------------------------------------------------
     def add_proposal(self, kind: str, title: str, detail: str, benefit: str) -> int:
-        r = self.db.execute("SELECT id FROM proposals WHERE title=? AND status='open'", (title,)).fetchone()
+        """A proposal, once by its title, whatever its answer: one the owner ignored is never made again (owner,
+        2026-10-13, /proposal) — "later" keeps it open, so it is shown again."""
+        r = self.db.execute("SELECT id FROM proposals WHERE title=? ORDER BY id DESC", (title,)).fetchone()
         if r:
             return r["id"]
         c = self.db.execute("INSERT INTO proposals (kind, title, detail, benefit, created_at) VALUES (?,?,?,?,?)",

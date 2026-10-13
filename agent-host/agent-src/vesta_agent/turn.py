@@ -132,7 +132,8 @@ class Turns:
         (command_request.Request): its skill's own brain and limit, its id and web searches for the toolbox."""
         terms = chat_terms(self.s, self.policy(), await self.server_tools(), person, chat,
                            request.brain if request else None, request.limit_usd if request else None)
-        return await self._run(terms, self.s.in_folder(f"chats/{chat}"), prompt, person, Origin(chat, CONVERSATION),
+        return await self._run(terms, self.s.in_folder(f"chats/{chat}"), prompt, person,
+                               Origin(chat, CONVERSATION, role=person.role if person else None),
                                resume, asked, [chat], image, request)
 
     async def job(self, name: str, cfg: dict, prompt: str, origin: Origin | None, run_settings,

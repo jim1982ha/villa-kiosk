@@ -64,7 +64,7 @@ schedule is in place.
 - Weekly (Monday, before the reports skill): `energy_period.py --period week --store $VESTA_STORE`.
 - Monthly (1st): `--period month`, plus `filtration_optimiser.py` for every asset whose slug ends in `_pump` and whose pool helpers exist, then `proposals.py`.
 - On demand ("how much did the pool pump cost last month"): run `energy_period.py` with `--period custom --start --end` or the matching period; answer from the JSON; never estimate from memory.
-- Proposals are stored once by title. The owner answers accept / later / ignore in the chat; the concierge skill records the decision (`Store.decide_proposal`). Accepted proposals are tracked in the next reports.
+- Proposals are stored once by title, whatever their answer: an ignored one is never made again. The owner answers with /proposal accept / later / ignore and the number (the proposals skill); accepted or ignored, a proposal leaves the report, later keeps it.
 
 ## Waste events
 

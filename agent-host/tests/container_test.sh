@@ -221,9 +221,9 @@ docker run -d --name vesta-ct "${PLATFORM[@]}" --network host --entrypoint /opt/
   -e VESTA_SKILLS_DIR=/tmp/skills -e VESTA_AGENT_CONFIG_DIR=/tmp/agent-config -e VESTA_DATA_DIR=/tmp/agent-data \
   -e TZ=Asia/Bangkok "$IMAGE" -m vesta_agent >/dev/null
 if wait_log "Acting on the villa is OFF" 120; then ok "the VESTA Agent started"; else bad "the VESTA Agent did not start"; fi
-hasf "Starter skills copied to the skills folder (first start): alert-desk, investigate, preventive-maintenance, reports, roi-energy, villa-concierge" \
+hasf "Starter skills copied to the skills folder (first start): alert-desk, investigate, preventive-maintenance, proposals, reports, roi-energy, villa-concierge" \
   && ok "starter skills seeded once" || bad "starter skills not seeded"
-hasf "Skills: alert-desk, investigate, preventive-maintenance, reports, roi-energy, villa-concierge" && ok "six skills loaded" || bad "skills not loaded"
+hasf "Skills: alert-desk, investigate, preventive-maintenance, proposals, reports, roi-energy, villa-concierge" && ok "seven skills loaded" || bad "skills not loaded"
 hasf "VESTA Kiosk: agreement 1" && ok "Kiosk agreement checked" || bad "Kiosk not checked"
 hasf "HA MCP: 2 tools on the server" && ok "HA MCP read through the client" || bad "HA MCP not read"
 hasf "Telegram: off" && ok "Telegram off: nothing sent" || bad "Telegram not off"

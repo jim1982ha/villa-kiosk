@@ -325,8 +325,9 @@ Decisions of 2026-09-30 (owner):
   Review 4 of 2026-10-13 (0.12.183): a run's scripts know whether it may search the web (VESTA_WEB_SEARCH_ON); an
   investigation page needs a search when it is on. "[n]" is dropped by `messaging.uncited` (chat message, Kiosk fault).
   The night check has no typed threshold left (reconnect_days is the logbook read AND the rule's window).
-  OPEN (owner asked how, 2026-10-13, not decided): the monthly page's "accept / later / ignore N" has no handler
-  (`Store.decide_proposal` has no caller) — proposed: one message per proposal with its buttons after the monthly.
+  0.12.184 (owner, 2026-10-13): a proposal is answered with /proposal accept|later|ignore N — the `proposals` starter
+  skill (a command skill, like investigate), the owner only (VESTA_ASKER: a run's scripts know who asks). The owner
+  REJECTED buttons in the page and a message per proposal ("bloating"): do not propose them again.
 - No PDF (owner, 2026-09-30): the reports are self-contained HTML pages sent
   as attachments. Chromium was ~480 MB of a 1.1 GB image for this alone.
 - ⚠️ The Dockerfile's layer order is what an update costs the Yellow: agent

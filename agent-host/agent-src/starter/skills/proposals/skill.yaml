@@ -1,0 +1,20 @@
+# proposals — the owner's answer to what VESTA suggests (the monthly report's proposals), by its number.
+# Run ONLY on its command (below): the AI is never offered it otherwise, so the line below is what the Agent page shows.
+description: Records the owner's answer to a proposal of the monthly report — accept, later or ignore — by its number.
+
+# ⚠️ ONLY BY ITS COMMAND (owner, 2026-10-13): "accept 3" typed in a chat could mean anything; "/proposal ignore 3" cannot.
+command: proposal
+brain: economy
+limit_usd: 0.2
+# what the agent shows a person who sends /proposal alone
+usage: "/proposal accept 3, /proposal later 3 or /proposal ignore 3 (the number on the report)"
+
+tools: []
+
+scripts:
+  answer.py:
+    description: Records the owner's answer to one proposal
+    commands:
+      answer: accept, later or ignore one proposal, by its number (the owner only)
+    flags: {--number: text, --choice: [accept, later, ignore]}
+    inject: [store]
