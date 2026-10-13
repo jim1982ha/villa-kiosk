@@ -68,7 +68,7 @@ closure, and never raise the same thing twice.
 | PM-UNAVAILABLE | availability | A device offline for more than 10 minutes at batch time, one finding per physical device; three or more devices of one integration offline together become one "integration down" finding. P2 when the device is critical. | `vesta_unavailable_minutes` |
 | PM-SILENT | level | A sensor online but not reporting for 24 h. | `vesta_silence_hours` |
 | PM-LEVEL-HIGH | level | A temperature or humidity above `<asset>_max_c` / `<asset>_max_humidity_pct` when such a helper exists. | asset helper |
-| PM-RECONNECT-LOOP | network | Ten or more drop/reconnect events in three days for one device (logbook). | none |
+| PM-RECONNECT-LOOP | network | Ten or more drop/reconnect events in three days for one device (logbook). | `vesta_reconnect_events`, `vesta_reconnect_days` |
 | PM-PARAM-MISSING | any | A rule could not run for lack of a helper. Says which one. | none |
 
 What an asset is, decided by the knowledge pack: "motor" (a schedule, a runtime

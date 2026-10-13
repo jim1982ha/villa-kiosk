@@ -810,6 +810,7 @@ def script_env(settings) -> dict:
         "VILLA_TZ": settings.timezone,
         "TZ": settings.timezone,
         "VESTA_WEB_SEARCHES": getattr(settings, "web_searches", "") or "",
+        "VESTA_WEB_SEARCH_ON": getattr(settings, "web_search_on", "") or "",
     }
 
 

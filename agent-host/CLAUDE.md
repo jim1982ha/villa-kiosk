@@ -322,6 +322,11 @@ Decisions of 2026-09-30 (owner):
   an alert's history and status one block.
   Review 3 of 2026-10-13 (0.12.182): `message_format.pages` cuts a too-long item into pieces, never "…" (no text is
   lost); a skill keeps room for `message_format.TO_LONGEST`, never a typed "To:" length.
+  Review 4 of 2026-10-13 (0.12.183): a run's scripts know whether it may search the web (VESTA_WEB_SEARCH_ON); an
+  investigation page needs a search when it is on. "[n]" is dropped by `messaging.uncited` (chat message, Kiosk fault).
+  The night check has no typed threshold left (reconnect_days is the logbook read AND the rule's window).
+  OPEN (owner asked how, 2026-10-13, not decided): the monthly page's "accept / later / ignore N" has no handler
+  (`Store.decide_proposal` has no caller) — proposed: one message per proposal with its buttons after the monthly.
 - No PDF (owner, 2026-09-30): the reports are self-contained HTML pages sent
   as attachments. Chromium was ~480 MB of a 1.1 GB image for this alone.
 - ⚠️ The Dockerfile's layer order is what an update costs the Yellow: agent

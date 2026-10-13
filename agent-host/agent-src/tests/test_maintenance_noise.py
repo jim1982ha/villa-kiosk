@@ -154,6 +154,25 @@ def test_a_restart_is_not_a_device_dropping_and_one_device_is_one_finding(tmp_pa
     assert f["summary"].startswith("Pool relay dropped and reconnected 12 times"), f["summary"]
 
 
+def test_a_villa_widens_the_reconnect_window_for_the_read_the_count_and_the_words(tmp_path):
+    # architecture review 4 (2026-10-13): "3 days" was typed in nightly.py's logbook read, in the rule and in its text
+    fx = tmp_path / "fx"
+    fx.mkdir()
+    (fx / "states.json").write_text(json.dumps({"states": {}}))
+    entries = [{"entity_id": "switch.example_relay", "state": "unavailable",
+                "when": datetime(2026, 9, 29 + k // 6, 11, 5 * k, tzinfo=timezone.utc).isoformat()} for k in range(12)]
+    (fx / "logbook.json").write_text(json.dumps({"entries": entries}))       # 29 and 30 Sept: 4 and 5 days back
+    _pack(tmp_path, {"network": [_row("switch.example_relay", "Pool relay", family="network", asset="relay",
+                                      device="dev-relay")]}, {"relay": {"slug": "relay", "name": "Pool relay", "entities": {}}})
+    _night(tmp_path, "--as-of", AS_OF)
+    assert _open(tmp_path, "PM-RECONNECT-LOOP") == []                       # the skill's 3 days: not seen
+    (fx / "helpers.json").write_text(json.dumps({"helpers": [], "states": {"input_number.vesta_reconnect_days": "5"}}))
+    (tmp_path / "s.sqlite").unlink()                                        # the villa's parameters are kept 10 min
+    _night(tmp_path, "--as-of", AS_OF)
+    (f,) = _open(tmp_path, "PM-RECONNECT-LOOP")
+    assert f["summary"].startswith("Pool relay dropped and reconnected 12 times in 5 days"), f["summary"]
+
+
 # ---------------------------------------------------------------------------------------------- offline
 def test_unknown_is_not_offline(tmp_path):
     # a wind chill on a warm day is "unknown": no value to give, while its station reports

@@ -1,3 +1,18 @@
+## 0.12.183
+
+What you will see:
+- An investigation always searches the web when web search is on: a page that says "No web search was made." while it
+  was on is no longer made (the AI is sent back to search). With web search switched off, the page says so: "Web search
+  is switched off: no web search was made."
+- The AI is asked for one length of summary, 3 to 5 sentences, everywhere (when a summary was too long, it was told
+  "4 to 6 sentences", the instructions said 3 to 5).
+- A fault created in the Kiosk from an investigation reads without the web references "[2]", which lead to no page
+  there.
+- The night check's last fixed limits can be set for the villa like the others: how many drops make a reconnect loop
+  (10) and over how many days (3: the night reads that much of the logbook, and the message says it), when a day
+  counts as a day an asset ran, when a day has enough data to judge, and the smallest daily use a change is judged
+  against. Nothing changes unless you change them (a "vesta_" number helper named after the setting, or villa.settings.yaml).
+
 ## 0.12.182
 
 What you will see:

@@ -29,3 +29,11 @@ behaviour:
   battery_trend_warn_days: 14           # told when it would be empty within these days
   battery_low_fraction_of_nominal: 0.8  # a voltage battery below this share of its nominal is low
   worsened_step_pct: 15                 # an open finding worse by this many points is told again
+  # (architecture review 4, 2026-10-13: these were typed in rules.py / nightly.py, out of a villa's reach)
+  reconnect_days: 3                     # the logbook read for reconnect loops, and the window the rule counts in
+  reconnect_events: 10                  # this many drops in that window: a reconnect loop
+  ran_min_hours: 0.1                    # a day an asset ran at least this long counts as a day it ran
+  intermittent_share: 0.5               # an asset that ran on fewer than this share of its days is intermittent…
+  intermittent_min_days: 3              # …or on fewer days than this
+  full_day_hours: 20                    # a day with this many hours of data is judged against its schedule
+  energy_baseline_min_kwh: 0.05         # a normal daily use below this is too small to judge a change against

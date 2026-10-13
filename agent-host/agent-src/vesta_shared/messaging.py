@@ -21,6 +21,16 @@ def no_code(s: str) -> str:
     return re.sub(r"^\s*\[[^\]]{2,80}\]\s*", "", s or "").strip()
 
 
+#: A web page cited in an investigation's text: "[2]" (its place in the page's sources).
+CITE = re.compile(r"\[(\d{1,2})\]")
+
+
+def uncited(text: str) -> str:
+    """`text` without its "[n]" references, for where there is no page to follow them to: the investigation's chat
+    message and the Kiosk fault offered from it (architecture review 4, 2026-10-13: the fault's note kept "[2]")."""
+    return " ".join(re.sub(r"\s*" + CITE.pattern, "", text or "").split())
+
+
 def tg_len(text: str) -> int:
     """A text's length as Telegram counts it: UTF-16 units (an emoji is two)."""
     return len(text.encode("utf-16-le")) // 2

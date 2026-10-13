@@ -53,7 +53,7 @@ from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
 from vesta_shared import result as R  # noqa: E402  (what the engine is asked to do: its shape)
 from vesta_shared import script  # noqa: E402  (pack, store, zone, day: one set-up)
 from vesta_shared.params import MissingParameter  # noqa: E402
-from vesta_shared.messaging import TELEGRAM_CAPTION, fmt_money, incident_tag  # noqa: E402
+from vesta_shared.messaging import CITE, TELEGRAM_CAPTION, fmt_money, incident_tag, uncited  # noqa: E402
 from vesta_shared.message_format import TO_LONGEST, document, split_title  # noqa: E402  (the one shape: title, To:, sections)
 from vesta_shared.axis import is_flat, label as axis_label, nice_axis  # noqa: E402  (the one axis rule)
 from vesta_shared.store import Incident, Store  # noqa: E402
@@ -715,9 +715,11 @@ DETAILS = " Details in the attached page."
 TITLE_MAX, TO_ROOM = 90, len(TO_LONGEST)
 #: the message starts with the recorded facts (investigation_facts.key_line), then the AI's summary
 SUMMARY_MAX = TELEGRAM_CAPTION - TITLE_MAX - TO_ROOM - KEY_MAX - len(DETAILS) - 6     # the line breaks between them
+#: what the summary is, as investigate's SKILL.md asks for it (a test holds the two to the same words: architecture review
+#: 4, 2026-10-13 — the instructions said 3 to 5 sentences, the refusal 4 to 6)
+SUMMARY_SENTENCES = "3 to 5 sentences"
 
 
-CITE = re.compile(r"\[(\d{1,2})\]")
 #: every text of the account a reference may stand in (owner, 2026-10-12: "I am expecting to see the text section where
 #: you used any of these web page content … with reference numbers")
 CITING = ("summary", "causes", "cannot_tell", "warned_earlier")
@@ -761,13 +763,18 @@ def web_said(searches: list[str]) -> str:
     """What the page says of the web: how many searches the AI made (the agent counted them)."""
     n = len(searches)
     return f"{n} web search{'es' if n != 1 else ''} made, every lead tested against the records." if n else \
-        "No web search was made."
+        "Web search is switched off: no web search was made."
 
 
 def web_pages(notes: dict) -> list[dict]:
     """The account's sources that are web pages (http/https): the only ones the page links to."""
     return [x for x in notes.get("sources") or [] if isinstance(x, dict)
             and re.match(r"https?://", str(x.get("url") or ""))]
+
+
+def web_search_on() -> bool:
+    """May the AI search the web in this run (the agent's VESTA_WEB_SEARCH_ON: the villa's switch and the asker's role)."""
+    return os.environ.get("VESTA_WEB_SEARCH_ON") == "1"
 
 
 def web_searches() -> list[str]:
@@ -953,7 +960,7 @@ def _investigation(a) -> int:
         return 1
     if len(summary) > SUMMARY_MAX:
         print(f"investigation: the summary is {len(summary)} characters; it is the chat message, at most {SUMMARY_MAX}: "
-              "4 to 6 sentences (what happened, the most likely cause and its evidence, what to check first). Shorten it in the "
+              f"{SUMMARY_SENTENCES} (the most likely cause and what points to it, what to check on site first). Shorten it in the "
               "notes and run this again; the details belong in the other fields.", file=sys.stderr)
         return 1
     # ⚠️ WEB RESEARCH SHOWS ITS SOURCES (owner, 2026-10-11: the page of a web-researched investigation named none): the
@@ -963,6 +970,14 @@ def _investigation(a) -> int:
     # 2026-10-11: "include the sources, when web_search tool is used")
     searches = web_searches()
     sources = web_pages(notes)
+    # ⚠️ A SEARCH WHEREVER THE WEB IS ON (owner, 2026-10-12: "always use web_search by default"; architecture review 4,
+    # 2026-10-13: skill.yaml said a page could not be made without one, and a page said "No web search was made."): the
+    # agent tells the script whether this run may search the web (VESTA_WEB_SEARCH_ON)
+    if web_search_on() and not searches:
+        print("investigation: web search is on for this investigation and none was made — search the web for this "
+              "device and what it did (SKILL.md step 6), list the pages you used in `sources`, and run this again.",
+              file=sys.stderr)
+        return 1
     if searches and not sources:
         print(f"investigation: you searched the web {len(searches)} time{'s' if len(searches) > 1 else ''} — list "
               'every web page you used in `sources`, each {"title": "…", "url": "https://…"}, and run this again.',
@@ -1001,7 +1016,7 @@ def _investigation(a) -> int:
         f.write(html)
     # the chat message: the recorded facts, then the AI's essence — the page is the account (owner, 2026-10-11: "much
     # more synthetic and shorter")
-    bubble = " ".join(re.sub(r"\s*\[\d{1,2}\]", "", summary).split())   # the chat message has no page for [n]
+    bubble = uncited(summary)                                       # the chat message has no page for [n]
     doc = document(str(notes["title"]).strip(), "", [(None, [x for x in (found["key"], bubble + DETAILS) if x])])
     print(json.dumps({"html": a.out, "html_chars": len(html), "charts": html.count("<svg"),
                       # what the page states from the records: the AI reads it against its account before sending

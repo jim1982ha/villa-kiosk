@@ -427,7 +427,8 @@ class Toolbox:
                 return _ok(self.parts.serve(key, None, part))
             # ⚠️ A SCRIPT KNOWS THE WEB WAS USED (owner, 2026-10-11: "include the sources, when web_search tool is used"):
             # the investigation page refuses to be made without the pages behind what the AI read on the web
-            run_s = replace(self.s, web_searches=json.dumps(self.searched[:20])) if self.searched else self.s
+            run_s = replace(self.s, web_searches=json.dumps(self.searched[:20]) if self.searched else "",
+                            web_search_on="1" if self.include_web else "")
             ans = await asyncio.to_thread(script_run.run, run_s, self.state, skill, sc, final, by=script_run.AI)
             out = ans.text()
             if ans.ok and self.carry_out:

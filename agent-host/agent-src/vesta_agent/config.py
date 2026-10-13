@@ -58,6 +58,9 @@ class Settings:
     # the web searches this run made so far (JSON list of the queries): its scripts read them (VESTA_WEB_SEARCHES) — a
     # page that used the web must name its sources, asked for or not
     web_searches: str = ""
+    # "1" when this run may search the web (Toolbox.include_web): its scripts read it (VESTA_WEB_SEARCH_ON) — an
+    # investigation page is refused without a search where one could be made
+    web_search_on: str = ""
 
     # ------------------------------------------------------------------ paths
     @property

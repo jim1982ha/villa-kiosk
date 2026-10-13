@@ -10,6 +10,11 @@ import features as F  # noqa: E402
 import facts  # noqa: E402
 import playbook
 from vesta_shared.messaging import no_code  # noqa: E402
+from vesta_shared.params import VillaParams  # noqa: E402
+from vesta_shared.skill_settings import load  # noqa: E402
+
+#: the night check's thresholds as the skill ships them
+PM_PARAMS = VillaParams(defaults=load(os.path.join(STARTER_SKILLS, "preventive-maintenance"), "settings.yaml")["behaviour"])
 
 
 def test_one_device_key_whichever_rule_asks():
@@ -144,5 +149,5 @@ def test_a_sensor_without_a_value_now_and_then_is_not_a_reconnect_loop():
     assert "sensor.wind_chill" not in flips
     assert sum(flips["switch.relay"].values()) == 12
     asset = {"slug": "relay", "name": "Relay"}
-    (loop,) = R.flap_rules(asset, "switch.relay", flips["switch.relay"], date(2026, 10, 12), VillaParams())
+    (loop,) = R.flap_rules(asset, "switch.relay", flips["switch.relay"], date(2026, 10, 12), PM_PARAMS)
     assert loop.rule_id == "PM-RECONNECT-LOOP"

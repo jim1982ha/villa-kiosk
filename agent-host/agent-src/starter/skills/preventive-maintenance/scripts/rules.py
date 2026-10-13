@@ -50,7 +50,7 @@ class Finding:
         return asdict(self)
 
 
-def _profile(series: list[dict]) -> str:
+def _profile(series: list[dict], params: VillaParams) -> str:
     """Classify how an asset runs from its last 30 days of power features.
     continuous: runs in long steady blocks (pool filtration, circulation)
     cycling:    short bursts, never a full hour (pressure pump)
@@ -58,8 +58,8 @@ def _profile(series: list[dict]) -> str:
     days = [f for f in series if f.get("hours_with_data", 0) > 0]
     if not days:
         return "unknown"
-    ran = [f for f in days if (f.get("run_hours") or 0) > 0.1]
-    if len(ran) < max(3, len(days) * 0.5):
+    ran = [f for f in days if (f.get("run_hours") or 0) > params.behaviour("ran_min_hours")]
+    if len(ran) < max(params.behaviour("intermittent_min_days"), len(days) * params.behaviour("intermittent_share")):
         return "intermittent"
     full = med([f.get("full_hours") or 0 for f in ran])
     if full is not None and full >= 1:
@@ -82,7 +82,7 @@ def power_rules(asset: dict, entity_id: str, series: dict[date, dict], today: da
     min_days = int(params.behaviour("min_days_for_baseline"))
     days = sorted(d for d in series if today - timedelta(days=baseline_days) < d <= today)
     feats = [series[d] for d in days]
-    profile = _profile(feats)
+    profile = _profile(feats, params)
     recent_days = days[-confirm:] if len(days) >= confirm else []
     base_days = days[:-confirm] if len(days) > confirm else []
     slug = asset["slug"]
@@ -123,7 +123,7 @@ def power_rules(asset: dict, entity_id: str, series: dict[date, dict], today: da
         for d in days[-1:]:  # the day being closed tonight
             exp = expected_hours_by_weekday.get(weekday_name(d), 0)
             f = series[d]
-            if exp and exp >= 1 and f.get("hours_with_data", 0) >= 20:
+            if exp and exp >= 1 and f.get("hours_with_data", 0) >= params.behaviour("full_day_hours"):
                 change = pct_change(f["run_hours"], exp)
                 if change is not None and abs(change) >= dev_pct:
                     what = "ran shorter" if change < 0 else "ran longer"
@@ -145,7 +145,7 @@ def power_rules(asset: dict, entity_id: str, series: dict[date, dict], today: da
             base_med = med(base)
             if "PM-ENERGY-CHANGE" in prior and prior["PM-ENERGY-CHANGE"].get("baseline_kwh"):
                 base_med = prior["PM-ENERGY-CHANGE"]["baseline_kwh"]
-            if len(base) >= min_days and base_med and base_med > 0.05:
+            if len(base) >= min_days and base_med and base_med > params.behaviour("energy_baseline_min_kwh"):
                 change = pct_change(med(rec), base_med)
                 drop, rise = params.behaviour("energy_drop_pct"), params.behaviour("energy_rise_pct")
                 if change is not None and (change <= -drop or change >= rise):
@@ -273,9 +273,14 @@ def level_rules(asset: dict, entity_id: str, device_class: str | None, series: d
 
 # ------------------------------------------------------------- forensics family
 def flap_rules(asset: dict, entity_id: str, flips_by_day: dict[date, int], today: date, params: VillaParams) -> list[Finding]:
-    n = sum(v for d, v in flips_by_day.items() if today - timedelta(days=3) < d <= today)
-    if n >= 10:
+    """A device that dropped and reconnected `reconnect_events` times within `reconnect_days` — the same window
+    nightly.py reads the logbook for (architecture review 4, 2026-10-13: "3 days" was typed in both, and in the text)."""
+    window = int(params.behaviour("reconnect_days"))
+    n = sum(v for d, v in flips_by_day.items() if today - timedelta(days=window) < d <= today)
+    if n >= params.behaviour("reconnect_events"):
         return [Finding("PM-RECONNECT-LOOP", entity_id, asset["slug"], "network", P3,
-                        f"{asset['name']} dropped and reconnected {n} times in 3 days: a Wi-Fi or power problem on its side.",
-                        {"flips_3d": n}, "Check the access point it uses, its power supply, and move it or add a repeater.")]
+                        f"{asset['name']} dropped and reconnected {n} times in {window} days: a Wi-Fi or power problem on "
+                        "its side.",
+                        {"flips_3d": n, "days": window},
+                        "Check the access point it uses, its power supply, and move it or add a repeater.")]
     return []

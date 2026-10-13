@@ -300,7 +300,7 @@ def test_the_investigation_lists_web_search_among_its_tools():
     assert "modes" not in yaml.safe_load(open(os.path.join(STARTER_SKILLS, "investigate", "skill.yaml")))  # no keyword
 
 
-def _page(tmp_path, notes, searches=None, readings=True):
+def _page(tmp_path, notes, searches=None, readings=True, web_on=False):
     """compose.py investigation as the agent runs it, on the invented heater's night (its timeline and around, with a
     control that stayed off): (exit, stderr, the page, its result). `searches`: the web searches the AI made."""
     import json
@@ -323,7 +323,8 @@ def _page(tmp_path, notes, searches=None, readings=True):
     r = subprocess.run([sys.executable, compose, "investigation", "--notes", str(tmp_path / "n.json"), *args,
                         "--out", str(tmp_path / "p.html")], capture_output=True, text=True,
                        env={**os.environ, "PYTHONPATH": PYTHONPATH,
-                            "VESTA_WEB_SEARCHES": json.dumps(searches) if searches else ""})
+                            "VESTA_WEB_SEARCHES": json.dumps(searches) if searches else "",
+                            "VESTA_WEB_SEARCH_ON": "1" if web_on else ""})
     page = (tmp_path / "p.html").read_text() if (tmp_path / "p.html").exists() else ""
     return r.returncode, r.stderr, page, (json.loads(r.stdout) if r.returncode == 0 else {})
 
@@ -356,7 +357,13 @@ def test_after_a_web_search_the_page_names_and_cites_every_source(tmp_path):
     assert "Web contribution" in page and "1 web search made" in page and "pump runs without stopping causes" in page
     assert "[1]" not in out["message"]["text"]                                # the chat message has no page for [n]
     code, err, page, _ = _page(tmp_path, {"title": "t", "summary": "s"}, readings=False)
-    assert code == 0 and "No web search was made." in page                   # no search: nothing required
+    assert code == 0 and "Web search is switched off: no web search was made." in page   # off: nothing required
+    # architecture review 4 (2026-10-13): web search on and none made — refused, as skill.yaml says (owner, 2026-10-12:
+    # "always use web_search by default")
+    code, err, page, _ = _page(tmp_path, {"title": "t", "summary": "s"}, readings=False, web_on=True)
+    assert code == 1 and "web search is on for this investigation and none was made" in err and not page
+    code, err, page, _ = _page(tmp_path, notes, asked, readings=False, web_on=True)
+    assert code == 0, err
 
 
 def test_a_device_that_runs_briefly_and_rarely_is_still_seen_running():
@@ -914,3 +921,6 @@ def test_the_skill_asks_for_a_summary_the_caption_can_hold():
     told = re.search(r'"summary": "[^"]*?at most (\d+) characters', open(os.path.join(STARTER_SKILLS, "investigate",
                                                                                       "SKILL.md")).read())
     assert told and compose.SUMMARY_MAX - 10 <= int(told.group(1)) <= compose.SUMMARY_MAX
+    # architecture review 4: the same sentences too — the instructions said 3 to 5, the refusal 4 to 6
+    assert re.search(r'"summary": "' + compose.SUMMARY_SENTENCES + r", at most \d+ characters",
+                     open(os.path.join(STARTER_SKILLS, "investigate", "SKILL.md")).read())

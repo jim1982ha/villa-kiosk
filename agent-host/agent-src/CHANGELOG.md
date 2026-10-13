@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.177 (13 October 2026)
+
+Architecture review 4, 2026-10-13 (owner: "implement #3 and #4"):
+- Investigation rules once: compose `SUMMARY_SENTENCES` ("3 to 5 sentences") is what the refusal says and what
+  investigate's SKILL.md asks for (test). The agent tells a run's scripts whether it may search the web
+  (`Settings.web_search_on` → VESTA_WEB_SEARCH_ON, from `Toolbox.include_web`); compose investigation refuses a page
+  with no search when it is on (skill.yaml said so, nothing checked it). `messaging.CITE` / `uncited` — the chat
+  message and the Kiosk fault offered from an investigation (`fault_offers.ensure`) both drop "[n]".
+- preventive-maintenance settings.yaml behaviour: reconnect_days (read by nightly.py's logbook window AND flap_rules,
+  and said in the message), reconnect_events, ran_min_hours, intermittent_share, intermittent_min_days, full_day_hours,
+  energy_baseline_min_kwh — were typed in rules.py / nightly.py. Defaults unchanged. Tests: test_maintenance_noise
+  (a villa's 5 days widens the read, the count and the words), test_investigate, test_ticket_offer.
+
 ## 0.6.176 (13 October 2026)
 
 Architecture review 3, 2026-10-13 (owner: "do 2. and 3."):

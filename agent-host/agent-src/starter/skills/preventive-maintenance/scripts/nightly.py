@@ -231,7 +231,7 @@ def run(args) -> dict:
 
     # ---- forensics: reconnect loops from the logbook -------------------------
     try:
-        lb = cli.logbook(day_end - timedelta(days=3), day_end)
+        lb = cli.logbook(day_end - timedelta(days=int(params.behaviour("reconnect_days"))), day_end)
     except Exception:  # logbook is optional
         lb = []
     flips = F.flips_per_day(lb, zone, int(params.behaviour("restart_crowd_entities")))

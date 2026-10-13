@@ -201,7 +201,7 @@ def test_a_command_starts_a_fresh_conversation_so_nothing_earlier_is_reused(tmp_
 
 # ---- every /investigate answer carries its page and the fault buttons (owner, 2026-10-11: "make sure this always
 # trigger the full use of the skill — HTML report in the response and buttons to create and cancel a ticket creation")
-def _investigating(tmp_path, monkeypatch, *, page_on_run=(1,), offer=False):
+def _investigating(tmp_path, monkeypatch, *, page_on_run=(1,), offer=False, summary="It ran 3 h; check the pipes."):
     """JM writes /investigate; the AI sends the page on the runs listed in `page_on_run` (1 = its first), saves the
     account, and offers a fault itself only when `offer`. (agent, the AI stand-in)"""
     import json as _json
@@ -215,7 +215,7 @@ def _investigating(tmp_path, monkeypatch, *, page_on_run=(1,), offer=False):
         runs.append(call["prompt"])
         if len(runs) == 1:
             await call["call"]("save_file", {"name": "investigation.json", "content": _json.dumps(
-                {"title": "Water heater on the night of 9 October", "summary": "It ran 3 h; check the pipes."})})
+                {"title": "Water heater on the night of 9 October", "summary": summary})})
             if offer:
                 await call["call"]("create_ticket", {"title": "Check the float switch"})
         if len(runs) in page_on_run:
@@ -543,3 +543,33 @@ def test_an_investigations_searches_reach_the_page_made_in_its_follow_up(tmp_pat
     search.clear()                                                            # another investigation, no search
     run(v.converse(JM, v.policy().person(JM), "the heater", invoked="investigate"))
     assert len(said) == 2 and json.loads(said[1]["content"][0]["text"])["searched"] == ""   # never the other's
+
+
+def test_the_fault_offered_from_an_investigation_reads_without_its_web_references(tmp_path, monkeypatch):
+    # architecture review 4 (2026-10-13): the Kiosk fault's note kept "[2]", which leads to no page there
+    v, _ = _investigating(tmp_path, monkeypatch, summary="A stuck pressure switch [2] is the likely cause [1]. Check it.")
+    (_, _, kb), = v.tg.buttoned
+    offer = v.state.claim_ticket_offer(kb["inline_keyboard"][-1][0]["callback_data"].split(":")[1], JM)
+    assert offer["note"] == "A stuck pressure switch is the likely cause. Check it."
+
+
+def test_a_runs_scripts_are_told_whether_it_may_search_the_web(tmp_path, monkeypatch):
+    # architecture review 4 (2026-10-13): the investigation page refuses to be made without a search only where one could
+    # be made — the villa's switch, as the run's own tools say
+    import json
+    from ai_fake import FakeAI
+    from helpers import make_skill
+    got = {}
+    for on in (True, False):
+        v = make_agent(tmp_path / str(on), {"people": PEOPLE, "settings": {"web_search": on}}, kiosk=FakeKiosk())
+        make_skill(v.s.skills_dir, "echo", {"tools": [], "scripts": {"env.py": {"description": "says its environment",
+                                                                               "commands": {"show": "its environment"}}}},
+                   {"env.py": "import json, os\nprint(json.dumps({'on': os.environ.get('VESTA_WEB_SEARCH_ON', '')}))\n"})
+        said = []
+
+        async def act(call):
+            said.append(await call["call"]("run_skill_script", {"skill": "echo", "script": "env.py", "args": ["show"]}))
+        FakeAI("ok", act=act).install(monkeypatch)
+        run(v.converse(JM, v.policy().person(JM), "the heater"))
+        got[on] = json.loads(said[0]["content"][0]["text"])["on"]
+    assert got == {True: "1", False: ""}
