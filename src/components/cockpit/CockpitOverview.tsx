@@ -39,7 +39,7 @@ import {
   buildCategoryTiles, buildRoomGroups, buildFloorGroups,
   buildActivityFeed, pivotTiles, tileLine, type Pivot, type ActivityEntry,
 } from "./cockpitData";
-import { attentionLineIn, type AttentionGroup, type AttentionItem, type AttentionKind } from "@/config/attention";
+import { attentionLineIn, lineIcon, type AttentionGroup, type AttentionItem, type AttentionKind } from "@/config/attention";
 
 
 const ATTENTION_ICON: Record<AttentionKind, typeof TriangleAlert> = {
@@ -279,12 +279,13 @@ function CockpitAttentionRow({ group, onOpenEntity, canCloseFault }: {
 function CockpitAttentionSub({ group, item, canCloseFault }: {
   group: AttentionGroup; item: AttentionItem; canCloseFault: boolean;
 }) {
-  const Icon = ATTENTION_ICON[item.kind];
+  const kind = lineIcon(group, item);
+  const Icon = kind ? ATTENTION_ICON[kind] : null;
   const close = useFaultClose(item, canCloseFault);
   return (
     <li className="cockpit-attention-sub">
       <div className="cockpit-attention-sub-line">
-        <Icon size={14} className={`cockpit-attention-icon cockpit-attention-${item.kind}`} />
+        {Icon && <Icon size={14} className={`cockpit-attention-icon cockpit-attention-${kind}`} />}
         <span className="cockpit-attention-sub-text">{attentionLineIn(group, item)}</span>
         {close.button}
       </div>

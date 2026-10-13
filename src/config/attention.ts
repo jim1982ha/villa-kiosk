@@ -121,6 +121,14 @@ export function attentionLineIn(group: AttentionGroup, item: AttentionItem): str
   return group.key.startsWith("device:") ? attentionLine(item) : item.detail;
 }
 
+/** The icon a problem's line shows inside its row: its own kind's only where the row's icon does not say it already.
+ *  ⚠️ ONE ICON PER MEANING (owner, 2026-10-13: "the icon is redundant"): every line repeated its row's icon — a red "!"
+ *  beside "House & Pool Relay" and again before "Open fault: …". A row mixing kinds (a lock "Unlocked" with a fault on
+ *  its battery) still marks the line whose kind is not the row's. */
+export function lineIcon(group: AttentionGroup, item: AttentionItem): AttentionKind | null {
+  return item.kind === group.kind ? null : item.kind;
+}
+
 /**
  * A fault about the SAME entity whose live state is already listed is that state's fault, not a second problem.
  *

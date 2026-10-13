@@ -1,3 +1,8 @@
+## 2.496.341
+
+### Fixed
+- Cockpit → Needs attention: a problem's line no longer repeats its row's icon. Under "House & Pool Relay" the red "!" now appears once, beside the device; the line just reads "Open fault: …". A row that mixes kinds of problem (a lock "Unlocked" with a fault on its battery) still marks the line whose kind differs, so the two can be told apart.
+
 ## 2.496.340
 
 ### Fixed
