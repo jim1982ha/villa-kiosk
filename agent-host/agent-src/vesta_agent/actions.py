@@ -47,6 +47,37 @@ VERB = {
 }
 
 
+def related_entities(pack, reader, entity_ids: list[str]) -> set[str] | None:
+    """What these ids stand for: the members of a group (its entity_id attribute, read from Home Assistant now) and the
+    other entities of the same device (the knowledge pack). An owner-only device behind a wrapper is found this way.
+    None: what they hold cannot be told — _wrap_check then asks the owner, never acts on its own.
+
+    ⚠️ UNKNOWN IS NOT EMPTY, FROM EITHER SOURCE (architecture review 17, 2026-10-10: Home Assistant not answering;
+    architecture review 5, 2026-10-13: the pack). With no pack — its build failed at start — or an id the last build
+    never saw (a device added since 01:30), the same-device check found nothing, and a "direct" rule could switch the
+    plug behind an owner-only siren with no Approve."""
+    if pack is None:
+        log.warning("No knowledge pack yet: what %s shares a device with is unknown, the owner is asked",
+                    ", ".join(entity_ids))
+        return None
+    rows = pack.rows()
+    seen = {r["entity_id"] for r in rows} | set(pack.unclassified)
+    if set(entity_ids) - seen:
+        log.warning("%s not in the knowledge pack yet: the owner is asked", ", ".join(sorted(set(entity_ids) - seen)))
+        return None
+    devices = {r["device_id"] for r in rows if r.get("device_id") and r["entity_id"] in entity_ids}
+    out = {r["entity_id"] for r in rows if r.get("device_id") in devices}
+    try:
+        for _eid, st in (reader.states(entity_ids) or {}).items():
+            members = ((st or {}).get("attributes") or {}).get("entity_id")
+            if isinstance(members, list):
+                out |= {str(m).lower() for m in members}
+    except Exception:  # noqa: BLE001
+        # a slow Home Assistant made a light group look as if it hid nothing (review 17)
+        log.warning("What %s holds could not be read from Home Assistant: the owner is asked", ", ".join(entity_ids))
+        return None
+    return out
+
 @dataclass
 class Outgoing:
     chats: list[int]            # every chat the request goes to (routing rule 3): its copies are one thread

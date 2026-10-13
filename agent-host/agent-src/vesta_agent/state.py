@@ -13,7 +13,7 @@ import secrets
 import sqlite3
 import threading
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Iterable
 
 from vesta_shared import agent_records
 
@@ -413,12 +413,23 @@ class State:
             self.db.commit()
         return n
 
-    def prune(self, runs_before: str, records_before: str, sessions_before: str | None = None) -> dict[str, int]:
+    def prune(self, runs_before: str, records_before: str, sessions_before: str | None = None,
+              open_incidents: Iterable[int | str] = ()) -> dict[str, int]:
         """Housekeeping (settings.keep): the AI runs (the Costs tab) and the other records have their own limit. A
         pending approval is kept until it has expired and the records' limit has passed; every named record family by
         KV_FAMILIES; a conversation not used since `sessions_before` (the conversations' limit: its transcript is
-        deleted then) is forgotten."""
+        deleted then) is forgotten.
+
+        ⚠️ AN OPEN ALERT KEEPS ITS RECORDS (architecture review 5, 2026-10-13): pruned by age alone, an alert still open
+        past records_days lost its messages — Done did nothing (not the agent's message any more) and a close in the
+        Kiosk could not take its buttons off. `open_incidents`: their records and messages wait for the close."""
         with self._lock:
+            kept_keys, kept_msgs = set(), set()
+            for iid in open_incidents:
+                kept_keys |= set(self.kv_prefix(f"inc:{iid}:")) | {f"inchist:{iid}"}
+                for k, v in self.kv_prefix(f"incthread:{iid}:").items():
+                    kept_keys.add(k)
+                    kept_msgs.add((int(k.rsplit(":", 1)[1]), int(json.loads(v).get("mid") or 0)))
             # the Costs tab's rows (an AI run, a job made without the AI) go by the runs' limit, together
             kinds = agent_records.COSTS_KINDS
             marks = ",".join("?" * len(kinds))
@@ -433,11 +444,17 @@ class State:
                 if sessions_before else 0
             cont = self.db.execute("delete from continuations where created_at < ?", (records_before,)).rowcount
             cont += self.db.execute("delete from ticket_offers where created_at < ?", (records_before,)).rowcount
-            msgs = self.db.execute("delete from own_messages where sent_at < ?", (records_before,)).rowcount
+            old = [(r["chat_id"], r["message_id"]) for r in self.db.execute(
+                "select chat_id, message_id from own_messages where sent_at < ?", (records_before,))]
+            gone = [m for m in old if m not in kept_msgs]
+            self.db.executemany("delete from own_messages where chat_id=? and message_id=?", gone)
+            msgs = len(gone)
             for prefix, life in KV_FAMILIES.items():
                 if life == RECORDS:
-                    msgs += self.db.execute("delete from kv where substr(k, 1, ?) = ? and at < ?",
-                                            (len(prefix), prefix, records_before)).rowcount
+                    keys = [r["k"] for r in self.db.execute("select k from kv where substr(k, 1, ?) = ? and at < ?",
+                                                            (len(prefix), prefix, records_before)) if r["k"] not in kept_keys]
+                    self.db.executemany("delete from kv where k=?", [(k,) for k in keys])
+                    msgs += len(keys)
             self.db.commit()
         return {"runs": runs, "records": other + appr + cont + msgs + sess}
 

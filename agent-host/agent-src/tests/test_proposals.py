@@ -82,3 +82,16 @@ def test_accept_3_typed_alone_is_no_answer(tmp_path, monkeypatch):
     run(v.converse(OWNER, v.policy().person(OWNER), f"accept {gate}"))
     assert said[0].get("is_error") and "/proposal" in said[0]["content"][0]["text"]
     assert all(p["status"] == "open" for p in store.proposals(None))
+
+
+def test_the_pages_test_checks_an_answer_and_records_nothing(tmp_path):
+    # owner, 2026-10-13: Offline Test of answer.py said "Only the owner answers proposals" to the owner — and had it
+    # passed, the answer would have been recorded on the live villa
+    v, store, gate = _villa(tmp_path)
+    got = v.try_command("proposals", "answer.py", ["answer", "--number", str(gate), "--choice", "ignore"])
+    assert got["ok"], got
+    assert json.loads(got["output"])["text"] == \
+        f"Test: Proposal {gate}, Retune Gate relay: it fires too often, would be ignored. Nothing was recorded."
+    assert all(p["status"] == "open" for p in store.proposals(None))
+    bad = v.try_command("proposals", "answer.py", ["answer", "--number", "99", "--choice", "accept"])
+    assert not bad["ok"] and "There is no proposal 99." in (bad["error"] or "")

@@ -61,8 +61,8 @@ class Settings:
     # "1" when this run may search the web (Toolbox.include_web): its scripts read it (VESTA_WEB_SEARCH_ON) — an
     # investigation page is refused without a search where one could be made
     web_search_on: str = ""
-    # the role of the person this run answers ("owner", "fm"; "" for a job or a hook): its scripts read it (VESTA_ASKER) —
-    # a proposal is answered by the owner only (proposals skill)
+    # the role of the person this run answers ("owner", "fm"; "" for a job or a hook; "page" for the page's Offline
+    # Test, which records nothing): its scripts read it (VESTA_ASKER) — a proposal is answered by the owner only
     asker: str = ""
 
     # ------------------------------------------------------------------ paths

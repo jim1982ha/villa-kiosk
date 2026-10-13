@@ -89,8 +89,8 @@ def route_for(rule_id: str, blueprint: str | None = None) -> dict:
     return r
 
 
-#: The priorities an alert can carry: what people_roles routes.
-PRIORITIES = ("P1", "P2", "P3", "P4")
+#: The priorities an alert can carry: what people_roles routes (vesta_shared.result's one list).
+PRIORITIES = R.PRIORITIES
 
 
 def priority(ev: dict, route: dict) -> str:

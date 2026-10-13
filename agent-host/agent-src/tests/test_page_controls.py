@@ -503,3 +503,26 @@ def test_the_server_names_what_the_page_used_to_spell_out():
     assert "fetch(" not in page_js().split("export function exportCard")[1].split("export function")[0]
     words_of = lambda code: ScriptAnswer(code, "", "", 1.0).verdict_words  # noqa: E731
     assert (words_of(0), words_of(2), words_of(1)) == ("Done", "Nothing to do, or a setting is missing", "Stopped (exit 1)")
+
+
+def test_a_skills_when_rows_name_every_way_the_engine_starts_it(ui):
+    # architecture review 5 (2026-10-13): villa-concierge's status check runs before every chat answer and its page
+    # said only "a voice message" and "in a chat" — the page wrote the rows itself
+    import dataclasses
+    from vesta_agent.skills import Skill, when_it_runs
+
+    async def fn(c):
+        return (await (await c.get("/api/skills/villa-concierge", headers=HDR)).json())["acts"]
+    acts = call(ui, fn)
+    assert {"when": "before every answer in a chat", "job": None, "script": "concierge.py", "kind": "code"} in acts
+    # every field of a skill that starts it has its row; a new field must be placed here, shown or not
+    starts = {"schedule", "every_5_min", "on_event", "on_reply", "before_answer", "command"}
+    others = {"name", "path", "description", "tools", "scripts", "buttons", "also", "deliver", "usage", "brain",
+              "limit_usd"}
+    assert {f.name for f in dataclasses.fields(Skill)} == starts | others
+    sk = Skill("x", "/x", schedule=[{"when": "07:00", "name": "j", "prompt": "p", "run": None}], every_5_min="a.py t",
+               on_event={"critical_event": "b.py c", "voice_message": "v.py p"}, on_reply="d.py r",
+               before_answer="e.py s", command="x")
+    assert [a["when"] for a in when_it_runs(sk)] == [
+        "every day at 07:00", "every 5 minutes", "a critical alert from a VESTA rule", "a voice message",
+        "an answer to one of its alerts", "before every answer in a chat", "in a chat"]

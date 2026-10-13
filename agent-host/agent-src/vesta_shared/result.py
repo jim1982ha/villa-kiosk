@@ -23,6 +23,11 @@ FAULTS_CHANGED = "faults_changed"
 #: The night check's rule ids another skill reads (the reports' counter resets, roi-energy's "create the missing
 #: setting" proposal). ⚠️ WRITTEN ONCE (architecture review 13): each reader spelled the id itself, so a renamed
 #: rule would have emptied their lists without a sound.
+#: The priorities a problem can carry, most urgent first: the alert's heading (app), the desk's routes, the open list's
+#: and the reports' order. ⚠️ WRITTEN ONCE (architecture review 5, 2026-10-13): four copies, one per reader.
+PRIORITIES = ("P1", "P2", "P3", "P4")
+PRIORITY_ORDER = {p: i for i, p in enumerate(PRIORITIES)}
+
 PARAM_MISSING = "PM-PARAM-MISSING"
 COUNTER_RESET = "PM-COUNTER-RESET"
 

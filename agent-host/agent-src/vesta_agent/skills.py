@@ -137,7 +137,8 @@ REFERENCE = ".starter"      # the current starter skills, for reading: not loade
 VILLA_PREFIX = "villa."
 #: the files a skill is made of: never deleted from the page (the page hid the button, the server allowed it, review 9)
 REQUIRED_FILES = ("SKILL.md", "skill.yaml")
-HOOK_EVENTS = {"critical_event", "voice_message"}
+#: The events a skill's on_event answers, and how the page names each (when_it_runs).
+HOOK_EVENTS = {"critical_event": "a critical alert from a VESTA rule", "voice_message": "a voice message"}
 JOB_NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,40}$")
 JOB_TARGETS = ("owner", "fm")
 
@@ -247,6 +248,32 @@ class Skill:
 
     def script_path(self, script: str) -> str:
         return os.path.join(self.path, "scripts", script)
+
+
+def when_it_runs(sk: Skill) -> list[dict]:
+    """Every way the engine starts this skill, as the page's "When the skill runs" rows, in the order shown: the
+    schedule, every 5 minutes, its events, an answer to its alerts, before every chat answer, the chats last.
+    {when, job, script (its file), kind ("ai" / "code" / None), note?}.
+
+    ⚠️ THE SKILL'S OWN READING (architecture review 5, 2026-10-13): the page wrote these rows itself and never learned
+    `before_answer` — villa-concierge's status check runs before every answer and its page did not say so."""
+    from .scheduler import describe
+
+    def row(when, job=None, script=None, ai=False, **more):
+        return {"when": when, "job": job, "script": script.split()[0] if script else None,
+                "kind": "ai" if ai else "code" if script else None, **more}
+    acts = [row(describe(j["when"])[0], j.get("name"), j.get("run"), ai=bool(j.get("prompt")) and not j.get("run"))
+            for j in sk.schedule]
+    if sk.every_5_min:
+        acts.append(row("every 5 minutes", script=sk.every_5_min))
+    acts += [row(HOOK_EVENTS.get(ev, ev), script=cmd) for ev, cmd in sk.on_event.items()]
+    if sk.on_reply:
+        acts.append(row("an answer to one of its alerts", script=sk.on_reply))
+    if sk.before_answer:
+        acts.append(row("before every answer in a chat", script=sk.before_answer))
+    acts.append(row("in a chat", note=f"only when a person writes /{sk.command}" if sk.command
+                    else "when a person asks about it"))
+    return acts
 
 
 def _script_file_ok(skill_path: str, script: str) -> bool:

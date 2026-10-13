@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 from vesta_shared.device_state import battery_charge  # the night check's own reading
 from vesta_shared.stats import slope_per_hour, step_index  # the night check's step detector
 from vesta_shared.timeutil import day_label, day_time_label  # the one day format
+from vesta_shared.result import PRIORITY_ORDER  # the one list of priorities
 
 if TYPE_CHECKING:
     from facts import Ctx
@@ -237,7 +238,7 @@ def todo(c: "Ctx") -> list[dict]:
     return c._todo
 
 
-SEVERITY_ORDER = {"P1": 0, "P2": 1, "P3": 2, "P4": 3}
+SEVERITY_ORDER = PRIORITY_ORDER
 
 
 def group_kinds(items: list[dict], group_from: int, group_words: dict) -> list[tuple[dict | None, list[dict]]]:

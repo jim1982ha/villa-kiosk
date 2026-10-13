@@ -31,7 +31,7 @@ CLEARED = "cleared"                    # its source is gone: the night check no 
 CLOSED_IN_KIOSK = "closed_in_kiosk"    # a person closed the fault in the VESTA Kiosk
 STATUSES = (DONE, CLEARED, CLOSED_IN_KIOSK)
 
-_ORDER = {"P1": 0, "P2": 1, "P3": 2, "P4": 3}
+_ORDER = result.PRIORITY_ORDER
 
 #: A state finding closed this many days ago or less that the night sees again is the SAME problem, back — not a new one.
 AGAIN_DAYS = 7

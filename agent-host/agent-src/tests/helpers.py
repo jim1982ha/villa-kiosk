@@ -161,3 +161,12 @@ def status(text: str) -> str:
         if last.startswith(f"{icon} "):
             return last[len(icon) + 1:]
     return last
+
+
+def known_devices(v, *entity_ids: str, device: str | None = None) -> None:
+    """The villa's knowledge pack, as the 01:30 build writes it, knowing these entities (on one `device` when given).
+    An action on an entity the pack does not know asks the owner (actions.related_entities)."""
+    from vesta_shared.knowledge_pack import build_pack
+    reg = {"entities": [{"entity_id": e, "device_id": device} for e in entity_ids]}
+    with open(v.s.pack_path, "w", encoding="utf-8") as f:
+        f.write(build_pack(reg, []).to_json())

@@ -161,7 +161,9 @@ def test_the_intrusion_is_said_when_no_owner_chat_takes_the_siren_request(tmp_pa
 def test_a_person_listed_twice_is_named_one_way_in_a_chat(tmp_path):
     people = [{"telegram_id": JM, "name": "JM_O", "role": "owner"}, {"telegram_id": JM, "name": "JM_FM", "role": "fm"},
               {"telegram_id": GROUP, "name": "Group_FM", "role": "fm"}]
+    from helpers import known_devices
     v = _villa(tmp_path, people=people)
+    known_devices(v, "cover.bedroom3")
     _, msg = v.actions.request("cover", "open_cover", "cover.bedroom3", {}, v.policy().member(JM, GROUP), GROUP)
     assert msg.chats == [GROUP]
     run(v.approvals.ask(msg))

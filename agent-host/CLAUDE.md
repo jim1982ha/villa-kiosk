@@ -328,6 +328,10 @@ Decisions of 2026-09-30 (owner):
   0.12.184 (owner, 2026-10-13): a proposal is answered with /proposal accept|later|ignore N — the `proposals` starter
   skill (a command skill, like investigate), the owner only (VESTA_ASKER: a run's scripts know who asks). The owner
   REJECTED buttons in the page and a message per proposal ("bloating"): do not propose them again.
+  Review 5 of 2026-10-13 (0.12.186): an open incident's records outlive records_days (State.prune open_incidents);
+  `skills.when_it_runs` is the page's trigger rows; `actions.related_entities` treats no pack / an unseen id as
+  unknown (the owner asked); `result.PRIORITIES`; Offline Test = VESTA_ASKER "page" (a script that writes its own
+  records checks and records nothing then).
 - No PDF (owner, 2026-09-30): the reports are self-contained HTML pages sent
   as attachments. Chromium was ~480 MB of a 1.1 GB image for this alone.
 - ⚠️ The Dockerfile's layer order is what an update costs the Yellow: agent

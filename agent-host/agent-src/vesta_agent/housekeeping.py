@@ -70,7 +70,7 @@ def tidy(settings, state, keep: dict[str, int], now: datetime | None = None) -> 
     now = now or datetime.now(timezone.utc)
     ago = lambda days: (now - timedelta(days=days)).isoformat()            # noqa: E731
     out = state.prune(runs_before=ago(keep["runs_days"]), records_before=ago(keep["records_days"]),
-                      sessions_before=ago(keep["conversations_days"]))
+                      sessions_before=ago(keep["conversations_days"]), open_incidents=_open_incidents(settings.store_path))
     stamp = now.timestamp()
     # The AI's transcripts: the CLI writes one file per conversation under its config folder (projects/).
     out["conversations"] = _files_older(os.path.join(settings.claude_dir, "projects"), keep["conversations_days"],
@@ -83,6 +83,14 @@ def tidy(settings, state, keep: dict[str, int], now: datetime | None = None) -> 
     from .skills import TRASH
     out["skills in the trash"] = _files_older(os.path.join(settings.skills_dir, TRASH), keep["files_days"], stamp, whole=True)
     return out
+
+
+def _open_incidents(store_path: str) -> list[int]:
+    """The alerts still open (the skills' store): their records wait for the close (State.prune)."""
+    if not os.path.exists(store_path):
+        return []
+    from vesta_shared.store import Store
+    return [i["id"] for i in Store(store_path).incidents(open_only=True)]
 
 
 def _prune_figures(store_path: str, now: datetime, months: int) -> int:

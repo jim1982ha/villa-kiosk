@@ -438,11 +438,9 @@ class UI:
 
 
     # ------------------------------------------------------------------ a fuller Skills tab
-    WHEN = {"critical_event": "a critical alert from a VESTA rule", "voice_message": "a voice message"}
-
     async def skill_detail(self, request):
         """Skills → one skill: its state against the release, the tools it needs, when it acts, its commands."""
-        from ..scheduler import describe
+        from ..skills import when_it_runs
         name = request.match_info["name"]
         self.files.skill_dir(name)
         pol = page_policy(self.s.policy_path)
@@ -453,21 +451,8 @@ class UI:
             return web.json_response({"name": name, "ok": False, "off": name in pol.skills_off, "release": rel,
                                       "problem": h["problem"]})
         listed = tool_access.read_list(self.s.data_dir)
-        # ⚠️ ROWS, NOT SENTENCES (architecture review 8): each was "when — job" with "AI job" as a magic value, and the
-        # page split it, renamed one sentence by a regex and moved the chats' row to the end. In the order shown:
-        # the schedule, then what the skill answers, the chats last. `script`: the script a code step runs.
-        def row(when, job=None, script=None, ai=False):
-            return {"when": when, "job": job, "script": script.split()[0] if script else None,
-                    "kind": "ai" if ai else "code" if script else None}
-        acts = [row(describe(j["when"])[0], j.get("name"), j.get("run"), ai=bool(j.get("prompt")) and not j.get("run"))
-                for j in sk.schedule]
-        if sk.every_5_min:
-            acts.append(row("every 5 minutes", script=sk.every_5_min))
-        acts += [row(self.WHEN.get(ev, ev), script=cmd) for ev, cmd in sk.on_event.items()]
-        if sk.on_reply:
-            acts.append(row("an answer to one of its alerts", script=sk.on_reply))
-        acts.append({**row("in a chat"), "note": f"only when a person writes /{sk.command}" if sk.command
-                     else "when a person asks about it"})
+        # ⚠️ ROWS, NOT SENTENCES (architecture review 8), and the skill's own (review 5, 2026-10-13: skills.when_it_runs)
+        acts = when_it_runs(sk)
         scripts = [spec.view() for _, spec in sorted(sk.scripts.items())]      # skills.Script: one reading
         return web.json_response({
             "name": name, "ok": h["ok"], "off": name in pol.skills_off, "description": sk.description,

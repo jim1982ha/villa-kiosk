@@ -209,8 +209,10 @@ def test_every_message_the_agent_sends_on_its_own_is_in_the_one_layout_and_style
 
 def test_the_agents_own_approvals_and_warnings_carry_the_heading_in_every_chat(tmp_path):
     # architecture review 18: approvals and "the siren cannot be requested" went without the heading
+    from helpers import known_devices
     v = make_agent(tmp_path, {"people": PEOPLE, "act_enabled": True,
                               "allowed_services": {"light.turn_on": "owner", "cover.open_cover": "any"}})
+    known_devices(v, "light.pool", "cover.pool")
     _, msg = v.actions.request("light", "turn_on", "light.pool", {}, None, None)
     run(v.outcome.ask(msg))
     assert {c: t.split("\n", 2)[:2] for c, t, _ in v.tg.sent} == {FABIEN: ["Approval request", "To: Owner"],

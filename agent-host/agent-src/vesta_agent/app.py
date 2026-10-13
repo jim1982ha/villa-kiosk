@@ -30,6 +30,7 @@ import signal
 import subprocess
 import sys
 import time
+import dataclasses
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Awaitable, Callable
@@ -39,7 +40,7 @@ from . import ai_down, button_data, intake, requests_box, script_run, tool_acces
 from .ai_jobs import AiJobs
 from .chat_jobs import ChatJobs
 from .siren import Siren
-from .actions import Actions
+from .actions import Actions, related_entities
 from .api_errors import AI_DOWN, FOR_PERSON, NEEDS_THE_OWNER
 from .delivery import Delivery
 from .config import STARTER_DIR
@@ -140,7 +141,8 @@ class Vesta:
         self.delivery = Delivery(self.tg, self.state, self.policy)
         self.delivery.on_unreachable = self._tell_unreachable
         self.chat_jobs = ChatJobs(self.delivery, self._safe, self.state, settings.timezone)     # a job asked for in a chat, start to end
-        self.actions = Actions(self.policy, self.state, self.writer_factory, names=self.name_of, related=self.related_entities,
+        self.actions = Actions(self.policy, self.state, self.writer_factory, names=self.name_of,
+                               related=lambda ids: related_entities(self.pack(), self.reader, ids),
                                executed=lambda *a: self.siren.executed(*a))
         self.siren = Siren(self.policy, self.state, self.actions, self._tell_owner_siren)
         # a script's result carried out (outcome.py), with the alert buttons and the Kiosk's tickets as their own modules
@@ -205,7 +207,8 @@ class Vesta:
         from vesta_shared.store import Store
         inc = Store(self.s.store_path).incident(int(iid)) or {}
         sev = str(inc.get("severity") or "")
-        return sev if sev in ("P1", "P2", "P3", "P4") else None
+        from vesta_shared.result import PRIORITIES
+        return sev if sev in PRIORITIES else None
 
     def pack(self):
         """The knowledge pack, read again when the nightly rebuild changes it (None until it is built)."""
@@ -221,27 +224,6 @@ class Vesta:
     def name_of(self, entity_id: str) -> str:
         pack = self.pack()
         return (pack.name_of(entity_id) if pack else None) or _pretty(entity_id)
-
-    def related_entities(self, entity_ids: list[str]) -> set[str] | None:
-        """What these ids stand for: the members of a group (its entity_id attribute) and the other entities
-        of the same device (knowledge pack). An owner-only device behind a wrapper is found this way. None: Home
-        Assistant could not say what they hold — actions._wrap_check then asks the owner, never acts on its own."""
-        out: set[str] = set()
-        pack = self.pack()
-        rows = pack.rows() if pack else []
-        devices = {r["device_id"] for r in rows if r.get("device_id") and r["entity_id"] in entity_ids}
-        out |= {r["entity_id"] for r in rows if r.get("device_id") in devices}
-        try:
-            for _eid, st in (self.reader.states(entity_ids) or {}).items():
-                members = ((st or {}).get("attributes") or {}).get("entity_id")
-                if isinstance(members, list):
-                    out |= {str(m).lower() for m in members}
-        except Exception:  # noqa: BLE001
-            # ⚠️ UNKNOWN IS NOT EMPTY (architecture review 17, 2026-10-10): swallowed, a slow Home Assistant made a light
-            # group look as if it hid nothing, and a "direct" rule switched an owner-only light on with no approval
-            log.warning("What %s holds could not be read from Home Assistant: the owner is asked", ", ".join(entity_ids))
-            return None
-        return out
 
     def toolbox(self, allowed: set[str] | None = None, settings=None, request: Request | None = None) -> Toolbox:
         """`allowed`: what the AI may use this time (turn.Terms.tools); None: everything switched on. `settings`: the
@@ -649,7 +631,6 @@ class Vesta:
         always trigger the full use of the skill — HTML report in the response and buttons to create and cancel a
         ticket creation"). skill.yaml `deliver`: the page the answer must have sent (missing: the AI is sent back to it
         once, then the person is told), and a fault always offered — one per investigation `inv` (fault_offers)."""
-        import dataclasses
         sk, inv = request.skill, request.inv
         page, account = sk.deliver.get("page"), sk.deliver.get("fault_offer")
         if page and page not in res.attached:
@@ -831,7 +812,11 @@ class Vesta:
             final = validate_script_args(skill, skill_name, script, args, self.s.out_dir)
         except ToolError as e:
             return {"ok": False, "error": str(e)}
-        ans = script_run.run(self.s, self.state, skill, script, final, by=script_run.PAGE)
+        # ⚠️ A TEST SAYS IT IS ONE (owner, 2026-10-13): "Only the owner answers proposals" to the owner's own test — and
+        # had it passed, the answer would have been recorded. A script that writes its own records reads VESTA_ASKER
+        # "page" and checks without writing.
+        ans = script_run.run(dataclasses.replace(self.s, asker=script_run.PAGE), self.state, skill, script, final,
+                             by=script_run.PAGE)
         return {"ok": ans.ok, "exit": ans.code, "verdict": ans.verdict, "verdict_words": ans.verdict_words, "seconds": ans.seconds,
                 "output": ans.stdout[:60_000], "error": ans.error}
 

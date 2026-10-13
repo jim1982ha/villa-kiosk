@@ -136,3 +136,28 @@ def test_a_skill_trashed_today_is_kept_whatever_the_age_of_its_files(tmp_path):
     (kept,) = os.listdir(os.path.join(s.skills_dir, TRASH))
     assert kept.startswith("pool-care-") and gone["skills in the trash"] == 0
     assert sorted(os.listdir(os.path.join(s.skills_dir, TRASH, kept))) == ["SKILL.md", "scripts"]
+
+
+def test_an_alert_still_open_keeps_its_messages_past_the_records_limit(tmp_path):
+    # architecture review 5 (2026-10-13): pruned by age alone, an alert open longer than records_days lost its records —
+    # Done did nothing (not the agent's message any more) and a close in the Kiosk could not take its buttons off
+    from vesta_shared.store import Store
+    s = settings(str(tmp_path))
+    store = Store(s.store_path)
+    still = store.new_incident("k1", "rule.a", "sensor.a", "P3", {})
+    over = store.new_incident("k2", "rule.b", "sensor.b", "P3", {})
+    store.update_incident(over, closed_at="2026-06-01T00:00:00+00:00")
+    st = State(s.state_path)
+    long_ago = NOW - timedelta(days=200)
+    for iid, mid in ((still, 501), (over, 502)):
+        st.remember_message(-100, mid, now=long_ago)
+        st.set_alert_skill(iid, -100, "alert-desk")
+        st.set_incident_message(iid, -100, {"mid": mid, "text": "t", "buttons": True, "settled": False})
+        st.set_incident_history(iid, [{"at": "x", "stage": "new", "to": ["fm"]}])
+    st.db.execute("update kv set at=?", (long_ago.isoformat(),))
+    st.db.commit()
+    housekeeping.tidy(s, st, KEEP_DEFAULT, now=NOW)
+    assert st.is_own_message(-100, 501) and st.alert_skill(still, -100) == "alert-desk"     # open: its Done still works
+    assert [c for c, _ in st.incident_chats(still)] == [-100] and st.incident_history(still)
+    assert not st.is_own_message(-100, 502) and st.alert_skill(over, -100) is None            # closed: by age, as before
+    assert st.incident_chats(over) == [] and not st.incident_history(over)

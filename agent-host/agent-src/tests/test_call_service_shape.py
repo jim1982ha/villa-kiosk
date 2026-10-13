@@ -164,3 +164,34 @@ def test_a_group_whose_members_cannot_be_read_asks_the_owner(villa, tmp_path, mo
                     lambda: Writer("http://unused", "UTC", write=True, session=session), related=lambda ids: None)
     answer, msg = blind.request("light", "turn_on", "light.example_group", {}, JM, 111)
     assert msg is not None and "approval by the owner (" in msg.status and session.calls == []
+
+
+def test_what_an_action_touches_is_unknown_without_the_pack_or_for_an_id_it_never_saw(tmp_path):
+    # architecture review 5 (2026-10-13): with no pack (its build failed at start) or a device added since 01:30, the
+    # same-device check found nothing — a "direct" rule could switch the plug behind an owner-only siren, no Approve
+    from vesta_agent.actions import related_entities
+    from vesta_shared.knowledge_pack import build_pack
+
+    class Reader:
+        def states(self, ids):
+            return {i: {"attributes": {}} for i in ids}
+    pack = build_pack({"entities": [{"entity_id": "siren.example_siren", "device_id": "d1"},
+                                    {"entity_id": "switch.example_siren_power", "device_id": "d1"}]}, [])
+    assert related_entities(pack, Reader(), ["switch.example_siren_power"]) == {"siren.example_siren",
+                                                                                 "switch.example_siren_power"}
+    assert related_entities(None, Reader(), ["switch.example_siren_power"]) is None          # no pack: ask the owner
+    assert related_entities(pack, Reader(), ["switch.example_new_plug"]) is None             # not in it yet: ask
+
+
+def test_a_direct_rule_asks_the_owner_while_the_pack_is_missing(tmp_path):
+    # the real wiring (app.Vesta → Actions → _wrap_check), not a stand-in `related`
+    from helpers import known_devices, make_agent
+    v = make_agent(tmp_path, {"act_enabled": True, "people": [{"telegram_id": 111, "name": "JM", "role": "fm"},
+                                                             {"telegram_id": 222, "name": "Owner", "role": "owner"}],
+                              "owner_only_entities": ["siren.example_siren"],
+                              "allowed_services": {"switch.turn_off": "direct"}})
+    _, msg = v.actions.request("switch", "turn_off", "switch.example_siren_power", {}, v.policy().person(111), 111)
+    assert msg is not None and msg.to == "owner" and msg.chats == [222]                      # asked, never done
+    known_devices(v, "switch.example_lamp")
+    answer, msg = v.actions.request("switch", "turn_off", "switch.example_lamp", {}, v.policy().person(111), 111)
+    assert msg is None and "without approval" in answer                                       # known: direct as before

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.180 (13 October 2026)
+
+Architecture review 5, 2026-10-13 (owner: "do all of them in one release"):
+- State.prune keeps an OPEN incident's records (own_messages of its copies, inc:, incthread:, inchist:) whatever their
+  age; housekeeping passes the store's open incidents. Test: test_housekeeping.
+- `skills.when_it_runs` is the page's "When the skill runs" (server.skill_detail read its own copy and missed
+  before_answer); HOOK_EVENTS carries each event's words. Test: test_page_controls (every Skill field placed).
+- `actions.related_entities` (was app.py's): no pack, or an id the pack never saw (rows + unclassified), is unknown —
+  None, the owner asked — as Home Assistant not answering already was. Tests: test_call_service_shape (the real
+  wiring); tests/helpers.known_devices gives a test villa its pack.
+- `result.PRIORITIES` / `PRIORITY_ORDER`: app's heading, desk, Problems and playbook read the one list.
+- Offline Test runs a script with VESTA_ASKER "page"; proposals' answer.py checks and records nothing then.
+
 ## 0.6.179 (13 October 2026)
 
 Owner, 2026-10-13 (review 4): reports/SKILL.md said the digest's numbers let "a reply '3 done' close the right one" —
