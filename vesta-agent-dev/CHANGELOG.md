@@ -1,3 +1,14 @@
+## 0.12.180
+
+What you will see:
+- The night check no longer counts a sensor that is briefly "unknown" (it answers, with no value for now) as a device
+  that dropped off the network. Only "unavailable" counts, Home Assistant's own word for a device it lost. A restart
+  button's drop was counted twice before (once "unavailable", once "unknown" on its return).
+- Nothing changes on the alert buttons: Done and Need help are now declared by the alert-desk skill itself
+  (its skill.yaml), so a label changed there is the one shown, answered and written "… pressed by … on …".
+- An answer stopped at its cost limit while the AI is unavailable keeps both its "make the report without the AI"
+  buttons and its Continue button (the Continue replaced them).
+
 ## 0.12.179
 
 What you will see:
