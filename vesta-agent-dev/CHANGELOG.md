@@ -1,3 +1,10 @@
+## 0.12.185
+
+What you will see:
+- If someone types "#9 done" in a chat, the agent now says plainly that this closes nothing and that the alert closes
+  with the Done button under its own message (a maintenance fault: in the VESTA Kiosk). Before, its instructions said
+  a typed "done" closed it, which was never true, so it could answer as if it had been noted.
+
 ## 0.12.184
 
 What you will see:
