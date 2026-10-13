@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.6.174 (13 October 2026)
+
+Architecture review 2, 2026-10-13 (owner: "do all of them"):
+- vesta_shared.device_state is the one reading of a state (reading: answers / no value / offline / absent; has_value,
+  is_offline): features.flips_per_day counts "unavailable" only (it counted "unknown" too, and the dead
+  from_unavailable), rules.availability_rules, the night's battery read, the alert desk's silent devices, investigate
+  and VillaParams read it. Test: test_shared_grouping (red with "unknown" counted).
+- skill.yaml `buttons` ([{option, label, mark}], checked by skills._buttons): the alert buttons are the skill's.
+  alert_buttons draws them and passes `option` to on_reply (and `text`, the label, for a skill.yaml from before:
+  BEFORE_BUTTONS); desk.py decides by option and writes every press with message_format.PRESSED (it read the label
+  back by its first word, and wrote the sentence by hand). Tests: test_one_message_per_incident (a renamed button still
+  closes the alert; red when the label is passed as the option), test_config_and_skills.
+- TurnResult.then joins a follow-up turn by a rule per field (THEN; test holds it to the class) — app._delivered merged
+  12 fields by hand. _converse adds its buttons up (report without the AI, Continue, fault offers): a Continue
+  replaced the report buttons. Test: test_api_errors.
+
 ## 0.6.173 (13 October 2026)
 
 Architecture review, 2026-10-13 (owner: "fully proceed"):

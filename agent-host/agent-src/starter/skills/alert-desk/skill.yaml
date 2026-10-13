@@ -10,4 +10,7 @@ scripts:                      # what the MODEL may run (the code runs the hooks 
 every_5_min: "desk.py tick"   # the chase ladder and the villa-silent watch, no model
 on_event:
   critical_event: "desk.py intake --event {event}"
-on_reply: "desk.py reply --incident {incident} --text {text} --from {role} --name {name}"
+on_reply: "desk.py reply --incident {incident} --option {option} --from {role} --name {name}"
+buttons:                      # under every message about an open alert; a press runs on_reply with its option
+  - {option: done, label: Done}
+  - {option: need_help, label: Need help, mark: help}     # mark: its footer's icon (🆘)

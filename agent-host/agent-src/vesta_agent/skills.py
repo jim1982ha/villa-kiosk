@@ -24,7 +24,10 @@ and skill.yaml (what the engine needs):
     on_event:
       critical_event: "desk.py intake --event {event}"
       voice_message: "voice.py prepare --audio {audio} --language {language}"   # prints {"stt": {...}}
-    on_reply: "desk.py reply --incident {incident} --text {text} --from {role} --name {name}"
+    on_reply: "desk.py reply --incident {incident} --option {option} --from {role} --name {name}"
+    buttons:                         the buttons under every message about an open alert, answered by on_reply
+      - {option: done, label: Done}              option: what on_reply is given; label: the words on the button
+      - {option: need_help, label: Need help, mark: help}   mark: the icon its footer shows (message_format)
     before_answer: "concierge.py status"   what the AI is given before EVERY answer in a chat: the script's "text"
 
 Nothing is compiled or cached across calls: a changed folder counts at the next
@@ -150,6 +153,7 @@ class SkillError(ValueError):
 VILLA_CHOICES = "villa.skill.yaml"
 TRASH = ".trash"              # skills deleted or replaced: kept to undo, trimmed by housekeeping (settings.keep.files_days)
 TOOL = re.compile(r"^[a-z][a-z0-9_]{1,60}$")
+BUTTON_OPTION = re.compile(r"^[a-z][a-z_]{0,15}$")
 SKILL_COMMAND = re.compile(r"^[a-z][a-z0-9_]{1,31}$")     # Telegram's own rule for a bot command
 BRAINS = ("economy", "auto", "performance")                # policy.PROFILES' names: what a skill's `brain` may say
 RESERVED_COMMANDS = OWN_COMMANDS | {"/start", "/help"}   # the agent's own (one list: intake.py) and Telegram's
@@ -212,6 +216,10 @@ class Skill:
     every_5_min: str | None = None
     on_event: dict[str, str] = field(default_factory=dict)
     on_reply: str | None = None
+    # ⚠️ THE SKILL'S BUTTONS, NOT THE ENGINE'S (architecture review, 2026-10-13): the engine drew "Done" / "Need help" and
+    # handed the skill the LABEL, which the desk read back by its first word — a button renamed on one side only would
+    # have turned a press into "Noted from …" and left the alert open with no button. [{option, label, mark}], in order.
+    buttons: list[dict] = field(default_factory=list)
     # ⚠️ GIVEN, NOT FETCHED (owner, 2026-10-10: "what's the status of the villa now?" got "everything ok" while three
     # pump devices were offline — the AI took one quick look instead of the skill's check). A skill's own check the
     # engine runs before each answer, its result put in front of the AI: what a person must be told is never left to
@@ -332,6 +340,7 @@ def parse_skill(name: str, path: str) -> Skill:
         sk.on_event[ev] = _check_command(path, str(cmd), f"on_event.{ev}")
     if raw.get("on_reply"):
         sk.on_reply = _check_command(path, str(raw["on_reply"]), "on_reply")
+    sk.buttons = _buttons(raw.get("buttons"))
     if raw.get("before_answer"):
         sk.before_answer = _check_command(path, str(raw["before_answer"]), "before_answer")
     asked = {j["name"] for j in sk.schedule if j.get("on_request")}
@@ -443,6 +452,30 @@ def _without_ai(path: str, steps, where: str) -> list[dict]:
                 raise SkillError(f"{at}: {first[0] if first else '(empty)'} is not a .py file name")
         out.append({"run": str(step["run"]), "skill": str(other) if other else None,
                     "on_schedule_only": bool(step.get("on_schedule_only"))})
+    return out
+
+
+def _buttons(raw) -> list[dict]:
+    """skill.yaml `buttons`: [{option, label, mark}] — an option is a short word (it travels in Telegram's 64 bytes of
+    button data, button_data.ALERT), a label what the button says, a mark one of message_format.MARK_ICONS."""
+    if raw is None:
+        return []
+    from vesta_shared.message_format import MARK_ICONS
+    if not isinstance(raw, list) or not raw:
+        raise SkillError("buttons must be a list of {option, label}")
+    out = []
+    for i, b in enumerate(raw):
+        b = b if isinstance(b, dict) else {}
+        option, label, mark = str(b.get("option") or ""), str(b.get("label") or "").strip(), b.get("mark")
+        if not BUTTON_OPTION.match(option):
+            raise SkillError(f"buttons[{i}]: option {option!r} must be a short word of a-z and _ (at most 16)")
+        if not 0 < len(label) <= 30:
+            raise SkillError(f"buttons[{i}]: label must say what the button does, in 30 characters at most")
+        if mark is not None and mark not in MARK_ICONS:
+            raise SkillError(f"buttons[{i}]: mark {mark!r} is not one of {', '.join(sorted(MARK_ICONS))}")
+        if option in {x["option"] for x in out}:
+            raise SkillError(f"buttons[{i}]: option {option} is given twice")
+        out.append({"option": option, "label": label, "mark": mark})
     return out
 
 

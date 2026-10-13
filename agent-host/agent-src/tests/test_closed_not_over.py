@@ -48,7 +48,7 @@ def door(store, legacy=False, **extra):
 def test_a_close_on_a_door_still_unlocked_reopens_it_still_there_and_the_desk_watches_it(tmp_path):
     store = Store(str(tmp_path / "s.sqlite"))
     iid = door(store)
-    desk.reply(store, iid, "Done", "fm", T0 + timedelta(minutes=5))
+    desk.reply(store, iid, "done", "fm", T0 + timedelta(minutes=5))
     villa = Villa(**{"lock.door": ("unlocked", T0 - timedelta(hours=1))})
     out = desk.tick(store, T0 + timedelta(minutes=20), client=villa)
     assert out["not_quiet"] == [iid]

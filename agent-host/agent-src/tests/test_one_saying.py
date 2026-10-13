@@ -137,9 +137,9 @@ def test_need_help_and_an_unchecked_closure_carry_their_icon_end_to_end(tmp_path
     st = Store(v.s.store_path)
     now = datetime.now(timezone.utc)
     iid = desk.intake(st, ev("opened", summary=ALERT), now, mode_reader=lambda: "x")["incident_id"]
-    asyncio.run(v.outcome.carry_out(desk.reply(st, iid, "Need help", "fm", now, name="Fabien"), "alert-desk"))
+    asyncio.run(v.outcome.carry_out(desk.reply(st, iid, "need_help", "fm", now, name="Fabien"), "alert-desk"))
     assert all(t.rsplit("\n", 1)[1].startswith("🆘 Need help pressed by Fabien on ") for _, t, _ in v.tg.sent[-2:])
-    asyncio.run(v.outcome.carry_out(desk.reply(st, iid, "Done", "owner", now, name="Jim"), "alert-desk"))
+    asyncio.run(v.outcome.carry_out(desk.reply(st, iid, "done", "owner", now, name="Jim"), "alert-desk"))
     assert v.tg.edits[-1][2].rsplit("\n", 1)[1].startswith("✅ Done pressed by Jim on ")     # the owner's copy, settled
     # 10 min later the lock does not answer: closed, not checked
     class Silent:

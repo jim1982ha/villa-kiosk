@@ -22,7 +22,7 @@ from typing import Any
 from vesta_shared.params import VillaParams, MissingParameter
 from vesta_shared.result import COUNTER_RESET, PARAM_MISSING  # the ids other skills read: written once
 from vesta_shared.stats import med, pct_change, step_index
-from vesta_shared.device_state import battery_charge
+from vesta_shared.device_state import battery_charge, is_offline
 from vesta_shared.timeutil import day_label, schedule_hours_per_day, weekday_name
 
 P2, P3, INFO = "P2", "P3", "INFO"
@@ -231,7 +231,7 @@ def availability_rules(asset: dict, entity_id: str, state: str | None, last_chan
     closes it once they are all back."""
     out = []
     slug = asset["slug"]
-    if state in ("unavailable", "unknown") and last_changed_hours is not None:
+    if is_offline(state) and last_changed_hours is not None:
         if last_changed_hours * 60 >= params.behaviour("unavailable_minutes"):
             sev = P2 if asset.get("critical") else P3
             out.append(Finding("PM-UNAVAILABLE", entity_id, slug, "availability", sev,

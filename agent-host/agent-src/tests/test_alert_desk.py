@@ -69,7 +69,7 @@ def test_an_opened_only_rule_closes_through_the_ladder(store):
     iid = desk.intake(store, ev, T0, mode_reader=lambda: "occupied")["incident_id"]
     res = desk.tick(store, T0 + timedelta(minutes=16))
     assert iid in res["reasked"]
-    out = desk.reply(store, iid, "Done", "fm", T0 + timedelta(minutes=20))
+    out = desk.reply(store, iid, "done", "fm", T0 + timedelta(minutes=20))
     assert store.incident(iid)["state"] == "done"
     assert [a for a in out["actions"] if a["action"] == "ticket.resolve"]
 
@@ -129,12 +129,15 @@ def test_the_cli_reads_an_event_file(tmp_path):
     assert json.loads(r.stdout)["decision"] == "new"
 
 
-def test_a_text_answer_settles_the_alerts_buttons_too(store):
-    # "#2 done" typed in a chat: the alert and its reminders lose their buttons, like a press
+def test_a_press_settles_the_alerts_buttons_by_its_option_and_names_its_label(store):
+    # architecture review, 2026-10-13: the desk is given the option pressed, never the label to read back
     iid = desk.intake(store, event(), T0, mode_reader=lambda: "occupied")["incident_id"]
-    res = desk.reply(store, iid, "done, it was the gardener", "fm", T0 + timedelta(minutes=5))
-    assert res["settle"] == [{"incident_id": iid, "note": "Done pressed by the facility manager on {time}."}]
-    assert "settle" not in desk.reply(store, iid, "what happened?", "fm", T0 + timedelta(minutes=6))
+    res = desk.reply(store, iid, "done", "fm", T0 + timedelta(minutes=5), name="Fabien")
+    assert res["settle"] == [{"incident_id": iid, "note": "Done pressed by Fabien on {time}."}]
+    assert desk.BUTTONS["need_help"]["mark"] == "help"
+    other = desk.intake(store, event(rule="automation.other", entities=("lock.other",)), T0,
+                        mode_reader=lambda: "occupied")["incident_id"]
+    assert "settle" not in desk.reply(store, other, "whatever", "fm", T0 + timedelta(minutes=6))
 
 
 
@@ -177,9 +180,8 @@ def test_a_repeated_alert_says_since_when_in_the_villas_time(store, monkeypatch)
 def test_only_done_and_need_help_and_an_old_not_found_is_chased_again(tmp_path):
     # owner, 2026-10-10: "remove all the Mute and Not Found … too complex for now"
     import sqlite3
-    from vesta_agent.alert_buttons import LADDER
     from vesta_shared.store import Store
-    assert [label for label, _ in LADDER] == ["Done", "Need help"]
+    assert [b["label"] for b in desk.BUTTONS.values()] == ["Done", "Need help"]      # the skill's own (skill.yaml)
     path = str(tmp_path / "old.sqlite")
     st = Store(path)
     iid = st.new_incident("k", "automation.x", "lock.x", "P2", {"message": "m"})
@@ -394,7 +396,7 @@ def test_an_alert_back_within_four_hours_is_the_same_incident_back_again(store):
 
 
 def _done(store, villa, iid, minutes):
-    desk.reply(store, iid, "Done", "fm", T0 + timedelta(minutes=minutes))
+    desk.reply(store, iid, "done", "fm", T0 + timedelta(minutes=minutes))
     return _tick(store, villa, minutes + 11)
 
 
@@ -413,12 +415,12 @@ def test_after_done_the_desk_reads_the_device_once_and_reopens_what_is_still_bad
 def test_after_done_a_quiet_device_stays_closed_and_an_alert_without_states_promises_nothing(store):
     villa = Villa(**{"lock.front_door": [(T0 - timedelta(minutes=10), "unlocked"), (T0 + timedelta(minutes=15), "locked")]})
     iid = _left_unlocked(store, abandon=False)
-    assert "VESTA will check it stays right." in desk.reply(store, iid, "Done", "fm", T0 + timedelta(minutes=20))["send"][0]["status"]
+    assert "VESTA will check it stays right." in desk.reply(store, iid, "done", "fm", T0 + timedelta(minutes=20))["send"][0]["status"]
     assert not _tick(store, villa, 31)["not_quiet"] and store.incident(iid)["closed_at"]
     villa.timeline["lock.front_door"].append((T0 + timedelta(days=3), "unlocked"))     # days later: another story
     assert not _tick(store, villa, 3 * 1440 + 30)["not_quiet"] and store.incident(iid)["closed_at"]
     other = desk.intake(store, event(rule="automation.critical_condition_other"), T0, mode_reader=lambda: "x")["incident_id"]
-    said = desk.reply(store, other, "Done", "fm", T0 + timedelta(minutes=20))["send"][0]["status"]
+    said = desk.reply(store, other, "done", "fm", T0 + timedelta(minutes=20))["send"][0]["status"]
     assert "stays quiet" not in said
 
 

@@ -606,7 +606,9 @@ class Vesta:
                 # told by the turn when no retry can help (no credit, a refused key)
                 said = FOR_PERSON.get(res.problem or "unknown", FOR_PERSON["unknown"])
                 answer = f"{answer}\n\n{said}" if answer else said
-            keyboard = None
+            # ⚠️ THE BUTTONS ARE ADDED, NEVER REPLACED (architecture review, 2026-10-13): each offer below put its own
+            # keyboard, and a Continue silently took the place of "a report can still be made without the AI"
+            rows: list[list[dict]] = []
             if res.problem in AI_DOWN and not is_continue and tool_access.may_start_job(pol, self.server_tools, person, cid):
                 # the AI cannot answer: a report asked for is still made from its figures (ai_down.py decides)
                 off = ai_down.offer(text, res.problem, self.jobs.without_ai_able())
@@ -614,20 +616,20 @@ class Vesta:
                     answer += "\n\n" + self.jobs.start_without_ai(off.start["name"], res.problem, cid)
                 elif off.buttons:
                     answer += "\n\nA report can still be made without the AI, from its figures and charts:"
-                    keyboard = ai_down.keyboard(res.problem, off.buttons)
+                    rows += ai_down.keyboard(res.problem, off.buttons)["inline_keyboard"]
             if res.stopped_at_limit and res.session_id:
                 cont = self.state.new_continuation(cid, res.session_id, person.telegram_id if person else None,
                                                    invoked=request.name if request else None,
                                                    inv=request.inv if request else None)
                 answer = (answer + "\n\n" if answer else "") + \
                     f"Stopped: this answer reached the {res.limit_usd:g} USD limit per reply."
-                keyboard = {"inline_keyboard": [[{"text": "Continue", "callback_data": button_data.make(button_data.CONTINUE, cont)}]]}
+                rows.append([{"text": "Continue", "callback_data": button_data.make(button_data.CONTINUE, cont)}])
             # a fault the AI offered in this answer (tools._ticket): its button goes under it; only a press creates it
             if page_mid:
                 self.fault_offers.keep_page(cid, sk.deliver["page"])
-            answer, rows, offered_ids = await self.fault_offers.show(cid, page_mid, answer)
-            if rows:
-                keyboard = {"inline_keyboard": (keyboard or {}).get("inline_keyboard", []) + rows}
+            answer, offer_rows, offered_ids = await self.fault_offers.show(cid, page_mid, answer)
+            rows += offer_rows
+            keyboard = {"inline_keyboard": rows} if rows else None
             # ⚠️ A REQUEST SHOWN HERE IS THE ANSWER (owner, 2026-10-10: "Approval request sent." under it, twice "redundant"):
             # told not to, the AI still wrote it — and pressed at once, the request was decided before that line came, so
             # nothing removed it. The engine decides: no written reply after a request put in this chat (anything else
@@ -656,16 +658,9 @@ class Vesta:
                 person, cid, f"Your answer has not sent {page}: every /{sk.command} answer carries it. Make it now and send "
                              f"it with send_message (attachment {page}), as the {sk.name} skill says. Write nothing else.",
                 resume=res.session_id, request=request)
-            # ⚠️ THE FOLLOW-UP'S OWN OUTCOME GOES ON (review 32): merged by hand, it lost its stop at the limit (no Continue)
-            # and its problem (no credit read as "the page could not be made")
-            res = dataclasses.replace(
-                res, session_id=again.session_id or res.session_id, sent=res.sent + again.sent,
-                attached=res.attached + again.attached, offered=res.offered + again.offered,
-                pages={**res.pages, **again.pages}, photos=res.photos + again.photos,
-                approvals=res.approvals + again.approvals, stopped_at_limit=again.stopped_at_limit,
-                problem=again.problem, error=again.error,
-                cost_usd=(res.cost_usd or 0) + (again.cost_usd or 0) if (res.cost_usd or again.cost_usd) else None,
-                text=res.text or again.text)
+            # ⚠️ THE FOLLOW-UP'S OWN OUTCOME GOES ON (review 32): its stop at the limit (Continue) and its problem (no
+            # credit is not "the page could not be made") — every field by its rule (TurnResult.then)
+            res = res.then(again)
             if again.session_id:
                 self.state.set_session(cid, again.session_id)
             if page not in res.attached and not (res.problem or res.error or res.stopped_at_limit):

@@ -38,13 +38,12 @@ from vesta_shared import script, skill_settings  # noqa: E402  (client, store, z
 from vesta_shared import periods as kinds  # noqa: E402  (the period kinds and their words, read by the report page too)
 from vesta_shared.timeutil import lasting  # noqa: E402  (the one duration wording)
 
-OFFLINE = {"unavailable"}                 # the device does not answer
+from vesta_shared.device_state import NO_VALUE, OFFLINE  # noqa: E402  (the one "does this device answer")
 # ⚠️ WHAT A CONTROL CAN PROVE (architecture review 32 follow-up, 2026-10-11): an on/off control that stayed OFF the whole
 # period — and the days before — while another device ran is not what turned that device on. An account blamed a
 # switch that had never once been on. Any control, any device: nothing here names one.
 CONTROL_DOMAINS = ("switch", "light", "fan", "input_boolean", "valve", "siren", "humidifier")
 OFF_STATES, ON_STATES = {"off", "closed"}, {"on", "open"}
-NO_VALUE = {"unknown", ""}                # it answers, without a value
 MAX_LINES = 120                           # per part: enough for a night, short enough to reason about
 # ⚠️ THE THRESHOLDS ARE THE SKILL'S, NOT THE SCRIPT'S (architecture review 32; the 0.12.80 rule): settings.yaml, with a
 # villa's own villa.settings.yaml on top. A missing one is named, never guessed (`th`).

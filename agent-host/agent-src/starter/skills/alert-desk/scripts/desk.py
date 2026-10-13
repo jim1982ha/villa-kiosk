@@ -5,7 +5,7 @@ Sub-commands (all print JSON the engine acts on; none sends anything itself):
 
   desk.py intake   --event event.json     one vesta_critical_event from Home Assistant (or a PM finding)
   desk.py tick                            every 5 min: re-asks, escalations, villa-silent check, fatigue
-  desk.py reply    --incident 12 --text "Done" --from fm
+  desk.py reply    --incident 12 --option done --from fm --name Jim   a button pressed (skill.yaml `buttons`)
   desk.py status                          open incidents, last beats
 
 The event is the one the VESTA rules fire AFTER their own Telegram message
@@ -43,7 +43,8 @@ from vesta_shared import result as R  # noqa: E402  (what the engine is asked to
 from vesta_shared import script  # noqa: E402  (client, store, settings, zone: one set-up)
 from vesta_shared import skill_settings  # noqa: E402  (rules.yaml, the villa's on top)
 from vesta_shared.messaging import incident_tag  # noqa: E402
-from vesta_shared.device_state import out_of  # noqa: E402  ("is it back": one answer)
+from vesta_shared.message_format import PRESSED  # noqa: E402  ("<button> pressed by <name> on <time>.": one wording)
+from vesta_shared.device_state import has_value, out_of  # noqa: E402  ("is it back": one answer)
 
 SKILL = os.path.dirname(HERE)
 # rules.yaml with the villa's own villa.rules.yaml on top (kept by updates): a villa's route comes FIRST, so it
@@ -57,7 +58,12 @@ def _params(params: VillaParams | None) -> VillaParams:
     if params is None:
         return VillaParams(defaults=DEFAULTS)
     return params if params.defaults else params.with_defaults(DEFAULTS)
-LADDER_OPTIONS = ["Done", "Need help"]      # owner, 2026-10-10: Not found and Mute removed, "too complex for now"
+# ⚠️ THE BUTTONS ARE THIS SKILL'S (architecture review, 2026-10-13): skill.yaml `buttons` — the engine draws them and
+# passes the option pressed; every sentence about a press names its label. The desk read the label back by its first
+# word ("done…"): a button renamed on one side would have become "Noted from …", the alert open and buttonless.
+# Owner, 2026-10-10: Not found and Mute removed, "too complex for now".
+with open(os.path.join(SKILL, "skill.yaml"), encoding="utf-8") as _fh:
+    BUTTONS = {b["option"]: b for b in (yaml.safe_load(_fh) or {}).get("buttons") or []}
 #: What a person still being asked can answer: the last line of every message that carries the buttons.
 #: The beat the engine writes every minute while its Home Assistant connection is up.
 HA_BEAT = "ha_events"
@@ -386,8 +392,8 @@ def still_there(inc: dict, client) -> tuple[bool | None, list[str]]:
     def name(e):
         return ((states.get(e) or {}).get("attributes") or {}).get("friendly_name") or e
 
-    def silent(e):        # a device that does not answer: absent, or reading "unavailable" / "unknown"
-        return (states.get(e) or {}).get("state") in (None, "unavailable", "unknown")
+    def silent(e):        # an alert's device that cannot be told right: absent, offline, or without a value
+        return not has_value((states.get(e) or {}).get("state"))
     if rs:
         bad = [f"{name(e)} still reads {states[e]['state']}" for e in ents if (states.get(e) or {}).get("state") in rs[1]]
         if bad:
@@ -451,7 +457,7 @@ def seen_again(store: Store, now: datetime, client, clear_minutes: float, out: d
         # "no stricter than the rule"): the same offline lock was "Cleared: door is unavailable" here and "VESTA cannot
         # check this one" after a Done. It stays open, said once, until the device answers and is right.
         p = json.loads(inc.get("payload") or "{}")
-        mute = [e for e in ents if (now_states.get(e) or {}).get("state") in (None, "unavailable", "unknown")
+        mute = [e for e in ents if not has_value((now_states.get(e) or {}).get("state"))
                 and (now_states.get(e) or {}).get("state") not in bad]
         if mute:
             if not p.get("silent_told"):
@@ -534,9 +540,9 @@ def siren_gate(store: Store, ev: dict, now: datetime) -> dict:
                    reason=None if armed else ("villa not vacant/away" if mode not in cfg["requires_villa_mode"] else "single signal"))
 
 
-def reply(store: Store, iid: int, text: str, sender_role: str, now: datetime, params: VillaParams | None = None,
+def reply(store: Store, iid: int, option: str, sender_role: str, now: datetime, params: VillaParams | None = None,
           name: str | None = None) -> dict:
-    """A person's answer to incident `iid` (a button: Done, Need help; or text). `name`: the person, as the People list
+    """A person's answer to incident `iid`: the `option` of the button pressed (BUTTONS). `name`: the person, as the People list
     names them — every line about the answer says it the way the button's own footer does ("Done pressed by Fabien on
     …"): owner, 2026-10-11, the same press read "Done pressed by Fabien" on one message and "Done answered by the
     facility manager" on the next."""
@@ -544,7 +550,9 @@ def reply(store: Store, iid: int, text: str, sender_role: str, now: datetime, pa
     out = {"send": [], "actions": []}
     if not inc:
         out["send"].append(R.message("here", f"There is no alert {incident_tag(iid)}.")); return out
-    t = text.strip().lower()
+    button = BUTTONS.get(option) or {"label": option, "mark": None}
+    label = button["label"]
+    pressed = PRESSED.format(label=label, name="{who}", time="{time}")      # "{who}" filled below, "{time}" by the engine
     who = name or {"owner": "the owner", "fm": "the facility manager"}.get(sender_role, sender_role)
 
     def here(status: str, stage: str = "update", mark: str | None = None) -> dict:
@@ -552,33 +560,32 @@ def reply(store: Store, iid: int, text: str, sender_role: str, now: datetime, pa
         return R.message("here", **about(inc, status), incident=iid, stage=stage, mark=mark)
     if inc.get("closed_at"):
         out["send"].append(here("Already closed", "closed")); return out
-    if t.startswith("done"):
+    pressed = pressed.replace("{who}", who)
+    if option == "done":
         out["actions"] += Problems(store).close_incident(iid, Incident.DONE, now.isoformat(),
-                                                         f"Done by {who} on Telegram.", who=who, reply=text)
+                                                         f"{label} by {who} on Telegram.", who=who, reply=label)
         # ⚠️ A PROMISE THE CODE KEEPS (architecture review 23): "will check it stays quiet" was written since 0.9.0 and
         # nothing ever checked — a Done on a door still unlocked closed it for good. The tick reads it again (quiet_after_done)
         # read again whatever the rule: still bad, it reopens; not knowable, the people asked are told (still_there)
         checks = rule_states(inc) is not None
         store.update_incident(iid, payload=json.dumps({**json.loads(inc.get("payload") or "{}"),
-                                                       "check_quiet": f"Done pressed by {who}"}))
-        out["send"].append(here(f"Done pressed by {who} on {{time}}."
-                                + (" VESTA will check it stays right." if checks else ""), "closed"))
-    elif t.startswith("need help"):
-        store.update_incident(iid, state=Incident.ESCALATED, reply=text, escalated_at=now.isoformat(), assignee="owner")
+                                                       "check_quiet": f"{label} pressed by {who}"}))
+        out["send"].append(here(pressed + (" VESTA will check it stays right." if checks else ""), "closed"))
+    elif option == "need_help":
+        store.update_incident(iid, state=Incident.ESCALATED, reply=label, escalated_at=now.isoformat(), assignee="owner")
         # ONE sentence in every chat (owner, 2026-10-11: one incident, one picture — "over to you" / "the owner has been
         # told" were two)
-        helped = f"Need help pressed by {who} on {{time}}: the owner is asked to act."
+        helped = pressed.rstrip(".") + ": the owner is asked to act."
         out["send"].append(R.message("owner", **about(inc, helped), incident=iid, buttons=True, stage="escalated",
-                                     mark="help"))
-        out["send"].append(here(helped, mark="help"))
+                                     mark=button.get("mark")))
+        out["send"].append(here(helped, mark=button.get("mark")))
     else:
-        store.update_incident(iid, reply=text)
-        out["send"].append(here(f"Noted from {who} on {{time}}: {text}"))
+        store.update_incident(iid, reply=label)
+        out["send"].append(here(f"Noted from {who} on {{time}}: {label}"))
     # the answer, on the alert and its reminders in every chat (a button press has already done it, by name)
-    said = next((w for w in LADDER_OPTIONS if t.startswith(w.lower())), None)
-    if said:
-        out["settle"] = [R.settle(iid, f"{said} pressed by {who} on {{time}}.", mark="help" if said == "Need help" else None)]
-    store.audit("alert-desk", "reply", {"incident": iid, "by": sender_role, "text": text})
+    if option in BUTTONS:
+        out["settle"] = [R.settle(iid, pressed, mark=button.get("mark"))]
+    store.audit("alert-desk", "reply", {"incident": iid, "by": sender_role, "option": option})
     return out
 
 
@@ -670,7 +677,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("cmd", choices=["intake", "tick", "reply", "status"])
     script.arguments(ap)                           # --store --zone --fixture-dir --now: one set-up for every script
-    ap.add_argument("--event"); ap.add_argument("--incident", type=int); ap.add_argument("--text"); ap.add_argument("--from", dest="sender", default="fm"); ap.add_argument("--name")
+    ap.add_argument("--event"); ap.add_argument("--incident", type=int); ap.add_argument("--option"); ap.add_argument("--from", dest="sender", default="fm"); ap.add_argument("--name")
     a = ap.parse_args(argv)
     ctx = script.Context(a, skill=SKILL, settings_file="rules.yaml")
     store = ctx.store
@@ -684,7 +691,7 @@ def main(argv=None):
     elif a.cmd == "tick":
         res = tick(store, now, params, ctx.live_client, zone=ctx.zone)
     elif a.cmd == "reply":
-        res = reply(store, a.incident, a.text or "", a.sender, now, params, name=a.name)
+        res = reply(store, a.incident, a.option or "", a.sender, now, params, name=a.name)
     else:
         res = {"open": store.incidents(), "beats": {n: store.last_beat(n) for n in (HA_BEAT, "agent_tick", "maintenance_nightly")}}
     print(json.dumps(res, indent=1, default=str))

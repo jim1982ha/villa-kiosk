@@ -4,14 +4,36 @@
   - "unknown" is a sensor with no value to give (a wind chill on a warm day) while its device reports; the night
     check learnt that on 2026-10-04, the weekly report still counted such sensors as offline devices;
   - a battery reporting in volts was read by the report as a percentage: a 3.0 V cell showed "3 %, replace".
+
+⚠️ ONE READING, EVERY CALLER (architecture review, 2026-10-13): five scripts kept their own tuple of "does not answer"
+states, and the night check's reconnect count still put "unknown" in it — a sensor with no value now and then read as
+"dropped and reconnected 12 times: a Wi-Fi or power problem". Home Assistant itself says "unavailable" when it loses
+a device; "unknown" is an entity that answers with no value (a button never pressed, a select with no option, a wind
+chill on a still day). A device lost for good while saying "unknown" is the silent check's (PM-SILENT), not this one's.
 """
 from __future__ import annotations
 
 OFFLINE = frozenset({"unavailable"})          # lost; "unknown" is not offline
+NO_VALUE = frozenset({"unknown", ""})         # it answers, without a value
+#: What a state says, one of four. ABSENT is an entity Home Assistant does not have (no state at all).
+ANSWERS, NO_VALUE_NOW, OFFLINE_NOW, ABSENT = "answers", "no value", "offline", "absent"
+
+
+def reading(state) -> str:
+    """What `state` (a state string, or None for an entity Home Assistant does not have) says of its device."""
+    if state is None:
+        return ABSENT
+    st = str(state)
+    return OFFLINE_NOW if st in OFFLINE else NO_VALUE_NOW if st in NO_VALUE else ANSWERS
 
 
 def is_offline(state) -> bool:
-    return str(state or "") in OFFLINE
+    return reading(state) == OFFLINE_NOW
+
+
+def has_value(state) -> bool:
+    """A value to read: neither absent, offline nor without a value."""
+    return reading(state) == ANSWERS
 
 
 def out_of(row: dict, bad, now, minutes: float, unknown_tells: bool = False, offline_ok: bool = False) -> bool:
@@ -23,7 +45,7 @@ def out_of(row: dict, bad, now, minutes: float, unknown_tells: bool = False, off
     recheck said it was, and the desk knew only "unavailable" — a Wi-Fi access point "disconnected" never closed."""
     from datetime import datetime, timedelta, timezone
     st, since = str(row.get("state") or ""), row.get("last_changed")
-    if not st or st in bad or (is_offline(st) and not offline_ok) or (st == "unknown" and not unknown_tells) or not since:
+    if not st or st in bad or (is_offline(st) and not offline_ok) or (reading(st) == NO_VALUE_NOW and not unknown_tells) or not since:
         return False
     return now - datetime.fromisoformat(since).astimezone(timezone.utc) >= timedelta(minutes=minutes)
 

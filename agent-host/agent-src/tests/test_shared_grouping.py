@@ -118,3 +118,31 @@ def test_an_integration_down_is_one_group_named_for_it():
     assert set(out) == {"zigbee", "d4"} and out["zigbee"]["hours"] == 5 and out["zigbee"]["critical"]
     assert out["zigbee"]["asset"]["name"] == "zigbee integration (3 devices)" and groups["d1"]   # the input untouched
     assert F.integration_down(groups, 4) == groups
+
+
+def test_does_this_device_answer_has_one_reading():
+    # architecture review, 2026-10-13: five scripts kept their own tuple of "does not answer" states
+    from vesta_shared import device_state as D
+    assert [D.reading(s) for s in ("21.5", "unavailable", "unknown", "", None)] == \
+        [D.ANSWERS, D.OFFLINE_NOW, D.NO_VALUE_NOW, D.NO_VALUE_NOW, D.ABSENT]
+    assert D.has_value("off") and not any(D.has_value(s) for s in ("unavailable", "unknown", "", None))
+
+
+def test_a_sensor_without_a_value_now_and_then_is_not_a_reconnect_loop():
+    # architecture review, 2026-10-13: "unknown" was counted as a drop — a wind chill going without a value on still
+    # days read as "dropped and reconnected 12 times in 3 days: a Wi-Fi or power problem"
+    from datetime import date
+    import rules as R
+    from vesta_shared.params import VillaParams
+    rows = []
+    for i in range(12):
+        when = f"2026-10-1{1 + i // 6}T{8 + i % 6:02d}:00:00+00:00"
+        rows.append({"entity_id": "sensor.wind_chill", "state": "unknown", "when": when})
+        rows.append({"entity_id": "sensor.wind_chill", "state": "24.1", "when": when.replace(":00:00+", ":05:00+")})
+        rows.append({"entity_id": "switch.relay", "state": "unavailable", "when": when.replace(":00:00+", ":30:00+")})
+    flips = F.flips_per_day(rows, "UTC", 3)
+    assert "sensor.wind_chill" not in flips
+    assert sum(flips["switch.relay"].values()) == 12
+    asset = {"slug": "relay", "name": "Relay"}
+    (loop,) = R.flap_rules(asset, "switch.relay", flips["switch.relay"], date(2026, 10, 12), VillaParams())
+    assert loop.rule_id == "PM-RECONNECT-LOOP"

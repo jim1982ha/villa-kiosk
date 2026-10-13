@@ -312,6 +312,10 @@ Decisions of 2026-09-30 (owner):
 - Architecture review 2026-10-13 (0.12.179): `command_request.Requests` is a command skill's request across its turns
   (web searches kept as records); `vesta_shared.periods` + `timeutil.lasting` are the investigation's kinds, words and
   durations for both skill folders. skill.yaml `modes` is retired.
+  Review 2 of 2026-10-13 (0.12.180): `device_state.reading` is the one "does this device answer" ("unknown" answers
+  without a value; only "unavailable" is a drop). skill.yaml `buttons` are the alert buttons — the engine passes the
+  option, never the label to read back. `TurnResult.then` joins a follow-up turn (a rule per field, THEN); a reply's
+  buttons are added up, never replaced.
 - No PDF (owner, 2026-09-30): the reports are self-contained HTML pages sent
   as attachments. Chromium was ~480 MB of a 1.1 GB image for this alone.
 - ⚠️ The Dockerfile's layer order is what an update costs the Yellow: agent

@@ -16,6 +16,8 @@ import json
 from dataclasses import dataclass, field
 from typing import Any
 
+from .device_state import has_value  # the one "does this device answer"
+
 
 class MissingParameter(Exception):
     def __init__(self, name: str, hint: str = ""):
@@ -56,7 +58,7 @@ class VillaParams:
 
     def number(self, object_id: str, hint: str = "") -> float:
         h, st = self._find(object_id)
-        if h is None or st in (None, "", "unknown", "unavailable"):
+        if h is None or not has_value(st):
             raise MissingParameter(object_id, hint or "create the helper in Home Assistant")
         try:
             return float(st)
@@ -65,7 +67,7 @@ class VillaParams:
 
     def text(self, object_id: str, hint: str = "") -> str:
         h, st = self._find(object_id)
-        if h is None or st in (None, "", "unknown", "unavailable"):
+        if h is None or not has_value(st):
             raise MissingParameter(object_id, hint or "create the helper in Home Assistant")
         return str(st)
 

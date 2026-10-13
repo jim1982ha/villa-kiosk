@@ -402,3 +402,22 @@ def test_a_skills_brain_is_one_the_rules_know(tmp_path):
         else:
             with pytest.raises(SkillError):
                 parse_skill("s", str(d))
+
+
+def test_a_skills_alert_buttons_are_checked_as_it_declares_them(tmp_path):
+    # architecture review, 2026-10-13: the buttons are the skill's — an option travels in Telegram's 64 bytes of button
+    # data, a mark is an icon message_format knows
+    from vesta_agent.skills import SkillError, parse_skill
+    d = tmp_path / "s"
+    (d / "scripts").mkdir(parents=True)
+    (d / "SKILL.md").write_text("x")
+    good = "buttons:\n  - {option: done, label: Fait}\n  - {option: need_help, label: Besoin d'aide, mark: help}\n"
+    (d / "skill.yaml").write_text("description: x\n" + good)
+    assert [(b["option"], b["label"], b["mark"]) for b in parse_skill("s", str(d)).buttons] == \
+        [("done", "Fait", None), ("need_help", "Besoin d'aide", "help")]
+    for bad in ("buttons: []\n", "buttons:\n  - {option: Done!, label: x}\n", "buttons:\n  - {option: done}\n",
+                "buttons:\n  - {option: done, label: x, mark: party}\n",
+                "buttons:\n  - {option: done, label: x}\n  - {option: done, label: y}\n"):
+        (d / "skill.yaml").write_text("description: x\n" + bad)
+        with pytest.raises(SkillError):
+            parse_skill("s", str(d))

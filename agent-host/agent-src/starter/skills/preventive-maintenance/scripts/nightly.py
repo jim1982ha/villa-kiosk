@@ -35,7 +35,7 @@ from vesta_shared.messaging import no_code as _no_code  # noqa: E402
 from vesta_shared.params import VillaParams, MissingParameter  # noqa: E402
 from vesta_shared.timeutil import day_label, villa_day  # noqa: E402
 from vesta_shared.message_format import document, split_title  # noqa: E402  (the one shape of a message)
-from vesta_shared.device_state import is_offline  # noqa: E402
+from vesta_shared.device_state import has_value, is_offline  # noqa: E402
 from vesta_shared.problems import Problems, again_title  # noqa: E402  (a problem's lifecycle: one owner)
 from vesta_shared import result  # noqa: E402  (what the engine is asked to do: its shape; R is rules.py)
 from vesta_shared.stats import med  # noqa: E402
@@ -144,7 +144,7 @@ def run(args) -> dict:
         asset = pack.assets.get(row["asset"], {"slug": row["asset"], "name": row["name"], "critical": False})
         st = states.get(row["entity_id"], {})
         try:
-            level = float(st.get("state")) if st.get("state") not in (None, "unavailable", "unknown") else None
+            level = float(st.get("state")) if has_value(st.get("state")) else None
         except ValueError:
             level = None
         series = [(str(r["start"]), r["mean"]) for r in bat_stats.get(row["entity_id"], []) if r.get("mean") is not None]

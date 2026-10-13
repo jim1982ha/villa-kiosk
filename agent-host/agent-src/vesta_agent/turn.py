@@ -16,7 +16,7 @@ help (credit, key), whoever asked.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from typing import Awaitable, Callable
 
 from vesta_shared import agent_records
@@ -64,6 +64,38 @@ class TurnResult:
     def failed(self) -> bool:
         """Nothing usable came back: a known problem, or an error with no answer."""
         return bool(self.problem or (self.error and not self.text))
+
+    def then(self, again: "TurnResult") -> "TurnResult":
+        """This turn followed by `again`, a follow-up on the same request (app._delivered): one result, each field by
+        its rule in THEN.
+
+        ⚠️ EVERY FIELD HAS A RULE (architecture review, 2026-10-13): the follow-up was merged by hand, field by field —
+        it once lost its stop at the limit (no Continue, review 32), and a field added later would have been dropped
+        without a word. A field without a rule fails the test that holds THEN to this class."""
+        return TurnResult(**{f.name: THEN[f.name](getattr(self, f.name), getattr(again, f.name)) for f in fields(self)})
+
+
+def _first(a, b):
+    return a or b
+
+
+def _latest(a, b):
+    return b or a
+
+
+def _summed_cost(a, b):
+    return (a or 0) + (b or 0) if (a or b) else None
+
+
+#: How a follow-up turn's field joins the first turn's (TurnResult.then): what was said first is the answer, what the
+#: follow-up ended on is where the request stands, what both did is added up.
+THEN = {
+    "text": _first, "earlier": _latest, "session_id": _latest, "limit_usd": _latest,
+    "stopped_at_limit": lambda a, b: b, "problem": lambda a, b: b, "error": lambda a, b: b,
+    "cost_usd": _summed_cost, "sent": lambda a, b: a + b, "offered": lambda a, b: a + b,
+    "photos": lambda a, b: a + b, "approvals": lambda a, b: a + b, "attached": lambda a, b: a + b,
+    "pages": lambda a, b: {**a, **b},
+}
 
 
 def chat_terms(settings, policy, server_tools: list[dict], person, chat: int, brain: str | None = None,

@@ -68,7 +68,7 @@ def _flapping(store, times, rule="automation.ap", entity="sensor.ap"):
         res = desk.intake(store, ev(rule, entity, k * 60, blueprint="critical_watchdog", state="disconnected",
                                     bad_states=["disconnected"]), at)
         iid = res["incident_id"]
-        desk.reply(store, iid, "Done", "fm", at + timedelta(minutes=5))
+        desk.reply(store, iid, "done", "fm", at + timedelta(minutes=5))
     return iid, res
 
 

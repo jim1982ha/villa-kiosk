@@ -12,6 +12,7 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+from vesta_shared.device_state import is_offline  # the one "does this device answer"
 from vesta_shared.stats import med, slope_per_hour
 from vesta_shared.timeutil import local_day
 # a day of a power or energy meter: shared with roi-energy, so they live in vesta_shared (roi-energy imported this
@@ -81,8 +82,13 @@ def flips_per_day(logbook: list[dict], zone: str, mass: int = 0) -> dict[str, di
     every Home Assistant restart takes every entity through "unavailable", so three restarts in three
     days read as "dropped and reconnected 10 times: a Wi-Fi or power problem on its side" for a relay
     that never moved. A drop shared by that many entities in one minute is the restart's (or the
-    integration's), and is not counted against any of them. mass=0 counts everything."""
-    drops = [r for r in logbook if str(r.get("state", "")) in ("unavailable", "unknown") or r.get("from_unavailable")]
+    integration's), and is not counted against any of them. mass=0 counts everything.
+
+    ⚠️ A DROP IS "unavailable", NEVER "unknown" (architecture review, 2026-10-13): "unknown" is a sensor that answers
+    with no value (device_state) — counted, a wind chill on a still day read as a Wi-Fi problem. A device Home Assistant
+    loses goes "unavailable"; its other entities going "unknown" with it add nothing (the device counts its busiest
+    entity's day, nightly)."""
+    drops = [r for r in logbook if is_offline(r.get("state"))]
     crowd: dict[str, set] = defaultdict(set)
     for r in drops:
         crowd[str(r["when"])[:16]].add(r["entity_id"])

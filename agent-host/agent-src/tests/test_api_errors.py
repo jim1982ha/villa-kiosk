@@ -358,3 +358,30 @@ def test_a_button_pressed_by_someone_the_villa_does_not_know_is_refused_in_one_w
                                                             "message": {"message_id": 901, "chat": {"id": FM}}}))
     assert agent.tg.toasts == [(d, NOT_REGISTERED) for d in ("w:credit:rep-weekly", "c:abc", "i:7:done")]
     assert "VESTA Agent" in NOT_REGISTERED
+
+
+def test_a_continue_is_added_to_the_report_buttons_never_in_their_place(agent, monkeypatch):
+    # architecture review, 2026-10-13: each offer put its own keyboard, and a Continue silently took the place of
+    # "a report can still be made without the AI"
+    from vesta_agent import runner
+    _report_without_ai(agent, monkeypatch, run_job=False)
+    FakeAI(runner.RunResult("", "S1", True, 1.0, [], "api credit", "credit")).install(monkeypatch)
+    asyncio.run(agent.converse(FM, agent.policy().person(FM), "a report please"))
+    (kb,) = [kb for c, _t, kb in agent.tg.sent if c == FM]
+    assert [[b["text"] for b in row] for row in kb["inline_keyboard"]] == [["Weekly report"], ["Continue"]]
+
+
+def test_a_follow_up_turn_joins_the_first_by_a_rule_for_every_field():
+    # architecture review, 2026-10-13: merged by hand, a field added to TurnResult would have been dropped
+    from dataclasses import fields
+    from vesta_agent.turn import THEN, TurnResult
+    assert set(THEN) == {f.name for f in fields(TurnResult)}
+    first = TurnResult("the answer", "S1", False, 0.5, None, None, sent=1, attached=["a.html"], pages={"a.html": 7},
+                       approvals=["r1"], limit_usd=2.0)
+    again = TurnResult("", "S2", True, None, "credit", "x", sent=1, attached=["p.html"], pages={"p.html": 9},
+                       limit_usd=2.0, earlier="last words")
+    both = first.then(again)
+    assert (both.text, both.session_id, both.stopped_at_limit, both.problem, both.cost_usd, both.sent) == \
+        ("the answer", "S2", True, "credit", 0.5, 2)
+    assert both.attached == ["a.html", "p.html"] and both.pages == {"a.html": 7, "p.html": 9} and both.approvals == ["r1"]
+    assert both.earlier == "last words"

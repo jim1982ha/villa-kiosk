@@ -269,3 +269,28 @@ def test_home_assistants_cleared_in_time_message_says_cleared_with_its_time(agen
     adopted = [t for c, mid, t in agent.tg.edits if (c, mid) == (GROUP, 600)]
     assert adopted and re.fullmatch(r"Cleared on \d\d/\d\d/\d{4} \d\d:\d\d: back to normal when Home Assistant stopped "
                                     r"watching\.", status(adopted[-1]))
+
+
+def test_a_button_the_skill_renames_still_answers_the_alert(agent):
+    # architecture review, 2026-10-13: the engine drew "Done" and handed the desk the LABEL, which the desk read back by
+    # its first word — renamed on one side, a press became "Noted from …" and the alert stayed open with no button.
+    # The buttons are the skill's (skill.yaml `buttons`); a press passes its option.
+    import os
+    import yaml
+    path = os.path.join(agent.skills.dir, "alert-desk", "skill.yaml")
+    spec = yaml.safe_load(open(path, encoding="utf-8"))
+    spec["buttons"][0]["label"] = "Fait"
+    with open(path, "w", encoding="utf-8") as fh:
+        yaml.safe_dump(spec, fh, allow_unicode=True)
+    ha_alert(agent)
+    tick(agent, 20)
+    kb = agent.tg.sent[-1][2]["inline_keyboard"][0]
+    assert [b["text"] for b in kb] == ["Fait", "Need help"]
+    iid = kb[0]["callback_data"].split(":")[1]
+    run(agent.on_ha_event("telegram_callback", {"id": "cb", "data": kb[0]["callback_data"], "chat_id": FM_CHAT,
+                                                "user_id": FM, "bot": BOT,
+                                                "message": {"message_id": 1000 + len(agent.tg.sent), "chat": {"id": FM_CHAT}}}))
+    (fm,) = shown(agent, FM_CHAT)
+    assert re.fullmatch(r"Fait pressed by Wayan on \d\d/\d\d/\d{4} \d\d:\d\d\.", status(fm))
+    from vesta_shared.store import Store
+    assert Store(agent.s.store_path).incident(int(iid))["closed_at"]
