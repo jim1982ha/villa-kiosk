@@ -112,7 +112,7 @@ rules out is not a cause; if you think a fact is misleading, say why in "cannot_
 8. **Save the account** with save_file, as `investigation.json` — plain sentences, no Markdown:
 
        {"title": "Water heater on the night of 9 October",     (at most 90 characters)
-        "summary": "3 to 5 sentences, at most 550 characters: the most likely cause and what points to it, what to
+        "summary": "3 to 5 sentences, at most 640 characters: the most likely cause and what points to it, what to
                     check on site first. The chat message puts it under the line of recorded facts (times and
                     durations): do not repeat them, explain them.",
         "timeline": [{"time": "09/10 07:30", "text": "The gardener found water on the floor.", "unusual": true}, …

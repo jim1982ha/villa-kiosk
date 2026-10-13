@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.176 (13 October 2026)
+
+Architecture review 3, 2026-10-13 (owner: "do 2. and 3."):
+- message_format.pages never loses text: an item longer than a page is cut into pieces (`_pieces`: between
+  paragraphs, lines, sentences, words — mid-word only for a word longer than a page), never shortened with "…". A
+  labelled section's paragraphs are one item (_sections), so six paragraphs under "Findings:" went as one truncated
+  message. Test: test_message_format (every character sent, in order).
+- reports/compose: TO_ROOM is `len(message_format.TO_LONGEST)` (the longest roles-only "To:"), was 120 for names;
+  SUMMARY_MAX 554 → 646; investigate's SKILL.md asks for at most 640 characters. Tests: test_investigate (the
+  caption is filled; the SKILL.md limit agrees with SUMMARY_MAX).
+
 ## 0.6.175 (13 October 2026)
 
 Owner, 2026-10-13 (alert #5, the house pump; message layout):

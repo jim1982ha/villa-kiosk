@@ -4,6 +4,7 @@ device's own normal, never a number written for one villa."""
 from __future__ import annotations
 
 import os
+import re
 import sys
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -191,14 +192,17 @@ def test_a_surge_inside_one_slice_of_the_chart_is_still_drawn():
 
 def test_the_longest_summary_with_a_long_to_line_is_still_one_bubble():
     # review 32: the limit was worked out by hand against 1,024 while the agent cuts captions at 1,000 — derived now, with
-    # room for a "To:" naming several people; checked through the agent's own layout of a message with a file
+    # room for the longest "To:" (every role: review 3, 2026-10-13 — 120 kept for names cut the summary ~90 short);
+    # checked through the agent's own layout of a message with a file
     sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
     import compose
     from vesta_agent.telegram import layout
-    from vesta_shared.message_format import titled
-    text = titled("T" * compose.TITLE_MAX, ["the Owner", "JM", "Fabien", "the facility manager group", "Housekeeping"],
-                  "S" * compose.SUMMARY_MAX + compose.DETAILS)
+    from vesta_shared.message_format import ROLE_WORDS, audience, titled
+    from vesta_shared.messaging import TELEGRAM_CAPTION
+    text = titled("T" * compose.TITLE_MAX, audience(ROLE_WORDS), "K" * compose.KEY_MAX + "\n" + "S" * compose.SUMMARY_MAX
+                  + compose.DETAILS)
     assert len(layout(text, {"inline_keyboard": []}, "document")) == 1
+    assert len(text) > TELEGRAM_CAPTION - 30                               # and no room is left unused
 
 
 def test_a_history_cut_short_is_said_and_never_stretched_to_the_end():
@@ -901,3 +905,12 @@ def test_a_device_that_reports_a_value_has_no_state_band():
     lane = compose.strip([{"name": "Uptime", "bands": [{"start": T(9, 2), "end": T(9, 15), "state": "x", "as": "value"}]}],
                          T(9, 2), T(9, 15), Z)
     assert "opacity=\".55\"" not in lane and compose.strip_legend([{"bands": [{"as": "value"}]}]) == []
+
+
+def test_the_skill_asks_for_a_summary_the_caption_can_hold():
+    # review 3 (2026-10-13): the room grew when "To:" became roles; the AI is told the limit in SKILL.md, so the two agree
+    sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
+    import compose
+    told = re.search(r'"summary": "[^"]*?at most (\d+) characters', open(os.path.join(STARTER_SKILLS, "investigate",
+                                                                                      "SKILL.md")).read())
+    assert told and compose.SUMMARY_MAX - 10 <= int(told.group(1)) <= compose.SUMMARY_MAX

@@ -46,6 +46,10 @@ def audience(roles) -> str:
     message is for a role, whoever holds it. The same words in Home Assistant's own messages (vesta_message.jinja)."""
     wanted = set(roles or ())
     return AND.join(w for r, w in ROLE_WORDS.items() if r in wanted)
+
+
+#: The longest "To:" line any message can carry (every role): the room a skill keeps for it in a caption.
+TO_LONGEST = TO + audience(ROLE_WORDS)
 #: The title of a message about no incident whose sender gave it none (an AI's message sent without one; a heading
 #: "For: …" recorded before 0.12.175). Every message the agent sends on its own has a title: this is the last resort.
 UNTITLED = "Message from VESTA"
@@ -169,7 +173,11 @@ def pages(title: str, to: str, body: str, limit: int) -> list[str]:
     """A report as messages of at most `limit` (Telegram's units), each a whole message in the shape — its own title
     "(1/2)", "To:", and its section's label again when a section goes on (owner, 2026-10-11, review 28: one long daily
     report lost its whole "Still open" section, cut at Telegram's 4,096). Cut between items; an item longer than a
-    message is cut itself."""
+    message is cut into pieces (_pieces), one after the other — never shortened.
+
+    ⚠️ NO TEXT IS LOST (architecture review 3, 2026-10-13): a labelled section's paragraphs are one item (_sections), and
+    an item longer than a message was cut with "…" — a 4,400-character report under "Findings:" arrived as ONE message,
+    its tail gone without a word."""
     whole = titled(title, to, body)
     if tg_len(whole) <= limit:
         return [whole]
@@ -177,9 +185,7 @@ def pages(title: str, to: str, body: str, limit: int) -> list[str]:
     room = limit - tg_len(titled(numbered(99, 99), to, "")) - 4
     out: list[list[tuple[str | None, list[str]]]] = [[]]
     for label, items in _sections(body):
-        for item in items:
-            item = item if tg_len(item) <= room - tg_len(label or "") - 4 else \
-                item[:max(room - tg_len(label or "") - 5, 1)] + "…"
+        for item in (p for i in items for p in _pieces(i, max(room - tg_len(label or "") - 4, 1))):
             page = out[-1]
             grown = page[:-1] + [(label, page[-1][1] + [item])] if page and page[-1][0] == label else page + [(label, [item])]
             if page and tg_len(_body(grown)) > room:
@@ -187,6 +193,26 @@ def pages(title: str, to: str, body: str, limit: int) -> list[str]:
             else:
                 out[-1] = grown
     return [titled(numbered(i + 1, len(out)), to, _body(p)) for i, p in enumerate(out)]
+
+
+#: Where a piece of a too-long item ends, the first found wins: between paragraphs, lines, sentences, words.
+CUTS = ("\n\n", "\n", ". ", " ")
+
+
+def _pieces(item: str, cap: int) -> list[str]:
+    """`item` as pieces of at most `cap` (Telegram's units), cut at the last CUTS that fits — mid-word only for a word
+    longer than `cap`. Together they are the whole item, less the spaces at the cuts."""
+    out: list[str] = []
+    rest = item.strip()
+    while tg_len(rest) > cap:
+        lo, hi = 1, len(rest)                        # the longest start of `rest` that fits (units are not characters)
+        while lo < hi:
+            mid = (lo + hi + 1) // 2
+            lo, hi = (mid, hi) if tg_len(rest[:mid]) <= cap else (lo, mid - 1)
+        at = next((k + (len(c) if c == ". " else 0) for c in CUTS if (k := rest.rfind(c, 0, lo)) > 0), lo)
+        out.append(rest[:at].rstrip())
+        rest = rest[at:].lstrip()
+    return out + ([rest] if rest else [])
 
 
 def parts(text: str) -> list[tuple[str, int, int]]:

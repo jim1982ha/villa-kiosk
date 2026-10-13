@@ -54,7 +54,7 @@ from vesta_shared import result as R  # noqa: E402  (what the engine is asked to
 from vesta_shared import script  # noqa: E402  (pack, store, zone, day: one set-up)
 from vesta_shared.params import MissingParameter  # noqa: E402
 from vesta_shared.messaging import TELEGRAM_CAPTION, fmt_money, incident_tag  # noqa: E402
-from vesta_shared.message_format import document, split_title  # noqa: E402  (the one shape: title, To:, sections)
+from vesta_shared.message_format import TO_LONGEST, document, split_title  # noqa: E402  (the one shape: title, To:, sections)
 from vesta_shared.axis import is_flat, label as axis_label, nice_axis  # noqa: E402  (the one axis rule)
 from vesta_shared.store import Incident, Store  # noqa: E402
 from vesta_shared.timeutil import day_label, day_time_label, lasting, villa_date  # noqa: E402  (the one day format, duration)
@@ -709,9 +709,10 @@ INVESTIGATION_FIELDS = ("title", "summary", "timeline", "causes", "cannot_tell",
 VERDICTS = ("consistent", "not supported", "cannot tell")
 #: the chat message is the title and the summary, under the page's file: ONE bubble, so within a file's caption
 #: (TELEGRAM_CAPTION) — title, "To: …" and summary together (owner, 2026-10-11: "all in 1 message … a bit more
-#: detailed"). Derived, never typed (review 32): room kept for a "To:" naming several people.
+#: detailed"). Derived, never typed (review 32): room kept for the longest "To:" the agent writes (roles only since
+#: 0.12.181 — 120 kept for a "To:" naming several people cut the summary ~90 characters short; review 3, 2026-10-13).
 DETAILS = " Details in the attached page."
-TITLE_MAX, TO_ROOM = 90, 120
+TITLE_MAX, TO_ROOM = 90, len(TO_LONGEST)
 #: the message starts with the recorded facts (investigation_facts.key_line), then the AI's summary
 SUMMARY_MAX = TELEGRAM_CAPTION - TITLE_MAX - TO_ROOM - KEY_MAX - len(DETAILS) - 6     # the line breaks between them
 

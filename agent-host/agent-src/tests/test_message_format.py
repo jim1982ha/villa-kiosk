@@ -136,3 +136,17 @@ def test_a_long_report_goes_as_whole_messages_none_lost(tmp_path):
     assert all(m.split("\n")[1] == "To: Facility Manager" and F.telegram_entities(m) for m in texts)
     assert "Still open:\n- Incident #5" in texts[-1]
     assert "\n\nNew since yesterday:\n" in texts[1]                       # the section goes on: its label again
+
+
+def test_a_long_report_in_paragraphs_loses_nothing(tmp_path):
+    # architecture review 3 (2026-10-13): six paragraphs under "Findings:" (4,400 characters) went as ONE message cut with
+    # "…" — a labelled section's paragraphs are one item, and an item longer than a message was shortened
+    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]})
+    paragraphs = [f"Paragraph {i}. " + "word " * 180 + f"end of {i}." for i in range(6)] + ["x" * 5000]
+    body = "Findings:\n" + "\n\n".join(paragraphs)
+    asyncio.run(v.outcome.carry_out({"send": [{"to": "fm", "title": "Weekly report", "text": body}]}, "reports"))
+    texts = [m for c, m, _ in v.tg.sent]
+    assert len(texts) >= 3 and all(F.tg_len(m) <= 4096 for m in texts) and not any(m.endswith("…") for m in texts)
+    assert all(m.split("\n")[3] == "Findings:" for m in texts)            # the section goes on: its label again
+    sent = "".join("".join(m.split("\n")[4:]) for m in texts).replace(" ", "")
+    assert sent == "".join(body.split("\n")[1:]).replace(" ", "")        # every character, in order

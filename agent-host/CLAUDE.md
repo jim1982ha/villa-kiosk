@@ -320,6 +320,8 @@ Decisions of 2026-09-30 (owner):
   they reported holds) and `priority`; the desk renders the claim every tick and knows no blueprint by name. "To:" is
   ROLES only (`message_format.audience`), never a person's name. Telegram: bold titles, ONE quote block per section,
   an alert's history and status one block.
+  Review 3 of 2026-10-13 (0.12.182): `message_format.pages` cuts a too-long item into pieces, never "…" (no text is
+  lost); a skill keeps room for `message_format.TO_LONGEST`, never a typed "To:" length.
 - No PDF (owner, 2026-09-30): the reports are self-contained HTML pages sent
   as attachments. Chromium was ~480 MB of a 1.1 GB image for this alone.
 - ⚠️ The Dockerfile's layer order is what an update costs the Yellow: agent
