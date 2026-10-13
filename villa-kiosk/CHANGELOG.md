@@ -1,3 +1,14 @@
+## 2.496.342
+
+### Changed
+- Cockpit → Faults: the button "Close — no action needed" is now just "Close" (it still asks to confirm, and still records no cost).
+- Cockpit → Faults: closed faults are in their own "Closed (…)" section under the open ones, folded until you tap it, 10 per page. The open faults are no longer buried under the ones the VESTA Agent has already cleared.
+- Cockpit → Faults and Today: the summary boxes always sit on one line, on a phone too (the fourth box used to drop onto a row of its own).
+
+### Fixed
+- Closed faults no longer pile up for ever. A fault closed with nothing done (your "Close", or the VESTA Agent clearing a problem that went away) is removed 90 days after it was closed; a fault that was repaired is kept as long as your evidence photos ("Keep evidence photos for", 550 days by default; 0 keeps them for ever). Until now every fault was kept, and the Facility record would eventually have grown too big to save.
+- The superadmin code keypad is centred on a phone, clear of the status bar. It used to sit in the top-left corner with its title under the clock.
+
 ## 2.496.341
 
 ### Fixed

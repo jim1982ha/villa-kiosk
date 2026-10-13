@@ -131,7 +131,9 @@ function SuperadminPrompt({
   // underneath it.
   const dialogRef = useModalA11y(onCancel);
   return (
-    <div className="modal-backdrop" onClick={onCancel}>
+    // ⚠️ `superadmin-backdrop`: on a phone every .modal-backdrop turns into a full-screen sheet pinned top-left, right
+    // for a .modal and wrong for this small card — it sat in the corner, its head under the status bar (owner, 2026-10-14)
+    <div className="modal-backdrop superadmin-backdrop" onClick={onCancel}>
       <div
         ref={dialogRef}
         className="superadmin-prompt"

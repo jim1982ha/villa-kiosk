@@ -155,6 +155,45 @@ async def main() -> None:
     ck("the app and the agent writing on one rev at once: exactly one lands",
        sorted(s for s, _ in results) == [200, 409], results)
 
+    # ── retention: a closed fault leaves by itself (owner, 2026-10-14) ───
+    print("\n  closed-fault retention:")
+    import time as _t
+    def ago(days):
+        return _t.strftime("%Y-%m-%dT%H:%M:%SZ", _t.gmtime(_t.time() - days * 86400))
+    def closed(rid, days, kind=None):
+        step = {"at": ago(days), "status": "resolved", "photoIds": []}
+        if kind:
+            step["kind"] = kind
+        return {"id": rid, "status": "resolved", "reportedBy": "owner", "openedAt": ago(days + 1),
+                "resolvedAt": ago(days), "photoIds": [], "updates": [step]}
+    kept_ids = ["open1", "cleared89", "fixed100", "fixed549"]
+    aged = {"schedules": [], "completions": [], "costs": [], "savedDocuments": [], "tickets": [
+        {"id": "open1", "status": "open", "reportedBy": "owner"},
+        closed("cleared89", 89, "cleared"), closed("cleared91", 91, "cleared"),
+        closed("fixed100", 100), closed("fixed549", 549), closed("fixed551", 551),
+        {**closed("old400", 400), "updates": []},
+    ]}
+    aged["tickets"][-1]["resolvedAt"] = ago(551)
+    (DATA / "fm-data.json").write_text(json.dumps(aged))
+    status, body = await call("GET", "/fm-data", ops)
+    ck("the GET leaves out a no-action close past 90 days and a repair past the evidence window (550)",
+       [t["id"] for t in body["data"]["tickets"]] == kept_ids, [t["id"] for t in body["data"]["tickets"]])
+    status, body2 = await call("GET", "/agent/v1/fm-data", agent)
+    ck("  ...and so does the agent's GET", [t["id"] for t in body2["data"]["tickets"]] == kept_ids, body2)
+    status, put = await call("PUT", "/fm-data", ops, {"data": aged, "rev": body["rev"]})
+    ck("a write from a stale copy that still holds them: 200, no superadmin code, and they stay gone",
+       status == 200 and [t["id"] for t in on_disk("fm-data.json")["tickets"]] == kept_ids,
+       (status, put, [t["id"] for t in on_disk("fm-data.json")["tickets"]]))
+    status, put = await call("PUT", "/agent/v1/fm-data", agent, {"data": body2["data"], "rev": put["rev"]})
+    ck("the agent writing its copy back is not a delete it may not make", status == 200, (status, put))
+    options["evidence_retention_days"] = 0
+    (DATA / "options.json").write_text(json.dumps(options))
+    (DATA / "fm-data.json").write_text(json.dumps(aged))
+    status, body = await call("GET", "/fm-data", ops)
+    ck("evidence window 0: repairs are kept for ever, no-action closes still leave",
+       [t["id"] for t in body["data"]["tickets"]] == ["open1", "cleared89", "fixed100", "fixed549", "fixed551", "old400"],
+       [t["id"] for t in body["data"]["tickets"]])
+
     await client.close()
 
 
