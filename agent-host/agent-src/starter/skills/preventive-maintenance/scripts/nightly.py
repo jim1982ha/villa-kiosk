@@ -141,7 +141,8 @@ def run(args) -> dict:
     bat_stats = cli.statistics(battery_entities, day_end - timedelta(days=14), day_end, "day", ("mean",)) if battery_entities else {}
     now_ref = day_end if args.as_of else datetime.now(Z)
     for row in pack.entities("battery"):
-        asset = pack.assets.get(row["asset"], {"slug": row["asset"], "name": row["name"], "critical": False})
+        asset = _device_named(pack, pack.assets.get(row["asset"], {"slug": row["asset"], "name": row["name"],
+                                                                   "critical": False}), row["entity_id"])
         st = states.get(row["entity_id"], {})
         try:
             level = float(st.get("state")) if has_value(st.get("state")) else None
@@ -210,14 +211,17 @@ def run(args) -> dict:
         for g in silent_groups.values():
             a = dict(g["asset"])
             a["name"] = F.device_name(g["names"])
+            a = _device_named(pack, a, g["entity_id"])
             findings += R.silence_rules(a, g["entity_id"], (now_ref - g["since"]).total_seconds() / 3600, params)
 
     # three or more devices of one integration offline together = the integration is down, one finding
     unavailable_groups = F.integration_down(unavailable_groups, params.behaviour("integration_down_devices"))
     for key, g in unavailable_groups.items():
         a = dict(g["asset"]); a["critical"] = g["critical"]
-        if len(g["names"]) > 1 and not a["slug"].startswith("integration_"):
-            a["name"] = F.device_name(g["names"])
+        if not a["slug"].startswith("integration_"):
+            if len(g["names"]) > 1:
+                a["name"] = F.device_name(g["names"])
+            a = _device_named(pack, a, g["entity_id"])
         findings += R.availability_rules(a, g["entity_id"], g["state"], g["hours"], params, g.get("entity_ids"))
 
     level_rows = [r for r in pack.entities("level")
@@ -234,6 +238,10 @@ def run(args) -> dict:
         lb = cli.logbook(day_end - timedelta(days=int(params.behaviour("reconnect_days"))), day_end)
     except Exception:  # logbook is optional
         lb = []
+    if getattr(cli, "logbook_cut", None):
+        # a count from a read cut short is a floor, said where the night's notes are read
+        notes.append(f"The logbook could not be read whole: nothing after {cli.logbook_cut.isoformat(timespec='minutes')} "
+                     "— reconnect counts may be low.")
     flips = F.flips_per_day(lb, zone, int(params.behaviour("restart_crowd_entities")))
     # ONE finding per DEVICE, named as a person reads it (villa, 2026-10-04: a relay, its firmware
     # entity and its uptime sensor were three lines, two of them raw entity ids)
@@ -242,15 +250,19 @@ def run(args) -> dict:
     for eid, per_day in flips.items():
         row = rows_by_eid.get(eid, {})
         slug = row.get("asset") or next((s for s, a in pack.assets.items() if eid in a["entities"].values()), None)
-        key = F.device_key({**row, "asset": row.get("asset") or slug}, eid)
+        # ⚠️ ITS DEVICE, CLASSIFIED OR NOT (2026-10-13): a relay's uptime sensor is in no family, had no device, and its
+        # drops were a second fault for the same relay
+        key = F.device_key({**row, "device_id": pack.device_id_of(eid), "asset": row.get("asset") or slug}, eid)
         g = by_device.setdefault(key, {"eid": eid, "slug": slug, "name": row.get("name"), "per_day": {}})
         for d, n in per_day.items():
             g["per_day"][d] = max(g["per_day"].get(d, 0), n)      # the device's drops, not the sum of its entities'
         g["name"] = g["name"] or row.get("name")
+    window_start = day_end - timedelta(days=int(params.behaviour("reconnect_days")))
     for g in by_device.values():
         asset = dict(pack.assets.get(g["slug"], {"slug": g["slug"] or g["eid"]}))
         asset["name"] = asset.get("name") or g["name"] or _plain_name(g["eid"])
-        findings += R.flap_rules(asset, g["eid"], g["per_day"], today, params)
+        findings += R.flap_rules(_device_named(pack, asset, g["eid"]), g["eid"], g["per_day"], today, params,
+                                 restarted=_restarted(pack, states, g["eid"], window_start))
 
     # ---- persist findings, dedup, close ---------------------------------------
     # the night's ledger is Problems' (vesta_shared/problems.py); what is a state, an event, worse, a task: here
@@ -288,6 +300,31 @@ def told_now(res: dict) -> list[dict]:
     title = f"{res.get('villa') or 'The villa'}, night check on {day_label(date.fromisoformat(res['as_of']), numeric=True)}."
     body = split_title(document(title, "", [("New", new), ("Back again", back)]))[1]
     return [result.message("fm", body, title=title)]
+
+
+def _device_named(pack, asset: dict, entity_id: str) -> dict:
+    """`asset` for a finding about the DEVICE itself (offline, silent, reconnecting, its battery): named as Home
+    Assistant names the device (knowledge_pack.device_label), never one of its entities — "Jet & Jaccuzi Relay
+    Restart" was its restart button's name, "Motion1 Occupancy" its motion entity's (2026-10-13). A measurement keeps its
+    asset's name: one meter can measure two circuits. Unchanged when Home Assistant names no device."""
+    label = pack.device_label(pack.device_id_of(entity_id))
+    return {**asset, "name": label} if label else asset
+
+
+def _restarted(pack, states: dict, entity_id: str, since: datetime) -> bool | None:
+    """Did the device of `entity_id` restart after `since`? Read from its own "uptime" entity (Home Assistant's device
+    class, whatever the device or integration: its state is when the device last started). None: it has none."""
+    for eid in sorted(pack.entities_of_device(pack.device_id_of(entity_id))):
+        st = states.get(eid) or {}
+        if (st.get("attributes") or {}).get("device_class") != "uptime":
+            continue
+        try:
+            started = datetime.fromisoformat(str(st.get("state")))
+        except ValueError:
+            continue
+        if started.tzinfo:
+            return started > since
+    return None
 
 
 def _plain_name(entity_id: str) -> str:

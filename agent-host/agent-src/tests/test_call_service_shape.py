@@ -195,3 +195,18 @@ def test_a_direct_rule_asks_the_owner_while_the_pack_is_missing(tmp_path):
     known_devices(v, "switch.example_lamp")
     answer, msg = v.actions.request("switch", "turn_off", "switch.example_lamp", {}, v.policy().person(111), 111)
     assert msg is None and "without approval" in answer                                       # known: direct as before
+
+
+def test_an_owner_only_device_the_pack_cannot_classify_is_still_found_behind_its_plug(tmp_path):
+    # 2026-10-13: an entity in no family kept no device in the pack — a siren whose id does not say "siren" was invisible
+    from vesta_agent.actions import related_entities
+    from vesta_shared.knowledge_pack import build_pack
+
+    class Reader:
+        def states(self, ids):
+            return {i: {"attributes": {}} for i in ids}
+    pack = build_pack({"entities": [{"entity_id": "siren.example_outdoor_alarm", "device_id": "d1"},
+                                    {"entity_id": "switch.example_alarm_power", "device_id": "d1"}]}, [])
+    assert "siren.example_outdoor_alarm" in pack.unclassified                              # in no family
+    assert related_entities(pack, Reader(), ["switch.example_alarm_power"]) == {"siren.example_outdoor_alarm",
+                                                                                 "switch.example_alarm_power"}

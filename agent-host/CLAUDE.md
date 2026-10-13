@@ -332,6 +332,11 @@ Decisions of 2026-09-30 (owner):
   `skills.when_it_runs` is the page's trigger rows; `actions.related_entities` treats no pack / an unseen id as
   unknown (the owner asked); `result.PRIORITIES`; Offline Test = VESTA_ASKER "page" (a script that writes its own
   records checks and records nothing then).
+  0.12.187 (owner, 2026-10-13): `paged` reports a read cut short (`logbook_cut`); the pack keeps every entity's
+  device (`entity_devices`, `device_id_of`); a finding about a DEVICE is named by its device, a measurement by its
+  asset; reconnect wording reads the device's "uptime" entity; a change needs every confirm day (`rules._held`).
+  OPEN, told owner: name-word heuristics (knowledge_pack *_WORDS, energy_period "main"/"phase"/"returned",
+  filtration_optimiser "_pump") and the restart filter counting ENTITIES not devices.
 - No PDF (owner, 2026-09-30): the reports are self-contained HTML pages sent
   as attachments. Chromium was ~480 MB of a 1.1 GB image for this alone.
 - ⚠️ The Dockerfile's layer order is what an update costs the Yellow: agent

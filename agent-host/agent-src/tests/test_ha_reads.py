@@ -127,3 +127,27 @@ def test_a_history_read_cut_short_says_where(monkeypatch):
     whole = McpClient("http://unused", "UTC", session=Recorder(rows[:10]))
     whole.history(["sensor.meter"], start, T)
     assert whole.history_cut == {}                                       # read whole: nothing said
+
+
+class CappedLogbook:
+    """ha-mcp as on the villa (2026-10-13): at most 500 rows a page whatever is asked, `total` rows in all, oldest first."""
+
+    def __init__(self, total, cap=500):
+        self.total, self.cap = total, cap
+
+    def call_raw(self, name, args):
+        off, n = args["offset"], min(args["limit"], self.cap)
+        rows = [{"when": (T - timedelta(days=3) + timedelta(seconds=2 * i)).isoformat(), "entity_id": "sensor.example",
+                 "state": str(i)} for i in range(off, min(off + n, self.total))]
+        return {"content": [{"type": "text", "text": json.dumps({"success": True, "entries": rows,
+                                                                 "has_more": off + n < self.total})}]}
+
+
+def test_a_long_logbook_is_read_to_its_end_and_a_read_cut_short_says_where():
+    # 2026-10-13: the night's 3-day logbook held 13,031 rows; 20 pages of 500 read 10,000 and stopped at 08:41 the day
+    # before — a relay's last 17 hours of drops never counted
+    c = McpClient("http://unused", "UTC", session=CappedLogbook(13_031))
+    assert len(c.logbook(T - timedelta(days=3), T)) == 13_031 and c.logbook_cut is None
+    c = McpClient("http://unused", "UTC", session=CappedLogbook(200 * 500 + 1))     # past every page it may read
+    rows = c.logbook(T - timedelta(days=3), T)
+    assert c.logbook_cut == max(datetime.fromisoformat(r["when"]) for r in rows)   # where the reading stopped

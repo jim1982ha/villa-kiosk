@@ -29,6 +29,8 @@ import urllib.request
 
 class HABase:
     zone: str = "UTC"
+    #: where the last logbook read stopped before its end (None: it read everything) — a count from it is a floor
+    logbook_cut: "datetime | None" = None
 
     # statistics ---------------------------------------------------------
     def statistics(self, entity_ids: Iterable[str], start: datetime, end: datetime,
@@ -190,8 +192,13 @@ def _when(row: dict) -> datetime | None:
         return None
 
 
-def paged(fetch, step: int, max_pages: int = 20) -> list:
-    """Every row of a paged read, each once. `fetch(offset) -> (rows, has_more, next_offset)`.
+def paged(fetch, step: int, max_pages: int = 20) -> tuple[list, bool]:
+    """Every row of a paged read, each once, and whether the read reached its end. `fetch(offset) -> (rows, has_more,
+    next_offset)`.
+
+    ⚠️ A READ CUT SHORT SAYS SO (2026-10-13): ha-mcp gives at most 500 logbook rows a page whatever is asked, and
+    the night's 3-day logbook (13,031 rows) stopped at its 20th page — the last 17 hours never read, a relay's
+    drops counted 13 for 31. Every caller is told, never left to guess from a row count.
 
     ⚠️ A PAGE MUST BRING NEW ROWS (ha-mcp 8.5.0 answered the same first page to every offset: one 3-day logbook read
     became 20 identical calls). The reading stops at a page that adds nothing, at the last page, or after
@@ -207,10 +214,12 @@ def paged(fetch, step: int, max_pages: int = 20) -> list:
                 seen.add(key)
                 rows.append(r)
                 fresh += 1
-        if not more or not fresh:
-            break
+        if not more:
+            return rows, True
+        if not fresh:
+            return rows, False                     # "more" with nothing new: the server repeats itself
         offset = nxt if isinstance(nxt, int) and nxt > offset else offset + (len(batch) or step)
-    return rows
+    return rows, False
 
 
 class McpClient(HABase):
@@ -288,7 +297,7 @@ class McpClient(HABase):
                     "limit": 1000, "offset": offset})
                 ent = next(iter(body.get("entities") or []), {})
                 return ent.get("statistics") or [], ent.get("has_more"), ent.get("next_offset")
-            rows = paged(fetch, 1000, max_pages=200)          # a year of hours is 9 pages: 200 is no loop
+            rows, _ = paged(fetch, 1000, max_pages=200)       # a year of hours is 9 pages: 200 is no loop
             for r in rows:
                 if not isinstance(r.get("start"), (int, float)):
                     r["start"] = int(datetime.fromisoformat(str(r["start"])).timestamp() * 1000)
@@ -330,8 +339,8 @@ class McpClient(HABase):
                 span /= 2                                 # too many readings in this slice: a shorter one, same start
                 continue
             if more:                                      # a slice of minutes still holds more: its pages, as before
-                batch = paged(lambda off, a=at, b=to: fetch(a, b, off), HISTORY_PAGE, max_pages=20)
-                if len(batch) >= HISTORY_PAGE * 20:       # even its pages could not hold it: read no further
+                batch, whole = paged(lambda off, a=at, b=to: fetch(a, b, off), HISTORY_PAGE, max_pages=20)
+                if not whole:                             # even its pages could not hold it: read no further
                     rows.extend(batch[1:] if rows and batch and batch[0].get("state") == rows[-1].get("state") else batch)
                     self.history_cut[eid] = _when(rows[-1]) or at
                     return rows
@@ -426,15 +435,19 @@ class McpClient(HABase):
                 args["entity_id"] = entity_id
             body = self.tool("ha_get_logs", args)
             return body.get("entries") or [], body.get("has_more"), None
-        rows = paged(fetch, 1000)                   # 20 pages at most: a busy logbook is not a loop
-        out = []
+        # ⚠️ PAGES UNTIL THE END (2026-10-13): 20 pages of ha-mcp's 500 rows read 10,000 of a 3-day logbook's 13,031.
+        # 200 pages is 100,000 rows; a read stopped before the end says where (logbook_cut).
+        rows, whole = paged(fetch, 1000, max_pages=200)
+        out, last = [], start
         for r in rows:
             try:
                 t = datetime.fromisoformat(r["when"])
             except (KeyError, ValueError):
                 continue
+            last = max(last, t)
             if start <= t < end:
                 out.append(r)
+        self.logbook_cut = None if whole else last
         return out
 
     # ------------------------------------------------------------------ writes (executor only)

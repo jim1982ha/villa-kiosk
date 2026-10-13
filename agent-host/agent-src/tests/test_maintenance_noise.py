@@ -25,11 +25,11 @@ def _run(*args):
     return subprocess.run([sys.executable, *args], capture_output=True, text=True, env={**os.environ, "PYTHONPATH": PYTHONPATH})
 
 
-def _pack(tmp, families, assets=None):
+def _pack(tmp, families, assets=None, **more):
     (tmp / "pack.json").write_text(json.dumps({
         "villa": "Example Villa", "time_zone": "UTC", "generated_at": "x", "ha_version": None, "areas": [], "people": [],
         "channels": {}, "unknown_area": [], "unclassified": [], "retention": {"raw_history_days": 10},
-        "families": families, "assets": assets or {}}))
+        "families": families, "assets": assets or {}, **more}))
 
 
 def _row(eid, name, family="level", asset=None, device=None):
@@ -303,3 +303,80 @@ def test_the_night_tells_the_engine_when_the_kiosks_faults_change(tmp_path):
     import inspect
     from vesta_agent.app import Vesta
     assert "if res.get(FAULTS_CHANGED):" in inspect.getsource(Vesta.run_code_job)   # the engine reads that one key
+
+
+# ------------------------------------------------------------------------- one device, its name, its own uptime
+def _relay(tmp, started):
+    """A Wi-Fi relay whose switch is classified and whose uptime sensor and restart button are not (no family): 6 drops
+    of the switch on 2 Oct, 6 of the uptime sensor on 3 Oct; the uptime sensor says the relay started at `started`."""
+    fx = tmp / "fx"
+    fx.mkdir()
+    ids = ["switch.example_relay", "sensor.example_relay_uptime", "button.example_relay_restart"]
+    (fx / "states.json").write_text(json.dumps({"states": {
+        "switch.example_relay": {"state": "off", "attributes": {}, "last_changed": "2026-10-03T20:00:00+00:00"},
+        "sensor.example_relay_uptime": {"state": started, "attributes": {"device_class": "uptime"},
+                                        "last_changed": "2026-10-03T20:00:00+00:00"}}}))
+    rows = [{"entity_id": ids[0] if day == 2 else ids[1], "state": "unavailable",
+             "when": datetime(2026, 10, day, 9 + k, 5, tzinfo=timezone.utc).isoformat()} for day in (2, 3) for k in range(6)]
+    (fx / "logbook.json").write_text(json.dumps({"entries": rows}))
+    _pack(tmp, {"runtime": [_row(ids[0], "Example relay switch", family="runtime", asset="example_relay", device="dev-1")]},
+          unclassified=ids[1:], entity_devices={e: "dev-1" for e in ids},
+          devices={"dev-1": {"name": "Example Relay", "manufacturer": "", "model": ""}})
+
+
+def test_a_device_reconnecting_is_one_fault_named_for_it_and_wifi_when_it_never_restarted(tmp_path):
+    # 2026-10-13: a relay's switch and its uptime sensor (in no family) were two faults, the second named from an entity
+    # id, a third named after its "Restart" button elsewhere; and "a Wi-Fi or power problem" for a relay whose own uptime
+    # showed no restart for 11 days
+    _relay(tmp_path, "2026-09-20T00:00:00+00:00")
+    _night(tmp_path, "--as-of", AS_OF)
+    (f,) = _open(tmp_path, "PM-RECONNECT-LOOP")
+    assert f["summary"] == ("Example Relay dropped and reconnected 12 times in 3 days: a Wi-Fi problem on its side: it "
+                            "never restarted, so its power held."), f["summary"]
+
+
+def test_a_device_that_restarted_in_the_window_may_be_its_power(tmp_path):
+    _relay(tmp_path, "2026-10-02T12:00:00+00:00")
+    _night(tmp_path, "--as-of", AS_OF)
+    (f,) = _open(tmp_path, "PM-RECONNECT-LOOP")
+    assert f["summary"].endswith("a Wi-Fi or power problem on its side (it restarted in that time)."), f["summary"]
+
+
+def test_one_odd_day_is_not_an_energy_change(tmp_path):
+    # 2026-10-13: "used 0.36 kWh/day over the last 2 days (+117%)" was one long run and one day it barely ran, averaged
+    _pump(tmp_path, [1.8, 0.02])
+    _night(tmp_path, "--as-of", AS_OF)
+    assert _open(tmp_path, "PM-ENERGY-CHANGE") == []
+
+
+def test_a_low_battery_is_named_for_its_device_not_one_of_its_entities(tmp_path):
+    # 2026-10-13: "Motion1 Occupancy battery at 14%" — the battery is the device's, named after its motion entity
+    fx = tmp_path / "fx"
+    fx.mkdir()
+    (fx / "states.json").write_text(json.dumps({"states": {
+        "sensor.example_motion_battery": {"state": "14", "attributes": {}, "last_changed": "2026-10-03T20:00:00+00:00"}}}))
+    _pack(tmp_path, {"battery": [{**_row("sensor.example_motion_battery", "Example motion occupancy", family="battery",
+                                         asset="example_motion_occupancy", device="dev-m"), "unit": "%"}]},
+          devices={"dev-m": {"name": "Example Motion", "manufacturer": "", "model": ""}})
+    _night(tmp_path, "--as-of", AS_OF)
+    found = [f for f in __import__("vesta_shared.store", fromlist=["Store"]).Store(str(tmp_path / "s.sqlite")).findings("open")
+             if f["rule_id"].startswith("PM-BATTERY")]
+    assert found and all(f["summary"].startswith("Example Motion battery") for f in found), [f["summary"] for f in found]
+
+
+def test_one_odd_day_is_not_a_running_power_change():
+    # the same rule for the running power (2026-10-13): one high day and one low day are not "a drift"
+    import sys
+    sys.path.insert(0, os.path.join(STARTER_SKILLS, "preventive-maintenance", "scripts"))
+    import rules as R
+    from vesta_shared.params import VillaParams
+    from vesta_shared.skill_settings import load
+    params = VillaParams(defaults=load(os.path.join(STARTER_SKILLS, "preventive-maintenance"), "settings.yaml")["behaviour"])
+    end = date.fromisoformat(AS_OF)
+    day = lambda w: {"run_hours": 8, "full_hours": 8, "hours_with_data": 24, "running_power": w}      # noqa: E731
+    series = {end - timedelta(days=i): day(700.0) for i in range(2, 20)}
+    asset = {"slug": "pump", "name": "Example pump", "entities": {}}
+    for last in ((1000.0, 600.0), (900.0, 880.0)):
+        s = {**series, end - timedelta(days=1): day(last[0]), end: day(last[1])}
+        got = [f.rule_id for f in R.power_rules(asset, "sensor.example_pump_power", s, end, params, None, None)]
+        assert got == ([] if last == (1000.0, 600.0) else ["PM-POWER-CHANGE"]), (last, got)

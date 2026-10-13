@@ -163,6 +163,11 @@ class KnowledgePack:
     # Home Assistant's devices, by device id: {"name", "manufacturer", "model"} — the name the owner gave it first.
     # Empty in a pack built before 0.6.108 (then nothing is grouped by device).
     devices: dict[str, dict] = field(default_factory=dict)
+    # ⚠️ EVERY ENTITY'S DEVICE, CLASSIFIED OR NOT (2026-10-13): only a family's rows carried their device, so an entity
+    # in no family — a relay's uptime sensor, its restart button, a siren whose id says nothing — belonged to no device:
+    # its drops were a second fault for the same relay, and the plug behind an owner-only siren hid nothing.
+    # {entity_id: device_id}; empty in a pack built before (then the rows' own device is all there is).
+    entity_devices: dict[str, str] = field(default_factory=dict)
 
     def entities(self, family: str) -> list[dict]:
         return self.families.get(family, [])
@@ -202,6 +207,17 @@ class KnowledgePack:
         what = " ".join(x for x in (d.get("manufacturer"), d.get("model")) if x)
         return f"Unnamed {what}" if what else ""
 
+    def device_id_of(self, entity_id: str | None) -> str | None:
+        """The Home Assistant device `entity_id` belongs to (its row's, else entity_devices), None when none."""
+        return (self.row(entity_id or "") or {}).get("device_id") or self.entity_devices.get(entity_id or "")
+
+    def entities_of_device(self, device_id: str | None) -> set[str]:
+        """Every entity of that device, classified or not."""
+        if not device_id:
+            return set()
+        return {e for e, d in self.entity_devices.items() if d == device_id} | \
+               {r["entity_id"] for r in self.rows() if r.get("device_id") == device_id}
+
     def device_of(self, entity_id: str) -> tuple[str, str | None]:
         """What `entity_id` belongs to, as a report names it: (key, name). The key is its Home Assistant device when
         the pack has it, else the pack's asset (a slug from the entity id), else the entity; the name is the device's
@@ -213,7 +229,7 @@ class KnowledgePack:
         page shows of a device comes from here (architecture review 13): the clues, the cards and the trends named the
         pack's asset, the counter resets and the mutes the entity."""
         r = self.row(entity_id) or {}
-        dev = r.get("device_id")
+        dev = self.device_id_of(entity_id)
         label = self.device_label(dev)
         if label is not None:
             return f"device:{dev}", (label or None)
@@ -223,7 +239,7 @@ class KnowledgePack:
     def device_name(self, entity_id: str | None, default: str | None) -> str | None:
         """The name of what `entity_id` belongs to, as every page names it (device_of); `default` for an entity the
         pack does not have, or a device Home Assistant knows nothing about."""
-        if not entity_id or self.row(entity_id) is None:
+        if not entity_id or (self.row(entity_id) is None and self.device_id_of(entity_id) is None):
             return default
         return self.device_of(entity_id)[1] or default
 
@@ -396,6 +412,7 @@ def build_pack(registry: dict, helpers: list[dict], states: dict | None = None,
         devices={d["device_id"]: {"name": d.get("name_by_user") or d.get("name") or "",
                                   "manufacturer": d.get("manufacturer") or "", "model": d.get("model") or ""}
                  for d in registry.get("devices", []) if d.get("device_id")},
+        entity_devices={e["entity_id"]: e["device_id"] for e in ents if e.get("device_id")},
     )
 
 

@@ -1,3 +1,18 @@
+## 0.12.187
+
+What you will see:
+- One fault per device: a relay's uptime sensor or restart button no longer opens a second fault for the same relay.
+  Faults about a device (offline, silent, keeps reconnecting, its battery) carry the device's own name from Home
+  Assistant, never one of its parts ("Jet & Jaccuzi Relay", not "... Restart"; "Motion1", not "Motion1 Occupancy").
+- "Dropped and reconnected": when the device reports its own uptime and it never restarted, the fault says it is a
+  Wi-Fi problem (its power held) and asks to check the access point, not the power supply.
+- The night check reads the whole logbook (it stopped at 10,000 entries of 13,031 and missed the last 17 hours), and
+  says so in its notes if a read is ever cut short. An investigation says so on its page too.
+- An energy or running-power change needs every day of the check outside its normal: one long run next to a day the
+  pump barely ran is no longer "+117% for 2 days".
+- An owner-only device the agent cannot classify (a siren whose name says nothing) is still found behind the plug
+  that feeds it: switching that plug asks for your Approve.
+
 ## 0.12.186
 
 What you will see:

@@ -60,13 +60,13 @@ def related_entities(pack, reader, entity_ids: list[str]) -> set[str] | None:
         log.warning("No knowledge pack yet: what %s shares a device with is unknown, the owner is asked",
                     ", ".join(entity_ids))
         return None
-    rows = pack.rows()
-    seen = {r["entity_id"] for r in rows} | set(pack.unclassified)
+    seen = {r["entity_id"] for r in pack.rows()} | set(pack.unclassified)
     if set(entity_ids) - seen:
         log.warning("%s not in the knowledge pack yet: the owner is asked", ", ".join(sorted(set(entity_ids) - seen)))
         return None
-    devices = {r["device_id"] for r in rows if r.get("device_id") and r["entity_id"] in entity_ids}
-    out = {r["entity_id"] for r in rows if r.get("device_id") in devices}
+    # every entity of the same device, classified or not (2026-10-13: an owner-only siren the pack does not classify
+    # had no device in it, and the plug feeding it hid nothing)
+    out = {e for eid in entity_ids for e in pack.entities_of_device(pack.device_id_of(eid))}
     try:
         for _eid, st in (reader.states(entity_ids) or {}).items():
             members = ((st or {}).get("attributes") or {}).get("entity_id")

@@ -599,6 +599,11 @@ def around(client, store, start: datetime, end: datetime, focus: list[str], zone
     lines += _vesta(store, start, end, zone, span_days)
     if not lines:
         lines.append("Nothing else was recorded in this period.")
+    # where the logbook could not be read further (vesta_shared.ha_client.logbook_cut) — never taken for "nothing else"
+    cut = getattr(client, "logbook_cut", None)
+    if cut:
+        lines.append(f"⚠️ the logbook could not be read whole: nothing is known after {at(cut, zone, span_days)} "
+                     "(too many entries) — say so, and narrow the period to read the rest")
     noisy = sorted(((n, e) for e, n in count.items() if n / hours > th("noise_per_hour") and e not in focus), reverse=True)[:8]
     if noisy:
         lines.append("Left out as background (change constantly): " + ", ".join(e for _, e in noisy))

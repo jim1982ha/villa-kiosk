@@ -50,6 +50,22 @@ class Finding:
         return asdict(self)
 
 
+def _held(changes: list[float | None], low_pct: float, high_pct: float) -> int:
+    """-1 when EVERY recent day is at least `low_pct` below its normal, +1 when every one is at least `high_pct`
+    above, else 0.
+
+    ⚠️ EVERY DAY, NOT THEIR MIDDLE (2026-10-13): "over the last 2 days" was the median of two days — their average —
+    so a house pump's one long run (0.68 kWh) and a day it barely ran (0.04) read "+117%, 0.36 kWh/day": the confirm
+    days are there so one odd day is never a finding."""
+    if not changes or any(c is None for c in changes):
+        return 0
+    if all(c <= -low_pct for c in changes):
+        return -1
+    if all(c >= high_pct for c in changes):
+        return 1
+    return 0
+
+
 def _profile(series: list[dict], params: VillaParams) -> str:
     """Classify how an asset runs from its last 30 days of power features.
     continuous: runs in long steady blocks (pool filtration, circulation)
@@ -97,7 +113,7 @@ def power_rules(asset: dict, entity_id: str, series: dict[date, dict], today: da
                 base = prior["PM-POWER-CHANGE"]["baseline_w"]
             rec = med(rec_vals)
             change = pct_change(rec, base)
-            if change is not None and abs(change) >= drift_pct:
+            if change is not None and _held([pct_change(v, base) for v in rec_vals], drift_pct, drift_pct):
                 all_vals = [series[d]["running_power"] for d in days if series[d].get("running_power")]
                 idx, step_pct = step_index(all_vals)
                 if idx is not None:
@@ -148,7 +164,7 @@ def power_rules(asset: dict, entity_id: str, series: dict[date, dict], today: da
             if len(base) >= min_days and base_med and base_med > params.behaviour("energy_baseline_min_kwh"):
                 change = pct_change(med(rec), base_med)
                 drop, rise = params.behaviour("energy_drop_pct"), params.behaviour("energy_rise_pct")
-                if change is not None and (change <= -drop or change >= rise):
+                if change is not None and _held([pct_change(v, base_med) for v in rec], drop, rise):
                     kind = "COLLAPSE" if change < 0 else "JUMP"
                     summary = (f"{asset['name']} used {med(rec):.2f} kWh/day over the last {confirm} days against a normal "
                                f"{base_med:.2f} kWh/day ({change:+.0f}%).")
@@ -272,15 +288,24 @@ def level_rules(asset: dict, entity_id: str, device_class: str | None, series: d
 
 
 # ------------------------------------------------------------- forensics family
-def flap_rules(asset: dict, entity_id: str, flips_by_day: dict[date, int], today: date, params: VillaParams) -> list[Finding]:
+def flap_rules(asset: dict, entity_id: str, flips_by_day: dict[date, int], today: date, params: VillaParams,
+               restarted: bool | None = None) -> list[Finding]:
     """A device that dropped and reconnected `reconnect_events` times within `reconnect_days` — the same window
-    nightly.py reads the logbook for (architecture review 4, 2026-10-13: "3 days" was typed in both, and in the text)."""
+    nightly.py reads the logbook for (architecture review 4, 2026-10-13: "3 days" was typed in both, and in the text).
+    `restarted`: whether the device restarted in that window, read from its own uptime (None: it does not say).
+
+    ⚠️ NOT "WI-FI OR POWER" WHEN THE DEVICE SAYS (2026-10-13): a relay whose uptime showed no restart for 11 days was
+    told to check its power supply — a power cut restarts a device; drops without a restart are its network."""
     window = int(params.behaviour("reconnect_days"))
     n = sum(v for d, v in flips_by_day.items() if today - timedelta(days=window) < d <= today)
-    if n >= params.behaviour("reconnect_events"):
-        return [Finding("PM-RECONNECT-LOOP", entity_id, asset["slug"], "network", P3,
-                        f"{asset['name']} dropped and reconnected {n} times in {window} days: a Wi-Fi or power problem on "
-                        "its side.",
-                        {"flips_3d": n, "days": window},
-                        "Check the access point it uses, its power supply, and move it or add a repeater.")]
-    return []
+    if n < params.behaviour("reconnect_events"):
+        return []
+    if restarted is False:
+        cause = "a Wi-Fi problem on its side: it never restarted, so its power held"
+        check = "Check the access point it uses and its signal; move it or add a repeater."
+    else:
+        cause = "a Wi-Fi or power problem on its side" + (" (it restarted in that time)" if restarted else "")
+        check = "Check the access point it uses, its power supply, and move it or add a repeater."
+    return [Finding("PM-RECONNECT-LOOP", entity_id, asset["slug"], "network", P3,
+                    f"{asset['name']} dropped and reconnected {n} times in {window} days: {cause}.",
+                    {"flips_3d": n, "days": window, "restarted": restarted}, check)]

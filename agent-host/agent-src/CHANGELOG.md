@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.181 (13 October 2026)
+
+Owner, 2026-10-13 (Cockpit faults checked against Home Assistant's history; "never hardcode … universal"):
+- ha_client.paged returns (rows, reached the end); logbook reads up to 200 pages (ha-mcp gives 500 rows a page) and
+  sets `logbook_cut` when stopped short — nightly notes it, investigate's `around` says it. history's cut check uses
+  the flag (it assumed 1,000-row pages).
+- KnowledgePack.entity_devices (every enabled entity's device, classified or not), `device_id_of`,
+  `entities_of_device`; device_of / device_name use them. actions.related_entities finds unclassified siblings.
+- nightly: reconnect groups by `device_id_of` (an unclassified uptime sensor joined its relay); device findings
+  (battery, offline, silent, reconnect) named by `_device_named` (device_label), measurements keep the asset's name;
+  `_restarted` reads the device's own "uptime" entity (HA device class) — rules.flap_rules says Wi-Fi when it did not
+  restart. rules `_held`: energy and running-power changes need EVERY confirm day beyond the threshold.
+- Tests: test_ha_reads, test_call_service_shape, test_maintenance_noise (one device, device name, uptime both ways,
+  odd day for energy and running power, battery named for its device).
+
 ## 0.6.180 (13 October 2026)
 
 Architecture review 5, 2026-10-13 (owner: "do all of them in one release"):
