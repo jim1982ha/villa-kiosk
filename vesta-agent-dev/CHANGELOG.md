@@ -1,3 +1,12 @@
+## 0.12.182
+
+What you will see:
+- A long message is never shortened any more. A report or a long answer written in paragraphs under a heading
+  ("Findings:") went as ONE message ending in "…", the rest lost; it now goes as whole messages "(1/2)", "(2/2)", the
+  heading repeated, every word kept. A paragraph longer than one message is cut between sentences.
+- An investigation's chat summary may be about 90 characters longer (up to 640): the room kept for a "To:" naming
+  people is no longer needed now that "To:" names roles.
+
 ## 0.12.181
 
 What you will see:
