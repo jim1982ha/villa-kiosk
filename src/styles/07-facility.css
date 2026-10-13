@@ -39,15 +39,23 @@
 
 .fm-stack { display: flex; flex-direction: column; gap: 16px; }
 
-/* Summary numbers — the glance layer above the detail. */
-.fm-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+/* Summary numbers — the glance layer above the detail. ⚠️ ONE LINE, HOWEVER
+   MANY (owner, 2026-10-14): auto-fit wrapped the Faults tab's fourth box onto a
+   row of its own on a phone. Each box takes an equal share; on a narrow screen
+   the figure shrinks and the label wraps inside its box instead. */
+.fm-summary { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 10px; }
 .fm-stat {
-  display: flex; flex-direction: column; gap: 2px;
+  display: flex; flex-direction: column; gap: 2px; min-width: 0;
   padding: 12px 14px; border-radius: 12px;
   background: var(--bg-card); border: 1px solid var(--hairline);
 }
+@media (max-width: 640px) {
+  .fm-summary { gap: 6px; }
+  .fm-stat { padding: 10px 8px; }
+  .fm-stat .n { font-size: var(--text-xl); }
+}
 .fm-stat .n { font-size: var(--text-2xl); font-weight: 700; line-height: 1.1; }
-.fm-stat .l { font-size: var(--text-xs); color: var(--text-dim); }
+.fm-stat .l { font-size: var(--text-xs); color: var(--text-dim); overflow-wrap: break-word; }
 .fm-stat.good .n { color: var(--status-on); }
 .fm-stat.warn .n { color: var(--status-warning); }
 .fm-stat.bad  .n { color: var(--status-danger); }
@@ -264,6 +272,18 @@
   width: min(360px, 100%);
   display: flex; flex-direction: column; align-items: center; gap: 10px;
 }
+/* ⚠️ CENTRED ON EVERY SCREEN. The phone rule in 05-layout.css makes every
+   .modal-backdrop a top-left full-screen sheet (padding 0, flex-start) for the
+   .modal windows; this card is not one. Centred again, clear of the notch and
+   the home indicator, and scrolling on a very short screen instead of losing
+   its head off the top (`margin: auto` centres without cropping, where
+   align-items: center would push an overflowing head out of reach). */
+.modal-backdrop.superadmin-backdrop {
+  align-items: flex-start; justify-content: center; overflow-y: auto;
+  padding: calc(16px + var(--safe-top)) calc(16px + env(safe-area-inset-right, 0px))
+           max(16px, var(--safe-bottom)) calc(16px + env(safe-area-inset-left, 0px));
+}
+.superadmin-backdrop > .superadmin-prompt { margin: auto; }
 .superadmin-prompt-head {
   display: inline-flex; align-items: center; gap: 8px;
   color: var(--status-danger); font-size: var(--text-sm); letter-spacing: 0.04em;

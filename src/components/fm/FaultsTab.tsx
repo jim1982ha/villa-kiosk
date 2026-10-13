@@ -27,6 +27,7 @@ import AgentMark from "./AgentMark";
 import RecordMeta, { RecordNotes } from "./RecordMeta";
 import { faultNoteLines, faultWhen } from "@/fm/faultNotes";
 import InlineConfirm from "@/components/common/InlineConfirm";
+import { Pager, usePaged, PAGE_CARDS } from "@/components/common/Paged";
 import { useDeviceChoice } from "./useDeviceChoice";
 import FormActions from "./FormActions";
 
@@ -74,7 +75,9 @@ export default function FaultsTab(
   /** The fault whose stage change is being recorded, and where it's going. */
   const [staging, setStaging] = useState<{ ticket: FmTicket; to: FmTicketStatus } | null>(null);
   const [showBroken, setShowBroken] = useState(false);
-  /** The fault whose one-step close ("no action needed") is being confirmed,
+  /** The closed faults' section, folded by default (owner, 2026-10-14). */
+  const [showClosed, setShowClosed] = useState(false);
+  /** The fault whose one-step close ("Close": nothing done) is being confirmed,
    *  and the reason the last close did not land. */
   const [closingId, setClosingId] = useState<string | null>(null);
   const [closeError, setCloseError] = useState<{ id: string; text: string } | null>(null);
@@ -107,6 +110,13 @@ export default function FaultsTab(
   // Rank and transitions are the engine's (fmEngine.ticketRank / TICKET_NEXT).
   const openFirst = [...data.tickets].sort((a, b) =>
     ticketRank(a) - ticketRank(b) || Date.parse(b.openedAt) - Date.parse(a.openedAt));
+  // ⚠️ THE CLOSED FAULTS ARE A SECTION OF THEIR OWN, FOLDED AND PAGED (owner, 2026-10-14): the VESTA Agent clears
+  // several a day, and they buried the open ones. Latest closed first. The server drops them after their retention
+  // window (supervisor-proxy _fm_expire), so the list cannot grow for ever.
+  const active = openFirst.filter(isTicketOpen);
+  const closed = openFirst.filter(isTicketResolved)
+    .sort((a, b) => Date.parse(b.resolvedAt ?? b.openedAt) - Date.parse(a.resolvedAt ?? a.openedAt));
+  const closedPage = usePaged(closed, PAGE_CARDS);
 
   // Devices HA currently reports as unavailable that don't already have an open
   // ticket — the "raise this" shortlist.
@@ -145,6 +155,114 @@ export default function FaultsTab(
     // the form mid-edit. The request id is the only trigger that matters.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reportFaultFor]);
+
+  // One card, for an open fault and a closed one alike.
+  const card = (t: FmTicket) => (
+    <ErasableRow
+      key={t.id}
+      className={`fm-fault state-${isTicketResolved(t) ? "ok" : t.status === "open" ? "overdue" : "due-soon"}`}
+      intent={{ title: "Erase this fault", detail: t.title }}
+      erase={(token) => removeTicket(t.id, token)}
+      onOpen={() => openEditor(t)}
+    >
+      {/* ⚠️ ONE CARD, THREE ROWS (owner, 2026-10-01: "the style of the cards
+          is very bad"). The status pill and both buttons used to share
+          the title's row, which squeezed a long title into a column six
+          lines tall. Now: the title across the card with its status at
+          the right; the record under it; the actions on a row of their
+          own, at the right — or the close question in their place. */}
+      <div className="fm-fault-head">
+        <div className="fm-row-title">
+          <strong>{t.title}</strong>
+        </div>
+        <span className={`fm-badge ${isTicketResolved(t) ? "ok" : t.status === "open" ? "overdue" : "due-soon"}`}>
+          {LABEL[t.status]}
+        </span>
+      </div>
+      <div className="fm-row-main">
+        {/* ⚠️ ONE LINE UNDER THE TITLE (owner, 2026-10-11): the pills and when, together — the
+            history's "Open · … · VESTA Agent" lines only repeated it, so its notes alone stay
+            below, each in the "Check: …" style. Who picked it up and who resolved it are on
+            this line. */}
+        <RecordMeta when={faultWhen(t, localStamp)}>
+          {t.room && <span className="fm-clause">{t.room}</span>}
+          {/* Read this row differently: a guest reports a symptom from
+              inside the villa, not a diagnosis. */}
+          {t.reportedBy === "guest" && <span className="fm-clause guest">guest report</span>}
+          <AgentMark record={t} />
+          {t.entityId ? (
+            <button className="fm-entity-chip" title={t.entityId}
+              onClick={(e) => { e.stopPropagation(); onOpenEntity(t.entityId!); }}>
+              {t.deviceLabel ?? label(t.entityId)}
+            </button>
+          ) : t.deviceLabel ? (
+            // Free-text device: nothing to open, so a plain (non-
+            // clickable) chip rather than a button that does nothing.
+            <span className="fm-entity-chip" style={{ cursor: "default" }}>{t.deviceLabel}</span>
+          ) : null}
+        </RecordMeta>
+        {/* Its notes, each with its date; of the title changes only the latest, as "Was: …" (owner,
+            2026-10-11: "only show the latest one"; review 26) — faultNoteLines */}
+        <RecordNotes notes={faultNoteLines(t, localStamp)} />
+        {/* The photos themselves, not a count of them. "3 photo(s)"
+            is a claim; a thumbnail you can open is the evidence. */}
+        {t.photoIds.length > 0 && (
+          <EvidenceRow photoIds={t.photoIds} disabled />
+        )}
+        {/* The investigation report the VESTA Agent attached (owner, 2026-10-11): opens on the iPad, offline */}
+        {(t.documentIds?.length ?? 0) > 0 && (
+          <div className="fm-documents">
+            {t.documentIds!.map((id, i) => (
+              <a key={id} className="fm-document-link" href={documentUrl(id)} target="_blank"
+                rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
+                <FileText size={15} aria-hidden="true" />
+                {t.documentIds!.length > 1 ? `Investigation report ${i + 1}` : "Investigation report"}
+              </a>
+            ))}
+          </div>
+        )}
+      </div>
+      {closingId !== t.id && (TICKET_NEXT[t.status] || !isTicketResolved(t)) && (
+        <div className="fm-fault-actions">
+          {TICKET_NEXT[t.status] && (
+            <button className="btn ghost"
+              // Never a bare status flip any more: every transition goes
+              // through the same dialog, so the record always carries who
+              // and what behind the change.
+              onClick={(e) => { e.stopPropagation(); setStaging({ ticket: t, to: TICKET_NEXT[t.status]! }); }}>
+              {/* a resolved fault can be reopened (review 26): the VESTA Agent reads it, never guesses it */}
+              {isTicketResolved(t) ? "Reopen fault" : `Mark ${LABEL[TICKET_NEXT[t.status]!].toLowerCase()}`}
+            </button>
+          )}
+          {/* ⚠️ THE ONE-STEP CLOSE, BESIDE THE TWO-STEP FLOW, NOT INSTEAD
+              OF IT. Many faults are obsolete — raised automatically and
+              since gone away — and walking each through "in progress" and
+              a cost dialog recorded work nobody did. This one leaves
+              "Closed without action" on the history, and no completion or
+              cost (fmEngine.withTicketClosed). */}
+          {!isTicketResolved(t) && (
+            <button className="btn ghost"
+              onClick={(e) => { e.stopPropagation(); setCloseError(null); setClosingId(t.id); }}>
+              Close
+            </button>
+          )}
+        </div>
+      )}
+      {closingId === t.id && (
+        <div className="fm-row-confirm">
+          <InlineConfirm
+            question="Close this fault? Nothing was done — no cost is recorded."
+            confirmLabel="Close fault"
+            onConfirm={() => closeNoAction(t.id)}
+            onCancel={() => setClosingId(null)}
+          />
+        </div>
+      )}
+      {closeError?.id === t.id && (
+        <div className="fm-inline-error fm-row-confirm" role="alert">{closeError.text}</div>
+      )}
+    </ErasableRow>
+  );
 
   return (
     <div className="fm-stack">
@@ -264,7 +382,7 @@ export default function FaultsTab(
         </div>
       )}
 
-      {openFirst.length === 0 && !adding && (
+      {data.tickets.length === 0 && !adding && (
         <div className="fm-empty">
           <Wrench size={28} />
           <h3>No faults recorded</h3>
@@ -274,114 +392,27 @@ export default function FaultsTab(
         </div>
       )}
 
-      <div className="fm-list">
-        {openFirst.map((t) => (
-          <ErasableRow
-            key={t.id}
-            className={`fm-fault state-${isTicketResolved(t) ? "ok" : t.status === "open" ? "overdue" : "due-soon"}`}
-            intent={{ title: "Erase this fault", detail: t.title }}
-            erase={(token) => removeTicket(t.id, token)}
-            onOpen={() => openEditor(t)}
-          >
-            {/* ⚠️ ONE CARD, THREE ROWS (owner, 2026-10-01: "the style of the cards
-                is very bad"). The status pill and both buttons used to share
-                the title's row, which squeezed a long title into a column six
-                lines tall. Now: the title across the card with its status at
-                the right; the record under it; the actions on a row of their
-                own, at the right — or the close question in their place. */}
-            <div className="fm-fault-head">
-              <div className="fm-row-title">
-                <strong>{t.title}</strong>
-              </div>
-              <span className={`fm-badge ${isTicketResolved(t) ? "ok" : t.status === "open" ? "overdue" : "due-soon"}`}>
-                {LABEL[t.status]}
-              </span>
-            </div>
-            <div className="fm-row-main">
-              {/* ⚠️ ONE LINE UNDER THE TITLE (owner, 2026-10-11): the pills and when, together — the
-                  history's "Open · … · VESTA Agent" lines only repeated it, so its notes alone stay
-                  below, each in the "Check: …" style. Who picked it up and who resolved it are on
-                  this line. */}
-              <RecordMeta when={faultWhen(t, localStamp)}>
-                {t.room && <span className="fm-clause">{t.room}</span>}
-                {/* Read this row differently: a guest reports a symptom from
-                    inside the villa, not a diagnosis. */}
-                {t.reportedBy === "guest" && <span className="fm-clause guest">guest report</span>}
-                <AgentMark record={t} />
-                {t.entityId ? (
-                  <button className="fm-entity-chip" title={t.entityId}
-                    onClick={(e) => { e.stopPropagation(); onOpenEntity(t.entityId!); }}>
-                    {t.deviceLabel ?? label(t.entityId)}
-                  </button>
-                ) : t.deviceLabel ? (
-                  // Free-text device: nothing to open, so a plain (non-
-                  // clickable) chip rather than a button that does nothing.
-                  <span className="fm-entity-chip" style={{ cursor: "default" }}>{t.deviceLabel}</span>
-                ) : null}
-              </RecordMeta>
-              {/* Its notes, each with its date; of the title changes only the latest, as "Was: …" (owner,
-                  2026-10-11: "only show the latest one"; review 26) — faultNoteLines */}
-              <RecordNotes notes={faultNoteLines(t, localStamp)} />
-              {/* The photos themselves, not a count of them. "3 photo(s)"
-                  is a claim; a thumbnail you can open is the evidence. */}
-              {t.photoIds.length > 0 && (
-                <EvidenceRow photoIds={t.photoIds} disabled />
-              )}
-              {/* The investigation report the VESTA Agent attached (owner, 2026-10-11): opens on the iPad, offline */}
-              {(t.documentIds?.length ?? 0) > 0 && (
-                <div className="fm-documents">
-                  {t.documentIds!.map((id, i) => (
-                    <a key={id} className="fm-document-link" href={documentUrl(id)} target="_blank"
-                      rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
-                      <FileText size={15} aria-hidden="true" />
-                      {t.documentIds!.length > 1 ? `Investigation report ${i + 1}` : "Investigation report"}
-                    </a>
-                  ))}
-                </div>
-              )}
-            </div>
-            {closingId !== t.id && (TICKET_NEXT[t.status] || !isTicketResolved(t)) && (
-              <div className="fm-fault-actions">
-                {TICKET_NEXT[t.status] && (
-                  <button className="btn ghost"
-                    // Never a bare status flip any more: every transition goes
-                    // through the same dialog, so the record always carries who
-                    // and what behind the change.
-                    onClick={(e) => { e.stopPropagation(); setStaging({ ticket: t, to: TICKET_NEXT[t.status]! }); }}>
-                    {/* a resolved fault can be reopened (review 26): the VESTA Agent reads it, never guesses it */}
-                    {isTicketResolved(t) ? "Reopen fault" : `Mark ${LABEL[TICKET_NEXT[t.status]!].toLowerCase()}`}
-                  </button>
-                )}
-                {/* ⚠️ THE ONE-STEP CLOSE, BESIDE THE TWO-STEP FLOW, NOT INSTEAD
-                    OF IT. Many faults are obsolete — raised automatically and
-                    since gone away — and walking each through "in progress" and
-                    a cost dialog recorded work nobody did. This one leaves
-                    "Closed without action" on the history, and no completion or
-                    cost (fmEngine.withTicketClosed). */}
-                {!isTicketResolved(t) && (
-                  <button className="btn ghost"
-                    onClick={(e) => { e.stopPropagation(); setCloseError(null); setClosingId(t.id); }}>
-                    Close — no action needed
-                  </button>
-                )}
-              </div>
-            )}
-            {closingId === t.id && (
-              <div className="fm-row-confirm">
-                <InlineConfirm
-                  question="Close this fault? Nothing was done — no cost is recorded."
-                  confirmLabel="Close fault"
-                  onConfirm={() => closeNoAction(t.id)}
-                  onCancel={() => setClosingId(null)}
-                />
-              </div>
-            )}
-            {closeError?.id === t.id && (
-              <div className="fm-inline-error fm-row-confirm" role="alert">{closeError.text}</div>
-            )}
-          </ErasableRow>
-        ))}
-      </div>
+      {active.length === 0 && closed.length > 0 && !adding && (
+        <p className="muted body-text">No open faults.</p>
+      )}
+
+      {active.length > 0 && <div className="fm-list">{active.map(card)}</div>}
+
+      {closed.length > 0 && (
+        <div className="fm-field">
+          <button type="button" className="fm-disclosure" onClick={() => setShowClosed((v) => !v)}
+            aria-expanded={showClosed}>
+            {showClosed ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+            Closed ({closed.length})
+          </button>
+          {showClosed && (
+            <>
+              <div className="fm-list">{closedPage.page.map(card)}</div>
+              <Pager paged={closedPage} unit="closed fault" />
+            </>
+          )}
+        </div>
+      )}
 
       {staging && (
         <FaultStageModal

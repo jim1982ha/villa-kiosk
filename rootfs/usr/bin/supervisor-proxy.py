@@ -1582,6 +1582,54 @@ FM_RECORD_COLLECTIONS = ("schedules", "completions", "costs", "tickets", "savedD
 FM_PROTECTED_COLLECTIONS = ("completions", "costs", "tickets")
 
 
+# ── HOW LONG A CLOSED FAULT IS KEPT ─────────────────────────────────────────
+# Until 2.496.342 a fault was kept FOREVER: the VESTA Agent raises and clears
+# several a day, the whole record is one document with a 4 MB cap
+# (FM_DATA_MAX_BYTES), so the list grew until every write would be refused
+# (owner, 2026-10-14: "I hope it's not growing indefinitely?").
+#
+# Two windows, both counted from the fault's last resolution:
+#   * closed with NO work done (its last resolving step is kind "cleared": the
+#     Kiosk's "Close", the agent clearing a problem that went away) —
+#     FM_CLEARED_FAULT_RETENTION_DAYS. It evidences nothing that happened.
+#   * repaired — as long as its photos (evidence_retention_days), the window
+#     the owner already sets for evidence; 0 there keeps them for ever.
+# A close written before steps carried a kind falls in the second, longer
+# window: kept too long is the safe direction.
+#
+# ⚠️ THE SERVER EXPIRES, NOBODY DELETES. Applied to the stored document AND to
+# every write before the guards judge it (the stores' `tidy`), so an expired
+# fault is never "removed by" a write (no superadmin code; the agent's
+# no-delete rule untouched), and a stale copy sent back cannot resurrect it.
+FM_CLEARED_FAULT_RETENTION_DAYS = 90
+
+
+def _fm_ticket_expired(ticket, now: float) -> bool:
+    """True when this closed fault is past its retention window."""
+    if not isinstance(ticket, dict) or ticket.get("status") != "resolved":
+        return False
+    steps = [u for u in ticket.get("updates") or []
+             if isinstance(u, dict) and u.get("status") == "resolved"]
+    last = steps[-1] if steps else None
+    resolved_at = _iso_epoch(last.get("at")) if last else None
+    if resolved_at is None:
+        resolved_at = _iso_epoch(ticket.get("resolvedAt"))
+    if resolved_at is None:
+        return False                      # cannot tell when: kept
+    days = FM_CLEARED_FAULT_RETENTION_DAYS if last and last.get("kind") == "cleared" \
+        else _evidence_retention_days()
+    return days > 0 and now - resolved_at > days * 86400
+
+
+def _fm_expire(doc, now: float | None = None):
+    """The Facility record without the closed faults past their window."""
+    if not isinstance(doc, dict) or not isinstance(doc.get("tickets"), list):
+        return doc
+    now = time.time() if now is None else now
+    kept = [t for t in doc["tickets"] if not _fm_ticket_expired(t, now)]
+    return doc if len(kept) == len(doc["tickets"]) else dict(doc, tickets=kept)
+
+
 # A guest may append at most this many reports in one write. One is the normal
 # case; the cap only exists so a scripted session cannot bulk-fill the store.
 FM_GUEST_MAX_NEW_TICKETS = 3
@@ -2607,7 +2655,7 @@ def _store_unreadable_response(key: str) -> web.Response:
 
 
 def _store_get_handler(store: JsonStore, key: str, what: str, *,
-                       capability: str | None = None, view=None, gate=None):
+                       capability: str | None = None, view=None, gate=None, tidy=None):
     """The GET door of one store: `{key: document, "rev": revision}`.
 
     `capability` gates it (None = any authorized caller — a guest still has to
@@ -2615,7 +2663,8 @@ def _store_get_handler(store: JsonStore, key: str, what: str, *,
     `view(request, stored)` is what THIS caller may read (default: the whole
     document). `gate(request, capability, message)` replaces _refuse for a
     caller that is not a browser session — the VESTA Agent's bearer token
-    (_agent_refuse)."""
+    (_agent_refuse). `tidy(stored)` drops what the store no longer keeps (the
+    closed faults past their window, _fm_expire) before anyone sees it."""
     gate = gate or _refuse
 
     async def get_handler(request: web.Request) -> web.Response:
@@ -2634,6 +2683,8 @@ def _store_get_handler(store: JsonStore, key: str, what: str, *,
         # in the field as the cause of one client's shared config silently
         # disagreeing with every other client's.
         stored = await asyncio.to_thread(store.read)
+        if tidy is not None:
+            stored = tidy(stored)
         return web.json_response(
             {key: view(request, stored) if view else stored, "rev": store.rev()},
             headers={"Cache-Control": "no-store"},
@@ -2644,7 +2695,7 @@ def _store_get_handler(store: JsonStore, key: str, what: str, *,
 
 def _store_put_handler(store: JsonStore, key: str, what: str, *,
                        capability: str = "editConfig", merge=None, guard=None,
-                       after=None, view=None, require_rev: bool = False, gate=None):
+                       after=None, view=None, require_rev: bool = False, gate=None, tidy=None):
     """The whole-document PUT door of one store: `{key: document, "rev"?}`.
 
     `capability` defaults to editConfig — owner-only, because shared state is
@@ -2656,7 +2707,10 @@ def _store_put_handler(store: JsonStore, key: str, what: str, *,
     the document to write; `guard(request, body, stored, new)` then judges the
     merged result and may refuse it by returning a response (a superadmin
     elevation before any record is DELETED); `after(stored, new)` runs once the
-    write has landed (the evidence sweep). `view` is applied to the 409 body
+    write has landed (the evidence sweep). `tidy(document)` drops what the
+    store no longer keeps — from the stored copy AND from what was sent, before
+    merge and guard, so an expired record is never a removal a guard judges nor
+    one a stale copy brings back (_fm_expire). `view` is applied to the 409 body
     too — a stale write must not be a way to read what a GET withholds.
 
     PUT optionally carries a `rev` (the revision the caller last read, from
@@ -2718,6 +2772,8 @@ def _store_put_handler(store: JsonStore, key: str, what: str, *,
                 {"error": "rev is required: send the revision you last read"}, status=428)
 
         def change(stored):
+            if tidy is not None:
+                stored = tidy(stored)
             if expected_rev is not None and expected_rev != (current := store.rev()):
                 # The fresher copy a caller rebases its retry onto — an
                 # intermediary caching THIS would be actively harmful, not
@@ -2727,6 +2783,8 @@ def _store_put_handler(store: JsonStore, key: str, what: str, *,
                      "rev": current},
                     status=409, headers={"Cache-Control": "no-store"}))
             new = merge(request, stored, sent) if merge is not None else sent
+            if tidy is not None:
+                new = tidy(new)
             if guard is not None and (veto := guard(request, body, stored, new)) is not None:
                 raise Veto(veto)
             return new
@@ -3023,7 +3081,7 @@ device_config_put_handler = _store_put_handler(
 # difference is who may write it. /agent/v1/fm-data opens the SAME store.
 FM_DATA = JsonStore("fm-data.json", {}, FM_DATA_MAX_BYTES)
 fm_data_get_handler = _store_get_handler(
-    FM_DATA, "data", "facility manager data", view=_fm_reader_view)
+    FM_DATA, "data", "facility manager data", view=_fm_reader_view, tidy=_fm_expire)
 fm_data_put_handler = _store_put_handler(
     FM_DATA, "data", "facility manager data",
     # "guest" is admitted at the ROLE gate but constrained by the write guard
@@ -3031,7 +3089,7 @@ fm_data_put_handler = _store_put_handler(
     # alone would be far too broad. Everything else about the maintenance
     # record stays owner/ops.
     capability="reportFault", view=_fm_reader_view, merge=_fm_writer_merge,
-    guard=_fm_write_guard, after=_fm_after_write)
+    guard=_fm_write_guard, after=_fm_after_write, tidy=_fm_expire)
 
 
 # ══ The VESTA Agent interface v1 ═════════════════════════════════════════════
@@ -3251,11 +3309,11 @@ def _fm_agent_write_guard(request: web.Request, body, old, new):
 
 
 agent_fm_get_handler = _store_get_handler(
-    FM_DATA, "data", "the Facility records", capability="agentRead", gate=_agent_refuse)
+    FM_DATA, "data", "the Facility records", capability="agentRead", gate=_agent_refuse, tidy=_fm_expire)
 agent_fm_put_handler = _store_put_handler(
     FM_DATA, "data", "the Facility records", capability="agentWrite",
     merge=_fm_agent_merge, guard=_fm_agent_write_guard, after=_fm_after_write,
-    require_rev=True, gate=_agent_refuse)
+    require_rev=True, gate=_agent_refuse, tidy=_fm_expire)
 
 
 async def agent_fm_evidence_handler(request: web.Request) -> web.Response:

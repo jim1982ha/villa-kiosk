@@ -78,7 +78,7 @@ interface FmDataContextValue {
     step: { who?: string; note?: string; photoIds: string[] },
     cost?: Omit<FmCost, "id" | "at" | "photoIds">,
   ) => Promise<FmWriteResult>;
-  /** Close a fault in ONE step, nothing done ("Close — no action needed"):
+  /** Close a fault in ONE step, nothing done ("Close": no action needed):
    *  resolved now, with a "Closed without action" update, and no completion
    *  or cost (fmEngine.withTicketClosed). The same write as every other. */
   closeTicket: (id: string) => Promise<FmWriteResult>;
