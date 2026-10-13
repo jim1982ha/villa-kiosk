@@ -1,3 +1,16 @@
+## 0.12.186
+
+What you will see:
+- An alert that stays open a long time keeps working buttons: its Done and Need help answer, and a close in the Kiosk
+  takes its buttons off, however long it was open. Before, after the records period (90 days, or as set) they did
+  nothing.
+- A skill's page (Skills, When the skill runs) now shows everything that starts it: villa-concierge shows "before every
+  answer in a chat", the status check it runs each time.
+- A "direct" action asks for your Approve whenever the agent cannot tell what else it touches: before its device list
+  is built, or for a device added since the last nightly build. (When Home Assistant itself cannot say, it already did.)
+- Offline Test of /proposal's answer now checks it and records nothing: "Test: Proposal 3, … would be ignored. Nothing
+  was recorded." Before, it said "Only the owner answers proposals" to the owner.
+
 ## 0.12.185
 
 What you will see:
