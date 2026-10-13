@@ -1,3 +1,10 @@
+## 0.12.189
+
+What you will see: nothing — this release changes only how the app is built and tested, not what it does.
+- The developer's test setup now lives in one permanent place instead of a temporary folder, so releases are checked
+  the same way every time.
+- The developer's working notes for the app were split: the rules stay short, the long history moved to its own file.
+
 ## 0.12.188
 
 What you will see:

@@ -45,7 +45,12 @@ ENGINE_CHANGELOG = "agent-host/agent-src/CHANGELOG.md"
 ENGINE_MANIFEST = "agent-host/agent-src/vesta-agent.yaml"
 ENGINE_INIT = "agent-host/agent-src/vesta_agent/__init__.py"
 
-PY = sys.executable
+#: ⚠️ THE TESTS' PYTHON IS A FIXED PLACE (2026-10-13): this machine has no `python` and its python3 lacks pytest, and
+#: a session found the only working environment in ANOTHER session's /tmp scratchpad, gone at the next reboot. Off CI,
+#: agent-host/.venv (uv venv --python 3.13; pyyaml pytest -r agent-src/requirements.txt; gitignored) is used when it
+#: exists; CI installs its own packages and runs with the interpreter that started this file.
+VENV_PY = ROOT / "agent-host" / ".venv" / "bin" / "python"
+PY = str(VENV_PY) if not IN_CI and VENV_PY.exists() else sys.executable
 # (name, command, working directory under ROOT, lane). ⚠️ A LANE RUNS ITS GATES IN ORDER, LANES RUN AT ONCE
 # (2026-10-05: one gate at a time was 77 s, 38 of them the agent's own tests). Every gate that binds the fixed sidecar
 # port (contract.SIDECAR_PORT) is in the "sidecar" lane, so two never bind it together — said on the gate's own line
