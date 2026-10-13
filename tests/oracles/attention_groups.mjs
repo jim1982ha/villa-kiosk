@@ -14,7 +14,7 @@ import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
-const { buildAttentionItems, groupAttention, attentionFor, attentionLine, attentionLineIn } = await import("@/config/attention");
+const { buildAttentionItems, groupAttention, attentionFor, attentionLine, attentionLineIn, lineIcon } = await import("@/config/attention");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
 
 const ent = (id, state, name) => ({ entity_id: id, state, attributes: { friendly_name: name } });
@@ -76,6 +76,13 @@ const loneFault = groupAttention(build([ticket("va-4", "Back door stiff", "lock.
 ck("  ...and a lone ticket is titled by its DEVICE, the fault its line, the device's room taken",
    loneFault?.title === "Back door" && loneFault.room === "Garden"
      && attentionLineIn(loneFault, loneFault.items[0]) === "Open fault: Back door stiff", loneFault);
+// ⚠️ ONE ICON PER MEANING (owner, 2026-10-13: "the icon is redundant"): every line repeated its row's icon
+ck("  ...and its line shows no icon of its own: the row's says it already",
+   lineIcon(loneFault, loneFault.items[0]) === null && lineIcon(lone, lone.items[0]) === null);
+const mixed = battery.find((g) => g.key === "device:lock.door");
+ck("  ...while a row mixing kinds marks the line whose kind is not the row's (a fault under an unlocked lock)",
+   mixed?.kind === "alarm" && mixed.items.map((i) => lineIcon(mixed, i)).join(",") === ",fault",
+   mixed?.items.map((i) => [i.kind, lineIcon(mixed, i)]));
 const noDevice = groupAttention(build([ticket("t-n", "Pool pump noisy")])).find((g) => g.key === "item:fault:t-n");
 ck("  ...and a problem with no device stands for itself: its line says only its status, never its title twice",
    noDevice?.title === "Pool pump noisy" && attentionLineIn(noDevice, noDevice.items[0]) === "Open fault", noDevice);
@@ -176,7 +183,9 @@ ck("the villa model hands buildAttentionItems the device fold, and leaves the gr
    && /return attentionFor\(attention, \(id\) => sees\.has\(id\)\);/.test(src("components/cockpit/useVillaAttention.ts")));
 ck("the Cockpit draws one row per group, and every fault line inside a row has its own Close",
    /attentionGroups\.map\(\(group\) => \(\s*<CockpitAttentionRow key=\{group\.key\} group=\{group\}/.test(cockpit)
-   && /function CockpitAttentionSub[\s\S]*?useFaultClose\(item, canCloseFault\)/.test(cockpit));
+   && /function CockpitAttentionSub[\s\S]*?useFaultClose\(item, canCloseFault\)/.test(cockpit)
+   // a line's icon is lineIcon's answer, never its own kind's again
+   && /function CockpitAttentionSub[\s\S]*?const kind = lineIcon\(group, item\);[\s\S]*?\{Icon && <Icon/.test(cockpit));
 // ⚠️ CLOSE TAKES ITS OWN CLICK (owner, 2026-10-10: "Close is not clickable because the whole card takes the
 // priority"): 2.496.318 stretched an invisible layer from the head over the card, on top of Close
 const css08 = src("styles/08-shared.css");
