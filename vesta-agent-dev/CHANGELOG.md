@@ -1,3 +1,13 @@
+## 0.12.184
+
+What you will see:
+- You can answer a proposal of the monthly report: /proposal accept 3, /proposal later 3 or /proposal ignore 3 (the
+  number on the report). The agent answers once, naming it: "Proposal 3, Retune Gate relay: ignored: it will not be
+  suggested again." Accepted or ignored, it leaves the next report; later keeps it there. Answering the same number
+  again changes the answer. Only the Owner can answer; "accept 3" typed without /proposal is not an answer.
+- Each proposal on the monthly page shows its number ("Proposal 3"), and the page says to answer with /proposal.
+- An ignored proposal is never suggested again, even when the same saving is found again.
+
 ## 0.12.183
 
 What you will see:
