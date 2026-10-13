@@ -121,7 +121,6 @@ def test_one_person_in_both_roles_is_named_as_each_chat_knows_them():
                            {"telegram_id": -5, "name": "Group_O", "role": "owner"}]})
     assert p.person(2).role == "owner" and p.person(-5) is None             # the wider rights; a group is nobody
     # "For:" of a notice: the persons of its role, never the group they read it in
-    assert p.names_for({"fm"}) == ["Jean-Marie", "Fabien_FM"] and p.names_for({"owner"}) == ["Fabien"]
     assert p.name_in(2, 1) == "Fabien_FM" and p.name_in(2, -5) == "Fabien"                    # a press's footer
     # where each role's messages go: every chat listed with it (owner, 2026-10-10)
     assert p.chats_for("owner") == [2, -5] and p.chats_for("fm") == [1, 2]

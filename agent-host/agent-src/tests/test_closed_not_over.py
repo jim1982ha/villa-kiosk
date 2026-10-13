@@ -75,13 +75,13 @@ def test_a_close_the_desk_cannot_check_says_so_with_what_the_device_reads(tmp_pa
     assert fm["stage"] == "closed" and store.incident(iid)["closed_at"]
 
 
-def test_a_rule_silent_for_twelve_hours_is_watched_by_the_desk(tmp_path):
-    # a blueprint reload cancels the rule's run without an "abandoned": the desk waited for an all-clear for ever
+def test_a_rule_that_never_says_it_cleared_is_read_again_by_the_desk(tmp_path):
+    # a blueprint reload cancels the rule's run without an "abandoned": the desk waited for an all-clear for ever.
+    # Owner, 2026-10-13: whatever rule sent it, the desk reads what the alert claims — no waiting on the rule
     store = Store(str(tmp_path / "s.sqlite"))
     iid = door(store)
     villa = Villa(**{"lock.door": ("locked", T0 + timedelta(hours=1))})
-    assert not desk.tick(store, T0 + timedelta(hours=6), client=villa).get("cleared")      # Home Assistant's still
-    assert desk.tick(store, T0 + timedelta(hours=13), client=villa)["cleared"] == [iid]
+    assert desk.tick(store, T0 + timedelta(hours=2), client=villa)["cleared"] == [iid]
 
 
 # ---------------------------------------------------------------------- 2 · a person's reopening in the Kiosk

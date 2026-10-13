@@ -1,24 +1,23 @@
 """A message the agent sends on its own — an alert, its reminder or escalation, a night check's finding, a report —
 and the one heading every such message carries (owner, 2026-10-11, the order and shape the owner drew):
 
-    #9-P1 (existing)                          ← underlined (vesta_shared.message_format: the one shape and style)
-    To: Jean-Marie, Fabien_FM
+    #9-P1 (existing)                          ← in bold (vesta_shared.message_format: the one shape and style)
+    To: Owner & Facility Manager
     <the alert>                               ← as a quote
     (empty line)
     Status:
-    - Alert sent 09/10/2026 13:12 to Jean-Marie, Fabien_FM        ← a quote, in italics
-    - Escalation sent 09/10/2026 13:27 to Fabien
-    (empty line)
-    ⚠️ ⚙️ Reminder: no answer after 15 min                         ← a quote, in italics
+    - Alert sent 09/10/2026 13:12 to Owner & Facility Manager     ← a quote, in italics
+    - Escalation sent 09/10/2026 13:27 to Owner
+    ⚠️ ⚙️ Reminder: no answer after 15 min                         ← the same quote: history and where it stands
 
 A message about no incident is headed the same way, by its title (owner, 2026-10-12: one layout):
 
     Approval request
-    To: Jean-Marie
+    To: Owner
 
-"To" names the people of the message's role (`to`: owner or fm) as the Rules page's People list names them — never a
-group, which is only where they read it; without a role, the people of the roles the chat is listed with. In a private
-chat, the one person whose chat it is. The title says "new" for an incident's first notice, "closed" for the one that
+"To" names the ROLES a message is for (message_format.audience: "Owner", "Facility Manager", "Owner & Facility
+Manager") — the message's role (`to`: owner or fm), else the roles the chat is listed with; never a person's name
+(owner, 2026-10-13: "To: Fabien, JM" became "To: Facility Manager"). The title says "new" for an incident's first notice, "closed" for the one that
 ends it, "existing" otherwise; then one line per earlier notice — what, when, to whom — whatever chat it went to (each
 chat keeps only an incident's latest message: incident_thread.py). A reply to a person in a chat carries none: it
 answers them.
@@ -31,7 +30,7 @@ from __future__ import annotations
 
 import re
 
-from vesta_shared.message_format import INCIDENT_TITLE, TO, UNTITLED, titled
+from vesta_shared.message_format import INCIDENT_TITLE, ROLE_WORDS, TO, UNTITLED, audience, titled
 from vesta_shared.messaging import incident_tag
 from vesta_shared.timeutil import moment_label
 
@@ -51,17 +50,6 @@ STAGES = {"new": "Alert sent", "reminder": "Reminder sent", "escalated": "Escala
 #: message says what IT is; a notice without a stage goes by the incident's history.
 HEAD_WORDS = {"new": "new", "closed": "closed"}
 EXISTING = "existing"
-#: A role in a heading when no person of it is listed (owner, 2026-10-10: "the Facility Manager", capitals)
-ROLE_WORDS = {"owner": "the Owner", "fm": "the Facility Manager"}
-
-
-def addressed(names) -> list[str]:
-    """The names a "To:" line or a history line says, once each: the people — a role's word ("the Owner") only when no
-    person is named at all. ⚠️ NEVER BOTH (owner, 2026-10-12: "To: the Owner, Fabien, JM"): a chat listed for a role
-    with no person in it (a group) gave its role's word, merged with the names of the other chats."""
-    out = list(dict.fromkeys(n for n in names if n))
-    people = [n for n in out if n not in ROLE_WORDS.values()]
-    return people or out
 #: An incident's history kept: its first notice, a line counting those dropped, and the latest ones (review 28: after
 #: 20 notices the first alert vanished without a word).
 HISTORY_KEPT = 20
@@ -92,47 +80,37 @@ class Notices:
         # whether an incident is closed as its skill stored it: its copies are headed "Closed" (architecture review 25)
         self.closed = closed or (lambda _iid: False)
 
-    def _for(self, chat: int, to=None) -> list[str]:
-        """Who a notice to `chat` is for: the People list's persons of the roles `to` (a role, or every role the copy went
-        there for: outcome merges them), else of the chat's roles; the role itself when no person of it is listed."""
-        pol = self.policy()
+    def roles_for(self, chat: int, to=None) -> set[str]:
+        """The roles a notice to `chat` is for: `to` (a role, or every role the copy went there for: outcome merges
+        them), else the roles the chat is listed with — for a private chat listed with none, its person's role."""
         wanted = {to} if isinstance(to, str) else set(to or ())
-        roles = (wanted & set(ROLE_WORDS)) or pol.roles_in(chat)
-        if int(chat) > 0:
-            # ⚠️ A PRIVATE CHAT IS ONE PERSON'S (owner, 2026-10-10: "why was this message addressed to Fabien, since it's a
-            # direct request from my personal chat?"): the reader is named, never every person of the role
-            own = list(dict.fromkeys(e.name for e in pol.entries if e.telegram_id == int(chat) and (e.role in roles or not roles)))
-            if len(own) == 1:
-                return own
-            p = pol.person(chat)                       # listed in both roles, the copy for both: the one person, once
-            if p is not None:
-                return [p.name]
-        return pol.names_for(roles) or [ROLE_WORDS[r] for r in sorted(roles)]
-
-    def recipients(self, chat: int, to=None) -> list[str]:
-        """Who a message to `chat` is for, as its "To:" line names them (a report's: message_format.fill_to)."""
-        return self._for(chat, to)
+        roles = wanted & set(ROLE_WORDS)
+        if roles:
+            return roles
+        pol = self.policy()
+        roles = pol.roles_in(chat)
+        if not roles and int(chat) > 0 and pol.person(chat) is not None:
+            roles = {pol.person(chat).role}
+        return roles & set(ROLE_WORDS)
 
     def heading(self, chat: int, incident: int | None = None, to=None, stage: str | None = None,
-                also: list[str] | None = None, title: str | None = None) -> str:
+                also=None, title: str | None = None) -> str:
         """The heading of a notice to `chat` (about `incident`), as it stands before this notice is recorded — its lines,
         which the layout places (layout.py: the title and "To …:" on top, the history under "Status:"):
 
             #9-P2 (existing)            the incident, its priority, and "new" / "existing" / "closed" (`stage`)
-            To: Jim                     who this message is for
-            - Alert sent 11/10/2026 09:57 to Jim, Fabien     one line per earlier notice
-            - Escalation sent 11/10/2026 10:27 to Jim
+            To: Owner & Facility Manager                      who this message is for
+            - Alert sent 11/10/2026 09:57 to Facility Manager      one line per earlier notice
+            - Escalation sent 11/10/2026 10:27 to Owner
 
-        "To:" names everyone the incident went to — every earlier notice's people, and `also`, this notice's — the same
-        line in every chat (owner, 2026-10-11: one incident, one picture; it named only the chat's reader before).
-        A message about no incident: its `title` (UNTITLED when it has none), and "To:" naming `also`, else the chat's
-        people of `to`."""
-        who = ', '.join(self._for(chat, to)) or 'this chat'
+        "To:" names every role the incident went to — every earlier notice's, and `also` (roles), this notice's — the
+        same line in every chat (owner, 2026-10-11: one incident, one picture). A message about no incident: its `title`
+        (UNTITLED when it has none), and "To:" the roles of `also`, else the chat's of `to`."""
         if incident is None:
-            return titled(title or UNTITLED, addressed(list(also or []) or self._for(chat, to)), "")
+            return titled(title or UNTITLED, audience(set(also or ()) or self.roles_for(chat, to)), "")
         history = self.state.incident_history(incident)
-        everyone = addressed([n for h in history for n in self._names(h)] + list(also or []))
-        who = ', '.join(everyone) or who
+        everyone = {r for h in history for r in self._roles(h)} | set(also or ())
+        who = audience(everyone or self.roles_for(chat, to)) or "this chat"
         try:
             p = self.severity(int(incident))
         except Exception:  # noqa: BLE001 — the heading is written without its priority, never not at all
@@ -140,7 +118,7 @@ class Notices:
         word = self.word(int(incident), stage, bool(history))
         lines = [f"- … {h['dropped']} earlier notice{'s' if h['dropped'] > 1 else ''}" if h.get("dropped") else
                  f"- {STAGES.get(h.get('stage'), 'Sent')} {when(datetime.fromisoformat(h['at']), self.tz)} "
-                 f"to {', '.join(self._names(h)) or 'nobody'}" for h in history]
+                 f"to {audience(self._roles(h)) or 'nobody'}" for h in history]
         return "\n".join([f"{incident_tag(incident)}{f'-{p}' if p else ''} ({word})", f"{TO}{who}", *lines])
 
     def word(self, incident: int, stage: str | None = None, history: bool = True) -> str:
@@ -177,22 +155,26 @@ class Notices:
 
     def record(self, incident: int, stage: str | None, sent: list[tuple[int, object]], at: datetime | None = None) -> None:
         """A notice about `incident` went to `sent` — (chat, the role or roles it was for) — one result's messages being one
-        notice: its history line. `stage` unset: "new" for the first, "update" after."""
+        notice: its history line, each chat with the roles it was for. `stage` unset: "new" for the first, "update" after."""
         history = self.state.incident_history(incident)
-        names = list(dict.fromkeys(n for c, to in sent for n in self._for(c, to)))
-        chats = [[int(c), sorted([to] if isinstance(to, str) else (to or []))] for c, to in sent]
+        chats = [[int(c), sorted(self.roles_for(c, to))] for c, to in sent]
         history.append({"at": (at or datetime.now(timezone.utc)).isoformat(), "chats": chats,
-                        "stage": stage if stage in STAGES else ("update" if history else "new"), "to": names})
+                        "stage": stage if stage in STAGES else ("update" if history else "new")})
         self.state.set_incident_history(incident, _kept(history))
 
-    def _names(self, h: dict) -> list[str]:
-        """Who a history line's notice went to, as the People list names them NOW — a person removed from it is no
-        longer named (review 28: "To: Fabien, Ketut, Made" after Ketut left); the names written then, for a line
-        recorded before 0.12.152 or a chat no longer listed."""
-        out = []
-        for chat, roles in h.get("chats") or []:
-            try:
-                out += self._for(int(chat), roles or None) if self.policy().knows_chat(int(chat)) else []
-            except Exception:  # noqa: BLE001 — a policy that cannot be read: the names written then
-                return list(h.get("to") or [])
-        return addressed(out) if h.get("chats") else addressed(h.get("to") or [])
+    def _roles(self, h: dict) -> set[str]:
+        """The roles a history line's notice went to, as recorded. A line recorded before 0.12.181 named people (`to`,
+        or chats without their roles): their roles as the People list gives them now, a role's own word read back."""
+        roles = {r for _chat, rs in h.get("chats") or [] for r in rs or ()}
+        if roles:
+            return roles & set(ROLE_WORDS)
+        try:
+            pol = self.policy()
+            roles = {r for chat, _rs in h.get("chats") or [] for r in pol.roles_in(int(chat))}
+            names = set(h.get("to") or [])
+            roles |= {e.role for e in pol.entries if e.name in names}
+        except Exception:  # noqa: BLE001 — a policy that cannot be read: the role words written then
+            names = set(h.get("to") or [])
+        words = {w.removeprefix("the ").lower(): r for r, w in ROLE_WORDS.items()}
+        roles |= {words[n.removeprefix("the ").lower()] for n in names if n.removeprefix("the ").lower() in words}
+        return roles & set(ROLE_WORDS)

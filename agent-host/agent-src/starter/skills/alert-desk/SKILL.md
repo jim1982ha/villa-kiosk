@@ -18,25 +18,23 @@ decides alone to act on the villa.
 ## Inputs (all run by the engine, never by you)
 
 1. `vesta_critical_event` from Home Assistant, fired by the VESTA rules AFTER their own message:
-   `{blueprint, rule_id, incident_id, phase, label, entities, summary, timestamp}`.
+   `{blueprint, rule_id, incident_id, phase, label, entities, summary, timestamp, priority?, claim?}`.
    - `opened`: a new incident. `resolved`: Home Assistant says it cleared (the chase stops).
      `abandoned`: the rule stopped watching while it was still true (the owner hears it).
-   - Only `critical_condition`, `critical_binary_trip` and `critical_presence_guard` ever send
-     `resolved`. Incidents of `critical_schedule` and `critical_system` close through the ladder only.
-   - What Home Assistant never says is over, the desk reads again every 5 minutes (`tick`), by the
-     rule's own `bad_states` (sent with every phase): a `critical_watchdog` device, or a
-     `critical_condition` in "state" mode whose rule stopped watching (`abandoned`). Over means NO
-     watched entity in ANY bad state, each readable, for `clear_minutes` (10): the incident closes
-     with its Kiosk fault, and its messages say what each device reads now. A number (numeric or
-     group mode) and an alert sent before the rules carried `bad_states` wait for a person.
+   - `priority` (P1–P4, the rule's "VESTA priority" input) decides who hears it (`people_roles`);
+     without one, the rule's route in `rules.yaml`. Home Assistant's own `severity` word is not a priority.
+   - `claim`: a Home Assistant template the rule wrote with its own entities and limits, true while
+     what the alert reports still holds. Every 5 minutes (`tick`) the desk renders it for every open
+     incident: false for `clear_minutes` (10) closes it, with its Kiosk fault; a device that does not
+     answer keeps it open, said once. An alert from a rule that sends no claim but its `bad_states`
+     is read by those states (no watched entity in any of them); with neither, it waits for a person.
+     The desk knows no rule by name: whatever a rule claims is the rule's.
    - `abandoned` with `still_true: false` (back to normal just as the rule gave up) closes the
      incident; still true, the owner hears it.
    - An alert back within `reopen_hours` (4) of its incident closing reopens it: "Back again: N
      times since …", under its own number, Home Assistant's latest words, its ladder started again
      and its OWN task and Kiosk fault open again, titled "(again: N times in 7 days)". Each run is
      counted on its own by the digest, the reports and the retune proposal.
-   - A condition whose rule has said nothing for `ha_silent_hours` (12) is read by the desk too: a
-     blueprint reload cancels the rule's run without an "abandoned".
    - An alert that no chat of the facility manager's received (Telegram refused them all) is handed
      to the owner at the next tick.
 2. The engine's own connection to Home Assistant: while it is up, a beat every minute. Its absence
@@ -48,7 +46,8 @@ decides alone to act on the villa.
 The decision is one of:
 - `maintenance_mode`: `input_boolean.maintenance_mode` is on, nothing sent unless P1.
 - `counted`: the same rule on the same entity is already open and inside its cooldown. Nothing sent.
-- `repeat`: open and past the cooldown: one "still there, N times since" message to the FM.
+- `repeat`: open and past the cooldown: one "still there, N times since" message to the roles its
+  priority reaches (as the first alert), with Home Assistant's latest words and claim.
 - `new`: the owner and FM (P1) or the FM (P2) get the message, the FM's with the ladder buttons;
   a P1 or P2 also becomes a Facility ticket in the VESTA Kiosk; a camera snapshot travels with
   the message when the event names one.

@@ -56,7 +56,7 @@ ANONYMOUS_TELEGRAM_IDS = {1087968824, 136817688, 777000}
 
 #: the people's roles and what the page calls them (architecture review 9: the page typed "Owner" / "Facility manager"
 #: twice, and the chats' words a third time)
-ROLE_WORDS = {"owner": "Owner", "fm": "Facility manager"}
+from vesta_shared.message_format import ROLE_WORDS  # noqa: E402  (the roles' words: "To:", history lines, the page)
 ROLES = tuple(ROLE_WORDS)
 
 # ------------------------------------------------------------------ the file's defaults, once
@@ -267,11 +267,6 @@ class Policy:
     def roles_in(self, chat_id: int) -> set[str]:
         """The roles a chat is listed with ({} for a chat the People list does not name)."""
         return {r for c, r in self.destinations if c == int(chat_id)}
-
-    def names_for(self, roles) -> list[str]:
-        """Who a message for `roles` is for: every PERSON of those roles, as the People list names them (the "For:" of a
-        notice). A group is where they read it, never who it is for."""
-        return list(dict.fromkeys(e.name for e in self.entries if e.role in roles and e.telegram_id > 0))
 
     def name_in(self, telegram_id: int, chat_id: int) -> str | None:
         """A person's name as this chat knows them: their entry for a role the chat is listed with (Fabien_FM in a chat

@@ -55,6 +55,10 @@ class HABase:
     def call_service(self, domain: str, service: str, data: dict) -> Any:
         raise NotImplementedError
 
+    def template(self, text: str) -> str:
+        """`text` (a Home Assistant template) rendered by Home Assistant now — an alert's claim (alert-desk)."""
+        raise NotImplementedError
+
 
 class HAError(RuntimeError):
     pass
@@ -454,6 +458,14 @@ class McpClient(HABase):
         if data:
             args["data"] = data
         return self.tool("ha_call_service", args)
+
+    # ------------------------------------------------------------------ templates (read)
+    def template(self, text):
+        """Home Assistant renders `text` now (ha_eval_template: read-only, it acts on nothing). A failed render raises."""
+        body = self.tool("ha_eval_template", {"template": str(text), "timeout": 10})
+        if not isinstance(body, dict) or "result" not in body:
+            raise HAError(f"ha_eval_template gave no result: {str(body)[:200]}")
+        return str(body["result"])
 
 
 def client_from_args(args) -> HABase:

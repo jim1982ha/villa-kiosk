@@ -1,3 +1,21 @@
+## 0.12.181
+
+What you will see:
+- "To:" names roles only: "To: Owner", "To: Facility Manager" or "To: Owner & Facility Manager" — on every alert,
+  reminder, report and approval, and on each "Alert sent … to …" line. Never a person's name.
+- Every message is easier to tell apart on Telegram: its title is in bold (no longer underlined, which looked like a
+  link); a report's section is ONE quote block ("New since yesterday:", "Still open:"), one line per item; an alert's
+  history and where it stands now are ONE block under "Status:".
+- A reminder of an alert that is still open carries Home Assistant's latest words (the house pump's "last confirmed"
+  date is today's, not the one of the day it opened) and goes to whoever its priority reaches, as the first alert did.
+- An alert's priority is its rule's: the pump's overdue run is a P2 (Home Assistant's "warning" is not a priority),
+  so it is chased with Done / Need help, a fault in the Kiosk, the 15 and 45 minute reminders.
+- Once the VESTA rules in Home Assistant send what they claim (6 rules to save, see below), an alert closes by itself
+  when what it reported is no longer true — a pump that ran again, a device back online — 10 minutes after; a device
+  that does not answer keeps it open, said once.
+- In Home Assistant: copy custom_templates/vesta_message.jinja and packages/vesta_message.yaml again (bold titles,
+  roles in "To:"), then reload the templates and the template entities.
+
 ## 0.12.180
 
 What you will see:

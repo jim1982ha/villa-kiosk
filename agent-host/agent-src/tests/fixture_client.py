@@ -23,6 +23,7 @@ class FixtureClient(HABase):
       registry.json                         {'entities': [...], 'areas': [...], 'devices': [...]}
       states.json                           {'states': {entity_id: {state, attributes, last_changed}}}
       logbook.json                          {'entries': [...]}
+      templates.json                        {template text: what Home Assistant renders it as}
     """
 
     def __init__(self, fixture_dir: str, zone: str = "UTC", extra_helpers: str | None = None):
@@ -99,6 +100,12 @@ class FixtureClient(HABase):
             if start <= t < end and (entity_id is None or r.get("entity_id") == entity_id):
                 out.append(r)
         return out
+
+    def template(self, text):
+        said = self._load("templates.json", {})
+        if text not in said:
+            raise KeyError(f"no rendering saved for this template: {text[:80]}")
+        return str(said[text])
 
     def call_service(self, domain, service, data):
         # Recorded, never executed. The replay test asserts on this list.

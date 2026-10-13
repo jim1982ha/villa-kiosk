@@ -19,7 +19,7 @@ from vesta_shared.message_format import STATUS, TELEGRAM, document, parts
 
 HA = os.path.join(os.path.dirname(__file__), "..", "homeassistant")
 #: Telegram's HTML tag for each MessageEntity type the style table names.
-TAG = {"underline": "u", "blockquote": "blockquote", "italic": "i"}
+TAG = {"bold": "b", "blockquote": "blockquote", "italic": "i"}
 
 
 def _env() -> jinja2.Environment:
@@ -52,10 +52,10 @@ def _expected(title, to, text, status) -> str:
 
 
 CASES = [
-    ("🔥 Mains phase overload", "Owner, Facility Manager", "Main Power Phase C 4450 W\nAbove 4000 W, Held 15 min",
+    ("🔥 Mains phase overload", "Owner & Facility Manager", "Main Power Phase C 4450 W\nAbove 4000 W, Held 15 min",
      "⚠️ New alert"),
     ("✅ Entrance door unlocked", "Owner", "Entrance door is locked", "✅ Resolved after 12 min"),
-    ("T <1> & co", "R", "a < b > c & d", "s & <i>"),             # escaped once, never twice
+    ("T <1> & co", "Facility Manager", "a < b > c & d", "s & <i>"),             # escaped once, never twice
     ("Only a title", "Owner", "", ""),
     ("No text", "Owner", "", "⚠️ New alert"),
 ]
@@ -66,7 +66,7 @@ def test_home_assistants_layout_is_the_agents_layout_and_style():
         got = _render(title, to, text, status)
         assert got == _expected(title, to, text, status), (title, got)
         # the words without the tags are exactly the agent's layout
-        plain = html.unescape(re.sub(r"</?(u|blockquote|i)>", "", got))
+        plain = html.unescape(re.sub(r"</?(b|blockquote|i)>", "", got))
         assert plain == document(title, to, [(None, [text]), (STATUS, [status])]), plain
 
 
@@ -82,17 +82,22 @@ def test_the_styles_are_the_ones_the_agent_finds_in_the_same_text():
         assert (_styled(piece, kind) if TELEGRAM[kind] else html.escape(piece, quote=False)) in _render(*CASES[0])
 
 
-def test_to_is_the_rules_own_else_the_villa_wide_audience_else_the_roles():
+def test_to_is_a_role_the_rules_own_else_the_villa_wide_audience_as_the_agent_writes_it():
     # owner, 2026-10-12: "To:" is set in ONE place for every alert (input_text.vesta_alert_audience); a rule that names
-    # its own audience keeps it; without the helper (or before HA has it) the roles
+    # its own audience keeps it. Owner, 2026-10-13: a role, in the agent's words — never a name
+    from vesta_shared.message_format import audience
     src = ("{%- set vm_title, vm_to, vm_text, vm_status = 'T', r, 'x', '' -%}"
            "{% include 'vesta_message.jinja' ignore missing %}")
     t = _env().from_string(src)
-    helper = lambda e: "JM, Fabien" if e == "input_text.vesta_alert_audience" else "unknown"
-    assert "\nTo: Owner\n" in t.render(r="Owner", states=helper)
-    assert "\nTo: JM, Fabien\n" in t.render(r="", states=helper)
-    assert "\nTo: Owner, Facility Manager\n" in t.render(r="", states=lambda e: "unknown")
-    assert "\nTo: Owner, Facility Manager\n" in t.render(r="")                  # no states() at all (not HA)
+    both, fm = audience({"owner", "fm"}), audience({"fm"})
+    helper = lambda e: fm if e == "input_text.vesta_alert_audience" else "unknown"
+    for roles in ({"owner"}, {"fm"}, {"owner", "fm"}):
+        assert f"\nTo: {html.escape(audience(roles))}\n" in t.render(r=audience(roles), states=helper)
+    both = html.escape(both)
+    assert f"\nTo: {fm}\n" in t.render(r="", states=helper)
+    assert f"\nTo: {both}\n" in t.render(r="JM, Fabien", states=helper)          # a name is never written
+    assert f"\nTo: {both}\n" in t.render(r="", states=lambda e: "unknown")
+    assert f"\nTo: {both}\n" in t.render(r="")                                    # no states() at all (not HA)
 
 
 def test_a_missing_file_draws_nothing_so_the_blueprint_sends_plain_text():
@@ -117,7 +122,7 @@ def _status(stage, status="", who="", at=None) -> str:
     src = ("{%- set vm_title, vm_to, vm_text, vm_status = 'T', 'R', 'x', s -%}{%- set vm_stage, vm_who = g, w -%}"
            "{% include 'vesta_message.jinja' ignore missing %}")
     out = _env().from_string(src).render(s=status, g=stage, w=who, **({"now": lambda: at} if at else {}))
-    return html.unescape(re.sub(r"</?(u|blockquote|i)>", "", out)).split(f"\n{STATUS}:\n", 1)[1]
+    return html.unescape(re.sub(r"</?(b|blockquote|i)>", "", out)).split(f"\n{STATUS}:\n", 1)[1]
 
 
 def test_the_bottom_line_is_said_in_the_agents_own_words_for_every_stage():

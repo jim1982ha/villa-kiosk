@@ -188,7 +188,7 @@ def test_every_notice_has_one_heading_with_the_incidents_history(agent):
                                                     stage="escalated")]}, "alert-desk"))
     later = agent.tg.sent[-1][1]
     assert re.fullmatch(r"#7 \(existing\)\nTo: .+\nStill stopped\n\nStatus:\n"
-                        r"- Alert sent \d\d/\d\d/\d{4} \d\d:\d\d to [^\n]+\n\n⚠️ ⚙️ Still open", later), later
+                        r"- Alert sent \d\d/\d\d/\d{4} \d\d:\d\d to [^\n]+\n⚠️ ⚙️ Still open", later), later
 
 
 def test_a_fault_closed_in_the_kiosk_says_who_and_when_on_telegram():

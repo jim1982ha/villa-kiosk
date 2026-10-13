@@ -18,38 +18,50 @@ DAILY = F.document("Villa Example, daily report on 11/10/2026.", "", [
 def test_a_report_is_written_in_the_owners_shape():
     assert DAILY == ("Villa Example, daily report on 11/10/2026.\nTo:\n\n"
                      "New since yesterday:\n- P3 Onsen pump used 0.12 kWh/day (-76%).\n\n"
-                     "Still open:\n- Incident #5 · ⚠️ House Pump Power has not run.\n\n- P2 Motion1 battery at 7%: replace now.")
+                     "Still open:\n- Incident #5 · ⚠️ House Pump Power has not run.\n- P2 Motion1 battery at 7%: replace now.")
 
 
 def test_its_parts_are_read_back_from_the_text_as_sent():
-    text = F.fill_to(DAILY, ["JM"])
+    text = F.fill_to(DAILY, "Facility Manager")
     got = [(k, text[a:b]) for k, a, b in F.parts(text)]
-    assert got == [("title", "Villa Example, daily report on 11/10/2026."), ("to", "To: JM"),
+    # owner, 2026-10-13: ONE quote block per section — its items together
+    assert got == [("title", "Villa Example, daily report on 11/10/2026."), ("to", "To: Facility Manager"),
                    ("label", "New since yesterday:"), ("item", "- P3 Onsen pump used 0.12 kWh/day (-76%)."),
-                   ("label", "Still open:"), ("item", "- Incident #5 · ⚠️ House Pump Power has not run."),
-                   ("item", "- P2 Motion1 battery at 7%: replace now.")]
-    # an alert: its items under "Status:" are notes
-    alert = "#1-P2 (existing)\nTo: Jim\n🚪 Gate relay released\nWhat to do: check it.\n\nStatus:\n- Alert sent …\n\n⚠️ ⚙️ Still open"
-    assert [k for k, _, _ in F.parts(alert)] == ["title", "to", "item", "label", "note", "note"]
+                   ("label", "Still open:"),
+                   ("item", "- Incident #5 · ⚠️ House Pump Power has not run.\n- P2 Motion1 battery at 7%: replace now.")]
+    # items an AI wrote apart are one block too
+    apart = text.replace("run.\n- P2", "run.\n\n- P2")
+    assert [k for k, _, _ in F.parts(apart)] == [k for k, _ in got]
+    # an alert: its history and where it stands under "Status:" are ONE note — an older text written apart too
+    alert = "#1-P2 (existing)\nTo: Owner\n🚪 Gate relay released\nWhat to do: check it.\n\nStatus:\n- Alert sent …\n\n⚠️ ⚙️ Still open"
+    assert [(k, alert[a:b]) for k, a, b in F.parts(alert)][3:] == [("label", "Status:"),
+                                                                   ("note", "- Alert sent …\n\n⚠️ ⚙️ Still open")]
     # any other text: no parts, no style
     assert F.parts("For: JM\n-------\nWeekly report") == [] and F.parts("Done.") == [] and F.telegram_entities("x\ny") == []
 
 
 def test_the_agent_fills_the_to_line_only_where_a_skill_left_it():
-    assert F.fill_to(DAILY, ["JM", "Fabien"]).split("\n")[1] == "To: JM, Fabien"
-    assert F.fill_to("A title\nTo: Jim\nbody", ["JM"]) is None                 # already says who
-    assert F.fill_to("Just a line", ["JM"]) is None
+    assert F.fill_to(DAILY, F.audience({"fm", "owner"})).split("\n")[1] == "To: Owner & Facility Manager"
+    assert F.fill_to("A title\nTo: Owner\nbody", "Owner") is None             # already says who
+    assert F.fill_to("Just a line", "Owner") is None
+
+
+def test_to_is_a_role_never_a_name():
+    # owner, 2026-10-13: "To: Owner", "To: Facility Manager", "To: Owner & Facility Manager" — and nothing else
+    assert [F.audience(r) for r in ({"owner"}, {"fm"}, {"fm", "owner"}, set(), {"someone"})] == \
+        ["Owner", "Facility Manager", "Owner & Facility Manager", "", ""]
 
 
 def test_one_table_decides_every_style_and_a_new_channel_is_one_more_table():
     # every part kind has a rule in the table — a kind the reader finds and the table forgets fails here, never silently
-    kinds = {k for text in (F.fill_to(DAILY, ["JM"]), "#1 (new)\nTo: Jim\nx\n\nStatus:\n⚠️ New alert")
+    kinds = {k for text in (F.fill_to(DAILY, "Owner"), "#1 (new)\nTo: Owner\nx\n\nStatus:\n⚠️ New alert")
              for k, _, _ in F.parts(text)}
     assert kinds <= set(F.TELEGRAM) and set(F.TELEGRAM) == {"title", "to", "label", "item", "note"}
     # a WhatsApp-like table, the same five keys: the same reader, other marks — nothing else changes
     other = {"title": ("bold",), "to": (), "label": ("bold",), "item": (), "note": ("italic",)}
-    assert [e["type"] for e in F.entities(F.fill_to(DAILY, ["JM"]), other)] == ["bold", "bold", "bold"]
-    assert [e["type"] for e in F.telegram_entities(F.fill_to(DAILY, ["JM"]))] == ["underline"] + ["blockquote"] * 3
+    assert [e["type"] for e in F.entities(F.fill_to(DAILY, "Owner"), other)] == ["bold", "bold", "bold"]
+    # owner, 2026-10-13: the title in bold (underlined, it read as a link), one quote per section
+    assert [e["type"] for e in F.telegram_entities(F.fill_to(DAILY, "Owner"))] == ["bold"] + ["blockquote"] * 2
 
 
 def test_no_style_is_written_anywhere_else():
@@ -71,23 +83,23 @@ def test_a_report_reaches_telegram_with_its_to_line_filled_and_no_other_heading(
                                          {"telegram_id": FM, "name": "JM", "role": "fm"}]})
     asyncio.run(v.outcome.carry_out({"send": [{"to": "fm", "text": DAILY}]}, "reports"))
     (chat, text, _), = v.tg.sent
-    assert chat == FM and text == F.fill_to(DAILY, ["JM"]) and "For:" not in text and "-------" not in text
+    assert chat == FM and text == F.fill_to(DAILY, "Facility Manager") and "For:" not in text and "-------" not in text
 
 
-def test_a_report_names_everyone_it_went_to_in_every_chat(tmp_path):
+def test_a_report_names_every_role_it_went_to_in_every_chat(tmp_path):
     v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "Fabien", "role": "fm"},
                                          {"telegram_id": 333, "name": "JM", "role": "fm"}]})
     asyncio.run(v.outcome.carry_out({"send": [{"to": "fm", "text": DAILY}]}, "reports"))
-    assert {c: t.split("\n")[1] for c, t, _ in v.tg.sent} == {FM: "To: Fabien, JM", 333: "To: Fabien, JM"}
+    assert {c: t.split("\n")[1] for c, t, _ in v.tg.sent} == {FM: "To: Facility Manager", 333: "To: Facility Manager"}
 
 
 # ---------------------------------------------------------------------- review 28
-def test_a_report_asked_for_in_a_chat_names_its_reader(tmp_path):
+def test_a_report_asked_for_in_a_chat_names_its_readers_role(tmp_path):
     # its "To:" was empty: a reply in the asker's chat carries no heading, and the line was filled only with one
     from vesta_agent.routing import JOB, Origin
     v = make_agent(tmp_path, {"people": [{"telegram_id": OWNER, "name": "Jim", "role": "owner"}]})
     asyncio.run(v.outcome.carry_out({"send": [{"to": "here", "text": DAILY}]}, "reports", Origin(OWNER, kind=JOB)))
-    assert v.tg.sent[-1][1].split("\n")[1] == "To: Jim"
+    assert v.tg.sent[-1][1].split("\n")[1] == "To: Owner"
 
 
 def test_a_report_titled_as_data_keeps_its_shape_whatever_the_ai_wrote(tmp_path):
@@ -96,7 +108,7 @@ def test_a_report_titled_as_data_keeps_its_shape_whatever_the_ai_wrote(tmp_path)
     t = "Villa Example, daily report on 11/10/2026."
     asyncio.run(v.outcome.carry_out({"send": [{"to": "fm", "title": t, "text": "Vila tenang: tidak ada yang baru."}]}, "x"))
     text = v.tg.sent[-1][1]
-    assert text == f"{t}\nTo: JM\nVila tenang: tidak ada yang baru." and F.telegram_entities(text)[0]["type"] == "underline"
+    assert text == f"{t}\nTo: Facility Manager\nVila tenang: tidak ada yang baru." and F.telegram_entities(text)[0]["type"] == "bold"
 
 
 def test_home_assistants_words_never_change_an_alerts_layout():
@@ -121,6 +133,6 @@ def test_a_long_report_goes_as_whole_messages_none_lost(tmp_path):
     assert len(texts) >= 2 and all(len(m) <= 4096 for m in texts)
     assert [m.split("\n")[0] for m in texts] == [f"Villa Example, daily report on 11/10/2026 ({i}/{len(texts)})."
                                                   for i in range(1, len(texts) + 1)]
-    assert all(m.split("\n")[1] == "To: JM" and F.telegram_entities(m) for m in texts)
+    assert all(m.split("\n")[1] == "To: Facility Manager" and F.telegram_entities(m) for m in texts)
     assert "Still open:\n- Incident #5" in texts[-1]
     assert "\n\nNew since yesterday:\n" in texts[1]                       # the section goes on: its label again

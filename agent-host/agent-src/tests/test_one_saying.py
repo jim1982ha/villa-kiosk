@@ -61,14 +61,15 @@ def test_the_heading_names_the_incident_first_and_what_was_sent_to_whom(tmp_path
     run(v.outcome.carry_out({"send": [R.message("fm", ALERT, incident=21, buttons=True, stage="new")]}, "alert-desk"))
     run(v.outcome.carry_out({"send": [R.message("fm", ALERT, incident=21, stage="reminder", status="Reminder")]}, "alert-desk"))
     run(v.outcome.carry_out({"send": [R.message("owner", ALERT, incident=21, stage="escalated", status="x")]}, "alert-desk"))
-    # owner, 2026-10-11: "#1-P2 (existing)" underlined, "To: Jim", the alert, "Status:" — the history with a dash per
-    # line, then where it stands
+    # owner, 2026-10-11: "#1-P2 (existing)", "To:", the alert, "Status:" — the history with a dash per line, then where
+    # it stands (owner, 2026-10-13: in the same block, and "To:" says roles, never names)
     text = v.tg.sent[-1][1]
     title, to, *rest = text.split("\n")
-    assert (title, to) == ("#21 (existing)", "To: JM, Jim")      # everyone it went to (owner, 2026-10-11)
-    history = text.split("\n\nStatus:\n")[1].split("\n\n")[0].split("\n")
-    assert re.fullmatch(r"- Alert sent \d\d/\d\d/\d{4} \d\d:\d\d to JM", history[0])
-    assert re.fullmatch(r"- Reminder sent \d\d/\d\d/\d{4} \d\d:\d\d to JM", history[1]) and len(history) == 2
+    assert (title, to) == ("#21 (existing)", "To: Owner & Facility Manager")      # every role it went to
+    history = [ln for ln in text.split("\n\nStatus:\n")[1].split("\n") if ln.startswith("- ")]
+    assert re.fullmatch(r"- Alert sent \d\d/\d\d/\d{4} \d\d:\d\d to Facility Manager", history[0])
+    assert re.fullmatch(r"- Reminder sent \d\d/\d\d/\d{4} \d\d:\d\d to Facility Manager", history[1]) and len(history) == 2
+    assert text.endswith(f"{history[1]}\n⚠️ ⚙️ x")                     # where it stands, right under its history
     assert not any(w in text for w in ("For:", "First time seen", ", to ", "Follow Up", "-------"))
 
 
@@ -85,7 +86,7 @@ def test_a_copy_settled_by_a_press_is_headed_closed_once_the_desk_closes_it(tmp_
     assert v.tg.edits[-1][2].split("\n")[0] == f"#{iid}-P2 (new)"
     st.update_incident(iid, closed_at=datetime.now(timezone.utc).isoformat(), state="done")   # the desk closes it
     run(v.thread.close(iid, "Done pressed by Fabien on {time}."))                      # the desk's settle
-    assert v.tg.edits[-1][2].startswith(f"#{iid}-P2 (closed)\nTo: Fabien\n")
+    assert v.tg.edits[-1][2].startswith(f"#{iid}-P2 (closed)\nTo: Facility Manager\n")
     assert v.tg.edits[-1][2].endswith("Done pressed by Fabien on " + v.tg.edits[-1][2].rsplit(" on ", 1)[1])
     n = len(v.tg.edits)
     run(v.thread.close(iid, "x"))
@@ -101,8 +102,8 @@ def test_one_result_records_one_history_line_per_kind_of_notice(tmp_path):
     run(v.outcome.carry_out({"send": [R.message("fm", ALERT, incident=4, buttons=True, stage="new")]}, "alert-desk"))
     run(v.outcome.carry_out({"send": [R.message("owner", ALERT, incident=4, stage="escalated", status="over to you"),
                                       R.message("fm", ALERT, incident=4, stage="update", status="owner told")]}, "alert-desk"))
-    hist = [(h["stage"], h["to"]) for h in v.state.incident_history(4)]
-    assert hist == [("new", ["Fabien"]), ("escalated", ["Jim"]), ("update", ["Fabien"])]
+    hist = [(h["stage"], v.notices._roles(h)) for h in v.state.incident_history(4)]
+    assert hist == [("new", {"fm"}), ("escalated", {"owner"}), ("update", {"fm"})]
 
 
 def test_the_bottom_line_shows_the_stage_by_its_icon():
@@ -149,9 +150,10 @@ def test_need_help_and_an_unchecked_closure_carry_their_icon_end_to_end(tmp_path
     assert v.tg.sent[-1][1].rsplit("\n", 1)[1].startswith("☑️ Done pressed by Jim. Note: VESTA cannot check this one")
 
 
-def test_telegram_shows_the_title_underlined_the_alert_quoted_and_the_status_quoted_in_italics():
+def test_telegram_shows_the_title_in_bold_the_alert_quoted_and_the_status_quoted_in_italics_in_one_block():
     # owner, 2026-10-11: "the first line underlined", "text inside each section in quote style", "everything below the
-    # Status line in italic" — Telegram's own markers over the text sent as it is (no markup to break on "<" or "_")
+    # Status line in italic" — Telegram's own markers over the text sent as it is (no markup to break on "<" or "_").
+    # Owner, 2026-10-13: the title in bold (underlined, it read as a link); the history and where it stands ONE block
     from vesta_agent import layout
     from vesta_agent.telegram import Telegram
     from vesta_shared.message_format import telegram_entities
@@ -163,9 +165,10 @@ def test_telegram_shows_the_title_underlined_the_alert_quoted_and_the_status_quo
         return {"message_id": 7}
     tg.api = api
     alert = "🚪 Gate <relay> released\nGate_Relay is off\nWhat to do: check it."
-    history = "- Alert sent 11/10/2026 05:23 to Jim, Fabien\n- Escalation sent 11/10/2026 05:23 to Jim"
+    history = "- Alert sent 11/10/2026 05:23 to Owner & Facility Manager\n- Escalation sent 11/10/2026 05:23 to Owner"
     bottom = "⚠️ ⚙️ Still not right when Home Assistant stopped watching it on 11/10/2026 05:23."
-    text = f"#1-P2 (existing)\nTo: Jim\n{alert}\n\nStatus:\n{history}\n\n{bottom}"
+    status = f"{history}\n{bottom}"
+    text = f"#1-P2 (existing)\nTo: Owner\n{alert}\n\nStatus:\n{status}"
     asyncio.run(tg.send(1, text))
     asyncio.run(tg.edit(1, 7, text))
     asyncio.run(tg.send(1, "The pool is fine: 27 °C."))                          # an answer to a person: no heading
@@ -174,12 +177,10 @@ def test_telegram_shows_the_title_underlined_the_alert_quoted_and_the_status_quo
     def at(part):
         return tg_len(text[:text.index(part)])
     assert m1 == "sendMessage" and d1["text"] == text and d1["entities"] == [
-        {"type": "underline", "offset": 0, "length": tg_len("#1-P2 (existing)")},
+        {"type": "bold", "offset": 0, "length": tg_len("#1-P2 (existing)")},
         {"type": "blockquote", "offset": at(alert), "length": tg_len(alert)},
-        {"type": "blockquote", "offset": at(history), "length": tg_len(history)},
-        {"type": "italic", "offset": at(history), "length": tg_len(history)},
-        {"type": "blockquote", "offset": at(bottom), "length": tg_len(bottom)},
-        {"type": "italic", "offset": at(bottom), "length": tg_len(bottom)}]
+        {"type": "blockquote", "offset": at(status), "length": tg_len(status)},
+        {"type": "italic", "offset": at(status), "length": tg_len(status)}]
     assert m2 == "editMessageText" and d2["entities"] == d1["entities"]
     assert "entities" not in d3                                                   # not in the layout: as it is
     # every other message sent on its own is in the same layout, so styled the same (owner, 2026-10-12: one layout)
@@ -187,10 +188,10 @@ def test_telegram_shows_the_title_underlined_the_alert_quoted_and_the_status_quo
                                          status="Waiting for approval by the owner"))
     assert request == ("Approval request\nTo: JM\nIntrusion suspected.\nTurn on Siren?\n\nStatus:\n"
                        "Waiting for approval by the owner")
-    assert [e["type"] for e in telegram_entities(request)] == ["underline", "blockquote", "blockquote", "italic"]
+    assert [e["type"] for e in telegram_entities(request)] == ["bold", "blockquote", "blockquote", "italic"]
     # the first alert: no history yet, its status alone under "Status:"
     first = "#1-P2 (new)\nTo: Jim\nDoor unlocked\n\nStatus:\n⚠️ New alert"
-    assert [e["type"] for e in telegram_entities(first)] == ["underline", "blockquote", "blockquote", "italic"]
+    assert [e["type"] for e in telegram_entities(first)] == ["bold", "blockquote", "blockquote", "italic"]
 
 
 def test_a_copy_turning_closed_turns_green(tmp_path):
@@ -221,8 +222,8 @@ def test_one_incident_one_picture_in_every_chat(tmp_path):
     shown = {c: r["text"] for c, r in v.thread.shown(5).items()}
     assert set(shown) == {GROUP, FM, JM2} and len(set(shown.values())) == 1, shown       # the group's copy too
     text = shown[GROUP]
-    # the people only: the owner's role is a group with nobody in it (owner, 2026-10-12: never "the Owner, Fabien, JM")
-    assert text.startswith("#5 (existing)\nTo: Fabien, JM\n") and text.endswith("⚠️ ⚙️ Reminder: no answer after 15 min")
+    # every role it went to, never a name (owner, 2026-10-13): the group is the owner's
+    assert text.startswith("#5 (existing)\nTo: Owner & Facility Manager\n") and text.endswith("⚠️ ⚙️ Reminder: no answer after 15 min")
     # the group was not sent the reminder: its copy was edited quietly, and keeps its buttons
     assert not [c for c, _, _ in v.tg.sent[3:] if c == GROUP]
     group = v.thread.shown(5)[GROUP]
@@ -245,11 +246,12 @@ def test_an_old_copy_gets_the_new_heading_whole(tmp_path):
     # review 28: a copy sent before 0.12.152, settled, showed the old heading with the new icons and no style
     v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "Fabien", "role": "fm"}]})
     head = v.notices.retitle(9, "For: Fabien, P2 Incident: Follow Up #9\nAlert sent on 09/10/2026 13:12, to Fabien", FM)
-    assert head.split("\n")[:2] == ["#9 (new)", "To: Fabien"]
+    assert head.split("\n")[:2] == ["#9 (new)", "To: Facility Manager"]
 
 
-def test_the_history_names_people_as_they_are_now_and_keeps_its_first_alert(tmp_path):
-    # review 28: "To: Fabien, Ketut, Made" after Ketut left; after 20 notices the first alert vanished without a word
+def test_the_history_names_roles_and_keeps_its_first_alert(tmp_path):
+    # review 28: after 20 notices the first alert vanished without a word. Owner, 2026-10-13: roles, never names — a
+    # person leaving the People list changes nothing
     import yaml
     v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "Fabien", "role": "fm"},
                                          {"telegram_id": 444, "name": "Ketut", "role": "fm"}]})
@@ -260,5 +262,5 @@ def test_the_history_names_people_as_they_are_now_and_keeps_its_first_alert(tmp_
     for _ in range(25):
         v.notices.record(5, "reminder", [(FM, "fm"), (555, "fm")])
     lines = v.notices.heading(FM, 5, "fm").split("\n")
-    assert lines[1] == "To: Fabien, Made" and lines[2].startswith("- Alert sent ") and lines[2].endswith(" to Fabien")
+    assert lines[1] == "To: Facility Manager" and lines[2].startswith("- Alert sent ") and lines[2].endswith(" to Facility Manager")
     assert lines[3] == "- … 7 earlier notices" and len(lines) == 2 + 20

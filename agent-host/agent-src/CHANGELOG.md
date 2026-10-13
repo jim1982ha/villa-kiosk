@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.6.175 (13 October 2026)
+
+Owner, 2026-10-13 (alert #5, the house pump; message layout):
+- alert-desk: `priority(ev, route)` — the event's `priority` (P1–P4, the rules' new "VESTA priority" input), else its
+  route; Home Assistant's `severity` word is never a priority. A repeat goes to `recipients(sev)` (was "fm" whatever
+  the priority) and carries the latest words, claim and priority (`_restated`, RESTATED); a priority that chases
+  arriving on a logged incident starts the ladder. `claim`: a Home Assistant template the rule sends with every
+  alert, rendered by `HABase.template` (McpClient: ha_eval_template; FixtureClient: templates.json) — `still_there`
+  reads it first, `seen_again` closes any open incident whose claim reads false for clear_minutes (payload
+  clear_since), "unknown" keeps it open and is said once. SEEN_AGAIN, watched_for and ha_silent_hours removed: no
+  blueprint is named; an alert without a claim is judged by its bad_states (mode absent or "state"). Tests:
+  test_alert_desk (claims, priority, repeats), test_closed_not_over.
+- "To:" is roles: `message_format.ROLE_WORDS` / `audience` ("Owner & Facility Manager"); `Notices.roles_for` replaces
+  the names (`_for`, `addressed`, `Policy.names_for` removed); history lines record the roles per chat (an older line's
+  names read back as roles). `fill_to` / `titled` / `pages` take the audience text. policy.ROLE_WORDS is
+  message_format's. The HA jinja writes only those three forms (any other value: "Owner & Facility Manager").
+- Telegram layout: titles bold (TELEGRAM["title"]); `document` writes a labelled section's items one per line and
+  `parts` reads ONE item / note span per section (an AI's items written apart too; an alert's history and status one
+  note); `pages` cuts between items and repeats a section's label. The jinja title is <b>, the package's check
+  sensor expects it. Tests: test_message_format, test_one_saying, test_ha_message_layout.
+
 ## 0.6.174 (13 October 2026)
 
 Architecture review 2, 2026-10-13 (owner: "do all of them"):

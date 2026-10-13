@@ -283,10 +283,14 @@ def test_a_rule_watching_two_doors_is_over_when_neither_is_open(store):
     assert _tick(store, villa, 101)["cleared"] == [iid]                 # the back door locked all along counts as fine
 
 
-def test_a_condition_home_assistant_still_watches_is_left_to_it(store):
+def test_a_condition_its_rule_still_watches_is_read_again_and_its_own_all_clear_joins_it(store):
+    # owner, 2026-10-13: an alert is over when what it claims no longer holds, whichever rule sent it — the desk no
+    # longer knows which rules say "resolved" themselves; one that does finds its incident closed (resolved_late)
     villa = Villa(**{"lock.front_door": [(T0 - timedelta(minutes=10), "unlocked"), (T0 + timedelta(minutes=15), "locked")]})
-    _left_unlocked(store, abandon=False)
-    assert not _tick(store, villa, 60).get("cleared")                   # Home Assistant says "resolved" itself
+    iid = _left_unlocked(store, abandon=False)
+    assert _tick(store, villa, 60)["cleared"] == [iid]
+    res = desk.intake(store, event(phase="resolved"), T0 + timedelta(minutes=61))
+    assert res["decision"] == "resolved_late" and not res["send"]
 
 
 def test_a_rule_that_stopped_watching_once_back_to_normal_never_tells_the_owner_still_not_clear(store):
@@ -432,3 +436,83 @@ def test_one_bad_state_sent_as_text_is_one_state_not_its_letters(store):
     villa = Villa(**{"sensor.ap_state": [(T0 - timedelta(minutes=10), "disconnected")]})
     assert not _tick(store2, villa, 60).get("cleared")
     assert iid
+
+
+# ------------------------------------------------------------- what an alert claims, its priority (owner, 2026-10-13)
+CLAIM = "{{ (now().timestamp() - (state_attr('input_datetime.pump_last_run', 'timestamp') or 0)) >= 86400 }}"
+
+
+class Claims(Villa):
+    """Home Assistant rendering an alert's claim: its answer over time [(since, "true" | "false" | "unknown")]."""
+    def __init__(self, said, **timeline):
+        super().__init__(**timeline)
+        self.said, self.rendered = said, []
+
+    def template(self, text):
+        self.rendered.append(text)
+        return [r for since, r in self.said if since <= self.now][-1]
+
+
+def _overdue(store, at=T0, **extra):
+    """A schedule rule's "no run in over 1 day", shaped as the live blueprint sends it (its own word: warning)."""
+    return desk.intake(store, event(blueprint="critical_schedule", rule="automation.pump_watchdog", phase="opened",
+                                    entities=("sensor.pump_power",), label="Pump overdue", severity="warning",
+                                    reason="overdue_run", **extra), at, mode_reader=lambda: "occupied")
+
+
+def test_an_alert_is_over_once_what_it_claims_no_longer_holds_whatever_rule_sent_it(store):
+    # the house pump's #5 stayed open 10 days across two real runs: its rule never says "resolved", and the desk read
+    # again only two blueprints, by name. The rule's own claim, rendered by Home Assistant, decides — no rule named here
+    iid = _overdue(store, claim=CLAIM)["incident_id"]
+    ha = Claims([(T0, "true"), (T0 + timedelta(hours=3), "false")])
+    assert not _tick(store, ha, 60).get("cleared") and ha.rendered == [CLAIM]
+    assert not _tick(store, ha, 185).get("cleared")                         # false, not yet for clear_minutes
+    res = _tick(store, ha, 200)
+    assert res["cleared"] == [iid] and store.incident(iid)["closed_at"]
+    assert res["settle"][0]["note"] == "Cleared on {time}: Home Assistant no longer reports it."
+
+
+def test_a_claim_that_cannot_be_told_keeps_the_alert_open_and_says_so_once(store):
+    iid = _overdue(store, claim=CLAIM)["incident_id"]
+    ha = Claims([(T0, "unknown")], **{"sensor.pump_power": [(T0, "unavailable")]})
+    said = [m["status"] for m in _tick(store, ha, 60)["send"] if m["stage"] == "update"]
+    assert said == ["pump_power does not answer: VESTA cannot tell if it is right. Still open."]
+    assert not [m for m in _tick(store, ha, 65)["send"] if m["stage"] == "update"] and not store.incident(iid)["closed_at"]
+
+
+def test_a_done_on_an_alert_whose_claim_still_holds_reopens_it(store):
+    iid = _overdue(store, claim=CLAIM, priority="P2")["incident_id"]
+    desk.reply(store, iid, "done", "fm", T0 + timedelta(minutes=5), name="Wayan")
+    res = _tick(store, Claims([(T0, "true")]), 20)
+    assert res["not_quiet"] == [iid] and not store.incident(iid)["closed_at"]
+    assert "Done pressed by Wayan, but Home Assistant still reports it: still open. VESTA keeps watching it." in \
+        [m["status"] for m in res["send"]]
+
+
+def test_the_priority_is_the_alerts_own_and_home_assistants_word_is_not_one(store):
+    # "warning" was kept as the priority: it matched no people_roles — the overdue pump was never sent, never chased
+    plain = _overdue(store)
+    assert store.incident(plain["incident_id"])["severity"] == "P2"            # its route's, rules.yaml
+    assert [m["to"] for m in plain["send"]] == ["fm"] and store.incident(plain["incident_id"])["state"] == "asked"
+    urgent = desk.intake(store, event(rule="automation.other", entities=("lock.other",), priority="P1"), T0,
+                         mode_reader=lambda: "occupied")
+    assert sorted(m["to"] for m in urgent["send"]) == ["fm", "owner"]
+
+
+def test_a_repeat_goes_where_its_priority_sends_it_with_home_assistants_latest_words(store):
+    # owner, 2026-10-13: #5 said "last confirmed: 2026-10-01" every morning while Home Assistant's own message said
+    # 2026-10-11, and went to the facility manager whatever its priority
+    iid = _overdue(store, summary="Pump: last confirmed 2026-10-01", priority="P1")["incident_id"]
+    res = _overdue(store, at=T0 + timedelta(days=1), summary="Pump: last confirmed 2026-10-11", priority="P1")
+    assert res["decision"] == "repeat" and sorted(m["to"] for m in res["send"]) == ["fm", "owner"]
+    assert all(m["text"].startswith("Pump: last confirmed 2026-10-11") for m in res["send"])
+    assert res["ha_messages"][0]["text"].startswith("Pump: last confirmed 2026-10-11")
+
+
+def test_an_incident_logged_under_home_assistants_word_is_chased_once_its_priority_arrives(store):
+    # #5 was stored as "warning" (no ladder, no task); its next repeat carries a priority: the chase starts
+    iid = _overdue(store)["incident_id"]
+    store.update_incident(iid, severity="warning", state="logged")
+    res = _overdue(store, at=T0 + timedelta(days=1), priority="P2")
+    inc = store.incident(iid)
+    assert (inc["severity"], inc["state"]) == ("P2", "asked") and [a["action"] for a in res["actions"]] == ["ticket"]

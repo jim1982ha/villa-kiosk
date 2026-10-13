@@ -18,7 +18,7 @@ carries the same incident_id:
 Only critical_condition, critical_binary_trip and critical_presence_guard ever
 send "resolved"; critical_schedule, critical_system and critical_watchdog send
 "opened" only — their incidents close through the ladder (Done), or, for the two whose
-condition the desk can read again, by `tick` (see SEEN_AGAIN).
+claim the desk can read again, by `tick` (see still_there).
 
 The output is the engine's standard form, built with vesta_shared/result.py (the shape there, every word here):
 {"send": [message], "actions": [fault | resolved | snapshot], "incident_id", "siren_gate"?, "settle"?}.
@@ -68,17 +68,10 @@ with open(os.path.join(SKILL, "skill.yaml"), encoding="utf-8") as _fh:
 #: The beat the engine writes every minute while its Home Assistant connection is up.
 HA_BEAT = "ha_events"
 
-#: ⚠️ OVER WHEN HOME ASSISTANT NO LONGER SAYS SO (villa, 2026-10-10: the Cockpit kept "Entrance door unlocked" hours
-#: after the door was locked, and a relay "unavailable" 5 hours after it was back). critical_condition stops watching
-#: after its "Repeat after" ("abandoned") — a door locked later was never said over; critical_watchdog never says a
-#: device came back. For these the desk reads the entities again (tick).
-#: ⚠️ BY THE RULE'S OWN BAD STATES, NEVER A GUESS (architecture review 22): 0.12.145 took the state at the alert as "the
-#: problem" and any other as "over" — a lock gone from unlocked to jammed was closed as cleared, and a rule watching
-#: two locks closed when the OTHER one was unlocked. The rules now send their list (bad_states) with the alert: over is
-#: NO watched entity in ANY of them, each readable and out of them `clear_minutes`. A condition is judged only once its
-#: rule stopped watching (until then Home Assistant says it itself), and only in its "state" mode — a number waits
-#: for Home Assistant or a person.
-SEEN_AGAIN = ("critical_condition", "critical_watchdog")
+#: ⚠️ OVER WHEN WHAT IT CLAIMS NO LONGER HOLDS (owner, 2026-10-13; still_there): every open incident whose alert sent
+#: its `claim` — or, sent before rules carried one, its `bad_states` — is read again by the tick, whichever rule sent it.
+#: ⚠️ BY THE RULE'S OWN WORDS, NEVER A GUESS (architecture review 22): 0.12.145 took the state at the alert as "the
+#: problem" and any other as "over" — a lock gone from unlocked to jammed was closed as cleared.
 
 
 def now_utc(fake: str | None = None) -> datetime:
@@ -94,6 +87,23 @@ def route_for(rule_id: str, blueprint: str | None = None) -> dict:
             r.update(cand)
             break
     return r
+
+
+#: The priorities an alert can carry: what people_roles routes.
+PRIORITIES = ("P1", "P2", "P3", "P4")
+
+
+def priority(ev: dict, route: dict) -> str:
+    """The alert's priority: its own (`priority`, the rule's "VESTA priority" input), else its route's in rules.yaml.
+
+    ⚠️ READ FROM THE ALERT (owner, 2026-10-13: "only if there is a way to read from the alert itself the priority it
+    belongs to … the same workflow as P1, P2, P3"): Home Assistant's own word (`severity`: "critical", "warning") was
+    kept as the priority whenever it was not "critical" — a "warning" matched no people_roles, so the house pump's
+    overdue run was never sent, never chased, and its daily repeats went to the facility manager anyway."""
+    for p in (ev.get("priority"), ev.get("severity")):
+        if str(p or "").upper() in PRIORITIES:
+            return str(p).upper()
+    return route["severity"]
 
 
 def recipients(severity: str) -> list[str]:
@@ -180,7 +190,7 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
         return abandoned(store, ev, now)
     rule_id, eid = ev["rule_id"], ev.get("entity_id", "")
     route = route_for(rule_id, ev.get("blueprint"))
-    sev = route["severity"] if ev.get("severity") in (None, "critical") else ev["severity"]
+    sev = priority(ev, route)
     key = f"{rule_id}|{eid}"
     out = {"send": [], "actions": [], "incident_id": None, "decision": None}
     if params and params.boolean("maintenance_mode", default=False) and sev != "P1":
@@ -192,6 +202,9 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
         last = datetime.fromisoformat(cur["last_seen_at"])
         store.touch_incident(cur["id"], now.isoformat())
         out["incident_id"] = cur["id"]
+        # ⚠️ WHAT IT SAYS NOW (owner, 2026-10-13, the house pump's #5: "last confirmed: 2026-10-01" every morning while
+        # Home Assistant's own message said 2026-10-11): a repeat carries the alert's latest words, claim and priority
+        cur = _restated(store, cur, ev, sev, now, route, out)
         # the villa's time, written as every message writes one ("Mon 5 Oct, 08:00"): it showed "2026-10-03T00:00", UTC
         since = day_time_label(villa_time(cur["opened_at"], zone or "UTC"), weekday=True)
         status = f"Still there: {cur['count'] + 1} times since {since}"
@@ -201,8 +214,11 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
             out["decision"] = "counted"  # repeat inside the cooldown: no message of the desk's own
             return out
         out["decision"] = "repeat"
-        ask = chased(cur)
-        out["send"].append(R.message("fm", **about(cur, status), incident=cur["id"], buttons=ask, stage="reminder"))
+        # ⚠️ TO WHOM ITS PRIORITY SENDS IT (owner, 2026-10-13: "respect what the skill is doing, consistently to any P1,
+        # P2, P3"): a repeat went to the facility manager whatever the priority, unlike the alert it repeats
+        for role in recipients(sev):
+            out["send"].append(R.message(role, **about(cur, status), incident=cur["id"],
+                                         buttons=bool(route.get("ladder", True) and role == "fm"), stage="reminder"))
         if route.get("intrusion"):
             out["siren_gate"] = siren_gate(store, ev, now)
         return out
@@ -225,6 +241,27 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
         # armed: the engine asks the owner to Approve the siren (no siren set: the warning goes to owner and fm)
         out["siren_gate"] = siren_gate(store, ev, now)
     return out
+
+
+#: What a repeat of an open alert brings that the incident keeps: Home Assistant's latest words and what it claims.
+RESTATED = ("message", "summary", "label", "claim", "bad_states", "mode", "state", "entities", "priority", "severity",
+            "reason")
+
+
+def _restated(store: Store, cur: dict, ev: dict, sev: str, now: datetime, route: dict, out: dict) -> dict:
+    """`cur` with what Home Assistant says of it now (RESTATED), and its priority — the ladder started when a priority
+    that chases arrives on an incident that was only logged (an alert opened before its rule carried one)."""
+    cur = dict(cur)                                # a store row
+    p = json.loads(cur.get("payload") or "{}")
+    p.update({k: ev[k] for k in RESTATED if ev.get(k) is not None})
+    p.pop("clear_since", None)                     # it fired again: whatever was seen clearing is not over
+    store.update_incident(cur["id"], payload=json.dumps(p))
+    if cur["severity"] != sev:
+        store.update_incident(cur["id"], severity=sev)
+        if cur["state"] in (Incident.LOGGED, Incident.DIGEST):
+            _ladder(store, cur["id"], {**p, "rule_id": cur["rule_id"], "entity_id": cur["entity_id"],
+                                       "message": p.get("message") or cur["rule_id"]}, now, sev, route, out)
+    return store.incident(cur["id"])
 
 
 def _ladder(store: Store, iid: int, ev: dict, now: datetime, sev: str, route: dict, out: dict,
@@ -283,7 +320,7 @@ def reopen(store: Store, inc: dict, ev: dict, now: datetime, sev: str, route: di
         store.reopen_incident(inc["id"], now.isoformat(), message=ended)
         store.touch_incident(inc["id"], now.isoformat())
     else:
-        p["abandoned"] = True                         # Home Assistant no longer watches it: the desk does (watched_for)
+        p["abandoned"] = True                         # Home Assistant no longer watches it: the desk does (seen_again)
         store.update_incident(inc["id"], closed_at=None, reply=None, payload=json.dumps(p))
     inc = store.incident(inc["id"])
     runs = incident_runs(inc)
@@ -350,37 +387,33 @@ def _close(store: Store, inc: dict, now: datetime, out: dict, settled: str,
 
 
 def rule_states(inc: dict) -> tuple[list[str], set[str]] | None:
-    """(entities, bad states) when the incident's rule said what is bad: a watchdog, a condition in "state" mode;
-    None for any other (a number, an alert sent before the rules carried bad_states)."""
+    """(entities, bad states) when the incident's alert said which states are bad — its `bad_states`, else the `state`
+    it alerted on — and its states are what it is about (no `mode`, or "state": a number's bad states only say when it
+    cannot be read); None otherwise. An alert's own `claim` comes first (still_there): this is what an alert sent
+    before its rule carried one tells."""
     p = json.loads(inc.get("payload") or "{}")
-    ents = [e for e in (p.get("entities") or [inc["entity_id"]]) if e]
-    if p.get("blueprint") == "critical_watchdog":
-        bad = p.get("bad_states") or ([p["state"]] if p.get("state") else [])
-    elif p.get("blueprint") == "critical_condition" and p.get("mode") == "state":
-        bad = p.get("bad_states") or []
-    else:
+    if p.get("mode") not in (None, "state"):
         return None
+    ents = [e for e in (p.get("entities") or [inc["entity_id"]]) if e]
+    bad = p.get("bad_states") or ([p["state"]] if p.get("state") else [])
     return (ents, set(bad)) if ents and bad else None
 
 
-def watched_for(inc: dict, now: datetime | None = None, silent_hours: float = 12) -> tuple[list[str], set[str]] | None:
-    """(entities, bad states) of an OPEN incident whose end the desk reads itself (SEEN_AGAIN): a watchdog's, or a
-    condition's once its rule stopped watching — said by "abandoned", or by `silent_hours` without a word from it.
-
-    ⚠️ A RULE THAT WENT QUIET HAS STOPPED (architecture review 25): a blueprint reload cancels the rule's run without
-    an "abandoned" — the desk waited for an all-clear that could never come."""
-    p = json.loads(inc.get("payload") or "{}")
-    if p.get("blueprint") == "critical_condition" and not p.get("abandoned"):
-        heard = datetime.fromisoformat(inc.get("last_seen_at") or inc["opened_at"])
-        if now is None or now - heard < timedelta(hours=silent_hours):
-            return None
-    return rule_states(inc)
+def judged(inc: dict) -> bool:
+    """Can the desk tell, from Home Assistant now, whether this incident's alert still holds? Its claim, or its bad
+    states."""
+    return bool(json.loads(inc.get("payload") or "{}").get("claim")) or rule_states(inc) is not None
 
 
 def still_there(inc: dict, client) -> tuple[bool | None, list[str]]:
-    """Is an incident's problem still there, read from Home Assistant now? (True, what is still bad) · (False, []) ·
-    (None, what each device reads) when its rule never said which states are bad, or a device does not answer — the
-    desk cannot tell, and says so.
+    """Does what the incident's alert claims still hold, read from Home Assistant now? (True, what still says so) ·
+    (False, []) · (None, what each device reads) when the desk cannot tell — no claim, or a device does not answer.
+
+    ⚠️ THE ALERT SAYS WHAT IT CLAIMS (owner, 2026-10-13: "when an alert is claiming something, it should be cleared if
+    what it claims is no longer happening … the most universal way … never hardcode"): the house pump's "no run in over
+    1 day" stayed open for 10 days across two real runs — its rule sent no all-clear, and the desk knew how to read
+    again only two blueprints, by name. Every rule now sends its `claim`: a Home Assistant template, written by the rule
+    with its own entities and limits, true while what it reported holds. The desk renders it and knows no rule.
 
     ⚠️ ONE ANSWER, EVERY CLOSE (architecture review 25): checked only when the rule named its states, a Done — or a close
     in the Kiosk — on a door still unlocked dropped the check without a word, and nothing watched the door again."""
@@ -394,6 +427,14 @@ def still_there(inc: dict, client) -> tuple[bool | None, list[str]]:
 
     def silent(e):        # an alert's device that cannot be told right: absent, offline, or without a value
         return not has_value((states.get(e) or {}).get("state"))
+
+    def readings():
+        return [f"{name(e)} reads {states[e]['state']}" if not silent(e) else f"{name(e)} does not answer" for e in ents]
+    if p.get("claim"):
+        said = str(client.template(str(p["claim"]))).strip().lower()
+        if said == "true":
+            return True, ["Home Assistant still reports it"]
+        return (False, []) if said == "false" else (None, readings())
     if rs:
         bad = [f"{name(e)} still reads {states[e]['state']}" for e in ents if (states.get(e) or {}).get("state") in rs[1]]
         if bad:
@@ -402,8 +443,7 @@ def still_there(inc: dict, client) -> tuple[bool | None, list[str]]:
         # "not in a bad state" — closed without a word. Unless its rule calls that state bad, the desk cannot tell.
         mute = [f"{name(e)} does not answer" for e in ents if silent(e)]
         return (None, mute) if mute else (False, [])
-    return None, [f"{name(e)} reads {states[e]['state']}" if not silent(e) else f"{name(e)} does not answer"
-                  for e in ents]
+    return None, readings()
 
 
 def quiet_after_done(store: Store, now: datetime, client, clear_minutes: float, out: dict) -> list[int]:
@@ -439,42 +479,55 @@ def quiet_after_done(store: Store, now: datetime, client, clear_minutes: float, 
     return reopened
 
 
-def seen_again(store: Store, now: datetime, client, clear_minutes: float, out: dict, silent_hours: float = 12) -> list[int]:
-    """Every open incident Home Assistant will never say is over (watched_for), read again: one with NO watched entity
-    in any of its rule's bad states — each readable, and out of them `clear_minutes` — is closed (`_close`). Returns
-    their ids."""
+def seen_again(store: Store, now: datetime, client, clear_minutes: float, out: dict) -> list[int]:
+    """Every open incident whose alert says what it claims (judged), read again: one whose claim no longer holds —
+    `clear_minutes` on end — is closed (`_close`). Returns their ids.
+
+    ⚠️ OVER WHEN HOME ASSISTANT NO LONGER SAYS SO (villa, 2026-10-10: the Cockpit kept "Entrance door unlocked" hours
+    after the door was locked). Read for every open incident that carries a claim, whichever rule sent it — a rule
+    that also says "resolved" itself closes it first, or finds it closed (resolved_late)."""
     closed = []
     for inc in store.incidents(open_only=True):
-        watched = watched_for(inc, now, silent_hours)
-        if not watched:
+        if not judged(inc):
             continue
-        ents, bad = watched
         try:
-            now_states = client.states(ents)
-        except Exception:  # noqa: BLE001 — Home Assistant not readable now: the next tick
-            return closed
-        # ⚠️ A DEVICE THAT DOES NOT ANSWER IS NOT "OVER" (owner's choice, architecture review 29 — reversing review 23's
-        # "no stricter than the rule"): the same offline lock was "Cleared: door is unavailable" here and "VESTA cannot
-        # check this one" after a Done. It stays open, said once, until the device answers and is right.
+            there, words = still_there(inc, client)
+        except Exception:  # noqa: BLE001 — Home Assistant not readable now, or the claim not renderable: the next tick
+            continue
         p = json.loads(inc.get("payload") or "{}")
-        mute = [e for e in ents if not has_value((now_states.get(e) or {}).get("state"))
-                and (now_states.get(e) or {}).get("state") not in bad]
-        if mute:
+        if there is not False:
+            # still holds, or cannot be told: whatever was seen clearing is not over
+            p.pop("clear_since", None)
+        if there is None:
+            # ⚠️ A DEVICE THAT DOES NOT ANSWER IS NOT "OVER" (owner's choice, architecture review 29): it stays open,
+            # said once, until the device answers and is right
             if not p.get("silent_told"):
-                names = ", ".join(((now_states.get(e) or {}).get("attributes") or {}).get("friendly_name") or e for e in mute)
-                store.update_incident(inc["id"], payload=json.dumps({**p, "silent_told": True}))
+                p["silent_told"] = True
                 for role in recipients(inc["severity"]):
-                    out["send"].append(R.message(role, **about(inc, f"{names} {'does' if len(mute) == 1 else 'do'} not "
-                                                                    "answer: VESTA cannot tell if it is right. Still open."),
-                                                 incident=inc["id"], stage="update"))
+                    out["send"].append(R.message(role, **about(inc, f"{'; '.join(words)}: VESTA cannot tell if it is right. "
+                                                                    "Still open."), incident=inc["id"], stage="update"))
+            store.update_incident(inc["id"], payload=json.dumps(p))
             continue
-        if p.get("silent_told"):
-            store.update_incident(inc["id"], payload=json.dumps({k: v for k, v in p.items() if k != "silent_told"}))
-        if not all(out_of(now_states.get(e) or {}, bad, now, clear_minutes) for e in ents):
+        p.pop("silent_told", None)
+        if there:
+            store.update_incident(inc["id"], payload=json.dumps(p))
             continue
-        said = "; ".join(f"{(now_states[e].get('attributes') or {}).get('friendly_name') or e} is {now_states[e]['state']}"
-                         for e in ents)
-        _close(store, inc, now, out, f"Cleared on {{time}}: {said}.",
+        if p.get("claim"):
+            # out of it `clear_minutes` on end, as the desk saw it (a claim is a verdict, not a state with its time)
+            since = p.setdefault("clear_since", now.isoformat())
+            store.update_incident(inc["id"], payload=json.dumps(p))
+            if now - datetime.fromisoformat(since) < timedelta(minutes=clear_minutes):
+                continue
+            said = "Home Assistant no longer reports it"
+        else:
+            store.update_incident(inc["id"], payload=json.dumps(p))
+            ents, bad = rule_states(inc)
+            now_states = client.states(ents)
+            if not all(out_of(now_states.get(e) or {}, bad, now, clear_minutes) for e in ents):
+                continue
+            said = "; ".join(f"{(now_states[e].get('attributes') or {}).get('friendly_name') or e} is "
+                             f"{now_states[e]['state']}" for e in ents)
+        _close(store, store.incident(inc["id"]), now, out, f"Cleared on {{time}}: {said}.",
                note="Cleared: back to normal, read again by the VESTA Agent.")
         store.audit("alert-desk", "seen_again", {"incident": inc["id"], "now": said})
         closed.append(inc["id"])
@@ -567,7 +620,7 @@ def reply(store: Store, iid: int, option: str, sender_role: str, now: datetime, 
         # ⚠️ A PROMISE THE CODE KEEPS (architecture review 23): "will check it stays quiet" was written since 0.9.0 and
         # nothing ever checked — a Done on a door still unlocked closed it for good. The tick reads it again (quiet_after_done)
         # read again whatever the rule: still bad, it reopens; not knowable, the people asked are told (still_there)
-        checks = rule_states(inc) is not None
+        checks = judged(inc)
         store.update_incident(iid, payload=json.dumps({**json.loads(inc.get("payload") or "{}"),
                                                        "check_quiet": f"{label} pressed by {who}"}))
         out["send"].append(here(pressed + (" VESTA will check it stays right." if checks else ""), "closed"))
@@ -598,8 +651,7 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
     silent_min = params.behaviour("villa_silent_minutes")
     out = {"send": [], "actions": [], "escalated": [], "reasked": []}
     if client is not None:
-        out["cleared"] = seen_again(store, now, client, params.behaviour("clear_minutes"), out,
-                                    params.behaviour("ha_silent_hours"))
+        out["cleared"] = seen_again(store, now, client, params.behaviour("clear_minutes"), out)
         out["not_quiet"] = quiet_after_done(store, now, client, params.behaviour("clear_minutes"), out)
     for inc in store.incidents(open_only=True):
         p = json.loads(inc.get("payload") or "{}")

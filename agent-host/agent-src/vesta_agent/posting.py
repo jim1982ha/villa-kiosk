@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Awaitable, Callable
 
-from vesta_shared.message_format import UNTITLED, fill_to, pages, titled
+from vesta_shared.message_format import UNTITLED, audience, fill_to, pages, titled
 
 from . import layout
 from .notice import when
@@ -28,7 +28,7 @@ class Poster:
     async def post(self, chat: int, text: str, *, status: str = "", lead: str = "", roles=(), incident: int | None = None,
                    keyboard: dict | None = None, document: str | None = None, photo=None,
                    thread: int | str | None = None, plain: bool = False, origin: Origin | None = None,
-                   stage: str | None = None, mark: str | None = None, also: list[str] | None = None,
+                   stage: str | None = None, mark: str | None = None, also=None,
                    title: str | None = None) -> int | None:
         """The message in `chat`: its heading — who it is for (`roles`), the incident and its history — unless it answers
         the person who asked, in their chat, or is `plain`; its parts laid out (layout.py) to fit ONE Telegram message —
@@ -41,19 +41,19 @@ class Poster:
         # "#9-P2 (new)", a report's, an approval's "Approval request"; the last resort UNTITLED (notice.heading) — and a
         # message given a title carries it in the asker's chat too. Only an answer to the person who asked, or a
         # `plain` one, has no heading. A report is titled as data (owner, 2026-10-11, review 28): the agent writes its
-        # title and "To:" — everyone it went to (`also`), the same in every chat — and cuts a long one into whole
+        # title and "To:" — every role it went to (`also`), the same in every chat — and cuts a long one into whole
         # messages "(1/2)", "(2/2)". A text a skill already wrote in the shape, with "To:" left for the agent, is filled.
         answering = bool(origin and origin.holds and chat == origin.chat)
-        names = (also or (self.notices.recipients(chat, roles) if self.notices else [])) if incident is None else []
-        filled = fill_to(text, names) if incident is None and not plain else None
+        to = audience(also or (self.notices.roles_for(chat, roles) if self.notices else ())) if incident is None else ""
+        filled = fill_to(text, to) if incident is None and not plain else None
         head = ""
         if filled is not None:
             text = filled
         elif incident is None and not plain and (title or (self.notices and not answering)):
             title = title or UNTITLED
             if not (status or lead or thread is not None):
-                return await self._pages(chat, title, names, text, keyboard, document, photo, origin)
-            head = titled(title, names, "")
+                return await self._pages(chat, title, to, text, keyboard, document, photo, origin)
+            head = titled(title, to, "")
         elif incident is not None and self.notices and not plain and not answering:
             head = self.notices.heading(chat, incident, roles, stage, also)
         p = layout.parts(body=text, status=status, head=head, lead=lead, mark=mark)
@@ -66,11 +66,11 @@ class Poster:
             await self.thread.post(thread, chat, mid, {**p, "limit": limit}, buttons=bool(keyboard), keyboard=keyboard)
         return mid
 
-    async def _pages(self, chat, title, names, text, keyboard, document, photo, origin) -> int | None:
+    async def _pages(self, chat, title, to, text, keyboard, document, photo, origin) -> int | None:
         """A titled report, one message per page; its file, photo and buttons go with the last. The last id, or None
         when a page did not arrive."""
         limit = CAPTION if (photo or document) else layout.TELEGRAM_LIMIT
-        docs = pages(title, names, text, limit)
+        docs = pages(title, to, text, limit)
         mid = None
         for i, doc in enumerate(docs):
             last = i == len(docs) - 1

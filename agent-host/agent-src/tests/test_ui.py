@@ -65,7 +65,7 @@ def test_the_forms_save_keeps_the_files_comments_and_the_agent_reads_it(ui):
         r = await c.put("/api/policy/form", json={"form": form, "rev": doc["rev"]}, headers=HDR)
         return refused.status, await refused.json(), r.status, await r.json()
     no_fm, why, status, body = call(ui, fn)
-    assert no_fm == 400 and any("at least one Facility manager" in p for p in why["problems"])
+    assert no_fm == 400 and any("at least one Facility Manager" in p for p in why["problems"])
     assert status == 200, body
     text = open(ui.policy_path).read()
     assert "# People, and where the agent posts" in text                 # a comment of the example, kept

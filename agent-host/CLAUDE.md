@@ -316,6 +316,10 @@ Decisions of 2026-09-30 (owner):
   without a value; only "unavailable" is a drop). skill.yaml `buttons` are the alert buttons — the engine passes the
   option, never the label to read back. `TurnResult.then` joins a follow-up turn (a rule per field, THEN); a reply's
   buttons are added up, never replaced.
+  0.12.181 (owner, 2026-10-13): an alert says what it CLAIMS — the rules send `claim` (a template, true while what
+  they reported holds) and `priority`; the desk renders the claim every tick and knows no blueprint by name. "To:" is
+  ROLES only (`message_format.audience`), never a person's name. Telegram: bold titles, ONE quote block per section,
+  an alert's history and status one block.
 - No PDF (owner, 2026-09-30): the reports are self-contained HTML pages sent
   as attachments. Chromium was ~480 MB of a 1.1 GB image for this alone.
 - ⚠️ The Dockerfile's layer order is what an update costs the Yellow: agent

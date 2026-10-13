@@ -39,13 +39,14 @@ def test_a_closing_message_is_headed_closed_never_new(tmp_path):
     # owner, 2026-10-11: "For: JM, P2 Incident: New #9 … Closed on …" — "is it a closure or not?"
     v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]})
     n = v.notices
-    assert n.heading(FM, 9, "fm", "new") == "#9 (new)\nTo: JM"
-    assert n.heading(FM, 9, "fm", "closed") == "#9 (closed)\nTo: JM"               # no history: still "closed"
-    assert n.heading(FM, 9, "fm", "back") == "#9 (existing)\nTo: JM"               # owner: never "Follow Up"
-    assert n.heading(FM, 9, "fm") == "#9 (new)\nTo: JM"                            # no stage: by its history, as before
+    to = "To: Facility Manager"
+    assert n.heading(FM, 9, "fm", "new") == f"#9 (new)\n{to}"
+    assert n.heading(FM, 9, "fm", "closed") == f"#9 (closed)\n{to}"               # no history: still "closed"
+    assert n.heading(FM, 9, "fm", "back") == f"#9 (existing)\n{to}"               # owner: never "Follow Up"
+    assert n.heading(FM, 9, "fm") == f"#9 (new)\n{to}"                            # no stage: by its history, as before
     run(v.outcome.carry_out({"send": [{"to": "fm", "text": "Relay offline", "incident_id": 9, "stage": "closed",
                                        "status": "Closed on {time}: back."}]}))
-    assert v.tg.sent[-1][1].startswith("#9 (closed)\nTo: JM\n")
+    assert v.tg.sent[-1][1].startswith(f"#9 (closed)\n{to}\n")
 
 
 # ---------------------------------------------------------------------- the siren

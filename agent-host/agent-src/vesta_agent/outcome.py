@@ -37,7 +37,7 @@ from datetime import datetime, timezone
 from typing import Awaitable, Callable
 
 from . import layout
-from .notice import addressed, when
+from .notice import when
 from .posting import Poster
 from .routing import Origin, Routing
 
@@ -121,18 +121,16 @@ class Outcome:
 
         def incident_of(item):
             return item.get("incident_id") or (res.get("incident_id") if item.get("keyboard") else None)
-        # who this result's notice of each incident goes to: its "To:" line, the same in every chat (notice.heading)
-        going: dict[int, list[str]] = {}
-        sent_to: dict[int, list[str]] = {}              # a report's: everyone its "To:" names, the same in every chat
+        # the roles this result's notice of each incident goes to: its "To:" line, the same in every chat (notice.heading)
+        going: dict[int, set[str]] = {}
+        sent_to: dict[int, set[str]] = {}               # a report's: every role its "To:" names, the same in every chat
         if self.notices:
             for chat, item, roles in pairs:
-                names = self.notices.recipients(chat, roles)
+                to = self.notices.roles_for(chat, roles)
                 if incident_of(item):
-                    going.setdefault(int(incident_of(item)), []).extend(names)
+                    going.setdefault(int(incident_of(item)), set()).update(to)
                 else:
-                    sent_to.setdefault(id(item), []).extend(names)
-            going = {k: addressed(v) for k, v in going.items()}
-            sent_to = {k: addressed(v) for k, v in sent_to.items()}
+                    sent_to.setdefault(id(item), set()).update(to)
         posted: dict[int, list[int]] = {}               # incident → the chats this result showed it in, the last one last
         # Home Assistant's own messages first: the desk's messages below then replace them where both land
         for h in res.get("ha_messages") or []:
@@ -281,7 +279,7 @@ class Outcome:
         kept = sorted((n, k) for k, n in best.items())
         return [(pairs[n][0], pairs[n][1], frozenset(roles[k])) for n, k in kept], unrouted
 
-    async def adopt_ha(self, h: dict, skill_name: str | None = None, also: list[str] | None = None) -> list[int]:
+    async def adopt_ha(self, h: dict, skill_name: str | None = None, also=None) -> list[int]:
         """Home Assistant's messages of one automation run become incident messages (outcome key ha_messages)."""
         ctx, iid, text = (h or {}).get("context"), (h or {}).get("incident_id"), (h or {}).get("text") or ""
         if not (ctx and str(iid or "").isdigit() and text):

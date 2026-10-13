@@ -38,12 +38,10 @@ def test_a_message_for_a_role_reaches_every_chat_of_it_once_under_its_heading(tm
     v = make_agent(tmp_path, {"people": PEOPLE})
     done = run(v.outcome.carry_out({"send": [{"to": "fm", "text": "Pool pump offline."}]}))
     assert done["sent"] == 3 and [c for c, _, _ in v.tg.sent] == [JM, FABIEN, GROUP]
-    # who it is for: the PEOPLE of the role, never the group they read it in
-    # a private chat names its own person, a group every person of the role (owner, 2026-10-10)
-    # under its title (UNTITLED: none was given), "To:" naming everyone it went to, the same in every chat — as an
-    # alert's and a report's (owner, 2026-10-11: one picture; 2026-10-12: one layout for every message)
+    # who it is for: its ROLE, never a person's name (owner, 2026-10-13), the same in every chat — under its title
+    # (UNTITLED: none was given), as an alert's and a report's (owner, 2026-10-11: one picture; 2026-10-12: one layout)
     heads = {c: t.split("\n")[1] for c, t, _ in v.tg.sent}
-    assert heads == {JM: "To: JM_FM, Fabien_FM", FABIEN: "To: JM_FM, Fabien_FM", GROUP: "To: JM_FM, Fabien_FM"}
+    assert heads == {JM: "To: Facility Manager", FABIEN: "To: Facility Manager", GROUP: "To: Facility Manager"}
     assert all(body(t) == "Pool pump offline." for _, t, _ in v.tg.sent)
     v.tg.sent.clear()
     run(v.outcome.carry_out({"send": [{"to": "owner", "text": "Siren off."}, {"to": "fm", "text": "Siren off."}]}))
@@ -137,32 +135,34 @@ def test_in_a_private_chat_the_persons_own_role_decides_in_a_group_the_least(tmp
     assert "ha_get_camera_image" not in tool_access.allowed_for(pol, tools, owner, GROUP)
 
 
-def test_the_for_line_names_the_role_the_message_is_for(tmp_path):
+def test_the_to_line_names_the_role_the_message_is_for(tmp_path):
     s = settings(str(tmp_path))
     n = Notices(State(s.state_path), lambda: Policy({"people": PEOPLE}), "UTC")
-    assert n.heading(JM, to="owner") == f"{UNTITLED}\nTo: JM_O"       # his own chat: him, never Fabien
-    assert n.heading(GROUP, to="fm", title="Approval request") == "Approval request\nTo: JM_FM, Fabien_FM"
+    assert n.heading(JM, to="owner") == f"{UNTITLED}\nTo: Owner"
+    assert n.heading(GROUP, to="fm", title="Approval request") == "Approval request\nTo: Facility Manager"
+    assert n.heading(GROUP) == f"{UNTITLED}\nTo: Owner & Facility Manager"   # no role given: the chat's
     alone = Notices(State(s.state_path), lambda: Policy({"people": [PEOPLE[4]]}), "UTC")
-    assert alone.heading(GROUP, to="owner") == f"{UNTITLED}\nTo: the Owner"   # a group alone: its role, capitalised
+    assert alone.heading(GROUP, to="owner") == f"{UNTITLED}\nTo: Owner"
 
 
-def test_to_names_the_people_and_a_roles_word_only_when_nobody_is_named(tmp_path):
-    # owner, 2026-10-12: "#25-P2 (closed) / To: the Owner, Fabien, JM" — the owner's role was a group with no person in
-    # it, and its word was merged with the facility manager's names. A role's word only when no person is named at all.
-    from vesta_agent.notice import addressed
-    assert addressed(["the Owner", "Fabien", "JM", "Fabien"]) == ["Fabien", "JM"]
-    assert addressed(["the Owner", "the Facility Manager"]) == ["the Owner", "the Facility Manager"]
+def test_to_names_roles_only_never_a_person(tmp_path):
+    # owner, 2026-10-12: "#25-P2 (closed) / To: the Owner, Fabien, JM" mixed a role and names. Owner, 2026-10-13: "To:
+    # Owner", "To: Facility Manager", "To: Owner & Facility Manager" — never a name
     v = make_agent(tmp_path, {"people": [{"telegram_id": GROUP, "name": "Villa group", "role": "owner"},
                                          {"telegram_id": FABIEN, "name": "Fabien", "role": "fm"},
                                          {"telegram_id": JM, "name": "JM", "role": "fm"}]})
     run(v.outcome.carry_out({"send": [{"to": "owner", "text": "Door unlocked.", "title": "Door"},
                                       {"to": "fm", "text": "Door unlocked.", "title": "Door"}]}))
-    # two messages: the owner's went to the group only (nobody named: its role's word), the facility manager's to two people
-    assert sorted(t.split("\n")[1] for _, t, _ in v.tg.sent) == ["To: Fabien, JM", "To: Fabien, JM", "To: the Owner"]
-    # one incident sent to both: ONE "To:" for it, the people only — in every chat, and in its history line
+    # two messages: the owner's went to the group, the facility manager's to two people — each says its role
+    assert sorted(t.split("\n")[1] for _, t, _ in v.tg.sent) == ["To: Facility Manager", "To: Facility Manager", "To: Owner"]
+    # one incident sent to both: ONE "To:" for it, both roles — in every chat, and in its history line
     v.notices.record(25, "new", [(GROUP, "owner"), (FABIEN, "fm"), (JM, "fm")])
     head = v.notices.heading(GROUP, 25, "owner", "closed")
-    assert head.split("\n")[1] == "To: Fabien, JM" and head.split("\n")[2].endswith(" to Fabien, JM"), head
+    both = "Owner & Facility Manager"
+    assert head.split("\n")[1] == f"To: {both}" and head.split("\n")[2].endswith(f" to {both}"), head
+    # a history line recorded before 0.12.181 named people: read back as their roles
+    v.state.set_incident_history(26, [{"at": "2026-10-12T08:00:00+00:00", "stage": "new", "to": ["Fabien", "the Owner"]}])
+    assert v.notices.heading(FABIEN, 26).split("\n")[1:] == [f"To: {both}", f"- Alert sent 12/10/2026 08:00 to {both}"]
 
 
 def test_a_chat_listed_for_both_roles_is_headed_for_both(tmp_path):
@@ -173,7 +173,7 @@ def test_a_chat_listed_for_both_roles_is_headed_for_both(tmp_path):
                                          {"telegram_id": GROUP, "name": "Group_FM", "role": "fm"}]})
     run(v.outcome.carry_out({"send": [{"to": "owner", "text": "Door unlocked."}, {"to": "fm", "text": "Door unlocked."}]}))
     heads = {c: t.split("\n")[1] for c, t, _ in v.tg.sent}
-    assert heads == {JM: "To: JM_O, Fabien_FM", GROUP: "To: JM_O, Fabien_FM", FABIEN: "To: Fabien_FM"}
+    assert heads == {JM: "To: Owner & Facility Manager", GROUP: "To: Owner & Facility Manager", FABIEN: "To: Facility Manager"}
 
 
 def test_every_message_the_agent_sends_on_its_own_is_in_the_one_layout_and_styled(tmp_path):
@@ -203,7 +203,7 @@ def test_every_message_the_agent_sends_on_its_own_is_in_the_one_layout_and_style
     for t in texts:
         assert t.split("\n")[1].startswith("To: ") and "-------" not in t and not t.startswith("For:"), t
         kinds = [e["type"] for e in telegram_entities(t)]
-        assert kinds[0] == "underline" and "blockquote" in kinds, (t, kinds)
+        assert kinds[0] == "bold" and "blockquote" in kinds, (t, kinds)
     assert all("Status:" in t for _, _, t in v.tg.edits)                         # a decision under "Status:"
 
 
@@ -213,8 +213,8 @@ def test_the_agents_own_approvals_and_warnings_carry_the_heading_in_every_chat(t
                               "allowed_services": {"light.turn_on": "owner", "cover.open_cover": "any"}})
     _, msg = v.actions.request("light", "turn_on", "light.pool", {}, None, None)
     run(v.outcome.ask(msg))
-    assert {c: t.split("\n", 2)[:2] for c, t, _ in v.tg.sent} == {FABIEN: ["Approval request", "To: Fabien_O"],
-                                                                  JM: ["Approval request", "To: JM_O"]}
+    assert {c: t.split("\n", 2)[:2] for c, t, _ in v.tg.sent} == {FABIEN: ["Approval request", "To: Owner"],
+                                                                  JM: ["Approval request", "To: Owner"]}
     v.tg.sent.clear()
     _, msg = v.actions.request("cover", "open_cover", "cover.pool", {}, v.policy().person(JM), JM)
     run(v.outcome.ask(msg))
@@ -259,7 +259,7 @@ def test_a_newer_snapshot_of_an_incident_replaces_the_older_one(tmp_path):
     run(v.outcome.carry_out(res))
     first = v.tg.next_id                                                # the snapshot: the last message sent
     # under the heading every message of the agent's carries (owner, 2026-10-10: "all formatted the same way")
-    assert v.tg.sent[-1][1].startswith("#9 (new)\nTo: JM_O\n")
+    assert v.tg.sent[-1][1].startswith("#9 (new)\nTo: Owner\n")
     assert v.tg.sent[-1][1].endswith("\nCamera snapshot\n\nStatus:\n⚠️ New alert")
     run(v.outcome.carry_out(res))
     assert (JM, first) in v.tg.deleted
@@ -612,6 +612,6 @@ def test_a_photo_with_a_long_heading_is_posted_as_one_message_and_recorded_as_se
     (text, photo), = sent
     assert photo and len(text) <= 1000 and text.startswith("#9-P1 (existing)\nTo: JM\nCamera snapshot\n\nStatus:\n"
                                                          "- Reminder sent 10/10/2026 10:00 to JM\n- … ") \
-        and text.endswith("to JM\n\n⚠️ ⚙️ Still open")                         # one caption: one message
+        and text.endswith("to JM\n⚠️ ⚙️ Still open")                           # one caption: one message
     # the first notice always kept, the newest kept, those between counted (review 28)
     assert "10:29 to JM" in text and "10:01 to JM" not in text

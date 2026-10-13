@@ -4,15 +4,14 @@ in the future — without risking to miss any rule").
 
 Every alert and every report is written as plain text in this shape:
 
-    Villa Example, daily report on 11/10/2026.     ← title                       (one line)
-    To: JM                                         ← who it is for              ("To: " line)
-                                                   ← (an empty line, between sections and between items)
+    Villa Example, daily report on 11/10/2026.     ← title, in bold             (one line)
+    To: Facility Manager                           ← the roles it is for        ("To: " line, `audience`)
+                                                   ← (an empty line, between sections)
     New since yesterday:                           ← a section's label          (a line ending ":")
-    - P3 Onsen pump used 0.12 kWh/day …            ← an item                    (its lines, up to an empty line)
+    - P3 Onsen pump used 0.12 kWh/day …            ← its items, one per line: ONE quote block per section
 
     Still open:
     - #5 · ⚠️ House Pump Power …
-
     - P2 Motion1 Occupancy battery at 7%: replace now.
 
 An alert ("#1-P2 (existing)" / "To: Jim" / the alert / "Status:" / its history / where it stands) is the same shape,
@@ -32,6 +31,21 @@ import re
 from .messaging import tg_len
 
 TO = "To: "
+#: The roles as every "To:" line, history line and page names them, in this order (owner, 2026-10-13: "To: Owner",
+#: "To: Facility Manager", "To: Owner & Facility Manager" — roles only, never a person's name).
+ROLE_WORDS = {"owner": "Owner", "fm": "Facility Manager"}
+#: What joins two roles in a "To:" line.
+AND = " & "
+
+
+def audience(roles) -> str:
+    """Who a message is for, as its "To:" line says it: its roles in ROLE_WORDS order ("Owner & Facility Manager"); ""
+    for none.
+
+    ⚠️ ROLES, NEVER NAMES (owner, 2026-10-13): "To: Fabien, JM" named the people the People list gives each role — a
+    message is for a role, whoever holds it. The same words in Home Assistant's own messages (vesta_message.jinja)."""
+    wanted = set(roles or ())
+    return AND.join(w for r, w in ROLE_WORDS.items() if r in wanted)
 #: The title of a message about no incident whose sender gave it none (an AI's message sent without one; a heading
 #: "For: …" recorded before 0.12.175). Every message the agent sends on its own has a title: this is the last resort.
 UNTITLED = "Message from VESTA"
@@ -56,7 +70,7 @@ NOTE_SECTIONS = frozenset({STATUS})
 #: How each part of a message looks on Telegram — the only style rule set. Keys: the parts `parts` finds.
 #: Values: Telegram's MessageEntity types, applied over the part's text (sent as it is, never as markup).
 TELEGRAM: dict[str, tuple[str, ...]] = {
-    "title": ("underline",),
+    "title": ("bold",),
     "to": (),
     "label": (),
     "item": ("blockquote",),
@@ -66,38 +80,80 @@ TELEGRAM: dict[str, tuple[str, ...]] = {
 
 def document(title: str, to: str, sections: list[tuple[str | None, list[str]]]) -> str:
     """A message in the shape: `title`, "To: `to`" ("" leaves "To:" for the agent to fill: `fill_to`), then each section
-    — its label (None: none) and its items, each item its own block."""
-    out = [title.strip(), (TO + to).rstrip()]
-    first = True
+    — its label (None: none) and its items (_section)."""
+    body = _body(sections)
+    return "\n".join([title.strip(), (TO + to).rstrip()] + ([body] if body else []))
+
+
+def _section(label: str | None, items: list[str]) -> str:
+    """A section's text: its label, then its items — a labelled section's one per line, ONE block; a section without a
+    label (prose: an alert's text, a page's lead) its paragraphs apart.
+
+    ⚠️ ONE BLOCK PER SECTION (owner, 2026-10-13: "regroup all of them into a unique quote block … 1 block under New
+    since yesterday and 1 block under Still open"; an alert's history and where it stands in one block too): each item
+    was its own quote, the daily report a column of nine boxes."""
+    lead = [f"{label}:"] if label else []
+    return "\n".join(lead + [("\n" if label else "\n\n").join(items)])
+
+
+def _body(sections: list[tuple[str | None, list[str]]]) -> str:
+    """The sections of a message under its "To:" line: an empty line before each labelled one and between sections."""
+    out, first = [], True
     for label, items in sections:
         items = [i.strip() for i in items if i and i.strip()]
         if not items:
             continue                                 # a section with nothing in it is not said
-        lead = [f"{label}:"] if label else []
         if not first or label:
             out.append("")
         first = False
-        out.append("\n\n".join(["\n".join(lead + items[:1])] + items[1:]) if items else lead[0])
+        out.append(_section(label, items))
     return "\n".join(out)
 
 
-def fill_to(text: str, names: list[str]) -> str | None:
-    """A message in the shape whose "To:" line a skill left for the agent: that line naming `names`. None for any other
-    text (it is not in the shape, or already says who)."""
+def _is_label(line: str) -> bool:
+    return line.rstrip().endswith(":") and not line.lstrip().startswith("- ")
+
+
+def _sections(body: str) -> list[tuple[str | None, list[str]]]:
+    """The sections of a message's body, read back (pages): a label starts one; its items are its "- " lines (with the
+    lines that go on under them), a section without a label its paragraphs."""
+    out: list[tuple[str | None, list[str]]] = []
+    for block in (body or "").strip("\n").split("\n\n"):
+        lines = block.split("\n")
+        if _is_label(lines[0]):
+            out.append((lines[0].rstrip()[:-1], []))
+            lines = lines[1:]
+        elif not out:
+            out.append((None, []))
+        label, items = out[-1]
+        if label is None:
+            items.append("\n".join(lines))
+            continue
+        for ln in lines:
+            if ln.lstrip().startswith("- ") or not items:
+                items.append(ln)
+            else:
+                items[-1] += "\n" + ln
+    return [(lab, [i for i in items if i.strip()]) for lab, items in out]
+
+
+def fill_to(text: str, to: str) -> str | None:
+    """A message in the shape whose "To:" line a skill left for the agent: that line saying `to` (audience). None for
+    any other text (it is not in the shape, or already says who)."""
     title, nl, rest = (text or "").partition("\n")
     line, nl2, body = rest.partition("\n")
     if not nl or line.strip() != TO.strip() or not title.strip():
         return None
-    return f"{title}\n{TO}{', '.join(names) or 'this chat'}" + (nl2 + body if nl2 else "")
+    return f"{title}\n{TO}{to or 'this chat'}" + (nl2 + body if nl2 else "")
 
 
-def titled(title: str, names: list[str], body: str) -> str:
+def titled(title: str, to: str, body: str) -> str:
     """A report in the shape from its parts as data (owner, 2026-10-11, review 28: a report is never recognised by its
-    text — the agent writes its title and "To:" itself, whatever the AI wrote under them): `title`, "To: `names`", then
+    text — the agent writes its title and "To:" itself, whatever the AI wrote under them): `title`, "To: `to`", then
     `body` (its sections) — under an empty line when it starts with a section's label."""
     body = (body or "").strip("\n")
     gap = "\n\n" if body.split("\n", 1)[0].rstrip().endswith(":") else "\n"
-    return f"{title.strip()}\n{TO}{', '.join(names) or 'this chat'}" + (gap + body if body else "")
+    return f"{title.strip()}\n{TO}{to or 'this chat'}" + (gap + body if body else "")
 
 
 def split_title(text: str) -> tuple[str, str] | None:
@@ -109,34 +165,28 @@ def split_title(text: str) -> tuple[str, str] | None:
     return title.strip(), body.strip("\n")
 
 
-def pages(title: str, names: list[str], body: str, limit: int) -> list[str]:
+def pages(title: str, to: str, body: str, limit: int) -> list[str]:
     """A report as messages of at most `limit` (Telegram's units), each a whole message in the shape — its own title
     "(1/2)", "To:", and its section's label again when a section goes on (owner, 2026-10-11, review 28: one long daily
     report lost its whole "Still open" section, cut at Telegram's 4,096). Cut between items; an item longer than a
     message is cut itself."""
-    whole = titled(title, names, body)
+    whole = titled(title, to, body)
     if tg_len(whole) <= limit:
         return [whole]
-    blocks, label = [], None                         # (the label it is under, the block's text)
-    for block in (body or "").strip("\n").split("\n\n"):
-        first = block.split("\n", 1)[0]
-        if first.rstrip().endswith(":") and not first.lstrip().startswith("- "):
-            label = first.rstrip()
-        blocks.append((label, block))
     numbered = lambda i, n: f"{title.strip().rstrip('.')} ({i}/{n})."
-    room = limit - tg_len(titled(numbered(99, 99), names, "")) - 4
-    out: list[list[str]] = [[]]
-    used = 0
-    for lab, block in blocks:
-        block = block if tg_len(block) <= room else block[:max(room - 1, 1)] + "…"
-        if out[-1] and used + 2 + tg_len(block) > room:
-            out.append([])
-            used = 0
-            if lab and not block.startswith(lab):
-                block = f"{lab}\n{block}"           # the section goes on: its label again
-        out[-1].append(block)
-        used += 2 + tg_len(block)
-    return [titled(numbered(i + 1, len(out)), names, "\n\n".join(b)) for i, b in enumerate(out)]
+    room = limit - tg_len(titled(numbered(99, 99), to, "")) - 4
+    out: list[list[tuple[str | None, list[str]]]] = [[]]
+    for label, items in _sections(body):
+        for item in items:
+            item = item if tg_len(item) <= room - tg_len(label or "") - 4 else \
+                item[:max(room - tg_len(label or "") - 5, 1)] + "…"
+            page = out[-1]
+            grown = page[:-1] + [(label, page[-1][1] + [item])] if page and page[-1][0] == label else page + [(label, [item])]
+            if page and tg_len(_body(grown)) > room:
+                out.append([(label, [item])])        # the section goes on: its label again
+            else:
+                out[-1] = grown
+    return [titled(numbered(i + 1, len(out)), to, _body(p)) for i, p in enumerate(out)]
 
 
 def parts(text: str) -> list[tuple[str, int, int]]:
@@ -162,21 +212,25 @@ def parts(text: str) -> list[tuple[str, int, int]]:
         at += len(ln) + 1
     found.append(("title", 0, len(lines[0])))
     found.append(("to", starts[1], starts[1] + len(lines[1])))
-    section, block = None, None                      # the current label; the current item's first line
-    for i in range(2, len(lines) + 1):
-        ln = lines[i] if i < len(lines) else ""
+    # ⚠️ ONE BLOCK PER SECTION (owner, 2026-10-13): a section's items are ONE part, from its first line to its last —
+    # an AI that wrote its items apart (the daily digest) is quoted the same way
+    section, span, after = None, None, True          # the current label; its items' (start, end); a label may start
+    for i in range(2, len(lines)):
+        ln = lines[i]
         if not ln.strip():
-            if block is not None:                    # an item ends at an empty line
-                end = starts[i - 1] + len(lines[i - 1])
-                found.append(("note" if section in NOTE_SECTIONS else "item", starts[block], end))
-                block = None
+            after = True
             continue
-        if block is None and ln.rstrip().endswith(":") and not ln.lstrip().startswith("- "):
+        if after and _is_label(ln):
+            if span:
+                found.append(("note" if section in NOTE_SECTIONS else "item", *span))
+                span = None
             section = ln.rstrip()[:-1].strip()
             found.append(("label", starts[i], starts[i] + len(ln)))
             continue
-        if block is None:
-            block = i
+        after = False
+        span = (span[0] if span else starts[i], starts[i] + len(ln))
+    if span:
+        found.append(("note" if section in NOTE_SECTIONS else "item", *span))
     return found
 
 
@@ -191,11 +245,9 @@ def _alert_parts(text: str, title_end: int, to_end: int) -> list[tuple[str, int,
     if at > to_end + 1:
         found.append(("item", to_end + 1, at))
     found.append(("label", at + 2, at + len(label) - 1))
-    start = at + len(label)
-    for block in text[start:].split("\n\n"):
-        if block.strip():
-            found.append(("note", start, start + len(block)))
-        start += len(block) + 2
+    start, end = at + len(label), len(text.rstrip())
+    if end > start:
+        found.append(("note", start, end))           # its history and where it stands: ONE block (owner, 2026-10-13)
     return found
 
 
@@ -210,5 +262,6 @@ def entities(text: str, table: dict[str, tuple[str, ...]]) -> list[dict]:
 
 
 def telegram_entities(text: str) -> list[dict]:
-    """How Telegram shows a message (TELEGRAM): the title underlined, each item quoted, a note quoted in italics."""
+    """How Telegram shows a message (TELEGRAM): the title in bold, each section's items quoted, its notes quoted in
+    italics."""
     return entities(text, TELEGRAM)
