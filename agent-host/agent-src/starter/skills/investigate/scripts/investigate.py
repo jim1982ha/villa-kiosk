@@ -38,7 +38,7 @@ from vesta_shared import script, skill_settings  # noqa: E402  (client, store, z
 from vesta_shared import periods as kinds  # noqa: E402  (the period kinds and their words, read by the report page too)
 from vesta_shared.timeutil import lasting  # noqa: E402  (the one duration wording)
 
-from vesta_shared.device_state import NO_VALUE, OFFLINE  # noqa: E402  (the one "does this device answer")
+from vesta_shared.device_state import NO_VALUE, OFFLINE, ha_restarts, in_restart  # noqa: E402  (the one "does this device answer")
 # ⚠️ WHAT A CONTROL CAN PROVE (architecture review 32 follow-up, 2026-10-11): an on/off control that stayed OFF the whole
 # period — and the days before — while another device ran is not what turned that device on. An account blamed a
 # switch that had never once been on. Any control, any device: nothing here names one.
@@ -571,7 +571,19 @@ def around(client, store, start: datetime, end: datetime, focus: list[str], zone
                 back.append((datetime.fromisoformat(r["when"]), r.get("name") or eid, eid))
             except (KeyError, ValueError):
                 pass
+    # ⚠️ A RESTART IS SAID ONCE, NOT AS EVERY DEVICE (2026-10-13): a period holding a Home Assistant restart listed
+    # nearly every device as "stopped answering" and never said Home Assistant had restarted. A device that went and
+    # answered again within `restart_settle_minutes` of it was the restart's; one that did not come back stays listed.
+    restarts = ha_restarts(rows)
+    settle = th("restart_settle_minutes")
+    came_back = {e for t, _, e in back if in_restart(t, restarts, settle)}
+    restart_only = {e for t, _, e in offline if in_restart(t, restarts, settle) and e in came_back}
+    offline = [o for o in offline if o[2] not in restart_only or not in_restart(o[0], restarts, settle)]
+    back = [b for b in back if b[2] not in restart_only or not in_restart(b[0], restarts, settle)]
     lines = []
+    if restarts:
+        lines.append("Home Assistant restarted: " + ", ".join(at(t, zone, span_days) for t in restarts)
+                     + f" ({len(restart_only)} device(s) dropped and answered again with it, not listed below)")
     if offline:
         lines.append("Devices that stopped answering:")
         lines += [f"  {at(t, zone, span_days)}  {n} ({e})" for t, n, e in _first_per(offline)[:40]]

@@ -1,3 +1,13 @@
+## 0.12.188
+
+What you will see:
+- Devices that drop together because one access point fails are counted: the night check no longer takes "20
+  entities dropping in one minute" for a Home Assistant restart (one Wi-Fi relay alone is about nine entities). It
+  leaves out only the drops within 10 minutes of a real restart, as Home Assistant itself records it ("started").
+- An investigation covering a Home Assistant restart says so in one line ("Home Assistant restarted: 16:59"), instead
+  of listing nearly every device as "stopped answering". A device that dropped with the restart and never came back
+  is still listed.
+
 ## 0.12.187
 
 What you will see:

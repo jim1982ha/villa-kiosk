@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.182 (13 October 2026)
+
+Owner, 2026-10-13: "restart-filter fix … remove all code and workflow that would then become redundant".
+- vesta_shared.device_state `ha_restarts` (Home Assistant's own logbook entry: domain homeassistant, message
+  "started") and `in_restart` (within `restart_settle_minutes`): the one rule for "was this drop the restart's".
+- preventive-maintenance: features.flips_per_day leaves out drops near a restart; the crowd count (20 ENTITIES in a
+  minute — three relays losing one access point) and settings `restart_crowd_entities` are removed;
+  `restart_settle_minutes: 10` replaces it.
+- investigate `around`: says the restarts once and leaves out devices that dropped and answered again with them
+  (one still lost stays listed); settings `restart_settle_minutes: 10`.
+- Tests: test_maintenance_noise (restart from its own entry; three devices dropping together are counted),
+  test_investigate (a restart said once).
+
 ## 0.6.181 (13 October 2026)
 
 Owner, 2026-10-13 (Cockpit faults checked against Home Assistant's history; "never hardcode … universal"):

@@ -336,7 +336,10 @@ Decisions of 2026-09-30 (owner):
   device (`entity_devices`, `device_id_of`); a finding about a DEVICE is named by its device, a measurement by its
   asset; reconnect wording reads the device's "uptime" entity; a change needs every confirm day (`rules._held`).
   OPEN, told owner: name-word heuristics (knowledge_pack *_WORDS, energy_period "main"/"phase"/"returned",
-  filtration_optimiser "_pump") and the restart filter counting ENTITIES not devices.
+  filtration_optimiser "_pump") — owner 2026-10-13: generic words, not villa data; low priority (main meter could
+  come from HA's Energy settings one day).
+  0.12.188: a drop is a restart's only near Home Assistant's own "started" entry (`device_state.ha_restarts` /
+  `in_restart`, `restart_settle_minutes`); the 20-entities crowd filter is gone — never reintroduce a crowd count.
 - No PDF (owner, 2026-09-30): the reports are self-contained HTML pages sent
   as attachments. Chromium was ~480 MB of a 1.1 GB image for this alone.
 - ⚠️ The Dockerfile's layer order is what an update costs the Yellow: agent

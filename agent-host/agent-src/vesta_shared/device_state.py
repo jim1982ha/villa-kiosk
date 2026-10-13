@@ -61,3 +61,28 @@ def battery_charge(value: float | None, unit: str | None, nominal_v: float | Non
     if unit == "V":
         return round(min(100.0, value / nominal_v * 100), 1) if nominal_v else None
     return None
+
+
+def ha_restarts(logbook: list[dict]) -> list:
+    """When Home Assistant said it had started, from logbook rows: its own entry ({"domain": "homeassistant",
+    "message": "started"}), the same on every install."""
+    from datetime import datetime
+    out = []
+    for r in logbook:
+        if r.get("domain") == "homeassistant" and str(r.get("message") or "").strip().lower() == "started":
+            try:
+                out.append(datetime.fromisoformat(str(r["when"])))
+            except (KeyError, ValueError):
+                continue
+    return sorted(out)
+
+
+def in_restart(when, restarts: list, settle_minutes: float) -> bool:
+    """Is `when` within `settle_minutes` of a Home Assistant start (before it: the integrations loading; after it: the
+    devices answering again)?
+
+    ⚠️ HOME ASSISTANT SAYS WHEN IT RESTARTED (2026-10-13): a minute with 20 entities dropping together was taken for a
+    restart — but one Wi-Fi relay is nine entities, so three relays losing the same access point were "a restart" and
+    their drops never counted, while a small villa's real restart might stay under 20. Its own "started" entry decides."""
+    from datetime import timedelta
+    return any(abs(when - r) <= timedelta(minutes=settle_minutes) for r in restarts)

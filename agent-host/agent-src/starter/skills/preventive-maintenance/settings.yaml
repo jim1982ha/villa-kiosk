@@ -22,7 +22,7 @@ behaviour:
   silence_reporting_share: 0.5          # it reported in at least this share of the hours: then silence is news
   silence_min_history_hours: 48         # less history than this: too little to call it silent
   integration_down_devices: 3           # this many devices of one integration offline: the integration is down
-  restart_crowd_entities: 20            # this many entities changing at once: Home Assistant restarted
+  restart_settle_minutes: 10            # drops this close to a Home Assistant restart (its own "started" entry) are the restart's
   battery_trend_days: 14                # a battery's trend over these days
   battery_trend_min_points: 7           # with at least these readings
   battery_trend_drop_per_day: 0.5       # falling faster than this (points a day) is a trend

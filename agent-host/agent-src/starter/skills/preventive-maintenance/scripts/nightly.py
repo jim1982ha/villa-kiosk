@@ -242,7 +242,7 @@ def run(args) -> dict:
         # a count from a read cut short is a floor, said where the night's notes are read
         notes.append(f"The logbook could not be read whole: nothing after {cli.logbook_cut.isoformat(timespec='minutes')} "
                      "— reconnect counts may be low.")
-    flips = F.flips_per_day(lb, zone, int(params.behaviour("restart_crowd_entities")))
+    flips = F.flips_per_day(lb, zone, params.behaviour("restart_settle_minutes"))
     # ONE finding per DEVICE, named as a person reads it (villa, 2026-10-04: a relay, its firmware
     # entity and its uptime sensor were three lines, two of them raw entity ids)
     rows_by_eid = {r["entity_id"]: r for fam in pack.families for r in pack.entities(fam)}

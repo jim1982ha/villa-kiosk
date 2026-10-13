@@ -20,3 +20,4 @@ behaviour:
   noise_per_hour: 30          # an entity changing more often than this an hour is background, not an event
   state_lane_max: 8           # an entity with more different states than this reports a value (a time, a text), not a state
   coincide_s: 600             # the page puts an event next to an unusual moment when it happened within this of it
+  restart_settle_minutes: 10  # a device answering again within this of a Home Assistant restart was the restart's, not its own

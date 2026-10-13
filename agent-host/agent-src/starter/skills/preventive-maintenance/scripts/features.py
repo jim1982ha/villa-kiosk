@@ -12,7 +12,7 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from vesta_shared.device_state import is_offline  # the one "does this device answer"
+from vesta_shared.device_state import ha_restarts, in_restart, is_offline  # the one "does this device answer"
 from vesta_shared.stats import med, slope_per_hour
 from vesta_shared.timeutil import local_day
 # a day of a power or energy meter: shared with roi-energy, so they live in vesta_shared (roi-energy imported this
@@ -75,29 +75,25 @@ def runs_from_history(states: list[dict], on_threshold_w: float, zone: str, min_
     return out
 
 
-def flips_per_day(logbook: list[dict], zone: str, mass: int = 0) -> dict[str, dict[date, int]]:
-    """Count unavailable <-> available transitions per entity per day from logbook rows.
-
-    ⚠️ A MINUTE IN WHICH `mass` OR MORE ENTITIES DROP TOGETHER IS NOT THEIR FAULT (villa, 2026-10-04):
-    every Home Assistant restart takes every entity through "unavailable", so three restarts in three
-    days read as "dropped and reconnected 10 times: a Wi-Fi or power problem on its side" for a relay
-    that never moved. A drop shared by that many entities in one minute is the restart's (or the
-    integration's), and is not counted against any of them. mass=0 counts everything.
+def flips_per_day(logbook: list[dict], zone: str, settle_minutes: float = 0) -> dict[str, dict[date, int]]:
+    """Count drops to "unavailable" per entity per day from logbook rows, leaving out those within `settle_minutes` of
+    a Home Assistant restart (device_state.in_restart: its own "started" entry) — every restart takes every entity
+    through "unavailable", and three restarts in three days read as "dropped and reconnected 10 times" for a relay that
+    never moved (villa, 2026-10-04).
 
     ⚠️ A DROP IS "unavailable", NEVER "unknown" (architecture review, 2026-10-13): "unknown" is a sensor that answers
     with no value (device_state) — counted, a wind chill on a still day read as a Wi-Fi problem. A device Home Assistant
     loses goes "unavailable"; its other entities going "unknown" with it add nothing (the device counts its busiest
     entity's day, nightly)."""
-    drops = [r for r in logbook if is_offline(r.get("state"))]
-    crowd: dict[str, set] = defaultdict(set)
-    for r in drops:
-        crowd[str(r["when"])[:16]].add(r["entity_id"])
+    restarts = ha_restarts(logbook)
     out: dict[str, dict[date, int]] = defaultdict(lambda: defaultdict(int))
-    for r in drops:
-        if mass and len(crowd[str(r["when"])[:16]]) >= mass:
+    for r in logbook:
+        if not r.get("entity_id") or not is_offline(r.get("state")):
             continue
-        d = datetime.fromisoformat(r["when"]).astimezone(ZoneInfo(zone)).date()
-        out[r["entity_id"]][d] += 1
+        t = datetime.fromisoformat(r["when"])
+        if settle_minutes and in_restart(t, restarts, settle_minutes):
+            continue
+        out[r["entity_id"]][t.astimezone(ZoneInfo(zone)).date()] += 1
     return {k: dict(v) for k, v in out.items()}
 
 

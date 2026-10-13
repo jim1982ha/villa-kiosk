@@ -924,3 +924,23 @@ def test_the_skill_asks_for_a_summary_the_caption_can_hold():
     # architecture review 4: the same sentences too — the instructions said 3 to 5, the refusal 4 to 6
     assert re.search(r'"summary": "' + compose.SUMMARY_SENTENCES + r", at most \d+ characters",
                      open(os.path.join(STARTER_SKILLS, "investigate", "SKILL.md")).read())
+
+
+def test_around_says_a_restart_once_and_keeps_a_device_that_did_not_come_back():
+    # 2026-10-13: a period holding a Home Assistant restart listed every device as "stopped answering" and never said it
+    import investigate
+
+    class Restarted(_Client):
+        def logbook(self, start, end):
+            rows = super().logbook(start, end) + [
+                {"when": T(9, 4, 0, 0).isoformat(), "name": "Home Assistant", "message": "started", "domain": "homeassistant"},
+                {"when": T(9, 3, 59, 40).isoformat(), "entity_id": "switch.spa", "name": "Spa Relay", "state": "unavailable"},
+                {"when": T(9, 4, 1, 0).isoformat(), "entity_id": "switch.spa", "name": "Spa Relay", "state": "off"},
+                {"when": T(9, 3, 59, 41).isoformat(), "entity_id": "sensor.example_thermometer", "name": "Thermometer",
+                 "state": "unavailable"}]                                          # it never answered again
+            return [r for r in rows if start <= datetime.fromisoformat(r["when"]) < end]
+    text = "\n".join(investigate.around(Restarted(), None, T(9, 2), T(9, 15), ["sensor.heater_power"], Z)["lines"])
+    assert "Home Assistant restarted: 04:00:00 (1 device(s) dropped and answered again with it" in text, text
+    assert "Spa Relay" not in text                                                 # the restart's, not its own
+    assert "03:59:41  Thermometer" in text                                         # lost with it, still lost: said
+    assert "06:01:25  Next Relay" in text                                          # far from any restart: said as before

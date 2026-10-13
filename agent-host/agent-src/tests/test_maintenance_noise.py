@@ -134,9 +134,11 @@ def test_a_restart_is_not_a_device_dropping_and_one_device_is_one_finding(tmp_pa
     crowd = [f"sensor.example_other_{k}" for k in range(25)]
     relay = ["switch.example_relay", "update.example_relay_firmware", "sensor.example_relay_uptime"]
     entries = []
-    for day in (1, 2, 3):                                  # a restart each day: everything drops in one minute
+    for day in (1, 2, 3):                                  # a restart each day: everything drops, Home Assistant says so
         when = datetime(2026, 10, day, 9, 28, 30, tzinfo=timezone.utc).isoformat()
         entries += [{"entity_id": e, "state": "unavailable", "when": when} for e in crowd + relay]
+        entries.append({"name": "Home Assistant", "message": "started", "domain": "homeassistant",
+                        "when": datetime(2026, 10, day, 9, 29, 5, tzinfo=timezone.utc).isoformat()})
     for k in range(4):                                     # and the relay's own drops: 4, not 4 + 3 restarts
         when = datetime(2026, 10, 2, 11, 5 * k, tzinfo=timezone.utc).isoformat()
         entries += [{"entity_id": e, "state": "unavailable", "when": when} for e in relay]
@@ -380,3 +382,20 @@ def test_one_odd_day_is_not_a_running_power_change():
         s = {**series, end - timedelta(days=1): day(last[0]), end: day(last[1])}
         got = [f.rule_id for f in R.power_rules(asset, "sensor.example_pump_power", s, end, params, None, None)]
         assert got == ([] if last == (1000.0, 600.0) else ["PM-POWER-CHANGE"]), (last, got)
+
+
+
+def test_several_devices_losing_one_access_point_together_are_counted_not_taken_for_a_restart(tmp_path):
+    # 2026-10-13: the old filter left out any minute with 20 entities dropping — three Wi-Fi relays of nine entities each
+    # losing their access point together were "a restart", their drops never counted. Home Assistant says when it restarts.
+    fx = tmp_path / "fx"
+    fx.mkdir()
+    (fx / "states.json").write_text(json.dumps({"states": {}}))
+    devices = {f"dev-{d}": [f"sensor.example_relay{d}_part{k}" for k in range(9)] for d in range(3)}
+    entries = [{"entity_id": e, "state": "unavailable", "when": datetime(2026, 10, 3, 8 + k, 5, tzinfo=timezone.utc).isoformat()}
+               for k in range(10) for ents in devices.values() for e in ents]
+    (fx / "logbook.json").write_text(json.dumps({"entries": entries}))
+    rows = [_row(e, f"Relay {d}", family="network", asset=f"relay{d[-1]}", device=d) for d, ents in devices.items() for e in ents]
+    _pack(tmp_path, {"network": rows})
+    _night(tmp_path, "--as-of", AS_OF)
+    assert len(_open(tmp_path, "PM-RECONNECT-LOOP")) == 3                # one per device, each its 10 drops
