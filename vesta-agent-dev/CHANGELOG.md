@@ -1,3 +1,11 @@
+## 0.12.192
+
+What you will see:
+- A device the night check finds offline (or any other problem it keeps open) now always has its fault in the
+  Cockpit. Timmerflotte_2623 has been offline for five days without one: its problem was first noted before such
+  problems got a fault, and the Agent only asked for a fault on the night a problem was new. After tonight's check it
+  gets its fault. A fault you closed by hand while the problem is still there stays closed, as before.
+
 ## 0.12.191
 
 What you will see:
