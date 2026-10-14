@@ -1,3 +1,18 @@
+## 2.496.349
+
+### Changed
+- Cockpit: one list of everything open, on the Overview — "Live issues" (it replaces "Needs attention" and the Faults tab's list of open faults, which showed the same faults twice). Everything about one device is one card, one line per problem, as before:
+  - what Home Assistant reports right now (unlocked, unavailable, not in Home Assistant…) — no buttons: it goes when the device is back to normal;
+  - faults, opened by the VESTA Agent or raised by a person;
+  - overdue maintenance tasks.
+- A card holding a fault has "Mark in progress": the device's faults become one ticket. The button then reads "Edit ticket", which opens that ticket in the Tickets tab. "Close" (no action needed) closes the device's faults.
+- "Raise a fault" and its (i) are now at the top of the Overview list. A guest sees the same list without buttons, and a "Report a problem" button.
+- The Faults tab is now "Tickets": the tickets in progress, one per device (each problem still listed, and each still closed by the VESTA Agent by itself when it goes away — the ticket goes to Closed with its last one), and the Closed section. Its figures: in progress, mean resolution, closed without action.
+- A device's wrench (owner, facility manager) opens "Raise a fault" on the Overview, pointed at that device.
+- The (i) beside "Raise a fault" adapts when no VESTA Agent is connected: it then lists only faults raised by a person.
+- Today: "open faults" and "tickets in progress" are counted separately. Readiness: "No open faults or tickets".
+- The raise form no longer carries a "devices offline" shortlist: those devices are cards on the same list.
+
 ## 2.496.348
 
 ### Changed
