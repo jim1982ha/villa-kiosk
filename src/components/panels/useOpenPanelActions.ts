@@ -9,6 +9,7 @@
 // file (32 commits in a month): every new header button rewired the page.
 // A new action now touches this file and BasePanel, nothing else.
 
+import type { Doors } from "@/auth/doors";
 import { useCallback } from "react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
@@ -35,11 +36,13 @@ export interface OpenPanelInput {
   panelFor: (entityId: string) => ActivePanel | null;
   /** What else is on the open entity's device (config/VillaModel's identity). */
   readingsOf: (entityId: string) => readonly string[];
+  /** What this profile may do (auth/doors), decided once by the Dashboard. */
+  doors: Doors;
 }
 
 /** The open panel's actions (null when no panel is open), and the linked
  *  switch's "ask first" question, which the page draws as a dialog. */
-export function useOpenPanelActions({ screen, go, panelFor, readingsOf }: OpenPanelInput): {
+export function useOpenPanelActions({ screen, go, panelFor, readingsOf, doors }: OpenPanelInput): {
   actions: PanelActions | null;
   linkedAsk: AskFirst;
 } {
@@ -47,8 +50,6 @@ export function useOpenPanelActions({ screen, go, panelFor, readingsOf }: OpenPa
   const { entities, ws } = useHA();
   const { role } = useProfile();
   const canControl = roleCan(role, "controlEntities");
-  const canEditConfig = roleCan(role, "editConfig");
-  const canReportFault = roleCan(role, "reportFault");
   const activePanel = screen.nav.panel;
 
   /** A device's reading, opened from the device's panel: Back returns to it. */
@@ -97,16 +98,15 @@ export function useOpenPanelActions({ screen, go, panelFor, readingsOf }: OpenPa
       readings,
       onOpenReading: openReading,
       back: backText ? { label: backText, go: goBack } : undefined,
+      may: { edit: doors.editDevices, reportFault: doors.reportFault },
       // Owner-only: jump straight to this device's row in Advanced Settings.
-      onEdit: canEditConfig ? () => go({ type: "editDevice" }) : undefined,
+      onEdit: () => go({ type: "editDevice" }),
       // Every profile can report; only some can MANAGE. A guest gets a
       // one-screen report form, an owner/facility manager lands on the Overview's
       // "Raise a fault" with the device filled in — same button, same intent.
-      onReportFault: canReportFault ? () => go({ type: "reportFault" }) : undefined,
+      onReportFault: () => go({ type: "reportFault" }),
       badge: header.badge,
-      onSetBadgeColor: canEditConfig
-        ? (hex) => update(patchMapping(activePanel.entityId, { badgeColor: hex ?? undefined }, activePanel.mapping))
-        : undefined,
+      onSetBadgeColor: (hex) => update(patchMapping(activePanel.entityId, { badgeColor: hex ?? undefined }, activePanel.mapping)),
       linked: header.linked ? { ...header.linked, toggle: linkedAsk.request } : undefined,
       motion: header.motion ?? undefined,
     },

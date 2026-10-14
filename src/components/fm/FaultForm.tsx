@@ -13,6 +13,7 @@ import { useConfig } from "@/config/ConfigContext";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
 import type { FmTicket } from "@/fm/fmTypes";
+import { stageOf } from "@/fm/fmEngine";
 import EvidenceRow from "./EvidenceRow";
 import NotesField from "./NotesField";
 import DeviceSearchPicker, { type DeviceOption } from "./DeviceSearchPicker";
@@ -50,7 +51,7 @@ export default function FaultForm({ editing, presetEntity, deviceOptions, onDone
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing?.id, presetEntity]);
 
-  const heading = !editing ? "Raise a fault" : editing.status === "open" ? "Edit fault" : "Edit ticket";
+  const heading = !editing ? "Raise a fault" : stageOf(editing) === "fault" ? "Edit fault" : "Edit ticket";
   return (
     <div className="fm-form">
       <h3>{heading}</h3>

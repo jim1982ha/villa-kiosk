@@ -10,7 +10,7 @@ register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const E = await import("@/fm/fmEngine");
 const { ticketGroups } = await import("@/fm/ticketGroups");
-const { groupAttention, cardFaults } = await import("@/config/attention");
+const { groupAttention, cardActions } = await import("@/config/attention");
 const { screenReducer, START } = await import("@/pages/screen");
 
 const k = { now: "2026-10-14T10:00:00.000Z", id: (p) => `${p}-${Math.random().toString(36).slice(2, 8)}` };
@@ -23,16 +23,27 @@ console.log("  a card's buttons are its faults' only:");
 const item = (id, kind, entityId, extra = {}) => ({ id, kind, title: id, detail: "", entityId, device: { key: deviceOf(entityId), label: "dev" }, ...extra });
 const [pump] = groupAttention([
   item("unavailable:sensor.pump_power", "unavailable", "sensor.pump_power"),
-  item("fault:a", "fault", "sensor.pump_energy", { ticketId: "a", ticketStatus: "open" }),
-  item("fault:b", "fault", "sensor.pump_power", { ticketId: "b", ticketStatus: "in_progress" }),
+  item("fault:a", "fault", "sensor.pump_energy", { ticketId: "a", stage: "fault" }),
+  item("fault:b", "fault", "sensor.pump_power", { ticketId: "b", stage: "ticket" }),
 ]);
-const split = cardFaults(pump);
-ck("a device's live state and its faults are ONE card", pump.items.length >= 2 && split.open.length + split.inProgress.length === 2, pump.items.map((i) => i.id));
-ck("  ...its open fault can be marked in progress, its in-progress one is its ticket",
-   split.open.map((f) => f.ticketId).join() === "a" && split.inProgress.map((f) => f.ticketId).join() === "b");
+const acts = cardActions(pump);
+ck("a device's live state and its faults are ONE card", pump.items.length >= 2 && acts.close.length === 2, pump.items.map((i) => i.id));
+ck("  ...Mark in progress takes on its fault (adding it to the ticket); Close closes both",
+   acts.markInProgress.join() === "a" && acts.editTicket === null && acts.close.sort().join() === "a,b", acts);
+const [taken] = groupAttention([item("fault:b", "fault", "sensor.pump_power", { ticketId: "b", stage: "ticket" })]);
+ck("  ...once every fault is a ticket, the button is Edit ticket, on that record",
+   cardActions(taken).markInProgress.length === 0 && cardActions(taken).editTicket === "b");
 const [lock] = groupAttention([item("alarm:lock.door", "alarm", "lock.door")]);
-const none = cardFaults(lock);
-ck("a card that is only what Home Assistant reports has nothing to act on — no button", none.open.length + none.inProgress.length === 0);
+ck("a card that is only what Home Assistant reports has nothing to act on — no button", cardActions(lock) === null);
+
+console.log("\n  one answer to \"fault, ticket or closed\":");
+ck("open → fault, in progress → ticket, resolved → closed",
+   E.stageOf({ status: "open" }) === "fault" && E.stageOf({ status: "in_progress" }) === "ticket" && E.stageOf({ status: "resolved" }) === "closed");
+ck("  ...a status this build does not know is a FAULT — never hidden, never closed", E.stageOf({ status: "escalated" }) === "fault" && E.stageOf({}) === "fault");
+const odd = fm([{ ...rec("z", "lock.door"), status: "escalated" }]);
+ck("  ...counted as an open fault, listed on the Overview, absent from Tickets",
+   E.ticketStats(odd.tickets).open === 1 && E.fmAttention(odd).unresolved.length === 1
+   && ticketGroups(odd.tickets.filter((t) => E.stageOf(t) === "ticket"), deviceOf).length === 0);
 
 console.log("\n  Mark in progress: one ticket per device, each fault its own record:");
 let d = fm([rec("a", "sensor.pump_energy"), rec("b", "sensor.pump_power"), rec("c", "lock.door")]);
@@ -71,12 +82,14 @@ console.log("\n  the screens:");
 const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
 const ov = src("components/cockpit/CockpitOverview.tsx"), tt = src("components/fm/TicketsTab.tsx");
 ck("the Tickets tab lists the tickets in progress (by device) and Closed — never an open fault",
-   /data\.tickets\.filter\(\(t\) => t\.status === "in_progress"\)/.test(tt) && /ticketGroups\(/.test(tt) && !/Raise a fault/.test(tt));
+   /data\.tickets\.filter\(\(t\) => stageOf\(t\) === "ticket"\)/.test(tt) && /ticketGroups\(/.test(tt) && !/Raise a fault/.test(tt));
 ck("the Overview raises faults, with the (i), for the profiles that manage them; a guest reports a problem",
    /Raise a fault<\/button>\s*<FaultTiming \/>/.test(ov) && /Report a problem<\/button>/.test(ov) && /<FaultForm /.test(ov));
-ck("a card's buttons: Mark in progress on open faults, else Edit ticket; Close closes them all",
-   /setStaging\(records\(open\)\)\}>Mark in progress/.test(ov) && /onEditTicket\(inProgress\[0\]\.ticketId as string\)/.test(ov)
-   && /closeTickets\(\[\.\.\.open, \.\.\.inProgress\]/.test(ov) && /open\.length \+ inProgress\.length === 0\) return null/.test(ov));
+ck("a card draws what cardActions says (no rule of its own)",
+   /const acts = cardActions\(group\);/.test(ov) && /setStaging\(records\(acts\.markInProgress\)\)\}>Mark in progress/.test(ov)
+   && /onEditTicket\(acts\.editTicket as string\)/.test(ov) && /closeTickets\(acts\.close\)/.test(ov) && !/in_progress"/.test(ov.replace(/to="in_progress"/, "")));
+ck("the screens ask stageOf, never the status themselves",
+   ["components/fm/TicketsTab.tsx", "components/fm/FaultForm.tsx", "components/fm/TodayTab.tsx"].every((f) => /stageOf\(/.test(src(f)) && !/status === "in_progress"|status !== "in_progress"|status === "open"/.test(src(f))));
 ck("the fault form is one, shared by raising and editing", /<FaultForm key=\{editing\.id\} editing=\{editing\}/.test(tt) && !/<input value=\{title\}/.test(ov + tt));
 
 done("✅ one list of live issues; faults become tickets; the same with or without the Agent");

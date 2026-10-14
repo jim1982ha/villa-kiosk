@@ -188,7 +188,7 @@ ck("the villa model hands buildAttentionItems the device fold, and leaves the gr
    && /return attentionFor\(attention, \(id\) => sees\.has\(id\)\);/.test(src("components/cockpit/useVillaAttention.ts")));
 ck("the Cockpit draws one card per group, its actions (on its faults) at the bottom of the card",
    /attentionGroups\.map\(\(group\) => \(\s*<CockpitAttentionRow key=\{group\.key\} group=\{group\}/.test(cockpit)
-   && /const actions = useCardActions\(group, canManage, onEditTicket\);/.test(cockpit) && /cardFaults\(group\)/.test(cockpit)
+   && /const actions = useCardActions\(group, canManage, onEditTicket\);/.test(cockpit) && /const acts = cardActions\(group\);/.test(cockpit)
    // a line's icon is lineIcon's answer, never its own kind's again
    && /function CockpitAttentionSub[\s\S]*?const kind = lineIcon\(group, item\);[\s\S]*?\{Icon && <Icon/.test(cockpit));
 // ⚠️ CLOSE TAKES ITS OWN CLICK (owner, 2026-10-10: "Close is not clickable because the whole card takes the

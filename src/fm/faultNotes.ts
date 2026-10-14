@@ -7,7 +7,7 @@
 // facility manager's own time and name the night the agent updated the title, and the kept "Now: …" line repeated the
 // title word for word. Each step now carries its kind (FmTicketUpdate.kind, agent-contract.json `ticketUpdate`).
 
-import { isTicketResolved } from "./fmEngine";
+import { isTicketResolved, stageOf } from "./fmEngine";
 import type { FmTicket, FmTicketUpdate } from "./fmTypes";
 
 /** A note written before steps had a kind (VESTA Agent before 0.12.151): its title change read "Now: <new title>".
@@ -33,9 +33,12 @@ export function faultWhen(t: FmTicket, stamp: (at: string) => string): string {
   const steps = statusSteps(t);
   const last = steps[steps.length - 1];
   const by = (u?: FmTicketUpdate) => (u?.who || u?.by ? ` by ${u.who || u.by}` : "");
-  const parts = [`Opened ${stamp(t.openedAt)}`];
+  // who raised it: its first step, when that step is the raising (fmCommands.addTicket stamps it, as every other step)
+  // — a person; the VESTA Agent's own faults already wear its mark beside this line (AgentMark)
+  const raised = t.source !== "vesta_agent" && steps[0]?.status === "open" && !steps[0]?.kind ? by(steps[0]) : "";
+  const parts = [`Opened ${stamp(t.openedAt)}${raised}`];
   if (t.status === "open" && last?.kind === "reopened") parts.push(`reopened ${stamp(last.at)}${by(last)}`);
-  if (t.status === "in_progress" && last?.status === "in_progress") parts.push(`in progress since ${stamp(last.at)}${by(last)}`);
+  if (stageOf(t) === "ticket" && last?.status === "in_progress") parts.push(`in progress since ${stamp(last.at)}${by(last)}`);
   if (t.resolvedAt && isTicketResolved(t)) {
     const done = [...steps].reverse().find((u) => isTicketResolved(u));
     parts.push(`resolved ${stamp(t.resolvedAt)}${by(done)}`);

@@ -19,7 +19,7 @@ import TapRipple, { RIPPLE_LIFETIME_MS, type Ripple } from "@/components/hud/Tap
 import { hasSeenFirstRunTips } from "@/utils/viewPrefs";
 import TeleportMenu from "@/components/teleport/TeleportMenu";
 import PanelRouter from "@/components/panels/PanelRouter";
-import { PanelActionsProvider } from "@/components/panels/PanelActionsContext";
+import { PanelActionsProvider, NO_PANEL_ACTIONS } from "@/components/panels/PanelActionsContext";
 import { useOpenPanelActions } from "@/components/panels/useOpenPanelActions";
 import SettingsModal from "@/components/settings/SettingsModal";
 import ConfigEditorModal from "@/components/settings/ConfigEditorModal";
@@ -394,7 +394,7 @@ export default function Dashboard() {
   // The open panel's header actions — Back, readings, edit, report, badge,
   // the linked switch and its "ask first" — are components/panels/
   // useOpenPanelActions'; this page only provides them and draws the dialog.
-  const openPanel = useOpenPanelActions({ screen, go, panelFor, readingsOf: identity.readingsOf });
+  const openPanel = useOpenPanelActions({ screen, go, panelFor, readingsOf: identity.readingsOf, doors });
   const linkedAsk = openPanel.linkedAsk;
 
   // Everything React shows of the scene's own state, read from EACH new scene
@@ -739,7 +739,7 @@ export default function Dashboard() {
       )}
 
       {activePanel && (
-        <PanelActionsProvider value={openPanel.actions ?? {}}>
+        <PanelActionsProvider value={openPanel.actions ?? NO_PANEL_ACTIONS}>
           <PanelRouter
             active={activePanel}
             onClose={closePanel}

@@ -159,7 +159,7 @@ ck("every Facility card: its pills and when on one line under the title (RecordM
      JSON.stringify(lines) === JSON.stringify(["Check: Replace the battery.", "Battery ordered (10-10 02)", "Was: Motion battery at 8% (renamed by VESTA Agent, 10-10 04)"]), lines);
   ck("  ...the title it has now is never repeated under it", !lines.some((l) => l.includes(t.title)), lines);
   const when = faultWhen(t, stamp);
-  ck("\"in progress since\" is the person's, never the agent's title change", when === "Opened 10-10 01 · in progress since 10-10 02 by Fabien", when);
+  ck("\"in progress since\" is the person's, never the agent's title change", when === "Opened 10-10 01 by VESTA Agent · in progress since 10-10 02 by Fabien", when);
   const reading = { ...t, title: "Front door — part ordered", updates: [...t.updates,
     { at: at(5), status: "in_progress", by: "VESTA Agent", kind: "reading", title: "Front door unavailable", photoIds: [] }] };
   const renamedByHand = { ...t, title: "Motion battery — ordered", updates: [...t.updates,
@@ -184,7 +184,7 @@ ck("every Facility card: its pills and when on one line under the title (RecordM
   const reopened = { ...t, status: "open", updates: [...t.updates,
     { at: at(6), status: "resolved", by: "Facility manager", photoIds: [] },
     { at: at(7), status: "open", by: "Owner", kind: "reopened", note: "Still beeping", photoIds: [] }] };
-  ck("a reopened fault says when and by whom", faultWhen(reopened, stamp) === "Opened 10-10 01 · reopened 10-10 07 by Owner", faultWhen(reopened, stamp));
+  ck("a reopened fault says when and by whom", faultWhen(reopened, stamp) === "Opened 10-10 01 by VESTA Agent · reopened 10-10 07 by Owner", faultWhen(reopened, stamp));
   const contract = JSON.parse(readFileSync(new URL("../../rootfs/usr/share/vesta/agent-contract.json", import.meta.url), "utf8"));
   ck("the step kinds are the agreement's, the one list both sides read",
      JSON.stringify(FM_TICKET_UPDATE_KINDS) === JSON.stringify(contract.ticketUpdate.kinds) && contract.ticketUpdate.kinds.includes("reopened"));

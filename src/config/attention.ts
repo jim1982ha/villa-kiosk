@@ -15,8 +15,8 @@ import { deviceLook, storeLookSource } from "@/utils/deviceActivity";
 import { deviceRowText } from "@/utils/entityValue";
 import type { Threshold } from "@/config/ThresholdConfig";
 import { labelOf } from "@/config/EntityMap";
-import { fmAttention } from "@/fm/fmEngine";
-import type { FmData, FmTicketStatus } from "@/fm/fmTypes";
+import { fmAttention, stageOf } from "@/fm/fmEngine";
+import type { FmData } from "@/fm/fmTypes";
 import type { HassEntity } from "@/types/ha.types";
 import type { EntityMapping } from "@/types/scene.types";
 import { domainOf } from "@/utils/entityDomain";
@@ -38,8 +38,8 @@ export interface AttentionItem {
   /** Set on a fault: the record it is, so its card can take it on or close it
    *  (FmDataContext.advanceTickets / closeTickets). */
   ticketId?: string;
-  /** Set on a fault: open (a fault nobody has taken on) or in_progress (a ticket). */
-  ticketStatus?: FmTicketStatus;
+  /** Set on a fault: where its record stands (fmEngine.stageOf) — a fault nobody has taken on, or a ticket. */
+  stage?: "fault" | "ticket";
   /** The villa DEVICE the entity belongs to (deviceGroups.deviceFolding: the
    *  owner's device groups, then Home Assistant's device registry) — what
    *  groupAttention folds on. Set exactly when `entityId` is. */
@@ -121,15 +121,18 @@ export function groupAttention(items: readonly AttentionItem[]): AttentionGroup[
  *  in a row that is the problem itself (no device), only a status the row does not show already ("In progress"; an
  *  open fault's line is empty — its title is the row's, its Close the line's). Every row shows its problems this way,
  *  one or several. */
-/** The faults a card holds — its own fault lines and those folded onto a live state's line (mergeFaults) — split by
- *  where they stand: `open` a card can mark in progress, `inProgress` are its ticket (owner, 2026-10-14). */
-export function cardFaults(group: AttentionGroup): { open: AttentionItem[]; inProgress: AttentionItem[] } {
-  const all = group.items.flatMap((i) => (i.kind === "fault" ? [i] : i.fault ? [i.fault] : []))
-    .filter((f) => !!f.ticketId);
-  return {
-    open: all.filter((f) => f.ticketStatus !== "in_progress"),
-    inProgress: all.filter((f) => f.ticketStatus === "in_progress"),
-  };
+/** What a card's buttons do (owner, 2026-10-14) — on its faults only (its own fault lines and those folded onto a
+ *  live state's line by mergeFaults); null when it holds none, so a card that is only what Home Assistant reports has
+ *  no button. `markInProgress`: the records "Mark in progress" takes on (one ticket for the device), empty when every
+ *  fault is already a ticket — then `editTicket` is the record "Edit ticket" opens. `close`: every one of them. */
+export interface CardActions { markInProgress: string[]; editTicket: string | null; close: string[] }
+export function cardActions(group: AttentionGroup): CardActions | null {
+  const faults = group.items.flatMap((i) => (i.kind === "fault" ? [i] : i.fault ? [i.fault] : []))
+    .filter((f): f is AttentionItem & { ticketId: string } => !!f.ticketId);
+  if (faults.length === 0) return null;
+  const markInProgress = faults.filter((f) => f.stage !== "ticket").map((f) => f.ticketId);
+  const tickets = faults.filter((f) => f.stage === "ticket").map((f) => f.ticketId);
+  return { markInProgress, editTicket: markInProgress.length ? null : tickets[0], close: faults.map((f) => f.ticketId) };
 }
 
 export function attentionLineIn(group: AttentionGroup, item: AttentionItem): string {
@@ -142,11 +145,8 @@ export function attentionLineIn(group: AttentionGroup, item: AttentionItem): str
  *  undefined for anything that is not a fault. */
 function faultStatus(item: AttentionItem): string | undefined {
   if (item.kind !== "fault") return undefined;
-  return item.detail === OPEN_FAULT ? "" : item.detail;
+  return item.stage === "ticket" ? "In progress" : "";
 }
-
-/** An open fault's `detail` — read by faultStatus, never shown. */
-const OPEN_FAULT = "Open fault";
 
 /** The icon a problem's line shows inside its row: its own kind's only where the row's icon does not say it already.
  *  ⚠️ ONE ICON PER MEANING (owner, 2026-10-13: "the icon is redundant"): every line repeated its row's icon — a red "!"
@@ -231,16 +231,17 @@ export function buildAttentionItems(opts: {
   }
 
   const fm = fmAttention(fmData);
-  for (const t of fm.openFaults) {
+  for (const t of fm.unresolved) {
+    const stage = stageOf(t) === "ticket" ? "ticket" : "fault";
     items.push({
       id: `fault:${t.id}`,
       kind: "fault",
       title: t.title,
-      detail: t.status === "in_progress" ? "In progress" : OPEN_FAULT,
+      detail: stage === "ticket" ? "In progress" : "Fault",
       room: t.room,
       entityId: t.entityId,
       ticketId: t.id,
-      ticketStatus: t.status,
+      stage,
     });
   }
 

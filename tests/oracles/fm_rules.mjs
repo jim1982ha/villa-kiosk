@@ -42,8 +42,8 @@ const now = Date.parse("2026-09-27T00:00:00Z");
 const att = E.fmAttention({ ...d, schedules: [...d.schedules, { id: "s2", title: "Due soon", everyDays: 30, enabled: true }],
   completions: [...d.completions, { id: "c3", scheduleId: "s2", at: new Date(now - 26 * 86400000).toISOString(), by: "Op", photoIds: [] }] }, now);
 ck("ONE attention rule: open faults + tasks overdue or never — a task merely due soon is not attention",
-   att.openFaults.map((t) => t.id).join() === "t2" && att.lateTasks.map((s) => s.schedule.id).join() === "s1" && att.total === 2,
-   { faults: att.openFaults.map((t) => t.id), late: att.lateTasks.map((s) => `${s.schedule.id}:${s.state}`) });
+   att.unresolved.map((t) => t.id).join() === "t2" && att.lateTasks.map((s) => s.schedule.id).join() === "s1" && att.total === 2,
+   { faults: att.unresolved.map((t) => t.id), late: att.lateTasks.map((s) => `${s.schedule.id}:${s.state}`) });
 
 // The one-step close, "no action needed" (2.496.239).
 {
@@ -76,11 +76,11 @@ ck("the Cockpit (whose count the top bar shows) and the Today tab count through 
    && /fmAttention\(data\)\.lateTasks/.test(src("components/fm/TodayTab.tsx")));
 ck("no screen parses an amount by itself",
    ["components/fm/TodayTab.tsx", "components/fm/SpendTab.tsx", "components/fm/FaultStageModal.tsx"].every((f) => /parseAmount\(/.test(src(f)) && !/replace\(\/\[\^\\d\]\/g, ""\)\) \|\| 0/.test(src(f))));
-ck("the store erases a fault through withoutTicket", /mutate\(\(d\) => withoutTicket\(d, id\), elevation\)/.test(src("fm/FmDataContext.tsx")));
-ck("the one-step close goes through the store's one writer (mutate), and both screens call it",
-   /mutate\(\(d\) => withTicketsClosed\(d, ids, stamp\(\), role \? ROLE_LABELS\[role\] : undefined\)\)/.test(src("fm/FmDataContext.tsx"))
+ck("the store erases a fault through its one command, with the elevation", /run\(\{ type: "removeTicket", id \}, elevation\)/.test(src("fm/FmDataContext.tsx")));
+ck("the one-step close is one command, and both screens call it",
+   /run\(\{ type: "closeTickets", ids \}\)/.test(src("fm/FmDataContext.tsx"))
    && /closeTickets\(ids\)/.test(src("components/fm/TicketsTab.tsx"))
-   && /closeTickets\(\[\.\.\.open, \.\.\.inProgress\]/.test(src("components/cockpit/CockpitOverview.tsx"))
+   && /closeTickets\(acts\.close\)/.test(src("components/cockpit/CockpitOverview.tsx"))
    && /ticketId: t\.id/.test(src("config/attention.ts")));
 
 {

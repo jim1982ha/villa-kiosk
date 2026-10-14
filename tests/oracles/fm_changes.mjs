@@ -64,9 +64,9 @@ ck("a patch to resolved stamps the time; one that keeps it keeps it",
    && E.withTicketPatch(patched, "t1", { status: "resolved" }, { now: "later" }).tickets[0].resolvedAt === "2026-09-27T13:00:00.000Z");
 
 const ctx = readFileSync(new URL("../../src/fm/FmDataContext.tsx", import.meta.url), "utf8");
-ck("the provider only calls them (no transition written inside a mutator)",
-   /withCompletion\(d, c, cost, stamp\(\)\)/.test(ctx) && /withTicketsAdvanced\(d, ids, to, step, cost, stamp\(\), role \? ROLE_LABELS\[role\] : undefined\)/.test(ctx)
-   && /withoutCost\(d, id\)/.test(ctx) && /withoutCompletion\(d, id\)/.test(ctx) && !/resolvedAt:/.test(ctx));
+ck("the provider writes nothing itself: every change is one applyFmCommand, who and when stamped there",
+   /mutate\(\(d\) => applyFmCommand\(d, cmd, \{ \.\.\.stamp\(\), by: role \? ROLE_LABELS\[role\] : undefined \}\), elevation\)/.test(ctx)
+   && !/=> \(\{\s*\.\.\.d,/.test(ctx) && !/resolvedAt:/.test(ctx) && !/withTicket|withCompletion|withoutCost/.test(ctx));
 
 if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
 console.log("\n✅ every Facility record change, reachable and checked");

@@ -39,7 +39,7 @@ import {
   buildCategoryTiles, buildRoomGroups, buildFloorGroups,
   buildActivityFeed, pivotTiles, tileLine, type Pivot, type ActivityEntry,
 } from "./cockpitData";
-import { attentionLineIn, cardFaults, lineIcon, type AttentionGroup, type AttentionItem, type AttentionKind } from "@/config/attention";
+import { attentionLineIn, cardActions, lineIcon, type AttentionGroup, type AttentionItem, type AttentionKind } from "@/config/attention";
 import { useVillaModel } from "@/config/VillaModel";
 import { buildDeviceOptions } from "@/components/fm/DeviceSearchPicker";
 import FaultForm from "@/components/fm/FaultForm";
@@ -59,7 +59,8 @@ const PIVOT_ICON = { room: MapPin, floor: Building2 } as const;
 
 export default function CockpitOverview({ onOpenEntity, doors, reportFaultFor, onFaultFormOpened, onEditTicket, onReportProblem }: {
   onOpenEntity: (entityId: string) => void;
-  /** `doors.updates`: the updates count is drawn only with it. */
+  /** What this profile may do (auth/doors): `facility` takes faults on and raises them, `reportFault` reports a
+   *  problem, `updates` draws the updates count. */
   doors: Doors;
   /** "Raise a fault" opens pointed at this device (a device panel's wrench); dropped once the form has it. */
   reportFaultFor?: string;
@@ -88,8 +89,8 @@ export default function CockpitOverview({ onOpenEntity, doors, reportFaultFor, o
   const canControl = roleCan(role, "controlEntities");
   // Taking a fault on, closing it and raising one are Facility work: the profiles that manage it. Everyone else
   // who may report (a guest) gets "Report a problem".
-  const canManage = roleCan(role, "manageFacility");
-  const canReport = roleCan(role, "reportFault");
+  const canManage = doors.facility;
+  const canReport = doors.reportFault;
   const { devices } = useVillaModel();
   const deviceOptions = useMemo(
     () => (canManage ? buildDeviceOptions(devices, config.entityMap, entities, resolvedRooms) : []),
@@ -336,19 +337,19 @@ function CockpitAttentionSub({ group, item }: { group: AttentionGroup; item: Att
   );
 }
 
-/** A card's actions, for the profiles that manage Facility work: on its faults only (attention.cardFaults). */
+/** A card's buttons, for the profiles that manage Facility work — WHAT they do is attention.cardActions' answer
+ *  (tested by value); this only draws it. */
 function useCardActions(group: AttentionGroup, canManage: boolean, onEditTicket: (ticketId: string) => void) {
   const { data, closeTickets } = useFmData();
   const [confirming, setConfirming] = useState(false);
   const [staging, setStaging] = useState<FmTicket[] | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
-  const { open, inProgress } = cardFaults(group);
-  if (!canManage || open.length + inProgress.length === 0) return null;
-  const records = (items: AttentionItem[]) =>
-    items.map((i) => data.tickets.find((t) => t.id === i.ticketId)).filter((t): t is FmTicket => !!t);
+  const acts = cardActions(group);
+  if (!canManage || !acts) return null;
+  const records = (ids: string[]) => ids.map((id) => data.tickets.find((t) => t.id === id)).filter((t): t is FmTicket => !!t);
   const close = async () => {
     setProblem(null);
-    const { done, note: why } = fmSaveOutcome(await closeTickets([...open, ...inProgress].map((f) => f.ticketId as string)));
+    const { done, note: why } = fmSaveOutcome(await closeTickets(acts.close));
     // On success the card's faults leave this list; only a failure stays to say so.
     setConfirming(false);
     setProblem(done ? null : why);
@@ -358,12 +359,10 @@ function useCardActions(group: AttentionGroup, canManage: boolean, onEditTicket:
     <div className="cockpit-attention-actions" onClick={stop}>
       {!confirming && (
         <div className="fm-fault-actions">
-          {open.length > 0 ? (
-            <button type="button" className="btn ghost" onClick={() => setStaging(records(open))}>Mark in progress</button>
+          {acts.editTicket === null ? (
+            <button type="button" className="btn ghost" onClick={() => setStaging(records(acts.markInProgress))}>Mark in progress</button>
           ) : (
-            <button type="button" className="btn ghost" onClick={() => onEditTicket(inProgress[0].ticketId as string)}>
-              Edit ticket
-            </button>
+            <button type="button" className="btn ghost" onClick={() => onEditTicket(acts.editTicket as string)}>Edit ticket</button>
           )}
           <button type="button" className="btn ghost" aria-label={`Close “${group.title}”`}
             onClick={() => { setProblem(null); setConfirming(true); }}>

@@ -9,7 +9,7 @@
 import { useState } from "react";
 import { Check, CalendarClock, Trash2 } from "lucide-react";
 import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
-import { budgetStatus, isTicketOpen, localStamp, scheduleBoard, shortDate, type ScheduleStatus, parseAmount, fmAttention, workedBy } from "@/fm/fmEngine";
+import { budgetStatus, stageOf, localStamp, scheduleBoard, shortDate, type ScheduleStatus, parseAmount, fmAttention, workedBy } from "@/fm/fmEngine";
 import EvidenceRow from "./EvidenceRow";
 import RecentWorkList from "./RecentWorkList";
 import NotesField from "./NotesField";
@@ -73,8 +73,8 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
   // The ONE attention rule (fmEngine.fmAttention): late tasks, not due-soon.
   const attention = fmAttention(data).lateTasks;
   // a fault waits on the Overview until someone takes it on; then it is a ticket (owner, 2026-10-14)
-  const openFaults = data.tickets.filter((t) => isTicketOpen(t) && t.status !== "in_progress");
-  const tickets = data.tickets.filter((t) => t.status === "in_progress");
+  const openFaults = data.tickets.filter((t) => stageOf(t) === "fault");
+  const tickets = data.tickets.filter((t) => stageOf(t) === "ticket");
 
   return (
     <div className="fm-stack">

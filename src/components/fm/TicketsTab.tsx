@@ -12,7 +12,7 @@ import { ChevronDown, ChevronRight, FileText, Wrench } from "lucide-react";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useDeviceIdentity } from "@/config/VillaModel";
 import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
-import { isTicketResolved, localStamp, ticketStats } from "@/fm/fmEngine";
+import { localStamp, stageOf, ticketStats } from "@/fm/fmEngine";
 import { ticketGroups, type TicketGroup } from "@/fm/ticketGroups";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
@@ -56,11 +56,11 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
 
   const stats = ticketStats(data.tickets);
   const tickets = useMemo(() => ticketGroups(
-    data.tickets.filter((t) => t.status === "in_progress").sort((a, b) => Date.parse(b.openedAt) - Date.parse(a.openedAt)),
+    data.tickets.filter((t) => stageOf(t) === "ticket").sort((a, b) => Date.parse(b.openedAt) - Date.parse(a.openedAt)),
     deviceOf), [data.tickets, deviceOf]);
   // ⚠️ THE CLOSED ONES ARE A SECTION OF THEIR OWN, FOLDED AND PAGED (owner, 2026-10-14): the VESTA Agent clears several
   // a day. Latest closed first; the server drops them after their retention window (supervisor-proxy _fm_expire).
-  const closed = useMemo(() => data.tickets.filter(isTicketResolved)
+  const closed = useMemo(() => data.tickets.filter((t) => stageOf(t) === "closed")
     .sort((a, b) => Date.parse(b.resolvedAt ?? b.openedAt) - Date.parse(a.resolvedAt ?? a.openedAt)), [data.tickets]);
   const closedPage = usePaged(closed, PAGE_CARDS);
   const editing = editingId ? data.tickets.find((t) => t.id === editingId) : undefined;

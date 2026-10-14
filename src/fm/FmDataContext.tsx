@@ -13,7 +13,8 @@ import {
   createContext, useCallback, useContext, useEffect, useRef, useState,
   type ReactNode,
 } from "react";
-import { isTicketOpen, withCompletion, withoutCost, withoutCompletion, withTicketPatch, withTicketsAdvanced, withTicketsClosed, type FmStamp, withoutTicket } from "./fmEngine";
+import { isTicketOpen, type FmStamp } from "./fmEngine";
+import { applyFmCommand, type FmCommand } from "./fmCommands";
 
 /** The real clock and id maker the record changes are stamped with (fmEngine). */
 const stamp = (): FmStamp => ({ now: new Date().toISOString(), id: fmId });
@@ -83,7 +84,7 @@ interface FmDataContextValue {
   ) => Promise<FmWriteResult>;
   /** Close a fault in ONE step, nothing done ("Close": no action needed):
    *  resolved now, with a "Closed without action" update, and no completion
-   *  or cost (fmEngine.withTicketClosed). The same write as every other. */
+   *  or cost (the "closeTickets" command). The same write as every other. */
   closeTickets: (ids: readonly string[]) => Promise<FmWriteResult>;
   updateTicket: (id: string, patch: Partial<FmTicket>) => Promise<FmWriteResult>;
   /** Erase a spend entry for good. Needs a single-use superadmin token — the
@@ -250,89 +251,39 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
   // failed — no separate retry path to keep in step with the real one.
   retryRef.current = useCallback(() => mutate((d) => d), [mutate]);
 
-  const addSchedule = useCallback((s: Omit<FmSchedule, "id" | "createdAt">) =>
-    mutate((d) => ({
-      ...d,
-      schedules: [...d.schedules, { ...s, id: fmId("sc"), createdAt: new Date().toISOString() }],
-    })), [mutate]);
+  // ONE way in for every change (fmCommands.applyFmCommand): this says WHICH command; who did it — the signed-in
+  // profile, on every step of a fault, for the card's "by …" and the VESTA Agent's notes — when, and the new ids are
+  // stamped there, the same for every write.
+  const { role } = useProfile();
+  const run = useCallback((cmd: FmCommand, elevation?: string) =>
+    mutate((d) => applyFmCommand(d, cmd, { ...stamp(), by: role ? ROLE_LABELS[role] : undefined }), elevation),
+  [mutate, role]);
 
-  const updateSchedule = useCallback((id: string, patch: Partial<FmSchedule>) =>
-    mutate((d) => ({
-      ...d, schedules: d.schedules.map((s) => (s.id === id ? { ...s, ...patch } : s)),
-    })), [mutate]);
-
-  const removeSchedule = useCallback((id: string) =>
-    mutate((d) => ({ ...d, schedules: d.schedules.filter((s) => s.id !== id) })), [mutate]);
-
-  const removeAllSchedules = useCallback(() =>
-    mutate((d) => ({ ...d, schedules: [] })), [mutate]);
-
-  const logCompletion = useCallback((
-    c: Omit<FmCompletion, "id" | "costId">,
-    cost?: Omit<FmCost, "id" | "at" | "photoIds">,
-  ) => mutate((d) => withCompletion(d, c, cost, stamp())), [mutate]);
-
-  const addCost = useCallback((c: Omit<FmCost, "id">) =>
-    mutate((d) => ({ ...d, costs: [...d.costs, { ...c, id: fmId("co") }] })), [mutate]);
+  const addSchedule = useCallback((schedule: Omit<FmSchedule, "id" | "createdAt">) => run({ type: "addSchedule", schedule }), [run]);
+  const updateSchedule = useCallback((id: string, patch: Partial<FmSchedule>) => run({ type: "updateSchedule", id, patch }), [run]);
+  const removeSchedule = useCallback((id: string) => run({ type: "removeSchedule", id }), [run]);
+  const removeAllSchedules = useCallback(() => run({ type: "removeAllSchedules" }), [run]);
+  const logCompletion = useCallback((completion: Omit<FmCompletion, "id" | "costId">, cost?: Omit<FmCost, "id" | "at" | "photoIds">) =>
+    run({ type: "logCompletion", completion, cost }), [run]);
+  const addCost = useCallback((cost: Omit<FmCost, "id">) => run({ type: "addCost", cost }), [run]);
+  const updateCost = useCallback((id: string, patch: Partial<FmCost>) => run({ type: "updateCost", id, patch }), [run]);
+  const addTicket = useCallback((ticket: Omit<FmTicket, "id" | "openedAt" | "status">) => run({ type: "addTicket", ticket }), [run]);
+  const updateTicket = useCallback((id: string, patch: Partial<FmTicket>) => run({ type: "updateTicket", id, patch }), [run]);
+  // Several records, ONE write: a device's faults move or close together, or not at all.
+  const advanceTickets = useCallback((ids: readonly string[], to: FmTicketStatus,
+    step: { who?: string; note?: string; photoIds: string[] }, cost?: Omit<FmCost, "id" | "at" | "photoIds">) =>
+    run({ type: "advanceTickets", ids, to, step, cost }), [run]);
+  const closeTickets = useCallback((ids: readonly string[]) => run({ type: "closeTickets", ids }), [run]);
+  const saveDocument = useCallback((doc: Omit<FmSavedDocument, "id" | "generatedAt">) => run({ type: "saveDocument", doc }), [run]);
+  const removeDocument = useCallback((id: string) => run({ type: "removeDocument", id }), [run]);
 
   // ── Superadmin erasures ────────────────────────────────────────────────
-  // These take a single-use elevation token and destroy evidence permanently
-  // (the server also purges the entry's evidence photos from /data). They are
-  // separate from the ordinary mutators above precisely so that no ordinary
-  // code path can reach them by accident — you cannot erase a fault without
-  // holding a token, and a token exists only because someone entered the
-  // superadmin code seconds earlier for this specific action.
-
-  const updateCost = useCallback((id: string, patch: Partial<FmCost>) =>
-    mutate((d) => ({
-      ...d, costs: d.costs.map((c) => (c.id === id ? { ...c, ...patch } : c)),
-    })), [mutate]);
-
-  const removeCost = useCallback((id: string, elevation: string) =>
-    mutate((d) => withoutCost(d, id), elevation), [mutate]);
-
-  const removeTicket = useCallback((id: string, elevation: string) =>
-    mutate((d) => withoutTicket(d, id), elevation), [mutate]);
-
-  const removeCompletion = useCallback((id: string, elevation: string) =>
-    mutate((d) => withoutCompletion(d, id), elevation), [mutate]);
-
-  const addTicket = useCallback((t: Omit<FmTicket, "id" | "openedAt" | "status">) =>
-    mutate((d) => ({
-      ...d,
-      tickets: [...d.tickets, {
-        ...t, id: fmId("tk"), status: "open", openedAt: new Date().toISOString(),
-      }],
-    })), [mutate]);
-
-  // who recorded it: the signed-in profile, on every step of a fault (a rename, the one-step close and the stage dialog alike),
-  // for the agent's note on Telegram and the card's "by …"
-  const { role } = useProfile();
-  const updateTicket = useCallback((id: string, patch: Partial<FmTicket>) =>
-    mutate((d) => withTicketPatch(d, id, patch, stamp(), role ? ROLE_LABELS[role] : undefined)), [mutate, role]);
-
-  // Several records, ONE write: a device's faults move or close together, or not at all.
-  const advanceTickets = useCallback((
-    ids: readonly string[],
-    to: FmTicketStatus,
-    step: { who?: string; note?: string; photoIds: string[] },
-    cost?: Omit<FmCost, "id" | "at" | "photoIds">,
-  ) => mutate((d) => withTicketsAdvanced(d, ids, to, step, cost, stamp(), role ? ROLE_LABELS[role] : undefined)), [mutate, role]);
-
-  const closeTickets = useCallback((ids: readonly string[]) =>
-    mutate((d) => withTicketsClosed(d, ids, stamp(), role ? ROLE_LABELS[role] : undefined)), [mutate, role]);
-
-  const saveDocument = useCallback((doc: Omit<FmSavedDocument, "id" | "generatedAt">) =>
-    mutate((d) => ({
-      ...d,
-      savedDocuments: [
-        ...d.savedDocuments,
-        { ...doc, id: fmId("doc"), generatedAt: new Date().toISOString() },
-      ],
-    })), [mutate]);
-
-  const removeDocument = useCallback((id: string) =>
-    mutate((d) => ({ ...d, savedDocuments: d.savedDocuments.filter((r) => r.id !== id) })), [mutate]);
+  // These take a single-use elevation token and destroy evidence permanently (the server also purges the entry's
+  // evidence photos from /data). No ordinary code path can reach them by accident: a token exists only because
+  // someone entered the superadmin code seconds earlier for this specific action.
+  const removeCost = useCallback((id: string, elevation: string) => run({ type: "removeCost", id }, elevation), [run]);
+  const removeTicket = useCallback((id: string, elevation: string) => run({ type: "removeTicket", id }, elevation), [run]);
+  const removeCompletion = useCallback((id: string, elevation: string) => run({ type: "removeCompletion", id }, elevation), [run]);
 
   return (
     <FmDataContext.Provider value={{

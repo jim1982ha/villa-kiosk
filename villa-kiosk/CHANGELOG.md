@@ -1,3 +1,16 @@
+## 2.496.350
+
+### Changed
+- A fault you raise now says who raised it: its card reads "Opened 14:20 by Owner" (or "by Guest" for a guest's report), as closing, renaming or marking in progress already did. The VESTA Agent's own faults keep their "by VESTA Agent" mark.
+- Behind the screens (nothing else changes on screen):
+  - one rule now decides whether a record is a fault (on the Overview), a ticket (in Tickets) or closed. Every screen and count reads it, so they can no longer disagree; a record in a state the app does not recognise is always shown as a fault, never hidden;
+  - what a card's buttons do (Mark in progress, Edit ticket, Close) is decided by that same rule;
+  - every change to the maintenance record goes through one step that notes who and when;
+  - what each profile may do from a device's window (the wrench, Edit, the badge colour) is decided once with the other rights, instead of by each window.
+
+### Security
+- The add-on refuses a guest's report whose history claims to be written by someone else: a guest's report carries at most its own raising step, signed "Guest".
+
 ## 2.496.349
 
 ### Changed

@@ -580,6 +580,14 @@ try:
        proxy._fm_guest_write_ok(STORED, merged))
     bad = proxy._fm_writer_merge(None, STORED, {**view, "tickets": [{**report, "status": "resolved"}]})
     ck("  ...a pre-resolved one is still refused", not proxy._fm_guest_write_ok(STORED, bad))
+    # since 2.496.350 a report carries its raising step: a guest's own, never someone else's
+    step = {"at": "2026-10-14T06:20:00Z", "status": "open", "photoIds": [], "by": "Guest"}
+    signed = proxy._fm_writer_merge(None, STORED, {**view, "tickets": [{**report, "updates": [step]}]})
+    ck("  ...a report with its raising step signed Guest passes", proxy._fm_guest_write_ok(STORED, signed))
+    forged = proxy._fm_writer_merge(None, STORED, {**view, "tickets": [{**report, "updates": [{**step, "by": "Owner"}]}]})
+    ck("  ...one signed in the Owner's name is refused", not proxy._fm_guest_write_ok(STORED, forged))
+    extra = proxy._fm_writer_merge(None, STORED, {**view, "tickets": [{**report, "updates": [step, {**step, "status": "resolved"}]}]})
+    ck("  ...and so is a report carrying more history than its raising", not proxy._fm_guest_write_ok(STORED, extra))
     resent = proxy._fm_writer_merge(None, STORED, {**view, "tickets": [{"id": "t1", "status": "resolved", "reportedBy": "guest"}]})
     ck("  ...re-sending an EXISTING ticket id cannot edit it (only new ids are taken)", resent["tickets"] == STORED["tickets"])
     proxy._role_for = lambda _r: "owner"

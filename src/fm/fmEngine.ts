@@ -228,6 +228,17 @@ export function isTicketOpen(t: { status?: FmTicket["status"] }): boolean {
   return !isTicketResolved(t);
 }
 
+/** Where a record stands (owner, 2026-10-14): a FAULT waits on the Overview until someone takes it on, then it is a
+ *  TICKET (the Tickets tab), then CLOSED. ONE answer for every screen and count.
+ *  ⚠️ SEVEN SCREENS DECIDED IT EACH (architecture review, 2026-10-14): a record with a status this build does not know
+ *  showed as a fault on the Overview, titled itself "Edit ticket" and was in no Tickets list. Unknown is a FAULT here,
+ *  everywhere — never hidden, never closed. */
+export type FmStage = "fault" | "ticket" | "closed";
+export function stageOf(t: { status?: FmTicket["status"] }): FmStage {
+  if (isTicketResolved(t)) return "closed";
+  return t.status === "in_progress" ? "ticket" : "fault";
+}
+
 /** Who did a piece of work: the person, when someone else recorded it (a VESTA Agent completion for a Done on
  *  Telegram), else who recorded it. One reading for every list and report. */
 export function workedBy(c: Pick<FmCompletion, "by" | "who">): string {
@@ -287,15 +298,12 @@ export function resolvedInMonth(t: FmTicket, month: string): boolean {
 export function ticketStats(tickets: readonly FmTicket[]): TicketStats {
   let open = 0, inProgress = 0, resolved = 0, cleared = 0, totalMs = 0, timed = 0;
   for (const t of tickets) {
-    if (t.status === "open") open++;
-    else if (t.status === "in_progress") inProgress++;
-    // ⚠️ EXPLICIT, AND AN UNKNOWN STATUS COUNTS AS OPEN. This was a bare
-    // `else`, so ANY row whose status was missing, empty or corrupt was counted
-    // RESOLVED — a fault silently removed from the facility report by bad data,
-    // which is the one direction this must never fail in. A fault wrongly shown
-    // as open is a question someone asks; a fault wrongly shown as resolved is
-    // one nobody ever asks again.
-    else if (isTicketOpen(t)) open++;
+    // ⚠️ AN UNKNOWN STATUS COUNTS AS OPEN (stageOf). A bare `else` once counted ANY row whose status was missing,
+    // empty or corrupt as RESOLVED — a fault silently removed from the facility report by bad data, the one
+    // direction this must never fail in.
+    const stage = stageOf(t);
+    if (stage === "fault") open++;
+    else if (stage === "ticket") inProgress++;
     else {
       // ⚠️ A CLOSE WITH NO WORK IS NOT A REPAIR (review 31): ten 10-minute Wi-Fi blips cleared by the agent made a
       // 48 h fridge repair read "4.5 h", one duplicate closed after 92 days "2208 h"
@@ -577,9 +585,10 @@ export function completionSource(
  * under the same words, so its number and the HUD's could differ.
  */
 export function fmAttention(d: FmData, now = Date.now()): {
-  openFaults: FmTicket[]; lateTasks: ReturnType<typeof scheduleBoard>; total: number;
+  /** Every record not closed — the faults and the tickets both stand on the Overview's list. */
+  unresolved: FmTicket[]; lateTasks: ReturnType<typeof scheduleBoard>; total: number;
 } {
-  const openFaults = d.tickets.filter(isTicketOpen);
+  const unresolved = d.tickets.filter((t) => stageOf(t) !== "closed");
   const lateTasks = scheduleBoard(d, now).filter((s) => s.state === "overdue" || s.state === "never");
-  return { openFaults, lateTasks, total: openFaults.length + lateTasks.length };
+  return { unresolved, lateTasks, total: unresolved.length + lateTasks.length };
 }
