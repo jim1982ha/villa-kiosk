@@ -126,13 +126,6 @@
    3px×2 padding = 40px) — the default .icon-btn (48px) sat visibly taller
    than the theme selector right next to it in this same header row. */
 .header-icon-btn { width: 40px; height: 40px; border-radius: 11px; }
-/* The (i) model-info popover's default anchor (.info-tip .info-pop) opens
-   LEFT-anchored (rightward) — fine when the (i) sits at the left edge of its
-   own row, but in a modal HEADER it sits near the RIGHT edge (title left,
-   icons right), so opening rightward would push it off the modal/viewport.
-   Anchor from the right edge instead (opens leftward) whenever it's in a
-   header row. */
-.modal-header .info-tip .info-pop { left: auto; right: 0; }
 /* The header's theme control now carries a written word. Two icon-only
    sun/moon triplets on one screen (this and Villa lighting) were reported as
    reading like the same duplicated control — see SettingsModal's note. The
@@ -381,55 +374,19 @@
 @media (hover: hover) {
   .info-tip > .info-btn:hover { color: var(--accent); }
 }
-.info-tip .info-pop {
-  /* Open DOWNWARD. The (i) button sits near the TOP of the "3D model source"
-     section (right after the heading) with the rest of the scrollable modal
-     body below it — opening upward (the old rule, written when the button
-     used to sit low in the section near the footer — stale after later
-     restructuring) anchored the box's BOTTOM edge above the button and grew
-     it toward the top of the BROWSER WINDOW itself. max-height alone can't
-     fix that: once content is taller than the room actually available above
-     the button, part of the box renders above y=0 of the viewport, which is
-     a hard clip no scroll container can reveal. Downward has the entire rest
-     of .modal-body's scrollable area to grow into instead.
-     Anchored from the LEFT (opens rightward): the (i) button sits at the
-     LEFT edge of its row, so right: 0 (opening leftward) pushed the whole
-     popover off the left edge of the modal/viewport.
-     max-height + overflow-y: auto — this popover has grown to 7+ rows plus a
-     paragraph; capping the height and scrolling internally means every row
-     stays reachable even if a future addition makes it taller still. */
-  position: absolute; z-index: 90; top: calc(100% + 8px); left: 0;
-  width: min(510px, 78vw); max-height: min(60vh, 420px); overflow-y: auto;
+/* The (i)'s card: portalled to <body>, `fixed`, placed by InfoTip (infoTipPlacement: below the (i), or above when
+   that has more room; never past the screen's edge). Opaque, above every window (a Dropdown's layer): the old
+   translucent card, absolute inside the (i) and capped at 420 px, let the cards under it show through and cut its
+   own last line (owner, 2026-10-14). Its width here is the one it is measured at before being placed. */
+.info-pop {
+  position: fixed; z-index: 400; width: min(510px, calc(100vw - 24px)); overflow-y: auto; overscroll-behavior: contain;
   padding: 12px 14px;
-  background: var(--bg-overlay); backdrop-filter: blur(12px);
+  background: var(--bg-modal);
   border: 1px solid var(--hairline-strong); border-radius: 12px;
-  box-shadow: 0 10px 32px var(--shadow);
+  box-shadow: var(--elev-3);
   font-size: var(--text-xs); line-height: 1.5; color: var(--text-secondary);
-  opacity: 0; visibility: hidden; transform: translateY(4px);
-  transition: opacity 0.14s, transform 0.14s, visibility 0.14s;
   text-align: left; white-space: normal;
-}
-.info-tip:focus-within .info-pop, .info-tip.open .info-pop { opacity: 1; visibility: visible; transform: translateY(0); }
-@media (hover: hover) {
-  .info-tip:hover .info-pop { opacity: 1; visibility: visible; transform: translateY(0); }
-}
-/* Phones: anchored-absolute can't be guaranteed to fit — the button's offset
-   plus 78vw of popover overflowed the modal's right edge (horizontal-scroll
-   report). Pin it to the VIEWPORT instead, spanning the full width minus
-   margins and vertically centred, so a tap on the (i) always shows the whole
-   card on screen. A tap opens it through `.open` (InfoTip — iOS Safari does
-   not focus a tapped button, so :focus-within alone never opened it there). */
-@media (max-width: 640px) {
-  .info-tip .info-pop {
-    position: fixed; left: 12px; right: 12px; width: auto;
-    top: 50%; transform: translateY(calc(-50% + 4px));
-    max-height: min(76vh, 560px);
-    overscroll-behavior: contain;
-  }
-  .info-tip:focus-within .info-pop, .info-tip.open .info-pop { transform: translateY(-50%); }
-  @media (hover: hover) {
-  .info-tip:hover .info-pop { transform: translateY(-50%); }
-}
+  animation: modal-backdrop-in 0.12s ease-out;
 }
 /* A card that explains with a table (FaultTiming): a title, the table, a note. */
 .info-pop-title { display: block; color: var(--text-primary); margin-bottom: 6px; }

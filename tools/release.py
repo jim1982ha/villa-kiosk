@@ -250,6 +250,20 @@ def ship(message: str | None, dry_run: bool, wait_minutes: float, poll_seconds: 
         raise ReleaseError("on main: this app releases from dev2 (main advances only by the owner's backport)")
     if subprocess.run(["git", "merge-base", "--is-ancestor", f"origin/{BRANCH}", "HEAD"], cwd=ROOT).returncode != 0:
         raise ReleaseError(f"HEAD does not contain origin/{BRANCH}: pull it first, a push would not fast-forward")
+    # ⚠️ ALREADY RELEASED SAYS SO (2026-10-14). A ship interrupted mid-run had committed, pushed and published; run
+    # again, it refused with "the changelog is not staged" — and the release was reported as never having happened.
+    # When the changelog's top version IS the last commit's and nothing is waiting, the answer is where it stands.
+    if not git("diff", "--name-only").strip() and not git("diff", "--cached", "--name-only").strip():
+        top = changelog_version((ROOT / CHANGELOG).read_text())
+        if top == config_version(git("show", f"HEAD:{CONFIG}")):
+            sha = git("rev-parse", "HEAD").strip()
+            if published_version() == top:
+                print(f"✅ ALREADY PUBLISHED: {top} is commit {sha[:8]}, and Home Assistant offers it. Nothing to do.")
+                return 0
+            if subprocess.run(["git", "merge-base", "--is-ancestor", "HEAD", f"origin/{BRANCH}"], cwd=ROOT).returncode == 0:
+                print(f"⏳ {top} is already committed ({sha[:8]}) and pushed, NOT published yet: read the CI run for it.")
+                return 3
+            raise ReleaseError(f"{top} is already committed ({sha[:8]}) but NOT pushed: push it (git push origin HEAD:{BRANCH})")
     if git("diff", "--name-only").strip():
         raise ReleaseError("unstaged changes in tracked files: stage what ships (by name) or stash the rest\n  "
                            + git("diff", "--name-only").strip().replace("\n", "\n  "))

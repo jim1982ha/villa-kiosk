@@ -120,6 +120,8 @@ export interface BudgetStatus {
   /** The other category's spend, tracked separately and explicitly NOT part
    *  of the cap. */
   majorSpend: number;
+  /** Both — the month's whole maintenance spend (the Spend tab shows all three, owner 2026-10-14). */
+  totalSpend: number;
   cap: number;
   /** 0–1+ against the cap; can exceed 1. */
   fraction: number;
@@ -149,7 +151,7 @@ export function budgetStatus(
     .reduce((s, c) => s + c.amountIdr, 0);
   const fraction = cap > 0 ? minorSpend / cap : 0;
   return {
-    month, minorSpend, majorSpend, cap, fraction,
+    month, minorSpend, majorSpend, totalSpend: minorSpend + majorSpend, cap, fraction,
     state: cap <= 0 ? "ok" : minorSpend >= cap ? "exceeded" : fraction >= terms.warnAt ? "approaching" : "ok",
     entries,
   };
@@ -237,6 +239,12 @@ export type FmStage = "fault" | "ticket" | "closed";
 export function stageOf(t: { status?: FmTicket["status"] }): FmStage {
   if (isTicketResolved(t)) return "closed";
   return t.status === "in_progress" ? "ticket" : "fault";
+}
+
+/** A fault's title as every list shows it: "#5 · House Pump Power …" when it came from a VESTA Agent alert — the
+ *  number its Telegram messages carry (FmTicket.alertNumber) — else its title alone. */
+export function faultTitle(t: Pick<FmTicket, "title" | "alertNumber">): string {
+  return typeof t.alertNumber === "number" && t.alertNumber > 0 ? `#${t.alertNumber} · ${t.title}` : t.title;
 }
 
 /** Who did a piece of work: the person, when someone else recorded it (a VESTA Agent completion for a Done on

@@ -24,14 +24,27 @@ out=$(mktemp -d) || exit 1
 trap 'rm -rf "$out"' EXIT
 jobs=${VK_ORACLE_JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)}
 ls *.mjs | xargs -P "$jobs" -I{} sh -c 'node --no-warnings "$1" > "$2/$1.out" 2>&1; echo $? > "$2/$1.rc"' _ {} "$out"
-fail=0
+# `--failed` (`npm run test:oracles -- --failed`): only the oracles that failed, each with its FAIL lines — or, for
+# one that crashed, the end of its output — and a count. The default prints everything, as CI's log wants (2026-10-14:
+# finding the failures in ~180 oracles' output was a loop rewritten by hand every time).
+quiet=0; [ "$1" = "--failed" ] && quiet=1
+fail=0; failed=0; total=0
 for f in *.mjs; do
-  printf '\n═══ %s ═══\n' "$f"
-  cat "$out/$f.out"
-  [ "$(cat "$out/$f.rc" 2>/dev/null)" = "0" ] || { echo "  ^ FAILED"; fail=1; }
+  total=$((total + 1))
+  ok=1; [ "$(cat "$out/$f.rc" 2>/dev/null)" = "0" ] || ok=0
+  if [ $quiet -eq 1 ]; then
+    [ $ok -eq 1 ] && continue
+    printf '\n═══ %s ═══\n' "$f"
+    grep -E '^\s*FAIL\b' "$out/$f.out" || tail -n 15 "$out/$f.out"
+  else
+    printf '\n═══ %s ═══\n' "$f"
+    cat "$out/$f.out"
+    [ $ok -eq 1 ] || echo "  ^ FAILED"
+  fi
+  [ $ok -eq 1 ] || { fail=1; failed=$((failed + 1)); }
 done
-printf '\n%s\n' "$([ $fail -eq 0 ] && echo '✅ all fixed-defect oracles pass' || echo '❌ SOME ORACLES FAILED')"
-if [ -d open ]; then
+printf '\n%s\n' "$([ $fail -eq 0 ] && echo "✅ all fixed-defect oracles pass ($total)" || echo "❌ SOME ORACLES FAILED ($failed of $total)")"
+if [ -d open ] && [ $quiet -eq 0 ]; then
   printf '\n──────── known-open defects (expected to fail) ────────\n'
   for f in open/*.mjs; do
     [ -e "$f" ] || continue

@@ -15,7 +15,8 @@ import { deviceLook, storeLookSource } from "@/utils/deviceActivity";
 import { deviceRowText } from "@/utils/entityValue";
 import type { Threshold } from "@/config/ThresholdConfig";
 import { labelOf } from "@/config/EntityMap";
-import { fmAttention, stageOf } from "@/fm/fmEngine";
+import { faultTitle, fmAttention, stageOf } from "@/fm/fmEngine";
+import { lastNoted } from "@/fm/faultNotes";
 import type { FmData } from "@/fm/fmTypes";
 import type { HassEntity } from "@/types/ha.types";
 import type { EntityMapping } from "@/types/scene.types";
@@ -46,6 +47,8 @@ export interface AttentionItem {
   device?: { key: string; label: string; room?: string };
   /** The open fault about this very entity, when this item is its live state (groupAttention): one problem, not two. */
   fault?: AttentionItem;
+  /** Set on a fault: what last happened about it on Telegram (faultNotes.lastNoted — "Escalation sent to Owner"). */
+  latest?: { note: string; at: string };
 }
 
 /**
@@ -236,12 +239,13 @@ export function buildAttentionItems(opts: {
     items.push({
       id: `fault:${t.id}`,
       kind: "fault",
-      title: t.title,
+      title: faultTitle(t),
       detail: stage === "ticket" ? "In progress" : "Fault",
       room: t.room,
       entityId: t.entityId,
       ticketId: t.id,
       stage,
+      latest: lastNoted(t),
     });
   }
 

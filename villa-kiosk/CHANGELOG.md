@@ -1,3 +1,39 @@
+## 2.496.356
+
+### Changed
+- Cockpit: a fault that came from a VESTA Agent alert now shows what happened about it on Telegram. Under the fault on its Overview card is the latest event, with its time — for example "Escalation sent to Owner · 2026-10-14 08:49" or "🆘 Need help pressed by Fabien". Each event (reminder sent, escalation sent, a button pressed) is also a note on the fault in the Tickets tab. Needs VESTA Agent 0.12.197 or later; until then nothing changes.
+
+## 2.496.355
+
+### Changed
+- Cockpit → Overview:
+  - The list is now called "Open issues" (was "Live issues"): everything in it stays until it is closed, and it pairs with "Open a ticket" beside it.
+  - The (i) card ("When faults open and close") is shown whole, on a solid background, above everything — it was cut off at its last line and the cards behind showed through. On a phone it fits the screen; near the bottom of the screen it opens upwards. The 3D model's (i) in Advanced Settings is the same card.
+  - On each card, "Mark in progress" is now "Open ticket", and the two buttons sit on the right of the card's description instead of on a line of their own — every card is shorter. On a phone the buttons go under the description.
+  - A fault that came from a VESTA Agent alert shows the alert's number, as Telegram writes it: "#5 · House Pump Power has not recorded a confirmed run…". The same in the Tickets tab. Faults the Agent creates from VESTA Agent 0.12.195 carry it; older open ones get it at the Agent's next start or night check. A fault opened by a person, or found by the night check, has no number (Telegram gives them none).
+- Cockpit → Spend:
+  - Minor, Major and Total share the width equally, each word above its amount.
+  - "Generate statement", "Save" and "Download .md" stay together on one line ("Save statement" is now "Save").
+  - Spend settings: the explanation is one paragraph, closer to the boxes, and "Remove cap" sits beside Cancel and Save, in the same style.
+
+## 2.496.354
+
+### Changed
+- Nothing changes on screen. Behind it, for whoever maintains the Kiosk:
+  - releasing again after a release that already went through now says "already published" (or "pushed, not yet published") instead of a misleading "the changelog is not staged";
+  - the automated checks can now render a screen and check what it shows, instead of only reading its code;
+  - `npm run test:oracles -- --failed` prints only the checks that failed.
+
+## 2.496.353
+
+### Changed
+- Cockpit → Schedule: the schedule's description is rewritten in plain English ("Each task repeats at the interval you set…"), with "Add a task" on the same line, at the right.
+- Cockpit → Spend:
+  - "Month", "Generate statement", "Save statement" and "Download .md" are on one line, at the top; the statement appears just below.
+  - The month's money is one line — Minor (with the cap, when there is one), Major, Total — with "Record spend" at its right. Major spend used to show only as a note, and the total not at all.
+  - Spend settings: the two "name of the category" boxes are gone. They were names for the two categories, not a choice — the cap always applies to minor spend. The categories are simply "Minor" (routine work, counted against the cap) and "Major" (larger work, outside it), and the settings say so. What remains, side by side: the monthly cap on minor spend and the warning threshold.
+  - Removing a cap: open Spend settings, press "Remove cap" next to the amount, then Save.
+
 ## 2.496.352
 
 ### Changed

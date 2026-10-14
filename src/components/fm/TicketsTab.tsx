@@ -1,6 +1,6 @@
 // src/components/fm/TicketsTab.tsx
 // The TICKETS: the work someone took on (owner, 2026-10-14). A fault — opened by the VESTA Agent or raised by a
-// person — waits on the Overview's list; "Mark in progress" there makes it a ticket, and the ticket lives here until
+// person — waits on the Overview's list; "Open ticket" there makes it a ticket, and the ticket lives here until
 // it is resolved or closed. So this tab holds the tickets in progress (one per device) and the Closed section; raising
 // a fault moved to the Overview, beside the problems it is raised about. It was the Faults tab, a second list of the
 // same open faults the Overview already showed.
@@ -12,7 +12,7 @@ import { ChevronDown, ChevronRight, FileText, Wrench } from "lucide-react";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useDeviceIdentity } from "@/config/VillaModel";
 import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
-import { localStamp, stageOf, ticketStats } from "@/fm/fmEngine";
+import { faultTitle, localStamp, stageOf, ticketStats } from "@/fm/fmEngine";
 import { ticketGroups, type TicketGroup } from "@/fm/ticketGroups";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
@@ -77,7 +77,7 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
     <ErasableRow key={t.id} className="fm-ticket-record" intent={{ title: "Erase this record", detail: t.title }}
       erase={(token) => removeTicket(t.id, token)} onOpen={() => setEditingId(t.id)}>
       <div className="fm-fault-head">
-        <div className="fm-row-title"><strong>{t.title}</strong></div>
+        <div className="fm-row-title"><strong>{faultTitle(t)}</strong></div>
         {status && <span className="fm-badge ok">{status}</span>}
       </div>
       <div className="fm-row-main">

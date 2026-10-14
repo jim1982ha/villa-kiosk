@@ -15,7 +15,7 @@ import { useConfig } from "@/config/ConfigContext";
 import { resolveSiteTitle } from "@/config/AppConfig";
 import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
 import { budgetStatus, monthKey, localStamp, parseAmount } from "@/fm/fmEngine";
-import { categoryName } from "@/fm/fmTypes";
+import { COST_CATEGORY_NAMES } from "@/fm/fmTypes";
 import { useFmTerms } from "@/fm/useFmTerms";
 import { useProfile } from "@/auth/ProfileContext";
 import { roleCan } from "@/auth/permissions";
@@ -121,20 +121,40 @@ export default function SpendTab(
       {/* The terms are the villa's agreement, set by whoever administers the
           kiosk — the shared config only the owner may write. */}
       {roleCan(role, "editConfig") && <ContractTermsEditor />}
-      <label className="fm-field" style={{ maxWidth: 220 }}>
-        <span>Month</span>
-        <Dropdown value={month} ariaLabel="Month" onChange={(m) => { setMonth(m); setStatement(null); setStatementSaved(false); }}
-          options={months.map((m) => ({ value: m, label: m }))} />
-      </label>
+      {/* The month, on the same line as its statement's buttons (owner, 2026-10-14): it chooses what this whole tab
+          shows, and the statement is of that month. */}
+      {/* ⚠️ THE STATEMENT'S THREE BUTTONS ARE ONE GROUP (owner, 2026-10-14: Download .md fell alone onto a second
+          line): they never part; on a narrow screen the group goes under the Month as a whole. "Save", not "Save
+          statement": beside "Generate statement" it says the same, and the three fit one line on the iPad. */}
+      <div className="fm-statement-row">
+        <span className="fm-inline-label">Month</span>
+        <div style={{ minWidth: 130 }}>
+          <Dropdown value={month} ariaLabel="Month" onChange={(m) => { setMonth(m); setStatement(null); setStatementSaved(false); }}
+            options={months.map((m) => ({ value: m, label: m }))} />
+        </div>
+        <div className="fm-statement-buttons">
+          <button className="btn ghost" onClick={generateStatement}>
+            <Sparkles size={16} /> {statement ? "Regenerate statement" : "Generate statement"}
+          </button>
+          <SaveButton saved={statementSaved} label="Save" icon={<Save size={16} />} onClick={() => void saveStatement()} disabled={!statement} />
+          <button className="btn ghost" onClick={downloadStatement} disabled={!statement}>
+            <Download size={16} /> Download .md
+          </button>
+        </div>
+      </div>
+      {statement && <MarkdownPreview markdown={statement} />}
 
       <div className={`fm-cap ${b.state}`}>
-        <div className="fm-cap-head">
-          <strong>{money(b.minorSpend)}</strong>
-          <span className="muted">
-            {b.cap > 0
-              ? `${terms.cappedName} spend, of a ${money(b.cap)} monthly cap`
-              : `${terms.cappedName} spend (no monthly cap set)`}
-          </span>
+        {/* the month's money on ONE line — minor (against the cap), major (outside it), total — and Record spend at
+            its right (owner, 2026-10-14: "what about total or major spend?"); the three share the width equally, each
+            word ABOVE its amount (owner, 2026-10-14) */}
+        <div className="fm-cap-totals">
+          <div className="fm-cap-total"><span className="muted">{COST_CATEGORY_NAMES.minor}{b.cap > 0 ? ` · cap ${money(b.cap)}` : ""}</span><strong>{money(b.minorSpend)}</strong></div>
+          <div className="fm-cap-total"><span className="muted">{COST_CATEGORY_NAMES.major}</span><strong>{money(b.majorSpend)}</strong></div>
+          <div className="fm-cap-total"><span className="muted">Total</span><strong>{money(b.totalSpend)}</strong></div>
+          {!adding && (
+            <button className="btn ghost fm-cap-record" onClick={() => setAdding(true)}><Plus size={16} /> Record spend</button>
+          )}
         </div>
         {b.cap > 0 && (
           <div className="fm-cap-bar">
@@ -143,28 +163,18 @@ export default function SpendTab(
         )}
         {b.state === "exceeded" && (
           <p className="fm-cap-note">
-            Cap reached. Further spend this month belongs to {terms.uncappedName}, on
+            Cap reached. Further spend this month belongs to {COST_CATEGORY_NAMES.major}, on
             whatever terms your own agreement sets for spend beyond it.
           </p>
         )}
         {b.state === "approaching" && (
           <p className="fm-cap-note">
-            Approaching the cap — decide now whether upcoming work is {terms.cappedName} or
-            should be recorded as {terms.uncappedName}.
-          </p>
-        )}
-        {b.majorSpend > 0 && (
-          <p className="fm-cap-note">
-            Plus {money(b.majorSpend)} recorded as {terms.uncappedName} (outside the cap).
+            Approaching the cap — decide now whether upcoming work is {COST_CATEGORY_NAMES.minor} or
+            should be recorded as {COST_CATEGORY_NAMES.major}.
           </p>
         )}
       </div>
 
-      {!adding && (
-        <button className="btn ghost" onClick={() => setAdding(true)} style={{ alignSelf: "flex-start" }}>
-          <Plus size={16} /> Record spend
-        </button>
-      )}
 
       {adding && (
         <div className="fm-form">
@@ -238,7 +248,7 @@ export default function SpendTab(
                 <strong>{c.label}</strong>
               </div>
               <RecordMeta when={localStamp(c.at)}>
-                <span className="fm-clause">{categoryName(terms, c.category)}</span>
+                <span className="fm-clause">{COST_CATEGORY_NAMES[c.category]}</span>
                 <AgentMark record={c} />
                 {c.entityId ? (
                   <button className="fm-entity-chip" title={c.entityId}
@@ -261,23 +271,9 @@ export default function SpendTab(
         ))}
       </div>
 
-      {/* A standalone statement for this month — same explicit Generate ->
-          Save shape as the Recap tab (see fmDocuments.buildSpendStatement),
-          for handing THIS month's spend over on its own without the rest of
-          the operational annex, and for keeping a point-in-time copy even
-          after entries above are later edited or removed. */}
-      <div className="fm-row-sub muted" style={{ marginTop: 4 }}>Spend statement for {month}</div>
-      <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-        <button className="btn ghost" onClick={generateStatement}>
-          <Sparkles size={16} /> {statement ? "Regenerate statement" : "Generate statement"}
-        </button>
-        <SaveButton saved={statementSaved} label="Save statement" icon={<Save size={16} />} onClick={() => void saveStatement()} disabled={!statement} />
-        <button className="btn ghost" onClick={downloadStatement} disabled={!statement}>
-          <Download size={16} /> Download .md
-        </button>
-      </div>
-      {statement && <MarkdownPreview markdown={statement} />}
-
+      {/* The month's statement (its buttons sit with the Month, above): the same explicit Generate -> Save shape as
+          the recap (fmDocuments.buildSpendStatement), for handing this month's spend over on its own, and keeping a
+          point-in-time copy even after entries are edited or removed. Its saved copies: */}
       <SavedDocumentsList kind="spend" onOpen={reopenStatement} />
     </div>
   );

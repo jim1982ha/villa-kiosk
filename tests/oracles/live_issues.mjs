@@ -1,6 +1,6 @@
 // The Overview's Live issues and the Tickets tab (owner, 2026-10-14): ONE list of everything open on the Overview, a
 // card per device — what Home Assistant reports right now (no buttons: it clears when the device does), faults the
-// VESTA Agent or a person opened, tickets in progress. "Mark in progress" makes a card's faults ONE ticket (each still
+// VESTA Agent or a person opened, tickets in progress. "Open ticket" (was "Mark in progress") makes a card's faults ONE ticket (each still
 // its own record, so the Agent can clear one alone), "Edit ticket" then opens it in the Tickets tab, which holds the
 // tickets in progress and the Closed ones. It replaced "Needs attention" and the Faults tab's open list (the same
 // faults twice). The same with or without the Agent: only where faults come from differs.
@@ -78,16 +78,51 @@ ck("  ...dropped once the form has it, and when the Cockpit closes",
 ck("a guest's Report a problem: the guest form, on no device", screenReducer(START, { type: "reportProblem" }, GUEST).guestReportFor === "");
 ck("  ...and a guest cannot be sent to the Tickets tab", screenReducer(START, { type: "editTicket", id: "b" }, GUEST).ticketFor === null);
 
+console.log("\n  the alert's number, as Telegram writes it (owner, 2026-10-14):");
+const { buildAttentionItems } = await import("@/config/attention");
+const numbered = buildAttentionItems({ unavailableIds: [], entities: {}, entityMap: {}, alertThresholds: {}, resolvedRooms: {},
+  selectableIds: [], folding: new Map(),
+  fmData: fm([{ ...rec("n", "switch.pump"), title: "House Pump Power has not run", alertNumber: 5 }, rec("p", "lock.door")]) });
+ck("a fault from a VESTA Agent alert reads \"#5 · …\" on its card; one without a number, its title alone",
+   numbered.find((i) => i.ticketId === "n")?.title === "#5 · House Pump Power has not run" && numbered.find((i) => i.ticketId === "p")?.title === "fault p",
+   numbered.map((i) => i.title));
+ck("  ...and the same in the Tickets tab", /<strong>\{faultTitle\(t\)\}<\/strong>/.test(readFileSync(new URL("../../src/components/fm/TicketsTab.tsx", import.meta.url), "utf8")));
+ck("  ...a number that is not one (0, text) is not shown", E.faultTitle({ title: "x", alertNumber: 0 }) === "x" && E.faultTitle({ title: "x", alertNumber: "5" }) === "x");
+
+const ov = readFileSync(new URL("../../src/components/cockpit/CockpitOverview.tsx", import.meta.url), "utf8");
+console.log("\n  what happened on Telegram, on the card (owner, 2026-10-14: reminders, escalation, Need help):");
+const N = await import("@/fm/faultNotes");
+const told = { ...rec("s", "switch.pump"), status: "open", updates: [
+  { at: "2026-10-14T08:00:00.000Z", status: "open", photoIds: [], title: "fault s" },
+  { at: "2026-10-14T08:49:00.000Z", status: "open", photoIds: [], kind: "noted", note: "Escalation sent to Owner" },
+  { at: "2026-10-14T09:10:00.000Z", status: "open", photoIds: [], kind: "noted", note: "🆘 Need help pressed by Fabien" }] };
+const reopenedThenTold = { ...told, updates: [{ at: "2026-10-13T08:00:00.000Z", status: "resolved", photoIds: [] },
+  { at: "2026-10-14T07:00:00.000Z", status: "open", photoIds: [], kind: "reopened", by: "Owner" }, ...told.updates.slice(1)] };
+const withLatest = buildAttentionItems({ unavailableIds: [], entities: {}, entityMap: {}, alertThresholds: {}, resolvedRooms: {},
+  selectableIds: [], folding: new Map(), fmData: fm([told]) });
+ck("the card's line under the fault: the LAST thing Telegram said, with its time",
+   withLatest[0].latest?.note === "🆘 Need help pressed by Fabien" && withLatest[0].latest.at === "2026-10-14T09:10:00.000Z", withLatest[0].latest);
+ck("  ...a noted line is never a status change: \"reopened by Owner\" still read under it",
+   N.statusSteps(reopenedThenTold).every((u) => u.kind !== "noted") && /reopened .* by Owner/.test(N.faultWhen(reopenedThenTold, (a) => a.slice(11, 16))),
+   N.faultWhen(reopenedThenTold, (a) => a.slice(11, 16)));
+ck("  ...and each one is a note in the Tickets tab, with its time",
+   N.faultNoteLines(told, (a) => a.slice(11, 16)).join("|") === "Escalation sent to Owner (08:49)|🆘 Need help pressed by Fabien (09:10)",
+   N.faultNoteLines(told, (a) => a.slice(11, 16)));
+ck("  ...shown on the Overview card", /item\.latest \?\? item\.fault\?\.latest/.test(ov) && /cockpit-attention-latest/.test(ov));
+
 console.log("\n  the screens:");
 const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
-const ov = src("components/cockpit/CockpitOverview.tsx"), tt = src("components/fm/TicketsTab.tsx");
+const tt = src("components/fm/TicketsTab.tsx");
 ck("the Tickets tab lists the tickets in progress (by device) and Closed — never an open fault",
    /data\.tickets\.filter\(\(t\) => stageOf\(t\) === "ticket"\)/.test(tt) && /ticketGroups\(/.test(tt) && !/Raise a fault/.test(tt));
 ck("the Overview's title line: the (i) then Open a ticket, for the profiles that manage tickets; a guest reports a problem",
    /<FaultTiming \/>\s*<button className="btn ghost" onClick=\{\(\) => setRaising\(\{\}\)\}><Plus size=\{16\} \/> Open a ticket<\/button>/.test(ov) && /Report a problem<\/button>/.test(ov) && /<FaultForm /.test(ov));
 ck("a card draws what cardActions says (no rule of its own)",
-   /const acts = cardActions\(group\);/.test(ov) && /setStaging\(records\(acts\.markInProgress\)\)\}>Mark in progress/.test(ov)
+   /const acts = cardActions\(group\);/.test(ov) && /setStaging\(records\(acts\.markInProgress\)\)\}>Open ticket/.test(ov)
    && /onEditTicket\(acts\.editTicket as string\)/.test(ov) && /closeTickets\(acts\.close\)/.test(ov) && !/in_progress"/.test(ov.replace(/to="in_progress"/, "")));
+ck("a card's lines on the left, its buttons on the right of the same line (owner, 2026-10-14)",
+   /<div className="cockpit-attention-detail">\s*<ul className="cockpit-attention-subs">[\s\S]*?<\/ul>\s*\{actions\}\s*<\/div>/.test(ov)
+   && /\.cockpit-attention-detail \{ display: flex;/.test(readFileSync(new URL("../../src/styles/08-shared.css", import.meta.url), "utf8")));
 ck("the screens ask stageOf, never the status themselves",
    ["components/fm/TicketsTab.tsx", "components/fm/FaultForm.tsx", "components/fm/TodayTab.tsx"].every((f) => /stageOf\(/.test(src(f)) && !/status === "in_progress"|status !== "in_progress"|status === "open"/.test(src(f))));
 ck("the fault form is one, shared by raising and editing", /<FaultForm key=\{editing\.id\} editing=\{editing\}/.test(tt) && !/<input value=\{title\}/.test(ov + tt));
