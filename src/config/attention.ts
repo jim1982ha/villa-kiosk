@@ -114,12 +114,25 @@ export function groupAttention(items: readonly AttentionItem[]): AttentionGroup[
     || a.title.localeCompare(b.title) || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
 }
 
-/** A problem's line inside ITS row: under a device, what attentionLine says ("Unlocked", "Open fault: Entrance door
- *  unlocked"); in a row that is the problem itself (no device), only its status ("Open fault") — its title is the
- *  row's already. Every row shows its problems this way, one or several. */
+/** A problem's line inside ITS row: under a device, what attentionLine says ("Unlocked", "Entrance door unlocked");
+ *  in a row that is the problem itself (no device), only a status the row does not show already ("In progress"; an
+ *  open fault's line is empty — its title is the row's, its Close the line's). Every row shows its problems this way,
+ *  one or several. */
 export function attentionLineIn(group: AttentionGroup, item: AttentionItem): string {
-  return group.key.startsWith("device:") ? attentionLine(item) : item.detail;
+  return group.key.startsWith("device:") ? attentionLine(item) : faultStatus(item) ?? item.detail;
 }
+
+/** What a fault's line must say of its status: nothing while it is open, "In progress" once someone took it.
+ *  ⚠️ "OPEN FAULT:" BEFORE EVERY FAULT SAID NOTHING (owner, 2026-10-14: "this seems providing no value"): the row's
+ *  icon says it is a fault and its Close that it is open — the words only pushed the text to a second line.
+ *  undefined for anything that is not a fault. */
+function faultStatus(item: AttentionItem): string | undefined {
+  if (item.kind !== "fault") return undefined;
+  return item.detail === OPEN_FAULT ? "" : item.detail;
+}
+
+/** An open fault's `detail` — read by faultStatus, never shown. */
+const OPEN_FAULT = "Open fault";
 
 /** The icon a problem's line shows inside its row: its own kind's only where the row's icon does not say it already.
  *  ⚠️ ONE ICON PER MEANING (owner, 2026-10-13: "the icon is redundant"): every line repeated its row's icon — a red "!"
@@ -153,11 +166,16 @@ function mergeFaults(items: AttentionItem[]): AttentionItem[] {
 
 /** One problem's line inside a device's row. A state needs no more than its
  *  word ("Unlocked", "Unavailable"); a fault or a schedule names itself, since
- *  its title is what is wrong, not the device ("Open fault: Entrance door
- *  unlocked"). */
+ *  its title is what is wrong, not the device ("Entrance door unlocked"; "In
+ *  progress: …" once someone took it, faultStatus). */
 export function attentionLine(item: AttentionItem): string {
-  if (item.fault) return `${item.detail} — ${item.fault.detail.toLowerCase()}: ${item.fault.title}`;
-  return item.kind === "fault" || item.kind === "schedule" ? `${item.detail}: ${item.title}` : item.detail;
+  const titled = (i: AttentionItem) => { const st = faultStatus(i); return st ? `${st}: ${i.title}` : i.title; };
+  if (item.fault) {
+    const st = faultStatus(item.fault);
+    return `${item.detail} — ${st ? `${st.toLowerCase()}: ` : ""}${item.fault.title}`;
+  }
+  if (item.kind === "fault") return titled(item);
+  return item.kind === "schedule" ? `${item.detail}: ${item.title}` : item.detail;
 }
 
 /**
@@ -203,7 +221,7 @@ export function buildAttentionItems(opts: {
       id: `fault:${t.id}`,
       kind: "fault",
       title: t.title,
-      detail: t.status === "in_progress" ? "In progress" : "Open fault",
+      detail: t.status === "in_progress" ? "In progress" : OPEN_FAULT,
       room: t.room,
       entityId: t.entityId,
       ticketId: t.id,

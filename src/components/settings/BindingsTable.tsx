@@ -19,6 +19,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Plus } from "lucide-react";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import EntityPicker from "./EntityPicker";
+import Fold from "./Fold";
 import BindingRow from "./BindingRow";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
@@ -101,6 +102,8 @@ export default function BindingsTable() {
         named after its entity ID is uploaded.
       </p>
 
+      <Fold summary={`${bound.length} bound · ${unbound.length} unbound · ${unmappedHaEntities.length} not shown`}>
+
       <div style={{ marginBottom: 20 }}>
         <div className="row" style={{ gap: 8, alignItems: "flex-start" }}>
           <div style={{ flex: 1 }}>
@@ -140,16 +143,28 @@ export default function BindingsTable() {
         </p>
       )}
 
-      {/* Bound objects — collapsed by default, same as unbound/unmapped below. */}
-      {bound.length > 0 && (
-        <button
-          className="btn ghost mt"
-          onClick={() => setShowBound((s) => !s)}
-        >
-          {showBound ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-          {bound.length} bound object{bound.length === 1 ? "" : "s"}
-        </button>
-      )}
+      {/* ⚠️ THE THREE LISTS' BUTTONS ON ONE LINE (owner, 2026-10-14), each list opening under them; the unmapped
+          list is the inverse audit — informational only, there is no mesh here to bind those TO. */}
+      <div className="row mt" style={{ gap: 8, flexWrap: "wrap" }}>
+        {bound.length > 0 && (
+          <button className="btn ghost" onClick={() => setShowBound((s) => !s)}>
+            {showBound ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+            {bound.length} bound object{bound.length === 1 ? "" : "s"}
+          </button>
+        )}
+        {catalog.length > 0 && (
+          <button className="btn ghost" onClick={() => setShowUnbound((s) => !s)}>
+            {showUnbound ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+            {unbound.length} unbound object{unbound.length === 1 ? "" : "s"}
+          </button>
+        )}
+        {unmappedHaEntities.length > 0 && (
+          <button className="btn ghost" onClick={() => setShowUnmappedHa((s) => !s)}>
+            {showUnmappedHa ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+            {unmappedHaEntities.length} HA entit{unmappedHaEntities.length === 1 ? "y" : "ies"} not shown
+          </button>
+        )}
+      </div>
 
       {showBound && bound.map((mesh) => (
         <BindingRow
@@ -160,17 +175,6 @@ export default function BindingsTable() {
           onUnbind={unbind}
         />
       ))}
-
-      {/* Unbound objects — collapsed by default */}
-      {catalog.length > 0 && (
-        <button
-          className="btn ghost mt"
-          onClick={() => setShowUnbound((s) => !s)}
-        >
-          {showUnbound ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-          {unbound.length} unbound object{unbound.length === 1 ? "" : "s"} in this model
-        </button>
-      )}
 
       {showUnbound &&
         unbound.map((mesh) => (
@@ -210,19 +214,6 @@ export default function BindingsTable() {
         </p>
       )}
 
-      {/* The inverse audit — collapsed by default, informational only: there's
-          no mesh here to bind these TO, so unlike "unbound objects" above
-          there's no action to offer, just visibility into what's missing. */}
-      {unmappedHaEntities.length > 0 && (
-        <button
-          className="btn ghost mt"
-          onClick={() => setShowUnmappedHa((s) => !s)}
-        >
-          {showUnmappedHa ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-          {unmappedHaEntities.length} HA entit{unmappedHaEntities.length === 1 ? "y" : "ies"} not shown anywhere in the model
-        </button>
-      )}
-
       {showUnmappedHa && (
         <>
           <p className="muted body-text mt">
@@ -253,6 +244,7 @@ export default function BindingsTable() {
           <ShowAll list={unmappedShown} noun="entity" plural="entities" />
         </>
       )}
+      </Fold>
     </div>
   );
 }

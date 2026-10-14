@@ -1,3 +1,27 @@
+## 2.496.345
+
+### Changed
+- Advanced Settings → Grouped Devices and Bound 3D objects: everything under the description (the pickers, the lists and their buttons) is folded behind one line saying what is inside ("9 groups · 15 suggested", "1 bound · 769 unbound · 114 not shown"). Tap it to open.
+- Bound 3D objects: the three list buttons sit on one line and read "1 bound object", "769 unbound objects", "114 HA entities not shown".
+- Advanced Settings → Device Telemetry: 10 events per page instead of 20 (every paged list in the app now shows 10 rows).
+- Device Telemetry: "Device" and "Probe" are one "Diagnose" button with a small menu (This device / Frame-cost probe). Each result is copied to the clipboard of the device you pressed it on, and a short notice says so, then clears itself. If the browser refuses to copy (it may, after the 15-second probe), the notice says so and the result has its own Copy button.
+- Device Telemetry on a phone: the buttons show their icons only, so their labels no longer spill out of them.
+- Settings: the "Badge size … is set with the +/- buttons" sentence is now part of the text under the Icon / Card / Summary bar buttons.
+
+### Fixed
+- Device Telemetry: asking for this device's report no longer records a made-up error. Every press of "Device" used to send an "error" to the telemetry list and became the device's "last error"; the report now reads "device report" with a [Session] section, without an error or a stack trace.
+- The device report no longer flags "dead space outside the page" on a computer, whose browser window is smaller than its screen by design; the warning stays for tablets, phones and the installed app. Its WebGL context-loss count says it is the total for that browser over every visit.
+
+## 2.496.344
+
+### Changed
+- Cockpit → Needs attention: a fault's line no longer starts with "Open fault:". It reads just what is wrong ("Jet & Jaccuzi Relay dropped and reconnected 12 times in 3 days…"); the red "!" and its Close button already say it is an open fault. A fault someone has taken in hand still says "In progress: …".
+
+## 2.496.343
+
+### Changed
+- Phone menu (the gear, top right): the (?) now sits before "Label size", where every other row has its icon, so "Label size" lines up with "Cockpit", "First-person view", "Settings" and "Logout". Tapping it still opens the map colours.
+
 ## 2.496.342
 
 ### Changed

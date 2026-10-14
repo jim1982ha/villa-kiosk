@@ -9,6 +9,7 @@ import AskDialog from "@/components/common/AskDialog";
 import { ChevronDown, ChevronRight, Plus, Search, Trash2, X, Sparkles } from "lucide-react";
 import { ShowAll, useTruncated } from "@/components/common/TruncatedList";
 import EntityPicker from "./EntityPicker";
+import Fold from "./Fold";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
 import {
@@ -83,6 +84,9 @@ export default function GroupedDevices() {
         map badge. Only the primary entity keeps a badge on the map; every other
         member's value and 24h history appear in that badge's detail view instead.
       </p>
+
+      <Fold summary={`${config.deviceGroups.length} group${config.deviceGroups.length === 1 ? "" : "s"}`
+        + (suggestions.length ? ` · ${suggestions.length} suggested` : "")}>
 
       {/* New group — first, since creating one is the primary action here;
           the existing-groups list below is what you get once you've made
@@ -219,6 +223,7 @@ export default function GroupedDevices() {
           </button>
         </div>
       ))}
+      </Fold>
     </div>
   );
 }

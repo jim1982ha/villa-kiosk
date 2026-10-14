@@ -213,7 +213,11 @@ function probeSafeAreaInsets(): { top: number; right: number; bottom: number; le
 
 /** Assemble the full, copyable report. `primary` is the headline error for this
  *  screen (crash-loop bail, model-load failure, render crash, …). */
-export function buildReport(primary: CapturedError): string {
+/** The report: an error's (`primary`), or — `null` — this device as it is, asked for from Settings.
+ *  ⚠️ A REPORT ASKED FOR IS NOT AN ERROR (2026-10-14): Settings' "Device" button captured a made-up
+ *  MANUAL_DIAGNOSTICS error to build this — it was sent to every device's telemetry as an error, became this
+ *  device's "last error", and the report opened on "[Error]" and a stack trace of the button's own click. */
+export function buildReport(primary: CapturedError | null): string {
   const d = read();
   const loop = crashLoopInfo();
   const model = getLoadedModelInfo();
@@ -225,19 +229,22 @@ export function buildReport(primary: CapturedError): string {
   const L: string[] = [];
   const push = (k: string, v: unknown) => L.push(`${k}: ${v}`);
 
-  L.push("VESTA — error report");
+  L.push(primary ? "VESTA — error report" : "VESTA — device report");
   L.push("==========================");
   push("When", new Date().toISOString());
   push("App version", typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "?");
   L.push("");
-  L.push("[Error]");
-  push("Code", primary.code);
-  push("Message", primary.message);
-  if (primary.source) push("Source", primary.source);
+  L.push(primary ? "[Error]" : "[Session]");
+  if (primary) {
+    push("Code", primary.code);
+    push("Message", primary.message);
+    if (primary.source) push("Source", primary.source);
+  }
   push("Last load phase reached", d.phase ?? "n/a");
   push("Rapid failed loads", `${loop.count} in ${Math.round(loop.sinceMs / 1000)}s`);
-  if (d.contextLosses) push("WebGL context losses", d.contextLosses);
-  if (primary.stack) { L.push("Stack:"); L.push(primary.stack); }
+  // kept in this browser's storage across every visit, never reset: a total, not this session's
+  if (d.contextLosses) push("WebGL context losses (this browser, all visits)", d.contextLosses);
+  if (primary?.stack) { L.push("Stack:"); L.push(primary.stack); }
 
   L.push("");
   L.push("[Model]");
@@ -256,8 +263,9 @@ export function buildReport(primary: CapturedError): string {
   push("User agent", navigator.userAgent);
   push("Platform", navigator.platform);
   push("iOS", isIOS());
-  push("PWA standalone", window.matchMedia?.("(display-mode: standalone)").matches
-    || (navigator as Navigator & { standalone?: boolean }).standalone === true);
+  const standalone = window.matchMedia?.("(display-mode: standalone)").matches
+    || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  push("PWA standalone", standalone);
   push("CPU cores", navigator.hardwareConcurrency ?? "n/a");
   push("Device memory (GB)", nav.deviceMemory ?? "n/a (not exposed on this browser)");
   push("Screen", `${screen.width}x${screen.height} @ DPR ${window.devicePixelRatio}`);
@@ -281,7 +289,13 @@ export function buildReport(primary: CapturedError): string {
   // which no CSS can fix — it is the meta/manifest presentation or the host.
   const shortBy = Math.round(screen.height - window.innerHeight);
   const shortByW = Math.round(screen.width - window.innerWidth);
-  push("Screen not used by page", `${shortByW}px wide, ${shortBy}px tall${shortBy > 2 || shortByW > 2 ? "  <-- dead space OUTSIDE the page" : ""}`);
+  // ⚠️ ONLY WHERE THE PAGE SHOULD FILL THE SCREEN (2026-10-14): a laptop's browser window is smaller than its screen
+  // by design, and the report flagged "dead space OUTSIDE the page" on every desk. The question is a tablet's, a
+  // phone's or an installed app's.
+  const fills = standalone || isIOS() || window.matchMedia?.("(pointer: coarse)").matches === true;
+  const gap = shortBy > 2 || shortByW > 2;
+  push("Screen not used by page", `${shortByW}px wide, ${shortBy}px tall${
+    gap ? (fills ? "  <-- dead space OUTSIDE the page" : " (a desktop window: normal)") : ""}`);
   push("Online", navigator.onLine);
 
   L.push("");
@@ -298,7 +312,7 @@ export function buildReport(primary: CapturedError): string {
   L.push("[WebGL]");
   for (const [k, v] of Object.entries(webglInfo())) push(`  ${k}`, v);
 
-  if (d.lastError && d.lastError.at !== primary.at) {
+  if (d.lastError && d.lastError.at !== primary?.at) {
     L.push("");
     L.push("[Previously captured JS error]");
     push("Code", d.lastError.code);

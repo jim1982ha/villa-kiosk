@@ -677,7 +677,7 @@ export default function HUD({
                     re-opening the dropdown after every click would be far
                     more annoying than leaving it open. */}
                 <div className="hud-menu-item hud-menu-stepper" role="none">
-                  {/* "Label size (?)": the title is the way to the map-colours
+                  {/* "(?) Label size": the title is the way to the map-colours
                       legend on a phone (owner, 2.496.246) — it replaced the
                       menu's own "Map colours" row. Only the title opens it;
                       the −/+ beside it still only step the size. */}
@@ -688,8 +688,9 @@ export default function HUD({
                     onClick={() => { setMenuOpen(false); setLegendOpen(true); }}
                     aria-label="Label size — what the map colours mean"
                   >
-                    <span>Label size</span>
+                    {/* the (?) where every other row has its icon, so the words line up (owner, 2026-10-14) */}
                     <CircleHelp size={18} aria-hidden="true" />
+                    <span>Label size</span>
                   </button>
                   <div className="row" style={{ gap: 6 }}>
                     <button

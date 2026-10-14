@@ -295,7 +295,19 @@ button.cockpit-attention-row.tappable { cursor: pointer; }
   .telemetry-row { flex-wrap: wrap; row-gap: 4px; }
   .telemetry-row > .telemetry-summary { flex: 1 1 100%; order: 1; }
   .telemetry-row > .telemetry-time { margin-left: auto; }
+  /* ICONS ONLY (owner, 2026-10-14): six labelled pills overflowed their text on a phone. */
+  .telemetry-actions { flex-wrap: nowrap; }
+  .telemetry-actions .btn-label { display: none; }
+  .telemetry-actions .btn { padding-left: 12px; padding-right: 12px; }
 }
+/* "Diagnose ▾" and its two items, opening under the button inside the dialog. */
+.telemetry-diag { position: relative; }
+.telemetry-diag-menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 5;
+  min-width: 220px; background: var(--bg-modal);
+}
+/* The copy notice, over the dialog (a fixed layer above its 70; portalled to <body>). */
+.service-toast.app-notice.telemetry-notice { position: fixed; z-index: 300; }
 
 /* On-demand "this device" diagnostics (TelemetryPanel). Monospace and
    scrollable in BOTH axes: the report has long unwrapped lines (a full user
