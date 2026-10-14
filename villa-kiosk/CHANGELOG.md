@@ -1,3 +1,8 @@
+## 2.496.356
+
+### Changed
+- Cockpit: a fault that came from a VESTA Agent alert now shows what happened about it on Telegram. Under the fault on its Overview card is the latest event, with its time — for example "Escalation sent to Owner · 2026-10-14 08:49" or "🆘 Need help pressed by Fabien". Each event (reminder sent, escalation sent, a button pressed) is also a note on the fault in the Tickets tab. Needs VESTA Agent 0.12.197 or later; until then nothing changes.
+
 ## 2.496.355
 
 ### Changed

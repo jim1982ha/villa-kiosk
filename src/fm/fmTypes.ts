@@ -152,13 +152,15 @@ export interface FmTicketUpdate {
   /** What this step is, said once in the agreement (agent-contract.json `ticketUpdate`) — none: a status step.
    *  ⚠️ NEVER READ FROM A NOTE'S FIRST WORDS (architecture review 26): the card guessed "Now: …" by its prefix. */
   kind?: FmTicketUpdateKind;
+  /** noted: a line of what happened on Telegram ("Reminder sent to Facility Manager") — neither a status change nor a
+   *  title (faultNotes.statusSteps leaves it out); its words are `note`, its time `at`. */
   /** The title the VESTA Agent gave the fault at this step (retitled, reading, reopened, raised). */
   title?: string;
   /** retitled: the title before. */
   was?: string;
 }
 
-export type FmTicketUpdateKind = "reopened" | "retitled" | "reading" | "cleared";
+export type FmTicketUpdateKind = "reopened" | "retitled" | "reading" | "noted" | "cleared";
 /** Every kind, from the agreement the VESTA Agent writes by. */
 export const FM_TICKET_UPDATE_KINDS = AGENT_CONTRACT.ticketUpdate.kinds as readonly FmTicketUpdateKind[];
 

@@ -3746,6 +3746,9 @@ async def agent_info_handler(request: web.Request) -> web.Response:
         "contract": AGENT_CONTRACT,
         "version": _own_version,
         "capabilities": sorted(ROLE_CAPABILITIES[AGENT]),
+        # the fault step kinds this Kiosk shows (agent-contract.json ticketUpdate): the agent writes a newer one only
+        # when it is listed here ("noted", 2.496.356)
+        "step_kinds": list((AGENT_CONTRACT_TABLE.get("ticketUpdate") or {}).get("kinds") or []),
         "offline_after_minutes": _agent_offline_minutes(),
         "message_retention_days": _agent_retention_days(),
     }, headers={"Cache-Control": "no-store"})

@@ -22,9 +22,17 @@ function titleOf(u: FmTicketUpdate): string | undefined {
   return undefined;
 }
 
-/** The steps that changed the fault's status — raised, picked up, resolved, reopened; never a title change. */
+/** The steps that changed the fault's status — raised, picked up, resolved, reopened; never a title change, never a
+ *  line of what happened on Telegram ("noted": a reminder sent is not the fault moving). */
 export function statusSteps(t: Pick<FmTicket, "updates">): FmTicketUpdate[] {
-  return (t.updates ?? []).filter((u) => titleOf(u) === undefined);
+  return (t.updates ?? []).filter((u) => titleOf(u) === undefined && u.kind !== "noted");
+}
+
+/** What last happened about the fault on Telegram, from the VESTA Agent ("Escalation sent to Owner"), with when — the
+ *  Overview card's line under the fault (owner, 2026-10-14: Telegram told the whole story, the card only its start). */
+export function lastNoted(t: Pick<FmTicket, "updates">): { note: string; at: string } | undefined {
+  const u = [...(t.updates ?? [])].reverse().find((x) => x.kind === "noted" && x.note);
+  return u ? { note: u.note as string, at: u.at } : undefined;
 }
 
 /** When it happened, in one line: opened, reopened, picked up, resolved — and by whom (the name typed for who does the

@@ -45,6 +45,7 @@ import { buildDeviceOptions } from "@/components/fm/DeviceSearchPicker";
 import FaultForm from "@/components/fm/FaultForm";
 import FaultTiming from "@/components/fm/FaultTiming";
 import FaultStageModal from "@/components/fm/FaultStageModal";
+import { localStamp } from "@/fm/fmEngine";
 import type { FmTicket } from "@/fm/fmTypes";
 
 
@@ -320,11 +321,16 @@ function CockpitAttentionRow({ group, onOpenEntity, canManage, onEditTicket }: {
 function CockpitAttentionSub({ group, item }: { group: AttentionGroup; item: AttentionItem }) {
   const kind = lineIcon(group, item);
   const Icon = kind ? ATTENTION_ICON[kind] : null;
+  // what last happened about it on Telegram — a reminder, an escalation, a button pressed (owner, 2026-10-14)
+  const latest = item.latest ?? item.fault?.latest;
   return (
     <li className="cockpit-attention-sub">
       <div className="cockpit-attention-sub-line">
         {Icon && <Icon size={14} className={`cockpit-attention-icon cockpit-attention-${kind}`} />}
-        <span className="cockpit-attention-sub-text">{attentionLineIn(group, item)}</span>
+        <span className="cockpit-attention-sub-text">
+          {attentionLineIn(group, item)}
+          {latest && <span className="cockpit-attention-latest">{latest.note} · {localStamp(latest.at)}</span>}
+        </span>
       </div>
     </li>
   );
