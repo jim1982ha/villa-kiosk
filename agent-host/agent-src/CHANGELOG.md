@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.191 (15 October 2026)
+
+- Incident state `taken` (vesta_shared.store.Incident.TAKEN): open, not chased. `Problems.taken_in_kiosk(task, said)`
+  moves a chased incident there when a person put its Kiosk fault in progress ("Open Ticket").
+- vesta_agent.kiosk.held_tickets: `taken_at` / `taken_by` from the person's in-progress step (never an agent's).
+- vesta_agent.tickets._take_in: an alert taken on in the Kiosk stops its ladder and restates every copy
+  (incident_thread.IncidentThread.restate: the status, no buttons, NOT settled — its close still shows).
+- alert_buttons.open(): a taken incident carries no buttons. kiosk_words.taken(). Tests: test_taken_in_kiosk.py.
+
 ## 0.6.190 (14 October 2026)
 
 - vesta_agent.kiosk: `add_ticket(origin=)` writes the fault's `origin` ("alert" | "night" | "chat"), the Kiosk card's

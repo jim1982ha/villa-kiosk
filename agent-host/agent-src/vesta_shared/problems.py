@@ -308,6 +308,20 @@ class Problems:
                 return sid
         return None
 
+    def taken_in_kiosk(self, task_id: int, said: str) -> int | None:
+        """A person took the task's fault on in the VESTA Kiosk ("Open Ticket"): the alert it came from is no longer
+        chased — no reminder, no escalation (owner, 2026-10-15: "should Telegram stop chasing the facility manager?
+        yes"). It stays open and ends as before. Returns the incident's id when it was still being chased, else None.
+        `said`: who and when, as kiosk_words.taken writes it."""
+        kind, sid = self._source(self.store.task(task_id))
+        if kind != "incident" or not sid:
+            return None
+        inc = self.store.incident(sid)
+        if not inc or inc.get("closed_at") or inc.get("state") not in Incident.CHASED:
+            return None
+        self.store.update_incident(sid, state=Incident.TAKEN, reply=said)
+        return sid
+
     def unreached(self, iid: int) -> None:
         """No chat of the facility manager's received incident `iid` (Telegram refused them all): the alert desk hands
         it to the owner at its next tick (payload "unreached")."""

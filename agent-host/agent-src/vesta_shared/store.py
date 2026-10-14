@@ -69,6 +69,9 @@ class Incident:
     DONE = "done"                                                        # a person's answer
     RESOLVED, RECOVERED = "resolved", "recovered"                        # its rule cleared / its source came back
     DIGEST, LOGGED = "digest", "logged"                                  # never chased: the morning list, the record
+    # someone took its fault on in the VESTA Kiosk ("Open Ticket", owner 2026-10-15): open, no longer chased — it ends
+    # as any open incident does (Home Assistant clears it, a person closes its ticket)
+    TAKEN = "taken"
     CHASED = (ASKED, REASKED, ESCALATED)
     ANSWERED_OR_CLEARED = (DONE, RESOLVED)    # over: its task and ticket close with it (not recovered)
     # an incident muted before 0.12.132 (Mute is gone): over too — its task and Kiosk fault close at the next repair,

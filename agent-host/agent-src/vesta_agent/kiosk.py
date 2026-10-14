@@ -222,6 +222,12 @@ class Kiosk:
         def last(t: dict, key: str) -> str:
             ups = [u for u in t.get("updates") or [] if isinstance(u, dict)]
             return str(ups[-1].get(key) or "") if ups else ""
+        def taken(t: dict) -> dict:
+            # the step a PERSON took it on with ("Open Ticket": in progress), its who and when — never an agent's step
+            ups = [u for u in t.get("updates") or [] if isinstance(u, dict) and u.get("status") == "in_progress"
+                   and not u.get("kind") and not _mine(u)]
+            return {"taken_at": str(ups[-1].get("at") or ""),
+                    "taken_by": str(ups[-1].get("who") or ups[-1].get("by") or "")} if ups else {}
         def reopened(t: dict) -> dict:
             ups = [u for u in t.get("updates") or [] if isinstance(u, dict) and u.get("kind") == REOPENED]
             return {"reopened_at": str(ups[-1].get("at") or ""),
@@ -231,7 +237,7 @@ class Kiosk:
                           "by": last(t, "who") or last(t, "by"), "alert_number": t.get("alertNumber"), "origin": t.get("origin"),
                           "noted": [(str(u.get("at") or ""), str(u.get("note") or "")) for u in t.get("updates") or []
                                     if isinstance(u, dict) and u.get("kind") == NOTED],
-                          **reopened(t)}     # `by`: who did it, as the card says it
+                          **reopened(t), **taken(t)}     # `by`: who did it, as the card says it
                 for t in data.get("tickets") or [] if isinstance(t, dict) and isinstance(t.get("id"), str)}
 
     async def update_ticket(self, tid: str, title: str) -> bool:

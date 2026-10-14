@@ -10,6 +10,7 @@ import logging
 from typing import Awaitable, Callable
 
 from vesta_shared.message_format import PRESSED
+from vesta_shared.store import Incident
 
 from . import button_data
 from .notice import note_press
@@ -40,9 +41,10 @@ class AlertButtons:
         return Store(self.store_path)
 
     def open(self, iid: int | str) -> bool:
-        """Is incident `iid` still waiting for an answer (not closed)? Its messages then carry the buttons."""
+        """Is incident `iid` still waiting for an answer — not closed, and not taken on in the VESTA Kiosk (someone has
+        it: owner, 2026-10-15)? Its messages then carry the buttons."""
         inc = self._store().incident(int(iid)) if str(iid).isdigit() else None
-        return bool(inc) and not inc.get("closed_at")
+        return bool(inc) and not inc.get("closed_at") and inc.get("state") != Incident.TAKEN
 
     @staticmethod
     def of(skill) -> list[dict]:

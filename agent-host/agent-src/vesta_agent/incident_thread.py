@@ -101,6 +101,18 @@ class IncidentThread:
             n += await self._show(iid, chat, {**rec, "settled": True}, p)
         return n
 
+    async def restate(self, iid: int | str, note: str) -> int:
+        """Every copy of incident `iid` shows `note` as where it stands and loses its buttons, WITHOUT settling: the
+        incident is open and ends as any does (its close still says how). For an alert someone took on in the VESTA
+        Kiosk (owner, 2026-10-15). Returns how many chats show it now."""
+        note = note.replace("{time}", when(datetime.now(timezone.utc), self.tz))
+        n = 0
+        for chat, rec in self.state.incident_chats(iid):
+            if rec.get("settled") or not rec.get("mid"):
+                continue
+            n += await self._show(iid, chat, {**rec, "buttons": False}, layout.changed(layout.of(rec), status=note))
+        return n
+
     async def sync(self, iid: int | str, parts: dict, skip=(), keyboard=None) -> int:
         """Every copy of incident `iid` outside `skip` (the chats just sent it) shows `parts` too — the same title,
         "To:", history and status in every chat, edited quietly (an edit makes no sound) (owner, 2026-10-11: "this should

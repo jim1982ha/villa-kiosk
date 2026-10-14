@@ -33,7 +33,8 @@ def kiosk_reopen_note(ticket: dict, summary: str | None, zone: str) -> str:
 class Tickets:
     def __init__(self, *, kiosk, state, store_path: str, settle_alert: Callable[[int, str], Awaitable[int]],
                  timezone: str = "UTC", tell_fm: Callable[[str], Awaitable[object]] | None = None,
-                 story: Callable[[int], list[dict]] | None = None):
+                 story: Callable[[int], list[dict]] | None = None,
+                 restate_alert: Callable[[int, str], Awaitable[int]] | None = None):
         self.kiosk = kiosk
         self.tell_fm = tell_fm                # a message to the facility manager (a night fault reopened in the Kiosk)
         self.timezone = timezone              # the villa's: the note's time (notice.when)
@@ -41,6 +42,7 @@ class Tickets:
         self.store_path = store_path
         self.settle_alert = settle_alert      # incident_thread.IncidentThread.close: an incident closed in the Kiosk
         self.story = story or (lambda _iid: [])   # notice.Notices.story: an incident's Telegram life, for its card
+        self.restate_alert = restate_alert        # incident_thread.IncidentThread.restate: an alert taken on in the Kiosk
 
     def _store(self):
         from vesta_shared.store import Store
@@ -185,6 +187,18 @@ class Tickets:
                 log.info("Kiosk ticket %s reopened by a person: its task is open again", uid)
         if closed:
             log.info("Kiosk tickets closed by a person: %d task(s) closed with them", closed)
+        # ⚠️ AN ALERT TAKEN ON IN THE KIOSK IS NO LONGER CHASED (owner, 2026-10-15): "Open Ticket" on its card, and
+        # Telegram kept reminding the facility manager, then escalating to the owner — of a job someone had taken
+        for t in problems.open_tasks():
+            card = held.get(t.get("todo_uid") or "")
+            if not card or card["status"] != "in_progress" or not card.get("taken_at"):
+                continue
+            said = kiosk_words.taken(card.get("taken_by") or "", card.get("taken_at"), self.timezone)
+            iid = problems.taken_in_kiosk(t["id"], said)
+            if iid and self.restate_alert:
+                await self.restate_alert(iid, said)
+            if iid:
+                log.info("Incident #%s taken on in the Kiosk: no longer chased", iid)
 
     async def _converge(self, problems: Problems, held: dict[str, dict]) -> None:
         """Step 3: each fault says what its task says (Problems.card). A close is redone for two days (a resolve that did

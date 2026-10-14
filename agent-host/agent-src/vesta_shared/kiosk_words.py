@@ -23,6 +23,12 @@ def closed(by: str, iso: str | None, zone: str) -> str:
     return f"Closed in the VESTA Kiosk{f' by {by}' if by else ''} on {when(iso, zone)}"
 
 
+def taken(by: str, iso: str | None, zone: str) -> str:
+    """"Ticket opened in the Cockpit by Facility manager on 15/10/2026 00:40." — someone took an alert's fault on in the
+    VESTA Kiosk ("Open Ticket"): its Telegram chase stops (owner, 2026-10-15)."""
+    return f"Ticket opened in the Cockpit{f' by {by}' if by else ''} on {when(iso, zone)}."
+
+
 def reopened(by: str, iso: str | None, zone: str, what: str | None = None) -> str:
     """"Reopened in the VESTA Kiosk by Owner on 11/10/2026 07:05: Pump weak. Please look again." — `what` when the
     message carries no alert of its own (a night check's fault)."""
