@@ -1,3 +1,8 @@
+## 2.496.364
+
+### Changed
+- Cockpit → Recap: the chevron of "Ready" / "Not ready" sits right after its words, so the card reads as one that opens (it was far to the right, next to Save snapshot).
+
 ## 2.496.363
 
 ### Changed

@@ -178,7 +178,9 @@ ck("  ...the Recap draws those icons in the line, after \"Check the\"",
 
 ck("  ...the checks fold under their verdict, closed at first; a tap on the verdict opens them (owner, 2026-10-14)",
    /const \[showChecks, setShowChecks\] = useState\(false\);/.test(tab) && /\{showChecks && <div className="fm-list">/.test(tab)
-   && /className="fm-headline-toggle" aria-expanded=\{showChecks\}\s*onClick=\{\(\) => setShowChecks\(\(v\) => !v\)\}/.test(tab));
+   && /className="fm-headline-toggle" aria-expanded=\{showChecks\}\s*onClick=\{\(\) => setShowChecks\(\(v\) => !v\)\}/.test(tab)
+   // its chevron right after the words (owner, 2026-10-14), not pushed to the far end
+   && /\.fm-headline-toggle > svg \{ flex: 0 0 auto; color/.test(readFileSync(new URL("../../src/styles/07-facility.css", import.meta.url), "utf8")));
 
 const recent = readFileSync(new URL("../../src/components/fm/RecentWorkList.tsx", import.meta.url), "utf8");
 const ticketsTab = readFileSync(new URL("../../src/components/fm/TicketsTab.tsx", import.meta.url), "utf8");
