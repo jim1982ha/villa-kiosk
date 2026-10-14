@@ -47,7 +47,7 @@ ck("  ...the row is named after the device, opens the lock, and leads with the r
 // ⚠️ ONE PROBLEM, ONE LINE (owner, 2026-10-10: "why do we see 2 lines for the same issue?"): the ticket is about the
 // very lock whose state is listed — it was a second line, "Open fault: Entrance door unlocked", under "Unlocked"
 ck("  ...ONE line: the state's word, then its fault naming itself (the fault keeps its ticket, so its Close)",
-   door?.items.map(attentionLine).join(" | ") === "Unlocked — open fault: Entrance door unlocked", door?.items.map(attentionLine));
+   door?.items.map(attentionLine).join(" | ") === "Unlocked — Entrance door unlocked", door?.items.map(attentionLine));
 ck("  ...and the villa's own items are never written on: the ticket gone, the state line has no fault",
    !before.concat(after).some((i) => i.fault) && !groupAttention(before).some((g) => g.items.some((i) => i.fault)));
 ck("  ...and the row keeps its place when the ticket lands (ordered by worst problem and name, not arrival)",
@@ -75,7 +75,12 @@ const loneFault = groupAttention(build([ticket("va-4", "Back door stiff", "lock.
 // device with two problems was titled "Back door" — the Cockpit showed three shapes of row
 ck("  ...and a lone ticket is titled by its DEVICE, the fault its line, the device's room taken",
    loneFault?.title === "Back door" && loneFault.room === "Garden"
-     && attentionLineIn(loneFault, loneFault.items[0]) === "Open fault: Back door stiff", loneFault);
+     && attentionLineIn(loneFault, loneFault.items[0]) === "Back door stiff", loneFault);
+// ⚠️ NO "Open fault:" (owner, 2026-10-14: "providing no value") — but a fault someone took still says so
+const taken = groupAttention(build([{ ...ticket("va-5", "Back door stiff", "lock.back"), status: "in_progress" }]))
+  .find((g) => g.entityId === "lock.back");
+ck("  ...an open fault's line is its text alone, one taken in hand still reads \"In progress: …\"",
+   taken && attentionLineIn(taken, taken.items[0]) === "In progress: Back door stiff", taken?.items);
 // ⚠️ ONE ICON PER MEANING (owner, 2026-10-13: "the icon is redundant"): every line repeated its row's icon
 ck("  ...and its line shows no icon of its own: the row's says it already",
    lineIcon(loneFault, loneFault.items[0]) === null && lineIcon(lone, lone.items[0]) === null);
@@ -85,7 +90,7 @@ ck("  ...while a row mixing kinds marks the line whose kind is not the row's (a 
    mixed?.items.map((i) => [i.kind, lineIcon(mixed, i)]));
 const noDevice = groupAttention(build([ticket("t-n", "Pool pump noisy")])).find((g) => g.key === "item:fault:t-n");
 ck("  ...and a problem with no device stands for itself: its line says only its status, never its title twice",
-   noDevice?.title === "Pool pump noisy" && attentionLineIn(noDevice, noDevice.items[0]) === "Open fault", noDevice);
+   noDevice?.title === "Pool pump noisy" && attentionLineIn(noDevice, noDevice.items[0]) === "", noDevice);
 const warnOnly = groupAttention(build([ticket("w1", "Squeaks", "lock.back"), ticket("w2", "Loose handle", "lock.back")]));
 const backRow = warnOnly.find((g) => g.key === "device:lock.back");
 ck("two faults on one device: one row under the device's name, both faults inside",

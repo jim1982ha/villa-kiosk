@@ -1,3 +1,8 @@
+## 2.496.344
+
+### Changed
+- Cockpit → Needs attention: a fault's line no longer starts with "Open fault:". It reads just what is wrong ("Jet & Jaccuzi Relay dropped and reconnected 12 times in 3 days…"); the red "!" and its Close button already say it is an open fault. A fault someone has taken in hand still says "In progress: …".
+
 ## 2.496.343
 
 ### Changed
