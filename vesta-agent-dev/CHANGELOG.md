@@ -1,3 +1,9 @@
+## 0.12.194
+
+What you will see:
+- Nothing new. For whoever releases the Agent: releasing again after a release that already went through now says
+  "already published" (or "pushed, not yet published"), instead of refusing with "the changelog is not staged".
+
 ## 0.12.193
 
 What you will see:
