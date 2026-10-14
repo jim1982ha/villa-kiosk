@@ -9,7 +9,7 @@ import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
-const { pxPerWorldAt, rungAt, referenceDepthAt, iconZoomAt, viewportPx } = await import("@/babylon/badgeScale");
+const { pxPerWorldAt, rungAt, rungPx, referenceDepthAt, iconZoomAt, cssExtent } = await import("@/babylon/badgeScale");
 const { ICON_ZOOM_MIN_SCALE } = await import("@/babylon/badgeMetrics");
 
 const H = 1800, T = Math.tan(0.4), FIT = 30;
@@ -31,10 +31,9 @@ console.log("  the rung:");
 }
 {
   // The same CSS viewport, sharpened (hw 1/2) and un-sharpened (hw 1).
-  const sharp = viewportPx(1800, 0.5, true), soft = viewportPx(900, 1, true);
+  const sharp = cssExtent(1800, 0.5), soft = cssExtent(900, 1);
   ck("the CSS-pixel rung ignores the resolution valve (c3367bcd)", rungAt(sharp, T, 20) === rungAt(soft, T, 20));
-  ck("  ...where the render-pixel one does not — so it is never compared across frames",
-     rungAt(viewportPx(1800, 0.5, false), T, 20) !== rungAt(viewportPx(900, 1, false), T, 20));
+  ck("the render-px rung is the CSS one, scaled", rungPx(900, T, 20, 2) === 2 * rungAt(900, T, 20));
 }
 
 console.log("\n  the icon zoom:");
@@ -55,7 +54,7 @@ const ev = readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.met
 ck("no inline copy of pixels-per-metre is left", !/vpH\s*\/\s*\(2\s*\*/.test(ev));
 // The ladder moved to roomZoomSolver.ts (2.496.94) — the same rule, there.
 const zs = readFileSync(new URL("../../src/babylon/roomZoomSolver.ts", import.meta.url), "utf8");
-ck("the room-zoom solver walks the lattice with rungAt", /rungAt\(view\.vpH, tanV, radius\)/.test(zs) && !/vpH\s*\/\s*\(2\s*\*/.test(zs));
+ck("the room-zoom solver walks the lattice with the renderer's rung, in its unit", /rungPx\(view\.cssH, tanV, radius, view\.cssToGui\)/.test(zs) && !/vpH\s*\/\s*\(2\s*\*/.test(zs));
 
 done("✅ one scale, one rung, one zoom");
 

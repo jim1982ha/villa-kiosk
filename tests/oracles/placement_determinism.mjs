@@ -33,18 +33,18 @@ const item = (sx, sy, reach = 10, reachY = 6, category = "light") => ({
 // a tall thin pair and a wide flat pair must answer differently.
 console.log("  the collision rule:");
 const A = item(0, 0, 20, 4);
-ck("two badges far apart do not collide", !conflicts(A, item(500, 0, 20, 4), 2, 2));
-ck("two overlapping badges do", conflicts(A, item(5, 0, 20, 4), 2, 2));
+ck("two badges far apart do not collide", !conflicts(A, item(500, 0, 20, 4), 2));
+ck("two overlapping badges do", conflicts(A, item(5, 0, 20, 4), 2));
 ck("it is symmetric",
-   conflicts(A, item(5, 0, 20, 4), 2, 2) === conflicts(item(5, 0, 20, 4), A, 2, 2));
+   conflicts(A, item(5, 0, 20, 4), 2) === conflicts(item(5, 0, 20, 4), A, 2));
 // 30 apart horizontally: half-widths 20+20 = 40 > 30, so they collide.
 // 30 apart VERTICALLY: half-heights 4+4 = 8 < 30, so they must not.
 ck("width and height are judged separately, not as one radius",
-   conflicts(A, item(30, 0, 20, 4), 2, 2) && !conflicts(A, item(0, 30, 20, 4), 2, 2));
+   conflicts(A, item(30, 0, 20, 4), 2) && !conflicts(A, item(0, 30, 20, 4), 2));
 ck("a bigger gap collides sooner",
-   conflicts(A, item(44, 0, 20, 4), 6, 2) && !conflicts(A, item(44, 0, 20, 4), 1, 2));
+   conflicts(A, item(44, 0, 20, 4), 6) && !conflicts(A, item(44, 0, 20, 4), 1));
 ck("the scale knob inflates both requirements",
-   conflicts(A, item(60, 0, 20, 4), 2, 2, 2) && !conflicts(A, item(60, 0, 20, 4), 2, 2, 1));
+   conflicts(A, item(60, 0, 20, 4), 2, 2) && !conflicts(A, item(60, 0, 20, 4), 2, 1));
 
 /* ── the clique sweep is a pure function of its inputs ─────────────────── */
 // ⚠️ `order` IS THE CANONICAL RANKING, NOT INCIDENTAL INPUT ORDER. Permuting it
@@ -54,13 +54,13 @@ ck("the scale knob inflates both requirements",
 console.log("\n  the clique sweep:");
 const ITEMS = [item(0, 0), item(9, 0), item(18, 0), item(60, 0), item(69, 0)];
 const ORDER = [0, 1, 2, 3, 4];
-const once = JSON.stringify(buildCliques(ITEMS, ORDER, 2, 2, 4));
-const twice = JSON.stringify(buildCliques(ITEMS, ORDER, 2, 2, 4));
+const once = JSON.stringify(buildCliques(ITEMS, ORDER, 2, 4));
+const twice = JSON.stringify(buildCliques(ITEMS, ORDER, 2, 4));
 ck("the same inputs give the same cliques", once === twice);
 ck("it does not mutate the items it was given",
    ITEMS.every((it, i) => it.sx === [0, 9, 18, 60, 69][i]));
 
-const piles = buildCliques(ITEMS, ORDER, 2, 2, 4);
+const piles = buildCliques(ITEMS, ORDER, 2, 4);
 const seen = piles.flat().sort((a, b) => a - b);
 ck("every badge lands in exactly one pile",
    seen.length === ITEMS.length && new Set(seen).size === ITEMS.length);
@@ -69,7 +69,7 @@ ck("distant badges are not piled together",
 
 const capped = buildCliques(
   [item(0, 0), item(6, 0), item(12, 0), item(18, 0), item(24, 0)],
-  [0, 1, 2, 3, 4], 2, 2, 2);
+  [0, 1, 2, 3, 4], 2, 2);
 ck("a pile never exceeds the cap it was given",
    capped.every((p) => p.length <= 2));
 

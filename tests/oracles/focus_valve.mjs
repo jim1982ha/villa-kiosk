@@ -9,13 +9,13 @@ import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
-const { rungAt, viewportPx } = await import("@/babylon/badgeScale");
+const { rungAt, cssExtent } = await import("@/babylon/badgeScale");
 const { PHONE_MAX_CSS_WIDTH } = await import("@/babylon/badgeMetrics");
 const { RoomFocus } = await import("@/babylon/roomFocus");
 
 const tan = Math.tan(0.4);
 // The render height as Babylon sets it: truncated.
-const zoomAt = (cssH, hw, dist, withCanvas) => rungAt(viewportPx(Math.trunc(cssH / hw), hw, true, withCanvas ? cssH : undefined), tan, dist);
+const zoomAt = (cssH, hw, dist, withCanvas) => rungAt(cssExtent(Math.trunc(cssH / hw), hw, withCanvas ? cssH : undefined), tan, dist);
 
 let drops = 0, dropsHeadless = 0, n = 0;
 for (let cssH = 700; cssH <= 1300; cssH++) for (const hw of [0.625, 0.75, 0.8, 0.9, 1.25, 1.5]) for (const dist of [20, 27.5, 35, 42.5, 50]) {
@@ -25,7 +25,6 @@ for (let cssH = 700; cssH <= 1300; cssH++) for (const hw of [0.625, 0.75, 0.8, 0
 }
 ck(`with the canvas's CSS height the zoom is IDENTICAL at every valve level (${n} window × scale × zoom cases)`, drops === 0, drops);
 ck("  ...and without a canvas (headless), rounding up never reads 'farther' at scale ≤ 1", dropsHeadless === 0, dropsHeadless);
-ck("render pixels are untouched (the layout's own unit)", viewportPx(1262, 0.75, false, 947) === 1262);
 
 // The focus itself, driven: granted at the sharp level, then the pointer moves.
 const f = new RoomFocus();
@@ -38,16 +37,16 @@ g.grant(["swimming pool"]); g.step(zoomAt(752, 0.5, 35, true)); g.step(zoomAt(75
 ck("  ...while zooming OUT still ends it", g.size === 0, g.size);
 
 const ev = readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8");
-ck("the layout gives the rung the canvas's CSS height", /viewportPx\(engine\.getRenderHeight\(\), engine\.getHardwareScalingLevel\(\), cssPixels,\s*engine\.getRenderingCanvas\(\)\?\.clientHeight\)/.test(ev));
+ck("the layout gives the rung the canvas's CSS height", /cssExtent\(engine\.getRenderHeight\(\), engine\.getHardwareScalingLevel\(\), engine\.getRenderingCanvas\(\)\?\.clientHeight\)/.test(ev));
 // The SAME conversion answers "is this a phone" (2.496.187). It used to be
 // render width × hwScale, which truncation reads SHORT: a window one CSS px
 // above the phone limit read as a phone at some valve scales and regrouped
 // its badges with nothing moved.
 {
   const W = PHONE_MAX_CSS_WIDTH + 1, hw = 1.5, render = Math.trunc(W / hw);
-  ck("one px wider than a phone, read through the canvas: not a phone", viewportPx(render, hw, true, W) > PHONE_MAX_CSS_WIDTH, viewportPx(render, hw, true, W));
+  ck("one px wider than a phone, read through the canvas: not a phone", cssExtent(render, hw, W) > PHONE_MAX_CSS_WIDTH, cssExtent(render, hw, W));
   ck("  ...where render × hwScale read it as one", render * hw <= PHONE_MAX_CSS_WIDTH, render * hw);
 }
-ck("the phone test reads the canvas's CSS width the same way", /const cssWidth = viewportPx\(engine\.getRenderWidth\(\), engine\.getHardwareScalingLevel\(\), true,\s*engine\.getRenderingCanvas\(\)\?\.clientWidth\);/.test(ev));
+ck("the phone test reads the canvas's CSS width the same way", /const cssWidth = cssExtent\(engine\.getRenderWidth\(\), engine\.getHardwareScalingLevel\(\),\s*engine\.getRenderingCanvas\(\)\?\.clientWidth\);/.test(ev));
 
 done("✅ a tapped room stays open when the pointer moves");

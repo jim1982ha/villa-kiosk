@@ -45,7 +45,7 @@ console.log("\n  the caller:");
   const { readFileSync } = await import("node:fs");
   const ev = readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8");
   ck("cullLabels asks once, before grouping, with the zoom in CSS px",
-     /const suppressOthers = this\.focus\.size > 0\s*&& this\.focus\.step\(this\.quantisedPixelsPerWorldUnit\(shown, true\)\);/.test(ev));
+     /const suppressOthers = this\.focus\.size > 0\s*&& this\.focus\.step\(this\.cssRung\(shown\)\);/.test(ev));
   ck("  ...and keeps no lifetime rule of its own", !/focusedAtZoom|focusedRooms/.test(ev));
   ck("a tap grants through it", /if \(!this\.focus\.grant\(/.test(ev));
 }

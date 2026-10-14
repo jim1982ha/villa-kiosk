@@ -55,6 +55,18 @@ export interface FrameDecision {
 
 const NOTHING: FrameDecision = { render: false, sample: false, flush: false };
 
+/** Does this pointer event move the view (a drag, a pinch, a wheel, a tap)? A
+ *  pointer MOVING WITH NO BUTTON HELD — a mouse or a pen hovering — does not.
+ *
+ *  ⚠️ IT DID, AND THE BADGES REGROUPED UNDER IT (owner, 2026-10-14, the third
+ *  report). Every hover move was motion: the picture dropped to the motion
+ *  resolution and sharpened again once the mouse stopped, and the badge layout
+ *  ran at both. The layout no longer depends on the resolution (badgeScale's
+ *  CSS-px rung); this stops a hover from touching the picture at all. */
+export function movesTheView(isMove: boolean, buttons: number): boolean {
+  return !isMove || buttons !== 0;
+}
+
 export class FrameScheduler implements FrameRequests {
   private repaintUntil = 0;
   private animateUntil = 0;

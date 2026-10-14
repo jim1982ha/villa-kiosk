@@ -1,3 +1,14 @@
+## 2.496.346
+
+### Fixed
+- Moving the mouse over the villa no longer changes the badges. A room's chip used to open into its devices while the mouse moved and close again when it stopped. Two things caused it, both fixed:
+  - a plain mouse movement (no button pressed) counted as moving the view, so the picture dropped to a lower sharpness while the mouse moved and sharpened again when it stopped. Only dragging, scrolling and touching count now;
+  - the badge grouping was worked out in the screen's drawing pixels, which change with that sharpness, and a room sitting right at its grouping limit came out differently at the two. It is now worked out in screen points, which the sharpness cannot change, so the grouping is the same at any sharpness, still or dragging.
+- The earlier fixes for "badges change under the mouse" (2.496.332, 2.496.337) fixed a different problem (a new layout not drawn until the next movement) and stay.
+
+### Changed
+- A room's badges are grouped into its chip only when the badges as drawn would overlap (keeping a 2-point gap). Before, they were also grouped whenever two badge centres were closer than a tap target (44 points on a touch screen, 24 with a mouse), even with clear space visibly between them. A tap still opens the badge under your finger.
+
 ## 2.496.345
 
 ### Changed

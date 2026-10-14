@@ -18,8 +18,8 @@ const { GROUP_ZOOM_STEPS_PER_DOUBLING } = await import("@/babylon/badgeMetrics")
 
 // Looking straight down: screen x = world x, screen y = −world z.
 const down = { rx: 1, rz: 0, ax: 0, az: 1, sinPhi: 1, cosPhi: 0, mode: "plane" };
-const view = (o = {}) => ({ vpH: 1000, vpW: 1600, vFov: 0.8, frame: down, grouping: down, cx: 0, cy: 0, cz: 0, minRadius: 2, maxRadius: 20, ...o });
-const spacing = { gapPx: 6, minSepPx: 40, allow: 1 };
+const view = (o = {}) => ({ vpH: 1000, vpW: 1600, cssH: 1000, cssToGui: 1, vFov: 0.8, frame: down, grouping: down, cx: 0, cy: 0, cz: 0, minRadius: 2, maxRadius: 20, ...o });
+const spacing = { gapPx: 6, allow: 1 };
 const badge = (x, z, mine = true, half = 24) => ({ wx: x, wy: 1, wz: z, mine, halfW: half, halfH: half, cy: 0 });
 const step = 2 ** (1 / GROUP_ZOOM_STEPS_PER_DOUBLING);
 /** The widest lattice rung at or below `r` — what "the room's own fit" is on the ladder. */
@@ -35,7 +35,7 @@ console.log("  the shot frames the ROOM (2.424.0, 2.426.0):");
   for (let k = Math.floor(Math.log2(2) * 12); k <= Math.ceil(Math.log2(20) * 12); k++) {
     const rad = 2 ** (k / 12); if (rad < 2 || rad > 20) continue;
     const px = rungAt(1000, Math.tan(0.4), rad);
-    if (Math.abs(1 * px) - 2 * 24 >= 40 && tightest === null) tightest = rad;
+    if (Math.abs(1 * px) - 2 * 24 >= 6 && tightest === null) tightest = rad;
   }
   ck("the OLD 'tightest clean rung' dives well inside the room's fit", tightest !== null && tightest < 20 / 1.5, tightest);
   ck("the shot is the room's own fit — the widest rung that frames it", r && Math.abs(r.radius - rungBelow(20)) < 1e-9, r);

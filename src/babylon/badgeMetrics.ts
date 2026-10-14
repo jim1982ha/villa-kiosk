@@ -352,25 +352,11 @@ export interface BadgeMetrics {
   /** Floor on pickBadgeAt's hit-area expansion, so a badge already at or above
    *  --touch-min still forgives a slightly-off tap. */
   tapSlopMinPx: number;
-  /**
-   * Floor on centre-to-centre distance between two drawn badges.
-   *
-   * The principled cluster radius, and the reason it is here rather than
-   * copied from a map library (Supercluster ships 40px, Mapbox GL JS 50,
-   * Leaflet 80 — all tuned for a mouse): two controls stop being
-   * independently tappable at exactly the point where their TOUCH TARGETS
-   * merge, whatever their painted size.
-   *
-   * So it is the tap target, and nothing more. 2.232.0 shipped Material's
-   * 56dp comfort PITCH (48dp target + 8dp spacing) and that was wrong twice
-   * over: 56 exceeds the target `pickBadgeAt` actually resolves against, and
-   * it dominated the badge-geometry term at every setting — so grouping was
-   * driven by this constant rather than by how big the badges are, roughly
-   * 1.8x more eagerly than 2.231.0. The fine value is WCAG 2.5.8's spacing
-   * exception (an undersized target needs 24 CSS px between centres), which
-   * is the real floor for a pointer that does not have a fingertip.
-   */
-  minCentrePitchPx: number;
+  // `minCentrePitchPx`, a floor on the distance between two badge centres (the
+  // tap target: 44 touch / 24 mouse), is GONE (owner, 2026-10-14: "a room chip
+  // shall only appear when there is entity overlap"). It grouped badges with
+  // clear space visibly between them. Grouping is the drawn boxes plus
+  // `minGapPx`, nothing else; a tap stays a badge's own (pickBadgeAt).
 
   // ── Summaries: the room chip and the entity group ────────────────────────
   // Sized FROM the badge rather than independently. They stand in for badges,
@@ -586,14 +572,6 @@ const COARSE: BadgeMetrics = {
   // wanted, it needs a reason this comment does not already cover.
   minGapPx: 2,
   tapSlopMinPx: 10,
-  // Apple's 44pt hit region, which is also this app's --touch-min.
-  //
-  // ⚠️ NOT the same question as `EntityVisuals.TOUCH_MIN_CSS_PX`, which shares
-  // the number: that one expands ONE badge's hit AREA, this one is the floor on
-  // the DISTANCE BETWEEN TWO CENTRES before the solver groups them — which is
-  // why this drops to 24 on a fine pointer (see FINE) and that one stays flat.
-  // Deliberately not converged; see the block at TOUCH_MIN_CSS_PX for why.
-  minCentrePitchPx: 44,
   countPillFraction: 0.58,
   countFontFraction: 0.78,
   textOpticalTopEm: 0.105,
@@ -624,10 +602,9 @@ const MIN_VALUE_FONT_PX = 6;
  * Derive one metrics table from another by scaling the GEOMETRY only.
  *
  * Everything that describes drawn size scales together, because the collision
- * box has to keep agreeing with the art. Three things deliberately do not:
+ * box has to keep agreeing with the art. Two things deliberately do not:
  * `minGapPx` (clear space between two badges is about legibility, not badge
- * size), `minCentrePitchPx` (an accessibility floor in real screen pixels),
- * and the value fonts, which are clamped so a smaller badge does not produce
+ * size) and the value fonts, which are clamped so a smaller badge does not produce
  * unreadable text.
  */
 function scaleGeometry(base: BadgeMetrics, k: number): BadgeMetrics {
@@ -662,7 +639,6 @@ function scaleGeometry(base: BadgeMetrics, k: number): BadgeMetrics {
     ringThicknessPx: Math.max(1, px(base.ringThicknessPx)),
     minGapPx: base.minGapPx,
     tapSlopMinPx: base.tapSlopMinPx,
-    minCentrePitchPx: base.minCentrePitchPx,
     countPillFraction: base.countPillFraction,
     countFontFraction: base.countFontFraction,
     textOpticalTopEm: base.textOpticalTopEm,
@@ -680,15 +656,10 @@ function scaleGeometry(base: BadgeMetrics, k: number): BadgeMetrics {
  * VISUAL size stays 32px and the TOUCH target is expanded to 44 … which is
  * what the accessibility guidance actually measures").
  *
- * 32 px painted with a 32 px pitch stays clear of the 24 px floor while fitting
- * roughly 1.9× the badges per unit area that the coarse table does.
+ * 32 px painted fits roughly 1.9× the badges per unit area that the coarse
+ * table does.
  */
-const FINE: BadgeMetrics = {
-  ...scaleGeometry(COARSE, 32 / 44),
-  // WCAG 2.5.8's spacing exception: an undersized target is acceptable when a
-  // 24 CSS px circle centred on each does not intersect its neighbour's.
-  minCentrePitchPx: 24,
-};
+const FINE: BadgeMetrics = scaleGeometry(COARSE, 32 / 44);
 
 export function badgeMetricsFor(pointer: PointerClass): BadgeMetrics {
   return pointer === "coarse" ? COARSE : FINE;

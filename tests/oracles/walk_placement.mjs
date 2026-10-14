@@ -47,7 +47,7 @@ const solveAt = (headingRad) => {
     const it = onGlass(c, m.x, m.y, m.z, { halfW: 22, halfH: 22, cy: -30 }, scratch, { sx: 0, sy: 0, sz: 0, reach: 0, reachY: 0 });
     return { ...it, rank: i % 3, sortKey: `dev.${String(i).padStart(2, "0")}`, category: cats[i % 4], room: `room${i % 5}`, exempt: false };
   });
-  const r = solvePlacement(items, 4, 40, "priority", createPlacementScratch(), 4);
+  const r = solvePlacement(items, 4, "priority", createPlacementScratch(), 4);
   const acc = items.filter((_, i) => r.accepted[i]).map((x) => x.sortKey).join(",");
   const bk = r.buckets.slice(0, r.bucketCount).map((b) => b.members.map((i) => items[i].sortKey).sort().join("+")).sort().join("|");
   return { sig: `${acc} // ${bk}`, buckets: r.bucketCount, big: r.buckets.slice(0, r.bucketCount).some((b) => b.members.length > 1) };
