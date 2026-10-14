@@ -10,7 +10,7 @@ import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
-const { dismissedEntitySet, orphanObjects } = await import("@/config/dismissedEntities");
+const { dismissedEntitySet, orphanObjects, inventoryGaps } = await import("@/config/dismissedEntities");
 const { villaDevices, deviceFolding } = await import("@/config/deviceGroups");
 const { effectiveMapped, visibleTo } = await import("@/config/villaVisibility");
 const { buildAttentionItems, attentionFor } = await import("@/config/attention");
@@ -30,8 +30,8 @@ ck("  ...while a plain row's still does (a stale row, not in the model)", dis.ha
 console.log("\n  reported everywhere:");
 const mapped = effectiveMapped(scene, {}, dis);
 const folding = deviceFolding({}, [], {});
-const d = villaDevices({ entityMap: {}, deviceGroups: [], dismissedEntityIds: dismissed, mappedEntityIds: mapped,
-  sceneEntityIds: scene, entities, entityDeviceIds: {}, folding });
+const d = villaDevices({ entityMap: {}, deviceGroups: [], dismissed: dis, mappedEntityIds: mapped,
+  entities, entityDeviceIds: {}, folding });
 ck("it is one of the villa's devices, and an unavailable one", d.has(TV) && d.unavailable.includes(TV), d.unavailable);
 const items = buildAttentionItems({ unavailableIds: d.unavailable, entities, entityMap: {}, alertThresholds: {},
   resolvedRooms: {}, fmData: emptyFm, selectableIds: d.ids, folding });
@@ -45,8 +45,17 @@ ck("\"not in Home Assistant\" is said only once HA's list is loaded", missingFro
 console.log("\n  the screens:");
 const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
 const ed = src("components/settings/ConfigEditor.tsx"), notice = src("components/panels/UnavailableNotice.tsx");
-ck("Settings' \"Remove N\" never counts an object the model names",
-   /filter\(\(id\) => !entities\[id\] && !sceneEntityIds\.has\(id\)\)/.test(ed));
+{
+  // Settings' "Remove N" and its orphan list: the villa model's ONE answer (inventoryGaps), by value
+  const gaps = inventoryGaps({ rowIds: [TV, "sensor.old_row", "light.a"], sceneEntityIds: scene, inHa: (id) => !!entities[id],
+    meshBindings: {}, haReady: true });
+  ck("Settings' \"Remove N\" never counts an object the model names — only a plain stale row",
+     gaps.stale.join() === "sensor.old_row", gaps);
+  ck("  ...and nothing at all is called missing before Home Assistant's list is loaded",
+     JSON.stringify(inventoryGaps({ rowIds: ["sensor.old_row"], sceneEntityIds: scene, inHa: () => false, meshBindings: {}, haReady: false }))
+     === JSON.stringify({ stale: [], orphans: [] }));
+  ck("  ...the screen reads that answer, never its own", /= villa\.settings;/.test(ed) && !/orphanObjects\(|dismissedEntitySet\(/.test(ed));
+}
 ck("  ...and a row of the model has no bin", /onRemove=\{sceneEntityIds\.has\(key\) \? undefined : remove\}/.test(ed));
 ck("the device's window says it is not in Home Assistant, and what to do",
    /missingFromHa\(entities, entityId\)/.test(notice) && /NOT_IN_HA/.test(notice) && /Rename or remove its object in the 3D model/.test(notice));

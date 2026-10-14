@@ -9,7 +9,7 @@ const readers = ["components/hud/HUD.tsx", "components/hud/SummaryBar.tsx", "com
   "components/fm/FacilitySections.tsx", "components/panels/SummaryGroupPanel.tsx"];
 const threaded = readers.filter((f) => /mappedEntityIds[=:]\s*(\{|Set<)/.test(src(f).replace(/\/\/.*$|\/\*[\s\S]*?\*\//gm, "")));
 ck("no reader takes or passes mappedEntityIds as a prop", threaded.length === 0, threaded);
-ck("the Dashboard provides the model once, from the villa's own sets", /<VillaModelProvider sets=\{villaSets\}>/.test(src("pages/Dashboard.tsx")) && /const villaSets = useVillaSets\(mappedEntityIds\);/.test(src("pages/Dashboard.tsx")));
+ck("the Dashboard provides the model once, from the villa's own sets", /<VillaModelProvider sets=\{villaSets\}>/.test(src("pages/Dashboard.tsx")) && /const villaSets = useVillaSets\(sceneEntityIds\);/.test(src("pages/Dashboard.tsx")));
 const hook = src("components/cockpit/useVillaAttention.ts");
 ck("the attention count is the model's — computed once, for the HUD badge and the Cockpit alike",
    /const \{ attention, visibleTo \} = useVillaModel\(\);/.test(hook) && !/buildAttentionItems\(/.test(hook) && /buildAttentionItems\(/.test(src("config/VillaModel.tsx")));

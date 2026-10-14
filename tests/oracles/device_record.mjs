@@ -27,8 +27,9 @@ ck("  ...by its id, its room, a linked object; case-insensitive",
 ck("  ...an empty search finds everything", D.rowMatches(patio, "  ", "x", ""));
 
 const ed = readFileSync(new URL("../../src/components/settings/ConfigEditor.tsx", import.meta.url), "utf8");
-ck("Advanced Settings lists deviceRows and filters with rowMatches on the shown name (no own list rule)",
-   /deviceRows\(config\.entityMap, config\.meshBindings, dismissedSet\)/.test(ed)
+ck("Advanced Settings lists the villa model's deviceRows and filters with rowMatches on the shown name (no own list rule)",
+   /const \{ rows: allRows, stale: staleIds, orphans: orphanIds \} = villa\.settings;/.test(ed)
+   && /deviceRows\(entityMap, config\.meshBindings, dismissedIds\)/.test(readFileSync(new URL("../../src/config/VillaModel.tsx", import.meta.url), "utf8"))
    && /rowMatches\(r, search, entityLabel\(r\.id\),/.test(ed) && !/boundEntityIds/.test(ed));
 
 done("✅ one device list: every device once, found by the name it shows");

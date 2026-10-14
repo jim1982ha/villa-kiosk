@@ -112,7 +112,7 @@ console.log("\n  a removed device's 3D object, pointed at another entity:");
   // pin the caller (2.496.327 tested its rule and asked the wrong list): the screen asks with the MODEL's objects
   const ed = readFileSync(new URL("../../src/components/settings/ConfigEditor.tsx", import.meta.url), "utf8");
   ck("Advanced Settings asks with the model's objects and re-points them all",
-     /orphanObjects\(sceneEntityIds,/.test(ed) && /useVillaModel\(\)/.test(ed) && /repointDevice\(id, to,/.test(ed) && /repointDevice\(oldKey, newId,/.test(ed));
+     /orphans: orphanIds \} = villa\.settings/.test(ed) && /useVillaModel\(\)/.test(ed) && /repointDevice\(id, to,/.test(ed) && /repointDevice\(oldKey, newId,/.test(ed));
 }
 
 console.log("\n  two edits in the same moment:");

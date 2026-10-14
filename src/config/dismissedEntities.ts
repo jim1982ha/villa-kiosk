@@ -50,6 +50,31 @@ export function orphanObjects(
 }
 
 /**
+ * What Advanced Settings must say is missing, decided ONCE for every screen (architecture review, 2026-10-14): the
+ * rule "Home Assistant does not have it, and is it the model's?" was written three times (the dismissal, the orphan
+ * list, the "Remove N" banner), and only the screen knew to wait for Home Assistant's list before answering.
+ *   stale   — stored rows Home Assistant does not have and the model does not name: "Remove N" may remove them;
+ *   orphans — objects the model names whose entity Home Assistant does not have, pointed at nothing it has, with no
+ *             row of their own: listed with "Point it there", never removable (the model is the ground truth).
+ * Both EMPTY until Home Assistant's list is loaded: an empty list is "not yet", and offering to remove every row at
+ * that moment would be a catastrophic false positive.
+ */
+export function inventoryGaps(o: {
+  rowIds: readonly string[];
+  sceneEntityIds: ReadonlySet<string>;
+  inHa: (id: string) => boolean;
+  meshBindings: Readonly<Record<string, string>>;
+  haReady: boolean;
+}): { stale: string[]; orphans: string[] } {
+  if (!o.haReady) return { stale: [], orphans: [] };
+  const rows = new Set(o.rowIds);
+  return {
+    stale: o.rowIds.filter((id) => !o.inHa(id) && !o.sceneEntityIds.has(id)),
+    orphans: orphanObjects(o.sceneEntityIds, o.inHa, o.meshBindings).filter((id) => !rows.has(id)),
+  };
+}
+
+/**
  * Removing a device, as ONE operation that cannot be half-performed.
  *
  * ⚠️ THE RULE WAS CENTRALISED FOR READING AND SCATTERED FOR WRITING, AND THAT

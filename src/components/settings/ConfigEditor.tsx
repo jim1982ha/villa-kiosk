@@ -20,9 +20,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ShowAll, useTruncated } from "@/components/common/TruncatedList";
 import { Search } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
-import { dismissedEntitySet, orphanObjects } from "@/config/dismissedEntities";
 import { forgetMappings, patchMapping, repointDevice } from "@/config/mappingEdits";
-import { deviceRows, rowMatches } from "@/config/deviceRecord";
+import { rowMatches } from "@/config/deviceRecord";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useHA } from "@/ha/HAStateStore";
 import { useVillaModel } from "@/config/VillaModel";
@@ -31,9 +30,10 @@ import EntityPicker from "./EntityPicker";
 import type { EntityMapping } from "@/types/scene.types";
 
 export default function ConfigEditor({ initialSearch }: { initialSearch?: string } = {}) {
-  const { config, update, resolvedRooms } = useConfig();
-  const { entities, connected } = useHA();
-  const { sceneEntityIds } = useVillaModel();
+  const { update, resolvedRooms } = useConfig();
+  const { entities } = useHA();
+  const villa = useVillaModel();
+  const { sceneEntityIds } = villa;
   // Seed the filter when opened from a device panel's edit shortcut, so that
   // entity's row is shown immediately.
   const [search, setSearch] = useState(initialSearch ?? "");
@@ -67,35 +67,12 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Dismissed-and-still-absent-from-HA entities are filtered out entirely (see
-  // AppConfig.dismissedEntityIds) — except an object the 3D model names, which
-  // is never dismissed (dismissedEntities: the model is the ground truth).
-  const dismissedSet = useMemo(
-    () => dismissedEntitySet(config.dismissedEntityIds, entities, sceneEntityIds),
-    [config.dismissedEntityIds, entities, sceneEntityIds],
-  );
-  // EVERY stored device, hand-linked or not — one row each (config/deviceRecord). A device bound
-  // to an object used to leave this list for the Villa tab's, with the same fields.
-  const allRows = useMemo(
-    () => deviceRows(config.entityMap, config.meshBindings, dismissedSet),
-    [config.entityMap, config.meshBindings, dismissedSet],
-  );
-  // Entries Home Assistant has never heard of. This map only ever GREW —
-  // auto-detection adds a row for any mesh named like an entity ID and nothing
-  // has ever removed one — so renaming or deleting an entity in HA leaves its
-  // old row here for good, long after both the entity and its mesh are gone.
-  // Reported from the field as rows for entities that "don't exist anymore in
-  // HA and aren't in the GLB either".
-  //
-  // Guarded on a live, populated snapshot: while HA is reconnecting `entities`
-  // is empty, and offering to delete the ENTIRE map at that moment would be a
-  // catastrophic false positive.
-  const haReady = connected && Object.keys(entities).length > 0;
-  const staleIds = useMemo(() => {
-    if (!haReady) return [] as string[];
-    // An object the 3D model names is never "removed" here — it is listed below with "Point it there".
-    return allRows.map((r) => r.id).filter((id) => !entities[id] && !sceneEntityIds.has(id));
-  }, [haReady, allRows, entities, sceneEntityIds]);
+  // EVERY stored device, one row each (config/deviceRecord), and what is missing — the villa model's ONE answer
+  // (dismissedEntities.inventoryGaps): `staleIds` are rows Home Assistant does not have and the model does not name
+  // ("Remove N"); `orphanIds` objects the model names whose entity Home Assistant does not have (never removable,
+  // listed below with "Point it there"). Both empty until Home Assistant's list is loaded. This screen wrote that
+  // rule itself until 2.496.351 — a third copy beside the dismissal and the orphan list.
+  const { rows: allRows, stale: staleIds, orphans: orphanIds } = villa.settings;
   const staleSet = useMemo(() => new Set(staleIds), [staleIds]);
 
   // Both Remove buttons on this screen go through the ONE operation — see
@@ -154,12 +131,9 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
   // (dismissedEntities.orphanObjects). It used to appear only when its exact id was typed in the search (owner,
   // 2026-10-14). The search narrows the cards like the rows. Only while HA's list is loaded.
   const orphans = useMemo(() => {
-    if (!haReady) return [] as string[];
-    const rowIds = new Set(allRows.map((r) => r.id));
     const q = search.trim().toLowerCase();
-    return orphanObjects(sceneEntityIds, (id) => !!entities[id], config.meshBindings)
-      .filter((id) => !rowIds.has(id) && (!q || id.toLowerCase().includes(q)));
-  }, [haReady, allRows, search, sceneEntityIds, entities, config.meshBindings]);
+    return orphanIds.filter((id) => !q || id.toLowerCase().includes(q));
+  }, [orphanIds, search]);
   const [repointTo, setRepointTo] = useState<Record<string, string | undefined>>({});
   const repoint = useCallback((id: string) => {
     const to = repointTo[id];

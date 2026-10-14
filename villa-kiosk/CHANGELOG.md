@@ -1,3 +1,8 @@
+## 2.496.351
+
+### Changed
+- Behind the screens, nothing changes on screen: which devices exist, which are missing from Home Assistant and which were removed is now worked out once, for the map, Cockpit → Live issues and Advanced Settings alike. Advanced Settings used to work out its own "no longer in Home Assistant" and "Point it there" lists, a third copy of the rule beside the other two; it now shows the same answer as every other screen, and still waits for Home Assistant's list to load before calling anything missing. This keeps a problem like the TV's (a device shown on one screen and missing from another) from coming back.
+
 ## 2.496.350
 
 ### Changed
