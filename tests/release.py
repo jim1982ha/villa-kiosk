@@ -126,7 +126,14 @@ with tempfile.TemporaryDirectory() as t:
     repo = sandbox(Path(t))
 
     code, calls, err = run_ship(repo)
-    ck("refused when the changelog is not staged", code is None and "not staged" in err, err)
+    ck("nothing new, the top version already published: says so, exit 0, no gate (2026-10-14)",
+       code == 0 and not calls, (code, err))
+
+    (repo / "notes.txt").write_text("a change\n")
+    sh(repo, "git", "add", "notes.txt")
+    code, calls, err = run_ship(repo)
+    ck("refused when something is staged but the changelog is not", code is None and "not staged" in err, err)
+    sh(repo, "git", "rm", "-q", "--cached", "notes.txt"); (repo / "notes.txt").unlink()
 
     (repo / "villa-kiosk/CHANGELOG.md").write_text("## 1.0.0\n\n- again\n\n## 1.0.0\n")
     sh(repo, "git", "add", "villa-kiosk/CHANGELOG.md")
@@ -161,6 +168,10 @@ with tempfile.TemporaryDirectory() as t:
        set(sh(repo, "git", "show", "--name-only", "--format=", pushed).split())
        == {"villa-kiosk/CHANGELOG.md", "villa-kiosk/config.yaml", "package.json", "package-lock.json"})
     ck("  ...and it is on origin/dev2", sh(repo, "git", "rev-parse", "origin/dev2").strip() == pushed)
+    calls_before = len(calls)
+    code, calls, err = run_ship(repo, wait=0.05)
+    ck("run again with nothing new: \"already committed and pushed, not published\" (exit 3) — never \"not staged\"",
+       code == 3 and not calls and "not staged" not in err, (code, err))
 
     (repo / "villa-kiosk/CHANGELOG.md").write_text("## 1.0.2\n\n- next\n\n" + (repo / "villa-kiosk/CHANGELOG.md").read_text())
     sh(repo, "git", "add", "villa-kiosk/CHANGELOG.md")
@@ -177,6 +188,9 @@ with tempfile.TemporaryDirectory() as t:
     code, calls, err = run_ship(repo, message="second", wait=0.5)
     stop.set(); ci.join()
     ck("published: exit 0 only once main's channel manifest names the version", code == 0 and calls, (code, err))
+    code, calls, err = run_ship(repo)
+    ck("run again after it published: \"already published\", exit 0, no gate run, nothing committed",
+       code == 0 and not calls and sh(repo, "git", "log", "-1", "--format=%s").strip() == "second", (code, err))
 
     sh(repo, "git", "checkout", "-q", "-B", "main", "origin/main")
     code, calls, err = run_ship(repo)
