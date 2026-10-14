@@ -1,3 +1,13 @@
+## 0.12.190
+
+What you will see:
+- A Wi-Fi relay that keeps dropping is one fault that stays the same fault. The night check used to file it under
+  whichever of the relay's parts dropped first that night (its switch one night, its uptime sensor the next), so the
+  fault closed and a new one opened, and the one left open kept the words of its first night. On the villa the
+  House & Pool relay's fault still said "10 times … Wi-Fi or power" under a technical name; it really dropped 30
+  times in 3 days and never restarted, so it is its Wi-Fi. After tonight's check the old fault closes by itself and
+  the new one reads "House & Pool Relay dropped and reconnected 30 times in 3 days: a Wi-Fi problem on its side".
+
 ## 0.12.189
 
 What you will see: nothing — this release changes only how the app is built and tested, not what it does.
