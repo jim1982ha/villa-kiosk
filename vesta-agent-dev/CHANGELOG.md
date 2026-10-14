@@ -1,3 +1,11 @@
+## 0.12.197
+
+What you will see (with VESTA Kiosk 2.496.356 or later):
+- A fault that came from an alert now shows on its Cockpit card what happened about it on Telegram: each reminder
+  sent, each escalation sent, and a "Need help" press, with its time. The Overview card shows the latest one under the
+  fault; the Tickets tab lists them all. The card catches up within 5 minutes. An older Kiosk gets none of this and
+  shows nothing different.
+
 ## 0.12.196
 
 What you will see:
