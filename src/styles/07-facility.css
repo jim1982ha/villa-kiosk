@@ -359,7 +359,8 @@
   flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 14px;
   background: none; border: none; padding: 0; color: inherit; font: inherit; text-align: left; cursor: pointer;
 }
-.fm-headline-toggle > svg { flex: 0 0 auto; margin-left: auto; color: var(--text-secondary); }
+/* the chevron right after the words, where the eye reads "this opens" (owner, 2026-10-14) — not at the far end */
+.fm-headline-toggle > svg { flex: 0 0 auto; color: var(--text-secondary); }
 .fm-headline-text { display: flex; flex-direction: column; gap: 2px; }
 .fm-headline strong { font-size: var(--text-lg); }
 .fm-headline.warn {
