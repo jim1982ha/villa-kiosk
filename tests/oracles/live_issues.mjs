@@ -10,7 +10,7 @@ register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const E = await import("@/fm/fmEngine");
 const { ticketGroups } = await import("@/fm/ticketGroups");
-const { groupAttention, cardActions } = await import("@/config/attention");
+const { groupAttention, cardActions, attentionLineIn } = await import("@/config/attention");
 const { screenReducer, START } = await import("@/pages/screen");
 
 const k = { now: "2026-10-14T10:00:00.000Z", id: (p) => `${p}-${Math.random().toString(36).slice(2, 8)}` };
@@ -90,6 +90,25 @@ ck("  ...and the same in the Tickets tab", /<strong>\{faultTitle\(t\)\}<\/strong
 ck("  ...a number that is not one (0, text) is not shown", E.faultTitle({ title: "x", alertNumber: 0 }) === "x" && E.faultTitle({ title: "x", alertNumber: "5" }) === "x");
 
 const ov = readFileSync(new URL("../../src/components/cockpit/CockpitOverview.tsx", import.meta.url), "utf8");
+console.log("\n  an offline device is ONE line (owner, 2026-10-14: the same Timmerflotte said \"Unavailable\" and \"offline for 9 h\"):");
+const ent = (id, state) => ({ entity_id: id, state, attributes: {}, last_changed: "", last_updated: "" });
+const offlineDevice = (batteryState) => groupAttention(buildAttentionItems({
+  unavailableIds: ["sensor.example_temperature"],
+  entities: { "sensor.example_temperature": ent("sensor.example_temperature", "unavailable"),
+              "sensor.example_battery": ent("sensor.example_battery", batteryState) },
+  entityMap: {}, alertThresholds: {}, resolvedRooms: {}, selectableIds: [],
+  folding: new Map([["sensor.example_battery", "sensor.example_temperature"]]),
+  fmData: fm([{ ...rec("off", "sensor.example_battery"), title: "Example has been offline for 9 h." }]) }));
+const [one] = offlineDevice("unavailable");
+ck("the fault on another entity of the device, itself unavailable, goes onto the device's Unavailable line",
+   one.items.length === 1 && one.items[0].kind === "unavailable" && one.items[0].fault?.ticketId === "off"
+   && attentionLineIn(one, one.items[0]) === "Unavailable — Example has been offline for 9 h.", one.items.map((i) => i.id));
+ck("  ...its Close and Open ticket still act on it", cardActions(one)?.close.join() === "off");
+const [two] = offlineDevice("42");
+ck("  ...a fault on an entity that still reports (a battery reading 42 %) stays its own line", two.items.length === 2, two.items.map((i) => i.id));
+const [unknownValue] = offlineDevice("unknown");
+ck("  ...and \"unknown\" (a sensor with no value) is not offline: its own line", unknownValue.items.length === 2);
+
 console.log("\n  what happened on Telegram, on the card (owner, 2026-10-14: reminders, escalation, Need help):");
 const N = await import("@/fm/faultNotes");
 const told = { ...rec("s", "switch.pump"), status: "open", updates: [

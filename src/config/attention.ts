@@ -47,6 +47,9 @@ export interface AttentionItem {
   device?: { key: string; label: string; room?: string };
   /** The open fault about this very entity, when this item is its live state (groupAttention): one problem, not two. */
   fault?: AttentionItem;
+  /** Set on a fault whose entity Home Assistant reports "unavailable" right now: its device is offline, and so is
+   *  what the fault is about — it goes onto the device's Unavailable line (mergeFaults). */
+  offline?: boolean;
   /** Set on a fault: what last happened about it on Telegram (faultNotes.lastNoted — "Escalation sent to Owner"). */
   latest?: { note: string; at: string };
 }
@@ -160,12 +163,17 @@ export function lineIcon(group: AttentionGroup, item: AttentionItem): AttentionK
 }
 
 /**
- * A fault about the SAME entity whose live state is already listed is that state's fault, not a second problem.
+ * A fault about the SAME entity whose live state is already listed is that state's fault, not a second problem — and
+ * so is a fault about ANOTHER entity of the device when that entity is unavailable too (`offline`): the device is off.
  *
  * ⚠️ ONE PROBLEM, ONE LINE (owner, 2026-10-10: "why do we see 2 lines for the same issue?"): the laundry door read
  * "Unlocked" (its live state) and "Open fault: Laundry Room door unlocked" (the agent's ticket for the VESTA rule's
  * alert about it); an offline pump plug read "Unavailable" and "Open fault: … offline for 9 h". The fault goes onto
  * the live line (`fault`), which keeps its Close. A fault on another entity of the device stays its own line.
+ *
+ * ⚠️ THE SAME OFFLINE DEVICE, TWO LINES (owner, 2026-10-14): a Timmerflotte sensor read "Unavailable" (its temperature,
+ * the entity the model shows) and "Timmerflotte_5969 has been offline for 9 h." (the night check's fault, on another of
+ * its entities) — every one of its nine entities was unavailable. Told by Home Assistant's state, never by the words.
  */
 function mergeFaults(items: AttentionItem[]): AttentionItem[] {
   // copies: the villa model's items are shared by every render and profile — a fault written onto one would stay
@@ -173,9 +181,12 @@ function mergeFaults(items: AttentionItem[]): AttentionItem[] {
   const out = items.map((i) => ({ ...i, fault: undefined }) as AttentionItem);
   const live = new Map(out.filter((i) => (i.kind === "alarm" || i.kind === "unavailable") && i.entityId)
     .map((i) => [i.entityId as string, i]));
+  const offlineLine = out.find((i) => i.kind === "unavailable");
   return out.filter((i) => {
-    const state = i.kind === "fault" && i.entityId ? live.get(i.entityId) : undefined;
-    if (!state || state.fault) return true;
+    if (i.kind !== "fault") return true;
+    const own = i.entityId ? live.get(i.entityId) : undefined;
+    const state = own && !own.fault ? own : !own && i.offline && offlineLine && !offlineLine.fault ? offlineLine : undefined;
+    if (!state) return true;
     state.fault = i;
     return false;
   });
@@ -246,6 +257,7 @@ export function buildAttentionItems(opts: {
       ticketId: t.id,
       stage,
       latest: lastNoted(t),
+      offline: !!t.entityId && entities[t.entityId]?.state === "unavailable",
     });
   }
 
