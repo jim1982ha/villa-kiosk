@@ -1,3 +1,8 @@
+## 2.496.358
+
+### Changed
+- Cockpit → Open issues: an offline device's line no longer starts with "Unavailable — ": it reads "Timmerflotte_5969 has been offline for 9 h." (the fault already says the device is offline). "Not in Home Assistant — …" and a live reading ("92 % — …") are kept: they say something the fault does not.
+
 ## 2.496.357
 
 ### Fixed
