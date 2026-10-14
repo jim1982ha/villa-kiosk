@@ -1,3 +1,10 @@
+## 2.496.362
+
+### Changed
+- Cockpit → Recap: the readiness card about faults no longer contradicts itself ("No open faults or tickets" over "5 still open"). It now says what is found — "4 detected faults (1 open ticket)" — and where to deal with them: "Check the faults in "Overview", or the open tickets in "Tickets"", with the faults' own icons (the same as on the Overview) after "Check the". With nothing open it still reads "No open faults or tickets".
+- Cockpit → Recap: the six checks are folded under "Ready" / "Not ready" when the tab opens; a tap on that card shows them, a second tap folds them.
+- Cockpit → Overview: the card buttons are "Open Ticket" (with the Tickets tab's wrench) and "Edit Ticket" (with a pencil); the dialog, the form and the (i) say "Open Ticket" too.
+
 ## 2.496.361
 
 ### Fixed
