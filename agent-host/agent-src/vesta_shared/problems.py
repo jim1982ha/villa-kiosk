@@ -221,6 +221,20 @@ class Problems:
                     # task row carried it — the Cockpit never said it)
                     tasks.append({"task_id": tid, "todo_summary": title[:250], "check": d.get("check") or "",
                                   "severity": d["severity"], "entity_id": d["entity_id"]})
+        # ⚠️ AN OPEN PROBLEM THAT NEVER HAD A FAULT GETS ONE (villa, 2026-10-14: a sensor offline for five days was
+        # open every night and never in the Cockpit). A task was asked for only on the night a finding was new or came
+        # back, so one opened before it earned a task — written by an older night check, or at a severity without
+        # one — stayed open and unseen for as long as the problem lasted. One that HAD a task is left alone: a
+        # person's close keeps a still-true problem quiet, and an open task's missing fault is repair's to restore.
+        for d in still_open:
+            if d["severity"] not in task_severities or self.store.open_task(d["rule_id"], d["entity_id"]) \
+                    or self.store.last_task(f"finding:{int(d['id'])}"):
+                continue
+            tid, created = self.open_task("finding", d["id"], d["rule_id"], d["entity_id"], d["summary"],
+                                          d.get("check") or "")
+            if created:
+                tasks.append({"task_id": tid, "todo_summary": d["summary"][:250], "check": d.get("check") or "",
+                              "severity": d["severity"], "entity_id": d["entity_id"]})
         return {"new": new, "still_open": still_open, "closed": closed, "again": again, "tasks": tasks,
                 "resolve_actions": resolve, "reopen_actions": reopen}
 

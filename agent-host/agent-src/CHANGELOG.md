@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.185 (14 October 2026)
+
+Villa, 2026-10-14: Timmerflotte_2623 offline for five days, open in the night check every night, never in the Cockpit
+(the owner's Closed list: no fault for it, ever). A task — hence a Kiosk fault — was asked for only on the night a
+finding was new or came back; one opened before it earned a task stayed open and unseen for the life of the problem.
+- vesta_shared.problems.record_night: a still-open finding at a task severity with no open task and NO task ever
+  (store.last_task of its source) gets one; tickets.repair gives it its fault within 5 minutes. One that had a task is
+  left alone: a person's close keeps a still-true problem quiet.
+- tests: test_an_open_problem_that_never_had_a_fault_gets_one_and_a_hand_closed_one_stays_quiet (red two ways: no
+  catch-up, and a hand-closed one revived).
+
 ## 0.6.184 (14 October 2026)
 
 Owner, 2026-10-14: a fault about a device deleted from Home Assistant stayed open until 02:00, then closed "Cleared: the

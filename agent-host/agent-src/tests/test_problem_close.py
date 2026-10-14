@@ -143,6 +143,25 @@ def test_a_fault_closed_by_hand_the_time_before_never_hides_it_when_it_comes_bac
     assert [p["source"] for p in pb.open_problems()] == [f"finding:{first['new'][0]['id']}"]
 
 
+def test_an_open_problem_that_never_had_a_fault_gets_one_and_a_hand_closed_one_stays_quiet(tmp_path):
+    # villa, 2026-10-14: a sensor offline for five days was open every night and never in the Cockpit — its finding
+    # opened before it had a task, and a task was asked for only when a finding was new or came back
+    store = Store(str(tmp_path / "s.sqlite"))
+    pb = Problems(store)
+    rules = dict(state_rules={"PM-UNAVAILABLE"}, event_rules=set(), worsened_step=15)
+    store.raise_finding("PM-UNAVAILABLE", "sensor.a", "a", "2026-10-09", "P3", "A offline for 39 h.", {})  # no task
+    night = pb.record_night([_F("PM-UNAVAILABLE", "sensor.a", "P3", summary="A offline for 63 h.")], "2026-10-10", **rules)
+    assert [t["entity_id"] for t in night["tasks"]] == ["sensor.a"] and night["tasks"][0]["todo_summary"] == "A offline for 63 h."
+    assert pb.record_night([_F("PM-UNAVAILABLE", "sensor.a", "P3")], "2026-10-11", **rules)["tasks"] == []  # once
+    # closed by hand while still offline: it stays quiet (a person's close silences a still-true problem)
+    pb.closed_in_kiosk(night["tasks"][0]["task_id"])
+    assert pb.record_night([_F("PM-UNAVAILABLE", "sensor.a", "P3")], "2026-10-12", **rules)["tasks"] == []
+    # a severity without a fault gets none
+    store.raise_finding("PM-UNAVAILABLE", "sensor.b", "b", "2026-10-09", "P4", "B.", {})
+    assert pb.record_night([_F("PM-UNAVAILABLE", "sensor.a", "P3"), _F("PM-UNAVAILABLE", "sensor.b", "P4")],
+                           "2026-10-13", **rules)["tasks"] == []
+
+
 def test_an_event_finding_is_never_counted_again(tmp_path):
     store = Store(str(tmp_path / "s.sqlite"))
     pb = Problems(store)
