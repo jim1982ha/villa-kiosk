@@ -20,8 +20,9 @@
 // reset-on-shrink rule both headers describe ("looking at nothing and reading
 // it as an empty ledger") is finally executable.
 
-/** Rows per page. ⚠️ ONE NUMBER FOR EVERY LOG IN THE APP. */
-export const PAGE_ROWS = 20;
+/** Rows per page. ⚠️ ONE NUMBER FOR EVERY LOG IN THE APP — 10, the owner's rule for every paged table
+ *  (2026-10-14: "instead of showing 20 lines, show a maximum of 10" on Device Telemetry). */
+export const PAGE_ROWS = 10;
 
 /** Cards per page, where a "row" is several lines with children nested under
  *  it. ⚠️ A SECOND NUMBER ON PURPOSE: the rule is that no page size is a

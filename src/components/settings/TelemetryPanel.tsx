@@ -8,15 +8,19 @@
 // JS errors, WebGL context losses and the page-lifecycle transitions that
 // explain an iOS white-screen-after-app-switch.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { usePaged, Pager } from "@/components/common/Paged";
 import { downloadFile } from "@/utils/download";
-import { RefreshCw, Trash2, Copy, Check, Download, Stethoscope, Activity } from "lucide-react";
+import { RefreshCw, Trash2, Copy, Check, Download, Stethoscope, Activity, ChevronDown, Info } from "lucide-react";
 import { ingressPath } from "@/ha/ingress";
-import { buildReport, captureError } from "@/utils/diagnostics";
+import { buildReport } from "@/utils/diagnostics";
+import { copyText } from "@/utils/clipboard";
 import { runRegisteredProbe, probeAvailable, formatProbe } from "@/babylon/perfProbe";
 import type { TelemetryKind } from "@/utils/telemetry";
 import { backendFetch } from "@/auth/sessionLost";
+import { useBackToClose } from "@/hooks/useBackToClose";
+import { useOutsideClose } from "@/hooks/useOutsideClose";
 
 interface TelemetryEvent {
   // ⚠️ `string`, not TelemetryKind, and deliberately (2.427.0): these events are
@@ -347,23 +351,36 @@ export default function TelemetryPanel() {
   const asJson = useCallback(() => JSON.stringify(events ?? [], null, 2), [events]);
 
   const copyAll = useCallback(async () => {
-    const text = asJson();
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      // Clipboard API blocked (insecure context / kiosk lockdown / iOS quirks)
-      // — same textarea+execCommand fallback ErrorReport already relies on.
-      const ta = document.createElement("textarea");
-      ta.value = text;
-      ta.style.position = "fixed";
-      ta.style.left = "-9999px";
-      document.body.appendChild(ta);
-      ta.select();
-      try { document.execCommand("copy"); } finally { document.body.removeChild(ta); }
-    }
+    if (!(await copyText(asJson()))) { setNotice("Could not copy — use Download instead."); return; }
     setCopied(true);
     setTimeout(() => setCopied(false), 1800);
   }, [asJson]);
+
+  /** A short notice that clears itself (owner, 2026-10-14: "a quick notification … that auto-clears"). */
+  const [notice, setNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(null), 3000);
+    return () => clearTimeout(t);
+  }, [notice]);
+  /** Copy a diagnostic's result where it was asked for, and say whether it landed. */
+  const copyResult = useCallback(async (text: string, what: string) => {
+    setNotice(await copyText(text) ? `${what} copied to the clipboard.`
+      : `${what} is ready — the browser refused to copy it automatically, use its Copy button.`);
+  }, []);
+  /** "Diagnose ▾": ONE button for this device's report and the frame-cost probe (owner, 2026-10-14). */
+  const [diagOpen, setDiagOpen] = useState(false);
+  // the phone's Back closes it like every menu (the overlay stack); a tap elsewhere or Escape too (the popover hook)
+  const diagRef = useRef<HTMLDivElement>(null);
+  const closeDiag = useCallback(() => setDiagOpen(false), []);
+  useBackToClose(closeDiag, diagOpen);
+  useOutsideClose([diagRef], diagOpen, closeDiag);
+  const runDevice = useCallback(() => {
+    setDiagOpen(false);
+    const text = buildReport(null);
+    setSelfReport(text);
+    void copyResult(text, "Device report");
+  }, [copyResult]);
 
   /** Save to a file — for a log too big to paste comfortably, and so it can be
    *  attached/forwarded as-is. */
@@ -379,11 +396,14 @@ export default function TelemetryPanel() {
   const [probing, setProbing] = useState(false);
   const [probeText, setProbeText] = useState<string | null>(null);
   const runProbe = useCallback(async () => {
+    setDiagOpen(false);
     setProbing(true);
     setProbeText(null);
     try {
       const rows = await runRegisteredProbe();
-      setProbeText(rows ? formatProbe(rows) : "No scene is loaded to measure.");
+      const text = rows ? formatProbe(rows) : "No scene is loaded to measure.";
+      setProbeText(text);
+      if (rows) void copyResult(text, "Frame-cost probe");
     } catch (err) {
       setProbeText(`Probe failed: ${(err as Error).message}`);
     } finally {
@@ -392,7 +412,7 @@ export default function TelemetryPanel() {
       // kiosk whose villa is now rendering perfectly well again.
       setProbing(false);
     }
-  }, []);
+  }, [copyResult]);
 
   return (
     <div>
@@ -405,54 +425,59 @@ export default function TelemetryPanel() {
         the summary shown here); <strong>Clear</strong> empties the store.
       </p>
 
-      <div className="row" style={{ gap: 8, marginBottom: 12 }}>
+      {/* ⚠️ ICONS ONLY ON A PHONE (owner, 2026-10-14): six labelled buttons overflowed their pills there
+          (.telemetry-actions .btn-label); each keeps its name as aria-label and title. */}
+      <div className="row telemetry-actions" style={{ gap: 8, marginBottom: 12 }}>
         <button className="btn ghost" onClick={() => void load()} disabled={busy}
-          title="Re-read the events from the add-on">
-          <RefreshCw size={16} /> Refresh
+          title="Re-read the events from the add-on" aria-label="Refresh">
+          <RefreshCw size={16} /> <span className="btn-label">Refresh</span>
         </button>
         <button className="btn ghost" onClick={() => void copyAll()} disabled={busy || !events?.length}
-          title="Copy every event, every field, as JSON">
-          {copied ? <Check size={16} /> : <Copy size={16} />} {copied ? "Copied" : "Copy"}
+          title="Copy every event, every field, as JSON" aria-label="Copy">
+          {copied ? <Check size={16} /> : <Copy size={16} />} <span className="btn-label">{copied ? "Copied" : "Copy"}</span>
         </button>
         <button className="btn ghost" onClick={downloadAll} disabled={busy || !events?.length}
-          title="Save every event as a .json file">
-          <Download size={16} /> Download
+          title="Save every event as a .json file" aria-label="Download">
+          <Download size={16} /> <span className="btn-label">Download</span>
         </button>
         <button className="btn ghost" onClick={() => void load(true)} disabled={busy}
-          title="Empty the add-on's event store. Copy or Download first if you want to keep them.">
-          <Trash2 size={16} /> Clear
+          title="Empty the add-on's event store. Copy or Download first if you want to keep them." aria-label="Clear">
+          <Trash2 size={16} /> <span className="btn-label">Clear</span>
         </button>
-        {/* THIS device, right now — as opposed to the fleet history above.
-            The report already existed but was only ever rendered by
-            ErrorReport, i.e. only once the app had already fallen over, which
-            is both the least readable moment and no use at all for a problem
-            that isn't a crash (a layout that's wrong but working, a device
-            whose WebGL limits explain a slow load). Same builder, so the two
-            can't describe the device differently. */}
-        <button className="btn ghost" title="This device right now — screen, viewport, WebGL caps, loaded model"
-          onClick={() => setSelfReport((r) => (r ? null : buildReport(captureError("MANUAL_DIAGNOSTICS", new Error("Requested from Settings"), "TelemetryPanel"))))}>
-          <Stethoscope size={16} /> {selfReport ? "Hide" : "Device"}
-        </button>
-        {/* THE ONLY WAY TO RUN THIS ON THE DEVICES THAT MATTER.
-            The frame-cost experiment also has a console form, and neither an
-            iPad nor an iPhone has a console — nor, inside the Home Assistant
-            companion app or an installed PWA, a URL that `?debug` can be added
-            to. A button is the only route left, and those are exactly the
-            devices whose frame cost the whole investigation is about. */}
-        <button
-          className="btn ghost"
-          onClick={() => void runProbe()}
-          disabled={probing || !probeAvailable()}
-          title="Frame-cost probe: re-times the frame with the badges, lights, image-based lighting and geometry removed one at a time. About 15 seconds, during which the villa will look wrong."
-        >
-          <Activity size={16} /> {probing ? "Measuring…" : "Probe"}
-        </button>
+        {/* THIS device, right now, and the frame-cost probe — one "Diagnose" menu (owner, 2026-10-14), each result
+            copied where the button was pressed.
+            The device report is the one ErrorReport shows after a crash — same builder, so the two cannot describe
+            the device differently — asked for while nothing is wrong (a layout that is wrong but working, WebGL
+            limits that explain a slow load). The probe has a console form too, and neither an iPad nor an iPhone
+            has a console — nor, inside the companion app or an installed PWA, a URL `?debug` can be added to. */}
+        <div className="telemetry-diag" ref={diagRef}>
+          <button className="btn ghost" aria-haspopup="menu" aria-expanded={diagOpen} disabled={probing}
+            onClick={() => setDiagOpen((o) => !o)} title="This device's report, or the frame-cost probe"
+            aria-label="Diagnose">
+            <Stethoscope size={16} /> <span className="btn-label">{probing ? "Measuring…" : "Diagnose"}</span>
+            <ChevronDown size={14} />
+          </button>
+          {diagOpen && (
+            <div className="hud-menu telemetry-diag-menu" role="menu">
+              <button role="menuitem" className="hud-menu-item" onClick={runDevice}
+                title="This device right now — screen, viewport, WebGL caps, loaded model">
+                <Stethoscope size={18} /> <span>This device</span>
+              </button>
+              <button role="menuitem" className="hud-menu-item" onClick={() => void runProbe()}
+                disabled={!probeAvailable()}
+                title="Re-times the frame with the badges, lights, image-based lighting and geometry removed one at a time. About 15 seconds, during which the villa will look wrong.">
+                <Activity size={18} /> <span>Frame-cost probe</span>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {probeText && (
         <div className="field">
-          <label className="entity-label">
+          <label className="entity-label row spread">
             Frame cost on this device — what each thing was costing
+            <button className="btn ghost" onClick={() => void copyResult(probeText, "Frame-cost probe")}><Copy size={14} /> Copy</button>
           </label>
           <pre className="diag-report">{probeText}</pre>
         </div>
@@ -460,7 +485,13 @@ export default function TelemetryPanel() {
 
       {selfReport && (
         <div className="field">
-          <label className="entity-label">This device — screen, viewport, WebGL, model</label>
+          <label className="entity-label row spread">
+            This device — screen, viewport, WebGL, model
+            <span className="row" style={{ gap: 6 }}>
+              <button className="btn ghost" onClick={() => void copyResult(selfReport, "Device report")}><Copy size={14} /> Copy</button>
+              <button className="btn ghost" onClick={() => setSelfReport(null)}>Hide</button>
+            </span>
+          </label>
           <pre className="diag-report">{selfReport}</pre>
         </div>
       )}
@@ -499,6 +530,10 @@ export default function TelemetryPanel() {
         </div>
       )}
       {!!events?.length && <Pager paged={paged} unit="event" />}
+      {/* Over the dialog, not inside its scrolling body, where a fixed toast can be clipped */}
+      {notice && createPortal(
+        <div className="service-toast app-notice telemetry-notice" role="status"><Info size={16} /><span>{notice}</span></div>,
+        document.body)}
     </div>
   );
 }

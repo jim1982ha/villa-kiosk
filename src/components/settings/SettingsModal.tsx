@@ -285,11 +285,6 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
           onChange={(e) => applyRender({ lightPoolIntensity: Number(e.target.value) })}
         />
 
-        <p className="muted body-text" style={{ marginTop: 10, fontSize: "var(--text-2xs)" }}>
-          Badge size — {config.entityIconScale.toFixed(2)}× — is set with
-          the +/- buttons next to the category filters in the top bar.
-        </p>
-
         <label style={{ marginTop: 16, display: "block" }}>Badge &amp; bottom bar style</label>
         {/* "Floating badge style" only ever named the first of these two
             controls (Default/Card, the on-map entity badge look) — the
@@ -319,6 +314,9 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
         <p className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-2xs)" }}>
           Classic: icon badge with a value pill. Card: coloured card with icon &amp; value inline —
           both show the same information, purely a look preference.
+          {/* one block under the buttons, not a paragraph of its own above them (owner, 2026-10-14) */}
+          {" "}Badge size — {config.entityIconScale.toFixed(2)}× — is set with the +/- buttons next to the category
+          filters in the top bar.
         </p>
 
         {/* ── Camera & movement ─────────────────────────────────────────────
