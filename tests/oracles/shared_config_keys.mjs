@@ -18,7 +18,7 @@ const sample = {
   deviceGroups: [{ id: "g1", primaryEntityId: "light.a", memberEntityIds: [] }, { id: "g2", primaryEntityId: "light.b", memberEntityIds: [] }],
   teleportPoints: [{ name: "Kitchen", position: [0, 0, 0] }, { name: "Patio", position: [1, 0, 1] }],
   dismissedEntityIds: ["sensor.x", "sensor.y"],
-  fmContract: { monthlyCap: 1000, cappedName: "", uncappedName: "", warnAtPercent: 0 },
+  fmContract: { monthlyCap: 1000, warnAtPercent: 0 },
 };
 const edit = {
   entityMap: (v, n) => ({ ...v, [`light.n${n}`]: { type: "light", label: `N${n}` } }),

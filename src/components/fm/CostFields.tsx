@@ -11,6 +11,7 @@
 import { useFmData } from "@/fm/FmDataContext";
 import Dropdown from "@/components/common/Dropdown";
 import { useFmTerms } from "@/fm/useFmTerms";
+import { COST_CATEGORY_NAMES } from "@/fm/fmTypes";
 import { monthKey, monthLabel, parseAmount, projectedSpend } from "@/fm/fmEngine";
 import { formatMoney } from "@/utils/money";
 
@@ -47,8 +48,8 @@ export default function CostFields({ amount, onAmount, category = "minor", onCat
           {/* Neutral words: which contract clause or account a category maps
               to is one villa's arrangement (hard-rules.py, 3b). */}
           <Dropdown<Category> value={category} onChange={onCategory} ariaLabel="Category" options={[
-            { value: "minor", label: `${terms.cappedName}${terms.monthlyCap > 0 ? " — counts against the monthly cap" : ""}` },
-            { value: "major", label: `${terms.uncappedName}${terms.monthlyCap > 0 ? " — outside the cap" : ""}` },
+            { value: "minor", label: `${COST_CATEGORY_NAMES.minor}${terms.monthlyCap > 0 ? " — counts against the monthly cap" : ""}` },
+            { value: "major", label: `${COST_CATEGORY_NAMES.major}${terms.monthlyCap > 0 ? " — outside the cap" : ""}` },
           ]} />
         </label>
       )}
@@ -57,7 +58,7 @@ export default function CostFields({ amount, onAmount, category = "minor", onCat
       {category === "minor" && value > 0 && p.cap > 0 && (
         <div className={`fm-banner ${p.over ? "warn" : ""}`}>
           {p.month === monthKey(Date.now()) ? "This month" : monthLabel(p.month)} would come to {money(p.minorSpend)} of {money(p.cap)}
-          {p.over && ` — past the monthly cap. Spend beyond it belongs to ${terms.uncappedName}.`}
+          {p.over && ` — past the monthly cap. Spend beyond it belongs to ${COST_CATEGORY_NAMES.major}.`}
         </div>
       )}
     </>

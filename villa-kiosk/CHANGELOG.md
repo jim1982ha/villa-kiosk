@@ -1,3 +1,13 @@
+## 2.496.353
+
+### Changed
+- Cockpit → Schedule: the schedule's description is rewritten in plain English ("Each task repeats at the interval you set…"), with "Add a task" on the same line, at the right.
+- Cockpit → Spend:
+  - "Month", "Generate statement", "Save statement" and "Download .md" are on one line, at the top; the statement appears just below.
+  - The month's money is one line — Minor (with the cap, when there is one), Major, Total — with "Record spend" at its right. Major spend used to show only as a note, and the total not at all.
+  - Spend settings: the two "name of the category" boxes are gone. They were names for the two categories, not a choice — the cap always applies to minor spend. The categories are simply "Minor" (routine work, counted against the cap) and "Major" (larger work, outside it), and the settings say so. What remains, side by side: the monthly cap on minor spend and the warning threshold.
+  - Removing a cap: open Spend settings, press "Remove cap" next to the amount, then Save.
+
 ## 2.496.352
 
 ### Changed

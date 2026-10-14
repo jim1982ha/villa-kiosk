@@ -120,6 +120,8 @@ export interface BudgetStatus {
   /** The other category's spend, tracked separately and explicitly NOT part
    *  of the cap. */
   majorSpend: number;
+  /** Both — the month's whole maintenance spend (the Spend tab shows all three, owner 2026-10-14). */
+  totalSpend: number;
   cap: number;
   /** 0–1+ against the cap; can exceed 1. */
   fraction: number;
@@ -149,7 +151,7 @@ export function budgetStatus(
     .reduce((s, c) => s + c.amountIdr, 0);
   const fraction = cap > 0 ? minorSpend / cap : 0;
   return {
-    month, minorSpend, majorSpend, cap, fraction,
+    month, minorSpend, majorSpend, totalSpend: minorSpend + majorSpend, cap, fraction,
     state: cap <= 0 ? "ok" : minorSpend >= cap ? "exceeded" : fraction >= terms.warnAt ? "approaching" : "ok",
     entries,
   };

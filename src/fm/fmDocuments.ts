@@ -15,7 +15,7 @@
 // archived as plain text years later for a dispute.
 
 import { budgetStatus, completionsInMonth, localStamp, monthKey, monthLabel, scheduleStatus, shortDate, resolvedInMonth, ticketAt, ticketStats, workedBy } from "./fmEngine";
-import { categoryName, NO_FM_TERMS, type FmData, type FmTerms } from "./fmTypes";
+import { COST_CATEGORY_NAMES, NO_FM_TERMS, type FmData, type FmTerms } from "./fmTypes";
 import type { BudgetStatus } from "./fmEngine";
 import type { ReadinessResult } from "./readiness";
 import { stampText } from "@/utils/dateText";
@@ -70,17 +70,17 @@ export function spendSummary(b: BudgetStatus, terms: FmTerms = NO_FM_TERMS): str
   const money = (n: number) => formatMoney(n, terms.currency);
   const out: string[] = [
     b.cap > 0
-      ? `- **${cell(terms.cappedName, 60)} maintenance this month:** ${money(b.minorSpend)} of the `
+      ? `- **${COST_CATEGORY_NAMES.minor} maintenance this month:** ${money(b.minorSpend)} of the `
         + `${money(b.cap)} monthly cap (${Math.round(b.fraction * 100)}%)`
-      : `- **${cell(terms.cappedName, 60)} maintenance this month:** ${money(b.minorSpend)} `
+      : `- **${COST_CATEGORY_NAMES.minor} maintenance this month:** ${money(b.minorSpend)} `
         + `(no monthly cap configured)`,
   ];
   if (b.majorSpend > 0) {
-    out.push(`- **${cell(terms.uncappedName, 60)} maintenance (outside the cap):** ${money(b.majorSpend)}`);
+    out.push(`- **${COST_CATEGORY_NAMES.major} maintenance (outside the cap):** ${money(b.majorSpend)}`);
   }
   if (b.state === "exceeded") {
     out.push(`- ⚠️ The monthly cap was reached. Spend beyond it belongs to `
-      + `${cell(terms.uncappedName, 60)} maintenance, on whatever terms the agreement sets.`);
+      + `${COST_CATEGORY_NAMES.major} maintenance, on whatever terms the agreement sets.`);
   }
   return out;
 }
@@ -97,7 +97,7 @@ export function spendTable(b: BudgetStatus, terms: FmTerms = NO_FM_TERMS): strin
     `|---|---|---|---|`,
     ...b.entries.slice().sort((x, y) => Date.parse(x.at) - Date.parse(y.at)).map(
       (c) => `| ${shortDate(c.at)} | ${cell(c.label)} `
-        + `| ${cell(categoryName(terms, c.category), 60)} | ${formatMoney(c.amountIdr, terms.currency)} |`),
+        + `| ${COST_CATEGORY_NAMES[c.category]} | ${formatMoney(c.amountIdr, terms.currency)} |`),
   ];
 }
 

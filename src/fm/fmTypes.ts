@@ -246,26 +246,25 @@ export const EMPTY_FM_DATA: FmData = {
  *  shows no invented number. The stored category ids stay "minor"/"major"
  *  (FmCost.category) — only their NAMES are the owner's. */
 export interface FmContract {
-  /** The monthly cap on the capped category, in the install's currency. 0 = no cap. */
+  /** The monthly cap on MINOR spend, in the install's currency. 0 = no cap. */
   monthlyCap: number;
-  /** What the capped category is called ("" → "Minor"). */
-  cappedName: string;
-  /** What the uncapped category is called ("" → "Major"). */
-  uncappedName: string;
   /** Warn when the month reaches this share of the cap, in percent (0 → 80). */
   warnAtPercent: number;
 }
+// ⚠️ THE TWO CATEGORY NAMES ARE GONE (owner, 2026-10-14: "why is there a need to display both?"). The settings held a
+// name for each category ("Minor", "Major" by default) as free text, and read like a choice of which one the cap
+// applies to — it never was: the cap is always on minor spend. The categories are "Minor" and "Major" everywhere
+// (COST_CATEGORY_NAMES); a name an older store still holds is simply not read.
 
-export const EMPTY_FM_CONTRACT: FmContract = { monthlyCap: 0, cappedName: "", uncappedName: "", warnAtPercent: 0 };
+export const EMPTY_FM_CONTRACT: FmContract = { monthlyCap: 0, warnAtPercent: 0 };
 
 /** The contract as every Facility screen, the engine and the report read it:
  *  names and threshold resolved, plus the currency Home Assistant is set to
  *  (Settings → System → General) — the app keeps no currency of its own. */
 export interface FmTerms {
+  /** The monthly cap on minor spend; 0 = none. */
   monthlyCap: number;
   currency: string;
-  cappedName: string;
-  uncappedName: string;
   /** 0–1. */
   warnAt: number;
 }
@@ -284,12 +283,9 @@ export function validWarnPercent(v: unknown): number | null {
 export function fmTerms(contract: Partial<FmContract> | undefined, haCurrency: string | undefined): FmTerms {
   const c = contract ?? {};
   const cap = Number(c.monthlyCap);
-  const name = (v: unknown, fallback: string) => (typeof v === "string" && v.trim() ? v.trim() : fallback);
   return {
     monthlyCap: Number.isFinite(cap) && cap > 0 ? cap : 0,
     currency: typeof haCurrency === "string" ? haCurrency.trim() : "",
-    cappedName: name(c.cappedName, "Minor"),
-    uncappedName: name(c.uncappedName, "Major"),
     warnAt: (validWarnPercent(c.warnAtPercent) ?? WARN_DEFAULT_PERCENT) / 100,
   };
 }
@@ -297,7 +293,5 @@ export function fmTerms(contract: Partial<FmContract> | undefined, haCurrency: s
 /** Terms with nothing configured — what a caller that has none passes. */
 export const NO_FM_TERMS: FmTerms = fmTerms(undefined, undefined);
 
-/** The owner's name for a cost category. */
-export function categoryName(terms: FmTerms, category: "minor" | "major"): string {
-  return category === "minor" ? terms.cappedName : terms.uncappedName;
-}
+/** What each cost category is called, everywhere: the cap is on minor spend, major spend is outside it. */
+export const COST_CATEGORY_NAMES: Readonly<Record<FmCostCategory, string>> = { minor: "Minor", major: "Major" };

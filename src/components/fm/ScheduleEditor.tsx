@@ -114,16 +114,16 @@ export default function ScheduleEditor() {
 
   return (
     <div className="fm-stack">
-      <p className="muted body-text">
-        The schedule the board above measures against. Intervals are the minimum
-        frequency — a task is overdue the day after its interval elapses.
-      </p>
-
-      {!adding && !editingId && (
-        <button className="btn ghost" onClick={startAdd} style={{ alignSelf: "flex-start" }}>
-          <Plus size={16} /> Add a task
-        </button>
-      )}
+      {/* the description and "Add a task" on one line (owner, 2026-10-14) */}
+      <div className="fm-desc-row">
+        <p className="muted body-text">
+          Each task repeats at the interval you set. It becomes overdue when its interval has passed since it was last
+          done, and the board above shows what is due.
+        </p>
+        {!adding && !editingId && (
+          <button className="btn ghost" onClick={startAdd}><Plus size={16} /> Add a task</button>
+        )}
+      </div>
 
       {(adding || editingId) && form}
 

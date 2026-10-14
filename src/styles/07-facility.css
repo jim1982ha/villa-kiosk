@@ -46,6 +46,13 @@
 /* A ticket (TicketsTab): its device, then each record taken on with it, divided by a hairline — one card. */
 .fm-ticket-records { display: flex; flex-direction: column; }
 .fm-ticket-records > .fm-ticket-record + .fm-ticket-record { border-top: 1px solid var(--hairline); padding-top: 8px; margin-top: 8px; }
+/* The Spend tab's month totals on one line, Record spend at its right (owner, 2026-10-14). */
+.fm-cap-totals { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; }
+.fm-cap-totals .fm-cap-record { margin-left: auto; }
+/* A description with its action at the right of the same line (Schedule's "Add a task"); wraps on a phone. */
+.fm-desc-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.fm-desc-row > p { flex: 1 1 280px; margin: 0; }
+.fm-desc-row > .btn { flex: none; }
 /* A field's name on the same line as its control (Recap's Period). */
 .fm-inline-label { color: var(--text-secondary); font-size: var(--field-label-size); }
 /* The Overview's Live issues title, with its (i) and "Open a ticket" on the right of the same line (owner, 2026-10-14). */

@@ -15,15 +15,18 @@ const R = await import("@/fm/fmDocuments");
 console.log("  the stored terms, resolved:");
 {
   const none = T.fmTerms(undefined, undefined);
-  ck("nothing set: no cap, no currency, the generic names, warn at 80 %",
-     none.monthlyCap === 0 && none.currency === "" && none.cappedName === "Minor" && none.uncappedName === "Major" && none.warnAt === 0.8);
-  const set = T.fmTerms({ monthlyCap: 5000, cappedName: " Routine ", uncappedName: "Capital", warnAtPercent: 90 }, "EUR");
-  ck("set: the owner's cap, names (trimmed) and share, with Home Assistant's currency",
-     set.monthlyCap === 5000 && set.cappedName === "Routine" && set.uncappedName === "Capital" && set.warnAt === 0.9 && set.currency === "EUR");
-  const junk = T.fmTerms({ monthlyCap: -5, cappedName: 7, uncappedName: "  ", warnAtPercent: 250 }, 3);
+  ck("nothing set: no cap, no currency, warn at 80 %",
+     none.monthlyCap === 0 && none.currency === "" && none.warnAt === 0.8);
+  const set = T.fmTerms({ monthlyCap: 5000, warnAtPercent: 90 }, "EUR");
+  ck("set: the owner's cap and share, with Home Assistant's currency",
+     set.monthlyCap === 5000 && set.warnAt === 0.9 && set.currency === "EUR");
+  const junk = T.fmTerms({ monthlyCap: -5, warnAtPercent: 250 }, 3);
   ck("junk (a hand-edited store) falls back, never throws or goes negative",
-     junk.monthlyCap === 0 && junk.cappedName === "Minor" && junk.uncappedName === "Major" && junk.warnAt === 0.8 && junk.currency === "");
-  ck("category names follow the terms", T.categoryName(set, "minor") === "Routine" && T.categoryName(set, "major") === "Capital");
+     junk.monthlyCap === 0 && junk.warnAt === 0.8 && junk.currency === "");
+  // owner, 2026-10-14: the two category names are gone — always Minor (the cap's) and Major (outside it)
+  const old = T.fmTerms({ monthlyCap: 1000, cappedName: "Routine", uncappedName: "Capital" }, "EUR");
+  ck("the categories are Minor and Major, whatever an older store still holds",
+     T.COST_CATEGORY_NAMES.minor === "Minor" && T.COST_CATEGORY_NAMES.major === "Major" && !("cappedName" in old) && !("uncappedName" in old));
 }
 
 console.log("\n  the one cap check:");
@@ -54,11 +57,12 @@ console.log("\n  the report speaks the owner's terms:");
   const t = T.fmTerms({ monthlyCap: 1000, cappedName: "Routine", uncappedName: "Capital" }, "EUR");
   const b = E.budgetStatus(costs, "2026-09", t);
   const text = [...R.spendSummary(b, t), ...R.spendTable(b, t)].join("\n");
-  ck("the owner's category names and currency, not \"Minor\"/\"Major\"",
-     text.includes("Routine") && text.includes("Capital") && /€|EUR/.test(text) && !/\bMinor\b|\bMajor\b/.test(text), text);
+  ck("Minor and Major, in Home Assistant's currency — an old stored name is not read",
+     text.includes("Minor") && text.includes("Major") && /€|EUR/.test(text) && !/Routine|Capital/.test(text), text);
+  ck("the month's total is minor plus major, counted once, by the engine", b.totalSpend === b.minorSpend + b.majorSpend && b.totalSpend > 0, b);
   ck("no account is named that the owner did not name", !/Owner's account/.test(text));
   const statement = R.buildSpendStatement({ costs, schedules: [], completions: [], tickets: [], savedDocuments: [] }, "2026-09", "V", t);
-  ck("the spend statement uses the same terms", statement.includes("Routine") && /€|EUR/.test(statement));
+  ck("the spend statement uses the same terms", statement.includes("Minor") && /€|EUR/.test(statement));
 }
 
 done("✅ the contract terms are the owner's; one cap check, an edit counted once");
