@@ -40,17 +40,16 @@ export interface PassSnapshot {
   chips: readonly RoomChip[];
   chipDrawnWidth(key: string): number | undefined;
   chipScale: number;
-  minSepPx: number;
   minGapPx: number;
   /** GROUP_OVERLAP_ALLOW_WIDTHS — zero means summary overlaps are the accepted cost. */
   overlapAllow: number;
   /** The pass's solver input, for the order-dependence re-solve. */
-  solve: { items: readonly PlacementItem[]; gap: number; minSep: number; mode: "priority" | "legacy"; drawableMax: number };
+  solve: { items: readonly PlacementItem[]; gap: number; mode: "priority" | "legacy"; drawableMax: number };
 }
 
 /** What the check found — every count, and the lines it would print. */
 export interface PlacementFindings {
-  overlaps: number; tooClose: number; focusOverlaps: number;
+  overlaps: number; focusOverlaps: number;
   buried: number; overhung: number; focusCardHits: number;
   summaryOverlaps: number; summaryFocusOverlaps: number;
   chipHits: number; chipHitsFocused: number; chipPairs: number;
@@ -69,8 +68,8 @@ export class PlacementCheck {
     const vp = s.viewport;
     // ── OVERLAP, MEASURED IN THE SPACE A PERSON ACTUALLY SEES ────────────
     // What used to be here fed `placementItems` straight back into
-    // `conflicts` — the same items, the same predicate, the same gap and
-    // minSep the solver had satisfied a few lines earlier. That is a
+    // `conflicts` — the same items, the same predicate, the same gap the
+    // solver had satisfied a few lines earlier. That is a
     // tautology: it could not fail whatever the screen looked like, and for
     // as long as it existed it reported a clean layout over screenshots full
     // of badges and cards drawn on top of each other. An assertion that
@@ -91,14 +90,14 @@ export class PlacementCheck {
     const onScreen = (b: ScreenBox) =>
       b.cx + b.hw >= vp.x && b.cx - b.hw <= vp.x + vp.width
       && b.cy + b.hh >= vp.y && b.cy - b.hh <= vp.y + vp.height;
-    // Ink on ink. No gap, no minimum pitch, no tolerance: two things either
+    // Ink on ink. No gap, no tolerance: two things either
     // cover the same pixels or they don't, and that is the one claim about
     // this subsystem nobody can argue with from a screenshot.
     const hits = (a: ScreenBox, b: ScreenBox) =>
       Math.abs(a.cx - b.cx) < a.hw + b.hw && Math.abs(a.cy - b.cy) < a.hh + b.hh;
     const lines: string[] = [];
     const f: PlacementFindings = {
-      overlaps: 0, tooClose: 0, focusOverlaps: 0, buried: 0, overhung: 0, focusCardHits: 0,
+      overlaps: 0, focusOverlaps: 0, buried: 0, overhung: 0, focusCardHits: 0,
       summaryOverlaps: 0, summaryFocusOverlaps: 0, chipHits: 0, chipHitsFocused: 0, chipPairs: 0,
       chipWidthErr: 0, moved: 0, leaked: 0, orphaned: 0, byWall: 0, orderDependent: false, lines,
     };
@@ -113,12 +112,6 @@ export class PlacementCheck {
 
     // (a) Drawn badge vs drawn badge. The headline number.
     //
-    // The accessibility PITCH is counted separately from visual overlap on
-    // purpose: they mean different things (one is a tap-target rule, the other
-    // is legibility) and one of them is much more likely to be non-zero for a
-    // legitimate reason. Rolled together, the first excusable case would
-    // teach whoever reads this to ignore the line.
-    //
     // Focused-room badges get their own bucket rather than being dropped:
     // their overlap is DELIBERATE (the exemption stacks them, which is exactly
     // why pairFocusedRoom exists), so mixing them in would poison the number
@@ -128,11 +121,9 @@ export class PlacementCheck {
         const ink = hits(bb[i], bb[j]);
         if (bEx[i] || bEx[j]) { if (ink) f.focusOverlaps++; continue; }
         if (ink) f.overlaps++;
-        else if (Math.hypot(bb[i].cx - bb[j].cx, bb[i].cy - bb[j].cy) < s.minSepPx) f.tooClose++;
       }
     }
     if (f.overlaps) lines.push(`PLACEMENT: ${f.overlaps} drawn badge pair(s) OVERLAP on screen`);
-    if (f.tooClose) lines.push(`PLACEMENT: ${f.tooClose} drawn badge pair(s) closer than the ${Math.round(s.minSepPx)}px tap pitch`);
     if (f.focusOverlaps) lines.push(`PLACEMENT: ${f.focusOverlaps} overlapping pair(s) inside the FOCUSED room (expected; pairFocusedRoom's leftovers)`);
 
     // (b) Drawn badge vs summary card, split in two — and the split is what
@@ -379,12 +370,12 @@ export class PlacementCheck {
     // Order independence — the purity guard.
     // The SAME drawableMax as the live solve, or this guard verifies the
     // purity of a function that does not ship.
-    const { items, gap, minSep, mode, drawableMax } = s.solve;
+    const { items, gap, mode, drawableMax } = s.solve;
     const reversed = items.slice().reverse();
-    const a = solvePlacement(items, gap, minSep, mode, this.scratchA, drawableMax);
+    const a = solvePlacement(items, gap, mode, this.scratchA, drawableMax);
     const idsA = new Set<string>();
     for (let i = 0; i < items.length; i++) if (a.accepted[i]) idsA.add(items[i].sortKey);
-    const b = solvePlacement(reversed, gap, minSep, mode, this.scratchB, drawableMax);
+    const b = solvePlacement(reversed, gap, mode, this.scratchB, drawableMax);
     const idsB = new Set<string>();
     for (let i = 0; i < reversed.length; i++) if (b.accepted[i]) idsB.add(reversed[i].sortKey);
     f.orderDependent = idsA.size !== idsB.size || [...idsA].some((id) => !idsB.has(id));

@@ -17,8 +17,8 @@ const box = (cx, cy, h = 20) => ({ cx, cy, hw: h, hh: h });
 const badge = (id, cx, cy, o = {}) => ({ id, box: box(cx, cy), visible: true, inFront: true, occluded: false, exempt: false, roomChipped: false, covered: false, offsetX: 0, ...o });
 const snap = (o = {}) => ({
   viewport: { x: 0, y: 0, width: 1000, height: 800 }, badges: [], cards: [], chips: [],
-  chipDrawnWidth: () => undefined, chipScale: 1, minSepPx: 44, minGapPx: 2, overlapAllow: 0,
-  solve: { items: [], gap: 2, minSep: 44, mode: "priority", drawableMax: 6 }, ...o,
+  chipDrawnWidth: () => undefined, chipScale: 1, minGapPx: 2, overlapAllow: 0,
+  solve: { items: [], gap: 2, mode: "priority", drawableMax: 6 }, ...o,
 });
 const check = (o) => new PlacementCheck().check(snap(o));
 
@@ -28,7 +28,7 @@ ck("a clean layout: silent", clean.lines.length === 0, clean.lines);
 const ov = check({ badges: [badge("a", 100, 100), badge("b", 110, 100)] });
 ck("two badges on the same pixels: OVERLAP reported", ov.overlaps === 1 && ov.lines.some((l) => /OVERLAP on screen/.test(l)));
 const near = check({ badges: [badge("a", 100, 100), badge("b", 142, 100)] });
-ck("clear of each other but inside the tap pitch: reported apart", near.overlaps === 0 && near.tooClose === 1);
+ck("clear of each other, however close: nothing to report (no centre floor, 2026-10-14)", near.overlaps === 0 && near.lines.length === 0, near.lines);
 const foc = check({ badges: [badge("a", 100, 100, { exempt: true }), badge("b", 110, 100)] });
 ck("a focused room's overlap is COUNTED in its own bucket, not dropped", foc.overlaps === 0 && foc.focusOverlaps === 1);
 const off = check({ badges: [badge("a", -500, 100), badge("b", -505, 100)] });
@@ -63,7 +63,7 @@ ck("hidden with no card and no chip: an ORPHAN; behind a wall counted apart; cov
    orph.orphaned === 1 && orph.byWall === 1, [orph.orphaned, orph.byWall]);
 
 const items = [0, 1, 2].map((i) => ({ sx: i * 200, sy: 0, sz: 0, reach: 20, reachY: 20, rank: 0, sortKey: `b${i}`, category: "", room: "r", exempt: false }));
-ck("a pure solve accepts the same badges reversed", check({ solve: { items, gap: 2, minSep: 44, mode: "priority", drawableMax: 6 } }).orderDependent === false);
+ck("a pure solve accepts the same badges reversed", check({ solve: { items, gap: 2, mode: "priority", drawableMax: 6 } }).orderDependent === false);
 
 {
   const { readFileSync } = await import("node:fs");

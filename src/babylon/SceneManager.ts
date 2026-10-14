@@ -16,6 +16,7 @@ import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
 import { Ray } from "@babylonjs/core/Culling/ray";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
+import { PointerEventTypes } from "@babylonjs/core/Events/pointerEvents";
 import { roomKey } from "@/config/roomKey";
 
 import { CameraController } from "./CameraController";
@@ -27,7 +28,7 @@ import { FloorManager } from "./FloorManager";
 import { PickHandler } from "./PickHandler";
 import { EntityVisuals } from "./EntityVisuals";
 import { resolveHit, type HitPickers } from "./hitResolution";
-import { FrameScheduler } from "./frameScheduler";
+import { FrameScheduler, movesTheView } from "./frameScheduler";
 import { ResolutionGovernor, startingScale } from "./resolutionGovernor";
 import { SceneLook } from "./sceneLook";
 import { StructureSet } from "./structureSet";
@@ -585,11 +586,16 @@ export class SceneManager {
     // resolved by the look from both passes' inputs, in whatever order they run.
     this.sun.applyRealSun();
 
-    // Any pointer activity on the canvas (look-around drag, wheel, tap) wakes the
-    // on-demand render loop so the view stays smooth.
-    // The second (and last) motion entry point — a finger on the glass is
-    // motion whether or not the camera has decided to move yet.
-    this.scene.onPointerObservable.add(() => this.frames.motion());
+    // Pointer activity that moves the view (drag, wheel, tap) wakes the
+    // on-demand render loop so the view stays smooth. A hover does not
+    // (frameScheduler.movesTheView). The second (and last) motion entry point —
+    // a finger on the glass is motion whether or not the camera has decided to
+    // move yet.
+    this.scene.onPointerObservable.add((info) => {
+      if (movesTheView(info.type === PointerEventTypes.POINTERMOVE, (info.event as PointerEvent).buttons ?? 0)) {
+        this.frames.motion();
+      }
+    });
 
     // Land on the bird's-eye OVERVIEW camera from the very first rendered frame.
     // Before the model finishes loading the active camera used to be the

@@ -14,7 +14,7 @@
 
 import { projectToView, exactViewBasis, type ViewBasis } from "./badgeProjection";
 import { markContacts, createPlacementScratch, type PlacementItem, type PlacementScratch } from "./badgePlacement";
-import { rungAt } from "./badgeScale";
+import { rungPx } from "./badgeScale";
 import { GROUP_ZOOM_STEPS_PER_DOUBLING } from "./badgeMetrics";
 
 // ── Zoom-to-room framing (roomWallFit) ──────────────────────
@@ -65,8 +65,10 @@ export interface ZoomBadge {
 }
 
 export interface ZoomView {
-  /** Render-target height and width, px. */
+  /** Render-target height and width, px — the frame test's unit. */
   vpH: number; vpW: number;
+  /** The viewport's CSS height and render px per CSS px — the rung's unit (badgeScale.rungPx). */
+  cssH: number; cssToGui: number;
   /** Vertical field of view, radians. */
   vFov: number;
   /** The DESTINATION's view plane, UNQUANTISED — what "on screen" is asked in. */
@@ -83,8 +85,6 @@ export interface ZoomView {
 export interface ZoomSpacing {
   /** Minimum gap between boxes, GUI px. */
   gapPx: number;
-  /** Minimum centre-to-centre pitch, GUI px (the accessibility floor). */
-  minSepPx: number;
   /** Fraction of a box's half-extent that counts as reach (1 − overlap allowed). */
   allow: number;
 }
@@ -215,8 +215,8 @@ export function solveRoomZoom(
     // `Math.ceil` since 2.407.0, so the rung this loop tested was up to 2.9%
     // below the one that would be drawn (/dry-audit, 2.425.0). One function,
     // every walker of the lattice.
-    // badgeScale.rungAt — the same function the renderer's rung is.
-    const pxPerWorld = rungAt(view.vpH, tanV, radius);
+    // badgeScale.rungPx — the same function, in the same unit, as the renderer's rung.
+    const pxPerWorld = rungPx(view.cssH, tanV, radius, view.cssToGui);
     if (!(pxPerWorld > 0)) continue;
 
     // Every badge fully inside the frame? Per screen axis, in drawn pixels,
@@ -251,7 +251,7 @@ export function solveRoomZoom(
       items[i].reach = members[i].halfW * spacing.allow;
       items[i].reachY = members[i].halfH * spacing.allow;
     }
-    const touching = markContacts(items, spacing.gapPx, spacing.minSepPx, scratch);
+    const touching = markContacts(items, spacing.gapPx, scratch);
     let clean = true;
     for (const i of mine) if (touching[i]) { clean = false; break; }
     // The rungs ascend, so the last write is the widest clean one. Recorded

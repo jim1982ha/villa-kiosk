@@ -225,23 +225,23 @@ export function createPlacementScratch(): PlacementScratch {
  * thing must be the thing that does it. A rung solver that promised a shot the
  * renderer then declined is a bug this file has already produced once.
  *
- * `minSeparation` is a floor on centre-to-centre distance regardless of how
- * small the badges are drawn: two controls stop being independently tappable
- * once their touch targets merge, whatever their painted size (badgeMetrics'
- * `minCentrePitchPx` derives the number from Material and WCAG).
+ * No floor on the distance between two centres (owner, 2026-10-14: "a room
+ * chip shall only appear when there is entity overlap"). There was one — 44 CSS
+ * px on a touch screen, 24 with a mouse, the tap target — and it grouped badges
+ * with clear space visibly between them. A tap still goes to the badge drawn
+ * under the finger (EntityVisuals.pickBadgeAt tries the exact point first).
  */
 export function conflicts(
   a: PlacementItem,
   b: PlacementItem,
   gap: number,
-  minSeparation: number,
   /** Inflates both requirements uniformly. 1 asks "do they collide"; the
    *  lone-deferral pull-back asks with PULLBACK_REACH_FACTOR to mean "close
    *  enough to summarise with". One predicate, one knob — not two copies. */
   scale = 1,
 ): boolean {
   // ── THE RULE, and the only one: TWO THINGS COLLIDE WHEN THEIR DRAWN BOXES,
-  // INFLATED BY THE GAP AND FLOORED BY THE TAP PITCH, INTERSECT ON THE GLASS.
+  // INFLATED BY THE GAP, INTERSECT ON THE GLASS.
   // Axis-aligned, against each thing's own drawn extents — the same test the
   // chip tier has used since 2.287.0 and the card tier since 2.405.0. This
   // tier was the last one still collapsing the rectangle to a single radius
@@ -260,9 +260,9 @@ export function conflicts(
   // distance against width plus height against height, which is the same
   // sentence with its axes named honestly.
   const dh2 = (b.sx - a.sx) * (b.sx - a.sx) + (b.sz - a.sz) * (b.sz - a.sz);
-  const needX = scale * Math.max(a.reach + b.reach + gap, minSeparation);
+  const needX = scale * (a.reach + b.reach + gap);
   if (dh2 >= needX * needX) return false;
-  const needY = scale * Math.max(a.reachY + b.reachY + gap, minSeparation);
+  const needY = scale * (a.reachY + b.reachY + gap);
   return Math.abs(b.sy - a.sy) < needY;
 }
 
@@ -329,7 +329,6 @@ function canonicalOrder(items: readonly PlacementItem[]): (x: number, y: number)
 export function markContacts(
   items: readonly PlacementItem[],
   gap: number,
-  minSeparation: number,
   scratch: PlacementScratch,
 ): Uint8Array {
   const n = items.length;
@@ -338,7 +337,7 @@ export function markContacts(
   out.fill(0, 0, n);
   if (n < 2) return out;
 
-  forEachConflict(items, gap, minSeparation, scratch.cells, (i, j) => { out[i] = 1; out[j] = 1; });
+  forEachConflict(items, gap, scratch.cells, (i, j) => { out[i] = 1; out[j] = 1; });
   return out;
 }
 
@@ -363,7 +362,7 @@ function hashCell(ix: number, iy: number, iz: number): number {
  * keeps union-find's piles — and pile_merge_order — byte-identical.
  */
 function forEachConflict(
-  items: readonly PlacementItem[], gap: number, minSeparation: number,
+  items: readonly PlacementItem[], gap: number,
   cells: Map<number, number[]>, visit: (i: number, j: number) => void,
 ): boolean {
   const n = items.length;
@@ -374,7 +373,7 @@ function forEachConflict(
     if (items[i].reach > maxReach) maxReach = items[i].reach;
     if (items[i].reachY > maxReach) maxReach = items[i].reachY;
   }
-  const cell = Math.max(2 * maxReach + gap, minSeparation);
+  const cell = 2 * maxReach + gap;
   if (!(cell > 0) || !Number.isFinite(cell)) return false;
   // Truncate rather than clear: the bucket arrays are reused across frames, so
   // the steady state allocates nothing.
@@ -400,7 +399,7 @@ function forEachConflict(
           for (const j of bucket) {
             // Each unordered pair considered once; self skipped.
             if (j <= i) continue;
-            if (conflicts(a, items[j], gap, minSeparation)) visit(i, j);
+            if (conflicts(a, items[j], gap)) visit(i, j);
           }
         }
       }
@@ -442,7 +441,6 @@ function forEachConflict(
 export function solvePlacement(
   items: readonly PlacementItem[],
   gap: number,
-  minSeparation: number,
   mode: "priority" | "legacy",
   scratch: PlacementScratch,
   /**
@@ -496,7 +494,7 @@ export function solvePlacement(
     while (parent[r] !== r) { parent[r] = parent[parent[r]]; r = parent[r]; }
     return r;
   };
-  const usable = forEachConflict(items, gap, minSeparation, st.cells, (i, j) => {
+  const usable = forEachConflict(items, gap, st.cells, (i, j) => {
     const ra = find(i), rb = find(j);
     if (ra !== rb) parent[ra] = rb;
   });
@@ -554,7 +552,7 @@ export function solvePlacement(
     for (const i of members) {
       let clear = true;
       for (const a of acceptedHere) {
-        if (conflicts(items[i], items[a], gap, minSeparation)) { clear = false; break; }
+        if (conflicts(items[i], items[a], gap)) { clear = false; break; }
       }
       if (clear) { accepted[i] = 1; acceptedHere.push(i); }
       else deferred[deferredCount++] = i;
@@ -652,7 +650,7 @@ export function solvePlacement(
       if (bucket.members.length <= drawableMax) continue;
       // The canonical order every other decision uses: rank, then entity_id.
       const order = bucket.members.slice().sort(canonicalOrder(items));
-      const cliques = buildCliques(items, order, gap, minSeparation, drawableMax);
+      const cliques = buildCliques(items, order, gap, drawableMax);
       // Fold singletons nearest-first, in canonical order so the outcome is a
       // function of geometry and rank like everything else here.
       // ⚠️ ALL THREE AXES (2.496.174). `sz` is the walk camera's along-view
@@ -691,7 +689,7 @@ export function solvePlacement(
           // worse.
           let touches = false;
           for (const m of cliques[ci]) {
-            if (conflicts(items[lone], items[m], gap, minSeparation)) { touches = true; break; }
+            if (conflicts(items[lone], items[m], gap)) { touches = true; break; }
           }
           if (!touches) continue;
           const dx = items[lone].sx - cent[ci].cx, dy = items[lone].sy - cent[ci].cy;
@@ -787,7 +785,7 @@ export function solvePlacement(
       // NEAREST among the eligible is still ranked by straight distance:
       // that is a ranking, not an overlap test, and the centroid the pair
       // will be drawn at cares about distance, not about box axes.
-      if (!conflicts(li, items[i], gap, minSeparation, PULLBACK_REACH_FACTOR)) continue;
+      if (!conflicts(li, items[i], gap, PULLBACK_REACH_FACTOR)) continue;
       const dx = items[i].sx - li.sx, dy = items[i].sy - li.sy, dz = items[i].sz - li.sz;
       const d2 = dx * dx + dy * dy + dz * dz;
       // Deterministic on ties, so two equidistant pile-mates cannot alternate.
@@ -1091,7 +1089,6 @@ export function buildCliques(
   items: readonly PlacementItem[],
   order: readonly number[],
   gap: number,
-  minSep: number,
   maxSize: number,
 ): number[][] {
   const taken = new Uint8Array(items.length);
@@ -1129,7 +1126,7 @@ export function buildCliques(
         if (taken[cand]) continue;
         let all = true;
         for (const m of pile) {
-          if (!conflicts(items[cand], items[m], gap, minSep)) { all = false; break; }
+          if (!conflicts(items[cand], items[m], gap)) { all = false; break; }
         }
         if (!all) continue;
         const dx = items[cand].sx - cx, dy = items[cand].sy - cy, dz = items[cand].sz - cz;

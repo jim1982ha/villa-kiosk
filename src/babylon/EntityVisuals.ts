@@ -115,7 +115,7 @@ import { LayoutGate } from "./layoutGate";
 import { WalkerView, walkExemptRooms } from "./walkerView";
 import type { RoomChip } from "./roomChips";
 import { groupCardModel, roomChipModel, type SummaryFrame } from "./summaryLook";
-import { rungAt, referenceDepthAt, iconZoomAt, viewportPx } from "./badgeScale";
+import { rungAt, referenceDepthAt, iconZoomAt, cssExtent } from "./badgeScale";
 import { solveRoomZoom } from "./roomZoomSolver";
 import { RoomFocus } from "./roomFocus";
 import { PlacementCheck, type ScreenBox } from "./placementCheck";
@@ -317,20 +317,9 @@ const WAKE_TRACE_FRAMES = 40;
 
 // The app-wide --touch-min (styles.css), in CSS px. pickBadgeAt expands a
 // badge's hit area up to this whenever the PAINTED badge is smaller — which
-// is the whole point of letting a fine pointer have a smaller badge.
-//
-// ⚠️ NOT a duplicate of `badgeMetrics.minCentrePitchPx`, which is also 44 on a
-// coarse pointer. Two questions that happen to share a number:
-//   this            — how far a HIT AREA is expanded around one badge, so a
-//                     shrunken badge stays tappable. Flat, because the target
-//                     must not shrink with the paint on any pointer.
-//   minCentrePitchPx— how far two badge CENTRES must be before the solver
-//                     stops grouping them. 44 coarse / 24 fine, because the
-//                     fine profile paints 32 px and leans on WCAG 2.5.8's
-//                     spacing exception.
-// Converging them would drag the fine pointer's hit expansion down to 24 and
-// undo exactly the decoupling this constant exists for. Cross-referenced in
-// both directions so /dry-audit does not re-flag the pair every pass.
+// is the whole point of letting a fine pointer have a smaller badge. Flat,
+// because the target must not shrink with the paint on any pointer. It never
+// decides grouping: badges group only when what is drawn would overlap.
 const TOUCH_MIN_CSS_PX = 44;
 // Unit offsets for pickBadgeAt's two sampling rings: the exact hit, then 8
 // directions at half slop, then the same 8 at full slop. Flat [cos,sin,...]
@@ -841,7 +830,7 @@ export class EntityVisuals {
   /** `this.labels` newest-first, for badgeContaining's hit test. Refreshed in
    *  rebuildLabels, the only place this.labels is mutated. */
   private labelsNewestFirst: Array<[string, LabelControls]> = [];
-  /** Scratch for quantisedPixelsPerWorldUnit's median. */
+  /** Scratch for cssRung's median. */
   private distPool: Float64Array = new Float64Array(0);
   /** Entities the owner removed as "no longer in HA" — see badgeEligible. */
   /** The `?debug=place` self-check over what a pass painted — placementCheck.ts. */
@@ -2023,7 +2012,7 @@ export class EntityVisuals {
   solveRoomZoomRadius(
     room: string,
     view: {
-      /** Render-target height in px — the units quantisedPixelsPerWorldUnit uses. */
+      /** Render-target height in px — the frame test's unit (the rung is the CSS one, cssRung). */
       vpH: number;
       /** Render-target width in px — the other half of the frame test. */
       vpW: number;
@@ -2091,28 +2080,19 @@ export class EntityVisuals {
 
     const allow = 1 - GROUP_OVERLAP_ALLOW_WIDTHS;
     const gapPx = this.metrics.minGapPx * mScale;
-    // The destination's accessibility floor. The zoom cap is 1 where this shot
-    // lands, so only the FAR-ZOOM CAP can shrink it — which is to say nothing
-    // does, here. It reads `iconZoomScale` and not `iconUserScale` because
-    // that is what screenClearance reads: this expression used to carry
-    // `Math.min(1, this.iconUserScale)` while its own comment claimed to match
-    // screenClearance, which had dropped that term in 2.232.0. Since the user
-    // scale is at most 1 there, the ladder was demanding LESS separation than
-    // the renderer would, i.e. promising a shot the renderer then declines —
-    // the exact bug this solver exists to prevent.
-    const minSepPx = this.metrics.minCentrePitchPx
-      * this.cssToGui() * Math.min(1, this.iconZoomScale);
     return solveRoomZoom(
       members.map((m, i) => ({ wx: m.wx, wy: m.wy, wz: m.wz, mine: m.mine, halfW: boxes[i].halfW, halfH: boxes[i].halfH, cy: boxes[i].cy })),
       {
         vpH: view.vpH, vpW: view.vpW, vFov: view.vFov, frame: view.frame,
+        // The rung's own unit, as the renderer's (cssRung): CSS height, then scaled.
+        cssH: this.cssViewportHeight(), cssToGui: this.cssToGui(),
         // The DESTINATION's grouping basis: roomShot keeps the
         // current alpha but forces a top-down beta, so the ladder is walked
         // through the direction the camera will ARRIVE at (roomZoomSolver.ts).
         grouping: this.currentViewBasis(view.dir),
         cx: view.cx, cy: view.cy, cz: view.cz, minRadius: view.minRadius, maxRadius: view.maxRadius,
       },
-      { gapPx, minSepPx, allow },
+      { gapPx, allow },
       this.zoomScratch,
     );
   }
@@ -3369,10 +3349,10 @@ export class EntityVisuals {
 
     // ── The focus, and how long each half of it lasts: roomFocus.ts ────────
     // Resolved BEFORE any grouping runs, so a single pass cannot group with a
-    // focus it is about to drop. The zoom is in CSS px (see
-    // quantisedPixelsPerWorldUnit) — the one comparison made BETWEEN frames.
+    // focus it is about to drop. The zoom is the CSS-px rung (cssRung) — the one
+    // comparison made BETWEEN frames, which the resolution valve cannot move.
     const suppressOthers = this.focus.size > 0
-      && this.focus.step(this.quantisedPixelsPerWorldUnit(shown, true));
+      && this.focus.step(this.cssRung(shown));
 
     // ── Layout ───────────────────────────────────────────────────────────
     // Grouping is decided in world space against the current zoom alone, so
@@ -3405,7 +3385,7 @@ export class EntityVisuals {
     const clearance = this.screenClearance(shown);
     if (clearance) {
       const withText = this.placementItems(shown, this.labelBoxes(shown, valueShown), clearance);
-      dropTouchingValues(valueShown, markContacts(withText, clearance.gap, clearance.minSep, this.placeScratch));
+      dropTouchingValues(valueShown, markContacts(withText, clearance.gap, this.placeScratch));
     }
     for (let i = 0; i < shown.length; i++) this.setValueVisible(shown[i].lbl, valueShown[i]);
     // ── Tier 2 → 3: only now, if the ICONS THEMSELVES still collide ───────
@@ -4040,7 +4020,7 @@ export class EntityVisuals {
     const f = dir ?? this.camForward;
     const len = Math.hypot(f.x, f.y, f.z);
     if (!(len > 0)) return viewBasis(0, 0, 1, VIEW_BASIS_STEPS, VIEW_METRIC);
-    // Duck-typed for the same reason quantisedPixelsPerWorldUnit is: only
+    // Duck-typed for the same reason cssRung is: only
     // ArcRotateCamera has a `radius`, and this file imports neither concrete
     // camera class. The walk camera keeps the pre-2.287.0 metric because the
     // plane one discards its depth axis entirely — projectToView has the
@@ -4054,39 +4034,29 @@ export class EntityVisuals {
    * The pass's clearance numbers, or null if the projection is not usable this
    * frame.
    *
-   * Everything the solver consumes is in GUI PIXELS, which is what "too close
-   * to read" and "too close to tap" both actually mean. It used to convert them
-   * DOWN into world units and measure there; the projection does that job now
-   * and does it correctly on all three axes, so the conversion is gone and
-   * `reach`, `gap` and `minSep` are simply the numbers badgeMetrics states.
+   * Everything the solver consumes is in GUI PIXELS, which is what "drawn on
+   * top of each other" actually means. It used to convert them DOWN into world
+   * units and measure there; the projection does that job now and does it
+   * correctly on all three axes, so the conversion is gone and `reach` and
+   * `gap` are simply the numbers badgeMetrics states.
    * `pxPerWorld` is still returned — the PROJECTION needs it even though none
    * of the clearances do.
    */
   private screenClearance(
     shown: ShownLabel[],
-  ): { pxPerWorld: number; gap: number; minSep: number; allow: number; basis: ViewBasis;
+  ): { pxPerWorld: number; gap: number; allow: number; basis: ViewBasis;
        refDepth: number; eye?: { x: number; y: number; z: number } } | null {
-    const pxPerWorld = this.quantisedPixelsPerWorldUnit(shown);
+    const rung = this.cssRung(shown);
+    // Render px for the projection, from the CSS-px rung (badgeScale.rungPx).
+    const pxPerWorld = rung * this.cssToGui();
     if (!(pxPerWorld > 0)) return null;
     const scale = this.effectiveScale();
-    // The accessibility floor decays with the FAR-ZOOM CAP only.
-    //
-    // Not with the user's size preference, which 2.232.0 got wrong. Folding
-    // iconUserScale in here meant raising the icon size raised the floor as
-    // well as the badge, so a single quarter-step took the required centre
-    // separation from 39 to 49 CSS px and whole rooms collapsed to their chip
-    // in one click. An accessibility floor is a fixed quantity on the glass:
-    // it is the tap target, and the tap target does not grow because someone
-    // asked for bigger icons. Growing badges already demand more room through
-    // the reach term, which is the honest reason for them to group.
-    const shrink = Math.min(1, this.iconZoomScale);
     return {
       pxPerWorld,
       gap: this.metrics.minGapPx * scale,
-      minSep: this.metrics.minCentrePitchPx * this.cssToGui() * shrink,
       allow: 1 - GROUP_OVERLAP_ALLOW_WIDTHS,
       basis: this.currentViewBasis(),
-      refDepth: this.rungReferenceDepth(pxPerWorld),
+      refDepth: this.rungReferenceDepth(rung),
       // Walk mode measures from the walker's eye (atReferenceDepth); the
       // orbit camera keeps the plane's own depth correction.
       eye: this.orbitCamera() ? undefined : this.walkEye(),
@@ -4094,7 +4064,7 @@ export class EntityVisuals {
   }
 
   /** Whether the active camera is the orbit (bird's-eye) one — duck-typed, as
-   *  quantisedPixelsPerWorldUnit and currentViewBasis are. */
+   *  cssRung and currentViewBasis are. */
   private orbitCamera(): boolean {
     return typeof (this.scene.activeCamera as unknown as { radius?: number } | null)?.radius === "number";
   }
@@ -4202,7 +4172,7 @@ export class EntityVisuals {
   private logPlacement(
     shown: ShownLabel[],
     clearance: {
-      pxPerWorld: number; gap: number; minSep: number; basis: ViewBasis;
+      pxPerWorld: number; gap: number; basis: ViewBasis;
     } | null,
     stats: PlacementStats | null,
     placed: PendingEntityGroup[],
@@ -4256,7 +4226,6 @@ export class EntityVisuals {
       // lines that agree on this field.
       + ` css=${this.cssToGui().toFixed(2)}`
       + ` zoom=${this.iconZoomScale.toFixed(2)} gapPx=${clearance.gap.toFixed(1)}`
-      + ` sepPx=${clearance.minSep.toFixed(1)}`
       + ` sinTilt=${clearance.basis.sinPhi.toFixed(3)} az=${clearance.basis.ax.toFixed(3)}`
       + ` metric=${clearance.basis.mode}`
       + ` | badges=${this.labels.size} eligible=${shown.length} behind=${behind} drawn=${drawn}`
@@ -4340,7 +4309,7 @@ export class EntityVisuals {
     shown: ShownLabel[],
     boxes: { halfW: number; halfH: number; cy: number }[],
     clearance: {
-      pxPerWorld: number; gap: number; minSep: number; allow: number; basis: ViewBasis;
+      pxPerWorld: number; gap: number; allow: number; basis: ViewBasis;
       refDepth: number;
     },
     /** The summaries that SURVIVED placement — not the ones the solver asked
@@ -4404,11 +4373,10 @@ export class EntityVisuals {
       chipDrawnWidth: (key) => (this.clusters.get(key)?.container as unknown as
         { _currentMeasure?: { width: number } } | undefined)?._currentMeasure?.width,
       chipScale: scale,
-      minSepPx: clearance.minSep,
       minGapPx: this.metrics.minGapPx,
       overlapAllow: GROUP_OVERLAP_ALLOW_WIDTHS,
       solve: {
-        items: this.placementItems(shown, boxes, clearance), gap: clearance.gap, minSep: clearance.minSep,
+        items: this.placementItems(shown, boxes, clearance), gap: clearance.gap,
         mode: BADGE_PLACEMENT, drawableMax: this.drawableMax(),
       },
     });
@@ -4455,14 +4423,13 @@ export class EntityVisuals {
    * is exactly where the overlapping badges were reported.
    */
 
-  /** This pass's reference depth, from the same viewport and field of view the
-   *  rung was measured with. 0 when either is unavailable, which reads as "no
-   *  correction" everywhere downstream. */
-  private rungReferenceDepth(pxPerWorld: number): number {
+  /** This pass's reference depth, from the same CSS viewport and field of view
+   *  the rung (`cssRung`) was measured with. 0 when either is unavailable, which
+   *  reads as "no correction" everywhere downstream. */
+  private rungReferenceDepth(cssRung: number): number {
     const cam = this.scene.activeCamera;
     if (!cam) return 0;
-    return referenceDepthAt(this.scene.getEngine().getRenderHeight(),
-      Math.tan(cameraFrame(this.scene, cam).vHalf), pxPerWorld);
+    return referenceDepthAt(this.cssViewportHeight(), Math.tan(cameraFrame(this.scene, cam).vHalf), cssRung);
   }
 
   /**
@@ -4494,46 +4461,37 @@ export class EntityVisuals {
     if (!(fit > 0)) { this.applyIconZoom(1); return; }
     const cam = this.scene.activeCamera;
     if (!cam) return;
-    const vpH = this.scene.getEngine().getRenderHeight();
-    // ⚠️ RENDER pixels on BOTH sides, and deliberately not the `cssPixels`
-    // variant. It cancels in the ratio, so this is hw-independent anyway — and
-    // asking for CSS px here would quantise against a DIFFERENT rung from the
-    // one scaling the positions, which is the offset-lattice bug this method
-    // exists to remove, reintroduced through the other door.
-    // A function of the RUNG — badgeScale.iconZoomAt, which carries why.
-    const z = iconZoomAt(this.quantisedPixelsPerWorldUnit(shown), vpH,
+    // CSS px on both sides: the same rung that scales the positions (cssRung),
+    // so one quantisation gives both — badgeScale.iconZoomAt carries why.
+    const z = iconZoomAt(this.cssRung(shown), this.cssViewportHeight(),
       Math.tan(cameraFrame(this.scene, cam).vHalf), fit);
     if (z !== null) this.applyIconZoom(z);
   }
 
-  private quantisedPixelsPerWorldUnit(shown: ShownLabel[], cssPixels = false): number {
+  /** The viewport's CSS height — the unit every rung is quantised in (badgeScale.cssExtent). */
+  private cssViewportHeight(): number {
+    const engine = this.scene.getEngine();
+    return cssExtent(engine.getRenderHeight(), engine.getHardwareScalingLevel(), engine.getRenderingCanvas()?.clientHeight);
+  }
+
+  /**
+   * This pass's rung — pixels per world metre on the zoom lattice — in CSS px.
+   * The layout's render-px scale is this times cssToGui() (badgeScale.rungPx).
+   *
+   * ⚠️ CSS PX, FOR EVERY CALLER (owner, 2026-10-14: badges regrouped whenever
+   * the mouse moved). The render height is not a property of the camera: the
+   * resolution valve draws at one scale while the camera moves and sharper once
+   * it is still. The focus rule learnt it first (c3367bcd: a focus stamped
+   * sharpened, dropped by the first un-sharpened frame); the layout itself kept
+   * a render-px rung on the grounds that its boxes are render px too, so the
+   * scale cancels within a frame. It does not: the rung is CEILED onto the
+   * lattice, and ceil does not commute with a scale that is not a power of two,
+   * so the two resolutions laid out one view at rungs up to a step apart.
+   */
+  private cssRung(shown: ShownLabel[]): number {
     const cam = this.scene.activeCamera;
     if (!cam) return 0;
-    const engine = this.scene.getEngine();
-    // ⚠️ RENDER pixels by default, CSS pixels for any caller that compares this
-    // ACROSS FRAMES — and that distinction is a reported bug.
-    //
-    // The render height is not a property of the camera. The resolution valve
-    // moves it every time the camera starts and stops moving (SceneManager's
-    // sharpen/unsharpen), so on a device whose devicePixelRatio exceeds
-    // HW_START_CAP the same pose measures 1.5x more pixels-per-world-unit while
-    // idle than while being dragged — a phone at dpr 3 sharpens to 1/3 and
-    // moves at 1/2.
-    //
-    // Within ONE frame that is harmless and must stay: the badge boxes it is
-    // compared against are render pixels too, so both sides scale together and
-    // `fits` is unaffected. It is fatal ACROSS frames. The focus retention rule
-    // stamps this value when a room is focused and drops the focus once the
-    // view gets farther — so the stamp was taken sharpened, the first frame of
-    // the pinch that followed was un-sharpened, and the 1.5x drop read as
-    // "zoomed out" and destroyed the exemption before any zoom-in could offset
-    // it. Symptom: tapping a room in the menu showed its devices, starting to
-    // zoom IN collapsed them to the very chip that had just been expanded, and
-    // they only came back a rung or two later once the badges genuinely fitted
-    // — entities, chip, entities, going one direction. Reproduces only where
-    // dpr > HW_START_CAP, which is why a dpr-1.6 laptop never showed it.
-    const vpH = viewportPx(engine.getRenderHeight(), engine.getHardwareScalingLevel(), cssPixels,
-      engine.getRenderingCanvas()?.clientHeight);
+    const vpH = this.cssViewportHeight();
     // Not `cam.fov` directly: whether that is the vertical or the horizontal
     // angle is cameraFrame.ts's question, and this reader was one of four that
     // each answered it separately. Its `|| 0.8` fallback lived on there too.
@@ -4654,7 +4612,7 @@ export class EntityVisuals {
     // The canvas's own CSS width, through the SAME conversion the rung uses —
     // render × hwScale truncates, and at a boundary width the valve's scale
     // change flipped the answer with nothing moved (2.496.187).
-    const cssWidth = viewportPx(engine.getRenderWidth(), engine.getHardwareScalingLevel(), true,
+    const cssWidth = cssExtent(engine.getRenderWidth(), engine.getHardwareScalingLevel(),
       engine.getRenderingCanvas()?.clientWidth);
     return cssWidth > 0 && cssWidth <= PHONE_MAX_CSS_WIDTH;
   }

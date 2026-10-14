@@ -14,8 +14,18 @@
 //  * the icon zoom is a function of the RUNG, so two frames at one rung give
 //    one layout;
 //  * the reference depth is the rung's inverse, so the depth correction
-//    (badgeLayout.depthPull) is measured against the plane it corrects.
-// Pure: tests/oracles/badge_scale.mjs.
+//    (badgeLayout.depthPull) is measured against the plane it corrects;
+//  * the rung is quantised in CSS px and only then converted to render px
+//    (rungPx) — so the layout is the same at every render resolution.
+//
+// ⚠️ "BADGES REGROUP WHILE THE MOUSE MOVES" (owner, three reports to 2.496.345).
+// The rung was ceiled in RENDER px. The resolution valve draws at one scale
+// while the camera moves and sharper once it is still, and ceil does not
+// commute with a scale that is not a power of two: snap(raw·c)/c moved by up to
+// one lattice step (5.9%) between the two, enough to tip a room sitting at its
+// grouping threshold — a chip when still, its devices while moving. Measured in
+// CSS px, the rung cannot know the valve exists.
+// Pure: tests/oracles/badge_scale.mjs, tests/oracles/hover_no_regroup.mjs.
 
 import { snapToZoomLattice, ICON_ZOOM_EXPONENT, ICON_ZOOM_MIN_SCALE } from "./badgeMetrics";
 
@@ -34,6 +44,13 @@ export function rungAt(vpH: number, tanHalf: number, dist: number): number {
   return raw > 0 ? snapToZoomLattice(raw) : 0;
 }
 
+/** The layout's rung in RENDER px: the CSS-px rung (`cssH`, the viewport's CSS
+ *  height) times `cssToGui` (render px per CSS px). Every pass and the room-zoom
+ *  solver ask this — see the header for why the order matters. */
+export function rungPx(cssH: number, tanHalf: number, dist: number, cssToGui: number): number {
+  return rungAt(cssH, tanHalf, dist) * cssToGui;
+}
+
 /** The depth at which `pxPerWorld` is exactly true — the rung's inverse. */
 export function referenceDepthAt(vpH: number, tanHalf: number, pxPerWorld: number): number {
   if (!(pxPerWorld > 0) || !(tanHalf > 0) || !(vpH > 0)) return 0;
@@ -47,9 +64,8 @@ export function referenceDepthAt(vpH: number, tanHalf: number, pxPerWorld: numbe
  * never of the raw camera radius, and snapped onto the same lattice — one rung,
  * one zoom. `fitRadius` 0 (the walking camera) means no shrink.
  *
- * Render pixels on both sides of the ratio; it cancels, so this is independent
- * of the resolution valve — and quantising against a CSS-pixel rung here would
- * reopen the offset-lattice bug through the other door.
+ * CSS pixels on both sides of the ratio: `rung` is the CSS-px rung (the one
+ * rungPx scales), so the zoom and the positions come from one quantisation.
  */
 export function iconZoomAt(rung: number, vpH: number, tanHalf: number, fitRadius: number): number | null {
   if (!(fitRadius > 0)) return 1;
@@ -59,26 +75,14 @@ export function iconZoomAt(rung: number, vpH: number, tanHalf: number, fitRadius
   return snapToZoomLattice(Math.min(1, Math.max(ICON_ZOOM_MIN_SCALE, ratio)));
 }
 
-/** One viewport extent (height for a rung, width for "is this a phone"), in
- *  RENDER pixels within a frame (the boxes it is compared with are render
- *  pixels too); CSS pixels for any value compared ACROSS frames, because the
- *  resolution valve moves the render size every time the camera starts and
- *  stops (c3367bcd). */
-export function viewportPx(renderPx: number, hwScale: number, cssPixels: boolean, cssPx?: number): number {
-  if (!cssPixels) return renderPx;
-  // ⚠️ THE CANVAS'S OWN CSS HEIGHT WHEN THERE IS ONE (2.496.181). The render
-  // height is TRUNCATED to whole pixels (Babylon's setSize), so
-  // `renderHeight × hwScale` came back up to a pixel SHORT at some scales —
-  // and the resolution valve changes the scale whenever the pointer brings
-  // interactive frames back. Near a zoom-lattice boundary that read as one
-  // rung "farther" with the camera dead still, and a room focus (a tapped
-  // chip's devices shown individually) was dropped: the owner's "the
-  // swimming pool icons collapse as soon as I move my mouse" (desktop). 50 of
-  // 12,020 window × zoom cases did it. The CSS height does not move with the
-  // valve, and the app always has a canvas to read it from. Without one
-  // (headless), rounding UP restores it EXACTLY only while hwScale ≤ 1 (the
-  // truncation leaves it short by less than hwScale); above that it is a best
-  // effort.
+/** A viewport extent (height for the rung, width for "is this a phone") in CSS
+ *  px — the one unit the resolution valve cannot move. The canvas's own CSS size
+ *  when there is one (`cssPx`); without one (headless), rebuilt from the render
+ *  size, rounding UP: Babylon's setSize TRUNCATES the render size, so
+ *  `renderPx × hwScale` reads up to a pixel short (2.496.181: "the swimming pool
+ *  icons collapse as soon as I move my mouse" — 50 of 12,020 window × zoom
+ *  cases). Rounding up restores it exactly while hwScale ≤ 1. */
+export function cssExtent(renderPx: number, hwScale: number, cssPx?: number): number {
   if (cssPx !== undefined && cssPx > 0) return cssPx;
   return Math.ceil(renderPx * hwScale - 1e-6);
 }

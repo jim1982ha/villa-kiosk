@@ -441,8 +441,8 @@ export function planeOf(
   return { sx: p.px * k, sy: p.py * k, sz: p.pz * k };
 }
 
-/** A pass's clearance: the glass, plus the solver's gap and minimum separation. */
-export type PassClearance = GlassClearance & { gap: number; minSep: number };
+/** A pass's clearance: the glass, plus the solver's gap. */
+export type PassClearance = GlassClearance & { gap: number };
 
 /** A pooled placement item before it is filled in (built twice until 2.496.263). */
 function blankItem(): PlacementItem {
@@ -569,7 +569,7 @@ export class PlacementPass {
     if (clearance) {
       const items = placementItems(shown, boxes, clearance, frame.rooms, frame.exempt, this.items, this.glass);
       const result = solvePlacement(
-        items, clearance.gap, clearance.minSep, BADGE_PLACEMENT, this.scratch,
+        items, clearance.gap, BADGE_PLACEMENT, this.scratch,
         drawableMaxOf(frame.cellCap),
       );
       solved = result.stats;
@@ -585,8 +585,8 @@ export class PlacementPass {
           const [ia, ib] = bk.members;
           const A = items[ia], B = items[ib];
           const dx = Math.hypot(B.sx - A.sx, B.sz - A.sz), dy = Math.abs(B.sy - A.sy);
-          const needX = Math.max(A.reach + B.reach + clearance.gap, clearance.minSep);
-          const needY = Math.max(A.reachY + B.reachY + clearance.gap, clearance.minSep);
+          const needX = A.reach + B.reach + clearance.gap;
+          const needY = A.reachY + B.reachY + clearance.gap;
           this.seatLog.push(
             `pair ${shown[ia].id} + ${shown[ib].id}`
             + ` dx=${dx.toFixed(0)}/${needX.toFixed(0)} dy=${dy.toFixed(0)}/${needY.toFixed(0)}`
@@ -795,8 +795,8 @@ export class PlacementPass {
     // `conflicts` and `mergeCollidingPiles`, in settleChips' `clears`, and in
     // the placement guard's `hits`. A /dry-audit weighed folding them into one
     // helper and the answer is no: the shared part is ONE line, while
-    // everything that can actually drift — which half-extents, whose gap,
-    // whether the tap-pitch floor applies — is per tier and cannot be shared.
+    // everything that can actually drift — which half-extents, whose gap —
+    // is per tier and cannot be shared.
     // The along-view residual is NOT per tier: it folds in through `groundOf`
     // at every instance, the one piece that is shared. `hits` must stay separate
     // outright: it is the GUARD, and measures ink on ink in true perspective
@@ -1445,7 +1445,7 @@ export class PlacementPass {
   pairFocusedRoom(
     shown: ShownLabel[],
     items: readonly PlacementItem[],
-    clearance: MeasureFrame & { gap: number; minSep: number },
+    clearance: MeasureFrame & { gap: number },
     pending: PendingEntityGroup[],
   ): void {
     const focus = this.f.exempt;
@@ -1467,7 +1467,7 @@ export class PlacementPass {
       // field of the item EXCEPT reachY, so the pooled 0 it was constructed
       // with survived into `conflicts` — and reachY is the entire VERTICAL half
       // of the collision rule. needY collapsed from
-      // `halfH_a + halfH_b + gap` to `max(gap, minSep)` = the tap pitch alone:
+      // `halfH_a + halfH_b + gap` to the centre floor alone (since removed):
       // 24 render px demanded where 50 is drawn, at icon 1.00x/css 1.00.
       //
       // The axis it broke is the one that matters most here. badgeProjection
@@ -1539,7 +1539,7 @@ export class PlacementPass {
     // tapped room could produce a card the renderer could not draw in full.
     // Found by /dry-audit against `drawableMax`.
     const piles = buildCliques(
-      sub, order, clearance.gap, clearance.minSep, this.f.cellCap);
+      sub, order, clearance.gap, this.f.cellCap);
 
     // ── …and then the CARDS must clear each other ─────────────────────────
     // The cliques above are built from where the BADGES are. What gets drawn
