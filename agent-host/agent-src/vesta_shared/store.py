@@ -95,7 +95,9 @@ class Store:
                         (_now(),))
         self.db.execute("DROP TABLE IF EXISTS mutes")
         cols = {r["name"] for r in self.db.execute("PRAGMA table_info(tasks)")}
-        for col in ("source", "check_text", "reopened_at", "reopened_by"):
+        # close_note / closed_who: what its fault's close says, and the person who closed it — kept with the task so a
+        # close the Kiosk did not receive is redone as it was meant (architecture review, 2026-10-14)
+        for col in ("source", "check_text", "reopened_at", "reopened_by", "close_note", "closed_who"):
             if col not in cols:
                 self.db.execute(f"ALTER TABLE tasks ADD COLUMN {col} TEXT")
         # a finding that comes back (vesta_shared.problems AGAIN_DAYS) keeps when it came back and the days it was seen —
@@ -312,8 +314,9 @@ class Store:
             q += " WHERE status=?"; args.append(status)
         return [dict(r) for r in self.db.execute(q + " ORDER BY created_at", args)]
 
-    def close_task(self, task_id: int, status: str = "done"):
-        self.db.execute("UPDATE tasks SET status=?, done_at=? WHERE id=?", (status, _now(), task_id))
+    def close_task(self, task_id: int, status: str = "done", note: str | None = None, who: str | None = None):
+        self.db.execute("UPDATE tasks SET status=?, done_at=?, close_note=?, closed_who=? WHERE id=?",
+                        (status, _now(), note or None, who or None, task_id))
         self.db.commit()
 
     # proposals -------------------------------------------------------------

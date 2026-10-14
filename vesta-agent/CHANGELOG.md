@@ -1,3 +1,15 @@
+## 0.12.196
+
+What you will see:
+- A fault you (or anyone) reopened in the Cockpit now stays open until a person closes it. Before, the next night check
+  that no longer saw the problem closed it again by itself ("Cleared"), and so did Home Assistant clearing the alert.
+  A Done pressed on Telegram still closes it.
+- A Done pressed on Telegram while the Kiosk is briefly unreachable is no longer recorded as the Agent's own clearing:
+  within minutes of the Kiosk coming back, the card says "Done by" and the name of whoever pressed it, and the
+  repair appears in Recent work.
+- When Home Assistant re-words an alert that is still open, the Cockpit card takes the new words too, as Telegram
+  already did. An open alert that has come back several times also shows "(again: N times in 7 days)" on its card.
+
 ## 0.12.195
 
 What you will see:

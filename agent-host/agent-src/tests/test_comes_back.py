@@ -137,9 +137,8 @@ def test_a_reopened_task_whose_old_resolution_is_seen_reopens_its_fault_and_a_lo
     iid = st.new_incident("k", "automation.ap", "sensor.ap", "P2", {"message": "AP down"})
     tid, _ = pb.open_task("incident", iid, "automation.ap", "sensor.ap", "AP down")
     st.set_task_uid(tid, "t-old")
-    k.known = ["t-old", "t-lost"]
-    k.closed_by_hand = {"t-old"}
-    k.closed_meta["t-old"] = {"resolved_at": "2026-10-01T08:00:00.000Z", "by": "Facility manager"}
+    k.held("t-old", "t-lost")
+    k.person_closes("t-old", by="Facility manager", at="2026-10-01T08:00:00.000Z")
     pb.close(tid, "done")
     pb.reopen_task("incident", iid, "automation.ap", "sensor.ap", "AP down (again: 2 times in 7 days)")
     # a closed task whose fault's resolve never reached the Kiosk

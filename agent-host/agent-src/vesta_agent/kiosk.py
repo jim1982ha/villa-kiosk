@@ -176,11 +176,15 @@ class Kiosk:
         except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             raise KioskError(f"POST /agent/v1/fm-document: {type(e).__name__}") from None
 
+    def _ticket_id(self) -> str:
+        """A new fault's id ("va-…": written by the VESTA Agent)."""
+        return "va-" + secrets.token_hex(8)
+
     async def add_ticket(self, title: str, entity_id: str | None = None, note: str | None = None,
                          document_ids: list[str] | None = None, number: int | None = None) -> str:
         """`number`: the alert's number, as every chat names it ("#5"), when the fault comes from one — the Kiosk's card
         shows it beside the title (owner, 2026-10-14), so the Telegram message and the card are seen to be one problem."""
-        tid = "va-" + secrets.token_hex(8)
+        tid = self._ticket_id()
 
         def change(data: dict) -> str:
             tickets = list(data.get("tickets") or [])

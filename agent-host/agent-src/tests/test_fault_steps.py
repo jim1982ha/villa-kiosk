@@ -8,7 +8,6 @@ Done counted as fixed. Synthetic villa; ids invented."""
 from __future__ import annotations
 
 import asyncio
-import copy
 import importlib.util
 import json
 import os
@@ -33,17 +32,9 @@ def run(c):
 
 
 def kiosk_holding(*tickets) -> tuple[Kiosk, dict]:
-    """The real Kiosk class over an in-memory Facility document (its GET and PUT of /agent/v1/fm-data)."""
-    k = Kiosk("http://kiosk", "token")
-    doc = {"data": {"tickets": list(tickets)}, "rev": 1}
-
-    async def answer(method, path, body=None):
-        if method == "GET":
-            return 200, copy.deepcopy(doc)
-        doc["data"], doc["rev"] = body["data"], doc["rev"] + 1
-        return 200, {}
-    k._req = answer
-    return k, doc
+    """The real Kiosk over an in-memory Facility document (kiosk_fake.FakeKiosk), and that document."""
+    k = FakeKiosk(*tickets)
+    return k, k.doc
 
 
 def ticket(doc, tid="va-1") -> dict:
@@ -108,7 +99,7 @@ def test_the_nightly_repair_never_writes_its_title_over_a_persons(tmp_path):
     fid, _ = st.raise_finding("PM-X", "lock.front", "offline", "2026-10-07", "P3", "Front door lock unavailable", {})
     tid, _ = pb.open_task("finding", fid, "PM-X", "lock.front", "Front door lock unavailable")
     run(v.tickets.repair())                                                           # its fault: t1
-    k.titles["t1"] = "Front door lock — part ordered"
+    k.person_renames("t1", "Front door lock — part ordered")
     st.raise_finding("PM-X", "lock.front", "offline", "2026-10-08", "P3", "Front door lock offline 3 days", {})
     assert pb.current_title(st.task(tid)) == "Front door lock offline 3 days"         # what the night reads now
     run(v.tickets.repair())
@@ -140,14 +131,14 @@ def _closed_night_fault(tmp_path, k, told):
     tid, _ = pb.open_task("finding", fid, "PM-X", "sensor.pump", "Pump weak")
     st.set_task_uid(tid, "t-pump")
     pb.close_finding(st.finding(fid), "2026-10-08", "Cleared")
-    k.known = ["t-pump"]
+    k.held("t-pump")
     return v, st, tid
 
 
 def test_a_night_fault_a_person_reopens_tells_the_facility_manager(tmp_path):
     k, told = FakeKiosk(), []
     v, st, tid = _closed_night_fault(tmp_path, k, told)
-    k.closed_meta["t-pump"] = {"reopened_by": "Owner", "reopened_at": "2099-01-01T00:00:00.000Z"}
+    k.person_reopens("t-pump", by="Owner")
     run(v.tickets.repair())
     assert st.task(tid)["status"] == "open"
     assert len(told) == 1 and told[0].startswith("Reopened in the VESTA Kiosk by Owner on ") \
@@ -161,7 +152,7 @@ def test_a_fault_picked_up_after_a_close_that_did_not_land_is_closed_again_not_t
     # step — the close is retried, nobody is told to look again at a job just taken
     k, told = FakeKiosk(), []
     v, st, tid = _closed_night_fault(tmp_path, k, told)
-    k.closed_meta["t-pump"] = {"by": "Facility manager"}
+    k.person_moves("t-pump", by="Facility manager")
     run(v.tickets.repair())
     assert st.task(tid)["status"] != "open" and "t-pump" in k.resolved and told == []
 
@@ -255,7 +246,7 @@ def test_a_reopen_of_a_fault_closed_days_ago_is_heard(tmp_path):
     v, st, tid = _closed_night_fault(tmp_path, k, told)
     with st.db:                                                                     # closed five days ago
         st.db.execute("UPDATE tasks SET done_at=? WHERE id=?", ((datetime.now(timezone.utc) - timedelta(days=5)).isoformat(), tid))
-    k.closed_meta["t-pump"] = {"reopened_by": "Owner", "reopened_at": "2099-01-01T00:00:00.000Z"}
+    k.person_reopens("t-pump", by="Owner")
     run(v.tickets.repair())
     assert st.task(tid)["status"] == "open" and told and told[0].startswith("Reopened in the VESTA Kiosk by Owner on 01/01/2099 00:00: ")
 

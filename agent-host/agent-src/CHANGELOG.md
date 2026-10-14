@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.188 (14 October 2026)
+
+Architecture review, 2026-10-14 (problem ↔ Kiosk fault):
+- vesta_shared.problems: `in_persons_hands(task)` — a task a person reopened is closed only by a person:
+  `clear_source` (close_finding, close_incident when cleared) skips it, as repair already did. `closed_by_person(source,
+  since)`: one reading of a person's close for open_problems and unseen. `card(task)`: what the task's Kiosk fault must
+  say (open, title, alert number, close note, who). `close_outlived()`. `current_title` follows an open incident's
+  message (Home Assistant re-wording it). Tasks keep `close_note` / `closed_who` (store columns, added on start).
+- vesta_agent.tickets: `repair()` = take in a person's gestures (`_take_in`), close outlived tasks, make every fault
+  what its task says (`_converge`), create missing faults — a failed resolve is redone with its person and note.
+- vesta_agent.kiosk: `_ticket_id()` (the id seam the tests' document uses).
+- tests: kiosk_fake.FakeKiosk is the REAL Kiosk over an in-memory Facility document (only `_req` replaced) with a
+  person's Cockpit gestures as verbs (held, person_closes/reopens/moves/renames); the two other stand-ins are gone.
+  New: test_persons_hands.py, test_card_from_task.py.
+
 ## 0.6.187 (14 October 2026)
 
 - vesta_agent.kiosk: `add_ticket(number=)` writes `alertNumber` on the Kiosk fault (the incident's number, "#5");

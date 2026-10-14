@@ -97,7 +97,8 @@ def test_the_tasks_and_the_kiosks_tickets_agree(agent):
     # Kiosk's Cockpit only grew (22 faults for problems gone)
     from vesta_shared.problems import Problems
     v, kiosk = agent
-    kiosk.known, kiosk.closed_by_hand = ["t-hand", "t-gone", "t-alert"], ["t-hand", "t-alert"]
+    kiosk.held("t-hand", "t-gone", "t-alert")
+    kiosk.person_closes("t-hand")
     st, pb = Store(v.s.store_path), Problems(Store(v.s.store_path))
     fid, _ = st.raise_finding("PM-A", "sensor.example_a", "level", "2026-09-30", "P3", "A", {})
     by_hand, _ = pb.open_task("finding", fid, "PM-A", "sensor.example_a", "Closed in the Kiosk"); st.set_task_uid(by_hand, "t-hand")
@@ -108,7 +109,7 @@ def test_the_tasks_and_the_kiosks_tickets_agree(agent):
     st.update_incident(iid, state="asked")
     alert, _ = pb.open_task("incident", iid, "automation.example_door", "lock.example_door", "Door left open")
     st.set_task_uid(alert, "t-alert")
-    kiosk.closed_meta["t-alert"] = {"by": "Facility manager", "resolved_at": "2026-10-10T09:13:00.000Z"}
+    kiosk.person_closes("t-alert", by="Facility manager", at="2026-10-10T09:13:00.000Z")
     run(v.outcome.carry_out({"send": [{"to": "fm", "text": f"Door left open. Incident #{iid}.", "keyboard": True}],
                              "incident_id": iid}, "alert-desk"))
     run(v.tickets.repair())

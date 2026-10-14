@@ -109,13 +109,16 @@ class Tickets:
         return False
 
     async def repair(self) -> int:
-        """The open tasks and the Kiosk's tickets agree (at each start and each night, owner, 2026-10-01):
-          - a task whose ticket a person resolved in the Kiosk is closed, with the incident it came from
-            (vesta_shared.problems decides; here only the Kiosk is read and the alert's messages settled);
-          - a task that outlived its finding or incident is closed, its ticket resolved;
-          - an open task without its ticket gets one (a task stored while the Kiosk was off, or by a
-            script whose result was dropped).
-        ⚠️ Without the first two the Kiosk's Cockpit only ever grew: 22 "Open fault" for problems gone."""
+        """The open tasks and the Kiosk's faults agree (at each start and each night, owner, 2026-10-01), in three steps:
+          1. what people did in the Kiosk comes in: a fault a person closed closes its task (and the incident it came
+             from: the alert's messages are settled); a fault a person reopened opens its task again, theirs;
+          2. a task that outlived its finding or incident closes (Problems.close_outlived);
+          3. every fault is made what its task says (Problems.card): open or closed — by whom, with which note —, its
+             title and its alert's number; an open task without a fault gets one.
+        Returns how many faults were created.
+        ⚠️ ONE COMPARISON, NOT NINE PATCHES (architecture review, 2026-10-14): each case was a pass of its own, and a
+        close the Kiosk did not receive was redone as the agent's ("Closed: the problem is over.") — a Done pressed by
+        Fabien lost his name and his repair. The card now comes from the task, whose close keeps who and why."""
         if not self.kiosk.enabled:
             return 0
         store = self._store()
@@ -125,84 +128,10 @@ class Tickets:
         except Exception as e:  # noqa: BLE001 — the next start or night tries again
             log.warning("The Kiosk's tickets could not be read (%s)", type(e).__name__)
             return 0
-        states = {tid: t["status"] for tid, t in held.items()}
-        closed = cleared = 0
-        for t in problems.open_tasks():
-            uid = t.get("todo_uid")
-            if uid and states.get(uid) == "resolved" and _before(held[uid].get("resolved_at"), t.get("reopened_at")):
-                # ⚠️ RESOLVED BEFORE IT CAME BACK (architecture review 24): the task reopened and its fault's reopening did
-                # not reach the Kiosk — that old resolution is not a person closing it now
-                await self.reopen({"task_id": t["id"], "title": t.get("summary") or ""})
-                continue
-            if uid and states.get(uid) == "resolved":
-                iid = problems.closed_in_kiosk(t["id"], kiosk_words.closed(held[uid].get("by") or "",
-                                                                           held[uid].get("resolved_at"), self.timezone))
-                if iid:
-                    # who and when, as a button's footer says it (owner, 2026-10-10): the Kiosk's own record of the close
-                    await self.settle_alert(iid, kiosk_close_note(held.get(uid) or {}, self.timezone))
-                closed += 1
-            elif problems.source_gone(t) and not t.get("reopened_by"):
-                problems.close(t["id"], CLEARED)
-                if uid and states.get(uid) not in (None, "resolved"):
-                    await self.kiosk.resolve_ticket(uid, note="Cleared: the check no longer sees it.")
-                    states[uid] = "resolved"
-                cleared += 1
-        # ⚠️ A CLOSED TASK'S FAULT IS CLOSED (architecture review 24): a resolve that failed (the Kiosk down a moment) left
-        # the fault "Open" for good — only open tasks were read. Two days back: enough for any blip.
-        # ⚠️ BUT A PERSON'S REOPENING IS THEIRS (architecture review 25): the fault reopened in the Cockpit for the
-        # facility manager to look was resolved again within 5 minutes. Reopened in the Kiosk after the task closed —
-        # its "Reopen fault" step, never a guess from timings (review 26: a fault picked up after a close that did not
-        # land was taken for a reopening, and its facility manager told to look again at a job just taken) — its task
-        # opens again and the facility manager is asked: an alert's by the desk (Problems.reopened_in_kiosk), a night
-        # check's fault here (review 26: it told nobody)
-        # ⚠️ A REOPENING IS HEARD WHATEVER THE FAULT'S AGE (architecture review 29): the two days were for retrying a
-        # close, and silenced "Reopen fault" on a fault closed three days before — open in the Cockpit for good, nobody told
-        recent = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
-        for t in store.tasks(None):
-            uid = t.get("todo_uid")
-            if t["status"] == "open" or not uid or states.get(uid) in (None, "resolved"):
-                continue
-            if _before(t.get("done_at"), held[uid].get("reopened_at")):
-                if not problems.reopened_in_kiosk(t["id"], held[uid].get("reopened_by") or "",
-                                                  kiosk_reopen_note(held[uid], None, self.timezone)) and self.tell_fm:
-                    await self.tell_fm(kiosk_reopen_note(held[uid], t.get("summary") or held[uid]["title"], self.timezone))
-                log.info("Kiosk ticket %s reopened by a person: its task is open again", uid)
-            elif (t.get("done_at") or "") >= recent:
-                if await self.kiosk.resolve_ticket(uid, note="Closed: the problem is over."):
-                    states[uid] = "resolved"
-                    cleared += 1
-        if closed or cleared:
-            log.info("Kiosk tickets reconciled: %d task(s) closed in the Kiosk, %d cleared with their ticket", closed, cleared)
-        # ⚠️ AN OPEN FAULT SAYS WHAT IS WRONG NOW (owner, 2026-10-07): the ticket kept "battery at 5 %" for days while
-        # the night check's finding read 0 % — the ticket was written once
-        updated = 0
-        for t in problems.open_tasks():
-            uid = t.get("todo_uid")
-            now_title = ticket_title(problems.current_title(t))[:200]
-            # the title the agent last gave it, not the one it has: a title a person wrote stays (Kiosk.update_ticket)
-            said = held.get(uid, {}).get("agent_title") or held.get(uid, {}).get("title")
-            if uid and uid in held and held[uid]["status"] != "resolved" and now_title and said != now_title:
-                try:
-                    if await self.kiosk.update_ticket(uid, now_title):
-                        updated += 1
-                except Exception as e:  # noqa: BLE001
-                    log.warning("A Kiosk ticket could not be brought up to date (%s)", type(e).__name__)
-                    break
-        if updated:
-            log.info("Kiosk tickets brought up to date: %d", updated)
-        # ⚠️ THE CARD SAYS THE ALERT'S NUMBER (owner, 2026-10-14: "#5" in Telegram, nothing on the Cockpit's card): a
-        # fault made before 0.12.195 is given it here
-        numbered = 0
-        for t in problems.open_tasks():
-            uid, number = t.get("todo_uid"), self._alert_number(t["id"])
-            if number and uid in held and held[uid]["status"] != "resolved" and held[uid].get("alert_number") != number:
-                try:
-                    numbered += bool(await self.kiosk.number_ticket(uid, number))
-                except Exception as e:  # noqa: BLE001 — the next start or night tries again
-                    log.warning("A Kiosk ticket could not be given its alert's number (%s)", type(e).__name__)
-                    break
-        if numbered:
-            log.info("Kiosk tickets given their alert's number: %d", numbered)
+        await self._take_in(problems, held)
+        if cleared := problems.close_outlived():
+            log.info("Tasks closed with their problem gone: %d", len(cleared))
+        await self._converge(problems, held)
         made = 0
         for t in problems.open_tasks():
             if t.get("todo_uid"):
@@ -222,6 +151,70 @@ class Tickets:
             log.warning("%d open problem(s) have no Kiosk fault: %s", len(unseen),
                         ", ".join(f"{f['rule_id']} {f['entity_id']}" for f in unseen[:10]))
         return made
+
+    async def _take_in(self, problems: Problems, held: dict[str, dict]) -> None:
+        """Step 1: what a PERSON did to a fault in the Kiosk reaches its task. Only their gestures — every other
+        difference is the agent's to put right (_converge)."""
+        closed = 0
+        for t in problems.open_tasks():
+            uid = t.get("todo_uid")
+            card = held.get(uid) if uid else None
+            # ⚠️ RESOLVED BEFORE IT CAME BACK (architecture review 24): the task reopened after that resolution — it is not
+            # a person closing it now (_converge reopens the fault)
+            if card and card["status"] == "resolved" and not _before(card.get("resolved_at"), t.get("reopened_at")):
+                iid = problems.closed_in_kiosk(t["id"], kiosk_words.closed(card.get("by") or "", card.get("resolved_at"),
+                                                                           self.timezone))
+                if iid:
+                    # who and when, as a button's footer says it (owner, 2026-10-10): the Kiosk's own record of the close
+                    await self.settle_alert(iid, kiosk_close_note(card, self.timezone))
+                closed += 1
+        # ⚠️ A PERSON'S REOPENING IS THEIRS (architecture review 25), WHATEVER THE FAULT'S AGE (review 29): read from the
+        # Kiosk's "Reopen fault" step, never guessed from timings (review 26): its task opens again and the facility
+        # manager is asked — an alert's by the desk (Problems.reopened_in_kiosk), a night check's fault here
+        for t in problems.store.tasks(None):
+            uid = t.get("todo_uid")
+            card = held.get(uid) if uid else None
+            if t["status"] == "open" or not card or card["status"] == "resolved":
+                continue
+            if _before(t.get("done_at"), card.get("reopened_at")):
+                if not problems.reopened_in_kiosk(t["id"], card.get("reopened_by") or "",
+                                                  kiosk_reopen_note(card, None, self.timezone)) and self.tell_fm:
+                    await self.tell_fm(kiosk_reopen_note(card, t.get("summary") or card["title"], self.timezone))
+                log.info("Kiosk ticket %s reopened by a person: its task is open again", uid)
+        if closed:
+            log.info("Kiosk tickets closed by a person: %d task(s) closed with them", closed)
+
+    async def _converge(self, problems: Problems, held: dict[str, dict]) -> None:
+        """Step 3: each fault says what its task says (Problems.card). A close is redone for two days (a resolve that did
+        not land: the Kiosk down a moment); past them, a fault a person moved since is theirs."""
+        recent = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+        fixed = 0
+        for t in problems.store.tasks(None):
+            uid = t.get("todo_uid")
+            card = held.get(uid) if uid else None
+            if not card:
+                continue
+            want = problems.card(t)
+            try:
+                if want["open"] and card["status"] == "resolved":
+                    # its problem came back and the fault's reopening did not reach the Kiosk
+                    fixed += await self.reopen({"task_id": t["id"], "title": t.get("summary") or ""})
+                elif want["open"]:
+                    title = ticket_title(want["title"])[:200]
+                    # the title the agent last gave it, not the one it has: a title a person wrote stays (Kiosk.update_ticket)
+                    if title and (card.get("agent_title") or card.get("title")) != title:
+                        fixed += await self.kiosk.update_ticket(uid, title)
+                    # the alert's number, as every chat writes it (owner, 2026-10-14)
+                    if want["number"] and card.get("alert_number") != want["number"]:
+                        fixed += await self.kiosk.number_ticket(uid, want["number"])
+                elif card["status"] != "resolved" and (t.get("done_at") or "") >= recent:
+                    fixed += await self.kiosk.resolve_ticket(uid, note=want["note"],
+                                                             **({"who": want["who"]} if want["who"] else {}))
+            except Exception as e:  # noqa: BLE001 — the next start or night tries again
+                log.warning("A Kiosk ticket could not be brought up to date (%s)", type(e).__name__)
+                break
+        if fixed:
+            log.info("Kiosk tickets brought up to date: %d", fixed)
 
 
 def _before(resolved_at: str | None, reopened_at: str | None) -> bool:

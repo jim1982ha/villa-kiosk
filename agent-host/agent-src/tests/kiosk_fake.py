@@ -1,41 +1,53 @@
-"""The in-memory stand-in for vesta_agent.kiosk.Kiosk: the VESTA Kiosk's Facility records, as the agent uses them.
+"""The tests' VESTA Kiosk: the REAL vesta_agent.kiosk.Kiosk over an in-memory Facility records document.
 
-One stand-in (architecture review, 2026-10-07): two near-identical ones recorded tickets differently. Held to the
-real Kiosk's methods and parameters by tests/test_fakes.py.
+⚠️ NO RULE OF ITS OWN (architecture review, 2026-10-14). The stand-in used to re-implement the Kiosk's ticket rules and
+drifted from them in five places — a resolve recorded no person and no completion, a fault a person closed could still
+be retitled, a reopen of an unknown fault "succeeded" — so a Done lost in a Kiosk outage and recorded as "cleared by
+the agent" passed every test. Now only the transport is replaced (`_req`: GET/PUT /agent/v1/fm-data, info, heartbeat);
+every rule runs as in production. What a PERSON does in the Cockpit is written to the document as the Kiosk app writes
+it (held, person_closes, person_reopens, person_moves, person_renames).
 
-    tickets   [(title, entity_id)]   ids t1, t2 …     notes   [note], in the same order     resolved   [ticket id]
-    reopened  [(ticket id, title)]   a resolved ticket open again (its problem came back)
-    closed_by_hand   ids a person resolved in the Kiosk itself     known   ids the Kiosk has from before
-    titles    {ticket id: title} as the Kiosk shows it — a test sets one to play a person renaming it
-    agent_titles   {ticket id: title} the agent last gave it        readings   [(ticket id, title)] under a person's title
-    numbers   {ticket id: alert number} ("#5" on the Kiosk's card)
+Views, read from the document (for assertions):
+    tickets   [(title it was created with, entity_id)] the agent created, ids t1, t2 …   notes, ticket_documents: same order
+    resolved  [ticket id] the agent resolved            reopened  [(ticket id, title)] the agent reopened
+    readings  [(ticket id, title)] under a person's title    titles  {ticket id: title now}    numbers  {ticket id: #N}
+    ticket(tid)  the record itself        documents  [html] kept (None: a Kiosk older than 2.496.326, keeps none)
 """
 from __future__ import annotations
 
+import copy
 
-class FakeKiosk:
-    enabled = True
+from vesta_agent.kiosk import CLEARED, READING, REOPENED, RETITLED, Kiosk, _mine
 
-    def __init__(self):
-        self.tickets, self.notes, self.resolved, self.reopened = [], [], [], []
-        self.closed_by_hand, self.known = set(), set()
-        self.titles: dict[str, str] = {}             # a ticket's title as it is now (update_ticket changes it)
-        self.agent_titles: dict[str, str] = {}       # the title the agent last gave it (Kiosk.agent_title)
-        self.readings: list[tuple[str, str]] = []    # the agent's readings under a title a person wrote
-        self.closed_meta: dict[str, dict] = {}       # a ticket closed by hand: {by, resolved_at}, as the Kiosk records it
+PERSON_AT = "2026-10-01T08:00:00.000Z"
+
+
+class FakeKiosk(Kiosk):
+    def __init__(self, *tickets: dict):
+        super().__init__("http://kiosk.invalid", "token")
+        self.doc = {"data": {"tickets": [copy.deepcopy(t) for t in tickets]}, "rev": 1}
         self.info = {"contract": 1}
-        self.documents: list | None = []             # pages kept (add_document); None: a Kiosk with no documents
-        self.ticket_documents: list[list[str]] = []   # each ticket's documentIds, in the order of `tickets`
-        self.numbers: dict[str, int] = {}            # a ticket's alert number (add_ticket number=, number_ticket)
+        self.documents: list | None = []
+        self._made: list[str] = []
 
-    async def check(self) -> bool:
-        return True
+    # ------------------------------------------------------------------ the one thing replaced: the transport
+    async def _req(self, method, path, body=None):
+        if path == "/agent/v1/fm-data":
+            if method == "GET":
+                return 200, copy.deepcopy(self.doc)
+            if body.get("rev") != self.doc["rev"]:
+                return 409, {"error": "changed since read"}
+            self.doc["data"], self.doc["rev"] = copy.deepcopy(body["data"]), self.doc["rev"] + 1   # in place: a test
+                                                                                                # may hold self.doc
+            return 200, {}
+        if path == "/agent/v1/info":
+            return 200, {"contract": 1}
+        return 200, {}
 
-    async def heartbeat(self, status=None) -> None:
-        pass
-
-    async def heartbeats(self, stop, status=lambda: None) -> None:
-        await stop.wait()
+    def _ticket_id(self) -> str:
+        tid = f"t{len(self._made) + 1}"
+        self._made.append(tid)
+        return tid
 
     async def add_document(self, html: bytes):
         """A Kiosk that holds documents (2.496.326+); `self.documents = None` plays an older one (no document kept)."""
@@ -44,54 +56,86 @@ class FakeKiosk:
         self.documents.append(html)
         return f"d{len(self.documents)}"
 
-    async def add_ticket(self, title, entity_id=None, note=None, document_ids=None, number=None) -> str:
-        if number:
-            self.numbers[f"t{len(self.tickets) + 1}"] = int(number)
-        self.ticket_documents.append(list(document_ids or []))
-        self.tickets.append((title, entity_id))
-        self.notes.append(note)
-        self.titles[f"t{len(self.tickets)}"] = self.agent_titles[f"t{len(self.tickets)}"] = title
-        return f"t{len(self.tickets)}"
+    # ------------------------------------------------------------------ what a person does in the Cockpit
+    def _all(self) -> list[dict]:
+        return self.doc["data"].setdefault("tickets", [])
 
-    async def resolve_ticket(self, tid, note=None, who=None) -> bool:
-        self.resolved.append(tid)
-        return True
+    def ticket(self, tid: str) -> dict:
+        return next(t for t in self._all() if t.get("id") == tid)
 
-    async def reopen_ticket(self, tid, title, note=None) -> bool:
-        if tid in self.resolved:
-            self.resolved.remove(tid)
-        self.closed_by_hand.discard(tid)
-        self.reopened.append((tid, title))
-        if not self._person_titled(tid):
-            self.titles[tid] = title
-        self.agent_titles[tid] = title
-        return True
+    def _step(self, tid: str, step: dict, **fields) -> None:
+        t = self.ticket(tid)
+        t.update(fields)
+        t["updates"] = list(t.get("updates") or []) + [{"photoIds": [], **step}]
+        self.doc["rev"] += 1
 
-    def _person_titled(self, tid) -> bool:
-        # as Kiosk.person_titled: a ticket on which the agent never said its title is the person's (review 29)
-        return tid not in self.agent_titles or self.titles.get(tid) != self.agent_titles[tid]
+    def held(self, *ids: str, title: str = "", status: str = "open") -> None:
+        """Faults the Kiosk has from before (no step of the agent's: the agent never said their title)."""
+        for tid in ids:
+            self._all().append({"id": tid, "title": title or tid, "status": status, "openedAt": PERSON_AT,
+                                "photoIds": [], "updates": []})
 
-    async def held_tickets(self) -> dict[str, dict]:
-        return {t: {"status": s, "title": self.titles.get(t, ""), "agent_title": self.agent_titles.get(t),
-                    "resolved_at": "", "by": "", "alert_number": self.numbers.get(t), **self.closed_meta.get(t, {})}
-                for t, s in (await self.ticket_states()).items()}
+    def person_closes(self, tid: str, by: str = "Facility manager", at: str = PERSON_AT) -> None:
+        self._step(tid, {"at": at, "status": "resolved", "by": by}, status="resolved", resolvedAt=at)
 
-    async def number_ticket(self, tid, number) -> bool:
-        if self.numbers.get(tid) == int(number):
-            return False
-        self.numbers[tid] = int(number)
-        return True
+    def person_reopens(self, tid: str, by: str = "Owner", at: str = "2099-01-01T00:00:00.000Z") -> None:
+        self.ticket(tid).pop("resolvedAt", None)
+        self._step(tid, {"at": at, "status": "open", "by": by, "kind": REOPENED}, status="open")
 
-    async def update_ticket(self, tid, title) -> bool:
-        if tid not in self.titles or self.agent_titles.get(tid, self.titles[tid]) == title[:200] or tid in self.resolved:
-            return False
-        if self._person_titled(tid):
-            self.readings.append((tid, title[:200]))
-        else:
-            self.titles[tid] = title[:200]
-        self.agent_titles[tid] = title[:200]
-        return True
+    def person_moves(self, tid: str, by: str = "Facility manager", at: str = PERSON_AT) -> None:
+        """Picked up ("Open ticket" in the Cockpit): in progress, the person's step last."""
+        self._step(tid, {"at": at, "status": "in_progress", "by": by}, status="in_progress")
 
-    async def ticket_states(self) -> dict[str, str]:
-        ids = [f"t{i + 1}" for i in range(len(self.tickets))] + sorted(self.known)
-        return {t: "resolved" if t in self.resolved or t in self.closed_by_hand else "open" for t in ids}
+    def person_renames(self, tid: str, title: str, by: str = "Owner") -> None:
+        was = self.ticket(tid).get("title")
+        self._step(tid, {"at": PERSON_AT, "status": self.ticket(tid)["status"], "by": by, "kind": RETITLED,
+                         "title": title, "was": was}, title=title)
+
+    # ------------------------------------------------------------------ views, read from the document
+    @property
+    def tickets(self) -> list[tuple]:
+        return [((self.ticket(t).get("updates") or [{}])[0].get("title") or self.ticket(t)["title"],
+                 self.ticket(t).get("entityId")) for t in self._made]
+
+    @property
+    def notes(self) -> list:
+        return [self.ticket(t).get("note") for t in self._made]
+
+    @property
+    def ticket_documents(self) -> list[list[str]]:
+        return [list(self.ticket(t).get("documentIds") or []) for t in self._made]
+
+    @property
+    def titles(self) -> dict[str, str]:
+        return {t["id"]: t.get("title") for t in self._all()}
+
+    @property
+    def numbers(self) -> dict[str, int]:
+        return {t["id"]: t["alertNumber"] for t in self._all() if "alertNumber" in t}
+
+    def _steps(self, kind=None):
+        for t in self._all():
+            for u in t.get("updates") or []:
+                if _mine(u) and (kind is None or u.get("kind") == kind):
+                    yield t, u
+
+    @property
+    def resolved(self) -> list[str]:
+        """Faults the agent resolved and that are still resolved, in the order it resolved them."""
+        done = [(u["at"], i, t["id"]) for i, (t, u) in enumerate(self._steps())
+                if u.get("status") == "resolved" and t.get("status") == "resolved"]
+        return [tid for _, _, tid in sorted(done)]
+
+    @property
+    def reopened(self) -> list[tuple[str, str]]:
+        return [(t["id"], u.get("title")) for t, u in self._steps(REOPENED)]
+
+    @property
+    def readings(self) -> list[tuple[str, str]]:
+        return [(t["id"], u.get("title")) for t, u in self._steps(READING)]
+
+    @property
+    def cleared(self) -> list[str]:
+        """Faults the agent closed as its own clearing (no work done), not a person's Done."""
+        return [t["id"] for t, u in self._steps(CLEARED)]
+

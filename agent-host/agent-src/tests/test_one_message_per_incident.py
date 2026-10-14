@@ -221,15 +221,11 @@ def test_the_kiosk_is_read_every_five_minutes(agent, monkeypatch):
 
 def test_the_kiosk_answer_gives_who_closed_a_fault_and_when():
     # the real reader of the Kiosk's Facility records (the fake skips it): the close's profile and moment reach the note
-    from vesta_agent.kiosk import Kiosk
-    k = Kiosk("http://kiosk.invalid", "token")
-
-    async def answer(method, path, body=None):
-        return 200, {"data": {"tickets": [
-            {"id": "va-1", "title": "Door", "status": "resolved", "resolvedAt": "2026-10-10T09:13:00.000Z",
-             "updates": [{"at": "2026-10-10T09:13:00.000Z", "status": "resolved", "by": "Owner", "photoIds": []}]},
-            {"id": "va-2", "title": "Pump", "status": "open"}]}}
-    k._req = answer
+    from kiosk_fake import FakeKiosk
+    k = FakeKiosk(
+        {"id": "va-1", "title": "Door", "status": "resolved", "resolvedAt": "2026-10-10T09:13:00.000Z",
+         "updates": [{"at": "2026-10-10T09:13:00.000Z", "status": "resolved", "by": "Owner", "photoIds": []}]},
+        {"id": "va-2", "title": "Pump", "status": "open"})
     held = run(k.held_tickets())
     assert held["va-1"]["by"] == "Owner" and held["va-1"]["resolved_at"] == "2026-10-10T09:13:00.000Z"
     assert held["va-2"]["by"] == "" and held["va-2"]["status"] == "open"

@@ -37,6 +37,12 @@ def test_the_home_assistant_stand_in_has_what_the_agent_calls_on_the_real_client
     assert hasattr(FakeHA().mcp, "server_info")
 
 
-def test_the_kiosk_stand_in_has_the_real_kiosks_methods():
-    assert _methods(FakeKiosk) == _methods(Kiosk)
-    assert FakeKiosk.enabled is True and hasattr(FakeKiosk(), "info")
+def test_the_kiosk_stand_in_is_the_real_kiosk_with_only_its_transport_replaced():
+    # architecture review, 2026-10-14: a stand-in with rules of its own drifted from the real ones in five places
+    assert issubclass(FakeKiosk, Kiosk)
+    replaced = {n for n, f in vars(FakeKiosk).items() if callable(f) and n in vars(Kiosk)}
+    assert replaced == {"__init__", "_req", "_ticket_id", "add_document"}, replaced
+    added = {n for n in vars(FakeKiosk) if not n.startswith("_") and n not in vars(Kiosk)}
+    assert added <= {"held", "person_closes", "person_reopens", "person_moves", "person_renames", "ticket", "tickets",
+                     "notes", "ticket_documents", "titles", "numbers", "resolved", "reopened", "readings", "cleared"}, added
+    assert FakeKiosk().enabled is True and FakeKiosk().info

@@ -93,8 +93,8 @@ def test_a_fault_a_person_reopens_in_the_kiosk_stays_open_and_the_facility_manag
     tid, _ = pb.open_task("incident", iid, "automation.door", "lock.door", "Door unlocked")
     st.set_task_uid(tid, "t-door")
     pb.close_incident(iid, "resolved", datetime.now(timezone.utc).isoformat(), "Cleared")   # the agent closed it
-    k.known = ["t-door"]
-    k.closed_meta["t-door"] = {"reopened_by": "Owner", "reopened_at": "2099-01-01T00:00:00.000Z"}   # its "Reopen fault"
+    k.held("t-door")
+    k.person_reopens("t-door", by="Owner")                                                   # its "Reopen fault"
     run(v.tickets.repair())
     run(v.tickets.repair())
     assert "t-door" not in k.resolved                                                        # never undone
@@ -178,8 +178,8 @@ def test_a_night_fault_a_person_reopens_is_theirs_until_they_close_it(tmp_path):
     tid, _ = pb.open_task("finding", fid, "PM-X", "sensor.pump", "Pump weak")
     st.set_task_uid(tid, "t-pump")
     pb.close_finding(st.finding(fid), "2026-10-08", "Cleared")
-    k.known = ["t-pump"]
-    k.closed_meta["t-pump"] = {"reopened_by": "Owner", "reopened_at": "2099-01-01T00:00:00.000Z"}
+    k.held("t-pump")
+    k.person_reopens("t-pump", by="Owner")
     run(v.tickets.repair())
     run(v.tickets.repair())
     assert st.task(tid)["status"] == "open" and "t-pump" not in k.resolved
