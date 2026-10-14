@@ -29,7 +29,7 @@ console.log("  onto an existing dismissal ->", JSON.stringify(onto.dismissedEnti
 /* ── and the removal actually reaches the surfaces that read mesh ids ─── */
 // dismissedEntitySet is what the fault picker, the offline count and readiness
 // consult. Before, a removed-but-stale id was in NONE of them.
-const stillGone = dismissedEntitySet(one.dismissedEntityIds, { "lock.a": {} });
+const stillGone = dismissedEntitySet(one.dismissedEntityIds, { "lock.a": {} }, new Set());
 
 /* ── no surface assembles the patch itself ────────────────────────────── */
 const walk = (d, out = []) => {

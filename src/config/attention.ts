@@ -20,6 +20,7 @@ import type { FmData } from "@/fm/fmTypes";
 import type { HassEntity } from "@/types/ha.types";
 import type { EntityMapping } from "@/types/scene.types";
 import { domainOf } from "@/utils/entityDomain";
+import { missingFromHa, NOT_IN_HA } from "@/utils/stateColors";
 
 export type AttentionKind = "unavailable" | "fault" | "schedule" | "alarm";
 
@@ -209,7 +210,8 @@ export function buildAttentionItems(opts: {
       id: `unavailable:${id}`,
       kind: "unavailable",
       title: labelOf(id, entityMap, entities),
-      detail: "Unavailable",
+      // an object the model names whose entity Home Assistant does not have says so, as everywhere (NOT_IN_HA)
+      detail: missingFromHa(entities, id) ? NOT_IN_HA : "Unavailable",
       room: resolvedRooms[id],
       entityId: id,
     });

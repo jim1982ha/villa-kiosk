@@ -22,7 +22,7 @@ const map = (...ids) => Object.fromEntries(ids.map((id) => [id, { entityId: id, 
 
 const base = {
   deviceGroups: [], dismissedEntityIds: [],
-  mappedEntityIds: new Set(), entityDeviceIds: {},
+  mappedEntityIds: new Set(), sceneEntityIds: new Set(), entityDeviceIds: {},
 };
 
 /* ── 1. the registry folds what the suffix pair cannot ────────────────── */

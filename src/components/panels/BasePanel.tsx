@@ -23,6 +23,8 @@ import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import BadgeColorModal from "./BadgeColorModal";
 import LastDayTimeline from "./LastDayTimeline";
 import ModalFooter from "@/components/common/ModalFooter";
+import { useHA } from "@/ha/HAStateStore";
+import { missingFromHa } from "@/utils/stateColors";
 
 interface Props {
   title: string;
@@ -61,6 +63,7 @@ interface Props {
 export default function BasePanel({ title, entityId, icon, className, headerActions, footerLeading, history, deviceReadings, onClose, children }: Props) {
   const { onEdit, onReportFault, badge, onSetBadgeColor, linked, motion, back } = usePanelActions();
   const { resolvedRooms } = useConfig();
+  const { entities } = useHA();
   const room = entityId ? resolvedRooms[entityId] : undefined;
   const [colorOpen, setColorOpen] = useState(false);
   // Escape + focus trap + focus restore, from one place (see useModalA11y).
@@ -217,7 +220,8 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
               caught it either, because it audited the panels that already HAD
               a timeline; a panel with none is invisible to that check. Made
               structural rather than fixed twice. */}
-          {history !== false && entityId && <LastDayTimeline entityId={entityId} />}
+          {/* Not for an entity Home Assistant does not have: it has no history to wait for (its notice says why). */}
+          {history !== false && entityId && !missingFromHa(entities, entityId) && <LastDayTimeline entityId={entityId} />}
         </div>
         {/* The shared footer (ModalFooter): the left group is always there,
             empty or not, so Close sits right as in every dialog. */}

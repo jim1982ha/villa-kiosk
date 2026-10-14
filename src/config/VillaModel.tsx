@@ -47,7 +47,8 @@ export function useVillaSets(sceneEntityIds: Set<string>): VillaSets {
   const { entities, suppressedEntityIds } = useHA();
   const { config } = useConfig();
   const dismissedIds = useMemo(
-    () => dismissedEntitySet(config.dismissedEntityIds, entities), [config.dismissedEntityIds, entities]);
+    () => dismissedEntitySet(config.dismissedEntityIds, entities, sceneEntityIds),
+    [config.dismissedEntityIds, entities, sceneEntityIds]);
   const mappedEntityIds = useMemo(
     () => effectiveMapped(sceneEntityIds, config.entityMap, dismissedIds), [sceneEntityIds, config.entityMap, dismissedIds]);
   const visibleEntities = useMemo(
@@ -74,7 +75,7 @@ export interface VillaModel extends VillaSets {
 const Ctx = createContext<VillaModel | null>(null);
 
 export function VillaModelProvider({ sets, children }: { sets: VillaSets; children: ReactNode }) {
-  const { mappedEntityIds, visibleEntities } = sets;
+  const { mappedEntityIds, visibleEntities, sceneEntityIds } = sets;
   const { entities, entityDeviceIds } = useHA();
   const { config, resolvedRooms } = useConfig();
   const { data: fmData } = useFmData();
@@ -84,12 +85,12 @@ export function VillaModelProvider({ sets, children }: { sets: VillaSets; childr
   // registry, so it is computed when those change, not on every state push.
   const { folding } = useDeviceIdentity();
   const devices = useMemo(
-    () => villaDevices({ entityMap, deviceGroups, dismissedEntityIds, mappedEntityIds, entities, entityDeviceIds, folding }),
-    [entityMap, deviceGroups, dismissedEntityIds, mappedEntityIds, entities, entityDeviceIds, folding],
+    () => villaDevices({ entityMap, deviceGroups, dismissedEntityIds, mappedEntityIds, sceneEntityIds, entities, entityDeviceIds, folding }),
+    [entityMap, deviceGroups, dismissedEntityIds, mappedEntityIds, sceneEntityIds, entities, entityDeviceIds, folding],
   );
   const visibleDevices = useMemo(
-    () => villaDevices({ entityMap, deviceGroups, dismissedEntityIds, mappedEntityIds, entities: visibleEntities, entityDeviceIds, folding }),
-    [entityMap, deviceGroups, dismissedEntityIds, mappedEntityIds, visibleEntities, entityDeviceIds, folding],
+    () => villaDevices({ entityMap, deviceGroups, dismissedEntityIds, mappedEntityIds, sceneEntityIds, entities: visibleEntities, entityDeviceIds, folding }),
+    [entityMap, deviceGroups, dismissedEntityIds, mappedEntityIds, sceneEntityIds, visibleEntities, entityDeviceIds, folding],
   );
   const attention = useMemo((): VillaProblems => {
     const unavailableIds = devices.unavailable as string[];

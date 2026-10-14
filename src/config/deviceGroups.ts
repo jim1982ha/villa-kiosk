@@ -187,9 +187,10 @@ function selectableDeviceIds(
   mappedEntityIds: ReadonlySet<string>,
   entities: Record<string, HassEntity>,
   dismissedEntityIds: readonly string[],
+  sceneEntityIds: ReadonlySet<string>,
   repOf: ReadonlyMap<string, string>,
 ): string[] {
-  const dismissed = dismissedEntitySet(dismissedEntityIds, entities);
+  const dismissed = dismissedEntitySet(dismissedEntityIds, entities, sceneEntityIds);
   const reps = new Set<string>();
   for (const id of new Set([...mappedEntityIds, ...Object.keys(entityMap)])) {
     if (entityMap[id]?.disabled) continue;
@@ -272,6 +273,9 @@ export interface VillaDeviceInput {
   /** Entity ids the 3D model itself carries — a device can be one of these
    *  without Home Assistant knowing it, and vice versa. */
   mappedEntityIds: ReadonlySet<string>;
+  /** The entities the loaded model's objects are named after — never dismissed
+   *  (dismissedEntities: the model is the ground truth). */
+  sceneEntityIds: ReadonlySet<string>;
   entities: Record<string, HassEntity>;
   /** Home Assistant's own device registry, entity_id → device_id. The
    *  AUTHORITATIVE folding signal: it needs no naming convention and covers
@@ -297,7 +301,7 @@ export interface VillaDevices {
 
 export function villaDevices(input: VillaDeviceInput): VillaDevices {
   const ids = selectableDeviceIds(
-    input.entityMap, input.mappedEntityIds, input.entities, input.dismissedEntityIds,
+    input.entityMap, input.mappedEntityIds, input.entities, input.dismissedEntityIds, input.sceneEntityIds,
     input.folding ?? deviceFolding(input.entityMap, input.deviceGroups, input.entityDeviceIds));
   const set = new Set(ids);
   return {
