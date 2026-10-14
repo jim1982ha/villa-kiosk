@@ -1,3 +1,14 @@
+## 0.12.201
+
+What you will see:
+- The VESTA Agent no longer names the platform underneath in anything you read: Telegram alerts and their status
+  ("Cleared on 15/10/2026 01:28." instead of "Cleared in Home Assistant on …"; "…: it is no longer reported."), the
+  villa-silent alert ("No contact with the villa's system…"), answers to an approval or a button, voice-message help,
+  the fault notes it writes in the Cockpit ("Cleared: back to normal.", "Closed: this device no longer exists in the
+  villa's system."), and its report pages.
+- Its AI is told the same: never "Home Assistant" or "HA" to a person, "the villa's system" instead — your villa's own
+  instructions are updated on the next start, the rest of what you wrote there is kept.
+
 ## 0.12.200
 
 What you will see:
