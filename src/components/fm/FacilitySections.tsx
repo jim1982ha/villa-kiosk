@@ -20,7 +20,7 @@
 import { useMemo, useState } from "react";
 import type { ModalTab } from "@/components/common/ModalTabs";
 import {
-  ClipboardCheck, ListChecks, Wrench, Wallet, FileText, CalendarCog,
+  Wrench, Wallet, FileText, CalendarCog,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
@@ -40,19 +40,16 @@ import RecapTab from "./RecapTab";
 import ScheduleEditor from "./ScheduleEditor";
 import { useVillaModel } from "@/config/VillaModel";
 
-export type FacilityTab = "today" | "readiness" | "tickets" | "spend" | "schedule" | "recap";
+export type FacilityTab = "tickets" | "schedule" | "recap" | "spend";
 
-/** The Facility tabs, shown in the Cockpit after its own view (2.496.273). */
+/** The Facility tabs, shown in the Cockpit after its own view (2.496.273). Owner, 2026-10-14: Tickets right after
+ *  the Overview; "Today" and "Schedule" are one tab (today's board, then the schedule it measures against); "Readiness"
+ *  and "Recap" are one tab (the live check, then the month's recap built from it). */
 export const FACILITY_TABS: ModalTab<FacilityTab>[] = [
-  { id: "today", label: "Today", icon: ListChecks },
-  { id: "readiness", label: "Readiness", icon: ClipboardCheck },
   { id: "tickets", label: "Tickets", icon: Wrench },
-  { id: "spend", label: "Spend", icon: Wallet },
-  // Before Recap: configuring the schedule is what the recap and the Today
-  // board both read from, so it belongs upstream of the annex that summarises
-  // them, not after it.
   { id: "schedule", label: "Schedule", icon: CalendarCog },
   { id: "recap", label: "Recap", icon: FileText },
+  { id: "spend", label: "Spend", icon: Wallet },
 ];
 
 /**
@@ -103,22 +100,29 @@ export default function FacilitySections({
     <>
       {saveError && <div className="fm-banner warn">{saveError}</div>}
       {!ready && <p className="muted body-text">Loading the maintenance record…</p>}
-      {ready && tab === "today" && <TodayTab onOpenEntity={onOpenEntity} />}
-      {ready && tab === "readiness" && (
-        <ReadinessTab readiness={readiness} onOpenEntity={onOpenEntity}
-          onOpenUnavailableDevices={onOpenOverview} onOpenCheckDevices={openCheckDevices} />
+      {ready && tab === "schedule" && (
+        <>
+          <TodayTab onOpenEntity={onOpenEntity} />
+          <div className="settings-section-title">Maintenance schedule</div>
+          <ScheduleEditor />
+        </>
+      )}
+      {ready && tab === "recap" && (
+        <>
+          <ReadinessTab readiness={readiness} onOpenEntity={onOpenEntity}
+            onOpenUnavailableDevices={onOpenOverview} onOpenCheckDevices={openCheckDevices} />
+          <div className="settings-section-title">Monthly recap</div>
+          <RecapTab readiness={readiness}
+            offlineDeviceCount={readiness.checks.find((c) => c.id === "devices-online")?.entityIds?.length ?? 0}
+            totalDeviceCount={totalDeviceCount} />
+        </>
       )}
       {ready && tab === "tickets" && (
         <TicketsTab onOpenEntity={onOpenEntity} deviceOptions={deviceOptions}
           editTicket={editTicket} onEditOpened={onTicketEditOpened} />
       )}
       {ready && tab === "spend" && <SpendTab onOpenEntity={onOpenEntity} deviceOptions={deviceOptions} />}
-      {ready && tab === "schedule" && <ScheduleEditor />}
-      {ready && tab === "recap" && (
-        <RecapTab readiness={readiness}
-          offlineDeviceCount={readiness.checks.find((c) => c.id === "devices-online")?.entityIds?.length ?? 0}
-          totalDeviceCount={totalDeviceCount} />
-      )}
+
       {checkPanelGroup && (
         <SummaryGroupPanel group={checkPanelGroup} canControl={canControl}
           onClose={() => setCheckPanelGroup(null)}

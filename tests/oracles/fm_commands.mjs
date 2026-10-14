@@ -24,6 +24,12 @@ ck("a guest's report: by Guest", faultWhen(guest.tickets[0], stamp) === "Opened 
 const agent = { ...t, source: "vesta_agent", updates: [{ ...t.updates[0], by: "VESTA Agent" }] };
 ck("the VESTA Agent's own fault does not repeat its mark on this line", faultWhen(agent, stamp) === "Opened 06:20");
 
+const opened = applyFmCommand(EMPTY, { type: "addTicket", ticket: { title: "Pump capacitor", photoIds: [] }, asTicket: true }, k("Owner"));
+const tk = opened.tickets[0];
+ck("\"Open a ticket\" (owner, 2026-10-14): a TICKET at once — in progress, taken on by whoever opened it",
+   tk.status === "in_progress" && tk.updates.length === 1 && tk.updates[0].status === "in_progress" && tk.updates[0].by === "Owner");
+ck("  ...its card says when and by whom", faultWhen(tk, stamp) === "Opened 06:20 · in progress since 06:20 by Owner", faultWhen(tk, stamp));
+
 console.log("\n  every write, one way:");
 const closed = applyFmCommand(raised, { type: "closeTickets", ids: [t.id] }, k("Facility manager"));
 ck("closing stamps who closed it", closed.tickets[0].status === "resolved"

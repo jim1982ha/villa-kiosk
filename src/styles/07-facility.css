@@ -46,8 +46,14 @@
 /* A ticket (TicketsTab): its device, then each record taken on with it, divided by a hairline — one card. */
 .fm-ticket-records { display: flex; flex-direction: column; }
 .fm-ticket-records > .fm-ticket-record + .fm-ticket-record { border-top: 1px solid var(--hairline); padding-top: 8px; margin-top: 8px; }
-/* "Raise a fault" and its (i) (FaultTiming), side by side at the start of the row. */
-.fm-raise-row { display: flex; align-items: center; gap: 10px; align-self: flex-start; }
+/* A field's name on the same line as its control (Recap's Period). */
+.fm-inline-label { color: var(--text-secondary); font-size: var(--field-label-size); }
+/* The Overview's Live issues title, with its (i) and "Open a ticket" on the right of the same line (owner, 2026-10-14). */
+.cockpit-issues-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.cockpit-issues-head .settings-section-title { margin-bottom: 0; }
+.cockpit-issues-actions { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+/* the (i) sits near the RIGHT edge here: its card opens leftward (as in a modal header) */
+.cockpit-issues-actions .info-tip .info-pop { left: auto; right: 0; }
 .fm-summary { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 10px; }
 .fm-stat {
   display: flex; flex-direction: column; gap: 2px; min-width: 0;

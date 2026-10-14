@@ -115,7 +115,7 @@ export default function ScheduleEditor() {
   return (
     <div className="fm-stack">
       <p className="muted body-text">
-        The schedule the Today tab measures against. Intervals are the minimum
+        The schedule the board above measures against. Intervals are the minimum
         frequency — a task is overdue the day after its interval elapses.
       </p>
 

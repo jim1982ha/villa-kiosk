@@ -51,7 +51,8 @@ export default function FaultForm({ editing, presetEntity, deviceOptions, onDone
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing?.id, presetEntity]);
 
-  const heading = !editing ? "Raise a fault" : stageOf(editing) === "fault" ? "Edit fault" : "Edit ticket";
+  // A person OPENS A TICKET (owner, 2026-10-14): what they open starts in progress, in the Tickets tab.
+  const heading = !editing ? "Open a ticket" : stageOf(editing) === "fault" ? "Edit fault" : "Edit ticket";
   return (
     <div className="fm-form">
       <h3>{heading}</h3>
@@ -81,7 +82,7 @@ export default function FaultForm({ editing, presetEntity, deviceOptions, onDone
       </div>
       <FormActions
         error={formError} onCancel={onDone} disabled={!title.trim()}
-        saveLabel={editing ? "Save changes" : "Raise fault"}
+        saveLabel={editing ? "Save changes" : "Open ticket"}
         onSave={async () => {
           const fields = {
             title: title.trim(),
@@ -94,7 +95,7 @@ export default function FaultForm({ editing, presetEntity, deviceOptions, onDone
           // Same fields either way — updateTicket leaves status, openedAt and resolvedAt alone, so correcting a
           // description never rewrites the record's history.
           const { done, note: why } = fmSaveOutcome(
-            editing ? await updateTicket(editing.id, fields) : await addTicket(fields));
+            editing ? await updateTicket(editing.id, fields) : await addTicket(fields, { asTicket: true }));
           // Closed only when saved or queued: a refused save used to throw away what was typed (2.496.252).
           if (done) onDone(); else setFormError(why);
         }}

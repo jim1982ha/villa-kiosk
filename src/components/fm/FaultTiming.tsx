@@ -1,5 +1,5 @@
 // src/components/fm/FaultTiming.tsx
-// The (i) beside the Overview's "Raise a fault" (owner, 2026-10-14). Its words are fm/faultTiming.ts's — the VESTA
+// The (i) beside the Overview's "Open a ticket" (owner, 2026-10-14). Its words are fm/faultTiming.ts's — the VESTA
 // Agent's rows only when an Agent is connected (agentView.agentVisible).
 
 import InfoTip from "@/components/common/InfoTip";

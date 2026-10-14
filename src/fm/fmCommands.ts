@@ -23,7 +23,9 @@ export type FmCommand =
   | { type: "addCost"; cost: Omit<FmCost, "id"> }
   | { type: "updateCost"; id: string; patch: Partial<FmCost> }
   | { type: "removeCost"; id: string }
-  | { type: "addTicket"; ticket: Omit<FmTicket, "id" | "openedAt" | "status"> }
+  /** `asTicket`: a person's "Open a ticket" (owner, 2026-10-14) — the record starts as a TICKET in progress, taken on by
+   *  whoever opened it; without it, a FAULT waiting on the Overview (a guest's report). */
+  | { type: "addTicket"; ticket: Omit<FmTicket, "id" | "openedAt" | "status">; asTicket?: boolean }
   | { type: "updateTicket"; id: string; patch: Partial<FmTicket> }
   | { type: "advanceTickets"; ids: readonly string[]; to: FmTicketStatus; step: TicketStep; cost?: TicketCost }
   | { type: "closeTickets"; ids: readonly string[] }
@@ -56,12 +58,14 @@ export function applyFmCommand(d: FmData, c: FmCommand, k: FmActor): FmData {
       return { ...d, costs: d.costs.map((x) => (x.id === c.id ? { ...x, ...c.patch } : x)) };
     case "removeCost":
       return withoutCost(d, c.id);
-    case "addTicket":
-      // its first step says who raised it, as every later step says who did it
+    case "addTicket": {
+      // its first step says who opened it and how, as every later step says who did it
+      const status = c.asTicket ? "in_progress" : "open";
       return { ...d, tickets: [...d.tickets, {
-        ...c.ticket, id: k.id("tk"), status: "open", openedAt: k.now,
-        updates: [{ at: k.now, status: "open", photoIds: [], ...(by ? { by } : {}) }],
+        ...c.ticket, id: k.id("tk"), status, openedAt: k.now,
+        updates: [{ at: k.now, status, photoIds: [], ...(by ? { by } : {}) }],
       }] };
+    }
     case "updateTicket":
       return withTicketPatch(d, c.id, c.patch, k, by);
     case "advanceTickets":

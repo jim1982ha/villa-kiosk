@@ -1,3 +1,13 @@
+## 2.496.352
+
+### Changed
+- Cockpit → Overview: "Raise a fault" is now "Open a ticket", on the same line as the "Live issues" title, at the right, with its (i) just before it. What you open is a ticket straight away — in progress, in the Tickets tab, with "Edit ticket" on its card. Faults now come from the VESTA Agent and from a guest's "Report a problem"; the (i) table says so.
+- Cockpit tabs, in this order: Overview, Tickets, Schedule, Recap, Spend.
+  - "Today" and "Schedule" are one tab, "Schedule": today's board first, then the maintenance schedule it measures against.
+  - "Readiness" and "Recap" are one tab, "Recap": the readiness check first, then the monthly recap.
+- Recap: the Period choice sits on the same line as "Generate recap", "Save recap" and "Download .md".
+- The Home Assistant updates count moved from the bottom of the Overview to the Cockpit's header, at the top right, drawn like the header buttons of Advanced Settings (it only shows the count; there is nothing to press).
+
 ## 2.496.351
 
 ### Changed

@@ -20,7 +20,8 @@
 // why.
 
 import { useMemo } from "react";
-import { Bot, LayoutDashboard } from "lucide-react";
+import { Bot, LayoutDashboard, RefreshCw } from "lucide-react";
+import { useHA } from "@/ha/HAStateStore";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import type { Doors } from "@/auth/doors";
 import { useAgent } from "@/agent/AgentContext";
@@ -76,6 +77,11 @@ export default function CockpitModal({
   const agentOnline = agentStatus?.state === "online";
   const agentWaiting = useMemo(() => awaitingAnswer(agentMessages), [agentMessages]);
   const dialogRef = useModalA11y(onClose);
+  // Firmware / add-on updates waiting — Home Assistant's own `update` domain counts them, per device and per add-on.
+  const { entities } = useHA();
+  const updatesAvailable = useMemo(() => (doors.updates
+    ? Object.values(entities).filter((e) => e.entity_id.startsWith("update.") && e.state === "on").length : 0),
+  [entities, doors.updates]);
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -89,6 +95,17 @@ export default function CockpitModal({
       >
         <div className="modal-header">
           <h2>Cockpit</h2>
+          {/* Updates Home Assistant has waiting (firmware, add-ons — this one included): in the header, drawn like
+              Advanced Settings' header buttons, for the profiles holding `doors.updates` (owner, 2026-10-14). It only
+              SAYS so — nothing to press; it used to be a line at the bottom of the Overview. */}
+          {updatesAvailable > 0 && (
+            <span className="icon-btn header-icon-btn header-icon-badge" role="status"
+              title={`${updatesAvailable} update${updatesAvailable === 1 ? "" : "s"} available in Home Assistant`}
+              aria-label={`${updatesAvailable} update${updatesAvailable === 1 ? "" : "s"} available in Home Assistant`}>
+              <RefreshCw size={18} />
+              <span className="icon-btn-count" aria-hidden="true">{formatCountBadge(updatesAvailable)}</span>
+            </span>
+          )}
         </div>
         {tabs.length > 1 && <ModalTabs tabs={tabs} active={shownTab} onSelect={onTab} label="Cockpit sections" />}
 

@@ -1,5 +1,5 @@
 // src/fm/faultTiming.ts
-// What the Overview's (i) beside "Raise a fault" says (components/fm/FaultTiming.tsx): when a fault opens and closes,
+// What the Overview's (i) beside "Open a ticket" says (components/fm/FaultTiming.tsx): when a fault opens and closes,
 // by where it comes from, how it becomes a ticket, and how often the list is read again (owner, 2026-10-14). Pure, so
 // tests/oracles/info_tip.mjs reads the very words the card shows.
 //
@@ -21,7 +21,10 @@ const AGENT_ROWS: readonly Row[] = [
   ["Maintenance trend (battery, energy use, Wi-Fi drops, run time)", "Nightly check",
    "At the next nightly check that no longer finds it"],
 ];
-const PERSON_ROW: Row = ["Raised by a person (Raise a fault, or a guest's report)", "At once", "When someone closes it"];
+const PERSON_ROWS: readonly Row[] = [
+  ["Ticket opened by a person (Open a ticket)", "At once, already in progress", "When someone resolves or closes it"],
+  ["A guest's report (Report a problem)", "At once, as a fault", "When someone closes it"],
+];
 
 const REFRESH = `This list is read again every ${STORE_ACTIVE_MS / 1000} seconds while it is open (every `
   + `${STORE_HEARTBEAT_MS / 60_000} minutes otherwise), and as soon as you come back to the app.`;
@@ -29,13 +32,13 @@ const REFRESH = `This list is read again every ${STORE_ACTIVE_MS / 1000} seconds
 export function faultTiming(agent: boolean): { rows: readonly Row[]; note: string } {
   return agent
     ? {
-        rows: [...AGENT_ROWS, PERSON_ROW],
+        rows: [...AGENT_ROWS, ...PERSON_ROWS],
         note: "A fault becomes a ticket when someone marks it in progress (Tickets tab). The VESTA Agent closes its "
           + "own faults and tickets when the problem goes away; it checks every 5 minutes, and its nightly check runs "
           + `at 02:00 by default. ${REFRESH}`,
       }
     : {
-        rows: [PERSON_ROW],
+        rows: PERSON_ROWS,
         note: `A fault becomes a ticket when someone marks it in progress (Tickets tab). ${REFRESH}`,
       };
 }

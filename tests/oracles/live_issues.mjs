@@ -83,8 +83,8 @@ const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf
 const ov = src("components/cockpit/CockpitOverview.tsx"), tt = src("components/fm/TicketsTab.tsx");
 ck("the Tickets tab lists the tickets in progress (by device) and Closed — never an open fault",
    /data\.tickets\.filter\(\(t\) => stageOf\(t\) === "ticket"\)/.test(tt) && /ticketGroups\(/.test(tt) && !/Raise a fault/.test(tt));
-ck("the Overview raises faults, with the (i), for the profiles that manage them; a guest reports a problem",
-   /Raise a fault<\/button>\s*<FaultTiming \/>/.test(ov) && /Report a problem<\/button>/.test(ov) && /<FaultForm /.test(ov));
+ck("the Overview's title line: the (i) then Open a ticket, for the profiles that manage tickets; a guest reports a problem",
+   /<FaultTiming \/>\s*<button className="btn ghost" onClick=\{\(\) => setRaising\(\{\}\)\}><Plus size=\{16\} \/> Open a ticket<\/button>/.test(ov) && /Report a problem<\/button>/.test(ov) && /<FaultForm /.test(ov));
 ck("a card draws what cardActions says (no rule of its own)",
    /const acts = cardActions\(group\);/.test(ov) && /setStaging\(records\(acts\.markInProgress\)\)\}>Mark in progress/.test(ov)
    && /onEditTicket\(acts\.editTicket as string\)/.test(ov) && /closeTickets\(acts\.close\)/.test(ov) && !/in_progress"/.test(ov.replace(/to="in_progress"/, "")));

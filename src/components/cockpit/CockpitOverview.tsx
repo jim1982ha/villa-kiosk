@@ -15,7 +15,7 @@ import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { createPortal } from "react-dom";
 import {
   TriangleAlert, AlertOctagon, MapPin, Building2, LayoutGrid,
-  Activity, RefreshCw, ChevronRight, X, Plus,
+  Activity, ChevronRight, X, Plus,
 } from "lucide-react";
 import SegmentedGroup from "@/components/common/SegmentedGroup";
 import { fmtChartTime } from "@/components/panels/chartUtils";
@@ -59,8 +59,8 @@ const PIVOT_ICON = { room: MapPin, floor: Building2 } as const;
 
 export default function CockpitOverview({ onOpenEntity, doors, reportFaultFor, onFaultFormOpened, onEditTicket, onReportProblem }: {
   onOpenEntity: (entityId: string) => void;
-  /** What this profile may do (auth/doors): `facility` takes faults on and raises them, `reportFault` reports a
-   *  problem, `updates` draws the updates count. */
+  /** What this profile may do (auth/doors): `facility` takes faults on and opens tickets, `reportFault` reports a
+   *  problem. */
   doors: Doors;
   /** "Raise a fault" opens pointed at this device (a device panel's wrench); dropped once the form has it. */
   reportFaultFor?: string;
@@ -134,15 +134,6 @@ export default function CockpitOverview({ onOpenEntity, doors, reportFaultFor, o
     return buildActivityFeed(activity.data, entities, config.entityMap, selectableIds);
   }, [activity.status, activity.data, entities, config.entityMap, selectableIds]);
 
-  // Firmware/add-on updates available — HA's own `update` domain already
-  // tracks this per device AND per add-on (including this one). A small
-  // Owner-only count, not a version list — this is a maintenance signal, not
-  // something a guest needs to see or act on.
-  const updatesAvailable = useMemo(() => {
-    if (!doors.updates) return null;
-    return Object.values(entities).filter((e) => e.entity_id.startsWith("update.") && e.state === "on").length;
-  }, [entities, doors.updates]);
-
   // "Other" (not "Unplaced" or any other invented word) for the no-floor
   // bucket — the SAME label the room pivot's own no-room bucket already
   // uses (cockpitData.ts's NO_ROOM), which is itself the one term every
@@ -167,18 +158,21 @@ export default function CockpitOverview({ onOpenEntity, doors, reportFaultFor, o
           device does), the faults the VESTA Agent or a person opened, and the tickets in progress. It replaced
           "Needs attention" AND the Faults tab's open list, which showed the same faults twice. Raising a fault is
           here, beside what it is raised about. */}
+      {/* The title, and on its right the (i) then "Open a ticket" (owner, 2026-10-14) — a guest's "Report a problem". */}
       {(attentionGroups.length > 0 || canReport) && (
-        <div className="settings-section-title">Live issues{attentionGroups.length > 0 ? ` (${attentionGroups.length})` : ""}</div>
-      )}
-      {canManage && !raising && (
-        <div className="fm-raise-row">
-          <button className="btn ghost" onClick={() => setRaising({})}><Plus size={16} /> Raise a fault</button>
-          <FaultTiming />
-        </div>
-      )}
-      {!canManage && canReport && (
-        <div className="fm-raise-row">
-          <button className="btn ghost" onClick={onReportProblem}><Plus size={16} /> Report a problem</button>
+        <div className="cockpit-issues-head">
+          <div className="settings-section-title">Live issues{attentionGroups.length > 0 ? ` (${attentionGroups.length})` : ""}</div>
+          {canManage && !raising && (
+            <div className="cockpit-issues-actions">
+              <FaultTiming />
+              <button className="btn ghost" onClick={() => setRaising({})}><Plus size={16} /> Open a ticket</button>
+            </div>
+          )}
+          {!canManage && canReport && (
+            <div className="cockpit-issues-actions">
+              <button className="btn ghost" onClick={onReportProblem}><Plus size={16} /> Report a problem</button>
+            </div>
+          )}
         </div>
       )}
       {raising && (
@@ -263,11 +257,6 @@ export default function CockpitOverview({ onOpenEntity, doors, reportFaultFor, o
       )}
 
       {/* ── Updates available (Owner only, small) ──────────────── */}
-      {updatesAvailable !== null && updatesAvailable > 0 && (
-        <p className="cockpit-updates muted body-text">
-          <RefreshCw size={16} style={{ verticalAlign: -2 }} /> {updatesAvailable} update{updatesAvailable === 1 ? "" : "s"} available
-        </p>
-      )}
     {/* Out of the Cockpit window's box, as it was before the Overview had its
         own file: a fixed overlay inside the scrolling body could be clipped. */}
     {pivotDrill && createPortal(

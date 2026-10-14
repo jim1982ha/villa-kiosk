@@ -64,7 +64,8 @@ interface FmDataContextValue {
    *  amount, a missing receipt photo) — only ERASING one needs the superadmin
    *  code, because that destroys the record rather than fixing it. */
   updateCost: (id: string, patch: Partial<FmCost>) => Promise<FmWriteResult>;
-  addTicket: (t: Omit<FmTicket, "id" | "openedAt" | "status">) => Promise<FmWriteResult>;
+  /** `asTicket`: "Open a ticket" — it starts in progress (fmCommands); otherwise a fault (a guest's report). */
+  addTicket: (t: Omit<FmTicket, "id" | "openedAt" | "status">, opts?: { asTicket?: boolean }) => Promise<FmWriteResult>;
   /** Move a fault to its next stage AND record the proof behind that move.
    *
    *  One mutator for every transition rather than one per stage: they differ
@@ -267,7 +268,8 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
     run({ type: "logCompletion", completion, cost }), [run]);
   const addCost = useCallback((cost: Omit<FmCost, "id">) => run({ type: "addCost", cost }), [run]);
   const updateCost = useCallback((id: string, patch: Partial<FmCost>) => run({ type: "updateCost", id, patch }), [run]);
-  const addTicket = useCallback((ticket: Omit<FmTicket, "id" | "openedAt" | "status">) => run({ type: "addTicket", ticket }), [run]);
+  const addTicket = useCallback((ticket: Omit<FmTicket, "id" | "openedAt" | "status">, opts?: { asTicket?: boolean }) =>
+    run({ type: "addTicket", ticket, asTicket: opts?.asTicket }), [run]);
   const updateTicket = useCallback((id: string, patch: Partial<FmTicket>) => run({ type: "updateTicket", id, patch }), [run]);
   // Several records, ONE write: a device's faults move or close together, or not at all.
   const advanceTickets = useCallback((ids: readonly string[], to: FmTicketStatus,
