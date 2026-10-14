@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.189 (14 October 2026)
+
+- vesta_agent.notice: `Notices.story(incident)` — the Kiosk card's lines of an incident's Telegram life (reminder,
+  escalation, still there, back, reopen request, a button pressed other than Done), from the same history as
+  Telegram's "Status:"; `note_press()` keeps a press in that history (alert_buttons), never shown as a Status line.
+- vesta_agent.kiosk: step kind `noted` (agreement 2.496.356); `note_ticket()` writes the missing lines, each at its own
+  time, never twice; `says(kind)` reads /agent/v1/info `step_kinds`; `held_tickets()` gives `noted`.
+- vesta_agent.tickets: `_converge` writes an open alert fault's missing lines (from its task's run on), only to a
+  Kiosk that shows them; repair re-reads the Kiosk's info until it does. Tests: test_card_story.py.
+
 ## 0.6.188 (14 October 2026)
 
 Architecture review, 2026-10-14 (problem ↔ Kiosk fault):

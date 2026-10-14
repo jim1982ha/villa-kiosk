@@ -13,7 +13,7 @@ from typing import Awaitable, Callable
 from vesta_shared import kiosk_words, result
 from vesta_shared.problems import CLEARED, Problems
 
-from .kiosk import KioskError
+from .kiosk import NOTED, KioskError
 from .outcome_words import ticket_title
 
 log = logging.getLogger("vesta.outcome")
@@ -32,13 +32,15 @@ def kiosk_reopen_note(ticket: dict, summary: str | None, zone: str) -> str:
 
 class Tickets:
     def __init__(self, *, kiosk, state, store_path: str, settle_alert: Callable[[int, str], Awaitable[int]],
-                 timezone: str = "UTC", tell_fm: Callable[[str], Awaitable[object]] | None = None):
+                 timezone: str = "UTC", tell_fm: Callable[[str], Awaitable[object]] | None = None,
+                 story: Callable[[int], list[dict]] | None = None):
         self.kiosk = kiosk
         self.tell_fm = tell_fm                # a message to the facility manager (a night fault reopened in the Kiosk)
         self.timezone = timezone              # the villa's: the note's time (notice.when)
         self.state = state
         self.store_path = store_path
         self.settle_alert = settle_alert      # incident_thread.IncidentThread.close: an incident closed in the Kiosk
+        self.story = story or (lambda _iid: [])   # notice.Notices.story: an incident's Telegram life, for its card
 
     def _store(self):
         from vesta_shared.store import Store
@@ -128,6 +130,11 @@ class Tickets:
         except Exception as e:  # noqa: BLE001 — the next start or night tries again
             log.warning("The Kiosk's tickets could not be read (%s)", type(e).__name__)
             return 0
+        if not self.kiosk.says(NOTED):
+            try:
+                await self.kiosk.check()          # a Kiosk updated since the agent started says so now
+            except Exception as e:  # noqa: BLE001 — the card's Telegram lines wait for the next repair
+                log.debug("The Kiosk's info could not be read (%s)", type(e).__name__)
         await self._take_in(problems, held)
         if cleared := problems.close_outlived():
             log.info("Tasks closed with their problem gone: %d", len(cleared))
@@ -207,6 +214,15 @@ class Tickets:
                     # the alert's number, as every chat writes it (owner, 2026-10-14)
                     if want["number"] and card.get("alert_number") != want["number"]:
                         fixed += await self.kiosk.number_ticket(uid, want["number"])
+                    # what happened on Telegram — reminders, escalation, a button pressed (owner, 2026-10-14) — from this
+                    # task's run on (an earlier run's lines belong to the fault as it was then)
+                    if want["number"] and self.kiosk.says(NOTED):
+                        since = _moment(t.get("reopened_at") or t.get("created_at"))
+                        have = set(card.get("noted") or [])
+                        lines = [x for x in self.story(want["number"]) if (since is None or (_moment(x["at"]) or since) >= since)
+                                 and (x["at"], x["note"][:500]) not in have]
+                        if lines:
+                            fixed += await self.kiosk.note_ticket(uid, lines)
                 elif card["status"] != "resolved" and (t.get("done_at") or "") >= recent:
                     fixed += await self.kiosk.resolve_ticket(uid, note=want["note"],
                                                              **({"who": want["who"]} if want["who"] else {}))
@@ -215,6 +231,14 @@ class Tickets:
                 break
         if fixed:
             log.info("Kiosk tickets brought up to date: %d", fixed)
+
+
+def _moment(iso: str | None) -> datetime | None:
+    """A moment as the Kiosk ("…Z") or the store ("…+00:00") writes it; None when it cannot be read."""
+    try:
+        return datetime.fromisoformat(str(iso).replace("Z", "+00:00")) if iso else None
+    except ValueError:
+        return None
 
 
 def _before(resolved_at: str | None, reopened_at: str | None) -> bool:

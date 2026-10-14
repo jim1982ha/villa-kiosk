@@ -154,7 +154,8 @@ class Vesta:
         self.tickets = Tickets(kiosk=self.kiosk, state=self.state, store_path=settings.store_path,
                                settle_alert=self.thread.close, timezone=settings.timezone,
                                tell_fm=lambda text: self.outcome.carry_out({"send": [{"to": "fm", "text": text,
-                                                                                 "title": "Fault reopened in the Kiosk"}]}))
+                                                                                 "title": "Fault reopened in the Kiosk"}]}),
+                               story=lambda iid: self.notices.story(iid))
         # a fault offered in a chat, start to end (fault_offers.py, review 32)
         self.requests = Requests(self.state, self.skills)   # a command skill's request, its turns (command_request.py)
         self.fault_offers = FaultOffers(self.state, self.delivery, self.tickets,

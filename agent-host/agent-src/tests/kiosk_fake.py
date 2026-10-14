@@ -16,17 +16,22 @@ Views, read from the document (for assertions):
 from __future__ import annotations
 
 import copy
+import json
+from pathlib import Path
 
 from vesta_agent.kiosk import CLEARED, READING, REOPENED, RETITLED, Kiosk, _mine
 
 PERSON_AT = "2026-10-01T08:00:00.000Z"
+#: The step kinds this Kiosk shows (/agent/v1/info `step_kinds`), from the agreement the host carries.
+STEP_KINDS = json.loads((Path(__file__).resolve().parents[2] / "rootfs/opt/vesta/host/agent-contract.json").read_text()
+                        )["ticketUpdate"]["kinds"]
 
 
 class FakeKiosk(Kiosk):
     def __init__(self, *tickets: dict):
         super().__init__("http://kiosk.invalid", "token")
         self.doc = {"data": {"tickets": [copy.deepcopy(t) for t in tickets]}, "rev": 1}
-        self.info = {"contract": 1}
+        self.info = {"contract": 1, "step_kinds": list(STEP_KINDS)}
         self.documents: list | None = []
         self._made: list[str] = []
 
@@ -41,7 +46,7 @@ class FakeKiosk(Kiosk):
                                                                                                 # may hold self.doc
             return 200, {}
         if path == "/agent/v1/info":
-            return 200, {"contract": 1}
+            return 200, dict(self.info)
         return 200, {}
 
     def _ticket_id(self) -> str:

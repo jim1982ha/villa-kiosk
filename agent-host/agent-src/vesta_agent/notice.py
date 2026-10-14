@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import re
 
-from vesta_shared.message_format import INCIDENT_TITLE, ROLE_WORDS, TO, UNTITLED, audience, titled
+from vesta_shared.message_format import INCIDENT_TITLE, MARK_ICONS, ROLE_WORDS, TO, UNTITLED, audience, titled
 from vesta_shared.messaging import incident_tag
 from vesta_shared.timeutil import moment_label
 
@@ -53,6 +53,24 @@ EXISTING = "existing"
 #: An incident's history kept: its first notice, a line counting those dropped, and the latest ones (review 28: after
 #: 20 notices the first alert vanished without a word).
 HISTORY_KEPT = 20
+
+
+#: The notices a fault's card in the Kiosk tells too (a "noted" step each, tickets.repair): what chased or escalated it,
+#: or brought it back — never the first alert (the fault itself) nor the closing (its close step says it).
+NOTED_STAGES = ("reminder", "escalated", "still", "back", "reopened")
+#: A button pressed on an alert, in its history for the Kiosk's card only (Telegram shows it as the message's footer).
+PRESSED_STAGE = "pressed"
+
+
+def note_press(state, incident: int, label: str, name: str, mark: str | None = None, option: str = "") -> None:
+    """A button pressed on incident `incident`'s alert, kept in its history (the Kiosk's card says it: Notices.story).
+    Done is not kept: the fault's close says "Done by … on Telegram." already."""
+    if option == "done":
+        return
+    history = state.incident_history(incident)
+    history.append({"at": datetime.now(timezone.utc).isoformat(), "stage": PRESSED_STAGE, "label": label,
+                    "name": name, **({"mark": mark} if mark else {})})
+    state.set_incident_history(incident, _kept(history))
 
 
 def _kept(history: list[dict]) -> list[dict]:
@@ -118,8 +136,22 @@ class Notices:
         word = self.word(int(incident), stage, bool(history))
         lines = [f"- … {h['dropped']} earlier notice{'s' if h['dropped'] > 1 else ''}" if h.get("dropped") else
                  f"- {STAGES.get(h.get('stage'), 'Sent')} {when(datetime.fromisoformat(h['at']), self.tz)} "
-                 f"to {audience(self._roles(h)) or 'nobody'}" for h in history]
+                 f"to {audience(self._roles(h)) or 'nobody'}" for h in history if h.get("stage") != PRESSED_STAGE]
         return "\n".join([f"{incident_tag(incident)}{f'-{p}' if p else ''} ({word})", f"{TO}{who}", *lines])
+
+    def story(self, incident: int) -> list[dict]:
+        """What a fault's card in the Kiosk tells of incident `incident`'s Telegram life, oldest first: [{at, note}] —
+        "Reminder sent to Facility Manager", "🆘 Need help pressed by Fabien" — its time is the step's own (the Kiosk
+        writes it). ⚠️ ONE STORY (architecture review, 2026-10-14): the card is told from the history Telegram's
+        "Status:" is written from, never by a second writer."""
+        out = []
+        for h in self.state.incident_history(incident):
+            if h.get("stage") in NOTED_STAGES:
+                out.append({"at": h["at"], "note": f"{STAGES[h['stage']]} to {audience(self._roles(h)) or 'nobody'}"})
+            elif h.get("stage") == PRESSED_STAGE:
+                icon = MARK_ICONS.get(h.get("mark") or "", "")
+                out.append({"at": h["at"], "note": f"{icon} {h.get('label')} pressed by {h.get('name')}".strip()})
+        return out
 
     def word(self, incident: int, stage: str | None = None, history: bool = True) -> str:
         """The title's word for a notice about `incident`: what the notice is (`stage`) — else what the incident is

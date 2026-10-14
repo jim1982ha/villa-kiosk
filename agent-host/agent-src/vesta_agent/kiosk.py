@@ -41,7 +41,7 @@ def _now() -> str:
 # What a step in a fault's history is — the agreement's `ticketUpdate.kinds` (agent-contract.json), never a note's
 # first words (architecture review 26: the Kiosk took "Now: …" for a status step and showed it under the title it
 # repeated). A step without a kind changes the status.
-REOPENED, RETITLED, READING, CLEARED = "reopened", "retitled", "reading", "cleared"
+REOPENED, RETITLED, READING, NOTED, CLEARED = "reopened", "retitled", "reading", "noted", "cleared"
 OLD_TITLE_NOTE = "Now: "            # this agent's title step before the kinds (0.12.150 and earlier), still read
 
 
@@ -224,7 +224,10 @@ class Kiosk:
                     "reopened_by": str(ups[-1].get("who") or ups[-1].get("by") or "")} if ups else {}
         return {t["id"]: {"status": str(t.get("status") or ""), "title": str(t.get("title") or ""),
                           "agent_title": agent_title(t), "resolved_at": str(t.get("resolvedAt") or ""),
-                          "by": last(t, "who") or last(t, "by"), "alert_number": t.get("alertNumber"), **reopened(t)}     # who did it, as the card says it
+                          "by": last(t, "who") or last(t, "by"), "alert_number": t.get("alertNumber"),
+                          "noted": [(str(u.get("at") or ""), str(u.get("note") or "")) for u in t.get("updates") or []
+                                    if isinstance(u, dict) and u.get("kind") == NOTED],
+                          **reopened(t)}     # `by`: who did it, as the card says it
                 for t in data.get("tickets") or [] if isinstance(t, dict) and isinstance(t.get("id"), str)}
 
     async def update_ticket(self, tid: str, title: str) -> bool:
@@ -246,6 +249,33 @@ class Kiosk:
                         t = dict(t, title=title, updates=list(t.get("updates") or [])
                                  + [{**step, "kind": RETITLED, "was": str(t.get("title") or "")}])
                     tickets[i] = t
+                    data["tickets"] = tickets
+                    return True
+            return False
+        return await self._edit(change)
+
+    def says(self, kind: str) -> bool:
+        """This Kiosk shows fault steps of `kind` (/agent/v1/info `step_kinds`, 2.496.356+): an older one would read a
+        "noted" line as the fault changing status."""
+        return kind in ((self.info or {}).get("step_kinds") or [])
+
+    async def note_ticket(self, tid: str, lines: list[dict]) -> bool:
+        """Lines of what happened about an open fault on Telegram ([{at, note}], notice.Notices.story), each a "noted"
+        step at its own time; a line the fault already has is not written again. False when it is gone, closed, or has
+        them all."""
+        def change(data: dict) -> bool:
+            tickets = list(data.get("tickets") or [])
+            for i, t in enumerate(tickets):
+                if isinstance(t, dict) and t.get("id") == tid:
+                    if t.get("status") == "resolved":
+                        return False
+                    have = {(u.get("at"), u.get("note")) for u in t.get("updates") or [] if isinstance(u, dict)
+                            and u.get("kind") == NOTED}
+                    new = [{"at": x["at"], "status": t.get("status") or "open", "photoIds": [], "kind": NOTED,
+                            "note": str(x["note"])[:500]} for x in lines if (x["at"], str(x["note"])[:500]) not in have]
+                    if not new:
+                        return False
+                    tickets[i] = dict(t, updates=list(t.get("updates") or []) + new)
                     data["tickets"] = tickets
                     return True
             return False

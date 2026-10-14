@@ -12,6 +12,7 @@ from typing import Awaitable, Callable
 from vesta_shared.message_format import PRESSED
 
 from . import button_data
+from .notice import note_press
 from .routing import Origin
 
 log = logging.getLogger("vesta.outcome")
@@ -95,6 +96,8 @@ class AlertButtons:
         # ⚠️ THE FOOTER (owner, 2026-10-10): "<button> pressed by <Name> on 09/10/2026 17:13", the name as the People list
         # names this person for the chat's role
         await self.thread.close(int(iid), PRESSED.format(label=label, name=name, time="{time}"), mark=button["mark"])
+        # the press, for the fault's card in the Kiosk (notice.Notices.story; owner, 2026-10-14)
+        note_press(self.state, int(iid), label, name, button["mark"], button["option"])
         if self.run_job:
             # `text`: the label, for a skill.yaml from before `buttons` (its on_reply reads `--text {text}`)
             await self.run_job(skill, skill.on_reply, 120, {"incident": iid, "option": button["option"], "text": label,

@@ -149,6 +149,10 @@ def test_need_help_reaches_the_owner_with_the_buttons_to_answer(agent):
     assert all(mid != owner["mid"] for _, mid, _ in agent.tg.edits)     # never edited: its buttons are still there
     (fm,) = shown(agent, FM_CHAT)
     assert status(fm) == status(owner["text"])                         # the same sentence in every chat (2026-10-11)
+    # the Kiosk's card tells the same story, through the wiring the app gives its tickets (owner, 2026-10-14)
+    notes = [x["note"] for x in agent.tickets.story(int(iid))]
+    assert notes[0] == "Reminder sent to Facility Manager" and notes[-2:] == ["🆘 Need help pressed by Wayan",
+                                                                               "Escalation sent to Owner"], notes
 
 
 def test_a_second_close_changes_nothing_and_the_records_are_pruned_with_the_others(agent):
