@@ -8,7 +8,6 @@ import type { AppConfig, DeviceGroup } from "./AppConfig";
 import type { EntityMapping } from "@/types/scene.types";
 import type { HassEntity } from "@/types/ha.types";
 import { isUnavailable } from "@/utils/stateColors";
-import { dismissedEntitySet } from "./dismissedEntities";
 import { domainOf } from "@/utils/entityDomain";
 
 /** Every entity_id folded into some group as a (non-primary) member — these
@@ -186,10 +185,9 @@ function selectableDeviceIds(
   entityMap: Record<string, EntityMapping>,
   mappedEntityIds: ReadonlySet<string>,
   entities: Record<string, HassEntity>,
-  dismissedEntityIds: readonly string[],
+  dismissed: ReadonlySet<string>,
   repOf: ReadonlyMap<string, string>,
 ): string[] {
-  const dismissed = dismissedEntitySet(dismissedEntityIds, entities);
   const reps = new Set<string>();
   for (const id of new Set([...mappedEntityIds, ...Object.keys(entityMap)])) {
     if (entityMap[id]?.disabled) continue;
@@ -267,8 +265,9 @@ export function deviceFolding(
 export interface VillaDeviceInput {
   entityMap: Record<string, EntityMapping>;
   deviceGroups: readonly DeviceGroup[];
-  /** See AppConfig.dismissedEntityIds. */
-  dismissedEntityIds: readonly string[];
+  /** The dismissed devices, as the villa model computed them ONCE (dismissedEntities.dismissedEntitySet — never an
+   *  object the model names). Recomputed here per call until 2.496.351, twice per state push. */
+  dismissed: ReadonlySet<string>;
   /** Entity ids the 3D model itself carries — a device can be one of these
    *  without Home Assistant knowing it, and vice versa. */
   mappedEntityIds: ReadonlySet<string>;
@@ -297,7 +296,7 @@ export interface VillaDevices {
 
 export function villaDevices(input: VillaDeviceInput): VillaDevices {
   const ids = selectableDeviceIds(
-    input.entityMap, input.mappedEntityIds, input.entities, input.dismissedEntityIds,
+    input.entityMap, input.mappedEntityIds, input.entities, input.dismissed,
     input.folding ?? deviceFolding(input.entityMap, input.deviceGroups, input.entityDeviceIds));
   const set = new Set(ids);
   return {

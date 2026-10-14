@@ -13,40 +13,65 @@
 
 import type { HassEntity } from "@/types/ha.types";
 
+// ⚠️ THE MODEL IS THE GROUND TRUTH (owner, 2026-10-14). A 3D object named after an entity IS a device of this Kiosk:
+// it is never removed here — not by "Remove N", not by a row's bin, not by an old dismissal on record. If Home
+// Assistant does not have its entity, every surface says so ("Not in Home Assistant"); what changes it is the model
+// (rename or delete the object) or a re-mapping (Bound 3D objects, "Point it there"). Until 2.496.348 a dismissal
+// applied to such an object too: the map kept its badge while Needs attention and Settings' banner forgot it —
+// "media_player.tv" was Unavailable on the map and nowhere else.
+
 export function dismissedEntitySet(
   dismissedEntityIds: readonly string[],
   entities: Record<string, HassEntity>,
+  /** The entities the loaded model names: never dismissed (see the note above). */
+  sceneEntityIds: { has(id: string): boolean },
 ): Set<string> {
-  return new Set(dismissedEntityIds.filter((id) => !entities[id]));
+  return new Set(dismissedEntityIds.filter((id) => !entities[id] && !sceneEntityIds.has(id)));
 }
 
 /**
- * The 3D object a search names whose entity Home Assistant no longer has —
- * so Advanced Settings can offer to point that object at another entity.
- *
- * ⚠️ A DEAD END, REPORTED FROM THE FIELD (2026-10-12): an entity renamed in
- * Home Assistant kept its tile on the map (by design, see
- * EntityVisuals.badgeEligible), and the tile's edit shortcut opened this list
- * on "No entities match": its row was gone, and the "change entity" pencil
- * lived on that row. 2.496.327 offered the fix only to ids in the "removed"
- * list — and the villa's tile was not in it (the model names the object, and
- * auto-detection adopts only entities HA still has, so a renamed one may never
- * have had a row at all). Decided from what the map SHOWS instead: an object
- * of the loaded model resolves to this id, and HA does not know it.
- *
- * Exact id only (the tile's edit shortcut passes it whole); null once the
- * object is bound to an entity Home Assistant has.
+ * The 3D objects of the loaded model whose entity Home Assistant does not have, and that are not pointed at one it
+ * has — every one, listed by Advanced Settings with "Point it there" (owner, 2026-10-14: the warning appeared only
+ * when the exact id was typed in the search, and opening Settings showed nothing). Sorted, for a stable list.
  */
-export function orphanObjectSearched(
-  search: string,
-  sceneEntityIds: ReadonlySet<string>,
+export function orphanObjects(
+  sceneEntityIds: Iterable<string>,
   inHa: (id: string) => boolean,
   meshBindings: Readonly<Record<string, string>>,
-): string | null {
-  const id = search.trim();
-  if (!id || !sceneEntityIds.has(id) || inHa(id)) return null;
-  const bound = meshBindings[id];
-  return bound && inHa(bound) ? null : id;
+): string[] {
+  const out: string[] = [];
+  for (const id of sceneEntityIds) {
+    if (inHa(id)) continue;
+    const bound = meshBindings[id];
+    if (bound && inHa(bound)) continue;
+    out.push(id);
+  }
+  return out.sort();
+}
+
+/**
+ * What Advanced Settings must say is missing, decided ONCE for every screen (architecture review, 2026-10-14): the
+ * rule "Home Assistant does not have it, and is it the model's?" was written three times (the dismissal, the orphan
+ * list, the "Remove N" banner), and only the screen knew to wait for Home Assistant's list before answering.
+ *   stale   — stored rows Home Assistant does not have and the model does not name: "Remove N" may remove them;
+ *   orphans — objects the model names whose entity Home Assistant does not have, pointed at nothing it has, with no
+ *             row of their own: listed with "Point it there", never removable (the model is the ground truth).
+ * Both EMPTY until Home Assistant's list is loaded: an empty list is "not yet", and offering to remove every row at
+ * that moment would be a catastrophic false positive.
+ */
+export function inventoryGaps(o: {
+  rowIds: readonly string[];
+  sceneEntityIds: ReadonlySet<string>;
+  inHa: (id: string) => boolean;
+  meshBindings: Readonly<Record<string, string>>;
+  haReady: boolean;
+}): { stale: string[]; orphans: string[] } {
+  if (!o.haReady) return { stale: [], orphans: [] };
+  const rows = new Set(o.rowIds);
+  return {
+    stale: o.rowIds.filter((id) => !o.inHa(id) && !o.sceneEntityIds.has(id)),
+    orphans: orphanObjects(o.sceneEntityIds, o.inHa, o.meshBindings).filter((id) => !rows.has(id)),
+  };
 }
 
 /**

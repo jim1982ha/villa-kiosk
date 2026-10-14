@@ -21,7 +21,7 @@ const dead = (id) => ({ entity_id: id, state: "unavailable", attributes: {} });
 const map = (...ids) => Object.fromEntries(ids.map((id) => [id, { entityId: id, type: "sensor", label: id }]));
 
 const base = {
-  deviceGroups: [], dismissedEntityIds: [],
+  deviceGroups: [], dismissed: new Set(),
   mappedEntityIds: new Set(), entityDeviceIds: {},
 };
 
@@ -62,7 +62,8 @@ const mixed = {
   },
   entities: { "sensor.real": live("sensor.real") },
   mappedEntityIds: new Set(["sensor.removed"]),
-  dismissedEntityIds: ["sensor.removed"],
+  // the dismissal as the villa model computes it (dismissedEntities.dismissedEntitySet — tested there)
+  dismissed: new Set(["sensor.removed"]),
 };
 const filtered = villaDevices(mixed);
 

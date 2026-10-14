@@ -9,7 +9,7 @@
 import { useState } from "react";
 import { Check, CalendarClock, Trash2 } from "lucide-react";
 import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
-import { budgetStatus, isTicketOpen, localStamp, scheduleBoard, shortDate, type ScheduleStatus, parseAmount, fmAttention, workedBy } from "@/fm/fmEngine";
+import { budgetStatus, stageOf, localStamp, scheduleBoard, shortDate, type ScheduleStatus, parseAmount, fmAttention, workedBy } from "@/fm/fmEngine";
 import EvidenceRow from "./EvidenceRow";
 import RecentWorkList from "./RecentWorkList";
 import NotesField from "./NotesField";
@@ -72,7 +72,9 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
 
   // The ONE attention rule (fmEngine.fmAttention): late tasks, not due-soon.
   const attention = fmAttention(data).lateTasks;
-  const openTickets = data.tickets.filter(isTicketOpen);
+  // a fault waits on the Overview until someone takes it on; then it is a ticket (owner, 2026-10-14)
+  const openFaults = data.tickets.filter((t) => stageOf(t) === "fault");
+  const tickets = data.tickets.filter((t) => stageOf(t) === "ticket");
 
   return (
     <div className="fm-stack">
@@ -81,9 +83,13 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
           <span className="n">{attention.length}</span>
           <span className="l">tasks need attention</span>
         </div>
-        <div className={`fm-stat ${openTickets.length ? "warn" : "good"}`}>
-          <span className="n">{openTickets.length}</span>
+        <div className={`fm-stat ${openFaults.length ? "warn" : "good"}`}>
+          <span className="n">{openFaults.length}</span>
           <span className="l">open faults</span>
+        </div>
+        <div className="fm-stat">
+          <span className="n">{tickets.length}</span>
+          <span className="l">tickets in progress</span>
         </div>
         <div className="fm-stat">
           <span className="n">{/* A bare figure by design — this stat reads as a number under the

@@ -409,7 +409,7 @@
   transition: opacity 0.14s, transform 0.14s, visibility 0.14s;
   text-align: left; white-space: normal;
 }
-.info-tip:focus-within .info-pop { opacity: 1; visibility: visible; transform: translateY(0); }
+.info-tip:focus-within .info-pop, .info-tip.open .info-pop { opacity: 1; visibility: visible; transform: translateY(0); }
 @media (hover: hover) {
   .info-tip:hover .info-pop { opacity: 1; visibility: visible; transform: translateY(0); }
 }
@@ -417,8 +417,8 @@
    plus 78vw of popover overflowed the modal's right edge (horizontal-scroll
    report). Pin it to the VIEWPORT instead, spanning the full width minus
    margins and vertically centred, so a tap on the (i) always shows the whole
-   card on screen. Tap-to-open works via :focus-within (the button is
-   focusable); tapping anywhere else drops focus and closes it. */
+   card on screen. A tap opens it through `.open` (InfoTip — iOS Safari does
+   not focus a tapped button, so :focus-within alone never opened it there). */
 @media (max-width: 640px) {
   .info-tip .info-pop {
     position: fixed; left: 12px; right: 12px; width: auto;
@@ -426,11 +426,18 @@
     max-height: min(76vh, 560px);
     overscroll-behavior: contain;
   }
-  .info-tip:focus-within .info-pop { transform: translateY(-50%); }
+  .info-tip:focus-within .info-pop, .info-tip.open .info-pop { transform: translateY(-50%); }
   @media (hover: hover) {
   .info-tip:hover .info-pop { transform: translateY(-50%); }
 }
 }
+/* A card that explains with a table (FaultTiming): a title, the table, a note. */
+.info-pop-title { display: block; color: var(--text-primary); margin-bottom: 6px; }
+.info-pop-table { width: 100%; border-collapse: collapse; }
+.info-pop-table th { text-align: left; font-weight: 600; color: var(--text-dim); padding: 4px 8px 4px 0; border-bottom: 1px solid var(--hairline); }
+.info-pop-table td { vertical-align: top; padding: 5px 8px 5px 0; border-bottom: 1px solid var(--hairline); }
+.info-pop-table td:first-child { color: var(--text-primary); }
+.info-pop-note { margin: 8px 0 0; color: var(--text-dim); }
 .info-pop .row { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; }
 .info-pop .row span:first-child { color: var(--text-dim); flex: 0 0 auto; }
 .info-pop .row span:last-child { color: var(--text-primary); word-break: break-all; text-align: right; }

@@ -9,14 +9,14 @@ const readers = ["components/hud/HUD.tsx", "components/hud/SummaryBar.tsx", "com
   "components/fm/FacilitySections.tsx", "components/panels/SummaryGroupPanel.tsx"];
 const threaded = readers.filter((f) => /mappedEntityIds[=:]\s*(\{|Set<)/.test(src(f).replace(/\/\/.*$|\/\*[\s\S]*?\*\//gm, "")));
 ck("no reader takes or passes mappedEntityIds as a prop", threaded.length === 0, threaded);
-ck("the Dashboard provides the model once, from the villa's own sets", /<VillaModelProvider sets=\{villaSets\}>/.test(src("pages/Dashboard.tsx")) && /const villaSets = useVillaSets\(mappedEntityIds\);/.test(src("pages/Dashboard.tsx")));
+ck("the Dashboard provides the model once, from the villa's own sets", /<VillaModelProvider sets=\{villaSets\}>/.test(src("pages/Dashboard.tsx")) && /const villaSets = useVillaSets\(sceneEntityIds\);/.test(src("pages/Dashboard.tsx")));
 const hook = src("components/cockpit/useVillaAttention.ts");
 ck("the attention count is the model's — computed once, for the HUD badge and the Cockpit alike",
    /const \{ attention, visibleTo \} = useVillaModel\(\);/.test(hook) && !/buildAttentionItems\(/.test(hook) && /buildAttentionItems\(/.test(src("config/VillaModel.tsx")));
 ck("the bottom bar counts the VISIBLE devices; the Facility the full set",
    /const \{ visibleDevices, mappedEntityIds, visibleEntities \} = useVillaModel\(\)/.test(src("components/hud/SummaryBar.tsx")) && /const \{ devices \} = useVillaModel\(\);/.test(src("components/fm/FacilitySections.tsx")));
 const cockpit = (src("components/cockpit/CockpitModal.tsx") + src("components/cockpit/CockpitOverview.tsx"));
-ck("the Cockpit says 'needs attention' once: the count in the list's title, and no headline (2.496.237)",
-   /Needs attention \(\{attentionGroups\.length\}\)/.test(cockpit) && !/cockpit-health/.test(cockpit));
+ck("the Cockpit says it once: the count in the Live issues title, and no headline (2.496.237)",
+   /Live issues\{attentionGroups\.length > 0 \? ` \(\$\{attentionGroups\.length\}\)` : ""\}/.test(cockpit) && !/cockpit-health/.test(cockpit));
 if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
 console.log("\n✅ the villa's device model, owned once");

@@ -1897,9 +1897,21 @@ def _fm_guest_write_ok(old, new) -> bool:
             or len(ch.added["tickets"]) != len(added):
         return False
     # A guest files an OPEN report and cannot pre-resolve it, backdate it, or
-    # attach a cost to the villa's accounts.
+    # attach a cost to the villa's accounts. Its one history step is the raising
+    # (the app stamps it since 2.496.350): open, and signed as a guest's or not
+    # at all — never a step in someone else's name.
     return all(t.get("status") == "open" and t.get("resolvedAt") is None
-               and t.get("costId") is None and t.get("reportedBy") == "guest" for t in added)
+               and t.get("costId") is None and t.get("reportedBy") == "guest"
+               and _fm_guest_steps_ok(t.get("updates")) for t in added)
+
+
+def _fm_guest_steps_ok(updates) -> bool:
+    """A guest report's history: none, or the one raising step — open, no kind, by "Guest" or nobody."""
+    if updates is None:
+        return True
+    return (isinstance(updates, list) and len(updates) <= 1
+            and all(isinstance(u, dict) and u.get("status") == "open" and not u.get("kind")
+                    and u.get("by") in (None, "Guest") and not u.get("who") for u in updates))
 
 
 def _fm_reader_view(request: web.Request, stored):

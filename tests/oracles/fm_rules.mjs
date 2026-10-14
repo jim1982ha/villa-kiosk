@@ -10,11 +10,7 @@ const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
 const R = await import("@/fm/fmDocuments");
 
 
-ck("a fault goes open → in progress → resolved, and a resolved one can be reopened (review 26: there was no way to)",
-   E.TICKET_NEXT.open === "in_progress" && E.TICKET_NEXT.in_progress === "resolved" && E.TICKET_NEXT.resolved === "open");
-ck("rank: open, in progress, resolved — and a status this build does not know ranks as OPEN (the engine's reading)",
-   E.ticketRank({ status: "open" }) === 0 && E.ticketRank({ status: "in_progress" }) === 1 && E.ticketRank({ status: "resolved" }) === 2
-   && E.ticketRank({ status: "escalated" }) === 0 && E.isTicketOpen({ status: "escalated" }));
+ck("a status this build does not know reads as OPEN (the engine's reading)", E.isTicketOpen({ status: "escalated" }));
 
 ck("amounts: grouping dropped (450.000 → 450000, 1,250,000 → 1250000)", E.parseAmount("450.000") === 450000 && E.parseAmount("1,250,000") === 1250000);
 ck("  ...a fraction is rounded, never glued on: 12.50 → 13 (it was 1250), 99,4 → 99", E.parseAmount("12.50") === 13 && E.parseAmount("99,4") === 99, [E.parseAmount("12.50"), E.parseAmount("99,4")]);
@@ -46,8 +42,8 @@ const now = Date.parse("2026-09-27T00:00:00Z");
 const att = E.fmAttention({ ...d, schedules: [...d.schedules, { id: "s2", title: "Due soon", everyDays: 30, enabled: true }],
   completions: [...d.completions, { id: "c3", scheduleId: "s2", at: new Date(now - 26 * 86400000).toISOString(), by: "Op", photoIds: [] }] }, now);
 ck("ONE attention rule: open faults + tasks overdue or never — a task merely due soon is not attention",
-   att.openFaults.map((t) => t.id).join() === "t2" && att.lateTasks.map((s) => s.schedule.id).join() === "s1" && att.total === 2,
-   { faults: att.openFaults.map((t) => t.id), late: att.lateTasks.map((s) => `${s.schedule.id}:${s.state}`) });
+   att.unresolved.map((t) => t.id).join() === "t2" && att.lateTasks.map((s) => s.schedule.id).join() === "s1" && att.total === 2,
+   { faults: att.unresolved.map((t) => t.id), late: att.lateTasks.map((s) => `${s.schedule.id}:${s.state}`) });
 
 // The one-step close, "no action needed" (2.496.239).
 {
@@ -78,14 +74,13 @@ const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf
 ck("the Cockpit (whose count the top bar shows) and the Today tab count through fmAttention; the top bar keeps no count of its own",
    !/fmAttention/.test(src("components/hud/HUD.tsx")) && /const fm = fmAttention\(fmData\);/.test(src("config/attention.ts"))
    && /fmAttention\(data\)\.lateTasks/.test(src("components/fm/TodayTab.tsx")));
-ck("no screen parses an amount or ranks/moves a fault by itself",
-   ["components/fm/TodayTab.tsx", "components/fm/SpendTab.tsx", "components/fm/FaultStageModal.tsx"].every((f) => /parseAmount\(/.test(src(f)) && !/replace\(\/\[\^\\d\]\/g, ""\)\) \|\| 0/.test(src(f)))
-   && /ticketRank\(a\)/.test(src("components/fm/FaultsTab.tsx")) && !/const NEXT:/.test(src("components/fm/FaultsTab.tsx")));
-ck("the store erases a fault through withoutTicket", /mutate\(\(d\) => withoutTicket\(d, id\), elevation\)/.test(src("fm/FmDataContext.tsx")));
-ck("the one-step close goes through the store's one writer (mutate), and both screens call it",
-   /mutate\(\(d\) => withTicketClosed\(d, id, stamp\(\), role \? ROLE_LABELS\[role\] : undefined\)\)/.test(src("fm/FmDataContext.tsx"))
-   && /closeTicket\(id\)/.test(src("components/fm/FaultsTab.tsx"))
-   && /closeTicket\(fault\.ticketId/.test((src("components/cockpit/CockpitModal.tsx") + src("components/cockpit/CockpitOverview.tsx")))
+ck("no screen parses an amount by itself",
+   ["components/fm/TodayTab.tsx", "components/fm/SpendTab.tsx", "components/fm/FaultStageModal.tsx"].every((f) => /parseAmount\(/.test(src(f)) && !/replace\(\/\[\^\\d\]\/g, ""\)\) \|\| 0/.test(src(f))));
+ck("the store erases a fault through its one command, with the elevation", /run\(\{ type: "removeTicket", id \}, elevation\)/.test(src("fm/FmDataContext.tsx")));
+ck("the one-step close is one command, and both screens call it",
+   /run\(\{ type: "closeTickets", ids \}\)/.test(src("fm/FmDataContext.tsx"))
+   && /closeTickets\(ids\)/.test(src("components/fm/TicketsTab.tsx"))
+   && /closeTickets\(acts\.close\)/.test(src("components/cockpit/CockpitOverview.tsx"))
    && /ticketId: t\.id/.test(src("config/attention.ts")));
 
 {

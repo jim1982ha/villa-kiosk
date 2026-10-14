@@ -15,11 +15,12 @@ import { deviceLook, storeLookSource } from "@/utils/deviceActivity";
 import { deviceRowText } from "@/utils/entityValue";
 import type { Threshold } from "@/config/ThresholdConfig";
 import { labelOf } from "@/config/EntityMap";
-import { fmAttention } from "@/fm/fmEngine";
+import { fmAttention, stageOf } from "@/fm/fmEngine";
 import type { FmData } from "@/fm/fmTypes";
 import type { HassEntity } from "@/types/ha.types";
 import type { EntityMapping } from "@/types/scene.types";
 import { domainOf } from "@/utils/entityDomain";
+import { missingFromHa, NOT_IN_HA } from "@/utils/stateColors";
 
 export type AttentionKind = "unavailable" | "fault" | "schedule" | "alarm";
 
@@ -34,9 +35,11 @@ export interface AttentionItem {
    *  panel) — a fault/schedule with no device behind it (a whole-villa task,
    *  a free-text device description) has none, so it renders as read-only. */
   entityId?: string;
-  /** Set on a fault: the Facility ticket it is, so the row can close it in
-   *  one step (FmDataContext.closeTicket). */
+  /** Set on a fault: the record it is, so its card can take it on or close it
+   *  (FmDataContext.advanceTickets / closeTickets). */
   ticketId?: string;
+  /** Set on a fault: where its record stands (fmEngine.stageOf) — a fault nobody has taken on, or a ticket. */
+  stage?: "fault" | "ticket";
   /** The villa DEVICE the entity belongs to (deviceGroups.deviceFolding: the
    *  owner's device groups, then Home Assistant's device registry) — what
    *  groupAttention folds on. Set exactly when `entityId` is. */
@@ -118,6 +121,20 @@ export function groupAttention(items: readonly AttentionItem[]): AttentionGroup[
  *  in a row that is the problem itself (no device), only a status the row does not show already ("In progress"; an
  *  open fault's line is empty — its title is the row's, its Close the line's). Every row shows its problems this way,
  *  one or several. */
+/** What a card's buttons do (owner, 2026-10-14) — on its faults only (its own fault lines and those folded onto a
+ *  live state's line by mergeFaults); null when it holds none, so a card that is only what Home Assistant reports has
+ *  no button. `markInProgress`: the records "Mark in progress" takes on (one ticket for the device), empty when every
+ *  fault is already a ticket — then `editTicket` is the record "Edit ticket" opens. `close`: every one of them. */
+export interface CardActions { markInProgress: string[]; editTicket: string | null; close: string[] }
+export function cardActions(group: AttentionGroup): CardActions | null {
+  const faults = group.items.flatMap((i) => (i.kind === "fault" ? [i] : i.fault ? [i.fault] : []))
+    .filter((f): f is AttentionItem & { ticketId: string } => !!f.ticketId);
+  if (faults.length === 0) return null;
+  const markInProgress = faults.filter((f) => f.stage !== "ticket").map((f) => f.ticketId);
+  const tickets = faults.filter((f) => f.stage === "ticket").map((f) => f.ticketId);
+  return { markInProgress, editTicket: markInProgress.length ? null : tickets[0], close: faults.map((f) => f.ticketId) };
+}
+
 export function attentionLineIn(group: AttentionGroup, item: AttentionItem): string {
   return group.key.startsWith("device:") ? attentionLine(item) : faultStatus(item) ?? item.detail;
 }
@@ -128,11 +145,8 @@ export function attentionLineIn(group: AttentionGroup, item: AttentionItem): str
  *  undefined for anything that is not a fault. */
 function faultStatus(item: AttentionItem): string | undefined {
   if (item.kind !== "fault") return undefined;
-  return item.detail === OPEN_FAULT ? "" : item.detail;
+  return item.stage === "ticket" ? "In progress" : "";
 }
-
-/** An open fault's `detail` — read by faultStatus, never shown. */
-const OPEN_FAULT = "Open fault";
 
 /** The icon a problem's line shows inside its row: its own kind's only where the row's icon does not say it already.
  *  ⚠️ ONE ICON PER MEANING (owner, 2026-10-13: "the icon is redundant"): every line repeated its row's icon — a red "!"
@@ -209,22 +223,25 @@ export function buildAttentionItems(opts: {
       id: `unavailable:${id}`,
       kind: "unavailable",
       title: labelOf(id, entityMap, entities),
-      detail: "Unavailable",
+      // an object the model names whose entity Home Assistant does not have says so, as everywhere (NOT_IN_HA)
+      detail: missingFromHa(entities, id) ? NOT_IN_HA : "Unavailable",
       room: resolvedRooms[id],
       entityId: id,
     });
   }
 
   const fm = fmAttention(fmData);
-  for (const t of fm.openFaults) {
+  for (const t of fm.unresolved) {
+    const stage = stageOf(t) === "ticket" ? "ticket" : "fault";
     items.push({
       id: `fault:${t.id}`,
       kind: "fault",
       title: t.title,
-      detail: t.status === "in_progress" ? "In progress" : OPEN_FAULT,
+      detail: stage === "ticket" ? "In progress" : "Fault",
       room: t.room,
       entityId: t.entityId,
       ticketId: t.id,
+      stage,
     });
   }
 

@@ -28,6 +28,11 @@ export interface Doors {
   agent: boolean;
   /** The Cockpit's count of firmware / add-on updates waiting. */
   updates: boolean;
+  /** Report a problem: a device panel's wrench, the Overview's "Report a problem" / "Raise a fault". Every profile
+   *  holds it today (guests included); said here so no screen asks the role again. */
+  reportFault: boolean;
+  /** Change a device's set-up: a device panel's Edit and its badge colour. */
+  editDevices: boolean;
 }
 
 /**
@@ -41,5 +46,7 @@ export function doorsFor(role: Role | null | undefined, agentVisible: boolean): 
     facility: roleCan(role, "manageFacility"),
     agent: roleCan(role, "viewAgent") && agentVisible,
     updates: roleCan(role, "seeUpdates"),
+    reportFault: roleCan(role, "reportFault"),
+    editDevices: roleCan(role, "editConfig"),
   };
 }

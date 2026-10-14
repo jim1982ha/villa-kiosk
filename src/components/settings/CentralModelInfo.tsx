@@ -4,7 +4,7 @@
 // Settings modal's header, next to the GLB upload button (see
 // ConfigEditorModal), Owner profile only.
 
-import { Info } from "lucide-react";
+import InfoTip from "@/components/common/InfoTip";
 import type { getLoadedModelInfo } from "@/utils/modelInfo";
 import type { AddonConfig } from "@/utils/centralModel";
 import { stampText } from "@/utils/dateText";
@@ -17,11 +17,7 @@ export default function CentralModelInfo({
   editable: boolean;
 }) {
   return (
-    <span className="info-tip">
-      <button type="button" className="info-btn" aria-label="Model details">
-        <Info size={16} />
-      </button>
-      <div className="info-pop" role="tooltip">
+    <InfoTip label="Model details">
           <div className="row">
             <span>Latest SH3D plan</span>
             <span>
@@ -84,7 +80,6 @@ export default function CentralModelInfo({
               </>
             )}
           </div>
-      </div>
-    </span>
+    </InfoTip>
   );
 }

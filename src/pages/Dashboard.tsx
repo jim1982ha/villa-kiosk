@@ -19,7 +19,7 @@ import TapRipple, { RIPPLE_LIFETIME_MS, type Ripple } from "@/components/hud/Tap
 import { hasSeenFirstRunTips } from "@/utils/viewPrefs";
 import TeleportMenu from "@/components/teleport/TeleportMenu";
 import PanelRouter from "@/components/panels/PanelRouter";
-import { PanelActionsProvider } from "@/components/panels/PanelActionsContext";
+import { PanelActionsProvider, NO_PANEL_ACTIONS } from "@/components/panels/PanelActionsContext";
 import { useOpenPanelActions } from "@/components/panels/useOpenPanelActions";
 import SettingsModal from "@/components/settings/SettingsModal";
 import ConfigEditorModal from "@/components/settings/ConfigEditorModal";
@@ -114,8 +114,10 @@ export default function Dashboard() {
   );
   const [currentFloor, setCurrentFloor] = useState(1);
   const [floorsAvailable, setFloorsAvailable] = useState<number[]>([1]);
-  /** Entities with real geometry in the loaded model (see manager.mappedEntityIds). */
-  const [mappedEntityIds, setMappedEntityIds] = useState<Set<string>>(new Set());
+  /** The entities the loaded model's objects are named after (manager.mappedEntityIds) — the RAW scene set. What the
+   *  rest of the page calls "on the map" is the villa model's `mappedEntityIds` below (these, plus every mapping's
+   *  linked and motion entity, dismissed ones out): two sets, two names (architecture review, 2026-10-14). */
+  const [sceneEntityIds, setSceneEntityIds] = useState<Set<string>>(new Set());
   // A device with no badge/mesh of its own can still be represented ON the
   // map INDIRECTLY: it's some other mapped device's linkedEntityId (its ring
   // toggle) or motionEntityId (a camera's detection sensor, driving its
@@ -131,16 +133,16 @@ export default function Dashboard() {
   // linked and motion entity, dismissed ones out), which are dismissed, and
   // which a profile can see at all — decided once, by the villa model
   // (config/villaVisibility.ts), and read here as by every surface below.
-  const villaSets = useVillaSets(mappedEntityIds);
-  const { dismissedIds, mappedEntityIds: effectiveMappedEntityIds } = villaSets;
+  const villaSets = useVillaSets(sceneEntityIds);
+  const { dismissedIds, mappedEntityIds } = villaSets;
   // Mirrored into a ref for the motion-toast subscription below, which reads
   // it from inside a subscribeAll callback set up once ([subscribeAll] only)
   // — a plain closure over the memo would freeze on whatever set existed at
   // subscribe time.
-  const effectiveMappedIdsRef = useRef(effectiveMappedEntityIds);
-  effectiveMappedIdsRef.current = effectiveMappedEntityIds;
+  const mappedIdsRef = useRef(mappedEntityIds);
+  mappedIdsRef.current = mappedEntityIds;
   // Diagnostic/hidden-in-HA entities are excluded UNLESS they're actually on
-  // the map (effectiveMappedEntityIds — real geometry, or linked/motion to
+  // the map (mappedEntityIds — real geometry, or linked/motion to
   // something that has it): the same distinction the map badge itself uses
   // (a UniFi AP's diagnostic "State" sensor someone deliberately bound to a
   // mesh stays visible). This is NOT "show every diagnostic entity in this
@@ -162,9 +164,9 @@ export default function Dashboard() {
   const categoryGroupEntityIds = useMemo(
     () => (categoryGroup ? categoryMembers(role, categoryGroup, {
       entityMap: config.entityMap, entities, dismissed: dismissedIds,
-      suppressed: suppressedEntityIds, mapped: effectiveMappedEntityIds,
+      suppressed: suppressedEntityIds, mapped: mappedEntityIds,
     }) : []),
-    [categoryGroup, role, config.entityMap, entities, suppressedEntityIds, effectiveMappedEntityIds, dismissedIds]);
+    [categoryGroup, role, config.entityMap, entities, suppressedEntityIds, mappedEntityIds, dismissedIds]);
   const [modelKey, setModelKey] = useState(0); // bump to force canvas remount
   // Starts "overview" to match the actual landing view (see the one-shot
   // effect below): the HUD reads this to decide joystick vs. overview-help
@@ -336,10 +338,10 @@ export default function Dashboard() {
       const map = configRef.current.entityMap[id];
       // Only announce a sensor actually configured somewhere in the app —
       // real geometry in the model, or another mapping's Linked entity /
-      // Motion sensor field (see effectiveMappedEntityIds above). Without
+      // Motion sensor field (see mappedEntityIds above). Without
       // this, any motion/presence/occupancy sensor HA happens to expose
       // fires the toast, configured or not.
-      if (!effectiveMappedIdsRef.current.has(id)) return;
+      if (!mappedIdsRef.current.has(id)) return;
 
       const on = e.state === "on";
       const prev = wasOn.get(id);
@@ -394,7 +396,7 @@ export default function Dashboard() {
   // The open panel's header actions — Back, readings, edit, report, badge,
   // the linked switch and its "ask first" — are components/panels/
   // useOpenPanelActions'; this page only provides them and draws the dialog.
-  const openPanel = useOpenPanelActions({ screen, go, panelFor, readingsOf: identity.readingsOf });
+  const openPanel = useOpenPanelActions({ screen, go, panelFor, readingsOf: identity.readingsOf, doors });
   const linkedAsk = openPanel.linkedAsk;
 
   // Everything React shows of the scene's own state, read from EACH new scene
@@ -480,7 +482,7 @@ export default function Dashboard() {
       // Which devices are actually ON the 3D map — the SummaryBar's group
       // modals mark everything else as "not on the map" (it exists in HA but
       // has no geometry in this villa model).
-      setMappedEntityIds(new Set(manager.mappedEntityIds()));
+      setSceneEntityIds(new Set(manager.mappedEntityIds()));
       const pts = manager.getCalibratedTeleportPoints();
       if (pts) {
         // Fitted rooms refresh; a room the owner added is kept; nothing is
@@ -516,10 +518,10 @@ export default function Dashboard() {
       // EVERY entity on the map or stored (EntityMap.resolveRooms says why
       // the set is the union): the model's own (a mesh bound to an entity
       // needs no stored mapping to draw a badge), the stored mappings, and
-      // — inside effectiveMappedEntityIds — every linked/motion target,
+      // — inside mappedEntityIds — every linked/motion target,
       // which is only ever a VALUE on another mapping and used to fall to
       // "Other" for the same reason.
-      const ids = new Set<string>([...effectiveMappedEntityIds, ...Object.keys(config.entityMap)]);
+      const ids = new Set<string>([...mappedEntityIds, ...Object.keys(config.entityMap)]);
       for (const mapping of Object.values(config.entityMap)) {
         if (mapping.linkedEntityId) ids.add(mapping.linkedEntityId);
         if (mapping.motionEntityId) ids.add(mapping.motionEntityId);
@@ -532,7 +534,7 @@ export default function Dashboard() {
     // no replay, since it has just run.
     recompute();
     return manager.onScene(recompute, false);
-  }, [manager, entityAreaNames, config.entityMap, effectiveMappedEntityIds, setResolvedRooms]);
+  }, [manager, entityAreaNames, config.entityMap, mappedEntityIds, setResolvedRooms]);
 
   const handleTeleport = useCallback(
     (point: TeleportPoint) => {
@@ -739,7 +741,7 @@ export default function Dashboard() {
       )}
 
       {activePanel && (
-        <PanelActionsProvider value={openPanel.actions ?? {}}>
+        <PanelActionsProvider value={openPanel.actions ?? NO_PANEL_ACTIONS}>
           <PanelRouter
             active={activePanel}
             onClose={closePanel}
@@ -806,7 +808,7 @@ export default function Dashboard() {
           // legitimately-kept ones straight back out again.
           //
           // Load-bearing invariant, not a coincidence: mappedEntityIds here
-          // is the SAME effectiveMappedEntityIds reference categoryGroupEntityIds
+          // is the SAME villa-model reference categoryGroupEntityIds
           // filtered against above. Every suppressed entity that survived
           // that filter is therefore, by construction, also in this set —
           // so SummaryGroupPanel's own onMap/offMap split (which reads THIS
@@ -828,6 +830,10 @@ export default function Dashboard() {
           onTab={(tab) => go({ type: "cockpitTab", tab })}
           reportFaultFor={screen.faultFor ?? undefined}
           onFaultFormOpened={() => go({ type: "faultFormOpened" })}
+          editTicket={screen.ticketFor ?? undefined}
+          onEditTicket={(id) => go({ type: "editTicket", id })}
+          onTicketEditOpened={() => go({ type: "ticketEditOpened" })}
+          onReportProblem={() => go({ type: "reportProblem" })}
         />
       )}
 
@@ -840,7 +846,7 @@ export default function Dashboard() {
 
       {screen.guestReportFor !== null && (
         <GuestReportModal
-          entityId={screen.guestReportFor}
+          entityId={screen.guestReportFor || undefined}
           onClose={() => go({ type: "closeGuestReport" })}
         />
       )}

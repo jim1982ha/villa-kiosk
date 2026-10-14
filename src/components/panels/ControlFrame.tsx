@@ -35,7 +35,7 @@ interface Props {
 export default function ControlFrame({ entity, mapping, device, power, always, children }: Props) {
   const { ws } = useHA();
   if (isUnavailable(entity)) {
-    return <><UnavailableNotice device={device} />{always}</>;
+    return <><UnavailableNotice device={device} entityId={mapping.entityId} />{always}</>;
   }
   return (
     <>

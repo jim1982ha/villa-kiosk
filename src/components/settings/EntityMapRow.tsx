@@ -54,7 +54,8 @@ interface Props {
   onRemapChange: (id: string | undefined) => void;
   onRemapApply: (key: string, newId: string) => void;
   onRemapCancel: () => void;
-  onRemove: (key: string) => void;
+  /** Absent for an object the 3D model names: it is never removed here (dismissedEntities). */
+  onRemove?: (key: string) => void;
   /** Stable identity (reads the latest config via a ref internally) — see
    *  ConfigEditor's patch(). Passing the SAME function to every row is what
    *  lets React.memo's default shallow-prop comparison actually work. */
@@ -147,13 +148,15 @@ function EntityMapRow({
               >
                 <Pencil size={16} />
               </button>
-              <button
-                className="icon-btn icon-btn-danger"
-                title="Remove this entity"
-                onClick={(e) => { e.stopPropagation(); onRemove(entryKey); }}
-              >
-                <Trash2 size={16} />
-              </button>
+              {onRemove && (
+                <button
+                  className="icon-btn icon-btn-danger"
+                  title="Remove this entity"
+                  onClick={(e) => { e.stopPropagation(); onRemove(entryKey); }}
+                >
+                  <Trash2 size={16} />
+                </button>
+              )}
             </span>
             {expanded ? <ChevronDown size={16} className="muted" /> : <ChevronRight size={16} className="muted" />}
           </div>

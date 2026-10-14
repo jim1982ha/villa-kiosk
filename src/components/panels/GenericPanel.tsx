@@ -11,7 +11,7 @@ import UnavailableNotice from "./UnavailableNotice";
 export default function GenericPanel({ entity, mapping, onClose }: PanelProps) {
   return (
     <BasePanel title={mapping.label} entityId={mapping.entityId} icon={<Info size={22} />} history={false} onClose={onClose}>
-      {isUnavailable(entity) ? <UnavailableNotice /> : (
+      {isUnavailable(entity) ? <UnavailableNotice entityId={mapping.entityId} /> : (
         <div className="center" style={{ margin: "8px 0 16px" }}>
           <span className="value-large">{entity?.state ?? "unknown"}</span>
         </div>

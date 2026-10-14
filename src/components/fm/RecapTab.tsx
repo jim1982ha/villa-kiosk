@@ -104,15 +104,13 @@ export default function RecapTab({
         are out of scope and stay with whoever already handles them.
       </p>
 
-      <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-        <label className="fm-field" style={{ maxWidth: 200 }}>
-          <span>Period</span>
+      {/* The period on the same line as what it is for (owner, 2026-10-14) */}
+      <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        <span className="fm-inline-label">Period</span>
+        <div style={{ minWidth: 130 }}>
           <Dropdown value={month} ariaLabel="Period" onChange={(m) => { setMonth(m); setMarkdown(null); setSaved(false); }}
             options={months.map((m) => ({ value: m, label: m }))} />
-        </label>
-      </div>
-
-      <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+        </div>
         <button className="btn primary" onClick={generate}>
           <Sparkles size={16} /> {markdown ? "Regenerate recap" : "Generate recap"}
         </button>
@@ -137,7 +135,7 @@ export default function RecapTab({
         ) : (
           <p className="muted body-text">
             Nothing generated yet for {month} — press "Generate recap" to build it from
-            the villa's current Readiness, Faults, Spend and Schedule status.
+            the villa's current Readiness, Tickets, Spend and Schedule status.
           </p>
         )}
       </div>

@@ -16,6 +16,8 @@ const { ROLE_ORDER } = await import("@/auth/roles");
 const table = JSON.parse(readFileSync(new URL("../../rootfs/usr/share/vesta/roles.json", import.meta.url), "utf8"));
 const holds = (role, cap) => table.profiles[role].capabilities.includes(cap);
 
+const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+const src = (f) => strip(readFileSync(new URL(`../../src/${f}`, import.meta.url), "utf8"));
 console.log("  by value, every profile × agent configured or not:");
 const wrong = [];
 for (const role of ROLE_ORDER) {
@@ -24,6 +26,7 @@ for (const role of ROLE_ORDER) {
     const want = {
       settings: holds(role, "openSettings"), facility: holds(role, "manageFacility"),
       agent: holds(role, "viewAgent") && agentVisible, updates: holds(role, "seeUpdates"),
+      reportFault: holds(role, "reportFault"), editDevices: holds(role, "editConfig"),
     };
     for (const k of Object.keys(want)) if (d[k] !== want[k]) wrong.push(`${role}/${agentVisible}: ${k}=${d[k]}`);
   }
@@ -36,10 +39,18 @@ ck("no profile chosen yet: no doors", Object.values(doorsFor(null, true)).every(
 }
 ck("the agent's door needs BOTH the right and an agent: never open with no agent configured",
    ROLE_ORDER.every((r) => doorsFor(r, false).agent === false));
+ck("every door is said (none left undefined for a screen to guess)",
+   ROLE_ORDER.every((r) => Object.values(doorsFor(r, true)).every((v) => typeof v === "boolean")) && Object.keys(doorsFor("owner", true)).length === 6);
+{
+  // what a device panel may show is a VALUE from these doors, never whether a callback exists (doors.ts' history):
+  // the wrench, Edit and the badge colour are drawn from `may`
+  const panel = src("components/panels/BasePanel.tsx"), acts = src("components/panels/useOpenPanelActions.ts");
+  ck("a device panel's wrench, Edit and badge colour read `may` (the doors), and its callbacks are always there",
+     /\{may\.reportFault && \(/.test(panel) && /\{may\.edit && <button/.test(panel) && /const canRecolor = badge && may\.edit;/.test(panel)
+     && !/\? \(\) => go\(\{ type: "(reportFault|editDevice)" \}\) : undefined/.test(acts) && !/roleCan\(role, "(reportFault|editConfig)"\)/.test(acts));
+}
 
 console.log("\n  every surface reads the one answer:");
-const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
-const src = (f) => strip(readFileSync(new URL(`../../src/${f}`, import.meta.url), "utf8"));
 const dash = src("pages/Dashboard.tsx"), hud = src("components/hud/HUD.tsx"), cockpit = (src("components/cockpit/CockpitModal.tsx") + src("components/cockpit/CockpitOverview.tsx"));
 ck("Dashboard computes it once and mounts every window behind it",
    (dash.match(/doorsFor\(/g) ?? []).length === 1
@@ -55,6 +66,6 @@ ck("the top bar draws Settings and the agent's robot from doors — and no Facil
    (hud.match(/\{doors\.facility && \(/g) ?? []).length === 0 && (hud.match(/\{doors\.settings && \(/g) ?? []).length === 1   // ONE Settings row, shared by both menus (accountRows, 2.496.335)
    && !/\{onOpenFacility && \(|\{canOpenSettings && \(/.test(hud));
 ck("the Cockpit's updates count and agent footer read doors, not roleCan",
-   /if \(!doors\.updates\) return null;/.test(cockpit) && !/roleCan\(role, "seeUpdates"\)/.test(cockpit) && /doors\.agent \? \(/.test(cockpit));
+   /doors\.updates\s*\? Object\.values\(entities\)/.test(cockpit) && !/roleCan\(role, "seeUpdates"\)/.test(cockpit) && /doors\.agent \? \(/.test(cockpit));
 
 done("✅ which doors a profile has is said once");

@@ -12,19 +12,20 @@ import type { ReadingRow } from "@/config/readingRows";
 export interface PanelActions {
   /** The HA entity_id the open panel controls (shown under the title). */
   entityId?: string;
-  /** Open Advanced Settings focused on this entity. Undefined when the current
-   *  profile may not edit config — the edit button is then hidden. */
-  onEdit?: () => void;
-  /** Raise a maintenance fault against the open device — opens the Facility
-   *  workspace on the Faults tab with this device already filled in.
+  /** What this profile may do from the panel — a VALUE (auth/doors), never read from whether a callback exists:
+   *  "absent" looks exactly like "may not" (doors.ts carries the history). */
+  may: { edit: boolean; reportFault: boolean };
+  /** Open Advanced Settings focused on this entity (shown with may.edit). */
+  onEdit: () => void;
+  /** Raise a maintenance fault against the open device — opens the Cockpit's
+   *  Overview with "Raise a fault" pointed at this device.
    *
    *  The point is the moment of noticing. Someone walking the villa taps the
    *  badge of a lamp that will not come on; before this, acting on that meant
    *  closing the panel, opening Facility, finding Faults, and searching for
    *  the device they had just been looking at — four steps and a name they
-   *  may not know. Undefined for profiles without manageFacility, which is
-   *  what hides the button. */
-  onReportFault?: () => void;
+   *  may not know. Shown with may.reportFault. */
+  onReportFault: () => void;
   /** Everything BasePanel needs to render THIS device's exact map badge in its
    *  header (same glyph + colour as the 3D view) and make it a colour editor.
    *  Provided by Dashboard, which knows the live entity + config. */
@@ -47,10 +48,9 @@ export interface PanelActions {
      *  See deviceActivity.badgeFaceAndRing. */
     ringState?: DeviceSurfaceState;
   };
-  /** Persist a new badge colour for the open entity (null = category default).
-   *  Undefined when the profile may not edit config — the badge is then a plain,
-   *  non-interactive icon. */
-  onSetBadgeColor?: (hex: string | null) => void;
+  /** Persist a new badge colour for the open entity (null = category default). Without may.edit the badge is a
+   *  plain, non-interactive icon. */
+  onSetBadgeColor: (hex: string | null) => void;
   /** The open device's LINKED entity (EntityMapping.linkedEntityId), when one
    *  is configured and the profile may control it. Renders as an on/off switch
    *  in the shared panel chrome, so EVERY device type gets it for free the
@@ -97,7 +97,12 @@ export interface PanelActions {
   };
 }
 
-const PanelActionsContext = createContext<PanelActions>({});
+/** No panel open, or a panel outside the provider: nothing allowed, nothing to call. */
+export const NO_PANEL_ACTIONS: PanelActions = {
+  may: { edit: false, reportFault: false }, onEdit: () => {}, onReportFault: () => {}, onSetBadgeColor: () => {},
+};
+
+const PanelActionsContext = createContext<PanelActions>(NO_PANEL_ACTIONS);
 /**
  * The linked entity's switch SEMANTICS — what it does, whether it can, and
  * what it says to assistive tech — spread onto whichever button draws it:

@@ -88,7 +88,7 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
           (UnavailableNotice), instead of this panel's own "Unavailable" text —
           one presentation of "HA lost contact" across the whole app. */}
       {rows.length > 0 && rows.every((r) => r.reading.unavailable) ? (
-        <UnavailableNotice device="device" />
+        <UnavailableNotice device="device" entityId={primaryMapping.entityId} />
       ) : (
         <div className="row-buttons" style={{ marginBottom: 18 }}>
           {rows.map((r) => (

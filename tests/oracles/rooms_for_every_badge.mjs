@@ -26,9 +26,9 @@ console.log("\n  the set:");
 {
   const dash = readFileSync(new URL("../../src/pages/Dashboard.tsx", import.meta.url), "utf8");
   ck("the model's own entities (mesh-bound included) AND the stored mappings",
-     /new Set<string>\(\[\.\.\.effectiveMappedEntityIds, \.\.\.Object\.keys\(config\.entityMap\)\]\)/.test(dash));
+     /new Set<string>\(\[\.\.\.mappedEntityIds, \.\.\.Object\.keys\(config\.entityMap\)\]\)/.test(dash));
   ck("  ...and every linked/motion target", /if \(mapping\.linkedEntityId\) ids\.add\(mapping\.linkedEntityId\);\s*if \(mapping\.motionEntityId\) ids\.add\(mapping\.motionEntityId\);/.test(dash));
   ck("  ...through the one rule, re-run when the model's entity set changes",
-     /resolveRooms\(ids, entityAreaNames, \(id\) => manager\.roomForEntity\(id\)\)/.test(dash) && /\[manager, entityAreaNames, config\.entityMap, effectiveMappedEntityIds, setResolvedRooms\]/.test(dash));
+     /resolveRooms\(ids, entityAreaNames, \(id\) => manager\.roomForEntity\(id\)\)/.test(dash) && /\[manager, entityAreaNames, config\.entityMap, mappedEntityIds, setResolvedRooms\]/.test(dash));
 }
 done("✅ every badge has a room to fold into");

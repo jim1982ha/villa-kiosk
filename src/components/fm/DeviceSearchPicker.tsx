@@ -1,5 +1,5 @@
 // src/components/fm/DeviceSearchPicker.tsx
-// A search-and-select device field, shared by the Faults and Spend tabs (a
+// A search-and-select device field, shared by the fault form and the Spend tab (a
 // fault or a cost entry both want "which device is this about", with the same
 // two requirements: search across every configured device without dumping the
 // whole list, and accept free text when the device isn't in it — a spare part,

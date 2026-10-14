@@ -10,7 +10,7 @@
 import {
   NO_FM_TERMS,
   type FmTerms,
-  type FmCompletion, type FmCost, type FmData, type FmSchedule, type FmTicket, type FmTicketStatus, type FmTicketUpdate,
+  type FmCompletion, type FmCost, type FmData, type FmSchedule, type FmTicket, type FmTicketUpdate,
 } from "./fmTypes";
 import { fullDate, monthYear } from "@/utils/dateText";
 
@@ -228,6 +228,17 @@ export function isTicketOpen(t: { status?: FmTicket["status"] }): boolean {
   return !isTicketResolved(t);
 }
 
+/** Where a record stands (owner, 2026-10-14): a FAULT waits on the Overview until someone takes it on, then it is a
+ *  TICKET (the Tickets tab), then CLOSED. ONE answer for every screen and count.
+ *  ⚠️ SEVEN SCREENS DECIDED IT EACH (architecture review, 2026-10-14): a record with a status this build does not know
+ *  showed as a fault on the Overview, titled itself "Edit ticket" and was in no Tickets list. Unknown is a FAULT here,
+ *  everywhere — never hidden, never closed. */
+export type FmStage = "fault" | "ticket" | "closed";
+export function stageOf(t: { status?: FmTicket["status"] }): FmStage {
+  if (isTicketResolved(t)) return "closed";
+  return t.status === "in_progress" ? "ticket" : "fault";
+}
+
 /** Who did a piece of work: the person, when someone else recorded it (a VESTA Agent completion for a Done on
  *  Telegram), else who recorded it. One reading for every list and report. */
 export function workedBy(c: Pick<FmCompletion, "by" | "who">): string {
@@ -287,15 +298,12 @@ export function resolvedInMonth(t: FmTicket, month: string): boolean {
 export function ticketStats(tickets: readonly FmTicket[]): TicketStats {
   let open = 0, inProgress = 0, resolved = 0, cleared = 0, totalMs = 0, timed = 0;
   for (const t of tickets) {
-    if (t.status === "open") open++;
-    else if (t.status === "in_progress") inProgress++;
-    // ⚠️ EXPLICIT, AND AN UNKNOWN STATUS COUNTS AS OPEN. This was a bare
-    // `else`, so ANY row whose status was missing, empty or corrupt was counted
-    // RESOLVED — a fault silently removed from the facility report by bad data,
-    // which is the one direction this must never fail in. A fault wrongly shown
-    // as open is a question someone asks; a fault wrongly shown as resolved is
-    // one nobody ever asks again.
-    else if (isTicketOpen(t)) open++;
+    // ⚠️ AN UNKNOWN STATUS COUNTS AS OPEN (stageOf). A bare `else` once counted ANY row whose status was missing,
+    // empty or corrupt as RESOLVED — a fault silently removed from the facility report by bad data, the one
+    // direction this must never fail in.
+    const stage = stageOf(t);
+    if (stage === "fault") open++;
+    else if (stage === "ticket") inProgress++;
     else {
       // ⚠️ A CLOSE WITH NO WORK IS NOT A REPAIR (review 31): ten 10-minute Wi-Fi blips cleared by the agent made a
       // 48 h fridge repair read "4.5 h", one duplicate closed after 92 days "2208 h"
@@ -450,10 +458,12 @@ export function withTicketPatch(d: FmData, id: string, patch: Partial<FmTicket>,
  * agent's Telegram note and the card said "by Facility manager" for one close and nothing for the other).
  * Reopening a resolved fault is a step of its own kind ("reopened"): the VESTA Agent reads it, never guesses it.
  */
+/** A stage change's own record (who, what, photos) and, when resolving, what it cost. */
+export type TicketStep = { who?: string; note?: string; photoIds: string[] };
+export type TicketCost = Omit<FmCost, "id" | "at" | "photoIds">;
+
 export function withTicketAdvanced(
-  d: FmData, id: string, to: FmTicket["status"],
-  step: { who?: string; note?: string; photoIds: string[] },
-  cost: Omit<FmCost, "id" | "at" | "photoIds"> | undefined, k: FmStamp, by?: string,
+  d: FmData, id: string, to: FmTicket["status"], step: TicketStep, cost: TicketCost | undefined, k: FmStamp, by?: string,
 ): FmData {
   if (!d.tickets.some((t) => t.id === id)) return d;
   const at = k.now;
@@ -480,6 +490,16 @@ export function withTicketAdvanced(
       : d.completions,
     costs: costId ? [...d.costs, { ...cost!, id: costId, at, photoIds: step.photoIds }] : d.costs,
   };
+}
+
+/** One device's faults moved together, in ONE edit (owner, 2026-10-14: "Mark in progress" takes on a whole card —
+ *  one ticket per device, each fault still its own record so the VESTA Agent can clear it alone). The cost, when
+ *  resolving, is filed once, on the first. */
+export function withTicketsAdvanced(
+  d: FmData, ids: readonly string[], to: FmTicket["status"], step: TicketStep, cost: TicketCost | undefined,
+  k: FmStamp, by?: string,
+): FmData {
+  return ids.reduce((acc, id, i) => withTicketAdvanced(acc, id, to, step, i === 0 ? cost : undefined, k, by), d);
 }
 
 /** The note a one-step close leaves on the fault's history. */
@@ -511,24 +531,15 @@ export function withTicketClosed(d: FmData, id: string, k: Pick<FmStamp, "now">,
 }
 
 
+/** One device's faults closed together, in ONE edit ("no action needed"). */
+export function withTicketsClosed(d: FmData, ids: readonly string[], k: Pick<FmStamp, "now">, by?: string): FmData {
+  return ids.reduce((acc, id) => withTicketClosed(acc, id, k, by), d);
+}
+
 // ── Rules that lived in the screens (round 13, 2.496.183) ─────────────────
 // Each was written in a component or the store's context, where only a regex
 // could reach it, and several already disagreed with the engine or with each
 // other. tests/oracles/fm_rules.mjs drives them by value.
-
-/** Where a fault goes next from the Faults tab. A resolved fault can be reopened (architecture review 26: there was
- *  no way to, and the VESTA Agent guessed a reopening from timings). */
-export const TICKET_NEXT: Readonly<Record<FmTicketStatus, FmTicketStatus | null>> = {
-  open: "in_progress", in_progress: "resolved", resolved: "open",
-};
-
-/** A fault's place in the list: open, then in progress, then resolved. A
- *  status this build does not know is treated as OPEN — the engine's own
- *  reading (isTicketOpen) — where the list used to rank it beside resolved. */
-export function ticketRank(t: Pick<FmTicket, "status">): number {
-  if (isTicketResolved(t)) return 2;
-  return t.status === "in_progress" ? 1 : 0;
-}
 
 /**
  * An amount typed by an operator, as a whole number of the currency's units.
@@ -574,9 +585,10 @@ export function completionSource(
  * under the same words, so its number and the HUD's could differ.
  */
 export function fmAttention(d: FmData, now = Date.now()): {
-  openFaults: FmTicket[]; lateTasks: ReturnType<typeof scheduleBoard>; total: number;
+  /** Every record not closed — the faults and the tickets both stand on the Overview's list. */
+  unresolved: FmTicket[]; lateTasks: ReturnType<typeof scheduleBoard>; total: number;
 } {
-  const openFaults = d.tickets.filter(isTicketOpen);
+  const unresolved = d.tickets.filter((t) => stageOf(t) !== "closed");
   const lateTasks = scheduleBoard(d, now).filter((s) => s.state === "overdue" || s.state === "never");
-  return { openFaults, lateTasks, total: openFaults.length + lateTasks.length };
+  return { unresolved, lateTasks, total: unresolved.length + lateTasks.length };
 }

@@ -89,7 +89,7 @@ console.log("\n  folding computed once:");
   const folding = deviceFolding(entityMap, [{ id: "g", primaryEntityId: "sensor.t", memberEntityIds: ["sensor.h"] }], {});
   const seen = { n: 0 };
   const spy = { get: (k) => { seen.n++; return folding.get(k); }, has: (k) => folding.has(k) };
-  const v = villaDevices({ entityMap, deviceGroups: [], dismissedEntityIds: [], mappedEntityIds: new Set(), entities, entityDeviceIds: {}, folding: spy });
+  const v = villaDevices({ entityMap, deviceGroups: [], dismissed: new Set(), mappedEntityIds: new Set(), entities, entityDeviceIds: {}, folding: spy });
   ck("a folding passed in is the one used (the member folds into its primary)", seen.n > 0 && v.ids.join() === "sensor.t", v.ids);
   const src = readFileSync(new URL("../../src/config/VillaModel.tsx", import.meta.url), "utf8");
   ck("the villa model memoises it on config + registry and hands it to BOTH device sets",

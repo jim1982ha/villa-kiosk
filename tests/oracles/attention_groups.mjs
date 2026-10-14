@@ -186,21 +186,19 @@ ck("every Cockpit count in the top bar and the phone menu is the number of ROWS"
 ck("the villa model hands buildAttentionItems the device fold, and leaves the grouping to the profile's view",
    /selectableIds, folding \}\);/.test(vm) && !/groupAttention|villaHealthFrom/.test(vm)
    && /return attentionFor\(attention, \(id\) => sees\.has\(id\)\);/.test(src("components/cockpit/useVillaAttention.ts")));
-ck("the Cockpit draws one row per group, and every fault line inside a row has its own Close",
+ck("the Cockpit draws one card per group, its actions (on its faults) at the bottom of the card",
    /attentionGroups\.map\(\(group\) => \(\s*<CockpitAttentionRow key=\{group\.key\} group=\{group\}/.test(cockpit)
-   && /function CockpitAttentionSub[\s\S]*?useFaultClose\(item, canCloseFault\)/.test(cockpit)
+   && /const actions = useCardActions\(group, canManage, onEditTicket\);/.test(cockpit) && /const acts = cardActions\(group\);/.test(cockpit)
    // a line's icon is lineIcon's answer, never its own kind's again
    && /function CockpitAttentionSub[\s\S]*?const kind = lineIcon\(group, item\);[\s\S]*?\{Icon && <Icon/.test(cockpit));
 // ⚠️ CLOSE TAKES ITS OWN CLICK (owner, 2026-10-10: "Close is not clickable because the whole card takes the
 // priority"): 2.496.318 stretched an invisible layer from the head over the card, on top of Close
 const css08 = src("styles/08-shared.css");
-ck("the card takes the click and Close stops its own there; no layer stretched over the card",
+ck("the card takes the click and its actions stop theirs there; no layer stretched over the card",
    /className=\{`cockpit-attention-item[\s\S]{0,120}onClick: \(\) => onOpenEntity/.test(cockpit)
-   && /cockpit-attention-close"[\s\S]{0,200}onClick=\{\(e\) => \{ e\.stopPropagation\(\)/.test(cockpit)
-   && /cockpit-attention-confirm" onClick=\{\(e\) => e\.stopPropagation\(\)\}/.test(cockpit)
+   && /<div className="cockpit-attention-actions" onClick=\{stop\}>/.test(cockpit)
    && !/cockpit-attention-row[^{]*::after/.test(css08)
-   // the card lights up as the device it opens, never while the pointer is on Close; Close lights up itself
-   && /\.cockpit-attention-item\.tappable:hover:not\(:has\(\.cockpit-attention-close:hover/.test(css08)
-   && /\.cockpit-attention-close:hover \{/.test(css08));
+   // the card lights up as the device it opens, never while the pointer is on its actions
+   && /\.cockpit-attention-item\.tappable:hover:not\(:has\(\.cockpit-attention-actions:hover\)\)/.test(css08));
 
-done("✅ one row per device in Needs attention");
+done("✅ one card per device in the Live issues");

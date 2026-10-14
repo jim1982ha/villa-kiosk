@@ -20,9 +20,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ShowAll, useTruncated } from "@/components/common/TruncatedList";
 import { Search } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
-import { dismissedEntitySet, orphanObjectSearched } from "@/config/dismissedEntities";
 import { forgetMappings, patchMapping, repointDevice } from "@/config/mappingEdits";
-import { deviceRows, rowMatches } from "@/config/deviceRecord";
+import { rowMatches } from "@/config/deviceRecord";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useHA } from "@/ha/HAStateStore";
 import { useVillaModel } from "@/config/VillaModel";
@@ -31,9 +30,10 @@ import EntityPicker from "./EntityPicker";
 import type { EntityMapping } from "@/types/scene.types";
 
 export default function ConfigEditor({ initialSearch }: { initialSearch?: string } = {}) {
-  const { config, update, resolvedRooms } = useConfig();
-  const { entities, connected } = useHA();
-  const { sceneEntityIds } = useVillaModel();
+  const { update, resolvedRooms } = useConfig();
+  const { entities } = useHA();
+  const villa = useVillaModel();
+  const { sceneEntityIds } = villa;
   // Seed the filter when opened from a device panel's edit shortcut, so that
   // entity's row is shown immediately.
   const [search, setSearch] = useState(initialSearch ?? "");
@@ -67,36 +67,12 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Dismissed-and-still-absent-from-HA entities are filtered out entirely (see
-  // AppConfig.dismissedEntityIds): auto-detection re-adds a row for any mesh
-  // named like an entity_id, so without this the rows the owner just removed
-  // reappeared here on the next model load. A dismissal that HA later
-  // contradicts (the entity is back) stops applying, and the row returns.
-  const dismissedSet = useMemo(
-    () => dismissedEntitySet(config.dismissedEntityIds, entities),
-    [config.dismissedEntityIds, entities],
-  );
-  // EVERY stored device, hand-linked or not — one row each (config/deviceRecord). A device bound
-  // to an object used to leave this list for the Villa tab's, with the same fields.
-  const allRows = useMemo(
-    () => deviceRows(config.entityMap, config.meshBindings, dismissedSet),
-    [config.entityMap, config.meshBindings, dismissedSet],
-  );
-  // Entries Home Assistant has never heard of. This map only ever GREW —
-  // auto-detection adds a row for any mesh named like an entity ID and nothing
-  // has ever removed one — so renaming or deleting an entity in HA leaves its
-  // old row here for good, long after both the entity and its mesh are gone.
-  // Reported from the field as rows for entities that "don't exist anymore in
-  // HA and aren't in the GLB either".
-  //
-  // Guarded on a live, populated snapshot: while HA is reconnecting `entities`
-  // is empty, and offering to delete the ENTIRE map at that moment would be a
-  // catastrophic false positive.
-  const haReady = connected && Object.keys(entities).length > 0;
-  const staleIds = useMemo(() => {
-    if (!haReady) return [] as string[];
-    return allRows.map((r) => r.id).filter((id) => !entities[id]);
-  }, [haReady, allRows, entities]);
+  // EVERY stored device, one row each (config/deviceRecord), and what is missing — the villa model's ONE answer
+  // (dismissedEntities.inventoryGaps): `staleIds` are rows Home Assistant does not have and the model does not name
+  // ("Remove N"); `orphanIds` objects the model names whose entity Home Assistant does not have (never removable,
+  // listed below with "Point it there"). Both empty until Home Assistant's list is loaded. This screen wrote that
+  // rule itself until 2.496.351 — a third copy beside the dismissal and the orphan list.
+  const { rows: allRows, stale: staleIds, orphans: orphanIds } = villa.settings;
   const staleSet = useMemo(() => new Set(staleIds), [staleIds]);
 
   // Both Remove buttons on this screen go through the ONE operation — see
@@ -150,22 +126,21 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
     setRemapNewId(undefined);
   }, [update]);
 
-  // A 3D object whose entity Home Assistant no longer has, named whole in the
-  // filter (its tile's edit shortcut does exactly that): it has no row, so
-  // offer the one thing left to do — point it at another entity
-  // (dismissedEntities.orphanObjectSearched). Only while HA's list is loaded.
-  const removedId = useMemo(
-    () => (entries.length === 0 && haReady
-      ? orphanObjectSearched(search, sceneEntityIds, (id) => !!entities[id], config.meshBindings) : null),
-    [entries.length, haReady, search, sceneEntityIds, entities, config.meshBindings],
-  );
-  const [repointTo, setRepointTo] = useState<string | undefined>(undefined);
-  const repoint = useCallback(() => {
-    if (!removedId || !repointTo || repointTo === removedId) return;
-    update(repointDevice(removedId, repointTo, entities[repointTo]));
-    setRepointTo(undefined);
-    setSearch(repointTo);
-  }, [removedId, repointTo, update, entities]);
+  // EVERY 3D object whose entity Home Assistant does not have and that has no row of its own (auto-detection adopts
+  // only entities HA has): one card each, with the one thing to do here — point it at another entity
+  // (dismissedEntities.orphanObjects). It used to appear only when its exact id was typed in the search (owner,
+  // 2026-10-14). The search narrows the cards like the rows. Only while HA's list is loaded.
+  const orphans = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return orphanIds.filter((id) => !q || id.toLowerCase().includes(q));
+  }, [orphanIds, search]);
+  const [repointTo, setRepointTo] = useState<Record<string, string | undefined>>({});
+  const repoint = useCallback((id: string) => {
+    const to = repointTo[id];
+    if (!to || to === id) return;
+    update(repointDevice(id, to, entities[to]));
+    setRepointTo((m) => ({ ...m, [id]: undefined }));
+  }, [repointTo, update, entities]);
 
   const startRemap = useCallback((key: string) => { setRemapKey(key); setRemapNewId(undefined); }, []);
   const cancelRemap = useCallback(() => { setRemapKey(null); setRemapNewId(undefined); }, []);
@@ -187,9 +162,9 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
           <div>
             <strong>{staleIds.length} entit{staleIds.length === 1 ? "y" : "ies"} no longer in Home Assistant.</strong>
             <div className="muted body-text" style={{ marginTop: 2 }}>
-              These rows were auto-detected from an earlier model or before the
-              entity was renamed/removed in HA. They do nothing except clutter
-              this list — the devices are gone.
+              Home Assistant no longer has these entities and the 3D model no longer
+              names them (they came from an earlier model, or were added by hand).
+              They do nothing except clutter this list.
             </div>
           </div>
           <button className="btn ghost" onClick={removeStale}>
@@ -219,29 +194,29 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
         </p>
       )}
 
-      {removedId ? (
-        <div className="config-stale-notice config-repoint">
+      {orphans.map((id) => (
+        <div key={id} className="config-stale-notice config-repoint">
           <div>
-            <strong>Home Assistant has no entity {removedId}.</strong>
+            <strong>Home Assistant has no entity {id}.</strong>
             <div className="muted body-text" style={{ marginTop: 2 }}>
-              A 3D object in the model is named after it, so it shows as
-              unavailable on the map. If the entity was renamed, point the
-              object at its new name.
+              A 3D object in the model is named after it, so it shows as not in Home Assistant everywhere. If the
+              entity was renamed, point the object at its new name; otherwise rename or remove the object in the model.
             </div>
             <div className="remap-row" style={{ marginTop: 8 }}>
               <div className="remap-picker">
-                <EntityPicker value={repointTo} onChange={setRepointTo} hideCurrentLabel
-                  placeholder="The entity this 3D object is now…" />
+                <EntityPicker value={repointTo[id]} onChange={(v) => setRepointTo((m) => ({ ...m, [id]: v }))}
+                  hideCurrentLabel placeholder="The entity this 3D object is now…" />
               </div>
               <div className="remap-actions">
-                <button className="btn primary" disabled={!repointTo || repointTo === removedId} onClick={repoint}>
+                <button className="btn primary" disabled={!repointTo[id] || repointTo[id] === id} onClick={() => repoint(id)}>
                   Point it there
                 </button>
               </div>
             </div>
           </div>
         </div>
-      ) : allRows.length > 0 && entries.length === 0 && (
+      ))}
+      {allRows.length > 0 && entries.length === 0 && orphans.length === 0 && (
         <p className="muted body-text mt">No entities match “{search}”.</p>
       )}
 
@@ -276,14 +251,14 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
                 onRemapChange={setRemapNewId}
                 onRemapApply={remapEntity}
                 onRemapCancel={cancelRemap}
-                onRemove={remove}
+                onRemove={sceneEntityIds.has(key) ? undefined : remove}
                 onPatch={patch}
               />
             ))}
           </tbody>
         </table>
       )}
-      <ShowAll list={shown} noun="entity" />
+      <ShowAll list={shown} noun="entity" plural="entities" />
 
     </div>
   );

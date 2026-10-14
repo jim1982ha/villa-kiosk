@@ -20,7 +20,7 @@
 import { useMemo, useState } from "react";
 import type { ModalTab } from "@/components/common/ModalTabs";
 import {
-  ClipboardCheck, ListChecks, Wrench, Wallet, FileText, CalendarCog,
+  Wrench, Wallet, FileText, CalendarCog,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
@@ -34,25 +34,22 @@ import SummaryGroupPanel, { type SummaryGroup } from "@/components/panels/Summar
 import { buildDeviceOptions } from "./DeviceSearchPicker";
 import TodayTab from "./TodayTab";
 import ReadinessTab from "./ReadinessTab";
-import FaultsTab from "./FaultsTab";
+import TicketsTab from "./TicketsTab";
 import SpendTab from "./SpendTab";
 import RecapTab from "./RecapTab";
 import ScheduleEditor from "./ScheduleEditor";
 import { useVillaModel } from "@/config/VillaModel";
 
-export type FacilityTab = "today" | "readiness" | "faults" | "spend" | "schedule" | "recap";
+export type FacilityTab = "tickets" | "schedule" | "recap" | "spend";
 
-/** The Facility tabs, shown in the Cockpit after its own view (2.496.273). */
+/** The Facility tabs, shown in the Cockpit after its own view (2.496.273). Owner, 2026-10-14: Tickets right after
+ *  the Overview; "Today" and "Schedule" are one tab (today's board, then the schedule it measures against); "Readiness"
+ *  and "Recap" are one tab (the live check, then the month's recap built from it). */
 export const FACILITY_TABS: ModalTab<FacilityTab>[] = [
-  { id: "today", label: "Today", icon: ListChecks },
-  { id: "readiness", label: "Readiness", icon: ClipboardCheck },
-  { id: "faults", label: "Faults", icon: Wrench },
-  { id: "spend", label: "Spend", icon: Wallet },
-  // Before Recap: configuring the schedule is what the recap and the Today
-  // board both read from, so it belongs upstream of the annex that summarises
-  // them, not after it.
+  { id: "tickets", label: "Tickets", icon: Wrench },
   { id: "schedule", label: "Schedule", icon: CalendarCog },
   { id: "recap", label: "Recap", icon: FileText },
+  { id: "spend", label: "Spend", icon: Wallet },
 ];
 
 /**
@@ -63,18 +60,16 @@ export const FACILITY_TABS: ModalTab<FacilityTab>[] = [
  * then (useFacilityLiveView).
  */
 export default function FacilitySections({
-  tab, onOpenEntity, reportFaultFor, onFaultFormOpened, onOpenOverview,
+  tab, onOpenEntity, editTicket, onTicketEditOpened, onOpenOverview,
 }: {
   tab: FacilityTab;
   /** Jump to a device's panel — a failing check or a fault opens the actual
    *  device instead of leaving the operator to hunt for it. */
   onOpenEntity: (entityId: string) => void;
-  /** Faults opens with a blank fault already pointed at this device — set
-   *  when the operator came from a device panel's fault shortcut. */
-  reportFaultFor?: string;
-  /** Called once the form has been filled in, so the request is dropped and
-   *  reopening the tab later does not spring the same form again. */
-  onFaultFormOpened?: () => void;
+  /** Tickets opens this record's form (an Overview card's "Edit ticket"). */
+  editTicket?: string;
+  /** Called once the form has it, so reopening the tab later does not spring it again. */
+  onTicketEditOpened?: () => void;
   /** Readiness's "devices offline" — the Cockpit's own view lists them (it
    *  used to open a SECOND Cockpit over the Facility window). */
   onOpenOverview: () => void;
@@ -99,30 +94,35 @@ export default function FacilitySections({
     () => buildDeviceOptions(devices, config.entityMap, entities, resolvedRooms),
     [devices, config.entityMap, entities, resolvedRooms],
   );
-  const unavailableIds = devices.unavailable as string[];
   const canControl = roleCan(role, "controlEntities");
 
   return (
     <>
       {saveError && <div className="fm-banner warn">{saveError}</div>}
       {!ready && <p className="muted body-text">Loading the maintenance record…</p>}
-      {ready && tab === "today" && <TodayTab onOpenEntity={onOpenEntity} />}
-      {ready && tab === "readiness" && (
-        <ReadinessTab readiness={readiness} onOpenEntity={onOpenEntity}
-          onOpenUnavailableDevices={onOpenOverview} onOpenCheckDevices={openCheckDevices} />
+      {ready && tab === "schedule" && (
+        <>
+          <TodayTab onOpenEntity={onOpenEntity} />
+          <div className="settings-section-title">Maintenance schedule</div>
+          <ScheduleEditor />
+        </>
       )}
-      {ready && tab === "faults" && (
-        <FaultsTab onOpenEntity={onOpenEntity} unavailableIds={unavailableIds}
-          deviceOptions={deviceOptions} reportFaultFor={reportFaultFor}
-          onFaultFormOpened={onFaultFormOpened} />
+      {ready && tab === "recap" && (
+        <>
+          <ReadinessTab readiness={readiness} onOpenEntity={onOpenEntity}
+            onOpenUnavailableDevices={onOpenOverview} onOpenCheckDevices={openCheckDevices} />
+          <div className="settings-section-title">Monthly recap</div>
+          <RecapTab readiness={readiness}
+            offlineDeviceCount={readiness.checks.find((c) => c.id === "devices-online")?.entityIds?.length ?? 0}
+            totalDeviceCount={totalDeviceCount} />
+        </>
+      )}
+      {ready && tab === "tickets" && (
+        <TicketsTab onOpenEntity={onOpenEntity} deviceOptions={deviceOptions}
+          editTicket={editTicket} onEditOpened={onTicketEditOpened} />
       )}
       {ready && tab === "spend" && <SpendTab onOpenEntity={onOpenEntity} deviceOptions={deviceOptions} />}
-      {ready && tab === "schedule" && <ScheduleEditor />}
-      {ready && tab === "recap" && (
-        <RecapTab readiness={readiness}
-          offlineDeviceCount={readiness.checks.find((c) => c.id === "devices-online")?.entityIds?.length ?? 0}
-          totalDeviceCount={totalDeviceCount} />
-      )}
+
       {checkPanelGroup && (
         <SummaryGroupPanel group={checkPanelGroup} canControl={canControl}
           onClose={() => setCheckPanelGroup(null)}

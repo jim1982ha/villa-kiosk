@@ -39,7 +39,7 @@ import { downloadFile } from "@/utils/download";
 export default function SpendTab(
   { onOpenEntity, deviceOptions }: {
     onOpenEntity?: (id: string) => void;
-    /** Built once by FacilityModal and shared with the Faults tab, so both
+    /** Built once by FacilityModal and shared with the fault form, so both
      *  offer exactly the same devices. */
     deviceOptions: DeviceOption[];
   },
@@ -53,7 +53,7 @@ export default function SpendTab(
   const [month, setMonth] = useState(monthKey(Date.now()));
   const [adding, setAdding] = useState(false);
   /** Id of the entry being corrected, or null when recording a new one — one
-   *  form for both, same reasoning as the Faults tab. */
+   *  form for both, same reasoning as the fault form. */
   const [editingId, setEditingId] = useState<string | null>(null);
   /** Why the last save was refused — the form keeps what was typed (2.496.252). */
   const [formError, setFormError] = useState<string | null>(null);

@@ -28,10 +28,14 @@ export interface Screen {
   /** The Cockpit's tab — kept while it is closed, so Back from a device it
    *  handed over returns to the tab it left. */
   cockpitTab: CockpitTab;
-  /** The device whose fault the Cockpit's Faults tab should start a report
-   *  for; cleared once the form has opened. */
+  /** The device the Overview's "Raise a fault" form should start with (a
+   *  device panel's wrench); cleared once the form has opened. */
   faultFor: string | null;
-  /** The device a guest is reporting a problem with. */
+  /** The record whose ticket the Tickets tab should open for editing (an
+   *  Overview card's "Edit ticket"); cleared once the form has it. */
+  ticketFor: string | null;
+  /** A guest's problem report: the device it is about, "" for none (the
+   *  Overview's "Report a problem"); null when no report is open. */
   guestReportFor: string | null;
   /** The device Advanced Settings was opened for (its table filtered to it);
    *  null when opened from Settings. */
@@ -40,7 +44,7 @@ export interface Screen {
 
 export const START: Screen = {
   nav: NO_PANEL, windows: NO_SURFACES, list: null,
-  cockpitTab: "overview", faultFor: null, guestReportFor: null, editorFocus: null,
+  cockpitTab: "overview", faultFor: null, ticketFor: null, guestReportFor: null, editorFocus: null,
 };
 
 export type ScreenAction =
@@ -67,11 +71,16 @@ export type ScreenAction =
   | { type: "back" }
   /** The open device's row in Advanced Settings. */
   | { type: "editDevice" }
-  /** The open device's fault: the Cockpit's Faults tab with the device filled
-   *  in for a profile that manages faults, the guest's one-screen report for
+  /** The open device's fault: the Overview's "Raise a fault" with the device
+   *  filled in for a profile that manages faults, the guest's one-screen report for
    *  any other. */
   | { type: "reportFault" }
   | { type: "faultFormOpened" }
+  /** An Overview card's "Edit ticket": the Tickets tab, that record's form open. */
+  | { type: "editTicket"; id: string }
+  | { type: "ticketEditOpened" }
+  /** A guest's "Report a problem" from the Overview: the report, on no device. */
+  | { type: "reportProblem" }
   | { type: "closeGuestReport" };
 
 /** The screen after `a`, for a profile with these `doors`. */
@@ -88,6 +97,7 @@ export function screenReducer(s: Screen, a: ScreenAction, doors: Doors): Screen 
     case "closeWindow":
       return { ...s, windows: win(s.windows, a.window, false),
         faultFor: a.window === "cockpit" ? null : s.faultFor,
+        ticketFor: a.window === "cockpit" ? null : s.ticketFor,
         editorFocus: a.window === "configEditor" ? null : s.editorFocus };
     case "cockpitTab": return { ...s, cockpitTab: a.tab };
     case "openDevice": return { ...s, nav: panel({ type: "open", panel: a.panel }) };
@@ -119,10 +129,14 @@ export function screenReducer(s: Screen, a: ScreenAction, doors: Doors): Screen 
     case "reportFault": {
       const id = s.nav.panel?.entityId;
       if (!id) return s;
-      if (doors.facility) return { ...s, nav: NO_PANEL, faultFor: id, cockpitTab: "faults", windows: win(s.windows, "cockpit", true) };
+      // raising a fault is the Overview's (owner, 2026-10-14): its form opens there, pointed at the device
+      if (doors.facility) return { ...s, nav: NO_PANEL, faultFor: id, cockpitTab: "overview", windows: win(s.windows, "cockpit", true) };
       return { ...s, nav: NO_PANEL, guestReportFor: id };
     }
     case "faultFormOpened": return s.faultFor === null ? s : { ...s, faultFor: null };
+    case "editTicket": return doors.facility ? { ...s, ticketFor: a.id, cockpitTab: "tickets" } : s;
+    case "ticketEditOpened": return s.ticketFor === null ? s : { ...s, ticketFor: null };
+    case "reportProblem": return { ...s, guestReportFor: "" };
     case "closeGuestReport": return s.guestReportFor === null ? s : { ...s, guestReportFor: null };
   }
 }

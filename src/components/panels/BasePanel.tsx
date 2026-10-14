@@ -23,6 +23,8 @@ import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import BadgeColorModal from "./BadgeColorModal";
 import LastDayTimeline from "./LastDayTimeline";
 import ModalFooter from "@/components/common/ModalFooter";
+import { useHA } from "@/ha/HAStateStore";
+import { missingFromHa } from "@/utils/stateColors";
 
 interface Props {
   title: string;
@@ -59,8 +61,9 @@ interface Props {
 }
 
 export default function BasePanel({ title, entityId, icon, className, headerActions, footerLeading, history, deviceReadings, onClose, children }: Props) {
-  const { onEdit, onReportFault, badge, onSetBadgeColor, linked, motion, back } = usePanelActions();
+  const { may, onEdit, onReportFault, badge, onSetBadgeColor, linked, motion, back } = usePanelActions();
   const { resolvedRooms } = useConfig();
+  const { entities } = useHA();
   const room = entityId ? resolvedRooms[entityId] : undefined;
   const [colorOpen, setColorOpen] = useState(false);
   // Escape + focus trap + focus restore, from one place (see useModalA11y).
@@ -78,7 +81,7 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
 
   // The exact map badge for this device (glyph + colour), shown in the header.
   // Clickable — when the profile may edit config — to recolour just this badge.
-  const canRecolor = badge && onSetBadgeColor;
+  const canRecolor = badge && may.edit;
   const badgeImg = badge && (
     <img
       className="panel-badge-img"
@@ -217,19 +220,20 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
               caught it either, because it audited the panels that already HAD
               a timeline; a panel with none is invisible to that check. Made
               structural rather than fixed twice. */}
-          {history !== false && entityId && <LastDayTimeline entityId={entityId} />}
+          {/* Not for an entity Home Assistant does not have: it has no history to wait for (its notice says why). */}
+          {history !== false && entityId && !missingFromHa(entities, entityId) && <LastDayTimeline entityId={entityId} />}
         </div>
         {/* The shared footer (ModalFooter): the left group is always there,
             empty or not, so Close sits right as in every dialog. */}
         <ModalFooter onClose={onClose} leading={
           <div className="modal-footer-group">
             {footerLeading}
-            {onEdit && <button className="btn ghost" onClick={onEdit}>Edit</button>}
+            {may.edit && <button className="btn ghost" onClick={onEdit}>Edit</button>}
             {/* Icon-only, sitting beside Edit: this is a shortcut for a
                 device you are already looking at, not a primary action, and
                 a second worded button next to "Edit" would compete with it.
                 The title/aria-label carry the meaning. */}
-            {onReportFault && (
+            {may.reportFault && (
               <button
                 className="btn ghost icon-only"
                 onClick={onReportFault}
@@ -241,7 +245,7 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
         } />
       </div>
 
-      {colorOpen && badge && onSetBadgeColor && (
+      {colorOpen && badge && may.edit && (
         <BadgeColorModal
           current={badge.color}
           categoryColor={badge.categoryColor}

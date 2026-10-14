@@ -1,3 +1,67 @@
+## 2.496.352
+
+### Changed
+- Cockpit → Overview: "Raise a fault" is now "Open a ticket", on the same line as the "Live issues" title, at the right, with its (i) just before it. What you open is a ticket straight away — in progress, in the Tickets tab, with "Edit ticket" on its card. Faults now come from the VESTA Agent and from a guest's "Report a problem"; the (i) table says so.
+- Cockpit tabs, in this order: Overview, Tickets, Schedule, Recap, Spend.
+  - "Today" and "Schedule" are one tab, "Schedule": today's board first, then the maintenance schedule it measures against.
+  - "Readiness" and "Recap" are one tab, "Recap": the readiness check first, then the monthly recap.
+- Recap: the Period choice sits on the same line as "Generate recap", "Save recap" and "Download .md".
+- The Home Assistant updates count moved from the bottom of the Overview to the Cockpit's header, at the top right, drawn like the header buttons of Advanced Settings (it only shows the count; there is nothing to press).
+
+## 2.496.351
+
+### Changed
+- Behind the screens, nothing changes on screen: which devices exist, which are missing from Home Assistant and which were removed is now worked out once, for the map, Cockpit → Live issues and Advanced Settings alike. Advanced Settings used to work out its own "no longer in Home Assistant" and "Point it there" lists, a third copy of the rule beside the other two; it now shows the same answer as every other screen, and still waits for Home Assistant's list to load before calling anything missing. This keeps a problem like the TV's (a device shown on one screen and missing from another) from coming back.
+
+## 2.496.350
+
+### Changed
+- A fault you raise now says who raised it: its card reads "Opened 14:20 by Owner" (or "by Guest" for a guest's report), as closing, renaming or marking in progress already did. The VESTA Agent's own faults keep their "by VESTA Agent" mark.
+- Behind the screens (nothing else changes on screen):
+  - one rule now decides whether a record is a fault (on the Overview), a ticket (in Tickets) or closed. Every screen and count reads it, so they can no longer disagree; a record in a state the app does not recognise is always shown as a fault, never hidden;
+  - what a card's buttons do (Mark in progress, Edit ticket, Close) is decided by that same rule;
+  - every change to the maintenance record goes through one step that notes who and when;
+  - what each profile may do from a device's window (the wrench, Edit, the badge colour) is decided once with the other rights, instead of by each window.
+
+### Security
+- The add-on refuses a guest's report whose history claims to be written by someone else: a guest's report carries at most its own raising step, signed "Guest".
+
+## 2.496.349
+
+### Changed
+- Cockpit: one list of everything open, on the Overview — "Live issues" (it replaces "Needs attention" and the Faults tab's list of open faults, which showed the same faults twice). Everything about one device is one card, one line per problem, as before:
+  - what Home Assistant reports right now (unlocked, unavailable, not in Home Assistant…) — no buttons: it goes when the device is back to normal;
+  - faults, opened by the VESTA Agent or raised by a person;
+  - overdue maintenance tasks.
+- A card holding a fault has "Mark in progress": the device's faults become one ticket. The button then reads "Edit ticket", which opens that ticket in the Tickets tab. "Close" (no action needed) closes the device's faults.
+- "Raise a fault" and its (i) are now at the top of the Overview list. A guest sees the same list without buttons, and a "Report a problem" button.
+- The Faults tab is now "Tickets": the tickets in progress, one per device (each problem still listed, and each still closed by the VESTA Agent by itself when it goes away — the ticket goes to Closed with its last one), and the Closed section. Its figures: in progress, mean resolution, closed without action.
+- A device's wrench (owner, facility manager) opens "Raise a fault" on the Overview, pointed at that device.
+- The (i) beside "Raise a fault" adapts when no VESTA Agent is connected: it then lists only faults raised by a person.
+- Today: "open faults" and "tickets in progress" are counted separately. Readiness: "No open faults or tickets".
+- The raise form no longer carries a "devices offline" shortlist: those devices are cards on the same list.
+
+## 2.496.348
+
+### Changed
+- The 3D model is the ground truth for which devices exist. A 3D object named after a Home Assistant entity is always a device of the Kiosk, and the Kiosk never removes it: there is no Remove button or bin for it in Advanced Settings, and an earlier removal no longer hides it. To change it, rename or remove the object in the 3D model, or point it at another entity.
+- When Home Assistant does not have such an entity (renamed or deleted there), every screen now says so in the same words, "Not in Home Assistant":
+  - Cockpit → Needs attention lists it ("Not in Home Assistant"), even if it was removed earlier;
+  - its window says Home Assistant has no entity of that name and what to do, instead of "Unavailable" and "Not enough history yet";
+  - Advanced Settings → Devices lists every such object at the top, each with "Point it there", without having to type its name in the search.
+- Advanced Settings: "N entities no longer in Home Assistant → Remove N" now only covers rows that the 3D model no longer names either.
+
+### Fixed
+- Advanced Settings: "Show all — 101 more entitys" now reads "entities".
+
+## 2.496.347
+
+### Added
+- Cockpit → Faults: an (i) next to "Raise a fault" explains, in a short table, when a fault opens and when it closes for each source (an alert from a Home Assistant rule, a device found offline by the nightly check, a device deleted from Home Assistant, a maintenance trend, or a person), and how often the list refreshes (every 15 seconds while it is open, every 3 minutes otherwise, and as soon as you come back to the app).
+
+### Fixed
+- Every (i) in the app now opens with a tap on a phone, iPhone included. On an iPhone the (i) used to do nothing (Safari does not focus a tapped button, which is what opened it). A tap opens it, a tap elsewhere or Escape closes it; a mouse still opens it on hover. This also applies to the (i) beside the 3D model upload in Advanced Settings.
+
 ## 2.496.346
 
 ### Fixed

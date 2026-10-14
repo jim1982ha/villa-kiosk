@@ -87,14 +87,12 @@ console.log("\n  a removed device's 3D object, pointed at another entity:");
   const em = await import("@/config/EntityMap");
   const scene = new Set(["light.old_name", "light.a"]);
   const ha = (id) => id === "light.a" || id === "light.new_name";
-  const o = (q, b = {}) => de.orphanObjectSearched(q, scene, ha, b);
-  ck("an object of the model whose entity HA no longer has, searched whole, is offered", o(" light.old_name ") === "light.old_name");
-  ck("  ...whether or not it was ever in the removed list (the villa's case: it was not)", o("light.old_name") === "light.old_name");
-  ck("part of the id is not", o("light.old") === null);
-  ck("an entity HA has is not (it has its row)", o("light.a") === null);
-  ck("an id no object of the model carries is not", de.orphanObjectSearched("light.typo", scene, ha, {}) === null);
-  ck("an object already pointed at an entity HA has is not", o("light.old_name", { "light.old_name": "light.new_name" }) === null);
-  ck("an object pointed at another missing entity still is", o("light.old_name", { "light.old_name": "light.also_gone" }) === "light.old_name");
+  const o = (b = {}) => de.orphanObjects(scene, ha, b);
+  ck("every object of the model whose entity HA no longer has is listed — no search needed (2026-10-14)",
+     J(o()) === J(["light.old_name"]));
+  ck("an entity HA has is not (it has its row)", !o().includes("light.a"));
+  ck("an object already pointed at an entity HA has is not", o({ "light.old_name": "light.new_name" }).length === 0);
+  ck("an object pointed at another missing entity still is", J(o({ "light.old_name": "light.also_gone" })) === J(["light.old_name"]));
   // what "Point it there" applies: the object named after the old id now resolves to the new entity
   const c = apply({ ...cfg(), entityMap: { ...cfg().entityMap, "light.old_name": { entityId: "light.old_name", type: "light", label: "old name" } }, meshBindings: { lamp_mesh: "light.a", hand_bound: "light.old_name" } },
                   me.repointDevice("light.old_name", "light.new_name", { attributes: { friendly_name: "New" } }));
@@ -114,7 +112,7 @@ console.log("\n  a removed device's 3D object, pointed at another entity:");
   // pin the caller (2.496.327 tested its rule and asked the wrong list): the screen asks with the MODEL's objects
   const ed = readFileSync(new URL("../../src/components/settings/ConfigEditor.tsx", import.meta.url), "utf8");
   ck("Advanced Settings asks with the model's objects and re-points them all",
-     /orphanObjectSearched\(search, sceneEntityIds,/.test(ed) && /useVillaModel\(\)/.test(ed) && /repointDevice\(removedId,/.test(ed) && /repointDevice\(oldKey, newId,/.test(ed));
+     /orphans: orphanIds \} = villa\.settings/.test(ed) && /useVillaModel\(\)/.test(ed) && /repointDevice\(id, to,/.test(ed) && /repointDevice\(oldKey, newId,/.test(ed));
 }
 
 console.log("\n  two edits in the same moment:");

@@ -83,7 +83,7 @@ ck("the top-bar badge, the phone menu's \"Cockpit (N)\" and the Cockpit list all
    /const \{ attentionGroups, health \} = useVillaAttention\(\);/.test(hud) && /formatCountBadge\(attentionGroups\.length\)\}/.test(hud)
    && /Cockpit\{attentionGroups\.length > 0 \? ` \(\$\{formatCountBadge\(attentionGroups\.length\)\}\)` : ""\}/.test(hud)
    && !/attentionItems/.test(hud)
-   && /const \{ selectableIds, attentionGroups \} = useVillaAttention\(\);/.test(cockpit) && /Needs attention \(\{attentionGroups\.length\}\)/.test(cockpit));
+   && /const \{ selectableIds, attentionGroups \} = useVillaAttention\(\);/.test(cockpit) && /Live issues\{attentionGroups\.length > 0 \? ` \(\$\{attentionGroups\.length\}\)` : ""\}/.test(cockpit));
 ck("  ...and the villa model hands buildAttentionItems the alert overrides the map paints from",
    /alertThresholds: config\.alertThresholds/.test(vm));
 
