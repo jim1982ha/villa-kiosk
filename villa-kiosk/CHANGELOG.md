@@ -1,3 +1,12 @@
+## 2.496.363
+
+### Changed
+- Cockpit → Schedule: "Recent work" is folded and paged exactly like "Closed" in the Tickets tab — "Recent work (N)", tap to open, ten at a time — so it never grows into an endless list (it showed the last 12, and the rest was out of reach). Both are now the same piece of the app.
+- Cockpit → Schedule: with no task yet, the text says to use "Add a task" below (it said "in the Schedule tab", the tab you are in).
+- Cockpit: every tab has the same footer as the Overview — the VESTA Agent button and Close. "Maintenance intervals are set in the Schedule tab" is gone.
+- Cockpit: the updates button's count sits at its bottom-right corner, and its tooltip reads "2 updates available".
+- The (i) beside "Open a ticket" is two-thirds wider on a desktop, so its table takes fewer lines; a phone still gets the screen's width.
+
 ## 2.496.362
 
 ### Changed

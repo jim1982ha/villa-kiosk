@@ -15,17 +15,19 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProp
 import { createPortal } from "react-dom";
 import { Info } from "lucide-react";
 import { useOutsideClose } from "@/hooks/useOutsideClose";
-import { infoTipPlacement } from "./infoTipPlacement";
+import { infoTipPlacement, INFO_TIP_WIDTH } from "./infoTipPlacement";
 
 /** How long the pointer may be between the (i) and its card before a hover-opened card closes. */
 const HOVER_GRACE_MS = 150;
 
-export default function InfoTip({ label, children, className }: {
+export default function InfoTip({ label, children, className, width = INFO_TIP_WIDTH }: {
   /** What the button is for, read by a screen reader ("How this list is kept up to date"). */
   label: string;
   children: ReactNode;
   /** Extra class on the wrapper. */
   className?: string;
+  /** Its card's width when the screen has room, in px (a table of several columns asks for more: FaultTiming). */
+  width?: number;
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<CSSProperties | null>(null);
@@ -38,9 +40,9 @@ export default function InfoTip({ label, children, className }: {
   const place = useCallback(() => {
     const b = ref.current?.getBoundingClientRect();
     if (!b) return;
-    const p = infoTipPlacement(b, { width: window.innerWidth, height: window.innerHeight }, pop.current?.scrollHeight ?? 0);
+    const p = infoTipPlacement(b, { width: window.innerWidth, height: window.innerHeight }, pop.current?.scrollHeight ?? 0, width);
     setPos({ left: p.left, width: p.width, maxHeight: p.maxHeight, ...(p.above ? { bottom: p.bottom } : { top: p.top }) });
-  }, []);
+  }, [width]);
   // placed once drawn (its height decides above or below), and again when the screen changes under it
   useLayoutEffect(() => { if (open) place(); else setPos(null); }, [open, place]);
   useEffect(() => {
@@ -72,7 +74,7 @@ export default function InfoTip({ label, children, className }: {
         <Info size={16} />
       </button>
       {open && createPortal(
-        <div ref={pop} className="info-pop" role="tooltip" style={pos ?? { visibility: "hidden" }}
+        <div ref={pop} className="info-pop" role="tooltip" style={pos ?? { visibility: "hidden", width: `min(${width}px, calc(100vw - 24px))` }}
           onPointerEnter={hoverIn} onPointerLeave={hoverOut}>
           {children}
         </div>,

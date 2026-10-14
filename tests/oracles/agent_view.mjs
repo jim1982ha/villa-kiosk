@@ -110,8 +110,8 @@ ck("  ...and so is the window (shown: open AND allowed, pages/surfaces)", /\{sho
   ck("  ...the Cockpit button shows the robot and the presence dot only with the agent's door, the ⚠ without",
      /\{doors\.agent \? <Bot size=\{24\} \/> : <TriangleAlert size=\{24\} \/>\}/.test(hud)
      && /\{doors\.agent && agentDot\}/.test(hud) && /const agentDot = <span className=\{`status-dot \$\{agentOnline/.test(hud) && !/onOpenAgent \?|onOpenAgent &&/.test(hud));
-  ck("  ...and the Cockpit's footer offers 'VESTA Agent' only with that door",
-     /leading=\{shownTab === "overview" && doors\.agent \? \(\s*<button className="btn ghost" onClick=\{\(\) => \{ onClose\(\); onOpenAgent\(\); \}\}/.test(cockpit)
+  ck("  ...and the Cockpit's footer offers 'VESTA Agent' only with that door — on every tab, one footer (owner, 2026-10-14)",
+     !/Maintenance intervals are set in the Schedule tab/.test(cockpit) && /leading=\{doors\.agent \? \(\s*<button className="btn ghost" onClick=\{\(\) => \{ onClose\(\); onOpenAgent\(\); \}\}/.test(cockpit)
      && /VESTA Agent\{agentWaiting > 0/.test(cockpit) && /\) : undefined\} \/>/.test(cockpit));
 }
 const ctx = src("agent/AgentContext.tsx");

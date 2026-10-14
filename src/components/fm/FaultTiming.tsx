@@ -8,6 +8,7 @@
 // the cards above already wore its icons. An icon on the list is always explained.
 
 import InfoTip from "@/components/common/InfoTip";
+import { INFO_TIP_WIDTH } from "@/components/common/infoTipPlacement";
 import { SOURCE_ICON, SOURCE_WORDS } from "@/components/fm/sourceIcons";
 import { faultTiming } from "@/fm/faultTiming";
 import { stageOf } from "@/fm/fmEngine";
@@ -21,7 +22,9 @@ export default function FaultTiming() {
   const agent = agentVisible(status) || data.tickets.some((t) => t.source === "vesta_agent" && stageOf(t) !== "closed");
   const { rows, note } = faultTiming(agent);
   return (
-    <InfoTip label="What the icons mean, and when each problem comes and goes">
+    // two-thirds wider than an (i)'s card: its three columns take fewer lines on a desktop (owner, 2026-10-14); a phone
+    // still gets the screen's width
+    <InfoTip label="What the icons mean, and when each problem comes and goes" width={Math.round(INFO_TIP_WIDTH * 1.66)}>
       <strong className="info-pop-title">What the icons mean, and when each problem comes and goes</strong>
       <table className="info-pop-table">
         <thead><tr><th>Source</th><th>Appears</th><th>Goes</th></tr></thead>

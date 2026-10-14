@@ -12,6 +12,9 @@
 // those are read differently: one is upkeep going to plan, the other is
 // something that broke. Erasing a completion destroys evidence, so it takes
 // the same press-and-hold superadmin path every other evidence record uses.
+//
+// ⚠️ FOLDED AND PAGED, AS THE TICKETS TAB'S CLOSED (owner, 2026-10-14: "a risk of this list to increase
+// indefinitely"): the shared FoldedList — every piece of work, a page of cards at a time, under "Recent work (N)".
 
 import { useMemo } from "react";
 import { CalendarCheck, Wrench } from "lucide-react";
@@ -23,8 +26,9 @@ import ErasableRow from "./ErasableRow";
 import AgentMark from "./AgentMark";
 import RecordMeta from "./RecordMeta";
 import { formatMoney } from "@/utils/money";
+import FoldedList from "@/components/common/FoldedList";
 
-export default function RecentWorkList({ limit = 12 }: { limit?: number }) {
+export default function RecentWorkList() {
   const { data, removeCompletion } = useFmData();
   const terms = useFmTerms();
 
@@ -32,7 +36,6 @@ export default function RecentWorkList({ limit = 12 }: { limit?: number }) {
     const costById = new Map(data.costs.map((c) => [c.id, c]));
     return [...data.completions]
       .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
-      .slice(0, limit)
       .map((c) => ({
         completion: c,
         // A completion can outlive the thing it answered (a schedule deleted,
@@ -44,17 +47,11 @@ export default function RecentWorkList({ limit = 12 }: { limit?: number }) {
         })(),
         cost: c.costId ? costById.get(c.costId) : undefined,
       }));
-  }, [data.completions, data.schedules, data.tickets, data.costs, limit]);
-
-  if (rows.length === 0) return null;
+  }, [data.completions, data.schedules, data.tickets, data.costs]);
 
   return (
-    <div className="fm-stack">
-      <div className="fm-row-sub muted" style={{ marginTop: 4 }}>
-        Recent work ({data.completions.length} logged)
-      </div>
-      <div className="fm-list">
-        {rows.map(({ completion: c, source, cost }) => (
+    <FoldedList title="Recent work" rows={rows} unit="piece of work">
+      {({ completion: c, source, cost }) => (
           <ErasableRow
             key={c.id}
             intent={{
@@ -81,8 +78,7 @@ export default function RecentWorkList({ limit = 12 }: { limit?: number }) {
             </div>
             {cost && <span className="fm-amount">{formatMoney(cost.amountIdr, terms.currency)}</span>}
           </ErasableRow>
-        ))}
-      </div>
-    </div>
+      )}
+    </FoldedList>
   );
 }

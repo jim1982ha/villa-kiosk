@@ -180,6 +180,12 @@ ck("  ...the checks fold under their verdict, closed at first; a tap on the verd
    /const \[showChecks, setShowChecks\] = useState\(false\);/.test(tab) && /\{showChecks && <div className="fm-list">/.test(tab)
    && /className="fm-headline-toggle" aria-expanded=\{showChecks\}\s*onClick=\{\(\) => setShowChecks\(\(v\) => !v\)\}/.test(tab));
 
+const recent = readFileSync(new URL("../../src/components/fm/RecentWorkList.tsx", import.meta.url), "utf8");
+const ticketsTab = readFileSync(new URL("../../src/components/fm/TicketsTab.tsx", import.meta.url), "utf8");
+ck("lists that only grow are ONE folded, paged list (owner, 2026-10-14): Tickets' Closed and Schedule's Recent work",
+   /<FoldedList title="Closed" rows=\{closed\}/.test(ticketsTab) && /<FoldedList title="Recent work" rows=\{rows\}/.test(recent)
+   && !/usePaged|<Pager|\.slice\(0, limit\)/.test(recent + ticketsTab));
+
 console.log("\n  what happened on Telegram, on the card (owner, 2026-10-14: reminders, escalation, Need help):");
 const N = await import("@/fm/faultNotes");
 const told = { ...rec("s", "switch.pump"), status: "open", updates: [

@@ -8,7 +8,7 @@
 // Time-to-resolution is what evidences supervision, so the app stamps the resolution time itself.
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, FileText, Wrench } from "lucide-react";
+import { FileText, Wrench } from "lucide-react";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useDeviceIdentity } from "@/config/VillaModel";
 import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
@@ -25,7 +25,7 @@ import AgentMark from "./AgentMark";
 import RecordMeta, { RecordNotes } from "./RecordMeta";
 import { faultNoteLines, faultWhen } from "@/fm/faultNotes";
 import InlineConfirm from "@/components/common/InlineConfirm";
-import { Pager, usePaged, PAGE_CARDS } from "@/components/common/Paged";
+import FoldedList from "@/components/common/FoldedList";
 
 export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, onEditOpened }: {
   onOpenEntity: (id: string) => void;
@@ -41,8 +41,6 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
   const [editingId, setEditingId] = useState<string | null>(null);
   /** The ticket whose stage change is being recorded, and where it goes. */
   const [staging, setStaging] = useState<{ tickets: FmTicket[]; to: FmTicketStatus } | null>(null);
-  /** The Closed section, folded by default (owner, 2026-10-14). */
-  const [showClosed, setShowClosed] = useState(false);
   /** The ticket whose one-step close ("nothing done") is being confirmed, and why the last one did not land. */
   const [closingKey, setClosingKey] = useState<string | null>(null);
   const [closeError, setCloseError] = useState<{ key: string; text: string } | null>(null);
@@ -62,7 +60,6 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
   // a day. Latest closed first; the server drops them after their retention window (supervisor-proxy _fm_expire).
   const closed = useMemo(() => data.tickets.filter((t) => stageOf(t) === "closed")
     .sort((a, b) => Date.parse(b.resolvedAt ?? b.openedAt) - Date.parse(a.resolvedAt ?? a.openedAt)), [data.tickets]);
-  const closedPage = usePaged(closed, PAGE_CARDS);
   const editing = editingId ? data.tickets.find((t) => t.id === editingId) : undefined;
 
   const closeNoAction = async (key: string, ids: string[]) => {
@@ -165,28 +162,17 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
       )}
       {tickets.length > 0 && <div className="fm-list">{tickets.map(ticket)}</div>}
 
-      {closed.length > 0 && (
-        <div className="fm-field">
-          <button type="button" className="fm-disclosure" onClick={() => setShowClosed((v) => !v)} aria-expanded={showClosed}>
-            {showClosed ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-            Closed ({closed.length})
-          </button>
-          {showClosed && (
-            <>
-              <div className="fm-list">{closedPage.page.map((t) => (
-                <div key={t.id} className="fm-fault state-ok">
-                  {record(t, "Resolved")}
-                  {/* reopened, it is a fault again: back on the Overview's list (the VESTA Agent reads it, never guesses) */}
-                  <div className="fm-fault-actions">
-                    <button className="btn ghost" onClick={() => setStaging({ tickets: [t], to: "open" })}>Reopen</button>
-                  </div>
-                </div>
-              ))}</div>
-              <Pager paged={closedPage} unit="closed record" />
-            </>
-          )}
-        </div>
-      )}
+      <FoldedList title="Closed" rows={closed} unit="closed record">
+        {(t) => (
+          <div key={t.id} className="fm-fault state-ok">
+            {record(t, "Resolved")}
+            {/* reopened, it is a fault again: back on the Overview's list (the VESTA Agent reads it, never guesses) */}
+            <div className="fm-fault-actions">
+              <button className="btn ghost" onClick={() => setStaging({ tickets: [t], to: "open" })}>Reopen</button>
+            </div>
+          </div>
+        )}
+      </FoldedList>
 
       {staging && <FaultStageModal tickets={staging.tickets} to={staging.to} onClose={() => setStaging(null)} />}
     </div>

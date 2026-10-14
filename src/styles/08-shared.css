@@ -266,6 +266,8 @@ button.cockpit-attention-row.tappable { cursor: pointer; }
 
 /* The Cockpit header's updates count: a header button's look, nothing to press. */
 .header-icon-badge { cursor: default; position: relative; }
+/* its count at the bottom-right corner (owner, 2026-10-14) — the top bar's counts stay where they are */
+.header-icon-badge > .icon-btn-count { top: auto; bottom: 1px; }
 
 /* ── Telemetry log rows ────────────────────────────────────────────────────
    A diagnostic row is four parts: the event kind, which device/role/build sent
