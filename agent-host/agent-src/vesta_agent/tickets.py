@@ -67,12 +67,22 @@ class Tickets:
             if why:
                 log.warning("Fault %r: its report was not attached: %s", (title or "")[:60], why)
                 note = ((note or "") + f"\n(The investigation report could not be attached: {why}.)").strip()
-        tid = await self.kiosk.add_ticket(ticket_title(title)[:200], entity_id=entity_id, note=note, document_ids=docs)
+        number = self._alert_number(task_id)
+        tid = await self.kiosk.add_ticket(ticket_title(title)[:200], entity_id=entity_id, note=note, document_ids=docs,
+                                          **({"number": number} if number else {}))
         log.info("Kiosk ticket %s created: %s", tid, ticket_title(title)[:80])
         if task_id:
             self._store().set_task_uid(int(task_id), tid)
         self.state.log("executed", {"tool": "ticket", "ticket": tid, "entity": entity_id})
         return tid
+
+    def _alert_number(self, task_id: int | None) -> int | None:
+        """The number every chat gives the alert a task came from ("#5", messaging.incident_tag) — None for a night
+        check's finding, which no message numbers."""
+        if not task_id:
+            return None
+        kind, sid = Problems._source(self._store().task(int(task_id)))
+        return sid if kind == "incident" else None
 
     async def reopen(self, a: dict) -> bool:
         """ticket.reopen {task_id, title, note}: the task's fault open again in the Kiosk under its new title — or, when it
@@ -180,6 +190,19 @@ class Tickets:
                     break
         if updated:
             log.info("Kiosk tickets brought up to date: %d", updated)
+        # ⚠️ THE CARD SAYS THE ALERT'S NUMBER (owner, 2026-10-14: "#5" in Telegram, nothing on the Cockpit's card): a
+        # fault made before 0.12.195 is given it here
+        numbered = 0
+        for t in problems.open_tasks():
+            uid, number = t.get("todo_uid"), self._alert_number(t["id"])
+            if number and uid in held and held[uid]["status"] != "resolved" and held[uid].get("alert_number") != number:
+                try:
+                    numbered += bool(await self.kiosk.number_ticket(uid, number))
+                except Exception as e:  # noqa: BLE001 — the next start or night tries again
+                    log.warning("A Kiosk ticket could not be given its alert's number (%s)", type(e).__name__)
+                    break
+        if numbered:
+            log.info("Kiosk tickets given their alert's number: %d", numbered)
         made = 0
         for t in problems.open_tasks():
             if t.get("todo_uid"):

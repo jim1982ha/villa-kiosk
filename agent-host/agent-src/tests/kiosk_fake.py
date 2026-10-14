@@ -8,6 +8,7 @@ real Kiosk's methods and parameters by tests/test_fakes.py.
     closed_by_hand   ids a person resolved in the Kiosk itself     known   ids the Kiosk has from before
     titles    {ticket id: title} as the Kiosk shows it — a test sets one to play a person renaming it
     agent_titles   {ticket id: title} the agent last gave it        readings   [(ticket id, title)] under a person's title
+    numbers   {ticket id: alert number} ("#5" on the Kiosk's card)
 """
 from __future__ import annotations
 
@@ -25,6 +26,7 @@ class FakeKiosk:
         self.info = {"contract": 1}
         self.documents: list | None = []             # pages kept (add_document); None: a Kiosk with no documents
         self.ticket_documents: list[list[str]] = []   # each ticket's documentIds, in the order of `tickets`
+        self.numbers: dict[str, int] = {}            # a ticket's alert number (add_ticket number=, number_ticket)
 
     async def check(self) -> bool:
         return True
@@ -42,7 +44,9 @@ class FakeKiosk:
         self.documents.append(html)
         return f"d{len(self.documents)}"
 
-    async def add_ticket(self, title, entity_id=None, note=None, document_ids=None) -> str:
+    async def add_ticket(self, title, entity_id=None, note=None, document_ids=None, number=None) -> str:
+        if number:
+            self.numbers[f"t{len(self.tickets) + 1}"] = int(number)
         self.ticket_documents.append(list(document_ids or []))
         self.tickets.append((title, entity_id))
         self.notes.append(note)
@@ -69,8 +73,14 @@ class FakeKiosk:
 
     async def held_tickets(self) -> dict[str, dict]:
         return {t: {"status": s, "title": self.titles.get(t, ""), "agent_title": self.agent_titles.get(t),
-                    "resolved_at": "", "by": "", **self.closed_meta.get(t, {})}
+                    "resolved_at": "", "by": "", "alert_number": self.numbers.get(t), **self.closed_meta.get(t, {})}
                 for t, s in (await self.ticket_states()).items()}
+
+    async def number_ticket(self, tid, number) -> bool:
+        if self.numbers.get(tid) == int(number):
+            return False
+        self.numbers[tid] = int(number)
+        return True
 
     async def update_ticket(self, tid, title) -> bool:
         if tid not in self.titles or self.agent_titles.get(tid, self.titles[tid]) == title[:200] or tid in self.resolved:

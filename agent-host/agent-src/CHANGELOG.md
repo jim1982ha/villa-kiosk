@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.187 (14 October 2026)
+
+- vesta_agent.kiosk: `add_ticket(number=)` writes `alertNumber` on the Kiosk fault (the incident's number, "#5");
+  `number_ticket()` gives it to a fault made before; `held_tickets()` reads it back (`alert_number`).
+- vesta_agent.tickets: `create()` passes the number when the task's source is an incident (none for a finding);
+  `repair()` numbers open incident faults that lack it. tests/test_alert_number.py.
+
 ## 0.6.186 (14 October 2026)
 
 Retrospective, 2026-10-14: Timmerflotte_2623 sat open five days with no fault and nothing anywhere said so.

@@ -177,7 +177,9 @@ class Kiosk:
             raise KioskError(f"POST /agent/v1/fm-document: {type(e).__name__}") from None
 
     async def add_ticket(self, title: str, entity_id: str | None = None, note: str | None = None,
-                         document_ids: list[str] | None = None) -> str:
+                         document_ids: list[str] | None = None, number: int | None = None) -> str:
+        """`number`: the alert's number, as every chat names it ("#5"), when the fault comes from one — the Kiosk's card
+        shows it beside the title (owner, 2026-10-14), so the Telegram message and the card are seen to be one problem."""
         tid = "va-" + secrets.token_hex(8)
 
         def change(data: dict) -> str:
@@ -190,6 +192,8 @@ class Kiosk:
                 t["entityId"] = entity_id
             if note:
                 t["note"] = note[:2000]
+            if number:
+                t["alertNumber"] = int(number)
             tickets.append(t)
             data["tickets"] = tickets
             return tid
@@ -216,7 +220,7 @@ class Kiosk:
                     "reopened_by": str(ups[-1].get("who") or ups[-1].get("by") or "")} if ups else {}
         return {t["id"]: {"status": str(t.get("status") or ""), "title": str(t.get("title") or ""),
                           "agent_title": agent_title(t), "resolved_at": str(t.get("resolvedAt") or ""),
-                          "by": last(t, "who") or last(t, "by"), **reopened(t)}     # who did it, as the card says it
+                          "by": last(t, "who") or last(t, "by"), "alert_number": t.get("alertNumber"), **reopened(t)}     # who did it, as the card says it
                 for t in data.get("tickets") or [] if isinstance(t, dict) and isinstance(t.get("id"), str)}
 
     async def update_ticket(self, tid: str, title: str) -> bool:
@@ -238,6 +242,21 @@ class Kiosk:
                         t = dict(t, title=title, updates=list(t.get("updates") or [])
                                  + [{**step, "kind": RETITLED, "was": str(t.get("title") or "")}])
                     tickets[i] = t
+                    data["tickets"] = tickets
+                    return True
+            return False
+        return await self._edit(change)
+
+    async def number_ticket(self, tid: str, number: int) -> bool:
+        """A fault made before it carried its alert's number gets it ("#5", add_ticket). False when it is gone or
+        already says it."""
+        def change(data: dict) -> bool:
+            tickets = list(data.get("tickets") or [])
+            for i, t in enumerate(tickets):
+                if isinstance(t, dict) and t.get("id") == tid:
+                    if t.get("alertNumber") == int(number):
+                        return False
+                    tickets[i] = dict(t, alertNumber=int(number))
                     data["tickets"] = tickets
                     return True
             return False
