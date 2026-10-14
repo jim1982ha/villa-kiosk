@@ -29,6 +29,8 @@ from .store import Store, Incident
 DONE = "done"                          # a person answered Done (a button, or "#N done")
 CLEARED = "cleared"                    # its source is gone: the night check no longer sees it, HA cleared it
 CLOSED_IN_KIOSK = "closed_in_kiosk"    # a person closed the fault in the VESTA Kiosk
+#: The severities whose finding earns a task, hence a Kiosk fault.
+TASK_SEVERITIES = ("P2", "P3")
 STATUSES = (DONE, CLEARED, CLOSED_IN_KIOSK)
 
 _ORDER = result.PRIORITY_ORDER
@@ -154,7 +156,7 @@ class Problems:
     # an event closed the same night, a rerun not news twice, worsened, closed tonight, its task opened. Which
     # rules are states and which are events, the worsened step and which severities get a task stay the skill's.
     def record_night(self, findings, day: str, _muted_at_iso: str | None = None, *, state_rules, event_rules, worsened_step: float,
-                     task_severities=("P2", "P3"), resolved_note: str = "") -> dict:
+                     task_severities=TASK_SEVERITIES, resolved_note: str = "") -> dict:
         """The night check's findings for `day`: {new, still_open, closed, again (came back: AGAIN_DAYS), tasks,
         resolve_actions, reopen_actions (a returning finding's fault open again)}. (`_muted_at_iso`: what a
         night check edited before 0.12.132 still passes — Mute is gone, it is ignored.)
@@ -322,6 +324,20 @@ class Problems:
         return False                                     # no source of its own: it waits for a person
 
     # ---------------------------------------------------------------- reading
+    def unseen(self) -> list[dict]:
+        """Open findings that should be a fault and are not: a task severity, no open task, and no person's close
+        keeping it quiet (Done, or closed in the Kiosk). record_night leaves none; tickets.repair says when any is
+        found (villa, 2026-10-14: a sensor open for five days, never in the Cockpit, and nothing said so)."""
+        out = []
+        for f in self.store.findings(status="open"):
+            if f["severity"] not in TASK_SEVERITIES or self.store.open_task(f["rule_id"], f["entity_id"]):
+                continue
+            last = self.store.last_task(f"finding:{int(f['id'])}")
+            if last and last.get("status") in (DONE, CLOSED_IN_KIOSK):
+                continue
+            out.append(f)
+        return out
+
     def open_tasks(self) -> list[dict]:
         return self.store.tasks("open")
 

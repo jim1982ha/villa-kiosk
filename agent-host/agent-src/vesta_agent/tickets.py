@@ -194,6 +194,10 @@ class Tickets:
                 break
         if made:
             log.info("Kiosk tickets created for %d open task(s) that had none", made)
+        # an open problem with no fault and no person's close is a fault the Cockpit never shows — said, not silent
+        if unseen := problems.unseen():
+            log.warning("%d open problem(s) have no Kiosk fault: %s", len(unseen),
+                        ", ".join(f"{f['rule_id']} {f['entity_id']}" for f in unseen[:10]))
         return made
 
 

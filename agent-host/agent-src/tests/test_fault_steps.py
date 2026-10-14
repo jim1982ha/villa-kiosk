@@ -117,6 +117,17 @@ def test_the_nightly_repair_never_writes_its_title_over_a_persons(tmp_path):
     assert k.readings == [("t1", "Front door lock offline 3 days")]                  # under it, once
 
 
+def test_the_repair_says_when_an_open_problem_has_no_fault(tmp_path, caplog):
+    # villa, 2026-10-14: a sensor open for five days, never in the Cockpit, and nothing anywhere said so
+    k = FakeKiosk()
+    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)
+    st = Store(v.s.store_path)
+    st.raise_finding("PM-X", "sensor.example_room", "offline", "2026-10-09", "P3", "Example offline for 39 h", {})
+    with caplog.at_level("WARNING", logger="vesta.outcome"):
+        run(v.tickets.repair())
+    assert "1 open problem(s) have no Kiosk fault: PM-X sensor.example_room" in caplog.text
+
+
 # ---------------------------------------------------------------------- 4, 6 · a reopening is read, and someone is told
 def _closed_night_fault(tmp_path, k, told):
     v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)

@@ -162,6 +162,24 @@ def test_an_open_problem_that_never_had_a_fault_gets_one_and_a_hand_closed_one_s
                            "2026-10-13", **rules)["tasks"] == []
 
 
+def test_unseen_names_an_open_problem_with_no_fault_and_no_persons_close(tmp_path):
+    store = Store(str(tmp_path / "s.sqlite"))
+    pb = Problems(store)
+    rules = dict(state_rules={"PM-UNAVAILABLE"}, event_rules=set(), worsened_step=15)
+    # whatever a run of nights does, it leaves none
+    for day, fs in [("2026-10-06", [_F("PM-UNAVAILABLE", "a", "P2"), _F("PM-UNAVAILABLE", "b", "P3"), _F("PM-UNAVAILABLE", "c", "P4")]),
+                    ("2026-10-07", [_F("PM-UNAVAILABLE", "a", "P2")]),
+                    ("2026-10-08", [_F("PM-UNAVAILABLE", "a", "P2"), _F("PM-UNAVAILABLE", "b", "P3")])]:
+        pb.record_night(fs, day, **rules)
+        assert pb.unseen() == [], day
+    # a person's close keeps it quiet: not unseen
+    pb.closed_in_kiosk(store.open_task("PM-UNAVAILABLE", "a")["id"])
+    assert pb.unseen() == []
+    # its task cleared while the problem is still open — nothing would ever show it: named
+    pb.close(store.open_task("PM-UNAVAILABLE", "b")["id"], CLEARED)
+    assert [f["entity_id"] for f in pb.unseen()] == ["b"]
+
+
 def test_an_event_finding_is_never_counted_again(tmp_path):
     store = Store(str(tmp_path / "s.sqlite"))
     pb = Problems(store)

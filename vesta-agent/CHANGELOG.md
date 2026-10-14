@@ -1,3 +1,9 @@
+## 0.12.193
+
+What you will see:
+- Nothing new on screen. The Agent's log now says when a problem it keeps open has no fault in the Cockpit (and you
+  did not close it), so a problem like Timmerflotte_2623's can no longer stay hidden for days without a trace.
+
 ## 0.12.192
 
 What you will see:

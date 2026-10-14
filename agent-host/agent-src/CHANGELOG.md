@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.186 (14 October 2026)
+
+Retrospective, 2026-10-14: Timmerflotte_2623 sat open five days with no fault and nothing anywhere said so.
+- vesta_shared.problems: `TASK_SEVERITIES` (one place: the severities that earn a task — record_night's default);
+  `Problems.unseen()`: open findings at a task severity with no open task and no person's close (Done, closed in the
+  Kiosk).
+- vesta_agent.tickets.repair (every start, after the night check, every 5 minutes): logs "N open problem(s) have no
+  Kiosk fault: <rule> <entity>, …" when any is found.
+- tests: test_unseen_names_an_open_problem_with_no_fault_and_no_persons_close (a run of nights leaves none; a
+  person's close is not unseen; a task cleared under a still-open problem is), and
+  test_the_repair_says_when_an_open_problem_has_no_fault (the caller, pinned). Both red when broken.
+
 ## 0.6.185 (14 October 2026)
 
 Villa, 2026-10-14: Timmerflotte_2623 offline for five days, open in the night check every night, never in the Cockpit
