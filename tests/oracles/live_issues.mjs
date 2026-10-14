@@ -150,8 +150,8 @@ ck("  ...a profile is the top bar's badge: its letters in a circle (O, FM, G), i
    /source-role-badge cockpit-attention-icon cockpit-attention-fault"[^>]*>O</.test(people)
    && /source-role-badge two[^"]*"[^>]*>FM</.test(people) && /class="source-role-badge[^"]*"[^>]*>G</.test(people), people);
 ck("  ...every source has its icon and its words in the (i)'s legend",
-   S.ISSUE_SOURCES.every((x) => I.SOURCE_ICON[x] && I.SOURCE_WORDS[x]?.[0] && I.SOURCE_WORDS[x]?.[1])
-   && /SOURCE_WORDS\[s\]\[1\]/.test(readFileSync(new URL("../../src/components/fm/FaultTiming.tsx", import.meta.url), "utf8")));
+   S.ISSUE_SOURCES.every((x) => I.SOURCE_ICON[x] && I.SOURCE_WORDS[x])
+   && /SOURCE_ICON\[r\.source\]/.test(readFileSync(new URL("../../src/components/fm/FaultTiming.tsx", import.meta.url), "utf8")));
 
 console.log("\n  what happened on Telegram, on the card (owner, 2026-10-14: reminders, escalation, Need help):");
 const N = await import("@/fm/faultNotes");

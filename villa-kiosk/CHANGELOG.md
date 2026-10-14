@@ -1,3 +1,10 @@
+## 2.496.360
+
+### Changed
+- Cockpit → the (i) beside "Open a ticket" is ONE table again: for each icon, what it is, when it appears and when it goes (or is brought up to date). The icons' list and the "when faults open and close" table said the same sources twice, in different words.
+- "Live" no longer mentions Home Assistant: "What a device reports right now: unavailable, missing, unlocked, too hot…".
+- The VESTA Agent's rows (Alert, Night check, Chat) are shown whenever one of its faults is on the list — they were missing for a moment after each start, or longer, while the cards already showed its icons.
+
 ## 2.496.359
 
 ### Changed

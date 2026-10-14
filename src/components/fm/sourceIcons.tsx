@@ -27,18 +27,10 @@ export const SOURCE_ICON: Record<IssueSource, IconType> = {
   owner: roleBadge("owner"), fm: roleBadge("ops"), person: UserRound, guest: roleBadge("guest"), schedule: CalendarCog,
 };
 
-/** [its word, what it means] — the (i)'s legend. */
-export const SOURCE_WORDS: Record<IssueSource, readonly [string, string]> = {
-  live: ["Live", "What Home Assistant reports right now (unavailable, not in Home Assistant, unlocked…): goes by itself"],
-  alert: ["Alert", "A VESTA alert from a Home Assistant rule, numbered as on Telegram (#5)"],
-  night: ["Night check", "Found by the VESTA Agent's nightly check (offline, battery, energy use, Wi-Fi drops…)"],
-  chat: ["Chat", "Created from a Telegram chat with the VESTA Agent (\"Create this fault\")"],
-  agent: ["VESTA Agent", "Made by the VESTA Agent before it said from where"],
-  owner: ["Owner", "A ticket the Owner opened"],
-  fm: ["Facility manager", "A ticket the Facility manager opened"],
-  person: ["Person", "A ticket opened in the Kiosk"],
-  guest: ["Guest", "A problem a guest reported"],
-  schedule: ["Schedule", "Maintenance overdue (Schedule tab)"],
+/** Its word — the (i)'s table says what it is and when it comes and goes (fm/faultTiming). */
+export const SOURCE_WORDS: Record<IssueSource, string> = {
+  live: "Live", alert: "Alert", night: "Night check", chat: "Chat", agent: "VESTA Agent",
+  owner: "Owner", fm: "Facility manager", person: "Person", guest: "Guest", schedule: "Schedule",
 };
 
 /** A problem's source icons, stacked when a line holds two (a device's live state and its fault). Each in its own
@@ -50,7 +42,7 @@ export function SourceIcons({ sources, kinds, size = 16 }: {
   size?: number;
 }) {
   return (
-    <span className="cockpit-source-icons" aria-label={sources.map((s) => SOURCE_WORDS[s][0]).join(" and ")}>
+    <span className="cockpit-source-icons" aria-label={sources.map((s) => SOURCE_WORDS[s]).join(" and ")}>
       {sources.map((s, i) => {
         const Icon = SOURCE_ICON[s];
         return <Icon key={`${s}-${i}`} size={size} aria-hidden className={`cockpit-attention-icon cockpit-attention-${kinds[i] ?? kinds[0]}`} />;

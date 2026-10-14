@@ -45,18 +45,23 @@ ck("no (i) is hand-built any more", handBuilt.length === 0, handBuilt);
 
 console.log("\n  the Overview's (i) beside Raise a fault — with or without the VESTA Agent:");
 const withAgent = faultTiming(true), alone = faultTiming(false);
-ck("with an Agent: its four sources, then a person's ticket and a guest's report, each saying when it opens and closes",
-   withAgent.rows.length === 6 && withAgent.rows.every((r) => r.length === 3 && r.every((c) => c.length > 0)), withAgent.rows.length);
-ck("  ...the nightly ones say so, and the Agent's defaults are said as defaults",
-   withAgent.rows.filter((r) => r[1] === "Nightly check").length === 2 && /02:00 by default/.test(withAgent.note));
-ck("without an Agent: a person's ticket and a guest's report only — nothing claims to open or close by itself",
-   alone.rows.length === 2 && /person/.test(alone.rows[0][0]) && /guest/.test(alone.rows[1][0]) && !/Agent|nightly/i.test(alone.note + alone.rows.flat().join(" ")), alone);
+const { ISSUE_SOURCES } = await import("@/fm/issueSource");
+ck("with an Agent: ONE row per icon a card can show, each saying what it is, when it appears and when it goes",
+   withAgent.rows.map((r) => r.source).join() === ISSUE_SOURCES.join() && withAgent.rows.every((r) => r.what && r.opens && r.goes),
+   withAgent.rows.map((r) => r.source));
+ck("  ...the nightly check's say so, and the Agent's defaults are said as defaults",
+   withAgent.rows.find((r) => r.source === "night")?.opens === "Nightly check" && /02:00 by default/.test(withAgent.note));
+ck("  ...Live does not name Home Assistant (owner, 2026-10-14)", !/Home Assistant/.test(withAgent.rows.find((r) => r.source === "live").what));
+ck("without an Agent: no row of the Agent's — nothing claims to open or close by itself",
+   !alone.rows.some((r) => ["alert", "night", "chat", "agent"].includes(r.source)) && alone.rows.some((r) => r.source === "guest")
+   && !/Agent|nightly/i.test(alone.note + alone.rows.map((r) => r.what + r.opens + r.goes).join(" ")), alone.rows.map((r) => r.source));
 ck("both say how a fault becomes a ticket", [withAgent, alone].every((t) => /becomes a ticket when someone presses Open ticket on its card/.test(t.note)));
 ck(`  ...and the list's own refresh, from the app's own numbers (${STORE_ACTIVE_MS / 1000} s open, ${STORE_HEARTBEAT_MS / 60000} min else)`,
    [withAgent, alone].every((t) => t.note.includes(`every ${STORE_ACTIVE_MS / 1000} seconds while it is open`)
      && t.note.includes(`every ${STORE_HEARTBEAT_MS / 60000} minutes otherwise`)));
 const card = src("components/fm/FaultTiming.tsx");
-ck("the card asks whether an Agent is connected, and shows that table", /faultTiming\(agent\)/.test(card) && /const agent = agentVisible\(status\);/.test(card)
+ck("the card shows the Agent's rows when an Agent is connected OR one of its faults is open (its icons are on the list)",
+   /faultTiming\(agent\)/.test(card) && /const agent = agentVisible\(status\) \|\| data\.tickets\.some\(\(t\) => t\.source === "vesta_agent" && stageOf\(t\) !== "closed"\);/.test(card)
    && /rows\.map/.test(card) && /\{note\}/.test(card) && /<table className="info-pop-table">/.test(card));
 ck("it sits just before Open a ticket, on the Overview's title line", /<FaultTiming \/>\s*<button[^>]*>[^<]*<Plus size=\{16\} \/> Open a ticket/.test(src("components/cockpit/CockpitOverview.tsx")));
 

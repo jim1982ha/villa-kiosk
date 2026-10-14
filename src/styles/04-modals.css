@@ -395,10 +395,11 @@
 .info-pop-table td { vertical-align: top; padding: 5px 8px 5px 0; border-bottom: 1px solid var(--hairline); }
 .info-pop-table td:first-child { color: var(--text-primary); }
 .info-pop-note { margin: 8px 0 0; color: var(--text-dim); }
-/* the (i)'s legend of the Open issues icons (FaultTiming): icon, word, what it means */
-.info-pop-legend { display: grid; grid-template-columns: 18px max-content 1fr; gap: 4px 8px; align-items: start; margin-bottom: 10px; }
-.info-pop-legend > svg { margin-top: 2px; color: var(--text-secondary); }
-.info-pop-legend > b { color: var(--text-primary); font-weight: 600; }
+/* the (i)'s table of sources (FaultTiming): the icon and its word, what it is under them */
+.info-pop-source { display: inline-flex; align-items: center; gap: 6px; color: var(--text-primary); white-space: nowrap; }
+.info-pop-source > b { font-weight: 600; }
+.info-pop-what { display: block; margin-top: 2px; color: var(--text-dim); }
+.info-pop-table td:first-child { width: 42%; }
 .info-pop .row { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; }
 .info-pop .row span:first-child { color: var(--text-dim); flex: 0 0 auto; }
 .info-pop .row span:last-child { color: var(--text-primary); word-break: break-all; text-align: right; }
