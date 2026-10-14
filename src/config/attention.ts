@@ -200,7 +200,12 @@ export function attentionLine(item: AttentionItem): string {
   const titled = (i: AttentionItem) => { const st = faultStatus(i); return st ? `${st}: ${i.title}` : i.title; };
   if (item.fault) {
     const st = faultStatus(item.fault);
-    return `${item.detail} — ${st ? `${st.toLowerCase()}: ` : ""}${item.fault.title}`;
+    const fault = `${st ? `${st.toLowerCase()}: ` : ""}${item.fault.title}`;
+    // ⚠️ "UNAVAILABLE — … OFFLINE FOR 9 H" SAID IT TWICE (owner, 2026-10-14): the fault on an unavailable line says the
+    // device is offline already. A word the fault does not say stays: "Not in Home Assistant", a live reading ("92 %").
+    return item.kind === "unavailable" && item.detail === "Unavailable"
+      ? fault.charAt(0).toUpperCase() + fault.slice(1)
+      : `${item.detail} — ${fault}`;
   }
   if (item.kind === "fault") return titled(item);
   return item.kind === "schedule" ? `${item.detail}: ${item.title}` : item.detail;

@@ -102,8 +102,16 @@ const offlineDevice = (batteryState) => groupAttention(buildAttentionItems({
 const [one] = offlineDevice("unavailable");
 ck("the fault on another entity of the device, itself unavailable, goes onto the device's Unavailable line",
    one.items.length === 1 && one.items[0].kind === "unavailable" && one.items[0].fault?.ticketId === "off"
-   && attentionLineIn(one, one.items[0]) === "Unavailable — Example has been offline for 9 h.", one.items.map((i) => i.id));
+   && attentionLineIn(one, one.items[0]) === "Example has been offline for 9 h.", one.items.map((i) => i.id));
 ck("  ...its Close and Open ticket still act on it", cardActions(one)?.close.join() === "off");
+const { attentionLine } = await import("@/config/attention");
+const f = { id: "fault:x", kind: "fault", title: "Pump has been offline for 9 h.", detail: "", ticketId: "x" };
+ck("  ...\"Unavailable — \" is not said before it (the fault says offline); a ticket still says it is in progress",
+   attentionLine({ id: "u", kind: "unavailable", title: "", detail: "Unavailable", fault: f }) === "Pump has been offline for 9 h."
+   && attentionLine({ id: "u", kind: "unavailable", title: "", detail: "Unavailable", fault: { ...f, stage: "ticket" } }) === "In progress: Pump has been offline for 9 h.");
+ck("  ...what the fault does not say stays: Not in Home Assistant, a live reading",
+   attentionLine({ id: "u", kind: "unavailable", title: "", detail: "Not in Home Assistant", fault: f }) === "Not in Home Assistant — Pump has been offline for 9 h."
+   && attentionLine({ id: "a", kind: "alarm", title: "", detail: "92 %", fault: { ...f, title: "Humidity high" } }) === "92 % — Humidity high");
 const [two] = offlineDevice("42");
 ck("  ...a fault on an entity that still reports (a battery reading 42 %) stays its own line", two.items.length === 2, two.items.map((i) => i.id));
 const [unknownValue] = offlineDevice("unknown");
