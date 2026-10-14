@@ -1,3 +1,16 @@
+## 2.496.348
+
+### Changed
+- The 3D model is the ground truth for which devices exist. A 3D object named after a Home Assistant entity is always a device of the Kiosk, and the Kiosk never removes it: there is no Remove button or bin for it in Advanced Settings, and an earlier removal no longer hides it. To change it, rename or remove the object in the 3D model, or point it at another entity.
+- When Home Assistant does not have such an entity (renamed or deleted there), every screen now says so in the same words, "Not in Home Assistant":
+  - Cockpit → Needs attention lists it ("Not in Home Assistant"), even if it was removed earlier;
+  - its window says Home Assistant has no entity of that name and what to do, instead of "Unavailable" and "Not enough history yet";
+  - Advanced Settings → Devices lists every such object at the top, each with "Point it there", without having to type its name in the search.
+- Advanced Settings: "N entities no longer in Home Assistant → Remove N" now only covers rows that the 3D model no longer names either.
+
+### Fixed
+- Advanced Settings: "Show all — 101 more entitys" now reads "entities".
+
 ## 2.496.347
 
 ### Added
