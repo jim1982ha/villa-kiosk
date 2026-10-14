@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.184 (14 October 2026)
+
+Owner, 2026-10-14: a fault about a device deleted from Home Assistant stayed open until 02:00, then closed "Cleared: the
+nightly check no longer sees it", as if the device had come back.
+- preventive-maintenance recheck.py (every 5 minutes): any open finding whose every entity Home Assistant answers
+  "not found" for closes with "Closed: it no longer exists in Home Assistant."; an offline finding whose devices are
+  back or deleted closes as back online. It now reads whenever a finding is open (one bulk read), not only an offline one.
+- vesta_shared.ha_client `not_found(ids)`: only HA's own ENTITY_NOT_FOUND, asked as a list (one id alone is an error);
+  a failed read is never "deleted". `tool(partial=True)` lets a bulk read whose every lookup failed answer.
+- tests: test_a_fault_about_a_device_deleted_from_home_assistant_closes_saying_so (red three ways: no close, a missing
+  row taken for deleted, a deleted device still counted as offline). Checked live: only a made-up id is "not found".
+
 ## 0.6.183 (14 October 2026)
 
 Villa, 2026-10-14 (Cockpit audit): the House & Pool relay's reconnect fault was keyed on the switch on 10 Oct and on

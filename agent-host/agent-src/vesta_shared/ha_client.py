@@ -44,6 +44,11 @@ class HABase:
     def states(self, entity_ids: Iterable[str] | None = None) -> dict[str, dict]:
         raise NotImplementedError
 
+    def not_found(self, entity_ids: Iterable[str]) -> set[str]:
+        """The ids Home Assistant says it does not have (deleted, renamed). Only its own "not found": an id a read
+        failed for is not in it — a client that cannot tell says none."""
+        return set()
+
     def helpers(self) -> tuple[list[dict], dict[str, str]]:
         raise NotImplementedError
 
@@ -233,7 +238,8 @@ class McpClient(HABase):
         self._all_ids: list[str] | None = None
 
     # ------------------------------------------------------------------ core
-    def tool(self, name: str, args: dict) -> Any:
+    def tool(self, name: str, args: dict, partial: bool = False) -> Any:
+        """`partial`: a bulk read whose every lookup failed still answers (its `errors` say why), not HAError."""
         if name in READ_ACTIONS:
             if (args or {}).get("action") not in READ_ACTIONS[name]:
                 raise HAError(f"{name} refused: only its {', '.join(sorted(READ_ACTIONS[name]))} action is allowed")
@@ -250,7 +256,7 @@ class McpClient(HABase):
         if res.get("isError"):
             raise HAError(f"{name} failed: {str(body)[:300]}")
         body = _unwrap(body)
-        if isinstance(body, dict) and body.get("success") is False:
+        if isinstance(body, dict) and body.get("success") is False and not (partial and "errors" in body):
             raise HAError(f"{name} failed: {str(body.get('error') or body.get('message') or body)[:300]}")
         return body
 
@@ -286,6 +292,17 @@ class McpClient(HABase):
             elif isinstance(body, dict) and body.get("entity_id"):
                 out[body["entity_id"]] = body
         return out
+
+    def not_found(self, entity_ids):
+        # ⚠️ ASKED AS A LIST, EVEN OF ONE: one id alone that HA does not have is an error; in a list it is a row of
+        # `errors` with HA's own code (ENTITY_NOT_FOUND, its 404) — a timeout or a refusal is never read as "deleted"
+        ids, gone = sorted(set(entity_ids)), set()
+        for i in range(0, len(ids), 100):
+            body = self.tool("ha_get_state", {"entity_id": ids[i:i + 100], "fields": ["entity_id"]}, partial=True)
+            for e in (body.get("errors") or []) if isinstance(body, dict) else []:
+                if isinstance(e, dict) and (e.get("error") or {}).get("code") == "ENTITY_NOT_FOUND" and e.get("entity_id"):
+                    gone.add(e["entity_id"])
+        return gone
 
     def statistics(self, entity_ids, start, end, period="hour", types=("mean", "min", "max")):
         out = {}

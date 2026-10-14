@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Every 5 minutes: a device the night check found offline that is back closes its fault now.
+"""Every 5 minutes: a device the night check found offline that is back closes its fault now; so does any fault
+about a device deleted from Home Assistant.
 
   python recheck.py --store vesta_store.sqlite [--fixture-dir DIR] [--now 2026-10-10T14:00:00+00:00]
 
@@ -7,13 +8,18 @@
 fault in the Cockpit all day while every Shelly device had been back since noon — the night check closes a finding
 only when it runs again, at 02:00. An offline finding is a state anyone can read again: here its devices are read
 every 5 minutes, and once all are back online (`back_online_minutes`), it closes as the night check would close it
-(vesta_shared.problems: its task and its Kiosk fault with it). Nothing is read when no device is found offline.
+(vesta_shared.problems: its task and its Kiosk fault with it).
+
+⚠️ A DEVICE DELETED FROM HOME ASSISTANT (owner, 2026-10-14): its fault stayed open until 02:00, then closed "Cleared:
+the nightly check no longer sees it" — as if it had come back. Any open finding whose every entity Home Assistant
+answers "not found" for (its own 404, never a failed read) closes here, saying so. Nothing is read when nothing is open.
 """
 from __future__ import annotations
 
 import argparse
 import json
 import os
+import re
 import sys
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -26,25 +32,35 @@ from vesta_shared.device_state import OFFLINE, out_of  # noqa: E402  ("is it bac
 from vesta_shared.problems import Problems  # noqa: E402
 
 OFFLINE_RULE = "PM-UNAVAILABLE"
+GONE_NOTE = "Closed: it no longer exists in Home Assistant."
+ENTITY_ID = re.compile(r"^[a-z0-9_]+\.[a-z0-9_]+$")     # only a real entity id can be "not found"
 
 
 def back_online(store, client, now: datetime, minutes: float, zone: str) -> dict:
-    """{closed: [finding ids], actions: [the Kiosk faults to resolve]}. `client()`: Home Assistant, asked for only when
-    a device is found offline."""
-    rows = [f for f in store.findings(status="open") if f["rule_id"] == OFFLINE_RULE]
+    """{closed: [finding ids], gone: [the ones whose devices no longer exist], actions: [the Kiosk faults to resolve]}.
+    `client()`: Home Assistant, asked for only when a finding is open."""
+    rows = store.findings(status="open")
     if not rows or client() is None:
-        return {"closed": [], "actions": []}
+        return {"closed": [], "gone": [], "actions": []}
     ents = {f["id"]: json.loads(f.get("detail") or "{}").get("entities") or [f["entity_id"]] for f in rows}
-    states = client().states(sorted({e for es in ents.values() for e in es}))
+    ids = sorted({e for es in ents.values() for e in es if ENTITY_ID.match(str(e))})
+    states = client().states(ids)
+    # only what has no state is asked about: "not found" is Home Assistant's answer, a missing row is not
+    gone = client().not_found([e for e in ids if e not in states]) if len(states) < len(ids) else set()
     day = now.astimezone(ZoneInfo(zone)).date().isoformat()
-    closed, actions = [], []
+    closed, deleted, actions = [], [], []
     for f in rows:
-        if all(out_of(states.get(e) or {}, OFFLINE, now, minutes, unknown_tells=True) for e in ents[f["id"]]):
+        es = ents[f["id"]]
+        if es and all(e in gone for e in es):
+            actions += Problems(store).close_finding(f, day, GONE_NOTE)
+            closed.append(f["id"]); deleted.append(f["id"])
+        elif f["rule_id"] == OFFLINE_RULE and all(
+                e in gone or out_of(states.get(e) or {}, OFFLINE, now, minutes, unknown_tells=True) for e in es):
             actions += Problems(store).close_finding(f, day, "Cleared: back online.")
             closed.append(f["id"])
     if closed:
-        store.audit("preventive-maintenance", "back_online", {"findings": closed})
-    return {"closed": closed, "actions": actions}
+        store.audit("preventive-maintenance", "back_online", {"findings": closed, "gone": deleted})
+    return {"closed": closed, "gone": deleted, "actions": actions}
 
 
 def main(argv=None):

@@ -1,3 +1,10 @@
+## 0.12.191
+
+What you will see:
+- A fault about a device you deleted from Home Assistant closes by itself within about 5 minutes, and says why:
+  "Closed: it no longer exists in Home Assistant." Before, it stayed open until the 02:00 night check and then read
+  "Cleared: the nightly check no longer sees it", as if the device had come back.
+
 ## 0.12.190
 
 What you will see:

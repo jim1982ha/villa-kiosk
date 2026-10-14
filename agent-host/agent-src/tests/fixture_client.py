@@ -21,7 +21,7 @@ class FixtureClient(HABase):
       history_raw_*.json                    ha_get_history(source=history) result 'data'
       helpers.json                          {'helpers': [...], 'states': {...}}
       registry.json                         {'entities': [...], 'areas': [...], 'devices': [...]}
-      states.json                           {'states': {entity_id: {state, attributes, last_changed}}}
+      states.json                           {'states': {entity_id: {state, attributes, last_changed}}, 'not_found': [ids]}
       logbook.json                          {'entries': [...]}
       templates.json                        {template text: what Home Assistant renders it as}
     """
@@ -80,6 +80,11 @@ class FixtureClient(HABase):
         if entity_ids is None:
             return d
         return {e: d[e] for e in entity_ids if e in d}
+
+    def not_found(self, entity_ids):
+        # states.json's "not_found": the ids Home Assistant answers "not found" for (deleted since)
+        gone = set(self._load("states.json", {"states": {}}).get("not_found") or [])
+        return {e for e in entity_ids if e in gone}
 
     def helpers(self):
         d = self._load("helpers.json", {"helpers": [], "states": {}})

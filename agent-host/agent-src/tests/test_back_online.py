@@ -27,10 +27,10 @@ def _offline_finding(store) -> int:
     return fid
 
 
-def _run(tmp_path, states: dict, now: datetime):
+def _run(tmp_path, states: dict, now: datetime, not_found=()):
     fx = tmp_path / "fx"
     fx.mkdir(exist_ok=True)
-    (fx / "states.json").write_text(json.dumps({"states": states}))
+    (fx / "states.json").write_text(json.dumps({"states": states, "not_found": list(not_found)}))
     r = subprocess.run([sys.executable, os.path.join(SKILL, "scripts", "recheck.py"), "--store", str(tmp_path / "s.sqlite"),
                         "--fixture-dir", str(fx), "--now", now.isoformat()],
                        capture_output=True, text=True, env={**os.environ, "PYTHONPATH": PYTHONPATH}, timeout=60)
@@ -54,6 +54,29 @@ def test_an_integration_back_online_closes_its_fault_with_its_task(tmp_path):
     assert [a["action"] for a in out["actions"]] == ["ticket.resolve"] and out["faults_changed"] is True
     assert Store(str(tmp_path / "s.sqlite")).finding(fid)["status"] == "closed"
     assert _run(tmp_path, {e: _st("0.0", 20) for e in ENTS}, T0)["actions"] == []        # closed once
+
+
+def test_a_fault_about_a_device_deleted_from_home_assistant_closes_saying_so(tmp_path):
+    # owner, 2026-10-14: a deleted light group's fault stayed open until 02:00, then read "Cleared: the nightly check
+    # no longer sees it", as if the group had come back
+    store = Store(str(tmp_path / "s.sqlite"))
+    weak, _ = store.raise_finding("PM-BATTERY-LOW", "sensor.door_x_battery", "door_x", "2026-10-09", "P3",
+                                  "Door X battery at 12%.", {})
+    Problems(store).open_task("finding", weak, "PM-BATTERY-LOW", "sensor.door_x_battery", "Door X battery")
+    off = _offline_finding(store)
+    # read, but no state for it and Home Assistant never said "not found" (a timeout, a refusal): nothing closes
+    assert _run(tmp_path, {ENTS[0]: _st("unavailable", 60)}, T0)["actions"] == []
+    # the battery sensor deleted: its fault closes, saying why; one of the offline three deleted, the other two
+    # still offline: that one stays open
+    out = _run(tmp_path, {ENTS[0]: _st("unavailable", 60), ENTS[1]: _st("unavailable", 60)}, T0,
+               not_found=["sensor.door_x_battery", ENTS[2]])
+    assert [(a["action"], a["note"]) for a in out["actions"]] == [
+        ("ticket.resolve", "Closed: it no longer exists in Home Assistant.")]
+    st = Store(str(tmp_path / "s.sqlite"))
+    assert st.finding(weak)["status"] == "closed" and st.finding(off)["status"] == "open"
+    # the other two back: the offline one closes as back online, the deleted one counting as no longer offline
+    out = _run(tmp_path, {ENTS[0]: _st("off", 30), ENTS[1]: _st("0.0", 30)}, T0, not_found=[ENTS[2]])
+    assert [a["note"] for a in out["actions"]] == ["Cleared: back online."]
 
 
 def test_the_check_runs_every_five_minutes_and_reads_nothing_when_nothing_is_offline(tmp_path):
