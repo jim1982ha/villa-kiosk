@@ -24,6 +24,7 @@ import FaultStageModal from "./FaultStageModal";
 import NotesField from "./NotesField";
 import DeviceSearchPicker, { type DeviceOption } from "./DeviceSearchPicker";
 import AgentMark from "./AgentMark";
+import FaultTiming from "./FaultTiming";
 import RecordMeta, { RecordNotes } from "./RecordMeta";
 import { faultNoteLines, faultWhen } from "@/fm/faultNotes";
 import InlineConfirm from "@/components/common/InlineConfirm";
@@ -284,9 +285,12 @@ export default function FaultsTab(
       </div>
 
       {!adding && (
-        <button className="btn ghost" onClick={() => setAdding(true)} style={{ alignSelf: "flex-start" }}>
-          <Plus size={16} /> Raise a fault
-        </button>
+        <div className="fm-raise-row">
+          <button className="btn ghost" onClick={() => setAdding(true)}>
+            <Plus size={16} /> Raise a fault
+          </button>
+          <FaultTiming />
+        </div>
       )}
 
       {adding && (

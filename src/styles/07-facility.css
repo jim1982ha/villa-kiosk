@@ -43,6 +43,8 @@
    MANY (owner, 2026-10-14): auto-fit wrapped the Faults tab's fourth box onto a
    row of its own on a phone. Each box takes an equal share; on a narrow screen
    the figure shrinks and the label wraps inside its box instead. */
+/* "Raise a fault" and its (i) (FaultTiming), side by side at the start of the row. */
+.fm-raise-row { display: flex; align-items: center; gap: 10px; align-self: flex-start; }
 .fm-summary { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 10px; }
 .fm-stat {
   display: flex; flex-direction: column; gap: 2px; min-width: 0;
