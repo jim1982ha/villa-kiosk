@@ -1,3 +1,8 @@
+## 2.496.365
+
+### Changed
+- Cockpit → Tickets: each ticket is one card. Its status pill ("In progress", "Resolved") sits on its title line, and its buttons — "Mark resolved" and "Close", or "Reopen" for a closed one — sit inside the card, on the right of its text (on a phone, under it). The device's name above the card is gone: its chip in the card already says it.
+
 ## 2.496.364
 
 ### Changed

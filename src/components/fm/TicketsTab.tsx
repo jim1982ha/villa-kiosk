@@ -7,7 +7,7 @@
 //
 // Time-to-resolution is what evidences supervision, so the app stamps the resolution time itself.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { FileText, Wrench } from "lucide-react";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useDeviceIdentity } from "@/config/VillaModel";
@@ -69,69 +69,70 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
     if (!done && why) setCloseError({ key, text: why });
   };
 
-  /** One record: its title, when/where/who, its notes, photos and reports. Tapping it edits it. */
-  const record = (t: FmTicket, status?: string) => (
+  /** One record: its title (with the ticket's pill on the first one), when/where/who, its notes, photos and reports.
+   *  Tapping it edits it. */
+  const record = (t: FmTicket, status?: { text: string; tone: "ok" | "due-soon" }, actions?: ReactNode) => (
     <ErasableRow key={t.id} className="fm-ticket-record" intent={{ title: "Erase this record", detail: t.title }}
       erase={(token) => removeTicket(t.id, token)} onOpen={() => setEditingId(t.id)}>
       <div className="fm-fault-head">
         <div className="fm-row-title"><strong>{faultTitle(t)}</strong></div>
-        {status && <span className="fm-badge ok">{status}</span>}
+        {status && <span className={`fm-badge ${status.tone}`}>{status.text}</span>}
       </div>
-      <div className="fm-row-main">
-        <RecordMeta when={faultWhen(t, localStamp)}>
-          {t.room && <span className="fm-clause">{t.room}</span>}
-          {/* a guest reports a symptom from inside the villa, not a diagnosis */}
-          {t.reportedBy === "guest" && <span className="fm-clause guest">guest report</span>}
-          <AgentMark record={t} />
-          {t.entityId ? (
-            <button className="fm-entity-chip" title={t.entityId}
-              onClick={(e) => { e.stopPropagation(); onOpenEntity(t.entityId!); }}>
-              {t.deviceLabel ?? label(t.entityId)}
-            </button>
-          ) : t.deviceLabel ? <span className="fm-entity-chip" style={{ cursor: "default" }}>{t.deviceLabel}</span> : null}
-        </RecordMeta>
-        <RecordNotes notes={faultNoteLines(t, localStamp)} />
-        {t.photoIds.length > 0 && <EvidenceRow photoIds={t.photoIds} disabled />}
-        {/* the investigation report the VESTA Agent attached: opens on the iPad, offline */}
-        {(t.documentIds?.length ?? 0) > 0 && (
-          <div className="fm-documents">
-            {t.documentIds!.map((id, i) => (
-              <a key={id} className="fm-document-link" href={documentUrl(id)} target="_blank" rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}>
-                <FileText size={15} aria-hidden="true" />
-                {t.documentIds!.length > 1 ? `Investigation report ${i + 1}` : "Investigation report"}
-              </a>
-            ))}
-          </div>
-        )}
+      {/* its text on the left, the ticket's buttons on the right of it, inside the card (owner, 2026-10-14) */}
+      <div className="fm-ticket-body">
+        <div className="fm-row-main">
+          <RecordMeta when={faultWhen(t, localStamp)}>
+            {t.room && <span className="fm-clause">{t.room}</span>}
+            {/* a guest reports a symptom from inside the villa, not a diagnosis */}
+            {t.reportedBy === "guest" && <span className="fm-clause guest">guest report</span>}
+            <AgentMark record={t} />
+            {t.entityId ? (
+              <button className="fm-entity-chip" title={t.entityId}
+                onClick={(e) => { e.stopPropagation(); onOpenEntity(t.entityId!); }}>
+                {t.deviceLabel ?? label(t.entityId)}
+              </button>
+            ) : t.deviceLabel ? <span className="fm-entity-chip" style={{ cursor: "default" }}>{t.deviceLabel}</span> : null}
+          </RecordMeta>
+          <RecordNotes notes={faultNoteLines(t, localStamp)} />
+          {t.photoIds.length > 0 && <EvidenceRow photoIds={t.photoIds} disabled />}
+          {/* the investigation report the VESTA Agent attached: opens on the iPad, offline */}
+          {(t.documentIds?.length ?? 0) > 0 && (
+            <div className="fm-documents">
+              {t.documentIds!.map((id, i) => (
+                <a key={id} className="fm-document-link" href={documentUrl(id)} target="_blank" rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}>
+                  <FileText size={15} aria-hidden="true" />
+                  {t.documentIds!.length > 1 ? `Investigation report ${i + 1}` : "Investigation report"}
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+        {/* a press on a button is the button's: never the card's hold-to-erase, never its tap-to-edit */}
+        {actions && <div className="fm-ticket-actions" onPointerDown={(e) => e.stopPropagation()}>{actions}</div>}
       </div>
     </ErasableRow>
   );
 
-  /** A ticket in progress: its device, and every record taken on with it. */
+  /** A ticket in progress: ONE card — every record taken on with it, its pill on the first, its buttons inside at the
+   *  bottom (owner, 2026-10-14: the device's name above it said again what its chip says; the pill and the buttons sat
+   *  outside the card). */
   const ticket = (g: TicketGroup) => {
-    const head = g.records[0];
-    const title = head.entityId ? (head.deviceLabel ?? label(deviceOf(head.entityId))) : head.title;
     return (
-      <div key={g.key} className="fm-fault fm-ticket state-due-soon">
-        <div className="fm-fault-head">
-          <div className="fm-row-title"><strong>{title}</strong></div>
-          <span className="fm-badge due-soon">In progress</span>
+      <div key={g.key} className="fm-ticket-card">
+        <div className="fm-ticket-records">
+          {g.records.map((t, i) => record(t, i === 0 ? { text: "In progress", tone: "due-soon" } : undefined,
+            i === 0 ? (closingKey === g.key ? (
+              <InlineConfirm question="Close this ticket? Nothing was done — no cost is recorded." confirmLabel="Close ticket"
+                onConfirm={() => closeNoAction(g.key, g.records.map((r) => r.id))} onCancel={() => setClosingKey(null)} />
+            ) : (
+              <>
+                <button className="btn ghost" onClick={() => setStaging({ tickets: g.records, to: "resolved" })}>Mark resolved</button>
+                {/* the one-step close beside the two-step flow: "Closed without action", no completion, no cost */}
+                <button className="btn ghost" onClick={() => { setCloseError(null); setClosingKey(g.key); }}>Close</button>
+              </>
+            )) : undefined))}
         </div>
-        <div className="fm-ticket-records">{g.records.map((t) => record(t))}</div>
-        {closingKey !== g.key && (
-          <div className="fm-fault-actions">
-            <button className="btn ghost" onClick={() => setStaging({ tickets: g.records, to: "resolved" })}>Mark resolved</button>
-            {/* the one-step close beside the two-step flow: "Closed without action", no completion, no cost */}
-            <button className="btn ghost" onClick={() => { setCloseError(null); setClosingKey(g.key); }}>Close</button>
-          </div>
-        )}
-        {closingKey === g.key && (
-          <div className="fm-row-confirm">
-            <InlineConfirm question="Close this ticket? Nothing was done — no cost is recorded." confirmLabel="Close ticket"
-              onConfirm={() => closeNoAction(g.key, g.records.map((t) => t.id))} onCancel={() => setClosingKey(null)} />
-          </div>
-        )}
         {closeError?.key === g.key && <div className="fm-inline-error fm-row-confirm" role="alert">{closeError.text}</div>}
       </div>
     );
@@ -164,12 +165,10 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
 
       <FoldedList title="Closed" rows={closed} unit="closed record">
         {(t) => (
-          <div key={t.id} className="fm-fault state-ok">
-            {record(t, "Resolved")}
+          <div key={t.id} className="fm-ticket-card">
             {/* reopened, it is a fault again: back on the Overview's list (the VESTA Agent reads it, never guesses) */}
-            <div className="fm-fault-actions">
-              <button className="btn ghost" onClick={() => setStaging({ tickets: [t], to: "open" })}>Reopen</button>
-            </div>
+            {record(t, { text: "Resolved", tone: "ok" },
+              <button className="btn ghost" onClick={() => setStaging({ tickets: [t], to: "open" })}>Reopen</button>)}
           </div>
         )}
       </FoldedList>

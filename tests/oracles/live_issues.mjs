@@ -188,6 +188,13 @@ ck("lists that only grow are ONE folded, paged list (owner, 2026-10-14): Tickets
    /<FoldedList title="Closed" rows=\{closed\}/.test(ticketsTab) && /<FoldedList title="Recent work" rows=\{rows\}/.test(recent)
    && !/usePaged|<Pager|\.slice\(0, limit\)/.test(recent + ticketsTab));
 
+ck("a ticket is ONE card: its pill on the first record, its buttons inside, no device name above (owner, 2026-10-14)",
+   /<div key=\{g\.key\} className="fm-ticket-card">/.test(ticketsTab) && /record\(t, i === 0 \? \{ text: "In progress", tone: "due-soon" \} : undefined,/.test(ticketsTab)
+   && /\{record\(t, \{ text: "Resolved", tone: "ok" \},\s*<button className="btn ghost" onClick=\{\(\) => setStaging\(\{ tickets: \[t\], to: "open" \}\)\}>Reopen<\/button>\)\}/.test(ticketsTab)
+   // the buttons sit INSIDE the card, on the right of its text, and take their own presses
+   && /<div className="fm-ticket-body">[\s\S]*?\{actions && <div className="fm-ticket-actions" onPointerDown=\{\(e\) => e\.stopPropagation\(\)\}>\{actions\}<\/div>\}/.test(ticketsTab)
+   && !/const title = head\.entityId/.test(ticketsTab));
+
 console.log("\n  what happened on Telegram, on the card (owner, 2026-10-14: reminders, escalation, Need help):");
 const N = await import("@/fm/faultNotes");
 const told = { ...rec("s", "switch.pump"), status: "open", updates: [
@@ -223,7 +230,7 @@ ck("a card's lines on the left, its buttons on the right of the same line (owner
    /<div className="cockpit-attention-detail">\s*<ul className="cockpit-attention-subs">[\s\S]*?<\/ul>\s*\{actions\}\s*<\/div>/.test(ov)
    && /\.cockpit-attention-detail \{ display: flex;/.test(readFileSync(new URL("../../src/styles/08-shared.css", import.meta.url), "utf8")));
 ck("a ticket's notes wrap inside its card, never past its edge (owner, 2026-10-14: a long \"VESTA reads\" ran out)",
-   /\.fm-fault \.fm-row-main \{ flex: 1 1 100%; min-width: 0; \}/.test(src("styles/07-facility.css"))
+   /\.fm-ticket-card \.fm-row-main \{ flex: 1 1 100%; min-width: 0; \}/.test(src("styles/07-facility.css"))
    && /\.fm-timeline-note \{[^}]*overflow-wrap: anywhere;/.test(src("styles/07-facility.css")));
 ck("the screens ask stageOf, never the status themselves",
    ["components/fm/TicketsTab.tsx", "components/fm/FaultForm.tsx", "components/fm/TodayTab.tsx"].every((f) => /stageOf\(/.test(src(f)) && !/status === "in_progress"|status !== "in_progress"|status === "open"/.test(src(f))));
