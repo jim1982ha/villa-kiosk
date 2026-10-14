@@ -1,3 +1,11 @@
+## 2.496.369
+
+### Fixed
+- Cockpit → Recap and the monthly figures: a line the VESTA Agent copies from Telegram onto a fault ("Reminder sent to Facility Manager") is never taken for a change of the fault's status. A reminder written onto the card after someone took the fault on could make the month's report count a fault that was still open at month end as "in progress". The fault's notes are also listed in time order.
+
+### Changed
+- The agreement between the Kiosk and the VESTA Agent now declares the fault the Agent writes and reads — its signature, where it was made from (alert, night check, chat), its alert number, what counts as someone taking it on — with a sample both apps are checked against. Nothing changes on screen: a change on one side alone now fails the checks before release.
+
 ## 2.496.368
 
 ### Changed
