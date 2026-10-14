@@ -3151,9 +3151,12 @@ AGENT_MAX_ENTITIES = int(_AGENT_LIMITS.get("entities") or 0)
 AGENT_MAX_LABEL = int(_AGENT_LIMITS.get("buttonLabel") or 0)
 AGENT_BUTTON_ID_RE = re.compile(_AGENT_MSG.get("buttonIdPattern") or r"(?!)")
 AGENT_ENTITY_RE = re.compile(_AGENT_MSG.get("entityPattern") or r"(?!)")
-#: What every Facility record the agent creates or changes carries (PLAN F6).
-AGENT_SOURCE = "vesta_agent"
-AGENT_NAME = "VESTA Agent"
+#: What every Facility record the agent creates or changes carries (PLAN F6) — the agreement's `ticket` (the agent tells
+#: its own steps from a person's by them: declared once, architecture review 2026-10-15). Unreadable agreement: the
+#: words this server always wrote, so a stamp never goes missing.
+_AGENT_TICKET = AGENT_CONTRACT_TABLE.get("ticket") or {}
+AGENT_SOURCE = str(_AGENT_TICKET.get("source") or "vesta_agent")
+AGENT_NAME = str(_AGENT_TICKET.get("agentStamp") or "VESTA Agent")
 AGENT_MESSAGES = JsonStore("agent-messages.json", {"messages": []}, AGENT_STORE_MAX_BYTES)
 AGENT_CHOICES = JsonStore("agent-choices.json", {"choices": [], "next_seq": 1},
                           AGENT_STORE_MAX_BYTES)

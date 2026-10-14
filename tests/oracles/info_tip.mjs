@@ -67,7 +67,7 @@ ck(`  ...and the list's own refresh, from the app's own numbers (${STORE_ACTIVE_
      && t.note.includes(`every ${STORE_HEARTBEAT_MS / 60000} minutes otherwise`)));
 const card = src("components/fm/FaultTiming.tsx");
 ck("the card shows the Agent's rows when an Agent is connected OR one of its faults is open (its icons are on the list)",
-   /faultTiming\(agent\)/.test(card) && /const agent = agentVisible\(status\) \|\| data\.tickets\.some\(\(t\) => t\.source === "vesta_agent" && stageOf\(t\) !== "closed"\);/.test(card)
+   /faultTiming\(agent\)/.test(card) && /const agent = agentVisible\(status\) \|\| data\.tickets\.some\(\(t\) => t\.source === AGENT_SOURCE && stageOf\(t\) !== "closed"\);/.test(card)
    && /rows\.map/.test(card) && /\{note\}/.test(card) && /<table className="info-pop-table">/.test(card));
 ck("it sits just before Open a ticket, on the Overview's title line", /<FaultTiming \/>\s*<button[^>]*>[^<]*<Plus size=\{16\} \/> Open a ticket/.test(src("components/cockpit/CockpitOverview.tsx")));
 

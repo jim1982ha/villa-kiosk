@@ -262,11 +262,29 @@ export function isClearedStep(u: FmTicketUpdate): boolean {
   return isTicketResolved(u) && (n === CLOSED_WITHOUT_ACTION || n.startsWith("Cleared:") || n.startsWith("Closed: the problem is over"));
 }
 
+/** The steps that CHANGED a fault's status, in time order — ONE reading for every figure and the card (architecture
+ *  review, 2026-10-15). A line from Telegram ("noted": "Reminder sent…") and a title step (retitled, reading) carry
+ *  the status the fault had when they were written, and a "noted" line is written minutes after its moment, at the end
+ *  of the list: read as a status change, a reminder at 23:50 written after a take-on at 00:10 made September's report
+ *  count a fault still OPEN at month end as in progress. A step without a kind changes the status; so do reopened and
+ *  cleared. */
+const NOT_A_STATUS_CHANGE: ReadonlySet<string> = new Set(["noted", "retitled", "reading"]);
+export function statusChanges(t: Pick<FmTicket, "updates">): FmTicketUpdate[] {
+  return stepsInTimeOrder(t).filter((u) => u.status && !(u.kind && NOT_A_STATUS_CHANGE.has(u.kind)));
+}
+
+/** A fault's steps in time order (stable: steps at the same moment keep their order) — a line from Telegram is
+ *  written minutes after its moment, at the end of the list. */
+export function stepsInTimeOrder(t: Pick<FmTicket, "updates">): FmTicketUpdate[] {
+  return (t.updates ?? []).map((u, i) => ({ u, i }))
+    .sort((a, b) => (Date.parse(a.u.at) - Date.parse(b.u.at)) || (a.i - b.i)).map(({ u }) => u);
+}
+
 /** The time a fault was really open, in ms: from its opening (or a reopening) to each resolution, never the time it
  *  sat resolved in between (review 31: fixed in 2 h, reopened a month later, fixed in 2 h read 722 h). Without
  *  steps: opened → resolved. Null when it cannot be told. */
 export function openTimeMs(t: FmTicket): number | null {
-  const steps = (t.updates ?? []).filter((u) => u.status);
+  const steps = statusChanges(t);
   if (!steps.some((u) => isTicketResolved(u))) {
     const ms = t.resolvedAt ? Date.parse(t.resolvedAt) - Date.parse(t.openedAt) : NaN;
     return Number.isFinite(ms) && ms >= 0 ? ms : null;
@@ -287,7 +305,7 @@ export function openTimeMs(t: FmTicket): number | null {
  *  that month, never the fault as it is today (review 31: reopened in October, it vanished from September's recap). */
 export function ticketAt(t: FmTicket, iso: string): { status: FmTicket["status"]; resolvedAt?: string } {
   const until = Date.parse(iso);
-  const all = (t.updates ?? []).filter((u) => u.status);
+  const all = statusChanges(t);
   if (!all.length) return { status: t.status, resolvedAt: t.resolvedAt };     // no history: as it is
   const steps = all.filter((u) => Date.parse(u.at) <= until);
   const last = steps[steps.length - 1];
@@ -298,7 +316,7 @@ export function ticketAt(t: FmTicket, iso: string): { status: FmTicket["status"]
 /** Did the fault resolve in `month` ("2026-09")? From its steps — a resolution the fault was later reopened from
  *  counts — else its resolvedAt. */
 export function resolvedInMonth(t: FmTicket, month: string): boolean {
-  const steps = (t.updates ?? []).filter((u) => isTicketResolved(u));
+  const steps = statusChanges(t).filter((u) => isTicketResolved(u));
   const ats = steps.length ? steps.map((u) => u.at) : (t.resolvedAt ? [t.resolvedAt] : []);
   return ats.some((a) => monthKey(a) === month);
 }

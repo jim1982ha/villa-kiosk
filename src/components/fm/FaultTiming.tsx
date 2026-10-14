@@ -15,11 +15,12 @@ import { stageOf } from "@/fm/fmEngine";
 import { useFmData } from "@/fm/FmDataContext";
 import { useAgent } from "@/agent/AgentContext";
 import { agentVisible } from "@/agent/agentView";
+import { AGENT_SOURCE } from "@/fm/fmTypes";
 
 export default function FaultTiming() {
   const { status } = useAgent();
   const { data } = useFmData();
-  const agent = agentVisible(status) || data.tickets.some((t) => t.source === "vesta_agent" && stageOf(t) !== "closed");
+  const agent = agentVisible(status) || data.tickets.some((t) => t.source === AGENT_SOURCE && stageOf(t) !== "closed");
   const { rows, note } = faultTiming(agent);
   return (
     // two-thirds wider than an (i)'s card: its three columns take fewer lines on a desktop (owner, 2026-10-14); a phone
