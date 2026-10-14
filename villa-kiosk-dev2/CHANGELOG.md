@@ -1,3 +1,11 @@
+## 2.496.347
+
+### Added
+- Cockpit → Faults: an (i) next to "Raise a fault" explains, in a short table, when a fault opens and when it closes for each source (an alert from a Home Assistant rule, a device found offline by the nightly check, a device deleted from Home Assistant, a maintenance trend, or a person), and how often the list refreshes (every 15 seconds while it is open, every 3 minutes otherwise, and as soon as you come back to the app).
+
+### Fixed
+- Every (i) in the app now opens with a tap on a phone, iPhone included. On an iPhone the (i) used to do nothing (Safari does not focus a tapped button, which is what opened it). A tap opens it, a tap elsewhere or Escape closes it; a mouse still opens it on hover. This also applies to the (i) beside the 3D model upload in Advanced Settings.
+
 ## 2.496.346
 
 ### Fixed
