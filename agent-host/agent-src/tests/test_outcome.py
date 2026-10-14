@@ -119,7 +119,7 @@ def test_the_tasks_and_the_kiosks_tickets_agree(agent):
     # alert's message loses its buttons (villa, 2026-10-01: it kept reminding, then escalated to the owner)
     assert st.task(alert)["status"] == "closed_in_kiosk" and st.incident(iid)["closed_at"]
     # owner, 2026-10-10: who closed it in the Cockpit, and when — as a button's footer says it
-    assert any("Closed in the VESTA Kiosk by Facility manager on 10/10/2026 " in text for _, _, text in v.tg.edits)
+    assert any("Closed in the Cockpit by Facility manager on 10/10/2026 " in text for _, _, text in v.tg.edits)
 
 
 def test_one_occasion_answers_every_routing_question():

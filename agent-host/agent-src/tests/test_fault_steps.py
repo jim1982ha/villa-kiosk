@@ -141,7 +141,7 @@ def test_a_night_fault_a_person_reopens_tells_the_facility_manager(tmp_path):
     k.person_reopens("t-pump", by="Owner")
     run(v.tickets.repair())
     assert st.task(tid)["status"] == "open"
-    assert len(told) == 1 and told[0].startswith("Reopened in the VESTA Kiosk by Owner on ") \
+    assert len(told) == 1 and told[0].startswith("Reopened in the Cockpit by Owner on ") \
         and told[0].endswith(": Pump weak. Please look again.")
     run(v.tickets.repair())
     assert len(told) == 1                                                             # once
@@ -248,7 +248,7 @@ def test_a_reopen_of_a_fault_closed_days_ago_is_heard(tmp_path):
         st.db.execute("UPDATE tasks SET done_at=? WHERE id=?", ((datetime.now(timezone.utc) - timedelta(days=5)).isoformat(), tid))
     k.person_reopens("t-pump", by="Owner")
     run(v.tickets.repair())
-    assert st.task(tid)["status"] == "open" and told and told[0].startswith("Reopened in the VESTA Kiosk by Owner on 01/01/2099 00:00: ")
+    assert st.task(tid)["status"] == "open" and told and told[0].startswith("Reopened in the Cockpit by Owner on 01/01/2099 00:00: ")
 
 
 def test_a_person_who_renames_a_fault_to_the_agents_own_words_keeps_it():

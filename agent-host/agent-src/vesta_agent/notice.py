@@ -144,9 +144,15 @@ class Notices:
         word = self.word(int(incident), stage, bool(history))
         lines = [f"- … {h['dropped']} earlier notice{'s' if h['dropped'] > 1 else ''}" if h.get("dropped") else
                  f"- {h['note']}" if h.get("note") else
+                 f"- {self._pressed(h)} {when(datetime.fromisoformat(h['at']), self.tz)}" if h.get("stage") == PRESSED_STAGE else
                  f"- {STAGES.get(h.get('stage'), 'Sent')} {when(datetime.fromisoformat(h['at']), self.tz)} "
-                 f"to {audience(self._roles(h)) or 'nobody'}" for h in history if h.get("stage") != PRESSED_STAGE]
+                 f"to {audience(self._roles(h)) or 'nobody'}" for h in history]
         return "\n".join([f"{incident_tag(incident)}{f'-{p}' if p else ''} ({word})", f"{TO}{who}", *lines])
+
+    @staticmethod
+    def _pressed(h: dict) -> str:
+        """A press as every reader tells it — Telegram's Status and the Kiosk card: "🆘 Need help pressed by Fabien"."""
+        return f"{MARK_ICONS.get(h.get('mark') or '', '')} {h.get('label')} pressed by {h.get('name')}".strip()
 
     def story(self, incident: int) -> list[dict]:
         """What a fault's card in the Kiosk tells of incident `incident`'s Telegram life, oldest first: [{at, note}] —
@@ -158,8 +164,7 @@ class Notices:
             if h.get("stage") in NOTED_STAGES:
                 out.append({"at": h["at"], "note": f"{STAGES[h['stage']]} to {audience(self._roles(h)) or 'nobody'}"})
             elif h.get("stage") == PRESSED_STAGE:
-                icon = MARK_ICONS.get(h.get("mark") or "", "")
-                out.append({"at": h["at"], "note": f"{icon} {h.get('label')} pressed by {h.get('name')}".strip()})
+                out.append({"at": h["at"], "note": self._pressed(h)})
         return out
 
     def word(self, incident: int, stage: str | None = None, history: bool = True) -> str:
@@ -197,6 +202,10 @@ class Notices:
     def record(self, incident: int, stage: str | None, sent: list[tuple[int, object]], at: datetime | None = None) -> None:
         """A notice about `incident` went to `sent` — (chat, the role or roles it was for) — one result's messages being one
         notice: its history line, each chat with the roles it was for. `stage` unset: "new" for the first, "update" after."""
+        if stage == PRESSED_STAGE:
+            # the answer to a press in its own chat: the press itself is the story's line (note_press) — recorded as
+            # "Update sent", it told the same press as two events (architecture review, 2026-10-15)
+            return
         history = self.state.incident_history(incident)
         chats = [[int(c), sorted(self.roles_for(c, to))] for c, to in sent]
         history.append({"at": (at or datetime.now(timezone.utc)).isoformat(), "chats": chats,

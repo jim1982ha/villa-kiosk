@@ -51,7 +51,9 @@ def finding_name(finding: dict) -> str | None:
 
 #: What a notice about an incident is (its history line, vesta_agent/notice.py): the first one, a reminder to the same
 #: people, an escalation to others, any other update (an answer, a closing).
-STAGES = ("new", "reminder", "escalated", "update", "back", "still", "reopened", "closed")
+# "pressed": the answer to a button press in its own chat — not a notice of its own: the press is the incident's
+# story line (notice.note_press), never also an "Update sent" (architecture review, 2026-10-15)
+STAGES = ("new", "reminder", "escalated", "update", "back", "still", "reopened", "closed", "pressed")
 
 
 #: What a bottom line says beyond its stage (vesta_agent/layout.py draws it): a person asked for help; a closure VESTA

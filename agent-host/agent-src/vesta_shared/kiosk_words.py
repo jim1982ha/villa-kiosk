@@ -9,6 +9,10 @@ from datetime import datetime
 from .timeutil import moment_label
 
 
+# ⚠️ ONE NAME FOR THE PLACE (architecture review, 2026-10-15): one Status list read "Closed in the VESTA Kiosk by …" and
+# "Ticket opened in the Cockpit by …" — the same place, two names. It is "the Cockpit", where the person did it.
+
+
 def when(iso: str | None, zone: str) -> str:
     """The Kiosk's moment ("…Z") in the villa's time, as every notice writes one; "{time}" (now, filled when sent)
     when the Kiosk gave none."""
@@ -20,7 +24,7 @@ def when(iso: str | None, zone: str) -> str:
 
 def closed(by: str, iso: str | None, zone: str) -> str:
     """"Closed in the VESTA Kiosk by Fabien on 11/10/2026 07:05" — no full stop: a sentence may go on after it."""
-    return f"Closed in the VESTA Kiosk{f' by {by}' if by else ''} on {when(iso, zone)}"
+    return f"Closed in the Cockpit{f' by {by}' if by else ''} on {when(iso, zone)}"
 
 
 def taken(by: str, iso: str | None, zone: str) -> str:
@@ -32,5 +36,5 @@ def taken(by: str, iso: str | None, zone: str) -> str:
 def reopened(by: str, iso: str | None, zone: str, what: str | None = None) -> str:
     """"Reopened in the VESTA Kiosk by Owner on 11/10/2026 07:05: Pump weak. Please look again." — `what` when the
     message carries no alert of its own (a night check's fault)."""
-    return f"Reopened in the VESTA Kiosk{f' by {by}' if by else ''} on {when(iso, zone)}" + \
+    return f"Reopened in the Cockpit{f' by {by}' if by else ''} on {when(iso, zone)}" + \
         (f": {what}." if what else ".") + " Please look again."

@@ -228,9 +228,9 @@ class Tickets:
                     # task's run on (an earlier run's lines belong to the fault as it was then)
                     if want["number"] and self.kiosk.says(NOTED):
                         since = _moment(t.get("reopened_at") or t.get("created_at"))
-                        have = set(card.get("noted") or [])
+                        have = {at for at, _note in card.get("noted") or []}            # by its moment (Kiosk.note_ticket)
                         lines = [x for x in self.story(want["number"]) if (since is None or (_moment(x["at"]) or since) >= since)
-                                 and (x["at"], x["note"][:500]) not in have]
+                                 and x["at"] not in have]
                         if lines:
                             fixed += await self.kiosk.note_ticket(uid, lines)
                 elif card["status"] != "resolved" and (t.get("done_at") or "") >= recent:

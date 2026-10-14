@@ -631,10 +631,10 @@ def reply(store: Store, iid: int, option: str, sender_role: str, now: datetime, 
         helped = pressed.rstrip(".") + ": the owner is asked to act."
         out["send"].append(R.message("owner", **about(inc, helped), incident=iid, buttons=True, stage="escalated",
                                      mark=button.get("mark")))
-        out["send"].append(here(helped, mark=button.get("mark")))
+        out["send"].append(here(helped, "pressed", mark=button.get("mark")))
     else:
         store.update_incident(iid, reply=label)
-        out["send"].append(here(f"Noted from {who} on {{time}}: {label}"))
+        out["send"].append(here(f"Noted from {who} on {{time}}: {label}", "pressed"))
     # the answer, on the alert and its reminders in every chat (a button press has already done it, by name)
     if option in BUTTONS:
         out["settle"] = [R.settle(iid, pressed, mark=button.get("mark"))]
@@ -662,8 +662,9 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
             store.update_incident(inc["id"], payload=json.dumps(p))
             # who and when the Kiosk recorded, in the one wording (vesta_shared.kiosk_words; review 29) — an older
             # record held only the name
-            said = said if said.startswith("Reopened in the VESTA Kiosk") else \
-                f"Reopened in the VESTA Kiosk by {said} on {{time}}. Please look again."
+            # (a record written before 0.12.202 says "in the VESTA Kiosk": kept as written)
+            said = said if said.startswith(("Reopened in the Cockpit", "Reopened in the VESTA Kiosk")) else \
+                f"Reopened in the Cockpit by {said} on {{time}}. Please look again."
             out["send"].append(R.message("fm", **about(inc, said), stage="reopened", incident=inc["id"], buttons=True))
             continue
         if p.get("unreached") and inc["state"] in (Incident.ASKED, Incident.REASKED):

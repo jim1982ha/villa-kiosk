@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.194 (15 October 2026)
+
+Architecture review, 2026-10-15:
+- #2: agent-contract.json `ticket` (stamp, source, origins, fields, takenStep, sample) copied from the Kiosk;
+  tests/test_contract_ticket.py holds AGENT_BY, the origins problems.card/tickets write, and held_tickets on the sample.
+- #3: a card's Telegram lines matched by their MOMENT, never their words (kiosk.note_ticket, tickets._converge) — a
+  rewording no longer re-adds them; a press is the story's line on Telegram too (Notices.heading renders "pressed",
+  `_pressed`), and its answer in its own chat is stage "pressed", not recorded (result.STAGES + Notices.record);
+  kiosk_words: "in the Cockpit" (desk reads the old "in the VESTA Kiosk" too). shipped-skills recorded.
+
 ## 0.6.193 (15 October 2026)
 
 - Every person-facing text without "Home Assistant" (owner, 2026-10-15): alert-desk desk.py statuses and notes,

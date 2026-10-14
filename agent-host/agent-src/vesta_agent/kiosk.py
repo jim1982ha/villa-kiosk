@@ -279,10 +279,11 @@ class Kiosk:
                 if isinstance(t, dict) and t.get("id") == tid:
                     if t.get("status") == "resolved":
                         return False
-                    have = {(u.get("at"), u.get("note")) for u in t.get("updates") or [] if isinstance(u, dict)
-                            and u.get("kind") == NOTED}
+                    # ⚠️ BY ITS MOMENT, NEVER ITS WORDS (architecture review, 2026-10-15): a reworded stage ("Reminder sent")
+                    # or a People change re-wrote every past line, and each was added again under the new words
+                    have = {u.get("at") for u in t.get("updates") or [] if isinstance(u, dict) and u.get("kind") == NOTED}
                     new = [{"at": x["at"], "status": t.get("status") or "open", "photoIds": [], "kind": NOTED,
-                            "note": str(x["note"])[:500]} for x in lines if (x["at"], str(x["note"])[:500]) not in have]
+                            "note": str(x["note"])[:500]} for x in lines if x["at"] not in have]
                     if not new:
                         return False
                     tickets[i] = dict(t, updates=list(t.get("updates") or []) + new)

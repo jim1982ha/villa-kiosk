@@ -267,7 +267,7 @@ class Problems:
         self.store.reopen_finding(last["id"], f.severity, f.summary, f.detail, day, seen)
         return last["id"]
 
-    def closed_in_kiosk(self, task_id: int, said: str = "Closed in the VESTA Kiosk") -> int | None:
+    def closed_in_kiosk(self, task_id: int, said: str = "Closed in the Cockpit") -> int | None:
         """A person closed the task's fault in the VESTA Kiosk: the task closes, and so does the incident
         it came from (the alert desk stops chasing it). Returns that incident's id, for its messages. `said`: who and
         when, as kiosk_words.closed writes it — the desk's check after it says it again (review 29: "Closed in the
@@ -283,7 +283,7 @@ class Problems:
                 # desk reads it again once (quiet_after_done), when its rule names its states
                 p = json.loads(inc.get("payload") or "{}")
                 p["check_quiet"] = said
-                self.store.update_incident(sid, state=Incident.DONE, reply="Closed in the VESTA Kiosk",
+                self.store.update_incident(sid, state=Incident.DONE, reply="Closed in the Cockpit",
                                            closed_at=self.store.now(), payload=json.dumps(p))
                 return sid
         return None
