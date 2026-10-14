@@ -257,7 +257,7 @@ export function flowTipRows(n: FlowNode, tree: FlowNode, now: string): { key: st
     ...(now ? [{ key: "n", text: now }] : []),
     ...n.members.slice(0, 8).map((m, k) => ({ key: `m${k}`, text: `↳ ${m.label} ${fmtKwh(m.kwh)} kWh` })),
     ...(n.members.length > 8 ? [{ key: "more", text: `↳ ${n.members.length - 8} more` }] : []),
-    ...(n.kind === "untracked" ? [{ key: "x", text: "no device meter in Home Assistant accounts for it" }] : []),
+    ...(n.kind === "untracked" ? [{ key: "x", text: "no device meter accounts for it" }] : []),
   ];
 }
 

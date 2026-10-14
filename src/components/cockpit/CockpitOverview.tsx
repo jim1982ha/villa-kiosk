@@ -237,7 +237,7 @@ export default function CockpitOverview({ onOpenEntity, doors, reportFaultFor, o
       {/* ── Recent activity ─────────────────────────────────────── */}
       <div className="settings-section-title"><Activity size={16} style={{ verticalAlign: -2 }} /> Recent activity</div>
       {villaActivity === "loading" && <p className="muted body-text">Loading…</p>}
-      {villaActivity === "error" && <p className="muted body-text">Couldn't reach Home Assistant's activity log.</p>}
+      {villaActivity === "error" && <p className="muted body-text">Couldn't read the activity log.</p>}
       {Array.isArray(villaActivity) && villaActivity.length === 0 && (
         <p className="muted body-text">Nothing in the last 6 hours.</p>
       )}

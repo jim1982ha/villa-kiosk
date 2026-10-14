@@ -95,7 +95,7 @@ export default function BindingsTable() {
           entity" sat under its own smaller heading and finer print, as if it
           were another section — it is this section's way to add an entity. */}
       <p className="muted body-text">
-        Each bound 3D object controls a Home Assistant entity when tapped in the
+        Each bound 3D object controls a device's entity when tapped in the
         villa: change which entity here, without reloading the model — its name
         and display settings are with the device, in Devices. To prepare an entity whose 3D object is not in the model yet,
         add it below — its settings apply as soon as a model with an object
@@ -161,7 +161,7 @@ export default function BindingsTable() {
         {unmappedHaEntities.length > 0 && (
           <button className="btn ghost" onClick={() => setShowUnmappedHa((s) => !s)}>
             {showUnmappedHa ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-            {unmappedHaEntities.length} HA entit{unmappedHaEntities.length === 1 ? "y" : "ies"} not shown
+            {unmappedHaEntities.length} entit{unmappedHaEntities.length === 1 ? "y" : "ies"} not shown
           </button>
         )}
       </div>
@@ -217,7 +217,7 @@ export default function BindingsTable() {
       {showUnmappedHa && (
         <>
           <p className="muted body-text mt">
-            These exist in Home Assistant but no 3D object resolves to them, so
+            These entities exist but no 3D object resolves to them, so
             they have no badge, panel or place on the map — add an object for
             one in the 3D model (or bind an existing unbound object above) to
             make it controllable from the villa.

@@ -150,7 +150,7 @@ function SceneMenu({ scenes, canRun, apply }: {
         // opens IS the list, so printing its length beside it said the same
         // thing twice, which is what was reported as clutter.
         aria-label={`Scenes (${scenes.length})`}
-        title={`${scenes.length} scene${scenes.length === 1 ? "" : "s"} from Home Assistant — tap to run one`}
+        title={`${scenes.length} scene${scenes.length === 1 ? "" : "s"} — tap to run one`}
         onClick={toggle}
       >
         <span className="summary-tile-icon"><Sparkles size={20} /></span>

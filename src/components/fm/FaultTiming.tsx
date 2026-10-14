@@ -27,7 +27,8 @@ export default function FaultTiming() {
     <InfoTip label="What the icons mean, and when each problem comes and goes" width={Math.round(INFO_TIP_WIDTH * 1.66)}>
       <strong className="info-pop-title">What the icons mean, and when each problem comes and goes</strong>
       <table className="info-pop-table">
-        <thead><tr><th>Source</th><th>Appears</th><th>Goes</th></tr></thead>
+        {/* "Appears" and "Goes" in ONE column, the same width: the card is less tall (owner, 2026-10-15) */}
+        <thead><tr><th>Source</th><th>When</th></tr></thead>
         <tbody>{rows.map((r) => {
           const Icon = SOURCE_ICON[r.source];
           return (
@@ -36,8 +37,10 @@ export default function FaultTiming() {
                 <span className="info-pop-source"><Icon size={15} aria-hidden /> <b>{SOURCE_WORDS[r.source]}</b></span>
                 <span className="info-pop-what">{r.what}</span>
               </td>
-              <td>{r.opens}</td>
-              <td>{r.goes}</td>
+              <td>
+                <span className="info-pop-when"><b>Appears:</b> {r.opens}</span>
+                <span className="info-pop-when"><b>Goes:</b> {r.goes}</span>
+              </td>
             </tr>
           );
         })}</tbody>

@@ -32,7 +32,7 @@ export function isUnavailable(entity: HassEntity | undefined): boolean {
 /** What every surface calls a device whose entity Home Assistant does not have at all — a 3D object named after an
  *  entity that was renamed or removed (owner, 2026-10-14: the model is the ground truth, and the Kiosk says so
  *  everywhere: Needs attention, the device's window, Advanced Settings). */
-export const NOT_IN_HA = "Not in Home Assistant";
+export const NOT_IN_HA = "Missing";
 
 /** Home Assistant does not have `id` — answered only once HA's list is loaded (an empty list is "not yet", never
  *  "every device is gone"). */

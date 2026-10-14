@@ -160,9 +160,9 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
       {staleIds.length > 0 && (
         <div className="config-stale-notice">
           <div>
-            <strong>{staleIds.length} entit{staleIds.length === 1 ? "y" : "ies"} no longer in Home Assistant.</strong>
+            <strong>{staleIds.length} entit{staleIds.length === 1 ? "y" : "ies"} no longer exist{staleIds.length === 1 ? "s" : ""}.</strong>
             <div className="muted body-text" style={{ marginTop: 2 }}>
-              Home Assistant no longer has these entities and the 3D model no longer
+              These entities no longer exist and the 3D model no longer
               names them (they came from an earlier model, or were added by hand).
               They do nothing except clutter this list.
             </div>
@@ -189,7 +189,7 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
       {allRows.length === 0 && (
         <p className="muted body-text mt">
           No auto-detected entities yet. Upload a GLB whose objects are named
-          after HA entity IDs, or pre-configure one in the
+          after entity IDs, or pre-configure one in the
           <strong> Bound 3D objects</strong> section below.
         </p>
       )}
@@ -197,9 +197,9 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
       {orphans.map((id) => (
         <div key={id} className="config-stale-notice config-repoint">
           <div>
-            <strong>Home Assistant has no entity {id}.</strong>
+            <strong>No entity {id} exists.</strong>
             <div className="muted body-text" style={{ marginTop: 2 }}>
-              A 3D object in the model is named after it, so it shows as not in Home Assistant everywhere. If the
+              A 3D object in the model is named after it, so it shows as missing everywhere. If the
               entity was renamed, point the object at its new name; otherwise rename or remove the object in the model.
             </div>
             <div className="remap-row" style={{ marginTop: 8 }}>

@@ -75,7 +75,7 @@ export default function MappingFields({ entityId, mapping, entity, onPatch, cell
       {cell("label", "Label", (
         // Saved half a second after typing stops, or at once on leaving the field.
         <input style={selectStyle ? { ...selectStyle, cursor: "text", flex: 1, minWidth: 80 } : undefined}
-          placeholder={named.placeholder} title="Display name — leave empty to use Home Assistant's name"
+          placeholder={named.placeholder} title="Display name — leave empty to use the device's own name"
           value={label.drafts.v ?? named.value}
           onChange={(e) => label.draft("v", e.target.value)}
           onBlur={() => label.flush("v")} />
@@ -94,7 +94,7 @@ export default function MappingFields({ entityId, mapping, entity, onPatch, cell
             onChange={(e) => intensity.draft("v", Number(e.target.value) / 100)}
             onMouseUp={() => intensity.flush("v")}
             onTouchEnd={() => intensity.flush("v")}
-            title="Per-light brightness override on top of this light's live Home Assistant brightness and the global Light effect strength setting. 0% = no change."
+            title="Per-light brightness override on top of this light's live brightness and the global Light effect strength setting. 0% = no change."
             aria-label={`Intensity override for ${entityId}`} />
           <span className="muted" style={{ fontSize: "var(--text-xs)", minWidth: 40, textAlign: "right" }}>
             {pct > 0 ? "+" : ""}{pct}%

@@ -57,8 +57,8 @@ export default function ContractTermsEditor() {
       {/* ONE paragraph, its sentences run on (owner, 2026-10-14: no blank line between them) */}
       <p className="muted body-text fm-form-intro">
         Shared by every device. {terms.currency
-          ? <>Amounts are in {terms.currency}, the currency set in Home Assistant (Settings → System → General).</>
-          : <>No currency is set in Home Assistant, so amounts show as plain numbers (set one in Settings → System → General).</>}
+          ? <>Amounts are in {terms.currency}, the villa's currency.</>
+          : <>No currency is set for the villa, so amounts show as plain numbers.</>}
         {" "}Spend is recorded as <b>Minor</b> (routine work, counted against the cap) or <b>Major</b> (larger work,
         always outside the cap).
       </p>

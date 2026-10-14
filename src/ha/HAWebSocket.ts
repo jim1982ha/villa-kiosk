@@ -151,7 +151,7 @@ export class HAWebSocket {
       let settled = false;
       // Guarantee the connect() promise always settles, so callers never hang
       // if HA is unreachable or the socket closes before authentication.
-      const timeout = setTimeout(() => finish(() => reject(new Error("Connection timed out — check the HA URL and that the device is reachable."))), 10000);
+      const timeout = setTimeout(() => finish(() => reject(new Error("Connection timed out — check the server address and that the device is reachable."))), 10000);
       const finish = (action: () => void) => {
         if (settled) return;
         settled = true;
@@ -232,7 +232,7 @@ export class HAWebSocket {
               this.authInvalidReported = true;
               captureError("HA_AUTH_INVALID", new Error(msg.message ?? "auth_invalid"), "HAWebSocket");
             }
-            finish(() => reject(new Error(msg.message ?? "Home Assistant rejected the add-on's authentication.")));
+            finish(() => reject(new Error(msg.message ?? "The add-on's sign-in was refused.")));
             this.ws?.close();
             break;
           case "result":
@@ -290,7 +290,7 @@ export class HAWebSocket {
         this.setState("disconnected");
         this.rejectAllPending(new Error("Connection closed"));
         // If we never authenticated, settle the connect() promise as a failure.
-        finish(() => reject(new Error("Could not reach Home Assistant at this URL.")));
+        finish(() => reject(new Error("Could not reach the server at this address.")));
         if (!this.manuallyClosed) this.scheduleReconnect();
       };
 
@@ -370,7 +370,7 @@ export class HAWebSocket {
   sendMessage<T = unknown>(type: string, payload: Record<string, unknown> = {}): Promise<T> {
     return new Promise((resolve, reject) => {
       if (this.state !== "connected" || !this.ws) {
-        reject(new Error("Not connected to Home Assistant"));
+        reject(new Error("Not connected"));
         return;
       }
       const id = this.nextId();
@@ -378,7 +378,7 @@ export class HAWebSocket {
       // caller forever — settle with a clear error after 10s.
       const timer = setTimeout(() => {
         if (this.pending.delete(id)) {
-          reject(new Error("Home Assistant did not respond"));
+          reject(new Error("No answer from the server"));
           this.sendPing(); // probe the socket — a dead one reconnects in ≤5s
         }
       }, 10000);
@@ -397,7 +397,7 @@ export class HAWebSocket {
   ): Promise<() => void> {
     return new Promise((resolve, reject) => {
       if (this.state !== "connected" || !this.ws) {
-        reject(new Error("Not connected to Home Assistant"));
+        reject(new Error("Not connected"));
         return;
       }
       const id = this.nextId();
@@ -415,7 +415,7 @@ export class HAWebSocket {
       const timer = setTimeout(() => {
         if (this.pending.delete(id)) {
           this.sessions.delete(id);
-          reject(new Error("Home Assistant did not respond"));
+          reject(new Error("No answer from the server"));
         }
       }, 10000);
       this.pending.set(id, {

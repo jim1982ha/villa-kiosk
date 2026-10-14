@@ -40,7 +40,7 @@ const BADGE_ITEMS: { label: string; state: DeviceSurfaceState; ringState?: Devic
   { label: "Needs attention", state: "alert",
     note: "Filled red — the device needs attention (an unlocked door, a leak, low battery…)" },
   { label: "Unavailable", state: "unavailable",
-    note: "Neutral square, dashed amber ring — Home Assistant has lost contact with this device" },
+    note: "Neutral square, dashed amber ring — contact with this device is lost" },
 ];
 
 /** A room chip: its border says whether something is on; its number's colour
@@ -51,7 +51,7 @@ const CHIP_RINGS: { label: string; frame: "active" | "rest"; note: string }[] = 
 ];
 const CHIP_COUNTS: { label: string; health: "alert" | "unavailable" | "ok"; note: string }[] = [
   { label: "Green number", health: "ok", note: "All right — every device is reporting and nothing needs attention" },
-  { label: "Amber number", health: "unavailable", note: "Home Assistant has lost contact with a device in the room" },
+  { label: "Amber number", health: "unavailable", note: "Contact is lost with a device in the room" },
   { label: "Red number", health: "alert", note: "Something in the room needs attention (an unlocked door, a leak…) — shown before amber" },
 ];
 
@@ -64,7 +64,7 @@ const STATUS_ITEMS: { label: string; swatch: string; note: string }[] = [
   { label: "Off / idle", swatch: STATUS_COLOR.idle, note: "Device is off or in its resting state — or a door or window standing open" },
   { label: "In progress", swatch: STATUS_COLOR.transitional,
     note: "Moving between the two — opening, closing, locking, arming" },
-  { label: "Unavailable", swatch: STATUS_COLOR.unavailable, note: "Home Assistant has lost contact — state unknown" },
+  { label: "Unavailable", swatch: STATUS_COLOR.unavailable, note: "Contact lost — state unknown" },
   { label: "Alert", swatch: STATUS_COLOR.alert, note: "Needs attention (e.g. unlocked door, jammed lock, leak) — or, in a sensor's history, a detection (motion, occupancy)" },
 ];
 
