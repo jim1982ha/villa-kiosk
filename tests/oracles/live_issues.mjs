@@ -200,6 +200,9 @@ ck("  ...and Recent work is the SCHEDULED work: a ticket's repair is told on its
    /\.filter\(\(c\) => completionSource\(data, c\)\.kind === "schedule"\)/.test(recent)
    && /const work = data\.completions\.find\(\(c\) => c\.ticketId === t\.id && c\.costId\);/.test(ticketsTab));
 
+ck("a card's \"Opened … by …\" stays on its pills' line and wraps there (owner, 2026-10-15)",
+   /\.fm-meta-when \{ font-size: var\(--text-xs\); flex: 1 1 0; min-width: 14em; \}/.test(readFileSync(new URL("../../src/styles/07-facility.css", import.meta.url), "utf8")));
+
 console.log("\n  what happened on Telegram, on the card (owner, 2026-10-14: reminders, escalation, Need help):");
 const N = await import("@/fm/faultNotes");
 const told = { ...rec("s", "switch.pump"), status: "open", updates: [

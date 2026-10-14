@@ -1,3 +1,8 @@
+## 2.496.368
+
+### Changed
+- Cockpit → every card (tickets, closed tickets, work done, spend): "Opened … · in progress since … by …" starts on the same line as the pills ("by VESTA Agent", the device) and wraps from there, instead of dropping below them as soon as it was too long to fit beside them whole.
+
 ## 2.496.367
 
 ### Changed
