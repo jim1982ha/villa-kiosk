@@ -242,6 +242,11 @@ INSTRUCTION_REWRITES = (
     ("A job for the facility manager is a ticket (create_ticket) in the villa's Facility records: it acts on nothing.",
      "A job for the facility manager is a ticket (create_ticket) in the villa's Facility records: it acts on nothing. "
      "In a chat it is only offered, with a button under your answer: never say a fault was created."),
+    # rules 5 and 6 (0.12.201): the people never read "Home Assistant" (owner, 2026-10-15)
+    ("5. A missing villa parameter: say which Home Assistant helper to create.",
+     "5. A missing villa parameter: say which villa setting is missing."),
+    ("say the device's name and the room.",
+     "say the device's name and the room. Never name Home Assistant (or HA) to a person: say \"the villa's system\"."),
 )
 
 

@@ -123,7 +123,7 @@ def facts(data: dict | None, around: dict | None, notes: dict | None = None) -> 
     for e in data.get("entities") or []:
         name = e.get("label") or e.get("entity_id")
         if e.get("nothing"):
-            cannot.append(f"{name}: Home Assistant kept no reading of it in this period, so it cannot be judged.")
+            cannot.append(f"{name}: no reading of it was kept in this period, so it cannot be judged.")
         cut = _t(e.get("cut"))
         if cut:
             cannot.append(f"{name}: its records could not be read after {clock(cut)}, so nothing is known of it after "

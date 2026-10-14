@@ -110,7 +110,7 @@ def done_words(decision: Decision, names: Callable[[str], str], result: dict, se
     said plainly in its place: the message never claims what did not happen."""
     verb, target, extra = _words(decision, names)
     if result.get("failed"):
-        return f"{verb} {target}{extra}: Home Assistant refused it, nothing was done."
+        return f"{verb} {target}{extra}: the villa's system refused it, nothing was done."
     bad = result.get("unconfirmed") or []
     if bad and not settled and verb in PROGRESS:
         # ⚠️ NOT YET IS NOT "DID NOT" (owner, 2026-10-10: "the curtain is actually well opened"): a curtain reads "closed"
@@ -277,7 +277,7 @@ class Actions:
         state = "moving" if moving else "done" if result["ok"] else "failed"
         self.state.finish_approval(aid, state, result)
         said = "Done." if result["ok"] else "Approved: on its way." if moving else \
-            "Home Assistant refused it." if result.get("failed") else "Sent, not confirmed."
+            "The villa's system refused it." if result.get("failed") else "Sent, not confirmed."
         return {"toast": said, "state": state, "by": person.name,
                 "body": done_words(d, self.names, result, settled=not moving), "executed": True, "result": result,
                 "follow": d if moving else None}
@@ -307,7 +307,7 @@ class Actions:
             self.state.log("failed", {"domain": d.domain, "service": d.service, "entities": d.entity_ids, "error": str(e)[:300]})
             log.warning("Approved %s.%s on %s failed: %s", d.domain, d.service, ", ".join(d.entity_ids) or "-", str(e)[:300])
             return {"ok": False, "failed": True,
-                    "text": f"Home Assistant refused or failed ({type(e).__name__}). Nothing confirmed."}
+                    "text": "The villa's system refused or failed. Nothing confirmed."}
         self.state.log("executed", {"domain": d.domain, "service": d.service, "entities": d.entity_ids, "data": d.data})
         try:
             self.on_executed(d.domain, d.service, list(d.entity_ids))

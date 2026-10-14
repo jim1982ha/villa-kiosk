@@ -360,20 +360,20 @@ def resolved(store: Store, ev: dict, now: datetime) -> dict:
         if late:
             out["incident_id"], out["decision"] = late["id"], "resolved_late"
             out["ha_messages"] = [R.ha_message(late["id"], context=ev.get("_context_id"),
-                                               **about(late, "Cleared in Home Assistant on {time}."))]
+                                               **about(late, "Cleared on {time}."))]
         return out
-    _close(store, inc, now, out, "Cleared in Home Assistant on {time}.")
+    _close(store, inc, now, out, "Cleared on {time}.")
     out["incident_id"], out["decision"] = inc["id"], "resolved"
     # Home Assistant's all-clear takes the incident's number and the original alert, and replaces its older ones
     # its status in the desk's words, as every other end says it (never "✅ <the alert's name> — resolved after …")
     out["ha_messages"] = [R.ha_message(inc["id"], context=ev.get("_context_id"),
-                                       **about(inc, "Cleared in Home Assistant on {time}."))]
+                                       **about(inc, "Cleared on {time}."))]
     store.audit("alert-desk", "resolved", {"incident": inc["id"]})
     return out
 
 
 def _close(store: Store, inc: dict, now: datetime, out: dict, settled: str,
-           note: str = "Cleared: Home Assistant reports it is back to normal.") -> None:
+           note: str = "Cleared: back to normal.") -> None:
     """An incident that is over: closed with its task and its Kiosk fault (`note`: what the fault says), its messages in
     every chat lose their buttons and say `settled`; the facility manager, when still chased, is told the same — ONE
     wording per end (owner, 2026-10-11: the group read "Cleared in Home Assistant on …" and the
@@ -433,7 +433,7 @@ def still_there(inc: dict, client) -> tuple[bool | None, list[str]]:
     if p.get("claim"):
         said = str(client.template(str(p["claim"]))).strip().lower()
         if said == "true":
-            return True, ["Home Assistant still reports it"]
+            return True, ["it is still reported"]
         return (False, []) if said == "false" else (None, readings())
     if rs:
         bad = [f"{name(e)} still reads {states[e]['state']}" for e in ents if (states.get(e) or {}).get("state") in rs[1]]
@@ -518,7 +518,7 @@ def seen_again(store: Store, now: datetime, client, clear_minutes: float, out: d
             store.update_incident(inc["id"], payload=json.dumps(p))
             if now - datetime.fromisoformat(since) < timedelta(minutes=clear_minutes):
                 continue
-            said = "Home Assistant no longer reports it"
+            said = "it is no longer reported"
         else:
             store.update_incident(inc["id"], payload=json.dumps(p))
             ents, bad = rule_states(inc)
@@ -546,7 +546,7 @@ def abandoned(store: Store, ev: dict, now: datetime) -> dict:
         return out
     out["incident_id"] = inc["id"]
     if str(ev.get("still_true")).lower() == "false":
-        cleared = "Cleared on {time}: back to normal when Home Assistant stopped watching."
+        cleared = "Cleared on {time}: back to normal when the alert stopped watching it."
         _close(store, inc, now, out, cleared)
         out["decision"] = "abandoned_cleared"
         # ⚠️ ITS OWN MESSAGE SAYS THE SAME END (architecture review 23): taken over with the rule's "🔶 no longer
@@ -559,7 +559,7 @@ def abandoned(store: Store, ev: dict, now: datetime) -> dict:
     store.update_incident(inc["id"], state=Incident.ESCALATED, escalated_at=now.isoformat(), assignee="owner")
     out["decision"] = "abandoned"
     # who watches it now, and what to do: the rule stopped, the desk did not (seen_again)
-    said = about(inc, "Still not right when Home Assistant stopped watching it on {time}. VESTA keeps watching it and "
+    said = about(inc, "Still not right when the alert stopped watching it on {time}. VESTA keeps watching it and "
                       "closes it once it is right. Press Done when it is fixed.")
     out["ha_messages"] = [R.ha_message(inc["id"], context=ev.get("_context_id"), stage="escalated", **said)]
     out["send"].append(R.message("owner", **said, incident=inc["id"], buttons=True, stage="escalated"))
@@ -697,18 +697,18 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
         key = "critical_internet---villa_silent|agent"
         if not store.find_open_incident(key):
             iid = store.new_incident(key, "critical_internet---villa_silent", "agent", "P1",
-                                     {"message": f"No contact with the villa's Home Assistant for {int((now - datetime.fromisoformat(last)).total_seconds() // 60)} min: internet, power or Home Assistant is down."},
+                                     {"message": f"No contact with the villa's system for {int((now - datetime.fromisoformat(last)).total_seconds() // 60)} min: internet, power or the villa's system is down."},
                                      now.isoformat())
             store.update_incident(iid, state=Incident.ASKED, asked_at=now.isoformat(), assignee="fm")
             for role in recipients("P1"):
-                out["send"].append(R.message(role, "No contact with Home Assistant. Check power, the router and the internet link.",
+                out["send"].append(R.message(role, "No contact with the villa's system. Check power, the router and the internet link.",
                                              status=f"Villa silent since {day_time_label(villa_time(last, zone or 'UTC'), weekday=True)}",
                                              incident=iid, stage="new"))   # the priority is the heading's; the villa's time
     elif last:
         cur = store.find_open_incident("critical_internet---villa_silent|agent")
         if cur:
             out["actions"] += Problems(store).close_incident(cur["id"], Incident.RECOVERED, now.isoformat())
-            out["send"].append(R.message("fm", **about(cur, "Closed on {time}: the villa is back online, Home Assistant answers again"), stage="closed",
+            out["send"].append(R.message("fm", **about(cur, "Closed on {time}: the villa is back online and answers again"), stage="closed",
                                          incident=cur["id"]))
     # alert fatigue: a rule firing more than N times in 30 days without acknowledgement
     limit = params.behaviour("alert_fatigue_per_month")

@@ -40,7 +40,7 @@ def test_a_rule_that_gave_up_is_said_once_in_the_desks_words(tmp_path):
     for m in (owner, out["ha_messages"][0]):
         assert "no longer tracked" not in m["text"] and "Repeat after" not in m["text"]   # Home Assistant's words: gone
         assert m["text"].count("Laundry door unlocked") == 1                              # its name once
-        assert m["status"] == ("Still not right when Home Assistant stopped watching it on {time}. VESTA keeps watching "
+        assert m["status"] == ("Still not right when the alert stopped watching it on {time}. VESTA keeps watching "
                                "it and closes it once it is right. Press Done when it is fixed.")
 
 
@@ -50,7 +50,7 @@ def test_home_assistants_all_clear_is_said_in_the_desks_words(tmp_path):
     out = desk.intake(store, ev("resolved", summary="✅ Laundry door unlocked — resolved after 4 min"),
                       T0 + timedelta(minutes=5), mode_reader=lambda: "x")
     (ha,) = out["ha_messages"]
-    assert ha["status"] == "Cleared in Home Assistant on {time}." and ha["text"].count("Laundry door unlocked") == 1
+    assert ha["status"] == "Cleared on {time}." and ha["text"].count("Laundry door unlocked") == 1
 
 
 def test_the_heading_names_the_incident_first_and_what_was_sent_to_whom(tmp_path):
@@ -121,8 +121,8 @@ def test_the_bottom_line_shows_the_stage_by_its_icon():
         "🆘 Need help pressed by Fabien: over to you."
     assert bottom("#3-P2 (closed)\nTo: JM", "Done pressed by Fabien. Note: VESTA cannot check this one.",
                   "unchecked") == "☑️ Done pressed by Fabien. Note: VESTA cannot check this one."
-    assert bottom("#3-P2 (closed)\nTo: JM", "Cleared in Home Assistant on 11/10/2026 10:27.") == \
-        "✅ Cleared in Home Assistant on 11/10/2026 10:27."
+    assert bottom("#3-P2 (closed)\nTo: JM", "Cleared on 11/10/2026 10:27.") == \
+        "✅ Cleared on 11/10/2026 10:27."
     assert bottom("#3-P2 (closed)\nTo: JM") == "✅ Closed: nothing more to do"
     assert bottom("#3-P2 (existing)\nTo: JM", "x", "unchecked") == "⚠️ ⚙️ x"         # ☑️ only on a closure
     # a copy sent before 0.12.152 ("For: JM, P2 Incident: Follow Up #3") is never drawn half old, half new: it gets
@@ -169,7 +169,7 @@ def test_telegram_shows_the_title_in_bold_the_alert_quoted_and_the_status_quoted
     tg.api = api
     alert = "🚪 Gate <relay> released\nGate_Relay is off\nWhat to do: check it."
     history = "- Alert sent 11/10/2026 05:23 to Owner & Facility Manager\n- Escalation sent 11/10/2026 05:23 to Owner"
-    bottom = "⚠️ ⚙️ Still not right when Home Assistant stopped watching it on 11/10/2026 05:23."
+    bottom = "⚠️ ⚙️ Still not right when the alert stopped watching it on 11/10/2026 05:23."
     status = f"{history}\n{bottom}"
     text = f"#1-P2 (existing)\nTo: Owner\n{alert}\n\nStatus:\n{status}"
     asyncio.run(tg.send(1, text))
@@ -205,8 +205,8 @@ def test_a_copy_turning_closed_turns_green(tmp_path):
     asyncio.run(v.outcome.carry_out({"send": [R.message("fm", "Door unlocked", incident=iid, buttons=True, stage="new")]}, "alert-desk"))
     assert v.tg.sent[-1][1].endswith("\n\nStatus:\n⚠️ New alert")
     st.update_incident(iid, closed_at=datetime.now(timezone.utc).isoformat(), state="resolved")
-    asyncio.run(v.thread.close(iid, "Cleared in Home Assistant on {time}."))
-    assert v.tg.edits[-1][2].rsplit("\n", 1)[1].startswith("✅ Cleared in Home Assistant on ")
+    asyncio.run(v.thread.close(iid, "Cleared on {time}."))
+    assert v.tg.edits[-1][2].rsplit("\n", 1)[1].startswith("✅ Cleared on ")
 
 
 def test_one_incident_one_picture_in_every_chat(tmp_path):

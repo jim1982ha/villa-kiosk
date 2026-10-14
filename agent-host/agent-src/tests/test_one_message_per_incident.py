@@ -267,8 +267,8 @@ def test_home_assistants_cleared_in_time_message_says_cleared_with_its_time(agen
         "summary": "🔶 Laundry door unlocked — no longer tracked after 30 min", CONTEXT_KEY: "RUN-2",
         "timestamp": datetime.now(timezone.utc).isoformat()}))
     adopted = [t for c, mid, t in agent.tg.edits if (c, mid) == (GROUP, 600)]
-    assert adopted and re.fullmatch(r"Cleared on \d\d/\d\d/\d{4} \d\d:\d\d: back to normal when Home Assistant stopped "
-                                    r"watching\.", status(adopted[-1]))
+    assert adopted and re.fullmatch(r"Cleared on \d\d/\d\d/\d{4} \d\d:\d\d: back to normal when the alert stopped "
+                                    r"watching it\.", status(adopted[-1]))
 
 
 def test_a_button_the_skill_renames_still_answers_the_alert(agent):

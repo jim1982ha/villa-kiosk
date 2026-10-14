@@ -422,5 +422,5 @@ def pack_diff_summary(new: list[dict], gone: list[dict]) -> str:
         where = e.get("area") or "room unknown"
         lines.append(f"New device seen: {e.get('name', e['entity_id'])} ({e.get('family')}, {where}).")
     for e in gone:
-        lines.append(f"Device no longer in Home Assistant: {e['entity_id']}. Archive its history? (reply archive / keep)")
+        lines.append(f"Device no longer in the villa's system: {e['entity_id']}. Archive its history? (reply archive / keep)")
     return "\n".join(lines)

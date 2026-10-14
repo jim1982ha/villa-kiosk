@@ -48,8 +48,8 @@ def test_resolved_closes_the_incident_and_its_ticket(store):
     assert res["decision"] == "resolved" and res["incident_id"] == iid
     assert store.incident(iid)["state"] == "resolved"
     assert [a for a in res["actions"] if a["action"] == "ticket.resolve"]
-    assert res["send"][0]["status"] == "Cleared in Home Assistant on {time}."   # its own part, the same words everywhere
-    assert res["settle"] == [{"incident_id": iid, "note": "Cleared in Home Assistant on {time}."}]
+    assert res["send"][0]["status"] == "Cleared on {time}."   # its own part, the same words everywhere
+    assert res["settle"] == [{"incident_id": iid, "note": "Cleared on {time}."}]
     # the chase stops: no reminder for it any more
     assert desk.tick(store, T0 + timedelta(minutes=30))["reasked"] == []
 
@@ -301,7 +301,7 @@ def test_a_rule_that_stopped_watching_once_back_to_normal_never_tells_the_owner_
     assert not [s for s in res["send"] if s["to"] == "owner"]
     # architecture review 23: Home Assistant's own message, taken over, says the same end — never "🔶 no longer tracked"
     (ha,) = res["ha_messages"]
-    assert ha["status"] == "Cleared on {time}: back to normal when Home Assistant stopped watching."
+    assert ha["status"] == "Cleared on {time}: back to normal when the alert stopped watching it."
 
 
 def test_a_number_or_an_alert_from_before_the_bad_states_waits_for_a_person(store):
@@ -469,7 +469,7 @@ def test_an_alert_is_over_once_what_it_claims_no_longer_holds_whatever_rule_sent
     assert not _tick(store, ha, 185).get("cleared")                         # false, not yet for clear_minutes
     res = _tick(store, ha, 200)
     assert res["cleared"] == [iid] and store.incident(iid)["closed_at"]
-    assert res["settle"][0]["note"] == "Cleared on {time}: Home Assistant no longer reports it."
+    assert res["settle"][0]["note"] == "Cleared on {time}: it is no longer reported."
 
 
 def test_a_claim_that_cannot_be_told_keeps_the_alert_open_and_says_so_once(store):
@@ -485,7 +485,7 @@ def test_a_done_on_an_alert_whose_claim_still_holds_reopens_it(store):
     desk.reply(store, iid, "done", "fm", T0 + timedelta(minutes=5), name="Wayan")
     res = _tick(store, Claims([(T0, "true")]), 20)
     assert res["not_quiet"] == [iid] and not store.incident(iid)["closed_at"]
-    assert "Done pressed by Wayan, but Home Assistant still reports it: still open. VESTA keeps watching it." in \
+    assert "Done pressed by Wayan, but it is still reported: still open. VESTA keeps watching it." in \
         [m["status"] for m in res["send"]]
 
 

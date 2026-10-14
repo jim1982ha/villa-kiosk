@@ -46,7 +46,7 @@ def build(period: dict, optimiser: dict | None, findings_open: list[dict] | None
                     "benefit": f"{abs(optimiser['delta_hours']):.1f} h/day {sign}, {fmt_money(abs(optimiser['delta_cost_per_month']), cur)}/month "
                                + ("extra, for the water quality target" if optimiser["delta_hours"] > 0 else "saved")})
     if optimiser and optimiser.get("ok") and optimiser.get("flow_confidence") == "low":
-        out.append({"kind": "measurement", "title": "Add a flow meter or a filter pressure gauge readable by Home Assistant",
+        out.append({"kind": "measurement", "title": "Add a flow meter or a filter pressure gauge readable by the villa's system",
                     "detail": "The filtration schedule is computed on an estimated flow. A flow meter on the return line (or a pressure "
                               "transducer on the filter) turns the estimate into a measurement and makes a blocked filter visible the same day.",
                     "benefit": "Removes the main uncertainty of the filtration schedule"})

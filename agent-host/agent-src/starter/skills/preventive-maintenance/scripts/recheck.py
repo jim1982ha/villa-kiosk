@@ -32,7 +32,7 @@ from vesta_shared.device_state import OFFLINE, out_of  # noqa: E402  ("is it bac
 from vesta_shared.problems import Problems  # noqa: E402
 
 OFFLINE_RULE = "PM-UNAVAILABLE"
-GONE_NOTE = "Closed: it no longer exists in Home Assistant."
+GONE_NOTE = "Closed: this device no longer exists in the villa's system."
 ENTITY_ID = re.compile(r"^[a-z0-9_]+\.[a-z0-9_]+$")     # only a real entity id can be "not found"
 
 

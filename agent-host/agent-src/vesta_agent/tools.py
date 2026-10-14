@@ -239,7 +239,7 @@ class Toolbox:
             try:
                 res = await asyncio.to_thread(self.reader.mcp.call_raw, name, args)
             except Exception as e:  # noqa: BLE001
-                return _err(f"Home Assistant did not answer ({type(e).__name__}).")
+                return _err("The villa's system did not answer.")
             blocks = res.get("content") or []
             images = [b for b in blocks if b.get("type") == "image"]
             for b in images:

@@ -159,7 +159,7 @@ incident_words:
   reasked: Reminder sent
   escalated: Escalated to the owner
   done: Done
-  resolved: Cleared in Home Assistant
+  resolved: Cleared
   abandoned: Stopped being watched
   digest: In the morning digest
   logged: Recorded

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.193 (15 October 2026)
+
+- Every person-facing text without "Home Assistant" (owner, 2026-10-15): alert-desk desk.py statuses and notes,
+  rules.yaml check, recheck GONE_NOTE, actions.py answers, api_errors.py, concierge voice errors, reports' incident
+  words, facts outcome, investigation_facts, investigate facts, roi-energy proposal title, knowledge_pack question,
+  tools.py error. Vocabulary: "the villa's system"; where it only said where, dropped.
+- instructions.md rules 5 and 6 (+ INSTRUCTION_REWRITES for installed villas). shipped-skills.json recorded.
+- tests/test_no_platform_name.py: the spoken files' string literals (docstrings and logs aside), the sent yaml texts
+  and the model's speaking rule.
+
 ## 0.6.192 (15 October 2026)
 
 - vesta_agent.incident_thread: a REPLACED status (close, restate) redraws the copy's whole heading from the

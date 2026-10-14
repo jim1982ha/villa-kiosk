@@ -108,8 +108,8 @@ def speech_to_text(cli, wanted: str | None) -> tuple[str | None, str | None]:
     if len(found) == 1:
         return found[0], None
     if not found:
-        return None, "Voice messages need a speech-to-text in Home Assistant (Whisper, for example)."
-    return None, ("Home Assistant has several speech-to-text services: name the one for voice messages "
+        return None, "Voice messages need a speech-to-text service in the villa's system (Whisper, for example)."
+    return None, ("The villa's system has several speech-to-text services: name the one for voice messages "
                   "(stt: in the villa-concierge skill's villa.voice.yaml).")
 
 

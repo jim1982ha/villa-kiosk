@@ -831,7 +831,7 @@ def test_a_device_home_assistant_names_nowhere_is_said_in_words_never_by_its_id(
             return {i: v for i, v in super().states(ids).items() if i != "sensor.pump_current"}
     _, f = _facts(Silent(), ("sensor.heater_power", "sensor.pump_current"))
     (cannot,) = [g for g in f["findings"] if g["title"] == "What the records cannot tell"]
-    assert cannot["groups"][0]["items"] == ["Pump current: Home Assistant kept no reading of it in this period, so it "
+    assert cannot["groups"][0]["items"] == ["Pump current: no reading of it was kept in this period, so it "
                                             "cannot be judged."]
     assert "sensor.pump_current" not in str(f)
 
@@ -940,7 +940,7 @@ def test_around_says_a_restart_once_and_keeps_a_device_that_did_not_come_back():
                  "state": "unavailable"}]                                          # it never answered again
             return [r for r in rows if start <= datetime.fromisoformat(r["when"]) < end]
     text = "\n".join(investigate.around(Restarted(), None, T(9, 2), T(9, 15), ["sensor.heater_power"], Z)["lines"])
-    assert "Home Assistant restarted: 04:00:00 (1 device(s) dropped and answered again with it" in text, text
+    assert "The villa's system restarted: 04:00:00 (1 device(s) dropped and answered again with it" in text, text
     assert "Spa Relay" not in text                                                 # the restart's, not its own
     assert "03:59:41  Thermometer" in text                                         # lost with it, still lost: said
     assert "06:01:25  Next Relay" in text                                          # far from any restart: said as before

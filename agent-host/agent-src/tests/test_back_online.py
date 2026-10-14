@@ -71,7 +71,7 @@ def test_a_fault_about_a_device_deleted_from_home_assistant_closes_saying_so(tmp
     out = _run(tmp_path, {ENTS[0]: _st("unavailable", 60), ENTS[1]: _st("unavailable", 60)}, T0,
                not_found=["sensor.door_x_battery", ENTS[2]])
     assert [(a["action"], a["note"]) for a in out["actions"]] == [
-        ("ticket.resolve", "Closed: it no longer exists in Home Assistant.")]
+        ("ticket.resolve", "Closed: this device no longer exists in the villa's system.")]
     st = Store(str(tmp_path / "s.sqlite"))
     assert st.finding(weak)["status"] == "closed" and st.finding(off)["status"] == "open"
     # the other two back: the offline one closes as back online, the deleted one counting as no longer offline

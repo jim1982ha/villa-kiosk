@@ -103,7 +103,7 @@ def find(client, what: str, where: str | None) -> dict:
     found = (client.tool("ha_search", args) or {}).get("entities") or []
     ids = [e["entity_id"] for e in found if e.get("entity_id", "").split(".")[0] not in ("automation", "script", "update")]
     if not ids:
-        return {"lines": [f"Nothing in Home Assistant matches \"{what}\"" + (f" in {where}" if where else "") + "."],
+        return {"lines": [f"Nothing in the villa's records matches \"{what}\"" + (f" in {where}" if where else "") + "."],
                 "entities": []}
     reg = {e["entity_id"]: e for e in (client.tool("ha_get_entity", {"entity_id": ids}) or {}).get("entity_entries") or []}
     states = client.states(ids)
@@ -582,7 +582,7 @@ def around(client, store, start: datetime, end: datetime, focus: list[str], zone
     back = [b for b in back if b[2] not in restart_only or not in_restart(b[0], restarts, settle)]
     lines = []
     if restarts:
-        lines.append("Home Assistant restarted: " + ", ".join(at(t, zone, span_days) for t in restarts)
+        lines.append("The villa's system restarted: " + ", ".join(at(t, zone, span_days) for t in restarts)
                      + f" ({len(restart_only)} device(s) dropped and answered again with it, not listed below)")
     if offline:
         lines.append("Devices that stopped answering:")
@@ -704,8 +704,8 @@ def automation_able(client, eid: str, start: datetime, end: datetime) -> dict:
             path = (cfg["use_blueprint"] or {}).get("path") or "a blueprint"
             did = _traced(client, eid, start, end)
             return {"text": f"built from the blueprint {path}, whose actions cannot be read here — not proven either way"
-                            + (f"; its runs in this period kept by Home Assistant did: {did}" if did else
-                               "; Home Assistant no longer keeps its runs of this period"),
+                            + (f"; its recorded runs in this period did: {did}" if did else
+                               "; its runs of this period are no longer kept"),
                     "can": "unproven", "changes": []}
     calls, targets = set(), set()
     _actions((cfg or {}).get("actions") or (cfg or {}).get("action") or [], calls, targets)

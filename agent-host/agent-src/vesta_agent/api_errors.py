@@ -45,7 +45,7 @@ FOR_PERSON = {
     CREDIT: "I cannot answer right now: the Anthropic account behind the VESTA Agent has run out of credit. "
             "The owner can add credit in the Anthropic Console (Billing).",
     KEY: "I cannot answer right now: Anthropic refused the VESTA Agent's API key. The owner can check it in "
-         "the VESTA Agent app's Configuration in Home Assistant.",
+         "the VESTA Agent app's Configuration.",
     RATE: "Too many requests to Anthropic at the moment. Try again in a minute.",
     BUSY: "Anthropic's servers are overloaded or down at the moment. Try again in a few minutes.",
     OFFLINE: "I cannot reach Anthropic at the moment: the villa's internet connection may be down. "
@@ -59,7 +59,7 @@ NEEDS_THE_OWNER = {
     CREDIT: "The VESTA Agent has stopped answering: the Anthropic account has run out of credit. "
             "Add credit in the Anthropic Console (Billing); nothing else needs changing.",
     KEY: "The VESTA Agent has stopped answering: Anthropic refuses its API key. Check \"Anthropic API key\" in "
-         "the VESTA Agent app's Configuration in Home Assistant, then restart the app.",
+         "the VESTA Agent app's Configuration, then restart the app.",
 }
 
 #: A failed resume is retried once in a new conversation — never for these: a new conversation fails the same way.

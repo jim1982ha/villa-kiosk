@@ -37,7 +37,7 @@ routes:
   - blueprint: critical_system
     severity: P2
     cooldown_min: 720
-    check: "A guarded automation is off or missing after a restart. Switch it back on in Home Assistant."
+    check: "A guarded automation is off or missing after a restart. Switch it back on in the villa's system."
   - prefix: critical_internet
     severity: P1
     cooldown_min: 30

@@ -226,7 +226,7 @@ class Ctx:
                 if followed_by_agent(eid, t, known, window):
                     continue                         # the agent followed it: shown once, as the agent's
                 out.append({"when": t.isoformat(), "what": self.alert_words(rinfo), "lasted": None, "severity": None,
-                            "blueprint": rinfo["blueprint"], "outcome": "Alerted by Home Assistant", "source": "home_assistant"})
+                            "blueprint": rinfo["blueprint"], "outcome": "Alerted by the villa's system", "source": "home_assistant"})
         return out
 
     def alert_words(self, rinfo: dict) -> str:

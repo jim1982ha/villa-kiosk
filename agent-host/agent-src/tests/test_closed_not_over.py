@@ -114,7 +114,7 @@ def test_a_copy_settled_after_its_incident_closed_is_headed_closed(tmp_path):
                                        "stage": "new"}]}, "alert-desk"))
     assert v.tg.sent[-1][1].split("\n")[0] == f"#{iid}-P2 (new)"
     st.update_incident(iid, closed_at=datetime.now(timezone.utc).isoformat(), state="resolved")
-    run(v.outcome.carry_out({"settle": [{"incident_id": iid, "note": "Cleared in Home Assistant on {time}."}]}))
+    run(v.outcome.carry_out({"settle": [{"incident_id": iid, "note": "Cleared on {time}."}]}))
     assert v.tg.edits[-1][2].startswith(f"#{iid}-P2 (closed)\n")
 
 
