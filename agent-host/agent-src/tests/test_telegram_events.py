@@ -255,5 +255,5 @@ def test_an_incident_home_assistant_clears_settles_its_alerts(agent):
     run(agent.outcome.carry_out({"send": [{"to": "fm", "text": f"Incident #{iid}.", "keyboard": True}], "incident_id": iid}, "alert-desk"))
     run(agent.outcome.carry_out({"settle": [{"incident_id": iid, "note": "Cleared in Home Assistant, {time}. No reply needed."}]}, "alert-desk"))
     assert sorted(c for c, _, _ in agent.tg.edits) == sorted([FM, GROUP])     # every chat of the role: each settled
-    assert all(re.search(r"(?:\n-------\n|\n\n|Status:\n)(?:(?:✅|⚠️|⚠️ ⚙️) )?Cleared in Home Assistant, \d\d/\d\d/\d{4} \d\d:\d\d\. No reply needed\.$", text)
+    assert all(re.search(r"(?:\n-------\n|\n\n|Status:\n|to [A-Za-z &]+\n)(?:(?:✅|⚠️|⚠️ ⚙️) )?Cleared in Home Assistant, \d\d/\d\d/\d{4} \d\d:\d\d\. No reply needed\.$", text)
                for _, _, text in agent.tg.edits)

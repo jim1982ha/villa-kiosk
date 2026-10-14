@@ -66,7 +66,7 @@ from .state import State
 from .telegram import Telegram, TelegramError
 from .tools import Toolbox, scrub
 from .turn import Turns
-from .notice import Notices, when
+from .notice import Notices, note_step, when
 
 log = logging.getLogger("vesta")
 
@@ -155,7 +155,7 @@ class Vesta:
                                settle_alert=self.thread.close, timezone=settings.timezone,
                                tell_fm=lambda text: self.outcome.carry_out({"send": [{"to": "fm", "text": text,
                                                                                  "title": "Fault reopened in the Kiosk"}]}),
-                               story=lambda iid: self.notices.story(iid), restate_alert=self.thread.restate)
+                               story=lambda iid: self.notices.story(iid), restate_alert=self._alert_taken)
         # a fault offered in a chat, start to end (fault_offers.py, review 32)
         self.requests = Requests(self.state, self.skills)   # a command skill's request, its turns (command_request.py)
         self.fault_offers = FaultOffers(self.state, self.delivery, self.tickets,
@@ -165,6 +165,7 @@ class Vesta:
         # the heading of every message the agent sends on its own (notice.py): who it is for, the incident, its history
         self.notices = Notices(self.state, self.policy, settings.timezone, severity=self._severity, closed=self._closed)
         self.thread.retitle = self.notices.retitle           # a settled copy of a closed incident is headed "Closed"
+        self.thread.reheading = self.notices.heading         # a replaced status: every earlier step listed again
         # putting one message in one chat (posting.py): the alerts and the approval requests both use it
         self.poster = Poster(send=self.delivery.send, thread=self.thread, notices=self.notices,
                              timezone_name=settings.timezone)
@@ -739,6 +740,13 @@ class Vesta:
         if not self.server_tools:
             await self.refresh_server_tools()
         return self.server_tools
+
+    async def _alert_taken(self, iid: int, note: str) -> int:
+        """Someone took incident `iid` on in the Kiosk: every copy says so, then the step joins its history — listed in
+        every later "Status:" (its close included), never twice beside the status saying it now."""
+        shown = await self.thread.restate(iid, note)
+        note_step(self.state, iid, "taken", note)
+        return shown
 
     async def _tell_owner_siren(self, text: str) -> None:
         await self.outcome.carry_out({"send": [{"to": "owner", "text": text, "title": "Siren"}]})

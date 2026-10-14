@@ -95,3 +95,31 @@ def test_every_copy_says_it_and_loses_its_buttons_without_being_settled(tmp_path
     assert keyboard is None and text.endswith("Ticket opened in the Cockpit by Owner on 15/10/2026 00:40.")
     rec = th.shown(7)[111]
     assert rec["buttons"] is False and rec["settled"] is False                      # still open: its close still shows
+
+
+def test_the_closed_message_tells_every_step_the_villa_saw_on_15_october(tmp_path):
+    # the run on the villa, 2026-10-15: alert 00:08, reminder 00:24, escalation 00:54, "Open Ticket" 01:09, cleared
+    # 01:28 — the closed message listed only the alert and the reminder: each replaced status was dropped
+    from helpers import make_agent
+    from vesta_shared import result as R
+    owner, fm = 101, 202
+    v = make_agent(tmp_path, {"people": [{"telegram_id": owner, "name": "Jim", "role": "owner"},
+                                         {"telegram_id": fm, "name": "Wayan", "role": "fm"}]})
+    st = Store(v.s.store_path)
+    iid = st.new_incident("k", "watchdog", "lock.example_door", "P2", {"message": "Door unavailable"})
+    send = lambda to, status, stage: asyncio.run(v.outcome.carry_out(
+        {"send": [R.message(to, "Door unavailable", status=status, incident=iid, buttons=True, stage=stage)]}, "alert-desk"))
+    send("fm", "New alert", "new")
+    send("fm", "Reminder: no answer after 15 min", "reminder")
+    send("owner", "No answer from the facility manager after 45 min", "escalated")
+    asyncio.run(v._alert_taken(iid, "Ticket opened in the Cockpit by Wayan on 15/10/2026 01:09."))
+    taken = v.thread.shown(iid)[owner]["text"]
+    assert "- Escalation sent " in taken and taken.endswith("Ticket opened in the Cockpit by Wayan on 15/10/2026 01:09.")
+    st.update_incident(iid, closed_at=st.now(), state=Incident.RESOLVED)
+    asyncio.run(v.thread.close(iid, "Cleared on {time}: back to normal."))
+    for chat in (owner, fm):
+        text = v.thread.shown(iid)[chat]["text"]
+        lines = text.split("Status:\n", 1)[1].split("\n")
+        assert [l.split(" ")[1] for l in lines[:4]] == ["Alert", "Reminder", "Escalation", "Ticket"], lines
+        assert "- Ticket opened in the Cockpit by Wayan on 15/10/2026 01:09" in lines and "Cleared on " in lines[-1]
+        assert text.split("\n")[0].endswith("(closed)")

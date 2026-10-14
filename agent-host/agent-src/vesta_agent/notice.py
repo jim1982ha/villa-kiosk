@@ -73,6 +73,14 @@ def note_press(state, incident: int, label: str, name: str, mark: str | None = N
     state.set_incident_history(incident, _kept(history))
 
 
+def note_step(state, incident: int, stage: str, note: str) -> None:
+    """A step of incident `incident` that is not a notice sent — someone took it on in the Kiosk ("taken") — kept in its
+    history in its own words, so a later "Status:" still lists it (owner, 2026-10-15)."""
+    history = state.incident_history(incident)
+    history.append({"at": datetime.now(timezone.utc).isoformat(), "stage": stage, "note": note.rstrip(".")})
+    state.set_incident_history(incident, _kept(history))
+
+
 def _kept(history: list[dict]) -> list[dict]:
     """The history with its first notice always kept and the dropped ones counted ("- … 3 earlier notices")."""
     if len(history) <= HISTORY_KEPT:
@@ -135,6 +143,7 @@ class Notices:
             p = None
         word = self.word(int(incident), stage, bool(history))
         lines = [f"- … {h['dropped']} earlier notice{'s' if h['dropped'] > 1 else ''}" if h.get("dropped") else
+                 f"- {h['note']}" if h.get("note") else
                  f"- {STAGES.get(h.get('stage'), 'Sent')} {when(datetime.fromisoformat(h['at']), self.tz)} "
                  f"to {audience(self._roles(h)) or 'nobody'}" for h in history if h.get("stage") != PRESSED_STAGE]
         return "\n".join([f"{incident_tag(incident)}{f'-{p}' if p else ''} ({word})", f"{TO}{who}", *lines])

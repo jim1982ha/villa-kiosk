@@ -42,6 +42,10 @@ class IncidentThread:
         self.edit = edit                # Telegram's edit (its buttons go); None while Telegram is off
         self.delete = delete            # Telegram's deleteMessage: True when the message is gone
         self.retitle = None             # notice.Notices.retitle: a copy's heading as its incident stands now
+        # notice.Notices.heading (chat, incident): the whole heading again — title, "To:" and EVERY earlier step. Used
+        # when a copy's status is REPLACED (taken on in the Kiosk, closed): the status it showed becomes a line of its
+        # history (owner, 2026-10-15: "Escalation sent … to Owner" vanished when "Ticket opened…" replaced it)
+        self.reheading = None
 
     async def post(self, iid: int | str, chat: int, mid: int, parts: dict, *, buttons: bool = False,
                    keyboard: dict | None = None) -> None:
@@ -96,8 +100,7 @@ class IncidentThread:
             # where it stands is the note now, under the line at the bottom; a new body when one is given (an approved
             # request: what happened) — the head and the lead kept (layout.py). Settled: decided, whatever Telegram said — a copy it did not take is owed and tried again (`catch_up`)
             p = layout.changed(layout.of(rec), status=note, body=body, mark=mark)
-            if self.retitle:
-                p = {**p, "head": self.retitle(iid, p.get("head") or "", chat)}      # "Closed" once its incident is (notice.py)
+            p = {**p, "head": self._head_now(iid, chat, p.get("head") or "")}      # "Closed" once its incident is (notice.py)
             n += await self._show(iid, chat, {**rec, "settled": True}, p)
         return n
 
@@ -110,8 +113,16 @@ class IncidentThread:
         for chat, rec in self.state.incident_chats(iid):
             if rec.get("settled") or not rec.get("mid"):
                 continue
-            n += await self._show(iid, chat, {**rec, "buttons": False}, layout.changed(layout.of(rec), status=note))
+            p = layout.changed(layout.of(rec), status=note)
+            n += await self._show(iid, chat, {**rec, "buttons": False}, {**p, "head": self._head_now(iid, chat, p.get("head") or "")})
         return n
+
+    def _head_now(self, iid: int | str, chat: int, head: str) -> str:
+        """A copy's heading when its status is replaced: every earlier step listed again (reheading), else its title
+        brought up to date (retitle) — a message about no incident keeps its own."""
+        if self.reheading and str(iid).isdigit() and head:
+            return self.reheading(chat, int(iid))
+        return self.retitle(iid, head, chat) if self.retitle else head
 
     async def sync(self, iid: int | str, parts: dict, skip=(), keyboard=None) -> int:
         """Every copy of incident `iid` outside `skip` (the chats just sent it) shows `parts` too — the same title,

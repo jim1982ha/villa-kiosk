@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.192 (15 October 2026)
+
+- vesta_agent.incident_thread: a REPLACED status (close, restate) redraws the copy's whole heading from the
+  incident's history (`reheading` = notice.Notices.heading) — the step it showed becomes a history line.
+- vesta_agent.notice: `note_step(state, incident, stage, note)` keeps a step in its own words ("Ticket opened in the
+  Cockpit by …"), listed by heading(); app._alert_taken records it after restating. Tests: test_taken_in_kiosk.py
+  (the villa's 15 October sequence), test_one_saying / test_telegram_events updated to the redrawn history.
+
 ## 0.6.191 (15 October 2026)
 
 - Incident state `taken` (vesta_shared.store.Incident.TAKEN): open, not chased. `Problems.taken_in_kiosk(task, said)`

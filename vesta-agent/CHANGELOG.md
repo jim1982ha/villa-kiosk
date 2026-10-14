@@ -1,3 +1,13 @@
+## 0.12.200
+
+What you will see:
+- An alert's Telegram message keeps its whole story to the end. When its status is replaced — a button pressed, the
+  ticket opened in the Cockpit, the alert closed — the step it showed joins the list under "Status:" instead of
+  disappearing. The villa's test of 15 October ended with only "Alert sent" and "Reminder sent"; it now reads Alert
+  sent, Reminder sent, Escalation sent, Ticket opened in the Cockpit by (who), then ✅ Cleared.
+- After a button is pressed the message is headed "(existing)" (with its ⚠️ ⚙️ icon), as every message after the
+  first one about an alert, and lists the alert sent.
+
 ## 0.12.199
 
 What you will see:

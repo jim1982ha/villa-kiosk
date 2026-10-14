@@ -83,7 +83,10 @@ def test_a_copy_settled_by_a_press_is_headed_closed_once_the_desk_closes_it(tmp_
     run = asyncio.run
     run(v.outcome.carry_out({"send": [R.message("fm", "Door unlocked", incident=iid, buttons=True, stage="new")]}, "alert-desk"))
     run(v.thread.close(iid, "Done pressed by Fabien on {time}."))                      # the press
-    assert v.tg.edits[-1][2].split("\n")[0] == f"#{iid}-P2 (new)"
+    # its status replaced, the copy lists every earlier step — the alert sent — and is no longer "new" (owner,
+    # 2026-10-15: a replaced status dropped the step it showed)
+    assert v.tg.edits[-1][2].split("\n")[0] == f"#{iid}-P2 (existing)"
+    assert "- Alert sent " in v.tg.edits[-1][2] and "to Facility Manager" in v.tg.edits[-1][2]
     st.update_incident(iid, closed_at=datetime.now(timezone.utc).isoformat(), state="done")   # the desk closes it
     run(v.thread.close(iid, "Done pressed by Fabien on {time}."))                      # the desk's settle
     assert v.tg.edits[-1][2].startswith(f"#{iid}-P2 (closed)\nTo: Facility Manager\n")
@@ -239,7 +242,9 @@ def test_a_close_reaches_a_copy_without_buttons_too(tmp_path):
                                               R.message("fm", ALERT, incident=6, buttons=True, stage="new")]}, "x"))
     assert not v.thread.shown(6)[OWNER]["buttons"]
     asyncio.run(v.thread.close(6, "Done pressed by Fabien on {time}."))
-    assert all(r["text"].rsplit("\n", 1)[1].startswith("⚠️ Done pressed by Fabien on ") for r in v.thread.shown(6).values())
+    # its status replaced: the copy is "existing" (its icon ⚠️ ⚙️) and lists the alert sent (owner, 2026-10-15)
+    assert all(r["text"].rsplit("\n", 1)[1].startswith("⚠️ ⚙️ Done pressed by Fabien on ")
+               and "\n- Alert sent " in r["text"] for r in v.thread.shown(6).values())
 
 
 def test_an_old_copy_gets_the_new_heading_whole(tmp_path):
