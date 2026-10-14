@@ -218,10 +218,11 @@
   .hud-menu-stepper:hover { background: transparent; }
 }
 .hud-menu-stepper .icon-btn { width: 32px; height: 32px; }
-/* "Label size (?)": the row's title is itself a button, opening the colour
-   legend — text and (?) inline, no row chrome of its own. */
+/* "(?) Label size": the row's title is itself a button, opening the colour
+   legend — the (?) in the icon column and the 10px gap of every other row, so
+   its words start where theirs do; its -6px margin cancels its own padding. */
 .hud-menu-help {
-  display: inline-flex; align-items: center; gap: 6px;
+  display: inline-flex; align-items: center; gap: 10px;
   margin: -6px -6px; padding: 6px; border: none; border-radius: 8px;
   background: transparent; color: inherit; font: inherit; cursor: pointer;
 }
