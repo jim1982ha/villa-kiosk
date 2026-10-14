@@ -186,6 +186,9 @@ ck("a card draws what cardActions says (no rule of its own)",
 ck("a card's lines on the left, its buttons on the right of the same line (owner, 2026-10-14)",
    /<div className="cockpit-attention-detail">\s*<ul className="cockpit-attention-subs">[\s\S]*?<\/ul>\s*\{actions\}\s*<\/div>/.test(ov)
    && /\.cockpit-attention-detail \{ display: flex;/.test(readFileSync(new URL("../../src/styles/08-shared.css", import.meta.url), "utf8")));
+ck("a ticket's notes wrap inside its card, never past its edge (owner, 2026-10-14: a long \"VESTA reads\" ran out)",
+   /\.fm-fault \.fm-row-main \{ flex: 1 1 100%; min-width: 0; \}/.test(src("styles/07-facility.css"))
+   && /\.fm-timeline-note \{[^}]*overflow-wrap: anywhere;/.test(src("styles/07-facility.css")));
 ck("the screens ask stageOf, never the status themselves",
    ["components/fm/TicketsTab.tsx", "components/fm/FaultForm.tsx", "components/fm/TodayTab.tsx"].every((f) => /stageOf\(/.test(src(f)) && !/status === "in_progress"|status !== "in_progress"|status === "open"/.test(src(f))));
 ck("the fault form is one, shared by raising and editing", /<FaultForm key=\{editing\.id\} editing=\{editing\}/.test(tt) && !/<input value=\{title\}/.test(ov + tt));

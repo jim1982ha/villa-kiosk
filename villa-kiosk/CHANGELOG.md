@@ -1,3 +1,9 @@
+## 2.496.361
+
+### Fixed
+- Cockpit → Tickets: a long note on a card (for example "VESTA reads: Onsen pump used 0.14 kWh/day…") ran past the card's right edge, in Closed and in progress. Every note now wraps inside its card.
+- The empty Tickets tab now says "A fault on the Overview becomes a ticket when you press Open ticket on its card." (it still said "mark it in progress").
+
 ## 2.496.360
 
 ### Changed
