@@ -196,6 +196,127 @@ with tempfile.TemporaryDirectory() as t:
     code, calls, err = run_ship(repo)
     ck("refused on main: this app releases from dev2", code is None and "on main" in err, err)
 
+# ── backport, end to end: dev2 into main, only on the owner's word ──────────
+def backport_sandbox(tmp: Path) -> Path:
+    """A repository whose main carries a folder of its own (a channel CI writes), absent on dev2."""
+    repo = sandbox(tmp)
+    sh(repo, "git", "checkout", "-q", "-B", "main", "origin/main")
+    (repo / "chan").mkdir(); (repo / "chan/config.yaml").write_text('version: "0.9.0"\n')
+    (repo / "README").write_text("one\ntwo\nthree\n")
+    sh(repo, "git", "add", "-A"); sh(repo, "git", "commit", "-q", "-m", "main's channel")
+    sh(repo, "git", "push", "-q", "origin", "main")
+    sh(repo, "git", "checkout", "-q", "-B", "work", "origin/dev2")
+    (repo / "README").write_text("one\ntwo\nthree\n")
+    sh(repo, "git", "add", "-A"); sh(repo, "git", "commit", "-q", "-m", "readme on dev2")
+    sh(repo, "git", "push", "-q", "origin", "HEAD:dev2")
+    return repo
+
+
+def dev2_change(repo: Path, version: str, file="notes.txt", text="a change\n") -> None:
+    (repo / file).write_text(text)
+    (repo / "villa-kiosk/config.yaml").write_text(f'name: "VESTA"\nversion: "{version}"\n')
+    sh(repo, "git", "add", "-A"); sh(repo, "git", "commit", "-q", "-m", f"dev2 {version}")
+    sh(repo, "git", "push", "-q", "origin", "HEAD:dev2")
+
+
+def run_backport(repo: Path, owner=True, gates=None, ci=lambda sha: ("success", []), dry=False, wait=0.05):
+    release.ROOT = repo
+    seen = []
+
+    def stub(root):
+        seen.append(root)
+        (seen_links.append((root / "node_modules").is_symlink()))
+        return gates(root) if gates else [release.GateResult("stub", "pass")]
+    seen_links: list[bool] = []
+    try:
+        code = release.backport(owner, None, dry, wait, poll_seconds=0.01, gates=stub, ci=ci)
+        return code, seen, seen_links, ""
+    except release.ReleaseError as e:
+        return None, seen, seen_links, str(e)
+
+
+def worktrees(repo: Path) -> int:
+    return sh(repo, "git", "worktree", "list").count("\n")
+
+
+print("\n  backport, in a throwaway repository:")
+with tempfile.TemporaryDirectory() as t:
+    repo = backport_sandbox(Path(t))
+    origin_main = lambda: sh(repo, "git", "rev-parse", "origin/main").strip()
+    start_main, start_wt = origin_main(), worktrees(repo)
+
+    code, seen, _l, err = run_backport(repo, owner=False)
+    ck("refused unless the owner asked: nothing merged, no gate", code is None and "owner" in err and not seen
+       and origin_main() == start_main, err)
+    ck("main's own entries are FOUND (on main, not on dev2), never named", release.main_only_entries() == ["chan"],
+       release.main_only_entries())
+
+    code, seen, _l, err = run_backport(repo)
+    ck("dev2 already in main (same version, same tree apart from main's own): says so, exit 0, no gate",
+       code == 0 and not seen and origin_main() == start_main, (code, err))
+
+    dev2_change(repo, "1.0.1")
+    code, seen, _l, err = run_backport(repo, dry=True)
+    ck("a dry run merges nothing and runs no gate", code == 0 and not seen and origin_main() == start_main, err)
+
+    code, seen, _l, err = run_backport(repo, gates=lambda root: [release.GateResult("stub", "FAIL")])
+    ck("a failing gate on the merged tree: refused, nothing pushed, the temporary checkout removed",
+       code is None and "gate failed" in err and origin_main() == start_main and worktrees(repo) == start_wt, err)
+
+    (repo / "node_modules").mkdir()
+    local = release.LOCAL_GATES[0]
+    (repo / local[2]).parent.mkdir(parents=True, exist_ok=True); (repo / local[2]).write_text("x\n")
+    code, seen, links, err = run_backport(repo, gates=lambda root: [release.GateResult(local[0], "not here")])
+    ck("a local gate this checkout can run, skipped on the merged tree: refused (a missing link, not a pass)",
+       code is None and "skipped" in err and origin_main() == start_main, err)
+    ck("  ...the gates ran on the merged tree, not this checkout, with this checkout's packages linked in",
+       seen and seen[0] != repo and links == [True], (seen, links))
+
+    code, seen, _l, err = run_backport(repo, ci=lambda sha: ("failure", ["Build"]))
+    merged = origin_main()
+    ck("pushed, CI red: exit 3, never 0", code == 3 and merged != start_main, (code, err))
+    parents = sh(repo, "git", "rev-list", "--parents", "-n", "1", merged).split()
+    ck("  ...main got a merge commit of main and dev2 (--no-ff)",
+       parents[1:] == [start_main, sh(repo, "git", "rev-parse", "origin/dev2").strip()], parents)
+    ck("  ...its tree is dev2's apart from main's own folder, which is main's untouched",
+       sh(repo, "git", "diff", "--name-only", "origin/dev2", merged).split() == ["chan/config.yaml"]
+       and sh(repo, "git", "diff", "--name-only", start_main, merged, "--", "chan").strip() == "")
+    ck("  ...and the temporary checkout is gone", worktrees(repo) == start_wt)
+
+    code, seen, _l, err = run_backport(repo)
+    ck("run again once in: \"already\", exit 0, nothing merged", code == 0 and not seen and origin_main() == merged,
+       (code, err))
+
+    dev2_change(repo, "1.0.2", text="another\n")
+    code, seen, _l, err = run_backport(repo, ci=lambda sha: ("pending", []))
+    ck("pushed, CI still running when the wait ends: exit 3", code == 3 and origin_main() != merged, (code, err))
+
+    dev2_change(repo, "1.0.3", text="third\n")
+    code, seen, _l, err = run_backport(repo)
+    ck("pushed and CI green: exit 0 (published)", code == 0 and seen, (code, err))
+
+    # main changed on its own, outside its folders: the merge would not be dev2's tree
+    sh(repo, "git", "checkout", "-q", "-B", "main", "origin/main")
+    (repo / "README").write_text("ONE\ntwo\nthree\n")
+    sh(repo, "git", "commit", "-qam", "a fix made on main"); sh(repo, "git", "push", "-q", "origin", "main")
+    sh(repo, "git", "checkout", "-q", "work")
+    dev2_change(repo, "1.0.4", text="fourth\n")
+    before = origin_main()
+    code, seen, _l, err = run_backport(repo)
+    ck("a merged tree that differs from dev2 outside main's own folders: refused, nothing pushed",
+       code is None and "differs from dev2" in err and "README" in err and origin_main() == before, err)
+
+    dev2_change(repo, "1.0.5", file="README", text="uno\ntwo\nthree\n")
+    code, seen, _l, err = run_backport(repo)
+    ck("a merge that conflicts: refused, nothing pushed, no gate", code is None and "cleanly" in err and not seen
+       and origin_main() == before and worktrees(repo) == start_wt, err)
+
+ok = {"workflow_runs": [{"name": "CI", "status": "completed", "conclusion": "success"}]}
+ck("CI state: every run finished green = success; one still running = pending; none yet = pending",
+   [release.ci_state("x", fetch=lambda r=r: r)[0] for r in
+    (ok, {"workflow_runs": ok["workflow_runs"] + [{"name": "B", "status": "queued"}]}, {"workflow_runs": []})]
+   == ["success", "pending", "pending"])
+
 print("\n  the one gate list:")
 import re
 runs = [m.strip() for m in re.findall(r"^\s+run:\s*(.+)$", (HERE / ".github/workflows/ci.yaml").read_text(), re.M)]

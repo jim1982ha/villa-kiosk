@@ -1,3 +1,8 @@
+## 2.496.371
+
+### Changed
+- Nothing changes on the iPad. Behind it: publishing a tested version to the main VESTA app (the "backport") is now one command that refuses unless the owner asked, checks the result is exactly the tested version, runs every check on it, and waits until the build has really succeeded — it was a dozen steps by hand, and one of them once ran an old copy of a safety check.
+
 ## 2.496.370
 
 ### Changed
