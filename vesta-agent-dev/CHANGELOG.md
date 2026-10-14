@@ -1,3 +1,11 @@
+## 0.12.195
+
+What you will see:
+- In the VESTA Kiosk's Cockpit (from Kiosk 2.496.355), a fault that came from an alert shows the alert's number, as
+  Telegram writes it: "#5 · House Pump Power has not recorded a confirmed run…" — so the Telegram message and the
+  Cockpit card are visibly the same problem. Faults already open get their number at the Agent's next start or night
+  check. Faults found by the night check have no number, as in Telegram.
+
 ## 0.12.194
 
 What you will see:
