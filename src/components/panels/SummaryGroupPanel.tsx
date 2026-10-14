@@ -42,6 +42,7 @@ import { deviceSwitch } from "@/utils/devicePower";
 import InlineConfirm from "@/components/common/InlineConfirm";
 import { NOT_SENT } from "@/ha/serviceOutcome";
 import { domainOf } from "@/utils/entityDomain";
+import { NOT_IN_HA } from "@/utils/stateColors";
 
 interface Props {
   group: SummaryGroup;
@@ -174,7 +175,7 @@ export default function SummaryGroupPanel({
       {onMap.length > 0 && renderRooms(onMap)}
       {offMap.length > 0 && (
         <>
-          <div className="summary-offmap-heading" title="These devices exist in Home Assistant but have no 3D geometry in this villa model">
+          <div className="summary-offmap-heading" title="These devices exist but have no 3D geometry in this villa model">
             Not on the map
           </div>
           {renderRooms(offMap)}
@@ -184,9 +185,9 @@ export default function SummaryGroupPanel({
         <>
           <div
             className="summary-offmap-heading summary-notinha-heading"
-            title="This villa model has 3D geometry named after these devices, but Home Assistant has no such entity — most often the integration was removed, or the entity was renamed. Update the model, or re-add them in Home Assistant."
+            title="This villa model has 3D geometry named after these devices, but no such device exists — most often its integration was removed, or it was renamed. Update the model, or add the device back."
           >
-            Not in Home Assistant
+            {NOT_IN_HA}
           </div>
           {renderRooms(notInHa)}
         </>
@@ -323,7 +324,7 @@ export default function SummaryGroupPanel({
           className="summary-entity-main"
           onClick={() => onOpenEntity(id)}
           title={notInHaRow
-            ? `${label} — Home Assistant has no entity with this id`
+            ? `${label} — no device has this id`
             : offMapRow ? `${label} — not on the 3D map` : `Open ${label}`}
         >
           <img
@@ -337,7 +338,7 @@ export default function SummaryGroupPanel({
             <span className="summary-entity-name-row">
               <span className="summary-entity-name" title={label}>{label}</span>
               {hiddenInHa && (
-                <EyeOff size={16} className="summary-entity-hidden-icon" aria-label="Hidden in HA" />
+                <EyeOff size={16} className="summary-entity-hidden-icon" aria-label="Hidden" />
               )}
             </span>
             <span className="summary-entity-state">{stateText}</span>

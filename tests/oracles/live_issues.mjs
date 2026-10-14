@@ -86,7 +86,7 @@ const numbered = buildAttentionItems({ unavailableIds: [], entities: {}, entityM
 ck("a fault from a VESTA Agent alert reads \"#5 · …\" on its card; one without a number, its title alone",
    numbered.find((i) => i.ticketId === "n")?.title === "#5 · House Pump Power has not run" && numbered.find((i) => i.ticketId === "p")?.title === "fault p",
    numbered.map((i) => i.title));
-ck("  ...and the same in the Tickets tab", /<strong>\{faultTitle\(t\)\}<\/strong>/.test(readFileSync(new URL("../../src/components/fm/TicketsTab.tsx", import.meta.url), "utf8")));
+ck("  ...and the same in the Tickets tab", /<RecordCard key=\{t\.id\} framed=\{framed\} title=\{faultTitle\(t\)\}/.test(readFileSync(new URL("../../src/components/fm/TicketsTab.tsx", import.meta.url), "utf8")));
 ck("  ...a number that is not one (0, text) is not shown", E.faultTitle({ title: "x", alertNumber: 0 }) === "x" && E.faultTitle({ title: "x", alertNumber: "5" }) === "x");
 
 const ov = readFileSync(new URL("../../src/components/cockpit/CockpitOverview.tsx", import.meta.url), "utf8");
@@ -188,6 +188,18 @@ ck("lists that only grow are ONE folded, paged list (owner, 2026-10-14): Tickets
    /<FoldedList title="Closed" rows=\{closed\}/.test(ticketsTab) && /<FoldedList title="Recent work" rows=\{rows\}/.test(recent)
    && !/usePaged|<Pager|\.slice\(0, limit\)/.test(recent + ticketsTab));
 
+ck("a ticket is ONE card: its pill on the first record, its buttons inside, no device name above (owner, 2026-10-14)",
+   /<div key=\{g\.key\} className="fm-record-card">/.test(ticketsTab) && /record\(t, i === 0 \? \{ text: "In progress", tone: "due-soon" \} : undefined,/.test(ticketsTab)
+   && /record\(t, \{ text: "Resolved", tone: "ok" \},\s*<button className="btn ghost" onClick=\{\(\) => setStaging\(\{ tickets: \[t\], to: "open" \}\)\}>Reopen<\/button>\)/.test(ticketsTab)
+   // the buttons sit INSIDE the card, on the right of its text, and take their own presses (RecordCard)
+   && /<div className="fm-record-body">[\s\S]*?\{actions && <div className="fm-record-actions" onPointerDown=\{\(e\) => e\.stopPropagation\(\)\}>\{actions\}<\/div>\}/.test(readFileSync(new URL("../../src/components/fm/RecordCard.tsx", import.meta.url), "utf8"))
+   && !/const title = head\.entityId/.test(ticketsTab));
+ck("ONE card for every Facility record (owner, 2026-10-14): Tickets and Recent work draw RecordCard, nothing of their own",
+   /<RecordCard /.test(ticketsTab) && /<RecordCard /.test(recent) && !/<ErasableRow|<RecordMeta|<EvidenceRow|fm-document-link/.test(ticketsTab + recent));
+ck("  ...and Recent work is the SCHEDULED work: a ticket's repair is told on its closed card",
+   /\.filter\(\(c\) => completionSource\(data, c\)\.kind === "schedule"\)/.test(recent)
+   && /const work = data\.completions\.find\(\(c\) => c\.ticketId === t\.id && c\.costId\);/.test(ticketsTab));
+
 console.log("\n  what happened on Telegram, on the card (owner, 2026-10-14: reminders, escalation, Need help):");
 const N = await import("@/fm/faultNotes");
 const told = { ...rec("s", "switch.pump"), status: "open", updates: [
@@ -223,7 +235,7 @@ ck("a card's lines on the left, its buttons on the right of the same line (owner
    /<div className="cockpit-attention-detail">\s*<ul className="cockpit-attention-subs">[\s\S]*?<\/ul>\s*\{actions\}\s*<\/div>/.test(ov)
    && /\.cockpit-attention-detail \{ display: flex;/.test(readFileSync(new URL("../../src/styles/08-shared.css", import.meta.url), "utf8")));
 ck("a ticket's notes wrap inside its card, never past its edge (owner, 2026-10-14: a long \"VESTA reads\" ran out)",
-   /\.fm-fault \.fm-row-main \{ flex: 1 1 100%; min-width: 0; \}/.test(src("styles/07-facility.css"))
+   /\.fm-record-body > \.fm-row-main \{ flex: 1 1 260px; min-width: 0; \}/.test(src("styles/07-facility.css"))
    && /\.fm-timeline-note \{[^}]*overflow-wrap: anywhere;/.test(src("styles/07-facility.css")));
 ck("the screens ask stageOf, never the status themselves",
    ["components/fm/TicketsTab.tsx", "components/fm/FaultForm.tsx", "components/fm/TodayTab.tsx"].every((f) => /stageOf\(/.test(src(f)) && !/status === "in_progress"|status !== "in_progress"|status === "open"/.test(src(f))));

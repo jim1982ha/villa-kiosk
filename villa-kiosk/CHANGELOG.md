@@ -1,3 +1,21 @@
+## 2.496.367
+
+### Changed
+- The Kiosk's screens no longer name "Home Assistant" anywhere — every text, tooltip, message and error was read through and reworded. "Not in Home Assistant" is now "Missing" (the same word as in the Overview's (i)); "Home Assistant has lost contact" is now "Contact lost"; "Disconnected from Home Assistant" is now "Disconnected — reconnecting…"; the Spend settings say "Amounts are in IDR, the villa's currency". An automatic check now refuses any new text that names it.
+- Cockpit → the (i) beside "Open a ticket": "Appears" and "Goes" are one column, "When" (each row: "Appears: …", "Goes: …"), at the same width — the card is less tall. The Alert row reads "A VESTA alert from one of the villa's rules…" and goes "Within minutes of it being back to normal…".
+
+## 2.496.366
+
+### Changed
+- Cockpit → Schedule: "Recent work" lists the scheduled maintenance done, only. The work that resolved a ticket was listed there too ("Test Gym Room Ceiling Fan", marked "fault"); it is told on the ticket's own card in Tickets → Closed — who did it, the note, its photos, and now its cost — and in Spend.
+- Cockpit: a ticket, a closed ticket and a piece of work done are drawn by one and the same card — title with its status, the pills and time on one line, the notes, the cost and the buttons on the right. Recent work's cards were grey and centred (they sat inside the "No maintenance schedule yet" message); they now look like every other card.
+- The pager under Recent work counts "completions" (it said "3 piece of works").
+
+## 2.496.365
+
+### Changed
+- Cockpit → Tickets: each ticket is one card. Its status pill ("In progress", "Resolved") sits on its title line, and its buttons — "Mark resolved" and "Close", or "Reopen" for a closed one — sit inside the card, on the right of its text (on a phone, under it). The device's name above the card is gone: its chip in the card already says it.
+
 ## 2.496.364
 
 ### Changed

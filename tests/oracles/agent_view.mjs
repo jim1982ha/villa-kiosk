@@ -136,8 +136,11 @@ ck("every Facility list shows the 'by VESTA Agent' mark", marks.length === 0, ma
 // owner, 2026-10-11: the pills and when on ONE line right under the title, the same on every card — the mark, the
 // room, the device are inside RecordMeta, never in the title row; a fault's history shows its notes, not
 // "Open · date · VESTA Agent" lines that repeat that line
+// the shared card (RecordCard, 2026-10-14) puts the `pills` it is given in RecordMeta: a card handing it its pills is fine
+const cardPutsPillsInMeta = /<RecordMeta when=\{when\}>\{pills\}<\/RecordMeta>/.test(src("components/fm/RecordCard.tsx"));
 const loose = ["TicketsTab", "RecentWorkList", "SpendTab", "TodayTab", "ScheduleEditor", "SavedDocumentsList"]
   .filter((f) => { const s = src(`components/fm/${f}.tsx`), m = s.indexOf("<AgentMark");
+    if (cardPutsPillsInMeta && /pills=\{/.test(s) && s.lastIndexOf("pills={", m) > -1 && s.indexOf("<RecordCard") > -1) return false;
     return !(s.indexOf("<RecordMeta") > -1 && s.indexOf("<RecordMeta") < m && m < s.indexOf("</RecordMeta>")); });
 ck("every Facility card: its pills and when on one line under the title (RecordMeta)", loose.length === 0, loose);
 {
@@ -191,7 +194,7 @@ ck("every Facility card: its pills and when on one line under the title (RecordM
 }
 const faults = src("components/fm/TicketsTab.tsx");
 ck("a fault card no longer repeats its history's status lines, and reads its notes and when through faultNotes",
-   !/fm-timeline-head|fm-timeline-dot/.test(faults) && /RecordNotes notes=\{faultNoteLines\(t, localStamp\)\}/.test(faults)
+   !/fm-timeline-head|fm-timeline-dot/.test(faults) && /notes=\{faultNoteLines\(t, localStamp\)\}/.test(faults)
    && /when=\{faultWhen\(t, localStamp\)\}/.test(faults) && !/startsWith\("Now: "\)/.test(faults));
 ck("a closed record offers \"Reopen\" (it is a fault again, on the Overview)", /setStaging\(\{ tickets: \[t\], to: "open" \}\)\}>Reopen</.test(faults));
 

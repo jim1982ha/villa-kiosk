@@ -51,7 +51,10 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
   const [confirmingDeleteAll, setConfirmingDeleteAll] = useState(false);
 
   if (data.schedules.length === 0) {
+    // work already logged (a task done, since removed) is part of the record: listed UNDER the empty-state message,
+    // never inside it (it took the message's grey, centred text)
     return (
+      <div className="fm-stack">
       <div className="fm-empty">
         <CalendarClock size={28} />
         <h3>No maintenance schedule yet</h3>
@@ -62,10 +65,8 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
           agreement calls for. Each task then tracks its own interval, due date
           and the work done.
         </p>
-        {/* Even with no schedule configured, work already logged — a fault
-            fixed, say — is part of the record and must not vanish behind an
-            empty-state screen. */}
-        <RecentWorkList />
+      </div>
+      <RecentWorkList />
       </div>
     );
   }

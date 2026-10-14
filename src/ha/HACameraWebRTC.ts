@@ -106,7 +106,7 @@ export async function startCameraWebRtc(
         } else if (ev.type === "candidate") {
           pc.addIceCandidate(ev.candidate).catch(() => {});
         } else if (ev.type === "error") {
-          handlers.onFail(ev.message ?? ev.code ?? "Home Assistant refused the offer");
+          handlers.onFail(ev.message ?? ev.code ?? "the camera stream was refused");
         }
       });
   } catch (err) {

@@ -124,14 +124,14 @@ export default function EntityPicker({
             >
               <span style={{ flex: 1, textAlign: "left" }}>
                 Use "{query.trim()}"
-                <div className="muted" style={{ fontSize: "var(--text-2xs)" }}>entity not in HA yet — will activate when it appears</div>
+                <div className="muted" style={{ fontSize: "var(--text-2xs)" }}>entity not there yet — will activate when it appears</div>
               </span>
             </button>
           )}
 
           {Object.keys(entities).length === 0 && !allowCustom && (
             <div className="muted body-text" style={{ padding: 12 }}>
-              Connect to Home Assistant first to see entities.
+              Entities show once connected.
             </div>
           )}
           {list.map((e) => (

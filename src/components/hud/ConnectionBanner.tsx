@@ -70,7 +70,7 @@ export default function ConnectionBanner() {
           that has to fit: it is reconnecting, so nothing will respond yet. */}
       <span>
         <span className="conn-banner-full">
-          Disconnected from Home Assistant — reconnecting…
+          Disconnected — reconnecting…
           {" "}
           <span className="muted">Controls won&rsquo;t respond until this clears.</span>
         </span>

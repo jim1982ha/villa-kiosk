@@ -39,7 +39,7 @@ ck("the linked entity is described once, truthfully (ring AND an on/off switch �
   const id = "light.hall_lamp_left";
   const auto = labelField(id, "Hall Lamp Left", "Reading lamp");
   ck("the label made from the entity id shows as an EMPTY field…", auto.value === "", auto);
-  ck("  …with the name actually shown in grey, and where it comes from", auto.placeholder === "Reading lamp — from Home Assistant", auto.placeholder);
+  ck("  …with the name actually shown in grey, and where it comes from", auto.placeholder === "Reading lamp — from its device name", auto.placeholder);
   ck("  …the underscore form of the fallback too", labelField(id, "hall_lamp_left", "Reading lamp").value === "");
   ck("a name the owner typed shows as it is", labelField(id, "Desk light", "Reading lamp").value === "Desk light");
   ck("no Home Assistant name yet: the id's own name, said so", /— from its entity id$/.test(labelField(id, undefined).placeholder));

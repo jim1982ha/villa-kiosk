@@ -29,9 +29,9 @@ export interface SourceRow {
 const ROWS: Record<IssueSource, Omit<SourceRow, "source">> = {
   live: { what: "What a device reports right now: unavailable, missing, unlocked, too hot…",
     opens: "At once", goes: "By itself, as soon as the device is back to normal" },
-  alert: { what: "A VESTA alert from a Home Assistant rule, numbered as on Telegram (#5)",
+  alert: { what: "A VESTA alert from one of the villa's rules, numbered as on Telegram (#5)",
     opens: "As soon as the alert is raised",
-    goes: "Within minutes of Home Assistant reporting it back to normal; its words and Telegram's reminders follow" },
+    goes: "Within minutes of it being back to normal; its words and Telegram's reminders follow" },
   night: { what: "Found by the nightly check: a device offline or deleted, a battery, energy use, Wi-Fi drops, run time",
     opens: "Nightly check",
     goes: "Offline or deleted: within minutes of it coming back or going. The others: at the next nightly check that "

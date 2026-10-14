@@ -80,14 +80,14 @@ function EntityMapRow({
       ref={matchedRowRef}
       className={stale ? "config-row-stale" : undefined}
       style={m.disabled ? { opacity: 0.5 } : undefined}
-      title={stale ? `${m.entityId} no longer exists in Home Assistant` : undefined}
+      title={stale ? `${m.entityId} no longer exists` : undefined}
     >
       <td data-label="" className="device-card-header">
         <input
           type="checkbox"
           checked={!m.disabled}
           onChange={(e) => draftField({ disabled: !e.target.checked })}
-          title="Show this device in the 3D view (badge, highlight, tap). Turn off for devices modelled but not yet integrated in Home Assistant."
+          title="Show this device in the 3D view (badge, highlight, tap). Turn off for devices modelled but not yet installed."
           aria-label={`Show ${m.entityId} in the 3D view`}
         />
         {editing ? (

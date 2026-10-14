@@ -30,7 +30,7 @@ export default function UnavailableNotice({ device = "device", entityId }: Props
       <div className="center" style={{ margin: "8px 0 20px" }}>
         <span className="status-pill unavailable"><AlertTriangle size={16} />{NOT_IN_HA.toUpperCase()}</span>
         <p className="muted body-text" style={{ marginTop: 10 }}>
-          Home Assistant has no entity <code>{entityId}</code>. Rename or remove its object in the 3D model, or point
+          No device has the id <code>{entityId}</code>. Rename or remove its object in the 3D model, or point
           it at another entity with Edit.
         </p>
       </div>
@@ -40,7 +40,7 @@ export default function UnavailableNotice({ device = "device", entityId }: Props
   // it just restated the word above it and tripled the height of an otherwise
   // tiny panel, so it survives only as the title / accessible description.
   const detail =
-    `Home Assistant has lost contact with this ${device} — its real state isn't `
+    `Contact with this ${device} is lost — its real state isn't `
     + "known, so controls are disabled until it reports in again.";
   return (
     <div className="center" style={{ margin: "8px 0 20px" }}>

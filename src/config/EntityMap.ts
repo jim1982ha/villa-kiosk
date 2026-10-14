@@ -191,7 +191,7 @@ export function labelField(
     return { value: storedLabel, placeholder: "Label" };
   }
   const shown = displayLabelFor(entityId, undefined, friendlyName);
-  return { value: "", placeholder: `${shown} — from ${friendlyName?.trim() ? "Home Assistant" : "its entity id"}` };
+  return { value: "", placeholder: `${shown} — from ${friendlyName?.trim() ? "its device name" : "its entity id"}` };
 }
 
 /**

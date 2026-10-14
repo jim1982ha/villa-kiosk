@@ -504,7 +504,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   useEffect(() => { zoom.reset(); }, [mapping.entityId, zoom.reset]);
 
   const renderView = () => {
-    if (!connected) return <Unavailable label="Not connected to Home Assistant." />;
+    if (!connected) return <Unavailable label="Not connected." />;
     if (mode === "failed") return <Unavailable label="Camera stream unavailable." />;
     if (!player) return null; // this camera's player is being made — the spinner shows
 

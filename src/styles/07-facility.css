@@ -43,9 +43,27 @@
    MANY (owner, 2026-10-14): auto-fit wrapped the Faults tab's fourth box onto a
    row of its own on a phone. Each box takes an equal share; on a narrow screen
    the figure shrinks and the label wraps inside its box instead. */
-/* A ticket (TicketsTab): its device, then each record taken on with it, divided by a hairline — one card. */
+/* THE card of a Facility record (RecordCard): a ticket, a closed ticket, scheduled work done (owner, 2026-10-14: one
+   style everywhere). ONE frame; inside it the record flat — its head (title, status pill), then its text with its
+   cost and buttons on the right of it (a phone puts them under). A ticket taken on for several faults of a device
+   holds them all, divided by a hairline (.fm-ticket-records). */
+.fm-record-card {
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 12px 14px; border-radius: 12px;
+  background: var(--bg-card); border: 1px solid var(--hairline);
+}
+.fm-record-card .fm-record { border: none; background: none; padding: 0; border-radius: 0; }
+.fm-record-head { display: flex; align-items: flex-start; gap: 12px; padding-right: 10px; flex: 1 1 100%; }
+.fm-record-head .fm-row-title { flex: 1 1 auto; min-width: 0; }
+.fm-record-head .fm-row-title strong { font-weight: 600; font-size: var(--text-md); line-height: 1.35; overflow-wrap: anywhere; }
+.fm-record-head .fm-badge { flex: 0 0 auto; margin-top: 2px; }
+.fm-record-body { flex: 1 1 100%; min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+/* ⚠️ THE CARD'S WIDTH, NEVER ITS LONGEST LINE (owner, 2026-10-14: a "VESTA reads: …" note ran past a Closed card's
+   right edge): a line of its own that may shrink wraps every note inside the card. */
+.fm-record-body > .fm-row-main { flex: 1 1 260px; min-width: 0; }
+.fm-record-actions { flex: 0 0 auto; margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.fm-record-actions .modal-actions { justify-content: flex-end; flex-wrap: wrap; }
 .fm-ticket-records { display: flex; flex-direction: column; }
-.fm-ticket-records > .fm-ticket-record + .fm-ticket-record { border-top: 1px solid var(--hairline); padding-top: 8px; margin-top: 8px; }
+.fm-ticket-records > .fm-record + .fm-record { border-top: 1px solid var(--hairline); padding-top: 8px; margin-top: 8px; }
 /* The Spend tab's month totals on one line, each an equal share of the width with its word above its amount, Record
    spend at their right (owner, 2026-10-14); on a phone Record spend takes the line under them. */
 .fm-cap-totals { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; align-items: center; gap: 6px 18px; }
@@ -124,21 +142,7 @@
 .fm-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .fm-meta-when { font-size: var(--text-xs); }
 .fm-meta .fm-entity-chip { font-size: var(--text-2xs); padding: 1px 9px; line-height: 1.6; }
-/* A fault card: the title across the card with its status at the right, the
-   record under it, the actions on their own row at the right (owner,
-   2026-10-01). Grid, not the row's flex: three stacked rows whatever the
-   width, so a long title is never squeezed beside the buttons. */
-.fm-row.fm-fault { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 8px; padding: 14px 16px; }
-.fm-fault-head { display: flex; align-items: flex-start; gap: 12px; padding-right: 10px; }
-.fm-fault-head .fm-row-title { flex: 1 1 auto; min-width: 0; }
-.fm-fault-head .fm-row-title strong { font-weight: 600; font-size: var(--text-md); line-height: 1.35; overflow-wrap: anywhere; }
-.fm-fault-head .fm-badge { flex: 0 0 auto; margin-top: 2px; }
-/* ⚠️ THE CARD'S WIDTH, NEVER ITS LONGEST LINE (owner, 2026-10-14: a "VESTA reads: …" note ran past a Closed card's
-   right edge). `flex: none` here sized the record's text to its longest line wherever the record is a flex row inside
-   a fault card (Tickets: in progress and Closed); a full line that may shrink wraps every note inside the card. */
-.fm-fault .fm-row-main { flex: 1 1 100%; min-width: 0; }
 .fm-fault-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
-.fm-fault .fm-row-confirm .modal-actions { justify-content: flex-end; }
 
 /* A record that opens for editing when tapped. The cursor and hover lift are
    the whole affordance — a per-row "Edit" button would compete with the status

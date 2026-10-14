@@ -75,7 +75,7 @@ export default function EnergyPanel({ onClose, fallback }: { onClose: () => void
   const loading = <ChartEmpty status={status === "failed" ? "failed" : "loading"} />;
   return (
     <DataWindow title="Energy" icon={<Zap size={22} />} className="energy-modal" onClose={onClose}
-      live={<LiveNote>Home Assistant Energy</LiveNote>} picker={picker}
+      live={<LiveNote>Energy dashboard</LiveNote>} picker={picker}
       now={() => (setup ? <NowView setup={setup} costUnit={costUnit} house={house} colourOf={colourOf} /> : loading)}
       history={() => (setup ? <HistoryView setup={setup} costUnit={costUnit} range={range} colourOf={colourOf} /> : loading)} />
   );
@@ -160,7 +160,7 @@ function NowView({ setup, costUnit, house, colourOf }: { setup: EnergyWindowSetu
         </div>
         <Flow split={split} rateKw={rateKw} house={house} colourOf={colourOf} />
         {overlapShows(split) && (
-          <div className="energy-note">The devices add up to more than the grid meter: some are set up beside the meter they belong to. In Home Assistant&apos;s Energy settings, set each one&apos;s upstream device.</div>
+          <div className="energy-note">The devices add up to more than the grid meter: some are set up beside the meter they belong to. In the energy settings, set each one&apos;s upstream device.</div>
         )}
       </div>
     </div>
