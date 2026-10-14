@@ -1,3 +1,8 @@
+## 2.496.357
+
+### Fixed
+- Cockpit → Open issues: a device that is offline no longer shows the same problem twice. A Timmerflotte sensor read "Unavailable" and, on a second line, "Timmerflotte_5969 has been offline for 9 h." — the VESTA Agent's fault is about another part of the same device. When that part is unavailable too, the fault now joins the "Unavailable" line ("Unavailable — Timmerflotte_5969 has been offline for 9 h."), with its Open ticket and Close buttons. A fault about a part that still reports (a battery level, for example) keeps its own line.
+
 ## 2.496.356
 
 ### Changed
