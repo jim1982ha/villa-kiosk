@@ -44,5 +44,5 @@ def test_the_kiosk_stand_in_is_the_real_kiosk_with_only_its_transport_replaced()
     assert replaced == {"__init__", "_req", "_ticket_id", "add_document"}, replaced
     added = {n for n in vars(FakeKiosk) if not n.startswith("_") and n not in vars(Kiosk)}
     assert added <= {"held", "person_closes", "person_reopens", "person_moves", "person_renames", "ticket", "tickets",
-                     "notes", "ticket_documents", "titles", "numbers", "resolved", "reopened", "readings", "cleared"}, added
+                     "notes", "ticket_documents", "titles", "numbers", "origins", "resolved", "reopened", "readings", "cleared"}, added
     assert FakeKiosk().enabled is True and FakeKiosk().info

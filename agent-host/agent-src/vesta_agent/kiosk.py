@@ -181,9 +181,11 @@ class Kiosk:
         return "va-" + secrets.token_hex(8)
 
     async def add_ticket(self, title: str, entity_id: str | None = None, note: str | None = None,
-                         document_ids: list[str] | None = None, number: int | None = None) -> str:
+                         document_ids: list[str] | None = None, number: int | None = None,
+                         origin: str | None = None) -> str:
         """`number`: the alert's number, as every chat names it ("#5"), when the fault comes from one — the Kiosk's card
-        shows it beside the title (owner, 2026-10-14), so the Telegram message and the card are seen to be one problem."""
+        shows it beside the title (owner, 2026-10-14), so the Telegram message and the card are seen to be one problem.
+        `origin`: where the agent made it from — "alert", "night" (its nightly check) or "chat" — the card's source icon."""
         tid = self._ticket_id()
 
         def change(data: dict) -> str:
@@ -198,6 +200,8 @@ class Kiosk:
                 t["note"] = note[:2000]
             if number:
                 t["alertNumber"] = int(number)
+            if origin:
+                t["origin"] = origin
             tickets.append(t)
             data["tickets"] = tickets
             return tid
@@ -224,7 +228,7 @@ class Kiosk:
                     "reopened_by": str(ups[-1].get("who") or ups[-1].get("by") or "")} if ups else {}
         return {t["id"]: {"status": str(t.get("status") or ""), "title": str(t.get("title") or ""),
                           "agent_title": agent_title(t), "resolved_at": str(t.get("resolvedAt") or ""),
-                          "by": last(t, "who") or last(t, "by"), "alert_number": t.get("alertNumber"),
+                          "by": last(t, "who") or last(t, "by"), "alert_number": t.get("alertNumber"), "origin": t.get("origin"),
                           "noted": [(str(u.get("at") or ""), str(u.get("note") or "")) for u in t.get("updates") or []
                                     if isinstance(u, dict) and u.get("kind") == NOTED],
                           **reopened(t)}     # `by`: who did it, as the card says it
@@ -281,16 +285,18 @@ class Kiosk:
             return False
         return await self._edit(change)
 
-    async def number_ticket(self, tid: str, number: int) -> bool:
-        """A fault made before it carried its alert's number gets it ("#5", add_ticket). False when it is gone or
-        already says it."""
+    async def tag_ticket(self, tid: str, number: int | None = None, origin: str | None = None) -> bool:
+        """A fault made before it carried them gets its alert's number ("#5") and where it came from (add_ticket). False
+        when it is gone or already says them."""
+        tags = {**({"alertNumber": int(number)} if number else {}), **({"origin": origin} if origin else {})}
+
         def change(data: dict) -> bool:
             tickets = list(data.get("tickets") or [])
             for i, t in enumerate(tickets):
                 if isinstance(t, dict) and t.get("id") == tid:
-                    if t.get("alertNumber") == int(number):
+                    if all(t.get(k) == v for k, v in tags.items()):
                         return False
-                    tickets[i] = dict(t, alertNumber=int(number))
+                    tickets[i] = dict(t, **tags)
                     data["tickets"] = tickets
                     return True
             return False

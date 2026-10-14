@@ -361,10 +361,13 @@ class Problems:
     # shows is here, from the task and its problem, and tickets.repair makes the Kiosk say it.
     def card(self, task: dict) -> dict:
         """What task `task`'s Kiosk fault must say: {open, title (what is wrong now), number (its alert's "#N", or None),
+        origin ("alert" | "night", or None),
         note and who (its close: what it says, the person who closed it — None: the agent's own clearing)}."""
         kind, sid = self._source(task)
         return {"open": task.get("status") == "open", "title": self.current_title(task),
                 "number": sid if kind == "incident" else None,
+                # where it came from, the Kiosk card's source icon (owner, 2026-10-14): an alert or the night check
+                "origin": {"incident": "alert", "finding": "night"}.get(kind or ""),
                 "note": task.get("close_note") or "Closed: the problem is over.", "who": task.get("closed_who") or None}
 
     def unseen(self) -> list[dict]:

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.190 (14 October 2026)
+
+- vesta_agent.kiosk: `add_ticket(origin=)` writes the fault's `origin` ("alert" | "night" | "chat"), the Kiosk card's
+  source icon (2.496.359); `tag_ticket(tid, number, origin)` replaces number_ticket; `held_tickets()` gives `origin`.
+- vesta_shared.problems: `card()` says the origin (incident → alert, finding → night); a fault with no task (a chat's
+  "Create this fault") is "chat". tickets.repair tags open faults made before.
+
 ## 0.6.189 (14 October 2026)
 
 - vesta_agent.notice: `Notices.story(incident)` — the Kiosk card's lines of an incident's Telegram life (reminder,

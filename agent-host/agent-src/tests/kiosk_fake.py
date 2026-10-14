@@ -115,6 +115,10 @@ class FakeKiosk(Kiosk):
         return {t["id"]: t.get("title") for t in self._all()}
 
     @property
+    def origins(self) -> dict[str, str]:
+        return {t["id"]: t["origin"] for t in self._all() if "origin" in t}
+
+    @property
     def numbers(self) -> dict[str, int]:
         return {t["id"]: t["alertNumber"] for t in self._all() if "alertNumber" in t}
 

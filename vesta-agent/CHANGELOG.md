@@ -1,3 +1,9 @@
+## 0.12.198
+
+What you will see (with VESTA Kiosk 2.496.359 or later):
+- Each fault the Agent creates says where it came from, so the Cockpit shows the right icon: an alert, the night
+  check, or a Telegram chat ("Create this fault"). Faults already open get it within 5 minutes of installing.
+
 ## 0.12.197
 
 What you will see (with VESTA Kiosk 2.496.356 or later):

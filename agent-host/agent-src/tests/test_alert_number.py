@@ -34,8 +34,8 @@ def test_the_real_kiosk_writes_the_number_and_gives_it_once_to_a_fault_made_with
     assert ticket(doc, tid)["alertNumber"] == 5
     other = run(k.add_ticket("Battery low"))
     assert "alertNumber" not in ticket(doc, other)                       # no alert behind it: no number
-    assert run(k.number_ticket(other, 7)) and ticket(doc, other)["alertNumber"] == 7
-    assert not run(k.number_ticket(other, 7))                            # already says it: nothing written
+    assert run(k.tag_ticket(other, 7)) and ticket(doc, other)["alertNumber"] == 7
+    assert not run(k.tag_ticket(other, 7))                            # already says it: nothing written
     assert run(k.held_tickets())[other]["alert_number"] == 7
 
 
@@ -60,10 +60,34 @@ def test_the_repair_numbers_an_open_alert_fault_made_before_and_leaves_it_alone_
     run(t.repair())
     assert kiosk.numbers == {uid: iid}
     calls = []
-    real = kiosk.number_ticket
-    async def counted(tid, number):
+    real = kiosk.tag_ticket
+    async def counted(tid, number=None, origin=None):
         calls.append(tid)
-        return await real(tid, number)
-    kiosk.number_ticket = counted
+        return await real(tid, number, origin)
+    kiosk.tag_ticket = counted
     run(t.repair())
     assert calls == []                                                   # it says it already: not asked again
+
+
+# ---------------------------------------------------------------------- where it came from (owner, 2026-10-14)
+def test_each_fault_says_where_it_came_from_an_alert_the_night_check_or_a_chat(tmp_path):
+    kiosk = FakeKiosk()
+    t, store = desk(tmp_path, kiosk)
+    iid = store.new_incident("k1", "pump_schedule", "switch.example_pump", "P2", {})
+    from_alert, _ = Problems(store).open_task("incident", iid, "pump_schedule", "switch.example_pump", "Pump did not run")
+    from_night, _ = Problems(store).open_task("finding", 3, "battery_low", "sensor.example_battery", "Battery at 9%")
+    a = run(t.create("Pump did not run", "switch.example_pump", None, from_alert))
+    n = run(t.create("Battery at 9%", "sensor.example_battery", None, from_night))
+    c = run(t.create("Water heater on the night of 9 October", None, None))     # "Create this fault" in a chat
+    assert kiosk.origins == {a: "alert", n: "night", c: "chat"}
+
+
+def test_the_repair_says_where_an_open_fault_made_before_came_from(tmp_path):
+    kiosk = FakeKiosk()
+    t, store = desk(tmp_path, kiosk)
+    fid, _ = store.raise_finding("battery_low", "sensor.example_battery", "battery", "2026-10-14", "P3", "Battery at 9%", {})
+    task, _ = Problems(store).open_task("finding", fid, "battery_low", "sensor.example_battery", "Battery at 9%")
+    uid = run(kiosk.add_ticket("Battery at 9%", "sensor.example_battery"))      # made before the origin existed
+    store.set_task_uid(task, uid)
+    run(t.repair())
+    assert kiosk.origins == {uid: "night"} and uid not in kiosk.numbers

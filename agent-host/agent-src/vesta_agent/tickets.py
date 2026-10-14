@@ -69,22 +69,17 @@ class Tickets:
             if why:
                 log.warning("Fault %r: its report was not attached: %s", (title or "")[:60], why)
                 note = ((note or "") + f"\n(The investigation report could not be attached: {why}.)").strip()
-        number = self._alert_number(task_id)
+        # its alert's number and where it came from (Problems.card); a fault with no task is a chat's ("Create this fault")
+        task = self._store().task(int(task_id)) if task_id else None
+        want = Problems(self._store()).card(task) if task else {"number": None, "origin": "chat"}
         tid = await self.kiosk.add_ticket(ticket_title(title)[:200], entity_id=entity_id, note=note, document_ids=docs,
-                                          **({"number": number} if number else {}))
+                                          **({"number": want["number"]} if want["number"] else {}),
+                                          **({"origin": want["origin"]} if want["origin"] else {}))
         log.info("Kiosk ticket %s created: %s", tid, ticket_title(title)[:80])
         if task_id:
             self._store().set_task_uid(int(task_id), tid)
         self.state.log("executed", {"tool": "ticket", "ticket": tid, "entity": entity_id})
         return tid
-
-    def _alert_number(self, task_id: int | None) -> int | None:
-        """The number every chat gives the alert a task came from ("#5", messaging.incident_tag) — None for a night
-        check's finding, which no message numbers."""
-        if not task_id:
-            return None
-        kind, sid = Problems._source(self._store().task(int(task_id)))
-        return sid if kind == "incident" else None
 
     async def reopen(self, a: dict) -> bool:
         """ticket.reopen {task_id, title, note}: the task's fault open again in the Kiosk under its new title — or, when it
@@ -211,9 +206,10 @@ class Tickets:
                     # the title the agent last gave it, not the one it has: a title a person wrote stays (Kiosk.update_ticket)
                     if title and (card.get("agent_title") or card.get("title")) != title:
                         fixed += await self.kiosk.update_ticket(uid, title)
-                    # the alert's number, as every chat writes it (owner, 2026-10-14)
-                    if want["number"] and card.get("alert_number") != want["number"]:
-                        fixed += await self.kiosk.number_ticket(uid, want["number"])
+                    # the alert's number, as every chat writes it, and where it came from (owner, 2026-10-14)
+                    if (want["number"] and card.get("alert_number") != want["number"]) \
+                            or (want["origin"] and card.get("origin") != want["origin"]):
+                        fixed += await self.kiosk.tag_ticket(uid, want["number"], want["origin"])
                     # what happened on Telegram — reminders, escalation, a button pressed (owner, 2026-10-14) — from this
                     # task's run on (an earlier run's lines belong to the fault as it was then)
                     if want["number"] and self.kiosk.says(NOTED):
