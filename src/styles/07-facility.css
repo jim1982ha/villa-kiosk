@@ -140,7 +140,10 @@
 /* The line right under a card's title: its pills, then when (RecordMeta.tsx, owner 2026-10-11).
    A device chip there is a pill like the others — the same height, still a button. */
 .fm-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.fm-meta-when { font-size: var(--text-xs); }
+/* ⚠️ ON THE PILLS' LINE, WRAPPING THERE (owner, 2026-10-15): "Opened … · in progress since … by …" was a flex item
+   as wide as its whole text, so a long one dropped below the pills as a block. A zero basis keeps it on their line
+   (when 14em fit there) and its words wrap inside it. */
+.fm-meta-when { font-size: var(--text-xs); flex: 1 1 0; min-width: 14em; }
 .fm-meta .fm-entity-chip { font-size: var(--text-2xs); padding: 1px 9px; line-height: 1.6; }
 .fm-fault-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 
