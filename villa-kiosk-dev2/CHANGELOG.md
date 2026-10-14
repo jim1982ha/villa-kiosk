@@ -1,3 +1,11 @@
+## 2.496.370
+
+### Changed
+- Cockpit: every list now uses the same card — Open issues on the Overview, Tickets, Schedule, Spend and Recent work. Title with its status pill (and the room under it on the Overview), the line of pills and time, the notes, a cost on the right, and the buttons inside the card on the right of its text. A card that opens lights up under the pointer, never while the pointer is on its buttons.
+- Schedule: each task's state pill ("Due soon", "Overdue"…) is on its title line, and "Log" and the bin are inside the card on its right — as for tickets. An overdue or due-soon task keeps its tint.
+- Open issues: the cards look like the tickets' (white, outlined), with their source icons before the device's name and its room under it.
+- Behind it: the automatic checks now draw these cards and read what they show, instead of matching the code's text — a reorganisation no longer breaks them, a wrong screen does. A forgotten style for an element that no longer exists was removed.
+
 ## 2.496.369
 
 ### Fixed
