@@ -85,8 +85,8 @@ ck("  ...an open fault's line is its text alone, one taken in hand still reads \
 ck("  ...and its line shows no icon of its own: the row's says it already",
    lineIcon(loneFault, loneFault.items[0]) === null && lineIcon(lone, lone.items[0]) === null);
 const mixed = battery.find((g) => g.key === "device:lock.door");
-ck("  ...while a row mixing kinds marks the line whose kind is not the row's (a fault under an unlocked lock)",
-   mixed?.kind === "alarm" && mixed.items.map((i) => lineIcon(mixed, i)).join(",") === ",fault",
+ck("  ...while a row mixing sources marks the line whose source is not the row's (a person's fault under a live lock)",
+   mixed?.kind === "alarm" && mixed.items.map((i) => lineIcon(mixed, i)?.sources.join("+") ?? "").join(",") === ",person",
    mixed?.items.map((i) => [i.kind, lineIcon(mixed, i)]));
 const noDevice = groupAttention(build([ticket("t-n", "Pool pump noisy")])).find((g) => g.key === "item:fault:t-n");
 ck("  ...and a problem with no device stands for itself: its line says only its status, never its title twice",
@@ -190,7 +190,7 @@ ck("the Cockpit draws one card per group, its actions (on its faults) at the bot
    /attentionGroups\.map\(\(group\) => \(\s*<CockpitAttentionRow key=\{group\.key\} group=\{group\}/.test(cockpit)
    && /const actions = useCardActions\(group, canManage, onEditTicket\);/.test(cockpit) && /const acts = cardActions\(group\);/.test(cockpit)
    // a line's icon is lineIcon's answer, never its own kind's again
-   && /function CockpitAttentionSub[\s\S]*?const kind = lineIcon\(group, item\);[\s\S]*?\{Icon && <Icon/.test(cockpit));
+   && /function CockpitAttentionSub[\s\S]*?const icons = lineIcon\(group, item\);[\s\S]*?\{icons && <SourceIcons \{\.\.\.icons\}/.test(cockpit));
 // ⚠️ CLOSE TAKES ITS OWN CLICK (owner, 2026-10-10: "Close is not clickable because the whole card takes the
 // priority"): 2.496.318 stretched an invisible layer from the head over the card, on top of Close
 const css08 = src("styles/08-shared.css");

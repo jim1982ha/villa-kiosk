@@ -14,7 +14,7 @@
 import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { createPortal } from "react-dom";
 import {
-  TriangleAlert, AlertOctagon, MapPin, Building2, LayoutGrid,
+  MapPin, Building2, LayoutGrid,
   Activity, ChevronRight, X, Plus,
 } from "lucide-react";
 import SegmentedGroup from "@/components/common/SegmentedGroup";
@@ -39,7 +39,8 @@ import {
   buildCategoryTiles, buildRoomGroups, buildFloorGroups,
   buildActivityFeed, pivotTiles, tileLine, type Pivot, type ActivityEntry,
 } from "./cockpitData";
-import { attentionLineIn, cardActions, lineIcon, type AttentionGroup, type AttentionItem, type AttentionKind } from "@/config/attention";
+import { attentionLineIn, cardActions, lineIcon, lineSources, type AttentionGroup, type AttentionItem } from "@/config/attention";
+import { SourceIcons } from "@/components/fm/sourceIcons";
 import { useVillaModel } from "@/config/VillaModel";
 import { buildDeviceOptions } from "@/components/fm/DeviceSearchPicker";
 import FaultForm from "@/components/fm/FaultForm";
@@ -49,12 +50,6 @@ import { localStamp } from "@/fm/fmEngine";
 import type { FmTicket } from "@/fm/fmTypes";
 
 
-const ATTENTION_ICON: Record<AttentionKind, typeof TriangleAlert> = {
-  unavailable: TriangleAlert,
-  fault: AlertOctagon,
-  schedule: AlertOctagon,
-  alarm: TriangleAlert,
-};
 
 const PIVOT_ICON = { room: MapPin, floor: Building2 } as const;
 
@@ -285,7 +280,6 @@ function CockpitAttentionRow({ group, onOpenEntity, canManage, onEditTicket }: {
   canManage: boolean;
   onEditTicket: (ticketId: string) => void;
 }) {
-  const Icon = ATTENTION_ICON[group.kind];
   const tappable = !!group.entityId;
   const Head = tappable ? "button" : "div";
   const actions = useCardActions(group, canManage, onEditTicket);
@@ -299,7 +293,8 @@ function CockpitAttentionRow({ group, onOpenEntity, canManage, onEditTicket }: {
         type={tappable ? "button" : undefined}
         className={`cockpit-attention-row${tappable ? " tappable" : ""}`}
       >
-        <Icon size={16} className={`cockpit-attention-icon cockpit-attention-${group.kind}`} />
+        {/* where its (first) problem comes from, in place of a warning sign (owner, 2026-10-14) — legend: the (i) */}
+        {group.items[0] && <SourceIcons {...lineSources(group.items[0])} />}
         <span className="cockpit-attention-body">
           <span className="cockpit-attention-title">{group.title}</span>
           {group.room && <span className="muted body-text" style={{ fontSize: "var(--text-2xs)" }}>{group.room}</span>}
@@ -319,14 +314,13 @@ function CockpitAttentionRow({ group, onOpenEntity, canManage, onEditTicket }: {
 }
 
 function CockpitAttentionSub({ group, item }: { group: AttentionGroup; item: AttentionItem }) {
-  const kind = lineIcon(group, item);
-  const Icon = kind ? ATTENTION_ICON[kind] : null;
+  const icons = lineIcon(group, item);
   // what last happened about it on Telegram — a reminder, an escalation, a button pressed (owner, 2026-10-14)
   const latest = item.latest ?? item.fault?.latest;
   return (
     <li className="cockpit-attention-sub">
       <div className="cockpit-attention-sub-line">
-        {Icon && <Icon size={14} className={`cockpit-attention-icon cockpit-attention-${kind}`} />}
+        {icons && <SourceIcons {...icons} size={14} />}
         <span className="cockpit-attention-sub-text">
           {attentionLineIn(group, item)}
           {latest && <span className="cockpit-attention-latest">{latest.note} · {localStamp(latest.at)}</span>}

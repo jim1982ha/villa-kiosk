@@ -186,6 +186,9 @@ export interface FmTicket extends FmProvenance {
    *  Agent (0.12.195+), shown before the title (fmEngine.faultTitle) so the message and the card read as one problem
    *  (owner, 2026-10-14). Absent on a person's fault and on a night check's (no message numbers those). */
   alertNumber?: number;
+  /** Where the VESTA Agent made it from (0.12.198+): an alert, its nightly check, or a chat ("Create this fault") — the
+   *  card's source icon (issueSource.faultSource). Absent on a person's fault and on the Agent's older ones. */
+  origin?: "alert" | "night" | "chat";
   /** Every status change, in order. Optional because faults raised before
    *  this existed have none — read it as "no steps recorded", never as an
    *  error. */

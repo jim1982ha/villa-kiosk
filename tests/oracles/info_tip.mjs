@@ -56,7 +56,7 @@ ck(`  ...and the list's own refresh, from the app's own numbers (${STORE_ACTIVE_
    [withAgent, alone].every((t) => t.note.includes(`every ${STORE_ACTIVE_MS / 1000} seconds while it is open`)
      && t.note.includes(`every ${STORE_HEARTBEAT_MS / 60000} minutes otherwise`)));
 const card = src("components/fm/FaultTiming.tsx");
-ck("the card asks whether an Agent is connected, and shows that table", /faultTiming\(agentVisible\(status\)\)/.test(card)
+ck("the card asks whether an Agent is connected, and shows that table", /faultTiming\(agent\)/.test(card) && /const agent = agentVisible\(status\);/.test(card)
    && /rows\.map/.test(card) && /\{note\}/.test(card) && /<table className="info-pop-table">/.test(card));
 ck("it sits just before Open a ticket, on the Overview's title line", /<FaultTiming \/>\s*<button[^>]*>[^<]*<Plus size=\{16\} \/> Open a ticket/.test(src("components/cockpit/CockpitOverview.tsx")));
 

@@ -1,3 +1,10 @@
+## 2.496.359
+
+### Changed
+- Cockpit → Open issues: each problem shows WHERE IT COMES FROM as an icon, in place of the warning sign — Live (what Home Assistant reports right now: it goes by itself), Alert (a VESTA alert, numbered as on Telegram), Night check, Chat (created from a Telegram chat), a ticket opened by the Owner, the Facility manager or a guest (shown as the round letter badge of the top bar: O, FM, G), and Schedule (maintenance overdue). The colour still says how serious it is: amber for lost contact or due, red for a confirmed problem. A line that holds two sources — an offline device and the VESTA Agent's fault about it — shows both icons, one under the other.
+- The (i) beside "Open a ticket" lists every icon and what it means (the VESTA Agent's only when an Agent is connected), above when faults open and close.
+- Night check and Chat are told apart from VESTA Agent 0.12.198; until then such a fault shows the VESTA Agent's own icon.
+
 ## 2.496.358
 
 ### Changed

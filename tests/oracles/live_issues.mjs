@@ -117,6 +117,42 @@ ck("  ...a fault on an entity that still reports (a battery reading 42 %) stays 
 const [unknownValue] = offlineDevice("unknown");
 ck("  ...and \"unknown\" (a sensor with no value) is not offline: its own line", unknownValue.items.length === 2);
 
+console.log("\n  each problem's source, as an icon (owner, 2026-10-14):");
+const S = await import("@/fm/issueSource");
+const agentRec = (x) => ({ ...rec("a", "x.y"), source: "vesta_agent", ...x });
+ck("a fault's source is read from its record: the Agent's origin, its alert number, a guest's mark, the profile that opened it",
+   S.faultSource(agentRec({ origin: "night" })) === "night" && S.faultSource(agentRec({ origin: "chat" })) === "chat"
+   && S.faultSource(agentRec({ alertNumber: 5 })) === "alert" && S.faultSource(agentRec({})) === "agent"
+   && S.faultSource({ ...rec("g", "x.y"), reportedBy: "guest" }) === "guest"
+   && S.faultSource({ ...rec("o", "x.y"), updates: [{ at: "", status: "in_progress", photoIds: [], by: "Owner" }] }) === "owner"
+   && S.faultSource({ ...rec("f", "x.y"), updates: [{ at: "", status: "in_progress", photoIds: [], by: "Facility manager" }] }) === "fm"
+   && S.faultSource(rec("p", "x.y")) === "person");
+const { lineSources } = await import("@/config/attention");
+const night = groupAttention(buildAttentionItems({
+  unavailableIds: ["sensor.example_temperature"],
+  entities: { "sensor.example_temperature": ent("sensor.example_temperature", "unavailable"),
+              "sensor.example_battery": ent("sensor.example_battery", "unavailable") },
+  entityMap: {}, alertThresholds: {}, resolvedRooms: {}, selectableIds: [],
+  folding: new Map([["sensor.example_battery", "sensor.example_temperature"]]),
+  fmData: fm([agentRec({ id: "n1", entityId: "sensor.example_battery", origin: "night", title: "Example offline" })]) }))[0];
+ck("  ...an offline device and its night check's fault: ONE line, two icons — Live (amber), Night check (red)",
+   JSON.stringify(lineSources(night.items[0])) === JSON.stringify({ sources: ["live", "night"], kinds: ["unavailable", "fault"] }),
+   lineSources(night.items[0]));
+const React = (await import("react")).default;
+const { renderToStaticMarkup } = await import("react-dom/server");
+const I = await import("@/components/fm/sourceIcons");
+const drawn = renderToStaticMarkup(React.createElement(I.SourceIcons, lineSources(night.items[0])));
+ck("  ...drawn one under the other, each in its status colour, named for a screen reader",
+   (drawn.match(/<svg/g) || []).length === 2 && /cockpit-attention-unavailable[\s\S]*cockpit-attention-fault/.test(drawn)
+   && /aria-label="Live and Night check"/.test(drawn), drawn);
+const people = renderToStaticMarkup(React.createElement(I.SourceIcons, { sources: ["owner", "fm", "guest"], kinds: ["fault"] }));
+ck("  ...a profile is the top bar's badge: its letters in a circle (O, FM, G), in the line's colour",
+   /source-role-badge cockpit-attention-icon cockpit-attention-fault"[^>]*>O</.test(people)
+   && /source-role-badge two[^"]*"[^>]*>FM</.test(people) && /class="source-role-badge[^"]*"[^>]*>G</.test(people), people);
+ck("  ...every source has its icon and its words in the (i)'s legend",
+   S.ISSUE_SOURCES.every((x) => I.SOURCE_ICON[x] && I.SOURCE_WORDS[x]?.[0] && I.SOURCE_WORDS[x]?.[1])
+   && /SOURCE_WORDS\[s\]\[1\]/.test(readFileSync(new URL("../../src/components/fm/FaultTiming.tsx", import.meta.url), "utf8")));
+
 console.log("\n  what happened on Telegram, on the card (owner, 2026-10-14: reminders, escalation, Need help):");
 const N = await import("@/fm/faultNotes");
 const told = { ...rec("s", "switch.pump"), status: "open", updates: [
