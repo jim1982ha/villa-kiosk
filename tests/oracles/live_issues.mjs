@@ -153,6 +153,39 @@ ck("  ...every source has its icon and its words in the (i)'s legend",
    S.ISSUE_SOURCES.every((x) => I.SOURCE_ICON[x] && I.SOURCE_WORDS[x])
    && /SOURCE_ICON\[r\.source\]/.test(readFileSync(new URL("../../src/components/fm/FaultTiming.tsx", import.meta.url), "utf8")));
 
+console.log("\n  the Recap's readiness says what is found, never the goal over a contradiction (owner, 2026-10-14):");
+const { buildReadiness } = await import("@/fm/readiness");
+const noDevices = { ids: [], unavailable: [], has: () => false };
+const readyWith = (tickets) => buildReadiness({}, fm(tickets), noDevices).checks.find((c) => c.id === "tickets");
+const mixedOpen = readyWith([agentRec({ id: "n1", origin: "night" }), agentRec({ id: "n2", origin: "night" }),
+  agentRec({ id: "a1", alertNumber: 5 }), { ...rec("g", "x.y"), reportedBy: "guest" },
+  { ...rec("t", "x.y"), status: "in_progress" }, { ...rec("r", "x.y"), status: "resolved", resolvedAt: "2026-10-14T09:00:00Z" }]);
+ck("4 faults and 1 ticket: \"4 detected faults (1 open ticket)\", where to deal with each, and the faults' source icons",
+   mixedOpen.label === "4 detected faults (1 open ticket)"
+   && mixedOpen.detail === 'Check the faults in "Overview", or the open tickets in "Tickets".'
+   && mixedOpen.sources.join() === "alert,night,guest", mixedOpen);
+const onlyFaults = readyWith([agentRec({ id: "n1", origin: "night" })]);
+ck("  ...one fault, no ticket: singular, and only Overview", onlyFaults.label === "1 detected fault (0 open tickets)"
+   && onlyFaults.detail === 'Check the faults in "Overview".', onlyFaults);
+const onlyTickets = readyWith([{ ...rec("t", "x.y"), status: "in_progress" }]);
+ck("  ...tickets only: no icon, only Tickets", onlyTickets.detail === 'Check the open tickets in "Tickets".' && onlyTickets.sources.length === 0, onlyTickets);
+const allClear = readyWith([]);
+ck("  ...nothing open: the goal is met, and said once", allClear.state === "pass" && allClear.label === "No open faults or tickets"
+   && allClear.detail === "Nothing to deal with.", allClear);
+const tab = readFileSync(new URL("../../src/components/fm/ReadinessTab.tsx", import.meta.url), "utf8");
+ck("  ...the Recap draws those icons in the line, after \"Check the\"",
+   /<CheckDetail check=\{c\} \/>/.test(tab) && /Check the <SourceIconRow sources=\{check\.sources\} \/> faults/.test(tab));
+
+ck("  ...the checks fold under their verdict, closed at first; a tap on the verdict opens them (owner, 2026-10-14)",
+   /const \[showChecks, setShowChecks\] = useState\(false\);/.test(tab) && /\{showChecks && <div className="fm-list">/.test(tab)
+   && /className="fm-headline-toggle" aria-expanded=\{showChecks\}\s*onClick=\{\(\) => setShowChecks\(\(v\) => !v\)\}/.test(tab));
+
+const recent = readFileSync(new URL("../../src/components/fm/RecentWorkList.tsx", import.meta.url), "utf8");
+const ticketsTab = readFileSync(new URL("../../src/components/fm/TicketsTab.tsx", import.meta.url), "utf8");
+ck("lists that only grow are ONE folded, paged list (owner, 2026-10-14): Tickets' Closed and Schedule's Recent work",
+   /<FoldedList title="Closed" rows=\{closed\}/.test(ticketsTab) && /<FoldedList title="Recent work" rows=\{rows\}/.test(recent)
+   && !/usePaged|<Pager|\.slice\(0, limit\)/.test(recent + ticketsTab));
+
 console.log("\n  what happened on Telegram, on the card (owner, 2026-10-14: reminders, escalation, Need help):");
 const N = await import("@/fm/faultNotes");
 const told = { ...rec("s", "switch.pump"), status: "open", updates: [
@@ -181,11 +214,15 @@ ck("the Tickets tab lists the tickets in progress (by device) and Closed — nev
 ck("the Overview's title line: the (i) then Open a ticket, for the profiles that manage tickets; a guest reports a problem",
    /<FaultTiming \/>\s*<button className="btn ghost" onClick=\{\(\) => setRaising\(\{\}\)\}><Plus size=\{16\} \/> Open a ticket<\/button>/.test(ov) && /Report a problem<\/button>/.test(ov) && /<FaultForm /.test(ov));
 ck("a card draws what cardActions says (no rule of its own)",
-   /const acts = cardActions\(group\);/.test(ov) && /setStaging\(records\(acts\.markInProgress\)\)\}>Open ticket/.test(ov)
+   /const acts = cardActions\(group\);/.test(ov) && /setStaging\(records\(acts\.markInProgress\)\)\}><Wrench size=\{14\} aria-hidden \/> Open Ticket</.test(ov)
+   && /onEditTicket\(acts\.editTicket as string\)\}><Pencil size=\{14\} aria-hidden \/> Edit Ticket</.test(ov)
    && /onEditTicket\(acts\.editTicket as string\)/.test(ov) && /closeTickets\(acts\.close\)/.test(ov) && !/in_progress"/.test(ov.replace(/to="in_progress"/, "")));
 ck("a card's lines on the left, its buttons on the right of the same line (owner, 2026-10-14)",
    /<div className="cockpit-attention-detail">\s*<ul className="cockpit-attention-subs">[\s\S]*?<\/ul>\s*\{actions\}\s*<\/div>/.test(ov)
    && /\.cockpit-attention-detail \{ display: flex;/.test(readFileSync(new URL("../../src/styles/08-shared.css", import.meta.url), "utf8")));
+ck("a ticket's notes wrap inside its card, never past its edge (owner, 2026-10-14: a long \"VESTA reads\" ran out)",
+   /\.fm-fault \.fm-row-main \{ flex: 1 1 100%; min-width: 0; \}/.test(src("styles/07-facility.css"))
+   && /\.fm-timeline-note \{[^}]*overflow-wrap: anywhere;/.test(src("styles/07-facility.css")));
 ck("the screens ask stageOf, never the status themselves",
    ["components/fm/TicketsTab.tsx", "components/fm/FaultForm.tsx", "components/fm/TodayTab.tsx"].every((f) => /stageOf\(/.test(src(f)) && !/status === "in_progress"|status !== "in_progress"|status === "open"/.test(src(f))));
 ck("the fault form is one, shared by raising and editing", /<FaultForm key=\{editing\.id\} editing=\{editing\}/.test(tt) && !/<input value=\{title\}/.test(ov + tt));

@@ -82,7 +82,7 @@ export default function FaultForm({ editing, presetEntity, deviceOptions, onDone
       </div>
       <FormActions
         error={formError} onCancel={onDone} disabled={!title.trim()}
-        saveLabel={editing ? "Save changes" : "Open ticket"}
+        saveLabel={editing ? "Save changes" : "Open Ticket"}
         onSave={async () => {
           const fields = {
             title: title.trim(),

@@ -1,3 +1,25 @@
+## 2.496.363
+
+### Changed
+- Cockpit → Schedule: "Recent work" is folded and paged exactly like "Closed" in the Tickets tab — "Recent work (N)", tap to open, ten at a time — so it never grows into an endless list (it showed the last 12, and the rest was out of reach). Both are now the same piece of the app.
+- Cockpit → Schedule: with no task yet, the text says to use "Add a task" below (it said "in the Schedule tab", the tab you are in).
+- Cockpit: every tab has the same footer as the Overview — the VESTA Agent button and Close. "Maintenance intervals are set in the Schedule tab" is gone.
+- Cockpit: the updates button's count sits at its bottom-right corner, and its tooltip reads "2 updates available".
+- The (i) beside "Open a ticket" is two-thirds wider on a desktop, so its table takes fewer lines; a phone still gets the screen's width.
+
+## 2.496.362
+
+### Changed
+- Cockpit → Recap: the readiness card about faults no longer contradicts itself ("No open faults or tickets" over "5 still open"). It now says what is found — "4 detected faults (1 open ticket)" — and where to deal with them: "Check the faults in "Overview", or the open tickets in "Tickets"", with the faults' own icons (the same as on the Overview) after "Check the". With nothing open it still reads "No open faults or tickets".
+- Cockpit → Recap: the six checks are folded under "Ready" / "Not ready" when the tab opens; a tap on that card shows them, a second tap folds them.
+- Cockpit → Overview: the card buttons are "Open Ticket" (with the Tickets tab's wrench) and "Edit Ticket" (with a pencil); the dialog, the form and the (i) say "Open Ticket" too.
+
+## 2.496.361
+
+### Fixed
+- Cockpit → Tickets: a long note on a card (for example "VESTA reads: Onsen pump used 0.14 kWh/day…") ran past the card's right edge, in Closed and in progress. Every note now wraps inside its card.
+- The empty Tickets tab now says "A fault on the Overview becomes a ticket when you press Open ticket on its card." (it still said "mark it in progress").
+
 ## 2.496.360
 
 ### Changed

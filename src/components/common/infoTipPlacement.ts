@@ -3,7 +3,8 @@
 
 const GAP = 8;       // between the (i) and its card
 const MARGIN = 12;   // the card never touches the screen's edge
-const WIDTH = 510;   // its width when the screen has room
+/** Its width when the screen has room, unless its (i) asks for another (InfoTip `width`). */
+export const INFO_TIP_WIDTH = 510;
 const MIN_HEIGHT = 120;
 
 export interface InfoTipPlacement {
@@ -26,14 +27,15 @@ export function infoTipPlacement(
   button: { left: number; right: number; top: number; bottom: number },
   viewport: { width: number; height: number },
   contentHeight: number,
+  wanted = INFO_TIP_WIDTH,
 ): InfoTipPlacement {
-  const width = Math.min(WIDTH, viewport.width - 2 * MARGIN);
+  const width = Math.min(wanted, viewport.width - 2 * MARGIN);
   const below = viewport.height - button.bottom - GAP - MARGIN;
   const aboveRoom = button.top - GAP - MARGIN;
   const above = contentHeight > below && aboveRoom > below;
   const centre = (button.left + button.right) / 2;
-  const wanted = centre < viewport.width / 2 ? button.left : button.right - width;
-  const left = Math.min(Math.max(wanted, MARGIN), viewport.width - MARGIN - width);
+  const anchor = centre < viewport.width / 2 ? button.left : button.right - width;
+  const left = Math.min(Math.max(anchor, MARGIN), viewport.width - MARGIN - width);
   return {
     left, width, above,
     top: button.bottom + GAP,

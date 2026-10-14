@@ -162,6 +162,7 @@ button.cockpit-attention-row.tappable { cursor: pointer; }
 }
 .cockpit-attention-icon { flex: 0 0 auto; }
 /* a problem's source icons (sourceIcons.tsx), one under the other when a line has two (owner, 2026-10-14) */
+.source-icon-row { display: inline-flex; align-items: center; gap: 4px; vertical-align: -3px; }
 .cockpit-source-icons { display: inline-flex; flex-direction: column; align-items: center; gap: 3px; flex: 0 0 auto; }
 /* a profile's source icon: the top bar's role badge (02-hud .role-glyph — its letters in a circle), outlined in the
    line's colour at an icon's size, like the icons beside it */
@@ -265,6 +266,8 @@ button.cockpit-attention-row.tappable { cursor: pointer; }
 
 /* The Cockpit header's updates count: a header button's look, nothing to press. */
 .header-icon-badge { cursor: default; position: relative; }
+/* its count at the bottom-right corner (owner, 2026-10-14) — the top bar's counts stay where they are */
+.header-icon-badge > .icon-btn-count { top: auto; bottom: 1px; }
 
 /* ── Telemetry log rows ────────────────────────────────────────────────────
    A diagnostic row is four parts: the event kind, which device/role/build sent

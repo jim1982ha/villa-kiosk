@@ -13,7 +13,8 @@
 import type { HassEntity } from "@/types/ha.types";
 import { isUnavailable } from "@/utils/stateColors";
 import type { VillaDevices } from "@/config/deviceGroups";
-import { isTicketOpen } from "./fmEngine";
+import { isTicketOpen, stageOf } from "./fmEngine";
+import { faultSource, ISSUE_SOURCES, type IssueSource } from "./issueSource";
 import { lockFacts, lightFacts, climateFacts } from "@/config/villaSummary";
 import type { FmData } from "./fmTypes";
 
@@ -27,6 +28,9 @@ export interface ReadinessCheck {
   detail: string;
   /** Entities behind a failing check, so the UI can jump to them on the map. */
   entityIds?: string[];
+  /** The open faults' sources, in the legend's order — the icons the Overview shows them with, drawn in the line
+   *  ("Check the ⏾ ⚑ faults in Overview…", ReadinessTab). Text stays plain for the saved snapshot. */
+  sources?: IssueSource[];
 }
 
 export interface ReadinessResult {
@@ -159,15 +163,23 @@ export function buildReadiness(
   }
 
   // ── Nothing broken and unresolved ────────────────────────────────────────
+  // ⚠️ THE TITLE SAYS WHAT IS FOUND, NOT THE GOAL (owner, 2026-10-14): "No open faults or tickets" stood over "5 still
+  // open" — the card contradicted itself. Failing, it counts both and says where each is dealt with.
   const openTickets = fm.tickets.filter(isTicketOpen);
+  const faults = openTickets.filter((t) => stageOf(t) === "fault");
+  const inProgress = openTickets.length - faults.length;
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+  const where = [faults.length ? "the faults in \"Overview\"" : "", inProgress ? "the open tickets in \"Tickets\"" : ""].filter(Boolean);
+  const found = new Set(faults.map(faultSource));
   checks.push({
     id: "tickets",
     // a fault and the ticket it became are both unresolved (owner, 2026-10-14: faults become tickets)
-    label: "No open faults or tickets",
+    label: openTickets.length === 0
+      ? "No open faults or tickets"
+      : `${plural(faults.length, "detected fault")} (${plural(inProgress, "open ticket")})`,
     state: openTickets.length === 0 ? "pass" : openTickets.length <= 2 ? "warn" : "fail",
-    detail: openTickets.length === 0
-      ? "No open faults or tickets."
-      : `${openTickets.length} still open (faults and tickets in progress).`,
+    detail: openTickets.length === 0 ? "Nothing to deal with." : `Check ${where.join(", or ")}.`,
+    sources: ISSUE_SOURCES.filter((s) => found.has(s)),
   });
 
   const passed = checks.filter((c) => c.state === "pass").length;

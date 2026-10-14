@@ -100,8 +100,8 @@ export default function CockpitModal({
               SAYS so — nothing to press; it used to be a line at the bottom of the Overview. */}
           {updatesAvailable > 0 && (
             <span className="icon-btn header-icon-btn header-icon-badge" role="status"
-              title={`${updatesAvailable} update${updatesAvailable === 1 ? "" : "s"} available in Home Assistant`}
-              aria-label={`${updatesAvailable} update${updatesAvailable === 1 ? "" : "s"} available in Home Assistant`}>
+              title={`${updatesAvailable} update${updatesAvailable === 1 ? "" : "s"} available`}
+              aria-label={`${updatesAvailable} update${updatesAvailable === 1 ? "" : "s"} available`}>
               <RefreshCw size={18} />
               <span className="icon-btn-count" aria-hidden="true">{formatCountBadge(updatesAvailable)}</span>
             </span>
@@ -122,9 +122,9 @@ export default function CockpitModal({
         {/* The VESTA Agent's door on the left when there is an agent — placed
             the way Settings places "Advanced Settings": a ghost button that
             leaves the dialog, never beside Close. */}
+        {/* ONE footer on every tab (owner, 2026-10-14): the VESTA Agent's door, then Close — no tab of its own note */}
         <ModalFooter onClose={onClose}
-          note={shownTab !== "overview" ? "Maintenance intervals are set in the Schedule tab" : undefined}
-          leading={shownTab === "overview" && doors.agent ? (
+          leading={doors.agent ? (
           <button className="btn ghost" onClick={() => { onClose(); onOpenAgent(); }}
             title={`VESTA Agent — ${agentOnline ? "online" : "offline"}`
               + (agentWaiting > 0 ? `, ${agentWaiting} message${agentWaiting === 1 ? "" : "s"} to answer` : "")}>

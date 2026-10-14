@@ -133,7 +133,10 @@
 .fm-fault-head .fm-row-title { flex: 1 1 auto; min-width: 0; }
 .fm-fault-head .fm-row-title strong { font-weight: 600; font-size: var(--text-md); line-height: 1.35; overflow-wrap: anywhere; }
 .fm-fault-head .fm-badge { flex: 0 0 auto; margin-top: 2px; }
-.fm-fault .fm-row-main { flex: none; }
+/* ⚠️ THE CARD'S WIDTH, NEVER ITS LONGEST LINE (owner, 2026-10-14: a "VESTA reads: …" note ran past a Closed card's
+   right edge). `flex: none` here sized the record's text to its longest line wherever the record is a flex row inside
+   a fault card (Tickets: in progress and Closed); a full line that may shrink wraps every note inside the card. */
+.fm-fault .fm-row-main { flex: 1 1 100%; min-width: 0; }
 .fm-fault-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .fm-fault .fm-row-confirm .modal-actions { justify-content: flex-end; }
 
@@ -351,6 +354,12 @@
   background: var(--bg-card);
 }
 .fm-headline-icon { flex: 0 0 auto; display: flex; color: var(--status-on); }
+/* The verdict is the checks' fold (owner, 2026-10-14): icon, words and chevron as one button, Save snapshot beside it. */
+.fm-headline-toggle {
+  flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 14px;
+  background: none; border: none; padding: 0; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.fm-headline-toggle > svg { flex: 0 0 auto; margin-left: auto; color: var(--text-secondary); }
 .fm-headline-text { display: flex; flex-direction: column; gap: 2px; }
 .fm-headline strong { font-size: var(--text-lg); }
 .fm-headline.warn {

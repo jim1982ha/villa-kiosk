@@ -33,6 +33,12 @@ const low = infoTipPlacement({ left: 300, right: 330, top: 760, bottom: 790 }, p
 ck("an (i) at the foot of a phone: the card opens ABOVE it, inside the screen", low.above && low.bottom === 844 - 760 + 8 && low.maxHeight <= 760 - 20, low);
 const narrow = infoTipPlacement({ left: 340, right: 370, top: 100, bottom: 130 }, phone, 400);
 ck("a phone: the card fits the screen's width with a margin each side", narrow.width === 390 - 24 && narrow.left >= 12 && narrow.left + narrow.width <= 390 - 12, narrow);
+const wide = infoTipPlacement({ left: 790, right: 828, top: 236, bottom: 274 }, { width: 1400, height: 1000 }, 560, 847);
+ck("an (i) may ask for a wider card (the Overview's table: 847 px) — kept inside the screen's margin when it does not fit",
+   wide.width === 847 && wide.left === 12, wide);
+const roomy = infoTipPlacement({ left: 1340, right: 1378, top: 236, bottom: 274 }, { width: 1920, height: 1000 }, 560, 847);
+ck("  ...with room, its right edge on the (i)'s", roomy.width === 847 && roomy.left + roomy.width === 1378, roomy);
+ck("  ...the Overview's (i) asks for two-thirds more than the default", /width=\{Math\.round\(INFO_TIP_WIDTH \* 1\.66\)\}/.test(src("components/fm/FaultTiming.tsx")));
 const tall = infoTipPlacement({ left: 300, right: 330, top: 100, bottom: 130 }, phone, 2000);
 ck("a card taller than the screen stops at its edge (and scrolls inside only then)", !tall.above && tall.top + tall.maxHeight <= 844 - 12, tall);
 
@@ -55,7 +61,7 @@ ck("  ...Live does not name Home Assistant (owner, 2026-10-14)", !/Home Assistan
 ck("without an Agent: no row of the Agent's — nothing claims to open or close by itself",
    !alone.rows.some((r) => ["alert", "night", "chat", "agent"].includes(r.source)) && alone.rows.some((r) => r.source === "guest")
    && !/Agent|nightly/i.test(alone.note + alone.rows.map((r) => r.what + r.opens + r.goes).join(" ")), alone.rows.map((r) => r.source));
-ck("both say how a fault becomes a ticket", [withAgent, alone].every((t) => /becomes a ticket when someone presses Open ticket on its card/.test(t.note)));
+ck("both say how a fault becomes a ticket", [withAgent, alone].every((t) => /becomes a ticket when someone presses Open Ticket on its card/.test(t.note)));
 ck(`  ...and the list's own refresh, from the app's own numbers (${STORE_ACTIVE_MS / 1000} s open, ${STORE_HEARTBEAT_MS / 60000} min else)`,
    [withAgent, alone].every((t) => t.note.includes(`every ${STORE_ACTIVE_MS / 1000} seconds while it is open`)
      && t.note.includes(`every ${STORE_HEARTBEAT_MS / 60000} minutes otherwise`)));

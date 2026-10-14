@@ -15,7 +15,7 @@ import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { createPortal } from "react-dom";
 import {
   MapPin, Building2, LayoutGrid,
-  Activity, ChevronRight, X, Plus,
+  Activity, ChevronRight, X, Plus, Wrench, Pencil,
 } from "lucide-react";
 import SegmentedGroup from "@/components/common/SegmentedGroup";
 import { fmtChartTime } from "@/components/panels/chartUtils";
@@ -271,7 +271,7 @@ export default function CockpitOverview({ onOpenEntity, doors, reportFaultFor, o
 /** One card of the Live issues, ONE SHAPE whatever it holds (owner, 2026-10-10: "make sure each reported issue
  *  appears in a consistent way"): titled by the device (or by the problem, when no device stands behind it) with its
  *  room, every problem a line INSIDE the card. A card holding a fault carries its actions (owner, 2026-10-14):
- *  "Open ticket" (was "Mark in progress", renamed 2026-10-14) makes the device's faults ONE ticket (each still its own record, so the VESTA Agent can clear
+ *  "Open Ticket" (was "Mark in progress"; the Tickets tab's wrench and Title Case, owner 2026-10-14) makes the device's faults ONE ticket (each still its own record, so the VESTA Agent can clear
  *  one alone), then "Edit ticket" opens it in the Tickets tab; "Close" closes them all ("no action needed"). A line
  *  that is only what Home Assistant reports has no button: it goes when the device is back. */
 function CockpitAttentionRow({ group, onOpenEntity, canManage, onEditTicket }: {
@@ -353,9 +353,9 @@ function useCardActions(group: AttentionGroup, canManage: boolean, onEditTicket:
       {!confirming && (
         <div className="fm-fault-actions">
           {acts.editTicket === null ? (
-            <button type="button" className="btn ghost" onClick={() => setStaging(records(acts.markInProgress))}>Open ticket</button>
+            <button type="button" className="btn ghost" onClick={() => setStaging(records(acts.markInProgress))}><Wrench size={14} aria-hidden /> Open Ticket</button>
           ) : (
-            <button type="button" className="btn ghost" onClick={() => onEditTicket(acts.editTicket as string)}>Edit ticket</button>
+            <button type="button" className="btn ghost" onClick={() => onEditTicket(acts.editTicket as string)}><Pencil size={14} aria-hidden /> Edit Ticket</button>
           )}
           <button type="button" className="btn ghost" aria-label={`Close “${group.title}”`}
             onClick={() => { setProblem(null); setConfirming(true); }}>
