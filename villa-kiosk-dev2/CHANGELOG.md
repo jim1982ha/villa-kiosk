@@ -1,3 +1,11 @@
+## 2.496.354
+
+### Changed
+- Nothing changes on screen. Behind it, for whoever maintains the Kiosk:
+  - releasing again after a release that already went through now says "already published" (or "pushed, not yet published") instead of a misleading "the changelog is not staged";
+  - the automated checks can now render a screen and check what it shows, instead of only reading its code;
+  - `npm run test:oracles -- --failed` prints only the checks that failed.
+
 ## 2.496.353
 
 ### Changed
