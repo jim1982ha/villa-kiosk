@@ -17,6 +17,7 @@ import type { Threshold } from "@/config/ThresholdConfig";
 import { labelOf } from "@/config/EntityMap";
 import { faultTitle, fmAttention, stageOf } from "@/fm/fmEngine";
 import { lastNoted } from "@/fm/faultNotes";
+import { faultSource, type IssueSource } from "@/fm/issueSource";
 import type { FmData } from "@/fm/fmTypes";
 import type { HassEntity } from "@/types/ha.types";
 import type { EntityMapping } from "@/types/scene.types";
@@ -28,6 +29,8 @@ export type AttentionKind = "unavailable" | "fault" | "schedule" | "alarm";
 export interface AttentionItem {
   id: string;
   kind: AttentionKind;
+  /** Where it comes from (fm/issueSource): its icon on the card. Live for a state; a fault's own (faultSource). */
+  source?: IssueSource;
   title: string;
   /** Short status word — "Open", "Overdue", "Leak detected", etc. */
   detail: string;
@@ -47,6 +50,9 @@ export interface AttentionItem {
   device?: { key: string; label: string; room?: string };
   /** The open fault about this very entity, when this item is its live state (groupAttention): one problem, not two. */
   fault?: AttentionItem;
+  /** Set on a fault whose entity Home Assistant reports "unavailable" right now: its device is offline, and so is
+   *  what the fault is about — it goes onto the device's Unavailable line (mergeFaults). */
+  offline?: boolean;
   /** Set on a fault: what last happened about it on Telegram (faultNotes.lastNoted — "Escalation sent to Owner"). */
   latest?: { note: string; at: string };
 }
@@ -151,21 +157,36 @@ function faultStatus(item: AttentionItem): string | undefined {
   return item.stage === "ticket" ? "In progress" : "";
 }
 
-/** The icon a problem's line shows inside its row: its own kind's only where the row's icon does not say it already.
+/** The icons a problem's line shows inside its row: its own sources only where the row's icons do not say them already
+ *  — the row's are its first line's (CockpitOverview draws them beside the device's name).
  *  ⚠️ ONE ICON PER MEANING (owner, 2026-10-13: "the icon is redundant"): every line repeated its row's icon — a red "!"
  *  beside "House & Pool Relay" and again before "Open fault: …". A row mixing kinds (a lock "Unlocked" with a fault on
  *  its battery) still marks the line whose kind is not the row's. */
-export function lineIcon(group: AttentionGroup, item: AttentionItem): AttentionKind | null {
-  return item.kind === group.kind ? null : item.kind;
+export function lineIcon(group: AttentionGroup, item: AttentionItem): LineSources | null {
+  const own = lineSources(item), row = lineSources(group.items[0] ?? item);
+  return item === group.items[0] || JSON.stringify(own) === JSON.stringify(row) ? null : own;
+}
+
+/** A line's source icons and the status colour of each (owner, 2026-10-14: the source as an icon, in place of the
+ *  warning sign; two stacked when a line holds a device's live state and its fault). */
+export interface LineSources { sources: IssueSource[]; kinds: AttentionKind[] }
+export function lineSources(item: AttentionItem): LineSources {
+  const own = { sources: [item.source ?? "live"], kinds: [item.kind] } as LineSources;
+  return item.fault ? { sources: [...own.sources, item.fault.source ?? "agent"], kinds: [...own.kinds, item.fault.kind] } : own;
 }
 
 /**
- * A fault about the SAME entity whose live state is already listed is that state's fault, not a second problem.
+ * A fault about the SAME entity whose live state is already listed is that state's fault, not a second problem — and
+ * so is a fault about ANOTHER entity of the device when that entity is unavailable too (`offline`): the device is off.
  *
  * ⚠️ ONE PROBLEM, ONE LINE (owner, 2026-10-10: "why do we see 2 lines for the same issue?"): the laundry door read
  * "Unlocked" (its live state) and "Open fault: Laundry Room door unlocked" (the agent's ticket for the VESTA rule's
  * alert about it); an offline pump plug read "Unavailable" and "Open fault: … offline for 9 h". The fault goes onto
  * the live line (`fault`), which keeps its Close. A fault on another entity of the device stays its own line.
+ *
+ * ⚠️ THE SAME OFFLINE DEVICE, TWO LINES (owner, 2026-10-14): a Timmerflotte sensor read "Unavailable" (its temperature,
+ * the entity the model shows) and "Timmerflotte_5969 has been offline for 9 h." (the night check's fault, on another of
+ * its entities) — every one of its nine entities was unavailable. Told by Home Assistant's state, never by the words.
  */
 function mergeFaults(items: AttentionItem[]): AttentionItem[] {
   // copies: the villa model's items are shared by every render and profile — a fault written onto one would stay
@@ -173,9 +194,12 @@ function mergeFaults(items: AttentionItem[]): AttentionItem[] {
   const out = items.map((i) => ({ ...i, fault: undefined }) as AttentionItem);
   const live = new Map(out.filter((i) => (i.kind === "alarm" || i.kind === "unavailable") && i.entityId)
     .map((i) => [i.entityId as string, i]));
+  const offlineLine = out.find((i) => i.kind === "unavailable");
   return out.filter((i) => {
-    const state = i.kind === "fault" && i.entityId ? live.get(i.entityId) : undefined;
-    if (!state || state.fault) return true;
+    if (i.kind !== "fault") return true;
+    const own = i.entityId ? live.get(i.entityId) : undefined;
+    const state = own && !own.fault ? own : !own && i.offline && offlineLine && !offlineLine.fault ? offlineLine : undefined;
+    if (!state) return true;
     state.fault = i;
     return false;
   });
@@ -189,7 +213,12 @@ export function attentionLine(item: AttentionItem): string {
   const titled = (i: AttentionItem) => { const st = faultStatus(i); return st ? `${st}: ${i.title}` : i.title; };
   if (item.fault) {
     const st = faultStatus(item.fault);
-    return `${item.detail} — ${st ? `${st.toLowerCase()}: ` : ""}${item.fault.title}`;
+    const fault = `${st ? `${st.toLowerCase()}: ` : ""}${item.fault.title}`;
+    // ⚠️ "UNAVAILABLE — … OFFLINE FOR 9 H" SAID IT TWICE (owner, 2026-10-14): the fault on an unavailable line says the
+    // device is offline already. A word the fault does not say stays: "Not in Home Assistant", a live reading ("92 %").
+    return item.kind === "unavailable" && item.detail === "Unavailable"
+      ? fault.charAt(0).toUpperCase() + fault.slice(1)
+      : `${item.detail} — ${fault}`;
   }
   if (item.kind === "fault") return titled(item);
   return item.kind === "schedule" ? `${item.detail}: ${item.title}` : item.detail;
@@ -228,6 +257,7 @@ export function buildAttentionItems(opts: {
       title: labelOf(id, entityMap, entities),
       // an object the model names whose entity Home Assistant does not have says so, as everywhere (NOT_IN_HA)
       detail: missingFromHa(entities, id) ? NOT_IN_HA : "Unavailable",
+      source: "live",
       room: resolvedRooms[id],
       entityId: id,
     });
@@ -246,6 +276,8 @@ export function buildAttentionItems(opts: {
       ticketId: t.id,
       stage,
       latest: lastNoted(t),
+      source: faultSource(t),
+      offline: !!t.entityId && entities[t.entityId]?.state === "unavailable",
     });
   }
 
@@ -255,6 +287,7 @@ export function buildAttentionItems(opts: {
       kind: "schedule",
       title: s.schedule.title,
       detail: s.state === "never" ? "Never recorded" : "Overdue",
+      source: "schedule",
       room: s.schedule.room,
       entityId: s.schedule.entityId,
     });
@@ -286,6 +319,7 @@ export function buildAttentionItems(opts: {
       detail: domain === "binary_sensor"
         ? stateLabelFor(id, entity.attributes.device_class as string | undefined)(entity.state)
         : deviceRowText(entity, domain),
+      source: "live",
       room: resolvedRooms[id],
       entityId: id,
     });

@@ -1,3 +1,27 @@
+## 2.496.360
+
+### Changed
+- Cockpit → the (i) beside "Open a ticket" is ONE table again: for each icon, what it is, when it appears and when it goes (or is brought up to date). The icons' list and the "when faults open and close" table said the same sources twice, in different words.
+- "Live" no longer mentions Home Assistant: "What a device reports right now: unavailable, missing, unlocked, too hot…".
+- The VESTA Agent's rows (Alert, Night check, Chat) are shown whenever one of its faults is on the list — they were missing for a moment after each start, or longer, while the cards already showed its icons.
+
+## 2.496.359
+
+### Changed
+- Cockpit → Open issues: each problem shows WHERE IT COMES FROM as an icon, in place of the warning sign — Live (what Home Assistant reports right now: it goes by itself), Alert (a VESTA alert, numbered as on Telegram), Night check, Chat (created from a Telegram chat), a ticket opened by the Owner, the Facility manager or a guest (shown as the round letter badge of the top bar: O, FM, G), and Schedule (maintenance overdue). The colour still says how serious it is: amber for lost contact or due, red for a confirmed problem. A line that holds two sources — an offline device and the VESTA Agent's fault about it — shows both icons, one under the other.
+- The (i) beside "Open a ticket" lists every icon and what it means (the VESTA Agent's only when an Agent is connected), above when faults open and close.
+- Night check and Chat are told apart from VESTA Agent 0.12.198; until then such a fault shows the VESTA Agent's own icon.
+
+## 2.496.358
+
+### Changed
+- Cockpit → Open issues: an offline device's line no longer starts with "Unavailable — ": it reads "Timmerflotte_5969 has been offline for 9 h." (the fault already says the device is offline). "Not in Home Assistant — …" and a live reading ("92 % — …") are kept: they say something the fault does not.
+
+## 2.496.357
+
+### Fixed
+- Cockpit → Open issues: a device that is offline no longer shows the same problem twice. A Timmerflotte sensor read "Unavailable" and, on a second line, "Timmerflotte_5969 has been offline for 9 h." — the VESTA Agent's fault is about another part of the same device. When that part is unavailable too, the fault now joins the "Unavailable" line ("Unavailable — Timmerflotte_5969 has been offline for 9 h."), with its Open ticket and Close buttons. A fault about a part that still reports (a battery level, for example) keeps its own line.
+
 ## 2.496.356
 
 ### Changed

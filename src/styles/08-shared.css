@@ -161,6 +161,15 @@ button.cockpit-attention-row.tappable { cursor: pointer; }
   }
 }
 .cockpit-attention-icon { flex: 0 0 auto; }
+/* a problem's source icons (sourceIcons.tsx), one under the other when a line has two (owner, 2026-10-14) */
+.cockpit-source-icons { display: inline-flex; flex-direction: column; align-items: center; gap: 3px; flex: 0 0 auto; }
+/* a profile's source icon: the top bar's role badge (02-hud .role-glyph — its letters in a circle), outlined in the
+   line's colour at an icon's size, like the icons beside it */
+.source-role-badge {
+  display: inline-grid; place-items: center; flex: 0 0 auto; box-sizing: border-box; border-radius: 50%;
+  border: 1.6px solid currentColor; font-size: 8px; font-weight: 700; line-height: 1; letter-spacing: 0;
+}
+.source-role-badge.two { font-size: 6.5px; }
 /* These two were SWAPPED, which inverted the one distinction the status
    vocabulary exists to protect (utils/stateColors, babylon/colors): amber is
    "Home Assistant has lost contact, the state is unknown", red is "a confirmed
