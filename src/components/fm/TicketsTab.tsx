@@ -160,7 +160,7 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
         <div className="fm-empty">
           <Wrench size={28} />
           <h3>No ticket in progress</h3>
-          <p className="muted body-text">A fault on the Overview becomes a ticket when you press Open ticket on its card.</p>
+          <p className="muted body-text">A fault on the Overview becomes a ticket when you press Open Ticket on its card.</p>
         </div>
       )}
       {tickets.length > 0 && <div className="fm-list">{tickets.map(ticket)}</div>}

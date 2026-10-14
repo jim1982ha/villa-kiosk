@@ -34,7 +34,7 @@ import CostFields from "./CostFields";
 const STAGE_COPY: Record<FmTicketStatus, { title: string; cta: string; note: string }> = {
   open: { title: "Reopen", cta: "Reopen", note: "Why it's being reopened (optional)" },
   in_progress: {
-    title: "Open a ticket", cta: "Open ticket",
+    title: "Open a ticket", cta: "Open Ticket",
     note: "What you found / what's being done (optional)",
   },
   resolved: {

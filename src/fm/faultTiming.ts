@@ -52,7 +52,7 @@ const ROWS: Record<IssueSource, Omit<SourceRow, "source">> = {
 
 const REFRESH = `This list is read again every ${STORE_ACTIVE_MS / 1000} seconds while it is open (every `
   + `${STORE_HEARTBEAT_MS / 60_000} minutes otherwise), and as soon as you come back to the app.`;
-const TICKET = "A fault becomes a ticket when someone presses Open ticket on its card (Tickets tab).";
+const TICKET = "A fault becomes a ticket when someone presses Open Ticket on its card (Tickets tab).";
 
 /** Every source's row — the VESTA Agent's only with an Agent — and the note under them. */
 export function faultTiming(agent: boolean): { rows: readonly SourceRow[]; note: string } {

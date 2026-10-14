@@ -7,7 +7,7 @@
 
 import { useState } from "react";
 import SaveButton from "@/components/common/SaveButton";
-import { CheckCircle2, AlertTriangle, XCircle, ChevronRight, Camera } from "lucide-react";
+import { CheckCircle2, AlertTriangle, XCircle, ChevronDown, ChevronRight, Camera } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
@@ -18,6 +18,7 @@ import { buildReadinessSnapshot } from "@/fm/fmDocuments";
 import type { FmSavedDocument } from "@/fm/fmTypes";
 import SavedDocumentsList from "./SavedDocumentsList";
 import MarkdownPreview from "./MarkdownPreview";
+import { SourceIconRow } from "./sourceIcons";
 import type { CheckState, ReadinessCheck, ReadinessResult } from "@/fm/readiness";
 
 const ICON: Record<CheckState, typeof CheckCircle2> = {
@@ -64,6 +65,9 @@ export default function ReadinessTab({
   const { saveDocument } = useFmData();
   const [saved, setSaved] = useState(false);
   const [viewing, setViewing] = useState<FmSavedDocument | null>(null);
+  // ⚠️ THE CHECKS FOLD UNDER THEIR VERDICT (owner, 2026-10-14): "Not ready · 3 of 6" says it; the six cards under it
+  // pushed the monthly recap off the screen. A tap on the verdict opens them.
+  const [showChecks, setShowChecks] = useState(false);
 
   const headline = readiness.overall === "pass"
     ? "Ready for the next guest"
@@ -80,11 +84,15 @@ export default function ReadinessTab({
           and spend statement, and it lands in the same saved-documents store,
           so a handover pack can include the check actually run on the day. */}
       <div className={`fm-headline ${readiness.overall}`}>
-        <span className="fm-headline-icon"><HeadlineIcon size={22} /></span>
-        <div className="fm-headline-text">
-          <strong>{headline}</strong>
-          <span className="muted">{readiness.passed} of {readiness.total} checks passing</span>
-        </div>
+        <button type="button" className="fm-headline-toggle" aria-expanded={showChecks}
+          onClick={() => setShowChecks((v) => !v)}>
+          <span className="fm-headline-icon"><HeadlineIcon size={22} /></span>
+          <span className="fm-headline-text">
+            <strong>{headline}</strong>
+            <span className="muted">{readiness.passed} of {readiness.total} checks passing</span>
+          </span>
+          {showChecks ? <ChevronDown size={18} aria-hidden /> : <ChevronRight size={18} aria-hidden />}
+        </button>
         <SaveButton saved={saved} label="Save snapshot" icon={<Camera size={16} />} style={{ marginLeft: "auto" }}
           onClick={async () => {
             const result = await saveDocument({
@@ -99,7 +107,7 @@ export default function ReadinessTab({
         />
       </div>
 
-      <div className="fm-list">
+      {showChecks && <div className="fm-list">
         {readiness.checks.map((c) => {
           const Icon = ICON[c.state];
           const isDeviceList = c.id === DEVICE_LIST_CHECK_ID;
@@ -125,7 +133,7 @@ export default function ReadinessTab({
                     </button>
                   )}
                 </div>
-                <div className="fm-row-sub muted">{c.detail}</div>
+                <div className="fm-row-sub muted"><CheckDetail check={c} /></div>
                 {!isDeviceList && !!c.entityIds?.length && (
                   <div className="fm-chiprow">
                     {c.entityIds.slice(0, 8).map((id) => (
@@ -144,7 +152,7 @@ export default function ReadinessTab({
             </div>
           );
         })}
-      </div>
+      </div>}
 
       <SavedDocumentsList kind="readiness" onOpen={setViewing} />
       {viewing && (
@@ -156,4 +164,12 @@ export default function ReadinessTab({
       )}
     </div>
   );
+}
+
+/** A check's line — with the open faults' source icons after "Check the", as the Overview shows them (owner,
+ *  2026-10-14). */
+function CheckDetail({ check }: { check: ReadinessCheck }) {
+  const lead = "Check the faults";
+  if (!check.sources?.length || !check.detail.startsWith(lead)) return <>{check.detail}</>;
+  return <>Check the <SourceIconRow sources={check.sources} /> faults{check.detail.slice(lead.length)}</>;
 }

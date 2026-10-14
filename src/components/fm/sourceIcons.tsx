@@ -50,3 +50,16 @@ export function SourceIcons({ sources, kinds, size = 16 }: {
     </span>
   );
 }
+
+/** The sources of several faults on one line ("Check the ⏾ ⚑ faults in Overview", the Recap's readiness) — side by
+ *  side, each in the fault's red, named for a screen reader. */
+export function SourceIconRow({ sources, size = 15 }: { sources: readonly IssueSource[]; size?: number }) {
+  return (
+    <span className="source-icon-row" aria-label={sources.map((s) => SOURCE_WORDS[s]).join(", ")}>
+      {sources.map((s) => {
+        const Icon = SOURCE_ICON[s];
+        return <Icon key={s} size={size} aria-hidden className="cockpit-attention-icon cockpit-attention-fault" />;
+      })}
+    </span>
+  );
+}

@@ -55,7 +55,7 @@ ck("  ...Live does not name Home Assistant (owner, 2026-10-14)", !/Home Assistan
 ck("without an Agent: no row of the Agent's — nothing claims to open or close by itself",
    !alone.rows.some((r) => ["alert", "night", "chat", "agent"].includes(r.source)) && alone.rows.some((r) => r.source === "guest")
    && !/Agent|nightly/i.test(alone.note + alone.rows.map((r) => r.what + r.opens + r.goes).join(" ")), alone.rows.map((r) => r.source));
-ck("both say how a fault becomes a ticket", [withAgent, alone].every((t) => /becomes a ticket when someone presses Open ticket on its card/.test(t.note)));
+ck("both say how a fault becomes a ticket", [withAgent, alone].every((t) => /becomes a ticket when someone presses Open Ticket on its card/.test(t.note)));
 ck(`  ...and the list's own refresh, from the app's own numbers (${STORE_ACTIVE_MS / 1000} s open, ${STORE_HEARTBEAT_MS / 60000} min else)`,
    [withAgent, alone].every((t) => t.note.includes(`every ${STORE_ACTIVE_MS / 1000} seconds while it is open`)
      && t.note.includes(`every ${STORE_HEARTBEAT_MS / 60000} minutes otherwise`)));
