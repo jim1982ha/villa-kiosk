@@ -112,8 +112,14 @@ class Ship(unittest.TestCase):
         self._tmp.cleanup()
 
     def test_refusals(self):
+        # nothing new and the top version already published: it says so (2026-10-14), never "not staged"
+        code, calls, err = self.s.ship()
+        self.assertEqual((code, calls), (0, []), err)
+        self.s.write("agent-host/agent-src/vesta_agent/app.py", "x = 9\n")
+        self.s.stage("agent-host/agent-src/vesta_agent/app.py")
         code, _, err = self.s.ship()
-        self.assertIsNone(code); self.assertIn("not staged", err)
+        self.assertIsNone(code); self.assertIn("vesta-agent/CHANGELOG.md is not staged", err)
+        sh(self.s.repo, "git", "checkout", "HEAD", "--", "agent-host/agent-src/vesta_agent/app.py")
         self.s.write("vesta-agent/CHANGELOG.md", "## 1.0.0\n\n- again\n")
         self.s.stage("vesta-agent/CHANGELOG.md")
         code, _, err = self.s.ship()
@@ -132,6 +138,9 @@ class Ship(unittest.TestCase):
         self.s.stage("vesta-agent/CHANGELOG.md")
         code, calls, err = self.s.ship()
         self.assertEqual(code, 3, err)   # pushed, CI never published: never 0
+        # run again with nothing new: already committed and pushed, not published — exit 3, no gate, no "not staged"
+        code, calls, err = self.s.ship()
+        self.assertEqual((code, calls), (3, []), err)
         files = set(sh(self.s.repo, "git", "show", "--name-only", "--format=", "HEAD").split())
         self.assertEqual(files, {"vesta-agent/CHANGELOG.md", "vesta-agent/config.yaml"})
         self.assertIn('"0.5.0"', self.s.read("agent-host/agent-src/vesta-agent.yaml"))
@@ -161,6 +170,8 @@ class Ship(unittest.TestCase):
         finally:
             stop.set(); ci.join()
         self.assertEqual(code, 0, err)
+        code, calls, err = self.s.ship()
+        self.assertEqual((code, calls), (0, []), err)    # run again: already published, nothing to do
         self.assertIn('version: "0.5.1"', self.s.read("agent-host/agent-src/vesta-agent.yaml"))
         self.assertIn('__version__ = "0.5.1"', self.s.read("agent-host/agent-src/vesta_agent/__init__.py"))
         self.assertIn('version: "1.0.1"', self.s.read("vesta-agent/config.yaml"))
