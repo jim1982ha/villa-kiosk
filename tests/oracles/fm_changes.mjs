@@ -65,7 +65,7 @@ ck("a patch to resolved stamps the time; one that keeps it keeps it",
 
 const ctx = readFileSync(new URL("../../src/fm/FmDataContext.tsx", import.meta.url), "utf8");
 ck("the provider only calls them (no transition written inside a mutator)",
-   /withCompletion\(d, c, cost, stamp\(\)\)/.test(ctx) && /withTicketAdvanced\(d, id, to, step, cost, stamp\(\), role \? ROLE_LABELS\[role\] : undefined\)/.test(ctx)
+   /withCompletion\(d, c, cost, stamp\(\)\)/.test(ctx) && /withTicketsAdvanced\(d, ids, to, step, cost, stamp\(\), role \? ROLE_LABELS\[role\] : undefined\)/.test(ctx)
    && /withoutCost\(d, id\)/.test(ctx) && /withoutCompletion\(d, id\)/.test(ctx) && !/resolvedAt:/.test(ctx));
 
 if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }

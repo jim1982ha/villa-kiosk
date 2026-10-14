@@ -77,7 +77,7 @@ ck("offline: DONE (queued), and the person is told it will be sent — never 'tr
    o.offline.done === true && /sent automatically/.test(o.offline.note) && !/try again/i.test(o.offline.note), o.offline);
 ck("refused: NOT done — the form keeps what was typed, and says so", o.refused.done === false && /still here/.test(o.refused.note), o.refused);
 
-const SAVES = ["components/fm/GuestReportModal.tsx", "components/fm/FaultStageModal.tsx", "components/fm/FaultsTab.tsx",
+const SAVES = ["components/fm/GuestReportModal.tsx", "components/fm/FaultStageModal.tsx", "components/fm/TicketsTab.tsx", "components/fm/FaultForm.tsx",
   "components/fm/SpendTab.tsx", "components/fm/ScheduleEditor.tsx", "components/fm/TodayTab.tsx", "components/cockpit/CockpitOverview.tsx"];
 const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
 ck("every Facility save asks fmSaveOutcome; the old wording is gone",

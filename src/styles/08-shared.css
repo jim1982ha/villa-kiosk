@@ -134,19 +134,16 @@
 
 /* --- Cockpit page (CockpitModal) — villa-wide status report ------------- */
 .cockpit-attention-list { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
-/* One row, ONE SHAPE (owner, 2026-10-10): a card — its head (the device, its room; tappable) and every problem as
-   a line inside it, a fault's "Close" ending its own line and its "sure?" beneath, wrapping on a phone. */
+/* One card, ONE SHAPE (owner, 2026-10-10): its head (the device, its room; tappable), every problem as a line inside
+   it, and — when it holds a fault — its actions at the bottom (Mark in progress / Edit ticket, Close; 2026-10-14). */
 .cockpit-attention-item {
   position: relative; display: flex; flex-direction: column; border-radius: 10px; background: var(--bg-input);
 }
-/* THE WHOLE CARD OPENS THE DEVICE (owner, 2026-10-10): the card takes the click (CockpitOverview), a fault's Close and
-   its "sure?" stop theirs. No layer stretched over the card: it lay on top of Close (2.496.318). */
+/* THE WHOLE CARD OPENS THE DEVICE (owner, 2026-10-10): the card takes the click (CockpitOverview), its actions and
+   their "sure?" stop theirs. No layer stretched over the card: it lay on top of Close (2.496.318). */
 .cockpit-attention-item.tappable { cursor: pointer; }
-.cockpit-attention-close {
-  flex: none; display: inline-flex; align-items: center; gap: 2px;
-  min-height: 32px; padding: 0 var(--space-2); font-size: var(--text-xs);
-}
-.cockpit-attention-confirm .modal-actions { flex-wrap: wrap; align-items: center; }
+.cockpit-attention-actions { padding: 0 12px 10px; cursor: default; }
+.cockpit-attention-actions .modal-actions { flex-wrap: wrap; align-items: center; }
 .cockpit-attention-row {
   display: flex; align-items: center; gap: 10px; width: 100%;
   padding: 10px 12px 4px; text-align: left;
@@ -154,13 +151,10 @@
 }
 button.cockpit-attention-row.tappable { cursor: pointer; }
 @media (hover: hover) {
-  /* the card lights up as the device it opens — never while the pointer is on a fault's Close or its "sure?", which
-     light up themselves (owner, 2026-10-10: "I don't see the close button highlighted, rather the whole card") */
-  .cockpit-attention-item.tappable:hover:not(:has(.cockpit-attention-close:hover, .cockpit-attention-confirm:hover)) {
+  /* the card lights up as the device it opens — never while the pointer is on its actions, which light up
+     themselves (owner, 2026-10-10: "I don't see the close button highlighted, rather the whole card") */
+  .cockpit-attention-item.tappable:hover:not(:has(.cockpit-attention-actions:hover)) {
     background: color-mix(in srgb, var(--accent) 12%, var(--bg-input));
-  }
-  .cockpit-attention-close:hover {
-    background: color-mix(in srgb, var(--accent) 18%, transparent); border-color: var(--accent);
   }
 }
 .cockpit-attention-icon { flex: 0 0 auto; }

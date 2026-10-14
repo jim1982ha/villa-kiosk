@@ -828,6 +828,10 @@ export default function Dashboard() {
           onTab={(tab) => go({ type: "cockpitTab", tab })}
           reportFaultFor={screen.faultFor ?? undefined}
           onFaultFormOpened={() => go({ type: "faultFormOpened" })}
+          editTicket={screen.ticketFor ?? undefined}
+          onEditTicket={(id) => go({ type: "editTicket", id })}
+          onTicketEditOpened={() => go({ type: "ticketEditOpened" })}
+          onReportProblem={() => go({ type: "reportProblem" })}
         />
       )}
 
@@ -840,7 +844,7 @@ export default function Dashboard() {
 
       {screen.guestReportFor !== null && (
         <GuestReportModal
-          entityId={screen.guestReportFor}
+          entityId={screen.guestReportFor || undefined}
           onClose={() => go({ type: "closeGuestReport" })}
         />
       )}

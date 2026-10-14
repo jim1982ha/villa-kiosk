@@ -130,13 +130,13 @@ ck("  ...and never an empty list", roomsToShare({ "sensor.x": null }, null) === 
 const share = src("agent/RoomShare.tsx");
 ck("RoomShare remembers what it sent in the device's storage, and asks roomsToShare",
    share.includes("roomsToShare(resolvedRooms, readString(LAST_SENT_KEY)") && share.includes("writeString(LAST_SENT_KEY, share.key)"));
-const marks = ["FaultsTab", "RecentWorkList", "SpendTab", "TodayTab", "ScheduleEditor", "SavedDocumentsList"]
+const marks = ["TicketsTab", "RecentWorkList", "SpendTab", "TodayTab", "ScheduleEditor", "SavedDocumentsList"]
   .filter((f) => !/<AgentMark record=\{/.test(src(`components/fm/${f}.tsx`)));
 ck("every Facility list shows the 'by VESTA Agent' mark", marks.length === 0, marks);
 // owner, 2026-10-11: the pills and when on ONE line right under the title, the same on every card — the mark, the
 // room, the device are inside RecordMeta, never in the title row; a fault's history shows its notes, not
 // "Open · date · VESTA Agent" lines that repeat that line
-const loose = ["FaultsTab", "RecentWorkList", "SpendTab", "TodayTab", "ScheduleEditor", "SavedDocumentsList"]
+const loose = ["TicketsTab", "RecentWorkList", "SpendTab", "TodayTab", "ScheduleEditor", "SavedDocumentsList"]
   .filter((f) => { const s = src(`components/fm/${f}.tsx`), m = s.indexOf("<AgentMark");
     return !(s.indexOf("<RecordMeta") > -1 && s.indexOf("<RecordMeta") < m && m < s.indexOf("</RecordMeta>")); });
 ck("every Facility card: its pills and when on one line under the title (RecordMeta)", loose.length === 0, loose);
@@ -189,11 +189,11 @@ ck("every Facility card: its pills and when on one line under the title (RecordM
   ck("the step kinds are the agreement's, the one list both sides read",
      JSON.stringify(FM_TICKET_UPDATE_KINDS) === JSON.stringify(contract.ticketUpdate.kinds) && contract.ticketUpdate.kinds.includes("reopened"));
 }
-const faults = src("components/fm/FaultsTab.tsx");
+const faults = src("components/fm/TicketsTab.tsx");
 ck("a fault card no longer repeats its history's status lines, and reads its notes and when through faultNotes",
    !/fm-timeline-head|fm-timeline-dot/.test(faults) && /RecordNotes notes=\{faultNoteLines\(t, localStamp\)\}/.test(faults)
    && /when=\{faultWhen\(t, localStamp\)\}/.test(faults) && !/startsWith\("Now: "\)/.test(faults));
-ck("a resolved fault offers \"Reopen fault\"", /isTicketResolved\(t\) \? "Reopen fault"/.test(faults));
+ck("a closed record offers \"Reopen\" (it is a fault again, on the Overview)", /setStaging\(\{ tickets: \[t\], to: "open" \}\)\}>Reopen</.test(faults));
 
 console.log("\n  the agreement's sample, as the app reads it (2.496.234):");
 {

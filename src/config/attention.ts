@@ -16,7 +16,7 @@ import { deviceRowText } from "@/utils/entityValue";
 import type { Threshold } from "@/config/ThresholdConfig";
 import { labelOf } from "@/config/EntityMap";
 import { fmAttention } from "@/fm/fmEngine";
-import type { FmData } from "@/fm/fmTypes";
+import type { FmData, FmTicketStatus } from "@/fm/fmTypes";
 import type { HassEntity } from "@/types/ha.types";
 import type { EntityMapping } from "@/types/scene.types";
 import { domainOf } from "@/utils/entityDomain";
@@ -35,9 +35,11 @@ export interface AttentionItem {
    *  panel) — a fault/schedule with no device behind it (a whole-villa task,
    *  a free-text device description) has none, so it renders as read-only. */
   entityId?: string;
-  /** Set on a fault: the Facility ticket it is, so the row can close it in
-   *  one step (FmDataContext.closeTicket). */
+  /** Set on a fault: the record it is, so its card can take it on or close it
+   *  (FmDataContext.advanceTickets / closeTickets). */
   ticketId?: string;
+  /** Set on a fault: open (a fault nobody has taken on) or in_progress (a ticket). */
+  ticketStatus?: FmTicketStatus;
   /** The villa DEVICE the entity belongs to (deviceGroups.deviceFolding: the
    *  owner's device groups, then Home Assistant's device registry) — what
    *  groupAttention folds on. Set exactly when `entityId` is. */
@@ -119,6 +121,17 @@ export function groupAttention(items: readonly AttentionItem[]): AttentionGroup[
  *  in a row that is the problem itself (no device), only a status the row does not show already ("In progress"; an
  *  open fault's line is empty — its title is the row's, its Close the line's). Every row shows its problems this way,
  *  one or several. */
+/** The faults a card holds — its own fault lines and those folded onto a live state's line (mergeFaults) — split by
+ *  where they stand: `open` a card can mark in progress, `inProgress` are its ticket (owner, 2026-10-14). */
+export function cardFaults(group: AttentionGroup): { open: AttentionItem[]; inProgress: AttentionItem[] } {
+  const all = group.items.flatMap((i) => (i.kind === "fault" ? [i] : i.fault ? [i.fault] : []))
+    .filter((f) => !!f.ticketId);
+  return {
+    open: all.filter((f) => f.ticketStatus !== "in_progress"),
+    inProgress: all.filter((f) => f.ticketStatus === "in_progress"),
+  };
+}
+
 export function attentionLineIn(group: AttentionGroup, item: AttentionItem): string {
   return group.key.startsWith("device:") ? attentionLine(item) : faultStatus(item) ?? item.detail;
 }
@@ -227,6 +240,7 @@ export function buildAttentionItems(opts: {
       room: t.room,
       entityId: t.entityId,
       ticketId: t.id,
+      ticketStatus: t.status,
     });
   }
 

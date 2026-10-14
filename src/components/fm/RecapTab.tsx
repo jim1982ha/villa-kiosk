@@ -137,7 +137,7 @@ export default function RecapTab({
         ) : (
           <p className="muted body-text">
             Nothing generated yet for {month} — press "Generate recap" to build it from
-            the villa's current Readiness, Faults, Spend and Schedule status.
+            the villa's current Readiness, Tickets, Spend and Schedule status.
           </p>
         )}
       </div>

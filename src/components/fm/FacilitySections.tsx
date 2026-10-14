@@ -34,19 +34,19 @@ import SummaryGroupPanel, { type SummaryGroup } from "@/components/panels/Summar
 import { buildDeviceOptions } from "./DeviceSearchPicker";
 import TodayTab from "./TodayTab";
 import ReadinessTab from "./ReadinessTab";
-import FaultsTab from "./FaultsTab";
+import TicketsTab from "./TicketsTab";
 import SpendTab from "./SpendTab";
 import RecapTab from "./RecapTab";
 import ScheduleEditor from "./ScheduleEditor";
 import { useVillaModel } from "@/config/VillaModel";
 
-export type FacilityTab = "today" | "readiness" | "faults" | "spend" | "schedule" | "recap";
+export type FacilityTab = "today" | "readiness" | "tickets" | "spend" | "schedule" | "recap";
 
 /** The Facility tabs, shown in the Cockpit after its own view (2.496.273). */
 export const FACILITY_TABS: ModalTab<FacilityTab>[] = [
   { id: "today", label: "Today", icon: ListChecks },
   { id: "readiness", label: "Readiness", icon: ClipboardCheck },
-  { id: "faults", label: "Faults", icon: Wrench },
+  { id: "tickets", label: "Tickets", icon: Wrench },
   { id: "spend", label: "Spend", icon: Wallet },
   // Before Recap: configuring the schedule is what the recap and the Today
   // board both read from, so it belongs upstream of the annex that summarises
@@ -63,18 +63,16 @@ export const FACILITY_TABS: ModalTab<FacilityTab>[] = [
  * then (useFacilityLiveView).
  */
 export default function FacilitySections({
-  tab, onOpenEntity, reportFaultFor, onFaultFormOpened, onOpenOverview,
+  tab, onOpenEntity, editTicket, onTicketEditOpened, onOpenOverview,
 }: {
   tab: FacilityTab;
   /** Jump to a device's panel — a failing check or a fault opens the actual
    *  device instead of leaving the operator to hunt for it. */
   onOpenEntity: (entityId: string) => void;
-  /** Faults opens with a blank fault already pointed at this device — set
-   *  when the operator came from a device panel's fault shortcut. */
-  reportFaultFor?: string;
-  /** Called once the form has been filled in, so the request is dropped and
-   *  reopening the tab later does not spring the same form again. */
-  onFaultFormOpened?: () => void;
+  /** Tickets opens this record's form (an Overview card's "Edit ticket"). */
+  editTicket?: string;
+  /** Called once the form has it, so reopening the tab later does not spring it again. */
+  onTicketEditOpened?: () => void;
   /** Readiness's "devices offline" — the Cockpit's own view lists them (it
    *  used to open a SECOND Cockpit over the Facility window). */
   onOpenOverview: () => void;
@@ -99,7 +97,6 @@ export default function FacilitySections({
     () => buildDeviceOptions(devices, config.entityMap, entities, resolvedRooms),
     [devices, config.entityMap, entities, resolvedRooms],
   );
-  const unavailableIds = devices.unavailable as string[];
   const canControl = roleCan(role, "controlEntities");
 
   return (
@@ -111,10 +108,9 @@ export default function FacilitySections({
         <ReadinessTab readiness={readiness} onOpenEntity={onOpenEntity}
           onOpenUnavailableDevices={onOpenOverview} onOpenCheckDevices={openCheckDevices} />
       )}
-      {ready && tab === "faults" && (
-        <FaultsTab onOpenEntity={onOpenEntity} unavailableIds={unavailableIds}
-          deviceOptions={deviceOptions} reportFaultFor={reportFaultFor}
-          onFaultFormOpened={onFaultFormOpened} />
+      {ready && tab === "tickets" && (
+        <TicketsTab onOpenEntity={onOpenEntity} deviceOptions={deviceOptions}
+          editTicket={editTicket} onEditOpened={onTicketEditOpened} />
       )}
       {ready && tab === "spend" && <SpendTab onOpenEntity={onOpenEntity} deviceOptions={deviceOptions} />}
       {ready && tab === "schedule" && <ScheduleEditor />}

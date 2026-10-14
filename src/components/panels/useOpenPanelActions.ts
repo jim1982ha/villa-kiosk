@@ -100,8 +100,8 @@ export function useOpenPanelActions({ screen, go, panelFor, readingsOf }: OpenPa
       // Owner-only: jump straight to this device's row in Advanced Settings.
       onEdit: canEditConfig ? () => go({ type: "editDevice" }) : undefined,
       // Every profile can report; only some can MANAGE. A guest gets a
-      // one-screen report form, an owner/facility manager lands in the Faults
-      // tab with the device filled in — same button, same intent.
+      // one-screen report form, an owner/facility manager lands on the Overview's
+      // "Raise a fault" with the device filled in — same button, same intent.
       onReportFault: canReportFault ? () => go({ type: "reportFault" }) : undefined,
       badge: header.badge,
       onSetBadgeColor: canEditConfig

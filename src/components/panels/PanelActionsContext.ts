@@ -15,8 +15,8 @@ export interface PanelActions {
   /** Open Advanced Settings focused on this entity. Undefined when the current
    *  profile may not edit config — the edit button is then hidden. */
   onEdit?: () => void;
-  /** Raise a maintenance fault against the open device — opens the Facility
-   *  workspace on the Faults tab with this device already filled in.
+  /** Raise a maintenance fault against the open device — opens the Cockpit's
+   *  Overview with "Raise a fault" pointed at this device.
    *
    *  The point is the moment of noticing. Someone walking the villa taps the
    *  badge of a lamp that will not come on; before this, acting on that meant

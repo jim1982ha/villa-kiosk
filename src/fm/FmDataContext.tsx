@@ -13,7 +13,7 @@ import {
   createContext, useCallback, useContext, useEffect, useRef, useState,
   type ReactNode,
 } from "react";
-import { isTicketOpen, withCompletion, withoutCost, withoutCompletion, withTicketPatch, withTicketAdvanced, withTicketClosed, type FmStamp, withoutTicket } from "./fmEngine";
+import { isTicketOpen, withCompletion, withoutCost, withoutCompletion, withTicketPatch, withTicketsAdvanced, withTicketsClosed, type FmStamp, withoutTicket } from "./fmEngine";
 
 /** The real clock and id maker the record changes are stamped with (fmEngine). */
 const stamp = (): FmStamp => ({ now: new Date().toISOString(), id: fmId });
@@ -72,16 +72,19 @@ interface FmDataContextValue {
    *  fault and the work that fixed it stop being unrelated records — that
    *  link is what lets a report say "this fault, fixed on this date, at this
    *  cost". */
-  advanceTicket: (
-    id: string,
+  advanceTickets: (
+    /** One device's faults, moved together (owner, 2026-10-14: Mark in progress takes on the whole card — one
+     *  ticket per device, each fault still its own record so the VESTA Agent can clear it alone). */
+    ids: readonly string[],
     to: FmTicketStatus,
     step: { who?: string; note?: string; photoIds: string[] },
+    /** Filed once, on the first of them. */
     cost?: Omit<FmCost, "id" | "at" | "photoIds">,
   ) => Promise<FmWriteResult>;
   /** Close a fault in ONE step, nothing done ("Close": no action needed):
    *  resolved now, with a "Closed without action" update, and no completion
    *  or cost (fmEngine.withTicketClosed). The same write as every other. */
-  closeTicket: (id: string) => Promise<FmWriteResult>;
+  closeTickets: (ids: readonly string[]) => Promise<FmWriteResult>;
   updateTicket: (id: string, patch: Partial<FmTicket>) => Promise<FmWriteResult>;
   /** Erase a spend entry for good. Needs a single-use superadmin token — the
    *  server rejects the write without one, so this is not a UI-level rule. */
@@ -308,15 +311,16 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
   const updateTicket = useCallback((id: string, patch: Partial<FmTicket>) =>
     mutate((d) => withTicketPatch(d, id, patch, stamp(), role ? ROLE_LABELS[role] : undefined)), [mutate, role]);
 
-  const advanceTicket = useCallback((
-    id: string,
+  // Several records, ONE write: a device's faults move or close together, or not at all.
+  const advanceTickets = useCallback((
+    ids: readonly string[],
     to: FmTicketStatus,
     step: { who?: string; note?: string; photoIds: string[] },
     cost?: Omit<FmCost, "id" | "at" | "photoIds">,
-  ) => mutate((d) => withTicketAdvanced(d, id, to, step, cost, stamp(), role ? ROLE_LABELS[role] : undefined)), [mutate, role]);
+  ) => mutate((d) => withTicketsAdvanced(d, ids, to, step, cost, stamp(), role ? ROLE_LABELS[role] : undefined)), [mutate, role]);
 
-  const closeTicket = useCallback((id: string) =>
-    mutate((d) => withTicketClosed(d, id, stamp(), role ? ROLE_LABELS[role] : undefined)), [mutate, role]);
+  const closeTickets = useCallback((ids: readonly string[]) =>
+    mutate((d) => withTicketsClosed(d, ids, stamp(), role ? ROLE_LABELS[role] : undefined)), [mutate, role]);
 
   const saveDocument = useCallback((doc: Omit<FmSavedDocument, "id" | "generatedAt">) =>
     mutate((d) => ({
@@ -335,7 +339,7 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
       data, ready, saveError, reload,
       addSchedule, updateSchedule, removeSchedule, removeAllSchedules,
       logCompletion, addCost, updateCost, addTicket, updateTicket,
-      removeCost, removeTicket, removeCompletion, advanceTicket, closeTicket,
+      removeCost, removeTicket, removeCompletion, advanceTickets, closeTickets,
       saveDocument, removeDocument, registerWatcher,
     }}>
       {children}

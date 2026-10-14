@@ -30,27 +30,30 @@ import NotesField from "./NotesField";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import CostFields from "./CostFields";
 
+// A fault becomes a TICKET when someone takes it on (owner, 2026-10-14): the dialog speaks of the ticket.
 const STAGE_COPY: Record<FmTicketStatus, { title: string; cta: string; note: string }> = {
-  open: { title: "Reopen fault", cta: "Reopen", note: "Why it's being reopened (optional)" },
+  open: { title: "Reopen", cta: "Reopen", note: "Why it's being reopened (optional)" },
   in_progress: {
-    title: "Start work", cta: "Mark in progress",
+    title: "Open a ticket", cta: "Mark in progress",
     note: "What you found / what's being done (optional)",
   },
   resolved: {
-    title: "Resolve fault", cta: "Mark resolved",
+    title: "Resolve the ticket", cta: "Mark resolved",
     note: "What was done (optional)",
   },
 };
 
 export default function FaultStageModal({
-  ticket, to, onClose,
+  tickets, to, onClose,
 }: {
-  ticket: FmTicket;
-  /** The status this transition moves the fault to. */
+  /** One device's faults (one ticket), moved together — usually one. */
+  tickets: readonly FmTicket[];
+  /** The status this transition moves them to. */
   to: FmTicketStatus;
   onClose: () => void;
 }) {
-  const { advanceTicket } = useFmData();
+  const { advanceTickets } = useFmData();
+  const ticket = tickets[0];
   // Escape + Back + focus trap + focus restore, from ONE hook — see
   // useModalA11y. It registers useBackToClose itself, so calling both would
   // push this surface onto the dismissal stack twice.
@@ -72,13 +75,13 @@ export default function FaultStageModal({
   const submit = async () => {
     setBusy(true);
     setFailed(null);
-    const result = await advanceTicket(
-      ticket.id, to,
+    const result = await advanceTickets(
+      tickets.map((t) => t.id), to,
       { who: who.trim() || undefined, note: note.trim() || undefined, photoIds },
       amountIdr > 0
         ? {
             amountIdr, category,
-            label: `Fault: ${ticket.title}`,
+            label: `Ticket: ${ticket.title}`,
             note: note.trim() || undefined,
             entityId: ticket.entityId,
             deviceLabel: ticket.deviceLabel,
@@ -107,7 +110,7 @@ export default function FaultStageModal({
           <h2>{copy.title}</h2>
         </div>
         <div className="modal-body fm-stack">
-          <div className="fm-banner">{ticket.title}</div>
+          {tickets.map((t) => <div key={t.id} className="fm-banner">{t.title}</div>)}
           <label className="fm-field">
             <span>Who{asksCost ? " did the work" : "'s handling it"} (optional)</span>
             <input value={who} onChange={(e) => setWho(e.target.value)}

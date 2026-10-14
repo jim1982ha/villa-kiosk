@@ -10,7 +10,7 @@
 import {
   NO_FM_TERMS,
   type FmTerms,
-  type FmCompletion, type FmCost, type FmData, type FmSchedule, type FmTicket, type FmTicketStatus, type FmTicketUpdate,
+  type FmCompletion, type FmCost, type FmData, type FmSchedule, type FmTicket, type FmTicketUpdate,
 } from "./fmTypes";
 import { fullDate, monthYear } from "@/utils/dateText";
 
@@ -450,10 +450,12 @@ export function withTicketPatch(d: FmData, id: string, patch: Partial<FmTicket>,
  * agent's Telegram note and the card said "by Facility manager" for one close and nothing for the other).
  * Reopening a resolved fault is a step of its own kind ("reopened"): the VESTA Agent reads it, never guesses it.
  */
+/** A stage change's own record (who, what, photos) and, when resolving, what it cost. */
+export type TicketStep = { who?: string; note?: string; photoIds: string[] };
+export type TicketCost = Omit<FmCost, "id" | "at" | "photoIds">;
+
 export function withTicketAdvanced(
-  d: FmData, id: string, to: FmTicket["status"],
-  step: { who?: string; note?: string; photoIds: string[] },
-  cost: Omit<FmCost, "id" | "at" | "photoIds"> | undefined, k: FmStamp, by?: string,
+  d: FmData, id: string, to: FmTicket["status"], step: TicketStep, cost: TicketCost | undefined, k: FmStamp, by?: string,
 ): FmData {
   if (!d.tickets.some((t) => t.id === id)) return d;
   const at = k.now;
@@ -480,6 +482,16 @@ export function withTicketAdvanced(
       : d.completions,
     costs: costId ? [...d.costs, { ...cost!, id: costId, at, photoIds: step.photoIds }] : d.costs,
   };
+}
+
+/** One device's faults moved together, in ONE edit (owner, 2026-10-14: "Mark in progress" takes on a whole card —
+ *  one ticket per device, each fault still its own record so the VESTA Agent can clear it alone). The cost, when
+ *  resolving, is filed once, on the first. */
+export function withTicketsAdvanced(
+  d: FmData, ids: readonly string[], to: FmTicket["status"], step: TicketStep, cost: TicketCost | undefined,
+  k: FmStamp, by?: string,
+): FmData {
+  return ids.reduce((acc, id, i) => withTicketAdvanced(acc, id, to, step, i === 0 ? cost : undefined, k, by), d);
 }
 
 /** The note a one-step close leaves on the fault's history. */
@@ -511,24 +523,15 @@ export function withTicketClosed(d: FmData, id: string, k: Pick<FmStamp, "now">,
 }
 
 
+/** One device's faults closed together, in ONE edit ("no action needed"). */
+export function withTicketsClosed(d: FmData, ids: readonly string[], k: Pick<FmStamp, "now">, by?: string): FmData {
+  return ids.reduce((acc, id) => withTicketClosed(acc, id, k, by), d);
+}
+
 // ── Rules that lived in the screens (round 13, 2.496.183) ─────────────────
 // Each was written in a component or the store's context, where only a regex
 // could reach it, and several already disagreed with the engine or with each
 // other. tests/oracles/fm_rules.mjs drives them by value.
-
-/** Where a fault goes next from the Faults tab. A resolved fault can be reopened (architecture review 26: there was
- *  no way to, and the VESTA Agent guessed a reopening from timings). */
-export const TICKET_NEXT: Readonly<Record<FmTicketStatus, FmTicketStatus | null>> = {
-  open: "in_progress", in_progress: "resolved", resolved: "open",
-};
-
-/** A fault's place in the list: open, then in progress, then resolved. A
- *  status this build does not know is treated as OPEN — the engine's own
- *  reading (isTicketOpen) — where the list used to rank it beside resolved. */
-export function ticketRank(t: Pick<FmTicket, "status">): number {
-  if (isTicketResolved(t)) return 2;
-  return t.status === "in_progress" ? 1 : 0;
-}
 
 /**
  * An amount typed by an operator, as a whole number of the currency's units.

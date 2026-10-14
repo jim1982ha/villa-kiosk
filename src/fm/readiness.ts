@@ -162,11 +162,12 @@ export function buildReadiness(
   const openTickets = fm.tickets.filter(isTicketOpen);
   checks.push({
     id: "tickets",
-    label: "No unresolved faults",
+    // a fault and the ticket it became are both unresolved (owner, 2026-10-14: faults become tickets)
+    label: "No open faults or tickets",
     state: openTickets.length === 0 ? "pass" : openTickets.length <= 2 ? "warn" : "fail",
     detail: openTickets.length === 0
-      ? "No open faults."
-      : `${openTickets.length} fault${openTickets.length === 1 ? "" : "s"} still open.`,
+      ? "No open faults or tickets."
+      : `${openTickets.length} still open (faults and tickets in progress).`,
   });
 
   const passed = checks.filter((c) => c.state === "pass").length;

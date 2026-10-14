@@ -41,14 +41,20 @@ export interface CockpitModalProps {
   /** Open the VESTA Agent window. */
   onOpenAgent: () => void;
   /** The open tab: the Cockpit's own view, or one of the Facility tabs (with
-   *  `doors.facility`). Held by the caller, so "report a fault" lands on
-   *  Faults and Back from a device returns to the tab it left. */
+   *  `doors.facility`). Held by the caller, so "Edit ticket" lands on
+   *  Tickets and Back from a device returns to the tab it left. */
   tab: CockpitTab;
   onTab: (tab: CockpitTab) => void;
-  /** Faults opens with a blank fault pointed at this device (a device panel's
-   *  "report a fault"), and the request is dropped once the form has it. */
+  /** The Overview opens "Raise a fault" pointed at this device (a device
+   *  panel's wrench); the request is dropped once the form has it. */
   reportFaultFor?: string;
   onFaultFormOpened?: () => void;
+  /** The Tickets tab opens this record's form (an Overview card's "Edit ticket"). */
+  editTicket?: string;
+  onEditTicket: (ticketId: string) => void;
+  onTicketEditOpened?: () => void;
+  /** A guest's "Report a problem" (the Overview). */
+  onReportProblem: () => void;
 }
 
 /** The Cockpit's own view, then the Facility tabs (2.496.273: the Facility
@@ -58,6 +64,7 @@ const OVERVIEW_TAB: ModalTab<CockpitTab> = { id: "overview", label: "Overview", 
 
 export default function CockpitModal({
   onClose, onOpenEntity, doors, onOpenAgent, tab, onTab, reportFaultFor, onFaultFormOpened,
+  editTicket, onEditTicket, onTicketEditOpened, onReportProblem,
 }: CockpitModalProps) {
   // A profile without the Facility door sees the Cockpit's view alone, no strip.
   const tabs: ModalTab<CockpitTab>[] = doors.facility ? [OVERVIEW_TAB, ...FACILITY_TABS] : [OVERVIEW_TAB];
@@ -87,10 +94,11 @@ export default function CockpitModal({
 
         <div className="modal-body">
           {shownTab !== "overview" ? (
-            <FacilitySections tab={shownTab} onOpenEntity={onOpenEntity} reportFaultFor={reportFaultFor}
-              onFaultFormOpened={onFaultFormOpened} onOpenOverview={() => onTab("overview")} />
+            <FacilitySections tab={shownTab} onOpenEntity={onOpenEntity} editTicket={editTicket}
+              onTicketEditOpened={onTicketEditOpened} onOpenOverview={() => onTab("overview")} />
           ) : (
-            <CockpitOverview onOpenEntity={onOpenEntity} doors={doors} />
+            <CockpitOverview onOpenEntity={onOpenEntity} doors={doors} reportFaultFor={reportFaultFor}
+              onFaultFormOpened={onFaultFormOpened} onEditTicket={onEditTicket} onReportProblem={onReportProblem} />
           )}
         </div>
 

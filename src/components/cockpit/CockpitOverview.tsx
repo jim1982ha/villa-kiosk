@@ -11,11 +11,11 @@
 // selectableDeviceIds/entityMap/resolvedRooms, never a raw HA domain query
 // (see cockpitData.ts's own docstring).
 
-import { useMemo, useState, type ComponentType } from "react";
+import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { createPortal } from "react-dom";
 import {
   TriangleAlert, AlertOctagon, MapPin, Building2, LayoutGrid,
-  Activity, RefreshCw, ChevronRight, X,
+  Activity, RefreshCw, ChevronRight, X, Plus,
 } from "lucide-react";
 import SegmentedGroup from "@/components/common/SegmentedGroup";
 import { fmtChartTime } from "@/components/panels/chartUtils";
@@ -39,7 +39,13 @@ import {
   buildCategoryTiles, buildRoomGroups, buildFloorGroups,
   buildActivityFeed, pivotTiles, tileLine, type Pivot, type ActivityEntry,
 } from "./cockpitData";
-import { attentionLineIn, lineIcon, type AttentionGroup, type AttentionItem, type AttentionKind } from "@/config/attention";
+import { attentionLineIn, cardFaults, lineIcon, type AttentionGroup, type AttentionItem, type AttentionKind } from "@/config/attention";
+import { useVillaModel } from "@/config/VillaModel";
+import { buildDeviceOptions } from "@/components/fm/DeviceSearchPicker";
+import FaultForm from "@/components/fm/FaultForm";
+import FaultTiming from "@/components/fm/FaultTiming";
+import FaultStageModal from "@/components/fm/FaultStageModal";
+import type { FmTicket } from "@/fm/fmTypes";
 
 
 const ATTENTION_ICON: Record<AttentionKind, typeof TriangleAlert> = {
@@ -51,10 +57,17 @@ const ATTENTION_ICON: Record<AttentionKind, typeof TriangleAlert> = {
 
 const PIVOT_ICON = { room: MapPin, floor: Building2 } as const;
 
-export default function CockpitOverview({ onOpenEntity, doors }: {
+export default function CockpitOverview({ onOpenEntity, doors, reportFaultFor, onFaultFormOpened, onEditTicket, onReportProblem }: {
   onOpenEntity: (entityId: string) => void;
   /** `doors.updates`: the updates count is drawn only with it. */
   doors: Doors;
+  /** "Raise a fault" opens pointed at this device (a device panel's wrench); dropped once the form has it. */
+  reportFaultFor?: string;
+  onFaultFormOpened?: () => void;
+  /** A card's "Edit ticket": the Tickets tab, that record's form open. */
+  onEditTicket: (ticketId: string) => void;
+  /** A guest's "Report a problem". */
+  onReportProblem: () => void;
 }) {
   const { entities, ws } = useHA();
   // Each room's floor: the villa's one answer (config/devicePlace), the category lists' too.
@@ -73,8 +86,22 @@ export default function CockpitOverview({ onOpenEntity, doors }: {
   // the bottom Summary bar's tiles), rather than a bespoke list here.
   const [pivotDrill, setPivotDrill] = useState<{ label: string; entityIds: string[]; icon: ComponentType<{ size?: number | string }> } | null>(null);
   const canControl = roleCan(role, "controlEntities");
-  // Closing a fault from here is Facility work: the profiles that manage it.
-  const canCloseFaults = roleCan(role, "manageFacility");
+  // Taking a fault on, closing it and raising one are Facility work: the profiles that manage it. Everyone else
+  // who may report (a guest) gets "Report a problem".
+  const canManage = roleCan(role, "manageFacility");
+  const canReport = roleCan(role, "reportFault");
+  const { devices } = useVillaModel();
+  const deviceOptions = useMemo(
+    () => (canManage ? buildDeviceOptions(devices, config.entityMap, entities, resolvedRooms) : []),
+    [canManage, devices, config.entityMap, entities, resolvedRooms]);
+  /** The raise form: closed, or open (pointed at a device when it came from a device's wrench). */
+  const [raising, setRaising] = useState<{ entity?: string } | null>(null);
+  useEffect(() => {
+    if (!reportFaultFor || !canManage) return;
+    setRaising({ entity: reportFaultFor });
+    onFaultFormOpened?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reportFaultFor]);
 
   // Shared with HUD's own top-bar alert icon/overflow-menu badge — see
   // useVillaAttention's own docstring for why that sharing is load-bearing,
@@ -134,17 +161,36 @@ export default function CockpitOverview({ onOpenEntity, doors }: {
           {/* No headline (owner, 2.496.237): the list below IS the message,
           its count in its title — and when nothing needs attention, the
           Cockpit simply starts with the villa's rooms. */}
-      {/* ── Needs attention ────────────────────────────────────── */}
+      {/* ── Live issues: ONE list (owner, 2026-10-14) ──────────────── */}
+      {/* Everything open, one card per device: what Home Assistant reports right now (no buttons — it clears when the
+          device does), the faults the VESTA Agent or a person opened, and the tickets in progress. It replaced
+          "Needs attention" AND the Faults tab's open list, which showed the same faults twice. Raising a fault is
+          here, beside what it is raised about. */}
+      {(attentionGroups.length > 0 || canReport) && (
+        <div className="settings-section-title">Live issues{attentionGroups.length > 0 ? ` (${attentionGroups.length})` : ""}</div>
+      )}
+      {canManage && !raising && (
+        <div className="fm-raise-row">
+          <button className="btn ghost" onClick={() => setRaising({})}><Plus size={16} /> Raise a fault</button>
+          <FaultTiming />
+        </div>
+      )}
+      {!canManage && canReport && (
+        <div className="fm-raise-row">
+          <button className="btn ghost" onClick={onReportProblem}><Plus size={16} /> Report a problem</button>
+        </div>
+      )}
+      {raising && (
+        <FaultForm key={raising.entity ?? "new"} presetEntity={raising.entity} deviceOptions={deviceOptions}
+          onDone={() => setRaising(null)} />
+      )}
       {attentionGroups.length > 0 && (
-        <>
-          <div className="settings-section-title">Needs attention ({attentionGroups.length})</div>
-          <div className="cockpit-attention-list">
-            {attentionGroups.map((group) => (
-              <CockpitAttentionRow key={group.key} group={group} onOpenEntity={onOpenEntity}
-                canCloseFault={canCloseFaults} />
-            ))}
-          </div>
-        </>
+        <div className="cockpit-attention-list">
+          {attentionGroups.map((group) => (
+            <CockpitAttentionRow key={group.key} group={group} onOpenEntity={onOpenEntity}
+              canManage={canManage} onEditTicket={onEditTicket} />
+          ))}
+        </div>
       )}
 
       {/* ── Room / floor / category breakdown ──────────────────── */}
@@ -236,23 +282,25 @@ export default function CockpitOverview({ onOpenEntity, doors }: {
   );
 }
 
-/** One row of "Needs attention", ONE SHAPE whatever it holds (owner, 2026-10-10: "make sure each reported issue
- *  appears in a consistent way"): a card titled by the device (or by the problem, when no device stands behind it)
- *  with its room, and every problem as a line INSIDE the card — one or several — a fault's Close at the end of its
- *  own line. It had three shapes: one problem in the subtitle, a fault titled by its own text with a tall Close box
- *  beside the card (cutting the title), and several problems as lines outside the card. */
-function CockpitAttentionRow({ group, onOpenEntity, canCloseFault }: {
+/** One card of the Live issues, ONE SHAPE whatever it holds (owner, 2026-10-10: "make sure each reported issue
+ *  appears in a consistent way"): titled by the device (or by the problem, when no device stands behind it) with its
+ *  room, every problem a line INSIDE the card. A card holding a fault carries its actions (owner, 2026-10-14):
+ *  "Mark in progress" makes the device's faults ONE ticket (each still its own record, so the VESTA Agent can clear
+ *  one alone), then "Edit ticket" opens it in the Tickets tab; "Close" closes them all ("no action needed"). A line
+ *  that is only what Home Assistant reports has no button: it goes when the device is back. */
+function CockpitAttentionRow({ group, onOpenEntity, canManage, onEditTicket }: {
   group: AttentionGroup;
   onOpenEntity: (id: string) => void;
-  canCloseFault: boolean;
+  canManage: boolean;
+  onEditTicket: (ticketId: string) => void;
 }) {
   const Icon = ATTENTION_ICON[group.kind];
   const tappable = !!group.entityId;
   const Head = tappable ? "button" : "div";
-  // ⚠️ THE CARD TAKES THE CLICK, A FAULT'S CLOSE TAKES ITS OWN (owner, 2026-10-10: "Close is not clickable because
-  // the whole card takes the priority"): an invisible layer stretched from the head over the card lay on top of Close.
-  // The card listens; the head stays the one <button> (keyboard and screen readers), its click bubbling to the card;
-  // Close and its "sure?" stop their clicks there.
+  const actions = useCardActions(group, canManage, onEditTicket);
+  // ⚠️ THE CARD TAKES THE CLICK, ITS BUTTONS TAKE THEIR OWN (owner, 2026-10-10: "Close is not clickable because the
+  // whole card takes the priority"). The card listens; the head stays the one <button> (keyboard and screen readers),
+  // its click bubbling to the card; the actions and their "sure?" stop their clicks there.
   return (
     <div className={`cockpit-attention-item${tappable ? " tappable" : ""}`}
       {...(tappable ? { onClick: () => onOpenEntity(group.entityId as string) } : {})}>
@@ -268,73 +316,67 @@ function CockpitAttentionRow({ group, onOpenEntity, canCloseFault }: {
         {tappable && <ChevronRight size={16} className="muted" />}
       </Head>
       <ul className="cockpit-attention-subs">
-        {group.items.map((item) => (
-          <CockpitAttentionSub key={item.id} group={group} item={item} canCloseFault={canCloseFault} />
-        ))}
+        {group.items.map((item) => <CockpitAttentionSub key={item.id} group={group} item={item} />)}
       </ul>
+      {actions}
     </div>
   );
 }
 
-function CockpitAttentionSub({ group, item, canCloseFault }: {
-  group: AttentionGroup; item: AttentionItem; canCloseFault: boolean;
-}) {
+function CockpitAttentionSub({ group, item }: { group: AttentionGroup; item: AttentionItem }) {
   const kind = lineIcon(group, item);
   const Icon = kind ? ATTENTION_ICON[kind] : null;
-  const close = useFaultClose(item, canCloseFault);
   return (
     <li className="cockpit-attention-sub">
       <div className="cockpit-attention-sub-line">
         {Icon && <Icon size={14} className={`cockpit-attention-icon cockpit-attention-${kind}`} />}
         <span className="cockpit-attention-sub-text">{attentionLineIn(group, item)}</span>
-        {close.button}
       </div>
-      {close.panel}
     </li>
   );
 }
 
-/** A fault can be closed from its line in one step ("no action needed" — the
- *  same write as the Faults tab's, FmDataContext.closeTicket). The button ends
- *  the fault's own line, never inside the card's head: that may be a <button>. */
-function useFaultClose(item: AttentionItem | null, canCloseFault: boolean) {
-  const { closeTicket } = useFmData();
+/** A card's actions, for the profiles that manage Facility work: on its faults only (attention.cardFaults). */
+function useCardActions(group: AttentionGroup, canManage: boolean, onEditTicket: (ticketId: string) => void) {
+  const { data, closeTickets } = useFmData();
   const [confirming, setConfirming] = useState(false);
+  const [staging, setStaging] = useState<FmTicket[] | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
-  // the fault itself, or the fault merged onto a live state's line (config/attention.mergeFaults)
-  const fault = item?.kind === "fault" ? item : item?.fault;
-  const closable = !!fault && canCloseFault && !!fault.ticketId;
+  const { open, inProgress } = cardFaults(group);
+  if (!canManage || open.length + inProgress.length === 0) return null;
+  const records = (items: AttentionItem[]) =>
+    items.map((i) => data.tickets.find((t) => t.id === i.ticketId)).filter((t): t is FmTicket => !!t);
   const close = async () => {
-    if (!fault?.ticketId) return;
     setProblem(null);
-    const { done, note: why } = fmSaveOutcome(await closeTicket(fault.ticketId));
-    const failed = done ? null : why;
-    // On success the fault leaves this list; only a failure stays to say so.
+    const { done, note: why } = fmSaveOutcome(await closeTickets([...open, ...inProgress].map((f) => f.ticketId as string)));
+    // On success the card's faults leave this list; only a failure stays to say so.
     setConfirming(false);
-    setProblem(failed);
+    setProblem(done ? null : why);
   };
-  return {
-    button: closable && !confirming ? (
-      <button type="button" className="btn ghost cockpit-attention-close"
-        aria-label={`Close the fault “${fault?.title}”`}
-        onClick={(e) => { e.stopPropagation(); setProblem(null); setConfirming(true); }}>
-        <X size={14} /> Close
-      </button>
-    ) : null,
-    panel: (
-      <>
-        {confirming && (
-          <div className="cockpit-attention-confirm" onClick={(e) => e.stopPropagation()}>
-            <InlineConfirm
-              question="Close this fault? No action needed."
-              confirmLabel="Close fault"
-              onConfirm={close}
-              onCancel={() => setConfirming(false)}
-            />
-          </div>
-        )}
-        {problem && <div className="fm-inline-error" role="alert">{problem}</div>}
-      </>
-    ),
-  };
+  const stop = (e: { stopPropagation(): void }) => e.stopPropagation();
+  return (
+    <div className="cockpit-attention-actions" onClick={stop}>
+      {!confirming && (
+        <div className="fm-fault-actions">
+          {open.length > 0 ? (
+            <button type="button" className="btn ghost" onClick={() => setStaging(records(open))}>Mark in progress</button>
+          ) : (
+            <button type="button" className="btn ghost" onClick={() => onEditTicket(inProgress[0].ticketId as string)}>
+              Edit ticket
+            </button>
+          )}
+          <button type="button" className="btn ghost" aria-label={`Close “${group.title}”`}
+            onClick={() => { setProblem(null); setConfirming(true); }}>
+            <X size={14} /> Close
+          </button>
+        </div>
+      )}
+      {confirming && (
+        <InlineConfirm question="Close this? No action needed." confirmLabel="Close"
+          onConfirm={close} onCancel={() => setConfirming(false)} />
+      )}
+      {problem && <div className="fm-inline-error" role="alert">{problem}</div>}
+      {staging && <FaultStageModal tickets={staging} to="in_progress" onClose={() => setStaging(null)} />}
+    </div>
+  );
 }

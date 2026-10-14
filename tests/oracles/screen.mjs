@@ -53,8 +53,8 @@ console.log("\n  room and category lists");
 console.log("\n  report a fault, edit this device");
 {
   const fm = run(OWNER, { type: "openDevice", panel: P("light.a") }, { type: "reportFault" });
-  ck("a profile that manages faults: the Cockpit on Faults, the device filled in, the panel closed",
-     fm.windows.cockpit && fm.cockpitTab === "faults" && fm.faultFor === "light.a" && fm.nav.panel === null && fm.guestReportFor === null);
+  ck("a profile that manages faults: the Cockpit's Overview, \"Raise a fault\" pointed at the device, the panel closed",
+     fm.windows.cockpit && fm.cockpitTab === "overview" && fm.faultFor === "light.a" && fm.nav.panel === null && fm.guestReportFor === null);
   const opened = screenReducer(fm, { type: "faultFormOpened" }, OWNER);
   ck("  ...the form takes it once; reopening the Cockpit later does not resurrect it", opened.faultFor === null);
   ck("  ...closing the Cockpit forgets it too", screenReducer(fm, { type: "closeWindow", window: "cockpit" }, OWNER).faultFor === null);

@@ -11,7 +11,7 @@ const dash = rd("pages/Dashboard.tsx"), hud = rd("components/hud/HUD.tsx");
 const ids = [...fm.matchAll(/\{ id: "(\w+)", label: "([^"]+)"/g)].map((m) => m[2]);
 ck("7 tabs: Overview, then Facility's six in the operator's order",
    /const OVERVIEW_TAB: ModalTab<CockpitTab> = \{ id: "overview", label: "Overview"/.test(cockpit)
-   && ids.join() === "Today,Readiness,Faults,Spend,Schedule,Recap", ids);
+   && ids.join() === "Today,Readiness,Tickets,Spend,Schedule,Recap", ids);
 ck("  ...a profile without the Facility door sees the Cockpit's own view, with no strip",
    /doors\.facility \? \[OVERVIEW_TAB, \.\.\.FACILITY_TABS\] : \[OVERVIEW_TAB\]/.test(cockpit)
    && /\{tabs\.length > 1 && <ModalTabs/.test(cockpit) && /const shownTab: CockpitTab = doors\.facility \? tab : "overview";/.test(cockpit));
