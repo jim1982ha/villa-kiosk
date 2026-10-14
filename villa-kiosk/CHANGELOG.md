@@ -1,3 +1,10 @@
+## 2.496.366
+
+### Changed
+- Cockpit → Schedule: "Recent work" lists the scheduled maintenance done, only. The work that resolved a ticket was listed there too ("Test Gym Room Ceiling Fan", marked "fault"); it is told on the ticket's own card in Tickets → Closed — who did it, the note, its photos, and now its cost — and in Spend.
+- Cockpit: a ticket, a closed ticket and a piece of work done are drawn by one and the same card — title with its status, the pills and time on one line, the notes, the cost and the buttons on the right. Recent work's cards were grey and centred (they sat inside the "No maintenance schedule yet" message); they now look like every other card.
+- The pager under Recent work counts "completions" (it said "3 piece of works").
+
 ## 2.496.365
 
 ### Changed
