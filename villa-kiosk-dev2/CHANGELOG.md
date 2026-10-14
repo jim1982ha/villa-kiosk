@@ -1,3 +1,8 @@
+## 2.496.343
+
+### Changed
+- Phone menu (the gear, top right): the (?) now sits before "Label size", where every other row has its icon, so "Label size" lines up with "Cockpit", "First-person view", "Settings" and "Logout". Tapping it still opens the map colours.
+
 ## 2.496.342
 
 ### Changed
