@@ -15,7 +15,7 @@ import RecentWorkList from "./RecentWorkList";
 import NotesField from "./NotesField";
 import InlineConfirm from "@/components/common/InlineConfirm";
 import AgentMark from "./AgentMark";
-import RecordMeta from "./RecordMeta";
+import RecordCard from "./RecordCard";
 import { formatMoney } from "@/utils/money";
 import CostFields from "./CostFields";
 import FormActions from "./FormActions";
@@ -122,34 +122,27 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
 
       <div className="fm-list">
         {board.map((s) => (
-          <div key={s.schedule.id} className={`fm-row state-${s.state}`}>
-            <div className="fm-row-main">
-              <div className="fm-row-title">
-                <strong>{s.schedule.title}</strong>
-              </div>
-              <RecordMeta when={`${dueText(s)} · every ${s.schedule.everyDays} days`
-                + (s.last ? ` · last ${localStamp(s.last.at)} by ${workedBy(s.last)}` : "")}>
-                {s.schedule.clause && <span className="fm-clause">Cl. {s.schedule.clause}</span>}
-                {s.schedule.room && <span className="fm-clause">{s.schedule.room}</span>}
-                <AgentMark record={s.schedule} />
-              </RecordMeta>
-            </div>
-            <span className={`fm-badge ${s.state}`}>{STATE_LABEL[s.state]}</span>
-            <button
-              className="btn ghost"
-              onClick={() => setOpenId(openId === s.schedule.id ? null : s.schedule.id)}
-            >
-              <Check size={16} /> Log
-            </button>
-            <button
-              className="icon-btn"
-              onClick={() => void removeSchedule(s.schedule.id)}
-              aria-label={`Remove ${s.schedule.title}`}
-              title="Remove this task. Completions already logged against it are kept."
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
+          // THE Cockpit card (RecordCard): its state pill on the title line, Log and the bin inside, on the right of
+          // its text (architecture review, 2026-10-15 — the layout the owner set for tickets); its tint says how late
+          <RecordCard key={s.schedule.id} tone={`state-${s.state}`} title={s.schedule.title}
+            status={{ text: STATE_LABEL[s.state], tone: s.state }}
+            when={`${dueText(s)} · every ${s.schedule.everyDays} days`
+              + (s.last ? ` · last ${localStamp(s.last.at)} by ${workedBy(s.last)}` : "")}
+            pills={<>
+              {s.schedule.clause && <span className="fm-clause">Cl. {s.schedule.clause}</span>}
+              {s.schedule.room && <span className="fm-clause">{s.schedule.room}</span>}
+              <AgentMark record={s.schedule} />
+            </>}
+            actions={<>
+              <button className="btn ghost" onClick={() => setOpenId(openId === s.schedule.id ? null : s.schedule.id)}>
+                <Check size={16} /> Log
+              </button>
+              <button className="icon-btn" onClick={() => void removeSchedule(s.schedule.id)}
+                aria-label={`Remove ${s.schedule.title}`}
+                title="Remove this task. Completions already logged against it are kept.">
+                <Trash2 size={16} />
+              </button>
+            </>} />
         ))}
       </div>
 

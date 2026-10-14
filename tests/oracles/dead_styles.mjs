@@ -13,7 +13,11 @@ import { ck, done } from "../consistency/check.mjs";
 const ROOT = new URL("../../", import.meta.url).pathname;
 const walk = (d, out = []) => { for (const e of readdirSync(d)) { const p = join(d, e); statSync(p).isDirectory() ? walk(p, out) : out.push(p); } return out; };
 const all = walk(ROOT + "src");
-const code = all.filter((f) => /\.(tsx?|html)$/.test(f)).map((f) => readFileSync(f, "utf8")).join("\n") + readFileSync(ROOT + "index.html", "utf8");
+// ⚠️ THE CODE WITHOUT ITS COMMENTS (architecture review, 2026-10-15): a class only a comment still named counted as
+// drawn — a comment explaining an old layout kept its dead rule alive
+const uncommented = (t) => t.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:"'`\\])\/\/[^\n]*/g, "$1").replace(/<!--[\s\S]*?-->/g, " ");
+const code = all.filter((f) => /\.(tsx?|html)$/.test(f)).map((f) => uncommented(readFileSync(f, "utf8"))).join("\n")
+  + uncommented(readFileSync(ROOT + "index.html", "utf8"));
 
 const classes = new Map(); // class → the sheet that styles it
 for (const f of all.filter((f) => f.endsWith(".css"))) {
@@ -30,7 +34,9 @@ ck("the scan found the stylesheets' classes", classes.size > 400, classes.size);
 const prefixes = new Set([...code.matchAll(/(?<![\w-])([a-z][a-z0-9-]*)\$\{/g)].map((m) => m[1]));
 const built = (c) => [...prefixes].some((p) => c.startsWith(p) && (p.endsWith("-") ? /^[a-z0-9-]+$/ : /^\d+$/).test(c.slice(p.length)));
 const named = (c) => new RegExp(`(^|[^\\w-])${c.replace(/-/g, "\\-")}(?![\\w-])`).test(code);
-const dead = [...classes].filter(([c]) => !named(c) && !built(c)).map(([c, f]) => `${c} (${f})`);
+// classes a LIBRARY puts on what it draws: lucide-react gives every icon class="lucide …"
+const LIBRARY = new Set(["lucide"]);
+const dead = [...classes].filter(([c]) => !named(c) && !built(c) && !LIBRARY.has(c)).map(([c, f]) => `${c} (${f})`);
 ck("every class a stylesheet styles is drawn by some screen", dead.length === 0, dead);
 ck("  ...a built class counts: the Energy slots e-s0..5 come from `e-s${i}`", built("e-s3") && !built("badge"));
 

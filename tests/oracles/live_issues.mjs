@@ -188,14 +188,17 @@ ck("lists that only grow are ONE folded, paged list (owner, 2026-10-14): Tickets
    /<FoldedList title="Closed" rows=\{closed\}/.test(ticketsTab) && /<FoldedList title="Recent work" rows=\{rows\}/.test(recent)
    && !/usePaged|<Pager|\.slice\(0, limit\)/.test(recent + ticketsTab));
 
-ck("a ticket is ONE card: its pill on the first record, its buttons inside, no device name above (owner, 2026-10-14)",
+// a ticket's card AS DRAWN (pill on the title line, buttons inside on the right): tests/oracles/cockpit_cards.mjs
+ck("a ticket is ONE card: the first record carries the pill, the closed one its Reopen, no device name above",
    /<div key=\{g\.key\} className="fm-record-card">/.test(ticketsTab) && /record\(t, i === 0 \? \{ text: "In progress", tone: "due-soon" \} : undefined,/.test(ticketsTab)
-   && /record\(t, \{ text: "Resolved", tone: "ok" \},\s*<button className="btn ghost" onClick=\{\(\) => setStaging\(\{ tickets: \[t\], to: "open" \}\)\}>Reopen<\/button>\)/.test(ticketsTab)
-   // the buttons sit INSIDE the card, on the right of its text, and take their own presses (RecordCard)
-   && /<div className="fm-record-body">[\s\S]*?\{actions && <div className="fm-record-actions" onPointerDown=\{\(e\) => e\.stopPropagation\(\)\}>\{actions\}<\/div>\}/.test(readFileSync(new URL("../../src/components/fm/RecordCard.tsx", import.meta.url), "utf8"))
+   && /record\(t, \{ text: "Resolved", tone: "ok" \},\s*<button className="btn ghost"[\s\S]*?>Reopen<\/button>\)/.test(ticketsTab)
    && !/const title = head\.entityId/.test(ticketsTab));
-ck("ONE card for every Facility record (owner, 2026-10-14): Tickets and Recent work draw RecordCard, nothing of their own",
-   /<RecordCard /.test(ticketsTab) && /<RecordCard /.test(recent) && !/<ErasableRow|<RecordMeta|<EvidenceRow|fm-document-link/.test(ticketsTab + recent));
+const spendTab = readFileSync(new URL("../../src/components/fm/SpendTab.tsx", import.meta.url), "utf8");
+const todayTab = readFileSync(new URL("../../src/components/fm/TodayTab.tsx", import.meta.url), "utf8");
+ck("ONE card for every Cockpit list (architecture review, 2026-10-15): Overview, Tickets, Schedule, Spend, Recent work draw RecordCard, nothing of their own",
+   [ticketsTab, recent, spendTab, todayTab].every((f) => /<RecordCard /.test(f)) && /<RecordCard\s/.test(ov)
+   && !/<ErasableRow|<RecordMeta|fm-document-link|className=\{`fm-row state-/.test(ticketsTab + recent + spendTab + todayTab)
+   && !/cockpit-attention-(item|row|detail|actions)/.test(ov));
 ck("  ...and Recent work is the SCHEDULED work: a ticket's repair is told on its closed card",
    /\.filter\(\(c\) => completionSource\(data, c\)\.kind === "schedule"\)/.test(recent)
    && /const work = data\.completions\.find\(\(c\) => c\.ticketId === t\.id && c\.costId\);/.test(ticketsTab));
@@ -254,9 +257,6 @@ ck("a card draws what cardActions says (no rule of its own)",
    /const acts = cardActions\(group\);/.test(ov) && /setStaging\(records\(acts\.markInProgress\)\)\}><Wrench size=\{14\} aria-hidden \/> Open Ticket</.test(ov)
    && /onEditTicket\(acts\.editTicket as string\)\}><Pencil size=\{14\} aria-hidden \/> Edit Ticket</.test(ov)
    && /onEditTicket\(acts\.editTicket as string\)/.test(ov) && /closeTickets\(acts\.close\)/.test(ov) && !/in_progress"/.test(ov.replace(/to="in_progress"/, "")));
-ck("a card's lines on the left, its buttons on the right of the same line (owner, 2026-10-14)",
-   /<div className="cockpit-attention-detail">\s*<ul className="cockpit-attention-subs">[\s\S]*?<\/ul>\s*\{actions\}\s*<\/div>/.test(ov)
-   && /\.cockpit-attention-detail \{ display: flex;/.test(readFileSync(new URL("../../src/styles/08-shared.css", import.meta.url), "utf8")));
 ck("a ticket's notes wrap inside its card, never past its edge (owner, 2026-10-14: a long \"VESTA reads\" ran out)",
    /\.fm-record-body > \.fm-row-main \{ flex: 1 1 260px; min-width: 0; \}/.test(src("styles/07-facility.css"))
    && /\.fm-timeline-note \{[^}]*overflow-wrap: anywhere;/.test(src("styles/07-facility.css")));

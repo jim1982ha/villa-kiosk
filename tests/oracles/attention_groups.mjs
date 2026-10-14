@@ -186,19 +186,12 @@ ck("every Cockpit count in the top bar and the phone menu is the number of ROWS"
 ck("the villa model hands buildAttentionItems the device fold, and leaves the grouping to the profile's view",
    /selectableIds, folding \}\);/.test(vm) && !/groupAttention|villaHealthFrom/.test(vm)
    && /return attentionFor\(attention, \(id\) => sees\.has\(id\)\);/.test(src("components/cockpit/useVillaAttention.ts")));
-ck("the Cockpit draws one card per group, its actions (on its faults) at the bottom of the card",
+// HOW a card is drawn (its buttons inside, the click its own, the source icons) is checked on the drawn card:
+// tests/oracles/cockpit_cards.mjs (architecture review, 2026-10-15). Here: the WIRING a drawing cannot see.
+ck("the Cockpit draws one card per group, its buttons decided by cardActions",
    /attentionGroups\.map\(\(group\) => \(\s*<CockpitAttentionRow key=\{group\.key\} group=\{group\}/.test(cockpit)
-   && /const actions = useCardActions\(group, canManage, onEditTicket\);/.test(cockpit) && /const acts = cardActions\(group\);/.test(cockpit)
+   && /const acts = cardActions\(group\);/.test(cockpit) && /<AttentionCard group=\{group\} onOpenEntity=\{onOpenEntity\} actions=\{useCardActions\(group, canManage, onEditTicket\)\} \/>/.test(cockpit)
    // a line's icon is lineIcon's answer, never its own kind's again
-   && /function CockpitAttentionSub[\s\S]*?const icons = lineIcon\(group, item\);[\s\S]*?\{icons && <SourceIcons \{\.\.\.icons\}/.test(cockpit));
-// ⚠️ CLOSE TAKES ITS OWN CLICK (owner, 2026-10-10: "Close is not clickable because the whole card takes the
-// priority"): 2.496.318 stretched an invisible layer from the head over the card, on top of Close
-const css08 = src("styles/08-shared.css");
-ck("the card takes the click and its actions stop theirs there; no layer stretched over the card",
-   /className=\{`cockpit-attention-item[\s\S]{0,120}onClick: \(\) => onOpenEntity/.test(cockpit)
-   && /<div className="cockpit-attention-actions" onClick=\{stop\}>/.test(cockpit)
-   && !/cockpit-attention-row[^{]*::after/.test(css08)
-   // the card lights up as the device it opens, never while the pointer is on its actions
-   && /\.cockpit-attention-item\.tappable:hover:not\(:has\(\.cockpit-attention-actions:hover\)\)/.test(css08));
+   && /function CockpitAttentionSub[\s\S]*?const icons = lineIcon\(group, item\);/.test(cockpit));
 
 done("✅ one card per device in the Live issues");

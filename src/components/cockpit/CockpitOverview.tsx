@@ -11,7 +11,7 @@
 // selectableDeviceIds/entityMap/resolvedRooms, never a raw HA domain query
 // (see cockpitData.ts's own docstring).
 
-import { useEffect, useMemo, useState, type ComponentType } from "react";
+import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
   MapPin, Building2, LayoutGrid,
@@ -41,6 +41,7 @@ import {
 } from "./cockpitData";
 import { attentionLineIn, cardActions, lineIcon, lineSources, type AttentionGroup, type AttentionItem } from "@/config/attention";
 import { SourceIcons } from "@/components/fm/sourceIcons";
+import RecordCard from "@/components/fm/RecordCard";
 import { useVillaModel } from "@/config/VillaModel";
 import { buildDeviceOptions } from "@/components/fm/DeviceSearchPicker";
 import FaultForm from "@/components/fm/FaultForm";
@@ -280,36 +281,33 @@ function CockpitAttentionRow({ group, onOpenEntity, canManage, onEditTicket }: {
   canManage: boolean;
   onEditTicket: (ticketId: string) => void;
 }) {
+  return <AttentionCard group={group} onOpenEntity={onOpenEntity} actions={useCardActions(group, canManage, onEditTicket)} />;
+}
+
+/** The card itself, drawn — THE Cockpit card (RecordCard), as every list's (architecture review, 2026-10-15): its
+ *  source icons before the device's name, the room under it, its problems' lines, its buttons on the right of them.
+ *  Tapping it opens the device; its buttons take their own presses. Pure: a check draws it. */
+export function AttentionCard({ group, onOpenEntity, actions }: {
+  group: AttentionGroup;
+  onOpenEntity: (id: string) => void;
+  actions?: ReactNode;
+}) {
   const tappable = !!group.entityId;
-  const Head = tappable ? "button" : "div";
-  const actions = useCardActions(group, canManage, onEditTicket);
-  // ⚠️ THE CARD TAKES THE CLICK, ITS BUTTONS TAKE THEIR OWN (owner, 2026-10-10: "Close is not clickable because the
-  // whole card takes the priority"). The card listens; the head stays the one <button> (keyboard and screen readers),
-  // its click bubbling to the card; the actions and their "sure?" stop their clicks there.
   return (
-    <div className={`cockpit-attention-item${tappable ? " tappable" : ""}`}
-      {...(tappable ? { onClick: () => onOpenEntity(group.entityId as string) } : {})}>
-      <Head
-        type={tappable ? "button" : undefined}
-        className={`cockpit-attention-row${tappable ? " tappable" : ""}`}
-      >
-        {/* where its (first) problem comes from, in place of a warning sign (owner, 2026-10-14) — legend: the (i) */}
-        {group.items[0] && <SourceIcons {...lineSources(group.items[0])} />}
-        <span className="cockpit-attention-body">
-          <span className="cockpit-attention-title">{group.title}</span>
-          {group.room && <span className="muted body-text" style={{ fontSize: "var(--text-2xs)" }}>{group.room}</span>}
-        </span>
-        {tappable && <ChevronRight size={16} className="muted" />}
-      </Head>
-      {/* its problems on the left, the buttons that act on them on the right of the SAME line (owner, 2026-10-14:
-          a line of its own for the buttons made every card a third taller); a phone wraps the buttons under */}
-      <div className="cockpit-attention-detail">
+    <RecordCard
+      title={group.title}
+      subtitle={group.room}
+      // where its (first) problem comes from, in place of a warning sign (owner, 2026-10-14) — legend: the (i)
+      lead={group.items[0] ? <SourceIcons {...lineSources(group.items[0])} /> : undefined}
+      trailing={tappable ? <ChevronRight size={16} className="muted" aria-hidden /> : undefined}
+      onOpen={tappable ? () => onOpenEntity(group.entityId as string) : undefined}
+      body={(
         <ul className="cockpit-attention-subs">
           {group.items.map((item) => <CockpitAttentionSub key={item.id} group={group} item={item} />)}
         </ul>
-        {actions}
-      </div>
-    </div>
+      )}
+      actions={actions ?? undefined}
+    />
   );
 }
 
@@ -347,9 +345,8 @@ function useCardActions(group: AttentionGroup, canManage: boolean, onEditTicket:
     setConfirming(false);
     setProblem(done ? null : why);
   };
-  const stop = (e: { stopPropagation(): void }) => e.stopPropagation();
   return (
-    <div className="cockpit-attention-actions" onClick={stop}>
+    <>
       {!confirming && (
         <div className="fm-fault-actions">
           {acts.editTicket === null ? (
@@ -369,6 +366,6 @@ function useCardActions(group: AttentionGroup, canManage: boolean, onEditTicket:
       )}
       {problem && <div className="fm-inline-error" role="alert">{problem}</div>}
       {staging && <FaultStageModal tickets={staging} to="in_progress" onClose={() => setStaging(null)} />}
-    </div>
+    </>
   );
 }
