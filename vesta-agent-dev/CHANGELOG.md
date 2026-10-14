@@ -1,3 +1,11 @@
+## 0.12.199
+
+What you will see:
+- When someone presses "Open Ticket" on an alert's card in the Cockpit, Telegram stops chasing: no more reminder to
+  the Facility Manager, no escalation to the Owner. Within 5 minutes every copy of the alert on Telegram loses its
+  Done / Need help buttons and reads "Ticket opened in the Cockpit by (who) on (date and time)." The alert stays open:
+  it still closes when the device is back to normal, or when the ticket is resolved or closed in the Cockpit.
+
 ## 0.12.198
 
 What you will see (with VESTA Kiosk 2.496.359 or later):
