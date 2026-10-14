@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.183 (14 October 2026)
+
+Villa, 2026-10-14 (Cockpit audit): the House & Pool relay's reconnect fault was keyed on the switch on 10 Oct and on
+the uptime sensor on the 11th — whichever entity the night's logbook named first — so each change closed one fault
+and opened another, and the open one kept its first night's words.
+- preventive-maintenance nightly `_standing_entity`: a device's reconnect finding is kept under ONE entity — its first
+  classified entity, else its first entity, never a control with no state (`_NO_STATE_DOMAINS`: on the villa the
+  relay's first entity was its Restart button). Replayed on the villa's last four nights: one finding, refreshed.
+- tests: test_a_device_s_reconnect_fault_keeps_one_entity_whichever_drops_first (red before the fix).
+
 ## 0.6.182 (13 October 2026)
 
 Owner, 2026-10-13: "restart-filter fix … remove all code and workflow that would then become redundant".

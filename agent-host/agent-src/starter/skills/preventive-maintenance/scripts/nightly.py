@@ -253,7 +253,8 @@ def run(args) -> dict:
         # ⚠️ ITS DEVICE, CLASSIFIED OR NOT (2026-10-13): a relay's uptime sensor is in no family, had no device, and its
         # drops were a second fault for the same relay
         key = F.device_key({**row, "device_id": pack.device_id_of(eid), "asset": row.get("asset") or slug}, eid)
-        g = by_device.setdefault(key, {"eid": eid, "slug": slug, "name": row.get("name"), "per_day": {}})
+        g = by_device.setdefault(key, {"eid": _standing_entity(pack, eid, rows_by_eid), "slug": slug,
+                                       "name": row.get("name"), "per_day": {}})
         for d, n in per_day.items():
             g["per_day"][d] = max(g["per_day"].get(d, 0), n)      # the device's drops, not the sum of its entities'
         g["name"] = g["name"] or row.get("name")
@@ -309,6 +310,22 @@ def _device_named(pack, asset: dict, entity_id: str) -> dict:
     asset's name: one meter can measure two circuits. Unchanged when Home Assistant names no device."""
     label = pack.device_label(pack.device_id_of(entity_id))
     return {**asset, "name": label} if label else asset
+
+
+def _standing_entity(pack, entity_id: str, classified) -> str:
+    """The ONE entity a device's reconnect finding is kept under, whichever of its entities dropped first: its first
+    classified entity (`classified`: the pack's rows), else its first entity, else `entity_id` (no device).
+    ⚠️ NEVER THE NIGHT'S FIRST TO DROP (villa, 2026-10-14): the relay's fault was the switch's on 10 Oct and the uptime
+    sensor's on the 11th — each change closed one fault and opened another for the same relay, and the one left open
+    kept the words of its first night ("10 times", "Wi-Fi or power", an entity id for a name)."""
+    ents = sorted(pack.entities_of_device(pack.device_id_of(entity_id)))
+    # never a control with no state of its own: on the villa, the relay's first entity was its "Restart" button
+    held = [e for e in ents if e.split(".", 1)[0] not in _NO_STATE_DOMAINS] or ents
+    return next((e for e in held if e in classified), held[0] if held else entity_id)
+
+
+#: Entities that hold no state a person would call the device's (a button's state is when it was last pressed).
+_NO_STATE_DOMAINS = {"button", "event", "image", "notify", "number", "scene", "select", "text", "update"}
 
 
 def _restarted(pack, states: dict, entity_id: str, since: datetime) -> bool | None:

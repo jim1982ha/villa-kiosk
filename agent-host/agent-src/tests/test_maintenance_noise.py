@@ -308,9 +308,10 @@ def test_the_night_tells_the_engine_when_the_kiosks_faults_change(tmp_path):
 
 
 # ------------------------------------------------------------------------- one device, its name, its own uptime
-def _relay(tmp, started):
+def _relay(tmp, started, uptime_first=False):
     """A Wi-Fi relay whose switch is classified and whose uptime sensor and restart button are not (no family): 6 drops
-    of the switch on 2 Oct, 6 of the uptime sensor on 3 Oct; the uptime sensor says the relay started at `started`."""
+    of the switch on 2 Oct, 6 of the uptime sensor on 3 Oct (`uptime_first`: the other way round); the uptime sensor
+    says the relay started at `started`."""
     fx = tmp / "fx"
     fx.mkdir()
     ids = ["switch.example_relay", "sensor.example_relay_uptime", "button.example_relay_restart"]
@@ -318,7 +319,7 @@ def _relay(tmp, started):
         "switch.example_relay": {"state": "off", "attributes": {}, "last_changed": "2026-10-03T20:00:00+00:00"},
         "sensor.example_relay_uptime": {"state": started, "attributes": {"device_class": "uptime"},
                                         "last_changed": "2026-10-03T20:00:00+00:00"}}}))
-    rows = [{"entity_id": ids[0] if day == 2 else ids[1], "state": "unavailable",
+    rows = [{"entity_id": ids[0] if (day == 2) != uptime_first else ids[1], "state": "unavailable",
              "when": datetime(2026, 10, day, 9 + k, 5, tzinfo=timezone.utc).isoformat()} for day in (2, 3) for k in range(6)]
     (fx / "logbook.json").write_text(json.dumps({"entries": rows}))
     _pack(tmp, {"runtime": [_row(ids[0], "Example relay switch", family="runtime", asset="example_relay", device="dev-1")]},
@@ -335,6 +336,19 @@ def test_a_device_reconnecting_is_one_fault_named_for_it_and_wifi_when_it_never_
     (f,) = _open(tmp_path, "PM-RECONNECT-LOOP")
     assert f["summary"] == ("Example Relay dropped and reconnected 12 times in 3 days: a Wi-Fi problem on its side: it "
                             "never restarted, so its power held."), f["summary"]
+
+
+def test_a_device_s_reconnect_fault_keeps_one_entity_whichever_drops_first(tmp_path):
+    # villa, 2026-10-14: the relay's fault was kept under whichever entity dropped first in the night's logbook — the
+    # switch on 10 Oct, the uptime sensor on the 11th — so each change closed its fault and opened another, and the one
+    # left open kept the words of the night it was opened ("10 times", "Wi-Fi or power", an entity id for a name)
+    for name, uptime_first in (("switch_first", False), ("uptime_first", True)):
+        tmp = tmp_path / name
+        tmp.mkdir()
+        _relay(tmp, "2026-09-20T00:00:00+00:00", uptime_first=uptime_first)
+        _night(tmp, "--as-of", AS_OF)
+        (f,) = _open(tmp, "PM-RECONNECT-LOOP")
+        assert f["entity_id"] == "switch.example_relay", (name, f["entity_id"])
 
 
 def test_a_device_that_restarted_in_the_window_may_be_its_power(tmp_path):
