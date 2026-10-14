@@ -11,7 +11,7 @@ const { default: Fold } = await import("@/components/settings/Fold");
 
 const tip = renderToStaticMarkup(React.createElement(InfoTip, { label: "How it works" }, "The card's words"));
 ck("the (i): a button named for what it explains, closed until tapped", /<button[^>]*class="info-btn"[^>]*aria-label="How it works"[^>]*aria-expanded="false"/.test(tip), tip);
-ck("  ...its card is in the page as a tooltip, carrying what it was given", /role="tooltip"[^>]*>The card&#x27;s words</.test(tip) || /role="tooltip"[^>]*>The card's words</.test(tip), tip);
+ck("  ...its card is not drawn until it opens (it is placed on the screen then, InfoTip)", !/role="tooltip"/.test(tip) && !tip.includes("The card"), tip);
 ck("  ...and not marked open", !/class="info-tip open/.test(tip), tip);
 
 const fold = renderToStaticMarkup(React.createElement(Fold, { summary: "9 groups · 15 suggested" }, React.createElement("p", null, "inside")));

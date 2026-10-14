@@ -161,7 +161,7 @@ export default function CockpitOverview({ onOpenEntity, doors, reportFaultFor, o
       {/* The title, and on its right the (i) then "Open a ticket" (owner, 2026-10-14) — a guest's "Report a problem". */}
       {(attentionGroups.length > 0 || canReport) && (
         <div className="cockpit-issues-head">
-          <div className="settings-section-title">Live issues{attentionGroups.length > 0 ? ` (${attentionGroups.length})` : ""}</div>
+          <div className="settings-section-title">Open issues{attentionGroups.length > 0 ? ` (${attentionGroups.length})` : ""}</div>
           {canManage && !raising && (
             <div className="cockpit-issues-actions">
               <FaultTiming />
@@ -275,7 +275,7 @@ export default function CockpitOverview({ onOpenEntity, doors, reportFaultFor, o
 /** One card of the Live issues, ONE SHAPE whatever it holds (owner, 2026-10-10: "make sure each reported issue
  *  appears in a consistent way"): titled by the device (or by the problem, when no device stands behind it) with its
  *  room, every problem a line INSIDE the card. A card holding a fault carries its actions (owner, 2026-10-14):
- *  "Mark in progress" makes the device's faults ONE ticket (each still its own record, so the VESTA Agent can clear
+ *  "Open ticket" (was "Mark in progress", renamed 2026-10-14) makes the device's faults ONE ticket (each still its own record, so the VESTA Agent can clear
  *  one alone), then "Edit ticket" opens it in the Tickets tab; "Close" closes them all ("no action needed"). A line
  *  that is only what Home Assistant reports has no button: it goes when the device is back. */
 function CockpitAttentionRow({ group, onOpenEntity, canManage, onEditTicket }: {
@@ -305,10 +305,14 @@ function CockpitAttentionRow({ group, onOpenEntity, canManage, onEditTicket }: {
         </span>
         {tappable && <ChevronRight size={16} className="muted" />}
       </Head>
-      <ul className="cockpit-attention-subs">
-        {group.items.map((item) => <CockpitAttentionSub key={item.id} group={group} item={item} />)}
-      </ul>
-      {actions}
+      {/* its problems on the left, the buttons that act on them on the right of the SAME line (owner, 2026-10-14:
+          a line of its own for the buttons made every card a third taller); a phone wraps the buttons under */}
+      <div className="cockpit-attention-detail">
+        <ul className="cockpit-attention-subs">
+          {group.items.map((item) => <CockpitAttentionSub key={item.id} group={group} item={item} />)}
+        </ul>
+        {actions}
+      </div>
     </div>
   );
 }
@@ -349,7 +353,7 @@ function useCardActions(group: AttentionGroup, canManage: boolean, onEditTicket:
       {!confirming && (
         <div className="fm-fault-actions">
           {acts.editTicket === null ? (
-            <button type="button" className="btn ghost" onClick={() => setStaging(records(acts.markInProgress))}>Mark in progress</button>
+            <button type="button" className="btn ghost" onClick={() => setStaging(records(acts.markInProgress))}>Open ticket</button>
           ) : (
             <button type="button" className="btn ghost" onClick={() => onEditTicket(acts.editTicket as string)}>Edit ticket</button>
           )}

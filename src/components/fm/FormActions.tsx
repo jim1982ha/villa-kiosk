@@ -7,9 +7,11 @@
 import type { ReactNode } from "react";
 import { Check, X } from "lucide-react";
 
-export default function FormActions({ error, onCancel, onSave, saveLabel, disabled = false }: {
+export default function FormActions({ error, onCancel, onSave, saveLabel, disabled = false, extra }: {
   /** The refusal to show above the buttons, or null. */
   error?: string | null;
+  /** A form's own button, drawn as these are, on the left of Cancel (Spend settings' "Remove cap"). */
+  extra?: ReactNode;
   onCancel: () => void;
   onSave: () => unknown;
   saveLabel: ReactNode;
@@ -19,6 +21,7 @@ export default function FormActions({ error, onCancel, onSave, saveLabel, disabl
     <>
       {error && <div className="fm-inline-error" role="alert">{error}</div>}
       <div className="modal-actions" style={{ marginTop: 8 }}>
+        {extra}
         <button className="btn ghost" onClick={onCancel}><X size={16} aria-hidden /> Cancel</button>
         <button className="btn primary" disabled={disabled} onClick={() => { void onSave(); }}>
           <Check size={16} aria-hidden /> {saveLabel}

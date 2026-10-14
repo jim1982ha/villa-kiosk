@@ -123,29 +123,35 @@ export default function SpendTab(
       {roleCan(role, "editConfig") && <ContractTermsEditor />}
       {/* The month, on the same line as its statement's buttons (owner, 2026-10-14): it chooses what this whole tab
           shows, and the statement is of that month. */}
-      <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+      {/* ⚠️ THE STATEMENT'S THREE BUTTONS ARE ONE GROUP (owner, 2026-10-14: Download .md fell alone onto a second
+          line): they never part; on a narrow screen the group goes under the Month as a whole. "Save", not "Save
+          statement": beside "Generate statement" it says the same, and the three fit one line on the iPad. */}
+      <div className="fm-statement-row">
         <span className="fm-inline-label">Month</span>
         <div style={{ minWidth: 130 }}>
           <Dropdown value={month} ariaLabel="Month" onChange={(m) => { setMonth(m); setStatement(null); setStatementSaved(false); }}
             options={months.map((m) => ({ value: m, label: m }))} />
         </div>
-        <button className="btn ghost" onClick={generateStatement}>
-          <Sparkles size={16} /> {statement ? "Regenerate statement" : "Generate statement"}
-        </button>
-        <SaveButton saved={statementSaved} label="Save statement" icon={<Save size={16} />} onClick={() => void saveStatement()} disabled={!statement} />
-        <button className="btn ghost" onClick={downloadStatement} disabled={!statement}>
-          <Download size={16} /> Download .md
-        </button>
+        <div className="fm-statement-buttons">
+          <button className="btn ghost" onClick={generateStatement}>
+            <Sparkles size={16} /> {statement ? "Regenerate statement" : "Generate statement"}
+          </button>
+          <SaveButton saved={statementSaved} label="Save" icon={<Save size={16} />} onClick={() => void saveStatement()} disabled={!statement} />
+          <button className="btn ghost" onClick={downloadStatement} disabled={!statement}>
+            <Download size={16} /> Download .md
+          </button>
+        </div>
       </div>
       {statement && <MarkdownPreview markdown={statement} />}
 
       <div className={`fm-cap ${b.state}`}>
         {/* the month's money on ONE line — minor (against the cap), major (outside it), total — and Record spend at
-            its right (owner, 2026-10-14: "what about total or major spend?") */}
-        <div className="fm-cap-head fm-cap-totals">
-          <span><strong>{money(b.minorSpend)}</strong> <span className="muted">{COST_CATEGORY_NAMES.minor}{b.cap > 0 ? ` of ${money(b.cap)} cap` : ""}</span></span>
-          <span><strong>{money(b.majorSpend)}</strong> <span className="muted">{COST_CATEGORY_NAMES.major}</span></span>
-          <span><strong>{money(b.totalSpend)}</strong> <span className="muted">Total</span></span>
+            its right (owner, 2026-10-14: "what about total or major spend?"); the three share the width equally, each
+            word ABOVE its amount (owner, 2026-10-14) */}
+        <div className="fm-cap-totals">
+          <div className="fm-cap-total"><span className="muted">{COST_CATEGORY_NAMES.minor}{b.cap > 0 ? ` · cap ${money(b.cap)}` : ""}</span><strong>{money(b.minorSpend)}</strong></div>
+          <div className="fm-cap-total"><span className="muted">{COST_CATEGORY_NAMES.major}</span><strong>{money(b.majorSpend)}</strong></div>
+          <div className="fm-cap-total"><span className="muted">Total</span><strong>{money(b.totalSpend)}</strong></div>
           {!adding && (
             <button className="btn ghost fm-cap-record" onClick={() => setAdding(true)}><Plus size={16} /> Record spend</button>
           )}

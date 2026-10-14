@@ -241,6 +241,12 @@ export function stageOf(t: { status?: FmTicket["status"] }): FmStage {
   return t.status === "in_progress" ? "ticket" : "fault";
 }
 
+/** A fault's title as every list shows it: "#5 · House Pump Power …" when it came from a VESTA Agent alert — the
+ *  number its Telegram messages carry (FmTicket.alertNumber) — else its title alone. */
+export function faultTitle(t: Pick<FmTicket, "title" | "alertNumber">): string {
+  return typeof t.alertNumber === "number" && t.alertNumber > 0 ? `#${t.alertNumber} · ${t.title}` : t.title;
+}
+
 /** Who did a piece of work: the person, when someone else recorded it (a VESTA Agent completion for a Done on
  *  Telegram), else who recorded it. One reading for every list and report. */
 export function workedBy(c: Pick<FmCompletion, "by" | "who">): string {

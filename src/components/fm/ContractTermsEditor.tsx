@@ -7,7 +7,7 @@
 // is Home Assistant's own (Settings → System → General).
 
 import { useState } from "react";
-import { Settings2 } from "lucide-react";
+import { Settings2, Trash2 } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { parseAmount } from "@/fm/fmEngine";
 import { useFmTerms } from "@/fm/useFmTerms";
@@ -54,30 +54,30 @@ export default function ContractTermsEditor() {
   return (
     <div className="fm-form">
       <h3>Spend settings</h3>
-      <p className="muted body-text">
+      {/* ONE paragraph, its sentences run on (owner, 2026-10-14: no blank line between them) */}
+      <p className="muted body-text fm-form-intro">
         Shared by every device. {terms.currency
           ? <>Amounts are in {terms.currency}, the currency set in Home Assistant (Settings → System → General).</>
           : <>No currency is set in Home Assistant, so amounts show as plain numbers (set one in Settings → System → General).</>}
-      </p>
-      <p className="muted body-text">
-        Spend is recorded as <b>Minor</b> (routine work, counted against the cap) or <b>Major</b> (larger work,
+        {" "}Spend is recorded as <b>Minor</b> (routine work, counted against the cap) or <b>Major</b> (larger work,
         always outside the cap).
       </p>
       <div className="slider-pair">
         <label className="fm-field">
           <span>Monthly cap on minor spend{terms.currency ? ` (${terms.currency})` : ""}</span>
-          <div className="row" style={{ gap: 8 }}>
-            <input value={cap} inputMode="numeric" onChange={(e) => setCap(e.target.value)} placeholder="No cap" />
-            {/* removing a cap is one tap, then Save (owner, 2026-10-14: "how to delete a previously set cap?") */}
-            {cap.trim() !== "" && <button type="button" className="btn ghost" onClick={() => setCap("")}>Remove cap</button>}
-          </div>
+          <input value={cap} inputMode="numeric" onChange={(e) => setCap(e.target.value)} placeholder="No cap" />
         </label>
         <label className="fm-field">
           <span>Warn when the month reaches (% of the cap)</span>
           <input value={warnAt} inputMode="numeric" onChange={(e) => setWarnAt(e.target.value)} placeholder="80" />
         </label>
       </div>
-      <FormActions onCancel={() => setOpen(false)} onSave={save} saveLabel="Save" />
+      {/* removing a cap is one tap, then Save (owner, 2026-10-14: "how to delete a previously set cap?"); the button
+          sits with Cancel and Save, drawn as they are (owner, 2026-10-14) */}
+      <FormActions onCancel={() => setOpen(false)} onSave={save} saveLabel="Save"
+        extra={cap.trim() !== "" && (
+          <button type="button" className="btn ghost" onClick={() => setCap("")}><Trash2 size={16} aria-hidden /> Remove cap</button>
+        )} />
     </div>
   );
 }

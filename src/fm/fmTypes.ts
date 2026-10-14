@@ -180,6 +180,10 @@ export interface FmTicket extends FmProvenance {
    *  photos are (supervisor-proxy FM_EVIDENCE_KINDS). Absent on every fault made before. */
   documentIds?: string[];
   costId?: string;
+  /** The number the VESTA Agent's messages give the alert this fault came from ("#5" in Telegram) — written by the
+   *  Agent (0.12.195+), shown before the title (fmEngine.faultTitle) so the message and the card read as one problem
+   *  (owner, 2026-10-14). Absent on a person's fault and on a night check's (no message numbers those). */
+  alertNumber?: number;
   /** Every status change, in order. Optional because faults raised before
    *  this existed have none — read it as "no steps recorded", never as an
    *  error. */

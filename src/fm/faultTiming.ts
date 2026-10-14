@@ -33,12 +33,12 @@ export function faultTiming(agent: boolean): { rows: readonly Row[]; note: strin
   return agent
     ? {
         rows: [...AGENT_ROWS, ...PERSON_ROWS],
-        note: "A fault becomes a ticket when someone marks it in progress (Tickets tab). The VESTA Agent closes its "
+        note: "A fault becomes a ticket when someone presses Open ticket on its card (Tickets tab). The VESTA Agent closes its "
           + "own faults and tickets when the problem goes away; it checks every 5 minutes, and its nightly check runs "
           + `at 02:00 by default. ${REFRESH}`,
       }
     : {
         rows: PERSON_ROWS,
-        note: `A fault becomes a ticket when someone marks it in progress (Tickets tab). ${REFRESH}`,
+        note: `A fault becomes a ticket when someone presses Open ticket on its card (Tickets tab). ${REFRESH}`,
       };
 }

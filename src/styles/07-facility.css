@@ -46,9 +46,20 @@
 /* A ticket (TicketsTab): its device, then each record taken on with it, divided by a hairline — one card. */
 .fm-ticket-records { display: flex; flex-direction: column; }
 .fm-ticket-records > .fm-ticket-record + .fm-ticket-record { border-top: 1px solid var(--hairline); padding-top: 8px; margin-top: 8px; }
-/* The Spend tab's month totals on one line, Record spend at its right (owner, 2026-10-14). */
-.fm-cap-totals { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; }
-.fm-cap-totals .fm-cap-record { margin-left: auto; }
+/* The Spend tab's month totals on one line, each an equal share of the width with its word above its amount, Record
+   spend at their right (owner, 2026-10-14); on a phone Record spend takes the line under them. */
+.fm-cap-totals { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; align-items: center; gap: 6px 18px; }
+.fm-cap-total { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.fm-cap-total > span { font-size: var(--text-xs); }
+.fm-cap-total > strong { font-size: var(--text-xl); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .fm-cap-totals { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .fm-cap-totals .fm-cap-record { grid-column: 1 / -1; justify-self: end; }
+}
+/* The Spend tab's Month and its statement's three buttons; the buttons are one group that never splits. */
+.fm-statement-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.fm-statement-buttons { display: flex; flex-wrap: nowrap; gap: 8px; }
+@media (max-width: 640px) { .fm-statement-buttons { flex-wrap: wrap; } }
 /* A description with its action at the right of the same line (Schedule's "Add a task"); wraps on a phone. */
 .fm-desc-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .fm-desc-row > p { flex: 1 1 280px; margin: 0; }
@@ -59,8 +70,6 @@
 .cockpit-issues-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .cockpit-issues-head .settings-section-title { margin-bottom: 0; }
 .cockpit-issues-actions { display: flex; align-items: center; gap: 10px; margin-left: auto; }
-/* the (i) sits near the RIGHT edge here: its card opens leftward (as in a modal header) */
-.cockpit-issues-actions .info-tip .info-pop { left: auto; right: 0; }
 .fm-summary { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 10px; }
 .fm-stat {
   display: flex; flex-direction: column; gap: 2px; min-width: 0;
@@ -373,6 +382,9 @@
   background: var(--bg-card); border: 1px solid var(--hairline-strong);
 }
 .fm-form h3 { margin: 0; font-size: var(--text-md); }
+/* a form's opening words sit close to its fields: the form's own gap is the only space (owner, 2026-10-14) */
+.fm-form .fm-form-intro { margin: 0; }
+.fm-form .fm-form-intro + .slider-pair label, .fm-form .fm-form-intro + .slider-pair .fm-field { margin-top: 0; }
 .fm-field { display: flex; flex-direction: column; gap: var(--field-label-gap); }
 .fm-field > span { font-size: var(--field-label-size); color: var(--text-secondary); }
 /* DIRECT children only. A descendant selector here reached into every nested
@@ -430,8 +442,6 @@
   background: color-mix(in srgb, var(--status-danger) 7%, var(--bg-card));
   border-color: color-mix(in srgb, var(--status-danger) 28%, var(--hairline));
 }
-.fm-cap-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.fm-cap-head strong { font-size: var(--text-xl); font-variant-numeric: tabular-nums; }
 .fm-cap-bar { height: 8px; border-radius: 999px; background: var(--bg-input); overflow: hidden; }
 .fm-cap-bar > span { display: block; height: 100%; background: var(--status-on); }
 .fm-cap.approaching .fm-cap-bar > span { background: var(--status-warning); }

@@ -135,14 +135,17 @@
 /* --- Cockpit page (CockpitModal) — villa-wide status report ------------- */
 .cockpit-attention-list { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
 /* One card, ONE SHAPE (owner, 2026-10-10): its head (the device, its room; tappable), every problem as a line inside
-   it, and — when it holds a fault — its actions at the bottom (Mark in progress / Edit ticket, Close; 2026-10-14). */
+   it, and — when it holds a fault — its actions on the right of its lines (Open ticket / Edit ticket, Close;
+   2026-10-14: the same line, not a line of their own). */
 .cockpit-attention-item {
   position: relative; display: flex; flex-direction: column; border-radius: 10px; background: var(--bg-input);
 }
 /* THE WHOLE CARD OPENS THE DEVICE (owner, 2026-10-10): the card takes the click (CockpitOverview), its actions and
    their "sure?" stop theirs. No layer stretched over the card: it lay on top of Close (2.496.318). */
 .cockpit-attention-item.tappable { cursor: pointer; }
-.cockpit-attention-actions { padding: 0 12px 10px; cursor: default; }
+.cockpit-attention-detail { display: flex; align-items: center; flex-wrap: wrap; column-gap: 12px; padding-right: 12px; }
+.cockpit-attention-detail > .cockpit-attention-subs { flex: 1 1 260px; min-width: 0; }
+.cockpit-attention-actions { flex: 0 0 auto; margin-left: auto; padding: 0 0 10px; cursor: default; }
 .cockpit-attention-actions .modal-actions { flex-wrap: wrap; align-items: center; }
 .cockpit-attention-row {
   display: flex; align-items: center; gap: 10px; width: 100%;
