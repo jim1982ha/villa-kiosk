@@ -1,3 +1,16 @@
+## 2.496.355
+
+### Changed
+- Cockpit → Overview:
+  - The list is now called "Open issues" (was "Live issues"): everything in it stays until it is closed, and it pairs with "Open a ticket" beside it.
+  - The (i) card ("When faults open and close") is shown whole, on a solid background, above everything — it was cut off at its last line and the cards behind showed through. On a phone it fits the screen; near the bottom of the screen it opens upwards. The 3D model's (i) in Advanced Settings is the same card.
+  - On each card, "Mark in progress" is now "Open ticket", and the two buttons sit on the right of the card's description instead of on a line of their own — every card is shorter. On a phone the buttons go under the description.
+  - A fault that came from a VESTA Agent alert shows the alert's number, as Telegram writes it: "#5 · House Pump Power has not recorded a confirmed run…". The same in the Tickets tab. Faults the Agent creates from VESTA Agent 0.12.195 carry it; older open ones get it at the Agent's next start or night check. A fault opened by a person, or found by the night check, has no number (Telegram gives them none).
+- Cockpit → Spend:
+  - Minor, Major and Total share the width equally, each word above its amount.
+  - "Generate statement", "Save" and "Download .md" stay together on one line ("Save statement" is now "Save").
+  - Spend settings: the explanation is one paragraph, closer to the boxes, and "Remove cap" sits beside Cancel and Save, in the same style.
+
 ## 2.496.354
 
 ### Changed
