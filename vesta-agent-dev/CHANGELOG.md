@@ -1,3 +1,15 @@
+## 0.12.202
+
+What you will see (architecture review of 15 October, points 2 and 3):
+- Telegram and the Cockpit card tell an alert the same way. A "Need help" press is now a line of the alert's
+  "Status:" list on Telegram — "🆘 Need help pressed by Fabien 15/10/2026 09:15" — exactly as on the card, instead
+  of an "Update sent … to Facility Manager" that told the same press as another event.
+- One name for the Cockpit everywhere: "Closed in the Cockpit by …", "Reopened in the Cockpit by …", as "Ticket
+  opened in the Cockpit by …" already said (it read "in the VESTA Kiosk").
+- When a wording changes in a future update, the lines already on a card are not copied onto it a second time.
+- Behind it: the fault the Agent writes is now checked against the agreement it shares with the VESTA Kiosk (needs
+  VESTA 2.496.369 or later for the same checks on the Kiosk's side).
+
 ## 0.12.201
 
 What you will see:
