@@ -1,3 +1,8 @@
+## 2.496.373
+
+### Changed
+- Nothing changes on the iPad. Behind it: a tool that proves each new check can fail — it breaks one piece of code, runs the check and always puts the code back, even when the run is interrupted — and a check of that tool on every release.
+
 ## 2.496.372
 
 ### Fixed

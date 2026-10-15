@@ -68,6 +68,7 @@ GATES: list[tuple[str, list[str]]] = [
     ("The crash-loop rule", ["npm", "run", "test:service-finish"]),
     ("The proxy parses", ["npm", "run", "test:proxy-parse"]),
     ("The release module", ["npm", "run", "test:release"]),
+    ("A mutation run always gives the file back", ["npm", "run", "test:mutate"]),
 ]
 
 # Gates whose input is deliberately NOT in git: run where it exists, and SAID

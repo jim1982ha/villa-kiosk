@@ -1,7 +1,7 @@
 {
   "name": "villa-kiosk",
   "private": true,
-  "version": "2.496.372",
+  "version": "2.496.373",
   "description": "VESTA \u2014 a 3D interactive villa dashboard for Home Assistant",
   "license": "UNLICENSED",
   "type": "module",
@@ -25,6 +25,8 @@
     "gates": "python3 tools/release.py gates",
     "ship": "python3 tools/release.py ship",
     "backport": "python3 tools/release.py backport",
+    "mutate": "python3 tools/mutate.py",
+    "test:mutate": "python3 tests/mutate.py",
     "test:release": "python3 tests/release.py",
     "test:proxy-parse": "python3 -c \"import ast, pathlib; ast.parse(pathlib.Path('rootfs/usr/bin/supervisor-proxy.py').read_text())\""
   },
