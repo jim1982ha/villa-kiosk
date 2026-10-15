@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.214 (15 October 2026)
+
+- UI Costs: an interrupted run's marker is core.alertButton (the failed run's (!)), its words in the tooltip (owner,
+  2026-10-15), no longer a written chip. test_run_records pins it.
+
 ## 0.6.213 (15 October 2026)
 
 - McpClient.logbook reads the whole villa's logbook by slices of LOGBOOK_SLICE (6 h), each its own hours back from its

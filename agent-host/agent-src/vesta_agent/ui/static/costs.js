@@ -71,7 +71,9 @@ export async function costs(days = 7) {
     { v: r.tokens_in === null || r.tokens_in === undefined ? "—" : `${ktok((r.tokens_in || 0) + (r.cache_read || 0) + (r.cache_write || 0))} / ${ktok(r.tokens_out)}`, cls: "num" },
     { v: r.interrupted && !r.cost ? "not reported" : usd(r.cost), cls: "num" },
     r.without_ai ? madeWithoutAi(r.without_ai)
-      : r.interrupted ? h("span", { class: "chip off", title: "The agent was restarted while this run was working. Anthropic reports a run's cost when it ends, so this one's is not here: the Anthropic Console has it." }, "stopped by a restart")
+      // the (!) a failed run has, its words in the tooltip (owner, 2026-10-15: "a single (!) icon, the details in tooltip")
+      : r.interrupted ? alertButton("Stopped by a restart", () => h("div", {}, h("b", {}, "Stopped by a restart of the agent."),
+        h("div", { class: "tooltip-detail" }, "It was still working when the agent restarted. Anthropic reports a run's cost when it ends, so this one's is not here: the Anthropic Console has it.")))
       : r.stopped ? h("span", { class: "chip off" }, "stopped at its limit") : r.error ? alertButton("This run failed", () => h("div", {}, h("b", {}, r.error_words || "This run failed."),
       h("div", { class: "tooltip-detail" }, r.error))) : ""]);
   fill($view,

@@ -114,7 +114,7 @@ def test_a_run_cut_by_a_stop_is_on_the_costs_tab_with_its_tokens_so_far(monkeypa
     assert (row["tokens_in"], row["tokens_out"], row["cache_read"]) == (2100, 130, 30000)
     assert [x["tool"] for x in row["steps"]] == ["run_skill_script", "ha_get_logs"]
     from helpers import page_js
-    assert 'r.interrupted ? h("span", { class: "chip off"' in page_js() and '"stopped by a restart"' in page_js()
+    assert 'r.interrupted ? alertButton("Stopped by a restart"' in page_js()                    # the (!) a failed run has
 
 
 def test_a_script_stopped_with_the_agent_is_not_a_failure_and_a_cut_run_is_no_reply(tmp_path):
