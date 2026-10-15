@@ -1,3 +1,9 @@
+## 0.12.223
+
+What you will see:
+- /investigate never counts time that has not come yet: asked about "until today", it read to midnight tonight, so a
+  sensor offline 6 d 6 h at 23:05 read "6 d 7 h". A period that would end later now ends at the moment it is read.
+
 ## 0.12.222
 
 What you will see:
