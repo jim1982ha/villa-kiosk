@@ -332,3 +332,19 @@ Decisions of 2026-09-30 (owner):
   call and never carried out.
 - Every page save is a row of `vesta_agent/history.py` (`page_history.sqlite`), undoable only while the file still
   holds what the change wrote. Copying a setup: `ui/setup_copy.py` (never people, chats, devices, keys, records).
+
+## A problem's life: one decision, one mover (architecture review, 2026-10-15, 0.12.213–0.12.215)
+
+- `vesta_shared/problems.py` `wants_open` / `settle` / `settle_all` is the ONE answer to "should this problem's task be
+  open": open while its finding (at a task severity) or incident lasts, unless a person closed it since the problem's
+  latest return; a task a person reopened closes only on a person's Done; a task with no source waits for a person.
+  Event sites (close_finding, close_incident, record_night, the repair) record the facts and call it — never decide.
+  Do not reintroduce per-pass sweeps (close_outlived, restore_unseen, a night backfill): each had its own rule.
+- `vesta_agent/outcome.py` never moves a fault about a task: a script's ticket actions or `faults_changed` run
+  `tickets.repair` at once, which makes each fault what `Problems.card` says. Only a chat's fault (no task) is
+  created directly.
+- What the Agent reads again every few minutes is the skill's `rechecks` (skill.yaml), read by recheck.py itself and
+  carried to the Kiosk as each fault's `check`; the Kiosk's card and (i) say what the fault says, never a copy.
+- A duration in a fault's title is worded by the Kiosk when shown (`titlePattern` + `since`), only to a Kiosk whose
+  /agent/v1/info lists the field, never on a person's title.
+- Tests: one pretend villa, `tests/villa_timeline.py` (states, history with the carried-over first row, not found).
