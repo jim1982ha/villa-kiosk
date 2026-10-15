@@ -1,3 +1,10 @@
+## 0.12.208
+
+What you will see:
+- A duration of a day or more is written as the Kiosk writes it: "offline for 1 d 9 h", not "33 h"; "has not
+  reported for 1 d 10 h", not "1.4 days". The same in investigations. A fault already open takes the new wording at
+  the next night check.
+
 ## 0.12.207
 
 What you will see:

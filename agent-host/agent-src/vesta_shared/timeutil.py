@@ -101,10 +101,13 @@ def weekday_name(d: date) -> str:
 
 
 def lasting(seconds: float) -> str:
-    """A duration in words a person reads: "8 s", "47 min", "1 h 15 min", "2 h".
+    """A duration in words a person reads: "8 s", "47 min", "1 h 15 min", "2 h", "1 d 9 h", "3 d" — the Kiosk's own
+    wording (chartUtils.fmtDuration): from a day on, days and hours.
 
     ⚠️ ONE DURATION WORDING (architecture review, 2026-10-13): the investigation's lines said "1 h 15 min" and its page,
-    just above the AI's reading of them, "75 min" for the same outage — three copies, two rules."""
+    just above the AI's reading of them, "75 min" for the same outage — three copies, two rules.
+    ⚠️ NOT "33 h" (owner, 2026-10-15): the night check's "offline for 33 h" sat in the Cockpit beside the Kiosk's
+    "1 d 9 h", and its "has not reported for 1.4 days" was a third way."""
     s = int(round(float(seconds)))
     if s < 90:
         return f"{s} s"
@@ -112,4 +115,7 @@ def lasting(seconds: float) -> str:
     if m < 60:
         return f"{m} min"
     h, m = divmod(m, 60)
-    return f"{h} h {m} min" if m else f"{h} h"
+    if h < 24:
+        return f"{h} h {m} min" if m else f"{h} h"
+    d, h = divmod(h, 24)
+    return f"{d} d {h} h" if h else f"{d} d"

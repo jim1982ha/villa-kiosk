@@ -23,7 +23,7 @@ from vesta_shared.params import VillaParams
 from vesta_shared.result import COUNTER_RESET, PARAM_MISSING  # the ids other skills read: written once
 from vesta_shared.stats import med, pct_change, step_index
 from vesta_shared.device_state import battery_charge, is_offline
-from vesta_shared.timeutil import day_label, weekday_name
+from vesta_shared.timeutil import day_label, lasting, weekday_name
 
 P2, P3, INFO = "P2", "P3", "INFO"
 
@@ -251,7 +251,7 @@ def availability_rules(asset: dict, entity_id: str, state: str | None, last_chan
         if last_changed_hours * 60 >= params.behaviour("unavailable_minutes"):
             sev = P2 if asset.get("critical") else P3
             out.append(Finding("PM-UNAVAILABLE", entity_id, slug, "availability", sev,
-                               f"{asset['name']} has been offline for {last_changed_hours:.0f} h.",
+                               f"{asset['name']} has been offline for {lasting(last_changed_hours * 3600)}.",
                                {"hours": round(last_changed_hours, 1), "critical": asset.get("critical", False),
                                 "entities": list(entities or [entity_id])},
                                "Check power and radio range; for a battery device, change the battery and press its reset."))
@@ -261,7 +261,7 @@ def availability_rules(asset: dict, entity_id: str, state: str | None, last_chan
 def silence_rules(asset: dict, entity_id: str, last_changed_hours: float | None, params: VillaParams) -> list[Finding]:
     if last_changed_hours is not None and last_changed_hours >= params.behaviour("silence_hours"):
         return [Finding("PM-SILENT", entity_id, asset["slug"], "level", P3,
-                        f"{asset['name']} has not reported for {last_changed_hours / 24:.1f} days although it is online.",
+                        f"{asset['name']} has not reported for {lasting(last_changed_hours * 3600)} although it is online.",
                         {"hours": round(last_changed_hours, 1)}, "Check the sensor: battery, range, or a frozen device.")]
     return []
 

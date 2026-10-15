@@ -413,3 +413,21 @@ def test_several_devices_losing_one_access_point_together_are_counted_not_taken_
     _pack(tmp_path, {"network": rows})
     _night(tmp_path, "--as-of", AS_OF)
     assert len(_open(tmp_path, "PM-RECONNECT-LOOP")) == 3                # one per device, each its 10 drops
+
+
+def test_a_duration_of_a_day_or_more_is_said_as_the_kiosk_says_it():
+    # owner, 2026-10-15: "Timmerflotte_5969 has been offline for 33 h." beside the Kiosk's "1 d 9 h" — and the silent
+    # check's "1.4 days" a third way. The night check's own lines, through its rules
+    sys.path.insert(0, os.path.join(STARTER_SKILLS, "preventive-maintenance", "scripts"))
+    import rules as R
+    from vesta_shared.params import VillaParams
+    from vesta_shared.skill_settings import load
+    from vesta_shared.timeutil import lasting
+    params = VillaParams(defaults=load(os.path.join(STARTER_SKILLS, "preventive-maintenance"), "settings.yaml")["behaviour"])
+    asset = {"slug": "sensor_x", "name": "Sensor X"}
+    off = R.availability_rules(asset, "sensor.sensor_x_humidity", "unavailable", 33.2, params)
+    assert [f.summary for f in off] == ["Sensor X has been offline for 1 d 9 h."]
+    quiet = R.silence_rules(asset, "sensor.sensor_x_humidity", 34.0, params)
+    assert [f.summary for f in quiet] == ["Sensor X has not reported for 1 d 10 h although it is online."]
+    for seconds, said in ((4500, "1 h 15 min"), (23 * 3600 + 59 * 60, "23 h 59 min"), (86400, "1 d"), (49 * 3600, "2 d 1 h")):
+        assert lasting(seconds) == said

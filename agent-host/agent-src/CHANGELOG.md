@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.200 (15 October 2026)
+
+- timeutil.lasting: from a day on, "1 d 9 h" / "3 d" (the Kiosk's chartUtils.fmtDuration). preventive-maintenance
+  rules.py (owner's request, 2026-10-15): PM-UNAVAILABLE "offline for {lasting}" (was "33 h") and PM-SILENT "has not
+  reported for {lasting}" (was "1.4 days"). Starter skills recorded (shipped-skills.json). Test in
+  test_maintenance_noise through the rules (three mutations red).
+
 ## 0.6.199 (15 October 2026)
 
 - knowledge_pack.PACK_RULES (1 = hidden entities left out) is written into the pack as `rules`; app.pack_needs_build
