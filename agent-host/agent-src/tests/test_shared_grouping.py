@@ -80,10 +80,10 @@ def test_a_percentage_line_stays_within_0_to_100_while_its_values_do():
 def test_float_noise_never_hangs_an_axis():
     # 2026-10-05: readings 21.4 and 21.400000000000002 looped forever in the axis ticks (the Kiosk's own
     # chart crashed on the same shape of data)
-    import compose
-    first, last, ticks = compose._ticks(21.4, 21.400000000000002)
+    from vesta_shared import page                                  # the charts every page shares
+    first, last, ticks = page._ticks(21.4, 21.400000000000002)
     assert 2 <= len(ticks) <= 12 and last - first >= 0.5          # a readable axis, not 100 ticks of noise
-    assert "<svg" in compose.line([("2026-10-01", 21.4), ("2026-10-02", 21.400000000000002)], "°C")
+    assert "<svg" in page.line([("2026-10-01", 21.4), ("2026-10-02", 21.400000000000002)], "°C")
 
 
 def test_one_day_format_everywhere():

@@ -126,8 +126,8 @@ def test_an_alert_no_facility_manager_received_goes_to_the_owner_at_once_and_the
     iid = st.new_incident("k", "automation.r", "lock.a", "P2", {"message": "Door unlocked"})
     st.update_incident(iid, state="asked", asked_at=datetime.now(timezone.utc).isoformat())
     v.tg.refuse.add(f"blocked {FM}")                                   # Fabien never pressed Start
-    run(v.outcome.carry_out({"send": [{"to": "fm", "text": "Door unlocked", "incident_id": iid, "keyboard": True,
-                                       "stage": "new"}]}, "alert-desk"))
+    # the desk's own notice (desk.tell): who is first in line is its word (architecture review, 2026-10-15)
+    run(v.outcome.carry_out({"send": desk.tell("P2", "new", incident=iid, text="Door unlocked")}, "alert-desk"))
     told = [t for c, t, _ in v.tg.sent if c == OWNER]
     assert any("Fabien cannot be reached on Telegram" in t and "press Start" in t for t in told)
     assert json.loads(st.incident(iid)["payload"])["unreached"]
@@ -146,8 +146,7 @@ def test_telegram_switched_off_is_never_taken_for_a_refused_person(tmp_path):
     st = Store(v.s.store_path)
     iid = st.new_incident("k", "automation.r", "lock.a", "P2", {"message": "Door unlocked"})
     v.tg.refuse.add("send")                                            # a network blip, not a refusal
-    run(v.outcome.carry_out({"send": [{"to": "fm", "text": "Door unlocked", "incident_id": iid, "keyboard": True}]},
-                            "alert-desk"))
+    run(v.outcome.carry_out({"send": desk.tell("P2", "new", incident=iid, text="Door unlocked")}, "alert-desk"))
     assert "unreached" not in json.loads(st.incident(iid)["payload"])
 
 

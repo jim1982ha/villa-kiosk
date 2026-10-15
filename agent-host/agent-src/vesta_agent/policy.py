@@ -230,10 +230,9 @@ class Policy:
         p = self.person(telegram_id)
         if telegram_id is None or int(telegram_id) in ANONYMOUS_TELEGRAM_IDS or chat_id is None or int(chat_id) >= 0:
             return p
-        roles = self.roles_in(chat_id)
-        if not roles:
+        role = self.group_role(chat_id)
+        if role is None:
             return p
-        role = "fm" if "fm" in roles else "owner"
         if p is not None:
             # ⚠️ NAMED AS THIS CHAT KNOWS THEM (architecture review 21): listed twice (JM_O, JM_FM), a person pressing in
             # a group of the facility manager's read "Done pressed by JM_FM" on an alert and "Approved by JM_O" on a
@@ -251,8 +250,8 @@ class Policy:
         answer (architecture review 21: an owner's request reached a group listed for both, where "Only the owner can
         approve this." answered every press)."""
         if int(chat_id) < 0:
-            roles = self.roles_in(chat_id)
-            return bool(roles) and self.role_can_approve("fm" if "fm" in roles else "owner", required_role)
+            role = self.group_role(chat_id)
+            return role is not None and self.role_can_approve(role, required_role)
         p = self.person(chat_id)
         return p is not None and self.role_can_approve(p.role, required_role)
 
@@ -267,6 +266,16 @@ class Policy:
     def roles_in(self, chat_id: int) -> set[str]:
         """The roles a chat is listed with ({} for a chat the People list does not name)."""
         return {r for c, r in self.destinations if c == int(chat_id)}
+
+    def group_role(self, chat_id: int) -> str | None:
+        """The ONE role everyone in a listed GROUP acts with — the facility manager's when the group is listed for both
+        (never more where facility managers read) — or None for a private chat or a group the People list does not
+        name. ⚠️ ONE ANSWER (architecture review, 2026-10-15): written three times (member, may_approve_in,
+        tool_access), and reviews 18 and 21 were each one of them disagreeing with the others."""
+        if int(chat_id) >= 0:
+            return None
+        roles = self.roles_in(chat_id)
+        return ("fm" if "fm" in roles else "owner") if roles else None
 
     def name_in(self, telegram_id: int, chat_id: int) -> str | None:
         """A person's name as this chat knows them: their entry for a role the chat is listed with (Fabien_FM in a chat

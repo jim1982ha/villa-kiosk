@@ -110,6 +110,35 @@ def recipients(severity: str) -> list[str]:
     return [role for role, sevs in RULES["people_roles"].items() if severity in sevs and role != "digest"]
 
 
+# The chase (rules.yaml `chase`): who is asked to answer (Done / Need help) and who hears when nobody does.
+CHASE = {"asks": "fm", "escalates_to": "owner", **(RULES.get("chase") or {})}
+# the notices that ask for an answer: the asked role's carry the buttons
+ASKING = {"new", "back", "still", "reminder", "reopened"}
+
+
+def tell(sev: str, stage: str, *, incident: int, ladder: bool = True, chased: bool = False, mark: str | None = None,
+         **said) -> list[dict]:
+    """Every message of one notice about an incident: who hears it, and with which buttons.
+
+    ⚠️ ONE ANSWER, EVERY NOTICE (architecture review, 2026-10-15; owner, 2026-10-13: "respect what the skill is doing,
+    consistently to any P1, P2, P3"): each message named its own people — a repeat was put right on 13 October, while a
+    P1's reminder, its reopening in the Cockpit and its "back online" still reached the facility manager alone. Now:
+    - `escalated`: the role it escalates to (chase.escalates_to), with the buttons — the chase is theirs now;
+    - every other notice: the people of its priority (people_roles), and while it is `chased` the asked role
+      (chase.asks) as well, whatever the priority; only the asked role's carry Done / Need help, on a notice that
+      asks for an answer (ASKING) of a route with the ladder — marked `first_in_line`, so the engine can tell when
+      none of their chats received it (and the desk hands it on: `unreached`)."""
+    if stage == "escalated":
+        return [R.message(CHASE["escalates_to"], **said, incident=incident, buttons=True, stage=stage, mark=mark)]
+    roles = recipients(sev) + ([CHASE["asks"]] if chased and CHASE["asks"] not in recipients(sev) else [])
+    out = []
+    for role in roles:
+        asked = bool(ladder) and stage in ASKING and role == CHASE["asks"]
+        out.append(R.message(role, **said, incident=incident, buttons=asked, stage=stage, mark=mark,
+                             first_in_line=asked))
+    return out
+
+
 def details(payload: dict, rule_id: str) -> str:
     """The original alert — Home Assistant's own message, and what to check — as every later message about the
     incident repeats it (owner, 2026-10-09: a chat keeps only an incident's latest message, so each one says
@@ -216,9 +245,7 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
         out["decision"] = "repeat"
         # ⚠️ TO WHOM ITS PRIORITY SENDS IT (owner, 2026-10-13: "respect what the skill is doing, consistently to any P1,
         # P2, P3"): a repeat went to the facility manager whatever the priority, unlike the alert it repeats
-        for role in recipients(sev):
-            out["send"].append(R.message(role, **about(cur, status), incident=cur["id"],
-                                         buttons=bool(route.get("ladder", True) and role == "fm"), stage="reminder"))
+        out["send"] += tell(sev, "reminder", incident=cur["id"], ladder=route.get("ladder", True), **about(cur, status))
         if route.get("intrusion"):
             out["siren_gate"] = siren_gate(store, ev, now)
         return out
@@ -232,9 +259,7 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
     if ev.get("snapshot"):
         out["actions"].append(R.snapshot(ev["snapshot"], iid))
     out["ha_messages"] = [R.ha_message(iid, text, ev.get("_context_id"), stage="new")]
-    for role in recipients(sev):
-        ladder = bool(route.get("ladder", True) and role == "fm")
-        out["send"].append(R.message(role, text, incident=iid, buttons=ladder, stage="new"))
+    out["send"] += tell(sev, "new", incident=iid, ladder=route.get("ladder", True), text=text)
     _ladder(store, iid, ev, now, sev, route, out)
     # intrusion: open the siren gate, never fire it
     if route.get("intrusion"):
@@ -337,10 +362,8 @@ def reopen(store: Store, inc: dict, ev: dict, now: datetime, sev: str, route: di
             out["actions"].append(R.snapshot(ev["snapshot"], inc["id"]))
         if route.get("intrusion"):
             out["siren_gate"] = siren_gate(store, ev, now)
-    for role in recipients(sev):
-        ladder = bool(route.get("ladder", True) and role == "fm")
-        out["send"].append(R.message(role, **about(inc, status), incident=inc["id"], buttons=ladder,
-                                     stage="back" if came_back_now else "still"))
+    out["send"] += tell(sev, "back" if came_back_now else "still", incident=inc["id"], ladder=route.get("ladder", True),
+                        **about(inc, status))
     out["incident_id"], out["decision"] = inc["id"], "reopened"
     store.audit("alert-desk", "reopened", {"incident": inc["id"], "status": status})
     return out
@@ -383,7 +406,7 @@ def _close(store: Store, inc: dict, now: datetime, out: dict, settled: str,
     out.setdefault("settle", []).append(R.settle(inc["id"], settled))
     if inc["state"] in Incident.CHASED:
         # the same words as every other copy (owner, 2026-10-11: one incident, one picture; ✅ already says no reply)
-        out["send"].append(R.message("fm", **about(inc, settled), incident=inc["id"], stage="closed"))
+        out["send"] += tell(inc["severity"], "closed", incident=inc["id"], chased=True, **about(inc, settled))
 
 
 def rule_states(inc: dict) -> tuple[list[str], set[str]] | None:
@@ -472,10 +495,8 @@ def quiet_after_done(store: Store, now: datetime, client, clear_minutes: float, 
             reopened.append(inc["id"])
         elif there is None and words:
             inc = store.incident(inc["id"])
-            for role in recipients(inc["severity"]):
-                out["send"].append(R.message(role, **about(inc, f"{who}. Note: VESTA cannot check this one; "
-                                                                f"{'; '.join(words)}."), incident=inc["id"], stage="closed",
-                                             mark="unchecked"))           # ☑️ closed, not checked (owner, 2026-10-11)
+            out["send"] += tell(inc["severity"], "closed", incident=inc["id"], mark="unchecked",   # ☑️ closed, not checked
+                                **about(inc, f"{who}. Note: VESTA cannot check this one; {'; '.join(words)}."))
     return reopened
 
 
@@ -503,9 +524,8 @@ def seen_again(store: Store, now: datetime, client, clear_minutes: float, out: d
             # said once, until the device answers and is right
             if not p.get("silent_told"):
                 p["silent_told"] = True
-                for role in recipients(inc["severity"]):
-                    out["send"].append(R.message(role, **about(inc, f"{'; '.join(words)}: VESTA cannot tell if it is right. "
-                                                                    "Still open."), incident=inc["id"], stage="update"))
+                out["send"] += tell(inc["severity"], "update", incident=inc["id"],
+                                    **about(inc, f"{'; '.join(words)}: VESTA cannot tell if it is right. Still open."))
             store.update_incident(inc["id"], payload=json.dumps(p))
             continue
         p.pop("silent_told", None)
@@ -562,7 +582,7 @@ def abandoned(store: Store, ev: dict, now: datetime) -> dict:
     said = about(inc, "Still not right when the alert stopped watching it on {time}. VESTA keeps watching it and "
                       "closes it once it is right. Press Done when it is fixed.")
     out["ha_messages"] = [R.ha_message(inc["id"], context=ev.get("_context_id"), stage="escalated", **said)]
-    out["send"].append(R.message("owner", **said, incident=inc["id"], buttons=True, stage="escalated"))
+    out["send"] += tell(inc["severity"], "escalated", incident=inc["id"], **said)
     return out
 
 
@@ -629,8 +649,7 @@ def reply(store: Store, iid: int, option: str, sender_role: str, now: datetime, 
         # ONE sentence in every chat (owner, 2026-10-11: one incident, one picture — "over to you" / "the owner has been
         # told" were two)
         helped = pressed.rstrip(".") + ": the owner is asked to act."
-        out["send"].append(R.message("owner", **about(inc, helped), incident=iid, buttons=True, stage="escalated",
-                                     mark=button.get("mark")))
+        out["send"] += tell(inc["severity"], "escalated", incident=iid, mark=button.get("mark"), **about(inc, helped))
         out["send"].append(here(helped, "pressed", mark=button.get("mark")))
     else:
         store.update_incident(iid, reply=label)
@@ -665,7 +684,7 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
             # (a record written before 0.12.202 says "in the VESTA Kiosk": kept as written)
             said = said if said.startswith(("Reopened in the Cockpit", "Reopened in the VESTA Kiosk")) else \
                 f"Reopened in the Cockpit by {said} on {{time}}. Please look again."
-            out["send"].append(R.message("fm", **about(inc, said), stage="reopened", incident=inc["id"], buttons=True))
+            out["send"] += tell(inc["severity"], "reopened", incident=inc["id"], chased=True, **about(inc, said))
             continue
         if p.get("unreached") and inc["state"] in (Incident.ASKED, Incident.REASKED):
             # ⚠️ NOBODY OF THE FACILITY MANAGER'S RECEIVED IT (architecture review 25): Telegram refused every chat of
@@ -673,9 +692,9 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
             p.pop("unreached")
             store.update_incident(inc["id"], payload=json.dumps(p), state=Incident.ESCALATED,
                                   escalated_at=now.isoformat(), assignee="owner")
-            out["send"].append(R.message("owner", **about(inc, "Not delivered to the facility manager: Telegram refused "
-                                                               "every chat of theirs. Over to you."),
-                                         stage="escalated", incident=inc["id"], buttons=True))
+            out["send"] += tell(inc["severity"], "escalated", incident=inc["id"],
+                                **about(inc, "Not delivered to the facility manager: Telegram refused every chat of "
+                                             "theirs. Over to you."))
             out["escalated"].append(inc["id"])
             continue
         if inc["state"] not in (Incident.ASKED, Incident.REASKED):
@@ -684,13 +703,13 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
         age = now - asked
         if inc["state"] == Incident.ASKED and age >= timedelta(minutes=reask):
             store.update_incident(inc["id"], state=Incident.REASKED, reasked_at=now.isoformat())
-            out["send"].append(R.message("fm", **about(inc, f"Reminder: no answer after {int(reask)} min"), stage="reminder",
-                                         incident=inc["id"], buttons=True))
+            out["send"] += tell(inc["severity"], "reminder", incident=inc["id"], chased=True,
+                                **about(inc, f"Reminder: no answer after {int(reask)} min"))
             out["reasked"].append(inc["id"])
         elif inc["state"] == Incident.REASKED and age >= timedelta(minutes=escal):
             store.update_incident(inc["id"], state=Incident.ESCALATED, escalated_at=now.isoformat(), assignee="owner")
-            out["send"].append(R.message("owner", **about(inc, f"No answer from the facility manager after {int(escal)} min"), stage="escalated",
-                                         incident=inc["id"], buttons=True))
+            out["send"] += tell(inc["severity"], "escalated", incident=inc["id"],
+                                **about(inc, f"No answer from the facility manager after {int(escal)} min"))
             out["escalated"].append(inc["id"])
     # villa silent: the engine's Home Assistant connection has been down too long
     last = store.last_beat(HA_BEAT)
@@ -701,16 +720,15 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
                                      {"message": f"No contact with the villa's system for {int((now - datetime.fromisoformat(last)).total_seconds() // 60)} min: internet, power or the villa's system is down."},
                                      now.isoformat())
             store.update_incident(iid, state=Incident.ASKED, asked_at=now.isoformat(), assignee="fm")
-            for role in recipients("P1"):
-                out["send"].append(R.message(role, "No contact with the villa's system. Check power, the router and the internet link.",
-                                             status=f"Villa silent since {day_time_label(villa_time(last, zone or 'UTC'), weekday=True)}",
-                                             incident=iid, stage="new"))   # the priority is the heading's; the villa's time
+            out["send"] += tell("P1", "new", incident=iid, ladder=False,   # the priority is the heading's; the villa's time
+                                text="No contact with the villa's system. Check power, the router and the internet link.",
+                                status=f"Villa silent since {day_time_label(villa_time(last, zone or 'UTC'), weekday=True)}")
     elif last:
         cur = store.find_open_incident("critical_internet---villa_silent|agent")
         if cur:
             out["actions"] += Problems(store).close_incident(cur["id"], Incident.RECOVERED, now.isoformat())
-            out["send"].append(R.message("fm", **about(cur, "Closed on {time}: the villa is back online and answers again"), stage="closed",
-                                         incident=cur["id"]))
+            out["send"] += tell("P1", "closed", incident=cur["id"], chased=True,
+                                **about(cur, "Closed on {time}: the villa is back online and answers again"))
     # alert fatigue: a rule firing more than N times in 30 days without acknowledgement
     limit = params.behaviour("alert_fatigue_per_month")
     since = (now - timedelta(days=30)).isoformat()

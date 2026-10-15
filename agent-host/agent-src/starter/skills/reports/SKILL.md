@@ -14,8 +14,7 @@ figures; compose.py lays the page out and checks your sentences.
 - `reports.yaml`         the reports: sections and their order, thresholds, the playbook, the words, the sentences you write
 - `scripts/facts.py`     every figure of a weekly or monthly page (Home Assistant, the store, the energy period)
 - `scripts/compose.py`   fm-daily and owner-weekly (chat text); fm-weekly and owner-monthly (the page, from facts + notes, charts inline)
-- `templates/report.html` the page: one part per section (`templates/page_head.html`: the style every page shares)
-- `templates/investigation.html` an investigation's page (`compose.py investigation`, used by the investigate skill)
+- `templates/report.html` the page: one part per section (its head, the style every VESTA page shares, is the agent's own)
 - `villa.reports.yaml`   (the villa's, optional) its own playbook entries, cards and thresholds; app updates keep it
 - Inputs: `energy_period.py` JSON (roi-energy), `proposals.py` (roi-energy, writes the proposals to the store)
 

@@ -13,7 +13,7 @@ Assistant client is read-only) and knows no device of any villa: everything come
                            --end 2026-10-09T15:00 [--baseline-days 3] [--out timeline.json]
         What each entity did in that period, as periods (running / idle / no power at all / offline) with their
         times, durations and levels — compared with the same entity's normal behaviour over the days before.
-        --out also saves the reading with each device's chart, for the investigation page (reports' compose.py).
+        --out also saves the reading with each device's chart, for the investigation page (page.py).
 
   investigate.py around    --start 2026-10-09T02:00 --end 2026-10-09T15:00 [--entities sensor.a,...] [--out around.json]
         Everything else Home Assistant recorded then: automations that ran, devices that dropped off or came back,
@@ -38,7 +38,7 @@ from vesta_shared import script, skill_settings  # noqa: E402  (client, store, z
 from vesta_shared import periods as kinds  # noqa: E402  (the period kinds and their words, read by the report page too)
 from vesta_shared.timeutil import lasting  # noqa: E402  (the one duration wording)
 
-from vesta_shared.device_state import NO_VALUE, OFFLINE, ha_restarts, in_restart  # noqa: E402  (the one "does this device answer")
+from vesta_shared.device_state import NO_VALUE, OFFLINE, RestartDrops  # noqa: E402  (the one "does this device answer")
 # ⚠️ WHAT A CONTROL CAN PROVE (architecture review 32 follow-up, 2026-10-11): an on/off control that stayed OFF the whole
 # period — and the days before — while another device ran is not what turned that device on. An account blamed a
 # switch that had never once been on. Any control, any device: nothing here names one.
@@ -357,7 +357,7 @@ def chart_series(rows: list[tuple[datetime, str]], start: datetime, end: datetim
 
 def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_days: float, zone: ZoneInfo,
              series: bool = False) -> dict:
-    """`series`: each numeric device's readings for a chart too (--out: the investigation page, reports' compose.py)."""
+    """`series`: each numeric device's readings for a chart too (--out: the investigation page, page.py)."""
     span_days = (end - start).total_seconds() > 86400
     parts = []
     names = client.states(ids)
@@ -419,11 +419,11 @@ def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_da
                         **({"per_hour": running_per_hour(ps, start, end, periods(base_rows, start, on), baseline_days)}
                            if on else {"normal_series": same_hours_before(base_rows, start, end, baseline_days)}))
         elif series:
-            part["states"] = state_series(rows, start, end)        # a lane under the charts (reports' compose.py)
+            part["states"] = state_series(rows, start, end)        # a lane under the charts (page.py)
         parts.append(part)
     _controls(parts, baseline_days)
     return {"lines": [l for p in parts for l in p["lines"]], "entities": parts, "baseline_days": baseline_days,
-            # what the page needs of this skill's settings to join the readings (reports' compose.py investigation)
+            # what the page needs of this skill's settings to join the readings (page.py)
             "settings": {"coincide_s": th("coincide_s")}}
 
 
@@ -574,19 +574,22 @@ def around(client, store, start: datetime, end: datetime, focus: list[str], zone
     # ⚠️ A RESTART IS SAID ONCE, NOT AS EVERY DEVICE (2026-10-13): a period holding a Home Assistant restart listed
     # nearly every device as "stopped answering" and never said Home Assistant had restarted. A device that went and
     # answered again within `restart_settle_minutes` of it was the restart's; one that did not come back stays listed.
-    restarts = ha_restarts(rows)
-    settle = th("restart_settle_minutes")
-    came_back = {e for t, _, e in back if in_restart(t, restarts, settle)}
-    restart_only = {e for t, _, e in offline if in_restart(t, restarts, settle) and e in came_back}
-    offline = [o for o in offline if o[2] not in restart_only or not in_restart(o[0], restarts, settle)]
-    back = [b for b in back if b[2] not in restart_only or not in_restart(b[0], restarts, settle)]
+    # the one answer to "was it the restart's" (vesta_shared.device_state.RestartDrops, the nightly check's too)
+    drops = RestartDrops(rows, th("restart_settle_minutes"))
+    restart_only = {e for t, _, e in offline if drops.theirs(e, t)}
+    offline = [o for o in offline if not drops.theirs(o[2], o[0])]
+    back = [b for b in back if not drops.theirs(b[2], b[0])]
     lines = []
-    if restarts:
-        lines.append("The villa's system restarted: " + ", ".join(at(t, zone, span_days) for t in restarts)
+    if drops.restarts:
+        lines.append("The villa's system restarted: " + ", ".join(at(t, zone, span_days) for t in drops.restarts)
                      + f" ({len(restart_only)} device(s) dropped and answered again with it, not listed below)")
     if offline:
         lines.append("Devices that stopped answering:")
-        lines += [f"  {at(t, zone, span_days)}  {n} ({e})" for t, n, e in _first_per(offline)[:40]]
+        # one the restart took down and that never answered again is said so — the nightly check, too, takes such a
+        # drop for the restart's, never a reconnect of the device's own
+        lines += [f"  {at(t, zone, span_days)}  {n} ({e})" + ("  — with the restart, not back since"
+                                                                 if drops.kept_down(e, t) else "")
+                  for t, n, e in _first_per(offline)[:40]]
     if back:
         lines.append("…and answered again:")
         lines += [f"  {at(t, zone, span_days)}  {n} ({e})" for t, n, e in _first_per(back)[:40]]
@@ -619,7 +622,7 @@ def around(client, store, start: datetime, end: datetime, focus: list[str], zone
     noisy = sorted(((n, e) for e, n in count.items() if n / hours > th("noise_per_hour") and e not in focus), reverse=True)[:8]
     if noisy:
         lines.append("Left out as background (change constantly): " + ", ".join(e for _, e in noisy))
-    # the same, as data — the investigation page builds its facts from it (reports' compose.py investigation --around)
+    # the same, as data — the investigation page builds its facts from it (page.py --around)
     data = {"offline": [{"at": t.isoformat(), "name": n, "id": e} for t, n, e in _first_per(offline)[:40]],
             "back": [{"at": t.isoformat(), "name": n, "id": e} for t, n, e in _first_per(back)[:40]],
             "automations": ran, "notifications": [{"at": t.isoformat(), "name": n} for t, n in sent[:40]],

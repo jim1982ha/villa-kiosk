@@ -19,7 +19,7 @@ from helpers import STARTER_SKILLS
 from test_reports import COMPOSE, _facts, _run, _villa
 
 ICONS = re.compile(r'<link rel="icon"[^>]*>')
-TEMPLATE = os.path.join(STARTER_SKILLS, "reports", "templates", "page_head.html")   # every page of the reports skill includes it
+TEMPLATE = __import__("vesta_shared.page", fromlist=["SHARED_TEMPLATES"]).SHARED_TEMPLATES + "/page_head.html"   # every page of the reports skill includes it
 
 
 def kiosk_file(path: str) -> bytes:

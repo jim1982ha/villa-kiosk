@@ -86,3 +86,42 @@ def in_restart(when, restarts: list, settle_minutes: float) -> bool:
     their drops never counted, while a small villa's real restart might stay under 20. Its own "started" entry decides."""
     from datetime import timedelta
     return any(abs(when - r) <= timedelta(minutes=settle_minutes) for r in restarts)
+
+
+class RestartDrops:
+    """The drops of a stretch of logbook rows, each judged against the villa system's restarts — ONE answer to "was
+    this drop the restart's?" for the nightly check and the investigation.
+
+    ⚠️ ONE ANSWER, TWO SKILLS (architecture review, 2026-10-15): the same rule was written into each on 2026-10-13,
+    differently — the night check left out every drop near a restart, the investigation only those that answered again.
+    Each now asks this, and keeps its own setting (restart_settle_minutes) and its own words:
+    - `at_restart`: the drop came with a restart (within the settle window) — never a device's own reconnect;
+    - `theirs`: …and the device answered again with it — the restart's alone, nothing to list;
+    - `kept_down`: …and it did not answer again — the restart took it down, said as such."""
+
+    def __init__(self, rows: list[dict], settle_minutes: float):
+        from datetime import datetime
+        self.restarts = ha_restarts(rows)
+        self.settle = settle_minutes
+        self._back: set[str] = set()
+        went = {r.get("entity_id") for r in rows if is_offline(r.get("state"))}
+        for r in rows:
+            eid = r.get("entity_id")
+            if eid in went and not is_offline(r.get("state")):
+                try:
+                    if self._near(datetime.fromisoformat(str(r["when"]))):
+                        self._back.add(eid)
+                except (KeyError, ValueError):
+                    continue
+
+    def _near(self, when) -> bool:
+        return bool(self.settle) and in_restart(when, self.restarts, self.settle)
+
+    def at_restart(self, entity_id: str, when) -> bool:
+        return self._near(when)
+
+    def theirs(self, entity_id: str, when) -> bool:
+        return self._near(when) and entity_id in self._back
+
+    def kept_down(self, entity_id: str, when) -> bool:
+        return self._near(when) and entity_id not in self._back

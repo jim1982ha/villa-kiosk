@@ -142,7 +142,7 @@ def test_a_date_alone_is_the_whole_day_and_words_are_not_device_ids(tmp_path):
 
 
 def test_timeline_out_saves_each_device_with_its_chart(tmp_path):
-    # the investigation page's charts (reports' compose.py investigation --data): the highest reading of each slice,
+    # the investigation page's charts (reports' inv_page.py investigation --data): the highest reading of each slice,
     # so a short surge is still drawn
     import investigate
     res = investigate.timeline(_Client(), ["sensor.heater_power"], T(9, 2), T(9, 15), 3, Z, series=True)
@@ -194,13 +194,12 @@ def test_the_longest_summary_with_a_long_to_line_is_still_one_bubble():
     # review 32: the limit was worked out by hand against 1,024 while the agent cuts captions at 1,000 — derived now, with
     # room for the longest "To:" (every role: review 3, 2026-10-13 — 120 kept for names cut the summary ~90 short);
     # checked through the agent's own layout of a message with a file
-    sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
-    import compose
+    import page as inv_page   # the investigate skill's page (it was reports' inv_page.py)
     from vesta_agent.telegram import layout
     from vesta_shared.message_format import ROLE_WORDS, audience, titled
     from vesta_shared.messaging import TELEGRAM_CAPTION
-    text = titled("T" * compose.TITLE_MAX, audience(ROLE_WORDS), "K" * compose.KEY_MAX + "\n" + "S" * compose.SUMMARY_MAX
-                  + compose.DETAILS)
+    text = titled("T" * inv_page.TITLE_MAX, audience(ROLE_WORDS), "K" * inv_page.KEY_MAX + "\n" + "S" * inv_page.SUMMARY_MAX
+                  + inv_page.DETAILS)
     assert len(layout(text, {"inline_keyboard": []}, "document")) == 1
     assert len(text) > TELEGRAM_CAPTION - 30                               # and no room is left unused
 
@@ -301,7 +300,7 @@ def test_the_investigation_lists_web_search_among_its_tools():
 
 
 def _page(tmp_path, notes, searches=None, readings=True, web_on=False):
-    """compose.py investigation as the agent runs it, on the invented heater's night (its timeline and around, with a
+    """inv_page.py investigation as the agent runs it, on the invented heater's night (its timeline and around, with a
     control that stayed off): (exit, stderr, the page, its result). `searches`: the web searches the AI made."""
     import json
     import subprocess
@@ -319,8 +318,8 @@ def _page(tmp_path, notes, searches=None, readings=True, web_on=False):
     (tmp_path / "n.json").write_text(json.dumps(notes))
     if (tmp_path / "p.html").exists():
         (tmp_path / "p.html").unlink()
-    compose = os.path.join(STARTER_SKILLS, "reports", "scripts", "compose.py")
-    r = subprocess.run([sys.executable, compose, "investigation", "--notes", str(tmp_path / "n.json"), *args,
+    page_py = os.path.join(STARTER_SKILLS, "investigate", "scripts", "page.py")
+    r = subprocess.run([sys.executable, page_py, "--notes", str(tmp_path / "n.json"), *args,
                         "--out", str(tmp_path / "p.html")], capture_output=True, text=True,
                        env={**os.environ, "PYTHONPATH": PYTHONPATH,
                             "VESTA_WEB_SEARCHES": json.dumps(searches) if searches else "",
@@ -418,12 +417,11 @@ class _Around(_WithControl):
 
 def _facts(client=None, ids=("sensor.heater_power", "switch.a")):
     import investigate
-    sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
     import investigation_facts
     client = client or _Around()
     data = {"start": T(9, 2).isoformat(), "end": T(9, 15).isoformat(), "zone": "UTC",
             **investigate.timeline(client, list(ids), T(9, 2), T(9, 15), 3, Z, series=True)}
-    data = __import__("json").loads(__import__("json").dumps(data, default=str))       # as compose reads the file
+    data = __import__("json").loads(__import__("json").dumps(data, default=str))       # as page.py reads the file
     around = {"start": data["start"], "end": data["end"], "zone": "UTC",
               **investigate.around(client, None, T(9, 2), T(9, 15), list(ids), Z)["data"]}
     return investigation_facts, investigation_facts.facts(data, around)
@@ -580,7 +578,6 @@ def test_a_period_is_judged_over_as_long_as_its_alert_would_need():
 def test_only_an_alert_in_time_to_matter_is_said_and_repeats_are_one_line():
     # an alert after 60 s of silence, for a drop-out of 71 s, warned of nothing; the same rule firing on three outages
     # of one device is one entry with its other times
-    sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
     import investigation_facts as mod
 
     def off(h, m, seconds):
@@ -597,7 +594,6 @@ def test_only_an_alert_in_time_to_matter_is_said_and_repeats_are_one_line():
 
 
 def test_what_drops_off_in_the_same_minute_is_one_row():
-    sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
     import investigation_facts as mod
     data = {"zone": "UTC", "start": T(9, 0).isoformat(), "end": T(9, 23).isoformat(), "settings": {"coincide_s": 600},
             "entities": [{"entity_id": "sensor.pump", "label": "Pump", "periods": [
@@ -694,30 +690,28 @@ def test_the_page_names_each_band_and_draws_the_strip(tmp_path):
 
 
 def test_every_band_kind_has_its_own_word_and_colour():
-    sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
-    import compose
-    assert compose.band_of("no power")[0] == "read 0: no power reached it"
-    assert compose.band_of("offline")[0] == "stopped reporting"
-    assert compose.band_of("stops and restarts 8 times")[0] == "kept stopping and restarting"
-    assert compose.band_of("running")[0] == "ran longer or harder than usual" and compose.band_of("open")[0] == "unusual"
+    import page as inv_page   # the investigate skill's page (it was reports' inv_page.py)
+    assert inv_page.band_of("no power")[0] == "read 0: no power reached it"
+    assert inv_page.band_of("offline")[0] == "stopped reporting"
+    assert inv_page.band_of("stops and restarts 8 times")[0] == "kept stopping and restarting"
+    assert inv_page.band_of("running")[0] == "ran longer or harder than usual" and inv_page.band_of("open")[0] == "unusual"
     # owner, 2026-10-12: "you are using too similar colour": every kind its own, none the readings' or the usual's
-    colours = [c for c in compose.BAND_COLOURS.values() if c != "var(--ink2)"]
-    assert len(set(colours)) == len(colours) and not {compose.READINGS, compose.USUAL} & set(colours)
+    colours = [c for c in inv_page.BAND_COLOURS.values() if c != "var(--ink2)"]
+    assert len(set(colours)) == len(colours) and not {inv_page.READINGS, inv_page.USUAL} & set(colours)
 
 
 def test_a_period_is_said_the_same_by_the_lines_the_ai_reads_and_by_the_page():
     # architecture review, 2026-10-13: the AI's reading quoted investigate.py's "offline for 1 h 15 min" while the
     # page's facts said "stopped reporting … 75 min" for the same outage — three duration rules and two word tables
-    sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
-    import compose
+    import page as inv_page   # the investigate skill's page (it was reports' inv_page.py)
     import investigation_facts
     from vesta_shared import periods
     import investigate as lines
     for seconds, said in ((45, "45 s"), (600, "10 min"), (4500, "1 h 15 min"), (7200, "2 h"), (9000, "2 h 30 min")):
-        assert lines.lasting(seconds) == investigation_facts.lasting(seconds) == compose.lasting(seconds) == said
+        assert lines.lasting(seconds) == investigation_facts.lasting(seconds) == inv_page.lasting(seconds) == said
     for kind in (periods.NO_POWER, periods.OFFLINE, periods.NO_VALUE, periods.RUNNING, periods.restarts(8)):
-        assert investigation_facts.did(kind) == periods.did(kind) and compose.band_of(kind)[0] == periods.band(kind)
-        assert periods.base(kind) in compose.BAND_COLOURS
+        assert investigation_facts.did(kind) == periods.did(kind) and inv_page.band_of(kind)[0] == periods.band(kind)
+        assert periods.base(kind) in inv_page.BAND_COLOURS
     assert periods.did(periods.restarts(8)) == "stopped and restarted 8 times"
 
 
@@ -746,10 +740,9 @@ def test_every_chart_and_the_strip_have_a_legend_of_what_they_draw(tmp_path):
 def test_a_tooltip_is_page_text_over_its_column_never_covered():
     # owner, 2026-10-12: the tip was chart text — it grew with the screen and the next bars covered it. Now page text
     # (13 px, page_head.html), laid over the chart after it, its place in % of the chart
-    sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
     import re
-    import compose
-    chart = compose.hourchart({"unit": "hour", "bins": [
+    import page as inv_page   # the investigate skill's page (it was reports' inv_page.py)
+    chart = inv_page.hourchart({"unit": "hour", "bins": [
         {"at": T(9, h).isoformat(), "minutes": m, "usual": 0.3} for h, m in ((2, 0), (3, 50), (4, 58), (5, 52))]}, Z)
     svg_end = chart.index("</svg>")
     tips = re.findall(r'<span class="pt" tabindex="0" aria-label="([^"]+)" style="left:([\d.]+)%;width:([\d.]+)%', chart)
@@ -757,18 +750,17 @@ def test_a_tooltip_is_page_text_over_its_column_never_covered():
     assert tips[0][0] == "02:00 · ran 0 min (usually 0.3 min)"
     assert all(0 <= float(left) and float(left) + float(w) <= 100.01 for _, left, w in tips)
     assert '<span class="tip l">' in chart and '<span class="tip r">' in chart   # at the edges, anchored inside
-    head = open(os.path.join(STARTER_SKILLS, "reports", "templates", "page_head.html"), encoding="utf-8").read()
+    head = open(__import__("vesta_shared.page", fromlist=["SHARED_TEMPLATES"]).SHARED_TEMPLATES + "/page_head.html", encoding="utf-8").read()
     assert ".chart .pt .tip{" in head and "font-size:13px" in head[head.index(".chart .pt .tip{"):][:400]
 
 
 def test_the_hours_chart_stops_at_an_hour_and_draws_its_usual_as_one_line():
     # 2026-10-12: the scale went to 80 min in an hour, and a dash per hour at 0 read as a broken axis
-    sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
-    import compose
-    chart = compose.hourchart({"unit": "hour", "bins": [
+    import page as inv_page   # the investigate skill's page (it was reports' inv_page.py)
+    chart = inv_page.hourchart({"unit": "hour", "bins": [
         {"at": T(9, h).isoformat(), "minutes": m, "usual": u} for h, m, u in ((2, 0, 0.3), (3, 58, 0.2), (4, 0, 8))]}, Z)
     assert ">60</span>" in chart and ">80</span>" not in chart
-    assert chart.count('class="usual"') == 1 and chart.count(f'stroke="{compose.USUAL}"') == 1   # one line, no dashes
+    assert chart.count('class="usual"') == 1 and chart.count(f'stroke="{inv_page.USUAL}"') == 1   # one line, no dashes
 
 
 def test_an_automation_made_from_a_blueprint_says_what_it_acts_on():
@@ -836,27 +828,24 @@ def test_a_device_home_assistant_names_nowhere_is_said_in_words_never_by_its_id(
     assert "sensor.pump_current" not in str(f)
 
 def test_a_reference_links_only_to_a_source_that_exists():
-    sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
-    import compose
-    said = str(compose.citing(1)("the guide [1] and <b> [2]"))
+    import page as inv_page   # the investigate skill's page (it was reports' inv_page.py)
+    said = str(inv_page.citing(1)("the guide [1] and <b> [2]"))
     assert '<a href="#src-1">[1]</a>' in said and "[2]" in said and "#src-2" not in said and "&lt;b&gt;" in said
 
 
 def test_the_usual_is_said_in_plain_sentences():
     # owner, 2026-10-12: "54.3 runs a day, usually 9 s, longest 9 min … doesn't seem proper English"
-    sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
-    import compose
+    import page as inv_page   # the investigate skill's page (it was reports' inv_page.py)
     ref = {"days": 3.0, "runs_per_day": 54.3, "run_median_s": 9.0, "run_longest_s": 566.0, "level_median": 802.0,
            "rest_median": 1.76}
-    assert compose.normal_words(ref, "W") == ("Usually (over the 3 days before) it started about 54 times a day; a run "
+    assert inv_page.normal_words(ref, "W") == ("Usually (over the 3 days before) it started about 54 times a day; a run "
                                               "usually lasted 9 s and never more than 9 min. While running it read "
                                               "about 802 W; at rest about 1.76 W.")
-    same = compose.normal_words({**ref, "run_longest_s": 9.0}, "W")
+    same = inv_page.normal_words({**ref, "run_longest_s": 9.0}, "W")
     assert "usually lasted 9 s." in same and "never more than" not in same          # never "9 s and never more than 9 s"
 
 
 def test_what_an_automation_does_is_said_as_a_person_says_a_list():
-    sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
     import investigation_facts as mod
     assert mod._and(["fires an event", "notifies", "records a value"]) == "fires an event, notifies and records a value"
     assert mod._and(["notifies"]) == "notifies" and mod._and([]) == ""
@@ -882,17 +871,16 @@ def test_a_lead_names_its_web_page_and_links_its_number_or_says_the_records(tmp_
 def test_every_word_of_a_chart_is_page_text_at_the_reports_size():
     # owner, 2026-10-12: "the X-axis and Y-axis and the graph legends … a font size different from the text in the
     # report" — no word is drawn in a chart any more: each is laid over it, in the page's own size
-    sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
-    import compose
-    charts = [compose.line([("2026-10-01", 40), ("2026-10-02", 97)], "%"),
-              compose.hourchart({"unit": "hour", "bins": [{"at": T(9, h).isoformat(), "minutes": 5, "usual": 1}
+    import page as inv_page   # the investigate skill's page (it was reports' inv_page.py)
+    charts = [__import__("vesta_shared.page", fromlist=["line"]).line([("2026-10-01", 40), ("2026-10-02", 97)], "%"),
+              inv_page.hourchart({"unit": "hour", "bins": [{"at": T(9, h).isoformat(), "minutes": 5, "usual": 1}
                                                           for h in range(3)]}, Z),
-              compose.strip([{"name": "Spa Relay", "bands": [{"start": T(9, 2), "end": T(9, 4), "state": "on",
+              inv_page.strip([{"name": "Spa Relay", "bands": [{"start": T(9, 2), "end": T(9, 4), "state": "on",
                                                                "as": "on"}]}], T(9, 2), T(9, 15), Z)]
     for chart in charts:
         assert "<text" not in chart and '<span class="ax"' in chart, chart[:200]
     assert '">Spa Relay</span>' in charts[2]
-    head = open(os.path.join(STARTER_SKILLS, "reports", "templates", "page_head.html"), encoding="utf-8").read()
+    head = open(__import__("vesta_shared.page", fromlist=["SHARED_TEMPLATES"]).SHARED_TEMPLATES + "/page_head.html", encoding="utf-8").read()
     import re
     note = re.search(r"(?:^|[}\n])\.note\{([^}]*)\}", head).group(1)
     assert "font-size:13px" in head[head.index(".chart .ax{"):][:200] and "font-size:13px" in note   # the notes' size
@@ -907,22 +895,20 @@ def test_a_device_that_reports_a_value_has_no_state_band():
     assert [g["as"] for g in got] == ["value", "offline", "value"]           # only when it stopped reporting shows
     door = investigate.state_series([(T(9, 2), "open"), (T(9, 3), "closed"), (T(9, 4), "jammed")], T(9, 2), T(9, 15))
     assert [g["as"] for g in door] == ["on", "off", "other"]                  # a few states: a state lane
-    sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
-    import compose
-    lane = compose.strip([{"name": "Uptime", "bands": [{"start": T(9, 2), "end": T(9, 15), "state": "x", "as": "value"}]}],
+    import page as inv_page   # the investigate skill's page (it was reports' inv_page.py)
+    lane = inv_page.strip([{"name": "Uptime", "bands": [{"start": T(9, 2), "end": T(9, 15), "state": "x", "as": "value"}]}],
                          T(9, 2), T(9, 15), Z)
-    assert "opacity=\".55\"" not in lane and compose.strip_legend([{"bands": [{"as": "value"}]}]) == []
+    assert "opacity=\".55\"" not in lane and inv_page.strip_legend([{"bands": [{"as": "value"}]}]) == []
 
 
 def test_the_skill_asks_for_a_summary_the_caption_can_hold():
     # review 3 (2026-10-13): the room grew when "To:" became roles; the AI is told the limit in SKILL.md, so the two agree
-    sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
-    import compose
+    import page as inv_page   # the investigate skill's page (it was reports' inv_page.py)
     told = re.search(r'"summary": "[^"]*?at most (\d+) characters', open(os.path.join(STARTER_SKILLS, "investigate",
                                                                                       "SKILL.md")).read())
-    assert told and compose.SUMMARY_MAX - 10 <= int(told.group(1)) <= compose.SUMMARY_MAX
+    assert told and inv_page.SUMMARY_MAX - 10 <= int(told.group(1)) <= inv_page.SUMMARY_MAX
     # architecture review 4: the same sentences too — the instructions said 3 to 5, the refusal 4 to 6
-    assert re.search(r'"summary": "' + compose.SUMMARY_SENTENCES + r", at most \d+ characters",
+    assert re.search(r'"summary": "' + inv_page.SUMMARY_SENTENCES + r", at most \d+ characters",
                      open(os.path.join(STARTER_SKILLS, "investigate", "SKILL.md")).read())
 
 
@@ -942,5 +928,15 @@ def test_around_says_a_restart_once_and_keeps_a_device_that_did_not_come_back():
     text = "\n".join(investigate.around(Restarted(), None, T(9, 2), T(9, 15), ["sensor.heater_power"], Z)["lines"])
     assert "The villa's system restarted: 04:00:00 (1 device(s) dropped and answered again with it" in text, text
     assert "Spa Relay" not in text                                                 # the restart's, not its own
-    assert "03:59:41  Thermometer" in text                                         # lost with it, still lost: said
-    assert "06:01:25  Next Relay" in text                                          # far from any restart: said as before
+    assert "03:59:41  Thermometer (sensor.example_thermometer)  — with the restart, not back since" in text, text
+    assert "06:01:25  Next Relay" in text and "Next Relay (switch.next_relay)  —" not in text   # its own drop: plain
+    # ⚠️ THE NIGHTLY CHECK READS THE SAME ROWS THE SAME WAY (architecture review, 2026-10-15: one answer,
+    # vesta_shared.device_state.RestartDrops): neither restart drop is a reconnect of the device's own, Next Relay's is
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "pm_features", os.path.join(STARTER_SKILLS, "preventive-maintenance", "scripts", "features.py"))
+    features = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(features)
+    rows = Restarted().logbook(T(9, 2), T(9, 15))
+    flips = features.flips_per_day(rows, "UTC", investigate.th("restart_settle_minutes"))
+    assert "switch.spa" not in flips and "sensor.example_thermometer" not in flips and "switch.next_relay" in flips, flips

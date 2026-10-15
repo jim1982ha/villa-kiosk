@@ -67,10 +67,13 @@ siren:
   # policy.yaml); how long it sounds is policy.yaml's siren_auto_off_min.
 
 people_roles:
-  # role -> which severities reach that chat
+  # role -> which severities reach that chat: every message about an alert, from the first to its close
   owner: [P1]
   fm: [P1, P2]
   digest: [P3]
+chase:
+  asks: fm               # asked to answer (Done / Need help); also told every step of an alert they are chased for
+  escalates_to: owner    # told when nobody answers, or when help is asked (the buttons go with it)
 # The alert desk's timings (vesta_shared.params.behaviour): a villa helper input_number.vesta_<name> overrides
 # one; a villa's own villa.rules.yaml may change them too (kept by updates). Moved here from the shared library.
 behaviour:

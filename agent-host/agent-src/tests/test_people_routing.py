@@ -520,6 +520,12 @@ def test_who_acts_with_which_role_is_one_answer_everywhere(chat, who, known_as, 
     assert Routing(pol).approver_chats("any", chat) == ([chat] if acts else [FABIEN, JM])
     # where an owner's request goes is where someone acting there may approve it (architecture review 21)
     assert pol.may_approve_in(chat, "owner") is (acts == "owner")
+    # ...and what the AI may use for them there: a group's role cuts the facility manager's tools whatever the role
+    # the caller passes (architecture review, 2026-10-15: tool_access kept its own copy of "the group's role")
+    if acts:
+        from vesta_agent.tool_access import allowed_for
+        cut = Policy({"people": PEOPLE, "tool_access": {"fm": {"create_ticket": False}}})
+        assert ("create_ticket" in allowed_for(cut, [], "owner", chat)) is (acts == "owner")
 
 
 def _press(v, msg, yn="y", chat=JM, who=JM):

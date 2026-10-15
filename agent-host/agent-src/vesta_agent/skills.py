@@ -20,6 +20,7 @@ and skill.yaml (what the engine needs):
       - when: "02:00"
         run: "nightly.py --out nightly.json"   a code job (no model, no token)
         timeout: 1800
+        kiosk: nightly_check         optional: this job is the nightly check the Kiosk names (its (i) says its time)
     every_5_min: "desk.py tick"      a code job every 5 minutes
     on_event:
       critical_event: "desk.py intake --event {event}"
@@ -152,6 +153,9 @@ class SkillError(ValueError):
 
 
 VILLA_CHOICES = "villa.skill.yaml"
+# A schedule entry's `kiosk`: what the Kiosk calls that job, so it can say its time (the heartbeat's cadence,
+# agent-contract.json `heartbeat`) — the skill names it, the engine never guesses which job is "the nightly check".
+KIOSK_JOBS = {"nightly_check"}
 TRASH = ".trash"              # skills deleted or replaced: kept to undo, trimmed by housekeeping (settings.keep.files_days)
 TOOL = re.compile(r"^[a-z][a-z0-9_]{1,60}$")
 BUTTON_OPTION = re.compile(r"^[a-z][a-z_]{0,15}$")
@@ -356,6 +360,11 @@ def parse_skill(name: str, path: str) -> Skill:
             _check_command(path, str(job["run"]), f"schedule[{i}].run")
         entry = {"when": when, "prompt": job.get("prompt"), "run": job.get("run"),
                  "timeout": int(job.get("timeout") or 900)}
+        if job.get("kiosk") is not None:
+            if job["kiosk"] not in KIOSK_JOBS or not re.fullmatch(r"\d\d:\d\d", when):
+                raise SkillError(f"schedule[{i}]: kiosk {job['kiosk']!r} must be one of {', '.join(sorted(KIOSK_JOBS))}, "
+                                 "on a daily HH:MM job")
+            entry["kiosk"] = job["kiosk"]
         if job.get("prompt"):
             entry.update(_ai_job(path, job, f"schedule[{i}]"))
         sk.schedule.append(entry)

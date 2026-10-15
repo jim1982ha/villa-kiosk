@@ -134,7 +134,7 @@ rules out is not a cause; if you think a fact is misleading, say why in "cannot_
    facts, your last timeline run must be the one of the whole period with `--out timeline.json`, all the devices that
    matter in it (with their controls), and your last around run the same period with `--out around.json`.
 
-9. **Make the page:** `run_skill_script reports compose.py investigation --notes investigation.json --data timeline.json
+9. **Make the page:** `run_skill_script investigate page.py --notes investigation.json --data timeline.json
    --around around.json --out investigation.html`. It prints a `message` {title, text} and the facts the page
    states ("established", "ruled_out"). Read them against your account before sending: if they disagree, fix the
    account and make the page again.

@@ -17,9 +17,8 @@ scripts:
       fm-weekly: the weekly page, from its figures and the readings
       owner-weekly: the owner's three Monday lines, with the weekly page (--page)
       owner-monthly: the monthly report, from its figures and the readings
-      investigation: an investigation's page (the investigate skill's account and charts) and its short message
     job_only: {fm-daily: fm-daily, fm-weekly: fm-weekly, owner-monthly: owner-monthly}
-    flags: {--energy: infile, --facts: infile, --notes: infile, --data: infile, --around: infile, --page: infile, --as-of: date, --out: outfile}
+    flags: {--energy: infile, --facts: infile, --notes: infile, --page: infile, --as-of: date, --out: outfile}
     inject: [pack, store, zone]
 # AI jobs: each `name` is the key of its model and spending limit in policy.yaml settings.jobs (VESTA
 # Agent page → Rules → AI jobs); a job that policy.yaml does not name does not run. `default` is what

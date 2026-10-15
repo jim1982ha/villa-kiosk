@@ -112,16 +112,19 @@ class Kiosk:
         self.info = data
         return True
 
-    async def heartbeat(self, status: str | None = None) -> None:
-        code, _ = await self._req("POST", "/agent/v1/heartbeat", {"status": status} if status else None)
+    async def heartbeat(self, status: str | None = None, cadence: dict | None = None) -> None:
+        """`cadence`: this agent's own timing (agent-contract.json `heartbeat`: checkMinutes, nightlyAt) — the Kiosk's
+        Overview (i) says it instead of a copy of the defaults (architecture review, 2026-10-15)."""
+        body = {k: v for k, v in (("status", status), ("cadence", cadence)) if v}
+        code, _ = await self._req("POST", "/agent/v1/heartbeat", body or None)
         if code != 200:
             raise KioskError(f"heartbeat answered {code}")
 
-    async def heartbeats(self, stop: asyncio.Event, status=lambda: None) -> None:
+    async def heartbeats(self, stop: asyncio.Event, status=lambda: None, cadence=lambda: None) -> None:
         reported = None
         while not stop.is_set():
             try:
-                await self.heartbeat(status())
+                await self.heartbeat(status(), cadence())
                 if reported:
                     log.info("Kiosk heartbeat: back")
                 reported = None

@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.6.195 (15 October 2026)
+
+Architecture review, 2026-10-15 (counts and alerts):
+- #3: the investigation's page is the investigate skill's: scripts/page.py (was reports compose.py investigation),
+  scripts/investigation_facts.py and templates/investigation.html moved there; SKILL.md step 9 runs `investigate
+  page.py`. The charts' drawing, linked/say and page_head.html are vesta_shared.page (a skill's own templates/ first,
+  then vesta_shared/templates); for_the_ai is vesta_shared.message_format's. reports: the `investigation` command and
+  its --data/--around flags gone.
+- #4: alert-desk desk.tell — ONE answer to who hears each notice and with which buttons: escalated to
+  chase.escalates_to; every other notice to people_roles of its priority, plus chase.asks while chased; only the
+  asked role's carry the buttons, marked result.message(first_in_line=True). outcome.carry_out's "nobody received
+  it" reads first_in_line, no longer "fm". rules.yaml `chase: {asks: fm, escalates_to: owner}`. Policy.group_role:
+  member, may_approve_in and tool_access.allowed_for read one group role; test_who_acts... covers tool_access.
+- #5: vesta_shared.device_state.RestartDrops (at_restart / theirs / kept_down): flips_per_day and investigate around
+  ask it; around marks a drop the restart took down and that never came back.
+- #6: the heartbeat carries `cadence` {checkMinutes, nightlyAt} (agent-contract.json `heartbeat`, copied from the
+  Kiosk 2.496.372): Vesta.kiosk_cadence reads the scheduler's tick and the schedule entry a skill marks
+  `kiosk: nightly_check` (preventive-maintenance's 02:00 job); skills.py validates `kiosk` (KIOSK_JOBS).
+
 ## 0.6.194 (15 October 2026)
 
 Architecture review, 2026-10-15:

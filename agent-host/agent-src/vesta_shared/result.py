@@ -71,11 +71,13 @@ def _mark(m: dict, mark: str | None) -> dict:
 
 def message(to: str, text: str, *, status: str | None = None, incident: int | None = None, buttons: bool = False,
             attachment: str | None = None, stage: str | None = None, mark: str | None = None,
-            title: str | None = None) -> dict:
+            title: str | None = None, first_in_line: bool = False) -> dict:
     """A message for `to` (here · owner · fm). `buttons`: the alert's Done / Need help for `incident`; `stage`: what
     this notice about it is (STAGES) — the engine writes its heading and its history line. "{time}" in `text` is the
     villa's time when it is sent (10/10/2026 15:04), as in a settle note. `status`: where it stands, shown under a line
-    at the bottom (vesta_agent/layout.py) — given apart, never written into `text`."""
+    at the bottom (vesta_agent/layout.py) — given apart, never written into `text`. `first_in_line`: the people asked
+    to answer it (the alert desk's chase) — when Telegram refused every chat it went to, the engine says so
+    (Problems.unreached) and the desk hands the incident on."""
     m = {"to": to, "text": text}
     if status:
         m["status"] = status
@@ -89,6 +91,10 @@ def message(to: str, text: str, *, status: str | None = None, incident: int | No
         if incident is None:
             raise ValueError("an alert's buttons need its incident")
         m["keyboard"] = True
+    if first_in_line:
+        if not buttons:
+            raise ValueError("the people asked to answer get the buttons to answer with")
+        m["first_in_line"] = True
     if attachment:
         m["attachment"] = attachment
     if title:

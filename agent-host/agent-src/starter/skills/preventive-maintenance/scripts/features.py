@@ -12,7 +12,7 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from vesta_shared.device_state import ha_restarts, in_restart, is_offline  # the one "does this device answer"
+from vesta_shared.device_state import RestartDrops, is_offline  # the one "does this device answer"
 from vesta_shared.stats import med, slope_per_hour
 from vesta_shared.timeutil import local_day
 # a day of a power or energy meter: shared with roi-energy, so they live in vesta_shared (roi-energy imported this
@@ -85,13 +85,13 @@ def flips_per_day(logbook: list[dict], zone: str, settle_minutes: float = 0) -> 
     with no value (device_state) — counted, a wind chill on a still day read as a Wi-Fi problem. A device Home Assistant
     loses goes "unavailable"; its other entities going "unknown" with it add nothing (the device counts its busiest
     entity's day, nightly)."""
-    restarts = ha_restarts(logbook)
+    drops = RestartDrops(logbook, settle_minutes)        # the one answer (vesta_shared.device_state)
     out: dict[str, dict[date, int]] = defaultdict(lambda: defaultdict(int))
     for r in logbook:
         if not r.get("entity_id") or not is_offline(r.get("state")):
             continue
         t = datetime.fromisoformat(r["when"])
-        if settle_minutes and in_restart(t, restarts, settle_minutes):
+        if drops.at_restart(r["entity_id"], t):           # came with a restart: never the device's own reconnect
             continue
         out[r["entity_id"]][t.astimezone(ZoneInfo(zone)).date()] += 1
     return {k: dict(v) for k, v in out.items()}

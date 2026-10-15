@@ -10,3 +10,4 @@ schedule:
   - when: "02:00"             # code only: zero tokens; the 07:00 digest carries the words
     run: "nightly.py --out nightly.json"
     timeout: 1800
+    kiosk: nightly_check      # the Kiosk's (i) says this job's time (the heartbeat's cadence)

@@ -58,7 +58,7 @@ from .voice import Voice
 from .tickets import Tickets
 from .policy import NOT_REGISTERED, Person, Policy, problems as policy_problems
 from .routing import Origin, Routing
-from .scheduler import Scheduler
+from .scheduler import EVERY as SCHEDULER_EVERY, Scheduler
 from .command_request import Request, Requests
 from .fault_offers import FaultOffers
 from .skills import SEEDED, Skills, script_env
@@ -829,6 +829,17 @@ class Vesta:
         return {"ok": ans.ok, "exit": ans.code, "verdict": ans.verdict, "verdict_words": ans.verdict_words, "seconds": ans.seconds,
                 "output": ans.stdout[:60_000], "error": ans.error}
 
+    def kiosk_cadence(self) -> dict | None:
+        """This agent's timing for the Kiosk's heartbeat (agent-contract.json `heartbeat.cadence`): how often its code
+        jobs look (the scheduler's tick) and when the job a skill marks `kiosk: nightly_check` runs — read at each beat,
+        so a changed schedule or a skill switched off shows at the next one. None without such a job: the Kiosk then
+        says no number rather than a wrong one."""
+        nightly = next((j["when"] for sk in self.skills.all().values() for j in sk.schedule
+                        if j.get("kiosk") == "nightly_check"), None)
+        if not nightly:
+            return None
+        return {"checkMinutes": int(SCHEDULER_EVERY.total_seconds() // 60), "nightlyAt": nightly}
+
     async def _safe(self, coro):
         try:
             await coro
@@ -845,7 +856,7 @@ class Vesta:
             events = HaEvents(self.s.ha_url, self.s.ha_token, self.on_ha_event, self.beat, headers=self.cf_headers)
             tasks.append(asyncio.create_task(events.run(stop)))
         if self.kiosk.enabled:
-            tasks.append(asyncio.create_task(self.kiosk.heartbeats(stop)))
+            tasks.append(asyncio.create_task(self.kiosk.heartbeats(stop, cadence=self.kiosk_cadence)))
         tasks.append(asyncio.create_task(requests_box.serve(self.s.data_dir, self.on_request, stop)))
         tasks.append(asyncio.create_task(self.siren.watch(stop)))     # stops the siren on time, after a restart too
         await stop.wait()

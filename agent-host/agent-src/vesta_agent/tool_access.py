@@ -175,7 +175,7 @@ def allowed_for(policy: Policy, server_tools: list[dict], role: str | None, chat
     tools = switched_on(policy, server_tools)
     if role == SYSTEM:
         return tools
-    fm_group = chat_id is not None and int(chat_id) < 0 and "fm" in policy.roles_in(chat_id)
+    fm_group = chat_id is not None and policy.group_role(chat_id) == "fm"     # the group's role: Policy.group_role
     if role != "owner" or fm_group:
         tools = _without_groups(tools, fm_denied(policy))
     return tools

@@ -1,5 +1,5 @@
 """A chart's Y axis — its round ticks and their labels — for every chart the VESTA Agent draws: the
-reports' line and bar charts (reports compose.py) and the Costs page's daily cost chart (status.costs serves it,
+the pages' line and bar charts (vesta_shared.page) and the Costs page's daily cost chart (status.costs serves it,
 app.js only draws it).
 
 ⚠️ ONE AXIS (architecture review, 0.12.36). The reports and the Costs page each worked the axis out their own

@@ -39,3 +39,6 @@ scripts:
     flags: {--what: text, --where: text, --entities: text, --start: date, --end: date, --baseline-days: text,
             --out: outfile}
     inject: [store, zone]
+  page.py:                     # this skill's own page (it was the reports skill's compose.py investigation)
+    description: Makes the investigation's page from your account and the readings, and the short message that carries it
+    flags: {--notes: infile, --data: infile, --around: infile, --out: outfile}

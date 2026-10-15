@@ -169,6 +169,13 @@ def split_title(text: str) -> tuple[str, str] | None:
     return title.strip(), body.strip("\n")
 
 
+def for_the_ai(doc: str) -> dict:
+    """What the AI is handed to send, of a message in the shape: {title, text} — send_message(title=…, text=…) (a
+    skill's SKILL.md). The reports' and the investigation's pages print their message this way."""
+    t, body = split_title(doc)
+    return {"title": t, "text": body}
+
+
 def pages(title: str, to: str, body: str, limit: int) -> list[str]:
     """A report as messages of at most `limit` (Telegram's units), each a whole message in the shape — its own title
     "(1/2)", "To:", and its section's label again when a section goes on (owner, 2026-10-11, review 28: one long daily

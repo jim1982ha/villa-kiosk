@@ -516,3 +516,46 @@ def test_an_incident_logged_under_home_assistants_word_is_chased_once_its_priori
     res = _overdue(store, at=T0 + timedelta(days=1), priority="P2")
     inc = store.incident(iid)
     assert (inc["severity"], inc["state"]) == ("P2", "asked") and [a["action"] for a in res["actions"]] == ["ticket"]
+
+
+# ── who hears each notice: ONE answer (desk.tell, architecture review 2026-10-15) ───────────────────────────────────
+def _who(msgs):
+    return sorted((m["to"], bool(m.get("keyboard")), bool(m.get("first_in_line"))) for m in msgs)
+
+
+def test_every_notice_of_a_p1_reaches_its_priority_and_only_the_asked_role_gets_the_buttons(store):
+    # owner, 2026-10-13: "consistently to any P1, P2, P3" — a P1's reminder and its reopening in the Cockpit reached
+    # the facility manager alone, while the owner had the first alert
+    iid = desk.intake(store, event(priority="P1"), T0, mode_reader=lambda: "occupied")["incident_id"]
+    both = [("fm", True, True), ("owner", False, False)]
+    reminder = desk.tick(store, T0 + timedelta(minutes=16))
+    assert reminder["reasked"] == [iid] and _who(reminder["send"]) == both
+    escalated = desk.tick(store, T0 + timedelta(minutes=46))
+    assert escalated["escalated"] == [iid] and _who(escalated["send"]) == [("owner", True, False)]
+    p = json.loads(store.incident(iid)["payload"])
+    store.update_incident(iid, state="asked", payload=json.dumps({**p, "kiosk_reopened": "Owner"}))
+    assert _who(desk.tick(store, T0 + timedelta(minutes=50))["send"]) == both
+
+
+def test_a_p2_stays_with_the_facility_manager_and_a_p3_is_never_chased(store):
+    iid = desk.intake(store, event(), T0, mode_reader=lambda: "occupied")["incident_id"]
+    assert _who(desk.tick(store, T0 + timedelta(minutes=16))["send"]) == [("fm", True, True)]
+    p3 = desk.tell("P3", "new", incident=iid, text="x")
+    assert p3 == []                                          # the morning list only (people_roles digest)
+    assert _who(desk.tell("P3", "reminder", incident=iid, text="x")) == []        # a P3 repeat: nobody chased
+    assert _who(desk.tell("P2", "closed", incident=iid, chased=True, text="x")) == [("fm", False, False)]
+
+
+def test_the_villa_back_online_reaches_everyone_told_it_was_silent(store):
+    store.beat("ha_events", T0.isoformat())
+    silent = desk.tick(store, T0 + timedelta(minutes=40))["send"]
+    store.beat("ha_events", (T0 + timedelta(minutes=41)).isoformat())
+    back = desk.tick(store, T0 + timedelta(minutes=42))["send"]
+    assert {m["to"] for m in silent} == {m["to"] for m in back} == {"owner", "fm"}
+
+
+def test_the_chase_is_the_skills_rule(store, monkeypatch):
+    monkeypatch.setitem(desk.CHASE, "asks", "owner")
+    monkeypatch.setitem(desk.CHASE, "escalates_to", "fm")
+    assert _who(desk.tell("P1", "reminder", incident=1, chased=True, text="x")) == [("fm", False, False), ("owner", True, True)]
+    assert _who(desk.tell("P1", "escalated", incident=1, text="x")) == [("fm", True, False)]

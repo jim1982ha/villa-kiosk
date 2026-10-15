@@ -15,7 +15,7 @@ import yaml
 ROOT = os.path.join(os.path.dirname(__file__), "..")
 SPOKEN = [
     "starter/skills/alert-desk/scripts/desk.py", "starter/skills/preventive-maintenance/scripts/recheck.py",
-    "starter/skills/villa-concierge/scripts/voice.py", "starter/skills/reports/scripts/investigation_facts.py",
+    "starter/skills/villa-concierge/scripts/voice.py", "starter/skills/investigate/scripts/investigation_facts.py",
     "starter/skills/roi-energy/scripts/proposals.py", "vesta_agent/actions.py", "vesta_agent/api_errors.py",
     "vesta_shared/kiosk_words.py", "vesta_shared/result.py", "vesta_agent/notice.py", "vesta_agent/layout.py",
 ]
