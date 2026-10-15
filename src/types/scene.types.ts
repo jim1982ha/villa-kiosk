@@ -95,10 +95,6 @@ export interface EntityMapping {
    *  only (see babylon/badgeIcons.badgeImageDataUrl). Unset = category default.
    *  Persisted with entityMap (local storage) and in the config export bundle. */
   badgeColor?: string;
-  /** A lock that reports the wrong way round — mounted upside down, its "unlocked" is locked (owner, 2026-10-15).
-   *  Set in Advanced Settings on any lock entity; the app then reads its every state, history and logbook row, and sends
-   *  its Lock / Unlock, the right way round — once, at the connection to the villa's system (ha/stateLens.ts). */
-  invertLock?: boolean;
 }
 
 export interface Vec3 {

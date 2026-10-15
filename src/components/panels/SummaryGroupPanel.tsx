@@ -8,7 +8,6 @@
 // Built on the shared BasePanel (same modal chrome/header/close as every other
 // panel) and the shared gradient badge (badgeImage) so it feels native.
 
-import { isInvertedLock } from "@/ha/stateLens";
 import { roleCan } from "@/auth/permissions";
 import { useState } from "react";
 import { deviceRowText } from "@/utils/entityValue";
@@ -330,7 +329,7 @@ export default function SummaryGroupPanel({
         >
           <img
             className="summary-entity-badge"
-            src={badgeImage({ category: cat, iconKey: iconKeyFor(type, e), state: badge.face, color: config.entityMap[id]?.badgeColor, ringState: badge.ring, inverted: isInvertedLock(config.entityMap, id) })}
+            src={badgeImage({ category: cat, iconKey: iconKeyFor(type, e), state: badge.face, color: config.entityMap[id]?.badgeColor, ringState: badge.ring })}
             key={theme}
             alt=""
             draggable={false}
