@@ -1,3 +1,8 @@
+## 2.496.383
+
+### Changed
+- Nothing on screen. Behind it: the tool that proves each check can fail now names the check that caught a change, and never counts a test run that stopped early as a catch.
+
 ## 2.496.382
 
 ### Changed
