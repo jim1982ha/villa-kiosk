@@ -82,6 +82,10 @@ STOPPED_BY_SIGTERM = -15
 def run(settings, state, skill, script: str, args: list[str], *, by: str, timeout: int = 900) -> ScriptAnswer:
     """One command with arguments already checked (skills.validate_script_args)."""
     t0 = time.monotonic()
+    if by == AI:
+        # ⚠️ A SCRIPT RUNNING IS SEEN WHILE IT RUNS (retro, 2026-10-15): only its end was logged ("took 40.9 s"), so a
+        # script reading the logbook for minutes was invisible — and its calls were blamed on the AI's own tool
+        log.info("Skill %s: %s %s started", skill.name, script, (args[0] if args else ""))
     code, out, err = _run(settings, skill, script, args, timeout)
     return _answer(settings, state, skill, script, args, code, out, err, time.monotonic() - t0, by)
 

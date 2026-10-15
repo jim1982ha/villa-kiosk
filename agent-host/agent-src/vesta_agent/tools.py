@@ -27,6 +27,7 @@ import json
 import logging
 import os
 import re
+import time
 from dataclasses import replace
 from datetime import datetime
 from typing import Any, Awaitable, Callable, NamedTuple
@@ -38,7 +39,7 @@ from .policy import Person, Policy
 from .redact import scrub  # noqa: F401 — callers import it from here too
 from .routing import Origin, Routing
 from .outcome import has_work
-from .runner import WEB_SEARCH
+from .runner import WEB_SEARCH, step
 from .skills import FILE_NAME, Skills, ToolError, validate_script_args
 
 SERVER = "vesta"
@@ -259,10 +260,15 @@ class Toolbox:
             key = hashlib.sha256(json.dumps([name, args], sort_keys=True, default=str).encode()).hexdigest()
             if part > 1 and key in self.parts.cache:
                 return _ok(self.parts.serve(key, None, part))
+            t0 = time.monotonic()
             try:
                 res = await asyncio.to_thread(self.reader.mcp.call_raw, name, args)
             except Exception:  # noqa: BLE001
                 return _err("The villa's system did not answer.")
+            finally:
+                # who called the villa's system, and for how long: the AI's own calls, beside its scripts' lines
+                # (retro, 2026-10-15: ha-mcp's log names the request, never the caller)
+                log.info("AI: %s %s took %.1f s", name, step(name, args)["input"][:100], time.monotonic() - t0)
             blocks = res.get("content") or []
             images = [b for b in blocks if b.get("type") == "image"]
             for b in images:

@@ -219,3 +219,31 @@ def test_find_asks_for_each_device_once_whatever_the_number_of_its_entities():
     investigate.find(c, "sensor x", None)
     assert [n for n, _ in c.calls].count("ha_get_device") == 1
     assert len([a for n, a in c.calls if n == "ha_search" and "ABCDEF1234" in a]) == 1
+
+
+def test_the_log_says_who_reads_the_villa_and_for_how_long(tmp_path, caplog):
+    # retro, 2026-10-15: a script reading the logbook for minutes was blamed on the AI's own tool — ha-mcp's log names the
+    # request, never the caller, and a script was logged only when it ended
+    import asyncio
+    import logging
+    from ha_fake import FakeHA, tool
+    from helpers import make_agent, make_skill
+    from vesta_agent import script_run
+    from vesta_agent.routing import CONVERSATION, Origin
+    ha = FakeHA(tools=[tool("ha_get_state", entity_id="string")])
+    v = make_agent(tmp_path, {"people": [{"telegram_id": 111, "name": "Owner", "role": "owner"}], "chats": {"owner": -1},
+                              "ha_read_tools": ["ha_get_state"]}, reader=ha)
+    asyncio.run(v.refresh_server_tools())
+    get = next(t for t in v.toolbox().tool_objects(None, Origin(-1, CONVERSATION)) if t.name == "ha_get_state")
+    with caplog.at_level(logging.INFO):
+        asyncio.run(get.handler({"entity_id": "sensor.example_room"}))
+    assert any(r.getMessage().startswith("AI: ha_get_state ") and "sensor.example_room" in r.getMessage()
+               and r.getMessage().endswith(" s") for r in caplog.records), caplog.text
+    make_skill(v.s.skills_dir, "probe", {"description": "x", "scripts": {"look.py": {}}}, {"look.py": "print('{}')\n"})
+    sk = v.skills.get("probe")
+    caplog.clear()
+    with caplog.at_level(logging.INFO, logger="vesta"):
+        script_run.run(v.s, v.state, sk, "look.py", ["find"], by=script_run.AI)
+        script_run.run(v.s, v.state, sk, "look.py", ["find"], by=script_run.PAGE)
+    said = [r.getMessage() for r in caplog.records]
+    assert said.count("Skill probe: look.py find started") == 1, said           # the AI's script: its start, once

@@ -176,6 +176,27 @@ class Ship(unittest.TestCase):
         self.assertIn('__version__ = "0.5.1"', self.s.read("agent-host/agent-src/vesta_agent/__init__.py"))
         self.assertIn('version: "1.0.1"', self.s.read("vesta-agent/config.yaml"))
 
+    def test_a_push_of_a_built_path_without_a_new_version_is_refused(self):
+        # retro, 2026-10-15: a note pushed by hand under agent-host/ rebuilt 0.12.215 over itself
+        with tempfile.TemporaryDirectory() as t:
+            box = Sandbox(Path(t))
+            release.ROOT = box.repo
+            remote = sh(box.repo, "git", "rev-parse", "origin/agent-dev").strip()
+            box.write("agent-host/ARCHITECTURE.md", "a note\n"); box.stage("agent-host/ARCHITECTURE.md")
+            sh(box.repo, "git", "commit", "-q", "-m", "note")
+            head = sh(box.repo, "git", "rev-parse", "HEAD").strip()
+            why = release.check_push(head, remote)
+            self.assertIn("without a new version", why or "")
+            self.assertEqual(release.main(["check-push", head, remote]), 1)
+            box.write("vesta-agent/config.yaml", 'name: "VESTA Agent"\nversion: "1.0.1"\n'); box.stage("vesta-agent/config.yaml")
+            sh(box.repo, "git", "commit", "-q", "-m", "release")
+            self.assertIsNone(release.check_push(sh(box.repo, "git", "rev-parse", "HEAD").strip(), remote))
+            box.write("README.md", "elsewhere\n"); box.stage("README.md")                 # a path nothing builds
+            sh(box.repo, "git", "commit", "-q", "-m", "readme")
+            self.assertIsNone(release.check_push(sh(box.repo, "git", "rev-parse", "HEAD").strip(),
+                                                 sh(box.repo, "git", "rev-parse", "HEAD~1").strip()))
+            self.assertIsNone(release.check_push(head, release.ZERO))                      # a new branch
+
     def test_refused_on_main(self):
         sh(self.s.repo, "git", "checkout", "-q", "main")
         code, _, err = self.s.ship()

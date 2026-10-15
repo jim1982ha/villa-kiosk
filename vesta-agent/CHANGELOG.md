@@ -1,3 +1,11 @@
+## 0.12.224
+
+What you will see:
+- Nothing new on screen. The Agent's log now says when each of the AI's scripts starts, and how long each of the AI's
+  own reads of the villa's system took, so a slow answer shows at once what it is waiting for.
+- Behind it: a push of the Agent without a new version is refused before it leaves (it would publish an update the
+  villa's system cannot see), and the tool that proves each test can fail now says which test caught a change.
+
 ## 0.12.223
 
 What you will see:

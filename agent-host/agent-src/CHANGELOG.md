@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.216 (16 October 2026)
+
+Retro 2026-10-15:
+- script_run.run logs "Skill <s>: <script> <command> started" for the AI's scripts (the end was all that was logged);
+  tools._proxy logs "AI: <tool> <args in short> took <s> s" for each of the AI's own Home Assistant reads (runner.step).
+  test_ha_reads pins both (two mutations red).
+- agent-host/tools/release.py check-push (the repository's pre-push hook calls it for agent-dev): a push changing
+  agent-host/ or vesta-agent/ without a newer vesta-agent/config.yaml version is refused. test_release pins it.
+- agent-host/tools/mutate.py: a RED names the failing tests; a pytest run ending 2–5 (interrupted, crashed, usage, none
+  collected) is CHECK BROKEN (exit 3), never a RED. test_mutate pins both.
+- ARCHITECTURE.md: rewriting a skill's instructions — every old rule found in the new text.
+
 ## 0.6.215 (15 October 2026)
 
 - investigate.py timeline / around: `end = min(end, ctx.now)` — a day given as --end is the whole day, but never past

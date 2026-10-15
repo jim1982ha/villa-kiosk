@@ -43,6 +43,17 @@ with tempfile.TemporaryDirectory() as t:
        and f.read_text() == "x = 1\n", (r.returncode, r.stdout, f.read_text()))
     r = run(str(f), "x = 1", "x = 1 ", "--", *check)
     ck("a mutation the check misses: STILL GREEN, exit 1", r.returncode == 1 and "STILL GREEN" in r.stdout, r)
+    # retro, 2026-10-15: a RED names what caught it; a pytest run that failed no test (its exit 2 to 5) is no RED
+    named = [sys.executable, "-c", "print('FAILED tests/test_x.py::test_door - assert 1 == 2'); raise SystemExit(1)"]
+    r = run(str(f), "x = 1", "x = 2", "--", *named)
+    ck("a RED names the tests that failed", r.returncode == 0 and "FAILED tests/test_x.py::test_door" in r.stdout, r)
+    for code in (2, 5):
+        stopped = [sys.executable, "-c", f"raise SystemExit({code})", "pytest"]
+        r = run(str(f), "x = 1", "x = 2", "--", *stopped)
+        ck(f"  ...a pytest run that ended {code} without failing a test: CHECK BROKEN, exit 3",
+           r.returncode == 3 and "CHECK BROKEN" in r.stdout and f.read_text() == "x = 1\n", r)
+    r = run(str(f), "x = 1", "x = 2", "--", sys.executable, "-c", "raise SystemExit(2)")
+    ck("  ...the same exit from another check is a RED (only pytest's own exits are read)", r.returncode == 0, r)
     r = run(str(f), "x = 9", "x = 2", "--", "true")
     ck("an old text that is not there: refused (exit 2), nothing written", r.returncode == 2 and "0 times" in r.stderr
        and f.read_text() == "x = 1\n", r)

@@ -331,6 +331,31 @@ def ship(message: str | None, dry_run: bool, wait_minutes: float, poll_seconds: 
     return 3
 
 
+#: The paths the app's image is built from (.github/workflows/agent-host.yaml): a push touching them builds a release.
+BUILT_PATHS = ("agent-host/", "vesta-agent/")
+ZERO = "0" * 40
+
+
+def check_push(local_sha: str, remote_sha: str) -> str | None:
+    """Why a push of `local_sha` over `remote_sha` (agent-dev) must be refused, or None.
+
+    ⚠️ A BUILT PATH GOES OUT ONLY WITH A NEW VERSION (retro, 2026-10-15): a note in agent-host/ARCHITECTURE.md was pushed
+    by hand, outside `ship`, and CI rebuilt 0.12.215 over itself — the Supervisor resolves image:<version>, so a code
+    change pushed that way is an update Home Assistant never sees. The pre-push hook asks here."""
+    if local_sha == ZERO or remote_sha == ZERO:
+        return None                                   # a branch deleted or created: nothing to compare
+    changed = git("diff", "--name-only", remote_sha, local_sha).split()
+    if not any(f.startswith(BUILT_PATHS) for f in changed):
+        return None
+    before = yaml_version(git("show", f"{remote_sha}:{APP_CONFIG}"), APP_CONFIG)
+    after = yaml_version(git("show", f"{local_sha}:{APP_CONFIG}"), APP_CONFIG)
+    if parse_version(after) > parse_version(before):
+        return None
+    return (f"this push changes {', '.join(sorted({f for f in changed if f.startswith(BUILT_PATHS)})[:3])} "
+            f"without a new version ({APP_CONFIG} still says {after}): release it with "
+            "`agent-host/.venv/bin/python agent-host/tools/release.py ship -F msg`.")
+
+
 def main(argv: list[str] | None = None) -> int:
     # Line by line even into a file or a pipe: a release watched through its log must show where it is.
     sys.stdout.reconfigure(line_buffering=True)
@@ -342,10 +367,17 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("-F", "--file", help="read the commit message from a file")
     s.add_argument("--dry-run", action="store_true")
     s.add_argument("--wait", type=float, default=40, help="minutes to wait for main (default 40: a multi-arch image)")
+    c = sub.add_parser("check-push", help="the pre-push hook: refuse a push of a built path without a new version")
+    c.add_argument("local_sha"); c.add_argument("remote_sha")
     a = ap.parse_args(argv)
     try:
         if a.cmd == "gates":
             return 0 if print_summary(run_gates()) else 1
+        if a.cmd == "check-push":
+            why = check_push(a.local_sha, a.remote_sha)
+            if why:
+                print(f"✋ REFUSED: {why}", file=sys.stderr)
+            return 1 if why else 0
         message = Path(a.file).read_text() if a.file else a.message
         return ship(message, a.dry_run, a.wait, poll_seconds=10)
     except ReleaseError as e:

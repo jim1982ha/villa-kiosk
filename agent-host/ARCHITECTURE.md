@@ -348,3 +348,10 @@ Decisions of 2026-09-30 (owner):
 - A duration in a fault's title is worded by the Kiosk when shown (`titlePattern` + `since`), only to a Kiosk whose
   /agent/v1/info lists the field, never on a person's title.
 - Tests: one pretend villa, `tests/villa_timeline.py` (states, history with the carried-over first row, not found).
+
+## Rewriting a skill's instructions (retro, 2026-10-15)
+
+Before shipping a rewritten SKILL.md, list every rule of the old version and find each in the new one: the
+investigate rewrite (0.12.216) lost "the summary explains the recorded times, never repeats them" and its new example
+broke it. A rule a test can check gets one (test_investigate pins the example cause and the example summary). Keep the
+step numbers the scripts' messages cite (page.py: "SKILL.md step 6").
