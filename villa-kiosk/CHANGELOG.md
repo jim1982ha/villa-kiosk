@@ -1,3 +1,34 @@
+## 2.496.372
+
+### Fixed
+- Cockpit: the figures count what the cards show — one per device. Two faults on the pump taken on together are one ticket card under "1 in progress", not "2"; the Recap's readiness line and the Schedule tab's "open faults" and "tickets in progress" count the same way.
+- Tickets: a fault the VESTA Agent cleared stays "closed, no action" after its title is changed or a Telegram line is added to it — it no longer counts as a repair, nor pushes up the mean repair time — and it leaves the Closed list after 90 days, as every closed blip does, instead of 18 months.
+
+### Changed
+- Overview → (i): the VESTA Agent's timing is the one the Agent itself says (how often it checks, and when its nightly check runs), no longer "every 5 minutes … 02:00 by default" whatever the villa set. Until the Agent says it, the (i) gives no number.
+- Behind it: two unused styles of the old Overview cards removed, and the check that finds them no longer misses that kind.
+
+## 2.496.371
+
+### Changed
+- Nothing changes on the iPad. Behind it: publishing a tested version to the main VESTA app (the "backport") is now one command that refuses unless the owner asked, checks the result is exactly the tested version, runs every check on it, and waits until the build has really succeeded — it was a dozen steps by hand, and one of them once ran an old copy of a safety check.
+
+## 2.496.370
+
+### Changed
+- Cockpit: every list now uses the same card — Open issues on the Overview, Tickets, Schedule, Spend and Recent work. Title with its status pill (and the room under it on the Overview), the line of pills and time, the notes, a cost on the right, and the buttons inside the card on the right of its text. A card that opens lights up under the pointer, never while the pointer is on its buttons.
+- Schedule: each task's state pill ("Due soon", "Overdue"…) is on its title line, and "Log" and the bin are inside the card on its right — as for tickets. An overdue or due-soon task keeps its tint.
+- Open issues: the cards look like the tickets' (white, outlined), with their source icons before the device's name and its room under it.
+- Behind it: the automatic checks now draw these cards and read what they show, instead of matching the code's text — a reorganisation no longer breaks them, a wrong screen does. A forgotten style for an element that no longer exists was removed.
+
+## 2.496.369
+
+### Fixed
+- Cockpit → Recap and the monthly figures: a line the VESTA Agent copies from Telegram onto a fault ("Reminder sent to Facility Manager") is never taken for a change of the fault's status. A reminder written onto the card after someone took the fault on could make the month's report count a fault that was still open at month end as "in progress". The fault's notes are also listed in time order.
+
+### Changed
+- The agreement between the Kiosk and the VESTA Agent now declares the fault the Agent writes and reads — its signature, where it was made from (alert, night check, chat), its alert number, what counts as someone taking it on — with a sample both apps are checked against. Nothing changes on screen: a change on one side alone now fails the checks before release.
+
 ## 2.496.368
 
 ### Changed

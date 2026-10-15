@@ -4,7 +4,7 @@
 // Pure: tests/oracles/live_issues.mjs drives it by value.
 
 import { ROLE_LABELS } from "@/auth/roles";
-import type { FmTicket } from "./fmTypes";
+import { AGENT_ORIGINS, AGENT_SOURCE, type FmTicket } from "./fmTypes";
 
 /** live: what Home Assistant reports right now (unavailable, not in Home Assistant, red on the map) — clears by itself.
  *  alert / night / chat: a fault the VESTA Agent made from an alert, its nightly check, or a chat ("Create this
@@ -24,8 +24,8 @@ export const AGENT_SOURCES: ReadonlySet<IssueSource> = new Set(["alert", "night"
  *  a guest's mark, else the profile its first step names (fmCommands.addTicket stamps it). */
 export function faultSource(t: Pick<FmTicket, "source" | "origin" | "alertNumber" | "reportedBy" | "updates">): IssueSource {
   if (t.reportedBy === "guest") return "guest";
-  if (t.source === "vesta_agent") {
-    if (t.origin === "alert" || t.origin === "night" || t.origin === "chat") return t.origin;
+  if (t.source === AGENT_SOURCE) {
+    if (t.origin && AGENT_ORIGINS.includes(t.origin)) return t.origin;
     return typeof t.alertNumber === "number" ? "alert" : "agent";
   }
   const by = t.updates?.[0]?.by;

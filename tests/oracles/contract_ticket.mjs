@@ -1,0 +1,36 @@
+// The fault the VESTA Agent writes and reads, as the agreement declares it (agent-contract.json `ticket`, architecture
+// review 2026-10-15): the Kiosk side of the check — the agent host's tests hold the other side against the same file.
+// Its stamp and source are what the proxy writes, every origin has its icon, the sample reads as the alert it is, and
+// "Open Ticket" in the Kiosk writes exactly the step the agreement calls a take-on (the agent stops chasing on it).
+import { register } from "node:module";
+import { readFileSync } from "node:fs";
+register("../consistency/alias-hook.mjs", import.meta.url);
+import { ck, done } from "../consistency/check.mjs";
+
+const contract = JSON.parse(readFileSync(new URL("../../rootfs/usr/share/vesta/agent-contract.json", import.meta.url), "utf8"));
+const T = contract.ticket;
+const { AGENT_ORIGINS, AGENT_SOURCE } = await import("@/fm/fmTypes");
+const { faultSource, ISSUE_SOURCES } = await import("@/fm/issueSource");
+const E = await import("@/fm/fmEngine");
+const proxy = readFileSync(new URL("../../rootfs/usr/bin/supervisor-proxy.py", import.meta.url), "utf8");
+
+ck("the agreement declares the agent's fault: stamp, source, origins, the take-on step and a sample",
+   T && T.agentStamp && T.source && Array.isArray(T.origins) && T.takenStep && T.sample, Object.keys(T || {}));
+ck("the proxy stamps the agreement's words, never its own copy",
+   /AGENT_SOURCE = str\(_AGENT_TICKET\.get\("source"\)/.test(proxy) && /AGENT_NAME = str\(_AGENT_TICKET\.get\("agentStamp"\)/.test(proxy));
+ck("the app reads the same source and origins", AGENT_SOURCE === T.source && JSON.stringify(AGENT_ORIGINS) === JSON.stringify(T.origins));
+ck("every declared origin is a source with its own icon (none falls back to the generic VESTA Agent one)",
+   T.origins.every((o) => ISSUE_SOURCES.includes(o) && faultSource({ ...T.sample, origin: o }) === o));
+ck("the sample — made from an alert — reads as an alert, its number kept", faultSource(T.sample) === "alert" && T.sample.alertNumber === 33);
+// "Open Ticket" on a fault, through the engine every Kiosk write goes through
+const k = { now: "2026-10-15T01:09:00.000Z", id: (p) => `${p}-1` };
+const fault = { ...T.sample, status: "open", updates: T.sample.updates.slice(0, 2) };
+const data = { schedules: [], completions: [], costs: [], tickets: [fault], savedDocuments: [] };
+const after = E.withTicketsAdvanced(data, [fault.id], "in_progress", { who: "Jean-Marie", photoIds: [] }, undefined, k, "Owner");
+const step = after.tickets[0].updates.at(-1);
+ck("\"Open Ticket\" writes the agreement's take-on step: in progress, no kind, not the agent's stamp",
+   step.status === T.takenStep.status && !step.kind && step.by !== T.agentStamp && step.by === "Owner", step);
+ck("  ...and the sample's own take-on step is one too",
+   T.sample.updates.filter((u) => u.status === "in_progress" && !u.kind && u.by !== T.agentStamp).length === 1);
+
+done("✅ the Kiosk holds the agent's fault as the agreement declares it");

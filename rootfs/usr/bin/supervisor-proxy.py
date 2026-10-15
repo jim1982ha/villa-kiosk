@@ -1608,17 +1608,38 @@ def _fm_ticket_expired(ticket, now: float) -> bool:
     """True when this closed fault is past its retention window."""
     if not isinstance(ticket, dict) or ticket.get("status") != "resolved":
         return False
-    steps = [u for u in ticket.get("updates") or []
-             if isinstance(u, dict) and u.get("status") == "resolved"]
-    last = steps[-1] if steps else None
+    last = _fm_last_resolution(ticket)
     resolved_at = _iso_epoch(last.get("at")) if last else None
     if resolved_at is None:
         resolved_at = _iso_epoch(ticket.get("resolvedAt"))
     if resolved_at is None:
         return False                      # cannot tell when: kept
-    days = FM_CLEARED_FAULT_RETENTION_DAYS if last and last.get("kind") == "cleared" \
-        else _evidence_retention_days()
+    days = FM_CLEARED_FAULT_RETENTION_DAYS if last and _fm_cleared_step(last) else _evidence_retention_days()
     return days > 0 and now - resolved_at > days * 86400
+
+
+# ⚠️ HOW A FAULT WAS CLOSED: THE APP'S ANSWER, NOT A COPY (architecture review, 2026-10-15). This took the last step
+# saying "resolved" in list order — a title change or a Telegram line written after the close carries "resolved" too,
+# so a cleared Wi-Fi blip renamed afterwards was kept 550 days instead of 90. The same reading as the app's
+# fmEngine.lastResolution / isClearedStep, from the same lists (agent-contract.json ticketUpdate).
+def _fm_last_resolution(ticket):
+    """The step that last resolved `ticket`: of the steps that change its status, in time order."""
+    table = AGENT_CONTRACT_TABLE.get("ticketUpdate") or {}
+    skip = set(table.get("notStatusChanges") or ())
+    steps = [(i, u) for i, u in enumerate(ticket.get("updates") or [])
+             if isinstance(u, dict) and u.get("status") and u.get("kind") not in skip]
+    steps.sort(key=lambda p: (_iso_epoch(p[1].get("at")) or 0.0, p[0]))
+    done = [u for _, u in steps if u.get("status") == "resolved"]
+    return done[-1] if done else None
+
+
+def _fm_cleared_step(step) -> bool:
+    """A close with no work done: kind "cleared", or — written before kinds — one of the agreement's notes."""
+    if step.get("kind"):
+        return step.get("kind") == "cleared"
+    table = AGENT_CONTRACT_TABLE.get("ticketUpdate") or {}
+    note = str(step.get("note") or "")
+    return note in (table.get("clearedNotes") or ()) or note.startswith(tuple(table.get("clearedNotePrefixes") or ()))
 
 
 def _fm_expire(doc, now: float | None = None):
@@ -3151,9 +3172,12 @@ AGENT_MAX_ENTITIES = int(_AGENT_LIMITS.get("entities") or 0)
 AGENT_MAX_LABEL = int(_AGENT_LIMITS.get("buttonLabel") or 0)
 AGENT_BUTTON_ID_RE = re.compile(_AGENT_MSG.get("buttonIdPattern") or r"(?!)")
 AGENT_ENTITY_RE = re.compile(_AGENT_MSG.get("entityPattern") or r"(?!)")
-#: What every Facility record the agent creates or changes carries (PLAN F6).
-AGENT_SOURCE = "vesta_agent"
-AGENT_NAME = "VESTA Agent"
+#: What every Facility record the agent creates or changes carries (PLAN F6) — the agreement's `ticket` (the agent tells
+#: its own steps from a person's by them: declared once, architecture review 2026-10-15). Unreadable agreement: the
+#: words this server always wrote, so a stamp never goes missing.
+_AGENT_TICKET = AGENT_CONTRACT_TABLE.get("ticket") or {}
+AGENT_SOURCE = str(_AGENT_TICKET.get("source") or "vesta_agent")
+AGENT_NAME = str(_AGENT_TICKET.get("agentStamp") or "VESTA Agent")
 AGENT_MESSAGES = JsonStore("agent-messages.json", {"messages": []}, AGENT_STORE_MAX_BYTES)
 AGENT_CHOICES = JsonStore("agent-choices.json", {"choices": [], "next_seq": 1},
                           AGENT_STORE_MAX_BYTES)
@@ -3655,7 +3679,7 @@ async def agent_heartbeat_handler(request: web.Request) -> web.Response:
     would come back from a restart either stale or wrong."""
     if (refused := _agent_refuse(request, "agentMessage")) is not None:
         return refused
-    status = None
+    status = cadence = None
     if request.can_read_body:
         try:
             body = await request.json()
@@ -3665,8 +3689,27 @@ async def agent_heartbeat_handler(request: web.Request) -> web.Response:
         if status is not None and (not isinstance(status, str) or len(status) > 200):
             return web.json_response({"error": "status must be a string of at most 200 characters"},
                                      status=400)
-    await AGENT_PRESENCE.replace({"last_seen": time.time(), "status": status})
+        cadence = body.get("cadence") if isinstance(body, dict) else None
+        if cadence is not None and _agent_cadence(cadence) is None:
+            return web.json_response({"error": "cadence: checkMinutes 1-1440 and nightlyAt HH:MM, as "
+                                               "agent-contract.json heartbeat declares"}, status=400)
+    await AGENT_PRESENCE.replace({"last_seen": time.time(), "status": status,
+                                  "cadence": _agent_cadence(cadence) if cadence is not None else None})
     return web.json_response({"ok": True, "offline_after_minutes": _agent_offline_minutes()})
+
+
+def _agent_cadence(value) -> dict | None:
+    """The agent's own timing as its heartbeat says it (agent-contract.json `heartbeat.cadence`), or None when it is
+    not that shape. ⚠️ THE AGENT'S CLOCK, TOLD — NOT COPIED (architecture review, 2026-10-15): the Overview's (i) said
+    "checks every 5 minutes, nightly check at 02:00" whatever the villa had set."""
+    if not isinstance(value, dict):
+        return None
+    minutes, nightly = value.get("checkMinutes"), value.get("nightlyAt")
+    if not (isinstance(minutes, int) and not isinstance(minutes, bool) and 1 <= minutes <= 1440):
+        return None
+    if not (isinstance(nightly, str) and re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", nightly)):
+        return None
+    return {"checkMinutes": minutes, "nightlyAt": nightly}
 
 
 def _agent_presence() -> dict:
@@ -3683,6 +3726,7 @@ def _agent_presence() -> dict:
         "last_seen": datetime.fromtimestamp(last, timezone.utc).isoformat(timespec="seconds")
         .replace("+00:00", "Z") if last else None,
         "status": doc.get("status") if isinstance(doc, dict) else None,
+        "cadence": _agent_cadence(doc.get("cadence")) if isinstance(doc, dict) else None,
         "offline_after_minutes": minutes,
     }
 

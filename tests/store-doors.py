@@ -198,6 +198,29 @@ async def main() -> None:
 
 
 asyncio.run(main())
+
+# ── how a closed fault was closed: the app's reading, from the agreement (architecture review, 2026-10-15) ───────
+# The evidence window is 0 here (main() left it so): a repair is kept for ever, a close with no work leaves at 90 days
+# — so "expired" says which of the two the server took the close for.
+print("  the close the server judges a fault by:")
+now = proxy._iso_epoch("2026-10-15T00:00:00Z")
+step = lambda at, status, **kw: {"at": at, "status": status, "photoIds": [], **kw}
+cleared = step("2026-06-01T00:00:00Z", "resolved", kind="cleared", note="Cleared: back online.")
+blip = lambda *after: {"id": "b", "status": "resolved", "resolvedAt": "2026-06-01T00:00:00Z",
+                       "updates": [step("2026-05-31T23:50:00Z", "open"), cleared, *after]}
+ck("a cleared blip leaves after 90 days", proxy._fm_ticket_expired(blip(), now))
+ck("  ...still, when its title was changed after the close (that step carries \"resolved\" too)",
+   proxy._fm_ticket_expired(blip(step("2026-06-02T00:00:00Z", "resolved", kind="retitled", title="x", was="y")), now))
+ck("  ...and when a Telegram line was noted after it",
+   proxy._fm_ticket_expired(blip(step("2026-06-01T00:05:00Z", "resolved", kind="noted", note="Reminder sent")), now))
+repaired = step("2026-05-31T23:55:00Z", "resolved", note="Replaced the fuse")
+ck("steps read in time order: a repair written after the close but dated before it is not the last close",
+   proxy._fm_ticket_expired({**blip(), "updates": [step("2026-05-31T23:50:00Z", "open"), cleared, repaired]}, now))
+ck("a repair is a repair (kept: the evidence window is 0)",
+   not proxy._fm_ticket_expired({**blip(), "updates": [step("2026-05-31T23:50:00Z", "open"), repaired]}, now))
+ck("a close written before kinds, by its note (the agreement's notes)",
+   proxy._fm_ticket_expired({**blip(), "updates": [step("2026-06-01T00:00:00Z", "resolved", note="Closed without action")]}, now)
+   and not proxy._fm_ticket_expired({**blip(), "updates": [step("2026-06-01T00:00:00Z", "resolved", note="Fixed")]}, now))
 shutil.rmtree(TMP, ignore_errors=True)
 if FAIL:
     print(f"\n❌ {FAIL} store-door check(s) failed")

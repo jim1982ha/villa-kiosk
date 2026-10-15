@@ -24,12 +24,11 @@ import { buildSpendStatement } from "@/fm/fmDocuments";
 import type { FmCost, FmSavedDocument } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
 import DeviceSearchPicker, { type DeviceOption } from "./DeviceSearchPicker";
-import ErasableRow from "./ErasableRow";
 import NotesField from "./NotesField";
 import MarkdownPreview from "./MarkdownPreview";
 import SavedDocumentsList from "./SavedDocumentsList";
 import AgentMark from "./AgentMark";
-import RecordMeta from "./RecordMeta";
+import RecordCard from "./RecordCard";
 import { formatMoney } from "@/utils/money";
 import CostFields from "./CostFields";
 import { useDeviceChoice } from "./useDeviceChoice";
@@ -237,37 +236,24 @@ export default function SpendTab(
           <p className="muted body-text">No spend recorded for {month}.</p>
         )}
         {b.entries.sort((a, c) => Date.parse(c.at) - Date.parse(a.at)).map((c) => (
-          <ErasableRow
-            key={c.id}
-            intent={{ title: "Erase this spend entry", detail: `${c.label} — ${money(c.amountIdr)}` }}
-            erase={(token) => removeCost(c.id, token)}
-            onOpen={() => openEditor(c)}
-          >
-            <div className="fm-row-main">
-              <div className="fm-row-title">
-                <strong>{c.label}</strong>
-              </div>
-              <RecordMeta when={localStamp(c.at)}>
-                <span className="fm-clause">{COST_CATEGORY_NAMES[c.category]}</span>
-                <AgentMark record={c} />
-                {c.entityId ? (
-                  <button className="fm-entity-chip" title={c.entityId}
-                    onClick={(e) => { e.stopPropagation(); onOpenEntity?.(c.entityId!); }}>
-                    {c.deviceLabel ?? c.entityId}
-                  </button>
-                ) : c.deviceLabel ? (
-                  <span className="fm-entity-chip" style={{ cursor: "default" }}>{c.deviceLabel}</span>
-                ) : null}
-              </RecordMeta>
-              {c.note && <div className="fm-timeline-note">{c.note}</div>}
-              {/* The receipt itself, openable — the whole point of attaching
-                  one is that somebody can later check it. */}
-              {c.photoIds.length > 0 && (
-                <EvidenceRow photoIds={c.photoIds} disabled />
-              )}
-            </div>
-            <span className="fm-amount">{money(c.amountIdr)}</span>
-          </ErasableRow>
+          // THE Cockpit card (RecordCard, architecture review 2026-10-15): the amount on the right, its receipt —
+          // the whole point of attaching one is that somebody can later check it
+          <RecordCard key={c.id} title={c.label} when={localStamp(c.at)} notes={[c.note]} photoIds={c.photoIds}
+            amount={money(c.amountIdr)} onOpen={() => openEditor(c)}
+            erase={{ title: "Erase this spend entry", detail: `${c.label} — ${money(c.amountIdr)}`,
+              run: (token) => removeCost(c.id, token) }}
+            pills={<>
+              <span className="fm-clause">{COST_CATEGORY_NAMES[c.category]}</span>
+              <AgentMark record={c} />
+              {c.entityId ? (
+                <button className="fm-entity-chip" title={c.entityId}
+                  onClick={(e) => { e.stopPropagation(); onOpenEntity?.(c.entityId!); }}>
+                  {c.deviceLabel ?? c.entityId}
+                </button>
+              ) : c.deviceLabel ? (
+                <span className="fm-entity-chip" style={{ cursor: "default" }}>{c.deviceLabel}</span>
+              ) : null}
+            </>} />
         ))}
       </div>
 

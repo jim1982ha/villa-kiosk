@@ -33,7 +33,7 @@ import AGENT_CONTRACT from "../../rootfs/usr/share/vesta/agent-contract.json" wi
  *  every record the VESTA Agent writes is stamped server-side, so the mark
  *  cannot be forgotten by the writer. Absent on a person's record. */
 export interface FmProvenance {
-  source?: "vesta_agent";
+  source?: "vesta_agent";       // the agreement's ticket.source (AGENT_SOURCE)
   /** ISO time of the agent's last change to this record. */
   updatedAt?: string;
 }
@@ -163,6 +163,18 @@ export interface FmTicketUpdate {
 export type FmTicketUpdateKind = "reopened" | "retitled" | "reading" | "noted" | "cleared";
 /** Every kind, from the agreement the VESTA Agent writes by. */
 export const FM_TICKET_UPDATE_KINDS = AGENT_CONTRACT.ticketUpdate.kinds as readonly FmTicketUpdateKind[];
+/** The kinds that carry the status the fault already had and never change it (fmEngine.statusChanges), and the notes a
+ *  close written before kinds existed said "nothing done" with — the agreement's, read by this app AND by the proxy's
+ *  expiry of old closed faults (architecture review, 2026-10-15: the proxy kept its own copy, and it had drifted). */
+export const NOT_STATUS_CHANGE_KINDS = AGENT_CONTRACT.ticketUpdate.notStatusChanges as readonly FmTicketUpdateKind[];
+export const CLEARED_NOTES = AGENT_CONTRACT.ticketUpdate.clearedNotes as readonly string[];
+export const CLEARED_NOTE_PREFIXES = AGENT_CONTRACT.ticketUpdate.clearedNotePrefixes as readonly string[];
+
+/** Where the VESTA Agent made a fault from (FmTicket.origin), and the mark its records carry — from the agreement's
+ *  `ticket` (agent-contract.json), the one place both apps read them (architecture review, 2026-10-15). */
+export type FmTicketOrigin = "alert" | "night" | "chat";
+export const AGENT_ORIGINS = AGENT_CONTRACT.ticket.origins as readonly FmTicketOrigin[];
+export const AGENT_SOURCE = AGENT_CONTRACT.ticket.source as "vesta_agent";
 
 /** A fault raised against a device or room. */
 export interface FmTicket extends FmProvenance {
@@ -188,7 +200,7 @@ export interface FmTicket extends FmProvenance {
   alertNumber?: number;
   /** Where the VESTA Agent made it from (0.12.198+): an alert, its nightly check, or a chat ("Create this fault") — the
    *  card's source icon (issueSource.faultSource). Absent on a person's fault and on the Agent's older ones. */
-  origin?: "alert" | "night" | "chat";
+  origin?: FmTicketOrigin;
   /** Every status change, in order. Optional because faults raised before
    *  this existed have none — read it as "no steps recorded", never as an
    *  error. */

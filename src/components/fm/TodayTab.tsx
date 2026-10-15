@@ -9,13 +9,15 @@
 import { useState } from "react";
 import { Check, CalendarClock, Trash2 } from "lucide-react";
 import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
-import { budgetStatus, stageOf, localStamp, scheduleBoard, shortDate, type ScheduleStatus, parseAmount, fmAttention, workedBy } from "@/fm/fmEngine";
+import { useDeviceIdentity } from "@/config/VillaModel";
+import { openCounts } from "@/fm/ticketGroups";
+import { budgetStatus, localStamp, scheduleBoard, shortDate, type ScheduleStatus, parseAmount, fmAttention, workedBy } from "@/fm/fmEngine";
 import EvidenceRow from "./EvidenceRow";
 import RecentWorkList from "./RecentWorkList";
 import NotesField from "./NotesField";
 import InlineConfirm from "@/components/common/InlineConfirm";
 import AgentMark from "./AgentMark";
-import RecordMeta from "./RecordMeta";
+import RecordCard from "./RecordCard";
 import { formatMoney } from "@/utils/money";
 import CostFields from "./CostFields";
 import FormActions from "./FormActions";
@@ -42,6 +44,7 @@ function dueText(s: ScheduleStatus): string {
 
 export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) => void }) {
   const { data, logCompletion, removeSchedule, removeAllSchedules } = useFmData();
+  const { deviceOf } = useDeviceIdentity();
   const board = scheduleBoard(data);
   const [openId, setOpenId] = useState<string | null>(null);
   // Bulk delete is destructive across every task at once — require an
@@ -74,8 +77,8 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
   // The ONE attention rule (fmEngine.fmAttention): late tasks, not due-soon.
   const attention = fmAttention(data).lateTasks;
   // a fault waits on the Overview until someone takes it on; then it is a ticket (owner, 2026-10-14)
-  const openFaults = data.tickets.filter((t) => stageOf(t) === "fault");
-  const tickets = data.tickets.filter((t) => stageOf(t) === "ticket");
+  // counted per device, as the Overview and Tickets draw them (openCounts)
+  const open = openCounts(data.tickets, deviceOf);
 
   return (
     <div className="fm-stack">
@@ -84,12 +87,12 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
           <span className="n">{attention.length}</span>
           <span className="l">tasks need attention</span>
         </div>
-        <div className={`fm-stat ${openFaults.length ? "warn" : "good"}`}>
-          <span className="n">{openFaults.length}</span>
+        <div className={`fm-stat ${open.faults ? "warn" : "good"}`}>
+          <span className="n">{open.faults}</span>
           <span className="l">open faults</span>
         </div>
         <div className="fm-stat">
-          <span className="n">{tickets.length}</span>
+          <span className="n">{open.tickets}</span>
           <span className="l">tickets in progress</span>
         </div>
         <div className="fm-stat">
@@ -122,34 +125,27 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
 
       <div className="fm-list">
         {board.map((s) => (
-          <div key={s.schedule.id} className={`fm-row state-${s.state}`}>
-            <div className="fm-row-main">
-              <div className="fm-row-title">
-                <strong>{s.schedule.title}</strong>
-              </div>
-              <RecordMeta when={`${dueText(s)} · every ${s.schedule.everyDays} days`
-                + (s.last ? ` · last ${localStamp(s.last.at)} by ${workedBy(s.last)}` : "")}>
-                {s.schedule.clause && <span className="fm-clause">Cl. {s.schedule.clause}</span>}
-                {s.schedule.room && <span className="fm-clause">{s.schedule.room}</span>}
-                <AgentMark record={s.schedule} />
-              </RecordMeta>
-            </div>
-            <span className={`fm-badge ${s.state}`}>{STATE_LABEL[s.state]}</span>
-            <button
-              className="btn ghost"
-              onClick={() => setOpenId(openId === s.schedule.id ? null : s.schedule.id)}
-            >
-              <Check size={16} /> Log
-            </button>
-            <button
-              className="icon-btn"
-              onClick={() => void removeSchedule(s.schedule.id)}
-              aria-label={`Remove ${s.schedule.title}`}
-              title="Remove this task. Completions already logged against it are kept."
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
+          // THE Cockpit card (RecordCard): its state pill on the title line, Log and the bin inside, on the right of
+          // its text (architecture review, 2026-10-15 — the layout the owner set for tickets); its tint says how late
+          <RecordCard key={s.schedule.id} tone={`state-${s.state}`} title={s.schedule.title}
+            status={{ text: STATE_LABEL[s.state], tone: s.state }}
+            when={`${dueText(s)} · every ${s.schedule.everyDays} days`
+              + (s.last ? ` · last ${localStamp(s.last.at)} by ${workedBy(s.last)}` : "")}
+            pills={<>
+              {s.schedule.clause && <span className="fm-clause">Cl. {s.schedule.clause}</span>}
+              {s.schedule.room && <span className="fm-clause">{s.schedule.room}</span>}
+              <AgentMark record={s.schedule} />
+            </>}
+            actions={<>
+              <button className="btn ghost" onClick={() => setOpenId(openId === s.schedule.id ? null : s.schedule.id)}>
+                <Check size={16} /> Log
+              </button>
+              <button className="icon-btn" onClick={() => void removeSchedule(s.schedule.id)}
+                aria-label={`Remove ${s.schedule.title}`}
+                title="Remove this task. Completions already logged against it are kept.">
+                <Trash2 size={16} />
+              </button>
+            </>} />
         ))}
       </div>
 

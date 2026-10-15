@@ -7,8 +7,9 @@
 // facility manager's own time and name the night the agent updated the title, and the kept "Now: …" line repeated the
 // title word for word. Each step now carries its kind (FmTicketUpdate.kind, agent-contract.json `ticketUpdate`).
 
-import { isTicketResolved, stageOf } from "./fmEngine";
+import { isTicketResolved, stageOf, statusChanges, stepsInTimeOrder } from "./fmEngine";
 import type { FmTicket, FmTicketUpdate } from "./fmTypes";
+import { AGENT_SOURCE } from "./fmTypes";
 
 /** A note written before steps had a kind (VESTA Agent before 0.12.151): its title change read "Now: <new title>".
  *  The one place the old words are still read — stored history is never rewritten. */
@@ -25,7 +26,8 @@ function titleOf(u: FmTicketUpdate): string | undefined {
 /** The steps that changed the fault's status — raised, picked up, resolved, reopened; never a title change, never a
  *  line of what happened on Telegram ("noted": a reminder sent is not the fault moving). */
 export function statusSteps(t: Pick<FmTicket, "updates">): FmTicketUpdate[] {
-  return (t.updates ?? []).filter((u) => titleOf(u) === undefined && u.kind !== "noted");
+  // fmEngine.statusChanges, less a title change only an old "Now: …" note says
+  return statusChanges(t).filter((u) => titleOf(u) === undefined);
 }
 
 /** What last happened about the fault on Telegram, from the VESTA Agent ("Escalation sent to Owner"), with when — the
@@ -43,7 +45,7 @@ export function faultWhen(t: FmTicket, stamp: (at: string) => string): string {
   const by = (u?: FmTicketUpdate) => (u?.who || u?.by ? ` by ${u.who || u.by}` : "");
   // who raised it: its first step, when that step is the raising (fmCommands.addTicket stamps it, as every other step)
   // — a person; the VESTA Agent's own faults already wear its mark beside this line (AgentMark)
-  const raised = t.source !== "vesta_agent" && steps[0]?.status === "open" && !steps[0]?.kind ? by(steps[0]) : "";
+  const raised = t.source !== AGENT_SOURCE && steps[0]?.status === "open" && !steps[0]?.kind ? by(steps[0]) : "";
   const parts = [`Opened ${stamp(t.openedAt)}${raised}`];
   if (t.status === "open" && last?.kind === "reopened") parts.push(`reopened ${stamp(last.at)}${by(last)}`);
   if (stageOf(t) === "ticket" && last?.status === "in_progress") parts.push(`in progress since ${stamp(last.at)}${by(last)}`);
@@ -59,7 +61,7 @@ export function faultWhen(t: FmTicket, stamp: (at: string) => string): string {
  *  (owner, review 26) — since the title above already says what it is now; the agent's reading under a title a person
  *  wrote is "VESTA reads: …". */
 export function faultNoteLines(t: Pick<FmTicket, "note" | "updates">, stamp: (at: string) => string): string[] {
-  const ups = t.updates ?? [];
+  const ups = stepsInTimeOrder(t);
   const titled = ups.map(titleOf);
   // ⚠️ A REOPENING THAT GIVES A NEW TITLE IS A RENAME TOO (review 31): it is a status step, and its `was` the title it
   // replaced — read as a status step only, "Was:" named the title two renames back

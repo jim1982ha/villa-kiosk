@@ -9,12 +9,14 @@
 // legend was what one read. Each source is now ONE row: icon, what it is, opens, goes.
 //
 // ⚠️ WITH OR WITHOUT THE VESTA AGENT: the Agent is optional in a Kiosk, and without it nothing opens or closes a fault
-// by itself — the card says only what a person does. With it, the Agent's numbers are its DEFAULTS, said as such (the
-// nightly check's time is the Agent's setting, which a villa can change). The list's own refresh is this app's
+// by itself — the card says only what a person does. With it, the Agent's timing is the one IT says (its heartbeat:
+// agentApi AgentCadence) — ⚠️ never a copy (architecture review, 2026-10-15): "every 5 minutes … 02:00 by default"
+// stood here whatever the villa had set; an Agent that does not say gets no number. The list's own refresh is this app's
 // (useStoreRefresh: STORE_ACTIVE_MS while the Cockpit is open, else the heartbeat).
 
 import { STORE_ACTIVE_MS, STORE_HEARTBEAT_MS } from "@/hooks/useStoreRefresh";
 import { AGENT_SOURCES, ISSUE_SOURCES, type IssueSource } from "./issueSource";
+import type { AgentCadence } from "@/agent/agentApi";
 
 export interface SourceRow {
   source: IssueSource;
@@ -54,14 +56,22 @@ const REFRESH = `This list is read again every ${STORE_ACTIVE_MS / 1000} seconds
   + `${STORE_HEARTBEAT_MS / 60_000} minutes otherwise), and as soon as you come back to the app.`;
 const TICKET = "A fault becomes a ticket when someone presses Open Ticket on its card (Tickets tab).";
 
-/** Every source's row — the VESTA Agent's only with an Agent — and the note under them. */
-export function faultTiming(agent: boolean): { rows: readonly SourceRow[]; note: string } {
+/** How often the Agent looks, in its own numbers when it said them. */
+function agentClock(c: AgentCadence | null): string {
+  if (!c) return "it checks regularly, and runs its nightly check at the time set in the VESTA Agent";
+  const every = c.checkMinutes === 1 ? "every minute" : `every ${c.checkMinutes} minutes`;
+  return `it checks ${every}, and its nightly check runs at ${c.nightlyAt}`;
+}
+
+/** Every source's row — the VESTA Agent's only with an Agent — and the note under them; `cadence`: the Agent's own
+ *  timing (null: it did not say). */
+export function faultTiming(agent: boolean, cadence: AgentCadence | null = null): { rows: readonly SourceRow[]; note: string } {
   const rows = ISSUE_SOURCES.filter((s) => agent || !AGENT_SOURCES.has(s)).map((source) => ({ source, ...ROWS[source] }));
   return {
     rows,
     note: agent
-      ? `${TICKET} The VESTA Agent closes its own faults and tickets when the problem goes away; it checks every 5 `
-        + `minutes, and its nightly check runs at 02:00 by default. ${REFRESH}`
+      ? `${TICKET} The VESTA Agent closes its own faults and tickets when the problem goes away; ${agentClock(cadence)}. `
+        + REFRESH
       : `${TICKET} ${REFRESH}`,
   };
 }

@@ -15,6 +15,7 @@ import { deviceLook, storeLookSource } from "@/utils/deviceActivity";
 import { deviceRowText } from "@/utils/entityValue";
 import type { Threshold } from "@/config/ThresholdConfig";
 import { labelOf } from "@/config/EntityMap";
+import { deviceOf } from "@/config/deviceGroups";
 import { faultTitle, fmAttention, stageOf } from "@/fm/fmEngine";
 import { lastNoted } from "@/fm/faultNotes";
 import { faultSource, type IssueSource } from "@/fm/issueSource";
@@ -330,7 +331,7 @@ export function buildAttentionItems(opts: {
   // the worst case is a row of its own, as before grouping. Never by name.
   for (const i of items) {
     if (!i.entityId) continue;
-    const key = folding.get(i.entityId) ?? i.entityId;
+    const key = deviceOf(folding, i.entityId);   // the one fold every count and the Tickets tab use
     i.device = {
       key,
       label: labelOf(key, entityMap, entities),

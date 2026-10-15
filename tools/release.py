@@ -34,6 +34,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -85,14 +86,16 @@ class GateResult:
     note: str = ""
 
 
-def run_gates(only_ci: bool = IN_CI) -> list[GateResult]:
-    """Run every gate, even after a failure; return what each did."""
+def run_gates(only_ci: bool = IN_CI, root: Path | None = None) -> list[GateResult]:
+    """Run every gate, even after a failure; return what each did. `root`: the tree to check (a backport's merge of
+    main; default this checkout)."""
+    root = root or ROOT
     plan = [(n, c, None) for n, c in GATES]
     if not only_ci:
         plan += [(n, c, need) for n, c, need in LOCAL_GATES]
     results: list[GateResult] = []
     for name, cmd, need in plan:
-        if need and not (ROOT / need).exists():
+        if need and not (root / need).exists():
             results.append(GateResult(name, "not here", note=f"{need} is not on this machine"))
             continue
         if IN_CI:
@@ -100,7 +103,7 @@ def run_gates(only_ci: bool = IN_CI) -> list[GateResult]:
         else:
             print(f"\n═══ {name} ═══", flush=True)
         start = time.monotonic()
-        proc = subprocess.run(cmd, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        proc = subprocess.run(cmd, cwd=root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         out = proc.stdout or ""
         sys.stdout.write(out)
         took = time.monotonic() - start
@@ -217,9 +220,9 @@ def published_version() -> str | None:
 
 # ── ship ─────────────────────────────────────────────────────────────────────
 
-def ci_failures(sha: str, fetch=None) -> list[str] | None:
-    """The CI runs for `sha` that ended in failure, by name — [] when none has (yet), None when GitHub could
-    not be asked (offline, rate-limited: the wait simply goes on, as before).
+def ci_state(sha: str, fetch=None) -> tuple[str, list[str]]:
+    """("success" | "failure" | "pending" | "unknown", the failed runs' names) of the CI runs for `sha`. "unknown":
+    GitHub could not be asked (offline, rate-limited: a wait simply goes on).
 
     ⚠️ ship USED TO WAIT OUT A RED RUN (2026-10-05): it only watched main for the published version, so a
     failed CI run kept it waiting the full --wait (30-40 min) before saying "not published". The repository
@@ -230,7 +233,7 @@ def ci_failures(sha: str, fetch=None) -> list[str] | None:
         url = git("remote", "get-url", "origin").strip()
         m = re.search(r"github\.com[:/]([^/]+)/([^/.]+?)(?:\.git)?$", url)
         if not m:
-            return None
+            return "unknown", []
         api = f"https://api.github.com/repos/{m.group(1)}/{m.group(2)}/actions/runs?head_sha={sha}&per_page=20"
 
         def fetch():
@@ -240,8 +243,19 @@ def ci_failures(sha: str, fetch=None) -> list[str] | None:
     try:
         runs = fetch().get("workflow_runs") or []
     except Exception:  # noqa: BLE001 — not knowing is not failing
-        return None
-    return [str(r.get("name") or r.get("id")) for r in runs if r.get("status") == "completed" and r.get("conclusion") == "failure"]
+        return "unknown", []
+    done = [r for r in runs if r.get("status") == "completed"]
+    failed = [str(r.get("name") or r.get("id")) for r in done if r.get("conclusion") == "failure"]
+    if failed:
+        return "failure", failed
+    return ("success" if runs and len(done) == len(runs) else "pending"), []
+
+
+def ci_failures(sha: str, fetch=None) -> list[str] | None:
+    """The CI runs for `sha` that ended in failure, by name — [] when none has (yet), None when GitHub could
+    not be asked."""
+    state, failed = ci_state(sha, fetch)
+    return None if state == "unknown" else failed
 
 def ship(message: str | None, dry_run: bool, wait_minutes: float, poll_seconds: float,
          gates=run_gates) -> int:
@@ -334,6 +348,112 @@ def ship(message: str | None, dry_run: bool, wait_minutes: float, poll_seconds: 
     return 3
 
 
+# ── backport ─────────────────────────────────────────────────────────────────
+# ⚠️ ONE COMMAND, EVERY CHECK (architecture review, 2026-10-15): the backport to main was a dozen hand steps, six times
+# in two days — a temporary main, the merge, an eye on what differs, two folders linked by hand (one linked to a stale
+# copy: the security suite ran an old file and failed), the gates, the push, then GitHub watched by hand. Main
+# advances only when the owner says so: the command refuses without --owner-asked. ADR 0001 holds: this app's module
+# merges this app's branch; main's own top-level folders (the channels CI writes there, this app's AND others') are
+# found — present on main, absent on dev2 — never named here.
+
+def _git_at(where: Path, *args: str, check: bool = True) -> str:
+    p = subprocess.run(["git", *args], cwd=where, capture_output=True, text=True)
+    if check and p.returncode != 0:
+        raise ReleaseError(f"git {' '.join(args)}: {p.stderr.strip() or p.stdout.strip()}")
+    return p.stdout
+
+
+def main_only_entries() -> list[str]:
+    """main's own top-level entries — on origin/main, not on origin/dev2: the channel folders CI writes there."""
+    on = lambda ref: set(git("ls-tree", "--name-only", ref).split())
+    return sorted(on("origin/main") - on(f"origin/{BRANCH}"))
+
+
+def backport(owner_asked: bool, message: str | None, dry_run: bool, wait_minutes: float, poll_seconds: float,
+             gates=None, ci=None) -> int:
+    """Merge dev2 into main exactly as CLAUDE.md says, every check run, and wait until main's build is published.
+    0: main carries dev2's version and its CI succeeded (or already did) · 3: pushed, not confirmed · ReleaseError:
+    refused, nothing pushed."""
+    import tempfile
+    if not owner_asked:
+        raise ReleaseError("main advances only when the owner asks: run with --owner-asked")
+    git("fetch", "-q", "origin", BRANCH, "main")
+    want = config_version(git("show", f"origin/{BRANCH}:{CONFIG}"))
+    have = config_version(git("show", f"origin/main:{CONFIG}"))
+    keep = main_only_entries()
+    if have == want and not git("diff", "--name-only", f"origin/{BRANCH}", "origin/main", "--", ".",
+                                *[f":(exclude){k}" for k in keep]).strip():
+        print(f"✅ ALREADY: main is {want}, the same tree as {BRANCH} (apart from main's own {', '.join(keep)}).")
+        return 0
+    print(f"{APP}: backport {BRANCH} {want} into main (now {have}); main keeps its own: {', '.join(keep) or 'nothing'}")
+    if dry_run:
+        print(f"  dry run: would merge origin/{BRANCH} --no-ff into main in a temporary worktree, check the tree, run "
+              f"{len(GATES)} gates (+ the local ones), commit, push main, wait ≤ {wait_minutes:g} min for CI")
+        return 0
+    wt = Path(tempfile.mkdtemp(prefix="backport-")) / "main"
+    git("worktree", "add", "-q", "--detach", str(wt), "origin/main")
+    try:
+        merged = subprocess.run(["git", "merge", "--no-ff", "--no-commit", f"origin/{BRANCH}"], cwd=wt,
+                                capture_output=True, text=True)
+        if merged.returncode != 0:
+            _git_at(wt, "merge", "--abort", check=False)
+            raise ReleaseError("the merge does not apply cleanly: " + (merged.stdout + merged.stderr).strip()[-600:])
+        # the merged tree is dev2's, apart from main's own entries, which are main's untouched
+        differs = _git_at(wt, "diff", "--cached", "--name-only", f"origin/{BRANCH}").split()
+        stray = [f for f in differs if f.split("/", 1)[0] not in keep]
+        if stray:
+            raise ReleaseError("the merged tree differs from dev2 outside main's own entries: " + ", ".join(stray[:10]))
+        changed_own = _git_at(wt, "diff", "--cached", "--name-only", "origin/main", "--", *keep).split() if keep else []
+        if changed_own:
+            raise ReleaseError("the merge would change main's own entries: " + ", ".join(changed_own[:10]))
+        # the gates on the merged tree — what this checkout has and git does not (its packages, the local-only
+        # inputs) linked from THIS checkout, never from another (the stale security suite of 2026-10-15)
+        for name in ("node_modules", ".scratch"):
+            if (ROOT / name).exists() and not (wt / name).exists():
+                (wt / name).symlink_to(ROOT / name)
+        results = (gates or (lambda root: run_gates(IN_CI, root)))(wt)
+        # a local gate this checkout can run but the merged tree skipped is a link gone wrong, not a pass
+        need_of = {n: need for n, _c, need in LOCAL_GATES}
+        missing = [r.name for r in results
+                   if r.status == "not here" and r.name in need_of and (ROOT / need_of[r.name]).exists()]
+        if not print_summary(results) or missing:
+            raise ReleaseError("a gate failed or was skipped on the merged tree: nothing committed"
+                               + (f" (skipped: {', '.join(missing)})" if missing else ""))
+        env = {**os.environ, "VK_ALLOW_MAIN": "1"}           # main's hooks: this child only
+        msg = message or (f"Backport {BRANCH} (villa-kiosk {want}) into main\n\nmain keeps its own "
+                          f"{', '.join(keep)}; the tree is {BRANCH}'s apart from them.\n")
+        p = subprocess.run(["git", "commit", "-q", "-F", "-"], cwd=wt, input=msg, text=True, env=env,
+                           capture_output=True)
+        if p.returncode != 0:
+            raise ReleaseError("commit refused: " + (p.stderr or p.stdout).strip()[-400:])
+        sha = _git_at(wt, "rev-parse", "HEAD").strip()
+        for attempt in range(3):
+            pushed = subprocess.run(["git", "push", "-q", "origin", "HEAD:main"], cwd=wt, capture_output=True,
+                                    text=True, env=env)
+            if pushed.returncode == 0:
+                break
+            if attempt == 2:
+                raise ReleaseError("push refused: " + pushed.stderr.strip()[-400:])
+            time.sleep(3)
+        print(f"  committed and pushed {sha[:8]} to main; waiting for its CI…")
+    finally:
+        git("worktree", "remove", "--force", str(wt), check=False)
+        shutil.rmtree(wt.parent, ignore_errors=True)
+    deadline = time.monotonic() + wait_minutes * 60
+    state = "unknown"
+    while time.monotonic() < deadline:
+        state, failed = (ci or ci_state)(sha)
+        if state == "success":
+            print(f"✅ PUBLISHED: main is {want} ({sha[:8]}), its CI and add-on build succeeded")
+            return 0
+        if state == "failure":
+            print(f"❌ pushed, NOT published: CI failed ({', '.join(failed)}) for {sha[:8]}. Read that run.")
+            return 3
+        time.sleep(poll_seconds)
+    print(f"⏳ pushed {sha[:8]}, CI not finished after {wait_minutes:g} min (last: {state}). Read the run.")
+    return 3
+
+
 def main(argv: list[str] | None = None) -> int:
     # Line by line even into a file or a pipe: 2.496.249's own ship, logged to a file, showed
     # nothing between the last gate and "PUBLISHED" — the summary sat in Python's buffer.
@@ -347,11 +467,19 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("-F", "--file", help="read the commit message from a file")
     s.add_argument("--dry-run", action="store_true")
     s.add_argument("--wait", type=float, default=30, help="minutes to wait for main (default 30)")
+    b = sub.add_parser("backport", help="merge dev2 into main (only when the owner asks), every check, wait for CI")
+    b.add_argument("--owner-asked", action="store_true", help="the owner asked for this backport")
+    b.add_argument("-m", "--message")
+    b.add_argument("-F", "--file", help="read the commit message from a file")
+    b.add_argument("--dry-run", action="store_true")
+    b.add_argument("--wait", type=float, default=30, help="minutes to wait for main's CI (default 30)")
     a = ap.parse_args(argv)
     try:
         if a.cmd == "gates":
             return 0 if print_summary(run_gates(only_ci=IN_CI or a.ci_only)) else 1
         message = Path(a.file).read_text() if a.file else a.message
+        if a.cmd == "backport":
+            return backport(a.owner_asked, message, a.dry_run, a.wait, poll_seconds=30)
         return ship(message, a.dry_run, a.wait, poll_seconds=10)
     except ReleaseError as e:
         print(f"❌ {e}", file=sys.stderr)

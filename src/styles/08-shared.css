@@ -134,32 +134,8 @@
 
 /* --- Cockpit page (CockpitModal) — villa-wide status report ------------- */
 .cockpit-attention-list { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
-/* One card, ONE SHAPE (owner, 2026-10-10): its head (the device, its room; tappable), every problem as a line inside
-   it, and — when it holds a fault — its actions on the right of its lines (Open ticket / Edit ticket, Close;
-   2026-10-14: the same line, not a line of their own). */
-.cockpit-attention-item {
-  position: relative; display: flex; flex-direction: column; border-radius: 10px; background: var(--bg-input);
-}
-/* THE WHOLE CARD OPENS THE DEVICE (owner, 2026-10-10): the card takes the click (CockpitOverview), its actions and
-   their "sure?" stop theirs. No layer stretched over the card: it lay on top of Close (2.496.318). */
-.cockpit-attention-item.tappable { cursor: pointer; }
-.cockpit-attention-detail { display: flex; align-items: center; flex-wrap: wrap; column-gap: 12px; padding-right: 12px; }
-.cockpit-attention-detail > .cockpit-attention-subs { flex: 1 1 260px; min-width: 0; }
-.cockpit-attention-actions { flex: 0 0 auto; margin-left: auto; padding: 0 0 10px; cursor: default; }
-.cockpit-attention-actions .modal-actions { flex-wrap: wrap; align-items: center; }
-.cockpit-attention-row {
-  display: flex; align-items: center; gap: 10px; width: 100%;
-  padding: 10px 12px 4px; text-align: left;
-  background: transparent; border: none; color: inherit; font: inherit;
-}
-button.cockpit-attention-row.tappable { cursor: pointer; }
-@media (hover: hover) {
-  /* the card lights up as the device it opens — never while the pointer is on its actions, which light up
-     themselves (owner, 2026-10-10: "I don't see the close button highlighted, rather the whole card") */
-  .cockpit-attention-item.tappable:hover:not(:has(.cockpit-attention-actions:hover)) {
-    background: color-mix(in srgb, var(--accent) 12%, var(--bg-input));
-  }
-}
+/* An open issue is THE Cockpit card (RecordCard, architecture review 2026-10-15): its own rules went with it — the
+   lines below are only what its problems' lines need. */
 .cockpit-attention-icon { flex: 0 0 auto; }
 /* a problem's source icons (sourceIcons.tsx), one under the other when a line has two (owner, 2026-10-14) */
 .source-icon-row { display: inline-flex; align-items: center; gap: 4px; vertical-align: -3px; }
@@ -182,17 +158,8 @@ button.cockpit-attention-row.tappable { cursor: pointer; }
 .cockpit-attention-unavailable { color: var(--status-warning); }
 .cockpit-attention-fault, .cockpit-attention-alarm { color: var(--status-danger); }
 .cockpit-attention-schedule { color: var(--status-warning); }
-.cockpit-attention-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.cockpit-attention-title {
-  font-size: var(--text-sm); color: var(--text-primary);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-/* The row's problems, one or several (config/attention.groupAttention): one line each inside the card, indented to
-   its title (12px padding + 16px icon + 10px gap), a fault's Close at the end of its line. */
-.cockpit-attention-subs {
-  list-style: none; margin: 0; padding: 0 8px 6px 38px;
-  display: flex; flex-direction: column; gap: 2px;
-}
+/* An issue's problems, one or several (config/attention.groupAttention): one line each, inside the card's text. */
+.cockpit-attention-subs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .cockpit-attention-sub { display: flex; flex-direction: column; gap: 4px; }
 .cockpit-attention-sub-line { display: flex; align-items: center; gap: 8px; min-height: 36px; }
 .cockpit-attention-latest { display: block; margin-top: 2px; font-size: var(--text-2xs); color: var(--text-dim); }

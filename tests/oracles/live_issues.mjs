@@ -155,15 +155,24 @@ ck("  ...every source has its icon and its words in the (i)'s legend",
 
 console.log("\n  the Recap's readiness says what is found, never the goal over a contradiction (owner, 2026-10-14):");
 const { buildReadiness } = await import("@/fm/readiness");
-const noDevices = { ids: [], unavailable: [], has: () => false };
+const noDevices = { ids: [], unavailable: [], has: () => false, deviceOf: (id) => id };
 const readyWith = (tickets) => buildReadiness({}, fm(tickets), noDevices).checks.find((c) => c.id === "tickets");
-const mixedOpen = readyWith([agentRec({ id: "n1", origin: "night" }), agentRec({ id: "n2", origin: "night" }),
-  agentRec({ id: "a1", alertNumber: 5 }), { ...rec("g", "x.y"), reportedBy: "guest" },
-  { ...rec("t", "x.y"), status: "in_progress" }, { ...rec("r", "x.y"), status: "resolved", resolvedAt: "2026-10-14T09:00:00Z" }]);
+const mixedOpen = readyWith([agentRec({ id: "n1", origin: "night", entityId: "x.n1" }), agentRec({ id: "n2", origin: "night", entityId: "x.n2" }),
+  agentRec({ id: "a1", alertNumber: 5, entityId: "x.a1" }), { ...rec("g", "x.g"), reportedBy: "guest" },
+  { ...rec("t", "x.t"), status: "in_progress" }, { ...rec("r", "x.r"), status: "resolved", resolvedAt: "2026-10-14T09:00:00Z" }]);
 ck("4 faults and 1 ticket: \"4 detected faults (1 open ticket)\", where to deal with each, and the faults' source icons",
    mixedOpen.label === "4 detected faults (1 open ticket)"
    && mixedOpen.detail === 'Check the faults in "Overview", or the open tickets in "Tickets".'
    && mixedOpen.sources.join() === "alert,night,guest", mixedOpen);
+// ⚠️ COUNTED AS DRAWN, PER DEVICE (architecture review, 2026-10-15): the pump's two faults taken on together are ONE
+// ticket card in Tickets, so one open ticket — not "2 open tickets" over one card
+const pumpBy = (devs) => buildReadiness({}, fm([{ ...rec("p1", "switch.pump"), status: "in_progress" },
+  { ...rec("p2", "sensor.pump_power"), status: "in_progress" }, rec("p3", "sensor.pump_temp")]),
+  { ...noDevices, deviceOf: devs }).checks.find((c) => c.id === "tickets");
+const onePump = pumpBy((id) => (id.includes("pump") ? "switch.pump" : id));
+ck("  ...counted per device, as drawn: one device's 2 tickets + 1 fault = \"1 detected fault (1 open ticket)\"",
+   onePump.label === "1 detected fault (1 open ticket)" && onePump.state === "warn", onePump);
+ck("  ...and three devices are three", pumpBy((id) => id).label === "1 detected fault (2 open tickets)", pumpBy((id) => id));
 const onlyFaults = readyWith([agentRec({ id: "n1", origin: "night" })]);
 ck("  ...one fault, no ticket: singular, and only Overview", onlyFaults.label === "1 detected fault (0 open tickets)"
    && onlyFaults.detail === 'Check the faults in "Overview".', onlyFaults);
@@ -188,20 +197,43 @@ ck("lists that only grow are ONE folded, paged list (owner, 2026-10-14): Tickets
    /<FoldedList title="Closed" rows=\{closed\}/.test(ticketsTab) && /<FoldedList title="Recent work" rows=\{rows\}/.test(recent)
    && !/usePaged|<Pager|\.slice\(0, limit\)/.test(recent + ticketsTab));
 
-ck("a ticket is ONE card: its pill on the first record, its buttons inside, no device name above (owner, 2026-10-14)",
+// a ticket's card AS DRAWN (pill on the title line, buttons inside on the right): tests/oracles/cockpit_cards.mjs
+ck("a ticket is ONE card: the first record carries the pill, the closed one its Reopen, no device name above",
    /<div key=\{g\.key\} className="fm-record-card">/.test(ticketsTab) && /record\(t, i === 0 \? \{ text: "In progress", tone: "due-soon" \} : undefined,/.test(ticketsTab)
-   && /record\(t, \{ text: "Resolved", tone: "ok" \},\s*<button className="btn ghost" onClick=\{\(\) => setStaging\(\{ tickets: \[t\], to: "open" \}\)\}>Reopen<\/button>\)/.test(ticketsTab)
-   // the buttons sit INSIDE the card, on the right of its text, and take their own presses (RecordCard)
-   && /<div className="fm-record-body">[\s\S]*?\{actions && <div className="fm-record-actions" onPointerDown=\{\(e\) => e\.stopPropagation\(\)\}>\{actions\}<\/div>\}/.test(readFileSync(new URL("../../src/components/fm/RecordCard.tsx", import.meta.url), "utf8"))
+   && /record\(t, \{ text: "Resolved", tone: "ok" \},\s*<button className="btn ghost"[\s\S]*?>Reopen<\/button>\)/.test(ticketsTab)
    && !/const title = head\.entityId/.test(ticketsTab));
-ck("ONE card for every Facility record (owner, 2026-10-14): Tickets and Recent work draw RecordCard, nothing of their own",
-   /<RecordCard /.test(ticketsTab) && /<RecordCard /.test(recent) && !/<ErasableRow|<RecordMeta|<EvidenceRow|fm-document-link/.test(ticketsTab + recent));
+const spendTab = readFileSync(new URL("../../src/components/fm/SpendTab.tsx", import.meta.url), "utf8");
+const todayTab = readFileSync(new URL("../../src/components/fm/TodayTab.tsx", import.meta.url), "utf8");
+ck("ONE card for every Cockpit list (architecture review, 2026-10-15): Overview, Tickets, Schedule, Spend, Recent work draw RecordCard, nothing of their own",
+   [ticketsTab, recent, spendTab, todayTab].every((f) => /<RecordCard /.test(f)) && /<RecordCard\s/.test(ov)
+   && !/<ErasableRow|<RecordMeta|fm-document-link|className=\{`fm-row state-/.test(ticketsTab + recent + spendTab + todayTab)
+   && !/cockpit-attention-(item|row|detail|actions)/.test(ov));
 ck("  ...and Recent work is the SCHEDULED work: a ticket's repair is told on its closed card",
    /\.filter\(\(c\) => completionSource\(data, c\)\.kind === "schedule"\)/.test(recent)
    && /const work = data\.completions\.find\(\(c\) => c\.ticketId === t\.id && c\.costId\);/.test(ticketsTab));
 
 ck("a card's \"Opened … by …\" stays on its pills' line and wraps there (owner, 2026-10-15)",
    /\.fm-meta-when \{ font-size: var\(--text-xs\); flex: 1 1 0; min-width: 14em; \}/.test(readFileSync(new URL("../../src/styles/07-facility.css", import.meta.url), "utf8")));
+
+console.log("\n  a line from Telegram is never a status change (architecture review, 2026-10-15):");
+// the villa's case: open 23:40 on 30 Sep, reminder 23:50, taken on 00:10 on 1 Oct — the reminder's line written after
+const late = { ...rec("m", "x.y"), status: "in_progress", openedAt: "2026-09-30T15:40:00Z", updates: [
+  { at: "2026-09-30T15:40:00Z", status: "open", photoIds: [] },
+  { at: "2026-09-30T16:10:00Z", status: "in_progress", by: "Facility manager", note: "On my way", photoIds: [] },
+  { at: "2026-09-30T15:50:00Z", status: "in_progress", kind: "noted", note: "Reminder sent to Facility Manager", photoIds: [] }] };
+ck("a fault still OPEN at month end is open in that month's report, whatever line Telegram added after",
+   E.ticketAt(late, "2026-09-30T15:55:00Z").status === "open" && E.ticketAt(late, "2026-09-30T16:30:00Z").status === "in_progress",
+   [E.ticketAt(late, "2026-09-30T15:55:00Z"), E.ticketAt(late, "2026-09-30T16:30:00Z")]);
+const N2 = await import("@/fm/faultNotes");
+ck("  ...and the card's notes read in time order (the reminder before the take-on)",
+   N2.faultNoteLines(late, (a) => a.slice(11, 16)).join("|") === "Reminder sent to Facility Manager (15:50)|On my way (16:10)",
+   N2.faultNoteLines(late, (a) => a.slice(11, 16)));
+const resolvedLate = { ...late, status: "resolved", resolvedAt: "2026-09-30T17:40:00Z", updates: [...late.updates,
+  { at: "2026-09-30T17:40:00Z", status: "resolved", photoIds: [] },
+  { at: "2026-09-30T17:45:00Z", status: "resolved", kind: "retitled", title: "t", was: "s", photoIds: [] }] };
+ck("  ...the time open counts status changes only: 2 h, never a title or a Telegram line",
+   E.openTimeMs(resolvedLate) === 2 * 3600 * 1000 && E.statusChanges(resolvedLate).every((u) => !["noted", "retitled", "reading"].includes(u.kind)),
+   E.openTimeMs(resolvedLate));
 
 console.log("\n  what happened on Telegram, on the card (owner, 2026-10-14: reminders, escalation, Need help):");
 const N = await import("@/fm/faultNotes");
@@ -234,14 +266,11 @@ ck("a card draws what cardActions says (no rule of its own)",
    /const acts = cardActions\(group\);/.test(ov) && /setStaging\(records\(acts\.markInProgress\)\)\}><Wrench size=\{14\} aria-hidden \/> Open Ticket</.test(ov)
    && /onEditTicket\(acts\.editTicket as string\)\}><Pencil size=\{14\} aria-hidden \/> Edit Ticket</.test(ov)
    && /onEditTicket\(acts\.editTicket as string\)/.test(ov) && /closeTickets\(acts\.close\)/.test(ov) && !/in_progress"/.test(ov.replace(/to="in_progress"/, "")));
-ck("a card's lines on the left, its buttons on the right of the same line (owner, 2026-10-14)",
-   /<div className="cockpit-attention-detail">\s*<ul className="cockpit-attention-subs">[\s\S]*?<\/ul>\s*\{actions\}\s*<\/div>/.test(ov)
-   && /\.cockpit-attention-detail \{ display: flex;/.test(readFileSync(new URL("../../src/styles/08-shared.css", import.meta.url), "utf8")));
 ck("a ticket's notes wrap inside its card, never past its edge (owner, 2026-10-14: a long \"VESTA reads\" ran out)",
    /\.fm-record-body > \.fm-row-main \{ flex: 1 1 260px; min-width: 0; \}/.test(src("styles/07-facility.css"))
    && /\.fm-timeline-note \{[^}]*overflow-wrap: anywhere;/.test(src("styles/07-facility.css")));
-ck("the screens ask stageOf, never the status themselves",
-   ["components/fm/TicketsTab.tsx", "components/fm/FaultForm.tsx", "components/fm/TodayTab.tsx"].every((f) => /stageOf\(/.test(src(f)) && !/status === "in_progress"|status !== "in_progress"|status === "open"/.test(src(f))));
+ck("the screens ask stageOf (or its count, openCounts), never the status themselves",
+   ["components/fm/TicketsTab.tsx", "components/fm/FaultForm.tsx", "components/fm/TodayTab.tsx"].every((f) => /stageOf\(|openCounts\(/.test(src(f)) && !/status === "in_progress"|status !== "in_progress"|status === "open"/.test(src(f))));
 ck("the fault form is one, shared by raising and editing", /<FaultForm key=\{editing\.id\} editing=\{editing\}/.test(tt) && !/<input value=\{title\}/.test(ov + tt));
 
 done("✅ one list of live issues; faults become tickets; the same with or without the Agent");
