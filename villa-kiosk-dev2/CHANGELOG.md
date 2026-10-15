@@ -1,3 +1,12 @@
+## 2.496.376
+
+### Added
+- Advanced Settings → every lock: "Inverted lock — reports Locked / Unlocked the wrong way round", for a lock mounted upside down. Switched on, the Kiosk reads that lock the right way round everywhere — its badge on the map, the Overview's cards, the counts and the readiness check, its panel, its history and the Cockpit's activity — and its Lock and Unlock buttons move it the way they say. A door that is really locked is no longer an "Unlocked" card on the Overview.
+- Its badge carries a small invert pill (two opposite arrows) in its bottom-right corner, wherever it is drawn, so anyone can see this lock is read through that setting.
+
+### Note
+- The setting is the Kiosk's own. The villa's system itself, its automations and the VESTA Agent's alerts still see the lock as it reports.
+
 ## 2.496.375
 
 ### Changed
