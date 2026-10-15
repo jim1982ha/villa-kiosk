@@ -208,6 +208,11 @@ export interface FmTicket extends FmProvenance {
   /** How the VESTA Agent reads it again to close it (0.12.212+): its card's "Next check". Absent on a person's fault, a
    *  chat's, and the Agent's older ones until its repair tags them. */
   check?: FmTicketCheck;
+  /** Its title with "{since}" where a duration goes, and the moment that duration counts from (0.12.215+): the card
+   *  words it each time it is shown (fmEngine.faultTitle) — "offline for 129 h", written at 02:00, was a day old by
+   *  evening (architecture review, 2026-10-15). Absent when the title holds no duration or a person retitled it. */
+  titlePattern?: string;
+  since?: string;
   /** Every status change, in order. Optional because faults raised before
    *  this existed have none — read it as "no steps recorded", never as an
    *  error. */

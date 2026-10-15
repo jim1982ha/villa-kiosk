@@ -38,8 +38,10 @@ const ROWS: Record<IssueSource, Omit<SourceRow, "source">> = {
     goes: "Within minutes of it being back to normal; its words and Telegram's reminders follow" },
   night: { what: "Found by the nightly check: a device offline or deleted, a battery, energy use, Wi-Fi drops, run time",
     opens: "Nightly check",
-    goes: "Offline or deleted: within minutes of it coming back or going. The others: at the next nightly check that "
-      + "no longer finds them; until then each night updates the figures" },
+    // ⚠️ NO COPY OF WHICH PROBLEMS ARE READ AGAIN WHEN (architecture review, 2026-10-15): "Offline or deleted: within
+    // minutes" stood here beside the Agent's own list — each card's Next check says it, from the fault itself
+    goes: "When the VESTA Agent no longer finds it, at the time its card's Next check says; until then each nightly "
+      + "check updates the figures" },
   chat: { what: "Created from a Telegram chat with the VESTA Agent (\"Create this fault\")",
     opens: "When someone presses Create this fault", goes: "When someone resolves or closes it" },
   owner: { what: "A ticket the Owner opened (Open a ticket)", opens: "At once, already in progress",
