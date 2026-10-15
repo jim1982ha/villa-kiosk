@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.207 (15 October 2026)
+
+Architecture review 2026-10-15 (the problem lifecycle), 3:
+- agent-contract.json (the Kiosk's 2.496.382, copied): ticket fields `titlePattern` and `since`; the Kiosk lists the
+  fields it reads in /agent/v1/info `ticket_fields` (Kiosk.takes). preventive-maintenance rules.since_of: PM-UNAVAILABLE
+  and PM-SILENT keep {since, since_words} (nightly passes now). Problems.card adds pattern (its title with "{since}" for
+  since_words) and since. Tickets._pattern: written on create and by the repair (tag_ticket) only to a Kiosk that takes
+  titlePattern, never on a person's title (held `person_titled`), and taken away when a person retitles (tag_ticket
+  drops a None). FakeKiosk's info lists ticket_fields from the agreement. Tests: test_fault_steps (rules → repair →
+  card; person's title; an older Kiosk) and test_maintenance_noise (the night keeps since); four mutations red.
+  Starter skills recorded.
+
 ## 0.6.206 (15 October 2026)
 
 Architecture review 2026-10-15 (the problem lifecycle), 4 and 6:

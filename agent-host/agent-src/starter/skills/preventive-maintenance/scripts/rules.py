@@ -242,9 +242,10 @@ def battery_rules(asset: dict, entity_id: str, unit: str | None, level: float | 
 
 # --------------------------------------------------------- availability family
 def availability_rules(asset: dict, entity_id: str, state: str | None, last_changed_hours: float | None,
-                       params: VillaParams, entities: list[str] | None = None) -> list[Finding]:
+                       params: VillaParams, entities: list[str] | None = None, now=None) -> list[Finding]:
     """`entities`: every device's entity the finding stands for (an integration down: one per device) — recheck.py
-    closes it once they are all back."""
+    closes it once they are all back. `now`: the night's moment — the finding keeps when the device went offline
+    (since_of), so the Kiosk's card words the duration when it is shown."""
     out = []
     slug = asset["slug"]
     if is_offline(state) and last_changed_hours is not None:
@@ -253,17 +254,28 @@ def availability_rules(asset: dict, entity_id: str, state: str | None, last_chan
             out.append(Finding("PM-UNAVAILABLE", entity_id, slug, "availability", sev,
                                f"{asset['name']} has been offline for {lasting(last_changed_hours * 3600)}.",
                                {"hours": round(last_changed_hours, 1), "critical": asset.get("critical", False),
-                                "entities": list(entities or [entity_id])},
+                                "entities": list(entities or [entity_id]), **since_of(last_changed_hours, now)},
                                "Check power and radio range; for a battery device, change the battery and press its reset."))
     return out
 
 
-def silence_rules(asset: dict, entity_id: str, last_changed_hours: float | None, params: VillaParams) -> list[Finding]:
+def silence_rules(asset: dict, entity_id: str, last_changed_hours: float | None, params: VillaParams,
+                  now=None) -> list[Finding]:
     if last_changed_hours is not None and last_changed_hours >= params.behaviour("silence_hours"):
         return [Finding("PM-SILENT", entity_id, asset["slug"], "level", P3,
                         f"{asset['name']} has not reported for {lasting(last_changed_hours * 3600)} although it is online.",
-                        {"hours": round(last_changed_hours, 1)}, "Check the sensor: battery, range, or a frozen device.")]
+                        {"hours": round(last_changed_hours, 1), **since_of(last_changed_hours, now)},
+                        "Check the sensor: battery, range, or a frozen device.")]
     return []
+
+
+def since_of(hours: float, now) -> dict:
+    """When a duration in a finding's words counts from, and those words: {"since": ISO moment, "since_words": "1 d 9 h"}
+    — the Kiosk's card words it again each time it is shown (architecture review, 2026-10-15: "offline for 129 h",
+    written at 02:00, was a day old by evening). Empty without the night's moment."""
+    if now is None:
+        return {}
+    return {"since": (now - timedelta(hours=hours)).isoformat(), "since_words": lasting(hours * 3600)}
 
 
 # ---------------------------------------------------------------- level family

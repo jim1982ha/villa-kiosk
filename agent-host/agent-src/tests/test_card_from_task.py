@@ -81,7 +81,7 @@ def test_the_card_says_what_the_task_says():
     iid = st.new_incident("k", "r", "lock.example_door", "P2", {"message": "Door unlocked"})
     tid, _ = pb.open_task("incident", iid, "r", "lock.example_door", "Door unlocked")
     assert pb.card(st.task(tid)) == {"open": True, "title": "Door unlocked", "number": iid, "origin": "alert",
-                                     "check": "minutes", "note": "Closed: the problem is over.", "who": None}
+                                     "check": "minutes", "pattern": None, "since": None, "note": "Closed: the problem is over.", "who": None}
     pb.close_incident(iid, Incident.DONE, st.now(), "Done by Wayan on Telegram.", who="Wayan")
     want = pb.card(st.task(tid))
     assert (want["open"], want["note"], want["who"]) == (False, "Done by Wayan on Telegram.", "Wayan")

@@ -369,3 +369,38 @@ def test_the_rules_the_skill_says_it_reads_again_are_the_ones_recheck_reads():
     spec.loader.exec_module(recheck)
     assert recheck.rechecked() == set(sk.rechecks) == {"PM-UNAVAILABLE"} and "recheck.py" in sk.every_5_min
     assert not hasattr(recheck, "OFFLINE_RULE")                       # no second copy of the list
+
+
+def test_a_duration_in_a_faults_title_is_worded_by_the_kiosk_when_it_shows_it(tmp_path):
+    # architecture review, 2026-10-15: "LG TV has been offline for 129 h", written at 02:00, was a day old by evening —
+    # the card carries its title with {since} and the moment, and the Kiosk words it each time it shows it
+    import sys
+    sys.path.insert(0, os.path.join(STARTER_SKILLS, "preventive-maintenance", "scripts"))
+    import rules
+    from vesta_shared.params import VillaParams
+    from vesta_shared.skill_settings import load
+    params = VillaParams(defaults=load(os.path.join(STARTER_SKILLS, "preventive-maintenance"), "settings.yaml")["behaviour"])
+    night = datetime(2026, 10, 15, 2, 0, tzinfo=timezone.utc)
+    (f,) = rules.availability_rules({"slug": "tv", "name": "LG TV"}, "switch.tv", "unavailable", 129.0, params, now=night)
+    assert f.summary == "LG TV has been offline for 5 d 9 h."
+    assert (f.detail["since"], f.detail["since_words"]) == ((night - timedelta(hours=129)).isoformat(), "5 d 9 h")
+
+    k = FakeKiosk()
+    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)
+    st, pb = Store(v.s.store_path), Problems(Store(v.s.store_path))
+    fid, _ = st.raise_finding("PM-UNAVAILABLE", "switch.tv", "tv", "2026-10-15", "P3", f.summary, f.detail)
+    pb.settle(f"finding:{fid}")
+    run(v.tickets.repair())
+    (t,) = k._all()
+    assert (t["title"], t["titlePattern"], t["since"]) == (f.summary, "LG TV has been offline for {since}.", f.detail["since"])
+    k.person_renames(t["id"], "TV — unplugged on purpose")                    # a person's title stays theirs, as it is
+    run(v.tickets.repair())
+    assert "titlePattern" not in k.ticket(t["id"]) and k.ticket(t["id"])["title"] == "TV — unplugged on purpose"
+    older = FakeKiosk()                                                        # a Kiosk that does not read the field
+    older.info["ticket_fields"] = [x for x in older.info["ticket_fields"] if x != "titlePattern"]
+    v2 = make_agent(tmp_path / "older", {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=older)
+    st2 = Store(v2.s.store_path)
+    fid2, _ = st2.raise_finding("PM-UNAVAILABLE", "switch.tv", "tv", "2026-10-15", "P3", f.summary, f.detail)
+    Problems(st2).settle(f"finding:{fid2}")
+    run(v2.tickets.repair())
+    assert [x.get("titlePattern") for x in older._all()] == [None]            # it never sees "{since}"

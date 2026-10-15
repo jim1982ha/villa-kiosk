@@ -185,12 +185,12 @@ class Kiosk:
 
     async def add_ticket(self, title: str, entity_id: str | None = None, note: str | None = None,
                          document_ids: list[str] | None = None, number: int | None = None,
-                         origin: str | None = None, check: str | None = None) -> str:
+                         origin: str | None = None, check: str | None = None, pattern: dict | None = None) -> str:
         """`number`: the alert's number, as every chat names it ("#5"), when the fault comes from one — the Kiosk's card
         shows it beside the title (owner, 2026-10-14), so the Telegram message and the card are seen to be one problem.
         `origin`: where the agent made it from — "alert", "night" (its nightly check) or "chat" — the card's source icon.
         `check`: how the agent reads it again to close it — "minutes" or "nightly" (agent-contract `ticket.checks`) — the
-        card's "Next check"."""
+        card's "Next check". `pattern`: {"titlePattern", "since"}, the duration the card words when shown."""
         tid = self._ticket_id()
 
         def change(data: dict) -> str:
@@ -209,6 +209,7 @@ class Kiosk:
                 t["origin"] = origin
             if check:
                 t["check"] = check
+            t.update({k: v for k, v in (pattern or {}).items() if v})     # titlePattern, since (takes())
             tickets.append(t)
             data["tickets"] = tickets
             return tid
@@ -242,7 +243,8 @@ class Kiosk:
         return {t["id"]: {"status": str(t.get("status") or ""), "title": str(t.get("title") or ""),
                           "agent_title": agent_title(t), "resolved_at": str(t.get("resolvedAt") or ""),
                           "by": last(t, "who") or last(t, "by"), "alert_number": t.get("alertNumber"), "origin": t.get("origin"),
-                          "check": t.get("check"),
+                          "check": t.get("check"), "title_pattern": t.get("titlePattern"), "since": t.get("since"),
+                          "person_titled": person_titled(t),
                           "noted": [(str(u.get("at") or ""), str(u.get("note") or "")) for u in t.get("updates") or []
                                     if isinstance(u, dict) and u.get("kind") == NOTED],
                           **reopened(t), **taken(t)}     # `by`: who did it, as the card says it
@@ -271,6 +273,11 @@ class Kiosk:
                     return True
             return False
         return await self._edit(change)
+
+    def takes(self, field: str) -> bool:
+        """This Kiosk reads the fault field `field` (/agent/v1/info `ticket_fields`, 2.496.382+): an older one would show
+        a title pattern's "{since}" as it is."""
+        return field in ((self.info or {}).get("ticket_fields") or [])
 
     def says(self, kind: str) -> bool:
         """This Kiosk shows fault steps of `kind` (/agent/v1/info `step_kinds`, 2.496.356+): an older one would read a
@@ -301,11 +308,12 @@ class Kiosk:
         return await self._edit(change)
 
     async def tag_ticket(self, tid: str, number: int | None = None, origin: str | None = None,
-                         check: str | None = None) -> bool:
+                         check: str | None = None, pattern: dict | None = None) -> bool:
         """A fault made before it carried them gets its alert's number ("#5"), where it came from and how it is read
-        again (add_ticket). False when it is gone or already says them."""
+        again (add_ticket). `pattern`: {"titlePattern", "since"} — both None takes them away (a person retitled it).
+        False when it is gone or already says them."""
         tags = {**({"alertNumber": int(number)} if number else {}), **({"origin": origin} if origin else {}),
-                **({"check": check} if check else {})}
+                **({"check": check} if check else {}), **(pattern or {})}
 
         def change(data: dict) -> bool:
             tickets = list(data.get("tickets") or [])
@@ -313,7 +321,7 @@ class Kiosk:
                 if isinstance(t, dict) and t.get("id") == tid:
                     if all(t.get(k) == v for k, v in tags.items()):
                         return False
-                    tickets[i] = dict(t, **tags)
+                    tickets[i] = {k: v for k, v in dict(t, **tags).items() if not (k in tags and v is None)}
                     data["tickets"] = tickets
                     return True
             return False

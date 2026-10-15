@@ -79,12 +79,20 @@ class Tickets:
         tid = await self.kiosk.add_ticket(ticket_title(title)[:200], entity_id=entity_id, note=note, document_ids=docs,
                                           **({"number": want["number"]} if want["number"] else {}),
                                           **({"origin": want["origin"]} if want["origin"] else {}),
-                                          **({"check": want["check"]} if want["check"] else {}))
+                                          **({"check": want["check"]} if want["check"] else {}),
+                                          **({"pattern": self._pattern(want)} if self._pattern(want) else {}))
         log.info("Kiosk ticket %s created: %s", tid, ticket_title(title)[:80])
         if task_id:
             self._store().set_task_uid(int(task_id), tid)
         self.state.log("executed", {"tool": "ticket", "ticket": tid, "entity": entity_id})
         return tid
+
+    def _pattern(self, want: dict, card: dict | None = None) -> dict | None:
+        """{"titlePattern", "since"} for a fault the agent titles, to a Kiosk that reads them (Kiosk.takes); None for a
+        title a person wrote, or nothing to word."""
+        if not want.get("pattern") or not self.kiosk.takes("titlePattern") or (card or {}).get("person_titled"):
+            return None
+        return {"titlePattern": ticket_title(want["pattern"])[:200], "since": want["since"]}
 
     async def reopen(self, a: dict) -> bool:
         """ticket.reopen {task_id, title, note}: the task's fault open again in the Kiosk under its new title — or, when it
@@ -230,10 +238,14 @@ class Tickets:
                     if title and (card.get("agent_title") or card.get("title")) != title:
                         fixed += await self.kiosk.update_ticket(uid, title)
                     # the alert's number, as every chat writes it, and where it came from (owner, 2026-10-14)
+                    # its duration worded when shown — never on a title a person wrote: theirs, as it is
+                    pattern = self._pattern(want, card) or (
+                        {"titlePattern": None, "since": None} if card.get("title_pattern") else None)
                     if (want["number"] and card.get("alert_number") != want["number"]) \
                             or (want["origin"] and card.get("origin") != want["origin"]) \
-                            or (want["check"] and card.get("check") != want["check"]):
-                        fixed += await self.kiosk.tag_ticket(uid, want["number"], want["origin"], want["check"])
+                            or (want["check"] and card.get("check") != want["check"]) \
+                            or (pattern and (card.get("title_pattern"), card.get("since")) != (pattern["titlePattern"], pattern["since"])):
+                        fixed += await self.kiosk.tag_ticket(uid, want["number"], want["origin"], want["check"], pattern)
                     # what happened on Telegram — reminders, escalation, a button pressed (owner, 2026-10-14) — from this
                     # task's run on (an earlier run's lines belong to the fault as it was then)
                     if want["number"] and self.kiosk.says(NOTED):

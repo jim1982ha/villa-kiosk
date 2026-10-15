@@ -22,16 +22,18 @@ from pathlib import Path
 from vesta_agent.kiosk import CLEARED, READING, REOPENED, RETITLED, Kiosk, _mine
 
 PERSON_AT = "2026-10-01T08:00:00.000Z"
-#: The step kinds this Kiosk shows (/agent/v1/info `step_kinds`), from the agreement the host carries.
-STEP_KINDS = json.loads((Path(__file__).resolve().parents[2] / "rootfs/opt/vesta/host/agent-contract.json").read_text()
-                        )["ticketUpdate"]["kinds"]
+#: The step kinds this Kiosk shows and the fault fields it reads (/agent/v1/info `step_kinds`, `ticket_fields`), from
+#: the agreement the host carries — as the Kiosk's proxy answers them.
+_AGREEMENT = json.loads((Path(__file__).resolve().parents[2] / "rootfs/opt/vesta/host/agent-contract.json").read_text())
+STEP_KINDS = _AGREEMENT["ticketUpdate"]["kinds"]
+TICKET_FIELDS = sorted(_AGREEMENT["ticket"]["fields"])
 
 
 class FakeKiosk(Kiosk):
     def __init__(self, *tickets: dict):
         super().__init__("http://kiosk.invalid", "token")
         self.doc = {"data": {"tickets": [copy.deepcopy(t) for t in tickets]}, "rev": 1}
-        self.info = {"contract": 1, "step_kinds": list(STEP_KINDS)}
+        self.info = {"contract": 1, "step_kinds": list(STEP_KINDS), "ticket_fields": list(TICKET_FIELDS)}
         self.documents: list | None = []
         self._made: list[str] = []
 

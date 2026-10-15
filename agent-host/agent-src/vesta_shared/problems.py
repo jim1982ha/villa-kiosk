@@ -411,7 +411,15 @@ class Problems:
         or None),
         note and who (its close: what it says, the person who closed it — None: the agent's own clearing)}."""
         kind, sid = self._source(task)
-        return {"open": task.get("status") == "open", "title": self.current_title(task),
+        title = self.current_title(task)
+        # a duration in its words, worded by the Kiosk when it shows the card (architecture review, 2026-10-15): the
+        # title with "{since}" where the night's words were, and the moment they count from (the rule's since_of)
+        row = self.store.finding(sid) if kind == "finding" else None
+        d = json.loads((row or {}).get("detail") or "{}") if row and row.get("status") == "open" else {}
+        words = d.get("since_words")
+        pattern = title.replace(words, "{since}", 1) if d.get("since") and words and words in title else None
+        return {"open": task.get("status") == "open", "title": title,
+                "pattern": pattern, "since": d.get("since") if pattern else None,
                 "number": sid if kind == "incident" else None,
                 # where it came from, the Kiosk card's source icon (owner, 2026-10-14): an alert or the night check
                 "origin": {"incident": "alert", "finding": "night"}.get(kind or ""),

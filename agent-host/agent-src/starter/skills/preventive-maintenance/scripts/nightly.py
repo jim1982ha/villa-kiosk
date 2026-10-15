@@ -210,7 +210,7 @@ def run(args) -> dict:
             a = dict(g["asset"])
             a["name"] = F.device_name(g["names"])
             a = _device_named(pack, a, g["entity_id"])
-            findings += R.silence_rules(a, g["entity_id"], (now_ref - g["since"]).total_seconds() / 3600, params)
+            findings += R.silence_rules(a, g["entity_id"], (now_ref - g["since"]).total_seconds() / 3600, params, now=now_ref)
 
     # three or more devices of one integration offline together = the integration is down, one finding
     unavailable_groups = F.integration_down(unavailable_groups, params.behaviour("integration_down_devices"))
@@ -220,7 +220,7 @@ def run(args) -> dict:
             if len(g["names"]) > 1:
                 a["name"] = F.device_name(g["names"])
             a = _device_named(pack, a, g["entity_id"])
-        findings += R.availability_rules(a, g["entity_id"], g["state"], g["hours"], params, g.get("entity_ids"))
+        findings += R.availability_rules(a, g["entity_id"], g["state"], g["hours"], params, g.get("entity_ids"), now=now_ref)
 
     level_rows = [r for r in pack.entities("level")
                   if params.has(f"{r['asset']}_max_c") or params.has(f"{r['asset']}_max_humidity_pct")]

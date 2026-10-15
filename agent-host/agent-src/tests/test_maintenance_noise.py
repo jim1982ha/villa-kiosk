@@ -188,6 +188,10 @@ def test_unknown_is_not_offline(tmp_path):
     _night(tmp_path, "--as-of", AS_OF)
     assert [f["entity_id"] for f in _open(tmp_path, "PM-UNAVAILABLE")] == ["sensor.example_lost"]
     assert _open(tmp_path, "PM-SILENT") == []
+    # the moment it went offline, for the card's duration worded when shown (architecture review, 2026-10-15)
+    (lost,) = _open(tmp_path, "PM-UNAVAILABLE")
+    since = datetime.fromisoformat(json.loads(lost["detail"])["since"])
+    assert abs((since - datetime.fromisoformat(old)).total_seconds()) < 1 and json.loads(lost["detail"])["since_words"] in lost["summary"]
 
 
 # ------------------------------------------------------------------------------------------------ energy

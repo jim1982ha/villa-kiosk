@@ -1,3 +1,11 @@
+## 0.12.215
+
+What you will see (architecture review of 15 October, idea 3):
+- A card that says how long a device has been offline, or silent, shows today's figure each time you look ("offline
+  for 6 d 2 h"), not the figure written at 02:00. It needs the VESTA Kiosk 2.496.382 or later (dev2 has it; main gets
+  it with the next copy of dev2): an older Kiosk keeps the night's words, as today. A card you renamed keeps your title.
+  The cards already open get it after tonight's check.
+
 ## 0.12.214
 
 What you will see (architecture review of 15 October, ideas 4 and 6):
