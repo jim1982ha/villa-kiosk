@@ -1,3 +1,20 @@
+## 0.12.203
+
+What you will see (architecture review of 15 October, counts and alerts — points 3 to 6):
+- A P1 alert keeps you in the loop at every step, as its priority says: its 15-minute reminder, its reopening in the
+  Cockpit and its close now reach you as well as the facility manager. The Done / Need help buttons stay with the
+  facility manager; you get them when it is escalated to you. "Villa back online" now reaches everyone who was told
+  the villa was silent. Who is asked and who is told when nobody answers is written once in the Alert desk's
+  settings (rules.yaml, `chase`).
+- A Telegram group listed for both you and the facility manager gets the same role everywhere: its heading, the
+  buttons it may press and the tools the AI may use there all follow one rule.
+- An investigation that covers a restart of the villa's system now says, for a device that went down with the
+  restart and never came back, "with the restart, not back since". The nightly check reads such drops the same way.
+- The investigation's page belongs to the Investigate skill now (it lived inside Reports). Same page, same look;
+  switching Reports off no longer leaves /investigate without its page.
+- The Overview's (i) in the VESTA Kiosk now gives the Agent's real timing (how often it checks, when its nightly
+  check runs) — needs VESTA 2.496.372 or later.
+
 ## 0.12.202
 
 What you will see (architecture review of 15 October, points 2 and 3):
