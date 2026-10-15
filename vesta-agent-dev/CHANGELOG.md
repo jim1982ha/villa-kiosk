@@ -1,3 +1,10 @@
+## 0.12.218
+
+What you will see:
+- A question the Agent was answering when it restarted (an update, a restart of the app) is no longer lost in silence:
+  when it starts again it tells the chat "Your question at … (“…”) was interrupted by a restart of the agent: send it
+  again to have its answer." Reports asked for in a chat already said so; questions now do too.
+
 ## 0.12.217
 
 What you will see:
