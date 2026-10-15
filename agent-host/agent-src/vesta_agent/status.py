@@ -131,7 +131,7 @@ def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_la
                      "cache_read": tok.get("cache_read_input_tokens"), "cache_write": tok.get("cache_creation_input_tokens"),
                      "cost": round(cost, 4), "stopped": bool(d.get("stopped_at_limit")), "error": d.get("error"),
                      # cut by a stop of the agent: its tokens so far, and no cost — Anthropic reports it at a run's end
-                     "interrupted": bool(d.get("interrupted")),
+                     "interrupted": c["kind"] == agent_records.RUN_CUT,
                      # the reason in plain words (api_errors.FOR_PERSON), for the error's (!) on the Costs tab
                      "error_words": _error_words(d.get("problem")) if d.get("error") else None,
                      "turns": d.get("turns"), "seconds": round(d["ms"] / 1000) if isinstance(d.get("ms"), (int, float)) else None,
@@ -187,7 +187,7 @@ def tool_usage(state, days: int = 7, now: datetime | None = None) -> dict[str, i
     since = (now or datetime.now(timezone.utc)) - timedelta(days=days)
     out: dict[str, int] = {}
     for c in state.calls_since(since.isoformat()):
-        if c["kind"] != agent_records.RUN:
+        if c["kind"] not in (agent_records.RUN, agent_records.RUN_CUT):     # a cut run called its tools too
             continue
         for x in agent_records.detail(c).get("steps") or []:
             if isinstance(x, dict) and x.get("tool"):

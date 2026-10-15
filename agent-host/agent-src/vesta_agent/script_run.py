@@ -76,6 +76,9 @@ class ScriptAnswer:
         return self.stdout if self.ok else (self.stdout + "\n" + self.stderr).strip()
 
 
+#: The exit a script gets when the agent stops (SIGTERM): stopped with it, never a failure.
+STOPPED_BY_SIGTERM = -15
+
 def run(settings, state, skill, script: str, args: list[str], *, by: str, timeout: int = 900) -> ScriptAnswer:
     """One command with arguments already checked (skills.validate_script_args)."""
     t0 = time.monotonic()
@@ -102,6 +105,11 @@ def _answer(settings, state, skill, script, args, code, out, err, seconds, by) -
     record = {"by": by, "skill": skill.name, "script": script, "args": list(args), "exit": code, "seconds": ans.seconds}
     if ans.ok:
         state.log("script", record)
+    elif code == STOPPED_BY_SIGTERM:
+        # ⚠️ STOPPED WITH THE AGENT, NOT FAILED (owner, 2026-10-15: "2 failures" were the two investigations' scripts
+        # ended by the agent's updates): its run is on the Costs tab as "stopped by a restart"
+        state.log("script_stopped", record)
+        log.info("Skill %s: %s stopped with the agent", skill.name, script)
     else:
         # every failure counts, whoever ran it (Overview → failures; agent_status)
         state.log("script_failed", {**record, "stderr": ans.stderr[-800:]})

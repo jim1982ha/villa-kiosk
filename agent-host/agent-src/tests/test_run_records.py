@@ -115,3 +115,25 @@ def test_a_run_cut_by_a_stop_is_on_the_costs_tab_with_its_tokens_so_far(monkeypa
     assert [x["tool"] for x in row["steps"]] == ["run_skill_script", "ha_get_logs"]
     from helpers import page_js
     assert 'r.interrupted ? h("span", { class: "chip off"' in page_js() and '"stopped by a restart"' in page_js()
+
+
+def test_a_script_stopped_with_the_agent_is_not_a_failure_and_a_cut_run_is_no_reply(tmp_path):
+    # owner, 2026-10-15: "2 failures" on the Overview were the two investigations' scripts ended by the agent's updates
+    from types import SimpleNamespace
+    from vesta_agent import script_run
+    s = settings(str(tmp_path))
+    st = State(s.state_path)
+    sk = SimpleNamespace(name="investigate")
+    script_run._answer(s, st, sk, "investigate.py", ["find"], script_run.STOPPED_BY_SIGTERM, "", "", 3.0, "ai")
+    script_run._answer(s, st, sk, "investigate.py", ["find"], 1, "", "boom", 3.0, "ai")      # a real failure
+    st.log(agent_records.RUN_CUT, {"who": "Owner@1", "cost_usd": None, "tokens": {"input_tokens": 10}})
+    figures = dict(status.figures({k: n for k, n in _counts(st).items()}, 0.0))
+    assert figures["failures"] == 1 and figures["replies written"] == 0
+    assert [r["interrupted"] for r in status.costs(st)["runs"]] == [True]
+
+
+def _counts(st):
+    out = {}
+    for c in st.calls_since("2000-01-01"):
+        out[c["kind"]] = out.get(c["kind"], 0) + 1
+    return out

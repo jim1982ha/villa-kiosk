@@ -18,6 +18,9 @@ from datetime import datetime
 # the cost (facts.py) — status.py parsed a row by hand three times, "run" was written in seven places, and
 # housekeeping kept the without-AI rows on the other records' limit while the runs beside them went by theirs.
 RUN = "run"
+#: An AI run a stop of the agent cut (runner.run): a row of the Costs tab with its tokens so far, never a reply written
+#: (owner, 2026-10-15: two cut /investigate were neither on the Costs tab nor anywhere but "2 failures").
+RUN_CUT = "run_cut"
 
 JOB = "job:"
 WITHOUT_AI = "without_ai"        # the record's kind (state.log): a job made by its code steps, the AI unavailable
@@ -46,7 +49,7 @@ def without_ai(job: str, problem: str, sent: int, failed: str | None) -> dict:
     return {"job": job, "problem": problem, "sent": sent, "failed": failed}
 
 
-COSTS_KINDS = (RUN, WITHOUT_AI)        # the Costs tab's rows: kept and pruned together (state.prune)
+COSTS_KINDS = (RUN, RUN_CUT, WITHOUT_AI)        # the Costs tab's rows: kept and pruned together (state.prune)
 
 
 def detail(row) -> dict:

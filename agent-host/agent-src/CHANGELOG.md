@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.212 (15 October 2026)
+
+- agent_records.RUN_CUT ("run_cut", in COSTS_KINDS): runner records a run cut by a stop under it, not RUN — a Costs row
+  (status.costs `interrupted`), counted in tool_usage, never in "replies written". script_run: an exit of -15 (SIGTERM:
+  the agent stopping) is "script_stopped", not "script_failed" (Overview → failures; owner, 2026-10-15). Test in
+  test_run_records (three mutations red).
+
 ## 0.6.211 (15 October 2026)
 
 Villa, 2026-10-15 — an /investigate read 8–15 October's villa-wide logbook every 15 s for 14 minutes:

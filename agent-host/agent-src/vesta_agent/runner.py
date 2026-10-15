@@ -27,7 +27,7 @@ from claude_agent_sdk import (AssistantMessage, ClaudeAgentOptions, ClaudeSDKCli
 
 from .api_errors import NO_RETRY, classify
 from .redact import scrub
-from vesta_shared.agent_records import RUN, run_cost
+from vesta_shared.agent_records import RUN, RUN_CUT, run_cost
 
 log = logging.getLogger("vesta.runner")
 
@@ -275,7 +275,7 @@ async def run(settings, system_prompt: str, prompt: str, kit, terms, state, resu
         # ⚠️ A RUN CUT BY A STOP IS A RUN (owner, 2026-10-15: two /investigate cut by updates were missing from the Costs
         # tab, though Anthropic billed them): recorded with what it had used — its tokens so far; its cost is reported
         # by Anthropic only at a run's end, so the record says it was cut rather than guess a price
-        state.log(RUN, {"who": terms.who, "cost_usd": None, "interrupted": True, "stopped_at_limit": False, "denied": [],
+        state.log(RUN_CUT, {"who": terms.who, "cost_usd": None, "stopped_at_limit": False, "denied": [],
                         "error": None, "profile": terms.profile, "model": opts.model, "tokens": c.partial_tokens(),
                         "turns": None, "ms": None, "asked": (asked or "")[:160] or None, "problem": None,
                         "steps": kept_steps(c.steps, settings.secrets() if hasattr(settings, "secrets") else [])})
