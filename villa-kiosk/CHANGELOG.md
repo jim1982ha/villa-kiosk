@@ -1,3 +1,34 @@
+## 2.496.377
+
+### Fixed
+- Advanced Settings: the description after a checkbox ("Confirm before toggling", "Reports Locked / Unlocked the wrong way round") sits at a comfortable distance from its box, the same everywhere — one shared checkbox-with-words, one look.
+
+## 2.496.376
+
+### Added
+- Advanced Settings → every lock: "Inverted lock — reports Locked / Unlocked the wrong way round", for a lock mounted upside down. Switched on, the Kiosk reads that lock the right way round everywhere — its badge on the map, the Overview's cards, the counts and the readiness check, its panel, its history and the Cockpit's activity — and its Lock and Unlock buttons move it the way they say. A door that is really locked is no longer an "Unlocked" card on the Overview.
+- Its badge carries a small invert pill (two opposite arrows) in its bottom-right corner, wherever it is drawn, so anyone can see this lock is read through that setting.
+
+### Note
+- The setting is the Kiosk's own. The villa's system itself, its automations and the VESTA Agent's alerts still see the lock as it reports.
+
+## 2.496.375
+
+### Changed
+- Overview → (i): the "VESTA Agent" source is gone. Every fault the VESTA Agent makes says where it comes from (Alert, Night check or Chat), and the Agent gives an older one its source within minutes, so that line described something you would never see. A very old fault from a chat that has no source shows the Chat icon.
+
+## 2.496.374
+
+### Changed
+- Overview → (i): the sources are in two groups, each under its heading — "From the Kiosk" (Live, Owner, Facility manager, Person, Guest, Schedule), then "From the VESTA Agent" (Alert, Night check, Chat, VESTA Agent). The Recap's readiness line shows its source icons in the same order.
+- Live now says what it is: what the Kiosk shows right now on its map — a device with a red badge (unavailable, missing, unlocked, too hot…) — seen on this screen only, nobody is told.
+- "VESTA Agent" says it is an older fault of the Agent's, made before it recorded where each comes from; new ones show Alert, Night check or Chat.
+
+## 2.496.373
+
+### Changed
+- Nothing changes on the iPad. Behind it: a tool that proves each new check can fail — it breaks one piece of code, runs the check and always puts the code back, even when the run is interrupted — and a check of that tool on every release.
+
 ## 2.496.372
 
 ### Fixed

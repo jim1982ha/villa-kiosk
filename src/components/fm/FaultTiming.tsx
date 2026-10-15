@@ -21,7 +21,7 @@ export default function FaultTiming() {
   const { status } = useAgent();
   const { data } = useFmData();
   const agent = agentVisible(status) || data.tickets.some((t) => t.source === AGENT_SOURCE && stageOf(t) !== "closed");
-  const { rows, note } = faultTiming(agent, status?.cadence ?? null);
+  const { groups, note } = faultTiming(agent, status?.cadence ?? null);
   return (
     // two-thirds wider than an (i)'s card: its three columns take fewer lines on a desktop (owner, 2026-10-14); a phone
     // still gets the screen's width
@@ -30,21 +30,27 @@ export default function FaultTiming() {
       <table className="info-pop-table">
         {/* "Appears" and "Goes" in ONE column, the same width: the card is less tall (owner, 2026-10-15) */}
         <thead><tr><th>Source</th><th>When</th></tr></thead>
-        <tbody>{rows.map((r) => {
-          const Icon = SOURCE_ICON[r.source];
-          return (
-            <tr key={r.source}>
-              <td>
-                <span className="info-pop-source"><Icon size={15} aria-hidden /> <b>{SOURCE_WORDS[r.source]}</b></span>
-                <span className="info-pop-what">{r.what}</span>
-              </td>
-              <td>
-                <span className="info-pop-when"><b>Appears:</b> {r.opens}</span>
-                <span className="info-pop-when"><b>Goes:</b> {r.goes}</span>
-              </td>
-            </tr>
-          );
-        })}</tbody>
+        {/* the Kiosk's sources, then the Agent's, each under its heading (owner, 2026-10-15) — headed only when both show */}
+        {groups.map((g) => (
+          <tbody key={g.title}>
+            {groups.length > 1 && <tr className="info-pop-group"><th colSpan={2}>{g.title}</th></tr>}
+            {g.rows.map((r) => {
+              const Icon = SOURCE_ICON[r.source];
+              return (
+                <tr key={r.source}>
+                  <td>
+                    <span className="info-pop-source"><Icon size={15} aria-hidden /> <b>{SOURCE_WORDS[r.source]}</b></span>
+                    <span className="info-pop-what">{r.what}</span>
+                  </td>
+                  <td>
+                    <span className="info-pop-when"><b>Appears:</b> {r.opens}</span>
+                    <span className="info-pop-when"><b>Goes:</b> {r.goes}</span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        ))}
       </table>
       <p className="info-pop-note">{note}</p>
     </InfoTip>

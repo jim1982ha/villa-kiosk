@@ -38,6 +38,9 @@ export const COSMETIC_MAPPING_FIELDS = [
   // and PowerToggle's own React props — it never reaches indexMeshes/
   // EntityVisuals, so it qualifies exactly like the fields above it.
   "requireConfirm",
+  // invertLock never reaches the scene's structure: the connection re-reads every state through the new lens
+  // (EntityStore.setLens) and the badges repaint from those states like any other change.
+  "invertLock",
 ] as const;
 
 /** How much work an entityMap replacement actually requires.

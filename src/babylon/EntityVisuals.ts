@@ -45,6 +45,7 @@
 //
 //   See desiredVariantWord / orderVariantWords / applyStateNamedVariant.
 
+import { isInvertedLock } from "@/ha/stateLens";
 import type { Observer } from "@babylonjs/core/Misc/observable";
 import { FrameClock } from "./frameClock";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
@@ -2890,6 +2891,7 @@ export class EntityVisuals {
         badgeImage({
           category, iconKey: iconKeyFor(type, this.lastState.get(entityId)), state: "off",
           color: this.config.entityMap[entityId]?.badgeColor, inset: card ? BADGE_INSET_CARD : 0,
+          inverted: isInvertedLock(this.config.entityMap, entityId),
           // Card: the Rectangle above strokes the edge, so the chip bakes no
           // ring of its own — see updateLabel for the doubled outline this
           // stops. Classic: the image IS the badge and carries its own.
@@ -3150,6 +3152,7 @@ export class EntityVisuals {
       lbl.glyph.source = badgeImage({
         category: lbl.category, iconKey, state, ringState, color: override,
         inset: BADGE_INSET_CARD, ring: "none", bakePx: this.glyphBakePx(true), bold: true,
+        inverted: isInvertedLock(this.config.entityMap, entityId),
       });
       // Neutral ink, on a now-neutral card — the bottom bar's value is
       // `--text-primary` beside a coloured chip, not the chip's own hue. The
@@ -3163,6 +3166,7 @@ export class EntityVisuals {
       applyBadgeFrame(lbl.badge, NO_RING, this.metrics.badgeDiameterPx);
       lbl.glyph.source = badgeImage({
         category: lbl.category, iconKey, state, ringState, color: override, ring: "baked", bakePx: this.glyphBakePx(false),
+        inverted: isInvertedLock(this.config.entityMap, entityId),
       });
     }
     lbl.badge.alpha = 1;
@@ -4769,6 +4773,7 @@ export class EntityVisuals {
             const color = this.config.entityMap[s2.id]?.badgeColor;
             c.chips[k].source = badgeImage({
               category: s2.lbl.category, iconKey: iconKeyFor(s2.lbl.type, st), state: face, ringState: ring, color,
+              inverted: isInvertedLock(this.config.entityMap, s2.id),
               // Inset 0: this chip IS the badge here, as the classic style's is;
               // the card behind it is the group's surface, not a second frame.
               // Baked at the PAINTED size: `lay.chip` is unscaled and the group

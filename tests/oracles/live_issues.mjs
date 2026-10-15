@@ -122,7 +122,7 @@ const S = await import("@/fm/issueSource");
 const agentRec = (x) => ({ ...rec("a", "x.y"), source: "vesta_agent", ...x });
 ck("a fault's source is read from its record: the Agent's origin, its alert number, a guest's mark, the profile that opened it",
    S.faultSource(agentRec({ origin: "night" })) === "night" && S.faultSource(agentRec({ origin: "chat" })) === "chat"
-   && S.faultSource(agentRec({ alertNumber: 5 })) === "alert" && S.faultSource(agentRec({})) === "agent"
+   && S.faultSource(agentRec({ alertNumber: 5 })) === "alert" && S.faultSource(agentRec({})) === "chat"   // an old fault with no origin (owner, 2026-10-15: no "VESTA Agent" source)
    && S.faultSource({ ...rec("g", "x.y"), reportedBy: "guest" }) === "guest"
    && S.faultSource({ ...rec("o", "x.y"), updates: [{ at: "", status: "in_progress", photoIds: [], by: "Owner" }] }) === "owner"
    && S.faultSource({ ...rec("f", "x.y"), updates: [{ at: "", status: "in_progress", photoIds: [], by: "Facility manager" }] }) === "fm"
@@ -163,7 +163,7 @@ const mixedOpen = readyWith([agentRec({ id: "n1", origin: "night", entityId: "x.
 ck("4 faults and 1 ticket: \"4 detected faults (1 open ticket)\", where to deal with each, and the faults' source icons",
    mixedOpen.label === "4 detected faults (1 open ticket)"
    && mixedOpen.detail === 'Check the faults in "Overview", or the open tickets in "Tickets".'
-   && mixedOpen.sources.join() === "alert,night,guest", mixedOpen);
+   && mixedOpen.sources.join() === "guest,alert,night", mixedOpen);   // the legend's order: the Kiosk's, then the Agent's
 // ⚠️ COUNTED AS DRAWN, PER DEVICE (architecture review, 2026-10-15): the pump's two faults taken on together are ONE
 // ticket card in Tickets, so one open ticket — not "2 open tickets" over one card
 const pumpBy = (devs) => buildReadiness({}, fm([{ ...rec("p1", "switch.pump"), status: "in_progress" },

@@ -55,6 +55,14 @@ const { ISSUE_SOURCES } = await import("@/fm/issueSource");
 ck("with an Agent: ONE row per icon a card can show, each saying what it is, when it appears and when it goes",
    withAgent.rows.map((r) => r.source).join() === ISSUE_SOURCES.join() && withAgent.rows.every((r) => r.what && r.opens && r.goes),
    withAgent.rows.map((r) => r.source));
+ck("  ...the Kiosk's sources first, then the Agent's, each group under its heading (owner, 2026-10-15)",
+   withAgent.groups.map((g) => g.title).join() === "From the Kiosk,From the VESTA Agent"
+   && withAgent.groups[0].rows.every((r) => !["alert", "night", "chat"].includes(r.source))
+   && withAgent.groups[1].rows.map((r) => r.source).join() === "alert,night,chat"
+   && alone.groups.length === 1, withAgent.groups.map((g) => [g.title, g.rows.map((r) => r.source)]));
+ck("  ...Live is what the Kiosk's map shows, and nobody is told",
+   /the Kiosk shows right now on its map/.test(withAgent.rows[0].what) && /nobody is told/.test(withAgent.rows[0].what)
+   && withAgent.rows[0].source === "live");
 const told = faultTiming(true, { checkMinutes: 15, nightlyAt: "04:30" });
 ck("  ...the nightly check's say so; the Agent's timing is the one it TOLD, never a copy (architecture review, 2026-10-15)",
    withAgent.rows.find((r) => r.source === "night")?.opens === "Nightly check"
@@ -68,7 +76,7 @@ ck("  ...the Kiosk reads the timing the agreement's heartbeat carries, as the pr
    && parseAgentStatus({ state: "online" }).cadence === null);
 ck("  ...Live does not name Home Assistant (owner, 2026-10-14)", !/Home Assistant/.test(withAgent.rows.find((r) => r.source === "live").what));
 ck("without an Agent: no row of the Agent's — nothing claims to open or close by itself",
-   !alone.rows.some((r) => ["alert", "night", "chat", "agent"].includes(r.source)) && alone.rows.some((r) => r.source === "guest")
+   !alone.rows.some((r) => ["alert", "night", "chat"].includes(r.source)) && alone.rows.some((r) => r.source === "guest")
    && !/Agent|nightly/i.test(alone.note + alone.rows.map((r) => r.what + r.opens + r.goes).join(" ")), alone.rows.map((r) => r.source));
 ck("both say how a fault becomes a ticket", [withAgent, alone].every((t) => /becomes a ticket when someone presses Open Ticket on its card/.test(t.note)));
 ck(`  ...and the list's own refresh, from the app's own numbers (${STORE_ACTIVE_MS / 1000} s open, ${STORE_HEARTBEAT_MS / 60000} min else)`,
@@ -76,7 +84,7 @@ ck(`  ...and the list's own refresh, from the app's own numbers (${STORE_ACTIVE_
      && t.note.includes(`every ${STORE_HEARTBEAT_MS / 60000} minutes otherwise`)));
 const card = src("components/fm/FaultTiming.tsx");
 ck("the card shows the Agent's rows when an Agent is connected OR one of its faults is open (its icons are on the list)",
-   /faultTiming\(agent, status\?\.cadence \?\? null\)/.test(card) && /const agent = agentVisible\(status\) \|\| data\.tickets\.some\(\(t\) => t\.source === AGENT_SOURCE && stageOf\(t\) !== "closed"\);/.test(card)
+   /faultTiming\(agent, status\?\.cadence \?\? null\)/.test(card) && /groups\.map\(\(g\) =>/.test(card) && /const agent = agentVisible\(status\) \|\| data\.tickets\.some\(\(t\) => t\.source === AGENT_SOURCE && stageOf\(t\) !== "closed"\);/.test(card)
    && /rows\.map/.test(card) && /\{note\}/.test(card) && /<table className="info-pop-table">/.test(card));
 ck("it sits just before Open a ticket, on the Overview's title line", /<FaultTiming \/>\s*<button[^>]*>[^<]*<Plus size=\{16\} \/> Open a ticket/.test(src("components/cockpit/CockpitOverview.tsx")));
 
