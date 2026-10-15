@@ -1,3 +1,9 @@
+## 0.12.207
+
+What you will see:
+- After this update the Agent rebuilds its list of the villa's devices as it starts, instead of waiting for the night.
+  The hidden Aqara locks leave the villa status straight away (with 0.12.205 and 0.12.206 they stayed until 01:30).
+
 ## 0.12.206
 
 What you will see:

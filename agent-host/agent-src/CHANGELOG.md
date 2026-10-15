@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.199 (15 October 2026)
+
+- knowledge_pack.PACK_RULES (1 = hidden entities left out) is written into the pack as `rules`; app.pack_needs_build
+  rebuilds at start a pack written by older rules. 0.6.197's rule otherwise waited for the 01:30 rebuild: the owner
+  updated and the villa status still said "unlocked" of the hidden locks. Raise PACK_RULES with every rule that
+  changes what the pack holds. test_reports pins a devices-but-older-rules pack (each half proven red).
+
 ## 0.6.198 (15 October 2026)
 
 - UI, Rules › Protected devices: a line in the card (owner, 2026-10-15) saying that a device hidden in the villa's

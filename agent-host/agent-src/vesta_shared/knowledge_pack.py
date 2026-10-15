@@ -144,6 +144,13 @@ class Asset:
     kind: str = "appliance"   # motor | lighting | meter | appliance: decides which maintenance rules apply
 
 
+#: ⚠️ A NEW RULE IN build_pack IS A FORMAT CHANGE (2026-10-15): the pack is rebuilt at 01:30, so an update that leaves out
+#: hidden entities still listed them until the night — the owner updated and the villa status went on saying "unlocked"
+#: of the hidden locks. Raise it with every rule that changes what the pack holds; the agent rebuilds an older one at start
+#: (app.pack_needs_build). 1: hidden entities left out (0.6.197).
+PACK_RULES = 1
+
+
 @dataclass
 class KnowledgePack:
     villa: str
@@ -168,6 +175,8 @@ class KnowledgePack:
     # its drops were a second fault for the same relay, and the plug behind an owner-only siren hid nothing.
     # {entity_id: device_id}; empty in a pack built before (then the rows' own device is all there is).
     entity_devices: dict[str, str] = field(default_factory=dict)
+    # Which of build_pack's rules wrote it (PACK_RULES); 0 in a pack built before the number was kept.
+    rules: int = 0
 
     def entities(self, family: str) -> list[dict]:
         return self.families.get(family, [])
@@ -419,6 +428,7 @@ def build_pack(registry: dict, helpers: list[dict], states: dict | None = None,
                                   "manufacturer": d.get("manufacturer") or "", "model": d.get("model") or ""}
                  for d in registry.get("devices", []) if d.get("device_id")},
         entity_devices={e["entity_id"]: e["device_id"] for e in live if e.get("device_id")},
+        rules=PACK_RULES,
     )
 
 

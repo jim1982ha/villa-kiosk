@@ -677,14 +677,19 @@ def test_a_pack_built_before_devices_were_kept_is_rebuilt_at_start(tmp_path):
     import inspect
     import json as _j
     from vesta_agent.app import Vesta, pack_needs_build
-    from vesta_shared.knowledge_pack import KnowledgePack
+    from vesta_shared.knowledge_pack import KnowledgePack, build_pack
     base = dict(villa="V", time_zone="UTC", generated_at="", ha_version=None, families={}, assets={}, areas=[], people=[],
                 channels={}, unknown_area=[], unclassified=[], retention={})
     old = tmp_path / "old.json"
     old.write_text(_j.dumps(base))
+    # 2026-10-15: kept devices, but built before hidden entities were left out — the owner's hidden locks stayed "unlocked"
+    older_rules = tmp_path / "older_rules.json"
+    older_rules.write_text(KnowledgePack(**base, devices={"d1": {"name": "Pump", "manufacturer": "", "model": ""}}).to_json())
     new = tmp_path / "new.json"
-    new.write_text(KnowledgePack(**base, devices={"d1": {"name": "Pump", "manufacturer": "", "model": ""}}).to_json())
+    new.write_text(build_pack({"entities": [{"entity_id": "sensor.pump_power", "device_id": "d1"}],
+                               "devices": [{"device_id": "d1", "name": "Pump"}]}, []).to_json())
     assert pack_needs_build(str(tmp_path / "none.json")) and pack_needs_build(str(old))
+    assert pack_needs_build(str(older_rules))
     assert not pack_needs_build(str(new))
     assert "if pack_needs_build(self.s.pack_path):" in inspect.getsource(Vesta.start)
 

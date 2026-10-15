@@ -96,13 +96,14 @@ class Press:
 
 
 def pack_needs_build(path: str) -> bool:
-    """Build the knowledge pack at start: none yet, unreadable, or built before it kept Home Assistant's devices.
+    """Build the knowledge pack at start: none yet, unreadable, built before it kept Home Assistant's devices, or by
+    older rules (knowledge_pack.PACK_RULES: hidden entities still in it).
 
     ⚠️ A FORMAT CHANGE CARRIES ITS MIGRATION (0.6.108): an older pack has no devices, and the reports would list
     sensors instead of devices until the 01:30 rebuild."""
-    from vesta_shared.knowledge_pack import KnowledgePack
+    from vesta_shared.knowledge_pack import PACK_RULES, KnowledgePack
     pack = KnowledgePack.read(path)
-    return pack is None or not pack.devices
+    return pack is None or not pack.devices or pack.rules < PACK_RULES
 
 
 #: How often the agent reads the VESTA Kiosk's faults (one closed in the Cockpit settles its alert's messages).
