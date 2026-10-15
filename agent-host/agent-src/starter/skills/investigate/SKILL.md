@@ -1,155 +1,151 @@
 ---
 name: investigate
-description: Find out what happened and why, from Home Assistant's records — answered with a short message and the whole account as an HTML page (what the records establish and rule out, timeline, charts, causes ranked by likelihood, what cannot be known, what would have warned earlier).
+description: Investigates what happened and why, from Home Assistant's records — a short message with the whole account as an HTML page (what the records establish and rule out, timeline, charts, causes ranked by likelihood, what cannot be known, what would have warned earlier). Used when the person writes /investigate.
 ---
 
 # investigate
 
-You are here because the person wrote /investigate with their question: find out what happened, why, since when,
-for how long, what caused it or what turned it on or off — about any device, room or event, now or in the past (a flood,
-a power cut, a pump or a heater that ran too long, a door, an alarm, a strange bill, a device that stopped).
-
-The person wants the TRUE and COMPLETE story, not a quick reply. Take the time to read; then answer once, completely.
+The person wrote /investigate with a question: what happened, why, since when, for how long, what caused it or what
+turned it on or off — about any device, room or event, now or in the past (a flood, a power cut, a pump or a heater that
+ran too long, a door, an alarm, a strange bill, a device that stopped). They want the whole, true story: read
+everything the steps below ask for, then answer once, completely.
 
 ## Files
 
-- `scripts/investigate.py`   find · timeline · around — reads Home Assistant and returns short, checked facts.
-  It never changes anything. Times are the villa's.
-- `settings.yaml`             what counts as unusual (a villa's own villa.settings.yaml may change it)
+- `scripts/investigate.py`: `find`, `timeline`, `around`. Reads Home Assistant (read-only) and returns short, checked
+  facts, in the villa's time.
+- `scripts/page.py`: makes the page and the short message from your account and the readings.
+- `settings.yaml`: what counts as unusual (a villa's villa.settings.yaml may change it).
 
-## The procedure — follow every step
+## The procedure
 
-1. **Pin down the question.** Which device, room or event; which day and hours (turn "yesterday", "on the 9th",
-   "last night" into villa dates with the date and time at the top of the message). If the person gave no time, start
-   from the last 7 days and find the moment yourself (step 3 shows it). Ask a question only when you cannot tell which
-   device or which day at all — one question, then stop.
+1. **Pin down the question.** Which device, room or event, and which day and hours: turn "yesterday", "on the 9th",
+   "last night" into villa dates using the date and time at the top of the message. With no time given, start from the
+   last 7 days and find the moment in step 3. Ask one question, and stop, only when you cannot tell which device or
+   which day at all.
 
-2. **Find the devices — and their neighbours.**
-   `run_skill_script investigate investigate.py find --what "<words of the person>"` (add `--where "<room>"` if said).
-   Keep the entities that measure or control the thing asked about (its power, its state, its switch, its sensor).
-   Also keep from its "same physical device" and "same room" lists anything that could share a supply or a cabinet:
-   a device next to it that stopped at the same moment is evidence of a common cause (a breaker, a power cut).
-   Read every on/off control found next to it (a switch, a relay, a light, a valve…) in the SAME timeline as the
-   device: the timeline then says whether that control could have turned it on (step 3).
-   If find gives nothing useful, try other words (the device type, the room) before saying so.
+2. **Find the devices and their neighbours.**
+   `run_skill_script investigate investigate.py find --what "<the person's words>"` (and `--where "<room>"` if said).
+   - Keep the entities that measure or control the thing asked about: its power, its state, its switch, its sensor.
+   - From its "same physical device" and "same room" lists, also keep anything that could share its supply or cabinet:
+     a neighbour that stopped at the same moment points to a common cause (a breaker, a power cut).
+   - Keep every on/off control next to it (a switch, a relay, a light, a valve): read in the same timeline as the
+     device, it shows whether that control could have turned the device on.
+   - If find gives nothing useful, try other words (the device type, the room) before saying so.
 
-3. **Read what they did, against their normal.**
-   `run_skill_script investigate investigate.py timeline --entities <ids, separated by commas> --start <…> --end <…>`
-   - The period: from at least 2 hours BEFORE the first sign of trouble to AFTER things were back to normal (or now).
-     When the moment is unknown, read the whole day or days first, then narrow on what stands out.
-   - At most about 5 ids in one `--entities` (it is a short text); repeat `--entities` for more. Only ids from find
-     (sensor.…, switch.…), never words. A date alone is a whole day: `--start 2026-10-09 --end 2026-10-09` reads the
-     9th from 00:00 to midnight.
-   - Each line flagged "⟵" is unusual against the device's own normal (the days before): a run far longer than any
-     before, a level well above or below its normal, exactly 0 where it normally reads a little (its supply was off),
-     no answer, stop-start cycling — each line says by how much (the limits are in settings.yaml). These flags are the
-     backbone of your answer.
-   - Read the normal line: how often and how long it usually runs. "Longest normal run 10 s" against "ran 1 h 46 min"
-     is the kind of contrast the person needs.
+3. **Read what they did against their own normal.**
+   `run_skill_script investigate investigate.py timeline --entities <ids, comma-separated> --start <…> --end <…>`
+   - Read from at least 2 hours before the first sign of trouble to after things were normal again (or now). When the
+     moment is unknown, read the whole day or days first, then narrow on what stands out.
+   - About 5 ids per `--entities`, repeated for more; only ids that find returned. A date alone is the whole day:
+     `--start 2026-10-09 --end 2026-10-09` reads the 9th from 00:00 to midnight.
+   - Lines flagged "⟵" are unusual against the device's own normal (the days before): a run far longer than any before,
+     a level well above or below normal, exactly 0 where it normally reads a little (its supply was off), no answer,
+     stop-start cycling. Each says by how much (the limits are in settings.yaml). They are the backbone of the answer.
+   - The normal line gives how often and how long it usually runs: "longest normal run 10 s" against "ran 1 h 46 min" is
+     the contrast the person needs.
 
 4. **Read everything else recorded then.**
-   `run_skill_script investigate investigate.py around --start <…> --end <…> --entities <the ids you focus on>
-   --out around.json` (the whole period, like the last timeline). It lists the automations that ran, devices that stopped answering and came back (with times), notifications sent,
-   doors, locks, switches, people, and the VESTA Agent's own alerts. Match times to the timeline: a device dropping off
-   79 seconds after another stops, an automation that ran at the moment a device turned on, a person arriving.
+   `run_skill_script investigate investigate.py around --start <…> --end <…> --entities <the ids you focus on> --out around.json`
+   over the same period as your last timeline. It lists the automations that ran, devices that stopped answering and
+   came back (with times), notifications sent, doors, locks, switches, people and the VESTA Agent's own alerts. Match
+   its times to the timeline: a device dropping off 79 seconds after another stops, an automation running at the moment
+   a device turned on, a person arriving.
 
-5. **Check what acts on it — from what things CAN do, never from their running at the time.** (The page lists what
-   the records rule out by itself — a switch that stayed off, an automation that can only notify: never repeat those
-   as causes.)
-   - A control the timeline marks "stayed off for the whole period … it is NOT what turned it on" is not a cause: a
-     control that never left "off" turned nothing on. Never write that it "controls" the device.
-   - `around` says under each automation that ran what it is ABLE to do. "Switches nothing" means it cannot have
-     turned anything on or off: it only watched — say what it saw, never that it "misfired". "CAN change things"
-     lists what it could switch: only those can be a cause, and only if its run matches the moment. "Not proven either
-     way" (its actions could not be read) is never a cause without other evidence: say it could not be checked.
+5. **Check what can act on it — by what each thing is able to do, not by its running at the time.**
+   - A control the timeline marks "stayed off for the whole period" turned nothing on: it belongs to what the records
+     rule out, and the page already says so.
+   - Under each automation that ran, `around` says what it is able to do:
+     - "Switches nothing": it only watched. Say what it saw.
+     - "CAN change things": what it lists can be a cause, when its run matches the moment.
+     - "Not proven either way" (its actions could not be read): say it could not be checked; it becomes a cause only
+       with other evidence.
    - For an automation that should have warned, read it with ha_config_get_automation: which case does it watch, and
      why did it (not) warn?
-   - If nothing in Home Assistant acted, say what did: a person, the device's own control (a pressure switch, a
-     thermostat, a timer), or a power cut. For every long or unusual run, ask both directions: did the device cause the
+   - When nothing in Home Assistant acted, name what did: a person, the device's own control (a pressure switch, a
+     thermostat, a timer) or a power cut. For every long or unusual run, look both ways: did the device cause the
      damage, or did the damage keep it running (water escaping keeps a pump running; an open window keeps cooling on)?
 
-6. **Fill the gaps with the raw tools only where needed:** ha_get_history for an entity the script did not read,
-   ha_get_logs (logbook) for a minute that matters, ha_get_state for how things are now.
+6. **Fill the gaps, then search the web.** Use the raw tools only where needed: ha_get_history for an entity the script
+   did not read, ha_get_logs (logbook) for a minute that matters, ha_get_state for how things are now.
 
-   **Search the web (web_search) — always** (owner, 2026-10-12), once the timeline and `around` are read, never
-   instead of them:
-   - Describe the pattern you found in general words (the kind of device and what it did, e.g. "a pump that runs
-     without stopping, then its circuit's protection trips") and search for its known causes and the correlations
-     that usually go with it; also the device's manual or its make and model's known failures (ha_get_device), what an
-     error code means, and an outside event at that time (a storm, a grid outage) when several devices stopped together.
-   - At most 5 searches. Never the villa's name, its address, a person, or a device's name in a search: the pattern,
-     the kind of device and its make and model only; for weather or a grid outage, at most the town.
-   - Every lead found is a QUESTION for the records, never an answer: for each, say what the records show for or
-     against it. Such a cause carries "source" — its web page as [n], e.g. "[2]" (or "the records" when a record
-     raised it), never a name: the page shows the title and the link — and "verdict": consistent (the records fit it), not supported (the
-     records contradict it — it then appears under "Ruled out") or cannot tell (no record can judge it — say what
-     would).
-   - Nothing from the web replaces a time or a number from Home Assistant.
-   - List every web page you used in "sources", and CITE it where you used it, as [1], [2]… (its place in "sources")
-     in the summary, a cause's evidence, what cannot be told or what would have warned. The page is refused with a
-     page never cited, or with a [n] that is not in "sources".
+   **Search the web (web_search) — always**, once the timeline and `around` are read, as a source of leads:
+   - Search for the pattern in general words (the kind of device and what it did, e.g. "a pump that runs without
+     stopping, then its circuit's protection trips"): its known causes and what usually goes with it; the make and
+     model's known failures (ha_get_device) or its manual; what an error code means; an outside event at that time (a
+     storm, a grid outage) when several devices stopped together.
+   - At most 5 searches. The words of a search are the pattern, the kind of device and its make and model, and for
+     weather or a grid outage at most the town. The villa, its address, its people and its devices' names stay out.
+   - Each lead is a question for the records: say what they show for or against it. Times and numbers always come
+     from Home Assistant.
 
-7. **Reason, before writing.** For each unusual thing, ask what physically explains it. Keep several causes when the
-   evidence allows several, rank them, and say for each what points to it and what would confirm it. Separate clearly:
-   what Home Assistant SHOWS (measured, with times) · what it most likely MEANS · what it CANNOT tell (no sensor there,
-   no reading, a gap). Never present a guess as a measurement. Then: what would have warned earlier or limited the
+7. **Reason before writing.** For each unusual thing, ask what physically explains it. Keep several causes when the
+   evidence allows, rank them, and give for each what points to it and what would confirm it. Keep apart what Home
+   Assistant SHOWS (measured, with times), what it most likely MEANS, and what it CANNOT tell (no sensor there, no
+   reading, a gap): a guess is never written as a measurement. Then: what would have warned earlier or limited the
    damage (a missing sensor, an alert on how long something runs, a rule that only watches the opposite case, a switch
    that does not actually control the device).
 
-## The answer — a short message, and the whole account as a page
+## The answer: a short message, and the whole account as a page
 
-The person reads a SHORT message in the chat and opens the page for the rest (owner, 2026-10-11: "the response in the
-chat bubble shall be much more synthetic and shorter"). The page is made by the reports skill, so it looks like every
-report the agent sends.
+The person reads a short message in the chat and opens the page for the rest. The page is drawn like every report the
+agent sends, and it writes the recorded facts itself from your `--out` files: every unusual period with its times and
+its normal, what else stopped answering, the automations that ran and could act, what the records rule out, the
+recorded timeline, and when an alert on the same limits would have warned. The message opens with a line of those facts.
 
-**The records speak first.** From your `--out` files the page writes, by itself: what the records show (every unusual
-period with its times and its normal, what else stopped answering then, the automations that ran then and could act),
-what they rule out (a control that stayed off, an automation that switches nothing), the timeline, and when an alert on
-the same limits would have warned. The message starts with a line of those facts. So do NOT retell them: your part is
-what they MEAN — the causes, what cannot be known, what to check on site. Never contradict them: a control the page
-rules out is not a cause; if you think a fact is misleading, say why in "cannot_tell".
+Your account adds what the facts MEAN: the causes, what cannot be known, what to check on site. It stays consistent
+with the facts; if one seems misleading, say why in "cannot_tell".
 
-8. **Save the account** with save_file, as `investigation.json` — plain sentences, no Markdown:
+8. **Save the account** with save_file as `investigation.json`, in plain sentences (no Markdown):
 
-       {"title": "Water heater on the night of 9 October",     (at most 90 characters)
-        "summary": "3 to 5 sentences, at most 640 characters: the most likely cause and what points to it, what to
-                    check on site first. The chat message puts it under the line of recorded facts (times and
-                    durations): do not repeat them, explain them.",
-        "timeline": [{"time": "09/10 07:30", "text": "The gardener found water on the floor.", "unusual": true}, …
-                     ONLY what a person saw or did that the records do not show — the page builds the recorded
-                     timeline itself; leave it out when there is nothing such],
-        "causes": [{"cause": "…", "evidence": "what in the records points to it", "confirm": "how to confirm on site"},
-                   … most likely first; a lead from web research also has "source" (where it came from: the web
-                   page's name, or the record that raised it) and "verdict" ("consistent", "not supported" or
-                   "cannot tell")],
-        "cannot_tell": ["what no sensor saw, gaps in the records, what only a person on site can check", …],
-        "warned_earlier": ["a sensor, rule or change the records cannot measure (the page already gives when an
-                           alert on each unusual period would have fired)", …],
-        "checked": "what you read in Home Assistant: devices, the period, the logbook, the automations (the page
-                    says what the web gave by itself — do not)",
-        "sources": [{"title": "the page's title", "url": "https://…"}, … every web page you used, numbered by
-                    its place: [1] is the first — each cited in the text where you used it]}
+       {"title": "at most 90 characters",
+        "summary": "3 to 5 sentences, at most 640 characters: the most likely cause and what points to it, and what to check on site first",
+        "timeline": [{"time": "09/10 07:30", "text": "what a person saw or did", "unusual": true}],
+        "causes": [{"cause": "…", "evidence": "what in the records points to it", "confirm": "how to confirm on site"}],
+        "cannot_tell": ["what no sensor saw, a gap in the records, what only a person on site can check"],
+        "warned_earlier": ["a sensor, rule or change that would have warned"],
+        "checked": "what you read: the devices, the period, the logbook, the automations",
+        "sources": [{"title": "the page's title", "url": "https://…"}]}
 
-   (the example is invented: write the devices and times of THIS investigation). For the charts and the recorded
-   facts, your last timeline run must be the one of the whole period with `--out timeline.json`, all the devices that
-   matter in it (with their controls), and your last around run the same period with `--out around.json`.
+   - `timeline`: only what a person saw or did that the records do not show (the page draws the recorded one); leave it
+     out when there is none.
+   - `causes`: most likely first. A cause that came from a lead also has `"source"`, written `"[2]"` for a web page (its
+     place in `sources`) or `"the records"`, and `"verdict"`: `"consistent"` (the records fit it), `"not supported"`
+     (they contradict it: the page then lists it under ruled out) or `"cannot tell"` (no record can judge it; say what
+     would).
+   - `warned_earlier`: what the records cannot measure; the page already gives when an alert on each unusual period
+     would have fired.
+   - `sources`: every web page you used, numbered by place ([1] is the first), each cited as [n] in the text that used
+     it (the summary, a cause, cannot_tell, warned_earlier). The page refuses an uncited page or a [n] it does not have.
+   - Before saving, your last timeline run covers the whole period with `--out timeline.json` and every device that
+     matters (with its controls), and your last around run covers the same period with `--out around.json`.
 
-9. **Make the page:** `run_skill_script investigate page.py --notes investigation.json --data timeline.json
-   --around around.json --out investigation.html`. It prints a `message` {title, text} and the facts the page
-   states ("established", "ruled_out"). Read them against your account before sending: if they disagree, fix the
-   account and make the page again.
+   An example of the tone (invented; write this investigation's own devices and times):
 
-10. **Send it:** send_message(to="here", title= the message's title, text= the message's text, attachment=
-    "investigation.html"). That message and its page ARE the answer: after it, write nothing — the agent does not
-    send anything you write after the page, and puts the fault buttons under the page's message itself.
+       "summary": "The pool pump ran without stopping from 02:14 to 06:40 because water was escaping: the level sensor
+                   fell 11 cm over the same hours and the pump's own pressure switch keeps it running while pressure
+                   stays low [1]. Check the pool's return pipes and the skimmer seal first."
+       {"cause": "A leak on the pool's return circuit", "evidence": "Level −11 cm from 02:10 while the pump ran 4 h 26
+        min, its longest normal run 2 h", "confirm": "Look for wet ground along the return pipe", "source": "[1]",
+        "verdict": "consistent"}
 
-If the page cannot be made (a script failed), say so in one line and write the account in the chat instead, in the
-same parts, plain text.
+9. **Make the page:** `run_skill_script investigate page.py --notes investigation.json --data timeline.json --around
+   around.json --out investigation.html`. It prints a `message` {title, text} and the facts the page states
+   ("established", "ruled_out"). Read them against your account; if they disagree, fix the account and make the page
+   again.
 
-Rules for the account:
-- Every number and time comes from a script or a tool. Give units (W, kWh, °C, min). Times as "03:09", with the date
+10. **Send it:** send_message(to="here", title= the message's title, text= the message's text,
+    attachment="investigation.html"). That message and its page are the whole answer: the agent sends nothing you write
+    after it, and puts the fault buttons under the page's message.
+
+If the page cannot be made (a script failed), say so in one line and give the account in the chat instead, in the same
+parts, plain text.
+
+## Rules for the account
+
+- Every number and time comes from a script or a tool, with its unit (W, kWh, °C, min). Times as "03:09", with the date
   when the account spans several days.
-- Devices and rooms by their names, never an entity id or a rule code.
-- Say "I could not read …" for anything that failed, and what that leaves uncertain.
-- A fault is never the answer. Only if a person must check or do something on site, you may call create_ticket once —
-  in a chat it is only offered, with a button, and the person decides. Never write that a fault was created.
+- Devices and rooms by their names; entity ids and rule codes stay out.
+- For anything that failed, say "I could not read …" and what that leaves uncertain.
+- The answer is the account. Only when a person must check or do something on site, call create_ticket once: in a chat
+  it is offered with a button and the person decides, so the account never says a fault was created.

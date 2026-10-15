@@ -940,3 +940,16 @@ def test_around_says_a_restart_once_and_keeps_a_device_that_did_not_come_back():
     rows = Restarted().logbook(T(9, 2), T(9, 15))
     flips = features.flips_per_day(rows, "UTC", investigate.th("restart_settle_minutes"))
     assert "switch.spa" not in flips and "sensor.example_thermometer" not in flips and "switch.next_relay" in flips, flips
+
+
+def test_the_skills_own_example_of_a_cause_passes_the_pages_rules():
+    # 2026-10-15: step 6 said a lead's source is "[n]", the account's format said "the web page's name" — the page
+    # refuses a name, so following the format had the page refused. One rule, and the example obeys it
+    import json
+    import page as inv_page
+    text = open(os.path.join(STARTER_SKILLS, "investigate", "SKILL.md"), encoding="utf-8").read()
+    raw = re.search(r'\{"cause":[^{}]*?"verdict"[^{}]*\}', text).group(0)          # the example, not the format
+    cause = json.loads(" ".join(line.strip() for line in raw.splitlines()))
+    assert (inv_page.CITE.search(cause["source"]) or inv_page.RECORDS.search(cause["source"])) \
+        and cause["verdict"] in inv_page.VERDICTS
+    assert "page's name" not in text and "web page's name" not in text

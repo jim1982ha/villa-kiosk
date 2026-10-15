@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.208 (15 October 2026)
+
+- investigate SKILL.md rewritten (owner: "you can edit and optimise this skill"), same ten steps (page.py and skill.yaml
+  still point at step 6): a cause's `source` is "[n]" or "the records" in the one place it is defined — the account's
+  format said "the web page's name", which page.py refuses (CITE / RECORDS); each rule said once (the page writes the
+  recorded facts: said once, before step 8); instructions stated as what to do, not as capitals and prohibitions; the
+  owner's dated notes left to the changelog; one invented example of a summary and a cause; the description says when it
+  is used. One file still: read_skill reads SKILL.md only, so nothing moved to a reference file. test_investigate runs
+  the example cause through page.py's rules (two mutations red). Starter skills recorded.
+
 ## 0.6.207 (15 October 2026)
 
 Architecture review 2026-10-15 (the problem lifecycle), 3:

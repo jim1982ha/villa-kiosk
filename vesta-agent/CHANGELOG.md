@@ -1,3 +1,11 @@
+## 0.12.216
+
+What you will see:
+- /investigate follows clearer instructions, with the same steps and the same page. One contradiction is gone: the
+  instructions told the AI to write a web source two different ways, and one of them made the page refuse the account
+  and the AI start over. The instructions are shorter, say each rule once, and show one example of a good summary and
+  cause.
+
 ## 0.12.215
 
 What you will see (architecture review of 15 October, idea 3):
