@@ -170,3 +170,17 @@ def known_devices(v, *entity_ids: str, device: str | None = None) -> None:
     reg = {"entities": [{"entity_id": e, "device_id": device} for e in entity_ids]}
     with open(v.s.pack_path, "w", encoding="utf-8") as f:
         f.write(build_pack(reg, []).to_json())
+
+
+def alert_desk():
+    """The alert desk's script as a module (starter/skills/alert-desk/scripts/desk.py).
+
+    ⚠️ A TEST SENDS WHAT THE DESK SENDS (retro, 2026-10-15): tests handed the engine incident messages written by hand
+    (`{"to": "fm", "keyboard": True}`), a shape that kept passing whatever the desk really produced — build them with
+    `alert_desk().tell(...)`, the desk's one answer to who hears a notice and with which buttons."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("desk_for_tests", os.path.join(STARTER_SKILLS, "alert-desk", "scripts",
+                                                                                "desk.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod

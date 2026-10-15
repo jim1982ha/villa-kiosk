@@ -19,11 +19,11 @@ from dataclasses import dataclass, field, asdict
 from datetime import date, timedelta
 from typing import Any
 
-from vesta_shared.params import VillaParams, MissingParameter
+from vesta_shared.params import VillaParams
 from vesta_shared.result import COUNTER_RESET, PARAM_MISSING  # the ids other skills read: written once
 from vesta_shared.stats import med, pct_change, step_index
 from vesta_shared.device_state import battery_charge, is_offline
-from vesta_shared.timeutil import day_label, schedule_hours_per_day, weekday_name
+from vesta_shared.timeutil import day_label, weekday_name
 
 P2, P3, INFO = "P2", "P3", "INFO"
 

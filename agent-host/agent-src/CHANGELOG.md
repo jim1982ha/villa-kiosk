@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.196 (15 October 2026)
+
+Retro, 2026-10-15:
+- release.py gates: ruff F on vesta_agent, vesta_shared and starter; F821/F822/F823 on tests; pytest -n auto
+  (pytest-xdist: 60 s instead of 130); tools/mutate.py and its test (agent-host/tests/test_mutate.py). The 25 ruff
+  findings in the agent's own code fixed (unused imports, an unused `as e`, an f-string without a placeholder);
+  test_ticket_offer imports the offer buttons from fault_offers.
+- tests: helpers.alert_desk(); the hand-written alert-desk messages in test_outcome and test_telegram_events are now
+  desk.tell's (a P1's reminder reaches every chat of both roles: 6 messages, each with the buttons while it is open).
+  desk.tell's docstring corrected: the engine puts the buttons under every copy of an open alert (owner, 2026-10-10);
+  first_in_line is who is chased.
+
 ## 0.6.195 (15 October 2026)
 
 Architecture review, 2026-10-15 (counts and alerts):

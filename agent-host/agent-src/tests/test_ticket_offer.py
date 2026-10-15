@@ -9,7 +9,7 @@ import os
 from helpers import make_agent
 from kiosk_fake import FakeKiosk
 from telegram_fake import BOT, FakeTelegram
-from vesta_agent.app import NO_OFFER_BUTTON, OFFER_BUTTON
+from vesta_agent.fault_offers import CREATE as OFFER_BUTTON, DECLINE as NO_OFFER_BUTTON
 
 JM = 111
 PEOPLE = [{"telegram_id": JM, "name": "JM", "role": "owner"}]

@@ -36,7 +36,6 @@ from vesta_shared.timeutil import moment_label
 
 from datetime import datetime, timezone
 from typing import Callable
-from zoneinfo import ZoneInfo
 
 
 #: A notice's kind (vesta_shared.result.message `stage`), as its history line says it.

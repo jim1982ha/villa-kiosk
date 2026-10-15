@@ -32,13 +32,11 @@ sys.path.insert(0, HERE)
 
 from vesta_shared import script  # noqa: E402  (client, pack, store, settings, zone: one set-up)
 from vesta_shared.messaging import no_code as _no_code  # noqa: E402
-from vesta_shared.params import VillaParams, MissingParameter  # noqa: E402
 from vesta_shared.timeutil import day_label, villa_day  # noqa: E402
 from vesta_shared.message_format import document, split_title  # noqa: E402  (the one shape of a message)
 from vesta_shared.device_state import has_value, is_offline  # noqa: E402
 from vesta_shared.problems import Problems, again_title  # noqa: E402  (a problem's lifecycle: one owner)
 from vesta_shared import result  # noqa: E402  (what the engine is asked to do: its shape; R is rules.py)
-from vesta_shared.stats import med  # noqa: E402
 from vesta_shared import daily  # noqa: E402  (a device's day: the one running threshold)
 from vesta_shared.timeutil import schedule_hours_per_day  # noqa: E402
 import features as F  # noqa: E402

@@ -9,7 +9,7 @@ parameters.
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from vesta_shared.device_state import RestartDrops, is_offline  # the one "does this device answer"

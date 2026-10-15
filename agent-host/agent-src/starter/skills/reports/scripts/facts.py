@@ -32,7 +32,6 @@ import sys
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-import yaml
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL = os.path.dirname(HERE)

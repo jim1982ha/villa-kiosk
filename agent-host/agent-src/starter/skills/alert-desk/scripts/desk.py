@@ -125,9 +125,10 @@ def tell(sev: str, stage: str, *, incident: int, ladder: bool = True, chased: bo
     P1's reminder, its reopening in the Cockpit and its "back online" still reached the facility manager alone. Now:
     - `escalated`: the role it escalates to (chase.escalates_to), with the buttons — the chase is theirs now;
     - every other notice: the people of its priority (people_roles), and while it is `chased` the asked role
-      (chase.asks) as well, whatever the priority; only the asked role's carry Done / Need help, on a notice that
-      asks for an answer (ASKING) of a route with the ladder — marked `first_in_line`, so the engine can tell when
-      none of their chats received it (and the desk hands it on: `unreached`)."""
+      (chase.asks) as well, whatever the priority. The asked role's notice that asks for an answer (ASKING), on a route
+      with the ladder, is marked `first_in_line`, so the engine can tell when none of their chats received it (and the
+      desk hands it on: `unreached`). (The engine puts Done / Need help under EVERY copy while the alert is open —
+      owner, 2026-10-10: nobody has to type a reply — so who is asked is a matter of who is chased, not of buttons.)"""
     if stage == "escalated":
         return [R.message(CHASE["escalates_to"], **said, incident=incident, buttons=True, stage=stage, mark=mark)]
     roles = recipients(sev) + ([CHASE["asks"]] if chased and CHASE["asks"] not in recipients(sev) else [])

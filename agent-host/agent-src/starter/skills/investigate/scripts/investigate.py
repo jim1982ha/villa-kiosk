@@ -31,7 +31,7 @@ import os
 import re
 import statistics
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from vesta_shared import script, skill_settings  # noqa: E402  (client, store, zone: one set-up for every skill script)

@@ -11,7 +11,7 @@ import re
 import pytest
 import yaml
 
-from helpers import copy_skill, make_agent, settings, body, status
+from helpers import alert_desk, copy_skill, make_agent, settings, body, status
 from ha_fake import FakeHA, tool
 from vesta_agent.app import Vesta
 from vesta_agent.routing import CONVERSATION, Origin
@@ -225,14 +225,16 @@ def test_an_answer_settles_the_alert_in_every_chat_and_its_reminder(agent):
         yaml.safe_dump(raw, f)
     from vesta_shared.store import Store
     iid = Store(agent.s.store_path).new_incident("k", "automation.x", "lock.front_door", "P1", {"message": "m"})
-    alert = {"send": [{"to": "owner", "text": f"🔒 Door unlocked. Incident #{iid}.", "keyboard": True},
-                      {"to": "fm", "text": f"🔒 Door unlocked. Incident #{iid}.", "keyboard": True}], "incident_id": iid}
-    run(agent.outcome.carry_out(alert, "alert-desk"))
-    run(agent.outcome.carry_out({"send": [{"to": "fm", "text": f"Reminder, incident #{iid}: m.", "keyboard": True}],
+    desk = alert_desk()                     # what the desk sends: a P1 to both roles, its buttons to the facility manager's
+    run(agent.outcome.carry_out({"send": desk.tell("P1", "new", incident=iid, text="🔒 Door unlocked."),
+                                 "incident_id": iid}, "alert-desk"))
+    run(agent.outcome.carry_out({"send": desk.tell("P1", "reminder", incident=iid, chased=True, text="Reminder: m."),
                                  "incident_id": iid}, "alert-desk"))
     sent = {(c, t): None for c, t, kb in agent.tg.sent if kb}
-    assert sorted({c for c, _ in sent}) == sorted([OWNER, GROUP, FM]) and len(sent) == 4   # every chat of each role
-    fm_mid = agent.tg.next_id - 1                                       # the reminder, pressed in the FM's chat
+    # the alert and its reminder, in every chat of each role (a P1's reminder reaches the owner too, 0.12.203), each with
+    # the buttons while it is open (owner, 2026-10-10: nobody has to type a reply)
+    assert sorted({c for c, _ in sent}) == sorted([OWNER, GROUP, FM]) and len(sent) == 6
+    fm_mid = max(1001 + n for n, (c, _t, _k) in enumerate(agent.tg.sent) if c == FM)   # the reminder in the FM's chat
     press = {"id": "cb9", "data": f"i:{iid}:done", "chat_id": FM, "user_id": FM,
              "message": {"message_id": fm_mid, "chat": {"id": FM}, "text": f"Reminder, incident #{iid}: m."}, "bot": BOT}
     run(agent.on_ha_event("telegram_callback", press))
@@ -252,7 +254,8 @@ def test_an_answer_settles_the_alert_in_every_chat_and_its_reminder(agent):
 def test_an_incident_home_assistant_clears_settles_its_alerts(agent):
     from vesta_shared.store import Store
     iid = Store(agent.s.store_path).new_incident("k", "automation.x", "lock.front_door", "P2", {"message": "m"})
-    run(agent.outcome.carry_out({"send": [{"to": "fm", "text": f"Incident #{iid}.", "keyboard": True}], "incident_id": iid}, "alert-desk"))
+    run(agent.outcome.carry_out({"send": alert_desk().tell("P2", "new", incident=iid, text="m"), "incident_id": iid},
+                                "alert-desk"))
     run(agent.outcome.carry_out({"settle": [{"incident_id": iid, "note": "Cleared in Home Assistant, {time}. No reply needed."}]}, "alert-desk"))
     assert sorted(c for c, _, _ in agent.tg.edits) == sorted([FM, GROUP])     # every chat of the role: each settled
     assert all(re.search(r"(?:\n-------\n|\n\n|Status:\n|to [A-Za-z &]+\n)(?:(?:✅|⚠️|⚠️ ⚙️) )?Cleared in Home Assistant, \d\d/\d\d/\d{4} \d\d:\d\d\. No reply needed\.$", text)

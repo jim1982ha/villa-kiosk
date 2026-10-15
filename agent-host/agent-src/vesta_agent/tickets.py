@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Awaitable, Callable
 
 from vesta_shared import kiosk_words, result
-from vesta_shared.problems import CLEARED, Problems
+from vesta_shared.problems import Problems
 
 from .kiosk import NOTED, KioskError
 from .outcome_words import ticket_title

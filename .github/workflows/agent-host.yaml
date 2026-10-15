@@ -32,7 +32,7 @@ jobs:
 
       - name: What the gates import
         run: |
-          python3 -m pip install --quiet pyyaml pytest -r agent-host/agent-src/requirements.txt
+          python3 -m pip install --quiet pyyaml pytest pytest-xdist ruff -r agent-host/agent-src/requirements.txt
 
       - name: What the agent needs from Debian
         # The image installs the agent manifest's system_packages; the tests need the

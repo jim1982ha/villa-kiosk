@@ -30,8 +30,7 @@ from .. import __version__, requests_box, status, tool_access
 from ..config import STARTER_DIR, Settings
 from ..history import History, file_change
 from ..places import ORDER, PLACES, TABS
-from ..policy import Policy, problems as policy_problems
-from ..skills import FILE_NAME, REQUIRED_FILES, SKILL_NAME, TRASH, VILLA_CHOICES, Skills, parse_skill, switch_command, to_trash
+from ..skills import FILE_NAME, REQUIRED_FILES, SKILL_NAME, TRASH, VILLA_CHOICES, Skills, switch_command, to_trash
 from ..state import State
 from . import setup_copy
 from .changes import PageFiles, Refused, _read, _write, page_policy, rev, rules_problems, undoable
@@ -195,7 +194,6 @@ class UI:
     # ------------------------------------------------------------------ AI jobs
     def _jobs(self) -> list[dict]:
         """The AI jobs the skills declare, and whether policy.yaml sets their model and limit (else they do not run)."""
-        from ..policy import Policy
         from ..skills import ai_jobs
         set_ = page_policy(self.s.policy_path).jobs
         from ..scheduler import describe
@@ -227,7 +225,6 @@ class UI:
     async def costs(self, request):
         """The Costs tab: every AI run of the last `days` (7, 30 or 90), from the agent's own records."""
         from zoneinfo import ZoneInfo
-        from ..policy import Policy
         from ..routing import Routing
         days = request.query.get("days", "7")
         days = int(days) if days in ("7", "30", "90") else 7          # the Costs tab opens on the last 7 days

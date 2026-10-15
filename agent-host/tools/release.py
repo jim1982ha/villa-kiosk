@@ -47,7 +47,7 @@ ENGINE_INIT = "agent-host/agent-src/vesta_agent/__init__.py"
 
 #: ⚠️ THE TESTS' PYTHON IS A FIXED PLACE (2026-10-13): this machine has no `python` and its python3 lacks pytest, and
 #: a session found the only working environment in ANOTHER session's /tmp scratchpad, gone at the next reboot. Off CI,
-#: agent-host/.venv (uv venv --python 3.13; pyyaml pytest -r agent-src/requirements.txt; gitignored) is used when it
+#: agent-host/.venv (uv venv --python 3.13; pyyaml pytest pytest-xdist ruff -r agent-src/requirements.txt; gitignored) is used when it
 #: exists; CI installs its own packages and runs with the interpreter that started this file.
 VENV_PY = ROOT / "agent-host" / ".venv" / "bin" / "python"
 PY = str(VENV_PY) if not IN_CI and VENV_PY.exists() else sys.executable
@@ -72,8 +72,20 @@ GATES: list[tuple[str, list[str], str, str]] = [
     ("What the host sends is what the agent reads", [PY, "agent-host/tests/test_env_contract.py"], ".", "rest"),
     ("The agent's manifest and the host state", [PY, "agent-host/tests/test_manifest.py"], ".", "rest"),
     ("The release module", [PY, "agent-host/tests/test_release.py"], ".", "rest"),
+    ("A mutation run always gives the file back", [PY, "agent-host/tests/test_mutate.py"], ".", "rest"),
+    # ⚠️ NO NAME USED THAT IS NOT DEFINED (retro, 2026-10-15): a 1,042-line split of the reports' composer was checked
+    # for missing imports by a throwaway script. pyflakes' rules (ruff F) on the agent's own code; on the tests,
+    # undefined names only (their fixture imports read as unused). `# noqa: F401` marks a re-export.
+    ("Every name the agent's code uses is defined",
+     [PY, "-m", "ruff", "check", "--no-cache", "--select", "F", "vesta_agent", "vesta_shared", "starter"],
+     "agent-host/agent-src", "rest"),
+    ("Every name the tests use is defined",
+     [PY, "-m", "ruff", "check", "--no-cache", "--select", "F821,F822,F823", "tests"], "agent-host/agent-src", "rest"),
     # The synthetic tests. tests/villa/ (real data, gitignored) is collected too wherever it exists.
-    ("The VESTA Agent's own tests", [PY, "-m", "pytest", "tests", "-q", "-p", "no:cacheprovider"], "agent-host/agent-src",
+    # -n auto (pytest-xdist): about 60 s on this machine instead of 130 — longer than a command's 2-minute limit (retro,
+    # 2026-10-15)
+    ("The VESTA Agent's own tests", [PY, "-m", "pytest", "tests", "-q", "-p", "no:cacheprovider", "-n", "auto"],
+     "agent-host/agent-src",
      "agent"),
 ]
 

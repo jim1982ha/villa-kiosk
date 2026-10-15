@@ -9,7 +9,7 @@ import os
 import pytest
 import yaml
 
-from helpers import make_agent, make_skill, settings, body
+from helpers import alert_desk, make_agent, make_skill, settings, body
 from telegram_fake import BOT, FakeTelegram
 from ha_fake import FakeHA, tool
 from kiosk_fake import FakeKiosk
@@ -110,7 +110,7 @@ def test_the_tasks_and_the_kiosks_tickets_agree(agent):
     alert, _ = pb.open_task("incident", iid, "automation.example_door", "lock.example_door", "Door left open")
     st.set_task_uid(alert, "t-alert")
     kiosk.person_closes("t-alert", by="Facility manager", at="2026-10-10T09:13:00.000Z")
-    run(v.outcome.carry_out({"send": [{"to": "fm", "text": f"Door left open. Incident #{iid}.", "keyboard": True}],
+    run(v.outcome.carry_out({"send": alert_desk().tell("P2", "new", incident=iid, text="Door left open."),
                              "incident_id": iid}, "alert-desk"))
     run(v.tickets.repair())
     assert st.task(by_hand)["status"] == "closed_in_kiosk"                          # a person closed it there

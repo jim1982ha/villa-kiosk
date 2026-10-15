@@ -360,7 +360,7 @@ def investigation(notes: dict, data: dict | None, around: dict | None = None, se
                            "hours": Markup(hourchart(hours, zone)) if hours else "",
                            "hours_title": f"How many minutes it ran each {per}",
                            "hours_legend": [{"word": f"minutes it ran that {per}", "colour": READINGS, "shape": "band"}]
-                           + ([{"word": f"its usual for that hour (the days before)", "colour": USUAL,
+                           + ([{"word": "its usual for that hour (the days before)", "colour": USUAL,
                                 "shape": "line"}] if per == "hour" and any(b.get("usual") is not None
                                                                          for b in hours.get("bins") or []) else [])})
     lanes_svg = ""

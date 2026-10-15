@@ -238,7 +238,7 @@ class Toolbox:
                 return _ok(self.parts.serve(key, None, part))
             try:
                 res = await asyncio.to_thread(self.reader.mcp.call_raw, name, args)
-            except Exception as e:  # noqa: BLE001
+            except Exception:  # noqa: BLE001
                 return _err("The villa's system did not answer.")
             blocks = res.get("content") or []
             images = [b for b in blocks if b.get("type") == "image"]

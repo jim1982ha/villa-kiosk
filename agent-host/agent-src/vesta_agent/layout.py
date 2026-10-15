@@ -21,7 +21,6 @@ changes; a "For: …" heading recorded before 0.12.175 is laid out under UNTITLE
 """
 from __future__ import annotations
 
-import re
 
 from vesta_shared.message_format import (INCIDENT_TITLE, MARK_ICONS, STAGE_ICONS, STAGE_WORDS, STATUS, TO, UNTITLED, document,
                                          parts as shape_parts)

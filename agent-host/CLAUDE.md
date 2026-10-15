@@ -32,6 +32,9 @@ You are building the **VESTA Agent host**: a Home Assistant app that hosts the V
 ## Working method
 - A check that cannot pass yet because a dependency does not exist (SPEC section 15) is reported as `skipped`, never faked.
 - Tests: `agent-host/.venv/bin/python` (Python 3.13, gitignored; `tools/release.py` uses it off CI — how to rebuild it is at its `PY`).
+  The full suite runs in parallel (`pytest tests -n auto`, about 60 s); `ruff check --select F` must stay clean.
+- Prove a new check can fail with `tools/mutate.py FILE 'old' 'new' -- CMD` (RED = it catches it; the file always
+  comes back; `--restore` after a killed run).
 
 ## Owner rules that stand (the decision and its date are in ARCHITECTURE.md)
 - SKILLS BEFORE CODE (mandatory): whatever a skill can define (sections, thresholds, wording, routes, which scripts run, which rules are alerts) lives in the skill, never in `vesta_agent/`. No threshold in code: a missing one is named, not guessed.

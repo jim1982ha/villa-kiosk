@@ -25,7 +25,6 @@ import asyncio
 import json
 import logging
 import os
-import shutil
 import signal
 import subprocess
 import sys
@@ -66,7 +65,7 @@ from .state import State
 from .telegram import Telegram, TelegramError
 from .tools import Toolbox, scrub
 from .turn import Turns
-from .notice import Notices, note_step, when
+from .notice import Notices, note_step
 
 log = logging.getLogger("vesta")
 
@@ -81,7 +80,6 @@ def _pretty(entity_id: str) -> str:
     return obj.replace("_", " ").strip().capitalize()
 
 
-from .fault_offers import CREATE as OFFER_BUTTON, DECLINE as NO_OFFER_BUTTON  # noqa: E402  (tests name them)
 
 
 @dataclass
