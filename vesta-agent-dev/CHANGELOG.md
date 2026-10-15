@@ -1,3 +1,9 @@
+## 0.12.206
+
+What you will see:
+- Rules › Protected devices now says, under its fields, that devices hidden in the villa's system are ignored by the
+  agent: left out of the villa status, the reports and what the AI is told.
+
 ## 0.12.205
 
 What you will see:
