@@ -1,3 +1,9 @@
+## 0.12.217
+
+What you will see:
+- /investigate's short message explains the times instead of repeating them: 0.12.216 lost that instruction, and its
+  own example summary repeated the times shown just above it. Both are put right.
+
 ## 0.12.216
 
 What you will see:
