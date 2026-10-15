@@ -12,6 +12,7 @@
 // an on/off switch. The fields, their drafts and their words are here once;
 // each table supplies only its layout — a cell per field (`cell`).
 
+import { isLockEntity } from "@/ha/stateLens";
 import type { ReactNode } from "react";
 import Dropdown from "@/components/common/Dropdown";
 import EntityPicker from "./EntityPicker";
@@ -86,6 +87,16 @@ export default function MappingFields({ entityId, mapping, entity, onPatch, cell
             onChange={(e) => draftField({ requireConfirm: e.target.checked })}
             title="Ask before toggling — a tap on this device's map badge opens its panel instead of acting instantly, and its panel's own on/off button asks 'Turn on/off?' first. For a device where an accidental toggle has a real physical consequence, e.g. a door release or gate motor modelled as a plain switch." />
           Confirm before toggling
+        </label>
+      ))}
+      {/* every lock entity, whatever its panel type (owner, 2026-10-15): one mounted upside down reports the wrong way
+          round — the app then reads and moves it the right way round everywhere (ha/stateLens.ts) */}
+      {isLockEntity(entityId) && cell("invert", "Inverted lock", (
+        <label className="row" style={{ gap: 6, fontSize: "var(--text-xs)", color: "var(--text-secondary)", cursor: "pointer", flex: "0 0 auto" }}>
+          <input type="checkbox" checked={!!m.invertLock}
+            onChange={(e) => draftField({ invertLock: e.target.checked || undefined })}
+            title="This lock reports the wrong way round (mounted upside down): its Locked and Unlocked are swapped everywhere in the Kiosk — the map, the cards, the history — and Lock / Unlock move it the way they say." />
+          Reports Locked / Unlocked the wrong way round
         </label>
       ))}
       {m.type === "light" && cell("intensity", "Intensity", (

@@ -13,6 +13,8 @@ import type { HAWebSocket } from "./HAWebSocket";
 import { EntityStore, type EntityStoreState, type HAConfig } from "./entityStore";
 import type { HassEntity, HassServiceTarget } from "@/types/ha.types";
 import type { ServiceOutcome } from "./serviceOutcome";
+import { useConfig } from "@/config/ConfigContext";
+import { lensFrom } from "./stateLens";
 
 export type { HAConfig };
 
@@ -54,9 +56,17 @@ interface HAStateContextType extends EntityStoreState {
 const HAStateContext = createContext<HAStateContextType | null>(null);
 
 export function HAStateProvider({ children }: { children: ReactNode }) {
+  // The villa's device settings decide how its devices are read (stateLens.ts: a lock marked inverted) — set before
+  // the first state is read, so no screen ever shows a reversed lock the wrong way round, then kept in step.
+  const { config } = useConfig();
+  const lens = useMemo(() => lensFrom(config.entityMap), [config.entityMap]);
   const storeRef = useRef<EntityStore>();
-  if (!storeRef.current) storeRef.current = new EntityStore();
+  if (!storeRef.current) {
+    storeRef.current = new EntityStore();
+    storeRef.current.setLens(lens);
+  }
   const store = storeRef.current;
+  useEffect(() => store.setLens(lens), [store, lens]);
   const state = useSyncExternalStore(store.onChange, store.getState);
 
   useEffect(() => store.attach(), [store]);

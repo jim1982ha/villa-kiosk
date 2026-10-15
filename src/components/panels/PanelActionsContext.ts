@@ -36,6 +36,8 @@ export interface PanelActions {
     color?: string;
     /** Representative category colour, for the picker's "default" chip. */
     categoryColor: string;
+    /** A lock read the wrong way round: its badge's invert pill (ha/stateLens.isInvertedLock). */
+    inverted: boolean;
     /** Drives the header icon's FILL and GLYPH exactly like its map badge
      *  (config/EntityCategories.categorySurface + babylon/badgeIcons.ts bake
      *  the same image both places use). This device's OWN state only —

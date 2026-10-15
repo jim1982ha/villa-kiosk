@@ -179,6 +179,28 @@ function opticalNudge(iconKey: string): { dx: number; dy: number } {
   return out;
 }
 
+/** The INVERT pill (BakeSpec.inverted): a round pill in the squircle's bottom-right corner, in the glyph's own ink,
+ *  carrying two opposed arrows in the badge's fill — the badge's colours swapped, so it reads in every state and theme
+ *  — with a hairline of the fill around it to part it from the lock it overlaps. */
+function drawInvertPill(ctx: CanvasRenderingContext2D, m: number, size: number,
+  surface: { fill: string; glyph: string }): void {
+  const r = size * 0.21;
+  const c = m + size - r - size * 0.03;            // inside the corner's curve, clear of the ring
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(c, c, r + Math.max(1, size * 0.03), 0, Math.PI * 2);
+  ctx.fillStyle = surface.fill;
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(c, c, r, 0, Math.PI * 2);
+  ctx.fillStyle = surface.glyph;
+  ctx.fill();
+  ctx.restore();
+  const iconPx = r * 1.3;
+  // bold, a little heavier still: at a fifth of the badge the arrows must stay legible
+  drawIcon(ctx, ICON_NODES["arrow-down-up"], iconPx / ICON_VIEWBOX, c - iconPx / 2, surface.fill, true, 1.25);
+}
+
 function drawIcon(
   ctx: CanvasRenderingContext2D, primitives: readonly IconPrimitive[], scale: number, offset: number, strokeStyle: string,
   bold = false,
@@ -297,13 +319,16 @@ export interface BakeSpec {
   bakePx?: number;
   /** The card style's heavier glyph (ICON_STROKE_VIEWBOX_BOLD). */
   bold?: boolean;
+  /** A lock read the wrong way round (its Advanced Settings switch, ha/stateLens.isInvertedLock): an invert pill — two
+   *  opposed arrows — in its bottom-right corner (owner, 2026-10-15), wherever its badge is drawn. */
+  inverted?: boolean;
 }
 
 /** The badge picture a BakeSpec describes, as a data URL (cached). */
 export function badgeImage(s: BakeSpec): string {
   return badgeImageDataUrl(
     s.category, s.iconKey, s.state, s.color, s.inset ?? 0, s.ringState,
-    s.ring === "none", s.bakePx ?? 0, s.bold ?? false, typeof s.ring === "number" ? s.ring : undefined);
+    s.ring === "none", s.bakePx ?? 0, s.bold ?? false, typeof s.ring === "number" ? s.ring : undefined, s.inverted ?? false);
 }
 
 /** Render (and cache) the composited squircle badge for a category + glyph +
@@ -359,6 +384,8 @@ function badgeImageDataUrl(
    * card beside it. Omitted: the classic style's own fractions.
    */
   ringOfSize?: number,
+  /** The invert pill in the bottom-right corner (BakeSpec.inverted). */
+  inverted = false,
 ): string {
   const theme = typeof document !== "undefined" ? document.documentElement.getAttribute("data-theme") ?? "" : "";
   // ringState is part of the key: two badges alike in every other respect but
@@ -372,7 +399,7 @@ function badgeImageDataUrl(
   // Weight is part of the key for the same reason size is: the two weights are
   // two different pictures, and a cache that conflated them would serve
   // whichever style happened to bake first to both of them.
-  const cacheKey = `${category}:${iconKey}:${state}:${ring}:${colorOverride ?? ""}:${inset}:${suppressRing}:${theme}:${px}:${boldGlyph}:${ringOfSize ?? ""}`;
+  const cacheKey = `${category}:${iconKey}:${state}:${ring}:${colorOverride ?? ""}:${inset}:${suppressRing}:${theme}:${px}:${boldGlyph}:${ringOfSize ?? ""}:${inverted}`;
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
@@ -426,6 +453,8 @@ function badgeImageDataUrl(
     // strokeScale.
     drawIcon(ctx, ICON_NODES[iconKey] ?? ICON_NODES.gauge, iconScale, offset, surface.glyph,
       boldGlyph, size > 0 ? px / size : 1, opticalNudge(iconKey));
+
+    if (inverted) drawInvertPill(ctx, m, size, surface);
 
     url = canvas.toDataURL("image/png");
   }
