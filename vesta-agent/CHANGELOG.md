@@ -1,3 +1,12 @@
+## 0.12.210
+
+What you will see:
+- A device still broken whose fault had been closed by the VESTA Agent gets its fault back in the Cockpit within
+  5 minutes, with its Open Ticket and Close buttons (Timmerflotte_2623, offline since 9 October, had none). A fault
+  you or the facility manager closed stays closed.
+- An alert still true after the villa's own alert stopped repeating now ends: "Still not fixed at 15/10/2026 17:04
+  (will close itself once fixed or press Done)".
+
 ## 0.12.209
 
 What you will see:

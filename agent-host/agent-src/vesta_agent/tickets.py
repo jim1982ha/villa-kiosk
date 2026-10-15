@@ -135,6 +135,8 @@ class Tickets:
         await self._take_in(problems, held)
         if cleared := problems.close_outlived():
             log.info("Tasks closed with their problem gone: %d", len(cleared))
+        if back := problems.restore_unseen(set(held)):
+            log.info("Open problems with no Kiosk fault given one again: %d", len(back))
         await self._converge(problems, held)
         made = 0
         for t in problems.open_tasks():

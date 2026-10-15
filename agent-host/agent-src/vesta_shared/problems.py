@@ -397,6 +397,26 @@ class Problems:
             out.append(f)
         return out
 
+    def restore_unseen(self, faults: set[str]) -> list[int]:
+        """Every open problem that should be a fault and is not (unseen) gets its task back: its last one open again,
+        or a new one. `faults`: the fault ids the Kiosk still holds — a task whose fault is gone loses its id, so the
+        repair makes a new one. Returns the task ids.
+
+        ⚠️ THE WARNING WAS NOT A FIX (villa, 2026-10-15): Timmerflotte_2623, offline since 9 Oct, was named "an open
+        problem with no Kiosk fault" every 5 minutes for a day — its task had been closed by the agent while the
+        sensor stayed dead (why: not readable from here), and record_night gives a fault only to a problem that never
+        had one. The Cockpit showed the dead sensor with no Open Ticket, and nobody was asked. A person's close is
+        never undone: unseen() leaves it out."""
+        out = []
+        for f in self.unseen():
+            tid, _how = self.reopen_task("finding", f["id"], f["rule_id"], f["entity_id"], f.get("summary") or "",
+                                         json.loads(f.get("detail") or "{}").get("check") or "")
+            uid = (self.store.task(tid) or {}).get("todo_uid")
+            if uid and uid not in faults:
+                self.store.set_task_uid(tid, None)
+            out.append(tid)
+        return out
+
     def open_tasks(self) -> list[dict]:
         return self.store.tasks("open")
 

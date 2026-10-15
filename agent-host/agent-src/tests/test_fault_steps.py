@@ -108,15 +108,17 @@ def test_the_nightly_repair_never_writes_its_title_over_a_persons(tmp_path):
     assert k.readings == [("t1", "Front door lock offline 3 days")]                  # under it, once
 
 
-def test_the_repair_says_when_an_open_problem_has_no_fault(tmp_path, caplog):
-    # villa, 2026-10-14: a sensor open for five days, never in the Cockpit, and nothing anywhere said so
+def test_the_repair_gives_an_open_problem_with_no_fault_its_fault(tmp_path, caplog):
+    # villa, 2026-10-14: a sensor open for five days, never in the Cockpit, and nothing anywhere said so (0.12.193 said
+    # it in the log; since 0.12.210 the repair makes the fault)
     k = FakeKiosk()
     v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)
     st = Store(v.s.store_path)
     st.raise_finding("PM-X", "sensor.example_room", "offline", "2026-10-09", "P3", "Example offline for 39 h", {})
     with caplog.at_level("WARNING", logger="vesta.outcome"):
         run(v.tickets.repair())
-    assert "1 open problem(s) have no Kiosk fault: PM-X sensor.example_room" in caplog.text
+    assert k.tickets == [("Example offline for 39 h", "sensor.example_room")]
+    assert "have no Kiosk fault" not in caplog.text
 
 
 # ---------------------------------------------------------------------- 4, 6 · a reopening is read, and someone is told
@@ -302,3 +304,31 @@ def test_a_reopening_under_a_new_title_says_the_title_it_replaced():
     assert run(k.reopen_ticket(tid, "Pump plug offline again", "Back again."))
     step = ticket(doc, tid)["updates"][-1]
     assert step["kind"] == "reopened" and step["was"] == "Pump plug offline for 9 h"
+
+
+def test_an_open_problem_whose_fault_the_agent_closed_gets_it_back_and_a_persons_close_stays(tmp_path, caplog):
+    # villa, 2026-10-15: Timmerflotte_2623, dead since 9 Oct, had no Open Ticket in the Cockpit — its task had been closed
+    # by the agent while the sensor stayed dead, and the repair only warned, every 5 minutes, for a day
+    k = FakeKiosk()
+    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)
+    st, pb = Store(v.s.store_path), Problems(Store(v.s.store_path))
+    dead, _ = st.raise_finding("PM-X", "sensor.room_a", "offline", "2026-10-09", "P3", "Room A offline for 6 d", {})
+    gone, _ = st.raise_finding("PM-X", "sensor.room_b", "offline", "2026-10-09", "P3", "Room B offline for 6 d", {})
+    mine, _ = st.raise_finding("PM-X", "sensor.room_c", "offline", "2026-10-09", "P3", "Room C offline for 6 d", {})
+    tids = [pb.open_task("finding", f, "PM-X", e, s)[0] for f, e, s in
+            ((dead, "sensor.room_a", "Room A offline"), (gone, "sensor.room_b", "Room B offline"),
+             (mine, "sensor.room_c", "Room C offline"))]
+    run(v.tickets.repair())                                                            # t1, t2, t3
+    for tid in tids[:2]:                                                               # the agent's own close
+        pb.close(tid, "cleared", "Cleared: the check no longer sees it.")
+        run(k.resolve_ticket(st.task(tid)["todo_uid"], note="Cleared: the check no longer sees it."))
+    assert k.ticket("t1")["status"] == k.ticket("t2")["status"] == "resolved"
+    k.doc["data"]["tickets"] = [t for t in k._all() if t["id"] != "t2"]               # Room B's fault no longer held
+    k.person_closes("t3")                                                              # a person closed Room C's
+    with caplog.at_level("WARNING", logger="vesta.outcome"):
+        run(v.tickets.repair())
+    assert k.ticket("t1")["status"] == "open"                                          # its own fault, open again
+    assert st.task(tids[1])["status"] == "open" and st.task(tids[1])["todo_uid"] not in (None, "t2")   # a new one
+    assert k.ticket(st.task(tids[1])["todo_uid"])["status"] == "open"
+    assert st.task(tids[2])["status"] != "open" and k.ticket("t3")["status"] == "resolved"            # theirs stays
+    assert "have no Kiosk fault" not in caplog.text

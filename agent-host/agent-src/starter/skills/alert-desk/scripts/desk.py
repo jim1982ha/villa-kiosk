@@ -581,8 +581,9 @@ def abandoned(store: Store, ev: dict, now: datetime) -> dict:
     out["decision"] = "abandoned"
     # who watches it now, and what to do: the rule stopped, the desk did not (seen_again)
     # ⚠️ SHORT, IN THE READER'S WORDS (owner, 2026-10-15: "I don't understand this latest update"): "when the alert
-    # stopped watching it", "VESTA keeps watching it and closes it once it is right" — two sentences about the machinery
-    said = about(inc, "Still not fixed at {time}. It closes by itself once fixed, or press Done.")
+    # stopped watching it", "VESTA keeps watching it and closes it once it is right" — two sentences about the machinery.
+    # The words are the owner's own (2026-10-15)
+    said = about(inc, "Still not fixed at {time} (will close itself once fixed or press Done)")
     out["ha_messages"] = [R.ha_message(inc["id"], context=ev.get("_context_id"), stage="escalated", **said)]
     out["send"] += tell(inc["severity"], "escalated", incident=inc["id"], **said)
     return out

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.202 (15 October 2026)
+
+- Problems.restore_unseen, called by tickets.repair after close_outlived: every unseen() problem (open, a task
+  severity, no open task, no person's close since its return) gets its last task reopened (or a new one); a task whose
+  Kiosk fault is no longer held loses its id so the repair makes a new fault. The warning (0.6.186) was all there was:
+  Timmerflotte_2623's task had been closed by the agent while the sensor stayed dead (cause not readable from here).
+  Test in test_fault_steps through repair and the real Kiosk over FakeKiosk (three mutations red).
+- alert-desk desk.abandoned: "Still not fixed at {time} (will close itself once fixed or press Done)" (the owner's
+  words). Starter skills recorded.
+
 ## 0.6.201 (15 October 2026)
 
 - alert-desk desk.abandoned (owner's request, 2026-10-15): the still-true status is "Still not fixed at {time}. It
