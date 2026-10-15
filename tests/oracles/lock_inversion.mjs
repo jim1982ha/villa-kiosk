@@ -142,7 +142,7 @@ ck("the settings set the lens where the store is made, before its first read, an
    /storeRef\.current = new EntityStore\(\);\s*storeRef\.current\.setLens\(lens\);/.test(src("ha/HAStateStore.tsx"))
    && /useEffect\(\(\) => store\.setLens\(lens\), \[store, lens\]\)/.test(src("ha/HAStateStore.tsx")));
 ck("Advanced Settings offers the switch on every lock entity (whatever its panel type)",
-   /\{isLockEntity\(entityId\) && cell\("invert", "Inverted lock"/.test(src("components/settings/MappingFields.tsx")));
+   /\{isLockEntity\(entityId\) && cell\("invert", "Invert Device State"/.test(src("components/settings/MappingFields.tsx")));
 // the field's readers: its type, the lens, the switch, the scene's "cosmetic" list — no screen of its own
 const { readdirSync, statSync } = await import("node:fs");
 const walk = (d) => readdirSync(d).flatMap((f) => { const p = `${d}/${f}`; return statSync(p).isDirectory() ? walk(p) : [p]; });

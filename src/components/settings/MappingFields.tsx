@@ -60,11 +60,20 @@ export default function MappingFields({ entityId, mapping, entity, onPatch, cell
   const pct = Math.round(ratio * 100);
   return (
     <>
+      {/* a lock's Invert Device State shares Type's line (owner, 2026-10-15) — stacked on a phone, as every pair is */}
       {cell("type", "Type", (
         <Dropdown<EntityType> style={selectStyle} value={m.type} title="Panel type" ariaLabel="Panel type"
           onChange={(type) => draftField({ type })}
           options={ENTITY_DOMAINS.map((t) => ({ value: t, label: t }))} />
-      ))}
+      ), { pair: isLockEntity(entityId) })}
+      {/* every lock entity, whatever its panel type (owner, 2026-10-15): one mounted upside down reports the wrong way
+          round — the app then reads and moves it the right way round everywhere (ha/stateLens.ts) */}
+      {isLockEntity(entityId) && cell("invert", "Invert Device State", (
+        <CheckField checked={!!m.invertLock} onChange={(on) => draftField({ invertLock: on || undefined })}
+          title="This lock reports the wrong way round (mounted upside down): its Locked and Unlocked are swapped everywhere in the Kiosk — the map, the cards, the history — and Lock / Unlock move it the way they say.">
+          Reports Locked / Unlocked the wrong way round
+        </CheckField>
+      ), { pair: true })}
       {cell("category", "Category", (
         <Dropdown<Category> style={selectStyle} value={effectiveCategory(subjectOf(entityId, m, entity))}
           // `categoryPicked` records that this was CHOSEN. Without it the pick
@@ -86,14 +95,6 @@ export default function MappingFields({ entityId, mapping, entity, onPatch, cell
         <CheckField checked={!!m.requireConfirm} onChange={(on) => draftField({ requireConfirm: on })}
           title="Ask before toggling — a tap on this device's map badge opens its panel instead of acting instantly, and its panel's own on/off button asks 'Turn on/off?' first. For a device where an accidental toggle has a real physical consequence, e.g. a door release or gate motor modelled as a plain switch.">
           Confirm before toggling
-        </CheckField>
-      ))}
-      {/* every lock entity, whatever its panel type (owner, 2026-10-15): one mounted upside down reports the wrong way
-          round — the app then reads and moves it the right way round everywhere (ha/stateLens.ts) */}
-      {isLockEntity(entityId) && cell("invert", "Inverted lock", (
-        <CheckField checked={!!m.invertLock} onChange={(on) => draftField({ invertLock: on || undefined })}
-          title="This lock reports the wrong way round (mounted upside down): its Locked and Unlocked are swapped everywhere in the Kiosk — the map, the cards, the history — and Lock / Unlock move it the way they say.">
-          Reports Locked / Unlocked the wrong way round
         </CheckField>
       ))}
       {m.type === "light" && cell("intensity", "Intensity", (
