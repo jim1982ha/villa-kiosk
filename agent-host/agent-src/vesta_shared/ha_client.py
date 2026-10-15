@@ -188,6 +188,7 @@ class McpSession:
 HISTORY_PAGE = 1000
 HISTORY_SLICE, HISTORY_MIN_SLICE, HISTORY_MAX_SLICE = timedelta(hours=6), timedelta(minutes=5), timedelta(days=2)
 HISTORY_MAX_CALLS = 400          # a 10-day read of a meter reporting every second stays inside it
+LOGBOOK_SLICE = timedelta(hours=6)   # the whole villa's logbook is read by these (McpClient.logbook)
 
 
 def _when(row: dict) -> datetime | None:
@@ -437,6 +438,31 @@ class McpClient(HABase):
                 "config": {"time_zone": self.zone, "location_name": home.get("friendly_name")}}
 
     def logbook(self, start, end, entity_id=None):
+        """Every logbook row in [start, end), oldest first (one entity's, or the whole villa's).
+
+        ⚠️ THE WHOLE VILLA BY SLICES OF LOGBOOK_SLICE (villa, 2026-10-15: an /investigate's `around` over a week ran
+        minutes, a call every 15 s): ha-mcp fetches the WHOLE period from Home Assistant at every page, and a week of the
+        villa's logbook is some thirty pages — thirty reads of the whole week. A slice is read in a page or two, each
+        fetching its own hours only. One entity's logbook is filtered by Home Assistant itself: one read."""
+        self.logbook_cut = None
+        out, seen, at = [], set(), start
+        step = (end - start) if entity_id else LOGBOOK_SLICE
+        while at < end:
+            to = min(end, at + step)
+            rows, whole, last = self._logbook_slice(at, to, entity_id)
+            for r in rows:
+                key = json.dumps(r, sort_keys=True, default=str)
+                if key not in seen:
+                    seen.add(key)
+                    out.append(r)
+            if not whole:
+                self.logbook_cut = last           # stopped before its end: a reader says where
+                break
+            at = to
+        return out
+
+    def _logbook_slice(self, start, end, entity_id=None):
+        """([start, end)'s rows, whether the read reached its end, the last moment read)."""
         # ⚠️ hours_back COUNTS BACK FROM end_time, not from now (ha-mcp: "24 hours back from <end_time>"). Counted from
         # now, one day two days ago read 67 hours of logbook in 24 pages, 75 s (investigate, 2026-10-11) — and a period
         # far enough back would end at the 20-page cap before reaching its own end.
@@ -465,8 +491,7 @@ class McpClient(HABase):
             last = max(last, t)
             if start <= t < end:
                 out.append(r)
-        self.logbook_cut = None if whole else last
-        return out
+        return out, whole, last
 
     # ------------------------------------------------------------------ writes (executor only)
     def call_service(self, domain, service, data):

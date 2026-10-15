@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.213 (15 October 2026)
+
+- McpClient.logbook reads the whole villa's logbook by slices of LOGBOOK_SLICE (6 h), each its own hours back from its
+  own end (_logbook_slice: the paging, the repeat stop and the cap as before), rows kept once; one entity's logbook stays
+  one read (Home Assistant filters it). The villa, 2026-10-15: investigate's `around` over a week ran minutes — ha-mcp
+  fetches the whole period at every page (about 30 pages for a week). The cause had been mistaken in 0.6.211 for the
+  AI's own logbook calls (that cap stays). Also the nightly check's 3-day reconnect read. Tests in test_ha_reads:
+  slices asked, every row read once, each call fetching its own hours only, a read cut short says where (mutation red).
+
 ## 0.6.212 (15 October 2026)
 
 - agent_records.RUN_CUT ("run_cut", in COSTS_KINDS): runner records a run cut by a stop under it, not RUN — a Costs row

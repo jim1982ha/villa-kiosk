@@ -25,7 +25,7 @@ def test_a_logbook_page_that_repeats_ends_the_reading_and_counts_once():
     rows = [{"when": (T - timedelta(hours=h)).isoformat(), "entity_id": "sensor.example_meter", "state": s}
             for h, s in ((5, "unavailable"), (4, "on"), (3, "unavailable"), (2, "on"))]
     session = SamePageSession(rows)
-    got = McpClient("http://unused", "UTC", session=session).logbook(T - timedelta(days=3), T)
+    got = McpClient("http://unused", "UTC", session=session).logbook(T - timedelta(hours=6), T)   # one slice
     assert session.calls == 2                       # the second page brought nothing new: stop
     assert len(got) == 4                            # each flip once, not once per page
 
@@ -42,13 +42,19 @@ class WindowSession:
 
 
 def test_a_past_period_asks_for_its_own_hours_counted_back_from_its_end():
-    # 2026-10-11: counted from now, one day two days ago read 67 hours (24 pages, 75 s)
-    for start, end, hours in ((T - timedelta(days=3), T - timedelta(days=2), 24),
-                              (T - timedelta(days=3, minutes=30), T - timedelta(days=2), 25),
-                              (T - timedelta(minutes=5), T, 1)):
-        session = WindowSession()
-        McpClient("http://unused", "UTC", session=session).logbook(start, end)
-        assert (session.args[0]["hours_back"], session.args[0]["end_time"]) == (hours, end.isoformat())
+    # 2026-10-11: counted from now, one day two days ago read 67 hours (24 pages, 75 s) — and 2026-10-15: the whole villa
+    # is read by slices of 6 hours, each its own hours back from its own end; one entity's in one read
+    session = WindowSession()
+    McpClient("http://unused", "UTC", session=session).logbook(T - timedelta(days=3), T - timedelta(days=2))
+    assert [(a["hours_back"], a["end_time"]) for a in session.args] == [
+        (6, (T - timedelta(days=3, hours=-6 * k)).isoformat()) for k in range(1, 5)]
+    session = WindowSession()
+    McpClient("http://unused", "UTC", session=session).logbook(T - timedelta(minutes=5), T)
+    assert [(a["hours_back"], a["end_time"]) for a in session.args] == [(1, T.isoformat())]
+    session = WindowSession()
+    McpClient("http://unused", "UTC", session=session).logbook(T - timedelta(days=3, minutes=30), T - timedelta(days=2),
+                                                                entity_id="sensor.example")
+    assert [(a["hours_back"], a["end_time"]) for a in session.args] == [(25, (T - timedelta(days=2)).isoformat())]
 
 
 class HistorySession:
@@ -130,25 +136,34 @@ def test_a_history_read_cut_short_says_where(monkeypatch):
 
 
 class CappedLogbook:
-    """ha-mcp as on the villa (2026-10-13): at most 500 rows a page whatever is asked, `total` rows in all, oldest first."""
+    """ha-mcp as on the villa (2026-10-13): the hours asked back from end_time, at most 500 rows a page whatever is
+    asked, oldest first — `total` rows in all, one every `every` seconds from 3 days back. `fetched`: how many rows of
+    the logbook each call had Home Assistant read (the whole period asked, at every page)."""
 
-    def __init__(self, total, cap=500):
-        self.total, self.cap = total, cap
+    def __init__(self, total, cap=500, every=2.0):
+        self.cap, self.fetched = cap, []
+        self.rows = [{"when": (T - timedelta(days=3) + timedelta(seconds=every * i)).isoformat(), "entity_id": "sensor.example",
+                      "state": str(i)} for i in range(total)]
 
     def call_raw(self, name, args):
+        end = datetime.fromisoformat(args["end_time"])
+        window = [r for r in self.rows if end - timedelta(hours=args["hours_back"]) <= datetime.fromisoformat(r["when"]) < end]
+        self.fetched.append(len(window))
         off, n = args["offset"], min(args["limit"], self.cap)
-        rows = [{"when": (T - timedelta(days=3) + timedelta(seconds=2 * i)).isoformat(), "entity_id": "sensor.example",
-                 "state": str(i)} for i in range(off, min(off + n, self.total))]
-        return {"content": [{"type": "text", "text": json.dumps({"success": True, "entries": rows,
-                                                                 "has_more": off + n < self.total})}]}
+        return {"content": [{"type": "text", "text": json.dumps({"success": True, "entries": window[off:off + n],
+                                                                 "has_more": off + n < len(window)})}]}
 
 
 def test_a_long_logbook_is_read_to_its_end_and_a_read_cut_short_says_where():
     # 2026-10-13: the night's 3-day logbook held 13,031 rows; 20 pages of 500 read 10,000 and stopped at 08:41 the day
     # before — a relay's last 17 hours of drops never counted
-    c = McpClient("http://unused", "UTC", session=CappedLogbook(13_031))
+    book = CappedLogbook(13_031, every=19.8)                                      # three days of the villa's logbook
+    c = McpClient("http://unused", "UTC", session=book)
     assert len(c.logbook(T - timedelta(days=3), T)) == 13_031 and c.logbook_cut is None
-    c = McpClient("http://unused", "UTC", session=CappedLogbook(200 * 500 + 1))     # past every page it may read
+    # 2026-10-15: each call has Home Assistant read its own 6 hours, never the whole period again at every page
+    # (read in one window, each of its 27 pages had the whole three days read: 27 × 13,031 rows)
+    assert max(book.fetched) <= 6 * 3600 / 19.8 + 2 and sum(book.fetched) < 4 * 13_031
+    c = McpClient("http://unused", "UTC", session=CappedLogbook(200 * 500 + 1, every=0.1))   # past every page it may read
     rows = c.logbook(T - timedelta(days=3), T)
     assert c.logbook_cut == max(datetime.fromisoformat(r["when"]) for r in rows)   # where the reading stopped
 
