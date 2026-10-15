@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.209 (15 October 2026)
+
+- investigate SKILL.md, after a reading of 0.6.208 as the AI reads it: the `summary` note restored (the message shows it
+  under the line of recorded times: explain, never repeat — the rewrite had lost it); the example summary carries no
+  clock time (it repeated "02:14 to 06:40"); "your last timeline/around runs cover the whole period" moved from the
+  account's fields (step 8) to making the page (step 9), where it is a precondition. test_investigate: the example
+  summary holds no time (mutation red). Starter skills recorded.
+
 ## 0.6.208 (15 October 2026)
 
 - investigate SKILL.md rewritten (owner: "you can edit and optimise this skill"), same ten steps (page.py and skill.yaml

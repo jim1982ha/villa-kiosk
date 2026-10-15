@@ -953,3 +953,6 @@ def test_the_skills_own_example_of_a_cause_passes_the_pages_rules():
     assert (inv_page.CITE.search(cause["source"]) or inv_page.RECORDS.search(cause["source"])) \
         and cause["verdict"] in inv_page.VERDICTS
     assert "page's name" not in text and "web page's name" not in text
+    # the message shows the summary under the line of recorded times: the example explains, it never repeats a time
+    example = re.search(r'"summary": "The pool pump.*?"\n', text, re.S).group(0)
+    assert not re.search(r"\b\d{1,2}:\d{2}\b", example), example

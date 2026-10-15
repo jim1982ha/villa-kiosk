@@ -107,6 +107,8 @@ with the facts; if one seems misleading, say why in "cannot_tell".
         "checked": "what you read: the devices, the period, the logbook, the automations",
         "sources": [{"title": "the page's title", "url": "https://…"}]}
 
+   - `summary`: the message shows it under the line of recorded times and durations: explain them, in other words
+     than theirs, rather than give them again.
    - `timeline`: only what a person saw or did that the records do not show (the page draws the recorded one); leave it
      out when there is none.
    - `causes`: most likely first. A cause that came from a lead also has `"source"`, written `"[2]"` for a web page (its
@@ -117,19 +119,19 @@ with the facts; if one seems misleading, say why in "cannot_tell".
      would have fired.
    - `sources`: every web page you used, numbered by place ([1] is the first), each cited as [n] in the text that used
      it (the summary, a cause, cannot_tell, warned_earlier). The page refuses an uncited page or a [n] it does not have.
-   - Before saving, your last timeline run covers the whole period with `--out timeline.json` and every device that
-     matters (with its controls), and your last around run covers the same period with `--out around.json`.
 
    An example of the tone (invented; write this investigation's own devices and times):
 
-       "summary": "The pool pump ran without stopping from 02:14 to 06:40 because water was escaping: the level sensor
-                   fell 11 cm over the same hours and the pump's own pressure switch keeps it running while pressure
-                   stays low [1]. Check the pool's return pipes and the skimmer seal first."
+       "summary": "The pool pump most likely kept running because water was escaping: the pool's level fell while it
+                   ran, and a pump of this kind runs on its own pressure switch for as long as pressure stays low [1].
+                   Check the pool's return pipes and the skimmer seal first."
        {"cause": "A leak on the pool's return circuit", "evidence": "Level −11 cm from 02:10 while the pump ran 4 h 26
         min, its longest normal run 2 h", "confirm": "Look for wet ground along the return pipe", "source": "[1]",
         "verdict": "consistent"}
 
-9. **Make the page:** `run_skill_script investigate page.py --notes investigation.json --data timeline.json --around
+9. **Make the page.** First make sure your last timeline run covers the whole period with `--out timeline.json` and
+   every device that matters (with its controls), and your last around run the same period with `--out around.json`.
+   Then `run_skill_script investigate page.py --notes investigation.json --data timeline.json --around
    around.json --out investigation.html`. It prints a `message` {title, text} and the facts the page states
    ("established", "ruled_out"). Read them against your account; if they disagree, fix the account and make the page
    again.
