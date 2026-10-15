@@ -1,3 +1,8 @@
+## 2.496.377
+
+### Fixed
+- Advanced Settings: the description after a checkbox ("Confirm before toggling", "Reports Locked / Unlocked the wrong way round") sits at a comfortable distance from its box, the same everywhere — one shared checkbox-with-words, one look.
+
 ## 2.496.376
 
 ### Added

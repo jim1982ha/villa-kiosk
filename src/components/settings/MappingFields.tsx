@@ -15,6 +15,7 @@
 import { isLockEntity } from "@/ha/stateLens";
 import type { ReactNode } from "react";
 import Dropdown from "@/components/common/Dropdown";
+import CheckField from "@/components/common/CheckField";
 import EntityPicker from "./EntityPicker";
 import { useDraftCommit } from "@/hooks/useDraftCommit";
 import { CATEGORY_ORDER, CATEGORY_LABELS, effectiveCategory, subjectOf } from "@/config/EntityCategories";
@@ -82,22 +83,18 @@ export default function MappingFields({ entityId, mapping, entity, onPatch, cell
           onBlur={() => label.flush("v")} />
       ), { wide: true })}
       {CONFIRM_GATE_TYPES.has(m.type) && cell("confirm", "Confirm before toggling", (
-        <label className="row" style={{ gap: 6, fontSize: "var(--text-xs)", color: "var(--text-secondary)", cursor: "pointer", flex: "0 0 auto" }}>
-          <input type="checkbox" checked={!!m.requireConfirm}
-            onChange={(e) => draftField({ requireConfirm: e.target.checked })}
-            title="Ask before toggling — a tap on this device's map badge opens its panel instead of acting instantly, and its panel's own on/off button asks 'Turn on/off?' first. For a device where an accidental toggle has a real physical consequence, e.g. a door release or gate motor modelled as a plain switch." />
+        <CheckField checked={!!m.requireConfirm} onChange={(on) => draftField({ requireConfirm: on })}
+          title="Ask before toggling — a tap on this device's map badge opens its panel instead of acting instantly, and its panel's own on/off button asks 'Turn on/off?' first. For a device where an accidental toggle has a real physical consequence, e.g. a door release or gate motor modelled as a plain switch.">
           Confirm before toggling
-        </label>
+        </CheckField>
       ))}
       {/* every lock entity, whatever its panel type (owner, 2026-10-15): one mounted upside down reports the wrong way
           round — the app then reads and moves it the right way round everywhere (ha/stateLens.ts) */}
       {isLockEntity(entityId) && cell("invert", "Inverted lock", (
-        <label className="row" style={{ gap: 6, fontSize: "var(--text-xs)", color: "var(--text-secondary)", cursor: "pointer", flex: "0 0 auto" }}>
-          <input type="checkbox" checked={!!m.invertLock}
-            onChange={(e) => draftField({ invertLock: e.target.checked || undefined })}
-            title="This lock reports the wrong way round (mounted upside down): its Locked and Unlocked are swapped everywhere in the Kiosk — the map, the cards, the history — and Lock / Unlock move it the way they say." />
+        <CheckField checked={!!m.invertLock} onChange={(on) => draftField({ invertLock: on || undefined })}
+          title="This lock reports the wrong way round (mounted upside down): its Locked and Unlocked are swapped everywhere in the Kiosk — the map, the cards, the history — and Lock / Unlock move it the way they say.">
           Reports Locked / Unlocked the wrong way round
-        </label>
+        </CheckField>
       ))}
       {m.type === "light" && cell("intensity", "Intensity", (
         <div className="row" style={{ gap: 8, width: "100%", flex: "1 1 220px", minWidth: 180 }}>
