@@ -28,7 +28,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 from vesta_shared import result, script  # noqa: E402
-from vesta_shared.device_state import OFFLINE, out_of  # noqa: E402  ("is it back": one answer)
+from vesta_shared.device_state import OFFLINE, out_for  # noqa: E402  ("is it back": one answer)
 from vesta_shared.problems import Problems  # noqa: E402
 
 OFFLINE_RULE = "PM-UNAVAILABLE"
@@ -54,8 +54,8 @@ def back_online(store, client, now: datetime, minutes: float, zone: str) -> dict
         if es and all(e in gone for e in es):
             actions += Problems(store).close_finding(f, day, GONE_NOTE)
             closed.append(f["id"]); deleted.append(f["id"])
-        elif f["rule_id"] == OFFLINE_RULE and all(
-                e in gone or out_of(states.get(e) or {}, OFFLINE, now, minutes, unknown_tells=True) for e in es):
+        elif f["rule_id"] == OFFLINE_RULE and out_for(client(), [e for e in es if e not in gone], states, OFFLINE, now,
+                                                      minutes, unknown_tells=True):
             actions += Problems(store).close_finding(f, day, "Cleared: back online.")
             closed.append(f["id"])
     if closed:

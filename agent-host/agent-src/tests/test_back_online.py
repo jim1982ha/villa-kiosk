@@ -123,3 +123,39 @@ def test_the_night_runs_output_carries_those_messages(monkeypatch, capsys):
     nightly.main(["--pack", "p.json"])
     out = json.loads(capsys.readouterr().out)
     assert [m["text"] for m in out["send"]] == ["Back again:\n- Plug offline (again: 2 times in 7 days)\nWhat to do: Look."]
+
+
+def test_a_sensor_that_reports_every_five_minutes_is_back_when_it_was_not_offline_in_the_last_minutes(tmp_path):
+    # villa, 2026-10-15: Timmerflotte_5969 came back at 14:03 and its humidity reported every 4 min 53 s — its last
+    # change was never 10 minutes old, and its fault stayed until 02:00. Its history over the minutes decides
+    hum = "sensor.room_x_humidity"
+    store = Store(str(tmp_path / "s.sqlite"))
+    fid, _ = store.raise_finding("PM-UNAVAILABLE", hum, "room_x", "2026-10-09", "P3", "Room X has been offline for 1 d 9 h.",
+                                 {"entities": [hum]})
+    Problems(store).open_task("finding", fid, "PM-UNAVAILABLE", hum, "Room X offline")
+
+    def at(now, back_minutes_ago):
+        """Offline until `back_minutes_ago`, then a new reading every 5 minutes."""
+        back = now - timedelta(minutes=back_minutes_ago)
+        rows = [{"state": "unavailable", "last_changed": (back - timedelta(hours=40)).isoformat()}]
+        rows += [{"state": f"{60 + k}.0", "last_changed": (back + timedelta(minutes=5 * k)).isoformat()}
+                 for k in range(back_minutes_ago // 5 + 1)]
+        fx = tmp_path / "fx"
+        fx.mkdir(exist_ok=True)
+        (fx / "history_raw_x.json").write_text(json.dumps({"entities": [{"entity_id": hum, "states": rows}]}))
+        last = rows[-1]
+        return {hum: {"state": last["state"], "last_changed": last["last_changed"], "attributes": {}}}
+
+    assert _run(tmp_path, at(T0, 7), T0)["actions"] == []              # back 7 min ago: not yet
+    # a history with nothing from before the minutes (the recorder lost it): it cannot be told, not yet
+    (tmp_path / "fx" / "history_raw_x.json").write_text(json.dumps({"entities": [{"entity_id": hum, "states": [
+        {"state": "61.0", "last_changed": (T0 - timedelta(minutes=8)).isoformat()},
+        {"state": "62.0", "last_changed": (T0 - timedelta(minutes=3)).isoformat()}]}]}))
+    young = {hum: {"state": "62.0", "last_changed": (T0 - timedelta(minutes=3)).isoformat(), "attributes": {}}}
+    (tmp_path / "fx" / "states.json").write_text(json.dumps({"states": young}))
+    r = subprocess.run([sys.executable, os.path.join(SKILL, "scripts", "recheck.py"), "--store", str(tmp_path / "s.sqlite"),
+                        "--fixture-dir", str(tmp_path / "fx"), "--now", T0.isoformat()],
+                       capture_output=True, text=True, env={**os.environ, "PYTHONPATH": PYTHONPATH}, timeout=60)
+    assert r.returncode == 0 and json.loads(r.stdout)["actions"] == [], r.stderr
+    out = _run(tmp_path, at(T0, 120), T0)                                # back 2 h ago, last reading 0 min ago
+    assert [a["note"] for a in out["actions"]] == ["Cleared: back online."]

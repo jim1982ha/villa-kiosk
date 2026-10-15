@@ -36,18 +36,58 @@ def has_value(state) -> bool:
     return reading(state) == ANSWERS
 
 
+def _out(st: str, bad, unknown_tells: bool, offline_ok: bool) -> bool:
+    """Is this state out of the `bad` states (offline only when `offline_ok`, "unknown" only when `unknown_tells`)?"""
+    return bool(st) and st not in bad and not (is_offline(st) and not offline_ok) \
+        and not (reading(st) == NO_VALUE_NOW and not unknown_tells)
+
+
 def out_of(row: dict, bad, now, minutes: float, unknown_tells: bool = False, offline_ok: bool = False) -> bool:
-    """Has this entity (a state row: state, last_changed) been out of the `bad` states for `minutes`? Offline counts as
-    out of them only when `offline_ok` (a rule that does not list it); "unknown" only when `unknown_tells` (a device that reports, its sensor without a value:
-    back online — never "the door is locked").
+    """Has this entity (a state row: state, last_changed) been out of the `bad` states for `minutes`, told by its
+    state's age alone? Offline counts as out of them only when `offline_ok` (a rule that does not list it); "unknown"
+    only when `unknown_tells` (a device that reports, its sensor without a value: back online — never "the door is
+    locked"). False for a state younger than `minutes`, which proves nothing: out_for reads its history.
 
     ⚠️ ONE ANSWER TO "IS IT BACK" (architecture review 22): the alert desk said "unknown" was not back, the night check's
     recheck said it was, and the desk knew only "unavailable" — a Wi-Fi access point "disconnected" never closed."""
     from datetime import datetime, timedelta, timezone
     st, since = str(row.get("state") or ""), row.get("last_changed")
-    if not st or st in bad or (is_offline(st) and not offline_ok) or (reading(st) == NO_VALUE_NOW and not unknown_tells) or not since:
+    if not _out(st, bad, unknown_tells, offline_ok) or not since:
         return False
     return now - datetime.fromisoformat(since).astimezone(timezone.utc) >= timedelta(minutes=minutes)
+
+
+def out_for(client, entity_ids, states: dict, bad, now, minutes: float, unknown_tells: bool = False,
+            offline_ok: bool = False) -> bool:
+    """Have ALL these entities been out of the `bad` states for the last `minutes`? `states`: their state rows, read
+    now. One out of them now whose state is younger than `minutes` is judged by its history over those minutes, which
+    must open with the state carried over from before them (Home Assistant's own first row) — without it, not yet.
+
+    ⚠️ A NEW READING IS NOT A RETURN (villa, 2026-10-15): a humidity sensor offline for 45 h reported again at 14:03 and
+    every 4 min 53 s after. "Unchanged for 10 minutes" never came, and its fault stayed in the Cockpit until the 02:00
+    check: the state's age measured its last reading, not its return. The alert desk's clear had the same flaw for any
+    alert on a reading that keeps changing (a temperature)."""
+    from datetime import datetime, timedelta, timezone
+    young = []
+    for e in entity_ids:
+        row = states.get(e) or {}
+        if not _out(str(row.get("state") or ""), bad, unknown_tells, offline_ok):
+            return False
+        if not out_of(row, bad, now, minutes, unknown_tells, offline_ok):
+            young.append(e)
+    if not young:
+        return True
+    start = now - timedelta(minutes=minutes)
+    hist = client.history(young, start, now)
+    for e in young:
+        rows = hist.get(e) or []
+        first = (rows[0].get("last_changed") or rows[0].get("last_updated")) if rows else None
+        # nothing from before the minutes: it cannot be told yet (a second's grace: the stamp may come back rounded)
+        if not first or datetime.fromisoformat(first).astimezone(timezone.utc) > start + timedelta(seconds=1):
+            return False
+        if not all(_out(str(r.get("state") or ""), bad, unknown_tells, offline_ok) for r in rows):
+            return False
+    return True
 
 
 def battery_charge(value: float | None, unit: str | None, nominal_v: float | None = None) -> float | None:

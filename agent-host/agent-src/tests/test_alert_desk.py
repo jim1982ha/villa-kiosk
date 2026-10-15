@@ -210,6 +210,16 @@ class Villa:
                 out[e] = {"state": st, "last_changed": since.isoformat(), "attributes": {"friendly_name": e.split(".")[1]}}
         return out
 
+    def history(self, ids, start, end):
+        """As Home Assistant answers: the state carried over from before `start`, stamped at `start`, then each change."""
+        out = {}
+        for e in ids:
+            tl = [(since, st) for since, st in self.timeline.get(e, []) if since < end]
+            before = [(since, st) for since, st in tl if since <= start]
+            rows = [{"state": before[-1][1], "last_changed": start.isoformat()}] if before else []
+            out[e] = rows + [{"state": st, "last_changed": since.isoformat()} for since, st in tl if since > start]
+        return out
+
 
 def _tick(store, villa, minutes):
     villa.now = T0 + timedelta(minutes=minutes)
@@ -244,6 +254,19 @@ def test_a_door_locked_after_its_rule_stopped_watching_closes_its_alert(store):
     assert [s for s in res["send"] if s["to"] == "fm" and s["status"] == "Cleared on {time}: front_door is locked."
             and s["stage"] == "closed"], res["send"]
     assert not _tick(store, villa, 120).get("cleared")                  # closed once
+
+
+def test_a_door_that_keeps_changing_while_locked_closes_when_it_was_never_unlocked_in_the_last_minutes(store):
+    # villa, 2026-10-15: "back for 10 minutes" was "unchanged for 10 minutes" — a state that moves between good ones
+    # (locked, locking, locked) never got there; its history over the minutes decides
+    m = lambda x: T0 + timedelta(minutes=x)                                             # noqa: E731
+    villa = Villa(**{"lock.front_door": [(m(-10), "unlocked"), (m(40), "locked"), (m(55), "locking"), (m(57), "locked")]})
+    iid = _left_unlocked(store)
+    assert _tick(store, villa, 60)["cleared"] == [iid]                  # locked since 40, its last change 3 min ago
+    again = Villa(**{"lock.back_door": [(m(-10), "unlocked"), (m(40), "locked"), (m(53), "unlocked"), (m(57), "locked")]})
+    iid2 = _left_unlocked(store, entities=("lock.back_door",))
+    assert not _tick(store, again, 60).get("cleared")                   # unlocked again 7 min ago: not yet
+    assert _tick(store, again, 68)["cleared"] == [iid2]
 
 
 def test_a_lock_gone_from_unlocked_to_jammed_is_never_cleared(store):

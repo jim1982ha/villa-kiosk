@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.203 (15 October 2026)
+
+- device_state.out_for (owner's go, 2026-10-15): "out of the bad states for N minutes" for every entity — by its
+  state's age when old enough, else by its history over the N minutes (which must open with the carried-over state;
+  without it, not yet; one second of grace on its stamp). recheck.py (back online) and desk.py seen_again (the clear
+  after an abandoned rule) call it instead of out_of over the state's age: a humidity sensor reporting every 4 min 53 s
+  was never "10 minutes unchanged", its fault stayed until 02:00. Tests' FixtureClient.history and test_alert_desk's
+  Villa answer as Home Assistant does (the state carried over, stamped at the start). Tests in test_back_online and
+  test_alert_desk (five mutations red). Starter skills recorded.
+
 ## 0.6.202 (15 October 2026)
 
 - Problems.restore_unseen, called by tickets.repair after close_outlived: every unseen() problem (open, a task

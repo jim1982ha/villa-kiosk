@@ -1,3 +1,11 @@
+## 0.12.211
+
+What you will see:
+- A device that comes back clears its "offline" fault about 10 minutes later, even when it sends a new reading every
+  few minutes (Timmerflotte_5969's fault stayed until the night check while the sensor had worked since 14:03).
+- The same for an alert that stays open after its alert stopped repeating: it closes once its device has been right
+  for the last 10 minutes, even if its state moved in between.
+
 ## 0.12.210
 
 What you will see:

@@ -44,7 +44,7 @@ from vesta_shared import script  # noqa: E402  (client, store, settings, zone: o
 from vesta_shared import skill_settings  # noqa: E402  (rules.yaml, the villa's on top)
 from vesta_shared.messaging import incident_tag  # noqa: E402
 from vesta_shared.message_format import PRESSED  # noqa: E402  ("<button> pressed by <name> on <time>.": one wording)
-from vesta_shared.device_state import has_value, out_of  # noqa: E402  ("is it back": one answer)
+from vesta_shared.device_state import has_value, out_for  # noqa: E402  ("is it back": one answer)
 
 SKILL = os.path.dirname(HERE)
 # rules.yaml with the villa's own villa.rules.yaml on top (kept by updates): a villa's route comes FIRST, so it
@@ -544,7 +544,7 @@ def seen_again(store: Store, now: datetime, client, clear_minutes: float, out: d
             store.update_incident(inc["id"], payload=json.dumps(p))
             ents, bad = rule_states(inc)
             now_states = client.states(ents)
-            if not all(out_of(now_states.get(e) or {}, bad, now, clear_minutes) for e in ents):
+            if not out_for(client, ents, now_states, bad, now, clear_minutes):
                 continue
             said = "; ".join(f"{(now_states[e].get('attributes') or {}).get('friendly_name') or e} is "
                              f"{now_states[e]['state']}" for e in ents)
