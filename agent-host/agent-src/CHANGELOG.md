@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.211 (15 October 2026)
+
+Villa, 2026-10-15 — an /investigate read 8–15 October's villa-wide logbook every 15 s for 14 minutes:
+- tools.logbook_too_wide (LOGBOOK_VILLA_HOURS = 6): the AI's ha_get_logs on the logbook without an entity_id over more
+  than 6 hours (hours_back) is refused, saying how to read it instead; with an entity_id, or the system log, as before.
+- investigate.py find: one ha_get_device per device and one ha_search per unique-id prefix (`asked`), not per entity
+  (50 s for two sensors' twenty entities). SKILL.md: a device silent for days — its timeline shows when it stopped;
+  the raw logbook for the hours around a moment (6 h villa-wide), `around` for a period. Starter skills recorded.
+- runner.run: a run cancelled by a stop is recorded (interrupted, its tokens so far from each AssistantMessage's
+  usage — Collector.partial_tokens —, its steps, no cost); status.costs carries `interrupted`; the Costs tab shows
+  "stopped by a restart" and "not reported" for its cost. Tests: test_ha_reads (the cap through the proxy; find asks
+  once), test_run_records (a cut run on the tab). Four mutations red.
+
 ## 0.6.210 (15 October 2026)
 
 - chat_jobs.ChatJobs.answering (owner, 2026-10-15: an /investigate cut by the update "went quiet"): a question being

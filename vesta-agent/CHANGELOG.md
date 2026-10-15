@@ -1,3 +1,13 @@
+## 0.12.219
+
+What you will see:
+- /investigate no longer spends many minutes reading the whole villa's logbook week after week: the Agent reads the
+  logbook of the whole villa 6 hours at a time at most (a longer period names one device), and the skill tells the AI
+  that a device's timeline shows when it went offline, with no logbook needed. Its first step ("find") is about ten
+  times faster: it asks for each device once.
+- Costs: an AI run cut by a restart of the Agent now has its row, marked "stopped by a restart", with the tokens it had
+  used. Its cost reads "not reported": Anthropic reports a run's cost when it ends (the Anthropic Console has it).
+
 ## 0.12.218
 
 What you will see:

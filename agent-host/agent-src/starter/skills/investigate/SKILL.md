@@ -36,7 +36,9 @@ everything the steps below ask for, then answer once, completely.
 3. **Read what they did against their own normal.**
    `run_skill_script investigate investigate.py timeline --entities <ids, comma-separated> --start <…> --end <…>`
    - Read from at least 2 hours before the first sign of trouble to after things were normal again (or now). When the
-     moment is unknown, read the whole day or days first, then narrow on what stands out.
+     moment is unknown, read the whole day or days first, then narrow on what stands out. A device that has not
+     answered for days: its timeline over those days shows when it stopped (an "offline" period from its first
+     moment), with no logbook needed.
    - About 5 ids per `--entities`, repeated for more; only ids that find returned. A date alone is the whole day:
      `--start 2026-10-09 --end 2026-10-09` reads the 9th from 00:00 to midnight.
    - Lines flagged "⟵" are unusual against the device's own normal (the days before): a run far longer than any before,
@@ -67,7 +69,8 @@ everything the steps below ask for, then answer once, completely.
      damage, or did the damage keep it running (water escaping keeps a pump running; an open window keeps cooling on)?
 
 6. **Fill the gaps, then search the web.** Use the raw tools only where needed: ha_get_history for an entity the script
-   did not read, ha_get_logs (logbook) for a minute that matters, ha_get_state for how things are now.
+   did not read, ha_get_logs (logbook) for the hours around a moment that matters (the whole villa's logbook is read 6
+   hours at a time at most; `around` reads a whole period), ha_get_state for how things are now.
 
    **Search the web (web_search) — always**, once the timeline and `around` are read, as a source of leads:
    - Search for the pattern in general words (the kind of device and what it did, e.g. "a pump that runs without

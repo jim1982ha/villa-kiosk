@@ -130,6 +130,8 @@ def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_la
                      "tokens_in": tok.get("input_tokens"), "tokens_out": tok.get("output_tokens"),
                      "cache_read": tok.get("cache_read_input_tokens"), "cache_write": tok.get("cache_creation_input_tokens"),
                      "cost": round(cost, 4), "stopped": bool(d.get("stopped_at_limit")), "error": d.get("error"),
+                     # cut by a stop of the agent: its tokens so far, and no cost — Anthropic reports it at a run's end
+                     "interrupted": bool(d.get("interrupted")),
                      # the reason in plain words (api_errors.FOR_PERSON), for the error's (!) on the Costs tab
                      "error_words": _error_words(d.get("problem")) if d.get("error") else None,
                      "turns": d.get("turns"), "seconds": round(d["ms"] / 1000) if isinstance(d.get("ms"), (int, float)) else None,

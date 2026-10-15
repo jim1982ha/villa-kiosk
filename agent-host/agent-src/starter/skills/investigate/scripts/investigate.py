@@ -107,6 +107,9 @@ def find(client, what: str, where: str | None) -> dict:
                 "entities": []}
     reg = {e["entity_id"]: e for e in (client.tool("ha_get_entity", {"entity_id": ids}) or {}).get("entity_entries") or []}
     states = client.states(ids)
+    # ⚠️ ONE LOOKUP PER DEVICE, NOT PER ENTITY (villa, 2026-10-15: find took 50 s): twenty entities of two sensors asked
+    # Home Assistant for the same device and the same serial twenty times each
+    asked: dict[tuple[str, str], object] = {}
     lines, out = [], []
     for eid in ids:
         e, st = reg.get(eid, {}), states.get(eid) or {}
@@ -115,7 +118,7 @@ def find(client, what: str, where: str | None) -> dict:
                 "area": e.get("area"), "state": st.get("state"), "unit": attrs.get("unit_of_measurement"),
                 "device_class": e.get("device_class") or e.get("original_device_class") or attrs.get("device_class"),
                 "device_id": e.get("device_id"), "platform": e.get("platform"),
-                "same_box": _same_box(client, e, ids), "same_room": []}
+                "same_box": _same_box(client, e, ids, asked), "same_room": []}
         out.append(item)
     _same_room(client, out)
     for it in out:
@@ -128,17 +131,24 @@ def find(client, what: str, where: str | None) -> dict:
     return {"lines": lines, "entities": out}
 
 
-def _same_box(client, e: dict, exclude: list[str]) -> list[tuple[str, str]]:
+def _same_box(client, e: dict, exclude: list[str], asked: dict | None = None) -> list[tuple[str, str]]:
     """The other entities of the same physical device: its own device, and devices that share its unique id's prefix
-    (one box an integration splits into several devices: a meter's channels and its relay)."""
+    (one box an integration splits into several devices: a meter's channels and its relay). `asked`: the answers
+    already read in this find, by (tool, key) — each device and each prefix is asked once."""
+    asked = {} if asked is None else asked
     prefix = re.split(r"[-_:]", str(e.get("unique_id") or ""))[0]
+
+    def once(tool: str, key: str, args: dict):
+        if (tool, key) not in asked:
+            asked[(tool, key)] = client.tool(tool, args) or {}
+        return asked[(tool, key)]
     out = []
     try:
-        dev = client.tool("ha_get_device", {"device_id": e["device_id"]}) if e.get("device_id") else {}
+        dev = once("ha_get_device", e["device_id"], {"device_id": e["device_id"]}) if e.get("device_id") else {}
         out += [(x["entity_id"], x.get("name") or x["entity_id"]) for x in (dev.get("entities") or [])]
         if len(prefix) >= 8:                            # a serial or a MAC, never a word
-            res = client.tool("ha_search", {"query": prefix, "exact_match": True, "limit": 40,
-                                            "result_fields": ["entity_id", "friendly_name"]}) or {}
+            res = once("ha_search", prefix, {"query": prefix, "exact_match": True, "limit": 40,
+                                             "result_fields": ["entity_id", "friendly_name"]})
             out += [(x["entity_id"], x.get("friendly_name") or x["entity_id"]) for x in res.get("entities") or []]
     except Exception:  # noqa: BLE001 — a neighbour list is a help, never a reason to fail
         pass

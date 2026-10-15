@@ -151,3 +151,56 @@ def test_a_long_logbook_is_read_to_its_end_and_a_read_cut_short_says_where():
     c = McpClient("http://unused", "UTC", session=CappedLogbook(200 * 500 + 1))     # past every page it may read
     rows = c.logbook(T - timedelta(days=3), T)
     assert c.logbook_cut == max(datetime.fromisoformat(r["when"]) for r in rows)   # where the reading stopped
+
+
+def test_the_ai_reads_the_whole_villas_logbook_a_few_hours_at_a_time(tmp_path):
+    # villa, 2026-10-15: an /investigate read the logbook of every device over a week, a call every 15 s for 14 minutes —
+    # ha-mcp fetches the whole period from Home Assistant at each page
+    import asyncio
+    from ha_fake import FakeHA, tool
+    from helpers import make_agent
+    from vesta_agent.routing import CONVERSATION, Origin
+    from vesta_agent.tools import LOGBOOK_VILLA_HOURS
+    ha = FakeHA(tools=[tool("ha_get_logs", source="string", hours_back="number", entity_id="string", end_time="string")])
+    v = make_agent(tmp_path, {"people": [{"telegram_id": 111, "name": "Owner", "role": "owner"}], "chats": {"owner": -1},
+                              "ha_read_tools": ["ha_get_logs"]}, reader=ha)
+    asyncio.run(v.refresh_server_tools())                                     # the tools HA MCP lists, as at start
+    logs = next(t for t in v.toolbox().tool_objects(None, Origin(-1, CONVERSATION)) if t.name == "ha_get_logs")
+    week = asyncio.run(logs.handler({"source": "logbook", "hours_back": 168}))
+    assert week.get("is_error") and "6 hours at a time" in week["content"][0]["text"] and ha.calls == []
+    assert asyncio.run(logs.handler({"hours_back": 168})).get("is_error")                   # the logbook is the default
+    asyncio.run(logs.handler({"source": "logbook", "hours_back": LOGBOOK_VILLA_HOURS}))       # the hours around a moment
+    asyncio.run(logs.handler({"source": "logbook", "hours_back": 168, "entity_id": "sensor.example_room"}))  # one device
+    asyncio.run(logs.handler({"source": "system"}))                                          # the system log: not a window
+    assert [c[1].get("hours_back") for c in ha.calls] == [LOGBOOK_VILLA_HOURS, 168, None]
+
+
+def test_find_asks_for_each_device_once_whatever_the_number_of_its_entities():
+    # villa, 2026-10-15: find took 50 s — twenty entities of two sensors asked for the same device twenty times each
+    import os
+    import sys
+    from helpers import STARTER_SKILLS
+    sys.path.insert(0, os.path.join(STARTER_SKILLS, "investigate", "scripts"))
+    import investigate
+
+    class Client:
+        def __init__(self):
+            self.calls = []
+
+        def tool(self, name, args):
+            self.calls.append((name, json.dumps(args, sort_keys=True)))
+            if name == "ha_search" and args.get("query") == "sensor x":
+                return {"entities": [{"entity_id": f"sensor.x_{i}"} for i in range(10)]}
+            if name == "ha_get_entity":
+                return {"entity_entries": [{"entity_id": e, "device_id": "dev1", "unique_id": "ABCDEF1234-x", "area": None}
+                                           for e in args["entity_id"]]}
+            if name == "ha_get_device":
+                return {"entities": [{"entity_id": f"sensor.x_{i}"} for i in range(10)]}
+            return {"entities": []}
+
+        def states(self, ids):
+            return {e: {"state": "1"} for e in ids}
+    c = Client()
+    investigate.find(c, "sensor x", None)
+    assert [n for n, _ in c.calls].count("ha_get_device") == 1
+    assert len([a for n, a in c.calls if n == "ha_search" and "ABCDEF1234" in a]) == 1

@@ -14,6 +14,7 @@ Every tool call is therefore decided by the code, never pre-approved.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import datetime
@@ -85,9 +86,13 @@ class Collector:
         self.session_id, self.stopped, self.cost, self.err = session_id, False, None, None
         self.usage, self.turns, self.ms = {}, None, None
         self.kind, self.status, self.exc_name, self.raw = None, None, None, ""
+        # each model message's own token counts, by message — what a run cut before its end had used (partial_tokens)
+        self.by_message: dict[str, dict] = {}
 
     def feed(self, msg) -> None:
         if isinstance(msg, AssistantMessage):
+            if isinstance(getattr(msg, "usage", None), dict):
+                self.by_message[getattr(msg, "message_id", None) or str(len(self.by_message))] = msg.usage
             words = [b.text.strip() for b in msg.content if isinstance(b, TextBlock) and b.text.strip()]
             if getattr(msg, "error", None):
                 self.kind = msg.error
@@ -111,6 +116,11 @@ class Collector:
                 self.err = msg.subtype if msg.subtype != "success" else f"api error {msg.api_error_status}"
                 self.status = getattr(msg, "api_error_status", None) or self.status
                 self.raw += " " + (msg.result or "") + " " + " ".join(getattr(msg, "errors", None) or [])
+
+    def partial_tokens(self) -> dict:
+        """The tokens of the model messages received so far — a run cut before its end gets no final count."""
+        keys = ("input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens")
+        return {k: sum(int(u.get(k) or 0) for u in self.by_message.values()) for k in keys}
 
     @property
     def answer(self) -> str:
@@ -261,6 +271,15 @@ async def run(settings, system_prompt: str, prompt: str, kit, terms, state, resu
             await client.query(message(with_time(settings, prompt), image))
             async for msg in client.receive_response():
                 c.feed(msg)
+    except asyncio.CancelledError:
+        # ⚠️ A RUN CUT BY A STOP IS A RUN (owner, 2026-10-15: two /investigate cut by updates were missing from the Costs
+        # tab, though Anthropic billed them): recorded with what it had used — its tokens so far; its cost is reported
+        # by Anthropic only at a run's end, so the record says it was cut rather than guess a price
+        state.log(RUN, {"who": terms.who, "cost_usd": None, "interrupted": True, "stopped_at_limit": False, "denied": [],
+                        "error": None, "profile": terms.profile, "model": opts.model, "tokens": c.partial_tokens(),
+                        "turns": None, "ms": None, "asked": (asked or "")[:160] or None, "problem": None,
+                        "steps": kept_steps(c.steps, settings.secrets() if hasattr(settings, "secrets") else [])})
+        raise
     except Exception as e:  # noqa: BLE001
         c.fail(e)
         # a known kind is one line (the warning below); anything else keeps its traceback for the log
