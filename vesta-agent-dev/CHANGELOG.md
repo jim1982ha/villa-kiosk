@@ -1,3 +1,10 @@
+## 0.12.209
+
+What you will see:
+- When a problem is still there after the villa's own alert has stopped repeating, the alert's status now says, in
+  short: "Still not fixed at 15/10/2026 17:04. It closes by itself once fixed, or press Done." (it said "Still not
+  right when the alert stopped watching it… VESTA keeps watching it and closes it once it is right…").
+
 ## 0.12.208
 
 What you will see:
