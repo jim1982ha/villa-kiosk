@@ -1,3 +1,10 @@
+## 2.496.382
+
+### Changed
+- A fault that says how long something has lasted ("offline for …", "has not reported for …") now shows today's figure each time you look, in the Kiosk's own words ("6 d 2 h"), instead of the figure written at the nightly check. It needs the VESTA Agent 0.12.215 or later; older faults keep their words.
+- Every device the villa's system knows gets its room, wherever the Kiosk shows it — not only the devices of the 3D model and the ones a fault names.
+- The (i) beside Open a ticket no longer keeps its own list of what the VESTA Agent checks again within minutes: it points to each card's Next check, which comes from the fault itself.
+
 ## 2.496.381
 
 ### Fixed

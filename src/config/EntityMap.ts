@@ -273,7 +273,8 @@ export function resolveRooms(
   const resolved: Record<string, string> = {};
   for (const id of ids) {
     if (id in resolved) continue;
-    resolved[id] = resolveEntityRoom(areaNames[id], geometricRoomFor(id));
+    // the model is asked only when Home Assistant has no area for it (every entity is asked now, 2026-10-15)
+    resolved[id] = resolveEntityRoom(areaNames[id], areaNames[id] ? null : geometricRoomFor(id));
   }
   return resolved;
 }

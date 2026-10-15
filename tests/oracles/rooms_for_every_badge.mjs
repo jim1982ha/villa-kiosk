@@ -21,18 +21,23 @@ console.log("  the rule:");
   ck("  ...else the room the anchor is in", r["sensor.wall"] === "Bedroom 1");
   ck("  ...else no room (empty, which reads as 'Other')", r["switch.nowhere"] === "");
   ck("an id given twice is resolved once", Object.keys(r).length === 4);
+  // every entity is asked now (2026-10-15): the model is asked only for one Home Assistant gives no area
+  const asked = [];
+  resolveRooms(["media_player.tv", "sensor.wall"], areas, (id) => { asked.push(id); return null; });
+  ck("  ...the model asked only where Home Assistant has no area", asked.join() === "sensor.wall", asked);
 }
 console.log("\n  the set:");
 {
   const dash = readFileSync(new URL("../../src/pages/Dashboard.tsx", import.meta.url), "utf8");
   ck("the model's own entities (mesh-bound included) AND the stored mappings",
      /new Set<string>\(\[\.\.\.mappedEntityIds, \.\.\.Object\.keys\(config\.entityMap\),/.test(dash));
-  // owner, 2026-10-15: a fault on a sensor the model does not draw ("House & Pool Relay Temperature") had no room line
-  ck("  ...and every device a Facility record names (a fault, a scheduled task), re-run when that set changes",
-     /\[\.\.\.fmData\.tickets, \.\.\.fmData\.schedules\][\s\S]*?\.map\(\(r\) => r\.entityId\)/.test(dash)
-     && /\.\.\.\(recordIdsKey \? recordIdsKey\.split\("\\n"\) : \[\]\)\]\);/.test(dash));
+  // owner, 2026-10-15: a fault on a sensor the model does not draw ("House & Pool Relay Temperature") had no room line —
+  // architecture review the same day: not one more source to join, EVERY entity Home Assistant has
+  ck("  ...and every entity Home Assistant has, re-run only when that id set changes",
+     /const haIdsKey = useMemo\(\(\) => Object\.keys\(entities\)\.sort\(\)\.join\("\\n"\), \[entities\]\);/.test(dash)
+     && /\.\.\.\(haIdsKey \? haIdsKey\.split\("\\n"\) : \[\]\)\]\);/.test(dash));
   ck("  ...and every linked/motion target", /if \(mapping\.linkedEntityId\) ids\.add\(mapping\.linkedEntityId\);\s*if \(mapping\.motionEntityId\) ids\.add\(mapping\.motionEntityId\);/.test(dash));
   ck("  ...through the one rule, re-run when the model's entity set changes",
-     /resolveRooms\(ids, entityAreaNames, \(id\) => manager\.roomForEntity\(id\)\)/.test(dash) && /\[manager, entityAreaNames, config\.entityMap, mappedEntityIds, recordIdsKey, setResolvedRooms\]/.test(dash));
+     /resolveRooms\(ids, entityAreaNames, \(id\) => manager\.roomForEntity\(id\)\)/.test(dash) && /\[manager, entityAreaNames, config\.entityMap, mappedEntityIds, haIdsKey, setResolvedRooms\]/.test(dash));
 }
 done("✅ every badge has a room to fold into");

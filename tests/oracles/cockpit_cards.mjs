@@ -92,6 +92,20 @@ ck("  ...a problem with no device: no chevron, nothing to tap, no buttons", !/ch
      && /align-items: flex-start/.test(rule(css("07-facility.css"), ".fm-record-body")));
 }
 
+// architecture review, 2026-10-15: "offline for 129 h" was written at 02:00 and a day old by evening — a duration in a
+// fault's title is worded when it is shown, from its since, in the Kiosk's own words
+{
+  const { faultTitle } = await import("@/fm/fmEngine");
+  const since = "2026-10-09T09:00:00Z", at = (iso) => Date.parse(iso);
+  const t = { title: "Sensor offline for 129 h.", titlePattern: "Sensor offline for {since}.", since };
+  ck("  ...a duration in its title is today's: worded from its since each time it is shown",
+     faultTitle(t, at("2026-10-15T11:00:00Z")) === "Sensor offline for 6 d 2 h."
+     && faultTitle(t, at("2026-10-09T10:15:00Z")) === "Sensor offline for 1 h 15 min."
+     && faultTitle({ ...t, alertNumber: 5 }, at("2026-10-15T11:00:00Z")) === "#5 · Sensor offline for 6 d 2 h."
+     && faultTitle({ title: "Sensor offline for 129 h." }) === "Sensor offline for 129 h."               // an older fault
+     && faultTitle({ ...t, since: undefined }) === "Sensor offline for 129 h.");                          // nothing to count from
+}
+
 console.log("\n  a scheduled task — the same card:");
 const task = draw(h(RecordCard, { title: "Pool filter clean", tone: "state-due-soon", status: { text: "Due soon", tone: "due-soon" },
   when: "due in 3 days · every 30 days", actions: h(React.Fragment, null, btn("Log"), h("button", { className: "icon-btn", "aria-label": "Remove" })) }));
