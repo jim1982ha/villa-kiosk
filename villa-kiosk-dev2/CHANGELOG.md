@@ -1,3 +1,11 @@
+## 2.496.378
+
+### Fixed
+- Advanced Settings: the words after a checkbox now really sit apart from their box and centred on it. 2.496.377's spacing was overruled by the dialog's own label style, so nothing had changed on screen.
+
+### Changed
+- Advanced Settings → a lock: "Inverted lock" is now "Invert Device State", on the same line as Type (one under the other on a phone).
+
 ## 2.496.377
 
 ### Fixed
