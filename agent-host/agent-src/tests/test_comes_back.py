@@ -145,9 +145,10 @@ def test_a_reopened_task_whose_old_resolution_is_seen_reopens_its_fault_and_a_lo
     gid = st.new_incident("g", "automation.gate", "lock.gate", "P2", {"message": "Gate open"})
     lost, _ = pb.open_task("incident", gid, "automation.gate", "lock.gate", "Gate open")
     st.set_task_uid(lost, "t-lost")
-    pb.close(lost, "cleared")
+    pb.close_incident(gid, "resolved", st.now())       # its actions never carried out: the Kiosk's resolve is lost
     run(v.tickets.repair())
-    assert st.task(tid)["status"] == "open" and k.reopened == [("t-old", "AP down (again: 2 times in 7 days)")]
+    # reopened under what is wrong now, as every card says it (Problems.card): the alert's own words
+    assert st.task(tid)["status"] == "open" and k.reopened == [("t-old", pb.current_title(st.task(tid)))]
     assert "t-lost" in k.resolved
 
 

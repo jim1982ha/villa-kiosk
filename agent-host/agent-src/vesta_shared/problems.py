@@ -123,20 +123,6 @@ class Problems:
             raise ValueError(f"a task closes as one of {', '.join(STATUSES)}, not {status!r}")
         self.store.close_task(task_id, status, note, who)
 
-    def clear_source(self, source: str, source_id: int, rule_id: str = "", entity_id: str = "",
-                     status: str = CLEARED, note: str = "", who: str | None = None) -> list[int]:
-        """Its finding or incident is over: the open task(s) about it close. Returns their ids (their
-        tickets are to be resolved). A task a person reopened is closed only by a person (in_persons_hands): its
-        source ending CLEARS nothing of it; a person's Done (DONE) still closes it."""
-        closed = []
-        for t in self.store.tasks("open"):
-            if status == CLEARED and self.in_persons_hands(t):
-                continue
-            if t.get("source") == f"{source}:{int(source_id)}":
-                self.close(t["id"], status, note, who)
-                closed.append(t["id"])
-        return closed
-
     # ⚠️ CLOSING A SOURCE CLOSES WHAT IT OWES (architecture review 6, 2026-10-07). The alert desk and the night check
     # each closed an incident or a finding, then had to remember to clear its task and resolve its Kiosk fault —
     # and to agree with source_gone() on which states end a Problem. The state decides here, once; the callers get
@@ -146,21 +132,18 @@ class Problems:
         its open task closes too — done by a person, or cleared — and its Kiosk fault is to be resolved with `note`, by
         `who` when a person did it (review 29: a Telegram Done showed "resolved … by VESTA Agent" on the card)."""
         self.store.update_incident(iid, state=state, closed_at=now_iso, **fields)
-        if state not in Incident.ANSWERED_OR_CLEARED:
-            return []
-        status = DONE if state == Incident.DONE else CLEARED
-        return [result.resolved(tid, note, who) for tid in self.clear_source("incident", iid, status=status, note=note, who=who)]
+        return self.settle(f"incident:{int(iid)}", note=note, who=who)
 
     def close_finding(self, finding: dict, day: str, note: str = "") -> list[dict]:
         """The night check no longer sees a finding: it closes, its task is cleared, its Kiosk fault resolved."""
         self.store.close_finding(finding["rule_id"], finding["entity_id"], day)
-        return [result.resolved(tid, note) for tid in self.clear_source("finding", finding["id"], note=note)]
+        return self.settle(f"finding:{int(finding['id'])}", note=note)
 
     # ⚠️ THE NIGHT'S LEDGER, HERE (architecture review 7, 2026-10-07): nightly.py kept it inline — raised,
     # an event closed the same night, a rerun not news twice, worsened, closed tonight, its task opened. Which
     # rules are states and which are events, the worsened step and which severities get a task stay the skill's.
     def record_night(self, findings, day: str, _muted_at_iso: str | None = None, *, state_rules, event_rules, worsened_step: float,
-                     task_severities=TASK_SEVERITIES, resolved_note: str = "") -> dict:
+                     resolved_note: str = "") -> dict:
         """The night check's findings for `day`: {new, still_open, closed, again (came back: AGAIN_DAYS), tasks,
         resolve_actions, reopen_actions (a returning finding's fault open again)}. (`_muted_at_iso`: what a
         night check edited before 0.12.132 still passes — Mute is gone, it is ignored.)
@@ -188,11 +171,11 @@ class Problems:
                 # ⚠️ AN EVENT WITH A FAULT STAYS OPEN A NIGHT (architecture review 30): closed the night it fired, its new
                 # fault was resolved by the repair the same second — "Cleared: the check no longer sees it", the digest
                 # "nothing new", the monthly page "Fixed". It closes when a night passes without it, or a person does.
-                if f.severity not in task_severities:
+                if f.severity not in TASK_SEVERITIES:
                     self.store.close_finding(f.rule_id, f.entity_id, day)    # no fault: closes the same night, as ever
                 if is_new:                                                    # a rerun of the same night: told already
                     new.append(d)
-                elif f.severity in task_severities and prev_row and prev_row["opened_day"] != day:
+                elif f.severity in TASK_SEVERITIES and prev_row and prev_row["opened_day"] != day:
                     still_open.append(d)                                      # again while its fault is open: the same one
             elif is_new:
                 new.append(d)
@@ -209,38 +192,18 @@ class Problems:
             # ⚠️ ITS TASK AND ITS KIOSK TICKET CLOSE WITH IT (villa, 2026-10-01): the finding closed, the ticket
             # stayed "Open fault" for ever, and the Kiosk's Cockpit filled with faults long gone
             resolve += self.close_finding(o, day, resolved_note)
+        # each problem's task, as settle() works it out (architecture review, 2026-10-15): new or back — open (again);
+        # still open with its task closed by the agent — open again (the same night run twice reopened the finding in
+        # place and no pass looked: Timmerflotte_2623); never had one — a new one (villa, 2026-10-14). A person's close
+        # keeps a still-true problem quiet: wants_open says so.
         tasks, reopen = [], []
-        for d in new + again:
-            if d["severity"] in task_severities:
-                title = again_title(d["summary"], d.get("again"))
-                if d in again:
-                    tid, how = self.reopen_task("finding", d["id"], d["rule_id"], d["entity_id"], title, d.get("check") or "")
-                    if how == "reopened":
-                        reopen.append(result.reopened(tid, title, "Back again."))
-                        continue
-                    created = how == "new"
-                else:
-                    tid, created = self.open_task("finding", d["id"], d["rule_id"], d["entity_id"], title,
-                                                  d.get("check") or "")
-                if created:
-                    # the Kiosk fault's title IS the task's, "(again: …)" included (architecture review 23: only the
-                    # task row carried it — the Cockpit never said it)
-                    tasks.append({"task_id": tid, "todo_summary": title[:250], "check": d.get("check") or "",
+        for d in new + again + still_open:
+            for a in self.settle(f"finding:{int(d['id'])}"):
+                if a["action"] == "ticket":
+                    tasks.append({"task_id": a["task_id"], "todo_summary": a["summary"], "check": d.get("check") or "",
                                   "severity": d["severity"], "entity_id": d["entity_id"]})
-        # ⚠️ AN OPEN PROBLEM THAT NEVER HAD A FAULT GETS ONE (villa, 2026-10-14: a sensor offline for five days was
-        # open every night and never in the Cockpit). A task was asked for only on the night a finding was new or came
-        # back, so one opened before it earned a task — written by an older night check, or at a severity without
-        # one — stayed open and unseen for as long as the problem lasted. One that HAD a task is left alone: a
-        # person's close keeps a still-true problem quiet, and an open task's missing fault is repair's to restore.
-        for d in still_open:
-            if d["severity"] not in task_severities or self.store.open_task(d["rule_id"], d["entity_id"]) \
-                    or self.store.last_task(f"finding:{int(d['id'])}"):
-                continue
-            tid, created = self.open_task("finding", d["id"], d["rule_id"], d["entity_id"], d["summary"],
-                                          d.get("check") or "")
-            if created:
-                tasks.append({"task_id": tid, "todo_summary": d["summary"][:250], "check": d.get("check") or "",
-                              "severity": d["severity"], "entity_id": d["entity_id"]})
+                elif a["action"] == "ticket.reopen":
+                    reopen.append(a)
         return {"new": new, "still_open": still_open, "closed": closed, "again": again, "tasks": tasks,
                 "resolve_actions": resolve, "reopen_actions": reopen}
 
@@ -357,16 +320,84 @@ class Problems:
             return bool(inc) and bool(inc.get("closed_at")) and inc.get("state") in Incident.ENDED
         return False                                     # no source of its own: it waits for a person
 
-    def close_outlived(self, note: str = "Cleared: the check no longer sees it.") -> list[int]:
-        """Open tasks whose finding or incident is over — and that no person reopened (in_persons_hands) — close as
-        cleared, `note` kept for their fault. Returns their ids. (A source closed by its own path closes its task there,
-        close_incident / close_finding; this catches one that ended another way.)"""
+    # ---------------------------------------------------------------- the one decision
+    # ⚠️ ONE PLACE DECIDES WHETHER A PROBLEM HAS ITS FAULT (architecture review, 2026-10-15). About fourteen places in
+    # five modules decided it — the night's ledger, the recheck, the desk, the repair — and three sweeps patched up
+    # after them (close_outlived, restore_unseen, the night's backfill), each with its own rule: the backfill skipped a
+    # finding that had ever had a task, the warning skipped only a person's close. Timmerflotte_2623 ended with its
+    # finding OPEN and its task CLEARED by the agent, nobody could say by which: one way, reproduced — the recheck
+    # cleared it, then the same night was run again, which reopens the day's row in place (store.raise_finding) where
+    # no pass looks. Now every pass only records the facts (the source opened, closed, came back; a person's gesture)
+    # and asks settle(), which works the task out from them.
+    def wants_open(self, source: str) -> bool:
+        """Should the task about `source` ("finding:3", "incident:5") be open now? Open while its finding or incident
+        lasts — a finding at a severity that earns a task — unless a person closed it since the problem's latest return
+        (closed_by_person: a still-true problem a person closed stays quiet). A task a person REOPENED is theirs
+        (in_persons_hands): settle closes it only on a person's Done."""
+        kind, sid = self._source({"source": source})
+        if kind == "finding":
+            row = self.store.finding(sid)
+            if not row or row["status"] != "open" or row["severity"] not in TASK_SEVERITIES:
+                return False
+            return not self.closed_by_person(source, row.get("reopened_at") or "")
+        if kind == "incident":
+            inc = self.store.incident(sid)
+            if not inc or self.source_gone({"source": source}):
+                return False
+            return not self.closed_by_person(source, inc.get("reopened_at") or "")
+        return False
+
+    def settle(self, source: str, note: str = "", who: str | None = None) -> list[dict]:
+        """The task about `source` made what wants_open says, and the Kiosk fault actions that follow (result.fault /
+        reopened / resolved): over — closed (DONE when its incident was answered Done, by `who`; else CLEARED), its
+        fault resolved with `note`; still there and its last task closed by the agent, or by a person before the
+        problem came back — open again ("Back again." unless `note` says otherwise); a finding still there that never
+        had a task — a new one. An incident's first task is the desk's to open (only some alerts ask for one)."""
+        kind, sid = self._source({"source": source})
+        if kind not in ("finding", "incident"):
+            return []                                    # no source of its own: it waits for a person
+        last = self.store.last_task(source)
+        if not self.wants_open(source):
+            if not last or last["status"] != "open":
+                return []
+            inc = self.store.incident(sid) if kind == "incident" else None
+            status = DONE if inc and inc.get("state") == Incident.DONE else CLEARED
+            if status == CLEARED and self.in_persons_hands(last):
+                return []                                # a person's reopening: only a person closes it (their Done does)
+            self.close(last["id"], status, note, who if status == DONE else None)
+            return [result.resolved(last["id"], note or None, who if status == DONE else None)]
+        if last and last["status"] == "open":
+            return []
+        title = self.source_title(source)
+        if last:
+            self.store.reopen_task(last["id"], title[:250])
+            return [result.reopened(last["id"], title, note or "Back again.")]
+        if kind != "finding":
+            return []
+        row = self.store.finding(sid)
+        check = json.loads(row.get("detail") or "{}").get("check") or ""
+        tid = self.store.add_task(row["rule_id"], row["entity_id"], title[:250], source=source, check_text=check or None)
+        return [result.fault(title[:200], task_id=tid, check=check, entity_id=row["entity_id"])]
+
+    def settle_all(self, faults: set[str] | None = None) -> list[dict]:
+        """settle() for every open problem and every open task — the repair's one pass. `faults`: the fault ids the Kiosk
+        still holds; a task brought back whose fault is gone loses its id, so the repair makes a new one."""
+        sources = {f"finding:{int(f['id'])}" for f in self.store.findings(status="open")}
+        sources |= {f"incident:{int(i['id'])}" for i in self.store.incidents(open_only=True)}
+        sources |= {t["source"] for t in self.open_tasks() if t.get("source")}
         out = []
-        for t in self.open_tasks():
-            if self.source_gone(t) and not self.in_persons_hands(t):
-                self.close(t["id"], CLEARED, note)
-                out.append(t["id"])
+        for src in sorted(sources):
+            acts = self.settle(src)
+            for a in acts:
+                uid = (self.store.task(a["task_id"]) or {}).get("todo_uid") if a.get("action") == "ticket.reopen" else None
+                if uid and faults is not None and uid not in faults:
+                    self.store.set_task_uid(a["task_id"], None)
+            out += acts
         return out
+
+    def source_title(self, source: str) -> str:
+        """What is wrong, as the problem's source says it now ("(again: …)" included): its task's title when it opens."""
+        return self.current_title({"source": source, "summary": ""})
 
     # ---------------------------------------------------------------- reading
     # ⚠️ THE CARD IS WORKED OUT, NOT PATCHED (architecture review, 2026-10-14). A change was sent to the Kiosk once; when
@@ -390,36 +421,15 @@ class Problems:
                 "note": task.get("close_note") or "Closed: the problem is over.", "who": task.get("closed_who") or None}
 
     def unseen(self) -> list[dict]:
-        """Open findings that should be a fault and are not: a task severity, no open task, and no person's close
-        keeping it quiet (Done, or closed in the Kiosk). record_night leaves none; tickets.repair says when any is
-        found (villa, 2026-10-14: a sensor open for five days, never in the Cockpit, and nothing said so)."""
+        """Open findings that should be a fault and are not — wants_open with no open task. settle_all leaves none;
+        tickets.repair says when any is found (villa, 2026-10-14: a sensor open for five days, never in the Cockpit,
+        and nothing said so)."""
         out = []
         for f in self.store.findings(status="open"):
-            if f["severity"] not in TASK_SEVERITIES or self.store.open_task(f["rule_id"], f["entity_id"]):
-                continue
-            if self.closed_by_person(f"finding:{int(f['id'])}", f.get("reopened_at") or ""):
-                continue
-            out.append(f)
-        return out
-
-    def restore_unseen(self, faults: set[str]) -> list[int]:
-        """Every open problem that should be a fault and is not (unseen) gets its task back: its last one open again,
-        or a new one. `faults`: the fault ids the Kiosk still holds — a task whose fault is gone loses its id, so the
-        repair makes a new one. Returns the task ids.
-
-        ⚠️ THE WARNING WAS NOT A FIX (villa, 2026-10-15): Timmerflotte_2623, offline since 9 Oct, was named "an open
-        problem with no Kiosk fault" every 5 minutes for a day — its task had been closed by the agent while the
-        sensor stayed dead (why: not readable from here), and record_night gives a fault only to a problem that never
-        had one. The Cockpit showed the dead sensor with no Open Ticket, and nobody was asked. A person's close is
-        never undone: unseen() leaves it out."""
-        out = []
-        for f in self.unseen():
-            tid, _how = self.reopen_task("finding", f["id"], f["rule_id"], f["entity_id"], f.get("summary") or "",
-                                         json.loads(f.get("detail") or "{}").get("check") or "")
-            uid = (self.store.task(tid) or {}).get("todo_uid")
-            if uid and uid not in faults:
-                self.store.set_task_uid(tid, None)
-            out.append(tid)
+            src = f"finding:{int(f['id'])}"
+            last = self.store.last_task(src)
+            if self.wants_open(src) and not (last and last["status"] == "open"):
+                out.append(f)
         return out
 
     def open_tasks(self) -> list[dict]:

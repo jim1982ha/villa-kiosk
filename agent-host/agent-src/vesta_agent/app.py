@@ -48,7 +48,7 @@ from . import layout
 from .approvals import Approvals
 from .posting import Poster
 from .incident_thread import IncidentThread
-from vesta_shared.result import FAULTS_CHANGED
+
 from .housekeeping import tidy
 from .kiosk import Kiosk, KioskError
 from .alert_buttons import AlertButtons
@@ -345,10 +345,8 @@ class Vesta:
     async def run_code_job(self, skill, command: str, timeout: int = 900, values: dict | None = None,
                            origin: Origin | None = None) -> dict:
         res = await asyncio.to_thread(self.code_command, skill, command, values, timeout)
+        # faults changed (the night check rewrote its findings, a recheck closed one): carry_out brings the Kiosk's in line
         await self._safe(self.outcome.carry_out(res, skill.name, origin))
-        if res.get(FAULTS_CHANGED):
-            # the night check rewrote its findings: their open faults in the Kiosk say what is wrong now
-            await self._safe(self.tickets.repair())
         return res
 
     def build_pack(self) -> dict:

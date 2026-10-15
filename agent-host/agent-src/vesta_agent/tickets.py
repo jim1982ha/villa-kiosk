@@ -110,44 +110,47 @@ class Tickets:
             return True
         return False
 
-    async def repair(self) -> int:
+    async def repair(self) -> dict[str, int]:
         """The open tasks and the Kiosk's faults agree (at each start and each night, owner, 2026-10-01), in three steps:
           1. what people did in the Kiosk comes in: a fault a person closed closes its task (and the incident it came
              from: the alert's messages are settled); a fault a person reopened opens its task again, theirs;
-          2. a task that outlived its finding or incident closes (Problems.close_outlived);
+          2. every task is made what its problem's facts say (Problems.settle_all): over — closed, still there — open;
           3. every fault is made what its task says (Problems.card): open or closed — by whom, with which note —, its
              title and its alert's number; an open task without a fault gets one.
-        Returns how many faults were created.
+        Returns how many faults it created, reopened and resolved: {created, reopened, resolved}.
         ⚠️ ONE COMPARISON, NOT NINE PATCHES (architecture review, 2026-10-14): each case was a pass of its own, and a
         close the Kiosk did not receive was redone as the agent's ("Closed: the problem is over.") — a Done pressed by
         Fabien lost his name and his repair. The card now comes from the task, whose close keeps who and why."""
+        nothing = {"created": 0, "reopened": 0, "resolved": 0}
         if not self.kiosk.enabled:
-            return 0
+            return nothing
         store = self._store()
         problems = Problems(store)
         try:
             held = await self.kiosk.held_tickets()
         except Exception as e:  # noqa: BLE001 — the next start or night tries again
             log.warning("The Kiosk's tickets could not be read (%s)", type(e).__name__)
-            return 0
+            return nothing
         if not self.kiosk.says(NOTED):
             try:
                 await self.kiosk.check()          # a Kiosk updated since the agent started says so now
             except Exception as e:  # noqa: BLE001 — the card's Telegram lines wait for the next repair
                 log.debug("The Kiosk's info could not be read (%s)", type(e).__name__)
         await self._take_in(problems, held)
-        if cleared := problems.close_outlived():
-            log.info("Tasks closed with their problem gone: %d", len(cleared))
-        if back := problems.restore_unseen(set(held)):
-            log.info("Open problems with no Kiosk fault given one again: %d", len(back))
-        await self._converge(problems, held)
+        # every problem's task as its facts say (Problems.settle_all): over — closed; still there — open (again)
+        if moved := problems.settle_all(set(held)):
+            log.info("Tasks brought in line with their problems: %s", ", ".join(
+                f"{sum(1 for a in moved if a['action'] == k)} {w}" for k, w in
+                (("ticket.resolve", "closed"), ("ticket.reopen", "reopened"), ("ticket", "new")) if any(a["action"] == k for a in moved)))
+        moved_cards = await self._converge(problems, held)
         made = 0
         for t in problems.open_tasks():
             if t.get("todo_uid"):
                 continue
             try:
                 check = problems.check_of(t)
-                if await self.create(problems.title_of(t), t.get("entity_id") or None,
+                # what is wrong NOW, as every card says it (Problems.card): a task restored days later kept its first words
+                if await self.create(problems.current_title(t), t.get("entity_id") or None,
                                             result.fault_note(check), t["id"]):
                     made += 1
             except Exception as e:  # noqa: BLE001 — the next start or night tries again
@@ -159,7 +162,7 @@ class Tickets:
         if unseen := problems.unseen():
             log.warning("%d open problem(s) have no Kiosk fault: %s", len(unseen),
                         ", ".join(f"{f['rule_id']} {f['entity_id']}" for f in unseen[:10]))
-        return made
+        return {"created": made, **moved_cards}
 
     async def _take_in(self, problems: Problems, held: dict[str, dict]) -> None:
         """Step 1: what a PERSON did to a fault in the Kiosk reaches its task. Only their gestures — every other
@@ -205,11 +208,11 @@ class Tickets:
             if iid:
                 log.info("Incident #%s taken on in the Kiosk: no longer chased", iid)
 
-    async def _converge(self, problems: Problems, held: dict[str, dict]) -> None:
+    async def _converge(self, problems: Problems, held: dict[str, dict]) -> dict[str, int]:
         """Step 3: each fault says what its task says (Problems.card). A close is redone for two days (a resolve that did
         not land: the Kiosk down a moment); past them, a fault a person moved since is theirs."""
         recent = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
-        fixed = 0
+        fixed, reopened, resolved = 0, 0, 0
         for t in problems.store.tasks(None):
             uid = t.get("todo_uid")
             card = held.get(uid) if uid else None
@@ -219,7 +222,8 @@ class Tickets:
             try:
                 if want["open"] and card["status"] == "resolved":
                     # its problem came back and the fault's reopening did not reach the Kiosk
-                    fixed += await self.reopen({"task_id": t["id"], "title": t.get("summary") or ""})
+                    n = await self.reopen({"task_id": t["id"], "title": want["title"] or t.get("summary") or ""})
+                    fixed += n; reopened += n
                 elif want["open"]:
                     title = ticket_title(want["title"])[:200]
                     # the title the agent last gave it, not the one it has: a title a person wrote stays (Kiosk.update_ticket)
@@ -240,13 +244,14 @@ class Tickets:
                         if lines:
                             fixed += await self.kiosk.note_ticket(uid, lines)
                 elif card["status"] != "resolved" and (t.get("done_at") or "") >= recent:
-                    fixed += await self.kiosk.resolve_ticket(uid, note=want["note"],
-                                                             **({"who": want["who"]} if want["who"] else {}))
+                    n = await self.kiosk.resolve_ticket(uid, note=want["note"], **({"who": want["who"]} if want["who"] else {}))
+                    fixed += n; resolved += n
             except Exception as e:  # noqa: BLE001 — the next start or night tries again
                 log.warning("A Kiosk ticket could not be brought up to date (%s)", type(e).__name__)
                 break
         if fixed:
             log.info("Kiosk tickets brought up to date: %d", fixed)
+        return {"reopened": reopened, "resolved": resolved}
 
 
 def _moment(iso: str | None) -> datetime | None:

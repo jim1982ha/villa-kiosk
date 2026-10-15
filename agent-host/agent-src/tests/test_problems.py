@@ -33,7 +33,7 @@ def test_a_closed_source_closes_its_task_and_says_which(pb):
     fid = finding(pb)
     tid, _ = pb.open_task("finding", fid, "PM-A", "sensor.example_a", "A is off")
     other, _ = pb.open_task("finding", finding(pb, "PM-B", "sensor.example_b"), "PM-B", "sensor.example_b", "B")
-    assert pb.clear_source("finding", fid) == [tid]
+    assert [a["task_id"] for a in pb.close_finding(pb.store.finding(fid), "2026-10-09")] == [tid]
     assert pb.store.task(tid)["status"] == CLEARED and pb.store.task(other)["status"] == "open"
 
 

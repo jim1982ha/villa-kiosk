@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.6.205 (15 October 2026)
+
+Architecture review 2026-10-15 (the problem lifecycle), 1 and 2:
+- Problems.wants_open / settle / settle_all: ONE decision whether a source's task is open (finding at a task severity
+  or incident not ended, unless a person closed it since its latest return; a person-reopened task closes only on a
+  person's Done; a task with no source waits for a person). close_finding, close_incident, record_night (new, again
+  AND still open) and the repair all go through it. Gone: clear_source, close_outlived, restore_unseen, the night's
+  backfill and its "ever had a task" rule, record_night's task_severities parameter. unseen() is wants_open with no
+  open task. The re-run gap (recheck clears, the same night runs again: raise_finding reopens the day's row in place,
+  its task stayed cleared) is closed by construction; test_problem_close pins it (red on 0.6.204).
+- outcome.carry_out: ticket / ticket.resolve / ticket.reopen about a task, or FAULTS_CHANGED, run tickets.repair at
+  once — one mover of Kiosk faults; only a fault with no task (a chat's) is created directly. run_code_job's own repair
+  after FAULTS_CHANGED removed. repair returns {created, reopened, resolved}; a created or reopened fault is titled by
+  current_title (Problems.card's). Tests: test_comes_back's lost resolve made real (close_incident), test_outcome,
+  test_maintenance_noise (the engine reads FAULTS_CHANGED in carry_out); villa tests use kiosk_fake. Five mutations
+  red.
+
 ## 0.6.204 (15 October 2026)
 
 - agent-contract.json (the Kiosk's 2.496.380, copied): `ticket.checks` ["minutes", "nightly"] and the fault's `check`.

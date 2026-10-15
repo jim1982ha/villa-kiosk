@@ -1,3 +1,13 @@
+## 0.12.213
+
+What you will see (architecture review of 15 October, how a problem lives and ends — ideas 1 and 2):
+- A problem that is still there always has its card in the Cockpit, with Open Ticket and Close. One place now decides,
+  for every problem, whether its card is open, and it closes only a problem that is over (or one you closed). One way
+  the bathroom sensor lost its card is closed: the nightly check run a second time for a day already checked.
+- Cards are moved by one route only, right after the job that noticed the change: a Done on Telegram can no longer be
+  overtaken by the Agent closing the same card for another reason.
+- A card that comes back says what is wrong now, in the same words as every other card.
+
 ## 0.12.212
 
 What you will see:

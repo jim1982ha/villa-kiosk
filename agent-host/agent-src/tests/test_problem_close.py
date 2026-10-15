@@ -190,3 +190,26 @@ def test_an_event_finding_is_never_counted_again(tmp_path):
     assert second["new"] == [] and len(second["still_open"]) == 1
     assert len(pb.record_night([], "2026-10-09", **rules)["closed"]) == 1               # a quiet night: it closes
     assert len(pb.record_night([_F("E-RUN", "c", "P3")], "2026-10-12", **rules)["new"]) == 1
+
+
+def test_a_night_run_twice_after_its_problem_was_cleared_gives_it_its_fault_back(tmp_path):
+    # architecture review, 2026-10-15 (Timmerflotte_2623: its finding OPEN, its task CLEARED by the agent, no card in the
+    # Cockpit for days): the recheck clears a problem, then the same night is run again — the day's row reopens in
+    # place (store.raise_finding) and no pass looked at its task
+    store = Store(str(tmp_path / "s.sqlite"))
+    pb = Problems(store)
+    rules = dict(state_rules={"PM-UNAVAILABLE"}, event_rules=set(), worsened_step=15)
+
+    class F:
+        rule_id, entity_id, family, severity, summary, check, day = "PM-UNAVAILABLE", "sensor.x", "x", "P3", "X offline for 20 h", "look", ""
+
+        def __init__(self):
+            self.detail = {}
+
+        def as_dict(self):
+            return {k: getattr(self, k) for k in ("rule_id", "entity_id", "family", "severity", "summary", "detail", "check", "day")}
+    (task,) = pb.record_night([F()], "2026-10-09", **rules)["tasks"]
+    pb.close_finding(store.open_finding("PM-UNAVAILABLE", "sensor.x"), "2026-10-10", "Cleared: back online.")
+    rerun = pb.record_night([F()], "2026-10-09", **rules)
+    assert [a["task_id"] for a in rerun["reopen_actions"]] == [task["task_id"]]
+    assert store.task(task["task_id"])["status"] == "open" and pb.unseen() == []

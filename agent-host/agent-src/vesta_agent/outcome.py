@@ -36,6 +36,8 @@ import os
 from datetime import datetime, timezone
 from typing import Awaitable, Callable
 
+from vesta_shared.result import FAULTS_CHANGED
+
 from . import layout
 from .notice import when
 from .posting import Poster
@@ -224,18 +226,18 @@ class Outcome:
                 if not told:
                     for chat in route.target("fm"):          # no chat of the owner's has it: the facility manager's do
                         await self.poster.post(chat, gate_prompt, status=said, roles={"fm"}, origin=origin, title=SIREN_TITLE)
+        # ⚠️ ONE HAND MOVES THE CARDS (architecture review, 2026-10-15): a script's fault actions were carried out here,
+        # and the repair worked the same cards out from the tasks — two routes, a 2-day "redo the close" window for when
+        # the first failed, and a person's Done that could meet the agent's close. A fault about a task is now the
+        # repair's (tickets.repair: Problems.card, at once); only a fault with no task (a chat's) is made here.
+        faults_moved = bool(res.get(FAULTS_CHANGED))
         for a in res.get("actions") or []:
             kind = (a or {}).get("action")
             try:
-                if kind == "ticket":
-                    if await self.tickets.create(a.get("summary", ""), a.get("entity_id") or None,
-                                                a.get("note") or None, a.get("task_id")):
-                        done["tickets"] += 1
-                elif kind == "ticket.resolve":
-                    if await self.tickets.resolve(a):
-                        done["resolved"] += 1
-                elif kind == "ticket.reopen":
-                    if await self.tickets.reopen(a):
+                if kind in ("ticket", "ticket.resolve", "ticket.reopen") and (kind != "ticket" or a.get("task_id")):
+                    faults_moved = True
+                elif kind == "ticket":
+                    if await self.tickets.create(a.get("summary", ""), a.get("entity_id") or None, a.get("note") or None):
                         done["tickets"] += 1
                 elif kind == "snapshot.get":
                     photo = await camera_photo(self.reader, a.get("entity_id"))
@@ -252,6 +254,13 @@ class Outcome:
             except Exception as e:  # noqa: BLE001
                 self.state.log("action_failed", {"action": kind, "error": type(e).__name__})
                 log.warning("action %s failed (%s)", kind, type(e).__name__)
+        if faults_moved:
+            try:
+                moved = await self.tickets.repair()
+                done["tickets"] += moved.get("created", 0) + moved.get("reopened", 0)
+                done["resolved"] += moved.get("resolved", 0)
+            except Exception as e:  # noqa: BLE001 — the next repair (5 minutes) does it
+                log.warning("The Kiosk's faults could not be brought up to date (%s)", type(e).__name__)
         return done
 
     @staticmethod
