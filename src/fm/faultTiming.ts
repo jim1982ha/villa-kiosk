@@ -29,8 +29,9 @@ export interface SourceRow {
 }
 
 const ROWS: Record<IssueSource, Omit<SourceRow, "source">> = {
-  live: { what: "What a device reports right now: unavailable, missing, unlocked, too hot…",
-    opens: "At once", goes: "By itself, as soon as the device is back to normal" },
+  live: { what: "What the Kiosk shows right now on its map — a device with a red badge: unavailable, missing, unlocked, "
+      + "too hot… Seen on this screen only: nobody is told", opens: "At once, as the map shows it",
+    goes: "By itself, as soon as the device is back to normal" },
   alert: { what: "A VESTA alert from one of the villa's rules, numbered as on Telegram (#5)",
     opens: "As soon as the alert is raised",
     goes: "Within minutes of it being back to normal; its words and Telegram's reminders follow" },
@@ -40,7 +41,9 @@ const ROWS: Record<IssueSource, Omit<SourceRow, "source">> = {
       + "no longer finds them; until then each night updates the figures" },
   chat: { what: "Created from a Telegram chat with the VESTA Agent (\"Create this fault\")",
     opens: "When someone presses Create this fault", goes: "When someone resolves or closes it" },
-  agent: { what: "Made by the VESTA Agent before it said from where", opens: "—", goes: "As an alert's or a nightly check's" },
+  agent: { what: "An older fault of the VESTA Agent's, made before it recorded where each comes from (new ones say "
+      + "Alert, Night check or Chat)", opens: "No longer: new faults carry their own source",
+    goes: "As an alert's or a nightly check's" },
   owner: { what: "A ticket the Owner opened (Open a ticket)", opens: "At once, already in progress",
     goes: "When someone resolves or closes it" },
   fm: { what: "A ticket the Facility manager opened (Open a ticket)", opens: "At once, already in progress",
@@ -63,12 +66,19 @@ function agentClock(c: AgentCadence | null): string {
   return `it checks ${every}, and its nightly check runs at ${c.nightlyAt}`;
 }
 
-/** Every source's row — the VESTA Agent's only with an Agent — and the note under them; `cadence`: the Agent's own
- *  timing (null: it did not say). */
-export function faultTiming(agent: boolean, cadence: AgentCadence | null = null): { rows: readonly SourceRow[]; note: string } {
+/** The table's two groups (owner, 2026-10-15): what the Kiosk and its people produce, then what the VESTA Agent does. */
+export interface SourceGroup { title: string; rows: readonly SourceRow[] }
+
+/** Every source's row — the VESTA Agent's only with an Agent — in its group, and the note under them; `cadence`: the
+ *  Agent's own timing (null: it did not say). */
+export function faultTiming(agent: boolean, cadence: AgentCadence | null = null):
+  { rows: readonly SourceRow[]; groups: readonly SourceGroup[]; note: string } {
   const rows = ISSUE_SOURCES.filter((s) => agent || !AGENT_SOURCES.has(s)).map((source) => ({ source, ...ROWS[source] }));
+  const groups = [{ title: "From the Kiosk", rows: rows.filter((r) => !AGENT_SOURCES.has(r.source)) },
+    { title: "From the VESTA Agent", rows: rows.filter((r) => AGENT_SOURCES.has(r.source)) }].filter((g) => g.rows.length);
   return {
     rows,
+    groups,
     note: agent
       ? `${TICKET} The VESTA Agent closes its own faults and tickets when the problem goes away; ${agentClock(cadence)}. `
         + REFRESH

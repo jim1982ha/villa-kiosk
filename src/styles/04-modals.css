@@ -394,6 +394,8 @@
 .info-pop-table th { text-align: left; font-weight: 600; color: var(--text-dim); padding: 4px 8px 4px 0; border-bottom: 1px solid var(--hairline); }
 .info-pop-table td { vertical-align: top; padding: 5px 8px 5px 0; border-bottom: 1px solid var(--hairline); }
 .info-pop-table td:first-child { color: var(--text-primary); }
+.info-pop-table .info-pop-group th { padding-top: 10px; color: var(--text-primary); text-transform: uppercase;
+  letter-spacing: 0.06em; font-size: var(--text-2xs); }
 .info-pop-note { margin: 8px 0 0; color: var(--text-dim); }
 /* the (i)'s table of sources (FaultTiming): the icon and its word, what it is under them */
 .info-pop-source { display: inline-flex; align-items: center; gap: 6px; color: var(--text-primary); white-space: nowrap; }

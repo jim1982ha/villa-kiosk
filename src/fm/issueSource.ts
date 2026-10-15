@@ -13,9 +13,10 @@ import { AGENT_ORIGINS, AGENT_SOURCE, type FmTicket } from "./fmTypes";
  *  maintenance overdue. */
 export type IssueSource = "live" | "alert" | "night" | "chat" | "agent" | "owner" | "fm" | "person" | "guest" | "schedule";
 
-/** Every source, in the legend's order. */
+/** Every source, in the legend's order: what the Kiosk and its people produce, then what the VESTA Agent produces
+ *  (owner, 2026-10-15: "first all the types that are not coming from the Agent, then those that are"). */
 export const ISSUE_SOURCES: readonly IssueSource[] =
-  ["live", "alert", "night", "chat", "agent", "owner", "fm", "person", "guest", "schedule"];
+  ["live", "owner", "fm", "person", "guest", "schedule", "alert", "night", "chat", "agent"];
 
 /** The sources only a VESTA Agent produces: the legend leaves them out when there is none (agentView.agentVisible). */
 export const AGENT_SOURCES: ReadonlySet<IssueSource> = new Set(["alert", "night", "chat", "agent"]);
