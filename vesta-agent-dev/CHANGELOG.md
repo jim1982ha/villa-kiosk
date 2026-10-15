@@ -1,3 +1,12 @@
+## 0.12.204
+
+What you will see:
+- Nothing new on Telegram or the Cockpit. A correction to what 0.12.203 said: on a P1 alert, Done / Need help are
+  under your copy too while the alert is open (as they have been since 10 October, so nobody has to type a reply).
+  What 0.12.203 changed is that you now also receive its reminder, its reopening and its close.
+- Behind it: every release now checks that the Agent's code uses no name it never defined, runs its tests in half
+  the time, and checks the tool used to prove each new check can fail.
+
 ## 0.12.203
 
 What you will see (architecture review of 15 October, counts and alerts — points 3 to 6):
