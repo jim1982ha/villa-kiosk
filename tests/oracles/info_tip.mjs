@@ -55,8 +55,17 @@ const { ISSUE_SOURCES } = await import("@/fm/issueSource");
 ck("with an Agent: ONE row per icon a card can show, each saying what it is, when it appears and when it goes",
    withAgent.rows.map((r) => r.source).join() === ISSUE_SOURCES.join() && withAgent.rows.every((r) => r.what && r.opens && r.goes),
    withAgent.rows.map((r) => r.source));
-ck("  ...the nightly check's say so, and the Agent's defaults are said as defaults",
-   withAgent.rows.find((r) => r.source === "night")?.opens === "Nightly check" && /02:00 by default/.test(withAgent.note));
+const told = faultTiming(true, { checkMinutes: 15, nightlyAt: "04:30" });
+ck("  ...the nightly check's say so; the Agent's timing is the one it TOLD, never a copy (architecture review, 2026-10-15)",
+   withAgent.rows.find((r) => r.source === "night")?.opens === "Nightly check"
+   && /it checks every 15 minutes, and its nightly check runs at 04:30\./.test(told.note) && !/02:00|every 5 minutes/.test(told.note), told.note);
+ck("  ...an Agent that did not say: no number at all", !/\d\d:\d\d|every \d+ minutes,/.test(withAgent.note)
+   && /at the time set in the VESTA Agent/.test(withAgent.note), withAgent.note);
+const { parseAgentStatus } = await import("@/agent/agentApi");
+const beat = JSON.parse(readFileSync(new URL("../../rootfs/usr/share/vesta/agent-contract.json", import.meta.url), "utf8")).heartbeat.sample;
+ck("  ...the Kiosk reads the timing the agreement's heartbeat carries, as the proxy shows it",
+   JSON.stringify(parseAgentStatus({ state: "online", status: beat.status, cadence: beat.cadence }).cadence) === JSON.stringify(beat.cadence)
+   && parseAgentStatus({ state: "online" }).cadence === null);
 ck("  ...Live does not name Home Assistant (owner, 2026-10-14)", !/Home Assistant/.test(withAgent.rows.find((r) => r.source === "live").what));
 ck("without an Agent: no row of the Agent's — nothing claims to open or close by itself",
    !alone.rows.some((r) => ["alert", "night", "chat", "agent"].includes(r.source)) && alone.rows.some((r) => r.source === "guest")
@@ -67,7 +76,7 @@ ck(`  ...and the list's own refresh, from the app's own numbers (${STORE_ACTIVE_
      && t.note.includes(`every ${STORE_HEARTBEAT_MS / 60000} minutes otherwise`)));
 const card = src("components/fm/FaultTiming.tsx");
 ck("the card shows the Agent's rows when an Agent is connected OR one of its faults is open (its icons are on the list)",
-   /faultTiming\(agent\)/.test(card) && /const agent = agentVisible\(status\) \|\| data\.tickets\.some\(\(t\) => t\.source === AGENT_SOURCE && stageOf\(t\) !== "closed"\);/.test(card)
+   /faultTiming\(agent, status\?\.cadence \?\? null\)/.test(card) && /const agent = agentVisible\(status\) \|\| data\.tickets\.some\(\(t\) => t\.source === AGENT_SOURCE && stageOf\(t\) !== "closed"\);/.test(card)
    && /rows\.map/.test(card) && /\{note\}/.test(card) && /<table className="info-pop-table">/.test(card));
 ck("it sits just before Open a ticket, on the Overview's title line", /<FaultTiming \/>\s*<button[^>]*>[^<]*<Plus size=\{16\} \/> Open a ticket/.test(src("components/cockpit/CockpitOverview.tsx")));
 

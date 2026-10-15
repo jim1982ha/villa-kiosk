@@ -13,7 +13,7 @@ import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useDeviceIdentity } from "@/config/VillaModel";
 import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
 import { faultTitle, localStamp, stageOf, ticketStats } from "@/fm/fmEngine";
-import { ticketGroups, type TicketGroup } from "@/fm/ticketGroups";
+import { openCounts, ticketGroups, type TicketGroup } from "@/fm/ticketGroups";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
 import RecordCard, { type RecordCardProps } from "./RecordCard";
 import FaultStageModal from "./FaultStageModal";
@@ -53,6 +53,8 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
   }, [editTicket]);
 
   const stats = ticketStats(data.tickets);
+  // in progress: the cards below, one per device (openCounts) — the other figures are per record (a repair's time)
+  const inProgress = openCounts(data.tickets, deviceOf).tickets;
   const tickets = useMemo(() => ticketGroups(
     data.tickets.filter((t) => stageOf(t) === "ticket").sort((a, b) => Date.parse(b.openedAt) - Date.parse(a.openedAt)),
     deviceOf), [data.tickets, deviceOf]);
@@ -122,7 +124,7 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
   return (
     <div className="fm-stack">
       <div className="fm-summary">
-        <div className="fm-stat"><span className="n">{stats.inProgress}</span><span className="l">in progress</span></div>
+        <div className="fm-stat"><span className="n">{inProgress}</span><span className="l">in progress</span></div>
         <div className="fm-stat">
           <span className="n">{stats.meanResolutionHours === null ? "—" : `${stats.meanResolutionHours.toFixed(0)}h`}</span>
           <span className="l">mean resolution</span>

@@ -155,15 +155,24 @@ ck("  ...every source has its icon and its words in the (i)'s legend",
 
 console.log("\n  the Recap's readiness says what is found, never the goal over a contradiction (owner, 2026-10-14):");
 const { buildReadiness } = await import("@/fm/readiness");
-const noDevices = { ids: [], unavailable: [], has: () => false };
+const noDevices = { ids: [], unavailable: [], has: () => false, deviceOf: (id) => id };
 const readyWith = (tickets) => buildReadiness({}, fm(tickets), noDevices).checks.find((c) => c.id === "tickets");
-const mixedOpen = readyWith([agentRec({ id: "n1", origin: "night" }), agentRec({ id: "n2", origin: "night" }),
-  agentRec({ id: "a1", alertNumber: 5 }), { ...rec("g", "x.y"), reportedBy: "guest" },
-  { ...rec("t", "x.y"), status: "in_progress" }, { ...rec("r", "x.y"), status: "resolved", resolvedAt: "2026-10-14T09:00:00Z" }]);
+const mixedOpen = readyWith([agentRec({ id: "n1", origin: "night", entityId: "x.n1" }), agentRec({ id: "n2", origin: "night", entityId: "x.n2" }),
+  agentRec({ id: "a1", alertNumber: 5, entityId: "x.a1" }), { ...rec("g", "x.g"), reportedBy: "guest" },
+  { ...rec("t", "x.t"), status: "in_progress" }, { ...rec("r", "x.r"), status: "resolved", resolvedAt: "2026-10-14T09:00:00Z" }]);
 ck("4 faults and 1 ticket: \"4 detected faults (1 open ticket)\", where to deal with each, and the faults' source icons",
    mixedOpen.label === "4 detected faults (1 open ticket)"
    && mixedOpen.detail === 'Check the faults in "Overview", or the open tickets in "Tickets".'
    && mixedOpen.sources.join() === "alert,night,guest", mixedOpen);
+// ⚠️ COUNTED AS DRAWN, PER DEVICE (architecture review, 2026-10-15): the pump's two faults taken on together are ONE
+// ticket card in Tickets, so one open ticket — not "2 open tickets" over one card
+const pumpBy = (devs) => buildReadiness({}, fm([{ ...rec("p1", "switch.pump"), status: "in_progress" },
+  { ...rec("p2", "sensor.pump_power"), status: "in_progress" }, rec("p3", "sensor.pump_temp")]),
+  { ...noDevices, deviceOf: devs }).checks.find((c) => c.id === "tickets");
+const onePump = pumpBy((id) => (id.includes("pump") ? "switch.pump" : id));
+ck("  ...counted per device, as drawn: one device's 2 tickets + 1 fault = \"1 detected fault (1 open ticket)\"",
+   onePump.label === "1 detected fault (1 open ticket)" && onePump.state === "warn", onePump);
+ck("  ...and three devices are three", pumpBy((id) => id).label === "1 detected fault (2 open tickets)", pumpBy((id) => id));
 const onlyFaults = readyWith([agentRec({ id: "n1", origin: "night" })]);
 ck("  ...one fault, no ticket: singular, and only Overview", onlyFaults.label === "1 detected fault (0 open tickets)"
    && onlyFaults.detail === 'Check the faults in "Overview".', onlyFaults);
@@ -260,8 +269,8 @@ ck("a card draws what cardActions says (no rule of its own)",
 ck("a ticket's notes wrap inside its card, never past its edge (owner, 2026-10-14: a long \"VESTA reads\" ran out)",
    /\.fm-record-body > \.fm-row-main \{ flex: 1 1 260px; min-width: 0; \}/.test(src("styles/07-facility.css"))
    && /\.fm-timeline-note \{[^}]*overflow-wrap: anywhere;/.test(src("styles/07-facility.css")));
-ck("the screens ask stageOf, never the status themselves",
-   ["components/fm/TicketsTab.tsx", "components/fm/FaultForm.tsx", "components/fm/TodayTab.tsx"].every((f) => /stageOf\(/.test(src(f)) && !/status === "in_progress"|status !== "in_progress"|status === "open"/.test(src(f))));
+ck("the screens ask stageOf (or its count, openCounts), never the status themselves",
+   ["components/fm/TicketsTab.tsx", "components/fm/FaultForm.tsx", "components/fm/TodayTab.tsx"].every((f) => /stageOf\(|openCounts\(/.test(src(f)) && !/status === "in_progress"|status !== "in_progress"|status === "open"/.test(src(f))));
 ck("the fault form is one, shared by raising and editing", /<FaultForm key=\{editing\.id\} editing=\{editing\}/.test(tt) && !/<input value=\{title\}/.test(ov + tt));
 
 done("✅ one list of live issues; faults become tickets; the same with or without the Agent");

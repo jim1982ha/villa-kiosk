@@ -456,6 +456,20 @@ async def main() -> None:
     ck("a heartbeat: 200", r.status == 200, r.status)
     status, body = await jget("/agent-status", cookie("ops"))
     ck("  ...online, with its status text", body.get("state") == "online" and body.get("status") == "all quiet", body)
+    ck("  ...and no timing when the agent did not say it (the (i) then gives no number)", body.get("cadence") is None, body)
+    beat = json.loads((ROOT / "rootfs" / "usr" / "share" / "vesta" / "agent-contract.json").read_text())["heartbeat"]["sample"]
+    r = await post("/agent/v1/heartbeat", headers=bearer(), json=beat)
+    status, body = await jget("/agent-status", cookie("ops"))
+    ck("the agreement's heartbeat: its timing is kept and shown (architecture review, 2026-10-15)",
+       r.status == 200 and body.get("cadence") == beat["cadence"], (r.status, body))
+    for bad in ({"checkMinutes": 0, "nightlyAt": "02:00"}, {"checkMinutes": 5, "nightlyAt": "2am"},
+                {"checkMinutes": True, "nightlyAt": "02:00"}, "every 5 min"):
+        r = await post("/agent/v1/heartbeat", headers=bearer(), json={"status": "x", "cadence": bad})
+        if r.status != 400:
+            break
+    ck("  ...a timing of another shape is refused (400), never shown", r.status == 400, (bad, r.status))
+    status, body = await jget("/agent-status", cookie("ops"))
+    ck("  ...and the refused beat changed nothing", body.get("cadence") == beat["cadence"], body)
     presence = TMP / "data" / "agent-presence.json"
     presence.write_text(json.dumps({"last_seen": time.time() - 6 * 60, "status": None}))
     status, body = await jget("/agent-status", cookie("ops"))

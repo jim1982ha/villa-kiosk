@@ -14,6 +14,7 @@ import type { HassEntity } from "@/types/ha.types";
 import { isUnavailable } from "@/utils/stateColors";
 import type { VillaDevices } from "@/config/deviceGroups";
 import { isTicketOpen, stageOf } from "./fmEngine";
+import { openCounts } from "./ticketGroups";
 import { faultSource, ISSUE_SOURCES, type IssueSource } from "./issueSource";
 import { lockFacts, lightFacts, climateFacts } from "@/config/villaSummary";
 import type { FmData } from "./fmTypes";
@@ -165,20 +166,20 @@ export function buildReadiness(
   // ── Nothing broken and unresolved ────────────────────────────────────────
   // ⚠️ THE TITLE SAYS WHAT IS FOUND, NOT THE GOAL (owner, 2026-10-14): "No open faults or tickets" stood over "5 still
   // open" — the card contradicted itself. Failing, it counts both and says where each is dealt with.
-  const openTickets = fm.tickets.filter(isTicketOpen);
-  const faults = openTickets.filter((t) => stageOf(t) === "fault");
-  const inProgress = openTickets.length - faults.length;
+  // counted per device, as the Overview and Tickets draw them (openCounts, architecture review 2026-10-15)
+  const open = openCounts(fm.tickets, devices.deviceOf);
+  const faults = fm.tickets.filter((t) => isTicketOpen(t) && stageOf(t) === "fault");
   const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
-  const where = [faults.length ? "the faults in \"Overview\"" : "", inProgress ? "the open tickets in \"Tickets\"" : ""].filter(Boolean);
+  const where = [open.faults ? "the faults in \"Overview\"" : "", open.tickets ? "the open tickets in \"Tickets\"" : ""].filter(Boolean);
   const found = new Set(faults.map(faultSource));
   checks.push({
     id: "tickets",
     // a fault and the ticket it became are both unresolved (owner, 2026-10-14: faults become tickets)
-    label: openTickets.length === 0
+    label: open.total === 0
       ? "No open faults or tickets"
-      : `${plural(faults.length, "detected fault")} (${plural(inProgress, "open ticket")})`,
-    state: openTickets.length === 0 ? "pass" : openTickets.length <= 2 ? "warn" : "fail",
-    detail: openTickets.length === 0 ? "Nothing to deal with." : `Check ${where.join(", or ")}.`,
+      : `${plural(open.faults, "detected fault")} (${plural(open.tickets, "open ticket")})`,
+    state: open.total === 0 ? "pass" : open.total <= 2 ? "warn" : "fail",
+    detail: open.total === 0 ? "Nothing to deal with." : `Check ${where.join(", or ")}.`,
     sources: ISSUE_SOURCES.filter((s) => found.has(s)),
   });
 

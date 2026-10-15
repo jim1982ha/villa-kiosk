@@ -8,7 +8,7 @@
 // threshold here traces to a clause; see fmTypes.ts for the citations.
 
 import {
-  NO_FM_TERMS,
+  CLEARED_NOTES, CLEARED_NOTE_PREFIXES, NOT_STATUS_CHANGE_KINDS, NO_FM_TERMS,
   type FmTerms,
   type FmCompletion, type FmCost, type FmData, type FmSchedule, type FmTicket, type FmTicketUpdate,
 } from "./fmTypes";
@@ -259,7 +259,7 @@ export function workedBy(c: Pick<FmCompletion, "by" | "who">): string {
 export function isClearedStep(u: FmTicketUpdate): boolean {
   if (u.kind) return u.kind === "cleared";
   const n = u.note ?? "";
-  return isTicketResolved(u) && (n === CLOSED_WITHOUT_ACTION || n.startsWith("Cleared:") || n.startsWith("Closed: the problem is over"));
+  return isTicketResolved(u) && (CLEARED_NOTES.includes(n) || CLEARED_NOTE_PREFIXES.some((p) => n.startsWith(p)));
 }
 
 /** The steps that CHANGED a fault's status, in time order — ONE reading for every figure and the card (architecture
@@ -268,9 +268,18 @@ export function isClearedStep(u: FmTicketUpdate): boolean {
  *  of the list: read as a status change, a reminder at 23:50 written after a take-on at 00:10 made September's report
  *  count a fault still OPEN at month end as in progress. A step without a kind changes the status; so do reopened and
  *  cleared. */
-const NOT_A_STATUS_CHANGE: ReadonlySet<string> = new Set(["noted", "retitled", "reading"]);
+const NOT_A_STATUS_CHANGE: ReadonlySet<string> = new Set(NOT_STATUS_CHANGE_KINDS);   // the agreement's (the proxy reads it too)
 export function statusChanges(t: Pick<FmTicket, "updates">): FmTicketUpdate[] {
   return stepsInTimeOrder(t).filter((u) => u.status && !(u.kind && NOT_A_STATUS_CHANGE.has(u.kind)));
+}
+
+/** The step that last resolved the fault — of its status changes, never a title or a Telegram line written after it
+ *  (those carry "resolved" too): what tells how it was closed. ⚠️ ONE ANSWER (architecture review, 2026-10-15): the
+ *  Tickets figures took the last step saying "resolved", so a closed Wi-Fi blip renamed afterwards counted as a repair,
+ *  and its hours went into the mean. */
+export function lastResolution(t: Pick<FmTicket, "updates">): FmTicketUpdate | undefined {
+  const done = statusChanges(t).filter((u) => isTicketResolved(u));
+  return done[done.length - 1];
 }
 
 /** A fault's steps in time order (stable: steps at the same moment keep their order) — a line from Telegram is
@@ -333,7 +342,7 @@ export function ticketStats(tickets: readonly FmTicket[]): TicketStats {
     else {
       // ⚠️ A CLOSE WITH NO WORK IS NOT A REPAIR (review 31): ten 10-minute Wi-Fi blips cleared by the agent made a
       // 48 h fridge repair read "4.5 h", one duplicate closed after 92 days "2208 h"
-      const lastResolve = [...(t.updates ?? [])].reverse().find((u) => isTicketResolved(u));
+      const lastResolve = lastResolution(t);
       if (lastResolve && isClearedStep(lastResolve)) { cleared++; continue; }
       resolved++;
       const ms = openTimeMs(t);

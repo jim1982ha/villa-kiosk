@@ -20,7 +20,12 @@ export interface AgentStatus {
   lastSeen: string | null;
   /** The agent's own one-line status, if it sent one. */
   statusText: string | null;
+  /** Its own timing, as its heartbeat says it (agent-contract.json `heartbeat`): how often it looks at its alerts and
+   *  faults, and the villa time of its nightly check — null from an agent that does not say. */
+  cadence: AgentCadence | null;
 }
+
+export interface AgentCadence { checkMinutes: number; nightlyAt: string }
 
 export type AgentMessageKind = "message" | "report" | "recommendation";
 export type AgentSeverity = "info" | "warning" | "critical";
@@ -66,7 +71,14 @@ export function parseAgentStatus(raw: unknown): AgentStatus {
     state: oneOf(b.state, STATUS_STATES, "not_configured"),
     lastSeen: typeof b.last_seen === "string" ? b.last_seen : null,
     statusText: typeof b.status === "string" && b.status ? b.status : null,
+    cadence: parseCadence(b.cadence),
   };
+}
+
+function parseCadence(raw: unknown): AgentCadence | null {
+  const c = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
+  return c && typeof c.checkMinutes === "number" && typeof c.nightlyAt === "string"
+    ? { checkMinutes: c.checkMinutes, nightlyAt: c.nightlyAt } : null;
 }
 
 export function parseAgentMessages(raw: unknown): AgentMessage[] {

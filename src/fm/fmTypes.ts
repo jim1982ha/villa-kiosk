@@ -163,6 +163,12 @@ export interface FmTicketUpdate {
 export type FmTicketUpdateKind = "reopened" | "retitled" | "reading" | "noted" | "cleared";
 /** Every kind, from the agreement the VESTA Agent writes by. */
 export const FM_TICKET_UPDATE_KINDS = AGENT_CONTRACT.ticketUpdate.kinds as readonly FmTicketUpdateKind[];
+/** The kinds that carry the status the fault already had and never change it (fmEngine.statusChanges), and the notes a
+ *  close written before kinds existed said "nothing done" with — the agreement's, read by this app AND by the proxy's
+ *  expiry of old closed faults (architecture review, 2026-10-15: the proxy kept its own copy, and it had drifted). */
+export const NOT_STATUS_CHANGE_KINDS = AGENT_CONTRACT.ticketUpdate.notStatusChanges as readonly FmTicketUpdateKind[];
+export const CLEARED_NOTES = AGENT_CONTRACT.ticketUpdate.clearedNotes as readonly string[];
+export const CLEARED_NOTE_PREFIXES = AGENT_CONTRACT.ticketUpdate.clearedNotePrefixes as readonly string[];
 
 /** Where the VESTA Agent made a fault from (FmTicket.origin), and the mark its records carry — from the agreement's
  *  `ticket` (agent-contract.json), the one place both apps read them (architecture review, 2026-10-15). */

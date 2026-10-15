@@ -54,6 +54,22 @@ eq("with nothing timed, the mean is null rather than 0",
 eq("a corrupt status counts as open", ticketStats([t({ status: "" })]).open, 1);
 eq("...and is not silently resolved", ticketStats([t({ status: "" })]).resolved, 0);
 
+console.log("\n  how a fault was closed is its last STATUS step (architecture review, 2026-10-15):");
+// a title change or a Telegram line written after the close carries "resolved" too: read as the close, a cleared Wi-Fi
+// blip renamed afterwards counted as a repair and its hours went into the mean
+const st = (at, status, x = {}) => ({ at, status, photoIds: [], ...x });
+const blip = (...after) => t({ resolvedAt: "2026-09-01T00:10:00Z", updates: [st("2026-09-01T00:00:00Z", "open"),
+  st("2026-09-01T00:10:00Z", "resolved", { kind: "cleared", note: "Cleared: back online." }), ...after] });
+const renamed = ticketStats([blip(st("2026-09-02T00:00:00Z", "resolved", { kind: "retitled", title: "a", was: "b" }))]);
+eq("a cleared blip renamed afterwards: still closed with no action, not a repair",
+   [renamed.closedWithoutAction, renamed.resolved, renamed.meanResolutionHours], [1, 0, null]);
+const noted = ticketStats([blip(st("2026-09-01T00:20:00Z", "resolved", { kind: "noted", note: "Reminder sent" }))]);
+eq("  ...and with a Telegram line noted after it", [noted.closedWithoutAction, noted.resolved], [1, 0]);
+const { CLEARED_NOTES } = await import("@/fm/fmTypes");
+const { CLOSED_WITHOUT_ACTION } = await import("@/fm/fmEngine");
+eq("the Kiosk's own \"Close\" note is one the agreement lists (the proxy reads the same list)",
+   CLEARED_NOTES.includes(CLOSED_WITHOUT_ACTION), true);
+
 console.log("\n  an unreadable date is not 'on schedule':");
 // ⚠️ THE FALLTHROUGH. Every comparison against NaN is false, so an unparseable
 // completion date walked past "overdue" and past "due-soon" and landed on "ok" —

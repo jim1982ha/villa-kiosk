@@ -32,12 +32,19 @@ for (const f of all.filter((f) => f.endsWith(".css"))) {
 ck("the scan found the stylesheets' classes", classes.size > 400, classes.size);
 
 const prefixes = new Set([...code.matchAll(/(?<![\w-])([a-z][a-z0-9-]*)\$\{/g)].map((m) => m[1]));
-const built = (c) => [...prefixes].some((p) => c.startsWith(p) && (p.endsWith("-") ? /^[a-z0-9-]+$/ : /^\d+$/).test(c.slice(p.length)));
+// ⚠️ A BUILT CLASS COUNTS ONLY FOR A SUFFIX THE CODE CAN PRODUCE (architecture review, 2026-10-15): `cockpit-attention-${kind}`
+// let EVERY cockpit-attention-* pass, so two styles of the old Overview card outlived it. A suffix after "-" must be a
+// word the code writes as a string ("fault", "warn"…); after a letter, a number (`e-s${i}`).
+const literals = new Set([...code.matchAll(/["'`]([a-z0-9][a-z0-9-]*)["'`]/g)].map((m) => m[1]));
+const built = (c) => [...prefixes].some((p) => c.startsWith(p)
+  && (p.endsWith("-") ? literals.has(c.slice(p.length)) : /^\d+$/.test(c.slice(p.length))));
 const named = (c) => new RegExp(`(^|[^\\w-])${c.replace(/-/g, "\\-")}(?![\\w-])`).test(code);
 // classes a LIBRARY puts on what it draws: lucide-react gives every icon class="lucide …"
 const LIBRARY = new Set(["lucide"]);
 const dead = [...classes].filter(([c]) => !named(c) && !built(c) && !LIBRARY.has(c)).map(([c, f]) => `${c} (${f})`);
 ck("every class a stylesheet styles is drawn by some screen", dead.length === 0, dead);
 ck("  ...a built class counts: the Energy slots e-s0..5 come from `e-s${i}`", built("e-s3") && !built("badge"));
+ck("  ...but only for a suffix the code writes: cockpit-attention-fault yes, cockpit-attention-body no",
+   built("cockpit-attention-fault") && !built("cockpit-attention-body"));
 
 done("✅ no stylesheet rule for an element that no longer exists");

@@ -292,12 +292,13 @@ export interface VillaDevices {
   /** Is this entity one of the villa's devices? Provided so callers stop
    *  building their own `Set` from `ids` — five of them did. */
   has(entityId: string): boolean;
+  /** The device `entityId` belongs to (the fold, deviceOf below): what every count "per device" counts by. */
+  deviceOf(entityId: string): string;
 }
 
 export function villaDevices(input: VillaDeviceInput): VillaDevices {
-  const ids = selectableDeviceIds(
-    input.entityMap, input.mappedEntityIds, input.entities, input.dismissed,
-    input.folding ?? deviceFolding(input.entityMap, input.deviceGroups, input.entityDeviceIds));
+  const folding = input.folding ?? deviceFolding(input.entityMap, input.deviceGroups, input.entityDeviceIds);
+  const ids = selectableDeviceIds(input.entityMap, input.mappedEntityIds, input.entities, input.dismissed, folding);
   const set = new Set(ids);
   return {
     ids,
@@ -307,6 +308,7 @@ export function villaDevices(input: VillaDeviceInput): VillaDevices {
     // its own, laxer idea of what counted as a device.
     unavailable: ids.filter((id) => isUnavailable(input.entities[id])),
     has: (id) => set.has(id),
+    deviceOf: (id) => deviceOf(folding, id),
   };
 }
 

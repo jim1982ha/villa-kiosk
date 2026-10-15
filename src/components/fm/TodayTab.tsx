@@ -9,7 +9,9 @@
 import { useState } from "react";
 import { Check, CalendarClock, Trash2 } from "lucide-react";
 import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
-import { budgetStatus, stageOf, localStamp, scheduleBoard, shortDate, type ScheduleStatus, parseAmount, fmAttention, workedBy } from "@/fm/fmEngine";
+import { useDeviceIdentity } from "@/config/VillaModel";
+import { openCounts } from "@/fm/ticketGroups";
+import { budgetStatus, localStamp, scheduleBoard, shortDate, type ScheduleStatus, parseAmount, fmAttention, workedBy } from "@/fm/fmEngine";
 import EvidenceRow from "./EvidenceRow";
 import RecentWorkList from "./RecentWorkList";
 import NotesField from "./NotesField";
@@ -42,6 +44,7 @@ function dueText(s: ScheduleStatus): string {
 
 export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) => void }) {
   const { data, logCompletion, removeSchedule, removeAllSchedules } = useFmData();
+  const { deviceOf } = useDeviceIdentity();
   const board = scheduleBoard(data);
   const [openId, setOpenId] = useState<string | null>(null);
   // Bulk delete is destructive across every task at once — require an
@@ -74,8 +77,8 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
   // The ONE attention rule (fmEngine.fmAttention): late tasks, not due-soon.
   const attention = fmAttention(data).lateTasks;
   // a fault waits on the Overview until someone takes it on; then it is a ticket (owner, 2026-10-14)
-  const openFaults = data.tickets.filter((t) => stageOf(t) === "fault");
-  const tickets = data.tickets.filter((t) => stageOf(t) === "ticket");
+  // counted per device, as the Overview and Tickets draw them (openCounts)
+  const open = openCounts(data.tickets, deviceOf);
 
   return (
     <div className="fm-stack">
@@ -84,12 +87,12 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
           <span className="n">{attention.length}</span>
           <span className="l">tasks need attention</span>
         </div>
-        <div className={`fm-stat ${openFaults.length ? "warn" : "good"}`}>
-          <span className="n">{openFaults.length}</span>
+        <div className={`fm-stat ${open.faults ? "warn" : "good"}`}>
+          <span className="n">{open.faults}</span>
           <span className="l">open faults</span>
         </div>
         <div className="fm-stat">
-          <span className="n">{tickets.length}</span>
+          <span className="n">{open.tickets}</span>
           <span className="l">tickets in progress</span>
         </div>
         <div className="fm-stat">

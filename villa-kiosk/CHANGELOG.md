@@ -1,3 +1,13 @@
+## 2.496.372
+
+### Fixed
+- Cockpit: the figures count what the cards show — one per device. Two faults on the pump taken on together are one ticket card under "1 in progress", not "2"; the Recap's readiness line and the Schedule tab's "open faults" and "tickets in progress" count the same way.
+- Tickets: a fault the VESTA Agent cleared stays "closed, no action" after its title is changed or a Telegram line is added to it — it no longer counts as a repair, nor pushes up the mean repair time — and it leaves the Closed list after 90 days, as every closed blip does, instead of 18 months.
+
+### Changed
+- Overview → (i): the VESTA Agent's timing is the one the Agent itself says (how often it checks, and when its nightly check runs), no longer "every 5 minutes … 02:00 by default" whatever the villa set. Until the Agent says it, the (i) gives no number.
+- Behind it: two unused styles of the old Overview cards removed, and the check that finds them no longer misses that kind.
+
 ## 2.496.371
 
 ### Changed
