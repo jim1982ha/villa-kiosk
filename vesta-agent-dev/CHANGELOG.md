@@ -1,3 +1,11 @@
+## 0.12.220
+
+What you will see:
+- Overview: a script the Agent's own restart stopped (an investigation cut by an update) is no longer counted among the
+  failures. Its AI run is on the Costs tab, "stopped by a restart", and it is not counted as a reply written.
+  (The two cut investigations of tonight were never recorded as runs: they stay out of the Costs tab; every one from
+  0.12.219 on is there.)
+
 ## 0.12.219
 
 What you will see:
