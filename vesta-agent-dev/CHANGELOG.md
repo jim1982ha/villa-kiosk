@@ -1,3 +1,10 @@
+## 0.12.221
+
+What you will see:
+- /investigate and the nightly check read the villa's logbook many times faster. A whole week of every device was read
+  page after page, and each page had the villa's system read the whole week again (an investigation sat on it for
+  minutes, a call every 15 seconds). It is now read 6 hours at a time, each read covering only its own hours.
+
 ## 0.12.220
 
 What you will see:
