@@ -17,6 +17,7 @@
 import { STORE_ACTIVE_MS, STORE_HEARTBEAT_MS } from "@/hooks/useStoreRefresh";
 import { AGENT_SOURCES, ISSUE_SOURCES, type IssueSource } from "./issueSource";
 import type { AgentCadence } from "@/agent/agentApi";
+import type { FmTicketCheck } from "./fmTypes";
 
 export interface SourceRow {
   source: IssueSource;
@@ -81,4 +82,31 @@ export function faultTiming(agent: boolean, cadence: AgentCadence | null = null)
         + REFRESH
       : `${TICKET} ${REFRESH}`,
   };
+}
+
+/** One problem of a card, as nextCheck reads it: where it comes from, how the VESTA Agent reads it again (its fault's
+ *  `check`), and the fault merged onto it (attention.mergeFaults). */
+export interface CheckedProblem { source?: IssueSource; check?: FmTicketCheck; fault?: CheckedProblem }
+
+type Clock = "minutes" | "nightly" | "hand";
+const SOONEST: readonly Clock[] = ["minutes", "nightly", "hand"];
+
+/** Who reads one fault again to close it: the VESTA Agent at its next look or its nightly check (the fault's `check`;
+ *  an older fault without one: its source's usual clock), else only a person. */
+function clockOf(p: CheckedProblem): Clock {
+  if (p.check) return p.check;
+  return p.source === "alert" ? "minutes" : p.source === "night" ? "nightly" : "hand";
+}
+
+/** A card's "Next check" (owner, 2026-10-15: "when the next test for this card will be done"), beside its room: the
+ *  soonest of its faults' clocks — the VESTA Agent's next look ("within 5 min"), its nightly check ("02:00"), or "by
+ *  hand" when only a person closes it; a card that is only what the map shows now: "live". The Agent's numbers are the
+ *  ones it says (its heartbeat's `cadence`) — never a copy: one that does not say gets none. */
+export function nextCheck(problems: readonly CheckedProblem[], cadence: AgentCadence | null): string {
+  const faults = problems.flatMap((p) => [p, ...(p.fault ? [p.fault] : [])]).filter((p) => p.source !== "live");
+  if (!faults.length) return "Next check: live";
+  const clock = SOONEST.find((c) => faults.some((p) => clockOf(p) === c)) as Clock;
+  if (clock === "hand") return "Next check: by hand";
+  if (!cadence) return "Next check: by the VESTA Agent";
+  return `Next check: ${clock === "minutes" ? `within ${cadence.checkMinutes} min` : cadence.nightlyAt}`;
 }

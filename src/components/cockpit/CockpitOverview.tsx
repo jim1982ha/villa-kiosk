@@ -46,6 +46,9 @@ import { useVillaModel } from "@/config/VillaModel";
 import { buildDeviceOptions } from "@/components/fm/DeviceSearchPicker";
 import FaultForm from "@/components/fm/FaultForm";
 import FaultTiming from "@/components/fm/FaultTiming";
+import { nextCheck } from "@/fm/faultTiming";
+import { useAgent } from "@/agent/AgentContext";
+import type { AgentCadence } from "@/agent/agentApi";
 import FaultStageModal from "@/components/fm/FaultStageModal";
 import { localStamp } from "@/fm/fmEngine";
 import type { FmTicket } from "@/fm/fmTypes";
@@ -281,15 +284,19 @@ function CockpitAttentionRow({ group, onOpenEntity, canManage, onEditTicket }: {
   canManage: boolean;
   onEditTicket: (ticketId: string) => void;
 }) {
-  return <AttentionCard group={group} onOpenEntity={onOpenEntity} actions={useCardActions(group, canManage, onEditTicket)} />;
+  const { status } = useAgent();
+  return <AttentionCard group={group} onOpenEntity={onOpenEntity} cadence={status?.cadence ?? null}
+    actions={useCardActions(group, canManage, onEditTicket)} />;
 }
 
 /** The card itself, drawn — THE Cockpit card (RecordCard), as every list's (architecture review, 2026-10-15): its
  *  source icons before the device's name, the room under it, its problems' lines, its buttons on the right of them.
  *  Tapping it opens the device; its buttons take their own presses. Pure: a check draws it. */
-export function AttentionCard({ group, onOpenEntity, actions }: {
+export function AttentionCard({ group, onOpenEntity, cadence, actions }: {
   group: AttentionGroup;
   onOpenEntity: (id: string) => void;
+  /** The VESTA Agent's own timing (its heartbeat), for the card's "Next check" — null: it did not say. */
+  cadence: AgentCadence | null;
   actions?: ReactNode;
 }) {
   const tappable = !!group.entityId;
@@ -300,6 +307,8 @@ export function AttentionCard({ group, onOpenEntity, actions }: {
       // where its (first) problem comes from, in place of a warning sign (owner, 2026-10-14) — legend: the (i)
       lead={group.items[0] ? <SourceIcons {...lineSources(group.items[0])} /> : undefined}
       trailing={tappable ? <ChevronRight size={16} className="muted" aria-hidden /> : undefined}
+      // when its problems are read again, on the room's line under the chevron (owner, 2026-10-15)
+      aside={nextCheck(group.items, cadence)}
       onOpen={tappable ? () => onOpenEntity(group.entityId as string) : undefined}
       body={(
         <ul className="cockpit-attention-subs">

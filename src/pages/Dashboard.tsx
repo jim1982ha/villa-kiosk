@@ -4,6 +4,7 @@
 import { overlayOpen } from "@/hooks/useBackToClose";
 import { useInterval } from "@/hooks/useInterval";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useFmData } from "@/fm/FmDataContext";
 import BabylonCanvas from "@/components/canvas/BabylonCanvas";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import { Layers } from "lucide-react";
@@ -56,6 +57,12 @@ import { readSceneMirror } from "./sceneMirror";
 
 export default function Dashboard() {
   const { config, update, resolvedRooms, setResolvedRooms } = useConfig();
+  // The devices the Facility records name — a fault on a sensor the model does not draw is shown too, so it gets its
+  // room by the same rule (owner, 2026-10-15: "House & Pool Relay Temperature" had no room line, though Home Assistant
+  // has it in Kitchen Terrace). One string, so a refresh of the records that names the same devices recomputes nothing.
+  const { data: fmData } = useFmData();
+  const recordIdsKey = useMemo(() => [...new Set([...fmData.tickets, ...fmData.schedules]
+    .map((r) => r.entityId).filter((id): id is string => !!id))].sort().join("\n"), [fmData.tickets, fmData.schedules]);
   const { role } = useProfile();
   const { connect, entities, suppressedEntityIds, ws, haConfig, subscribeAll, entityAreaNames } = useHA();
   // ProfileGate does NOT guarantee a signed-in role before this page mounts
@@ -521,7 +528,8 @@ export default function Dashboard() {
       // — inside mappedEntityIds — every linked/motion target,
       // which is only ever a VALUE on another mapping and used to fall to
       // "Other" for the same reason.
-      const ids = new Set<string>([...mappedEntityIds, ...Object.keys(config.entityMap)]);
+      const ids = new Set<string>([...mappedEntityIds, ...Object.keys(config.entityMap),
+        ...(recordIdsKey ? recordIdsKey.split("\n") : [])]);
       for (const mapping of Object.values(config.entityMap)) {
         if (mapping.linkedEntityId) ids.add(mapping.linkedEntityId);
         if (mapping.motionEntityId) ids.add(mapping.motionEntityId);
@@ -534,7 +542,7 @@ export default function Dashboard() {
     // no replay, since it has just run.
     recompute();
     return manager.onScene(recompute, false);
-  }, [manager, entityAreaNames, config.entityMap, mappedEntityIds, setResolvedRooms]);
+  }, [manager, entityAreaNames, config.entityMap, mappedEntityIds, recordIdsKey, setResolvedRooms]);
 
   const handleTeleport = useCallback(
     (point: TeleportPoint) => {

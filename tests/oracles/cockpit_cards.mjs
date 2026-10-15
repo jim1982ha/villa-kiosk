@@ -45,7 +45,9 @@ const [group] = groupAttention([
     source: "live", device: { key: "lock.example", label: "Test lock", room: "Hall" } },
   { id: "fault:f1", kind: "fault", title: "#33 · Test lock unavailable", detail: "Fault", entityId: "lock.example", ticketId: "f1",
     stage: "fault", source: "alert", device: { key: "lock.example", label: "Test lock", room: "Hall" } }]);
-const issue = draw(h(AttentionCard, { group, onOpenEntity: () => {}, actions: h(React.Fragment, null, btn("Open Ticket"), btn("Close")) }));
+const CADENCE = { checkMinutes: 5, nightlyAt: "02:00" };
+const issue = draw(h(AttentionCard, { group, onOpenEntity: () => {}, cadence: CADENCE,
+  actions: h(React.Fragment, null, btn("Open Ticket"), btn("Close")) }));
 ck("it IS the Cockpit card: title, the room under it, its source icons before it, a chevron",
    /class="fm-record-card"/.test(issue) && /fm-record-lead[\s\S]*<svg/.test(inside(issue, "fm-record-head"))
    && /<strong>Test lock<\/strong>[\s\S]*fm-record-subtitle[^>]*>Hall/.test(issue) && /lucide-chevron-right/.test(issue), issue.slice(0, 400));
@@ -53,8 +55,42 @@ ck("  ...its problem's line on the left, Open Ticket and Close inside on the rig
    /fm-row-main[\s\S]*#33 · Test lock unavailable[\s\S]*fm-record-actions[\s\S]*Open Ticket[\s\S]*Close/.test(inside(issue, "fm-record-body")));
 ck("  ...it opens the device when tapped (a button), and its buttons stop their own presses",
    /role="button"/.test(issue) && /class="fm-record-actions"/.test(issue));
-const lone = draw(h(AttentionCard, { group: { ...group, entityId: undefined }, onOpenEntity: () => {} }));
+// owner, 2026-10-15: "add a small text on the same line as the room, right below the chevron: Next check"
+ck("  ...its Next check on the room's line, right under the chevron",
+   /fm-record-side[^>]*><svg[^>]*lucide-chevron-right[\s\S]*?<\/svg><span class="fm-record-aside muted">Next check: within 5 min<\/span>/.test(inside(issue, "fm-record-head")),
+   inside(issue, "fm-record-head"));
+const { nextCheck } = await import("@/fm/faultTiming");
+const said = (problems, cadence = CADENCE) => nextCheck(problems, cadence);
+ck("  ...each card says when its problems are read again, the Agent's numbers its own",
+   said([{ source: "live" }]) === "Next check: live"
+   && said([{ source: "night", check: "nightly" }]) === "Next check: 02:00"
+   && said([{ source: "night", check: "nightly" }], { checkMinutes: 15, nightlyAt: "04:30" }) === "Next check: 04:30"
+   && said([{ source: "live", fault: { source: "night", check: "minutes" } }]) === "Next check: within 5 min"   // offline: rechecked
+   && said([{ source: "night", check: "nightly" }, { source: "alert", check: "minutes" }]) === "Next check: within 5 min"
+   && said([{ source: "alert" }]) === "Next check: within 5 min" && said([{ source: "night" }]) === "Next check: 02:00" // older
+   && said([{ source: "owner" }]) === "Next check: by hand" && said([{ source: "chat" }]) === "Next check: by hand"
+   && said([{ source: "live" }, { source: "guest" }]) === "Next check: by hand"
+   && said([{ source: "schedule" }]) === "Next check: by hand"
+   && said([{ source: "night", check: "nightly" }], null) === "Next check: by the VESTA Agent");
+// owner, 2026-10-15: "there should always be the room line, to respect a consistent layout"
+const [roomless] = groupAttention([{ id: "fault:f9", kind: "fault", title: "Relay dropped", detail: "Fault", entityId: "sensor.relay_t",
+  ticketId: "f9", stage: "fault", source: "night", device: { key: "sensor.relay_t", label: "Relay" } }]);
+ck("  ...a device no room holds still has its room line: Other, as By Room files it",
+   /fm-record-subtitle[^>]*>Other</.test(draw(h(AttentionCard, { group: roomless, onOpenEntity: () => {}, cadence: CADENCE }))));
+const lone = draw(h(AttentionCard, { group: { ...group, entityId: undefined }, onOpenEntity: () => {}, cadence: CADENCE }));
 ck("  ...a problem with no device: no chevron, nothing to tap, no buttons", !/chevron-right/.test(lone) && !/role="button"/.test(lone) && !/fm-record-actions/.test(lone));
+
+// owner, 2026-10-15: "don't skip a line between the room and the next section" — a card without buttons kept a blank
+// line: its problem's line was 36 px high, its text centred, under the row's 12 px gap. What the stylesheet says:
+{
+  const { readFileSync } = await import("node:fs");
+  const css = (f) => readFileSync(new URL(`../../src/styles/${f}`, import.meta.url), "utf8");
+  const rule = (text, sel) => (text.match(new RegExp(`^${sel.replace(/[.]/g, "\\.")} \\{([^}]*)\\}`, "m")) ?? [])[1] ?? "";
+  ck("  ...its text right under the room: no height of its own on a problem's line, 4 px under the head",
+     !/min-height/.test(rule(css("08-shared.css"), ".cockpit-attention-sub-line"))
+     && /row-gap: 4px/.test(rule(css("07-facility.css"), ".fm-record-card .fm-record"))
+     && /align-items: flex-start/.test(rule(css("07-facility.css"), ".fm-record-body")));
+}
 
 console.log("\n  a scheduled task — the same card:");
 const task = draw(h(RecordCard, { title: "Pool filter clean", tone: "state-due-soon", status: { text: "Due soon", tone: "due-soon" },

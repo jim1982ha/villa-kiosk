@@ -51,7 +51,8 @@
   display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 12px 14px; border-radius: 12px;
   background: var(--bg-card); border: 1px solid var(--hairline);
 }
-.fm-record-card .fm-record { border: none; background: none; padding: 0; border-radius: 0; }
+/* its text right under the room (owner, 2026-10-15: "don't skip a line"): 4 px between head and text, not the row's 12 */
+.fm-record-card .fm-record { border: none; background: none; padding: 0; border-radius: 0; row-gap: 4px; }
 /* its tint (a task overdue or due soon): the frame's, as the row's was */
 .fm-record-card.state-overdue, .fm-record-card.state-never {
   background: color-mix(in srgb, var(--status-danger) 7%, var(--bg-card));
@@ -77,7 +78,12 @@
 .fm-record-head .fm-row-title { flex: 1 1 auto; min-width: 0; }
 .fm-record-head .fm-row-title strong { font-weight: 600; font-size: var(--text-md); line-height: 1.35; overflow-wrap: anywhere; }
 .fm-record-head .fm-badge { flex: 0 0 auto; margin-top: 2px; }
-.fm-record-body { flex: 1 1 100%; min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+/* its text starts right under the room, level with the top of its buttons — centred on them, it left a blank line
+   (owner, 2026-10-15: "don't skip a line between the device name and the next section") */
+.fm-record-body { flex: 1 1 100%; min-width: 0; display: flex; align-items: flex-start; flex-wrap: wrap; gap: 8px 12px; }
+/* the chevron and, under it on the room's line, a short word ("Next check: 02:00") */
+.fm-record-side { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.fm-record-aside { font-size: var(--text-2xs); white-space: nowrap; }
 /* ⚠️ THE CARD'S WIDTH, NEVER ITS LONGEST LINE (owner, 2026-10-14: a "VESTA reads: …" note ran past a Closed card's
    right edge): a line of its own that may shrink wraps every note inside the card. */
 .fm-record-body > .fm-row-main { flex: 1 1 260px; min-width: 0; }

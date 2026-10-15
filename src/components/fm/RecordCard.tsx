@@ -11,7 +11,7 @@
 //
 // `framed`: a card of its own (the default) — or a record inside a card holding several (a ticket taken on for several
 // faults of one device: TicketsTab draws the frame). `lead`: what stands before the title (the Overview's source
-// icons); `trailing`: after the pill (its chevron); `tone`: the card's own tint (a task overdue).
+// icons); `trailing`: after the pill (its chevron), `aside` under it; `tone`: the card's own tint (a task overdue).
 
 import type { ReactNode } from "react";
 import { FileText } from "lucide-react";
@@ -27,6 +27,8 @@ export interface RecordCardProps {
   subtitle?: ReactNode;
   lead?: ReactNode;
   trailing?: ReactNode;
+  /** A short line at the right, under `trailing` — on the room's line (the Overview's "Next check", owner 2026-10-15). */
+  aside?: ReactNode;
   /** The pills before `when` (room, device chip, "by VESTA Agent"…). */
   pills?: ReactNode;
   when?: ReactNode;
@@ -45,7 +47,7 @@ export interface RecordCardProps {
   tone?: string;
 }
 
-export default function RecordCard({ title, status, subtitle, lead, trailing, pills, when, notes, body, photoIds,
+export default function RecordCard({ title, status, subtitle, lead, trailing, aside, pills, when, notes, body, photoIds,
   documentIds, amount, actions, erase, onOpen, framed = true, tone }: RecordCardProps) {
   const inside = (
     <>
@@ -56,7 +58,9 @@ export default function RecordCard({ title, status, subtitle, lead, trailing, pi
           {subtitle && <span className="fm-record-subtitle muted">{subtitle}</span>}
         </div>
         {status && <span className={`fm-badge ${status.tone}`}>{status.text}</span>}
-        {trailing}
+        {aside ? (
+          <span className="fm-record-side">{trailing}<span className="fm-record-aside muted">{aside}</span></span>
+        ) : trailing}
       </div>
       {/* its text on the left, its cost and buttons on the right of it, inside the card (owner, 2026-10-14) */}
       <div className="fm-record-body">
