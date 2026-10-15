@@ -956,3 +956,15 @@ def test_the_skills_own_example_of_a_cause_passes_the_pages_rules():
     # the message shows the summary under the line of recorded times: the example explains, it never repeats a time
     example = re.search(r'"summary": "The pool pump.*?"\n', text, re.S).group(0)
     assert not re.search(r"\b\d{1,2}:\d{2}\b", example), example
+
+
+def test_a_period_that_would_end_later_ends_now(tmp_path):
+    # villa, 2026-10-15: "--end 2026-10-15" read at 23:05 ran to midnight — a sensor offline 6 d 6 h read "6 d 7 h"
+    import json
+    code, said = _main(tmp_path, "timeline", "--entities", "sensor.a", "--start", "2026-10-09", "--end", "2026-10-15",
+                       "--now", "2026-10-15T23:05:00+00:00", "--out", str(tmp_path / "timeline.json"))
+    assert code == 0, said
+    assert json.load(open(tmp_path / "timeline.json"))["end"] == "2026-10-15T23:05:00+00:00"
+    code, said = _main(tmp_path, "around", "--start", "2026-10-16", "--end", "2026-10-16",
+                       "--now", "2026-10-15T23:05:00+00:00")
+    assert code == 1 and "--end must be after --start" in said           # a period that has not begun yet

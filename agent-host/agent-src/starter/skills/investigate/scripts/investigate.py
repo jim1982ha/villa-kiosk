@@ -852,6 +852,9 @@ def main(argv=None):
             start, end = parse_time(a.start, zone), parse_time(a.end, zone)
             if DAY_ONLY.match(a.end.strip()):
                 end += timedelta(days=1)                   # "--end 2026-10-09" is the whole of the 9th, as a person means it
+            # ⚠️ A PERIOD THAT ENDS LATER ENDS NOW (villa, 2026-10-15: "--end" today was midnight tonight, and a sensor
+            # offline 6 d 6 h at 23:05 read "6 d 7 h": its last period ran to a moment that had not come)
+            end = min(end, ctx.now)
             if end <= start:
                 raise SystemExit("--end must be after --start.")
             ids = [x.strip() for part in (a.entities or []) for x in part.split(",") if x.strip()]

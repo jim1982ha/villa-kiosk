@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.215 (15 October 2026)
+
+- investigate.py timeline / around: `end = min(end, ctx.now)` — a day given as --end is the whole day, but never past
+  now (villa, 2026-10-15: the 23:05 investigation's last period ran to 24:00, "6 d 7 h" for 6 d 6 h). A period that has
+  not begun is refused as before. test_investigate (mutation red). Starter skills recorded.
+
 ## 0.6.214 (15 October 2026)
 
 - UI Costs: an interrupted run's marker is core.alertButton (the failed run's (!)), its words in the tooltip (owner,
