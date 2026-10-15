@@ -11,8 +11,8 @@
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
   "orientation": "any",
-  "background_color": "#F7F4EE",
-  "theme_color": "#F7F4EE",
+  "background_color": "#101311",
+  "theme_color": "#101311",
   "screenshots": [
     {
       "src": "./screenshots/wide.png",
