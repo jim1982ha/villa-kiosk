@@ -1,3 +1,9 @@
+## 0.12.222
+
+What you will see:
+- Costs: a run stopped by a restart is marked with the same red (!) as a failed run; its explanation is in the
+  tooltip, instead of the words "stopped by a restart" in the row.
+
 ## 0.12.221
 
 What you will see:
