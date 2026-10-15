@@ -526,7 +526,9 @@ class Vesta:
         command skill the person's "/command" called (a new request); `request`: the one a Continue continues."""
         if request is None and not is_continue:
             request = self.requests.begin(invoked)
-        async with self.delivery.typing(cid, held=held) as answered:
+        # what they asked, kept until it is answered: a restart in between is said at the next start (chat_jobs)
+        asked = ("Continue" if is_continue else text or ("a photo" if image else "a voice message" if voice else "…"))
+        async with self.delivery.typing(cid, held=held) as answered, self.chat_jobs.answering(cid, asked):
             await self._converse(cid, person, text, resume, is_continue, voice, answered, image, request)
 
     async def _converse(self, cid, person, text, resume, is_continue, voice, answered, image=None,

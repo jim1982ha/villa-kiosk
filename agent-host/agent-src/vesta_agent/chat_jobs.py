@@ -26,6 +26,8 @@ from .routing import JOB, Origin
 log = logging.getLogger("vesta")
 
 Work = Callable[[Origin], Awaitable[None]]
+#: A chat's answer in progress (a person's question being answered), kept like a job: one cut by a stop is said at start.
+ANSWER = "answer"
 
 
 class ChatJobs:
@@ -112,9 +114,28 @@ class ChatJobs:
         if self.state is not None and j is not None:
             self.state.chat_job(chat, name, {"started": j["started"], "mid": mid})
 
+    @contextlib.asynccontextmanager
+    async def answering(self, chat: int, asked: str):
+        """While a person's question in `chat` is being answered: kept across a stop, so the next start tells the chat it
+        was cut (recover). `asked`: what they asked, as the chat will be reminded of it.
+
+        ⚠️ A QUESTION CUT BY A RESTART IS SAID, NOT LOST (owner, 2026-10-15: an /investigate running when the agent was
+        updated "went quiet"): only a job's waiting message was kept, a question being answered lived in memory only."""
+        if self.state is not None:
+            self.state.chat_job(int(chat), ANSWER, {"started": time.time(), "asked": " ".join(str(asked).split())[:80]})
+        cut = False
+        try:
+            yield
+        except asyncio.CancelledError:
+            cut = True                        # the agent is stopping: its record stays, the next start says so (recover)
+            raise
+        finally:
+            if not cut and self.state is not None:
+                self.state.chat_job(int(chat), ANSWER, None)
+
     async def recover(self) -> int:
-        """At start: every job asked for in a chat that the last stop cut is said ended there — its waiting message
-        says so, or a message does when it had none. Returns how many.
+        """At start: every job asked for in a chat, and every question being answered, that the last stop cut is said
+        ended there — its waiting message says so, or a message does when it had none. Returns how many.
 
         ⚠️ NEVER A PROMISE LEFT HANGING (architecture review 21): the jobs running lived in memory only, so an update in
         the minutes a report was being made left "it will arrive in this chat in a few minutes" — and nothing, ever.
@@ -126,7 +147,9 @@ class ChatJobs:
         n = 0
         for chat, name, rec in self.state.chat_jobs_cut():
             at = when(datetime.fromtimestamp(float(rec.get("started") or time.time()), timezone.utc), self.tz)
-            text = f"The {name} job asked for at {at} was stopped by a restart of the agent: ask again to have it."
+            text = (f"Your question at {at} (“{rec.get('asked') or '…'}”) was interrupted by a restart of the agent: "
+                    "send it again to have its answer." if name == ANSWER else
+                    f"The {name} job asked for at {at} was stopped by a restart of the agent: ask again to have it.")
             log.info("Job %s in chat %s was cut by the last stop: said so", name, chat)
             if self.delivery.tg is None:
                 continue

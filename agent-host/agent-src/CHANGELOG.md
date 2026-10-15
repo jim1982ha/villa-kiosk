@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.210 (15 October 2026)
+
+- chat_jobs.ChatJobs.answering (owner, 2026-10-15: an /investigate cut by the update "went quiet"): a question being
+  answered is kept like a chat job (state chatjob:<chat>:answer, what was asked) for the length of app.converse; a stop
+  (CancelledError, or no clean end) leaves it, and recover() tells the chat at the next start, once. A question answered
+  leaves nothing. Tests in test_recorded_is_shown (three mutations red).
+
 ## 0.6.209 (15 October 2026)
 
 - investigate SKILL.md, after a reading of 0.6.208 as the AI reads it: the `summary` note restored (the message shows it

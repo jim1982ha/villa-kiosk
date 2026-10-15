@@ -341,3 +341,37 @@ def test_a_copy_given_up_once_gets_its_own_two_hours_at_its_next_change(tmp_path
     assert v.state.incident_messages_owed() == []                          # given up
     run(v.thread.rewrite(f"approval-{msg.approval_id}", "Opened Bedroom3 Curtain."))   # a later change, refused too
     assert v.state.incident_messages_owed()                                # tried again: its own two hours
+
+
+# ---------------------------------------------------------------------- a question cut by a stop
+def test_a_question_being_answered_when_the_agent_stops_is_said_at_the_start(tmp_path, monkeypatch):
+    # owner, 2026-10-15: an /investigate running when the agent was updated "went quiet" — the question lived in memory
+    v = _villa(tmp_path)
+    person = v.policy().person(JM)
+
+    async def forever(*a, **k):
+        await asyncio.Event().wait()
+    monkeypatch.setattr(v, "_converse", forever)
+
+    async def ask():
+        asyncio.create_task(v.converse(JM, person, "/investigate What happened to the bathroom sensor yesterday?"))
+        await asyncio.sleep(0.05)
+    run(ask())                                                             # the run ends: the answer is cut, as by a stop
+    v = restarted(v)
+    said = [t for _, t, _ in v.tg.sent if "interrupted by a restart" in t]
+    assert len(said) == 1 and re.match(r"Your question at \d\d/\d\d/\d{4} \d\d:\d\d \(“/investigate What happened to the "
+                                       r"bathroom sensor yesterday\?”\) was interrupted by a restart of the agent: send "
+                                       r"it again", said[0]), said
+    v = restarted(v)
+    assert len([t for _, t, _ in v.tg.sent if "interrupted by a restart" in t]) == 1      # said once
+
+
+def test_a_question_answered_leaves_nothing_for_the_next_start(tmp_path, monkeypatch):
+    v = _villa(tmp_path)
+
+    async def answered(*a, **k):
+        return None
+    monkeypatch.setattr(v, "_converse", answered)
+    run(v.converse(JM, v.policy().person(JM), "How is the pool?"))
+    v = restarted(v)
+    assert not [t for _, t, _ in v.tg.sent if "interrupted by a restart" in t]
