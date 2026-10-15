@@ -1,3 +1,8 @@
+## 2.496.375
+
+### Changed
+- Overview → (i): the "VESTA Agent" source is gone. Every fault the VESTA Agent makes says where it comes from (Alert, Night check or Chat), and the Agent gives an older one its source within minutes, so that line described something you would never see. A very old fault from a chat that has no source shows the Chat icon.
+
 ## 2.496.374
 
 ### Changed

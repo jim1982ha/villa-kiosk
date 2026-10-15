@@ -173,7 +173,7 @@ export function lineIcon(group: AttentionGroup, item: AttentionItem): LineSource
 export interface LineSources { sources: IssueSource[]; kinds: AttentionKind[] }
 export function lineSources(item: AttentionItem): LineSources {
   const own = { sources: [item.source ?? "live"], kinds: [item.kind] } as LineSources;
-  return item.fault ? { sources: [...own.sources, item.fault.source ?? "agent"], kinds: [...own.kinds, item.fault.kind] } : own;
+  return item.fault ? { sources: [...own.sources, item.fault.source ?? "person"], kinds: [...own.kinds, item.fault.kind] } : own;
 }
 
 /**

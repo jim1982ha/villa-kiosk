@@ -3,7 +3,7 @@
 // place of the warning sign (owner, 2026-10-14), the (i) beside "Open a ticket" lists them all (FaultTiming). One
 // table: a card and its legend can never disagree.
 
-import { Bot, CalendarCog, MessageCircle, MoonStar, Radio, Siren, UserRound } from "lucide-react";
+import { CalendarCog, MessageCircle, MoonStar, Radio, Siren, UserRound } from "lucide-react";
 import type { AriaAttributes, ComponentType } from "react";
 import { ROLE_INITIALS, type Role } from "@/auth/roles";
 import type { IssueSource } from "@/fm/issueSource";
@@ -23,13 +23,13 @@ const roleBadge = (role: Role): IconType => function RoleBadge({ size = 16, clas
 };
 
 export const SOURCE_ICON: Record<IssueSource, IconType> = {
-  live: Radio, alert: Siren, night: MoonStar, chat: MessageCircle, agent: Bot,
+  live: Radio, alert: Siren, night: MoonStar, chat: MessageCircle,
   owner: roleBadge("owner"), fm: roleBadge("ops"), person: UserRound, guest: roleBadge("guest"), schedule: CalendarCog,
 };
 
 /** Its word — the (i)'s table says what it is and when it comes and goes (fm/faultTiming). */
 export const SOURCE_WORDS: Record<IssueSource, string> = {
-  live: "Live", alert: "Alert", night: "Night check", chat: "Chat", agent: "VESTA Agent",
+  live: "Live", alert: "Alert", night: "Night check", chat: "Chat",
   owner: "Owner", fm: "Facility manager", person: "Person", guest: "Guest", schedule: "Schedule",
 };
 

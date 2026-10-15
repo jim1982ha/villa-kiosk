@@ -41,9 +41,6 @@ const ROWS: Record<IssueSource, Omit<SourceRow, "source">> = {
       + "no longer finds them; until then each night updates the figures" },
   chat: { what: "Created from a Telegram chat with the VESTA Agent (\"Create this fault\")",
     opens: "When someone presses Create this fault", goes: "When someone resolves or closes it" },
-  agent: { what: "An older fault of the VESTA Agent's, made before it recorded where each comes from (new ones say "
-      + "Alert, Night check or Chat)", opens: "No longer: new faults carry their own source",
-    goes: "As an alert's or a nightly check's" },
   owner: { what: "A ticket the Owner opened (Open a ticket)", opens: "At once, already in progress",
     goes: "When someone resolves or closes it" },
   fm: { what: "A ticket the Facility manager opened (Open a ticket)", opens: "At once, already in progress",

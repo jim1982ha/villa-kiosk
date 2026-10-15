@@ -122,7 +122,7 @@ const S = await import("@/fm/issueSource");
 const agentRec = (x) => ({ ...rec("a", "x.y"), source: "vesta_agent", ...x });
 ck("a fault's source is read from its record: the Agent's origin, its alert number, a guest's mark, the profile that opened it",
    S.faultSource(agentRec({ origin: "night" })) === "night" && S.faultSource(agentRec({ origin: "chat" })) === "chat"
-   && S.faultSource(agentRec({ alertNumber: 5 })) === "alert" && S.faultSource(agentRec({})) === "agent"
+   && S.faultSource(agentRec({ alertNumber: 5 })) === "alert" && S.faultSource(agentRec({})) === "chat"   // an old fault with no origin (owner, 2026-10-15: no "VESTA Agent" source)
    && S.faultSource({ ...rec("g", "x.y"), reportedBy: "guest" }) === "guest"
    && S.faultSource({ ...rec("o", "x.y"), updates: [{ at: "", status: "in_progress", photoIds: [], by: "Owner" }] }) === "owner"
    && S.faultSource({ ...rec("f", "x.y"), updates: [{ at: "", status: "in_progress", photoIds: [], by: "Facility manager" }] }) === "fm"
