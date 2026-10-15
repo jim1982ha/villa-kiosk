@@ -1,3 +1,10 @@
+## 2.496.374
+
+### Changed
+- Overview → (i): the sources are in two groups, each under its heading — "From the Kiosk" (Live, Owner, Facility manager, Person, Guest, Schedule), then "From the VESTA Agent" (Alert, Night check, Chat, VESTA Agent). The Recap's readiness line shows its source icons in the same order.
+- Live now says what it is: what the Kiosk shows right now on its map — a device with a red badge (unavailable, missing, unlocked, too hot…) — seen on this screen only, nobody is told.
+- "VESTA Agent" says it is an older fault of the Agent's, made before it recorded where each comes from; new ones show Alert, Night check or Chat.
+
 ## 2.496.373
 
 ### Changed
