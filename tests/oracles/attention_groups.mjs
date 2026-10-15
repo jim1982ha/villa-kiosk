@@ -34,6 +34,14 @@ const build = (tickets, more = {}) => buildAttentionItems({
   fmData: { ...EMPTY_FM_DATA, tickets }, selectableIds: Object.keys(entities), folding, ...more,
 });
 
+// owner, 2026-10-15: the card's "Next check" — the clock the Agent wrote on its fault reaches the card's problem
+{
+  const [item] = build([ticket("va-9", "Lamp offline for 2 d", "light.lamp",
+    { source: "vesta_agent", origin: "night", check: "minutes" })]).filter((i) => i.ticketId === "va-9");
+  ck("a fault's own check (how the Agent reads it again) is on its problem, for its card's Next check",
+     item?.check === "minutes" && item.source === "night", item);
+}
+
 console.log("  the entrance door:");
 const before = build([]);
 const after = build([ticket("va-1", "Entrance door unlocked", "lock.door")]);
@@ -190,7 +198,7 @@ ck("the villa model hands buildAttentionItems the device fold, and leaves the gr
 // tests/oracles/cockpit_cards.mjs (architecture review, 2026-10-15). Here: the WIRING a drawing cannot see.
 ck("the Cockpit draws one card per group, its buttons decided by cardActions",
    /attentionGroups\.map\(\(group\) => \(\s*<CockpitAttentionRow key=\{group\.key\} group=\{group\}/.test(cockpit)
-   && /const acts = cardActions\(group\);/.test(cockpit) && /<AttentionCard group=\{group\} onOpenEntity=\{onOpenEntity\} actions=\{useCardActions\(group, canManage, onEditTicket\)\} \/>/.test(cockpit)
+   && /const acts = cardActions\(group\);/.test(cockpit) && /<AttentionCard group=\{group\} onOpenEntity=\{onOpenEntity\} cadence=\{status\?\.cadence \?\? null\}\s*actions=\{useCardActions\(group, canManage, onEditTicket\)\} \/>/.test(cockpit)
    // a line's icon is lineIcon's answer, never its own kind's again
    && /function CockpitAttentionSub[\s\S]*?const icons = lineIcon\(group, item\);/.test(cockpit));
 

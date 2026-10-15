@@ -175,6 +175,10 @@ export const CLEARED_NOTE_PREFIXES = AGENT_CONTRACT.ticketUpdate.clearedNotePref
 export type FmTicketOrigin = "alert" | "night" | "chat";
 export const AGENT_ORIGINS = AGENT_CONTRACT.ticket.origins as readonly FmTicketOrigin[];
 export const AGENT_SOURCE = AGENT_CONTRACT.ticket.source as "vesta_agent";
+/** How the VESTA Agent reads a fault again to close it (FmTicket.check): at every look, or at its nightly check — the
+ *  card's "Next check" (fm/faultTiming.nextCheck), from the agreement's `ticket.checks`. */
+export type FmTicketCheck = "minutes" | "nightly";
+export const AGENT_CHECKS = AGENT_CONTRACT.ticket.checks as readonly FmTicketCheck[];
 
 /** A fault raised against a device or room. */
 export interface FmTicket extends FmProvenance {
@@ -201,6 +205,9 @@ export interface FmTicket extends FmProvenance {
   /** Where the VESTA Agent made it from (0.12.198+): an alert, its nightly check, or a chat ("Create this fault") — the
    *  card's source icon (issueSource.faultSource). Absent on a person's fault and on the Agent's older ones. */
   origin?: FmTicketOrigin;
+  /** How the VESTA Agent reads it again to close it (0.12.212+): its card's "Next check". Absent on a person's fault, a
+   *  chat's, and the Agent's older ones until its repair tags them. */
+  check?: FmTicketCheck;
   /** Every status change, in order. Optional because faults raised before
    *  this existed have none — read it as "no steps recorded", never as an
    *  error. */

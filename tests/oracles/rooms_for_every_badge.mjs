@@ -26,9 +26,13 @@ console.log("\n  the set:");
 {
   const dash = readFileSync(new URL("../../src/pages/Dashboard.tsx", import.meta.url), "utf8");
   ck("the model's own entities (mesh-bound included) AND the stored mappings",
-     /new Set<string>\(\[\.\.\.mappedEntityIds, \.\.\.Object\.keys\(config\.entityMap\)\]\)/.test(dash));
+     /new Set<string>\(\[\.\.\.mappedEntityIds, \.\.\.Object\.keys\(config\.entityMap\),/.test(dash));
+  // owner, 2026-10-15: a fault on a sensor the model does not draw ("House & Pool Relay Temperature") had no room line
+  ck("  ...and every device a Facility record names (a fault, a scheduled task), re-run when that set changes",
+     /\[\.\.\.fmData\.tickets, \.\.\.fmData\.schedules\][\s\S]*?\.map\(\(r\) => r\.entityId\)/.test(dash)
+     && /\.\.\.\(recordIdsKey \? recordIdsKey\.split\("\\n"\) : \[\]\)\]\);/.test(dash));
   ck("  ...and every linked/motion target", /if \(mapping\.linkedEntityId\) ids\.add\(mapping\.linkedEntityId\);\s*if \(mapping\.motionEntityId\) ids\.add\(mapping\.motionEntityId\);/.test(dash));
   ck("  ...through the one rule, re-run when the model's entity set changes",
-     /resolveRooms\(ids, entityAreaNames, \(id\) => manager\.roomForEntity\(id\)\)/.test(dash) && /\[manager, entityAreaNames, config\.entityMap, mappedEntityIds, setResolvedRooms\]/.test(dash));
+     /resolveRooms\(ids, entityAreaNames, \(id\) => manager\.roomForEntity\(id\)\)/.test(dash) && /\[manager, entityAreaNames, config\.entityMap, mappedEntityIds, recordIdsKey, setResolvedRooms\]/.test(dash));
 }
 done("✅ every badge has a room to fold into");

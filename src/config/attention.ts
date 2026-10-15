@@ -15,11 +15,12 @@ import { deviceLook, storeLookSource } from "@/utils/deviceActivity";
 import { deviceRowText } from "@/utils/entityValue";
 import type { Threshold } from "@/config/ThresholdConfig";
 import { labelOf } from "@/config/EntityMap";
+import { NO_ROOM_LABEL } from "@/config/roomKey";
 import { deviceOf } from "@/config/deviceGroups";
 import { faultTitle, fmAttention, stageOf } from "@/fm/fmEngine";
 import { lastNoted } from "@/fm/faultNotes";
 import { faultSource, type IssueSource } from "@/fm/issueSource";
-import type { FmData } from "@/fm/fmTypes";
+import type { FmData, FmTicketCheck } from "@/fm/fmTypes";
 import type { HassEntity } from "@/types/ha.types";
 import type { EntityMapping } from "@/types/scene.types";
 import { domainOf } from "@/utils/entityDomain";
@@ -54,6 +55,8 @@ export interface AttentionItem {
   /** Set on a fault whose entity Home Assistant reports "unavailable" right now: its device is offline, and so is
    *  what the fault is about — it goes onto the device's Unavailable line (mergeFaults). */
   offline?: boolean;
+  /** Set on a fault: how the VESTA Agent reads it again to close it (FmTicket.check) — the card's "Next check". */
+  check?: FmTicketCheck;
   /** Set on a fault: what last happened about it on Telegram (faultNotes.lastNoted — "Escalation sent to Owner"). */
   latest?: { note: string; at: string };
 }
@@ -115,7 +118,9 @@ export function groupAttention(items: readonly AttentionItem[]): AttentionGroup[
       key,
       kind: worst.kind,
       title: worst.device ? worst.device.label : worst.title,
-      room: worst.device ? worst.device.room ?? worst.room : worst.room,
+      // ⚠️ ALWAYS A ROOM LINE (owner, 2026-10-15: a card without one broke the layout): a device no room holds reads as
+      // the By Room list files it, "Other"
+      room: (worst.device ? worst.device.room ?? worst.room : worst.room) || NO_ROOM_LABEL,
       // The DEVICE, as the map opens it — not the entity the problem names. A
       // ticket on a pump's energy meter opened the meter's chart while the
       // map's pump badge opens its power (2.496.258).
@@ -278,6 +283,7 @@ export function buildAttentionItems(opts: {
       stage,
       latest: lastNoted(t),
       source: faultSource(t),
+      check: t.check,
       offline: !!t.entityId && entities[t.entityId]?.state === "unavailable",
     });
   }

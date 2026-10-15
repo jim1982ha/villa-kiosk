@@ -1,3 +1,12 @@
+## 2.496.380
+
+### Added
+- Each card under Open issues says when it is next checked, on the room's line under the arrow: "Next check: within 5 min" (a device offline, an alert — the VESTA Agent looks every few minutes), "Next check: 02:00" (what its nightly check found: a battery, Wi-Fi drops), "Next check: live" (what the map shows, cleared as soon as the device is back), or "Next check: by hand" (a ticket only a person closes). The times are the ones the VESTA Agent says it uses: change its nightly time and the cards follow.
+
+### Changed
+- A card's text now starts right under its room, with no blank line, level with the top of its buttons — on every Cockpit card.
+- Every card has its room line. A fault on a sensor the 3D model does not show now takes its room from the villa's system ("House & Pool Relay" reads Kitchen Terrace); one that no room holds reads "Other", as the By Room list files it.
+
 ## 2.496.379
 
 ### Removed
