@@ -1,3 +1,11 @@
+## 0.12.214
+
+What you will see (architecture review of 15 October, ideas 4 and 6):
+- Nothing new on screen. The list of problems the Agent looks at again every 5 minutes (a device offline) is now kept
+  in one place, the night check's own settings, so a card's "Next check: within 5 min" is always what really happens.
+- Behind it: the Agent's tests use one pretend villa that answers like the real one, so a change is tested the same
+  way everywhere.
+
 ## 0.12.213
 
 What you will see (architecture review of 15 October, how a problem lives and ends — ideas 1 and 2):

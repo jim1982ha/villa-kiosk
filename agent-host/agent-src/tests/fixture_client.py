@@ -65,20 +65,11 @@ class FixtureClient(HABase):
         return out
 
     def history(self, entity_ids, start, end):
-        """As Home Assistant answers: the state carried over from before `start`, stamped at `start`, then each change."""
-        out = {}
-        for eid in entity_ids:
-            rows, before = [], None
-            for r in sorted(self._hist.get(eid, []), key=lambda r: datetime.fromisoformat(r["last_changed"])):
-                t = datetime.fromisoformat(r["last_changed"])
-                if t < start:
-                    before = r
-                elif t < end:
-                    rows.append(r)
-            if before is not None and not (rows and datetime.fromisoformat(rows[0]["last_changed"]) == start):
-                rows.insert(0, {**before, "last_changed": start.isoformat()})
-            out[eid] = rows
-        return out
+        """As Home Assistant answers (villa_timeline.history_rows): the state carried over from before `start`, stamped at
+        `start`, then each change."""
+        from villa_timeline import history_rows
+        return {eid: history_rows([(datetime.fromisoformat(r["last_changed"]), r["state"]) for r in self._hist.get(eid, [])],
+                                  start, end) for eid in entity_ids}
 
     def states(self, entity_ids=None):
         d = self._load("states.json", {"states": {}})["states"]

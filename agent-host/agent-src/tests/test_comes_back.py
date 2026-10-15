@@ -11,6 +11,7 @@ import json
 import os
 from datetime import datetime, timedelta, timezone
 
+from villa_timeline import TimelineVilla
 from helpers import STARTER_SKILLS, make_agent
 from kiosk_fake import FakeKiosk
 from vesta_shared.problems import Problems
@@ -163,10 +164,8 @@ def test_a_door_closed_in_the_kiosk_is_read_again_as_a_done_is(tmp_path):
     (task,) = store.tasks("open")
     Problems(store).closed_in_kiosk(task["id"])
 
-    class Villa:
-        def states(self, ids):
-            return {e: {"state": "unlocked", "last_changed": T0.isoformat(), "attributes": {"friendly_name": "Door"}} for e in ids}
-    out = desk.tick(store, datetime.now(timezone.utc) + timedelta(minutes=11), client=Villa())
+    villa = TimelineVilla(names={"lock.door": "Door"}, **{"lock.door": ("unlocked", T0)})
+    out = desk.tick(store, datetime.now(timezone.utc) + timedelta(minutes=11), client=villa)
     assert out["not_quiet"] == [iid]
     (fm,) = [s for s in out["send"] if s["to"] == "fm"]
     assert fm["status"] == "Closed in the Cockpit, but Door still reads unlocked: still open. VESTA keeps watching it."

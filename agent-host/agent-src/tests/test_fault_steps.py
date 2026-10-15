@@ -13,6 +13,7 @@ import json
 import os
 from datetime import datetime, timedelta, timezone
 
+from villa_timeline import TimelineVilla
 from helpers import STARTER_SKILLS, make_agent
 from kiosk_fake import FakeKiosk
 from vesta_agent.kiosk import Kiosk
@@ -163,12 +164,9 @@ def test_a_fault_picked_up_after_a_close_that_did_not_land_is_closed_again_not_t
 T0 = datetime(2026, 10, 1, 9, 0, tzinfo=timezone.utc)
 
 
-class Villa:
-    def __init__(self, **now):
-        self.now = now
-
-    def states(self, ids):
-        return {e: {"state": s, "attributes": {"friendly_name": "Laundry lock"}} for e, s in self.now.items() if e in ids}
+def Villa(**now):
+    """Home Assistant's states, since a moment nobody knows (villa_timeline)."""
+    return TimelineVilla(names={e: "Laundry lock" for e in now}, **now)
 
 
 def _door_done(store):
@@ -360,7 +358,8 @@ def test_each_fault_says_how_the_agent_reads_it_again_for_its_cards_next_check(t
 
 
 def test_the_rules_the_skill_says_it_reads_again_are_the_ones_recheck_reads():
-    # one answer: the card's "within 5 min" is true only for what recheck.py really reads again
+    # one list (architecture review, 2026-10-15): the card's "within 5 min" is true only for what recheck.py really
+    # reads again — it reads the skill's own `rechecks`, which the engine also hands the Kiosk (Skill.rechecks)
     import importlib.util
     from vesta_agent.skills import parse_skill
     sk = parse_skill("preventive-maintenance", os.path.join(STARTER_SKILLS, "preventive-maintenance"))
@@ -368,4 +367,5 @@ def test_the_rules_the_skill_says_it_reads_again_are_the_ones_recheck_reads():
         STARTER_SKILLS, "preventive-maintenance", "scripts", "recheck.py"))
     recheck = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(recheck)
-    assert sk.rechecks == [recheck.OFFLINE_RULE] and "recheck.py" in sk.every_5_min
+    assert recheck.rechecked() == set(sk.rechecks) == {"PM-UNAVAILABLE"} and "recheck.py" in sk.every_5_min
+    assert not hasattr(recheck, "OFFLINE_RULE")                       # no second copy of the list

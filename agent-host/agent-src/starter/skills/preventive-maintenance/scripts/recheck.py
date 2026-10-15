@@ -31,7 +31,14 @@ from vesta_shared import result, script  # noqa: E402
 from vesta_shared.device_state import OFFLINE, out_for  # noqa: E402  ("is it back": one answer)
 from vesta_shared.problems import Problems  # noqa: E402
 
-OFFLINE_RULE = "PM-UNAVAILABLE"
+
+
+def rechecked(skill_dir: str = os.path.dirname(HERE)) -> set[str]:
+    """The rules whose findings are read again here: the skill's own `rechecks` (skill.yaml) — what the Kiosk's card
+    says "Next check: within 5 min" of (architecture review, 2026-10-15: this script kept its own copy of that list)."""
+    import yaml
+    with open(os.path.join(skill_dir, "skill.yaml"), encoding="utf-8") as f:
+        return set((yaml.safe_load(f) or {}).get("rechecks") or [])
 GONE_NOTE = "Closed: this device no longer exists in the villa's system."
 ENTITY_ID = re.compile(r"^[a-z0-9_]+\.[a-z0-9_]+$")     # only a real entity id can be "not found"
 
@@ -48,13 +55,13 @@ def back_online(store, client, now: datetime, minutes: float, zone: str) -> dict
     # only what has no state is asked about: "not found" is Home Assistant's answer, a missing row is not
     gone = client().not_found([e for e in ids if e not in states]) if len(states) < len(ids) else set()
     day = now.astimezone(ZoneInfo(zone)).date().isoformat()
-    closed, deleted, actions = [], [], []
+    closed, deleted, actions, rules = [], [], [], rechecked()
     for f in rows:
         es = ents[f["id"]]
         if es and all(e in gone for e in es):
             actions += Problems(store).close_finding(f, day, GONE_NOTE)
             closed.append(f["id"]); deleted.append(f["id"])
-        elif f["rule_id"] == OFFLINE_RULE and out_for(client(), [e for e in es if e not in gone], states, OFFLINE, now,
+        elif f["rule_id"] in rules and out_for(client(), [e for e in es if e not in gone], states, OFFLINE, now,
                                                       minutes, unknown_tells=True):
             actions += Problems(store).close_finding(f, day, "Cleared: back online.")
             closed.append(f["id"])

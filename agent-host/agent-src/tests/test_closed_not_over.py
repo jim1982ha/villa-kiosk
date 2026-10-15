@@ -10,6 +10,7 @@ import json
 import os
 from datetime import datetime, timedelta, timezone
 
+from villa_timeline import TimelineVilla
 from helpers import STARTER_SKILLS, make_agent
 from kiosk_fake import FakeKiosk
 from vesta_shared.problems import Problems
@@ -27,14 +28,9 @@ def run(c):
     return asyncio.run(c)
 
 
-class Villa:
-    """Home Assistant's states: {entity: (state, since)}."""
-    def __init__(self, **now):
-        self.now = now
-
-    def states(self, ids):
-        return {e: {"state": s, "last_changed": t.isoformat(), "attributes": {"friendly_name": e.split(".")[1]}}
-                for e, (s, t) in self.now.items() if e in ids}
+def Villa(**now):
+    """Home Assistant's states: {entity: (state, since)} (villa_timeline)."""
+    return TimelineVilla(**now)
 
 
 def door(store, legacy=False, **extra):
@@ -58,7 +54,7 @@ def test_a_close_on_a_door_still_unlocked_reopens_it_still_there_and_the_desk_wa
     assert [a for a in out["actions"] if a["action"] in ("ticket.reopen", "ticket")]
     assert all(a.get("note") != "Back again." for a in out["actions"])
     # locked later: the desk itself closes it — Home Assistant's rule no longer watches it
-    villa.now["lock.door"] = ("locked", T0 + timedelta(minutes=30))
+    villa.timeline["lock.door"].append((T0 + timedelta(minutes=30), "locked"))
     assert desk.tick(store, T0 + timedelta(minutes=45), client=villa)["cleared"] == [iid]
 
 

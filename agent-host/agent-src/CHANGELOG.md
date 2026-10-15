@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.206 (15 October 2026)
+
+Architecture review 2026-10-15 (the problem lifecycle), 4 and 6:
+- preventive-maintenance recheck.py reads the rules it reads again from its own skill.yaml `rechecks` (rechecked());
+  OFFLINE_RULE, the second copy, is gone. Starter skills recorded.
+- tests/villa_timeline.py: TimelineVilla (an HABase built from each entity's timeline: states, history with the
+  carried-over first row, not_found) and history_rows, the one rule. test_alert_desk, test_closed_not_over,
+  test_fault_steps and test_comes_back use it; FixtureClient.history goes through history_rows. (test_investigate's
+  _Client and ha_fake.FakeHA are tool-level adapters and stay.)
+
 ## 0.6.205 (15 October 2026)
 
 Architecture review 2026-10-15 (the problem lifecycle), 1 and 2:

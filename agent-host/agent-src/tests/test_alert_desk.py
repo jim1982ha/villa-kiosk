@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from helpers import PYTHONPATH, STARTER_SKILLS
+from villa_timeline import TimelineVilla
 from vesta_shared.store import Store
 
 spec = importlib.util.spec_from_file_location("desk", os.path.join(STARTER_SKILLS, "alert-desk", "scripts", "desk.py"))
@@ -195,30 +196,10 @@ def test_only_done_and_need_help_and_an_old_not_found_is_chased_again(tmp_path):
 
 
 # ---------------------------------------------------------------------- over when Home Assistant no longer says so
-class Villa:
-    """Home Assistant's states as the desk reads them again: each entity's timeline [(since, state)]."""
+class Villa(TimelineVilla):
+    """Home Assistant as the desk reads it again: each entity's timeline (villa_timeline), seen from T0 on."""
     def __init__(self, **timeline):
-        self.timeline = timeline
-        self.now = T0
-
-    def states(self, ids):
-        out = {}
-        for e in ids:
-            rows = [(since, st) for since, st in self.timeline.get(e, []) if since <= self.now]
-            if rows:
-                since, st = rows[-1]
-                out[e] = {"state": st, "last_changed": since.isoformat(), "attributes": {"friendly_name": e.split(".")[1]}}
-        return out
-
-    def history(self, ids, start, end):
-        """As Home Assistant answers: the state carried over from before `start`, stamped at `start`, then each change."""
-        out = {}
-        for e in ids:
-            tl = [(since, st) for since, st in self.timeline.get(e, []) if since < end]
-            before = [(since, st) for since, st in tl if since <= start]
-            rows = [{"state": before[-1][1], "last_changed": start.isoformat()}] if before else []
-            out[e] = rows + [{"state": st, "last_changed": since.isoformat()} for since, st in tl if since > start]
-        return out
+        super().__init__(now=T0, **timeline)
 
 
 def _tick(store, villa, minutes):
