@@ -1,0 +1,58 @@
+"""An entity hidden in the villa's system is left out of what the Agent lists (owner, 2026-10-15).
+
+A lock fitted the wrong way round is corrected at the source: a template lock reads the real one inverted, and the
+real one is HIDDEN (not disabled — the template reads it). Still listed, the villa status said "Laundry Room unlocked"
+of a door that was locked. Driven from ha-mcp's own answer, through the client and the pack, to the status the AI is
+given — the client dropping `hidden_by` would leave every helper below green (pin the caller)."""
+from __future__ import annotations
+
+import json
+import os
+import sys
+
+from helpers import STARTER_SKILLS
+
+sys.path.insert(0, os.path.join(STARTER_SKILLS, "villa-concierge", "scripts"))
+
+RAW, FIXED = "lock.front_door_raw", "lock.front_door"
+
+
+class _Session:
+    """ha-mcp as the villa answers, two locks: the real one (hidden, reads backwards) and its corrected template."""
+
+    def call_raw(self, name, args):
+        body = {
+            "ha_get_overview": {"domain_stats": {"lock": {"entities": [{"entity_id": RAW}, {"entity_id": FIXED}]}}},
+            "ha_get_device": {"devices": [{"device_id": "d1", "name": "Front door lock", "area_id": "hall",
+                                           "entities": [{"entity_id": RAW, "platform": "matter"}]}]},
+            "ha_get_state": {"states": {RAW: {"state": "unlocked", "attributes": {"friendly_name": "Front Door Raw"}},
+                                        FIXED: {"state": "locked", "attributes": {"friendly_name": "Front Door"}}}},
+            "ha_get_entity": {"entity_entries": [
+                {"entity_id": RAW, "original_name": "Front Door Raw", "hidden_by": "user", "disabled_by": None},
+                {"entity_id": FIXED, "original_name": "Front Door", "area_id": "hall", "hidden_by": None,
+                 "disabled_by": None}]},
+            "ha_list_floors_areas": {"floors": [{"areas": [{"area_id": "hall", "name": "Hall"}]}]},
+        }[name]
+        return {"content": [{"type": "text", "text": json.dumps(body)}]}
+
+
+def _pack():
+    from vesta_shared.ha_client import McpClient
+    from vesta_shared.knowledge_pack import build_pack
+    cli = McpClient(session=_Session())
+    return build_pack(cli.registry(), [], cli.states())
+
+
+def test_a_hidden_lock_is_not_in_the_villa_status(tmp_path):
+    import concierge
+    from vesta_shared.store import Store
+    pack = _pack()
+    assert [r["entity_id"] for r in pack.rows()] == [FIXED]
+    states = {RAW: {"state": "unlocked"}, FIXED: {"state": "locked"}}
+    s = concierge.status(pack, states, Store(str(tmp_path / "s.sqlite")))
+    assert "unlocked" not in s["text"] and s["colour"] == "green"
+
+
+def test_a_hidden_entity_still_names_its_device():
+    # an alert written before the swap still names the real lock: its device is still known
+    assert _pack().device_name(RAW, None) == "Front door lock"

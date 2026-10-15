@@ -283,6 +283,7 @@ def _norm_entities(registry: dict, states: dict | None) -> list[dict]:
             "device_id": e.get("device_id"),
             "state": e.get("state", st.get("state") if st else None),
             "disabled": bool(e.get("disabled_by")),
+            "hidden": bool(e.get("hidden_by")),
         })
     return rows
 
@@ -291,7 +292,12 @@ def build_pack(registry: dict, helpers: list[dict], states: dict | None = None,
                bom_rows: list[dict] | None = None, people: list[dict] | None = None,
                channels: dict | None = None, generated_at: str = "", villa: str | None = None) -> KnowledgePack:
     cfg = registry.get("config", {})
-    ents = [e for e in _norm_entities(registry, states) if not e["disabled"]]
+    # ⚠️ HIDDEN IS LEFT OUT TOO (owner, 2026-10-15): a lock fitted the wrong way round is corrected AT THE SOURCE — a
+    # template lock reads the real one inverted, and the real one is hidden in the villa's system (never disabled: the
+    # template reads it). Hidden but listed, the villa status said "Laundry Room unlocked" of a locked door. Same rule
+    # as the Kiosk (registryResolve: hidden_by set, by anyone). Its device stays known, for an alert that still names it.
+    live = [e for e in _norm_entities(registry, states) if not e["disabled"]]
+    ents = [e for e in live if not e["hidden"]]
     area_names = {a.get("area_id"): a.get("name") for a in registry.get("areas", [])}
     families: dict[str, list[dict]] = {}
     unclassified: list[str] = []
@@ -412,7 +418,7 @@ def build_pack(registry: dict, helpers: list[dict], states: dict | None = None,
         devices={d["device_id"]: {"name": d.get("name_by_user") or d.get("name") or "",
                                   "manufacturer": d.get("manufacturer") or "", "model": d.get("model") or ""}
                  for d in registry.get("devices", []) if d.get("device_id")},
-        entity_devices={e["entity_id"]: e["device_id"] for e in ents if e.get("device_id")},
+        entity_devices={e["entity_id"]: e["device_id"] for e in live if e.get("device_id")},
     )
 
 

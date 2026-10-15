@@ -1,3 +1,11 @@
+## 0.12.205
+
+What you will see:
+- A device you hide in the villa's system is no longer counted by the VESTA Agent: not in the villa status, not in
+  what the AI is told, not in reports or investigations. This is how the Kiosk already works. Your two corrected door
+  locks now show the right way round, because the original Aqara locks you hid are left out.
+- Hide a device, never disable it, when another one reads from it, as your corrected locks do from the originals.
+
 ## 0.12.204
 
 What you will see:

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.197 (15 October 2026)
+
+- knowledge_pack.build_pack leaves out an entity HIDDEN in Home Assistant (registry hidden_by set, by anyone), as it
+  already left out a disabled one, and as the Kiosk does (registryResolve). The owner corrected two reversed locks at
+  the source (template locks reading the real ones inverted, the real ones hidden): the villa status still said
+  "unlocked" of the hidden originals. A hidden entity's device stays in entity_devices, so an alert that names it
+  still names its device. McpClient.registry passes hidden_by. tests/test_hidden_entities.py, driven from ha-mcp's
+  answer through the client and the pack to concierge.status (each half proven red with tools/mutate.py).
+
 ## 0.6.196 (15 October 2026)
 
 Retro, 2026-10-15:

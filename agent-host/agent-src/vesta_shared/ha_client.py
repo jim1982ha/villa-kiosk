@@ -426,6 +426,7 @@ class McpClient(HABase):
                     "device_id": dv.get("device_id"),
                     "state": (states.get(eid) or {}).get("state"),
                     "disabled_by": e.get("disabled_by"),
+                    "hidden_by": e.get("hidden_by"),
                 })
         fa = self.tool("ha_list_floors_areas", {})
         areas = [a for f in fa.get("floors") or [] for a in f.get("areas") or []] + list(fa.get("unassigned_areas") or [])
