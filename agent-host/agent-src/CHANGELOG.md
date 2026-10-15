@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.201 (15 October 2026)
+
+- alert-desk desk.abandoned (owner's request, 2026-10-15): the still-true status is "Still not fixed at {time}. It
+  closes by itself once fixed, or press Done." test_one_saying pins it (mutation red). Starter skills recorded.
+
 ## 0.6.200 (15 October 2026)
 
 - timeutil.lasting: from a day on, "1 d 9 h" / "3 d" (the Kiosk's chartUtils.fmtDuration). preventive-maintenance

@@ -40,8 +40,7 @@ def test_a_rule_that_gave_up_is_said_once_in_the_desks_words(tmp_path):
     for m in (owner, out["ha_messages"][0]):
         assert "no longer tracked" not in m["text"] and "Repeat after" not in m["text"]   # Home Assistant's words: gone
         assert m["text"].count("Laundry door unlocked") == 1                              # its name once
-        assert m["status"] == ("Still not right when the alert stopped watching it on {time}. VESTA keeps watching "
-                               "it and closes it once it is right. Press Done when it is fixed.")
+        assert m["status"] == "Still not fixed at {time}. It closes by itself once fixed, or press Done."
 
 
 def test_home_assistants_all_clear_is_said_in_the_desks_words(tmp_path):
