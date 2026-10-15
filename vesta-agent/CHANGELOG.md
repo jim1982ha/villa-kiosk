@@ -1,3 +1,10 @@
+## 0.12.212
+
+What you will see:
+- Each fault the VESTA Agent puts in the Cockpit now says how it is checked again, so the Kiosk's card (2.496.380 and
+  later) can show "Next check: within 5 min" (a device offline, an alert) or "Next check: 02:00" (a battery, Wi-Fi
+  drops). The faults already open get it within 5 minutes of the update.
+
 ## 0.12.211
 
 What you will see:

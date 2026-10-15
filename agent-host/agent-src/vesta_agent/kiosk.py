@@ -185,10 +185,12 @@ class Kiosk:
 
     async def add_ticket(self, title: str, entity_id: str | None = None, note: str | None = None,
                          document_ids: list[str] | None = None, number: int | None = None,
-                         origin: str | None = None) -> str:
+                         origin: str | None = None, check: str | None = None) -> str:
         """`number`: the alert's number, as every chat names it ("#5"), when the fault comes from one — the Kiosk's card
         shows it beside the title (owner, 2026-10-14), so the Telegram message and the card are seen to be one problem.
-        `origin`: where the agent made it from — "alert", "night" (its nightly check) or "chat" — the card's source icon."""
+        `origin`: where the agent made it from — "alert", "night" (its nightly check) or "chat" — the card's source icon.
+        `check`: how the agent reads it again to close it — "minutes" or "nightly" (agent-contract `ticket.checks`) — the
+        card's "Next check"."""
         tid = self._ticket_id()
 
         def change(data: dict) -> str:
@@ -205,6 +207,8 @@ class Kiosk:
                 t["alertNumber"] = int(number)
             if origin:
                 t["origin"] = origin
+            if check:
+                t["check"] = check
             tickets.append(t)
             data["tickets"] = tickets
             return tid
@@ -238,6 +242,7 @@ class Kiosk:
         return {t["id"]: {"status": str(t.get("status") or ""), "title": str(t.get("title") or ""),
                           "agent_title": agent_title(t), "resolved_at": str(t.get("resolvedAt") or ""),
                           "by": last(t, "who") or last(t, "by"), "alert_number": t.get("alertNumber"), "origin": t.get("origin"),
+                          "check": t.get("check"),
                           "noted": [(str(u.get("at") or ""), str(u.get("note") or "")) for u in t.get("updates") or []
                                     if isinstance(u, dict) and u.get("kind") == NOTED],
                           **reopened(t), **taken(t)}     # `by`: who did it, as the card says it
@@ -295,10 +300,12 @@ class Kiosk:
             return False
         return await self._edit(change)
 
-    async def tag_ticket(self, tid: str, number: int | None = None, origin: str | None = None) -> bool:
-        """A fault made before it carried them gets its alert's number ("#5") and where it came from (add_ticket). False
-        when it is gone or already says them."""
-        tags = {**({"alertNumber": int(number)} if number else {}), **({"origin": origin} if origin else {})}
+    async def tag_ticket(self, tid: str, number: int | None = None, origin: str | None = None,
+                         check: str | None = None) -> bool:
+        """A fault made before it carried them gets its alert's number ("#5"), where it came from and how it is read
+        again (add_ticket). False when it is gone or already says them."""
+        tags = {**({"alertNumber": int(number)} if number else {}), **({"origin": origin} if origin else {}),
+                **({"check": check} if check else {})}
 
         def change(data: dict) -> bool:
             tickets = list(data.get("tickets") or [])

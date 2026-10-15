@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.204 (15 October 2026)
+
+- agent-contract.json (the Kiosk's 2.496.380, copied): `ticket.checks` ["minutes", "nightly"] and the fault's `check`.
+  Problems.card gives it: an incident "minutes" (the alert desk's every look), a finding of a rule the skills list in
+  `rechecks` "minutes", any other finding "nightly", a chat's none. Skill.rechecks (skill.yaml, beside every_5_min);
+  preventive-maintenance says `rechecks: [PM-UNAVAILABLE]` (test: the very rule recheck.py reads again). Kiosk.add_ticket
+  writes it, tag_ticket and the repair give it to faults made before. Tests in test_fault_steps (five mutations red).
+  Starter skills recorded.
+
 ## 0.6.203 (15 October 2026)
 
 - device_state.out_for (owner's go, 2026-10-15): "out of the bad states for N minutes" for every entity — by its

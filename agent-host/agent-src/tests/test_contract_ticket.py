@@ -30,6 +30,8 @@ def test_every_origin_the_agent_writes_is_declared(tmp_path):
     n, _ = pb.open_task("finding", 3, "battery_low", "sensor.example", "y")
     written = {pb.card(st.task(a))["origin"], pb.card(st.task(n))["origin"], "chat"}   # chat: tickets.create, no task
     assert written <= set(T["origins"]), written
+    checks = {pb.card(st.task(a))["check"], pb.card(st.task(n))["check"], pb.card(st.task(n), {"battery_low"})["check"]}
+    assert checks == set(T["checks"]), checks                      # every clock the card can say, each one declared
 
 
 def test_the_sample_reads_as_the_agreement_says():
@@ -37,6 +39,7 @@ def test_the_sample_reads_as_the_agreement_says():
     step = [u for u in T["sample"]["updates"] if u["status"] == T["takenStep"]["status"] and not u.get("kind")
             and u.get("by") != T["agentStamp"]][-1]
     assert held["alert_number"] == T["sample"]["alertNumber"] and held["origin"] == T["sample"]["origin"]
+    assert held["check"] == T["sample"]["check"]
     assert (held["taken_by"], held["taken_at"]) == (step["who"], step["at"])             # the take-on the chase stops on
     assert held["agent_title"] == T["sample"]["title"]                                   # its own title, by the stamp
     assert [n for _at, n in held["noted"]] == ["Reminder sent to Facility Manager"]

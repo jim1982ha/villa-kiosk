@@ -154,7 +154,8 @@ class Vesta:
                                settle_alert=self.thread.close, timezone=settings.timezone,
                                tell_fm=lambda text: self.outcome.carry_out({"send": [{"to": "fm", "text": text,
                                                                                  "title": "Fault reopened in the Kiosk"}]}),
-                               story=lambda iid: self.notices.story(iid), restate_alert=self._alert_taken)
+                               story=lambda iid: self.notices.story(iid), restate_alert=self._alert_taken,
+                               rechecked=lambda: {r for sk in self.skills.all().values() for r in sk.rechecks})
         # a fault offered in a chat, start to end (fault_offers.py, review 32)
         self.requests = Requests(self.state, self.skills)   # a command skill's request, its turns (command_request.py)
         self.fault_offers = FaultOffers(self.state, self.delivery, self.tickets,

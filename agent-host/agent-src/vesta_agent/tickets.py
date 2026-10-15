@@ -34,8 +34,10 @@ class Tickets:
     def __init__(self, *, kiosk, state, store_path: str, settle_alert: Callable[[int, str], Awaitable[int]],
                  timezone: str = "UTC", tell_fm: Callable[[str], Awaitable[object]] | None = None,
                  story: Callable[[int], list[dict]] | None = None,
-                 restate_alert: Callable[[int, str], Awaitable[int]] | None = None):
+                 restate_alert: Callable[[int, str], Awaitable[int]] | None = None,
+                 rechecked: Callable[[], set[str]] | None = None):
         self.kiosk = kiosk
+        self.rechecked = rechecked or set     # the rules the skills read again every few minutes (Skill.rechecks)
         self.tell_fm = tell_fm                # a message to the facility manager (a night fault reopened in the Kiosk)
         self.timezone = timezone              # the villa's: the note's time (notice.when)
         self.state = state
@@ -73,10 +75,11 @@ class Tickets:
                 note = ((note or "") + f"\n(The investigation report could not be attached: {why}.)").strip()
         # its alert's number and where it came from (Problems.card); a fault with no task is a chat's ("Create this fault")
         task = self._store().task(int(task_id)) if task_id else None
-        want = Problems(self._store()).card(task) if task else {"number": None, "origin": "chat"}
+        want = Problems(self._store()).card(task, self.rechecked()) if task else {"number": None, "origin": "chat", "check": None}
         tid = await self.kiosk.add_ticket(ticket_title(title)[:200], entity_id=entity_id, note=note, document_ids=docs,
                                           **({"number": want["number"]} if want["number"] else {}),
-                                          **({"origin": want["origin"]} if want["origin"] else {}))
+                                          **({"origin": want["origin"]} if want["origin"] else {}),
+                                          **({"check": want["check"]} if want["check"] else {}))
         log.info("Kiosk ticket %s created: %s", tid, ticket_title(title)[:80])
         if task_id:
             self._store().set_task_uid(int(task_id), tid)
@@ -212,7 +215,7 @@ class Tickets:
             card = held.get(uid) if uid else None
             if not card:
                 continue
-            want = problems.card(t)
+            want = problems.card(t, self.rechecked())
             try:
                 if want["open"] and card["status"] == "resolved":
                     # its problem came back and the fault's reopening did not reach the Kiosk
@@ -224,8 +227,9 @@ class Tickets:
                         fixed += await self.kiosk.update_ticket(uid, title)
                     # the alert's number, as every chat writes it, and where it came from (owner, 2026-10-14)
                     if (want["number"] and card.get("alert_number") != want["number"]) \
-                            or (want["origin"] and card.get("origin") != want["origin"]):
-                        fixed += await self.kiosk.tag_ticket(uid, want["number"], want["origin"])
+                            or (want["origin"] and card.get("origin") != want["origin"]) \
+                            or (want["check"] and card.get("check") != want["check"]):
+                        fixed += await self.kiosk.tag_ticket(uid, want["number"], want["origin"], want["check"])
                     # what happened on Telegram — reminders, escalation, a button pressed (owner, 2026-10-14) — from this
                     # task's run on (an earlier run's lines belong to the fault as it was then)
                     if want["number"] and self.kiosk.says(NOTED):

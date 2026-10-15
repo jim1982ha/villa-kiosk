@@ -71,7 +71,7 @@
       }
     }
   },
-  "_ticket": "The Facility fault the VESTA Agent writes and reads (/agent/v1/fm-data), declared ONCE (architecture review, 2026-10-15: these were copies on each side, and a renamed stamp would have silently stopped the agent retitling its faults). `agentStamp`: the name the Kiosk's proxy stamps on every step and completion the agent writes, and `source` on every record it creates or changes — the agent tells its own steps from a person's by them. `origins`: where the agent made a fault from (its `origin` field: an alert, its nightly check, a chat's \"Create this fault\"), the Kiosk's source icon. `fields`: what the agent writes on a fault beyond the Kiosk's own. `takenStep`: a person took the fault on in the Kiosk (\"Open Ticket\") — a step with status in_progress, no kind, not stamped agentStamp: the agent stops chasing its alert. `sample`: one fault as the Kiosk holds it after the agent made it and a person took it on; both sides read it in their tests.",
+  "_ticket": "The Facility fault the VESTA Agent writes and reads (/agent/v1/fm-data), declared ONCE (architecture review, 2026-10-15: these were copies on each side, and a renamed stamp would have silently stopped the agent retitling its faults). `agentStamp`: the name the Kiosk's proxy stamps on every step and completion the agent writes, and `source` on every record it creates or changes — the agent tells its own steps from a person's by them. `origins`: where the agent made a fault from (its `origin` field: an alert, its nightly check, a chat's \"Create this fault\"), the Kiosk's source icon. `checks`: how the agent reads a fault again to close it (its `check` field) — \"minutes\" at every look (heartbeat.cadence.checkMinutes), \"nightly\" at its nightly check (heartbeat.cadence.nightlyAt) — the card's \"Next check\" (owner, 2026-10-15). `fields`: what the agent writes on a fault beyond the Kiosk's own. `takenStep`: a person took the fault on in the Kiosk (\"Open Ticket\") — a step with status in_progress, no kind, not stamped agentStamp: the agent stops chasing its alert. `sample`: one fault as the Kiosk holds it after the agent made it and a person took it on; both sides read it in their tests.",
   "ticket": {
     "agentStamp": "VESTA Agent",
     "source": "vesta_agent",
@@ -80,9 +80,14 @@
       "night",
       "chat"
     ],
+    "checks": [
+      "minutes",
+      "nightly"
+    ],
     "fields": {
       "alertNumber": "integer: the alert's number as every chat writes it (#5); alerts only",
       "origin": "one of origins",
+      "check": "one of checks; absent on a fault only a person closes (chat)",
       "documentIds": "the reports kept with it (/agent/v1/fm-document)",
       "entityId": "the device's entity",
       "note": "what to do on site"
@@ -101,6 +106,7 @@
       "note": "What to do: Power and network of the device named, until it is back.",
       "alertNumber": 33,
       "origin": "alert",
+      "check": "minutes",
       "source": "vesta_agent",
       "updatedAt": "2026-10-15T01:13:15Z",
       "photoIds": [],

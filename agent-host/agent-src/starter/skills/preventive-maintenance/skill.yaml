@@ -6,6 +6,7 @@ scripts:
     flags: {--as-of: date, --out: outfile, --skip-raw: switch}
     inject: [pack, store, zone]
 every_5_min: "recheck.py"     # a device found offline that is back: its fault closes now, not the next night
+rechecks: [PM-UNAVAILABLE]    # what recheck.py reads again: its Kiosk card says "Next check: within 5 min", the others the nightly time
 schedule:
   - when: "02:00"             # code only: zero tokens; the 07:00 digest carries the words
     run: "nightly.py --out nightly.json"

@@ -22,6 +22,7 @@ and skill.yaml (what the engine needs):
         timeout: 1800
         kiosk: nightly_check         optional: this job is the nightly check the Kiosk names (its (i) says its time)
     every_5_min: "desk.py tick"      a code job every 5 minutes
+    rechecks: [PM-UNAVAILABLE]       the night's findings that job reads again (their Kiosk card: "Next check: within 5 min")
     on_event:
       critical_event: "desk.py intake --event {event}"
       voice_message: "voice.py prepare --audio {audio} --language {language}"   # prints {"stt": {...}}
@@ -219,6 +220,9 @@ class Skill:
     scripts: dict[str, Script] = field(default_factory=dict)
     schedule: list[dict] = field(default_factory=list)
     every_5_min: str | None = None
+    # the rules whose findings every_5_min reads again — the rest wait for the nightly check: the Kiosk card's "Next check"
+    # (owner, 2026-10-15). The skill says it, the engine only carries it to the card.
+    rechecks: list[str] = field(default_factory=list)
     on_event: dict[str, str] = field(default_factory=dict)
     on_reply: str | None = None
     # ⚠️ THE SKILL'S BUTTONS, NOT THE ENGINE'S (architecture review, 2026-10-13): the engine drew "Done" / "Need help" and
@@ -370,6 +374,10 @@ def parse_skill(name: str, path: str) -> Skill:
         sk.schedule.append(entry)
     if raw.get("every_5_min"):
         sk.every_5_min = _check_command(path, str(raw["every_5_min"]), "every_5_min")
+    if raw.get("rechecks") is not None:
+        if not sk.every_5_min or not isinstance(raw["rechecks"], list) or not all(isinstance(r, str) for r in raw["rechecks"]):
+            raise SkillError("rechecks: a list of rule ids, beside the every_5_min job that reads them again")
+        sk.rechecks = list(raw["rechecks"])
     for ev, cmd in (raw.get("on_event") or {}).items():
         if ev not in HOOK_EVENTS:
             raise SkillError(f"on_event: unknown event {ev} (known: {', '.join(sorted(HOOK_EVENTS))})")

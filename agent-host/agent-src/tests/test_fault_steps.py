@@ -332,3 +332,40 @@ def test_an_open_problem_whose_fault_the_agent_closed_gets_it_back_and_a_persons
     assert k.ticket(st.task(tids[1])["todo_uid"])["status"] == "open"
     assert st.task(tids[2])["status"] != "open" and k.ticket("t3")["status"] == "resolved"            # theirs stays
     assert "have no Kiosk fault" not in caplog.text
+
+
+def test_each_fault_says_how_the_agent_reads_it_again_for_its_cards_next_check(tmp_path):
+    # owner, 2026-10-15: "add a small text … Next check: ###, when the next test for this card will be done" — an offline
+    # device is read again every few minutes (the skill's `rechecks`), a battery at the nightly check, an alert at every
+    # look of the desk; a chat's fault only a person closes
+    k = FakeKiosk()
+    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k,
+                   skills=("preventive-maintenance",))
+    st, pb = Store(v.s.store_path), Problems(Store(v.s.store_path))
+    off, _ = st.raise_finding("PM-UNAVAILABLE", "sensor.room_a", "room_a", "2026-10-15", "P3", "Room A offline for 1 d", {})
+    low, _ = st.raise_finding("PM-BATTERY-LOW", "sensor.door_b", "door_b", "2026-10-15", "P3", "Door B battery at 12%", {})
+    pb.open_task("finding", off, "PM-UNAVAILABLE", "sensor.room_a", "Room A offline for 1 d")
+    pb.open_task("finding", low, "PM-BATTERY-LOW", "sensor.door_b", "Door B battery at 12%")
+    iid = st.new_incident("rule_x|lock.front", "rule_x", "lock.front", "P2", {"summary": "Front door unlocked"})
+    pb.open_task("incident", iid, "rule_x", "lock.front", "Front door unlocked")
+    run(v.tickets.repair())
+    by_entity = {t.get("entityId"): t.get("check") for t in k._all()}
+    assert by_entity == {"sensor.room_a": "minutes", "sensor.door_b": "nightly", "lock.front": "minutes"}, by_entity
+    chat = run(v.tickets.create("Pool light flickers"))                                # a chat's: no clock
+    assert "check" not in k.ticket(chat)
+    for t in k._all():                                                                  # a fault made before 0.12.212
+        t.pop("check", None)
+    run(v.tickets.repair())
+    assert {t.get("entityId"): t.get("check") for t in k._all() if t["id"] != chat} == by_entity    # tagged again
+
+
+def test_the_rules_the_skill_says_it_reads_again_are_the_ones_recheck_reads():
+    # one answer: the card's "within 5 min" is true only for what recheck.py really reads again
+    import importlib.util
+    from vesta_agent.skills import parse_skill
+    sk = parse_skill("preventive-maintenance", os.path.join(STARTER_SKILLS, "preventive-maintenance"))
+    spec = importlib.util.spec_from_file_location("recheck_for_tests", os.path.join(
+        STARTER_SKILLS, "preventive-maintenance", "scripts", "recheck.py"))
+    recheck = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(recheck)
+    assert sk.rechecks == [recheck.OFFLINE_RULE] and "recheck.py" in sk.every_5_min

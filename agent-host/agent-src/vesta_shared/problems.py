@@ -373,15 +373,20 @@ class Problems:
     # it failed (the Kiosk down a minute), the repair later guessed with what it had left — a Done pressed by Fabien became
     # "Closed by VESTA Agent — Closed: the problem is over.", and no repair in Recent work. Every fact a fault's card
     # shows is here, from the task and its problem, and tickets.repair makes the Kiosk say it.
-    def card(self, task: dict) -> dict:
+    def card(self, task: dict, rechecked: frozenset[str] | set[str] = frozenset()) -> dict:
         """What task `task`'s Kiosk fault must say: {open, title (what is wrong now), number (its alert's "#N", or None),
-        origin ("alert" | "night", or None),
+        origin ("alert" | "night", or None), check (how it is read again to close it: "minutes" — an alert, at the desk's
+        every look, or a finding of a rule in `rechecked` (the skills' `rechecks`) — "nightly" — any other finding —
+        or None),
         note and who (its close: what it says, the person who closed it — None: the agent's own clearing)}."""
         kind, sid = self._source(task)
         return {"open": task.get("status") == "open", "title": self.current_title(task),
                 "number": sid if kind == "incident" else None,
                 # where it came from, the Kiosk card's source icon (owner, 2026-10-14): an alert or the night check
                 "origin": {"incident": "alert", "finding": "night"}.get(kind or ""),
+                # how it is read again, the card's "Next check" (owner, 2026-10-15)
+                "check": ("minutes" if kind == "incident" or task.get("rule_id") in rechecked else "nightly")
+                if kind in ("incident", "finding") else None,
                 "note": task.get("close_note") or "Closed: the problem is over.", "who": task.get("closed_who") or None}
 
     def unseen(self) -> list[dict]:
