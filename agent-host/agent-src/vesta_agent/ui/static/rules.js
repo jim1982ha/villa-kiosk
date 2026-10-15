@@ -231,7 +231,9 @@ export function rulesForms(doc, jobs = [], tools = null) {
       field(W("excluded_entities"), many("excluded_entities", null), "Never acted on, never reported (a test device)."),
       field(W("siren_entity"), picker(() => (f.siren_entity ? [f.siren_entity] : []), (v) => (f.siren_entity = v[0] || null), SCHEMA.siren_domains, true),
             "The siren the alert desk may ask the owner to sound."),
-      field(W("siren_auto_off_min"), h("input", { type: "number", min: 1, max: 60, value: f.siren_auto_off_min, oninput: on((t) => (f.siren_auto_off_min = num(t.value))) }))));
+      field(W("siren_auto_off_min"), h("input", { type: "number", min: 1, max: 60, value: f.siren_auto_off_min, oninput: on((t) => (f.siren_auto_off_min = num(t.value))) }))),
+    // in the page, not behind the (i) (owner, 2026-10-15): hiding is done in the villa's system, not here (knowledge_pack)
+    h("p", { class: "muted" }, "Devices hidden in the villa's system are ignored by the agent: left out of the villa status, the reports and what the AI is told."));
 
   const save = async () => {
     const res = await saveWith(probs, () => api("PUT", "api/policy/form", { form: f, rev: doc.rev }),

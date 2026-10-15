@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.198 (15 October 2026)
+
+- UI, Rules › Protected devices: a line in the card (owner, 2026-10-15) saying that a device hidden in the villa's
+  system is ignored by the agent (0.6.197's knowledge_pack rule), in the page rather than behind the (i).
+
 ## 0.6.197 (15 October 2026)
 
 - knowledge_pack.build_pack leaves out an entity HIDDEN in Home Assistant (registry hidden_by set, by anyone), as it
