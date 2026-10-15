@@ -1,3 +1,8 @@
+## 2.496.384
+
+### Fixed
+- On a phone with the three navigation buttons at the bottom (a folding phone's front screen, for example), the installed VESTA app no longer shows a white band behind those buttons: the band is now the Kiosk's own dark colour. Android repaints it once it refreshes the installed app, which it does on its own within a few days; removing VESTA from the home screen and adding it again applies it at once.
+
 ## 2.496.383
 
 ### Changed
