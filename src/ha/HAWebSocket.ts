@@ -12,7 +12,6 @@ import { captureError } from "@/utils/diagnostics";
 import { report as reportTelemetry } from "@/utils/telemetry";
 import { reportSessionLost } from "@/auth/sessionLost";
 import type { ServiceOutcome } from "./serviceOutcome";
-import { NO_LENS, viewEntity, viewLogbookEntry, viewServiceCall, viewState, type StateLens } from "./stateLens";
 
 type Resolver = (result: unknown) => void;
 type Rejecter = (err: Error) => void;
@@ -56,12 +55,6 @@ export class HAWebSocket {
   onStateChange: (state: ConnectionState) => void = () => {};
   /** Every failed service call is reported here (panels fire-and-forget). */
   onServiceError: (err: Error) => void = () => {};
-  /** How this app reads the villa's devices (stateLens.ts): a lock mounted upside down, read and moved the right way
-   *  round. Applied here, the one seam every state, logbook row and command crosses — nothing past it knows. */
-  private lens: StateLens = NO_LENS;
-  setLens(lens: StateLens): void { this.lens = lens; }
-  /** A state of `entityId` as it really is (the history's rows read through the same lens: HAHistoryAPI). */
-  viewState = (entityId: string, state: string): string => viewState(this.lens, entityId, state);
 
   // Stored so disconnect() can remove them — anonymous inline handlers would
   // leak (and keep this whole client, its socket and timers, reachable) if
@@ -246,7 +239,7 @@ export class HAWebSocket {
             this.handleResult(msg);
             break;
           case "event":
-            (this.subscriptions.get(msg.id)?.callback ?? this.sessions.get(msg.id))?.(this.viewEvent(msg.event));
+            (this.subscriptions.get(msg.id)?.callback ?? this.sessions.get(msg.id))?.(msg.event);
             break;
           case "pong":
             if (this.pongTimer) {
@@ -483,16 +476,7 @@ export class HAWebSocket {
   }
 
   async getStates(): Promise<HassEntity[]> {
-    const all = await this.sendMessage<HassEntity[]>("get_states");
-    return this.lens.invertedLocks.size ? all.map((e) => viewEntity(this.lens, e)) : all;
-  }
-
-  /** A state_changed event as it really happened (its new and old state through the lens); any other event as is. */
-  private viewEvent(event: unknown): unknown {
-    const ev = event as { event_type?: string; data?: { new_state?: HassEntity | null; old_state?: HassEntity | null } };
-    if (ev?.event_type !== "state_changed" || !ev.data || !this.lens.invertedLocks.size) return event;
-    return { ...ev, data: { ...ev.data, new_state: viewEntity(this.lens, ev.data.new_state),
-      old_state: viewEntity(this.lens, ev.data.old_state) } };
+    return this.sendMessage<HassEntity[]>("get_states");
   }
 
   /** Entity registry rows (hidden_by, area_id, etc.) — NOT included in
@@ -527,8 +511,7 @@ export class HAWebSocket {
    *  not return usable data in the same test. Each entry's `when` is epoch
    *  SECONDS, not ms or ISO — see HALogbookAPI.ts's RawLogbookEntry. */
   async getLogbookEvents(startTime: string): Promise<RawLogbookEntry[]> {
-    const rows = await this.sendMessage<RawLogbookEntry[]>("logbook/get_events", { start_time: startTime });
-    return this.lens.invertedLocks.size ? rows.map((r) => viewLogbookEntry(this.lens, r)) : rows;
+    return this.sendMessage<RawLogbookEntry[]>("logbook/get_events", { start_time: startTime });
   }
 
   /** The Energy Dashboard's own configuration — which statistic IDs it
@@ -587,15 +570,12 @@ export class HAWebSocket {
     target?: HassServiceTarget,
   ): Promise<ServiceOutcome> {
     try {
-      // what the press MEANS: a lock or unlock of an inverted lock goes out as its opposite (stateLens.viewServiceCall)
-      for (const c of viewServiceCall(this.lens, { domain, service, data, target })) {
-        await this.sendMessage("call_service", {
-          domain: c.domain,
-          service: c.service,
-          service_data: c.data,
-          ...(c.target ? { target: c.target } : {}),
-        });
-      }
+      await this.sendMessage("call_service", {
+        domain,
+        service,
+        service_data: data,
+        ...(target ? { target } : {}),
+      });
       return { ok: true };
     } catch (err) {
       // Most buttons fire service calls without awaiting them; a rejection

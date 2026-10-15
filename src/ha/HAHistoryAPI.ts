@@ -9,10 +9,7 @@ import { ingressApiBase } from "./ingress";
 import { backendFetch } from "@/auth/sessionLost";
 
 /** Anything that can read the recorder's statistics — the HA websocket. */
-export type StatisticsPort = Pick<HistoryPort, "getStatisticsDuringPeriod"> & {
-  /** A state as it really is (the socket's lens, stateLens.ts): a reversed lock's history reads the right way round. */
-  viewState: (entityId: string, state: string) => string;
-};
+export type StatisticsPort = Pick<HistoryPort, "getStatisticsDuringPeriod">;
 
 export function haHistoryPort(ws: StatisticsPort): HistoryPort {
   return {
@@ -32,8 +29,7 @@ export function haHistoryPort(ws: StatisticsPort): HistoryPort {
       const res = await backendFetch(url);
       if (!res.ok) throw new Error(`History request failed: ${res.status}`);
       const data = (await res.json()) as StateRow[][];
-      const rows = data[0] ?? [];
-      return rows.map((r) => (typeof r.state === "string" ? { ...r, state: ws.viewState(entityId, r.state) } : r));
+      return data[0] ?? [];
     },
     getStatisticsDuringPeriod: (...args) => ws.getStatisticsDuringPeriod(...args),
   };

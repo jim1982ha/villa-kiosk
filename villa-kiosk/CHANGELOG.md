@@ -1,3 +1,16 @@
+## 2.496.379
+
+### Removed
+- "Invert Device State" for locks is withdrawn, with its invert pill on the badge and the checkbox restyle that came with it: the app is again exactly as in 2.496.375. A lock that reports the wrong way round is corrected once, in the villa's system (a corrected lock that the Kiosk and the VESTA Agent both read), so nothing in VESTA has to know about it.
+
+## 2.496.378
+
+### Fixed
+- Advanced Settings: the words after a checkbox now really sit apart from their box and centred on it. 2.496.377's spacing was overruled by the dialog's own label style, so nothing had changed on screen.
+
+### Changed
+- Advanced Settings → a lock: "Inverted lock" is now "Invert Device State", on the same line as Type (one under the other on a phone).
+
 ## 2.496.377
 
 ### Fixed

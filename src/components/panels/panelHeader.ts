@@ -11,7 +11,6 @@
 // their results in; the actions (edit, report a fault, Back) are
 // pages/screen's.
 
-import { isInvertedLock } from "@/ha/stateLens";
 import type { ActivePanel } from "@/types/panel.types";
 import type { HassEntity } from "@/types/ha.types";
 import type { Category } from "@/types/scene.types";
@@ -27,8 +26,6 @@ export interface PanelHeader {
   badge: {
     category: Category; iconKey: string; color?: string; categoryColor: string;
     state: DeviceSurfaceState; ringState?: DeviceSurfaceState;
-    /** A lock read the wrong way round: its badge's invert pill (ha/stateLens.isInvertedLock). */
-    inverted: boolean;
   };
   /** The linked switch (EntityMapping.linkedEntityId), when it has one and
    *  this profile may control it. */
@@ -75,7 +72,6 @@ export function panelHeader({ panel, entities, config, canControl, linkedSwitch 
       categoryColor: categoryColor(category),
       state: look.face,
       ringState: look.ring,
-      inverted: isInvertedLock(config.entityMap, entityId),
     },
     linked: linkedId && canControl && linkedSwitch
       ? { label: labelOf(linkedId, config.entityMap, entities), isOn: linkedSwitch.isOn, known: linkedSwitch.known }

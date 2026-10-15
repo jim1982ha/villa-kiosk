@@ -585,17 +585,8 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .remap-picker { flex: 1 1 220px; min-width: 160px; }
 .remap-actions { display: flex; gap: 6px; flex: 0 0 auto; }
 
-/* A checkbox with its description after it (components/common/CheckField) — one look wherever there is one: the box
-   is the entity table's (below), the space between box and words one token, the words one size (owner, 2026-10-15:
-   an inline gap of 6px read as text glued to its box). */
-.check-field {
-  display: inline-flex; align-items: center; gap: 10px; flex: 0 0 auto;
-  min-height: var(--touch-min); cursor: pointer;
-  font-size: var(--text-xs); color: var(--text-secondary); line-height: 1.35;
-}
-
-/* Confirm checkboxes in the entity table — match the toggle style; every CheckField's box too */
-.config-table input[type="checkbox"], .check-field input[type="checkbox"] {
+/* Confirm checkboxes in the entity table — match the toggle style */
+.config-table input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
   box-sizing: border-box;
@@ -614,11 +605,11 @@ label.toggle span { user-select: none; line-height: 1.4; }
   flex-shrink: 0;
   transition: background 0.15s, border-color 0.15s;
 }
-.config-table input[type="checkbox"]:checked, .check-field input[type="checkbox"]:checked {
+.config-table input[type="checkbox"]:checked {
   background: var(--accent);
   border-color: var(--accent);
 }
-.config-table input[type="checkbox"]:checked::after, .check-field input[type="checkbox"]:checked::after {
+.config-table input[type="checkbox"]:checked::after {
   content: "";
   position: absolute;
   left: 5px;

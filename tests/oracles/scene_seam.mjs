@@ -129,7 +129,7 @@ ck("EntityVisuals detaches what it registers", registers && detaches);
 // The bake-size argument is in RENDER pixels while every other number in the
 // pipeline is unscaled CSS px, so the unit lives in a private method rather
 // than in the callee's signature. Two of three in-scene callers got it wrong.
-const bakes = [...ev.matchAll(/badgeImage\(\{([\s\S]{0,1600}?)\}\)\)?;/g)]
+const bakes = [...ev.matchAll(/badgeImage\(\{([\s\S]{0,1200}?)\}\)\)?;/g)]
   .map((m) => m[1]);
 // Every in-scene bake names its size, and none hands it the CSS-px glyphPx.
 const cssPxBake = /bakePx: glyphPx\b/.test(ev) || bakes.some((b) => !/bakePx: /.test(b));

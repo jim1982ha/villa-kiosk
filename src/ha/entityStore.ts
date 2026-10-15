@@ -19,7 +19,6 @@ import { hasBootMark } from "@/utils/bootTimeline";
 import { placesAfterRefresh, entityRegistryFacts } from "./registryResolve";
 import type { HassEntity, HassServiceTarget } from "@/types/ha.types";
 import type { ServiceOutcome } from "./serviceOutcome";
-import { NO_LENS, sameLens, type StateLens } from "./stateLens";
 
 /** Subset of HA's `get_config` we use to auto-fill onboarding (location + name). */
 export interface HAConfig {
@@ -167,16 +166,6 @@ export class EntityStore {
     this.perEntity.get(entity.entity_id)?.forEach((cb) => cb(entity));
     this.allSubs.forEach((cb) => cb(entity));
   }
-
-  /** How the app reads the villa's devices (stateLens.ts: a lock marked inverted). A change re-reads every state
-   *  through it, so each screen shows the new reading at once — and only the locks that moved repaint. */
-  private lens: StateLens = NO_LENS;
-  setLens = (lens: StateLens): void => {
-    if (sameLens(lens, this.lens)) return;
-    this.lens = lens;
-    this.ws.setLens(lens);
-    if (this.state.connection === "connected") void this.hydrate().catch(() => {});
-  };
 
   callService = (
     domain: string, service: string, data?: Record<string, unknown>, target?: HassServiceTarget,
