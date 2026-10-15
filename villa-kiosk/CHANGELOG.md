@@ -1,3 +1,8 @@
+## 2.496.381
+
+### Fixed
+- A Cockpit card's text really starts right under its room now, also on a card without buttons (a device the map shows unavailable or missing): 2.496.380 left a blank line there.
+
 ## 2.496.380
 
 ### Added

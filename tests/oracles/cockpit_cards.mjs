@@ -80,6 +80,18 @@ ck("  ...a device no room holds still has its room line: Other, as By Room files
 const lone = draw(h(AttentionCard, { group: { ...group, entityId: undefined }, onOpenEntity: () => {}, cadence: CADENCE }));
 ck("  ...a problem with no device: no chevron, nothing to tap, no buttons", !/chevron-right/.test(lone) && !/role="button"/.test(lone) && !/fm-record-actions/.test(lone));
 
+// owner, 2026-10-15: "don't skip a line between the room and the next section" — a card without buttons kept a blank
+// line: its problem's line was 36 px high, its text centred, under the row's 12 px gap. What the stylesheet says:
+{
+  const { readFileSync } = await import("node:fs");
+  const css = (f) => readFileSync(new URL(`../../src/styles/${f}`, import.meta.url), "utf8");
+  const rule = (text, sel) => (text.match(new RegExp(`^${sel.replace(/[.]/g, "\\.")} \\{([^}]*)\\}`, "m")) ?? [])[1] ?? "";
+  ck("  ...its text right under the room: no height of its own on a problem's line, 4 px under the head",
+     !/min-height/.test(rule(css("08-shared.css"), ".cockpit-attention-sub-line"))
+     && /row-gap: 4px/.test(rule(css("07-facility.css"), ".fm-record-card .fm-record"))
+     && /align-items: flex-start/.test(rule(css("07-facility.css"), ".fm-record-body")));
+}
+
 console.log("\n  a scheduled task — the same card:");
 const task = draw(h(RecordCard, { title: "Pool filter clean", tone: "state-due-soon", status: { text: "Due soon", tone: "due-soon" },
   when: "due in 3 days · every 30 days", actions: h(React.Fragment, null, btn("Log"), h("button", { className: "icon-btn", "aria-label": "Remove" })) }));

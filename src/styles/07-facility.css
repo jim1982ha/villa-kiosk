@@ -51,7 +51,8 @@
   display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 12px 14px; border-radius: 12px;
   background: var(--bg-card); border: 1px solid var(--hairline);
 }
-.fm-record-card .fm-record { border: none; background: none; padding: 0; border-radius: 0; }
+/* its text right under the room (owner, 2026-10-15: "don't skip a line"): 4 px between head and text, not the row's 12 */
+.fm-record-card .fm-record { border: none; background: none; padding: 0; border-radius: 0; row-gap: 4px; }
 /* its tint (a task overdue or due soon): the frame's, as the row's was */
 .fm-record-card.state-overdue, .fm-record-card.state-never {
   background: color-mix(in srgb, var(--status-danger) 7%, var(--bg-card));
