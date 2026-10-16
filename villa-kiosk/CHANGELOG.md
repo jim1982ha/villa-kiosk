@@ -1,3 +1,11 @@
+## 2.496.400
+
+### Fixed
+- The overview's sun and moon now go round the villa like a 24-hour clock. By day the sun follows its real path over the house. At night the moon is shown where it really is: over the villa when it is up, and carrying on below the villa once it has set.
+- The day/night preview in Settings now only changes how the villa is lit. It no longer moves the sun: at night with "day" switched on, you see the moon in its real place, not a sun high in the sky.
+- When the sun or the moon is up in the air on your side of the house, out of view above you, it is no longer shown waiting at the top of the screen (where it looked as if it were far beyond the house). Tilt down and it comes in from the top and moves down to where it really is.
+- Version 2.496.399 (the sun always shown beyond the house) is undone: the sun and the moon stay in the same place round the villa whichever way you turn.
+
 ## 2.496.399
 
 ### Fixed

@@ -15,7 +15,7 @@
 
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
-import { arcPoint, MOON_SPANS, skyDirection, type VillaBox } from "./skyBodies";
+import { MOON_SPANS, skyDirection, spherePoint, type VillaBox } from "./skyBodies";
 import { disposeGlow, drawOnArc, makeGlow, showOnArc, type Glow } from "./skyArc";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
@@ -52,8 +52,12 @@ export interface MoonLook {
   angle: number;
   /** Radians; tilt of the lit limb for this latitude and hour. */
   parallacticAngle: number;
-  /** 0 by day → 1 at full night. Fades both moon and stars. */
+  /** 0 by day → 1 at full night, as the sky is coloured (Settings' preview
+   *  included). Fades the stars. */
   nightT: number;
+  /** The same, by the REAL clock: fades the moon, which never follows the
+   *  preview (skyBodies, "day the sun, night the moon"). Defaults to nightT. */
+  moonT?: number;
 }
 
 export class NightSky {
@@ -158,21 +162,23 @@ export class NightSky {
       l.mat.alpha = night * l.peak;
       l.mesh.setEnabled(night > 0);
     }
-    // Below the horizon the moon is simply not visible — no need to fade it,
-    // and fading would leave a disc hanging in the ground half of the dome.
+    // The moon shows at night by the REAL clock (moonT), whatever Settings'
+    // preview does to the sky's colour.
     //
-    // ⚠️ "Has it set?" is asked of the TRUE altitude. In the overview the moon
-    // is a point on the arc round the villa, by the sun's own rule
-    // (skyBodies.arcPoint, skyArc) — it moves along the arc through the night
-    // and down to the horizon, and waits at the screen edge when its point is
-    // off screen; walking, it is the true direction at sky distance.
+    // In the overview it is a point on the sphere round the villa, by the
+    // sun's own rule (skyArc), and the WHOLE sphere (skyBodies.spherePoint):
+    // up, it is over the villa; set, it carries on under it — the owner's
+    // night hours. It waits at the screen edge when its point is off screen.
+    // Walking, it is the true direction at sky distance and sets at the real
+    // horizon (there is a ground under the viewer).
+    const moonT = Math.max(0, Math.min(1, look.moonT ?? look.nightT));
     const { x, y, z } = look.dir;
     let alpha = 0;
     if (this.lift > 0) {
-      const arc = this.villa ? arcPoint(x, y, z, this.villa) : null;
-      const shown = arc && arc.at ? showOnArc(this.scene, arc.at, arc.side, arc.alt, this.villa as VillaBox) : null;
-      alpha = night > 0 && arc && shown ? night * arc.fade * shown.alpha : 0;
-      if (arc && shown) drawOnArc(this.moon, this.moonGlow, shown, this.villa as VillaBox, MOON_SIZE, MOON_SPANS, alpha, 0.25);
+      const pt = this.villa ? spherePoint(x, y, z, this.villa) : null;
+      const shown = pt ? showOnArc(this.scene, pt.at, pt.side, pt.alt, this.villa as VillaBox, false) : null;
+      alpha = moonT > 0 && pt && shown ? moonT * shown.alpha : 0;
+      if (pt && shown) drawOnArc(this.moon, this.moonGlow, shown, this.villa as VillaBox, MOON_SIZE, MOON_SPANS, alpha, 0.25);
     } else {
       const { fade, dir: d } = skyDirection(x, y, z);
       // Placed even while hidden: where it is is the hour's, whether it shows
@@ -182,7 +188,7 @@ export class NightSky {
         this.moon.scaling.setAll(1);
         this.moon.position = new Vector3(d.x, d.y, d.z).scale(MOON_DIST);
       }
-      alpha = night > 0 && d !== null ? night * fade : 0;
+      alpha = moonT > 0 && d !== null ? moonT * fade : 0;
       this.moonGlow.mat.alpha = 0;
     }
     this.moonMat.alpha = alpha;

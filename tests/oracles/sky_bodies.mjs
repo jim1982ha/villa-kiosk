@@ -130,11 +130,15 @@ for (const [name, beta] of [["almost flat", 1.35], ["looking down", 0.25]]) {
       pose(r, a, beta, radius);
       poses++;
       for (const [name, mesh] of [["sun", r.sun], ["moon", r.moon]]) {
-        const w = want[name];
+        const w = want[name], P = new Vector3(w.at.x, w.at.y, w.at.z);
         const fwd = r.cam.getDirection(new Vector3(0, 0, 1));
-        const seen = b.seenPoint(w.at, box, fwd), P = new Vector3(seen.x, seen.y, seen.z);
-        const fade = b.behindFade(w.side, w.alt, fwd);
-        const pz = screen(r, P).z;
+        // The sun is hidden low on the viewer's side; the moon is not (its
+        // night hours go round under the villa — skyArc.showOnArc).
+        const sp = screen(r, P), pz = sp.z;
+        // ...and either is hidden while it waits at the TOP edge with its point
+        // on the viewer's side, above them (skyBodies.nearSideHold).
+        const fade = (name === "sun" ? b.behindFade(w.side, w.alt, fwd) : 1)
+          * (pz > 0 && pz < 1 ? b.nearSideHold(w.at, box, fwd, Math.max(0, b.EDGE_MARGIN - sp.y)) : 1);
         // A point behind the camera (a close camera under a high body) is out
         // of view, not "behind the viewer": nothing to show or to hold.
         if (!shown(mesh)) { if (fade > 0.05 && pz > 0 && pz < 1) behind.push({ name, a, beta, radius, why: "hidden while not behind" }); continue; }
@@ -178,40 +182,43 @@ for (const [name, beta] of [["almost flat", 1.35], ["looking down", 0.25]]) {
      behindLow === null || behindLow.y < 0.5, behindLow);
 }
 
-// ── 2c. TILTING KEEPS IT IN THE SKY (owner's two screenshots, 2026-10-17):
-// a sun 46° up on the camera's side of the villa sat at the top edge almost
-// flat and dropped to the BOTTOM of the screen, over the grass, looking down.
-// At every heading and every tilt a body well up in the sky stays above the
-// villa's roof on screen, and a tilt step never moves it far.
+// ── 2c. NEVER HIGH IN THE SKY ONE WAY AND BELOW THE HOUSE THE OTHER (owner's
+// two screenshots, 2026-10-17): a sun 46° up on the camera's side of the
+// villa waited at the TOP edge almost flat, and looking down it was below the
+// house. Out of view above the viewer, it is not shown; tilting down it comes
+// in from the top and moves down smoothly. Beyond the villa it still waits at
+// the top at every tilt.
 {
   const r = rig();
-  const low = [], jumps = [];
-  let seenN = 0;
-  for (const [alt, az] of [[46, 113], [30, 60], [60, 200], [25, 300], [75, 10]])
-    for (let a = 0; a < 360; a += 15) {
-      let last = null;
-      for (let i = 0; i <= 12; i++) {
-        const beta = BETA_MAX - ((BETA_MAX - BETA_MIN) * i) / 12;   // almost flat → looking down
-        pose(r, a, beta);
-        sunAt(r, alt, az);
-        if (!shown(r.sun)) { last = null; continue; }
-        seenN++;
-        const s = screen(r, r.sun.position), roof = screen(r, new Vector3(box.cx, MAX.y, box.cz));
-        if (s.y > roof.y) low.push({ alt, az, a, beta: +beta.toFixed(2), y: +s.y.toFixed(2), roof: +roof.y.toFixed(2) });
-        if (last && Math.hypot(s.x - last.x, s.y - last.y) > 0.2) jumps.push({ alt, az, a, beta: +beta.toFixed(2) });
-        last = s;
-      }
+  const tops = [], jumps = [];
+  for (const [alt, az] of [[46, 200], [55, 170], [40, 215]]) {   // south: the viewer's side of a camera facing north
+    let last = null;
+    for (let i = 0; i <= 24; i++) {
+      pose(r, -90, BETA_MAX - ((BETA_MAX - BETA_MIN) * i) / 24);
+      sunAt(r, alt, az);
+      if (!shown(r.sun)) { last = null; continue; }
+      const s = screen(r, r.sun.position);
+      const to = toward(deg(alt), deg(az)), P = b.arcPoint(to.x, to.y, to.z, box).at, p = screen(r, new Vector3(P.x, P.y, P.z));
+      // Its point clearly out of view above (beyond the short fade-in at the top).
+      if (p.z > 0 && p.z < 1 && p.y < b.EDGE_MARGIN - b.HOLD_FADE && r.sun.material.alpha > 0.01) tops.push({ alt, az, i, a: +r.sun.material.alpha.toFixed(2) });
+      if (last && Math.hypot(s.x - last.x, s.y - last.y) > 0.1) jumps.push({ alt, az, i });
+      last = s;
     }
-  ck(`tilting from almost flat to looking down (${seenN} views): a body well up in the sky never drops below the villa's roof`,
-     low.length === 0 && seenN > 500, low.slice(0, 3));
-  ck("  ...and no tilt step moves it more than a fifth of the screen", jumps.length === 0, jumps.slice(0, 3));
+  }
+  ck("a sun up on the viewer's side, tilting from almost flat to looking down: not shown while its point is out of view above", tops.length === 0, tops.slice(0, 3));
+  ck("  ...and once it shows, it moves down smoothly (no tilt step moves it a tenth of the screen)", jumps.length === 0, jumps.slice(0, 3));
+  pose(r, -90, 1.35);
+  sunAt(r, 50, 20);   // north: beyond the villa
+  ck("  ...while beyond the villa it still waits at the top edge, almost flat", shown(r.sun) && Math.abs(screen(r, r.sun.position).y - b.EDGE_MARGIN) < 1e-3);
 }
 
 // ── 3. THE MOON MOVES THROUGH THE NIGHT, DOWN TO THE HORIZON ────────────────
 for (const [name, beta] of [["almost flat", 1.35], ["looking down", 0.25]]) {
   const r = rig();
   pose(r, -90, beta);
-  const night = [[52, 223], [39, 230], [27, 235], [14, 239], [1, 243]].map(([alt, az]) => {
+  // North-west, beyond the villa: on the camera's side (south-west) an evening
+  // moon high up is out of view above it — hidden (skyBodies.nearSideHold).
+  const night = [[52, 317], [39, 310], [27, 305], [14, 301], [1, 297]].map(([alt, az]) => {
     moonAt(r, alt, az);
     return { alt, shown: shown(r.moon), ...screen(r, r.moon.position) };
   });
@@ -225,6 +232,54 @@ for (const [name, beta] of [["almost flat", 1.35], ["looking down", 0.25]]) {
   ck(`the moon, facing north ${name}: seen every hour of the evening and MOVING every hour`,
      night.every((p) => p.shown) && still === 0 && travel > 0.1, night.map((p) => `${p.alt}°:${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(" "));
   if (name === "almost flat") ck("  ...going down toward the horizon as it sets", sinks);
+}
+
+// ── 3b. THE NIGHT HOURS GO ROUND UNDER THE VILLA (owner's 24-hour drawing,
+// 2026-10-17): once the moon has set it carries on below the house on its
+// true side — seen facing north almost flat, under the villa's ground on
+// screen — and it crosses the horizon without a jump.
+{
+  const r = rig();
+  pose(r, -90, 1.35);
+  const ground = screen(r, new Vector3(box.cx, box.ground, box.cz)).y;
+  const pts = Array.from({ length: 24 }, (_, i) => [6 - 2 * i, 80]).map(([alt, az]) => {
+    moonAt(r, alt, az);
+    return { alt, shown: shown(r.moon), ...screen(r, r.moon.position), wy: r.moon.position.y };
+  });
+  const under = pts.filter((p) => p.alt <= -20);
+  let worst = 0;
+  for (let i = 1; i < pts.length; i++) worst = Math.max(worst, Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
+  ck("the moon after it sets: still shown at night, carrying on BELOW the villa (facing north, almost flat)",
+     pts.every((p) => p.shown) && under.every((p) => p.y > ground && p.wy < box.ground),
+     pts.map((p) => `${p.alt}°:${p.shown ? p.y.toFixed(2) : "--"}`).join(" ") + ` ground=${ground.toFixed(2)}`);
+  ck("  ...crossing the horizon without a jump: no 2° of travel moves it more than a twentieth of the screen", worst < 0.05, worst);
+  // Set on the VIEWER's side (south, behind a camera facing north): the night
+  // hours along the bottom of the drawing — shown low on screen, not hidden.
+  const mine = [[-10, 200], [-30, 190], [-50, 170]].map(([alt, az]) => { moonAt(r, alt, az); return { alt, shown: shown(r.moon), ...screen(r, r.moon.position) }; });
+  ck("  ...and set on the viewer's side, it is shown low on screen (the bottom of the owner's circle), never hidden",
+     mine.every((p) => p.shown && p.y > ground), mine.map((p) => `${p.alt}°:${p.shown ? p.y.toFixed(2) : "--"}`).join(" "));
+}
+
+// ── 3c. SETTINGS' DAY PREVIEW NEVER MOVES A BODY (owner's two screenshots,
+// 2026-10-17): at 02:46 with "day", the real sun 46° down was drawn 46° UP —
+// high in the sky almost flat, below the house looking down. The preview
+// lights the villa; the sun's disc and the moon follow the real clock.
+{
+  const { SunController } = await import("@/babylon/SunController");
+  const { HemisphericLight } = await import("@babylonjs/core/Lights/hemisphericLight.js");
+  const noop = new Proxy({}, { get: () => () => {} });
+  for (const preview of ["day", "auto"]) {
+    const r = rig();
+    pose(r, 90, 1.35);   // facing the moon's side (SunController's compass runs the other way round from toward())
+    const cfg = { latitude: -8.6, longitude: 115.2, northOffsetDeg: 0, render: { dayNightPreview: preview } };
+    const sc = new SunController(r.scene, new HemisphericLight("h", new Vector3(0, 1, 0), r.scene), cfg, r.sky, noop, noop);
+    sc.setNightSky(r.night);
+    sc.applyRealSun(new Date("2026-10-16T18:46:00Z"));   // 02:46 at the villa: sun 46° down, moon set
+    r.scene.render();
+    ck(`02:46 with the "${preview}" preview: no sun disc, and the moon is shown — below the villa, where it really is`,
+       !shown(r.sun) && shown(r.moon) && r.moon.position.y < box.ground,
+       { sun: shown(r.sun), moon: shown(r.moon), y: r.moon.position.y });
+  }
 }
 
 // ── 4. WALKING: THE TRUE SKY ───────────────────────────────────────────────

@@ -10,10 +10,8 @@
 // rises on the right at 06:00, climbs one step per hour, passes over the top
 // at noon and sets on the left — and where the real sun goes nearly overhead
 // (this villa's latitude, in October) it passes OVER the villa from east to
-// west instead of jumping sides. Tilting or zooming never moves the point;
-// it turns with the villa, except that a point on the viewer's side is shown
-// turned over to the far side (seenPoint), so it stays in the sky beyond the
-// house at every tilt.
+// west instead of jumping sides. Turning, tilting or zooming never moves the
+// point: it turns with the villa.
 //
 // The arc's size is the villa's own (ARC_SPANS times its longest side, from the
 // model's extents — never a number of metres): big enough that, looking down
@@ -29,6 +27,16 @@
 //     "I like that").
 //
 // Walking (lift 0) draws the TRUE direction, at sky distance.
+//
+// ── DAY THE SUN, NIGHT THE MOON — BY THE REAL CLOCK (owner, 2026-10-17) ────
+// The owner drew the 24 hours as a circle round the villa: the day hours over
+// it, the night hours under it. By day the sun is drawn on its real path; at
+// night the MOON is drawn where it really is — over the villa when it is up,
+// under it once it has set (spherePoint). Which one shows, and where, follows
+// the REAL time: Settings' day/night preview lights the villa and colours the
+// sky, never moves a body (at 02:46 with "day" it drew a sun 46° up, the real
+// one mirrored over the horizon — high in the sky looking almost flat, below
+// the house looking down).
 //
 // ⚠️ 2.496.290–389 placed the body round the villa's SCREEN outline at a
 // bearing relative to the camera's heading, so it went round the villa as the
@@ -98,19 +106,33 @@ export function villaBox(min: Vec3, max: Vec3): VillaBox {
 export function arcPoint(x: number, y: number, z: number, villa: VillaBox): {
   alt: number; fade: number; side: { x: number; z: number }; at: Vec3 | null;
 } {
+  const { alt, side } = spherePoint(x, y, z, villa);
+  const fade = arcFade(alt);
+  if (!(fade > 0)) return { alt, fade: 0, side, at: null };
+  return { alt, fade, side, at: onSphere(villa, side, Math.max(0, alt)) };
+}
+
+/**
+ * The moon's point: the same sphere round the villa as arcPoint, but the WHOLE
+ * of it — once the moon has set it carries on below the villa, on its true
+ * side, rather than vanishing (owner's 24-hour drawing, 2026-10-17: the night
+ * hours go round UNDER the house). No fade: a point always.
+ */
+export function spherePoint(x: number, y: number, z: number, villa: VillaBox): {
+  alt: number; side: { x: number; z: number }; at: Vec3;
+} {
   const h = Math.hypot(x, z);
   const alt = Math.atan2(y, h);
   // Exactly overhead has no azimuth: north stands in (a single instant; the
   // azimuth either side of it is the true one).
   const side = h > 1e-9 ? { x: x / h, z: z / h } : { x: 0, z: 1 };
-  const fade = arcFade(alt);
-  if (!(fade > 0)) return { alt, fade: 0, side, at: null };
-  const R = ARC_SPANS * villa.span, a = Math.max(0, alt);
-  const c = Math.cos(a);
-  return {
-    alt, fade, side,
-    at: { x: villa.cx + R * c * side.x, y: villa.ground + R * Math.sin(a), z: villa.cz + R * c * side.z },
-  };
+  return { alt, side, at: onSphere(villa, side, alt) };
+}
+
+/** The point at altitude `a` on `side` of the sphere round the villa. */
+function onSphere(villa: VillaBox, side: { x: number; z: number }, a: number): Vec3 {
+  const R = ARC_SPANS * villa.span, c = Math.cos(a);
+  return { x: villa.cx + R * c * side.x, y: villa.ground + R * Math.sin(a), z: villa.cz + R * c * side.z };
 }
 
 /**
@@ -130,26 +152,36 @@ export function behindFade(side: { x: number; z: number }, alt: number, camFwd: 
 }
 
 /**
- * The arc point as the viewer is shown it: a point on the viewer's side of
- * the villa is turned over to the far side, the same distance beyond the
- * villa's centre, the same height, the same left or right. A point on the far
- * side, or straight across, is unchanged — so turning round the villa never
- * makes it jump.
+ * How much of a body to show while it waits at the TOP edge, `above` screens
+ * above it (its point is off the top of the screen): all of it when the point
+ * is beyond the villa or beside it, none of it once the point is on the
+ * viewer's side. That point is up in the air between the viewer and the house,
+ * above the viewer — out of view; tilting down brings it in from the top and
+ * on down to where it really is, in front of the house.
  *
- * ⚠️ TILTING DROPPED THE SUN TO THE BOTTOM (owner's two screenshots,
- * 2026-10-17, 2.496.398). A point on the viewer's side sits between the
- * camera and the house: almost flat it was above the screen and waited at the
- * top edge, but looking down the camera saw it from above, in FRONT of the
- * house — so tilting moved it from the top edge to the bottom, over the
- * grass. Turned over, it stays in the sky beyond the villa at every tilt.
+ * ⚠️ ALMOST FLAT IT WAS HIGH IN THE SKY BEYOND THE HOUSE, LOOKING DOWN IT WAS
+ * BELOW THE HOUSE (owner's two screenshots, 2026-10-17, 2.496.398; the moon at
+ * 19:00–20:00 the same). Waiting at the top edge drew a point that is in
+ * front of the house as if it were in the sky beyond it. Owner: hide it there.
+ * A point beyond or beside the villa still waits at the top (the midday line
+ * facing north), and the night hours waiting along the BOTTOM stay — they are
+ * below the villa from every angle. Turning the point over to the far side
+ * instead (2.496.399) was REJECTED: the sun changed side of the villa as the
+ * camera turned.
  */
-export function seenPoint(at: Vec3, villa: VillaBox, camFwd: Vec3): Vec3 {
+export const NEAR_SIDE = { from: 0.15, to: 0.35 };   // villa lengths from the centre toward the viewer (the sun runs within 0.1 at this villa in October; the 19:00 moon is at 0.39)
+export const HOLD_FADE = 0.15;                      // screens above the top over which it fades out
+
+export function nearSideHold(at: Vec3, villa: VillaBox, camFwd: Vec3, above: number): number {
   const fl = Math.hypot(camFwd.x, camFwd.z);
-  if (fl < 1e-9) return at;
-  const fx = camFwd.x / fl, fz = camFwd.z / fl;
-  const k = (at.x - villa.cx) * fx + (at.z - villa.cz) * fz;   // < 0 on the viewer's side
-  if (!(k < 0)) return at;
-  return { x: at.x - 2 * k * fx, y: at.y, z: at.z - 2 * k * fz };
+  if (fl < 1e-9 || !(above > 0)) return 1;
+  const toward = -((at.x - villa.cx) * camFwd.x + (at.z - villa.cz) * camFwd.z) / fl / villa.span;
+  return 1 - smooth((toward - NEAR_SIDE.from) / (NEAR_SIDE.to - NEAR_SIDE.from)) * smooth(above / HOLD_FADE);
+}
+
+function smooth(t: number): number {
+  const c = Math.max(0, Math.min(1, t));
+  return c * c * (3 - 2 * c);
 }
 
 /** How far in from the screen's edges a body waits, as a share of the width

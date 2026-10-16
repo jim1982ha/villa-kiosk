@@ -230,6 +230,9 @@ export class SkyDome {
   /** Last direction handed to update(), so a horizon-drop change can re-place
    *  the sun without waiting for the next astronomical tick. */
   private readonly sunDir = new Vector3(0, -1, 0);
+  /** Where the disc is drawn from: the REAL sun, while sunDir (the material,
+   *  the sky's colour) follows Settings' day/night preview. */
+  private readonly discDir = new Vector3(0, -1, 0);
   private dropUnits = 0;
 
   /**
@@ -237,8 +240,9 @@ export class SkyDome {
    * travels (sun → scene), exactly as SunController computes it, so the sun in the
    * sky sits opposite that direction.
    */
-  update(dirToScene: Vector3, isDay: boolean): void {
+  update(dirToScene: Vector3, isDay: boolean, discToScene: Vector3 = dirToScene): void {
     this.sunDir.copyFrom(dirToScene);
+    this.discDir.copyFrom(discToScene);
     this.placeSun();
     // Night: drop the luminance hard so the dome reads as a deep night sky rather
     // than a glowing daytime dome, and lift turbidity slightly so the little light
@@ -302,11 +306,16 @@ export class SkyDome {
     // the two questions stopped being one input the moment it existed.
     this.mat.sunPosition = new Vector3(x, y, z).scale(300);
 
+    // The DISC is the real sun, by the real clock: Settings' preview colours
+    // the sky above, never moves the sun (skyBodies, "day the sun, night the
+    // moon"). Walking it is off, so only the overview reads this.
+    const bx = -this.discDir.x, by = -this.discDir.y, bz = -this.discDir.z;
+
     // First person shows the material's own disc in a sky the viewer is
     // genuinely standing under, so the billboard would only ever be a second
     // sun beside the real one.
     const overview = liftFor(this.dropUnits) > 0 && this.villa !== null;
-    const arc = overview ? arcPoint(x, y, z, this.villa as VillaBox) : null;
+    const arc = overview ? arcPoint(bx, by, bz, this.villa as VillaBox) : null;
     const shown = arc && arc.at ? showOnArc(this.scene, arc.at, arc.side, arc.alt, this.villa as VillaBox) : null;
     const alpha = arc && shown ? arc.fade * shown.alpha : 0;
     if (arc && shown) drawOnArc(this.sunDisc, this.sunGlow, shown, this.villa as VillaBox, SUN_PLANE, SUN_SPANS, alpha, 0.55);

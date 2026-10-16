@@ -4,10 +4,10 @@
 // SkyDome and NightSky so both follow ONE rule in the same frame.
 //
 // The point comes from skyBodies.arcPoint (no camera). The camera then only
-// decides whether it is shown (behindFade), which side of the villa it is
-// seen on (seenPoint: always beyond it) and, when the point is off screen,
+// decides whether it is shown (behindFade) and, when the point is off screen,
 // where it waits: at the edge on its true side, at the point's own depth, so
-// the house still hides it where they meet (holdOnScreen).
+// the house still hides it where they meet (holdOnScreen) — except at the TOP
+// edge when its point is on the viewer's side, above them (nearSideHold).
 
 import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
@@ -17,7 +17,7 @@ import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import type { Scene } from "@babylonjs/core/scene";
-import { behindFade, drawnDepth, GLOW_SPANS, holdOnScreen, seenPoint, type VillaBox, type Vec3 } from "./skyBodies";
+import { behindFade, drawnDepth, GLOW_SPANS, holdOnScreen, nearSideHold, type VillaBox, type Vec3 } from "./skyBodies";
 
 /** A soft additive light round a body, so the sky is brightest on its side.
  *  Procedural (no image: the wall may have no internet). */
@@ -72,19 +72,21 @@ const fwd = new Vector3();
  * — and where it is drawn in the world: on that line of sight, never nearer
  * than just beyond the villa, with the scale its size takes there
  * (skyBodies.drawnDepth). Null when there is no camera or the point is behind
- * it.
+ * it. `hideOnViewersSide` false (the moon) skips behindFade: the night hours
+ * go round under the villa, so a set moon on the viewer's side is shown low
+ * on screen (owner's 24-hour drawing, 2026-10-17); only a point behind the
+ * camera and below the eye is not seen.
  */
-export function showOnArc(scene: Scene, point: Vec3, side: { x: number; z: number }, alt: number, villa: VillaBox):
+export function showOnArc(scene: Scene, point: Vec3, side: { x: number; z: number }, alt: number, villa: VillaBox,
+  hideOnViewersSide = true):
   { at: Vector3; scale: number; alpha: number; screen: { x: number; y: number }; held: boolean } | null {
   const cam = scene.activeCamera;
   if (!cam) return null;
   cam.getDirectionToRef(FWD, fwd);
-  const alpha = behindFade(side, alt, fwd);
   const eng = scene.getEngine();
   const vp = cam.viewport.toGlobal(eng.getRenderWidth(), eng.getRenderHeight());
   const view = cam.getViewMatrix(), proj = cam.getProjectionMatrix();
-  const seen = seenPoint(point, villa, fwd);
-  const p = new Vector3(seen.x, seen.y, seen.z);
+  const p = new Vector3(point.x, point.y, point.z);
   let s = Vector3.Project(p, Matrix.Identity(), view.multiply(proj), vp);
   if (!(s.z > 0 && s.z < 1)) {
     // Behind the camera's plane — zoomed in close under a high sun, the point
@@ -101,6 +103,8 @@ export function showOnArc(scene: Scene, point: Vec3, side: { x: number; z: numbe
     s = new Vector3(vp.x + vp.width / 2 + (v.x / l) * far, vp.y + vp.height / 2 - (v.y / l) * far, 0.5);
   }
   const h = holdOnScreen(s.x - vp.x, s.y - vp.y, vp.width, vp.height);
+  const above = Math.max(0, (h.y - (s.y - vp.y)) / vp.height);
+  const alpha = (hideOnViewersSide ? behindFade(side, alt, fwd) : 1) * nearSideHold(point, villa, fwd, above);
   const onSight = h.held
     ? Vector3.Unproject(new Vector3(h.x, h.y, s.z), vp.width, vp.height, Matrix.Identity(), view, proj)   // viewport-relative pixels
     : p;

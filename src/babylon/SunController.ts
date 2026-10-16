@@ -43,6 +43,9 @@ export class SunController {
   // GLB carries a BAKED_Structure_Night texture; null = single-atlas GLB,
   // where night falls back to the exposure dim below.
   private nightSky: NightSky | null = null;
+  /** The REAL sun's sky direction, for the overview's disc (null when only
+   *  the villa's day/night state is known) — see applyRealSun. */
+  private discDir: Vector3 | null = null;
   private nightBlend: ((t: number) => void) | null = null;
   // Pane dimmer from ModelLoader: ramps the glass materials' forced light
   // albedo + emissive sheen down after dark (they are excluded from every
@@ -185,6 +188,11 @@ export class SunController {
     const isDay = g.isDay, nightT = g.nightT;
     const dir = new Vector3(...g.dir);
     const skyDir = new Vector3(...g.skyDir);
+    // The sun's disc and the moon follow the REAL clock, never the preview:
+    // the preview lights the villa and colours the sky (skyBodies, "day the
+    // sun, night the moon" — owner, 2026-10-17).
+    const real = sunGeometry(realAltitude, azimuth);
+    this.discDir = new Vector3(...real.skyDir);
 
     this.applyDayNight(isDay, dir, nightT, skyDir);
 
@@ -218,6 +226,7 @@ export class SunController {
         angle: ill.angle,
         parallacticAngle: m.parallacticAngle,
         nightT,
+        moonT: real.nightT,
       });
     }
   }
@@ -295,6 +304,7 @@ export class SunController {
     // lighting direction below the horizon (positive Y) for the sky at
     // night, same reasoning as the unclamped skyDir above.
     const skyDir = isDay ? dir : new Vector3(-0.2, 1, -0.2);
+    this.discDir = null;   // no real position known: the disc follows the sky
     this.applyDayNight(isDay, dir.normalize(), isDay ? 0 : 1, skyDir.normalize());
     // Report from here too — this branch never reaches applyRealSun, and a
     // channel that goes quiet on one path reads as "nothing happened" when it
@@ -359,7 +369,7 @@ export class SunController {
     // applyHaSunState for why this must not be the same floored `dir` used
     // for scene lighting. clearColor is kept as a fallback for when the sky
     // dome is absent.
-    this.sky?.update(skyDir, isDay);
+    this.sky?.update(skyDir, isDay, this.discDir ?? skyDir);
     this.frames.repaint();
   }
 
