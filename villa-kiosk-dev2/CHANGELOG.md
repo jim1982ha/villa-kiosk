@@ -1,3 +1,8 @@
+## 2.496.398
+
+### Changed
+- The lock and blind windows' status labels and the history bar in device windows now take their words and colours from the same place as every other reading. Nothing looks different.
+
 ## 2.496.397
 
 ### Changed
