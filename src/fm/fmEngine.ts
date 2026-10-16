@@ -289,10 +289,12 @@ export function lastResolution(t: Pick<FmTicket, "updates">): FmTicketUpdate | u
 }
 
 /** A fault's steps in time order (stable: steps at the same moment keep their order) — a line from Telegram is
- *  written minutes after its moment, at the end of the list. */
+ *  written minutes after its moment, at the end of the list. A step whose time cannot be read sorts FIRST, as the
+ *  proxy's _fm_last_resolution reads it (agent-contract.json `ticketUpdate.histories`): its NaN compared as "same
+ *  moment" and fell back to list position, an order that is no order at all (a before b before c before a). */
 export function stepsInTimeOrder(t: Pick<FmTicket, "updates">): FmTicketUpdate[] {
-  return (t.updates ?? []).map((u, i) => ({ u, i }))
-    .sort((a, b) => (Date.parse(a.u.at) - Date.parse(b.u.at)) || (a.i - b.i)).map(({ u }) => u);
+  return (t.updates ?? []).map((u, i) => ({ u, i, at: Date.parse(u.at) || 0 }))
+    .sort((a, b) => (a.at - b.at) || (a.i - b.i)).map(({ u }) => u);
 }
 
 /** The time a fault was really open, in ms: from its opening (or a reopening) to each resolution, never the time it

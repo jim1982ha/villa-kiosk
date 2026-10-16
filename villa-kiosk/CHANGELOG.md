@@ -1,3 +1,11 @@
+## 2.496.394
+
+### Fixed
+- A closed fault whose times could not all be read is now counted the same way by the Kiosk and by the add-on. Before, the Kiosk could count it as fixed by hand in your figures while the add-on kept it as cleared by itself, or the other way round.
+
+### Changed
+- The Kiosk and the add-on now check how a fault was closed against the same set of example histories, so the two can no longer quietly disagree about whether a fault cleared by itself or was repaired.
+
 ## 2.496.393
 
 ### Fixed

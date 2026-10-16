@@ -199,28 +199,24 @@ async def main() -> None:
 
 asyncio.run(main())
 
-# ── how a closed fault was closed: the app's reading, from the agreement (architecture review, 2026-10-15) ───────
-# The evidence window is 0 here (main() left it so): a repair is kept for ever, a close with no work leaves at 90 days
-# — so "expired" says which of the two the server took the close for.
-print("  the close the server judges a fault by:")
-now = proxy._iso_epoch("2026-10-15T00:00:00Z")
-step = lambda at, status, **kw: {"at": at, "status": status, "photoIds": [], **kw}
-cleared = step("2026-06-01T00:00:00Z", "resolved", kind="cleared", note="Cleared: back online.")
-blip = lambda *after: {"id": "b", "status": "resolved", "resolvedAt": "2026-06-01T00:00:00Z",
-                       "updates": [step("2026-05-31T23:50:00Z", "open"), cleared, *after]}
-ck("a cleared blip leaves after 90 days", proxy._fm_ticket_expired(blip(), now))
-ck("  ...still, when its title was changed after the close (that step carries \"resolved\" too)",
-   proxy._fm_ticket_expired(blip(step("2026-06-02T00:00:00Z", "resolved", kind="retitled", title="x", was="y")), now))
-ck("  ...and when a Telegram line was noted after it",
-   proxy._fm_ticket_expired(blip(step("2026-06-01T00:05:00Z", "resolved", kind="noted", note="Reminder sent")), now))
-repaired = step("2026-05-31T23:55:00Z", "resolved", note="Replaced the fuse")
-ck("steps read in time order: a repair written after the close but dated before it is not the last close",
-   proxy._fm_ticket_expired({**blip(), "updates": [step("2026-05-31T23:50:00Z", "open"), cleared, repaired]}, now))
-ck("a repair is a repair (kept: the evidence window is 0)",
-   not proxy._fm_ticket_expired({**blip(), "updates": [step("2026-05-31T23:50:00Z", "open"), repaired]}, now))
-ck("a close written before kinds, by its note (the agreement's notes)",
-   proxy._fm_ticket_expired({**blip(), "updates": [step("2026-06-01T00:00:00Z", "resolved", note="Closed without action")]}, now)
-   and not proxy._fm_ticket_expired({**blip(), "updates": [step("2026-06-01T00:00:00Z", "resolved", note="Fixed")]}, now))
+# ── how a closed fault was closed: the agreement's histories (architecture review, 2026-10-15) ───────────────────
+# agent-contract.json `ticketUpdate.histories`: the cases tests/oracles/fault_close.mjs drives through the app's
+# fmEngine.lastResolution / isClearedStep — the same ones, through the proxy's reading, so neither side is tested on
+# histories of its own (2.496.372 fixed the same misreading on both). Each says which step last closed the fault,
+# whether with no work done, and whether the server still keeps it at the agreement's `now` and evidence window.
+print("  the close the server judges a fault by (the agreement's histories):")
+H = json.loads((ROOT / "rootfs" / "usr" / "share" / "vesta" / "agent-contract.json").read_text())["ticketUpdate"]["histories"]
+now = proxy._iso_epoch(H["now"])
+proxy._evidence_retention_days = lambda: H["evidenceDays"]
+ck("the agreement holds the histories both sides read", len(H["cases"]) >= 10, len(H["cases"]))
+for c in H["cases"]:
+    ticket = {"id": "h", "title": c["_"], "status": "resolved", "resolvedAt": c["resolvedAt"],
+              "updates": [{"photoIds": [], **u} for u in c["updates"]]}
+    last = proxy._fm_last_resolution(ticket)
+    got = {"last": next((i for i, u in enumerate(ticket["updates"]) if u is last), None),
+           "cleared": proxy._fm_cleared_step(last) if last else None,
+           "expired": proxy._fm_ticket_expired(ticket, now)}
+    ck(c["_"], got == {k: c[k] for k in ("last", "cleared", "expired")}, got)
 shutil.rmtree(TMP, ignore_errors=True)
 if FAIL:
     print(f"\n❌ {FAIL} store-door check(s) failed")
