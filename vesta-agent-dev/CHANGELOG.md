@@ -1,3 +1,20 @@
+## 0.12.225
+
+What you will see on an alert in Telegram:
+- "Facility Manager" is now "FM" on alert cards: "To: Owner & FM", "Reminder sent … to FM", "No answer from FM after
+  45 min". Reports and the People page keep the full words.
+- The last line of a card says what was sent, when and to whom: "Reminder sent 16/10/2026 18:20 to FM — No answer
+  after 15 min". The copy in the house group is updated without a sound; it used to show "Reminder: no answer after
+  15 min" under the time of the earlier alert, as if it had happened then.
+- When an alert clears, its card says it once: "Closing note sent 15:40 to Owner & FM" (it was two lines, "Update sent
+  to Owner" and "Closing note sent to Facility Manager").
+- When the same alert comes back within 4 hours, its card draws a line before the new round: "— Came back 16/10/2026
+  18:03 (2nd time in 7 days) —".
+- The first alert names everyone who got it: "To: Owner & FM" from the first message, as every later one already did.
+- Unchanged: the alert's own text (for example "Phase C 4580 W / Above 4000 W, Held 15 min") is written by the villa's
+  rule, not by the Agent; it needs the rule's wording changed to read "Over 4000 W for 15 min · now 4580 W". The
+  Done / Need help buttons stay on every step in the house group, as chosen.
+
 ## 0.12.224
 
 What you will see:
