@@ -12,7 +12,7 @@
 // live here instead of being duplicated as state in every panel.
 
 import { useHA } from "@/ha/HAStateStore";
-import { stateLabelFor } from "@/config/BinarySensorClasses";
+import { stateWords } from "@/config/reading";
 import StateTimeline from "./StateTimeline";
 import { useStateHistory } from "@/hooks/useStateHistory";
 import { historyTitle } from "@/ha/historySource";
@@ -49,7 +49,7 @@ export default function LastDayTimeline({
         status={status}
         hours={range.hours}
         end={lastSeen}
-        labelFor={stateLabelFor(entityId, entities[entityId]?.attributes.device_class as string | undefined)}
+        labelFor={stateWords(entityId, entities[entityId]?.attributes.device_class as string | undefined)}
         legend={palette && [...new Set(data.map((p) => p.state))].map((s) => ({ state: s, color: palette(s) }))}
       />
     </div>

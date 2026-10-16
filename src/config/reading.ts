@@ -12,12 +12,21 @@
 //   · the rows coloured binary sensors only.
 // Six releases in one day (2.496.279–297) each re-fixed one of those windows.
 // Now every window asks here and only lays the answer out.
+//
+// ⚠️ AND THE LISTS ASK HERE TOO (architecture review 2026-10-16, step 1). The
+// device lists, the Cockpit's alarm line and Recent activity each reached past
+// this module into entityValue and BinarySensorClasses for their words, so a
+// change of wording made here reached the windows alone. They ask rowText,
+// alarmText and stateWords now — the same words they printed before
+// (tests/oracles/reading_surfaces.mjs compares them with the old helpers).
 
 import type { HassEntity } from "@/types/ha.types";
 import type { AlertLevel, Threshold } from "./ThresholdConfig";
 import { readingKind, readingLevel, type ReadingKind } from "./sensorReading";
 import { binaryLook } from "./binaryLook";
-import { formatSensorParts } from "@/utils/entityValue";
+import { stateLabelFor } from "./BinarySensorClasses";
+import { deviceRowText, formatSensorParts } from "@/utils/entityValue";
+import { domainOf } from "@/utils/entityDomain";
 import { isUnavailable } from "@/utils/stateColors";
 
 /** The colour a measurement's number (and its chart) takes at each level. */
@@ -119,4 +128,28 @@ export function rowTone(r: Reading): string | undefined {
 export type ReadingHistory = "states" | "words" | "numbers";
 export function historyOf(r: Reading): ReadingHistory {
   return r.kind === "binary" ? "states" : r.kind === "text" ? "words" : "numbers";
+}
+
+/** What a ROW prints beside a device — the device lists and "Also on this
+ *  device": the number scaled as the badge writes it, a climate's current →
+ *  target, a binary sensor in its class's words, "Unavailable" when offline.
+ *  Not shouted: a row is not a pill. */
+export function rowText(id: string, entity: HassEntity): string {
+  return deviceRowText(entity, domainOf(id));
+}
+
+/** How a state of this entity is worded — for a state that is not its current
+ *  one (Recent activity, a history bar's tooltip): a binary sensor's "on" and
+ *  "off" in its class's words, every other state readable ("Not home"). */
+export function stateWords(id: string, deviceClass: string | undefined): (state: string) => string {
+  return stateLabelFor(id, deviceClass);
+}
+
+/** The Cockpit's alarm line: a binary sensor's own words for its state
+ *  ("Leak detected", "Disconnected"); anything else, what its row says
+ *  ("Unlocked", "Jammed", "92%"). */
+export function alarmText(id: string, entity: HassEntity): string {
+  return domainOf(id) === "binary_sensor"
+    ? stateWords(id, entity.attributes.device_class as string | undefined)(entity.state)
+    : rowText(id, entity);
 }

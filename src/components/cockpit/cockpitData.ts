@@ -7,7 +7,7 @@
 // summary would be actively misleading, not just noisy. See the Cockpit plan
 // memory for how this was verified.
 
-import { stateLabelFor } from "@/config/BinarySensorClasses";
+import { stateWords } from "@/config/reading";
 import { categoryMembers, type CategoryMembers } from "@/config/activeDevices";
 import { deviceLook, groupLook, type LookSource } from "@/utils/deviceActivity";
 import { displayLabelFor } from "@/config/EntityMap";
@@ -152,9 +152,9 @@ export function describeLogbookEntry(
   // ⚠️ THE SHARED WORDS, NOT ITS OWN (2.496.252). This line worded binary
   // states by hand — anything but "on" took the OFF word, so a leak sensor
   // that went OFFLINE read "No leak" — and capitalised the rest by hand, so
-  // "not_home" read "Not_home". stateLabelFor and prettyState are the rules
-  // every other surface (the pill, the history bars) already reads.
-  return { t, name, message: stateLabelFor(raw.entity_id, entity?.attributes.device_class as string | undefined)(raw.state) };
+  // "not_home" read "Not_home". config/reading's stateWords is the rule every
+  // other surface (the pill, the history bars) already reads.
+  return { t, name, message: stateWords(raw.entity_id, entity?.attributes.device_class as string | undefined)(raw.state) };
 }
 
 /** Describe + filter to the villa's own selectable devices (HA's raw

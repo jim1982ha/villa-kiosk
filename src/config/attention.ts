@@ -10,9 +10,8 @@
 // ran twice: once in the villa model, whose result nothing read, then again
 // per profile. It is grouped once now, after the profile's filter.
 
-import { stateLabelFor } from "@/config/BinarySensorClasses";
 import { deviceLook, storeLookSource } from "@/utils/deviceActivity";
-import { deviceRowText } from "@/utils/entityValue";
+import { alarmText } from "@/config/reading";
 import type { Threshold } from "@/config/ThresholdConfig";
 import { labelOf } from "@/config/EntityMap";
 import { deviceRoom, deviceRoomOrRecord, firstRoom, roomLabel } from "@/config/devicePlace";
@@ -24,7 +23,6 @@ import { faultSource, type IssueSource } from "@/fm/issueSource";
 import type { FmData, FmTicketCheck } from "@/fm/fmTypes";
 import type { HassEntity } from "@/types/ha.types";
 import type { EntityMapping } from "@/types/scene.types";
-import { domainOf } from "@/utils/entityDomain";
 import { missingFromHa, NOT_IN_HA } from "@/utils/stateColors";
 
 export type AttentionKind = "unavailable" | "fault" | "schedule" | "alarm";
@@ -311,17 +309,14 @@ export function buildAttentionItems(opts: {
   for (const id of selectableIds) {
     const entity = entities[id];
     if (!entity || !deviceLook(id, looks).alert) continue;
-    const domain = domainOf(id);
     items.push({
       id: `alarm:${id}`,
       kind: "alarm",
       title: labelOf(id, entityMap, entities),
       // A binary_sensor's own words for its state ("Leak detected",
       // "Disconnected"); anything else, what its list row says ("Unlocked",
-      // "Jammed", "92 %").
-      detail: domain === "binary_sensor"
-        ? stateLabelFor(id, entity.attributes.device_class as string | undefined)(entity.state)
-        : deviceRowText(entity, domain),
+      // "Jammed", "92 %") — config/reading, as every reading.
+      detail: alarmText(id, entity),
       source: "live",
       room: deviceRoom(resolvedRooms, id),
       entityId: id,

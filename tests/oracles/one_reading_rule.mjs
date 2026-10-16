@@ -93,10 +93,13 @@ const SGP = src.get("src/components/panels/SummaryGroupPanel.tsx") ?? "";
 // sites for it" — and the file documenting that lesson committed the defect one
 // directory over, the same day.
 const sgpCode = SGP.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
-eq("SummaryGroupPanel calls deviceRowText, not just imports it",
-   (sgpCode.match(/(?<!\.)\bdeviceRowText\(/g) ?? []).length >= 1, true);
+// Since the architecture review of 2026-10-16 the row asks config/reading's
+// rowText (deviceRowText, one step down) — reading_surfaces.mjs pins the words
+// are the same.
+eq("SummaryGroupPanel calls rowText, not just imports it",
+   (sgpCode.match(/(?<!\.)\browText\(/g) ?? []).length >= 1, true);
 eq("...and it is the module's, not a local redeclaration",
-   /(?:function|const)\s+deviceRowText\b/.test(sgpCode), false);
+   /(?:function|const)\s+(?:rowText|deviceRowText)\b/.test(sgpCode), false);
 // An exact-literal absence pin is unmatchable after any whitespace edit, so
 // this asks the question by SHAPE: a unit appended to a state, however spaced.
 eq("...and no raw state is pasted beside a raw unit anywhere in the file",
