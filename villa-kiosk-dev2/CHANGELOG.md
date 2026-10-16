@@ -1,3 +1,8 @@
+## 2.496.396
+
+### Changed
+- Device lists, "Also on this device", the Cockpit's alarm lines, Recent activity and the last-day timeline now take a reading's words from the same place as the device windows. Every word stays exactly as before; a future wording fix now reaches all of them at once.
+
 ## 2.496.395
 
 ### Changed
