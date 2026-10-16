@@ -86,7 +86,7 @@ console.log("\n  who uses it:");
      && !/serviceWorker\.register\(/.test(main));
   const worker = src("public/sw.js");
   ck("the worker serves content-hashed files from its copy and never refreshes them",
-     /includes\("\/assets\/"\)\) \{\s*event\.respondWith\(\s*caches\.match\(req\)\.then\(\(cached\) => cached \|\| fetch\(req\)\.then\(cacheCopy\)\)/.test(worker));
+     /includes\("\/assets\/"\)\) \{\s*event\.respondWith\(\s*fromCache\(req, caches, CACHE\)\.then\(\(cached\) => cached \|\| fetch\(req\)\.then\(cacheCopy\)\)/.test(worker));
 }
 
 done("✅ a new build reaches the installed app without a network wait on every open");
