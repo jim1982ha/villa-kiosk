@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.220 (16 October 2026)
+
+Architecture review round 2, "how much electricity the villa used" (owner asked; done while offline):
+- vesta_shared/energy_setup.py: the Kiosk's energyModel rule in Python (nesting from included_in_stat; used = grid in
+  + solar − grid out; untracked = used − top-level devices; overlap). roi-energy's energy_period and the reports'
+  days/trend/use-while-empty read the villa's own Energy settings (Ctx.daily_total); the name guess + main-meter
+  helper is only the fallback (basis: names). Cache key energy:v2.
+- ha_client READ_ACTIONS is {tool: (argument, read values)}: ha_manage_energy_prefs is a read only with mode "get";
+  set/add/remove stay refused, even for the executor's writing client. HABase/McpClient.energy_prefs().
+- Fallback wording no longer names a helper id. tests/test_energy_setup.py (7), 8 mutations RED.
+
 ## 0.6.219 (16 October 2026)
 
 Architecture review round 2 (owner asked; done while offline):

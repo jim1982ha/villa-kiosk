@@ -381,3 +381,19 @@ step numbers the scripts' messages cite (page.py: "SKILL.md step 6").
 - ⚠️ history() / logbook() keep their plain lists and still set `history_cut` / `logbook_cut`: a starter skill edited
   on the villa is kept by updates and reads them. Do not change their returns. A client of another shape gets the
   reads from HABase over those two attributes (tests' stand-ins subclass HABase; `TimelineVilla(cut=…)` stops a read).
+
+## The villa's electricity from its own Energy settings (architecture review round 2, 2026-10-16)
+
+- `vesta_shared/energy_setup.py` is the Kiosk's Energy window rule (dev2 `src/config/energyModel.ts`) in Python: the
+  settings' grid in / out, solar and devices with their nesting (`included_in_stat`); used = grid in + solar − grid
+  out; untracked = used − the TOP-LEVEL devices (a device inside another is counted once); `overlap` when the top
+  level exceeds used. tests/test_energy_setup.py replays the Kiosk oracle's cases (energy_model.mjs) with its kWh.
+- Read with `HABase.energy_prefs` → ha-mcp `ha_manage_energy_prefs` mode "get". ⚠️ The tool writes in every other
+  mode (set, add_device, remove_device, add_source; ha-mcp marks it destructive): `ha_client.READ_ACTIONS` is now
+  {tool: (argument, read values)} — this tool keys on `mode`, ha_manage_blueprints on `action`; a writing client is
+  held to it too.
+- roi-energy `energy_period.py` builds on the settings (`basis: settings`, `total_from`) and falls back to the name
+  guess (+ input_text.villa_main_meter) only when they give no grid or solar source or cannot be read
+  (`basis: names`, `total_basis` in words). The reports' days, trend and "use while empty" read `Ctx.daily_total`
+  (the same rule over `total_from`), never one meter by name. Closes the 0.12.187 OPEN note on energy_period's
+  "main"/"phase"/"returned" words (they remain, as the fallback only).

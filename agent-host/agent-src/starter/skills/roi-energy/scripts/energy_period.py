@@ -3,17 +3,18 @@
 
   python energy_period.py --pack pack.json --period week|month|custom [--end 2026-09-27] [--start ...] [--fixture-dir DIR] [--store S] [--out r.json]
 
-Reads daily long-term statistics (change) for every entity of the energy
-family, once. Computes in code:
-  total (the main meter), per load kWh and share, unmetered remainder,
-  cost at the villa tariff, comparison with the previous period of equal
-  length and with the 30-day baseline, top movers, pump run hours.
+Reads daily long-term statistics (change) once, for every statistic it needs. Computes in code:
+  total, per device kWh and share, what the devices leave untracked, cost at the villa tariff,
+  comparison with the previous period of equal length and with the 30-day baseline, top movers, pump run hours.
 The result is cached in the store by (period, start, end): a second request
 for the same period costs nothing.
 
-Which entity is the main meter: the energy asset whose slug contains "main"
-or which is the largest, unless input_text.villa_main_meter names it. Phase
-sub-meters (slug containing "phase") are part of the main meter, not loads.
+Where the total and the devices come from (architecture review round 2, 2026-10-16): the villa's own Energy
+settings, read once (vesta_shared.energy_setup — the Kiosk's Energy window rule): total = grid in + solar − grid
+out; the devices and which one sits inside which; "untracked" = total − the TOP-LEVEL devices, so a light inside a
+phase meter is counted once. Only when those settings give no grid or solar source (or cannot be read) does it fall
+back to the old guess: the energy asset whose slug contains "main" (not "phase"), unless input_text.villa_main_meter
+names it; phase sub-meters and "returned" counters are then not loads.
 """
 
 from __future__ import annotations
@@ -32,6 +33,7 @@ from vesta_shared.stats import med, pct_change  # noqa: E402
 from vesta_shared.messaging import fmt_money  # noqa: E402
 from vesta_shared.timeutil import villa_day  # noqa: E402
 import vesta_shared.daily as F  # noqa: E402  (a day of a meter: shared, not another skill's file)
+import vesta_shared.energy_setup as E  # noqa: E402  (the Energy settings' rule, the Kiosk's)
 
 
 def period_bounds(period: str, end: date, start: date | None) -> tuple[date, date]:
@@ -62,7 +64,8 @@ def run(args) -> dict:
     a, b = period_bounds(args.period, end, start_arg)
     n_days = (b - a).days + 1
     prev_a, prev_b = a - timedelta(days=n_days), a - timedelta(days=1)
-    key = f"energy:{args.period}:{a}:{b}"
+    # v2: the total and the devices follow the villa's Energy settings — a period cached by the name guess is not reused
+    key = f"energy:v2:{args.period}:{a}:{b}"
     store = ctx.store
     if store and not args.no_cache:
         cached = store.cache_get(key)
@@ -70,60 +73,46 @@ def run(args) -> dict:
             cached["from_cache"] = True
             return cached
 
-    energy_rows = pack.entities("energy") + pack.entities("generation")
-    main_name = params.text_or("villa_main_meter", "")
-    # one energy counter per asset: a Shelly plug exposes "energy" and "energy_consumed" for the same kWh.
-    # ⚠️ THE NAMED MAIN METER IS THE ONE KEPT for its asset (architecture review 5): the shortest id was, and the
-    # total then read a meter that had not been fetched — a KeyError instead of a report
-    seen_asset: dict[str, str] = {}
-    deduped = []
-    for r in sorted(energy_rows, key=lambda r: (r["entity_id"] != main_name, len(r["entity_id"]))):
-        if "returned" in r["entity_id"]:
-            continue
-        if r["asset"] in seen_asset:
-            continue
-        seen_asset[r["asset"]] = r["entity_id"]
-        deduped.append(r)
-    energy_rows = deduped
-    ids = [r["entity_id"] for r in energy_rows]
     win_start = datetime.combine(min(prev_a, a - timedelta(days=30)), time(0, 0), tzinfo=Z)
     win_end = datetime.combine(b + timedelta(days=1), time(0, 0), tzinfo=Z)
-    stats = cli.statistics(ids, win_start, win_end, "day", ("change", "sum")) if ids else {}
-    series = {eid: F.energy_daily_features(stats.get(eid, []), pack.time_zone) for eid in ids}
 
-    main_eid = main_name or next((r["entity_id"] for r in energy_rows if "main" in r["asset"] and "phase" not in r["asset"]), None)
+    def read(ids: list[str]) -> dict:
+        stats = cli.statistics(ids, win_start, win_end, "day", ("change", "sum")) if ids else {}
+        return {eid: F.energy_daily_features(stats.get(eid, []), pack.time_zone) for eid in ids}
+
     try:
         tariff, currency = params.tariff()
     except MissingParameter:
         tariff, currency = None, None
 
-    loads = []
-    for r in energy_rows:
-        eid = r["entity_id"]
-        if eid == main_eid or "phase" in r["asset"] or "returned" in eid:
-            continue
+    def load(eid: str, name: str, area, family: str, series: dict) -> dict:
         cur, days = sum_days(series[eid], a, b)
         prev, _ = sum_days(series[eid], prev_a, prev_b)
         base_vals = [series[eid][d]["kwh"] for d in series[eid] if a - timedelta(days=30) <= d < a and series[eid][d].get("kwh") is not None]
         base_daily = med(base_vals)
-        loads.append({"entity_id": eid, "asset": r["asset"], "name": pack.device_name(eid, r["name"] or eid),
-                      "area": r["area"], "family": r["family"], "kwh": cur, "days_with_data": days, "prev_kwh": prev,
-                      "vs_prev_pct": pct_change(cur, prev) if prev else None,
-                      "baseline_kwh": round(base_daily * n_days, 2) if base_daily is not None else None,
-                      "vs_baseline_pct": pct_change(cur, base_daily * n_days) if base_daily else None,
-                      "cost": round(cur * tariff) if tariff else None,
-                      "first_seen": store.first_seen(eid) if store else None})
-    known_main = main_eid if main_eid in series else None
-    total, total_days = (sum_days(series[known_main], a, b) if known_main else (None, 0))
-    total_prev = sum_days(series[known_main], prev_a, prev_b)[0] if known_main else None
-    metered = round(sum(l["kwh"] for l in loads if l["family"] == "energy"), 2)
-    unmetered = round(total - metered, 2) if total is not None else None
+        return {"entity_id": eid, "asset": (pack.row(eid) or {}).get("asset"), "name": name,
+                "area": area, "family": family, "kwh": cur, "days_with_data": days, "prev_kwh": prev,
+                "vs_prev_pct": pct_change(cur, prev) if prev else None,
+                "baseline_kwh": round(base_daily * n_days, 2) if base_daily is not None else None,
+                "vs_baseline_pct": pct_change(cur, base_daily * n_days) if base_daily else None,
+                "cost": round(cur * tariff) if tariff else None,
+                "first_seen": store.first_seen(eid) if store else None}
+
+    prefs, unread = E.read(cli)
+    if E.usable(prefs):
+        part = from_settings(prefs, pack, read, load, a, b, prev_a, prev_b)
+    else:
+        part = from_names(pack, params, read, load, a, b, prev_a, prev_b)
+        if unread:
+            part["unread"] = unread
+            part["total_basis"] = "The villa's Energy settings could not be read: " + part["total_basis"]
+    total, total_prev, loads = part["total"], part["total_prev"], part["loads"]
     for l in loads:
         l["share_pct"] = round(l["kwh"] / total * 100, 1) if total else None
     loads.sort(key=lambda l: -l["kwh"])
     movers = sorted([l for l in loads if l["vs_prev_pct"] is not None and abs(l["kwh"] - l["prev_kwh"]) >= 1],
                     key=lambda l: -abs(l["kwh"] - l["prev_kwh"]))[:5]
-    generation = [l for l in loads if l["family"] == "generation"]
+    unmetered = part["unmetered"]
 
     # pumps: run hours from hourly power stats
     pumps = []
@@ -145,24 +134,109 @@ def run(args) -> dict:
               "villa": pack.villa, "tariff": tariff, "currency": currency,
               "total_kwh": total, "total_prev_kwh": total_prev, "total_vs_prev_pct": pct_change(total, total_prev) if total_prev else None,
               "total_cost": round(total * tariff) if (total is not None and tariff) else None,
-              "days_with_data": total_days, "metered_kwh": metered, "unmetered_kwh": unmetered,
-              "unmetered_pct": round(unmetered / total * 100, 1) if total else None,
-              "loads": loads, "movers": movers, "generation": generation, "pumps": pumps,
-              "main_meter": main_eid, "from_cache": False}
-    if not main_eid:
-        result["note"] = "No main meter found: set input_text.villa_main_meter to the total energy entity."
-    elif main_eid not in series:
-        result["note"] = (f"input_text.villa_main_meter names {main_eid}, which is not one of the villa's energy "
-                          "meters in the knowledge pack: the total is not known.")
+              "days_with_data": part["total_days"], "metered_kwh": part["metered"], "unmetered_kwh": unmetered,
+              "unmetered_pct": round(unmetered / total * 100, 1) if (total and unmetered is not None) else None,
+              "overlap_kwh": part.get("overlap"),
+              "loads": loads, "movers": movers, "generation": part["generation"], "pumps": pumps,
+              "basis": part["basis"], "total_basis": part["total_basis"],
+              # the statistics the total is made of, for a reader of the days (reports' facts.py): one rule
+              "total_from": part["total_from"], "main_meter": part.get("main_meter"), "from_cache": False}
+    if part.get("unread"):
+        result["unread"] = part["unread"]
+    if part.get("note"):
+        result["note"] = part["note"]
     result["headline"] = headline(result)
     if store:
         store.cache_put(key, result)
     return result
 
 
+def from_settings(prefs, pack, read, load, a, b, prev_a, prev_b) -> dict:
+    """The total, the devices and what they leave, as the villa's Energy settings lay them out (the Kiosk's rule)."""
+    s = E.setup(prefs, lambda sid: pack.device_name(sid, pack.name_of(sid) or sid))
+    series = read(list(dict.fromkeys(s.sources + [n.id for n in s.devices])))
+
+    def kwh(lo, hi):
+        def of(sid):
+            v, days = sum_days(series.get(sid, {}), lo, hi)
+            return v if days else None
+        return of
+    cur, prev = E.split(s, kwh(a, b)), E.split(s, kwh(prev_a, prev_b))
+    read_days = lambda lo, hi: {d for sid in s.grid_in + s.solar for d, f in series[sid].items()  # noqa: E731
+                                if lo <= d <= hi and f.get("kwh") is not None and not f.get("counter_reset")}
+    days, prev_days = read_days(a, b), read_days(prev_a, prev_b)
+    parent = s.parent_of()
+    loads = []
+    for u in E.ranking(cur):
+        row = pack.row(u.node.id) or {}
+        l = load(u.node.id, u.node.name, row.get("area"), "energy", series)
+        up = parent.get(u.node.id)
+        l["inside"] = up.name if up else None          # its upstream device in the settings: already in that one's kWh
+        l["top_level"] = up is None
+        if u.children:
+            l["untracked_kwh"] = round(u.untracked, 2)  # what its own devices leave of it
+        loads.append(l)
+    generation = [load(sid, pack.device_name(sid, pack.name_of(sid) or sid), (pack.row(sid) or {}).get("area"),
+                       "generation", series) for sid in s.solar]
+    return {"basis": "settings", "total_basis": "The villa's Energy settings: what came from the grid"
+            + (" and the solar" if s.solar else "") + (", less what went back" if s.grid_out else "") + ".",
+            "total": round(cur.used, 2) if days else None, "total_prev": round(prev.used, 2) if prev_days else None,
+            "total_days": len(days), "loads": loads, "generation": generation,
+            "metered": round(sum(r.kwh for r in cur.roots), 2), "unmetered": round(cur.untracked, 2) if days else None,
+            "overlap": round(cur.overlap, 2),
+            "total_from": {"grid_in": s.grid_in, "grid_out": s.grid_out, "solar": s.solar}}
+
+
+def from_names(pack, params, read, load, a, b, prev_a, prev_b) -> dict:
+    """The fallback when the Energy settings give no total: the meter recognised as the main one, by its name or the
+    villa's main-meter setting; every other meter but its phases and "returned" counters is a load."""
+    energy_rows = pack.entities("energy") + pack.entities("generation")
+    main_name = params.text_or("villa_main_meter", "")
+    # one energy counter per asset: a Shelly plug exposes "energy" and "energy_consumed" for the same kWh.
+    # ⚠️ THE NAMED MAIN METER IS THE ONE KEPT for its asset (architecture review 5): the shortest id was, and the
+    # total then read a meter that had not been fetched — a KeyError instead of a report
+    seen_asset: dict[str, str] = {}
+    deduped = []
+    for r in sorted(energy_rows, key=lambda r: (r["entity_id"] != main_name, len(r["entity_id"]))):
+        if "returned" in r["entity_id"]:
+            continue
+        if r["asset"] in seen_asset:
+            continue
+        seen_asset[r["asset"]] = r["entity_id"]
+        deduped.append(r)
+    energy_rows = deduped
+    series = read([r["entity_id"] for r in energy_rows])
+    main_eid = main_name or next((r["entity_id"] for r in energy_rows if "main" in r["asset"] and "phase" not in r["asset"]), None)
+    loads = []
+    for r in energy_rows:
+        eid = r["entity_id"]
+        if eid == main_eid or "phase" in r["asset"] or "returned" in eid:
+            continue
+        loads.append(load(eid, pack.device_name(eid, r["name"] or eid), r["area"], r["family"], series))
+    known_main = main_eid if main_eid in series else None
+    total, total_days = (sum_days(series[known_main], a, b) if known_main else (None, 0))
+    total_prev = sum_days(series[known_main], prev_a, prev_b)[0] if known_main else None
+    metered = round(sum(l["kwh"] for l in loads if l["family"] == "energy"), 2)
+    out = {"basis": "names", "total": total, "total_prev": total_prev, "total_days": total_days,
+           "loads": [l for l in loads if l["family"] == "energy"],
+           "generation": [l for l in loads if l["family"] == "generation"],
+           "metered": metered, "unmetered": round(total - metered, 2) if total is not None else None,
+           "total_from": {"grid_in": [known_main], "grid_out": [], "solar": []} if known_main else None,
+           "main_meter": main_eid,
+           "total_basis": "The villa's Energy settings name no grid meter: the total is the meter recognised as the main one."}
+    # ⚠️ PLAIN WORDS, NO SETTING'S ID (owner rules): this note reaches a person through the AI
+    if not main_eid:
+        out["note"] = ("No total: the villa's Energy settings name no grid meter, and no meter is recognisably the main "
+                       "one. Adding the grid meter to the villa system's Energy settings gives the total.")
+    elif not known_main:
+        out["note"] = ("The main meter chosen in the villa's settings is not one of its energy meters: the total is not "
+                       "known. Adding the grid meter to the villa system's Energy settings gives the total.")
+    return out
+
+
 def headline(r: dict) -> str:
     if r["total_kwh"] is None:
-        return "No main meter: totals unavailable."
+        return "Total not known: the villa's Energy settings name no grid meter."
     s = f"{r['villa']}: {r['total_kwh']:.0f} kWh from {r['start']} to {r['end']}"
     if r["total_cost"] is not None:
         s += f", {fmt_money(r['total_cost'], r['currency'])}"
@@ -172,8 +246,11 @@ def headline(r: dict) -> str:
     if top:
         s += ". Largest: " + ", ".join(f"{l['name']} {l['share_pct']:.0f}%" for l in top)
     if r["unmetered_pct"] is not None:
-        s += f". Not metered: {r['unmetered_pct']:.0f}%."
-    return s
+        s += f". Not metered: {r['unmetered_pct']:.0f}%"
+    if r.get("overlap_kwh"):
+        s += (f". {r['overlap_kwh']:.0f} kWh is counted twice: some devices are set up beside the meter they are "
+              "part of, not inside it")
+    return s + "."
 
 
 def main(argv=None):

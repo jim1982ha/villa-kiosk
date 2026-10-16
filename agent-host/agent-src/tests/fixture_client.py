@@ -24,6 +24,7 @@ class FixtureClient(HABase):
       states.json                           {'states': {entity_id: {state, attributes, last_changed}}, 'not_found': [ids]}
       logbook.json                          {'entries': [...]}
       templates.json                        {template text: what Home Assistant renders it as}
+      energy_prefs.json                     ha_manage_energy_prefs(mode=get)'s `config` (absent: no settings read)
     """
 
     def __init__(self, fixture_dir: str, zone: str = "UTC", extra_helpers: str | None = None):
@@ -107,6 +108,9 @@ class FixtureClient(HABase):
         if text not in said:
             raise KeyError(f"no rendering saved for this template: {text[:80]}")
         return str(said[text])
+
+    def energy_prefs(self):
+        return self._load("energy_prefs.json", None)
 
     def call_service(self, domain, service, data):
         # Recorded, never executed. The replay test asserts on this list.

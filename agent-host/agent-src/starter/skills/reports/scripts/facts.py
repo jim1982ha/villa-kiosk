@@ -39,6 +39,7 @@ from vesta_shared import script  # noqa: E402  (client, pack, store, zone, now: 
 from vesta_shared.messaging import no_code as _no_code  # noqa: E402
 from vesta_shared.timeutil import lasting  # noqa: E402  (how long something lasted, the Kiosk's words)
 from vesta_shared.daily import energy_daily_features  # noqa: E402  (a meter's day: one reading for every skill)
+from vesta_shared.energy_setup import used as energy_used  # noqa: E402  (the villa's total: the Kiosk's rule)
 from vesta_shared import result  # noqa: E402  (the night check's rule ids, written once)
 from vesta_shared.timeutil import day_label, day_time_label, local_day, villa_date, villa_time  # noqa: E402  (the one day format)
 from vesta_shared import agent_records  # noqa: E402  (the agent's records: one reader)
@@ -251,6 +252,27 @@ class Ctx:
         # reset, not consumption
         return {d: round(f["kwh"], 2) for d, f in energy_daily_features(rows, self.pack.time_zone).items()
                 if f["kwh"] is not None and not f["counter_reset"]}
+
+    def total_from(self) -> dict | None:
+        """The statistics the villa's total is made of, as roi-energy found them (its `total_from`: the Energy
+        settings' grid and solar, or the main meter it fell back on); a period from before carries only main_meter."""
+        t = self.energy.get("total_from")
+        if t:
+            return t
+        m = self.energy.get("main_meter")
+        return {"grid_in": [m], "grid_out": [], "solar": []} if m else None
+
+    def daily_total(self, start: date, end: date) -> dict[date, float]:
+        """The villa's electricity per day, by the same rule as the period's total (grid in + solar − grid out):
+        ⚠️ the weekly page's days and trend read ONE meter by name while roi-energy's total followed the Energy
+        settings (round 2, 2026-10-16) — the days would not have added up to the week. A day no source read is absent."""
+        t = self.total_from()
+        if not t:
+            return {}
+        per = {i: self.daily_kwh(i, start, end) for i in dict.fromkeys(t["grid_in"] + t["grid_out"] + t["solar"])}
+        days = {d for i in t["grid_in"] + t["solar"] for d in per[i]}
+        add = lambda ids, d: sum(per[i].get(d, 0.0) for i in ids)  # noqa: E731
+        return {d: round(energy_used(add(t["grid_in"], d), add(t["grid_out"], d), add(t["solar"], d)), 2) for d in days}
 
     def running_power(self, entity_id: str, days: int) -> list[tuple[str, float]]:
         """Mean power per day over the hours the device ran (hourly mean above run_min_w)."""
@@ -490,11 +512,10 @@ def s_batteries(c: Ctx) -> dict:
 
 
 def s_energy_days(c: Ctx) -> dict:
-    meter = c.energy.get("main_meter")
-    if not meter:
-        return {"error": "No main electricity meter in the knowledge pack."}
+    if not c.total_from():
+        return {"error": "No electricity total: the villa's Energy settings name no grid meter."}
     prev_start = c.start - timedelta(days=c.days)
-    per = c.daily_kwh(meter, prev_start, c.end)
+    per = c.daily_total(prev_start, c.end)
     rows = []
     for k in range(c.days):
         d = c.start + timedelta(days=k)
@@ -506,7 +527,10 @@ def s_circuits(c: Ctx) -> dict:
     n = int(c.need("circuits_show"))
     cap = float(c.need("circuit_change_max_pct"))
     rows = [{"name": l.get("name"), "kwh": _r(l.get("kwh")), "share_pct": _r(l.get("share_pct")),
-             "vs_prev_pct": _r(l.get("vs_prev_pct")), "basis": "measured"} for l in (c.energy.get("loads") or [])[:n]]
+             "vs_prev_pct": _r(l.get("vs_prev_pct")),
+             # a device the Energy settings put inside another is already in that one's kWh: the table says so
+             "basis": f"measured, inside {l['inside']}" if l.get("inside") else "measured"}
+            for l in (c.energy.get("loads") or [])[:n]]
     if c.energy.get("unmetered_kwh") is not None:
         rows.append({"name": "Everything else", "kwh": _r(c.energy.get("unmetered_kwh")),
                      "share_pct": _r(c.energy.get("unmetered_pct")), "vs_prev_pct": None, "basis": "not metered"})
@@ -543,11 +567,10 @@ def s_fixed_suggest(c: Ctx) -> dict:
 
 def s_trends(c: Ctx) -> dict:
     charts = []
-    meter = c.energy.get("main_meter")
     weeks = int(c.need("trend_weeks"))
-    if meter:
+    if c.total_from():
         first = c.end - timedelta(days=7 * weeks - 1)
-        per = c.daily_kwh(meter, first, c.end)
+        per = c.daily_total(first, c.end)
         bars = []
         for w in range(weeks):
             ws = first + timedelta(days=7 * w)

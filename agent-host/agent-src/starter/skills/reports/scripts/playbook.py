@@ -149,8 +149,8 @@ def clue_offline(c, when):
 
 
 def clue_use_while_empty(c, when):
-    meter, ent = c.energy.get("main_meter"), when.get("mode_entity")
-    if not meter or not ent:
+    ent = when.get("mode_entity")
+    if not c.total_from() or not ent:
         return []
     days = int(when.get("days", 10))
     start = max(c.start, c.end - timedelta(days=days - 1))
@@ -165,7 +165,7 @@ def clue_use_while_empty(c, when):
                           + unread("its mode", day_time_label(got.reach(ent).astimezone(c.Z)))
                           + " — the days after that are not counted.")
     empty = {str(x).lower() for x in when.get("empty") or []}
-    per = c.daily_kwh(meter, start, c.end)
+    per = c.daily_total(start, c.end)
     empty_days, other_days = [], []
     for k in range((c.end - start).days + 1):
         d = start + timedelta(days=k)

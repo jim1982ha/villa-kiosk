@@ -18,14 +18,21 @@ period, cached: a second question on the same period costs zero tokens.
 
 ## Where the numbers come from
 
-- kWh: daily `change` of every entity in the energy family of the knowledge pack.
-  The main meter is the energy asset containing "main" (or `input_text.villa_main_meter`).
-  Phase sub-meters and "returned" counters are excluded from the loads.
+- Total and devices: the villa's own Energy settings (the same ones the Kiosk's Energy
+  window shows), read, never changed. Total = what came from the grid, plus solar, less
+  what went back. The devices are the ones listed there, with which device sits inside
+  which: a device inside another is already in that one's kWh (`inside` in the JSON).
+- Only when those settings give no grid or solar meter (`basis: names`): the total is the
+  energy asset containing "main" (or `input_text.villa_main_meter`); phase sub-meters and
+  "returned" counters are then not loads. `total_basis` says which, in words.
+- kWh: daily `change` of each statistic.
 - Cost: `input_number.electricity_tariff_kwh` and its unit (IDR/kWh). A USD line
   appears when `input_number.villa_fx_idr_per_usd` exists.
-- Unmetered remainder: main meter minus the sum of the metered loads. It is
-  shown, not hidden: it is the honest coverage of the report and the first
-  proposal when it is above 50%.
+- Unmetered remainder: the total minus the TOP-LEVEL devices (a device inside another
+  is never subtracted twice). When the top-level devices add up to more than the total,
+  `overlap_kwh` says how much is counted twice (a device set up beside the meter it is part
+  of): say so, never a negative remainder. It is shown, not hidden: it is the honest
+  coverage of the report and the first proposal when it is above 50%.
 - Comparisons: same length previous period, and the 30-day daily median before
   the period. A load first seen less than 30 days ago is labelled "measured
   since N days, baseline building" (the pack diff records first sight).

@@ -1,3 +1,12 @@
+## 0.12.229
+
+What you will see in the energy reports and the weekly page:
+- The electricity figures now come from the villa's own Energy settings, the same ones the Kiosk's Energy window uses,
+  so the two show the same total for the same week. Energy sent back to the grid is now taken off the total.
+- "Not metered" drops to about nothing: your three phase meters already measure everything, and they are now counted
+  as such. "Largest" names the phases first, then the lights and pumps inside them.
+- If the Energy settings ever lose the grid meter, the report says so in plain words instead of naming a setting.
+
 ## 0.12.228
 
 What you will see:

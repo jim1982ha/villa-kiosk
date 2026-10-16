@@ -91,6 +91,11 @@ class HABase:
         """`text` (a Home Assistant template) rendered by Home Assistant now — an alert's claim (alert-desk)."""
         raise NotImplementedError
 
+    def energy_prefs(self) -> dict | None:
+        """The villa's Energy settings (energy_sources, device_consumption, …) — vesta_shared.energy_setup reads them.
+        None: a client that cannot read them (a test's stand-in), so a reader falls back."""
+        return None
+
 
 class HAError(RuntimeError):
     pass
@@ -104,9 +109,12 @@ READ_TOOLS = {
     "ha_list_floors_areas", "ha_get_camera_image", "ha_get_todo", "ha_get_overview", "ha_get_system_health",
 }
 WRITE_TOOLS = {"ha_call_service"}
-#: A tool that can also write, allowed for its READ actions only (the `action` argument), refused for every other one.
-#: ha_manage_blueprints `get`: what an automation built from a blueprint can do (investigate's automation_able).
-READ_ACTIONS = {"ha_manage_blueprints": {"get"}}
+#: A tool that can also write, allowed for its READ actions only, refused for every other one: {tool: (the argument
+#: that names the action, the values that only read)}. ha_manage_blueprints `get`: what an automation built from a
+#: blueprint can do (investigate's automation_able). ha_manage_energy_prefs mode `get`: the villa's Energy settings
+#: (vesta_shared.energy_setup) — ⚠️ ITS ARGUMENT IS `mode`, NOT `action`: set / add_device / remove_device / add_source
+#: rewrite the owner's Energy dashboard (ha-mcp marks the tool destructive), so every mode but get stays refused.
+READ_ACTIONS = {"ha_manage_blueprints": ("action", {"get"}), "ha_manage_energy_prefs": ("mode", {"get"})}
 BROWSER_UA = "Mozilla/5.0 (X11; Linux aarch64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128 Safari/537.36 VESTA"
 
 
@@ -267,8 +275,9 @@ class McpClient(HABase):
     def tool(self, name: str, args: dict, partial: bool = False) -> Any:
         """`partial`: a bulk read whose every lookup failed still answers (its `errors` say why), not HAError."""
         if name in READ_ACTIONS:
-            if (args or {}).get("action") not in READ_ACTIONS[name]:
-                raise HAError(f"{name} refused: only its {', '.join(sorted(READ_ACTIONS[name]))} action is allowed")
+            key, reads = READ_ACTIONS[name]
+            if (args or {}).get(key) not in reads:
+                raise HAError(f"{name} refused: only its {', '.join(sorted(reads))} {key} is allowed")
         elif name in WRITE_TOOLS and not self.write:
             raise HAError(f"{name} refused: this client is read-only")
         elif name not in READ_TOOLS and name not in WRITE_TOOLS:
@@ -285,6 +294,12 @@ class McpClient(HABase):
         if isinstance(body, dict) and body.get("success") is False and not (partial and "errors" in body):
             raise HAError(f"{name} failed: {str(body.get('error') or body.get('message') or body)[:300]}")
         return body
+
+    def energy_prefs(self):
+        # mode "get" ONLY: the one mode READ_ACTIONS lets through (every other one writes the owner's Energy dashboard)
+        body = self.tool("ha_manage_energy_prefs", {"mode": "get"})
+        cfg = body.get("config") if isinstance(body, dict) else None
+        return cfg if isinstance(cfg, dict) else None
 
     def tool_content(self, name: str, args: dict) -> list[dict]:
         """Raw MCP content blocks (images kept), for the camera snapshot."""

@@ -116,9 +116,11 @@ def test_a_day_past_the_reach_is_never_counted_empty_or_occupied():
 
     def ctx(cut):
         villa = TimelineVilla(**{"switch.x": mode}, cut=cut)
+        # the villa's total per day (facts.Ctx.daily_total: the Energy settings' rule, round 2 2026-10-16)
         return SimpleNamespace(energy={"main_meter": "sensor.meter"}, start=d1, end=d1 + timedelta(days=3), Z=Z,
                                e_dt=datetime(2026, 10, 9, tzinfo=Z), now=NOW, cli=villa, problems=[],
-                               daily_kwh=lambda m, s, e: {d1: 10.0, d1 + timedelta(days=1): 5.0,
+                               total_from=lambda: {"grid_in": ["sensor.meter"], "grid_out": [], "solar": []},
+                               daily_total=lambda s, e: {d1: 10.0, d1 + timedelta(days=1): 5.0,
                                                           d1 + timedelta(days=2): 5.0, d1 + timedelta(days=3): 5.0})
     when = {"mode_entity": "switch.x", "empty": ["away"], "days": 4}
     c = ctx({"switch.x": datetime(2026, 10, 6, 13, tzinfo=Z)})
