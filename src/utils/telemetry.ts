@@ -139,7 +139,7 @@ export function report(kind: TelemetryKind, data: TelemetryData = {}): void {
       return r ? Math.round(r.height) : undefined;
     })(),
     dpr: Math.round((window.devicePixelRatio || 1) * 100) / 100,
-    standalone: window.matchMedia?.("(display-mode: standalone)").matches === true
+    standalone: window.matchMedia?.("(display-mode: standalone), (display-mode: fullscreen)").matches === true
       || (navigator as Navigator & { standalone?: boolean }).standalone === true,
     mem: (performance as Performance & { memory?: { usedJSHeapSize: number } })
       .memory?.usedJSHeapSize,

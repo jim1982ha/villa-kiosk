@@ -8,6 +8,17 @@
          mode the page actually rendered in half the time. -->
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#F7F4EE" />
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101311" />
+    <!-- The manifest's background_color/theme_color are DARK (#101311), on purpose.
+         Android paints its three-button navigation bar (a phone's cover screen,
+         where gestures are off) from the installed app's manifest, which has no
+         light/dark variant: #F7F4EE drew a white band under the dark map. A dark
+         bar under the light theme reads as the phone's own frame; a white one
+         under the dark theme read as a broken layout. The page's own theme-color
+         above still decides the top bar in both themes.
+         display_override starts with "fullscreen": an installed app on Android
+         hides the clock and the three buttons (a swipe from the edge shows
+         them), as the villa's own app does. "display" stays "standalone"
+         because iOS reads only that key — the iPad and iPhone are unchanged. -->
     <meta name="application-name" content="VESTA" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />

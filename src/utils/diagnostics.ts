@@ -263,7 +263,7 @@ export function buildReport(primary: CapturedError | null): string {
   push("User agent", navigator.userAgent);
   push("Platform", navigator.platform);
   push("iOS", isIOS());
-  const standalone = window.matchMedia?.("(display-mode: standalone)").matches
+  const standalone = window.matchMedia?.("(display-mode: standalone), (display-mode: fullscreen)").matches
     || (navigator as Navigator & { standalone?: boolean }).standalone === true;
   push("PWA standalone", standalone);
   push("CPU cores", navigator.hardwareConcurrency ?? "n/a");
