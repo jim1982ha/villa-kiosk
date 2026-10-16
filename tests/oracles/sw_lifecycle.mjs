@@ -136,6 +136,23 @@ eq("  ...and behind Ingress", r("/api/hassio_ingress/tok/fm-data"), "network");
 eq("another origin is not ours", swRoute(new URL("http://127.0.0.1:9/x.js"), "cors", "", O), "foreign");
 eq("a navigation is a page (this worker's own saved shell first)", r("/index.html", "navigate", "document"), "page");
 eq("a hashed asset is cache-first", r("/assets/index-abc.js"), "asset");
+eq("the web app manifest is read fresh (Android installs from it)", r("/manifest.json"), "fresh");
+
+console.log("\n  a saved copy comes from THIS build's cache first:");
+{
+  const fromSrc = /async function fromCache\(req, storage, own\) \{[\s\S]*?\n\}/.exec(code)?.[0] ?? "";
+  eq("fromCache was found in the source", fromSrc.length > 0, true);
+  const fromCache = new Function(`${fromSrc}; return fromCache;`)();
+  // CacheStorage.match searches the caches in creation order: the older build first
+  const caches = { "villa-kiosk-2.496.385": "old", "villa-kiosk-2.496.386": "new" };
+  const storage = {
+    open: async (n) => ({ match: async () => caches[n] }),
+    match: async () => Object.values(caches)[0],
+  };
+  eq("the current build's copy, not the previous build's", await fromCache("x", storage, "villa-kiosk-2.496.386"), "new");
+  eq("a file this build never saved still comes from an older one",
+     await fromCache("x", storage, "villa-kiosk-2.496.387"), "old");
+}
 
 console.log(`\n${fail ? `❌ ${fail} failed` : "✅ the worker updates without stranding a page"}`);
 process.exit(fail ? 1 : 0);

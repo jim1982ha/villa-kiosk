@@ -17,8 +17,8 @@
  *    hashed file cannot change. The background refresh this used to run
  *    re-downloaded ~3.9 MB (the 3D engine, the app, the decoder) on every
  *    open, invisibly to the page's own timings (rig, 2.496.256).
- *  - Other static files (fonts, icons, manifest): cache-first with a
- *    background refresh.
+ *  - Other static files (fonts, icons): cache-first with a background
+ *    refresh. The manifest: network-first (swRoute's "fresh").
  *  - Everything else (HA WebSocket is not HTTP; camera proxy, REST history):
  *    network-only — we never want to serve a stale camera frame or sensor value.
  */
@@ -107,6 +107,18 @@ self.addEventListener("install", (event) => {
   // running means seizing it away from the cache holding its own chunks.
 });
 
+/** A saved copy of `req`: THIS build's cache first, then any other.
+ *  `caches.match` alone searches the caches oldest first, so a file kept by the
+ *  previous build (KEEP_GENERATIONS) won over the copy this build saved, for a
+ *  whole release. */
+async function fromCache(req, storage, own) {
+  try {
+    const hit = await (await storage.open(own)).match(req);
+    if (hit) return hit;
+  } catch { /* storage unavailable — any cache below */ }
+  return storage.match(req);
+}
+
 /** Newest-first order for our own generation caches. A name that does not parse
  *  as a version — `villa-kiosk-v10`, the hand-edited literal this replaced —
  *  sorts oldest, so the legacy cache is the first thing evicted. */
@@ -173,6 +185,11 @@ self.addEventListener("activate", (event) => {
 //              a GET four seconds after a confirmed write returned a document
 //              1.8 hours old, which broke the shared-config sync);
 //   foreign  — another origin: not ours to cache;
+//   fresh    — the web app manifest: network first, the saved copy offline.
+//              Android reads the installed app's colours and display mode
+//              from it when the app is added to the home screen; a saved copy
+//              served there kept the old ones (2.496.384–386: a white band
+//              and no full screen after re-adding the app);
 //   page     — a navigation: network first, the cached shell when offline;
 //   asset    — everything else of ours: cache first, refreshed behind.
 const NEVER_CACHE = [
@@ -188,6 +205,7 @@ function swRoute(url, mode, destination, origin) {
   if ((path.endsWith(".glb") || path.endsWith(".rooms.json")) && !path.includes("camera_proxy")) return "model";
   if (NEVER_CACHE_FRAGMENTS.some((f) => path.includes(f)) || NEVER_CACHE.some((p) => path.endsWith(p))) return "network";
   if (url.origin !== origin) return "foreign";
+  if (path.endsWith("/manifest.json")) return "fresh";
   if (mode === "navigate" || destination === "document" || path.endsWith("/") || path.endsWith(".html")) return "page";
   return "asset";
 }
@@ -233,16 +251,23 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  if (route === "fresh") {
+    event.respondWith(
+      fetch(req).then(cacheCopy).catch(() => fromCache(req, caches, CACHE)),
+    );
+    return;
+  }
+
   // A content-hashed asset never changes: the cached copy, or one download.
   if (url.pathname.includes("/assets/")) {
     event.respondWith(
-      caches.match(req).then((cached) => cached || fetch(req).then(cacheCopy)),
+      fromCache(req, caches, CACHE).then((cached) => cached || fetch(req).then(cacheCopy)),
     );
     return;
   }
 
   event.respondWith(
-    caches.match(req).then((cached) => {
+    fromCache(req, caches, CACHE).then((cached) => {
       const network = fetch(req).then(cacheCopy).catch(() => cached);
       return cached || network;
     }),
