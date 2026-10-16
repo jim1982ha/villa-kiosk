@@ -1,3 +1,8 @@
+## 2.496.397
+
+### Changed
+- How long something lasted is now worded by one rule shared with the VESTA Agent, so Telegram, the weekly report and the Kiosk say the same thing. Nothing changes on the Kiosk's screens; the Agent follows in its next version.
+
 ## 2.496.396
 
 ### Changed
