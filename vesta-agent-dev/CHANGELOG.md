@@ -1,3 +1,12 @@
+## 0.12.228
+
+What you will see:
+- Lengths of time read the same as on the Kiosk: "1 h 30 min" (it could say "1 h 29 min"), "1 min" (not "89 s"), and
+  in the weekly report's "Lasted" column "1 h 59 min" or "1 d 9 h" instead of "119 min" or "33.0 h".
+- When the villa's records could not be read to the end, the night check and the weekly report now say so, as
+  investigations already did: "… could not be read whole: nothing is known after 13:00 — its runs after that are not
+  counted." Before, they could quietly count as if the records went on.
+
 ## 0.12.227
 
 Nothing changes in Telegram. Behind it: what the Agent was doing when it restarts (a scheduled report, a chat's job,
