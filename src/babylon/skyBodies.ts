@@ -1,34 +1,38 @@
 // src/babylon/skyBodies.ts
-// Where the sun and the moon are drawn in the sky, from their TRUE direction:
-// pure numbers, no Babylon. SkyDome (the sun) and NightSky (the moon) draw
-// them; tests/oracles/sky_bodies.mjs checks both through the real camera.
+// Where the sun and the moon are drawn, from their TRUE direction: pure
+// numbers, no Babylon. SkyDome (the sun) and NightSky (the moon) draw them;
+// tests/oracles/sky_bodies.mjs checks both through the real camera.
 //
-// ── THE ONE RULE (2.496.390): THE CAMERA IS NOT AN INPUT ───────────────────
-// A body is drawn in a fixed direction of the sky, computed from its true
-// azimuth and altitude and nothing else (skyDirection takes no camera). It is
-// drawn at sky distance, behind everything, so the villa hides it where they
-// meet and it can never hang in front of the house. Turning, tilting, zooming
-// or panning only changes how that piece of sky is SEEN — exactly like the
-// real sun: face east in the morning and it is over the villa's east side, turn
-// away and it is behind you, turn back and it is where it was.
+// ── THE OVERVIEW: AN ARC ROUND THE VILLA (owner, 2026-10-16) ───────────────
+// In the overview a body is a POINT in the world, on its real path drawn as an
+// arc round the villa: its true compass side and its true height, on a
+// half-sphere centred on the villa's ground (arcPoint). Facing north, the sun
+// rises on the right at 06:00, climbs one step per hour, passes over the top
+// at noon and sets on the left — and where the real sun goes nearly overhead
+// (this villa's latitude, in October) it passes OVER the villa from east to
+// west instead of jumping sides. Turning, tilting or zooming never moves the
+// point: it turns with the villa.
 //
-// The overview looks DOWN on the villa, where the real sky is out of frame,
-// so there the sky from horizon to zenith is drawn SQUEEZED into the band that
-// shows above the villa at the overview's usual tilts (OVERVIEW_HORIZON ..
-// OVERVIEW_ZENITH, drawnAltitude). Still one fixed direction per hour, the
-// same for every camera — the hour moves the body, the camera never does.
-// Walking (lift 0) draws the true direction.
+// The arc's size is the villa's own (ARC_SPANS times its longest side, from the
+// model's extents — never a number of metres): big enough that, looking down
+// at the villa, the sun goes round the house and never crosses it (the owner's
+// reference view).
 //
-// The camera decides one thing only: whether the body is SHOWN. A lowered sky
-// lies below eye level, so with the view tilted flat a body could land in the
-// lower half of the view — under or in front of the villa the camera looks at.
-// It fades out there instead (beyondFade): a sky body is drawn only above and
-// beyond the villa, and never moved to stay in view.
+// The camera decides two things, never the point itself:
+//   · whether the body is SHOWN — hidden only when it is really behind the
+//     viewer (behindFade); the house hides it by ordinary depth where they meet;
+//   · where it WAITS when its point is off screen — at the screen edge on its
+//     true side (holdOnScreen), so zooming in never loses it. Almost flat, the
+//     midday sun therefore runs along the top edge in a straight line (owner:
+//     "I like that").
 //
-// ⚠️ 2.496.290–389 PLACED the body by the camera: round the villa's outline as
-// the screen showed it, at its bearing RELATIVE TO THE CAMERA'S HEADING. So it
-// went round the villa whenever the camera turned (owner's recording,
-// 2026-10-16). Never feed the camera into the direction again.
+// Walking (lift 0) draws the TRUE direction, at sky distance.
+//
+// ⚠️ 2.496.290–389 placed the body round the villa's SCREEN outline at a
+// bearing relative to the camera's heading, so it went round the villa as the
+// camera turned. 2.496.390 fixed that with a fixed sky direction per hour, but
+// facing north the hour's side flipped at noon: the sun jumped from the right
+// of the villa to the left between 12:00 and 13:00 (owner, 2026-10-16).
 
 /** The dome's radius, and the denominator the horizon drop's angle is measured
  *  against — one constant so the two cannot drift apart. */
@@ -43,7 +47,10 @@ export function liftFor(units: number): number {
   return units > 0 ? Math.atan(units / SKY_RADIUS) : 0;
 }
 
-/** The twilight band a body fades over as it sets: −1°..3° of TRUE altitude. */
+export interface Vec3 { x: number; y: number; z: number }
+
+/** The twilight band a body fades over as it sets: −1°..3° of TRUE altitude
+ *  (walking, where the real horizon is in view). */
 export const SET_LOW = (-1 * Math.PI) / 180;
 export const SET_HIGH = (3 * Math.PI) / 180;
 
@@ -54,64 +61,103 @@ export function horizonFade(alt: number): number {
   return Math.max(0, Math.min(1, t));
 }
 
-/** Where the overview draws the horizon and the zenith, radians from eye
- *  level. A fixed direction is seen only while the camera's tilt puts it in
- *  the upper half of the view — a window as tall as half the field of view
- *  (~23° at the overview's fov 0.8) — so the whole sky is squeezed into about
- *  that much, placed for the tilts the overview is used at: at 40–50° down
- *  every hour shows when facing it; steeper, the low sun; flatter, the high
- *  one. ⚠️ 2.496.390 first used the sky colours' own drop (horizon 54° down,
- *  zenith at eye level): rendered on the real villa, a morning sun then hid
- *  under the house at every tilt but the steepest. */
-export const OVERVIEW_HORIZON = (-42 * Math.PI) / 180;
-export const OVERVIEW_ZENITH = (-20 * Math.PI) / 180;
+/** The overview's set/rise band: −2°..1°. The arc's ends sit beside the villa
+ *  on the ground, so a sun just risen is already seen there rather than still
+ *  fading in. */
+export const ARC_SET_LOW = (-2 * Math.PI) / 180;
+export const ARC_SET_HIGH = (1 * Math.PI) / 180;
 
-/** The altitude a body at TRUE altitude `alt` is drawn at: the true one when
- *  walking (`lift` 0); in the overview, horizon..zenith squeezed into
- *  OVERVIEW_HORIZON..OVERVIEW_ZENITH. Rising with the true altitude, so the
- *  hours keep their order. */
-export function drawnAltitude(alt: number, lift: number): number {
-  if (!(lift > 0)) return alt;
-  const t = Math.max(0, alt) / (Math.PI / 2);
-  return OVERVIEW_HORIZON + t * (OVERVIEW_ZENITH - OVERVIEW_HORIZON);
+export function arcFade(alt: number): number {
+  const t = (alt - ARC_SET_LOW) / (ARC_SET_HIGH - ARC_SET_LOW);
+  return Math.max(0, Math.min(1, t));
+}
+
+/** The arc's radius, in lengths of the villa's longest side. 1.1 is the
+ *  owner's reference (2026-10-16): facing north and looking down, the sun goes
+ *  round the house and never crosses it. */
+export const ARC_SPANS = 1.1;
+
+/** The villa as the arc needs it: the centre of its ground and its longest
+ *  side, from the model's extents. */
+export interface VillaBox { cx: number; cz: number; ground: number; span: number }
+
+export function villaBox(min: Vec3, max: Vec3): VillaBox {
+  return {
+    cx: (min.x + max.x) / 2, cz: (min.z + max.z) / 2, ground: min.y,
+    span: Math.max(max.x - min.x, max.z - min.z),
+  };
 }
 
 /**
- * Where a body whose TRUE direction is (x,y,z) is drawn: a unit direction of
- * the sky, its drawn altitude, and its set/rise fade. The azimuth is never
- * touched. `dir` is null once it has set.
+ * Where a body whose TRUE direction is (x,y,z) sits on the arc round `villa`:
+ * a world point, its true altitude, its compass direction (unit, horizontal)
+ * and its set/rise fade. `at` is null once it has set. No camera in it.
  */
-export interface Vec3 { x: number; y: number; z: number }
+export function arcPoint(x: number, y: number, z: number, villa: VillaBox): {
+  alt: number; fade: number; side: { x: number; z: number }; at: Vec3 | null;
+} {
+  const h = Math.hypot(x, z);
+  const alt = Math.atan2(y, h);
+  // Exactly overhead has no azimuth: north stands in (a single instant; the
+  // azimuth either side of it is the true one).
+  const side = h > 1e-9 ? { x: x / h, z: z / h } : { x: 0, z: 1 };
+  const fade = arcFade(alt);
+  if (!(fade > 0)) return { alt, fade: 0, side, at: null };
+  const R = ARC_SPANS * villa.span, a = Math.max(0, alt);
+  const c = Math.cos(a);
+  return {
+    alt, fade, side,
+    at: { x: villa.cx + R * c * side.x, y: villa.ground + R * Math.sin(a), z: villa.cz + R * c * side.z },
+  };
+}
 
-export function skyDirection(x: number, y: number, z: number, lift: number): {
+/**
+ * 1 unless the body is really BEHIND the viewer, 0 when it is, smooth between.
+ * `side` is its compass direction, `alt` its true altitude, `camFwd` the
+ * camera's forward direction. A high body counts as beyond the villa from
+ * every side (it is over the roof), so only a low one on the viewer's side is
+ * hidden — never one merely beside the villa.
+ */
+export function behindFade(side: { x: number; z: number }, alt: number, camFwd: Vec3): number {
+  const fl = Math.hypot(camFwd.x, camFwd.z);
+  if (fl < 1e-9) return 1;
+  const v = (side.x * camFwd.x + side.z * camFwd.z) / fl;   // +1 beyond the villa, −1 on the viewer's side
+  const c = Math.cos(Math.max(0, alt));
+  const t = Math.max(0, Math.min(1, (v * c + (1 - c) + 0.6) / 0.3));
+  return t * t * (3 - 2 * t);
+}
+
+/** How far in from the screen's edges a body waits, as a share of the width
+ *  and the height. */
+export const EDGE_MARGIN = 0.07;
+
+/** Where a body whose point lands at screen (x,y) — pixels, in a w×h view — is
+ *  shown: there, or at the nearest place EDGE_MARGIN inside the edges. */
+export function holdOnScreen(x: number, y: number, w: number, h: number): { x: number; y: number; held: boolean } {
+  const mx = EDGE_MARGIN * w, my = EDGE_MARGIN * h;
+  const hx = Math.max(mx, Math.min(w - mx, x)), hy = Math.max(my, Math.min(h - my, y));
+  return { x: hx, y: hy, held: hx !== x || hy !== y };
+}
+
+/** The bodies' sizes in the overview, and their sky glow's, in lengths of the
+ *  villa's longest side. */
+export const SUN_SPANS = 0.13;
+export const MOON_SPANS = 0.09;
+export const GLOW_SPANS = 1.1;
+
+/**
+ * Walking: where a body whose TRUE direction is (x,y,z) is drawn — that
+ * direction, unit — and its set/rise fade. `dir` is null once it has set.
+ */
+export function skyDirection(x: number, y: number, z: number): {
   alt: number; fade: number; dir: Vec3 | null;
 } {
   const h = Math.hypot(x, z);
   const alt = Math.atan2(y, h);
   const fade = horizonFade(alt);
-  const drawnAlt = drawnAltitude(alt, lift);
   if (!(fade > 0)) return { alt, fade: 0, dir: null };
-  const c = Math.cos(drawnAlt);
-  // Exactly overhead has no azimuth: north stands in (a single instant; the
-  // azimuth either side of it is the true one).
-  const ux = h > 1e-9 ? x / h : 0, uz = h > 1e-9 ? z / h : 1;
-  return { alt, fade, dir: { x: ux * c, y: Math.sin(drawnAlt), z: uz * c } };
-}
-
-/** Over how many radians above the middle of the view a body fades in
- *  (beyondFade). */
-export const BEYOND_BAND = (6 * Math.PI) / 180;
-
-/**
- * 1 when a body drawn in direction `dir` is in the UPPER half of the view —
- * above the point the camera looks at, the villa — 0 in the lower half, smooth
- * between. `camUp` is the camera's own up direction (unit). Only whether the
- * body is shown depends on it; where it is never does.
- */
-export function beyondFade(dir: Vec3, camUp: Vec3): number {
-  const up = dir.x * camUp.x + dir.y * camUp.y + dir.z * camUp.z;
-  const t = Math.max(0, Math.min(1, up / Math.sin(BEYOND_BAND)));
-  return t * t * (3 - 2 * t);
+  const l = Math.hypot(x, y, z) || 1;
+  return { alt, fade, dir: { x: x / l, y: y / l, z: z / l } };
 }
 
 /** How much the sun's disc warms toward the horizon, over the last 25° of

@@ -232,8 +232,9 @@ export class SunController {
    * `real` vs `alt` is the day/night PREVIEW pin: they differ only when
    * Settings is forcing a side of the horizon, which is what made a simulated
    * 04:00 render as bright noon with no stars and no moon.
-   * `drawn` is where the sun DISC is in the sky (skyBodies.skyDirection) and
-   * `frame` where that lands on screen.
+   * `drawn` is the sun disc's true altitude@azimuth on the overview's arc
+   * round the villa (skyBodies.arcPoint), `frame` where it lands on screen and
+   * `held` when it is waiting at the screen edge.
    */
   private reportSky(
     date: Date, real: number, alt: number, azimuth: number,

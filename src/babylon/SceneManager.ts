@@ -1091,6 +1091,8 @@ export class SceneManager {
     if (!this.loadedMeshes.length) return;
     const ext = this.worldExtends(this.loadedMeshes);
     this.overview.fitTo({ min: ext.min, max: ext.max });
+    // The sun's and moon's arc goes round the villa, sized from it (skyBodies).
+    this.sky.setVilla(ext.min, ext.max);
     // A saved per-device default (see saveOverviewDefault) overrides the
     // auto-fit angle/tilt/zoom/pan — fitTo() still ran first so the pan
     // bounds and icon-zoom reference are correct for THIS model.
