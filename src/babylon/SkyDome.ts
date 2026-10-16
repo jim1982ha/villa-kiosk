@@ -307,9 +307,9 @@ export class SkyDome {
     // sun beside the real one.
     const overview = liftFor(this.dropUnits) > 0 && this.villa !== null;
     const arc = overview ? arcPoint(x, y, z, this.villa as VillaBox) : null;
-    const shown = arc && arc.at ? showOnArc(this.scene, arc.at, arc.side, arc.alt) : null;
+    const shown = arc && arc.at ? showOnArc(this.scene, arc.at, arc.side, arc.alt, this.villa as VillaBox) : null;
     const alpha = arc && shown ? arc.fade * shown.alpha : 0;
-    if (arc && shown) drawOnArc(this.sunDisc, this.sunGlow, shown.at, this.villa as VillaBox, SUN_PLANE, SUN_SPANS, alpha, 0.55);
+    if (arc && shown) drawOnArc(this.sunDisc, this.sunGlow, shown, this.villa as VillaBox, SUN_PLANE, SUN_SPANS, alpha, 0.55);
     this.sunMat.alpha = alpha;
     this.sunDisc.setEnabled(this.enabled && alpha > 0);
     this.sunGlow.mesh.setEnabled(this.enabled && alpha > 0);

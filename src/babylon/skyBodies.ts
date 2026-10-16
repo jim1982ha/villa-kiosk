@@ -139,6 +139,28 @@ export function holdOnScreen(x: number, y: number, w: number, h: number): { x: n
   return { x: hx, y: hy, held: hx !== x || hy !== y };
 }
 
+/**
+ * How a body is drawn for a camera `pointDist` from its point and `villaDist`
+ * from the villa's centre: at what DEPTH along its own line of sight, and how
+ * much its size in the world is scaled.
+ *
+ * ⚠️ ZOOMED IN, THE SUN WASHED OVER THE VILLA (owner's recording,
+ * 2026-10-16, 2.496.391). The point is near the villa, so a camera that zooms
+ * in gets close to it: the disc and its glow grew to fill the screen, and a
+ * point between the camera and the house was drawn over the house. So:
+ *   · it is drawn on the same line of sight but never nearer than just beyond
+ *     the villa (villaDist + one villa length): the house always hides it
+ *     where they meet, and where it shows on screen does not change;
+ *   · it never looks bigger than from NEAREST_SPANS villa lengths away — about
+ *     the overview's usual zoom, where its size was chosen.
+ */
+export const NEAREST_SPANS = 1.9;
+
+export function drawnDepth(pointDist: number, villaDist: number, span: number): { depth: number; scale: number } {
+  const depth = Math.max(pointDist, villaDist + span);
+  return { depth, scale: depth / Math.max(pointDist, NEAREST_SPANS * span) };
+}
+
 /** The bodies' sizes in the overview, and their sky glow's, in lengths of the
  *  villa's longest side. */
 export const SUN_SPANS = 0.13;

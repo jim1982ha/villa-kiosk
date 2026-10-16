@@ -1,3 +1,8 @@
+## 2.496.392
+
+### Fixed
+- Zooming in close no longer floods the view with the sun's light. The sun and its glow never look bigger than at your usual zoom, and they are always drawn behind the villa, so the house hides them instead of being washed over. They still show in the same place on the screen. The moon follows the same rule.
+
 ## 2.496.391
 
 ### Changed

@@ -16,7 +16,7 @@ import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import type { Scene } from "@babylonjs/core/scene";
-import { behindFade, GLOW_SPANS, holdOnScreen, type VillaBox, type Vec3 } from "./skyBodies";
+import { behindFade, drawnDepth, GLOW_SPANS, holdOnScreen, type VillaBox, type Vec3 } from "./skyBodies";
 
 /** A soft additive light round a body, so the sky is brightest on its side.
  *  Procedural (no image: the wall may have no internet). */
@@ -66,13 +66,15 @@ const fwd = new Vector3();
 
 /**
  * Show `point` (skyBodies.arcPoint's `at`) for the active camera: how opaque
- * the body is from the viewer's side (0 when really behind), and where it is
- * drawn — the point, or, when that is off screen, the screen edge on its side
- * at the point's own depth. Null when there is no camera or the point is
- * behind it.
+ * the body is from the viewer's side (0 when really behind), where it shows on
+ * screen — the point, or, when that is off screen, the screen edge on its side
+ * — and where it is drawn in the world: on that line of sight, never nearer
+ * than just beyond the villa, with the scale its size takes there
+ * (skyBodies.drawnDepth). Null when there is no camera or the point is behind
+ * it.
  */
-export function showOnArc(scene: Scene, point: Vec3, side: { x: number; z: number }, alt: number):
-  { at: Vector3; alpha: number; screen: { x: number; y: number }; held: boolean } | null {
+export function showOnArc(scene: Scene, point: Vec3, side: { x: number; z: number }, alt: number, villa: VillaBox):
+  { at: Vector3; scale: number; alpha: number; screen: { x: number; y: number }; held: boolean } | null {
   const cam = scene.activeCamera;
   if (!cam) return null;
   cam.getDirectionToRef(FWD, fwd);
@@ -81,24 +83,41 @@ export function showOnArc(scene: Scene, point: Vec3, side: { x: number; z: numbe
   const vp = cam.viewport.toGlobal(eng.getRenderWidth(), eng.getRenderHeight());
   const view = cam.getViewMatrix(), proj = cam.getProjectionMatrix();
   const p = new Vector3(point.x, point.y, point.z);
-  const s = Vector3.Project(p, Matrix.Identity(), view.multiply(proj), vp);
-  // Behind the camera a projection lands mirrored on screen: nothing to hold.
-  if (!(s.z > 0 && s.z < 1)) return null;
+  let s = Vector3.Project(p, Matrix.Identity(), view.multiply(proj), vp);
+  if (!(s.z > 0 && s.z < 1)) {
+    // Behind the camera's plane — zoomed in close under a high sun, the point
+    // is above and behind the eye. Its projection lands mirrored, so the side
+    // it is on is read in the camera's own frame instead, and it waits at the
+    // screen edge there (holdOnScreen) rather than vanishing.
+    // Only a body ABOVE the eye waits (at the top or a side): one below and
+    // behind it would wait along the bottom, over the ground in front of the
+    // house, so it is simply not seen.
+    const v = Vector3.TransformCoordinates(p, view);
+    const l = Math.hypot(v.x, v.y);
+    if (l < 1e-9 || !(v.y > 0)) return null;
+    const far = 4 * Math.max(vp.width, vp.height);
+    s = new Vector3(vp.x + vp.width / 2 + (v.x / l) * far, vp.y + vp.height / 2 - (v.y / l) * far, 0.5);
+  }
   const h = holdOnScreen(s.x - vp.x, s.y - vp.y, vp.width, vp.height);
-  const at = h.held
+  const onSight = h.held
     ? Vector3.Unproject(new Vector3(h.x, h.y, s.z), vp.width, vp.height, Matrix.Identity(), view, proj)   // viewport-relative pixels
     : p;
-  return { at, alpha, screen: { x: h.x / vp.width, y: h.y / vp.height }, held: h.held };
+  const eye = cam.globalPosition;
+  const d = drawnDepth(Vector3.Distance(eye, p),
+    Vector3.Distance(eye, new Vector3(villa.cx, villa.ground, villa.cz)), villa.span);
+  const at = eye.add(onSight.subtract(eye).normalize().scale(d.depth));
+  return { at, scale: d.scale, alpha, screen: { x: h.x / vp.width, y: h.y / vp.height }, held: h.held };
 }
 
-/** Put a body's disc and glow at `at`, sized from the villa. `plane` is the
- *  disc mesh's own size (the plane it was built with). */
-export function drawOnArc(disc: Mesh, glow: Glow, at: Vector3, villa: VillaBox, plane: number, spans: number,
-  alpha: number, glowPeak: number): void {
+/** Put a body's disc and glow where showOnArc says, sized from the villa and
+ *  scaled for its drawn depth. `plane` is the disc mesh's own size (the plane
+ *  it was built with). */
+export function drawOnArc(disc: Mesh, glow: Glow, shown: { at: Vector3; scale: number }, villa: VillaBox, plane: number,
+  spans: number, alpha: number, glowPeak: number): void {
   disc.infiniteDistance = false;
-  disc.position.copyFrom(at);
-  disc.scaling.setAll((spans * villa.span) / plane);
-  glow.mesh.position.copyFrom(at);
-  glow.mesh.scaling.setAll(GLOW_SPANS * villa.span);
+  disc.position.copyFrom(shown.at);
+  disc.scaling.setAll((spans * villa.span * shown.scale) / plane);
+  glow.mesh.position.copyFrom(shown.at);
+  glow.mesh.scaling.setAll(GLOW_SPANS * villa.span * shown.scale);
   glow.mat.alpha = alpha * glowPeak;
 }

@@ -170,9 +170,9 @@ export class NightSky {
     let alpha = 0;
     if (this.lift > 0) {
       const arc = this.villa ? arcPoint(x, y, z, this.villa) : null;
-      const shown = arc && arc.at ? showOnArc(this.scene, arc.at, arc.side, arc.alt) : null;
+      const shown = arc && arc.at ? showOnArc(this.scene, arc.at, arc.side, arc.alt, this.villa as VillaBox) : null;
       alpha = night > 0 && arc && shown ? night * arc.fade * shown.alpha : 0;
-      if (arc && shown) drawOnArc(this.moon, this.moonGlow, shown.at, this.villa as VillaBox, MOON_SIZE, MOON_SPANS, alpha, 0.25);
+      if (arc && shown) drawOnArc(this.moon, this.moonGlow, shown, this.villa as VillaBox, MOON_SIZE, MOON_SPANS, alpha, 0.25);
     } else {
       const { fade, dir: d } = skyDirection(x, y, z);
       // Placed even while hidden: where it is is the hour's, whether it shows
