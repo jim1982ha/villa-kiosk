@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.6.217 (16 October 2026)
+
+Alert cards (owner, 2026-10-16, alert #43: a mains-phase alert cleared at 15:40, back at 18:03, reopened under its number):
+- message_format.ROLE_SHORT / audience(short=True): an alert card's "To:", every "Status:" line and its bottom line say
+  "FM" (notice.Notices.heading/step). Reports, the People page, the Kiosk card's story and the villa's own messages keep
+  ROLE_WORDS ("Facility Manager"). The desk's statuses: "No answer from FM after N min", "Not delivered to FM: …", a
+  press without a name "by FM".
+- notice.Notices.bottom (TIMED_STAGES: reminder, escalated, back, still, reopened): a step's bottom line is its own
+  history line first — "Reminder sent 16/10/2026 18:20 to FM — No answer after 15 min" — so a quiet edit of another
+  chat's copy never reads as of that message's time. Its roles are the step's own (outcome `told`, per incident and
+  stage), never every role of the result (a Need help's answer to the presser). The desk's reminder status is now "No
+  answer after N min" (the step says "Reminder").
+- desk.py: the rule's all-clear taken over is a "closed" step (resolved, resolved late, cleared as the rule stopped
+  watching): ONE "Closing note sent … to Owner & FM" line, never "Update sent … to Owner" beside it.
+- notice.Notices.divider: a "back" step's run starts under "— Came back 16/10/2026 18:03 (2nd time in 7 days) —"; the
+  count is problems.incident_runs at the time it was recorded (app._runs → history "run"); an older record has none.
+- outcome.adopt_ha: the rule's own chat's roles count in "To:" and the step's roles from the first message taken over,
+  and in the result's later messages (`going`).
+- Not changed: the alert's quoted text ("… 4580 W / Above 4000 W, Held 15 min") is the villa rule's own message, copied
+  as written — its wording is the blueprint's. Every P2 step keeps Done / Need help in the owner's group (owner's choice).
+- tests/test_alert_card_runs.py drives the #43 run end to end (9 mutations red); tests pinning the old words updated.
+  Starter skills recorded.
+
 ## 0.6.216 (16 October 2026)
 
 Retro 2026-10-15:

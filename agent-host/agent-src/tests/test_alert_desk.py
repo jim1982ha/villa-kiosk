@@ -415,7 +415,7 @@ def test_after_done_the_desk_reads_the_device_once_and_reopens_what_is_still_bad
     res = _done(store, villa, iid, 20)
     assert res["not_quiet"] == [iid] and store.incident(iid)["closed_at"] is None
     (fm,) = [s for s in res["send"] if s["to"] == "fm"]
-    assert fm["status"] == "Done pressed by the facility manager, but front_door still reads unlocked: still open. VESTA keeps watching it." and fm["keyboard"]
+    assert fm["status"] == "Done pressed by FM, but front_door still reads unlocked: still open. VESTA keeps watching it." and fm["keyboard"]
     assert [a for a in res["actions"] if a["action"] == "ticket.reopen"]      # its own fault, open again
     assert not _tick(store, villa, 60).get("not_quiet")                         # read once
 

@@ -47,7 +47,7 @@ def _word(head: str) -> str | None:
 
 
 def stage_line(head: str, status: str, mark: str | None = None) -> str:
-    """The bottom line with its icon, when the message is about an incident: "⚠️ New alert", "⚠️ ⚙️ Reminder: …",
+    """The bottom line with its icon, when the message is about an incident: "⚠️ New alert", "⚠️ ⚙️ Reminder sent … to FM — …",
     "🆘 Need help pressed by …", "✅ Cleared in Home Assistant on …", "☑️ Done pressed by …. Note: VESTA cannot check
     this one; …". Any other message's status as it is."""
     word = _word(head)

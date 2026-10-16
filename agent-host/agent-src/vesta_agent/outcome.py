@@ -125,20 +125,30 @@ class Outcome:
             return item.get("incident_id") or (res.get("incident_id") if item.get("keyboard") else None)
         # the roles this result's notice of each incident goes to: its "To:" line, the same in every chat (notice.heading)
         going: dict[int, set[str]] = {}
+        # the roles each notice (incident, stage) goes to: its own bottom line says them (notice.Notices.bottom) — a
+        # "Need help" escalates to the owner while the presser's own chat gets the answer; only the first is the step's
+        told: dict[tuple[int, str | None], set[str]] = {}
         sent_to: dict[int, set[str]] = {}               # a report's: every role its "To:" names, the same in every chat
         if self.notices:
             for chat, item, roles in pairs:
                 to = self.notices.roles_for(chat, roles)
                 if incident_of(item):
                     going.setdefault(int(incident_of(item)), set()).update(to)
+                    told.setdefault((int(incident_of(item)), item.get("stage")), set()).update(to)
                 else:
                     sent_to.setdefault(id(item), set()).update(to)
         posted: dict[int, list[int]] = {}               # incident → the chats this result showed it in, the last one last
         # Home Assistant's own messages first: the desk's messages below then replace them where both land
         for h in res.get("ha_messages") or []:
-            for chat in await self.adopt_ha(h, skill_name, going.get(int(h.get("incident_id") or 0))):
+            hid = int(h.get("incident_id") or 0)
+            for chat in await self.adopt_ha(h, skill_name, going.get(hid), told.get((hid, h.get("stage")))):
                 notice(h["incident_id"], h.get("stage"), chat)
-                posted.setdefault(int(h["incident_id"]), []).append(chat)
+                posted.setdefault(hid, []).append(chat)
+                if self.notices:
+                    # the rule's chat is told too: this result's own messages say so in their "To:" and the step's
+                    # bottom line (owner, 2026-10-16)
+                    going.setdefault(hid, set()).update(self.notices.roles_for(chat))
+                    told.setdefault((hid, h.get("stage")), set()).update(self.notices.roles_for(chat))
         # ⚠️ SETTLED BEFORE THIS RESULT'S MESSAGES ARE POSTED (architecture review 12, 2026-10-09): "Need help" sends the
         # owner a new message with the buttons; settled after it, that message lost them the moment it arrived
         for s in res.get("settle") or []:
@@ -175,7 +185,7 @@ class Outcome:
                                    incident=int(iid) if iid else None, keyboard=kb, document=doc,
                                    thread=int(iid) if iid else None, origin=origin, stage=item.get("stage"),
                                    mark=item.get("mark"), also=going.get(int(iid)) if iid else sent_to.get(id(item)),
-                                   title=item.get("title"))
+                                   title=item.get("title"), told=told.get((int(iid), item.get("stage"))) if iid else None)
             # the people the skill asked to answer (result.message first_in_line) — the skill's, never a role named here
             if iid and kb and item.get("first_in_line"):
                 asked.setdefault(int(iid), []).append((chat, bool(mid)))
@@ -290,8 +300,9 @@ class Outcome:
         kept = sorted((n, k) for k, n in best.items())
         return [(pairs[n][0], pairs[n][1], frozenset(roles[k])) for n, k in kept], unrouted
 
-    async def adopt_ha(self, h: dict, skill_name: str | None = None, also=None) -> list[int]:
-        """Home Assistant's messages of one automation run become incident messages (outcome key ha_messages)."""
+    async def adopt_ha(self, h: dict, skill_name: str | None = None, also=None, told=None) -> list[int]:
+        """Home Assistant's messages of one automation run become incident messages (outcome key ha_messages). `also`:
+        the roles the incident's other messages of this result go to; `told`: those of this same step."""
         ctx, iid, text = (h or {}).get("context"), (h or {}).get("incident_id"), (h or {}).get("text") or ""
         if not (ctx and str(iid or "").isdigit() and text):
             return []
@@ -301,11 +312,18 @@ class Outcome:
                 break
             await asyncio.sleep(wait)
             found = self.state.ha_sent(ctx)
+        # ⚠️ "TO:" COUNTS THE RULE'S OWN CHAT FROM THE FIRST MESSAGE (owner, 2026-10-16, #43): the first alert taken over
+        # in the group said "To: FM" — only the roles the agent itself sent to — and every later one "To: Owner & FM"
+        if self.notices:
+            here = {r for chat, _ in found for r in self.notices.roles_for(chat)}
+            also, told = set(also or ()) | here, set(told or ()) | here
         for chat, mid in found:
             # Home Assistant's own alert, taken over: the incident's text, the earlier messages' times, its buttons
             kb = self.buttons.keyboard(int(iid), chat, skill_name) if skill_name and self.buttons.open(iid) else None
             # "{time}" in its status: the villa's time now, as every message of the agent's writes it
             status = (h.get("status") or "").replace("{time}", when(datetime.now(timezone.utc), self.poster.tz))
+            if self.notices:
+                status = self.notices.bottom(h.get("stage"), told or self.notices.roles_for(chat), status)
             p = layout.parts(body=text, status=status,
                              head=self.notices.heading(chat, int(iid), stage=h.get("stage"), also=also) if self.notices else "")
             await self.thread.adopt(int(iid), chat, mid, p, keyboard=kb)

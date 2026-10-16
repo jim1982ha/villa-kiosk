@@ -29,11 +29,12 @@ class Poster:
                    keyboard: dict | None = None, document: str | None = None, photo=None,
                    thread: int | str | None = None, plain: bool = False, origin: Origin | None = None,
                    stage: str | None = None, mark: str | None = None, also=None,
-                   title: str | None = None) -> int | None:
+                   title: str | None = None, told=None) -> int | None:
         """The message in `chat`: its heading — who it is for (`roles`), the incident and its history — unless it answers
         the person who asked, in their chat, or is `plain`; its parts laid out (layout.py) to fit ONE Telegram message —
         a photo's or a file's caption included, so the copy recorded is the message sent; then its `thread` (an incident,
-        an approval, a snapshot): the earlier copy in this chat goes. The message id, or None when nothing arrived."""
+        an approval, a snapshot): the earlier copy in this chat goes. `told`: the roles this step of the incident went to
+        (its bottom line says them: notice.Notices.bottom). The message id, or None when nothing arrived."""
         # "{time}": the moment it says what happened, as every notice writes one (10/10/2026 15:04, the villa's time)
         now = when(datetime.now(timezone.utc), self.tz)
         text, status, lead = (x.replace("{time}", now) for x in (text, status or "", lead or ""))
@@ -56,6 +57,8 @@ class Poster:
             head = titled(title, to, "")
         elif incident is not None and self.notices and not plain and not answering:
             head = self.notices.heading(chat, incident, roles, stage, also)
+            # its own step, when and to whom, on its bottom line: a quiet copy elsewhere never reads as of its own time
+            status = self.notices.bottom(stage, told or self.notices.roles_for(chat, roles), status)
         p = layout.parts(body=text, status=status, head=head, lead=lead, mark=mark)
         # ⚠️ A CAPTION IS 1,024 CHARACTERS (architecture review 20): laid out for 4,096, a long incident's snapshot went as a
         # photo and a separate text — only the text was recorded, so the next snapshot left the old photo behind

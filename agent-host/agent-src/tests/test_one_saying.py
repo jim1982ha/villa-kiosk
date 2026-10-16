@@ -64,11 +64,12 @@ def test_the_heading_names_the_incident_first_and_what_was_sent_to_whom(tmp_path
     # it stands (owner, 2026-10-13: in the same block, and "To:" says roles, never names)
     text = v.tg.sent[-1][1]
     title, to, *rest = text.split("\n")
-    assert (title, to) == ("#21 (existing)", "To: Owner & Facility Manager")      # every role it went to
+    assert (title, to) == ("#21 (existing)", "To: Owner & FM")      # every role it went to ("FM": owner, 2026-10-16)
     history = [ln for ln in text.split("\n\nStatus:\n")[1].split("\n") if ln.startswith("- ")]
-    assert re.fullmatch(r"- Alert sent \d\d/\d\d/\d{4} \d\d:\d\d to Facility Manager", history[0])
-    assert re.fullmatch(r"- Reminder sent \d\d/\d\d/\d{4} \d\d:\d\d to Facility Manager", history[1]) and len(history) == 2
-    assert text.endswith(f"{history[1]}\n⚠️ ⚙️ x")                     # where it stands, right under its history
+    assert re.fullmatch(r"- Alert sent \d\d/\d\d/\d{4} \d\d:\d\d to FM", history[0])
+    assert re.fullmatch(r"- Reminder sent \d\d/\d\d/\d{4} \d\d:\d\d to FM", history[1]) and len(history) == 2
+    # where it stands, right under its history — its own step first: what, when, to whom (owner, 2026-10-16)
+    assert re.search(rf"{re.escape(history[1])}\n⚠️ ⚙️ Escalation sent \d\d/\d\d/\d{{4}} \d\d:\d\d to Owner — x$", text), text
     assert not any(w in text for w in ("For:", "First time seen", ", to ", "Follow Up", "-------"))
 
 
@@ -85,10 +86,10 @@ def test_a_copy_settled_by_a_press_is_headed_closed_once_the_desk_closes_it(tmp_
     # its status replaced, the copy lists every earlier step — the alert sent — and is no longer "new" (owner,
     # 2026-10-15: a replaced status dropped the step it showed)
     assert v.tg.edits[-1][2].split("\n")[0] == f"#{iid}-P2 (existing)"
-    assert "- Alert sent " in v.tg.edits[-1][2] and "to Facility Manager" in v.tg.edits[-1][2]
+    assert "- Alert sent " in v.tg.edits[-1][2] and "to FM" in v.tg.edits[-1][2]
     st.update_incident(iid, closed_at=datetime.now(timezone.utc).isoformat(), state="done")   # the desk closes it
     run(v.thread.close(iid, "Done pressed by Fabien on {time}."))                      # the desk's settle
-    assert v.tg.edits[-1][2].startswith(f"#{iid}-P2 (closed)\nTo: Facility Manager\n")
+    assert v.tg.edits[-1][2].startswith(f"#{iid}-P2 (closed)\nTo: FM\n")
     assert v.tg.edits[-1][2].endswith("Done pressed by Fabien on " + v.tg.edits[-1][2].rsplit(" on ", 1)[1])
     n = len(v.tg.edits)
     run(v.thread.close(iid, "x"))
@@ -141,7 +142,9 @@ def test_need_help_and_an_unchecked_closure_carry_their_icon_end_to_end(tmp_path
     now = datetime.now(timezone.utc)
     iid = desk.intake(st, ev("opened", summary=ALERT), now, mode_reader=lambda: "x")["incident_id"]
     asyncio.run(v.outcome.carry_out(desk.reply(st, iid, "need_help", "fm", now, name="Fabien"), "alert-desk"))
-    assert all(t.rsplit("\n", 1)[1].startswith("🆘 Need help pressed by Fabien on ") for _, t, _ in v.tg.sent[-2:])
+    # the owner's escalation says its step first (owner, 2026-10-16): "🆘 Escalation sent … to Owner — Need help …"
+    assert all(t.rsplit("\n", 1)[1].startswith("🆘 ") and "Need help pressed by Fabien on " in t.rsplit("\n", 1)[1]
+               for _, t, _ in v.tg.sent[-2:])
     asyncio.run(v.outcome.carry_out(desk.reply(st, iid, "done", "owner", now, name="Jim"), "alert-desk"))
     assert v.tg.edits[-1][2].rsplit("\n", 1)[1].startswith("✅ Done pressed by Jim on ")     # the owner's copy, settled
     # 10 min later the lock does not answer: closed, not checked
@@ -220,12 +223,13 @@ def test_one_incident_one_picture_in_every_chat(tmp_path):
     run(v.outcome.carry_out({"send": [R.message("owner", ALERT, incident=5, buttons=True, stage="new"),
                                       R.message("fm", ALERT, incident=5, buttons=True, stage="new")]}, "alert-desk"))
     run(v.outcome.carry_out({"send": [R.message("fm", ALERT, incident=5, buttons=True, stage="reminder",
-                                                status="Reminder: no answer after 15 min")]}, "alert-desk"))
+                                                status="No answer after 15 min")]}, "alert-desk"))
     shown = {c: r["text"] for c, r in v.thread.shown(5).items()}
     assert set(shown) == {GROUP, FM, JM2} and len(set(shown.values())) == 1, shown       # the group's copy too
     text = shown[GROUP]
     # every role it went to, never a name (owner, 2026-10-13): the group is the owner's
-    assert text.startswith("#5 (existing)\nTo: Owner & Facility Manager\n") and text.endswith("⚠️ ⚙️ Reminder: no answer after 15 min")
+    assert text.startswith("#5 (existing)\nTo: Owner & FM\n") and \
+        re.search(r"\n⚠️ ⚙️ Reminder sent \d\d/\d\d/\d{4} \d\d:\d\d to FM — No answer after 15 min$", text), text
     # the group was not sent the reminder: its copy was edited quietly, and keeps its buttons
     assert not [c for c, _, _ in v.tg.sent[3:] if c == GROUP]
     group = v.thread.shown(5)[GROUP]
@@ -250,7 +254,7 @@ def test_an_old_copy_gets_the_new_heading_whole(tmp_path):
     # review 28: a copy sent before 0.12.152, settled, showed the old heading with the new icons and no style
     v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "Fabien", "role": "fm"}]})
     head = v.notices.retitle(9, "For: Fabien, P2 Incident: Follow Up #9\nAlert sent on 09/10/2026 13:12, to Fabien", FM)
-    assert head.split("\n")[:2] == ["#9 (new)", "To: Facility Manager"]
+    assert head.split("\n")[:2] == ["#9 (new)", "To: FM"]
 
 
 def test_the_history_names_roles_and_keeps_its_first_alert(tmp_path):
@@ -266,5 +270,5 @@ def test_the_history_names_roles_and_keeps_its_first_alert(tmp_path):
     for _ in range(25):
         v.notices.record(5, "reminder", [(FM, "fm"), (555, "fm")])
     lines = v.notices.heading(FM, 5, "fm").split("\n")
-    assert lines[1] == "To: Facility Manager" and lines[2].startswith("- Alert sent ") and lines[2].endswith(" to Facility Manager")
+    assert lines[1] == "To: FM" and lines[2].startswith("- Alert sent ") and lines[2].endswith(" to FM")
     assert lines[3] == "- … 7 earlier notices" and len(lines) == 2 + 20

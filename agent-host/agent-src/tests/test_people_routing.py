@@ -155,10 +155,11 @@ def test_to_names_roles_only_never_a_person(tmp_path):
                                       {"to": "fm", "text": "Door unlocked.", "title": "Door"}]}))
     # two messages: the owner's went to the group, the facility manager's to two people — each says its role
     assert sorted(t.split("\n")[1] for _, t, _ in v.tg.sent) == ["To: Facility Manager", "To: Facility Manager", "To: Owner"]
-    # one incident sent to both: ONE "To:" for it, both roles — in every chat, and in its history line
+    # one incident sent to both: ONE "To:" for it, both roles — in every chat, and in its history line; an alert card
+    # says "FM" (owner, 2026-10-16)
     v.notices.record(25, "new", [(GROUP, "owner"), (FABIEN, "fm"), (JM, "fm")])
     head = v.notices.heading(GROUP, 25, "owner", "closed")
-    both = "Owner & Facility Manager"
+    both = "Owner & FM"
     assert head.split("\n")[1] == f"To: {both}" and head.split("\n")[2].endswith(f" to {both}"), head
     # a history line recorded before 0.12.181 named people: read back as their roles
     v.state.set_incident_history(26, [{"at": "2026-10-12T08:00:00+00:00", "stage": "new", "to": ["Fabien", "the Owner"]}])
@@ -616,6 +617,12 @@ def test_a_photo_with_a_long_heading_is_posted_as_one_message_and_recorded_as_se
     class Notices:
         def heading(self, chat, incident, roles, stage=None, also=None):
             return "#9-P1 (existing)\nTo: JM\n" + "\n".join(f"- Reminder sent 10/10/2026 10:{i:02d} to JM" for i in range(30))
+
+        def roles_for(self, chat, to=None):
+            return set()
+
+        def bottom(self, stage, roles, status, at=None):
+            return status
     run(Poster(send=send, notices=Notices()).post(JM, "Camera snapshot", incident=9, photo=("SlBFRw==", "image/jpeg")))
     (text, photo), = sent
     assert photo and len(text) <= 1000 and text.startswith("#9-P1 (existing)\nTo: JM\nCamera snapshot\n\nStatus:\n"

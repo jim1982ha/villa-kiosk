@@ -130,7 +130,7 @@ def test_an_alert_no_facility_manager_received_goes_to_the_owner_at_once_and_the
     out = desk.tick(st, datetime.now(timezone.utc))
     assert out["escalated"] == [iid] and st.incident(iid)["state"] == "escalated"
     (owner,) = [s for s in out["send"] if s["to"] == "owner"]
-    assert owner["status"].startswith("Not delivered to the facility manager") and owner["keyboard"]
+    assert owner["status"].startswith("Not delivered to FM") and owner["keyboard"]
     # told once: a second refused message says nothing more
     n = len([c for c, _, _ in v.tg.sent if c == OWNER])
     run(v.outcome.carry_out({"send": [{"to": "fm", "text": "Another"}]}))

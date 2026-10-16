@@ -163,7 +163,8 @@ class Vesta:
         # a voice message's words (voice.py): the skill prepares the audio, Home Assistant reads it
         self.voice = Voice(self.s, self.tg, self.skills, self.code_command, self.delivery.send, self.state, self.cf_headers)
         # the heading of every message the agent sends on its own (notice.py): who it is for, the incident, its history
-        self.notices = Notices(self.state, self.policy, settings.timezone, severity=self._severity, closed=self._closed)
+        self.notices = Notices(self.state, self.policy, settings.timezone, severity=self._severity, closed=self._closed,
+                               runs=self._runs)
         self.thread.retitle = self.notices.retitle           # a settled copy of a closed incident is headed "Closed"
         self.thread.reheading = self.notices.heading         # a replaced status: every earlier step listed again
         # putting one message in one chat (posting.py): the alerts and the approval requests both use it
@@ -203,6 +204,13 @@ class Vesta:
         """Is the incident closed, as the store holds it (the notices' heading: "Closed")."""
         from vesta_shared.store import Store
         return bool((Store(self.s.store_path).incident(int(iid)) or {}).get("closed_at"))
+
+    def _runs(self, iid: int) -> int | None:
+        """How many times an incident alerted in the last days, as the store holds it (a came-back step's divider)."""
+        from vesta_shared.problems import incident_runs
+        from vesta_shared.store import Store
+        inc = Store(self.s.store_path).incident(int(iid))
+        return incident_runs(dict(inc)) if inc else None
 
     def _severity(self, iid: int) -> str | None:
         """An incident's priority (P1…P4) as the store holds it: the notices' heading says it."""

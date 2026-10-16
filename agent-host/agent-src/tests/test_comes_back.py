@@ -40,7 +40,7 @@ def test_a_closing_message_is_headed_closed_never_new(tmp_path):
     # owner, 2026-10-11: "For: JM, P2 Incident: New #9 … Closed on …" — "is it a closure or not?"
     v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]})
     n = v.notices
-    to = "To: Facility Manager"
+    to = "To: FM"                                                   # an alert card's word (owner, 2026-10-16)
     assert n.heading(FM, 9, "fm", "new") == f"#9 (new)\n{to}"
     assert n.heading(FM, 9, "fm", "closed") == f"#9 (closed)\n{to}"               # no history: still "closed"
     assert n.heading(FM, 9, "fm", "back") == f"#9 (existing)\n{to}"               # owner: never "Follow Up"

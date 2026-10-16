@@ -2,13 +2,15 @@
 and the one heading every such message carries (owner, 2026-10-11, the order and shape the owner drew):
 
     #9-P1 (existing)                          ← in bold (vesta_shared.message_format: the one shape and style)
-    To: Owner & Facility Manager
+    To: Owner & FM
     <the alert>                               ← as a quote
     (empty line)
     Status:
-    - Alert sent 09/10/2026 13:12 to Owner & Facility Manager     ← a quote, in italics
-    - Escalation sent 09/10/2026 13:27 to Owner
-    ⚠️ ⚙️ Reminder: no answer after 15 min                         ← the same quote: history and where it stands
+    - Alert sent 09/10/2026 13:12 to Owner & FM                   ← a quote, in italics
+    - Closing note sent 09/10/2026 13:20 to Owner & FM
+    — Came back 09/10/2026 15:02 (2nd time in 7 days) —            ← a new run of the same alert starts here
+    - Came-back alert sent 09/10/2026 15:02 to Owner & FM
+    ⚠️ ⚙️ Reminder sent 09/10/2026 15:17 to FM — No answer after 15 min    ← this step: what, when, to whom, why
 
 A message about no incident is headed the same way, by its title (owner, 2026-10-12: one layout):
 
@@ -32,6 +34,7 @@ import re
 
 from vesta_shared.message_format import INCIDENT_TITLE, MARK_ICONS, ROLE_WORDS, TO, UNTITLED, audience, titled
 from vesta_shared.messaging import incident_tag
+from vesta_shared.problems import AGAIN_DAYS
 from vesta_shared.timeutil import moment_label
 
 from datetime import datetime, timezone
@@ -48,6 +51,15 @@ STAGES = {"new": "Alert sent", "reminder": "Reminder sent", "escalated": "Escala
 #: closure or not?"; then: "mention if it's a new or an existing alert, no more Follow Up wording anywhere"): the
 #: message says what IT is; a notice without a stage goes by the incident's history.
 HEAD_WORDS = {"new": "new", "closed": "closed"}
+#: The steps whose bottom line says what was sent, when and to whom before the desk's words ("⚠️ ⚙️ Reminder sent
+#: 16/10/2026 18:20 to FM — No answer after 15 min").
+#: ⚠️ A QUIET EDIT CARRIES ITS OWN TIME (owner, 2026-10-16, #43): the group's copy of a came-back alert, sent at 18:03,
+#: was edited without a sound to "Reminder: no answer after 15 min" — it read as if it had happened at 18:03, and the
+#: reminder was nowhere in its history (a card's history is drawn as it stood BEFORE its step). The first alert is its
+#: message's own moment; a closing says its own time ("Cleared on …").
+TIMED_STAGES = ("reminder", "escalated", "back", "still", "reopened")
+#: Between a step's line and the desk's words on the bottom line.
+STEP_SEP = " — "
 EXISTING = "existing"
 #: An incident's history kept: its first notice, a line counting those dropped, and the latest ones (review 28: after
 #: 20 notices the first alert vanished without a word).
@@ -91,6 +103,11 @@ def _kept(history: list[dict]) -> list[dict]:
     return [first, {"dropped": dropped + cut}] + rest[cut:]
 
 
+def _ordinal(n: int) -> str:
+    """2nd, 3rd, 11th, 22nd."""
+    return f"{n}{'th' if 10 <= n % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')}"
+
+
 def when(at: datetime, zone: str) -> str:
     """A moment as every notice says it: 09/10/2026 13:12, in the villa's time (timeutil.moment_label: one format)."""
     return moment_label(at, zone)
@@ -98,8 +115,11 @@ def when(at: datetime, zone: str) -> str:
 
 class Notices:
     def __init__(self, state, policy: Callable, timezone_name: str, severity: Callable[[int], str | None] | None = None,
-                 closed: Callable[[int], bool] | None = None):
+                 closed: Callable[[int], bool] | None = None, runs: Callable[[int], int | None] | None = None):
         self.state, self.policy, self.tz = state, policy, timezone_name
+        # how many times an incident alerted in AGAIN_DAYS, as its skill stored it (problems.incident_runs): a came-back
+        # step's divider says it ("— Came back … (2nd time in 7 days) —")
+        self.runs = runs or (lambda _iid: None)
         # an incident's priority (P1…P4) as its skill stored it: "P2 Incident: New #18" (owner, 2026-10-10)
         self.severity = severity or (lambda _iid: None)
         # whether an incident is closed as its skill stored it: its copies are headed "Closed" (architecture review 25)
@@ -124,8 +144,8 @@ class Notices:
         which the layout places (layout.py: the title and "To …:" on top, the history under "Status:"):
 
             #9-P2 (existing)            the incident, its priority, and "new" / "existing" / "closed" (`stage`)
-            To: Owner & Facility Manager                      who this message is for
-            - Alert sent 11/10/2026 09:57 to Facility Manager      one line per earlier notice
+            To: Owner & FM                                    who this message is for
+            - Alert sent 11/10/2026 09:57 to FM               one line per earlier notice
             - Escalation sent 11/10/2026 10:27 to Owner
 
         "To:" names every role the incident went to — every earlier notice's, and `also` (roles), this notice's — the
@@ -135,18 +155,42 @@ class Notices:
             return titled(title or UNTITLED, audience(set(also or ()) or self.roles_for(chat, to)), "")
         history = self.state.incident_history(incident)
         everyone = {r for h in history for r in self._roles(h)} | set(also or ())
-        who = audience(everyone or self.roles_for(chat, to)) or "this chat"
+        who = audience(everyone or self.roles_for(chat, to), short=True) or "this chat"
         try:
             p = self.severity(int(incident))
         except Exception:  # noqa: BLE001 — the heading is written without its priority, never not at all
             p = None
         word = self.word(int(incident), stage, bool(history))
-        lines = [f"- … {h['dropped']} earlier notice{'s' if h['dropped'] > 1 else ''}" if h.get("dropped") else
-                 f"- {h['note']}" if h.get("note") else
-                 f"- {self._pressed(h)} {when(datetime.fromisoformat(h['at']), self.tz)}" if h.get("stage") == PRESSED_STAGE else
-                 f"- {STAGES.get(h.get('stage'), 'Sent')} {when(datetime.fromisoformat(h['at']), self.tz)} "
-                 f"to {audience(self._roles(h)) or 'nobody'}" for h in history]
+        lines = []
+        for h in history:
+            if h.get("stage") == "back":
+                # ⚠️ ONE RUN, THEN THE NEXT (owner, 2026-10-16, #43): a closing note, then a came-back alert, then a
+                # reminder — two runs of the alert read as one story with nothing between them
+                lines.append(self.divider(h))
+            lines.append(f"- … {h['dropped']} earlier notice{'s' if h['dropped'] > 1 else ''}" if h.get("dropped") else
+                         f"- {h['note']}" if h.get("note") else
+                         f"- {self._pressed(h)} {when(datetime.fromisoformat(h['at']), self.tz)}" if h.get("stage") == PRESSED_STAGE else
+                         f"- {self.step(h.get('stage'), self._roles(h), datetime.fromisoformat(h['at']))}")
         return "\n".join([f"{incident_tag(incident)}{f'-{p}' if p else ''} ({word})", f"{TO}{who}", *lines])
+
+    def step(self, stage: str | None, roles, at: datetime) -> str:
+        """A step as a card's "Status:" says it — what was sent, when, to whom: "Reminder sent 16/10/2026 18:20 to FM".
+        The ONE wording of a step, in its history line and on its own bottom line (`bottom`)."""
+        return f"{STAGES.get(stage, 'Sent')} {when(at, self.tz)} to {audience(roles, short=True) or 'nobody'}"
+
+    def bottom(self, stage: str | None, roles, status: str, at: datetime | None = None) -> str:
+        """The bottom line of a notice of `stage` sent now to `roles`: a TIMED_STAGES step says itself first, then the
+        skill's words (`status`); any other notice's status as it is."""
+        if stage not in TIMED_STAGES:
+            return status
+        line = self.step(stage, roles, at or datetime.now(timezone.utc))
+        return f"{line}{STEP_SEP}{status}" if status else line
+
+    def divider(self, h: dict) -> str:
+        """The line a came-back step's run starts under: "— Came back 16/10/2026 18:03 (2nd time in 7 days) —"."""
+        run = h.get("run")
+        times = f" ({_ordinal(run)} time in {AGAIN_DAYS} days)" if isinstance(run, int) and run > 1 else ""
+        return f"— Came back {when(datetime.fromisoformat(h['at']), self.tz)}{times} —"
 
     @staticmethod
     def _pressed(h: dict) -> str:
@@ -207,8 +251,16 @@ class Notices:
             return
         history = self.state.incident_history(incident)
         chats = [[int(c), sorted(self.roles_for(c, to))] for c, to in sent]
-        history.append({"at": (at or datetime.now(timezone.utc)).isoformat(), "chats": chats,
-                        "stage": stage if stage in STAGES else ("update" if history else "new")})
+        line = {"at": (at or datetime.now(timezone.utc)).isoformat(), "chats": chats,
+                "stage": stage if stage in STAGES else ("update" if history else "new")}
+        if line["stage"] == "back":
+            try:
+                run = self.runs(int(incident))
+            except Exception:  # noqa: BLE001 — the divider is drawn without its count, never not at all
+                run = None
+            if isinstance(run, int):
+                line["run"] = run
+        history.append(line)
         self.state.set_incident_history(incident, _kept(history))
 
     def _roles(self, h: dict) -> set[str]:

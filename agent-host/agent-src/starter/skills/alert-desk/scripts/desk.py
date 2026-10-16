@@ -383,14 +383,17 @@ def resolved(store: Store, ev: dict, now: datetime) -> dict:
         late = _find_by_ha_incident(store, ev.get("ha_incident"), closed_within=timedelta(days=1), now=now)
         if late:
             out["incident_id"], out["decision"] = late["id"], "resolved_late"
-            out["ha_messages"] = [R.ha_message(late["id"], context=ev.get("_context_id"),
+            out["ha_messages"] = [R.ha_message(late["id"], context=ev.get("_context_id"), stage="closed",
                                                **about(late, "Cleared on {time}."))]
         return out
     _close(store, inc, now, out, "Cleared on {time}.")
     out["incident_id"], out["decision"] = inc["id"], "resolved"
     # Home Assistant's all-clear takes the incident's number and the original alert, and replaces its older ones
     # its status in the desk's words, as every other end says it (never "✅ <the alert's name> — resolved after …")
-    out["ha_messages"] = [R.ha_message(inc["id"], context=ev.get("_context_id"),
+    # ⚠️ A CLOSING STEP (owner, 2026-10-16, #43): recorded without a stage, the rule's own all-clear was "Update sent
+    # 15:40 to Owner" beside "Closing note sent 15:40 to FM" — one end, two lines. Now ONE: "Closing note sent … to
+    # Owner & FM"
+    out["ha_messages"] = [R.ha_message(inc["id"], context=ev.get("_context_id"), stage="closed",
                                        **about(inc, "Cleared on {time}."))]
     store.audit("alert-desk", "resolved", {"incident": inc["id"]})
     return out
@@ -572,7 +575,7 @@ def abandoned(store: Store, ev: dict, now: datetime) -> dict:
         out["decision"] = "abandoned_cleared"
         # ⚠️ ITS OWN MESSAGE SAYS THE SAME END (architecture review 23): taken over with the rule's "🔶 no longer
         # tracked" as its status, Home Assistant's "✅ cleared just inside the limit" became an orange warning
-        out["ha_messages"] = [R.ha_message(inc["id"], context=ev.get("_context_id"), **about(inc, cleared))]
+        out["ha_messages"] = [R.ha_message(inc["id"], context=ev.get("_context_id"), stage="closed", **about(inc, cleared))]
         return out
     p = json.loads(inc.get("payload") or "{}")
     p.update({"abandoned": True, **{k: ev[k] for k in ("mode", "bad_states") if ev.get(k) is not None}})
@@ -629,7 +632,7 @@ def reply(store: Store, iid: int, option: str, sender_role: str, now: datetime, 
     button = BUTTONS.get(option) or {"label": option, "mark": None}
     label = button["label"]
     pressed = PRESSED.format(label=label, name="{who}", time="{time}")      # "{who}" filled below, "{time}" by the engine
-    who = name or {"owner": "the owner", "fm": "the facility manager"}.get(sender_role, sender_role)
+    who = name or {"owner": "the owner", "fm": "FM"}.get(sender_role, sender_role)
 
     def here(status: str, stage: str = "update", mark: str | None = None) -> dict:
         """The answer in the chat it came from: it replaces the incident's message there, so it says it all."""
@@ -696,8 +699,7 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
             store.update_incident(inc["id"], payload=json.dumps(p), state=Incident.ESCALATED,
                                   escalated_at=now.isoformat(), assignee="owner")
             out["send"] += tell(inc["severity"], "escalated", incident=inc["id"],
-                                **about(inc, "Not delivered to the facility manager: Telegram refused every chat of "
-                                             "theirs. Over to you."))
+                                **about(inc, "Not delivered to FM: Telegram refused every chat of theirs. Over to you."))
             out["escalated"].append(inc["id"])
             continue
         if inc["state"] not in (Incident.ASKED, Incident.REASKED):
@@ -707,12 +709,13 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
         if inc["state"] == Incident.ASKED and age >= timedelta(minutes=reask):
             store.update_incident(inc["id"], state=Incident.REASKED, reasked_at=now.isoformat())
             out["send"] += tell(inc["severity"], "reminder", incident=inc["id"], chased=True,
-                                **about(inc, f"Reminder: no answer after {int(reask)} min"))
+                                # the engine writes the step first: "Reminder sent … to FM — No answer after 15 min"
+                                **about(inc, f"No answer after {int(reask)} min"))
             out["reasked"].append(inc["id"])
         elif inc["state"] == Incident.REASKED and age >= timedelta(minutes=escal):
             store.update_incident(inc["id"], state=Incident.ESCALATED, escalated_at=now.isoformat(), assignee="owner")
             out["send"] += tell(inc["severity"], "escalated", incident=inc["id"],
-                                **about(inc, f"No answer from the facility manager after {int(escal)} min"))
+                                **about(inc, f"No answer from FM after {int(escal)} min"))
             out["escalated"].append(inc["id"])
     # villa silent: the engine's Home Assistant connection has been down too long
     last = store.last_beat(HA_BEAT)

@@ -34,18 +34,23 @@ TO = "To: "
 #: The roles as every "To:" line, history line and page names them, in this order (owner, 2026-10-13: "To: Owner",
 #: "To: Facility Manager", "To: Owner & Facility Manager" — roles only, never a person's name).
 ROLE_WORDS = {"owner": "Owner", "fm": "Facility Manager"}
+#: The same roles as an alert card says them — its "To:", every line of its "Status:" and its bottom line
+#: (vesta_agent/notice.py). ⚠️ "FM" ON AN ALERT CARD (owner, 2026-10-16): "Reminder sent … to Facility Manager" made
+#: every update line long; reports, the People page and the villa's own messages keep ROLE_WORDS.
+ROLE_SHORT = {"owner": "Owner", "fm": "FM"}
 #: What joins two roles in a "To:" line.
 AND = " & "
 
 
-def audience(roles) -> str:
+def audience(roles, short: bool = False) -> str:
     """Who a message is for, as its "To:" line says it: its roles in ROLE_WORDS order ("Owner & Facility Manager"); ""
-    for none.
+    for none. `short`: as an alert card says them (ROLE_SHORT: "Owner & FM").
 
     ⚠️ ROLES, NEVER NAMES (owner, 2026-10-13): "To: Fabien, JM" named the people the People list gives each role — a
     message is for a role, whoever holds it. The same words in Home Assistant's own messages (vesta_message.jinja)."""
     wanted = set(roles or ())
-    return AND.join(w for r, w in ROLE_WORDS.items() if r in wanted)
+    words = ROLE_SHORT if short else ROLE_WORDS
+    return AND.join(w for r, w in words.items() if r in wanted)
 
 
 #: The longest "To:" line any message can carry (every role): the room a skill keeps for it in a caption.

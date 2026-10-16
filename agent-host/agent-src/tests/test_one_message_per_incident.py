@@ -81,11 +81,14 @@ def test_each_chat_keeps_only_the_latest_message_and_it_recalls_the_alert(agent)
     ha_alert(agent)
     tick(agent, 20)                            # the reminder replaces the alert in the FM's chat
     (fm,) = shown(agent, FM_CHAT)
-    assert status(fm) == "Reminder: no answer after 15 min" and SUMMARY in fm and "What to do:" in fm
+    # the step says itself — what, when, to whom — before the desk's words (owner, 2026-10-16, #43)
+    assert re.fullmatch(r"Reminder sent \d\d/\d\d/\d{4} \d\d:\d\d to FM — No answer after 15 min", status(fm)) \
+        and SUMMARY in fm and "What to do:" in fm
     assert agent.tg.sent[-1][2], "the reminder carries the buttons"
     tick(agent, 50)                            # the escalation replaces Home Assistant's alert in the owner's chat
     (grp,) = shown(agent, GROUP)
-    assert status(grp) == "No answer from the facility manager after 45 min" and SUMMARY in grp
+    assert re.fullmatch(r"Escalation sent \d\d/\d\d/\d{4} \d\d:\d\d to Owner — No answer from FM after 45 min",
+                        status(grp)) and SUMMARY in grp
     assert (GROUP, 500) in agent.tg.deleted
     assert len(shown(agent, FM_CHAT)) == 1     # the FM's reminder is untouched by the owner's message
 
@@ -145,10 +148,13 @@ def test_need_help_reaches_the_owner_with_the_buttons_to_answer(agent):
                                                 "message": {"message_id": reminder, "chat": {"id": FM_CHAT}}, "bot": BOT}))
     owner = agent.thread.shown(int(iid))[GROUP]
     assert owner["buttons"] and not owner["settled"], owner
-    assert re.fullmatch(r"Need help pressed by Wayan on .+: the owner is asked to act\.", status(owner["text"])) and SUMMARY in owner["text"]
+    # the escalation's step to the owner only — never the presser's chat, which got the answer (owner, 2026-10-16)
+    assert re.fullmatch(r"Escalation sent .+ to Owner — Need help pressed by Wayan on .+: the owner is asked to act\.",
+                        status(owner["text"])) and SUMMARY in owner["text"]
     assert all(mid != owner["mid"] for _, mid, _ in agent.tg.edits)     # never edited: its buttons are still there
     (fm,) = shown(agent, FM_CHAT)
-    assert status(fm) == status(owner["text"])                         # the same sentence in every chat (2026-10-11)
+    # the same sentence in every chat (2026-10-11); the owner's copy, the escalation, says its step first (2026-10-16)
+    assert status(owner["text"]).endswith(" — " + status(fm))
     # the Kiosk's card tells the same story, through the wiring the app gives its tickets (owner, 2026-10-14) — and
     # Telegram's Status the same events in the same words: the press, then the escalation; never an "Update sent"
     # (architecture review, 2026-10-15)
@@ -198,7 +204,8 @@ def test_every_notice_has_one_heading_with_the_incidents_history(agent):
                                                     stage="escalated")]}, "alert-desk"))
     later = agent.tg.sent[-1][1]
     assert re.fullmatch(r"#7 \(existing\)\nTo: .+\nStill stopped\n\nStatus:\n"
-                        r"- Alert sent \d\d/\d\d/\d{4} \d\d:\d\d to [^\n]+\n⚠️ ⚙️ Still open", later), later
+                        r"- Alert sent \d\d/\d\d/\d{4} \d\d:\d\d to [^\n]+\n"
+                        r"⚠️ ⚙️ Escalation sent \d\d/\d\d/\d{4} \d\d:\d\d to Owner", later), later
 
 
 def test_a_fault_closed_in_the_kiosk_says_who_and_when_on_telegram():

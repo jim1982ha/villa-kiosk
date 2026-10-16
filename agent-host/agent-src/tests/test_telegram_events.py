@@ -121,7 +121,7 @@ def test_a_press_on_the_agents_own_message_is_handled(agent):
     press = {**old, "id": "cb2", "data": "i:1:need_help"}
     run(agent.on_ha_event("telegram_callback", press))
     assert agent.tg.toasts[-1][1] == "Need help: noted."
-    assert any(status(t).startswith("Need help pressed by ") for _, t, _ in agent.tg.sent)   # the owner is told
+    assert any("Need help pressed by " in status(t) for _, t, _ in agent.tg.sent)   # the owner is told
 
 
 def test_a_press_in_a_private_chat_is_answered_there_and_its_buttons_go(agent):
