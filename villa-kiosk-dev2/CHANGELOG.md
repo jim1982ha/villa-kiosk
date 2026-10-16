@@ -1,3 +1,11 @@
+## 2.496.393
+
+### Fixed
+- A fault card on the Overview now names the device's room whenever the villa's system knows it. It no longer says "Other" when the sensor, or the ticket, is in a room.
+
+### Changed
+- Every screen now works out a device's room the same way: the map's groups, device lists, windows, the Cockpit cards, new tickets and guest reports. Tickets still show the room they were opened in.
+
 ## 2.496.392
 
 ### Fixed
