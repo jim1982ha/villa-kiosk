@@ -1,3 +1,9 @@
+## 2.496.387
+
+### Fixed
+- The full screen and dark bottom bar of 2.496.385 never reached an installed VESTA app on Android: the app kept serving itself its own saved copy of its settings, from the version before. It now always reads them fresh from the villa. To get them: open VESTA once and accept the update (or close it and open it again), then remove VESTA from the home screen and add it again.
+- Behind it: a file the Kiosk keeps on the device (an icon, a font) now comes from the version running, never from the one before it.
+
 ## 2.496.386
 
 ### Changed
