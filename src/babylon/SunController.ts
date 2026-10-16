@@ -232,8 +232,8 @@ export class SunController {
    * `real` vs `alt` is the day/night PREVIEW pin: they differ only when
    * Settings is forcing a side of the horizon, which is what made a simulated
    * 04:00 render as bright noon with no stars and no moon.
-   * `drawn` is where the sun DISC lands (skyFraming.placeBody); read it
-   * against `sinTilt` on the `place` line to say whether it is in frame.
+   * `drawn` is where the sun DISC is in the sky (skyBodies.skyDirection) and
+   * `frame` where that lands on screen.
    */
   private reportSky(
     date: Date, real: number, alt: number, azimuth: number,

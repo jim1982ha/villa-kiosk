@@ -5,8 +5,8 @@
 // ⚠️ TWO SUNS (owner, 2026-10-05, a screenshot at 17:37). SkyMaterial always
 // paints a sun at the TRUE direction: a small white disc (`sundisk`) and a
 // wide forward-scattering glow (`hgPhase`). Walking, that IS the sun, and the
-// billboard is off. In the overview the billboard is the sun — on a dome round
-// the villa (skyFraming) — and the material's one is usually out of frame
+// billboard is off. In the overview the billboard is the sun — in the lowered
+// sky (skyBodies) — and the material's one is usually out of frame
 // because the camera looks down; at a shallow tilt it came into view beside
 // the billboard. The sky's COLOUR still comes from the true direction
 // (sunPosition), so the hour and the twilight stay honest: only the disc and

@@ -408,12 +408,11 @@ export class SceneManager {
     // Moon + stars. Entirely optional to the rest of the scene, and computed
     // from date/lat/lng — an install without HA's opt-in Moon integration gets
     // exactly the same night sky, which is the requirement.
-    this.nightSky = new NightSky(this.scene, this.sky.camera);
+    this.nightSky = new NightSky(this.scene);
     this.sun.setNightSky(this.nightSky);
-    // Sun and moon are framed against the camera and the horizon drop, so a
-    // tilt or a view change re-places both — through ONE owner (SkyDome),
-    // because two would race for ordering and leave the moon behind the sun
-    // in a sky they are meant to share.
+    // Sun and moon follow the horizon drop (and fade with the tilt), so a view
+    // change re-places both — through ONE owner (SkyDome), because two would
+    // race for ordering and leave the moon behind the sun.
     this.sky.setMoon(this.nightSky);
 
     this.visuals = new EntityVisuals(this.scene, opts.config, this.frames, this.walker);
@@ -1092,14 +1091,6 @@ export class SceneManager {
     if (!this.loadedMeshes.length) return;
     const ext = this.worldExtends(this.loadedMeshes);
     this.overview.fitTo({ min: ext.min, max: ext.max });
-    // The overview draws the sun and the moon on an arc round the villa's
-    // outline as the screen shows it (skyFraming): the outline is every
-    // mesh's box, reduced once to a handful of points.
-    const corners: { x: number; y: number; z: number }[] = [];
-    for (const m of this.loadedMeshes) {
-      for (const v of m.getBoundingInfo().boundingBox.vectorsWorld) corners.push({ x: v.x, y: v.y, z: v.z });
-    }
-    this.sky.setVillaOutline(corners);
     // A saved per-device default (see saveOverviewDefault) overrides the
     // auto-fit angle/tilt/zoom/pan — fitTo() still ran first so the pan
     // bounds and icon-zoom reference are correct for THIS model.
