@@ -14,7 +14,7 @@ import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
-const { rowText, alarmText, stateWords } = await import("@/config/reading");
+const { rowText, alarmText, stateWords, lockPill, coverPill, readableState, chartColours } = await import("@/config/reading");
 const { readingRows } = await import("@/config/readingRows");
 const { buildAttentionItems } = await import("@/config/attention");
 const { describeLogbookEntry } = await import("@/components/cockpit/cockpitData");
@@ -23,6 +23,11 @@ const { BINARY_WORDS } = await import("@/config/binarySensorWords");
 // THE OLD PATH — what each surface called until this release.
 const { deviceRowText } = await import("@/utils/entityValue");
 const { stateLabelFor } = await import("@/config/BinarySensorClasses");
+// ...and what the lock and cover pills and the history bar called until step 2.
+const { statusKeyFor, STATUS_PILL_CLASS, paintState, historyStateColor, paletteColorFor } = await import("@/utils/stateColors");
+const { coverStateLabel } = await import("@/utils/panelRules");
+const { prettyState } = await import("@/utils/entityValue");
+const { binaryLook } = await import("@/config/binaryLook");
 const domainOf = (id) => id.split(".")[0];
 const oldRow = (id, e) => deviceRowText(e, domainOf(id));
 const oldAlarm = (id, e) => domainOf(id) === "binary_sensor"
@@ -109,6 +114,59 @@ console.log("\n  Recent activity");
   ck(`every (entity, state) pair (${ids.length * STATES.length + 1}) is worded as before`, bad.length === 0, bad.slice(0, 5));
 }
 
+// ── step 2: the control windows' pills and the history bar ────────────────
+console.log("\n  the lock window's pill");
+{
+  // The old LockPanel: the tone by the lock's reading of its state, the words
+  // HA sent, shouted; "UNKNOWN" when the window has no entity.
+  const old = (id, st) => ({ text: (st ?? "unknown").replace(/_/g, " ").toUpperCase(), tone: STATUS_PILL_CLASS[statusKeyFor(st ?? "", id)] });
+  add("lock.l_not_ready", "not_ready");
+  const cases = [...ids.filter((id) => domainOf(id) === "lock").map((id) => [id, E[id].state]), ["lock.l_gone", undefined], ["lock.l_not_ready", "not_ready"]];
+  const bad = cases.filter(([id, st]) => JSON.stringify(lockPill(id, st)) !== JSON.stringify(old(id, st))).map(([id, st]) => `${id} ${st}: ${JSON.stringify(lockPill(id, st))}`);
+  ck(`lockPill's words and tone are the old pill's, for every lock state (${cases.length})`, bad.length === 0, bad.slice(0, 5));
+  const said = new Set(cases.map(([id, st]) => `${lockPill(id, st).text}/${lockPill(id, st).tone}`));
+  const WANT = ["LOCKED/on", "UNLOCKED/danger", "OPEN/danger", "JAMMED/danger", "UNLOCKING/transitional", "OPENING/transitional", "UNAVAILABLE/unavailable", "/unavailable", "UNKNOWN/unavailable", "NOT READY/off"];
+  ck("  (the set reaches every tone: secured, open, jammed, moving, offline, blank, no entity, a state nobody models)",
+     WANT.every((w) => said.has(w)), WANT.filter((w) => !said.has(w)));
+}
+
+console.log("\n  the cover window's pill");
+{
+  const old = (id, st, pos) => ({ text: coverStateLabel(st, pos), tone: STATUS_PILL_CLASS[statusKeyFor(st ?? "", id)] });
+  // The window passes the SLIDER's value (it follows a drag), or undefined
+  // when the cover reports no position — so every state meets every position.
+  const SLIDER = [undefined, 0, 1, 40, 99, 100];
+  const cases = [];
+  for (const id of [...ids.filter((i) => domainOf(i) === "cover"), "cover.c_gone"])
+    for (const pos of SLIDER) cases.push([id, E[id]?.state, pos]);
+  const bad = cases.filter(([id, st, pos]) => JSON.stringify(coverPill(id, st, pos)) !== JSON.stringify(old(id, st, pos)))
+    .map(([id, st, pos]) => `${id} ${st} ${pos}: ${JSON.stringify(coverPill(id, st, pos))}`);
+  ck(`coverPill's words and tone are the old pill's, for every state × position (${cases.length})`, bad.length === 0, bad.slice(0, 5));
+  const said = new Set(cases.map(([id, st, pos]) => `${coverPill(id, st, pos).text}/${coverPill(id, st, pos).tone}`));
+  const WANT = ["Open/on", "Partially open (40%)/on", "Closed/off", "opening/transitional", "stopped/off", "unavailable/unavailable", "/unavailable", "Unknown/unavailable"];
+  ck("  (the set reaches every branch: open, partly open, closed, moving, a raw state, offline, blank, no entity)",
+     WANT.every((w) => said.has(w)), WANT.filter((w) => !said.has(w)));
+}
+
+console.log("\n  the history bar (StateTimeline)");
+{
+  const STATES = [...new Set([...ids.map((id) => E[id].state), "on", "off", "none", "None", "not_home", "_odd_start", "returning", "armed_night", "fault"])];
+  const badWords = STATES.filter((st) => readableState(st) !== prettyState(st));
+  ck(`readableState words every state as prettyState did (${STATES.length})`, badWords.length === 0, badWords.slice(0, 5));
+  // Every colouring the bar is handed: a domain's own (lock, cover, climate…),
+  // a binary sensor's class look, a words sensor's palette, a constant.
+  const fns = [
+    ...ids.map((id) => [id, historyStateColor(id)]),
+    ...ids.filter((id) => domainOf(id) === "binary_sensor").map((id) => [`look ${id}`, binaryLook(id, E[id].attributes.device_class, alertThresholds[id]?.alertState).color]),
+    ["palette", paletteColorFor(STATES)], ["constant", () => "green"],
+  ];
+  const bad = [];
+  for (const [name, f] of fns) { const a = chartColours(f), b = paintState(f); for (const st of STATES) if (a(st) !== b(st)) bad.push(`${name} ${st}: ${a(st)}`); }
+  ck(`chartColours paints every state as paintState did, for each colouring (${fns.length} × ${STATES.length})`, bad.length === 0, bad.slice(0, 5));
+  ck("  (an offline stretch takes the legend's colour over a colouring that says otherwise)",
+     chartColours(() => "green")("unavailable") === "var(--status-warning)" && chartColours(() => "green")("connected") === "green");
+}
+
 console.log("\n  each surface asks config/reading, and nothing lower");
 {
   const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
@@ -125,6 +183,21 @@ console.log("\n  each surface asks config/reading, and nothing lower");
     ck(`${name} calls reading`, call.test(t) && /from "(@\/config|\.)\/reading"/.test(t));
     ck("  ...and none of the helpers under it", !LOWER.test(t), t.match(LOWER)?.[0]);
   }
+  // Step 2: the pills and the history bar — words AND tone/colour from reading.
+  const LOWER2 = new RegExp(`${LOWER.source}|\\b(statusKeyFor|STATUS_PILL_CLASS|coverStateLabel|paintState|historyStateColor|binaryStatus)\\b|from "@/utils/(stateColors|panelRules|entityValue)"`);
+  for (const [name, file, calls] of [
+    ["the lock window's pill", "components/panels/LockPanel.tsx",
+      [/const pill = lockPill\(mapping\.entityId, entity\?\.state\)/, /className=\{`status-pill \$\{pill\.tone\}`\}/, /\{pill\.text\}/]],
+    ["the cover window's pill", "components/panels/CoverPanel.tsx",
+      [/const pill = coverPill\(mapping\.entityId, entity\?\.state, hasPosition \? position\.value : undefined\)/, /className=\{`status-pill \$\{pill\.tone\}`\}>\{pill\.text\}</]],
+    ["the history bar", "components/panels/StateTimeline.tsx",
+      [/labelFor = readableState,/, /useMemo\(\(\) => chartColours\(ownColour\)/]],
+  ]) {
+    const t = src(file);
+    ck(`${name} calls reading for its words and its colour`, calls.every((c) => c.test(t)) && /from "@\/config\/reading"/.test(t),
+       calls.filter((c) => !c.test(t)).map(String));
+    ck("  ...and none of the helpers under it", !LOWER2.test(t), t.match(LOWER2)?.[0]);
+  }
 }
 
-done("✅ every list reads its words from config/reading, unchanged");
+done("✅ every list, pill and history bar reads its words and colours from config/reading, unchanged");

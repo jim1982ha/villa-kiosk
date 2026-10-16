@@ -4,8 +4,7 @@ import BasePanel from "./BasePanel";
 import type { PanelProps } from "@/types/panel.types";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
-import { statusKeyFor, STATUS_PILL_CLASS } from "@/utils/stateColors";
-import { coverStateLabel } from "@/utils/panelRules";
+import { coverPill } from "@/config/reading";
 import { useLiveDraft } from "@/hooks/useLiveDraft";
 import ControlFrame from "./ControlFrame";
 
@@ -17,7 +16,7 @@ export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
   // would otherwise snap it back and the release would send a stale number.
   const position = useLiveDraft<number>(hasPosition ? pos as number : undefined, 0,
     (v) => HAServices.setCoverPosition(ws, mapping.entityId, v));
-  const stateLabel = coverStateLabel(entity?.state, hasPosition ? position.value : undefined);
+  const pill = coverPill(mapping.entityId, entity?.state, hasPosition ? position.value : undefined);
 
   return (
     <BasePanel title={mapping.label} entityId={mapping.entityId} icon={<Blinds size={22} />} onClose={onClose}>
@@ -25,7 +24,7 @@ export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
           the bespoke pill carried no detail. The notice, as every panel. */}
       <ControlFrame entity={entity} mapping={mapping} device="cover">
         <div className="center" style={{ marginBottom: 16 }}>
-          <span className={`status-pill ${STATUS_PILL_CLASS[statusKeyFor(entity?.state ?? "", mapping.entityId)]}`}>{stateLabel}</span>
+          <span className={`status-pill ${pill.tone}`}>{pill.text}</span>
         </div>
 
       <div className="row-buttons">
