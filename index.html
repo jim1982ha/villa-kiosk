@@ -8,17 +8,13 @@
          mode the page actually rendered in half the time. -->
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#F7F4EE" />
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101311" />
-    <!-- The manifest's background_color/theme_color are DARK (#101311), on purpose.
-         Android paints its three-button navigation bar (a phone's cover screen,
-         where gestures are off) from the installed app's manifest, which has no
-         light/dark variant: #F7F4EE drew a white band under the dark map. A dark
-         bar under the light theme reads as the phone's own frame; a white one
-         under the dark theme read as a broken layout. The page's own theme-color
-         above still decides the top bar in both themes.
-         display_override starts with "fullscreen": an installed app on Android
-         hides the clock and the three buttons (a swipe from the edge shows
-         them), as the villa's own app does. "display" stays "standalone"
-         because iOS reads only that key — the iPad and iPhone are unchanged. -->
+    <!-- The manifest's "display" is "fullscreen": an installed app on Android
+         uses the whole screen, with no clock and no navigation buttons (a swipe
+         from the edge shows them), as VESTA does inside the villa's app. It is
+         "display" itself, not display_override: a browser that may read only
+         "display" (Brave adds the app as a plain shortcut) saves it
+         when the app is added — removing and adding the app again applies a
+         change. A browser without fullscreen falls back to standalone. -->
     <meta name="application-name" content="VESTA" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />

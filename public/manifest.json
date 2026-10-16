@@ -8,11 +8,10 @@
   "categories": ["utilities", "lifestyle"],
   "start_url": "./index.html",
   "scope": "./",
-  "display": "standalone",
-  "display_override": ["fullscreen", "standalone", "minimal-ui"],
+  "display": "fullscreen",
   "orientation": "any",
-  "background_color": "#101311",
-  "theme_color": "#101311",
+  "background_color": "#F7F4EE",
+  "theme_color": "#F7F4EE",
   "screenshots": [
     {
       "src": "./screenshots/wide.png",
