@@ -37,6 +37,7 @@ from zoneinfo import ZoneInfo
 from vesta_shared import script, skill_settings  # noqa: E402  (client, store, zone: one set-up for every skill script)
 from vesta_shared import periods as kinds  # noqa: E402  (the period kinds and their words, read by the report page too)
 from vesta_shared.timeutil import lasting  # noqa: E402  (the one duration wording)
+from vesta_shared import past  # noqa: E402  (a read of the past with how far it got; the one "could not be read whole")
 
 from vesta_shared.device_state import NO_VALUE, OFFLINE, RestartDrops  # noqa: E402  (the one "does this device answer")
 # ⚠️ WHAT A CONTROL CAN PROVE (architecture review 32 follow-up, 2026-10-11): an on/off control that stayed OFF the whole
@@ -80,16 +81,15 @@ def number(state) -> float | None:
     return v if v == v else None
 
 
-def rows_of(client, eid: str, start: datetime, end: datetime) -> list[tuple[datetime, str]]:
+def read(client, eid: str, start: datetime, end: datetime,
+         now: datetime | None) -> tuple[list[tuple[datetime, str]], datetime, datetime | None]:
     """(time, state) of every recorded change of `eid` in [start, end), oldest first, the state before `start`
-    included as the first row (Home Assistant gives it)."""
-    out = []
-    for r in client.history([eid], start, end).get(eid) or []:
-        try:
-            out.append((datetime.fromisoformat(r.get("last_changed") or r.get("last_updated")), str(r.get("state"))))
-        except (TypeError, ValueError):
-            continue
-    return sorted(out)
+    included as the first row (Home Assistant gives it); how far the reading reached (`end`, now, or where it stopped);
+    where it stopped short (None: read whole).
+
+    ⚠️ NEVER PAST THE REACH (vesta_shared.past): a period, a chart and a normal end where the reading stopped."""
+    got = client.history_read([eid], start, end, now)
+    return got.changes(eid), got.reach(eid), (None if got.whole(eid) else got.reach(eid))
 
 
 # ------------------------------------------------------------------ find
@@ -345,17 +345,23 @@ def state_series(rows: list[tuple[datetime, str]], start: datetime, end: datetim
     return out[-CHART_POINTS:]
 
 
-def chart_series(rows: list[tuple[datetime, str]], start: datetime, end: datetime) -> list[list]:
+def chart_series(rows: list[tuple[datetime, str]], start: datetime, end: datetime,
+                 reach: datetime | None = None) -> list[list]:
     """The readings as at most CHART_POINTS [time, value] points over [start, end): each slice's HIGHEST reading, the
-    last value carried through a slice with none; None where the device gave no number (offline)."""
+    last value carried through a slice with none; None where the device gave no number (offline) — and past `reach`,
+    where the reading stopped: nothing is known there, nothing is drawn."""
     if not rows or end <= start:
         return []
+    reach = end if reach is None else reach
     step = (end - start) / CHART_POINTS
     out, i, last = [], 0, None
     while i < len(rows) and rows[i][0] < start:
         last = number(rows[i][1]); i += 1
     for k in range(CHART_POINTS):
         a, b = start + k * step, start + (k + 1) * step
+        if a >= reach:
+            out.append([a.isoformat(), None])
+            continue
         vals = [last] if last is not None else []
         while i < len(rows) and rows[i][0] < b:
             last = number(rows[i][1]); i += 1
@@ -366,26 +372,27 @@ def chart_series(rows: list[tuple[datetime, str]], start: datetime, end: datetim
 
 
 def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_days: float, zone: ZoneInfo,
-             series: bool = False) -> dict:
-    """`series`: each numeric device's readings for a chart too (--out: the investigation page, page.py)."""
+             series: bool = False, now: datetime | None = None) -> dict:
+    """`series`: each numeric device's readings for a chart too (--out: the investigation page, page.py). `now`: the
+    time it is (the clock when not given) — no reading goes past it."""
     span_days = (end - start).total_seconds() > 86400
     parts = []
     names = client.states(ids)
     for eid in ids:
-        rows = rows_of(client, eid, start, end)
+        # where the history could not be read further (vesta_shared.ha_client: its cap) — never stretched past it
+        rows, reach, cut = read(client, eid, start, end, now)
         if not rows:
             parts.append({"entity_id": eid, "lines": [f"{eid}: nothing recorded in this period."], "nothing": True,
                           "label": ((names.get(eid) or {}).get("attributes") or {}).get("friendly_name") or spoken(eid)})
             continue
-        # where Home Assistant's history could not be read further (vesta_shared.ha_client: its cap) — never stretched
-        cut = (getattr(client, "history_cut", None) or {}).get(eid)
-        base_rows = rows_of(client, eid, start - timedelta(days=baseline_days), start) if baseline_days > 0 else []
+        base_rows, base_reach, _ = read(client, eid, start - timedelta(days=baseline_days), start, now) \
+            if baseline_days > 0 else ([], start, None)
         on = threshold([number(s) for _, s in base_rows + rows])
-        ps = periods(rows, min(cut, end) if cut else end, on)
-        ref = normal(base_rows, start, on) if base_rows else {}
+        ps = periods(rows, reach, on)
+        ref = normal(base_rows, base_reach, on) if base_rows else {}
         lines = [f"{eid}: {len(rows)} readings" + (f"; counted as running above {on:g}" if on else "")]
         if cut:
-            lines.append(f"  ⚠️ its history could not be read whole: nothing is known after {at(cut, zone, span_days)} "
+            lines.append(f"  ⚠️ {past.unread('its history', at(cut, zone, span_days))} "
                          "(too many readings) — say so, and narrow the period to read the rest")
         if ref:
             r = ref
@@ -422,11 +429,11 @@ def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_da
             part["control"] = "off" if seen and seen <= OFF_STATES else "on" if seen and seen <= ON_STATES else None
         if series and any(number(v) is not None for _, v in rows):
             part.update(name=attrs.get("friendly_name") or eid, unit=attrs.get("unit_of_measurement") or "",
-                        series=chart_series(rows, start, end),
+                        series=chart_series(rows, start, end, reach),
                         # ⚠️ THE CHART THAT FITS THE DEVICE (owner, 2026-10-12: "would you use other metric?"): a device
                         # that RUNS gets its minutes running per hour against its usual — its days before drawn as
                         # lines were spikes nobody could read; one read as LEVELS (a temperature) keeps them, dashed
-                        **({"per_hour": running_per_hour(ps, start, end, periods(base_rows, start, on), baseline_days)}
+                        **({"per_hour": running_per_hour(ps, start, end, periods(base_rows, base_reach, on), baseline_days)}
                            if on else {"normal_series": same_hours_before(base_rows, start, end, baseline_days)}))
         elif series:
             part["states"] = state_series(rows, start, end)        # a lane under the charts (page.py)
@@ -542,10 +549,12 @@ def _notable(ps: list[dict], ref: dict, on: float | None) -> list[dict]:
 
 
 # ------------------------------------------------------------------ around
-def around(client, store, start: datetime, end: datetime, focus: list[str], zone: ZoneInfo) -> dict:
+def around(client, store, start: datetime, end: datetime, focus: list[str], zone: ZoneInfo,
+           now: datetime | None = None) -> dict:
     span_days = (end - start).total_seconds() > 86400
     hours = max((end - start).total_seconds() / 3600, 1)
-    rows = client.logbook(start, end)
+    book = client.logbook_read(start, end, now=now)
+    rows = book.rows
     count: dict[str, int] = {}
     for r in rows:
         count[r.get("entity_id") or ""] = count.get(r.get("entity_id") or "", 0) + 1
@@ -624,10 +633,9 @@ def around(client, store, start: datetime, end: datetime, focus: list[str], zone
     lines += _vesta(store, start, end, zone, span_days)
     if not lines:
         lines.append("Nothing else was recorded in this period.")
-    # where the logbook could not be read further (vesta_shared.ha_client.logbook_cut) — never taken for "nothing else"
-    cut = getattr(client, "logbook_cut", None)
-    if cut:
-        lines.append(f"⚠️ the logbook could not be read whole: nothing is known after {at(cut, zone, span_days)} "
+    # where the logbook could not be read further (vesta_shared.past) — never taken for "nothing else"
+    if not book.whole:
+        lines.append(f"⚠️ {past.unread('the logbook', at(book.reach, zone, span_days))} "
                      "(too many entries) — say so, and narrow the period to read the rest")
     noisy = sorted(((n, e) for e, n in count.items() if n / hours > th("noise_per_hour") and e not in focus), reverse=True)[:8]
     if noisy:
@@ -854,7 +862,7 @@ def main(argv=None):
                 end += timedelta(days=1)                   # "--end 2026-10-09" is the whole of the 9th, as a person means it
             # ⚠️ A PERIOD THAT ENDS LATER ENDS NOW (villa, 2026-10-15: "--end" today was midnight tonight, and a sensor
             # offline 6 d 6 h at 23:05 read "6 d 7 h": its last period ran to a moment that had not come)
-            end = min(end, ctx.now)
+            end = past.until(end, ctx.now)
             if end <= start:
                 raise SystemExit("--end must be after --start.")
             ids = [x.strip() for part in (a.entities or []) for x in part.split(",") if x.strip()]
@@ -865,7 +873,8 @@ def main(argv=None):
             if a.cmd == "timeline":
                 if not ids:
                     raise SystemExit("timeline needs --entities: ids from find, separated by commas.")
-                res = timeline(ctx.client, ids[:12], start, end, float(a.baseline_days), zone, series=bool(a.out))
+                res = timeline(ctx.client, ids[:12], start, end, float(a.baseline_days), zone, series=bool(a.out),
+                               now=ctx.now)
                 if a.out:
                     # the whole reading, charts included, for the investigation page; the AI gets the lines only
                     with open(a.out, "w", encoding="utf-8") as f:
@@ -873,7 +882,7 @@ def main(argv=None):
                                   ensure_ascii=False, default=str)
                     res = {"lines": res["lines"], "saved": a.out}
             else:
-                res = around(ctx.client, ctx.store, start, end, ids, zone)
+                res = around(ctx.client, ctx.store, start, end, ids, zone, now=ctx.now)
                 if a.out:
                     with open(a.out, "w", encoding="utf-8") as f:
                         json.dump({"start": start.isoformat(), "end": end.isoformat(), "zone": str(zone), **res["data"]},

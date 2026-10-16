@@ -26,11 +26,36 @@ from typing import Any, Iterable
 import urllib.error
 import urllib.request
 
+from .past import History, Logbook, until
+
 
 class HABase:
     zone: str = "UTC"
-    #: where the last logbook read stopped before its end (None: it read everything) — a count from it is a floor
+    #: where the last logbook read stopped before its end (None: it read everything) — a count from it is a floor.
+    #: Kept for a starter skill edited on the villa (kept by updates); new readers use logbook_read.
     logbook_cut: "datetime | None" = None
+    #: {entity: where the last history read stopped before its end} — the same, for history(); see history_read
+    history_cut: "dict[str, datetime] | None" = None
+
+    # the past, with how far each read got (vesta_shared.past) ------------
+    def history_read(self, entity_ids: Iterable[str], start: datetime, end: datetime,
+                     now: datetime | None = None) -> "History":
+        """history() with how far each entity's reading got, over [start, end) brought back to `now` (default: the
+        clock). A client that reads in one piece says nothing stopped short (`history_cut` unset)."""
+        ids, end = list(entity_ids), until(end, now)
+        if end <= start:
+            return History({e: [] for e in ids}, start, start)
+        rows = self.history(ids, start, end)
+        return History(rows, start, end, dict(getattr(self, "history_cut", None) or {}))
+
+    def logbook_read(self, start: datetime, end: datetime, entity_id: str | None = None,
+                     now: datetime | None = None) -> "Logbook":
+        """logbook() with how far the reading got, over [start, end) brought back to `now` (default: the clock)."""
+        end = until(end, now)
+        if end <= start:
+            return Logbook([], start, start)
+        rows = self.logbook(start, end, entity_id) if entity_id is not None else self.logbook(start, end)
+        return Logbook(rows, start, end, getattr(self, "logbook_cut", None))
 
     # statistics ---------------------------------------------------------
     def statistics(self, entity_ids: Iterable[str], start: datetime, end: datetime,
@@ -330,15 +355,30 @@ class McpClient(HABase):
         over to page through them (minutes for one device). A slice holding more than a page is halved and read again;
         a quiet slice lets the next one double. Each slice opens with the state carried over from before it, stamped
         at the slice's start: kept only for the first slice, never counted as a change."""
-        out = {}
         # ⚠️ A READ CUT SHORT SAYS SO (architecture review 32): stopped at its cap, it handed back what it had and a reader
-        # stretched the last state to the period's end — "ran until 15:00", made up. {entity: where the read stopped}.
-        self.history_cut: dict[str, datetime] = {}
-        for eid in entity_ids:
-            out[eid] = self._history_one(eid, start.astimezone(timezone.utc), end.astimezone(timezone.utc))
+        # stretched the last state to the period's end — "ran until 15:00", made up. {entity: where the read stopped}:
+        # kept on the client for a skill edited before history_read (round 2, 2026-10-16), which carries it instead.
+        out, self.history_cut = self._history(entity_ids, start, end)
         return out
 
-    def _history_one(self, eid, start, end):
+    def history_read(self, entity_ids, start, end, now=None):
+        ids, end = list(entity_ids), until(end, now)
+        if end <= start:
+            return History({e: [] for e in ids}, start, start)
+        rows, cut = self._history(ids, start, end)          # the cut carried with the rows, not left on the client
+        return History(rows, start, end, cut)
+
+    def _history(self, entity_ids, start, end) -> tuple[dict[str, list[dict]], dict[str, datetime]]:
+        out: dict[str, list[dict]] = {}
+        cut: dict[str, datetime] = {}
+        for eid in entity_ids:
+            out[eid], stopped = self._history_one(eid, start.astimezone(timezone.utc), end.astimezone(timezone.utc))
+            if stopped is not None:
+                cut[eid] = stopped
+        return out, cut
+
+    def _history_one(self, eid, start, end) -> tuple[list[dict], datetime | None]:
+        """(the rows, where the reading stopped before `end` — None when it read to the end)."""
         def fetch(a, b, offset=0):
             body = self.tool("ha_get_history", {
                 "entity_ids": eid, "source": "history", "order": "asc", "minimal_response": True,
@@ -360,17 +400,14 @@ class McpClient(HABase):
                 batch, whole = paged(lambda off, a=at, b=to: fetch(a, b, off), HISTORY_PAGE, max_pages=20)
                 if not whole:                             # even its pages could not hold it: read no further
                     rows.extend(batch[1:] if rows and batch and batch[0].get("state") == rows[-1].get("state") else batch)
-                    self.history_cut[eid] = _when(rows[-1]) or at
-                    return rows
+                    return rows, _when(rows[-1]) or at
             if rows and batch and batch[0].get("state") == rows[-1].get("state"):
                 batch = batch[1:]                         # the carried-over state, stamped at the slice's start
             rows.extend(batch)
             at = to
             if len(batch) < HISTORY_PAGE // 4:
                 span = min(span * 2, HISTORY_MAX_SLICE)
-        if at < end:
-            self.history_cut[eid] = at                    # the call cap: nothing read after `at`
-        return rows
+        return rows, (at if at < end else None)           # the call cap: nothing read after `at`
 
     def helpers(self):
         helpers = []
@@ -444,7 +481,19 @@ class McpClient(HABase):
         minutes, a call every 15 s): ha-mcp fetches the WHOLE period from Home Assistant at every page, and a week of the
         villa's logbook is some thirty pages — thirty reads of the whole week. A slice is read in a page or two, each
         fetching its own hours only. One entity's logbook is filtered by Home Assistant itself: one read."""
-        self.logbook_cut = None
+        out, self.logbook_cut = self._logbook(start, end, entity_id)   # kept for a skill edited before logbook_read
+        return out
+
+    def logbook_read(self, start, end, entity_id=None, now=None):
+        end = until(end, now)
+        if end <= start:
+            return Logbook([], start, start)
+        rows, cut = self._logbook(start, end, entity_id)  # the cut carried with the rows, not left on the client
+        return Logbook(rows, start, end, cut)
+
+    def _logbook(self, start, end, entity_id=None) -> tuple[list[dict], datetime | None]:
+        """(every row of [start, end), where the reading stopped before `end` — None when it read to the end)."""
+        cut = None
         out, seen, at = [], set(), start
         step = (end - start) if entity_id else LOGBOOK_SLICE
         while at < end:
@@ -456,10 +505,10 @@ class McpClient(HABase):
                     seen.add(key)
                     out.append(r)
             if not whole:
-                self.logbook_cut = last           # stopped before its end: a reader says where
+                cut = last                        # stopped before its end: a reader says where
                 break
             at = to
-        return out
+        return out, cut
 
     def _logbook_slice(self, start, end, entity_id=None):
         """([start, end)'s rows, whether the read reached its end, the last moment read)."""

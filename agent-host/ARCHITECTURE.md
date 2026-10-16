@@ -368,3 +368,16 @@ Before shipping a rewritten SKILL.md, list every rule of the old version and fin
 investigate rewrite (0.12.216) lost "the summary explains the recorded times, never repeats them" and its new example
 broke it. A rule a test can check gets one (test_investigate pins the example cause and the example summary). Keep the
 step numbers the scripts' messages cite (page.py: "SKILL.md step 6").
+
+## A read of the past says how far it got (architecture review round 2, 2026-10-16)
+
+- `HABase.history_read` / `logbook_read` hand back the rows WITH where the reading stopped, the period's end brought
+  back to now (`vesta_shared.past.until`). `past.History` answers "the state at a moment" (`state_at`) and "each
+  state's period" (`periods`), never past `reach`; `past.unread(what, when)` is the one sentence for the rest
+  ("… could not be read whole: nothing is known after …", /investigate's). Readers: investigate (timeline, its chart,
+  its normal, around), investigation_facts (cannot-tell line, a lane's last band), the night check (a pump's runs —
+  a run still going at the cut is dropped, `features.ended_runs` — and the logbook note), the reports (a rule's runs,
+  the state at noon), `device_state.out_for` (a read short of now is "not yet").
+- ⚠️ history() / logbook() keep their plain lists and still set `history_cut` / `logbook_cut`: a starter skill edited
+  on the villa is kept by updates and reads them. Do not change their returns. A client of another shape gets the
+  reads from HABase over those two attributes (tests' stand-ins subclass HABase; `TimelineVilla(cut=…)` stops a read).

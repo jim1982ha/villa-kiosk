@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.219 (16 October 2026)
+
+Architecture review round 2 (owner asked; done while offline):
+- One duration rule with the Kiosk: timeutil.lasting follows chartUtils.fmtDuration (seconds under a minute, never
+  under "1 s"; minutes rounded, half up; from a day on days + whole hours), held to the agreement file's 28
+  duration.cases (tests/test_duration_words.py). The reports skill's "Lasted" column uses lasting instead of its own
+  rule. agent-contract.json copied from the Kiosk's 2.496.397.
+- A read of the villa's past says how far it got: HABase.history_read/logbook_read return rows with their reach and
+  clamp the end to now; vesta_shared/past.py (History.state_at/periods never past the reach, Logbook, until, unread —
+  one sentence "{what} could not be read whole: nothing is known after {when}"). investigate, investigation_facts,
+  nightly (+features.ended_runs), facts, playbook and device_state.out_for use it. history()/logbook() still return
+  plain lists and still set *_cut, for skill copies edited on the villa. tests/test_past.py (11 tests).
+- Starter fingerprints recorded for investigate, preventive-maintenance, reports.
+
 ## 0.6.218 (16 October 2026)
 
 Architecture review round 2, "a job cut short by a restart" (owner asked; done while offline):

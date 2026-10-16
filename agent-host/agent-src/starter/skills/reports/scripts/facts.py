@@ -37,6 +37,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL = os.path.dirname(HERE)
 from vesta_shared import script  # noqa: E402  (client, pack, store, zone, now: one set-up)
 from vesta_shared.messaging import no_code as _no_code  # noqa: E402
+from vesta_shared.timeutil import lasting  # noqa: E402  (how long something lasted, the Kiosk's words)
 from vesta_shared.daily import energy_daily_features  # noqa: E402  (a meter's day: one reading for every skill)
 from vesta_shared import result  # noqa: E402  (the night check's rule ids, written once)
 from vesta_shared.timeutil import day_label, day_time_label, local_day, villa_date, villa_time  # noqa: E402  (the one day format)
@@ -44,6 +45,7 @@ from vesta_shared import agent_records  # noqa: E402  (the agent's records: one 
 from vesta_shared.problems import Problems  # noqa: E402  (what is still open: one owner)
 
 from vesta_shared.device_state import is_offline  # noqa: E402  (the night check's own reading)
+from vesta_shared.past import unread  # noqa: E402  (the one "could not be read whole: nothing is known after")
 from playbook import (  # noqa: E402  (the clues and the one list of what needs doing)
     MissingParameter, _device, _num, _when, battery_pct, clues, todo)
 
@@ -215,10 +217,15 @@ class Ctx:
             if str(rinfo["blueprint"]).removesuffix(".yaml") not in every_run:
                 continue
             try:
-                rows = self.cli.logbook(self.s_dt, self.e_dt, entity_id=eid)
+                book = self.cli.logbook_read(self.s_dt, self.e_dt, entity_id=eid, now=self.now)
             except Exception:  # noqa: BLE001
                 continue
-            for r in rows:
+            if not book.whole:
+                # ⚠️ A COUNT FROM A READ STOPPED SHORT IS A FLOOR (round 2, 2026-10-16): said, never given as the week's
+                self.problems.append(f"{self.alert_words(rinfo)}: "
+                                     + unread("its runs", day_time_label(book.reach.astimezone(self.Z), weekday=True))
+                                     + " — its alerts after that are not counted.")
+            for r in book.rows:
                 t = _when(r)
                 if t is None or not str(r.get("message") or "").startswith("triggered"):
                     continue                         # switched on or off, reloaded: not a run
@@ -375,7 +382,7 @@ def _alert_rows(c: Ctx) -> list[dict]:
         lasted = None
         if i.get("closed_at"):
             secs = (datetime.fromisoformat(i["closed_at"]) - datetime.fromisoformat(i["opened_at"])).total_seconds()
-            lasted = f"{int(secs)} s" if secs < 120 else (f"{int(secs // 60)} min" if secs < 7200 else f"{secs / 3600:.1f} h")
+            lasted = lasting(secs)   # the one duration wording on both apps (was "119 s", "119 min", "2.3 h")
         state = i.get("state") or ""
         if state not in words:
             # a state with no words is named, not shown raw to the reader

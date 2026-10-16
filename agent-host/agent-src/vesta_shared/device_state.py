@@ -67,7 +67,7 @@ def out_for(client, entity_ids, states: dict, bad, now, minutes: float, unknown_
     every 4 min 53 s after. "Unchanged for 10 minutes" never came, and its fault stayed in the Cockpit until the 02:00
     check: the state's age measured its last reading, not its return. The alert desk's clear had the same flaw for any
     alert on a reading that keeps changing (a temperature)."""
-    from datetime import datetime, timedelta, timezone
+    from datetime import timedelta
     young = []
     for e in entity_ids:
         row = states.get(e) or {}
@@ -78,14 +78,14 @@ def out_for(client, entity_ids, states: dict, bad, now, minutes: float, unknown_
     if not young:
         return True
     start = now - timedelta(minutes=minutes)
-    hist = client.history(young, start, now)
+    # ⚠️ ONLY WHAT WAS READ (round 2, 2026-10-16): a reading that stopped short of now says nothing of the minutes after
+    # it — a bad state there would have passed for "back" (vesta_shared.past)
+    past = client.history_read(young, start, now, now=now)
     for e in young:
-        rows = hist.get(e) or []
-        first = (rows[0].get("last_changed") or rows[0].get("last_updated")) if rows else None
         # nothing from before the minutes: it cannot be told yet (a second's grace: the stamp may come back rounded)
-        if not first or datetime.fromisoformat(first).astimezone(timezone.utc) > start + timedelta(seconds=1):
+        if not past.whole(e) or past.state_at(e, start + timedelta(seconds=1)) is None:
             return False
-        if not all(_out(str(r.get("state") or ""), bad, unknown_tells, offline_ok) for r in rows):
+        if not all(_out(s, bad, unknown_tells, offline_ok) for _, s in past.changes(e)):
             return False
     return True
 

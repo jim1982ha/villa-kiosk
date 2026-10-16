@@ -25,6 +25,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from vesta_shared import periods                         # the period kinds and their words (investigate.py's)
+from vesta_shared.past import unread                     # the one "could not be read whole: nothing is known after"
 from vesta_shared.periods import did
 from vesta_shared.timeutil import day_time_label, lasting  # the one day format, the one duration wording
 
@@ -126,8 +127,7 @@ def facts(data: dict | None, around: dict | None, notes: dict | None = None) -> 
             cannot.append(f"{name}: no reading of it was kept in this period, so it cannot be judged.")
         cut = _t(e.get("cut"))
         if cut:
-            cannot.append(f"{name}: its records could not be read after {clock(cut)}, so nothing is known of it after "
-                          "that.")
+            cannot.append(f"{name}: {unread('its records', clock(cut))}.")
         if e.get("control") == "off" and ran:
             off_controls.append(name)
         elif e.get("control") == "on" and ran:
@@ -228,7 +228,9 @@ def _lanes(data: dict, went: list[dict], acted: list, unproven: list) -> list[di
         states = [s for s in e.get("states") or [] if _t(s.get("at"))]
         if not states or not end:
             continue
-        bands = [{"start": _t(s["at"]), "end": _t(states[i + 1]["at"]) if i + 1 < len(states) else end,
+        # the last band ends where its reading stopped, never at the period's end past it (vesta_shared.past)
+        last = min(end, _t(e.get("cut")) or end)
+        bands = [{"start": _t(s["at"]), "end": _t(states[i + 1]["at"]) if i + 1 < len(states) else last,
                   "state": s.get("state"), "as": s.get("as")} for i, s in enumerate(states)]
         out.append({"name": e.get("label") or e.get("entity_id"), "bands": bands})
     if went:

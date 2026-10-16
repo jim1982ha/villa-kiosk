@@ -34,6 +34,24 @@ def level_daily_features(hour_rows: list[dict], zone: str) -> dict[date, dict]:
     return out
 
 
+def ended_runs(runs: list[dict], states: list[dict], on_threshold_w: float, zone: str) -> list[dict]:
+    """`runs` (runs_from_history's) without the one still going at the last reading: a reading that stopped short
+    does not know its end, its length or its sag."""
+    last = None
+    for s in states:
+        try:
+            v = float(s["state"])
+        except (ValueError, TypeError, KeyError):
+            continue
+        t = datetime.fromisoformat(s["last_changed"]).astimezone(ZoneInfo(zone))
+        if last is None or t >= last[0]:
+            last = (t, v)
+    if last is None or last[1] <= on_threshold_w:
+        return runs
+    going = last[0].isoformat(timespec="minutes")
+    return [r for r in runs if r["end"] != going]
+
+
 def runs_from_history(states: list[dict], on_threshold_w: float, zone: str, min_run_minutes: int = 30) -> list[dict]:
     """Split a raw power history into runs. Each run: start, end, minutes, first/last quarter medians, slope W/h, sag_pct."""
     pts = []

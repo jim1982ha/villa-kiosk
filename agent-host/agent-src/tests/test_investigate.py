@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from helpers import STARTER_SKILLS
+from vesta_shared.ha_client import HABase
 
 sys.path.insert(0, os.path.join(STARTER_SKILLS, "investigate", "scripts"))
 
@@ -35,7 +36,7 @@ def _night():
     return pw
 
 
-class _Client:
+class _Client(HABase):
     def __init__(self):
         self.pw = _night()
 
@@ -434,7 +435,8 @@ def test_the_page_states_what_the_records_establish_and_rule_out():
         in log
     assert any(p == "unusual" and t.startswith("Heater Power stopped and restarted 7 times in 15 min, until 05:10")
                for _, p, t in log)
-    assert any(p == "unusual" and t.startswith("Heater Power had no power for 7 h 4 min") for _, p, t in log)
+    # 06:00–13:05 rounded to the minute, as the Kiosk says it (round 2, 2026-10-16; was "7 h 4 min", cut)
+    assert any(p == "unusual" and t.startswith("Heater Power had no power for 7 h 5 min") for _, p, t in log)
     assert ("06:01", "unusual", "Next Relay stops reporting") in log            # not the device itself
     assert ("13:08", "usual", "Next Relay reports again") in log
     assert [t for t, _, _ in log] == sorted(t for t, _, _ in log)           # one list, in time order
@@ -480,7 +482,7 @@ def test_each_unusual_period_says_when_an_alert_on_the_same_limit_would_have_war
     assert heater["name"] == "Heater Power"
     long = rules["it runs for more than 5 min without stopping"]
     assert (long["at"], long["ahead"], long["what"], long["span"]) == ("03:14", "1 h 40 min", "ran", "03:09–04:55")
-    assert rules["it reads 0 for 60 s"]["at"] == "06:01"
+    assert rules["it reads 0 for 1 min"]["at"] == "06:01"  # was "60 s": the Kiosk's words (round 2)
     assert rules["it starts 3 times in a row, each run shorter than 3 min"]["at"] == "05:00"     # its 3rd short run
     assert rules["it stays above 1.5× its usual running level for 2 min"]["at"] == "05:12"      # the earliest rule
 
@@ -500,13 +502,13 @@ def test_the_facts_are_any_devices_a_door_that_stopped_answering():
     assert {"time": "08:00", "pill": "unusual",
             "text": "Back Door stopped reporting for 40 min, until 08:40 — it stopped reporting"} in f["log"]
     (door,) = f["alerts"]
-    assert door["items"][0]["rule"] == "it stops reporting for 60 s" and door["items"][0]["at"] == "08:01"
+    assert door["items"][0]["rule"] == "it stops reporting for 1 min" and door["items"][0]["at"] == "08:01"
 
 
 def test_the_key_line_gives_the_longest_periods_per_device_and_says_how_many_more():
     mod, f = _facts()
     assert f["key"] == ("Recorded: Heater Power: ran 03:09–04:55 (1 h 45 min), stopped and restarted 7 times "
-                        "04:55–05:10 (15 min), ran 05:10–06:00 (50 min), had no power 06:00–13:05 (7 h 4 min), ran "
+                        "04:55–05:10 (15 min), ran 05:10–06:00 (50 min), had no power 06:00–13:05 (7 h 5 min), ran "
                         "13:05–13:16 (11 min).")                                # one device: named once
     hm = lambda t: f"{t:%H:%M}"                                              # noqa: E731
     blips = [{"name": "Gate", "kind": "offline", "start": T(9, h), "end": T(9, h, 2), "seconds": 120} for h in range(12)]

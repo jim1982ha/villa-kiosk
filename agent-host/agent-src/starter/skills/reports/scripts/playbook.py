@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 from vesta_shared.device_state import battery_charge  # the night check's own reading
 from vesta_shared.stats import slope_per_hour, step_index  # the night check's step detector
 from vesta_shared.timeutil import day_label, day_time_label  # the one day format
+from vesta_shared.past import unread  # the one "could not be read whole: nothing is known after"
 from vesta_shared.result import PRIORITY_ORDER  # the one list of priorities
 
 if TYPE_CHECKING:
@@ -154,19 +155,22 @@ def clue_use_while_empty(c, when):
     days = int(when.get("days", 10))
     start = max(c.start, c.end - timedelta(days=days - 1))
     s = datetime.combine(start, time(0), c.Z)
-    hist = sorted(c.cli.history([ent], s, c.e_dt).get(ent, []), key=lambda h: h.get("last_changed", ""))
-    if not hist:
+    # ⚠️ THE STATE AT NOON, NEVER PAST THE READING (round 2, 2026-10-16): a read stopped short stretched its last state
+    # over every noon after it — days nobody read counted as "empty" or "occupied" (vesta_shared.past)
+    got = c.cli.history_read([ent], s, c.e_dt, now=c.now)
+    if not got.changes(ent):
         return []
+    if not got.whole(ent):
+        c.problems.append("Electricity while the villa is empty: "
+                          + unread("its mode", day_time_label(got.reach(ent).astimezone(c.Z)))
+                          + " — the days after that are not counted.")
     empty = {str(x).lower() for x in when.get("empty") or []}
     per = c.daily_kwh(meter, start, c.end)
     empty_days, other_days = [], []
     for k in range((c.end - start).days + 1):
         d = start + timedelta(days=k)
-        noon = datetime.combine(d, time(12), c.Z)
-        state = None
-        for h in hist:
-            if datetime.fromisoformat(h["last_changed"]) <= noon:
-                state = str(h.get("state") or "").lower()
+        state = got.state_at(ent, datetime.combine(d, time(12), c.Z))
+        state = None if state is None else state.lower()
         if d in per and state is not None:
             (empty_days if state in empty else other_days).append(per[d])
     if not empty_days:

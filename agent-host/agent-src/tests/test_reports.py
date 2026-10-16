@@ -6,6 +6,7 @@ import subprocess
 import sys
 
 from helpers import PYTHONPATH, ROOT, STARTER_SKILLS
+from vesta_shared.ha_client import HABase  # noqa: E402
 
 COMPOSE = os.path.join(STARTER_SKILLS, "reports", "scripts", "compose.py")
 
@@ -241,7 +242,7 @@ def test_a_group_that_started_in_the_same_minute_says_one_cause(tmp_path):
     assert "All since 1 Oct, 09:28: one cause is likely" in row["why"]
 
 
-class _Book:
+class _Book(HABase):
     """Home Assistant's logbook for two VESTA rules: a condition rule (each run is an alert) and a schedule
     rule (it runs every day to check, and alerts rarely: the villa, 2026-10-01)."""
     def __init__(self, condition_runs, schedule_runs):
@@ -917,3 +918,21 @@ def test_an_alert_that_came_back_counts_each_run_in_the_week(tmp_path):
     end = (c.e_dt - timedelta(days=1)).date().isoformat()
     text = compose.owner_weekly(c.pack, store, {"start": c.s_dt.date().isoformat(), "end": end, "total_kwh": None})
     assert "3 alert(s), 3 critical" in text
+
+
+def test_an_alerts_lasted_column_is_said_as_both_apps_say_a_duration(tmp_path):
+    # architecture review round 2, 2026-10-16: the weekly page's "Lasted" had a rule of its own — "119 s", "119 min",
+    # "2.5 h" — beside the Kiosk's and the agent's "1 min", "2 h 29 min". The agreement's cases, through the page's rows
+    contract = os.path.join(os.path.dirname(__file__), "..", "..", "rootfs", "opt", "vesta", "host", "agent-contract.json")
+    cases = [c for c in json.load(open(contract))["duration"]["cases"] if c["seconds"] < 4 * 86400]
+    sys.path.insert(0, os.path.dirname(FACTS))                     # facts.py imports its sibling playbook.py
+    facts, c, store = _ctx(tmp_path)
+    opened = datetime(2026, 10, 1, 7, tzinfo=timezone.utc)
+    for n, case in enumerate(cases):
+        iid = store.new_incident(f"k{n}", "r", "lock.example_door", "P2", {"message": f"Case {n}"},
+                                 at=(opened + timedelta(minutes=n)).isoformat())
+        store.update_incident(iid, state="resolved",
+                              closed_at=(opened + timedelta(minutes=n, seconds=case["seconds"])).isoformat())
+    facts, c, store = _ctx(tmp_path)
+    said = {r["what"]: r["lasted"] for r in facts._alert_rows(c)}
+    assert [said[f"Case {n}"] for n in range(len(cases))] == [case["words"] for case in cases]

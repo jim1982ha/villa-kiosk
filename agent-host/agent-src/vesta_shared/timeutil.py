@@ -4,6 +4,7 @@ UTC never reaches a chat message."""
 
 from __future__ import annotations
 
+import math
 from datetime import datetime, date, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -107,11 +108,18 @@ def lasting(seconds: float) -> str:
     ⚠️ ONE DURATION WORDING (architecture review, 2026-10-13): the investigation's lines said "1 h 15 min" and its page,
     just above the AI's reading of them, "75 min" for the same outage — three copies, two rules.
     ⚠️ NOT "33 h" (owner, 2026-10-15): the night check's "offline for 33 h" sat in the Cockpit beside the Kiosk's
-    "1 d 9 h", and its "has not reported for 1.4 days" was a third way."""
-    s = int(round(float(seconds)))
-    if s < 90:
-        return f"{s} s"
-    m = s // 60
+    "1 d 9 h", and its "has not reported for 1.4 days" was a third way.
+    ⚠️ ONE RULE ON BOTH APPS (architecture review round 2, 2026-10-16): this said "89 s" where the Kiosk said "1 min",
+    and "1 h 29 min" for its "1 h 30 min" (seconds from 90 s, minutes cut); the weekly report's "Lasted" a third rule.
+    Now the Kiosk's: rounded to the second (never under "1 s"), to the minute from a minute on, whole hours from a day
+    on. A half rounds UP, as JavaScript's Math.round does (Python's round() would make 150 s "2 min"). The agreement's
+    `duration.cases` (agent-contract.json) are the words, on both sides (test_duration_words)."""
+    def half_up(x: float) -> int:
+        return math.floor(x + 0.5)
+    s = max(0, half_up(float(seconds)))
+    if s < 60:
+        return f"{max(1, s)} s"
+    m = half_up(s / 60)
     if m < 60:
         return f"{m} min"
     h, m = divmod(m, 60)

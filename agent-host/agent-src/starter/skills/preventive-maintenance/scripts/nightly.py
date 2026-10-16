@@ -32,7 +32,8 @@ sys.path.insert(0, HERE)
 
 from vesta_shared import script  # noqa: E402  (client, pack, store, settings, zone: one set-up)
 from vesta_shared.messaging import no_code as _no_code  # noqa: E402
-from vesta_shared.timeutil import day_label, villa_day  # noqa: E402
+from vesta_shared.timeutil import day_label, day_time_label, villa_day  # noqa: E402
+from vesta_shared.past import unread  # noqa: E402  (the one "could not be read whole: nothing is known after")
 from vesta_shared.message_format import document, split_title  # noqa: E402  (the one shape of a message)
 from vesta_shared.device_state import has_value, is_offline  # noqa: E402
 from vesta_shared.problems import Problems, again_title  # noqa: E402  (a problem's lifecycle: one owner)
@@ -65,6 +66,7 @@ def run(args) -> dict:
     findings: list[R.Finding] = []
     notes: list[str] = []
     features_written = 0
+    now_ref = day_end if args.as_of else datetime.now(Z)       # no reading of the past goes beyond it
 
     # ---- power assets -------------------------------------------------------
     power_entities = [r["entity_id"] for r in pack.entities("power")]
@@ -87,9 +89,18 @@ def run(args) -> dict:
             p_series = F.power_daily_features(rows, zone, thr)
             # raw runs for the closing day
             if not args.skip_raw:
-                raw = cli.history([p_eid], day_end - timedelta(days=1), day_end).get(p_eid, [])
+                got = cli.history_read([p_eid], day_end - timedelta(days=1), day_end, now=now_ref)
+                raw = got.rows.get(p_eid, [])
                 if raw:
-                    p_series.setdefault(today, {}).update({"runs": F.runs_from_history(raw, thr, zone)})
+                    runs = F.runs_from_history(raw, thr, zone)
+                    if not got.whole(p_eid):
+                        # ⚠️ A RUN GOING WHERE THE READING STOPPED HAS NO KNOWN END (round 2, 2026-10-16): its minutes
+                        # and its sag were read as if it had ended there; the runs after it were never read
+                        runs = F.ended_runs(runs, raw, thr, zone)
+                        notes.append(f"{asset['name']}: "
+                                     + unread("its power for the day", day_time_label(got.reach(p_eid).astimezone(Z)))
+                                     + " — its runs after that are not counted.")
+                    p_series.setdefault(today, {}).update({"runs": runs})
             if today in p_series:
                 f = p_series[today]
                 for k in ("run_hours", "full_hours", "running_power", "peak_w", "gap_hours"):
@@ -137,7 +148,6 @@ def run(args) -> dict:
     states = cli.states()
     battery_entities = [r["entity_id"] for r in pack.entities("battery")]
     bat_stats = cli.statistics(battery_entities, day_end - timedelta(days=14), day_end, "day", ("mean",)) if battery_entities else {}
-    now_ref = day_end if args.as_of else datetime.now(Z)
     for row in pack.entities("battery"):
         asset = _device_named(pack, pack.assets.get(row["asset"], {"slug": row["asset"], "name": row["name"],
                                                                    "critical": False}), row["entity_id"])
@@ -233,13 +243,13 @@ def run(args) -> dict:
 
     # ---- forensics: reconnect loops from the logbook -------------------------
     try:
-        lb = cli.logbook(day_end - timedelta(days=int(params.behaviour("reconnect_days"))), day_end)
+        book = cli.logbook_read(day_end - timedelta(days=int(params.behaviour("reconnect_days"))), day_end, now=now_ref)
+        lb = book.rows
     except Exception:  # logbook is optional
-        lb = []
-    if getattr(cli, "logbook_cut", None):
+        book, lb = None, []
+    if book is not None and not book.whole:
         # a count from a read cut short is a floor, said where the night's notes are read
-        notes.append(f"The logbook could not be read whole: nothing after {cli.logbook_cut.isoformat(timespec='minutes')} "
-                     "— reconnect counts may be low.")
+        notes.append(unread("The logbook", day_time_label(book.reach.astimezone(Z))) + " — reconnect counts may be low.")
     flips = F.flips_per_day(lb, zone, params.behaviour("restart_settle_minutes"))
     # ONE finding per DEVICE, named as a person reads it (villa, 2026-10-04: a relay, its firmware
     # entity and its uptime sensor were three lines, two of them raw entity ids)

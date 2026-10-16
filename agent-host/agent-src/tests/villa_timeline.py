@@ -10,6 +10,9 @@ A timeline is given per entity as keyword arguments, in any of three shapes:
     lock.door=[(T0, "unlocked"), (T1, "locked")]   its states, each from its moment
     lock.door=("unlocked", T0)                       one state, since T0
     lock.door="unlocked"                             one state, since a moment nobody knows (no last_changed)
+
+`cut={entity: moment}`: its history read stops there, as McpClient's does at its cap — the rows up to it, and the
+moment in `history_cut` (what history_read carries).
 """
 from __future__ import annotations
 
@@ -28,8 +31,10 @@ def history_rows(timeline: list[tuple[datetime | None, str]], start: datetime, e
 
 
 class TimelineVilla(HABase):
-    def __init__(self, *, now: datetime | None = None, names: dict[str, str] | None = None, gone=(), **timeline):
+    def __init__(self, *, now: datetime | None = None, names: dict[str, str] | None = None, gone=(),
+                 cut: dict[str, datetime] | None = None, **timeline):
         self.now = now
+        self.cut = dict(cut or {})                          # where a history read stops short, per entity
         self.names = dict(names or {})
         self.gone = set(gone)                               # entities Home Assistant answers "not found" for
         self.timeline: dict[str, list[tuple[datetime | None, str]]] = {}
@@ -52,7 +57,10 @@ class TimelineVilla(HABase):
         return out
 
     def history(self, entity_ids, start, end):
-        return {eid: history_rows(self.timeline.get(eid, []), start, end) for eid in entity_ids}
+        ids = list(entity_ids)
+        self.history_cut = {e: self.cut[e] for e in ids if e in self.cut and start <= self.cut[e] < end}
+        return {eid: history_rows(self.timeline.get(eid, []), start, min(end, self.history_cut.get(eid, end)))
+                for eid in ids}
 
     def not_found(self, entity_ids):
         return {e for e in entity_ids if e in self.gone}
