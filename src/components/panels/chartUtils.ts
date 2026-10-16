@@ -15,7 +15,11 @@ export function fmtChartTime(t: number): string {
   return clockTime(t);
 }
 
-/** A duration, as a person says it: "2 s", "3 min", "1 h 20 min", "2 d 3 h". */
+/** A duration, as a person says it: "2 s", "3 min", "1 h 20 min", "2 d 3 h" — rounded to the minute from a minute
+ *  on, whole hours from a day on (never an hour more than it has been).
+ *  ⚠️ ONE RULE ON BOTH APPS (architecture review round 2, 2026-10-16): the VESTA Agent's timeutil.lasting writes the
+ *  same words — 89 s was "1 min" here and "89 s" in its messages. The agreement's `duration.cases`
+ *  (agent-contract.json) are the words, checked on both sides (tests/oracles/duration_words.mjs here). */
 export function fmtDuration(ms: number): string {
   const s = Math.max(0, Math.round(ms / 1000));
   if (s < 60) return `${Math.max(1, s)} s`;

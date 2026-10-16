@@ -502,6 +502,139 @@
   },
   "_answering": "Who may press a message's buttons: every profile holding this capability in roles.json (never a guest).",
   "answeringCapability": "viewAgent",
+  "_duration": "How long something lasted, in the words BOTH apps write (architecture review round 2, 2026-10-16: the Kiosk's chartUtils.fmtDuration and the VESTA Agent's timeutil.lasting each had a rule, and the weekly report's \"Lasted\" column a third: 89 s read \"1 min\", \"89 s\" and \"89 s\"; 2 h 29 min \"2 h 29 min\", \"2 h 29 min\" and \"2.5 h\"). The rule: rounded to the nearest second; under a minute in seconds, never less than \"1 s\"; from a minute on rounded to the nearest minute; from an hour on \"1 h 20 min\"; from a day on days and WHOLE hours, the minutes dropped (\"1 d 9 h\" until it is 1 d 10 h). A half rounds up on both apps. Every case is checked by tests/oracles/duration_words.mjs (Kiosk) and by the VESTA Agent's test_duration_words.py.",
+  "duration": {
+    "cases": [
+      {
+        "_": "nothing measurable still reads one second, never \"0 s\" (the Kiosk's outage tooltip, an \"ago\" just now)",
+        "seconds": 0,
+        "words": "1 s"
+      },
+      {
+        "_": "under half a second",
+        "seconds": 0.4,
+        "words": "1 s"
+      },
+      {
+        "seconds": 2,
+        "words": "2 s"
+      },
+      {
+        "seconds": 45,
+        "words": "45 s"
+      },
+      {
+        "_": "the last second in seconds",
+        "seconds": 59,
+        "words": "59 s"
+      },
+      {
+        "_": "rounded to 60 s, so a minute",
+        "seconds": 59.6,
+        "words": "1 min"
+      },
+      {
+        "_": "minutes from a minute on (the VESTA Agent said \"60 s\" up to 89 s)",
+        "seconds": 60,
+        "words": "1 min"
+      },
+      {
+        "_": "rounded to the nearest minute (the VESTA Agent said \"89 s\")",
+        "seconds": 89,
+        "words": "1 min"
+      },
+      {
+        "_": "a half rounds up, on both apps",
+        "seconds": 90,
+        "words": "2 min"
+      },
+      {
+        "_": "a half rounds up, on both apps (Python's round() would say 2)",
+        "seconds": 150,
+        "words": "3 min"
+      },
+      {
+        "seconds": 600,
+        "words": "10 min"
+      },
+      {
+        "seconds": 3569,
+        "words": "59 min"
+      },
+      {
+        "_": "59.5 min rounds to the hour",
+        "seconds": 3570,
+        "words": "1 h"
+      },
+      {
+        "seconds": 4500,
+        "words": "1 h 15 min"
+      },
+      {
+        "seconds": 4800,
+        "words": "1 h 20 min"
+      },
+      {
+        "_": "89 minutes: the Weather panel's \"ago\" once said \"1 h\"",
+        "seconds": 5340,
+        "words": "1 h 29 min"
+      },
+      {
+        "_": "rounded, not cut (the VESTA Agent said \"1 h 29 min\")",
+        "seconds": 5370,
+        "words": "1 h 30 min"
+      },
+      {
+        "seconds": 7200,
+        "words": "2 h"
+      },
+      {
+        "seconds": 9000,
+        "words": "2 h 30 min"
+      },
+      {
+        "seconds": 86340,
+        "words": "23 h 59 min"
+      },
+      {
+        "_": "from a day on, days and hours",
+        "seconds": 86400,
+        "words": "1 d"
+      },
+      {
+        "_": "33.2 h (owner, 2026-10-15: never \"33 h\")",
+        "seconds": 119520,
+        "words": "1 d 9 h"
+      },
+      {
+        "_": "from a day on the minutes are dropped: never an hour more than it has been",
+        "seconds": 122340,
+        "words": "1 d 9 h"
+      },
+      {
+        "seconds": 122400,
+        "words": "1 d 10 h"
+      },
+      {
+        "seconds": 176400,
+        "words": "2 d 1 h"
+      },
+      {
+        "_": "129 h, a fault's title",
+        "seconds": 464400,
+        "words": "5 d 9 h"
+      },
+      {
+        "seconds": 525600,
+        "words": "6 d 2 h"
+      },
+      {
+        "_": "6 d 6 h 55 min still reads 6 d 6 h, never \"6 d 7 h\" (villa, 2026-10-15)",
+        "seconds": 543300,
+        "words": "6 d 6 h"
+      }
+    ]
+  },
   "samples": {
     "_postMessage": "What an agent POSTs to /agent/v1/messages.",
     "postMessage": {
