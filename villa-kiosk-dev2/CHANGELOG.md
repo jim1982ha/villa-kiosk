@@ -1,3 +1,10 @@
+## 2.496.390
+
+### Fixed
+- The sun and the moon above the villa no longer move when you turn, tilt, zoom or pan the view. Each now stays in one place in the sky for the hour: over the villa's east side in the morning, higher at midday, over the west side in the evening, whichever side you look from.
+- They are never drawn in front of the house any more: they always sit beyond it, and the house hides them where the two meet.
+- Because they now stay put, you see them only when you face their side of the villa, as with the real sun. Turned away, or with the view almost flat, they are out of sight rather than pulled onto the screen. A low sun sits just behind the house; a higher one shows further above it. At night the moon follows the same rule.
+
 ## 2.496.389
 
 ### Changed
