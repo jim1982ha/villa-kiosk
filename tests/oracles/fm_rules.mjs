@@ -77,10 +77,12 @@ ck("the Cockpit (whose count the top bar shows) and the Today tab count through 
 ck("no screen parses an amount by itself",
    ["components/fm/TodayTab.tsx", "components/fm/SpendTab.tsx", "components/fm/FaultStageModal.tsx"].every((f) => /parseAmount\(/.test(src(f)) && !/replace\(\/\[\^\\d\]\/g, ""\)\) \|\| 0/.test(src(f))));
 ck("the store erases a fault through its one command, with the elevation", /run\(\{ type: "removeTicket", id \}, elevation\)/.test(src("fm/FmDataContext.tsx")));
-ck("the one-step close is one command, and both screens call it",
+// both screens close through ONE piece (WorkButtons.useConfirmedClose, architecture review 2026-10-16); what each
+// Close closes and asks is fm/deviceWork's, checked by value in live_issues.mjs
+ck("the one-step close is one command, and both screens call it — through the one shared close",
    /run\(\{ type: "closeTickets", ids \}\)/.test(src("fm/FmDataContext.tsx"))
-   && /closeTickets\(ids\)/.test(src("components/fm/TicketsTab.tsx"))
-   && /closeTickets\(acts\.close\)/.test(src("components/cockpit/CockpitOverview.tsx"))
+   && /closeTickets\(ids\)/.test(src("components/fm/WorkButtons.tsx"))
+   && ["components/fm/TicketsTab.tsx", "components/cockpit/CockpitOverview.tsx"].every((f) => /useConfirmedClose\(\)/.test(src(f)) && !/closeTickets/.test(src(f)))
    && /ticketId: t\.id/.test(src("config/attention.ts")));
 
 {

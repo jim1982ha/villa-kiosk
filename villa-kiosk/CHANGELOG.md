@@ -1,3 +1,8 @@
+## 2.496.395
+
+### Changed
+- The Overview's fault cards, the Tickets tab, the Schedule figures and the readiness checks now take a device's open faults and tickets from one place. The counts can no longer disagree with the cards. The buttons and their questions are the same on both tabs. As before, Close on an Overview card closes all of that device's faults and tickets, and Close on a ticket closes only that ticket.
+
 ## 2.496.394
 
 ### Fixed

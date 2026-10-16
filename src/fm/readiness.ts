@@ -14,7 +14,7 @@ import type { HassEntity } from "@/types/ha.types";
 import { isUnavailable } from "@/utils/stateColors";
 import type { VillaDevices } from "@/config/deviceGroups";
 import { isTicketOpen, stageOf } from "./fmEngine";
-import { openCounts } from "./ticketGroups";
+import { openCounts } from "./deviceWork";
 import { faultSource, ISSUE_SOURCES, type IssueSource } from "./issueSource";
 import { lockFacts, lightFacts, climateFacts } from "@/config/villaSummary";
 import type { FmData } from "./fmTypes";

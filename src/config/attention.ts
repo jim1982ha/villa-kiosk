@@ -19,6 +19,7 @@ import { deviceRoom, deviceRoomOrRecord, firstRoom, roomLabel } from "@/config/d
 import { deviceOf } from "@/config/deviceGroups";
 import { faultTitle, fmAttention, stageOf } from "@/fm/fmEngine";
 import { lastNoted } from "@/fm/faultNotes";
+import { deviceWorkKey, groupByDevice, overviewActions, type WorkAction, type WorkRecord } from "@/fm/deviceWork";
 import { faultSource, type IssueSource } from "@/fm/issueSource";
 import type { FmData, FmTicketCheck } from "@/fm/fmTypes";
 import type { HassEntity } from "@/types/ha.types";
@@ -100,14 +101,10 @@ const ATTENTION_RANK: Record<AttentionKind, number> = { alarm: 0, unavailable: 1
  * as Unlocked leaves the row where it is.
  */
 export function groupAttention(items: readonly AttentionItem[]): AttentionGroup[] {
-  const byKey = new Map<string, AttentionItem[]>();
-  for (const i of items) {
-    const key = i.device ? `device:${i.device.key}` : `item:${i.id}`;
-    const list = byKey.get(key);
-    if (list) list.push(i); else byKey.set(key, [i]);
-  }
+  // the one card per device the Tickets tab and the counts use too (fm/deviceWork)
+  const byKey = groupByDevice(items, (i) => deviceWorkKey(i.device?.key, i.id));
   const groups: AttentionGroup[] = [];
-  for (const [key, list] of byKey) {
+  for (const { key, items: list } of byKey) {
     const sorted = mergeFaults([...list].sort((a, b) => ATTENTION_RANK[a.kind] - ATTENTION_RANK[b.kind]));
     const worst = sorted[0];
     // ⚠️ ONE SHAPE FOR EVERY ROW (owner, 2026-10-10: "all these lines feel inconsistently shown"): a device's row is
@@ -132,24 +129,23 @@ export function groupAttention(items: readonly AttentionItem[]): AttentionGroup[
     || a.title.localeCompare(b.title) || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
 }
 
+/** What a card's buttons do (owner, 2026-10-14) — on its records only (its own fault lines and those folded onto a
+ *  live state's line by mergeFaults): fm/deviceWork.overviewActions' answer, in the order drawn. Empty when it holds
+ *  none, so a card that is only what Home Assistant reports has no button. */
+export function cardActions(group: AttentionGroup): WorkAction[] {
+  return overviewActions(cardRecords(group));
+}
+
+/** The records on a card — its faults and tickets, each with its stage. */
+export function cardRecords(group: AttentionGroup): WorkRecord[] {
+  return group.items.flatMap((i) => (i.kind === "fault" ? [i] : i.fault ? [i.fault] : []))
+    .flatMap((f) => (f.ticketId ? [{ id: f.ticketId, stage: f.stage === "ticket" ? "ticket" as const : "fault" as const }] : []));
+}
+
 /** A problem's line inside ITS row: under a device, what attentionLine says ("Unlocked", "Entrance door unlocked");
  *  in a row that is the problem itself (no device), only a status the row does not show already ("In progress"; an
  *  open fault's line is empty — its title is the row's, its Close the line's). Every row shows its problems this way,
  *  one or several. */
-/** What a card's buttons do (owner, 2026-10-14) — on its faults only (its own fault lines and those folded onto a
- *  live state's line by mergeFaults); null when it holds none, so a card that is only what Home Assistant reports has
- *  no button. `markInProgress`: the records "Mark in progress" takes on (one ticket for the device), empty when every
- *  fault is already a ticket — then `editTicket` is the record "Edit ticket" opens. `close`: every one of them. */
-export interface CardActions { markInProgress: string[]; editTicket: string | null; close: string[] }
-export function cardActions(group: AttentionGroup): CardActions | null {
-  const faults = group.items.flatMap((i) => (i.kind === "fault" ? [i] : i.fault ? [i.fault] : []))
-    .filter((f): f is AttentionItem & { ticketId: string } => !!f.ticketId);
-  if (faults.length === 0) return null;
-  const markInProgress = faults.filter((f) => f.stage !== "ticket").map((f) => f.ticketId);
-  const tickets = faults.filter((f) => f.stage === "ticket").map((f) => f.ticketId);
-  return { markInProgress, editTicket: markInProgress.length ? null : tickets[0], close: faults.map((f) => f.ticketId) };
-}
-
 export function attentionLineIn(group: AttentionGroup, item: AttentionItem): string {
   return group.key.startsWith("device:") ? attentionLine(item) : faultStatus(item) ?? item.detail;
 }
