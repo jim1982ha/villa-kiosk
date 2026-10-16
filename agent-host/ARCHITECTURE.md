@@ -349,6 +349,19 @@ Decisions of 2026-09-30 (owner):
   /agent/v1/info lists the field, never on a person's title.
 - Tests: one pretend villa, `tests/villa_timeline.py` (states, history with the carried-over first row, not found).
 
+## Work in progress: one record of what runs (architecture review round 2, 2026-10-16)
+
+- `vesta_agent/in_progress.py` `InProgress` is what runs, for whom, what it promised and whether its result arrived:
+  a scheduled run, a job asked for in a chat, a question being answered, a scheduled report holding its chats
+  (`held`). `kept(item)` is the ONE "cut / finally" (a stop keeps the record; an end, a failure included, clears it
+  and says it ended); `arrived(origin)` is the one "its result came" (Delivery.send only); `left(kinds)` reads at start
+  what a stop cut, once, each with `ON_START`'s decision for its kind (scheduled: run again in its window; a chat's
+  job or question: tell the chat; arrived: nothing). The words are `Item.cut_text`. One instance (`Vesta.work`) is
+  shared by Delivery, ChatJobs and the Scheduler; state.py keeps the keys (`jobrun:`, `chatjob:`), unchanged — an
+  older engine's "|delivered" row reads as arrived. ChatJobs keeps the waiting message and "typing…"; the scheduler's
+  task map is task control (never twice, `idle`), not a record. Superseded above: `state.RUNNING_JOB`, `job_running`,
+  `jobs_cut`, `chat_job(s_cut)`.
+
 ## Rewriting a skill's instructions (retro, 2026-10-15)
 
 Before shipping a rewritten SKILL.md, list every rule of the old version and find each in the new one: the

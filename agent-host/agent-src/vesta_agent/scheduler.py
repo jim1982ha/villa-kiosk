@@ -26,7 +26,7 @@ import logging
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from .state import RUNNING_JOB
+from .in_progress import AGAIN, SCHEDULED, InProgress, Item
 
 log = logging.getLogger("vesta.scheduler")
 
@@ -99,10 +99,11 @@ def job_label(key: str, skills: dict) -> str:
     return skill
 
 class Scheduler:
-    def __init__(self, settings, skills, state, run_code, run_model, rebuild_pack, housekeeping=None):
+    def __init__(self, settings, skills, state, run_code, run_model, rebuild_pack, housekeeping=None, work=None):
         self.s = settings
         self.skills = skills
         self.state = state
+        self.work = work or InProgress(state)          # what runs and what a stop cut (in_progress.py)
         self.run_code = run_code            # async (skill, command, timeout) -> None
         self.run_model = run_model          # async (skill, job) -> None: ai_jobs.AiJobs.run
         self.rebuild_pack = rebuild_pack    # async () -> None
@@ -111,8 +112,9 @@ class Scheduler:
         self._running: dict[str, asyncio.Task] = {}     # job key → its task, while it runs
         # ⚠️ A RUN CUT BY A STOP IS RUN AGAIN (architecture review 21): the slot was claimed before the run, so an update
         # in the middle of the morning report lost it for the day, without a word. A run in progress is recorded
-        # (state.job_running); one still recorded at start was cut, and its slot may be claimed once more in its window
-        self._cut: dict[str, str] = state.jobs_cut()
+        # (in_progress.InProgress.kept); one still recorded at start was cut, and its slot may be claimed once more in its
+        # window — unless its report had arrived (in_progress.ON_START)
+        self._cut: dict[str, str] = {r.name: r.slot for r in self.work.left(SCHEDULED) if r.then == AGAIN}
         if self._cut:
             log.info("Scheduled runs cut by the last stop, run again in their window: %s", ", ".join(sorted(self._cut)))
 
@@ -175,21 +177,13 @@ class Scheduler:
                 name = f"{sk.name}:{job['when']}"
 
                 async def run(sk=sk, job=job, key=key, slot=slot):
-                    self.state.job_running(key, slot.isoformat())
-                    RUNNING_JOB.set(key)              # this task's own context: what it sends marks it delivered
-                    cut = False
-                    try:
+                    # kept while it runs; what it sends from this task is its result (in_progress.InProgress.arrived)
+                    async with self.work.kept(Item(SCHEDULED, key, slot=slot.isoformat())):
                         await self._after_pack()
                         if job.get("run"):
                             await self.run_code(sk, job["run"], job["timeout"])
                         else:
                             await self.run_model(sk, job)
-                    except asyncio.CancelledError:
-                        cut = True            # the agent is stopping: the record stays for the next start
-                        raise
-                    finally:
-                        if not cut:
-                            self.state.job_running(key, None)
                 if self._start(key, run):
                     started.append(name)
         if self.housekeeping:

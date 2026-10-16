@@ -26,6 +26,7 @@ from typing import AsyncIterator, Awaitable, Callable
 
 from vesta_shared.messaging import TELEGRAM_LIMIT, split_message, tg_len
 
+from .in_progress import InProgress
 from .routing import JOB, Origin, Routing
 from .telegram import TelegramError
 
@@ -86,10 +87,12 @@ def typing_timeline(times: list[tuple[float, float, bool]]) -> str:
 
 
 class Delivery:
-    def __init__(self, tg, state, policy: Callable):
+    def __init__(self, tg, state, policy: Callable, work: InProgress | None = None):
         self.tg = tg                  # telegram.Telegram, or None when the takeover is off: nothing is sent
         self.state = state
         self.policy = policy
+        # what runs and whether its result arrived (in_progress.py): every message that arrives is told there, once
+        self.work = work or InProgress(state)
         # a message sent on behalf of a job asked for in a chat is its result: chat_jobs.ChatJobs.result, set by it
         self.on_job_result: Callable[[Origin], Awaitable[None]] | None = None
         # a chat Telegram newly refuses (it was reachable): the owner is told once (app.Vesta._tell_unreachable)
@@ -131,7 +134,7 @@ class Delivery:
         if not mid:
             return None
         self.state.set_unreachable(chat_id, None)
-        self.state.job_delivered()                              # a scheduled run's message arrived: never run twice
+        self.work.arrived(origin)                               # a run's message arrived: nothing owed at the next start
         log.info("Sent to chat %s (%s)%s%s%s", chat_id, Routing(self.policy()).label(chat_id),
                  " with buttons" if keyboard else "", " and a file" if document else "", " and a photo" if photo else "")
         if origin is not None and origin.kind == JOB and self.on_job_result:

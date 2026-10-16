@@ -38,6 +38,7 @@ from zoneinfo import ZoneInfo
 from . import ai_down, button_data, intake, requests_box, script_run, tool_access
 from .ai_jobs import AiJobs
 from .chat_jobs import ChatJobs
+from .in_progress import InProgress
 from .siren import Siren
 from .actions import Actions, related_entities
 from .api_errors import AI_DOWN, FOR_PERSON, NEEDS_THE_OWNER
@@ -137,9 +138,11 @@ class Vesta:
         self.cf_headers = cf
         self.kiosk = kiosk if kiosk is not None else Kiosk(settings.kiosk_url, settings.kiosk_token, cf)
         # everything that reaches a chat, and whether it did (delivery.py)
-        self.delivery = Delivery(self.tg, self.state, self.policy)
+        # what runs, for whom, what it promised, whether its result arrived — and what a stop cut (in_progress.py)
+        self.work = InProgress(self.state, settings.timezone)
+        self.delivery = Delivery(self.tg, self.state, self.policy, self.work)
         self.delivery.on_unreachable = self._tell_unreachable
-        self.chat_jobs = ChatJobs(self.delivery, self._safe, self.state, settings.timezone)     # a job asked for in a chat, start to end
+        self.chat_jobs = ChatJobs(self.delivery, self._safe, self.work)     # a job asked for in a chat, start to end
         self.actions = Actions(self.policy, self.state, self.writer_factory, names=self.name_of,
                                related=lambda ids: related_entities(self.pack(), self.reader, ids),
                                executed=lambda *a: self.siren.executed(*a))
@@ -859,7 +862,7 @@ class Vesta:
         await self.start()
         await self._safe(self.tidy())
         tasks = [asyncio.create_task(Scheduler(self.s, self.skills, self.state, self.run_code_job, self.jobs.run,
-                                               self.rebuild_pack, self.housekeeping).run(stop))]
+                                               self.rebuild_pack, self.housekeeping, self.work).run(stop))]
         if self.s.ha_url and self.s.ha_token:
             events = HaEvents(self.s.ha_url, self.s.ha_token, self.on_ha_event, self.beat, headers=self.cf_headers)
             tasks.append(asyncio.create_task(events.run(stop)))

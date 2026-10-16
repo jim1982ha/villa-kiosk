@@ -17,28 +17,26 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-import time
 from typing import Awaitable, Callable
 
+from .in_progress import ANSWER, ANSWER_NAME, CHAT_JOB, TELL, InProgress, Item
 from .job_notices import JobNotices
 from .routing import JOB, Origin
 
 log = logging.getLogger("vesta")
 
 Work = Callable[[Origin], Awaitable[None]]
-#: A chat's answer in progress (a person's question being answered), kept like a job: one cut by a stop is said at start.
-ANSWER = "answer"
 
 
 class ChatJobs:
-    def __init__(self, delivery, safe: Callable[[Awaitable], Awaitable[None]], state=None, timezone_name: str = "UTC"):
+    def __init__(self, delivery, safe: Callable[[Awaitable], Awaitable[None]], work: InProgress | None = None):
         self.delivery = delivery
-        # what runs, kept across a stop (state.chat_job): a job cut by one is said ended at the next start (`recover`)
-        self.state, self.tz = state, timezone_name
+        # what runs, for whom, what it promised, whether its result arrived — kept across a stop (in_progress.py): the
+        # same record Delivery.send tells of an arrival and the scheduler holds its chats in
+        self.work = work or InProgress()
         delivery.on_job_result = self.result               # a message sent on behalf of a job is its result
         self._safe = safe                                  # logs what a task raised (app.Vesta._safe)
         self.notices = JobNotices()                        # the waiting messages, by turn
-        self._jobs: dict[tuple[int, str], dict] = {}       # (chat, job) → {started, turn}: the jobs running
         self._turn: dict[int, int] = {}                    # chat → its current conversation turn
         self._typing: dict[tuple[int, str], Callable[[], None]] = {}   # (chat, job) → its hold of the chat's "typing…"
         # the tasks, kept: asyncio holds only a weak reference to a task nobody keeps, and `idle` waits for them
@@ -46,12 +44,12 @@ class ChatJobs:
 
     # ------------------------------------------------------------------ what runs
     def running(self, chat: int, name: str) -> bool:
-        return (int(chat), name) in self._jobs
+        return self.work.running(chat, name)
 
     def started_at(self, chat: int, name: str) -> float | None:
         """When this chat's job `name` started (time.time()), while it runs; None otherwise."""
-        j = self._jobs.get((int(chat), name))
-        return j["started"] if j else None
+        j = self.work.get(chat, name)
+        return j.started if j else None
 
     # ------------------------------------------------------------------ a conversation's turn
     def turn(self, chat: int) -> None:
@@ -68,10 +66,10 @@ class ChatJobs:
             return
         log.info("Reply %s in chat %s, while a job asked for here runs: %s", mid, chat, self.notices.describe(key))
         await self._carry(chat, self.notices.replied(key, mid))
-        for (c, name), j in list(self._jobs.items()):
-            if c == chat and j["turn"] == key:
-                self._keep(chat, name, mid)
-                self._typing_on(chat, name)
+        for j in self.work.in_chat(chat):
+            if j.turn == key:
+                self.work.promised(j, mid)
+                self._typing_on(chat, j.name)
 
     # ------------------------------------------------------------------ a job
     def start(self, chat: int, name: str, work: Work, waiting_mid: int | None = None, role: str | None = None) -> bool:
@@ -79,40 +77,24 @@ class ChatJobs:
         message that stands for it until its result (a pressed button's); without one, the turn's reply does.
         `role`: who asked (routing.Origin.role): the run uses what they may."""
         chat = int(chat)
-        if (chat, name) in self._jobs:
+        if self.work.running(chat, name):
             return False
         key = ("press", chat, int(waiting_mid)) if waiting_mid else ("turn", chat, self._turn.get(chat, 0))
-        self._jobs[(chat, name)] = {"started": time.time(), "turn": key}
-        self._keep(chat, name, waiting_mid)
+        job = self.work.begin(Item(CHAT_JOB, name, chat=chat, mid=waiting_mid, turn=key))
         self.notices.started(key, name)
         log.info("Job %s asked for in chat %s: %s", name, chat, self.notices.describe(key))
 
         async def run() -> None:
-            cut = False
-            try:
+            async with self.work.kept(job, after=lambda: self._typing_off(chat, name),
+                                      ended=lambda: self._carry(chat, self.notices.ended(key, name))):
                 if waiting_mid:
                     await self._carry(chat, self.notices.replied(key, int(waiting_mid)))
                     self._typing_on(chat, name)
                 await work(Origin(chat, JOB, job=name, role=role))
-            except asyncio.CancelledError:
-                cut = True                    # the agent is stopping: its record stays, the next start says so (recover)
-                raise
-            finally:
-                self._jobs.pop((chat, name), None)
-                self._typing_off(chat, name)
-                if not cut:
-                    if self.state is not None:
-                        self.state.chat_job(chat, name, None)
-                    await self._carry(chat, self.notices.ended(key, name))
         task = asyncio.create_task(self._safe(run()))
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
         return True
-
-    def _keep(self, chat: int, name: str, mid: int | None) -> None:
-        j = self._jobs.get((chat, name))
-        if self.state is not None and j is not None:
-            self.state.chat_job(chat, name, {"started": j["started"], "mid": mid})
 
     @contextlib.asynccontextmanager
     async def answering(self, chat: int, asked: str):
@@ -121,17 +103,8 @@ class ChatJobs:
 
         ⚠️ A QUESTION CUT BY A RESTART IS SAID, NOT LOST (owner, 2026-10-15: an /investigate running when the agent was
         updated "went quiet"): only a job's waiting message was kept, a question being answered lived in memory only."""
-        if self.state is not None:
-            self.state.chat_job(int(chat), ANSWER, {"started": time.time(), "asked": " ".join(str(asked).split())[:80]})
-        cut = False
-        try:
+        async with self.work.kept(Item(ANSWER, ANSWER_NAME, chat=int(chat), asked=" ".join(str(asked).split())[:80])):
             yield
-        except asyncio.CancelledError:
-            cut = True                        # the agent is stopping: its record stays, the next start says so (recover)
-            raise
-        finally:
-            if not cut and self.state is not None:
-                self.state.chat_job(int(chat), ANSWER, None)
 
     async def recover(self) -> int:
         """At start: every job asked for in a chat, and every question being answered, that the last stop cut is said
@@ -139,53 +112,34 @@ class ChatJobs:
 
         ⚠️ NEVER A PROMISE LEFT HANGING (architecture review 21): the jobs running lived in memory only, so an update in
         the minutes a report was being made left "it will arrive in this chat in a few minutes" — and nothing, ever.
-        It is not run again by itself: a report costs the AI again, the person asks when they still want it."""
-        if self.state is None:
-            return 0
-        from datetime import datetime, timezone
-        from .notice import when
+        It is not run again by itself (in_progress.ON_START): a report costs the AI again, the person asks when they
+        still want it."""
         n = 0
-        for chat, name, rec in self.state.chat_jobs_cut():
-            at = when(datetime.fromtimestamp(float(rec.get("started") or time.time()), timezone.utc), self.tz)
-            text = (f"Your question at {at} (“{rec.get('asked') or '…'}”) was interrupted by a restart of the agent: "
-                    "send it again to have its answer." if name == ANSWER else
-                    f"The {name} job asked for at {at} was stopped by a restart of the agent: ask again to have it.")
-            log.info("Job %s in chat %s was cut by the last stop: said so", name, chat)
+        for cut in self.work.left(CHAT_JOB, ANSWER):
+            if cut.then != TELL:
+                continue
+            log.info("Job %s in chat %s was cut by the last stop: said so", cut.name, cut.chat)
             if self.delivery.tg is None:
                 continue
-            mid = rec.get("mid")
-            if not (mid and await self.delivery.edit(chat, int(mid), text)):
-                await self.delivery.send(chat, text)
+            text = cut.cut_text(self.work.tz)
+            if not (cut.mid and await self.delivery.edit(cut.chat, int(cut.mid), text)):
+                await self.delivery.send(cut.chat, text)
             n += 1
         return n
 
-    @contextlib.asynccontextmanager
-    async def held(self, chats: list[int], name: str):
-        """A job that runs on schedule, sending to `chats`: while it runs, the same job asked for in one is "already
-        being made", with its start time — one record of what runs, whatever started it (architecture review 14: the
-        schedule kept its own, and a report asked for in the facility manager's chat at 08:01 ran a second time
-        beside the scheduled one). No waiting message, no "typing…": nobody asked."""
-        mine = [k for k in ((int(c), name) for c in chats) if k not in self._jobs]
-        for key in mine:
-            self._jobs[key] = {"started": time.time(), "turn": None}
-        try:
-            yield
-        finally:
-            for key in mine:
-                self._jobs.pop(key, None)
+    def held(self, chats: list[int], name: str):
+        """A job that runs on schedule, sending to `chats`: "already being made" there while it runs
+        (in_progress.InProgress.held). No waiting message, no "typing…": nobody asked."""
+        return self.work.held(chats, name)
 
     async def result(self, origin: Origin) -> None:
-        """A message sent on behalf of job `origin.job` reached `origin.chat`: its waiting message goes, its
-        "typing…" stops."""
-        j = self._jobs.get((int(origin.chat), origin.job or ""))
-        if j is None or j["turn"] is None:
+        """A message sent on behalf of job `origin.job` reached `origin.chat` (Delivery.send told in_progress first:
+        nothing is owed at the next start — architecture review 22): its waiting message goes, its "typing…" stops."""
+        j = self.work.get(origin.chat, origin.job or "")
+        if j is None or j.turn is None:
             return
-        log.info("Job result in chat %s: waiting notice before it: %s", origin.chat, self.notices.describe(j["turn"]))
-        # ⚠️ ITS RESULT CAME: NOTHING TO SAY AT THE NEXT START (architecture review 22): a stop after the report arrived
-        # told the chat "it was stopped by a restart: ask again" under the report itself
-        if self.state is not None:
-            self.state.chat_job(int(origin.chat), origin.job or "", None)
-        await self._carry(int(origin.chat), self.notices.result(j["turn"]))
+        log.info("Job result in chat %s: waiting notice before it: %s", origin.chat, self.notices.describe(j.turn))
+        await self._carry(int(origin.chat), self.notices.result(j.turn))
         self._typing_off(int(origin.chat), origin.job or "")
 
     async def idle(self) -> None:
@@ -209,7 +163,7 @@ class ChatJobs:
     def _typing_on(self, chat: int, name: str) -> None:
         """⚠️ "typing…" UNTIL THE RESULT IS THERE (owner, 2026-10-07): the job holds the chat's one "typing…"
         (delivery.Delivery.hold) — never a loop of its own: a second one hides the first (measured 2026-10-09)."""
-        if self.delivery.tg is None or (chat, name) not in self._jobs or (chat, name) in self._typing:
+        if self.delivery.tg is None or not self.work.running(chat, name) or (chat, name) in self._typing:
             return
         self._typing[(chat, name)] = self.delivery.hold(chat, name)
 

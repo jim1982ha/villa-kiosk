@@ -206,7 +206,7 @@ def test_a_report_that_ended_leaves_nothing_for_the_next_start(tmp_path):
     run(ask())
     edits = len(v.tg.edits)
     v = restarted(v)
-    assert len(v.tg.edits) == edits and v.state.chat_jobs_cut() == []
+    assert len(v.tg.edits) == edits and v.state.chat_work_kept() == []
 
 
 def test_a_scheduled_run_cut_by_a_stop_runs_again_in_its_window(tmp_path):
@@ -274,6 +274,7 @@ def test_a_report_whose_result_came_is_never_said_stopped(tmp_path):
 def test_a_scheduled_report_that_arrived_is_not_sent_again_after_a_stop(tmp_path):
     from datetime import datetime
     from zoneinfo import ZoneInfo
+    from vesta_agent.in_progress import InProgress
     from vesta_agent.scheduler import Scheduler
     from vesta_agent.state import State
     from helpers import settings
@@ -291,7 +292,7 @@ def test_a_scheduled_report_that_arrived_is_not_sent_again_after_a_stop(tmp_path
 
     async def sends_then_hangs(sk, cmd, timeout):
         ran.append(cmd)
-        st.job_delivered()                                                 # what Delivery.send does once it arrived
+        InProgress(st).arrived()                                           # what Delivery.send does once it arrived
         await asyncio.Event().wait()
 
     async def noop():
@@ -308,15 +309,19 @@ def test_a_scheduled_report_that_arrived_is_not_sent_again_after_a_stop(tmp_path
 
 def test_a_message_sent_on_behalf_of_a_scheduled_run_marks_it_delivered(tmp_path):
     # the seam the scheduler relies on: Delivery.send, inside the run's own task
-    from vesta_agent.state import RUNNING_JOB
+    from vesta_agent.in_progress import SCHEDULED, Item
     v = _villa(tmp_path)
-    v.state.job_running("reports:0:07:00", "2026-10-10T07:00:00+08:00")
 
     async def run_job():
-        RUNNING_JOB.set("reports:0:07:00")
-        await v.delivery.send(JM, "The weekly report.")
-    run(run_job())
-    assert v.state.jobs_cut() == {}                                        # cut now: delivered, never run again
+        async with v.work.kept(Item(SCHEDULED, "reports:0:07:00", slot="2026-10-10T07:00:00+08:00")):
+            assert v.state.runs_kept() == {"reports:0:07:00": "2026-10-10T07:00:00+08:00"}
+            await v.delivery.send(JM, "The weekly report.")
+            raise asyncio.CancelledError                                   # then the stop
+    try:
+        run(run_job())
+    except asyncio.CancelledError:
+        pass
+    assert v.work.left(SCHEDULED) == []                                    # cut now: delivered, never run again
 
 
 def test_a_copy_given_up_once_gets_its_own_two_hours_at_its_next_change(tmp_path, monkeypatch):

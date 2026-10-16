@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.218 (16 October 2026)
+
+Architecture review round 2, "a job cut short by a restart" (owner asked; done while offline):
+- vesta_agent/in_progress.py: one record of work in progress (Item: kind, name, chat, start, the message standing in
+  for its result, the question, whether its result arrived). begin/promised/kept/held/arrived/left; kept() is the one
+  cut/finally (was copied in scheduler.py and twice in chat_jobs.py); arrived() is the one "its result came" (replaces
+  the RUNNING_JOB contextvar and ChatJobs.result's own clearing); left() reads what the last stop cut once, and ON_START
+  decides per kind (scheduled: run again in its window; a chat's job or question: tell the chat; arrived: nothing).
+- Every text a chat is told is unchanged. Rows keep their keys and shapes; an arrived result now deletes its row instead
+  of appending "|delivered", and a "|delivered" row from an older engine still reads as arrived.
+- tests/test_in_progress.py (9 tests), 10 mutations RED. Left as it was, for the owner: a reply that lands after its
+  chat job's result already arrived can still re-arm that job's row.
+
 ## 0.6.217 (16 October 2026)
 
 Alert cards (owner, 2026-10-16, alert #43: a mains-phase alert cleared at 15:40, back at 18:03, reopened under its number):
