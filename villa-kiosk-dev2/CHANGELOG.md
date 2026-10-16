@@ -1,3 +1,13 @@
+## 2.496.391
+
+### Changed
+- The sun now follows its real path as an arc round the villa. Facing north, it rises on the right in the morning, climbs a step every hour, passes over the top at midday and sets on the left in the evening. It no longer jumps from one side of the villa to the other between noon and 1 pm.
+- Looking down at the villa, the sun goes round the house and never crosses it.
+- When you zoom in, or the view is almost flat, the sun waits at the edge of the screen on its side instead of disappearing. Almost flat, the midday sun runs in a straight line along the top of the screen.
+- The sky is lit with a soft glow around the sun, and a paler one around the moon.
+- The moon follows the same arc at night and moves hour by hour down towards the horizon as it sets.
+- The sun or moon is hidden only when it is really behind you. Where it meets the house, the house hides it.
+
 ## 2.496.390
 
 ### Fixed
