@@ -10,8 +10,10 @@
 // rises on the right at 06:00, climbs one step per hour, passes over the top
 // at noon and sets on the left — and where the real sun goes nearly overhead
 // (this villa's latitude, in October) it passes OVER the villa from east to
-// west instead of jumping sides. Turning, tilting or zooming never moves the
-// point: it turns with the villa.
+// west instead of jumping sides. Tilting or zooming never moves the point;
+// it turns with the villa, except that a point on the viewer's side is shown
+// turned over to the far side (seenPoint), so it stays in the sky beyond the
+// house at every tilt.
 //
 // The arc's size is the villa's own (ARC_SPANS times its longest side, from the
 // model's extents — never a number of metres): big enough that, looking down
@@ -125,6 +127,29 @@ export function behindFade(side: { x: number; z: number }, alt: number, camFwd: 
   const c = Math.cos(Math.max(0, alt));
   const t = Math.max(0, Math.min(1, (v * c + (1 - c) + 0.6) / 0.3));
   return t * t * (3 - 2 * t);
+}
+
+/**
+ * The arc point as the viewer is shown it: a point on the viewer's side of
+ * the villa is turned over to the far side, the same distance beyond the
+ * villa's centre, the same height, the same left or right. A point on the far
+ * side, or straight across, is unchanged — so turning round the villa never
+ * makes it jump.
+ *
+ * ⚠️ TILTING DROPPED THE SUN TO THE BOTTOM (owner's two screenshots,
+ * 2026-10-17, 2.496.398). A point on the viewer's side sits between the
+ * camera and the house: almost flat it was above the screen and waited at the
+ * top edge, but looking down the camera saw it from above, in FRONT of the
+ * house — so tilting moved it from the top edge to the bottom, over the
+ * grass. Turned over, it stays in the sky beyond the villa at every tilt.
+ */
+export function seenPoint(at: Vec3, villa: VillaBox, camFwd: Vec3): Vec3 {
+  const fl = Math.hypot(camFwd.x, camFwd.z);
+  if (fl < 1e-9) return at;
+  const fx = camFwd.x / fl, fz = camFwd.z / fl;
+  const k = (at.x - villa.cx) * fx + (at.z - villa.cz) * fz;   // < 0 on the viewer's side
+  if (!(k < 0)) return at;
+  return { x: at.x - 2 * k * fx, y: at.y, z: at.z - 2 * k * fz };
 }
 
 /** How far in from the screen's edges a body waits, as a share of the width

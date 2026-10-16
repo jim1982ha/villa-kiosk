@@ -1,3 +1,8 @@
+## 2.496.399
+
+### Fixed
+- Tilting the overview from almost flat to looking down no longer drops the sun or the moon to the bottom of the screen, below the villa. When the body is on your side of the house, it is now shown beyond the house, still on its own left or right, so it stays in the sky at every tilt. Where it was already beyond the house, nothing changes.
+
 ## 2.496.398
 
 ### Changed

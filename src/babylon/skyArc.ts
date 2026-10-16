@@ -4,7 +4,8 @@
 // SkyDome and NightSky so both follow ONE rule in the same frame.
 //
 // The point comes from skyBodies.arcPoint (no camera). The camera then only
-// decides whether it is shown (behindFade) and, when the point is off screen,
+// decides whether it is shown (behindFade), which side of the villa it is
+// seen on (seenPoint: always beyond it) and, when the point is off screen,
 // where it waits: at the edge on its true side, at the point's own depth, so
 // the house still hides it where they meet (holdOnScreen).
 
@@ -16,7 +17,7 @@ import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import type { Scene } from "@babylonjs/core/scene";
-import { behindFade, drawnDepth, GLOW_SPANS, holdOnScreen, type VillaBox, type Vec3 } from "./skyBodies";
+import { behindFade, drawnDepth, GLOW_SPANS, holdOnScreen, seenPoint, type VillaBox, type Vec3 } from "./skyBodies";
 
 /** A soft additive light round a body, so the sky is brightest on its side.
  *  Procedural (no image: the wall may have no internet). */
@@ -82,7 +83,8 @@ export function showOnArc(scene: Scene, point: Vec3, side: { x: number; z: numbe
   const eng = scene.getEngine();
   const vp = cam.viewport.toGlobal(eng.getRenderWidth(), eng.getRenderHeight());
   const view = cam.getViewMatrix(), proj = cam.getProjectionMatrix();
-  const p = new Vector3(point.x, point.y, point.z);
+  const seen = seenPoint(point, villa, fwd);
+  const p = new Vector3(seen.x, seen.y, seen.z);
   let s = Vector3.Project(p, Matrix.Identity(), view.multiply(proj), vp);
   if (!(s.z > 0 && s.z < 1)) {
     // Behind the camera's plane — zoomed in close under a high sun, the point

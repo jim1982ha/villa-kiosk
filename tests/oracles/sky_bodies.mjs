@@ -130,8 +130,9 @@ for (const [name, beta] of [["almost flat", 1.35], ["looking down", 0.25]]) {
       pose(r, a, beta, radius);
       poses++;
       for (const [name, mesh] of [["sun", r.sun], ["moon", r.moon]]) {
-        const w = want[name], P = new Vector3(w.at.x, w.at.y, w.at.z);
+        const w = want[name];
         const fwd = r.cam.getDirection(new Vector3(0, 0, 1));
+        const seen = b.seenPoint(w.at, box, fwd), P = new Vector3(seen.x, seen.y, seen.z);
         const fade = b.behindFade(w.side, w.alt, fwd);
         const pz = screen(r, P).z;
         // A point behind the camera (a close camera under a high body) is out
@@ -175,6 +176,35 @@ for (const [name, beta] of [["almost flat", 1.35], ["looking down", 0.25]]) {
   const behindLow = shown(r.sun) ? screen(r, r.sun.position) : null;
   ck("  ...but never waiting along the bottom, over the ground in front of the house",
      behindLow === null || behindLow.y < 0.5, behindLow);
+}
+
+// ── 2c. TILTING KEEPS IT IN THE SKY (owner's two screenshots, 2026-10-17):
+// a sun 46° up on the camera's side of the villa sat at the top edge almost
+// flat and dropped to the BOTTOM of the screen, over the grass, looking down.
+// At every heading and every tilt a body well up in the sky stays above the
+// villa's roof on screen, and a tilt step never moves it far.
+{
+  const r = rig();
+  const low = [], jumps = [];
+  let seenN = 0;
+  for (const [alt, az] of [[46, 113], [30, 60], [60, 200], [25, 300], [75, 10]])
+    for (let a = 0; a < 360; a += 15) {
+      let last = null;
+      for (let i = 0; i <= 12; i++) {
+        const beta = BETA_MAX - ((BETA_MAX - BETA_MIN) * i) / 12;   // almost flat → looking down
+        pose(r, a, beta);
+        sunAt(r, alt, az);
+        if (!shown(r.sun)) { last = null; continue; }
+        seenN++;
+        const s = screen(r, r.sun.position), roof = screen(r, new Vector3(box.cx, MAX.y, box.cz));
+        if (s.y > roof.y) low.push({ alt, az, a, beta: +beta.toFixed(2), y: +s.y.toFixed(2), roof: +roof.y.toFixed(2) });
+        if (last && Math.hypot(s.x - last.x, s.y - last.y) > 0.2) jumps.push({ alt, az, a, beta: +beta.toFixed(2) });
+        last = s;
+      }
+    }
+  ck(`tilting from almost flat to looking down (${seenN} views): a body well up in the sky never drops below the villa's roof`,
+     low.length === 0 && seenN > 500, low.slice(0, 3));
+  ck("  ...and no tilt step moves it more than a fifth of the screen", jumps.length === 0, jumps.slice(0, 3));
 }
 
 // ── 3. THE MOON MOVES THROUGH THE NIGHT, DOWN TO THE HORIZON ────────────────
