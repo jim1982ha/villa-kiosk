@@ -1,3 +1,9 @@
+## 0.12.227
+
+Nothing changes in Telegram. Behind it: what the Agent was doing when it restarts (a scheduled report, a chat's job,
+an answer being written) is now kept in one place, so it picks up after a restart the same way for every kind of work.
+The messages you get after a restart are word for word the same.
+
 ## 0.12.226
 
 Nothing changes on screen. The Agent's copy of the agreement it shares with the Kiosk is updated to the Kiosk's
