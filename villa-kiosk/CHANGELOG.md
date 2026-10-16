@@ -1,3 +1,8 @@
+## 2.496.389
+
+### Changed
+- The whole-screen setting is back to the one you saw working in 2.496.387 on Android; 2.496.388 had also changed it for the iPad and iPhone, which did not need it. Nothing changes on your phone.
+
 ## 2.496.388
 
 ### Changed

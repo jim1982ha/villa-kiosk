@@ -8,13 +8,13 @@
          mode the page actually rendered in half the time. -->
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#F7F4EE" />
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101311" />
-    <!-- The manifest's "display" is "fullscreen": an installed app on Android
-         uses the whole screen, with no clock and no navigation buttons (a swipe
-         from the edge shows them), as VESTA does inside the villa's app. It is
-         "display" itself, not display_override: a browser that may read only
-         "display" (Brave adds the app as a plain shortcut) saves it
-         when the app is added — removing and adding the app again applies a
-         change. A browser without fullscreen falls back to standalone. -->
+    <!-- The manifest's display_override starts with "fullscreen": an installed
+         app on Android uses the whole screen, with no clock and no navigation
+         buttons (a swipe from the edge shows them), as VESTA does inside the
+         villa's app. Seen working in Brave on Android (2.496.387, owner,
+         2026-10-16). "display" stays "standalone" because iOS reads only that
+         key: the iPad and iPhone are unchanged. The browser saves this when
+         the app is added — removing and adding it again applies a change. -->
     <meta name="application-name" content="VESTA" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
