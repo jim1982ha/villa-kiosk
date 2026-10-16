@@ -1,3 +1,8 @@
+## 0.12.226
+
+Nothing changes on screen. The Agent's copy of the agreement it shares with the Kiosk is updated to the Kiosk's
+2.496.394 version, which adds example fault histories the two check themselves against.
+
 ## 0.12.225
 
 What you will see on an alert in Telegram:
