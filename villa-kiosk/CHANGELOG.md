@@ -1,3 +1,8 @@
+## 2.496.386
+
+### Changed
+- The add-on's description in the add-on store is shorter and plainer: "Interactive 3D map of your property — live devices, energy, security and maintenance at a glance".
+
 ## 2.496.385
 
 ### Changed
