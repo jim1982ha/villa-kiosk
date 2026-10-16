@@ -1,3 +1,9 @@
+## 2.496.388
+
+### Changed
+- The installed VESTA app on Android uses the whole screen in every browser, Brave included: no clock bar, no navigation buttons (a swipe from the top or bottom edge shows them for a moment). Remove VESTA from the home screen and add it again: the browser keeps the old layout until then.
+- The bottom bar's colour is back to what it was before 2.496.384: with the whole screen used, it is no longer shown.
+
 ## 2.496.387
 
 ### Fixed
