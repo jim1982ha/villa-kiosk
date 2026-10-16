@@ -28,6 +28,7 @@
 // tests/oracles/placement_pass.mjs drives it with a frame of plain values.
 
 import { roomKey, NO_ROOM_LABEL } from "@/config/roomKey";
+import { deviceRoomLabel } from "@/config/devicePlace";
 import type { LabelControls } from "./EntityVisuals";
 import { Vector3, Matrix } from "@babylonjs/core/Maths/math.vector";
 import type { Viewport } from "@babylonjs/core/Maths/math.viewport";
@@ -399,9 +400,9 @@ export function layoutOf(f: CardShapeInput & { cardBudget: number }, g: PendingE
   return cardOf(f, drawnCells(g, memberCount), cellMax(g), f.cardBudget);
 }
 
-/** A device's room LABEL: its resolved room, else the no-room bucket. */
+/** A device's room LABEL: its resolved room, else the no-room bucket — devicePlace's, the one clean-up. */
 export function roomOfEntity(rooms: Readonly<Record<string, string | undefined>>, entityId: string): string {
-  return rooms[entityId]?.trim() || NO_ROOM_LABEL;
+  return deviceRoomLabel(rooms, entityId);
 }
 
 /** A card's members in reading order: by badge rank, then by id. Sorts in place. */

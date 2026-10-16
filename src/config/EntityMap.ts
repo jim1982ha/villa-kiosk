@@ -229,58 +229,8 @@ export function createDefaultMapping(
   };
 }
 
-/**
- * THE authoritative rule for "what room is this device in" — Dashboard.tsx's
- * room-resolution effect calls this once per mapped entity, on every HA
- * registry change and every scene re-calibration, and pushes the result to
- * both React (ConfigContext's resolvedRooms) and Babylon (SceneManager.
- * setResolvedRooms). Room used to be a field on EntityMapping itself,
- * hand-typed in two separate Advanced Settings editors — which meant it could
- * silently disagree with Home Assistant's own Area assignment for the same
- * device, two sources of truth that had no way to reconcile. Now there is
- * exactly one: HA's Area wins whenever the device has one; geometric
- * detection (which drawn room polygon the device's own 3D anchor sits
- * inside) is the fallback for whatever HA hasn't organised into an Area yet.
- * Nothing in the kiosk writes a room any more — see BindingsTable.tsx /
- * EntityMapRow.tsx, which used to.
- */
-export function resolveEntityRoom(
-  areaName: string | undefined,
-  geometricRoom: string | null,
-): string {
-  return areaName || geometricRoom || "";
-}
-
-/**
- * The room of EVERY entity the kiosk shows, by resolveEntityRoom — one pass
- * over one id set.
- *
- * ⚠️ THE SET USED TO BE THE STORED MAPPINGS (2.496.202). Dashboard walked
- * `Object.keys(config.entityMap)`, but a device reaches the map by a MESH
- * BINDING too (resolveMeshToMapping → mappingForEntityId builds its mapping
- * on the fly, no stored entry), and those got no room at all — "Other", the
- * one bucket the placement pass will not fold into a chip. The owner's TV:
- * Home Assistant had it in the Living Room (through its device), the model
- * carried it, and its badge sat on top of the "Living Room 18" label. The
- * caller passes every id that is on the map or stored; the answer is the
- * same rule for each.
- */
-export function resolveRooms(
-  ids: Iterable<string>,
-  areaNames: Record<string, string>,
-  geometricRoomFor: (entityId: string) => string | null,
-): Record<string, string> {
-  const resolved: Record<string, string> = {};
-  for (const id of ids) {
-    if (id in resolved) continue;
-    // the model is asked only when Home Assistant has no area for it (every entity is asked now, 2026-10-15)
-    resolved[id] = resolveEntityRoom(areaNames[id], areaNames[id] ? null : geometricRoomFor(id));
-  }
-  return resolved;
-}
-
-/* A device's FLOOR is config/devicePlace.ts (2026-10-12): resolveEntityFloor moved there as
-   haFloorNumber, without its geometric fallback, which no caller ever passed. */
+/* "Which room is this device in" — the rule (resolveEntityRoom, resolveRooms), the id set it runs over, the clean-up
+   and the no-room label — is config/devicePlace.ts (architecture review 2026-10-16), with the floor of a room. */
 
 
 /** Build a usable EntityMapping for an entity_id, falling back to inference.

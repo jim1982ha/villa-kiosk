@@ -15,7 +15,7 @@ export interface EntityMapping {
   // Room is NOT stored here any more — it's live-computed (HA's own Area
   // assignment, falling back to GLB geometric detection) rather than a
   // stored/user-editable field, so it can never drift from Home Assistant's
-  // own room organisation. See config/EntityMap.ts's resolveEntityRoom and
+  // own room organisation. See config/devicePlace.ts's resolveEntityRoom and
   // ConfigContext's resolvedRooms.
   category?: Category; // Map filter grouping; falls back to categoryForEntity() when unset
   /** The owner picked `category` by hand, rather than it having been

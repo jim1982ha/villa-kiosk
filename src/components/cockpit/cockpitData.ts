@@ -12,7 +12,7 @@ import { categoryMembers, type CategoryMembers } from "@/config/activeDevices";
 import { deviceLook, groupLook, type LookSource } from "@/utils/deviceActivity";
 import { displayLabelFor } from "@/config/EntityMap";
 import { NO_ROOM_LABEL } from "@/config/roomKey";
-import { floorOfRoom } from "@/config/devicePlace";
+import { deviceRoomLabel, floorOfRoom } from "@/config/devicePlace";
 import { byRoomOrder } from "@/config/summaryRows";
 import type { HassEntity, RawLogbookEntry } from "@/types/ha.types";
 import type { Category, EntityMapping } from "@/types/scene.types";
@@ -77,7 +77,7 @@ export function buildRoomGroups(
 ): RoomGroup[] {
   const idsByRoom = new Map<string, string[]>();
   for (const id of selectableIds) {
-    const room = resolvedRooms[id]?.trim() || NO_ROOM_LABEL;
+    const room = deviceRoomLabel(resolvedRooms, id);
     const list = idsByRoom.get(room) ?? [];
     list.push(id);
     idsByRoom.set(room, list);

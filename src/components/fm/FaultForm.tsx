@@ -19,6 +19,7 @@ import NotesField from "./NotesField";
 import DeviceSearchPicker, { type DeviceOption } from "./DeviceSearchPicker";
 import { useDeviceChoice } from "./useDeviceChoice";
 import FormActions from "./FormActions";
+import { deviceRoom } from "@/config/devicePlace";
 
 export default function FaultForm({ editing, presetEntity, deviceOptions, onDone }: {
   /** The record being edited; absent when raising a new fault. */
@@ -88,7 +89,7 @@ export default function FaultForm({ editing, presetEntity, deviceOptions, onDone
             title: title.trim(),
             entityId: entityId || undefined,
             deviceLabel: deviceText.trim() || undefined,
-            room: entityId ? resolvedRooms[entityId] : undefined,
+            room: entityId ? deviceRoom(resolvedRooms, entityId) : undefined,
             note: note.trim() || undefined,
             photoIds,
           };

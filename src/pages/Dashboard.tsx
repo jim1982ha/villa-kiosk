@@ -33,7 +33,8 @@ import AgentModal from "@/components/agent/AgentModal";
 import { useAgent } from "@/agent/AgentContext";
 import GuestReportModal from "@/components/fm/GuestReportModal";
 import { useHA } from "@/ha/HAStateStore";
-import { displayLabelFor, resolveRooms } from "@/config/EntityMap";
+import { displayLabelFor } from "@/config/EntityMap";
+import { deviceRoom, entityIdsKey, resolveRooms, roomIdSet } from "@/config/devicePlace";
 import { deriveHaScenes, scenesForRoom } from "@/config/haScenes";
 import { CATEGORY_ICONS, CATEGORY_LABELS } from "@/config/EntityCategories";
 import { deviceLook, storeLookSource } from "@/utils/deviceActivity";
@@ -62,7 +63,7 @@ export default function Dashboard() {
   // the map and the stored mappings, and each new place that showed a device had to join that list — a fault on a sensor
   // the model does not draw had no room line (owner, 2026-10-15). Every entity Home Assistant has now gets its room by
   // the same rule. One string of ids, so a state push that changes no id recomputes nothing.
-  const haIdsKey = useMemo(() => Object.keys(entities).sort().join("\n"), [entities]);
+  const haIdsKey = useMemo(() => entityIdsKey(entities), [entities]);
   // ProfileGate does NOT guarantee a signed-in role before this page mounts
   // (v2.30.2's early scene preload — an explicit, informed trade-off, see
   // ProfileGate's modelPreloadable — mounts it pre-login on non-iOS
@@ -354,7 +355,7 @@ export default function Dashboard() {
       if (!on || prev === undefined || prev) return; // only a fresh off->on edge
 
       const label = displayLabelFor(id, map?.label, e.attributes?.friendly_name as string | undefined);
-      const room = resolvedRoomsRef.current[id];
+      const room = deviceRoom(resolvedRoomsRef.current, id);
       // One phrasing for every source: the ROOM alone when known ("Motion
       // detected · Guest Bathroom"), never room + device suffixed together —
       // a camera's own motion entity has no `room` mapped and falls back to
@@ -507,7 +508,7 @@ export default function Dashboard() {
   // one; geometric detection (which room polygon the device's own mesh sits
   // inside) is the fallback for whatever HA hasn't organised into an Area
   // yet. Replaces the old "type a room into Advanced Settings" model — see
-  // config/EntityMap.ts's docstring for the full reasoning. Recomputed
+  // config/devicePlace.ts's resolveEntityRoom for the full reasoning. Recomputed
   // whenever HA's registry data changes (entityAreaNames — live, no reload,
   // see HAStateStore's *_registry_updated subscriptions), whenever the
   // entity list itself changes (a device newly mapped), or whenever the
@@ -520,18 +521,10 @@ export default function Dashboard() {
   useEffect(() => {
     if (!manager) return;
     const recompute = () => {
-      // EVERY entity on the map or stored (EntityMap.resolveRooms says why
-      // the set is the union): the model's own (a mesh bound to an entity
-      // needs no stored mapping to draw a badge), the stored mappings, and
-      // — inside mappedEntityIds — every linked/motion target,
-      // which is only ever a VALUE on another mapping and used to fall to
-      // "Other" for the same reason.
-      const ids = new Set<string>([...mappedEntityIds, ...Object.keys(config.entityMap),
-        ...(haIdsKey ? haIdsKey.split("\n") : [])]);
-      for (const mapping of Object.values(config.entityMap)) {
-        if (mapping.linkedEntityId) ids.add(mapping.linkedEntityId);
-        if (mapping.motionEntityId) ids.add(mapping.motionEntityId);
-      }
+      // EVERY entity Home Assistant has, on the map or stored (devicePlace.roomIdSet
+      // says why the set is the union), by the one rule; the scene is the rule's
+      // "which drawn room is this entity in" (EntityVisuals.roomForEntity).
+      const ids = roomIdSet(haIdsKey, mappedEntityIds, config.entityMap);
       const resolved = resolveRooms(ids, entityAreaNames, (id) => manager.roomForEntity(id));
       manager.setResolvedRooms(resolved);
       setResolvedRooms(resolved);
@@ -602,7 +595,7 @@ export default function Dashboard() {
       const merged = chipRooms(roomNames, room);
       if (merged.length > 1) {
         const looks = storeLookSource(entities, config);
-        setRoomChoices(roomChoicesFor(merged, entityIds, (id) => resolvedRooms[id],
+        setRoomChoices(roomChoicesFor(merged, entityIds, (id) => deviceRoom(resolvedRooms, id),
           (id) => (entities[id] ? deviceLook(id, looks) : undefined)));
         return;
       }

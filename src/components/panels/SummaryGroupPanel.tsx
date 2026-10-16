@@ -31,7 +31,7 @@ import type { HassEntity } from "@/types/ha.types";
 import type { Category } from "@/types/scene.types";
 import { bucketByRoom, floorSections, summaryRows } from "@/config/summaryRows";
 import { useRoomFloors } from "@/config/useRoomFloors";
-import { floorOfRoom } from "@/config/devicePlace";
+import { deviceRoom, floorOfRoom } from "@/config/devicePlace";
 import { NO_ROOM_LABEL } from "@/config/roomKey";
 
 // The group's shape is config/summaryGroups' (this screen only draws one).
@@ -143,7 +143,7 @@ export default function SummaryGroupPanel({
   const entityLabel = useEntityLabel();
   const { ask: askScene, dialog: sceneDialog } = useSceneConfirm();
 
-  const roomOf = (id: string) => resolvedRooms[id]?.trim() ?? "";
+  const roomOf = (id: string) => deviceRoom(resolvedRooms, id);
 
   // Which rows, in which buckets — config/summaryRows (the phantom stand-ins,
   // the three buckets, the guest's off-map rule; tested by value). A guest

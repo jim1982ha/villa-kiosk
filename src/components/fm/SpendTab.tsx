@@ -34,6 +34,7 @@ import CostFields from "./CostFields";
 import { useDeviceChoice } from "./useDeviceChoice";
 import FormActions from "./FormActions";
 import { downloadFile } from "@/utils/download";
+import { deviceRoom } from "@/config/devicePlace";
 
 export default function SpendTab(
   { onOpenEntity, deviceOptions }: {
@@ -216,7 +217,7 @@ export default function SpendTab(
                   note: note.trim() || undefined,
                   entityId: entityId || undefined,
                   deviceLabel: deviceText.trim() || undefined,
-                  room: entityId ? resolvedRooms[entityId] : undefined,
+                  room: entityId ? deviceRoom(resolvedRooms, entityId) : undefined,
                 };
                 // `at` is set once, when the spend happened, and is never
                 // rewritten by a later correction — it is what the monthly

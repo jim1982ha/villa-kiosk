@@ -15,7 +15,7 @@ import { deviceLook, storeLookSource } from "@/utils/deviceActivity";
 import { deviceRowText } from "@/utils/entityValue";
 import type { Threshold } from "@/config/ThresholdConfig";
 import { labelOf } from "@/config/EntityMap";
-import { NO_ROOM_LABEL } from "@/config/roomKey";
+import { deviceRoom, deviceRoomOrRecord, firstRoom, roomLabel } from "@/config/devicePlace";
 import { deviceOf } from "@/config/deviceGroups";
 import { faultTitle, fmAttention, stageOf } from "@/fm/fmEngine";
 import { lastNoted } from "@/fm/faultNotes";
@@ -120,7 +120,7 @@ export function groupAttention(items: readonly AttentionItem[]): AttentionGroup[
       title: worst.device ? worst.device.label : worst.title,
       // ⚠️ ALWAYS A ROOM LINE (owner, 2026-10-15: a card without one broke the layout): a device no room holds reads as
       // the By Room list files it, "Other"
-      room: (worst.device ? worst.device.room ?? worst.room : worst.room) || NO_ROOM_LABEL,
+      room: roomLabel(firstRoom(worst.device?.room, worst.room)),
       // The DEVICE, as the map opens it — not the entity the problem names. A
       // ticket on a pump's energy meter opened the meter's chart while the
       // map's pump badge opens its power (2.496.258).
@@ -264,7 +264,7 @@ export function buildAttentionItems(opts: {
       // an object the model names whose entity Home Assistant does not have says so, as everywhere (NOT_IN_HA)
       detail: missingFromHa(entities, id) ? NOT_IN_HA : "Unavailable",
       source: "live",
-      room: resolvedRooms[id],
+      room: deviceRoom(resolvedRooms, id),
       entityId: id,
     });
   }
@@ -327,7 +327,7 @@ export function buildAttentionItems(opts: {
         ? stateLabelFor(id, entity.attributes.device_class as string | undefined)(entity.state)
         : deviceRowText(entity, domain),
       source: "live",
-      room: resolvedRooms[id],
+      room: deviceRoom(resolvedRooms, id),
       entityId: id,
     });
   }
@@ -341,7 +341,9 @@ export function buildAttentionItems(opts: {
     i.device = {
       key,
       label: labelOf(key, entityMap, entities),
-      room: resolvedRooms[key] ?? resolvedRooms[i.entityId] ?? i.room,
+      // ⚠️ EMPTY MEANS ABSENT (2026-10-16): this was `rooms[key] ?? rooms[entityId] ?? i.room`, and resolveRooms
+      // stores "" for no room, so `??` stopped there — a device with no room whose sensor had one read "Other".
+      room: deviceRoomOrRecord(resolvedRooms, key, i.entityId, i.room),
     };
   }
 

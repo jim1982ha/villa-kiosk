@@ -58,7 +58,7 @@ export interface EntityStoreState {
    *  `*_registry_updated` subscriptions below), so renaming or assigning a
    *  device's Area in Home Assistant reaches every kiosk session without a
    *  reload. Empty for any entity HA has no area assigned to. This is now
-   *  the AUTHORITATIVE room source for a device (see config/EntityMap.ts's
+   *  the AUTHORITATIVE room source for a device (see config/devicePlace.ts's
    *  resolveEntityRoom) — geometric room-polygon detection is the fallback
    *  for whatever this doesn't cover, not the other way around. */
   entityAreaNames: Record<string, string>;

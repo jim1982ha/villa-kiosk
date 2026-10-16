@@ -4,7 +4,7 @@
 // Assistant has no area for.
 //
 // ⚠️ ONE OWNER OF THE RULE. "Which room is this device in" is resolveEntityRoom
-// (config/EntityMap.ts): Home Assistant's area, else which drawn room the
+// (config/devicePlace.ts): Home Assistant's area, else which drawn room the
 // device's 3D anchor sits in. The second half exists only in a browser with
 // the scene loaded — the add-on has no 3D model to ask — so the add-on does not
 // re-derive it; it is told the answer the Kiosk already shows.

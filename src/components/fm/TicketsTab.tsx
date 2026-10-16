@@ -25,6 +25,7 @@ import InlineConfirm from "@/components/common/InlineConfirm";
 import FoldedList from "@/components/common/FoldedList";
 import { useFmTerms } from "@/fm/useFmTerms";
 import { formatMoney } from "@/utils/money";
+import { cleanRoom } from "@/config/devicePlace";
 
 export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, onEditOpened }: {
   onOpenEntity: (id: string) => void;
@@ -83,7 +84,8 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
         erase={{ title: "Erase this record", detail: t.title, run: (token) => removeTicket(t.id, token) }}
         onOpen={() => setEditingId(t.id)}
         pills={<>
-          {t.room && <span className="fm-clause">{t.room}</span>}
+          {/* the room stored on the ticket when it was opened (never re-resolved), cleaned as every room is */}
+          {cleanRoom(t.room) && <span className="fm-clause">{cleanRoom(t.room)}</span>}
           {/* a guest reports a symptom from inside the villa, not a diagnosis */}
           {t.reportedBy === "guest" && <span className="fm-clause guest">guest report</span>}
           <AgentMark record={t} />
