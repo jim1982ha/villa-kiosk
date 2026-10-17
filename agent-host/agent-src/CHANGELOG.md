@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.226 (17 October 2026)
+
+- Rules page: a muted reminder under "Acting on the villa" to install the Agent before new alert-rule templates
+  (owner, after the 14:41 alert storm). test_ui pins its words, place and style, and holds it to the platform-name
+  rule (the page's JS is not in test_no_platform_name's files: 13 platform names remain on the page — reported).
+
 ## 0.6.225 (17 October 2026)
 
 - alert-desk: a phase it does not know (PHASES: opened, resolved, abandoned, restated) is audited "phase_unknown" and

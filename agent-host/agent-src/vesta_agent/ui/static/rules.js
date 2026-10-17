@@ -59,7 +59,10 @@ export function rulesForms(doc, jobs = [], tools = null) {
   const acting = h("section", { class: "card" }, h("div", { class: "card-title" },
     h("h2", {}, place("acting"), infoButton(place("acting"), `Off: the agent informs only, and never offers to do anything. On: it may act, within the rules below; every action still goes through "${place("actions")}".`),
       h("label", { class: "switch title-switch" }, h("input", { type: "checkbox", checked: f.act_enabled, "aria-label": W("act_enabled"),
-        onchange: on((t) => { f.act_enabled = t.checked; }) })))));
+        onchange: on((t) => { f.act_enabled = t.checked; }) })))),
+    // a reminder under the switch (owner, 2026-10-17, after the 14:41 alert storm: a newer rule template reached an
+    // older Agent and its new kind of message was taken for alerts)
+    h("div", { class: "muted" }, "When an update also changes the villa's alert rules, install the VESTA Agent update first. Until then, the Agent ignores anything new those rules send."));
 
   // the AI
   const sel = (opts, value, set, label) => dropdown(Object.entries(opts), value, (v) => { set(v); markDirty(); }, label);
