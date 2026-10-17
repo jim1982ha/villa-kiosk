@@ -25,6 +25,7 @@ import LastDayTimeline from "./LastDayTimeline";
 import ModalFooter from "@/components/common/ModalFooter";
 import { useHA } from "@/ha/HAStateStore";
 import { missingFromHa } from "@/utils/stateColors";
+import { deviceRoom } from "@/config/devicePlace";
 
 interface Props {
   title: string;
@@ -64,7 +65,7 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
   const { may, onEdit, onReportFault, badge, onSetBadgeColor, linked, motion, back } = usePanelActions();
   const { resolvedRooms } = useConfig();
   const { entities } = useHA();
-  const room = entityId ? resolvedRooms[entityId] : undefined;
+  const room = entityId ? deviceRoom(resolvedRooms, entityId) : "";
   const [colorOpen, setColorOpen] = useState(false);
   // Escape + focus trap + focus restore, from one place (see useModalA11y).
   // This replaced a local Escape-only listener: behind every one of these

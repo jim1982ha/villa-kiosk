@@ -8,10 +8,12 @@
 // `temperature` sensors outdoors, a pressure-class vapour-pressure deficit,
 // a UV sensor with no device_class, a 10-minute average direction, rain in
 // seven windows — under generic ids that name no villa.
-import { register } from "node:module";
+// The Weather window's tiles are DRAWN (tests/consistency/screen.mjs) and read as the owner sees them; the source-text
+// checks left are the window's wiring to the recorder and its shell (it needs the villa's data to draw) and stylesheets.
 import { readFileSync } from "node:fs";
-register("../consistency/alias-hook.mjs", import.meta.url);
+import { h, draw, text } from "../consistency/screen.mjs";
 const W = await import("@/config/weatherStation");
+const Tiles = await import("@/components/panels/WeatherPanel");
 
 let fail = 0;
 const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
@@ -162,18 +164,26 @@ console.log("\n  the Sun & UV tile — the WHO scale (2026-09-26)");
   ck("today's peak is the highest reading, when it was FIRST reached", pk?.v === 9 && pk.t === 2, pk);
   ck("  ...and none without readings", peakOf({ points: [], gaps: [], window: { from: 0, to: 1 } }) === null);
   const panel = readFileSync(new URL("../../src/components/panels/WeatherPanel.tsx", import.meta.url), "utf8");
+  // UV 8 at 13:05, 935 W/m², today's peak 9 at 12:10
+  const uv = draw(h(Tiles.SunUv, { r: { uv: 8, solar: 935 }, peak: { v: 9, t: new Date(2026, 9, 16, 12, 10).getTime() } }));
   ck("the tile draws the band table, the reading's mark, the peak and the sunshine bar — and no decorative sun",
-     /UV_BANDS\.map\(\(x, i\) =>/.test(panel) && /uvScalePosition\(r\.uv\)/.test(panel) && /Peak today/.test(panel)
-       && /sunshineFraction\(r\.solar\)/.test(panel) && !/sun-dot|sun-path/.test(panel));
+     (uv.match(/class="uv-seg /g) ?? []).length === 5 && /<span class="on"[^>]*>Very high<small>8–10<\/small>/.test(uv)
+       && /class="weather-mark uv" style="bottom:61.53846153846154%"/.test(uv)
+       && /\|Peak today\|9 at 12:10/.test(text(uv)) && /class="weather-sunshine-bar"[^>]*><i style="width:93.5%"/.test(uv)
+       && text(uv).startsWith("|8|UV|Very high|") && !/sun-dot|sun-path/.test(uv), text(uv));
   ck("rain words: 0 dry; 2.4 light, 2.5 moderate, 7.6 heavy, 50 violent (the meteorological bands)",
      W.rainBand(0).band === "Dry" && W.rainBand(2.4).band === "Light rain" && W.rainBand(2.5).band === "Moderate rain"
        && W.rainBand(7.6).band === "Heavy rain" && W.rainBand(50).band === "Violent rain" && W.rainBand(4.2).detail === "4.2 mm/h now");
+  const rain = draw(h(Tiles.RainGauge, { r: { rainToday: 3.2, rateMmH: 4.2, rainUnit: "mm" } }));
   ck("the rain gauge opens with the Sun & UV head: today's rain, and whether it is raining",
-     /<div className="weather-rain">\s*<div className="weather-uv-head">/.test(panel) && /rainBand\(r\.rateMmH\)/.test(panel));
-  ck("the barometer carries no 'CHANGE' label", !/>CHANGE</.test(panel));
+     /^<div class="weather-rain"><div class="weather-uv-head">/.test(rain) && text(rain).startsWith("|3.2|mm today|Moderate rain|4.2 mm/h now|"), text(rain));
+  const baro = draw(h(Tiles.Barometer, { hpa: 1010 }));
+  ck("the barometer carries no 'CHANGE' label: RAIN and FAIR, the reading, its unit",
+     !/CHANGE/.test(baro) && (baro.match(/<text[^>]*>[^<]*</g) ?? []).map((x) => x.replace(/<text[^>]*>|</g, "")).join("|") === "RAIN|FAIR|1010.0|hPa"
+       && /aria-label="Pressure 1010.0 hPa"/.test(baro), baro);
   const css = readFileSync(new URL("../../src/styles/03-panels.css", import.meta.url), "utf8");
-  ck("the gauge is VERTICAL (the reading's height from the bottom) in the 'How it feels' palette — no WHO hexes",
-     /bottom: `\$\{uvScalePosition\(r\.uv\) \* 100\}%`/.test(panel) && /\.uv-seg\.low \{ background: color-mix\(in srgb, var\(--accent\) 40%/.test(css) && !/\.uv-seg\.[\w-]+ \{ background: #/.test(css));
+  ck("the gauge is VERTICAL (the reading's height from the bottom, drawn above) in the 'How it feels' palette — no WHO hexes",
+     /class="weather-mark uv" style="bottom:/.test(uv) && /\.uv-seg\.low \{ background: color-mix\(in srgb, var\(--accent\) 40%/.test(css) && !/\.uv-seg\.[\w-]+ \{ background: #/.test(css));
 }
 
 console.log("\n  the window: the approved boards 6 and 7");

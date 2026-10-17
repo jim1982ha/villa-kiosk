@@ -10,7 +10,7 @@
 
 import { roleCan } from "@/auth/permissions";
 import { useState } from "react";
-import { deviceRowText } from "@/utils/entityValue";
+import { rowText } from "@/config/reading";
 import { ChevronRight, Sparkles, Power, PowerOff, EyeOff } from "lucide-react";
 import BasePanel from "./BasePanel";
 import EntityRowToggle from "./EntityRowToggle";
@@ -31,7 +31,7 @@ import type { HassEntity } from "@/types/ha.types";
 import type { Category } from "@/types/scene.types";
 import { bucketByRoom, floorSections, summaryRows } from "@/config/summaryRows";
 import { useRoomFloors } from "@/config/useRoomFloors";
-import { floorOfRoom } from "@/config/devicePlace";
+import { deviceRoom, floorOfRoom } from "@/config/devicePlace";
 import { NO_ROOM_LABEL } from "@/config/roomKey";
 
 // The group's shape is config/summaryGroups' (this screen only draws one).
@@ -143,7 +143,7 @@ export default function SummaryGroupPanel({
   const entityLabel = useEntityLabel();
   const { ask: askScene, dialog: sceneDialog } = useSceneConfirm();
 
-  const roomOf = (id: string) => resolvedRooms[id]?.trim() ?? "";
+  const roomOf = (id: string) => deviceRoom(resolvedRooms, id);
 
   // Which rows, in which buckets — config/summaryRows (the phantom stand-ins,
   // the three buckets, the guest's off-map rule; tested by value). A guest
@@ -262,8 +262,8 @@ export default function SummaryGroupPanel({
     // ⚠️ ONE OWNER, AND THIS ROW USED NOT TO USE IT. This was written out here
     // as `pretty(state) + " " + unit` — no scaling — so the row printed
     // "6570.989 W" beside a badge that said "6.6 kW". The climate arrow and the
-    // room-vs-setpoint reasoning moved with it; see deviceRowText.
-    const stateText = deviceRowText(e, domain);
+    // room-vs-setpoint reasoning moved with it; see config/reading's rowText.
+    const stateText = rowText(id, e);
 
     const isLock = domain === "lock";
     // `rowInHa` gates every CONTROL on the row. A phantom is rendered so the

@@ -27,10 +27,8 @@ import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { roleCan } from "@/auth/permissions";
 import { useFmData, useFacilityLiveView } from "@/fm/FmDataContext";
-import { buildReadiness, type ReadinessCheck } from "@/fm/readiness";
-import { locksGroup, lightsGroup } from "@/config/summaryGroups";
-import { lockFacts, lightFacts } from "@/config/villaSummary";
-import SummaryGroupPanel, { type SummaryGroup } from "@/components/panels/SummaryGroupPanel";
+import { buildReadiness, type CheckTarget } from "@/fm/readiness";
+import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import { buildDeviceOptions } from "./DeviceSearchPicker";
 import TodayTab from "./TodayTab";
 import ReadinessTab from "./ReadinessTab";
@@ -60,7 +58,7 @@ export const FACILITY_TABS: ModalTab<FacilityTab>[] = [
  * then (useFacilityLiveView).
  */
 export default function FacilitySections({
-  tab, onOpenEntity, editTicket, onTicketEditOpened, onOpenOverview,
+  tab, onOpenEntity, editTicket, onTicketEditOpened,
 }: {
   tab: FacilityTab;
   /** Jump to a device's panel — a failing check or a fault opens the actual
@@ -70,9 +68,6 @@ export default function FacilitySections({
   editTicket?: string;
   /** Called once the form has it, so reopening the tab later does not spring it again. */
   onTicketEditOpened?: () => void;
-  /** Readiness's "devices offline" — the Cockpit's own view lists them (it
-   *  used to open a SECOND Cockpit over the Facility window). */
-  onOpenOverview: () => void;
 }) {
   const { entities } = useHA();
   const { config, resolvedRooms } = useConfig();
@@ -82,14 +77,10 @@ export default function FacilitySections({
   const { devices } = useVillaModel();
   const totalDeviceCount = devices.ids.length;
 
-  const [checkPanelGroup, setCheckPanelGroup] = useState<SummaryGroup | null>(null);
-  const openCheckDevices = (check: ReadinessCheck) => {
-    const group = check.id === "locks" ? locksGroup(lockFacts(entities, devices), entities, config.entityMap)
-      : check.id === "lights" ? lightsGroup(lightFacts(entities, devices))
-      : null;
-    if (group) setCheckPanelGroup(group);
-  };
-  const readiness = useMemo(() => buildReadiness(entities, data, devices), [entities, data, devices]);
+  // The list a readiness check opens — its own devices (readiness.CheckTarget).
+  const [checkList, setCheckList] = useState<CheckTarget | null>(null);
+  const readiness = useMemo(() => buildReadiness(entities, data, devices, config.entityMap),
+    [entities, data, devices, config.entityMap]);
   const deviceOptions = useMemo(
     () => buildDeviceOptions(devices, config.entityMap, entities, resolvedRooms),
     [devices, config.entityMap, entities, resolvedRooms],
@@ -109,11 +100,9 @@ export default function FacilitySections({
       )}
       {ready && tab === "recap" && (
         <>
-          <ReadinessTab readiness={readiness} onOpenEntity={onOpenEntity}
-            onOpenUnavailableDevices={onOpenOverview} onOpenCheckDevices={openCheckDevices} />
+          <ReadinessTab readiness={readiness} onOpenEntity={onOpenEntity} onOpenCheck={setCheckList} />
           <div className="settings-section-title">Monthly recap</div>
-          <RecapTab readiness={readiness}
-            offlineDeviceCount={readiness.checks.find((c) => c.id === "devices-online")?.entityIds?.length ?? 0}
+          <RecapTab readiness={readiness} offlineDeviceCount={devices.unavailable.length}
             totalDeviceCount={totalDeviceCount} />
         </>
       )}
@@ -123,10 +112,12 @@ export default function FacilitySections({
       )}
       {ready && tab === "spend" && <SpendTab onOpenEntity={onOpenEntity} deviceOptions={deviceOptions} />}
 
-      {checkPanelGroup && (
-        <SummaryGroupPanel group={checkPanelGroup} canControl={canControl}
-          onClose={() => setCheckPanelGroup(null)}
-          onOpenEntity={(id) => { setCheckPanelGroup(null); onOpenEntity(id); }} />
+      {checkList && (
+        // A health list keeps every device it names (hidden and diagnostic ones too) and offers no "turn all".
+        <SummaryGroupPanel group={checkList.group} canControl={canControl}
+          hideBulkToggle={checkList.health} filterSuppressed={!checkList.health}
+          onClose={() => setCheckList(null)}
+          onOpenEntity={(id) => { setCheckList(null); onOpenEntity(id); }} />
       )}
     </>
   );

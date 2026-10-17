@@ -12,13 +12,29 @@
 //   · the rows coloured binary sensors only.
 // Six releases in one day (2.496.279–297) each re-fixed one of those windows.
 // Now every window asks here and only lays the answer out.
+//
+// ⚠️ AND THE LISTS ASK HERE TOO (architecture review 2026-10-16, step 1). The
+// device lists, the Cockpit's alarm line and Recent activity each reached past
+// this module into entityValue and BinarySensorClasses for their words, so a
+// change of wording made here reached the windows alone. They ask rowText,
+// alarmText and stateWords now — the same words they printed before
+// (tests/oracles/reading_surfaces.mjs compares them with the old helpers).
+//
+// ⚠️ AND THE PANEL PILLS AND THE HISTORY BAR (step 2). The lock and cover
+// windows took their pill's words and tone from stateColors and panelRules,
+// the history bar its default words and its offline colour from entityValue
+// and stateColors. They ask lockPill, coverPill, readableState and
+// chartColours now — same words, same tones (same oracle).
 
 import type { HassEntity } from "@/types/ha.types";
 import type { AlertLevel, Threshold } from "./ThresholdConfig";
 import { readingKind, readingLevel, type ReadingKind } from "./sensorReading";
 import { binaryLook } from "./binaryLook";
-import { formatSensorParts } from "@/utils/entityValue";
-import { isUnavailable } from "@/utils/stateColors";
+import { stateLabelFor } from "./BinarySensorClasses";
+import { deviceRowText, formatSensorParts, prettyState } from "@/utils/entityValue";
+import { domainOf } from "@/utils/entityDomain";
+import { isUnavailable, paintState, statusKeyFor, STATUS_PILL_CLASS } from "@/utils/stateColors";
+import { coverStateLabel } from "@/utils/panelRules";
 
 /** The colour a measurement's number (and its chart) takes at each level. */
 const LEVEL_COLOR: Record<AlertLevel, string> = {
@@ -119,4 +135,65 @@ export function rowTone(r: Reading): string | undefined {
 export type ReadingHistory = "states" | "words" | "numbers";
 export function historyOf(r: Reading): ReadingHistory {
   return r.kind === "binary" ? "states" : r.kind === "text" ? "words" : "numbers";
+}
+
+/** What a ROW prints beside a device — the device lists and "Also on this
+ *  device": the number scaled as the badge writes it, a climate's current →
+ *  target, a binary sensor in its class's words, "Unavailable" when offline.
+ *  Not shouted: a row is not a pill. */
+export function rowText(id: string, entity: HassEntity): string {
+  return deviceRowText(entity, domainOf(id));
+}
+
+/** How a state of this entity is worded — for a state that is not its current
+ *  one (Recent activity, a history bar's tooltip): a binary sensor's "on" and
+ *  "off" in its class's words, every other state readable ("Not home"). */
+export function stateWords(id: string, deviceClass: string | undefined): (state: string) => string {
+  return stateLabelFor(id, deviceClass);
+}
+
+/** The Cockpit's alarm line: a binary sensor's own words for its state
+ *  ("Leak detected", "Disconnected"); anything else, what its row says
+ *  ("Unlocked", "Jammed", "92%"). */
+export function alarmText(id: string, entity: HassEntity): string {
+  return domainOf(id) === "binary_sensor"
+    ? stateWords(id, entity.attributes.device_class as string | undefined)(entity.state)
+    : rowText(id, entity);
+}
+
+/** A control window's state pill: its words and its `.status-pill` tone. */
+export interface StatePill {
+  text: string;
+  /** The `.status-pill` modifier class ("on", "danger", "transitional"…). */
+  tone: string;
+}
+
+/** The tone of a state's pill — the same reading of the state that colours
+ *  its history bar (stateColors.statusKeyFor, by the entity's domain). */
+const pillTone = (id: string, state: string | undefined): string =>
+  STATUS_PILL_CLASS[statusKeyFor(state ?? "", id)];
+
+/** The lock window's pill: the state the lock actually reported, shouted
+ *  ("UNLOCKING", "JAMMED"), "UNKNOWN" when there is no lock entity at all. */
+export function lockPill(id: string, state: string | undefined): StatePill {
+  return { text: (state ?? "unknown").replace(/_/g, " ").toUpperCase(), tone: pillTone(id, state) };
+}
+
+/** The cover window's pill: "Open", "Partially open (40%)", "Closed" —
+ *  `position` is the slider's (it follows a drag), undefined when the cover
+ *  reports none; any other state as HA sent it. */
+export function coverPill(id: string, state: string | undefined, position: number | undefined): StatePill {
+  return { text: coverStateLabel(state, position), tone: pillTone(id, state) };
+}
+
+/** A state's words when nothing says how this entity words it — a history
+ *  bar's tooltip by default ("not_home" → "Not home"). */
+export function readableState(state: string): string {
+  return prettyState(state);
+}
+
+/** A history bar's colours: the window's own, except that an unavailable or
+ *  unknown stretch is ALWAYS the legend's offline colour. */
+export function chartColours(colorFor: (state: string) => string): (state: string) => string {
+  return paintState(colorFor);
 }

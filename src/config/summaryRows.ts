@@ -14,6 +14,7 @@ import { phantomEntity } from "@/utils/phantomEntity";
 import { TOGGLEABLE_DOMAINS } from "@/utils/quickAction";
 import { domainOf } from "@/utils/entityDomain";
 import { NO_ROOM_LABEL } from "./roomKey";
+import { roomLabel } from "./devicePlace";
 
 /** Alphabetical, the no-room bucket ("Other") always last — the one order of
  *  every by-room list (the device list, the Cockpit's room tiles). */
@@ -28,7 +29,7 @@ export function byRoomOrder(a: string, b: string): number {
 export function bucketByRoom<T>(items: readonly T[], idOf: (t: T) => string, roomOf: (id: string) => string): [string, T[]][] {
   const buckets = new Map<string, T[]>();
   for (const t of items) {
-    const room = roomOf(idOf(t))?.trim() || NO_ROOM_LABEL;
+    const room = roomLabel(roomOf(idOf(t)));
     const list = buckets.get(room) ?? [];
     list.push(t);
     buckets.set(room, list);

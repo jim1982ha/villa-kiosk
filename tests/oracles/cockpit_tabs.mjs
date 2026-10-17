@@ -32,7 +32,7 @@ ck("a device's 'report a fault' (shown by the profile's door, a value) opens the
 ck("the top bar opens it on Overview; Back from a device returns to the tab it left (the tab is held by the page)",
    /onOpenCockpit=\{\(\) => go\(\{ type: "openWindow", window: "cockpit", tab: "overview" \}\)\}/.test(dash)
    && /tab=\{screen\.cockpitTab\}\s*onTab=\{\(tab\) => go\(\{ type: "cockpitTab", tab \}\)\}/.test(dash));
-ck("Readiness's 'devices offline' switches to Overview (it opened a second Cockpit over Facility)",
-   /onOpenOverview=\{\(\) => onTab\("overview"\)\}/.test(cockpit) && /onOpenUnavailableDevices=\{onOpenOverview\}/.test(fm)
-   && !/CockpitModal/.test(fm));
+// Readiness's "View unavailable devices" opens its own list now, in Recap (readiness_checks.mjs, by value); it never
+// opens a second Cockpit over the first.
+ck("Facility's tabs never open a second Cockpit", !/CockpitModal/.test(fm));
 done("✅ one Cockpit: its view and Facility's six tabs");

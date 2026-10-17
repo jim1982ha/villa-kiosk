@@ -506,7 +506,7 @@ export default function BabylonCanvas({
         // (cameras, fans, lights, etc.) so they appear in the Config Editor.
         // Room is NOT resolved/stamped here any more — it's no longer part of
         // EntityMapping at all (see Dashboard.tsx's room-resolution effect
-        // and config/EntityMap.ts's docstring): every entityMap entry's room
+        // and config/devicePlace.ts's resolveEntityRoom): every entityMap entry's room
         // is computed live from HA's Area assignment / GLB geometry, so there
         // is nothing to seed on first detection.
         //

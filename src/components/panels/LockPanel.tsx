@@ -5,7 +5,7 @@ import type { PanelProps } from "@/types/panel.types";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { usePendingAck } from "@/hooks/usePendingAck";
-import { statusKeyFor, STATUS_PILL_CLASS } from "@/utils/stateColors";
+import { lockPill } from "@/config/reading";
 import { tapFeedback, successFeedback } from "@/utils/haptics";
 import ControlFrame from "./ControlFrame";
 import InlineConfirm from "@/components/common/InlineConfirm";
@@ -21,7 +21,7 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
   // motor reports for a second or two, and "jammed" — was announced as a red
   // "UNLOCKED": an alarming claim about a door that was in fact busy securing
   // itself. Reporting the state HA actually sent is both truer and shorter.
-  const lockStatus = statusKeyFor(entity?.state ?? "", mapping.entityId);
+  const pill = lockPill(mapping.entityId, entity?.state);
   // A deadbolt is the SLOWEST device class in the villa — a Z-Wave/Zigbee
   // lock routinely takes seconds to report back, and unlike a light there is
   // usually no way to see the result from where you're standing. This panel
@@ -58,7 +58,7 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
           pill and the buttons otherwise (ControlFrame). */}
       <ControlFrame entity={entity} mapping={mapping} device="lock">
       <div className="center" style={{ margin: "8px 0 20px" }}>
-        <span className={`status-pill ${STATUS_PILL_CLASS[lockStatus]}`}>
+        <span className={`status-pill ${pill.tone}`}>
           {/* The open padlock is reserved for a lock that is genuinely NOT
               secured. Mid-motion, jammed and unavailable all keep the closed
               icon, for the same reason meshVariants falls an unauthored state
@@ -66,7 +66,7 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
               short of the device saying so. */}
           {entity?.state === "unlocked" || entity?.state === "open"
             ? <Unlock size={16} /> : <Lock size={16} />}
-          {(entity?.state ?? "unknown").replace(/_/g, " ").toUpperCase()}
+          {pill.text}
         </span>
       </div>
       {lock.asking ? (

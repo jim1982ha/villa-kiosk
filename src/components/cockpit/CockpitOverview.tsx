@@ -15,7 +15,7 @@ import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from
 import { createPortal } from "react-dom";
 import {
   MapPin, Building2, LayoutGrid,
-  Activity, ChevronRight, X, Plus, Wrench, Pencil,
+  Activity, ChevronRight, Plus,
 } from "lucide-react";
 import SegmentedGroup from "@/components/common/SegmentedGroup";
 import { fmtChartTime } from "@/components/panels/chartUtils";
@@ -23,8 +23,8 @@ import { useHistory } from "@/hooks/useHistory";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
-import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
-import InlineConfirm from "@/components/common/InlineConfirm";
+import { useFmData } from "@/fm/FmDataContext";
+import WorkButtons, { useConfirmedClose } from "@/components/fm/WorkButtons";
 import { roleCan } from "@/auth/permissions";
 import type { Doors } from "@/auth/doors";
 import { CATEGORY_LABELS, CATEGORY_ICONS } from "@/config/EntityCategories";
@@ -51,7 +51,7 @@ import { useAgent } from "@/agent/AgentContext";
 import type { AgentCadence } from "@/agent/agentApi";
 import FaultStageModal from "@/components/fm/FaultStageModal";
 import { localStamp } from "@/fm/fmEngine";
-import type { FmTicket } from "@/fm/fmTypes";
+import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
 
 
 
@@ -337,44 +337,22 @@ function CockpitAttentionSub({ group, item }: { group: AttentionGroup; item: Att
   );
 }
 
-/** A card's buttons, for the profiles that manage Facility work — WHAT they do is attention.cardActions' answer
- *  (tested by value); this only draws it. */
+/** A card's buttons, for the profiles that manage Facility work — WHICH buttons, on which records and with which
+ *  question is attention.cardActions' answer (fm/deviceWork, tested by value); WorkButtons draws them. */
 function useCardActions(group: AttentionGroup, canManage: boolean, onEditTicket: (ticketId: string) => void) {
-  const { data, closeTickets } = useFmData();
-  const [confirming, setConfirming] = useState(false);
-  const [staging, setStaging] = useState<FmTicket[] | null>(null);
-  const [problem, setProblem] = useState<string | null>(null);
+  const { data } = useFmData();
+  const closer = useConfirmedClose();
+  const [staging, setStaging] = useState<{ tickets: FmTicket[]; to: FmTicketStatus } | null>(null);
   const acts = cardActions(group);
-  if (!canManage || !acts) return null;
-  const records = (ids: string[]) => ids.map((id) => data.tickets.find((t) => t.id === id)).filter((t): t is FmTicket => !!t);
-  const close = async () => {
-    setProblem(null);
-    const { done, note: why } = fmSaveOutcome(await closeTickets(acts.close));
-    // On success the card's faults leave this list; only a failure stays to say so.
-    setConfirming(false);
-    setProblem(done ? null : why);
-  };
+  if (!canManage || acts.length === 0) return null;
+  const records = (ids: readonly string[]) => ids.map((id) => data.tickets.find((t) => t.id === id)).filter((t): t is FmTicket => !!t);
+  const problem = closer.problemFor(group.key);
   return (
     <>
-      {!confirming && (
-        <div className="fm-fault-actions">
-          {acts.editTicket === null ? (
-            <button type="button" className="btn ghost" onClick={() => setStaging(records(acts.markInProgress))}><Wrench size={14} aria-hidden /> Open Ticket</button>
-          ) : (
-            <button type="button" className="btn ghost" onClick={() => onEditTicket(acts.editTicket as string)}><Pencil size={14} aria-hidden /> Edit Ticket</button>
-          )}
-          <button type="button" className="btn ghost" aria-label={`Close “${group.title}”`}
-            onClick={() => { setProblem(null); setConfirming(true); }}>
-            <X size={14} /> Close
-          </button>
-        </div>
-      )}
-      {confirming && (
-        <InlineConfirm question="Close this? No action needed." confirmLabel="Close"
-          onConfirm={close} onCancel={() => setConfirming(false)} />
-      )}
+      <WorkButtons actions={acts} cardKey={group.key} closer={closer} name={group.title} className="fm-fault-actions"
+        onAction={(a) => (a.step.kind === "stage" ? setStaging({ tickets: records(a.ids), to: a.step.to }) : onEditTicket(a.ids[0]))} />
       {problem && <div className="fm-inline-error" role="alert">{problem}</div>}
-      {staging && <FaultStageModal tickets={staging} to="in_progress" onClose={() => setStaging(null)} />}
+      {staging && <FaultStageModal tickets={staging.tickets} to={staging.to} onClose={() => setStaging(null)} />}
     </>
   );
 }

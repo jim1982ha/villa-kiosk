@@ -112,7 +112,7 @@ export default function CockpitModal({
         <div className="modal-body">
           {shownTab !== "overview" ? (
             <FacilitySections tab={shownTab} onOpenEntity={onOpenEntity} editTicket={editTicket}
-              onTicketEditOpened={onTicketEditOpened} onOpenOverview={() => onTab("overview")} />
+              onTicketEditOpened={onTicketEditOpened} />
           ) : (
             <CockpitOverview onOpenEntity={onOpenEntity} doors={doors} reportFaultFor={reportFaultFor}
               onFaultFormOpened={onFaultFormOpened} onEditTicket={onEditTicket} onReportProblem={onReportProblem} />

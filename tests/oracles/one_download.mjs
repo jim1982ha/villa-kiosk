@@ -15,8 +15,8 @@ ck("the scan reached the source tree", files.length > 100, files.length);
 const ALLOWED = new Set(["src/utils/download.ts", "src/babylon/ModelLoader.ts"]);
 const own = files.filter((f) => !ALLOWED.has(f) && /URL\.createObjectURL\(/.test(readFileSync(ROOT + f, "utf8")));
 ck("no screen makes its own object URL to save a file", own.length === 0, own);
-const users = ["src/components/fm/SpendTab.tsx", "src/components/fm/RecapTab.tsx"];
-ck("  ...the Spend and Recap tabs save through downloadFile", users.every((f) => /downloadFile\(/.test(readFileSync(ROOT + f, "utf8"))));
+const users = ["src/fm/useMonthlyDocument.ts"];
+ck("  ...the Recap, Spend and Readiness documents save through downloadFile", users.every((f) => /downloadFile\(/.test(readFileSync(ROOT + f, "utf8"))));
 
 const weather = readFileSync(ROOT + "src/components/panels/WeatherPanel.tsx", "utf8");
 ck("Weather's \"ago\" is the app's one duration (fmtDuration), not its own rounding", /fmtDuration\(now - Date\.parse\(iso\)\)/.test(weather) && !/Math\.round\(s \/ 3600\)/.test(weather));

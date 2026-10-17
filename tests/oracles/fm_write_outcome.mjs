@@ -77,8 +77,9 @@ ck("offline: DONE (queued), and the person is told it will be sent — never 'tr
    o.offline.done === true && /sent automatically/.test(o.offline.note) && !/try again/i.test(o.offline.note), o.offline);
 ck("refused: NOT done — the form keeps what was typed, and says so", o.refused.done === false && /still here/.test(o.refused.note), o.refused);
 
-const SAVES = ["components/fm/GuestReportModal.tsx", "components/fm/FaultStageModal.tsx", "components/fm/TicketsTab.tsx", "components/fm/FaultForm.tsx",
-  "components/fm/SpendTab.tsx", "components/fm/ScheduleEditor.tsx", "components/fm/TodayTab.tsx", "components/cockpit/CockpitOverview.tsx"];
+// the Overview's and the Tickets tab's Close save through their one shared piece, WorkButtons (2026-10-16)
+const SAVES = ["components/fm/GuestReportModal.tsx", "components/fm/FaultStageModal.tsx", "components/fm/WorkButtons.tsx", "components/fm/FaultForm.tsx",
+  "components/fm/SpendTab.tsx", "components/fm/ScheduleEditor.tsx", "components/fm/TodayTab.tsx"];
 const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
 ck("every Facility save asks fmSaveOutcome; the old wording is gone",
    SAVES.every((f) => /fmSaveOutcome\(/.test(src(f))) && !SAVES.some((f) => /fmWriteProblem/.test(src(f))) && !/fmWriteProblem/.test(ctx + src("fm/fmSave.ts")),
@@ -91,9 +92,9 @@ ck("the guest's thank-you says when the report is only queued on this tablet",
 ck("the fault step, the Spend tab and logging a completion all ask for a cost with ONE CostFields (one cap line) — 2.496.263",
    ["components/fm/FaultStageModal.tsx", "components/fm/SpendTab.tsx", "components/fm/TodayTab.tsx"].every((f) => /<CostFields amount=\{amount\} onAmount=\{setAmount\}/.test(src(f)))
    && /projectedSpend\(data\.costs, \{ amount: value, category, replacing \}, terms\)/.test(src("components/fm/CostFields.tsx")));
+// One document state for the three (useMonthlyDocument, 2.496.403).
 ck("the three 'Saved' labels still show only when saved (not when queued)",
-   /if \(result !== "saved"\) return;/.test(src("components/fm/ReadinessTab.tsx"))
-   && /=== "saved"\) setSaved\(true\);/.test(src("components/fm/RecapTab.tsx"))
-   && /=== "saved"\) setStatementSaved\(true\);/.test(src("components/fm/SpendTab.tsx")));
+   /=== "saved"\) setSaved\(true\);/.test(src("fm/useMonthlyDocument.ts"))
+   && [["ReadinessTab", "readiness"], ["RecapTab", "recap"], ["SpendTab", "spend"]].every(([f, k]) => src(`components/fm/${f}.tsx`).includes(`useMonthlyDocument("${k}"`)));
 
 done("✅ a Facility write says what happened");

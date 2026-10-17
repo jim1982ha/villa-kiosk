@@ -1,3 +1,104 @@
+## 2.496.404
+
+### Fixed
+- "Set North" in Settings now turns the sky the right way on any villa. Facing the villa's real north and pressing it put the whole sky half way round on a new install, with the morning sun in the west. Your villa is unchanged: its saved setting gives exactly the same sky as before.
+
+### Changed
+- Nothing you see changes. 144 views of the real villa were compared pixel for pixel: the 24-hour circle facing north, through the app's own sky calculation, and a low sun far beyond the house. All were identical.
+- The code that places the sun and the moon is simpler. Where a body is round the villa is read in one place instead of four, and the sun's and the moon's directions are written by the same line. Whether a body is shown is decided in one place, and the checks run before every release now judge what is drawn instead of re-computing it.
+
+## 2.496.403
+
+### Fixed
+- Readiness snapshots are listed as snapshots, not statements: "Saved snapshots", and their delete button says snapshot.
+- A readiness snapshot can now be downloaded, like a recap or a spend statement. Saving one shows it under the list, and "Saved" stays until you make another, the same on Recap, Spend and Readiness.
+- Every readiness check about devices now opens its own list: "View air conditioning" and "View cameras" are new, and "View unavailable devices" opens the list right there in Recap instead of leaving for the Overview.
+
+### Changed
+- The recap, the spend statement and the readiness snapshot are made, saved, reopened and downloaded by one shared piece, so they can no longer drift apart. The checks run before every release now draw more of the Cockpit and the Weather window and read them as you would.
+
+## 2.496.402
+
+### Fixed
+- The moon is now drawn on its real side of the sky. It was on the opposite side: on 16 October at 19:00 the real moon was in the south-west and the overview drew it in the north-east. The sun is unchanged.
+
+## 2.496.401
+
+### Changed
+- Nothing you see changes: the sun and the moon are drawn exactly where 2.496.400 drew them (48 views of the 24-hour circle compared pixel by pixel, all identical).
+- The sun and the moon are now placed by one rule instead of two copies of it, and whether a body follows the real clock or Settings' day/night preview is decided in one place. Before every release they are now checked at every hour of a day, all the way round the villa, at every tilt and four zooms (over 170,000 camera positions), so a sun that jumps when you tilt or turn is caught before it reaches the wall.
+
+## 2.496.400
+
+### Fixed
+- The overview's sun and moon now go round the villa like a 24-hour clock. By day the sun follows its real path over the house. At night the moon is shown where it really is: over the villa when it is up, and carrying on below the villa once it has set.
+- The day/night preview in Settings now only changes how the villa is lit. It no longer moves the sun: at night with "day" switched on, you see the moon in its real place, not a sun high in the sky.
+- When the sun or the moon is up in the air on your side of the house, out of view above you, it is no longer shown waiting at the top of the screen (where it looked as if it were far beyond the house). Tilt down and it comes in from the top and moves down to where it really is.
+- Version 2.496.399 (the sun always shown beyond the house) is undone: the sun and the moon stay in the same place round the villa whichever way you turn.
+
+## 2.496.399
+
+### Fixed
+- Tilting the overview from almost flat to looking down no longer drops the sun or the moon to the bottom of the screen, below the villa. When the body is on your side of the house, it is now shown beyond the house, still on its own left or right, so it stays in the sky at every tilt. Where it was already beyond the house, nothing changes.
+
+## 2.496.398
+
+### Changed
+- The lock and blind windows' status labels and the history bar in device windows now take their words and colours from the same place as every other reading. Nothing looks different.
+
+## 2.496.397
+
+### Changed
+- How long something lasted is now worded by one rule shared with the VESTA Agent, so Telegram, the weekly report and the Kiosk say the same thing. Nothing changes on the Kiosk's screens; the Agent follows in its next version.
+
+## 2.496.396
+
+### Changed
+- Device lists, "Also on this device", the Cockpit's alarm lines, Recent activity and the last-day timeline now take a reading's words from the same place as the device windows. Every word stays exactly as before; a future wording fix now reaches all of them at once.
+
+## 2.496.395
+
+### Changed
+- The Overview's fault cards, the Tickets tab, the Schedule figures and the readiness checks now take a device's open faults and tickets from one place. The counts can no longer disagree with the cards. The buttons and their questions are the same on both tabs. As before, Close on an Overview card closes all of that device's faults and tickets, and Close on a ticket closes only that ticket.
+
+## 2.496.394
+
+### Fixed
+- A closed fault whose times could not all be read is now counted the same way by the Kiosk and by the add-on. Before, the Kiosk could count it as fixed by hand in your figures while the add-on kept it as cleared by itself, or the other way round.
+
+### Changed
+- The Kiosk and the add-on now check how a fault was closed against the same set of example histories, so the two can no longer quietly disagree about whether a fault cleared by itself or was repaired.
+
+## 2.496.393
+
+### Fixed
+- A fault card on the Overview now names the device's room whenever the villa's system knows it. It no longer says "Other" when the sensor, or the ticket, is in a room.
+
+### Changed
+- Every screen now works out a device's room the same way: the map's groups, device lists, windows, the Cockpit cards, new tickets and guest reports. Tickets still show the room they were opened in.
+
+## 2.496.392
+
+### Fixed
+- Zooming in close no longer floods the view with the sun's light. The sun and its glow never look bigger than at your usual zoom, and they are always drawn behind the villa, so the house hides them instead of being washed over. They still show in the same place on the screen. The moon follows the same rule.
+
+## 2.496.391
+
+### Changed
+- The sun now follows its real path as an arc round the villa. Facing north, it rises on the right in the morning, climbs a step every hour, passes over the top at midday and sets on the left in the evening. It no longer jumps from one side of the villa to the other between noon and 1 pm.
+- Looking down at the villa, the sun goes round the house and never crosses it.
+- When you zoom in, or the view is almost flat, the sun waits at the edge of the screen on its side instead of disappearing. Almost flat, the midday sun runs in a straight line along the top of the screen.
+- The sky is lit with a soft glow around the sun, and a paler one around the moon.
+- The moon follows the same arc at night and moves hour by hour down towards the horizon as it sets.
+- The sun or moon is hidden only when it is really behind you. Where it meets the house, the house hides it.
+
+## 2.496.390
+
+### Fixed
+- The sun and the moon above the villa no longer move when you turn, tilt, zoom or pan the view. Each now stays in one place in the sky for the hour: over the villa's east side in the morning, higher at midday, over the west side in the evening, whichever side you look from.
+- They are never drawn in front of the house any more: they always sit beyond it, and the house hides them where the two meet.
+- Because they now stay put, you see them only when you face their side of the villa, as with the real sun. Turned away, or with the view almost flat, they are out of sight rather than pulled onto the screen. A low sun sits just behind the house; a higher one shows further above it. At night the moon follows the same rule.
+
 ## 2.496.389
 
 ### Changed

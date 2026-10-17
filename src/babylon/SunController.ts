@@ -11,12 +11,11 @@ import type { SkyDome } from "./SkyDome";
 import { skyNow, skyTickMs, skySimActive, skySimLabel } from "@/utils/skyClock";
 import { tapDebug } from "@/utils/tapDebug";
 import { type AppConfig } from "@/config/AppConfig";
-import { getSunPosition, getMoonPosition, getMoonIllumination } from "@/utils/sunCalc";
-import type { NightSky } from "./NightSky";
 import type { FrameRequests } from "./frameScheduler";
 import type { SceneLook } from "./sceneLook";
 import type { LightingMode } from "./lightingMode";
-import { sunGeometry, sunLights } from "./sunState";
+import { sunLights } from "./sunState";
+import { guessedMoment, skyMoment, type SkyMoment } from "./skyMoment";
 import { clockTime } from "@/utils/dateText";
 
 export class SunController {
@@ -42,7 +41,6 @@ export class SunController {
   // atlas, 1 = the sun-free night atlas. Provided by ModelLoader when the
   // GLB carries a BAKED_Structure_Night texture; null = single-atlas GLB,
   // where night falls back to the exposure dim below.
-  private nightSky: NightSky | null = null;
   private nightBlend: ((t: number) => void) | null = null;
   // Pane dimmer from ModelLoader: ramps the glass materials' forced light
   // albedo + emissive sheen down after dark (they are excluded from every
@@ -148,45 +146,18 @@ export class SunController {
   }
 
   /**
-   * A true compass bearing, turned into a bearing in THIS model's axes.
-   *
-   * ONE reader for the whole file, and it has to be: the sun and the moon are
-   * computed independently and would otherwise need the correction applied
-   * twice, which is how they would come to disagree about which way is north.
-   * See AppConfig.northOffsetDeg for why the correction exists at all.
+   * Light the villa and set the sky for right now, from the villa's
+   * coordinates and the clock (skyMoment): Settings' day/night preview lights
+   * the villa and colours the sky; the sun's disc and the moon follow the
+   * real clock. The moon rides the same beat as the sun, so an unattended
+   * kiosk walks it across the sky and through its phases on its own —
+   * computed from the same date/lat/lng, never from the villa's system, whose
+   * moon sensor has no position at all (see utils/sunCalc).
    */
-  private modelAzimuth(azimuth: number): number {
-    return azimuth + (this.config.northOffsetDeg * Math.PI) / 180;
-  }
-
-  /** Compute lighting from the computed sun altitude/azimuth right now. */
   applyRealSun(date = skyNow()): void {
-    const { latitude, longitude } = this.config;
-    const { azimuth: trueAzimuth, altitude: realAltitude } =
-      getSunPosition(date, latitude, longitude);
-    const azimuth = this.modelAzimuth(trueAzimuth);
-    // Settings' day/night preview (baked villas): "day"/"night" PIN the sun
-    // to the matching side of the horizon regardless of the real altitude —
-    // everything downstream (isDay, light dir, sky dir, the twilight nightT
-    // ramp) then derives that look consistently, including a plausible
-    // above-horizon sun position for a forced day. Math.abs (not a sign
-    // flip) is what makes it an absolute PIN rather than a relative invert —
-    // forcing "day" at 3am and forcing "day" at noon must look the same.
     const preview = this.config.render?.dayNightPreview ?? "auto";
-    const altitude =
-      preview === "day" ? Math.abs(realAltitude)
-      : preview === "night" ? -Math.abs(realAltitude)
-      : realAltitude;
-    // The sun's two directions (the light's floored at 0.05 so the room is
-    // never lit edge-on after dark; the sky dome's UNCLAMPED, or its sun
-    // hovered over the horizon all night) and the twilight ramp that fades
-    // the night bake in over ~25 minutes: sunState.sunGeometry.
-    const g = sunGeometry(altitude, azimuth);
-    const isDay = g.isDay, nightT = g.nightT;
-    const dir = new Vector3(...g.dir);
-    const skyDir = new Vector3(...g.skyDir);
-
-    this.applyDayNight(isDay, dir, nightT, skyDir);
+    const m = skyMoment(date, this.config, preview);
+    this.applyDayNight(m);
 
     // ── The `sky` channel, reporting on EVERY pass ──────────────────────────
     // It used to emit one line at startup and only when a simulation was
@@ -196,30 +167,7 @@ export class SunController {
     // (compare `drawn` against the camera's own `sinTilt` on the `place` line).
     // A diagnostic that reports on one branch reports a blank that means "not
     // measured" rather than "did not happen".
-    this.reportSky(date, realAltitude, altitude, azimuth, preview, nightT);
-
-    // The moon rides the same beat as the sun, so an unattended kiosk walks it
-    // across the sky and through its phases on its own. Computed here from the
-    // same date/lat/lng — never from HA, whose sensor.moon_phase is an enum
-    // with no position at all (see utils/sunCalc) and which is opt-in, so it
-    // can never be a prerequisite for this running.
-    if (this.nightSky) {
-      const m = getMoonPosition(date, latitude, longitude);
-      const mAz = this.modelAzimuth(m.azimuth);
-      const ill = getMoonIllumination(date);
-      // Same convention as skyDir above: a unit vector pointing AT the body.
-      this.nightSky.update({
-        dir: new Vector3(
-          -Math.sin(mAz) * Math.cos(m.altitude),
-          Math.sin(m.altitude),
-          -Math.cos(mAz) * Math.cos(m.altitude),
-        ).normalize(),
-        fraction: ill.fraction,
-        angle: ill.angle,
-        parallacticAngle: m.parallacticAngle,
-        nightT,
-      });
-    }
+    this.reportSky(date, m.realAltitude, m.altitude, m.azimuth, preview, m.light.nightT);
   }
 
   /** Last line emitted, so a per-minute sun.sun event does not fill the panel
@@ -232,8 +180,9 @@ export class SunController {
    * `real` vs `alt` is the day/night PREVIEW pin: they differ only when
    * Settings is forcing a side of the horizon, which is what made a simulated
    * 04:00 render as bright noon with no stars and no moon.
-   * `drawn` is where the sun DISC lands (skyFraming.placeBody); read it
-   * against `sinTilt` on the `place` line to say whether it is in frame.
+   * `drawn` is the sun disc's true altitude@azimuth on the overview's arc
+   * round the villa (skyBodies.placeBodies), `frame` where it lands on screen and
+   * `held` when it is waiting at the screen edge.
    */
   private reportSky(
     date: Date, real: number, alt: number, azimuth: number,
@@ -248,12 +197,6 @@ export class SunController {
     if (line === this.lastSkyLine) return;
     this.lastSkyLine = line;
     tapDebug(line, "sky");
-  }
-
-  /** Optional — the scene works without it, and so does every install that
-   *  never enabled HA's Moon integration. */
-  setNightSky(ns: NightSky): void {
-    this.nightSky = ns;
   }
 
   /** Override from HA sun.sun entity ("above_horizon" | "below_horizon"). */
@@ -286,26 +229,21 @@ export class SunController {
       return;
     }
     // Same day/night preview honoured here so the HA-driven path can't
-    // silently undo the override on the next sun.sun state event.
+    // silently undo the override on the next sun.sun state event. No real
+    // azimuth/altitude from the binary state: a made-up sun (skyMoment's
+    // guessedMoment), and no moon.
     const preview = this.config.render?.dayNightPreview ?? "auto";
-    const isDay = preview === "day" ? true : preview === "night" ? false : state === "above_horizon";
-    const dir = isDay ? new Vector3(-0.4, -1, -0.6) : new Vector3(-0.2, -1, -0.2);
-    // No real azimuth/altitude from the binary HA state — mirror the
-    // lighting direction below the horizon (positive Y) for the sky at
-    // night, same reasoning as the unclamped skyDir above.
-    const skyDir = isDay ? dir : new Vector3(-0.2, 1, -0.2);
-    this.applyDayNight(isDay, dir.normalize(), isDay ? 0 : 1, skyDir.normalize());
+    const m = guessedMoment(state === "above_horizon", preview);
+    this.applyDayNight(m);
     // Report from here too — this branch never reaches applyRealSun, and a
     // channel that goes quiet on one path reads as "nothing happened" when it
     // means "not measured". `real` is the synthetic altitude, which is the
     // point: it says the position is made up because lat/lng are unset.
-    const synth = Math.asin(Math.max(-1, Math.min(1, skyDir.normalize().y)));
-    this.reportSky(skyNow(), synth, synth, 0, `${preview}/ha-only`, isDay ? 0 : 1);
+    this.reportSky(skyNow(), m.realAltitude, m.altitude, 0, `${preview}/ha-only`, m.light.nightT);
   }
 
-  private applyDayNight(
-    isDay: boolean, dir: Vector3, nightT: number = isDay ? 0 : 1, skyDir: Vector3 = dir,
-  ): void {
+  private applyDayNight(m: SkyMoment): void {
+    const { isDay, nightT } = m.light;
     // Render-quality multipliers let Settings rebalance the key light + fill
     // without touching the day/night base values here.
     const r = this.config.render;
@@ -313,7 +251,7 @@ export class SunController {
     // Key, ambient and fill for day or for Settings' night dimming — warm at
     // night (the "blue kitchen" and "dead grey" history is in sunState).
     const L = sunLights(isDay, r);
-    this.sunLight.direction = dir;
+    this.sunLight.direction = new Vector3(...m.light.dir);
     this.sunLight.intensity = L.sunIntensity;
     this.sunLight.diffuse = new Color3(...L.sunColor);
     this.scene.ambientColor = new Color3(...L.ambient);
@@ -353,12 +291,10 @@ export class SunController {
     // in every mode, since no bake, lightmap or scene light drives them.
     this.glassDim?.(nightT);
 
-    // Drive the procedural sky from the UNCLAMPED sun direction (it shows
-    // through the windows) — see skyDir's comment in applyRealSun/
-    // applyHaSunState for why this must not be the same floored `dir` used
-    // for scene lighting. clearColor is kept as a fallback for when the sky
-    // dome is absent.
-    this.sky?.update(skyDir, isDay);
+    // The procedural sky (it shows through the windows), the sun's disc, the
+    // moon and the stars, all from the one moment. clearColor is kept as a
+    // fallback for when the sky dome is absent.
+    this.sky?.update(m);
     this.frames.repaint();
   }
 

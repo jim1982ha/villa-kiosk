@@ -2,7 +2,7 @@
 // Unified editor for all 3D-object → entity bindings. Each row lets you
 // change which entity the object controls AND edit its display metadata
 // (type, label, requires-confirmation) — all in one place. Room is NOT
-// editable here (or anywhere in the kiosk) any more — see config/EntityMap.ts's
+// editable here (or anywhere in the kiosk) any more — see config/devicePlace.ts's
 // resolveEntityRoom docstring for why.
 //
 // Each row is its own React.memo'd component (BindingRow) — see its docstring

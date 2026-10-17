@@ -2,10 +2,9 @@
 // ONE answer to "what solid angle does this camera show?".
 //
 // ── Why this file exists ──────────────────────────────────────────────────
-// Four separate places converted `camera.fov` into an on-screen angle, and all
+// Four separate places (three now) converted `camera.fov` into an on-screen angle, and all
 // four independently assumed it was the VERTICAL one:
 //
-//   • SkyDome          — where in the frame the sun and moon are drawn
 //   • SceneManager     — the radius that fits a room in shot
 //   • OverviewController — the radius limits, as an aspect correction
 //   • EntityVisuals    — pixels per world unit, which drives the zoom rung

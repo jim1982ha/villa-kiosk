@@ -28,6 +28,7 @@ import { useVillaModel } from "@/config/VillaModel";
 import EntityMapRow from "./EntityMapRow";
 import EntityPicker from "./EntityPicker";
 import type { EntityMapping } from "@/types/scene.types";
+import { deviceRoom } from "@/config/devicePlace";
 
 export default function ConfigEditor({ initialSearch }: { initialSearch?: string } = {}) {
   const { update, resolvedRooms } = useConfig();
@@ -87,7 +88,7 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
   // it filtered on the stored label, entity-id fallbacks included, which nobody sees.
   const entityLabel = useEntityLabel();
   const entries = useMemo(
-    () => allRows.filter((r) => rowMatches(r, search, entityLabel(r.id), resolvedRooms[r.id] ?? "")),
+    () => allRows.filter((r) => rowMatches(r, search, entityLabel(r.id), deviceRoom(resolvedRooms, r.id))),
     [allRows, search, entityLabel, resolvedRooms],
   );
 

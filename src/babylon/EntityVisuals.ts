@@ -153,6 +153,7 @@ import { BulbSet, WARM_GLOW, STRIP_MIN_LENGTH, type BulbReading } from "./bulbSe
 import { lightingModeFor, type LightingMode } from "./lightingMode";
 import "./babylonSideEffects";
 import { onActiveFloor, stampedFloor } from "./floorOf";
+import { deviceRoom } from "@/config/devicePlace";
 
 // Baseline emissive for an UNWIRED light marker (no HA state yet). SweetHome
 // ceiling spots / LED strips export as small placeholder spheres; at the old
@@ -2454,14 +2455,14 @@ export class EntityVisuals {
       }
       if (!anyBeam) {
         for (const camId of cameraIds) {
-          const camRoom = this.resolvedRooms[camId];
+          const camRoom = deviceRoom(this.resolvedRooms, camId);
           if (camRoom) this.roomHighlight.setActive(camRoom, on);
         }
       }
       return;
     }
     const map = this.config.entityMap[entity.entity_id];
-    const room = this.resolvedRooms[entity.entity_id];
+    const room = deviceRoom(this.resolvedRooms, entity.entity_id);
     if (map?.type === "binary_sensor" && room) {
       this.roomHighlight.setActive(room, on);
     }

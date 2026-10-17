@@ -20,7 +20,7 @@ interface ConfigContextType {
   reset: () => void;
   /** entity_id -> room name, live-computed (HA's own Area assignment, falling
    *  back to GLB geometric detection — see Dashboard.tsx's resolution effect
-   *  and config/EntityMap.ts's resolveEntityRoom) rather than stored/edited
+   *  and config/devicePlace.ts's resolveEntityRoom) rather than stored/edited
    *  config. Deliberately NOT part of AppConfig/persisted: every client
    *  independently computes the same answer from the same HA instance + the
    *  same GLB, so there is nothing to save or sync. Empty until the scene

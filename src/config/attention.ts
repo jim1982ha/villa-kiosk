@@ -10,20 +10,19 @@
 // ran twice: once in the villa model, whose result nothing read, then again
 // per profile. It is grouped once now, after the profile's filter.
 
-import { stateLabelFor } from "@/config/BinarySensorClasses";
 import { deviceLook, storeLookSource } from "@/utils/deviceActivity";
-import { deviceRowText } from "@/utils/entityValue";
+import { alarmText } from "@/config/reading";
 import type { Threshold } from "@/config/ThresholdConfig";
 import { labelOf } from "@/config/EntityMap";
-import { NO_ROOM_LABEL } from "@/config/roomKey";
+import { deviceRoom, deviceRoomOrRecord, firstRoom, roomLabel } from "@/config/devicePlace";
 import { deviceOf } from "@/config/deviceGroups";
 import { faultTitle, fmAttention, stageOf } from "@/fm/fmEngine";
 import { lastNoted } from "@/fm/faultNotes";
+import { deviceWorkKey, groupByDevice, overviewActions, type WorkAction, type WorkRecord } from "@/fm/deviceWork";
 import { faultSource, type IssueSource } from "@/fm/issueSource";
 import type { FmData, FmTicketCheck } from "@/fm/fmTypes";
 import type { HassEntity } from "@/types/ha.types";
 import type { EntityMapping } from "@/types/scene.types";
-import { domainOf } from "@/utils/entityDomain";
 import { missingFromHa, NOT_IN_HA } from "@/utils/stateColors";
 
 export type AttentionKind = "unavailable" | "fault" | "schedule" | "alarm";
@@ -100,14 +99,10 @@ const ATTENTION_RANK: Record<AttentionKind, number> = { alarm: 0, unavailable: 1
  * as Unlocked leaves the row where it is.
  */
 export function groupAttention(items: readonly AttentionItem[]): AttentionGroup[] {
-  const byKey = new Map<string, AttentionItem[]>();
-  for (const i of items) {
-    const key = i.device ? `device:${i.device.key}` : `item:${i.id}`;
-    const list = byKey.get(key);
-    if (list) list.push(i); else byKey.set(key, [i]);
-  }
+  // the one card per device the Tickets tab and the counts use too (fm/deviceWork)
+  const byKey = groupByDevice(items, (i) => deviceWorkKey(i.device?.key, i.id));
   const groups: AttentionGroup[] = [];
-  for (const [key, list] of byKey) {
+  for (const { key, items: list } of byKey) {
     const sorted = mergeFaults([...list].sort((a, b) => ATTENTION_RANK[a.kind] - ATTENTION_RANK[b.kind]));
     const worst = sorted[0];
     // ⚠️ ONE SHAPE FOR EVERY ROW (owner, 2026-10-10: "all these lines feel inconsistently shown"): a device's row is
@@ -120,7 +115,7 @@ export function groupAttention(items: readonly AttentionItem[]): AttentionGroup[
       title: worst.device ? worst.device.label : worst.title,
       // ⚠️ ALWAYS A ROOM LINE (owner, 2026-10-15: a card without one broke the layout): a device no room holds reads as
       // the By Room list files it, "Other"
-      room: (worst.device ? worst.device.room ?? worst.room : worst.room) || NO_ROOM_LABEL,
+      room: roomLabel(firstRoom(worst.device?.room, worst.room)),
       // The DEVICE, as the map opens it — not the entity the problem names. A
       // ticket on a pump's energy meter opened the meter's chart while the
       // map's pump badge opens its power (2.496.258).
@@ -132,24 +127,23 @@ export function groupAttention(items: readonly AttentionItem[]): AttentionGroup[
     || a.title.localeCompare(b.title) || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
 }
 
+/** What a card's buttons do (owner, 2026-10-14) — on its records only (its own fault lines and those folded onto a
+ *  live state's line by mergeFaults): fm/deviceWork.overviewActions' answer, in the order drawn. Empty when it holds
+ *  none, so a card that is only what Home Assistant reports has no button. */
+export function cardActions(group: AttentionGroup): WorkAction[] {
+  return overviewActions(cardRecords(group));
+}
+
+/** The records on a card — its faults and tickets, each with its stage. */
+export function cardRecords(group: AttentionGroup): WorkRecord[] {
+  return group.items.flatMap((i) => (i.kind === "fault" ? [i] : i.fault ? [i.fault] : []))
+    .flatMap((f) => (f.ticketId ? [{ id: f.ticketId, stage: f.stage === "ticket" ? "ticket" as const : "fault" as const }] : []));
+}
+
 /** A problem's line inside ITS row: under a device, what attentionLine says ("Unlocked", "Entrance door unlocked");
  *  in a row that is the problem itself (no device), only a status the row does not show already ("In progress"; an
  *  open fault's line is empty — its title is the row's, its Close the line's). Every row shows its problems this way,
  *  one or several. */
-/** What a card's buttons do (owner, 2026-10-14) — on its faults only (its own fault lines and those folded onto a
- *  live state's line by mergeFaults); null when it holds none, so a card that is only what Home Assistant reports has
- *  no button. `markInProgress`: the records "Mark in progress" takes on (one ticket for the device), empty when every
- *  fault is already a ticket — then `editTicket` is the record "Edit ticket" opens. `close`: every one of them. */
-export interface CardActions { markInProgress: string[]; editTicket: string | null; close: string[] }
-export function cardActions(group: AttentionGroup): CardActions | null {
-  const faults = group.items.flatMap((i) => (i.kind === "fault" ? [i] : i.fault ? [i.fault] : []))
-    .filter((f): f is AttentionItem & { ticketId: string } => !!f.ticketId);
-  if (faults.length === 0) return null;
-  const markInProgress = faults.filter((f) => f.stage !== "ticket").map((f) => f.ticketId);
-  const tickets = faults.filter((f) => f.stage === "ticket").map((f) => f.ticketId);
-  return { markInProgress, editTicket: markInProgress.length ? null : tickets[0], close: faults.map((f) => f.ticketId) };
-}
-
 export function attentionLineIn(group: AttentionGroup, item: AttentionItem): string {
   return group.key.startsWith("device:") ? attentionLine(item) : faultStatus(item) ?? item.detail;
 }
@@ -264,7 +258,7 @@ export function buildAttentionItems(opts: {
       // an object the model names whose entity Home Assistant does not have says so, as everywhere (NOT_IN_HA)
       detail: missingFromHa(entities, id) ? NOT_IN_HA : "Unavailable",
       source: "live",
-      room: resolvedRooms[id],
+      room: deviceRoom(resolvedRooms, id),
       entityId: id,
     });
   }
@@ -315,19 +309,16 @@ export function buildAttentionItems(opts: {
   for (const id of selectableIds) {
     const entity = entities[id];
     if (!entity || !deviceLook(id, looks).alert) continue;
-    const domain = domainOf(id);
     items.push({
       id: `alarm:${id}`,
       kind: "alarm",
       title: labelOf(id, entityMap, entities),
       // A binary_sensor's own words for its state ("Leak detected",
       // "Disconnected"); anything else, what its list row says ("Unlocked",
-      // "Jammed", "92 %").
-      detail: domain === "binary_sensor"
-        ? stateLabelFor(id, entity.attributes.device_class as string | undefined)(entity.state)
-        : deviceRowText(entity, domain),
+      // "Jammed", "92 %") — config/reading, as every reading.
+      detail: alarmText(id, entity),
       source: "live",
-      room: resolvedRooms[id],
+      room: deviceRoom(resolvedRooms, id),
       entityId: id,
     });
   }
@@ -341,7 +332,9 @@ export function buildAttentionItems(opts: {
     i.device = {
       key,
       label: labelOf(key, entityMap, entities),
-      room: resolvedRooms[key] ?? resolvedRooms[i.entityId] ?? i.room,
+      // ⚠️ EMPTY MEANS ABSENT (2026-10-16): this was `rooms[key] ?? rooms[entityId] ?? i.room`, and resolveRooms
+      // stores "" for no room, so `??` stopped there — a device with no room whose sensor had one read "Other".
+      room: deviceRoomOrRecord(resolvedRooms, key, i.entityId, i.room),
     };
   }
 

@@ -138,16 +138,17 @@ export interface AppConfig {
    * Degrees to add to every celestial AZIMUTH, so the computed sun and moon
    * land on the right walls of THIS model.
    *
-   * getSunPosition returns a true compass bearing (0 = North, clockwise), and
-   * the direction vector built from it assumes the scene's +Z axis is North.
-   * Nothing guarantees that: a GLB's heading is whatever the floor-plan export
-   * happened to produce, and it differs per villa. Without this the astronomy
-   * is correct and the ORIENTATION is arbitrary — the sun rises over whichever
-   * wall the exporter chose.
+   * sunCalc's azimuth runs from SOUTH toward west, and a body is drawn at
+   * model heading azimuth + this offset — so the offset is the model heading
+   * of true south (skyMoment). Nothing fixes it: a GLB's heading is whatever
+   * the floor-plan export happened to produce, and it differs per villa.
+   * Without it the astronomy is correct and the ORIENTATION is arbitrary —
+   * the sun rises over whichever wall the exporter chose. "Set North"
+   * measures it from the view (skyMoment.northOffsetFacing).
    *
-   * 0 by default, i.e. "+Z is North", which is the only honest assumption to
-   * ship: a seeded value would be right for one villa and wrong for every
-   * other install.
+   * 0 by default (+Z is south) — kept, because a changed default would turn
+   * the sky of every install that never stored a value: a seeded value would
+   * be right for one villa and wrong for every other install.
    */
   northOffsetDeg: number;
   theme: "dark" | "light" | "auto" | "night";

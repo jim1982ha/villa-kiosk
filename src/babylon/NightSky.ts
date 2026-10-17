@@ -11,11 +11,18 @@
 // exactly one entity, `sensor.moon_phase`, and it is an enum — eight phase
 // names, no elevation, no azimuth, no illumination (verified against a live
 // install). It cannot place a moon in a sky, it is opt-in, and it must never be
-// a prerequisite for anything here.
+// a prerequisite for anything here (skyMoment).
+//
+// WHERE the moon is drawn is not decided here: SkyDome places both bodies
+// with one call (skyBodies.placeBodies) and hands this class the moon's
+// placement to paint (paintMoon), and the night's fade for the stars
+// (setNight).
 
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
-import { placeBody, type SkyCamera } from "./skyFraming";
+import { MOON_SPANS, type InSky, type OnArc, type VillaBox } from "./skyBodies";
+import { disposeGlow, drawOnArc, makeGlow, type Glow } from "./skyArc";
+import type { MoonNow } from "./skyMoment";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
@@ -24,9 +31,11 @@ import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { VertexData } from "@babylonjs/core/Meshes/mesh.vertexData";
 import type { Scene } from "@babylonjs/core/scene";
 
-/** Distance from the camera, in world units. Inside the sky dome's 500 radius
- *  so it always reads as "in the sky", and far inside the 10000 default far
- *  plane so ordinary depth testing lets the villa occlude it. */
+/** Walking: distance from the camera, in world units. Inside the sky dome's
+ *  500 radius so it always reads as "in the sky", and far inside the 10000
+ *  default far plane so ordinary depth testing lets the villa occlude it. In
+ *  the overview the moon is a point on the sphere round the villa instead
+ *  (skyBodies.placeBodies), placed with the sun. */
 const MOON_DIST = 380;
 const STAR_RADIUS = 470;
 /** Moon disc size in world units at MOON_DIST — about 1.7°, a little larger
@@ -40,38 +49,21 @@ const MOON_TEX = 256;
 const STAR_DIM_COUNT = 1600;
 const STAR_BRIGHT_COUNT = 220;
 
-export interface MoonLook {
-  /** Unit vector FROM the camera TOWARD the moon. */
-  dir: Vector3;
-  /** 0 = new, 1 = full. */
-  fraction: number;
-  /** Negative = waxing (lit on the right in the northern convention). */
-  angle: number;
-  /** Radians; tilt of the lit limb for this latitude and hour. */
-  parallacticAngle: number;
-  /** 0 by day → 1 at full night. Fades both moon and stars. */
-  nightT: number;
-}
-
 export class NightSky {
   private moon: Mesh;
   private moonMat: StandardMaterial;
   private moonTex: DynamicTexture;
-  /** The sky's horizon drop as an angle — handed over by SkyDome (reframe),
-   *  the one owner of the drop for both bodies. */
-  private lift = 0;
+  /** Whether the moon was last painted on the overview's arc (its glow shows
+   *  there only). */
+  private onArc = false;
+  private moonGlow: Glow;
   private starLayers: { mesh: Mesh; mat: StandardMaterial; peak: number }[] = [];
   /** Last phase the texture was drawn for, so a per-minute update does not
    *  redraw an identical disc. The moon's lit fraction moves ~3% per hour, so
    *  a 1% band repaints a handful of times a night rather than 1440. */
   private drawnKey = "";
 
-  /** SkyDome's camera object (SceneManager hands it over), so the moon is framed
-   *  against the very pose the sun is. */
-  private readonly camera: SkyCamera;
-
-  constructor(scene: Scene, camera: SkyCamera) {
-    this.camera = camera;
+  constructor(scene: Scene) {
     // ── Stars ──────────────────────────────────────────────────────────────
     // GL POINTS, not a textured sphere — and that is the whole fix (2.228.0).
     //
@@ -114,7 +106,7 @@ export class NightSky {
     // orient the crescent. The parallactic tilt is therefore baked into the
     // TEXTURE instead (see drawMoon), which sidesteps the conflict entirely.
     moon.billboardMode = Mesh.BILLBOARDMODE_ALL;
-    moon.infiniteDistance = true;      // position is read as a camera offset
+    moon.infiniteDistance = true;      // walking: position is read as a camera offset (see update)
     moon.isPickable = false;
     moon.applyFog = false;
     moon.checkCollisions = false;
@@ -123,54 +115,44 @@ export class NightSky {
     // drop it once the camera moved far enough from the origin.
     moon.alwaysSelectAsActiveMesh = true;
     this.moon = moon;
+    this.moonGlow = makeGlow(scene, "moonGlow", new Color3(0.55, 0.62, 0.75));
 
     this.setEnabled(false);
   }
 
-  /** The last look handed to update(), so the moon can be re-placed when the
-   *  CAMERA moves rather than only when the sky clock ticks: in the overview
-   *  it is a fixed point round the villa (skyFraming.placeBody), so wherever
-   *  the camera goes, the direction to it changes. */
-  private lastLook: MoonLook | null = null;
-
-  /** Re-place from the stored look against the sky's current drop (`lift`,
-   *  radians; > 0 is the overview). Called by SkyDome whenever it re-frames
-   *  the sun — a camera move or a drop change — so sun and moon move in the
-   *  same frame by the same rule. */
-  reframe(lift: number): void {
-    this.lift = lift;
-    if (this.lastLook) this.update(this.lastLook);
-  }
-
-  /**
-   * Place and light the moon, and fade both it and the stars for the hour.
-   *
-   * Called from SunController on the same beat as the sun, so an unattended
-   * kiosk walks the moon across the sky and through its phases on its own.
-   */
-  update(look: MoonLook): void {
-    this.lastLook = look;
-    const night = Math.max(0, Math.min(1, look.nightT));
+  /** Fade the stars for the hour: 0 by day → 1 at full night, as the sky is
+   *  coloured (Settings' preview included). */
+  setNight(nightT: number): void {
+    const night = Math.max(0, Math.min(1, nightT));
     for (const l of this.starLayers) {
       l.mat.alpha = night * l.peak;
       l.mesh.setEnabled(night > 0);
     }
-    // Below the horizon the moon is simply not visible — no need to fade it,
-    // and fading would leave a disc hanging in the ground half of the dome.
-    //
-    // ⚠️ "Has it set?" is asked of the TRUE altitude, never of the drawn
-    // direction: in the overview that points from the camera to a point round
-    // the villa, often below the horizon. skyFraming.horizonFade owns the rule
-    // for both bodies, and placeBody places both, against the same camera
-    // object SkyDome tracks — the moon on the same sun-path diagram as the sun.
-    const { x, y, z } = look.dir;
-    const { fade, dir: d } = placeBody(x, y, z, this.lift, this.camera);
-    const visible = night > 0 && d !== null;
-    this.moonMat.alpha = visible ? night * fade : 0;
-    this.moon.setEnabled(visible);
-    if (!visible) return;
+  }
 
-    this.moon.position = new Vector3(d.x, d.y, d.z).scale(MOON_DIST);
+  /**
+   * Paint the moon where skyBodies.placeBodies put it (null: not drawn), lit
+   * as `look` says. In the overview it is a point on the sphere round the
+   * villa — up, over the villa; set, under it — with its glow; walking, the
+   * true direction at sky distance.
+   */
+  paintMoon(p: OnArc | InSky | null, look: MoonNow, villa: VillaBox | null): void {
+    this.onArc = p !== null && p.onArc;
+    let alpha = 0;
+    if (p && p.onArc) {
+      alpha = p.alpha;
+      drawOnArc(this.moon, this.moonGlow, p, villa as VillaBox, MOON_SIZE, MOON_SPANS, alpha, 0.25);
+    } else if (p) {
+      this.moon.infiniteDistance = true;   // position is read as a camera offset
+      this.moon.scaling.setAll(1);
+      this.moon.position = new Vector3(p.dir.x, p.dir.y, p.dir.z).scale(MOON_DIST);
+      alpha = p.alpha;
+      this.moonGlow.mat.alpha = 0;
+    }
+    this.moonMat.alpha = alpha;
+    this.moon.setEnabled(alpha > 0);
+    this.moonGlow.mesh.setEnabled(this.onArc && alpha > 0);
+    if (!(alpha > 0)) return;
 
     // Redraw only when the disc would actually look different.
     const key = `${look.fraction.toFixed(2)}:${look.angle < 0 ? "w" : "n"}`
@@ -316,6 +298,7 @@ export class NightSky {
 
   setEnabled(on: boolean): void {
     this.moon.setEnabled(on && this.moonMat.alpha > 0);
+    this.moonGlow.mesh.setEnabled(on && this.onArc && this.moonMat.alpha > 0);
     for (const l of this.starLayers) l.mesh.setEnabled(on && l.mat.alpha > 0);
   }
 
@@ -323,6 +306,7 @@ export class NightSky {
     this.moon.dispose();
     this.moonMat.dispose();
     this.moonTex.dispose();
+    disposeGlow(this.moonGlow);
     for (const l of this.starLayers) { l.mesh.dispose(); l.mat.dispose(); }
   }
 }

@@ -55,7 +55,368 @@
     "clearedNotePrefixes": [
       "Cleared:",
       "Closed: the problem is over"
-    ]
+    ],
+    "_histories": "How a closed fault was closed, as both Kiosk sides read it (architecture review, 2026-10-15): the app's figures (src/fm/fmEngine.ts lastResolution, isClearedStep) and the proxy's retention (supervisor-proxy.py _fm_last_resolution, _fm_cleared_step, _fm_ticket_expired) — 2.496.372 fixed the same misreading on both. Each case is a resolved fault's `updates`: `last` the index of the step that last resolved it (of the status changes, in time order; a step whose time cannot be read sorts first), null when none did; `cleared` whether that step closed it with no work done; `expired` whether the proxy no longer keeps it at `now` with closes evidenced for `evidenceDays` (0: a repair is kept for ever, a close with no work leaves after 90 days). tests/oracles/fault_close.mjs and tests/store-doors.py drive both sides through every case.",
+    "histories": {
+      "now": "2026-10-15T00:00:00Z",
+      "evidenceDays": 0,
+      "cases": [
+        {
+          "_": "a cleared blip",
+          "resolvedAt": "2026-06-01T00:00:00Z",
+          "updates": [
+            {
+              "at": "2026-05-31T23:50:00Z",
+              "status": "open"
+            },
+            {
+              "at": "2026-06-01T00:00:00Z",
+              "status": "resolved",
+              "kind": "cleared",
+              "note": "Cleared: back online."
+            }
+          ],
+          "last": 1,
+          "cleared": true,
+          "expired": true
+        },
+        {
+          "_": "a cleared blip renamed afterwards: the title step carries \"resolved\" too, it is not the close (2.496.372)",
+          "resolvedAt": "2026-06-01T00:00:00Z",
+          "updates": [
+            {
+              "at": "2026-05-31T23:50:00Z",
+              "status": "open"
+            },
+            {
+              "at": "2026-06-01T00:00:00Z",
+              "status": "resolved",
+              "kind": "cleared",
+              "note": "Cleared: back online."
+            },
+            {
+              "at": "2026-06-02T00:00:00Z",
+              "status": "resolved",
+              "kind": "retitled",
+              "title": "Wi-Fi blip",
+              "was": "Access point offline"
+            }
+          ],
+          "last": 1,
+          "cleared": true,
+          "expired": true
+        },
+        {
+          "_": "a cleared blip with a Telegram line noted after it",
+          "resolvedAt": "2026-06-01T00:00:00Z",
+          "updates": [
+            {
+              "at": "2026-05-31T23:50:00Z",
+              "status": "open"
+            },
+            {
+              "at": "2026-06-01T00:00:00Z",
+              "status": "resolved",
+              "kind": "cleared",
+              "note": "Cleared: back online."
+            },
+            {
+              "at": "2026-06-01T00:05:00Z",
+              "status": "resolved",
+              "kind": "noted",
+              "note": "Reminder sent"
+            }
+          ],
+          "last": 1,
+          "cleared": true,
+          "expired": true
+        },
+        {
+          "_": "time order, not list order: a repair written after the close but dated before it is not the last close",
+          "resolvedAt": "2026-06-01T00:00:00Z",
+          "updates": [
+            {
+              "at": "2026-05-31T23:50:00Z",
+              "status": "open"
+            },
+            {
+              "at": "2026-06-01T00:00:00Z",
+              "status": "resolved",
+              "kind": "cleared",
+              "note": "Cleared: back online."
+            },
+            {
+              "at": "2026-05-31T23:55:00Z",
+              "status": "resolved",
+              "note": "Replaced the fuse"
+            }
+          ],
+          "last": 1,
+          "cleared": true,
+          "expired": true
+        },
+        {
+          "_": "a repair",
+          "resolvedAt": "2026-06-01T00:00:00Z",
+          "updates": [
+            {
+              "at": "2026-05-31T23:50:00Z",
+              "status": "open"
+            },
+            {
+              "at": "2026-06-01T00:00:00Z",
+              "status": "resolved",
+              "who": "Made",
+              "note": "Replaced the fuse"
+            }
+          ],
+          "last": 1,
+          "cleared": false,
+          "expired": false
+        },
+        {
+          "_": "a close written before kinds, by the agreement's note",
+          "resolvedAt": "2026-06-01T00:00:00Z",
+          "updates": [
+            {
+              "at": "2026-05-31T23:50:00Z",
+              "status": "open"
+            },
+            {
+              "at": "2026-06-01T00:00:00Z",
+              "status": "resolved",
+              "note": "Closed without action"
+            }
+          ],
+          "last": 1,
+          "cleared": true,
+          "expired": true
+        },
+        {
+          "_": "a close written before kinds, by the agreement's note prefix",
+          "resolvedAt": "2026-06-01T00:00:00Z",
+          "updates": [
+            {
+              "at": "2026-05-31T23:50:00Z",
+              "status": "open"
+            },
+            {
+              "at": "2026-06-01T00:00:00Z",
+              "status": "resolved",
+              "note": "Closed: the problem is over (pump online)"
+            }
+          ],
+          "last": 1,
+          "cleared": true,
+          "expired": true
+        },
+        {
+          "_": "a close written before kinds with any other note is a repair",
+          "resolvedAt": "2026-06-01T00:00:00Z",
+          "updates": [
+            {
+              "at": "2026-05-31T23:50:00Z",
+              "status": "open"
+            },
+            {
+              "at": "2026-06-01T00:00:00Z",
+              "status": "resolved",
+              "note": "Fixed"
+            }
+          ],
+          "last": 1,
+          "cleared": false,
+          "expired": false
+        },
+        {
+          "_": "a cleared blip that came back and was repaired: the repair is the last close",
+          "resolvedAt": "2026-06-03T00:00:00Z",
+          "updates": [
+            {
+              "at": "2026-05-31T23:50:00Z",
+              "status": "open"
+            },
+            {
+              "at": "2026-06-01T00:00:00Z",
+              "status": "resolved",
+              "kind": "cleared",
+              "note": "Cleared: back online."
+            },
+            {
+              "at": "2026-06-02T00:00:00Z",
+              "status": "open",
+              "kind": "reopened"
+            },
+            {
+              "at": "2026-06-03T00:00:00Z",
+              "status": "resolved",
+              "who": "Made"
+            }
+          ],
+          "last": 3,
+          "cleared": false,
+          "expired": false
+        },
+        {
+          "_": "a repair that came back and was cleared: the clearing is the last close",
+          "resolvedAt": "2026-06-03T00:00:00Z",
+          "updates": [
+            {
+              "at": "2026-05-31T23:50:00Z",
+              "status": "open"
+            },
+            {
+              "at": "2026-06-01T00:00:00Z",
+              "status": "resolved",
+              "who": "Made"
+            },
+            {
+              "at": "2026-06-02T00:00:00Z",
+              "status": "open",
+              "kind": "reopened"
+            },
+            {
+              "at": "2026-06-03T00:00:00Z",
+              "status": "resolved",
+              "kind": "cleared",
+              "note": "Closed without action"
+            }
+          ],
+          "last": 3,
+          "cleared": true,
+          "expired": true
+        },
+        {
+          "_": "a cleared blip inside its 90 days stays",
+          "resolvedAt": "2026-10-01T00:00:00Z",
+          "updates": [
+            {
+              "at": "2026-09-30T23:50:00Z",
+              "status": "open"
+            },
+            {
+              "at": "2026-10-01T00:00:00Z",
+              "status": "resolved",
+              "kind": "cleared",
+              "note": "Cleared: back online."
+            }
+          ],
+          "last": 1,
+          "cleared": true,
+          "expired": false
+        },
+        {
+          "_": "a Telegram line whose words are a clearing note, after a repair, is not the close",
+          "resolvedAt": "2026-06-01T00:00:00Z",
+          "updates": [
+            {
+              "at": "2026-05-31T23:50:00Z",
+              "status": "open"
+            },
+            {
+              "at": "2026-06-01T00:00:00Z",
+              "status": "resolved",
+              "who": "Made"
+            },
+            {
+              "at": "2026-06-01T00:30:00Z",
+              "status": "resolved",
+              "kind": "noted",
+              "note": "Cleared: back online."
+            }
+          ],
+          "last": 1,
+          "cleared": false,
+          "expired": false
+        },
+        {
+          "_": "a clearing note on a step that is not a close does not make the later repair one (kindless: only a close is read by its note)",
+          "resolvedAt": "2026-06-01T00:00:00Z",
+          "updates": [
+            {
+              "at": "2026-05-31T23:50:00Z",
+              "status": "open"
+            },
+            {
+              "at": "2026-05-31T23:55:00Z",
+              "status": "in_progress",
+              "note": "Closed without action"
+            },
+            {
+              "at": "2026-06-01T00:00:00Z",
+              "status": "resolved",
+              "note": "Fixed"
+            }
+          ],
+          "last": 2,
+          "cleared": false,
+          "expired": false
+        },
+        {
+          "_": "a step whose time cannot be read sorts FIRST, not where it sits in the list: the dated repair is the last close",
+          "resolvedAt": "2026-06-01T00:00:00Z",
+          "updates": [
+            {
+              "at": "2026-05-31T23:50:00Z",
+              "status": "open"
+            },
+            {
+              "at": "2026-06-01T00:00:00Z",
+              "status": "resolved",
+              "who": "Made"
+            },
+            {
+              "at": "not a time",
+              "status": "resolved",
+              "kind": "cleared",
+              "note": "Closed without action"
+            }
+          ],
+          "last": 1,
+          "cleared": false,
+          "expired": false
+        },
+        {
+          "_": "a close whose time cannot be read is still the last close when it is the only one; its date is the fault's resolvedAt",
+          "resolvedAt": "2026-06-01T00:00:00Z",
+          "updates": [
+            {
+              "at": "2026-05-31T23:50:00Z",
+              "status": "open"
+            },
+            {
+              "at": "",
+              "status": "resolved",
+              "kind": "cleared",
+              "note": "Closed without action"
+            }
+          ],
+          "last": 1,
+          "cleared": true,
+          "expired": true
+        },
+        {
+          "_": "no step closed it: how cannot be told, it is kept as a repair would be",
+          "resolvedAt": "2026-06-01T00:00:00Z",
+          "updates": [
+            {
+              "at": "2026-05-31T23:50:00Z",
+              "status": "open"
+            },
+            {
+              "at": "2026-06-01T00:00:00Z",
+              "status": "resolved",
+              "kind": "retitled",
+              "title": "Pump",
+              "was": "Pump offline"
+            }
+          ],
+          "last": null,
+          "cleared": null,
+          "expired": false
+        }
+      ]
+    }
   },
   "_heartbeat": "POST /agent/v1/heartbeat: the VESTA Agent says it is alive. `status`: a short text (at most 200 characters). `cadence` (optional): its own timing, which the Kiosk shows in the Overview's (i) instead of a copy of the defaults (architecture review, 2026-10-15) — `checkMinutes` how often it looks at its alerts and faults (1-1440), `nightlyAt` the villa time of its nightly check (HH:MM). Without it the Kiosk says no number.",
   "heartbeat": {
@@ -141,6 +502,139 @@
   },
   "_answering": "Who may press a message's buttons: every profile holding this capability in roles.json (never a guest).",
   "answeringCapability": "viewAgent",
+  "_duration": "How long something lasted, in the words BOTH apps write (architecture review round 2, 2026-10-16: the Kiosk's chartUtils.fmtDuration and the VESTA Agent's timeutil.lasting each had a rule, and the weekly report's \"Lasted\" column a third: 89 s read \"1 min\", \"89 s\" and \"89 s\"; 2 h 29 min \"2 h 29 min\", \"2 h 29 min\" and \"2.5 h\"). The rule: rounded to the nearest second; under a minute in seconds, never less than \"1 s\"; from a minute on rounded to the nearest minute; from an hour on \"1 h 20 min\"; from a day on days and WHOLE hours, the minutes dropped (\"1 d 9 h\" until it is 1 d 10 h). A half rounds up on both apps. Every case is checked by tests/oracles/duration_words.mjs (Kiosk) and by the VESTA Agent's test_duration_words.py.",
+  "duration": {
+    "cases": [
+      {
+        "_": "nothing measurable still reads one second, never \"0 s\" (the Kiosk's outage tooltip, an \"ago\" just now)",
+        "seconds": 0,
+        "words": "1 s"
+      },
+      {
+        "_": "under half a second",
+        "seconds": 0.4,
+        "words": "1 s"
+      },
+      {
+        "seconds": 2,
+        "words": "2 s"
+      },
+      {
+        "seconds": 45,
+        "words": "45 s"
+      },
+      {
+        "_": "the last second in seconds",
+        "seconds": 59,
+        "words": "59 s"
+      },
+      {
+        "_": "rounded to 60 s, so a minute",
+        "seconds": 59.6,
+        "words": "1 min"
+      },
+      {
+        "_": "minutes from a minute on (the VESTA Agent said \"60 s\" up to 89 s)",
+        "seconds": 60,
+        "words": "1 min"
+      },
+      {
+        "_": "rounded to the nearest minute (the VESTA Agent said \"89 s\")",
+        "seconds": 89,
+        "words": "1 min"
+      },
+      {
+        "_": "a half rounds up, on both apps",
+        "seconds": 90,
+        "words": "2 min"
+      },
+      {
+        "_": "a half rounds up, on both apps (Python's round() would say 2)",
+        "seconds": 150,
+        "words": "3 min"
+      },
+      {
+        "seconds": 600,
+        "words": "10 min"
+      },
+      {
+        "seconds": 3569,
+        "words": "59 min"
+      },
+      {
+        "_": "59.5 min rounds to the hour",
+        "seconds": 3570,
+        "words": "1 h"
+      },
+      {
+        "seconds": 4500,
+        "words": "1 h 15 min"
+      },
+      {
+        "seconds": 4800,
+        "words": "1 h 20 min"
+      },
+      {
+        "_": "89 minutes: the Weather panel's \"ago\" once said \"1 h\"",
+        "seconds": 5340,
+        "words": "1 h 29 min"
+      },
+      {
+        "_": "rounded, not cut (the VESTA Agent said \"1 h 29 min\")",
+        "seconds": 5370,
+        "words": "1 h 30 min"
+      },
+      {
+        "seconds": 7200,
+        "words": "2 h"
+      },
+      {
+        "seconds": 9000,
+        "words": "2 h 30 min"
+      },
+      {
+        "seconds": 86340,
+        "words": "23 h 59 min"
+      },
+      {
+        "_": "from a day on, days and hours",
+        "seconds": 86400,
+        "words": "1 d"
+      },
+      {
+        "_": "33.2 h (owner, 2026-10-15: never \"33 h\")",
+        "seconds": 119520,
+        "words": "1 d 9 h"
+      },
+      {
+        "_": "from a day on the minutes are dropped: never an hour more than it has been",
+        "seconds": 122340,
+        "words": "1 d 9 h"
+      },
+      {
+        "seconds": 122400,
+        "words": "1 d 10 h"
+      },
+      {
+        "seconds": 176400,
+        "words": "2 d 1 h"
+      },
+      {
+        "_": "129 h, a fault's title",
+        "seconds": 464400,
+        "words": "5 d 9 h"
+      },
+      {
+        "seconds": 525600,
+        "words": "6 d 2 h"
+      },
+      {
+        "_": "6 d 6 h 55 min still reads 6 d 6 h, never \"6 d 7 h\" (villa, 2026-10-15)",
+        "seconds": 543300,
+        "words": "6 d 6 h"
+      }
+    ]
+  },
   "samples": {
     "_postMessage": "What an agent POSTs to /agent/v1/messages.",
     "postMessage": {

@@ -17,9 +17,9 @@ import { useChartPointer } from "./useChartPointer";
 // operations, and already disagreeing with the owner on the empty string (it
 // returned the raw input, the owner returns ""). It feeds every tooltip in
 // every panel's history bar and the camera's status rail, so the drift would
-// have shown as one word spelled two ways on one screen.
-import { prettyState } from "@/utils/entityValue";
-import { paintState } from "@/utils/stateColors";
+// have shown as one word spelled two ways on one screen. Its words and its
+// offline colour come from config/reading, like every other surface's.
+import { readableState, chartColours } from "@/config/reading";
 import { TREND_INTERVAL_MS } from "@/utils/trendInterval";
 import { timelineCells, timelineRuns } from "@/utils/timelineCells";
 import type { HistoryStatus } from "@/utils/statisticsSeries";
@@ -99,12 +99,12 @@ interface Props {
 }
 
 export default function StateTimeline({
-  data, hours, end, colorFor: ownColour, labelFor = prettyState, height, legend, status, vertical,
+  data, hours, end, colorFor: ownColour, labelFor = readableState, height, legend, status, vertical,
   baselineStates,
 }: Props) {
   // Unavailable/unknown are the legend's colour on EVERY timeline, whatever
-  // the panel's mapping (stateColors.paintState).
-  const colorFor = useMemo(() => paintState(ownColour), [ownColour]);
+  // the panel's mapping (config/reading.chartColours).
+  const colorFor = useMemo(() => chartColours(ownColour), [ownColour]);
   // Where the pointer is along the bar, as a fraction (the app's one rule:
   // useChartPointer) — along whichever axis the bar runs.
   const { frac, handlers } = useChartPointer<HTMLDivElement>(vertical ? "y" : "x");

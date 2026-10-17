@@ -15,6 +15,7 @@
 
 import { displayLabelFor } from "./EntityMap";
 import { roomKey } from "@/config/roomKey";
+import { deviceRoom } from "@/config/devicePlace";
 import type { HassEntity } from "@/types/ha.types";
 
 export interface HaSceneInfo {
@@ -47,7 +48,7 @@ export function deriveHaScenes(
     const rooms: string[] = [];
     const seen = new Set<string>();
     for (const id of memberEntityIds) {
-      const room = resolvedRooms[id]?.trim();
+      const room = deviceRoom(resolvedRooms, id);
       if (room && !seen.has(room)) { seen.add(room); rooms.push(room); }
     }
     out.push({

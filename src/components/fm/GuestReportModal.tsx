@@ -29,6 +29,7 @@ import { uploadEvidence } from "@/fm/fmApi";
 import NotesField from "./NotesField";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import ModalFooter from "@/components/common/ModalFooter";
+import { deviceRoom } from "@/config/devicePlace";
 
 export default function GuestReportModal({
   entityId, onClose,
@@ -78,7 +79,7 @@ export default function GuestReportModal({
       title: title.trim(),
       entityId,
       deviceLabel,
-      room: entityId ? resolvedRooms[entityId] : undefined,
+      room: entityId ? deviceRoom(resolvedRooms, entityId) : undefined,
       note: note.trim() || undefined,
       photoIds,
       reportedBy: "guest",

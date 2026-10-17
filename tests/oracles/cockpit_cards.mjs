@@ -2,25 +2,11 @@
 // scheduled task, a spend line, work done — is one card (RecordCard), and these checks render it and read what it
 // SHOWS. The checks they replace matched the code's text and were rewritten nine times in two days for moves that
 // changed nothing on screen; a check here fails only when what the owner sees changes.
-import { register } from "node:module";
-register("../consistency/alias-hook.mjs", import.meta.url);
+import { React, h, draw, inside, btn } from "../consistency/screen.mjs";
 import { ck, done } from "../consistency/check.mjs";
-const React = (await import("react")).default;
-const { renderToStaticMarkup } = await import("react-dom/server");
-const { SuperadminGate } = await import("@/auth/SuperadminGate");
 const { default: RecordCard } = await import("@/components/fm/RecordCard");
 const { AttentionCard } = await import("@/components/cockpit/CockpitOverview");
 const { groupAttention } = await import("@/config/attention");
-const h = React.createElement;
-const draw = (el) => renderToStaticMarkup(h(SuperadminGate, null, el));
-/** The markup between the first `open` and its own closing tag — a crude but exact slice for nested divs. */
-const inside = (html, cls) => {
-  const at = html.indexOf(`class="${cls}`); if (at < 0) return "";
-  let depth = 0, i = html.lastIndexOf("<", at);
-  for (const m of html.slice(i).matchAll(/<(\/?)div\b[^>]*>/g)) { depth += m[1] ? -1 : 1; if (depth === 0) return html.slice(i, i + m.index + m[0].length); }
-  return html.slice(i);
-};
-const btn = (label) => h("button", { type: "button", className: "btn ghost" }, label);
 
 console.log("  a ticket's card:");
 const ticket = draw(h(RecordCard, { title: "#33 · Test lock unavailable", status: { text: "In progress", tone: "due-soon" },

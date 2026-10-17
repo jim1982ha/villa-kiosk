@@ -4,13 +4,14 @@
 // its own record, so the Agent can clear one alone), "Edit ticket" then opens it in the Tickets tab, which holds the
 // tickets in progress and the Closed ones. It replaced "Needs attention" and the Faults tab's open list (the same
 // faults twice). The same with or without the Agent: only where faults come from differs.
-import { register } from "node:module";
+// Where a check can draw what it is about it does (tests/consistency/screen.mjs); the source-text checks left are
+// wiring that needs the Facility data or the page to draw (said where), and stylesheet rules.
 import { readFileSync } from "node:fs";
-register("../consistency/alias-hook.mjs", import.meta.url);
+import { h, draw, text } from "../consistency/screen.mjs";
 import { ck, done } from "../consistency/check.mjs";
 const E = await import("@/fm/fmEngine");
-const { ticketGroups } = await import("@/fm/ticketGroups");
-const { groupAttention, cardActions, attentionLineIn } = await import("@/config/attention");
+const W = await import("@/fm/deviceWork");
+const { groupAttention, cardActions, cardRecords, attentionLineIn, buildAttentionItems } = await import("@/config/attention");
 const { screenReducer, START } = await import("@/pages/screen");
 
 const k = { now: "2026-10-14T10:00:00.000Z", id: (p) => `${p}-${Math.random().toString(36).slice(2, 8)}` };
@@ -19,22 +20,36 @@ const fm = (tickets) => ({ schedules: [], completions: [], costs: [], tickets, s
 // the pump's power and energy sensors are ONE device; the lock is another
 const deviceOf = (id) => (id === "sensor.pump_energy" ? "sensor.pump_power" : id);
 
-console.log("  a card's buttons are its faults' only:");
+console.log("  a card's buttons are its faults' only (fm/deviceWork, architecture review 2026-10-16):");
 const item = (id, kind, entityId, extra = {}) => ({ id, kind, title: id, detail: "", entityId, device: { key: deviceOf(entityId), label: "dev" }, ...extra });
+// a card's buttons as the owner reads them: "label → the records it acts on [what it asks first]"
+const said = (acts) => acts.map((a) => `${a.label} → ${[...a.ids].sort().join(",")}${a.step.kind === "close" ? ` [${a.step.question} / ${a.step.confirmLabel}]` : ""}${a.step.kind === "stage" ? ` (${a.step.to})` : ""}`);
+const OV_CLOSE = "[Close this? No action needed. / Close]", TK_CLOSE = "[Close this ticket? Nothing was done — no cost is recorded. / Close ticket]";
 const [pump] = groupAttention([
   item("unavailable:sensor.pump_power", "unavailable", "sensor.pump_power"),
   item("fault:a", "fault", "sensor.pump_energy", { ticketId: "a", stage: "fault" }),
   item("fault:b", "fault", "sensor.pump_power", { ticketId: "b", stage: "ticket" }),
 ]);
 const acts = cardActions(pump);
-ck("a device's live state and its faults are ONE card", pump.items.length >= 2 && acts.close.length === 2, pump.items.map((i) => i.id));
-ck("  ...Mark in progress takes on its fault (adding it to the ticket); Close closes both",
-   acts.markInProgress.join() === "a" && acts.editTicket === null && acts.close.sort().join() === "a,b", acts);
-const [taken] = groupAttention([item("fault:b", "fault", "sensor.pump_power", { ticketId: "b", stage: "ticket" })]);
-ck("  ...once every fault is a ticket, the button is Edit ticket, on that record",
-   cardActions(taken).markInProgress.length === 0 && cardActions(taken).editTicket === "b");
+ck("a device's live state and its faults are ONE card", pump.items.length >= 2 && cardRecords(pump).length === 2, pump.items.map((i) => i.id));
+ck("  ...Open Ticket takes on its fault (adding it to the ticket); Close closes both, the fault AND the ticket",
+   said(acts).join(" | ") === `Open Ticket → a (in_progress) | Close → a,b ${OV_CLOSE}`, said(acts));
+const [taken] = groupAttention([item("fault:b", "fault", "sensor.pump_power", { ticketId: "b", stage: "ticket" }),
+  item("fault:c", "fault", "sensor.pump_energy", { ticketId: "c", stage: "ticket" })]);
+ck("  ...once every fault is a ticket, the button is Edit Ticket, on its first record",
+   said(cardActions(taken)).join(" | ") === `Edit Ticket → b | Close → b,c ${OV_CLOSE}`, said(cardActions(taken)));
 const [lock] = groupAttention([item("alarm:lock.door", "alarm", "lock.door")]);
-ck("a card that is only what Home Assistant reports has nothing to act on — no button", cardActions(lock) === null);
+ck("a card that is only what Home Assistant reports has nothing to act on — no button", cardActions(lock).length === 0);
+ck("a ticket in progress (Tickets): Mark resolved and Close, both on every record of it — its own Close question",
+   said(W.ticketActions([{ id: "a", stage: "ticket" }, { id: "b", stage: "ticket" }])).join(" | ")
+   === `Mark resolved → a,b (resolved) | Close → a,b ${TK_CLOSE}`);
+ck("  ...a closed record: Reopen, on it alone — and nothing else on a record that is not where the card expects it",
+   said(W.closedActions({ id: "r", stage: "closed" })).join() === "Reopen → r (open)"
+   && W.closedActions({ id: "r", stage: "fault" }).length === 0 && W.ticketActions([{ id: "f", stage: "fault" }]).length === 0
+   && W.overviewActions([{ id: "r", stage: "closed" }]).length === 0);
+ck("  ...ONE wording per action: every button of a kind says the same, whichever card draws it",
+   Object.entries(W.WORK_ACTIONS).every(([kind, spec]) => [acts, cardActions(taken), W.ticketActions([{ id: "a", stage: "ticket" }]), W.closedActions({ id: "r", stage: "closed" })]
+     .flat().filter((a) => a.kind === kind).every((a) => a.label === spec.label && JSON.stringify(a.step) === JSON.stringify(spec.step))));
 
 console.log("\n  one answer to \"fault, ticket or closed\":");
 ck("open → fault, in progress → ticket, resolved → closed",
@@ -43,7 +58,7 @@ ck("  ...a status this build does not know is a FAULT — never hidden, never cl
 const odd = fm([{ ...rec("z", "lock.door"), status: "escalated" }]);
 ck("  ...counted as an open fault, listed on the Overview, absent from Tickets",
    E.ticketStats(odd.tickets).open === 1 && E.fmAttention(odd).unresolved.length === 1
-   && ticketGroups(odd.tickets.filter((t) => E.stageOf(t) === "ticket"), deviceOf).length === 0);
+   && W.ticketCards(odd.tickets, deviceOf).length === 0);
 
 console.log("\n  Mark in progress: one ticket per device, each fault its own record:");
 let d = fm([rec("a", "sensor.pump_energy"), rec("b", "sensor.pump_power"), rec("c", "lock.door")]);
@@ -51,19 +66,53 @@ d = E.withTicketsAdvanced(d, ["a", "b"], "in_progress", { who: "Wayan", photoIds
 const inProg = d.tickets.filter((t) => t.status === "in_progress");
 ck("both of the pump's faults are in progress, in one edit; the lock's is untouched",
    inProg.map((t) => t.id).sort().join() === "a,b" && d.tickets.find((t) => t.id === "c").status === "open");
-const groups = ticketGroups(inProg, deviceOf);
+const groups = W.ticketCards(d.tickets, deviceOf);
 ck("  ...and the Tickets tab shows them as ONE ticket for the pump", groups.length === 1 && groups[0].records.length === 2, groups);
 const resolved = E.withTicketsAdvanced(d, ["a", "b"], "resolved", { photoIds: [] }, { amountIdr: 100, category: "minor", label: "x" }, k);
 ck("resolving the ticket files its cost ONCE", resolved.costs.length === 1 && resolved.tickets.filter((t) => t.status === "resolved").length === 2);
 
 console.log("\n  the Agent clears one problem of a ticket:");
 const oneCleared = E.withTicketClosed(d, "a", k, undefined);
-const left = ticketGroups(oneCleared.tickets.filter((t) => t.status === "in_progress"), deviceOf);
+const left = W.ticketCards(oneCleared.tickets, deviceOf);
 ck("that record closes; the ticket stays in progress for the other", left.length === 1 && left[0].records.map((t) => t.id).join() === "b");
 const both = E.withTicketsClosed(oneCleared, ["b"], k);
-ck("  ...and with its last one it goes to Closed", ticketGroups(both.tickets.filter((t) => t.status === "in_progress"), deviceOf).length === 0
+ck("  ...and with its last one it goes to Closed", W.ticketCards(both.tickets, deviceOf).length === 0
    && both.tickets.filter(E.isTicketResolved).map((t) => t.id).sort().join() === "a,b");
-ck("a fault on no device is a ticket of its own", ticketGroups([rec("x", undefined, "in_progress"), rec("y", undefined, "in_progress")], deviceOf).length === 2);
+ck("a fault on no device is a ticket of its own", W.ticketCards([rec("x", undefined, "in_progress"), rec("y", undefined, "in_progress")], deviceOf).length === 2);
+
+console.log("\n  ONE card per device, on the Overview and in Tickets, and the counts are the cards:");
+{
+  // the pump (power + energy: one device) has a fault and a ticket; the lock a fault; two records on no device, one of
+  // each stage; a door's ticket alone; a closed one
+  const folding = new Map([["sensor.pump_energy", "sensor.pump_power"]]);
+  const fold = (id) => folding.get(id) ?? id;
+  const at = (h) => `2026-10-14T0${h}:00:00.000Z`;
+  const records = [{ ...rec("p1", "sensor.pump_energy"), openedAt: at(1) }, { ...rec("p2", "sensor.pump_power", "in_progress"), openedAt: at(2) },
+    rec("l1", "lock.door"), rec("n1", undefined), { ...rec("n2", undefined, "in_progress"), openedAt: at(4) },
+    { ...rec("d1", "lock.back", "in_progress"), openedAt: at(3) }, { ...rec("z", "lock.back", "resolved"), resolvedAt: at(5) }];
+  const overview = groupAttention(buildAttentionItems({ unavailableIds: [], entities: {}, entityMap: {}, alertThresholds: {}, resolvedRooms: {},
+    selectableIds: [], folding, fmData: fm(records) }));
+  const tickets = W.ticketCards(records, fold);
+  const counts = W.openCounts(records, fold);
+  const has = (g, kind) => cardActions(g).some((a) => a.kind === kind);
+  ck("the counts are the cards: devices to take on = Overview cards with Open Ticket; in progress = Tickets cards; open = Overview cards with a Close",
+     counts.faults === overview.filter((g) => has(g, "openTicket")).length && counts.tickets === tickets.length
+     && counts.total === overview.filter((g) => has(g, "closeDevice")).length
+     && JSON.stringify(counts) === JSON.stringify({ faults: 3, tickets: 3, total: 5 }), { counts, overview: overview.map((g) => g.key), tickets: tickets.map((t) => t.key) });
+  ck("  ...each record's card is the same device in both: a Tickets card holds exactly its Overview card's tickets",
+     tickets.every((t) => { const g = overview.find((o) => o.key === t.key);
+       return g && cardRecords(g).filter((r) => r.stage === "ticket").map((r) => r.id).sort().join() === t.records.map((r) => r.id).sort().join(); })
+     && records.filter(E.isTicketOpen).every((t) => overview.find((g) => g.key === W.recordWorkKey(t, fold))?.items
+       .some((i) => (i.fault ?? i).ticketId === t.id)),
+     tickets.map((t) => [t.key, t.records.map((r) => r.id)]));
+  ck("  ...the Tickets card's buttons are its records', the Overview card's the whole device's",
+     said(W.ticketActions(tickets.find((t) => t.key === "device:sensor.pump_power").records.map(W.workRecord))).join(" | ")
+       === `Mark resolved → p2 (resolved) | Close → p2 ${TK_CLOSE}`
+     && said(cardActions(overview.find((g) => g.key === "device:sensor.pump_power"))).join(" | ")
+       === `Open Ticket → p1 (in_progress) | Close → p1,p2 ${OV_CLOSE}`);
+  ck("  ...Tickets lists the device whose ticket was opened last first, never an open fault or a closed record",
+     tickets.map((t) => t.key).join() === "item:fault:n2,device:lock.back,device:sensor.pump_power", tickets.map((t) => t.key));
+}
 
 console.log("\n  where things land:");
 const OWNER = { facility: true }, GUEST = { facility: false };
@@ -79,7 +128,6 @@ ck("a guest's Report a problem: the guest form, on no device", screenReducer(STA
 ck("  ...and a guest cannot be sent to the Tickets tab", screenReducer(START, { type: "editTicket", id: "b" }, GUEST).ticketFor === null);
 
 console.log("\n  the alert's number, as Telegram writes it (owner, 2026-10-14):");
-const { buildAttentionItems } = await import("@/config/attention");
 const numbered = buildAttentionItems({ unavailableIds: [], entities: {}, entityMap: {}, alertThresholds: {}, resolvedRooms: {},
   selectableIds: [], folding: new Map(),
   fmData: fm([{ ...rec("n", "switch.pump"), title: "House Pump Power has not run", alertNumber: 5 }, rec("p", "lock.door")]) });
@@ -103,7 +151,7 @@ const [one] = offlineDevice("unavailable");
 ck("the fault on another entity of the device, itself unavailable, goes onto the device's Unavailable line",
    one.items.length === 1 && one.items[0].kind === "unavailable" && one.items[0].fault?.ticketId === "off"
    && attentionLineIn(one, one.items[0]) === "Example has been offline for 9 h.", one.items.map((i) => i.id));
-ck("  ...its Close and Open ticket still act on it", cardActions(one)?.close.join() === "off");
+ck("  ...its Close and Open ticket still act on it", said(cardActions(one)).join(" | ") === `Open Ticket → off (in_progress) | Close → off ${OV_CLOSE}`, said(cardActions(one)));
 const { attentionLine } = await import("@/config/attention");
 const f = { id: "fault:x", kind: "fault", title: "Pump has been offline for 9 h.", detail: "", ticketId: "x" };
 ck("  ...\"Unavailable — \" is not said before it (the fault says offline); a ticket still says it is in progress",
@@ -138,14 +186,12 @@ const night = groupAttention(buildAttentionItems({
 ck("  ...an offline device and its night check's fault: ONE line, two icons — Live (amber), Night check (red)",
    JSON.stringify(lineSources(night.items[0])) === JSON.stringify({ sources: ["live", "night"], kinds: ["unavailable", "fault"] }),
    lineSources(night.items[0]));
-const React = (await import("react")).default;
-const { renderToStaticMarkup } = await import("react-dom/server");
 const I = await import("@/components/fm/sourceIcons");
-const drawn = renderToStaticMarkup(React.createElement(I.SourceIcons, lineSources(night.items[0])));
+const drawn = draw(h(I.SourceIcons, lineSources(night.items[0])));
 ck("  ...drawn one under the other, each in its status colour, named for a screen reader",
    (drawn.match(/<svg/g) || []).length === 2 && /cockpit-attention-unavailable[\s\S]*cockpit-attention-fault/.test(drawn)
    && /aria-label="Live and Night check"/.test(drawn), drawn);
-const people = renderToStaticMarkup(React.createElement(I.SourceIcons, { sources: ["owner", "fm", "guest"], kinds: ["fault"] }));
+const people = draw(h(I.SourceIcons, { sources: ["owner", "fm", "guest"], kinds: ["fault"] }));
 ck("  ...a profile is the top bar's badge: its letters in a circle (O, FM, G), in the line's colour",
    /source-role-badge cockpit-attention-icon cockpit-attention-fault"[^>]*>O</.test(people)
    && /source-role-badge two[^"]*"[^>]*>FM</.test(people) && /class="source-role-badge[^"]*"[^>]*>G</.test(people), people);
@@ -181,15 +227,19 @@ ck("  ...tickets only: no icon, only Tickets", onlyTickets.detail === 'Check the
 const allClear = readyWith([]);
 ck("  ...nothing open: the goal is met, and said once", allClear.state === "pass" && allClear.label === "No open faults or tickets"
    && allClear.detail === "Nothing to deal with.", allClear);
-const tab = readFileSync(new URL("../../src/components/fm/ReadinessTab.tsx", import.meta.url), "utf8");
-ck("  ...the Recap draws those icons in the line, after \"Check the\"",
-   /<CheckDetail check=\{c\} \/>/.test(tab) && /Check the <SourceIconRow sources=\{check\.sources\} \/> faults/.test(tab));
-
-ck("  ...the checks fold under their verdict, closed at first; a tap on the verdict opens them (owner, 2026-10-14)",
-   /const \[showChecks, setShowChecks\] = useState\(false\);/.test(tab) && /\{showChecks && <div className="fm-list">/.test(tab)
-   && /className="fm-headline-toggle" aria-expanded=\{showChecks\}\s*onClick=\{\(\) => setShowChecks\(\(v\) => !v\)\}/.test(tab)
-   // its chevron right after the words (owner, 2026-10-14), not pushed to the far end
-   && /\.fm-headline-toggle > svg \{ flex: 0 0 auto; color/.test(readFileSync(new URL("../../src/styles/07-facility.css", import.meta.url), "utf8")));
+{
+  const { ReadinessChecks } = await import("@/components/fm/ReadinessTab");
+  const result = { checks: [mixedOpen], passed: 0, total: 1, overall: "warn" };
+  const checks = (startOpen) => draw(h(ReadinessChecks, { readiness: result, label: (id) => id, onOpenEntity: () => {}, onOpenCheck: () => {}, ...(startOpen ? { startOpen } : {}) }));
+  ck("  ...the Recap draws those icons in the line, after \"Check the\"",
+     text(checks(true)).includes('|Check the |G|[icon][icon]| faults in "Overview", or the open tickets in "Tickets".|'), text(checks(true)));
+  const folded = checks();   // as the tab draws it: no startOpen
+  ck("  ...the checks fold under their verdict, closed at first; a tap on the verdict opens them (owner, 2026-10-14)",
+     /class="fm-headline-toggle" aria-expanded="false"/.test(folded) && text(folded).includes("|Ready, with things worth fixing|0 of 1 checks passing|")
+     && !folded.includes("4 detected faults") && checks(true).includes("4 detected faults")
+     // its chevron right after the words (owner, 2026-10-14), not pushed to the far end — a stylesheet rule
+     && /\.fm-headline-toggle > svg \{ flex: 0 0 auto; color/.test(readFileSync(new URL("../../src/styles/07-facility.css", import.meta.url), "utf8")), text(folded));
+}
 
 const recent = readFileSync(new URL("../../src/components/fm/RecentWorkList.tsx", import.meta.url), "utf8");
 const ticketsTab = readFileSync(new URL("../../src/components/fm/TicketsTab.tsx", import.meta.url), "utf8");
@@ -197,10 +247,11 @@ ck("lists that only grow are ONE folded, paged list (owner, 2026-10-14): Tickets
    /<FoldedList title="Closed" rows=\{closed\}/.test(ticketsTab) && /<FoldedList title="Recent work" rows=\{rows\}/.test(recent)
    && !/usePaged|<Pager|\.slice\(0, limit\)/.test(recent + ticketsTab));
 
-// a ticket's card AS DRAWN (pill on the title line, buttons inside on the right): tests/oracles/cockpit_cards.mjs
-ck("a ticket is ONE card: the first record carries the pill, the closed one its Reopen, no device name above",
-   /<div key=\{g\.key\} className="fm-record-card">/.test(ticketsTab) && /record\(t, i === 0 \? \{ text: "In progress", tone: "due-soon" \} : undefined,/.test(ticketsTab)
-   && /record\(t, \{ text: "Resolved", tone: "ok" \},\s*<button className="btn ghost"[\s\S]*?>Reopen<\/button>\)/.test(ticketsTab)
+// a ticket's card AS DRAWN (pill on the title line, buttons inside on the right): tests/oracles/cockpit_cards.mjs; its
+// buttons as drawn: "the buttons, drawn" below. WIRING the Tickets tab alone holds (it needs the Facility data to render):
+ck("a ticket is ONE card: the first record carries the pill and the ticket's buttons, the closed one its Reopen, no device name above",
+   /<div key=\{g\.key\} className="fm-record-card">/.test(ticketsTab) && /record\(t, i === 0 \? \{ text: "In progress", tone: "due-soon" \} : undefined,\s*i === 0 \? <WorkButtons actions=\{ticketActions\(g\.records\.map\(workRecord\)\)\}/.test(ticketsTab)
+   && /record\(t, \{ text: "Resolved", tone: "ok" \},\s*<WorkButtons actions=\{closedActions\(workRecord\(t\)\)\}/.test(ticketsTab)
    && !/const title = head\.entityId/.test(ticketsTab));
 const spendTab = readFileSync(new URL("../../src/components/fm/SpendTab.tsx", import.meta.url), "utf8");
 const todayTab = readFileSync(new URL("../../src/components/fm/TodayTab.tsx", import.meta.url), "utf8");
@@ -253,19 +304,49 @@ ck("  ...a noted line is never a status change: \"reopened by Owner\" still read
 ck("  ...and each one is a note in the Tickets tab, with its time",
    N.faultNoteLines(told, (a) => a.slice(11, 16)).join("|") === "Escalation sent to Owner (08:49)|🆘 Need help pressed by Fabien (09:10)",
    N.faultNoteLines(told, (a) => a.slice(11, 16)));
-ck("  ...shown on the Overview card", /item\.latest \?\? item\.fault\?\.latest/.test(ov) && /cockpit-attention-latest/.test(ov));
+{
+  const { AttentionCard } = await import("@/components/cockpit/CockpitOverview");
+  const card = draw(h(AttentionCard, { group: groupAttention(withLatest)[0], onOpenEntity: () => {}, cadence: { checkMinutes: 5, nightlyAt: "02:00" } }));
+  ck("  ...shown on the Overview card, under the fault's line", /fault s[\s\S]*class="cockpit-attention-latest">🆘 Need help pressed by Fabien · /.test(card), text(card));
+}
 
 console.log("\n  the screens:");
 const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
 const tt = src("components/fm/TicketsTab.tsx");
-ck("the Tickets tab lists the tickets in progress (by device) and Closed — never an open fault",
-   /data\.tickets\.filter\(\(t\) => stageOf\(t\) === "ticket"\)/.test(tt) && /ticketGroups\(/.test(tt) && !/Raise a fault/.test(tt));
+// what ticketCards lists is checked by value above ("Tickets lists the device whose ticket was opened last first");
+// here, that the tab draws it — and counts it (openCounts: the same cards)
+ck("the Tickets tab draws ticketCards — the tickets in progress, by device — and Closed; never a raise form",
+   /ticketCards\(data\.tickets, deviceOf\)/.test(tt) && /openCounts\(data\.tickets, deviceOf\)\.tickets/.test(tt) && !/Raise a fault/.test(tt));
 ck("the Overview's title line: the (i) then Open a ticket, for the profiles that manage tickets; a guest reports a problem",
    /<FaultTiming \/>\s*<button className="btn ghost" onClick=\{\(\) => setRaising\(\{\}\)\}><Plus size=\{16\} \/> Open a ticket<\/button>/.test(ov) && /Report a problem<\/button>/.test(ov) && /<FaultForm /.test(ov));
+// WHAT the buttons are, on which records, with which question: by value at the top and in "the buttons, drawn".
+// Here only the wiring a drawing cannot reach — the Overview hands cardActions to the shared buttons, and acts on
+// what each button names (its stage, its records), with no status or rule of its own
 ck("a card draws what cardActions says (no rule of its own)",
-   /const acts = cardActions\(group\);/.test(ov) && /setStaging\(records\(acts\.markInProgress\)\)\}><Wrench size=\{14\} aria-hidden \/> Open Ticket</.test(ov)
-   && /onEditTicket\(acts\.editTicket as string\)\}><Pencil size=\{14\} aria-hidden \/> Edit Ticket</.test(ov)
-   && /onEditTicket\(acts\.editTicket as string\)/.test(ov) && /closeTickets\(acts\.close\)/.test(ov) && !/in_progress"/.test(ov.replace(/to="in_progress"/, "")));
+   /const acts = cardActions\(group\);/.test(ov) && /<WorkButtons actions=\{acts\} cardKey=\{group\.key\} closer=\{closer\}/.test(ov)
+   && /a\.step\.kind === "stage" \? setStaging\(\{ tickets: records\(a\.ids\), to: a\.step\.to \}\) : onEditTicket\(a\.ids\[0\]\)/.test(ov)
+   && !/closeTickets|InlineConfirm|in_progress"|"resolved"/.test(ov + tt));
+
+console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
+{
+  const { default: WorkButtons } = await import("@/components/fm/WorkButtons");
+  const closer = (asking) => ({ asking, problemFor: () => null, ask: () => {}, cancel: () => {}, close: async () => {} });
+  const drawButtons = (actions, asking = null, extra = {}) => draw(h(WorkButtons,
+    { actions, cardKey: "device:x", closer: closer(asking), onAction: () => {}, ...extra }));
+  const ovActs = cardActions(pump), tkActs = W.ticketActions([{ id: "a", stage: "ticket" }]);
+  ck("an Overview card: Open Ticket with its wrench, Close with its cross, in their row, Close named for a screen reader",
+     /^<div class="fm-fault-actions">/.test(drawButtons(ovActs, null, { name: "Pump", className: "fm-fault-actions" }))
+     && text(drawButtons(ovActs, null, { name: "Pump" })) === "|[icon] Open Ticket|[icon] Close|"
+     && /aria-label="Close “Pump”"/.test(drawButtons(ovActs, null, { name: "Pump" })), text(drawButtons(ovActs)));
+  ck("  ...a ticket: Mark resolved and Close, no icon; a closed record: Reopen",
+     text(drawButtons(tkActs)) === "|Mark resolved|Close|" && text(drawButtons(W.closedActions({ id: "r", stage: "closed" }))) === "|Reopen|", text(drawButtons(tkActs)));
+  ck("  ...its Close asks ITS question in place of the buttons — the Overview's for the device, the ticket's for the ticket",
+     text(drawButtons(ovActs, "device:x")) === "|Close this? No action needed.|Cancel|Close|"
+     && text(drawButtons(tkActs, "device:x")) === "|Close this ticket? Nothing was done — no cost is recorded.|Cancel|Close ticket|",
+     [text(drawButtons(ovActs, "device:x")), text(drawButtons(tkActs, "device:x"))]);
+  ck("  ...another card's question leaves this one's buttons; a card with nothing to act on draws nothing",
+     text(drawButtons(tkActs, "device:y")) === "|Mark resolved|Close|" && drawButtons([]) === "");
+}
 ck("a ticket's notes wrap inside its card, never past its edge (owner, 2026-10-14: a long \"VESTA reads\" ran out)",
    /\.fm-record-body > \.fm-row-main \{ flex: 1 1 260px; min-width: 0; \}/.test(src("styles/07-facility.css"))
    && /\.fm-timeline-note \{[^}]*overflow-wrap: anywhere;/.test(src("styles/07-facility.css")));

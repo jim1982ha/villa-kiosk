@@ -11,9 +11,9 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Wrench } from "lucide-react";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useDeviceIdentity } from "@/config/VillaModel";
-import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
+import { useFmData } from "@/fm/FmDataContext";
 import { faultTitle, localStamp, stageOf, ticketStats } from "@/fm/fmEngine";
-import { openCounts, ticketGroups, type TicketGroup } from "@/fm/ticketGroups";
+import { closedActions, openCounts, ticketActions, ticketCards, workRecord, type DeviceWork, type WorkAction } from "@/fm/deviceWork";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
 import RecordCard, { type RecordCardProps } from "./RecordCard";
 import FaultStageModal from "./FaultStageModal";
@@ -21,10 +21,11 @@ import FaultForm from "./FaultForm";
 import type { DeviceOption } from "./DeviceSearchPicker";
 import AgentMark from "./AgentMark";
 import { faultNoteLines, faultWhen } from "@/fm/faultNotes";
-import InlineConfirm from "@/components/common/InlineConfirm";
+import WorkButtons, { useConfirmedClose } from "./WorkButtons";
 import FoldedList from "@/components/common/FoldedList";
 import { useFmTerms } from "@/fm/useFmTerms";
 import { formatMoney } from "@/utils/money";
+import { cleanRoom } from "@/config/devicePlace";
 
 export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, onEditOpened }: {
   onOpenEntity: (id: string) => void;
@@ -34,7 +35,7 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
   editTicket?: string;
   onEditOpened?: () => void;
 }) {
-  const { data, removeTicket, closeTickets } = useFmData();
+  const { data, removeTicket } = useFmData();
   const terms = useFmTerms();
   const { deviceOf } = useDeviceIdentity();
   const label = useEntityLabel();
@@ -42,8 +43,7 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
   /** The ticket whose stage change is being recorded, and where it goes. */
   const [staging, setStaging] = useState<{ tickets: FmTicket[]; to: FmTicketStatus } | null>(null);
   /** The ticket whose one-step close ("nothing done") is being confirmed, and why the last one did not land. */
-  const [closingKey, setClosingKey] = useState<string | null>(null);
-  const [closeError, setCloseError] = useState<{ key: string; text: string } | null>(null);
+  const closer = useConfirmedClose();
 
   useEffect(() => {
     if (!editTicket) return;
@@ -55,20 +55,17 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
   const stats = ticketStats(data.tickets);
   // in progress: the cards below, one per device (openCounts) — the other figures are per record (a repair's time)
   const inProgress = openCounts(data.tickets, deviceOf).tickets;
-  const tickets = useMemo(() => ticketGroups(
-    data.tickets.filter((t) => stageOf(t) === "ticket").sort((a, b) => Date.parse(b.openedAt) - Date.parse(a.openedAt)),
-    deviceOf), [data.tickets, deviceOf]);
+  const tickets = useMemo(() => ticketCards(data.tickets, deviceOf), [data.tickets, deviceOf]);
   // ⚠️ THE CLOSED ONES ARE A SECTION OF THEIR OWN, FOLDED AND PAGED (owner, 2026-10-14): the VESTA Agent clears several
   // a day. Latest closed first; the server drops them after their retention window (supervisor-proxy _fm_expire).
   const closed = useMemo(() => data.tickets.filter((t) => stageOf(t) === "closed")
     .sort((a, b) => Date.parse(b.resolvedAt ?? b.openedAt) - Date.parse(a.resolvedAt ?? a.openedAt)), [data.tickets]);
   const editing = editingId ? data.tickets.find((t) => t.id === editingId) : undefined;
 
-  const closeNoAction = async (key: string, ids: string[]) => {
-    setCloseError(null);
-    const { done, note: why } = fmSaveOutcome(await closeTickets(ids));
-    setClosingKey(null);
-    if (!done && why) setCloseError({ key, text: why });
+  /** A button that is not a Close (deviceWork): Mark resolved, Reopen — the stage change, recorded in its form. */
+  const onAction = (a: WorkAction) => {
+    if (a.step.kind !== "stage") return;
+    setStaging({ tickets: a.ids.map((id) => data.tickets.find((t) => t.id === id)).filter((t): t is FmTicket => !!t), to: a.step.to });
   };
 
   /** One record, as every Facility card is drawn (RecordCard): its title, when/where/who, its notes, photos and
@@ -83,7 +80,8 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
         erase={{ title: "Erase this record", detail: t.title, run: (token) => removeTicket(t.id, token) }}
         onOpen={() => setEditingId(t.id)}
         pills={<>
-          {t.room && <span className="fm-clause">{t.room}</span>}
+          {/* the room stored on the ticket when it was opened (never re-resolved), cleaned as every room is */}
+          {cleanRoom(t.room) && <span className="fm-clause">{cleanRoom(t.room)}</span>}
           {/* a guest reports a symptom from inside the villa, not a diagnosis */}
           {t.reportedBy === "guest" && <span className="fm-clause guest">guest report</span>}
           <AgentMark record={t} />
@@ -100,23 +98,16 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
   /** A ticket in progress: ONE card — every record taken on with it, its pill on the first, its buttons inside at the
    *  bottom (owner, 2026-10-14: the device's name above it said again what its chip says; the pill and the buttons sat
    *  outside the card). */
-  const ticket = (g: TicketGroup) => {
+  const ticket = (g: DeviceWork) => {
+    const problem = closer.problemFor(g.key);
     return (
       <div key={g.key} className="fm-record-card">
         <div className="fm-ticket-records">
           {g.records.map((t, i) => record(t, i === 0 ? { text: "In progress", tone: "due-soon" } : undefined,
-            i === 0 ? (closingKey === g.key ? (
-              <InlineConfirm question="Close this ticket? Nothing was done — no cost is recorded." confirmLabel="Close ticket"
-                onConfirm={() => closeNoAction(g.key, g.records.map((r) => r.id))} onCancel={() => setClosingKey(null)} />
-            ) : (
-              <>
-                <button className="btn ghost" onClick={() => setStaging({ tickets: g.records, to: "resolved" })}>Mark resolved</button>
-                {/* the one-step close beside the two-step flow: "Closed without action", no completion, no cost */}
-                <button className="btn ghost" onClick={() => { setCloseError(null); setClosingKey(g.key); }}>Close</button>
-              </>
-            )) : undefined, false))}
+            i === 0 ? <WorkButtons actions={ticketActions(g.records.map(workRecord))} cardKey={g.key} closer={closer}
+              onAction={onAction} /> : undefined, false))}
         </div>
-        {closeError?.key === g.key && <div className="fm-inline-error fm-row-confirm" role="alert">{closeError.text}</div>}
+        {problem && <div className="fm-inline-error fm-row-confirm" role="alert">{problem}</div>}
       </div>
     );
   };
@@ -150,7 +141,7 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
         {(t) => (
           // reopened, it is a fault again: back on the Overview's list (the VESTA Agent reads it, never guesses)
           record(t, { text: "Resolved", tone: "ok" },
-            <button className="btn ghost" onClick={() => setStaging({ tickets: [t], to: "open" })}>Reopen</button>)
+            <WorkButtons actions={closedActions(workRecord(t))} cardKey={`closed:${t.id}`} closer={closer} onAction={onAction} />)
         )}
       </FoldedList>
 

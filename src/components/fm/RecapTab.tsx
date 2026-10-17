@@ -18,31 +18,16 @@
 // Schedule status, and its own "Generated:" timestamp should mean the moment
 // someone asked for it, not "whenever this component happened to re-render".
 
-import { useState } from "react";
 import Dropdown from "@/components/common/Dropdown";
 import SaveButton from "@/components/common/SaveButton";
 import { Sparkles, Download, Save } from "lucide-react";
-import { useConfig } from "@/config/ConfigContext";
-import { useHA } from "@/ha/HAStateStore";
-import { resolveSiteTitle } from "@/config/AppConfig";
 import { useFmData } from "@/fm/FmDataContext";
 import { buildMonthlyRecap } from "@/fm/fmDocuments";
-import { monthKey } from "@/fm/fmEngine";
 import { useFmTerms } from "@/fm/useFmTerms";
+import { useMonthlyDocument } from "@/fm/useMonthlyDocument";
 import type { ReadinessResult } from "@/fm/readiness";
-import type { FmSavedDocument } from "@/fm/fmTypes";
 import MarkdownPreview from "./MarkdownPreview";
 import SavedDocumentsList from "./SavedDocumentsList";
-import { downloadFile } from "@/utils/download";
-
-/** Previous month by default: the recap is written about a month that has
- *  finished, and it is due by the 10th of the one after it. */
-function defaultMonth(): string {
-  const d = new Date();
-  d.setDate(1);
-  d.setMonth(d.getMonth() - 1);
-  return monthKey(d);
-}
 
 export default function RecapTab({
   readiness, offlineDeviceCount, totalDeviceCount,
@@ -51,49 +36,14 @@ export default function RecapTab({
   offlineDeviceCount: number;
   totalDeviceCount: number;
 }) {
-  const { data, saveDocument } = useFmData();
+  const { data } = useFmData();
   const terms = useFmTerms();
-  const { config } = useConfig();
-  const { haConfig } = useHA();
-  const [month, setMonth] = useState(defaultMonth());
-  // A snapshot, not a live useMemo: see the module comment on why generation
-  // is an explicit action. null until "Generate recap" is pressed, or after
-  // the period changes underneath a previously generated one — a recap for
-  // June must never silently keep showing on screen once July is selected.
-  const [markdown, setMarkdown] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
-
-  const villaName = resolveSiteTitle(config, haConfig?.location_name);
-
-  const months = [...new Set([
-    defaultMonth(), monthKey(Date.now()),
-    ...data.completions.map((c) => monthKey(c.at)),
-    ...data.costs.map((c) => monthKey(c.at)),
-  ])].sort().reverse();
-
-  const generate = () => {
-    setMarkdown(buildMonthlyRecap({
-      fm: data, month, villaName, readiness, offlineDeviceCount, totalDeviceCount, terms,
-    }));
-    setSaved(false);
-  };
-
-  const download = () => {
-    if (!markdown) return;
-    downloadFile(`${villaName.replace(/\s+/g, "-").toLowerCase()}-operations-${month}.md`, markdown, "text/markdown");
-  };
-
-  const save = async () => {
-    if (!markdown) return;
-    // "Saved" only when it was; otherwise the store's banner says why.
-    if (await saveDocument({ kind: "recap", month, markdown }) === "saved") setSaved(true);
-  };
-
-  const reopen = (doc: FmSavedDocument) => {
-    setMonth(doc.month);
-    setMarkdown(doc.markdown);
-    setSaved(true);
-  };
+  // Make / save / reopen / download, and the months offered (the previous
+  // month first: see monthlyDocument.defaultMonth) — useMonthlyDocument.
+  const doc = useMonthlyDocument("recap", (month, villaName) => buildMonthlyRecap({
+    fm: data, month, villaName, readiness, offlineDeviceCount, totalDeviceCount, terms,
+  }));
+  const { month, markdown } = doc;
 
   return (
     <div className="fm-stack">
@@ -108,14 +58,14 @@ export default function RecapTab({
       <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
         <span className="fm-inline-label">Period</span>
         <div style={{ minWidth: 130 }}>
-          <Dropdown value={month} ariaLabel="Period" onChange={(m) => { setMonth(m); setMarkdown(null); setSaved(false); }}
-            options={months.map((m) => ({ value: m, label: m }))} />
+          <Dropdown value={month} ariaLabel="Period" onChange={doc.setMonth}
+            options={doc.months.map((m) => ({ value: m, label: m }))} />
         </div>
-        <button className="btn primary" onClick={generate}>
+        <button className="btn primary" onClick={doc.generate}>
           <Sparkles size={16} /> {markdown ? "Regenerate recap" : "Generate recap"}
         </button>
-        <SaveButton saved={saved} label="Save recap" icon={<Save size={16} />} onClick={() => void save()} disabled={!markdown} />
-        <button className="btn ghost" onClick={download} disabled={!markdown}>
+        <SaveButton saved={doc.saved} label="Save recap" icon={<Save size={16} />} onClick={() => void doc.save()} disabled={!markdown} />
+        <button className="btn ghost" onClick={doc.download} disabled={!markdown}>
           <Download size={16} /> Download .md
         </button>
       </div>
@@ -140,7 +90,7 @@ export default function RecapTab({
         )}
       </div>
 
-      <SavedDocumentsList kind="recap" onOpen={reopen} />
+      <SavedDocumentsList kind="recap" onOpen={doc.reopen} />
     </div>
   );
 }

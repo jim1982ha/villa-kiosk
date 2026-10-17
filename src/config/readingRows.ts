@@ -12,8 +12,7 @@
 import type { HassEntity } from "@/types/ha.types";
 import type { Threshold } from "./ThresholdConfig";
 import { labelOf } from "./EntityMap";
-import { readingOf, rowTone } from "./reading";
-import { deviceRowText } from "@/utils/entityValue";
+import { readingOf, rowText, rowTone } from "./reading";
 import { domainOf } from "@/utils/entityDomain";
 
 export interface ReadingRow {
@@ -38,7 +37,7 @@ export function readingRows(
     return {
       id,
       label: labelOf(id, entityMap, entities),
-      text: e ? deviceRowText(e, domain) : "",
+      text: e ? rowText(id, e) : "",
       // A sensor's row takes the tone its own window gives it (config/reading):
       // a binary state's pill tone, a measurement out of the owner's bounds.
       tone: e && (domain === "binary_sensor" || domain === "sensor")

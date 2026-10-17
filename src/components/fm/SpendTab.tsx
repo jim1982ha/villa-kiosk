@@ -10,18 +10,17 @@ import { useState } from "react";
 import Dropdown from "@/components/common/Dropdown";
 import SaveButton from "@/components/common/SaveButton";
 import { Plus, Sparkles, Save, Download } from "lucide-react";
-import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
-import { resolveSiteTitle } from "@/config/AppConfig";
 import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
-import { budgetStatus, monthKey, localStamp, parseAmount } from "@/fm/fmEngine";
+import { budgetStatus, localStamp, parseAmount } from "@/fm/fmEngine";
 import { COST_CATEGORY_NAMES } from "@/fm/fmTypes";
 import { useFmTerms } from "@/fm/useFmTerms";
 import { useProfile } from "@/auth/ProfileContext";
 import { roleCan } from "@/auth/permissions";
 import ContractTermsEditor from "./ContractTermsEditor";
 import { buildSpendStatement } from "@/fm/fmDocuments";
-import type { FmCost, FmSavedDocument } from "@/fm/fmTypes";
+import type { FmCost } from "@/fm/fmTypes";
+import { useMonthlyDocument } from "@/fm/useMonthlyDocument";
 import EvidenceRow from "./EvidenceRow";
 import DeviceSearchPicker, { type DeviceOption } from "./DeviceSearchPicker";
 import NotesField from "./NotesField";
@@ -33,23 +32,21 @@ import { formatMoney } from "@/utils/money";
 import CostFields from "./CostFields";
 import { useDeviceChoice } from "./useDeviceChoice";
 import FormActions from "./FormActions";
-import { downloadFile } from "@/utils/download";
+import { deviceRoom } from "@/config/devicePlace";
 
 export default function SpendTab(
   { onOpenEntity, deviceOptions }: {
     onOpenEntity?: (id: string) => void;
-    /** Built once by FacilityModal and shared with the fault form, so both
-     *  offer exactly the same devices. */
+    /** Built once by FacilitySections and shared with the ticket form, so
+     *  both offer exactly the same devices. */
     deviceOptions: DeviceOption[];
   },
 ) {
-  const { data, addCost, updateCost, removeCost, saveDocument } = useFmData();
-  const { config, resolvedRooms } = useConfig();
-  const { haConfig } = useHA();
+  const { data, addCost, updateCost, removeCost } = useFmData();
+  const { resolvedRooms } = useConfig();
   const { role } = useProfile();
   const terms = useFmTerms();
   const money = (n: number) => formatMoney(n, terms.currency);
-  const [month, setMonth] = useState(monthKey(Date.now()));
   const [adding, setAdding] = useState(false);
   /** Id of the entry being corrected, or null when recording a new one — one
    *  form for both, same reasoning as the fault form. */
@@ -64,13 +61,12 @@ export default function SpendTab(
   const [note, setNote] = useState("");
   const [category, setCategory] = useState<"minor" | "major">("minor");
   const [photoIds, setPhotoIds] = useState<string[]>([]);
-  // The saved-statement workflow — same "explicit Generate, then optionally
-  // Save" shape as RecapTab, so a statement is a point-in-time record of
+  // The month's statement — the recap's "explicit Generate, then optionally
+  // Save" (useMonthlyDocument), so a statement is a point-in-time record of
   // this month's spend rather than something that silently changes if an
-  // entry is edited or deleted afterwards.
-  const [statement, setStatement] = useState<string | null>(null);
-  const [statementSaved, setStatementSaved] = useState(false);
-  const villaName = resolveSiteTitle(config, haConfig?.location_name);
+  // entry is edited or deleted afterwards. Its month is the whole tab's.
+  const statement = useMonthlyDocument("spend", (m, villaName) => buildSpendStatement(data, m, villaName, terms));
+  const month = statement.month;
 
   const resetForm = () => {
     setFormError(null);
@@ -93,28 +89,6 @@ export default function SpendTab(
   const b = budgetStatus(data.costs, month, terms);
   const amountIdr = parseAmount(amount);
 
-  const generateStatement = () => {
-    setStatement(buildSpendStatement(data, month, villaName, terms));
-    setStatementSaved(false);
-  };
-  const downloadStatement = () => {
-    if (!statement) return;
-    downloadFile(`${villaName.replace(/\s+/g, "-").toLowerCase()}-spend-${month}.md`, statement, "text/markdown");
-  };
-  const saveStatement = async () => {
-    if (!statement) return;
-    if (await saveDocument({ kind: "spend", month, markdown: statement }) === "saved") setStatementSaved(true);
-  };
-  const reopenStatement = (doc: FmSavedDocument) => {
-    setMonth(doc.month);
-    setStatement(doc.markdown);
-    setStatementSaved(true);
-  };
-  // Months that actually have entries, newest first — plus the current month so
-  // it's always selectable even before anything is recorded in it.
-  const months = [...new Set([monthKey(Date.now()), ...data.costs.map((c) => monthKey(c.at))])]
-    .sort().reverse();
-
   return (
     <div className="fm-stack">
       {/* The terms are the villa's agreement, set by whoever administers the
@@ -128,20 +102,20 @@ export default function SpendTab(
       <div className="fm-statement-row">
         <span className="fm-inline-label">Month</span>
         <div style={{ minWidth: 130 }}>
-          <Dropdown value={month} ariaLabel="Month" onChange={(m) => { setMonth(m); setStatement(null); setStatementSaved(false); }}
-            options={months.map((m) => ({ value: m, label: m }))} />
+          <Dropdown value={month} ariaLabel="Month" onChange={statement.setMonth}
+            options={statement.months.map((m) => ({ value: m, label: m }))} />
         </div>
         <div className="fm-statement-buttons">
-          <button className="btn ghost" onClick={generateStatement}>
-            <Sparkles size={16} /> {statement ? "Regenerate statement" : "Generate statement"}
+          <button className="btn ghost" onClick={statement.generate}>
+            <Sparkles size={16} /> {statement.markdown ? "Regenerate statement" : "Generate statement"}
           </button>
-          <SaveButton saved={statementSaved} label="Save" icon={<Save size={16} />} onClick={() => void saveStatement()} disabled={!statement} />
-          <button className="btn ghost" onClick={downloadStatement} disabled={!statement}>
+          <SaveButton saved={statement.saved} label="Save" icon={<Save size={16} />} onClick={() => void statement.save()} disabled={!statement.markdown} />
+          <button className="btn ghost" onClick={statement.download} disabled={!statement.markdown}>
             <Download size={16} /> Download .md
           </button>
         </div>
       </div>
-      {statement && <MarkdownPreview markdown={statement} />}
+      {statement.markdown && <MarkdownPreview markdown={statement.markdown} />}
 
       <div className={`fm-cap ${b.state}`}>
         {/* the month's money on ONE line — minor (against the cap), major (outside it), total — and Record spend at
@@ -216,7 +190,7 @@ export default function SpendTab(
                   note: note.trim() || undefined,
                   entityId: entityId || undefined,
                   deviceLabel: deviceText.trim() || undefined,
-                  room: entityId ? resolvedRooms[entityId] : undefined,
+                  room: entityId ? deviceRoom(resolvedRooms, entityId) : undefined,
                 };
                 // `at` is set once, when the spend happened, and is never
                 // rewritten by a later correction — it is what the monthly
@@ -260,7 +234,7 @@ export default function SpendTab(
       {/* The month's statement (its buttons sit with the Month, above): the same explicit Generate -> Save shape as
           the recap (fmDocuments.buildSpendStatement), for handing this month's spend over on its own, and keeping a
           point-in-time copy even after entries are edited or removed. Its saved copies: */}
-      <SavedDocumentsList kind="spend" onOpen={reopenStatement} />
+      <SavedDocumentsList kind="spend" onOpen={statement.reopen} />
     </div>
   );
 }
