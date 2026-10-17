@@ -58,6 +58,9 @@ export interface AttentionItem {
   check?: FmTicketCheck;
   /** Set on a fault: what last happened about it on Telegram (faultNotes.lastNoted — "Escalation sent to Owner"). */
   latest?: { note: string; at: string };
+  /** Set on a fault: the other open records that say exactly the same thing on the same card (foldTwins) — one line,
+   *  "(N times)", and the card's buttons act on every one of them. */
+  twins?: string[];
 }
 
 /**
@@ -91,8 +94,9 @@ const ATTENTION_RANK: Record<AttentionKind, number> = { alarm: 0, unavailable: 1
 /**
  * Fold problems into one row per device. Pure, and it only GROUPS: every item
  * given comes back exactly once — as a line, or as the `fault` of the live line
- * about the same entity (mergeFaults) — so a fault's Close button and ticket
- * survive inside its device's row.
+ * about the same entity (mergeFaults), or as a `twin` of an identical fault's
+ * line (foldTwins) — so a fault's Close button and ticket survive inside its
+ * device's row.
  *
  * Rows are ordered by their most serious problem, then by title, then by key —
  * never by which problem arrived first, so a ticket landing on a door already listed
@@ -103,7 +107,7 @@ export function groupAttention(items: readonly AttentionItem[]): AttentionGroup[
   const byKey = groupByDevice(items, (i) => deviceWorkKey(i.device?.key, i.id));
   const groups: AttentionGroup[] = [];
   for (const { key, items: list } of byKey) {
-    const sorted = mergeFaults([...list].sort((a, b) => ATTENTION_RANK[a.kind] - ATTENTION_RANK[b.kind]));
+    const sorted = mergeFaults(foldTwins([...list].sort((a, b) => ATTENTION_RANK[a.kind] - ATTENTION_RANK[b.kind])));
     const worst = sorted[0];
     // ⚠️ ONE SHAPE FOR EVERY ROW (owner, 2026-10-10: "all these lines feel inconsistently shown"): a device's row is
     // titled by the DEVICE, whatever its problems. With ONE problem it read as the problem — an open fault on the
@@ -137,7 +141,8 @@ export function cardActions(group: AttentionGroup): WorkAction[] {
 /** The records on a card — its faults and tickets, each with its stage. */
 export function cardRecords(group: AttentionGroup): WorkRecord[] {
   return group.items.flatMap((i) => (i.kind === "fault" ? [i] : i.fault ? [i.fault] : []))
-    .flatMap((f) => (f.ticketId ? [{ id: f.ticketId, stage: f.stage === "ticket" ? "ticket" as const : "fault" as const }] : []));
+    .flatMap((f) => [f.ticketId, ...(f.twins ?? [])].flatMap((id) => (id
+      ? [{ id, stage: f.stage === "ticket" ? "ticket" as const : "fault" as const }] : [])));
 }
 
 /** A problem's line inside ITS row: under a device, what attentionLine says ("Unlocked", "Entrance door unlocked");
@@ -188,6 +193,34 @@ export function lineSources(item: AttentionItem): LineSources {
  * the entity the model shows) and "Timmerflotte_5969 has been offline for 9 h." (the night check's fault, on another of
  * its entities) — every one of its nine entities was unavailable. Told by Home Assistant's state, never by the words.
  */
+/** Faults on one card that say exactly the same thing — the same title, at the same stage — are ONE line; the others
+ *  ride on it as `twins`, so its count says how many and its buttons reach them all.
+ *  ⚠️ ONE LINE PER PROBLEM (owner, 2026-10-17: "#49 · One mains phase lost" six times — "i never want to see 1
+ *  individual line per update"): records that say the same are counted, never listed one under the other. */
+function foldTwins(items: AttentionItem[]): AttentionItem[] {
+  const first = new Map<string, AttentionItem>();
+  const out: AttentionItem[] = [];
+  for (const i of items) {
+    const key = i.kind === "fault" ? `${i.stage ?? ""}|${i.title}` : undefined;
+    const kept = key !== undefined ? first.get(key) : undefined;
+    if (kept && i.ticketId) {
+      kept.twins = [...(kept.twins ?? []), i.ticketId];
+      continue;
+    }
+    // a copy: the villa model's items are shared by every render (as mergeFaults)
+    const own = i.kind === "fault" ? { ...i, twins: undefined } : i;
+    if (key !== undefined) first.set(key, own);
+    out.push(own);
+  }
+  return out;
+}
+
+/** "(6 times)" after a line that stands for several identical records (foldTwins); "" for one. */
+function timesSaid(item: AttentionItem): string {
+  const n = 1 + (item.twins?.length ?? 0);
+  return n > 1 ? ` (${n} times)` : "";
+}
+
 function mergeFaults(items: AttentionItem[]): AttentionItem[] {
   // copies: the villa model's items are shared by every render and profile — a fault written onto one would stay
   // there after it was closed
@@ -210,10 +243,10 @@ function mergeFaults(items: AttentionItem[]): AttentionItem[] {
  *  its title is what is wrong, not the device ("Entrance door unlocked"; "In
  *  progress: …" once someone took it, faultStatus). */
 export function attentionLine(item: AttentionItem): string {
-  const titled = (i: AttentionItem) => { const st = faultStatus(i); return st ? `${st}: ${i.title}` : i.title; };
+  const titled = (i: AttentionItem) => { const st = faultStatus(i); return `${st ? `${st}: ${i.title}` : i.title}${timesSaid(i)}`; };
   if (item.fault) {
     const st = faultStatus(item.fault);
-    const fault = `${st ? `${st.toLowerCase()}: ` : ""}${item.fault.title}`;
+    const fault = `${st ? `${st.toLowerCase()}: ` : ""}${item.fault.title}${timesSaid(item.fault)}`;
     // ⚠️ "UNAVAILABLE — … OFFLINE FOR 9 H" SAID IT TWICE (owner, 2026-10-14): the fault on an unavailable line says the
     // device is offline already. A word the fault does not say stays: "Not in Home Assistant", a live reading ("92 %").
     return item.kind === "unavailable" && item.detail === "Unavailable"
@@ -232,6 +265,15 @@ export function attentionLine(item: AttentionItem): string {
  * maintenance, and every device the map paints RED (its deviceLook is
  * `alert`).
  */
+/** The device a record names: its entity — or, for a record naming several at once ("sensor.a,sensor.b", a rule
+ *  watching three phases), the first of them the villa's system has. A list read as one id was no device at all: its
+ *  card was titled "… Phase A Voltage,sensor" and filed under "Other" (owner, 2026-10-17). */
+export function oneEntity(id: string | undefined, entities: Record<string, HassEntity>): string | undefined {
+  if (!id || !id.includes(",")) return id;
+  const ids = id.split(",").map((x) => x.trim()).filter(Boolean);
+  return ids.find((x) => x in entities) ?? ids[0];
+}
+
 export function buildAttentionItems(opts: {
   unavailableIds: readonly string[];
   entities: Record<string, HassEntity>;
@@ -272,7 +314,7 @@ export function buildAttentionItems(opts: {
       title: faultTitle(t),
       detail: stage === "ticket" ? "In progress" : "Fault",
       room: t.room,
-      entityId: t.entityId,
+      entityId: oneEntity(t.entityId, entities),
       ticketId: t.id,
       stage,
       latest: lastNoted(t),

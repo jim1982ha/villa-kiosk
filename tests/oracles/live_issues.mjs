@@ -350,6 +350,26 @@ console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
 ck("a ticket's notes wrap inside its card, never past its edge (owner, 2026-10-14: a long \"VESTA reads\" ran out)",
    /\.fm-record-body > \.fm-row-main \{ flex: 1 1 260px; min-width: 0; \}/.test(src("styles/07-facility.css"))
    && /\.fm-timeline-note \{[^}]*overflow-wrap: anywhere;/.test(src("styles/07-facility.css")));
+console.log("\n  one line per problem (owner, 2026-10-17: \"#49 · One mains phase lost\" six times):");
+{
+  const { AttentionCard } = await import("@/components/cockpit/CockpitOverview");
+  const lost = (id) => ({ ...rec(id, "sensor.phase_a_voltage,sensor.phase_b_voltage"), title: "One mains phase lost", alertNumber: 49 });
+  const six = ["a", "b", "c", "d", "e", "f"].map(lost);
+  const ents = { "sensor.phase_b_voltage": { entity_id: "sensor.phase_b_voltage", state: "230", attributes: { friendly_name: "Phase B Voltage" } } };
+  const items = buildAttentionItems({ unavailableIds: [], entities: ents, entityMap: {}, alertThresholds: {}, resolvedRooms: {},
+    selectableIds: [], folding: new Map(), fmData: fm([...six, { ...rec("g", "lock.door"), title: "Door unlocked" }]) });
+  const groups = groupAttention(items);
+  const g = groups.find((x) => x.items.some((i) => i.title.includes("phase lost")));
+  const card = draw(h(AttentionCard, { group: g, onOpenEntity: () => {}, cadence: { checkMinutes: 5, nightlyAt: "02:00" } }));
+  const said = text(card);
+  ck("six records saying the same are ONE line, counted", (said.match(/#49 · One mains phase lost/g) || []).length === 1
+     && /#49 · One mains phase lost \(6 times\)/.test(said), said);
+  ck("  ...and its card's buttons still reach all six", cardRecords(g).length === 6, cardRecords(g));
+  ck("  ...a different problem keeps its own line", groups.some((x) => x.items.some((i) => i.title === "Door unlocked")));
+  ck("a record naming several devices (\"a,b\") is the first the villa has, never a device called \"…,sensor\"",
+     g.entityId === "sensor.phase_b_voltage" && !/,sensor/.test(g.title), g.entityId, g.title);
+}
+
 ck("the screens ask stageOf (or its count, openCounts), never the status themselves",
    ["components/fm/TicketsTab.tsx", "components/fm/FaultForm.tsx", "components/fm/TodayTab.tsx"].every((f) => /stageOf\(|openCounts\(/.test(src(f)) && !/status === "in_progress"|status !== "in_progress"|status === "open"/.test(src(f))));
 ck("the fault form is one, shared by raising and editing", /<FaultForm key=\{editing\.id\} editing=\{editing\}/.test(tt) && !/<input value=\{title\}/.test(ov + tt));

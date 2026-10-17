@@ -124,19 +124,26 @@ for (let run = 0; run < 300; run++) {
       ...(dev ? { entityId: `${dev}.e${rnd(2)}`, device: { key: dev, label: dev.toUpperCase() } } : {}) };
   });
   const groups = groupAttention(items);
-  // every item once: as a line, or as the fault of the live line about the same entity (mergeFaults)
+  // every item once: as a line, as the fault of the live line about the same entity (mergeFaults), or — a fault saying
+  // exactly what another on its row says — as that line's twin (foldTwins, owner 2026-10-17: one line, counted)
   const shown = (g) => g.items.flatMap((i) => (i.fault ? [i, i.fault] : [i]));
+  const twinIds = new Set(groups.flatMap((g) => shown(g).flatMap((i) => i.twins ?? [])));
   const out = groups.flatMap((g) => shown(g).map((i) => i.id)).sort().join();
-  if (out !== items.map((i) => i.id).sort().join()) conserved = false;
-  const tickets = groups.flatMap((g) => shown(g).map((i) => i.ticketId).filter(Boolean)).sort().join();
+  if (out !== items.filter((i) => !twinIds.has(i.ticketId)).map((i) => i.id).sort().join()) conserved = false;
+  const tickets = groups.flatMap((g) => shown(g).flatMap((i) => [i.ticketId, ...(i.twins ?? [])]).filter(Boolean)).sort().join();
   if (tickets !== items.map((i) => i.ticketId).filter(Boolean).sort().join()) conserved = false;
+  // a twin says exactly what its line says, on the same row
+  for (const g of groups) for (const i of shown(g)) for (const tw of i.twins ?? []) {
+    const twin = items.find((x) => x.ticketId === tw);
+    if (!twin || twin.title !== i.title || (twin.device?.key ?? null) !== (i.device?.key ?? null)) conserved = false;
+  }
   if (groups.some((g) => g.items.some((i) => (i.device?.key ?? `item:${i.id}`) !== (g.items[0].device?.key ?? `item:${g.items[0].id}`)))) conserved = false;
   const shuffled = [...items].reverse();
   if (groupAttention(shuffled).map((g) => g.key).join() !== groups.map((g) => g.key).join()) ordered = false;
   const RANK = { alarm: 0, unavailable: 1, fault: 2, schedule: 3 };
   if (groups.some((g) => g.kind !== g.items[0].kind || g.items.some((i) => RANK[i.kind] < RANK[g.kind]))) worstFirst = false;
 }
-ck("300 random sets: every item comes back exactly once, every ticket id with it, each row one device", conserved);
+ck("300 random sets: every item comes back exactly once (a fault saying the same as another as its twin), every ticket id with it, each row one device", conserved);
 ck("  ...the rows' order does not depend on the order the problems arrived in", ordered);
 {
   const tie = [{ id: "a", kind: "fault", title: "Same", detail: "x", entityId: "d1.e", device: { key: "d1", label: "D1" } },
