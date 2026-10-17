@@ -2554,10 +2554,8 @@ export class SceneManager {
     // Each pass owns what it writes (renderFx: tone mapping, SSAO, the IBL
     // texture; the sun: key, ambient and fill lights) and reports its share of
     // exposure and IBL strength to the look, so neither needs the other first.
-    if (plan.render) {
-      this.renderFx.apply(this.deviceRenderConfig(config.render));
-      this.sun.updateConfig(config);
-    }
+    if (plan.render) this.renderFx.apply(this.deviceRenderConfig(config.render));
+    if (plan.sky) this.sun.updateConfig(config);
     // A theme flip is NOT handled here any more — see handleThemeChange. This
     // watched `config.theme`, which only moves when someone picks a theme in
     // Settings; an "auto" kiosk crossing into night, or the OS switching to

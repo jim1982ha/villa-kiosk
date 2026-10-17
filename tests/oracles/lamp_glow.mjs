@@ -106,31 +106,44 @@ console.log("  the plugin attaches to a material");
 console.log("  which lamps are written");
 {
   const lamp = (x, over = {}) => ({ x, y: 2.3, z: 0, r: 1, g: 0.8, b: 0.5, amount: 1, radius: 1.8, floorY: 0, ceilingY: 2.56, ...over });
-  const eye = { x: 0, y: 2, z: 0 };
   const s = new LampGlowState();
-  ck("a pool that is on is written", s.set([lamp(1)], eye) && s.count === 1);
+  ck("a pool that is on is written", s.set([lamp(1)]) && s.count === 1);
   ck("its bulb and room floor", near4(s.pos.slice(0, 4), [1, 2.3, 0, 0]), [...s.pos.slice(0, 4)]);
   ck("colour x the pool's strength", near4(s.col.slice(0, 3), [1, 0.8, 0.5]), [...s.col.slice(0, 3)]);
   ck("  ...and the floor of the storey above, where its light stops", Math.abs(s.col[3] - 2.56) < 1e-6, s.col[3]);
-  s.set([lamp(1, { ceilingY: Infinity })], eye);
+  s.set([lamp(1, { ceilingY: Infinity })]);
   ck("  ...no storey above: a finite stand-in, never NaN or Infinity in a uniform", s.col[3] === 1e6, s.col[3]);
-  s.set([lamp(1, { amount: 0.5 })], eye);
+  s.set([lamp(1, { amount: 0.5 })]);
   ck("  ...a dimmer pool, a dimmer glow", near4(s.col.slice(0, 3), [0.5, 0.4, 0.25]), [...s.col.slice(0, 3)]);
-  ck("the same lamps again change nothing", s.set([lamp(1, { amount: 0.5 })], eye) === false);
-  s.set([lamp(1, { amount: 0 }), lamp(2)], eye);
+  ck("the same lamps again change nothing", s.set([lamp(1, { amount: 0.5 })]) === false);
+  s.set([lamp(1, { amount: 0 }), lamp(2)]);
   ck("a pool at strength 0 is left out", s.count === 1 && s.pos[0] === 2, s.count);
-  s.set([lamp(1, { radius: 0 }), lamp(2)], eye);
+  s.set([lamp(1, { radius: 0 }), lamp(2)]);
   ck("a pool of no size is left out", s.count === 1 && s.pos[0] === 2, s.count);
   const many = Array.from({ length: LAMP_GLOW_MAX + 4 }, (_, i) => lamp(i + 1));
-  s.set(many.slice().reverse(), eye);
+  s.set(many.slice().reverse());
+  // owner's recording, 2026-10-17: the 32 nearest the eye were kept, so walls brightened and dimmed as the view
+  // moved. More than fit are MERGED — no lamp is dropped, and no camera is asked.
+  const total = (st) => Array.from({ length: st.count }, (_, i) => st.col[i * 4]).reduce((a, v) => a + v, 0);
+  ck(`more than ${LAMP_GLOW_MAX}: ${LAMP_GLOW_MAX} written`, s.count === LAMP_GLOW_MAX, s.count);
+  ck("  ...every lamp's light is still there, summed", Math.abs(total(s) - many.length) < 1e-6, total(s));
   const xs = Array.from({ length: s.count }, (_, i) => s.pos[i * 4]).sort((a, b) => a - b);
-  ck(`more than ${LAMP_GLOW_MAX}: the nearest ${LAMP_GLOW_MAX} to the eye`,
-    s.count === LAMP_GLOW_MAX && xs[0] === 1 && xs[LAMP_GLOW_MAX - 1] === LAMP_GLOW_MAX, xs);
+  ck("  ...the farthest lamps at both ends are still shown, not dropped", xs[0] < 2 && xs[xs.length - 1] > LAMP_GLOW_MAX + 3, xs);
+  const again = new LampGlowState();
+  again.set([...many.slice(10), ...many.slice(0, 10)]);
+  ck("  ...the same lamps in another order: the same answer", again.pos.every((v, i) => v === s.pos[i]) && again.col.every((v, i) => v === s.col[i]));
+  const mixed = new LampGlowState();
+  // two lamps upstairs, each just 0.6 m above one downstairs (closer than any two on one floor, 1 m apart)
+  const up = (x) => lamp(x, { floorY: 2.56, ceilingY: Infinity, y: 2.9 });
+  mixed.set([...Array.from({ length: LAMP_GLOW_MAX }, (_, i) => lamp(i + 1)), up(1), up(4)]);
+  const floors = Array.from({ length: mixed.count }, (_, i) => mixed.pos[i * 4 + 3]);
+  ck("  ...lamps merge only on the SAME storey: never one upstairs with one under it, however close",
+    mixed.count === LAMP_GLOW_MAX && floors.filter((v) => Math.abs(v - 2.56) < 1e-5).length === 2, floors);
   const resume = s.suspend();
   ck("suspended: no lamps shown", s.count === 0);
   resume();
   ck("resumed: the same lamps back", s.count === LAMP_GLOW_MAX);
-  s.set([], eye);
+  s.set([]);
   ck("all off: count 0 and the slots cleared", s.count === 0 && s.col.every((v) => v === 0));
 }
 function near4(a, b) { return b.every((v, i) => Math.abs(a[i] - v) < 1e-6); }

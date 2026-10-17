@@ -67,7 +67,7 @@ import { RenderTargetTexture } from "@babylonjs/core/Materials/Textures/renderTa
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { Scene } from "@babylonjs/core/scene";
 import { LightPoolSet, type LightReading, type PoolFloorProbe, type PoolRoom } from "./lightPoolSet";
-import { attachLampGlow, hasLampGlow, lampGlowFor, LAMP_GLOW_MAX, BULB_REACH_M } from "./lampGlow";
+import { attachLampGlow, hasLampGlow, lampGlowFor, BULB_REACH_M } from "./lampGlow";
 import { isHelperMesh } from "./meshRoles";
 import type { Storeys } from "./storeys";
 
@@ -139,7 +139,6 @@ export class BulbSet {
   private strength = 1;
   private glowMeshes: AbstractMesh[] = [];
   private glowVersion = -1;
-  private glowOverflow = false;
   /** Live cube shadow maps, keyed by the entity's representative light. */
   private readonly shadows = new Map<PointLight, ShadowGenerator>();
   private castShadows = false;
@@ -316,16 +315,13 @@ export class BulbSet {
   lamps(): ReturnType<LightPoolSet["glowLamps"]> { return this.pools.glowLamps(); }
 
   /** Before a frame: write the pools that are on to the furniture light —
-   *  when a pool changed, or every frame while more are on than it holds
-   *  (then the nearest to the eye win). */
+   *  only when a pool changed. Never with the camera: more lamps than it holds
+   *  are merged the same way from every view (lampGlow.fitLamps). */
   syncGlow(): void {
-    if (this.pools.version === this.glowVersion && !this.glowOverflow) return;
+    if (this.pools.version === this.glowVersion) return;
     if (!this.glowMeshes.length) return;
     this.glowVersion = this.pools.version;
-    const lamps = this.lamps();
-    this.glowOverflow = lamps.length > LAMP_GLOW_MAX;
-    const eye = this.scene.activeCamera?.globalPosition ?? Vector3.ZeroReadOnly;
-    lampGlowFor(this.scene).set(lamps, eye);
+    lampGlowFor(this.scene).set(this.lamps());
   }
 
   /** Unload: every light and pool of the outgoing model. */

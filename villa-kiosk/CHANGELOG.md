@@ -1,3 +1,28 @@
+## 2.496.407
+
+### Fixed
+- The light inside the villa no longer changes while you move the view. With many lights on (more than 32 lamps, an LED
+  strip counting as three), only the lamps nearest the camera lit the walls and furniture, so rooms brightened and
+  dimmed as you turned or zoomed. Every lamp that is on now always lights its room, from every view; when there are
+  many, lamps sitting close together in the same room share one light, with their brightness added together.
+
+## 2.496.406
+
+### Fixed
+- The villa's north direction and location are saved once for the whole villa: a new phone or tablet shows the sun on
+  the right side straight away. Each browser used to keep its own north, so one that had never been set drew the sun
+  on the wrong side of the house.
+- Changing the north setting moves the sun immediately; it used to need a reload.
+
+## 2.496.405
+
+### Fixed
+- The Cockpit never lists the same problem twice on a card. When several records say exactly the same thing, they show
+  as one line with a count, for example "#49 · One mains phase lost (6 times)", and the card's Close or Open Ticket
+  acts on all of them.
+- A fault about a rule that watches several devices at once (the three mains phases) is shown on its device, in its
+  room. It was titled "… Phase A Voltage,sensor" and filed under "Other".
+
 ## 2.496.404
 
 ### Fixed

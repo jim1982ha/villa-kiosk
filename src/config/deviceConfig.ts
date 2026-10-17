@@ -18,6 +18,11 @@
 //                    a decision about the VILLA's model, so dismissing on a
 //                    phone must dismiss on the wall tablet too
 //     fmContract     the maintenance contract's cap and category names
+//     latitude, longitude, northOffsetDeg   where the villa is and which way
+//                    north lies on its model — the sun and moon are drawn from
+//                    them, so a device that kept its own copy drew the sun on
+//                    the wrong side of the house (owner, 2026-10-17: the main
+//                    app's browser had never been told; the wall tablet had)
 //
 //   PER-DEVICE — describes THIS CLIENT's look/feel, where different answers on
 //   different hardware are correct, not a drift to be reconciled: render
@@ -62,6 +67,9 @@ interface SharedItems {
   teleportPoints: TeleportPoint;
   dismissedEntityIds: true;
   fmContract: FmContract;
+  latitude: number;
+  longitude: number;
+  northOffsetDeg: number;
 }
 
 export type SharedConfigKey = keyof SharedItems;
@@ -86,6 +94,19 @@ const asRecord = <T>(raw: unknown): Record<string, T> | undefined =>
 const asArray = <T>(raw: unknown): T[] | undefined =>
   Array.isArray(raw) ? (raw as T[]) : undefined;
 const sameRecord = <T>(v: Keyed<T>): Keyed<T> => v;
+const asNumber = (raw: unknown): number | undefined =>
+  typeof raw === "number" && Number.isFinite(raw) ? raw : undefined;
+/** One number about the villa (where it is, which way north lies): one value,
+ *  indexed as a single item. Its empty is 0, the app's own "not set" — never a
+ *  villa's number — so a device still on the default proposes nothing, and a
+ *  device holding a value the villa has never stored proposes it, by the same
+ *  push a local edit takes. */
+const villaNumber: SharedKeyRow<number, number> = {
+  index: (v) => ({ value: v }),
+  fromIndex: (items) => items.value ?? 0,
+  parse: asNumber,
+  empty: 0,
+};
 
 const SHARED_KEYS: { [K in SharedConfigKey]: SharedKeyRow<AppConfig[K], SharedItems[K]> } = {
   entityMap: { index: sameRecord, fromIndex: sameRecord, parse: asRecord, empty: {} },
@@ -115,6 +136,9 @@ const SHARED_KEYS: { [K in SharedConfigKey]: SharedKeyRow<AppConfig[K], SharedIt
     parse: (raw) => (isRecord(raw) ? { ...EMPTY_FM_CONTRACT, ...(raw as Partial<FmContract>) } : undefined),
     empty: EMPTY_FM_CONTRACT,
   },
+  latitude: villaNumber,
+  longitude: villaNumber,
+  northOffsetDeg: villaNumber,
 };
 
 /** The AppConfig fields stored centrally, in the one order every document is
