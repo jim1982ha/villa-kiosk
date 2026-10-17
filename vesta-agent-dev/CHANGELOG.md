@@ -1,3 +1,10 @@
+## 0.12.235
+
+What you will see on the Agent's page:
+- Rules, under "Acting on the villa": a short reminder — "When an update also changes the villa's alert rules,
+  install the VESTA Agent update first. Until then, the Agent ignores anything new those rules send." (The Agent has
+  ignored anything new since 0.12.234.)
+
 ## 0.12.234
 
 What you will see:
