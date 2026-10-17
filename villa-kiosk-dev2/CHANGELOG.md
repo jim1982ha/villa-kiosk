@@ -1,3 +1,9 @@
+## 2.496.408
+
+### Fixed
+- The furniture is lit again by the lamps that are on (2.496.407 left it dark). The light stays the same while you
+  move the view.
+
 ## 2.496.407
 
 ### Fixed
