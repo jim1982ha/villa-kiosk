@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.231 (18 October 2026)
+
+Owner, 2026-10-18 ("turn off the TV" turned off its screen switch only): ha_call_service's description says to act
+on the named device through its own entity, never a part or feature of it in its place, and to say a refusal plainly
+instead of asking for something else. The starter policy allows media_player.turn_on/turn_off for any approver.
+
 ## 0.6.230 (18 October 2026)
 
 Architecture review 2026-10-18 (an alert that goes and comes back; the villa's #52), owner's wording for #52:

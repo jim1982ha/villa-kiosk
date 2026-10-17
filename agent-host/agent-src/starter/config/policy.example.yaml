@@ -59,7 +59,7 @@ siren_auto_off_min: 3
 # Never acted on, never reported as real devices (a test lock, for example).
 excluded_entities: []
 
-# Lights, covers, fans for both roles; locks, siren, automations for the owner.
+# Lights, covers, fans, TVs and speakers for both roles; locks, siren, automations for the owner.
 # service: who may approve.
 #   any    = the owner or the facility manager approves (Approve / Refuse buttons)
 #   owner  = only the owner approves
@@ -74,6 +74,8 @@ allowed_services:
   cover.set_cover_position: any
   fan.turn_on: any
   fan.turn_off: any
+  media_player.turn_on: any     # a TV, a speaker: the device itself, never its screen switch or its plug
+  media_player.turn_off: any
   switch.turn_on: listed
   switch.turn_off: listed
   scene.turn_on: listed

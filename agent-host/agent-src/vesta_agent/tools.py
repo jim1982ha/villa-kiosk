@@ -258,8 +258,11 @@ class Toolbox:
               "Ask for an action on the villa (e.g. light turn_on, lock lock). Usually this does NOT execute: it sends the "
               "request with Approve and Refuse buttons to the person allowed to approve it. A service the villa marks direct "
               "runs at once when the person writing to you asked for it; the answer says which happened and the result. "
-              "Name every entity explicitly; use absolute states, never toggle. The villa's rules may refuse the request: "
-              "say so plainly. Call it for EVERY action asked now, even one asked before: whether a request is waiting "
+              "Name every entity explicitly; use absolute states, never toggle. Act on the device the person named "
+              "through its OWN entity (a TV is its media_player, a lamp its light) — never a part or a feature of it in "
+              "its place (a screen switch, the plug feeding it): turning the screen off is not turning the TV off. "
+              "The villa's rules may refuse the request: say so plainly, and never ask for something else instead. "
+              "Call it for EVERY action asked now, even one asked before: whether a request is waiting "
               "or was decided is in the requests line in front of the message, never in your memory of the conversation.",
               schema)
         async def handler(args: dict) -> dict:
