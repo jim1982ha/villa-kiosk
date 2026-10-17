@@ -21,6 +21,8 @@ decides alone to act on the villa.
    `{blueprint, rule_id, incident_id, phase, label, entities, summary, timestamp, priority?, claim?}`.
    - `opened`: a new incident. `resolved`: Home Assistant says it cleared (the chase stops).
      `abandoned`: the rule stopped watching while it was still true (the owner hears it).
+     `restated`: the rule was saved, reloaded or the villa's system started — it sends what it claims now, and its
+     open alert is judged by that from now on (no message to anyone).
    - `priority` (P1–P4, the rule's "VESTA priority" input) decides who hears it (`people_roles`);
      without one, the rule's route in `rules.yaml`. Home Assistant's own `severity` word is not a priority.
    - `claim`: a Home Assistant template the rule wrote with its own entities and limits, true while

@@ -625,3 +625,21 @@ def test_the_chase_roles_are_said_as_set_never_as_written_in_the_desk(store, mon
     assert any(m["status"].endswith(": FM is asked to act.") for m in out["send"]), out["send"]
     assert desk.reply(store, iid2, "other", "owner", T0 + timedelta(minutes=6), name=None)["send"][0]["status"] \
         .startswith("Noted from Owner on ")
+
+
+def test_a_rule_restating_itself_changes_how_its_open_alert_is_judged_and_sends_nothing(store):
+    # owner, 2026-10-17 (#45): the overload limit went from 4000 to 6200 W while its alert was open — the desk kept the
+    # claim it was raised with, so 6000 W on the phase kept it open for ever
+    old = "{{ 'true' }}"
+    new = "{{ 'false' }}"
+    iid = desk.intake(store, event(claim=old), T0, mode_reader=lambda: "occupied")["incident_id"]
+    out = desk.intake(store, event(phase="restated", claim=new, priority="P1"), T0 + timedelta(hours=3),
+                      mode_reader=lambda: "occupied")
+    assert out["decision"] == "restated" and out["incident_id"] == iid
+    assert not out["send"] and not out.get("ha_messages") and not out["actions"]
+    inc = store.incident(iid)
+    assert json.loads(inc["payload"])["claim"] == new and inc["severity"] == "P1"
+    assert not inc["closed_at"]                                  # closed by the desk's re-reading, never by the restate
+    out = desk.intake(store, event(phase="restated", claim=new, rule="automation.critical_condition_other"), T0,
+                      mode_reader=lambda: "occupied")
+    assert out["decision"] == "restated_nothing_open" and not out["send"]

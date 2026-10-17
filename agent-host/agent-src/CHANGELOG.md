@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.224 (17 October 2026)
+
+Owner, #45: an open alert kept the claim it was raised with after its rule's threshold changed (4000 → 6200 W).
+- alert-desk: phase "restated" (the critical_condition blueprint sends it on automation_reloaded and at start): the
+  rule's open incident takes its new claim / bad_states / mode / entities and priority; nothing is sent; seen_again
+  closes it once the new claim is false. 1 test, 2 mutations RED.
+
 ## 0.6.223 (17 October 2026)
 
 Owner, 2026-10-17: "a label shall never be hardcoded to a value that can be changed as parameter of the alert"; "To:"

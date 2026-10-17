@@ -12,7 +12,7 @@ The event is the one the VESTA rules fire AFTER their own Telegram message
 (checked live on 2026-09-29/30; INTEGRATION-PLAN 6b). Every phase of one incident
 carries the same incident_id:
   {"blueprint": "critical_condition", "rule_id": "automation.<the rule>",
-   "incident_id": "automation.<the rule>-1790000000", "phase": "opened|resolved|abandoned",
+   "incident_id": "automation.<the rule>-1790000000", "phase": "opened|resolved|abandoned|restated",
    "severity": "critical", "label": "Entrance left unlocked", "entities": ["lock.<a lock>"],
    "summary": "the rule's own message", "timestamp": "...", "reason"?: "...", ...}
 Only critical_condition, critical_binary_trip and critical_presence_guard ever
@@ -225,6 +225,8 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
         return resolved(store, ev, now)
     if ev["phase"] == "abandoned":
         return abandoned(store, ev, now)
+    if ev["phase"] == "restated":
+        return restated(store, ev, now)
     rule_id, eid = ev["rule_id"], ev.get("entity_id", "")
     route = route_for(rule_id, ev.get("blueprint"))
     sev = priority(ev, route)
@@ -558,6 +560,30 @@ def seen_again(store: Store, now: datetime, client, clear_minutes: float, out: d
         store.audit("alert-desk", "seen_again", {"incident": inc["id"], "now": said})
         closed.append(inc["id"])
     return closed
+
+
+#: What a rule restating itself changes on its open alert: how it is judged from now on — never its words.
+RESTATES = ("claim", "bad_states", "mode", "entities")
+
+
+def restated(store: Store, ev: dict, now: datetime) -> dict:
+    """The rule restated what it claims now (it was saved, reloaded, or the villa's system started): its open alert is
+    judged from now by that claim (seen_again), at that priority. Nothing is sent to anyone.
+
+    ⚠️ AN ALERT JUDGED BY A LIMIT THAT IS GONE (owner, 2026-10-17, #45): the mains overload rule went from 4000 to
+    6200 W while its alert was open; the save cancelled the rule's run, so no all-clear ever came, and the desk kept
+    reading the alert against 4000 W with 6000 W on the phase — it could never close, and a Done would reopen it."""
+    out = {"send": [], "actions": [], "incident_id": None, "decision": "restated_nothing_open"}
+    cur = store.find_open_incident(f"{ev['rule_id']}|{ev.get('entity_id', '')}")
+    if not cur:
+        return out
+    out["incident_id"], out["decision"] = cur["id"], "restated"
+    store.note(cur["id"], {k: ev[k] for k in RESTATES if ev.get(k) is not None})
+    sev = priority(ev, route_for(ev["rule_id"], ev.get("blueprint")))
+    if sev != cur["severity"]:
+        store.update_incident(cur["id"], severity=sev)
+    store.audit("alert-desk", "restated", {"incident": cur["id"], "priority": sev})
+    return out
 
 
 def abandoned(store: Store, ev: dict, now: datetime) -> dict:
