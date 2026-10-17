@@ -163,7 +163,7 @@ export async function api(method, path, body, { file = false } = {}) {
   try { data = await r.json(); } catch { /* an empty answer */ }
   if (!r.ok) {
     const problems = Array.isArray(data.problems) && data.problems.length ? data.problems
-      : [r.status === 401 || r.status === 403 ? "The Home Assistant session has ended: reload the page." : `The agent answered with error ${r.status}.`];
+      : [r.status === 401 || r.status === 403 ? "Your session in the villa's system has ended: reload the page." : `The agent answered with error ${r.status}.`];
     throw Object.assign(new Error("refused"), { problems, status: r.status });
   }
   return data;

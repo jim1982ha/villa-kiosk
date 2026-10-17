@@ -138,7 +138,7 @@ class UI:
     async def guard(self, request: web.Request, handler):
         if request.remote not in self.allowed:
             log.warning("UI: refused a connection from %s (only Home Assistant's sidebar may connect)", request.remote)
-            return web.json_response({"problems": ["Open the VESTA Agent from Home Assistant's sidebar."]}, status=403)
+            return web.json_response({"problems": ["Open the VESTA Agent from the villa's system sidebar."]}, status=403)
         # A write must come from this page's own script: a JSON body and our header. A form
         # posted by another site (with the admin's Home Assistant session) carries neither.
         if request.method not in ("GET", "HEAD") and (
@@ -422,7 +422,7 @@ class UI:
         if res is None:
             raise Refused(["The agent did not answer: it is stopped, or waiting for a setting (see its log)."], 503)
         if not res.get("ok"):
-            raise Refused([res.get("error") or "Home Assistant's MCP server did not answer."], 502)
+            raise Refused([res.get("error") or "The villa's system did not answer."], 502)
         return await self.tools(_request)
 
     async def tool_on(self, request):

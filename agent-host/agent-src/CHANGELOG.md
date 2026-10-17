@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.227 (17 October 2026)
+
+- The Agent page's words never name the platform: 8 strings in core.js, rules.js, skills.js and 4 served from
+  Python (places "ha_tools" → "Villa system tools", tool_access ha_get_logs line, ui/server sign-in refusal and
+  refresh error). test_no_platform_name now reads every static .js/.html without its comments (a small JS reader
+  keeps strings and template literals whole) plus places.py, tool_access.py, ui/server.py. 2 mutations RED.
+
 ## 0.6.226 (17 October 2026)
 
 - Rules page: a muted reminder under "Acting on the villa" to install the Agent before new alert-rule templates

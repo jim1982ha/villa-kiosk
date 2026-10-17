@@ -52,7 +52,7 @@ HA_GROUPS: dict[str, tuple[str, tuple[str, ...]]] = {
 #: What a person should know before switching a tool on (decision D5: the VESTA Agent user is an administrator).
 NOTES = {
     "ha_eval_template": "needs an administrator account",
-    "ha_get_logs": "needs an administrator account · the logbook and Home Assistant's own log, never an app's",
+    "ha_get_logs": "needs an administrator account · the logbook and the villa system's own log, never an app's",
     "ha_get_automation_traces": "needs an administrator account",
     "ha_config_get_automation": "needs an administrator account",
     "ha_config_get_script": "needs an administrator account",

@@ -71,7 +71,7 @@ export async function switchTool(b) {
 // ⚠️ OPENED FROM ITS OWN CARD (owner, 2026-10-08: the "Try a command" tab became an "Offline Test" pill on each
 // command's card, in a popup): the script and the command are the card's, so only the options are asked; then Run.
 export const FLAG_HELP = { date: "a day, e.g. 2026-10-05", text: "a word or a few", switch: "" };
-export const OFFLINE_TEST_INFO = "Runs this command on the villa, exactly as the AI would: it changes nothing in Home Assistant, uses no AI and costs nothing. Messages or tickets it would create are shown here, never sent. A file it saves stays in the agent's out folder, for a next step.";
+export const OFFLINE_TEST_INFO = "Runs this command on the villa, exactly as the AI would: it changes nothing in the villa's system, uses no AI and costs nothing. Messages or tickets it would create are shown here, never sent. A file it saves stays in the agent's out folder, for a next step.";
 export function tryPanel(name, d, script, command = null) {
   const out = h("div");
   let values = {};
@@ -367,7 +367,7 @@ export function aboutSkill(name, d) {
     if (!d.needs.length) return h("p", { class: "muted" }, "None: the AI needs no tool of its own for this skill.");
     const off = d.needs.filter((n) => !n.on);
     const verdict = off.length ? h("b", { class: "warn-text" }, `${off.length} of ${d.needs.length} not available`) : `${plural(d.needs.length, "tool", "tools")}, all switched on`;
-    const state = { off: "off", missing: "not on this Home Assistant", never: "never available" };
+    const state = { off: "off", missing: "not in the villa's system", never: "never available" };
     return [h("p", {}, withInfo(verdict, WHERE_TOOLS)),
       h("div", { class: "tool-grid three" }, d.needs.map((n) => tileCard(n.label, {
         on: n.on, chip: n.on ? null : h("span", { class: "chip off tiny" }, state[n.state] || "off"),

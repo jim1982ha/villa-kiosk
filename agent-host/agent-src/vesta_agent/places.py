@@ -35,7 +35,7 @@ PLACES: dict[str, tuple[str, str]] = {
     "actions": ("Allowed actions", "Rules"),
     "protected": ("Protected devices", "Rules"),
     "tools": ("AI tools", "Rules"),
-    "ha_tools": ("Home Assistant tools", "Rules › AI tools"),
+    "ha_tools": ("Villa system tools", "Rules › AI tools"),
     "agent_tools": ("Agent tools", "Rules › AI tools"),
     "tool_roles": ("Tools by role", "Rules › AI tools"),
     # Skills (owner, 2026-10-08: short names like the others — "Skill tools" beside "AI tools" and "Agent tools")

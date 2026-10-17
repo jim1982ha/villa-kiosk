@@ -154,7 +154,7 @@ export function rulesForms(doc, jobs = [], tools = null) {
     const drawList = () => {
       const cur = get();
       const q = search.value.trim().toLowerCase();
-      const rows = [...cur.filter((id) => !ENT.byId[id]).map((id) => ({ id, name: id, area: "not found in Home Assistant" })),
+      const rows = [...cur.filter((id) => !ENT.byId[id]).map((id) => ({ id, name: id, area: "not found in the villa's system" })),
                     ...pool].filter((e) => !q || `${e.name} ${e.area} ${e.id}`.toLowerCase().includes(q));
       list.replaceChildren(...rows.slice(0, 300).map((e) => {
         const on = cur.includes(e.id);
@@ -215,7 +215,7 @@ export function rulesForms(doc, jobs = [], tools = null) {
                  oninput: on((t) => (f.approval_ttl_minutes = num(t.value))) }), h("span", {}, "min"),
     infoButton(W("approval_ttl_minutes"), "An Approve or Refuse button older than this does nothing: the person asks again."))
   const services = h("section", { class: "card" },
-    titleWithInfo(place("actions"), "One line per Home Assistant service, and who decides. Anything not listed is refused. Restarts, shell commands, toggles and the like are refused whatever this says. For \"Only the devices chosen beside it\", choose the devices on the same line: the agent may act only on those, and still asks for approval.", "h2", ttl),
+    titleWithInfo(place("actions"), "One line per service of the villa's system, and who decides. Anything not listed is refused. Restarts, shell commands, toggles and the like are refused whatever this says. For \"Only the devices chosen beside it\", choose the devices on the same line: the agent may act only on those, and still asks for approval.", "h2", ttl),
     ...editTable(svcRows, {
       cls: "svc", add: "Add a service", blank: () => ["", "any"], per: 10,      // 10 lines a page (owner, 2026-10-06)
       changed: () => { f.allowed_services = Object.fromEntries(svcRows.filter(([k]) => k)); },
@@ -271,7 +271,7 @@ export function toolsCard(f, t, reload) {
   const haInfo = () => {
     const on = new Set(f.ha_read_tools);
     return (t.count ? `${[...on].filter((n) => t.groups.some((g) => g.tools.some((x) => x.name === n))).length} of ${t.count} tools on. ` : "The list is not read yet. ")
-      + (t.read_at ? `From Home Assistant's MCP server${t.server ? " " + t.server : ""}, read ${new Date(t.read_at).toLocaleString()}.` : "The agent reads it when it starts.");
+      + (t.read_at ? `From the villa's system${t.server ? " (" + t.server + ")" : ""}, read ${new Date(t.read_at).toLocaleString()}.` : "The agent reads it when it starts.");
   };
   const ha = () => {
     const on = new Set(f.ha_read_tools);
@@ -303,9 +303,9 @@ export function toolsCard(f, t, reload) {
     }, 16, ["‹ Previous", "Next ›", "tools"]);
     pages.redraw();
     const groups = [list, pages.nav];
-    const unknown = t.unknown.length ? problemsBox(t.unknown.map((n) => `${n}: named in the file, but this Home Assistant's MCP server has no such tool.`), "Not on this Home Assistant:") : null;
+    const unknown = t.unknown.length ? problemsBox(t.unknown.map((n) => `${n}: named in the file, but the villa's system has no such tool.`), "Not in the villa's system:") : null;
     const never = t.never.length ? h("details", { class: "tool-group never" },
-      h("summary", {}, h("b", {}, "Never available"), h("span", { class: "muted" }, ` ${plural(t.never.length, "tool", "tools")} that change Home Assistant — locked by the agent, whatever is chosen here`)),
+      h("summary", {}, h("b", {}, "Never available"), h("span", { class: "muted" }, ` ${plural(t.never.length, "tool", "tools")} that change the villa's system — locked by the agent, whatever is chosen here`)),
       h("div", { class: "chips" }, t.never.map((x) => h("span", { class: "chip off", title: x.description }, x.title)))) : null;
     return [head, unknown, ...groups, never];
   };

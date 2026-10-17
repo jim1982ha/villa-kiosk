@@ -55,3 +55,55 @@ def test_the_sent_yaml_texts_and_the_models_speaking_rule():
     rules_text = open(os.path.join(ROOT, "starter/config/instructions.md"), encoding="utf-8").read()
     assert 'Never name Home Assistant (or HA) to a person: say "the villa\'s system".' in rules_text
     assert "say which Home Assistant helper" not in rules_text
+
+
+#: The Agent's page: every file the browser shows a person (its JS and HTML), read without its code comments.
+PAGE = os.path.join(ROOT, "vesta_agent", "ui", "static")
+#: The page's words served from Python: the place names (tabs and titles), the tools' lines, the sign-in refusal.
+PAGE_SPOKEN = ["vesta_agent/places.py", "vesta_agent/tool_access.py", "vesta_agent/ui/server.py"]
+
+
+def _without_comments(src: str, html: bool = False) -> str:
+    """The text of a JS (or HTML) file with its comments blanked — what the browser can show a person. Strings and
+    template literals are kept whole: a "//" inside one (a URL) is no comment."""
+    if html:
+        src = re.sub(r"<!--.*?-->", " ", src, flags=re.S)
+        return re.sub(r"(<script[^>]*>)(.*?)(</script>)", lambda m: m[1] + _without_comments(m[2]) + m[3], src, flags=re.S)
+    out, i, n, quote = [], 0, len(src), None
+    while i < n:
+        c = src[i]
+        if quote:
+            out.append(c)
+            if c == "\\" and i + 1 < n:
+                out.append(src[i + 1]); i += 2; continue
+            if c == quote:
+                quote = None
+            i += 1
+        elif c in "\"'`":
+            quote = c; out.append(c); i += 1
+        elif src.startswith("//", i):
+            j = src.find("\n", i); i = n if j < 0 else j
+        elif src.startswith("/*", i):
+            j = src.find("*/", i + 2); i = n if j < 0 else j + 2
+        else:
+            out.append(c); i += 1
+    return "".join(out)
+
+
+def test_the_agents_page_never_names_home_assistant():
+    # owner, 2026-10-15 ("never mention Home Assistant") — the page was outside this guard until 2026-10-17: 13 names
+    # had stayed on it ("Not on this Home Assistant:", "The Home Assistant session has ended")
+    hits = []
+    for name in sorted(os.listdir(PAGE)):
+        if not name.endswith((".js", ".html")):
+            continue
+        text = _without_comments(open(os.path.join(PAGE, name), encoding="utf-8").read(), html=name.endswith(".html"))
+        hits += [f"{name}:{ln + 1}: {line.strip()[:80]!r}" for ln, line in enumerate(text.split("\n")) if NAMED.search(line)]
+    hits += [f"{p}:{line}: {text[:60]!r}" for p in PAGE_SPOKEN for line, text in _spoken_strings(p) if NAMED.search(text)]
+    assert hits == [], hits
+
+
+def test_the_page_reader_keeps_strings_and_drops_comments():
+    js = 'a = "x // Home Assistant"; // Home Assistant\n/* HA */ b = `HA`;'
+    kept = _without_comments(js)
+    assert "x // Home Assistant" in kept and "`HA`" in kept and "/* HA */" not in kept and kept.count("Home Assistant") == 1
