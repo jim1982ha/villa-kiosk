@@ -38,12 +38,12 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 from vesta_shared.store import Incident, Notes, Store, notes_of  # noqa: E402  (PYTHONPATH is set by the engine)
 from vesta_shared.params import VillaParams  # noqa: E402
 from vesta_shared.timeutil import day_time_label, villa_time  # noqa: E402
-from vesta_shared.problems import Problems, again_title, incident_runs  # noqa: E402  (a problem's lifecycle: one owner)
+from vesta_shared.problems import AGAIN_DAYS, Problems, again_title, incident_runs  # noqa: E402  (a problem's lifecycle: one owner)
 from vesta_shared import result as R  # noqa: E402  (what the engine is asked to do: its shape)
 from vesta_shared import script  # noqa: E402  (client, store, settings, zone: one set-up)
 from vesta_shared import skill_settings  # noqa: E402  (rules.yaml, the villa's on top)
 from vesta_shared.messaging import incident_tag  # noqa: E402
-from vesta_shared.message_format import PRESSED  # noqa: E402  ("<button> pressed by <name> on <time>.": one wording)
+from vesta_shared.message_format import PRESSED, ROLE_SHORT  # noqa: E402  ("<button> pressed by <name> on <time>.": one wording)
 from vesta_shared.device_state import has_value, out_for  # noqa: E402  ("is it back": one answer)
 
 SKILL = os.path.dirname(HERE)
@@ -112,24 +112,34 @@ def recipients(severity: str) -> list[str]:
 
 # The chase (rules.yaml `chase`): who is asked to answer (Done / Need help) and who hears when nobody does.
 CHASE = {"asks": "fm", "escalates_to": "owner", **(RULES.get("chase") or {})}
+
+
+def role_said(role: str) -> str:
+    """A role as an alert card says it ("FM", "Owner": message_format.ROLE_SHORT).
+
+    ⚠️ NEVER A ROLE'S WORD WRITTEN HERE (owner, 2026-10-17: "the label shall never be hardcoded to a value that can be
+    changed as parameter of the alert"): "No answer from FM", "the owner is asked to act" named the roles the chase
+    happened to have — a villa whose chase asks someone else would read the wrong people."""
+    return ROLE_SHORT.get(role, role)
 # the notices that ask for an answer: the asked role's carry the buttons
 ASKING = {"new", "back", "still", "reminder", "reopened"}
 
 
 def tell(sev: str, stage: str, *, incident: int, ladder: bool = True, chased: bool = False, mark: str | None = None,
-         **said) -> list[dict]:
+         escalate: bool | None = None, **said) -> list[dict]:
     """Every message of one notice about an incident: who hears it, and with which buttons.
 
     ⚠️ ONE ANSWER, EVERY NOTICE (architecture review, 2026-10-15; owner, 2026-10-13: "respect what the skill is doing,
     consistently to any P1, P2, P3"): each message named its own people — a repeat was put right on 13 October, while a
     P1's reminder, its reopening in the Cockpit and its "back online" still reached the facility manager alone. Now:
-    - `escalated`: the role it escalates to (chase.escalates_to), with the buttons — the chase is theirs now;
+    - `escalated` (or `escalate`: a still-there notice once the rule gave up): the role it escalates to
+      (chase.escalates_to), with the buttons — the chase is theirs now;
     - every other notice: the people of its priority (people_roles), and while it is `chased` the asked role
       (chase.asks) as well, whatever the priority. The asked role's notice that asks for an answer (ASKING), on a route
       with the ladder, is marked `first_in_line`, so the engine can tell when none of their chats received it (and the
       desk hands it on: `unreached`). (The engine puts Done / Need help under EVERY copy while the alert is open —
       owner, 2026-10-10: nobody has to type a reply — so who is asked is a matter of who is chased, not of buttons.)"""
-    if stage == "escalated":
+    if escalate if escalate is not None else stage == "escalated":
         return [R.message(CHASE["escalates_to"], **said, incident=incident, buttons=True, stage=stage, mark=mark)]
     roles = recipients(sev) + ([CHASE["asks"]] if chased and CHASE["asks"] not in recipients(sev) else [])
     out = []
@@ -236,14 +246,16 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
         since = day_time_label(villa_time(cur["opened_at"], zone or "UTC"), weekday=True)
         status = f"Still there: {cur['count'] + 1} times since {since}"
         # Home Assistant's own new message for it takes the incident's number, and replaces its older ones
-        out["ha_messages"] = [R.ha_message(cur["id"], context=ev.get("_context_id"), stage="reminder", **about(cur, status))]
+        # ⚠️ THE RULE ALERTED AGAIN, NOT A REMINDER (owner, 2026-10-17, #45: "Reminder sent 11:38 to Owner & FM" — the
+        # load had moved from phase C to phase B and the villa's rule alerted again; a reminder is the desk's own chase)
+        out["ha_messages"] = [R.ha_message(cur["id"], context=ev.get("_context_id"), stage="still", **about(cur, status))]
         if (now - last) < timedelta(minutes=route["cooldown_min"]):
             out["decision"] = "counted"  # repeat inside the cooldown: no message of the desk's own
             return out
         out["decision"] = "repeat"
         # ⚠️ TO WHOM ITS PRIORITY SENDS IT (owner, 2026-10-13: "respect what the skill is doing, consistently to any P1,
         # P2, P3"): a repeat went to the facility manager whatever the priority, unlike the alert it repeats
-        out["send"] += tell(sev, "reminder", incident=cur["id"], ladder=route.get("ladder", True), **about(cur, status))
+        out["send"] += tell(sev, "still", incident=cur["id"], ladder=route.get("ladder", True), **about(cur, status))
         if route.get("intrusion"):
             out["siren_gate"] = siren_gate(store, ev, now)
         return out
@@ -291,7 +303,7 @@ def _ladder(store: Store, iid: int, ev: dict, now: datetime, sev: str, route: di
     and Kiosk fault — the same ones open again when it came back (Problems.reopen_task) — (P1, P2 with the ladder); the
     morning list (P3); the record (P4)."""
     if sev in ("P1", "P2") and route.get("ladder", True):
-        store.update_incident(iid, state=Incident.ASKED, asked_at=now.isoformat(), assignee="fm")
+        store.update_incident(iid, state=Incident.ASKED, asked_at=now.isoformat(), assignee=CHASE["asks"])
         eid, check = ev.get("entity_id", ""), route.get("check") or ""
         if again:
             tid, how = Problems(store).reopen_task("incident", iid, ev["rule_id"], eid, again[:250], check)
@@ -348,7 +360,7 @@ def reopen(store: Store, inc: dict, ev: dict, now: datetime, sev: str, route: di
     if came_back_now:
         # one counter, the Kiosk fault's and the digest's (architecture review 25: "N times since the 1st" and "again:
         # M times in 7 days" drifted apart)
-        status = f"Back again: {runs} times in 7 days"
+        status = f"Back again: {runs} times in {AGAIN_DAYS} days"
         out["ha_messages"] = [R.ha_message(inc["id"], context=ev.get("_context_id"), stage="back", **about(inc, status))]
         if ev.get("snapshot"):
             out["actions"].append(R.snapshot(ev["snapshot"], inc["id"]))
@@ -568,15 +580,18 @@ def abandoned(store: Store, ev: dict, now: datetime) -> dict:
         out["ha_messages"] = [R.ha_message(inc["id"], context=ev.get("_context_id"), stage="closed", **about(inc, cleared))]
         return out
     store.note(inc["id"], {"abandoned": True, **{k: ev[k] for k in ("mode", "bad_states") if ev.get(k) is not None}},
-               state=Incident.ESCALATED, escalated_at=now.isoformat(), assignee="owner")
+               state=Incident.ESCALATED, escalated_at=now.isoformat(), assignee=CHASE["escalates_to"])
     out["decision"] = "abandoned"
     # who watches it now, and what to do: the rule stopped, the desk did not (seen_again)
     # ⚠️ SHORT, IN THE READER'S WORDS (owner, 2026-10-15: "I don't understand this latest update"): "when the alert
     # stopped watching it", "VESTA keeps watching it and closes it once it is right" — two sentences about the machinery.
     # The words are the owner's own (2026-10-15)
-    said = about(inc, "Still not fixed at {time} (will close itself once fixed or press Done)")
-    out["ha_messages"] = [R.ha_message(inc["id"], context=ev.get("_context_id"), stage="escalated", **said)]
-    out["send"] += tell(inc["severity"], "escalated", incident=inc["id"], **said)
+    # ⚠️ NOT A SECOND ESCALATION (owner, 2026-10-17, #45: "Escalation sent 10:09 to Owner", then "Escalation sent 10:24
+    # to Owner"): the rule giving up is a still-there notice, sent where an escalation goes. Its line says its own time
+    # ("Still-there alert sent 17/10/2026 10:24 to Owner — Still not fixed …"), so the words no longer repeat it
+    said = about(inc, "Still not fixed (will close itself once fixed or press Done)")
+    out["ha_messages"] = [R.ha_message(inc["id"], context=ev.get("_context_id"), stage="still", **said)]
+    out["send"] += tell(inc["severity"], "still", incident=inc["id"], escalate=True, **said)
     return out
 
 
@@ -620,7 +635,7 @@ def reply(store: Store, iid: int, option: str, sender_role: str, now: datetime, 
     button = BUTTONS.get(option) or {"label": option, "mark": None}
     label = button["label"]
     pressed = PRESSED.format(label=label, name="{who}", time="{time}")      # "{who}" filled below, "{time}" by the engine
-    who = name or {"owner": "the owner", "fm": "FM"}.get(sender_role, sender_role)
+    who = name or role_said(sender_role)
 
     def here(status: str, stage: str = "update", mark: str | None = None) -> dict:
         """The answer in the chat it came from: it replaces the incident's message there, so it says it all."""
@@ -638,10 +653,11 @@ def reply(store: Store, iid: int, option: str, sender_role: str, now: datetime, 
         store.note(iid, {"check_quiet": f"{label} pressed by {who}"})
         out["send"].append(here(pressed + (" VESTA will check it stays right." if checks else ""), "closed"))
     elif option == "need_help":
-        store.update_incident(iid, state=Incident.ESCALATED, reply=label, escalated_at=now.isoformat(), assignee="owner")
+        store.update_incident(iid, state=Incident.ESCALATED, reply=label, escalated_at=now.isoformat(),
+                              assignee=CHASE["escalates_to"])
         # ONE sentence in every chat (owner, 2026-10-11: one incident, one picture — "over to you" / "the owner has been
         # told" were two)
-        helped = pressed.rstrip(".") + ": the owner is asked to act."
+        helped = pressed.rstrip(".") + f": {role_said(CHASE['escalates_to'])} is asked to act."
         out["send"] += tell(inc["severity"], "escalated", incident=iid, mark=button.get("mark"), **about(inc, helped))
         out["send"].append(here(helped, "pressed", mark=button.get("mark")))
     else:
@@ -667,7 +683,8 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
         out["not_quiet"] = quiet_after_done(store, now, client, params.behaviour("clear_minutes"), out)
     for inc in store.incidents(open_only=True):
         p = notes_of(inc)
-        said = store.take_note(inc["id"], Notes.KIOSK_REOPENED) if p.get(Notes.KIOSK_REOPENED) else None
+        said = store.take_note(inc["id"], Notes.KIOSK_REOPENED, assignee=CHASE["asks"]) \
+            if p.get(Notes.KIOSK_REOPENED) else None
         if said:
             # ⚠️ A FAULT A PERSON REOPENED IN THE KIOSK (architecture review 25): the facility manager is asked at once,
             # its buttons back — the ladder runs from now
@@ -680,11 +697,12 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
             continue
         if p.get(Notes.UNREACHED) and inc["state"] in (Incident.ASKED, Incident.REASKED) and \
                 store.take_note(inc["id"], Notes.UNREACHED, state=Incident.ESCALATED, escalated_at=now.isoformat(),
-                                assignee="owner"):
+                                assignee=CHASE["escalates_to"]):
             # ⚠️ NOBODY OF THE FACILITY MANAGER'S RECEIVED IT (architecture review 25): Telegram refused every chat of
             # theirs, and the owner heard of it only at the 45-minute escalation — told now
             out["send"] += tell(inc["severity"], "escalated", incident=inc["id"],
-                                **about(inc, "Not delivered to FM: Telegram refused every chat of theirs. Over to you."))
+                                **about(inc, f"Not delivered to {role_said(CHASE['asks'])}: Telegram refused every "
+                                                  f"chat of theirs. Over to {role_said(CHASE['escalates_to'])}."))
             out["escalated"].append(inc["id"])
             continue
         if inc["state"] not in (Incident.ASKED, Incident.REASKED):
@@ -698,9 +716,9 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
                                 **about(inc, f"No answer after {int(reask)} min"))
             out["reasked"].append(inc["id"])
         elif inc["state"] == Incident.REASKED and age >= timedelta(minutes=escal):
-            store.update_incident(inc["id"], state=Incident.ESCALATED, escalated_at=now.isoformat(), assignee="owner")
+            store.update_incident(inc["id"], state=Incident.ESCALATED, escalated_at=now.isoformat(), assignee=CHASE["escalates_to"])
             out["send"] += tell(inc["severity"], "escalated", incident=inc["id"],
-                                **about(inc, f"No answer from FM after {int(escal)} min"))
+                                **about(inc, f"No answer from {role_said(CHASE['asks'])} after {int(escal)} min"))
             out["escalated"].append(inc["id"])
     # villa silent: the engine's Home Assistant connection has been down too long
     last = store.last_beat(HA_BEAT)
@@ -710,7 +728,7 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
             iid = store.new_incident(key, "critical_internet---villa_silent", "agent", "P1",
                                      {"message": f"No contact with the villa's system for {int((now - datetime.fromisoformat(last)).total_seconds() // 60)} min: internet, power or the villa's system is down."},
                                      now.isoformat())
-            store.update_incident(iid, state=Incident.ASKED, asked_at=now.isoformat(), assignee="fm")
+            store.update_incident(iid, state=Incident.ASKED, asked_at=now.isoformat(), assignee=CHASE["asks"])
             out["send"] += tell("P1", "new", incident=iid, ladder=False,   # the priority is the heading's; the villa's time
                                 text="No contact with the villa's system. Check power, the router and the internet link.",
                                 status=f"Villa silent since {day_time_label(villa_time(last, zone or 'UTC'), weekday=True)}")

@@ -66,8 +66,8 @@ closure, and never raise the same thing twice.
 | PM-RUN-SAG | power | Within one run the draw fell by 5% or more from the first quarter to the last quarter of the run (air, basket filling). Report only. | `vesta_sag_pct` |
 | PM-EXPECTED-SILENT | power | An intermittent, usage-driven asset was scheduled and did not run. Report only, never a task. | schedule helper |
 | PM-COUNTER-RESET | energy | An energy counter went backwards: the day's kWh is unreliable. | none |
-| PM-BATTERY-LOW / -CRIT / -TREND | battery | Level under 20% (task), under 10% (task now, P2 if the device is critical), or falling fast enough to be empty within 14 days (report). A battery that reports volts needs `<asset>_battery_nominal_v`. | `vesta_battery_warn_pct`, `vesta_battery_crit_pct` |
-| PM-UNAVAILABLE | availability | A device offline for more than 10 minutes at batch time, one finding per physical device; three or more devices of one integration offline together become one "integration down" finding. P2 when the device is critical. | `vesta_unavailable_minutes` |
+| PM-BATTERY-LOW / -CRIT / -TREND | battery | Level under `battery_warn_pct` (task), under `battery_crit_pct` (task now, P2 if the device is critical), or falling fast enough to be empty within `battery_trend_warn_days` (report). A battery that reports volts needs `<asset>_battery_nominal_v`. | `vesta_battery_warn_pct`, `vesta_battery_crit_pct` |
+| PM-UNAVAILABLE | availability | A device offline for more than `unavailable_minutes` at batch time, one finding per physical device; three or more devices of one integration offline together become one "integration down" finding. P2 when the device is critical. | `vesta_unavailable_minutes` |
 | PM-SILENT | level | A sensor online but not reporting for 24 h. | `vesta_silence_hours` |
 | PM-LEVEL-HIGH | level | A temperature or humidity above `<asset>_max_c` / `<asset>_max_humidity_pct` when such a helper exists. | asset helper |
 | PM-RECONNECT-LOOP | network | Ten or more drop/reconnect events in three days for one device (logbook). | `vesta_reconnect_events`, `vesta_reconnect_days` |
@@ -94,7 +94,7 @@ night confirms.
 ## The task loop
 
 A P2 or P3 finding becomes one Facility ticket `summary. Check: ...`. The
-chase (15 minutes re-ask, 45 minutes escalation to the owner) belongs to the
+chase (its re-ask and escalation, with their timings and roles in the alert-desk's rules.yaml) belongs to the
 alert-desk skill; this skill only opens and closes. Replies:
 - Done: close the task; if the finding is still there the next night, reopen with "still measured after your intervention".
 - Need help: escalate to the owner with the finding detail.

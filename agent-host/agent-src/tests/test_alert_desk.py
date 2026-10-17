@@ -605,3 +605,23 @@ def test_an_incidents_notes_change_in_place_and_an_old_or_broken_record_still_re
         store.update_incident(iid, payload=broken)
         assert notes_of(store.incident(iid)) == {}
         assert store.note(iid, {"a": 1}) == {"a": 1}
+
+
+def test_the_chase_roles_are_said_as_set_never_as_written_in_the_desk(store, monkeypatch):
+    # owner, 2026-10-17: "the label shall never be hardcoded to a value that can be changed as parameter of the alert" —
+    # "No answer from FM", "the owner is asked to act" named the chase's roles as shipped; a villa that asks the owner
+    # first would read the wrong people
+    monkeypatch.setattr(desk, "CHASE", {"asks": "owner", "escalates_to": "fm"})
+    iid = desk.intake(store, event(), T0, mode_reader=lambda: "occupied")["incident_id"]
+    assert store.incident(iid)["assignee"] == "owner"
+    desk.tick(store, T0 + timedelta(minutes=16))
+    out = desk.tick(store, T0 + timedelta(minutes=50))
+    (esc,) = [m for m in out["send"] if m["to"] == "fm"]
+    assert esc["status"].startswith("No answer from Owner after "), esc
+    assert store.incident(iid)["assignee"] == "fm"
+    iid2 = desk.intake(store, event(rule="automation.critical_condition_back_door"), T0,
+                       mode_reader=lambda: "occupied")["incident_id"]
+    out = desk.reply(store, iid2, "need_help", "owner", T0 + timedelta(minutes=5))
+    assert any(m["status"].endswith(": FM is asked to act.") for m in out["send"]), out["send"]
+    assert desk.reply(store, iid2, "other", "owner", T0 + timedelta(minutes=6), name=None)["send"][0]["status"] \
+        .startswith("Noted from Owner on ")

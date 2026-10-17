@@ -150,7 +150,7 @@ def test_need_help_reaches_the_owner_with_the_buttons_to_answer(agent):
     owner = agent.thread.shown(int(iid))[GROUP]
     assert owner["buttons"] and not owner["settled"], owner
     # the escalation's step to the owner only — never the presser's chat, which got the answer (owner, 2026-10-16)
-    assert re.fullmatch(r"Escalation sent .+ to Owner — Need help pressed by Wayan on .+: the owner is asked to act\.",
+    assert re.fullmatch(r"Escalation sent .+ to Owner — Need help pressed by Wayan on .+: Owner is asked to act\.",
                         status(owner["text"])) and SUMMARY in owner["text"]
     assert all(mid != owner["mid"] for _, mid, _ in agent.tg.edits)     # never edited: its buttons are still there
     (fm,) = shown(agent, FM_CHAT)

@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.6.223 (17 October 2026)
+
+Owner, 2026-10-17: "a label shall never be hardcoded to a value that can be changed as parameter of the alert"; "To:"
+follows the priority (owner told it reverses 2026-10-16's #43).
+- outcome: a card's roles are the desk's (priority + later steps); adopt_ha no longer unions the rule chat's roles, and a
+  copy for no role (an answer in its own chat) records the incident's roles. A taken-over villa message is remembered as
+  the agent's (state.remember_message): a press on it was ignored. Notices.roles_of.
+- alert-desk: role words from CHASE + ROLE_SHORT (role_said), assignee from CHASE, "in {AGAIN_DAYS} days"; engine's
+  Kiosk reopen no longer sets assignee="fm" (the desk sets chase.asks when it reads the mail). SKILL.md files name
+  settings, not numbers. preventive-maintenance: "its {baseline_days}-day normal" / "its normal before this was found".
+- actions/policy approval words from ROLE_WORDS. test_jobs waits for the chat jobs (idle), never 0.1 s.
+- 4 tests, 9 mutations RED.
+
+Owner, #45 (mains overload, 17 October): two steps on the card were mislabelled.
+- alert-desk intake: a repeat of an open incident (the rule alerted again) is stage "still", not "reminder".
+- alert-desk abandoned (still_true): stage "still" sent where an escalation goes (tell(..., escalate=True)), not a
+  second "escalated"; its words drop "at {time}" (the timed step line says it). 2 tests, 3 mutations RED.
+
 ## 0.6.222 (17 October 2026)
 
 Architecture review round two, 2026-10-17 (owner: "proceed fully"):

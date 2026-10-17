@@ -109,8 +109,13 @@ def power_rules(asset: dict, entity_id: str, series: dict[date, dict], today: da
         rec_vals = [series[d]["running_power"] for d in recent_days if series[d].get("running_power")]
         if len(base_vals) >= min_days and len(rec_vals) == confirm:
             base = med(base_vals)
+            # ⚠️ WHICH NORMAL IT IS COMPARED WITH, SAID AS IT IS (owner, 2026-10-17: never a fixed word for a setting):
+            # "its 30-day normal" was written whatever baseline_days said, and also while an open finding compares
+            # with the normal frozen when it opened
+            normal = f"its {baseline_days}-day normal"
             if "PM-POWER-CHANGE" in prior and prior["PM-POWER-CHANGE"].get("baseline_w"):
                 base = prior["PM-POWER-CHANGE"]["baseline_w"]
+                normal = "its normal before this was found"
             rec = med(rec_vals)
             change = pct_change(rec, base)
             if change is not None and _held([pct_change(v, base) for v in rec_vals], drift_pct, drift_pct):
@@ -123,7 +128,7 @@ def power_rules(asset: dict, entity_id: str, series: dict[date, dict], today: da
                     kind, when = ("drift", recent_days[0]) if len(rec_vals) >= 3 else ("new", recent_days[0])
                     how = "gradual drift" if kind == "drift" else "started on " + day_label(when)
                 direction = "lower" if change < 0 else "higher"
-                summary = (f"{asset['name']} draws {abs(change):.0f}% {direction} than its 30-day normal "
+                summary = (f"{asset['name']} draws {abs(change):.0f}% {direction} than {normal} "
                            f"({rec:.0f} W vs {base:.0f} W) at the same running hours, {how}.")
                 check = ("Lower draw at equal hours means less water moved: check water level and air in the pump, "
                          "empty the basket, check the valves, photograph the filter gauge before any backwash."

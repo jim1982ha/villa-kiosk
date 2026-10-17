@@ -202,7 +202,9 @@ def _asked_in_chat(agent, tmp_path, monkeypatch, page: bool, job_name: str = "fm
 
     async def go():
         await agent.converse(ASKER, Person(ASKER, "Asker", "fm"), "/ask the weekly report")
-        await asyncio.sleep(0.1)
+        # ⚠️ WAIT FOR THE JOB, NEVER FOR A TIME (async tests wait on events): a fixed 0.1 s let a loaded run (the gate's
+        # parallel suite) check before the job had sent its page — red at the gate, green alone
+        await agent.chat_jobs.idle()
     run(go())
     return agent.tg
 

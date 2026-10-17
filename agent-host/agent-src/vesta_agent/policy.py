@@ -419,8 +419,10 @@ class Policy:
 # input_button entities this file's check refuses, and the siren picker offered siren entities the alert desk
 # then called switch.turn_on on. The page now draws its forms from FORM_SCHEMA (served by /api/policy).
 RULE_WORDS = {
-    "any": "the owner or the facility manager approves",
-    "owner": "only the owner approves",
+    # the roles in their one set of words (message_format.ROLE_WORDS; owner, 2026-10-17: never a role's word written
+    # twice — a renamed role would leave these behind)
+    "any": f"the {ROLE_WORDS['owner'].lower()} or the {ROLE_WORDS['fm'].lower()} approves",
+    "owner": f"only the {ROLE_WORDS['owner'].lower()} approves",
     "listed": "only the devices chosen beside it, then approval",
     "direct": "no approval when a registered person asks",
 }

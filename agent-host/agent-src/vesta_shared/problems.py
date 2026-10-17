@@ -261,9 +261,10 @@ class Problems:
         if kind == "incident" and sid:
             inc = self.store.incident(sid)
             if inc and inc.get("closed_at"):
-                # kiosk_words.reopened: who and when, said once — mail to the alert desk (store.Notes)
+                # kiosk_words.reopened: who and when, said once — mail to the alert desk (store.Notes), which names who
+                # is asked (its chase.asks: a skill's setting, never the engine's)
                 self.store.note(sid, {Notes.KIOSK_REOPENED: said or by or "a person"}, drop=("check_quiet",),
-                                closed_at=None, reply=None, state=Incident.ASKED, asked_at=self.store.now(), assignee="fm")
+                                closed_at=None, reply=None, state=Incident.ASKED, asked_at=self.store.now())
                 return sid
         return None
 

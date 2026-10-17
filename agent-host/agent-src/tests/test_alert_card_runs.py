@@ -6,7 +6,8 @@ The six points of the owner's page, as checked here:
    happened at that message's own time — and the step is not then told twice;
 2. the rule's all-clear and the closing note to the facility manager are ONE line;
 3. a new run of the alert starts under a divider line;
-4. "To:" counts the rule's own chat from the first message;
+4. "To:" counts the rule's own chat from the first message — REVERSED by the owner on 2026-10-17: "To:" follows the
+   priority (the roles it reaches, then whoever a later step went to), whatever chat the rule posts in;
 A. the roles read "FM" in every line of an alert card's "Status:" and its "To:".
 (5, the rule's own text, and 6, the buttons in the group, are left as they are: the report says why.)"""
 from __future__ import annotations
@@ -44,14 +45,14 @@ def agent(tmp_path):
     return v
 
 
-def rule(v, phase: str, run_no: int, mid: int):
+def rule(v, phase: str, run_no: int, mid: int, priority: str | None = None):
     """The villa's rule: its own message in the group, then its event — one run, one context."""
     ctx = f"RUN-{run_no}-{phase}"
     run(v.on_ha_event("telegram_sent", {"chat_id": GROUP, "message_id": mid, "bot": BOT, CONTEXT_KEY: ctx}))
     run(v.on_ha_event("vesta_critical_event", {
         "blueprint": "critical_condition", "rule_id": RULE, "incident_id": f"{RULE}-{run_no}", "phase": phase,
         "severity": "critical", "label": "Phase C high", "entities": ["sensor.phase_c"], "summary": SUMMARY,
-        "timestamp": datetime.now(timezone.utc).isoformat(), CONTEXT_KEY: ctx}))
+        "timestamp": datetime.now(timezone.utc).isoformat(), CONTEXT_KEY: ctx, **({"priority": priority} if priority else {})}))
 
 
 def tick(v, minutes):
@@ -67,11 +68,33 @@ def status_lines(text: str) -> list[str]:
     return text.split("\n\nStatus:\n", 1)[1].split("\n")
 
 
-def test_the_first_alert_names_the_rules_chat_in_every_to_line(agent):
-    # point 4: the group's copy said "To: FM" — only the roles the agent itself sent to — the next ones "To: Owner & FM"
+def test_to_follows_the_priority_never_the_chat_the_rule_posts_in(agent):
+    # owner, 2026-10-17 (told it reverses 2026-10-16's point 4): a P2 reaches the FM — "To: FM" in the group too, where
+    # the owner reads it; once escalated, the owner is named
     rule(agent, "opened", 1, 500)
+    assert card(agent, GROUP).split("\n")[1] == "To: FM"
+    assert card(agent, FM_CHAT).split("\n")[1] == "To: FM"
+    tick(agent, 20)
+    tick(agent, 50)
     assert card(agent, GROUP).split("\n")[1] == "To: Owner & FM"
-    assert card(agent, FM_CHAT).split("\n")[1] == "To: Owner & FM"
+
+
+def test_an_answer_in_the_group_never_widens_to(agent):
+    # owner, 2026-10-17: a copy for no role (the answer to a press, in its own chat) is about the roles the incident
+    # already reached — Done pressed in the group the owner reads must not turn a P2's "To: FM" into "Owner & FM"
+    rule(agent, "opened", 1, 500)
+    run(agent.on_ha_event("telegram_callback", {"id": "cb", "data": "i:1:done", "chat_id": GROUP, "user_id": OWNER,
+                                                "message": {"message_id": 500, "chat": {"id": GROUP}}, "bot": BOT}))
+    assert agent.tg.toasts, "a press on the rule's own copy, taken over, is the agent's to answer"
+    assert "(closed)" in card(agent, GROUP).split("\n")[0], card(agent, GROUP)
+    assert card(agent, GROUP).split("\n")[1] == "To: FM", card(agent, GROUP)
+    hist = head_text(agent.notices.heading(GROUP, 1)).split("\n")[2:]
+    assert hist and all(ln.endswith(" to FM") for ln in hist), hist
+
+
+def test_a_p1_names_both_roles_from_its_first_message(agent):
+    rule(agent, "opened", 1, 500, priority="P1")
+    assert card(agent, GROUP).split("\n")[1] == "To: Owner & FM"
 
 
 def test_the_rules_all_clear_and_the_closing_note_are_one_line(agent):
@@ -79,8 +102,8 @@ def test_the_rules_all_clear_and_the_closing_note_are_one_line(agent):
     rule(agent, "opened", 1, 500)
     rule(agent, "resolved", 1, 501)
     hist = head_text(agent.notices.heading(GROUP, 1)).split("\n")[2:]
-    assert len(hist) == 2 and re.fullmatch(rf"- Alert sent {T} to Owner & FM", hist[0]), hist
-    assert re.fullmatch(rf"- Closing note sent {T} to Owner & FM", hist[1]), hist
+    assert len(hist) == 2 and re.fullmatch(rf"- Alert sent {T} to FM", hist[0]), hist
+    assert re.fullmatch(rf"- Closing note sent {T} to FM", hist[1]), hist
     assert not any("Update sent" in ln for ln in hist)
 
 
@@ -90,8 +113,8 @@ def test_a_run_that_came_back_starts_under_a_divider_and_a_reminder_carries_its_
     rule(agent, "opened", 2, 502)                       # back within the reopen window: the same #1
     assert set(agent.thread.shown(1)) == {GROUP, FM_CHAT}
     back = card(agent, GROUP)
-    assert back.startswith("#1-P2 (existing)\nTo: Owner & FM\n")
-    assert re.fullmatch(rf"Came-back alert sent {T} to Owner & FM — Back again: 2 times in 7 days",
+    assert back.startswith("#1-P2 (existing)\nTo: FM\n")
+    assert re.fullmatch(rf"Came-back alert sent {T} to FM — Back again: 2 times in 7 days",
                         status(back).removeprefix("⚠️ ⚙️ ")), status(back)
     tick(agent, 20)                                     # the reminder: to the FM; the group's copy edited quietly
     group = card(agent, GROUP)

@@ -132,6 +132,11 @@ class Outcome:
         if self.notices:
             for chat, item, roles in pairs:
                 to = self.notices.roles_for(chat, roles)
+                if incident_of(item) and not roles:
+                    # ⚠️ A COPY FOR NO ROLE WIDENS NOTHING (owner, 2026-10-17: "To:" follows the priority): an answer
+                    # in its own chat is about the incident the roles its priority reaches already had — the group's
+                    # own roles made a P2 read "To: Owner & FM"
+                    to = self.notices.roles_of(int(incident_of(item))) or to
                 if incident_of(item):
                     going.setdefault(int(incident_of(item)), set()).update(to)
                     told.setdefault((int(incident_of(item)), item.get("stage")), set()).update(to)
@@ -141,14 +146,14 @@ class Outcome:
         # Home Assistant's own messages first: the desk's messages below then replace them where both land
         for h in res.get("ha_messages") or []:
             hid = int(h.get("incident_id") or 0)
-            for chat in await self.adopt_ha(h, skill_name, going.get(hid), told.get((hid, h.get("stage")))):
-                notice(h["incident_id"], h.get("stage"), chat)
+            # ⚠️ "TO:" FOLLOWS THE PRIORITY (owner, 2026-10-17, reversing 2026-10-16's #43 knowingly): the rule's own
+            # message is about the roles this step goes to (the desk's, from the alert's priority), else the roles the
+            # incident already went to — never the roles of the chat the rule posts in
+            step = told.get((hid, h.get("stage"))) or going.get(hid) or \
+                (self.notices.roles_of(hid) if self.notices and hid else set())
+            for chat in await self.adopt_ha(h, skill_name, going.get(hid) or step, step):
+                notice(h["incident_id"], h.get("stage"), chat, step)
                 posted.setdefault(hid, []).append(chat)
-                if self.notices:
-                    # the rule's chat is told too: this result's own messages say so in their "To:" and the step's
-                    # bottom line (owner, 2026-10-16)
-                    going.setdefault(hid, set()).update(self.notices.roles_for(chat))
-                    told.setdefault((hid, h.get("stage")), set()).update(self.notices.roles_for(chat))
         # ⚠️ SETTLED BEFORE THIS RESULT'S MESSAGES ARE POSTED (architecture review 12, 2026-10-09): "Need help" sends the
         # owner a new message with the buttons; settled after it, that message lost them the moment it arrived
         for s in res.get("settle") or []:
@@ -193,7 +198,7 @@ class Outcome:
                 done["not_sent"] += 1                         # delivery.py: refused, or Telegram off
                 continue
             if iid:
-                notice(iid, item.get("stage"), chat, roles)
+                notice(iid, item.get("stage"), chat, roles or (self.notices.roles_of(int(iid)) if self.notices else ()))
                 posted.setdefault(int(iid), []).append(chat)
             chats.add(chat)
             done["sent"] += 1
@@ -312,11 +317,6 @@ class Outcome:
                 break
             await asyncio.sleep(wait)
             found = self.state.ha_sent(ctx)
-        # ⚠️ "TO:" COUNTS THE RULE'S OWN CHAT FROM THE FIRST MESSAGE (owner, 2026-10-16, #43): the first alert taken over
-        # in the group said "To: FM" — only the roles the agent itself sent to — and every later one "To: Owner & FM"
-        if self.notices:
-            here = {r for chat, _ in found for r in self.notices.roles_for(chat)}
-            also, told = set(also or ()) | here, set(told or ()) | here
         for chat, mid in found:
             # Home Assistant's own alert, taken over: the incident's text, the earlier messages' times, its buttons
             kb = self.buttons.keyboard(int(iid), chat, skill_name) if skill_name and self.buttons.open(iid) else None
@@ -327,6 +327,9 @@ class Outcome:
             p = layout.parts(body=text, status=status,
                              head=self.notices.heading(chat, int(iid), stage=h.get("stage"), also=also) if self.notices else "")
             await self.thread.adopt(int(iid), chat, mid, p, keyboard=kb)
+            # ⚠️ TAKEN OVER, IT IS THE AGENT'S (2026-10-17): a press is handled only on the agent's own messages, and this
+            # one carries its Done / Need help — never remembered, a press on the rule's first copy was left unanswered
+            self.state.remember_message(chat, mid)
         if not found:
             log.info("Incident #%s: no Home Assistant message of its run to take over", iid)
         return [chat for chat, _ in found]

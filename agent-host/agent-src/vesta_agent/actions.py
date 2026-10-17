@@ -22,6 +22,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable
 
+from vesta_shared.message_format import ROLE_WORDS
+
 from . import button_data
 from .policy import NOT_REGISTERED, Decision, Person, Policy, action_hash
 from .routing import Routing
@@ -209,7 +211,9 @@ class Actions:
         action = {"domain": d.domain, "service": d.service, "entity_ids": d.entity_ids, "data": d.data, "plain": text}
         aid = self.state.new_approval(action, d.action_hash(), d.required_role or "owner", int(targets[0]),
                                       requester.telegram_id if requester else None, policy.approval_ttl_minutes)
-        who = "the owner" if d.required_role == "owner" else "the owner or the facility manager"
+        # the roles in their one set of words (message_format.ROLE_WORDS; owner, 2026-10-17)
+        owner, fm = (f"the {ROLE_WORDS[r].lower()}" for r in ("owner", "fm"))
+        who = owner if d.required_role == "owner" else f"{owner} or {fm}"
         self.state.log("requested", dict(base, approval=aid, required_role=d.required_role))
         msg = Outgoing([int(c) for c in targets],
                        # the action as its body, where it stands as its status — replaced by the decision when pressed

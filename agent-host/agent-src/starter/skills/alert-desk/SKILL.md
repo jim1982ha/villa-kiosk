@@ -48,7 +48,8 @@ The decision is one of:
 - `counted`: the same rule on the same entity is already open and inside its cooldown. Nothing sent.
 - `repeat`: open and past the cooldown: one "still there, N times since" message to the roles its
   priority reaches (as the first alert), with Home Assistant's latest words and claim.
-- `new`: the owner and FM (P1) or the FM (P2) get the message, the FM's with the ladder buttons;
+- `new`: the roles its priority reaches (rules.yaml `people_roles`) get the message, the asked role's
+  (`chase.asks`) with the ladder buttons;
   a P1 or P2 also becomes a Facility ticket in the VESTA Kiosk; a camera snapshot travels with
   the message when the event names one.
 - P3 goes to the store with state `digest`; the reports skill picks it up at 07:00. P4 is logged only.
@@ -63,13 +64,17 @@ included (it is rewritten with the incident's number as soon as the desk knows i
 
 ## The chase ladder (every 5 minutes: `desk.py tick`)
 
-- 15 min without reply: one reminder to the FM with the buttons.
-- 45 min: escalation to the owner, incident assigned to the owner.
+Every timing and role below is a setting (rules.yaml, or the villa's own `villa.rules.yaml` / its helpers): when a
+person asks, read the value in force, never quote a number from here.
+
+- After `reask_minutes` (rules.yaml `behaviour`) without reply: one reminder to the role the chase asks
+  (`chase.asks`), with the buttons.
+- After `escalate_minutes`: escalation to `chase.escalates_to`, the incident assigned to them.
 - Only one chase may run: the agent's. Home Assistant's `vesta_task_actions` ignores these
   events (they never carry `task_text`).
-- Villa silent: no contact with Home Assistant for 30 min opens one P1 incident to both chats;
+- Villa silent: no contact with Home Assistant for `villa_silent_minutes` opens one P1 incident to both chats;
   the next contact closes it with a "back online" line.
-- Alert fatigue: a rule that fired 20 times in 30 days becomes a "retune" proposal in the
+- Alert fatigue: a rule that fired more than `alert_fatigue_per_month` times in 30 days becomes a "retune" proposal in the
   weekly report. Nothing is changed automatically.
 
 ## Answers

@@ -41,7 +41,21 @@ def test_a_rule_that_gave_up_is_said_once_in_the_desks_words(tmp_path):
     for m in (owner, out["ha_messages"][0]):
         assert "no longer tracked" not in m["text"] and "Repeat after" not in m["text"]   # Home Assistant's words: gone
         assert m["text"].count("Laundry door unlocked") == 1                              # its name once
-        assert m["status"] == "Still not fixed at {time} (will close itself once fixed or press Done)"
+        # owner, 2026-10-17 (#45): a still-there notice, sent where an escalation goes — never a second "Escalation sent";
+        # its line says its own time, so the words do not repeat it
+        assert m["status"] == "Still not fixed (will close itself once fixed or press Done)"
+        assert m["stage"] == "still", m
+    assert owner.get("keyboard") and [s["to"] for s in out["send"]] == ["owner"]
+
+
+def test_a_rule_alerting_again_while_open_is_a_still_there_alert_never_a_reminder(tmp_path):
+    # owner, 2026-10-17 (#45): "Reminder sent 11:38 to Owner & FM" — the load had moved to another phase and the
+    # villa's rule alerted again; a reminder is only the desk's own chase of the facility manager
+    store = Store(str(tmp_path / "s.sqlite"))
+    desk.intake(store, ev("opened", summary=ALERT), T0, mode_reader=lambda: "x")
+    out = desk.intake(store, ev("opened", summary=ALERT), T0 + timedelta(hours=2), mode_reader=lambda: "x")
+    assert out["decision"] == "repeat"
+    assert {m["stage"] for m in out["send"] + out["ha_messages"]} == {"still"}
 
 
 def test_home_assistants_all_clear_is_said_in_the_desks_words(tmp_path):

@@ -114,6 +114,10 @@ class Notices:
             roles = {pol.person(chat).role}
         return roles & set(ROLE_WORDS)
 
+    def roles_of(self, incident: int) -> set[str]:
+        """The roles incident `incident`'s notices went to so far, as its history recorded them."""
+        return {r for h in self.state.incident_history(incident) for r in self._roles(h)}
+
     def heading(self, chat: int, incident: int | None = None, to=None, stage: str | None = None,
                 also=None, title: str | None = None) -> str:
         """The heading of a notice to `chat` (about `incident`), as it stands before this notice is recorded — as facts
