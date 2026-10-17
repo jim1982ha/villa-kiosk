@@ -1,3 +1,11 @@
+## 2.496.407
+
+### Fixed
+- The light inside the villa no longer changes while you move the view. With many lights on (more than 32 lamps, an LED
+  strip counting as three), only the lamps nearest the camera lit the walls and furniture, so rooms brightened and
+  dimmed as you turned or zoomed. Every lamp that is on now always lights its room, from every view; when there are
+  many, lamps sitting close together in the same room share one light, with their brightness added together.
+
 ## 2.496.406
 
 ### Fixed

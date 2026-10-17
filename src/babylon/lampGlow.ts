@@ -45,7 +45,9 @@
 //  * the side of a surface that faces the viewer is the side that is lit, so
 //    a thin slab exported with a downward normal lights from above, and the
 //    far face of a wall stays dark from the next room;
-//  * at most LAMP_GLOW_MAX lamps — the nearest to the eye when more are on.
+//  * at most LAMP_GLOW_MAX lamps — when more are on, the nearest two on the
+//    same storey become one at their middle, their light summed (`fitLamps`),
+//    until they fit. Never chosen by the camera: see fitLamps.
 //
 // ⚠️ THE HOOK IS A LINE OF BABYLON'S SHADER, matched by regex. A Babylon
 // upgrade that rewrites it switches this off without an error, so
@@ -123,14 +125,10 @@ export class LampGlowState {
   count = 0;
   private key = "";
 
-  /** Write the lamps to show. More than fit: the nearest to `eye`. Returns
+  /** Write the lamps to show — more than fit are merged (fitLamps). Returns
    *  whether anything changed. Pure apart from the arrays it fills. */
-  set(lamps: readonly GlowLamp[], eye: { x: number; y: number; z: number }): boolean {
-    let chosen = lamps.filter((l) => l.amount > 0 && l.radius > 0);
-    if (chosen.length > LAMP_GLOW_MAX) {
-      const d = (l: GlowLamp) => (l.x - eye.x) ** 2 + (l.y - eye.y) ** 2 + (l.z - eye.z) ** 2;
-      chosen = chosen.slice().sort((a, b) => d(a) - d(b)).slice(0, LAMP_GLOW_MAX);
-    }
+  set(lamps: readonly GlowLamp[]): boolean {
+    const chosen = fitLamps(lamps.filter((l) => l.amount > 0 && l.radius > 0), LAMP_GLOW_MAX);
     let key = "";
     for (const l of chosen) key += `${l.x},${l.y},${l.z},${l.r},${l.g},${l.b},${l.amount},${l.radius},${l.floorY},${l.ceilingY};`;
     if (key === this.key) return false;
@@ -152,6 +150,51 @@ export class LampGlowState {
     this.count = 0;
     return () => { this.count = count; };
   }
+}
+
+/**
+ * The lamps that are on, in at most `max` — the same answer wherever the
+ * camera stands.
+ *
+ * ⚠️ NEVER BY THE CAMERA (owner's recording, 2026-10-17). More than 32 lamps
+ * were on (ten lights, 31 fixtures, each LED strip three pools) and the 32
+ * nearest to the eye were kept: as the view moved, lamps dropped in and out
+ * and the walls and furniture brightened and dimmed under a fixed set of
+ * lights. Now the two nearest lamps on the same storey (same room floor and
+ * floor above) become ONE at their amount-weighted middle with their light
+ * summed, until the rest fit — a strip's three pools and a room's ceiling
+ * spots first, which sit closest. What a surface a few metres away receives
+ * barely moves; nothing switches off. Only if no two share a storey do the
+ * nearest two of all merge (the lower floor and ceiling kept).
+ *
+ * Deterministic: the lamps are ordered by position first, so the same lamps in
+ * any order give the same answer.
+ */
+export function fitLamps(lamps: readonly GlowLamp[], max: number): GlowLamp[] {
+  const out = lamps.slice().sort((a, b) => a.x - b.x || a.y - b.y || a.z - b.z || a.amount - b.amount);
+  const d2 = (a: GlowLamp, b: GlowLamp) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2 + (a.z - b.z) ** 2;
+  const sameStorey = (a: GlowLamp, b: GlowLamp) => a.floorY === b.floorY && a.ceilingY === b.ceilingY;
+  while (out.length > max) {
+    let bi = -1, bj = -1, best = Infinity, bestSame = false;
+    for (let i = 0; i < out.length; i++) {
+      for (let j = i + 1; j < out.length; j++) {
+        const same = sameStorey(out[i], out[j]);
+        const d = d2(out[i], out[j]);
+        if ((same && !bestSame) || (same === bestSame && d < best)) { bi = i; bj = j; best = d; bestSame = same; }
+      }
+    }
+    const a = out[bi], b = out[bj];
+    const sum = a.amount + b.amount;
+    const w = (k: "x" | "y" | "z" | "r" | "g" | "b") => (a[k] * a.amount + b[k] * b.amount) / sum;
+    const merged: GlowLamp = {
+      x: w("x"), y: w("y"), z: w("z"), r: w("r"), g: w("g"), b: w("b"), amount: sum,
+      radius: Math.max(a.radius, b.radius) + Math.sqrt(best) / 2,
+      floorY: Math.min(a.floorY, b.floorY), ceilingY: Math.min(a.ceilingY, b.ceilingY),
+    };
+    out.splice(bj, 1);
+    out[bi] = merged;
+  }
+  return out;
 }
 
 const states = new WeakMap<Scene, LampGlowState>();
