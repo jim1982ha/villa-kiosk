@@ -1,3 +1,12 @@
+## 0.12.233
+
+What you will see:
+- When you change an alert rule's limit or priority while one of its alerts is open (as with the mains overload at
+  6200 W today), the open alert is judged by the new setting from then on. If the new limit is not crossed, it closes
+  by itself about 10 minutes later with a closing note; before, it stayed open against the old limit, and a Done
+  would have reopened it. Nothing is sent when the rule is saved. This needs the updated alert rule template in the
+  villa's system (done together with this update).
+
 ## 0.12.232
 
 What you will see on an alert card:
