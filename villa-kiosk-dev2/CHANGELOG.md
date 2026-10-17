@@ -1,3 +1,20 @@
+## 2.496.406
+
+### Fixed
+- The villa's north direction and location are saved once for the whole villa: a new phone or tablet shows the sun on
+  the right side straight away. Each browser used to keep its own north, so one that had never been set drew the sun
+  on the wrong side of the house.
+- Changing the north setting moves the sun immediately; it used to need a reload.
+
+## 2.496.405
+
+### Fixed
+- The Cockpit never lists the same problem twice on a card. When several records say exactly the same thing, they show
+  as one line with a count, for example "#49 · One mains phase lost (6 times)", and the card's Close or Open Ticket
+  acts on all of them.
+- A fault about a rule that watches several devices at once (the three mains phases) is shown on its device, in its
+  room. It was titled "… Phase A Voltage,sensor" and filed under "Other".
+
 ## 2.496.404
 
 ### Fixed
