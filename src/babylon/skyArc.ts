@@ -1,23 +1,17 @@
 // src/babylon/skyArc.ts
-// Putting a sky body (the sun's disc, the moon) on the overview's arc round
-// the villa, through the camera — the Babylon half of skyBodies.ts, shared by
-// SkyDome and NightSky so both follow ONE rule in the same frame.
-//
-// The point comes from skyBodies.arcPoint (no camera). The camera then only
-// decides whether it is shown (behindFade) and, when the point is off screen,
-// where it waits: at the edge on its true side, at the point's own depth, so
-// the house still hides it where they meet (holdOnScreen) — except at the TOP
-// edge when its point is on the viewer's side, above them (nearSideHold).
+// The Babylon half of skyBodies.ts, shared by SkyDome (the sun) and NightSky
+// (the moon): the camera read as numbers for skyBodies.placeBodies (viewOf),
+// and a body's disc and glow painted where it says (drawOnArc).
 
 import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { Constants } from "@babylonjs/core/Engines/constants";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
-import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector";
+import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import type { Scene } from "@babylonjs/core/scene";
-import { behindFade, drawnDepth, GLOW_SPANS, holdOnScreen, nearSideHold, type VillaBox, type Vec3 } from "./skyBodies";
+import { GLOW_SPANS, type SkyView, type VillaBox } from "./skyBodies";
 
 /** A soft additive light round a body, so the sky is brightest on its side.
  *  Procedural (no image: the wall may have no internet). */
@@ -63,61 +57,24 @@ export function disposeGlow(g: Glow): void {
 }
 
 const FWD = new Vector3(0, 0, 1);
-const fwd = new Vector3();
 
-/**
- * Show `point` (skyBodies.arcPoint's `at`) for the active camera: how opaque
- * the body is from the viewer's side (0 when really behind), where it shows on
- * screen — the point, or, when that is off screen, the screen edge on its side
- * — and where it is drawn in the world: on that line of sight, never nearer
- * than just beyond the villa, with the scale its size takes there
- * (skyBodies.drawnDepth). Null when there is no camera or the point is behind
- * it. `hideOnViewersSide` false (the moon) skips behindFade: the night hours
- * go round under the villa, so a set moon on the viewer's side is shown low
- * on screen (owner's 24-hour drawing, 2026-10-17); only a point behind the
- * camera and below the eye is not seen.
- */
-export function showOnArc(scene: Scene, point: Vec3, side: { x: number; z: number }, alt: number, villa: VillaBox,
-  hideOnViewersSide = true):
-  { at: Vector3; scale: number; alpha: number; screen: { x: number; y: number }; held: boolean } | null {
+/** The active camera as skyBodies.placeBodies takes it; null without one. */
+export function viewOf(scene: Scene): SkyView | null {
   const cam = scene.activeCamera;
   if (!cam) return null;
-  cam.getDirectionToRef(FWD, fwd);
+  const forward = new Vector3();
+  cam.getDirectionToRef(FWD, forward);
   const eng = scene.getEngine();
-  const vp = cam.viewport.toGlobal(eng.getRenderWidth(), eng.getRenderHeight());
-  const view = cam.getViewMatrix(), proj = cam.getProjectionMatrix();
-  const p = new Vector3(point.x, point.y, point.z);
-  let s = Vector3.Project(p, Matrix.Identity(), view.multiply(proj), vp);
-  if (!(s.z > 0 && s.z < 1)) {
-    // Behind the camera's plane — zoomed in close under a high sun, the point
-    // is above and behind the eye. Its projection lands mirrored, so the side
-    // it is on is read in the camera's own frame instead, and it waits at the
-    // screen edge there (holdOnScreen) rather than vanishing.
-    // Only a body ABOVE the eye waits (at the top or a side): one below and
-    // behind it would wait along the bottom, over the ground in front of the
-    // house, so it is simply not seen.
-    const v = Vector3.TransformCoordinates(p, view);
-    const l = Math.hypot(v.x, v.y);
-    if (l < 1e-9 || !(v.y > 0)) return null;
-    const far = 4 * Math.max(vp.width, vp.height);
-    s = new Vector3(vp.x + vp.width / 2 + (v.x / l) * far, vp.y + vp.height / 2 - (v.y / l) * far, 0.5);
-  }
-  const h = holdOnScreen(s.x - vp.x, s.y - vp.y, vp.width, vp.height);
-  const above = Math.max(0, (h.y - (s.y - vp.y)) / vp.height);
-  const alpha = (hideOnViewersSide ? behindFade(side, alt, fwd) : 1) * nearSideHold(point, villa, fwd, above);
-  const onSight = h.held
-    ? Vector3.Unproject(new Vector3(h.x, h.y, s.z), vp.width, vp.height, Matrix.Identity(), view, proj)   // viewport-relative pixels
-    : p;
-  const eye = cam.globalPosition;
-  const d = drawnDepth(Vector3.Distance(eye, p),
-    Vector3.Distance(eye, new Vector3(villa.cx, villa.ground, villa.cz)), villa.span);
-  const at = eye.add(onSight.subtract(eye).normalize().scale(d.depth));
-  return { at, scale: d.scale, alpha, screen: { x: h.x / vp.width, y: h.y / vp.height }, held: h.held };
+  return {
+    eye: cam.globalPosition, forward,
+    view: cam.getViewMatrix(), projection: cam.getProjectionMatrix(),
+    viewport: cam.viewport.toGlobal(eng.getRenderWidth(), eng.getRenderHeight()),
+  };
 }
 
-/** Put a body's disc and glow where showOnArc says, sized from the villa and
- *  scaled for its drawn depth. `plane` is the disc mesh's own size (the plane
- *  it was built with). */
+/** Put a body's disc and glow where placeBodies says, sized from the villa
+ *  and scaled for its drawn depth. `plane` is the disc mesh's own size (the
+ *  plane it was built with). */
 export function drawOnArc(disc: Mesh, glow: Glow, shown: { at: Vector3; scale: number }, villa: VillaBox, plane: number,
   spans: number, alpha: number, glowPeak: number): void {
   disc.infiniteDistance = false;

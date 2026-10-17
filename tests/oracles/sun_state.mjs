@@ -55,9 +55,9 @@ ck("night is warm: the fill's red exceeds its blue", (() => { const h = sunLight
 
 // ── the callers ──
 const src = (f) => readFileSync(new URL(`../../src/babylon/${f}`, import.meta.url), "utf8");
-const sun = src("SunController.ts"), look = src("sceneLook.ts");
-ck("SunController reads sunGeometry and sunLights, and keeps no lerp of its own",
-   /sunGeometry\(altitude, azimuth\)/.test(sun) && /sunLights\(isDay, r\)/.test(sun) && !/const lerp =/.test(sun) && !/TWILIGHT/.test(sun));
+const sun = src("SunController.ts"), moment = src("skyMoment.ts"), look = src("sceneLook.ts");
+ck("skyMoment reads sunGeometry, SunController reads sunLights, and neither keeps a lerp of its own",
+   /sunGeometry\(altitude, azimuth\)/.test(moment) && /sunLights\(isDay, r\)/.test(sun) && ![sun, moment].some((s) => /const lerp =/.test(s) || /TWILIGHT/.test(s)));
 ck("sceneLook's exposure and IBL night use the same nightLerp", /nightLerp\(i\.isDay \? 0 : i\.nightDimming\)/.test(look) && !/Math\.min\(1, Math\.max\(0, i\.nightDimming\)\)/.test(look));
 
 done("✅ the sun and the night, one rule");

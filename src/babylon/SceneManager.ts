@@ -409,10 +409,10 @@ export class SceneManager {
     // from date/lat/lng — an install without HA's opt-in Moon integration gets
     // exactly the same night sky, which is the requirement.
     this.nightSky = new NightSky(this.scene);
-    this.sun.setNightSky(this.nightSky);
-    // Sun and moon follow the horizon drop (and fade with the tilt), so a view
-    // change re-places both — through ONE owner (SkyDome), because two would
-    // race for ordering and leave the moon behind the sun.
+    // Sun and moon follow the hour, the horizon drop and the view, so every
+    // change re-places both — through ONE owner (SkyDome, from the one moment
+    // SunController hands it), because two would race for ordering and leave
+    // the moon behind the sun.
     this.sky.setMoon(this.nightSky);
 
     this.visuals = new EntityVisuals(this.scene, opts.config, this.frames, this.walker);
