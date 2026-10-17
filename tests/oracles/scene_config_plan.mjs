@@ -25,8 +25,16 @@ ck("a new entity re-fits the rooms; a handful at once also moves the walker",
    && !plan({ entityMap: { ...base.entityMap, "lock.b": { entityId: "lock.b", type: "lock", label: "B" } } }).reteleport
    && plan({ entityMap: { ...base.entityMap, ...Object.fromEntries(Array.from({ length: RETELEPORT_ENTITY_DELTA }, (_, i) => [`lock.x${i}`, { entityId: `lock.x${i}`, type: "lock", label: "x" }])) } }).reteleport);
 ck("a re-uploaded plan (.sh3d) re-fits the rooms", plan({ sh3dRooms: [{ name: "New", pts: [] }] }).recalibrate);
-ck("the render look or the location re-runs the lighting, nothing else",
-   (() => { const p = plan({ latitude: 1 }); return p.render && !p.structural && !p.roomPoints; })() && plan({ render: { ...base.render } }).render);
+ck("the location re-places the sky, nothing else",
+   (() => { const p = plan({ latitude: 1 }); return p.sky && !p.render && !p.structural && !p.roomPoints; })());
+// ⚠️ owner, 2026-10-17: setting the north offset left the sun where it was until
+// the page was reloaded — north was not among the sky's inputs.
+ck("which way north lies re-places the sun and moon at once, and re-renders nothing else",
+   (() => { const p = plan({ northOffsetDeg: base.northOffsetDeg + 90 }); return p.sky && !p.render && !p.structural && !p.roomPoints; })());
+ck("the location re-places the sky too; the render look re-renders AND re-places it",
+   plan({ longitude: 1 }).sky && plan({ render: { ...base.render } }).sky && plan({ render: { ...base.render } }).render);
+ck("SceneManager re-places the sky on the plan's word",
+   /if \(plan\.sky\) this\.sun\.updateConfig\(config\);/.test(readFileSync(new URL("../../src/babylon/SceneManager.ts", import.meta.url), "utf8")));
 ck("the eye height rebuilds the point-rooms (they are stored at eye level)", plan({ eyeHeight: base.eyeHeight + 0.1 }).roomPoints);
 ck("a hidden category or the highlight switch re-outlines only",
    (() => { const p = plan({ hiddenCategories: ["light"] }); return p.highlight && !p.structural; })() && plan({ highlightInteractive: !base.highlightInteractive }).highlight);

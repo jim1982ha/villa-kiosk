@@ -17,8 +17,13 @@ import type { AppConfig } from "@/config/AppConfig";
 import { entityMapDelta, sliceChanged, type EntityMapDelta } from "./entityMapDiff";
 
 export interface SceneConfigPlan {
-  /** Tone mapping, SSAO, IBL, and the sun's lights (render look or location). */
+  /** Tone mapping, SSAO and IBL (the render look). */
   render: boolean;
+  /** The sun's lights, the sky, the sun's disc and the moon are placed again:
+   *  the render look, the villa's location, or which way north lies on the
+   *  model. ⚠️ NORTH WAS MISSING (owner, 2026-10-17): setting the north offset
+   *  left the sun where it was until the page was reloaded. */
+  sky: boolean;
   /** How the device list (entityMap) changed — decided ONCE, here, and handed
    *  to EntityVisuals.updateConfig, which rebuilds the badges on any change.
    *  ⚠️ IT DECIDED THIS A SECOND TIME, with its own diff, and SceneManager
@@ -49,7 +54,9 @@ export function sceneConfigPlan(prev: AppConfig, next: AppConfig): SceneConfigPl
   // device-config sync hands back a freshly JSON-parsed copy on every focus
   // pull, never `===`, and a reference check bought a multi-second rebuild
   // for a config that did not change.
-  const render = prev.render !== next.render || prev.latitude !== next.latitude || prev.longitude !== next.longitude;
+  const render = prev.render !== next.render;
+  const sky = render || prev.latitude !== next.latitude || prev.longitude !== next.longitude
+    || prev.northOffsetDeg !== next.northOffsetDeg;
   // A re-uploaded central .sh3d lands asynchronously (BabylonCanvas's central
   // SH3D refresh) and must re-run the room fit; readRoomData returns fresh
   // arrays every open, so by content.
@@ -66,6 +73,7 @@ export function sceneConfigPlan(prev: AppConfig, next: AppConfig): SceneConfigPl
   const recalibrate = structural && (sh3d || entityDelta > 0);
   return {
     render,
+    sky,
     entityMap: mapDelta,
     // teleportPoints by content (the fourth shared key to need it); eyeHeight
     // because the point-rooms READ it (a point stores the eye, the floor is

@@ -1,3 +1,11 @@
+## 2.496.406
+
+### Fixed
+- The villa's north direction and location are saved once for the whole villa: a new phone or tablet shows the sun on
+  the right side straight away. Each browser used to keep its own north, so one that had never been set drew the sun
+  on the wrong side of the house.
+- Changing the north setting moves the sun immediately; it used to need a reload.
+
 ## 2.496.405
 
 ### Fixed

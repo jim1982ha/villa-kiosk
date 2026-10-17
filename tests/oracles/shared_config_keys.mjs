@@ -19,6 +19,9 @@ const sample = {
   teleportPoints: [{ name: "Kitchen", position: [0, 0, 0] }, { name: "Patio", position: [1, 0, 1] }],
   dismissedEntityIds: ["sensor.x", "sensor.y"],
   fmContract: { monthlyCap: 1000, warnAtPercent: 0 },
+  latitude: -8.5,
+  longitude: 115.2,
+  northOffsetDeg: 117,
 };
 const edit = {
   entityMap: (v, n) => ({ ...v, [`light.n${n}`]: { type: "light", label: `N${n}` } }),
@@ -27,10 +30,13 @@ const edit = {
   teleportPoints: (v, n) => [...v, { name: `Room ${n}`, position: [n, 0, 0] }],
   dismissedEntityIds: (v, n) => [...v, `sensor.n${n}`],
   fmContract: (v, n) => ({ ...v, monthlyCap: 1000 + n }),
+  latitude: (v, n) => v + n,
+  longitude: (v, n) => v + n,
+  northOffsetDeg: (v, n) => v + n,
 };
 // Keys holding ONE value rather than a collection: a change replaces it whole,
 // so two devices' edits cannot both survive — the later one wins.
-const SINGLE = new Set(["fmContract"]);
+const SINGLE = new Set(["fmContract", "latitude", "longitude", "northOffsetDeg"]);
 const base = Object.fromEntries(KEYS.map((k) => [k, sample[k]]));
 const J = JSON.stringify;
 
@@ -42,7 +48,7 @@ console.log("\n  reading what the server holds:");
   const parsed = dc.parseSharedConfig({ ...base, fromANewerVersion: 1 });
   ck("every shared key is read back as stored", KEYS.every((k) => J(parsed[k]) === J(base[k])));
   ck("a key this version does not know is dropped", !("fromANewerVersion" in parsed));
-  const wrong = dc.parseSharedConfig({ entityMap: [], meshBindings: "x", deviceGroups: {}, teleportPoints: 3, dismissedEntityIds: "a", fmContract: 5 });
+  const wrong = dc.parseSharedConfig({ entityMap: [], meshBindings: "x", deviceGroups: {}, teleportPoints: 3, dismissedEntityIds: "a", fmContract: 5, latitude: "x", longitude: null, northOffsetDeg: NaN });
   ck("a wrong-shaped value is left out, so the device keeps its own", Object.keys(wrong).length === 0, J(wrong));
   ck("a dismissed list keeps only its ids", J(dc.parseSharedConfig({ dismissedEntityIds: ["a", 3, null, "b"] }).dismissedEntityIds) === J(["a", "b"]));
   ck("nothing usable reads as nothing", J(dc.parseSharedConfig(null)) === "{}" && J(dc.parseSharedConfig([1])) === "{}");
@@ -93,6 +99,23 @@ console.log("\n  the baseline when the server holds nothing:");
   ck("built in the same key order as the push (the gate compares JSON strings)",
      J(Object.keys(empty)) === J(KEYS));
   ck("a key the server holds is taken as held", J(dc.baselineFromServer({ meshBindings: { m: "x" } }).meshBindings) === J({ m: "x" }));
+}
+
+console.log("\n  where the villa is and which way north lies — shared, never a device's own:");
+{
+  // owner, 2026-10-17: the main app's browser drew the sun on the wrong side of
+  // the house — the north offset lived in each browser, and that one had never
+  // been told. The villa's three numbers are shared keys now.
+  const NUMBERS = ["latitude", "longitude", "northOffsetDeg"];
+  ck("the villa's location and north are shared keys", NUMBERS.every((k) => KEYS.includes(k)), KEYS.join());
+  const nothing = dc.baselineFromServer({});
+  ck("their empty is 0, the app's own \"not set\" — never a villa's number", NUMBERS.every((k) => nothing[k] === 0), J(nothing));
+  const onDefault = { ...nothing };
+  ck("a device still on the default proposes nothing", dc.isSharedConfigDiffEmpty(dc.diffSharedConfig(nothing, onDefault)));
+  const tuned = { ...nothing, northOffsetDeg: 117 };
+  ck("a device holding a north the villa has never stored proposes it, as an edit would",
+     J(dc.describeSharedConfigDiff(dc.diffSharedConfig(nothing, tuned))) === J({ northOffsetDeg: 1 })
+     && dc.applySharedConfigDiff(nothing, dc.diffSharedConfig(nothing, tuned)).northOffsetDeg === 117);
 }
 
 done("✅ every shared key is read, diffed, replayed and baselined from its one row");
