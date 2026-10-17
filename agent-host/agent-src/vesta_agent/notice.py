@@ -8,8 +8,7 @@ and the one heading every such message carries (owner, 2026-10-11, the order and
     Status:
     - Alert sent 09/10/2026 13:12 to Owner & FM                   ← a quote, in italics
     - Closing note sent 09/10/2026 13:20 to Owner & FM
-    — Came back 09/10/2026 15:02 (2nd time in 7 days) —            ← a new run of the same alert starts here
-    - Came-back alert sent 09/10/2026 15:02 to Owner & FM
+    - Back at 09/10/2026 15:02 (2nd time in 7 days), alert sent to Owner & FM   ← a new run of the same alert
     ⚠️ ⚙️ Reminder sent 09/10/2026 15:17 to FM — No answer after 15 min    ← this step: what, when, to whom, why
 
 A message about no incident is headed the same way, by its title (owner, 2026-10-12: one layout):
@@ -93,8 +92,8 @@ class Notices:
     def __init__(self, state, policy: Callable, timezone_name: str, severity: Callable[[int], str | None] | None = None,
                  closed: Callable[[int], bool] | None = None, runs: Callable[[int], int | None] | None = None):
         self.state, self.policy, self.tz = state, policy, timezone_name
-        # how many times an incident alerted in AGAIN_DAYS, as its skill stored it (problems.incident_runs): a came-back
-        # step's divider says it ("— Came back … (2nd time in 7 days) —")
+        # how many times an incident alerted in AGAIN_DAYS, as its skill stored it (problems.incident_runs): a "back"
+        # step's line says it ("- Back at … (2nd time in 7 days), alert sent to …")
         self.runs = runs or (lambda _iid: None)
         # an incident's priority (P1…P4) as its skill stored it: "P2 Incident: New #18" (owner, 2026-10-10)
         self.severity = severity or (lambda _iid: None)
@@ -143,21 +142,23 @@ class Notices:
         word = self.word(int(incident), stage, bool(history))
         lines = []
         for h in history:
-            if h.get("stage") == "back":
-                # ⚠️ ONE RUN, THEN THE NEXT (owner, 2026-10-16, #43): a closing note, then a came-back alert, then a
-                # reminder — two runs of the alert read as one story with nothing between them
-                lines.append(self.divider(h))
+            # ⚠️ ONE RUN, THEN THE NEXT (owner, 2026-10-16, #43): a second run starts at its "- Back at …" line, which
+            # says how many times it came (message_format.STEPS: one line, the shape of every other step)
             lines.append(f"- … {h['dropped']} earlier notice{'s' if h['dropped'] > 1 else ''}" if h.get("dropped") else
                          f"- {h['note']}" if h.get("note") else
                          f"- {self._pressed(h)} {when(datetime.fromisoformat(h['at']), self.tz)}" if h.get("stage") == PRESSED_STAGE else
-                         f"- {self.step(h.get('stage'), self._roles(h), datetime.fromisoformat(h['at']))}")
+                         f"- {self.step(h.get('stage'), self._roles(h), datetime.fromisoformat(h['at']), h.get('run'))}")
         return layout.head(f"{incident_tag(incident)}{f'-{p}' if p else ''}", who, lines, word)
 
-    def step(self, stage: str | None, roles, at: datetime) -> str:
-        """A step as a card's "Status:" says it — what was sent, when, to whom: "Reminder sent 16/10/2026 18:20 to FM".
-        The ONE wording of a step, in its history line and on its own bottom line (`bottom`)."""
-        sent = STEPS[stage].sent if stage in STEPS else "Sent"
-        return f"{sent} {when(at, self.tz)} to {audience(roles, short=True) or 'nobody'}"
+    def step(self, stage: str | None, roles, at: datetime, run: int | None = None) -> str:
+        """A step as a card's "Status:" says it — what was sent, when, to whom: "Reminder sent 16/10/2026 18:20 to FM",
+        "Back at 16/10/2026 18:03 (2nd time in 7 days), alert sent to FM" (`run`: the how-many-th time; an older record
+        has none). The ONE wording of a step, in its history line and on its own bottom line (`bottom`)."""
+        s = STEPS.get(stage or "")
+        times = f" ({_ordinal(run)} time in {AGAIN_DAYS} days)" if isinstance(run, int) and run > 1 else ""
+        return (s.line if s else "{sent} {at} to {who}").format(
+            sent=s.sent if s else "Sent", at=when(at, self.tz), times=times,
+            who=audience(roles, short=True) or "nobody")
 
     def bottom(self, stage: str | None, roles, status: str, at: datetime | None = None) -> str:
         """The bottom line of a notice of `stage` sent now to `roles`: a timed step (message_format.STEPS) says itself
@@ -166,12 +167,6 @@ class Notices:
             return status
         line = self.step(stage, roles, at or datetime.now(timezone.utc))
         return f"{line}{STEP_SEP}{status}" if status else line
-
-    def divider(self, h: dict) -> str:
-        """The line a came-back step's run starts under: "— Came back 16/10/2026 18:03 (2nd time in 7 days) —"."""
-        run = h.get("run")
-        times = f" ({_ordinal(run)} time in {AGAIN_DAYS} days)" if isinstance(run, int) and run > 1 else ""
-        return f"— Came back {when(datetime.fromisoformat(h['at']), self.tz)}{times} —"
 
     @staticmethod
     def _pressed(h: dict) -> str:
@@ -235,7 +230,7 @@ class Notices:
         if line["stage"] == "back":
             try:
                 run = self.runs(int(incident))
-            except Exception:  # noqa: BLE001 — the divider is drawn without its count, never not at all
+            except Exception:  # noqa: BLE001 — the line is written without its count, never not at all
                 run = None
             if isinstance(run, int):
                 line["run"] = run

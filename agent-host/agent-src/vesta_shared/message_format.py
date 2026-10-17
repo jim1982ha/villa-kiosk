@@ -78,7 +78,10 @@ class Step(NamedTuple):
     sent: str               # its history line: "Reminder sent 16/10/2026 18:20 to FM"
     title: str              # the card's title word while it is the latest step ("new", "existing", "closed")
     timed: bool             # its bottom line says what, when and to whom before the desk's words
-    noted: bool             # the fault's card in the Kiosk tells it too (a "noted" step)
+    noted: bool             # the fault's card in the Kiosk tells it too (a "noted" step): "{sent} to {who}"
+    #: its history line and bottom line: {sent}, {at} (the villa's time), {times} (" (2nd time in 7 days)", or "")
+    #: and {who} (the roles, short)
+    line: str = "{sent} {at} to {who}"
 
 
 #: EVERY STEP OF AN ALERT, ONE LINE EACH (architecture review, 2026-10-17: a step was named in five tables — the
@@ -86,6 +89,10 @@ class Step(NamedTuple):
 #: meant editing them all; "Reminder: no answer" once sat beside a reminder its history never showed).
 #: ⚠️ A QUIET EDIT CARRIES ITS OWN TIME (owner, 2026-10-16, #43): `timed` steps say their own moment on their bottom
 #: line — the group's copy of a came-back alert, edited without a sound, read as if the reminder had happened then.
+#: ⚠️ "BACK AT" IS ONE LINE LIKE THE OTHERS (owner, 2026-10-17, #51/#52): a second run started under its own
+#: "— Came back 17/10/2026 19:44 (2nd time in 7 days) —", the next line "- Came-back alert sent 17/10/2026 19:44 …" —
+#: two shapes and two words for one moment. It is now "- Back at 17/10/2026 19:44 (2nd time in 7 days), alert sent
+#: to Owner & FM"; the words "came back" / "came-back" are never written.
 #: The Kiosk's card tells what chased, escalated or brought an alert back — never the first alert (the fault itself)
 #: nor the closing (its close step says it).
 STEPS: dict[str, Step] = {
@@ -93,7 +100,8 @@ STEPS: dict[str, Step] = {
     "reminder": Step("Reminder sent", "existing", timed=True, noted=True),
     "escalated": Step("Escalation sent", "existing", timed=True, noted=True),
     "update": Step("Update sent", "existing", timed=False, noted=False),
-    "back": Step("Came-back alert sent", "existing", timed=True, noted=True),
+    "back": Step("Back: alert sent", "existing", timed=True, noted=True,
+                 line="Back at {at}{times}, alert sent to {who}"),
     "still": Step("Still-there alert sent", "existing", timed=True, noted=True),
     "reopened": Step("Reopen request sent", "existing", timed=True, noted=True),
     "closed": Step("Closing note sent", "closed", timed=False, noted=False),

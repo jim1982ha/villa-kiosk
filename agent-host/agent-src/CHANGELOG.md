@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.229 (17 October 2026)
+
+Owner, #51/#52 (the "— Came back … —" divider looked unlike every other step, and said "came back" twice):
+- message_format.Step gains `line` (default "{sent} {at} to {who}"); "back" is "Back at {at}{times}, alert sent to
+  {who}", its Kiosk note "Back: alert sent to …". Notices.step takes the run count; Notices.divider is gone.
+
 ## 0.6.228 (17 October 2026)
 
 Owner, #48–#50 (six "#49 · One mains phase lost" lines in the Cockpit):

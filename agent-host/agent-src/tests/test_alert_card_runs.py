@@ -5,7 +5,7 @@ The six points of the owner's page, as checked here:
 1. a step's bottom line says what was sent, when and to whom — a quiet edit of the group's copy never reads as if it
    happened at that message's own time — and the step is not then told twice;
 2. the rule's all-clear and the closing note to the facility manager are ONE line;
-3. a new run of the alert starts under a divider line;
+3. a new run of the alert starts at its own "- Back at …" line, shaped like every other step;
 4. "To:" counts the rule's own chat from the first message — REVERSED by the owner on 2026-10-17: "To:" follows the
    priority (the roles it reaches, then whoever a later step went to), whatever chat the rule posts in;
 A. the roles read "FM" in every line of an alert card's "Status:" and its "To:".
@@ -107,14 +107,14 @@ def test_the_rules_all_clear_and_the_closing_note_are_one_line(agent):
     assert not any("Update sent" in ln for ln in hist)
 
 
-def test_a_run_that_came_back_starts_under_a_divider_and_a_reminder_carries_its_own_time(agent):
+def test_a_run_that_came_back_starts_at_a_back_at_line_and_a_reminder_carries_its_own_time(agent):
     rule(agent, "opened", 1, 500)
     rule(agent, "resolved", 1, 501)
     rule(agent, "opened", 2, 502)                       # back within the reopen window: the same #1
     assert set(agent.thread.shown(1)) == {GROUP, FM_CHAT}
     back = card(agent, GROUP)
     assert back.startswith("#1-P2 (existing)\nTo: FM\n")
-    assert re.fullmatch(rf"Came-back alert sent {T} to FM — Back again: 2 times in 7 days",
+    assert re.fullmatch(rf"Back at {T}, alert sent to FM — Back again: 2 times in 7 days",
                         status(back).removeprefix("⚠️ ⚙️ ")), status(back)
     tick(agent, 20)                                     # the reminder: to the FM; the group's copy edited quietly
     group = card(agent, GROUP)
@@ -124,9 +124,11 @@ def test_a_run_that_came_back_starts_under_a_divider_and_a_reminder_carries_its_
     lines = status_lines(group)
     # ... and is told once: the history above it stops before it (drawn as it stood before this step)
     assert sum("Reminder sent" in ln for ln in lines) == 1, lines
-    # point 3: the second run under its divider; A: "FM", never "Facility Manager"
-    assert re.fullmatch(rf"— Came back {T} \(2nd time in 7 days\) —", lines[2]), lines
-    assert lines[1].startswith("- Closing note sent") and lines[3].startswith("- Came-back alert sent"), lines
+    # point 3: the second run starts at its own "- Back at" line, shaped like every other step (owner, 2026-10-17,
+    # #51: "— Came back … —" then "- Came-back alert sent …" were two shapes for one moment); A: "FM", never "Facility Manager"
+    assert re.fullmatch(rf"- Back at {T} \(2nd time in 7 days\), alert sent to FM", lines[2]), lines
+    assert lines[1].startswith("- Closing note sent") and lines[3].startswith("⚠️ ⚙️ Reminder sent"), lines
+    assert not any("ame back" in ln or "ame-back" in ln or ln.startswith("—") for ln in lines), lines
     assert "Facility Manager" not in group and "facility manager" not in group
     tick(agent, 50)                                     # the escalation: the reminder joins the history, once
     esc = card(agent, GROUP)
@@ -136,12 +138,14 @@ def test_a_run_that_came_back_starts_under_a_divider_and_a_reminder_carries_its_
     assert sum("Reminder sent" in ln for ln in lines) == 1
 
 
-def test_the_divider_counts_the_runs_and_an_older_record_has_none():
+def test_the_back_line_counts_the_runs_and_an_older_record_has_none():
+    from datetime import datetime
     from vesta_agent.notice import Notices, _ordinal
     n = Notices(None, lambda: None, "UTC")
-    at = "2026-10-16T18:03:00+00:00"
-    assert n.divider({"at": at, "stage": "back", "run": 3}) == "— Came back 16/10/2026 18:03 (3rd time in 7 days) —"
-    assert n.divider({"at": at, "stage": "back"}) == "— Came back 16/10/2026 18:03 —"
+    at = datetime.fromisoformat("2026-10-16T18:03:00+00:00")
+    assert n.step("back", {"fm"}, at, 3) == "Back at 16/10/2026 18:03 (3rd time in 7 days), alert sent to FM"
+    assert n.step("back", {"fm"}, at) == "Back at 16/10/2026 18:03, alert sent to FM"
+    assert n.step("reminder", {"fm"}, at, 3) == "Reminder sent 16/10/2026 18:03 to FM"
     assert [_ordinal(k) for k in (1, 2, 3, 4, 11, 12, 13, 21, 22, 101)] == \
         ["1st", "2nd", "3rd", "4th", "11th", "12th", "13th", "21st", "22nd", "101st"]
 
@@ -181,7 +185,8 @@ def test_every_step_is_one_line_of_the_step_table_and_said_the_same_everywhere()
         assert stage in STAGES and message("fm", "x", incident=7, stage=stage)["stage"] == stage
         assert head_text(n.heading(-1, 7, to="fm", stage=stage)).split("\n")[0] == f"#7 ({step.title})"
         n.record(7, stage, [(-1, "fm")], at)
-        assert head_text(n.heading(-1, 7, to="fm")).split("\n")[-1] == f"- {step.sent} 16/10/2026 18:20 to FM", stage
+        line = step.line.format(sent=step.sent, at="16/10/2026 18:20", times="", who="FM")
+        assert head_text(n.heading(-1, 7, to="fm")).split("\n")[-1] == f"- {line}", stage
         said = n.bottom(stage, {"fm"}, "why", at)
-        assert said == (f"{step.sent} 16/10/2026 18:20 to FM — why" if step.timed else "why"), stage
+        assert said == (f"{line} — why" if step.timed else "why"), stage
         assert [s["note"] for s in n.story(7)] == ([f"{step.sent} to Facility Manager"] if step.noted else []), stage

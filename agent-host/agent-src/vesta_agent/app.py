@@ -212,7 +212,7 @@ class Vesta:
         return bool((Store(self.s.store_path).incident(int(iid)) or {}).get("closed_at"))
 
     def _runs(self, iid: int) -> int | None:
-        """How many times an incident alerted in the last days, as the store holds it (a came-back step's divider)."""
+        """How many times an incident alerted in the last days, as the store holds it (a "Back at …" step says it)."""
         from vesta_shared.problems import incident_runs
         from vesta_shared.store import Store
         inc = Store(self.s.store_path).incident(int(iid))

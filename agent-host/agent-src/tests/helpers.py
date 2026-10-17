@@ -149,8 +149,7 @@ def status(text: str) -> str:
     label = f"\n\n{STATUS}:\n"
     probe = "\n\n" + text if text.startswith(f"{STATUS}:\n") else text
     lines = probe.rsplit(label, 1)[1].split("\n") if label in probe else []
-    # a came-back run's divider ("— Came back … —", notice.Notices.divider) is history too
-    while lines and (lines[0].startswith(("- ", "— ")) or not lines[0].strip()):
+    while lines and (lines[0].startswith("- ") or not lines[0].strip()):
         lines.pop(0)
     last = "\n".join(lines)
     # the icon in front (layout.stage_line) is the stage again — pinned by test_one_saying, set aside here; a bottom

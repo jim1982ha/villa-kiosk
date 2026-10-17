@@ -1,3 +1,12 @@
+## 0.12.238
+
+What you will see on Telegram:
+- When an alert comes back, its "Status:" shows one line in the same shape as the others:
+  "- Back at 17/10/2026 19:44 (2nd time in 7 days), alert sent to Owner & FM". Before, it showed two lines: a
+  "— Came back … —" line between dashes and a "- Came-back alert sent …" line, both with the same time. Messages
+  sent before this update keep their old wording until their next step.
+- The Kiosk fault's last line says "Back: alert sent to …".
+
 ## 0.12.237
 
 What you will see in the Cockpit:
