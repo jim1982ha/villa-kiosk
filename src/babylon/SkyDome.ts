@@ -5,7 +5,7 @@
 // villa's latitude/longitude and the time of day: blue by day, warm at dusk, deep
 // blue at night. No texture assets required (SweetHome's sky never exports to GLB).
 
-import { liftFor, placeBodies, sunWarmth, SUN_SPANS, villaBox, type BodiesNow, type OnArc, type Vec3, type VillaBox } from "./skyBodies";
+import { placeBodies, sunWarmth, SUN_SPANS, villaBox, type BodiesNow, type OnArc, type Vec3, type VillaBox } from "./skyBodies";
 import { disposeGlow, drawOnArc, makeGlow, viewOf, type Glow } from "./skyArc";
 import type { MoonNow, SkyMoment } from "./skyMoment";
 import type { NightSky } from "./NightSky";
@@ -113,7 +113,7 @@ export class SkyDome {
     // the other: `mat.sunPosition` keeps the TRUE direction, so the sky's
     // colour, gradient and twilight are physically honest, and the disc is a
     // separate billboard on the overview's arc round the villa
-    // (skyBodies.arcPoint) — exactly how NightSky draws the moon.
+    // (skyBodies.placeBodies, which places the moon in the same call).
     this.sunTex = new DynamicTexture(
       "sunTex", { width: SUN_TEX, height: SUN_TEX }, scene, true);
     this.sunTex.hasAlpha = true;
@@ -312,7 +312,7 @@ export class SkyDome {
     // First person shows the material's own disc in a sky the viewer is
     // genuinely standing under, so the billboard would only ever be a second
     // sun beside the real one.
-    const overview = liftFor(this.dropUnits) > 0;
+    const overview = this.dropUnits > 0;
     const p = placeBodies(this.now, { overview, villa: this.villa, view: overview ? viewOf(this.scene) : null });
     this.paintSun(p.sun);
     if (this.moon && this.moonNow) this.moon.paintMoon(p.moon, this.moonNow, this.villa);

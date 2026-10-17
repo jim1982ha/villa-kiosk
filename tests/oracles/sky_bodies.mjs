@@ -39,7 +39,8 @@ const { SkyDome } = await import("@/babylon/SkyDome");
 const { NightSky } = await import("@/babylon/NightSky");
 const { BETA_MIN, BETA_MAX } = await import("@/babylon/overviewPose");
 const b = await import("@/babylon/skyBodies");
-const { skyMoment } = await import("@/babylon/skyMoment");
+const { skyMoment, northOffsetFacing } = await import("@/babylon/skyMoment");
+const { getSunPosition } = await import("@/utils/sunCalc");
 
 const DROP = 700;   // SceneManager's OVERVIEW_HORIZON_DROP
 const deg = (d) => (d * Math.PI) / 180;
@@ -48,6 +49,20 @@ const toward = (alt, az) => new Vector3(Math.sin(az) * Math.cos(alt), Math.sin(a
 const MIN = new Vector3(-20, 0, -12), MAX = new Vector3(20, 6, 12);
 const SPAN = 40;
 const NORTH = -Math.PI / 2;   // ArcRotate alpha that puts the camera south of the villa, facing north (+z)
+// The owner's rules as NUMBERS, written here and not read from skyBodies (its
+// rules are private: a check that re-computes the rule it judges agrees with
+// any mistake in it — sun/moon review, 2026-10-17):
+const ARC = 1.1;      // the arc's radius, in villa lengths (owner's reference, 2026-10-16)
+const EDGE = 0.07;    // a body waits this far inside the screen's edges
+const USUAL = 1.9;    // the overview's usual zoom, in villa lengths: never bigger than from there
+const HOLD = 0.15;    // screens above the top over which a body on the viewer's side fades in
+// Where a body toward `d` is on the sphere round the villa: its true side and
+// height, never below `floor` (the sun's arc stops at the ground).
+function arcAt(d, floor = -Infinity) {
+  const h = Math.hypot(d.x, d.z), alt = Math.atan2(d.y, h), side = { x: d.x / h, z: d.z / h };
+  const a = Math.max(floor, alt), R = ARC * SPAN;
+  return { alt, side, at: { x: 0 + R * Math.cos(a) * side.x, y: MIN.y + R * Math.sin(a), z: 0 + R * Math.cos(a) * side.z } };
+}
 
 function rig() {
   const scene = new Scene(new NullEngine({ renderWidth: 1376, renderHeight: 640, textureSize: 256, deterministicLockstep: false, lockstepMaxSteps: 1 }));
@@ -65,7 +80,7 @@ function rig() {
 // A moment for the sky (skyMoment's shape): the sun toward `sunTo` (sky colour
 // and disc alike), the moon as given or null, full night for the moon.
 const moment = (sunTo, moon) => ({
-  light: { isDay: sunTo.y > 0, nightT: 1, dir: [0, -1, 0], skyDir: [-sunTo.x, -sunTo.y, -sunTo.z] },
+  light: { isDay: sunTo.y > 0, nightT: 1, dir: [0, -1, 0] },
   skySun: sunTo, sun: sunTo, moon, moonT: 1, realAltitude: 0, altitude: 0, azimuth: 0,
 });
 // Change the sun and/or the moon; the other stays as it was.
@@ -128,7 +143,7 @@ for (const [name, beta] of [["almost flat", 1.35], ["looking down", 0.25]]) {
     const over = pts.filter((p) => p.x > bx.x0 && p.x < bx.x1 && p.y > bx.y0 && p.y < bx.y1).map((p) => p.h);
     ck(`  ...and looking down it goes ROUND the villa, never over it`, over.length === 0, { over, bx });
   } else {
-    const top = pts.filter((p) => Math.abs(p.y - b.EDGE_MARGIN) < 1e-3).map((p) => p.h);
+    const top = pts.filter((p) => Math.abs(p.y - EDGE) < 1e-3).map((p) => p.h);
     ck(`  ...almost flat, the midday sun waits along the top edge in a straight line`, top.includes(12) && top.length >= 3, top);
   }
 }
@@ -138,7 +153,7 @@ for (const [name, beta] of [["almost flat", 1.35], ["looking down", 0.25]]) {
   const r = rig();
   const sunTo = toward(deg(35), deg(100)), moonTo = toward(deg(50), deg(230));
   sky(r, { sun: sunTo, moon: { dir: moonTo, fraction: 0.6, angle: -1, parallacticAngle: 0 } });
-  const want = { sun: b.arcPoint(sunTo.x, sunTo.y, sunTo.z, box), moon: b.arcPoint(moonTo.x, moonTo.y, moonTo.z, box) };
+  const want = { sun: arcAt(sunTo, 0), moon: arcAt(moonTo) };
   let poses = 0, shownN = 0, onScreen = 0, held = 0;
   const moved = [], outside = [], behind = [], tooBig = [], inFront = [];
   for (let a = 0; a < 360; a += 15) for (let beta = BETA_MIN; beta <= BETA_MAX + 1e-9; beta += (BETA_MAX - BETA_MIN) / 6)
@@ -147,29 +162,31 @@ for (const [name, beta] of [["almost flat", 1.35], ["looking down", 0.25]]) {
       poses++;
       for (const [name, mesh] of [["sun", r.sun], ["moon", r.moon]]) {
         const w = want[name], P = new Vector3(w.at.x, w.at.y, w.at.z);
-        const fwd = r.cam.getDirection(new Vector3(0, 0, 1));
-        // The sun is hidden low on the viewer's side; the moon is not (its
-        // night hours go round under the villa — skyBodies.placeBodies).
+        const fwd = r.cam.getDirection(new Vector3(0, 0, 1)), fl = Math.hypot(fwd.x, fwd.z);
+        // Which side of the villa the body is on, seen from the camera: +1
+        // beyond it, −1 on the viewer's side.
+        const v = fl > 1e-9 ? (w.side.x * fwd.x + w.side.z * fwd.z) / fl : 1;
         const sp = screen(r, P), pz = sp.z;
-        // ...and either is hidden while it waits at the TOP edge with its point
-        // on the viewer's side, above them (skyBodies.nearSideHold).
-        const fade = (name === "sun" ? b.behindFade(w.side, w.alt, fwd) : 1)
-          * (pz > 0 && pz < 1 ? b.nearSideHold(w.at, box, fwd, Math.max(0, b.EDGE_MARGIN - sp.y)) : 1);
-        // A point behind the camera (a close camera under a high body) is out
-        // of view, not "behind the viewer": nothing to show or to hold.
-        if (!shown(mesh)) { if (fade > 0.05 && pz > 0 && pz < 1) behind.push({ name, a, beta, radius, why: "hidden while not behind" }); continue; }
+        const inView = pz > 0 && pz < 1 && sp.x >= EDGE && sp.x <= 1 - EDGE && sp.y >= EDGE && sp.y <= 1 - EDGE;
+        // The SUN low and well on the viewer's side is really behind them:
+        // never shown. Either body whose point is in view, clear of that, is
+        // shown (the moon's night hours go round under the villa — it is never
+        // hidden for its side).
+        const behindYou = name === "sun" && w.alt < deg(15) && v < -0.75;
+        const clearOf = name === "moon" || v > -0.3;
+        if (!shown(mesh)) { if (inView && clearOf) behind.push({ name, a, beta, radius, why: "hidden while in view, not behind" }); continue; }
         shownN++;
-        if (fade < 0.01) behind.push({ name, a, beta, radius, why: "shown while behind" });
+        if (behindYou) behind.push({ name, a, beta, radius, why: "shown while behind" });
         const s = screen(r, mesh.position), p = screen(r, P);
-        const m = b.EDGE_MARGIN - 1e-3;
+        const m = EDGE - 1e-3;
         if (s.x < m || s.x > 1 - m || s.y < m || s.y > 1 - m) outside.push({ name, a, beta, radius, s });
-        const inside = p.z > 0 && p.z < 1 && p.x >= b.EDGE_MARGIN && p.x <= 1 - b.EDGE_MARGIN && p.y >= b.EDGE_MARGIN && p.y <= 1 - b.EDGE_MARGIN;
+        const inside = p.z > 0 && p.z < 1 && p.x >= EDGE && p.x <= 1 - EDGE && p.y >= EDGE && p.y <= 1 - EDGE;
         if (inside) { onScreen++; if (Math.hypot(s.x - p.x, s.y - p.y) > 1e-6) moved.push({ name, a, beta, radius }); }
         else held++;
         // Never bigger than at the usual zoom; never nearer than just beyond the villa.
         const eye = r.cam.globalPosition, dist = Vector3.Distance(eye, mesh.position);
         const plane = name === "sun" ? 46 : 11, spans = name === "sun" ? b.SUN_SPANS : b.MOON_SPANS;
-        if ((mesh.scaling.x * plane) / dist > spans / b.NEAREST_SPANS + 1e-9) tooBig.push({ name, a, beta, radius });
+        if ((mesh.scaling.x * plane) / dist > spans / USUAL + 1e-9) tooBig.push({ name, a, beta, radius });
         if (dist < Vector3.Distance(eye, new Vector3(box.cx, box.ground, box.cz)) + box.span - 1e-6) inFront.push({ name, a, beta, radius });
       }
     }
@@ -177,7 +194,7 @@ for (const [name, beta] of [["almost flat", 1.35], ["looking down", 0.25]]) {
      moved.length === 0 && onScreen > 100, moved.slice(0, 3));
   ck(`  ...and when its point is off screen it waits inside the screen's edge (${held} times), never off it`,
      outside.length === 0 && held > 20, outside.slice(0, 3));
-  ck("  ...hidden exactly when it is really behind the viewer", behind.length === 0 && shownN < poses * 2, behind.slice(0, 3));
+  ck("  ...hidden when it is really behind the viewer, and shown whenever its point is in view clear of that", behind.length === 0 && shownN < poses * 2, behind.slice(0, 3));
   ck("  ...zoomed in, never bigger than at the usual zoom (it washed over the villa, 2.496.391)", tooBig.length === 0, tooBig.slice(0, 3));
   ck("  ...and always drawn beyond the villa, so the house hides it where they meet", inFront.length === 0, inFront.slice(0, 3));
 }
@@ -190,7 +207,7 @@ for (const [name, beta] of [["almost flat", 1.35], ["looking down", 0.25]]) {
   sunAt(r, 70, 100);   // high, east: to the right of a camera facing north
   const s = screen(r, r.sun.position);
   ck("zoomed right in under a high sun: still shown, waiting at the screen edge on its side",
-     shown(r.sun) && s.x > 0.5 && (Math.abs(s.x - (1 - b.EDGE_MARGIN)) < 1e-3 || Math.abs(s.y - b.EDGE_MARGIN) < 1e-3), s);
+     shown(r.sun) && s.x > 0.5 && (Math.abs(s.x - (1 - EDGE)) < 1e-3 || Math.abs(s.y - EDGE) < 1e-3), s);
   pose(r, 0, 0.8, 0.9 * SPAN);   // camera on the east side facing west, zoomed in; the morning sun behind it
   sunAt(r, 44, 93);
   const behindLow = shown(r.sun) ? screen(r, r.sun.position) : null;
@@ -214,9 +231,9 @@ for (const [name, beta] of [["almost flat", 1.35], ["looking down", 0.25]]) {
       sunAt(r, alt, az);
       if (!shown(r.sun)) { last = null; continue; }
       const s = screen(r, r.sun.position);
-      const to = toward(deg(alt), deg(az)), P = b.arcPoint(to.x, to.y, to.z, box).at, p = screen(r, new Vector3(P.x, P.y, P.z));
+      const to = toward(deg(alt), deg(az)), P = arcAt(to, 0).at, p = screen(r, new Vector3(P.x, P.y, P.z));
       // Its point clearly out of view above (beyond the short fade-in at the top).
-      if (p.z > 0 && p.z < 1 && p.y < b.EDGE_MARGIN - b.HOLD_FADE && r.sun.material.alpha > 0.01) tops.push({ alt, az, i, a: +r.sun.material.alpha.toFixed(2) });
+      if (p.z > 0 && p.z < 1 && p.y < EDGE - HOLD && r.sun.material.alpha > 0.01) tops.push({ alt, az, i, a: +r.sun.material.alpha.toFixed(2) });
       if (last && Math.hypot(s.x - last.x, s.y - last.y) > 0.1) jumps.push({ alt, az, i });
       last = s;
     }
@@ -225,7 +242,7 @@ for (const [name, beta] of [["almost flat", 1.35], ["looking down", 0.25]]) {
   ck("  ...and once it shows, it moves down smoothly (no tilt step moves it a tenth of the screen)", jumps.length === 0, jumps.slice(0, 3));
   pose(r, -90, 1.35);
   sunAt(r, 50, 20);   // north: beyond the villa
-  ck("  ...while beyond the villa it still waits at the top edge, almost flat", shown(r.sun) && Math.abs(screen(r, r.sun.position).y - b.EDGE_MARGIN) < 1e-3);
+  ck("  ...while beyond the villa it still waits at the top edge, almost flat", shown(r.sun) && Math.abs(screen(r, r.sun.position).y - EDGE) < 1e-3);
 }
 
 // ── 3. THE MOON MOVES THROUGH THE NIGHT, DOWN TO THE HORIZON ────────────────
@@ -313,10 +330,36 @@ const place = (m, view) => b.placeBodies({ sun: m.sun, moon: m.moon ? m.moon.dir
   // near-conjunction of 2026-10-10 — sun and moon 3.7° apart in the real sky —
   // must be drawn together, not on opposite sides of the villa.
   const together = new Date("2026-10-10T09:14:00Z"), tm = skyMoment(together, VILLA_AT);
-  const tp = place(tm, orbitView(-90, 1.35)), sp = (v) => b.spherePoint(v.x, v.y, v.z, box).at;
+  const tp = place(tm, orbitView(-90, 1.35)), sp = (v) => arcAt(v).at;
   const gap = Vector3.Distance(new Vector3(...Object.values(sp(tm.sun))), new Vector3(...Object.values(sp(tm.moon.dir))));
   ck("the moon's compass is the sun's: a sun and moon 3.7° apart in the real sky are drawn together (2.496.401 drew them on opposite sides)",
      gap < 0.1 * box.span && Math.abs(tp.sun.screen.x - tp.moon.screen.x) < 0.05, { gap, sun: tp.sun?.screen.x, moon: tp.moon?.screen.x });
+
+  // "SET NORTH" ON ANY VILLA (sun/moon review, 2026-10-17): it stored the view's
+  // heading itself, and on a fresh install the morning sun was then drawn in
+  // the WEST — the whole sky half way round. Whatever way a model's real north
+  // points, facing it and pressing Set North puts the sun on its true compass
+  // side at every hour.
+  const heading = (v) => ((Math.atan2(v.x, v.z) * 180) / Math.PI + 360) % 360;
+  const off = [];
+  for (const hN of [0, 37, 90, 180, 200, 271, 315, 359.6]) for (const t of ["2026-10-16T22:30:00Z", "2026-10-17T04:00:00Z", "2026-10-17T09:30:00Z"]) {
+    const d = new Date(t), m = skyMoment(d, { ...VILLA_AT, northOffsetDeg: northOffsetFacing(hN) });
+    const bearing = (getSunPosition(d, VILLA_AT.latitude, VILLA_AT.longitude).azimuth * 180) / Math.PI + 180;   // compass: 0 = north, clockwise
+    const err = Math.abs((((heading(m.sun) - (hN + bearing)) % 360) + 540) % 360 - 180);
+    if (err > 0.6) off.push({ hN, t, err: +err.toFixed(1) });
+  }
+  ck("Set North, facing a model's real north whichever way it points: the sun is drawn on its true side (06:30 east, 17:30 west)", off.length === 0, off.slice(0, 3));
+
+  // The arc stops at the ground: a sun just set or not yet risen (−2°..0°,
+  // fading) sits ON the ground at the arc's end beside the villa, never below it.
+  const W2 = (v, w) => { const q = Vector3.Project(new Vector3(w.x, w.y, w.z), Matrix.Identity(), v.view.multiply(v.projection), v.viewport); return { x: q.x / W, y: q.y / H }; };
+  const sunk = [];
+  for (const [alt, az] of [[-1, 95], [-1.5, 265], [-0.3, 100]]) {
+    const to = toward(deg(alt), deg(az)), v = orbitView(-90, 1.0, 6 * SPAN);
+    const p = b.placeBodies({ sun: to, moon: null, moonT: 0 }, { overview: true, villa: box, view: v }).sun, w = W2(v, arcAt(to, 0).at);
+    if (!(p?.alpha > 0) || p.held || Math.hypot(p.screen.x - w.x, p.screen.y - w.y) > 1e-6) sunk.push({ alt, az, alpha: p?.alpha, s: p?.screen, w });
+  }
+  ck("a sun just below the horizon, fading, sits on the ground at the arc's end — never below the villa's ground", sunk.length === 0, sunk.slice(0, 2));
 
   // End to end: SunController hands that moment to the real sky.
   const { SunController } = await import("@/babylon/SunController");
@@ -344,11 +387,11 @@ const place = (m, view) => b.placeBodies({ sun: m.sun, moon: m.moon ? m.moon.dir
   const hours = Array.from({ length: 24 }, (_, hh) => skyMoment(new Date(Date.UTC(2026, 9, 16, hh - 8, 30)), VILLA_AT));
   let n = 0, onPt = 0, waits = 0;
   const bad = { moved: [], outside: [], big: [], near: [], jump: [], day: [] };
-  const usual = { sun: b.SUN_SPANS / b.NEAREST_SPANS, moon: b.MOON_SPANS / b.NEAREST_SPANS };
+  const usual = { sun: b.SUN_SPANS / USUAL, moon: b.MOON_SPANS / USUAL };
   const look = (m, view) => { const p = place(m, view); return { sun: p.sun, moon: p.moon }; };
   const scr = (view, w) => { const s = Vector3.Project(new Vector3(w.x, w.y, w.z), Matrix.Identity(), view.view.multiply(view.projection), view.viewport); return { x: s.x / W, y: s.y / H, z: s.z }; };
   for (const [hh, m] of hours.entries()) {
-    const want = { sun: b.arcPoint(m.sun.x, m.sun.y, m.sun.z, box).at, moon: b.spherePoint(m.moon.dir.x, m.moon.dir.y, m.moon.dir.z, box).at };
+    const want = { sun: arcAt(m.sun, 0).at, moon: arcAt(m.moon.dir).at };
     for (const radius of [0.6, 1.0, 1.9, 4].map((k) => k * SPAN)) for (let a = 0; a < 360; a += TURN) {
       let last = null;
       for (let i = 0; i <= STEPS; i++) {
@@ -360,7 +403,7 @@ const place = (m, view) => b.placeBodies({ sun: m.sun, moon: m.moon ? m.moon.dir
           const q = p[name];
           if (!q || !(q.alpha > 0.01)) continue;
           const s = scr(view, q.at), dist = Vector3.Distance(view.eye, q.at);
-          if (s.x < b.EDGE_MARGIN - 1e-3 || s.x > 1 - b.EDGE_MARGIN + 1e-3 || s.y < b.EDGE_MARGIN - 1e-3 || s.y > 1 - b.EDGE_MARGIN + 1e-3) bad.outside.push({ hh, name, a, beta, radius });
+          if (s.x < EDGE - 1e-3 || s.x > 1 - EDGE + 1e-3 || s.y < EDGE - 1e-3 || s.y > 1 - EDGE + 1e-3) bad.outside.push({ hh, name, a, beta, radius });
           if (!q.held) {
             onPt++;
             const w = scr(view, want[name]);
@@ -391,7 +434,7 @@ const place = (m, view) => b.placeBodies({ sun: m.sun, moon: m.moon ? m.moon.dir
   // sphere the bodies sit on, and a point near the eye sweeps across the
   // screen as it turns (2.496.400 does this; measured, not judged here — the
   // count is printed). At the usual zoom and wider it must never happen.
-  const far = bad.jump.filter((j) => j.radius >= b.NEAREST_SPANS * SPAN), close = bad.jump.length - far.length;
+  const far = bad.jump.filter((j) => j.radius >= USUAL * SPAN), close = bad.jump.length - far.length;
   ck("  ...at the usual zoom and wider, a small turn or tilt never makes a body jump (a tenth of the screen)", far.length === 0, { count: far.length, first: far.slice(0, 3) });
   console.log(`    INFO  zoomed in closer than the arc (0.6 and 1 villa lengths): ${close} turn/tilt steps move a body more than a tenth of the screen`);
   ck("  ...the sun only by day, the moon only at night", bad.day.length === 0, bad.day.slice(0, 3));
@@ -410,7 +453,7 @@ const place = (m, view) => b.placeBodies({ sun: m.sun, moon: m.moon ? m.moon.dir
      !r.sun.isEnabled() && !r.scene.getMeshByName("sunGlow").isEnabled());
   r.sky.setHorizonDrop(DROP);
   pose(r, -90, 1.35, 6 * SPAN);   // far enough that its point is on screen
-  const back = screen(r, r.moon.position), want = screen(r, new Vector3(...Object.values(b.arcPoint(to.x, to.y, to.z, box).at)));
+  const back = screen(r, r.moon.position), want = screen(r, new Vector3(...Object.values(arcAt(to).at)));
   ck("back to the overview: the moon is back on the arc round the villa", !r.moon.infiniteDistance
      && Math.hypot(back.x - want.x, back.y - want.y) < 1e-6);
   sky(r, { sun: toward(deg(-5), deg(270)) });

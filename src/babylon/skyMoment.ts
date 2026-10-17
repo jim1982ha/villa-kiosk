@@ -12,11 +12,12 @@
 // downstream has a default to fall back on.
 //
 // One direction convention: every Vec3 here points FROM the villa TOWARD the
-// body, in the model's axes. (`light.dir`/`light.skyDir` are the light's own,
-// sun → scene, as a Babylon DirectionalLight takes it — sunState.)
+// body, in the model's axes, written by sunState.towardBody for the sun and
+// the moon alike. (`light.dir` is the light's own, sun → scene, as a Babylon
+// DirectionalLight takes it.)
 
 import { getSunPosition, getMoonPosition, getMoonIllumination } from "@/utils/sunCalc";
-import { sunGeometry, type SunGeometry } from "./sunState";
+import { sunGeometry, towardBody, unit, type SunGeometry } from "./sunState";
 import type { Vec3 } from "./skyBodies";
 
 export type DayNightPreview = "day" | "auto" | "night";
@@ -54,8 +55,6 @@ export interface SkyMoment {
   azimuth: number;
 }
 
-const toward = (d: readonly [number, number, number]): Vec3 => ({ x: -d[0], y: -d[1], z: -d[2] });
-
 /**
  * The sky at `date` over `place`. `preview` "day"/"night" PINS the sun to that
  * side of the horizon for the villa's light and the sky's colour — Math.abs,
@@ -65,8 +64,10 @@ const toward = (d: readonly [number, number, number]): Vec3 => ({ x: -d[0], y: -
  */
 export function skyMoment(date: Date, place: SkyPlace, preview: DayNightPreview = "auto"): SkyMoment {
   const { latitude, longitude } = place;
-  // A true compass bearing turned into this model's axes, for the sun AND the
-  // moon — one correction, or the two would disagree about north.
+  // sunCalc's azimuth (0 = south, toward west) turned into this model's axes,
+  // for the sun AND the moon — one correction, or the two would disagree about
+  // north. A body is drawn at model heading azimuth + offset, so the offset is
+  // the model heading of true SOUTH (northOffsetFacing).
   const north = (place.northOffsetDeg * Math.PI) / 180;
   const s = getSunPosition(date, latitude, longitude);
   const azimuth = s.azimuth + north;
@@ -75,27 +76,39 @@ export function skyMoment(date: Date, place: SkyPlace, preview: DayNightPreview 
     : preview === "night" ? -Math.abs(realAltitude)
     : realAltitude;
   const light = sunGeometry(altitude, azimuth);
-  const real = sunGeometry(realAltitude, azimuth);
 
   const m = getMoonPosition(date, latitude, longitude);
-  const mAz = m.azimuth + north;
   const ill = getMoonIllumination(date);
-  // The moon points the way the sun does: (sin az, cos az) of its sunCalc
-  // azimuth (0 = south, toward west), in the same model axes.
-  //
   // ⚠️ THE MOON WAS DRAWN ON THE OPPOSITE SIDE OF THE SKY (until 2.496.402):
-  // its direction was (−sin az, −cos az), the sun's turned half way round, so
+  // its direction had its own formula, the sun's turned half way round, so
   // once the north offset made the sun right the moon was mirrored — measured
   // on 2026-10-10, sun and moon 3.7° apart in the real sky were drawn on
-  // opposite sides of the villa; at 19:00 on 2026-10-16 the real moon was in
-  // the south-west and was drawn in the north-east.
+  // opposite sides of the villa. Both are towardBody now.
   const moon: MoonNow = {
-    dir: unit(Math.sin(mAz) * Math.cos(m.altitude), Math.sin(m.altitude), Math.cos(mAz) * Math.cos(m.altitude)),
+    dir: towardBody(m.altitude, m.azimuth + north),
     fraction: ill.fraction,
     angle: ill.angle,
     parallacticAngle: m.parallacticAngle,
   };
-  return { light, skySun: toward(light.skyDir), sun: toward(real.skyDir), moon, moonT: real.nightT, realAltitude, altitude, azimuth };
+  return {
+    light, skySun: towardBody(altitude, azimuth), sun: towardBody(realAltitude, azimuth), moon,
+    moonT: sunGeometry(realAltitude, azimuth).nightT, realAltitude, altitude, azimuth,
+  };
+}
+
+/**
+ * The north offset that makes `headingDeg` — the way the 3D view looks
+ * (SceneManager.viewHeadingDeg) — true north: what Settings' "Set North"
+ * stores when the view faces the villa's real north. The offset is the model
+ * heading of true SOUTH (see skyMoment), so it is the heading turned half way
+ * round.
+ *
+ * ⚠️ "SET NORTH" STORED THE HEADING ITSELF (until 2.496.404): measured on a
+ * fresh install, the morning sun was then drawn in the west — the whole sky
+ * half way round — and only dragging the slider 180° put it right.
+ */
+export function northOffsetFacing(headingDeg: number): number {
+  return (((Math.round(headingDeg) + 180) % 360) + 360) % 360;
 }
 
 /**
@@ -105,19 +118,9 @@ export function skyMoment(date: Date, place: SkyPlace, preview: DayNightPreview 
  */
 export function guessedMoment(aboveHorizon: boolean, preview: DayNightPreview = "auto"): SkyMoment {
   const isDay = preview === "day" ? true : preview === "night" ? false : aboveHorizon;
-  const dir = unit(-0.4, -1, -0.6), skyDir = isDay ? dir : unit(-0.2, 1, -0.2);
+  const dir = unit(-0.4, -1, -0.6), [x, y, z] = isDay ? unit(0.4, 1, 0.6) : unit(0.2, -1, 0.2);
   const nightT = isDay ? 0 : 1;
-  const synth = Math.asin(Math.max(-1, Math.min(1, skyDir.y)));
-  const d: [number, number, number] = [dir.x, dir.y, dir.z], sd: [number, number, number] = [skyDir.x, skyDir.y, skyDir.z];
-  const sun = toward(sd);
-  return { light: { isDay, dir: d, skyDir: sd, nightT }, skySun: sun, sun, moon: null, moonT: nightT, realAltitude: synth, altitude: synth, azimuth: 0 };
-}
-
-/** Babylon's Vector3.normalize, to the last bit (×(1/length), and a length of
- *  exactly 1 left alone) — so the moved code draws the same pixels. */
-function unit(x: number, y: number, z: number): Vec3 {
-  const len = Math.sqrt(x * x + y * y + z * z);
-  if (len === 0 || len === 1.0) return { x, y, z };
-  const k = 1.0 / len;
-  return { x: x * k, y: y * k, z: z * k };
+  const synth = Math.asin(Math.max(-1, Math.min(1, y)));
+  const sun = { x, y, z };
+  return { light: { isDay, dir, nightT }, skySun: sun, sun, moon: null, moonT: nightT, realAltitude: synth, altitude: synth, azimuth: 0 };
 }

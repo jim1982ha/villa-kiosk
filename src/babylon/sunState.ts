@@ -1,6 +1,7 @@
 // src/babylon/sunState.ts
 // Where the sun is and what the lights are at that moment — pure numbers, no
-// Babylon: the sun's two directions and the twilight ramp from its altitude,
+// Babylon: the light's direction, a body's direction (towardBody) and the
+// twilight ramp from the sun's altitude,
 // and the key / ambient / fill levels for day or for a night dimmed by
 // Settings' "Night dimming".
 //
@@ -29,19 +30,32 @@ const TWILIGHT = (6 * Math.PI) / 180;
 export interface SunGeometry {
   isDay: boolean;
   /** Direction the light travels (sun → scene), floored at 0.05 down so the
-   *  lighting never goes edge-on after dark. */
+   *  lighting never goes edge-on after dark. Where the sun IS — for the sky's
+   *  colour and the disc — is `towardBody`, unclamped: the floor kept the
+   *  sky's sun hovering over the horizon all night. */
   dir: readonly [number, number, number];
-  /** The same direction UNCLAMPED, for the sky dome only — the floor kept
-   *  its sun hovering over the horizon all night. */
-  skyDir: readonly [number, number, number];
   /** 0 = day … 1 = full night, over civil twilight. */
   nightT: number;
 }
 
-const unit = (x: number, y: number, z: number): [number, number, number] => {
+export const unit = (x: number, y: number, z: number): [number, number, number] => {
   const l = Math.hypot(x, y, z) || 1;
   return [x / l, y / l, z / l];
 };
+
+/**
+ * The direction FROM the villa TOWARD a body at this altitude and azimuth
+ * (radians; the azimuth as sunCalc gives it — 0 = south, toward west — plus
+ * the model's north offset). The ONE way the sky writes a body's direction:
+ * the sun's, the sky colour's and the moon's.
+ *
+ * ⚠️ THE MOON HAD ITS OWN FORMULA (until 2.496.402), and it was the sun's
+ * turned half way round: the moon was drawn on the opposite side of the sky.
+ */
+export function towardBody(altitude: number, azimuth: number): { x: number; y: number; z: number } {
+  const [x, y, z] = unit(Math.sin(azimuth) * Math.cos(altitude), Math.sin(altitude), Math.cos(azimuth) * Math.cos(altitude));
+  return { x, y, z };
+}
 
 /** The sun at this altitude/azimuth (radians, azimuth already in model space). */
 export function sunGeometry(altitude: number, azimuth: number): SunGeometry {
@@ -50,7 +64,6 @@ export function sunGeometry(altitude: number, azimuth: number): SunGeometry {
   return {
     isDay: altitude > 0,
     dir: unit(sx, -Math.max(0.05, Math.sin(altitude)), sz),
-    skyDir: unit(sx, -Math.sin(altitude), sz),
     nightT: Math.min(1, Math.max(0, -altitude / TWILIGHT)),
   };
 }

@@ -34,8 +34,8 @@ import type { Scene } from "@babylonjs/core/scene";
 /** Walking: distance from the camera, in world units. Inside the sky dome's
  *  500 radius so it always reads as "in the sky", and far inside the 10000
  *  default far plane so ordinary depth testing lets the villa occlude it. In
- *  the overview the moon is a point on the arc round the villa instead
- *  (skyBodies.arcPoint), like the sun. */
+ *  the overview the moon is a point on the sphere round the villa instead
+ *  (skyBodies.placeBodies), placed with the sun. */
 const MOON_DIST = 380;
 const STAR_RADIUS = 470;
 /** Moon disc size in world units at MOON_DIST — about 1.7°, a little larger

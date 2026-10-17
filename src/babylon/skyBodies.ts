@@ -9,7 +9,7 @@
 // ── THE OVERVIEW: AN ARC ROUND THE VILLA (owner, 2026-10-16) ───────────────
 // In the overview a body is a POINT in the world, on its real path drawn as an
 // arc round the villa: its true compass side and its true height, on a
-// half-sphere centred on the villa's ground (arcPoint). Facing north, the sun
+// half-sphere centred on the villa's ground (bodyPoint). Facing north, the sun
 // rises on the right at 06:00, climbs one step per hour, passes over the top
 // at noon and sets on the left — and where the real sun goes nearly overhead
 // (this villa's latitude, in October) it passes OVER the villa from east to
@@ -21,21 +21,25 @@
 // at the villa, the sun goes round the house and never crosses it (the owner's
 // reference view).
 //
-// The camera decides two things, never the point itself:
-//   · whether the body is SHOWN — hidden only when it is really behind the
-//     viewer (behindFade); the house hides it by ordinary depth where they meet;
-//   · where it WAITS when its point is off screen — at the screen edge on its
+// The camera never moves the point. It decides only whether the body is
+// SHOWN and where it WAITS — one function, `seen`:
+//   · where it waits when its point is off screen — at the screen edge on its
 //     true side (holdOnScreen), so zooming in never loses it. Almost flat, the
 //     midday sun therefore runs along the top edge in a straight line (owner:
-//     "I like that").
+//     "I like that");
+//   · hidden when it is really behind the viewer (the sun only: the moon's
+//     night hours go round under the villa), when it waits at the top edge
+//     with its point on the viewer's side, above them, and when its point is
+//     behind the camera and below the eye. The house hides it by ordinary
+//     depth where they meet.
 //
-// Walking (lift 0) draws the TRUE direction, at sky distance.
+// Walking (no horizon drop) draws the TRUE direction, at sky distance.
 //
 // ── DAY THE SUN, NIGHT THE MOON — BY THE REAL CLOCK (owner, 2026-10-17) ────
 // The owner drew the 24 hours as a circle round the villa: the day hours over
 // it, the night hours under it. By day the sun is drawn on its real path; at
 // night the MOON is drawn where it really is — over the villa when it is up,
-// under it once it has set (spherePoint). Which one shows, and where, follows
+// under it once it has set (the whole sphere: bodyPoint without a floor). Which one shows, and where, follows
 // the REAL time: Settings' day/night preview lights the villa and colours the
 // sky, never moves a body (at 02:46 with "day" it drew a sun 46° up, the real
 // one mirrored over the horizon — high in the sky looking almost flat, below
@@ -55,19 +59,6 @@
 
 import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { Viewport } from "@babylonjs/core/Maths/math.viewport";
-
-/** The dome's radius, and the denominator the horizon drop's angle is measured
- *  against — one constant so the two cannot drift apart. */
-const SKY_RADIUS = 500;
-
-/**
- * The angle, in radians, that a given horizon drop rotated the sky by. 0 in
- * first person, where the true sky is what the viewer is standing under and
- * must not be redrawn at all — so `lift > 0` is also "this is the overview".
- */
-export function liftFor(units: number): number {
-  return units > 0 ? Math.atan(units / SKY_RADIUS) : 0;
-}
 
 export interface Vec3 { x: number; y: number; z: number }
 
@@ -111,40 +102,29 @@ export function villaBox(min: Vec3, max: Vec3): VillaBox {
 }
 
 /**
- * Where a body whose TRUE direction is (x,y,z) sits on the arc round `villa`:
- * a world point, its true altitude, its compass direction (unit, horizontal)
- * and its set/rise fade. `at` is null once it has set. No camera in it.
+ * Where a body whose TRUE direction is `d` is: its true altitude, its compass
+ * side (unit, horizontal), its direction (unit) and — with a villa — its point
+ * on the sphere round it, at its altitude but never below `floor` (the sun's
+ * arc stops at the ground: floor 0; the moon goes on under the villa). The ONE
+ * reading of a body's place; no camera in it.
+ *
+ * ⚠️ FOUR READINGS OF THE SAME PLACE (until 2.496.404): the sun's arc, the
+ * moon's sphere, the walking direction and the point on the sphere each read
+ * altitude and side again — added one release at a time, the older ones kept.
  */
-export function arcPoint(x: number, y: number, z: number, villa: VillaBox): {
-  alt: number; fade: number; side: { x: number; z: number }; at: Vec3 | null;
+function bodyPoint(d: Vec3, villa: VillaBox | null, floor = -Infinity): {
+  alt: number; side: { x: number; z: number }; unit: Vec3; at: Vec3 | null;
 } {
-  const { alt, side } = spherePoint(x, y, z, villa);
-  const fade = arcFade(alt);
-  if (!(fade > 0)) return { alt, fade: 0, side, at: null };
-  return { alt, fade, side, at: onSphere(villa, side, Math.max(0, alt)) };
-}
-
-/**
- * The moon's point: the same sphere round the villa as arcPoint, but the WHOLE
- * of it — once the moon has set it carries on below the villa, on its true
- * side, rather than vanishing (owner's 24-hour drawing, 2026-10-17: the night
- * hours go round UNDER the house). No fade: a point always.
- */
-export function spherePoint(x: number, y: number, z: number, villa: VillaBox): {
-  alt: number; side: { x: number; z: number }; at: Vec3;
-} {
-  const h = Math.hypot(x, z);
-  const alt = Math.atan2(y, h);
+  const h = Math.hypot(d.x, d.z);
+  const alt = Math.atan2(d.y, h);
   // Exactly overhead has no azimuth: north stands in (a single instant; the
   // azimuth either side of it is the true one).
-  const side = h > 1e-9 ? { x: x / h, z: z / h } : { x: 0, z: 1 };
-  return { alt, side, at: onSphere(villa, side, alt) };
-}
-
-/** The point at altitude `a` on `side` of the sphere round the villa. */
-function onSphere(villa: VillaBox, side: { x: number; z: number }, a: number): Vec3 {
-  const R = ARC_SPANS * villa.span, c = Math.cos(a);
-  return { x: villa.cx + R * c * side.x, y: villa.ground + R * Math.sin(a), z: villa.cz + R * c * side.z };
+  const side = h > 1e-9 ? { x: d.x / h, z: d.z / h } : { x: 0, z: 1 };
+  const l = Math.hypot(d.x, d.y, d.z) || 1;
+  const unit = { x: d.x / l, y: d.y / l, z: d.z / l };
+  if (!villa) return { alt, side, unit, at: null };
+  const a = Math.max(floor, alt), R = ARC_SPANS * villa.span, c = Math.cos(a);
+  return { alt, side, unit, at: { x: villa.cx + R * c * side.x, y: villa.ground + R * Math.sin(a), z: villa.cz + R * c * side.z } };
 }
 
 /**
@@ -154,7 +134,7 @@ function onSphere(villa: VillaBox, side: { x: number; z: number }, a: number): V
  * every side (it is over the roof), so only a low one on the viewer's side is
  * hidden — never one merely beside the villa.
  */
-export function behindFade(side: { x: number; z: number }, alt: number, camFwd: Vec3): number {
+function behindFade(side: { x: number; z: number }, alt: number, camFwd: Vec3): number {
   const fl = Math.hypot(camFwd.x, camFwd.z);
   if (fl < 1e-9) return 1;
   const v = (side.x * camFwd.x + side.z * camFwd.z) / fl;   // +1 beyond the villa, −1 on the viewer's side
@@ -182,9 +162,9 @@ export function behindFade(side: { x: number; z: number }, alt: number, camFwd: 
  * camera turned.
  */
 const NEAR_SIDE = { from: 0.15, to: 0.35 };   // villa lengths from the centre toward the viewer (the sun runs within 0.1 at this villa in October; the 19:00 moon is at 0.39)
-export const HOLD_FADE = 0.15;                      // screens above the top over which it fades out
+const HOLD_FADE = 0.15;                        // screens above the top over which it fades out
 
-export function nearSideHold(at: Vec3, villa: VillaBox, camFwd: Vec3, above: number): number {
+function nearSideHold(at: Vec3, villa: VillaBox, camFwd: Vec3, above: number): number {
   const fl = Math.hypot(camFwd.x, camFwd.z);
   if (fl < 1e-9 || !(above > 0)) return 1;
   const toward = -((at.x - villa.cx) * camFwd.x + (at.z - villa.cz) * camFwd.z) / fl / villa.span;
@@ -198,7 +178,7 @@ function smooth(t: number): number {
 
 /** How far in from the screen's edges a body waits, as a share of the width
  *  and the height. */
-export const EDGE_MARGIN = 0.07;
+const EDGE_MARGIN = 0.07;
 
 /** Where a body whose point lands at screen (x,y) — pixels, in a w×h view — is
  *  shown: there, or at the nearest place EDGE_MARGIN inside the edges. */
@@ -209,47 +189,29 @@ function holdOnScreen(x: number, y: number, w: number, h: number): { x: number; 
 }
 
 /**
- * How a body is drawn for a camera `pointDist` from its point and `villaDist`
- * from the villa's centre: at what DEPTH along its own line of sight, and how
- * much its size in the world is scaled.
+ * How a body is drawn: at what DEPTH along its line of sight, and how much its
+ * size in the world is scaled there.
  *
  * ⚠️ ZOOMED IN, THE SUN WASHED OVER THE VILLA (owner's recording,
  * 2026-10-16, 2.496.391). The point is near the villa, so a camera that zooms
  * in gets close to it: the disc and its glow grew to fill the screen, and a
  * point between the camera and the house was drawn over the house. So:
- *   · it is drawn on the same line of sight but never nearer than just beyond
+ *   · it is drawn on its own line of sight but never nearer than just beyond
  *     the villa (villaDist + one villa length): the house always hides it
- *     where they meet, and where it shows on screen does not change;
+ *     where they meet, and where it shows on screen does not change. (Always
+ *     AT villaDist + one length was tried, 2026-10-17: the same on screen to
+ *     the last digit, but a far low sun's edge pixels shifted one colour
+ *     level in the real-villa renders — kept as it was.)
  *   · it never looks bigger than from NEAREST_SPANS villa lengths away — about
  *     the overview's usual zoom, where its size was chosen.
  */
-export const NEAREST_SPANS = 1.9;
-
-function drawnDepth(pointDist: number, villaDist: number, span: number): { depth: number; scale: number } {
-  const depth = Math.max(pointDist, villaDist + span);
-  return { depth, scale: depth / Math.max(pointDist, NEAREST_SPANS * span) };
-}
+const NEAREST_SPANS = 1.9;
 
 /** The bodies' sizes in the overview, and their sky glow's, in lengths of the
  *  villa's longest side. */
 export const SUN_SPANS = 0.13;
 export const MOON_SPANS = 0.09;
 export const GLOW_SPANS = 1.1;
-
-/**
- * Walking: where a body whose TRUE direction is (x,y,z) is drawn — that
- * direction, unit — and its set/rise fade. `dir` is null once it has set.
- */
-function skyDirection(x: number, y: number, z: number): {
-  alt: number; fade: number; dir: Vec3 | null;
-} {
-  const h = Math.hypot(x, z);
-  const alt = Math.atan2(y, h);
-  const fade = horizonFade(alt);
-  if (!(fade > 0)) return { alt, fade: 0, dir: null };
-  const l = Math.hypot(x, y, z) || 1;
-  return { alt, fade, dir: { x: x / l, y: y / l, z: z / l } };
-}
 
 /** How much the sun's disc warms toward the horizon, over the last 25° of
  *  TRUE altitude: 0 high (white core), 1 on the horizon (orange) — the same
@@ -293,7 +255,7 @@ export interface InSky { onArc: false; dir: Vec3; alpha: number }
 /**
  * Where the sun and the moon are drawn for this frame, and how opaque. Null
  * for a body that is not drawn at all (set, behind the camera, no villa yet).
- * `overview` is the sky's drop being on (liftFor > 0); walking, the sun's
+ * `overview` is the sky's horizon drop being on; walking, the sun's
  * disc is off (the sky material draws the real one) and the moon is in its
  * true direction.
  */
@@ -309,17 +271,18 @@ export function placeBodies(now: BodiesNow, frame: { overview: boolean; villa: V
 /** THE SUN: on the arc while it is up (fading in and out at the horizon),
  *  hidden when really behind the viewer. */
 function sunOnArc(d: Vec3, villa: VillaBox, view: SkyView): OnArc | null {
-  const arc = arcPoint(d.x, d.y, d.z, villa);
-  const shown = arc.at ? onScreen(view, arc.at, arc.side, arc.alt, villa, true) : null;
-  return shown ? { onArc: true, ...shown, alpha: arc.fade * shown.alpha, alt: arc.alt, side: arc.side } : null;
+  const pt = bodyPoint(d, villa, 0);
+  const fade = arcFade(pt.alt);
+  const shown = fade > 0 ? onScreen(view, pt.at as Vec3, pt.side, pt.alt, villa, true) : null;
+  return shown ? { onArc: true, ...shown, alpha: fade * shown.alpha, alt: pt.alt, side: pt.side } : null;
 }
 
 /** THE MOON: on the WHOLE sphere — under the villa once set (the night hours
  *  of the owner's 24-hour drawing, 2026-10-17), so never hidden for being on
  *  the viewer's side; shown at night by the real clock. */
 function moonOnArc(d: Vec3, moonT: number, villa: VillaBox, view: SkyView): OnArc | null {
-  const pt = spherePoint(d.x, d.y, d.z, villa);
-  const shown = onScreen(view, pt.at, pt.side, pt.alt, villa, false);
+  const pt = bodyPoint(d, villa);
+  const shown = onScreen(view, pt.at as Vec3, pt.side, pt.alt, villa, false);
   return shown ? { onArc: true, ...shown, alpha: moonT > 0 ? moonT * shown.alpha : 0, alt: pt.alt, side: pt.side } : null;
 }
 
@@ -327,29 +290,28 @@ function moonOnArc(d: Vec3, moonT: number, villa: VillaBox, view: SkyView): OnAr
  *  (there is a ground under the viewer). Placed even while hidden: where it
  *  is is the hour's, whether it shows is the view's. */
 function moonInSky(d: Vec3, moonT: number): InSky | null {
-  const { fade, dir } = skyDirection(d.x, d.y, d.z);
-  return dir ? { onArc: false, dir, alpha: moonT > 0 ? moonT * fade : 0 } : null;
+  const { alt, unit } = bodyPoint(d, null);
+  const fade = horizonFade(alt);
+  return fade > 0 ? { onArc: false, dir: unit, alpha: moonT > 0 ? moonT * fade : 0 } : null;
 }
 
 /**
- * Show `point` (arcPoint's or spherePoint's `at`) for `view`: how opaque the
- * body is from the viewer's side (0 when really behind — the sun only,
- * `hideBehind`), where it shows on screen — the point, or, when that is off
- * screen, the screen edge on its side — and where it is drawn in the world:
- * on that line of sight, never nearer than just beyond the villa, with the
- * scale its size takes there (drawnDepth). Null when the point is behind the
- * camera and below the eye.
+ * Whether a body whose point is `point` is SEEN from `view`, and where on the
+ * screen (pixels, viewport-relative): the point itself, or — off screen — the
+ * place it waits at the edge on its side (holdOnScreen). The ONE place that
+ * decides it is shown: null when the point is behind the camera and below the
+ * eye; `alpha` 0 when it is really behind the viewer (`hideBehind`: the sun)
+ * or waits at the top edge with its point on the viewer's side.
  */
-function onScreen(view: SkyView, point: Vec3, side: { x: number; z: number }, alt: number, villa: VillaBox, hideBehind: boolean):
-  { at: Vector3; scale: number; alpha: number; screen: { x: number; y: number }; held: boolean } | null {
+function seen(view: SkyView, p: Vector3, side: { x: number; z: number }, alt: number, villa: VillaBox, hideBehind: boolean):
+  { s: Vector3; x: number; y: number; held: boolean; alpha: number } | null {
   const vp = view.viewport, fwd = view.forward;
-  const p = new Vector3(point.x, point.y, point.z);
   let s = Vector3.Project(p, Matrix.Identity(), view.view.multiply(view.projection), vp);
   if (!(s.z > 0 && s.z < 1)) {
     // Behind the camera's plane — zoomed in close under a high sun, the point
     // is above and behind the eye. Its projection lands mirrored, so the side
     // it is on is read in the camera's own frame instead, and it waits at the
-    // screen edge there (holdOnScreen) rather than vanishing.
+    // screen edge there rather than vanishing.
     // Only a body ABOVE the eye waits (at the top or a side): one below and
     // behind it would wait along the bottom, over the ground in front of the
     // house, so it is simply not seen.
@@ -361,13 +323,27 @@ function onScreen(view: SkyView, point: Vec3, side: { x: number; z: number }, al
   }
   const h = holdOnScreen(s.x - vp.x, s.y - vp.y, vp.width, vp.height);
   const above = Math.max(0, (h.y - (s.y - vp.y)) / vp.height);
-  const alpha = (hideBehind ? behindFade(side, alt, fwd) : 1) * nearSideHold(point, villa, fwd, above);
-  const onSight = h.held
-    ? Vector3.Unproject(new Vector3(h.x, h.y, s.z), vp.width, vp.height, Matrix.Identity(), view.view, view.projection)   // viewport-relative pixels
+  const alpha = (hideBehind ? behindFade(side, alt, fwd) : 1) * nearSideHold(p, villa, fwd, above);
+  return { s, x: h.x, y: h.y, held: h.held, alpha };
+}
+
+/**
+ * Show `point` (bodyPoint's `at`) for `view` (`seen`), and where it is drawn
+ * in the world: on that line of sight, never nearer than just beyond the villa, with the scale
+ * its size takes there (NEAREST_SPANS). Null when it is not seen at all.
+ */
+function onScreen(view: SkyView, point: Vec3, side: { x: number; z: number }, alt: number, villa: VillaBox, hideBehind: boolean):
+  { at: Vector3; scale: number; alpha: number; screen: { x: number; y: number }; held: boolean } | null {
+  const p = new Vector3(point.x, point.y, point.z);
+  const w = seen(view, p, side, alt, villa, hideBehind);
+  if (!w) return null;
+  const vp = view.viewport, eye = view.eye;
+  const onSight = w.held
+    ? Vector3.Unproject(new Vector3(w.x, w.y, w.s.z), vp.width, vp.height, Matrix.Identity(), view.view, view.projection)   // viewport-relative pixels
     : p;
-  const eye = view.eye;
-  const d = drawnDepth(Vector3.Distance(eye, p),
-    Vector3.Distance(eye, new Vector3(villa.cx, villa.ground, villa.cz)), villa.span);
-  const at = eye.add(onSight.subtract(eye).normalize().scale(d.depth));
-  return { at, scale: d.scale, alpha, screen: { x: h.x / vp.width, y: h.y / vp.height }, held: h.held };
+  const pointDist = Vector3.Distance(eye, p);
+  const depth = Math.max(pointDist, Vector3.Distance(eye, new Vector3(villa.cx, villa.ground, villa.cz)) + villa.span);
+  const scale = depth / Math.max(pointDist, NEAREST_SPANS * villa.span);
+  const at = eye.add(onSight.subtract(eye).normalize().scale(depth));
+  return { at, scale, alpha: w.alpha, screen: { x: w.x / vp.width, y: w.y / vp.height }, held: w.held };
 }

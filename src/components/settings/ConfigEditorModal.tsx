@@ -14,6 +14,7 @@ import { useModalA11y } from "@/hooks/useModalA11y";
 import { Boxes, Home, LogOut, Upload, Wrench } from "lucide-react";
 import ModalTabs, { type ModalTab } from "@/components/common/ModalTabs";
 import { useConfig } from "@/config/ConfigContext";
+import { northOffsetFacing } from "@/babylon/skyMoment";
 import { useProfile } from "@/auth/ProfileContext";
 import CentralModelInfo from "./CentralModelInfo";
 import { useGlbUpload, ModelFileInput } from "./useGlbUpload";
@@ -92,9 +93,11 @@ function VillaCoordinates() {
 /** Which way the model faces (owner, 2026-10-12: moved here from Settings, below
  *  the villa's coordinates — both place the villa on the real Earth, and the sun
  *  is drawn from the two together). The sun and moon are computed from the
- *  coordinates and the clock, but their direction assumes the MODEL's +Z points
- *  north, and a GLB's heading is whatever its floor-plan export produced: this
- *  turns the whole sky to match. Ships at 0 rather than a seeded guess, which
+ *  coordinates and the clock, but which way the MODEL faces is whatever its
+ *  floor-plan export produced: this turns the whole sky to match. Set North
+ *  stores the offset that makes the view's heading true north
+ *  (skyMoment.northOffsetFacing — it stored the heading itself until
+ *  2.496.404, and the morning sun came up in the west). Ships at 0 rather than a seeded guess, which
  *  would be right for one villa only. Applies live, like everything on this tab. */
 function NorthOffset({ viewHeadingDeg }: { viewHeadingDeg?: () => number | null }) {
   const { config, update } = useConfig();
@@ -118,7 +121,7 @@ function NorthOffset({ viewHeadingDeg }: { viewHeadingDeg?: () => number | null 
           disabled={!viewHeadingDeg}
           onClick={() => {
             const h = viewHeadingDeg?.();
-            if (h != null) update({ northOffsetDeg: Math.round(h) });
+            if (h != null) update({ northOffsetDeg: northOffsetFacing(h) });
           }}
         >
           Set North
