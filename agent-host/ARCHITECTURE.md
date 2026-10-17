@@ -397,3 +397,20 @@ step numbers the scripts' messages cite (page.py: "SKILL.md step 6").
   (`basis: names`, `total_basis` in words). The reports' days, trend and "use while empty" read `Ctx.daily_total`
   (the same rule over `total_from`), never one meter by name. Closes the 0.12.187 OPEN note on energy_period's
   "main"/"phase"/"returned" words (they remain, as the fallback only).
+
+## An alert card: one table of steps, a heading as facts, one set of words (architecture review, 2026-10-17)
+
+- **One table of steps** — `vesta_shared/message_format.STEPS`: each step's history words, its title word, whether its
+  bottom line says its own time, whether the Kiosk's card tells it. `result.STAGES` is its keys plus `pressed`. It
+  replaced five tables (`notice.STAGES`, `HEAD_WORDS`, `TIMED_STAGES`, `NOTED_STAGES`, `result.STAGES`). A new step is
+  one line. The alert desk's own `ASKING` (which notice asks for an answer) and its "FM" / "the owner" wording stay in
+  the skill: skills before code.
+- **A heading is facts** — `layout.head(title, to, history, word)`; `notice.Notices.heading` returns it, `layout.render`
+  draws it. Nothing reads a heading back by pattern any more: `retitle` sets `word`. A heading stored as text (a record
+  from 0.12.229 or earlier, or a "For: …" one) is read once by `layout.head_of`.
+- **One set of words for the villa's own alerts** — the words block of
+  `homeassistant/custom_templates/vesta_message.jinja` is written by `message_format.jinja_words`
+  (`python -m vesta_shared.message_format`), and a test fails when it differs or a word is written by hand outside it.
+  "To:" there says roles as an alert card does ("Owner & FM"), read from any of their words separated by ",". The
+  template itself stays: an alert never waits on the agent. Its tests render it in an immutable sandbox, as the
+  villa's system does.

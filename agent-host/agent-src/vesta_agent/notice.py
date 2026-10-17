@@ -30,9 +30,7 @@ named who a message was for. The skill now writes only what happened; this write
 """
 from __future__ import annotations
 
-import re
-
-from vesta_shared.message_format import INCIDENT_TITLE, MARK_ICONS, ROLE_WORDS, TO, UNTITLED, audience, titled
+from vesta_shared.message_format import MARK_ICONS, PRESSED_STAGE, ROLE_WORDS, STEPS, UNTITLED, audience
 from vesta_shared.messaging import incident_tag
 from vesta_shared.problems import AGAIN_DAYS
 from vesta_shared.timeutil import moment_label
@@ -40,37 +38,15 @@ from vesta_shared.timeutil import moment_label
 from datetime import datetime, timezone
 from typing import Callable
 
+from . import layout
 
-#: A notice's kind (vesta_shared.result.message `stage`), as its history line says it.
-#: ⚠️ WHAT WAS SENT, TO WHOM (owner, 2026-10-11, the laundry door's #21: "redundant and at different places, hard to
-#: understand"): "First time seen on …, to the Owner" read as who had seen it; "For: the Owner, P2 Incident" as a list.
-STAGES = {"new": "Alert sent", "reminder": "Reminder sent", "escalated": "Escalation sent", "update": "Update sent",
-          "back": "Came-back alert sent", "still": "Still-there alert sent", "reopened": "Reopen request sent",
-          "closed": "Closing note sent"}
-#: The title's word for a notice of this stage (owner, 2026-10-11: a closing message headed "New #9" — "is it a
-#: closure or not?"; then: "mention if it's a new or an existing alert, no more Follow Up wording anywhere"): the
-#: message says what IT is; a notice without a stage goes by the incident's history.
-HEAD_WORDS = {"new": "new", "closed": "closed"}
-#: The steps whose bottom line says what was sent, when and to whom before the desk's words ("⚠️ ⚙️ Reminder sent
-#: 16/10/2026 18:20 to FM — No answer after 15 min").
-#: ⚠️ A QUIET EDIT CARRIES ITS OWN TIME (owner, 2026-10-16, #43): the group's copy of a came-back alert, sent at 18:03,
-#: was edited without a sound to "Reminder: no answer after 15 min" — it read as if it had happened at 18:03, and the
-#: reminder was nowhere in its history (a card's history is drawn as it stood BEFORE its step). The first alert is its
-#: message's own moment; a closing says its own time ("Cleared on …").
-TIMED_STAGES = ("reminder", "escalated", "back", "still", "reopened")
+
 #: Between a step's line and the desk's words on the bottom line.
 STEP_SEP = " — "
 EXISTING = "existing"
 #: An incident's history kept: its first notice, a line counting those dropped, and the latest ones (review 28: after
 #: 20 notices the first alert vanished without a word).
 HISTORY_KEPT = 20
-
-
-#: The notices a fault's card in the Kiosk tells too (a "noted" step each, tickets.repair): what chased or escalated it,
-#: or brought it back — never the first alert (the fault itself) nor the closing (its close step says it).
-NOTED_STAGES = ("reminder", "escalated", "still", "back", "reopened")
-#: A button pressed on an alert, in its history for the Kiosk's card only (Telegram shows it as the message's footer).
-PRESSED_STAGE = "pressed"
 
 
 def note_press(state, incident: int, label: str, name: str, mark: str | None = None, option: str = "") -> None:
@@ -140,8 +116,8 @@ class Notices:
 
     def heading(self, chat: int, incident: int | None = None, to=None, stage: str | None = None,
                 also=None, title: str | None = None) -> str:
-        """The heading of a notice to `chat` (about `incident`), as it stands before this notice is recorded — its lines,
-        which the layout places (layout.py: the title and "To …:" on top, the history under "Status:"):
+        """The heading of a notice to `chat` (about `incident`), as it stands before this notice is recorded — as facts
+        (layout.head), which the layout places (layout.py: the title and "To …:" on top, the history under "Status:"):
 
             #9-P2 (existing)            the incident, its priority, and "new" / "existing" / "closed" (`stage`)
             To: Owner & FM                                    who this message is for
@@ -152,7 +128,7 @@ class Notices:
         same line in every chat (owner, 2026-10-11: one incident, one picture). A message about no incident: its `title`
         (UNTITLED when it has none), and "To:" the roles of `also`, else the chat's of `to`."""
         if incident is None:
-            return titled(title or UNTITLED, audience(set(also or ()) or self.roles_for(chat, to)), "")
+            return layout.head(title or UNTITLED, audience(set(also or ()) or self.roles_for(chat, to)) or "this chat")
         history = self.state.incident_history(incident)
         everyone = {r for h in history for r in self._roles(h)} | set(also or ())
         who = audience(everyone or self.roles_for(chat, to), short=True) or "this chat"
@@ -171,17 +147,18 @@ class Notices:
                          f"- {h['note']}" if h.get("note") else
                          f"- {self._pressed(h)} {when(datetime.fromisoformat(h['at']), self.tz)}" if h.get("stage") == PRESSED_STAGE else
                          f"- {self.step(h.get('stage'), self._roles(h), datetime.fromisoformat(h['at']))}")
-        return "\n".join([f"{incident_tag(incident)}{f'-{p}' if p else ''} ({word})", f"{TO}{who}", *lines])
+        return layout.head(f"{incident_tag(incident)}{f'-{p}' if p else ''}", who, lines, word)
 
     def step(self, stage: str | None, roles, at: datetime) -> str:
         """A step as a card's "Status:" says it — what was sent, when, to whom: "Reminder sent 16/10/2026 18:20 to FM".
         The ONE wording of a step, in its history line and on its own bottom line (`bottom`)."""
-        return f"{STAGES.get(stage, 'Sent')} {when(at, self.tz)} to {audience(roles, short=True) or 'nobody'}"
+        sent = STEPS[stage].sent if stage in STEPS else "Sent"
+        return f"{sent} {when(at, self.tz)} to {audience(roles, short=True) or 'nobody'}"
 
     def bottom(self, stage: str | None, roles, status: str, at: datetime | None = None) -> str:
-        """The bottom line of a notice of `stage` sent now to `roles`: a TIMED_STAGES step says itself first, then the
-        skill's words (`status`); any other notice's status as it is."""
-        if stage not in TIMED_STAGES:
+        """The bottom line of a notice of `stage` sent now to `roles`: a timed step (message_format.STEPS) says itself
+        first, then the skill's words (`status`); any other notice's status as it is."""
+        if stage not in STEPS or not STEPS[stage].timed:
             return status
         line = self.step(stage, roles, at or datetime.now(timezone.utc))
         return f"{line}{STEP_SEP}{status}" if status else line
@@ -204,8 +181,8 @@ class Notices:
         "Status:" is written from, never by a second writer."""
         out = []
         for h in self.state.incident_history(incident):
-            if h.get("stage") in NOTED_STAGES:
-                out.append({"at": h["at"], "note": f"{STAGES[h['stage']]} to {audience(self._roles(h)) or 'nobody'}"})
+            if h.get("stage") in STEPS and STEPS[h["stage"]].noted:
+                out.append({"at": h["at"], "note": f"{STEPS[h['stage']].sent} to {audience(self._roles(h)) or 'nobody'}"})
             elif h.get("stage") == PRESSED_STAGE:
                 out.append({"at": h["at"], "note": self._pressed(h)})
         return out
@@ -214,7 +191,7 @@ class Notices:
         """The title's word for a notice about `incident`: what the notice is (`stage`) — else what the incident is
         (closed: "closed") — else "existing" once anything was sent about it, "new" before."""
         if stage:
-            return HEAD_WORDS.get(stage, EXISTING)
+            return STEPS[stage].title if stage in STEPS else EXISTING
         try:
             if self.closed(int(incident)):
                 return "closed"
@@ -222,19 +199,17 @@ class Notices:
             pass
         return EXISTING if history else "new"
 
-    def retitle(self, incident, head: str, chat: int = 0) -> str:
+    def retitle(self, incident, head, chat: int = 0):
         """A copy's heading as the incident stands now: an incident closed since is "closed" in every copy settled
         (architecture review 25: the owner's earlier copy kept "New #9" under "Cleared in Home Assistant on …")."""
-        if not str(incident).isdigit() or not head:
+        h = layout.head_of(head)
+        if not str(incident).isdigit() or not h:
             return head
-        first, _, rest = head.partition("\n")
-        if not INCIDENT_TITLE.fullmatch(first):
+        if not h["word"]:
             # ⚠️ A COPY SENT BEFORE 0.12.152 ("For: Jim, P2 Incident: Follow Up #9") gets the new heading whole the
             # first time it changes (review 28: settled, it kept the old look with the new icons, the other chats the new)
             return self.heading(chat, int(incident))
-        if self._is_closed(int(incident)):
-            first = re.sub(r"^(#\d+(?:-P\d)?) \((new|existing|closed)\)$", r"\1 (closed)", first)
-        return first + ("\n" + rest if rest else "")
+        return {**h, "word": "closed"} if self._is_closed(int(incident)) else h
 
     def _is_closed(self, incident: int) -> bool:
         try:
@@ -252,7 +227,7 @@ class Notices:
         history = self.state.incident_history(incident)
         chats = [[int(c), sorted(self.roles_for(c, to))] for c, to in sent]
         line = {"at": (at or datetime.now(timezone.utc)).isoformat(), "chats": chats,
-                "stage": stage if stage in STAGES else ("update" if history else "new")}
+                "stage": stage if stage in STEPS else ("update" if history else "new")}
         if line["stage"] == "back":
             try:
                 run = self.runs(int(incident))

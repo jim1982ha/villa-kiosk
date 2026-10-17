@@ -26,7 +26,10 @@ Another channel is another table of the same five keys, read the same way.
 """
 from __future__ import annotations
 
+import json
+import os
 import re
+from typing import NamedTuple
 
 from .messaging import tg_len
 
@@ -36,7 +39,8 @@ TO = "To: "
 ROLE_WORDS = {"owner": "Owner", "fm": "Facility Manager"}
 #: The same roles as an alert card says them — its "To:", every line of its "Status:" and its bottom line
 #: (vesta_agent/notice.py). ⚠️ "FM" ON AN ALERT CARD (owner, 2026-10-16): "Reminder sent … to Facility Manager" made
-#: every update line long; reports, the People page and the villa's own messages keep ROLE_WORDS.
+#: every update line long; reports and the People page keep ROLE_WORDS. The villa's own alerts say them as the card
+#: does (jinja_words; architecture review, 2026-10-17: the same alert read "Facility Manager", then "FM").
 ROLE_SHORT = {"owner": "Owner", "fm": "FM"}
 #: What joins two roles in a "To:" line.
 AND = " & "
@@ -68,6 +72,35 @@ STAGE_ICONS = {"new": "⚠️", "existing": "⚠️ ⚙️", "closed": "✅"}
 MARK_ICONS = {"help": "🆘", "unchecked": "☑️"}
 #: The bottom line of a stage that has none of its own (the first alert says only what Home Assistant said).
 STAGE_WORDS = {"new": "New alert", "existing": "Still open", "closed": "Closed: nothing more to do"}
+
+class Step(NamedTuple):
+    """One step of an alert's life, as its card says it (vesta_agent/notice.py)."""
+    sent: str               # its history line: "Reminder sent 16/10/2026 18:20 to FM"
+    title: str              # the card's title word while it is the latest step ("new", "existing", "closed")
+    timed: bool             # its bottom line says what, when and to whom before the desk's words
+    noted: bool             # the fault's card in the Kiosk tells it too (a "noted" step)
+
+
+#: EVERY STEP OF AN ALERT, ONE LINE EACH (architecture review, 2026-10-17: a step was named in five tables — the
+#: stages a skill may set, the history words, the title words, the timed ones, the Kiosk's noted ones — and adding one
+#: meant editing them all; "Reminder: no answer" once sat beside a reminder its history never showed).
+#: ⚠️ A QUIET EDIT CARRIES ITS OWN TIME (owner, 2026-10-16, #43): `timed` steps say their own moment on their bottom
+#: line — the group's copy of a came-back alert, edited without a sound, read as if the reminder had happened then.
+#: The Kiosk's card tells what chased, escalated or brought an alert back — never the first alert (the fault itself)
+#: nor the closing (its close step says it).
+STEPS: dict[str, Step] = {
+    "new": Step("Alert sent", "new", timed=False, noted=False),
+    "reminder": Step("Reminder sent", "existing", timed=True, noted=True),
+    "escalated": Step("Escalation sent", "existing", timed=True, noted=True),
+    "update": Step("Update sent", "existing", timed=False, noted=False),
+    "back": Step("Came-back alert sent", "existing", timed=True, noted=True),
+    "still": Step("Still-there alert sent", "existing", timed=True, noted=True),
+    "reopened": Step("Reopen request sent", "existing", timed=True, noted=True),
+    "closed": Step("Closing note sent", "closed", timed=False, noted=False),
+}
+#: A button pressed on an alert: the answer in its own chat is no step of its own — the press is the story's line
+#: (notice.note_press), never also an "Update sent" (architecture review, 2026-10-15).
+PRESSED_STAGE = "pressed"
 #: What a pressed Done / Need help leaves on its message ("{time}": the villa's time then, timeutil.moment_label).
 #: ⚠️ ONE WORDING (architecture review, 2026-10-13): Home Assistant's own job messages said "✅ Done - JM" and
 #: "🆘 Help requested - JM" where the agent's said "Done pressed by JM on 12/10/2026 17:13." — the HA template
@@ -303,3 +336,48 @@ def telegram_entities(text: str) -> list[dict]:
     """How Telegram shows a message (TELEGRAM): the title in bold, each section's items quoted, its notes quoted in
     italics."""
     return entities(text, TELEGRAM)
+
+
+#: The words the villa's own alerts are drawn with (homeassistant/custom_templates/vesta_message.jinja) sit in that file
+#: between these two lines, written by `jinja_words` — never by hand.
+JINJA_BEGIN = "{#- WORDS: written by vesta_shared.message_format.jinja_words — python -m vesta_shared.message_format -#}"
+JINJA_END = "{#- END WORDS -#}"
+JINJA_FILE = os.path.join(os.path.dirname(__file__), "..", "homeassistant", "custom_templates", "vesta_message.jinja")
+
+
+def jinja_words() -> str:
+    """The agent's words as the villa's own alert template reads them: the roles (every way a "To:" may name one, and
+    how an alert card says it), the stages' icons and words, a pressed button's line.
+
+    ⚠️ ONE SET OF WORDS (architecture review, 2026-10-17): the template kept its own copy — "Owner & Facility Manager"
+    after alert cards said "Owner & FM" (owner, 2026-10-16), so an alert read one way for a second, then the other once
+    the agent took it over. The template is a second renderer by necessity (an alert never waits on the agent); its
+    words are not."""
+    lit = lambda v: json.dumps(v, ensure_ascii=False)
+    names = {w.lower(): r for words in (ROLE_WORDS, ROLE_SHORT) for r, w in words.items()}
+    return "\n".join([
+        JINJA_BEGIN,
+        f"{{%- set vm_role_of = {lit(names)} -%}}",
+        f"{{%- set vm_role_words = {lit([[r, w] for r, w in ROLE_SHORT.items()])} -%}}",
+        f"{{%- set vm_and = {lit(AND)} -%}}",
+        f"{{%- set vm_icons = {lit({**STAGE_ICONS, 'help': MARK_ICONS['help']})} -%}}",
+        f"{{%- set vm_words = {lit(STAGE_WORDS)} -%}}",
+        f"{{%- set vm_pressed = {lit(PRESSED)} -%}}",
+        JINJA_END,
+    ])
+
+
+def write_jinja(path: str = JINJA_FILE) -> bool:
+    """The template's words block rewritten from `jinja_words`; True when it changed."""
+    with open(path, encoding="utf-8") as f:
+        src = f.read()
+    a, b = src.index(JINJA_BEGIN), src.index(JINJA_END) + len(JINJA_END)
+    new = src[:a] + jinja_words() + src[b:]
+    if new != src:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(new)
+    return new != src
+
+
+if __name__ == "__main__":
+    print("vesta_message.jinja:", "words rewritten" if write_jinja() else "already up to date")

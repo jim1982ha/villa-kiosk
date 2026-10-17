@@ -34,32 +34,65 @@ OLD_RULE = "\n-------\n"
 OLD_FOR = "For: "
 PARTS = ("head", "lead", "body", "status", "mark")
 
+def head(title: str, to: str = "", history=(), word: str | None = None) -> dict:
+    """A message's heading as facts, never as text: its `title` ("#9-P2", "Approval request"), who it is for (`to`,
+    the "To:" line's words), an incident's `history` (its "- …" lines and dividers) and, for an incident, its title's
+    `word` ("new", "existing", "closed": the title reads "#9-P2 (existing)").
+
+    ⚠️ FACTS UNTIL DRAWN (architecture review, 2026-10-17): the heading was written as text, then read back — its stage
+    word by a pattern, its title rewritten by another, its "To:" and history by splitting lines — so a wording change
+    could quietly drop a card's ✅ or its "(closed)". Only a record stored before 0.12.230 is read from text (`head_of`)."""
+    return {"title": (title or "").strip(), "to": (to or "").strip(), "history": [x for x in history if x],
+            "word": word or None}
+
+
+def head_of(h) -> dict | None:
+    """A heading as facts: one written by `head`, or one recorded as text (before 0.12.230: "#9-P2 (existing)" / "To: …" /
+    its history; before 0.12.175 "For: JM"). None for no heading."""
+    if isinstance(h, dict):
+        return head(h.get("title") or "", h.get("to") or "", h.get("history") or (), h.get("word"))
+    lines = [x for x in (h or "").strip().split("\n") if x]
+    if not lines:
+        return None
+    if lines[0].startswith(OLD_FOR):
+        lines = [UNTITLED, TO + lines[0][len(OLD_FOR):]] + lines[1:]
+    title, to, history = lines[0], (lines[1] if len(lines) > 1 else TO), lines[2:]
+    to = to[len(TO):] if to.startswith(TO) else to.removeprefix(TO.strip()).strip()
+    m = INCIDENT_TITLE.fullmatch(title)
+    return head(title[:-len(f" ({m.group(1)})")] if m else title, to, history, m.group(1) if m else None)
+
+
+def title_line(h: dict) -> str:
+    """A heading's first line: "#9-P2 (existing)", "Approval request"."""
+    return f"{h['title']} ({h['word']})" if h.get("word") else h["title"]
+
+
+def head_text(h) -> str:
+    """A heading as the message shows it: its title line, "To: …", then its history."""
+    h = head_of(h)
+    return "\n".join([title_line(h), f"{TO}{h['to']}".rstrip(), *h["history"]]) if h else ""
+
+
 #: An incident message's stage, as its title says it, shown again at the head of its bottom line (owner, 2026-10-11:
 #: "clearly see if this message is a new alert, a follow-up, or a closure — no more follow-up expected"). Taken from the
 #: title's word (notice.Notices), never decided twice: a copy retitled "(closed)" shows ✅ at once. STAGE_ICONS,
 #: STAGE_WORDS and MARK_ICONS (a person pressed Need help; closed, but VESTA could not check it) live in
 #: vesta_shared.message_format, the one place of the messages' shape and style.
-def _word(head: str) -> str | None:
-    """The stage word of an incident message's heading ("new", "existing", "closed"); None for any other message (a
-    copy sent before 0.12.152 gets the new heading the first time it changes: notice.Notices.retitle)."""
-    m = INCIDENT_TITLE.fullmatch((head or "").split("\n", 1)[0])
-    return m.group(1) if m else None
-
-
-def stage_line(head: str, status: str, mark: str | None = None) -> str:
+def stage_line(h, status: str, mark: str | None = None) -> str:
     """The bottom line with its icon, when the message is about an incident: "⚠️ New alert", "⚠️ ⚙️ Reminder sent … to FM — …",
     "🆘 Need help pressed by …", "✅ Cleared in Home Assistant on …", "☑️ Done pressed by …. Note: VESTA cannot check
     this one; …". Any other message's status as it is."""
-    word = _word(head)
+    word = (head_of(h) or {}).get("word")
     if not word:
         return status
     icon = MARK_ICONS.get(mark or "") if not (mark == "unchecked" and word != "closed") else None
     return f"{icon or STAGE_ICONS[word]} {status or STAGE_WORDS[word]}"
 
 
-def parts(body: str = "", status: str = "", head: str = "", lead: str = "", mark: str | None = None) -> dict:
-    """A message as its parts (any may be empty); `mark`: what its status is beyond its stage (MARK_ICONS)."""
-    return {"head": head or "", "lead": lead or "", "body": body or "", "status": status or "", "mark": mark}
+def parts(body: str = "", status: str = "", head=None, lead: str = "", mark: str | None = None) -> dict:
+    """A message as its parts (any may be empty); `head`: its heading as facts (`head`; a text one is read once:
+    `head_of`); `mark`: what its status is beyond its stage (MARK_ICONS)."""
+    return {"head": head_of(head) or "", "lead": lead or "", "body": body or "", "status": status or "", "mark": mark}
 
 
 #: What the middle (the alert, the action) always keeps, however long the head's history and the status are.
@@ -76,16 +109,13 @@ def render(p: dict, limit: int | None = None) -> str:
     ⚠️ NEVER A NEGATIVE ROOM (architecture review 20): a heading and a status longer than the limit asked fit() for a
     negative size, which never returns — the agent would have stopped answering."""
     limit = int(limit or p.get("limit") or TELEGRAM_LIMIT)
-    status = fit(stage_line(p.get("head") or "", (p.get("status") or "").strip(), p.get("mark")), max(limit // 4, 40))
-    lines = [x for x in (p.get("head") or "").strip().split("\n") if x]
-    if lines and lines[0].startswith(OLD_FOR):
-        lines = [UNTITLED, TO + lines[0][len(OLD_FOR):]] + lines[1:]
+    h = head_of(p.get("head"))
+    status = fit(stage_line(h, (p.get("status") or "").strip(), p.get("mark")), max(limit // 4, 40))
     middle = "\n".join(x.strip() for x in (p.get("lead"), p.get("body")) if x and x.strip())
-    if not lines:
+    if not h:
         tail = f"\n\n{STATUS}:\n{status}" if status else ""
         return fit(middle, max(limit - tg_len(tail), 20)) + tail if middle else tail.lstrip("\n")
-    title, to, history = lines[0], (lines[1] if len(lines) > 1 else TO), lines[2:]
-    to = to[len(TO):] if to.startswith(TO) else to.removeprefix(TO.strip()).strip()
+    title, to, history = title_line(h), h["to"], list(h["history"])
     floor, dropped, cap = min(MIDDLE_FLOOR, tg_len(middle)), 0, None
 
     def framed(mid: str) -> str:

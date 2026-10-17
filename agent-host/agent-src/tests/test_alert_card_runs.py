@@ -20,6 +20,7 @@ import pytest
 from helpers import make_agent, status
 from ha_fake import FakeHA, tool
 from telegram_fake import BOT
+from vesta_agent.layout import head_text
 from vesta_agent.ha_events import CONTEXT_KEY
 
 OWNER, FM = 111, 222
@@ -77,7 +78,7 @@ def test_the_rules_all_clear_and_the_closing_note_are_one_line(agent):
     # point 2: "Update sent 15:40 to Owner" and "Closing note sent 15:40 to Facility Manager" for one end
     rule(agent, "opened", 1, 500)
     rule(agent, "resolved", 1, 501)
-    hist = agent.notices.heading(GROUP, 1).split("\n")[2:]
+    hist = head_text(agent.notices.heading(GROUP, 1)).split("\n")[2:]
     assert len(hist) == 2 and re.fullmatch(rf"- Alert sent {T} to Owner & FM", hist[0]), hist
     assert re.fullmatch(rf"- Closing note sent {T} to Owner & FM", hist[1]), hist
     assert not any("Update sent" in ln for ln in hist)
@@ -131,3 +132,33 @@ def test_only_a_later_step_says_itself_on_the_bottom_line():
     assert n.bottom("escalated", {"owner"}, "", at) == "Escalation sent 16/10/2026 18:20 to Owner"
     for stage in ("new", "closed", "update", "pressed", None):
         assert n.bottom(stage, {"owner", "fm"}, "Cleared on 16/10/2026 18:20.", at) == "Cleared on 16/10/2026 18:20."
+
+
+def test_every_step_is_one_line_of_the_step_table_and_said_the_same_everywhere():
+    # architecture review, 2026-10-17: a step was named in five tables; a new one is ONE line of STEPS, and every reader
+    # — the history, the title, the bottom line, the Kiosk's card, the stages a skill may set — follows it
+    from vesta_agent.notice import Notices
+    from vesta_shared.message_format import STEPS
+    from vesta_shared.result import STAGES, message
+
+    class Hist:
+        def __init__(self):
+            self.h = {}
+
+        def incident_history(self, iid):
+            return list(self.h.get(iid, []))
+
+        def set_incident_history(self, iid, v):
+            self.h[iid] = v
+
+    at = datetime(2026, 10, 16, 18, 20, tzinfo=timezone.utc)
+    for stage, step in STEPS.items():
+        state = Hist()
+        n = Notices(state, lambda: None, "UTC")
+        assert stage in STAGES and message("fm", "x", incident=7, stage=stage)["stage"] == stage
+        assert head_text(n.heading(-1, 7, to="fm", stage=stage)).split("\n")[0] == f"#7 ({step.title})"
+        n.record(7, stage, [(-1, "fm")], at)
+        assert head_text(n.heading(-1, 7, to="fm")).split("\n")[-1] == f"- {step.sent} 16/10/2026 18:20 to FM", stage
+        said = n.bottom(stage, {"fm"}, "why", at)
+        assert said == (f"{step.sent} 16/10/2026 18:20 to FM — why" if step.timed else "why"), stage
+        assert [s["note"] for s in n.story(7)] == ([f"{step.sent} to Facility Manager"] if step.noted else []), stage

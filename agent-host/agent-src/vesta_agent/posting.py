@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Awaitable, Callable
 
-from vesta_shared.message_format import UNTITLED, audience, fill_to, pages, titled
+from vesta_shared.message_format import UNTITLED, audience, fill_to, pages
 
 from . import layout
 from .notice import when
@@ -47,14 +47,14 @@ class Poster:
         answering = bool(origin and origin.holds and chat == origin.chat)
         to = audience(also or (self.notices.roles_for(chat, roles) if self.notices else ())) if incident is None else ""
         filled = fill_to(text, to) if incident is None and not plain else None
-        head = ""
+        head = None
         if filled is not None:
             text = filled
         elif incident is None and not plain and (title or (self.notices and not answering)):
             title = title or UNTITLED
             if not (status or lead or thread is not None):
                 return await self._pages(chat, title, to, text, keyboard, document, photo, origin)
-            head = titled(title, to, "")
+            head = layout.head(title, to or "this chat")
         elif incident is not None and self.notices and not plain and not answering:
             head = self.notices.heading(chat, incident, roles, stage, also)
             # its own step, when and to whom, on its bottom line: a quiet copy elsewhere never reads as of its own time

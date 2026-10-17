@@ -14,6 +14,7 @@ The engine's reader is vesta_agent/outcome.py (carry_out); its keys:
 """
 from __future__ import annotations
 
+from .message_format import PRESSED_STAGE, STEPS
 
 #: A script result's mark that the Kiosk's faults must be brought up to date (its findings opened, still open or
 #: closed): the engine repairs them (app.run_code_job). ⚠️ ONE KEY, WRITTEN AND READ HERE (architecture review 13): the
@@ -49,11 +50,9 @@ def finding_name(finding: dict) -> str | None:
     return finding_detail(finding).get("name")
 
 
-#: What a notice about an incident is (its history line, vesta_agent/notice.py): the first one, a reminder to the same
-#: people, an escalation to others, any other update (an answer, a closing).
-# "pressed": the answer to a button press in its own chat — not a notice of its own: the press is the incident's
-# story line (notice.note_press), never also an "Update sent" (architecture review, 2026-10-15)
-STAGES = ("new", "reminder", "escalated", "update", "back", "still", "reopened", "closed", "pressed")
+#: What a notice about an incident is (its history line, vesta_agent/notice.py): every step of an alert
+#: (message_format.STEPS, one line each), and "pressed" — the answer to a button press in its own chat.
+STAGES = (*STEPS, PRESSED_STAGE)
 
 
 #: What a bottom line says beyond its stage (vesta_agent/layout.py draws it): a person asked for help; a closure VESTA

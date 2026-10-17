@@ -13,6 +13,7 @@ import re
 from datetime import datetime, timedelta, timezone
 
 from helpers import STARTER_SKILLS, make_agent
+from vesta_agent.layout import head_text
 from vesta_shared.store import Store
 
 spec = importlib.util.spec_from_file_location("desk27", os.path.join(STARTER_SKILLS, "alert-desk", "scripts", "desk.py"))
@@ -253,7 +254,7 @@ def test_a_close_reaches_a_copy_without_buttons_too(tmp_path):
 def test_an_old_copy_gets_the_new_heading_whole(tmp_path):
     # review 28: a copy sent before 0.12.152, settled, showed the old heading with the new icons and no style
     v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "Fabien", "role": "fm"}]})
-    head = v.notices.retitle(9, "For: Fabien, P2 Incident: Follow Up #9\nAlert sent on 09/10/2026 13:12, to Fabien", FM)
+    head = head_text(v.notices.retitle(9, "For: Fabien, P2 Incident: Follow Up #9\nAlert sent on 09/10/2026 13:12, to Fabien", FM))
     assert head.split("\n")[:2] == ["#9 (new)", "To: FM"]
 
 
@@ -269,6 +270,24 @@ def test_the_history_names_roles_and_keeps_its_first_alert(tmp_path):
                                    {"telegram_id": 555, "name": "Made", "role": "fm"}]}, f)
     for _ in range(25):
         v.notices.record(5, "reminder", [(FM, "fm"), (555, "fm")])
-    lines = v.notices.heading(FM, 5, "fm").split("\n")
+    lines = head_text(v.notices.heading(FM, 5, "fm")).split("\n")
     assert lines[1] == "To: FM" and lines[2].startswith("- Alert sent ") and lines[2].endswith(" to FM")
     assert lines[3] == "- … 7 earlier notices" and len(lines) == 2 + 20
+
+
+def test_a_heading_is_facts_and_a_heading_stored_as_text_reads_the_same():
+    from vesta_agent import layout
+    from vesta_shared.message_format import UNTITLED
+    # architecture review, 2026-10-17: the heading was written as text and read back by patterns; it is facts now, and
+    # a copy recorded before (0.12.229 and earlier) is read once, into the same facts — drawn the same, ✅ and all
+    old = "#3-P2 (closed)\nTo: Owner & FM\n- Alert sent 16/10/2026 18:03 to Owner & FM"
+    h = layout.head("#3-P2", "Owner & FM", ["- Alert sent 16/10/2026 18:03 to Owner & FM"], "closed")
+    assert layout.head_of(old) == h and layout.head_text(h) == old
+    for head in (old, h):
+        text = layout.render(layout.parts(head=head, body="Door unlocked", status="Cleared."))
+        assert text.split("\n")[0] == "#3-P2 (closed)" and text.endswith("\n✅ Cleared."), text
+    assert layout.head_of("For: JM") == layout.head(UNTITLED, "JM")
+    assert layout.head_of("Approval request\nTo: Owner")["word"] is None
+    # a title that only LOOKS like a stage is never read as one once it is facts
+    odd = layout.head("Pump (closed)", "Owner")
+    assert layout.render(layout.parts(head=odd, body="b", status="s")).endswith("\ns")

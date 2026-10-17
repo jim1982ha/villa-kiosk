@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 
 from helpers import settings
 from kiosk_fake import FakeKiosk
+from vesta_agent.layout import head_text
 from vesta_agent.notice import Notices, note_press
 from vesta_agent.policy import Policy
 from vesta_agent.state import State
@@ -55,7 +56,7 @@ def test_the_story_is_the_reminders_the_escalation_and_the_presses_not_the_first
     assert [x["note"] for x in notices.story(iid)] == [
         "Reminder sent to Facility Manager", "Escalation sent to Owner", "🆘 Need help pressed by Wayan"]
     # Telegram's "Status:" tells the press as the card does — once, never also as an "Update sent" (review 2026-10-15)
-    head = notices.heading(FM, iid)
+    head = head_text(notices.heading(FM, iid))
     assert "- 🆘 Need help pressed by Wayan " in head and "Update sent" not in head
 
 
@@ -85,12 +86,12 @@ def test_a_reworded_line_is_never_written_on_the_card_again(tmp_path):
     k, t, state, notices, iid, uid = villa(tmp_path)
     told(notices, state, iid, 1)
     run(t.repair())
-    import vesta_agent.notice as N
-    saved = dict(N.STAGES)
+    from vesta_shared.message_format import STEPS
+    saved = STEPS["reminder"]
     try:
-        N.STAGES["reminder"] = "Reminder posted"                       # tomorrow's rewording
+        STEPS["reminder"] = saved._replace(sent="Reminder posted")     # tomorrow's rewording
         run(t.repair())
     finally:
-        N.STAGES.clear(); N.STAGES.update(saved)
+        STEPS["reminder"] = saved
     notes = [u["note"] for u in k.ticket(uid)["updates"] if u.get("kind") == "noted"]
     assert notes.count("Reminder sent to Facility Manager") == 1 and "Reminder posted to Facility Manager" not in notes

@@ -13,6 +13,7 @@ import pytest
 from helpers import make_agent, body, status
 from ha_fake import FakeHA, tool
 from telegram_fake import BOT
+from vesta_agent.layout import head_text
 from vesta_agent.ha_events import CONTEXT_KEY
 
 OWNER, FM = 111, 222
@@ -161,7 +162,7 @@ def test_need_help_reaches_the_owner_with_the_buttons_to_answer(agent):
     notes = [x["note"] for x in agent.tickets.story(int(iid))]
     assert notes[0] == "Reminder sent to Facility Manager" and notes[-2:] == ["🆘 Need help pressed by Wayan",
                                                                                "Escalation sent to Owner"], notes
-    lines = agent.notices.heading(FM_CHAT, int(iid)).split("\n")[2:]
+    lines = head_text(agent.notices.heading(FM_CHAT, int(iid))).split("\n")[2:]
     kinds = [next((k for k in ("Alert sent", "Reminder sent", "🆘 Need help pressed by Wayan", "Escalation sent")
                    if l.startswith("- " + k)), l) for l in lines]
     assert kinds == ["Alert sent", "Reminder sent", "🆘 Need help pressed by Wayan", "Escalation sent"], lines

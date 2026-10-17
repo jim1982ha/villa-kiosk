@@ -1,3 +1,18 @@
+## 0.12.230
+
+What you will see on Telegram:
+- An alert reads the same from the start. The villa's own first message already says "To: Owner & FM", as the card
+  does once the Agent takes it over; it said "Owner & Facility Manager" for a second, then changed.
+- The villa's other alerts that use the same message layout say "FM" too.
+- This needs the new message layout file copied into the villa's system once. Until then, the villa's first message
+  keeps the long words; nothing else changes.
+
+Behind the scenes (nothing else visible changes):
+- The steps of an alert (alert sent, reminder, escalation, came back, still there, reopen request, closing note) are
+  listed once, with their words and habits; they were in five lists.
+- A card's title, "To:" line and history are kept as facts until the card is sent, instead of being written out and
+  read back. A wording change can no longer drop a card's ✅ or "(closed)" by accident.
+
 ## 0.12.229
 
 What you will see in the energy reports and the weekly page:

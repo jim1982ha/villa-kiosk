@@ -14,6 +14,7 @@ import re
 
 import jinja2
 import yaml
+from jinja2.sandbox import ImmutableSandboxedEnvironment
 
 from vesta_shared.message_format import STATUS, TELEGRAM, document, parts
 
@@ -23,7 +24,8 @@ TAG = {"bold": "b", "blockquote": "blockquote", "italic": "i"}
 
 
 def _env() -> jinja2.Environment:
-    return jinja2.Environment(loader=jinja2.FileSystemLoader(os.path.join(HA, "custom_templates")))
+    # Home Assistant renders templates in an immutable sandbox: a method or filter it refuses fails here too
+    return ImmutableSandboxedEnvironment(loader=jinja2.FileSystemLoader(os.path.join(HA, "custom_templates")))
 
 
 def _render(title, to, text, status) -> str:
@@ -52,10 +54,10 @@ def _expected(title, to, text, status) -> str:
 
 
 CASES = [
-    ("🔥 Mains phase overload", "Owner & Facility Manager", "Main Power Phase C 4450 W\nAbove 4000 W, Held 15 min",
+    ("🔥 Mains phase overload", "Owner & FM", "Main Power Phase C 4450 W\nAbove 4000 W, Held 15 min",
      "⚠️ New alert"),
     ("✅ Entrance door unlocked", "Owner", "Entrance door is locked", "✅ Resolved after 12 min"),
-    ("T <1> & co", "Facility Manager", "a < b > c & d", "s & <i>"),             # escaped once, never twice
+    ("T <1> & co", "FM", "a < b > c & d", "s & <i>"),             # escaped once, never twice
     ("Only a title", "Owner", "", ""),
     ("No text", "Owner", "", "⚠️ New alert"),
 ]
@@ -82,22 +84,43 @@ def test_the_styles_are_the_ones_the_agent_finds_in_the_same_text():
         assert (_styled(piece, kind) if TELEGRAM[kind] else html.escape(piece, quote=False)) in _render(*CASES[0])
 
 
-def test_to_is_a_role_the_rules_own_else_the_villa_wide_audience_as_the_agent_writes_it():
+def test_to_is_a_role_the_rules_own_else_the_villa_wide_audience_as_an_alert_card_says_it():
     # owner, 2026-10-12: "To:" is set in ONE place for every alert (input_text.vesta_alert_audience); a rule that names
-    # its own audience keeps it. Owner, 2026-10-13: a role, in the agent's words — never a name
-    from vesta_shared.message_format import audience
+    # its own audience keeps it. Owner, 2026-10-13: a role — never a name. Architecture review, 2026-10-17: said as the
+    # agent's alert card says it ("Owner & FM"), however the rule or the helper wrote it — the villa's helper reads
+    # "Owner, Facility Manager", which drew "Owner & Facility Manager", then the agent's edit "Owner & FM"
+    from vesta_shared.message_format import ROLE_SHORT, ROLE_WORDS, audience
     src = ("{%- set vm_title, vm_to, vm_text, vm_status = 'T', r, 'x', '' -%}"
            "{% include 'vesta_message.jinja' ignore missing %}")
     t = _env().from_string(src)
-    both, fm = audience({"owner", "fm"}), audience({"fm"})
+    to = lambda roles: f"\nTo: {html.escape(audience(roles, short=True))}\n"
+    fm = audience({"fm"})
     helper = lambda e: fm if e == "input_text.vesta_alert_audience" else "unknown"
     for roles in ({"owner"}, {"fm"}, {"owner", "fm"}):
-        assert f"\nTo: {html.escape(audience(roles))}\n" in t.render(r=audience(roles), states=helper)
-    both = html.escape(both)
-    assert f"\nTo: {fm}\n" in t.render(r="", states=helper)
-    assert f"\nTo: {both}\n" in t.render(r="JM, Fabien", states=helper)          # a name is never written
-    assert f"\nTo: {both}\n" in t.render(r="", states=lambda e: "unknown")
-    assert f"\nTo: {both}\n" in t.render(r="")                                    # no states() at all (not HA)
+        for words in (ROLE_WORDS, ROLE_SHORT):
+            for joined in (" & ", ", ", ","):
+                written = joined.join(w for r, w in words.items() if r in roles)
+                assert to(roles) in t.render(r=written, states=helper), written
+                assert to(roles) in t.render(r=written.upper(), states=helper), written
+                assert to(roles) in t.render(r="", states=lambda e: written), written      # the villa-wide helper
+    every = to({"owner", "fm"})
+    assert to({"fm"}) in t.render(r="", states=helper)
+    assert every in t.render(r="JM, Fabien", states=helper)                     # a name is never written
+    assert every in t.render(r="", states=lambda e: "unknown")
+    assert every in t.render(r="")                                              # no states() at all (not HA)
+
+
+def test_the_templates_words_are_written_from_the_agents_never_by_hand():
+    # architecture review, 2026-10-17: the file kept its own copy of the roles, icons and words — it said "Facility
+    # Manager" a day after alert cards said "FM". Its words block is message_format.jinja_words, whole
+    from vesta_shared.message_format import JINJA_BEGIN, JINJA_END, jinja_words
+    with open(os.path.join(HA, "custom_templates", "vesta_message.jinja"), encoding="utf-8") as f:
+        src = f.read()
+    block = src[src.index(JINJA_BEGIN):src.index(JINJA_END) + len(JINJA_END)]
+    assert block == jinja_words(), "run: python -m vesta_shared.message_format"
+    rest = src.replace(block, "")
+    for word in ("Facility Manager", "'FM'", '"FM"', "New alert", "Still open", "pressed by", "⚠️", "✅", "🆘"):
+        assert word not in rest.split("-#}", 1)[1], f"{word!r} is written by hand outside the words block"
 
 
 def test_a_missing_file_draws_nothing_so_the_blueprint_sends_plain_text():

@@ -14,6 +14,7 @@ import pytest
 import yaml
 
 from helpers import body, make_agent, settings, status as status_of
+from vesta_agent.layout import head_text
 from vesta_shared.message_format import UNTITLED
 from telegram_fake import BOT
 from vesta_agent import button_data, status, tool_access
@@ -138,11 +139,11 @@ def test_in_a_private_chat_the_persons_own_role_decides_in_a_group_the_least(tmp
 def test_the_to_line_names_the_role_the_message_is_for(tmp_path):
     s = settings(str(tmp_path))
     n = Notices(State(s.state_path), lambda: Policy({"people": PEOPLE}), "UTC")
-    assert n.heading(JM, to="owner") == f"{UNTITLED}\nTo: Owner"
-    assert n.heading(GROUP, to="fm", title="Approval request") == "Approval request\nTo: Facility Manager"
-    assert n.heading(GROUP) == f"{UNTITLED}\nTo: Owner & Facility Manager"   # no role given: the chat's
+    assert head_text(n.heading(JM, to="owner")) == f"{UNTITLED}\nTo: Owner"
+    assert head_text(n.heading(GROUP, to="fm", title="Approval request")) == "Approval request\nTo: Facility Manager"
+    assert head_text(n.heading(GROUP)) == f"{UNTITLED}\nTo: Owner & Facility Manager"   # no role given: the chat's
     alone = Notices(State(s.state_path), lambda: Policy({"people": [PEOPLE[4]]}), "UTC")
-    assert alone.heading(GROUP, to="owner") == f"{UNTITLED}\nTo: Owner"
+    assert head_text(alone.heading(GROUP, to="owner")) == f"{UNTITLED}\nTo: Owner"
 
 
 def test_to_names_roles_only_never_a_person(tmp_path):
@@ -158,12 +159,12 @@ def test_to_names_roles_only_never_a_person(tmp_path):
     # one incident sent to both: ONE "To:" for it, both roles — in every chat, and in its history line; an alert card
     # says "FM" (owner, 2026-10-16)
     v.notices.record(25, "new", [(GROUP, "owner"), (FABIEN, "fm"), (JM, "fm")])
-    head = v.notices.heading(GROUP, 25, "owner", "closed")
+    head = head_text(v.notices.heading(GROUP, 25, "owner", "closed"))
     both = "Owner & FM"
     assert head.split("\n")[1] == f"To: {both}" and head.split("\n")[2].endswith(f" to {both}"), head
     # a history line recorded before 0.12.181 named people: read back as their roles
     v.state.set_incident_history(26, [{"at": "2026-10-12T08:00:00+00:00", "stage": "new", "to": ["Fabien", "the Owner"]}])
-    assert v.notices.heading(FABIEN, 26).split("\n")[1:] == [f"To: {both}", f"- Alert sent 12/10/2026 08:00 to {both}"]
+    assert head_text(v.notices.heading(FABIEN, 26)).split("\n")[1:] == [f"To: {both}", f"- Alert sent 12/10/2026 08:00 to {both}"]
 
 
 def test_a_chat_listed_for_both_roles_is_headed_for_both(tmp_path):

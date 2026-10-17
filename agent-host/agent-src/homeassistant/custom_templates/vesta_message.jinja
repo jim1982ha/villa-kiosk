@@ -15,9 +15,15 @@
         <blockquote><i>⚠️ New alert</i></blockquote>
 
     "To:" is vm_to when a rule names who it is for; empty, it is the villa-wide input_text.vesta_alert_audience (one
-    place for every alert, owner 2026-10-12). It is a ROLE, as the agent writes it (message_format.audience; owner,
-    2026-10-13: "To: Owner", "To: Facility Manager" or "To: Owner & Facility Manager", never a name): any other value —
-    a name, the helper missing — is "Owner & Facility Manager".
+    place for every alert, owner 2026-10-12). It names ROLES, as an alert card says them (message_format.audience,
+    short; owner, 2026-10-16: "To: Owner", "To: FM" or "To: Owner & FM", never a name). Each role is read in any of
+    its words, apart by ",": "Owner, Facility Manager" is "Owner & FM". A value naming no single role — a name, two
+    joined by "&", the helper missing — is every role.
+
+    The words themselves (roles, stage icons and words, a pressed button's line) are the agent's: the block between
+    WORDS and END WORDS is written by vesta_shared.message_format.jinja_words — run
+    `python -m vesta_shared.message_format` after changing them there; never edit it here (architecture review,
+    2026-10-17: this file kept "Facility Manager" after alert cards said "FM").
 
     The bottom line is said by its STAGE, in the agent's own words (architecture review, 2026-10-13: a job's Done read
     "✅ Done - JM" here and "✅ Done pressed by JM on 12/10/2026 17:13." under the agent's alerts). A rule sets
@@ -32,20 +38,33 @@
     italic); its test (tests/test_ha_message_layout.py) fails when this file and the agent's layout or words differ.
     Text is escaped here, once: Telegram's HTML refuses a bare "<", ">" or "&". -#}
 {%- macro vm_escape(s) -%}{{ (s | default('', true) | string | trim) | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') }}{%- endmacro -%}
+{#- WORDS: written by vesta_shared.message_format.jinja_words — python -m vesta_shared.message_format -#}
+{%- set vm_role_of = {"owner": "owner", "facility manager": "fm", "fm": "fm"} -%}
+{%- set vm_role_words = [["owner", "Owner"], ["fm", "FM"]] -%}
+{%- set vm_and = " & " -%}
+{%- set vm_icons = {"new": "⚠️", "existing": "⚠️ ⚙️", "closed": "✅", "help": "🆘"} -%}
+{%- set vm_words = {"new": "New alert", "existing": "Still open", "closed": "Closed: nothing more to do"} -%}
+{%- set vm_pressed = "{label} pressed by {name} on {time}." -%}
+{#- END WORDS -#}
 {%- set vm_r = vm_to | default('', true) | string | trim -%}
 {%- if not vm_r and states is defined -%}{%- set vm_r = states('input_text.vesta_alert_audience') | trim -%}{%- endif -%}
-{%- set vm_roles = ['Owner', 'Facility Manager', 'Owner & Facility Manager'] -%}
-{%- if vm_r not in vm_roles -%}{%- set vm_r = vm_roles[-1] -%}{%- endif -%}
+{%- set vm_named = namespace(roles=[], words=[]) -%}
+{%- for vm_w in (vm_r | lower).split(',') -%}
+{%- set vm_k = vm_role_of.get(vm_w | trim) -%}
+{%- if vm_k -%}{%- set vm_named.roles = vm_named.roles + [vm_k] -%}{%- endif -%}
+{%- endfor -%}
+{%- for vm_k, vm_w in vm_role_words -%}
+{%- if not vm_named.roles or vm_k in vm_named.roles -%}{%- set vm_named.words = vm_named.words + [vm_w] -%}{%- endif -%}
+{%- endfor -%}
+{%- set vm_r = vm_named.words | join(vm_and) -%}
 {%- set vm_t = vm_text | default('', true) | string | trim -%}
 {%- set vm_s = vm_status | default('', true) | string | trim -%}
-{%- set vm_icons = {'new': '⚠️', 'existing': '⚠️ ⚙️', 'closed': '✅', 'help': '🆘'} -%}
-{%- set vm_words = {'new': 'New alert', 'existing': 'Still open', 'closed': 'Closed: nothing more to do'} -%}
 {%- set vm_g = vm_stage | default('', true) | string | trim -%}
 {%- if vm_g in vm_icons -%}
 {%- set vm_p = vm_who | default('', true) | string | trim -%}
 {%- if vm_p -%}
 {%- set vm_at = now().strftime('%d/%m/%Y %H:%M') if now is defined else '' -%}
-{%- set vm_said = '{label} pressed by {name} on {time}.' | replace('{label}', 'Need help' if vm_g == 'help' else 'Done') | replace('{name}', vm_p) | replace('{time}', vm_at) -%}
+{%- set vm_said = vm_pressed | replace('{label}', 'Need help' if vm_g == 'help' else 'Done') | replace('{name}', vm_p) | replace('{time}', vm_at) -%}
 {%- set vm_s = (vm_said ~ ' ' ~ vm_s) | trim -%}
 {%- endif -%}
 {%- set vm_s = vm_icons[vm_g] ~ ' ' ~ (vm_s or vm_words.get(vm_g, '')) -%}

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.221 (17 October 2026)
+
+Architecture review, 2026-10-17 (owner: "do all of them"), the alert card:
+- message_format.STEPS: one table of an alert's steps (history words, title word, timed, noted); result.STAGES is its
+  keys + "pressed". notice.STAGES / HEAD_WORDS / TIMED_STAGES / NOTED_STAGES are gone.
+- layout.head(title, to, history, word): a heading is facts; Notices.heading returns it, retitle sets its word. A
+  text heading (stored by 0.12.229 or earlier, "For: …") is read once by layout.head_of; INCIDENT_TITLE now reads only
+  old records and the AI's text.
+- message_format.jinja_words writes the words block of homeassistant/custom_templates/vesta_message.jinja (python -m
+  vesta_shared.message_format). The template says roles as an alert card does ("Owner & FM"), each read from any of its
+  words separated by "," (the villa's helper reads "Owner, Facility Manager"). Template tests run in an immutable
+  sandbox. 4 new tests, 9 mutations RED.
+
 ## 0.6.220 (16 October 2026)
 
 Architecture review round 2, "how much electricity the villa used" (owner asked; done while offline):

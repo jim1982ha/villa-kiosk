@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 from villa_timeline import TimelineVilla
 from helpers import STARTER_SKILLS, make_agent
 from kiosk_fake import FakeKiosk
+from vesta_agent.layout import head_text
 from vesta_shared.problems import Problems
 from vesta_shared.store import Store
 
@@ -41,10 +42,10 @@ def test_a_closing_message_is_headed_closed_never_new(tmp_path):
     v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]})
     n = v.notices
     to = "To: FM"                                                   # an alert card's word (owner, 2026-10-16)
-    assert n.heading(FM, 9, "fm", "new") == f"#9 (new)\n{to}"
-    assert n.heading(FM, 9, "fm", "closed") == f"#9 (closed)\n{to}"               # no history: still "closed"
-    assert n.heading(FM, 9, "fm", "back") == f"#9 (existing)\n{to}"               # owner: never "Follow Up"
-    assert n.heading(FM, 9, "fm") == f"#9 (new)\n{to}"                            # no stage: by its history, as before
+    assert head_text(n.heading(FM, 9, "fm", "new")) == f"#9 (new)\n{to}"
+    assert head_text(n.heading(FM, 9, "fm", "closed")) == f"#9 (closed)\n{to}"               # no history: still "closed"
+    assert head_text(n.heading(FM, 9, "fm", "back")) == f"#9 (existing)\n{to}"               # owner: never "Follow Up"
+    assert head_text(n.heading(FM, 9, "fm")) == f"#9 (new)\n{to}"                            # no stage: by its history, as before
     run(v.outcome.carry_out({"send": [{"to": "fm", "text": "Relay offline", "incident_id": 9, "stage": "closed",
                                        "status": "Closed on {time}: back."}]}))
     assert v.tg.sent[-1][1].startswith(f"#9 (closed)\n{to}\n")
