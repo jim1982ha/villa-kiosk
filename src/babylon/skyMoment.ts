@@ -80,13 +80,17 @@ export function skyMoment(date: Date, place: SkyPlace, preview: DayNightPreview 
   const m = getMoonPosition(date, latitude, longitude);
   const mAz = m.azimuth + north;
   const ill = getMoonIllumination(date);
-  // ⚠️ THE MOON'S COMPASS IS THE SUN'S TURNED HALF WAY ROUND: the sun points
-  // along (sin az, cos az), the moon along (−sin az, −cos az), from the same
-  // azimuth convention (utils/sunCalc, 0 = south for both). Kept exactly as
-  // shipped (2.496.400 and before) — tests/oracles/sky_bodies.mjs pins it
-  // ("the moon's compass") until the owner has seen where each one is drawn.
+  // The moon points the way the sun does: (sin az, cos az) of its sunCalc
+  // azimuth (0 = south, toward west), in the same model axes.
+  //
+  // ⚠️ THE MOON WAS DRAWN ON THE OPPOSITE SIDE OF THE SKY (until 2.496.402):
+  // its direction was (−sin az, −cos az), the sun's turned half way round, so
+  // once the north offset made the sun right the moon was mirrored — measured
+  // on 2026-10-10, sun and moon 3.7° apart in the real sky were drawn on
+  // opposite sides of the villa; at 19:00 on 2026-10-16 the real moon was in
+  // the south-west and was drawn in the north-east.
   const moon: MoonNow = {
-    dir: unit(-Math.sin(mAz) * Math.cos(m.altitude), Math.sin(m.altitude), -Math.cos(mAz) * Math.cos(m.altitude)),
+    dir: unit(Math.sin(mAz) * Math.cos(m.altitude), Math.sin(m.altitude), Math.cos(mAz) * Math.cos(m.altitude)),
     fraction: ill.fraction,
     angle: ill.angle,
     parallacticAngle: m.parallacticAngle,

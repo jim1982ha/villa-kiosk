@@ -308,13 +308,15 @@ const place = (m, view) => b.placeBodies({ sun: m.sun, moon: m.moon ? m.moon.dir
   ck("14:00 with the \"night\" preview: the villa is lit for night, the sun's disc still shows and the moon does not",
      !night.light.isDay && night.light.nightT === 1 && night.moonT === 0 && pn.sun?.alpha > 0.5 && !(pn.moon?.alpha > 0),
      { moonT: night.moonT, sun: pn.sun?.alpha, moon: pn.moon?.alpha });
-  // ⚠️ The moon's compass is the sun's turned half way round (skyMoment) —
-  // kept as shipped until the owner has seen where each one is drawn; this
-  // pins it so it cannot change by accident either way.
-  const { getMoonPosition } = await import("@/utils/sunCalc");
-  const mp = getMoonPosition(DAY_1400, VILLA_AT.latitude, VILLA_AT.longitude), mm = skyMoment(DAY_1400, VILLA_AT).moon.dir;
-  const h = Math.hypot(mm.x, mm.z);
-  ck("the moon's compass: (−sin, −cos) of its azimuth, as shipped", Math.abs(mm.x / h + Math.sin(mp.azimuth)) < 1e-9 && Math.abs(mm.z / h + Math.cos(mp.azimuth)) < 1e-9);
+  // The moon's compass is the sun's (owner's report, 2026-10-17: it was
+  // drawn on the opposite side of the sky). Measured, not by formula: the
+  // near-conjunction of 2026-10-10 — sun and moon 3.7° apart in the real sky —
+  // must be drawn together, not on opposite sides of the villa.
+  const together = new Date("2026-10-10T09:14:00Z"), tm = skyMoment(together, VILLA_AT);
+  const tp = place(tm, orbitView(-90, 1.35)), sp = (v) => b.spherePoint(v.x, v.y, v.z, box).at;
+  const gap = Vector3.Distance(new Vector3(...Object.values(sp(tm.sun))), new Vector3(...Object.values(sp(tm.moon.dir))));
+  ck("the moon's compass is the sun's: a sun and moon 3.7° apart in the real sky are drawn together (2.496.401 drew them on opposite sides)",
+     gap < 0.1 * box.span && Math.abs(tp.sun.screen.x - tp.moon.screen.x) < 0.05, { gap, sun: tp.sun?.screen.x, moon: tp.moon?.screen.x });
 
   // End to end: SunController hands that moment to the real sky.
   const { SunController } = await import("@/babylon/SunController");
