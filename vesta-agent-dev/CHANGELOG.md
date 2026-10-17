@@ -1,3 +1,21 @@
+## 0.12.232
+
+What you will see on an alert card:
+- "To:" now follows the alert's priority, as you chose: a P1 says "To: Owner & FM", a P2 "To: FM", in the house group
+  too. Once a P2 is escalated to you, its card adds Owner. (Until 16 October the group's own members widened it.)
+- Pressing Done or Need help on the villa's own first message in the group now always works; it could be left
+  unanswered before the Agent's next step replaced that message.
+- Words that name who is asked, who is escalated to, or a number of days now come from the settings, so they stay
+  true if a setting changes: "No answer from FM after 45 min", "Owner is asked to act", "Back again: 3 times in 7 days".
+  A pump's power finding says which normal it compares with ("its 30-day normal", or "its normal before this was
+  found" while it is open).
+- When the villa's rule alerts again while the alert is still open (for example the load moving from one phase to
+  another), the card says "Still-there alert sent … to Owner & FM". It said "Reminder sent", which is only meant for
+  the FM being asked again after 15 minutes.
+- When the villa's rule stops watching after its time limit and the problem is still there, the card says
+  "Still-there alert sent … to Owner — Still not fixed (will close itself once fixed or press Done)". It said
+  "Escalation sent … to Owner" a second time, as if you had been escalated to twice. Who gets it is unchanged.
+
 ## 0.12.231
 
 What you will see:
