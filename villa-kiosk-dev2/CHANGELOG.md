@@ -1,3 +1,9 @@
+## 2.496.401
+
+### Changed
+- Nothing you see changes: the sun and the moon are drawn exactly where 2.496.400 drew them (48 views of the 24-hour circle compared pixel by pixel, all identical).
+- The sun and the moon are now placed by one rule instead of two copies of it, and whether a body follows the real clock or Settings' day/night preview is decided in one place. Before every release they are now checked at every hour of a day, all the way round the villa, at every tilt and four zooms (over 170,000 camera positions), so a sun that jumps when you tilt or turn is caught before it reaches the wall.
+
 ## 2.496.400
 
 ### Fixed
