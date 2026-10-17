@@ -138,7 +138,6 @@ export class BulbSet {
   private readonly pools: LightPoolSet;
   private strength = 1;
   private glowMeshes: AbstractMesh[] = [];
-  private glowVersion = -1;
   /** Live cube shadow maps, keyed by the entity's representative light. */
   private readonly shadows = new Map<PointLight, ShadowGenerator>();
   private castShadows = false;
@@ -314,13 +313,18 @@ export class BulbSet {
    *  one lamp per pool, where its placement says it stands. */
   lamps(): ReturnType<LightPoolSet["glowLamps"]> { return this.pools.glowLamps(); }
 
-  /** Before a frame: write the pools that are on to the furniture light —
-   *  only when a pool changed. Never with the camera: more lamps than it holds
-   *  are merged the same way from every view (lampGlow.fitLamps). */
+  /** Before EVERY frame: hand the pools that are on to the furniture light,
+   *  which merges them only when they changed (LampGlowState.set). Never with
+   *  the camera: more lamps than it holds are merged the same way from every
+   *  view (lampGlow.fitLamps).
+   *
+   *  ⚠️ NOT GATED ON THE POOLS' VERSION (owner's screenshot, 2026-10-17,
+   *  2.496.407). Until 2.496.406 this villa (51 lamps on, 32 shown) re-sent the
+   *  lamps every frame for the camera; 2.496.407 sent them only when the
+   *  version moved, and the furniture went unlit — some change to the lamps
+   *  does not move it. The lamps themselves are the key now. */
   syncGlow(): void {
-    if (this.pools.version === this.glowVersion) return;
     if (!this.glowMeshes.length) return;
-    this.glowVersion = this.pools.version;
     lampGlowFor(this.scene).set(this.lamps());
   }
 
@@ -331,7 +335,6 @@ export class BulbSet {
     this.lights.clear();
     this.pools.clear();
     this.glowMeshes = [];
-    this.glowVersion = -1;
   }
 
   /** Every bulb's reading as the pools want it: per mesh, the storey folded in. */

@@ -128,11 +128,14 @@ export class LampGlowState {
   /** Write the lamps to show — more than fit are merged (fitLamps). Returns
    *  whether anything changed. Pure apart from the arrays it fills. */
   set(lamps: readonly GlowLamp[]): boolean {
-    const chosen = fitLamps(lamps.filter((l) => l.amount > 0 && l.radius > 0), LAMP_GLOW_MAX);
+    const on = lamps.filter((l) => l.amount > 0 && l.radius > 0);
+    // Keyed on the lamps AS GIVEN, so a caller may hand them every frame: the
+    // same lamps cost a string, never a merge (fitLamps).
     let key = "";
-    for (const l of chosen) key += `${l.x},${l.y},${l.z},${l.r},${l.g},${l.b},${l.amount},${l.radius},${l.floorY},${l.ceilingY};`;
+    for (const l of on) key += `${l.x},${l.y},${l.z},${l.r},${l.g},${l.b},${l.amount},${l.radius},${l.floorY},${l.ceilingY};`;
     if (key === this.key) return false;
     this.key = key;
+    const chosen = fitLamps(on, LAMP_GLOW_MAX);
     this.pos.fill(0);
     this.col.fill(0);
     chosen.forEach((l, i) => {

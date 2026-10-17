@@ -54,8 +54,9 @@ ck("  ...the row is named after the device, opens the lock, and leads with the r
    door?.title === "Front door" && door.kind === "alarm" && door.room === "Entrance", door);
 // ⚠️ ONE PROBLEM, ONE LINE (owner, 2026-10-10: "why do we see 2 lines for the same issue?"): the ticket is about the
 // very lock whose state is listed — it was a second line, "Open fault: Entrance door unlocked", under "Unlocked"
-ck("  ...ONE line: the state's word, then its fault naming itself (the fault keeps its ticket, so its Close)",
-   door?.items.map(attentionLine).join(" | ") === "Unlocked — Entrance door unlocked", door?.items.map(attentionLine));
+// (owner, 2026-10-18: "Unlocked — #41 · Laundry Room door unlocked" — the state's word is not said when the fault says it)
+ck("  ...ONE line: its fault naming itself, the state's word not said again (the fault keeps its ticket, so its Close)",
+   door?.items.map(attentionLine).join(" | ") === "Entrance door unlocked", door?.items.map(attentionLine));
 ck("  ...and the villa's own items are never written on: the ticket gone, the state line has no fault",
    !before.concat(after).some((i) => i.fault) && !groupAttention(before).some((g) => g.items.some((i) => i.fault)));
 ck("  ...and the row keeps its place when the ticket lands (ordered by worst problem and name, not arrival)",

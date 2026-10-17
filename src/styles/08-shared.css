@@ -212,22 +212,7 @@
 .cockpit-tile-line { font-size: var(--text-xs); }
 .cockpit-tile-line.is-warn { color: var(--status-warning); }
 
-.cockpit-activity-list { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
-/* Two columns where there is width for them, so the same 20 entries are read
-   without scrolling. CSS columns rather than a grid: the feed is chronological,
-   and columns flow top-to-bottom then across, which keeps 1-10 on the left and
-   11-20 on the right. A grid would interleave them across rows and scramble the
-   order. */
-@media (min-width: 641px) {
-  .cockpit-activity-list { display: block; columns: 2; column-gap: 28px; }
-  .cockpit-activity-row { break-inside: avoid; margin-bottom: 8px; }
-}
-/* A phone gets the 10 most recent only. The feed still carries 20 — the rest
-   are hidden rather than dropped, so widening the window fills the second
-   column immediately instead of waiting on a refetch. */
-@media (max-width: 640px) {
-  .cockpit-activity-row:nth-child(n + 11) { display: none; }
-}
+/* Recent activity: folded and paged like Tickets' Closed (FoldedList, owner 2026-10-18) — one row per event. */
 .cockpit-activity-row { display: flex; align-items: baseline; gap: 10px; font-size: var(--text-xs); }
 .cockpit-activity-time { flex: 0 0 50px; font-variant-numeric: tabular-nums; color: var(--text-dim); }
 .cockpit-activity-text { color: var(--text-secondary); }

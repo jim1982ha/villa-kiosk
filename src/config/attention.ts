@@ -238,6 +238,14 @@ function mergeFaults(items: AttentionItem[]): AttentionItem[] {
   });
 }
 
+/** Does `title` already say `word` ("Laundry Room door unlocked" says "Unlocked"), as a whole word, whatever its case? */
+function saysWord(title: string, word: string): boolean {
+  const w = word.trim().toLowerCase();
+  if (!w) return false;
+  return new RegExp(`(^|[^\\p{L}\\p{N}])${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|[^\\p{L}\\p{N}])`, "u")
+    .test(title.toLowerCase());
+}
+
 /** One problem's line inside a device's row. A state needs no more than its
  *  word ("Unlocked", "Unavailable"); a fault or a schedule names itself, since
  *  its title is what is wrong, not the device ("Entrance door unlocked"; "In
@@ -248,10 +256,11 @@ export function attentionLine(item: AttentionItem): string {
     const st = faultStatus(item.fault);
     const fault = `${st ? `${st.toLowerCase()}: ` : ""}${item.fault.title}${timesSaid(item.fault)}`;
     // ⚠️ "UNAVAILABLE — … OFFLINE FOR 9 H" SAID IT TWICE (owner, 2026-10-14): the fault on an unavailable line says the
-    // device is offline already. A word the fault does not say stays: "Not in Home Assistant", a live reading ("92 %").
-    return item.kind === "unavailable" && item.detail === "Unavailable"
-      ? fault.charAt(0).toUpperCase() + fault.slice(1)
-      : `${item.detail} — ${fault}`;
+    // device is offline already. ⚠️ SO DID "UNLOCKED — #41 · LAUNDRY ROOM DOOR UNLOCKED" (owner, 2026-10-18): a state
+    // word the fault's title already says is not said before it. A word the fault does not say stays: "Not in Home
+    // Assistant", a live reading ("92 %").
+    const said = (item.kind === "unavailable" && item.detail === "Unavailable") || saysWord(item.fault.title, item.detail);
+    return said ? fault.charAt(0).toUpperCase() + fault.slice(1) : `${item.detail} — ${fault}`;
   }
   if (item.kind === "fault") return titled(item);
   return item.kind === "schedule" ? `${item.detail}: ${item.title}` : item.detail;

@@ -160,6 +160,9 @@ ck("  ...\"Unavailable — \" is not said before it (the fault says offline); a 
 ck("  ...what the fault does not say stays: Not in Home Assistant, a live reading",
    attentionLine({ id: "u", kind: "unavailable", title: "", detail: "Not in Home Assistant", fault: f }) === "Not in Home Assistant — Pump has been offline for 9 h."
    && attentionLine({ id: "a", kind: "alarm", title: "", detail: "92 %", fault: { ...f, title: "Humidity high" } }) === "92 % — Humidity high");
+ck("  ...a state word the fault's title already says is not said before it (owner, 2026-10-18, #41); a word only inside another stays",
+   attentionLine({ id: "a", kind: "alarm", title: "", detail: "Unlocked", fault: { ...f, title: "Laundry Room door unlocked" } }) === "Laundry Room door unlocked"
+   && attentionLine({ id: "a", kind: "alarm", title: "", detail: "Open", fault: { ...f, title: "Door opened twice" } }) === "Open — Door opened twice");
 const [two] = offlineDevice("42");
 ck("  ...a fault on an entity that still reports (a battery reading 42 %) stays its own line", two.items.length === 2, two.items.map((i) => i.id));
 const [unknownValue] = offlineDevice("unknown");
@@ -246,6 +249,9 @@ const ticketsTab = readFileSync(new URL("../../src/components/fm/TicketsTab.tsx"
 ck("lists that only grow are ONE folded, paged list (owner, 2026-10-14): Tickets' Closed and Schedule's Recent work",
    /<FoldedList title="Closed" rows=\{closed\}/.test(ticketsTab) && /<FoldedList title="Recent work" rows=\{rows\}/.test(recent)
    && !/usePaged|<Pager|\.slice\(0, limit\)/.test(recent + ticketsTab));
+const overviewSrc = readFileSync(new URL("../../src/components/cockpit/CockpitOverview.tsx", import.meta.url), "utf8");
+ck("  ...the Overview's Recent activity too, folded by default (owner, 2026-10-18): the same FoldedList, no fold of its own",
+   /<FoldedList title="Recent activity" rows=\{villaActivity\}/.test(overviewSrc) && !/cockpit-activity-list/.test(overviewSrc));
 
 // a ticket's card AS DRAWN (pill on the title line, buttons inside on the right): tests/oracles/cockpit_cards.mjs; its
 // buttons as drawn: "the buttons, drawn" below. WIRING the Tickets tab alone holds (it needs the Facility data to render):

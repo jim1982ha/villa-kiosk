@@ -40,8 +40,9 @@ ck("every failing check about devices has its button, with its own words",
    rowOf("All devices reporting").includes("|View unavailable devices [icon]|") && rowOf("Doors locked").includes("|View doors [icon]|")
    && rowOf("Lights off before arrival").includes("|View lights [icon]|") && rowOf("Air conditioning reachable").includes("|View air conditioning [icon]|")
    && rowOf("Cameras online").includes("|View cameras [icon]|"), rows);
-ck("  ...the devices not reporting are its list, not a wall of chips; another check names its few as chips",
-   !/fm-entity-chip/.test(html.split('<div class="fm-row ')[1]) && rowOf("Doors locked").includes("|back|") && rowOf("Cameras online").includes("|pool|"), rows);
+// (owner, 2026-10-18: the devices not reporting as pills, "the same way the unlocked device or on lights are shown")
+ck("  ...every check names its devices as chips — the devices not reporting too",
+   /fm-entity-chip/.test(html.split('<div class="fm-row ')[1]) && rowOf("Doors locked").includes("|back|") && rowOf("Cameras online").includes("|pool|"), rows);
 ck("  ...and nothing in it leaves Recap: no Overview link", !/Overview/.test(rowOf("All devices reporting")));
 const fs = readFileSync(new URL("../../src/components/fm/FacilitySections.tsx", import.meta.url), "utf8");
 // The wiring a drawing cannot reach (it needs the Facility data): the button's list opens in Recap, as a list.
