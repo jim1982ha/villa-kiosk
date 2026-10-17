@@ -1,3 +1,12 @@
+## 2.496.404
+
+### Fixed
+- "Set North" in Settings now turns the sky the right way on any villa. Facing the villa's real north and pressing it put the whole sky half way round on a new install, with the morning sun in the west. Your villa is unchanged: its saved setting gives exactly the same sky as before.
+
+### Changed
+- Nothing you see changes. 144 views of the real villa were compared pixel for pixel: the 24-hour circle facing north, through the app's own sky calculation, and a low sun far beyond the house. All were identical.
+- The code that places the sun and the moon is simpler. Where a body is round the villa is read in one place instead of four, and the sun's and the moon's directions are written by the same line. Whether a body is shown is decided in one place, and the checks run before every release now judge what is drawn instead of re-computing it.
+
 ## 2.496.403
 
 ### Fixed
