@@ -90,6 +90,7 @@ function NowView({ station, r }: { station: WeatherStation; r: Readings }) {
   const pts = pressure3h?.p.points ?? [];
   const tendency = pts.length >= 2 ? pressureTendency(pts[pts.length - 1].v - pts[0].v) : null;
   const today = useTodayRange(station.roles.temperature);
+  const uvPeak = useTodayPeak(station.roles.uv);
 
   const advice = [
     windowAdvice({ outC: r.t, inC: r.inT, outDewC: r.dew, inDewC: r.inDew, raining: r.raining, gustKmh: r.gust }),
@@ -154,7 +155,7 @@ function NowView({ station, r }: { station: WeatherStation; r: Readings }) {
           </Tile>
         )}
         {(r.rainToday !== undefined || r.rate !== undefined) && <Tile title="Rain gauge" k="rain"><RainGauge r={r} /></Tile>}
-        {(r.uv !== undefined || r.solar !== undefined) && <Tile title="Sun & UV" k="uv"><SunUv r={r} uvId={station.roles.uv} /></Tile>}
+        {(r.uv !== undefined || r.solar !== undefined) && <Tile title="Sun & UV" k="uv"><SunUv r={r} peak={uvPeak} /></Tile>}
       </div>
 
     </div>
@@ -207,7 +208,7 @@ function WindCompass({ r }: { r: Readings }) {
 }
 
 /** A barometer dial (weatherStation.BAROMETER_HPA, barometerAngle). */
-function Barometer({ hpa }: { hpa: number }) {
+export function Barometer({ hpa }: { hpa: number }) {
   const a = barometerAngle(hpa); // degrees from up
   const rad = (a * Math.PI) / 180;
   const x = 115 + 78 * Math.sin(rad), y = 120 - 78 * Math.cos(rad);
@@ -254,7 +255,7 @@ function Ring({ pct, cls, label, sub }: { pct: number; cls: string; label: strin
 }
 
 /** A rain tube for today (weatherStation.rainTubeTop). */
-function RainGauge({ r }: { r: Readings }) {
+export function RainGauge({ r }: { r: Readings }) {
   const today = r.rainToday ?? 0;
   const top = rainTubeTop(today);
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((q) => ({ v: Math.round(top * q), y: 248 - q * 224 }));
@@ -296,8 +297,7 @@ function RainGauge({ r }: { r: Readings }) {
  * otherwise — "the sun is at its highest" at nine in the morning — and the
  * 935 W/m² beneath had nothing to be read against. Every mark here is data.
  */
-function SunUv({ r, uvId }: { r: Readings; uvId: string | undefined }) {
-  const peak = useTodayPeak(uvId);
+export function SunUv({ r, peak }: { r: Readings; peak: { v: number; t: number } | null }) {
   const b = r.uv !== undefined ? uvBand(r.uv) : null;
   return (
     <div className="weather-uv">

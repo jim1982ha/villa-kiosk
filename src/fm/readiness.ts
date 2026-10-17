@@ -17,6 +17,9 @@ import { isTicketOpen, stageOf } from "./fmEngine";
 import { openCounts } from "./deviceWork";
 import { faultSource, ISSUE_SOURCES, type IssueSource } from "./issueSource";
 import { lockFacts, lightFacts, climateFacts } from "@/config/villaSummary";
+import { locksGroup, lightsGroup, type SummaryGroup } from "@/config/summaryGroups";
+import type { EntityMapping } from "@/types/scene.types";
+import { AirVent, Cctv, WifiOff } from "lucide-react";
 import type { FmData } from "./fmTypes";
 
 export type CheckState = "pass" | "warn" | "fail";
@@ -32,8 +35,28 @@ export interface ReadinessCheck {
   /** The open faults' sources, in the legend's order — the icons the Overview shows them with, drawn in the line
    *  ("Check the ⏾ ⚑ faults in Overview…", ReadinessTab). Text stays plain for the saved snapshot. */
   sources?: IssueSource[];
+  /** What tapping the check opens: its devices, as a list (SummaryGroupPanel), behind a button with these words.
+   *  Shown when the check names devices. Absent for a check about no device (the tickets). */
+  opens?: CheckTarget;
 }
 
+/**
+ * A check's own devices, as the list its button opens.
+ *
+ * ⚠️ WHAT EACH CHECK OPENED WAS DECIDED BY ITS ID IN THREE OTHER PLACES (until 2.496.403): ReadinessTab kept the
+ * button words per id and hid the device chips for "devices-online", FacilitySections rebuilt the doors' and lights'
+ * lists per id and found "devices-online" by name for the recap's count — Air conditioning and Cameras had no
+ * button, and "View unavailable devices" left Recap for the Overview (architecture review round two, 2026-10-17).
+ */
+export interface CheckTarget {
+  /** The button's words: "View doors". */
+  label: string;
+  /** The list it opens. */
+  group: SummaryGroup;
+  /** A health list (devices not reporting): every device in it, hidden or diagnostic ones too, no "turn all", and
+   *  the list IS the view — no chip per device under the check. */
+  health?: boolean;
+}
 export interface ReadinessResult {
   checks: ReadinessCheck[];
   passed: number;
@@ -61,6 +84,8 @@ export function buildReadiness(
    *  so a caller that forgot one silently resurrected dismissed devices and
    *  unfolded every combo sensor rather than failing. */
   devices: VillaDevices,
+  /** The user's own device names (config.entityMap) — a one-door villa's list is named after its door. */
+  entityMap: Record<string, EntityMapping>,
 ): ReadinessResult {
   const checks: ReadinessCheck[] = [];
 
@@ -90,6 +115,7 @@ export function buildReadiness(
       ? "Every configured device is reporting."
       : `${offline.length} device${offline.length === 1 ? "" : "s"} offline or not reporting.`,
     entityIds: offline,
+    opens: { label: "View unavailable devices", group: { title: "Unavailable devices", icon: WifiOff, entityIds: offline }, health: true },
   });
 
   // ── Doors locked ─────────────────────────────────────────────────────────
@@ -117,6 +143,8 @@ export function buildReadiness(
         ? `All ${locks.ids.length} lock${locks.ids.length === 1 ? "" : "s"} secured.`
         : `${parts.join(", ")}.`,
       entityIds: notLocked,
+      // every lock, as the summary tile opens them (summaryGroups) — not only the failing ones
+      opens: target("View doors", locksGroup(locks, entities, entityMap)),
     });
   }
 
@@ -130,6 +158,7 @@ export function buildReadiness(
       state: lit === 0 ? "pass" : "warn",
       detail: lit === 0 ? "All lights off." : `${lit} still on.`,
       entityIds: lights.on,
+      opens: target("View lights", lightsGroup(lights)),
     });
   }
 
@@ -145,6 +174,7 @@ export function buildReadiness(
         ? `${climate.ids.length} unit${climate.ids.length === 1 ? "" : "s"} responding.`
         : `${broken.length} not responding — cannot pre-cool.`,
       entityIds: broken,
+      opens: target("View air conditioning", { title: "Air conditioning", icon: AirVent, entityIds: climate.ids.slice() }),
     });
   }
 
@@ -160,6 +190,7 @@ export function buildReadiness(
         ? `${cameras.length} camera${cameras.length === 1 ? "" : "s"} online.`
         : `${down.length} offline.`,
       entityIds: down.map((c) => c.entity_id),
+      opens: target("View cameras", { title: "Cameras", icon: Cctv, entityIds: cameras.map((c) => c.entity_id) }),
     });
   }
 
@@ -188,3 +219,5 @@ export function buildReadiness(
     ? "fail" : checks.some((c) => c.state === "warn") ? "warn" : "pass";
   return { checks, passed, total: checks.length, overall };
 }
+
+const target = (label: string, group: SummaryGroup | null): CheckTarget | undefined => group ? { label, group } : undefined;

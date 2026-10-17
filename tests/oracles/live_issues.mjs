@@ -4,9 +4,10 @@
 // its own record, so the Agent can clear one alone), "Edit ticket" then opens it in the Tickets tab, which holds the
 // tickets in progress and the Closed ones. It replaced "Needs attention" and the Faults tab's open list (the same
 // faults twice). The same with or without the Agent: only where faults come from differs.
-import { register } from "node:module";
+// Where a check can draw what it is about it does (tests/consistency/screen.mjs); the source-text checks left are
+// wiring that needs the Facility data or the page to draw (said where), and stylesheet rules.
 import { readFileSync } from "node:fs";
-register("../consistency/alias-hook.mjs", import.meta.url);
+import { h, draw, text } from "../consistency/screen.mjs";
 import { ck, done } from "../consistency/check.mjs";
 const E = await import("@/fm/fmEngine");
 const W = await import("@/fm/deviceWork");
@@ -185,14 +186,12 @@ const night = groupAttention(buildAttentionItems({
 ck("  ...an offline device and its night check's fault: ONE line, two icons — Live (amber), Night check (red)",
    JSON.stringify(lineSources(night.items[0])) === JSON.stringify({ sources: ["live", "night"], kinds: ["unavailable", "fault"] }),
    lineSources(night.items[0]));
-const React = (await import("react")).default;
-const { renderToStaticMarkup } = await import("react-dom/server");
 const I = await import("@/components/fm/sourceIcons");
-const drawn = renderToStaticMarkup(React.createElement(I.SourceIcons, lineSources(night.items[0])));
+const drawn = draw(h(I.SourceIcons, lineSources(night.items[0])));
 ck("  ...drawn one under the other, each in its status colour, named for a screen reader",
    (drawn.match(/<svg/g) || []).length === 2 && /cockpit-attention-unavailable[\s\S]*cockpit-attention-fault/.test(drawn)
    && /aria-label="Live and Night check"/.test(drawn), drawn);
-const people = renderToStaticMarkup(React.createElement(I.SourceIcons, { sources: ["owner", "fm", "guest"], kinds: ["fault"] }));
+const people = draw(h(I.SourceIcons, { sources: ["owner", "fm", "guest"], kinds: ["fault"] }));
 ck("  ...a profile is the top bar's badge: its letters in a circle (O, FM, G), in the line's colour",
    /source-role-badge cockpit-attention-icon cockpit-attention-fault"[^>]*>O</.test(people)
    && /source-role-badge two[^"]*"[^>]*>FM</.test(people) && /class="source-role-badge[^"]*"[^>]*>G</.test(people), people);
@@ -228,15 +227,19 @@ ck("  ...tickets only: no icon, only Tickets", onlyTickets.detail === 'Check the
 const allClear = readyWith([]);
 ck("  ...nothing open: the goal is met, and said once", allClear.state === "pass" && allClear.label === "No open faults or tickets"
    && allClear.detail === "Nothing to deal with.", allClear);
-const tab = readFileSync(new URL("../../src/components/fm/ReadinessTab.tsx", import.meta.url), "utf8");
-ck("  ...the Recap draws those icons in the line, after \"Check the\"",
-   /<CheckDetail check=\{c\} \/>/.test(tab) && /Check the <SourceIconRow sources=\{check\.sources\} \/> faults/.test(tab));
-
-ck("  ...the checks fold under their verdict, closed at first; a tap on the verdict opens them (owner, 2026-10-14)",
-   /const \[showChecks, setShowChecks\] = useState\(false\);/.test(tab) && /\{showChecks && <div className="fm-list">/.test(tab)
-   && /className="fm-headline-toggle" aria-expanded=\{showChecks\}\s*onClick=\{\(\) => setShowChecks\(\(v\) => !v\)\}/.test(tab)
-   // its chevron right after the words (owner, 2026-10-14), not pushed to the far end
-   && /\.fm-headline-toggle > svg \{ flex: 0 0 auto; color/.test(readFileSync(new URL("../../src/styles/07-facility.css", import.meta.url), "utf8")));
+{
+  const { ReadinessChecks } = await import("@/components/fm/ReadinessTab");
+  const result = { checks: [mixedOpen], passed: 0, total: 1, overall: "warn" };
+  const checks = (startOpen) => draw(h(ReadinessChecks, { readiness: result, label: (id) => id, onOpenEntity: () => {}, onOpenCheck: () => {}, ...(startOpen ? { startOpen } : {}) }));
+  ck("  ...the Recap draws those icons in the line, after \"Check the\"",
+     text(checks(true)).includes('|Check the |G|[icon][icon]| faults in "Overview", or the open tickets in "Tickets".|'), text(checks(true)));
+  const folded = checks();   // as the tab draws it: no startOpen
+  ck("  ...the checks fold under their verdict, closed at first; a tap on the verdict opens them (owner, 2026-10-14)",
+     /class="fm-headline-toggle" aria-expanded="false"/.test(folded) && text(folded).includes("|Ready, with things worth fixing|0 of 1 checks passing|")
+     && !folded.includes("4 detected faults") && checks(true).includes("4 detected faults")
+     // its chevron right after the words (owner, 2026-10-14), not pushed to the far end — a stylesheet rule
+     && /\.fm-headline-toggle > svg \{ flex: 0 0 auto; color/.test(readFileSync(new URL("../../src/styles/07-facility.css", import.meta.url), "utf8")), text(folded));
+}
 
 const recent = readFileSync(new URL("../../src/components/fm/RecentWorkList.tsx", import.meta.url), "utf8");
 const ticketsTab = readFileSync(new URL("../../src/components/fm/TicketsTab.tsx", import.meta.url), "utf8");
@@ -301,7 +304,11 @@ ck("  ...a noted line is never a status change: \"reopened by Owner\" still read
 ck("  ...and each one is a note in the Tickets tab, with its time",
    N.faultNoteLines(told, (a) => a.slice(11, 16)).join("|") === "Escalation sent to Owner (08:49)|🆘 Need help pressed by Fabien (09:10)",
    N.faultNoteLines(told, (a) => a.slice(11, 16)));
-ck("  ...shown on the Overview card", /item\.latest \?\? item\.fault\?\.latest/.test(ov) && /cockpit-attention-latest/.test(ov));
+{
+  const { AttentionCard } = await import("@/components/cockpit/CockpitOverview");
+  const card = draw(h(AttentionCard, { group: groupAttention(withLatest)[0], onOpenEntity: () => {}, cadence: { checkMinutes: 5, nightlyAt: "02:00" } }));
+  ck("  ...shown on the Overview card, under the fault's line", /fault s[\s\S]*class="cockpit-attention-latest">🆘 Need help pressed by Fabien · /.test(card), text(card));
+}
 
 console.log("\n  the screens:");
 const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
@@ -324,22 +331,21 @@ console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
 {
   const { default: WorkButtons } = await import("@/components/fm/WorkButtons");
   const closer = (asking) => ({ asking, problemFor: () => null, ask: () => {}, cancel: () => {}, close: async () => {} });
-  const draw = (actions, asking = null, extra = {}) => renderToStaticMarkup(React.createElement(WorkButtons,
+  const drawButtons = (actions, asking = null, extra = {}) => draw(h(WorkButtons,
     { actions, cardKey: "device:x", closer: closer(asking), onAction: () => {}, ...extra }));
-  const text = (html) => html.replace(/<svg[\s\S]*?<\/svg>/g, "[icon]").replace(/<[^>]+>/g, "|").replace(/\|+/g, "|");
   const ovActs = cardActions(pump), tkActs = W.ticketActions([{ id: "a", stage: "ticket" }]);
   ck("an Overview card: Open Ticket with its wrench, Close with its cross, in their row, Close named for a screen reader",
-     /^<div class="fm-fault-actions">/.test(draw(ovActs, null, { name: "Pump", className: "fm-fault-actions" }))
-     && text(draw(ovActs, null, { name: "Pump" })) === "|[icon] Open Ticket|[icon] Close|"
-     && /aria-label="Close “Pump”"/.test(draw(ovActs, null, { name: "Pump" })), text(draw(ovActs)));
+     /^<div class="fm-fault-actions">/.test(drawButtons(ovActs, null, { name: "Pump", className: "fm-fault-actions" }))
+     && text(drawButtons(ovActs, null, { name: "Pump" })) === "|[icon] Open Ticket|[icon] Close|"
+     && /aria-label="Close “Pump”"/.test(drawButtons(ovActs, null, { name: "Pump" })), text(drawButtons(ovActs)));
   ck("  ...a ticket: Mark resolved and Close, no icon; a closed record: Reopen",
-     text(draw(tkActs)) === "|Mark resolved|Close|" && text(draw(W.closedActions({ id: "r", stage: "closed" }))) === "|Reopen|", text(draw(tkActs)));
+     text(drawButtons(tkActs)) === "|Mark resolved|Close|" && text(drawButtons(W.closedActions({ id: "r", stage: "closed" }))) === "|Reopen|", text(drawButtons(tkActs)));
   ck("  ...its Close asks ITS question in place of the buttons — the Overview's for the device, the ticket's for the ticket",
-     text(draw(ovActs, "device:x")) === "|Close this? No action needed.|Cancel|Close|"
-     && text(draw(tkActs, "device:x")) === "|Close this ticket? Nothing was done — no cost is recorded.|Cancel|Close ticket|",
-     [text(draw(ovActs, "device:x")), text(draw(tkActs, "device:x"))]);
+     text(drawButtons(ovActs, "device:x")) === "|Close this? No action needed.|Cancel|Close|"
+     && text(drawButtons(tkActs, "device:x")) === "|Close this ticket? Nothing was done — no cost is recorded.|Cancel|Close ticket|",
+     [text(drawButtons(ovActs, "device:x")), text(drawButtons(tkActs, "device:x"))]);
   ck("  ...another card's question leaves this one's buttons; a card with nothing to act on draws nothing",
-     text(draw(tkActs, "device:y")) === "|Mark resolved|Close|" && draw([]) === "");
+     text(drawButtons(tkActs, "device:y")) === "|Mark resolved|Close|" && drawButtons([]) === "");
 }
 ck("a ticket's notes wrap inside its card, never past its edge (owner, 2026-10-14: a long \"VESTA reads\" ran out)",
    /\.fm-record-body > \.fm-row-main \{ flex: 1 1 260px; min-width: 0; \}/.test(src("styles/07-facility.css"))

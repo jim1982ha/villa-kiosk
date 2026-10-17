@@ -5,69 +5,73 @@
 // villa's ACTUAL live state, which is the one thing a paper checklist can't do.
 // A failing check names the devices behind it and opens them directly.
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import SaveButton from "@/components/common/SaveButton";
-import { CheckCircle2, AlertTriangle, XCircle, ChevronDown, ChevronRight, Camera } from "lucide-react";
-import { useConfig } from "@/config/ConfigContext";
-import { useHA } from "@/ha/HAStateStore";
+import { CheckCircle2, AlertTriangle, XCircle, ChevronDown, ChevronRight, Camera, Download } from "lucide-react";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
-import { resolveSiteTitle } from "@/config/AppConfig";
-import { useFmData } from "@/fm/FmDataContext";
-import { monthKey } from "@/fm/fmEngine";
 import { buildReadinessSnapshot } from "@/fm/fmDocuments";
-import type { FmSavedDocument } from "@/fm/fmTypes";
+import { useMonthlyDocument } from "@/fm/useMonthlyDocument";
 import SavedDocumentsList from "./SavedDocumentsList";
 import MarkdownPreview from "./MarkdownPreview";
 import { SourceIconRow } from "./sourceIcons";
-import type { CheckState, ReadinessCheck, ReadinessResult } from "@/fm/readiness";
+import type { CheckState, CheckTarget, ReadinessCheck, ReadinessResult } from "@/fm/readiness";
 
 const ICON: Record<CheckState, typeof CheckCircle2> = {
   pass: CheckCircle2, warn: AlertTriangle, fail: XCircle,
 };
 
-/** The "All devices reporting" check can legitimately list dozens of ids on a
- *  villa having a bad day — that's the exact check this app once got
- *  flagged for cluttering the tab with a wall of chips. It already has a
- *  dedicated, better UI for that: the same Unavailable-devices panel the HUD
- *  badge opens (see FacilityModal). Every OTHER check keeps its inline chip
- *  list — those are usually one or two devices (a lock, a camera), and jumping
- *  straight to the one at fault is more useful there than a link to a list. */
-const DEVICE_LIST_CHECK_ID = "devices-online";
-
-/** Checks that ALSO get a one-tap "View …" shortcut (same idea as the
- *  devices-online one above, opening a group panel via onOpenCheckDevices)
- *  IN ADDITION to their inline chip row — unlike devices-online, these
- *  usually name few enough devices that the chips stay useful on their own,
- *  but the shortcut is still worth having for the same reason the map badge
- *  and the SummaryBar tile have one: jumping straight to "every lock" /
- *  "every light" beats hunting for the entity in a chip row one at a time.
- *  Keyed by check id (see readiness.ts) -> the shortcut's button label. */
-const SHORTCUT_LABEL: Partial<Record<string, string>> = {
-  locks: "View doors",
-  lights: "View lights",
-};
-
 export default function ReadinessTab({
-  readiness, onOpenEntity, onOpenUnavailableDevices, onOpenCheckDevices,
+  readiness, onOpenEntity, onOpenCheck,
 }: {
   readiness: ReadinessResult;
   onOpenEntity: (id: string) => void;
-  /** Opens the shared Unavailable-devices panel — same list, same count as
-   *  the HUD badge (see config/deviceGroups.unavailableDeviceIds). */
-  onOpenUnavailableDevices: () => void;
-  /** Same idea, generalised to any other check in SHORTCUT_LABEL — opens a
-   *  group panel scoped to exactly that check's own entityIds. */
-  onOpenCheckDevices: (check: ReadinessCheck) => void;
+  /** Opens a check's own devices as a list (readiness.CheckTarget) — every
+   *  check the same way. */
+  onOpenCheck: (target: CheckTarget) => void;
 }) {
-  const { config } = useConfig();
-  const { haConfig } = useHA();
   const label = useEntityLabel();
-  const { saveDocument } = useFmData();
-  const [saved, setSaved] = useState(false);
-  const [viewing, setViewing] = useState<FmSavedDocument | null>(null);
+  // Freezing the check turns it from a live readout into evidence (see
+  // buildReadinessSnapshot): made and saved in one tap, then shown, saved,
+  // reopened and downloaded like the recap and the statement.
+  const snapshot = useMonthlyDocument("readiness", (_month, villaName) => buildReadinessSnapshot(readiness, villaName));
+  return (
+    <div className="fm-stack">
+      <ReadinessChecks readiness={readiness} label={label} onOpenEntity={onOpenEntity} onOpenCheck={onOpenCheck}
+        save={<SaveButton saved={snapshot.saved} label="Save snapshot" icon={<Camera size={16} />} style={{ marginLeft: "auto" }}
+          onClick={() => void snapshot.generateAndSave()} />} />
+
+      <SavedDocumentsList kind="readiness" onOpen={snapshot.reopen} />
+      {snapshot.markdown && (
+        <div className="fm-stack">
+          <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+            <button className="btn ghost" onClick={snapshot.close}>Close snapshot</button>
+            <button className="btn ghost" onClick={snapshot.download}>
+              <Download size={16} /> Download .md
+            </button>
+          </div>
+          <MarkdownPreview markdown={snapshot.markdown} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The verdict and, folded under it, the checks — each with its own devices' button (readiness.CheckTarget) and,
+ *  unless its list is the view itself, a chip per device. Drawn by tests/oracles/readiness_checks.mjs. */
+export function ReadinessChecks({ readiness, label, onOpenEntity, onOpenCheck, save, startOpen = false }: {
+  readiness: ReadinessResult;
+  /** A device's name on its chip. */
+  label: (id: string) => string;
+  onOpenEntity: (id: string) => void;
+  onOpenCheck: (target: CheckTarget) => void;
+  /** The verdict line's Save snapshot. */
+  save?: ReactNode;
+  /** Open at first (a test drawing the checks); the tab opens folded. */
+  startOpen?: boolean;
+}) {
   // ⚠️ THE CHECKS FOLD UNDER THEIR VERDICT (owner, 2026-10-14): "Not ready · 3 of 6" says it; the six cards under it
   // pushed the monthly recap off the screen. A tap on the verdict opens them.
-  const [showChecks, setShowChecks] = useState(false);
+  const [showChecks, setShowChecks] = useState(startOpen);
 
   const headline = readiness.overall === "pass"
     ? "Ready for the next guest"
@@ -78,7 +82,7 @@ export default function ReadinessTab({
   const HeadlineIcon = ICON[readiness.overall];
 
   return (
-    <div className="fm-stack">
+    <>
       {/* Freezing the check turns it from a live readout into evidence — see
           buildReadinessSnapshot. Same generate-and-keep shape as the recap
           and spend statement, and it lands in the same saved-documents store,
@@ -93,25 +97,15 @@ export default function ReadinessTab({
           </span>
           {showChecks ? <ChevronDown size={18} aria-hidden /> : <ChevronRight size={18} aria-hidden />}
         </button>
-        <SaveButton saved={saved} label="Save snapshot" icon={<Camera size={16} />} style={{ marginLeft: "auto" }}
-          onClick={async () => {
-            const result = await saveDocument({
-              kind: "readiness",
-              month: monthKey(Date.now()),
-              markdown: buildReadinessSnapshot(readiness, resolveSiteTitle(config, haConfig?.location_name)),
-            });
-            if (result !== "saved") return;   // the store's banner says why
-            setSaved(true);
-            window.setTimeout(() => setSaved(false), 2500);
-          }}
-        />
+        {save}
       </div>
 
       {showChecks && <div className="fm-list">
         {readiness.checks.map((c) => {
           const Icon = ICON[c.state];
-          const isDeviceList = c.id === DEVICE_LIST_CHECK_ID;
-          const shortcutLabel = SHORTCUT_LABEL[c.id];
+          const opens = c.entityIds?.length ? c.opens : undefined;
+          // A health list is the view itself; any other check also names its devices as chips (usually one or two).
+          const chips = !c.opens?.health && !!c.entityIds?.length;
           return (
             <div key={c.id} className={`fm-row state-${c.state === "pass" ? "ok" : c.state === "warn" ? "due-soon" : "overdue"}`}>
               <span className={`fm-check-icon ${c.state}`}><Icon size={18} /></span>
@@ -122,19 +116,14 @@ export default function ReadinessTab({
                       stacking it made ONE row taller than every other
                       readiness row next to it (they're read as a grid of
                       cards, and an outlier height there reads as a bug). */}
-                  {isDeviceList && !!c.entityIds?.length && (
-                    <button className="btn ghost fm-row-title-action" onClick={onOpenUnavailableDevices}>
-                      View unavailable devices <ChevronRight size={16} />
-                    </button>
-                  )}
-                  {!isDeviceList && shortcutLabel && !!c.entityIds?.length && (
-                    <button className="btn ghost fm-row-title-action" onClick={() => onOpenCheckDevices(c)}>
-                      {shortcutLabel} <ChevronRight size={16} />
+                  {opens && (
+                    <button className="btn ghost fm-row-title-action" onClick={() => onOpenCheck(opens)}>
+                      {opens.label} <ChevronRight size={16} />
                     </button>
                   )}
                 </div>
                 <div className="fm-row-sub muted"><CheckDetail check={c} /></div>
-                {!isDeviceList && !!c.entityIds?.length && (
+                {chips && c.entityIds && (
                   <div className="fm-chiprow">
                     {c.entityIds.slice(0, 8).map((id) => (
                       <button key={id} className="fm-entity-chip" onClick={() => onOpenEntity(id)}>
@@ -154,21 +143,13 @@ export default function ReadinessTab({
         })}
       </div>}
 
-      <SavedDocumentsList kind="readiness" onOpen={setViewing} />
-      {viewing && (
-        <div className="fm-stack">
-          <button className="btn ghost" style={{ alignSelf: "flex-start" }}
-            onClick={() => setViewing(null)}>Close snapshot</button>
-          <MarkdownPreview markdown={viewing.markdown} />
-        </div>
-      )}
-    </div>
+    </>
   );
 }
 
 /** A check's line — with the open faults' source icons after "Check the", as the Overview shows them (owner,
  *  2026-10-14). */
-function CheckDetail({ check }: { check: ReadinessCheck }) {
+export function CheckDetail({ check }: { check: ReadinessCheck }) {
   const lead = "Check the faults";
   if (!check.sources?.length || !check.detail.startsWith(lead)) return <>{check.detail}</>;
   return <>Check the <SourceIconRow sources={check.sources} /> faults{check.detail.slice(lead.length)}</>;

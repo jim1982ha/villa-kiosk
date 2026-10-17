@@ -92,9 +92,9 @@ ck("the guest's thank-you says when the report is only queued on this tablet",
 ck("the fault step, the Spend tab and logging a completion all ask for a cost with ONE CostFields (one cap line) — 2.496.263",
    ["components/fm/FaultStageModal.tsx", "components/fm/SpendTab.tsx", "components/fm/TodayTab.tsx"].every((f) => /<CostFields amount=\{amount\} onAmount=\{setAmount\}/.test(src(f)))
    && /projectedSpend\(data\.costs, \{ amount: value, category, replacing \}, terms\)/.test(src("components/fm/CostFields.tsx")));
+// One document state for the three (useMonthlyDocument, 2.496.403).
 ck("the three 'Saved' labels still show only when saved (not when queued)",
-   /if \(result !== "saved"\) return;/.test(src("components/fm/ReadinessTab.tsx"))
-   && /=== "saved"\) setSaved\(true\);/.test(src("components/fm/RecapTab.tsx"))
-   && /=== "saved"\) setStatementSaved\(true\);/.test(src("components/fm/SpendTab.tsx")));
+   /=== "saved"\) setSaved\(true\);/.test(src("fm/useMonthlyDocument.ts"))
+   && [["ReadinessTab", "readiness"], ["RecapTab", "recap"], ["SpendTab", "spend"]].every(([f, k]) => src(`components/fm/${f}.tsx`).includes(`useMonthlyDocument("${k}"`)));
 
 done("✅ a Facility write says what happened");
