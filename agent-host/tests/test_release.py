@@ -145,6 +145,32 @@ class Ship(unittest.TestCase):
         self.assertEqual(files, {"vesta-agent/CHANGELOG.md", "vesta-agent/config.yaml"})
         self.assertIn('"0.5.0"', self.s.read("agent-host/agent-src/vesta-agent.yaml"))
 
+    def test_a_release_that_ships_a_starter_skill_records_it_as_shipped(self):
+        # architecture review, 2026-10-17: 104 of 229 releases recorded a changed starter skill by hand, after a test
+        # failed and said how — the release records it itself, like the version, and only when a skill ships
+        stub = ("import json, os\n"
+                "def record_shipped(d):\n"
+                "    names = sorted(os.listdir(d))\n"
+                "    with open(os.path.join(os.path.dirname(d), 'shipped-skills.json'), 'w') as f:\n"
+                "        json.dump({n: [open(os.path.join(d, n, 'SKILL.md')).read()] for n in names}, f)\n")
+        self.s.write("agent-host/agent-src/vesta_agent/skills.py", stub)
+        self.s.write("agent-host/agent-src/starter/skills/desk/SKILL.md", "v2")
+        self.s.write("vesta-agent/CHANGELOG.md", "## 1.0.1\n\n- skill\n\n## 1.0.0\n")
+        self.s.write("agent-host/agent-src/CHANGELOG.md", "# Changelog\n\n## 0.5.1 (2 October 2026)\n\n- y\n\n## 0.5.0\n")
+        self.s.stage("vesta-agent/CHANGELOG.md", "agent-host/agent-src/CHANGELOG.md", "agent-host/agent-src/vesta_agent/skills.py",
+                     "agent-host/agent-src/starter/skills/desk/SKILL.md")
+        code, calls, err = self.s.ship()
+        self.assertEqual(code, 3, err)
+        files = set(sh(self.s.repo, "git", "show", "--name-only", "--format=", "HEAD").split())
+        self.assertIn("agent-host/agent-src/starter/shipped-skills.json", files)
+        self.assertIn('"desk": ["v2"]', self.s.read("agent-host/agent-src/starter/shipped-skills.json"))
+
+    def test_a_release_without_a_starter_skill_records_nothing(self):
+        self.s.write("vesta-agent/CHANGELOG.md", "## 1.0.1\n\n- docs\n\n## 1.0.0\n")
+        self.s.stage("vesta-agent/CHANGELOG.md")
+        self.s.ship()
+        self.assertFalse((self.s.repo / "agent-host/agent-src/starter/shipped-skills.json").exists())
+
     def test_a_failing_gate_commits_nothing(self):
         self.s.write("vesta-agent/CHANGELOG.md", "## 1.0.1\n\n- x\n\n## 1.0.0\n")
         self.s.stage("vesta-agent/CHANGELOG.md")

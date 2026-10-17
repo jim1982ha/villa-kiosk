@@ -1,3 +1,17 @@
+## 0.12.231
+
+What you will see:
+- When you reopen an alert's fault in the Cockpit at the very moment the Agent is re-checking that alert, the
+  facility manager is now always told "Reopened in the Cockpit…". Before, in that rare overlap, the reopening could be
+  lost without a word.
+
+Behind the scenes (nothing else visible changes):
+- What a reply in a chat contains (the page, the plain-words error, a report without the AI, Continue, the fault
+  buttons, staying quiet under an approval request) is decided in one place, each rule checked on its own.
+- What the Agent may ask of the villa's system when it reads it is checked in one place, for the AI and for every
+  skill's scripts alike.
+- Releasing the Agent now records the skills it ships by itself.
+
 ## 0.12.230
 
 What you will see on Telegram:

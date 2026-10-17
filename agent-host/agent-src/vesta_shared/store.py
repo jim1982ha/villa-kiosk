@@ -79,6 +79,33 @@ class Incident:
     ENDED = ANSWERED_OR_CLEARED + ("muted",)
 
 
+class Notes:
+    """An incident's notes (its `payload`), as every reader names them. Three kinds share the one record:
+
+    - the alert's CLAIM — what its rule said (`message`, `blueprint`, `claim`, `bad_states`, `entities`, `mode`, …),
+      written by the alert desk, read by the reports, investigations and problems;
+    - the alert desk's own NOTES — its working state between ticks (`check_quiet`, `clear_since`, `silent_told`, …),
+      spelled by the desk alone;
+    - MAIL from the engine to the desk, read once and gone (`take_note`).
+
+    ⚠️ CHANGED IN PLACE, NEVER REWRITTEN WHOLE (architecture review, 2026-10-17): five modules read the record, changed
+    it and wrote the whole of it back — the desk read it, then the villa, then wrote its old copy, so a fault reopened in
+    the Kiosk in between lost its "kiosk_reopened" and the facility manager was never told. `Store.note` changes only the
+    keys it is given, against the record as it stands at that moment."""
+    MESSAGE, BLUEPRINT = "message", "blueprint"                  # the alert's claim, read beyond the desk
+    KIOSK_REOPENED = "kiosk_reopened"                            # mail: who reopened its fault in the Kiosk, and when
+    UNREACHED = "unreached"                                      # mail: Telegram refused every chat of the FM's
+
+
+def notes_of(inc) -> dict:
+    """An incident's notes (a store row or a dict): {} when it has none or they cannot be read."""
+    try:
+        p = json.loads((dict(inc) if inc is not None else {}).get("payload") or "{}")
+    except (TypeError, ValueError):
+        return {}
+    return p if isinstance(p, dict) else {}
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
@@ -225,6 +252,42 @@ class Store:
         cols = ", ".join(f"{k}=?" for k in fields)
         self.db.execute(f"UPDATE incidents SET {cols} WHERE id=?", (*fields.values(), iid))
         self.db.commit()
+
+    def note(self, iid: int, set: dict | None = None, drop=(), **fields) -> dict:
+        """Incident `iid`'s notes changed in place: `set` merged in, `drop` removed — against the record as it stands
+        NOW, in one write (`Notes`), with any other column in `fields`. Returns the notes as written."""
+        self.db.commit()                                  # nothing of this connection's left open under the lock
+        self.db.execute("BEGIN IMMEDIATE")               # no other writer between the read and the write
+        try:
+            p = notes_of(self.db.execute("SELECT payload FROM incidents WHERE id=?", (iid,)).fetchone())
+            p.update(set or {})
+            for k in drop:
+                p.pop(k, None)
+            cols = {"payload": json.dumps(p), **fields}
+            self.db.execute(f"UPDATE incidents SET {', '.join(f'{k}=?' for k in cols)} WHERE id=?", (*cols.values(), iid))
+            self.db.commit()
+        except BaseException:
+            self.db.rollback()
+            raise
+        return p
+
+    def take_note(self, iid: int, key: str, **fields):
+        """A note read once and gone (engine → desk mail, `Notes`), with any other column in `fields`: its value, None
+        when there is none (and then nothing is written)."""
+        self.db.commit()
+        self.db.execute("BEGIN IMMEDIATE")
+        try:
+            p = notes_of(self.db.execute("SELECT payload FROM incidents WHERE id=?", (iid,)).fetchone())
+            value = p.pop(key, None)
+            if value is not None:
+                cols = {"payload": json.dumps(p), **fields}
+                self.db.execute(f"UPDATE incidents SET {', '.join(f'{k}=?' for k in cols)} WHERE id=?",
+                                (*cols.values(), iid))
+            self.db.commit()
+        except BaseException:
+            self.db.rollback()
+            raise
+        return value
 
     def incidents(self, open_only: bool = True) -> list[dict]:
         q = "SELECT * FROM incidents" + (" WHERE closed_at IS NULL" if open_only else "") + " ORDER BY opened_at"

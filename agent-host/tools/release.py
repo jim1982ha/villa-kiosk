@@ -44,6 +44,10 @@ ENGINE_DIR = "agent-host/agent-src/"
 ENGINE_CHANGELOG = "agent-host/agent-src/CHANGELOG.md"
 ENGINE_MANIFEST = "agent-host/agent-src/vesta-agent.yaml"
 ENGINE_INIT = "agent-host/agent-src/vesta_agent/__init__.py"
+#: The starter skills, and the record of every version of them a release shipped (vesta_agent.skills.record_shipped):
+#: a skill whose fingerprint is not in it is taken for one the villa edited, and never updated again.
+STARTER_SKILLS = "agent-host/agent-src/starter/skills/"
+SHIPPED_SKILLS = "agent-host/agent-src/starter/shipped-skills.json"
 
 #: ⚠️ THE TESTS' PYTHON IS A FIXED PLACE (2026-10-13): this machine has no `python` and its python3 lacks pytest, and
 #: a session found the only working environment in ANOTHER session's /tmp scratchpad, gone at the next reboot. Off CI,
@@ -286,7 +290,8 @@ def ship(message: str | None, dry_run: bool, wait_minutes: float, poll_seconds: 
           + f"  (branch {BRANCH}, channel {CHANNEL_DIR}/ on main)")
     print("  ships: " + ", ".join(staged))
     if dry_run:
-        sites = [APP_CONFIG] + ([ENGINE_MANIFEST, ENGINE_INIT] if engine else [])
+        sites = [APP_CONFIG] + ([ENGINE_MANIFEST, ENGINE_INIT] if engine else []) + \
+            ([SHIPPED_SKILLS] if any(f.startswith(STARTER_SKILLS) for f in staged) else [])
         print(f"  dry run: would write versions to {', '.join(sites)}; run {len(GATES)} gates; "
               f"commit; push HEAD:{BRANCH}; wait ≤ {wait_minutes:g} min for main")
         return 0
@@ -300,6 +305,13 @@ def ship(message: str | None, dry_run: bool, wait_minutes: float, poll_seconds: 
         (ROOT / ENGINE_MANIFEST).write_text(with_yaml_version((ROOT / ENGINE_MANIFEST).read_text(), engine))
         (ROOT / ENGINE_INIT).write_text(with_init_version((ROOT / ENGINE_INIT).read_text(), engine))
         git("add", ENGINE_MANIFEST, ENGINE_INIT)
+
+    # ...and the starter skills it ships, recorded as shipped (architecture review, 2026-10-17: 104 of 229 releases
+    # recorded them by hand, after a test failed and said how).
+    if any(f.startswith(STARTER_SKILLS) for f in staged):
+        subprocess.run([PY, "-c", "from vesta_agent.skills import record_shipped; record_shipped('starter/skills')"],
+                       cwd=ROOT / ENGINE_DIR, check=True)
+        git("add", SHIPPED_SKILLS)
 
     # 2. Every gate, on exactly what will be committed.
     if not print_summary(gates()):

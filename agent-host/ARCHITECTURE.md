@@ -414,3 +414,22 @@ step numbers the scripts' messages cite (page.py: "SKILL.md step 6").
   "To:" there says roles as an alert card does ("Owner & FM"), read from any of their words separated by ",". The
   template itself stays: an alert never waits on the agent. Its tests render it in an immutable sandbox, as the
   villa's system does.
+
+## Round two: a chat reply, an incident's notes, one read guard, skills recorded by the release (architecture review, 2026-10-17)
+
+- **What a chat turn's reply is**: `vesta_agent/turn_reply.TurnReply.compose`. Its seven rules, in order: the answer
+  and its last-words fallback, a page's message is the answer, the failure in plain words, a report without the AI,
+  Continue, offered faults, and silence under an approval request. app._converse runs the turn and sends the `Reply`.
+  Tests: `tests/test_turn_reply.py`, one table per rule, no agent.
+- **An incident's notes**: `vesta_shared/store.Notes`, `notes_of`, `Store.note(iid, set, drop, **cols)` and
+  `Store.take_note(iid, key)`. The single `payload` column holds the alert's claim, the desk's working notes and
+  engine→desk mail (`kiosk_reopened`, `unreached`). Every write changes only its own keys, against the record as it
+  stands, inside one `BEGIN IMMEDIATE`. Nothing rewrites the whole payload any more: desk.py, problems.py, facts.py
+  and investigate.py read through `notes_of`. This fixes a race: `quiet_after_done` wrote back a stale copy after
+  reading the villa, so a Kiosk reopen in between lost its note. The stored format is unchanged.
+- **One read guard**: `vesta_shared/read_guard.refused(name, args, known)`. It owns READ_ACTIONS, the argument
+  rules, the forbidden arguments and the 6-hour villa-wide logbook (LOGBOOK_SLICE is the same constant). Both doors
+  ask it: the AI's `tools._proxy` and `ha_client.McpClient.tool`. Which TOOLS a caller may use stays per door. Its
+  refusal names no skill script.
+- **The release records the shipped starter skills**: `tools/release.py ship` runs `record_shipped` and stages
+  `shipped-skills.json` when a staged file is under `starter/skills/`.

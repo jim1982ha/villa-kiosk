@@ -175,7 +175,7 @@ def test_the_ai_reads_the_whole_villas_logbook_a_few_hours_at_a_time(tmp_path):
     from ha_fake import FakeHA, tool
     from helpers import make_agent
     from vesta_agent.routing import CONVERSATION, Origin
-    from vesta_agent.tools import LOGBOOK_VILLA_HOURS
+    from vesta_shared.read_guard import LOGBOOK_VILLA_HOURS
     ha = FakeHA(tools=[tool("ha_get_logs", source="string", hours_back="number", entity_id="string", end_time="string")])
     v = make_agent(tmp_path, {"people": [{"telegram_id": 111, "name": "Owner", "role": "owner"}], "chats": {"owner": -1},
                               "ha_read_tools": ["ha_get_logs"]}, reader=ha)

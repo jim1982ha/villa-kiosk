@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.222 (17 October 2026)
+
+Architecture review round two, 2026-10-17 (owner: "proceed fully"):
+- vesta_agent/turn_reply.py: TurnReply.compose decides a chat turn's reply (7 rules, in order); app._converse
+  sends it. tests/test_turn_reply.py: a table per rule, without an agent (14 mutations RED).
+- vesta_shared/store: Notes, notes_of, Store.note / take_note change an incident's notes in place under BEGIN
+  IMMEDIATE. The alert desk, problems, facts and investigate no longer rewrite the whole payload. Fixes a lost
+  "kiosk_reopened" when the Kiosk reopened a fault while quiet_after_done read the villa (race test, RED on the old
+  write). The stored format is unchanged; a broken payload reads as {}.
+- vesta_shared/read_guard.py: one guard (READ_ACTIONS, argument values and forbidden arguments, the 6-hour villa-wide
+  logbook) for tools._proxy and McpClient.tool; its refusal names no skill script. tests/test_read_guard.py runs one
+  table through both doors (11 mutations RED).
+- tools/release.py ship records shipped starter skills (record_shipped) when a skill ships.
+
 ## 0.6.221 (17 October 2026)
 
 Architecture review, 2026-10-17 (owner: "do all of them"), the alert card:

@@ -7,7 +7,7 @@ Energy settings. roi-energy picked a "main meter" by its name instead and took e
 light configured inside a phase meter was subtracted twice, and the Agent's "not metered" disagreed with the Kiosk's
 "untracked" for the same week. tests/test_energy_setup.py replays the Kiosk oracle's cases with its numbers.
 
-Nothing here is configured in VESTA: the setup is read (`read`, mode "get" only — ha_client.READ_ACTIONS), the kWh
+Nothing here is configured in VESTA: the setup is read (`read`, mode "get" only — read_guard.READ_ACTIONS), the kWh
 are each statistic's own. PURE apart from `read`.
 """
 from __future__ import annotations

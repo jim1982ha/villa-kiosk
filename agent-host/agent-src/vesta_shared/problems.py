@@ -24,7 +24,7 @@ import json
 
 from . import result
 from .messaging import no_code as _no_code
-from .store import Store, Incident
+from .store import Incident, Notes, Store, notes_of
 
 DONE = "done"                          # a person answered Done (a button, or "#N done")
 CLEARED = "cleared"                    # its source is gone: the night check no longer sees it, HA cleared it
@@ -244,10 +244,8 @@ class Problems:
                 # ⚠️ A DONE IS A DONE, WHEREVER IT IS GIVEN (architecture review 24): closed in the Kiosk, a door fault
                 # skipped the check a Done button gets — the door still unlocked, it stayed closed for good. The alert
                 # desk reads it again once (quiet_after_done), when its rule names its states
-                p = json.loads(inc.get("payload") or "{}")
-                p["check_quiet"] = said
-                self.store.update_incident(sid, state=Incident.DONE, reply="Closed in the Cockpit",
-                                           closed_at=self.store.now(), payload=json.dumps(p))
+                self.store.note(sid, {"check_quiet": said}, state=Incident.DONE, reply="Closed in the Cockpit",
+                                closed_at=self.store.now())
                 return sid
         return None
 
@@ -263,11 +261,9 @@ class Problems:
         if kind == "incident" and sid:
             inc = self.store.incident(sid)
             if inc and inc.get("closed_at"):
-                p = json.loads(inc.get("payload") or "{}")
-                p["kiosk_reopened"] = said or by or "a person"     # kiosk_words.reopened: who and when, said once
-                p.pop("check_quiet", None)
-                self.store.update_incident(sid, closed_at=None, reply=None, state=Incident.ASKED,
-                                           asked_at=self.store.now(), assignee="fm", payload=json.dumps(p))
+                # kiosk_words.reopened: who and when, said once — mail to the alert desk (store.Notes)
+                self.store.note(sid, {Notes.KIOSK_REOPENED: said or by or "a person"}, drop=("check_quiet",),
+                                closed_at=None, reply=None, state=Incident.ASKED, asked_at=self.store.now(), assignee="fm")
                 return sid
         return None
 
@@ -290,7 +286,7 @@ class Problems:
         it to the owner at its next tick (payload "unreached")."""
         inc = self.store.incident(iid)
         if inc and not inc.get("closed_at"):
-            self.store.update_incident(iid, payload=json.dumps({**json.loads(inc.get("payload") or "{}"), "unreached": True}))
+            self.store.note(iid, {Notes.UNREACHED: True})
 
     # ⚠️ ONE ANSWER TO "IS IT A PERSON'S NOW?" (architecture review, 2026-10-14). reopened_in_kiosk promises a task a
     # person reopened stays theirs until they close it; the repair kept that promise, the night check's close_finding
@@ -461,7 +457,7 @@ class Problems:
             # ⚠️ AN ALERT SAYS WHAT HOME ASSISTANT SAYS NOW (architecture review, 2026-10-14): Home Assistant re-worded an
             # open alert (desk RESTATED), Telegram showed the new words, the card kept the first ones
             inc = self.store.incident(sid)
-            message = json.loads((inc or {}).get("payload") or "{}").get("message") if inc and not inc.get("closed_at") else None
+            message = notes_of(inc).get(Notes.MESSAGE) if inc and not inc.get("closed_at") else None
             if message:
                 return again_title(str(message)[:200], incident_runs(inc) - 1)
         return self.title_of(task)
@@ -488,7 +484,7 @@ class Problems:
                         "check": d.get("check") or "", "since": since, "incident": None,
                         "figures": {k: v for k, v in d.items() if isinstance(v, (int, float, str)) and k != "check"}})
         for i in self.store.incidents(open_only=True):
-            p = json.loads(i.get("payload") or "{}")
+            p = notes_of(i)
             out.append({"id": f"incident-{i['id']}", "source": f"incident:{i['id']}", "rule_id": i["rule_id"],
                         "entity_id": i["entity_id"], "severity": i["severity"],
                         # its latest run is when it opened, how often it came back is in its title (review 24: a

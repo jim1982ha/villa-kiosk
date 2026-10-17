@@ -35,13 +35,13 @@ from datetime import datetime, timedelta, timezone
 from typing import Awaitable, Callable
 from zoneinfo import ZoneInfo
 
-from . import ai_down, button_data, intake, requests_box, script_run, tool_access
+from . import button_data, intake, requests_box, script_run, tool_access
 from .ai_jobs import AiJobs
 from .chat_jobs import ChatJobs
 from .in_progress import InProgress
 from .siren import Siren
 from .actions import Actions, related_entities
-from .api_errors import AI_DOWN, FOR_PERSON, NEEDS_THE_OWNER
+from .api_errors import NEEDS_THE_OWNER
 from .delivery import Delivery
 from .config import STARTER_DIR
 from .ha_events import CONTEXT_KEY, HaEvents
@@ -66,6 +66,7 @@ from .state import State
 from .telegram import Telegram, TelegramError
 from .tools import Toolbox, scrub
 from .turn import Turns
+from .turn_reply import TurnReply
 from .notice import Notices, note_step
 
 log = logging.getLogger("vesta")
@@ -187,6 +188,8 @@ class Vesta:
                            system_prompt=self.system_prompt, tell_owner=self._tell_owner, safe=self._safe)
         self.jobs = AiJobs(settings, self.state, self.policy, self.skills, self.delivery, self.chat_jobs, self.outcome,
                            turns=self.turns, safe=self._safe)
+        self.turn_reply = TurnReply(jobs=self.jobs, state=self.state, fault_offers=self.fault_offers,
+                                    approvals=self.approvals)
         self.bot_username: str | None = None
         self._locks: dict[int, asyncio.Lock] = {}
         self._kiosk_read = 0.0            # when the Kiosk's faults were last read (housekeeping)
@@ -586,57 +589,15 @@ class Vesta:
                      time.monotonic() - began, f", error {res.error}" if res.error else "")
             if sk is not None and sk.deliver and not (res.problem or res.error or res.stopped_at_limit):
                 res = await self._delivered(request, cid, person, res, asked or "")
-            answer = (res.text or "").strip()               # an empty answer sends nothing (a request said it all)
-            if not answer and not res.sent and not res.approvals and res.earlier:
-                answer = res.earlier                        # ended on a tool call with nothing sent: its last words
-            # ⚠️ THE PAGE'S MESSAGE IS THE ANSWER (owner, 2026-10-11: "the response … shall be all in 1 message, the
-            # details being in the HTML file"): told to write nothing after it, the AI still added a long second message
-            page_mid = res.pages.get(sk.deliver["page"]) if sk is not None and sk.deliver.get("page") else None
-            if page_mid and answer and not (res.problem or res.error):
-                log.info("Chat %s: the AI's text after its page is not sent (%d characters): the page's message is the "
-                         "answer", cid, len(answer))
-                answer = ""
-            if res.problem or res.error:
-                # ⚠️ NEVER THE RAW ERROR (owner, 2026-10-06): the reason in plain words (api_errors); the owner was
-                # told by the turn when no retry can help (no credit, a refused key)
-                said = FOR_PERSON.get(res.problem or "unknown", FOR_PERSON["unknown"])
-                answer = f"{answer}\n\n{said}" if answer else said
-            # ⚠️ THE BUTTONS ARE ADDED, NEVER REPLACED (architecture review, 2026-10-13): each offer below put its own
-            # keyboard, and a Continue silently took the place of "a report can still be made without the AI"
-            rows: list[list[dict]] = []
-            if res.problem in AI_DOWN and not is_continue and tool_access.may_start_job(pol, self.server_tools, person, cid):
-                # the AI cannot answer: a report asked for is still made from its figures (ai_down.py decides)
-                off = ai_down.offer(text, res.problem, self.jobs.without_ai_able())
-                if off.start:
-                    answer += "\n\n" + self.jobs.start_without_ai(off.start["name"], res.problem, cid)
-                elif off.buttons:
-                    answer += "\n\nA report can still be made without the AI, from its figures and charts:"
-                    rows += ai_down.keyboard(res.problem, off.buttons)["inline_keyboard"]
-            if res.stopped_at_limit and res.session_id:
-                cont = self.state.new_continuation(cid, res.session_id, person.telegram_id if person else None,
-                                                   invoked=request.name if request else None,
-                                                   inv=request.inv if request else None)
-                answer = (answer + "\n\n" if answer else "") + \
-                    f"Stopped: this answer reached the {res.limit_usd:g} USD limit per reply."
-                rows.append([{"text": "Continue", "callback_data": button_data.make(button_data.CONTINUE, cont)}])
-            # a fault the AI offered in this answer (tools._ticket): its button goes under it; only a press creates it
-            if page_mid:
-                self.fault_offers.keep_page(cid, sk.deliver["page"])
-            answer, offer_rows, offered_ids = await self.fault_offers.show(cid, page_mid, answer)
-            rows += offer_rows
-            keyboard = {"inline_keyboard": rows} if rows else None
-            # ⚠️ A REQUEST SHOWN HERE IS THE ANSWER (owner, 2026-10-10: "Approval request sent." under it, twice "redundant"):
-            # told not to, the AI still wrote it — and pressed at once, the request was decided before that line came, so
-            # nothing removed it. The engine decides: no written reply after a request put in this chat (anything else
-            # the person asked, the AI answers with send_message — tools.ha_call_service tells it so).
-            if not keyboard and not (res.problem or res.error) and self.approvals.shown_in(res.approvals, cid):
-                if answer:
-                    log.info("Chat %s: the AI's reply not sent, the approval request shown there says it all", cid)
-                answer = ""
+            # what the person receives — text, buttons, offers carried: turn_reply.py decides, in its order
+            reply = await self.turn_reply.compose(
+                cid, res, asked=text or "", page=sk.deliver.get("page") if sk is not None else None,
+                may_start_job=lambda: tool_access.may_start_job(pol, self.server_tools, person, cid),
+                is_continue=is_continue, person_id=person.telegram_id if person else None, request=request)
             answered()                                       # "typing…" ends: the answer is going out
             # the camera pictures the AI looked at go with it (Toolbox.photos)
-            mid = await self.delivery.reply(cid, answer, keyboard=keyboard, photos=res.photos)
-            self.fault_offers.delivered(offered_ids, mid)
+            mid = await self.delivery.reply(cid, reply.text, keyboard=reply.keyboard, photos=res.photos)
+            self.fault_offers.delivered(reply.offered, mid)
             await self.chat_jobs.replied(cid, mid)            # this turn's jobs: their waiting message, their "typing…"
 
     async def _delivered(self, request: Request, cid: int, person, res, asked: str):

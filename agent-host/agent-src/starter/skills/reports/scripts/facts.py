@@ -47,6 +47,7 @@ from vesta_shared.problems import Problems  # noqa: E402  (what is still open: o
 
 from vesta_shared.device_state import is_offline  # noqa: E402  (the night check's own reading)
 from vesta_shared.past import unread  # noqa: E402  (the one "could not be read whole: nothing is known after")
+from vesta_shared.store import Notes, notes_of  # noqa: E402  (an alert's notes: one reader)
 from playbook import (  # noqa: E402  (the clues and the one list of what needs doing)
     MissingParameter, _device, _num, _when, battery_pct, clues, todo)
 
@@ -400,7 +401,7 @@ def _alert_rows(c: Ctx) -> list[dict]:
     words = c.cfg.get("incident_words") or {}
     rows = []
     for i in c.incidents():
-        p = json.loads(i.get("payload") or "{}")
+        p = notes_of(i)
         lasted = None
         if i.get("closed_at"):
             secs = (datetime.fromisoformat(i["closed_at"]) - datetime.fromisoformat(i["opened_at"])).total_seconds()
@@ -612,7 +613,7 @@ def s_quiet(c: Ctx) -> dict:
     info = c.vesta_rule_info()
     fired = set()
     for i in c.incidents():
-        fired.add(json.loads(i.get("payload") or "{}").get("blueprint"))
+        fired.add(notes_of(i).get(Notes.BLUEPRINT))
     for a in c.ha_alerts():
         fired.add(a.get("blueprint"))
     words = c.cfg.get("nothing_happened") or {}

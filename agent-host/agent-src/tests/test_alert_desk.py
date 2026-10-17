@@ -420,6 +420,31 @@ def test_after_done_the_desk_reads_the_device_once_and_reopens_what_is_still_bad
     assert not _tick(store, villa, 60).get("not_quiet")                         # read once
 
 
+def test_a_fault_reopened_in_the_kiosk_while_the_desk_reads_the_villa_is_still_told(store):
+    # architecture review, 2026-10-17: the desk read an incident's notes, then the villa, then wrote its old copy back —
+    # a fault reopened in the Kiosk in between lost its note, and the facility manager was never told
+    from vesta_shared.problems import Problems
+    from vesta_shared.store import Notes, notes_of
+    iid = _left_unlocked(store, abandon=False)
+    desk.reply(store, iid, "done", "fm", T0 + timedelta(minutes=20))
+    task = store.last_task(f"incident:{iid}")
+    engine = Store(store.path)                                  # the agent itself: its own connection to the record
+
+    class Reopening(Villa):
+        def states(self, ids):
+            if not getattr(self, "done", False):
+                self.done = True
+                Problems(engine).reopened_in_kiosk(task["id"], by="Wayan", said="Reopened in the Cockpit by Wayan.")
+            return super().states(ids)
+
+    villa = Reopening(**{"lock.front_door": [(T0 - timedelta(minutes=10), "unlocked")]})
+    res = _tick(store, villa, 31)
+    assert villa.done                                           # the Kiosk reopened it while the desk read the villa
+    told = [m for m in res["send"] if "Reopened in the Cockpit by Wayan" in (m.get("status") or m.get("text") or "")]
+    assert [m["to"] for m in told] == ["fm"], res["send"]       # the facility manager is told, once
+    assert res["not_quiet"] == [] and not notes_of(store.incident(iid)).get(Notes.KIOSK_REOPENED)
+
+
 def test_after_done_a_quiet_device_stays_closed_and_an_alert_without_states_promises_nothing(store):
     villa = Villa(**{"lock.front_door": [(T0 - timedelta(minutes=10), "unlocked"), (T0 + timedelta(minutes=15), "locked")]})
     iid = _left_unlocked(store, abandon=False)
@@ -563,3 +588,20 @@ def test_the_chase_is_the_skills_rule(store, monkeypatch):
     monkeypatch.setitem(desk.CHASE, "escalates_to", "fm")
     assert _who(desk.tell("P1", "reminder", incident=1, chased=True, text="x")) == [("fm", False, False), ("owner", True, True)]
     assert _who(desk.tell("P1", "escalated", incident=1, text="x")) == [("fm", True, False)]
+
+
+def test_an_incidents_notes_change_in_place_and_an_old_or_broken_record_still_reads(store):
+    # architecture review, 2026-10-17: Store.note changes only the keys it is given, against the record as it stands
+    from vesta_shared.store import notes_of
+    iid = desk.intake(store, event(), T0, mode_reader=lambda: "x")["incident_id"]
+    before = notes_of(store.incident(iid))
+    other = Store(store.path)
+    other.note(iid, {"kiosk_reopened": "by Wayan"})                 # another writer, between a read and a write
+    store.note(iid, {"check_quiet": "Done"}, drop=("clear_since",), state="done")
+    after = notes_of(store.incident(iid))
+    assert after == {**before, "kiosk_reopened": "by Wayan", "check_quiet": "Done"} and store.incident(iid)["state"] == "done"
+    assert store.take_note(iid, "kiosk_reopened") == "by Wayan" and store.take_note(iid, "kiosk_reopened") is None
+    for broken in ("not json", "[1, 2]", None):
+        store.update_incident(iid, payload=broken)
+        assert notes_of(store.incident(iid)) == {}
+        assert store.note(iid, {"a": 1}) == {"a": 1}

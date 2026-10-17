@@ -38,6 +38,7 @@ from vesta_shared import script, skill_settings  # noqa: E402  (client, store, z
 from vesta_shared import periods as kinds  # noqa: E402  (the period kinds and their words, read by the report page too)
 from vesta_shared.timeutil import lasting  # noqa: E402  (the one duration wording)
 from vesta_shared import past  # noqa: E402  (a read of the past with how far it got; the one "could not be read whole")
+from vesta_shared.store import Notes, notes_of  # noqa: E402  (an alert's notes: one reader)
 
 from vesta_shared.device_state import NO_VALUE, OFFLINE, RestartDrops  # noqa: E402  (the one "does this device answer")
 # ⚠️ WHAT A CONTROL CAN PROVE (architecture review 32 follow-up, 2026-10-11): an on/off control that stayed OFF the whole
@@ -824,7 +825,7 @@ def _vesta(store, start: datetime, end: datetime, zone: ZoneInfo, span_days: boo
         for i in store.incidents(open_only=False):
             t = datetime.fromisoformat(i["opened_at"])
             if start <= t < end:
-                msg = json.loads(i.get("payload") or "{}").get("message") or i["rule_id"]
+                msg = notes_of(i).get(Notes.MESSAGE) or i["rule_id"]
                 closed = f", closed {at(datetime.fromisoformat(i['closed_at']), zone, True)}" if i.get("closed_at") else ", still open"
                 out.append(f"  {at(t, zone, span_days)}  alert #{i['id']} {i['severity']}: {msg.splitlines()[0][:120]}{closed}")
         for f in store.findings(None):

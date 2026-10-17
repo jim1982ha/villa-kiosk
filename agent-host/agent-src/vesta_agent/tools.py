@@ -33,6 +33,7 @@ from datetime import datetime
 from typing import Any, Awaitable, Callable, NamedTuple
 
 from claude_agent_sdk import create_sdk_mcp_server, tool
+from vesta_shared import read_guard
 
 from . import __version__, script_run, status, tool_access
 from .policy import Person, Policy
@@ -47,34 +48,7 @@ SAVE_MAX = 64 * 1024
 log = logging.getLogger("vesta.tools")
 PART_CHARS = 60_000          # about 15,000 tokens: under the SDK's 25,000-token cut of a tool answer
 
-# Arguments of the Home Assistant read tools that are pinned by code. ha_get_logs can read other add-ons'
-# container logs (source "supervisor"), which may print secrets: only the logbook and the system log are allowed.
-READ_ARG_RULES: dict[str, dict[str, set]] = {
-    "ha_get_logs": {"source": {"logbook", "system"}},
-}
-READ_ARG_FORBIDDEN: dict[str, set] = {
-    "ha_get_logs": {"slug"},
-}
-#: The villa-wide logbook, read by the AI, covers at most this many hours a call — a longer period names its entity_id.
-#: ⚠️ A WEEK OF THE WHOLE VILLA, PAGE AFTER PAGE (villa, 2026-10-15): an /investigate read 8 to 15 October's logbook of
-#: every device, a call every 15 seconds for 14 minutes — ha-mcp fetches the whole period from Home Assistant at each
-#: page. A skill's script reads long periods (investigate's `around`); the raw tool is for the moments that matter.
-LOGBOOK_VILLA_HOURS = 6
-
-
-def logbook_too_wide(name: str, args: dict) -> str | None:
-    """Why this ha_get_logs call is refused (the villa-wide logbook over more than LOGBOOK_VILLA_HOURS), or None."""
-    if name != "ha_get_logs" or (args.get("source") or "logbook") != "logbook" or args.get("entity_id"):
-        return None
-    try:
-        hours = float(args.get("hours_back") or 1)
-    except (TypeError, ValueError):
-        return None
-    if hours <= LOGBOOK_VILLA_HOURS:
-        return None
-    return (f"The logbook of the whole villa is read {LOGBOOK_VILLA_HOURS} hours at a time at most (asked: {hours:g}). "
-            "Name the entity_id for a longer period, read the hours around the moment that matters, or use your skill's "
-            "script for the whole period (investigate: around).")
+# What the AI's reads may ask of the villa's system: vesta_shared.read_guard, the one guard for every caller.
 
 SKILL_PREFACE = """[How to run this skill inside VESTA]
 You have no shell. Run a script only with the tool run_skill_script(skill, script, args).
@@ -246,17 +220,9 @@ class Toolbox:
                 self.state.log("tool_denied", {"tool": name})
                 return _err(f"{name} is not allowed.")
             known = set(((t.get("inputSchema") or {}).get("properties") or {}).keys())
-            unknown = [k for k in args if k not in known] + [k for k in args if k in READ_ARG_FORBIDDEN.get(name, set())]
-            if unknown:
-                self.state.log("tool_arg_refused", {"tool": name, "args": sorted(set(unknown))})
-                return _err(f"Argument not allowed for {name}: {', '.join(sorted(set(unknown)))}.")
-            if why := logbook_too_wide(name, args):
-                self.state.log("tool_arg_refused", {"tool": name, "arg": "hours_back", "value": str(args.get("hours_back"))[:20]})
+            if why := read_guard.refused(name, args, known):
+                self.state.log("tool_arg_refused", {"tool": name, "args": sorted(args)[:10], "why": why[:120]})
                 return _err(why)
-            for k, allowed_values in READ_ARG_RULES.get(name, {}).items():
-                if k in args and args[k] not in allowed_values:
-                    self.state.log("tool_arg_refused", {"tool": name, "arg": k, "value": str(args[k])[:40]})
-                    return _err(f"{k} must be one of: {', '.join(sorted(allowed_values))}.")
             key = hashlib.sha256(json.dumps([name, args], sort_keys=True, default=str).encode()).hexdigest()
             if part > 1 and key in self.parts.cache:
                 return _ok(self.parts.serve(key, None, part))

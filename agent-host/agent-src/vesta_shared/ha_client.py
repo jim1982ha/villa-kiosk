@@ -27,6 +27,7 @@ import urllib.error
 import urllib.request
 
 from .past import History, Logbook, until
+from .read_guard import LOGBOOK_SLICE, READ_ACTIONS, READ_TOOLS, WRITE_TOOLS, refused  # noqa: F401 (READ_ACTIONS, READ_TOOLS: read here by name)
 
 
 class HABase:
@@ -101,20 +102,7 @@ class HAError(RuntimeError):
     pass
 
 
-# The only ha-mcp tools this client calls. Anything else is refused here, in
-# the client, whoever asks.
-READ_TOOLS = {
-    "ha_get_state", "ha_get_entity", "ha_get_device", "ha_search", "ha_eval_template", "ha_get_history",
-    "ha_get_logs", "ha_get_automation_traces", "ha_config_get_automation", "ha_config_list_helpers",
-    "ha_list_floors_areas", "ha_get_camera_image", "ha_get_todo", "ha_get_overview", "ha_get_system_health",
-}
-WRITE_TOOLS = {"ha_call_service"}
-#: A tool that can also write, allowed for its READ actions only, refused for every other one: {tool: (the argument
-#: that names the action, the values that only read)}. ha_manage_blueprints `get`: what an automation built from a
-#: blueprint can do (investigate's automation_able). ha_manage_energy_prefs mode `get`: the villa's Energy settings
-#: (vesta_shared.energy_setup) — ⚠️ ITS ARGUMENT IS `mode`, NOT `action`: set / add_device / remove_device / add_source
-#: rewrite the owner's Energy dashboard (ha-mcp marks the tool destructive), so every mode but get stays refused.
-READ_ACTIONS = {"ha_manage_blueprints": ("action", {"get"}), "ha_manage_energy_prefs": ("mode", {"get"})}
+# Which tools and arguments may reach the villa's system: read_guard.py, for this client and the AI's reads alike.
 BROWSER_UA = "Mozilla/5.0 (X11; Linux aarch64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128 Safari/537.36 VESTA"
 
 
@@ -221,7 +209,6 @@ class McpSession:
 HISTORY_PAGE = 1000
 HISTORY_SLICE, HISTORY_MIN_SLICE, HISTORY_MAX_SLICE = timedelta(hours=6), timedelta(minutes=5), timedelta(days=2)
 HISTORY_MAX_CALLS = 400          # a 10-day read of a meter reporting every second stays inside it
-LOGBOOK_SLICE = timedelta(hours=6)   # the whole villa's logbook is read by these (McpClient.logbook)
 
 
 def _when(row: dict) -> datetime | None:
@@ -274,10 +261,10 @@ class McpClient(HABase):
     # ------------------------------------------------------------------ core
     def tool(self, name: str, args: dict, partial: bool = False) -> Any:
         """`partial`: a bulk read whose every lookup failed still answers (its `errors` say why), not HAError."""
+        if why := refused(name, args):
+            raise HAError(why)
         if name in READ_ACTIONS:
-            key, reads = READ_ACTIONS[name]
-            if (args or {}).get(key) not in reads:
-                raise HAError(f"{name} refused: only its {', '.join(sorted(reads))} {key} is allowed")
+            pass                                        # a read action of a tool that can write (refused passed it)
         elif name in WRITE_TOOLS and not self.write:
             raise HAError(f"{name} refused: this client is read-only")
         elif name not in READ_TOOLS and name not in WRITE_TOOLS:
