@@ -1,3 +1,11 @@
+## 0.12.240
+
+What you will see on Telegram:
+- "Turn off the TV" asks to turn off the TV itself, never only its screen (or the plug feeding it). If the villa's
+  rules do not allow turning a TV off, the Agent says so instead of asking for something else.
+- A new install allows TVs and speakers to be turned on and off with an approval, like lights and fans. Your villa
+  keeps its own list: check VESTA Agent page → Rules › Actions has "media_player.turn_off".
+
 ## 0.12.239
 
 What you will see on Telegram:
