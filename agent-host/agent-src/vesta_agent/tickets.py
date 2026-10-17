@@ -6,6 +6,7 @@ ticket.resolve), the AI's create_ticket tool, and the reconciliation at each sta
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Awaitable, Callable
@@ -13,7 +14,7 @@ from typing import Awaitable, Callable
 from vesta_shared import kiosk_words, result
 from vesta_shared.problems import Problems
 
-from .kiosk import NOTED, KioskError
+from .kiosk import MINE, NOTED, KioskError
 from .outcome_words import ticket_title
 
 log = logging.getLogger("vesta.outcome")
@@ -45,6 +46,10 @@ class Tickets:
         self.settle_alert = settle_alert      # incident_thread.IncidentThread.close: an incident closed in the Kiosk
         self.story = story or (lambda _iid: [])   # notice.Notices.story: an incident's Telegram life, for its card
         self.restate_alert = restate_alert        # incident_thread.IncidentThread.restate: an alert taken on in the Kiosk
+        # ⚠️ ONE REPAIR AT A TIME (owner, 2026-10-17, #48–#50: "1 individual line per update"): every result that moves a
+        # fault runs a repair, and seven alerts in one second ran seven at once — each saw the same open tasks with no
+        # fault yet, and each made one. Taken in turn, the second finds the first one's fault on its task.
+        self._repairing = asyncio.Lock()
 
     def _store(self):
         from vesta_shared.store import Store
@@ -129,6 +134,10 @@ class Tickets:
         ⚠️ ONE COMPARISON, NOT NINE PATCHES (architecture review, 2026-10-14): each case was a pass of its own, and a
         close the Kiosk did not receive was redone as the agent's ("Closed: the problem is over.") — a Done pressed by
         Fabien lost his name and his repair. The card now comes from the task, whose close keeps who and why."""
+        async with self._repairing:
+            return await self._repair()
+
+    async def _repair(self) -> dict[str, int]:
         nothing = {"created": 0, "reopened": 0, "resolved": 0}
         if not self.kiosk.enabled:
             return nothing
@@ -166,11 +175,34 @@ class Tickets:
                 break
         if made:
             log.info("Kiosk tickets created for %d open task(s) that had none", made)
+        moved_cards["resolved"] = moved_cards.get("resolved", 0) + await self._close_doubles(problems, held)
         # an open problem with no fault and no person's close is a fault the Cockpit never shows — said, not silent
         if unseen := problems.unseen():
             log.warning("%d open problem(s) have no Kiosk fault: %s", len(unseen),
                         ", ".join(f"{f['rule_id']} {f['entity_id']}" for f in unseen[:10]))
         return {"created": made, **moved_cards}
+
+    async def _close_doubles(self, problems: Problems, held: dict[str, dict]) -> int:
+        """An open fault of the agent's that no task holds, for an alert whose task holds another fault, is a double of
+        that one: closed as the agent's own clearing, never deleted (owner, 2026-10-17: six "#49 · One mains phase lost"
+        lines, made by repairs that ran at once before 0.12.237). Returns how many it closed."""
+        mine = {t.get("todo_uid") for t in problems.store.tasks(None) if t.get("todo_uid")}
+        by_number = {}
+        for t in problems.store.tasks(None):
+            n = problems.card(t).get("number") if t.get("todo_uid") else None
+            if n is not None:
+                by_number[str(n)] = t["todo_uid"]
+        closed = 0
+        for uid, card in held.items():
+            n = card.get("alert_number")
+            if uid in mine or card.get("status") == "resolved" or n is None or not uid.startswith(MINE):
+                continue
+            if by_number.get(str(n)) and by_number[str(n)] != uid:
+                if await self.kiosk.resolve_ticket(uid, note=f"A second copy of #{n}'s fault: closed, the other one says it."):
+                    closed += 1
+        if closed:
+            log.info("Closed %d double Kiosk fault(s) of an alert that already had one", closed)
+        return closed
 
     async def _take_in(self, problems: Problems, held: dict[str, dict]) -> None:
         """Step 1: what a PERSON did to a fault in the Kiosk reaches its task. Only their gestures — every other

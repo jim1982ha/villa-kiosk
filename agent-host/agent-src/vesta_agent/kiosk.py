@@ -30,6 +30,10 @@ CONTRACT = 1
 HEARTBEAT_EVERY = 120
 
 
+
+#: The start of every fault id the agent writes ("va-…"): a fault the agent made, whoever holds it now.
+MINE = "va-"
+
 class KioskError(RuntimeError):
     pass
 
@@ -181,7 +185,7 @@ class Kiosk:
 
     def _ticket_id(self) -> str:
         """A new fault's id ("va-…": written by the VESTA Agent)."""
-        return "va-" + secrets.token_hex(8)
+        return MINE + secrets.token_hex(8)
 
     async def add_ticket(self, title: str, entity_id: str | None = None, note: str | None = None,
                          document_ids: list[str] | None = None, number: int | None = None,

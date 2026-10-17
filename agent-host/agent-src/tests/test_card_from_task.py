@@ -85,3 +85,49 @@ def test_the_card_says_what_the_task_says():
     pb.close_incident(iid, Incident.DONE, st.now(), "Done by Wayan on Telegram.", who="Wayan")
     want = pb.card(st.task(tid))
     assert (want["open"], want["note"], want["who"]) == (False, "Done by Wayan on Telegram.", "Wayan")
+
+
+class _SlowKiosk(FakeKiosk):
+    """The real Kiosk answers over the network: every call yields, so repairs started together interleave. Its ids are
+    the agent's own ("va-…"), as the real Kiosk's are."""
+
+    def _ticket_id(self) -> str:
+        from vesta_agent.kiosk import MINE
+        return MINE + super()._ticket_id()
+
+    async def held_tickets(self):
+        await asyncio.sleep(0)
+        return await super().held_tickets()
+
+    async def add_ticket(self, *a, **k):
+        await asyncio.sleep(0)
+        return await super().add_ticket(*a, **k)
+
+
+def test_repairs_started_together_make_one_fault_per_alert_and_close_older_doubles(tmp_path):
+    # owner, 2026-10-17 (#48–#50): seven alerts in one second ran seven repairs at once; each found the same open
+    # tasks without a fault and made one — the Cockpit showed "#49 · One mains phase lost" six times
+    k = _SlowKiosk()
+    path = str(tmp_path / "agent.db")
+
+    async def settle(_iid, _note):
+        return 0
+    t, st = Tickets(kiosk=k, state=_State(), store_path=path, settle_alert=settle), Store(path)
+    for n, msg in ((1, "One mains phase lost"), (2, "Electrical cabinet overheating")):
+        iid = st.new_incident(f"k{n}", f"rule{n}", f"sensor.example_{n}", "P1", {"message": msg})
+        Problems(st).open_task("incident", iid, f"rule{n}", f"sensor.example_{n}", msg)
+
+    async def together():
+        await asyncio.gather(*(t.repair() for _ in range(7)))
+    run(together())
+    open_faults = [x for x in k.doc["data"]["tickets"] if x["status"] == "open"]
+    assert len(open_faults) == 2, [x["title"] for x in open_faults]
+
+    # doubles made before this fix (no task holds them) are closed by the next repair, never deleted
+    held_by_task = {x["id"] for x in open_faults}
+    for x in list(open_faults):
+        run(k.add_ticket(x["title"], number=x.get("alertNumber"), origin="alert"))
+    run(t.repair())
+    still_open = [x for x in k.doc["data"]["tickets"] if x["status"] == "open"]
+    assert {x["id"] for x in still_open} == held_by_task
+    assert len(k.doc["data"]["tickets"]) == 4                         # every record kept

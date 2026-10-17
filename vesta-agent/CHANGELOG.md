@@ -1,3 +1,10 @@
+## 0.12.237
+
+What you will see in the Cockpit:
+- One fault per alert. When many alerts arrived in the same second (as at 14:41 on 17 October), the Agent could create
+  the same fault several times; it now makes one, and closes the extra copies it made before (they stay in the
+  records as closed, nothing is deleted).
+
 ## 0.12.236
 
 What you will see on the Agent's page:

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.228 (17 October 2026)
+
+Owner, #48–#50 (six "#49 · One mains phase lost" lines in the Cockpit):
+- tickets.repair runs one at a time (asyncio.Lock): seven results in one second ran seven repairs, each found the same
+  open tasks with no fault and made one.
+- tickets._close_doubles: an open agent fault ("va-…", kiosk.MINE) no task holds, for an alert whose task holds
+  another fault, is closed as the agent's own clearing — never deleted. 1 test, 3 mutations RED.
+
 ## 0.6.227 (17 October 2026)
 
 - The Agent page's words never name the platform: 8 strings in core.js, rules.js, skills.js and 4 served from
