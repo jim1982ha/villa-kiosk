@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.225 (17 October 2026)
+
+- alert-desk: a phase it does not know (PHASES: opened, resolved, abandoned, restated) is audited "phase_unknown" and
+  nothing else — a newer blueprint can never raise alerts on an older desk (14:41: "restated" on 0.12.231 opened
+  #46-#50 and reopened #41, #45). No phase is still "opened". 1 test, 2 mutations RED.
+
 ## 0.6.224 (17 October 2026)
 
 Owner, #45: an open alert kept the claim it was raised with after its rule's threshold changed (4000 → 6200 W).

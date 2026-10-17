@@ -217,10 +217,20 @@ def _find_by_ha_incident(store: Store, ha_incident: str | None, closed_within: t
     return None
 
 
+#: The phases of a rule's event this desk acts on (a missing phase is "opened": rules saved before phases existed).
+PHASES = ("opened", "resolved", "abandoned", "restated")
+
+
 def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = None, mode_reader=villa_mode,
            zone: str | None = None) -> dict:
     """An alert from Home Assistant. `zone`: the villa's time zone (vesta_shared.script's one rule)."""
     ev = normalise(ev)
+    if ev["phase"] not in PHASES:
+        # ⚠️ A PHASE THIS DESK DOES NOT KNOW IS NOTHING (2026-10-17, 14:41): a newer rule template sent "restated" to a
+        # desk that read every phase it did not know as an alert — five false alerts and two reopenings in one
+        # minute. A newer rule can never raise an alert on an older desk: recorded, nothing sent, nothing created
+        store.audit("alert-desk", "phase_unknown", {"rule": ev.get("rule_id"), "phase": ev["phase"]})
+        return {"send": [], "actions": [], "incident_id": None, "decision": "phase_unknown"}
     if ev["phase"] == "resolved":
         return resolved(store, ev, now)
     if ev["phase"] == "abandoned":

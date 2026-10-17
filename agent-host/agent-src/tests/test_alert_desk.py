@@ -643,3 +643,17 @@ def test_a_rule_restating_itself_changes_how_its_open_alert_is_judged_and_sends_
     out = desk.intake(store, event(phase="restated", claim=new, rule="automation.critical_condition_other"), T0,
                       mode_reader=lambda: "occupied")
     assert out["decision"] == "restated_nothing_open" and not out["send"]
+
+
+def test_a_phase_the_desk_does_not_know_raises_nothing(store):
+    # 2026-10-17, 14:41: "restated" reached a desk that did not know it — five false alerts, two reopenings in one
+    # minute. Any phase a newer rule sends that this desk does not know is recorded, and nothing else
+    iid = desk.intake(store, event(), T0, mode_reader=lambda: "occupied")["incident_id"]
+    before = [dict(r) for r in store.incidents(open_only=False)]
+    for rule in ("automation.critical_condition_front_door", "automation.critical_condition_other"):
+        out = desk.intake(store, event(phase="rechecked", rule=rule), T0 + timedelta(hours=5),
+                          mode_reader=lambda: "occupied")
+        assert out == {"send": [], "actions": [], "incident_id": None, "decision": "phase_unknown"}, out
+    assert [dict(r) for r in store.incidents(open_only=False)] == before and store.incident(iid)["closed_at"] is None
+    assert desk.intake(store, {k: v for k, v in event().items() if k != "phase"}, T0 + timedelta(hours=6),
+                       mode_reader=lambda: "occupied")["decision"] in ("repeat", "counted")   # no phase: "opened"

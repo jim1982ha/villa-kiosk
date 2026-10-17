@@ -1,3 +1,10 @@
+## 0.12.234
+
+What you will see:
+- Nothing, unless a newer alert rule template ever sends the Agent a kind of message it does not know: it is now
+  noted and ignored. At 14:41 today such a message (a rule restating itself after a save) reached the previous
+  version, which took it for new alerts — the five false alerts and two "came back" lines you received.
+
 ## 0.12.233
 
 What you will see:
