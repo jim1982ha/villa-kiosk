@@ -1,3 +1,10 @@
+## 0.12.236
+
+What you will see on the Agent's page:
+- The page no longer names the platform underneath: "the villa's system" instead, for example "Not in the villa's
+  system:", "not found in the villa's system", and the AI tools tab "Villa system tools". The check that keeps
+  Telegram free of the name now reads the page too.
+
 ## 0.12.235
 
 What you will see on the Agent's page:
