@@ -1,3 +1,8 @@
+## 2.496.402
+
+### Fixed
+- The moon is now drawn on its real side of the sky. It was on the opposite side: on 16 October at 19:00 the real moon was in the south-west and the overview drew it in the north-east. The sun is unchanged.
+
 ## 2.496.401
 
 ### Changed
