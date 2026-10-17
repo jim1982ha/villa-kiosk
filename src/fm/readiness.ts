@@ -53,8 +53,8 @@ export interface CheckTarget {
   label: string;
   /** The list it opens. */
   group: SummaryGroup;
-  /** A health list (devices not reporting): every device in it, hidden or diagnostic ones too, no "turn all", and
-   *  the list IS the view — no chip per device under the check. */
+  /** A health list (devices not reporting): every device in it, hidden or diagnostic ones too, no "turn all". Its
+   *  devices are chips under the check like any other's (owner, 2026-10-18). */
   health?: boolean;
 }
 export interface ReadinessResult {

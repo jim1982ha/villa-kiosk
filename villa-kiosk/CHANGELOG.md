@@ -1,3 +1,13 @@
+## 2.496.409
+
+### Changed
+- Cockpit › Recap: "All devices reporting" names the devices offline as pills, like the unlocked doors and the
+  lights still on.
+- Cockpit › Overview: "Recent activity" is folded by default, like Tickets' Closed. Tap it to open; 10 events a page.
+- Cockpit › Overview: a fault no longer repeats the device's state before its own title: "#41 · Laundry Room door
+  unlocked", not "Unlocked — #41 · Laundry Room door unlocked". A word the fault does not say (a reading such as
+  "92 %") is still shown.
+
 ## 2.496.408
 
 ### Fixed

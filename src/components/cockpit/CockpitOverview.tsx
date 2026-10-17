@@ -42,6 +42,7 @@ import {
 import { attentionLineIn, cardActions, lineIcon, lineSources, type AttentionGroup, type AttentionItem } from "@/config/attention";
 import { SourceIcons } from "@/components/fm/sourceIcons";
 import RecordCard from "@/components/fm/RecordCard";
+import FoldedList from "@/components/common/FoldedList";
 import { useVillaModel } from "@/config/VillaModel";
 import { buildDeviceOptions } from "@/components/fm/DeviceSearchPicker";
 import FaultForm from "@/components/fm/FaultForm";
@@ -239,21 +240,23 @@ export default function CockpitOverview({ onOpenEntity, doors, reportFaultFor, o
       </div>
 
       {/* ── Recent activity ─────────────────────────────────────── */}
-      <div className="settings-section-title"><Activity size={16} style={{ verticalAlign: -2 }} /> Recent activity</div>
-      {villaActivity === "loading" && <p className="muted body-text">Loading…</p>}
-      {villaActivity === "error" && <p className="muted body-text">Couldn't read the activity log.</p>}
-      {Array.isArray(villaActivity) && villaActivity.length === 0 && (
-        <p className="muted body-text">Nothing in the last 6 hours.</p>
-      )}
-      {Array.isArray(villaActivity) && villaActivity.length > 0 && (
-        <div className="cockpit-activity-list">
-          {villaActivity.map((e, i) => (
-            <div key={`${e.t}-${i}`} className="cockpit-activity-row">
+      {/* Folded by default, as Tickets' Closed (owner, 2026-10-18): the same FoldedList, a page at a time. */}
+      {Array.isArray(villaActivity) && villaActivity.length > 0 ? (
+        <FoldedList title="Recent activity" rows={villaActivity} unit="event">
+          {(e) => (
+            <div key={`${e.t}-${e.name}-${e.message}`} className="cockpit-activity-row">
               <span className="cockpit-activity-time muted">{fmtChartTime(e.t)}</span>
               <span className="cockpit-activity-text"><strong>{e.name}</strong> {e.message}</span>
             </div>
-          ))}
-        </div>
+          )}
+        </FoldedList>
+      ) : (
+        <>
+          <div className="settings-section-title"><Activity size={16} style={{ verticalAlign: -2 }} /> Recent activity</div>
+          {villaActivity === "loading" && <p className="muted body-text">Loading…</p>}
+          {villaActivity === "error" && <p className="muted body-text">Couldn't read the activity log.</p>}
+          {Array.isArray(villaActivity) && <p className="muted body-text">Nothing in the last 6 hours.</p>}
+        </>
       )}
 
       {/* ── Updates available (Owner only, small) ──────────────── */}

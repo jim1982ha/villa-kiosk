@@ -104,8 +104,9 @@ export function ReadinessChecks({ readiness, label, onOpenEntity, onOpenCheck, s
         {readiness.checks.map((c) => {
           const Icon = ICON[c.state];
           const opens = c.entityIds?.length ? c.opens : undefined;
-          // A health list is the view itself; any other check also names its devices as chips (usually one or two).
-          const chips = !c.opens?.health && !!c.entityIds?.length;
+          // Every check names its devices as chips, the devices not reporting too (owner, 2026-10-18: "the same way the
+          // unlocked device or on lights are shown as pills"); past 8, "+N more" — the button opens the whole list.
+          const chips = !!c.entityIds?.length;
           return (
             <div key={c.id} className={`fm-row state-${c.state === "pass" ? "ok" : c.state === "warn" ? "due-soon" : "overdue"}`}>
               <span className={`fm-check-icon ${c.state}`}><Icon size={18} /></span>
