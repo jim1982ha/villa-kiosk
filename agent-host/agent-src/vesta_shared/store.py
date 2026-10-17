@@ -127,7 +127,9 @@ class Store:
         cols = {r["name"] for r in self.db.execute("PRAGMA table_info(tasks)")}
         # close_note / closed_who: what its fault's close says, and the person who closed it — kept with the task so a
         # close the Kiosk did not receive is redone as it was meant (architecture review, 2026-10-14)
-        for col in ("source", "check_text", "reopened_at", "reopened_by", "close_note", "closed_who"):
+        # reopen_note: what its fault's reopening says ("Back again." / "Still there after the close.") — the desk's words
+        # were dropped on the way and the Kiosk wrote its own "Back again" for both (architecture review, 2026-10-18)
+        for col in ("source", "check_text", "reopened_at", "reopened_by", "close_note", "closed_who", "reopen_note"):
             if col not in cols:
                 self.db.execute(f"ALTER TABLE tasks ADD COLUMN {col} TEXT")
         # a finding that comes back (vesta_shared.problems AGAIN_DAYS) keeps when it came back and the days it was seen —
@@ -293,6 +295,10 @@ class Store:
         q = "SELECT * FROM incidents" + (" WHERE closed_at IS NULL" if open_only else "") + " ORDER BY opened_at"
         return [dict(r) for r in self.db.execute(q)]
 
+    def incidents_of_key(self, key: str) -> list[dict]:
+        """Every incident of one alert (its rule and device), open or closed, oldest first."""
+        return [dict(r) for r in self.db.execute("SELECT * FROM incidents WHERE key=? ORDER BY opened_at", (key,))]
+
     def incident(self, iid: int) -> dict | None:
         r = self.db.execute("SELECT * FROM incidents WHERE id=?", (iid,)).fetchone()
         return dict(r) if r else None
@@ -368,10 +374,11 @@ class Store:
         r = self.db.execute("SELECT * FROM tasks WHERE source=? ORDER BY id DESC LIMIT 1", (source,)).fetchone()
         return dict(r) if r else None
 
-    def reopen_task(self, task_id: int, summary: str, by: str | None = None) -> None:
-        """Open again (`by`: the person who reopened its fault in the Kiosk; None: its problem came back)."""
-        self.db.execute("UPDATE tasks SET status='open', done_at=NULL, summary=?, reopened_at=?, reopened_by=? WHERE id=?",
-                        (summary, _now(), by, task_id))
+    def reopen_task(self, task_id: int, summary: str, by: str | None = None, note: str | None = None) -> None:
+        """Open again (`by`: the person who reopened its fault in the Kiosk; None: its problem came back), `note` what its
+        fault's reopening says (Problems.card)."""
+        self.db.execute("UPDATE tasks SET status='open', done_at=NULL, summary=?, reopened_at=?, reopened_by=?, reopen_note=? "
+                        "WHERE id=?", (summary, _now(), by, note or None, task_id))
         self.db.commit()
 
     def tasks(self, status: str | None = "open") -> list[dict]:

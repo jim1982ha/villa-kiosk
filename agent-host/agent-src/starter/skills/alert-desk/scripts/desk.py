@@ -318,7 +318,7 @@ def _ladder(store: Store, iid: int, ev: dict, now: datetime, sev: str, route: di
         store.update_incident(iid, state=Incident.ASKED, asked_at=now.isoformat(), assignee=CHASE["asks"])
         eid, check = ev.get("entity_id", ""), route.get("check") or ""
         if again:
-            tid, how = Problems(store).reopen_task("incident", iid, ev["rule_id"], eid, again[:250], check)
+            tid, how = Problems(store).reopen_task("incident", iid, ev["rule_id"], eid, again[:250], check, note=note)
             if how == "reopened":
                 out["actions"].append(R.reopened(tid, again, note))
             elif how == "new":
@@ -364,7 +364,7 @@ def reopen(store: Store, inc: dict, ev: dict, now: datetime, sev: str, route: di
         # Home Assistant no longer watches it: the desk does (seen_again)
         p = store.note(inc["id"], {"abandoned": True}, drop=("check_quiet",), closed_at=None, reply=None)
     inc = store.incident(inc["id"])
-    runs = incident_runs(inc)
+    runs = incident_runs(inc, store)
     title = again_title(str(p.get("message") or inc["rule_id"])[:200], runs - 1)
     _ladder(store, inc["id"], {**p, "rule_id": inc["rule_id"], "entity_id": inc["entity_id"],
                                "message": p.get("message") or inc["rule_id"]}, now, sev, route, out, again=title,

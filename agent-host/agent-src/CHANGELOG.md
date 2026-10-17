@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.230 (18 October 2026)
+
+Architecture review 2026-10-18 (an alert that goes and comes back; the villa's #52), owner's wording for #52:
+- A task keeps its reopening's words (`reopen_note`, beside `close_note`); Problems.card returns them and the repair
+  writes them on the fault. The desk's "Still there after the close." reached nothing before: the Kiosk wrote its own
+  "Back again" for both.
+- incident_runs(inc, store) counts the AGAIN_DAYS of every incident of the alert's key (Store.incidents_of_key), not
+  one incident's runs.
+- Kiosk.held_tickets says `cleared` (the last close was the agent's own); tickets._take_in never reads it as a
+  person's close. The time comparison is the fallback for a record without the step.
+- "back": "Back at {at}{times} (to: {who})", times ", 3rd time in 7 days".
+
 ## 0.6.229 (17 October 2026)
 
 Owner, #51/#52 (the "— Came back … —" divider looked unlike every other step, and said "came back" twice):

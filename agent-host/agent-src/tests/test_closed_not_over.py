@@ -53,6 +53,8 @@ def test_a_close_on_a_door_still_unlocked_reopens_it_still_there_and_the_desk_wa
     # "still there", never "back again" (review 25)
     assert [a for a in out["actions"] if a["action"] in ("ticket.reopen", "ticket")]
     assert all(a.get("note") != "Back again." for a in out["actions"])
+    # ... and the Cockpit card says it: the words travel on the task (architecture review, 2026-10-18)
+    assert [t["reopen_note"] for t in store.tasks("open")] == ["Still there after the close."]
     # locked later: the desk itself closes it — Home Assistant's rule no longer watches it
     villa.timeline["lock.door"].append((T0 + timedelta(minutes=30), "locked"))
     assert desk.tick(store, T0 + timedelta(minutes=45), client=villa)["cleared"] == [iid]

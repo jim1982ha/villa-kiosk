@@ -213,7 +213,12 @@ class Tickets:
             card = held.get(uid) if uid else None
             # ⚠️ RESOLVED BEFORE IT CAME BACK (architecture review 24): the task reopened after that resolution — it is not
             # a person closing it now (_converge reopens the fault)
-            if card and card["status"] == "resolved" and not _before(card.get("resolved_at"), t.get("reopened_at")):
+            # ⚠️ AND NEVER THE AGENT'S OWN CLEARING (architecture review, 2026-10-18): an alert flapping within seconds had
+            # its close's clearing land just after its return reopened the task, and the times said "a person closed it" —
+            # "Closed in the Cockpit by VESTA Agent", the alert no longer chased. The Kiosk's step says who; times are
+            # only the fallback for a record without one.
+            if card and card["status"] == "resolved" and not card.get("cleared") \
+                    and not _before(card.get("resolved_at"), t.get("reopened_at")):
                 iid = problems.closed_in_kiosk(t["id"], kiosk_words.closed(card.get("by") or "", card.get("resolved_at"),
                                                                            self.timezone))
                 if iid:
@@ -262,7 +267,9 @@ class Tickets:
             try:
                 if want["open"] and card["status"] == "resolved":
                     # its problem came back and the fault's reopening did not reach the Kiosk
-                    n = await self.reopen({"task_id": t["id"], "title": want["title"] or t.get("summary") or ""})
+                    # its own words ("Still there after the close." is not "Back again."): the task keeps them (Problems.card)
+                    n = await self.reopen({"task_id": t["id"], "title": want["title"] or t.get("summary") or "",
+                                           "note": want["reopen_note"]})
                     fixed += n; reopened += n
                 elif want["open"]:
                     title = ticket_title(want["title"])[:200]

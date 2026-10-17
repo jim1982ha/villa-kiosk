@@ -1,3 +1,17 @@
+## 0.12.239
+
+What you will see on Telegram:
+- An alert back again reads "- Back at 17/10/2026 20:16, 3rd time in 7 days (to: Owner & FM)": the count after a
+  comma, who it went to in brackets.
+- "Nth time in 7 days" counts every time the same alert went off in the past week. Before, an alert back more than
+  4 hours after it cleared got a new number and started again at 1.
+
+What you will see in the Cockpit:
+- A fault reopened because a Done or a close did not fix it says "Still there after the close." It no longer says
+  "Back again", which now means only that the alert cleared and returned.
+- An alert that clears and returns within seconds is never marked "Closed in the Cockpit by VESTA Agent": only a
+  close a person makes counts as theirs.
+
 ## 0.12.238
 
 What you will see on Telegram:

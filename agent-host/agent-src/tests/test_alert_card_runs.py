@@ -114,7 +114,7 @@ def test_a_run_that_came_back_starts_at_a_back_at_line_and_a_reminder_carries_it
     assert set(agent.thread.shown(1)) == {GROUP, FM_CHAT}
     back = card(agent, GROUP)
     assert back.startswith("#1-P2 (existing)\nTo: FM\n")
-    assert re.fullmatch(rf"Back at {T}, alert sent to FM — Back again: 2 times in 7 days",
+    assert re.fullmatch(rf"Back at {T} \(to: FM\) — Back again: 2 times in 7 days",
                         status(back).removeprefix("⚠️ ⚙️ ")), status(back)
     tick(agent, 20)                                     # the reminder: to the FM; the group's copy edited quietly
     group = card(agent, GROUP)
@@ -125,8 +125,9 @@ def test_a_run_that_came_back_starts_at_a_back_at_line_and_a_reminder_carries_it
     # ... and is told once: the history above it stops before it (drawn as it stood before this step)
     assert sum("Reminder sent" in ln for ln in lines) == 1, lines
     # point 3: the second run starts at its own "- Back at" line, shaped like every other step (owner, 2026-10-17,
-    # #51: "— Came back … —" then "- Came-back alert sent …" were two shapes for one moment); A: "FM", never "Facility Manager"
-    assert re.fullmatch(rf"- Back at {T} \(2nd time in 7 days\), alert sent to FM", lines[2]), lines
+    # #51: "— Came back … —" then "- Came-back alert sent …" were two shapes for one moment; reworded 2026-10-18, #52:
+    # the count after a comma, whom in brackets); A: "FM", never "Facility Manager"
+    assert re.fullmatch(rf"- Back at {T}, 2nd time in 7 days \(to: FM\)", lines[2]), lines
     assert lines[1].startswith("- Closing note sent") and lines[3].startswith("⚠️ ⚙️ Reminder sent"), lines
     assert not any("ame back" in ln or "ame-back" in ln or ln.startswith("—") for ln in lines), lines
     assert "Facility Manager" not in group and "facility manager" not in group
@@ -143,8 +144,8 @@ def test_the_back_line_counts_the_runs_and_an_older_record_has_none():
     from vesta_agent.notice import Notices, _ordinal
     n = Notices(None, lambda: None, "UTC")
     at = datetime.fromisoformat("2026-10-16T18:03:00+00:00")
-    assert n.step("back", {"fm"}, at, 3) == "Back at 16/10/2026 18:03 (3rd time in 7 days), alert sent to FM"
-    assert n.step("back", {"fm"}, at) == "Back at 16/10/2026 18:03, alert sent to FM"
+    assert n.step("back", {"fm"}, at, 3) == "Back at 16/10/2026 18:03, 3rd time in 7 days (to: FM)"
+    assert n.step("back", {"fm"}, at) == "Back at 16/10/2026 18:03 (to: FM)"
     assert n.step("reminder", {"fm"}, at, 3) == "Reminder sent 16/10/2026 18:03 to FM"
     assert [_ordinal(k) for k in (1, 2, 3, 4, 11, 12, 13, 21, 22, 101)] == \
         ["1st", "2nd", "3rd", "4th", "11th", "12th", "13th", "21st", "22nd", "101st"]

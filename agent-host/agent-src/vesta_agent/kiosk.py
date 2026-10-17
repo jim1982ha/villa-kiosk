@@ -224,9 +224,10 @@ class Kiosk:
         return {tid: t["status"] for tid, t in (await self.held_tickets()).items()}
 
     async def held_tickets(self) -> dict[str, dict]:
-        """{ticket id: {status, title, agent_title, resolved_at, by, reopened_at, reopened_by}} of the Facility records,
+        """{ticket id: {status, title, agent_title, resolved_at, by, cleared, reopened_at, reopened_by}} of the Facility records,
         as the Kiosk holds them now: `by` the profile of its last step ("Facility manager" who closed it), `agent_title`
-        the title the agent last gave it (None: never said), `reopened_*` its last reopening, from its steps."""
+        the title the agent last gave it (None: never said), `cleared` whether its last close was the agent's own
+        clearing, `reopened_*` its last reopening, from its steps."""
         status, got = await self._req("GET", "/agent/v1/fm-data")
         if status != 200:
             raise KioskError(f"reading the Facility records answered {status}")
@@ -240,6 +241,10 @@ class Kiosk:
                    and not u.get("kind") and not _mine(u)]
             return {"taken_at": str(ups[-1].get("at") or ""),
                     "taken_by": str(ups[-1].get("who") or ups[-1].get("by") or "")} if ups else {}
+        def cleared(t: dict) -> bool:
+            # its last close was the agent's own clearing (resolve_ticket without a person: kind CLEARED), never a person's
+            ups = [u for u in t.get("updates") or [] if isinstance(u, dict) and u.get("status") == "resolved"]
+            return bool(ups) and ups[-1].get("kind") == CLEARED
         def reopened(t: dict) -> dict:
             ups = [u for u in t.get("updates") or [] if isinstance(u, dict) and u.get("kind") == REOPENED]
             return {"reopened_at": str(ups[-1].get("at") or ""),
@@ -248,7 +253,7 @@ class Kiosk:
                           "agent_title": agent_title(t), "resolved_at": str(t.get("resolvedAt") or ""),
                           "by": last(t, "who") or last(t, "by"), "alert_number": t.get("alertNumber"), "origin": t.get("origin"),
                           "check": t.get("check"), "title_pattern": t.get("titlePattern"), "since": t.get("since"),
-                          "person_titled": person_titled(t),
+                          "person_titled": person_titled(t), "cleared": cleared(t),
                           "noted": [(str(u.get("at") or ""), str(u.get("note") or "")) for u in t.get("updates") or []
                                     if isinstance(u, dict) and u.get("kind") == NOTED],
                           **reopened(t), **taken(t)}     # `by`: who did it, as the card says it

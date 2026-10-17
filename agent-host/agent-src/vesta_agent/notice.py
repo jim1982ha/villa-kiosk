@@ -155,7 +155,7 @@ class Notices:
         "Back at 16/10/2026 18:03 (2nd time in 7 days), alert sent to FM" (`run`: the how-many-th time; an older record
         has none). The ONE wording of a step, in its history line and on its own bottom line (`bottom`)."""
         s = STEPS.get(stage or "")
-        times = f" ({_ordinal(run)} time in {AGAIN_DAYS} days)" if isinstance(run, int) and run > 1 else ""
+        times = f", {_ordinal(run)} time in {AGAIN_DAYS} days" if isinstance(run, int) and run > 1 else ""
         return (s.line if s else "{sent} {at} to {who}").format(
             sent=s.sent if s else "Sent", at=when(at, self.tz), times=times,
             who=audience(roles, short=True) or "nobody")

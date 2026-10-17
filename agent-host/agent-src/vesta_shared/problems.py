@@ -46,12 +46,23 @@ def occurrences(finding: dict | None) -> list[str]:
     return json.loads(finding.get("occurrences") or "null") or [finding["opened_day"]]
 
 
-def incident_runs(inc: dict) -> int:
-    """How many times an incident alerted in the AGAIN_DAYS before its latest run (store.reopen_incident keeps them)."""
+def incident_runs(inc: dict, store: Store) -> int:
+    """How many times the alert of `inc` (its key: the rule and the device) alerted in the AGAIN_DAYS up to the incident's
+    latest run — every incident of that key counted, each run of each (store.reopen_incident keeps them).
+
+    ⚠️ "N TIMES IN 7 DAYS" MEANS THE WEEK, NOT ONE NUMBER (architecture review, 2026-10-18): only the runs of the one
+    incident were counted, and an alert back more than reopen_hours after its close gets a new number — the same camera
+    three nights running read "New" each night, "1st time", while the line claimed to count seven days."""
     from datetime import datetime, timedelta
     latest = datetime.fromisoformat(inc.get("reopened_at") or inc["opened_at"])
-    runs = [o["opened_at"] for o in json.loads(inc.get("occurrences") or "[]")] + [latest.isoformat()]
-    return sum(1 for r in runs if datetime.fromisoformat(r) >= latest - timedelta(days=AGAIN_DAYS))
+    since = latest - timedelta(days=AGAIN_DAYS)
+    runs = {inc["id"]: _runs_of(inc)} | {i["id"]: _runs_of(i) for i in store.incidents_of_key(inc["key"])}
+    return sum(1 for rs in runs.values() for r in rs if since <= datetime.fromisoformat(r) <= latest)
+
+
+def _runs_of(inc: dict) -> list[str]:
+    """When each run of an incident opened: its earlier runs, then its current one."""
+    return [o["opened_at"] for o in json.loads(inc.get("occurrences") or "[]")] + [inc.get("reopened_at") or inc["opened_at"]]
 
 
 def again_title(summary: str, again: int | None) -> str:
@@ -101,9 +112,9 @@ class Problems:
                                    check_text=check or None), True
 
     def reopen_task(self, source: str, source_id: int, rule_id: str, entity_id: str, summary: str,
-                    check: str = "") -> tuple[int, str]:
+                    check: str = "", note: str = "Back again.") -> tuple[int, str]:
         """The task of a problem that came back: (task id, "open" — it still is | "reopened" — its last one, closed, open
-        again under `summary` (its Kiosk fault is to be reopened: result.reopened) | "new" — it never had one).
+        again under `summary` (its Kiosk fault is to be reopened, saying `note`: card()) | "new" — it never had one).
 
         ⚠️ ONE PROBLEM, ONE FAULT (architecture review 24): each return opened a new task and a new Kiosk fault — 24 a day
         for one access point, each opened and resolved, nothing saying they were the same."""
@@ -112,7 +123,7 @@ class Problems:
             return cur["id"], "open"
         last = self.store.last_task(f"{source}:{int(source_id)}")
         if last:
-            self.store.reopen_task(last["id"], summary)
+            self.store.reopen_task(last["id"], summary, note=note)
             return last["id"], "reopened"
         return self.open_task(source, source_id, rule_id, entity_id, summary, check)[0], "new"
 
@@ -367,7 +378,7 @@ class Problems:
             return []
         title = self.source_title(source)
         if last:
-            self.store.reopen_task(last["id"], title[:250])
+            self.store.reopen_task(last["id"], title[:250], note=note or "Back again.")
             return [result.reopened(last["id"], title, note or "Back again.")]
         if kind != "finding":
             return []
@@ -406,7 +417,12 @@ class Problems:
         origin ("alert" | "night", or None), check (how it is read again to close it: "minutes" — an alert, at the desk's
         every look, or a finding of a rule in `rechecked` (the skills' `rechecks`) — "nightly" — any other finding —
         or None),
-        note and who (its close: what it says, the person who closed it — None: the agent's own clearing)}."""
+        note and who (its close: what it says, the person who closed it — None: the agent's own clearing),
+        reopen_note (what its reopening says — None: it was never reopened by its problem)}.
+
+        ⚠️ A REOPENING SAYS WHY, LIKE A CLOSE (architecture review, 2026-10-18): the desk wrote "Still there after the close."
+        on an action nothing read, and the Kiosk wrote its own "Back again" — a door never locked after a Done read as if
+        it had come back (review 25 forbade exactly that). The words travel on the task, as the close's do."""
         kind, sid = self._source(task)
         title = self.current_title(task)
         # a duration in its words, worded by the Kiosk when it shows the card (architecture review, 2026-10-15): the
@@ -423,7 +439,8 @@ class Problems:
                 # how it is read again, the card's "Next check" (owner, 2026-10-15)
                 "check": ("minutes" if kind == "incident" or task.get("rule_id") in rechecked else "nightly")
                 if kind in ("incident", "finding") else None,
-                "note": task.get("close_note") or "Closed: the problem is over.", "who": task.get("closed_who") or None}
+                "note": task.get("close_note") or "Closed: the problem is over.", "who": task.get("closed_who") or None,
+                "reopen_note": task.get("reopen_note") or None}
 
     def unseen(self) -> list[dict]:
         """Open findings that should be a fault and are not — wants_open with no open task. settle_all leaves none;
@@ -460,7 +477,7 @@ class Problems:
             inc = self.store.incident(sid)
             message = notes_of(inc).get(Notes.MESSAGE) if inc and not inc.get("closed_at") else None
             if message:
-                return again_title(str(message)[:200], incident_runs(inc) - 1)
+                return again_title(str(message)[:200], incident_runs(inc, self.store) - 1)
         return self.title_of(task)
 
     def check_of(self, task: dict) -> str:
@@ -490,7 +507,7 @@ class Problems:
                         "entity_id": i["entity_id"], "severity": i["severity"],
                         # its latest run is when it opened, how often it came back is in its title (review 24: a
                         # reopened alert stayed "still open since the 1st", never new, never "again")
-                        "title": again_title(_no_code(p.get("message") or i["rule_id"]), incident_runs(i) - 1),
+                        "title": again_title(_no_code(p.get("message") or i["rule_id"]), incident_runs(i, self.store) - 1),
                         "check": p.get("check") or "",
                         # the VILLA's day it opened (review 30: the UTC date dated an alert of 06:30 at UTC+8 the day
                         # before — under "Still open" where "Also noted" was due)

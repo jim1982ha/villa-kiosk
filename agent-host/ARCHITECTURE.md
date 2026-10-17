@@ -433,3 +433,12 @@ step numbers the scripts' messages cite (page.py: "SKILL.md step 6").
   refusal names no skill script.
 - **The release records the shipped starter skills**: `tools/release.py ship` runs `record_shipped` and stages
   `shipped-skills.json` when a staged file is under `starter/skills/`.
+
+## An alert that goes and comes back (architecture review, 2026-10-18, 0.12.239)
+
+The villa's #52 opened, cleared and came back four times in four hours. Decided:
+- **A reopening says why, like a close.** The task keeps `reopen_note` beside `close_note`; `Problems.card` returns it
+  and `tickets.repair` writes it. A `ticket.reopen` action only tells the engine a fault moved; its words are not read.
+- **"N times in 7 days" is the week of the alert's key**, every incident of it (`incident_runs(inc, store)`).
+  Whether a return reopens the old number stays the skill's `reopen_hours` (owner's question, not yet answered).
+- **Who closed a fault is read from the Kiosk's step** (`held_tickets["cleared"]`), never inferred from times alone.

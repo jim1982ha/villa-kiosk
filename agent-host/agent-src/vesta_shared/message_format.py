@@ -92,7 +92,8 @@ class Step(NamedTuple):
 #: ⚠️ "BACK AT" IS ONE LINE LIKE THE OTHERS (owner, 2026-10-17, #51/#52): a second run started under its own
 #: "— Came back 17/10/2026 19:44 (2nd time in 7 days) —", the next line "- Came-back alert sent 17/10/2026 19:44 …" —
 #: two shapes and two words for one moment. It is now "- Back at 17/10/2026 19:44 (2nd time in 7 days), alert sent
-#: to Owner & FM"; the words "came back" / "came-back" are never written.
+#: to Owner & FM"; the words "came back" / "came-back" are never written. Reworded by the owner on 2026-10-18 (#52):
+#: "- Back at 17/10/2026 20:16, 3rd time in 7 days (to: Owner & FM)" — the count after a comma, whom in brackets.
 #: The Kiosk's card tells what chased, escalated or brought an alert back — never the first alert (the fault itself)
 #: nor the closing (its close step says it).
 STEPS: dict[str, Step] = {
@@ -101,7 +102,7 @@ STEPS: dict[str, Step] = {
     "escalated": Step("Escalation sent", "existing", timed=True, noted=True),
     "update": Step("Update sent", "existing", timed=False, noted=False),
     "back": Step("Back: alert sent", "existing", timed=True, noted=True,
-                 line="Back at {at}{times}, alert sent to {who}"),
+                 line="Back at {at}{times} (to: {who})"),
     "still": Step("Still-there alert sent", "existing", timed=True, noted=True),
     "reopened": Step("Reopen request sent", "existing", timed=True, noted=True),
     "closed": Step("Closing note sent", "closed", timed=False, noted=False),

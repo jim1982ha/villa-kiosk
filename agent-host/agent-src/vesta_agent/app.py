@@ -215,8 +215,9 @@ class Vesta:
         """How many times an incident alerted in the last days, as the store holds it (a "Back at …" step says it)."""
         from vesta_shared.problems import incident_runs
         from vesta_shared.store import Store
-        inc = Store(self.s.store_path).incident(int(iid))
-        return incident_runs(dict(inc)) if inc else None
+        store = Store(self.s.store_path)
+        inc = store.incident(int(iid))
+        return incident_runs(dict(inc), store) if inc else None
 
     def _severity(self, iid: int) -> str | None:
         """An incident's priority (P1…P4) as the store holds it: the notices' heading says it."""
