@@ -1,3 +1,13 @@
+## 2.496.403
+
+### Fixed
+- Readiness snapshots are listed as snapshots, not statements: "Saved snapshots", and their delete button says snapshot.
+- A readiness snapshot can now be downloaded, like a recap or a spend statement. Saving one shows it under the list, and "Saved" stays until you make another, the same on Recap, Spend and Readiness.
+- Every readiness check about devices now opens its own list: "View air conditioning" and "View cameras" are new, and "View unavailable devices" opens the list right there in Recap instead of leaving for the Overview.
+
+### Changed
+- The recap, the spend statement and the readiness snapshot are made, saved, reopened and downloaded by one shared piece, so they can no longer drift apart. The checks run before every release now draw more of the Cockpit and the Weather window and read them as you would.
+
 ## 2.496.402
 
 ### Fixed
