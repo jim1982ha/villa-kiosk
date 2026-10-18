@@ -24,9 +24,10 @@ export function deviceWorkKey(device: string | undefined, ownId: string): string
 }
 
 /** A record's card: its entity's device, else the record alone — the same key its Overview line gets (its line's id
- *  is `fault:<record id>`, config/attention.buildAttentionItems). */
-export function recordWorkKey(t: Pick<FmTicket, "id" | "entityId">, deviceOf: (entityId: string) => string): string {
-  return deviceWorkKey(t.entityId ? deviceOf(t.entityId) : undefined, `fault:${t.id}`);
+ *  is `fault:<record id>`, config/attention.buildAttentionItems). `deviceOfRecord`: the villa's one answer to "which
+ *  device does this record's entity field name" (deviceGroups.recordDeviceOf — a list of several included). */
+export function recordWorkKey(t: Pick<FmTicket, "id" | "entityId">, deviceOfRecord: (field: string) => string): string {
+  return deviceWorkKey(t.entityId ? deviceOfRecord(t.entityId) : undefined, `fault:${t.id}`);
 }
 
 /** `things` grouped by `keyOf`, in the order each key first appears; every thing comes back exactly once. */
@@ -48,14 +49,14 @@ export interface DeviceWork {
 }
 
 /** `records` grouped by device, in the order each device first appears. */
-export function workByDevice(records: readonly FmTicket[], deviceOf: (entityId: string) => string): DeviceWork[] {
-  return groupByDevice(records, (t) => recordWorkKey(t, deviceOf)).map(({ key, items }) => ({ key, records: items }));
+export function workByDevice(records: readonly FmTicket[], deviceOfRecord: (field: string) => string): DeviceWork[] {
+  return groupByDevice(records, (t) => recordWorkKey(t, deviceOfRecord)).map(({ key, items }) => ({ key, records: items }));
 }
 
 /** The Tickets tab's cards: the tickets in progress, one per device, the device whose latest was opened last first. */
-export function ticketCards(records: readonly FmTicket[], deviceOf: (entityId: string) => string): DeviceWork[] {
+export function ticketCards(records: readonly FmTicket[], deviceOfRecord: (field: string) => string): DeviceWork[] {
   return workByDevice(records.filter((t) => stageOf(t) === "ticket")
-    .sort((a, b) => Date.parse(b.openedAt) - Date.parse(a.openedAt)), deviceOf);
+    .sort((a, b) => Date.parse(b.openedAt) - Date.parse(a.openedAt)), deviceOfRecord);
 }
 
 // ── What a card's buttons do ─────────────────────────────────────────────────
@@ -145,12 +146,12 @@ export const workRecord = (t: Pick<FmTicket, "id" | "status">): WorkRecord => ({
  *  figures that must stay per record (a repair's mean time, the closed list) are ticketStats'. */
 export interface OpenCounts { faults: number; tickets: number; total: number }
 
-export function openCounts(records: readonly FmTicket[], deviceOf: (entityId: string) => string): OpenCounts {
-  const cards = workByDevice(records.filter(isTicketOpen), deviceOf)
+export function openCounts(records: readonly FmTicket[], deviceOfRecord: (field: string) => string): OpenCounts {
+  const cards = workByDevice(records.filter(isTicketOpen), deviceOfRecord)
     .map((d) => overviewActions(d.records.map(workRecord)));
   return {
     faults: cards.filter((acts) => acts.some((a) => a.kind === "openTicket")).length,
-    tickets: ticketCards(records, deviceOf).length,
+    tickets: ticketCards(records, deviceOfRecord).length,
     total: cards.filter((acts) => acts.length > 0).length,
   };
 }

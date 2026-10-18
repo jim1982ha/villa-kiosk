@@ -37,7 +37,7 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
 }) {
   const { data, removeTicket } = useFmData();
   const terms = useFmTerms();
-  const { deviceOf } = useDeviceIdentity();
+  const { deviceOfRecord } = useDeviceIdentity();
   const label = useEntityLabel();
   const [editingId, setEditingId] = useState<string | null>(null);
   /** The ticket whose stage change is being recorded, and where it goes. */
@@ -54,8 +54,8 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
 
   const stats = ticketStats(data.tickets);
   // in progress: the cards below, one per device (openCounts) — the other figures are per record (a repair's time)
-  const inProgress = openCounts(data.tickets, deviceOf).tickets;
-  const tickets = useMemo(() => ticketCards(data.tickets, deviceOf), [data.tickets, deviceOf]);
+  const inProgress = openCounts(data.tickets, deviceOfRecord).tickets;
+  const tickets = useMemo(() => ticketCards(data.tickets, deviceOfRecord), [data.tickets, deviceOfRecord]);
   // ⚠️ THE CLOSED ONES ARE A SECTION OF THEIR OWN, FOLDED AND PAGED (owner, 2026-10-14): the VESTA Agent clears several
   // a day. Latest closed first; the server drops them after their retention window (supervisor-proxy _fm_expire).
   const closed = useMemo(() => data.tickets.filter((t) => stageOf(t) === "closed")

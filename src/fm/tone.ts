@@ -1,0 +1,23 @@
+// src/fm/tone.ts
+// HOW BAD A THING IS, as every tinted card of the Facility screens says it — a task's due state, a Recap check, the
+// month's spending cap. One answer per state, one look per answer (`.tone-warn` / `.tone-danger`, 08-shared.css).
+//
+// ⚠️ FOUR VOCABULARIES, FOUR COPIES (architecture review "One answer per question" #3, 2026-10-19): the same tinted
+// frame was written four times in 07-facility.css under `state-overdue`, `warn/fail`, `approaching/exceeded` — and a
+// Recap check borrowed the Schedule's words for its colour (`warn` drawn as `state-due-soon`). Each screen now says
+// which tone its state is, here, and the stylesheet draws a tone once.
+
+import type { DueState, SpendCapState } from "./fmEngine";
+import type { CheckState } from "./readiness";
+
+export type Tone = "ok" | "warn" | "danger";
+
+/** Each state of each kind, as a tone. */
+export const TONE_OF = {
+  due: { ok: "ok", "due-soon": "warn", overdue: "danger", never: "danger" } satisfies Record<DueState, Tone>,
+  check: { pass: "ok", warn: "warn", fail: "danger" } satisfies Record<CheckState, Tone>,
+  cap: { ok: "ok", approaching: "warn", exceeded: "danger" } satisfies Record<SpendCapState, Tone>,
+} as const;
+
+/** A tone's class on a card: none when all is well. */
+export const toneClass = (t: Tone): string => (t === "ok" ? "" : `tone-${t}`);

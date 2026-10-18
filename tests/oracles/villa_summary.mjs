@@ -27,7 +27,7 @@ const entities = Object.fromEntries([
 // The villa's own devices: folded, so the pump's power sensor is NOT one.
 const villa = new Set(["lock.front", "lock.back", "lock.gate", "light.hall", "light.bed",
   "climate.living", "climate.bed", "switch.pool_pump"]);
-const devices = { ids: [...villa], unavailable: ["lock.gate", "climate.bed"], has: (id) => villa.has(id) };
+const devices = { ids: [...villa], unavailable: ["lock.gate", "climate.bed"], has: (id) => villa.has(id), isCritical: () => false, deviceOfRecord: (id) => id };
 
 const facts = villaSummary({ entities, devices, resolvedRooms: {}, thresholds: {} });
 const report = buildReadiness(entities, EMPTY_FM_DATA, devices);

@@ -43,7 +43,7 @@ export interface RecordCardProps {
   erase?: { title: string; detail: string; run: (token: string) => Promise<unknown> };
   onOpen?: () => void;
   framed?: boolean;
-  /** The frame's tint: "state-overdue", "state-due-soon"… */
+  /** The frame's tint: fm/tone's toneClass ("tone-warn", "tone-danger"), none when all is well. */
   tone?: string;
 }
 

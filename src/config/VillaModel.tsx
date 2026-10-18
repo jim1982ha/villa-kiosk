@@ -17,7 +17,7 @@ import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "./ConfigContext";
 import { useFmData } from "@/fm/FmDataContext";
 import { useCriticalDevices } from "@/ha/criticalDevices";
-import { villaDevices, deviceFolding, deviceOf, deviceReadings, type VillaDevices } from "./deviceGroups";
+import { villaDevices, deviceFolding, deviceOf, deviceReadings, recordDeviceOf, type VillaDevices } from "./deviceGroups";
 import { effectiveMapped, visibleEntitiesOf, visibleTo } from "./villaVisibility";
 import type { Role } from "@/auth/roles";
 import type { HassEntity } from "@/types/ha.types";
@@ -90,12 +90,12 @@ export function VillaModelProvider({ sets, children }: { sets: VillaSets; childr
   // registry, so it is computed when those change, not on every state push.
   const { folding } = useDeviceIdentity();
   const devices = useMemo(
-    () => villaDevices({ entityMap, deviceGroups, dismissed: dismissedIds, mappedEntityIds, entities, entityDeviceIds, folding }),
-    [entityMap, deviceGroups, dismissedIds, mappedEntityIds, entities, entityDeviceIds, folding],
+    () => villaDevices({ entityMap, deviceGroups, dismissed: dismissedIds, mappedEntityIds, entities, entityDeviceIds, folding, critical }),
+    [entityMap, deviceGroups, dismissedIds, mappedEntityIds, entities, entityDeviceIds, folding, critical],
   );
   const visibleDevices = useMemo(
-    () => villaDevices({ entityMap, deviceGroups, dismissed: dismissedIds, mappedEntityIds, entities: visibleEntities, entityDeviceIds, folding }),
-    [entityMap, deviceGroups, dismissedIds, mappedEntityIds, visibleEntities, entityDeviceIds, folding],
+    () => villaDevices({ entityMap, deviceGroups, dismissed: dismissedIds, mappedEntityIds, entities: visibleEntities, entityDeviceIds, folding, critical }),
+    [entityMap, deviceGroups, dismissedIds, mappedEntityIds, visibleEntities, entityDeviceIds, folding, critical],
   );
   const attention = useMemo((): VillaProblems => {
     const unavailableIds = devices.unavailable as string[];
@@ -146,6 +146,8 @@ export function useDeviceIdentity() {
     folding,
     /** What a tap on anything of `id`'s device opens. */
     deviceOf: (id: string) => deviceOf(folding, id),
+    /** The device a fault's or ticket's entity field names — the card it sits on in every screen. */
+    deviceOfRecord: recordDeviceOf(folding, (id: string) => id in entities),
     /** What else is on the open entity's device, listed under its panel. */
     readingsOf: (id: string) => deviceReadings(id, folding, entities, suppressedEntityIds, deviceGroups, entityDeviceIds,
       hiddenInHaEntityIds),

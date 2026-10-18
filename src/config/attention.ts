@@ -15,7 +15,7 @@ import { alarmText } from "@/config/reading";
 import type { Threshold } from "@/config/ThresholdConfig";
 import { labelOf } from "@/config/EntityMap";
 import { deviceRoom, deviceRoomOrRecord, firstRoom, roomLabel } from "@/config/devicePlace";
-import { deviceOf } from "@/config/deviceGroups";
+import { criticalDevices, deviceOf, recordEntity } from "@/config/deviceGroups";
 import { faultTitle, fmAttention, stageOf } from "@/fm/fmEngine";
 import { lastNoted } from "@/fm/faultNotes";
 import { deviceWorkKey, groupByDevice, lineActions, overviewActions, type WorkAction, type WorkRecord } from "@/fm/deviceWork";
@@ -300,15 +300,6 @@ export function attentionLine(item: AttentionItem): string {
  * maintenance, and every device the map paints RED (its deviceLook is
  * `alert`).
  */
-/** The device a record names: its entity — or, for a record naming several at once ("sensor.a,sensor.b", a rule
- *  watching three phases), the first of them the villa's system has. A list read as one id was no device at all: its
- *  card was titled "… Phase A Voltage,sensor" and filed under "Other" (owner, 2026-10-17). */
-export function oneEntity(id: string | undefined, entities: Record<string, HassEntity>): string | undefined {
-  if (!id || !id.includes(",")) return id;
-  const ids = id.split(",").map((x) => x.trim()).filter(Boolean);
-  return ids.find((x) => x in entities) ?? ids[0];
-}
-
 export function buildAttentionItems(opts: {
   unavailableIds: readonly string[];
   entities: Record<string, HassEntity>;
@@ -330,7 +321,7 @@ export function buildAttentionItems(opts: {
   const { unavailableIds, entities, entityMap, alertThresholds, resolvedRooms, fmData, selectableIds, folding } = opts;
   const items: AttentionItem[] = [];
   // a critical entity stands for its device (the fold): the rule may name a lock's battery sensor, the model the lock
-  const criticalIds = new Set([...(opts.critical ?? [])].flatMap((e) => [e, folding.get(e) ?? e]));
+  const criticalIds = criticalDevices(opts.critical, folding);
 
   for (const id of unavailableIds) {
     items.push({
@@ -348,6 +339,7 @@ export function buildAttentionItems(opts: {
 
   const fm = fmAttention(fmData);
   for (const t of fm.unresolved) {
+    const entityId = recordEntity(t.entityId, (x) => x in entities);   // the one the Tickets tab files it under too
     const stage = stageOf(t) === "ticket" ? "ticket" : "fault";
     items.push({
       id: `fault:${t.id}`,
@@ -355,14 +347,14 @@ export function buildAttentionItems(opts: {
       title: faultTitle(t),
       detail: stage === "ticket" ? "In progress" : "Fault",
       room: t.room,
-      entityId: oneEntity(t.entityId, entities),
+      entityId,
       ticketId: t.id,
       stage,
       latest: lastNoted(t),
       source: faultSource(t),
       check: t.check,
       // lost contact (isOffline) with an entity the villa's system has: the device's offline line takes it
-      offline: !!t.entityId && !!entities[t.entityId] && isOffline(entities[t.entityId]),
+      offline: !!entityId && !!entities[entityId] && isOffline(entities[entityId]),
     });
   }
 

@@ -18,6 +18,8 @@ import { fmtDuration } from "@/components/panels/chartUtils";
 const DAY_MS = 86_400_000;
 
 export type DueState = "never" | "overdue" | "due-soon" | "ok";
+/** Where the month's minor spending stands against its cap. */
+export type SpendCapState = "ok" | "approaching" | "exceeded";
 
 export interface ScheduleStatus {
   schedule: FmSchedule;
@@ -126,7 +128,7 @@ export interface BudgetStatus {
   cap: number;
   /** 0–1+ against the cap; can exceed 1. */
   fraction: number;
-  state: "ok" | "approaching" | "exceeded";
+  state: SpendCapState;
   entries: FmCost[];
 }
 

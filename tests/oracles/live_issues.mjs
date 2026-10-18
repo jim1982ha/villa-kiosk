@@ -115,6 +115,29 @@ console.log("\n  ONE card per device, on the Overview and in Tickets, and the co
      tickets.map((t) => t.key).join() === "item:fault:n2,device:lock.back,device:sensor.pump_power", tickets.map((t) => t.key));
 }
 
+console.log("\n  a fault naming several sensors sits on ONE card, on every screen (review \"One answer per question\" #1):");
+{
+  // a rule watching the pump's energy and a sensor the villa no longer has: the Overview, Tickets and the counts all
+  // file it under the pump — deviceGroups.recordDeviceOf, the one answer
+  const { recordDeviceOf } = await import("@/config/deviceGroups");
+  const folding = new Map([["sensor.pump_energy", "sensor.pump_power"]]);
+  const entities = { "sensor.pump_energy": { entity_id: "sensor.pump_energy", state: "unavailable", attributes: {} } };
+  const of = recordDeviceOf(folding, (id) => id in entities);
+  const records = [rec("m1", "sensor.gone,sensor.pump_energy"), { ...rec("m2", "sensor.gone,sensor.pump_energy"), status: "in_progress" }];
+  const overview = groupAttention(buildAttentionItems({ unavailableIds: ["sensor.pump_energy"], entities, entityMap: {}, alertThresholds: {},
+    resolvedRooms: {}, selectableIds: [], folding, fmData: fm(records) }));
+  const tickets = W.ticketCards(records, of);
+  ck("the Overview card, the Tickets card and every record's key are the pump's",
+     records.every((t) => W.recordWorkKey(t, of) === "device:sensor.pump_power") && tickets.map((t) => t.key).join() === "device:sensor.pump_power"
+     && overview.some((g) => g.key === "device:sensor.pump_power" && cardRecords(g).length === 2),
+     { tickets: tickets.map((t) => t.key), overview: overview.map((g) => [g.key, cardRecords(g).map((r) => r.id)]) });
+  ck("  ...counted once: one device with a fault and a ticket", JSON.stringify(W.openCounts(records, of)) === JSON.stringify({ faults: 1, tickets: 1, total: 1 }),
+     W.openCounts(records, of));
+  ck("  ...and with its device offline, the fault knows it (it joins the device's Unavailable line)",
+     buildAttentionItems({ unavailableIds: [], entities, entityMap: {}, alertThresholds: {}, resolvedRooms: {}, selectableIds: [], folding,
+       fmData: fm(records.slice(0, 1)) }).find((i) => i.id === "fault:m1")?.offline === true);
+}
+
 console.log("\n  where things land:");
 const OWNER = { facility: true }, GUEST = { facility: false };
 const open = { ...START, nav: { ...START.nav, panel: { entityId: "light.a" } } };
@@ -205,7 +228,7 @@ ck("  ...every source has its icon and its words in the (i)'s legend",
 
 console.log("\n  the Recap's readiness says what is found, never the goal over a contradiction (owner, 2026-10-14):");
 const { buildReadiness } = await import("@/fm/readiness");
-const noDevices = { ids: [], unavailable: [], has: () => false, deviceOf: (id) => id };
+const noDevices = { ids: [], unavailable: [], has: () => false, deviceOf: (id) => id, deviceOfRecord: (id) => id, isCritical: () => false };
 const readyWith = (tickets) => buildReadiness({}, fm(tickets), noDevices).checks.find((c) => c.id === "tickets");
 const mixedOpen = readyWith([agentRec({ id: "n1", origin: "night", entityId: "x.n1" }), agentRec({ id: "n2", origin: "night", entityId: "x.n2" }),
   agentRec({ id: "a1", alertNumber: 5, entityId: "x.a1" }), { ...rec("g", "x.g"), reportedBy: "guest" },
@@ -218,11 +241,16 @@ ck("4 faults and 1 ticket: \"4 detected faults (1 open ticket)\", where to deal 
 // ticket card in Tickets, so one open ticket — not "2 open tickets" over one card
 const pumpBy = (devs) => buildReadiness({}, fm([{ ...rec("p1", "switch.pump"), status: "in_progress" },
   { ...rec("p2", "sensor.pump_power"), status: "in_progress" }, rec("p3", "sensor.pump_temp")]),
-  { ...noDevices, deviceOf: devs }).checks.find((c) => c.id === "tickets");
+  { ...noDevices, deviceOf: devs, deviceOfRecord: devs }).checks.find((c) => c.id === "tickets");
 const onePump = pumpBy((id) => (id.includes("pump") ? "switch.pump" : id));
 ck("  ...counted per device, as drawn: one device's 2 tickets + 1 fault = \"1 detected fault (1 open ticket)\"",
    onePump.label === "1 detected fault (1 open ticket)" && onePump.state === "warn", onePump);
 ck("  ...and three devices are three", pumpBy((id) => id).label === "1 detected fault (2 open tickets)", pumpBy((id) => id));
+// the Recap files a record as every screen does — by the record's device (deviceOfRecord: a list of several sensors
+// included), never by its raw field looked up as one entity (review "One answer per question" #1, 2026-10-19)
+const byRecord = buildReadiness({}, fm([rec("m1", "sensor.gone,sensor.pump_power"), rec("m2", "sensor.pump_power")]),
+  { ...noDevices, deviceOf: (id) => id, deviceOfRecord: (id) => (id.includes("pump") ? "sensor.pump_power" : id) }).checks.find((c) => c.id === "tickets");
+ck("  ...a fault naming several sensors counts on its device's card", byRecord.label === "1 detected fault (0 open tickets)", byRecord);
 const onlyFaults = readyWith([agentRec({ id: "n1", origin: "night" })]);
 ck("  ...one fault, no ticket: singular, and only Overview", onlyFaults.label === "1 detected fault (0 open tickets)"
    && onlyFaults.detail === 'Check the faults in "Overview".', onlyFaults);
@@ -323,7 +351,7 @@ const tt = src("components/fm/TicketsTab.tsx");
 // what ticketCards lists is checked by value above ("Tickets lists the device whose ticket was opened last first");
 // here, that the tab draws it — and counts it (openCounts: the same cards)
 ck("the Tickets tab draws ticketCards — the tickets in progress, by device — and Closed; never a raise form",
-   /ticketCards\(data\.tickets, deviceOf\)/.test(tt) && /openCounts\(data\.tickets, deviceOf\)\.tickets/.test(tt) && !/Raise a fault/.test(tt));
+   /ticketCards\(data\.tickets, deviceOfRecord\)/.test(tt) && /openCounts\(data\.tickets, deviceOfRecord\)\.tickets/.test(tt) && !/Raise a fault/.test(tt));
 ck("the Overview's title line: the (i) then Open a ticket, for the profiles that manage tickets; a guest reports a problem",
    /<FaultTiming \/>\s*<button className="btn ghost" onClick=\{\(\) => setRaising\(\{\}\)\}><Plus size=\{16\} \/> Open a ticket<\/button>/.test(ov) && /Report a problem<\/button>/.test(ov) && /<FaultForm /.test(ov));
 // WHAT the buttons are, on which records, with which question: by value at the top and in "the buttons, drawn".

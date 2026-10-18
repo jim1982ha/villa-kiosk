@@ -17,7 +17,7 @@ const entities = Object.fromEntries([
   E("sensor.door_battery", "unavailable"),
 ].map((e) => [e.entity_id, e]));
 const villa = new Set(Object.keys(entities));
-const devices = { ids: [...villa], unavailable: ["climate.bed", "camera.pool", "sensor.door_battery"], has: (id) => villa.has(id), deviceOf: (id) => id };
+const devices = { ids: [...villa], unavailable: ["climate.bed", "camera.pool", "sensor.door_battery"], has: (id) => villa.has(id), deviceOf: (id) => id, deviceOfRecord: (id) => id, isCritical: () => false };
 const r = buildReadiness(entities, EMPTY_FM_DATA, devices, {});
 const opens = (c) => c.opens ? `${c.opens.label} → ${c.opens.group.title} [${c.opens.group.entityIds.join(",")}]${c.opens.health ? " (health)" : ""}` : "-";
 
@@ -51,5 +51,37 @@ ck("Recap opens the list a check names (SummaryGroupPanel), its health flag deci
    && /hideBulkToggle=\{checkList\.health\} filterSuppressed=\{!checkList\.health\}/.test(fs) && !/check\.id ===|c\.id ===|"devices-online"/.test(fs));
 ck("  ...and the Recap screen knows no check by its name", !/c\.id ===|check\.id ===|"devices-online"|"locks"|"lights"/.test(
    readFileSync(new URL("../../src/components/fm/ReadinessTab.tsx", import.meta.url), "utf8")));
+
+console.log("\n  how bad, as the top bar says it (review \"One answer per question\" #3, 2026-10-19):");
+{
+  const stateOf = (rr) => Object.fromEntries(rr.checks.map((c) => [c.id, c.state]));
+  const plain = stateOf(r);
+  ck("devices not answering, none critical: amber, however many (3 here) — air conditioning and cameras alike",
+     plain["devices-online"] === "warn" && plain.climate === "warn" && plain.cameras === "warn" && r.overall === "warn", plain);
+  const crit = stateOf(buildReadiness(entities, EMPTY_FM_DATA, { ...devices, isCritical: (id) => id === "camera.pool" }, {}));
+  ck("  ...one CRITICAL device not answering: red, in its own checks only",
+     crit["devices-online"] === "fail" && crit.cameras === "fail" && crit.climate === "warn", crit);
+  const rec = (id) => ({ id, title: id, status: "open", openedAt: "2026-10-19T08:00:00Z", entityId: `x.${id}`, photoIds: [] });
+  const five = buildReadiness({}, { ...EMPTY_FM_DATA, tickets: ["a", "b", "c", "d", "e"].map(rec) }, { ...devices, unavailable: [] }, {});
+  ck("  ...five faults: amber — a fault is a warning, however many", five.checks.find((c) => c.id === "tickets").state === "warn"
+     && five.overall === "warn", five.checks.find((c) => c.id === "tickets"));
+  ck("  ...and the critical rule is the Overview's: a critical entity stands for its device",
+     (await import("@/config/deviceGroups")).criticalDevices(new Set(["sensor.lock_battery"]), new Map([["sensor.lock_battery", "lock.door"]])).has("lock.door"));
+}
+
+console.log("\n  one tinted card (fm/tone): each state says its tone, the stylesheet draws a tone once:");
+{
+  const { TONE_OF, toneClass } = await import("@/fm/tone");
+  const drawnRow = (state) => draw(h(ReadinessChecks, { readiness: { ...r, checks: [{ ...r.checks[0], state }] }, label: (id) => id,
+    onOpenEntity: () => {}, onOpenCheck: () => {}, startOpen: true }));
+  ck("a Recap check drawn amber or red by its tone, never by the Schedule's words",
+     /class="fm-row tone-warn"/.test(drawnRow("warn")) && /class="fm-row tone-danger"/.test(drawnRow("fail")) && !/state-/.test(drawnRow("fail")));
+  ck("  ...the same three tones for a task, a check and the spending cap",
+     [TONE_OF.due["due-soon"], TONE_OF.check.warn, TONE_OF.cap.approaching].every((t) => toneClass(t) === "tone-warn")
+     && [TONE_OF.check.fail, TONE_OF.cap.exceeded].every((t) => toneClass(t) === "tone-danger") && toneClass(TONE_OF.check.pass) === "");
+  const css = ["07-facility", "08-shared"].map((f) => readFileSync(new URL(`../../src/styles/${f}.css`, import.meta.url), "utf8")).join("\n");
+  ck("  ...and the tinted frame is written once", (css.match(/color-mix\(in srgb, var\(--status-(warning|danger)\) [67]%, var\(--bg-card\)\)/g) ?? []).length === 0
+     && (css.match(/color-mix\(in srgb, var\(--tone\) var\(--tone-fill\), var\(--bg-card\)\)/g) ?? []).length === 1);
+}
 
 done("✅ every readiness check opens its own devices, the same way");
