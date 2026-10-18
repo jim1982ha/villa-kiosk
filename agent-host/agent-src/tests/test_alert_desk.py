@@ -755,6 +755,18 @@ def test_an_alert_opened_before_rules_sent_their_number_is_found_and_moved_under
     assert renamed["incident_id"] == old, renamed                                                # then survives a rename
 
 
+def test_an_alert_renamed_while_closed_comes_back_under_its_number(store):
+    # architecture review scan 2, 2026-10-19: closed, its rule renamed, back within reopen_hours — the same number, its
+    # rule's name brought up to date (open_alert did; intake's "came back" path kept the old name)
+    first = desk.intake(store, event(rule_uid="1789", entities=("lock.front_door",)), T0, occupancy_reader=lambda: "x")
+    desk.intake(store, event(phase="resolved", rule_uid="1789", entities=("lock.front_door",)), T0 + timedelta(minutes=20))
+    assert store.incident(first["incident_id"])["closed_at"]
+    back = desk.intake(store, event(rule="automation.front_door_renamed", rule_uid="1789", entities=("lock.front_door",)),
+                       T0 + timedelta(minutes=60), occupancy_reader=lambda: "x")
+    assert back["incident_id"] == first["incident_id"], back
+    assert store.incident(first["incident_id"])["rule_id"] == "automation.front_door_renamed"
+
+
 class Automations(Villa):
     """The villa's system as the desk reads it, with its automations: {entity id: their own id}."""
     def __init__(self, automations, **timeline):

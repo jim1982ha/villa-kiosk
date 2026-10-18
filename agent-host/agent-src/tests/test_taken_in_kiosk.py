@@ -141,3 +141,27 @@ def test_an_alert_taken_on_in_the_kiosk_waits_for_no_answer(tmp_path):
     st.update_incident(iid, state=Incident.TAKEN)
     assert not inc.awaiting_answer(iid)
     assert not inc.awaiting_answer("x") and inc.runs(999) is None
+
+
+def test_a_reminder_never_overwrites_an_alert_taken_on_meanwhile(tmp_path):
+    # architecture review scan 2, 2026-10-19: the desk's tick read "asked", a person's "Open Ticket" landed (TAKEN), and
+    # the tick wrote "reasked" over it — chased again, a reminder sent. A state moves only from where it was read.
+    import importlib.util
+    from datetime import datetime, timedelta, timezone
+    from vesta_shared.store import Incident, Store
+    spec = importlib.util.spec_from_file_location("desk_race", os.path.join(STARTER_SKILLS, "alert-desk", "scripts", "desk.py"))
+    desk = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(desk)
+    st = Store(str(tmp_path / "s.sqlite"))
+    t0 = datetime(2026, 10, 19, 1, 0, tzinfo=timezone.utc)
+    iid = st.new_incident("k", "automation.x", "lock.front_door", "P2", {"message": "m"})
+    st.update_incident(iid, state=Incident.ASKED, asked_at=t0.isoformat())
+    read = st.incidents
+
+    def incidents_then_taken(open_only=True):
+        rows = read(open_only)                                   # the tick has read "asked"…
+        Store(str(tmp_path / "s.sqlite")).update_incident(iid, state=Incident.TAKEN)   # …then the Cockpit's Open Ticket
+        return rows
+    st.incidents = incidents_then_taken
+    out = desk.tick(st, t0 + timedelta(minutes=20))
+    assert st.incident(iid)["state"] == Incident.TAKEN and out["reasked"] == [] and not out["send"], out

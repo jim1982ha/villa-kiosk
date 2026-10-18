@@ -364,3 +364,20 @@ def test_a_copy_refreshed_elsewhere_is_headed_as_the_copy_sent(tmp_path):
                             "alert-desk", skip=[GROUP]))
     sent, kept = (v.thread.shown(9)[c]["text"].split("\n") for c in (FM, GROUP))
     assert "closed" in sent[0] and kept[:2] == sent[:2], (kept[:2], sent[:2])
+
+
+def test_who_each_notice_is_for_is_worked_out_before_anything_is_sent(tmp_path):
+    # architecture review scan 2, 2026-10-19 (notice.Notices.audiences): "To:" per incident, each step's own roles, a
+    # report's roles — a table, no Telegram. An answer in its own chat (no role) widens nothing.
+    v = make_agent(tmp_path, {"people": [{"telegram_id": OWNER, "name": "Jim", "role": "owner"},
+                                         {"telegram_id": FM, "name": "Fabien", "role": "fm"}]})
+    alert = lambda st: {"incident_id": 9, "stage": st}
+    report = {"text": "weekly"}
+    going, told, sent_to = v.notices.audiences(
+        [(FM, alert("new"), frozenset({"fm"})), (OWNER, alert("escalated"), frozenset({"owner"})),
+         (OWNER, report, frozenset({"owner"}))], lambda m: m.get("incident_id"))
+    assert going == {9: {"owner", "fm"}} and told == {(9, "new"): {"fm"}, (9, "escalated"): {"owner"}}
+    assert sent_to == {id(report): {"owner"}}
+    v.notices.record(9, "new", [(FM, "fm")])
+    going, told, _ = v.notices.audiences([(OWNER, alert("pressed"), frozenset())], lambda m: m.get("incident_id"))
+    assert going == {9: {"fm"}} and told == {(9, "pressed"): {"fm"}}       # the owner's chat answered: still "To: FM"

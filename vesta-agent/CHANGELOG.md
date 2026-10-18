@@ -1,3 +1,12 @@
+## 0.12.254
+
+What you will see:
+- An alert someone took on in the Cockpit ("Open Ticket") is never chased again by a reminder that was already on
+  its way at that moment.
+- An alert that comes back after its automation was renamed keeps its number and shows the automation's new name.
+- Bringing a Cockpit fault up to date writes it once, not once per change: fewer "changed since you opened it"
+  refusals when you edit a fault while VESTA updates it.
+
 ## 0.12.253
 
 What you will see on Telegram:

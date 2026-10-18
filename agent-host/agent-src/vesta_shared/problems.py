@@ -306,11 +306,8 @@ class Problems:
         kind, sid = self._source(self.store.task(task_id))
         if kind != "incident" or not sid:
             return None
-        inc = self.store.incident(sid)
-        if not inc or inc.get("closed_at") or inc.get("state") not in Incident.CHASED:
-            return None
-        self.store.update_incident(sid, state=Incident.TAKEN, reply=said)
-        return sid
+        # still being chased, read and written under one lock (store.move): the desk's tick may be moving it too
+        return sid if self.store.move(sid, Incident.CHASED, Incident.TAKEN, reply=said) else None
 
     def unreached(self, iid: int) -> None:
         """No chat of the facility manager's received incident `iid` (Telegram refused them all): the alert desk hands

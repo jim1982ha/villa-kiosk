@@ -21,6 +21,7 @@ import json
 import logging
 import secrets
 from datetime import datetime, timezone
+from typing import Callable
 
 import aiohttp
 
@@ -80,6 +81,86 @@ def person_titled(t: dict) -> bool:
             break                                                  # the agent titled it after any person did
     mine = agent_title(t)
     return mine is None or str(t.get("title") or "") != mine
+
+
+def fault_of(t: dict) -> dict:
+    """One Facility fault as the agent reads it: {status, title, agent_title, resolved_at, by, cleared, reopened_at,
+    reopened_by, taken_at, taken_by, noted, …} — `by` the profile of its last step ("Facility manager" who closed it),
+    `agent_title` the title the agent last gave it (None: never said), `cleared` whether its last close was the agent's
+    own clearing, `reopened_*` / `taken_*` a PERSON's last reopening / "Open Ticket", from its steps. Pure: what a
+    person did is read from the Kiosk's steps here and nowhere else (architecture review scan 2, 2026-10-19: the
+    reading sat in closures inside the network call — testable only through a fake Kiosk)."""
+    ups = [u for u in t.get("updates") or [] if isinstance(u, dict)]
+
+    def last(key: str) -> str:
+        return str(ups[-1].get(key) or "") if ups else ""
+
+    # the step a PERSON took it on with ("Open Ticket": in progress), its who and when — never an agent's step
+    took = [u for u in ups if u.get("status") == "in_progress" and not u.get("kind") and not _mine(u)]
+    # its last close was the agent's own clearing (resolve_ticket without a person: kind CLEARED), never a person's
+    closes = [u for u in ups if u.get("status") == "resolved"]
+    reopens = [u for u in ups if u.get("kind") == REOPENED]
+    return {"status": str(t.get("status") or ""), "title": str(t.get("title") or ""),
+            "agent_title": agent_title(t), "resolved_at": str(t.get("resolvedAt") or ""),
+            "by": last("who") or last("by"), "alert_number": t.get("alertNumber"), "origin": t.get("origin"),
+            "check": t.get("check"), "title_pattern": t.get("titlePattern"), "since": t.get("since"),
+            "person_titled": person_titled(t), "cleared": bool(closes) and closes[-1].get("kind") == CLEARED,
+            "noted": [(str(u.get("at") or ""), str(u.get("note") or "")) for u in ups if u.get("kind") == NOTED],
+            **({"reopened_at": str(reopens[-1].get("at") or ""),
+                "reopened_by": str(reopens[-1].get("who") or reopens[-1].get("by") or "")} if reopens else {}),
+            **({"taken_at": str(took[-1].get("at") or ""),
+                "taken_by": str(took[-1].get("who") or took[-1].get("by") or "")} if took else {})}
+
+
+#: One change the agent makes to an open fault: the ticket as it stands → the ticket changed, None when it has nothing
+#: to change (Kiosk.amend applies several in one write).
+Amend = Callable[[dict], "dict | None"]
+
+
+def retitled(title: str) -> Amend:
+    """An open ticket says what is wrong NOW (owner, 2026-10-07: "battery at 5 %" stayed while it read 0 %): its title
+    follows, its history keeping the one before (a "retitled" step); under a title a person wrote, the title stays
+    theirs and the reading is a "reading" step. Nothing when it is closed or already says it."""
+    title = title[:200]
+
+    def amend(t: dict) -> dict | None:
+        if t.get("status") == "resolved" or (agent_title(t) or t.get("title")) == title:
+            return None
+        step = {"at": _now(), "status": t.get("status") or "open", "photoIds": [], "title": title}
+        if person_titled(t):
+            return dict(t, updates=list(t.get("updates") or []) + [{**step, "kind": READING}])
+        return dict(t, title=title, updates=list(t.get("updates") or [])
+                    + [{**step, "kind": RETITLED, "was": str(t.get("title") or "")}])
+    return amend
+
+
+def noted(lines: list[dict]) -> Amend:
+    """Lines of what happened about an open fault on Telegram ([{at, note}], notice.Notices.story), each a "noted" step
+    at its own time; a line the fault already has is not written again."""
+    def amend(t: dict) -> dict | None:
+        if t.get("status") == "resolved":
+            return None
+        # ⚠️ BY ITS MOMENT, NEVER ITS WORDS (architecture review, 2026-10-15): a reworded stage ("Reminder sent")
+        # or a People change re-wrote every past line, and each was added again under the new words
+        have = {u.get("at") for u in t.get("updates") or [] if isinstance(u, dict) and u.get("kind") == NOTED}
+        new = [{"at": x["at"], "status": t.get("status") or "open", "photoIds": [], "kind": NOTED,
+                "note": str(x["note"])[:500]} for x in lines if x["at"] not in have]
+        return dict(t, updates=list(t.get("updates") or []) + new) if new else None
+    return amend
+
+
+def tagged(number: int | None = None, origin: str | None = None, check: str | None = None,
+           pattern: dict | None = None) -> Amend:
+    """A fault made before it carried them gets its alert's number ("#5"), where it came from and how it is read again
+    (add_ticket). `pattern`: {"titlePattern", "since"} — both None takes them away (a person retitled it)."""
+    tags = {**({"alertNumber": int(number)} if number else {}), **({"origin": origin} if origin else {}),
+            **({"check": check} if check else {}), **(pattern or {})}
+
+    def amend(t: dict) -> dict | None:
+        if all(t.get(k) == v for k, v in tags.items()):
+            return None
+        return {k: v for k, v in dict(t, **tags).items() if not (k in tags and v is None)}
+    return amend
 
 
 class Kiosk:
@@ -232,56 +313,34 @@ class Kiosk:
         if status != 200:
             raise KioskError(f"reading the Facility records answered {status}")
         data = got.get("data") if isinstance(got.get("data"), dict) else {}
-        def last(t: dict, key: str) -> str:
-            ups = [u for u in t.get("updates") or [] if isinstance(u, dict)]
-            return str(ups[-1].get(key) or "") if ups else ""
-        def taken(t: dict) -> dict:
-            # the step a PERSON took it on with ("Open Ticket": in progress), its who and when — never an agent's step
-            ups = [u for u in t.get("updates") or [] if isinstance(u, dict) and u.get("status") == "in_progress"
-                   and not u.get("kind") and not _mine(u)]
-            return {"taken_at": str(ups[-1].get("at") or ""),
-                    "taken_by": str(ups[-1].get("who") or ups[-1].get("by") or "")} if ups else {}
-        def cleared(t: dict) -> bool:
-            # its last close was the agent's own clearing (resolve_ticket without a person: kind CLEARED), never a person's
-            ups = [u for u in t.get("updates") or [] if isinstance(u, dict) and u.get("status") == "resolved"]
-            return bool(ups) and ups[-1].get("kind") == CLEARED
-        def reopened(t: dict) -> dict:
-            ups = [u for u in t.get("updates") or [] if isinstance(u, dict) and u.get("kind") == REOPENED]
-            return {"reopened_at": str(ups[-1].get("at") or ""),
-                    "reopened_by": str(ups[-1].get("who") or ups[-1].get("by") or "")} if ups else {}
-        return {t["id"]: {"status": str(t.get("status") or ""), "title": str(t.get("title") or ""),
-                          "agent_title": agent_title(t), "resolved_at": str(t.get("resolvedAt") or ""),
-                          "by": last(t, "who") or last(t, "by"), "alert_number": t.get("alertNumber"), "origin": t.get("origin"),
-                          "check": t.get("check"), "title_pattern": t.get("titlePattern"), "since": t.get("since"),
-                          "person_titled": person_titled(t), "cleared": cleared(t),
-                          "noted": [(str(u.get("at") or ""), str(u.get("note") or "")) for u in t.get("updates") or []
-                                    if isinstance(u, dict) and u.get("kind") == NOTED],
-                          **reopened(t), **taken(t)}     # `by`: who did it, as the card says it
-                for t in data.get("tickets") or [] if isinstance(t, dict) and isinstance(t.get("id"), str)}
+        return {t["id"]: fault_of(t) for t in data.get("tickets") or [] if isinstance(t, dict) and isinstance(t.get("id"), str)}
 
-    async def update_ticket(self, tid: str, title: str) -> bool:
-        """An open ticket says what is wrong NOW (owner, 2026-10-07: "battery at 5 %" stayed while it read 0 %): its
-        title follows, its history keeping the one before (a "retitled" step); under a title a person wrote, the title
-        stays theirs and the reading is a "reading" step. False when it is gone, closed, or already says it."""
-        title = title[:200]
+    async def amend(self, tid: str, *amends: "Amend") -> int:
+        """Ticket `tid` changed by each of `amends` in turn (retitled, tagged, noted: what the agent puts right on an
+        open fault), in ONE write. How many changed it; 0 when it is gone or none did.
 
-        def change(data: dict) -> bool:
+        ⚠️ ONE WRITE PER FAULT (architecture review scan 2, 2026-10-19): bringing a fault up to date wrote the whole
+        Facility record once per field — title, tags, Telegram lines: three reads, three writes, three new revisions,
+        each one more chance to turn a person's save into "changed since you opened it"."""
+        def change(data: dict) -> int:
             tickets = list(data.get("tickets") or [])
             for i, t in enumerate(tickets):
                 if isinstance(t, dict) and t.get("id") == tid:
-                    if t.get("status") == "resolved" or (agent_title(t) or t.get("title")) == title:
-                        return False
-                    step = {"at": _now(), "status": t.get("status") or "open", "photoIds": [], "title": title}
-                    if person_titled(t):
-                        t = dict(t, updates=list(t.get("updates") or []) + [{**step, "kind": READING}])
-                    else:
-                        t = dict(t, title=title, updates=list(t.get("updates") or [])
-                                 + [{**step, "kind": RETITLED, "was": str(t.get("title") or "")}])
-                    tickets[i] = t
-                    data["tickets"] = tickets
-                    return True
-            return False
-        return await self._edit(change)
+                    n = 0
+                    for a in amends:
+                        nt = a(t)
+                        if nt is not None:
+                            t, n = nt, n + 1
+                    if n:
+                        tickets[i] = t
+                        data["tickets"] = tickets
+                    return n
+            return 0
+        return await self._edit(change) if amends else 0
+
+    async def update_ticket(self, tid: str, title: str) -> bool:
+        """An open ticket says what is wrong NOW (retitled). False when it is gone, closed, or already says it."""
+        return await self.amend(tid, retitled(title)) > 0
 
     def takes(self, field: str) -> bool:
         """This Kiosk reads the fault field `field` (/agent/v1/info `ticket_fields`, 2.496.382+): an older one would show
@@ -294,47 +353,14 @@ class Kiosk:
         return kind in ((self.info or {}).get("step_kinds") or [])
 
     async def note_ticket(self, tid: str, lines: list[dict]) -> bool:
-        """Lines of what happened about an open fault on Telegram ([{at, note}], notice.Notices.story), each a "noted"
-        step at its own time; a line the fault already has is not written again. False when it is gone, closed, or has
-        them all."""
-        def change(data: dict) -> bool:
-            tickets = list(data.get("tickets") or [])
-            for i, t in enumerate(tickets):
-                if isinstance(t, dict) and t.get("id") == tid:
-                    if t.get("status") == "resolved":
-                        return False
-                    # ⚠️ BY ITS MOMENT, NEVER ITS WORDS (architecture review, 2026-10-15): a reworded stage ("Reminder sent")
-                    # or a People change re-wrote every past line, and each was added again under the new words
-                    have = {u.get("at") for u in t.get("updates") or [] if isinstance(u, dict) and u.get("kind") == NOTED}
-                    new = [{"at": x["at"], "status": t.get("status") or "open", "photoIds": [], "kind": NOTED,
-                            "note": str(x["note"])[:500]} for x in lines if x["at"] not in have]
-                    if not new:
-                        return False
-                    tickets[i] = dict(t, updates=list(t.get("updates") or []) + new)
-                    data["tickets"] = tickets
-                    return True
-            return False
-        return await self._edit(change)
+        """Lines of what happened about an open fault on Telegram (noted). False when it is gone, closed, or has them
+        all."""
+        return await self.amend(tid, noted(lines)) > 0
 
     async def tag_ticket(self, tid: str, number: int | None = None, origin: str | None = None,
                          check: str | None = None, pattern: dict | None = None) -> bool:
-        """A fault made before it carried them gets its alert's number ("#5"), where it came from and how it is read
-        again (add_ticket). `pattern`: {"titlePattern", "since"} — both None takes them away (a person retitled it).
-        False when it is gone or already says them."""
-        tags = {**({"alertNumber": int(number)} if number else {}), **({"origin": origin} if origin else {}),
-                **({"check": check} if check else {}), **(pattern or {})}
-
-        def change(data: dict) -> bool:
-            tickets = list(data.get("tickets") or [])
-            for i, t in enumerate(tickets):
-                if isinstance(t, dict) and t.get("id") == tid:
-                    if all(t.get(k) == v for k, v in tags.items()):
-                        return False
-                    tickets[i] = {k: v for k, v in dict(t, **tags).items() if not (k in tags and v is None)}
-                    data["tickets"] = tickets
-                    return True
-            return False
-        return await self._edit(change)
+        """A fault's alert number, origin, check and title pattern (tagged). False when it is gone or already says them."""
+        return await self.amend(tid, tagged(number, origin, check, pattern)) > 0
 
     async def reopen_ticket(self, tid: str, title: str, note: str | None = None) -> bool:
         """One of the agent's resolved tickets open again — its problem came back (architecture review 24: each return

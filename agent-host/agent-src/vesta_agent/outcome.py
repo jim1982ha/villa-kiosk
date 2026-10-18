@@ -127,25 +127,8 @@ class Outcome:
 
         def incident_of(item):
             return item.get("incident_id") or (res.get("incident_id") if item.get("keyboard") else None)
-        # the roles this result's notice of each incident goes to: its "To:" line, the same in every chat (notice.heading)
-        going: dict[int, set[str]] = {}
-        # the roles each notice (incident, stage) goes to: its own bottom line says them (notice.Notices.bottom) — a
-        # "Need help" escalates to the owner while the presser's own chat gets the answer; only the first is the step's
-        told: dict[tuple[int, str | None], set[str]] = {}
-        sent_to: dict[int, set[str]] = {}               # a report's: every role its "To:" names, the same in every chat
-        if self.notices:
-            for chat, item, roles in pairs:
-                to = self.notices.roles_for(chat, roles)
-                if incident_of(item) and not roles:
-                    # ⚠️ A COPY FOR NO ROLE WIDENS NOTHING (owner, 2026-10-17: "To:" follows the priority): an answer
-                    # in its own chat is about the incident the roles its priority reaches already had — the group's
-                    # own roles made a P2 read "To: Owner & FM"
-                    to = self.notices.roles_of(int(incident_of(item))) or to
-                if incident_of(item):
-                    going.setdefault(int(incident_of(item)), set()).update(to)
-                    told.setdefault((int(incident_of(item)), item.get("stage")), set()).update(to)
-                else:
-                    sent_to.setdefault(id(item), set()).update(to)
+        # who each notice is for (notice.Notices.audiences): its incident's "To:", its step's own roles, a report's
+        going, told, sent_to = self.notices.audiences(pairs, incident_of) if self.notices else ({}, {}, {})
         # incident → where this result showed it, the last one last: (chat, its step, the roles its "To:" named)
         posted: dict[int, list[tuple[int, str | None, set]]] = {}
         # Home Assistant's own messages first: the desk's messages below then replace them where both land

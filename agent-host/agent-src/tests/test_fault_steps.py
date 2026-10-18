@@ -404,3 +404,55 @@ def test_a_duration_in_a_faults_title_is_worded_by_the_kiosk_when_it_shows_it(tm
     Problems(st2).settle(f"finding:{fid2}")
     run(v2.tickets.repair())
     assert [x.get("titlePattern") for x in older._all()] == [None]            # it never sees "{since}"
+
+
+def test_a_fault_brought_up_to_date_is_written_once_whatever_it_needs():
+    # architecture review scan 2, 2026-10-19: a new title, its tags and its Telegram lines were three reads and three
+    # writes of the whole Facility record — three revisions, each one more chance a person's save is refused
+    from vesta_agent.kiosk import noted, retitled, tagged
+    k, doc = kiosk_holding({"id": "va-1", "title": "Pump weak", "status": "open", "openedAt": "2026-10-19T00:00:00Z",
+                            "photoIds": [], "updates": [{"at": "2026-10-19T00:00:00Z", "status": "open", "photoIds": [],
+                                                        "title": "Pump weak"}]})
+    rev = doc["rev"]
+    n = run(k.amend("va-1", retitled("Pump very weak"), tagged(5, "alert", "minutes"),
+                    noted([{"at": "2026-10-19T00:05:00Z", "note": "Reminder sent (to: FM)"}])))
+    t = ticket(doc)
+    assert n == 3 and doc["rev"] == rev + 1, (n, doc["rev"])
+    assert t["title"] == "Pump very weak" and t["alertNumber"] == 5 and t["updates"][-1]["kind"] == "noted"
+    assert run(k.amend("va-1", retitled("Pump very weak"), tagged(5, "alert", "minutes"))) == 0 and doc["rev"] == rev + 1
+
+
+def test_the_repair_puts_a_fault_right_in_one_write(tmp_path):
+    # the same review: the repair (tickets._converge) hands every change a fault needs to ONE Kiosk.amend
+    k = FakeKiosk()
+    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)
+    st, pb = Store(v.s.store_path), Problems(Store(v.s.store_path))
+    fid, _ = st.raise_finding("PM-X", "lock.front", "offline", "2026-10-07", "P3", "Front door lock unavailable", {})
+    pb.open_task("finding", fid, "PM-X", "lock.front", "Front door lock unavailable")
+    run(v.tickets.repair())
+    t1 = ticket(k.doc, "t1")
+    for f in ("origin", "check"):
+        t1.pop(f, None)                                        # a fault made before it carried them
+    st.raise_finding("PM-X", "lock.front", "offline", "2026-10-08", "P3", "Front door lock offline 3 days", {})
+    rev = k.doc["rev"]
+    run(v.tickets.repair())
+    assert k.titles["t1"] == "Front door lock offline 3 days" and ticket(k.doc, "t1").get("origin")
+    assert k.doc["rev"] == rev + 1, k.doc["rev"] - rev
+
+
+def test_what_a_person_did_to_a_fault_is_read_from_its_steps_alone():
+    # architecture review scan 2, 2026-10-19: kiosk.fault_of, pure — the agent's own clearing is never a person's close,
+    # a person's reopening and "Open Ticket" carry who and when, a step of the agent's never counts as taken
+    from vesta_agent.kiosk import fault_of
+    step = lambda at, status, **k: {"at": at, "status": status, "photoIds": [], **k}
+    t = {"id": "va-1", "title": "Pump weak", "status": "open", "updates": [
+        step("2026-10-19T00:00Z", "open", title="Pump weak"),
+        step("2026-10-19T00:10Z", "resolved", kind="cleared", by="VESTA Agent"),
+        step("2026-10-19T00:20Z", "open", kind="reopened", by="Owner", who="Jim"),
+        step("2026-10-19T00:25Z", "in_progress", by="VESTA Agent"),
+        step("2026-10-19T00:30Z", "in_progress", by="Facility manager", who="Wayan")]}
+    f = fault_of(t)
+    assert f["cleared"] and (f["reopened_at"], f["reopened_by"]) == ("2026-10-19T00:20Z", "Jim")
+    assert (f["taken_at"], f["taken_by"]) == ("2026-10-19T00:30Z", "Wayan") and f["by"] == "Wayan"
+    t["updates"] = t["updates"][:4]
+    assert "taken_at" not in fault_of(t)                       # the agent's own step is never a person taking it on

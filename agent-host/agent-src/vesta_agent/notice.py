@@ -113,6 +113,32 @@ class Notices:
             roles = {pol.person(chat).role}
         return roles & set(ROLE_WORDS)
 
+    def audiences(self, pairs, incident_of) -> tuple[dict, dict, dict]:
+        """Who each of one result's notices is for, from its deliveries (routing.Routing.deliveries: (chat, message,
+        roles)): ({incident: the roles its "To:" names — the same in every chat}, {(incident, stage): the roles this
+        step went to — its bottom line says them}, {id(message): a report's roles}). `incident_of(message)`: its
+        incident, or None. Pure of Telegram (architecture review scan 2, 2026-10-19: worked out inside Outcome's
+        sending loop, where four "To:" fixes in three days each had to be made).
+
+        A "Need help" escalates to the owner while the presser's own chat gets the answer: only the first is the
+        step's. ⚠️ A COPY FOR NO ROLE WIDENS NOTHING (owner, 2026-10-17: "To:" follows the priority): an answer in its
+        own chat is about the incident the roles its priority reaches already had — the group's own roles made a P2
+        read "To: Owner & FM"."""
+        going: dict[int, set[str]] = {}
+        told: dict[tuple[int, str | None], set[str]] = {}
+        sent_to: dict[int, set[str]] = {}
+        for chat, item, roles in pairs:
+            to = self.roles_for(chat, roles)
+            iid = incident_of(item)
+            if iid and not roles:
+                to = self.roles_of(int(iid)) or to
+            if iid:
+                going.setdefault(int(iid), set()).update(to)
+                told.setdefault((int(iid), item.get("stage")), set()).update(to)
+            else:
+                sent_to.setdefault(id(item), set()).update(to)
+        return going, told, sent_to
+
     def roles_of(self, incident: int) -> set[str]:
         """The roles incident `incident`'s notices went to so far, as its history recorded them."""
         return {r for h in self.state.incident_history(incident) for r in self._roles(h)}

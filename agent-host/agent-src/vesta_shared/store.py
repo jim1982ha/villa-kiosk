@@ -255,6 +255,28 @@ class Store:
         self.db.execute(f"UPDATE incidents SET {cols} WHERE id=?", (*fields.values(), iid))
         self.db.commit()
 
+    def move(self, iid: int, frm: tuple[str, ...], to: str, **fields) -> bool:
+        """Incident `iid` goes to state `to` (with `fields`: its stamps) only if it is still open and in one of `frm` —
+        read and written under one lock. False when it moved on meanwhile (nothing is written).
+
+        ⚠️ A STATE IS NEVER WRITTEN BLIND (architecture review scan 2, 2026-10-19): the desk's tick read "asked", then
+        wrote "reasked" — a person's "Open Ticket" in the Cockpit (TAKEN, written by the engine's own process) landing
+        in between was overwritten and the chase started again (the bug 0abbc196 fixed, back by another road)."""
+        self.db.commit()
+        self.db.execute("BEGIN IMMEDIATE")
+        try:
+            row = self.db.execute("SELECT state, closed_at FROM incidents WHERE id=?", (iid,)).fetchone()
+            ok = bool(row) and row[1] is None and row[0] in frm
+            if ok:
+                cols = {"state": to, **fields}
+                self.db.execute(f"UPDATE incidents SET {', '.join(f'{k}=?' for k in cols)} WHERE id=?",
+                                (*cols.values(), iid))
+            self.db.commit()
+        except BaseException:
+            self.db.rollback()
+            raise
+        return ok
+
     def note(self, iid: int, set: dict | None = None, drop=(), **fields) -> dict:
         """Incident `iid`'s notes changed in place: `set` merged in, `drop` removed — against the record as it stands
         NOW, in one write (`Notes`), with any other column in `fields`. Returns the notes as written."""

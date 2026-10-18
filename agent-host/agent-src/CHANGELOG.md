@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.245 (19 October 2026)
+
+Architecture review scan 2 (2026-10-19).
+- Store.move(iid, frm, to, **stamps): a state moves only from where it was read (BEGIN IMMEDIATE); the desk's
+  reminder and escalation and Problems.taken_in_kiosk use it — a tick could overwrite a Cockpit "Open Ticket".
+- desk.back_alert beside open_alert: an alert back after its close is found under its number or its rule's name, its
+  rule's name brought up to date; intake no longer knows the by-name key.
+- kiosk.Kiosk.amend(tid, *amends) with pure retitled / tagged / noted: a fault brought up to date in ONE write
+  (tickets._converge); kiosk.fault_of: a fault's person acts read from its steps, pure.
+- notice.Notices.audiences: who each of a result's notices is for, worked out before sending (Outcome).
+
 ## 0.6.244 (19 October 2026)
 
 Architecture review scan 1 (2026-10-19).

@@ -260,6 +260,23 @@ def open_alert(store: Store, ev: dict) -> dict | None:
     return store.incident(cur["id"])
 
 
+def back_alert(store: Store, ev: dict, now: datetime, hours: float) -> dict | None:
+    """The incident of `ev`'s alert closed in the last `hours` (came_back): under its permanent number, or under its
+    rule's name from before rules sent one — then filed under the number, its rule's name brought up to date.
+
+    ⚠️ ONE FILE OF ALERTS (architecture review scan 2, 2026-10-19): open_alert knew both keys and a rename; intake's
+    "came back" path re-did the two keys itself and kept the old name. Both ask here and in open_alert: intake no
+    longer knows a by-name key exists."""
+    key, by_name = alert_keys(ev)
+    back = came_back(store, key, now, hours) or (came_back(store, by_name, now, hours) if by_name else None)
+    if back is None:
+        return None
+    fields = {k: v for k, v in (("key", key), ("rule_id", ev.get("rule_id"))) if v and back.get(k) != v}
+    if fields:
+        store.update_incident(back["id"], **fields)
+    return store.incident(back["id"])
+
+
 #: The phases of a rule's event this desk acts on (a missing phase is "opened": rules saved before phases existed).
 PHASES = ("opened", "resolved", "abandoned", "restated")
 
@@ -283,7 +300,7 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
     rule_id, eid = ev["rule_id"], ev.get("entity_id", "")
     route = route_for(rule_id, ev.get("blueprint"))
     sev = priority(ev, route)
-    key, by_name = alert_keys(ev)
+    key = alert_keys(ev)[0]
     out = {"send": [], "actions": [], "incident_id": None, "decision": None}
     if params and params.boolean("maintenance_mode", default=False) and sev != "P1":
         out["decision"] = "maintenance_mode"; store.audit("alert-desk", "suppressed_maintenance", ev); return out
@@ -314,12 +331,8 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
         if route.get("intrusion"):
             out["siren_gate"] = siren_gate(store, ev, now)
         return out
-    hours = _params(params).behaviour("reopen_hours")
-    back = came_back(store, key, now, hours) or (came_back(store, by_name, now, hours) if by_name else None)
+    back = back_alert(store, ev, now, _params(params).behaviour("reopen_hours"))
     if back:
-        if back["key"] != key:
-            store.update_incident(back["id"], key=key)            # its rule sends its number now: filed under it
-            back = store.incident(back["id"])
         return reopen(store, back, ev, now, sev, route, out, zone=zone)
     iid = store.new_incident(key, rule_id, eid, sev, ev, now.isoformat())
     out["incident_id"] = iid
@@ -861,14 +874,16 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
             continue
         asked = datetime.fromisoformat(inc["asked_at"])
         age = now - asked
-        if inc["state"] == Incident.ASKED and age >= timedelta(minutes=reask):
-            store.update_incident(inc["id"], state=Incident.REASKED, reasked_at=now.isoformat())
+        # only if it is still where it was read (store.move): taken on in the Cockpit meanwhile, it is chased no more
+        if inc["state"] == Incident.ASKED and age >= timedelta(minutes=reask) and \
+                store.move(inc["id"], (Incident.ASKED,), Incident.REASKED, reasked_at=now.isoformat()):
             out["send"] += tell(inc["severity"], "reminder", incident=inc["id"], chased=True,
                                 # the engine writes the step first: "Reminder sent … to FM — No answer after 15 min"
                                 **about(inc, f"No answer after {int(reask)} min"))
             out["reasked"].append(inc["id"])
-        elif inc["state"] == Incident.REASKED and age >= timedelta(minutes=escal):
-            store.update_incident(inc["id"], state=Incident.ESCALATED, escalated_at=now.isoformat(), assignee=CHASE["escalates_to"])
+        elif inc["state"] == Incident.REASKED and age >= timedelta(minutes=escal) and \
+                store.move(inc["id"], (Incident.REASKED,), Incident.ESCALATED, escalated_at=now.isoformat(),
+                           assignee=CHASE["escalates_to"]):
             out["send"] += tell(inc["severity"], "escalated", incident=inc["id"],
                                 **about(inc, f"No answer from {role_said(CHASE['asks'])} after {int(escal)} min"))
             out["escalated"].append(inc["id"])

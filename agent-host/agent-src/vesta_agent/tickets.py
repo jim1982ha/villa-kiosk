@@ -14,7 +14,7 @@ from typing import Awaitable, Callable
 from vesta_shared import kiosk_words, result
 from vesta_shared.problems import Problems
 
-from .kiosk import MINE, NOTED, KioskError
+from .kiosk import MINE, NOTED, KioskError, noted, retitled, tagged
 from .outcome_words import ticket_title
 
 log = logging.getLogger("vesta.outcome")
@@ -272,10 +272,12 @@ class Tickets:
                                            "note": want["reopen_note"]})
                     fixed += n; reopened += n
                 elif want["open"]:
+                    # what the fault must say now, put right in ONE write (Kiosk.amend: retitled, tagged, noted)
+                    amends = []
                     title = ticket_title(want["title"])[:200]
-                    # the title the agent last gave it, not the one it has: a title a person wrote stays (Kiosk.update_ticket)
+                    # the title the agent last gave it, not the one it has: a title a person wrote stays (kiosk.retitled)
                     if title and (card.get("agent_title") or card.get("title")) != title:
-                        fixed += await self.kiosk.update_ticket(uid, title)
+                        amends.append(retitled(title))
                     # the alert's number, as every chat writes it, and where it came from (owner, 2026-10-14)
                     # its duration worded when shown — never on a title a person wrote: theirs, as it is
                     pattern = self._pattern(want, card) or (
@@ -284,7 +286,7 @@ class Tickets:
                             or (want["origin"] and card.get("origin") != want["origin"]) \
                             or (want["check"] and card.get("check") != want["check"]) \
                             or (pattern and (card.get("title_pattern"), card.get("since")) != (pattern["titlePattern"], pattern["since"])):
-                        fixed += await self.kiosk.tag_ticket(uid, want["number"], want["origin"], want["check"], pattern)
+                        amends.append(tagged(want["number"], want["origin"], want["check"], pattern))
                     # what happened on Telegram — reminders, escalation, a button pressed (owner, 2026-10-14) — from this
                     # task's run on (an earlier run's lines belong to the fault as it was then)
                     if want["number"] and self.kiosk.says(NOTED):
@@ -293,7 +295,8 @@ class Tickets:
                         lines = [x for x in self.story(want["number"]) if (since is None or (_moment(x["at"]) or since) >= since)
                                  and x["at"] not in have]
                         if lines:
-                            fixed += await self.kiosk.note_ticket(uid, lines)
+                            amends.append(noted(lines))
+                    fixed += await self.kiosk.amend(uid, *amends)
                 elif card["status"] != "resolved" and (t.get("done_at") or "") >= recent:
                     n = await self.kiosk.resolve_ticket(uid, note=want["note"], **({"who": want["who"]} if want["who"] else {}))
                     fixed += n; resolved += n
