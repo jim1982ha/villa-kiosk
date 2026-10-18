@@ -28,6 +28,26 @@ console.log("  which device:");
 ck("anything of the pump opens the pump's placed badge entity", ["switch.pump", "sensor.pump_energy", "button.pump_restart"].every((id) => deviceOf(fold, id) === "sensor.pump_power"));
 ck("  ...a placed entity, and one with no device, is its own", deviceOf(fold, "sensor.pump_power") === "sensor.pump_power" && deviceOf(fold, "sensor.lonely") === "sensor.lonely");
 
+// owner, 2026-10-18 ("all device / sub-device are seen the same way"): Home Assistant lists a three-phase meter as the
+// meter and one device per phase "via" it; the Agent counts them as one device, and so does the Cockpit now
+{
+  const { deviceUnits } = await import("@/ha/registryResolve");
+  const units = deviceUnits([{ id: "dev-meter", area_id: null }, { id: "dev-phase-a", area_id: null, via_device_id: "dev-meter" },
+    { id: "dev-relay", area_id: null }, { id: "dev-pump-1", area_id: null, via_device_id: "dev-relay" },
+    { id: "dev-pump-2", area_id: null, via_device_id: "dev-relay" }, { id: "dev-loop", area_id: null, via_device_id: "dev-loop" }]);
+  ck("a device's parts point at the whole device; a device of its own (or a loop) is left out",
+     units["dev-phase-a"] === "dev-meter" && units["dev-pump-1"] === "dev-relay" && !("dev-meter" in units) && !("dev-loop" in units), units);
+  const map = Object.fromEntries(["sensor.meter_power", "sensor.pump_1_power", "sensor.pump_2_power"].map((id) => [id, { entityId: id, type: "sensor" }]));
+  const reg = { "sensor.meter_power": "dev-meter", "sensor.phase_a_power": "dev-phase-a",
+    "sensor.pump_1_power": "dev-pump-1", "sensor.pump_2_power": "dev-pump-2", "sensor.relay_temperature": "dev-relay" };
+  const f = deviceFolding(map, [], reg, units);
+  ck("  ...a reading on a meter's phase, never placed, is the meter: one card",
+     deviceOf(f, "sensor.phase_a_power") === "sensor.meter_power", [...f]);
+  ck("  ...two pumps the owner placed on one relay box stay two devices; the box's own reading joins one of them",
+     deviceOf(f, "sensor.pump_1_power") !== deviceOf(f, "sensor.pump_2_power")
+     && ["sensor.pump_1_power", "sensor.pump_2_power"].includes(deviceOf(f, "sensor.relay_temperature")), [...f]);
+}
+
 console.log("\n  also on this device:");
 const r = deviceReadings("sensor.pump_power", fold, entities, suppressed, []);
 ck("the pump's other READINGS — energy and current; not the restart button, not the network tracker, not itself",

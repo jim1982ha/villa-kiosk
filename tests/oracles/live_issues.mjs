@@ -24,7 +24,7 @@ console.log("  a card's buttons are its faults' only (fm/deviceWork, architectur
 const item = (id, kind, entityId, extra = {}) => ({ id, kind, title: id, detail: "", entityId, device: { key: deviceOf(entityId), label: "dev" }, ...extra });
 // a card's buttons as the owner reads them: "label → the records it acts on [what it asks first]"
 const said = (acts) => acts.map((a) => `${a.label} → ${[...a.ids].sort().join(",")}${a.step.kind === "close" ? ` [${a.step.question} / ${a.step.confirmLabel}]` : ""}${a.step.kind === "stage" ? ` (${a.step.to})` : ""}`);
-const OV_CLOSE = "[Close this? No action needed. / Close]", TK_CLOSE = "[Close this ticket? Nothing was done — no cost is recorded. / Close ticket]";
+const OV_CLOSE = "[Close this? No action needed. / Close]", OV_ALL = "[Close all of them? No action needed. / Close all]", TK_CLOSE = "[Close this ticket? Nothing was done — no cost is recorded. / Close ticket]";
 const [pump] = groupAttention([
   item("unavailable:sensor.pump_power", "unavailable", "sensor.pump_power"),
   item("fault:a", "fault", "sensor.pump_energy", { ticketId: "a", stage: "fault" }),
@@ -32,12 +32,13 @@ const [pump] = groupAttention([
 ]);
 const acts = cardActions(pump);
 ck("a device's live state and its faults are ONE card", pump.items.length >= 2 && cardRecords(pump).length === 2, pump.items.map((i) => i.id));
-ck("  ...Open Ticket takes on its fault (adding it to the ticket); Close closes both, the fault AND the ticket",
-   said(acts).join(" | ") === `Open Ticket → a (in_progress) | Close → a,b ${OV_CLOSE}`, said(acts));
+// two problems on the card (owner, 2026-10-18): its Close is "Close all"; each line closes alone (attention_groups)
+ck("  ...Open Ticket takes on its fault (adding it to the ticket); Close all closes both, the fault AND the ticket",
+   said(acts).join(" | ") === `Open Ticket → a (in_progress) | Close all → a,b ${OV_ALL}`, said(acts));
 const [taken] = groupAttention([item("fault:b", "fault", "sensor.pump_power", { ticketId: "b", stage: "ticket" }),
   item("fault:c", "fault", "sensor.pump_energy", { ticketId: "c", stage: "ticket" })]);
 ck("  ...once every fault is a ticket, the button is Edit Ticket, on its first record",
-   said(cardActions(taken)).join(" | ") === `Edit Ticket → b | Close → b,c ${OV_CLOSE}`, said(cardActions(taken)));
+   said(cardActions(taken)).join(" | ") === `Edit Ticket → b | Close all → b,c ${OV_ALL}`, said(cardActions(taken)));
 const [lock] = groupAttention([item("alarm:lock.door", "alarm", "lock.door")]);
 ck("a card that is only what Home Assistant reports has nothing to act on — no button", cardActions(lock).length === 0);
 ck("a ticket in progress (Tickets): Mark resolved and Close, both on every record of it — its own Close question",
@@ -97,7 +98,7 @@ console.log("\n  ONE card per device, on the Overview and in Tickets, and the co
   const has = (g, kind) => cardActions(g).some((a) => a.kind === kind);
   ck("the counts are the cards: devices to take on = Overview cards with Open Ticket; in progress = Tickets cards; open = Overview cards with a Close",
      counts.faults === overview.filter((g) => has(g, "openTicket")).length && counts.tickets === tickets.length
-     && counts.total === overview.filter((g) => has(g, "closeDevice")).length
+     && counts.total === overview.filter((g) => has(g, "closeDevice") || has(g, "closeAll")).length
      && JSON.stringify(counts) === JSON.stringify({ faults: 3, tickets: 3, total: 5 }), { counts, overview: overview.map((g) => g.key), tickets: tickets.map((t) => t.key) });
   ck("  ...each record's card is the same device in both: a Tickets card holds exactly its Overview card's tickets",
      tickets.every((t) => { const g = overview.find((o) => o.key === t.key);
@@ -109,7 +110,7 @@ console.log("\n  ONE card per device, on the Overview and in Tickets, and the co
      said(W.ticketActions(tickets.find((t) => t.key === "device:sensor.pump_power").records.map(W.workRecord))).join(" | ")
        === `Mark resolved → p2 (resolved) | Close → p2 ${TK_CLOSE}`
      && said(cardActions(overview.find((g) => g.key === "device:sensor.pump_power"))).join(" | ")
-       === `Open Ticket → p1 (in_progress) | Close → p1,p2 ${OV_CLOSE}`);
+       === `Open Ticket → p1 (in_progress) | Close all → p1,p2 ${OV_ALL}`);
   ck("  ...Tickets lists the device whose ticket was opened last first, never an open fault or a closed record",
      tickets.map((t) => t.key).join() === "item:fault:n2,device:lock.back,device:sensor.pump_power", tickets.map((t) => t.key));
 }
@@ -342,12 +343,12 @@ console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
   const ovActs = cardActions(pump), tkActs = W.ticketActions([{ id: "a", stage: "ticket" }]);
   ck("an Overview card: Open Ticket with its wrench, Close with its cross, in their row, Close named for a screen reader",
      /^<div class="fm-fault-actions">/.test(drawButtons(ovActs, null, { name: "Pump", className: "fm-fault-actions" }))
-     && text(drawButtons(ovActs, null, { name: "Pump" })) === "|[icon] Open Ticket|[icon] Close|"
-     && /aria-label="Close “Pump”"/.test(drawButtons(ovActs, null, { name: "Pump" })), text(drawButtons(ovActs)));
+     && text(drawButtons(ovActs, null, { name: "Pump" })) === "|[icon] Open Ticket|[icon] Close all|"
+     && /aria-label="Close all “Pump”"/.test(drawButtons(ovActs, null, { name: "Pump" })), text(drawButtons(ovActs)));
   ck("  ...a ticket: Mark resolved and Close, no icon; a closed record: Reopen",
      text(drawButtons(tkActs)) === "|Mark resolved|Close|" && text(drawButtons(W.closedActions({ id: "r", stage: "closed" }))) === "|Reopen|", text(drawButtons(tkActs)));
   ck("  ...its Close asks ITS question in place of the buttons — the Overview's for the device, the ticket's for the ticket",
-     text(drawButtons(ovActs, "device:x")) === "|Close this? No action needed.|Cancel|Close|"
+     text(drawButtons(ovActs, "device:x")) === "|Close all of them? No action needed.|Cancel|Close all|"
      && text(drawButtons(tkActs, "device:x")) === "|Close this ticket? Nothing was done — no cost is recorded.|Cancel|Close ticket|",
      [text(drawButtons(ovActs, "device:x")), text(drawButtons(tkActs, "device:x"))]);
   ck("  ...another card's question leaves this one's buttons; a card with nothing to act on draws nothing",

@@ -1,3 +1,13 @@
+## 2.496.412
+
+### Changed
+- Cockpit › Overview: a card holding several problems (two alerts about the same door) has a small Close on each
+  problem's line, to close that one alone, and its main button reads "Close all". A card with one problem keeps its
+  one Close.
+- Cockpit: a part the villa's system lists under a device (a power meter's phase, a relay's channel) is that device:
+  a fault on a meter's phase sits on the meter's card, never on a card of its own. Devices you placed separately on
+  the map stay separate.
+
 ## 2.496.411
 
 ### Fixed

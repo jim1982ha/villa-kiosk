@@ -45,6 +45,8 @@ const ICON: Partial<Record<WorkActionKind, ReactNode>> = {
   openTicket: <Wrench size={14} aria-hidden />,
   editTicket: <Pencil size={14} aria-hidden />,
   closeDevice: <X size={14} />,
+  closeAll: <X size={14} />,
+  closeOne: <X size={14} />,
 };
 
 export default function WorkButtons({ actions, cardKey, closer, onAction, name, className }: {
@@ -67,7 +69,7 @@ export default function WorkButtons({ actions, cardKey, closer, onAction, name, 
   }
   const buttons = actions.map((a) => (
     <button key={a.kind} type="button" className="btn ghost"
-      aria-label={a.kind === "closeDevice" && name ? `Close “${name}”` : undefined}
+      aria-label={a.step.kind === "close" && name ? `${a.label} “${name}”` : undefined}
       onClick={() => (a.step.kind === "close" ? closer.ask(cardKey) : onAction(a))}>
       {ICON[a.kind]}{ICON[a.kind] ? " " : null}{a.label}
     </button>

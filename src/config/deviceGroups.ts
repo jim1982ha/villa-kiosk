@@ -205,6 +205,8 @@ export function deviceFolding(
   entityMap: Record<string, EntityMapping>,
   deviceGroups: readonly DeviceGroup[],
   entityDeviceIds: Record<string, string>,
+  /** device_id → the whole device it is a part of (registryResolve.deviceUnits). */
+  deviceUnits: Readonly<Record<string, string>> = {},
 ): Map<string, string> {
   const repOf = new Map<string, string>();
   for (const g of deviceGroups) {
@@ -236,9 +238,28 @@ export function deviceFolding(
     if (!deviceId || entityMap[id]?.disabled || repOfDevice.has(deviceId)) continue;
     repOfDevice.set(deviceId, repOf.get(id) ?? id);
   }
+  // ⚠️ A PART OF A DEVICE IS THAT DEVICE (owner, 2026-10-18: "all device / sub-device are seen the same way"): a
+  // reading on a meter's phase device, never placed, folds to the meter — one card, as the VESTA Agent counts it.
+  // Entities the owner placed keep the device they were placed as: a placement is the owner's own grouping, and
+  // two pumps on one relay box stay two pumps on the map.
+  const repOfUnit = new Map<string, string>();
+  const byOwnEntity = new Set<string>();
+  for (const id of Object.keys(entityMap).sort()) {
+    const deviceId = entityDeviceIds[id];
+    if (!deviceId || entityMap[id]?.disabled) continue;
+    const unit = deviceUnits[deviceId] ?? deviceId;
+    const rep = repOf.get(id) ?? id;
+    // the whole device's own placed entity stands for it, else the first placed entity of one of its parts
+    if (deviceId === unit && !byOwnEntity.has(unit)) {
+      byOwnEntity.add(unit);
+      repOfUnit.set(unit, rep);
+    } else if (!repOfUnit.has(unit)) {
+      repOfUnit.set(unit, rep);
+    }
+  }
   for (const [id, deviceId] of Object.entries(entityDeviceIds)) {
     if (entityMap[id] || repOf.has(id)) continue;
-    const rep = repOfDevice.get(deviceId);
+    const rep = repOfDevice.get(deviceId) ?? repOfUnit.get(deviceUnits[deviceId] ?? deviceId);
     if (rep && rep !== id) repOf.set(id, rep);
   }
   return repOf;

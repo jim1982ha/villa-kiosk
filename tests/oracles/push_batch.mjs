@@ -93,7 +93,7 @@ console.log("\n  folding computed once:");
   ck("a folding passed in is the one used (the member folds into its primary)", seen.n > 0 && v.ids.join() === "sensor.t", v.ids);
   const src = readFileSync(new URL("../../src/config/VillaModel.tsx", import.meta.url), "utf8");
   ck("the villa model memoises it on config + registry and hands it to BOTH device sets",
-     /useMemo\(\(\) => deviceFolding\(entityMap, deviceGroups, entityDeviceIds\), \[entityMap, deviceGroups, entityDeviceIds\]\)/.test(src) && (src.match(/entityDeviceIds, folding \}\)/g) ?? []).length === 2);
+     /useMemo\(\(\) => deviceFolding\(entityMap, deviceGroups, entityDeviceIds, deviceUnits\),\s*\[entityMap, deviceGroups, entityDeviceIds, deviceUnits\]\)/.test(src) && (src.match(/entityDeviceIds, folding \}\)/g) ?? []).length === 2);
 }
 
 console.log("\n  the callers:");
