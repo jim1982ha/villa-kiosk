@@ -647,3 +647,14 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .panel-reading-value.transitional { color: var(--status-pending); }
 .panel-reading-value.unavailable { color: var(--status-warning); }
 .panel-reading-value.warning { color: var(--status-warning); }
+
+/* Villa presence (PresenceTile's panel): the state in its colour, then rows that open what they name. */
+.presence-now { display: flex; align-items: baseline; gap: 4px; padding: 10px 14px; border-radius: 12px;
+  background: color-mix(in srgb, var(--tone) 14%, var(--bg-modal)); border: 1px solid color-mix(in srgb, var(--tone) 40%, transparent); }
+.presence-now strong { color: var(--text-primary); }
+.presence-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.presence-row { width: 100%; display: flex; justify-content: space-between; gap: 12px; padding: 8px 10px; border-radius: 10px;
+  background: var(--bg-input); border: none; color: var(--text-primary); font: inherit; text-align: left; cursor: pointer; }
+.presence-row > :last-child { text-align: right; min-width: 0; overflow-wrap: anywhere; }
+@media (hover: hover) { .presence-row:hover { background: color-mix(in srgb, var(--accent) 14%, var(--bg-input)); } }
+.presence-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

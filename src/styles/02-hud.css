@@ -415,6 +415,15 @@
   display: flex; flex-direction: column; gap: 8px; pointer-events: none;
 }
 .hud-left-col > * { pointer-events: auto; }
+/* The presence tile (PresenceTile): the rail's width, its icon and one short word in the map's colour for the state
+   (--tone: active = someone there, off/idle = empty, unavailable = unknown). */
+.hud-left-col .hud-presence-btn {
+  width: 100%; height: auto; min-height: 44px; padding: 4px 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  color: var(--tone);
+}
+.hud-presence-word { font-size: var(--text-2xs); font-weight: 700; line-height: 1; color: var(--text-primary); }
+.hud-presence-btn[data-presence="empty"] { color: var(--text-secondary); }
 
 /* The brand icon's "go home" button (see HUD.tsx's .hud-brand +
    useHomeAnchor) — same gesture the removed floor-stack anchor button used

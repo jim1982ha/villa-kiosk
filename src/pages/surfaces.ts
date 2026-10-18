@@ -19,18 +19,18 @@ import type { DeviceLook } from "@/utils/deviceActivity";
 /** A window over the map. Several may be open at once: Advanced Settings
  *  opens over Settings. (The Cockpit footer's "VESTA Agent" LEAVES the
  *  Cockpit — its button says so — so those two are never stacked.) */
-export type Surface = "rooms" | "cockpit" | "agent" | "settings" | "configEditor";
+export type Surface = "rooms" | "cockpit" | "agent" | "settings" | "configEditor" | "presence";
 
 export type Surfaces = Readonly<Record<Surface, boolean>>;
 
 /** What a window is called on a "Back to …" button. */
 export const SURFACE_LABEL: Readonly<Record<Surface, string>> = {
   rooms: "Rooms", cockpit: "Cockpit", agent: "VESTA Agent", settings: "Settings",
-  configEditor: "Advanced Settings",
+  configEditor: "Advanced Settings", presence: "Villa presence",
 };
 
 export const NO_SURFACES: Surfaces = {
-  rooms: false, cockpit: false, agent: false, settings: false, configEditor: false,
+  rooms: false, cockpit: false, agent: false, settings: false, configEditor: false, presence: false,
 };
 
 /** May this profile open `s`? The doors (auth/doors) say, once — every

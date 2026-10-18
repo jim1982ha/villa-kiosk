@@ -22,6 +22,7 @@ import ConfigEditor from "./ConfigEditor";
 import BindingsTable from "./BindingsTable";
 import TelemetryPanel from "./TelemetryPanel";
 import GroupedDevices from "./GroupedDevices";
+import EntityPicker from "./EntityPicker";
 import InlineConfirm from "@/components/common/InlineConfirm";
 import ModalFooter from "@/components/common/ModalFooter";
 
@@ -131,6 +132,24 @@ function NorthOffset({ viewHeadingDeg }: { viewHeadingDeg?: () => number | null 
         Face the villa's real north side and press Set North, or drag the slider
         until the shadows match. Only fixes which wall the light comes from —
         sunrise and sunset times are already right.
+      </p>
+    </>
+  );
+}
+
+/** The villa's "is it empty?" sensor (config/presence): a picker of the villa's on/off sensors, never free text —
+ *  picked once for every screen (a shared setting, like the location). Nothing picked: no presence tile. */
+function PresenceSensor() {
+  const { config, update } = useConfig();
+  return (
+    <>
+      <div className="settings-section-title">Villa presence</div>
+      <label>"Villa empty" sensor</label>
+      <EntityPicker value={config.presenceSensor} domains={["binary_sensor"]} placeholder="Pick the villa's empty / occupied sensor"
+        onChange={(id) => update({ presenceSensor: id })} onClear={() => update({ presenceSensor: "" })} />
+      <p className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-xs)" }}>
+        The on/off sensor that is on when the villa is empty. Shown on every screen as the presence tile under the
+        floors — Occupied, Empty or Unknown — and tapping it tells why.
       </p>
     </>
   );
@@ -268,6 +287,8 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
                 Drives sun position and day/night for this villa.
               </p>
               <NorthOffset viewHeadingDeg={viewHeadingDeg} />
+
+              <PresenceSensor />
 
               {/* No collapse: `BindingsTable` already opens on its three counts
                   with the lists themselves behind their own toggles, so this

@@ -62,6 +62,9 @@ export const CAPABILITIES = [
    *  guest's: a guest does not see the agent at all. The add-on holds the same
    *  name (ROLE_CAPABILITIES) and refuses /agent-* to a session without it. */
   "viewAgent",
+  /** Who is home and since when (the presence window's People). The owner's only: the add-on never relays a person
+   *  to a guest or ops session either (ha-commands.json readDomains), so this only matches what they can read. */
+  "seePeople",
 ] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 

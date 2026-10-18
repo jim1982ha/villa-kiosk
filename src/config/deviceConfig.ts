@@ -23,6 +23,8 @@
 //                    them, so a device that kept its own copy drew the sun on
 //                    the wrong side of the house (owner, 2026-10-17: the main
 //                    app's browser had never been told; the wall tablet had)
+//     presenceSensor the villa's "is it empty?" on/off sensor (config/presence):
+//                    picked once, the presence tile on every screen follows
 //
 //   PER-DEVICE — describes THIS CLIENT's look/feel, where different answers on
 //   different hardware are correct, not a drift to be reconciled: render
@@ -70,6 +72,7 @@ interface SharedItems {
   latitude: number;
   longitude: number;
   northOffsetDeg: number;
+  presenceSensor: string;
 }
 
 export type SharedConfigKey = keyof SharedItems;
@@ -108,6 +111,15 @@ const villaNumber: SharedKeyRow<number, number> = {
   empty: 0,
 };
 
+/** One text about the villa (its presence sensor): one value, indexed as a single item; its empty is "" — nothing
+ *  picked, never a villa's sensor. */
+const villaText: SharedKeyRow<string, string> = {
+  index: (v) => ({ value: v }),
+  fromIndex: (items) => items.value ?? "",
+  parse: (raw) => (typeof raw === "string" ? raw : undefined),
+  empty: "",
+};
+
 const SHARED_KEYS: { [K in SharedConfigKey]: SharedKeyRow<AppConfig[K], SharedItems[K]> } = {
   entityMap: { index: sameRecord, fromIndex: sameRecord, parse: asRecord, empty: {} },
   meshBindings: { index: sameRecord, fromIndex: sameRecord, parse: asRecord, empty: {} },
@@ -139,6 +151,7 @@ const SHARED_KEYS: { [K in SharedConfigKey]: SharedKeyRow<AppConfig[K], SharedIt
   latitude: villaNumber,
   longitude: villaNumber,
   northOffsetDeg: villaNumber,
+  presenceSensor: villaText,
 };
 
 /** The AppConfig fields stored centrally, in the one order every document is

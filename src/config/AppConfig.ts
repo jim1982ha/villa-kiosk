@@ -151,6 +151,12 @@ export interface AppConfig {
    * be right for one villa and wrong for every other install.
    */
   northOffsetDeg: number;
+  /**
+   * The villa's "is it empty?" answer: an on/off sensor of the villa's system, on = empty (config/presence). Shown
+   * as the presence tile under the floors, for everyone. Empty by default — nothing is guessed: which sensor answers
+   * it is each villa's own (owner, 2026-10-18).
+   */
+  presenceSensor: string;
   theme: "dark" | "light" | "auto" | "night";
   /** The storey being shown. 1-based; see TeleportPoint.floor for why this
    *  is not a two-value union. */
@@ -322,6 +328,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   latitude: env.VITE_LAT ? Number(env.VITE_LAT) : 0,
   longitude: env.VITE_LNG ? Number(env.VITE_LNG) : 0,
   northOffsetDeg: 0,
+  presenceSensor: "",
   theme: "auto",
   currentFloor: 1,
   entityMap: ENTITY_MAP,

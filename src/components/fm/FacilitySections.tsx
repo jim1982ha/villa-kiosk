@@ -23,6 +23,8 @@ import {
   Wrench, Wallet, FileText, CalendarCog,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
+import { presenceOf, recapPresenceText, sinceText } from "@/config/presence";
+import { clockTime, dayTime } from "@/utils/dateText";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { roleCan } from "@/auth/permissions";
@@ -71,6 +73,9 @@ export default function FacilitySections({
 }) {
   const { entities } = useHA();
   const { config, resolvedRooms } = useConfig();
+  // the villa's presence in the Recap, as the tile under the floors says it (owner, 2026-10-18)
+  const presence = presenceOf(config.presenceSensor, entities);
+  const presenceLine = presence ? recapPresenceText(presence, sinceText(presence.since, clockTime, dayTime)) : null;
   const { role } = useProfile();
   const { data, ready, saveError } = useFmData();
   useFacilityLiveView();
@@ -101,6 +106,7 @@ export default function FacilitySections({
       {ready && tab === "recap" && (
         <>
           <ReadinessTab readiness={readiness} onOpenEntity={onOpenEntity} onOpenCheck={setCheckList} />
+          {presenceLine && <p className="body-text recap-presence">{presenceLine}</p>}
           <div className="settings-section-title">Monthly recap</div>
           <RecapTab readiness={readiness} offlineDeviceCount={devices.unavailable.length}
             totalDeviceCount={totalDeviceCount} />
