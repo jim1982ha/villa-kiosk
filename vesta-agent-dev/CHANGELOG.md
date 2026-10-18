@@ -1,3 +1,10 @@
+## 0.12.242
+
+What you will see:
+- A device the villa's "critical device offline" alert already covers gets no second "offline" fault on the Cockpit,
+  and no second message: one problem, one fault, its #.
+- A new install turns TVs and speakers on and off at once when a registered person asks, as your villa now does.
+
 ## 0.12.241
 
 What you will see:
