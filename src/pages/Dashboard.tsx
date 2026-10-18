@@ -1,6 +1,7 @@
 // src/pages/Dashboard.tsx
 // Main page: 3D canvas + HUD + panels + teleport + settings + onboarding.
 
+import { PresenceWindow } from "@/components/hud/PresenceTile";
 import { overlayOpen } from "@/hooks/useBackToClose";
 import { useInterval } from "@/hooks/useInterval";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
@@ -722,6 +723,7 @@ export default function Dashboard() {
         onSaveOverviewDefault={saveOverviewDefault}
         onOpenCockpit={() => go({ type: "openWindow", window: "cockpit", tab: "overview" })}
         onOpenCategory={(category) => go({ type: "openList", list: { kind: "category", category } })}
+        onOpenPresence={() => openSurface("presence")}
       />
 
       {/* Bottom dashboard strip — scene / quick-action / summary tiles,
@@ -732,6 +734,10 @@ export default function Dashboard() {
         scenes={haScenes}
       />
 
+      {shown("presence") && (
+        <PresenceWindow onClose={() => closeSurface("presence")} onOpenEntity={(id) => handOver("presence", id)}
+          canOpen={(id) => !!panelFor(identity.deviceOf(id))} />
+      )}
       {shown("rooms") && (
         <TeleportMenu
           manager={manager}

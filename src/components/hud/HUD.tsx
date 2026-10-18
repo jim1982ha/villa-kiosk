@@ -20,6 +20,7 @@
 // labels are always shown; "Highlight clickable objects" moved to Settings.)
 // Bottom bar: bottom-right shows the first-person movement joystick only.
 
+import PresenceTile from "./PresenceTile";
 import { useBackToClose } from "@/hooks/useBackToClose";
 import { useOutsideClose } from "@/hooks/useOutsideClose";
 import { useInterval } from "@/hooks/useInterval";
@@ -100,6 +101,8 @@ interface Props {
    *  device in that category, the same group-modal every SummaryBar tile
    *  already opens. A plain tap keeps toggling that category's visibility. */
   onOpenCategory: (category: Category) => void;
+  /** Asks the Dashboard to open the villa's presence window (why it counts as empty or occupied). */
+  onOpenPresence: () => void;
 }
 
 function useClock(): string {
@@ -125,7 +128,7 @@ export default function HUD({
   doors, onOpenSettings, onMove,
   viewMode, onToggleViewMode,
   hasOverviewDefault, onApplyOverviewDefault, onSaveOverviewDefault,
-  onOpenCockpit, onOpenCategory,
+  onOpenCockpit, onOpenCategory, onOpenPresence,
 }: Props) {
   const { connection, haConfig } = useHA();
   const { config, update } = useConfig();
@@ -782,6 +785,8 @@ export default function HUD({
           <span className="hud-stack-sep hud-view-btn" aria-hidden="true" />
           <ViewControls className="hud-view-btn" viewMode={viewMode} onToggleViewMode={onToggleViewMode} />
         </div>
+        {/* Is the villa seen as empty or occupied — its own section, on every screen (owner, 2026-10-18) */}
+        <PresenceTile onOpen={onOpenPresence} />
       </div>
 
       <div className="bottom-bar">

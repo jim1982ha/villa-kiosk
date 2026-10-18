@@ -64,8 +64,13 @@ const scanned = new Map();
 for (const { f, src } of files) {
   for (const m of src.matchAll(/entities\["([a-z_]+)\.[a-z_]+"\]|entity_id === "([a-z_]+)\.[a-z_]+"|startsWith\("([a-z_]+)\."\)/g)) scanned.set(m[1] ?? m[2] ?? m[3], f);
 }
-// `update.*` is the one owner-only scan (Cockpit's updates count sits behind seeUpdates).
-const unread = [...scanned].filter(([d]) => d !== "update" && !readable.has(d)).map(([d, f]) => `${d} (${f})`);
+// `update.*` is an owner-only scan (Cockpit's updates count sits behind seeUpdates), and so is `person.*`: a
+// person's whereabouts never leave the add-on for a guest or ops session (readDomains' own note), and the presence
+// window shows its People to the owner only (components/hud/PresenceTile — PresenceWindow).
+const OWNER_ONLY = new Set(["update", "person"]);
+const unread = [...scanned].filter(([d]) => !OWNER_ONLY.has(d) && !readable.has(d)).map(([d, f]) => `${d} (${f})`);
+ck("  ...the people of the presence window are the owner's only",
+   /const seesPeople = roleCan\(role, "seePeople"\);[\s\S]*showPeople=\{seesPeople\}/.test(readFileSync(new URL("../../src/components/hud/PresenceTile.tsx", import.meta.url), "utf8")));
 ck(`every domain read by a fixed id or prefix scan is readable (${[...scanned.keys()].sort().join(", ")})`, scanned.has("sun") && scanned.has("scene") && unread.length === 0, unread);
 
 done("✅ the app sends Home Assistant only what the proxy was told about, and reads only what it relays");

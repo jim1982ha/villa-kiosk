@@ -1,3 +1,22 @@
+## 2.496.416
+
+### Changed
+- Villa presence window: "People" lists only the people your "Villa empty" sensor watches, and "Latest movement" only
+  its own sensors — never every person of the villa's system or a camera's motion it does not read. The sensor says
+  which ones it watches (its "people" and "sensors" attributes); one that does not say gets a plain sentence instead.
+- A row of the window only looks and acts clickable when tapping it opens something.
+
+## 2.496.415
+
+### Added
+- Villa presence, always in sight: a tile under the floor buttons says whether the villa counts as **occupied**
+  (green, "In"), **empty** (grey, "Empty") or **unknown** (amber, "?"), in the colours of Map colours & keys. Hover or
+  a screen reader gives the full words ("Empty since 14:20"). Tap it for the Villa presence window: since when, who
+  is home or away (owner only), the latest movement, and the settings that decide it — each row opens what it names.
+- Settings › Villa › Villa presence: pick the on/off sensor that is on when the villa is empty (your "Villa empty"
+  sensor). Picked once for every screen. Nothing picked: no tile.
+- Cockpit › Recap says it too: "Villa occupied since 09:12".
+
 ## 2.496.414
 
 ### Fixed
