@@ -1,3 +1,11 @@
+## 0.12.244
+
+What you will see:
+- The Agent offers to sound the siren again (two outdoor sensors within 5 minutes, then your Approve button) when
+  your "Villa empty" helper reads on. It used to wait for a "villa mode" setting your villa never had, so it could
+  never offer it.
+- The weekly report's "electricity used while the villa is empty" counts the days "Villa empty" was on.
+
 ## 0.12.243
 
 What you will see:
