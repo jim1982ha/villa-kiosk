@@ -10,7 +10,7 @@ import { STATUS_COLOR } from "@/utils/stateColors";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import ModalFooter from "@/components/common/ModalFooter";
 import { useProfile } from "@/auth/ProfileContext";
-import { roleCan } from "@/auth/permissions";
+import { profileView } from "@/auth/permissions";
 
 const ICON = { occupied: Users, empty: House, unknown: CircleQuestionMark };
 /** The tile's own short word (a 50 px rail): the panel's heading says it in full. */
@@ -29,10 +29,10 @@ export function PresenceWindow({ onClose, onOpenEntity, canOpen }: {
   onClose: () => void; onOpenEntity: (entityId: string) => void; canOpen: (entityId: string) => boolean;
 }) {
   const { role } = useProfile();
-  const seesPeople = roleCan(role, "seePeople");
+  const sees = profileView(role);
   const p = usePresence();
   if (!p) return null;
-  return <PresencePanel presence={p.presence} why={p.why()} showPeople={seesPeople}
+  return <PresencePanel presence={p.presence} why={p.why()} showPeople={sees.people} showMovement={sees.motion}
     canOpen={canOpen} onOpenEntity={onOpenEntity} onClose={onClose} />;
 }
 
@@ -65,8 +65,10 @@ function Row({ entityId, name, said, onOpen }: { entityId: string; name: string;
 /** Why the villa counts as empty or occupied: who it watches (the owner only), the latest movement among the sensors
  *  it watches, the settings that decide it — all from the sensor's own lists (config/presence). Pure (a check draws
  *  it). */
-export function PresencePanel({ presence: p, why, showPeople, canOpen, onOpenEntity, onClose }: {
-  presence: Presence; why: PresenceWhy; showPeople: boolean; canOpen: (entityId: string) => boolean;
+export function PresencePanel({ presence: p, why, showPeople, showMovement = true, canOpen, onOpenEntity, onClose }: {
+  presence: Presence; why: PresenceWhy; showPeople: boolean;
+  /** Its latest movement — never for a profile that sees no motion (profileView: a guest). */
+  showMovement?: boolean; canOpen: (entityId: string) => boolean;
   onOpenEntity: (entityId: string) => void; onClose: () => void;
 }) {
   const dialogRef = useModalA11y(onClose);
@@ -94,13 +96,17 @@ export function PresencePanel({ presence: p, why, showPeople, canOpen, onOpenEnt
                 )}
             </>
           )}
-          <div className="settings-section-title">Latest movement</div>
-          {act ? (
-            <ul className="presence-list">
-              <Row entityId={act.entityId} name={act.name} onOpen={opener(act.entityId)}
-                said={act.moving ? "moving now" : `quiet since ${since(act.at)}`} />
-            </ul>
-          ) : <p className="muted body-text">{why.listsSensors ? "None of the sensors this one watches reports." : "This sensor does not list the sensors it watches."}</p>}
+          {showMovement && (
+            <>
+              <div className="settings-section-title">Latest movement</div>
+              {act ? (
+                <ul className="presence-list">
+                  <Row entityId={act.entityId} name={act.name} onOpen={opener(act.entityId)}
+                    said={act.moving ? "moving now" : `quiet since ${since(act.at)}`} />
+                </ul>
+              ) : <p className="muted body-text">{why.listsSensors ? "None of the sensors this one watches reports." : "This sensor does not list the sensors it watches."}</p>}
+            </>
+          )}
           {why.settings.length > 0 && (
             <>
               <div className="settings-section-title">What decides it</div>

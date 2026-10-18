@@ -7,7 +7,7 @@
 // deliberately doesn't attempt; this file is only the generic fallback.
 
 import type { HassEntity } from "@/types/ha.types";
-import { TRANSITIONAL_STATES, isUnavailable } from "@/utils/stateColors";
+import { isUnavailable, lockBolt } from "@/utils/stateColors";
 import { domainOf } from "./entityDomain";
 
 export const OFF_STATES = new Set(["off", "unavailable", "unknown", ""]);
@@ -42,7 +42,8 @@ export function switchPosition(e: HassEntity | undefined, domain?: string): Swit
   if (isUnavailable(e) || e == null) return "unknown";
   const d = domainOf(domain ?? e.entity_id);
   if (d === "lock") {
-    if (TRANSITIONAL_STATES.has(e.state)) return "unknown";
+    const bolt = lockBolt(e.state);                    // the one reading of a lock (stateColors.lockBolt)
+    if (bolt === "moving" || bolt === "unknown") return "unknown";
     // ⚠️ `jammed` IS NOT `unknown`, AND THE DIFFERENCE IS WHETHER ANYTHING WAS
     // OBSERVED. A jammed lock reported its state: the bolt did not throw, so
     // the door is definitely NOT secured, and falling through to "on" says
@@ -52,7 +53,7 @@ export function switchPosition(e: HassEntity | undefined, domain?: string): Swit
     // to put on a switch.
     // Inverted on purpose: the switch reads "unlocked = on", because that is
     // the state a person acts on. `locked` is the quiet, secure rest state.
-    return e.state === "locked" ? "off" : "on";
+    return bolt === "thrown" ? "off" : "on";
   }
   return OFF_STATES.has(e.state) ? "off" : "on";
 }

@@ -70,7 +70,7 @@ for (const { f, src } of files) {
 const OWNER_ONLY = new Set(["update", "person"]);
 const unread = [...scanned].filter(([d]) => !OWNER_ONLY.has(d) && !readable.has(d)).map(([d, f]) => `${d} (${f})`);
 ck("  ...the people of the presence window are the owner's only",
-   /const seesPeople = roleCan\(role, "seePeople"\);[\s\S]*showPeople=\{seesPeople\}/.test(readFileSync(new URL("../../src/components/hud/PresenceTile.tsx", import.meta.url), "utf8")));
+   /const sees = profileView\(role\);[\s\S]*showPeople=\{sees\.people\}/.test(readFileSync(new URL("../../src/components/hud/PresenceTile.tsx", import.meta.url), "utf8")));
 ck(`every domain read by a fixed id or prefix scan is readable (${[...scanned.keys()].sort().join(", ")})`, scanned.has("sun") && scanned.has("scene") && unread.length === 0, unread);
 
 done("✅ the app sends Home Assistant only what the proxy was told about, and reads only what it relays");

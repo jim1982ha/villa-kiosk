@@ -23,7 +23,7 @@ import type { HassEntity } from "@/types/ha.types";
 // POWER, by name: "N on" counts a device switched on (deviceActivity owns both
 // meanings of "on"; a lights/AC tile counts this one).
 import { isSwitchedOn } from "@/utils/deviceActivity";
-import { isOffline } from "@/utils/stateColors";
+import { isOffline, lockBolt } from "@/utils/stateColors";
 import { effectiveSensorClass, toBaseUnit } from "./SensorClasses";
 import { levelForValue, type Threshold } from "./ThresholdConfig";
 import { domainOf } from "@/utils/entityDomain";
@@ -88,9 +88,10 @@ export function lockFacts(entities: Record<string, HassEntity>, allowed?: Allowe
   if (!locks.length) return null;
   return {
     ids: idsOf(locks),
-    locked: idsOf(locks.filter((l) => l.state === "locked")),
-    unlocked: idsOf(locks.filter((l) => l.state === "unlocked")),
-    unknown: idsOf(locks.filter((l) => l.state !== "locked" && l.state !== "unlocked")),
+    // the one reading of a lock (stateColors.lockBolt): an "open" lock is unlocked too; jammed, moving, unknown are neither
+    locked: idsOf(locks.filter((l) => lockBolt(l.state) === "thrown")),
+    unlocked: idsOf(locks.filter((l) => lockBolt(l.state) === "open")),
+    unknown: idsOf(locks.filter((l) => !["thrown", "open"].includes(lockBolt(l.state)))),
   };
 }
 

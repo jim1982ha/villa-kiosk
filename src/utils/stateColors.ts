@@ -339,3 +339,21 @@ export function paletteColorFor(states: string[]): (state: string) => string {
 export function paintState(colorFor: (state: string) => string): (state: string) => string {
   return (state: string) => (UNKNOWN_STATES.has(state) ? STATUS_COLOR.unavailable : colorFor(state));
 }
+
+/** Where a lock's bolt is, as every reader of a lock asks it: "thrown" (locked — the quiet, secure rest state), "open"
+ *  (unlocked, or open: not secured, as the lock itself says), "jammed" (it said so: not secured, the retry stays
+ *  offered), "moving" (locking / unlocking: on its way, nobody observed either rest state) or "unknown" (contact lost, or
+ *  no value). Never "open" on anything short of the lock saying so.
+ *
+ *  ⚠️ FIVE ANSWERS (architecture review scan 2, 2026-10-19): the switch (entityState.switchPosition), the summary's
+ *  counts (villaSummary), the lock window's header icon, its pill icon and its button each read the raw state their
+ *  own way — the header showed an OPEN padlock for a jammed, locking or unavailable lock while the pill beside it
+ *  showed a closed one, and the summary counted an "open" lock as neither locked nor unlocked. */
+export type LockBolt = "thrown" | "open" | "jammed" | "moving" | "unknown";
+export function lockBolt(state: string | undefined | null): LockBolt {
+  if (contactOf(state) !== "ok") return "unknown";
+  if (state === "locked") return "thrown";
+  if (state === "unlocked" || state === "open") return "open";
+  if (state === "jammed") return "jammed";
+  return TRANSITIONAL_STATES.has(state as string) ? "moving" : "unknown";
+}

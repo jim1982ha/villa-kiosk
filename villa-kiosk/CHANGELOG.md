@@ -1,3 +1,16 @@
+## 2.496.420
+
+### Fixed
+- The villa presence window no longer shows "Latest movement" to a profile that sees no motion anywhere else (the
+  guest's): the same rule as the motion notice and the map's motion beams.
+- A lock's window shows the same padlock at its top as on its status label: an open padlock only when the lock says it
+  is unlocked or open — never for a lock that is jammed, moving or out of contact. A lock reporting "open" now counts
+  as unlocked in the Recap and the summary.
+
+### Changed (behind the scenes)
+- One reading of a lock for the switch, the counts and the lock window; one answer to "what may this profile be
+  shown"; one answer to "can this row be opened" for every window.
+
 ## 2.496.419
 
 ### Fixed

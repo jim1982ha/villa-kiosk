@@ -202,4 +202,28 @@ ck("  ...an \"unknown\" device is quiet on the map — never the amber of lost c
 ck("no reader spells the pair out for itself", strayPairs.length === 0);
 ck("  ...and the deliberately wider set is still wider",
    OFF_STATES.has("off") && OFF_STATES.has("") && !UNKNOWN_STATES.has("off"));
+// ONE READING OF A LOCK (architecture review scan 2, 2026-10-19: five answers — the window's header showed an open
+// padlock for a jammed, locking or unavailable lock beside a closed one on its pill)
+{
+  const { lockBolt } = await import("@/config/reading");
+  const { switchPosition } = await import("@/utils/entityState");
+  const { lockFacts } = await import("@/config/villaSummary");
+  const STATES = ["locked", "unlocked", "open", "jammed", "locking", "unlocking", "unavailable", "unknown"];
+  const ents = Object.fromEntries(STATES.map((st) => [`lock.${st}`, { entity_id: `lock.${st}`, state: st, attributes: {} }]));
+  const facts = lockFacts(ents);
+  const agree = STATES.every((st) => {
+    const b = lockBolt(st), sw = switchPosition(ents[`lock.${st}`]), id = `lock.${st}`;
+    const counted = facts.locked.includes(id) ? "thrown" : facts.unlocked.includes(id) ? "open" : "neither";
+    return (b === "thrown") === (sw === "off") && (b === "open" || b === "jammed") === (sw === "on")
+      && counted === (b === "thrown" || b === "open" ? b : "neither");
+  });
+  ck("every lock state reads the same to the switch, the summary's counts and the bolt", agree,
+     STATES.map((st) => [st, lockBolt(st), switchPosition(ents[`lock.${st}`])]));
+  ck("  ...an open padlock only where the lock says it is not secured",
+     STATES.filter((st) => lockBolt(st) === "open").join() === "unlocked,open");
+  const panel = readFileSync(new URL("../../src/components/panels/LockPanel.tsx", import.meta.url), "utf8");
+  ck("  ...and the lock window's header and pill draw the same padlock",
+     /const PadIcon = bolt === "open" \? Unlock : Lock;/.test(panel) && (panel.match(/<PadIcon size=/g) ?? []).length === 2
+     && !/entity\?\.state === "(un)?locked"/.test(panel));     // its buttons keep their own icons: they say what they do
+}
 process.exit(fail ? 1 : 0);

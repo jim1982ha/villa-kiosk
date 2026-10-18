@@ -121,9 +121,10 @@ const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf
 const d = src("pages/Dashboard.tsx"), router = src("components/panels/PanelRouter.tsx"), base = src("components/panels/BasePanel.tsx");
 ck("the Cockpit, the summary bar, the Agent and Facility open the DEVICE",
    /onOpenEntity=\{openDevicePanel\}/.test(d)
-   && /go\(\{ type: "handOver", from, panel: panelFor\(identity\.deviceOf\(entityId\)\) \}\)/.test(d)
+   && /go\(\{ type: "handOver", from, panel: devicePanel\(entityId\) \}\)/.test(d)
    && ["cockpit", "agent"].every((w) => d.includes(`onOpenEntity={(id) => handOver("${w}", id)}`))
-   && /go\(\{ type: "openDevice", panel: panelFor\(identity\.deviceOf\(entityId\)\) \}\)/.test(d));
+   && /go\(\{ type: "openDevice", panel: devicePanel\(entityId\) \}\)/.test(d)
+   && /const devicePanel = useCallback\(\(entityId: string\) => panelFor\(identity\.deviceOf\(entityId\)\)/.test(d));
 ck("  ...a list row and the camera's next/prev open exactly the entity they name",
    // 2.496.270: through openFromList, which records the list for Back and opens exactly the entity
    // (Back to the list is pages/screen's, driven by value in screen.mjs.)

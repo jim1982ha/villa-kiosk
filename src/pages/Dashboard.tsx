@@ -29,7 +29,7 @@ import { useConfig } from "@/config/ConfigContext";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import RoomChoiceSheet, { type RoomChoice } from "@/components/hud/RoomChoiceSheet";
 import { useProfile } from "@/auth/ProfileContext";
-import { isTypeAllowed, panelMapping, roleCan } from "@/auth/permissions";
+import { panelMapping, profileView, roleCan } from "@/auth/permissions";
 import { doorsFor } from "@/auth/doors";
 import AgentModal from "@/components/agent/AgentModal";
 import { useAgent } from "@/agent/AgentContext";
@@ -341,8 +341,7 @@ export default function Dashboard() {
       if (!isMotionSensor(id, e.attributes?.device_class as string | undefined)) return;
       // A profile that may not see motion sensors (the guest's) is not told
       // about motion either (2.496.210).
-      const who = roleRef.current;
-      if (!who || !isTypeAllowed(who, "binary_sensor")) return;
+      if (!profileView(roleRef.current).motion) return;
       const map = configRef.current.entityMap[id];
       // Only announce a sensor actually configured somewhere in the app —
       // real geometry in the model, or another mapping's Linked entity /
@@ -388,16 +387,20 @@ export default function Dashboard() {
   // ("Also on this device"). A device list's row and the camera's next/prev
   // name ONE entity and still open exactly it.
   const identity = useDeviceIdentity();
+  /** The panel a DEVICE named by any of its entities opens — what a device row, a hand-over and "can this row be
+   *  opened" all ask (architecture review scan 2, 2026-10-19: the presence window rebuilt `!!panelFor(deviceOf(id))`
+   *  inline, to be kept in step with the hand-over by hand — 2.496.416 was that pairing). */
+  const devicePanel = useCallback((entityId: string) => panelFor(identity.deviceOf(entityId)), [panelFor, identity]);
   /** A device from the bottom bar: a fresh open. */
   const openDevicePanel = useCallback(
-    (entityId: string) => go({ type: "openDevice", panel: panelFor(identity.deviceOf(entityId)) }),
-    [panelFor, identity, go],
+    (entityId: string) => go({ type: "openDevice", panel: devicePanel(entityId) }),
+    [devicePanel, go],
   );
   /** A window hands a device over: the device's panel opens and the window
    *  closes — only when there IS a panel to open (pages/screen). */
   const handOver = useCallback(
-    (from: Surface, entityId: string) => go({ type: "handOver", from, panel: panelFor(identity.deviceOf(entityId)) }),
-    [panelFor, identity, go]);
+    (from: Surface, entityId: string) => go({ type: "handOver", from, panel: devicePanel(entityId) }),
+    [devicePanel, go]);
   /** A device opened from the open room or category list (the list closes). */
   const openFromList = useCallback(
     (entityId: string) => go({ type: "openFromList", panel: panelFor(entityId) }), [panelFor, go]);
@@ -736,7 +739,7 @@ export default function Dashboard() {
 
       {shown("presence") && (
         <PresenceWindow onClose={() => closeSurface("presence")} onOpenEntity={(id) => handOver("presence", id)}
-          canOpen={(id) => !!panelFor(identity.deviceOf(id))} />
+          canOpen={(id) => devicePanel(id) !== null} />
       )}
       {shown("rooms") && (
         <TeleportMenu
