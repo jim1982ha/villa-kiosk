@@ -605,7 +605,7 @@ button {
    below still sets its own border (color/width vary: hairline, hairline-strong,
    or the danger color for the service-error toast) and layout separately. */
 .icon-btn, .hud-group, .hud-stack, .hud-menu,
-.room-label, .service-toast, .joystick-base {
+.room-label, .joystick-base {
   background: var(--bg-panel);
   backdrop-filter: blur(20px) saturate(1.1);
   box-shadow: var(--elev-2);

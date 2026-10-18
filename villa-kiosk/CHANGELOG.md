@@ -1,3 +1,13 @@
+## 2.496.413
+
+### Changed
+- Every notice over the villa looks the same and sits in the same place: one column under the top bar, where they
+  stack instead of overlapping. "Disconnected — reconnecting…", "A new version of VESTA is ready", a tap that failed,
+  "Motion detected · room", "Floor … isn't modelled yet" and a floor-plan sync problem are all the same pill, coloured
+  as in Map colours & keys: amber when contact is lost, green when a sensor is triggered, red when something failed,
+  and the VESTA green for news. The floor-plan sync problem moved from the bottom of the screen to that column.
+- The short "reconnecting" notice on a phone reads "Reconnecting to the villa…".
+
 ## 2.496.412
 
 ### Changed

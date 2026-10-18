@@ -1,14 +1,15 @@
 // src/components/hud/AppNotice.tsx
-// General-purpose themed toast for app-level notices that aren't a failed HA
-// service call (see ServiceErrorToast for that specific case) — e.g. "this
-// floor isn't modelled yet". Reuses the same .service-toast chrome so every
-// transient message in the kiosk looks consistent, instead of a native
-// alert() that breaks out of the app's own dark/light theme entirely.
+// A passing notice of the villa view — "Motion detected · Kitchen", "Floor 3 isn't modelled yet" — gone after a few
+// seconds. Drawn as every notice is (Notice): its tone says what it is, from the map's own colours.
 
 import { useEffect, useState } from "react";
-import { Info } from "lucide-react";
+import { Activity, Info } from "lucide-react";
+import { NoticeView, type NoticeTone } from "./Notice";
 
-export default function AppNotice({ message, onExpire }: { message: string | null; onExpire: () => void }) {
+/** What to say, and what it is: a sensor triggered ("active") or plain news ("info"). */
+export interface AppNoticeMessage { text: string; tone: Extract<NoticeTone, "active" | "info"> }
+
+export default function AppNotice({ message, onExpire }: { message: AppNoticeMessage | null; onExpire: () => void }) {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -20,11 +21,11 @@ export default function AppNotice({ message, onExpire }: { message: string | nul
   }, [message]);
 
   if (!visible || !message) return null;
-
+  // a sensor's notice belongs to the villa map: never over the fullscreen camera's live picture
   return (
-    <div className="service-toast app-notice" role="status">
-      <Info size={16} />
-      <span>{message}</span>
-    </div>
+    <NoticeView tone={message.tone} icon={message.tone === "active" ? <Activity size={16} /> : <Info size={16} />}
+      belowCamera={message.tone === "active"}>
+      {message.text}
+    </NoticeView>
   );
 }

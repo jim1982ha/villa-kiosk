@@ -12,7 +12,8 @@ import RoomLabel from "@/components/hud/RoomLabel";
 import ServiceErrorToast from "@/components/hud/ServiceErrorToast";
 import ConnectionBanner from "@/components/hud/ConnectionBanner";
 import UpdateBanner from "@/components/hud/UpdateBanner";
-import AppNotice from "@/components/hud/AppNotice";
+import AppNotice, { type AppNoticeMessage } from "@/components/hud/AppNotice";
+import { NoticeStack } from "@/components/hud/Notice";
 import FirstRunTips from "@/components/hud/FirstRunTips";
 import SummaryBar from "@/components/hud/SummaryBar";
 import TapRipple, { RIPPLE_LIFETIME_MS, type Ripple } from "@/components/hud/TapRipple";
@@ -190,7 +191,7 @@ export default function Dashboard() {
   // General app notices (e.g. "this floor isn't modelled yet") — themed,
   // replaces a native alert() that used to break out of the kiosk's own
   // dark/light chrome entirely. See AppNotice.
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<AppNoticeMessage | null>(null);
   // First-ever login on this device — see FirstRunTips/utils/viewPrefs'
   // hasSeenFirstRunTips docstring. Checked once, lazily, so it reflects
   // whatever was in localStorage when this component first mounted rather
@@ -363,7 +364,7 @@ export default function Dashboard() {
       // append "— {label}" whenever a room WAS known too (a plain device
       // occupancy sensor's label, e.g. "Motion4 Occupancy"), so the identical
       // event read differently depending only on which entity fired it.
-      setNotice(room ? `Motion detected · ${room}` : `Motion detected · ${label}`);
+      setNotice({ text: room ? `Motion detected · ${room}` : `Motion detected · ${label}`, tone: "active" });
     });
   }, [subscribeAll]);
 
@@ -453,7 +454,7 @@ export default function Dashboard() {
         setCurrentFloor(floor);
       } else {
         // Floor not modelled yet.
-        setNotice(`Floor ${floor} isn't modelled yet — coming soon.`);
+        setNotice({ text: `Floor ${floor} isn't modelled yet — coming soon.`, tone: "info" });
       }
     },
     [manager],
@@ -691,18 +692,19 @@ export default function Dashboard() {
 
       <TapRipple ripples={ripples} />
 
-      <AppNotice message={notice} onExpire={() => setNotice(null)} />
-
       {role && showFirstRunTips && (
         <FirstRunTips onClose={() => setShowFirstRunTips(false)} />
       )}
 
-      <ServiceErrorToast />
-
-      {/* Persistent while the HA socket is down — the only connection signal
-          that survives the phone tier, where the top bar's dot is hidden. */}
-      <ConnectionBanner />
-      <UpdateBanner />
+      {/* EVERY notice of the villa view, in one column under the top bar, drawn by one piece (Notice) — the most
+          lasting first: the connection (the only signal that survives the phone tier, where the top bar's dot is
+          hidden), a new version, a failed tap, then what just happened. The 3D canvas's own joins it. */}
+      <NoticeStack>
+        <ConnectionBanner />
+        <UpdateBanner />
+        <ServiceErrorToast />
+        <AppNotice message={notice} onExpire={() => setNotice(null)} />
+      </NoticeStack>
 
       <HUD
         currentFloor={currentFloor}

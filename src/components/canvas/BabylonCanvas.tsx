@@ -1,8 +1,9 @@
 // src/components/canvas/BabylonCanvas.tsx
 // Owns the <canvas> + SceneManager lifecycle and wires HA state -> 3D visuals.
 
+import Notice from "@/components/hud/Notice";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, X } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { SceneManager } from "@/babylon/SceneManager";
 import { formatProbe, registerProbeRunner } from "@/babylon/perfProbe";
 import { useConfig } from "@/config/ConfigContext";
@@ -947,14 +948,11 @@ export default function BabylonCanvas({
           }
         />
       )}
+      {/* drawn as every notice is, in the villa view's one column (Notice) — it was a red box of its own at the bottom */}
       {sh3dSyncMsg && (
-        <div className="sh3d-sync-banner">
-          <AlertTriangle size={16} />
-          <span>{sh3dSyncMsg}</span>
-          <button onClick={() => setSh3dSyncMsg(null)} aria-label="Dismiss">
-            <X size={16} />
-          </button>
-        </div>
+        <Notice tone="alert" role="alert" icon={<AlertTriangle size={16} />} onDismiss={() => setSh3dSyncMsg(null)}>
+          {sh3dSyncMsg}
+        </Notice>
       )}
     </>
   );
