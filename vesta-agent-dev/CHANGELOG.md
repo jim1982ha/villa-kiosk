@@ -1,3 +1,16 @@
+## 0.12.252
+
+What you will see on Telegram:
+- A person's act now reads what, when, then who: "✅ Done on 19/10/2026 02:10 (JM), VESTA will monitor it for
+  10 min." — the time is how long VESTA watches the device after a Done (the alert desk's setting). The same order
+  for "Need help", an approval or refusal, and a fault closed, reopened or taken on in the Cockpit.
+- The nightly check no longer reports a device you have hidden in the villa's system as "dropped and reconnected"
+  (it was the one check that still read hidden devices). The LG TV fault clears at the next night check.
+
+Behind the scenes:
+- Every chat's copy of an alert is headed by one piece of code, and who hears each step is decided in one place:
+  the next change to these rules is one change.
+
 ## 0.12.251
 
 What you will see on Telegram:
