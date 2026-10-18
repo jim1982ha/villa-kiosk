@@ -686,3 +686,51 @@ def test_the_siren_reads_the_villas_one_empty_helper(tmp_path):
         assert desk.occupancy(FixtureClient(str(fx))) == mode
     (fx / "states.json").write_text(json.dumps({"states": {"input_select.villa_mode": {"state": "vacant"}}}))
     assert desk.occupancy(FixtureClient(str(fx))) == "unknown"
+
+
+# ------------------------------------------------------------- an alert whose automation is gone (owner, 2026-10-18)
+RULE = "automation.critical_condition_front_door"
+
+
+def test_an_alert_whose_automation_is_gone_is_closed_saying_why_and_its_fault_with_it(store):
+    # the laundry rule's entity ID changed while #41 was open: its next alert came as #55, and #41 could never clear
+    iid = _left_unlocked(store, abandon=False)
+    villa = Villa(**{"lock.front_door": [(T0 - timedelta(minutes=10), "unlocked")]})
+    villa.gone = {RULE}
+    assert _tick(store, villa, 5)["rule_gone"] == []                       # seen gone once: not yet
+    clear = desk._params(None).behaviour("clear_minutes")
+    res = _tick(store, villa, 5 + clear)
+    assert res["rule_gone"] == [iid] and store.incident(iid)["closed_at"]
+    said = [m for m in res["send"] if "no longer exists" in (m.get("status") or "")]
+    assert said and "Its next alert comes with a new number." in said[0]["status"], res["send"]
+    assert res.get("settle")                                               # its messages lose their buttons
+    task = store.last_task(f"incident:{iid}")
+    assert task and task["status"] != "open", task                         # its Kiosk fault closes with it
+
+
+def test_an_automation_back_before_the_wait_keeps_its_alert(store):
+    # a restart can answer "not found" before the villa's automations are loaded: gone, then back, is still its rule
+    iid = _left_unlocked(store, abandon=False)
+    villa = Villa(**{"lock.front_door": [(T0 - timedelta(minutes=10), "unlocked")]})
+    villa.gone = {RULE}
+    _tick(store, villa, 5)
+    villa.gone = set()
+    _tick(store, villa, 6)
+    villa.gone = {RULE}
+    clear = desk._params(None).behaviour("clear_minutes")
+    # gone again a full wait after it was FIRST seen gone: the wait starts again, from now
+    assert _tick(store, villa, 5 + clear)["rule_gone"] == [] and not store.incident(iid)["closed_at"]
+
+
+def test_a_villa_that_cannot_say_closes_nothing(store):
+    # only the villa's own "not found" counts: a read that fails is not a deleted automation
+    iid = _left_unlocked(store, abandon=False)
+
+    class Unreadable(Villa):
+        def not_found(self, entity_ids):
+            raise TimeoutError("no answer")
+
+    villa = Unreadable(**{"lock.front_door": [(T0 - timedelta(minutes=10), "unlocked")]})
+    for m in (5, 60, 120):
+        assert _tick(store, villa, m)["rule_gone"] == []
+    assert not store.incident(iid)["closed_at"]

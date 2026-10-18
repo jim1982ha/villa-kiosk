@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.239 (18 October 2026)
+
+Owner, 2026-10-18 (#41 and #55, one laundry door: the rule's entity ID changed while #41 was open, and the Cockpit's
+Close closes a device's faults together): alert-desk desk.rule_gone — an open incident whose rule_id (an automation)
+the villa's system answers "not found" for (client.not_found, never a failed read), on two ticks clear_minutes apart, is
+closed with its fault, saying why. Rules page reminder reworded in the owner's terms (critical automations, entity ID,
+title).
+
 ## 0.6.238 (18 October 2026)
 
 Owner, 2026-10-18 (#41: "Alert sent … to Owner & FM" beside "Back at …, 2nd time in 7 days (to: Owner & FM)"): every

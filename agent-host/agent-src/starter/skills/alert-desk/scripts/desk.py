@@ -586,6 +586,43 @@ def seen_again(store: Store, now: datetime, client, clear_minutes: float, out: d
     return closed
 
 
+def rule_gone(store: Store, now: datetime, client, clear_minutes: float, out: dict) -> list[int]:
+    """Every open incident whose rule — an automation of the villa — the villa's system says it no longer has (its
+    entity ID changed, or it was deleted), `clear_minutes` on end: closed, saying why. Returns their ids.
+
+    ⚠️ AN ALERT NOBODY COULD CLOSE (owner, 2026-10-18): the laundry rule's entity ID changed while its alert #41 was
+    open; its next alert came under the new ID as #55 — the same door, two faults, and the Cockpit's Close closes a
+    device's faults together. An incident is its rule's: a rule that is gone can never clear it. Only the villa's own
+    "not found" counts (client.not_found): a read that fails is not a rule deleted."""
+    rules = [i for i in store.incidents(open_only=True) if str(i.get("rule_id") or "").startswith("automation.")]
+    if not rules:
+        return []
+    try:
+        gone = client.not_found(sorted({i["rule_id"] for i in rules}))
+    except Exception:  # noqa: BLE001 — the villa's system not readable now: the next tick
+        return []
+    closed = []
+    for inc in rules:
+        p = notes_of(inc)
+        if inc["rule_id"] not in gone:
+            if p.get("rule_gone_since"):
+                store.note(inc["id"], drop=("rule_gone_since",))       # back (a restart read it too early): still its
+            continue
+        since = p.get("rule_gone_since")
+        if not since:
+            store.note(inc["id"], {"rule_gone_since": now.isoformat()})
+            continue
+        if now - datetime.fromisoformat(since) < timedelta(minutes=clear_minutes):
+            continue
+        _close(store, store.incident(inc["id"]), now, out,
+               "Closed on {time}: the automation that sent it no longer exists (its entity ID changed, or it was "
+               "deleted). Its next alert comes with a new number.",
+               note="Closed: the automation that sent it no longer exists (its entity ID changed, or it was deleted).")
+        store.audit("alert-desk", "rule_gone", {"incident": inc["id"], "rule": inc["rule_id"]})
+        closed.append(inc["id"])
+    return closed
+
+
 #: What a rule restating itself changes on its open alert: how it is judged from now on — never its words.
 RESTATES = ("claim", "bad_states", "mode", "entities")
 
@@ -731,6 +768,7 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
     if client is not None:
         out["cleared"] = seen_again(store, now, client, params.behaviour("clear_minutes"), out)
         out["not_quiet"] = quiet_after_done(store, now, client, params.behaviour("clear_minutes"), out)
+        out["rule_gone"] = rule_gone(store, now, client, params.behaviour("clear_minutes"), out)
     for inc in store.incidents(open_only=True):
         p = notes_of(inc)
         said = store.take_note(inc["id"], Notes.KIOSK_REOPENED, assignee=CHASE["asks"]) \

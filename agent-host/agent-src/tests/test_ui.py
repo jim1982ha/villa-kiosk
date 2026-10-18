@@ -875,15 +875,17 @@ def test_files_keep_their_order_and_picking_a_skill_keeps_the_list(ui):
 
 def test_rules_reminds_to_install_the_agent_before_new_alert_rules():
     # owner, 2026-10-17 (the 14:41 alert storm): a gentle reminder directly under the "Acting on the villa" switch, in
-    # the page's muted sub-line style, never a colour of its own
+    # the page's muted sub-line style, never a colour of its own — 2026-10-18: what HE must watch, in his words
+    # (critical automations, their entity ID, their title), never how the Agent works inside
     js = body_of(page_js(), "rulesForms")
     acting = js[js.index("const acting = "):js.index("const sel = ")]
-    reminder = ("When an update also changes the villa's alert rules, install the VESTA Agent update first. "
-                "Until then, the Agent ignores anything new those rules send.")
+    reminder = ("Install VESTA Agent updates as soon as they're offered: an update to the villa's critical automations may "
+                "need the matching Agent. Changing a critical automation's entity ID closes its open alert; its title can "
+                "change freely.")
     assert f'h("div", {{ class: "muted" }}, "{reminder}")' in acting, acting
     assert acting.index("title-switch") < acting.index(reminder)
     # the platform underneath is never named (owner, 2026-10-15) — the page's own words are not in
     # test_no_platform_name's files, so this line is held to it here
     from test_no_platform_name import NAMED
-    line = acting[acting.index('h("div", { class: "muted" }, "When an update'):]
+    line = acting[acting.index('h("div", { class: "muted" }, "Install VESTA Agent'):]
     assert not NAMED.search(line.split("));", 1)[0]), line

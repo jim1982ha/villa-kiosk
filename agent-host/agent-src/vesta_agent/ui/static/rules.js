@@ -60,9 +60,10 @@ export function rulesForms(doc, jobs = [], tools = null) {
     h("h2", {}, place("acting"), infoButton(place("acting"), `Off: the agent informs only, and never offers to do anything. On: it may act, within the rules below; every action still goes through "${place("actions")}".`),
       h("label", { class: "switch title-switch" }, h("input", { type: "checkbox", checked: f.act_enabled, "aria-label": W("act_enabled"),
         onchange: on((t) => { f.act_enabled = t.checked; }) })))),
-    // a reminder under the switch (owner, 2026-10-17, after the 14:41 alert storm: a newer rule template reached an
-    // older Agent and its new kind of message was taken for alerts)
-    h("div", { class: "muted" }, "When an update also changes the villa's alert rules, install the VESTA Agent update first. Until then, the Agent ignores anything new those rules send."));
+    // what the owner must watch in the villa's critical automations (owner, 2026-10-17, after the 14:41 alert storm: a
+    // newer rule template reached an older Agent; 2026-10-18, in his words: what to pay attention to, never the inside —
+    // and the #41/#55 entity-ID change, which the desk now closes itself: desk.rule_gone)
+    h("div", { class: "muted" }, "Install VESTA Agent updates as soon as they're offered: an update to the villa's critical automations may need the matching Agent. Changing a critical automation's entity ID closes its open alert; its title can change freely."));
 
   // the AI
   const sel = (opts, value, set, label) => dropdown(Object.entries(opts), value, (v) => { set(v); markDirty(); }, label);
