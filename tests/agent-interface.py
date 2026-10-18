@@ -514,6 +514,19 @@ async def main() -> None:
        devices.get("light.living_ceiling", {}).get("room") == "Living"
        and devices["light.living_ceiling"]["floor"] == "Ground"
        and devices.get("switch.pool_pump", {}).get("room") == "Garden")
+    # each device's name and category as the Kiosk shows them, shared beside the rooms (architecture review scan 3,
+    # 2026-10-19): the Kiosk's answer wins over the stored label and category
+    r = await put("/kiosk-rooms", headers=cookie("ops"), json={"data": {
+        "rooms": {"sensor.living_power": "Living"}, "names": {"light.hall": "Hallway lamp"},
+        "categories": {"light.hall": "light"}}})
+    ck("a device shares the names and categories the Kiosk shows: 200", r.status == 200)
+    ck("  ...a name map that is not one: 400", (await put("/kiosk-rooms", headers=cookie("ops"), json={"data": {
+        "rooms": {}, "names": {"light.hall": ""}}})).status == 400)
+    status, body = await jget("/agent/v1/villa-model", bearer())
+    devices = {d["entity_id"]: d for d in body.get("devices", [])} if status == 200 else {}
+    ck("  ...and the villa model names and files the device as the Kiosk does",
+       devices.get("light.hall", {}).get("name") == "Hallway lamp" and devices["light.hall"].get("category") == "light",
+       devices.get("light.hall"))
     ck("  ...no area: the room the Kiosk shows, marked as the Kiosk's",
        devices.get("sensor.living_power", {}).get("room") == "Living"
        and devices["sensor.living_power"]["room_source"] == "kiosk", devices.get("sensor.living_power"))

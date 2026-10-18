@@ -26,6 +26,7 @@ import { useOpenPanelActions } from "@/components/panels/useOpenPanelActions";
 import SettingsModal from "@/components/settings/SettingsModal";
 import ConfigEditorModal from "@/components/settings/ConfigEditorModal";
 import { useConfig } from "@/config/ConfigContext";
+import { loadSyncBaseline, locationToAdopt } from "@/config/deviceConfig";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import RoomChoiceSheet, { type RoomChoice } from "@/components/hud/RoomChoiceSheet";
 import { useProfile } from "@/auth/ProfileContext";
@@ -237,15 +238,14 @@ export default function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Adopt the connected HA instance's own location for sun tracking, once, when
-  // it arrives — replaces the old onboarding step that used to confirm it.
+  // The villa's location for sun tracking: Home Assistant's own, taken once — only while the villa has none set
+  // (deviceConfig.locationToAdopt: never over a value typed in Settings, never before this device synced).
   const adoptedLocationRef = useRef(false);
   useEffect(() => {
     if (adoptedLocationRef.current || !haConfig) return;
     adoptedLocationRef.current = true;
-    if (typeof haConfig.latitude === "number" && typeof haConfig.longitude === "number") {
-      update({ latitude: haConfig.latitude, longitude: haConfig.longitude });
-    }
+    const loc = locationToAdopt(config, loadSyncBaseline(), haConfig);
+    if (loc) update(loc);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [haConfig]);
 

@@ -1,3 +1,16 @@
+## 2.496.421
+
+### Fixed
+- The villa's latitude and longitude set in Settings stay as set: the location of the villa's system is taken only
+  while none is set — it was put back on every load of an owner's device, and pushed to every screen.
+- The VESTA Agent now names each device and files it under a category exactly as the Kiosk shows it (its Telegram
+  messages included): this device shares its answer with the add-on beside the rooms it already shared.
+
+### Changed (behind the scenes)
+- Adding or removing a room from the room menu is worked out from the settings as they are when it is saved, never
+  from a copy taken when the menu opened.
+- Whether a profile may answer an Agent message is one rule for the page's buttons and for the press.
+
 ## 2.496.420
 
 ### Fixed

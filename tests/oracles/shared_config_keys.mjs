@@ -120,4 +120,17 @@ console.log("\n  where the villa is and which way north lies — shared, never a
      && dc.applySharedConfigDiff(nothing, dc.diffSharedConfig(nothing, tuned)).northOffsetDeg === 117);
 }
 
+// the villa's location from Home Assistant's own only while none is set (architecture review scan 3, 2026-10-19: it
+// was taken on every load, over a value typed in Settings)
+{
+  const ha = { latitude: -8.6, longitude: 115.1 }, set = { latitude: -8.7, longitude: 115.2 }, none = { latitude: 0, longitude: 0 };
+  ck("Home Assistant's location is taken only while the villa has none, and never before this device synced",
+     JSON.stringify(dc.locationToAdopt(none, none, ha)) === JSON.stringify(ha)
+     && dc.locationToAdopt(set, set, ha) === null && dc.locationToAdopt(none, set, ha) === null
+     && dc.locationToAdopt(set, none, ha) === null && dc.locationToAdopt(none, null, ha) === null
+     && dc.locationToAdopt(none, none, { latitude: "x" }) === null);
+  const dash = (await import("node:fs")).readFileSync(new URL("../../src/pages/Dashboard.tsx", import.meta.url), "utf8");
+  ck("  ...and the Dashboard asks it", /const loc = locationToAdopt\(config, loadSyncBaseline\(\), haConfig\);\s*if \(loc\) update\(loc\);/.test(dash)
+     && !/update\(\{ latitude: haConfig\.latitude/.test(dash));
+}
 done("✅ every shared key is read, diffed, replayed and baselined from its one row");

@@ -187,13 +187,14 @@ export async function clearAgentMessages(
 /** Share the rooms THIS device resolved for the villa's devices, so the
  *  agent's villa model can place a device Home Assistant has no area for
  *  exactly where the Kiosk shows it (see RoomShare). */
-export async function shareKioskRooms(rooms: Record<string, string>): Promise<boolean> {
+export async function shareKioskRooms(rooms: Record<string, string>, names: Record<string, string> = {},
+  categories: Record<string, string> = {}): Promise<boolean> {
   try {
     const r = await backendFetch(ingressPath("kiosk-rooms"), {
       method: "PUT",
       credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ data: { rooms } }),
+      body: JSON.stringify({ data: { rooms, names, categories } }),
     });
     return r.ok;
   } catch {
