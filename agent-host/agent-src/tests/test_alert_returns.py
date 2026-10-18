@@ -110,3 +110,14 @@ def test_n_times_in_7_days_counts_every_incident_of_the_same_alert(tmp_path):
     other = _incident(st, T0 + timedelta(days=2), key="door|lock.example_door")
     runs = {i: incident_runs(st.incident(i), st) for i in (old, mon, tue, wed, other)}
     assert runs == {old: 1, mon: 1, tue: 3, wed: 4, other: 1}, runs
+
+
+def test_n_times_in_7_days_counts_the_runs_filed_under_the_rules_name(tmp_path):
+    # architecture review scan 1, 2026-10-19: since 0.12.250 an alert is filed by its rule's permanent number; its runs
+    # of the week filed under the rule's name before were not counted — "1st time" for the third run
+    st = Store(str(tmp_path / "s.sqlite"))
+    by_name = "outdoor_motion|binary_sensor.parking_motion"
+    _incident(st, T0, key=by_name)
+    _incident(st, T0 + timedelta(hours=30), key=by_name)
+    now = _incident(st, T0 + timedelta(days=2), key="rule:1700000000000|binary_sensor.parking_motion")
+    assert incident_runs(st.incident(now), st) == 3

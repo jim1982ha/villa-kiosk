@@ -56,7 +56,11 @@ def incident_runs(inc: dict, store: Store) -> int:
     from datetime import datetime, timedelta
     latest = datetime.fromisoformat(inc.get("reopened_at") or inc["opened_at"])
     since = latest - timedelta(days=AGAIN_DAYS)
-    runs = {inc["id"]: _runs_of(inc)} | {i["id"]: _runs_of(i) for i in store.incidents_of_key(inc["key"])}
+    # ⚠️ AND UNDER ITS NAME (architecture review scan 1, 2026-10-19): an alert filed by its rule's permanent number
+    # (0.12.250, "rule:<uid>|<device>") came back as the "1st time" though its runs of the week were filed under the
+    # rule's name — the same rule, the same device
+    keys = {inc["key"], f"{inc.get('rule_id') or ''}|{inc.get('entity_id') or ''}"}
+    runs = {inc["id"]: _runs_of(inc)} | {i["id"]: _runs_of(i) for k in keys for i in store.incidents_of_key(k)}
     return sum(1 for rs in runs.values() for r in rs if since <= datetime.fromisoformat(r) <= latest)
 
 
@@ -154,21 +158,29 @@ class Problems:
     # an event closed the same night, a rerun not news twice, worsened, closed tonight, its task opened. Which
     # rules are states and which are events, the worsened step and which severities get a task stay the skill's.
     def record_night(self, findings, day: str, _muted_at_iso: str | None = None, *, state_rules, event_rules, worsened_step: float,
-                     resolved_note: str = "") -> dict:
+                     resolved_note: str = "", handed_over: dict[tuple[str, str], str] | None = None) -> dict:
         """The night check's findings for `day`: {new, still_open, closed, again (came back: AGAIN_DAYS), tasks,
         resolve_actions, reopen_actions (a returning finding's fault open again)}. (`_muted_at_iso`: what a
         night check edited before 0.12.132 still passes — Mute is gone, it is ignored.)
         A finding has rule_id, entity_id, family, severity, summary, detail, check, day and as_dict().
-        The night sees everything: a state finding it did not see tonight closes (`record` is the rest)."""
+        The night sees everything: a state finding it did not see tonight closes (`record` is the rest).
+
+        `handed_over`: (rule, entity) → the note of a finding the night left out because something else now follows it
+        (an open alert on the same device): it closes with that note, never `resolved_note`, and is not counted closed.
+        ⚠️ LEFT OUT IS NOT CLEARED (architecture review scan 1, 2026-10-19): a device offline at 5 minutes, then alerted
+        on by the villa's rule at 10, read "Cleared: the nightly check no longer sees it" at 02:00 while still off."""
+        handed_over = handed_over or {}
         out = self.record(findings, day, state_rules=state_rules, event_rules=event_rules, worsened_step=worsened_step)
         fired = {(f.rule_id, f.entity_id) for f in findings}
         closed, resolve = [], []
+        handed = []
         for o in closes_tonight(self.store.findings(status="open"), fired, state_rules, event_rules):
-            closed.append(o)
+            note = handed_over.get((o["rule_id"], o["entity_id"]))
+            (handed if note else closed).append(o)
             # ⚠️ ITS TASK AND ITS KIOSK TICKET CLOSE WITH IT (villa, 2026-10-01): the finding closed, the ticket
             # stayed "Open fault" for ever, and the Kiosk's Cockpit filled with faults long gone
-            resolve += self.close_finding(o, day, resolved_note)
-        return {**out, "closed": closed, "resolve_actions": resolve}
+            resolve += self.close_finding(o, day, note or resolved_note)
+        return {**out, "closed": closed, "handed_over": handed, "resolve_actions": resolve}
 
     def record(self, findings, day: str, *, state_rules, event_rules, worsened_step: float) -> dict:
         """Findings seen now, recorded — new, still open, back again (AGAIN_DAYS) — each with its task: {new,

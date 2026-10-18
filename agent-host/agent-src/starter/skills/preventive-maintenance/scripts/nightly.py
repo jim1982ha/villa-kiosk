@@ -31,7 +31,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 from vesta_shared import script  # noqa: E402  (client, pack, store, settings, zone: one set-up)
-from vesta_shared.messaging import no_code as _no_code  # noqa: E402
+from vesta_shared.messaging import incident_tag, no_code as _no_code  # noqa: E402
 from vesta_shared.timeutil import day_label, day_time_label, villa_day  # noqa: E402
 from vesta_shared.past import unread  # noqa: E402  (the one "could not be read whole: nothing is known after")
 from vesta_shared.message_format import document, split_title  # noqa: E402  (the one shape of a message)
@@ -159,7 +159,13 @@ def run(args) -> dict:
         series = [(str(r["start"]), r["mean"]) for r in bat_stats.get(row["entity_id"], []) if r.get("mean") is not None]
         findings += R.battery_rules(asset, row["entity_id"], row.get("unit"), level, series, params, today)
 
-    findings += offline_findings(pack, states, now_ref, params, alerted_offline(store, pack))
+    alerted = alerted_offline(store, pack)
+    findings += offline_findings(pack, states, now_ref, params, set(alerted))
+    # an offline fault open from before its alert: the alert follows the device now — closed as handed over, never
+    # "cleared" while the device is still off (Problems.record_night)
+    handed_over = {(o["rule_id"], o["entity_id"]): f"Followed by alert {incident_tag(alerted[dev])}, which says when it is back."
+                   for o in store.findings(status="open") if o["rule_id"] == "PM-UNAVAILABLE"
+                   for dev in [pack.physical_device_of(o["entity_id"]) or o["entity_id"]] if dev in alerted}
     quiet_rows: list[tuple[dict, dict, datetime]] = []
     for fam in ("level",):                       # silence: a level sensor online and quiet
         for row in pack.entities(fam):
@@ -194,7 +200,7 @@ def run(args) -> dict:
             share, hours = F.reporting_share(q_stats.get(row["entity_id"], []), int(since.timestamp() * 1000), hist_hours)
             if share is None or hours < params.behaviour("silence_min_history_hours") or share < share_min:
                 continue                  # reports on change only, or too little history to say: not a fault
-            key = F.device_key({**row, "device_id": pack.physical_device_of(row["entity_id"])}, row["entity_id"])
+            key = pack.device_key(row["entity_id"], row)
             g = silent_groups.setdefault(key, {"asset": asset, "entity_id": row["entity_id"], "since": since, "names": []})
             g["names"].append(row["name"])
             g["since"] = min(g["since"], since)
@@ -238,7 +244,7 @@ def run(args) -> dict:
         slug = row.get("asset") or next((s for s, a in pack.assets.items() if eid in a["entities"].values()), None)
         # ⚠️ ITS DEVICE, CLASSIFIED OR NOT (2026-10-13): a relay's uptime sensor is in no family, had no device, and its
         # drops were a second fault for the same relay
-        key = F.device_key({**row, "device_id": pack.physical_device_of(eid), "asset": row.get("asset") or slug}, eid)
+        key = pack.device_key(eid, {**row, "asset": row.get("asset") or slug})
         g = by_device.setdefault(key, {"eid": _standing_entity(pack, eid, rows_by_eid), "slug": slug,
                                        "name": row.get("name"), "per_day": {}})
         for d, n in per_day.items():
@@ -256,7 +262,7 @@ def run(args) -> dict:
     night = Problems(store).record_night(
         findings, today.isoformat(), state_rules=STATE_RULES,
         event_rules=EVENT_RULES, worsened_step=params.behaviour("worsened_step_pct"),
-        resolved_note="Cleared: the nightly check no longer sees it.")
+        resolved_note="Cleared: the nightly check no longer sees it.", handed_over=handed_over)
     new, still_open, closed, tasks = night["new"], night["still_open"], night["closed"], night["tasks"]
     again = night["again"]
     resolved = night["resolve_actions"]
@@ -264,7 +270,7 @@ def run(args) -> dict:
     store.audit("preventive-maintenance", "nightly", {"as_of": today.isoformat(), "new": len(new), "closed": len(closed)})
 
     result = {"as_of": today.isoformat(), "villa": pack.villa, "features_written": features_written,
-              "new_findings": new, "still_open": still_open, "closed": closed, "again": again,
+              "new_findings": new, "still_open": still_open, "closed": closed, "handed_over": night["handed_over"], "again": again,
               "tasks_to_create": tasks, "tasks_resolved": [a["task_id"] for a in resolved], "resolve_actions": resolved,
               "reopen_actions": night["reopen_actions"], "notes": notes}
     if args.out:
@@ -277,21 +283,21 @@ def run(args) -> dict:
 WATCHED_FAMILIES = ("power", "energy", "security", "level", "runtime", "water", "generation")
 
 
-def alerted_offline(store, pack) -> set[str]:
-    """The devices (pack.device_id_of, else the entity) an open alert already follows for being offline: an alert whose
-    bad states hold "unavailable" (the alert desk's incidents).
+def alerted_offline(store, pack) -> dict[str, int]:
+    """The devices (pack.device_id_of, else the entity) an open alert already follows for being offline, each with that
+    alert's number: an alert whose bad states hold "unavailable" (the alert desk's incidents).
 
     ⚠️ ONE PROBLEM, ONE FAULT (architecture review, offline devices #3, 2026-10-18): a lock the villa's own rule alerted
     on at 10 minutes (#, Telegram card, its Kiosk fault) got a second fault "offline for …" from this check, with its
     own message at 02:00 — and, once recheck.py opened faults every 5 minutes, at the same minute."""
-    out = set()
+    out: dict[str, int] = {}
     for inc in store.incidents(open_only=True):
         p = json.loads(inc.get("payload") or "{}")
         if "unavailable" not in (p.get("bad_states") or []):
             continue
         for e in (p.get("entities") or []) + [inc.get("entity_id")]:
             if e:
-                out.add(pack.physical_device_of(e) or e)            # its whole device: a phase is its meter's
+                out.setdefault(pack.physical_device_of(e) or e, int(inc["id"]))   # its whole device: a phase is its meter's
     return out
 
 
@@ -319,7 +325,7 @@ def offline_findings(pack, states: dict, now: datetime, params, alerted: set[str
                 except ValueError:
                     hours = None
             # one physical device, whatever part of it the entity is on (a meter's phase is the meter)
-            key = F.device_key({**row, "device_id": pack.physical_device_of(row["entity_id"])}, row["entity_id"])
+            key = pack.device_key(row["entity_id"], row)
             crit = pack.is_critical(row["entity_id"])         # the villa's one list (vesta_shared.critical)
             g = groups.setdefault(key, {"asset": asset, "entity_id": row["entity_id"], "hours": hours,
                                         "state": st.get("state"), "names": [], "critical": crit,
@@ -413,7 +419,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
     res = run(args)
     out = {k: res[k] for k in ("as_of", "features_written", "tasks_to_create", "notes")}
-    out[result.FAULTS_CHANGED] = bool(res["new_findings"] or res["still_open"] or res["closed"] or res["again"])
+    out[result.FAULTS_CHANGED] = bool(res["new_findings"] or res["still_open"] or res["closed"] or res.get("handed_over") or res["again"])
     # The engine's standard output: each task a Facility ticket in the VESTA Kiosk, and a P2
     # finding sent to the facility manager at once rather than at the 07:00 digest.
     # the ticket's title says what is wrong, its note what to check (two fields, not one sentence)

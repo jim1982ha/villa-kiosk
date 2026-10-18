@@ -141,18 +141,8 @@ def reporting_share(hour_rows: list[dict], until_ms: int | None = None, hours: i
     return moved / len(rows), len(rows)
 
 
-def device_key(row: dict, fallback: str) -> str:
-    """Which physical device a knowledge-pack row belongs to: its device_id when the registry gives one,
-    else its integration + asset, else `fallback` (an entity the pack does not know).
-
-    ⚠️ ONE KEY FOR EVERY RULE (architecture review, 0.12.27): "offline" and "silent" keyed on
-    device_id or platform:asset while "keeps dropping" keyed on device_id or asset slug — one device without
-    a registry id was one finding to the first two and another to the third."""
-    if row.get("device_id"):
-        return str(row["device_id"])
-    if row.get("asset"):
-        return f"{row.get('platform') or 'x'}:{row['asset']}"
-    return fallback
+# the one device key (vesta_shared.knowledge_pack): KnowledgePack.device_key is what the checks call
+from vesta_shared.knowledge_pack import device_key  # noqa: E402,F401
 
 
 def device_name(names: list[str]) -> str:

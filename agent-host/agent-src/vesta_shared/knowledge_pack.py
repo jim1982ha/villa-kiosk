@@ -152,6 +152,20 @@ class Asset:
 PACK_RULES = 2
 
 
+
+def device_key(row: dict, fallback: str) -> str:
+    """Which physical device a knowledge-pack row belongs to: its device_id when the registry gives one,
+    else its integration + asset, else `fallback` (an entity the pack does not know).
+
+    ⚠️ ONE KEY FOR EVERY RULE (architecture review, 0.12.27): "offline" and "silent" keyed on
+    device_id or platform:asset while "keeps dropping" keyed on device_id or asset slug — one device without
+    a registry id was one finding to the first two and another to the third."""
+    if row.get("device_id"):
+        return str(row["device_id"])
+    if row.get("asset"):
+        return f"{row.get('platform') or 'x'}:{row['asset']}"
+    return fallback
+
 @dataclass
 class KnowledgePack:
     villa: str
@@ -262,6 +276,15 @@ class KnowledgePack:
         offline, silent, keeps dropping, restarted, critical, a report's devices, what an action touches. One rule for
         every device of every make (owner, 2026-10-18: "all device / sub-device are seen the same way")."""
         return self.unit_of(self.device_id_of(entity_id))
+
+    def device_key(self, entity_id: str, row: dict | None = None) -> str:
+        """The key every check groups `entity_id` by: its PHYSICAL device (physical_device_of — a meter's phase is the
+        meter), else its row's integration + asset, else itself. ⚠️ THE CALLER NO LONGER BUILDS IT (architecture review
+        scan 1, 2026-10-19): each of the night's checks had to put physical_device_of into the row first — three
+        copies of one sentence, and a fourth caller forgetting it would split a meter from its phases again."""
+        r = dict(row if row is not None else (self.row(entity_id) or {}))
+        r["device_id"] = self.physical_device_of(entity_id)
+        return device_key(r, entity_id)
 
     def entities_of_device(self, device_id: str | None) -> set[str]:
         """Every entity of that device's physical device (unit_of: the device, and every part listed under it), classified

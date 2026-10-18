@@ -11,12 +11,19 @@ lifetimes, alert_buttons' replace / adopt / settle, and the order outcome.carry_
 sends took the buttons off the owner's escalation the moment "Need help" sent it, and the latest-message records were
 never pruned. Here a chat holds one record per incident (state.incident_message) and `close` settles only what was
 shown before it, whatever order the caller uses.
+
+⚠️ ONE CHANGE AT A TIME PER INCIDENT (architecture review scan 1, 2026-10-19 — #55 shown twice in the owner's group): a
+post read the chat's record, waited on Telegram to delete the older message, then wrote its own. Every Home Assistant
+event, button press and scheduler tick is its own task, and nothing ran one incident's changes one at a time: two
+posts read the same record, one's message was left in the chat with nothing pointing at it — its buttons live. Every
+public method holds the incident's lock; what it reads, it reads under it.
 """
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from typing import Awaitable, Callable
 
+import asyncio
 import logging
 
 from vesta_shared.messaging import incident_tag
@@ -46,11 +53,21 @@ class IncidentThread:
         # when a copy's status is REPLACED (taken on in the Kiosk, closed): the status it showed becomes a line of its
         # history (owner, 2026-10-15: "Escalation sent … to Owner" vanished when "Ticket opened…" replaced it)
         self.reheading = None
+        self._locks: dict[str, asyncio.Lock] = {}
+
+    def _lock(self, iid: int | str) -> asyncio.Lock:
+        """Incident `iid`'s lock: its copies change one at a time (see the module's note)."""
+        return self._locks.setdefault(str(iid), asyncio.Lock())
 
     async def post(self, iid: int | str, chat: int, mid: int, parts: dict, *, buttons: bool = False,
                    keyboard: dict | None = None) -> None:
         """Message `mid`, just sent to `chat` with these `parts` (layout.py), is now incident `iid`'s message there: the
         earlier one goes."""
+        async with self._lock(iid):
+            await self._post(iid, chat, mid, parts, buttons=buttons, keyboard=keyboard)
+
+    async def _post(self, iid: int | str, chat: int, mid: int, parts: dict, *, buttons: bool = False,
+                    keyboard: dict | None = None) -> None:
         old = self.state.incident_message(iid, chat)
         if old and old["mid"] != mid:
             gone = bool(self.delete and await self.delete(chat, old["mid"]))
@@ -70,9 +87,25 @@ class IncidentThread:
         rewritten as the incident's message — its number, the original alert and, while it is open, its buttons
         (`keyboard`) — and replaces the earlier one."""
         text = layout.render(parts)
-        if self.edit:
-            await self.edit(chat, mid, text, keyboard) if keyboard else await self.edit(chat, mid, text)
-        await self.post(iid, chat, mid, parts, buttons=bool(keyboard), keyboard=keyboard)
+        async with self._lock(iid):
+            if self.edit:
+                await self.edit(chat, mid, text, keyboard) if keyboard else await self.edit(chat, mid, text)
+            await self._post(iid, chat, mid, parts, buttons=bool(keyboard), keyboard=keyboard)
+
+    async def stray(self, iid: int | str, chat: int, mid: int) -> bool:
+        """A message of incident `iid` in `chat` that is NOT its message there (a button pressed on it): it goes, or —
+        past Telegram's 48 hours — points to the newer one, so no chat keeps two copies with live buttons. True when it
+        was one."""
+        async with self._lock(iid):
+            rec = self.state.incident_message(iid, chat)
+            if not rec or int(rec.get("mid") or 0) == int(mid):
+                return False
+            gone = bool(self.delete and await self.delete(chat, mid))
+            if not gone and self.edit:
+                await self.edit(chat, mid, f"{incident_tag(iid)} · see the newer message below.")
+            log.info("%s in chat %s: stray message %s %s (its message is %s)", iid, chat, mid,
+                     "deleted" if gone else "now a pointer" if self.edit else "kept", rec.get("mid"))
+            return True
 
     async def close(self, iid: int | str, note: str, body: str | None = None, mark: str | None = None) -> int:
         """Every message of incident `iid`, in every chat, loses its buttons and shows `note` (who did what, when;
@@ -81,41 +114,43 @@ class IncidentThread:
 
         ⚠️ ALL OF THEM, NOT THE ONE PRESSED (owner, 2026-10-01): a P1 goes to the owner's chat and the facility
         manager's; pressed in one, the others kept buttons that only answered "already closed"."""
-        note = note.replace("{time}", when(datetime.now(timezone.utc), self.tz))     # 10/10/2026 17:13, as every notice
-        n = 0
-        for chat, rec in self.state.incident_chats(iid):
-            if rec.get("settled") and self.retitle:
-                # ⚠️ SETTLED BEFORE ITS INCIDENT CLOSED (owner, 2026-10-11): a press settles every copy at once, the desk
-                # closes the incident just after — the group's copy kept "New" above "Done pressed by Fabien"
-                p = layout.of(rec)
-                head = self.retitle(iid, p.get("head") or "", chat)
-                if head != (p.get("head") or ""):
-                    n += await self._show(iid, chat, rec, {**p, "head": head})
-                continue
-            if rec.get("settled"):
-                continue
-            if not note:
-                self.state.set_incident_message(iid, chat, {**rec, "settled": True})
-                continue
-            # where it stands is the note now, under the line at the bottom; a new body when one is given (an approved
-            # request: what happened) — the head and the lead kept (layout.py). Settled: decided, whatever Telegram said — a copy it did not take is owed and tried again (`catch_up`)
-            p = layout.changed(layout.of(rec), status=note, body=body, mark=mark)
-            p = {**p, "head": self._head_now(iid, chat, p.get("head") or "")}      # "Closed" once its incident is (notice.py)
-            n += await self._show(iid, chat, {**rec, "settled": True}, p)
-        return n
+        async with self._lock(iid):
+            note = note.replace("{time}", when(datetime.now(timezone.utc), self.tz))     # 10/10/2026 17:13, as every notice
+            n = 0
+            for chat, rec in self.state.incident_chats(iid):
+                if rec.get("settled") and self.retitle:
+                    # ⚠️ SETTLED BEFORE ITS INCIDENT CLOSED (owner, 2026-10-11): a press settles every copy at once, the desk
+                    # closes the incident just after — the group's copy kept "New" above "Done pressed by Fabien"
+                    p = layout.of(rec)
+                    head = self.retitle(iid, p.get("head") or "", chat)
+                    if head != (p.get("head") or ""):
+                        n += await self._show(iid, chat, rec, {**p, "head": head})
+                    continue
+                if rec.get("settled"):
+                    continue
+                if not note:
+                    self.state.set_incident_message(iid, chat, {**rec, "settled": True})
+                    continue
+                # where it stands is the note now, under the line at the bottom; a new body when one is given (an approved
+                # request: what happened) — the head and the lead kept (layout.py). Settled: decided, whatever Telegram said — a copy it did not take is owed and tried again (`catch_up`)
+                p = layout.changed(layout.of(rec), status=note, body=body, mark=mark)
+                p = {**p, "head": self._head_now(iid, chat, p.get("head") or "")}      # "Closed" once its incident is (notice.py)
+                n += await self._show(iid, chat, {**rec, "settled": True}, p)
+            return n
 
     async def restate(self, iid: int | str, note: str) -> int:
         """Every copy of incident `iid` shows `note` as where it stands and loses its buttons, WITHOUT settling: the
         incident is open and ends as any does (its close still says how). For an alert someone took on in the VESTA
         Kiosk (owner, 2026-10-15). Returns how many chats show it now."""
-        note = note.replace("{time}", when(datetime.now(timezone.utc), self.tz))
-        n = 0
-        for chat, rec in self.state.incident_chats(iid):
-            if rec.get("settled") or not rec.get("mid"):
-                continue
-            p = layout.changed(layout.of(rec), status=note)
-            n += await self._show(iid, chat, {**rec, "buttons": False}, {**p, "head": self._head_now(iid, chat, p.get("head") or "")})
-        return n
+        async with self._lock(iid):
+            note = note.replace("{time}", when(datetime.now(timezone.utc), self.tz))
+            n = 0
+            for chat, rec in self.state.incident_chats(iid):
+                if rec.get("settled") or not rec.get("mid"):
+                    continue
+                p = layout.changed(layout.of(rec), status=note)
+                n += await self._show(iid, chat, {**rec, "buttons": False}, {**p, "head": self._head_now(iid, chat, p.get("head") or "")})
+            return n
 
     def _head_now(self, iid: int | str, chat: int, head: str) -> str:
         """A copy's heading when its status is replaced: every earlier step listed again (reheading), else its title
@@ -129,26 +164,28 @@ class IncidentThread:
         "To:", history and status in every chat, edited quietly (an edit makes no sound) (owner, 2026-10-11: "this should
         be exactly the same, since we are speaking about the same incident"). A copy still asked to answer keeps its
         buttons (`keyboard(chat)`). Returns how many changed."""
-        n = 0
-        for chat, rec in self.state.incident_chats(iid):
-            if chat in skip or not rec.get("mid"):
-                continue
-            p = {**parts, "limit": layout.of(rec).get("limit")}
-            if head_for:
-                p["head"] = head_for(chat)                  # this chat's own heading (each chat its own steps)
-            elif self.retitle:
-                p["head"] = self.retitle(iid, p.get("head") or "", chat)
-            if layout.render(p) == rec.get("text"):
-                continue
-            live = rec.get("buttons") and not rec.get("settled")
-            n += await self._show(iid, chat, rec, p, keyboard=(keyboard(chat) if live and keyboard else None))
-        return n
+        async with self._lock(iid):
+            n = 0
+            for chat, rec in self.state.incident_chats(iid):
+                if chat in skip or not rec.get("mid"):
+                    continue
+                p = {**parts, "limit": layout.of(rec).get("limit")}
+                if head_for:
+                    p["head"] = head_for(chat)                  # this chat's own heading (each chat its own steps)
+                elif self.retitle:
+                    p["head"] = self.retitle(iid, p.get("head") or "", chat)
+                if layout.render(p) == rec.get("text"):
+                    continue
+                live = rec.get("buttons") and not rec.get("settled")
+                n += await self._show(iid, chat, rec, p, keyboard=(keyboard(chat) if live and keyboard else None))
+            return n
 
     async def rewrite(self, iid: int | str, body: str) -> None:
         """Every copy of `iid` says `body` now in its middle part, its heading and status kept (an approved request whose
         device got there: "Opening …" becomes "Opened …")."""
-        for chat, rec in self.state.incident_chats(iid):
-            await self._show(iid, chat, rec, layout.changed(layout.of(rec), body=body))
+        async with self._lock(iid):
+            for chat, rec in self.state.incident_chats(iid):
+                await self._show(iid, chat, rec, layout.changed(layout.of(rec), body=body))
 
     async def _show(self, iid: int | str, chat: int, rec: dict, p: dict, keyboard: dict | None = None) -> bool:
         """The copy in `chat` shows `p` now (its buttons gone). The record keeps `p` whatever Telegram said; a copy Telegram
@@ -179,8 +216,11 @@ class IncidentThread:
         """Every copy a refused edit left behind is tried again (housekeeping, every 30 seconds; for OWED_FOR — a message
         deleted in the chat can never be changed). Returns how many are shown now."""
         n = 0
-        for iid, chat, rec in self.state.incident_messages_owed():
-            n += await self._show(iid, chat, rec, layout.of(rec))
+        for iid, chat, _rec in self.state.incident_messages_owed():
+            async with self._lock(iid):
+                rec = self.state.incident_message(iid, chat)        # as it stands now, under its lock
+                if rec and rec.get("owed"):
+                    n += await self._show(iid, chat, rec, layout.of(rec))
         return n
 
     def shown(self, iid: int | str) -> dict[int, dict]:

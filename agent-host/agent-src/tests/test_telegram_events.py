@@ -260,3 +260,19 @@ def test_an_incident_home_assistant_clears_settles_its_alerts(agent):
     assert sorted(c for c, _, _ in agent.tg.edits) == sorted([FM, GROUP])     # every chat of the role: each settled
     assert all(re.search(r"(?:\n-------\n|\n\n|Status:\n|\(to: [A-Za-z &]+\)\n)(?:(?:✅|⚠️|⚠️ ⚙️) )?Cleared in Home Assistant, \d\d/\d\d/\d{4} \d\d:\d\d\. No reply needed\.$", text)
                for _, _, text in agent.tg.edits)
+
+
+def test_a_press_on_a_copy_left_behind_answers_it_and_removes_that_copy(agent):
+    # architecture review scan 1, 2026-10-19 (#55 twice in the owner's group): Done pressed on a copy no record points
+    # to — the alert is answered, every copy on record settled, and the pressed one goes: no chat keeps live buttons
+    mid = run(agent.delivery.send(FM, "🚨 Incident #1: pump stopped", keyboard={"inline_keyboard": [[{"text": "Done"}]]}))
+    left = run(agent.delivery.send(FM, "🚨 Incident #1: pump stopped", keyboard={"inline_keyboard": [[{"text": "Done"}]]}))
+    agent.state.set_alert_skill(1, FM, "alert-desk")
+    agent.state.set_incident_message(1, FM, {"mid": mid, "text": "🚨 Incident #1: pump stopped", "buttons": True,
+                                             "settled": False})
+    from vesta_shared.store import Store
+    Store(agent.s.store_path).new_incident("k", "automation.x", "lock.front_door", "P2", {"message": "m"})
+    press = {"id": "cb4", "data": "i:1:done", "chat_id": FM, "user_id": FM,
+             "message": {"message_id": left, "chat": {"id": FM}, "text": "🚨 Incident #1: pump stopped"}, "bot": BOT}
+    run(agent.on_ha_event("telegram_callback", press))
+    assert (FM, left) in agent.tg.deleted

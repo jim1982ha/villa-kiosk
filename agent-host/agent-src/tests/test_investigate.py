@@ -970,3 +970,17 @@ def test_a_period_that_would_end_later_ends_now(tmp_path):
     code, said = _main(tmp_path, "around", "--start", "2026-10-16", "--end", "2026-10-16",
                        "--now", "2026-10-15T23:05:00+00:00")
     assert code == 1 and "--end must be after --start" in said           # a period that has not begun yet
+
+
+def test_find_names_the_parts_listed_under_the_device_as_the_same_box():
+    # architecture review scan 1, 2026-10-19: a meter's phases hang under it ("via"); the night's checks call them one
+    # device (0.12.249) — the investigation's "same physical device" now says so too, from the same rule
+    import investigate
+    from vesta_shared.knowledge_pack import KnowledgePack
+    pack = KnowledgePack(villa="Example Villa", time_zone="UTC", generated_at="x", ha_version=None, areas=[], people=[],
+                         channels={}, unknown_area=[], unclassified=[], retention={}, families={}, assets={},
+                         devices={"d1": {"name": "Heater meter"}, "d2": {"name": "Phase A", "via": "d1"}},
+                         entity_devices={"sensor.heater_power": "d1", "sensor.heater_phase_a_power": "d2"})
+    text = "\n".join(investigate.find(_Client(), "heater", None, pack)["lines"])
+    assert "sensor.heater_phase_a_power" in text, text
+    assert "sensor.heater_phase_a_power" not in "\n".join(investigate.find(_Client(), "heater", None)["lines"])

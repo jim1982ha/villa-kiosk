@@ -10,9 +10,9 @@ import logging
 from typing import Awaitable, Callable
 
 from vesta_shared.message_format import PRESSED
-from vesta_shared.store import Incident
 
 from . import button_data
+from .incidents import Incidents
 from .notice import note_press
 from .routing import Origin
 
@@ -36,15 +36,9 @@ class AlertButtons:
         self.run_job = run_job          # (skill, command, timeout, values, origin) -> result: the on_reply hook
         self._pressing: set[tuple[str, int]] = set()   # (incident, chat) whose press is being handled now
 
-    def _store(self):
-        from vesta_shared.store import Store
-        return Store(self.store_path)
-
     def open(self, iid: int | str) -> bool:
-        """Is incident `iid` still waiting for an answer — not closed, and not taken on in the VESTA Kiosk (someone has
-        it: owner, 2026-10-15)? Its messages then carry the buttons."""
-        inc = self._store().incident(int(iid)) if str(iid).isdigit() else None
-        return bool(inc) and not inc.get("closed_at") and inc.get("state") != Incident.TAKEN
+        """Is incident `iid` still waiting for an answer (incidents.Incidents)? Its messages then carry the buttons."""
+        return Incidents(self.store_path).awaiting_answer(iid)
 
     @staticmethod
     def of(skill) -> list[dict]:
@@ -87,6 +81,12 @@ class AlertButtons:
             await self._answer(iid, buttons[opt], skill, chat, person, toast, name or person.name)
         finally:
             self._pressing.discard(key)
+        # ⚠️ THE COPY PRESSED MAY NOT BE THE ONE ON RECORD (architecture review scan 1, 2026-10-19: #55 twice in the
+        # owner's group): every copy on record was settled above; a copy no record points to would keep its buttons
+        # beside the answer — it goes now
+        pressed = ((q or {}).get("message") or {}).get("message_id")
+        if str(pressed or "").isdigit():
+            await self.thread.stray(int(iid), int(chat), int(pressed))
 
     async def _answer(self, iid: str, button: dict, skill, chat: int, person, toast, name: str) -> None:
         label = button["label"]

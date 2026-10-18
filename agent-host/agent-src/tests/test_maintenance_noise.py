@@ -454,3 +454,24 @@ def test_a_hidden_entity_dropping_is_no_reconnect_fault(tmp_path):
     _pack(tmp_path, {"network": []}, {})                   # the same TV, not hidden: its fault
     _night(tmp_path, "--as-of", AS_OF)
     assert len(_open(tmp_path, "PM-RECONNECT-LOOP")) == 1
+
+
+def test_an_offline_fault_an_alert_took_over_is_handed_over_never_cleared(tmp_path):
+    # architecture review scan 1, 2026-10-19: offline at 5 minutes (its fault, recheck.py), then the villa's own rule
+    # alerted at 10 — at 02:00 the night left the device out (the alert follows it) and closed its fault "Cleared: the
+    # nightly check no longer sees it" while it was still off. Now it closes as followed by the alert, and is no "closed"
+    from vesta_shared.store import Store
+    fx = tmp_path / "fx"
+    fx.mkdir()
+    (fx / "states.json").write_text(json.dumps({"states": {"lock.example_door": {
+        "state": "unavailable", "attributes": {}, "last_changed": "2026-10-03T20:00:00+00:00"}}}))
+    (fx / "logbook.json").write_text(json.dumps({"entries": []}))
+    _pack(tmp_path, {"availability": [_row("lock.example_door", "Example door", family="availability", device="dev-door")]})
+    store = Store(str(tmp_path / "s.sqlite"))
+    store.raise_finding("PM-UNAVAILABLE", "lock.example_door", "availability", "2026-10-03", "P3", "offline", {})
+    iid = store.new_incident("watch|lock.example_door", "automation.example_watchdog", "lock.example_door", "P2",
+                             {"bad_states": ["unavailable"], "entities": ["lock.example_door"]})
+    res = _night(tmp_path, "--as-of", AS_OF)
+    assert _open(tmp_path, "PM-UNAVAILABLE") == []                       # one problem: the alert's
+    assert res["closed"] == [] and [f["entity_id"] for f in res["handed_over"]] == ["lock.example_door"], res
+    assert iid

@@ -39,6 +39,7 @@ from . import button_data, intake, requests_box, script_run, tool_access
 from .ai_jobs import AiJobs
 from .chat_jobs import ChatJobs
 from .in_progress import InProgress
+from .incidents import Incidents
 from .siren import Siren
 from .actions import Actions, related_entities
 from .api_errors import NEEDS_THE_OWNER
@@ -167,8 +168,9 @@ class Vesta:
         # a voice message's words (voice.py): the skill prepares the audio, Home Assistant reads it
         self.voice = Voice(self.s, self.tg, self.skills, self.code_command, self.delivery.send, self.state, self.cf_headers)
         # the heading of every message the agent sends on its own (notice.py): who it is for, the incident, its history
-        self.notices = Notices(self.state, self.policy, settings.timezone, severity=self._severity, closed=self._closed,
-                               runs=self._runs)
+        incidents = Incidents(settings.store_path)        # the alert desk's incidents, as the engine reads them
+        self.notices = Notices(self.state, self.policy, settings.timezone, severity=incidents.severity,
+                               closed=incidents.closed, runs=incidents.runs)
         self.thread.retitle = self.notices.retitle           # a settled copy of a closed incident is headed "Closed"
         self.thread.reheading = self.notices.heading         # a replaced status: every earlier step listed again
         # putting one message in one chat (posting.py): the alerts and the approval requests both use it
@@ -180,7 +182,7 @@ class Vesta:
         self.outcome = Outcome(policy=self.policy, state=self.state, send=self.delivery.send, actions=self.actions,
                                reader=self.reader, tickets=self.tickets, buttons=self.buttons, thread=self.thread,
                                notices=self.notices, out_dir=settings.out_dir, timezone_name=settings.timezone,
-                               poster=self.poster, ask=self.approvals.ask)
+                               poster=self.poster, ask=self.approvals.ask, incidents=incidents)
         self.server_tools: list[dict] = []
         # the reports (ai_jobs.py): run, made without the AI, started from a chat
         # one AI turn, decided once: its tools by who asks, its brain, limit, record and folder (turn.py)
@@ -205,27 +207,6 @@ class Vesta:
             for p in policy_problems(pol.raw):
                 log.warning("policy.yaml: %s", p)
         return pol
-
-    def _closed(self, iid: int) -> bool:
-        """Is the incident closed, as the store holds it (the notices' heading: "Closed")."""
-        from vesta_shared.store import Store
-        return bool((Store(self.s.store_path).incident(int(iid)) or {}).get("closed_at"))
-
-    def _runs(self, iid: int) -> int | None:
-        """How many times an incident alerted in the last days, as the store holds it (a "Back at …" step says it)."""
-        from vesta_shared.problems import incident_runs
-        from vesta_shared.store import Store
-        store = Store(self.s.store_path)
-        inc = store.incident(int(iid))
-        return incident_runs(dict(inc), store) if inc else None
-
-    def _severity(self, iid: int) -> str | None:
-        """An incident's priority (P1…P4) as the store holds it: the notices' heading says it."""
-        from vesta_shared.store import Store
-        inc = Store(self.s.store_path).incident(int(iid)) or {}
-        sev = str(inc.get("severity") or "")
-        from vesta_shared.result import PRIORITIES
-        return sev if sev in PRIORITIES else None
 
     def pack(self):
         """The knowledge pack, read again when the nightly rebuild changes it (None until it is built)."""

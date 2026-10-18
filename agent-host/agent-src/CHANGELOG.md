@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.244 (19 October 2026)
+
+Architecture review scan 1 (2026-10-19).
+- incident_thread.IncidentThread: one lock per incident in every public method (post, adopt, close, restate, sync,
+  rewrite, catch_up) — two posts of one incident at once left one Telegram copy with nothing pointing at it (#55
+  twice in the owner's group). `stray(iid, chat, mid)`: a pressed copy that is not the one on record goes.
+- alert_buttons: after a press, the pressed message is removed when it is not the incident's copy on record.
+- Problems.record_night(handed_over=): a finding left out because an open alert follows the device closes "Followed
+  by alert #N", never "Cleared"; nightly.alerted_offline gives each device's alert number.
+- incident_runs counts the runs filed under the rule's name as well as its permanent number.
+- KnowledgePack.device_key: the one device key (physical device, else platform:asset); the night's checks call it;
+  investigate's "same physical device" includes the parts listed under it (pack, `via`).
+- incidents.Incidents: the one reader of the alert desk's incidents for the engine (buttons, notices, unreached);
+  app.py's three store helpers and Outcome's reach into the tickets' private store are gone.
+
 ## 0.6.243 (19 October 2026)
 
 Architecture review "One answer per question" (2026-10-19), cards 2 and 4, and the owner's wording of 2026-10-19.

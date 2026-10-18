@@ -94,7 +94,7 @@ def read(client, eid: str, start: datetime, end: datetime,
 
 
 # ------------------------------------------------------------------ find
-def find(client, what: str, where: str | None) -> dict:
+def find(client, what: str, where: str | None, pack=None) -> dict:
     """The entities `what` (and `where`) mean, with their neighbours. Universal: Home Assistant's own search, devices
     and areas — no list of devices anywhere."""
     args = {"query": what, "exact_match": False, "limit": 20,
@@ -119,7 +119,7 @@ def find(client, what: str, where: str | None) -> dict:
                 "area": e.get("area"), "state": st.get("state"), "unit": attrs.get("unit_of_measurement"),
                 "device_class": e.get("device_class") or e.get("original_device_class") or attrs.get("device_class"),
                 "device_id": e.get("device_id"), "platform": e.get("platform"),
-                "same_box": _same_box(client, e, ids, asked), "same_room": []}
+                "same_box": _same_box(client, e, ids, asked, pack), "same_room": []}
         out.append(item)
     _same_room(client, out)
     for it in out:
@@ -132,10 +132,14 @@ def find(client, what: str, where: str | None) -> dict:
     return {"lines": lines, "entities": out}
 
 
-def _same_box(client, e: dict, exclude: list[str], asked: dict | None = None) -> list[tuple[str, str]]:
-    """The other entities of the same physical device: its own device, and devices that share its unique id's prefix
-    (one box an integration splits into several devices: a meter's channels and its relay). `asked`: the answers
-    already read in this find, by (tool, key) — each device and each prefix is asked once."""
+def _same_box(client, e: dict, exclude: list[str], asked: dict | None = None, pack=None) -> list[tuple[str, str]]:
+    """The other entities of the same physical device: its own device, the parts the villa's system lists under it
+    (the knowledge pack's `via`: KnowledgePack.entities_of_device — the rule every check uses, owner 2026-10-18), and
+    devices that share its unique id's prefix (one box an integration splits into devices with no `via` between them).
+    `asked`: the answers already read in this find, by (tool, key) — each device and each prefix is asked once.
+
+    ⚠️ "SAME DEVICE" HAD ITS OWN MEANING HERE (architecture review scan 1, 2026-10-19): the night's checks knew a meter
+    and its phases were one device since 0.12.249; the investigation still guessed from the serial number alone."""
     asked = {} if asked is None else asked
     prefix = re.split(r"[-_:]", str(e.get("unique_id") or ""))[0]
 
@@ -144,6 +148,8 @@ def _same_box(client, e: dict, exclude: list[str], asked: dict | None = None) ->
             asked[(tool, key)] = client.tool(tool, args) or {}
         return asked[(tool, key)]
     out = []
+    if pack is not None and e.get("device_id"):
+        out += [(x, pack.name_of(x, x) or x) for x in sorted(pack.entities_of_device(e["device_id"]))]
     try:
         dev = once("ha_get_device", e["device_id"], {"device_id": e["device_id"]}) if e.get("device_id") else {}
         out += [(x["entity_id"], x.get("name") or x["entity_id"]) for x in (dev.get("entities") or [])]
@@ -841,7 +847,7 @@ def _vesta(store, start: datetime, end: datetime, zone: ZoneInfo, span_days: boo
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("cmd", choices=["find", "timeline", "around"])
-    script.arguments(ap)                                    # --store --zone (the agent adds them)
+    script.arguments(ap, pack=True)                         # --pack --store --zone (the agent adds them)
     ap.add_argument("--what"); ap.add_argument("--where")
     ap.add_argument("--entities", action="append")       # may be given several times: each one is a short text
     ap.add_argument("--start"); ap.add_argument("--end")
@@ -854,7 +860,7 @@ def main(argv=None):
         if a.cmd == "find":
             if not a.what:
                 raise SystemExit("find needs --what: a device, a word or a room.")
-            res = find(ctx.client, a.what, a.where)
+            res = find(ctx.client, a.what, a.where, ctx.pack)
         else:
             if not (a.start and a.end):
                 raise SystemExit(f"{a.cmd} needs --start and --end (the villa's time, e.g. 2026-10-09T02:00).")

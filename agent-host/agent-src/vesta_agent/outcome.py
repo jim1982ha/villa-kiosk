@@ -41,6 +41,7 @@ from vesta_shared.result import FAULTS_CHANGED
 from . import layout
 from .notice import when
 from vesta_shared.message_format import PRESSED_STAGE, ROLES
+from .incidents import Incidents
 from .posting import Poster
 from .routing import Origin, Routing
 
@@ -78,7 +79,7 @@ async def camera_photo(reader, entity_id) -> tuple[str, str] | None:
 
 class Outcome:
     def __init__(self, *, policy: Callable, state, send: Callable[..., Awaitable], actions, reader, tickets, buttons,
-                 thread, notices=None, out_dir: str = "", timezone_name: str = "UTC", poster=None, ask=None):
+                 thread, notices=None, out_dir: str = "", timezone_name: str = "UTC", poster=None, ask=None, incidents=None):
         self.policy = policy
         self.state = state
         self.actions = actions
@@ -86,6 +87,8 @@ class Outcome:
         self.tickets = tickets          # tickets.Tickets: ticket, ticket.resolve
         self.buttons = buttons          # alert_buttons.AlertButtons: an alert's buttons
         self.thread = thread            # incident_thread.IncidentThread: what each chat shows of an incident
+        # incidents.Incidents: the alert desk's incidents (one marked unreached); built from the tickets' store when alone
+        self.incidents = incidents or (Incidents(tickets.store_path) if getattr(tickets, "store_path", None) else None)
         self.notices = notices          # notice.Notices: the heading of every message the agent sends on its own
         self.out_dir = out_dir
         # an approval request is approvals.Approvals' (the siren's gate asks through it), handed in at construction
@@ -234,8 +237,8 @@ class Outcome:
         refused = set(self.state.unreachable())
         for iid, tried in asked.items():
             if not any(ok for _, ok in tried) and all(chat in refused for chat, _ in tried):
-                from vesta_shared.problems import Problems
-                Problems(self.tickets._store()).unreached(iid)
+                if self.incidents is not None:
+                    self.incidents.unreached(iid)
                 log.warning("Incident #%s: no chat of the people asked to answer received it — handed on", iid)
         if gate_prompt and pol.siren_entity:
             # its own domain's turn_on (a switch or a siren entity: policy.SIREN_DOMAINS)

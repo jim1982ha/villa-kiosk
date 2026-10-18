@@ -126,3 +126,18 @@ def test_the_closed_message_tells_every_step_the_villa_saw_on_15_october(tmp_pat
         assert [l.split(" ")[1] for l in lines[:-1]] == steps, (chat, lines)
         assert "- Ticket opened in the Cockpit by Wayan on 15/10/2026 01:09" in lines and "Cleared on " in lines[-1]
         assert text.split("\n")[0].endswith("(closed)")
+
+
+def test_an_alert_taken_on_in_the_kiosk_waits_for_no_answer(tmp_path):
+    # owner, 2026-10-15: someone has it — its messages carry no Done / Need help (incidents.Incidents, the one reader
+    # since architecture review scan 1, 2026-10-19)
+    from vesta_agent.incidents import Incidents
+    from vesta_shared.store import Incident, Store
+    path = str(tmp_path / "s.sqlite")
+    st = Store(path)
+    iid = st.new_incident("k", "automation.x", "lock.front_door", "P2", {"message": "m"})
+    inc = Incidents(path)
+    assert inc.awaiting_answer(iid) and not inc.closed(iid) and inc.severity(iid) == "P2"
+    st.update_incident(iid, state=Incident.TAKEN)
+    assert not inc.awaiting_answer(iid)
+    assert not inc.awaiting_answer("x") and inc.runs(999) is None
