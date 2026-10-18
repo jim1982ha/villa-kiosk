@@ -29,6 +29,8 @@ export interface RecordCardProps {
   trailing?: ReactNode;
   /** A short line at the right, under `trailing` — on the room's line (the Overview's "Next check", owner 2026-10-15). */
   aside?: ReactNode;
+  /** What hovering `aside` says (the Overview's "Next check": its date and time). */
+  asideTip?: string;
   /** The pills before `when` (room, device chip, "by VESTA Agent"…). */
   pills?: ReactNode;
   when?: ReactNode;
@@ -47,7 +49,7 @@ export interface RecordCardProps {
   tone?: string;
 }
 
-export default function RecordCard({ title, status, subtitle, lead, trailing, aside, pills, when, notes, body, photoIds,
+export default function RecordCard({ title, status, subtitle, lead, trailing, aside, asideTip, pills, when, notes, body, photoIds,
   documentIds, amount, actions, erase, onOpen, framed = true, tone }: RecordCardProps) {
   const inside = (
     <>
@@ -59,7 +61,7 @@ export default function RecordCard({ title, status, subtitle, lead, trailing, as
         </div>
         {status && <span className={`fm-badge ${status.tone}`}>{status.text}</span>}
         {aside ? (
-          <span className="fm-record-side">{trailing}<span className="fm-record-aside muted">{aside}</span></span>
+          <span className="fm-record-side">{trailing}<span className="fm-record-aside muted" title={asideTip}>{aside}</span></span>
         ) : trailing}
       </div>
       {/* its text on the left, its cost and buttons on the right of it, inside the card (owner, 2026-10-14) */}

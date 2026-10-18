@@ -93,6 +93,27 @@ export interface CheckedProblem { source?: IssueSource; check?: FmTicketCheck; f
 type Clock = "minutes" | "nightly" | "hand";
 const SOONEST: readonly Clock[] = ["minutes", "nightly", "hand"];
 
+/** The soonest clock of a card's faults; null for a card that is only what the map shows now. */
+function soonestClock(problems: readonly CheckedProblem[]): Clock | null {
+  const faults = problems.flatMap((p) => [p, ...(p.fault ? [p.fault] : [])]).filter((p) => p.source !== "live");
+  return faults.length ? SOONEST.find((c) => faults.some((p) => clockOf(p) === c)) as Clock : null;
+}
+
+/** WHEN the card's "Next check" happens, as a moment (owner, 2026-10-19: hovering it shows "20/10/2026 02:00"): the
+ *  nightly check's next `nightlyAt` after `now`, or `now` plus the Agent's `checkMinutes`; null when it has no time
+ *  (live, by hand, or an Agent that did not say its cadence) — the same clock nextCheck words. */
+export function nextCheckAt(problems: readonly CheckedProblem[], cadence: AgentCadence | null, now: Date = new Date()): Date | null {
+  const clock = soonestClock(problems);
+  if (!cadence || (clock !== "minutes" && clock !== "nightly")) return null;
+  if (clock === "minutes") return new Date(now.getTime() + cadence.checkMinutes * 60_000);
+  const [h, m] = cadence.nightlyAt.split(":").map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+  const at = new Date(now);
+  at.setHours(h, m, 0, 0);
+  if (at <= now) at.setDate(at.getDate() + 1);
+  return at;
+}
+
 /** Who reads one fault again to close it: the VESTA Agent at its next look or its nightly check (the fault's `check`;
  *  an older fault without one: its source's usual clock), else only a person. */
 function clockOf(p: CheckedProblem): Clock {
@@ -105,9 +126,8 @@ function clockOf(p: CheckedProblem): Clock {
  *  hand" when only a person closes it; a card that is only what the map shows now: "live". The Agent's numbers are the
  *  ones it says (its heartbeat's `cadence`) — never a copy: one that does not say gets none. */
 export function nextCheck(problems: readonly CheckedProblem[], cadence: AgentCadence | null): string {
-  const faults = problems.flatMap((p) => [p, ...(p.fault ? [p.fault] : [])]).filter((p) => p.source !== "live");
-  if (!faults.length) return "Next check: live";
-  const clock = SOONEST.find((c) => faults.some((p) => clockOf(p) === c)) as Clock;
+  const clock = soonestClock(problems);
+  if (!clock) return "Next check: live";
   if (clock === "hand") return "Next check: by hand";
   if (!cadence) return "Next check: by the VESTA Agent";
   return `Next check: ${clock === "minutes" ? `within ${cadence.checkMinutes} min` : cadence.nightlyAt}`;

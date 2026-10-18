@@ -43,7 +43,7 @@ ck("  ...it opens the device when tapped (a button), and its buttons stop their 
    /role="button"/.test(issue) && /class="fm-record-actions"/.test(issue));
 // owner, 2026-10-15: "add a small text on the same line as the room, right below the chevron: Next check"
 ck("  ...its Next check on the room's line, right under the chevron",
-   /fm-record-side[^>]*><svg[^>]*lucide-chevron-right[\s\S]*?<\/svg><span class="fm-record-aside muted">Next check: within 5 min<\/span>/.test(inside(issue, "fm-record-head")),
+   /fm-record-side[^>]*><svg[^>]*lucide-chevron-right[\s\S]*?<\/svg><span class="fm-record-aside muted"[^>]*>Next check: within 5 min<\/span>/.test(inside(issue, "fm-record-head")),
    inside(issue, "fm-record-head"));
 const { nextCheck } = await import("@/fm/faultTiming");
 const said = (problems, cadence = CADENCE) => nextCheck(problems, cadence);
@@ -58,6 +58,19 @@ ck("  ...each card says when its problems are read again, the Agent's numbers it
    && said([{ source: "live" }, { source: "guest" }]) === "Next check: by hand"
    && said([{ source: "schedule" }]) === "Next check: by hand"
    && said([{ source: "night", check: "nightly" }], null) === "Next check: by the VESTA Agent");
+// owner, 2026-10-19: hovering "Next check" says when, as a date and time — the nightly check's next run, or the
+// Agent's next look; nothing for a card with no time (live, by hand, an Agent that did not say)
+const { nextCheckAt } = await import("@/fm/faultTiming");
+const { momentText } = await import("@/utils/dateText");
+const NOW = new Date(2026, 9, 19, 2, 10);
+const at = (problems, cadence = CADENCE) => { const d = nextCheckAt(problems, cadence, NOW); return d ? momentText(d) : null; };
+ck("  ...and hovering it says when: the nightly check's next run, the Agent's next look",
+   at([{ source: "night", check: "nightly" }]) === "20/10/2026 02:00"
+   && at([{ source: "night", check: "nightly" }], { checkMinutes: 5, nightlyAt: "04:30" }) === "19/10/2026 04:30"
+   && at([{ source: "alert", check: "minutes" }]) === "19/10/2026 02:15"
+   && at([{ source: "live" }]) === null && at([{ source: "owner" }]) === null && at([{ source: "night" }], null) === null,
+   [at([{ source: "night", check: "nightly" }]), at([{ source: "alert", check: "minutes" }])]);
+ck("  ...drawn as the hover text of the card's Next check", /<span class="fm-record-aside muted" title="\d\d\/\d\d\/\d{4} \d\d:\d\d">Next check/.test(issue));
 // owner, 2026-10-15: "there should always be the room line, to respect a consistent layout"
 const [roomless] = groupAttention([{ id: "fault:f9", kind: "fault", title: "Relay dropped", detail: "Fault", entityId: "sensor.relay_t",
   ticketId: "f9", stage: "fault", source: "night", device: { key: "sensor.relay_t", label: "Relay" } }]);

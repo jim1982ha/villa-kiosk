@@ -53,3 +53,13 @@ export function stampText(t: string | number | Date): string {
     ? d.toLocaleString([], { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
     : "";
 }
+
+/** "20/10/2026 02:00" — a moment as the VESTA Agent's messages write it on Telegram (its timeutil.moment_label): day,
+ *  month, year, then the time, the same on every screen whatever the reader's locale (owner, 2026-10-19: the Overview's
+ *  "Next check" tooltip, "20/10/2026 02:00"). */
+export function momentText(t: string | number | Date): string {
+  const d = at(t);
+  if (!valid(d)) return "";
+  const two = (n: number) => String(n).padStart(2, "0");
+  return `${two(d.getDate())}/${two(d.getMonth() + 1)}/${d.getFullYear()} ${two(d.getHours())}:${two(d.getMinutes())}`;
+}
