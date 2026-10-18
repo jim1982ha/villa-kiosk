@@ -352,7 +352,12 @@ def reopen(store: Store, inc: dict, ev: dict, now: datetime, sev: str, route: di
     the desk watches it from now on (seen_again). Either way its ladder starts again and its task and Kiosk fault open
     again, titled with how often it came back.
 
-    ⚠️ "STILL THERE" IS NOT "BACK AGAIN" (architecture review 25): a door never locked was reopened "Back again"."""
+    ⚠️ "STILL THERE" IS NOT "BACK AGAIN" (architecture review 25): a door never locked was reopened "Back again".
+
+    ⚠️ A RUN'S "CLEAR SINCE" ENDS WITH IT (villa's #54, 2026-10-18): main power back at 11:30:15 was closed at
+    11:30:17 — the "back to normal since 10:40" of the run closed at 10:50 was still on the incident, so the new run
+    read as 50 minutes clear. Either way it reopens, it is bad now: seen_again counts its clear_minutes afresh."""
+    store.note(inc["id"], drop=("clear_since", "silent_told"))
     came_back_now = status is None
     if came_back_now:
         ended = notes_of(store.incident(inc["id"])).get(Notes.MESSAGE)   # the run that ended keeps its own words

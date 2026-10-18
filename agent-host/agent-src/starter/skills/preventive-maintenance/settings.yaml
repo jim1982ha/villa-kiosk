@@ -13,7 +13,7 @@ behaviour:
   battery_warn_pct: 20
   battery_crit_pct: 10
   silence_hours: 24                     # a sensor that has not reported for this long
-  unavailable_minutes: 10
+  unavailable_minutes: 10              # offline this long: its fault opens (the night check, and recheck.py every 5 minutes)
   back_online_minutes: 10               # a device found offline, back this long: its fault closes (recheck.py)
   on_threshold_fraction: 0.2            # fraction of running power that counts as "on"
   on_threshold_floor_w: 1.0             # an asset with no data to judge from: "on" above this

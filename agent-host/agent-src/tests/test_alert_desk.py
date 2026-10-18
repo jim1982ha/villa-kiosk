@@ -657,3 +657,19 @@ def test_a_phase_the_desk_does_not_know_raises_nothing(store):
     assert [dict(r) for r in store.incidents(open_only=False)] == before and store.incident(iid)["closed_at"] is None
     assert desk.intake(store, {k: v for k, v in event().items() if k != "phase"}, T0 + timedelta(hours=6),
                        mode_reader=lambda: "occupied")["decision"] in ("repeat", "counted")   # no phase: "opened"
+
+
+def test_an_alert_back_again_waits_its_own_clear_minutes_never_the_last_runs(store):
+    # the villa's #54 (2026-10-18): main power unavailable, cleared after 10 min back (10:50); back at 11:28, the device
+    # answered at 11:30:15 and the desk closed it at 11:30:17 — the "back to normal since 10:40" of the run before was
+    # never forgotten, so the new run read as 50 minutes clear
+    iid = _overdue(store, claim=CLAIM)["incident_id"]
+    ha = Claims([(T0, "true"), (T0 + timedelta(minutes=2), "false"), (T0 + timedelta(minutes=50), "true"),
+                 (T0 + timedelta(minutes=60), "false")])
+    assert not _tick(store, ha, 5).get("cleared")                              # clear since 5
+    assert _tick(store, ha, 15)["cleared"] == [iid]                            # 10 min clear: over
+    again = _overdue(store, at=T0 + timedelta(minutes=55), claim=CLAIM, started=1790003300)
+    assert again["decision"] == "reopened" and again["incident_id"] == iid
+    assert not _tick(store, ha, 61).get("cleared")                             # back 1 min, not 56
+    assert not _tick(store, ha, 66).get("cleared")
+    assert _tick(store, ha, 71)["cleared"] == [iid]                            # its own 10 minutes

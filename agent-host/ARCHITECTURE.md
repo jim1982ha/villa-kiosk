@@ -440,5 +440,20 @@ The villa's #52 opened, cleared and came back four times in four hours. Decided:
 - **A reopening says why, like a close.** The task keeps `reopen_note` beside `close_note`; `Problems.card` returns it
   and `tickets.repair` writes it. A `ticket.reopen` action only tells the engine a fault moved; its words are not read.
 - **"N times in 7 days" is the week of the alert's key**, every incident of it (`incident_runs(inc, store)`).
-  Whether a return reopens the old number stays the skill's `reopen_hours` (owner's question, not yet answered).
+  Whether a return reopens the old number stays the skill's `reopen_hours` (owner, 2026-10-18: after the 4 hours, a
+  new number — the same one would be inconsistent).
 - **Who closed a fault is read from the Kiosk's step** (`held_tickets["cleared"]`), never inferred from times alone.
+
+## When a device goes offline (architecture review, 2026-10-18, 0.12.241)
+
+Timmerflotte_5969 dropped at 21:46 and stood "Unavailable" in the Cockpit for 4 h 14 min before the night check opened
+its fault. Decided (owner: "implement the recommended finding", card 1 of 4):
+- **One reading of "offline now"**: `nightly.offline_findings` (per device, an integration down as one) serves the
+  02:00 batch and `recheck.py` every 5 minutes. The recheck opens a finding for a device with none open, closes nothing
+  it did not see (that stays `back_online`, `back_online_minutes`), and sends the FM the night's own P2 message.
+- **`Problems.record` is the night's ledger without its closing**: `record_night` = `record` + close what the night
+  did not see. A partial reading (the recheck) records; only the whole night may close.
+- **A code job finds the pack through `VESTA_PACK`** (as the store through `VESTA_STORE`): an `every_5_min` job is
+  run without `inject`.
+- Not done (cards 2–4, waiting): one list of critical devices, one record per offline device across the alert desk
+  and the night check, one meaning of "offline" in the Kiosk and the Agent.

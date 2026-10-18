@@ -15,9 +15,11 @@ closure, and never raise the same thing twice.
 - Never write to Home Assistant. A job for the FM is a Facility ticket in the
   VESTA Kiosk, which the engine writes. No service call on a device.
 - Never poll during the day. One batched read at 02:00 villa time. The rest of
-  the time the alert-desk skill handles events. One exception: a device found
-  offline is read again every 5 minutes (`recheck.py`), and its fault closes once
-  it has been back `back_online_minutes` (10) — never left open until the next night.
+  the time the alert-desk skill handles events. One exception: which devices are
+  offline is read every 5 minutes (`recheck.py`, the batch's own reading of it): a
+  device offline `unavailable_minutes` (10) gets its fault then — and a critical one
+  the FM's message — never at the next night; its fault closes once it has been
+  back `back_online_minutes` (10).
   The same read closes any fault about a device deleted from Home Assistant
   ("Closed: this device no longer exists in the villa's system.").
 - Never invent a physical number. A missing helper means "cannot compute" and a
@@ -30,7 +32,7 @@ closure, and never raise the same thing twice.
 ## Files
 
 - `scripts/nightly.py`   the batch (one call, one JSON result)
-- `scripts/recheck.py`   every 5 minutes: the devices found offline read again; deleted ones closed
+- `scripts/recheck.py`   every 5 minutes: devices gone offline get their fault, those back close it; deleted ones closed
 - `scripts/rules.py`     the rules per family with their ids (PM-xxx)
 - `scripts/features.py`  feature extraction from statistics and raw history
 - `scripts/replay.py`    replays N nights and prints the findings timeline
@@ -67,7 +69,7 @@ closure, and never raise the same thing twice.
 | PM-EXPECTED-SILENT | power | An intermittent, usage-driven asset was scheduled and did not run. Report only, never a task. | schedule helper |
 | PM-COUNTER-RESET | energy | An energy counter went backwards: the day's kWh is unreliable. | none |
 | PM-BATTERY-LOW / -CRIT / -TREND | battery | Level under `battery_warn_pct` (task), under `battery_crit_pct` (task now, P2 if the device is critical), or falling fast enough to be empty within `battery_trend_warn_days` (report). A battery that reports volts needs `<asset>_battery_nominal_v`. | `vesta_battery_warn_pct`, `vesta_battery_crit_pct` |
-| PM-UNAVAILABLE | availability | A device offline for more than `unavailable_minutes` at batch time, one finding per physical device; three or more devices of one integration offline together become one "integration down" finding. P2 when the device is critical. | `vesta_unavailable_minutes` |
+| PM-UNAVAILABLE | availability | A device offline for more than `unavailable_minutes` (read every 5 minutes, and at batch time), one finding per physical device; three or more devices of one integration offline together become one "integration down" finding. P2 when the device is critical. | `vesta_unavailable_minutes` |
 | PM-SILENT | level | A sensor online but not reporting for 24 h. | `vesta_silence_hours` |
 | PM-LEVEL-HIGH | level | A temperature or humidity above `<asset>_max_c` / `<asset>_max_humidity_pct` when such a helper exists. | asset helper |
 | PM-RECONNECT-LOOP | network | Ten or more drop/reconnect events in three days for one device (logbook). | `vesta_reconnect_events`, `vesta_reconnect_days` |

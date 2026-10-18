@@ -210,3 +210,15 @@ def test_an_owner_only_device_the_pack_cannot_classify_is_still_found_behind_its
     assert "siren.example_outdoor_alarm" in pack.unclassified                              # in no family
     assert related_entities(pack, Reader(), ["switch.example_alarm_power"]) == {"siren.example_outdoor_alarm",
                                                                                  "switch.example_alarm_power"}
+
+
+def test_a_refusal_by_the_villas_rules_is_in_the_log(villa, caplog):
+    # owner, 2026-10-18: "turn off the TV" — the TV was refused, then its screen switch asked; the log showed only the
+    # second, so the refusal looked like a request never made
+    actions, session = villa
+    with caplog.at_level("INFO", logger="vesta.actions"):
+        answer, msg = actions.request("media_player", "turn_off", "media_player.example_tv", {}, JM, 111)
+    assert msg is None and answer.startswith("Refused by the villa's rules") and session.calls == []
+    line = [r.getMessage() for r in caplog.records if r.getMessage().startswith("Refused ")]
+    assert line == ["Refused media_player.turn_off on media_player.example_tv, asked by Registered: "
+                    "media_player.turn_off is not in the allowed services of this villa."], line

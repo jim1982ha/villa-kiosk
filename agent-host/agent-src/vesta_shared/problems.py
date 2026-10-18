@@ -158,12 +158,26 @@ class Problems:
         """The night check's findings for `day`: {new, still_open, closed, again (came back: AGAIN_DAYS), tasks,
         resolve_actions, reopen_actions (a returning finding's fault open again)}. (`_muted_at_iso`: what a
         night check edited before 0.12.132 still passes — Mute is gone, it is ignored.)
-        A finding has rule_id, entity_id, family, severity, summary, detail, check, day and as_dict()."""
-        new, still_open, closed, again, fired = [], [], [], [], set()
+        A finding has rule_id, entity_id, family, severity, summary, detail, check, day and as_dict().
+        The night sees everything: a state finding it did not see tonight closes (`record` is the rest)."""
+        out = self.record(findings, day, state_rules=state_rules, event_rules=event_rules, worsened_step=worsened_step)
+        fired = {(f.rule_id, f.entity_id) for f in findings}
+        closed, resolve = [], []
+        for o in closes_tonight(self.store.findings(status="open"), fired, state_rules, event_rules):
+            closed.append(o)
+            # ⚠️ ITS TASK AND ITS KIOSK TICKET CLOSE WITH IT (villa, 2026-10-01): the finding closed, the ticket
+            # stayed "Open fault" for ever, and the Kiosk's Cockpit filled with faults long gone
+            resolve += self.close_finding(o, day, resolved_note)
+        return {**out, "closed": closed, "resolve_actions": resolve}
+
+    def record(self, findings, day: str, *, state_rules, event_rules, worsened_step: float) -> dict:
+        """Findings seen now, recorded — new, still open, back again (AGAIN_DAYS) — each with its task: {new,
+        still_open, again, tasks, reopen_actions}. Closes nothing: a check that reads only part of the villa (recheck.py,
+        every 5 minutes) cannot say what it did not see is over."""
+        new, still_open, again = [], [], []
         for f in findings:
             f.day = day
             f.detail["check"] = f.check
-            fired.add((f.rule_id, f.entity_id))
             prev_row = self.store.open_finding(f.rule_id, f.entity_id)
             prev = json.loads(prev_row["detail"] or "{}") if prev_row else {}
             if prev and f.rule_id in state_rules:
@@ -197,12 +211,6 @@ class Problems:
                     d["worsened"] = True
                     f.detail["last_reported_pct"] = f.detail.get("change_pct")
                     self.store.set_finding_detail(fid, f.detail)
-        resolve = []
-        for o in closes_tonight(self.store.findings(status="open"), fired, state_rules, event_rules):
-            closed.append(o)
-            # ⚠️ ITS TASK AND ITS KIOSK TICKET CLOSE WITH IT (villa, 2026-10-01): the finding closed, the ticket
-            # stayed "Open fault" for ever, and the Kiosk's Cockpit filled with faults long gone
-            resolve += self.close_finding(o, day, resolved_note)
         # each problem's task, as settle() works it out (architecture review, 2026-10-15): new or back — open (again);
         # still open with its task closed by the agent — open again (the same night run twice reopened the finding in
         # place and no pass looked: Timmerflotte_2623); never had one — a new one (villa, 2026-10-14). A person's close
@@ -215,8 +223,7 @@ class Problems:
                                   "severity": d["severity"], "entity_id": d["entity_id"]})
                 elif a["action"] == "ticket.reopen":
                     reopen.append(a)
-        return {"new": new, "still_open": still_open, "closed": closed, "again": again, "tasks": tasks,
-                "resolve_actions": resolve, "reopen_actions": reopen}
+        return {"new": new, "still_open": still_open, "again": again, "tasks": tasks, "reopen_actions": reopen}
 
     def _came_back(self, f, day: str, may: bool) -> int | None:
         """⚠️ THE SAME PROBLEM, BACK (architecture review 22): a device offline every night and back by noon was closed

@@ -847,6 +847,7 @@ def script_env(settings) -> dict:
         "VESTA_HA_MCP_URL": settings.ha_mcp_url,
         "VESTA_HA_READ_ONLY": "1",
         "VESTA_STORE": settings.store_path,
+        "VESTA_PACK": settings.pack_path,
         # read only, by convention and by review: the villa's policy (one reader: vesta_agent.policy)
         # and the agent's own records (what it cost, what it did) for the reports
         "VESTA_POLICY": settings.policy_path,

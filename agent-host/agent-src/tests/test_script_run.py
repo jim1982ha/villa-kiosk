@@ -118,3 +118,11 @@ def test_an_offline_test_reads_the_file_a_report_run_left(agent):
     import inspect
     from vesta_agent.app import Vesta
     assert "take_run_file(self.s.out_dir, a)" in inspect.getsource(Vesta.try_command)
+
+
+def test_a_code_job_finds_the_knowledge_pack_without_being_given_it(tmp_path):
+    # recheck.py runs every 5 minutes with --store only (2026-10-18): it reads what is offline through the pack
+    make_skill(os.path.join(str(tmp_path), "skills"), "probe", {"description": "t"},
+               {"p.py": "import json, os\nprint(json.dumps({'pack': os.environ.get('VESTA_PACK')}))\n"})
+    v = make_agent(tmp_path, {"people": [], "chats": {}})
+    assert v.code_command(v.skills.get("probe"), "p.py") == {"pack": v.s.pack_path} and v.s.pack_path

@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.6.232 (18 October 2026)
+
+Architecture review 2026-10-18 (offline devices, card 1 — owner: "implement the recommended finding"):
+- recheck.py, every 5 minutes, opens the fault of a device gone offline (`unavailable_minutes`) with no open finding,
+  through the night's own reading (`nightly.offline_findings`); a critical one sends the FM the night's P2 message.
+  Timmerflotte_5969 had waited from 21:46 to the 02:00 night check.
+- `Problems.record`: the night's ledger without its closing; `record_night` = record + close what the night missed.
+- Scripts get `VESTA_PACK` (as `VESTA_STORE`); `--pack` defaults to it.
+
+The villa's #54 (alert-desk): an alert back again kept the "clear since" of the run before, so the desk closed it 2 s
+after the device answered (main power, back 11:30:15, closed 11:30:17) — `reopen` drops it: each run waits its own
+`clear_minutes`.
+
+Owner, 2026-10-18 ("turn off the TV"): a request the villa's rules refuse is a line in the log ("Refused
+media_player.turn_off on …, asked by …: …"); it was only in the agent's own records, so the TV's refusal looked like a
+request never made.
+
 ## 0.6.231 (18 October 2026)
 
 Owner, 2026-10-18 ("turn off the TV" turned off its screen switch only): ha_call_service's description says to act

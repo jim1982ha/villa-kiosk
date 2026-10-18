@@ -159,34 +159,16 @@ def run(args) -> dict:
         series = [(str(r["start"]), r["mean"]) for r in bat_stats.get(row["entity_id"], []) if r.get("mean") is not None]
         findings += R.battery_rules(asset, row["entity_id"], row.get("unit"), level, series, params, today)
 
-    # one availability finding per physical device (device_id when the registry gives it,
-    # otherwise the integration + asset), never one per entity
-    unavailable_groups: dict[str, dict] = {}
+    findings += offline_findings(pack, states, now_ref, params)
     quiet_rows: list[tuple[dict, dict, datetime]] = []
-    for fam in ("power", "energy", "security", "level", "runtime", "water", "generation"):
+    for fam in ("level",):                       # silence: a level sensor online and quiet
         for row in pack.entities(fam):
             st = states.get(row["entity_id"])
             if not st:
                 continue
             asset = pack.assets.get(row["asset"], {"slug": row["asset"], "name": row["name"], "critical": False})
             lc = st.get("last_changed")
-            hours = None
-            if lc:
-                try:
-                    hours = (now_ref - datetime.fromisoformat(lc).astimezone(Z)).total_seconds() / 3600
-                except ValueError:
-                    hours = None
-            # ⚠️ "unknown" IS NOT OFFLINE (villa, 2026-10-04): it is a sensor with no value to give — a
-            # wind chill on a warm day — while its device reports. Lost is "unavailable".
-            if is_offline(st.get("state")):
-                key = F.device_key(row, row["entity_id"])
-                g = unavailable_groups.setdefault(key, {"asset": asset, "entity_id": row["entity_id"], "hours": hours,
-                                                        "state": st.get("state"), "names": [], "critical": asset.get("critical", False),
-                                                        "platform": row.get("platform") or "x"})
-                g["names"].append(row["name"]); g["critical"] = g["critical"] or asset.get("critical", False)
-                if hours is not None and (g["hours"] is None or hours > g["hours"]):
-                    g["hours"] = hours
-            elif fam == "level" and st.get("state") != "unknown":
+            if not is_offline(st.get("state")) and st.get("state") != "unknown":
                 # ⚠️ SILENT MEANS NOT REPORTING, NOT UNCHANGED (villa, 2026-10-01): last_reported moves at
                 # each report (HA 2024.3+). But many integrations write only on a CHANGE, and every
                 # restart stamps all of them (villa, 2026-10-04) — so quiet alone proves nothing; the
@@ -221,16 +203,6 @@ def run(args) -> dict:
             a["name"] = F.device_name(g["names"])
             a = _device_named(pack, a, g["entity_id"])
             findings += R.silence_rules(a, g["entity_id"], (now_ref - g["since"]).total_seconds() / 3600, params, now=now_ref)
-
-    # three or more devices of one integration offline together = the integration is down, one finding
-    unavailable_groups = F.integration_down(unavailable_groups, params.behaviour("integration_down_devices"))
-    for key, g in unavailable_groups.items():
-        a = dict(g["asset"]); a["critical"] = g["critical"]
-        if not a["slug"].startswith("integration_"):
-            if len(g["names"]) > 1:
-                a["name"] = F.device_name(g["names"])
-            a = _device_named(pack, a, g["entity_id"])
-        findings += R.availability_rules(a, g["entity_id"], g["state"], g["hours"], params, g.get("entity_ids"), now=now_ref)
 
     level_rows = [r for r in pack.entities("level")
                   if params.has(f"{r['asset']}_max_c") or params.has(f"{r['asset']}_max_humidity_pct")]
@@ -295,7 +267,52 @@ def run(args) -> dict:
     return result
 
 
-def told_now(res: dict) -> list[dict]:
+#: The families whose devices are read for being offline (and, for `level`, silent).
+WATCHED_FAMILIES = ("power", "energy", "security", "level", "runtime", "water", "generation")
+
+
+def offline_findings(pack, states: dict, now: datetime, params) -> list:
+    """The devices offline now, as PM-UNAVAILABLE findings — the ONE reading of it, for the night check and for
+    recheck.py every 5 minutes. One finding per physical device (device_id when the registry gives it, otherwise the
+    integration + asset), never one per entity; `integration_down_devices` or more of one integration: one finding.
+
+    ⚠️ FOUND AT ONCE, NOT AT 02:00 (owner, 2026-10-18 — architecture review, offline devices #1): Timmerflotte_5969
+    dropped at 21:46 and stood "Unavailable" in the Cockpit for 4 h 14 min before the night check opened its fault —
+    the recheck read every 5 minutes whether a device was BACK, never whether one had gone."""
+    groups: dict[str, dict] = {}
+    for fam in WATCHED_FAMILIES:
+        for row in pack.entities(fam):
+            st = states.get(row["entity_id"])
+            # ⚠️ "unknown" IS NOT OFFLINE (villa, 2026-10-04): it is a sensor with no value to give — a
+            # wind chill on a warm day — while its device reports. Lost is "unavailable".
+            if not st or not is_offline(st.get("state")):
+                continue
+            asset = pack.assets.get(row["asset"], {"slug": row["asset"], "name": row["name"], "critical": False})
+            hours = None
+            if st.get("last_changed"):
+                try:
+                    hours = (now - datetime.fromisoformat(st["last_changed"]).astimezone(now.tzinfo)).total_seconds() / 3600
+                except ValueError:
+                    hours = None
+            key = F.device_key(row, row["entity_id"])
+            g = groups.setdefault(key, {"asset": asset, "entity_id": row["entity_id"], "hours": hours,
+                                        "state": st.get("state"), "names": [], "critical": asset.get("critical", False),
+                                        "platform": row.get("platform") or "x"})
+            g["names"].append(row["name"]); g["critical"] = g["critical"] or asset.get("critical", False)
+            if hours is not None and (g["hours"] is None or hours > g["hours"]):
+                g["hours"] = hours
+    out = []
+    for g in F.integration_down(groups, params.behaviour("integration_down_devices")).values():
+        a = dict(g["asset"]); a["critical"] = g["critical"]
+        if not a["slug"].startswith("integration_"):
+            if len(g["names"]) > 1:
+                a["name"] = F.device_name(g["names"])
+            a = _device_named(pack, a, g["entity_id"])
+        out += R.availability_rules(a, g["entity_id"], g["state"], g["hours"], params, g.get("entity_ids"), now=now)
+    return out
+
+
+def told_now(res: dict, title: str | None = None) -> list[dict]:
     """The facility manager's message at 02:00: each P2 found new — or back again, with how often (architecture review
     23: it came back in silence) — with what to do, in the one shape of every alert and report (vesta_shared.
     message_format; review 30: it kept "For: … / -------" and its own "What to check:")."""
@@ -306,7 +323,7 @@ def told_now(res: dict) -> list[dict]:
     back = [item(d) for d in res["again"] if d.get("severity") == "P2"]
     if not (new or back):
         return []
-    title = f"{res.get('villa') or 'The villa'}, night check on {day_label(date.fromisoformat(res['as_of']), numeric=True)}."
+    title = title or f"{res.get('villa') or 'The villa'}, night check on {day_label(date.fromisoformat(res['as_of']), numeric=True)}."
     body = split_title(document(title, "", [("New", new), ("Back again", back)]))[1]
     return [result.message("fm", body, title=title)]
 

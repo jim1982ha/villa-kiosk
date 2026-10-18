@@ -159,3 +159,84 @@ def test_a_sensor_that_reports_every_five_minutes_is_back_when_it_was_not_offlin
     assert r.returncode == 0 and json.loads(r.stdout)["actions"] == [], r.stderr
     out = _run(tmp_path, at(T0, 120), T0)                                # back 2 h ago, last reading 0 min ago
     assert [a["note"] for a in out["actions"]] == ["Cleared: back online."]
+
+
+# ------------------------------------------------------------------ gone offline: found within minutes, not at 02:00
+NIGHT = datetime(2026, 10, 17, 21, 46, tzinfo=timezone.utc)
+
+
+def _villa_pack(tmp_path) -> str:
+    """A humidity sensor (not critical) and a door lock (critical), as the knowledge pack lists them."""
+    path = tmp_path / "pack.json"
+    path.write_text(json.dumps({
+        "villa": "Example Villa", "time_zone": "UTC", "generated_at": "x", "ha_version": None, "areas": [], "people": [],
+        "channels": {}, "unknown_area": [], "unclassified": [], "retention": {"raw_history_days": 10},
+        "families": {"level": [{"entity_id": "sensor.example_th_humidity", "name": "TH humidity", "area": "Bedroom",
+                                "family": "level", "asset": "th", "device_id": None}],
+                     "security": [{"entity_id": "lock.example_door", "name": "Example door", "area": "Hall",
+                                   "family": "security", "asset": "door", "device_id": None}]},
+        "assets": {"th": {"slug": "th", "name": "TH", "entities": {"level": "sensor.example_th_humidity"}, "critical": False},
+                   "door": {"slug": "door", "name": "Example door", "entities": {"security": "lock.example_door"},
+                            "critical": True}}}))
+    return str(path)
+
+
+def _run_engine(tmp_path, states: dict, now: datetime):
+    """recheck.py as the engine runs it every 5 minutes: --store only, the knowledge pack named by VESTA_PACK."""
+    fx = tmp_path / "fx"
+    fx.mkdir(exist_ok=True)
+    (fx / "states.json").write_text(json.dumps({"states": states}))
+    r = subprocess.run([sys.executable, os.path.join(SKILL, "scripts", "recheck.py"), "--store", str(tmp_path / "s.sqlite"),
+                        "--fixture-dir", str(fx), "--now", now.isoformat()], capture_output=True, text=True, timeout=60,
+                       env={**os.environ, "PYTHONPATH": PYTHONPATH, "VESTA_PACK": _villa_pack(tmp_path)})
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout)
+
+
+def _off_since(at, ok_door=True):
+    return {"sensor.example_th_humidity": {"state": "unavailable", "last_changed": at.isoformat(), "attributes": {}},
+            "lock.example_door": {"state": "locked", "last_changed": (at - timedelta(days=1)).isoformat(), "attributes": {}}}
+
+
+def test_a_device_gone_offline_gets_its_fault_within_minutes_not_at_two_in_the_morning(tmp_path):
+    # owner, 2026-10-18: Timmerflotte_5969 dropped at 21:46 and stood "Unavailable" in the Cockpit with no fault of the
+    # agent's until the night check at 02:00
+    states = _off_since(NIGHT)
+    assert _run_engine(tmp_path, states, NIGHT + timedelta(minutes=5))["actions"] == []        # 5 min: not yet
+    out = _run_engine(tmp_path, states, NIGHT + timedelta(minutes=11))
+    (fault,) = out["actions"]
+    assert fault["action"] == "ticket" and fault["entity_id"] == "sensor.example_th_humidity"
+    assert "offline for 11 min" in fault["summary"] and out["faults_changed"] is True
+    assert out["send"] == []                                     # not critical: the 07:00 digest, as at night
+    (f,) = Store(str(tmp_path / "s.sqlite")).findings("open")
+    assert f["rule_id"] == "PM-UNAVAILABLE"
+    assert _run_engine(tmp_path, states, NIGHT + timedelta(minutes=16))["actions"] == []       # once
+    # untouched while open: restating it is the night check's (no store write every 5 minutes)
+    assert Store(str(tmp_path / "s.sqlite")).finding(f["id"])["summary"] == f["summary"]
+    # back online: closed by the same 5-minute job, as before
+    back = {**states, "sensor.example_th_humidity": {"state": "55", "attributes": {},
+                                                     "last_changed": (NIGHT + timedelta(minutes=20)).isoformat()}}
+    out = _run_engine(tmp_path, back, NIGHT + timedelta(minutes=31))
+    assert [a["action"] for a in out["actions"]] == ["ticket.resolve"]
+
+
+def test_a_critical_device_gone_offline_tells_the_facility_manager_at_once(tmp_path):
+    states = {**_off_since(NIGHT), "lock.example_door": {"state": "unavailable", "attributes": {},
+                                                         "last_changed": NIGHT.isoformat()}}
+    states.pop("sensor.example_th_humidity")
+    out = _run_engine(tmp_path, states, NIGHT + timedelta(minutes=12))
+    (fault,) = out["actions"]
+    assert fault["entity_id"] == "lock.example_door"
+    (msg,) = out["send"]
+    assert msg["to"] == "fm" and "Example door has been offline for 12 min" in msg["text"], msg
+
+
+def test_a_device_offline_again_within_the_week_says_so(tmp_path):
+    states = _off_since(NIGHT)
+    _run_engine(tmp_path, states, NIGHT + timedelta(minutes=11))
+    back = {**states, "sensor.example_th_humidity": {"state": "55", "attributes": {},
+                                                     "last_changed": (NIGHT + timedelta(minutes=20)).isoformat()}}
+    _run_engine(tmp_path, back, NIGHT + timedelta(minutes=31))
+    later = NIGHT + timedelta(hours=3)
+    (fault,) = _run_engine(tmp_path, _off_since(later), later + timedelta(minutes=11))["actions"]
+    assert fault["action"] == "ticket.reopen" and "(again: 2 times in 7 days)" in fault["title"], fault

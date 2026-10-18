@@ -98,6 +98,13 @@ PROGRESS = {"Turn on": "Turning on", "Turn off": "Turning off", "Lock": "Locking
             "Open": "Opening", "Close": "Closing"}
 
 
+def _ids(entity_id: Any) -> str:
+    """An action's devices for the log, as the request named them (a string, a list, or nothing)."""
+    if not entity_id:
+        return "-"
+    return entity_id if isinstance(entity_id, str) else ", ".join(map(str, entity_id))
+
+
 def plain(decision: Decision, names: Callable[[str], str]) -> str:
     """The action in plain words: every device (name and room), every parameter. Never an entity id."""
     verb, target, extra = _words(decision, names)
@@ -186,6 +193,11 @@ class Actions:
                 "requester": requester.telegram_id if requester else None}
         if not d.allowed:
             self.state.log("refused", dict(base, reason=d.reason))
+            # ⚠️ A REFUSAL IS IN THE LOG TOO (owner, 2026-10-18, "turn off the TV"): it was only in the agent's own
+            # records, so the log read "ha_search, then a request for the screen switch" and nobody could tell that
+            # the TV itself had been asked first and refused by the villa's rules
+            log.info("Refused %s.%s on %s, asked by %s: %s", domain, service, _ids(entity_id),
+                     requester.name if requester else "a job", d.reason)
             return f"Refused by the villa's rules: {d.reason}", None
         # ⚠️ `direct` SKIPS THE BUTTON ONLY FOR A PERSON'S OWN REQUEST: a registered
         # person, writing in a chat. A scheduled job, an alert, a skill (no requester)

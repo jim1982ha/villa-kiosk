@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
-"""Every 5 minutes: a device the night check found offline that is back closes its fault now; so does any fault
-about a device deleted from Home Assistant.
+"""Every 5 minutes: a device gone offline gets its fault now; one found offline that is back closes it now; so does
+any fault about a device deleted from Home Assistant.
 
-  python recheck.py --store vesta_store.sqlite [--fixture-dir DIR] [--now 2026-10-10T14:00:00+00:00]
+  python recheck.py --store vesta_store.sqlite [--pack pack.json] [--fixture-dir DIR] [--now 2026-10-10T14:00:00+00:00]
+
+⚠️ FOUND AT ONCE, NOT AT 02:00 (owner, 2026-10-18 — architecture review, offline devices #1): Timmerflotte_5969 dropped
+at 21:46 and stood "Unavailable" in the Cockpit for 4 h 14 min before the night check opened its fault. Here the
+night's own reading of what is offline (nightly.offline_findings) runs every 5 minutes: a device offline
+`unavailable_minutes` with no open finding gets one — its Kiosk fault, and for a critical device the facility
+manager's message, as the night check sends it. It closes nothing it did not see: that stays back_online's.
 
 ⚠️ NOT THE NEXT NIGHT (villa, 2026-10-10): "shelly integration (3 devices) has been offline for 9 h" stayed an open
 fault in the Cockpit all day while every Shelly device had been back since noon — the night check closes a finding
@@ -30,6 +36,8 @@ sys.path.insert(0, HERE)
 from vesta_shared import result, script  # noqa: E402
 from vesta_shared.device_state import OFFLINE, out_for  # noqa: E402  ("is it back": one answer)
 from vesta_shared.problems import Problems  # noqa: E402
+from vesta_shared.timeutil import day_time_label  # noqa: E402
+import nightly as N  # noqa: E402  (what is offline: the night's one reading of it)
 
 
 
@@ -70,14 +78,39 @@ def back_online(store, client, now: datetime, minutes: float, zone: str) -> dict
     return {"closed": closed, "gone": deleted, "actions": actions}
 
 
+def gone_offline(store, pack, client, now: datetime, params, zone: str) -> dict:
+    """{actions: [the Kiosk faults to open or reopen], send: [the facility manager's message for a critical device],
+    found: [finding ids]}. Only a device with no open finding: one already open is the night check's to restate."""
+    none = {"actions": [], "send": [], "found": []}
+    if pack is None or client() is None:
+        return none
+    ids = sorted({r["entity_id"] for fam in N.WATCHED_FAMILIES for r in pack.entities(fam)})
+    at = now.astimezone(ZoneInfo(zone))
+    found = [f for f in N.offline_findings(pack, client().states(ids), at, params)
+             if not store.open_finding(f.rule_id, f.entity_id)]
+    if not found:
+        return none
+    day = at.date().isoformat()
+    rec = Problems(store).record(found, day, state_rules=N.STATE_RULES, event_rules=N.EVENT_RULES,
+                                 worsened_step=params.behaviour("worsened_step_pct"))
+    actions = [result.fault(t["todo_summary"], task_id=t["task_id"], check=t.get("check"), entity_id=t.get("entity_id"))
+               for t in rec["tasks"]] + rec["reopen_actions"]
+    send = N.told_now({"villa": pack.villa, "as_of": day, "new_findings": rec["new"], "again": rec["again"]},
+                      title=f"{pack.villa or 'The villa'}, devices offline on {day_time_label(at)}.")
+    store.audit("preventive-maintenance", "gone_offline", {"findings": [d["id"] for d in rec["new"] + rec["again"]]})
+    return {"actions": actions, "send": send, "found": [d["id"] for d in rec["new"] + rec["again"]]}
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    script.arguments(ap)
+    script.arguments(ap, pack=True)
     a = ap.parse_args(argv)
     ctx = script.Context(a, skill=os.path.dirname(HERE))
     now = datetime.fromisoformat(a.now) if getattr(a, "now", None) else datetime.now(timezone.utc)
     res = back_online(ctx.store, lambda: ctx.live_client, now, ctx.params.behaviour("back_online_minutes"), ctx.zone)
-    print(json.dumps({"actions": res["actions"], result.FAULTS_CHANGED: bool(res["closed"])}, default=str))
+    found = gone_offline(ctx.store, ctx.pack, lambda: ctx.live_client, now, ctx.params, ctx.zone)
+    print(json.dumps({"actions": res["actions"] + found["actions"], "send": found["send"],
+                      result.FAULTS_CHANGED: bool(res["closed"] or found["actions"])}, default=str))
     return 0
 
 

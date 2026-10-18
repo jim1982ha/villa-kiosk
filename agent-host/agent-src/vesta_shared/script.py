@@ -26,7 +26,9 @@ def arguments(ap, *, pack: bool = False, pack_required: bool = False, store: boo
     `store`: True — the skill store, by default VESTA_STORE's; "optional" — only when given (a cache it can do
     without); False — the script keeps nothing. No store is ever made where none was asked for."""
     if pack:
-        ap.add_argument("--pack", required=pack_required)
+        # the engine's knowledge pack when the job was not given one (VESTA_PACK, as VESTA_STORE): a code job every 5
+        # minutes is run without `inject` (recheck.py, 2026-10-18)
+        ap.add_argument("--pack", required=pack_required, default=os.environ.get("VESTA_PACK") or None)
     if store:
         ap.add_argument("--store", default=os.environ.get("VESTA_STORE", STORE_DEFAULT) if store is True else None)
     ap.add_argument("--zone")
