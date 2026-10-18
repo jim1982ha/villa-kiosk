@@ -635,6 +635,8 @@
       }
     ]
   },
+  "_criticalDevices": "The villa's critical devices: ONE list, the one its \"critical devices offline\" rule watches (owner, 2026-10-18 — architecture review, offline devices #2: the Kiosk, the agent's night check and its reports each had their own idea). Every automation built from the blueprint whose file name (its path's last part, without .yaml) is `blueprint` names them in its input `input` (one id or a list); the list is the union. The Kiosk's proxy reads it (GET /critical-devices) and the VESTA Agent reads the same; a critical device offline is red (danger), any other offline device amber.",
+  "criticalDevices": {"blueprint": "critical_watchdog", "input": "critical_entities"},
   "samples": {
     "_postMessage": "What an agent POSTs to /agent/v1/messages.",
     "postMessage": {

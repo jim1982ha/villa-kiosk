@@ -3738,6 +3738,79 @@ async def agent_status_handler(request: web.Request) -> web.Response:
     return web.json_response(_agent_presence(), headers={"Cache-Control": "no-store"})
 
 
+# ── The villa's critical devices (agent-contract.json criticalDevices) ───────
+# ⚠️ ONE LIST (owner, 2026-10-18 — architecture review, offline devices #2): the
+# Kiosk painted every offline device red, the agent's night check called locks,
+# motors and scheduled assets critical, its reports security devices only. The
+# list is the one the villa's "critical devices offline" rule watches: every
+# automation built from the agreement's blueprint, its input. Read HERE, with the
+# add-on's own access, so no browser is given automation configs (no new
+# passthrough type) — it gets the entity ids only, no more than get_states shows.
+CRITICAL_TTL_SECONDS = 300
+_critical_cache: dict = {"at": 0.0, "body": None}
+
+
+def _critical_from_configs(configs, rule: dict) -> tuple[list[str], list[str]]:
+    """(the critical entity ids, the automations they came from) from
+    [(automation entity id, its config)] and the agreement's {blueprint, input}.
+    A blueprint is matched by its path's last part without .yaml (it may sit in
+    a sub-folder); the input may be one id or a list. Pure."""
+    want, key = str(rule.get("blueprint") or ""), str(rule.get("input") or "")
+    ents: set[str] = set()
+    used: list[str] = []
+    for eid, cfg in configs:
+        bp = (cfg or {}).get("use_blueprint") if isinstance(cfg, dict) else None
+        if not want or not key or not isinstance(bp, dict):
+            continue
+        name = str(bp.get("path") or "").rsplit("/", 1)[-1]
+        if name.removesuffix(".yaml") != want:
+            continue
+        val = (bp.get("input") or {}).get(key)
+        ids = [val] if isinstance(val, str) else val if isinstance(val, list) else []
+        got = {i for i in ids if isinstance(i, str) and AGENT_ENTITY_RE.fullmatch(i)}
+        if got:
+            ents |= got
+            used.append(eid)
+    return sorted(ents), sorted(used)
+
+
+async def _critical_read(session: ClientSession) -> dict:
+    """The villa's critical devices, read now from Home Assistant."""
+    base = f"http://{SUPERVISOR}/core/api"
+    t = ClientTimeout(total=20)
+    async with session.get(f"{base}/states", headers=AUTH, timeout=t) as resp:
+        resp.raise_for_status()
+        states = await resp.json()
+    configs = []
+    for st in states:
+        eid = str(st.get("entity_id") or "")
+        aid = (st.get("attributes") or {}).get("id")
+        if not eid.startswith("automation.") or not aid:
+            continue
+        async with session.get(f"{base}/config/automation/config/{aid}", headers=AUTH, timeout=t) as resp:
+            if resp.status == 200:
+                configs.append((eid, await resp.json()))
+    ents, used = _critical_from_configs(configs, AGENT_CONTRACT_TABLE.get("criticalDevices") or {})
+    return {"entities": ents, "rules": used, "at": _now_iso()}
+
+
+async def critical_devices_handler(request: web.Request) -> web.Response:
+    """GET /critical-devices: {entities, rules, at} (+ error when the read failed:
+    the last good answer, else an empty list — never a 500)."""
+    if (refused := _refuse(request)) is not None:
+        return refused
+    now = time.monotonic()
+    body = _critical_cache["body"]
+    if body is None or now - _critical_cache["at"] >= CRITICAL_TTL_SECONDS:
+        try:
+            body = await _critical_read(request.app["session"])
+            _critical_cache.update(at=now, body=body)
+        except Exception as err:  # noqa: BLE001 — Home Assistant unreachable: say so, keep the last answer
+            last = _critical_cache["body"] or {"entities": [], "rules": [], "at": None}
+            body = {**last, "error": f"could not read the villa's rules: {type(err).__name__}"}
+    return web.json_response(body, headers={"Cache-Control": "no-store"})
+
+
 # ── The rooms the Kiosk shows (the villa model's fallback) ───────────────────
 # "Which room is this device in" is the Kiosk's rule (EntityMap.ts
 # resolveEntityRoom): Home Assistant's area, else the drawn room the device's
@@ -3956,6 +4029,7 @@ def build_app(data_dir: str | None = None) -> web.Application:
     app.router.add_get("/core/websocket", ws_handler)
     app.router.add_route("*", "/core/api/{path:.*}", rest_handler)
     # The Kiosk's side of the VESTA Agent (owner and facility manager).
+    app.router.add_get("/critical-devices", critical_devices_handler)
     app.router.add_get("/agent-status", agent_status_handler)
     app.router.add_get("/agent-messages", agent_messages_get_handler)
     app.router.add_post("/agent-messages/clear", agent_messages_clear_handler)

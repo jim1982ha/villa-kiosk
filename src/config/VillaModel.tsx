@@ -16,6 +16,7 @@ import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "./ConfigContext";
 import { useFmData } from "@/fm/FmDataContext";
+import { useCriticalDevices } from "@/ha/criticalDevices";
 import { villaDevices, deviceFolding, deviceOf, deviceReadings, type VillaDevices } from "./deviceGroups";
 import { effectiveMapped, visibleEntitiesOf, visibleTo } from "./villaVisibility";
 import type { Role } from "@/auth/roles";
@@ -82,6 +83,7 @@ export function VillaModelProvider({ sets, children }: { sets: VillaSets; childr
   const { entities, entityDeviceIds, connected } = useHA();
   const { config, resolvedRooms } = useConfig();
   const { data: fmData } = useFmData();
+  const critical = useCriticalDevices();
   const { entityMap, deviceGroups } = config;
 
   // Which entity stands for which device — a function of CONFIG and the
@@ -99,11 +101,12 @@ export function VillaModelProvider({ sets, children }: { sets: VillaSets; childr
     const unavailableIds = devices.unavailable as string[];
     const selectableIds = devices.ids as string[];
     const attentionItems = buildAttentionItems({
-      unavailableIds, entities, entityMap, alertThresholds: config.alertThresholds, resolvedRooms, fmData, selectableIds, folding });
+      unavailableIds, entities, entityMap, alertThresholds: config.alertThresholds, resolvedRooms, fmData, selectableIds, folding,
+      critical });
     // NOT grouped here: grouping is per profile (attentionFor), and a
     // role-blind grouping had no reader (until 2.496.268 it ran anyway).
     return { unavailableIds, selectableIds, attentionItems };
-  }, [devices, entities, entityMap, config.alertThresholds, resolvedRooms, fmData, folding]);
+  }, [devices, entities, entityMap, config.alertThresholds, resolvedRooms, fmData, folding, critical]);
 
   // Advanced Settings' device list and what it must say is missing — the same dismissal as every set above.
   const settings = useMemo(() => {

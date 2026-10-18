@@ -23,7 +23,7 @@ import type { HassEntity } from "@/types/ha.types";
 // POWER, by name: "N on" counts a device switched on (deviceActivity owns both
 // meanings of "on"; a lights/AC tile counts this one).
 import { isSwitchedOn } from "@/utils/deviceActivity";
-import { isUnavailable } from "@/utils/stateColors";
+import { isOffline } from "@/utils/stateColors";
 import { effectiveSensorClass, toBaseUnit } from "./SensorClasses";
 import { levelForValue, type Threshold } from "./ThresholdConfig";
 import { domainOf } from "@/utils/entityDomain";
@@ -109,7 +109,8 @@ export function climateFacts(entities: Record<string, HassEntity>, allowed?: All
   return {
     ids: idsOf(units),
     active: idsOf(active),
-    unreachable: idsOf(units.filter((e) => isUnavailable(e))),
+    // unreachable = lost contact (isOffline), one meaning with every offline list (2026-10-18)
+    unreachable: idsOf(units.filter((e) => isOffline(e))),
     avgCurrentTemp: temps.length ? Math.round(temps.reduce((a, b) => a + b, 0) / temps.length) : null,
   };
 }

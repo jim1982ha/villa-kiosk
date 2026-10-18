@@ -23,7 +23,7 @@ import { faultSource, type IssueSource } from "@/fm/issueSource";
 import type { FmData, FmTicketCheck } from "@/fm/fmTypes";
 import type { HassEntity } from "@/types/ha.types";
 import type { EntityMapping } from "@/types/scene.types";
-import { missingFromHa, NOT_IN_HA } from "@/utils/stateColors";
+import { isOffline, missingFromHa, NOT_IN_HA } from "@/utils/stateColors";
 
 export type AttentionKind = "unavailable" | "fault" | "schedule" | "alarm";
 
@@ -54,6 +54,10 @@ export interface AttentionItem {
   /** Set on a fault whose entity Home Assistant reports "unavailable" right now: its device is offline, and so is
    *  what the fault is about — it goes onto the device's Unavailable line (mergeFaults). */
   offline?: boolean;
+  /** Set on an offline device (kind "unavailable"): it is on the villa's ONE list of critical devices — the one its
+   *  "critical devices offline" rule watches (agent-contract.json criticalDevices, owner 2026-10-18): red, the
+   *  villa's health danger. Any other offline device is amber. */
+  critical?: boolean;
   /** Set on a fault: how the VESTA Agent reads it again to close it (FmTicket.check) — the card's "Next check". */
   check?: FmTicketCheck;
   /** Set on a fault: what last happened about it on Telegram (faultNotes.lastNoted — "Escalation sent to Owner"). */
@@ -174,10 +178,17 @@ export function lineIcon(group: AttentionGroup, item: AttentionItem): LineSource
 
 /** A line's source icons and the status colour of each (owner, 2026-10-14: the source as an icon, in place of the
  *  warning sign; two stacked when a line holds a device's live state and its fault). */
-export interface LineSources { sources: IssueSource[]; kinds: AttentionKind[] }
+export interface LineSources { sources: IssueSource[]; kinds: AttentionTone[] }
 export function lineSources(item: AttentionItem): LineSources {
-  const own = { sources: [item.source ?? "live"], kinds: [item.kind] } as LineSources;
-  return item.fault ? { sources: [...own.sources, item.fault.source ?? "person"], kinds: [...own.kinds, item.fault.kind] } : own;
+  const own = { sources: [item.source ?? "live"], kinds: [attentionTone(item)] } as LineSources;
+  return item.fault ? { sources: [...own.sources, item.fault.source ?? "person"], kinds: [...own.kinds, attentionTone(item.fault)] } : own;
+}
+
+/** What colours a problem's icon (the .cockpit-attention-<tone> class): its kind — and a CRITICAL offline device its
+ *  own, red, where any other offline device is amber (owner, 2026-10-18: "critical" = red and told at once). */
+export type AttentionTone = AttentionKind | "critical";
+export function attentionTone(item: AttentionItem): AttentionTone {
+  return item.kind === "unavailable" && item.critical ? "critical" : item.kind;
 }
 
 /**
@@ -297,14 +308,20 @@ export function buildAttentionItems(opts: {
    *  (deviceGroups.deviceFolding), so groupAttention folds a lock's own
    *  alarm and a ticket raised on its battery sensor into ONE row. */
   folding: ReadonlyMap<string, string>;
+  /** The villa's critical entities (useCriticalDevices: GET /critical-devices) — a device is critical when it, or any
+   *  entity folded onto it, is listed. Empty: nothing is (the list not read yet, or the villa has no such rule). */
+  critical?: ReadonlySet<string>;
 }): AttentionItem[] {
   const { unavailableIds, entities, entityMap, alertThresholds, resolvedRooms, fmData, selectableIds, folding } = opts;
   const items: AttentionItem[] = [];
+  // a critical entity stands for its device (the fold): the rule may name a lock's battery sensor, the model the lock
+  const criticalIds = new Set([...(opts.critical ?? [])].flatMap((e) => [e, folding.get(e) ?? e]));
 
   for (const id of unavailableIds) {
     items.push({
       id: `unavailable:${id}`,
       kind: "unavailable",
+      critical: criticalIds.has(id),
       title: labelOf(id, entityMap, entities),
       // an object the model names whose entity Home Assistant does not have says so, as everywhere (NOT_IN_HA)
       detail: missingFromHa(entities, id) ? NOT_IN_HA : "Unavailable",
@@ -329,7 +346,8 @@ export function buildAttentionItems(opts: {
       latest: lastNoted(t),
       source: faultSource(t),
       check: t.check,
-      offline: !!t.entityId && entities[t.entityId]?.state === "unavailable",
+      // lost contact (isOffline) with an entity the villa's system has: the device's offline line takes it
+      offline: !!t.entityId && !!entities[t.entityId] && isOffline(entities[t.entityId]),
     });
   }
 
@@ -442,11 +460,11 @@ export function attentionFor(att: VillaProblems, may: (entityId: string) => bool
   };
 }
 
-/** The level is read from EVERY problem (a fault beside an unavailable device
- *  is still danger); the count is the ROWS, the number the badge shows. */
+/** The level is read from EVERY problem; the count is the ROWS, the number the badge shows. Danger is an alarm or a
+ *  CRITICAL device offline (owner, 2026-10-18); any other offline device, a fault or a late task is a warning. */
 export function villaHealthFrom(groups: readonly AttentionGroup[]): VillaHealth {
   if (groups.length === 0) return { level: "ok", summary: "Everything looks fine." };
-  const hasDanger = groups.some((g) => g.items.some((i) => i.kind === "unavailable" || i.kind === "alarm"));
+  const hasDanger = groups.some((g) => g.items.some((i) => i.kind === "alarm" || attentionTone(i) === "critical"));
   const n = groups.length;
   return {
     level: hasDanger ? "danger" : "warn",
