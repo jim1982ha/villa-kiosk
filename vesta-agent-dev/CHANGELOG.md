@@ -1,3 +1,13 @@
+## 0.12.250
+
+What you will see:
+- An alert keeps its number when its automation is renamed, or its entity ID changed: the next alert of the same
+  automation carries on under the same number, never a new one beside it. The villa's six alert templates now send
+  each automation's permanent number (updated on the villa today). An alert opened before today is found under its
+  old name the first time its automation speaks again, and keeps its number from then on.
+- An alert whose automation was renamed is no longer closed as "no longer exists": only a deleted automation closes
+  its alert that way.
+
 ## 0.12.249
 
 What you will see:
