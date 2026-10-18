@@ -1,3 +1,23 @@
+## 2.496.413
+
+### Changed
+- Every notice over the villa looks the same and sits in the same place: one column under the top bar, where they
+  stack instead of overlapping. "Disconnected — reconnecting…", "A new version of VESTA is ready", a tap that failed,
+  "Motion detected · room", "Floor … isn't modelled yet" and a floor-plan sync problem are all the same pill, coloured
+  as in Map colours & keys: amber when contact is lost, green when a sensor is triggered, red when something failed,
+  and the VESTA green for news. The floor-plan sync problem moved from the bottom of the screen to that column.
+- The short "reconnecting" notice on a phone reads "Reconnecting to the villa…".
+
+## 2.496.412
+
+### Changed
+- Cockpit › Overview: a card holding several problems (two alerts about the same door) has a small Close on each
+  problem's line, to close that one alone, and its main button reads "Close all". A card with one problem keeps its
+  one Close.
+- Cockpit: a part the villa's system lists under a device (a power meter's phase, a relay's channel) is that device:
+  a fault on a meter's phase sits on the meter's card, never on a card of its own. Devices you placed separately on
+  the map stay separate.
+
 ## 2.496.411
 
 ### Fixed

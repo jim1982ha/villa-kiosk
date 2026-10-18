@@ -206,8 +206,30 @@ ck("the villa model hands buildAttentionItems the device fold, and leaves the gr
 // tests/oracles/cockpit_cards.mjs (architecture review, 2026-10-15). Here: the WIRING a drawing cannot see.
 ck("the Cockpit draws one card per group, its buttons decided by cardActions",
    /attentionGroups\.map\(\(group\) => \(\s*<CockpitAttentionRow key=\{group\.key\} group=\{group\}/.test(cockpit)
-   && /const acts = cardActions\(group\);/.test(cockpit) && /<AttentionCard group=\{group\} onOpenEntity=\{onOpenEntity\} cadence=\{status\?\.cadence \?\? null\}\s*actions=\{useCardActions\(group, canManage, onEditTicket\)\} \/>/.test(cockpit)
+   && /const acts = cardActions\(group\);/.test(cockpit) && /<AttentionCard group=\{group\} onOpenEntity=\{onOpenEntity\} cadence=\{status\?\.cadence \?\? null\}\s*actions=\{useCardActions\(group, canManage, onEditTicket, closer\)\}\s*lineActions=\{canManage \? \(item\) => <LineClose group=\{group\} item=\{item\} closer=\{closer\} \/> : undefined\} \/>/.test(cockpit)
+   // ...and each line's own Close is itemActions' answer, sharing the card's one question
+   && /function LineClose[\s\S]*?const acts = itemActions\(group, item\);/.test(cockpit)
    // a line's icon is lineIcon's answer, never its own kind's again
    && /function CockpitAttentionSub[\s\S]*?const icons = lineIcon\(group, item\);/.test(cockpit));
+
+// owner, 2026-10-18 (architecture review "One problem, one card" #2): #41 could not be closed without #55 — the card's
+// Close closed every problem of the door. A card holding several problems closes each alone, or "Close all".
+{
+  const { cardActions, itemActions } = await import("@/config/attention");
+  const dev = { key: "lock.door2", label: "Door", room: "Hall" };
+  const [two] = groupAttention([
+    { id: "alarm:lock.door2", kind: "alarm", title: "Door", detail: "Unlocked", entityId: "lock.door2", source: "live", device: dev },
+    { id: "fault:a", kind: "fault", title: "#41 · Door unlocked", detail: "Fault", entityId: "lock.door2", ticketId: "a", stage: "fault", source: "alert", device: dev },
+    { id: "fault:b", kind: "fault", title: "#55 · Door unlocked", detail: "Fault", entityId: "lock.door2", ticketId: "b", stage: "fault", source: "alert", device: dev }]);
+  const close = cardActions(two).find((a) => a.step.kind === "close");
+  const lines = two.items.map((i) => itemActions(two, i).map((a) => `${a.label}:${a.ids.join("+")}`).join());
+  ck("  a card with two problems: \"Close all\" closes both; each problem's own Close closes it alone",
+     close?.label === "Close all" && close.ids.slice().sort().join() === "a,b" && lines.join("|") === "Close:a|Close:b", { close, lines });
+  const [one] = groupAttention([
+    { id: "fault:c", kind: "fault", title: "#60 · Door unlocked", detail: "Fault", entityId: "lock.door3", ticketId: "c", stage: "fault", source: "alert",
+      device: { key: "lock.door3", label: "Door 3", room: "Hall" } }]);
+  ck("  ...a card with one problem keeps its one Close, and no line carries another",
+     cardActions(one).find((a) => a.step.kind === "close")?.label === "Close" && one.items.every((i) => itemActions(one, i).length === 0));
+}
 
 done("✅ one card per device in the Live issues");

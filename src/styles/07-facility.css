@@ -179,6 +179,9 @@
 .fm-meta-when { font-size: var(--text-xs); flex: 1 1 0; min-width: 14em; }
 .fm-meta .fm-entity-chip { font-size: var(--text-2xs); padding: 1px 9px; line-height: 1.6; }
 .fm-fault-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+/* one problem's own Close on a card holding several: small, at the end of its line (owner, 2026-10-18) */
+.cockpit-line-actions { display: flex; gap: 6px; flex: 0 0 auto; }
+.cockpit-line-actions .btn { padding: 2px 8px; font-size: var(--text-2xs); min-height: 0; }
 
 /* A record that opens for editing when tapped. The cursor and hover lift are
    the whole affordance — a per-row "Edit" button would compete with the status

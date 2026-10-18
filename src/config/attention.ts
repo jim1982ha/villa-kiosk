@@ -18,7 +18,7 @@ import { deviceRoom, deviceRoomOrRecord, firstRoom, roomLabel } from "@/config/d
 import { deviceOf } from "@/config/deviceGroups";
 import { faultTitle, fmAttention, stageOf } from "@/fm/fmEngine";
 import { lastNoted } from "@/fm/faultNotes";
-import { deviceWorkKey, groupByDevice, overviewActions, type WorkAction, type WorkRecord } from "@/fm/deviceWork";
+import { deviceWorkKey, groupByDevice, lineActions, overviewActions, type WorkAction, type WorkRecord } from "@/fm/deviceWork";
 import { faultSource, type IssueSource } from "@/fm/issueSource";
 import type { FmData, FmTicketCheck } from "@/fm/fmTypes";
 import type { HassEntity } from "@/types/ha.types";
@@ -139,14 +139,29 @@ export function groupAttention(items: readonly AttentionItem[]): AttentionGroup[
  *  live state's line by mergeFaults): fm/deviceWork.overviewActions' answer, in the order drawn. Empty when it holds
  *  none, so a card that is only what Home Assistant reports has no button. */
 export function cardActions(group: AttentionGroup): WorkAction[] {
-  return overviewActions(cardRecords(group));
+  return overviewActions(cardRecords(group), problemLines(group));
+}
+
+/** One line's own Close (deviceWork.lineActions): on a card holding several problems, each closes alone. */
+export function itemActions(group: AttentionGroup, item: AttentionItem): WorkAction[] {
+  return lineActions(itemRecords(item), problemLines(group));
+}
+
+/** How many of a card's lines carry a record a person can close. */
+function problemLines(group: AttentionGroup): number {
+  return group.items.filter((i) => itemRecords(i).length > 0).length;
+}
+
+/** The records of one line — its fault, or the fault folded onto its live state, with their copies. */
+function itemRecords(i: AttentionItem): WorkRecord[] {
+  const f = i.kind === "fault" ? i : i.fault;
+  return f ? [f.ticketId, ...(f.twins ?? [])].flatMap((id) => (id
+    ? [{ id, stage: f.stage === "ticket" ? "ticket" as const : "fault" as const }] : [])) : [];
 }
 
 /** The records on a card — its faults and tickets, each with its stage. */
 export function cardRecords(group: AttentionGroup): WorkRecord[] {
-  return group.items.flatMap((i) => (i.kind === "fault" ? [i] : i.fault ? [i.fault] : []))
-    .flatMap((f) => [f.ticketId, ...(f.twins ?? [])].flatMap((id) => (id
-      ? [{ id, stage: f.stage === "ticket" ? "ticket" as const : "fault" as const }] : [])));
+  return group.items.flatMap(itemRecords);
 }
 
 /** A problem's line inside ITS row: under a device, what attentionLine says ("Unlocked", "Entrance door unlocked");

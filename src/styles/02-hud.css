@@ -476,7 +476,7 @@
 }
 
 .room-label {
-  /* Same safe-area treatment as .service-toast right below — this banner
+  /* Safe-area aware, as the notices are (.notice-stack) — this banner
      used to sit at a flat 64px regardless of device, which on an iPhone with
      a Dynamic Island (a taller inset than a plain notch) let it render
      partially under/behind the island cutout instead of clear of it. */
@@ -487,29 +487,6 @@
   border: 1px solid var(--hairline);
 }
 
-/* Failed-service-call feedback: sits above panels/sheets so a tap that did
-   nothing always explains itself, wherever it happened. */
-.service-toast {
-  position: absolute; top: calc(64px + var(--safe-top));
-  left: 50%; transform: translateX(-50%);
-  display: flex; align-items: center; gap: 8px;
-  border: 1px solid var(--status-danger); color: var(--status-danger);
-  padding: 10px 18px; border-radius: 999px; z-index: 70;
-  animation: fadeSlide 0.3s ease-out;
-  max-width: 86vw; font-size: var(--text-base);
-}
-/* Neutral variant (AppNotice) — a general "heads up", not a failure, so it
-   doesn't borrow the danger-red tone the plain .service-toast uses for a
-   failed HA service call. */
-/* App notices (e.g. "Motion detected · Kitchen") belong to the VILLA MAP, so
-   they sit BELOW the fullscreen camera viewer (z-index 60) instead of the
-   shared toast's 70 — a motion alert was drawing on top of the live feed you
-   were watching. The error toast keeps the higher z-index on purpose: a
-   service failure still has to reach you over anything. */
-.service-toast.app-notice {
-  border-color: var(--hairline-strong); color: var(--text-primary);
-  background: var(--bg-panel); z-index: 55;
-}
 
 /* Instant tap-acknowledgment ring for the in-scene quick-toggle gesture (see
    TapRipple.tsx) — fixed layer over the whole viewport, never intercepts

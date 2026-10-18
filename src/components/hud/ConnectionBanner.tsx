@@ -27,6 +27,7 @@
 import { useEffect, useRef, useState } from "react";
 import { WifiOff } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
+import { NoticeView } from "./Notice";
 
 /** Grace period before saying anything. A socket that drops and recovers
  *  within a second or two (a phone waking, a brief AP roam) should not flash
@@ -55,27 +56,18 @@ export default function ConnectionBanner() {
 
   if (!show) return null;
 
+  // Two phrasings, picked by width (same -full/-short idiom the settings labels use): the long one wrapped to FIVE
+  // lines on a phone, turning a status pill into a slab covering a third of the villa. The short one says the only
+  // thing that has to fit: it is reconnecting, so nothing will respond yet. Drawn as every notice is (Notice), in the
+  // map's "contact lost" amber.
   return (
-    // role="status" + aria-live="polite": announced once when it appears,
-    // without interrupting whatever a screen-reader user is currently on.
-    // Deliberately not role="alert" (assertive) — the connection dropping is
-    // important context, not an emergency that should cut someone off
-    // mid-sentence, and it re-announces on every reconnect cycle.
-    <div className="connection-banner" role="status" aria-live="polite">
-      <WifiOff size={16} />
-      {/* Two phrasings, picked by width (same -full/-short idiom the settings
-          labels use). The long one wrapped to FIVE lines on a phone, turning a
-          status pill into a slab covering a third of the villa — see the
-          .connection-banner phone rules. The short one says the only thing
-          that has to fit: it is reconnecting, so nothing will respond yet. */}
-      <span>
-        <span className="conn-banner-full">
-          Disconnected — reconnecting…
-          {" "}
-          <span className="muted">Controls won&rsquo;t respond until this clears.</span>
-        </span>
-        <span className="conn-banner-short">Reconnecting to Home&nbsp;Assistant…</span>
+    <NoticeView tone="unavailable" icon={<WifiOff size={16} />}>
+      <span className="conn-banner-full">
+        Disconnected — reconnecting…
+        {" "}
+        <span className="muted">Controls won&rsquo;t respond until this clears.</span>
       </span>
-    </div>
+      <span className="conn-banner-short">Reconnecting to the villa…</span>
+    </NoticeView>
   );
 }

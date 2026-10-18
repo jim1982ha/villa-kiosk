@@ -8,6 +8,7 @@
 // JS errors, WebGL context losses and the page-lifecycle transitions that
 // explain an iOS white-screen-after-app-switch.
 
+import { NoticeView } from "@/components/hud/Notice";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePaged, Pager } from "@/components/common/Paged";
@@ -532,7 +533,7 @@ export default function TelemetryPanel() {
       {!!events?.length && <Pager paged={paged} unit="event" />}
       {/* Over the dialog, not inside its scrolling body, where a fixed toast can be clipped */}
       {notice && createPortal(
-        <div className="service-toast app-notice telemetry-notice" role="status"><Info size={16} /><span>{notice}</span></div>,
+        <div className="notice-stack over-dialog"><NoticeView tone="info" icon={<Info size={16} />}>{notice}</NoticeView></div>,
         document.body)}
     </div>
   );

@@ -52,84 +52,57 @@
 }
 @keyframes reduced-motion-breathe { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
 
-/* ---- Connection banner (ConnectionBanner.tsx) -------------------------
-   Sits at the TOP EDGE, full width, rather than borrowing the centred pill
-   shape .service-toast uses. That is deliberate: a toast is transient and
-   dismissible-by-waiting, while this stays for as long as the problem does,
-   and the two must not be mistaken for each other. Full-bleed also survives
-   the phone tier that hides the brand chip's connection dot — the exact case
-   this exists for.
-
-   Warning-amber, not danger-red: the socket dropping is recoverable and
-   usually self-heals in seconds. Red here would put a permanent-looking
-   alarm on a wall display for something that resolves on its own, and would
-   collide with the red this app already reserves for a device that needs
-   attention (an unlocked door, a leak). */
-/* Sits BELOW the top bar (52px, see .hud-topbar) rather than across it. As a
-   full-width strip pinned to top:0 it covered the villa name, the category
-   rail and the corner controls whenever the connection dropped — hiding the
-   UI at the exact moment someone is trying to work out what still works. A
-   centred pill clears the corners entirely, so nothing but empty canvas is
-   ever behind it. */
-.connection-banner {
+/* ---- Notices (components/hud/Notice) ----------------------------------
+   The connection notice is amber, not red: the socket dropping is recoverable and usually self-heals in seconds, and
+   red is what the map reserves for a device that needs attention (an unlocked door, a leak). */
+/* THE notice (components/hud/Notice) — every message over the villa: the connection, a new version, a failed tap, a
+   sensor triggered, a floor-plan sync problem. ONE column under the top bar (52px, see .hud-topbar), so notices stack
+   and never overlap; a centred pill clears the corners, so nothing but empty canvas is behind it. Its colour is its
+   tone (--tone, set from the map's own STATUS_COLOR): a 16% tint, a 45% ring, the icon in full — owner, 2026-10-18:
+   "all the notification formatted the same way, in the colours of Map colours & keys". */
+.notice-stack {
   position: absolute;
   top: calc(var(--safe-top) + 52px + 8px);
   left: 50%; transform: translateX(-50%); z-index: 75;
-  max-width: min(560px, calc(100% - 32px));
-  display: flex; align-items: center; justify-content: center; gap: 8px;
-  padding: 8px 16px;
-  background: color-mix(in srgb, var(--status-warning) 16%, var(--bg-modal));
-  border: 1px solid color-mix(in srgb, var(--status-warning) 45%, transparent);
-  border-radius: 999px;
-  color: var(--text-primary);
-  font-size: var(--text-sm);
-  text-align: center;
-  animation: fadeIn 0.2s ease-out;
-  /* Never eat a tap meant for the HUD underneath: the banner is purely
-     informational and has no controls of its own. */
+  width: max-content; max-width: min(560px, calc(100% - 32px));
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  /* Never eat a tap meant for the HUD underneath: only a notice that acts takes its own (below). */
   pointer-events: none;
 }
-.connection-banner svg { flex: 0 0 auto; color: var(--status-warning); }
-
-/* The installed app's update notice (UpdateBanner): the connection banner's
-   pill, one row below it so the two never overlap (the bottom edge is the
-   category bar's), in the accent colour (news, not a fault), and a button —
-   the whole pill is the tap target. */
-.update-banner {
-  position: absolute;
-  top: calc(var(--safe-top) + 52px + 8px + 48px);
-  left: 50%; transform: translateX(-50%); z-index: 75;
-  max-width: min(560px, calc(100% - 32px));
-  min-height: var(--touch-min);
+.notice-stack:empty { display: none; }
+/* over the Settings dialog, not inside its scrolling body, where a fixed notice can be clipped */
+.notice-stack.over-dialog { position: fixed; z-index: 300; }
+.vesta-notice {
   display: flex; align-items: center; justify-content: center; gap: 8px;
-  padding: 8px 16px;
-  background: color-mix(in srgb, var(--accent) 16%, var(--bg-modal));
-  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  max-width: 100%; padding: 8px 16px;
+  background: color-mix(in srgb, var(--tone) 16%, var(--bg-modal));
+  border: 1px solid color-mix(in srgb, var(--tone) 45%, transparent);
   border-radius: 999px;
   color: var(--text-primary);
-  font-size: var(--text-sm);
+  font: inherit; font-size: var(--text-sm);
   text-align: center;
+  animation: fadeIn 0.2s ease-out;
 }
-.update-banner svg { flex: 0 0 auto; color: var(--accent); }
+.vesta-notice > svg:first-child { flex: 0 0 auto; color: var(--tone); }
+.vesta-notice-text { min-width: 0; overflow-wrap: anywhere; }
+.vesta-notice.tappable { pointer-events: auto; cursor: pointer; min-height: var(--touch-min); }
+.vesta-notice-dismiss {
+  pointer-events: auto; background: none; border: none; color: var(--text-secondary); cursor: pointer;
+  display: flex; padding: 2px; flex: 0 0 auto;
+}
+/* a sensor's news belongs to the villa map: never over the fullscreen camera's live picture */
+body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 .conn-banner-short { display: none; }
 
-/* Phone: the full sentence wrapped to five lines inside a shrink-to-fit pill,
-   which read as a slab dropped over the villa rather than as a status note —
-   and pushed down far enough to sit alongside the floor buttons. Swap to the
-   short phrasing, tighten the box, and keep it on one line: `nowrap` is what
-   actually guarantees the height, since a pill that is merely narrower can
-   still wrap. The width cap keeps that single line clear of the floor stack
-   on the left and the overflow button on the right. */
+/* Phone: a long sentence wrapped to five lines inside a shrink-to-fit pill, which read as a slab dropped over the
+   villa — and pushed down far enough to sit alongside the floor buttons. Tighter box, one line where the notice has
+   a short phrasing; the width cap keeps the column clear of the floor stack on the left and the overflow button on
+   the right. */
 @media (max-width: 640px) {
-  .connection-banner {
-    max-width: calc(100% - 120px);
-    padding: 6px 12px;
-    gap: 6px;
-    font-size: var(--text-xs);
-    white-space: nowrap;
-  }
+  .notice-stack { max-width: calc(100% - 120px); }
+  .vesta-notice { padding: 6px 12px; gap: 6px; font-size: var(--text-xs); }
   .conn-banner-full { display: none; }
-  .conn-banner-short { display: inline; }
+  .conn-banner-short { display: inline; white-space: nowrap; }
 }
 
 /* --- Cockpit page (CockpitModal) — villa-wide status report ------------- */
@@ -272,7 +245,6 @@
   min-width: 220px; background: var(--bg-modal);
 }
 /* The copy notice, over the dialog (a fixed layer above its 70; portalled to <body>). */
-.service-toast.app-notice.telemetry-notice { position: fixed; z-index: 300; }
 
 /* On-demand "this device" diagnostics (TelemetryPanel). Monospace and
    scrollable in BOTH axes: the report has long unwrapped lines (a full user

@@ -63,7 +63,8 @@ export function ticketCards(records: readonly FmTicket[], deviceOf: (entityId: s
 /** Every button a card of open work can carry. Two Closes, because they close different things:
  *  `closeDevice` — an Overview card's: every fault and ticket of the device; `closeTicket` — a Tickets card's: that
  *  ticket's records. Both close with nothing done and no cost (fmCommands' closeTickets). */
-export type WorkActionKind = "openTicket" | "editTicket" | "markResolved" | "closeDevice" | "closeTicket" | "reopen";
+export type WorkActionKind = "openTicket" | "editTicket" | "markResolved" | "closeDevice" | "closeAll" | "closeOne"
+  | "closeTicket" | "reopen";
 
 /** What a button does once pressed: record a stage change (FaultStageModal, to `to`), open the record's form, or —
  *  after its question — close the records with no action. */
@@ -80,6 +81,10 @@ export const WORK_ACTIONS: Record<WorkActionKind, WorkActionSpec> = {
   editTicket: { label: "Edit Ticket", step: { kind: "edit" } },
   markResolved: { label: "Mark resolved", step: { kind: "stage", to: "resolved" } },
   closeDevice: { label: "Close", step: { kind: "close", question: "Close this? No action needed.", confirmLabel: "Close" } },
+  // a card holding several problems: every one at once, or one alone (owner, 2026-10-18: #41 could not be closed
+  // without #55 — architecture review "One problem, one card" #2)
+  closeAll: { label: "Close all", step: { kind: "close", question: "Close all of them? No action needed.", confirmLabel: "Close all" } },
+  closeOne: { label: "Close", step: { kind: "close", question: "Close this one? No action needed.", confirmLabel: "Close" } },
   closeTicket: { label: "Close", step: { kind: "close", question: "Close this ticket? Nothing was done — no cost is recorded.", confirmLabel: "Close ticket" } },
   reopen: { label: "Reopen", step: { kind: "stage", to: "open" } },
 };
@@ -98,15 +103,23 @@ export interface WorkRecord { id: string; stage: FmStage }
  * "Open Ticket" takes on its faults (one ticket for the device); once every one is a ticket, "Edit Ticket" opens the
  * first. "Close" closes them ALL, faults and tickets.
  */
-export function overviewActions(records: readonly WorkRecord[]): WorkAction[] {
+export function overviewActions(records: readonly WorkRecord[], problems = 1): WorkAction[] {
   const open = records.filter((r) => r.stage !== "closed");
   if (open.length === 0) return [];
   const faults = open.filter((r) => r.stage === "fault").map((r) => r.id);
   const tickets = open.filter((r) => r.stage === "ticket").map((r) => r.id);
   return [
     faults.length ? action("openTicket", faults) : action("editTicket", [tickets[0]]),
-    action("closeDevice", open.map((r) => r.id)),
+    action(problems > 1 ? "closeAll" : "closeDevice", open.map((r) => r.id)),
   ];
+}
+
+/** One problem's own Close on a card holding several (`problems` lines with records): its records — its fault and the
+ *  copies folded onto it. None on a card with one problem (the card's Close is that one), none on a line with no
+ *  record (what the villa's system reports goes when the device is back). */
+export function lineActions(records: readonly WorkRecord[], problems: number): WorkAction[] {
+  const open = records.filter((r) => r.stage !== "closed").map((r) => r.id);
+  return problems > 1 && open.length ? [action("closeOne", open)] : [];
 }
 
 /** The buttons of a ticket in progress (a Tickets card): "Mark resolved" and "Close" — both on every record of it. */

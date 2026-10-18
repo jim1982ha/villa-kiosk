@@ -68,6 +68,30 @@ export function entityPlaces(
   return { areaNames, floorNumbers };
 }
 
+/**
+ * Each device that is a PART of another — Home Assistant lists a three-phase meter as the meter and one device per
+ * phase "via" it — mapped to the whole device it belongs to (followed to the top). Devices of their own are absent.
+ *
+ * ⚠️ ONE METER, TWO CARDS (owner, 2026-10-18 — architecture review "One problem, one card" #3): the VESTA Agent counts a
+ * meter and its phases as one device (KnowledgePack.physical_device_of); the Cockpit put a fault on a phase's reading
+ * on a card of its own beside the meter's alert. The same rule, from the same registry, on both sides.
+ */
+export function deviceUnits(devices: readonly HassDeviceRegistryEntry[]): Record<string, string> {
+  const up = new Map(devices.filter((d) => d.via_device_id).map((d) => [d.id, d.via_device_id as string]));
+  const known = new Set(devices.map((d) => d.id));
+  const out: Record<string, string> = {};
+  for (const id of up.keys()) {
+    const seen = new Set([id]);
+    let cur = id;
+    for (let next = up.get(cur); next && known.has(next) && !seen.has(next); next = up.get(cur)) {
+      seen.add(next);
+      cur = next;
+    }
+    if (cur !== id) out[id] = cur;
+  }
+  return out;
+}
+
 /** The three registries a refresh asks for — `null` for one whose request
  *  FAILED (as opposed to answering with nothing). */
 export interface RegistryAnswers {

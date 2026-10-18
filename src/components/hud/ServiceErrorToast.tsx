@@ -1,13 +1,12 @@
 // src/components/hud/ServiceErrorToast.tsx
-// Global feedback for failed service calls. Every control in the app fires
-// its HA call without awaiting it, so when a call fails (disconnected socket,
-// unsupported service, HA-side error) the tap used to do exactly nothing.
-// This toast is that missing feedback: it surfaces the failure for a few
-// seconds wherever it happened — no per-panel wiring needed.
+// Global feedback for failed service calls. Every control in the app fires its call without awaiting it, so when a
+// call fails (disconnected socket, unsupported service, an error on the villa's side) the tap used to do exactly
+// nothing. This is that missing feedback, for a few seconds, wherever it happened — drawn as every notice is (Notice).
 
 import { useEffect, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
+import { NoticeView } from "./Notice";
 
 export default function ServiceErrorToast() {
   const { serviceError } = useHA();
@@ -22,10 +21,5 @@ export default function ServiceErrorToast() {
 
   if (!visible || !serviceError) return null;
 
-  return (
-    <div className="service-toast" role="alert">
-      <AlertTriangle size={16} />
-      <span>{serviceError.message}</span>
-    </div>
-  );
+  return <NoticeView tone="alert" role="alert" icon={<AlertTriangle size={16} />}>{serviceError.message}</NoticeView>;
 }

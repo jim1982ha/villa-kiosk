@@ -16,7 +16,7 @@ import { HAWebSocket, type ConnectionState } from "./HAWebSocket";
 import { devLog } from "@/utils/devLog";
 import { report as reportTelemetry } from "@/utils/telemetry";
 import { hasBootMark } from "@/utils/bootTimeline";
-import { placesAfterRefresh, entityRegistryFacts } from "./registryResolve";
+import { placesAfterRefresh, entityRegistryFacts, deviceUnits } from "./registryResolve";
 import type { HassEntity, HassServiceTarget } from "@/types/ha.types";
 import type { ServiceOutcome } from "./serviceOutcome";
 
@@ -76,6 +76,9 @@ export interface EntityStoreState {
    *  registry fetch resolves; entities with no device behind them (helpers,
    *  templates) are simply absent as keys. */
   entityDeviceIds: Record<string, string>;
+  /** device_id -> the whole device it is a part of (registryResolve.deviceUnits); a device of its own is absent.
+   *  Empty until the device registry answers. */
+  deviceUnits: Record<string, string>;
   connection: ConnectionState;
   /** HA instance config (location, name, unit system, currency), fetched on
    *  connect. Null until then. */
@@ -110,7 +113,7 @@ export class EntityStore {
   readonly ws: HAWebSocket;
   private state: EntityStoreState = {
     entities: {}, suppressedEntityIds: new Set(), hiddenInHaEntityIds: new Set(),
-    entityAreaNames: {}, entityFloorNumbers: {}, entityDeviceIds: {},
+    entityAreaNames: {}, entityFloorNumbers: {}, entityDeviceIds: {}, deviceUnits: {},
     connection: "disconnected", haConfig: null, lastError: null, serviceError: null,
   };
   private readonly listeners = new Set<() => void>();
@@ -305,6 +308,7 @@ export class EntityStore {
         this.ws.getAreaRegistry().catch(failed),
         this.ws.getFloorRegistry().catch(failed),
       ]);
+      if (devices !== null) this.set({ deviceUnits: deviceUnits(devices) });
       const prev = { areaNames: this.state.entityAreaNames, floorNumbers: this.state.entityFloorNumbers };
       const places = placesAfterRefresh(prev, rows, { devices, areas, floors });
       if (places === prev) return;

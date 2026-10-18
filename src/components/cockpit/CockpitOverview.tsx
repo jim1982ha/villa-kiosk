@@ -24,7 +24,7 @@ import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { useFmData } from "@/fm/FmDataContext";
-import WorkButtons, { useConfirmedClose } from "@/components/fm/WorkButtons";
+import WorkButtons, { useConfirmedClose, type ConfirmedClose } from "@/components/fm/WorkButtons";
 import { roleCan } from "@/auth/permissions";
 import type { Doors } from "@/auth/doors";
 import { CATEGORY_LABELS, CATEGORY_ICONS } from "@/config/EntityCategories";
@@ -39,7 +39,7 @@ import {
   buildCategoryTiles, buildRoomGroups, buildFloorGroups,
   buildActivityFeed, pivotTiles, tileLine, type Pivot, type ActivityEntry,
 } from "./cockpitData";
-import { attentionLineIn, cardActions, lineIcon, lineSources, type AttentionGroup, type AttentionItem } from "@/config/attention";
+import { attentionLineIn, cardActions, itemActions, lineIcon, lineSources, type AttentionGroup, type AttentionItem } from "@/config/attention";
 import { SourceIcons } from "@/components/fm/sourceIcons";
 import RecordCard from "@/components/fm/RecordCard";
 import FoldedList from "@/components/common/FoldedList";
@@ -288,19 +288,40 @@ function CockpitAttentionRow({ group, onOpenEntity, canManage, onEditTicket }: {
   onEditTicket: (ticketId: string) => void;
 }) {
   const { status } = useAgent();
+  // ONE close-question per card, its own Close and each line's: asking on one puts the others' buttons back
+  const closer = useConfirmedClose();
   return <AttentionCard group={group} onOpenEntity={onOpenEntity} cadence={status?.cadence ?? null}
-    actions={useCardActions(group, canManage, onEditTicket)} />;
+    actions={useCardActions(group, canManage, onEditTicket, closer)}
+    lineActions={canManage ? (item) => <LineClose group={group} item={item} closer={closer} /> : undefined} />;
+}
+
+/** One problem's own Close, on a card holding several (attention.itemActions): its question in place of the button,
+ *  why it did not land under its line. */
+function LineClose({ group, item, closer }: { group: AttentionGroup; item: AttentionItem; closer: ConfirmedClose }) {
+  const acts = itemActions(group, item);
+  if (acts.length === 0) return null;
+  const key = `${group.key}|${item.id}`;
+  const problem = closer.problemFor(key);
+  return (
+    <>
+      <WorkButtons actions={acts} cardKey={key} closer={closer} name={attentionLineIn(group, item) || group.title}
+        className="cockpit-line-actions" onAction={() => {}} />
+      {problem && <div className="fm-inline-error" role="alert">{problem}</div>}
+    </>
+  );
 }
 
 /** The card itself, drawn — THE Cockpit card (RecordCard), as every list's (architecture review, 2026-10-15): its
  *  source icons before the device's name, the room under it, its problems' lines, its buttons on the right of them.
  *  Tapping it opens the device; its buttons take their own presses. Pure: a check draws it. */
-export function AttentionCard({ group, onOpenEntity, cadence, actions }: {
+export function AttentionCard({ group, onOpenEntity, cadence, actions, lineActions }: {
   group: AttentionGroup;
   onOpenEntity: (id: string) => void;
   /** The VESTA Agent's own timing (its heartbeat), for the card's "Next check" — null: it did not say. */
   cadence: AgentCadence | null;
   actions?: ReactNode;
+  /** A line's own buttons (its Close, on a card holding several problems). */
+  lineActions?: (item: AttentionItem) => ReactNode;
 }) {
   const tappable = !!group.entityId;
   return (
@@ -315,7 +336,7 @@ export function AttentionCard({ group, onOpenEntity, cadence, actions }: {
       onOpen={tappable ? () => onOpenEntity(group.entityId as string) : undefined}
       body={(
         <ul className="cockpit-attention-subs">
-          {group.items.map((item) => <CockpitAttentionSub key={item.id} group={group} item={item} />)}
+          {group.items.map((item) => <CockpitAttentionSub key={item.id} group={group} item={item} actions={lineActions?.(item)} />)}
         </ul>
       )}
       actions={actions ?? undefined}
@@ -323,7 +344,7 @@ export function AttentionCard({ group, onOpenEntity, cadence, actions }: {
   );
 }
 
-function CockpitAttentionSub({ group, item }: { group: AttentionGroup; item: AttentionItem }) {
+function CockpitAttentionSub({ group, item, actions }: { group: AttentionGroup; item: AttentionItem; actions?: ReactNode }) {
   const icons = lineIcon(group, item);
   // what last happened about it on Telegram — a reminder, an escalation, a button pressed (owner, 2026-10-14)
   const latest = item.latest ?? item.fault?.latest;
@@ -336,6 +357,8 @@ function CockpitAttentionSub({ group, item }: { group: AttentionGroup; item: Att
           {attentionLineIn(group, item)}
           {latest && <span className="cockpit-attention-latest">{latest.note} · {localStamp(latest.at)}</span>}
         </span>
+        {/* a press on it is its own: never the card's tap-to-open */}
+        {actions && <span onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>{actions}</span>}
       </div>
     </li>
   );
@@ -343,9 +366,9 @@ function CockpitAttentionSub({ group, item }: { group: AttentionGroup; item: Att
 
 /** A card's buttons, for the profiles that manage Facility work — WHICH buttons, on which records and with which
  *  question is attention.cardActions' answer (fm/deviceWork, tested by value); WorkButtons draws them. */
-function useCardActions(group: AttentionGroup, canManage: boolean, onEditTicket: (ticketId: string) => void) {
+function useCardActions(group: AttentionGroup, canManage: boolean, onEditTicket: (ticketId: string) => void,
+  closer: ConfirmedClose) {
   const { data } = useFmData();
-  const closer = useConfirmedClose();
   const [staging, setStaging] = useState<{ tickets: FmTicket[]; to: FmTicketStatus } | null>(null);
   const acts = cardActions(group);
   if (!canManage || acts.length === 0) return null;

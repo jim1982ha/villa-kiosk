@@ -45,20 +45,6 @@
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
 /* --- Central .sh3d background-refresh failure banner --- */
-.sh3d-sync-banner {
-  position: absolute; bottom: 110px; left: 50%; transform: translateX(-50%);
-  z-index: 45; display: flex; align-items: center; gap: 10px;
-  background: var(--bg-overlay); backdrop-filter: blur(12px);
-  border: 1px solid var(--status-danger); border-radius: 14px;
-  padding: 10px 14px; max-width: 92vw;
-  box-shadow: 0 6px 24px var(--shadow);
-  font-size: var(--text-sm); color: var(--text-primary);
-}
-.sh3d-sync-banner svg:first-child { color: var(--status-danger); flex-shrink: 0; }
-.sh3d-sync-banner button {
-  background: none; border: none; color: var(--text-secondary); cursor: pointer;
-  display: flex; padding: 2px; flex-shrink: 0;
-}
 
 .muted { color: var(--text-secondary); }
 .danger-text { color: var(--status-danger); }
