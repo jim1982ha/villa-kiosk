@@ -1,3 +1,16 @@
+## 0.12.253
+
+What you will see on Telegram:
+- One copy of an alert per chat, even when two of its messages are sent at the same moment (#55 showed twice in the
+  owner's group). Pressing Done or Need help on a copy left behind answers the alert and removes that copy.
+- "Back at … (3rd time in 7 days)" counts the alert's earlier runs again after this week's change of how alerts are
+  numbered.
+
+What you will see in the Cockpit:
+- A device that went offline and was then alerted on by the villa's own rule no longer gets "Cleared: the nightly
+  check no longer sees it" at 02:00 while still off: its fault closes as "Followed by alert #N".
+- An investigation lists a meter's phases as parts of the same device, as every nightly check already does.
+
 ## 0.12.252
 
 What you will see on Telegram:
