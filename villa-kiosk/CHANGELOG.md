@@ -1,3 +1,12 @@
+## 2.496.414
+
+### Fixed
+- Every button in the app now shows it is under the mouse (the VESTA green tint), as the window footers already did.
+- Cockpit › Overview: a card no longer lights up as a whole while the mouse is on one of its buttons.
+- Cockpit › Overview: a problem's own Close asks its question on a row of its own under the problem, with small
+  Cancel and Close buttons — it was squeezed beside the words with full-size buttons. A problem's words stay on one
+  line, cut with "…" (the whole text shows when the mouse rests on it).
+
 ## 2.496.413
 
 ### Changed

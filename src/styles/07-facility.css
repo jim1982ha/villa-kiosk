@@ -76,7 +76,9 @@
 @media (hover: hover) {
   /* a card that opens lights up — never while the pointer is on its buttons, which light up themselves (owner,
      2026-10-10: "I don't see the close button highlighted, rather the whole card") */
-  .fm-record-card:has(> .fm-openable):hover:not(:has(.fm-record-actions:hover)) {
+  /* …nor on ANY button of it: a problem's own Close sits on its line, outside the card's row of buttons, and lit
+     the whole card (owner, 2026-10-18) */
+  .fm-record-card:has(> .fm-openable):hover:not(:has(.fm-record-actions:hover)):not(:has(button:hover)) {
     background: color-mix(in srgb, var(--accent) 8%, var(--bg-card));
   }
 }
@@ -182,6 +184,15 @@
 /* one problem's own Close on a card holding several: small, at the end of its line (owner, 2026-10-18) */
 .cockpit-line-actions { display: flex; gap: 6px; flex: 0 0 auto; }
 .cockpit-line-actions .btn { padding: 2px 8px; font-size: var(--text-2xs); min-height: 0; }
+/* …and its question on a row of its own under the line, as small as the button it replaces (owner, 2026-10-18: the
+   question and full-size Cancel/Close were squeezed beside the text, pushing it into a narrow column) */
+.cockpit-line-act { flex: 0 0 auto; }
+.cockpit-line-act:has(> .modal-actions) { flex: 1 1 100%; }
+.cockpit-line-act .modal-actions { justify-content: flex-end; align-items: center; flex-wrap: nowrap; gap: 8px; }
+/* the question takes what is left, its two buttons stay together — on a phone too */
+.cockpit-line-act .modal-actions .body-text { flex: 1 1 0; min-width: 0; font-size: var(--text-xs); color: var(--text-secondary); }
+.cockpit-line-act .modal-actions .btn { flex: 0 0 auto; }
+.cockpit-line-act .modal-actions .btn { min-height: 0; padding: 3px 12px; font-size: var(--text-2xs); border-radius: 999px; }
 
 /* A record that opens for editing when tapped. The cursor and hover lift are
    the whole affordance — a per-row "Edit" button would compete with the status

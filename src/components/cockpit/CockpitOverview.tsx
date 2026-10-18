@@ -354,11 +354,11 @@ function CockpitAttentionSub({ group, item, actions }: { group: AttentionGroup; 
         {/* in the card's icon column (RecordCard's gutter), not before the text: every line's text lines up */}
         {icons && <span className="fm-record-gutter-icon"><SourceIcons {...icons} size={14} /></span>}
         <span className="cockpit-attention-sub-text">
-          {attentionLineIn(group, item)}
+          <span className="cockpit-attention-sub-title" title={attentionLineIn(group, item)}>{attentionLineIn(group, item)}</span>
           {latest && <span className="cockpit-attention-latest">{latest.note} · {localStamp(latest.at)}</span>}
         </span>
         {/* a press on it is its own: never the card's tap-to-open */}
-        {actions && <span onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>{actions}</span>}
+        {actions && <span className="cockpit-line-act" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>{actions}</span>}
       </div>
     </li>
   );
