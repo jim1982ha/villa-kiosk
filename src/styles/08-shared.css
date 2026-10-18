@@ -136,10 +136,14 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 .cockpit-attention-sub { display: flex; flex-direction: column; gap: 4px; }
 /* no height of its own: 36 px, its text centred, was a blank line under the room on a card without buttons (owner,
    2026-10-15) — the card's text starts level with the top of its buttons (RecordCard) */
-.cockpit-attention-sub-line { display: flex; align-items: center; gap: 8px; }
+.cockpit-attention-sub-line { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; }
+/* a problem's words on ONE line, cut with "…" (the whole of them on hover, and in the device it opens) — owner,
+   2026-10-18: "use truncation for the description text" */
+.cockpit-attention-sub-title { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cockpit-attention-latest { display: block; margin-top: 2px; font-size: var(--text-2xs); color: var(--text-dim); }
 .cockpit-attention-sub-text {
-  flex: 1 1 auto; min-width: 0; font-size: var(--text-xs); color: var(--text-secondary);
+  /* basis 0: the cut text never claims its full length, so a line's Close stays beside it */
+  flex: 1 1 0; min-width: 0; font-size: var(--text-xs); color: var(--text-secondary);
   overflow-wrap: anywhere;
 }
 

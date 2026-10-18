@@ -120,4 +120,31 @@ ck("its state pill on the title line, Log and the bin inside on the right, its t
    && /class="fm-record-card state-due-soon"/.test(task), task.slice(0, 300));
 ck("  ...nothing to erase by holding it (its bin removes it): no hold-to-erase on it", !/fm-erasable/.test(task));
 
+// owner, 2026-10-18: a problem's question was squeezed beside its words with full-size buttons, the words ran on, and
+// no button showed the mouse was on it. Drawn: the words cut on one line (whole on hover), a line's own buttons in
+// their own slot; in the stylesheets: every button lights under the mouse, the card does not light over a button.
+{
+  const { readFileSync } = await import("node:fs");
+  const css = (f) => readFileSync(new URL(`../../src/styles/${f}`, import.meta.url), "utf8");
+  const dev = { key: "lock.door4", label: "Door", room: "Hall" };
+  const words = "A long problem that has to be cut on one line";
+  const [two] = groupAttention([
+    { id: "fault:x", kind: "fault", title: words, detail: "Fault", entityId: "lock.door4", ticketId: "x", stage: "fault", source: "alert", device: dev },
+    { id: "fault:y", kind: "fault", title: "Another", detail: "Fault", entityId: "lock.door4", ticketId: "y", stage: "fault", source: "alert", device: dev }]);
+  const card = draw(h(AttentionCard, { group: two, onOpenEntity: () => {}, cadence: CADENCE, lineActions: () => btn("Close") }));
+  ck("  ...a problem's words sit in one cut line, whole on hover; its own Close in its own slot beside them",
+     card.includes(`<span class="cockpit-attention-sub-title" title="${words}">${words}</span>`)
+     && (card.match(/<span class="cockpit-line-act">/g) ?? []).length === 2, card.slice(0, 600));
+  const shared = css("08-shared.css"), fac = css("07-facility.css"), base = css("01-base.css");
+  ck("  ...cut with \"…\", and the cut words never push a line's Close off its line",
+     /\.cockpit-attention-sub-title \{[^}]*white-space: nowrap;[^}]*text-overflow: ellipsis;/.test(shared)
+     && /\.cockpit-attention-sub-text \{[^}]*flex: 1 1 0;/.test(shared));
+  ck("  ...a line's question gets a row of its own, its two small buttons together",
+     /\.cockpit-line-act:has\(> \.modal-actions\) \{ flex: 1 1 100%; \}/.test(fac)
+     && /\.cockpit-line-act \.modal-actions \{[^}]*flex-wrap: nowrap;/.test(fac) && /\.cockpit-line-act \.modal-actions \.btn \{ min-height: 0;/.test(fac));
+  ck("every button lights under the mouse, and the card does not light while the mouse is on any of its buttons",
+     /@media \(hover: hover\) \{\s*\.btn:hover:not\(:disabled\) \{/.test(base)
+     && /\.fm-record-card:has\(> \.fm-openable\):hover:not\(:has\(\.fm-record-actions:hover\)\):not\(:has\(button:hover\)\)/.test(fac));
+}
+
 done("✅ every Cockpit list is one card, checked as it is drawn");

@@ -567,6 +567,20 @@ button {
 .btn.danger { background: var(--status-danger); color: #fff; }
 .btn.ghost { background: transparent; border: 1px solid var(--hairline-strong); }
 .btn.active { background: var(--accent); color: var(--text-on-accent); }
+/* ⚠️ NO BUTTON SHOWED IT WAS UNDER THE MOUSE (owner, 2026-10-18: "there is no hovering style when hovering the
+   buttons"): only the modal footer's and a device panel's own rows had one. Every button now lights as the footer's
+   do — the accent tint — and an action button brightens; those two keep their own, more specific, rules. */
+@media (hover: hover) {
+  .btn:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent);
+    border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+  .btn.primary:hover:not(:disabled), .btn.active:hover:not(:disabled) {
+    background: var(--accent); color: var(--text-on-accent); filter: brightness(1.06);
+  }
+  .btn.danger:hover:not(:disabled) { background: var(--status-danger); color: #fff; filter: brightness(1.08); }
+}
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* Inside a device panel, a selected chip (the fan's speed, a climate mode, a
    media source) is reporting THAT DEVICE'S current state, so it speaks the
    same language as the On button above it — the badge treatment in the
