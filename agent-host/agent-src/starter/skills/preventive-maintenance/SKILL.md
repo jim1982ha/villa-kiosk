@@ -69,7 +69,7 @@ closure, and never raise the same thing twice.
 | PM-EXPECTED-SILENT | power | An intermittent, usage-driven asset was scheduled and did not run. Report only, never a task. | schedule helper |
 | PM-COUNTER-RESET | energy | An energy counter went backwards: the day's kWh is unreliable. | none |
 | PM-BATTERY-LOW / -CRIT / -TREND | battery | Level under `battery_warn_pct` (task), under `battery_crit_pct` (task now, P2 if the device is critical), or falling fast enough to be empty within `battery_trend_warn_days` (report). A battery that reports volts needs `<asset>_battery_nominal_v`. | `vesta_battery_warn_pct`, `vesta_battery_crit_pct` |
-| PM-UNAVAILABLE | availability | A device offline for more than `unavailable_minutes` (read every 5 minutes, and at batch time), one finding per physical device; three or more devices of one integration offline together become one "integration down" finding. P2 when the device is critical. | `vesta_unavailable_minutes` |
+| PM-UNAVAILABLE | availability | A device offline for more than `unavailable_minutes` (read every 5 minutes, and at batch time) — none for a device an open offline alert already follows, one finding per physical device; three or more devices of one integration offline together become one "integration down" finding. P2 when the device is critical. | `vesta_unavailable_minutes` |
 | PM-SILENT | level | A sensor online but not reporting for 24 h. | `vesta_silence_hours` |
 | PM-LEVEL-HIGH | level | A temperature or humidity above `<asset>_max_c` / `<asset>_max_humidity_pct` when such a helper exists. | asset helper |
 | PM-RECONNECT-LOOP | network | Ten or more drop/reconnect events in three days for one device (logbook). | `vesta_reconnect_events`, `vesta_reconnect_days` |

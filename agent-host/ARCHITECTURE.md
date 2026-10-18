@@ -455,5 +455,7 @@ its fault. Decided (owner: "implement the recommended finding", card 1 of 4):
   did not see. A partial reading (the recheck) records; only the whole night may close.
 - **A code job finds the pack through `VESTA_PACK`** (as the store through `VESTA_STORE`): an `every_5_min` job is
   run without `inject`.
-- Not done (cards 2–4, waiting): one list of critical devices, one record per offline device across the alert desk
-  and the night check, one meaning of "offline" in the Kiosk and the Agent.
+- **One problem, one fault (card 3, 0.12.242)**: a device an open alert follows for being offline (its bad states hold
+  "unavailable") gets no PM-UNAVAILABLE finding (`nightly.alerted_offline`); the alert is its record. Needed once
+  card 1 made both fire at the same 10 minutes. The villa's own message beside the Agent's card stays, by design.
+- Not done: card 2 (one list of critical devices — the owner's choice of list), card 4 (one meaning of "offline").

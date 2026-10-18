@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.233 (18 October 2026)
+
+- Architecture review 2026-10-18, offline devices card 3: no PM-UNAVAILABLE finding (night or recheck.py) for a device
+  an open alert already follows for being offline (`nightly.alerted_offline`: bad states holding "unavailable").
+- Starter policy: media_player.turn_on/turn_off `direct` (owner: "a default service that shall be available as
+  baseline").
+
 ## 0.6.232 (18 October 2026)
 
 Architecture review 2026-10-18 (offline devices, card 1 — owner: "implement the recommended finding"):

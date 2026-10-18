@@ -86,7 +86,7 @@ def gone_offline(store, pack, client, now: datetime, params, zone: str) -> dict:
         return none
     ids = sorted({r["entity_id"] for fam in N.WATCHED_FAMILIES for r in pack.entities(fam)})
     at = now.astimezone(ZoneInfo(zone))
-    found = [f for f in N.offline_findings(pack, client().states(ids), at, params)
+    found = [f for f in N.offline_findings(pack, client().states(ids), at, params, N.alerted_offline(store, pack))
              if not store.open_finding(f.rule_id, f.entity_id)]
     if not found:
         return none

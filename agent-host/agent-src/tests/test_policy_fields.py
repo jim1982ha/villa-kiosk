@@ -34,3 +34,13 @@ def test_the_history_and_the_setup_copy_read_the_same_table():
         f"{policy.WORDS['settings.reply_limit_usd']}: 1 → 2"
     assert set(setup_copy.TOOL_SECTIONS) | set(setup_copy.ACTION_SECTIONS) | {"settings"} <= policy.SECTIONS
     assert {f"settings.{k}" for k in setup_copy.AI_SETTINGS} == set(policy.setup_fields("ai"))
+
+
+def test_a_new_villa_turns_a_tv_on_and_off_at_once_for_a_registered_person():
+    # owner, 2026-10-18: "a default service that shall be available as baseline" — no Approve button for a TV
+    from vesta_agent.policy import Policy
+    example = yaml.safe_load(open(os.path.join(ROOT, "starter", "config", "policy.example.yaml")))
+    pol = Policy({**example, "act_enabled": True})
+    for service in ("turn_on", "turn_off"):
+        d = pol.check_service("media_player", service, "media_player.example_tv", {})
+        assert d.allowed and d.direct, (service, d)

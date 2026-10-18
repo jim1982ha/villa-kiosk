@@ -159,7 +159,7 @@ def run(args) -> dict:
         series = [(str(r["start"]), r["mean"]) for r in bat_stats.get(row["entity_id"], []) if r.get("mean") is not None]
         findings += R.battery_rules(asset, row["entity_id"], row.get("unit"), level, series, params, today)
 
-    findings += offline_findings(pack, states, now_ref, params)
+    findings += offline_findings(pack, states, now_ref, params, alerted_offline(store, pack))
     quiet_rows: list[tuple[dict, dict, datetime]] = []
     for fam in ("level",):                       # silence: a level sensor online and quiet
         for row in pack.entities(fam):
@@ -271,7 +271,25 @@ def run(args) -> dict:
 WATCHED_FAMILIES = ("power", "energy", "security", "level", "runtime", "water", "generation")
 
 
-def offline_findings(pack, states: dict, now: datetime, params) -> list:
+def alerted_offline(store, pack) -> set[str]:
+    """The devices (pack.device_id_of, else the entity) an open alert already follows for being offline: an alert whose
+    bad states hold "unavailable" (the alert desk's incidents).
+
+    ⚠️ ONE PROBLEM, ONE FAULT (architecture review, offline devices #3, 2026-10-18): a lock the villa's own rule alerted
+    on at 10 minutes (#, Telegram card, its Kiosk fault) got a second fault "offline for …" from this check, with its
+    own message at 02:00 — and, once recheck.py opened faults every 5 minutes, at the same minute."""
+    out = set()
+    for inc in store.incidents(open_only=True):
+        p = json.loads(inc.get("payload") or "{}")
+        if "unavailable" not in (p.get("bad_states") or []):
+            continue
+        for e in (p.get("entities") or []) + [inc.get("entity_id")]:
+            if e:
+                out.add(pack.device_id_of(e) or e)
+    return out
+
+
+def offline_findings(pack, states: dict, now: datetime, params, alerted: set[str] = frozenset()) -> list:
     """The devices offline now, as PM-UNAVAILABLE findings — the ONE reading of it, for the night check and for
     recheck.py every 5 minutes. One finding per physical device (device_id when the registry gives it, otherwise the
     integration + asset), never one per entity; `integration_down_devices` or more of one integration: one finding.
@@ -301,6 +319,9 @@ def offline_findings(pack, states: dict, now: datetime, params) -> list:
             g["names"].append(row["name"]); g["critical"] = g["critical"] or asset.get("critical", False)
             if hours is not None and (g["hours"] is None or hours > g["hours"]):
                 g["hours"] = hours
+    # a device an open alert already follows is that alert's (alerted_offline); its group is left out before the
+    # integration is counted, so the others of its integration stay what they are
+    groups = {k: g for k, g in groups.items() if (pack.device_id_of(g["entity_id"]) or g["entity_id"]) not in alerted}
     out = []
     for g in F.integration_down(groups, params.behaviour("integration_down_devices")).values():
         a = dict(g["asset"]); a["critical"] = g["critical"]

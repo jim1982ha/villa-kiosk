@@ -240,3 +240,26 @@ def test_a_device_offline_again_within_the_week_says_so(tmp_path):
     later = NIGHT + timedelta(hours=3)
     (fault,) = _run_engine(tmp_path, _off_since(later), later + timedelta(minutes=11))["actions"]
     assert fault["action"] == "ticket.reopen" and "(again: 2 times in 7 days)" in fault["title"], fault
+
+
+def test_a_device_an_offline_alert_already_follows_gets_no_second_fault(tmp_path):
+    # architecture review, offline devices #3: the villa's own rule alerted at 10 minutes (#, card, its fault); this
+    # check would add "Example door has been offline for 12 min" and the FM's message, the same minute
+    store = Store(str(tmp_path / "s.sqlite"))
+    store.new_incident("watch|lock.example_door", "automation.example_watchdog", "lock.example_door", "P2",
+                       {"bad_states": ["unavailable", "disconnected"], "entities": ["lock.example_door"]})
+    store.new_incident("door|lock.example_door", "automation.example_unlocked", "lock.example_door", "P2",
+                       {"bad_states": ["unlocked"], "entities": ["lock.example_door"]})   # another problem: no cover
+    states = {**_off_since(NIGHT), "lock.example_door": {"state": "unavailable", "attributes": {},
+                                                         "last_changed": NIGHT.isoformat()}}
+    out = _run_engine(tmp_path, states, NIGHT + timedelta(minutes=12))
+    assert [a["entity_id"] for a in out["actions"]] == ["sensor.example_th_humidity"] and out["send"] == []
+
+
+def test_an_open_alert_about_something_else_leaves_the_offline_fault(tmp_path):
+    store = Store(str(tmp_path / "s.sqlite"))
+    store.new_incident("door|lock.example_door", "automation.example_unlocked", "lock.example_door", "P2",
+                       {"bad_states": ["unlocked"], "entities": ["lock.example_door"]})
+    states = {"lock.example_door": {"state": "unavailable", "attributes": {}, "last_changed": NIGHT.isoformat()}}
+    out = _run_engine(tmp_path, states, NIGHT + timedelta(minutes=12))
+    assert [a["entity_id"] for a in out["actions"]] == ["lock.example_door"] and len(out["send"]) == 1
