@@ -1,3 +1,13 @@
+## 2.496.410
+
+### Changed
+- Cockpit: a device on your "critical devices offline" rule's list that goes offline is red; any other offline device
+  is amber. The Cockpit's warning turns red only for an alarm or a critical device offline. The list is the one in
+  that rule: change it there and the Cockpit follows within 5 minutes.
+- Cockpit: a sensor that simply has no value to give (a wind chill on a warm day, a light switch's slide sensor
+  between gestures) is no longer listed as offline. A device is offline when the villa's system has lost contact with
+  it, as the VESTA Agent already counts it.
+
 ## 2.496.409
 
 ### Changed
