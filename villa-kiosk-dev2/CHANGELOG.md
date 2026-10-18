@@ -1,3 +1,11 @@
+## 2.496.416
+
+### Changed
+- Villa presence window: "People" lists only the people your "Villa empty" sensor watches, and "Latest movement" only
+  its own sensors — never every person of the villa's system or a camera's motion it does not read. The sensor says
+  which ones it watches (its "people" and "sensors" attributes); one that does not say gets a plain sentence instead.
+- A row of the window only looks and acts clickable when tapping it opens something.
+
 ## 2.496.415
 
 ### Added
