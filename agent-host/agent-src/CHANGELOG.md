@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.238 (18 October 2026)
+
+Owner, 2026-10-18 (#41: "Alert sent … to Owner & FM" beside "Back at …, 2nd time in 7 days (to: Owner & FM)"): every
+step of an alert card ends "(to: …)" — message_format.Step.line "{sent} {at} (to: {who})"; a timed step's bottom line
+puts the skill's words before whom ("Escalation sent … — No answer from FM after 45 min (to: Owner)"); the Kiosk card's
+notes "Reminder sent (to: Facility Manager)".
+
 ## 0.6.237 (18 October 2026)
 
 Owner, 2026-10-18 ("never create helpers via the UI; always a file in the packages folder"): the shipped package

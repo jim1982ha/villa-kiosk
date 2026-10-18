@@ -1,3 +1,11 @@
+## 0.12.247
+
+What you will see on Telegram:
+- Every line of an alert's "Status:" ends the same way, with whom it went to: "- Alert sent 16/10/2026 10:51 (to: Owner
+  & FM)", "- Reminder sent … (to: FM)", "- Back at …, 2nd time in 7 days (to: FM)". The last line puts its explanation
+  first: "Still-there alert sent 18/10/2026 13:59 — Still not fixed (…) (to: Owner)". The Cockpit's fault card says
+  "Reminder sent (to: Facility Manager)" the same way. Older cards change when they are next updated.
+
 ## 0.12.246
 
 What you will see: nothing changes. The message package the Agent provides (vesta_message.yaml) now also defines

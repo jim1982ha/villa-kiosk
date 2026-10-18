@@ -156,7 +156,7 @@ class Notices:
         has none). The ONE wording of a step, in its history line and on its own bottom line (`bottom`)."""
         s = STEPS.get(stage or "")
         times = f", {_ordinal(run)} time in {AGAIN_DAYS} days" if isinstance(run, int) and run > 1 else ""
-        return (s.line if s else "{sent} {at} to {who}").format(
+        return (s.line if s else "{sent} {at} (to: {who})").format(
             sent=s.sent if s else "Sent", at=when(at, self.tz), times=times,
             who=audience(roles, short=True) or "nobody")
 
@@ -166,7 +166,11 @@ class Notices:
         if stage not in STEPS or not STEPS[stage].timed:
             return status
         line = self.step(stage, roles, at or datetime.now(timezone.utc))
-        return f"{line}{STEP_SEP}{status}" if status else line
+        if not status:
+            return line
+        # the skill's words go BEFORE whom, so this line ends "(to: …)" like every other (owner, 2026-10-18, #41)
+        to = f" (to: {audience(roles, short=True) or 'nobody'})"
+        return f"{line.removesuffix(to)}{STEP_SEP}{status}{to}" if line.endswith(to) else f"{line}{STEP_SEP}{status}"
 
     @staticmethod
     def _pressed(h: dict) -> str:
@@ -181,7 +185,7 @@ class Notices:
         out = []
         for h in self.state.incident_history(incident):
             if h.get("stage") in STEPS and STEPS[h["stage"]].noted:
-                out.append({"at": h["at"], "note": f"{STEPS[h['stage']].sent} to {audience(self._roles(h)) or 'nobody'}"})
+                out.append({"at": h["at"], "note": f"{STEPS[h['stage']].sent} (to: {audience(self._roles(h)) or 'nobody'})"})
             elif h.get("stage") == PRESSED_STAGE:
                 out.append({"at": h["at"], "note": self._pressed(h)})
         return out

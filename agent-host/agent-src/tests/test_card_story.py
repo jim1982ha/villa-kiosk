@@ -54,7 +54,7 @@ def test_the_story_is_the_reminders_the_escalation_and_the_presses_not_the_first
     k, t, state, notices, iid, uid = villa(tmp_path)
     told(notices, state, iid, 1)
     assert [x["note"] for x in notices.story(iid)] == [
-        "Reminder sent to Facility Manager", "Escalation sent to Owner", "🆘 Need help pressed by Wayan"]
+        "Reminder sent (to: Facility Manager)", "Escalation sent (to: Owner)", "🆘 Need help pressed by Wayan"]
     # Telegram's "Status:" tells the press as the card does — once, never also as an "Update sent" (review 2026-10-15)
     head = head_text(notices.heading(FM, iid))
     assert "- 🆘 Need help pressed by Wayan " in head and "Update sent" not in head
@@ -66,7 +66,7 @@ def test_the_repair_writes_them_on_the_card_once_without_changing_its_status(tmp
     run(t.repair())
     run(t.repair())
     steps = [u for u in k.ticket(uid)["updates"] if u.get("kind") == "noted"]
-    assert [u["note"] for u in steps] == ["Reminder sent to Facility Manager", "Escalation sent to Owner",
+    assert [u["note"] for u in steps] == ["Reminder sent (to: Facility Manager)", "Escalation sent (to: Owner)",
                                           "🆘 Need help pressed by Wayan"]
     assert {u["status"] for u in steps} == {"open"} and k.ticket(uid)["status"] == "open"
 
@@ -94,4 +94,4 @@ def test_a_reworded_line_is_never_written_on_the_card_again(tmp_path):
     finally:
         STEPS["reminder"] = saved
     notes = [u["note"] for u in k.ticket(uid)["updates"] if u.get("kind") == "noted"]
-    assert notes.count("Reminder sent to Facility Manager") == 1 and "Reminder posted to Facility Manager" not in notes
+    assert notes.count("Reminder sent (to: Facility Manager)") == 1 and "Reminder posted to Facility Manager" not in notes

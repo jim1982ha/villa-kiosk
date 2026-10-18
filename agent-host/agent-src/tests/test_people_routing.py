@@ -161,10 +161,10 @@ def test_to_names_roles_only_never_a_person(tmp_path):
     v.notices.record(25, "new", [(GROUP, "owner"), (FABIEN, "fm"), (JM, "fm")])
     head = head_text(v.notices.heading(GROUP, 25, "owner", "closed"))
     both = "Owner & FM"
-    assert head.split("\n")[1] == f"To: {both}" and head.split("\n")[2].endswith(f" to {both}"), head
+    assert head.split("\n")[1] == f"To: {both}" and head.split("\n")[2].endswith(f" (to: {both})"), head
     # a history line recorded before 0.12.181 named people: read back as their roles
     v.state.set_incident_history(26, [{"at": "2026-10-12T08:00:00+00:00", "stage": "new", "to": ["Fabien", "the Owner"]}])
-    assert head_text(v.notices.heading(FABIEN, 26)).split("\n")[1:] == [f"To: {both}", f"- Alert sent 12/10/2026 08:00 to {both}"]
+    assert head_text(v.notices.heading(FABIEN, 26)).split("\n")[1:] == [f"To: {both}", f"- Alert sent 12/10/2026 08:00 (to: {both})"]
 
 
 def test_a_chat_listed_for_both_roles_is_headed_for_both(tmp_path):

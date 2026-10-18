@@ -89,7 +89,7 @@ def test_an_answer_in_the_group_never_widens_to(agent):
     assert "(closed)" in card(agent, GROUP).split("\n")[0], card(agent, GROUP)
     assert card(agent, GROUP).split("\n")[1] == "To: FM", card(agent, GROUP)
     hist = head_text(agent.notices.heading(GROUP, 1)).split("\n")[2:]
-    assert hist and all(ln.endswith(" to FM") for ln in hist), hist
+    assert hist and all(ln.endswith(" (to: FM)") for ln in hist), hist
 
 
 def test_a_p1_names_both_roles_from_its_first_message(agent):
@@ -102,8 +102,8 @@ def test_the_rules_all_clear_and_the_closing_note_are_one_line(agent):
     rule(agent, "opened", 1, 500)
     rule(agent, "resolved", 1, 501)
     hist = head_text(agent.notices.heading(GROUP, 1)).split("\n")[2:]
-    assert len(hist) == 2 and re.fullmatch(rf"- Alert sent {T} to FM", hist[0]), hist
-    assert re.fullmatch(rf"- Closing note sent {T} to FM", hist[1]), hist
+    assert len(hist) == 2 and re.fullmatch(rf"- Alert sent {T} \(to: FM\)", hist[0]), hist
+    assert re.fullmatch(rf"- Closing note sent {T} \(to: FM\)", hist[1]), hist
     assert not any("Update sent" in ln for ln in hist)
 
 
@@ -114,12 +114,12 @@ def test_a_run_that_came_back_starts_at_a_back_at_line_and_a_reminder_carries_it
     assert set(agent.thread.shown(1)) == {GROUP, FM_CHAT}
     back = card(agent, GROUP)
     assert back.startswith("#1-P2 (existing)\nTo: FM\n")
-    assert re.fullmatch(rf"Back at {T} \(to: FM\) — Back again: 2 times in 7 days",
+    assert re.fullmatch(rf"Back at {T} — Back again: 2 times in 7 days \(to: FM\)",
                         status(back).removeprefix("⚠️ ⚙️ ")), status(back)
     tick(agent, 20)                                     # the reminder: to the FM; the group's copy edited quietly
     group = card(agent, GROUP)
     # point 1: the bottom line says its own step — never "Reminder: no answer after 15 min" alone under 18:03
-    assert re.fullmatch(rf"⚠️ ⚙️ Reminder sent {T} to FM — No answer after 15 min", status_lines(group)[-1]), group
+    assert re.fullmatch(rf"⚠️ ⚙️ Reminder sent {T} — No answer after 15 min \(to: FM\)", status_lines(group)[-1]), group
     assert card(agent, FM_CHAT) == group                # one incident, one picture
     lines = status_lines(group)
     # ... and is told once: the history above it stops before it (drawn as it stood before this step)
@@ -134,8 +134,8 @@ def test_a_run_that_came_back_starts_at_a_back_at_line_and_a_reminder_carries_it
     tick(agent, 50)                                     # the escalation: the reminder joins the history, once
     esc = card(agent, GROUP)
     lines = status_lines(esc)
-    assert re.fullmatch(rf"- Reminder sent {T} to FM", lines[-2]), lines
-    assert re.fullmatch(rf"⚠️ ⚙️ Escalation sent {T} to Owner — No answer from FM after 45 min", lines[-1]), lines
+    assert re.fullmatch(rf"- Reminder sent {T} \(to: FM\)", lines[-2]), lines
+    assert re.fullmatch(rf"⚠️ ⚙️ Escalation sent {T} — No answer from FM after 45 min \(to: Owner\)", lines[-1]), lines
     assert sum("Reminder sent" in ln for ln in lines) == 1
 
 
@@ -146,7 +146,7 @@ def test_the_back_line_counts_the_runs_and_an_older_record_has_none():
     at = datetime.fromisoformat("2026-10-16T18:03:00+00:00")
     assert n.step("back", {"fm"}, at, 3) == "Back at 16/10/2026 18:03, 3rd time in 7 days (to: FM)"
     assert n.step("back", {"fm"}, at) == "Back at 16/10/2026 18:03 (to: FM)"
-    assert n.step("reminder", {"fm"}, at, 3) == "Reminder sent 16/10/2026 18:03 to FM"
+    assert n.step("reminder", {"fm"}, at, 3) == "Reminder sent 16/10/2026 18:03 (to: FM)"
     assert [_ordinal(k) for k in (1, 2, 3, 4, 11, 12, 13, 21, 22, 101)] == \
         ["1st", "2nd", "3rd", "4th", "11th", "12th", "13th", "21st", "22nd", "101st"]
 
@@ -156,8 +156,8 @@ def test_only_a_later_step_says_itself_on_the_bottom_line():
     n = Notices(None, lambda: None, "UTC")
     at = datetime(2026, 10, 16, 18, 20, tzinfo=timezone.utc)
     assert n.bottom("reminder", {"fm"}, "No answer after 15 min", at) == \
-        "Reminder sent 16/10/2026 18:20 to FM — No answer after 15 min"
-    assert n.bottom("escalated", {"owner"}, "", at) == "Escalation sent 16/10/2026 18:20 to Owner"
+        "Reminder sent 16/10/2026 18:20 — No answer after 15 min (to: FM)"
+    assert n.bottom("escalated", {"owner"}, "", at) == "Escalation sent 16/10/2026 18:20 (to: Owner)"
     for stage in ("new", "closed", "update", "pressed", None):
         assert n.bottom(stage, {"owner", "fm"}, "Cleared on 16/10/2026 18:20.", at) == "Cleared on 16/10/2026 18:20."
 
@@ -189,5 +189,5 @@ def test_every_step_is_one_line_of_the_step_table_and_said_the_same_everywhere()
         line = step.line.format(sent=step.sent, at="16/10/2026 18:20", times="", who="FM")
         assert head_text(n.heading(-1, 7, to="fm")).split("\n")[-1] == f"- {line}", stage
         said = n.bottom(stage, {"fm"}, "why", at)
-        assert said == (f"{line} — why" if step.timed else "why"), stage
-        assert [s["note"] for s in n.story(7)] == ([f"{step.sent} to Facility Manager"] if step.noted else []), stage
+        assert said == (f"{line.removesuffix(' (to: FM)')} — why (to: FM)" if step.timed else "why"), stage
+        assert [s["note"] for s in n.story(7)] == ([f"{step.sent} (to: Facility Manager)"] if step.noted else []), stage

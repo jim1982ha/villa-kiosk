@@ -83,12 +83,12 @@ def test_each_chat_keeps_only_the_latest_message_and_it_recalls_the_alert(agent)
     tick(agent, 20)                            # the reminder replaces the alert in the FM's chat
     (fm,) = shown(agent, FM_CHAT)
     # the step says itself — what, when, to whom — before the desk's words (owner, 2026-10-16, #43)
-    assert re.fullmatch(r"Reminder sent \d\d/\d\d/\d{4} \d\d:\d\d to FM — No answer after 15 min", status(fm)) \
+    assert re.fullmatch(r"Reminder sent \d\d/\d\d/\d{4} \d\d:\d\d — No answer after 15 min \(to: FM\)", status(fm)) \
         and SUMMARY in fm and "What to do:" in fm
     assert agent.tg.sent[-1][2], "the reminder carries the buttons"
     tick(agent, 50)                            # the escalation replaces Home Assistant's alert in the owner's chat
     (grp,) = shown(agent, GROUP)
-    assert re.fullmatch(r"Escalation sent \d\d/\d\d/\d{4} \d\d:\d\d to Owner — No answer from FM after 45 min",
+    assert re.fullmatch(r"Escalation sent \d\d/\d\d/\d{4} \d\d:\d\d — No answer from FM after 45 min \(to: Owner\)",
                         status(grp)) and SUMMARY in grp
     assert (GROUP, 500) in agent.tg.deleted
     assert len(shown(agent, FM_CHAT)) == 1     # the FM's reminder is untouched by the owner's message
@@ -150,18 +150,18 @@ def test_need_help_reaches_the_owner_with_the_buttons_to_answer(agent):
     owner = agent.thread.shown(int(iid))[GROUP]
     assert owner["buttons"] and not owner["settled"], owner
     # the escalation's step to the owner only — never the presser's chat, which got the answer (owner, 2026-10-16)
-    assert re.fullmatch(r"Escalation sent .+ to Owner — Need help pressed by Wayan on .+: Owner is asked to act\.",
+    assert re.fullmatch(r"Escalation sent .+ — Need help pressed by Wayan on .+: Owner is asked to act\. \(to: Owner\)",
                         status(owner["text"])) and SUMMARY in owner["text"]
     assert all(mid != owner["mid"] for _, mid, _ in agent.tg.edits)     # never edited: its buttons are still there
     (fm,) = shown(agent, FM_CHAT)
     # the same sentence in every chat (2026-10-11); the owner's copy, the escalation, says its step first (2026-10-16)
-    assert status(owner["text"]).endswith(" — " + status(fm))
+    assert status(owner["text"]).endswith(" — " + status(fm) + " (to: Owner)")
     # the Kiosk's card tells the same story, through the wiring the app gives its tickets (owner, 2026-10-14) — and
     # Telegram's Status the same events in the same words: the press, then the escalation; never an "Update sent"
     # (architecture review, 2026-10-15)
     notes = [x["note"] for x in agent.tickets.story(int(iid))]
-    assert notes[0] == "Reminder sent to Facility Manager" and notes[-2:] == ["🆘 Need help pressed by Wayan",
-                                                                               "Escalation sent to Owner"], notes
+    assert notes[0] == "Reminder sent (to: Facility Manager)" and notes[-2:] == ["🆘 Need help pressed by Wayan",
+                                                                               "Escalation sent (to: Owner)"], notes
     lines = head_text(agent.notices.heading(FM_CHAT, int(iid))).split("\n")[2:]
     kinds = [next((k for k in ("Alert sent", "Reminder sent", "🆘 Need help pressed by Wayan", "Escalation sent")
                    if l.startswith("- " + k)), l) for l in lines]
@@ -205,8 +205,8 @@ def test_every_notice_has_one_heading_with_the_incidents_history(agent):
                                                     stage="escalated")]}, "alert-desk"))
     later = agent.tg.sent[-1][1]
     assert re.fullmatch(r"#7 \(existing\)\nTo: .+\nStill stopped\n\nStatus:\n"
-                        r"- Alert sent \d\d/\d\d/\d{4} \d\d:\d\d to [^\n]+\n"
-                        r"⚠️ ⚙️ Escalation sent \d\d/\d\d/\d{4} \d\d:\d\d to Owner", later), later
+                        r"- Alert sent \d\d/\d\d/\d{4} \d\d:\d\d \(to: [^\n]+\)\n"
+                        r"⚠️ ⚙️ Escalation sent \d\d/\d\d/\d{4} \d\d:\d\d \(to: Owner\)", later), later
 
 
 def test_a_fault_closed_in_the_kiosk_says_who_and_when_on_telegram():

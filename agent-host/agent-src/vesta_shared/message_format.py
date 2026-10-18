@@ -75,13 +75,14 @@ STAGE_WORDS = {"new": "New alert", "existing": "Still open", "closed": "Closed: 
 
 class Step(NamedTuple):
     """One step of an alert's life, as its card says it (vesta_agent/notice.py)."""
-    sent: str               # its history line: "Reminder sent 16/10/2026 18:20 to FM"
+    sent: str               # its history line: "Reminder sent 16/10/2026 18:20 (to: FM)"
     title: str              # the card's title word while it is the latest step ("new", "existing", "closed")
     timed: bool             # its bottom line says what, when and to whom before the desk's words
     noted: bool             # the fault's card in the Kiosk tells it too (a "noted" step): "{sent} to {who}"
     #: its history line and bottom line: {sent}, {at} (the villa's time), {times} (" (2nd time in 7 days)", or "")
-    #: and {who} (the roles, short)
-    line: str = "{sent} {at} to {who}"
+    #: and {who} (the roles, short). ⚠️ EVERY LINE ENDS "(to: …)" (owner, 2026-10-18, #41: "Alert sent … to Owner &
+    #: FM" beside "Back at …, 2nd time in 7 days (to: Owner & FM)" — two shapes for whom in one Status).
+    line: str = "{sent} {at} (to: {who})"
 
 
 #: EVERY STEP OF AN ALERT, ONE LINE EACH (architecture review, 2026-10-17: a step was named in five tables — the
