@@ -51,14 +51,13 @@ def status(pack: KnowledgePack, states: dict, store: Store | None) -> dict:
         for r in pack.entities(fam):
             st = states.get(r["entity_id"], {})
             s = st.get("state")
-            asset = pack.assets.get(r["asset"], {})
             # ⚠️ ONE "OFFLINE" (architecture review 30): "unknown" is a sensor with no value on a warm day while its device
             # reports — the villa read AMBER, "Offline: Weather Station", where the night check and the report said none
             if is_offline(s):
                 key, name = pack.device_of(r["entity_id"])
                 if name is None:
                     continue                               # a device Home Assistant knows nothing about
-                if asset.get("critical"):
+                if pack.is_critical(r["entity_id"]):         # the villa's one list (vesta_shared.critical)
                     if f"{name} offline" not in problems:
                         problems.append(f"{name} offline")
                 else:

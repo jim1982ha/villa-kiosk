@@ -78,6 +78,10 @@ class HABase:
     def helpers(self) -> tuple[list[dict], dict[str, str]]:
         raise NotImplementedError
 
+    def automation_configs(self, text: str) -> list[dict]:
+        """The configs of the villa's automations whose configuration mentions `text` (a blueprint's name)."""
+        raise NotImplementedError
+
     def registry(self) -> dict:
         """{'entities': [...], 'devices': [...], 'areas': [...]}"""
         raise NotImplementedError
@@ -432,6 +436,26 @@ class McpClient(HABase):
         ids = [h["entity_id"] for h in helpers if h.get("entity_id")]
         st = self.states(ids) if ids else {}
         return helpers, {eid: s.get("state") for eid, s in st.items()}
+
+    def automation_configs(self, text):
+        # ha-mcp's own search over the automations' configurations, then each one read whole; a search cut short says
+        # has_more: read on (a list of critical devices missing its second rule would lose them in silence)
+        ids, offset = [], 0
+        while True:
+            body = self.tool("ha_search", {"query": text, "fields": ["automations", "config_has_more",
+                                                                     "config_next_offset"], "limit": 50,
+                                           "offset": offset})
+            ids += [a["entity_id"] for a in (body.get("automations") or []) if a.get("entity_id")]
+            if not body.get("config_has_more") or body.get("config_next_offset") in (None, offset):
+                break
+            offset = body["config_next_offset"]
+        out = []
+        for eid in dict.fromkeys(ids):
+            got = self.tool("ha_config_get_automation", {"identifier": eid})
+            cfg = got.get("config") if isinstance(got, dict) else None
+            if isinstance(cfg, dict):
+                out.append(cfg)
+        return out
 
     def registry(self):
         ids = self.all_entity_ids()

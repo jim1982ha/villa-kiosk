@@ -56,3 +56,28 @@ def test_a_hidden_lock_is_not_in_the_villa_status(tmp_path):
 def test_a_hidden_entity_still_names_its_device():
     # an alert written before the swap still names the real lock: its device is still known
     assert _pack().device_name(RAW, None) == "Front door lock"
+
+
+def test_the_ais_own_search_never_offers_a_hidden_entity(tmp_path):
+    # owner, 2026-10-18: asked "turn off the TV", the AI offered three TVs, two of them hidden by the owner — the Rules
+    # page says hidden devices are left out of what the AI is told. Through the real tool, the pack built as at night
+    import asyncio
+    from ha_fake import FakeHA, tool
+    from helpers import make_agent
+    from vesta_agent.routing import CONVERSATION, Origin
+    pack = _pack()
+    assert pack.hidden == [RAW]
+    found = {"success": True, "entities": [{"entity_id": RAW, "friendly_name": "Front Door Raw"},
+                                           {"entity_id": FIXED, "friendly_name": "Front Door"}],
+             "by_domain": {"lock": [{"entity_id": RAW}, {"entity_id": FIXED}]}}
+    v = make_agent(tmp_path, {"people": [{"telegram_id": 5, "name": "Asker", "role": "owner"}], "chats": {"owner": 5},
+                              "ha_read_tools": ["ha_search"]},
+                   reader=FakeHA(tools=[tool("ha_search", query={"type": "string"})],
+                                 answers={"ha_search": json.dumps(found)}))
+    with open(v.s.pack_path, "w") as f:
+        f.write(pack.to_json())
+    asyncio.run(v.refresh_server_tools())
+    search = next(t for t in v.toolbox().tool_objects(None, Origin(5, CONVERSATION)) if t.name == "ha_search")
+    out = asyncio.run(search.handler({"query": "door"}))
+    text = out["content"][0]["text"]
+    assert FIXED in text and RAW not in text, text

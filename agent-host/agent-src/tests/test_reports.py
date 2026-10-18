@@ -63,7 +63,8 @@ def _villa(tmp):
                                      fam("sensor.example_battery_b", "battery", "Battery B")],
                          "security": [fam("lock.example_door", "security", "Front door lock", "door")]},
             "assets": {"pump": {"slug": "pump", "name": "Garden pump", "kind": "motor",
-                                "entities": {"power": "sensor.example_pump_power", "energy": "sensor.example_pump_energy"}}}}
+                                "entities": {"power": "sensor.example_pump_power", "energy": "sensor.example_pump_energy"}}},
+            "critical": ["lock.example_door"]}               # the villa's one list (its "critical devices offline" rule)
     (tmp / "pack.json").write_text(json.dumps(pack))
     energy = {"start": "2026-09-28", "end": "2026-10-04", "total_kwh": 287.0, "total_prev_kwh": 290.0,
               "total_vs_prev_pct": -1.0, "total_cost": 487900, "currency": "IDR", "tariff": 1700.0,
@@ -96,7 +97,7 @@ def test_the_weekly_facts_come_from_home_assistant_and_reports_yaml(tmp_path):
     card = s["equipment"]["cards"][0]
     assert card["title"] == "Garden pump" and card["status"] == "Watch"                # 850 W → 740 W: a drop
     assert s["batteries"]["rows"][0] == {"name": "Battery A", "pct": 12, "level": "replace", "volts": None}
-    assert s["kpis"]["offline_critical"] == 1                                          # the lock: a security device
+    assert s["kpis"]["offline_critical"] == 1                               # the lock: on the villa's critical list
     assert {w["id"] for w in printed["to_write"]} >= {"headline", "card-pump.reading"}
 
 
@@ -640,17 +641,18 @@ def test_the_monitoring_table_lists_devices_not_their_sensors():
         assets={}, areas=[], people=[], channels={}, unknown_area=[], unclassified=[], retention={},
         devices={"plug": {"name": "Spa Plug", "manufacturer": "Shelly", "model": "Plus 1PM"},
                  "phone": {"name": "", "manufacturer": "", "model": ""},
-                 "ap": {"name": "", "manufacturer": "Ubiquiti", "model": "U6 Lite"}})
+                 "ap": {"name": "", "manufacturer": "Ubiquiti", "model": "U6 Lite"}},
+        critical=["switch.spa_relay"])                # the villa's one list (its "critical devices offline" rule)
     c = facts.Ctx.__new__(facts.Ctx)
     c.pack, c.Z = pack, ZoneInfo("UTC")
-    c.cfg = {"offline_families": ["power", "switch", "network", "battery"], "critical_families": ["switch"]}
+    c.cfg = {"offline_families": ["power", "switch", "network", "battery"], }
     off = lambda at: {"state": "unavailable", "last_changed": at}
     c._states = {"sensor.spa_pump_power": off("2026-10-09T09:05:00+00:00"), "sensor.jet_pump_power": off("2026-10-09T09:01:00+00:00"),
                  "switch.spa_relay": off("2026-10-09T09:03:00+00:00"), "sensor.rx": off("2026-10-09T08:00:00+00:00"),
                  "sensor.tx": off("2026-10-09T08:00:00+00:00"), "sensor.ap_rx": off("2026-10-09T07:00:00+00:00"),
                  "sensor.lone_battery": off("2026-10-09T06:00:00+00:00")}
     got = {o["name"]: o for o in c.offline()}
-    # the plug is ONE row under its own name, since its first sensor went, critical because its relay is
+    # the plug is ONE row under its own name, since its first sensor went, critical because its relay is on the list
     assert set(got) == {"Spa Plug", "Unnamed Ubiquiti U6 Lite", "Lone Battery"}, sorted(got)
     assert got["Spa Plug"]["since"] == "2026-10-09T09:01" and got["Spa Plug"]["critical"] is True
     assert "RX" not in got and "TX" not in got                        # a nameless Wi-Fi client is not a villa device

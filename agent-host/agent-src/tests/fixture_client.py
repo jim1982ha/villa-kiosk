@@ -91,6 +91,15 @@ class FixtureClient(HABase):
         helpers += extra.get("helpers", []); states.update(extra.get("states", {}))
         return helpers, states
 
+    def automation_configs(self, text):
+        """automations.json: [automation config], those mentioning `text` (as ha-mcp's search finds them); anything
+        else in the file: the villa's system not answering."""
+        got = self._load("automations.json", [])
+        if not isinstance(got, list):
+            from vesta_shared.ha_client import HAError
+            raise HAError("ha_search failed: the villa's system did not answer")
+        return [c for c in got if text in json.dumps(c)]
+
     def registry(self):
         return self._load("registry.json", {"entities": [], "areas": [], "devices": []})
 

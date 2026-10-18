@@ -458,4 +458,9 @@ its fault. Decided (owner: "implement the recommended finding", card 1 of 4):
 - **One problem, one fault (card 3, 0.12.242)**: a device an open alert follows for being offline (its bad states hold
   "unavailable") gets no PM-UNAVAILABLE finding (`nightly.alerted_offline`); the alert is its record. Needed once
   card 1 made both fire at the same 10 minutes. The villa's own message beside the Agent's card stays, by design.
-- Not done: card 2 (one list of critical devices — the owner's choice of list), card 4 (one meaning of "offline").
+- **One list of critical devices (card 2, 0.12.243; owner: "the list in the villa's critical devices offline")**:
+  `vesta_shared.critical` reads every automation built from the agreement's `criticalDevices.blueprint`, input
+  `criticalDevices.input`; the nightly pack keeps it and `KnowledgePack.is_critical` (entity or same device) is the
+  ONE predicate — night check, recheck, chat status and reports. The Kiosk's proxy reads the same rule. Nothing is
+  critical for what it is (no lock/motor/schedule rule, no family). A failed read keeps the last list.
+- Card 4 (one meaning of "offline": "unknown" is not lost) is the Kiosk's (2.496.410); the Agent already had it.

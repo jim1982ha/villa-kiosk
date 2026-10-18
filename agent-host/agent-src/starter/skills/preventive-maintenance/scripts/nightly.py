@@ -313,10 +313,11 @@ def offline_findings(pack, states: dict, now: datetime, params, alerted: set[str
                 except ValueError:
                     hours = None
             key = F.device_key(row, row["entity_id"])
+            crit = pack.is_critical(row["entity_id"])         # the villa's one list (vesta_shared.critical)
             g = groups.setdefault(key, {"asset": asset, "entity_id": row["entity_id"], "hours": hours,
-                                        "state": st.get("state"), "names": [], "critical": asset.get("critical", False),
+                                        "state": st.get("state"), "names": [], "critical": crit,
                                         "platform": row.get("platform") or "x"})
-            g["names"].append(row["name"]); g["critical"] = g["critical"] or asset.get("critical", False)
+            g["names"].append(row["name"]); g["critical"] = g["critical"] or crit
             if hours is not None and (g["hours"] is None or hours > g["hours"]):
                 g["hours"] = hours
     # a device an open alert already follows is that alert's (alerted_offline); its group is left out before the

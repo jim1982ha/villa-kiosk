@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.234 (18 October 2026)
+
+Architecture review 2026-10-18, offline devices card 2 (owner: "the list in the villa's critical devices offline"):
+- ONE list of critical devices: vesta_shared.critical reads every automation built from the `critical_watchdog`
+  blueprint, input `critical_entities` (the agreement's `criticalDevices`, shared with the Kiosk); the nightly pack
+  keeps it (`KnowledgePack.critical`, `is_critical` by entity or device; a failed read keeps the last list).
+  `asset.critical` follows it; the knowledge pack's lock/motor/schedule rule and reports.yaml `critical_families`
+  are gone; an integration down is critical only when one of its devices is. The energy rule keeps motors by kind.
+- The AI's own search never offers an entity hidden in the villa's system (`tools.without_hidden`; the pack names
+  them): the Rules page already said so. PACK_RULES 2: a pack built before is rebuilt at start.
+
 ## 0.6.233 (18 October 2026)
 
 - Architecture review 2026-10-18, offline devices card 3: no PM-UNAVAILABLE finding (night or recheck.py) for a device

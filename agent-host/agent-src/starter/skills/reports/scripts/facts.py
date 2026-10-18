@@ -312,7 +312,6 @@ class Ctx:
         related to a device"). It listed sensors: a phone's Wi-Fi traffic as two rows "RX" and "TX", one pump plug as
         "Jacuzzi Pump Power" beside its relay. A sensor with no device keeps its own row; a device Home Assistant
         knows nothing about (no name, maker or model: a phone seen on the Wi-Fi) is not one of the villa's."""
-        crit = set(self.cfg.get("critical_families") or [])
         out: list[dict] = []
         by_key: dict = {}
         for fam in self.cfg.get("offline_families") or []:
@@ -327,10 +326,11 @@ class Ctx:
                 cur = by_key.get(key)
                 if cur is None:
                     by_key[key] = cur = {"name": name, "since": since,
-                                         "critical": fam in crit, "family": fam, "entity_id": r["entity_id"]}
+                                         "critical": self.pack.is_critical(r["entity_id"]), "family": fam,
+                                         "entity_id": r["entity_id"]}
                     out.append(cur)
                 else:
-                    cur["critical"] = cur["critical"] or fam in crit
+                    cur["critical"] = cur["critical"] or self.pack.is_critical(r["entity_id"])
                     if since and (not cur["since"] or since < cur["since"]):
                         cur["since"] = since
         return out

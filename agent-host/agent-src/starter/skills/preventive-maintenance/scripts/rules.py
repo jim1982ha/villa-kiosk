@@ -157,8 +157,9 @@ def power_rules(asset: dict, entity_id: str, series: dict[date, dict], today: da
                                        {"day": d.isoformat(), "run_hours": f["run_hours"], "expected_hours": exp,
                                         "change_pct": round(change, 1), "gap_hours": f.get("gap_hours", 0)}, check))
 
-    # 3. energy collapse or jump, for scheduled or critical assets (cycling pumps live here)
-    if energy_series and (expected_hours_by_weekday or asset.get("critical")):
+    # 3. energy collapse or jump, for scheduled assets and motors (cycling pumps live here) — what the asset IS, never
+    # whether the villa lists it critical (that list says who hears it offline, owner 2026-10-18)
+    if energy_series and (expected_hours_by_weekday or asset.get("kind") == "motor" or asset.get("critical")):
         e_days = sorted(d for d in energy_series if today - timedelta(days=baseline_days) < d <= today and energy_series[d].get("kwh") is not None)
         if len(e_days) > confirm + min_days:
             rec = [energy_series[d]["kwh"] for d in e_days[-confirm:]]

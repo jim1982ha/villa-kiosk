@@ -16,6 +16,7 @@ import sys
 from datetime import datetime, timezone
 
 from .ha_client import client_from_args
+from .critical import BLUEPRINT, critical_entities
 from .knowledge_pack import build_pack, pack_diff_summary
 from .store import Store
 
@@ -57,7 +58,8 @@ def main(argv=None):
             people = json.load(open(args.people)).get("people", [])
     channels = json.loads(args.channels) if args.channels else None
     pack = build_pack(registry, helpers, states, bom, people, channels,
-                      generated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"), villa=args.villa)
+                      generated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"), villa=args.villa,
+                      critical=_critical(cli, args.out))
     with open(args.out, "w", encoding="utf-8") as f:
         f.write(pack.to_json())
     summary = {"villa": pack.villa, "families": {k: len(v) for k, v in pack.families.items()},
@@ -74,6 +76,19 @@ def main(argv=None):
         summary["gone"] = [e["entity_id"] for e in gone]
     print(json.dumps(summary, indent=1))
     return 0
+
+
+def _critical(cli, previous: str) -> list[str]:
+    """The villa's critical devices (vesta_shared.critical), read from its own rule. ⚠️ A FAILED READ IS NOT "NONE":
+    the last pack's list is kept — an empty one would turn every critical device amber until the next night."""
+    try:
+        return sorted(critical_entities(cli.automation_configs(BLUEPRINT)))
+    except Exception as e:  # noqa: BLE001 — the villa's system not readable now
+        print(f"The critical devices could not be read ({str(e)[:200]}): the last list is kept.", file=sys.stderr)
+        try:
+            return list(json.load(open(previous, encoding="utf-8")).get("critical") or [])
+        except (OSError, ValueError):
+            return []
 
 
 if __name__ == "__main__":

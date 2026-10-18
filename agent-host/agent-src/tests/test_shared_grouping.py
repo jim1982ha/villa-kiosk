@@ -120,7 +120,10 @@ def test_an_integration_down_is_one_group_named_for_it():
                               "names": [eid.title()], "critical": False, "platform": plat}
     groups = {"d1": g("a", "zigbee", 2), "d2": g("b", "zigbee", 5), "d3": g("c", "zigbee", 1), "d4": g("d", "wifi", 3)}
     out = F.integration_down(groups, 3)
-    assert set(out) == {"zigbee", "d4"} and out["zigbee"]["hours"] == 5 and out["zigbee"]["critical"]
+    assert set(out) == {"zigbee", "d4"} and out["zigbee"]["hours"] == 5
+    # critical only when one of its devices is on the villa's list (owner, 2026-10-18), never for being a group
+    assert out["zigbee"]["critical"] is False
+    assert F.integration_down({**groups, "d2": {**groups["d2"], "critical": True}}, 3)["zigbee"]["critical"] is True
     assert out["zigbee"]["asset"]["name"] == "zigbee integration (3 devices)" and groups["d1"]   # the input untouched
     assert F.integration_down(groups, 4) == groups
 

@@ -63,6 +63,29 @@ done by the code, not by you. Ignore the parts of the text below that tell you t
 """
 
 
+
+def without_hidden(text: str, hidden: set[str]) -> str:
+    """A search's answer without the entities hidden in the villa's system.
+
+    ⚠️ HIDDEN IS IGNORED BY THE AGENT, THE AI'S SEARCH TOO (owner, 2026-10-18): the Rules page says hidden devices are
+    left out of "what the AI is told", but the AI's own search listed them — asked "turn off the TV", it offered
+    three, two of them hidden by the owner. Every record naming a hidden entity is dropped, wherever it sits."""
+    if not hidden or not text:
+        return text
+    try:
+        body = json.loads(text)
+    except ValueError:
+        return text
+
+    def drop(x):
+        if isinstance(x, list):
+            return [drop(v) for v in x if not (isinstance(v, dict) and v.get("entity_id") in hidden)]
+        if isinstance(x, dict):
+            return {k: drop(v) for k, v in x.items()}
+        return x
+    return json.dumps(drop(body), ensure_ascii=False)
+
+
 class Parts:
     """Long answers served in parts, so nothing is cut without the model knowing."""
 
@@ -242,11 +265,21 @@ class Toolbox:
                 if photo[0] and photo not in self.photos:
                     self.photos.append(photo)
             text = scrub("".join(b.get("text", "") for b in blocks if b.get("type") == "text"), self._secrets())
+            if name == "ha_search":
+                text = without_hidden(text, self._hidden())
             out = {"content": ([{"type": "text", "text": self.parts.serve(key, text, part)}] if text else []) + images}
             if res.get("isError"):
                 out["is_error"] = True
             return out
         return handler
+
+    def _hidden(self) -> set[str]:
+        """The entities hidden in the villa's system (the knowledge pack's), read once per run."""
+        if "_hidden_ids" not in self.__dict__:
+            from vesta_shared.knowledge_pack import KnowledgePack
+            pack = KnowledgePack.read(self.s.pack_path)
+            self.__dict__["_hidden_ids"] = set(pack.hidden) if pack else set()
+        return self.__dict__["_hidden_ids"]
 
     def _call_service(self, person: Person | None, chat_id: int | None):
         schema = {"type": "object", "properties": {

@@ -71,3 +71,16 @@ def test_the_villa_concierge_skill_asks_for_its_status_before_every_answer():
     from vesta_agent.skills import parse_skill
     sk = parse_skill("villa-concierge", os.path.join(STARTER_SKILLS, "villa-concierge"))
     assert sk.before_answer == "concierge.py status"
+
+
+def test_a_device_on_the_villas_critical_list_offline_is_red_the_others_amber(tmp_path):
+    # owner, 2026-10-18: the one list is the villa's "critical devices offline" rule's — a relay listed, its plug's
+    # power sensor dropping with it, is red "Now"; a pump plug not listed stays amber "Offline"
+    import concierge
+    from vesta_shared.store import Store
+    pack = _pack()
+    pack.critical = ["switch.jacuzzi_relay"]
+    pack.entity_devices = {"switch.jacuzzi_relay": "plug1"}
+    states = {"sensor.jacuzzi_pump_power": {"state": "unavailable"}, "sensor.jet_pump_power": {"state": "unavailable"}}
+    s = concierge.status(pack, states, Store(str(tmp_path / "s.sqlite")))
+    assert s["colour"] == "red" and s["problems"] == ["Jacuzzi pump plug offline"] and s["offline"] == ["Jet pump plug"]

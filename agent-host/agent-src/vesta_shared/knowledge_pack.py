@@ -147,8 +147,9 @@ class Asset:
 #: ⚠️ A NEW RULE IN build_pack IS A FORMAT CHANGE (2026-10-15): the pack is rebuilt at 01:30, so an update that leaves out
 #: hidden entities still listed them until the night — the owner updated and the villa status went on saying "unlocked"
 #: of the hidden locks. Raise it with every rule that changes what the pack holds; the agent rebuilds an older one at start
-#: (app.pack_needs_build). 1: hidden entities left out (0.6.197).
-PACK_RULES = 1
+#: (app.pack_needs_build). 1: hidden entities left out (0.6.197). 2: the villa's critical devices from its own rule, and
+#: the hidden entities named (0.6.234).
+PACK_RULES = 2
 
 
 @dataclass
@@ -177,6 +178,25 @@ class KnowledgePack:
     entity_devices: dict[str, str] = field(default_factory=dict)
     # Which of build_pack's rules wrote it (PACK_RULES); 0 in a pack built before the number was kept.
     rules: int = 0
+    # ⚠️ ONE LIST OF CRITICAL DEVICES (owner, 2026-10-18 — architecture review, offline devices #2): the entities the
+    # villa's "critical devices offline" rule watches (vesta_shared.critical). The chat status, the night check and
+    # the reports each had their own idea — a pump critical in one, not in the reports. is_critical reads this only.
+    critical: list[str] = field(default_factory=list)
+    # The entities hidden in the villa's system (left out of the families above): what the AI's own search must not
+    # offer either (tools.without_hidden) — the Rules page says hidden devices are ignored by the agent.
+    hidden: list[str] = field(default_factory=list)
+
+    def is_critical(self, entity_id: str | None) -> bool:
+        """`entity_id` is one of the villa's critical devices: named in its list, or an entity of a device it names
+        (a relay listed, its power sensor dropping with it)."""
+        idx = self.__dict__.get("_critical")
+        if idx is None:
+            ids = set(self.critical)
+            idx = (ids, {d for d in (self.device_id_of(e) for e in ids) if d})
+            self.__dict__["_critical"] = idx
+        if not entity_id:
+            return False
+        return entity_id in idx[0] or (self.device_id_of(entity_id) or "") in idx[1]
 
     def entities(self, family: str) -> list[dict]:
         return self.families.get(family, [])
@@ -299,7 +319,9 @@ def _norm_entities(registry: dict, states: dict | None) -> list[dict]:
 
 def build_pack(registry: dict, helpers: list[dict], states: dict | None = None,
                bom_rows: list[dict] | None = None, people: list[dict] | None = None,
-               channels: dict | None = None, generated_at: str = "", villa: str | None = None) -> KnowledgePack:
+               channels: dict | None = None, generated_at: str = "", villa: str | None = None,
+               critical=()) -> KnowledgePack:
+    """`critical`: the entities the villa's own "critical devices offline" rule watches (vesta_shared.critical)."""
     cfg = registry.get("config", {})
     # ⚠️ HIDDEN IS LEFT OUT TOO (owner, 2026-10-15): a lock fitted the wrong way round is corrected AT THE SOURCE — a
     # template lock reads the real one inverted, and the real one is hidden in the villa's system (never disabled: the
@@ -387,11 +409,6 @@ def build_pack(registry: dict, helpers: list[dict], states: dict | None = None,
         # kind: what the asset physically is, from its helpers first (a schedule, a runtime counter or a power
         # baseline mark a motor), then its name. input_text.vesta_asset_kinds = {"slug": "motor"} overrides.
         a.kind = asset_kind(a, kind_overrides)
-        # critical: locks and security devices, motors, scheduled assets. Lighting circuits and meters are ROI
-        # material, never maintenance findings (the villa's light circuits carry power meters too).
-        a.critical = (any(k in a.entities for k in ("lock", "security"))
-                      or a.kind == "motor"
-                      or a.schedule is not None)
 
     # people: from HA persons plus an optional table (roles, chats, language)
     ppl = []
@@ -409,7 +426,7 @@ def build_pack(registry: dict, helpers: list[dict], states: dict | None = None,
                            for r in families.get(fam, []) if not r["area"]})
     retention = {"raw_history_days": 10, "logbook_days": 10, "statistics": "permanent",
                  "agent_feature_store_months": 24, "photos_days": 30}
-    return KnowledgePack(
+    pack = KnowledgePack(
         villa=villa or cfg.get("location_name") or "villa",
         time_zone=cfg.get("time_zone") or "UTC",
         generated_at=generated_at,
@@ -429,7 +446,13 @@ def build_pack(registry: dict, helpers: list[dict], states: dict | None = None,
                  for d in registry.get("devices", []) if d.get("device_id")},
         entity_devices={e["entity_id"]: e["device_id"] for e in live if e.get("device_id")},
         rules=PACK_RULES,
+        critical=sorted(set(critical or ())),
+        hidden=sorted(e["entity_id"] for e in live if e["hidden"]),
     )
+    # an asset is critical when one of its entities is (is_critical: by entity or by device) — never by what it is
+    for a in pack.assets.values():
+        a["critical"] = any(pack.is_critical(e) for e in (a.get("entities") or {}).values())
+    return pack
 
 
 def pack_diff_summary(new: list[dict], gone: list[dict]) -> str:

@@ -166,7 +166,7 @@ NIGHT = datetime(2026, 10, 17, 21, 46, tzinfo=timezone.utc)
 
 
 def _villa_pack(tmp_path) -> str:
-    """A humidity sensor (not critical) and a door lock (critical), as the knowledge pack lists them."""
+    """A humidity sensor and a door lock, the lock on the villa's critical list, as the knowledge pack has them."""
     path = tmp_path / "pack.json"
     path.write_text(json.dumps({
         "villa": "Example Villa", "time_zone": "UTC", "generated_at": "x", "ha_version": None, "areas": [], "people": [],
@@ -177,7 +177,8 @@ def _villa_pack(tmp_path) -> str:
                                    "family": "security", "asset": "door", "device_id": None}]},
         "assets": {"th": {"slug": "th", "name": "TH", "entities": {"level": "sensor.example_th_humidity"}, "critical": False},
                    "door": {"slug": "door", "name": "Example door", "entities": {"security": "lock.example_door"},
-                            "critical": True}}}))
+                            "critical": True}},
+        "critical": ["lock.example_door"]}))           # the villa's one list (its "critical devices offline" rule)
     return str(path)
 
 
