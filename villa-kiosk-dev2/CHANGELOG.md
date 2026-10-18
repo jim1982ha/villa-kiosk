@@ -1,3 +1,16 @@
+## 2.496.419
+
+### Fixed
+- A device whose sensor has no value to give right now ("unknown" — a gesture sensor between gestures, a wind chill
+  on a still day) is no longer shown as having lost contact: no amber badge or room count on the map, its row reads
+  "Unknown" instead of "Unavailable", the device picker no longer calls it offline — as the Cockpit already said. A
+  lock in that state is no longer painted red. Amber means "contact lost", as the colours legend says.
+
+### Changed (behind the scenes)
+- Each Cockpit card is worked out in one place (its words, icons, Next check, buttons) and the page only draws it.
+- One rule for "this came from the VESTA Agent" (its mark, a fault's "Opened by", the (i)'s Agent rows); one
+  shared reading of the villa's presence for the tile, its window and the Recap.
+
 ## 2.496.418
 
 ### Added
