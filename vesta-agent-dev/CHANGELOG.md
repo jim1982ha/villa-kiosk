@@ -1,3 +1,12 @@
+## 0.12.243
+
+What you will see:
+- "Critical" means one thing everywhere: the devices in your "critical devices offline" rule. Offline, they are red
+  in the Agent's villa status and message the facility manager at once; any other device offline is amber and in the
+  07:00 summary. The weekly report counts them the same way. Edit that rule's list to change who is critical.
+- The Agent never offers a device you have hidden in the villa's system: asked "turn off the TV", it no longer lists
+  the hidden ones.
+
 ## 0.12.242
 
 What you will see:
