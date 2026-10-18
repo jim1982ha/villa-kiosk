@@ -29,6 +29,18 @@ ck("owner and facility manager, never a guest",
 ck("nothing while the agent is not configured", !agentVisible(off));
 ck("  ...nor before the first answer (no flash of 'offline')", !agentVisible(null));
 ck("configured: shown, online or offline", agentVisible(online) && agentVisible(offline));
+// the (i)'s Agent rows: an Agent configured, or one of its faults still open — never neither (2.496.360; one rule since
+// architecture review scan 1, 2026-10-19 — it lived inside FaultTiming's JSX)
+{
+  const { agentSourcesShown } = await import("@/agent/agentView");
+  const { agentOwned } = await import("@/fm/issueSource");
+  ck("the Agent's sources are listed with an Agent, or with a fault of its still open — not with neither",
+     agentSourcesShown(online, false) && agentSourcesShown(off, true) && agentSourcesShown(null, true)
+     && !agentSourcesShown(off, false) && !agentSourcesShown(null, false));
+  ck("  ...and \"the Agent's\" is one test of a record's stamp", agentOwned({ source: "vesta_agent" }) !== agentOwned({ source: "kiosk" }));
+  ck("  ...which the (i), the mark and the fault's \"Opened by\" all ask",
+     ["components/fm/FaultTiming.tsx", "components/fm/AgentMark.tsx", "fm/faultNotes.ts"].every((f) => /agentOwned\(/.test(src(f)) && !/AGENT_SOURCE/.test(src(f))));
+}
 
 console.log("\n  buttons:");
 ck("the server says answerable (open, allowed, agent online): offered", buttonsShown(msg()));

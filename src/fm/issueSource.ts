@@ -12,6 +12,13 @@ import { AGENT_ORIGINS, AGENT_SOURCE, type FmTicket } from "./fmTypes";
  *  schedule: maintenance overdue. */
 export type IssueSource = "live" | "alert" | "night" | "chat" | "owner" | "fm" | "person" | "guest" | "schedule";
 
+/** Did the VESTA Agent write this record (created it or last changed it)? ⚠️ ONE ANSWER (architecture review scan 1,
+ *  2026-10-19): the "by VESTA Agent" mark, a fault's "Opened … by", its source and the (i)'s Agent rows each tested
+ *  the record's stamp themselves. */
+export function agentOwned(r: { source?: string }): boolean {
+  return r.source === AGENT_SOURCE;
+}
+
 /** Every source, in the legend's order: what the Kiosk and its people produce, then what the VESTA Agent produces
  *  (owner, 2026-10-15: "first all the types that are not coming from the Agent, then those that are"). */
 export const ISSUE_SOURCES: readonly IssueSource[] =
@@ -24,7 +31,7 @@ export const AGENT_SOURCES: ReadonlySet<IssueSource> = new Set(["alert", "night"
  *  a guest's mark, else the profile its first step names (fmCommands.addTicket stamps it). */
 export function faultSource(t: Pick<FmTicket, "source" | "origin" | "alertNumber" | "reportedBy" | "updates">): IssueSource {
   if (t.reportedBy === "guest") return "guest";
-  if (t.source === AGENT_SOURCE) {
+  if (agentOwned(t)) {
     if (t.origin && AGENT_ORIGINS.includes(t.origin)) return t.origin;
     // ⚠️ NO "VESTA AGENT" SOURCE ANY MORE (owner, 2026-10-15: it only confused the (i)). Every fault the Agent writes
     // carries its origin (Agent 0.12.198), and its repair gives an older alert's or night check's fault its origin

@@ -205,13 +205,27 @@ ck("the villa model hands buildAttentionItems the device fold, and leaves the gr
    && /return attentionFor\(attention, \(id\) => sees\.has\(id\)\);/.test(src("components/cockpit/useVillaAttention.ts")));
 // HOW a card is drawn (its buttons inside, the click its own, the source icons) is checked on the drawn card:
 // tests/oracles/cockpit_cards.mjs (architecture review, 2026-10-15). Here: the WIRING a drawing cannot see.
-ck("the Cockpit draws one card per group, its buttons decided by cardActions",
-   /attentionGroups\.map\(\(group\) => \(\s*<CockpitAttentionRow key=\{group\.key\} group=\{group\}/.test(cockpit)
-   && /const acts = cardActions\(group\);/.test(cockpit) && /<AttentionCard group=\{group\} onOpenEntity=\{onOpenEntity\} cadence=\{status\?\.cadence \?\? null\}\s*actions=\{useCardActions\(group, canManage, onEditTicket, closer\)\}\s*lineActions=\{canManage \? \(item\) => <LineClose group=\{group\} item=\{item\} closer=\{closer\} \/> : undefined\} \/>/.test(cockpit)
-   // ...and each line's own Close is itemActions' answer, sharing the card's one question
-   && /function LineClose[\s\S]*?const acts = itemActions\(group, item\);/.test(cockpit)
-   // a line's icon is lineIcon's answer, never its own kind's again
-   && /function CockpitAttentionSub[\s\S]*?const icons = lineIcon\(group, item\);/.test(cockpit));
+// ONE CARD, BY VALUE (architecture review scan 1, 2026-10-19): what a card says and does is config/cockpitCard's answer
+// — its buttons cardActions', each line's words, icons, latest and Close the line's own — and the page draws that and
+// nothing else: it asks attention for no part of a card (these checks matched its JSX text before, and broke on any
+// rewrite that kept the behaviour)
+{
+  const { cockpitCard } = await import("@/config/cockpitCard");
+  const { cardActions, itemActions, attentionLineIn, lineIcon } = await import("@/config/attention");
+  const groups = [...battery, ...offline, ...loose, ...gAfter];   // devices with a fault, offline, loose problems
+  const views = groups.map((g) => [g, cockpitCard(g, { checkMinutes: 5, nightlyAt: "02:00" })]);
+  ck("a card's view is the answers of the card's rules, line by line",
+     views.length > 0 && views.every(([g, v]) => v.key === g.key && v.title === g.title
+       && JSON.stringify(v.actions) === JSON.stringify(cardActions(g))
+       && v.lines.length === g.items.length && v.lines.every((l, n) => l.key === g.items[n].id
+         && l.text === attentionLineIn(g, g.items[n]) && JSON.stringify(l.icons) === JSON.stringify(lineIcon(g, g.items[n]))
+         && JSON.stringify(l.actions) === JSON.stringify(itemActions(g, g.items[n])))));
+  ck("  ...and the Cockpit draws one card per group from it, asking attention for no part of a card",
+     /attentionGroups\.map\(\(group\) => \(\s*<CockpitAttentionRow key=\{group\.key\} group=\{group\}/.test(cockpit)
+     && (cockpit.match(/cockpitCard\(/g) ?? []).length === 1
+     && !/(cardActions|itemActions|attentionLineIn|lineIcon|lineSources|nextCheck)\(/.test(cockpit)
+     && /actions=\{line\.actions\}/.test(cockpit) && /const acts = card\.actions;/.test(cockpit));
+}
 
 // owner, 2026-10-18 (architecture review "One problem, one card" #2): #41 could not be closed without #55 — the card's
 // Close closed every problem of the door. A card holding several problems closes each alone, or "Close all".

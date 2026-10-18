@@ -4,27 +4,22 @@
 // config/presence's (by value, tested); this draws it. No sensor picked in Settings › Villa: no tile.
 
 import { CircleQuestionMark, House, Users } from "lucide-react";
-import { useHA } from "@/ha/HAStateStore";
-import { useConfig } from "@/config/ConfigContext";
-import { presenceOf, presenceWhy, sinceText, type Presence, type PresenceWhy } from "@/config/presence";
+import { type Presence, type PresenceWhy } from "@/config/presence";
+import { presenceSince as since, usePresence } from "@/config/usePresence";
 import { STATUS_COLOR } from "@/utils/stateColors";
-import { clockTime, dayTime } from "@/utils/dateText";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import ModalFooter from "@/components/common/ModalFooter";
 import { useProfile } from "@/auth/ProfileContext";
 import { roleCan } from "@/auth/permissions";
 
 const ICON = { occupied: Users, empty: House, unknown: CircleQuestionMark };
-const since = (at: string | null) => sinceText(at, clockTime, dayTime);
 /** The tile's own short word (a 50 px rail): the panel's heading says it in full. */
 const SHORT = { occupied: "In", empty: "Empty", unknown: "?" };
 
 export default function PresenceTile({ onOpen }: { onOpen: () => void }) {
-  const { entities } = useHA();
-  const { config } = useConfig();
-  const p = presenceOf(config.presenceSensor, entities);
+  const p = usePresence();
   if (!p) return null;
-  return <div className="hud-stack"><PresenceButton presence={p} onClick={onOpen} /></div>;
+  return <div className="hud-stack"><PresenceButton presence={p.presence} onClick={onOpen} /></div>;
 }
 
 /** The villa's presence window, as the Dashboard opens it (pages/surfaces "presence"). A person's whereabouts are
@@ -33,13 +28,11 @@ export default function PresenceTile({ onOpen }: { onOpen: () => void }) {
 export function PresenceWindow({ onClose, onOpenEntity, canOpen }: {
   onClose: () => void; onOpenEntity: (entityId: string) => void; canOpen: (entityId: string) => boolean;
 }) {
-  const { entities } = useHA();
-  const { config } = useConfig();
   const { role } = useProfile();
   const seesPeople = roleCan(role, "seePeople");
-  const p = presenceOf(config.presenceSensor, entities);
+  const p = usePresence();
   if (!p) return null;
-  return <PresencePanel presence={p} why={presenceWhy(config.presenceSensor, entities)} showPeople={seesPeople}
+  return <PresencePanel presence={p.presence} why={p.why()} showPeople={seesPeople}
     canOpen={canOpen} onOpenEntity={onOpenEntity} onClose={onClose} />;
 }
 

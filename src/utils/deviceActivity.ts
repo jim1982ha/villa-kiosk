@@ -21,7 +21,7 @@ import type { DeviceSurfaceState } from "@/config/EntityCategories";
 import type { Threshold } from "@/config/ThresholdConfig";
 import { alertStateFor } from "@/config/BinarySensorClasses";
 import { inferTypeFromEntityId } from "@/config/EntityMap";
-import { TRANSITIONAL_STATES, UNKNOWN_STATES, statusKeyFor } from "@/utils/stateColors";
+import { TRANSITIONAL_STATES, contactOf, statusKeyFor } from "@/utils/stateColors";
 import { devicePower } from "@/utils/devicePower";
 import type { SwitchPosition } from "@/utils/entityState";
 import { phantomEntity } from "@/utils/phantomEntity";
@@ -90,7 +90,10 @@ export const SURFACE_STATE: Record<BadgeKind, DeviceSurfaceState> = {
  * resolved it three different ways (2.496.245).
  */
 export function badgeKindFor(r: DeviceReading): BadgeKind {
-  if (UNKNOWN_STATES.has(r.entity.state)) return "unavailable";
+  const contact = contactOf(r.entity.state);
+  if (contact === "lost") return "unavailable";
+  // nothing to say (unknown): quiet, as a device at rest — never "contact lost" amber, never a lock's red
+  if (contact === "no-value") return "off";
   // Outranks the entity's own state vocabulary on purpose — see linkedEntityId.
   // ⚠️ "ON", NEVER "ALERT" (owner, 2026-10-01): a pump's power sensor whose relay
   // runs is a device ON. As "alert" it rang every room chip and count card that

@@ -126,11 +126,17 @@ const unknownReaders = [
   ["statusKeyFor (history bar)", statusKeyFor("unavailable", "lock")],
   ["isUnavailable (panels)", isUnavailable(ent("lock.a", "unknown"))],
 ];
+// Both members show no value (isUnavailable: a panel has nothing to print); only "unavailable" is LOST CONTACT — the
+// map's amber badge, as the Cockpit's offline lists (stateColors.contactOf; architecture review scan 1, 2026-10-19:
+// an "unknown" sensor rang amber on the map, and a lock in "unknown" was painted red, while the Cockpit called it fine)
+const { contactOf } = await import("@/utils/stateColors");
 const bothMembersAgree = ["unavailable", "unknown"].every((st) =>
-  UNKNOWN_STATES.has(st)
-  && badgeFaceAndRing(read("lock", ent("lock.a", st))).face === "unavailable"
-  && statusKeyFor(st, "lock") === "unavailable"
-  && isUnavailable(ent("lock.a", st)) === true);
+  UNKNOWN_STATES.has(st) && isUnavailable(ent("lock.a", st)) === true && statusKeyFor(st, "lock") === "unavailable")
+  && badgeFaceAndRing(read("lock", ent("lock.a", "unavailable"))).face === "unavailable"
+  && contactOf("unavailable") === "lost" && contactOf(undefined) === "lost" && contactOf("unknown") === "no-value"
+  && contactOf("locked") === "ok";
+const unknownIsQuiet = !["unavailable", "alert"].includes(badgeFaceAndRing(read("lock", ent("lock.a", "unknown"))).face)
+  && !["unavailable", "alert"].includes(badgeFaceAndRing(read("sensor", ent("sensor.x", "unknown", "temperature"))).face);
 
 // A line of CODE (not a comment) naming both members, anywhere but the owner.
 const OWNER = "utils/stateColors.ts";
@@ -191,7 +197,8 @@ ck("the device_class table is still consulted", binarySensorClassInfo("moisture"
   const { badgeKindFor } = await import("@/utils/deviceActivity");
   ck("a linked entity on counts as ON for a room chip, never as needs-attention", badgeKindFor({ ...read("sensor", power), linkedOn: true }) === "on");
 }
-ck("both members of UNKNOWN_STATES reach every reader the same way", bothMembersAgree);
+ck("both members of UNKNOWN_STATES show no value; only \"unavailable\" is lost contact (contactOf)", bothMembersAgree);
+ck("  ...an \"unknown\" device is quiet on the map — never the amber of lost contact, never a lock's red", unknownIsQuiet);
 ck("no reader spells the pair out for itself", strayPairs.length === 0);
 ck("  ...and the deliberately wider set is still wider",
    OFF_STATES.has("off") && OFF_STATES.has("") && !UNKNOWN_STATES.has("off"));

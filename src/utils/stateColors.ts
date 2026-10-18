@@ -38,7 +38,17 @@ export function isUnavailable(entity: HassEntity | undefined): boolean {
  *  listed every "unknown" device as Unavailable while the VESTA Agent, since 2026-10-04, calls only "unavailable"
  *  lost. One meaning now, the Agent's. */
 export function isOffline(entity: HassEntity | undefined): boolean {
-  return entity == null || entity.state === "unavailable";
+  return contactOf(entity?.state) === "lost";
+}
+
+/** Where a state stands with its device: "lost" (unavailable, or no state at all), "no-value" (unknown: the device
+ *  reports, this entity has nothing to say), "ok". ⚠️ ONE ANSWER FOR THE MAP AND THE COCKPIT (architecture review
+ *  scan 1, 2026-10-19): since 2.496.410 the Cockpit called only "unavailable" offline, while the map still rang an
+ *  "unknown" sensor amber ("Contact is lost", the legend says), its row read "Unavailable", the device picker said
+ *  offline — and a lock in "unknown" was painted red. Every "is contact lost" reader asks this, on a state string too
+ *  (a history point, a camera's status). */
+export function contactOf(state: string | undefined | null): "lost" | "no-value" | "ok" {
+  return !state || state === "unavailable" ? "lost" : state === "unknown" ? "no-value" : "ok";
 }
 
 /** What every surface calls a device whose entity Home Assistant does not have at all — a 3D object named after an

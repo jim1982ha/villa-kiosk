@@ -12,6 +12,13 @@ export function agentVisible(status: AgentStatus | null): boolean {
   return status != null && status.state !== "not_configured";
 }
 
+/** Are the VESTA Agent's sources listed (the (i)'s "From the VESTA Agent" rows)? An Agent that answers, or one of its
+ *  faults still open — the cards wear its icons, so the table says what they mean even while it is not answering
+ *  (2.496.360: its rows vanished from the (i) while its icons stayed on the cards). `openAgentFault`: one is open. */
+export function agentSourcesShown(status: AgentStatus | null, openAgentFault: boolean): boolean {
+  return agentVisible(status) || openAgentFault;
+}
+
 /** May THIS device offer a message's buttons right now? The SERVER decides
  *  (canAnswer): open, this profile allowed, and the agent online — nobody
  *  would act on an answer while it is offline (A8).

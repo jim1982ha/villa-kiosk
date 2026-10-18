@@ -12,7 +12,7 @@
 // Pure: tests/oracles/camera_status_bar.mjs. It was an inline closure in
 // CameraPanel.tsx, where 2.496.179 painted a lost motion sensor green.
 
-import { UNKNOWN_STATES } from "@/utils/stateColors";
+import { contactOf } from "@/utils/stateColors";
 import type { StateHistoryPoint } from "@/types/ha.types";
 import { mergeStateHistories } from "./chartUtils";
 
@@ -20,12 +20,12 @@ export type CameraBarState = "offline" | "online" | "motion" | "motion-unavailab
 
 /** The bar's state at one instant, from each series' state then. */
 export function cameraBarState(camera: string | undefined, motion: string | undefined, hasMotion: boolean): CameraBarState {
-  if (!camera || UNKNOWN_STATES.has(camera)) return "offline";
+  if (contactOf(camera) === "lost") return "offline";
   if (hasMotion && motion === "on") return "motion";
   // ⚠️ A LOST MOTION SENSOR IS NOT "ONLINE" (2.496.179): it resolved to the
   // camera's resting state and was painted green — an outage of the thing
   // this bar exists to report, shown as all-clear.
-  if (hasMotion && (!motion || UNKNOWN_STATES.has(motion))) return "motion-unavailable";
+  if (hasMotion && contactOf(motion) === "lost") return "motion-unavailable";
   return "online";
 }
 
