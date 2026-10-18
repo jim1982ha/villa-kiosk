@@ -118,7 +118,7 @@ playbook:
   energy_and_occupancy:
     - name: electricity used while the villa is empty
       title: "Electricity used while the villa was empty: {kwh_per_empty_day} kWh a day"
-      when: {kind: use_while_empty, mode_entity: input_select.villa_mode, empty: [vacant, away], days: 10}
+      when: {kind: use_while_empty, mode_entity: binary_sensor.villa_empty, empty: ["on"], days: 10}   # the villa's one "empty" (2026-10-18)
       look_at: "the main meter per hour on empty days, which circuits ran, lights and air conditioning left on"
       means: "something left on, or a load that should be off when nobody is there"
       check: "what was left on, and whether a scene or automation should switch it off when the villa is empty"

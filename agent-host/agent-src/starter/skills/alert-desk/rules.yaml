@@ -59,10 +59,12 @@ routes:
 
 siren:
   # The siren never fires on a single signal. Two independent signals inside
-  # the window, the villa marked vacant or away, and one explicit human approval.
+  # the window, the villa empty, and one explicit human approval.
   window_min: 5
   min_signals: 2
-  requires_villa_mode: [vacant, away]
+  # The villa's one "is it empty?" (owner, 2026-10-18): a binary sensor, on when empty — the same one its
+  # presence rules read. It replaced input_select.villa_mode, a mode no villa had: the siren could never arm.
+  villa_empty: binary_sensor.villa_empty
   # The human step is the owner's Approve button (the siren is an owner-only device in
   # policy.yaml); how long it sounds is policy.yaml's siren_auto_off_min.
 

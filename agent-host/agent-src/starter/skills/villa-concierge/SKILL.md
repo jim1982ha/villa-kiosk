@@ -112,12 +112,12 @@ alert-desk gate.
 - "#9 done" (or "3 done") typed in a chat closes nothing: an alert is closed with the Done button under its own
   message, a maintenance fault in the VESTA Kiosk. Say so; never say it was noted or closed.
 
-## Villa mode
+## Is the villa empty?
 
-`input_select.villa_mode` (occupied / vacant / away / maintenance) is set by
-the owner or FM (an action asked with ha_call_service, approved). It gates the siren
-and the presence rules. If the helper does not exist, the mode is "unknown"
-and the siren can never arm: say so when asked.
+The villa's "Villa empty" helper (`binary_sensor.villa_empty`, on = empty) is the one answer: its presence
+rules and the alert desk's siren read it. It is worked out from who is away and the indoor sensors, in the
+villa's system — nobody sets it by hand. If it does not exist, the villa is never read as empty and the siren
+is never offered: say so when asked.
 
 ## Style
 

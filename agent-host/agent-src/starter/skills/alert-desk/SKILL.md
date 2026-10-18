@@ -93,7 +93,8 @@ message then says who pressed what, and when. Typing the word works too.
 
 `rules.yaml` section `siren`. The gate arms only when all three hold:
 1. At least 2 independent intrusion signals (different entities) inside 5 minutes.
-2. The villa is marked vacant or away (`input_select.villa_mode`).
+2. The villa is empty: its "Villa empty" helper reads on (`rules.yaml` `siren.villa_empty`, the same one its
+   presence rules read). Missing or unreadable: not empty, the siren is not offered.
 3. The owner approves the siren request with the Approve button (it expires after policy.yaml's
    `approval_ttl_minutes`). It sounds for policy.yaml's `siren_auto_off_min`, then stops.
 

@@ -87,12 +87,12 @@ def test_a_repeat_inside_the_cooldown_is_counted_not_sent(store):
     assert res["decision"] == "counted" and res["send"] == []
 
 
-def test_intrusion_arms_the_siren_gate_only_when_vacant_with_two_signals(store):
+def test_intrusion_arms_the_siren_gate_only_when_empty_with_two_signals(store):
     pg = dict(blueprint="critical_presence_guard", rule="automation.critical_presence_guard_night")
-    a = desk.intake(store, event(entities=("binary_sensor.garden_motion",), started=1, **pg), T0, mode_reader=lambda: "vacant")
+    a = desk.intake(store, event(entities=("binary_sensor.garden_motion",), started=1, **pg), T0, mode_reader=lambda: "empty")
     assert a["siren_gate"]["armed"] is False                               # one signal
     b = desk.intake(store, event(entities=("binary_sensor.gate_motion",), started=2, **pg),
-                    T0 + timedelta(minutes=1), mode_reader=lambda: "vacant")
+                    T0 + timedelta(minutes=1), mode_reader=lambda: "empty")
     assert b["siren_gate"]["armed"] is True
     c = desk.intake(Store(":memory:"), event(entities=("binary_sensor.gate_motion",), **pg), T0, mode_reader=lambda: "occupied")
     assert c["siren_gate"]["armed"] is False
@@ -121,7 +121,7 @@ def test_the_cli_reads_an_event_file(tmp_path):
     p.write_text(json.dumps(event()))
     fx = tmp_path / "fx"                                             # the villa as a test sees it: one seam, no flags
     fx.mkdir()
-    (fx / "states.json").write_text(json.dumps({"states": {"input_select.villa_mode": {"state": "Occupied"}}}))
+    (fx / "states.json").write_text(json.dumps({"states": {"binary_sensor.villa_empty": {"state": "off"}}}))
     env = {**os.environ, "PYTHONPATH": PYTHONPATH}
     r = subprocess.run([sys.executable, os.path.join(STARTER_SKILLS, "alert-desk", "scripts", "desk.py"), "intake",
                         "--event", str(p), "--store", str(tmp_path / "s.sqlite"), "--fixture-dir", str(fx)],
@@ -673,3 +673,16 @@ def test_an_alert_back_again_waits_its_own_clear_minutes_never_the_last_runs(sto
     assert not _tick(store, ha, 61).get("cleared")                             # back 1 min, not 56
     assert not _tick(store, ha, 66).get("cleared")
     assert _tick(store, ha, 71)["cleared"] == [iid]                            # its own 10 minutes
+
+
+def test_the_siren_reads_the_villas_one_empty_helper(tmp_path):
+    # owner, 2026-10-18: the desk read input_select.villa_mode, a mode no villa had — "unknown" for every intrusion,
+    # the siren could never be offered. The helper the presence rules read answers; missing is never empty
+    from fixture_client import FixtureClient
+    fx = tmp_path / "fx"
+    fx.mkdir()
+    for state, mode in (("on", "empty"), ("off", "occupied"), ("unavailable", "unknown")):
+        (fx / "states.json").write_text(json.dumps({"states": {"binary_sensor.villa_empty": {"state": state}}}))
+        assert desk.villa_mode(FixtureClient(str(fx))) == mode
+    (fx / "states.json").write_text(json.dumps({"states": {"input_select.villa_mode": {"state": "vacant"}}}))
+    assert desk.villa_mode(FixtureClient(str(fx))) == "unknown"

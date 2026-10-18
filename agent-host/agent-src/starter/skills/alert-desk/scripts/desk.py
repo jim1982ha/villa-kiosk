@@ -190,17 +190,26 @@ def normalise(ev: dict) -> dict:
             "phase": ev.get("phase") or "opened", "ha_incident": ev.get("incident_id")}
 
 
+#: What villa_mode answers: the villa empty, someone in it, or it cannot be told.
+EMPTY, OCCUPIED, UNKNOWN = "empty", "occupied", "unknown"
+
+
 def villa_mode(client=None) -> str:
-    """input_select.villa_mode, read through the script's Home Assistant client (vesta_shared.script: the live
-    client, or a test's fixture folder); "unknown" when it cannot be read."""
+    """The villa empty or not, from its one helper (rules.yaml siren.villa_empty: on = empty), read through the
+    script's Home Assistant client (vesta_shared.script: the live client, or a test's fixture folder).
+
+    ⚠️ A MODE NO VILLA HAD (owner, 2026-10-18): this read input_select.villa_mode, never created on the villa — every
+    intrusion read "unknown" and the siren could never arm. The helper the presence rules read answers it now; an
+    unreadable or missing one is UNKNOWN, never empty."""
+    ent = RULES["siren"].get("villa_empty")
     try:
         if client is None:
             from vesta_shared.ha_client import McpClient
             client = McpClient()
-        st = client.states(["input_select.villa_mode"]).get("input_select.villa_mode") or {}
-        return str(st.get("state") or "unknown").lower()
+        st = (client.states([ent]).get(ent) or {}).get("state") if ent else None
     except Exception:  # noqa: BLE001
-        return "unknown"
+        return UNKNOWN
+    return {"on": EMPTY, "off": OCCUPIED}.get(str(st or "").lower(), UNKNOWN)
 
 
 def _find_by_ha_incident(store: Store, ha_incident: str | None, closed_within: timedelta | None = None,
@@ -652,15 +661,15 @@ def siren_gate(store: Store, ev: dict, now: datetime) -> dict:
               # garden alert of 20:00 tripping again at 22:00 counted as 20:00 — two sensors in a minute, no siren asked
               and datetime.fromisoformat(i.get("last_seen_at") or i["opened_at"]) >= window]
     signals = {i["entity_id"] for i in recent}
-    mode = (ev.get("villa_mode") or "unknown").lower()
-    armed = len(signals) >= cfg["min_signals"] and mode in cfg["requires_villa_mode"]
+    mode = (ev.get("villa_mode") or UNKNOWN).lower()
+    armed = len(signals) >= cfg["min_signals"] and mode == EMPTY
     prompt = ""
     if armed:
         # The engine turns this into an Approve / Refuse request to the owner (outcome.carry_out).
         prompt = (f"Intrusion suspected: {len(signals)} independent sensors in {cfg['window_min']} min while the villa is {mode}: "
                   f"{', '.join(sorted(signals))}. Look at the snapshot. Approving sounds the siren for {siren_minutes()} min.")
     return R.siren(armed, prompt, ("owner", "fm"), signals=sorted(signals), villa_mode=mode,
-                   reason=None if armed else ("villa not vacant/away" if mode not in cfg["requires_villa_mode"] else "single signal"))
+                   reason=None if armed else ("villa not empty" if mode != EMPTY else "single signal"))
 
 
 def reply(store: Store, iid: int, option: str, sender_role: str, now: datetime, params: VillaParams | None = None,

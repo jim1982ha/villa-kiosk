@@ -33,7 +33,7 @@ def run(c):
 def ev(rule, entity, minutes, phase="opened", blueprint="critical_presence_guard", **extra):
     return {"blueprint": blueprint, "rule_id": rule, "incident_id": f"{rule}-{minutes}", "phase": phase,
             "severity": "critical", "label": "Motion", "entities": [entity], "summary": f"Motion at {entity}",
-            "villa_mode": "vacant", **extra}
+            "villa_mode": "empty", **extra}
 
 
 # ---------------------------------------------------------------------- the heading says what the message is

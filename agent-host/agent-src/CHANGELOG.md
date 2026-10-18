@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.235 (18 October 2026)
+
+Owner, 2026-10-18: the siren gate read input_select.villa_mode, a mode the villa never had — every intrusion read
+"unknown", the siren could never be offered. It reads the villa's one "empty" helper now (alert-desk rules.yaml
+`siren.villa_empty`, binary_sensor.villa_empty: on = empty; missing or unreadable = never empty), the one its presence
+rules read. The report's "electricity used while the villa is empty" reads it too (`mode_entity`, empty ["on"]).
+
 ## 0.6.234 (18 October 2026)
 
 Architecture review 2026-10-18, offline devices card 2 (owner: "the list in the villa's critical devices offline"):
