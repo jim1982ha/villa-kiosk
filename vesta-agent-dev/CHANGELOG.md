@@ -1,3 +1,8 @@
+## 0.12.245
+
+What you will see: nothing changes. The Agent's alert code no longer uses the name "villa mode" anywhere; it reads
+"Villa empty", as since 0.12.244.
+
 ## 0.12.244
 
 What you will see:
