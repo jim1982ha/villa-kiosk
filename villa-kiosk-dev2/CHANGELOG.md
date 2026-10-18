@@ -1,3 +1,9 @@
+## 2.496.418
+
+### Added
+- Cockpit › Overview: hovering a card's "Next check" shows the date and time of that check — "20/10/2026 02:00" for
+  the nightly check, the VESTA Agent's next look for an alert (written as the Agent's Telegram messages write a time).
+
 ## 2.496.417
 
 ### Fixed
