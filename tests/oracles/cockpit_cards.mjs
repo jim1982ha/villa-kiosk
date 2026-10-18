@@ -66,6 +66,26 @@ ck("  ...a device no room holds still has its room line: Other, as By Room files
 const lone = draw(h(AttentionCard, { group: { ...group, entityId: undefined }, onOpenEntity: () => {}, cadence: CADENCE }));
 ck("  ...a problem with no device: no chevron, nothing to tap, no buttons", !/chevron-right/.test(lone) && !/role="button"/.test(lone) && !/fm-record-actions/.test(lone));
 
+// owner, 2026-10-18: "#55" (its own siren before it) sat further right than "#41" above it (its icons are the card's):
+// a line's icon hangs in the card's icon column, so every line's text starts at the same place.
+{
+  const { readFileSync } = await import("node:fs");
+  const css = readFileSync(new URL("../../src/styles/07-facility.css", import.meta.url), "utf8");
+  const dev = { key: "lock.door", label: "Door lock", room: "Hall" };
+  const [two] = groupAttention([
+    { id: "alarm:lock.door", kind: "alarm", title: "Door lock", detail: "Unlocked", entityId: "lock.door", source: "live", device: dev },
+    { id: "fault:f1", kind: "fault", title: "#41 · Door unlocked", detail: "Fault", entityId: "lock.door", ticketId: "f1", stage: "fault", source: "alert", device: dev },
+    { id: "fault:f2", kind: "fault", title: "#55 · Door unlocked", detail: "Fault", entityId: "lock.door", ticketId: "f2", stage: "fault", source: "alert", device: dev }]);
+  const lines = inside(draw(h(AttentionCard, { group: two, onOpenEntity: () => {}, cadence: CADENCE })), "fm-record-body")
+    .split('<li class="cockpit-attention-sub">').slice(1);
+  const gutter = (css.match(/\.fm-record-head:has\(> \.fm-record-lead\) \+ \.fm-record-body \{ padding-left: (\d+)px/) ?? [])[1];
+  const hung = (css.match(/\.fm-record-gutter > \.fm-record-gutter-icon \{[^}]*position: absolute; left: -(\d+)px/) ?? [])[1];
+  ck("  ...a line with its own icon starts its text where a line without one does: the icon hangs in the card's icon column",
+     lines.length === 2 && /siren/.test(lines[1]) && !/<svg/.test(lines[0])
+     && lines.every((l) => !/cockpit-source-icons/.test(l.replace(/<span class="fm-record-gutter-icon">[\s\S]*?<\/svg><\/span><\/span>/g, "")))
+     && !!gutter && gutter === hung, { gutter, hung, lines });
+}
+
 // owner, 2026-10-15: "don't skip a line between the room and the next section" — a card without buttons kept a blank
 // line: its problem's line was 36 px high, its text centred, under the row's 12 px gap. What the stylesheet says:
 {

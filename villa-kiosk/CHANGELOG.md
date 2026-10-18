@@ -1,3 +1,11 @@
+## 2.496.411
+
+### Fixed
+- Cockpit › Overview: every line of an issue's card starts at the same place. A line with its own icon (a second
+  alert about the same door) has its icon in the card's icon column, under the card's own, instead of pushing its
+  text to the right.
+- Charts: in an energy bar's tooltip, "Total" lines up with the devices listed under it.
+
 ## 2.496.410
 
 ### Changed
