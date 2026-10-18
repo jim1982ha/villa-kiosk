@@ -190,11 +190,11 @@ def normalise(ev: dict) -> dict:
             "phase": ev.get("phase") or "opened", "ha_incident": ev.get("incident_id")}
 
 
-#: What villa_mode answers: the villa empty, someone in it, or it cannot be told.
+#: What occupancy answers: the villa empty, someone in it, or it cannot be told.
 EMPTY, OCCUPIED, UNKNOWN = "empty", "occupied", "unknown"
 
 
-def villa_mode(client=None) -> str:
+def occupancy(client=None) -> str:
     """The villa empty or not, from its one helper (rules.yaml siren.villa_empty: on = empty), read through the
     script's Home Assistant client (vesta_shared.script: the live client, or a test's fixture folder).
 
@@ -230,7 +230,7 @@ def _find_by_ha_incident(store: Store, ha_incident: str | None, closed_within: t
 PHASES = ("opened", "resolved", "abandoned", "restated")
 
 
-def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = None, mode_reader=villa_mode,
+def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = None, occupancy_reader=occupancy,
            zone: str | None = None) -> dict:
     """An alert from Home Assistant. `zone`: the villa's time zone (vesta_shared.script's one rule)."""
     ev = normalise(ev)
@@ -253,8 +253,8 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
     out = {"send": [], "actions": [], "incident_id": None, "decision": None}
     if params and params.boolean("maintenance_mode", default=False) and sev != "P1":
         out["decision"] = "maintenance_mode"; store.audit("alert-desk", "suppressed_maintenance", ev); return out
-    if route.get("intrusion") and not ev.get("villa_mode"):
-        ev["villa_mode"] = mode_reader()
+    if route.get("intrusion") and not ev.get("occupancy"):
+        ev["occupancy"] = occupancy_reader()
     cur = store.find_open_incident(key)
     if cur:
         last = datetime.fromisoformat(cur["last_seen_at"])
@@ -661,14 +661,14 @@ def siren_gate(store: Store, ev: dict, now: datetime) -> dict:
               # garden alert of 20:00 tripping again at 22:00 counted as 20:00 — two sensors in a minute, no siren asked
               and datetime.fromisoformat(i.get("last_seen_at") or i["opened_at"]) >= window]
     signals = {i["entity_id"] for i in recent}
-    mode = (ev.get("villa_mode") or UNKNOWN).lower()
+    mode = (ev.get("occupancy") or UNKNOWN).lower()
     armed = len(signals) >= cfg["min_signals"] and mode == EMPTY
     prompt = ""
     if armed:
         # The engine turns this into an Approve / Refuse request to the owner (outcome.carry_out).
         prompt = (f"Intrusion suspected: {len(signals)} independent sensors in {cfg['window_min']} min while the villa is {mode}: "
                   f"{', '.join(sorted(signals))}. Look at the snapshot. Approving sounds the siren for {siren_minutes()} min.")
-    return R.siren(armed, prompt, ("owner", "fm"), signals=sorted(signals), villa_mode=mode,
+    return R.siren(armed, prompt, ("owner", "fm"), signals=sorted(signals), occupancy=mode,
                    reason=None if armed else ("villa not empty" if mode != EMPTY else "single signal"))
 
 
@@ -817,7 +817,7 @@ def main(argv=None):
     params = ctx.params
     if a.cmd == "intake":
         ev = json.load(open(a.event)) if a.event else json.load(sys.stdin)
-        res = intake(store, ev, now, params, lambda: villa_mode(ctx.client), zone=ctx.zone)
+        res = intake(store, ev, now, params, lambda: occupancy(ctx.client), zone=ctx.zone)
     elif a.cmd == "tick":
         res = tick(store, now, params, ctx.live_client, zone=ctx.zone)
     elif a.cmd == "reply":

@@ -33,7 +33,7 @@ def run(c):
 def ev(rule, entity, minutes, phase="opened", blueprint="critical_presence_guard", **extra):
     return {"blueprint": blueprint, "rule_id": rule, "incident_id": f"{rule}-{minutes}", "phase": phase,
             "severity": "critical", "label": "Motion", "entities": [entity], "summary": f"Motion at {entity}",
-            "villa_mode": "empty", **extra}
+            "occupancy": "empty", **extra}
 
 
 # ---------------------------------------------------------------------- the heading says what the message is
@@ -160,7 +160,7 @@ def test_a_door_closed_in_the_kiosk_is_read_again_as_a_done_is(tmp_path):
     res = desk.intake(store, {"blueprint": "critical_condition", "rule_id": "automation.door", "incident_id": "automation.door-1",
                               "phase": "opened", "severity": "critical", "label": "Door", "entities": ["lock.door"],
                               "summary": "Door unlocked", "mode": "state", "bad_states": ["unlocked"]}, T0,
-                      mode_reader=lambda: "x")
+                      occupancy_reader=lambda: "x")
     iid = res["incident_id"]
     (task,) = store.tasks("open")
     Problems(store).closed_in_kiosk(task["id"])

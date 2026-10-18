@@ -33,7 +33,7 @@ def store(tmp_path):
 
 
 def test_opened_goes_to_the_fm_with_the_ladder_and_becomes_a_ticket(store):
-    res = desk.intake(store, event(), T0, mode_reader=lambda: "occupied")
+    res = desk.intake(store, event(), T0, occupancy_reader=lambda: "occupied")
     assert res["decision"] == "new"
     fm = [s for s in res["send"] if s["to"] == "fm"]
     # the incident's number is the heading the engine writes (notice.py); the skill's text is the body alone
@@ -44,7 +44,7 @@ def test_opened_goes_to_the_fm_with_the_ladder_and_becomes_a_ticket(store):
 
 
 def test_resolved_closes_the_incident_and_its_ticket(store):
-    iid = desk.intake(store, event(), T0, mode_reader=lambda: "occupied")["incident_id"]
+    iid = desk.intake(store, event(), T0, occupancy_reader=lambda: "occupied")["incident_id"]
     res = desk.intake(store, event(phase="resolved"), T0 + timedelta(minutes=20))
     assert res["decision"] == "resolved" and res["incident_id"] == iid
     assert store.incident(iid)["state"] == "resolved"
@@ -56,7 +56,7 @@ def test_resolved_closes_the_incident_and_its_ticket(store):
 
 
 def test_abandoned_escalates_to_the_owner(store):
-    iid = desk.intake(store, event(), T0, mode_reader=lambda: "occupied")["incident_id"]
+    iid = desk.intake(store, event(), T0, occupancy_reader=lambda: "occupied")["incident_id"]
     res = desk.intake(store, event(phase="abandoned"), T0 + timedelta(hours=6))
     assert res["decision"] == "abandoned"
     assert store.incident(iid)["state"] == "escalated"
@@ -67,7 +67,7 @@ def test_an_opened_only_rule_closes_through_the_ladder(store):
     # critical_watchdog never sends "resolved": Done must close it
     ev = event(blueprint="critical_watchdog", rule="automation.critical_watchdog_devices",
                entities=("sensor.garden_probe",), label="Device offline")
-    iid = desk.intake(store, ev, T0, mode_reader=lambda: "occupied")["incident_id"]
+    iid = desk.intake(store, ev, T0, occupancy_reader=lambda: "occupied")["incident_id"]
     res = desk.tick(store, T0 + timedelta(minutes=16))
     assert iid in res["reasked"]
     out = desk.reply(store, iid, "done", "fm", T0 + timedelta(minutes=20))
@@ -77,24 +77,24 @@ def test_an_opened_only_rule_closes_through_the_ladder(store):
 
 def test_routing_by_blueprint(store):
     trip = desk.intake(store, event(blueprint="critical_binary_trip", rule="automation.critical_leak",
-                                    entities=("binary_sensor.kitchen_leak",), label="Leak"), T0, mode_reader=lambda: "occupied")
+                                    entities=("binary_sensor.kitchen_leak",), label="Leak"), T0, occupancy_reader=lambda: "occupied")
     assert {s["to"] for s in trip["send"]} == {"owner", "fm"}            # P1: both chats
 
 
 def test_a_repeat_inside_the_cooldown_is_counted_not_sent(store):
-    desk.intake(store, event(started=1), T0, mode_reader=lambda: "occupied")
-    res = desk.intake(store, event(started=2), T0 + timedelta(minutes=5), mode_reader=lambda: "occupied")
+    desk.intake(store, event(started=1), T0, occupancy_reader=lambda: "occupied")
+    res = desk.intake(store, event(started=2), T0 + timedelta(minutes=5), occupancy_reader=lambda: "occupied")
     assert res["decision"] == "counted" and res["send"] == []
 
 
 def test_intrusion_arms_the_siren_gate_only_when_empty_with_two_signals(store):
     pg = dict(blueprint="critical_presence_guard", rule="automation.critical_presence_guard_night")
-    a = desk.intake(store, event(entities=("binary_sensor.garden_motion",), started=1, **pg), T0, mode_reader=lambda: "empty")
+    a = desk.intake(store, event(entities=("binary_sensor.garden_motion",), started=1, **pg), T0, occupancy_reader=lambda: "empty")
     assert a["siren_gate"]["armed"] is False                               # one signal
     b = desk.intake(store, event(entities=("binary_sensor.gate_motion",), started=2, **pg),
-                    T0 + timedelta(minutes=1), mode_reader=lambda: "empty")
+                    T0 + timedelta(minutes=1), occupancy_reader=lambda: "empty")
     assert b["siren_gate"]["armed"] is True
-    c = desk.intake(Store(":memory:"), event(entities=("binary_sensor.gate_motion",), **pg), T0, mode_reader=lambda: "occupied")
+    c = desk.intake(Store(":memory:"), event(entities=("binary_sensor.gate_motion",), **pg), T0, occupancy_reader=lambda: "occupied")
     assert c["siren_gate"]["armed"] is False
 
 
@@ -132,12 +132,12 @@ def test_the_cli_reads_an_event_file(tmp_path):
 
 def test_a_press_settles_the_alerts_buttons_by_its_option_and_names_its_label(store):
     # architecture review, 2026-10-13: the desk is given the option pressed, never the label to read back
-    iid = desk.intake(store, event(), T0, mode_reader=lambda: "occupied")["incident_id"]
+    iid = desk.intake(store, event(), T0, occupancy_reader=lambda: "occupied")["incident_id"]
     res = desk.reply(store, iid, "done", "fm", T0 + timedelta(minutes=5), name="Fabien")
     assert res["settle"] == [{"incident_id": iid, "note": "Done pressed by Fabien on {time}."}]
     assert desk.BUTTONS["need_help"]["mark"] == "help"
     other = desk.intake(store, event(rule="automation.other", entities=("lock.other",)), T0,
-                        mode_reader=lambda: "occupied")["incident_id"]
+                        occupancy_reader=lambda: "occupied")["incident_id"]
     assert "settle" not in desk.reply(store, other, "whatever", "fm", T0 + timedelta(minutes=6))
 
 
@@ -173,8 +173,8 @@ def test_the_desk_reads_the_villas_parameters_kept_ten_minutes_and_never_crashes
 
 def test_a_repeated_alert_says_since_when_in_the_villas_time(store, monkeypatch):
     # owner, 2026-10-07: "(4 times since 2026-10-03T00:00)" — UTC, written as a machine writes it
-    desk.intake(store, event(), T0, mode_reader=lambda: "occupied", zone="Asia/Makassar")
-    res = desk.intake(store, event(), T0 + timedelta(hours=6), mode_reader=lambda: "occupied", zone="Asia/Makassar")
+    desk.intake(store, event(), T0, occupancy_reader=lambda: "occupied", zone="Asia/Makassar")
+    res = desk.intake(store, event(), T0 + timedelta(hours=6), occupancy_reader=lambda: "occupied", zone="Asia/Makassar")
     assert res["send"][0]["status"].endswith("since Thu 1 Oct, 17:00")  # 09:00 UTC is 17:00 in the villa
 
 
@@ -214,7 +214,7 @@ BAD = ["unlocked", "open", "jammed"]
 def _left_unlocked(store, entities=("lock.front_door",), abandon=True, still_true=True, **extra):
     """A door rule shaped like the live critical_condition: every watched entity, its list of bad states."""
     iid = desk.intake(store, event(entities=entities, mode="state", bad_states=BAD, **extra), T0,
-                      mode_reader=lambda: "occupied")["incident_id"]
+                      occupancy_reader=lambda: "occupied")["incident_id"]
     if abandon:
         desk.intake(store, event(phase="abandoned", entities=entities, mode="state", bad_states=BAD, still_true=still_true,
                                  **extra), T0 + timedelta(minutes=30))
@@ -273,7 +273,7 @@ def test_a_device_that_does_not_answer_keeps_the_alert_open_and_says_so_once(sto
     timeline["lock.back_door"].append((T0 + timedelta(minutes=95), "locked"))                    # it answers, and is right
     assert _tick(store, Villa(**timeline), 120)["cleared"] == [iid]
     store2 = Store(store.path + "-2")
-    desk.intake(store2, event(entities=LOCKS, mode="state", bad_states=BAD + ["unavailable"]), T0, mode_reader=lambda: "x")
+    desk.intake(store2, event(entities=LOCKS, mode="state", bad_states=BAD + ["unavailable"]), T0, occupancy_reader=lambda: "x")
     desk.intake(store2, event(phase="abandoned", entities=LOCKS, mode="state", bad_states=BAD + ["unavailable"],
                               still_true=True), T0 + timedelta(minutes=30))
     assert not _tick(store2, Villa(**timeline), 101).get("cleared")
@@ -299,7 +299,7 @@ def test_a_condition_its_rule_still_watches_is_read_again_and_its_own_all_clear_
 
 def test_a_rule_that_stopped_watching_once_back_to_normal_never_tells_the_owner_still_not_clear(store):
     # architecture review 22: the rule said "cleared just inside the limit", the desk told the owner "Still not clear"
-    iid = desk.intake(store, event(), T0, mode_reader=lambda: "occupied")["incident_id"]
+    iid = desk.intake(store, event(), T0, occupancy_reader=lambda: "occupied")["incident_id"]
     res = desk.intake(store, event(phase="abandoned", still_true=False), T0 + timedelta(minutes=30))
     assert res["decision"] == "abandoned_cleared" and store.incident(iid)["state"] == "resolved"
     assert not [s for s in res["send"] if s["to"] == "owner"]
@@ -313,10 +313,10 @@ def test_a_number_or_an_alert_from_before_the_bad_states_waits_for_a_person(stor
                      "lock.front_door": [(T0 + timedelta(minutes=5), "locked")]})
     # a numeric rule sends its bad states too (the blueprint's default: unavailable) — never read as "over"
     desk.intake(store, event(rule="automation.critical_condition_cabinet", entities=("sensor.cabinet",), mode="numeric",
-                             bad_states=["unavailable"]), T0, mode_reader=lambda: "occupied")
+                             bad_states=["unavailable"]), T0, occupancy_reader=lambda: "occupied")
     desk.intake(store, event(phase="abandoned", rule="automation.critical_condition_cabinet", entities=("sensor.cabinet",),
                              mode="numeric", bad_states=["unavailable"]), T0 + timedelta(minutes=30))
-    desk.intake(store, event(), T0, mode_reader=lambda: "occupied")                  # no bad_states: an older rule
+    desk.intake(store, event(), T0, occupancy_reader=lambda: "occupied")                  # no bad_states: an older rule
     desk.intake(store, event(phase="abandoned"), T0 + timedelta(minutes=30))
     assert not _tick(store, villa, 120).get("cleared") and len(store.incidents(open_only=True)) == 2
 
@@ -325,7 +325,7 @@ def _watchdog(store, state, bad_states=None):
     extra = {"bad_states": bad_states} if bad_states else {}
     return desk.intake(store, event(blueprint="critical_watchdog", rule="automation.critical_devices_unavailable_watchdog",
                                     entities=("sensor.ap_state",), label="Critical device unavailable", state=state,
-                                    **extra), T0, mode_reader=lambda: "occupied")["incident_id"]
+                                    **extra), T0, occupancy_reader=lambda: "occupied")["incident_id"]
 
 
 def test_a_device_back_after_the_watchdog_alerted_closes_its_alert(store):
@@ -360,7 +360,7 @@ def test_the_ticks_cli_reads_home_assistant_again(tmp_path):
     import sys
     s = Store(str(tmp_path / "s.sqlite"))
     iid = desk.intake(s, event(blueprint="critical_watchdog", entities=("switch.pool_relay",), state="unavailable"), T0,
-                      mode_reader=lambda: "occupied")["incident_id"]
+                      occupancy_reader=lambda: "occupied")["incident_id"]
     fx = tmp_path / "fx"
     fx.mkdir()
     (fx / "states.json").write_text(json.dumps({"states": {"switch.pool_relay": {
@@ -377,7 +377,7 @@ def _ap(store, minutes, **extra):
     return desk.intake(store, event(blueprint="critical_watchdog", rule="automation.critical_devices_unavailable_watchdog",
                                     entities=("sensor.ap_state",), state="disconnected", bad_states=["disconnected"],
                                     started=1790000000 + minutes * 60, **extra),
-                       T0 + timedelta(minutes=minutes), mode_reader=lambda: "occupied")
+                       T0 + timedelta(minutes=minutes), occupancy_reader=lambda: "occupied")
 
 
 def test_an_alert_back_within_four_hours_is_the_same_incident_back_again(store):
@@ -452,7 +452,7 @@ def test_after_done_a_quiet_device_stays_closed_and_an_alert_without_states_prom
     assert not _tick(store, villa, 31)["not_quiet"] and store.incident(iid)["closed_at"]
     villa.timeline["lock.front_door"].append((T0 + timedelta(days=3), "unlocked"))     # days later: another story
     assert not _tick(store, villa, 3 * 1440 + 30)["not_quiet"] and store.incident(iid)["closed_at"]
-    other = desk.intake(store, event(rule="automation.critical_condition_other"), T0, mode_reader=lambda: "x")["incident_id"]
+    other = desk.intake(store, event(rule="automation.critical_condition_other"), T0, occupancy_reader=lambda: "x")["incident_id"]
     said = desk.reply(store, other, "done", "fm", T0 + timedelta(minutes=20))["send"][0]["status"]
     assert "stays quiet" not in said
 
@@ -461,7 +461,7 @@ def test_one_bad_state_sent_as_text_is_one_state_not_its_letters(store):
     iid = _ap(store, 0, )["incident_id"]
     store2 = Store(store.path + "-3")
     desk.intake(store2, {**event(blueprint="critical_watchdog", entities=("sensor.ap_state",), state="disconnected"),
-                         "bad_states": "disconnected"}, T0, mode_reader=lambda: "x")
+                         "bad_states": "disconnected"}, T0, occupancy_reader=lambda: "x")
     villa = Villa(**{"sensor.ap_state": [(T0 - timedelta(minutes=10), "disconnected")]})
     assert not _tick(store2, villa, 60).get("cleared")
     assert iid
@@ -486,7 +486,7 @@ def _overdue(store, at=T0, **extra):
     """A schedule rule's "no run in over 1 day", shaped as the live blueprint sends it (its own word: warning)."""
     return desk.intake(store, event(blueprint="critical_schedule", rule="automation.pump_watchdog", phase="opened",
                                     entities=("sensor.pump_power",), label="Pump overdue", severity="warning",
-                                    reason="overdue_run", **extra), at, mode_reader=lambda: "occupied")
+                                    reason="overdue_run", **extra), at, occupancy_reader=lambda: "occupied")
 
 
 def test_an_alert_is_over_once_what_it_claims_no_longer_holds_whatever_rule_sent_it(store):
@@ -524,7 +524,7 @@ def test_the_priority_is_the_alerts_own_and_home_assistants_word_is_not_one(stor
     assert store.incident(plain["incident_id"])["severity"] == "P2"            # its route's, rules.yaml
     assert [m["to"] for m in plain["send"]] == ["fm"] and store.incident(plain["incident_id"])["state"] == "asked"
     urgent = desk.intake(store, event(rule="automation.other", entities=("lock.other",), priority="P1"), T0,
-                         mode_reader=lambda: "occupied")
+                         occupancy_reader=lambda: "occupied")
     assert sorted(m["to"] for m in urgent["send"]) == ["fm", "owner"]
 
 
@@ -555,7 +555,7 @@ def _who(msgs):
 def test_every_notice_of_a_p1_reaches_its_priority_and_only_the_asked_role_gets_the_buttons(store):
     # owner, 2026-10-13: "consistently to any P1, P2, P3" — a P1's reminder and its reopening in the Cockpit reached
     # the facility manager alone, while the owner had the first alert
-    iid = desk.intake(store, event(priority="P1"), T0, mode_reader=lambda: "occupied")["incident_id"]
+    iid = desk.intake(store, event(priority="P1"), T0, occupancy_reader=lambda: "occupied")["incident_id"]
     both = [("fm", True, True), ("owner", False, False)]
     reminder = desk.tick(store, T0 + timedelta(minutes=16))
     assert reminder["reasked"] == [iid] and _who(reminder["send"]) == both
@@ -567,7 +567,7 @@ def test_every_notice_of_a_p1_reaches_its_priority_and_only_the_asked_role_gets_
 
 
 def test_a_p2_stays_with_the_facility_manager_and_a_p3_is_never_chased(store):
-    iid = desk.intake(store, event(), T0, mode_reader=lambda: "occupied")["incident_id"]
+    iid = desk.intake(store, event(), T0, occupancy_reader=lambda: "occupied")["incident_id"]
     assert _who(desk.tick(store, T0 + timedelta(minutes=16))["send"]) == [("fm", True, True)]
     p3 = desk.tell("P3", "new", incident=iid, text="x")
     assert p3 == []                                          # the morning list only (people_roles digest)
@@ -593,7 +593,7 @@ def test_the_chase_is_the_skills_rule(store, monkeypatch):
 def test_an_incidents_notes_change_in_place_and_an_old_or_broken_record_still_reads(store):
     # architecture review, 2026-10-17: Store.note changes only the keys it is given, against the record as it stands
     from vesta_shared.store import notes_of
-    iid = desk.intake(store, event(), T0, mode_reader=lambda: "x")["incident_id"]
+    iid = desk.intake(store, event(), T0, occupancy_reader=lambda: "x")["incident_id"]
     before = notes_of(store.incident(iid))
     other = Store(store.path)
     other.note(iid, {"kiosk_reopened": "by Wayan"})                 # another writer, between a read and a write
@@ -612,7 +612,7 @@ def test_the_chase_roles_are_said_as_set_never_as_written_in_the_desk(store, mon
     # "No answer from FM", "the owner is asked to act" named the chase's roles as shipped; a villa that asks the owner
     # first would read the wrong people
     monkeypatch.setattr(desk, "CHASE", {"asks": "owner", "escalates_to": "fm"})
-    iid = desk.intake(store, event(), T0, mode_reader=lambda: "occupied")["incident_id"]
+    iid = desk.intake(store, event(), T0, occupancy_reader=lambda: "occupied")["incident_id"]
     assert store.incident(iid)["assignee"] == "owner"
     desk.tick(store, T0 + timedelta(minutes=16))
     out = desk.tick(store, T0 + timedelta(minutes=50))
@@ -620,7 +620,7 @@ def test_the_chase_roles_are_said_as_set_never_as_written_in_the_desk(store, mon
     assert esc["status"].startswith("No answer from Owner after "), esc
     assert store.incident(iid)["assignee"] == "fm"
     iid2 = desk.intake(store, event(rule="automation.critical_condition_back_door"), T0,
-                       mode_reader=lambda: "occupied")["incident_id"]
+                       occupancy_reader=lambda: "occupied")["incident_id"]
     out = desk.reply(store, iid2, "need_help", "owner", T0 + timedelta(minutes=5))
     assert any(m["status"].endswith(": FM is asked to act.") for m in out["send"]), out["send"]
     assert desk.reply(store, iid2, "other", "owner", T0 + timedelta(minutes=6), name=None)["send"][0]["status"] \
@@ -632,31 +632,31 @@ def test_a_rule_restating_itself_changes_how_its_open_alert_is_judged_and_sends_
     # claim it was raised with, so 6000 W on the phase kept it open for ever
     old = "{{ 'true' }}"
     new = "{{ 'false' }}"
-    iid = desk.intake(store, event(claim=old), T0, mode_reader=lambda: "occupied")["incident_id"]
+    iid = desk.intake(store, event(claim=old), T0, occupancy_reader=lambda: "occupied")["incident_id"]
     out = desk.intake(store, event(phase="restated", claim=new, priority="P1"), T0 + timedelta(hours=3),
-                      mode_reader=lambda: "occupied")
+                      occupancy_reader=lambda: "occupied")
     assert out["decision"] == "restated" and out["incident_id"] == iid
     assert not out["send"] and not out.get("ha_messages") and not out["actions"]
     inc = store.incident(iid)
     assert json.loads(inc["payload"])["claim"] == new and inc["severity"] == "P1"
     assert not inc["closed_at"]                                  # closed by the desk's re-reading, never by the restate
     out = desk.intake(store, event(phase="restated", claim=new, rule="automation.critical_condition_other"), T0,
-                      mode_reader=lambda: "occupied")
+                      occupancy_reader=lambda: "occupied")
     assert out["decision"] == "restated_nothing_open" and not out["send"]
 
 
 def test_a_phase_the_desk_does_not_know_raises_nothing(store):
     # 2026-10-17, 14:41: "restated" reached a desk that did not know it — five false alerts, two reopenings in one
     # minute. Any phase a newer rule sends that this desk does not know is recorded, and nothing else
-    iid = desk.intake(store, event(), T0, mode_reader=lambda: "occupied")["incident_id"]
+    iid = desk.intake(store, event(), T0, occupancy_reader=lambda: "occupied")["incident_id"]
     before = [dict(r) for r in store.incidents(open_only=False)]
     for rule in ("automation.critical_condition_front_door", "automation.critical_condition_other"):
         out = desk.intake(store, event(phase="rechecked", rule=rule), T0 + timedelta(hours=5),
-                          mode_reader=lambda: "occupied")
+                          occupancy_reader=lambda: "occupied")
         assert out == {"send": [], "actions": [], "incident_id": None, "decision": "phase_unknown"}, out
     assert [dict(r) for r in store.incidents(open_only=False)] == before and store.incident(iid)["closed_at"] is None
     assert desk.intake(store, {k: v for k, v in event().items() if k != "phase"}, T0 + timedelta(hours=6),
-                       mode_reader=lambda: "occupied")["decision"] in ("repeat", "counted")   # no phase: "opened"
+                       occupancy_reader=lambda: "occupied")["decision"] in ("repeat", "counted")   # no phase: "opened"
 
 
 def test_an_alert_back_again_waits_its_own_clear_minutes_never_the_last_runs(store):
@@ -683,6 +683,6 @@ def test_the_siren_reads_the_villas_one_empty_helper(tmp_path):
     fx.mkdir()
     for state, mode in (("on", "empty"), ("off", "occupied"), ("unavailable", "unknown")):
         (fx / "states.json").write_text(json.dumps({"states": {"binary_sensor.villa_empty": {"state": state}}}))
-        assert desk.villa_mode(FixtureClient(str(fx))) == mode
+        assert desk.occupancy(FixtureClient(str(fx))) == mode
     (fx / "states.json").write_text(json.dumps({"states": {"input_select.villa_mode": {"state": "vacant"}}}))
-    assert desk.villa_mode(FixtureClient(str(fx))) == "unknown"
+    assert desk.occupancy(FixtureClient(str(fx))) == "unknown"

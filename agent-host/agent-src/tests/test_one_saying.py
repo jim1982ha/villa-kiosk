@@ -34,9 +34,9 @@ def ev(phase, **extra):
 
 def test_a_rule_that_gave_up_is_said_once_in_the_desks_words(tmp_path):
     store = Store(str(tmp_path / "s.sqlite"))
-    desk.intake(store, ev("opened", summary=ALERT), T0, mode_reader=lambda: "x")
+    desk.intake(store, ev("opened", summary=ALERT), T0, occupancy_reader=lambda: "x")
     out = desk.intake(store, ev("abandoned", summary=GAVE_UP, still_true=True), T0 + timedelta(minutes=30),
-                      mode_reader=lambda: "x")
+                      occupancy_reader=lambda: "x")
     (owner,) = [s for s in out["send"] if s["to"] == "owner"]
     for m in (owner, out["ha_messages"][0]):
         assert "no longer tracked" not in m["text"] and "Repeat after" not in m["text"]   # Home Assistant's words: gone
@@ -52,17 +52,17 @@ def test_a_rule_alerting_again_while_open_is_a_still_there_alert_never_a_reminde
     # owner, 2026-10-17 (#45): "Reminder sent 11:38 to Owner & FM" — the load had moved to another phase and the
     # villa's rule alerted again; a reminder is only the desk's own chase of the facility manager
     store = Store(str(tmp_path / "s.sqlite"))
-    desk.intake(store, ev("opened", summary=ALERT), T0, mode_reader=lambda: "x")
-    out = desk.intake(store, ev("opened", summary=ALERT), T0 + timedelta(hours=2), mode_reader=lambda: "x")
+    desk.intake(store, ev("opened", summary=ALERT), T0, occupancy_reader=lambda: "x")
+    out = desk.intake(store, ev("opened", summary=ALERT), T0 + timedelta(hours=2), occupancy_reader=lambda: "x")
     assert out["decision"] == "repeat"
     assert {m["stage"] for m in out["send"] + out["ha_messages"]} == {"still"}
 
 
 def test_home_assistants_all_clear_is_said_in_the_desks_words(tmp_path):
     store = Store(str(tmp_path / "s.sqlite"))
-    desk.intake(store, ev("opened", summary=ALERT), T0, mode_reader=lambda: "x")
+    desk.intake(store, ev("opened", summary=ALERT), T0, occupancy_reader=lambda: "x")
     out = desk.intake(store, ev("resolved", summary="✅ Laundry door unlocked — resolved after 4 min"),
-                      T0 + timedelta(minutes=5), mode_reader=lambda: "x")
+                      T0 + timedelta(minutes=5), occupancy_reader=lambda: "x")
     (ha,) = out["ha_messages"]
     assert ha["status"] == "Cleared on {time}." and ha["text"].count("Laundry door unlocked") == 1
 
@@ -155,7 +155,7 @@ def test_need_help_and_an_unchecked_closure_carry_their_icon_end_to_end(tmp_path
                                          {"telegram_id": FM, "name": "Fabien", "role": "fm"}]}, skills=["alert-desk"])
     st = Store(v.s.store_path)
     now = datetime.now(timezone.utc)
-    iid = desk.intake(st, ev("opened", summary=ALERT), now, mode_reader=lambda: "x")["incident_id"]
+    iid = desk.intake(st, ev("opened", summary=ALERT), now, occupancy_reader=lambda: "x")["incident_id"]
     asyncio.run(v.outcome.carry_out(desk.reply(st, iid, "need_help", "fm", now, name="Fabien"), "alert-desk"))
     # the owner's escalation says its step first (owner, 2026-10-16): "🆘 Escalation sent … to Owner — Need help …"
     assert all(t.rsplit("\n", 1)[1].startswith("🆘 ") and "Need help pressed by Fabien on " in t.rsplit("\n", 1)[1]

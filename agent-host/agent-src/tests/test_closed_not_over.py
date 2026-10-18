@@ -37,7 +37,7 @@ def door(store, legacy=False, **extra):
     ev = {"blueprint": "critical_condition", "rule_id": "automation.door", "incident_id": "automation.door-1",
           "phase": "opened", "severity": "critical", "label": "Door", "entities": ["lock.door"], "summary": "Door unlocked",
           **({} if legacy else {"mode": "state", "bad_states": ["unlocked"]}), **extra}
-    return desk.intake(store, ev, T0, mode_reader=lambda: "x")["incident_id"]
+    return desk.intake(store, ev, T0, occupancy_reader=lambda: "x")["incident_id"]
 
 
 # ---------------------------------------------------------------------- 1 · closed while still bad

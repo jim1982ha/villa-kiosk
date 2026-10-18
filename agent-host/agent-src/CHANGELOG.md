@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.236 (18 October 2026)
+
+Owner, 2026-10-18 ("confirm there is no more reference to villa mode"): the alert desk's reader and its event field are
+`occupancy` (empty / occupied / unknown, from the villa's "Villa empty" helper), no longer named after the mode no villa
+had; `intake(occupancy_reader=…)`. Behaviour unchanged.
+
 ## 0.6.235 (18 October 2026)
 
 Owner, 2026-10-18: the siren gate read input_select.villa_mode, a mode the villa never had — every intrusion read

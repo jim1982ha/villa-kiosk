@@ -173,7 +173,7 @@ def _door_done(store):
     ev = {"blueprint": "critical_condition", "rule_id": "automation.door", "incident_id": "automation.door-1",
           "phase": "opened", "severity": "critical", "label": "Door", "entities": ["lock.door"], "summary": "Door unlocked",
           "mode": "state", "bad_states": ["unlocked"]}
-    iid = desk.intake(store, ev, T0, mode_reader=lambda: "x")["incident_id"]
+    iid = desk.intake(store, ev, T0, occupancy_reader=lambda: "x")["incident_id"]
     desk.reply(store, iid, "done", "fm", T0 + timedelta(minutes=5))
     return iid
 
@@ -207,7 +207,7 @@ def test_an_old_alert_whose_device_is_gone_after_done_still_says_it_cannot_check
     store = Store(str(tmp_path / "s.sqlite"))
     ev = {"blueprint": "critical_condition", "rule_id": "automation.door", "incident_id": "automation.door-1",
           "phase": "opened", "severity": "critical", "label": "Door", "entities": ["lock.door"], "summary": "Door unlocked"}
-    iid = desk.intake(store, ev, T0, mode_reader=lambda: "x")["incident_id"]
+    iid = desk.intake(store, ev, T0, occupancy_reader=lambda: "x")["incident_id"]
     desk.reply(store, iid, "done", "fm", T0 + timedelta(minutes=5))
     out = desk.tick(store, T0 + timedelta(minutes=20), client=Villa())
     (fm,) = [s for s in out["send"] if s["to"] == "fm"]
@@ -277,7 +277,7 @@ def test_a_done_on_telegram_resolves_the_fault_by_the_person(tmp_path):
     ev = {"blueprint": "critical_condition", "rule_id": "automation.d", "incident_id": "automation.d-1", "phase": "opened",
           "severity": "critical", "label": "Door", "entities": ["lock.d"], "summary": "Door unlocked", "mode": "state",
           "bad_states": ["unlocked"]}
-    iid = desk.intake(store, ev, T0, mode_reader=lambda: "x")["incident_id"]
+    iid = desk.intake(store, ev, T0, occupancy_reader=lambda: "x")["incident_id"]
     out = desk.reply(store, iid, "done", "fm", T0 + timedelta(minutes=5), name="Fabien")
     (res,) = [a for a in out["actions"] if a["action"] == "ticket.resolve"]
     assert res["who"] == "Fabien"
