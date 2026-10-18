@@ -226,6 +226,38 @@ def _find_by_ha_incident(store: Store, ha_incident: str | None, closed_within: t
     return None
 
 
+def alert_keys(ev: dict) -> tuple[str, str | None]:
+    """(the key an alert is filed under, the key an alert of the same rule was filed under before its rule sent its
+    permanent number — None when it sends none). An alert is its rule and its device: the rule by its permanent number
+    (`rule_uid`, the automation's own id) when it sends one, else by its entity id.
+
+    ⚠️ A NEW NUMBER FOR A NEW NAME (owner, 2026-10-18 — architecture review, one problem one card #1): the laundry
+    rule's entity id changed while its alert #41 was open; its next alert, under the new id, became #55 — the same
+    door, two faults. The automation's own id survives any rename."""
+    eid = ev.get("entity_id", "")
+    by_name = f"{ev.get('rule_id', '')}|{eid}"
+    uid = str(ev.get("rule_uid") or "").strip()
+    return (f"rule:{uid}|{eid}", by_name) if uid else (by_name, None)
+
+
+def open_alert(store: Store, ev: dict) -> dict | None:
+    """The open incident of `ev`'s alert, whatever its rule is called now: filed under its permanent number, or under
+    the rule's name before rules sent one (then moved under the number). Its rule's name is brought up to date."""
+    key, by_name = alert_keys(ev)
+    cur = store.find_open_incident(key)
+    if cur is None and by_name:
+        cur = store.find_open_incident(by_name)
+        if cur is not None:
+            store.update_incident(cur["id"], key=key)
+    if cur is None:
+        return None
+    if ev.get("rule_id") and cur["rule_id"] != ev["rule_id"]:
+        store.update_incident(cur["id"], rule_id=ev["rule_id"])   # renamed: the name it has now
+    if ev.get("rule_uid"):
+        store.note(cur["id"], {"rule_uid": str(ev["rule_uid"])})
+    return store.incident(cur["id"])
+
+
 #: The phases of a rule's event this desk acts on (a missing phase is "opened": rules saved before phases existed).
 PHASES = ("opened", "resolved", "abandoned", "restated")
 
@@ -249,13 +281,13 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
     rule_id, eid = ev["rule_id"], ev.get("entity_id", "")
     route = route_for(rule_id, ev.get("blueprint"))
     sev = priority(ev, route)
-    key = f"{rule_id}|{eid}"
+    key, by_name = alert_keys(ev)
     out = {"send": [], "actions": [], "incident_id": None, "decision": None}
     if params and params.boolean("maintenance_mode", default=False) and sev != "P1":
         out["decision"] = "maintenance_mode"; store.audit("alert-desk", "suppressed_maintenance", ev); return out
     if route.get("intrusion") and not ev.get("occupancy"):
         ev["occupancy"] = occupancy_reader()
-    cur = store.find_open_incident(key)
+    cur = open_alert(store, ev)
     if cur:
         last = datetime.fromisoformat(cur["last_seen_at"])
         store.touch_incident(cur["id"], now.isoformat())
@@ -280,8 +312,12 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
         if route.get("intrusion"):
             out["siren_gate"] = siren_gate(store, ev, now)
         return out
-    back = came_back(store, key, now, _params(params).behaviour("reopen_hours"))
+    hours = _params(params).behaviour("reopen_hours")
+    back = came_back(store, key, now, hours) or (came_back(store, by_name, now, hours) if by_name else None)
     if back:
+        if back["key"] != key:
+            store.update_incident(back["id"], key=key)            # its rule sends its number now: filed under it
+            back = store.incident(back["id"])
         return reopen(store, back, ev, now, sev, route, out, zone=zone)
     iid = store.new_incident(key, rule_id, eid, sev, ev, now.isoformat())
     out["incident_id"] = iid
@@ -405,7 +441,7 @@ def resolved(store: Store, ev: dict, now: datetime) -> dict:
     Home Assistant already sent its own all-clear to the group: the desk writes only
     when a person was being chased, to tell them no reply is needed any more."""
     out = {"send": [], "actions": [], "incident_id": None, "decision": "resolved_unknown"}
-    inc = _find_by_ha_incident(store, ev.get("ha_incident")) or store.find_open_incident(f"{ev['rule_id']}|{ev.get('entity_id', '')}")
+    inc = _find_by_ha_incident(store, ev.get("ha_incident")) or open_alert(store, ev)
     if not inc:
         # ⚠️ ALREADY CLOSED HERE, STILL ITS MESSAGE (architecture review 22): the desk saw it over first (seen_again, a
         # Done) — Home Assistant's all-clear then stayed a second message in the group, without its incident's number
@@ -602,8 +638,20 @@ def rule_gone(store: Store, now: datetime, client, clear_minutes: float, out: di
     except Exception:  # noqa: BLE001 — the villa's system not readable now: the next tick
         return []
     closed = []
+    renamed: dict[str, str | None] | None = None
     for inc in rules:
         p = notes_of(inc)
+        if inc["rule_id"] in gone and p.get("rule_uid"):
+            # ⚠️ RENAMED IS NOT GONE (one problem one card #1): a rule that sends its permanent number is looked for by
+            # it; found under a new entity id, its alert carries on under that name. Not readable: nothing is closed
+            if renamed is None:
+                renamed = _automations_by_uid(client)
+            now_named = (renamed or {}).get(str(p["rule_uid"])) if renamed is not None else None
+            if renamed is None or renamed == {} or now_named:
+                if now_named:
+                    store.update_incident(inc["id"], rule_id=now_named)
+                store.note(inc["id"], drop=("rule_gone_since",))
+                continue
         if inc["rule_id"] not in gone:
             if p.get("rule_gone_since"):
                 store.note(inc["id"], drop=("rule_gone_since",))       # back (a restart read it too early): still its
@@ -623,6 +671,17 @@ def rule_gone(store: Store, now: datetime, client, clear_minutes: float, out: di
     return closed
 
 
+def _automations_by_uid(client) -> dict[str, str] | None:
+    """{an automation's own id: its entity id now}, read from the villa's system; None when it cannot be read (then
+    no rule counts as gone by its number)."""
+    try:
+        ids = [e for e in client.all_entity_ids() if e.startswith("automation.")]
+        return {str(a["attributes"]["id"]): e for e, a in (client.states(ids) or {}).items()
+                if (a.get("attributes") or {}).get("id") is not None}
+    except Exception:  # noqa: BLE001 — not readable now (or a client that cannot list): the next tick
+        return None
+
+
 #: What a rule restating itself changes on its open alert: how it is judged from now on — never its words.
 RESTATES = ("claim", "bad_states", "mode", "entities")
 
@@ -635,7 +694,7 @@ def restated(store: Store, ev: dict, now: datetime) -> dict:
     6200 W while its alert was open; the save cancelled the rule's run, so no all-clear ever came, and the desk kept
     reading the alert against 4000 W with 6000 W on the phase — it could never close, and a Done would reopen it."""
     out = {"send": [], "actions": [], "incident_id": None, "decision": "restated_nothing_open"}
-    cur = store.find_open_incident(f"{ev['rule_id']}|{ev.get('entity_id', '')}")
+    cur = open_alert(store, ev)
     if not cur:
         return out
     out["incident_id"], out["decision"] = cur["id"], "restated"
@@ -654,7 +713,7 @@ def abandoned(store: Store, ev: dict, now: datetime) -> dict:
     ⚠️ "STOPPED WATCHING" IS NOT "STILL NOT CLEAR" (architecture review 22): the rule's own message said "cleared just
     inside the limit — back to normal now", and the desk told the owner "Still not clear" with Done / Need help."""
     out = {"send": [], "actions": [], "incident_id": None, "decision": "abandoned_unknown"}
-    inc = _find_by_ha_incident(store, ev.get("ha_incident")) or store.find_open_incident(f"{ev['rule_id']}|{ev.get('entity_id', '')}")
+    inc = _find_by_ha_incident(store, ev.get("ha_incident")) or open_alert(store, ev)
     if not inc:
         return out
     out["incident_id"] = inc["id"]

@@ -734,3 +734,57 @@ def test_a_villa_that_cannot_say_closes_nothing(store):
     for m in (5, 60, 120):
         assert _tick(store, villa, m)["rule_gone"] == []
     assert not store.incident(iid)["closed_at"]
+
+
+# ------------------------------------------------------------- an alert keeps its number across a rename (2026-10-18)
+def test_a_renamed_rule_that_sends_its_permanent_number_keeps_its_alert(store):
+    # one problem one card #1: the laundry rule's entity id changed while #41 was open; its next alert became #55
+    first = desk.intake(store, event(rule_uid="1789", entities=("lock.front_door",)), T0, occupancy_reader=lambda: "x")
+    again = desk.intake(store, event(rule="automation.front_door_renamed", rule_uid="1789", entities=("lock.front_door",)),
+                        T0 + timedelta(minutes=40), occupancy_reader=lambda: "x")
+    assert again["incident_id"] == first["incident_id"] and again["decision"] in ("repeat", "counted"), again
+    assert store.incident(first["incident_id"])["rule_id"] == "automation.front_door_renamed"   # its name now
+
+
+def test_an_alert_opened_before_rules_sent_their_number_is_found_and_moved_under_it(store):
+    old = desk.intake(store, event(), T0, occupancy_reader=lambda: "x")["incident_id"]          # no number yet
+    again = desk.intake(store, event(rule_uid="1789"), T0 + timedelta(minutes=40), occupancy_reader=lambda: "x")
+    assert again["incident_id"] == old
+    renamed = desk.intake(store, event(rule="automation.front_door_renamed", rule_uid="1789"), T0 + timedelta(minutes=80),
+                          occupancy_reader=lambda: "x")
+    assert renamed["incident_id"] == old, renamed                                                # then survives a rename
+
+
+class Automations(Villa):
+    """The villa's system as the desk reads it, with its automations: {entity id: their own id}."""
+    def __init__(self, automations, **timeline):
+        super().__init__(**timeline)
+        self.automations = automations
+
+    def all_entity_ids(self):
+        return list(self.automations) + list(self.timeline)
+
+    def states(self, ids=None):
+        out = super().states([i for i in (ids or []) if not i.startswith("automation.")] if ids is not None else None)
+        out.update({e: {"entity_id": e, "state": "on", "attributes": {"id": uid}} for e, uid in self.automations.items()
+                    if ids is None or e in ids})
+        return out
+
+
+def test_a_rule_renamed_while_its_alert_is_open_is_not_gone(store):
+    iid = desk.intake(store, event(rule_uid="1789", mode="state", bad_states=BAD), T0, occupancy_reader=lambda: "x")["incident_id"]
+    villa = Automations({"automation.front_door_renamed": "1789"}, **{"lock.front_door": [(T0 - timedelta(minutes=10), "unlocked")]})
+    villa.gone = {RULE}
+    clear = desk._params(None).behaviour("clear_minutes")
+    for m in (5, 5 + clear, 5 + 2 * clear):
+        assert _tick(store, villa, m)["rule_gone"] == []
+    assert not store.incident(iid)["closed_at"] and store.incident(iid)["rule_id"] == "automation.front_door_renamed"
+
+
+def test_a_rule_deleted_while_its_alert_is_open_still_closes_it(store):
+    iid = desk.intake(store, event(rule_uid="1789", mode="state", bad_states=BAD), T0, occupancy_reader=lambda: "x")["incident_id"]
+    villa = Automations({"automation.something_else": "42"}, **{"lock.front_door": [(T0 - timedelta(minutes=10), "unlocked")]})
+    villa.gone = {RULE}
+    clear = desk._params(None).behaviour("clear_minutes")
+    _tick(store, villa, 5)
+    assert _tick(store, villa, 5 + clear)["rule_gone"] == [iid]

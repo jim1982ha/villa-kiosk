@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.241 (18 October 2026)
+
+Architecture review "One problem, one card" #1 (owner, 2026-10-18): an alert's identity is its rule's permanent
+number (`rule_uid`, the automation's `id` attribute, sent by every critical_* blueprint beside `rule_id`) and its
+entity — desk.alert_keys / open_alert, one place instead of four inline keys; an incident filed under the rule's
+name is moved under its number when the rule first sends one; its rule_id follows a rename. rule_gone looks a rule
+with a number up by it (_automations_by_uid): renamed is not gone; unreadable closes nothing.
+
 ## 0.6.240 (18 October 2026)
 
 Owner, 2026-10-18 (#56, the silent Shelly Pro 3EM listed as 4 devices: "shelly integration (3 devices) offline" on a
