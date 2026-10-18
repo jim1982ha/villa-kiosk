@@ -134,7 +134,7 @@ def test_a_press_settles_the_alerts_buttons_by_its_option_and_names_its_label(st
     # architecture review, 2026-10-13: the desk is given the option pressed, never the label to read back
     iid = desk.intake(store, event(), T0, occupancy_reader=lambda: "occupied")["incident_id"]
     res = desk.reply(store, iid, "done", "fm", T0 + timedelta(minutes=5), name="Fabien")
-    assert res["settle"] == [{"incident_id": iid, "note": "Done pressed by Fabien on {time}."}]
+    assert res["settle"] == [{"incident_id": iid, "note": "Done on {time} (Fabien)."}]
     assert desk.BUTTONS["need_help"]["mark"] == "help"
     other = desk.intake(store, event(rule="automation.other", entities=("lock.other",)), T0,
                         occupancy_reader=lambda: "occupied")["incident_id"]
@@ -415,7 +415,7 @@ def test_after_done_the_desk_reads_the_device_once_and_reopens_what_is_still_bad
     res = _done(store, villa, iid, 20)
     assert res["not_quiet"] == [iid] and store.incident(iid)["closed_at"] is None
     (fm,) = [s for s in res["send"] if s["to"] == "fm"]
-    assert fm["status"] == "Done pressed by FM, but front_door still reads unlocked: still open. VESTA keeps watching it." and fm["keyboard"]
+    assert fm["status"] == "Done (FM), but front_door still reads unlocked: still open. VESTA keeps watching it." and fm["keyboard"]
     assert [a for a in res["actions"] if a["action"] == "ticket.reopen"]      # its own fault, open again
     assert not _tick(store, villa, 60).get("not_quiet")                         # read once
 
@@ -448,7 +448,7 @@ def test_a_fault_reopened_in_the_kiosk_while_the_desk_reads_the_villa_is_still_t
 def test_after_done_a_quiet_device_stays_closed_and_an_alert_without_states_promises_nothing(store):
     villa = Villa(**{"lock.front_door": [(T0 - timedelta(minutes=10), "unlocked"), (T0 + timedelta(minutes=15), "locked")]})
     iid = _left_unlocked(store, abandon=False)
-    assert "VESTA will check it stays right." in desk.reply(store, iid, "done", "fm", T0 + timedelta(minutes=20))["send"][0]["status"]
+    assert ", VESTA will monitor it for 10 min." in desk.reply(store, iid, "done", "fm", T0 + timedelta(minutes=20))["send"][0]["status"]
     assert not _tick(store, villa, 31)["not_quiet"] and store.incident(iid)["closed_at"]
     villa.timeline["lock.front_door"].append((T0 + timedelta(days=3), "unlocked"))     # days later: another story
     assert not _tick(store, villa, 3 * 1440 + 30)["not_quiet"] and store.incident(iid)["closed_at"]
@@ -514,7 +514,7 @@ def test_a_done_on_an_alert_whose_claim_still_holds_reopens_it(store):
     desk.reply(store, iid, "done", "fm", T0 + timedelta(minutes=5), name="Wayan")
     res = _tick(store, Claims([(T0, "true")]), 20)
     assert res["not_quiet"] == [iid] and not store.incident(iid)["closed_at"]
-    assert "Done pressed by Wayan, but it is still reported: still open. VESTA keeps watching it." in \
+    assert "Done (Wayan), but it is still reported: still open. VESTA keeps watching it." in \
         [m["status"] for m in res["send"]]
 
 
@@ -624,7 +624,7 @@ def test_the_chase_roles_are_said_as_set_never_as_written_in_the_desk(store, mon
     out = desk.reply(store, iid2, "need_help", "owner", T0 + timedelta(minutes=5))
     assert any(m["status"].endswith(": FM is asked to act.") for m in out["send"]), out["send"]
     assert desk.reply(store, iid2, "other", "owner", T0 + timedelta(minutes=6), name=None)["send"][0]["status"] \
-        .startswith("Noted from Owner on ")
+        .startswith("Noted on {time} (Owner)")
 
 
 def test_a_rule_restating_itself_changes_how_its_open_alert_is_judged_and_sends_nothing(store):

@@ -21,9 +21,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from vesta_shared.message_format import ROLES
+
 from .policy import Policy
 
-TARGETS = ("here", "owner", "fm")
+TARGETS = ("here", *ROLES)
 
 
 CONVERSATION = "conversation"   # a person writing to the agent in this chat
@@ -65,8 +67,8 @@ class Routing:
     def offered(origin: Origin | None) -> list[str]:
         """The destinations send_message offers the AI: the asker's chat only, while someone is asking."""
         if origin is None:
-            return ["owner", "fm"]
-        return ["here"] if origin.holds else ["here", "owner", "fm"]
+            return list(ROLES)
+        return ["here"] if origin.holds else list(TARGETS)
 
     def target(self, to: str | None, origin: Origin | None = None) -> list[int]:
         """Rules 1 and 2: every chat it goes to. [] when there is nowhere to send it (no origin for `here`, nobody of
@@ -75,9 +77,37 @@ class Routing:
             return [origin.chat]
         if to == "here":
             return [origin.chat] if origin else []
-        if to in ("owner", "fm"):
+        if to in ROLES:
             return self.policy.chats_for(to)
         return []
+
+    def deliveries(self, items: list, origin: Origin | None = None) -> tuple[list[tuple[int, dict, frozenset]], list[dict]]:
+        """Each message in every chat it goes to, as (chat, message, the roles it goes there for), and the messages that
+        go nowhere. One copy per chat: of several messages for one incident landing in one chat (a chat listed with both
+        roles), the one with the buttons — else the last; of the same text twice, the first.
+
+        ⚠️ THE ROLES ARE MERGED, NEVER DROPPED (architecture review 18): the copy kept for a group listed for the owner AND
+        the facility manager was headed "For:" the owner's people only, and its history named only them.
+        ⚠️ WHO HEARS A STEP IS DECIDED HERE (architecture review "One answer per question" #4, 2026-10-19): this was
+        Outcome's, with the two roles written out again — where a message goes, and for whom, is routing."""
+        pairs: list[tuple[int, dict]] = []
+        unrouted: list[dict] = []
+        for it in items:
+            it = it or {}
+            chats = self.target(it.get("to"), origin)
+            if not chats:
+                unrouted.append(it)
+            pairs += [(int(c), it) for c in chats]
+        best: dict[tuple, int] = {}
+        roles: dict[tuple, set] = {}
+        for n, (chat, it) in enumerate(pairs):
+            iid = it.get("incident_id")
+            k = ("incident", chat, int(iid)) if iid else ("text", chat, it.get("text") or "")
+            roles.setdefault(k, set()).update({it["to"]} if it.get("to") in ROLES else set())
+            if k not in best or (iid and (it.get("keyboard") or not pairs[best[k]][1].get("keyboard"))):
+                best[k] = n
+        kept = sorted((n, k) for k, n in best.items())
+        return [(pairs[n][0], pairs[n][1], frozenset(roles[k])) for n, k in kept], unrouted
 
     def approver_chats(self, required_role: str | None, origin_chat: int | None) -> list[int]:
         """Rule 3: where an Approve / Refuse request is sent — never where nobody can press it (Policy.may_approve_in): a

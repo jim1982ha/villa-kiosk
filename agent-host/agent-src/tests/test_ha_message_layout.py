@@ -168,5 +168,5 @@ def test_the_bottom_line_is_said_in_the_agents_own_words_for_every_stage():
         assert _status(stage, "", "JM", at) == stage_line(head[stage], said, mark.get(stage))
         assert _status(stage, "Tick it on the Jobs tab.", "JM", at) == \
             stage_line(head[stage], f"{said} Tick it on the Jobs tab.", mark.get(stage))
-    assert _status("closed", "", "JM", at) == "✅ Done pressed by JM on 13/10/2026 09:02."
+    assert _status("closed", "", "JM", at) == "✅ Done on 13/10/2026 09:02 (JM)."
     assert _status("", "⚠️ written by hand") == "⚠️ written by hand"         # a rule saved before: as it is

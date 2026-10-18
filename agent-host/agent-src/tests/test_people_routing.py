@@ -63,7 +63,7 @@ def test_an_approval_for_the_owner_reaches_every_chat_where_the_owner_can_press_
     run(v.on_ha_event("telegram_callback", press))            # in his own private chat Fabien is the Owner he is listed as
     # every copy, in every chat, says who refused and when — its buttons gone (one mechanism: incident_thread.py)
     assert sorted(c for c, _, _ in v.tg.edits) == sorted([FABIEN, JM])
-    assert all(re.search(r"\n\nStatus:\nRefused by Fabien_O on \d\d/\d\d/\d{4} \d\d:\d\d\. Nothing was done\.$", t)
+    assert all(re.search(r"\n\nStatus:\nRefused on \d\d/\d\d/\d{4} \d\d:\d\d \(Fabien_O\)\. Nothing was done\.$", t)
                for _, _, t in v.tg.edits)
 
 
@@ -288,7 +288,7 @@ def test_a_member_of_a_listed_group_acts_with_its_role_without_a_people_row(tmp_
              "user_id": RITA, "from_first": "Rita",
              "message": {"message_id": in_group, "chat": {"id": GROUP}, "text": msg.text}, "bot": BOT}
     run(v.on_ha_event("telegram_callback", press))
-    assert v.tg.edits and all("Refused by Rita on " in t for _, _, t in v.tg.edits)
+    assert v.tg.edits and all("(Rita). Nothing was done." in t for _, _, t in v.tg.edits)
 
 
 def test_in_a_listed_group_everyone_acts_with_the_groups_role_whatever_their_own():
@@ -322,7 +322,7 @@ def test_a_request_answered_at_once_leaves_one_message_in_the_askers_chat(tmp_pa
              "message": {"message_id": req_n, "chat": {"id": JM}, "text": req}, "bot": BOT}
     run(v.on_ha_event("telegram_callback", press))
     (_, mid, settled), = v.tg.edits
-    assert len(v.tg.sent) == 1 and mid == req_n and re.search(r"\n\nStatus:\nRefused by JM on .*Nothing was done\.$", settled)
+    assert len(v.tg.sent) == 1 and mid == req_n and re.search(r"\n\nStatus:\nRefused on .* \(JM\)\. Nothing was done\.$", settled)
 
 
 def test_the_siren_that_cannot_be_requested_says_so_in_the_agents_layout(tmp_path):
@@ -396,8 +396,8 @@ def test_a_curtain_still_moving_is_said_to_be_and_the_request_says_opened_once_i
         await v.approvals.idle()
     run(go())
     first, last = v.tg.edits[0][2], v.tg.edits[-1][2]
-    assert "\nOpening " in first and "\n\nStatus:\nApproved by JM on " in first     # on its way, right away
-    assert "\nOpened " in last and "did not" not in last and status_of(last).startswith("Approved by JM")
+    assert "\nOpening " in first and "\n\nStatus:\nApproved on " in first and "(JM)." in first     # on its way, right away
+    assert "\nOpened " in last and "did not" not in last and status_of(last).startswith("Approved on ") and status_of(last).endswith("(JM).")
 
 
 def test_the_ai_is_told_what_is_waiting_and_what_was_decided_never_left_to_its_memory(tmp_path):
@@ -553,7 +553,7 @@ def test_approve_pressed_as_the_owner_does_it_ends_in_one_verdict_everywhere(tmp
     assert v.tg.toasts[-1][1] == "Approved: on its way."
     texts = [t for _, _, t in v.tg.edits]
     assert body(texts[0]).startswith("Opening ")                              # right away: on its way, who, when
-    assert body(texts[-1]).startswith("Opened ") and status_of(texts[-1]).startswith("Approved by JM on ")
+    assert body(texts[-1]).startswith("Opened ") and status_of(texts[-1]).startswith("Approved on ") and status_of(texts[-1]).endswith("(JM).")
     assert v.state.approval(msg.approval_id)["status"] == "done" and " — approved, and done (by JM on " in v.approvals.now()
 
 

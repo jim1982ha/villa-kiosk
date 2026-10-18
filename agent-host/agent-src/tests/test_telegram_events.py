@@ -121,7 +121,7 @@ def test_a_press_on_the_agents_own_message_is_handled(agent):
     press = {**old, "id": "cb2", "data": "i:1:need_help"}
     run(agent.on_ha_event("telegram_callback", press))
     assert agent.tg.toasts[-1][1] == "Need help: noted."
-    assert any("Need help pressed by " in status(t) for _, t, _ in agent.tg.sent)   # the owner is told
+    assert any("Need help on " in status(t) for _, t, _ in agent.tg.sent)   # the owner is told
 
 
 def test_a_press_in_a_private_chat_is_answered_there_and_its_buttons_go(agent):
@@ -141,8 +141,8 @@ def test_a_press_in_a_private_chat_is_answered_there_and_its_buttons_go(agent):
     assert replies and all(chat == FM for chat, _, _ in replies)           # never the group
     (chat, m, text), = agent.tg.edits
     assert (chat, m) == (FM, mid)
-    assert text.startswith("🚨 Incident #1: pump stopped\n\nStatus:\nDone pressed by FM on ")    # what, then who and when, under "Status:"
-    assert re.search(r" on \d\d/\d\d/\d{4} \d\d:\d\d\.$", text)
+    assert re.fullmatch(r"🚨 Incident #1: pump stopped\n\nStatus:\nDone on .+ \(FM\)\.", text)    # what, when, then who, under "Status:"
+    assert re.search(r" on \d\d/\d\d/\d{4} \d\d:\d\d \(FM\)\.$", text)
 
 
 def test_telegram_gets_plain_text_not_markdown(agent):
@@ -246,7 +246,7 @@ def test_an_answer_settles_the_alert_in_every_chat_and_its_reminder(agent):
     assert {c for c, _, _ in agent.tg.edits} == {OWNER, GROUP, FM}
     shown = {c: r["text"] for c, r in agent.thread.shown(iid).items()}
     assert set(shown) == {OWNER, GROUP, FM} and len(set(shown.values())) == 1, shown
-    assert re.search(r"\n(?:(?:✅|⚠️|⚠️ ⚙️) )?Done pressed by FM on \d\d/\d\d/\d{4} \d\d:\d\d\.", shown[GROUP]), shown[GROUP]
+    assert re.search(r"\n(?:(?:✅|⚠️|⚠️ ⚙️) )?Done on \d\d/\d\d/\d{4} \d\d:\d\d \(FM\)\.", shown[GROUP]), shown[GROUP]
     # settled once: no chat still shows the incident's buttons unanswered
     assert not [c for c, r in agent.thread.shown(iid).items() if r["buttons"] and not r["settled"]]
 

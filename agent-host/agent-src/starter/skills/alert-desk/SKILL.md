@@ -86,7 +86,7 @@ message then says who pressed what, and when. Typing the word works too.
 
 | Button | Effect |
 |---|---|
-| Done | incident closed, its Kiosk ticket resolved; the device is read once `clear_minutes` (10) later. Still bad (its rule names its bad states): the incident opens again, "still there" — "Done by …, but … still reads …: still open. VESTA keeps watching it." — and the desk closes it when it is right. Not knowable (an older alert, a number): the people asked are told what it reads. The same for a fault closed in the Kiosk ("Closed in the Kiosk, but …"); a fault a person REOPENS in the Kiosk asks the facility manager again at once |
+| Done | incident closed, its Kiosk ticket resolved; the device is read once `clear_minutes` (10) later. Still bad (its rule names its bad states): the incident opens again, "still there" — "Done (…), but … still reads …: still open. VESTA keeps watching it." — and the desk closes it when it is right. Not knowable (an older alert, a number): the people asked are told what it reads. The same for a fault closed in the Kiosk ("Closed in the Kiosk, but …"); a fault a person REOPENS in the Kiosk asks the facility manager again at once |
 | Need help | escalated to the owner with the detail |
 
 ## The siren: strict human validation

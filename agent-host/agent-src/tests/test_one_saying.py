@@ -161,16 +161,16 @@ def test_need_help_and_an_unchecked_closure_carry_their_icon_end_to_end(tmp_path
     iid = desk.intake(st, ev("opened", summary=ALERT), now, occupancy_reader=lambda: "x")["incident_id"]
     asyncio.run(v.outcome.carry_out(desk.reply(st, iid, "need_help", "fm", now, name="Fabien"), "alert-desk"))
     # the owner's escalation says its step first (owner, 2026-10-16): "🆘 Escalation sent … to Owner — Need help …"
-    assert all(t.rsplit("\n", 1)[1].startswith("🆘 ") and "Need help pressed by Fabien on " in t.rsplit("\n", 1)[1]
+    assert all(t.rsplit("\n", 1)[1].startswith("🆘 ") and " (Fabien)" in t.rsplit("\n", 1)[1]
                for _, t, _ in v.tg.sent[-2:])
     asyncio.run(v.outcome.carry_out(desk.reply(st, iid, "done", "owner", now, name="Jim"), "alert-desk"))
-    assert v.tg.edits[-1][2].rsplit("\n", 1)[1].startswith("✅ Done pressed by Jim on ")     # the owner's copy, settled
+    assert v.tg.edits[-1][2].rsplit("\n", 1)[1].startswith("✅ Done on ")     # the owner's copy, settled
     # 10 min later the lock does not answer: closed, not checked
     class Silent:
         def states(self, ids):
             return {}
     asyncio.run(v.outcome.carry_out(desk.tick(st, now + timedelta(minutes=11), client=Silent()), "alert-desk"))
-    assert v.tg.sent[-1][1].rsplit("\n", 1)[1].startswith("☑️ Done pressed by Jim. Note: VESTA cannot check this one")
+    assert v.tg.sent[-1][1].rsplit("\n", 1)[1].startswith("☑️ Done (Jim). Note: VESTA cannot check this one")
 
 
 def test_telegram_shows_the_title_in_bold_the_alert_quoted_and_the_status_quoted_in_italics_in_one_block():
@@ -265,9 +265,9 @@ def test_a_close_reaches_a_copy_without_buttons_too(tmp_path):
     asyncio.run(v.outcome.carry_out({"send": [R.message("owner", ALERT, incident=6, stage="new"),
                                               R.message("fm", ALERT, incident=6, buttons=True, stage="new")]}, "x"))
     assert not v.thread.shown(6)[OWNER]["buttons"]
-    asyncio.run(v.thread.close(6, "Done pressed by Fabien on {time}."))
+    asyncio.run(v.thread.close(6, "Done on {time} (Fabien)."))
     # its status replaced: the copy is "existing" (its icon ⚠️ ⚙️) and lists the alert sent (owner, 2026-10-15)
-    assert all(r["text"].rsplit("\n", 1)[1].startswith("⚠️ ⚙️ Done pressed by Fabien on ")
+    assert all(r["text"].rsplit("\n", 1)[1].startswith("⚠️ ⚙️ Done on ")
                and "\n- Alert sent " in r["text"] for r in v.thread.shown(6).values())
 
 
@@ -342,3 +342,25 @@ def test_each_chat_lists_only_its_own_steps(tmp_path):
     assert v.thread.shown(9)[GROUP]["text"] == before
     assert not [e for e in v.tg.edits[edits:] if e[0] == GROUP] and not [s for s in v.tg.sent[sent:] if s[0] == GROUP]
     assert "Reminder" in v.thread.shown(9)[FM]["text"].rsplit("\n", 1)[1]
+
+
+def test_a_copy_refreshed_elsewhere_is_headed_as_the_copy_sent(tmp_path):
+    # architecture review "One answer per question" #2 (2026-10-19): a chat that shares the step's role but was not sent
+    # it (here: already told, `skip`) is refreshed with the same title and "To:" as the copy sent — one heading
+    # (notice.heading), never the sent copy's re-parsed — and lists the step once, on its bottom line only
+    from vesta_shared import result as R
+    GROUP = -100123
+    v = make_agent(tmp_path, {"people": [{"telegram_id": GROUP, "name": "VillaGroup", "role": "fm"},
+                                         {"telegram_id": FM, "name": "Wayan", "role": "fm"}]})
+    run = asyncio.run
+    run(v.outcome.carry_out({"send": [R.message("fm", ALERT, incident=9, buttons=True, stage="new", status="new")]}, "alert-desk"))
+    run(v.outcome.carry_out({"send": [R.message("fm", ALERT, incident=9, buttons=True, stage="reminder", status="reminder")]},
+                            "alert-desk", skip=[GROUP]))
+    sent, kept = (v.thread.shown(9)[c]["text"].split("\n") for c in (FM, GROUP))
+    assert kept[:2] == sent[:2], (kept[:2], sent[:2])
+    assert sum("Reminder" in ln for ln in kept) == 1 and "Reminder" in kept[-1], kept
+    # the step's own title word too: a closing note reads "(closed)" in the copy refreshed as in the one sent
+    run(v.outcome.carry_out({"send": [R.message("fm", ALERT, incident=9, stage="closed", status="closed")]},
+                            "alert-desk", skip=[GROUP]))
+    sent, kept = (v.thread.shown(9)[c]["text"].split("\n") for c in (FM, GROUP))
+    assert "closed" in sent[0] and kept[:2] == sent[:2], (kept[:2], sent[:2])

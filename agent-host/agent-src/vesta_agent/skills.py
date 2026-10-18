@@ -65,6 +65,8 @@ from dataclasses import dataclass, field
 
 import yaml
 
+from vesta_shared.message_format import ROLES
+
 log = logging.getLogger("vesta.skills")
 
 SKILL_NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,60}$")
@@ -142,7 +144,7 @@ REQUIRED_FILES = ("SKILL.md", "skill.yaml")
 #: The events a skill's on_event answers, and how the page names each (when_it_runs).
 HOOK_EVENTS = {"critical_event": "a critical alert from a VESTA rule", "voice_message": "a voice message"}
 JOB_NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,40}$")
-JOB_TARGETS = ("owner", "fm")
+JOB_TARGETS = ROLES
 
 
 class ToolError(Exception):

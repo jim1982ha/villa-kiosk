@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.243 (19 October 2026)
+
+Architecture review "One answer per question" (2026-10-19), cards 2 and 4, and the owner's wording of 2026-10-19.
+- notice.Notices.heading(before=): the ONE heading of a chat's copy — the first copy, the villa's own alert taken
+  over, a replaced status and every other chat's refresh. `rehead` (the sent copy's heading re-parsed, its lines
+  swapped) is gone; Outcome keeps each posting's stage and "To:" roles and heads the other chats with them.
+- routing.Routing.deliveries (was Outcome._deliveries): which chats a step goes to, and for which roles.
+  message_format.ROLES is the one list of roles (routing's targets, the shared-chat role merge, the siren's
+  fallback order, the jobs' targets).
+- message_format.acted / PRESSED: "<what> on <when> (<who>)" for every person's act — a press, an approval or a
+  refusal, a close / reopen / ticket in the Cockpit; Done says "VESTA will monitor it for <clear_minutes>"
+  (timeutil.lasting). vesta_message.jinja's word table regenerated.
+- preventive-maintenance nightly: a hidden entity's drops are no reconnect fault (pack.hidden), as every other check.
+
 ## 0.6.242 (18 October 2026)
 
 Owner, 2026-10-18 (#55): each chat its own steps — reversing part of 2026-10-11 "one incident, one picture".

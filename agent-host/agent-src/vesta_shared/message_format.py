@@ -42,6 +42,10 @@ ROLE_WORDS = {"owner": "Owner", "fm": "Facility Manager"}
 #: every update line long; reports and the People page keep ROLE_WORDS. The villa's own alerts say them as the card
 #: does (jinja_words; architecture review, 2026-10-17: the same alert read "Facility Manager", then "FM").
 ROLE_SHORT = {"owner": "Owner", "fm": "FM"}
+#: The roles a message can be for, in ROLE_WORDS order — what routing.Routing sends to and every "To:" names. ⚠️ ONE
+#: LIST (architecture review "One answer per question" #4, 2026-10-19): the pair was written out again in routing,
+#: in Outcome's merge of a shared chat's roles, in the siren's fallback and in the jobs' targets.
+ROLES = tuple(ROLE_WORDS)
 #: What joins two roles in a "To:" line.
 AND = " & "
 
@@ -115,7 +119,15 @@ PRESSED_STAGE = "pressed"
 #: ⚠️ ONE WORDING (architecture review, 2026-10-13): Home Assistant's own job messages said "✅ Done - JM" and
 #: "🆘 Help requested - JM" where the agent's said "Done pressed by JM on 12/10/2026 17:13." — the HA template
 #: (homeassistant/custom_templates/vesta_message.jinja) carries these tables too, and its test holds it to them.
-PRESSED = "{label} pressed by {name} on {time}."
+#: ⚠️ WHAT, WHEN, THEN WHO (owner, 2026-10-19: "✅ Done on 19/10/2026 02:10 (JM)"): every line saying a person's act —
+#: a press, an approval, a close or reopen in the Cockpit — reads "<what> on <when> (<who>)" (acted).
+PRESSED = "{label} on {time} ({name})."
+
+
+def acted(what: str, when: str, who: str = "") -> str:
+    """A person's act as every line says it: "Done on 19/10/2026 02:10 (JM)", "Closed in the Cockpit on … (Fabien)" —
+    no full stop, a sentence may go on; no brackets when nobody is named."""
+    return f"{what} on {when}" + (f" ({who})" if who else "")
 #: Sections whose items are notes — what happened, said by the agent — rather than the things reported.
 NOTE_SECTIONS = frozenset({STATUS})
 

@@ -437,3 +437,20 @@ def test_a_duration_of_a_day_or_more_is_said_as_the_kiosk_says_it():
     assert [f.summary for f in quiet] == ["Sensor X has not reported for 1 d 10 h although it is online."]
     for seconds, said in ((4500, "1 h 15 min"), (23 * 3600 + 59 * 60, "23 h 59 min"), (86400, "1 d"), (49 * 3600, "2 d 1 h")):
         assert lasting(seconds) == said
+
+
+def test_a_hidden_entity_dropping_is_no_reconnect_fault(tmp_path):
+    # owner, 2026-10-19: a TV hidden in the villa's system was "dropped and reconnected 10 times in 3 days" — hidden
+    # entities are checked by nothing (knowledge_pack: left out of every family, listed in `hidden`)
+    fx = tmp_path / "fx"
+    fx.mkdir()
+    (fx / "states.json").write_text(json.dumps({"states": {}}))
+    entries = [{"entity_id": "media_player.example_tv", "state": "unavailable",
+                "when": datetime(2026, 10, 3, 11, 5 * k, tzinfo=timezone.utc).isoformat()} for k in range(12)]
+    (fx / "logbook.json").write_text(json.dumps({"entries": entries}))
+    _pack(tmp_path, {"network": []}, {}, hidden=["media_player.example_tv"])
+    _night(tmp_path, "--as-of", AS_OF)
+    assert _open(tmp_path, "PM-RECONNECT-LOOP") == []
+    _pack(tmp_path, {"network": []}, {})                   # the same TV, not hidden: its fault
+    _night(tmp_path, "--as-of", AS_OF)
+    assert len(_open(tmp_path, "PM-RECONNECT-LOOP")) == 1

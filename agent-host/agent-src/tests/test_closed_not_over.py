@@ -100,7 +100,7 @@ def test_a_fault_a_person_reopens_in_the_kiosk_stays_open_and_the_facility_manag
     assert st.incident(iid)["closed_at"] is None
     out = desk.tick(st, datetime.now(timezone.utc))
     (fm,) = [s for s in out["send"] if s["to"] == "fm"]
-    assert fm["status"] == "Reopened in the Cockpit by Owner on 01/01/2099 00:00. Please look again." and fm["keyboard"]
+    assert fm["status"] == "Reopened in the Cockpit on 01/01/2099 00:00 (Owner). Please look again." and fm["keyboard"]
 
 
 # ---------------------------------------------------------------------- 3 · a settled copy says "Closed"

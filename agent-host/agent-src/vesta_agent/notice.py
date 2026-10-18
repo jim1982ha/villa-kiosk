@@ -29,7 +29,7 @@ named who a message was for. The skill now writes only what happened; this write
 """
 from __future__ import annotations
 
-from vesta_shared.message_format import MARK_ICONS, PRESSED_STAGE, ROLE_WORDS, STEPS, UNTITLED, audience
+from vesta_shared.message_format import MARK_ICONS, acted, PRESSED_STAGE, ROLE_WORDS, STEPS, UNTITLED, audience
 from vesta_shared.messaging import incident_tag
 from vesta_shared.problems import AGAIN_DAYS
 from vesta_shared.timeutil import moment_label
@@ -50,7 +50,7 @@ HISTORY_KEPT = 20
 
 def note_press(state, incident: int, label: str, name: str, mark: str | None = None, option: str = "") -> None:
     """A button pressed on incident `incident`'s alert, kept in its history (the Kiosk's card says it: Notices.story).
-    Done is not kept: the fault's close says "Done by … on Telegram." already."""
+    Done is not kept: the fault's close says "Done on Telegram (…)." already."""
     if option == "done":
         return
     history = state.incident_history(incident)
@@ -118,7 +118,7 @@ class Notices:
         return {r for h in self.state.incident_history(incident) for r in self._roles(h)}
 
     def heading(self, chat: int, incident: int | None = None, to=None, stage: str | None = None,
-                also=None, title: str | None = None) -> str:
+                also=None, title: str | None = None, before: int = 0) -> str:
         """The heading of a notice to `chat` (about `incident`), as it stands before this notice is recorded — as facts
         (layout.head), which the layout places (layout.py: the title and "To …:" on top, the history under "Status:"):
 
@@ -129,10 +129,19 @@ class Notices:
 
         "To:" names every role the incident went to — every earlier notice's, and `also` (roles), this notice's — the
         same line in every chat (owner, 2026-10-11: one incident, one picture). A message about no incident: its `title`
-        (UNTITLED when it has none), and "To:" the roles of `also`, else the chat's of `to`."""
+        (UNTITLED when it has none), and "To:" the roles of `also`, else the chat's of `to`.
+
+        `before`: the heading as it stood before the incident's last `before` steps were recorded — a copy refreshed in
+        another chat with the notice just sent, whose own bottom line already says them.
+
+        ⚠️ THE ONE HEADING OF A CHAT'S COPY (architecture review "One answer per question" #2, 2026-10-19): the first
+        copy, the villa's own alert taken over, a replaced status AND every other chat's refresh are headed here. The
+        refresh had its own path (rehead: the sent copy's heading re-parsed, its lines swapped), and showed the newest
+        step twice until the last test of 0.12.251 caught it."""
         if incident is None:
             return layout.head(title or UNTITLED, audience(set(also or ()) or self.roles_for(chat, to)) or "this chat")
         history = self.state.incident_history(incident)
+        history = history[:len(history) - before] if before else history
         everyone = {r for h in history for r in self._roles(h)} | set(also or ())
         who = audience(everyone or self.roles_for(chat, to), short=True) or "this chat"
         try:
@@ -140,7 +149,8 @@ class Notices:
         except Exception:  # noqa: BLE001 — the heading is written without its priority, never not at all
             p = None
         word = self.word(int(incident), stage, bool(history))
-        return layout.head(f"{incident_tag(incident)}{f'-{p}' if p else ''}", who, self.history_lines(int(incident), chat), word)
+        return layout.head(f"{incident_tag(incident)}{f'-{p}' if p else ''}", who,
+                           self.history_lines(int(incident), chat, before), word)
 
     def history_lines(self, incident: int, chat: int = 0, latest_excluded: int = 0) -> list[str]:
         """Incident `incident`'s "Status:" lines as chat `chat` sees them: the steps sent to one of its roles, and what
@@ -162,17 +172,9 @@ class Notices:
             # says how many times it came (message_format.STEPS: one line, the shape of every other step)
             lines.append(f"- … {h['dropped']} earlier notice{'s' if h['dropped'] > 1 else ''}" if h.get("dropped") else
                          f"- {h['note']}" if h.get("note") else
-                         f"- {self._pressed(h)} {when(datetime.fromisoformat(h['at']), self.tz)}" if h.get("stage") == PRESSED_STAGE else
+                         f"- {self._pressed(h, when(datetime.fromisoformat(h['at']), self.tz))}" if h.get("stage") == PRESSED_STAGE else
                          f"- {self.step(h.get('stage'), self._roles(h), datetime.fromisoformat(h['at']), h.get('run'))}")
         return lines
-
-    def rehead(self, incident: int, head, chat: int, latest_excluded: int = 0):
-        """Another chat's copy of the notice just sent, headed for chat `chat`: its title and "To:" kept, its "Status:"
-        lines this chat's own (history_lines), as they stood before the notice's own steps (`latest_excluded`)."""
-        h = layout.head_of(head)
-        if not h or not str(incident).isdigit() or not h.get("word"):
-            return head
-        return self.retitle(incident, {**h, "history": self.history_lines(int(incident), chat, latest_excluded)}, chat)
 
     def concerns(self, chat: int, roles) -> bool:
         """Is a step sent to `roles` one of chat `chat`'s — a role of the chat's among them (a chat with no role, or a
@@ -213,13 +215,15 @@ class Notices:
         return f"{line.removesuffix(to)}{STEP_SEP}{status}{to}" if line.endswith(to) else f"{line}{STEP_SEP}{status}"
 
     @staticmethod
-    def _pressed(h: dict) -> str:
-        """A press as every reader tells it — Telegram's Status and the Kiosk card: "🆘 Need help pressed by Fabien"."""
-        return f"{MARK_ICONS.get(h.get('mark') or '', '')} {h.get('label')} pressed by {h.get('name')}".strip()
+    def _pressed(h: dict, at: str = "") -> str:
+        """A press as every reader tells it: Telegram's Status "🆘 Need help on 16/10/2026 18:20 (Fabien)" (`at`), the
+        Kiosk card, whose line has its own time, "🆘 Need help (Fabien)" — message_format.acted's order."""
+        what = f"{MARK_ICONS.get(h.get('mark') or '', '')} {h.get('label')}".strip()
+        return acted(what, at, h.get("name") or "") if at else f"{what} ({h.get('name')})"
 
     def story(self, incident: int) -> list[dict]:
         """What a fault's card in the Kiosk tells of incident `incident`'s Telegram life, oldest first: [{at, note}] —
-        "Reminder sent to Facility Manager", "🆘 Need help pressed by Fabien" — its time is the step's own (the Kiosk
+        "Reminder sent to Facility Manager", "🆘 Need help (Fabien)" — its time is the step's own (the Kiosk
         writes it). ⚠️ ONE STORY (architecture review, 2026-10-14): the card is told from the history Telegram's
         "Status:" is written from, never by a second writer."""
         out = []

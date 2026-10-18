@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from .message_format import acted
 from .timeutil import moment_label
 
 
@@ -23,18 +24,18 @@ def when(iso: str | None, zone: str) -> str:
 
 
 def closed(by: str, iso: str | None, zone: str) -> str:
-    """"Closed in the VESTA Kiosk by Fabien on 11/10/2026 07:05" — no full stop: a sentence may go on after it."""
-    return f"Closed in the Cockpit{f' by {by}' if by else ''} on {when(iso, zone)}"
+    """"Closed in the Cockpit on 11/10/2026 07:05 (Fabien)" — no full stop: a sentence may go on after it."""
+    return acted("Closed in the Cockpit", when(iso, zone), by)
 
 
 def taken(by: str, iso: str | None, zone: str) -> str:
-    """"Ticket opened in the Cockpit by Facility manager on 15/10/2026 00:40." — someone took an alert's fault on in the
+    """"Ticket opened in the Cockpit on 15/10/2026 00:40 (Facility manager)." — someone took an alert's fault on in the
     VESTA Kiosk ("Open Ticket"): its Telegram chase stops (owner, 2026-10-15)."""
-    return f"Ticket opened in the Cockpit{f' by {by}' if by else ''} on {when(iso, zone)}."
+    return acted("Ticket opened in the Cockpit", when(iso, zone), by) + "."
 
 
 def reopened(by: str, iso: str | None, zone: str, what: str | None = None) -> str:
-    """"Reopened in the VESTA Kiosk by Owner on 11/10/2026 07:05: Pump weak. Please look again." — `what` when the
+    """"Reopened in the Cockpit on 11/10/2026 07:05 (Owner): Pump weak. Please look again." — `what` when the
     message carries no alert of its own (a night check's fault)."""
-    return f"Reopened in the Cockpit{f' by {by}' if by else ''} on {when(iso, zone)}" + \
+    return acted("Reopened in the Cockpit", when(iso, zone), by) + \
         (f": {what}." if what else ".") + " Please look again."

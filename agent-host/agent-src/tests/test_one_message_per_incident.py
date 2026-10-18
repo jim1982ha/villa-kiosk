@@ -105,8 +105,8 @@ def test_an_answer_replaces_the_alert_where_it_was_given(agent):
     # the alert first, then where it stands, with when (owner, 2026-10-10) — and no promise of a check this alert's rule
     # gives no states for (architecture review 23: "will check it stays quiet" was never kept)
     # who pressed it by name, as the button's own footer says it (owner, 2026-10-11)
-    assert re.fullmatch(r"Done pressed by Wayan on \d\d/\d\d/\d{4} \d\d:\d\d\.", status(fm)) \
-        and body(fm).index(SUMMARY) < fm.index("Done pressed by")
+    assert re.fullmatch(r"Done on \d\d/\d\d/\d{4} \d\d:\d\d \(Wayan\)\.", status(fm)) \
+        and body(fm).index(SUMMARY) < fm.index("Done on ")
 
 
 def test_a_message_past_telegrams_48_hours_becomes_a_pointer(agent):
@@ -125,10 +125,10 @@ def test_the_owner_and_the_fm_in_one_chat_get_one_message_with_the_buttons(agent
     from vesta_agent.routing import Routing
     route = Routing(agent.policy())
     route.target = lambda to, origin=None: {"owner": [GROUP], "fm": [FM_CHAT]}[to]
-    kept, _ = agent.outcome._deliveries(res["send"], route, None)
+    kept, _ = route.deliveries(res["send"])
     assert [m.get("keyboard") for _, m, _ in kept] == [None, True, None]       # different chats: all three kept
     route.target = lambda to, origin=None: [GROUP]                          # the owner and the FM share the group
-    kept, _ = agent.outcome._deliveries(res["send"], route, None)
+    kept, _ = route.deliveries(res["send"])
     assert [(m.get("keyboard"), roles) for _, m, roles in kept if m.get("incident_id")] == [(True, {"owner", "fm"})]
 
 
@@ -150,7 +150,7 @@ def test_need_help_reaches_the_owner_with_the_buttons_to_answer(agent):
     owner = agent.thread.shown(int(iid))[GROUP]
     assert owner["buttons"] and not owner["settled"], owner
     # the escalation's step to the owner only — never the presser's chat, which got the answer (owner, 2026-10-16)
-    assert re.fullmatch(r"Escalation sent .+ — Need help pressed by Wayan on .+: Owner is asked to act\. \(to: Owner\)",
+    assert re.fullmatch(r"Escalation sent .+ — Need help on .+ \(Wayan\): Owner is asked to act\. \(to: Owner\)",
                         status(owner["text"])) and SUMMARY in owner["text"]
     assert all(mid != owner["mid"] for _, mid, _ in agent.tg.edits)     # never edited: its buttons are still there
     (fm,) = shown(agent, FM_CHAT)
@@ -160,17 +160,17 @@ def test_need_help_reaches_the_owner_with_the_buttons_to_answer(agent):
     # Telegram's Status the same events in the same words: the press, then the escalation; never an "Update sent"
     # (architecture review, 2026-10-15)
     notes = [x["note"] for x in agent.tickets.story(int(iid))]
-    assert notes[0] == "Reminder sent (to: Facility Manager)" and notes[-2:] == ["🆘 Need help pressed by Wayan",
+    assert notes[0] == "Reminder sent (to: Facility Manager)" and notes[-2:] == ["🆘 Need help (Wayan)",
                                                                                "Escalation sent (to: Owner)"], notes
     # owner, 2026-10-18, #55 "each chat its own steps" (reversing part of 2026-10-11 "one incident, one picture"): the
     # FM's chat lists the FM's steps and the press, never the escalation to the owner; the owner's group the press and
     # its escalation, never the FM's alert or reminder
     def kinds(chat):
         lines = head_text(agent.notices.heading(chat, int(iid))).split("\n")[2:]
-        return [next((k for k in ("Alert sent", "Reminder sent", "🆘 Need help pressed by Wayan", "Escalation sent")
+        return [next((k for k in ("Alert sent", "Reminder sent", "🆘 Need help on", "Escalation sent")
                       if l.startswith("- " + k)), l) for l in lines]
-    assert kinds(FM_CHAT) == ["Alert sent", "Reminder sent", "🆘 Need help pressed by Wayan"], kinds(FM_CHAT)
-    assert kinds(GROUP) == ["🆘 Need help pressed by Wayan", "Escalation sent"], kinds(GROUP)
+    assert kinds(FM_CHAT) == ["Alert sent", "Reminder sent", "🆘 Need help on"], kinds(FM_CHAT)
+    assert kinds(GROUP) == ["🆘 Need help on", "Escalation sent"], kinds(GROUP)
 
 
 def test_a_second_close_changes_nothing_and_the_records_are_pruned_with_the_others(agent):
@@ -221,7 +221,7 @@ def test_a_fault_closed_in_the_kiosk_says_who_and_when_on_telegram():
     # owner, 2026-10-10: a Close in the Cockpit must act on the Telegram messages like a button: who, and when
     from vesta_agent.tickets import kiosk_close_note
     note = kiosk_close_note({"by": "Facility manager", "resolved_at": "2026-10-10T09:13:00.000Z"}, "Asia/Singapore")
-    assert note == "Closed in the Cockpit by Facility manager on 10/10/2026 17:13."
+    assert note == "Closed in the Cockpit on 10/10/2026 17:13 (Facility manager)."
     assert kiosk_close_note({}, "UTC") == "Closed in the Cockpit on {time}."     # an older Kiosk: noticed now
 
 
@@ -313,6 +313,6 @@ def test_a_button_the_skill_renames_still_answers_the_alert(agent):
                                                 "user_id": FM, "bot": BOT,
                                                 "message": {"message_id": 1000 + len(agent.tg.sent), "chat": {"id": FM_CHAT}}}))
     (fm,) = shown(agent, FM_CHAT)
-    assert re.fullmatch(r"Fait pressed by Wayan on \d\d/\d\d/\d{4} \d\d:\d\d\.", status(fm))
+    assert re.fullmatch(r"Fait on \d\d/\d\d/\d{4} \d\d:\d\d \(Wayan\)\.", status(fm))
     from vesta_shared.store import Store
     assert Store(agent.s.store_path).incident(int(iid))["closed_at"]

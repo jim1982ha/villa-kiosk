@@ -43,7 +43,9 @@ from vesta_shared import result as R  # noqa: E402  (what the engine is asked to
 from vesta_shared import script  # noqa: E402  (client, store, settings, zone: one set-up)
 from vesta_shared import skill_settings  # noqa: E402  (rules.yaml, the villa's on top)
 from vesta_shared.messaging import incident_tag  # noqa: E402
-from vesta_shared.message_format import PRESSED, ROLE_SHORT  # noqa: E402  ("<button> pressed by <name> on <time>.": one wording)
+from vesta_shared.message_format import PRESSED, ROLE_SHORT  # noqa: E402  ("<button> on <time> (<name>).": one wording)
+from vesta_shared import kiosk_words  # noqa: E402
+from vesta_shared.timeutil import lasting  # noqa: E402
 from vesta_shared.device_state import has_value, out_for  # noqa: E402  ("is it back": one answer)
 
 SKILL = os.path.dirname(HERE)
@@ -791,13 +793,16 @@ def reply(store: Store, iid: int, option: str, sender_role: str, now: datetime, 
     pressed = pressed.replace("{who}", who)
     if option == "done":
         out["actions"] += Problems(store).close_incident(iid, Incident.DONE, now.isoformat(),
-                                                         f"{label} by {who} on Telegram.", who=who, reply=label)
+                                                         f"{label} on Telegram ({who}).", who=who, reply=label)
         # ⚠️ A PROMISE THE CODE KEEPS (architecture review 23): "will check it stays quiet" was written since 0.9.0 and
         # nothing ever checked — a Done on a door still unlocked closed it for good. The tick reads it again (quiet_after_done)
         # read again whatever the rule: still bad, it reopens; not knowable, the people asked are told (still_there)
         checks = judged(inc)
-        store.note(iid, {"check_quiet": f"{label} pressed by {who}"})
-        out["send"].append(here(pressed + (" VESTA will check it stays right." if checks else ""), "closed"))
+        store.note(iid, {"check_quiet": f"{label} ({who})"})
+        # how long VESTA watches it is the desk's own setting (clear_minutes), said as every duration (owner, 2026-10-19:
+        # "✅ Done on 19/10/2026 02:10 (JM), VESTA will monitor it for …")
+        watch = lasting(_params(params).behaviour("clear_minutes") * 60)
+        out["send"].append(here(pressed.rstrip(".") + f", VESTA will monitor it for {watch}." if checks else pressed, "closed"))
     elif option == "need_help":
         store.update_incident(iid, state=Incident.ESCALATED, reply=label, escalated_at=now.isoformat(),
                               assignee=CHASE["escalates_to"])
@@ -808,7 +813,7 @@ def reply(store: Store, iid: int, option: str, sender_role: str, now: datetime, 
         out["send"].append(here(helped, "pressed", mark=button.get("mark")))
     else:
         store.update_incident(iid, reply=label)
-        out["send"].append(here(f"Noted from {who} on {{time}}: {label}", "pressed"))
+        out["send"].append(here(f"Noted on {{time}} ({who}): {label}", "pressed"))
     # the answer, on the alert and its reminders in every chat (a button press has already done it, by name)
     if option in BUTTONS:
         out["settle"] = [R.settle(iid, pressed, mark=button.get("mark"))]
@@ -839,7 +844,7 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
             # record held only the name
             # (a record written before 0.12.202 says "in the VESTA Kiosk": kept as written)
             said = said if said.startswith(("Reopened in the Cockpit", "Reopened in the VESTA Kiosk")) else \
-                f"Reopened in the Cockpit by {said} on {{time}}. Please look again."
+                kiosk_words.reopened(said, None, "")
             out["send"] += tell(inc["severity"], "reopened", incident=inc["id"], chased=True, **about(inc, said))
             continue
         if p.get(Notes.UNREACHED) and inc["state"] in (Incident.ASKED, Incident.REASKED) and \

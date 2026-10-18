@@ -26,12 +26,12 @@
     2026-10-17: this file kept "Facility Manager" after alert cards said "FM").
 
     The bottom line is said by its STAGE, in the agent's own words (architecture review, 2026-10-13: a job's Done read
-    "✅ Done - JM" here and "✅ Done pressed by JM on 12/10/2026 17:13." under the agent's alerts). A rule sets
+    "✅ Done - JM" here and "✅ Done on 12/10/2026 17:13 (JM)." under the agent's alerts). A rule sets
     vm_stage — 'new', 'existing', 'closed' or 'help' — and this file writes its icon (message_format.STAGE_ICONS,
     MARK_ICONS) before vm_status, or the stage's own words when there is no status (STAGE_WORDS). With vm_who (who
     pressed Done or Need help), the line says it as the agent does (PRESSED), then vm_status:
         {%- set vm_stage, vm_who, vm_status = 'help', 'JM', 'Tick it on the Jobs tab.' -%}
-        →  🆘 Need help pressed by JM on 13/10/2026 09:02. Tick it on the Jobs tab.
+        →  🆘 Need help on 13/10/2026 09:02 (JM). Tick it on the Jobs tab.
     Without vm_stage, vm_status is written as it is (a rule saved before 2026-10-13).
 
     The tags are the agent's style table (message_format.TELEGRAM: title bold, item blockquote, note blockquote +
@@ -44,7 +44,7 @@
 {%- set vm_and = " & " -%}
 {%- set vm_icons = {"new": "⚠️", "existing": "⚠️ ⚙️", "closed": "✅", "help": "🆘"} -%}
 {%- set vm_words = {"new": "New alert", "existing": "Still open", "closed": "Closed: nothing more to do"} -%}
-{%- set vm_pressed = "{label} pressed by {name} on {time}." -%}
+{%- set vm_pressed = "{label} on {time} ({name})." -%}
 {#- END WORDS -#}
 {%- set vm_r = vm_to | default('', true) | string | trim -%}
 {%- if not vm_r and states is defined -%}{%- set vm_r = states('input_text.vesta_alert_audience') | trim -%}{%- endif -%}

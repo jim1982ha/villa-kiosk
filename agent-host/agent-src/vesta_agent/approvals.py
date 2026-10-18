@@ -30,7 +30,7 @@ FOLLOW_EVERY_S, FOLLOW_FOR_S = 5, 90
 #: How far back the AI is told of decided requests (the waiting ones, whatever their age, until they expire).
 DECIDED_FOR = timedelta(hours=2)
 
-_APPROVED = "Approved by {by} on {time}."
+_APPROVED = "Approved on {time} ({by})."          # message_format.acted: what, when, then who
 #: ⚠️ ONE TABLE OF A REQUEST'S STATES (architecture review 20, 21): their words were written in four places and "failed"
 #: meant three things — the villa's rules refused it at the press (nothing tried), Home Assistant refused it, or the device
 #: never got there — told to the AI as "failed by JM"; then the notes under the request were still written in actions.py
@@ -44,7 +44,7 @@ STATES: dict[str, tuple[str, str, str]] = {
     "failed": ("approved, but it did not happen", "Already approved; it did not happen.", _APPROVED),
     "blocked": ("pressed, but the villa's rules no longer allowed it: nothing was tried", "No longer allowed.",
                 "No longer allowed: {why}."),
-    "refused": ("refused", "Already refused.", "Refused by {by} on {time}. Nothing was done."),
+    "refused": ("refused", "Already refused.", "Refused on {time} ({by}). Nothing was done."),
     "expired": ("expired: nobody answered in time", "Expired. Ask again.", "Expired on {time}: nothing was done."),
     "unknown": ("approved; the agent restarted before it could see the result", "Already approved.", _APPROVED),
     # nobody received it (architecture review 21): never "waiting" — no chat had its buttons

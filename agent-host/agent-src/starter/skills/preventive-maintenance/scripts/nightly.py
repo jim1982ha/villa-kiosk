@@ -227,7 +227,13 @@ def run(args) -> dict:
     # entity and its uptime sensor were three lines, two of them raw entity ids)
     rows_by_eid = {r["entity_id"]: r for fam in pack.families for r in pack.entities(fam)}
     by_device: dict[str, dict] = {}
+    # ⚠️ A HIDDEN ENTITY IS NOT CHECKED (owner, 2026-10-19: the LG TV, hidden in the villa's system, was a "dropped and
+    # reconnected 10 times" fault): the logbook lists every entity, and this was the one check that read past the
+    # pack's own rule (knowledge_pack: hidden entities left out of every family, `pack.hidden`)
+    hidden = set(pack.hidden)
     for eid, per_day in flips.items():
+        if eid in hidden:
+            continue
         row = rows_by_eid.get(eid, {})
         slug = row.get("asset") or next((s for s, a in pack.assets.items() if eid in a["entities"].values()), None)
         # ⚠️ ITS DEVICE, CLASSIFIED OR NOT (2026-10-13): a relay's uptime sensor is in no family, had no device, and its

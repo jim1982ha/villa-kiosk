@@ -40,7 +40,7 @@ from vesta_shared.result import FAULTS_CHANGED
 
 from . import layout
 from .notice import when
-from vesta_shared.message_format import PRESSED_STAGE
+from vesta_shared.message_format import PRESSED_STAGE, ROLES
 from .posting import Poster
 from .routing import Origin, Routing
 
@@ -119,7 +119,7 @@ class Outcome:
 
         def notice(iid, stage, chat, roles=frozenset()):
             noticed.setdefault((int(iid), stage), []).append((chat, frozenset(roles)))
-        pairs, unrouted = self._deliveries(items, route, origin)
+        pairs, unrouted = route.deliveries(items, origin)
         pairs = [p for p in pairs if p[0] not in {int(x) for x in skip}]
 
         def incident_of(item):
@@ -143,7 +143,8 @@ class Outcome:
                     told.setdefault((int(incident_of(item)), item.get("stage")), set()).update(to)
                 else:
                     sent_to.setdefault(id(item), set()).update(to)
-        posted: dict[int, list[int]] = {}               # incident → the chats this result showed it in, the last one last
+        # incident → where this result showed it, the last one last: (chat, its step, the roles its "To:" named)
+        posted: dict[int, list[tuple[int, str | None, set]]] = {}
         # Home Assistant's own messages first: the desk's messages below then replace them where both land
         for h in res.get("ha_messages") or []:
             hid = int(h.get("incident_id") or 0)
@@ -154,7 +155,7 @@ class Outcome:
                 (self.notices.roles_of(hid) if self.notices and hid else set())
             for chat in await self.adopt_ha(h, skill_name, going.get(hid) or step, step):
                 notice(h["incident_id"], h.get("stage"), chat, step)
-                posted.setdefault(hid, []).append(chat)
+                posted.setdefault(hid, []).append((chat, h.get("stage"), going.get(hid) or step))
         # ⚠️ SETTLED BEFORE THIS RESULT'S MESSAGES ARE POSTED (architecture review 12, 2026-10-09): "Need help" sends the
         # owner a new message with the buttons; settled after it, that message lost them the moment it arrived
         for s in res.get("settle") or []:
@@ -200,7 +201,7 @@ class Outcome:
                 continue
             if iid:
                 notice(iid, item.get("stage"), chat, roles or (self.notices.roles_of(int(iid)) if self.notices else ()))
-                posted.setdefault(int(iid), []).append(chat)
+                posted.setdefault(int(iid), []).append((chat, item.get("stage"), going.get(int(iid))))
             chats.add(chat)
             done["sent"] += 1
             done.setdefault("messages", {})[chat] = mid          # each chat's message: a page's buttons go under it
@@ -210,7 +211,8 @@ class Outcome:
         # ⚠️ ONE INCIDENT, ONE PICTURE (owner, 2026-10-11): a reminder went to the facility manager only, and the group's
         # copy kept "(new)" and the first alert — every other copy now shows what was just sent, quietly
         for iid, shown_in in posted.items():
-            latest = (self.thread.shown(iid).get(shown_in[-1]) or {})
+            last_chat, last_stage, last_also = shown_in[-1]
+            latest = (self.thread.shown(iid).get(last_chat) or {})
             # ⚠️ EACH CHAT ITS OWN STEPS (owner, 2026-10-18, #55): a step to the facility manager alone re-posted the
             # owner's group copy with it — a chat none of whose roles this step went to keeps its copy as it is
             stepped = set().union(*[r for (i, _st), r in told.items() if i == iid] or [set()])
@@ -218,10 +220,12 @@ class Outcome:
                          if self.notices and not self.notices.concerns(c, stepped)}
             # this result's own steps of the incident: its bottom line says them, the history above them never
             steps_now = sum(1 for (i, st) in noticed if i == iid and st != PRESSED_STAGE)   # a press records none
-            head_for = (lambda c, i=iid, h=layout.of(latest).get("head"), n=steps_now:
-                        self.notices.rehead(i, h, c, n)) if self.notices else None
+            # each chat's heading as the copy just sent was headed, the chat's own steps listed (notice.heading: one)
+            head_for = (lambda c, i=iid, st=last_stage, al=last_also, n=steps_now:
+                        self.notices.heading(c, i, stage=st, also=al, before=n)) if self.notices else None
             if latest.get("parts"):
-                await self.thread.sync(iid, layout.of(latest), skip=set(shown_in) | elsewhere, head_for=head_for, keyboard=(
+                await self.thread.sync(iid, layout.of(latest), skip={c for c, _s, _a in shown_in} | elsewhere,
+                                       head_for=head_for, keyboard=(
                     lambda c, i=iid: self.buttons.keyboard(i, c, skill_name)) if skill_name and self.buttons.open(iid) else None)
         # ⚠️ AN ALERT NOBODY ASKED TO ANSWER RECEIVED (architecture review 25): Telegram refused every chat of the people
         # first in line (a person who never pressed Start) — the alert desk hands it on at its next tick, never 45
@@ -244,13 +248,13 @@ class Outcome:
             if msg and not await self.ask(msg, head=gate_prompt, origin=origin):
                 answer, msg = "no chat of the owner's received the request", None
             if not msg:
-                said, told = f"The siren cannot be requested: {answer}", 0
-                for chat in route.target("owner"):
-                    told += bool(await self.poster.post(chat, gate_prompt, status=said, roles={"owner"}, origin=origin,
-                                                                       title=SIREN_TITLE))
-                if not told:
-                    for chat in route.target("fm"):          # no chat of the owner's has it: the facility manager's do
-                        await self.poster.post(chat, gate_prompt, status=said, roles={"fm"}, origin=origin, title=SIREN_TITLE)
+                said = f"The siren cannot be requested: {answer}"
+                # every chat of the first role, in the roles' order, that receives it: the owner's, else the facility
+                # manager's (message_format.ROLES — never the two written out again here)
+                for role in ROLES:
+                    if any([bool(await self.poster.post(chat, gate_prompt, status=said, roles={role}, origin=origin,
+                                                        title=SIREN_TITLE)) for chat in route.target(role)]):
+                        break
         # ⚠️ ONE HAND MOVES THE CARDS (architecture review, 2026-10-15): a script's fault actions were carried out here,
         # and the repair worked the same cards out from the tasks — two routes, a 2-day "redo the close" window for when
         # the first failed, and a person's Done that could meet the agent's close. A fault about a task is now the
@@ -287,33 +291,6 @@ class Outcome:
             except Exception as e:  # noqa: BLE001 — the next repair (5 minutes) does it
                 log.warning("The Kiosk's faults could not be brought up to date (%s)", type(e).__name__)
         return done
-
-    @staticmethod
-    def _deliveries(items: list, route: Routing, origin) -> tuple[list[tuple[int, dict, frozenset]], list[dict]]:
-        """Each message in every chat it goes to, as (chat, message, the roles it goes there for), and the messages that
-        go nowhere. One copy per chat: of several messages for one incident landing in one chat (a chat listed with both
-        roles), the one with the buttons — else the last; of the same text twice, the first.
-
-        ⚠️ THE ROLES ARE MERGED, NEVER DROPPED (architecture review 18): the copy kept for a group listed for the owner AND
-        the facility manager was headed "For:" the owner's people only, and its history named only them."""
-        pairs: list[tuple[int, dict]] = []
-        unrouted: list[dict] = []
-        for it in items:
-            it = it or {}
-            chats = route.target(it.get("to"), origin)
-            if not chats:
-                unrouted.append(it)
-            pairs += [(int(c), it) for c in chats]
-        best: dict[tuple, int] = {}
-        roles: dict[tuple, set] = {}
-        for n, (chat, it) in enumerate(pairs):
-            iid = it.get("incident_id")
-            k = ("incident", chat, int(iid)) if iid else ("text", chat, it.get("text") or "")
-            roles.setdefault(k, set()).update({it["to"]} if it.get("to") in ("owner", "fm") else set())
-            if k not in best or (iid and (it.get("keyboard") or not pairs[best[k]][1].get("keyboard"))):
-                best[k] = n
-        kept = sorted((n, k) for k, n in best.items())
-        return [(pairs[n][0], pairs[n][1], frozenset(roles[k])) for n, k in kept], unrouted
 
     async def adopt_ha(self, h: dict, skill_name: str | None = None, also=None, told=None) -> list[int]:
         """Home Assistant's messages of one automation run become incident messages (outcome key ha_messages). `also`:

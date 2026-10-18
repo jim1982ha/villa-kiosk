@@ -55,7 +55,7 @@ def test_open_ticket_in_the_kiosk_stops_the_chase_and_says_so_once(tmp_path):
     run(t.repair())
     run(t.repair())
     assert st.incident(iid)["state"] == Incident.TAKEN and not st.incident(iid)["closed_at"]
-    assert said == [(iid, "Ticket opened in the Cockpit by Facility manager on 15/10/2026 00:40.")]
+    assert said == [(iid, "Ticket opened in the Cockpit on 15/10/2026 00:40 (Facility manager).")]
     out = desk.tick(st, asked + timedelta(minutes=60))                                # past the reminder AND the escalation
     assert not [m for m in out["send"] if m.get("stage") in ("reminder", "escalated")], out["send"]
 
