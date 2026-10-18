@@ -2,6 +2,18 @@
 # A blueprint sends its formatted alert ONLY while this sensor reads "ok"; anything else (missing, changed, a broken
 # file) and it sends its plain text, as before. Rendered every minute and at start, so a file removed or edited badly
 # switches the blueprints back to plain text within a minute. Nothing else depends on it.
+#
+# The villa-wide "To:" (owner, 2026-10-18: every helper is defined in a package file, never from the screens):
+# a rule whose "Who the message is for" names nobody uses this. Roles, apart by ",": "Owner, Facility Manager".
+# No `initial:`, so the value set in Settings > Helpers is kept across restarts.
+input_text:
+  vesta_alert_audience:
+    name: VESTA alert audience
+    min: 0
+    max: 120
+    mode: text
+    icon: mdi:account-group
+
 template:
   - triggers:
       - trigger: homeassistant

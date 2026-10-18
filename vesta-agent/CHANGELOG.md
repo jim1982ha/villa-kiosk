@@ -1,3 +1,8 @@
+## 0.12.246
+
+What you will see: nothing changes. The message package the Agent provides (vesta_message.yaml) now also defines
+"VESTA alert audience", the villa-wide "To:" of alert messages, so it is created by a file instead of from the screens.
+
 ## 0.12.245
 
 What you will see: nothing changes. The Agent's alert code no longer uses the name "villa mode" anywhere; it reads

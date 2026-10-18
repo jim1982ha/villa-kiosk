@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.237 (18 October 2026)
+
+Owner, 2026-10-18 ("never create helpers via the UI; always a file in the packages folder"): the shipped package
+homeassistant/packages/vesta_message.yaml defines input_text.vesta_alert_audience, the villa-wide "To:" the message
+layout reads — it was a helper made from the screens.
+
 ## 0.6.236 (18 October 2026)
 
 Owner, 2026-10-18 ("confirm there is no more reference to villa mode"): the alert desk's reader and its event field are
