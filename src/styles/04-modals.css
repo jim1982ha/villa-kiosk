@@ -654,7 +654,9 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .presence-now strong { color: var(--text-primary); }
 .presence-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .presence-row { width: 100%; display: flex; justify-content: space-between; gap: 12px; padding: 8px 10px; border-radius: 10px;
-  background: var(--bg-input); border: none; color: var(--text-primary); font: inherit; text-align: left; cursor: pointer; }
+  background: var(--bg-input); border: none; color: var(--text-primary); font: inherit; text-align: left; }
+/* only a row that opens something looks and acts like it (owner, 2026-10-18) */
+.presence-row.opens { cursor: pointer; }
 .presence-row > :last-child { text-align: right; min-width: 0; overflow-wrap: anywhere; }
-@media (hover: hover) { .presence-row:hover { background: color-mix(in srgb, var(--accent) 14%, var(--bg-input)); } }
-.presence-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (hover: hover) { .presence-row.opens:hover { background: color-mix(in srgb, var(--accent) 14%, var(--bg-input)); } }
+.presence-row.opens:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

@@ -735,7 +735,8 @@ export default function Dashboard() {
       />
 
       {shown("presence") && (
-        <PresenceWindow onClose={() => closeSurface("presence")} onOpenEntity={(id) => handOver("presence", id)} />
+        <PresenceWindow onClose={() => closeSurface("presence")} onOpenEntity={(id) => handOver("presence", id)}
+          canOpen={(id) => !!panelFor(identity.deviceOf(id))} />
       )}
       {shown("rooms") && (
         <TeleportMenu

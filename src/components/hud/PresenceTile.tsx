@@ -29,16 +29,18 @@ export default function PresenceTile({ onOpen }: { onOpen: () => void }) {
 
 /** The villa's presence window, as the Dashboard opens it (pages/surfaces "presence"). A person's whereabouts are
  *  the owner's to see: the proxy never relays a person to a guest or staff session (ha-commands.json readDomains),
- *  so for them the window says nothing about people rather than "no person is set up". */
-export function PresenceWindow({ onClose, onOpenEntity }: { onClose: () => void; onOpenEntity: (entityId: string) => void }) {
+ *  so for them the window has no People at all. `canOpen`: whether a row's device has a panel to open. */
+export function PresenceWindow({ onClose, onOpenEntity, canOpen }: {
+  onClose: () => void; onOpenEntity: (entityId: string) => void; canOpen: (entityId: string) => boolean;
+}) {
   const { entities } = useHA();
   const { config } = useConfig();
   const { role } = useProfile();
   const seesPeople = roleCan(role, "seePeople");
   const p = presenceOf(config.presenceSensor, entities);
   if (!p) return null;
-  const why = presenceWhy(config.presenceSensor, entities);
-  return <PresencePanel presence={p} why={seesPeople ? why : { ...why, people: null }} onOpenEntity={onOpenEntity} onClose={onClose} />;
+  return <PresencePanel presence={p} why={presenceWhy(config.presenceSensor, entities)} showPeople={seesPeople}
+    canOpen={canOpen} onOpenEntity={onOpenEntity} onClose={onClose} />;
 }
 
 /** The tile, drawn — pure (a check draws it). */
@@ -56,25 +58,28 @@ export function PresenceButton({ presence: p, onClick }: { presence: Presence; o
   );
 }
 
-/** Why the villa counts as empty or occupied: who is home, the latest movement, the settings that decide it. */
-/** One row of the window: what it names, its state; a tap opens it. */
-function Row({ entityId, name, said, onOpen }: { entityId: string; name: string; said: string; onOpen: (id: string) => void }) {
+/** One row of the window: what it names, its state. A button only when it opens something (owner, 2026-10-18: a row
+ *  that lit up under the mouse and did nothing) — otherwise plain text, no hover, no pointer. */
+function Row({ entityId, name, said, onOpen }: { entityId: string; name: string; said: string; onOpen?: (id: string) => void }) {
+  const inner = <><span>{name}</span><span className="muted">{said}</span></>;
   return (
-    <li><button type="button" className="presence-row" onClick={() => onOpen(entityId)}>
-      <span>{name}</span><span className="muted">{said}</span>
-    </button></li>
+    <li>{onOpen
+      ? <button type="button" className="presence-row opens" onClick={() => onOpen(entityId)}>{inner}</button>
+      : <div className="presence-row">{inner}</div>}</li>
   );
 }
 
-/** Why the villa counts as empty or occupied: who is home (the owner only: `people` null), the latest movement, the
- *  settings that decide it. Pure (a check draws it). */
-export function PresencePanel({ presence: p, why, onOpenEntity, onClose }: {
-  presence: Presence; why: Omit<PresenceWhy, "people"> & { people: PresenceWhy["people"] | null };
+/** Why the villa counts as empty or occupied: who it watches (the owner only), the latest movement among the sensors
+ *  it watches, the settings that decide it — all from the sensor's own lists (config/presence). Pure (a check draws
+ *  it). */
+export function PresencePanel({ presence: p, why, showPeople, canOpen, onOpenEntity, onClose }: {
+  presence: Presence; why: PresenceWhy; showPeople: boolean; canOpen: (entityId: string) => boolean;
   onOpenEntity: (entityId: string) => void; onClose: () => void;
 }) {
   const dialogRef = useModalA11y(onClose);
   const when = since(p.since);
   const act = why.lastActivity;
+  const opener = (id: string) => (canOpen(id) ? onOpenEntity : undefined);
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div ref={dialogRef} className="modal settings-modal presence-modal" onClick={(e) => e.stopPropagation()}
@@ -84,29 +89,30 @@ export function PresencePanel({ presence: p, why, onOpenEntity, onClose }: {
           <div className="presence-now" style={{ "--tone": STATUS_COLOR[p.tone] } as React.CSSProperties}>
             <strong>{p.label}</strong>{when ? <span className="muted"> · since {when}</span> : null}
           </div>
-          {why.people && (
+          {showPeople && (
             <>
               <div className="settings-section-title">People</div>
-              {why.people.length === 0 ? <p className="muted body-text">No person is set up in the villa's system.</p> : (
-                <ul className="presence-list">
-                  {why.people.map((x) => <Row key={x.entityId} entityId={x.entityId} name={x.name} onOpen={onOpenEntity}
-                    said={`${x.place}${since(x.since) ? ` · since ${since(x.since)}` : ""}`} />)}
-                </ul>
-              )}
+              {why.people === null ? <p className="muted body-text">This sensor does not list the people it watches.</p>
+                : why.people.length === 0 ? <p className="muted body-text">None of the people this sensor watches is known.</p> : (
+                  <ul className="presence-list">
+                    {why.people.map((x) => <Row key={x.entityId} entityId={x.entityId} name={x.name} onOpen={opener(x.entityId)}
+                      said={`${x.place}${since(x.since) ? ` · since ${since(x.since)}` : ""}`} />)}
+                  </ul>
+                )}
             </>
           )}
           <div className="settings-section-title">Latest movement</div>
           {act ? (
             <ul className="presence-list">
-              <Row entityId={act.entityId} name={act.name} onOpen={onOpenEntity}
+              <Row entityId={act.entityId} name={act.name} onOpen={opener(act.entityId)}
                 said={act.moving ? "moving now" : `quiet since ${since(act.at)}`} />
             </ul>
-          ) : <p className="muted body-text">No motion sensor reports.</p>}
+          ) : <p className="muted body-text">{why.listsSensors ? "None of the sensors this one watches reports." : "This sensor does not list the sensors it watches."}</p>}
           {why.settings.length > 0 && (
             <>
               <div className="settings-section-title">What decides it</div>
               <ul className="presence-list">
-                {why.settings.map((x) => <Row key={x.entityId} entityId={x.entityId} name={x.name} onOpen={onOpenEntity}
+                {why.settings.map((x) => <Row key={x.entityId} entityId={x.entityId} name={x.name} onOpen={opener(x.entityId)}
                   said={`${x.value}${x.unit ? ` ${x.unit}` : ""}`} />)}
               </ul>
             </>

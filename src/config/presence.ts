@@ -42,31 +42,44 @@ export interface PresenceActivity { entityId: string; name: string; moving: bool
 export interface PresenceSetting { entityId: string; name: string; value: string; unit: string }
 
 export interface PresenceWhy {
-  /** Every person of the villa's system: home or away, and since when. */
-  people: PresencePerson[];
-  /** The motion/occupancy sensor that changed last: moving now, or quiet since. */
+  /** The people the sensor watches — those it lists in its own "people" attribute, home or away and since when;
+   *  null when it lists none (the window then says so, rather than showing everyone the villa's system knows). */
+  people: PresencePerson[] | null;
+  /** Of the sensors it watches (its "sensors" attribute), the one that changed last: moving now, or quiet since;
+   *  null when it lists none, or none of them reports. */
   lastActivity: PresenceActivity | null;
+  /** It lists the sensors it watches. */
+  listsSensors: boolean;
   /** The numbers that decide it: the villa's number settings named after the sensor ("<its name>_…", one prefix per
    *  feature — the owner's rule for every helper), so the panel finds them without naming any. */
   settings: PresenceSetting[];
 }
 
-const MOTION_CLASSES = new Set(["motion", "occupancy", "presence"]);
 const nameOf = (e: HassEntity) => String(e.attributes?.friendly_name ?? e.entity_id);
+/** An attribute that lists entity ids, as the sensor states it; null when it states none. */
+const listed = (v: unknown): string[] | null => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : null);
 
+/**
+ * ⚠️ ONLY WHAT THE SENSOR WATCHES (owner, 2026-10-18: "only show the people that are defined in the villa_empty
+ * sensor", and the latest movement from its own sensors): the window listed every person of the villa's system — two
+ * service accounts among them — and the parking camera's motion, which the sensor does not read. The sensor states
+ * its own lists ("people", "sensors" attributes); the window reads those, and names nothing itself.
+ */
 export function presenceWhy(sensorId: string, entities: Readonly<Record<string, HassEntity>>): PresenceWhy {
   const all = Object.values(entities);
-  const people = all.filter((e) => e.entity_id.startsWith("person."))
+  const attrs = entities[sensorId]?.attributes ?? {};
+  const peopleIds = listed(attrs.people), sensorIds = listed(attrs.sensors);
+  const people = peopleIds && peopleIds.map((id) => entities[id]).filter((e): e is HassEntity => !!e)
     .map((e) => ({
       entityId: e.entity_id, name: nameOf(e), home: e.state === "home",
       place: e.state === "home" ? "Home" : e.state === "not_home" ? "Away" : UNKNOWN_STATES.has(e.state) || !e.state ? "Unknown" : e.state,
       since: e.last_changed ?? null,
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
-  const motion = all.filter((e) => e.entity_id.startsWith("binary_sensor.") && e.entity_id !== sensorId
-    && MOTION_CLASSES.has(String(e.attributes?.device_class ?? "")) && (e.state === "on" || e.state === "off"));
-  const moving = motion.filter((e) => e.state === "on");
-  const latest = (moving.length ? moving : motion)
+  const watched = (sensorIds ?? []).map((id) => entities[id])
+    .filter((e): e is HassEntity => !!e && (e.state === "on" || e.state === "off"));
+  const moving = watched.filter((e) => e.state === "on");
+  const latest = (moving.length ? moving : watched)
     .sort((a, b) => Date.parse(b.last_changed ?? "") - Date.parse(a.last_changed ?? ""))[0];
   const prefix = sensorId.includes(".") ? `input_number.${sensorId.split(".")[1]}_` : null;
   const settings = prefix ? all.filter((e) => e.entity_id.startsWith(prefix))
@@ -75,6 +88,7 @@ export function presenceWhy(sensorId: string, entities: Readonly<Record<string, 
   return {
     people,
     lastActivity: latest ? { entityId: latest.entity_id, name: nameOf(latest), moving: latest.state === "on", at: latest.last_changed ?? null } : null,
+    listsSensors: sensorIds !== null,
     settings,
   };
 }
