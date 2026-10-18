@@ -1,3 +1,13 @@
+## 0.12.255
+
+What you will see:
+- A device you hid in the villa's system is now left out of everything the AI reads, not only its search: the
+  overview and a device's own state no longer show it.
+- An action asked in a chat that runs at once (a "direct" rule) says what happened in the same words as an approved
+  one ("Opening Bedroom3 Curtain…", "Turned on Pool light."). An approved light that did not come on is said to have
+  failed at once, never "on its way" for 90 seconds.
+- The skill pages say the same thing about a tool in their "Tools it needs" list and in "works without".
+
 ## 0.12.254
 
 What you will see:
