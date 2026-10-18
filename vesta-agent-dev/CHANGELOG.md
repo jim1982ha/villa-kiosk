@@ -1,3 +1,13 @@
+## 0.12.241
+
+What you will see:
+- A device that goes offline gets its fault on the Cockpit within about 15 minutes, no longer at the 02:00 night
+  check. A critical device also messages the facility manager then. Its fault closes 10 minutes after it is back, as
+  before.
+- An alert that comes back now waits its own 10 minutes back to normal before it closes. #54 (main power) closed 2
+  seconds after the meter answered again, because the Agent still counted the 10 minutes from the first time.
+- When the villa's rules refuse an action ("turn off the TV"), the Agent's log says so.
+
 ## 0.12.240
 
 What you will see on Telegram:
