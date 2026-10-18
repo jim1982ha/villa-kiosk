@@ -1,3 +1,12 @@
+## 0.12.249
+
+What you will see:
+- A device and the parts the villa's system lists under it are one device, for every check and every make: a
+  three-phase meter and its three "phase" devices, a relay box and its two pump channels. A silent main power meter
+  is one fault named after the meter — never "shelly integration (3 devices) offline" on a card of its own — and none
+  at all while its own alert (#56) is open. "Integration down" now needs that many separate devices offline.
+  Critical, "keeps dropping", "restarted", report names and what an action touches all follow the same rule.
+
 ## 0.12.248
 
 What you will see:
