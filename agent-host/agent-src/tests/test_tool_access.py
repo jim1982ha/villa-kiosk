@@ -471,3 +471,22 @@ def test_a_ticket_the_ai_creates_is_one_action(agent, monkeypatch):
     before = sum(1 for c in agent.state.calls_since("1970") if c["kind"] == "executed")
     run(tool.handler({"title": "Pool pump noisy"}))
     assert sum(1 for c in agent.state.calls_since("1970") if c["kind"] == "executed") == before + 1
+
+
+def test_the_skill_page_and_a_run_tell_each_tool_the_same_way(agent):
+    # architecture review scan 3, 2026-10-19 (tool_access.tool_state): "Tools it needs" and "works without" read the
+    # same answer — a tool switched off is off in both, a tool this villa's system lacks or one that changes it is
+    # shown on the page and never offered to switch on
+    from types import SimpleNamespace
+    server = [{"name": "ha_get_state", "annotations": {"readOnlyHint": True, "title": "Get state"}},
+              {"name": "ha_get_history", "annotations": {"readOnlyHint": True, "title": "Get history"}},
+              {"name": "ha_call_event", "annotations": {"readOnlyHint": False, "title": "Fire event"}}]
+    policy_edit(agent, ha_read_tools=["ha_get_state"])
+    pol = agent.policy()
+    sk = SimpleNamespace(tools=["ha_get_state", "ha_get_history", "ha_call_event", "ha_not_here"])
+    listed = {"tools": [{"name": t["name"], "title": t["annotations"]["title"], "readable": t["annotations"]["readOnlyHint"]}
+                        for t in server]}
+    page = {n["tool"]: n["state"] for n in tool_access.needs(pol, listed, sk)}
+    without = {w["tool"] for w in tool_access.health(pol, server, sk)["without"]}
+    assert page == {"ha_get_state": "on", "ha_get_history": "off", "ha_call_event": "never", "ha_not_here": "missing"}
+    assert without == {t for t, st in page.items() if st == "off"}

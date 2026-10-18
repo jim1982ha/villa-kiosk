@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.246 (19 October 2026)
+
+Architecture review scan 3 (2026-10-19).
+- tools.without_hidden on EVERY read tool's answer (records, bare ids, a hidden entity's own record) — only
+  ha_search was filtered; the overview and a state read showed a hidden device.
+- actions.outcome: one "done / moving / failed" for the direct and the approved path (moving only for a device that
+  said it is on its way, or a slow one: cover, valve); a direct action answers in done_words.
+- tool_access.tool_state: the one state of a skill's tool (on/off/missing/never); needs() and unavailable() read it.
+- reports: playbook raises vesta_shared.params.MissingParameter (one class; `said=` keeps the skill file's sentence).
+  Not done: the weekly report's own "running" rule (run_min_w) — vesta_shared.daily's would read the villa's
+  pressure pump (short bursts inside each hour) as never running: an owner decision.
+
 ## 0.6.245 (19 October 2026)
 
 Architecture review scan 2 (2026-10-19).

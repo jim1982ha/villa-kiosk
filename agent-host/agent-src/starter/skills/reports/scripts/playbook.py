@@ -20,8 +20,10 @@ if TYPE_CHECKING:
     from facts import Ctx
 
 
-class MissingParameter(Exception):
-    """A threshold reports.yaml does not give (facts.Ctx.need): named, never guessed."""
+# a threshold reports.yaml does not give (facts.Ctx.need): named, never guessed — THE one exception, the one every
+# shared reader raises too (architecture review scan 3, 2026-10-19: a class of this skill's own let a params error
+# raised inside a clue escape its handler, and the whole clue list with it)
+from vesta_shared.params import MissingParameter  # noqa: E402,F401
 
 
 def _num(v):

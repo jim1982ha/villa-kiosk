@@ -81,3 +81,26 @@ def test_the_ais_own_search_never_offers_a_hidden_entity(tmp_path):
     out = asyncio.run(search.handler({"query": "door"}))
     text = out["content"][0]["text"]
     assert FIXED in text and RAW not in text, text
+
+
+def test_no_read_tool_of_the_ai_shows_a_hidden_entity(tmp_path):
+    # architecture review scan 3, 2026-10-19: only the search was filtered — the overview (on by default) listed the
+    # hidden lock among its domain's ids, and a state read of it answered as for any device
+    import asyncio
+    from ha_fake import FakeHA, tool
+    from helpers import make_agent
+    from vesta_agent.routing import CONVERSATION, Origin
+    overview = {"domains": {"lock": {"count": 2, "entities": [RAW, FIXED]}}}
+    state = {"entity_id": RAW, "state": "locked"}
+    v = make_agent(tmp_path, {"people": [{"telegram_id": 5, "name": "Asker", "role": "owner"}], "chats": {"owner": 5},
+                              "ha_read_tools": ["ha_get_overview", "ha_get_state"]},
+                   reader=FakeHA(tools=[tool("ha_get_overview"), tool("ha_get_state", entity_id={"type": "string"})],
+                                 answers={"ha_get_overview": json.dumps(overview), "ha_get_state": json.dumps(state)}))
+    with open(v.s.pack_path, "w") as f:
+        f.write(_pack().to_json())
+    asyncio.run(v.refresh_server_tools())
+    tools = {t.name: t for t in v.toolbox().tool_objects(None, Origin(5, CONVERSATION))}
+    seen = asyncio.run(tools["ha_get_overview"].handler({}))["content"][0]["text"]
+    assert FIXED in seen and RAW not in seen, seen
+    read = asyncio.run(tools["ha_get_state"].handler({"entity_id": RAW}))["content"][0]["text"]
+    assert "hidden" in read and '"locked"' not in read, read

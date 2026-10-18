@@ -96,7 +96,7 @@ def fm_daily(pack: KnowledgePack, store: Store, as_of: date) -> str:
     # ⚠️ NAMED, NEVER GUESSED (review 7): a missing value fell back to 3 here, where facts.py names it
     group_from = ((cfg.get("thresholds") or {}).get("todo") or {}).get("group_from")
     if group_from is None:
-        raise MissingParameter("reports.yaml: parameter missing: thresholds.todo.group_from")
+        raise MissingParameter("todo.group_from", said="reports.yaml: parameter missing: thresholds.todo.group_from")
     group_from = int(group_from)
     words = {k: v for k, v in (cfg.get("todo_groups") or {}).items() if k != "same_time"}
     def name_of(entity_id, text):

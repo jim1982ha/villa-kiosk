@@ -106,7 +106,7 @@ class Ctx:
         v = self.th
         for k in path:
             if not isinstance(v, dict) or k not in v:
-                raise MissingParameter("reports.yaml: parameter missing: thresholds." + ".".join(path))
+                raise MissingParameter(".".join(path), said="reports.yaml: parameter missing: thresholds." + ".".join(path))
             v = v[k]
         return v
 

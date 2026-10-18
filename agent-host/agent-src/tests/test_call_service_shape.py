@@ -107,7 +107,7 @@ def villa(tmp_path, monkeypatch):
 def test_direct_runs_at_once_when_a_registered_person_asks(villa):
     actions, session = villa
     answer, msg = actions.request("light", "turn_on", "light.example_pool", {}, JM, 111)
-    assert msg is None and "without approval" in answer and "Done" in answer
+    assert msg is None and "without approval" in answer and "Result: Turned on " in answer      # as an approved one says it
     assert session.calls == [{"domain": "light", "service": "turn_on", "wait": True, "entity_id": "light.example_pool"}]
 
 
@@ -222,3 +222,17 @@ def test_a_refusal_by_the_villas_rules_is_in_the_log(villa, caplog):
     line = [r.getMessage() for r in caplog.records if r.getMessage().startswith("Refused ")]
     assert line == ["Refused media_player.turn_off on media_player.example_tv, asked by Registered: "
                     "media_player.turn_off is not in the allowed services of this villa."], line
+
+
+def test_where_an_action_stands_is_one_answer_for_both_paths():
+    # architecture review scan 3, 2026-10-19 (actions.outcome): a light that reads "off" after "Turn on" did not turn
+    # on — never "on its way"; a curtain reading "closed" just after "Open" is on its way; a lock reading "unlocking"
+    from vesta_agent.actions import outcome
+    from vesta_agent.policy import Decision
+    d = lambda domain, service: Decision(True, "", domain=domain, service=service, entity_ids=[f"{domain}.x"], data={})
+    assert outcome(d("light", "turn_on"), {"ok": False, "unconfirmed": [("Lamp", "off")]}) == "failed"
+    assert outcome(d("cover", "open_cover"), {"ok": False, "unconfirmed": [("Curtain", "closed")]}) == "moving"
+    assert outcome(d("lock", "lock"), {"ok": False, "unconfirmed": [("Door", "locking")]}) == "moving"
+    assert outcome(d("lock", "lock"), {"ok": False, "unconfirmed": [("Door", "jammed")]}) == "failed"
+    assert outcome(d("light", "turn_on"), {"ok": True}) == "done"
+    assert outcome(d("light", "turn_on"), {"ok": False, "failed": True}) == "failed"

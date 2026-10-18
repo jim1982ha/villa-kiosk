@@ -20,10 +20,12 @@ from .device_state import has_value  # the one "does this device answer"
 
 
 class MissingParameter(Exception):
-    def __init__(self, name: str, hint: str = ""):
+    """A value a script needs that nothing gives: named, never guessed. `said`: the whole sentence, when the value is
+    a skill file's rather than a villa helper ("reports.yaml: parameter missing: thresholds.battery.show")."""
+    def __init__(self, name: str, hint: str = "", *, said: str | None = None):
         self.name = name
         self.hint = hint
-        super().__init__(f"missing villa parameter '{name}'" + (f": {hint}" if hint else ""))
+        super().__init__(said or f"missing villa parameter '{name}'" + (f": {hint}" if hint else ""))
 
 
 # ⚠️ NO BEHAVIOUR TABLE HERE (architecture review 7, 2026-10-07). The alert desk's and the night check's thresholds

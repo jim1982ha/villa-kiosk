@@ -98,6 +98,26 @@ PROGRESS = {"Turn on": "Turning on", "Turn off": "Turning off", "Lock": "Locking
             "Open": "Opening", "Close": "Closing"}
 
 
+#: The devices that take their time and say nothing on the way: a curtain reads "closed" until it has finished opening.
+SLOW_DOMAINS = {"cover", "valve"}
+
+
+def outcome(decision: Decision, result: dict) -> str:
+    """Where an action carried out stands: "done", "moving" (a device on its way — it said so, "unlocking", or it is one
+    that takes its time and says nothing until it arrives) or "failed".
+
+    ⚠️ ONE ANSWER (architecture review scan 3, 2026-10-19): the approval decided "moving" from the VERB — an approved
+    light that read "off" after "Turn on" was "Approved: on its way", "Turning on…", followed 90 s, then "failed";
+    a direct action answered the raw "Not confirmed: … I will not retry by myself" for a curtain still moving."""
+    if result.get("ok"):
+        return "done"
+    bad = result.get("unconfirmed") or []
+    if bad and VERB.get(decision.service) in PROGRESS and (
+            decision.domain in SLOW_DOMAINS or any(s in ON_ITS_WAY for _, s in bad)):
+        return "moving"
+    return "failed"
+
+
 def _ids(entity_id: Any) -> str:
     """An action's devices for the log, as the request named them (a string, a list, or nothing)."""
     if not entity_id:
@@ -209,8 +229,10 @@ class Actions:
             self.state.log("direct", dict(base, by=requester.name, ok=result["ok"]))
             log.info("Direct %s.%s on %s, asked by %s: %s", d.domain, d.service, ", ".join(d.entity_ids),
                      requester.name, result["text"])
-            return (f"Executed without approval (this villa's rule for {d.domain}.{d.service} is direct). "
-                    f"Result: {result['text']}"), None
+            # what happened, as an approved request says it (done_words, outcome): "Opening Bedroom3 Curtain…" for a
+            # curtain on its way, never "Not confirmed: … I will not retry by myself"
+            said = done_words(d, self.names, result, settled=outcome(d, result) != "moving")
+            return f"Executed without approval (this villa's rule for {d.domain}.{d.service} is direct). Result: {said}", None
         targets = Routing(policy).approver_chats(d.required_role, origin_chat)
         if d.required_role == "owner" and not targets:
             self.state.log("refused", dict(base, reason="no chat where the owner can approve"))
@@ -289,8 +311,8 @@ class Actions:
         # the body says what happened, the status who approved it and when (owner, 2026-10-10). A device still on its way
         # is recorded "moving", never "failed" (architecture review 19: the AI read "failed" for a curtain that opened):
         # approvals.Approvals follows it and writes the one verdict — done or failed — with the message's last words
-        moving = bool(result.get("unconfirmed")) and VERB.get(d.service) in PROGRESS
-        state = "moving" if moving else "done" if result["ok"] else "failed"
+        state = outcome(d, result)
+        moving = state == "moving"
         self.state.finish_approval(aid, state, result)
         said = "Done." if result["ok"] else "Approved: on its way." if moving else \
             "The villa's system refused it." if result.get("failed") else "Sent, not confirmed."

@@ -65,11 +65,14 @@ done by the code, not by you. Ignore the parts of the text below that tell you t
 
 
 def without_hidden(text: str, hidden: set[str]) -> str:
-    """A search's answer without the entities hidden in the villa's system.
+    """A read tool's answer without the entities hidden in the villa's system: every record naming one, and every bare
+    id of one in a list, dropped wherever it sits; an answer that IS one hidden entity's record says it is hidden.
 
     ⚠️ HIDDEN IS IGNORED BY THE AGENT, THE AI'S SEARCH TOO (owner, 2026-10-18): the Rules page says hidden devices are
     left out of "what the AI is told", but the AI's own search listed them — asked "turn off the TV", it offered
-    three, two of them hidden by the owner. Every record naming a hidden entity is dropped, wherever it sits."""
+    three, two of them hidden by the owner.
+    ⚠️ EVERY READ TOOL, NOT THE SEARCH ALONE (architecture review scan 3, 2026-10-19): the overview and a state read,
+    both on by default, still listed the hidden TV."""
     if not hidden or not text:
         return text
     try:
@@ -77,12 +80,18 @@ def without_hidden(text: str, hidden: set[str]) -> str:
     except ValueError:
         return text
 
+    def gone(v) -> bool:
+        return (isinstance(v, dict) and v.get("entity_id") in hidden) or (isinstance(v, str) and v in hidden)
+
     def drop(x):
         if isinstance(x, list):
-            return [drop(v) for v in x if not (isinstance(v, dict) and v.get("entity_id") in hidden)]
+            return [drop(v) for v in x if not gone(v)]
         if isinstance(x, dict):
-            return {k: drop(v) for k, v in x.items()}
+            return {k: drop(v) for k, v in x.items() if not (k in hidden and isinstance(v, dict))}
         return x
+    if isinstance(body, dict) and (body.get("entity_id") in hidden
+                                   or (isinstance(body.get("data"), dict) and body["data"].get("entity_id") in hidden)):
+        return json.dumps({"error": "This device is hidden in the villa's system: the agent leaves it out."})
     return json.dumps(drop(body), ensure_ascii=False)
 
 
@@ -265,8 +274,7 @@ class Toolbox:
                 if photo[0] and photo not in self.photos:
                     self.photos.append(photo)
             text = scrub("".join(b.get("text", "") for b in blocks if b.get("type") == "text"), self._secrets())
-            if name == "ha_search":
-                text = without_hidden(text, self._hidden())
+            text = without_hidden(text, self._hidden())       # every read tool, never the search alone
             out = {"content": ([{"type": "text", "text": self.parts.serve(key, text, part)}] if text else []) + images}
             if res.get("isError"):
                 out["is_error"] = True

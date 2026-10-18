@@ -212,49 +212,61 @@ def switch_on(form: dict, tool: str) -> dict:
     return {"ha_read_tools": form["ha_read_tools"] if tool in form["ha_read_tools"] else [*form["ha_read_tools"], tool]}
 
 
+def _listing(server_tools: list[dict] | None) -> dict[str, dict] | None:
+    """The server's tools as the saved list holds them: {name: {"title", "readable"}}; None when not known."""
+    if server_tools is None:
+        return None
+    return {t["name"]: {"title": _title(t), "readable": readable(t)} for t in server_tools}
+
+
+def tool_state(policy: Policy, listed: dict[str, dict] | None, tool: str) -> tuple[str, str]:
+    """Where one tool a skill uses stands here, and its name as the page says it: "on", "off" (the villa switched it
+    off — Rules turns it on), "missing" (this Home Assistant does not have it) or "never" (it changes the villa: never
+    the AI's to read with). `listed`: the server's tools ({name: {title, readable}}), None when not known yet — a Home
+    Assistant tool is then judged by the switch alone.
+
+    ⚠️ ONE ANSWER (architecture review scan 3, 2026-10-19): the skill's page asked needs() (the saved list's shape) and
+    health() (the server's shape) and the two told a missing tool and an unreadable one apart differently."""
+    if tool in OWN:
+        return ("on" if OWN[tool][2] != CHOOSE or tool in own_on(policy) else "off"), OWN[tool][0]
+    if listed is not None and tool not in listed:
+        return "missing", tool
+    t = (listed or {}).get(tool) or {}
+    name = t.get("title") or tool
+    if listed is not None and not t.get("readable"):
+        return "never", name
+    return ("on" if tool in policy.ha_read_tools else "off"), name
+
+
 def unavailable(policy: Policy, server_tools: list[dict] | None, skill, allowed: set[str] | None = None) -> list[dict]:
     """The tools this skill uses (skill.yaml `tools:`) that a run goes without, in plain words: those THE VILLA
     switched off (with what turns each back on: `fix`), and — given `allowed`, a run's own tools — those this asker
     may not use here. [] when it has them all. A tool this Home Assistant does not have, or that changes it, is not
-    listed: the AI simply goes without it (needs() shows it on the page)."""
+    listed: the AI simply goes without it (needs() shows it on the page). Read from tool_state."""
+    listed = _listing(server_tools)
     out = []
-    by = {t["name"]: t for t in server_tools} if server_tools else None
     for t in getattr(skill, "tools", None) or []:
-        if t in OWN:
-            if OWN[t][2] != CHOOSE:
-                continue
-            if t not in own_on(policy):
-                out.append({"tool": t, "label": OWN[t][0], "fix": "own",
-                            "why": f"It uses \"{OWN[t][0]}\", switched off in {where('tools')}."})
-            elif allowed is not None and t not in allowed:
-                out.append({"tool": t, "label": OWN[t][0], "fix": None,
-                            "why": f"\"{OWN[t][0]}\" is not for the person who asked (the facility manager's tools)."})
-        elif by is None or (t in by and readable(by[t])):
-            name = _title(by[t]) if by else t
-            if t not in policy.ha_read_tools:
-                out.append({"tool": t, "label": name, "fix": "ha",
-                            "why": f"It uses \"{name}\" ({t}), switched off in {where('tools')}."})
-            elif allowed is not None and t not in allowed:
-                out.append({"tool": t, "label": name, "fix": None,
-                            "why": f"\"{name}\" ({t}) is not for the person who asked (the facility manager's tools)."})
+        state, name = tool_state(policy, listed, t)
+        own = t in OWN
+        if own and OWN[t][2] != CHOOSE:
+            continue
+        said = f"\"{name}\"" if own else f"\"{name}\" ({t})"
+        if state == "off":
+            out.append({"tool": t, "label": name, "fix": "own" if own else "ha",
+                        "why": f"It uses {said}, switched off in {where('tools')}."})
+        elif state == "on" and allowed is not None and t not in allowed:
+            out.append({"tool": t, "label": name, "fix": None,
+                        "why": f"{said} is not for the person who asked (the facility manager's tools)."})
     return out
 
 
 def needs(policy: Policy, listed: dict | None, skill) -> list[dict]:
-    """Skills → "Tools it needs": each tool of the skill, and whether the AI has it here."""
-    by = {t["name"]: t for t in (listed or {}).get("tools") or []}
+    """Skills → "Tools it needs": each tool of the skill, and whether the AI has it here (tool_state)."""
+    by = {t["name"]: t for t in (listed or {}).get("tools") or []} or None
     out = []
     for t in getattr(skill, "tools", None) or []:
-        if t in OWN:
-            on = OWN[t][2] != CHOOSE or t in own_on(policy)
-            out.append({"tool": t, "label": OWN[t][0], "on": on, "state": "on" if on else "off"})
-        elif by and t not in by:
-            out.append({"tool": t, "label": t, "on": False, "state": "missing"})
-        elif by and not by[t].get("readable"):
-            out.append({"tool": t, "label": by[t].get("title") or t, "on": False, "state": "never"})
-        else:
-            on = t in policy.ha_read_tools
-            out.append({"tool": t, "label": (by.get(t) or {}).get("title") or t, "on": on, "state": "on" if on else "off"})
+        state, name = tool_state(policy, by, t)
+        out.append({"tool": t, "label": name, "on": state == "on", "state": state})
     return out
 
 
