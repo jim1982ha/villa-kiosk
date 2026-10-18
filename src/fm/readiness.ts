@@ -88,6 +88,12 @@ export function buildReadiness(
   entityMap: Record<string, EntityMapping>,
 ): ReadinessResult {
   const checks: ReadinessCheck[] = [];
+  // ⚠️ HOW BAD, AS THE TOP BAR SAYS IT (architecture review "One answer per question" #3, 2026-10-19): the top bar
+  // turns red for a CRITICAL device not answering, and amber for any other, a fault or a late task (owner,
+  // 2026-10-18 — attention.villaHealthFrom). These checks went red past two devices or two faults, whichever they
+  // were: two faults and the alarm panel offline read amber here under a red top bar.
+  const offlineState = (ids: readonly string[]): CheckState =>
+    ids.length === 0 ? "pass" : ids.some((id) => devices.isCritical(id)) ? "fail" : "warn";
 
   // ⚠️ THE VILLA'S OWN DEVICES, NOT EVERYTHING HOME ASSISTANT KNOWS. The old
   // predicate here was `!disabled && (mapped || entities[id])`, and that second
@@ -110,7 +116,7 @@ export function buildReadiness(
   checks.push({
     id: "devices-online",
     label: "All devices reporting",
-    state: offline.length === 0 ? "pass" : offline.length <= 2 ? "warn" : "fail",
+    state: offlineState(offline),
     detail: offline.length === 0
       ? "Every configured device is reporting."
       : `${offline.length} device${offline.length === 1 ? "" : "s"} offline or not reporting.`,
@@ -169,7 +175,7 @@ export function buildReadiness(
     checks.push({
       id: "climate",
       label: "Air conditioning reachable",
-      state: broken.length === 0 ? "pass" : "fail",
+      state: offlineState(broken),
       detail: broken.length === 0
         ? `${climate.ids.length} unit${climate.ids.length === 1 ? "" : "s"} responding.`
         : `${broken.length} not responding — cannot pre-cool.`,
@@ -186,7 +192,7 @@ export function buildReadiness(
     checks.push({
       id: "cameras",
       label: "Cameras online",
-      state: down.length === 0 ? "pass" : "warn",
+      state: offlineState(down.map((c) => c.entity_id)),
       detail: down.length === 0
         ? `${cameras.length} camera${cameras.length === 1 ? "" : "s"} online.`
         : `${down.length} offline.`,
@@ -199,7 +205,7 @@ export function buildReadiness(
   // ⚠️ THE TITLE SAYS WHAT IS FOUND, NOT THE GOAL (owner, 2026-10-14): "No open faults or tickets" stood over "5 still
   // open" — the card contradicted itself. Failing, it counts both and says where each is dealt with.
   // counted per device, as the Overview and Tickets draw them (openCounts, architecture review 2026-10-15)
-  const open = openCounts(fm.tickets, devices.deviceOf);
+  const open = openCounts(fm.tickets, devices.deviceOfRecord);
   const faults = fm.tickets.filter((t) => isTicketOpen(t) && stageOf(t) === "fault");
   const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
   const where = [open.faults ? "the faults in \"Overview\"" : "", open.tickets ? "the open tickets in \"Tickets\"" : ""].filter(Boolean);
@@ -210,7 +216,7 @@ export function buildReadiness(
     label: open.total === 0
       ? "No open faults or tickets"
       : `${plural(open.faults, "detected fault")} (${plural(open.tickets, "open ticket")})`,
-    state: open.total === 0 ? "pass" : open.total <= 2 ? "warn" : "fail",
+    state: open.total === 0 ? "pass" : "warn",   // a fault is a warning, however many (owner, 2026-10-18)
     detail: open.total === 0 ? "Nothing to deal with." : `Check ${where.join(", or ")}.`,
     sources: ISSUE_SOURCES.filter((s) => found.has(s)),
   });

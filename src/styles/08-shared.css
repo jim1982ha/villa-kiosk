@@ -424,3 +424,13 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 }
 .dropdown-option.is-active { background: var(--bg-input); }
 .dropdown-option.is-chosen { color: var(--accent); font-weight: 600; }
+
+/* ONE TINTED CARD (fm/tone, architecture review "One answer per question" #3, 2026-10-19): a task late or due soon, a
+   Recap check, the spending cap — the frame of any card whose state is a warning or a danger. It was written four
+   times in 07-facility.css under four vocabularies. `--tone` is the status colour; a card's icon or bar may use it. */
+.tone-warn { --tone: var(--status-warning); --tone-fill: 6%; --tone-edge: 25%; }
+.tone-danger { --tone: var(--status-danger); --tone-fill: 7%; --tone-edge: 28%; }
+.tone-warn, .tone-danger {
+  background: color-mix(in srgb, var(--tone) var(--tone-fill), var(--bg-card));
+  border-color: color-mix(in srgb, var(--tone) var(--tone-edge), var(--hairline));
+}

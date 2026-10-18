@@ -11,6 +11,7 @@ import { Check, CalendarClock, Trash2 } from "lucide-react";
 import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
 import { useDeviceIdentity } from "@/config/VillaModel";
 import { openCounts } from "@/fm/deviceWork";
+import { TONE_OF, toneClass } from "@/fm/tone";
 import { budgetStatus, localStamp, scheduleBoard, shortDate, type ScheduleStatus, parseAmount, fmAttention, workedBy } from "@/fm/fmEngine";
 import EvidenceRow from "./EvidenceRow";
 import RecentWorkList from "./RecentWorkList";
@@ -44,7 +45,7 @@ function dueText(s: ScheduleStatus): string {
 
 export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) => void }) {
   const { data, logCompletion, removeSchedule, removeAllSchedules } = useFmData();
-  const { deviceOf } = useDeviceIdentity();
+  const { deviceOfRecord } = useDeviceIdentity();
   const board = scheduleBoard(data);
   const [openId, setOpenId] = useState<string | null>(null);
   // Bulk delete is destructive across every task at once — require an
@@ -78,7 +79,7 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
   const attention = fmAttention(data).lateTasks;
   // a fault waits on the Overview until someone takes it on; then it is a ticket (owner, 2026-10-14)
   // counted per device, as the Overview and Tickets draw them (openCounts)
-  const open = openCounts(data.tickets, deviceOf);
+  const open = openCounts(data.tickets, deviceOfRecord);
 
   return (
     <div className="fm-stack">
@@ -127,7 +128,7 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
         {board.map((s) => (
           // THE Cockpit card (RecordCard): its state pill on the title line, Log and the bin inside, on the right of
           // its text (architecture review, 2026-10-15 — the layout the owner set for tickets); its tint says how late
-          <RecordCard key={s.schedule.id} tone={`state-${s.state}`} title={s.schedule.title}
+          <RecordCard key={s.schedule.id} tone={toneClass(TONE_OF.due[s.state])} title={s.schedule.title}
             status={{ text: STATE_LABEL[s.state], tone: s.state }}
             when={`${dueText(s)} · every ${s.schedule.everyDays} days`
               + (s.last ? ` · last ${localStamp(s.last.at)} by ${workedBy(s.last)}` : "")}

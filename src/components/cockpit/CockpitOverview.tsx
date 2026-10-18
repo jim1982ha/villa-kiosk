@@ -47,7 +47,8 @@ import { useVillaModel } from "@/config/VillaModel";
 import { buildDeviceOptions } from "@/components/fm/DeviceSearchPicker";
 import FaultForm from "@/components/fm/FaultForm";
 import FaultTiming from "@/components/fm/FaultTiming";
-import { nextCheck } from "@/fm/faultTiming";
+import { nextCheck, nextCheckAt } from "@/fm/faultTiming";
+import { momentText } from "@/utils/dateText";
 import { useAgent } from "@/agent/AgentContext";
 import type { AgentCadence } from "@/agent/agentApi";
 import FaultStageModal from "@/components/fm/FaultStageModal";
@@ -324,6 +325,8 @@ export function AttentionCard({ group, onOpenEntity, cadence, actions, lineActio
   lineActions?: (item: AttentionItem) => ReactNode;
 }) {
   const tappable = !!group.entityId;
+  // hovering "Next check" says when, as a date and time (owner, 2026-10-19: "20/10/2026 02:00")
+  const checkAt = nextCheckAt(group.items, cadence);
   return (
     <RecordCard
       title={group.title}
@@ -333,6 +336,7 @@ export function AttentionCard({ group, onOpenEntity, cadence, actions, lineActio
       trailing={tappable ? <ChevronRight size={16} className="muted" aria-hidden /> : undefined}
       // when its problems are read again, on the room's line under the chevron (owner, 2026-10-15)
       aside={nextCheck(group.items, cadence)}
+      asideTip={checkAt ? momentText(checkAt) : undefined}
       onOpen={tappable ? () => onOpenEntity(group.entityId as string) : undefined}
       body={(
         <ul className="cockpit-attention-subs">

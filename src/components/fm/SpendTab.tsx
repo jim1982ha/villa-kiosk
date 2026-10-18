@@ -33,6 +33,7 @@ import CostFields from "./CostFields";
 import { useDeviceChoice } from "./useDeviceChoice";
 import FormActions from "./FormActions";
 import { deviceRoom } from "@/config/devicePlace";
+import { TONE_OF, toneClass } from "@/fm/tone";
 
 export default function SpendTab(
   { onOpenEntity, deviceOptions }: {
@@ -117,7 +118,7 @@ export default function SpendTab(
       </div>
       {statement.markdown && <MarkdownPreview markdown={statement.markdown} />}
 
-      <div className={`fm-cap ${b.state}`}>
+      <div className={`fm-cap ${toneClass(TONE_OF.cap[b.state])}`}>
         {/* the month's money on ONE line — minor (against the cap), major (outside it), total — and Record spend at
             its right (owner, 2026-10-14: "what about total or major spend?"); the three share the width equally, each
             word ABOVE its amount (owner, 2026-10-14) */}

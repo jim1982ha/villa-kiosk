@@ -15,6 +15,7 @@ import SavedDocumentsList from "./SavedDocumentsList";
 import MarkdownPreview from "./MarkdownPreview";
 import { SourceIconRow } from "./sourceIcons";
 import type { CheckState, CheckTarget, ReadinessCheck, ReadinessResult } from "@/fm/readiness";
+import { TONE_OF, toneClass } from "@/fm/tone";
 
 const ICON: Record<CheckState, typeof CheckCircle2> = {
   pass: CheckCircle2, warn: AlertTriangle, fail: XCircle,
@@ -87,7 +88,7 @@ export function ReadinessChecks({ readiness, label, onOpenEntity, onOpenCheck, s
           buildReadinessSnapshot. Same generate-and-keep shape as the recap
           and spend statement, and it lands in the same saved-documents store,
           so a handover pack can include the check actually run on the day. */}
-      <div className={`fm-headline ${readiness.overall}`}>
+      <div className={`fm-headline ${toneClass(TONE_OF.check[readiness.overall])}`}>
         <button type="button" className="fm-headline-toggle" aria-expanded={showChecks}
           onClick={() => setShowChecks((v) => !v)}>
           <span className="fm-headline-icon"><HeadlineIcon size={22} /></span>
@@ -108,7 +109,7 @@ export function ReadinessChecks({ readiness, label, onOpenEntity, onOpenCheck, s
           // unlocked device or on lights are shown as pills"); past 8, "+N more" — the button opens the whole list.
           const chips = !!c.entityIds?.length;
           return (
-            <div key={c.id} className={`fm-row state-${c.state === "pass" ? "ok" : c.state === "warn" ? "due-soon" : "overdue"}`}>
+            <div key={c.id} className={`fm-row ${toneClass(TONE_OF.check[c.state])}`}>
               <span className={`fm-check-icon ${c.state}`}><Icon size={18} /></span>
               <div className="fm-row-main">
                 <div className="fm-row-title">

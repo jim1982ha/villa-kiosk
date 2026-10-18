@@ -301,6 +301,8 @@ export interface VillaDeviceInput {
    *  holds it. It depends on CONFIG only, never on a state push, and the
    *  villa model asked for it twice per push (2.496.197). */
   folding?: ReadonlyMap<string, string>;
+  /** The villa's critical entities (useCriticalDevices). Absent: none is (the list not read yet, or no such rule). */
+  critical?: ReadonlySet<string>;
 }
 
 export interface VillaDevices {
@@ -315,6 +317,10 @@ export interface VillaDevices {
   has(entityId: string): boolean;
   /** The device `entityId` belongs to (the fold, deviceOf below): what every count "per device" counts by. */
   deviceOf(entityId: string): string;
+  /** The device a fault's or ticket's entity field names — a list of several included (recordDeviceOf). */
+  deviceOfRecord(field: string): string;
+  /** Is this device critical — it, or an entity folded onto it, is on the villa's critical list (criticalDevices). */
+  isCritical(entityId: string): boolean;
 }
 
 export function villaDevices(input: VillaDeviceInput): VillaDevices {
@@ -331,6 +337,8 @@ export function villaDevices(input: VillaDeviceInput): VillaDevices {
     unavailable: ids.filter((id) => isOffline(input.entities[id])),
     has: (id) => set.has(id),
     deviceOf: (id) => deviceOf(folding, id),
+    deviceOfRecord: recordDeviceOf(folding, (id) => id in input.entities),
+    isCritical: ((crit) => (id: string) => crit.has(id))(criticalDevices(input.critical, folding)),
   };
 }
 
@@ -347,6 +355,30 @@ export function villaDevices(input: VillaDeviceInput): VillaDevices {
  *  device opens. Itself when it is its own device. */
 export function deviceOf(folding: ReadonlyMap<string, string>, id: string): string {
   return folding.get(id) ?? id;
+}
+
+/** The devices that are critical: every critical entity, and the entity standing for its device — the rule may name
+ *  a lock's battery sensor, the model the lock. The Overview's red and the Recap's both read this. */
+export function criticalDevices(critical: ReadonlySet<string> | undefined, folding: ReadonlyMap<string, string>): ReadonlySet<string> {
+  return new Set([...(critical ?? [])].flatMap((e) => [e, deviceOf(folding, e)]));
+}
+
+/** The entity a fault or ticket names: its entity — or, for a record naming several at once ("sensor.a,sensor.b", a
+ *  rule watching three phases), the first of them the villa's system has (`has`), else the first. A list read as one
+ *  id was no device at all: its card was titled "… Phase A Voltage,sensor" and filed under "Other" (owner, 2026-10-17).
+ *
+ *  ⚠️ ONE ANSWER FOR EVERY SCREEN (architecture review "One answer per question" #1, 2026-10-19): the Overview read the
+ *  list, the Tickets tab and every count looked the raw list up as one id — the same fault on two different cards. */
+export function recordEntity(id: string | undefined, has: (entityId: string) => boolean): string | undefined {
+  if (!id || !id.includes(",")) return id;
+  const ids = id.split(",").map((x) => x.trim()).filter(Boolean);
+  return ids.find(has) ?? ids[0];
+}
+
+/** The device a record's card is: its entity (recordEntity), folded (deviceOf). What the Overview, the Tickets tab and
+ *  every count "per device" file a record under. */
+export function recordDeviceOf(folding: ReadonlyMap<string, string>, has: (entityId: string) => boolean) {
+  return (field: string): string => deviceOf(folding, recordEntity(field, has) ?? field);
 }
 
 const READING_DOMAINS = new Set(["sensor", "binary_sensor"]);

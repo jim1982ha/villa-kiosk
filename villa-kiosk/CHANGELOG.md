@@ -1,3 +1,24 @@
+## 2.496.418
+
+### Added
+- Cockpit › Overview: hovering a card's "Next check" shows the date and time of that check — "20/10/2026 02:00" for
+  the nightly check, the VESTA Agent's next look for an alert (written as the Agent's Telegram messages write a time).
+
+## 2.496.417
+
+### Fixed
+- A fault that names several sensors at once (a rule watching three phases, say) now sits on its device's card in the
+  Tickets tab and in every count, as it already did on the Overview — one fault, one card, wherever you look. With
+  its device offline, it now joins the device's "Unavailable" line.
+
+### Changed
+- Recap: "All devices reporting", "Air conditioning reachable" and "Cameras online" turn red only when a **critical**
+  device is not answering — the top bar's own rule — and amber for any other, however many. "Detected faults" is
+  amber however many are open (a fault is a warning). Until now these went red past two of anything, and stayed amber
+  under a red top bar.
+- Every tinted card of the Facility screens (a late task, a Recap check, the spending cap) is drawn by one shared
+  style, so amber and red look the same on all of them.
+
 ## 2.496.416
 
 ### Changed

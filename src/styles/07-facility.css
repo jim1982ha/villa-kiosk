@@ -53,15 +53,6 @@
 }
 /* its text right under the room (owner, 2026-10-15: "don't skip a line"): 4 px between head and text, not the row's 12 */
 .fm-record-card .fm-record { border: none; background: none; padding: 0; border-radius: 0; row-gap: 4px; }
-/* its tint (a task overdue or due soon): the frame's, as the row's was */
-.fm-record-card.state-overdue, .fm-record-card.state-never {
-  background: color-mix(in srgb, var(--status-danger) 7%, var(--bg-card));
-  border-color: color-mix(in srgb, var(--status-danger) 28%, var(--hairline));
-}
-.fm-record-card.state-due-soon {
-  background: color-mix(in srgb, var(--status-warning) 6%, var(--bg-card));
-  border-color: color-mix(in srgb, var(--status-warning) 25%, var(--hairline));
-}
 /* what stands before its title (an issue's source icons), the line under the title (its room); its text then starts
    under the title, not under the icons */
 .fm-record-lead { flex: 0 0 18px; display: inline-flex; justify-content: center; margin-top: 2px; }
@@ -152,14 +143,6 @@
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
   padding: 12px 14px; border-radius: 12px;
   background: var(--bg-card); border: 1px solid var(--hairline);
-}
-.fm-row.state-overdue, .fm-row.state-never {
-  background: color-mix(in srgb, var(--status-danger) 7%, var(--bg-card));
-  border-color: color-mix(in srgb, var(--status-danger) 28%, var(--hairline));
-}
-.fm-row.state-due-soon {
-  background: color-mix(in srgb, var(--status-warning) 6%, var(--bg-card));
-  border-color: color-mix(in srgb, var(--status-warning) 25%, var(--hairline));
 }
 .fm-row-main { flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .fm-row-title { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
@@ -417,16 +400,8 @@
 .fm-headline-toggle > svg { flex: 0 0 auto; color: var(--text-secondary); }
 .fm-headline-text { display: flex; flex-direction: column; gap: 2px; }
 .fm-headline strong { font-size: var(--text-lg); }
-.fm-headline.warn {
-  background: color-mix(in srgb, var(--status-warning) 6%, var(--bg-card));
-  border-color: color-mix(in srgb, var(--status-warning) 25%, var(--hairline));
-}
-.fm-headline.warn .fm-headline-icon { color: var(--status-warning); }
-.fm-headline.fail {
-  background: color-mix(in srgb, var(--status-danger) 7%, var(--bg-card));
-  border-color: color-mix(in srgb, var(--status-danger) 28%, var(--hairline));
-}
-.fm-headline.fail .fm-headline-icon { color: var(--status-danger); }
+/* its icon in its tone's colour (.tone-*, 08-shared.css) */
+:is(.tone-warn, .tone-danger) .fm-headline-icon { color: var(--tone); }
 
 /* Chips that jump to a device — interactive, so they look interactive. */
 .fm-chiprow { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
@@ -498,18 +473,9 @@
   padding: 14px 16px; border-radius: 12px;
   background: var(--bg-card); border: 1px solid var(--hairline);
 }
-.fm-cap.approaching {
-  background: color-mix(in srgb, var(--status-warning) 6%, var(--bg-card));
-  border-color: color-mix(in srgb, var(--status-warning) 25%, var(--hairline));
-}
-.fm-cap.exceeded {
-  background: color-mix(in srgb, var(--status-danger) 7%, var(--bg-card));
-  border-color: color-mix(in srgb, var(--status-danger) 28%, var(--hairline));
-}
 .fm-cap-bar { height: 8px; border-radius: 999px; background: var(--bg-input); overflow: hidden; }
 .fm-cap-bar > span { display: block; height: 100%; background: var(--status-on); }
-.fm-cap.approaching .fm-cap-bar > span { background: var(--status-warning); }
-.fm-cap.exceeded .fm-cap-bar > span { background: var(--status-danger); }
+:is(.tone-warn, .tone-danger) .fm-cap-bar > span { background: var(--tone); }
 .fm-cap-note { margin: 0; font-size: var(--text-sm); color: var(--text-secondary); }
 
 /* Evidence thumbnails */
