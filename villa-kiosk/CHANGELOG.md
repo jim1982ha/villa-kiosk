@@ -1,3 +1,21 @@
+## 2.496.411
+
+### Fixed
+- Cockpit › Overview: every line of an issue's card starts at the same place. A line with its own icon (a second
+  alert about the same door) has its icon in the card's icon column, under the card's own, instead of pushing its
+  text to the right.
+- Charts: in an energy bar's tooltip, "Total" lines up with the devices listed under it.
+
+## 2.496.410
+
+### Changed
+- Cockpit: a device on your "critical devices offline" rule's list that goes offline is red; any other offline device
+  is amber. The Cockpit's warning turns red only for an alarm or a critical device offline. The list is the one in
+  that rule: change it there and the Cockpit follows within 5 minutes.
+- Cockpit: a sensor that simply has no value to give (a wind chill on a warm day, a light switch's slide sensor
+  between gestures) is no longer listed as offline. A device is offline when the villa's system has lost contact with
+  it, as the VESTA Agent already counts it.
+
 ## 2.496.409
 
 ### Changed

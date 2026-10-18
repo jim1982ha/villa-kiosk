@@ -329,8 +329,9 @@ function CockpitAttentionSub({ group, item }: { group: AttentionGroup; item: Att
   const latest = item.latest ?? item.fault?.latest;
   return (
     <li className="cockpit-attention-sub">
-      <div className="cockpit-attention-sub-line">
-        {icons && <SourceIcons {...icons} size={14} />}
+      <div className="cockpit-attention-sub-line fm-record-gutter">
+        {/* in the card's icon column (RecordCard's gutter), not before the text: every line's text lines up */}
+        {icons && <span className="fm-record-gutter-icon"><SourceIcons {...icons} size={14} /></span>}
         <span className="cockpit-attention-sub-text">
           {attentionLineIn(group, item)}
           {latest && <span className="cockpit-attention-latest">{latest.note} · {localStamp(latest.at)}</span>}

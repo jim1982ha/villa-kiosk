@@ -1022,6 +1022,23 @@ with tempfile.TemporaryDirectory() as d:
     finally:
         proxy._data = _saved_data
 
+# ── the villa's critical devices: the rule's list, read by its blueprint (owner, 2026-10-18) ──
+_rule = proxy.AGENT_CONTRACT_TABLE.get("criticalDevices") or {}
+ck("the agreement names the critical devices' blueprint and input", bool(_rule.get("blueprint") and _rule.get("input")))
+_bp = _rule.get("blueprint", "x")
+_cfgs = [
+    ("automation.example_watch", {"use_blueprint": {"path": f"{_bp}.yaml", "input": {_rule.get("input"): ["lock.example_door", "sensor.example_meter"]}}}),
+    ("automation.example_watch_two", {"use_blueprint": {"path": f"vesta/{_bp}.yaml", "input": {_rule.get("input"): "switch.example_pump"}}}),
+    ("automation.example_other", {"use_blueprint": {"path": f"{_bp}_extra.yaml", "input": {_rule.get("input"): ["light.example_lamp"]}}}),
+    ("automation.example_plain", {"triggers": []}),
+]
+_ents, _used = proxy._critical_from_configs(_cfgs, _rule)
+ck("every automation of that blueprint counts, one id or a list, in a sub-folder too",
+   _ents == ["lock.example_door", "sensor.example_meter", "switch.example_pump"])
+ck("  ...and only those (another blueprint whose name starts the same is not it)",
+   _used == ["automation.example_watch", "automation.example_watch_two"])
+ck("  ...with no agreement, nothing is critical", proxy._critical_from_configs(_cfgs, {}) == ([], []))
+
 print()
 print("✅ the proxy's pure rules hold" if FAIL == 0
       else "❌ A PROXY RULE IS BROKEN")

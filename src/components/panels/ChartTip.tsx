@@ -56,13 +56,26 @@ export default function ChartTip({ x, y, rows, stamp }: {
       {createPortal(
         <div ref={tip} className="spark-tip chart-tip"
           style={{ position: "fixed", left: at?.x ?? 0, top: at?.y ?? 0, visibility: at ? "visible" : "hidden" }}>
-          {rows.map((r) => r.event
-            ? <span key={r.key} className="spark-tip-event">{r.marker}{r.text}</span>
-            : <strong key={r.key}>{r.marker}{r.text}</strong>)}
+          <TipRows rows={rows} />
           {stamp && <span className="spark-tip-time">{stamp}</span>}
         </div>,
         document.body,
       )}
+    </>
+  );
+}
+
+/** The rows, drawn. A bold row with no marker among bold rows that have one (an energy bar's "Total" over its
+ *  devices) keeps an empty marker's place, so every row's text starts at the same place (owner, 2026-10-18: lines of
+ *  one list line up, with or without an icon). Event rows (a timeline's states under their time range) are a list of
+ *  their own: their range line is the heading, as the stamp is under the rows. Pure: a check draws it. */
+export function TipRows({ rows }: { rows: ChartTipRow[] }) {
+  const marked = rows.some((r) => !r.event && r.marker);
+  return (
+    <>
+      {rows.map((r) => r.event
+        ? <span key={r.key} className="spark-tip-event">{r.marker}{r.text}</span>
+        : <strong key={r.key}>{r.marker ?? (marked ? <i className="key" aria-hidden="true" /> : null)}{r.text}</strong>)}
     </>
   );
 }

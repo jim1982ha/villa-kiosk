@@ -29,6 +29,18 @@ export function isUnavailable(entity: HassEntity | undefined): boolean {
   return entity == null || UNKNOWN_STATES.has(entity.state);
 }
 
+/** A device the villa's system has LOST CONTACT with: "unavailable", or an entity it does not have at all — never
+ *  "unknown", a sensor with no value to give while its device reports (a wind chill on a warm day, a switch's gesture
+ *  sensor between gestures). What every "is this device offline" list asks; isUnavailable stays the question "can a
+ *  value be shown".
+ *
+ *  ⚠️ THE COCKPIT AND THE AGENT DISAGREED (owner, 2026-10-18 — architecture review, offline devices #4): the Cockpit
+ *  listed every "unknown" device as Unavailable while the VESTA Agent, since 2026-10-04, calls only "unavailable"
+ *  lost. One meaning now, the Agent's. */
+export function isOffline(entity: HassEntity | undefined): boolean {
+  return entity == null || entity.state === "unavailable";
+}
+
 /** What every surface calls a device whose entity Home Assistant does not have at all — a 3D object named after an
  *  entity that was renamed or removed (owner, 2026-10-14: the model is the ground truth, and the Kiosk says so
  *  everywhere: Needs attention, the device's window, Advanced Settings). */

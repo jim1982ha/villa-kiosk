@@ -67,6 +67,12 @@
 .fm-record-lead { flex: 0 0 18px; display: inline-flex; justify-content: center; margin-top: 2px; }
 .fm-record-subtitle { flex-basis: 100%; font-size: var(--text-2xs); }
 .fm-record-head:has(> .fm-record-lead) + .fm-record-body { padding-left: 30px; }
+/* a line's own icon hangs in that column, under the card's, so every line's text starts at the same place, with or
+   without an icon (owner, 2026-10-18: "#55" sat further right than "#41" above it) */
+.fm-record-body .fm-record-gutter { position: relative; }
+.fm-record-body .fm-record-gutter > .fm-record-gutter-icon {
+  position: absolute; left: -30px; top: 1px; width: 18px; display: flex; justify-content: center;
+}
 @media (hover: hover) {
   /* a card that opens lights up — never while the pointer is on its buttons, which light up themselves (owner,
      2026-10-10: "I don't see the close button highlighted, rather the whole card") */

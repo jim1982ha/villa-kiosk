@@ -156,7 +156,7 @@
    a maintenance item, and amber is Facility Manager's established "due soon"
    tier (.fm-badge.due-soon), not a claim about connectivity. */
 .cockpit-attention-unavailable { color: var(--status-warning); }
-.cockpit-attention-fault, .cockpit-attention-alarm { color: var(--status-danger); }
+.cockpit-attention-fault, .cockpit-attention-alarm, .cockpit-attention-critical { color: var(--status-danger); }
 .cockpit-attention-schedule { color: var(--status-warning); }
 /* An issue's problems, one or several (config/attention.groupAttention): one line each, inside the card's text. */
 .cockpit-attention-subs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }

@@ -200,7 +200,7 @@ ck("every Cockpit count in the top bar and the phone menu is the number of ROWS"
 // 2.496.268: grouped ONCE, per profile — the villa model's role-blind
 // grouping had no reader and ran on every state push anyway.
 ck("the villa model hands buildAttentionItems the device fold, and leaves the grouping to the profile's view",
-   /selectableIds, folding \}\);/.test(vm) && !/groupAttention|villaHealthFrom/.test(vm)
+   /selectableIds, folding,\s*critical \}\);/.test(vm)   // and the villa's critical devices (2.496.410) && !/groupAttention|villaHealthFrom/.test(vm)
    && /return attentionFor\(attention, \(id\) => sees\.has\(id\)\);/.test(src("components/cockpit/useVillaAttention.ts")));
 // HOW a card is drawn (its buttons inside, the click its own, the source icons) is checked on the drawn card:
 // tests/oracles/cockpit_cards.mjs (architecture review, 2026-10-15). Here: the WIRING a drawing cannot see.

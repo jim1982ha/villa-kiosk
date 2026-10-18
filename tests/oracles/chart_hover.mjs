@@ -48,4 +48,19 @@ for (const f of ["LineChart.tsx", "BarChart.tsx", "StateTimeline.tsx"]) {
 }
 ck("  LineChart reads it as a time in the geometry", /const hover = frac !== null \? g\.hover\(g\.tAt\(frac \* W\)\) : null;/.test(read("LineChart.tsx")));
 
+// owner, 2026-10-18: lines of one list start their text at the same place, with or without an icon — an energy bar's
+// "Total" (no colour key) sat left of its devices (one each).
+{
+  const { h, draw } = await import("../consistency/screen.mjs");
+  const { TipRows } = await import("@/components/panels/ChartTip");
+  const { barTipRows } = await import("@/utils/barChart");
+  const bucket = { t: 0, segs: [{ key: "a", label: "Pump", v: 2, cls: "c1" }, { key: "b", label: "Fridge", v: 1, cls: "c2" }] };
+  const rows = barTipRows(bucket, (v) => `${v} kWh`).map((r) => ({ key: r.key, text: r.text, marker: r.cls ? h("i", { className: `key ${r.cls}` }) : undefined }));
+  const lines = draw(h(TipRows, { rows })).split("<strong>").slice(1);
+  ck("  a tooltip's rows: a row with no key keeps a key's place when the others have one (Total over its devices)",
+     lines.length === 3 && /^Total/.test(lines[0].replace(/<i class="key" aria-hidden="true"><\/i>/, "")) && lines.every((l) => /^<i class="key/.test(l)), lines);
+  const timeline = draw(h(TipRows, { rows: [{ key: "_range", text: "08:00–09:00" }, { key: "s", text: "On", event: true, marker: h("span", null, "●") }] }));
+  ck("  ...a timeline's time range stays its heading: no empty key before it", /^<strong>08:00–09:00<\/strong>/.test(timeline), timeline);
+}
+
 done("✅ one hover: pointer in, tip out");

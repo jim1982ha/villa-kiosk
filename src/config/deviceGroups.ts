@@ -7,7 +7,7 @@
 import type { AppConfig, DeviceGroup } from "./AppConfig";
 import type { EntityMapping } from "@/types/scene.types";
 import type { HassEntity } from "@/types/ha.types";
-import { isUnavailable } from "@/utils/stateColors";
+import { isOffline } from "@/utils/stateColors";
 import { domainOf } from "@/utils/entityDomain";
 
 /** Every entity_id folded into some group as a (non-primary) member — these
@@ -306,7 +306,8 @@ export function villaDevices(input: VillaDeviceInput): VillaDevices {
     // (hidden, config debris, dismissed, group folding) is the list above's
     // job, so the two cannot drift apart. They did once: the fault picker had
     // its own, laxer idea of what counted as a device.
-    unavailable: ids.filter((id) => isUnavailable(input.entities[id])),
+    // lost contact (isOffline), never "unknown": a sensor with no value to give is not offline (2026-10-18)
+    unavailable: ids.filter((id) => isOffline(input.entities[id])),
     has: (id) => set.has(id),
     deviceOf: (id) => deviceOf(folding, id),
   };

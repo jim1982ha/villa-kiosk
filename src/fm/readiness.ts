@@ -11,7 +11,7 @@
 // performance clauses exist to protect, whatever they happen to say.
 
 import type { HassEntity } from "@/types/ha.types";
-import { isUnavailable } from "@/utils/stateColors";
+import { isOffline } from "@/utils/stateColors";
 import type { VillaDevices } from "@/config/deviceGroups";
 import { isTicketOpen, stageOf } from "./fmEngine";
 import { openCounts } from "./deviceWork";
@@ -181,7 +181,8 @@ export function buildReadiness(
   // ── Cameras healthy (security is part of the house rules obligation) ─────
   const cameras = byDomain("camera");
   if (cameras.length) {
-    const down = cameras.filter((c) => isUnavailable(c));
+    // "online" is lost contact or not (isOffline): one meaning with every offline list (2026-10-18)
+    const down = cameras.filter((c) => isOffline(c));
     checks.push({
       id: "cameras",
       label: "Cameras online",
