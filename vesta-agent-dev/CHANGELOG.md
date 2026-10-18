@@ -1,3 +1,12 @@
+## 0.12.251
+
+What you will see on Telegram:
+- Each chat's copy of an alert lists only the steps sent to its own people: the owner's group shows the steps "(to:
+  Owner)" and "(to: Owner & FM)", the facility manager's chat the steps "(to: FM)" and "(to: Owner & FM)". A button
+  pressed and "Cleared …" still show everywhere, and "To:" still names everyone the alert involves.
+- A step sent to the facility manager alone (a reminder, a still-there) no longer re-posts or changes the owner's
+  group copy — and a step to the owner alone leaves the facility manager's copy as it is.
+
 ## 0.12.250
 
 What you will see:
