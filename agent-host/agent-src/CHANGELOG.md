@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.242 (18 October 2026)
+
+Owner, 2026-10-18 (#55): each chat its own steps — reversing part of 2026-10-11 "one incident, one picture".
+Notices.history_lines(incident, chat) lists the steps sent to the chat's roles (and lines to nobody in particular);
+Outcome no longer syncs a copy in a chat none of whose roles the step went to (Notices.concerns), and a synced copy's
+heading is rebuilt for its own chat (Notices.rehead, incident_thread.sync head_for). No People list: every step, as
+before.
+
 ## 0.6.241 (18 October 2026)
 
 Architecture review "One problem, one card" #1 (owner, 2026-10-18): an alert's identity is its rule's permanent

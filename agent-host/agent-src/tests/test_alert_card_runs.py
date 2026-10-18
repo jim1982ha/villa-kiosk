@@ -88,8 +88,11 @@ def test_an_answer_in_the_group_never_widens_to(agent):
     assert agent.tg.toasts, "a press on the rule's own copy, taken over, is the agent's to answer"
     assert "(closed)" in card(agent, GROUP).split("\n")[0], card(agent, GROUP)
     assert card(agent, GROUP).split("\n")[1] == "To: FM", card(agent, GROUP)
-    hist = head_text(agent.notices.heading(GROUP, 1)).split("\n")[2:]
+    # owner, 2026-10-18, #55 "each chat its own steps" (reversing part of 2026-10-11 "one incident, one picture"): the
+    # steps to the FM are listed in the FM's chat, never in the owner's group
+    hist = head_text(agent.notices.heading(FM_CHAT, 1)).split("\n")[2:]
     assert hist and all(ln.endswith(" (to: FM)") for ln in hist), hist
+    assert not any(ln.endswith(" (to: FM)") for ln in head_text(agent.notices.heading(GROUP, 1)).split("\n")[2:])
 
 
 def test_a_p1_names_both_roles_from_its_first_message(agent):
@@ -101,7 +104,8 @@ def test_the_rules_all_clear_and_the_closing_note_are_one_line(agent):
     # point 2: "Update sent 15:40 to Owner" and "Closing note sent 15:40 to Facility Manager" for one end
     rule(agent, "opened", 1, 500)
     rule(agent, "resolved", 1, 501)
-    hist = head_text(agent.notices.heading(GROUP, 1)).split("\n")[2:]
+    # read where these steps went (owner, 2026-10-18, #55 "each chat its own steps"): the FM's chat
+    hist = head_text(agent.notices.heading(FM_CHAT, 1)).split("\n")[2:]
     assert len(hist) == 2 and re.fullmatch(rf"- Alert sent {T} \(to: FM\)", hist[0]), hist
     assert re.fullmatch(rf"- Closing note sent {T} \(to: FM\)", hist[1]), hist
     assert not any("Update sent" in ln for ln in hist)
@@ -116,11 +120,14 @@ def test_a_run_that_came_back_starts_at_a_back_at_line_and_a_reminder_carries_it
     assert back.startswith("#1-P2 (existing)\nTo: FM\n")
     assert re.fullmatch(rf"Back at {T} — Back again: 2 times in 7 days \(to: FM\)",
                         status(back).removeprefix("⚠️ ⚙️ ")), status(back)
-    tick(agent, 20)                                     # the reminder: to the FM; the group's copy edited quietly
-    group = card(agent, GROUP)
+    before = card(agent, GROUP)
+    tick(agent, 20)                                     # the reminder: to the FM alone
+    # owner, 2026-10-18, #55 "each chat its own steps" (reversing part of 2026-10-11 "one incident, one picture"): a
+    # step to the FM leaves the owner's group copy as it was — no edit, no line
+    assert card(agent, GROUP) == before
+    group = card(agent, FM_CHAT)                        # the FM's copy tells it
     # point 1: the bottom line says its own step — never "Reminder: no answer after 15 min" alone under 18:03
     assert re.fullmatch(rf"⚠️ ⚙️ Reminder sent {T} — No answer after 15 min \(to: FM\)", status_lines(group)[-1]), group
-    assert card(agent, FM_CHAT) == group                # one incident, one picture
     lines = status_lines(group)
     # ... and is told once: the history above it stops before it (drawn as it stood before this step)
     assert sum("Reminder sent" in ln for ln in lines) == 1, lines
@@ -131,12 +138,13 @@ def test_a_run_that_came_back_starts_at_a_back_at_line_and_a_reminder_carries_it
     assert lines[1].startswith("- Closing note sent") and lines[3].startswith("⚠️ ⚙️ Reminder sent"), lines
     assert not any("ame back" in ln or "ame-back" in ln or ln.startswith("—") for ln in lines), lines
     assert "Facility Manager" not in group and "facility manager" not in group
-    tick(agent, 50)                                     # the escalation: the reminder joins the history, once
+    fm_before = card(agent, FM_CHAT)
+    tick(agent, 50)                                     # the escalation: to the owner — in the group, not the FM's chat
     esc = card(agent, GROUP)
     lines = status_lines(esc)
-    assert re.fullmatch(rf"- Reminder sent {T} \(to: FM\)", lines[-2]), lines
     assert re.fullmatch(rf"⚠️ ⚙️ Escalation sent {T} — No answer from FM after 45 min \(to: Owner\)", lines[-1]), lines
-    assert sum("Reminder sent" in ln for ln in lines) == 1
+    assert not any("(to: FM)" in ln for ln in lines), lines     # the FM's steps are the FM chat's
+    assert card(agent, FM_CHAT) == fm_before                    # and the owner's step leaves the FM's copy alone
 
 
 def test_the_back_line_counts_the_runs_and_an_older_record_has_none():

@@ -40,6 +40,7 @@ from vesta_shared.result import FAULTS_CHANGED
 
 from . import layout
 from .notice import when
+from vesta_shared.message_format import PRESSED_STAGE
 from .posting import Poster
 from .routing import Origin, Routing
 
@@ -210,8 +211,17 @@ class Outcome:
         # copy kept "(new)" and the first alert — every other copy now shows what was just sent, quietly
         for iid, shown_in in posted.items():
             latest = (self.thread.shown(iid).get(shown_in[-1]) or {})
+            # ⚠️ EACH CHAT ITS OWN STEPS (owner, 2026-10-18, #55): a step to the facility manager alone re-posted the
+            # owner's group copy with it — a chat none of whose roles this step went to keeps its copy as it is
+            stepped = set().union(*[r for (i, _st), r in told.items() if i == iid] or [set()])
+            elsewhere = {c for c, _rec in self.thread.state.incident_chats(iid)
+                         if self.notices and not self.notices.concerns(c, stepped)}
+            # this result's own steps of the incident: its bottom line says them, the history above them never
+            steps_now = sum(1 for (i, st) in noticed if i == iid and st != PRESSED_STAGE)   # a press records none
+            head_for = (lambda c, i=iid, h=layout.of(latest).get("head"), n=steps_now:
+                        self.notices.rehead(i, h, c, n)) if self.notices else None
             if latest.get("parts"):
-                await self.thread.sync(iid, layout.of(latest), skip=set(shown_in), keyboard=(
+                await self.thread.sync(iid, layout.of(latest), skip=set(shown_in) | elsewhere, head_for=head_for, keyboard=(
                     lambda c, i=iid: self.buttons.keyboard(i, c, skill_name)) if skill_name and self.buttons.open(iid) else None)
         # ⚠️ AN ALERT NOBODY ASKED TO ANSWER RECEIVED (architecture review 25): Telegram refused every chat of the people
         # first in line (a person who never pressed Start) — the alert desk hands it on at its next tick, never 45

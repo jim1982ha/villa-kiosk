@@ -80,11 +80,14 @@ def test_the_heading_names_the_incident_first_and_what_was_sent_to_whom(tmp_path
     text = v.tg.sent[-1][1]
     title, to, *rest = text.split("\n")
     assert (title, to) == ("#21 (existing)", "To: Owner & FM")      # every role it went to ("FM": owner, 2026-10-16)
-    history = [ln for ln in text.split("\n\nStatus:\n")[1].split("\n") if ln.startswith("- ")]
+    # owner, 2026-10-18, #55 "each chat its own steps" (reversing part of 2026-10-11 "one incident, one picture"): the
+    # owner's escalation lists none of the FM's steps — its own step, what, when, to whom (owner, 2026-10-16)
+    status_block = text.split("\n\nStatus:\n")[1]
+    assert re.fullmatch(r"⚠️ ⚙️ Escalation sent \d\d/\d\d/\d{4} \d\d:\d\d — x \(to: Owner\)", status_block), text
+    # the FM's chat holds them, a dash per line
+    history = [ln for ln in head_text(v.notices.heading(FM, 21)).split("\n")[2:] if ln.startswith("- ")]
     assert re.fullmatch(r"- Alert sent \d\d/\d\d/\d{4} \d\d:\d\d \(to: FM\)", history[0])
     assert re.fullmatch(r"- Reminder sent \d\d/\d\d/\d{4} \d\d:\d\d \(to: FM\)", history[1]) and len(history) == 2
-    # where it stands, right under its history — its own step first: what, when, to whom (owner, 2026-10-16)
-    assert re.search(rf"{re.escape(history[1])}\n⚠️ ⚙️ Escalation sent \d\d/\d\d/\d{{4}} \d\d:\d\d — x \(to: Owner\)$", text), text
     assert not any(w in text for w in ("For:", "First time seen", ", to ", "Follow Up", "-------"))
 
 
@@ -226,9 +229,10 @@ def test_a_copy_turning_closed_turns_green(tmp_path):
     assert v.tg.edits[-1][2].rsplit("\n", 1)[1].startswith("✅ Cleared on ")
 
 
-def test_one_incident_one_picture_in_every_chat(tmp_path):
-    # owner, 2026-10-11: "this should be exactly the same, since we are speaking about the same incident" — a reminder
-    # sent to the facility managers only left the group's copy "(new)" with the first alert; "To:" named one reader
+def test_one_incident_one_picture_in_every_chat_of_the_same_people(tmp_path):
+    # owner, 2026-10-11: "this should be exactly the same, since we are speaking about the same incident" — kept for
+    # every chat a step went to. REVERSED for the others on 2026-10-18 (#55, "each chat its own steps"): a reminder to
+    # the facility managers leaves the owner's group copy as it was — no edit, no FM line
     from vesta_shared import result as R
     GROUP, JM2 = -100123, 333
     v = make_agent(tmp_path, {"people": [{"telegram_id": GROUP, "name": "VillaGroup", "role": "owner"},
@@ -240,15 +244,17 @@ def test_one_incident_one_picture_in_every_chat(tmp_path):
     run(v.outcome.carry_out({"send": [R.message("fm", ALERT, incident=5, buttons=True, stage="reminder",
                                                 status="No answer after 15 min")]}, "alert-desk"))
     shown = {c: r["text"] for c, r in v.thread.shown(5).items()}
-    assert set(shown) == {GROUP, FM, JM2} and len(set(shown.values())) == 1, shown       # the group's copy too
-    text = shown[GROUP]
-    # every role it went to, never a name (owner, 2026-10-13): the group is the owner's
+    assert set(shown) == {GROUP, FM, JM2} and shown[FM] == shown[JM2], shown     # the two FMs: one picture
+    text = shown[FM]
+    # every role it went to, never a name (owner, 2026-10-13)
     assert text.startswith("#5 (existing)\nTo: Owner & FM\n") and \
         re.search(r"\n⚠️ ⚙️ Reminder sent \d\d/\d\d/\d{4} \d\d:\d\d — No answer after 15 min \(to: FM\)$", text), text
-    # the group was not sent the reminder: its copy was edited quietly, and keeps its buttons
-    assert not [c for c, _, _ in v.tg.sent[3:] if c == GROUP]
+    # the group: neither sent the reminder nor edited — its copy as first sent, its buttons kept
+    first_group = next(t for c, t, _ in v.tg.sent if c == GROUP)
+    assert not [c for c, _, _ in v.tg.sent[3:] if c == GROUP] and shown[GROUP] == first_group
+    assert "Reminder" not in shown[GROUP] and not [e for e in v.tg.edits if e[0] == GROUP]
     group = v.thread.shown(5)[GROUP]
-    assert group["buttons"] and not group["settled"] and group["kb"]["inline_keyboard"]   # edited WITH its buttons
+    assert group["buttons"] and not group["settled"]
 
 
 def test_a_close_reaches_a_copy_without_buttons_too(tmp_path):
@@ -305,3 +311,34 @@ def test_a_heading_is_facts_and_a_heading_stored_as_text_reads_the_same():
     # a title that only LOOKS like a stage is never read as one once it is facts
     odd = layout.head("Pump (closed)", "Owner")
     assert layout.render(layout.parts(head=odd, body="b", status="s")).endswith("\ns")
+
+
+def test_each_chat_lists_only_its_own_steps(tmp_path):
+    # owner, 2026-10-18, #55 "each chat its own steps" (reversing part of 2026-10-11 "one incident, one picture"): the
+    # owner's group listed the FM's alert and reminder, the FM's chat the still-theres sent to the owner alone
+    from vesta_shared import result as R
+    GROUP = -100123
+    v = make_agent(tmp_path, {"people": [{"telegram_id": GROUP, "name": "VillaGroup", "role": "owner"},
+                                         {"telegram_id": FM, "name": "Wayan", "role": "fm"}]})
+    run = asyncio.run
+
+    def send(*msgs):
+        run(v.outcome.carry_out({"send": [R.message(to, ALERT, incident=9, buttons=True, stage=st, status=st)
+                                          for to, st in msgs]}, "alert-desk"))
+    send(("fm", "new"))
+    send(("fm", "reminder"))
+    send(("owner", "escalated"))
+    send(("owner", "still"), ("fm", "still"))
+
+    def steps(chat):
+        return [ln.split(" ")[1] + ln[ln.rindex(" (to:"):] for ln in head_text(v.notices.heading(chat, 9)).split("\n")[2:]]
+    assert steps(GROUP) == ["Escalation (to: Owner)", "Still-there (to: Owner & FM)"], steps(GROUP)
+    assert steps(FM) == ["Alert (to: FM)", "Reminder (to: FM)", "Still-there (to: Owner & FM)"], steps(FM)
+    # "To:" still names everyone the alert involves, in both
+    assert all(v.thread.shown(9)[c]["text"].split("\n")[1] == "To: Owner & FM" for c in (GROUP, FM))
+    # a step to the FM alone: the group's copy as it was — no edit, no new message
+    before, edits, sent = v.thread.shown(9)[GROUP]["text"], len(v.tg.edits), len(v.tg.sent)
+    send(("fm", "reminder"))
+    assert v.thread.shown(9)[GROUP]["text"] == before
+    assert not [e for e in v.tg.edits[edits:] if e[0] == GROUP] and not [s for s in v.tg.sent[sent:] if s[0] == GROUP]
+    assert "Reminder" in v.thread.shown(9)[FM]["text"].rsplit("\n", 1)[1]

@@ -140,15 +140,55 @@ class Notices:
         except Exception:  # noqa: BLE001 — the heading is written without its priority, never not at all
             p = None
         word = self.word(int(incident), stage, bool(history))
+        return layout.head(f"{incident_tag(incident)}{f'-{p}' if p else ''}", who, self.history_lines(int(incident), chat), word)
+
+    def history_lines(self, incident: int, chat: int = 0, latest_excluded: int = 0) -> list[str]:
+        """Incident `incident`'s "Status:" lines as chat `chat` sees them: the steps sent to one of its roles, and what
+        was sent to nobody in particular (a button pressed, a note) — every step for a chat that has no role (0: any).
+
+        ⚠️ EACH CHAT ITS OWN STEPS (owner, 2026-10-18, #55): the owner's group listed "Reminder sent … (to: FM)" and a
+        still-there to the FM, and the facility manager's chat the still-theres sent to the owner alone. "To:" still
+        names everyone the alert involves; the lines are the ones sent to this chat's people."""
+        mine = self._chat_roles(chat)
         lines = []
-        for h in history:
+        history = self.state.incident_history(incident)
+        # `latest_excluded`: the last steps recorded, left out — a copy refreshed with the notice just sent, whose own
+        # bottom line already says it (Outcome's refresh of the other chats)
+        for h in history[:len(history) - latest_excluded] if latest_excluded else history:
+            roles = self._roles(h) if h.get("chats") or h.get("to") else set()
+            if mine and roles and not roles & mine:
+                continue
             # ⚠️ ONE RUN, THEN THE NEXT (owner, 2026-10-16, #43): a second run starts at its "- Back at …" line, which
             # says how many times it came (message_format.STEPS: one line, the shape of every other step)
             lines.append(f"- … {h['dropped']} earlier notice{'s' if h['dropped'] > 1 else ''}" if h.get("dropped") else
                          f"- {h['note']}" if h.get("note") else
                          f"- {self._pressed(h)} {when(datetime.fromisoformat(h['at']), self.tz)}" if h.get("stage") == PRESSED_STAGE else
                          f"- {self.step(h.get('stage'), self._roles(h), datetime.fromisoformat(h['at']), h.get('run'))}")
-        return layout.head(f"{incident_tag(incident)}{f'-{p}' if p else ''}", who, lines, word)
+        return lines
+
+    def rehead(self, incident: int, head, chat: int, latest_excluded: int = 0):
+        """Another chat's copy of the notice just sent, headed for chat `chat`: its title and "To:" kept, its "Status:"
+        lines this chat's own (history_lines), as they stood before the notice's own steps (`latest_excluded`)."""
+        h = layout.head_of(head)
+        if not h or not str(incident).isdigit() or not h.get("word"):
+            return head
+        return self.retitle(incident, {**h, "history": self.history_lines(int(incident), chat, latest_excluded)}, chat)
+
+    def concerns(self, chat: int, roles) -> bool:
+        """Is a step sent to `roles` one of chat `chat`'s — a role of the chat's among them (a chat with no role, or a
+        step to nobody in particular: yes)? A step that is not leaves the chat's copy as it is (each chat its own steps)."""
+        mine, roles = self._chat_roles(chat), set(roles or ())
+        return not mine or not roles or bool(mine & roles)
+
+    def _chat_roles(self, chat: int) -> set[str]:
+        """The roles chat `chat` is listed with (roles_for); none for no chat, or when the People list cannot be read —
+        then every step shows there, as before each chat had its own."""
+        if not chat:
+            return set()
+        try:
+            return self.roles_for(chat)
+        except Exception:  # noqa: BLE001
+            return set()
 
     def step(self, stage: str | None, roles, at: datetime, run: int | None = None) -> str:
         """A step as a card's "Status:" says it — what was sent, when, to whom: "Reminder sent 16/10/2026 18:20 to FM",
