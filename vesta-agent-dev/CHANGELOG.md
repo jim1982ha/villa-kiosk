@@ -1,3 +1,14 @@
+## 0.12.248
+
+What you will see:
+- An alert whose critical automation no longer exists (its entity ID was changed, or it was deleted) closes by itself
+  within about 10 minutes, with its Cockpit fault: "Closed …: the automation that sent it no longer exists (its entity
+  ID changed, or it was deleted). Its next alert comes with a new number." This closes #41, left behind when the
+  laundry automation's entity ID changed this morning.
+- Rules page, under "Acting on the villa", in place of the earlier reminder: "Install VESTA Agent updates as soon as
+  they're offered: an update to the villa's critical automations may need the matching Agent. Changing a critical
+  automation's entity ID closes its open alert; its title can change freely."
+
 ## 0.12.247
 
 What you will see on Telegram:
