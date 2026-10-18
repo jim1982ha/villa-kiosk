@@ -264,3 +264,50 @@ def test_an_open_alert_about_something_else_leaves_the_offline_fault(tmp_path):
     states = {"lock.example_door": {"state": "unavailable", "attributes": {}, "last_changed": NIGHT.isoformat()}}
     out = _run_engine(tmp_path, states, NIGHT + timedelta(minutes=12))
     assert [a["entity_id"] for a in out["actions"]] == ["lock.example_door"] and len(out["send"]) == 1
+
+
+# ------------------------------------------------------------------ one physical device, whatever is listed under it
+def _meter_pack(tmp_path) -> str:
+    """A three-phase meter as Home Assistant lists it: the meter, and one device per phase hanging under it ("via")."""
+    rows = [{"entity_id": f"sensor.example_meter_{p}_power", "name": f"Meter {p} power", "area": "Hall", "family": "power",
+             "asset": f"meter_{p}", "device_id": f"dev_{p}", "platform": "examplemeter"} for p in ("total", "a", "b", "c")]
+    path = tmp_path / "pack.json"
+    path.write_text(json.dumps({
+        "villa": "Example Villa", "time_zone": "UTC", "generated_at": "x", "ha_version": None, "areas": [], "people": [],
+        "channels": {}, "unknown_area": [], "unclassified": [], "retention": {"raw_history_days": 10},
+        "families": {"power": rows},
+        "assets": {r["asset"]: {"slug": r["asset"], "name": r["name"], "entities": {"power": r["entity_id"]},
+                                "critical": False} for r in rows},
+        "devices": {"dev_total": {"name": "Example Meter", "manufacturer": "", "model": "", "via": ""},
+                    **{f"dev_{p}": {"name": f"Example Meter Phase {p.upper()}", "manufacturer": "", "model": "",
+                                    "via": "dev_total"} for p in ("a", "b", "c")}},
+        "entity_devices": {r["entity_id"]: r["device_id"] for r in rows}}))
+    return str(path)
+
+
+def _run_meter(tmp_path, now: datetime):
+    fx = tmp_path / "fx"
+    fx.mkdir(exist_ok=True)
+    (fx / "states.json").write_text(json.dumps({"states": {
+        f"sensor.example_meter_{p}_power": {"state": "unavailable", "attributes": {}, "last_changed": NIGHT.isoformat()}
+        for p in ("total", "a", "b", "c")}}))
+    r = subprocess.run([sys.executable, os.path.join(SKILL, "scripts", "recheck.py"), "--store", str(tmp_path / "s.sqlite"),
+                        "--fixture-dir", str(fx), "--now", now.isoformat()], capture_output=True, text=True, timeout=60,
+                       env={**os.environ, "PYTHONPATH": PYTHONPATH, "VESTA_PACK": _meter_pack(tmp_path)})
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout)
+
+
+def test_a_silent_meter_and_its_phases_are_one_device_never_an_integration_down(tmp_path):
+    # owner, 2026-10-18: the villa's three-phase meter went silent — the meter and its three phase devices, "4 devices
+    # offline": "shelly integration (3 devices)", on a card of its own. One device, named as the meter, whatever make
+    (fault,) = _run_meter(tmp_path, NIGHT + timedelta(minutes=12))["actions"]
+    assert "integration" not in fault["summary"] and "Example Meter has been offline" in fault["summary"], fault
+
+
+def test_an_alert_on_the_meter_covers_its_phases_too(tmp_path):
+    # the villa's own rule alerted on the meter's total power (#56): its phases are the same device — no second fault
+    Store(str(tmp_path / "s.sqlite")).new_incident(
+        "watch|sensor.example_meter_total_power", "automation.example_watchdog", "sensor.example_meter_total_power", "P2",
+        {"bad_states": ["unavailable"], "entities": ["sensor.example_meter_total_power"]})
+    assert _run_meter(tmp_path, NIGHT + timedelta(minutes=12))["actions"] == []

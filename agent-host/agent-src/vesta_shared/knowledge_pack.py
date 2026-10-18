@@ -168,7 +168,8 @@ class KnowledgePack:
     retention: dict
     # Each area's other names in Home Assistant ("Cuisine" for Kitchen): a person may say either.
     area_aliases: dict[str, list[str]] = field(default_factory=dict)
-    # Home Assistant's devices, by device id: {"name", "manufacturer", "model"} — the name the owner gave it first.
+    # Home Assistant's devices, by device id: {"name", "manufacturer", "model", "via"} — the name the owner gave it first;
+    # "via": the device it hangs under (a meter's phase, a relay's channel), "" for a device of its own (unit_of).
     # Empty in a pack built before 0.6.108 (then nothing is grouped by device).
     devices: dict[str, dict] = field(default_factory=dict)
     # ⚠️ EVERY ENTITY'S DEVICE, CLASSIFIED OR NOT (2026-10-13): only a family's rows carried their device, so an entity
@@ -192,11 +193,11 @@ class KnowledgePack:
         idx = self.__dict__.get("_critical")
         if idx is None:
             ids = set(self.critical)
-            idx = (ids, {d for d in (self.device_id_of(e) for e in ids) if d})
+            idx = (ids, {d for d in (self.physical_device_of(e) for e in ids) if d})
             self.__dict__["_critical"] = idx
         if not entity_id:
             return False
-        return entity_id in idx[0] or (self.device_id_of(entity_id) or "") in idx[1]
+        return entity_id in idx[0] or (self.physical_device_of(entity_id) or "") in idx[1]
 
     def entities(self, family: str) -> list[dict]:
         return self.families.get(family, [])
@@ -236,16 +237,40 @@ class KnowledgePack:
         what = " ".join(x for x in (d.get("manufacturer"), d.get("model")) if x)
         return f"Unnamed {what}" if what else ""
 
+    def unit_of(self, device_id: str | None) -> str | None:
+        """The physical device `device_id` is part of: the device it hangs under ("via"), up to one of its own;
+        `device_id` itself when it hangs under none, or the pack does not know (a pack built before "via" was kept).
+
+        ⚠️ ONE METER, FOUR DEVICES (owner, 2026-10-18): Home Assistant lists a three-phase meter as the meter and a
+        device per phase under it. Silent, it was "4 devices offline": an integration down, on a card of its own beside
+        the meter's own alert."""
+        seen, cur = set(), device_id
+        while cur and cur not in seen:
+            seen.add(cur)
+            up = (self.devices.get(cur) or {}).get("via")
+            if not up or up not in self.devices:
+                return cur
+            cur = up
+        return cur
+
     def device_id_of(self, entity_id: str | None) -> str | None:
         """The Home Assistant device `entity_id` belongs to (its row's, else entity_devices), None when none."""
         return (self.row(entity_id or "") or {}).get("device_id") or self.entity_devices.get(entity_id or "")
 
+    def physical_device_of(self, entity_id: str | None) -> str | None:
+        """The physical device `entity_id` is on (unit_of its device): what every check groups by, counts and names —
+        offline, silent, keeps dropping, restarted, critical, a report's devices, what an action touches. One rule for
+        every device of every make (owner, 2026-10-18: "all device / sub-device are seen the same way")."""
+        return self.unit_of(self.device_id_of(entity_id))
+
     def entities_of_device(self, device_id: str | None) -> set[str]:
-        """Every entity of that device, classified or not."""
+        """Every entity of that device's physical device (unit_of: the device, and every part listed under it), classified
+        or not."""
         if not device_id:
             return set()
-        return {e for e, d in self.entity_devices.items() if d == device_id} | \
-               {r["entity_id"] for r in self.rows() if r.get("device_id") == device_id}
+        unit = self.unit_of(device_id)                     # the whole physical device, with every part under it
+        return {e for e, d in self.entity_devices.items() if self.unit_of(d) == unit} | \
+               {r["entity_id"] for r in self.rows() if r.get("device_id") and self.unit_of(r["device_id"]) == unit}
 
     def device_of(self, entity_id: str) -> tuple[str, str | None]:
         """What `entity_id` belongs to, as a report names it: (key, name). The key is its Home Assistant device when
@@ -258,7 +283,7 @@ class KnowledgePack:
         page shows of a device comes from here (architecture review 13): the clues, the cards and the trends named the
         pack's asset, the counter resets and the mutes the entity."""
         r = self.row(entity_id) or {}
-        dev = self.device_id_of(entity_id)
+        dev = self.physical_device_of(entity_id)
         label = self.device_label(dev)
         if label is not None:
             return f"device:{dev}", (label or None)
@@ -442,7 +467,8 @@ def build_pack(registry: dict, helpers: list[dict], states: dict | None = None,
         area_aliases={a.get("name"): [x for x in (a.get("aliases") or []) if x]
                       for a in registry.get("areas", []) if a.get("name") and a.get("aliases")},
         devices={d["device_id"]: {"name": d.get("name_by_user") or d.get("name") or "",
-                                  "manufacturer": d.get("manufacturer") or "", "model": d.get("model") or ""}
+                                  "manufacturer": d.get("manufacturer") or "", "model": d.get("model") or "",
+                                  "via": d.get("via_device_id") or ""}
                  for d in registry.get("devices", []) if d.get("device_id")},
         entity_devices={e["entity_id"]: e["device_id"] for e in live if e.get("device_id")},
         rules=PACK_RULES,

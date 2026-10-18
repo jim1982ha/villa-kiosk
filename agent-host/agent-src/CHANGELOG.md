@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.240 (18 October 2026)
+
+Owner, 2026-10-18 (#56, the silent Shelly Pro 3EM listed as 4 devices: "shelly integration (3 devices) offline" on a
+second card): the knowledge pack keeps each device's "via" (via_device_id); KnowledgePack.unit_of /
+physical_device_of — the physical device an entity is on — is what offline, silent, reconnect, critical, device_of
+(report names) and entities_of_device (an action's reach, restarted) group by. Universal, from the registry: no make
+named.
+
 ## 0.6.239 (18 October 2026)
 
 Owner, 2026-10-18 (#41 and #55, one laundry door: the rule's entity ID changed while #41 was open, and the Cockpit's

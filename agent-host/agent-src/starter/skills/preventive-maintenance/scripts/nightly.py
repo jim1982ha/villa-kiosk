@@ -194,7 +194,7 @@ def run(args) -> dict:
             share, hours = F.reporting_share(q_stats.get(row["entity_id"], []), int(since.timestamp() * 1000), hist_hours)
             if share is None or hours < params.behaviour("silence_min_history_hours") or share < share_min:
                 continue                  # reports on change only, or too little history to say: not a fault
-            key = F.device_key(row, row["entity_id"])
+            key = F.device_key({**row, "device_id": pack.physical_device_of(row["entity_id"])}, row["entity_id"])
             g = silent_groups.setdefault(key, {"asset": asset, "entity_id": row["entity_id"], "since": since, "names": []})
             g["names"].append(row["name"])
             g["since"] = min(g["since"], since)
@@ -232,7 +232,7 @@ def run(args) -> dict:
         slug = row.get("asset") or next((s for s, a in pack.assets.items() if eid in a["entities"].values()), None)
         # ⚠️ ITS DEVICE, CLASSIFIED OR NOT (2026-10-13): a relay's uptime sensor is in no family, had no device, and its
         # drops were a second fault for the same relay
-        key = F.device_key({**row, "device_id": pack.device_id_of(eid), "asset": row.get("asset") or slug}, eid)
+        key = F.device_key({**row, "device_id": pack.physical_device_of(eid), "asset": row.get("asset") or slug}, eid)
         g = by_device.setdefault(key, {"eid": _standing_entity(pack, eid, rows_by_eid), "slug": slug,
                                        "name": row.get("name"), "per_day": {}})
         for d, n in per_day.items():
@@ -285,7 +285,7 @@ def alerted_offline(store, pack) -> set[str]:
             continue
         for e in (p.get("entities") or []) + [inc.get("entity_id")]:
             if e:
-                out.add(pack.device_id_of(e) or e)
+                out.add(pack.physical_device_of(e) or e)            # its whole device: a phase is its meter's
     return out
 
 
@@ -312,7 +312,8 @@ def offline_findings(pack, states: dict, now: datetime, params, alerted: set[str
                     hours = (now - datetime.fromisoformat(st["last_changed"]).astimezone(now.tzinfo)).total_seconds() / 3600
                 except ValueError:
                     hours = None
-            key = F.device_key(row, row["entity_id"])
+            # one physical device, whatever part of it the entity is on (a meter's phase is the meter)
+            key = F.device_key({**row, "device_id": pack.physical_device_of(row["entity_id"])}, row["entity_id"])
             crit = pack.is_critical(row["entity_id"])         # the villa's one list (vesta_shared.critical)
             g = groups.setdefault(key, {"asset": asset, "entity_id": row["entity_id"], "hours": hours,
                                         "state": st.get("state"), "names": [], "critical": crit,
@@ -322,7 +323,8 @@ def offline_findings(pack, states: dict, now: datetime, params, alerted: set[str
                 g["hours"] = hours
     # a device an open alert already follows is that alert's (alerted_offline); its group is left out before the
     # integration is counted, so the others of its integration stay what they are
-    groups = {k: g for k, g in groups.items() if (pack.device_id_of(g["entity_id"]) or g["entity_id"]) not in alerted}
+    groups = {k: g for k, g in groups.items()
+              if (pack.physical_device_of(g["entity_id"]) or g["entity_id"]) not in alerted}
     out = []
     for g in F.integration_down(groups, params.behaviour("integration_down_devices")).values():
         a = dict(g["asset"]); a["critical"] = g["critical"]
@@ -355,7 +357,7 @@ def _device_named(pack, asset: dict, entity_id: str) -> dict:
     Assistant names the device (knowledge_pack.device_label), never one of its entities — "Jet & Jaccuzi Relay
     Restart" was its restart button's name, "Motion1 Occupancy" its motion entity's (2026-10-13). A measurement keeps its
     asset's name: one meter can measure two circuits. Unchanged when Home Assistant names no device."""
-    label = pack.device_label(pack.device_id_of(entity_id))
+    label = pack.device_label(pack.physical_device_of(entity_id))   # the meter, not one of its phases
     return {**asset, "name": label} if label else asset
 
 
