@@ -10,9 +10,8 @@ import { useState } from "react";
 import Dropdown from "@/components/common/Dropdown";
 import SaveButton from "@/components/common/SaveButton";
 import { Plus, Sparkles, Save, Download } from "lucide-react";
-import { useConfig } from "@/config/ConfigContext";
 import { useFmData } from "@/fm/FmDataContext";
-import { budgetStatus, localStamp, parseAmount } from "@/fm/fmEngine";
+import { budgetStatus, capNotes, localStamp, parseAmount } from "@/fm/fmEngine";
 import { COST_CATEGORY_NAMES } from "@/fm/fmTypes";
 import { useFmTerms } from "@/fm/useFmTerms";
 import { useProfile } from "@/auth/ProfileContext";
@@ -31,8 +30,8 @@ import RecordCard from "./RecordCard";
 import { formatMoney } from "@/utils/money";
 import CostFields from "./CostFields";
 import { useDeviceChoice } from "./useDeviceChoice";
+import { useRecordPlace } from "./useRecordPlace";
 import FormActions from "./FormActions";
-import { deviceRoom } from "@/config/devicePlace";
 import { TONE_OF, toneClass } from "@/fm/tone";
 
 export default function SpendTab(
@@ -44,7 +43,7 @@ export default function SpendTab(
   },
 ) {
   const { data, addCost, updateCost, removeCost } = useFmData();
-  const { resolvedRooms } = useConfig();
+  const place = useRecordPlace();
   const { role } = useProfile();
   const terms = useFmTerms();
   const money = (n: number) => formatMoney(n, terms.currency);
@@ -135,18 +134,8 @@ export default function SpendTab(
             <span style={{ width: `${Math.min(100, b.fraction * 100)}%` }} />
           </div>
         )}
-        {b.state === "exceeded" && (
-          <p className="fm-cap-note">
-            Cap reached. Further spend this month belongs to {COST_CATEGORY_NAMES.major}, on
-            whatever terms your own agreement sets for spend beyond it.
-          </p>
-        )}
-        {b.state === "approaching" && (
-          <p className="fm-cap-note">
-            Approaching the cap — decide now whether upcoming work is {COST_CATEGORY_NAMES.minor} or
-            should be recorded as {COST_CATEGORY_NAMES.major}.
-          </p>
-        )}
+        {/* the cap's sentence, ONE per state (fmEngine.capNotes) — the statement's and the cost banner's too */}
+        {capNotes(b).map((note) => <p key={note} className="fm-cap-note">{note}</p>)}
       </div>
 
 
@@ -189,9 +178,7 @@ export default function SpendTab(
                 const fields = {
                   amountIdr, label: label.trim(), category, photoIds,
                   note: note.trim() || undefined,
-                  entityId: entityId || undefined,
-                  deviceLabel: deviceText.trim() || undefined,
-                  room: entityId ? deviceRoom(resolvedRooms, entityId) : undefined,
+                  ...place(entityId, deviceText),   // the device, its name and room: ONE builder (fm/recordPlace)
                 };
                 // `at` is set once, when the spend happened, and is never
                 // rewritten by a later correction — it is what the monthly

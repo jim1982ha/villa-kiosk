@@ -17,6 +17,7 @@ const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
 const E = (id, state, attributes = {}) => ({ entity_id: id, state, attributes });
 const entities = Object.fromEntries([
   E("lock.front", "locked"), E("lock.back", "unlocked"), E("lock.gate", "unavailable"),
+  E("lock.shed", "jammed"), E("lock.side", "locking"), E("lock.pool", "unknown"),
   E("lock.neighbour", "unlocked"),                          // not one of this villa's doors
   E("light.hall", "on"), E("light.bed", "off"), E("light.helper", "on"),
   E("climate.living", "cool", { current_temperature: 24 }), E("climate.bed", "unavailable"),
@@ -25,7 +26,7 @@ const entities = Object.fromEntries([
   E("sensor.pump_power", "850", { unit_of_measurement: "W", device_class: "power" }),  // a FOLDED member
 ].map((e) => [e.entity_id, e]));
 // The villa's own devices: folded, so the pump's power sensor is NOT one.
-const villa = new Set(["lock.front", "lock.back", "lock.gate", "light.hall", "light.bed",
+const villa = new Set(["lock.front", "lock.back", "lock.gate", "lock.shed", "lock.side", "lock.pool", "light.hall", "light.bed",
   "climate.living", "climate.bed", "switch.pool_pump"]);
 const devices = { ids: [...villa], unavailable: ["lock.gate", "climate.bed"], has: (id) => villa.has(id), isCritical: () => false, deviceOfRecord: (id) => id };
 
@@ -33,13 +34,29 @@ const facts = villaSummary({ entities, devices, resolvedRooms: {}, thresholds: {
 const report = buildReadiness(entities, EMPTY_FM_DATA, devices, {}, []);
 const check = (id) => report.checks.find((c) => c.id === id);
 
-console.log("  locks:");
-ck("an unavailable lock is UNKNOWN, not unlocked", JSON.stringify(facts.locks.unknown) === '["lock.gate"]', facts.locks);
-ck("  ...and the report no longer calls it 'not locked'", !/not locked/.test(check("locks").detail), check("locks").detail);
-ck("  ...it names both: one unlocked, one not reporting", check("locks").detail === "1 unlocked, 1 not reporting.", check("locks").detail);
+console.log("  locks — one word per fact (architecture review, 2026-10-19: jammed, moving, lost and no-value were all \"not reporting\"):");
+const L = facts.locks;
+ck("every lock is in exactly ONE list: locked, unlocked, jammed, moving, lost, or no value",
+   JSON.stringify({ locked: L.locked, unlocked: L.unlocked, jammed: L.jammed, moving: L.moving, lost: L.lost, unknown: L.unknown })
+   === JSON.stringify({ locked: ["lock.front"], unlocked: ["lock.back"], jammed: ["lock.shed"], moving: ["lock.side"], lost: ["lock.gate"], unknown: ["lock.pool"] }), L);
+ck("  ...and the report no longer calls any of them 'not locked'", !/not locked/.test(check("locks").detail), check("locks").detail);
+ck("  ...it names each: unlocked, jammed, moving, not reporting — and NOT the lost one (that is the devices-online check's)",
+   check("locks").detail === "1 unlocked, 1 jammed, 1 moving, 1 not reporting.", check("locks").detail);
+ck("  ...the lost lock is counted ONCE, under devices not reporting", check("devices-online").entityIds.includes("lock.gate")
+   && !check("locks").entityIds.includes("lock.gate"), check("devices-online").entityIds);
 ck("  ...and still warns — a door nobody can confirm is not secured", check("locks").state === "warn");
 ck("the report and the tile flag the same doors",
-   JSON.stringify([...facts.locks.unlocked, ...facts.locks.unknown].sort()) === JSON.stringify([...check("locks").entityIds].sort()));
+   JSON.stringify([...L.unlocked, ...L.jammed, ...L.moving, ...L.unknown].sort()) === JSON.stringify([...check("locks").entityIds].sort()));
+{
+  const only = (state) => buildReadiness({ "lock.a": E("lock.a", "locked"), "lock.b": E("lock.b", state) }, EMPTY_FM_DATA,
+    { ids: ["lock.a", "lock.b"], unavailable: state === "unavailable" ? ["lock.b"] : [], has: () => true, isCritical: () => false, deviceOfRecord: (id) => id }, {}, [])
+    .checks.find((c) => c.id === "locks");
+  ck("  ...each fact alone, its own word: jammed / moving / not reporting",
+     only("jammed").detail === "1 jammed." && only("unlocking").detail === "1 moving." && only("unknown").detail === "1 not reporting.",
+     [only("jammed").detail, only("unlocking").detail, only("unknown").detail]);
+  ck("  ...a lock lost alone: the doors answering are secured, the lost one is the other check's",
+     only("unavailable").detail === "All 1 lock secured." && only("unavailable").state === "pass", only("unavailable"));
+}
 ck("a lock that is not this villa's is not counted", !facts.locks.ids.includes("lock.neighbour"));
 
 console.log("\n  the rest:");

@@ -9,7 +9,6 @@
 // are cards on the same Overview list, just above.
 
 import { useEffect, useState } from "react";
-import { useConfig } from "@/config/ConfigContext";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useFmData } from "@/fm/FmDataContext";
 import type { FmTicket } from "@/fm/fmTypes";
@@ -18,8 +17,8 @@ import EvidenceRow from "./EvidenceRow";
 import NotesField from "./NotesField";
 import DeviceSearchPicker, { type DeviceOption } from "./DeviceSearchPicker";
 import { useDeviceChoice } from "./useDeviceChoice";
+import { useRecordPlace } from "./useRecordPlace";
 import FormActions from "./FormActions";
-import { deviceRoom } from "@/config/devicePlace";
 
 export default function FaultForm({ editing, presetEntity, deviceOptions, onDone }: {
   /** The record being edited; absent when raising a new fault. */
@@ -34,7 +33,7 @@ export default function FaultForm({ editing, presetEntity, deviceOptions, onDone
   onDone: () => void;
 }) {
   const { addTicket, updateTicket } = useFmData();
-  const { resolvedRooms } = useConfig();
+  const place = useRecordPlace();
   const label = useEntityLabel();
   const device = useDeviceChoice();
   const { deviceText, entityId } = device;
@@ -87,9 +86,7 @@ export default function FaultForm({ editing, presetEntity, deviceOptions, onDone
         onSave={async () => {
           const fields = {
             title: title.trim(),
-            entityId: entityId || undefined,
-            deviceLabel: deviceText.trim() || undefined,
-            room: entityId ? deviceRoom(resolvedRooms, entityId) : undefined,
+            ...place(entityId, deviceText),   // the device, its name and room: ONE builder (fm/recordPlace)
             note: note.trim() || undefined,
             photoIds,
           };

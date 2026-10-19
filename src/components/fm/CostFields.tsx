@@ -12,7 +12,7 @@ import { useFmData } from "@/fm/FmDataContext";
 import Dropdown from "@/components/common/Dropdown";
 import { useFmTerms } from "@/fm/useFmTerms";
 import { COST_CATEGORY_NAMES } from "@/fm/fmTypes";
-import { monthKey, monthLabel, parseAmount, projectedSpend } from "@/fm/fmEngine";
+import { capNotes, monthKey, monthLabel, parseAmount, projectedSpend } from "@/fm/fmEngine";
 import { formatMoney } from "@/utils/money";
 
 type Category = "minor" | "major";
@@ -55,10 +55,12 @@ export default function CostFields({ amount, onAmount, category = "minor", onCat
       )}
       {/* Only with a cap set: with none there is nothing to be over (an
           unconfigured install once read "…of IDR 0"). */}
+      {/* ...and what that asks: the cap's ONE sentence per state (fmEngine.capNotes — the Spend tab's and the
+          statement's), "approaching" included: the decision a cap forces is made before the money is spent. */}
       {category === "minor" && value > 0 && p.cap > 0 && (
         <div className={`fm-banner ${p.over ? "warn" : ""}`}>
-          {p.month === monthKey(Date.now()) ? "This month" : monthLabel(p.month)} would come to {money(p.minorSpend)} of {money(p.cap)}
-          {p.over && ` — past the monthly cap. Spend beyond it belongs to ${COST_CATEGORY_NAMES.major}.`}
+          {p.month === monthKey(Date.now()) ? "This month" : monthLabel(p.month)} would come to {money(p.minorSpend)} of {money(p.cap)}.
+          {capNotes(p).map((note) => ` ${note}`).join("")}
         </div>
       )}
     </>

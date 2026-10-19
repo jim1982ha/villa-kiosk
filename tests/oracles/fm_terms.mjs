@@ -65,4 +65,36 @@ console.log("\n  the report speaks the owner's terms:");
   ck("the spend statement uses the same terms", statement.includes("Minor") && /€|EUR/.test(statement));
 }
 
+console.log("\n  the month's money said one way (architecture review, 2026-10-19): the cap's sentence per state, everywhere:");
+{
+  // the statement's cap sentence equals the Spend tab's for EVERY cap state (fmEngine.capNotes); the tab, the
+  // statement and the cost banner read it — the statement had none for "approaching", the banner a third wording
+  const at = (monthlyCap) => E.budgetStatus(costs, "2026-09", { monthlyCap, warnAt: 0.8 });
+  const states = { ok: at(10000), approaching: at(700), exceeded: at(500) };
+  ck("the three states", Object.values(states).map((b) => b.state).join() === "ok,approaching,exceeded", Object.values(states).map((b) => b.state));
+  ck("one sentence for approaching, one for exceeded, none when all is well — each naming the category it asks about",
+     E.capNotes(states.ok).length === 0 && E.capNotes(states.approaching).length === 1 && E.capNotes(states.exceeded).length === 1
+     && E.capNotes(states.approaching)[0].includes(T.COST_CATEGORY_NAMES.major) && E.capNotes(states.exceeded)[0].includes(T.COST_CATEGORY_NAMES.major)
+     && E.capNotes(states.approaching)[0] !== E.capNotes(states.exceeded)[0], [E.capNotes(states.approaching), E.capNotes(states.exceeded)]);
+  ck("the statement's cap sentence IS that sentence, for every state (and no other sentence about the cap)",
+     Object.values(states).every((b) => {
+       const lines = R.spendSummary(b, { ...T.NO_FM_TERMS, monthlyCap: b.cap });
+       const notes = E.capNotes(b);
+       return notes.every((n) => lines.some((l) => l === `- ⚠️ ${n}`)) && lines.filter((l) => l.startsWith("- ⚠️ ")).length === notes.length;
+     }), Object.values(states).map((b) => R.spendSummary(b, { ...T.NO_FM_TERMS, monthlyCap: b.cap })));
+  ck("  ...and a projection says the same: the cost banner's state is the ladder's",
+     E.projectedSpend(costs, { amount: 100, category: "minor" }, { monthlyCap: 1000, warnAt: 0.8 }, now).state === "ok"
+     && E.projectedSpend(costs, { amount: 250, category: "minor" }, { monthlyCap: 1000, warnAt: 0.8 }, now).state === "approaching"
+     && E.projectedSpend(costs, { amount: 400, category: "minor" }, { monthlyCap: 1000, warnAt: 0.8 }, now).state === "exceeded");
+  const { readFileSync } = await import("node:fs");
+  const code = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, "");
+  const spend = code("components/fm/SpendTab.tsx"), cost = code("components/fm/CostFields.tsx"), today = code("components/fm/TodayTab.tsx");
+  ck("the Spend tab and the cost banner draw capNotes, and spell no cap sentence of their own",
+     /capNotes\(b\)\.map\(/.test(spend) && /capNotes\(p\)/.test(cost)
+     && ![spend, cost].some((c) => /Cap reached|Approaching the cap|past the monthly cap/.test(c)));
+  ck("the Schedule tab's money stat is the capped category's spend, in the villa's currency, under its name",
+     /formatMoney\(budgetStatus\(data\.costs, undefined, terms\)\.minorSpend, terms\.currency\)/.test(today)
+     && /\{COST_CATEGORY_NAMES\.minor\} spend this month/.test(today) && !/formatMoney\([^)]*, ""\)/.test(today));
+}
+
 done("✅ the contract terms are the owner's; one cap check, an edit counted once");

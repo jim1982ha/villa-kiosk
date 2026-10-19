@@ -15,7 +15,12 @@
 // asks again."
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
-const { ticketStats, isTicketOpen, isTicketResolved } = await import("@/fm/fmEngine");
+const { ticketStats, isTicketOpen, isTicketResolved, stageOf } = await import("@/fm/fmEngine");
+// what is OPEN is counted per device card (deviceWork.openCounts — the Tickets tab's unit, the recap's since
+// 2.496.427); ticketStats keeps only the per-record figures (resolved, the mean). One record per device here.
+const { openCounts } = await import("@/fm/deviceWork");
+const byRecord = (id) => id;
+const open = (tickets) => openCounts(tickets.map((x, i) => ({ ...x, id: `t${i}`, entityId: `x.t${i}` })), byRecord);
 
 let fail = 0;
 const eq = (name, got, want) => {
@@ -26,16 +31,15 @@ const eq = (name, got, want) => {
 const t = (status) => ({ id: "t", title: "x", status, openedAt: "2026-09-01T00:00:00Z" });
 
 console.log("  the three real statuses:");
-const real = ticketStats([t("open"), t("in_progress"), t("resolved")]);
-eq("open", real.open, 1);
-eq("in progress", real.inProgress, 1);
-eq("resolved", real.resolved, 1);
+const three = [t("open"), t("in_progress"), t("resolved")];
+eq("open", open(three).faults, 1);
+eq("in progress", open(three).tickets, 1);
+eq("resolved", ticketStats(three).resolved, 1);
 
 console.log("\n  and everything else counts as OPEN, never resolved:");
 // The bare `else` this replaced sent every one of these to `resolved`.
 for (const bad of ["", "  ", "unknown", "REOPENED", "closed?", null, undefined]) {
-  const s = ticketStats([t(bad)]);
-  eq(`status ${JSON.stringify(bad)} → open`, [s.open, s.resolved], [1, 0]);
+  eq(`status ${JSON.stringify(bad)} → open`, [open([t(bad)]).faults, ticketStats([t(bad)]).resolved, stageOf(t(bad))], [1, 0, "fault"]);
 }
 
 console.log("\n  the two predicates agree with the tally:");
@@ -49,7 +53,7 @@ for (const st of ["open", "in_progress", "resolved", "", "garbage"]) {
      isTicketOpen(tk) !== isTicketResolved(tk), true);
 }
 eq("what the predicates call open is what the tally calls open",
-   ticketStats([t("open"), t("garbage"), t("resolved")]).open,
+   open([t("open"), t("garbage"), t("resolved")]).total,
    [t("open"), t("garbage"), t("resolved")].filter(isTicketOpen).length);
 
 console.log(`\n${fail ? `❌ ${fail} failed` : "✅ no fault leaves the report by bad data"}`);

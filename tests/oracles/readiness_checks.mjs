@@ -72,13 +72,15 @@ console.log("\n  how bad, as the top bar says it (review \"One answer per questi
 console.log("\n  one tinted card (fm/tone): each state says its tone, the stylesheet draws a tone once:");
 {
   const { TONE_OF, toneClass } = await import("@/fm/tone");
+  const { DUE_WORDS } = await import("@/fm/fmEngine");
+  const { CHECK_WORDS } = await import("@/fm/readiness");
   const drawnRow = (state) => draw(h(ReadinessChecks, { readiness: { ...r, checks: [{ ...r.checks[0], state }] }, label: (id) => id,
     onOpenEntity: () => {}, onOpenCheck: () => {}, startOpen: true }));
   ck("a Recap check drawn amber or red by its tone, never by the Schedule's words",
      /class="fm-row tone-warn"/.test(drawnRow("warn")) && /class="fm-row tone-danger"/.test(drawnRow("fail")) && !/state-/.test(drawnRow("fail")));
   ck("  ...the same three tones for a task, a check and the spending cap",
-     [TONE_OF.due["due-soon"], TONE_OF.check.warn, TONE_OF.cap.approaching].every((t) => toneClass(t) === "tone-warn")
-     && [TONE_OF.check.fail, TONE_OF.cap.exceeded].every((t) => toneClass(t) === "tone-danger") && toneClass(TONE_OF.check.pass) === "");
+     [DUE_WORDS["due-soon"].tone, CHECK_WORDS.warn.tone, TONE_OF.cap.approaching].every((t) => toneClass(t) === "tone-warn")
+     && [CHECK_WORDS.fail.tone, TONE_OF.cap.exceeded].every((t) => toneClass(t) === "tone-danger") && toneClass(CHECK_WORDS.pass.tone) === "");
   const css = ["07-facility", "08-shared"].map((f) => readFileSync(new URL(`../../src/styles/${f}.css`, import.meta.url), "utf8")).join("\n");
   ck("  ...and the tinted frame is written once", (css.match(/color-mix\(in srgb, var\(--status-(warning|danger)\) [67]%, var\(--bg-card\)\)/g) ?? []).length === 0
      && (css.match(/color-mix\(in srgb, var\(--tone\) var\(--tone-fill\), var\(--bg-card\)\)/g) ?? []).length === 1);
@@ -106,6 +108,34 @@ console.log("\n  an alarm makes the villa not ready, as it makes the top bar red
   ck("  ...the button takes that class, and the Recap is given the Cockpit's own alarms",
      /\$\{healthClass\(health\)\}/.test(hud) && !/attentionGroups\.length > 0 \? " has-alert"/.test(hud)
      && /buildReadiness\(entities, data, devices, config\.entityMap, attentionItems\)/.test(fs));
+}
+
+console.log("\n  one word per check state and one verdict, on the tab, in the recap and in the snapshot (review, 2026-10-19):");
+{
+  const { CHECK_WORDS, VERDICT_WORDS } = await import("@/fm/readiness");
+  const R = await import("@/fm/fmDocuments");
+  const one = (state) => ({ checks: [{ id: "c", label: `Check ${state}`, state, detail: "what was found" }], passed: state === "pass" ? 1 : 0, total: 1, overall: state });
+  const wordOf = (state) => (CHECK_WORDS[state].tone === "danger" ? `**${CHECK_WORDS[state].word}**` : CHECK_WORDS[state].word);
+  ck("three states, three words: Pass, Warning, Fail", Object.entries(CHECK_WORDS).map(([k, w]) => `${k}:${w.word}/${w.tone}`).join() === "pass:Pass/ok,warn:Warning/warn,fail:Fail/danger");
+  for (const state of ["pass", "warn", "fail"]) {
+    const res = one(state);
+    const tab = text(draw(h(ReadinessChecks, { readiness: res, label: (id) => id, onOpenEntity: () => {}, onOpenCheck: () => {}, startOpen: true })));
+    const snap = R.buildReadinessSnapshot(res, "V", "2026-09");
+    const recap = R.buildMonthlyRecap({ fm: EMPTY_FM_DATA, month: "2026-09", villaName: "V", readiness: res, deviceOfRecord: (id) => id });
+    const row = `| Check ${state} | ${wordOf(state)} | what was found |`;
+    ck(`${state}: the tab's verdict is VERDICT_WORDS', the snapshot's the same sentence; the check's row is the same in the recap and the snapshot`,
+       tab.includes(`|${VERDICT_WORDS[state]}|${res.passed} of 1 checks passing|`) && snap.includes(`**${VERDICT_WORDS[state]}** — ${res.passed} of 1 checks passing.`)
+       && snap.includes(row) && recap.includes(row) && snap.includes("| Check | Result | Finding |") && recap.includes("| Check | Result | Finding |"),
+       { tab, snap: snap.split("\n").filter((l) => l.startsWith("|") || l.startsWith("**")), recap: recap.split("## 5.")[1] });
+  }
+  const snap = R.buildReadinessSnapshot(one("warn"), "V", "2026-09");
+  ck("the snapshot opens with the documents' shared header (its Generated stamp is the moment taken), no \"Taken\" line, nothing shouted",
+     snap.startsWith("# V — readiness snapshot\n**Period:** ") && /^\*\*Generated:\*\* \d{4}-\d{2}-\d{2} \d{2}:\d{2}  $/m.test(snap) && /^\*\*Scope:\*\* /m.test(snap)
+     && !/Taken |READY|Attention/.test(snap), snap.split("\n").slice(0, 5));
+  const code = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, "");
+  ck("  ...and neither the tab nor the documents spell a verdict or a check word themselves",
+     !/Ready for the next guest|Not ready|worth fixing/.test(code("components/fm/ReadinessTab.tsx"))
+     && !/"Pass"|"Warning"|"Attention"|"Fail"|READY|"Detail"/.test(code("fm/fmDocuments.ts")) && /readinessTable\(readiness\)/.test(code("fm/fmDocuments.ts")));
 }
 
 done("✅ every readiness check opens its own devices, the same way");

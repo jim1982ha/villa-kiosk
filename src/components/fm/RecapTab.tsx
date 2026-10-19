@@ -22,6 +22,7 @@ import Dropdown from "@/components/common/Dropdown";
 import SaveButton from "@/components/common/SaveButton";
 import { Sparkles, Download, Save } from "lucide-react";
 import { useFmData } from "@/fm/FmDataContext";
+import { useDeviceIdentity } from "@/config/VillaModel";
 import { buildMonthlyRecap } from "@/fm/fmDocuments";
 import { useFmTerms } from "@/fm/useFmTerms";
 import { useMonthlyDocument } from "@/fm/useMonthlyDocument";
@@ -38,10 +39,12 @@ export default function RecapTab({
 }) {
   const { data } = useFmData();
   const terms = useFmTerms();
+  // the open work counted per device card, as the Tickets tab counts it (fmDocuments.RecapInput.deviceOfRecord)
+  const { deviceOfRecord } = useDeviceIdentity();
   // Make / save / reopen / download, and the months offered (the previous
   // month first: see monthlyDocument.defaultMonth) — useMonthlyDocument.
   const doc = useMonthlyDocument("recap", (month, villaName) => buildMonthlyRecap({
-    fm: data, month, villaName, readiness, offlineDeviceCount, totalDeviceCount, terms,
+    fm: data, month, villaName, readiness, offlineDeviceCount, totalDeviceCount, terms, deviceOfRecord,
   }));
   const { month, markdown } = doc;
 

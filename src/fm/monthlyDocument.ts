@@ -12,6 +12,7 @@
 // (architecture review, round two, 2026-10-17).
 
 import { monthKey } from "./fmEngine";
+import { localMonthStart } from "@/utils/localDay";
 import type { FmData, FmSavedDocument } from "./fmTypes";
 
 export type DocumentKind = FmSavedDocument["kind"];
@@ -40,11 +41,8 @@ export function documentFileName(kind: DocumentKind, villaName: string, month: s
  *  finished (due by the 10th of the one after it); a statement and a snapshot
  *  are of the month running now. */
 export function defaultMonth(kind: DocumentKind, now: number = Date.now()): string {
-  if (kind !== "recap") return monthKey(now);
-  const d = new Date(now);
-  d.setDate(1);
-  d.setMonth(d.getMonth() - 1);
-  return monthKey(d);
+  // the month before this one, on the villa's calendar (utils/localDay — the one month arithmetic, never by hand)
+  return monthKey(kind === "recap" ? localMonthStart(now, -1) : now);
 }
 
 /** The months a document can be made for, newest first: the months that have

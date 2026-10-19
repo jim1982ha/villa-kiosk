@@ -23,11 +23,11 @@ const fm = { ...EMPTY_FM_DATA,
   tickets: [{ id: "t1", title: evil, status: "open", openedAt: "2026-09-02T00:00:00Z", photoIds: [] }],
   costs: [{ id: "k1", at: "2026-09-03T00:00:00Z", label: evil, category: "minor", amountIdr: 1 }],
 };
-const readiness = { at: "2026-09-04T00:00:00Z", checks: [{ id: "c", label: evil, state: "warn", detail: evil }] };
+const readiness = { at: "2026-09-04T00:00:00Z", overall: "warn", passed: 0, total: 1, checks: [{ id: "c", label: evil, state: "warn", detail: evil }] };
 for (const [name, doc] of [
-  ["the monthly report", R.buildMonthlyRecap({ fm, month: "2026-09", villaName: "V", readiness })],
+  ["the monthly report", R.buildMonthlyRecap({ fm, month: "2026-09", villaName: "V", readiness, deviceOfRecord: (id) => id })],
   ["the spend statement", R.buildSpendStatement(fm, "2026-09", "V")],
-  ["the readiness snapshot", R.buildReadinessSnapshot(readiness, "V")],
+  ["the readiness snapshot", R.buildReadinessSnapshot(readiness, "V", "2026-09")],
 ]) {
   ck(`${name} carries the text on its own row, not as a heading`,
      !doc.split("\n").some((l) => l.startsWith("## Paid")) && doc.includes("Gate stuck ## Paid in full / x / y"), name);

@@ -22,14 +22,13 @@
 
 import { useState } from "react";
 import { Camera, Check, Wrench } from "lucide-react";
-import { useConfig } from "@/config/ConfigContext";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useFmData } from "@/fm/FmDataContext";
 import { uploadEvidence } from "@/fm/fmApi";
 import NotesField from "./NotesField";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import ModalFooter from "@/components/common/ModalFooter";
-import { deviceRoom } from "@/config/devicePlace";
+import { useRecordPlace } from "./useRecordPlace";
 
 export default function GuestReportModal({
   entityId, onClose,
@@ -43,7 +42,7 @@ export default function GuestReportModal({
   // useModalA11y. It registers useBackToClose itself, so calling both would
   // push this surface onto the dismissal stack twice.
   const dialogRef = useModalA11y(onClose);
-  const { resolvedRooms } = useConfig();
+  const place = useRecordPlace();
   const label = useEntityLabel();
   const [title, setTitle] = useState("");
   const [note, setNote] = useState("");
@@ -77,9 +76,7 @@ export default function GuestReportModal({
     setSendError(null);
     const result = await addTicket({
       title: title.trim(),
-      entityId,
-      deviceLabel,
-      room: entityId ? deviceRoom(resolvedRooms, entityId) : undefined,
+      ...place(entityId),   // the device, its name on screen and its room: ONE builder (fm/recordPlace)
       note: note.trim() || undefined,
       photoIds,
       reportedBy: "guest",

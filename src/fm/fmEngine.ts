@@ -8,11 +8,12 @@
 // threshold here traces to a clause; see fmTypes.ts for the citations.
 
 import {
-  CLEARED_NOTES, CLEARED_NOTE_PREFIXES, NOT_STATUS_CHANGE_KINDS, NO_FM_TERMS,
+  CLEARED_NOTES, CLEARED_NOTE_PREFIXES, COST_CATEGORY_NAMES, NOT_STATUS_CHANGE_KINDS, NO_FM_TERMS,
   type FmTerms,
   type FmCompletion, type FmCost, type FmData, type FmSchedule, type FmTicket, type FmTicketUpdate,
 } from "./fmTypes";
 import { fullDate, monthYear } from "@/utils/dateText";
+import { localMonthStart } from "@/utils/localDay";
 import { fmtDuration } from "@/components/panels/chartUtils";
 import type { Tone } from "./tone";
 
@@ -97,6 +98,28 @@ export function scheduleStatus(
   return { schedule, last, dueAt, daysUntilDue, state };
 }
 
+/** Each due state's ONE word and tone, as every screen and document says it: the Schedule's pill (its colour: fm/tone
+ *  pillClass), the Overview's late-task line (config/attention), the recap's Standing table. The twin of STAGE_WORDS.
+ *  ⚠️ THREE SPELLINGS (architecture review, 2026-10-19): the tab held STATE_LABEL, the recap wrote "**Overdue by 3d**"
+ *  and "**Never recorded**" of its own, the Overview a third copy — and the tone sat apart in fm/tone. */
+export const DUE_WORDS: Record<DueState, { word: string; tone: Tone }> = {
+  overdue: { word: "Overdue", tone: "danger" },
+  never: { word: "Never recorded", tone: "danger" },
+  "due-soon": { word: "Due soon", tone: "warn" },
+  ok: { word: "On schedule", tone: "ok" },
+};
+
+/** How a task stands, as a sentence WITHOUT its date — "3 days overdue", "Due today", "Due in 12 days", "No completion
+ *  recorded yet". The date is the reader's: a screen appends it in its locale (shortDate), a document in the fixed
+ *  form (dateText.docDate). ⚠️ The sentence lived in the Schedule tab alone; the recap said "Overdue by 3d". */
+export function dueLine(st: Pick<ScheduleStatus, "state" | "daysUntilDue">): string {
+  if (st.state === "never") return "No completion recorded yet";
+  const d = Math.round(st.daysUntilDue ?? 0);
+  if (d < 0) return `${Math.abs(d)} day${Math.abs(d) === 1 ? "" : "s"} overdue`;
+  if (d === 0) return "Due today";
+  return `Due in ${d} day${d === 1 ? "" : "s"}`;
+}
+
 /** Every enabled schedule's status, worst first — what the FM home screen shows.
  *  Ordering is by urgency, not alphabetically: this list exists to be actioned
  *  from the top. */
@@ -115,6 +138,18 @@ export function scheduleBoard(data: FmData, now = Date.now()): ScheduleStatus[] 
 export function monthKey(at: string | number | Date): string {
   const d = new Date(at);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/** The first instant of a month key ("2026-09") and of the month after it, in LOCAL time — the one parsing of a
+ *  month, on utils/localDay. ⚠️ PARSED THREE TIMES (architecture review, 2026-10-19): the recap's month end, the
+ *  documents' default month and the Period heading each split the key by hand. A malformed key gives NaN bounds, and
+ *  every reader says so rather than printing "Invalid Date". */
+export function monthBounds(month: string): { start: number; end: number } {
+  const m = /^(\d{4})-(\d{2})$/.exec(month);
+  const y = Number(m?.[1]), mo = Number(m?.[2]);
+  if (!m || mo < 1 || mo > 12) return { start: NaN, end: NaN };
+  const start = localMonthStart(new Date(y, mo - 1, 1).getTime());
+  return { start, end: localMonthStart(start, 1) };
 }
 
 export interface BudgetStatus {
@@ -156,9 +191,31 @@ export function budgetStatus(
   const fraction = cap > 0 ? minorSpend / cap : 0;
   return {
     month, minorSpend, majorSpend, totalSpend: minorSpend + majorSpend, cap, fraction,
-    state: cap <= 0 ? "ok" : minorSpend >= cap ? "exceeded" : fraction >= terms.warnAt ? "approaching" : "ok",
+    state: capState(minorSpend, cap, terms.warnAt),
     entries,
   };
+}
+
+/** Where a capped total stands against the cap: the one ladder budgetStatus and projectedSpend climb. */
+function capState(minorSpend: number, cap: number, warnAt: number): SpendCapState {
+  return cap <= 0 ? "ok" : minorSpend >= cap ? "exceeded" : minorSpend / cap >= warnAt ? "approaching" : "ok";
+}
+
+/** What the month's cap state asks of the reader, one sentence per state — none when all is well. The ONE wording
+ *  for the Spend tab's note, the statement's and the recap's line, and a form's cost banner.
+ *  ⚠️ THREE SENTENCES (architecture review, 2026-10-19): the Spend tab, the statement (which had none for
+ *  "approaching") and the cost fields each wrote their own. */
+export function capNotes(b: Pick<BudgetStatus, "state">): string[] {
+  switch (b.state) {
+    case "exceeded":
+      return [`Cap reached. Further spend this month belongs to ${COST_CATEGORY_NAMES.major}, on whatever terms your `
+        + "own agreement sets for spend beyond it."];
+    case "approaching":
+      return [`Approaching the cap — decide now whether upcoming work is ${COST_CATEGORY_NAMES.minor} or should be `
+        + `recorded as ${COST_CATEGORY_NAMES.major}.`];
+    default:
+      return [];
+  }
 }
 
 /**
@@ -175,14 +232,15 @@ export function projectedSpend(
   change: { amount: number; category: "minor" | "major"; replacing?: string },
   terms: Pick<FmTerms, "monthlyCap" | "warnAt"> = NO_FM_TERMS,
   now = Date.now(),
-): { month: string; minorSpend: number; cap: number; over: boolean } {
+): { month: string; minorSpend: number; cap: number; over: boolean; state: SpendCapState } {
   const edited = change.replacing ? costs.find((c) => c.id === change.replacing) : undefined;
   const month = monthKey(edited ? edited.at : now);
   const others = edited ? costs.filter((c) => c.id !== edited.id) : costs;
   const minorSpend = budgetStatus(others, month, terms).minorSpend
     + (change.category === "minor" ? change.amount : 0);
   const cap = terms.monthlyCap;
-  return { month, minorSpend, cap, over: cap > 0 && minorSpend >= cap };
+  const state = capState(minorSpend, cap, terms.warnAt);
+  return { month, minorSpend, cap, over: state === "exceeded", state };
 }
 
 /** Whether a new capped expense of `amount` would reach the cap — warned
@@ -194,9 +252,10 @@ export function wouldExceedCap(
   return projectedSpend(costs, { amount, category: "minor" }, terms, now).over;
 }
 
+/** The figures that are PER RECORD — a repair's time, the closed ones. What is OPEN is counted per DEVICE card, as
+ *  the Overview and the Tickets tab draw it (deviceWork.openCounts) — the recap's "Open" line read this per record
+ *  while its own readiness section and the Tickets tab counted cards (architecture review, 2026-10-19). */
 export interface TicketStats {
-  open: number;
-  inProgress: number;
   resolved: number;
   /** Mean hours from opening to resolution across resolved tickets, or null
    *  when nothing has been resolved yet. This is the number that evidences
@@ -334,8 +393,8 @@ export function openTimeMs(t: FmTicket): number | null {
 
 /** A fault as it stood at `iso`: its status, and when it was resolved if it was by then — a past month's report tells
  *  that month, never the fault as it is today (review 31: reopened in October, it vanished from September's recap). */
-export function ticketAt(t: FmTicket, iso: string): { status: FmTicket["status"]; resolvedAt?: string } {
-  const until = Date.parse(iso);
+export function ticketAt(t: FmTicket, at: string | number): { status: FmTicket["status"]; resolvedAt?: string } {
+  const until = typeof at === "number" ? at : Date.parse(at);
   const all = statusChanges(t);
   if (!all.length) return { status: t.status, resolvedAt: t.resolvedAt };     // no history: as it is
   const steps = all.filter((u) => Date.parse(u.at) <= until);
@@ -353,26 +412,22 @@ export function resolvedInMonth(t: FmTicket, month: string): boolean {
 }
 
 export function ticketStats(tickets: readonly FmTicket[]): TicketStats {
-  let open = 0, inProgress = 0, resolved = 0, cleared = 0, totalMs = 0, timed = 0;
+  let resolved = 0, cleared = 0, totalMs = 0, timed = 0;
   for (const t of tickets) {
     // ⚠️ AN UNKNOWN STATUS COUNTS AS OPEN (stageOf). A bare `else` once counted ANY row whose status was missing,
     // empty or corrupt as RESOLVED — a fault silently removed from the facility report by bad data, the one
-    // direction this must never fail in.
-    const stage = stageOf(t);
-    if (stage === "fault") open++;
-    else if (stage === "ticket") inProgress++;
-    else {
-      // ⚠️ A CLOSE WITH NO WORK IS NOT A REPAIR (review 31): ten 10-minute Wi-Fi blips cleared by the agent made a
-      // 48 h fridge repair read "4.5 h", one duplicate closed after 92 days "2208 h"
-      const lastResolve = lastResolution(t);
-      if (lastResolve && isClearedStep(lastResolve)) { cleared++; continue; }
-      resolved++;
-      const ms = openTimeMs(t);
-      if (ms !== null) { totalMs += ms; timed++; }
-    }
+    // direction this must never fail in. The open ones are deviceWork.openCounts', per device.
+    if (stageOf(t) !== "closed") continue;
+    // ⚠️ A CLOSE WITH NO WORK IS NOT A REPAIR (review 31): ten 10-minute Wi-Fi blips cleared by the agent made a
+    // 48 h fridge repair read "4.5 h", one duplicate closed after 92 days "2208 h"
+    const lastResolve = lastResolution(t);
+    if (lastResolve && isClearedStep(lastResolve)) { cleared++; continue; }
+    resolved++;
+    const ms = openTimeMs(t);
+    if (ms !== null) { totalMs += ms; timed++; }
   }
   return {
-    open, inProgress, resolved, closedWithoutAction: cleared,
+    resolved, closedWithoutAction: cleared,
     meanResolutionHours: timed ? totalMs / timed / 3_600_000 : null,
     // ⚠️ HOW MANY TICKETS THE MEAN ACTUALLY COVERS. `resolved` and `timed` are
     // independent counters: a ticket resolved with no resolvedAt, or with a
@@ -429,11 +484,10 @@ export function shortDate(at: string | number | Date): string {
  *  Same reasoning as shortDate: fixed fields, reader's locale. Lived in
  *  fmDocuments.ts with its own hardcoded "en-GB". */
 export function monthLabel(month: string): string {
-  const [y, m] = month.split("-").map(Number);
+  const { start } = monthBounds(month);
   // A malformed month key would otherwise render "Invalid Date" into the
   // report's own Period heading; say what was actually stored instead.
-  if (!Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) return month;
-  return monthYear(new Date(y, m - 1, 1));
+  return Number.isFinite(start) ? monthYear(start) : month;
 }
 
 // ── How a record changes (round 10, 2.496.159) ──────────────────────────────

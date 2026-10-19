@@ -32,8 +32,16 @@ console.log("  what each tile says:");
   ck("weather: from the station, and only with one", t.weather?.value.startsWith("29") && !byKind(tiles()).weather);
   const allLocked = byKind(tiles(everything, null, { ...entities, "lock.back": e("lock.back", "locked") }));
   ck("every lock locked: \"Locked\", quiet", allLocked.locks.value === "Locked" && allLocked.locks.tone === "neutral");
-  const lost = byKind(tiles(everything, null, { ...entities, "lock.back": e("lock.back", "unavailable") }));
-  ck("a lost lock is \"Unknown\", never counted as unlocked", lost.locks.value === "1 Unknown", lost.locks.value);
+  // one word per lock fact (villaSummary.LOCK_FACT_WORDS — the readiness check's facts): "N Unknown" stood for four
+  const back = (state) => byKind(tiles(everything, null, { ...entities, "lock.back": e("lock.back", state) })).locks.value;
+  ck("a lost lock is \"Unavailable\", never counted as unlocked", back("unavailable") === "1 Unavailable", back("unavailable"));
+  ck("  ...a jammed one \"Jammed\", one on its way \"Moving\", one with no value \"Unknown\"",
+     back("jammed") === "1 Jammed" && back("locking") === "1 Moving" && back("unknown") === "1 Unknown",
+     [back("jammed"), back("locking"), back("unknown")]);
+  const { "lock.back": _back, ...oneLock } = entities;
+  const one = (state) => byKind(tiles(everything, null, { ...oneLock, "lock.front": e("lock.front", state) })).locks.value;
+  ck("  ...a single lock says its fact's word, never its raw state", one("jammed") === "Jammed" && one("unavailable") === "Unavailable" && one("locked") === "Locked",
+     [one("jammed"), one("unavailable"), one("locked")]);
 }
 
 console.log("\n  what a profile gets:");

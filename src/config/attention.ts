@@ -16,7 +16,7 @@ import type { Threshold } from "@/config/ThresholdConfig";
 import { labelOf } from "@/config/EntityMap";
 import { deviceRoom, deviceRoomOrRecord, firstRoom, roomLabel } from "@/config/devicePlace";
 import { criticalDevices, deviceOf, recordEntity } from "@/config/deviceGroups";
-import { faultTitle, fmAttention, STAGE_WORDS, stageOf, type FmStage } from "@/fm/fmEngine";
+import { DUE_WORDS, faultTitle, fmAttention, STAGE_WORDS, stageOf, type FmStage } from "@/fm/fmEngine";
 import { lastNoted } from "@/fm/faultNotes";
 import { deviceWorkKey, groupByDevice, lineActions, overviewActions, type WorkAction, type WorkRecord } from "@/fm/deviceWork";
 import { faultSource, type IssueSource } from "@/fm/issueSource";
@@ -376,7 +376,7 @@ export function buildAttentionItems(opts: {
       id: `schedule:${s.schedule.id}`,
       kind: "schedule",
       title: s.schedule.title,
-      detail: s.state === "never" ? "Never recorded" : "Overdue",
+      detail: DUE_WORDS[s.state].word,   // its state's ONE word (the Schedule's pill's, the recap's)
       source: "schedule",
       room: s.schedule.room,
       entityId: s.schedule.entityId,

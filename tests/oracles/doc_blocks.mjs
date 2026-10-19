@@ -17,9 +17,9 @@ const fm = { ...EMPTY_FM_DATA,
 };
 const readiness = { at: "2026-09-04T00:00:00Z", overall: "warn", passed: 0, total: 1, checks: [{ id: "c", label: evil, state: "warn", detail: evil }] };
 for (const [name, doc] of [
-  ["the monthly recap", R.buildMonthlyRecap({ fm, month: "2026-09", villaName: "V", readiness })],
+  ["the monthly recap", R.buildMonthlyRecap({ fm, month: "2026-09", villaName: "V", readiness, deviceOfRecord: (id) => id })],
   ["the spend statement", R.buildSpendStatement(fm, "2026-09", "V")],
-  ["the readiness snapshot", R.buildReadinessSnapshot(readiness, "V")],
+  ["the readiness snapshot", R.buildReadinessSnapshot(readiness, "V", "2026-09")],
 ]) {
   const blocks = parseBlocks(doc);
   const tables = blocks.filter((b) => b.type === "table");

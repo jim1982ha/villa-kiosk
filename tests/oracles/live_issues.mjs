@@ -59,7 +59,7 @@ ck("open → fault, in progress → ticket, resolved → closed",
 ck("  ...a status this build does not know is a FAULT — never hidden, never closed", E.stageOf({ status: "escalated" }) === "fault" && E.stageOf({}) === "fault");
 const odd = fm([{ ...rec("z", "lock.door"), status: "escalated" }]);
 ck("  ...counted as an open fault, listed on the Overview, absent from Tickets",
-   E.ticketStats(odd.tickets).open === 1 && E.fmAttention(odd).unresolved.length === 1
+   W.openCounts(odd.tickets, deviceOf).faults === 1 && E.fmAttention(odd).unresolved.length === 1
    && W.ticketCards(odd.tickets, deviceOf).length === 0);
 
 console.log("\n  Mark in progress: one ticket per device, each fault its own record:");
@@ -301,12 +301,28 @@ ck("a ticket is ONE card: the first record carries the pill and the ticket's but
   ck("a ticket in progress is \"In progress\" in the warning tone, a closed one \"Resolved\" in the ok tone, an open fault's word is \"Open\"",
      pill(taken).text === "In progress" && pill(taken).tone === "tone-warn" && pill(closed).text === "Resolved" && pill(closed).tone === "tone-ok"
      && E.STAGE_WORDS.fault.word === "Open", [pill(taken), pill(closed)]);
-  const recap = buildMonthlyRecap({ fm: fm([taken, closed]), month: "2026-09", villaName: "V", readiness: null });
+  const recap = buildMonthlyRecap({ fm: fm([taken, closed]), month: "2026-09", villaName: "V", readiness: null, deviceOfRecord: deviceOf });
   const row = (t) => recap.split("\n").find((l) => l.includes(`| ${t.title} |`)) ?? "";
   ck("  ...the recap's Status column says the SAME word as the pill, for both", row(taken).includes(`| ${pill(taken).text} |`)
      && row(closed).includes(`| ${pill(closed).text} |`) && !/\| in progress \|/.test(recap), [row(taken), row(closed)]);
   ck("  ...the Tickets tab draws its pills from the table, no word of its own", /STAGE_WORDS\[stageOf\(t\)\]/.test(ticketsTab)
      && !/"In progress"|"Resolved"|due-soon/.test(ticketsTab));
+
+  // THE RECAP'S OPEN FIGURES ARE THE TICKETS TAB'S CARDS (architecture review, 2026-10-19): the pump's power and energy
+  // sensors are one device with two faults nobody took on and two records taken on together — ONE card with Open
+  // Ticket, ONE ticket card. The recap's "Open" line counted records (2 and 2) while its own §5 and the tab counted cards.
+  const pumpWork = [rec("f1", "sensor.pump_energy"), rec("f2", "sensor.pump_power"),
+    { ...rec("k1", "sensor.pump_energy", "in_progress"), openedAt: "2026-09-01T10:00:00.000Z" },
+    { ...rec("k2", "sensor.pump_power", "in_progress"), openedAt: "2026-09-02T10:00:00.000Z" }];
+  const counts = W.openCounts(pumpWork, deviceOf);
+  const pumpRecap = buildMonthlyRecap({ fm: fm(pumpWork), month: "2026-09", villaName: "V", readiness: null, deviceOfRecord: deviceOf });
+  const openLine = pumpRecap.split("\n").find((l) => l.startsWith("- Open faults:")) ?? "";
+  ck("the recap's open figures equal the Tickets tab's cards: one device, one fault card, one ticket card — never the four records",
+     counts.faults === 1 && counts.tickets === 1 && W.ticketCards(pumpWork, deviceOf).length === 1
+     && openLine.includes(`Open faults: **${counts.faults}**`) && openLine.includes(`Tickets in progress: **${counts.tickets}**`)
+     && !/\*\*2\*\*/.test(openLine), openLine);
+  ck("  ...and the per-record figures stay per record: nothing is resolved here, and the engine's table no longer counts open work",
+     E.ticketStats(pumpWork).resolved === 0 && !("open" in E.ticketStats(pumpWork)) && !("inProgress" in E.ticketStats(pumpWork)));
 }
 const spendTab = readFileSync(new URL("../../src/components/fm/SpendTab.tsx", import.meta.url), "utf8");
 const todayTab = readFileSync(new URL("../../src/components/fm/TodayTab.tsx", import.meta.url), "utf8");

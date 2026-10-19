@@ -52,7 +52,8 @@ export function locksGroup(
   const single = facts.ids.length === 1;
   return {
     title: single ? friendly(entities[facts.ids[0]], facts.ids[0], entityMap) : "Locks",
-    icon: facts.unlocked.length > 0 ? DoorOpen : facts.unknown.length > 0 ? Lock : DoorClosed,
+    // an open door only when one IS unlocked; a plain lock when one cannot be read (jammed, moving, lost, no value)
+    icon: facts.unlocked.length > 0 ? DoorOpen : facts.locked.length < facts.ids.length ? Lock : DoorClosed,
     entityIds: facts.ids.slice(),
   };
 }

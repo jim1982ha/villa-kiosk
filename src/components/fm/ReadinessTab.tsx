@@ -14,8 +14,8 @@ import { useMonthlyDocument } from "@/fm/useMonthlyDocument";
 import SavedDocumentsList from "./SavedDocumentsList";
 import MarkdownPreview from "./MarkdownPreview";
 import { SourceIconRow } from "./sourceIcons";
-import type { CheckState, CheckTarget, ReadinessCheck, ReadinessResult } from "@/fm/readiness";
-import { TONE_OF, toneClass } from "@/fm/tone";
+import { CHECK_WORDS, VERDICT_WORDS, type CheckState, type CheckTarget, type ReadinessCheck, type ReadinessResult } from "@/fm/readiness";
+import { toneClass } from "@/fm/tone";
 
 const ICON: Record<CheckState, typeof CheckCircle2> = {
   pass: CheckCircle2, warn: AlertTriangle, fail: XCircle,
@@ -34,7 +34,7 @@ export default function ReadinessTab({
   // Freezing the check turns it from a live readout into evidence (see
   // buildReadinessSnapshot): made and saved in one tap, then shown, saved,
   // reopened and downloaded like the recap and the statement.
-  const snapshot = useMonthlyDocument("readiness", (_month, villaName) => buildReadinessSnapshot(readiness, villaName));
+  const snapshot = useMonthlyDocument("readiness", (month, villaName) => buildReadinessSnapshot(readiness, villaName, month));
   return (
     <div className="fm-stack">
       <ReadinessChecks readiness={readiness} label={label} onOpenEntity={onOpenEntity} onOpenCheck={onOpenCheck}
@@ -74,11 +74,8 @@ export function ReadinessChecks({ readiness, label, onOpenEntity, onOpenCheck, s
   // pushed the monthly recap off the screen. A tap on the verdict opens them.
   const [showChecks, setShowChecks] = useState(startOpen);
 
-  const headline = readiness.overall === "pass"
-    ? "Ready for the next guest"
-    : readiness.overall === "warn"
-      ? "Ready, with things worth fixing"
-      : "Not ready";
+  // the verdict's ONE sentence (readiness.VERDICT_WORDS — the saved snapshot's too)
+  const headline = VERDICT_WORDS[readiness.overall];
 
   const HeadlineIcon = ICON[readiness.overall];
 
@@ -88,7 +85,7 @@ export function ReadinessChecks({ readiness, label, onOpenEntity, onOpenCheck, s
           buildReadinessSnapshot. Same generate-and-keep shape as the recap
           and spend statement, and it lands in the same saved-documents store,
           so a handover pack can include the check actually run on the day. */}
-      <div className={`fm-headline ${toneClass(TONE_OF.check[readiness.overall])}`}>
+      <div className={`fm-headline ${toneClass(CHECK_WORDS[readiness.overall].tone)}`}>
         <button type="button" className="fm-headline-toggle" aria-expanded={showChecks}
           onClick={() => setShowChecks((v) => !v)}>
           <span className="fm-headline-icon"><HeadlineIcon size={22} /></span>
@@ -109,7 +106,7 @@ export function ReadinessChecks({ readiness, label, onOpenEntity, onOpenCheck, s
           // unlocked device or on lights are shown as pills"); past 8, "+N more" — the button opens the whole list.
           const chips = !!c.entityIds?.length;
           return (
-            <div key={c.id} className={`fm-row ${toneClass(TONE_OF.check[c.state])}`}>
+            <div key={c.id} className={`fm-row ${toneClass(CHECK_WORDS[c.state].tone)}`}>
               <span className={`fm-check-icon ${c.state}`}><Icon size={18} /></span>
               <div className="fm-row-main">
                 <div className="fm-row-title">
