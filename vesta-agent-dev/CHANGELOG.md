@@ -1,3 +1,19 @@
+## 0.12.264
+
+What you will see:
+- An alert's "What to do" is the same everywhere, and follows the rule's words as they stand: on Telegram, on the
+  Cockpit fault's note and in the morning digest's "Still open" line (an alert's line had none). Change the words in
+  the alert desk's rules and every open alert's fault and digest line follow within minutes; a note you wrote on a
+  fault yourself stays yours.
+- An alert that comes back under a new number says so: its card's first line reads "Alert sent …, 3rd time in 7 days"
+  when the same alert was seen this week, as the Cockpit's "(again: 3 times in 7 days)" already did.
+- An alert lowered to P3 and raised again keeps its one Cockpit fault, reopened with "Raised to P2." — no second
+  fault for the same number.
+- The alert desk words every duration the same way ("1 h 30 min", never "90 min"): reminders, escalations, the
+  siren's request and the villa-silent message.
+- The Monday lines to the owner say exactly the attached weekly page's figures (alerts, critical, still open,
+  maintenance problems open).
+
 ## 0.12.263
 
 What you will see: nothing new: notes for whoever works on the Agent next.
