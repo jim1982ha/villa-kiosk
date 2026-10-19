@@ -1,3 +1,8 @@
+## 0.12.281
+
+What you will see:
+- Limits: "Changed from its usual …" appears only under a value you changed; it was shown under every one.
+
 ## 0.12.280
 
 What you will see:
