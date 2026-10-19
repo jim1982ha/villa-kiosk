@@ -1,3 +1,15 @@
+## 2.496.437
+
+### Changed
+- A light whose device has a scene choice (an LED strip's "Scene" list) shows a picker of its scenes in place of the
+  Effect list ("off" / "Scene"): picking one sets the scene and switches the light to its Scene mode, so it plays at
+  once. Lights without one keep the Effect list. For the owner's profile (the scene choice is a setting of the device;
+  other profiles keep the Effect list).
+
+### Fixed
+- A light's colour bubbles: the last one (the colour picker) sat lower and smaller than the others; all ten are the
+  same size on one aligned grid.
+
 ## 2.496.436
 
 ### Changed
