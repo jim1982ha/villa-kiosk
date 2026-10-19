@@ -43,9 +43,15 @@ ck("reopening clears the resolution time (a stale one corrupts every MTTR figure
      E.withTicketAdvanced(t0, "t1", "open", { photoIds: [] }, undefined, k()).tickets[0].updates.at(-1).kind === undefined);
   ck("every step records the profile that recorded it and the name typed for who did it",
      p.by === "Facility manager" && p.who === "Op" && f.by === "Owner" && f.who === "Op", [p, f]);
-  ck("  ...the work done is the typed name's, else the profile's",
-     fixed.completions[0].by === "Op"
-     && E.withTicketAdvanced(picked, "t1", "resolved", { photoIds: [] }, undefined, k(), "Owner").completions[0].by === "Owner");
+  // ⚠️ A DELIBERATE REVERSAL (owner, 2026-10-19): this pinned `completions[0].by === "Op"` — the typed name in `by`,
+  // while an Agent completion's `by` is the recorder (the agent) and `who` the person. A person's completion is now
+  // written like a step: `by` the profile, `who` the typed name; workedBy is the one reader, old rows included.
+  const bare = E.withTicketAdvanced(picked, "t1", "resolved", { photoIds: [] }, undefined, k(), "Owner").completions[0];
+  ck("  ...the completion too: `by` the profile that recorded it, `who` the typed name (absent when none was typed)",
+     fixed.completions[0].by === "Owner" && fixed.completions[0].who === "Op" && bare.by === "Owner" && !("who" in bare),
+     [fixed.completions[0], bare]);
+  ck("  ...and the work done reads the typed name, else the profile's, old rows included (workedBy)",
+     E.workedBy(fixed.completions[0]) === "Op" && E.workedBy(bare) === "Owner" && E.workedBy({ by: "Op" }) === "Op");
 }
 ck("an unknown fault changes nothing", E.withTicketAdvanced(t0, "nope", "resolved", { photoIds: [] }, cost, k()) === t0);
 {

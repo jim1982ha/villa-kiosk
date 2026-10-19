@@ -75,5 +75,20 @@ const withNull = await statesOf([
 eq("HA's null on a fresh entity is coerced at the door",
    withNull.every((p) => typeof p.state === "string"), true);
 
+console.log("\n  and each stretch is painted for what it is (owner, 2026-10-19):");
+// ⚠️ AN UNKNOWN STRETCH WAS PAINTED "CONTACT LOST" (to 2.496.427). "unknown" also survives the fetch, and the bar
+// painted it the legend's amber; its device was answering with no value (stateColors.contactOf "no-value").
+{
+  const blank = await statesOf([
+    { state: "21.5", last_changed: T(0) }, { state: "unknown", last_changed: T(10) }, { state: "unavailable", last_changed: T(20) },
+  ], "sensor.fixture_temp");
+  const { chartColours } = await import("@/config/reading");
+  const { historyStateColor, STATUS_COLOR } = await import("@/utils/stateColors");
+  const paint = chartColours(historyStateColor("sensor.fixture_temp"));
+  eq("`unknown` reaches the chart too", blank.map((p) => p.state), ["21.5", "unknown", "unavailable"]);
+  eq("...painted idle, never the lost colour; `unavailable` stays amber",
+     blank.map((p) => paint(p.state)).slice(1), [STATUS_COLOR.idle, STATUS_COLOR.unavailable]);
+}
+
 console.log(`\n${fail ? `❌ ${fail} failed` : "✅ offline time reaches the chart"}`);
 process.exit(fail ? 1 : 0);

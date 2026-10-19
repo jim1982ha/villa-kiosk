@@ -26,6 +26,8 @@ export interface PanelHeader {
   badge: {
     category: Category; iconKey: string; color?: string; categoryColor: string;
     state: DeviceSurfaceState; ringState?: DeviceSurfaceState;
+    /** A critical device that lost contact (deviceLook.critical): the window's lost pill is red (reading.lostPillTone). */
+    critical: boolean;
   };
   /** The linked switch (EntityMapping.linkedEntityId), when it has one and
    *  this profile may control it. */
@@ -86,6 +88,7 @@ export function panelHeader({ panel, entities, config, canControl, linkedSwitch 
       categoryColor: categoryColor(category),
       state: look.face,
       ringState: look.ring,
+      critical: look.critical,
     },
     linked: linkedId && canControl && linkedSwitch
       ? { label: labelOf(linkedId, config.entityMap, entities), ...linkedSwitch }

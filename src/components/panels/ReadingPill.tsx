@@ -7,7 +7,8 @@
 import type { CSSProperties } from "react";
 import type { LucideIcon } from "lucide-react";
 import { AlertTriangle } from "lucide-react";
-import type { Reading } from "@/config/reading";
+import { lostPillTone, type Reading } from "@/config/reading";
+import { usePanelActions } from "./PanelActionsContext";
 
 export default function ReadingPill({ r, icon: Icon, size, style }: {
   r: Reading;
@@ -15,8 +16,10 @@ export default function ReadingPill({ r, icon: Icon, size, style }: {
   size: number;
   style?: CSSProperties;
 }) {
+  // a critical device that lost contact: the red of the Cockpit, not the amber (the open window's header decides)
+  const critical = usePanelActions().badge?.critical ?? false;
   return (
-    <span className={`status-pill ${r.pill}`} style={style}>
+    <span className={`status-pill ${lostPillTone(r.pill ?? "", critical)}`} style={style}>
       {r.alarm ? <AlertTriangle size={size} /> : <Icon size={size} />}
       {r.value}
     </span>

@@ -188,8 +188,18 @@ const pillTone = (id: string, state: string | undefined): string =>
 /** Where a lock's bolt is (stateColors.lockBolt): the one reading a panel asks here, with its pill. */
 export { lockBolt, type LockBolt } from "@/utils/stateColors";
 
+/** The tone of a window's pill once its device is known to be CRITICAL and lost (`critical`: the header's
+ *  deviceLook.critical — PanelActions.badge.critical): its lost ("unavailable") pill takes the danger red, as the
+ *  Cockpit paints that device; every other tone stays. ⚠️ ONE RULE FOR THE THREE LOST PILLS (2.496.428): the
+ *  reading's, the "UNAVAILABLE" notice's and the lock's. */
+export function lostPillTone(tone: string, critical: boolean): string {
+  return critical && tone === STATUS_PILL_CLASS.unavailable ? STATUS_PILL_CLASS.alert : tone;
+}
+
 /** The lock window's pill: the state the lock actually reported, shouted
- *  ("UNLOCKING", "JAMMED"), "UNKNOWN" when there is no lock entity at all. */
+ *  ("UNLOCKING", "JAMMED"), "UNKNOWN" when there is no lock entity at all.
+ *  A lock reporting "unknown" (no value, its device answering) takes the quiet
+ *  tone, never the amber of a lost lock (statusKeyFor). */
 export function lockPill(id: string, state: string | undefined): StatePill {
   return { text: (state ?? "unknown").replace(/_/g, " ").toUpperCase(), tone: pillTone(id, state) };
 }
@@ -207,8 +217,9 @@ export function readableState(state: string): string {
   return prettyState(state);
 }
 
-/** A history bar's colours: the window's own, except that an unavailable or
- *  unknown stretch is ALWAYS the legend's offline colour. */
+/** A history bar's colours: the window's own, except that an unavailable
+ *  stretch is ALWAYS the legend's offline colour and an unknown one its quiet
+ *  idle colour (stateColors.paintState). */
 export function chartColours(colorFor: (state: string) => string): (state: string) => string {
   return paintState(colorFor);
 }

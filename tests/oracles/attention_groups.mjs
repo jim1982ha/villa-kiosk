@@ -14,8 +14,15 @@ import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
-const { buildAttentionItems, groupAttention, attentionFor, attentionLine, attentionLineIn, lineIcon } = await import("@/config/attention");
+const { buildAttentionItems, groupAttention, attentionFor } = await import("@/config/attention");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
+const { devicesOf } = await import("../consistency/devices.mjs");
+// A card's words, icons and buttons are what cockpitCard returns — what the Overview draws (architecture review,
+// 2026-10-19: these checks read attention's line functions one by one, which the card might not have used)
+const { cockpitCard } = await import("@/config/cockpitCard");
+const card = (g) => cockpitCard(g, null);
+const lineText = (g, n = 0) => card(g).lines[n]?.text;
+const lineIcon = (g, n = 0) => card(g).lines[n]?.icons;
 
 const ent = (id, state, name) => ({ entity_id: id, state, attributes: { friendly_name: name } });
 const entities = {
@@ -29,9 +36,10 @@ const resolvedRooms = { "lock.door": "Entrance", "light.lamp": "Hall", "lock.bac
 const ticket = (id, title, entityId, extra = {}) => ({ id, title, status: "open", openedAt: "2026-10-02T10:00:00Z", photoIds: [], updates: [], ...(entityId ? { entityId } : {}), ...extra });
 // The battery sensor is the lock's own entity in Home Assistant's registry.
 const folding = new Map([["sensor.door_battery", "lock.door"]]);
+const villa = devicesOf({ ids: Object.keys(entities), unavailable: ["light.lamp"], folding });
 const build = (tickets, more = {}) => buildAttentionItems({
-  unavailableIds: ["light.lamp"], entities, entityMap, alertThresholds: {}, resolvedRooms,
-  fmData: { ...EMPTY_FM_DATA, tickets }, selectableIds: Object.keys(entities), folding, ...more,
+  devices: villa, entities, entityMap, alertThresholds: {}, resolvedRooms,
+  fmData: { ...EMPTY_FM_DATA, tickets }, ...more,
 });
 
 // owner, 2026-10-15: the card's "Next check" — the clock the Agent wrote on its fault reaches the card's problem
@@ -56,7 +64,7 @@ ck("  ...the row is named after the device, opens the lock, and leads with the r
 // very lock whose state is listed — it was a second line, "Open fault: Entrance door unlocked", under "Unlocked"
 // (owner, 2026-10-18: "Unlocked — #41 · Laundry Room door unlocked" — the state's word is not said when the fault says it)
 ck("  ...ONE line: its fault naming itself, the state's word not said again (the fault keeps its ticket, so its Close)",
-   door?.items.map(attentionLine).join(" | ") === "Entrance door unlocked", door?.items.map(attentionLine));
+   door && card(door).lines.map((l) => l.text).join(" | ") === "Entrance door unlocked", door && card(door).lines);
 ck("  ...and the villa's own items are never written on: the ticket gone, the state line has no fault",
    !before.concat(after).some((i) => i.fault) && !groupAttention(before).some((g) => g.items.some((i) => i.fault)));
 ck("  ...and the row keeps its place when the ticket lands (ordered by worst problem and name, not arrival)",
@@ -78,28 +86,28 @@ ck("an entity the fold does not know is its own device: a row of its own, as bef
    ghostRow?.key === "device:sensor.renamed_away" && ghostRow.items.length === 1);
 const lone = groupAttention(before).find((g) => g.entityId === "light.lamp");
 ck("a device with ONE problem: its row is the device, the problem its line",
-   lone?.title === "Hall lamp" && lone.room === "Hall" && lone.items.length === 1 && attentionLineIn(lone, lone.items[0]) === "Unavailable");
+   lone?.title === "Hall lamp" && lone.room === "Hall" && lone.items.length === 1 && lineText(lone) === "Unavailable");
 const loneFault = groupAttention(build([ticket("va-4", "Back door stiff", "lock.back")])).find((g) => g.entityId === "lock.back");
 // ⚠️ ONE SHAPE (owner, 2026-10-10): a lone fault titled its row with its own text ("Back door stiff") where the same
 // device with two problems was titled "Back door" — the Cockpit showed three shapes of row
 ck("  ...and a lone ticket is titled by its DEVICE, the fault its line, the device's room taken",
    loneFault?.title === "Back door" && loneFault.room === "Garden"
-     && attentionLineIn(loneFault, loneFault.items[0]) === "Back door stiff", loneFault);
+     && lineText(loneFault) === "Back door stiff", loneFault);
 // ⚠️ NO "Open fault:" (owner, 2026-10-14: "providing no value") — but a fault someone took still says so
 const taken = groupAttention(build([{ ...ticket("va-5", "Back door stiff", "lock.back"), status: "in_progress" }]))
   .find((g) => g.entityId === "lock.back");
 ck("  ...an open fault's line is its text alone, one taken in hand still reads \"In progress: …\"",
-   taken && attentionLineIn(taken, taken.items[0]) === "In progress: Back door stiff", taken?.items);
+   taken && lineText(taken) === "In progress: Back door stiff", taken?.items);
 // ⚠️ ONE ICON PER MEANING (owner, 2026-10-13: "the icon is redundant"): every line repeated its row's icon
 ck("  ...and its line shows no icon of its own: the row's says it already",
-   lineIcon(loneFault, loneFault.items[0]) === null && lineIcon(lone, lone.items[0]) === null);
+   lineIcon(loneFault) === null && lineIcon(lone) === null);
 const mixed = battery.find((g) => g.key === "device:lock.door");
 ck("  ...while a row mixing sources marks the line whose source is not the row's (a person's fault under a live lock)",
-   mixed?.kind === "alarm" && mixed.items.map((i) => lineIcon(mixed, i)?.sources.join("+") ?? "").join(",") === ",person",
-   mixed?.items.map((i) => [i.kind, lineIcon(mixed, i)]));
+   mixed?.kind === "alarm" && mixed.items.map((_, n) => lineIcon(mixed, n)?.sources.join("+") ?? "").join(",") === ",person",
+   mixed?.items.map((i, n) => [i.kind, lineIcon(mixed, n)]));
 const noDevice = groupAttention(build([ticket("t-n", "Pool pump noisy")])).find((g) => g.key === "item:fault:t-n");
 ck("  ...and a problem with no device stands for itself: its line says only its status, never its title twice",
-   noDevice?.title === "Pool pump noisy" && attentionLineIn(noDevice, noDevice.items[0]) === "", noDevice);
+   noDevice?.title === "Pool pump noisy" && lineText(noDevice) === "", noDevice);
 const warnOnly = groupAttention(build([ticket("w1", "Squeaks", "lock.back"), ticket("w2", "Loose handle", "lock.back")]));
 const backRow = warnOnly.find((g) => g.key === "device:lock.back");
 ck("two faults on one device: one row under the device's name, both faults inside",
@@ -155,7 +163,7 @@ ck("  ...the rows' order does not depend on the order the problems arrived in", 
 ck("  ...each row's icon is its most serious problem, listed first", worstFirst);
 
 console.log("\n  the profile filter runs FIRST:");
-const att = { unavailableIds: ["light.lamp"], selectableIds: Object.keys(entities), attentionItems: build([ticket("va-5", "Battery low", "sensor.door_battery")]) };
+const att = { devices: villa, attentionItems: build([ticket("va-5", "Battery low", "sensor.door_battery")]) };
 const guest = attentionFor(att, (id) => id !== "lock.door");
 const guestRow = guest.attentionGroups.find((g) => g.key === "device:lock.door");
 ck("a profile that may not open the lock never gets its red state inside the row, only what it may open",
@@ -164,6 +172,9 @@ const owner = attentionFor(att, () => true);
 ck("the health line counts ROWS (the badge's number) but reads its level from every problem",
    owner.health.summary.startsWith(`${owner.attentionGroups.length} thing`) && owner.attentionGroups.length < owner.attentionItems.length && owner.health.level === "danger",
    [owner.health, owner.attentionGroups.length, owner.attentionItems.length]);
+ck("  ...and the profile's devices are the ones it may open: the Overview's tiles and the Recap count these",
+   guest.devices.ids.join() === Object.keys(entities).filter((id) => id !== "lock.door").join() && !guest.devices.has("lock.door")
+   && owner.devices.ids.length === Object.keys(entities).length && guest.devices.unavailable.join() === "light.lamp", guest.devices.ids);
 
 console.log("\n  a reading nobody placed on the map (2.496.258):");
 // A pump: its power sensor is placed, its energy meter is not. The agent's
@@ -175,10 +186,9 @@ const pumpMap = { ...entityMap, "sensor.pump_power": { entityId: "sensor.pump_po
 const registry = { "sensor.pump_power": "dev-pump", "sensor.pump_energy": "dev-pump", "lock.door": "dev-door" };
 const pumpFold = deviceFolding(pumpMap, [], registry);
 const pumpRows = groupAttention(buildAttentionItems({
-  unavailableIds: [], entities: pumpEntities, entityMap: pumpMap, alertThresholds: {},
+  devices: devicesOf({ ids: Object.keys(pumpMap), folding: pumpFold }), entities: pumpEntities, entityMap: pumpMap, alertThresholds: {},
   resolvedRooms: { ...resolvedRooms, "sensor.pump_power": "Pool" },
   fmData: { ...EMPTY_FM_DATA, tickets: [ticket("pm-1", "Pump used 0.09 kWh/day", "sensor.pump_energy")] },
-  selectableIds: Object.keys(pumpMap), folding: pumpFold,
 }));
 const pumpRow = pumpRows.find((g) => g.items.some((i) => i.id === "fault:pm-1"));
 ck("the fold puts an unplaced entity on its Home Assistant device's placed one",
@@ -199,9 +209,9 @@ ck("every Cockpit count in the top bar and the phone menu is the number of ROWS"
    counted.length === 2 && counted.every((a) => a === "attentionGroups.length"), counted);
 // 2.496.268: grouped ONCE, per profile — the villa model's role-blind
 // grouping had no reader and ran on every state push anyway.
-ck("the villa model hands buildAttentionItems the device fold, and leaves the grouping to the profile's view",
-   // and the villa's critical devices (2.496.410) — never grouped there (a `//` once swallowed that half, review 2026-10-19)
-   /selectableIds, folding,\s*critical \}\);/.test(vm) && !/groupAttention|villaHealthFrom/.test(vm)
+ck("the villa model hands buildAttentionItems its device list (the fold and the critical list inside), and leaves the grouping to the profile's view",
+   // never grouped there (a `//` once swallowed that half, review 2026-10-19); the list asked, never restated (review, 2026-10-19)
+   /buildAttentionItems\(\{\s*devices, entities,/.test(vm) && /return \{ devices, attentionItems \};/.test(vm) && !/groupAttention|villaHealthFrom/.test(vm)
    && /return attentionFor\(attention, \(id\) => sees\.has\(id\)\);/.test(src("components/cockpit/useVillaAttention.ts")));
 // HOW a card is drawn (its buttons inside, the click its own, the source icons) is checked on the drawn card:
 // tests/oracles/cockpit_cards.mjs (architecture review, 2026-10-15). Here: the WIRING a drawing cannot see.
@@ -210,16 +220,15 @@ ck("the villa model hands buildAttentionItems the device fold, and leaves the gr
 // nothing else: it asks attention for no part of a card (these checks matched its JSX text before, and broke on any
 // rewrite that kept the behaviour)
 {
-  const { cockpitCard } = await import("@/config/cockpitCard");
-  const { cardActions, itemActions, attentionLineIn, lineIcon } = await import("@/config/attention");
   const groups = [...battery, ...offline, ...loose, ...gAfter];   // devices with a fault, offline, loose problems
   const views = groups.map((g) => [g, cockpitCard(g, { checkMinutes: 5, nightlyAt: "02:00" })]);
-  ck("a card's view is the answers of the card's rules, line by line",
+  ck("a card's view is its group: one line per problem, in its order",
      views.length > 0 && views.every(([g, v]) => v.key === g.key && v.title === g.title
-       && JSON.stringify(v.actions) === JSON.stringify(cardActions(g))
-       && v.lines.length === g.items.length && v.lines.every((l, n) => l.key === g.items[n].id
-         && l.text === attentionLineIn(g, g.items[n]) && JSON.stringify(l.icons) === JSON.stringify(lineIcon(g, g.items[n]))
-         && JSON.stringify(l.actions) === JSON.stringify(itemActions(g, g.items[n])))));
+       && v.lines.length === g.items.length && v.lines.every((l, n) => l.key === g.items[n].id)));
+  const att2 = await import("@/config/attention");
+  ck("  ...and how a card says its problems is cockpitCard's alone: attention exports no line, icon or button rule",
+     ["cardActions", "itemActions", "attentionLineIn", "attentionLine", "lineIcon", "lineSources", "cardRecords", "healthClass"]
+       .every((n) => !(n in att2)), Object.keys(att2));
   ck("  ...and the Cockpit draws one card per group from it, asking attention for no part of a card",
      /attentionGroups\.map\(\(group\) => \(\s*<CockpitAttentionRow key=\{group\.key\} group=\{group\}/.test(cockpit)
      && (cockpit.match(/cockpitCard\(/g) ?? []).length === 1
@@ -230,7 +239,8 @@ ck("the villa model hands buildAttentionItems the device fold, and leaves the gr
 // owner, 2026-10-18 (architecture review "One problem, one card" #2): #41 could not be closed without #55 — the card's
 // Close closed every problem of the door. A card holding several problems closes each alone, or "Close all".
 {
-  const { cardActions, itemActions } = await import("@/config/attention");
+  const cardActions = (g) => card(g).actions;
+  const itemActions = (g, i) => card(g).lines[g.items.indexOf(i)].actions;
   const dev = { key: "lock.door2", label: "Door", room: "Hall" };
   const [two] = groupAttention([
     { id: "alarm:lock.door2", kind: "alarm", title: "Door", detail: "Unlocked", entityId: "lock.door2", source: "live", device: dev },

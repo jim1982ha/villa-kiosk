@@ -31,8 +31,9 @@ console.log("\n  what a profile's lists and counts cover:");
 
 console.log("\n  the attention a profile is shown:");
 {
+  const { devicesOf } = await import("../consistency/devices.mjs");
   const att = {
-    unavailableIds: ["cam", "lamp"], selectableIds: ["cam", "lamp", "fan"],
+    devices: devicesOf({ ids: ["cam", "lamp", "fan"], unavailable: ["cam", "lamp"] }),
     attentionItems: [
       { id: "unavailable:cam", kind: "unavailable", title: "Cam", detail: "Unavailable", entityId: "cam" },
       { id: "unavailable:lamp", kind: "unavailable", title: "Lamp", detail: "Unavailable", entityId: "lamp" },
@@ -43,7 +44,8 @@ console.log("\n  the attention a profile is shown:");
   const g = attentionFor(att, (id) => id !== "cam");
   ck("an item about a device the profile may not open is left out; one with no device stays",
      g.attentionItems.map((i) => i.id).join() === "unavailable:lamp,schedule:s", g.attentionItems.map((i) => i.id));
-  ck("  ...and the lists the Cockpit groups by follow", g.unavailableIds.join() === "lamp" && g.selectableIds.join() === "lamp,fan");
+  ck("  ...and the devices the Cockpit groups by follow", g.devices.unavailable.join() === "lamp" && g.devices.ids.join() === "lamp,fan"
+     && !g.devices.has("cam") && g.devices.has("fan"));
   const none = attentionFor(att, () => false);
   ck("  ...and the health line is re-read from what remains", none.attentionItems.length === 1 && none.health.level !== "ok" && g.health !== att.health);
   const clean = attentionFor({ ...att, attentionItems: att.attentionItems.slice(0, 1) }, () => false);

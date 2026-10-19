@@ -342,6 +342,14 @@ export function villaDevices(input: VillaDeviceInput): VillaDevices {
   };
 }
 
+/** The devices ONE PROFILE is shown: the villa's, those `may` open (villaVisibility.visibleTo) — what the Overview, the
+ *  top bar and the Recap count (attention.attentionFor). The fold and the critical list are the villa's own. */
+export function devicesFor(devices: VillaDevices, may: (entityId: string) => boolean): VillaDevices {
+  const ids = devices.ids.filter(may);
+  const set = new Set(ids);
+  return { ...devices, ids, unavailable: devices.unavailable.filter(may), has: (id) => set.has(id) };
+}
+
 // ── One identity for every opener (2.496.260) ──────────────────────────────
 // ⚠️ THREE ANSWERS TO "WHICH DEVICE IS THIS". The panel router and the map
 // knew explicit groups only; Cockpit and the counts the full fold above; and

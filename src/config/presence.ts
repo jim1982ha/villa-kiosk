@@ -93,14 +93,15 @@ export function presenceWhy(sensorId: string, entities: Readonly<Record<string, 
   };
 }
 
-/** "since" in words: a time today ("14:20"), else the day and time ("Sat 17 Oct, 21:00") — dateText's own forms. */
-export function sinceText(at: string | null, clockTime: (t: string) => string, dayTime: (t: string) => string,
-  now: Date = new Date()): string {
+/** "since" in words, always with its day: "19 Oct, 18:40" (dateText.dayTime). ⚠️ THE TIME ALONE WAS NOT ENOUGH (owner,
+ *  2026-10-19, the presence window's People: "Home · since 18:40" — which day?): a time today was written without its
+ *  date, so a reader could not tell today from yesterday. One form, every "since" of the window, the tile and the Recap. */
+export function sinceText(at: string | null, dayTime: (t: string) => string): string {
   if (!at || Number.isNaN(Date.parse(at))) return "";
-  return new Date(at).toDateString() === now.toDateString() ? clockTime(at) : dayTime(at);
+  return dayTime(at);
 }
 
-/** The Recap's line: "Villa occupied since 09:12", "Villa empty since Sat 17 Oct, 21:00", "Villa presence unknown". */
+/** The Recap's line: "Villa occupied since 19 Oct, 09:12", "Villa presence unknown". */
 export function recapPresenceText(p: Presence, when: string): string {
   if (p.state === "unknown") return "Villa presence unknown";
   return `Villa ${p.state}${when ? ` since ${when}` : ""}`;

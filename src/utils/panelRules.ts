@@ -8,6 +8,8 @@
 // said "°C" whatever Home Assistant's unit system. Pure now:
 // tests/oracles/panel_rules.mjs.
 
+import { hsToRgb } from "./colorUtils";
+
 /** Labels for a fan with N discrete speeds (HA's percentage_step). */
 const SPEED_LABELS: Record<number, string[]> = {
   1: ["On"],
@@ -75,7 +77,54 @@ export function fmtTemp(v: number | undefined | null, unit?: string): string {
 /** What a light can be asked for, from its supported_color_modes. */
 export function lightSupport(modes: readonly string[]): { brightness: boolean; temperature: boolean } {
   return {
-    brightness: modes.some((m) => ["brightness", "color_temp", "hs", "rgb", "rgbw", "xy"].includes(m)),
+    brightness: modes.some((m) => ["brightness", "color_temp", "hs", "rgb", "rgbw", "rgbww", "xy", "white"].includes(m)),
     temperature: modes.includes("color_temp"),
   };
+}
+
+/** The colour modes a light takes a colour in (the villa's system's supported_color_modes). */
+const COLOUR_MODES = ["hs", "rgb", "rgbw", "rgbww", "xy"];
+
+/** The choices a light's window offers beside its On button (owner, 2026-10-19: an LED strip's colours and effects
+ *  sat nowhere). `colour`: the field a colour is sent in — `hs_color` for a light that takes hue/saturation, else
+ *  `rgb_color` (an rgb/rgbw/rgbww/xy light; the villa's system converts it to the light's own mode); null for a light
+ *  that takes no colour. `temperatureInRow`: a white-only light (color_temp and no colour) has its temperature slider
+ *  there instead. `effects`: its effect_list. `any`: whether there is a row at all — a light with none of these keeps
+ *  the big On button. */
+export interface LightChoices {
+  colour: "hs_color" | "rgb_color" | null;
+  temperatureInRow: boolean;
+  effects: string[];
+  any: boolean;
+}
+
+export function lightChoices(attrs: Record<string, unknown> | undefined): LightChoices {
+  const modes = Array.isArray(attrs?.supported_color_modes) ? (attrs.supported_color_modes as unknown[]).map(String) : [];
+  const colour = modes.includes("hs") ? "hs_color" : modes.some((m) => COLOUR_MODES.includes(m)) ? "rgb_color" : null;
+  const temperatureInRow = !colour && modes.includes("color_temp");
+  const effects = Array.isArray(attrs?.effect_list)
+    ? (attrs.effect_list as unknown[]).filter((e): e is string => typeof e === "string" && e !== "") : [];
+  return { colour, temperatureInRow, effects, any: !!colour || temperatureInRow || effects.length > 0 };
+}
+
+/** The data of the `light.turn_on` that sets this colour (hue 0-360, saturation 0-100) on this light: in the field
+ *  lightChoices chose; null for a light that takes no colour. */
+export function lightColourData(choices: Pick<LightChoices, "colour">, hue: number, sat: number): Record<string, unknown> | null {
+  const h = Math.round(((hue % 360) + 360) % 360), s = Math.round(Math.min(100, Math.max(0, sat)));
+  if (choices.colour === "hs_color") return { hs_color: [h, s] };
+  if (choices.colour === "rgb_color") {
+    const c = hsToRgb(h, s);
+    return { rgb_color: [c.r, c.g, c.b].map((v) => Math.round(v * 255)) };
+  }
+  return null;
+}
+
+/** The `light.turn_on` data that runs one of the light's effects; null for a name its effect_list does not hold. */
+export function lightEffectData(choices: Pick<LightChoices, "effects">, effect: string): Record<string, unknown> | null {
+  return choices.effects.includes(effect) ? { effect } : null;
+}
+
+/** The `light.turn_on` data for a colour temperature, in kelvin (whole). */
+export function lightTemperatureData(kelvin: number): Record<string, unknown> {
+  return { color_temp_kelvin: Math.round(kelvin) };
 }

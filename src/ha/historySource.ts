@@ -161,7 +161,7 @@ async function readings(port: HistoryPort, id: string, window: { from: number; t
  * blank up to its first change, a 12h window as one solid band of the state
  * that survived (2026-09-14, a flapping lock) — and it made the look-back's
  * own "is anything alive in here" test vacuous. Colour is not this module's
- * business (stateColors.historyStateColor paints these amber).
+ * business (stateColors.paintState: unavailable amber, unknown idle).
  */
 async function states(port: HistoryPort, id: string, window: { from: number; to: number }): Promise<StateHistoryPoint[]> {
   const points = (await port.stateRows(id, window.from, window.to))

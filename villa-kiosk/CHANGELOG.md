@@ -1,3 +1,62 @@
+## 2.496.428
+
+### Fixed
+- The monthly recap's resolution figures are the month's own. It printed "Resolved (all time)", the mean time to
+  resolution and "Closed without action" over every record still kept, so September's recap made again in January
+  read "Closed without action: 0" (those closes had already been cleared away). It now reads "Resolved this month",
+  "Mean time to resolution this month" and "Closed without action this month", each as the month stood at its end.
+- The Tickets tab's "mean resolution" and "closed, no action" figures say which period they cover: a line under them
+  reads "Mean resolution and closes within the kept record (90 days)." The number of days is the one the add-on
+  keeps closed faults for (a close with no work after 90 days, a repair after the evidence window in the add-on's
+  options), and a close older than that no longer counts in them.
+- The Recap counts what your profile sees on the Overview. Its "All devices reporting" check, the recap's "Device
+  availability" section and the "detected faults" check counted every device and every fault in the villa, including
+  the ones your Overview does not list. They now count the devices and faults your profile is shown.
+- A device the villa's system no longer has (a 3D object whose device was renamed or removed, shown as "Missing" on
+  its Overview card) now appears in its own Recap checks too. A missing camera or air conditioner was counted under
+  "All devices reporting" but left out of "Cameras online" and "Air conditioning reachable". Those checks now list it
+  and name it apart: "1 offline, 1 missing."
+- The recap's "Device availability" section said offline devices were "see the faults section above", but they are
+  not listed there. It now reads "listed under "Open issues" on the Overview, and under "All devices reporting" below."
+- Saved readiness snapshots are titled by the moment they were taken ("2026-10-19 14:05"). All three snapshots saved
+  this month were titled "October 2026". Recaps and spend statements keep their month as the title.
+- The villa presence window says the day with every time: "Home · since 19 Oct, 18:40" (it said "since 18:40",
+  which did not tell today from yesterday). The tile and the Recap's presence line say it the same way.
+- Minutes when a sensor had no value to give are no longer painted as "contact lost". A history bar drew every
+  "unknown" stretch in the amber the Map colours legend calls "Contact lost", under a badge sitting quiet on the map;
+  it is now the plain grey of a quiet device, and only a real loss of contact stays amber. A lock reporting "unknown"
+  wears the grey pill instead of the amber one. The legend's amber line says "Contact lost", and a new grey line
+  says "No value reported".
+- A critical device that has lost contact is red on the map, not only on the Cockpit. Its badge keeps the muted
+  face and wears a red ring, its room chip's number turns red, its row in a device list has the same red ring, and
+  its window's "UNAVAILABLE" pill is red. Any other device that lost contact stays amber. The legend gains "Red ring:
+  a critical device has lost contact", and its red room number now names that case too.
+- A VESTA Agent whose heartbeat carried a timing in the wrong shape showed Offline for good, though it was running:
+  the whole heartbeat was refused. The heartbeat now counts (the Agent shows Online); only the timing is set aside,
+  so the Overview's (i) gives no number until the Agent sends one in the right shape.
+- A device the villa's system has lost contact with wears the whole tile in a device list, not only its icon. In a
+  room's window, "… Temperature — Unavailable" had a dashed amber icon square on an ordinary tile;
+  the tile itself now has the dashed amber edge, an amber tint and its "Unavailable" in amber. A critical device that
+  lost contact has a red edge and a red word instead. A device with no value to give stays a plain tile. The same in
+  the Cockpit's lists, Lights, the Recap's lists and every other device list.
+
+### Changed
+- A fault closed in the Kiosk records who did the work and who recorded it the way a VESTA Agent completion always
+  has: the signed-in profile as the recorder, the name typed under "Resolved by" as the person who did it. Lists,
+  the Schedule tab and the recap still show the person who did the work, older records included.
+- A light that has colours or effects shows them beside a smaller On button. An LED strip's window was a huge
+  "On" button, then its brightness: its colours and effects were nowhere. The top of the window is now one row: a
+  compact On button, a row of colour swatches (White, Red, Orange, Yellow, Green, Cyan, Blue, Purple, Pink, the
+  current one ringed) and a last swatch in the light's current colour that opens the device's own colour picker,
+  then an "Effect" list showing the running effect. A white-only light has its colour temperature slider in that
+  row instead. A light that only dims keeps the big On button.
+
+### Under the hood
+- One read of the villa's critical-device list serves every screen (the Cockpit, the map, the open window, the
+  device lists); it was a per-screen read.
+- The heartbeat's answer says why a timing was set aside ("cadence": "refused: …"), and the add-on's log notes it
+  once per new reason; the agreement with the VESTA Agent says so in its heartbeat sentence.
+
 ## 2.496.427
 
 ### Fixed

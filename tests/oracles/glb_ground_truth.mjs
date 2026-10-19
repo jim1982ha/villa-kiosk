@@ -33,10 +33,10 @@ const folding = deviceFolding({}, [], {});
 const d = villaDevices({ entityMap: {}, deviceGroups: [], dismissed: dis, mappedEntityIds: mapped,
   entities, entityDeviceIds: {}, folding });
 ck("it is one of the villa's devices, and an unavailable one", d.has(TV) && d.unavailable.includes(TV), d.unavailable);
-const items = buildAttentionItems({ unavailableIds: d.unavailable, entities, entityMap: {}, alertThresholds: {},
-  resolvedRooms: {}, fmData: emptyFm, selectableIds: d.ids, folding });
+const items = buildAttentionItems({ devices: d, entities, entityMap: {}, alertThresholds: {},
+  resolvedRooms: {}, fmData: emptyFm });
 const sees = visibleTo("owner", { mapped, entityMap: {}, entities });
-const att = attentionFor({ attentionItems: items, unavailableIds: d.unavailable, selectableIds: d.ids }, (id) => sees.has(id));
+const att = attentionFor({ attentionItems: items, devices: d }, (id) => sees.has(id));
 const row = att.attentionGroups.find((g) => g.items.some((i) => i.entityId === TV));
 ck(`Needs attention lists it, as "${NOT_IN_HA}"`, !!row && row.items.some((i) => i.detail === NOT_IN_HA), att.attentionGroups.map((g) => g.items.map((i) => i.detail)));
 ck("Advanced Settings lists it without a search, to point it at an entity", orphanObjects(scene, (id) => !!entities[id], {}).includes(TV));

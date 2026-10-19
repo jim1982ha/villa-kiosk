@@ -11,9 +11,10 @@
 import { roleCan } from "@/auth/permissions";
 import { useState } from "react";
 import { rowText } from "@/config/reading";
-import { ChevronRight, Sparkles, Power, PowerOff, EyeOff } from "lucide-react";
+import { Sparkles, Power, PowerOff } from "lucide-react";
 import BasePanel from "./BasePanel";
 import EntityRowToggle from "./EntityRowToggle";
+import SummaryEntityRow from "./SummaryEntityRow";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useSceneConfirm } from "@/hooks/useSceneConfirm";
@@ -127,7 +128,7 @@ export default function SummaryGroupPanel({
 }: Props) {
   // Entities on the 3D map; anything else exists only in Home Assistant and
   // is listed last and tinted (config/VillaModel).
-  const { mappedEntityIds } = useVillaModel();
+  const { mappedEntityIds, devices: villaDevices } = useVillaModel();
   const { entities, suppressedEntityIds, hiddenInHaEntityIds, callService } = useHA();
   const roomFloors = useRoomFloors();
   const { config, resolvedRooms } = useConfig();
@@ -138,7 +139,9 @@ export default function SummaryGroupPanel({
    *  linked entity through devicePower, its alert override from config). A
    *  linked entity is frequently not itself in this group (a pump's switch
    *  lives elsewhere), so this reads the whole store, not the group's list. */
-  const looks = storeLookSource(entities, config);
+  // ...and the villa's critical list as the villa model folds it (devices.isCritical): a critical device that lost
+  // contact is red here, as on the map and the Cockpit (2.496.428).
+  const looks = storeLookSource(entities, { ...config, isCritical: villaDevices.isCritical });
   const { role } = useProfile();
   const entityLabel = useEntityLabel();
   const { ask: askScene, dialog: sceneDialog } = useSceneConfirm();
@@ -315,37 +318,20 @@ export default function SummaryGroupPanel({
       return f ? callService(f.domain, f.service, {}, { entity_id: id }) : Promise.resolve(NOT_SENT);
     };
 
+    // The tile itself is SummaryEntityRow — a device that lost contact wears it whole (2.496.428).
     return (
-      <div
-        className={`summary-entity-row${offMapRow ? " is-offmap" : ""}${notInHaRow ? " is-notinha" : ""}`}
+      <SummaryEntityRow
         key={id}
-      >
-        <button
-          className="summary-entity-main"
-          onClick={() => onOpenEntity(id)}
-          title={notInHaRow
-            ? `${label} — no device has this id`
-            : offMapRow ? `${label} — not on the 3D map` : `Open ${label}`}
-        >
-          <img
-            className="summary-entity-badge"
-            src={badgeImage({ category: cat, iconKey: iconKeyFor(type, e), state: badge.face, color: config.entityMap[id]?.badgeColor, ringState: badge.ring })}
-            key={theme}
-            alt=""
-            draggable={false}
-          />
-          <span className="summary-entity-text">
-            <span className="summary-entity-name-row">
-              <span className="summary-entity-name" title={label}>{label}</span>
-              {hiddenInHa && (
-                <EyeOff size={16} className="summary-entity-hidden-icon" aria-label="Hidden" />
-              )}
-            </span>
-            <span className="summary-entity-state">{stateText}</span>
-          </span>
-          <ChevronRight size={18} className="summary-entity-chevron" />
-        </button>
-        {canToggle && (
+        label={label}
+        stateText={stateText}
+        look={badge}
+        badgeSrc={badgeImage({ category: cat, iconKey: iconKeyFor(type, e), state: badge.face, color: config.entityMap[id]?.badgeColor, ringState: badge.ring })}
+        badgeKey={theme}
+        notInHa={notInHaRow}
+        offMap={offMapRow}
+        hidden={hiddenInHa}
+        onOpen={() => onOpenEntity(id)}
+        toggle={canToggle && (
           <EntityRowToggle
             entityId={id}
             actualOn={position === "on"}
@@ -354,7 +340,7 @@ export default function SummaryGroupPanel({
             onToggle={doToggle}
           />
         )}
-      </div>
+      />
     );
   }
 }

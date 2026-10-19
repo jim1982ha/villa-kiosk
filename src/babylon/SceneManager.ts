@@ -2626,6 +2626,12 @@ export class SceneManager {
     this.visuals.setResolvedRooms(rooms);
   }
 
+  /** The villa's critical devices, folded onto their devices (deviceGroups.criticalDevices): a critical device that
+   *  lost contact is red on the map, as on the Cockpit. */
+  setCriticalDevices(ids: ReadonlySet<string>): void {
+    this.visuals.setCriticalDevices(ids);
+  }
+
   private disposed = false;
   /** One-shot guard so handlePageShow's reload can never loop. */
   private reloadedAfterDispose = false;

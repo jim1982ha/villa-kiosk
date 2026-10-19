@@ -136,8 +136,14 @@ console.log("\n  the callers ask it (pin the caller):");
      (ev.match(/deviceLook\([^)]*this\.lookSource\)/g) ?? []).length >= 4 && /mapLookSource\(this\.lastState, this\.mapping/.test(ev));
   ck("the device-list rows and the panel header ask deviceLook through the store",
      // the header since 2.496.305 in components/panels/panelHeader (driven by value in panel_header.mjs)
-     /deviceLook\(id, looks\)/.test(sg) && /storeLookSource\(entities, config\)/.test(sg) && /deviceLook\(entityId, storeLookSource\(/.test(ph)
+     /deviceLook\(id, looks\)/.test(sg) && /storeLookSource\(entities, \{ \.\.\.config, isCritical: villaDevices\.isCritical \}\)/.test(sg) && /deviceLook\(entityId, storeLookSource\(/.test(ph)
      && /panelHeader\(\{/.test(db));
+  // A CRITICAL device that lost contact is red on every one of them (2.496.428): each hands deviceLook the villa's
+  // folded critical list — the map through the page's push, the header through the page, the list through the model.
+  ck("the map, the open window's header, the room chooser and the list rows all read the critical list",
+     /isCritical: \(id: string\) => crit\.has\(id\)/.test(ev) && /manager\?\.setCriticalDevices\(critical\)/.test(db)
+     && /config: \{ \.\.\.config, isCritical \}/.test(db) && /storeLookSource\(entities, \{ \.\.\.config, isCritical \}\)/.test(db)
+     && /isCritical: villaDevices\.isCritical/.test(sg));
   ck("no caller builds a reading by hand any more (badgeFaceAndRing / linkedOn / alertStateFor)",
      ![ev, sg, db, ph].some((s) => /badgeFaceAndRing\(|linkedOn:|alertStateFor\(|linkActiveIds/.test(s)));
 }

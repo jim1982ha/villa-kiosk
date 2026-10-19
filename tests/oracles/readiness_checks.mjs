@@ -18,7 +18,7 @@ const entities = Object.fromEntries([
 ].map((e) => [e.entity_id, e]));
 const villa = new Set(Object.keys(entities));
 const devices = { ids: [...villa], unavailable: ["climate.bed", "camera.pool", "sensor.door_battery"], has: (id) => villa.has(id), deviceOf: (id) => id, deviceOfRecord: (id) => id, isCritical: () => false };
-const r = buildReadiness(entities, EMPTY_FM_DATA, devices, {}, []);
+const r = buildReadiness(entities, EMPTY_FM_DATA, { devices: devices, attentionItems: [] }, {});
 const opens = (c) => c.opens ? `${c.opens.label} → ${c.opens.group.title} [${c.opens.group.entityIds.join(",")}]${c.opens.health ? " (health)" : ""}` : "-";
 
 console.log("  each check's own list, by value:");
@@ -58,11 +58,15 @@ console.log("\n  how bad, as the top bar says it (review \"One answer per questi
   const plain = stateOf(r);
   ck("devices not answering, none critical: amber, however many (3 here) — air conditioning and cameras alike",
      plain["devices-online"] === "warn" && plain.climate === "warn" && plain.cameras === "warn" && r.overall === "warn", plain);
-  const crit = stateOf(buildReadiness(entities, EMPTY_FM_DATA, { ...devices, isCritical: (id) => id === "camera.pool" }, {}, []));
+  const crit = stateOf(buildReadiness(entities, EMPTY_FM_DATA, { devices: { ...devices, isCritical: (id) => id === "camera.pool" }, attentionItems: [] }, {}));
   ck("  ...one CRITICAL device not answering: red, in its own checks only",
      crit["devices-online"] === "fail" && crit.cameras === "fail" && crit.climate === "warn", crit);
   const rec = (id) => ({ id, title: id, status: "open", openedAt: "2026-10-19T08:00:00Z", entityId: `x.${id}`, photoIds: [] });
-  const five = buildReadiness({}, { ...EMPTY_FM_DATA, tickets: ["a", "b", "c", "d", "e"].map(rec) }, { ...devices, unavailable: [] }, {}, []);
+  const fiveData = { ...EMPTY_FM_DATA, tickets: ["a", "b", "c", "d", "e"].map(rec) };
+  const { buildAttentionItems } = await import("@/config/attention");
+  const calmDevices = { ...devices, unavailable: [] };
+  const five = buildReadiness({}, fiveData, { devices: calmDevices, attentionItems: buildAttentionItems({ devices: calmDevices, entities: {},
+    entityMap: {}, alertThresholds: {}, resolvedRooms: {}, fmData: fiveData }) }, {});
   ck("  ...five faults: amber — a fault is a warning, however many", five.checks.find((c) => c.id === "tickets").state === "warn"
      && five.overall === "warn", five.checks.find((c) => c.id === "tickets"));
   ck("  ...and the critical rule is the Overview's: a critical entity stands for its device",
@@ -92,22 +96,26 @@ console.log("\n  an alarm makes the villa not ready, as it makes the top bar red
   const alarm = { id: "alarm:binary_sensor.kitchen_leak", kind: "alarm", title: "Kitchen leak", detail: "Leak detected",
     source: "live", entityId: "binary_sensor.kitchen_leak" };
   const late = { id: "schedule:pool", kind: "schedule", title: "Pool filter", detail: "Overdue", source: "schedule" };
-  const calm = buildReadiness({}, EMPTY_FM_DATA, { ...devices, unavailable: [] }, {}, [late]);
-  const leak = buildReadiness({}, EMPTY_FM_DATA, { ...devices, unavailable: [] }, {}, [late, alarm]);
+  const calm = buildReadiness({}, EMPTY_FM_DATA, { devices: { ...devices, unavailable: [] }, attentionItems: [late] }, {});
+  const leak = buildReadiness({}, EMPTY_FM_DATA, { devices: { ...devices, unavailable: [] }, attentionItems: [late, alarm] }, {});
   const row = (res) => res.checks.find((c) => c.id === "alarms");
   ck("no alarm: the check passes, and a late task is no alarm", row(calm).state === "pass" && row(calm).label === "No alarm");
   ck("  ...a leak sounding: the check fails, names it, and the verdict is NOT READY",
      row(leak).state === "fail" && row(leak).detail === "Kitchen leak: Leak detected" && leak.overall === "fail"
      && row(leak).entityIds.join() === "binary_sensor.kitchen_leak", row(leak));
-  const { healthClass, villaHealthFrom } = await import("@/config/attention");
+  const { villaHealthFrom } = await import("@/config/attention");
+  // the level is attention's; the class is the top bar's own (HUD.HEALTH_CLASS)
+  const { HEALTH_CLASS } = await import("@/components/hud/HUD");
+  const healthClass = (health) => HEALTH_CLASS[health.level];
   const g = (items) => [{ items }];
   ck("the top bar's Cockpit button: red for an alarm, amber for a late task, plain when all is fine",
      healthClass(villaHealthFrom(g([alarm]))) === " has-alert" && healthClass(villaHealthFrom(g([late]))) === " has-warn"
      && healthClass(villaHealthFrom([])) === "");
   const hud = readFileSync(new URL("../../src/components/hud/HUD.tsx", import.meta.url), "utf8");
   ck("  ...the button takes that class, and the Recap is given the Cockpit's own alarms",
-     /\$\{healthClass\(health\)\}/.test(hud) && !/attentionGroups\.length > 0 \? " has-alert"/.test(hud)
-     && /buildReadiness\(entities, data, devices, config\.entityMap, attentionItems\)/.test(fs));
+     /\$\{HEALTH_CLASS\[health\.level\]\}/.test(hud) && !/attentionGroups\.length > 0 \? " has-alert"/.test(hud)
+     && /const view = useVillaAttention\(\);/.test(fs) && /buildReadiness\(entities, data, view, config\.entityMap\)/.test(fs));
+  ck("  ...and attention keeps no class name: it gives the level only", !("healthClass" in (await import("@/config/attention"))));
 }
 
 console.log("\n  one word per check state and one verdict, on the tab, in the recap and in the snapshot (review, 2026-10-19):");
@@ -138,4 +146,54 @@ console.log("\n  one word per check state and one verdict, on the tab, in the re
      && !/"Pass"|"Warning"|"Attention"|"Fail"|READY|"Detail"/.test(code("fm/fmDocuments.ts")) && /readinessTable\(readiness\)/.test(code("fm/fmDocuments.ts")));
 }
 
-done("✅ every readiness check opens its own devices, the same way");
+
+console.log("\n  the Recap counts what the profile is shown (architecture review, 2026-10-19):");
+{
+  const { buildAttentionItems, attentionFor } = await import("@/config/attention");
+  const { devicesOf } = await import("../consistency/devices.mjs");
+  const R = await import("@/fm/fmDocuments");
+  const villaDev = devicesOf({ ids: [...villa], unavailable: ["climate.bed", "camera.pool", "sensor.door_battery"] });
+  const rec = (id, entityId) => ({ id, title: id, status: "open", openedAt: "2026-10-19T08:00:00Z", entityId, photoIds: [] });
+  const data = { ...EMPTY_FM_DATA, tickets: [rec("cam", "camera.pool"), rec("ac", "climate.bed")] };
+  const problems = { devices: villaDev, attentionItems: buildAttentionItems({ devices: villaDev, entities, entityMap: {}, alertThresholds: {},
+    resolvedRooms: {}, fmData: data }) };
+  const owner = buildReadiness(entities, data, attentionFor(problems, () => true), {});
+  const noCams = buildReadiness(entities, data, attentionFor(problems, (id) => !id.startsWith("camera.")), {});
+  const check = (res, id) => res.checks.find((c) => c.id === id);
+  ck("a profile shown no camera: the camera is not among its devices not reporting, nor its fault among its faults",
+     check(owner, "devices-online").entityIds.includes("camera.pool") && !check(noCams, "devices-online").entityIds.includes("camera.pool")
+     && check(owner, "tickets").label === "2 detected faults (0 open tickets)" && check(noCams, "tickets").label === "1 detected fault (0 open tickets)"
+     && !check(noCams, "cameras"), [check(noCams, "devices-online").entityIds, check(noCams, "tickets").label]);
+  ck("  ...its device count is its own: the recap's availability section says the profile's figures",
+     owner.availability.total === villa.size && noCams.availability.total === villa.size - 2
+     && noCams.availability.offline.join() === "climate.bed,sensor.door_battery", noCams.availability);
+  const recap = R.buildMonthlyRecap({ fm: data, month: "2026-10", villaName: "V", readiness: noCams, deviceOfRecord: (id) => id });
+  const s4 = recap.split("## 4.")[1]?.split("##")[0] ?? "";
+  ck("  ...and the recap's §4 is the readiness' devices, pointing where they are listed (no \"faults section\")",
+     s4.includes(`**${villa.size - 4} of ${villa.size - 2}** devices reporting`)
+     && s4.includes('2 device(s) currently offline — listed under "Open issues" on the Overview, and under "All devices reporting" below.')
+     && !/faults section/.test(recap), s4);
+}
+
+console.log("\n  a device the villa's system no longer has is in its own checks, named \"Missing\" as the card names it:");
+{
+  const { NOT_IN_HA } = await import("@/utils/stateColors");
+  const { devicesOf } = await import("../consistency/devices.mjs");
+  const ghosts = ["camera.ghost", "climate.ghost"];
+  const dev = devicesOf({ ids: [...villa, ...ghosts], unavailable: ["climate.bed", "camera.pool", "sensor.door_battery", ...ghosts] });
+  const res = buildReadiness(entities, EMPTY_FM_DATA, { devices: dev, attentionItems: [] }, {});
+  const c = (id) => res.checks.find((x) => x.id === id);
+  const missing = NOT_IN_HA.toLowerCase();
+  ck("cameras: the missing one is in the list, and named apart",
+     c("cameras").entityIds.join() === "camera.pool,camera.ghost" && c("cameras").detail === `1 offline, 1 ${missing}.`
+     && c("cameras").opens.group.entityIds.includes("camera.ghost"), c("cameras"));
+  ck("  ...air conditioning too", c("climate").entityIds.join() === "climate.bed,climate.ghost"
+     && c("climate").detail === `1 not responding, 1 ${missing} — cannot pre-cool.`, c("climate"));
+  ck("  ...and the devices not reporting say how many are missing", c("devices-online").detail === `3 devices offline or not reporting, 2 devices ${missing}.`,
+     c("devices-online").detail);
+  const noHa = buildReadiness({}, EMPTY_FM_DATA, { devices: dev, attentionItems: [] }, {});
+  ck("  ...while the villa's system is not read yet, nothing is called missing", !noHa.checks.some((x) => x.id === "cameras" || x.id === "climate")
+     && !/missing/.test(noHa.checks.find((x) => x.id === "devices-online").detail), noHa.checks.map((x) => x.detail));
+}
+
+done("✅ every readiness check opens its own devices, the same way, for the profile looking");

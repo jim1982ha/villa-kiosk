@@ -82,9 +82,11 @@ export interface FmCompletion extends FmProvenance {
   ticketId?: string;
   /** ISO timestamp of when the work was done (not when it was logged). */
   at: string;
+  /** Who RECORDED it: the signed-in profile ("Facility manager"), or the VESTA Agent (stamped by the Kiosk's proxy).
+   *  A completion written before 2.496.428 from a fault may hold the typed name here instead — workedBy reads both. */
   by: string;
-  /** Who did the work when someone else recorded it — the person a VESTA Agent completion is for (its `by` is the
-   *  agent's, stamped by the Kiosk). Read through fmEngine.workedBy. */
+  /** Who DID the work, when a name was given: typed in the Kiosk ("Resolved by"), or the person a VESTA Agent
+   *  completion is for. Absent: the recorder did it. Read through fmEngine.workedBy — the same two fields as a step's. */
   who?: string;
   note?: string;
   photoIds: string[];

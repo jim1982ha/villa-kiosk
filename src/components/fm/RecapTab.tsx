@@ -21,31 +21,18 @@
 import Dropdown from "@/components/common/Dropdown";
 import SaveButton from "@/components/common/SaveButton";
 import { Sparkles, Download, Save } from "lucide-react";
-import { useFmData } from "@/fm/FmDataContext";
-import { useDeviceIdentity } from "@/config/VillaModel";
-import { buildMonthlyRecap } from "@/fm/fmDocuments";
-import { useFmTerms } from "@/fm/useFmTerms";
 import { useMonthlyDocument } from "@/fm/useMonthlyDocument";
-import type { ReadinessResult } from "@/fm/readiness";
+import type { DocumentInputs } from "@/fm/monthlyDocument";
 import MarkdownPreview from "./MarkdownPreview";
 import SavedDocumentsList from "./SavedDocumentsList";
 
-export default function RecapTab({
-  readiness, offlineDeviceCount, totalDeviceCount,
-}: {
-  readiness: ReadinessResult;
-  offlineDeviceCount: number;
-  totalDeviceCount: number;
+export default function RecapTab({ inputs }: {
+  /** What the recap is made from, built once by FacilitySections (monthlyDocument.DocumentInputs). */
+  inputs: DocumentInputs;
 }) {
-  const { data } = useFmData();
-  const terms = useFmTerms();
-  // the open work counted per device card, as the Tickets tab counts it (fmDocuments.RecapInput.deviceOfRecord)
-  const { deviceOfRecord } = useDeviceIdentity();
   // Make / save / reopen / download, and the months offered (the previous
   // month first: see monthlyDocument.defaultMonth) — useMonthlyDocument.
-  const doc = useMonthlyDocument("recap", (month, villaName) => buildMonthlyRecap({
-    fm: data, month, villaName, readiness, offlineDeviceCount, totalDeviceCount, terms, deviceOfRecord,
-  }));
+  const doc = useMonthlyDocument("recap", inputs);
   const { month, markdown } = doc;
 
   return (

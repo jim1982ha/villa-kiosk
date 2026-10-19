@@ -11,7 +11,10 @@ register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { isOffline, isUnavailable } = await import("@/utils/stateColors");
 const { villaDevices, deviceFolding } = await import("@/config/deviceGroups");
-const { buildAttentionItems, groupAttention, villaHealthFrom, lineSources, attentionTone } = await import("@/config/attention");
+const { buildAttentionItems, groupAttention, villaHealthFrom, attentionTone } = await import("@/config/attention");
+const { cockpitCard } = await import("@/config/cockpitCard");
+// a problem's icons as its card draws them (cockpitCard: the card's lead icons are its first problem's)
+const lineSources = (item) => cockpitCard(groupAttention([item])[0], null).lead;
 const { parseCriticalDevices } = await import("@/ha/criticalDevices");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
 
@@ -40,8 +43,10 @@ ck("the Cockpit's offline list leaves out the unknown sensor and keeps the lost 
    d.unavailable);
 
 console.log("  one list of critical devices:");
-const build = (critical) => buildAttentionItems({ unavailableIds: d.unavailable, entities, entityMap, alertThresholds: {},
-  resolvedRooms: {}, fmData: EMPTY_FM_DATA, selectableIds: d.ids, folding, critical });
+// the villa's devices with the rule's critical list — the device list answers which are critical (villaDevices.isCritical)
+const build = (critical) => buildAttentionItems({ devices: villaDevices({ entityMap, deviceGroups: [], dismissed: new Set(),
+  mappedEntityIds: new Set(ids), entities, entityDeviceIds: { "lock.door": "dev-door", "sensor.door_battery": "dev-door" }, folding, critical }),
+  entities, entityMap, alertThresholds: {}, resolvedRooms: {}, fmData: EMPTY_FM_DATA });
 // the rule names the lock's BATTERY sensor; the model shows the lock: the device is critical
 const items = build(new Set(["sensor.door_battery"]));
 const door = items.find((i) => i.entityId === "lock.door" || i.entityId === "sensor.door_battery");
@@ -70,6 +75,48 @@ ck("  ...a warning when only devices off the list are offline",
    villaHealthFrom(groupAttention(build(new Set()))).level === "warn");
 ck("  ...and nothing is critical before the list is read (no guess)",
    build(undefined).every((i) => !i.critical));
+
+console.log("  a critical device that lost contact is red everywhere, not only on the Cockpit (owner, 2026-10-19):");
+// ⚠️ RED ON THE COCKPIT, AMBER EVERYWHERE ELSE (to 2.496.427): the map badge, its room chip, its list row and its window
+// all showed the amber of any lost device. One fact (DeviceLook.critical), from the villa model's folded predicate.
+{
+  const { deviceLook, storeLookSource, mapLookSource } = await import("@/utils/deviceActivity");
+  const { roomLook } = await import("@/babylon/summaryLook");
+  const { panelHeader } = await import("@/components/panels/panelHeader");
+  const { lostPillTone } = await import("@/config/reading");
+  const { categorySurfaceRinged, categorySurface } = await import("@/config/EntityCategories");
+  const crit = villaDevices({ entityMap, deviceGroups: [], dismissed: new Set(), mappedEntityIds: new Set(ids),
+    entities, entityDeviceIds: { "lock.door": "dev-door", "sensor.door_battery": "dev-door" }, folding,
+    critical: new Set(["sensor.door_battery"]) });
+  const config = { entityMap, alertThresholds: {}, isCritical: crit.isCritical };
+  const store = storeLookSource(entities, config);
+  const map = mapLookSource(new Map(Object.entries(entities)), new Map(), () => config);
+  const door = deviceLook("lock.door", store), th = deviceLook("sensor.th_humidity", store);
+  ck("the badge: a muted face and a RED ring for the critical lost device",
+     door.critical && door.face === "unavailable" && door.ring === "alert", door);
+  ck("  ...an ordinary lost device stays amber (dashed amber ring)", !th.critical && th.ring === "unavailable", th);
+  ck("  ...the map's source paints it the same", JSON.stringify(deviceLook("lock.door", map)) === JSON.stringify(door));
+  const s = categorySurfaceRinged("access_control", door.face, door.ring);
+  ck("  ...drawn as a red ring around the muted amber face (no new picture to fetch: the same baked squircle)",
+     s.ring === categorySurface("access_control", "alert").ring && s.glyph === categorySurface("access_control", "unavailable").glyph);
+  ck("the room chip: its number red for a critical lost device, amber for an ordinary one",
+     roomLook([door]).health === "alert" && roomLook([th]).health === "unavailable" && roomLook([door, th]).health === "alert");
+  // the list rows read deviceLook over this same store (SummaryGroupPanel, pinned in device_look_source.mjs)
+  const win = (id) => panelHeader({ panel: { entityId: id, mapping: entityMap[id] }, entities, config, canControl: false, linkedSwitch: null });
+  ck("the window: its lost pill is the danger red for the critical device, amber for the other",
+     lostPillTone("unavailable", win("lock.door").badge.critical) === "danger"
+     && lostPillTone("unavailable", win("sensor.th_humidity").badge.critical) === "unavailable");
+  ck("  ...and only the LOST pill: a critical device's other tones are its own", lostPillTone("on", true) === "on");
+  const back = deviceLook("lock.door", storeLookSource({ ...entities, "lock.door": e("lock.door", "locked") }, config));
+  ck("a critical device that answers is not red (critical needs lost contact)", !back.critical && back.ring !== "alert", back);
+  const { readFileSync } = await import("node:fs");
+  const src = (f) => readFileSync(new URL(`../../src/${f}`, import.meta.url), "utf8");
+  ck("  ...the three lost pills of a window ask it, with the header's fact (pin the caller)",
+     ["components/panels/ReadingPill.tsx", "components/panels/UnavailableNotice.tsx", "components/panels/LockPanel.tsx"]
+       .every((f) => /lostPillTone\(/.test(src(f)) && /usePanelActions\(\)\.badge\?\.critical/.test(src(f)))
+     && !/status-pill unavailable" title/.test(src("components/panels/UnavailableNotice.tsx")));
+  ck("nothing is red before the list is read", !deviceLook("lock.door", storeLookSource(entities, { entityMap, alertThresholds: {} })).critical);
+}
 
 console.log("  the proxy's answer:");
 ck("its entity ids are read", JSON.stringify(parseCriticalDevices({ entities: ["lock.door", 3], rules: [], at: "x" })) === '["lock.door"]');

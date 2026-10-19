@@ -44,10 +44,10 @@ ck("  ...the settings named after the sensor (one prefix per feature), and no ot
    why.settings.map((s) => `${s.name}=${s.value} ${s.unit}`).join() === "Grace=5 min", why.settings);
 
 console.log("\n  in words:");
-const now = new Date("2026-10-18T09:00:00+00:00");
-ck("since: a time today, the day and time otherwise",
-   P.sinceText(at, () => "T", () => "D", now) === "T" && P.sinceText("2026-10-16T06:20:00+00:00", () => "T", () => "D", now) === "D"
-   && P.sinceText(null, () => "T", () => "D", now) === "");
+ck("since: always the day and time, today included",
+   // owner, 2026-10-19: always with its day — today's time alone ("since 18:40") did not say which day
+   P.sinceText(new Date().toISOString(), () => "D") === "D" && P.sinceText(at, () => "D") === "D" && P.sinceText("2026-10-16T06:20:00+00:00", () => "D") === "D"
+   && P.sinceText(null, () => "D") === "");
 ck("the Recap's line", P.recapPresenceText(off, "14:20") === "Villa occupied since 14:20"
    && P.recapPresenceText(on, "") === "Villa empty" && P.recapPresenceText(P.presenceOf(S, {}), "x") === "Villa presence unknown");
 

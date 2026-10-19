@@ -7,6 +7,7 @@
 import { ingressPath } from "@/ha/ingress";
 import { EMPTY_FM_DATA, FM_COLLECTIONS, type FmCollection, type FmData, type FmSavedDocument, recapKind } from "./fmTypes";
 import { backendFetch } from "@/auth/sessionLost";
+import type { FmRetention } from "./fmEngine";
 import {
   keyBy, diffKeyed, applyKeyed, keyedDiffIsEmpty,
   type KeyedDiff, type StoreFetch, type StoreSaveResult,
@@ -38,17 +39,27 @@ function parseFmData(raw: unknown): FmData {
  *  by the owner AND the facility manager, frequently from different devices
  *  at the same time, so writes need optimistic concurrency and unknown-key
  *  carry-over exactly like the device-config store. See utils/keyedSync.ts. */
-export async function fetchFmData(): Promise<StoreFetch<FmData> | null> {
+/** The server's retention windows, read beside the record (null: not said — an older add-on). */
+export function parseRetention(raw: unknown): FmRetention | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const day = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null);
+  const clearedDays = day(r.clearedDays), repairedDays = day(r.repairedDays);
+  return clearedDays === null || repairedDays === null ? null : { clearedDays, repairedDays };
+}
+
+export async function fetchFmData(): Promise<(StoreFetch<FmData> & { retention: FmRetention | null }) | null> {
   try {
     const r = await backendFetch(ingressPath("fm-data"), { credentials: "same-origin" });
     if (!r.ok) return null;
-    const d = (await r.json()) as { data?: unknown; rev?: unknown };
+    const d = (await r.json()) as { data?: unknown; rev?: unknown; retention?: unknown };
     const raw = d.data && typeof d.data === "object"
       ? (d.data as Record<string, unknown>) : {};
     return {
       doc: parseFmData(d.data),
       rev: typeof d.rev === "string" ? d.rev : "0",
       raw,
+      retention: parseRetention(d.retention),
     };
   } catch {
     return null;

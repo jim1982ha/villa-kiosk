@@ -35,7 +35,7 @@ ck("by floor: ascending, 'Other' last, every device once",
 
 const read = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
 ck("the Cockpit and the category lists read the same answer (useRoomFloors), and nothing else decides a room's floor",
-   /buildRoomGroups\(selectableIds, resolvedRooms, roomFloors\)/.test(read("components/cockpit/CockpitOverview.tsx"))
+   /buildRoomGroups\(deviceIds, resolvedRooms, roomFloors\)/.test(read("components/cockpit/CockpitOverview.tsx"))
    && /floorOfRoom\(roomFloors, room\)/.test(read("components/panels/SummaryGroupPanel.tsx"))
    && !/haFloor|floorByRoom/.test(read("components/cockpit/cockpitData.ts"))
    && !/function resolveEntityFloor/.test(read("config/EntityMap.ts")));

@@ -9,8 +9,8 @@ import { useState, type ReactNode } from "react";
 import SaveButton from "@/components/common/SaveButton";
 import { CheckCircle2, AlertTriangle, XCircle, ChevronDown, ChevronRight, Camera, Download } from "lucide-react";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
-import { buildReadinessSnapshot } from "@/fm/fmDocuments";
 import { useMonthlyDocument } from "@/fm/useMonthlyDocument";
+import type { DocumentInputs } from "@/fm/monthlyDocument";
 import SavedDocumentsList from "./SavedDocumentsList";
 import MarkdownPreview from "./MarkdownPreview";
 import { SourceIconRow } from "./sourceIcons";
@@ -22,9 +22,10 @@ const ICON: Record<CheckState, typeof CheckCircle2> = {
 };
 
 export default function ReadinessTab({
-  readiness, onOpenEntity, onOpenCheck,
+  inputs, onOpenEntity, onOpenCheck,
 }: {
-  readiness: ReadinessResult;
+  /** What the snapshot is made from — the live readiness among it (monthlyDocument.DocumentInputs). */
+  inputs: DocumentInputs;
   onOpenEntity: (id: string) => void;
   /** Opens a check's own devices as a list (readiness.CheckTarget) — every
    *  check the same way. */
@@ -34,7 +35,8 @@ export default function ReadinessTab({
   // Freezing the check turns it from a live readout into evidence (see
   // buildReadinessSnapshot): made and saved in one tap, then shown, saved,
   // reopened and downloaded like the recap and the statement.
-  const snapshot = useMonthlyDocument("readiness", (month, villaName) => buildReadinessSnapshot(readiness, villaName, month));
+  const snapshot = useMonthlyDocument("readiness", inputs);
+  const { readiness } = inputs;
   return (
     <div className="fm-stack">
       <ReadinessChecks readiness={readiness} label={label} onOpenEntity={onOpenEntity} onOpenCheck={onOpenCheck}

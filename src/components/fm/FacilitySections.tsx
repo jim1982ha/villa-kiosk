@@ -30,6 +30,9 @@ import { useProfile } from "@/auth/ProfileContext";
 import { roleCan } from "@/auth/permissions";
 import { useFmData } from "@/fm/FmDataContext";
 import { buildReadiness, type CheckTarget } from "@/fm/readiness";
+import type { DocumentInputs } from "@/fm/monthlyDocument";
+import { useFmTerms } from "@/fm/useFmTerms";
+import { resolveSiteTitle } from "@/config/AppConfig";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import { buildDeviceOptions } from "./DeviceSearchPicker";
 import TodayTab from "./TodayTab";
@@ -38,7 +41,7 @@ import TicketsTab from "./TicketsTab";
 import SpendTab from "./SpendTab";
 import RecapTab from "./RecapTab";
 import ScheduleEditor from "./ScheduleEditor";
-import { useVillaModel } from "@/config/VillaModel";
+import { useDeviceIdentity, useVillaModel } from "@/config/VillaModel";
 
 export type FacilityTab = "tickets" | "schedule" | "recap" | "spend";
 
@@ -71,21 +74,28 @@ export default function FacilitySections({
   /** Called once the form has it, so reopening the tab later does not spring it again. */
   onTicketEditOpened?: () => void;
 }) {
-  const { entities } = useHA();
+  const { entities, haConfig } = useHA();
   const { config, resolvedRooms } = useConfig();
   // the villa's presence in the Recap, as the tile under the floors says it (owner, 2026-10-18)
   const presenceLine = usePresence()?.recap ?? null;
   const { role } = useProfile();
   const { data, ready, saveError } = useFmData();
+  // the villa's devices, role-blind — the pickers offer every device to the people who record work
   const { devices } = useVillaModel();
-  const totalDeviceCount = devices.ids.length;
 
   // The list a readiness check opens — its own devices (readiness.CheckTarget).
   const [checkList, setCheckList] = useState<CheckTarget | null>(null);
-  // the villa's alarms as the Cockpit lists them (one rule: attention's), so readiness and the top bar agree
-  const { attentionItems } = useVillaAttention();
-  const readiness = useMemo(() => buildReadiness(entities, data, devices, config.entityMap, attentionItems),
-    [entities, data, devices, config.entityMap, attentionItems]);
+  // ONE profile view (useVillaAttention): the devices this profile is shown and its problems, the Overview's — so the
+  // Recap counts what the Overview lists for the same person, and readiness and the top bar agree
+  const view = useVillaAttention();
+  const readiness = useMemo(() => buildReadiness(entities, data, view, config.entityMap),
+    [entities, data, view, config.entityMap]);
+  // what every document is made from, once (monthlyDocument.DocumentInputs) — the tabs only draw
+  const terms = useFmTerms();
+  const { deviceOfRecord } = useDeviceIdentity();
+  const villaName = resolveSiteTitle(config, haConfig?.location_name);
+  const inputs = useMemo((): DocumentInputs => ({ fm: data, terms, readiness, villaName, deviceOfRecord }),
+    [data, terms, readiness, villaName, deviceOfRecord]);
   const deviceOptions = useMemo(
     () => buildDeviceOptions(devices, config.entityMap, entities, resolvedRooms),
     [devices, config.entityMap, entities, resolvedRooms],
@@ -105,18 +115,17 @@ export default function FacilitySections({
       )}
       {ready && tab === "recap" && (
         <>
-          <ReadinessTab readiness={readiness} onOpenEntity={onOpenEntity} onOpenCheck={setCheckList} />
+          <ReadinessTab inputs={inputs} onOpenEntity={onOpenEntity} onOpenCheck={setCheckList} />
           {presenceLine && <p className="body-text recap-presence">{presenceLine}</p>}
           <div className="settings-section-title">Monthly recap</div>
-          <RecapTab readiness={readiness} offlineDeviceCount={devices.unavailable.length}
-            totalDeviceCount={totalDeviceCount} />
+          <RecapTab inputs={inputs} />
         </>
       )}
       {ready && tab === "tickets" && (
         <TicketsTab onOpenEntity={onOpenEntity} deviceOptions={deviceOptions}
           editTicket={editTicket} onEditOpened={onTicketEditOpened} />
       )}
-      {ready && tab === "spend" && <SpendTab onOpenEntity={onOpenEntity} deviceOptions={deviceOptions} />}
+      {ready && tab === "spend" && <SpendTab onOpenEntity={onOpenEntity} deviceOptions={deviceOptions} inputs={inputs} />}
 
       {checkList && (
         // A health list keeps every device it names (hidden and diagnostic ones too) and offers no "turn all".

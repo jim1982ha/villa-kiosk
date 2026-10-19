@@ -8,7 +8,7 @@
 // memory for how this was verified.
 
 import { stateWords } from "@/config/reading";
-import { categoryMembers, type CategoryMembers } from "@/config/activeDevices";
+import type { CategoryMembers } from "@/config/activeDevices";
 import { deviceLook, groupLook, type LookSource } from "@/utils/deviceActivity";
 import { displayLabelFor } from "@/config/EntityMap";
 import { NO_ROOM_LABEL } from "@/config/roomKey";
@@ -39,18 +39,6 @@ export function tileLine(s: TileStats): string {
   if (s.onCount > 0) parts.push(`${s.onCount} on`);
   if (s.offline > 0) parts.push(`${s.offline} offline`);
   return parts.join(" · ");
-}
-
-/** One tile per category, count + a generic cross-domain "on" count —
- *  deliberately non-judgmental (a light being on isn't a problem), kept
- *  visually separate from the attention list so the page doesn't read as
- *  "everything is red". */
-export function buildCategoryTiles(
-  selectableIds: readonly string[],
-  entities: Record<string, HassEntity>,
-  entityMap: Record<string, EntityMapping>,
-): CategoryTile[] {
-  return categoryMembers(selectableIds, entities, entityMap);
 }
 
 

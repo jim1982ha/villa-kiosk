@@ -7,19 +7,19 @@
 // made or the month changes.
 
 import { useState } from "react";
-import { useHA } from "@/ha/HAStateStore";
-import { useConfig } from "@/config/ConfigContext";
-import { resolveSiteTitle } from "@/config/AppConfig";
 import { downloadFile } from "@/utils/download";
 import { useFmData } from "./FmDataContext";
 import type { FmSavedDocument } from "./fmTypes";
-import { DOCUMENT_KINDS, defaultMonth, documentFileName, monthsOffered, type DocumentKind } from "./monthlyDocument";
+import {
+  DOCUMENT_KINDS, defaultMonth, documentFileName, monthsOffered, type DocumentInputs, type DocumentKind,
+} from "./monthlyDocument";
 
-export function useMonthlyDocument(kind: DocumentKind, build: (month: string, villaName: string) => string) {
+/** `inputs`: what every document is made from, built once by FacilitySections (monthlyDocument.DocumentInputs); the
+ *  kind's own `build` makes it. */
+export function useMonthlyDocument(kind: DocumentKind, inputs: DocumentInputs) {
   const { data, saveDocument } = useFmData();
-  const { config } = useConfig();
-  const { haConfig } = useHA();
-  const villaName = resolveSiteTitle(config, haConfig?.location_name);
+  const { villaName } = inputs;
+  const build = (month: string) => DOCUMENT_KINDS[kind].build(inputs, month);
   const [month, setMonthState] = useState(() => defaultMonth(kind));
   // A snapshot, not a live useMemo: a document is a point-in-time record, and
   // its own "Generated:" time means the moment someone asked for it. Null
@@ -39,11 +39,11 @@ export function useMonthlyDocument(kind: DocumentKind, build: (month: string, vi
     months: monthsOffered(kind, data),
     markdown, saved,
     setMonth: (m: string) => { setMonthState(m); setMarkdown(null); setSaved(false); },
-    generate: () => { setMarkdown(build(month, villaName)); setSaved(false); },
+    generate: () => { setMarkdown(build(month)); setSaved(false); },
     save: async () => { if (markdown) await keep(markdown, month); },
     /** Make it and save it in one go (the readiness snapshot: the check as it is now). */
     generateAndSave: async () => {
-      const md = build(month, villaName);
+      const md = build(month);
       setMarkdown(md); setSaved(false);
       await keep(md, month);
     },

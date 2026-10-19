@@ -55,6 +55,9 @@ export interface DeviceReading {
   /** The villa's per-entity alert override, already resolved against the
    *  device_class default. `undefined` means "this reading is never a fault". */
   alertState: string | undefined;
+  /** On the villa's critical list (LookSource.config.isCritical — the list its "critical devices offline" rule
+   *  watches, folded onto the device). Only matters once contact is lost: the ring turns red. */
+  critical: boolean;
 }
 
 /** The five-way live-state reading a badge is painted from: this module's own
@@ -130,12 +133,18 @@ export function badgeKindFor(r: DeviceReading): BadgeKind {
  * not a problem, so a power badge whose relay was on wore the alarm colour.
  * Owner: the ring takes the badge's category colour (or its own badge colour)
  * — categorySurface's "active" ring, the same hue as its pictogram.
+ *
+ * ── A CRITICAL device that lost contact rings RED (owner, 2026-10-19) ──────
+ * The Cockpit painted it red ("critical devices offline") while the map, its
+ * room chip, its list row and its window all showed the amber of any lost
+ * device. Its face stays the muted "unavailable" one — nothing is known of its
+ * state — and its ring takes the "Needs attention" red.
  */
 export function badgeFaceAndRing(
   r: DeviceReading,
 ): { face: DeviceSurfaceState; ring: DeviceSurfaceState } {
   const own = badgeKindFor({ ...r, linkedOn: false });
-  if (own === "unavailable") return { face: "unavailable", ring: "unavailable" };
+  if (own === "unavailable") return { face: "unavailable", ring: r.critical ? "alert" : "unavailable" };
   const face = SURFACE_STATE[own];
   // A face already alerting keeps its red ring: that IS needs-attention.
   return { face, ring: r.linkedOn && face !== "alert" ? "active" : face };
@@ -314,8 +323,15 @@ export interface LookSource {
    *  mapping; a list: the entity map, else the id's domain). */
   typeOf(entityId: string): EntityType;
   /** The entity map (for `linkedEntityId`) and the villa's per-entity alert
-   *  overrides — resolved here, never by a caller. */
-  config: { entityMap: Record<string, EntityMapping>; alertThresholds: Record<string, Threshold> };
+   *  overrides — resolved here, never by a caller. `isCritical`: is this device
+   *  on the villa's critical list, folded onto its device (deviceGroups
+   *  `devices.isCritical` — the predicate the Cockpit's red reads). Absent:
+   *  nothing is critical (the Cockpit's own tiles, which say it themselves). */
+  config: {
+    entityMap: Record<string, EntityMapping>;
+    alertThresholds: Record<string, Threshold>;
+    isCritical?: (entityId: string) => boolean;
+  };
   /** A linked switch the person has just thrown and Home Assistant has not yet
    *  confirmed: true/false while it is pending, undefined otherwise. Only the
    *  device panel's header passes it (useOptimisticToggle) — the header sits
@@ -342,6 +358,9 @@ export interface DeviceLook {
   alert: boolean;
   /** Home Assistant has lost it (or never reported it). */
   unavailable: boolean;
+  /** A CRITICAL device that has lost contact (on the villa's critical list AND `unavailable`): red, never amber — its
+   *  badge ring, its room chip's number, its list row and its window's pill. */
+  critical: boolean;
   /** POWER: its switch's position, "none" when it has no switch. */
   power: PowerState;
   /** Whether the entity it is LINKED to is on (devicePower: an unlocked lock,
@@ -368,6 +387,7 @@ export function readingOf(entityId: string, source: LookSource): DeviceReading {
     alertState: alertStateFor(
       entity.attributes.device_class as string | undefined,
       source.config.alertThresholds[entityId]?.alertState),
+    critical: source.config.isCritical?.(entityId) ?? false,
   };
 }
 
@@ -383,6 +403,7 @@ export function deviceLook(entityId: string, source: LookSource): DeviceLook {
     active: kind === "on",
     alert: face === "alert",
     unavailable: own === "unavailable",
+    critical: r.critical && own === "unavailable",
     power: switchable ? devicePower(source.state(entityId), entityId).position : "none",
     linkedOn: r.linkedOn,
   };
@@ -429,8 +450,9 @@ export function mapLookSource(
 /** What a summary of several devices — a room chip, a group card, a Cockpit
  *  tile, a device list's header — shows. */
 export interface GroupLook {
-  /** Red ring: needs attention. Never for "on" (owner, 2026-10-01: red is the
-   *  Map-colours legend's "Needs attention"). */
+  /** Red ring: needs attention — a member alerting, or a CRITICAL member that
+   *  lost contact (DeviceLook.critical). Never for "on" (owner, 2026-10-01: red
+   *  is the Map-colours legend's "Needs attention"). */
   ringRed: boolean;
   /** The neutral "a member is on" ring (ACTIVITY), only when nothing is red. */
   ringOn: boolean;
@@ -469,7 +491,8 @@ export function groupLook(
   let onCount = 0, activeCount = 0, offline = 0;
   for (const m of members) {
     if (!m) { everyRingAlert = false; continue; }
-    if (m.kind === "alert") anyAlert = true;
+    // a critical device that lost contact needs attention, as the Cockpit says (owner, 2026-10-19)
+    if (m.kind === "alert" || m.critical) anyAlert = true;
     if (m.kind === "on") anyActive = true;
     if (m.ring !== "alert") everyRingAlert = false;
     if (m.kind === "unavailable") unavailable = true;

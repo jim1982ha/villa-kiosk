@@ -135,6 +135,35 @@ input[type="range"]::-moz-range-thumb {
 .big-toggle.pending { animation: big-toggle-pending 0.9s ease-in-out infinite; }
 @keyframes big-toggle-pending { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
 
+/* The power button's row (PowerToggle.PowerSection): a compact On button and the device's other choices beside it —
+   a light's colours and effects (LightChoices). It wraps on a narrow phone: the choices go under the button. */
+.power-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 14px; margin-bottom: 16px; }
+.big-toggle.compact {
+  width: auto; flex: 0 0 auto; min-height: 56px; min-width: 104px; padding: 0 20px; gap: 10px;
+  font-size: var(--text-lg); border-radius: 16px;
+}
+.light-choices { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.light-choices .field { margin: 0; }
+.light-swatches { display: flex; flex-wrap: wrap; gap: 10px; }
+/* 36 px: a fingertip's target on an iPhone, nine to a row on an iPad's window. */
+.light-swatch {
+  position: relative; width: 36px; height: 36px; flex: 0 0 auto; padding: 0;
+  border: none; border-radius: 50%; cursor: pointer;
+  box-shadow: inset 0 0 0 1px var(--hairline-strong);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.light-swatch.on { box-shadow: 0 0 0 2px var(--bg-modal), 0 0 0 4px var(--device-ring, var(--accent)); }
+.light-swatch:disabled { opacity: 0.5; cursor: default; }
+/* The last swatch: the light's current colour, and the device's own colour picker under the finger — the input
+   covers the swatch, invisible, so a tap lands on it (iOS opens a colour input only from a tap on the input). */
+.light-swatch-custom { background: var(--bg-input); color: var(--text-primary); overflow: hidden; }
+.light-swatch-custom svg { filter: drop-shadow(0 0 2px var(--bg-modal)); pointer-events: none; }
+.light-swatch-custom input {
+  position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0;
+  border: none; opacity: 0; cursor: pointer;
+}
+.light-effect { align-self: stretch; }
+
 .status-pill { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 999px; font-weight: 600; }
 .status-pill.on { background: color-mix(in srgb, var(--status-on) 20%, transparent); color: var(--status-on); }
 .status-pill.off { background: var(--bg-input); color: var(--text-secondary); }

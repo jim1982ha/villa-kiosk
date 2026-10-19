@@ -14,6 +14,7 @@ import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
+import { devicesOf } from "../consistency/devices.mjs";
 const { rowText, alarmText, stateWords, lockPill, coverPill, readableState, chartColours } = await import("@/config/reading");
 const { readingRows } = await import("@/config/readingRows");
 const { buildAttentionItems } = await import("@/config/attention");
@@ -85,8 +86,7 @@ console.log("\n  the Cockpit's alarm line");
   const bad = diff((id) => alarmText(id, E[id]) === oldAlarm(id, E[id]));
   ck("alarmText says what the alarm line said, for every fixture (alarm or not)", bad.length === 0, bad.slice(0, 5));
   const entityMap = Object.fromEntries(ids.map((id) => [id, { entityId: id, type: domainOf(id) }]));
-  const items = buildAttentionItems({ unavailableIds: [], entities: E, entityMap, alertThresholds, resolvedRooms: {},
-    fmData: EMPTY_FM_DATA, selectableIds: ids, folding: new Map() }).filter((i) => i.kind === "alarm");
+  const items = buildAttentionItems({ devices: devicesOf({ ids }), entities: E, entityMap, alertThresholds, resolvedRooms: {}, fmData: EMPTY_FM_DATA }).filter((i) => i.kind === "alarm");
   const badItems = items.filter((i) => i.detail !== oldAlarm(i.entityId, E[i.entityId])).map((i) => `${i.entityId}: ${i.detail}`);
   ck(`every alarm Needs attention lists (${items.length}) is worded as before`, badItems.length === 0, badItems.slice(0, 5));
   const listed = new Set(items.map((i) => i.entityId));
@@ -187,7 +187,7 @@ console.log("\n  each surface asks config/reading, and nothing lower");
   const LOWER2 = new RegExp(`${LOWER.source}|\\b(statusKeyFor|STATUS_PILL_CLASS|coverStateLabel|paintState|historyStateColor|binaryStatus)\\b|from "@/utils/(stateColors|panelRules|entityValue)"`);
   for (const [name, file, calls] of [
     ["the lock window's pill", "components/panels/LockPanel.tsx",
-      [/const pill = lockPill\(mapping\.entityId, entity\?\.state\)/, /className=\{`status-pill \$\{pill\.tone\}`\}/, /\{pill\.text\}/]],
+      [/const own = lockPill\(mapping\.entityId, entity\?\.state\)/, /tone: lostPillTone\(own\.tone,/, /className=\{`status-pill \$\{pill\.tone\}`\}/, /\{pill\.text\}/]],
     ["the cover window's pill", "components/panels/CoverPanel.tsx",
       [/const pill = coverPill\(mapping\.entityId, entity\?\.state, hasPosition \? position\.value : undefined\)/, /className=\{`status-pill \$\{pill\.tone\}`\}>\{pill\.text\}</]],
     ["the history bar", "components/panels/StateTimeline.tsx",

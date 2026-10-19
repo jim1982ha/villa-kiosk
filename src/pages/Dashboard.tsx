@@ -53,6 +53,8 @@ import type { SceneManager } from "@/babylon/SceneManager";
 import type { ActivePanel } from "@/types/panel.types";
 import type { TeleportPoint } from "@/types/scene.types";
 import { VillaModelProvider, useVillaSets, useDeviceIdentity } from "@/config/VillaModel";
+import { criticalDevices } from "@/config/deviceGroups";
+import { useCriticalDevices } from "@/ha/criticalDevices";
 import { categoryMembers } from "@/config/villaVisibility";
 import AskDialog from "@/components/common/AskDialog";
 import { readSceneMirror } from "./sceneMirror";
@@ -407,7 +409,14 @@ export default function Dashboard() {
   // The open panel's header actions — Back, readings, edit, report, badge,
   // the linked switch and its "ask first" — are components/panels/
   // useOpenPanelActions'; this page only provides them and draws the dialog.
-  const openPanel = useOpenPanelActions({ screen, go, panelFor, readingsOf: identity.readingsOf, doors });
+  // The villa's critical devices, folded onto their devices as the villa model folds them (devices.isCritical — one
+  // shared read, ha/criticalDevices): a critical device that lost contact is red on the map, its room chip, the open
+  // window and the room chooser, as on the Cockpit (2.496.428). This page sits outside the villa model, so it folds here.
+  const criticalIds = useCriticalDevices();
+  const critical = useMemo(() => criticalDevices(criticalIds, identity.folding), [criticalIds, identity.folding]);
+  const isCritical = useCallback((id: string) => critical.has(id), [critical]);
+  useEffect(() => { manager?.setCriticalDevices(critical); }, [manager, critical]);
+  const openPanel = useOpenPanelActions({ screen, go, panelFor, readingsOf: identity.readingsOf, doors, isCritical });
   const linkedAsk = openPanel.linkedAsk;
 
   // Everything React shows of the scene's own state, read from EACH new scene
@@ -599,14 +608,14 @@ export default function Dashboard() {
     (room: string, entityIds: string[], roomNames: string[]) => {
       const merged = chipRooms(roomNames, room);
       if (merged.length > 1) {
-        const looks = storeLookSource(entities, config);
+        const looks = storeLookSource(entities, { ...config, isCritical });
         setRoomChoices(roomChoicesFor(merged, entityIds, (id) => deviceRoom(resolvedRooms, id),
           (id) => (entities[id] ? deviceLook(id, looks) : undefined)));
         return;
       }
       go({ type: "openList", list: { kind: "room", room, entityIds } });
     },
-    [resolvedRooms, entities, config, go],
+    [resolvedRooms, entities, config, isCritical, go],
   );
 
   const handleClusterTapped = useCallback(
