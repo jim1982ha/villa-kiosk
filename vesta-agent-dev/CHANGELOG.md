@@ -1,3 +1,20 @@
+## 0.12.278
+
+What you will see:
+- Rules › AI brains and limits: the reports skill has ONE line with one brain and one spending limit "for each run",
+  used by all three reports (daily digest, weekly, monthly); the three report lines and their own limits are gone, the
+  reports are named in small text under it with when they run. The limit starts at 2 US$ for each run of any report.
+  Your current file (Auto, with 1, 2 and 6 US$) is read as Auto with 2 US$ for all three; the first save on the Rules
+  page rewrites it, nothing to do on your part.
+- The Cockpit's "dropped and reconnected 10 times in 3 days" faults for the ceiling fans, the inverted locks, the test
+  lock, the curtain and the template sensors were wrong: each time a template, a helper or a package is saved, the
+  villa's system reloads those virtual devices and they read "unavailable" for a twentieth of a second. Such a blink
+  is no longer counted (a drop must last 10 seconds). Tonight's check closes them; two stay, which are real: the
+  Timmerflotte_5969 sensor and the House & Pool Relay.
+- Costs › Every run: "Reply to JM · fm private chat" with the steps pill at the right; the Tools called column is gone
+  (open a run's steps: they now have a header and start with the skill each step used); the date and time on one line.
+- Limits: Save sits at the right end of each line.
+
 ## 0.12.277
 
 What you will see:
