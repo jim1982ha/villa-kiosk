@@ -69,7 +69,7 @@ def test_a_pump_that_runs_in_bursts_counts_the_minutes_it_ran():
     thr, days = daily.power_days({}, rows, "UTC", _params())
     (day,) = days.values()
     assert thr == 600 and day["run_hours"] == 1.0                       # 10 hours of 300 W ÷ 3000 W peaks
-    assert day["draw_w"] == 3000 and day["running_power"] is None       # no steady hour: what it drew while running
+    assert day["running_power"] is None                                 # no steady hour: no running power to give
 
 
 def test_the_typical_peak_is_where_the_energy_went():
@@ -83,13 +83,14 @@ def test_the_typical_peak_is_where_the_energy_went():
     assert daily.typical_peak(_h([(0.0, 0.0)])) is None
 
 
-def test_a_series_keeps_one_measure_of_power():
-    steady = {"run_hours": 8, "running_power": 800.0, "draw_w": 830.0}
-    burst = {"run_hours": 1, "running_power": None, "draw_w": 3000.0}
-    off = {"run_hours": 0, "running_power": None, "draw_w": None}
+def test_a_series_gives_power_only_for_a_device_that_runs_steadily():
+    steady = {"run_hours": 8, "running_power": 800.0}
+    burst = {"run_hours": 1, "running_power": None}
+    off = {"run_hours": 0, "running_power": None}
     assert daily.running_series({1: steady, 2: off, 3: steady}) == [(1, 800.0, 8), (2, None, 0), (3, 800.0, 8)]
-    # a day with no steady hour: every day says what it drew, never a step from one measure to the other
-    assert [p for _, p, _ in daily.running_series({1: steady, 2: burst})] == [830.0, 3000.0]
+    # ⚠️ one day without a steady hour: no power on any day (villa, 2026-10-19: a burst pump's "power" swung from
+    # 1,500 W to 6,410 W with its start-up peaks) — its run hours stay
+    assert daily.running_series({1: steady, 2: burst}) == [(1, None, 8), (2, None, 1)]
 
 
 def test_the_weekly_page_counts_running_by_the_one_rule(tmp_path):
@@ -110,4 +111,38 @@ def test_the_weekly_page_counts_running_by_the_one_rule(tmp_path):
     c = facts.Ctx("fm-weekly", Pack(), None, Cli(), {"start": "2026-10-01", "end": "2026-10-01"}, {"thresholds": {}},
                   "UTC", datetime(2026, 10, 2, 7, tzinfo=timezone.utc), None, params=_params)
     ((_, power, hours),) = c.running_days("sensor.example_pump_power", {}, 1)
-    assert hours == 1.0 and power == 3000           # a 100 W hour is not this pump running; "mean above 15 W" read 14 h
+    assert hours == 1.0 and power is None           # a 100 W hour is not this pump running; "mean above 15 W" read 14 h
+
+
+def _pack(devices, rows):
+    from vesta_shared.knowledge_pack import KnowledgePack
+    return KnowledgePack(villa="V", time_zone="UTC", generated_at="", ha_version=None,
+                         families={"power": rows}, assets={}, areas=[], people=[], channels={}, unknown_area=[],
+                         unclassified=[], retention={}, devices=devices)
+
+
+def test_a_part_shares_its_device_and_a_bridge_does_not():
+    # villa, 2026-10-19: every Zigbee sensor hangs under its bridge as a meter's phase hangs under the meter
+    p = _pack({"meter": {"name": "Main Meter", "manufacturer": "Maker", "model": "3EM", "via": ""},
+               "phase_a": {"name": "Main Phase A", "manufacturer": "Maker", "model": "3EM", "via": "meter"},
+               "bridge": {"name": "Zigbee Bridge", "manufacturer": "Koenkk", "model": "Bridge", "via": ""},
+               "sensor": {"name": "Laundry Door", "manufacturer": "Aqara", "model": "Door sensor", "via": "bridge"}},
+              [{"entity_id": "sensor.phase_a_power", "name": "Power", "device_id": "phase_a", "family": "power"},
+               {"entity_id": "sensor.door_battery", "name": "Battery", "device_id": "sensor", "family": "power"}])
+    assert p.physical_device_of("sensor.phase_a_power") == "meter"           # one meter: its phase is part of it
+    assert p.physical_device_of("sensor.door_battery") == "sensor"           # its own device, not the bridge's
+    assert p.device_name("sensor.door_battery", None) == "Laundry Door"
+    # a whole device's fault is the meter's; a reading is its channel's
+    assert p.device_name("sensor.phase_a_power", None) == "Main Meter"
+    assert p.reading_name("sensor.phase_a_power", None) == "Main Phase A"
+    assert p.reading_key("sensor.phase_a_power") != p.reading_key("sensor.door_battery")
+
+
+def test_a_phone_the_wifi_saw_is_not_the_villas():
+    # villa, 2026-10-19: a guest's iPhone and a "wlan0" laptop were "monitoring devices offline"
+    p = _pack({"phone": {"name": "iPhone", "manufacturer": "", "model": "", "via": "", "named": False},
+               "kept": {"name": "Gate box", "manufacturer": "", "model": "", "via": "", "named": True},
+               "plug": {"name": "", "manufacturer": "Maker", "model": "Plug", "via": ""}}, [])
+    assert p.device_label("phone") == ""                                    # left out of the villa's devices
+    assert p.device_label("kept") == "Gate box"                             # the owner named it: the villa's
+    assert p.device_label("plug") == "Unnamed Maker Plug"

@@ -19,7 +19,13 @@ SPOKEN = [
     "starter/skills/roi-energy/scripts/proposals.py", "starter/skills/roi-energy/scripts/energy_period.py",
     "vesta_agent/actions.py", "vesta_agent/api_errors.py",
     "vesta_shared/kiosk_words.py", "vesta_shared/result.py", "vesta_agent/notice.py", "vesta_agent/layout.py",
+    # the report pages (villa, week 42: the page's footer said "read through Home Assistant" — the pages were named
+    # above and never read)
+    "starter/skills/reports/scripts/facts.py", "starter/skills/reports/scripts/playbook.py",
+    "starter/skills/reports/scripts/compose.py",
 ]
+#: The report page's own template, read without its Jinja comments.
+REPORT_PAGE = "starter/skills/reports/templates/report.html"
 NAMED = re.compile(r"Home\s+Assistant|\bHA\b")
 LOGS = {"log", "logger", "debug", "info", "warning", "error", "exception", "critical"}
 
@@ -44,6 +50,8 @@ def _spoken_strings(path: str):
 def test_no_text_a_person_reads_names_home_assistant():
     hits = [f"{p}:{line}: {text[:60]!r}" for p in SPOKEN for line, text in _spoken_strings(p) if NAMED.search(text)]
     assert hits == [], hits
+    page = re.sub(r"\{#.*?#\}|<!--.*?-->", " ", open(os.path.join(ROOT, REPORT_PAGE), encoding="utf-8").read(), flags=re.S)
+    assert not NAMED.findall(page), [ln for ln in page.splitlines() if NAMED.search(ln)]
 
 
 def test_the_sent_yaml_texts_and_the_models_speaking_rule():

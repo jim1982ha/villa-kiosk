@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.6.248 (19 October 2026)
+
+The week 42 FM weekly report, checked line by line against the villa (owner, 2026-10-19), and every report kept on one
+calculation (owner: "apply to any other report ... consistency in calculations").
+- reports: a VESTA rule's run started by the villa's system itself (reports.yaml not_an_alert_when_started_by:
+  automation_reloaded, homeassistant_start(ed)) is not an alert. Week 42 counted 400 such re-checks — the rules were
+  reloaded 57 times — as "403 critical alerts"; read in the logbook and five traces (each stopped in 2 ms). The weekly
+  KPI, the alerts table and the monthly count share facts._read_ha_alerts.
+- knowledge_pack.part_of: a device hanging under another ("via") is part of it only when it is the same product (both
+  models given and equal); a Zigbee sensor under its bridge is its own device (five batteries read "Zigbee2MQTT
+  Bridge"; the night grouped every Zigbee sensor as one). A registry without models is not judged.
+- knowledge_pack.device_label: a device with no maker, no model and no name from the owner ("named", new in the pack;
+  PACK_RULES 3 rebuilds it at start) is a client of the Wi-Fi, not the villa's: a guest's iPhone and a "wlan0" laptop
+  were "monitoring devices offline".
+- knowledge_pack.reading_name / reading_key: a READING is named by its own device (the relay's channel "House Pump",
+  the meter's phase) — equipment cards, battery rows, energy trends, the energy table (energy_period: three rows
+  "Main Power Device"), the playbook's clues. A whole device's fault keeps device_of. An equipment card is "Watch"
+  by its own reading (items carry entity_ids): the house pump's finding no longer marks the pool pump's card.
+- daily.running_series: a device without a steady hour has no running power (draw_w removed): the house pump's
+  "power" swung 1,500–6,410 W with its start-up peaks and the AI read "watch for a leak" in it. Its card shows hours
+  running per day; the power-step clue never sees it.
+- nightly: a quiet reading of a device whose other readings report (_device_still_talks) is not silent: the system
+  monitor's disk use held at 2.4 % for days while its processor use reported every minute.
+- compose.owner_weekly: with the weekly page's facts (--facts, skill.yaml), the page's count of alerts — the owner's
+  Monday line counted the agent's alerts only, the page beside it the villa's own as well.
+- report.html: the footer said "read through Home Assistant"; test_no_platform_name now reads the report page and
+  its scripts.
+- Tests: each shown red by tools/mutate.py, the night's caller included (run for real).
+
 ## 0.6.247 (19 October 2026)
 
 One "running" for every page (owner, 2026-10-19: "do both").

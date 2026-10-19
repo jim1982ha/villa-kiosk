@@ -24,6 +24,7 @@ class _Session:
         body = {
             "ha_get_overview": {"domain_stats": {"lock": {"entities": [{"entity_id": RAW}, {"entity_id": FIXED}]}}},
             "ha_get_device": {"devices": [{"device_id": "d1", "name": "Front door lock", "area_id": "hall",
+                                           "manufacturer": "Example Locks", "model": "L1",
                                            "entities": [{"entity_id": RAW, "platform": "matter"}]}]},
             "ha_get_state": {"states": {RAW: {"state": "unlocked", "attributes": {"friendly_name": "Front Door Raw"}},
                                         FIXED: {"state": "locked", "attributes": {"friendly_name": "Front Door"}}}},

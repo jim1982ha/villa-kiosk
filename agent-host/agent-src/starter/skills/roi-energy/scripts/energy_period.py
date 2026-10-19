@@ -126,7 +126,7 @@ def run(args) -> dict:
         hrs = [feats[d]["run_hours"] for d in feats if a <= d <= b]
         rp = [feats[d]["running_power"] for d in feats if a <= d <= b and feats[d].get("running_power")]
         if hrs:
-            pumps.append({"asset": r["asset"], "name": pack.device_name(r["entity_id"], r["name"] or r["entity_id"]),
+            pumps.append({"asset": r["asset"], "name": pack.reading_name(r["entity_id"], r["name"] or r["entity_id"]),
                           "run_hours_total": round(sum(hrs), 1), "run_hours_per_day": round(sum(hrs) / len(hrs), 2),
                           "running_power_w": round(med(rp), 0) if rp else None})
 
@@ -153,7 +153,7 @@ def run(args) -> dict:
 
 def from_settings(prefs, pack, read, load, a, b, prev_a, prev_b) -> dict:
     """The total, the devices and what they leave, as the villa's Energy settings lay them out (the Kiosk's rule)."""
-    s = E.setup(prefs, lambda sid: pack.device_name(sid, pack.name_of(sid) or sid))
+    s = E.setup(prefs, lambda sid: pack.reading_name(sid, pack.name_of(sid) or sid))
     series = read(list(dict.fromkeys(s.sources + [n.id for n in s.devices])))
 
     def kwh(lo, hi):
@@ -176,7 +176,7 @@ def from_settings(prefs, pack, read, load, a, b, prev_a, prev_b) -> dict:
         if u.children:
             l["untracked_kwh"] = round(u.untracked, 2)  # what its own devices leave of it
         loads.append(l)
-    generation = [load(sid, pack.device_name(sid, pack.name_of(sid) or sid), (pack.row(sid) or {}).get("area"),
+    generation = [load(sid, pack.reading_name(sid, pack.name_of(sid) or sid), (pack.row(sid) or {}).get("area"),
                        "generation", series) for sid in s.solar]
     return {"basis": "settings", "total_basis": "The villa's Energy settings: what came from the grid"
             + (" and the solar" if s.solar else "") + (", less what went back" if s.grid_out else "") + ".",
@@ -212,7 +212,7 @@ def from_names(pack, params, read, load, a, b, prev_a, prev_b) -> dict:
         eid = r["entity_id"]
         if eid == main_eid or "phase" in r["asset"] or "returned" in eid:
             continue
-        loads.append(load(eid, pack.device_name(eid, r["name"] or eid), r["area"], r["family"], series))
+        loads.append(load(eid, pack.reading_name(eid, r["name"] or eid), r["area"], r["family"], series))
     known_main = main_eid if main_eid in series else None
     total, total_days = (sum_days(series[known_main], a, b) if known_main else (None, 0))
     total_prev = sum_days(series[known_main], prev_a, prev_b)[0] if known_main else None

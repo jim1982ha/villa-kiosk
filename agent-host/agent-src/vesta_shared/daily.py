@@ -21,7 +21,6 @@ def power_daily_features(hour_rows: list[dict], zone: str, on_threshold_w: float
                     of it spent running, its mean over its maximum
     full_hours      whole hours with min above the threshold (steady running)
     running_power   mean of the full hours' means (the signature we trend)
-    draw_w          what it drew while running: the running hours' energy over run_hours (None when it did not run)
     peak_w          highest max of the day
     gap_hours       hours with no statistics row at all (data missing)
 
@@ -38,12 +37,10 @@ def power_daily_features(hour_rows: list[dict], zone: str, on_threshold_w: float
         on = [r for r in rows if r.get("max") and r["max"] > on_threshold_w and r.get("mean") is not None]
         full = [r for r in rows if r.get("min") is not None and r["min"] > on_threshold_w]
         run_hours = sum(min(1.0, max(0.0, r["mean"]) / r["max"]) for r in on)
-        drawn = sum(max(0.0, r["mean"]) for r in on)
         out[day] = {
             "run_hours": round(run_hours, 2),
             "full_hours": len(full),
             "running_power": round(sum(r["mean"] for r in full) / len(full), 1) if full else None,
-            "draw_w": round(drawn / run_hours, 1) if run_hours > 0 else None,
             "peak_w": round(max((r.get("max") or 0) for r in rows), 0),
             "gap_hours": 24 - len(rows),
             "hours_with_data": len(rows),
@@ -109,15 +106,16 @@ def power_days(asset: dict | None, hour_rows: list[dict], zone: str, params) -> 
 
 
 def running_series(days: dict[date, dict]) -> list[tuple[date, float | None, float]]:
-    """A device's days as one series: (day, power while running, run hours); the power is None on a day it did not
-    run.
+    """A device's days as one series: (day, steady running power, run hours); the power is None on a day it did not
+    run — and on EVERY day for a device that does not run steadily (one day without a steady hour).
 
-    The power is its steady running power (running_power) when every day it ran has one; a device that runs in
-    bursts has no steady hour, and then every day says what it drew while running (draw_w) — one measure for the
-    whole series, so a pump that ran one steady hour some day does not step from one measure to the other."""
+    ⚠️ A BURST PUMP HAS NO RUNNING POWER IN HOURLY FIGURES (villa, 2026-10-19). A pressure pump's minutes of bursts never
+    fill an hour, and what it drew per minute run, worked out from the hour's mean and peak, swung from 1,500 W to
+    6,410 W with its start-up peaks — the weekly report read "watch for a leak" in that noise. Its run hours are real;
+    its power is not known, and is never shown."""
     ran = [f for _, f in days.items() if (f.get("run_hours") or 0) > 0]
-    key = "running_power" if ran and all(f.get("running_power") for f in ran) else "draw_w"
-    return [(d, f.get(key) if (f.get("run_hours") or 0) > 0 else None, f.get("run_hours") or 0.0)
+    steady = bool(ran) and all(f.get("running_power") for f in ran)
+    return [(d, f.get("running_power") if steady and (f.get("run_hours") or 0) > 0 else None, f.get("run_hours") or 0.0)
             for d, f in sorted(days.items())]
 
 

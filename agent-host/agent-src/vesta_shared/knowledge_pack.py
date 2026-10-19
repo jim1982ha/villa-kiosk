@@ -148,8 +148,9 @@ class Asset:
 #: hidden entities still listed them until the night — the owner updated and the villa status went on saying "unlocked"
 #: of the hidden locks. Raise it with every rule that changes what the pack holds; the agent rebuilds an older one at start
 #: (app.pack_needs_build). 1: hidden entities left out (0.6.197). 2: the villa's critical devices from its own rule, and
-#: the hidden entities named (0.6.234).
-PACK_RULES = 2
+#: the hidden entities named (0.6.234). 3: a device the owner named is kept as such (devices' "named": a Wi-Fi client
+#: is not the villa's, 0.6.248).
+PACK_RULES = 3
 
 
 
@@ -182,8 +183,9 @@ class KnowledgePack:
     retention: dict
     # Each area's other names in Home Assistant ("Cuisine" for Kitchen): a person may say either.
     area_aliases: dict[str, list[str]] = field(default_factory=dict)
-    # Home Assistant's devices, by device id: {"name", "manufacturer", "model", "via"} — the name the owner gave it first;
-    # "via": the device it hangs under (a meter's phase, a relay's channel), "" for a device of its own (unit_of).
+    # Home Assistant's devices, by device id: {"name", "manufacturer", "model", "via", "named"} — the name the owner gave
+    # it first; "via": the device it hangs under (a meter's phase, a relay's channel — or a sensor's radio bridge: unit_of
+    # tells them apart), "" for a device of its own; "named": the owner named it (a pack built before: absent, False).
     # Empty in a pack built before 0.6.108 (then nothing is grouped by device).
     devices: dict[str, dict] = field(default_factory=dict)
     # ⚠️ EVERY ENTITY'S DEVICE, CLASSIFIED OR NOT (2026-10-13): only a family's rows carried their device, so an entity
@@ -246,26 +248,46 @@ class KnowledgePack:
         d = self.devices.get(device_id or "")
         if d is None:
             return None
+        if d.get("named") is False and not d.get("manufacturer") and not d.get("model"):
+            # ⚠️ A CLIENT OF THE WI-FI IS NOT THE VILLA'S (villa, 2026-10-19): the network's integration makes a device
+            # of every phone and laptop it sees, named after its host name ("iPhone", "wlan0") with no maker or model.
+            # A guest's phone that left was "a monitoring device offline" in the weekly report. A device the owner
+            # named stays the villa's, whatever it lacks; a pack that does not say ("named" absent) is not judged.
+            return ""
         if d.get("name"):
             return d["name"]
         what = " ".join(x for x in (d.get("manufacturer"), d.get("model")) if x)
         return f"Unnamed {what}" if what else ""
 
     def unit_of(self, device_id: str | None) -> str | None:
-        """The physical device `device_id` is part of: the device it hangs under ("via"), up to one of its own;
-        `device_id` itself when it hangs under none, or the pack does not know (a pack built before "via" was kept).
+        """The physical device `device_id` is part of: the device it hangs under ("via") when it is a PART of it (part_of),
+        up to one of its own; `device_id` itself when it hangs under none or is a device of its own behind a bridge, or the
+        pack does not know (a pack built before "via" was kept).
 
         ⚠️ ONE METER, FOUR DEVICES (owner, 2026-10-18): Home Assistant lists a three-phase meter as the meter and a
         device per phase under it. Silent, it was "4 devices offline": an integration down, on a card of its own beside
-        the meter's own alert."""
+        the meter's own alert.
+        ⚠️ A BRIDGE IS NOT ITS SENSORS (villa, 2026-10-19): every Zigbee sensor hangs under the Zigbee bridge the same
+        way — read as parts of it, five sensors' batteries were "Zigbee2MQTT Bridge" five times in the weekly report,
+        and the night counted every Zigbee sensor as one device."""
         seen, cur = set(), device_id
         while cur and cur not in seen:
             seen.add(cur)
             up = (self.devices.get(cur) or {}).get("via")
-            if not up or up not in self.devices:
+            if not up or up not in self.devices or not self.part_of(cur, up):
                 return cur
             cur = up
         return cur
+
+    def part_of(self, child: str, parent: str) -> bool:
+        """Is `child` a part of `parent` (a meter's phase, a relay's channel) rather than a device of its own that talks
+        through it (a sensor behind its radio bridge)? A part is the same product: a device of its own is told by a model
+        of its own (both models given, and they differ). One rule for every make, read from the registry — never a list
+        of integrations; a registry that gives no model is not judged (a part, as before)."""
+        c, p = self.devices.get(child) or {}, self.devices.get(parent) or {}
+        if c.get("model") and p.get("model"):
+            return (c.get("manufacturer"), c["model"]) == (p.get("manufacturer"), p["model"])
+        return True
 
     def device_id_of(self, entity_id: str | None) -> str | None:
         """The Home Assistant device `entity_id` belongs to (its row's, else entity_devices), None when none."""
@@ -319,6 +341,21 @@ class KnowledgePack:
         if not entity_id or (self.row(entity_id) is None and self.device_id_of(entity_id) is None):
             return default
         return self.device_of(entity_id)[1] or default
+
+    def reading_name(self, entity_id: str | None, default: str | None) -> str | None:
+        """The name of what a READING measures: its own device in Home Assistant — the relay's channel ("House Pump"),
+        the meter's phase ("Main Power Phase A") — else device_name. A whole device's fault (offline, keeps dropping)
+        is the physical device's (device_of); a reading is its channel's.
+
+        ⚠️ TWO PUMPS ON ONE RELAY (villa, 2026-10-19): named by their relay, the weekly report drew two cards "House &
+        Pool Relay", two "Jet & Jaccuzi Relay", and three "Main Power Device" rows in the energy table."""
+        own = self.device_label(self.device_id_of(entity_id)) if entity_id else None
+        return own or self.device_name(entity_id, default)
+
+    def reading_key(self, entity_id: str) -> str:
+        """What a reading is about, as reading_name names it: its own device, else device_of's key."""
+        own = self.device_id_of(entity_id)
+        return f"device:{own}" if own and self.device_label(own) else self.device_of(entity_id)[0]
 
     def name_of(self, entity_id: str, default: str | None = None) -> str | None:
         """An entity's name as the pack has it; `default` when the pack does not name it."""
@@ -491,7 +528,7 @@ def build_pack(registry: dict, helpers: list[dict], states: dict | None = None,
                       for a in registry.get("areas", []) if a.get("name") and a.get("aliases")},
         devices={d["device_id"]: {"name": d.get("name_by_user") or d.get("name") or "",
                                   "manufacturer": d.get("manufacturer") or "", "model": d.get("model") or "",
-                                  "via": d.get("via_device_id") or ""}
+                                  "via": d.get("via_device_id") or "", "named": bool(d.get("name_by_user"))}
                  for d in registry.get("devices", []) if d.get("device_id")},
         entity_devices={e["entity_id"]: e["device_id"] for e in live if e.get("device_id")},
         rules=PACK_RULES,

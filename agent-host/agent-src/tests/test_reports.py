@@ -265,11 +265,15 @@ class _Book(HABase):
     def logbook(self, start, end, entity_id=None):
         self.reads = getattr(self, "reads", 0) + 1
         rows = [{"when": w, "entity_id": entity_id, "message": "triggered by lock.example_door"} for w in self.runs.get(entity_id, [])]
-        return rows + [{"when": "2026-09-30T12:00:00+00:00", "entity_id": entity_id, "message": "turned off"}]
+        # the villa's system re-checking its rules when they are reloaded or it starts: runs, never alerts
+        rechecks = [{"when": "2026-09-30T13:00:00+00:00", "entity_id": entity_id, "message": f"triggered by event '{e}'",
+                     "source": f"event '{e}'"} for e in ("automation_reloaded", "homeassistant_started")]
+        return rows + rechecks + [{"when": "2026-09-30T12:00:00+00:00", "entity_id": entity_id, "message": "turned off"}]
 
 
 def test_an_alert_is_a_run_only_for_a_rule_that_alerts_on_every_run(tmp_path):
-    # villa, 2026-10-01: 71 runs of the schedule rules (a daily check) showed as 71 "critical alerts"
+    # villa, 2026-10-01: 71 runs of the schedule rules (a daily check) showed as 71 "critical alerts"; week 42: 400
+    # re-checks after the rules were reloaded showed as "403 critical alerts" (each _Book rule has two of them)
     daily = [f"2026-09-{d:02d}T07:30:00+00:00" for d in range(28, 31)]
     book = _Book(["2026-09-30T07:41:00+00:00"], daily)
     facts, c, store = _ctx(tmp_path, book)
@@ -659,7 +663,7 @@ def test_the_monitoring_table_lists_devices_not_their_sensors():
     assert got["Lone Battery"]["since"] == "2026-10-09T06:00"         # a sensor with no device keeps its own row
     # every section names a device the same way (knowledge_pack.device_of): the to-do list groups a clue and a task
     # about one plug under its device, and the batteries are named as the device they power
-    assert facts._device(c, "sensor.spa_pump_power", "x") == facts._device(c, "switch.spa_relay", "x") == "device:plug"
+    assert playbook._device(c, "sensor.spa_pump_power", "x") == playbook._device(c, "switch.spa_relay", "x") == "device:plug"
     c.need = lambda *p: {"replace_below_pct": 20, "watch_below_pct": 35, "show": 8}[p[-1]]
     pack.families["battery"].append(row("sensor.plug_battery", "Plug Battery", "plug", "battery"))
     pack.families["battery"].append(row("sensor.porch_battery", "Porch Battery", None, "battery"))
@@ -727,23 +731,36 @@ def test_an_equipment_card_is_watched_when_the_to_do_list_names_its_device():
     import facts
     import playbook
     from vesta_shared.knowledge_pack import KnowledgePack
+    from datetime import date
+    # two pumps on one relay, as the villa's system lists them: the relay, and a device per channel under it
     pack = KnowledgePack(villa="V", time_zone="UTC", generated_at="", ha_version=None,
-                         families={"power": [{"entity_id": "sensor.pool_power", "name": "Pool Power", "device_id": "plug",
-                                              "asset": "pool", "family": "power"}]},
+                         families={"power": [{"entity_id": "sensor.pool_power", "name": "Pool Power", "device_id": "pool_ch",
+                                              "asset": "pool", "family": "power"},
+                                             {"entity_id": "sensor.house_power", "name": "House Power", "device_id": "house_ch",
+                                              "asset": "house", "family": "power"}]},
                          assets={"pool": {"slug": "pool", "name": "Pool pump", "kind": "motor",
-                                          "entities": {"power": "sensor.pool_power"}}},
+                                          "entities": {"power": "sensor.pool_power"}},
+                                 "house": {"slug": "house", "name": "House pump", "kind": "motor",
+                                           "entities": {"power": "sensor.house_power"}}},
                          areas=[], people=[], channels={}, unknown_area=[], unclassified=[], retention={},
-                         devices={"plug": {"name": "Pool Plug", "manufacturer": "", "model": ""}})
+                         devices={"relay": {"name": "House & Pool Relay", "manufacturer": "Maker", "model": "Pro EM", "via": ""},
+                                  "pool_ch": {"name": "Pool Pump", "manufacturer": "Maker", "model": "Pro EM", "via": "relay"},
+                                  "house_ch": {"name": "House Pump", "manufacturer": "Maker", "model": "Pro EM", "via": "relay"}})
     c = facts.Ctx.__new__(facts.Ctx)
     c.pack, c.cfg = pack, {}
     c.need = lambda *p: {"card_days": 14, "watch_drop_pct": 10}[p[-1]]
-    c.running_power = lambda eid, asset, days: [("2026-10-01", 700.0), ("2026-10-02", 700.0)]        # steady: no drop of its own
-    c._todo = [{"device": "device:plug"}]
-    (card,) = facts.s_equipment(c)["cards"]
-    assert card["status"] == "Watch"
-    assert card["title"] == "Pool Plug"                      # named as the device, like the to-do list and the tables
+    d1, d2 = date(2026, 10, 1), date(2026, 10, 2)
+    c.running_days = lambda eid, asset, days: ([(d1, 700.0, 8.0), (d2, 700.0, 8.0)] if eid == "sensor.pool_power"   # steady
+                                               else [(d1, None, 0.5), (d2, None, 1.1)])                             # bursts
+    c._todo = [{"device": "device:relay", "entity_ids": ["sensor.pool_power"]}]
+    house, pool = facts.s_equipment(c)["cards"]
+    assert pool["status"] == "Watch" and pool["title"] == "Pool Pump"    # named as its channel, like the villa's system
+    # ⚠️ the house pump shares the relay: the pool pump's item never marks it (villa, 2026-10-19: both cards "Watch")
+    assert house["status"] == "OK" and house["title"] == "House Pump"
+    # a pump in bursts: its running time, never a power the hourly figures cannot give
+    assert house["unit"] == "h" and [v for _, v in house["series"]] == [0.5, 1.1] and pool["unit"] == "W"
     c._todo = []
-    assert facts.s_equipment(c)["cards"][0]["status"] != "Watch"
+    assert facts.s_equipment(c)["cards"][1]["status"] != "Watch"
 
 
 def test_a_volt_battery_is_judged_by_its_charge_not_its_reading():
@@ -840,6 +857,9 @@ def test_the_owners_weekly_line_counts_alerts_apart_from_maintenance(tmp_path):
     pack, store = _problems_villa(tmp_path)
     text = compose.owner_weekly(pack, store, {"start": "2026-09-28", "end": "2026-10-04", "total_kwh": None})
     assert "2 still open; 2 maintenance problem(s) open" in text                  # not "4 FM task(s)"
+    # with the weekly page's figures, the page's count of alerts (the villa's own included): one number for one week
+    week = {"start": "2026-09-28", "end": "2026-10-04", "total_kwh": None}
+    assert "- 7 alert(s)," in compose.owner_weekly(pack, store, week, kpis={"alerts": 7})
 
 
 def test_the_owners_monday_lines_carry_the_weekly_page_they_point_to(tmp_path, monkeypatch, capsys):

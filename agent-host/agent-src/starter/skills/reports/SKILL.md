@@ -24,7 +24,7 @@ figures; compose.py lays the page out and checks your sentences.
 |---|---|---|---|
 | Daily 07:00 | FM | chat, under 4,096 characters, split if longer | `compose.py fm-daily` |
 | Monday 08:00 | FM | page (HTML file attached) and its headline in chat | the steps below, weekly |
-| Monday 08:00 | Owner | three lines in chat, the FM weekly page attached | `compose.py owner-weekly --energy week.json --page fm_weekly.html` |
+| Monday 08:00 | Owner | three lines in chat, the FM weekly page attached | `compose.py owner-weekly --energy week.json --facts facts.json --page fm_weekly.html` |
 | 1st of the month 08:00 | Owner | page (HTML file attached), the monthly proof, and its headline in chat | the steps below, monthly |
 | On demand | either | the period asked for (`--end` for a past one) | the steps below |
 

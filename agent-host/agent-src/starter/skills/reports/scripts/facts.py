@@ -50,7 +50,7 @@ from vesta_shared.device_state import is_offline  # noqa: E402  (the night check
 from vesta_shared.past import unread  # noqa: E402  (the one "could not be read whole: nothing is known after")
 from vesta_shared.store import Notes, notes_of  # noqa: E402  (an alert's notes: one reader)
 from playbook import (  # noqa: E402  (the clues and the one list of what needs doing)
-    MissingParameter, _device, _num, _when, battery_pct, clues, todo)
+    MissingParameter, _num, _when, battery_pct, clues, todo)
 
 
 def load_cfg() -> dict:
@@ -213,10 +213,13 @@ class Ctx:
         ⚠️ A RULE RUNNING IS NOT AN ALERT (villa, 2026-10-01). A schedule rule runs at the start of every
         expected run window and sends only when the pump does not run; a presence rule mostly stops at its
         conditions. Counted as alerts, 71 runs made 71 "critical alerts" in a week that had a handful. A
-        condition rule only runs once its condition has held: each of its runs IS an alert. Matching the
+        condition rule only runs once its condition has held: each of its runs IS an alert — except a run the villa's
+        system starts itself (reports.yaml not_an_alert_when_started_by: reloading its rules re-checks every one; 400
+        such runs were week 42's "403 critical alerts"). Matching the
         notify entities' messages instead was tried and failed: the wall tablet gets every automation's
         messages, and nothing in the record says which rule sent one."""
         every_run = {str(b).removesuffix(".yaml") for b in self.cfg.get("alert_on_every_run") or []}
+        rechecks = [f"'{e}'" for e in self.cfg.get("not_an_alert_when_started_by") or []]
         window = float(self.need("alert_follow_window_min")) * 60
         out = []
         known = [(i.get("rule_id"), datetime.fromisoformat(i["opened_at"])) for i in self.incidents() if i.get("opened_at")]
@@ -234,8 +237,11 @@ class Ctx:
                                      + " — its alerts after that are not counted.")
             for r in book.rows:
                 t = _when(r)
-                if t is None or not str(r.get("message") or "").startswith("triggered"):
+                said = str(r.get("message") or "")
+                if t is None or not said.startswith("triggered"):
                     continue                         # switched on or off, reloaded: not a run
+                if any(w in said or w in str(r.get("source") or "") for w in rechecks):
+                    continue                         # the villa's system re-checking its rules: not an alert
                 if followed_by_agent(eid, t, known, window):
                     continue                         # the agent followed it: shown once, as the agent's
                 out.append({"when": t.isoformat(), "what": self.alert_words(rinfo), "lasted": None, "severity": None,
@@ -279,10 +285,6 @@ class Ctx:
         days = {d for i in t["grid_in"] + t["solar"] for d in per[i]}
         add = lambda ids, d: sum(per[i].get(d, 0.0) for i in ids)  # noqa: E731
         return {d: round(energy_used(add(t["grid_in"], d), add(t["grid_out"], d), add(t["solar"], d)), 2) for d in days}
-
-    def running_power(self, entity_id: str, asset: dict | None, days: int) -> list[tuple[str, float]]:
-        """Power per day while the device ran (running_days)."""
-        return [(d.isoformat(), round(w)) for d, w, _ in self.running_days(entity_id, asset, days) if w is not None]
 
     def ai_cost(self) -> float | None:
         s, e = self.s_dt.astimezone(timezone.utc).isoformat(), self.e_dt.astimezone(timezone.utc).isoformat()
@@ -457,20 +459,29 @@ def _status_from(series: list[tuple[str, float]], drop_pct: float) -> str:
 def s_equipment(c: Ctx) -> dict:
     days = int(c.need("card_days"))
     drop = float(c.need("pump", "watch_drop_pct"))
-    watched = {d for it in todo(c) for d in (it.get("devices") or [it["device"]])}
+    # ⚠️ BY WHAT THE ITEM MEASURES, NOT ITS RELAY (villa, 2026-10-19): two pumps on one relay are one device; the house
+    # pump's finding set the pool pump's card to "Watch" too (knowledge_pack.reading_key)
+    watched = {c.pack.reading_key(e) for it in todo(c) for e in it.get("entity_ids") or []}
     cards = []
     for slug, a in sorted(c.pack.assets.items()):
         pw = (a.get("entities") or {}).get("power")
         if a.get("kind") != "motor" or not pw:
             continue
-        series = c.running_power(pw, a, days)
+        run = c.running_days(pw, a, days)
+        series = [(d.isoformat(), round(w)) for d, w, _ in run if w is not None]
+        subtitle, unit = f"Running power per day, last {days} days", "W"
+        if not series:
+            # no steady hour (a pump in short bursts): its power is not known, its running time is (daily.running_series)
+            series = [(d.isoformat(), round(h, 1)) for d, _, h in run if h > 0]
+            subtitle, unit = f"Hours running per day, last {days} days", "h"
         if len(series) < 2:
             continue                                  # did not run in the period: no card to draw
         # ⚠️ BY THE ONE DEVICE IDENTITY (architecture review 13): the to-do list names devices by device_of, and this
         # compared them with the asset slug — no card was ever set to "Watch" by it (a regression of 0.12.115)
-        status = "Watch" if _device(c, pw, slug) in watched else _status_from(series, drop)
-        cards.append({"id": f"card-{slug}", "title": c.pack.device_name(pw, slug), "subtitle": f"Running power per day, last {days} days",
-                      "unit": "W", "series": series, "status": status,
+        mark = c.pack.reading_key(pw) in watched
+        status = "Watch" if mark else (_status_from(series, drop) if unit == "W" else "OK")
+        cards.append({"id": f"card-{slug}", "title": c.pack.reading_name(pw, slug), "subtitle": subtitle,
+                      "unit": unit, "series": series, "status": status,
                       "figures": {"first": series[0][1] if series else None, "last": series[-1][1] if series else None,
                                   "min": min((v for _, v in series), default=None), "max": max((v for _, v in series), default=None)}})
     for extra in c.cfg.get("cards") or []:
@@ -507,8 +518,8 @@ def s_batteries(c: Ctx) -> dict:
         if pct is None:
             continue                      # volts with no nominal: the night check asks for it, never a guess
         lvl = "replace" if pct < repl else ("watch" if pct < watch else "ok")
-        # named as the device it powers, like every list of devices in the report (knowledge_pack.device_of)
-        rows.append({"name": c.pack.device_name(r["entity_id"], r.get("name") or r["entity_id"]), "pct": round(pct), "level": lvl,
+        # named as the device it powers (knowledge_pack.reading_name: its own device, never its radio bridge)
+        rows.append({"name": c.pack.reading_name(r["entity_id"], r.get("name") or r["entity_id"]), "pct": round(pct), "level": lvl,
                      "volts": round(v, 2) if unit == "V" else None})
     rows.sort(key=lambda x: x["pct"])
     return {"count": len(rows), "rows": rows[: int(show)], "replace_below_pct": repl,
@@ -589,7 +600,7 @@ def s_trends(c: Ctx) -> dict:
             continue
         series = [(d.isoformat(), v) for d, v in sorted(c.daily_kwh(en, c.start, c.end).items())]
         if series and max(v for _, v in series) > 0:
-            charts.append({"id": f"trend-{slug}", "kind": "line", "title": f"{c.pack.device_name(en, slug)}, kWh per day",
+            charts.append({"id": f"trend-{slug}", "kind": "line", "title": f"{c.pack.reading_name(en, slug)}, kWh per day",
                            "unit": "kWh", "series": series,
                            "figures": {"first": series[0][1], "last": series[-1][1], "min": min(v for _, v in series),
                                        "max": max(v for _, v in series)}})

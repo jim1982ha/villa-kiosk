@@ -188,7 +188,8 @@ def run(args) -> dict:
                     quiet_rows.append((row, asset, since))
     # silence: one finding per device, and only for a sensor that normally reports all the time
     silence_hours = params.behaviour("silence_hours")
-    long_quiet = [(r, a, t) for r, a, t in quiet_rows if (now_ref - t).total_seconds() / 3600 >= silence_hours]
+    long_quiet = [(r, a, t) for r, a, t in quiet_rows if (now_ref - t).total_seconds() / 3600 >= silence_hours
+                  and not _device_still_talks(pack, states, r["entity_id"], now_ref, silence_hours)]
     if long_quiet:
         # judged on the hours just BEFORE it went quiet (features.reporting_share)
         hist_hours = int(params.behaviour("silence_history_hours"))
@@ -362,6 +363,26 @@ def told_now(res: dict, title: str | None = None) -> list[dict]:
     title = title or f"{res.get('villa') or 'The villa'}, night check on {day_label(date.fromisoformat(res['as_of']), numeric=True)}."
     body = split_title(document(title, "", [("New", new), ("Back again", back)]))[1]
     return [result.message("fm", body, title=title)]
+
+
+def _device_still_talks(pack, states: dict, entity_id: str, now: datetime, hours: float) -> bool:
+    """Has another reading of `entity_id`'s device reported within `hours`? Then the device is talking and this reading
+    has simply not changed — it is not silent.
+
+    ⚠️ STILL IS NOT SILENT (villa, 2026-10-19): the system monitor's disk use went from 78.6 % to 2.4 % when the disk
+    was emptied, and at one decimal of a large disk it then stayed 2.4 % for days; it writes only on a change, so it
+    read "has not reported for 1 d 9 h although it is online" while its disk-free reading went on reporting."""
+    for e in pack.entities_of_device(pack.device_id_of(entity_id)) - {entity_id}:
+        st = states.get(e) or {}
+        if is_offline(st.get("state")) or st.get("state") == "unknown":
+            continue
+        at = st.get("last_reported") or st.get("last_changed")
+        try:
+            if at and (now - datetime.fromisoformat(at).astimezone(now.tzinfo)).total_seconds() / 3600 < hours:
+                return True
+        except ValueError:
+            continue
+    return False
 
 
 def _device_named(pack, asset: dict, entity_id: str) -> dict:

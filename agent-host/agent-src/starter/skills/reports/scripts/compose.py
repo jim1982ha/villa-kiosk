@@ -2,7 +2,8 @@
 """reports: the composer — the chat texts, and the weekly and monthly pages from their facts.
 
   compose.py fm-daily      --pack pack.json --store S [--as-of D]                 -> text (chat)
-  compose.py owner-weekly  --pack pack.json --store S --energy week.json [--page P] -> 3 lines (chat), page attached
+  compose.py owner-weekly  --pack pack.json --store S --energy week.json [--page P] [--facts F] -> 3 lines (chat),
+                           page attached; with the page's facts.json, its count of alerts
   compose.py fm-weekly     --facts facts.json [--notes notes.json] --out page.html
   compose.py owner-monthly --facts facts.json [--notes notes.json] --out page.html
 
@@ -134,12 +135,18 @@ def fm_daily(pack: KnowledgePack, store: Store, as_of: date) -> str:
     return document(title(pack.villa, "daily", as_of), "", sections)
 
 
-def owner_weekly(pack: KnowledgePack, store: Store, energy: dict, page: bool = False) -> str:
+def owner_weekly(pack: KnowledgePack, store: Store, energy: dict, page: bool = False, kpis: dict | None = None) -> str:
     """The owner's Monday lines. `page`: the facility manager's weekly page goes with them (owner, 2026-10-12: the
-    lines said "Details in the FM weekly page", a page only the facility manager was sent)."""
+    lines said "Details in the FM weekly page", a page only the facility manager was sent). `kpis`: that page's own
+    figures (facts.json's kpis section) — its count of alerts, the villa's own included, is then the one said.
+
+    ⚠️ ONE COUNT OF ALERTS (owner, 2026-10-19: "maintain consistency in calculations"): these lines counted only the
+    alerts the agent recorded, while the page sent with them also counted those the villa's system raised while the
+    agent was not listening — two numbers for one week, side by side."""
     inc = [i for i in store.incident_occurrences()            # every run, a reopened alert's included
            if energy["start"] <= villa_date(i["opened_at"], pack.time_zone or "UTC").isoformat() <= energy["end"]]
     p1 = sum(1 for i in inc if i["severity"] == "P1")
+    n_alerts = (kpis or {}).get("alerts", len(inc))
     # the alerts and the maintenance problems still open, counted apart as the concierge counts them: every open
     # problem was called an "FM task", an alert included
     still = Problems(store).open_problems()
@@ -150,7 +157,7 @@ def owner_weekly(pack: KnowledgePack, store: Store, energy: dict, page: bool = F
     cost = f", {fmt_money(energy['total_cost'], energy['currency'])}" if energy.get("total_cost") else ""
     return document(title(pack.villa, "weekly", date.fromisoformat(energy["end"])), "", [
         ("Energy this week", [f"- {kwh}{vs}{cost}."]),
-        ("Alerts and problems", [f"- {len(inc)} alert(s), {p1} critical, {alerts_open} still open; {open_tasks} "
+        ("Alerts and problems", [f"- {n_alerts} alert(s), {p1} critical, {alerts_open} still open; {open_tasks} "
                                  f"maintenance problem(s) open.",
                                  "- All quiet." if not still and not p1 else "- Details in the attached page." if page
                                  else "- The facility manager has the details in their weekly page."])])
@@ -350,7 +357,8 @@ def main(argv=None):
             print(f"fm-daily: {e}", file=sys.stderr)
             return 1
     else:
-        doc = owner_weekly(pack, store, json.load(open(a.energy)), page=bool(a.page))
+        kpis = (json.load(open(a.facts, encoding="utf-8")).get("sections") or {}).get("kpis") if a.facts else None
+        doc = owner_weekly(pack, store, json.load(open(a.energy)), page=bool(a.page), kpis=kpis)
     attached = {"attachment": os.path.basename(a.page)} if a.page else {}
     if mode == "no_ai":
         # a job's without_ai step: the message is sent as written, saying it was made without the AI; a long one is cut

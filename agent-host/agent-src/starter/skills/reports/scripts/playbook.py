@@ -89,7 +89,7 @@ def clue_power_step(c, when):
             k = best[0]
             if min(statistics.mean(r[2] for r in rows[:k]), statistics.mean(r[2] for r in rows[k:])) < float(when.get("min_hours", 0)):
                 continue                             # a few minutes a day: its hourly means are not its power
-            out.append({"subject": c.pack.device_name(pw, slug), "entity_id": pw, "step_date": rows[k][0].isoformat(),
+            out.append({"subject": c.pack.reading_name(pw, slug), "entity_id": pw, "step_date": rows[k][0].isoformat(),
                         "before_w": round(statistics.mean(r[1] for r in rows[:k])),
                         "after_w": round(statistics.mean(r[1] for r in rows[k:])), "drop_pct": round(-best[1]),
                         "hours_before": round(statistics.mean(r[2] for r in rows[:k]), 1),
@@ -111,7 +111,7 @@ def clue_run_change(c, when):
             after = statistics.mean(r[2] for r in rows[k:])
             if max(before, after) < float(when.get("min_hours", 0)):
                 continue                             # a few minutes a day either way: not a change to report
-            out.append({"subject": c.pack.device_name(pw, slug), "entity_id": pw, "change_date": rows[k][0].isoformat(),
+            out.append({"subject": c.pack.reading_name(pw, slug), "entity_id": pw, "change_date": rows[k][0].isoformat(),
                         "hours_before": round(statistics.mean(r[2] for r in rows[:k]), 1),
                         "hours_after": round(statistics.mean(r[2] for r in rows[k:]), 1), "change_pct": round(best[1])})
     return out
@@ -135,7 +135,7 @@ def clue_battery_trend(c, when):
             fall = round(-(slope_per_hour(pts) or 0) * 7, 1)      # the points are (day index, level): per day
         if not fall or fall <= 0 or now_v <= repl:
             continue                    # no trend to project, or already due: the batteries section shows it
-        out.append({"subject": c.pack.device_name(r["entity_id"], r["entity_id"]), "entity_id": r["entity_id"], "level_pct": round(now_v),
+        out.append({"subject": c.pack.reading_name(r["entity_id"], r["entity_id"]), "entity_id": r["entity_id"], "level_pct": round(now_v),
                     "fall_per_week": fall, "weeks_left": round((now_v - repl) / fall, 1), "replace_below_pct": repl})
     return out
 
@@ -293,6 +293,7 @@ def one_list(clue_rows: list[dict], problems: list[dict], device_of, name_of, ho
         keep["severity"] = min(keep["severity"], other["severity"], key=lambda s: order.get(s, 9))
         keep["task_ids"] = keep["task_ids"] + other["task_ids"]
         keep["also"] = keep["also"] + [other["title"]] + other["also"]
+        keep["entity_ids"] = keep["entity_ids"] + other["entity_ids"]
         items[it["device"]] = keep
 
     def severity_for(h):
@@ -308,13 +309,15 @@ def one_list(clue_rows: list[dict], problems: list[dict], device_of, name_of, ho
              "subject": cl["subject"], "title": cl["title"], "severity": sev, "horizon": cl.get("horizon") or horizon.get(sev),
              "why": cl["playbook"].get("means", ""), "check": cl["playbook"].get("check", ""), "ask": cl["playbook"].get("ask", ""),
              "cost": cl["playbook"].get("cost_of_ignoring", ""), "since": str(f.get("since") or f.get("step_date") or f.get("change_date") or ""),
-             "figures": f, "task_ids": [], "also": [], "group_title": cl.get("group_title"), "look_at": cl["playbook"].get("look_at", "")})
+             "figures": f, "task_ids": [], "also": [], "group_title": cl.get("group_title"), "look_at": cl["playbook"].get("look_at", ""),
+             "entity_ids": [f["entity_id"]] if f.get("entity_id") else []})
     for pr in problems:
         title = pr["title"].split("\n")[0]
         add({"from": "task", "kind": pr["kind"], "device": device_of(pr.get("entity_id"), pr["id"]),
              "subject": name_of(pr.get("entity_id")) or title, "title": title, "severity": pr["severity"],
              "horizon": horizon.get(pr["severity"]), "why": "", "check": pr.get("check") or "", "ask": "", "cost": "",
-             "since": pr["since"], "figures": pr["figures"], "task_ids": [pr["id"]], "also": [], "group_title": None})
+             "since": pr["since"], "figures": pr["figures"], "task_ids": [pr["id"]], "also": [], "group_title": None,
+             "entity_ids": [pr["entity_id"]] if pr.get("entity_id") else []})
 
     out = []
     for group, its in group_kinds(list(items.values()), group_from, group_words):
@@ -331,7 +334,7 @@ def one_list(clue_rows: list[dict], problems: list[dict], device_of, name_of, ho
         out.append({**its[0], "title": group["title"], "subject": f"{n} items", "why": why,
                     "ask": "", "severity": group["severity"],
                     "task_ids": [i for x in its for i in x["task_ids"]], "also": [], "members": group["names"],
-                    "devices": [x["device"] for x in its]})
+                    "devices": [x["device"] for x in its], "entity_ids": [e for x in its for e in x["entity_ids"]]})
     out.sort(key=lambda x: (order.get(x["severity"], 9), x["since"]))
     for k, it in enumerate(out):
         it["id"] = f"todo-{k + 1}"

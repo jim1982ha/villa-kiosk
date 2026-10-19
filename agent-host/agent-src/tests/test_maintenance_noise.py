@@ -126,6 +126,30 @@ def test_one_silent_device_is_one_finding(tmp_path):
     assert f["summary"].startswith("TH temperature (+2 entities of the same device) has not reported"), f["summary"]
 
 
+def test_the_night_leaves_a_still_reading_of_a_talking_device_alone(tmp_path):
+    # villa, 2026-10-19 (the caller, run for real): the disk use held at 2.4 % for days while the same monitor's
+    # processor use reported every minute — "System Monitor has not reported for 1 d 9 h although it is online"
+    fx = tmp_path / "fx"
+    fx.mkdir()
+    old, fresh = (NOW - timedelta(hours=40)).isoformat(), (NOW - timedelta(minutes=5)).isoformat()
+    disk, cpu = "sensor.example_monitor_disk", "sensor.example_monitor_cpu"
+    (fx / "states.json").write_text(json.dumps({"states": {
+        disk: {"state": "2.4", "attributes": {}, "last_changed": old, "last_reported": old},
+        cpu: {"state": "3", "attributes": {}, "last_changed": fresh, "last_reported": fresh}}}))
+    _hourly(fx, "a", {disk: (NOW - timedelta(days=14), 12 * 24, True)})
+    rows = {"level": [_row(disk, "Monitor disk", asset="mon", device="dev-mon")],
+            "runtime": [_row(cpu, "Monitor CPU", family="runtime", asset="mon", device="dev-mon")]}
+    _pack(tmp_path, rows)
+    _night(tmp_path, "--as-of", AS_OF)
+    assert _open(tmp_path, "PM-SILENT") == []
+    # the whole device quiet: then it IS silent
+    (fx / "states.json").write_text(json.dumps({"states": {
+        disk: {"state": "2.4", "attributes": {}, "last_changed": old, "last_reported": old},
+        cpu: {"state": "3", "attributes": {}, "last_changed": old, "last_reported": old}}}))
+    _night(tmp_path, "--as-of", AS_OF)
+    assert len(_open(tmp_path, "PM-SILENT")) == 1
+
+
 # ------------------------------------------------------------------------------------------ reconnect loops
 def test_a_restart_is_not_a_device_dropping_and_one_device_is_one_finding(tmp_path):
     fx = tmp_path / "fx"
@@ -475,3 +499,26 @@ def test_an_offline_fault_an_alert_took_over_is_handed_over_never_cleared(tmp_pa
     assert _open(tmp_path, "PM-UNAVAILABLE") == []                       # one problem: the alert's
     assert res["closed"] == [] and [f["entity_id"] for f in res["handed_over"]] == ["lock.example_door"], res
     assert iid
+
+
+def test_a_reading_that_holds_still_while_its_device_reports_is_not_silent():
+    # villa, 2026-10-19: the disk use stayed 2.4 % for days (it writes on a change only) while the same monitor's
+    # processor use reported every minute — "has not reported for 1 d 9 h although it is online"
+    import importlib.util
+    from datetime import datetime, timezone
+    from vesta_shared.knowledge_pack import KnowledgePack
+    spec = importlib.util.spec_from_file_location("nightly_t", os.path.join(
+        os.path.dirname(__file__), "..", "starter", "skills", "preventive-maintenance", "scripts", "nightly.py"))
+    nightly = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(nightly)
+    pack = KnowledgePack(villa="V", time_zone="UTC", generated_at="", ha_version=None, families={}, assets={}, areas=[],
+                         people=[], channels={}, unknown_area=[], unclassified=[], retention={},
+                         devices={"mon": {"name": "Monitor", "manufacturer": "M", "model": "X", "via": ""}},
+                         entity_devices={"sensor.disk": "mon", "sensor.cpu": "mon"})
+    now = datetime(2026, 10, 19, 2, tzinfo=timezone.utc)
+    talks = {"sensor.cpu": {"state": "3", "last_reported": "2026-10-19T01:59:00+00:00"}}
+    quiet = {"sensor.cpu": {"state": "3", "last_reported": "2026-10-17T08:00:00+00:00"}}
+    gone = {"sensor.cpu": {"state": "unavailable", "last_reported": "2026-10-19T01:59:00+00:00"}}
+    assert nightly._device_still_talks(pack, talks, "sensor.disk", now, 24)
+    assert not nightly._device_still_talks(pack, quiet, "sensor.disk", now, 24)   # the whole device quiet: silent
+    assert not nightly._device_still_talks(pack, gone, "sensor.disk", now, 24)    # an offline reading says nothing

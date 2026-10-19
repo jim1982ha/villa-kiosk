@@ -155,6 +155,11 @@ todo_groups:
 # a schedule rule runs every day to check, a presence rule mostly stops at its conditions; their alerts
 # come from the agent's own record (the event they raise when they alert).
 alert_on_every_run: [critical_condition]
+# ...except a run started by the villa's system itself: such a rule re-checks its condition each time the rules are
+# reloaded or the system starts, and stops at once when it does not hold (villa, week 42: 400 such re-checks were
+# counted as "critical alerts" — the rules had been reloaded 57 times, and none had alerted). The words are the
+# event's name, as the logbook says what started a run ("triggered by event 'automation_reloaded'").
+not_an_alert_when_started_by: [automation_reloaded, homeassistant_start, homeassistant_started]
 
 # What became of an alert, in the alerts table: per state the alert desk gives an incident. A state with no
 # words here is named in the report's problems, never shown raw.
