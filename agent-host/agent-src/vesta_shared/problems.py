@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 
 from . import agreement, result
+from .limits import limit
 from .messaging import no_code as _no_code
 from .store import Incident, Notes, Store, notes_of
 
@@ -35,12 +36,32 @@ STATUSES = (DONE, CLEARED, CLOSED_IN_KIOSK)
 
 _ORDER = result.PRIORITY_ORDER
 
-#: A state finding closed this many days ago or less that the night sees again is the SAME problem, back — not a new one.
-AGAIN_DAYS = 7
+def again_days() -> int:
+    """A state finding closed this many days ago or less that the night sees again is the SAME problem, back — not a
+    new one; and "again: N times in 7 days" counts this window."""
+    return limit("problems.again_days", 7, unit="days", group="detect", lo=1, hi=90,
+                 says="A problem that comes back within this many days of its close is the same problem, reopened, "
+                      "and \"again: N times in 7 days\" counts this many days.",
+                 reached="Back after longer, it is a new problem with a new number.", told="person")
+
+
+#: The window when a skill script starts (it reads it once); the engine calls again_days() at each use
+AGAIN_DAYS = again_days()
 
 #: What a task's fault says when it opens again because its problem was read still there after a person closed it —
 #: as the alert desk's reopening says it (its quiet_after_done), one sentence for both.
 STILL_THERE = "Still there after the close."
+
+
+def task_title_chars() -> int:
+    return limit("problems.task_title_chars", 250, unit="characters", group="text", lo=60, hi=2000,
+                 says="The longest title a problem's task keeps.", reached="The rest of the title is cut.", told="")
+
+
+def alert_title_chars() -> int:
+    return limit("problems.alert_title_chars", 200, unit="characters", group="text", lo=60, hi=2000,
+                 says="The longest title an alert's problem keeps (from the alert's own message).",
+                 reached="The rest of the title is cut.", told="")
 
 
 def occurrences(finding: dict | None) -> list[str]:
@@ -59,7 +80,7 @@ def incident_runs(inc: dict, store: Store) -> int:
     three nights running read "New" each night, "1st time", while the line claimed to count seven days."""
     from datetime import datetime, timedelta
     latest = datetime.fromisoformat(inc.get("reopened_at") or inc["opened_at"])
-    since = latest - timedelta(days=AGAIN_DAYS)
+    since = latest - timedelta(days=again_days())
     # ⚠️ AND UNDER ITS NAME (architecture review scan 1, 2026-10-19): an alert filed by its rule's permanent number
     # (0.12.250, "rule:<uid>|<device>") came back as the "1st time" though its runs of the week were filed under the
     # rule's name — the same rule, the same device
@@ -75,7 +96,7 @@ def _runs_of(inc: dict) -> list[str]:
 
 def again_title(summary: str, again: int | None) -> str:
     """A problem's title with how often it came back: the Kiosk fault, the digest and the AI all read this one."""
-    return f"{summary} (again: {again + 1} times in {AGAIN_DAYS} days)" if again else summary
+    return f"{summary} (again: {again + 1} times in {again_days()} days)" if again else summary
 
 
 
@@ -316,7 +337,7 @@ class Problems:
         if not may:
             return None
         from datetime import date, timedelta
-        since = (date.fromisoformat(day) - timedelta(days=AGAIN_DAYS)).isoformat()
+        since = (date.fromisoformat(day) - timedelta(days=again_days())).isoformat()
         last = self.store.last_closed_finding(f.rule_id, f.entity_id, since, day)
         if not last:
             return None
@@ -495,14 +516,14 @@ class Problems:
             # ⚠️ ONE OPENER (architecture review, 2026-10-19): this reopened the last task itself, the alert desk through
             # reopen_task — a third way (open_task, for a raised priority) made a second task and a second Kiosk fault
             why = STILL_THERE if kind == "finding" and self.still_there_after_close(source) else note or "Back again."
-            tid, how = self.reopen_task(kind, sid, last["rule_id"], last["entity_id"], title[:250],
+            tid, how = self.reopen_task(kind, sid, last["rule_id"], last["entity_id"], title[:task_title_chars()],
                                         self.check_of(last), note=why)
             return [tid] if how == "reopened" else []
         if kind != "finding":
             return []
         row = self.store.finding(sid)
         check = json.loads(row.get("detail") or "{}").get("check") or ""
-        return [self.store.add_task(row["rule_id"], row["entity_id"], title[:250], source=source, check_text=check or None)]
+        return [self.store.add_task(row["rule_id"], row["entity_id"], title[:task_title_chars()], source=source, check_text=check or None)]
 
     def settle_all(self, faults: set[str] | None = None) -> list[int]:
         """settle() for every open problem and every open task — the repair's one pass: the ids of the tasks that moved.
@@ -602,7 +623,7 @@ class Problems:
             inc = self.store.incident(sid)
             message = notes_of(inc).get(Notes.MESSAGE) if inc and not inc.get("closed_at") else None
             if message:
-                return again_title(str(message)[:200], incident_runs(inc, self.store) - 1)
+                return again_title(str(message)[:alert_title_chars()], incident_runs(inc, self.store) - 1)
         return self.title_of(task)
 
     def check_of(self, task: dict) -> str:

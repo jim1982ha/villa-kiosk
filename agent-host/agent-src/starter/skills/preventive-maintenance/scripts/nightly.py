@@ -37,12 +37,31 @@ from vesta_shared.past import unread  # noqa: E402  (the one "could not be read 
 from vesta_shared.message_format import document, split_title  # noqa: E402  (the one shape of a message)
 from vesta_shared.device_state import has_value, is_offline  # noqa: E402
 from vesta_shared.offline import devices_offline  # noqa: E402  (the one reading of "offline now")
+from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the Limits tab)
 from vesta_shared.problems import Problems, again_title  # noqa: E402  (a problem's lifecycle: one owner)
 from vesta_shared import result  # noqa: E402  (what the engine is asked to do: its shape; R is rules.py)
 from vesta_shared import daily  # noqa: E402  (a device's day: the one running threshold)
 from vesta_shared.timeutil import schedule_hours_per_day  # noqa: E402
 import features as F  # noqa: E402
 import rules as R  # noqa: E402
+
+# The night check's reading windows written in code, set on the Limits tab (vesta_shared.limits)
+WINDOW_MARGIN_DAYS = limit("night.window_margin_days", 2, unit="days", group="read", lo=0, hi=14,
+                           says="Extra days read before the normal and confirm days for each pump's hourly power.",
+                           reached="Days before this window are not read for the night check's power figures.", told="")
+RAW_POWER_DAYS = limit("night.raw_power_days", 1, unit="days", group="read", lo=1, hi=7,
+                       says="Days of second-by-second power read to find each run of a pump and how much it weakened.",
+                       reached="Runs before this window are not judged for weakening.", told="")
+BATTERY_READ_DAYS = limit("night.battery_read_days", 14, unit="days", group="read", lo=2, hi=90,
+                          says="Days of daily battery levels the night check reads to see a battery falling.",
+                          reached="A battery's trend is judged on these days only, whatever its trend setting says.",
+                          told="")
+LEVEL_READ_DAYS = limit("night.level_read_days", 2, unit="days", group="read", lo=1, hi=30,
+                        says="Days of hourly temperature and humidity the night check reads against each room's maximum.",
+                        reached="Older highs are not looked at.", told="")
+MIN_RUN_MINUTES = limit("night.min_run_minutes", 30, unit="minutes", group="detect", lo=1, hi=600,
+                        says="Shortest pump run the night check judges for losing power during the run.",
+                        reached="Shorter runs are never judged for weakening; nobody is told.", told="")
 
 STATE_RULES = {"PM-POWER-CHANGE", "PM-ENERGY-CHANGE", "PM-UNAVAILABLE",
                "PM-BATTERY-LOW", "PM-BATTERY-CRIT", "PM-SILENT", "PM-RECONNECT-LOOP", "PM-LEVEL-HIGH",
@@ -61,7 +80,7 @@ def run(args) -> dict:
     # stub: "Onsen pump used 0.09 kWh/day against a normal 0.48". --as-of names the day to judge.
     today = villa_day(Z, args.as_of, last_finished=True)
     day_end = datetime.combine(today + timedelta(days=1), time(0, 0), tzinfo=Z)
-    baseline_days = int(params.behaviour("baseline_days")) + int(params.behaviour("confirm_days")) + 2
+    baseline_days = int(params.behaviour("baseline_days")) + int(params.behaviour("confirm_days")) + WINDOW_MARGIN_DAYS
     win_start = day_end - timedelta(days=baseline_days)
 
     findings: list[R.Finding] = []
@@ -90,10 +109,10 @@ def run(args) -> dict:
             p_series = F.power_daily_features(rows, zone, thr)
             # raw runs for the closing day
             if not args.skip_raw:
-                got = cli.history_read([p_eid], day_end - timedelta(days=1), day_end, now=now_ref)
+                got = cli.history_read([p_eid], day_end - timedelta(days=RAW_POWER_DAYS), day_end, now=now_ref)
                 raw = got.rows.get(p_eid, [])
                 if raw:
-                    runs = F.runs_from_history(raw, thr, zone)
+                    runs = F.runs_from_history(raw, thr, zone, MIN_RUN_MINUTES)
                     if not got.whole(p_eid):
                         # ⚠️ A RUN GOING WHERE THE READING STOPPED HAS NO KNOWN END (round 2, 2026-10-16): its minutes
                         # and its sag were read as if it had ended there; the runs after it were never read
@@ -148,7 +167,7 @@ def run(args) -> dict:
     # ---- batteries, availability, silence, levels (current states) -----------
     states = cli.states()
     battery_entities = [r["entity_id"] for r in pack.entities("battery")]
-    bat_stats = cli.statistics(battery_entities, day_end - timedelta(days=14), day_end, "day", ("mean",)) if battery_entities else {}
+    bat_stats = cli.statistics(battery_entities, day_end - timedelta(days=BATTERY_READ_DAYS), day_end, "day", ("mean",)) if battery_entities else {}
     findings += battery_findings(pack, states, params, today, bat_stats)
 
     alerted = alerted_offline(store, pack)
@@ -163,7 +182,7 @@ def run(args) -> dict:
     level_rows = [r for r in pack.entities("level")
                   if params.has(f"{r['asset']}_max_c") or params.has(f"{r['asset']}_max_humidity_pct")]
     level_entities = [r["entity_id"] for r in level_rows]
-    lvl_stats = cli.statistics(level_entities, day_end - timedelta(days=2), day_end, "hour", ("mean", "min", "max")) if level_entities else {}
+    lvl_stats = cli.statistics(level_entities, day_end - timedelta(days=LEVEL_READ_DAYS), day_end, "hour", ("mean", "min", "max")) if level_entities else {}
     for row in level_rows:
         asset = pack.assets.get(row["asset"], {"slug": row["asset"], "name": row["name"]})
         series = F.level_daily_features(lvl_stats.get(row["entity_id"], []), zone)

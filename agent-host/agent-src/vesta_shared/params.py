@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .device_state import has_value  # the one "does this device answer"
+from .limits import limit
 
 
 class MissingParameter(Exception):
@@ -148,7 +149,8 @@ class VillaParams:
         return cls(helpers=d.get("helpers", []), states=d.get("states", {}))
 
 
-def live_params(client, store, max_age_minutes: float = 10, now=None, defaults: dict | None = None) -> "VillaParams":
+def live_params(client, store, max_age_minutes: float | None = None, now=None,
+                defaults: dict | None = None) -> "VillaParams":
     """The villa's parameters as Home Assistant has them now, kept for `max_age_minutes` in the skill store (a script
     run every five minutes would otherwise read every helper each time). Home Assistant not answering: the last
     copy kept, else the defaults — never a crash, never a guessed value. `client`: Home Assistant's client, or a
@@ -158,6 +160,12 @@ def live_params(client, store, max_age_minutes: float = 10, now=None, defaults: 
     fixture, so in the villa its maintenance mode and the villa's own timings were never read."""
     from datetime import datetime, timedelta, timezone
     now = now or datetime.now(timezone.utc)
+    if max_age_minutes is None:
+        max_age_minutes = limit("params.cache_minutes", 10, unit="minutes", group="keep", lo=0, hi=1440,
+                                says="How long the skills reuse the villa's settings (its helpers) before reading them "
+                                     "again.",
+                                reached="They are read again; if the villa's system does not answer, the last copy is "
+                                        "used, however old.", told="")
     kept = store.cache_get("villa_params") or {}
     try:
         fresh = kept and now - datetime.fromisoformat(kept["at"]) < timedelta(minutes=max_age_minutes)

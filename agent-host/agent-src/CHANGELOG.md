@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.6.264 (20 October 2026)
+
+Every limit on what the agent reads, says and keeps is declared where it applies and set in one place: the VESTA Agent
+page's new Limits tab (owner, 2026-10-20: "keep them, but create a temporary tab in the Agent UI to define them
+centrally and exhaustively"; a change there changes the value the other tabs show, and nothing on them moved).
+- New `vesta_shared.limits`: `limit(key, default, *, unit, group, lo, hi, says, reached, told)` answers the villa's
+  value from `limits.yaml` (beside policy.yaml; `VESTA_LIMITS`, given to every skill script by `script_env`) or the
+  default — a value of the wrong kind or out of its bounds is the default. Read again when the file changes, so the
+  long-running engine calls it where the value is used. `scan(roots)` reads every `limit()` call from the source.
+- 141 numbers written in the code are now `limit()` calls with today's value as default (behaviour unchanged): the
+  history, statistics and logbook readers (pages, slices, calls, timeouts), the logbook's 6-hour villa window, the
+  AI's tool answers (parts, description, status), investigate (find 20, neighbours, 12 devices a timeline, lists of
+  40, 120 lines, page and facts), the night check (battery read 14 days, temperature 2 days, raw power 1 day, runs
+  under 30 minutes, the rules' minimums), reports (digest 8 lines, headline 5 and 3, playbook 8), energy (loads 8,
+  headline 3, movers 5), the chat status (12 names), alert and fault titles and notes, Telegram's sizes, "again" 7
+  days, kept days, timeouts of scripts, jobs and voice. Module constants other files read became functions
+  (`history_page()`, `logbook_villa_hours()`, `part_chars()`, `again_days()`…); a few kept as aliases for scripts.
+- The AI's own reads get the villa's limits where the AI gives none (tools.ai_read_defaults: history and statistics
+  rows 100, logbook 50, search 10, 24 hours, 30 days; the fewest rows it may ask for, 1) — only an argument the
+  tool declares, after the read guard.
+- The page (ui/limits_tab.py, static/limits.js, places.TABS "limits"): every limit of the code, every number of every
+  skill's settings files (its comment is its description; `…families` lists and a command's brain too) and the rules'
+  numbers (brain, limit per reply, conversation reset, each AI job's brain and limit, keep, approve buttons, siren).
+  Saved where each lives, through PageFiles (checked, in Page changes, undoable): limits.yaml (new kind "limits"); a
+  skill's villa.<file> (a number inside a list: the skill's own file); policy.yaml, checked by the agent's rules. Each
+  row says where else it is shown, and that a vesta_<name> helper wins over a skill's behaviour value.
+- Tests (test_limits): every declared limit readable, described and within its bounds; limit() reads the file, falls
+  back and re-reads; the page lists the three sources and saves each where it lives (the skill reads the villa file,
+  a list's comments kept, policy checked, Page changes); a value set reaches the AI's own reads through the real
+  Toolbox; and no list or text is cut by a bare number anywhere in the agent (NOT_LIMITS: the 33 that are not limits,
+  each with why). Mutation-proved.
+
 ## 0.6.263 (20 October 2026)
 
 What the AI writes to a person never names the platform underneath: "the villa's system" (owner rule, 2026-10-15; a

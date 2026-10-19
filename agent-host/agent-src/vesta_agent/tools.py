@@ -34,11 +34,12 @@ from typing import Any, Awaitable, Callable, NamedTuple
 
 from claude_agent_sdk import create_sdk_mcp_server, tool
 from vesta_shared import read_guard
+from vesta_shared.limits import limit
 from vesta_shared.messaging import no_platform_name
 
 from . import __version__, script_run, status, tool_access
 from .policy import Person, Policy
-from .kiosk import KioskError
+from .kiosk import KioskError, fault_note_chars, fault_title_chars
 from .redact import scrub  # noqa: F401 — callers import it from here too
 from .routing import Origin, Routing
 from .outcome import has_work
@@ -46,9 +47,78 @@ from .runner import WEB_SEARCH, step
 from .skills import FILE_NAME, Skills, ToolError, validate_script_args
 
 SERVER = "vesta"
-SAVE_MAX = 64 * 1024
+
+
+def save_max_bytes() -> int:
+    return limit("ai.save_file_bytes", 65536, unit="bytes", group="ai", lo=1024, hi=10485760,
+                 says="The largest file the AI may save for a skill to read (a report's sentences, notes).",
+                 reached="The save is refused; the AI is told the most it may write.", told="ai")
+
+
 log = logging.getLogger("vesta.tools")
-PART_CHARS = 60_000          # about 15,000 tokens: under the SDK's 25,000-token cut of a tool answer
+
+
+def part_chars() -> int:
+    """One part of a long tool answer: about 15,000 tokens, under the SDK's 25,000-token cut of a tool answer."""
+    return limit("ai.tool_answer_chars", 60000, unit="characters", group="ai", lo=5000, hi=90000,
+                 says="How much of one tool's answer the AI receives at once (the AI's own tools cut near 100,000).",
+                 reached="The rest is served as part 2, 3… — only if the AI asks for it.", told="ai")
+
+
+def ai_read_defaults(name: str, args: dict, known: set) -> dict:
+    """The AI's read with the villa's limits where it gives none: how many rows a page holds, how far back a read
+    goes, and the fewest rows it may ask for — values the villa's system would otherwise choose (ha-mcp's own
+    defaults: 100 readings, 100 figures, 50 logbook lines, 10 search results, 24 hours, 30 days). Only an argument the
+    tool declares."""
+    a = dict(args)
+
+    def unset(k: str) -> bool:
+        return k in known and a.get(k) in (None, "")
+    if name == "ha_get_history":
+        stats = a.get("source") == "statistics"
+        if unset("limit"):
+            a["limit"] = (limit("ai.statistics_rows", 100, unit="figures", group="ai", lo=1, hi=1000,
+                                says="Hourly or daily figures the AI receives in one statistics read when it does "
+                                     "not ask for a number.",
+                                reached="The AI gets the OLDEST figures of the period and is told more exist; it is "
+                                        "not made to read on.", told="ai")
+                          if stats else
+                          limit("ai.history_rows", 100, unit="readings", group="ai", lo=1, hi=1000,
+                                says="Readings of a device the AI receives in one history read when it does not ask "
+                                     "for a number.",
+                                reached="The AI gets the NEWEST readings and is told more exist; it is not made to "
+                                        "read on — a week can be answered from its last hours.", told="ai"))
+        if "limit" in known and a.get("limit") is not None:
+            least = limit("ai.history_min_rows", 1, unit="rows", group="ai", lo=1, hi=1000,
+                          says="The fewest readings or figures the AI may ask for in one read.",
+                          reached="A smaller number asked for is raised to this one.", told="")
+            try:
+                if int(a["limit"]) < least:
+                    a["limit"] = least
+            except (TypeError, ValueError):
+                pass
+        if unset("start_time"):
+            if stats:
+                days = limit("ai.statistics_default_days", 30, unit="days", group="ai", lo=1, hi=3650,
+                             says="How far back a statistics read of the AI goes when it names no start.",
+                             reached="Older figures are not read.", told="ai")
+                a["start_time"] = f"{days * 24}h"
+            else:
+                hours = limit("ai.history_default_hours", 24, unit="hours", group="ai", lo=1, hi=240,
+                              says="How far back a history read of the AI goes when it names no start.",
+                              reached="Older readings are not read.", told="ai")
+                a["start_time"] = f"{hours}h"
+    elif name == "ha_get_logs" and (a.get("source") or "logbook") == "logbook" and unset("limit"):
+        a["limit"] = limit("ai.logbook_rows", 50, unit="lines", group="ai", lo=1, hi=500,
+                           says="Logbook lines the AI receives in one read when it does not ask for a number (the "
+                                "villa's system gives 500 at most).",
+                           reached="The AI gets the newest lines and is told more exist; it is not made to read on.",
+                           told="ai")
+    elif name == "ha_search" and unset("limit"):
+        a["limit"] = limit("ai.search_results", 10, unit="results", group="ai", lo=1, hi=200,
+                           says="Devices the AI's search returns when it does not ask for a number.",
+                           reached="Further matches are not listed; the AI is told more exist.", told="ai")
+    return a
 
 # What the AI's reads may ask of the villa's system: vesta_shared.read_guard, the one guard for every caller.
 
@@ -107,11 +177,12 @@ class Parts:
         if text is not None:
             self.cache[key] = text
         text = self.cache.get(key, "")
-        if len(text) <= PART_CHARS:
+        size = part_chars()
+        if len(text) <= size:
             return text
-        n = (len(text) + PART_CHARS - 1) // PART_CHARS
+        n = (len(text) + size - 1) // size
         part = max(1, min(part, n))
-        chunk = text[(part - 1) * PART_CHARS: part * PART_CHARS]
+        chunk = text[(part - 1) * size: part * size]
         more = f" Call the same tool with the same arguments and vesta_part={part + 1} for the next part." if part < n else " This is the last part."
         return f"[Part {part} of {n}: the answer was too long for one reply.{more}]\n{chunk}"
 
@@ -244,7 +315,10 @@ class Toolbox:
         schema.setdefault("type", "object")
         schema.setdefault("properties", {})["vesta_part"] = {
             "type": "integer", "minimum": 1, "description": "Part of a long answer to read (1 by default)."}
-        desc = (t.get("description") or name)[:4000]
+        desc = (t.get("description") or name)[:limit(
+            "ai.tool_description_chars", 4000, unit="characters", group="ai", lo=500, hi=20000,
+            says="How much of the villa's reading tool's own explanation of each tool the AI is given.",
+            reached="The end of the explanation (where its paging advice often is) is not given.", told="")]
 
         @tool(name, desc, schema)
         async def handler(args: dict) -> dict:
@@ -257,6 +331,7 @@ class Toolbox:
             if why := read_guard.refused(name, args, known):
                 self.state.log("tool_arg_refused", {"tool": name, "args": sorted(args)[:10], "why": why[:120]})
                 return _err(why)
+            args = ai_read_defaults(name, args, known)        # the villa's limits where the AI gives none
             key = hashlib.sha256(json.dumps([name, args], sort_keys=True, default=str).encode()).hexdigest()
             if part > 1 and key in self.parts.cache:
                 return _ok(self.parts.serve(key, None, part))
@@ -349,15 +424,15 @@ class Toolbox:
             ent = str(args.get("entity_id") or "").strip() or None
             if ent and not re.match(r"^[a-z_]+\.[a-z0-9_]+$", ent):
                 return _err(f"{ent} is not an entity id.")
-            note = str(args.get("note") or "")[:2000] or None
+            note = str(args.get("note") or "")[:fault_note_chars()] or None
             if offer_in is not None:
                 if offered:
                     return _err("A fault is already offered under this answer: put everything in that one's note.")
-                offered.append(self.state.new_ticket_offer(offer_in, title[:200], ent, note, self.inv))
+                offered.append(self.state.new_ticket_offer(offer_in, title[:fault_title_chars()], ent, note, self.inv))
                 return _ok("Offered, NOT created: a button under your answer lets the person create it. Never say it "
                            "was created; you may say they can create it with the button.")
             try:
-                await self.ticket(title=title[:200], entity_id=ent, note=note)
+                await self.ticket(title=title[:fault_title_chars()], entity_id=ent, note=note)
             except KioskError as e:
                 # the Kiosk's own words, so the person hears why (not "KioskError")
                 return _err(f"The Kiosk did not record the ticket: {e}.")
@@ -373,15 +448,18 @@ class Toolbox:
                              label=lambda k: job_label(k, self.skills.all()))
 
     def _status(self):
+        most = limit("ai.status_hours", 168, unit="hours", group="ai", lo=24, hi=8760,
+                     says="How far back the AI may look at what the agent itself did (\"what did you do last night?\").",
+                     reached="A longer look back is shortened to this; the AI's tool says the most.", told="ai")
         schema = {"type": "object", "properties": {
-            "hours": {"type": "integer", "description": "How far back, in hours (default 24, at most 168)."}}}
+            "hours": {"type": "integer", "description": f"How far back, in hours (default 24, at most {most})."}}}
 
         @tool("agent_status", "What YOU (the VESTA Agent) did recently: scheduled jobs run, alerts followed, "
                               "buttons pressed, tickets, actions asked or done, failures, AI cost. Read-only. "
                               "Use it for 'what did you do last night?'. Times are UTC.", schema)
         async def handler(args: dict) -> dict:
             try:
-                hours = max(1, min(168, int(args.get("hours") or 24)))
+                hours = max(1, min(most, int(args.get("hours") or 24)))
             except (TypeError, ValueError):
                 return _err("hours must be a whole number.")
             return _ok(scrub(json.dumps(self.status_report(hours), default=str), self._secrets()))
@@ -471,7 +549,11 @@ class Toolbox:
                 return _ok(self.parts.serve(key, None, part))
             # ⚠️ A SCRIPT KNOWS THE WEB WAS USED (owner, 2026-10-11: "include the sources, when web_search tool is used"):
             # the investigation page refuses to be made without the pages behind what the AI read on the web
-            run_s = replace(self.s, web_searches=json.dumps(self.searched[:20]) if self.searched else "",
+            run_s = replace(self.s, web_searches=json.dumps(self.searched[:limit(
+                "ai.web_searches_kept", 20, unit="searches", group="ai", lo=1, hi=200,
+                says="Web searches of one answer handed to a skill's page as its sources.",
+                reached="Later searches are not listed among the page's sources.", told="")])
+                            if self.searched else "",
                             web_search_on="1" if self.include_web else "", asker=(origin.role if origin else None) or "")
             ans = await asyncio.to_thread(script_run.run, run_s, self.state, skill, sc, final, by=script_run.AI)
             out = ans.text()
@@ -520,8 +602,9 @@ class Toolbox:
             name, content = str(args.get("name") or ""), args.get("content")
             if not FILE_NAME.match(name) or not name.endswith((".json", ".txt", ".md")):
                 return _err("A plain file name ending .json, .txt or .md.")
-            if not isinstance(content, str) or len(content.encode("utf-8")) > SAVE_MAX:
-                return _err(f"The content must be text of at most {SAVE_MAX // 1024} KB.")
+            most = save_max_bytes()
+            if not isinstance(content, str) or len(content.encode("utf-8")) > most:
+                return _err(f"The content must be text of at most {most // 1024} KB.")
             if name.endswith(".json"):
                 try:
                     json.loads(content)

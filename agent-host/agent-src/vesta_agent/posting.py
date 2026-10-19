@@ -14,7 +14,7 @@ from vesta_shared.message_format import UNTITLED, audience, fill_to, pages
 
 from . import layout
 from .routing import Origin
-from .telegram import CAPTION
+from vesta_shared.messaging import telegram_caption_chars, telegram_message_chars
 
 
 class Poster:
@@ -61,7 +61,7 @@ class Poster:
         p = layout.parts(body=text, status=status, head=head, lead=lead, mark=mark)
         # ⚠️ A CAPTION IS 1,024 CHARACTERS (architecture review 20): laid out for 4,096, a long incident's snapshot went as a
         # photo and a separate text — only the text was recorded, so the next snapshot left the old photo behind
-        limit = CAPTION if (photo or document) else layout.TELEGRAM_LIMIT
+        limit = telegram_caption_chars() if (photo or document) else telegram_message_chars()
         mid = await self.send(chat, layout.render(p, limit), keyboard=keyboard, document=document, photo=photo,
                               origin=origin)
         if mid and thread is not None and self.thread is not None:
@@ -71,7 +71,7 @@ class Poster:
     async def _pages(self, chat, title, to, text, keyboard, document, photo, origin) -> int | None:
         """A titled report, one message per page; its file, photo and buttons go with the last. The last id, or None
         when a page did not arrive."""
-        limit = CAPTION if (photo or document) else layout.TELEGRAM_LIMIT
+        limit = telegram_caption_chars() if (photo or document) else telegram_message_chars()
         docs = pages(title, to, text, limit)
         mid = None
         for i, doc in enumerate(docs):

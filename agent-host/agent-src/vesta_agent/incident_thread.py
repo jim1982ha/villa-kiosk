@@ -26,6 +26,7 @@ from typing import Awaitable, Callable
 import asyncio
 import logging
 
+from vesta_shared.limits import limit
 from vesta_shared.messaging import incident_tag
 
 from . import layout
@@ -38,7 +39,13 @@ Delete = Callable[[int, int], Awaitable]
 #: How long a copy Telegram refused to update is tried again (at every housekeeping pass), then given up.
 #: ⚠️ A DURATION, NEVER A COUNT (architecture review 22): 12 tries were meant as "about an hour" at one pass every five
 #: minutes — housekeeping runs every 30 seconds, so a 10-minute internet cut outlived them and left the buttons.
-OWED_FOR = timedelta(hours=2)
+
+
+def owed_for() -> timedelta:
+    return timedelta(hours=limit("telegram.edit_retry_hours", 2, unit="hours", group="text", lo=1, hi=72,
+                                 says="How long a message Telegram refused to update is tried again (its buttons "
+                                      "removed, its status written).",
+                                 reached="It is given up: that copy keeps its old text and buttons.", told=""))
 
 
 class IncidentThread:
@@ -212,7 +219,7 @@ class IncidentThread:
         if keyboard:
             rec["kb"] = keyboard
         if not ok:
-            rec |= {"owed": now - datetime.fromisoformat(since) < OWED_FOR, "owed_since": since}
+            rec |= {"owed": now - datetime.fromisoformat(since) < owed_for(), "owed_since": since}
             if not rec["owed"]:
                 rec.pop("owed_since")   # given up: a later change starts its own two hours (architecture review 23)
             log.info("%s in chat %s: message %s not updated (%s)", iid, chat, rec["mid"],
@@ -221,7 +228,7 @@ class IncidentThread:
         return ok
 
     async def catch_up(self) -> int:
-        """Every copy a refused edit left behind is tried again (housekeeping, every 30 seconds; for OWED_FOR — a message
+        """Every copy a refused edit left behind is tried again (housekeeping, every 30 seconds; for owed_for() — a message
         deleted in the chat can never be changed). Returns how many are shown now."""
         n = 0
         for iid, chat, _rec in self.state.incident_messages_owed():

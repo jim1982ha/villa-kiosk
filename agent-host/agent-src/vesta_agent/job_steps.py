@@ -30,7 +30,7 @@ async def run(settings, state, skills, outcome, skill, steps: list[dict], values
         script = st["run"].split()[0]
         if sk is None:
             return Done(sent, f"{script} ({st['skill']}: not installed)")
-        ans = await asyncio.to_thread(script_run.run_command, settings, state, sk, st["run"], values, timeout=900)
+        ans = await asyncio.to_thread(script_run.run_command, settings, state, sk, st["run"], values)
         if not ans.ok:
             return Done(sent, script)
         res = ans.result()

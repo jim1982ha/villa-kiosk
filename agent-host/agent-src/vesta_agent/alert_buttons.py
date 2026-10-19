@@ -10,6 +10,7 @@ import logging
 from typing import Awaitable, Callable
 
 from vesta_shared.message_format import PRESSED
+from vesta_shared.limits import limit
 
 from . import button_data
 from .incidents import Incidents
@@ -102,5 +103,8 @@ class AlertButtons:
         note_press(self.state, int(iid), label, name, button["mark"], button["option"])
         if self.run_job:
             # `text`: the label, for a skill.yaml from before `buttons` (its on_reply reads `--text {text}`)
-            await self.run_job(skill, skill.on_reply, 120, {"incident": iid, "option": button["option"], "text": label,
+            await self.run_job(skill, skill.on_reply, limit(
+                "alerts.reply_hook_timeout_s", 120, unit="seconds", group="run", lo=10, hi=1800,
+                says="How long a skill may take to handle a button pressed under an alert.",
+                reached="That handling stops and counts as failed; the press itself is recorded.", told="person"), {"incident": iid, "option": button["option"], "text": label,
                                                              "role": person.role, "name": name}, Origin(chat))

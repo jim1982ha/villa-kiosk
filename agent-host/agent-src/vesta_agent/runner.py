@@ -27,12 +27,19 @@ from claude_agent_sdk import (AssistantMessage, ClaudeAgentOptions, ClaudeSDKCli
 
 from .api_errors import NO_RETRY, classify
 from .redact import scrub
+from vesta_shared.limits import limit
 from vesta_shared.agent_records import RUN, RUN_CUT, run_cost, session_before, turn_cost
 
 log = logging.getLogger("vesta.runner")
 
 WEB_SEARCH = "WebSearch"
-MAX_STEPS = 40          # the tools one run used, as the Costs tab shows them (a report uses about 20)
+
+
+def max_steps() -> int:
+    """The tools one run used, as the Costs tab shows them (a report uses about 20)."""
+    return limit("costs.steps_kept", 40, unit="steps", group="keep", lo=5, hi=1000,
+                 says="The steps of one AI run kept for the Costs tab.",
+                 reached="Later steps of that run are not listed.", told="")
 # the tools that use a skill, their `skill` argument naming it (tools.Toolbox: read_skill, run_skill_script)
 SKILL_TOOLS = ("read_skill", "run_skill_script")
 
@@ -103,7 +110,7 @@ class Collector:
                 return
             for b in msg.content:
                 if isinstance(b, ToolUseBlock):
-                    if len(self.steps) < MAX_STEPS:
+                    if len(self.steps) < max_steps():
                         self.steps.append(step(b.name, b.input))
                     if tool_key(b.name) in SKILL_TOOLS and isinstance(b.input, dict) and b.input.get("skill"):
                         self.skills.append(str(b.input["skill"])[:60])
@@ -170,22 +177,35 @@ def step(name: str, args) -> dict:
     return {"tool": tool_key(name), "args": _bounded(args)}
 
 
-ARG_CHARS = 300         # one argument value as a run's record keeps it (a file's content, a message's text: their start)
-ARG_ITEMS = 25          # the items of a list argument kept (a service call's entities)
+
+
+def arg_chars() -> int:
+    """One argument value as a run's record keeps it (a file's content, a message's text: their start)."""
+    return limit("costs.arg_chars", 300, unit="characters", group="keep", lo=40, hi=20000,
+                 says="How much of each value a step of a run used is kept for the Costs tab.",
+                 reached="The rest is cut, with \"…\".", told="person")
+
+
+def arg_items() -> int:
+    """The items of a list argument kept (a service call's entities)."""
+    return limit("costs.arg_items", 25, unit="items", group="keep", lo=5, hi=1000,
+                 says="How many items of a list a step of a run used are kept for the Costs tab.",
+                 reached="Later items are not kept.", told="")
 
 
 def _bounded(v, depth: int = 0):
-    """`v` with every text cut to ARG_CHARS, every list to ARG_ITEMS, nothing deeper than three levels."""
+    """`v` with every text cut to arg_chars(), every list to arg_items(), nothing deeper than three levels."""
     if isinstance(v, str):
-        return v if len(v) <= ARG_CHARS else v[:ARG_CHARS] + "…"
+        most = arg_chars()
+        return v if len(v) <= most else v[:most] + "…"
     if isinstance(v, (int, float, bool)) or v is None:
         return v
     if depth >= 3:
         return _bounded(json.dumps(v, ensure_ascii=False, default=str), depth)
     if isinstance(v, dict):
-        return {str(k): _bounded(x, depth + 1) for k, x in list(v.items())[:ARG_ITEMS]}
+        return {str(k): _bounded(x, depth + 1) for k, x in list(v.items())[:arg_items()]}
     if isinstance(v, (list, tuple)):
-        return [_bounded(x, depth + 1) for x in list(v)[:ARG_ITEMS]]
+        return [_bounded(x, depth + 1) for x in list(v)[:arg_items()]]
     return _bounded(str(v), depth)
 
 
@@ -204,7 +224,10 @@ def make_guard(allowed: set[str], state, who: str, searched: list | None = None)
         name = (input_data or {}).get("tool_name", "")
         if name in allowed:
             if name == WEB_SEARCH and searched is not None:
-                searched.append(str(((input_data or {}).get("tool_input") or {}).get("query") or "")[:160])
+                searched.append(str(((input_data or {}).get("tool_input") or {}).get("query") or "")[:limit(
+                    "ai.web_search_chars", 160, unit="characters", group="keep", lo=40, hi=2000,
+                    says="How much of each web search's words is kept as a page's source.",
+                    reached="The rest of the words is cut.", told="")])
             return {}
         if name not in denied:
             denied.append(name)
@@ -283,12 +306,17 @@ def _scrub_each(v, secrets: list[str]):
 # ⚠️ THE QUESTION WHOLE (owner, 2026-10-19): the Costs tab showed what was asked cut at 160 characters, mid-word, its
 # tooltip too. 2,000 keeps any question a person types or says whole (a long voice message is about 1,000), and still
 # bounds a pasted page in a record kept for a year (runs_days) and served 300 rows at a time.
-ASKED_CHARS = 2000
+
+
+def asked_chars() -> int:
+    return limit("costs.asked_chars", 2000, unit="characters", group="keep", lo=200, hi=50000,
+                 says="How much of a question is kept with its run, as the Costs tab shows it.",
+                 reached="The rest of the question is not kept.", told="")
 
 
 def kept_asked(asked: str | None, secrets: list[str]) -> str | None:
-    """What was asked, as a run's record keeps it: whole up to ASKED_CHARS, through the one scrubber."""
-    return scrub((asked or "")[:ASKED_CHARS], secrets) or None
+    """What was asked, as a run's record keeps it: whole up to asked_chars(), through the one scrubber."""
+    return scrub((asked or "")[:asked_chars()], secrets) or None
 
 
 def with_time(settings, prompt: str, now: datetime | None = None) -> str:

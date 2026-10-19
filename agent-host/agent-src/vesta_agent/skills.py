@@ -73,6 +73,7 @@ from dataclasses import dataclass, field
 
 import yaml
 
+from vesta_shared.limits import limit
 from vesta_shared.message_format import ROLES
 
 log = logging.getLogger("vesta.skills")
@@ -85,7 +86,7 @@ FILE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,120}$")
 RUN_FILE = re.compile(r"^runs/[A-Za-z0-9][A-Za-z0-9._-]{0,160}/[A-Za-z0-9][A-Za-z0-9._-]{0,120}$")
 
 
-def out_files(out_root: str, runs: int = 10) -> list[tuple[str, float]]:
+def out_files(out_root: str, runs: int | None = None) -> list[tuple[str, float]]:
     """The files an Offline Test may read, newest first: (its value, when written). Those of the out folder itself (an
     earlier Offline Test's), and those of the last `runs` report runs — `runs/<run>/<file>`.
 
@@ -107,7 +108,10 @@ def out_files(out_root: str, runs: int = 10) -> list[tuple[str, float]]:
     runs_dir = os.path.join(out_root, "runs")
     try:
         recent = sorted((d for d in os.listdir(runs_dir) if os.path.isdir(os.path.join(runs_dir, d))),
-                        key=lambda d: os.path.getmtime(os.path.join(runs_dir, d)), reverse=True)[:runs]
+                        key=lambda d: os.path.getmtime(os.path.join(runs_dir, d)), reverse=True)[:runs or limit(
+                            "skills.test_runs_offered", 10, unit="runs", group="keep", lo=1, hi=200,
+                            says="Report runs whose files an Offline Test on the Skills tab may read.",
+                            reached="Older runs' files are not offered.", told="")]
     except OSError:
         recent = []
     for d in recent:
@@ -340,7 +344,10 @@ def parse_skill(name: str, path: str) -> Skill:
         if not cmds:
             raise SkillError("command: an empty list")
         sk.command, sk.also = cmds[0], cmds[1:]
-        sk.usage = str(raw.get("usage") or "").strip()[:200]
+        sk.usage = str(raw.get("usage") or "").strip()[:limit(
+            "skills.usage_chars", 200, unit="characters", group="text", lo=40, hi=2000,
+            says="The longest \"how to use it\" line of a skill's command, as Telegram's command menu shows it.",
+            reached="The rest of the line is cut.", told="")]
         if raw.get("brain") is not None:
             if str(raw["brain"]) not in BRAINS:
                 raise SkillError(f"brain: {raw['brain']} is not one of {', '.join(BRAINS)}")
@@ -359,7 +366,10 @@ def parse_skill(name: str, path: str) -> Skill:
         if not isinstance(offer, dict) or set(offer) - {"label", "pressed"} or \
                 not all(isinstance(v, str) and v.strip() for v in offer.values()) or not str(offer.get("label") or "").strip():
             raise SkillError("offer: {label: the button's words, pressed: what the message says once pressed (optional)}")
-        sk.offer = {k: v.strip()[:60] for k, v in offer.items()}
+        sk.offer = {k: v.strip()[:limit(
+                "skills.offer_label_chars", 60, unit="characters", group="text", lo=10, hi=64,
+                says="The longest text of a button a reply offers (\"🔎 Investigate this\").",
+                reached="The rest of the text is cut.", told="")] for k, v in offer.items()}
     deliver = raw.get("deliver") or {}
     if deliver:
         if not sk.command:
@@ -876,7 +886,10 @@ def validate_script_args(skill: Skill | None, skill_name: str, script: str, args
             if kind == "infile" and not os.path.exists(v):
                 raise ToolError(f"{os.path.basename(v)} does not exist yet in the out folder.")
         elif kind == "text":
-            if v.startswith("-") or len(v) > 200:
+            most = limit("skills.text_arg_chars", 200, unit="characters", group="ai", lo=20, hi=5000,
+                         says="The longest text the AI may pass to a skill script as one of its settings.",
+                         reached="That script is not run; the AI is told the text is too long.", told="ai")
+            if v.startswith("-") or len(v) > most:
                 raise ToolError(f"{a} takes a short text.")
         final += [a, v]
         i += 2
@@ -897,6 +910,9 @@ def script_env(settings) -> dict:
         # read only, by convention and by review: the villa's policy (one reader: vesta_agent.policy)
         # and the agent's own records (what it cost, what it did) for the reports
         "VESTA_POLICY": settings.policy_path,
+        # the villa's limits (vesta_shared.limits: the VESTA Agent page's Limits tab), beside policy.yaml
+        "VESTA_LIMITS": os.path.join(getattr(settings, "config_dir", None) or os.path.dirname(settings.policy_path),
+                                     "limits.yaml"),
         "VESTA_STATE": settings.state_path,
         "VILLA_TZ": settings.timezone,
         "TZ": settings.timezone,
@@ -995,20 +1011,33 @@ def injected(settings, skill: Skill, script: str) -> list[str]:
     return args
 
 
-def run_script(settings, skill: Skill, script: str, args: list[str], timeout: int = 900) -> tuple[int, str, str]:
+def script_timeout_s() -> int:
+    """How long one skill script may run when its skill names no time of its own."""
+    return limit("skills.script_timeout_s", 900, unit="seconds", group="run", lo=30, hi=7200,
+                 says="How long one skill script may run (the AI's, a scheduled job's step) when its skill names no "
+                      "time of its own.",
+                 reached="The script is stopped and counts as failed; the AI or the job is told.", told="ai")
+
+
+def run_script(settings, skill: Skill, script: str, args: list[str], timeout: int | None = None) -> tuple[int, str, str]:
     """(exit code, stdout, stderr tail). Exit 2 is a script's "nothing to do / missing parameter", not a failure."""
     if not _script_file_ok(skill.path, script):
         return 127, "", f"{script} is not a script of {skill.name}"
     cmd = [sys.executable, skill.script_path(script)] + list(args) + injected(settings, skill, script)
     try:
         p = subprocess.run(cmd, cwd=settings.out_dir, env=script_env(settings), capture_output=True, text=True,
-                           timeout=timeout)
+                           timeout=timeout or script_timeout_s())
     except subprocess.TimeoutExpired:
         return 124, "", "The script took too long and was stopped."
-    return p.returncode, (p.stdout or "").strip(), "\n".join((p.stderr or "").strip().splitlines()[-5:])
+    lines = limit("errors.script_stderr_lines", 5, unit="lines", group="ai", lo=1, hi=200,
+                  says="Lines of a failed script's own error output kept with its answer (what the AI and the page "
+                       "read).",
+                  reached="Only the last lines are kept.", told="")
+    return p.returncode, (p.stdout or "").strip(), "\n".join((p.stderr or "").strip().splitlines()[-lines:])
 
 
-def run_command(settings, skill: Skill, command: str, values: dict | None = None, timeout: int = 900) -> tuple[int, str, str]:
+def run_command(settings, skill: Skill, command: str, values: dict | None = None,
+                timeout: int | None = None) -> tuple[int, str, str]:
     """A code job or hook from skill.yaml, placeholders filled: `desk.py intake --event {event}`."""
     parts = shlex.split(command)
     filled = [p.format(**(values or {})) if "{" in p else p for p in parts[1:]]

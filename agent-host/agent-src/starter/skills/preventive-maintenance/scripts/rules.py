@@ -25,6 +25,21 @@ from vesta_shared.stats import med, pct_change, step_index
 from vesta_shared import battery  # a battery's charge, its projection and its rule ids: one owner
 from vesta_shared.device_state import is_offline
 from vesta_shared.timeutil import day_label, lasting, weekday_name
+from vesta_shared.limits import limit  # every limit, set on the Limits tab
+
+# thresholds written in code until now, set on the Limits tab (vesta_shared.limits)
+CONTINUOUS_FULL_HOURS = limit("night.continuous_full_hours", 1, unit="hours", group="detect", lo=0, hi=24,
+                              says="A pump whose usual run lasts at least this many full hours is read as running continuously.",
+                              reached="Below it, the pump is read as cycling on and off.", told="")
+DRIFT_MIN_DAYS = limit("night.drift_min_days", 3, unit="days", group="detect", lo=1, hi=30,
+                       says="Days of changed running power needed to call it a gradual drift rather than a new level.",
+                       reached="With fewer days, the change is called new, starting on its first day.", told="person")
+SCHEDULE_MIN_HOURS = limit("night.schedule_min_hours", 1, unit="hours", group="detect", lo=0, hi=24,
+                           says="Shortest planned running time a day must have for the night check to compare it with what ran.",
+                           reached="Days planned for less are not checked against their schedule.", told="")
+EXPECTED_RAN_HOURS = limit("night.expected_ran_hours", 0.1, unit="hours", group="detect", lo=0, hi=24,
+                           says="A pump that was planned to run but ran less than this is reported as not having run.",
+                           reached="Below it: 'scheduled but did not run'.", told="person")
 
 P2, P3, INFO = "P2", "P3", "INFO"
 
@@ -79,7 +94,7 @@ def _profile(series: list[dict], params: VillaParams) -> str:
     if len(ran) < max(params.behaviour("intermittent_min_days"), len(days) * params.behaviour("intermittent_share")):
         return "intermittent"
     full = med([f.get("full_hours") or 0 for f in ran])
-    if full is not None and full >= 1:
+    if full is not None and full >= CONTINUOUS_FULL_HOURS:
         return "continuous"
     return "cycling"
 
@@ -126,7 +141,7 @@ def power_rules(asset: dict, entity_id: str, series: dict[date, dict], today: da
                     kind, when = "step", [d for d in days if series[d].get("running_power")][idx]
                     how = "sudden change on " + day_label(when)
                 else:
-                    kind, when = ("drift", recent_days[0]) if len(rec_vals) >= 3 else ("new", recent_days[0])
+                    kind, when = ("drift", recent_days[0]) if len(rec_vals) >= DRIFT_MIN_DAYS else ("new", recent_days[0])
                     how = "gradual drift" if kind == "drift" else "started on " + day_label(when)
                 direction = "lower" if change < 0 else "higher"
                 summary = (f"{asset['name']} draws {abs(change):.0f}% {direction} than {normal} "
@@ -145,7 +160,7 @@ def power_rules(asset: dict, entity_id: str, series: dict[date, dict], today: da
         for d in days[-1:]:  # the day being closed tonight
             exp = expected_hours_by_weekday.get(weekday_name(d), 0)
             f = series[d]
-            if exp and exp >= 1 and f.get("hours_with_data", 0) >= params.behaviour("full_day_hours"):
+            if exp and exp >= SCHEDULE_MIN_HOURS and f.get("hours_with_data", 0) >= params.behaviour("full_day_hours"):
                 change = pct_change(f["run_hours"], exp)
                 if change is not None and abs(change) >= dev_pct:
                     what = "ran shorter" if change < 0 else "ran longer"
@@ -203,7 +218,7 @@ def power_rules(asset: dict, entity_id: str, series: dict[date, dict], today: da
     if expected_hours_by_weekday and profile == "intermittent":
         d = days[-1] if days else today
         exp = expected_hours_by_weekday.get(weekday_name(d), 0)
-        if exp and series.get(d, {}).get("run_hours", 0) < 0.1:
+        if exp and series.get(d, {}).get("run_hours", 0) < EXPECTED_RAN_HOURS:
             out.append(Finding("PM-EXPECTED-SILENT", entity_id, slug, "power", INFO,
                                f"{asset['name']} was scheduled {exp:.1f} h on {day_label(d, weekday=True)} and did not run.",
                                {"day": d.isoformat(), "expected_hours": exp}, "Report only: usage driven assets are not chased."))

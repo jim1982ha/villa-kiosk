@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable
 
 from vesta_shared.message_format import ROLE_WORDS
+from vesta_shared.ha_client import error_chars, error_short_chars
 
 from . import button_data
 from .approvals import note as approval_note
@@ -343,8 +344,8 @@ class Actions:
         try:
             writer.call_service(d.domain, d.service, data)
         except Exception as e:  # noqa: BLE001
-            self.state.log("failed", {"domain": d.domain, "service": d.service, "entities": d.entity_ids, "error": str(e)[:300]})
-            log.warning("Approved %s.%s on %s failed: %s", d.domain, d.service, ", ".join(d.entity_ids) or "-", str(e)[:300])
+            self.state.log("failed", {"domain": d.domain, "service": d.service, "entities": d.entity_ids, "error": str(e)[:error_chars()]})
+            log.warning("Approved %s.%s on %s failed: %s", d.domain, d.service, ", ".join(d.entity_ids) or "-", str(e)[:error_chars()])
             return {"ok": False, "failed": True,
                     "text": "The villa's system refused or failed. Nothing confirmed."}
         self.state.log("executed", {"domain": d.domain, "service": d.service, "entities": d.entity_ids, "data": d.data})
@@ -390,5 +391,5 @@ class Actions:
             self.state.log("executed", {"system": True, "domain": domain, "service": service, "entity": entity_id})
             return True
         except Exception as e:  # noqa: BLE001
-            self.state.log("failed", {"system": True, "domain": domain, "service": service, "error": str(e)[:200]})
+            self.state.log("failed", {"system": True, "domain": domain, "service": service, "error": str(e)[:error_short_chars()]})
             return False

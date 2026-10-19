@@ -15,6 +15,11 @@ from vesta_shared.stats import step_index  # the night check's step detector
 from vesta_shared.timeutil import day_time_label, said  # the one day format; a stored time in words
 from vesta_shared.past import unread  # the one "could not be read whole: nothing is known after"
 from vesta_shared.result import PRIORITY_ORDER, WHOLE_DEVICE  # the one list of priorities; a whole device's faults
+from vesta_shared.limits import limit  # every limit, set on the Limits tab
+
+GROUP_NAMES_SHOWN = limit("reports.group_names_shown", 8, unit="names", group="text", lo=1, hi=100,
+                          says="Device names listed in one grouped line of a report.",
+                          reached="The others are counted: 'and N more'.", told="person")
 
 if TYPE_CHECKING:
     from facts import Ctx
@@ -218,7 +223,7 @@ def group_kinds(items: list[dict], group_from: int, group_words: dict) -> list[t
         n = len(its)
         names = [x["subject"] for x in its]
         out.append(({"title": title.format(n=n, kind=kind.split("/")[-1]), "names": names,
-                     "shown": ", ".join(names[:8]) + (f" and {n - 8} more" if n > 8 else ""),
+                     "shown": ", ".join(names[:GROUP_NAMES_SHOWN]) + (f" and {n - GROUP_NAMES_SHOWN} more" if n > GROUP_NAMES_SHOWN else ""),
                      "severity": min((x["severity"] for x in its), key=lambda s_: SEVERITY_ORDER.get(s_, 9))}, its))
     return out
 

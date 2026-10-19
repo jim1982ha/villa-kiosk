@@ -22,6 +22,8 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from .limits import limit
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS features (
   day TEXT NOT NULL, entity_id TEXT NOT NULL, family TEXT NOT NULL,
@@ -352,14 +354,19 @@ class Store:
         r = self.db.execute("SELECT * FROM incidents WHERE id=?", (iid,)).fetchone()
         return dict(r) if r else None
 
-    #: How long an incident's earlier runs are kept (the monthly report reads a month back).
-    RUNS_KEPT_DAYS = 40
+    @staticmethod
+    def runs_kept_days() -> int:
+        """How long an incident's earlier runs are kept (the monthly report reads a month back)."""
+        return limit("alerts.runs_kept_days", 40, unit="days", group="keep", lo=7, hi=3650,
+                     says="How long the earlier times an alert came back are kept with it (the monthly report reads a "
+                          "month back).",
+                     reached="Older times are forgotten: the monthly report cannot count them.", told="")
 
     def reopen_incident(self, iid: int, at: str, message: str | None = None) -> None:
         """Incident `iid`, closed, open again at `at`: the run that ended is kept as an occurrence (opened, closed, how,
-        its own words `message`); runs older than RUNS_KEPT_DAYS go."""
+        its own words `message`); runs older than runs_kept_days() go."""
         inc = self.incident(iid)
-        cutoff = (datetime.fromisoformat(at) - timedelta(days=self.RUNS_KEPT_DAYS)).isoformat()
+        cutoff = (datetime.fromisoformat(at) - timedelta(days=self.runs_kept_days())).isoformat()
         past = [o for o in json.loads(inc.get("occurrences") or "[]") if o["opened_at"] >= cutoff] + [
             {"opened_at": inc.get("reopened_at") or inc["opened_at"], "closed_at": inc.get("closed_at"), "state": inc.get("state"),
              **({"message": message} if message else {})}]

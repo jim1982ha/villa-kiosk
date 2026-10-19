@@ -27,6 +27,8 @@ from typing import Callable
 import aiohttp
 
 from vesta_shared import agreement
+from vesta_shared.ha_client import error_short_chars
+from vesta_shared.limits import limit
 
 log = logging.getLogger("vesta.kiosk")
 
@@ -53,6 +55,37 @@ def beat_every(answer: dict, current: float) -> float:
 
 #: The start of every fault id the agent writes ("va-…"): a fault the agent made, whoever holds it now.
 MINE = "va-"
+
+
+def fault_title_chars() -> int:
+    return limit("kiosk.fault_title_chars", 200, unit="characters", group="text", lo=60, hi=2000,
+                 says="The longest title of a fault sent to the VESTA Kiosk.",
+                 reached="The rest of the title is cut, with no mark.", told="")
+
+
+def fault_note_chars() -> int:
+    return limit("kiosk.fault_note_chars", 2000, unit="characters", group="text", lo=200, hi=20000,
+                 says="The longest note a fault keeps in the VESTA Kiosk (what the facility manager reads).",
+                 reached="The rest of the note is cut, with no mark.", told="")
+
+
+def update_note_chars() -> int:
+    return limit("kiosk.update_note_chars", 500, unit="characters", group="text", lo=100, hi=5000,
+                 says="The longest note added to a fault's update in the VESTA Kiosk.",
+                 reached="The rest of the note is cut, with no mark.", told="")
+
+
+def who_chars() -> int:
+    return limit("kiosk.who_chars", 80, unit="characters", group="text", lo=20, hi=500,
+                 says="The longest name of who acted, shown on a fault's update.",
+                 reached="The rest of the name is cut.", told="")
+
+
+def kiosk_timeout_s() -> float:
+    return limit("kiosk.timeout_s", 30, unit="seconds", group="run", lo=5, hi=600,
+                 says="How long the agent waits for the VESTA Kiosk to answer.",
+                 reached="That exchange fails: a fault not recorded is said so; the next try comes later.",
+                 told="person")
 
 class KioskError(RuntimeError):
     """What the Kiosk answered, or that it could not be reached. `status`: the answer of a refusal (403: a write its
@@ -127,7 +160,7 @@ def agent_title(t: dict) -> str | None:
         if isinstance(u.get("title"), str) and u["title"] and _mine(u):
             return u["title"]
         if not u.get("kind") and str(u.get("note") or "").startswith(OLD_TITLE_NOTE):
-            return str(u["note"])[len(OLD_TITLE_NOTE):][:200]
+            return str(u["note"])[len(OLD_TITLE_NOTE):][:fault_title_chars()]
     return None
 
 
@@ -231,7 +264,7 @@ def retitled(title: str) -> Amend:
     """An open ticket says what is wrong NOW (owner, 2026-10-07: "battery at 5 %" stayed while it read 0 %): its title
     follows, its history keeping the one before (a "retitled" step); under a title a person wrote, the title stays
     theirs and the reading is a "reading" step. Nothing when it is closed or already says it."""
-    title = title[:200]
+    title = title[:fault_title_chars()]
 
     def amend(t: dict) -> dict | None:
         if t.get("status") == "resolved" or (agent_title(t) or t.get("title")) == title:
@@ -254,7 +287,7 @@ def noted(lines: list[dict]) -> Amend:
         # or a People change re-wrote every past line, and each was added again under the new words
         have = {u.get("at") for u in t.get("updates") or [] if isinstance(u, dict) and u.get("kind") == NOTED}
         new = [{"at": x["at"], "status": t.get("status") or "open", "photoIds": [], "kind": NOTED,
-                "note": str(x["note"])[:500]} for x in lines if x["at"] not in have]
+                "note": str(x["note"])[:update_note_chars()]} for x in lines if x["at"] not in have]
         return dict(t, updates=list(t.get("updates") or []) + new) if new else None
     return amend
 
@@ -272,7 +305,7 @@ def todo(note: str) -> Amend:
         cur = str(t.get("note") or "")
         if t.get("status") == "resolved" or cur == note or (cur and not cur.startswith(TODO_LABELS)):
             return None
-        return dict(t, note=note[:2000])
+        return dict(t, note=note[:fault_note_chars()])
     return amend
 
 
@@ -301,7 +334,7 @@ class Kiosk:
         self._lock = asyncio.Lock()
 
     async def _req(self, method: str, path: str, body: dict | None = None) -> tuple[int, dict]:
-        timeout = aiohttp.ClientTimeout(total=30)
+        timeout = aiohttp.ClientTimeout(total=kiosk_timeout_s())
         try:
             async with aiohttp.ClientSession(timeout=timeout, headers=self.headers) as http:
                 async with http.request(method, f"{self.url}{path}", json=body) as r:
@@ -339,7 +372,7 @@ class Kiosk:
         said = answer.get("cadence")
         if isinstance(said, str) and said.startswith("refused"):
             if said != self._cadence_refused:
-                log.warning("The Kiosk did not take this agent's timing: %s", said[:200])
+                log.warning("The Kiosk did not take this agent's timing: %s", said[:error_short_chars()])
             self._cadence_refused = said
         else:
             self._cadence_refused = None
@@ -385,7 +418,7 @@ class Kiosk:
                     return result
                 if status == 409 and attempt == 1:
                     continue
-                said = str(res.get("error", ""))[:200]
+                said = str(res.get("error", ""))[:error_short_chars()]
                 raise KioskError(f"writing the Facility records answered {status}: {said}", status=status, said=said)
         raise KioskError("the Facility records kept changing", status=409)
 
@@ -394,7 +427,10 @@ class Kiosk:
         when this Kiosk cannot hold documents (an older one answers 404) or refused it. Kept with the fault, deleted with it."""
         did = secrets.token_hex(16)
         try:
-            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=60), headers=self.headers) as http:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=limit(
+                    "kiosk.document_timeout_s", 60, unit="seconds", group="run", lo=10, hi=600,
+                    says="How long the agent waits for the VESTA Kiosk to store a fault's page.",
+                    reached="The page is not kept with the fault; the fault itself is.", told="")), headers=self.headers) as http:
                 async with http.post(f"{self.url}/agent/v1/fm-document?id={did}", data=html,
                                      headers={"Content-Type": "text/html; charset=utf-8"}) as r:
                     if r.status == 200:
@@ -421,14 +457,14 @@ class Kiosk:
 
         def change(data: dict) -> str:
             tickets = list(data.get("tickets") or [])
-            t = {"id": tid, "title": title[:200], "status": "open", "openedAt": _now(), "photoIds": [],
-                 "updates": [{"at": _now(), "status": "open", "photoIds": [], "title": title[:200]}]}
+            t = {"id": tid, "title": title[:fault_title_chars()], "status": "open", "openedAt": _now(), "photoIds": [],
+                 "updates": [{"at": _now(), "status": "open", "photoIds": [], "title": title[:fault_title_chars()]}]}
             if document_ids:
                 t["documentIds"] = list(document_ids)
             if entity_id:
                 t["entityId"] = entity_id
             if note:
-                t["note"] = note[:2000]
+                t["note"] = note[:fault_note_chars()]
             if number:
                 t["alertNumber"] = int(number)
             if origin:
@@ -545,13 +581,13 @@ class Kiosk:
             tickets = list(data.get("tickets") or [])
             for i, t in enumerate(tickets):
                 if isinstance(t, dict) and t.get("id") == tid:
-                    upd = {"at": _now(), "status": "open", "photoIds": [], "kind": REOPENED, "title": title[:200],
-                           "note": (note or f"Back again: {title}")[:500]}
+                    upd = {"at": _now(), "status": "open", "photoIds": [], "kind": REOPENED, "title": title[:fault_title_chars()],
+                           "note": (note or f"Back again: {title}")[:update_note_chars()]}
                     mine = not person_titled(t)                 # a title a person wrote stays theirs (review 26)
-                    if mine and str(t.get("title") or "") != title[:200]:
+                    if mine and str(t.get("title") or "") != title[:fault_title_chars()]:
                         upd["was"] = str(t.get("title") or "")  # the title it replaces: the card's "Was:" (review 31)
                     was, t = t, {k: v for k, v in t.items() if k != "resolvedAt"}
-                    tickets[i] = self._gated(was, dict(t, status="open", title=title[:200] if mine else t.get("title"),
+                    tickets[i] = self._gated(was, dict(t, status="open", title=title[:fault_title_chars()] if mine else t.get("title"),
                                                        updates=list(t.get("updates") or []) + [upd]))
                     data["tickets"] = tickets
                     return True
@@ -572,13 +608,13 @@ class Kiosk:
                     now = _now()
                     upd = {"at": now, "status": "resolved", "photoIds": []}
                     if note:
-                        upd["note"] = note[:500]
+                        upd["note"] = note[:update_note_chars()]
                     if who:
-                        upd["who"] = who[:80]       # the person, on the card (faultWhen: who, else by)
+                        upd["who"] = who[:who_chars()]       # the person, on the card (faultWhen: who, else by)
                         # its `by` is the Kiosk's to stamp ("VESTA Agent"); the person is `who` (fmEngine.workedBy)
                         data["completions"] = list(data.get("completions") or []) + [{
                             "id": "va-cp-" + secrets.token_hex(6), "scheduleId": "", "ticketId": tid, "at": now,
-                            "by": "", "who": who[:80], "photoIds": [], **({"note": note[:500]} if note else {})}]
+                            "by": "", "who": who[:who_chars()], "photoIds": [], **({"note": note[:update_note_chars()]} if note else {})}]
                     else:
                         upd["kind"] = CLEARED
                     tickets[i] = self._gated(t, dict(t, status="resolved", resolvedAt=now,

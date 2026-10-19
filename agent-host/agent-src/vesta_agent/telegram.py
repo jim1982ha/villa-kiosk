@@ -21,7 +21,8 @@ from typing import Any
 import aiohttp
 
 from vesta_shared.message_format import telegram_entities
-from vesta_shared.messaging import TELEGRAM_CAPTION, split_message
+from vesta_shared.limits import limit
+from vesta_shared.messaging import TELEGRAM_CAPTION, split_message, telegram_caption_chars, telegram_message_chars
 
 
 log = logging.getLogger("vesta.telegram")
@@ -50,7 +51,8 @@ def _failed(method: str, body: dict) -> TelegramError:
 #: Telegram's words when an edit changes nothing (it already shows this), or targets a photo's or a file's caption.
 NOT_MODIFIED, NO_TEXT = "message is not modified", "no text in the message to edit"
 
-#: A photo's or a file's caption: the first part of its text (vesta_shared.messaging.TELEGRAM_CAPTION).
+#: A photo's or a file's caption: the first part of its text — its value when the agent started; the code reads
+#: telegram_caption_chars() at each use (the villa's limit, changed on the page without a restart)
 CAPTION = TELEGRAM_CAPTION
 
 
@@ -74,7 +76,7 @@ def layout(text: str, keyboard: dict | None = None, media: str | None = None, re
     text = text or ""
     parts: list[Part] = []
     if media:
-        head = split_message(text, CAPTION) if text else [""]
+        head = split_message(text, telegram_caption_chars()) if text else [""]
         rest = text[len(head[0]):].lstrip("\n") if len(head) > 1 else ""
         parts.append(Part(head[0], media))
         text = rest
@@ -178,14 +180,15 @@ class Telegram:
             data["reply_parameters"] = {"message_id": part.reply_to, "allow_sending_without_reply": True}
         return await self.api("sendMessage", **data) or {}
 
-    async def download(self, file_id: str, limit: int = 20 * 1024 * 1024) -> bytes:
+    async def download(self, file_id: str, limit: int | None = None) -> bytes:
         """A file a person sent, by the id Home Assistant's telegram_attachment event gave.
         Telegram serves a bot files up to 20 MB."""
+        limit = limit or download_max_bytes()
         assert self.http is not None
         info = await self.api("getFile", file_id=file_id)
         path = (info or {}).get("file_path")
         if not path or (info.get("file_size") or 0) > limit:
-            raise TelegramError("getFile: no file, or larger than 20 MB")
+            raise TelegramError(f"getFile: no file, or larger than {limit // 1048576} MB")
         try:
             async with self.http.get(f"https://api.telegram.org/file/bot{self.token}/{path}") as r:
                 if r.status != 200:
@@ -198,7 +201,7 @@ class Telegram:
 
     async def answer_callback(self, callback_id: str, text: str):
         try:
-            await self.api("answerCallbackQuery", callback_query_id=callback_id, text=text[:190], show_alert=False)
+            await self.api("answerCallbackQuery", callback_query_id=callback_id, text=text[:toast_chars()], show_alert=False)
         except TelegramError as e:
             log.warning("answerCallbackQuery failed: %s", e)
 
@@ -244,8 +247,8 @@ class Telegram:
         """Rewrite one of the bot's messages: its buttons go, or become `keyboard`. False when Telegram refuses."""
         extra = {"reply_markup": keyboard} if keyboard else {}
         try:
-            await self.api("editMessageText", chat_id=chat_id, message_id=message_id, text=text[:4096], **extra,
-                           **_italic("entities", text[:4096]))
+            await self.api("editMessageText", chat_id=chat_id, message_id=message_id, text=text[:telegram_message_chars()], **extra,
+                           **_italic("entities", text[:telegram_message_chars()]))
             return True
         except TelegramError as e:
             if NOT_MODIFIED in str(e):
@@ -256,8 +259,8 @@ class Telegram:
         # ⚠️ A PHOTO'S OR A FILE'S MESSAGE HAS A CAPTION, NOT A TEXT (architecture review 21): editMessageText is refused
         # there, every time — an alert sent with its file kept its buttons for good
         try:
-            await self.api("editMessageCaption", chat_id=chat_id, message_id=message_id, caption=text[:CAPTION], **extra,
-                           **_italic("caption_entities", text[:CAPTION]))
+            await self.api("editMessageCaption", chat_id=chat_id, message_id=message_id, caption=text[:telegram_caption_chars()],
+                           **extra, **_italic("caption_entities", text[:telegram_caption_chars()]))
             return True
         except TelegramError as e:
             if NOT_MODIFIED in str(e):
@@ -272,4 +275,20 @@ def _italic(key: str, text: str) -> dict:
 
 
 def dump(obj: Any) -> str:
-    return json.dumps(obj, default=str)[:500]
+    return json.dumps(obj, default=str)[:limit(
+        "errors.telegram_answer_chars", 500, unit="characters", group="keep", lo=100, hi=20000,
+        says="How much of an answer of Telegram's is kept when it refuses something (the log).",
+        reached="The rest is cut.", told="")]
+
+
+def download_max_bytes() -> int:
+    return limit("telegram.download_bytes", 20971520, unit="bytes", group="ai", lo=1048576, hi=20971520,
+                 says="The largest file a person sends that the agent fetches (Telegram serves a bot 20 MB at most).",
+                 reached="The file is not fetched; the person is told.", told="person")
+
+
+def toast_chars() -> int:
+    return limit("telegram.toast_chars", 190, unit="characters", group="text", lo=20, hi=200,
+                 says="The longest short notice shown at the top of Telegram after a button press (Telegram's own "
+                      "maximum is 200).",
+                 reached="The rest of the notice is cut.", told="")

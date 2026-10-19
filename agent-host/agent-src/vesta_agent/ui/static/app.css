@@ -538,3 +538,14 @@ table.rows td > * + .chip, table.rows td .cell-v > * + .chip { margin-left: 8px;
 .md-box table.rows th { text-transform: none; letter-spacing: 0; font-size: var(--text-sm); color: var(--text-secondary); }
 .md-meta { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0 0 12px; padding-bottom: 10px; border-bottom: 1px solid var(--hairline); font-size: var(--text-sm); }
 .md-meta dt { color: var(--text-dim); } .md-meta dd { margin: 0; }
+
+/* the Limits tab (limits.js) */
+.limits-search { margin: 4px 0 12px; }
+.limits-search input { width: 100%; max-width: 420px; }
+table.limits td { vertical-align: top; }
+.limit-what .muted { margin-top: 2px; }
+.limit-value { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.limit-value input[type=number] { width: 110px; }
+.limit-bounds { flex-basis: 100%; }
+.limit-words { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.limit-word { display: inline-flex; align-items: center; gap: 4px; font-size: var(--text-xs); }

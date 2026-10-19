@@ -47,6 +47,19 @@ from vesta_shared.message_format import PRESSED, ROLE_SHORT, acted, closing  # n
 from vesta_shared import kiosk_words  # noqa: E402
 from vesta_shared.timeutil import lasting  # noqa: E402
 from vesta_shared.device_state import has_value, out_for  # noqa: E402  ("is it back": one answer)
+from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the Limits tab)
+
+FATIGUE_WINDOW_DAYS = limit("alerts.fatigue_window_days", 30, unit="days", group="detect", lo=1, hi=365,
+                            says="Days over which a rule's alerts are counted to propose retuning it.",
+                            reached="Older alerts do not count.", told="person")
+LATE_CLOSE_DAYS = limit("alerts.late_close_days", 1, unit="days", group="detect", lo=0, hi=30,
+                        says="How recently an alert must have closed for the villa's own all-clear to be matched to it.",
+                        reached="An older all-clear starts no thread and is not matched.", told="")
+TASK_TITLE_CHARS = limit("alerts.task_title_chars", 250, unit="characters", group="text", lo=40, hi=2000,
+                         says="Longest title of the fault an alert reopens.", reached="A longer one is cut.", told="")
+TITLE_CHARS = limit("alerts.title_chars", 200, unit="characters", group="text", lo=40, hi=2000,
+                    says="Longest alert title, taken from the villa's own message.", reached="A longer one is cut.",
+                    told="")
 
 SKILL = os.path.dirname(HERE)
 # rules.yaml with the villa's own villa.rules.yaml on top (kept by updates): a villa's route comes FIRST, so it
@@ -461,7 +474,7 @@ def _ladder(store: Store, iid: int, ev: dict, now: datetime, sev: str, route: di
         store.update_incident(iid, state=Incident.ASKED, asked_at=now.isoformat(), assignee=CHASE["asks"])
         eid, check = ev.get("entity_id", ""), route.get("check") or ""
         title = again or ev["message"]
-        Problems(store).reopen_task("incident", iid, ev["rule_id"], eid, title[:250], check, note=note)
+        Problems(store).reopen_task("incident", iid, ev["rule_id"], eid, title[:TASK_TITLE_CHARS], check, note=note)
         # new, reopened or still open: the engine makes its fault what the task says (tickets.repair, Problems.card)
         out["actions"].append(R.faults_changed())
     elif does(sev, route) == "digest":
@@ -510,7 +523,7 @@ def reopen(store: Store, inc: dict, ev: dict, now: datetime, sev: str, route: di
     carry_to(store, inc["id"], sev, p)
     inc = store.incident(inc["id"])
     runs = incident_runs(inc, store)
-    title = again_title(str(p.get("message") or inc["rule_id"])[:200], runs - 1)
+    title = again_title(str(p.get("message") or inc["rule_id"])[:TITLE_CHARS], runs - 1)
     _ladder(store, inc["id"], {**p, "rule_id": inc["rule_id"], "entity_id": inc["entity_id"],
                                "message": p.get("message") or inc["rule_id"]}, now, sev, route, out, again=title,
             note="Back again." if came_back_now else "Still there after the close.")
@@ -540,7 +553,7 @@ def resolved(store: Store, ev: dict, now: datetime) -> dict:
     if not inc:
         # ⚠️ ALREADY CLOSED HERE, STILL ITS MESSAGE (architecture review 22): the desk saw it over first (seen_again, a
         # Done) — Home Assistant's all-clear then stayed a second message in the group, without its incident's number
-        late = _find_by_ha_incident(store, ev.get("ha_incident"), closed_within=timedelta(days=1), now=now)
+        late = _find_by_ha_incident(store, ev.get("ha_incident"), closed_within=timedelta(days=LATE_CLOSE_DAYS), now=now)
         if late:
             out["incident_id"], out["decision"] = late["id"], "resolved_late"
             out["ha_messages"] = [R.ha_message(late["id"], context=ev.get("_context_id"), stage="closed",
@@ -1000,14 +1013,14 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
                                 **about(cur, closing("the villa is back online and answers again")))
     # alert fatigue: a rule firing more than N times in 30 days without acknowledgement
     limit = params.behaviour("alert_fatigue_per_month")
-    since = (now - timedelta(days=30)).isoformat()
+    since = (now - timedelta(days=FATIGUE_WINDOW_DAYS)).isoformat()
     # every rule's runs counted in ONE pass (architecture review 25: a pass per rule over all history, every 5 minutes)
     for r, n in store.incident_counts(since).items():
         if n >= limit:
             # one proposal per rule: its count lives in the detail (architecture review 24: the count in the title made a
             # new open proposal at every new count — "fired 21 times", "fired 22 times"…)
             store.add_proposal("retune", f"Retune {r}: it fires too often",
-                               f"The rule {r} fired {n} times in 30 days. Either the threshold is too tight or the device needs attention. "
+                               f"The rule {r} fired {n} times in {FATIGUE_WINDOW_DAYS} days. Either the threshold is too tight or the device needs attention. "
                                "The VESTA Agent proposes a new threshold in the weekly report and applies nothing.", "Fewer useless messages")
     store.beat("agent_tick", now.isoformat())
     return out

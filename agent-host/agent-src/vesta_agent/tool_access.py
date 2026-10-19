@@ -31,6 +31,8 @@ import os
 import re
 from datetime import datetime, timedelta, timezone
 
+from vesta_shared.limits import limit
+
 from .places import title, where
 from .policy import Policy
 
@@ -107,7 +109,10 @@ def save_list(data_dir: str, server_tools: list[dict], server: str = "", now: da
         seen.setdefault(t["name"], now.isoformat() if old else first)
     data = {"read_at": now.isoformat(), "server": server, "first_list_at": first, "first_seen": seen,
             "tools": [{"name": t["name"], "title": (t.get("annotations") or {}).get("title") or "",
-                       "description": (t.get("description") or "").strip().split("\n")[0][:240],
+                       "description": (t.get("description") or "").strip().split("\n")[0][:limit(
+        "page.tool_description_chars", 240, unit="characters", group="text", lo=40, hi=4000,
+        says="How much of a tool's description the Rules tab shows under its name.",
+        reached="The description is cut there on the page.")],
                        "readable": readable(t)} for t in server_tools]}
     tmp = path + ".new"
     with open(tmp, "w", encoding="utf-8") as f:

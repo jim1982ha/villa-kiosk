@@ -13,8 +13,15 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 
-#: the searches a request keeps (a script is told the first 20: tools.run_skill_script)
-KEPT = 40
+from vesta_shared.limits import limit
+
+
+
+def kept() -> int:
+    """The searches a request keeps (a script is told the first ai.web_searches_kept: tools.run_skill_script)."""
+    return limit("ai.request_searches_kept", 40, unit="searches", group="keep", lo=1, hi=500,
+                 says="Web searches one investigation keeps across its turns (a Continue, its page).",
+                 reached="Older searches of that investigation are forgotten.", told="")
 
 
 class Searches(list):
@@ -26,7 +33,7 @@ class Searches(list):
 
     def append(self, query) -> None:
         super().append(query)
-        self._state.keep_request_searches(self._inv, list(self)[-KEPT:])
+        self._state.keep_request_searches(self._inv, list(self)[-kept():])
 
 
 @dataclass

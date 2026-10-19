@@ -17,6 +17,7 @@ import shutil
 import tempfile
 
 import yaml
+from vesta_shared.limits import FILE as LIMITS_FILE
 
 from ..config import Settings
 from ..history import History, policy_change
@@ -55,7 +56,7 @@ def _write(path: str, data: bytes) -> None:
         raise
 
 
-TEXT_KINDS = ("policy", "instructions", "file")    # what Undo writes back as text (UI.text_change)
+TEXT_KINDS = ("policy", "instructions", "file", "limits")    # what Undo writes back as text (UI.text_change)
 
 
 def undoable(ch: dict) -> bool:
@@ -165,6 +166,8 @@ class PageFiles:
             return self.s.policy_path
         if t["kind"] == "instructions":
             return self.s.instructions_path
+        if t["kind"] == "limits":                       # the Limits tab's file (vesta_shared.limits)
+            return os.path.join(self.s.config_dir, LIMITS_FILE)
         return os.path.join(self.skill_dir(t["skill"]), self.rel(t["path"]))
 
     def text_now(self, t: dict) -> str | None:
@@ -213,7 +216,7 @@ class PageFiles:
             if probs:
                 raise Refused(probs)
             return
-        rel = str(target.get("path") or "")
+        rel = LIMITS_FILE if target["kind"] == "limits" else str(target.get("path") or "")
         if rel.endswith(".py"):
             try:
                 compile(text, rel, "exec")

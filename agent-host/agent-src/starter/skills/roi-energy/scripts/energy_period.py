@@ -36,6 +36,23 @@ from vesta_shared.timeutil import day_label  # noqa: E402  (the one day format)
 from vesta_shared.timeutil import villa_day  # noqa: E402
 import vesta_shared.daily as F  # noqa: E402  (a day of a meter: shared, not another skill's file)
 import vesta_shared.energy_setup as E  # noqa: E402  (the Energy settings' rule, the Kiosk's)
+from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the Limits tab)
+
+BASELINE_DAYS = limit("energy.baseline_days", 30, unit="days", group="read", lo=7, hi=365,
+                      says="Days before a period read to give each device its usual daily energy.",
+                      reached="Older days do not count in the usual figure.", told="")
+MOVERS = limit("energy.movers", 5, unit="devices", group="ai", lo=1, hi=100,
+               says="Devices listed as having changed most since the previous period.",
+               reached="Smaller changes are not listed as changes (every device stays in the full list).", told="")
+MOVER_MIN_KWH = limit("energy.mover_min_kwh", 1, unit="kWh", group="detect", lo=0, hi=1000,
+                      says="Smallest change in a device's energy since the previous period that counts as a change.",
+                      reached="Smaller changes are not listed as changes.", told="")
+HEADLINE_LOADS = limit("energy.headline_loads", 3, unit="devices", group="text", lo=1, hi=20,
+                       says="Largest consumers named in the energy headline.", reached="The others are not named there.",
+                       told="")
+LOADS_PRINTED = limit("energy.loads_printed", 8, unit="devices", group="ai", lo=1, hi=500,
+                      says="Consumers the energy figures hand the AI, largest first.",
+                      reached="The AI never sees the smaller ones, and is not told they exist.", told="")
 
 
 def period_bounds(period: str, end: date, start: date | None) -> tuple[date, date]:
@@ -75,7 +92,7 @@ def run(args) -> dict:
             cached["from_cache"] = True
             return cached
 
-    win_start = datetime.combine(min(prev_a, a - timedelta(days=30)), time(0, 0), tzinfo=Z)
+    win_start = datetime.combine(min(prev_a, a - timedelta(days=BASELINE_DAYS)), time(0, 0), tzinfo=Z)
     win_end = datetime.combine(b + timedelta(days=1), time(0, 0), tzinfo=Z)
 
     def read(ids: list[str]) -> dict:
@@ -90,7 +107,7 @@ def run(args) -> dict:
     def load(eid: str, name: str, area, family: str, series: dict) -> dict:
         cur, days = sum_days(series[eid], a, b)
         prev, _ = sum_days(series[eid], prev_a, prev_b)
-        base_vals = [series[eid][d]["kwh"] for d in series[eid] if a - timedelta(days=30) <= d < a and series[eid][d].get("kwh") is not None]
+        base_vals = [series[eid][d]["kwh"] for d in series[eid] if a - timedelta(days=BASELINE_DAYS) <= d < a and series[eid][d].get("kwh") is not None]
         base_daily = med(base_vals)
         return {"entity_id": eid, "asset": (pack.row(eid) or {}).get("asset"), "name": name,
                 "area": area, "family": family, "kwh": cur, "days_with_data": days, "prev_kwh": prev,
@@ -112,8 +129,8 @@ def run(args) -> dict:
     for l in loads:
         l["share_pct"] = round(l["kwh"] / total * 100, 1) if total else None
     loads.sort(key=lambda l: -l["kwh"])
-    movers = sorted([l for l in loads if l["vs_prev_pct"] is not None and abs(l["kwh"] - l["prev_kwh"]) >= 1],
-                    key=lambda l: -abs(l["kwh"] - l["prev_kwh"]))[:5]
+    movers = sorted([l for l in loads if l["vs_prev_pct"] is not None and abs(l["kwh"] - l["prev_kwh"]) >= MOVER_MIN_KWH],
+                    key=lambda l: -abs(l["kwh"] - l["prev_kwh"]))[:MOVERS]
     unmetered = part["unmetered"]
 
     # pumps: run hours from hourly power stats
@@ -262,7 +279,7 @@ def headline(r: dict) -> str:
         s += f", {fmt_money(r['total_cost'], r['currency'])}"
     if r["total_vs_prev_pct"] is not None:
         s += f" ({r['total_vs_prev_pct']:+.0f}% vs previous {r['period']})"
-    top = [l for l in r["loads"] if l["family"] == "energy"][:3]
+    top = [l for l in r["loads"] if l["family"] == "energy"][:HEADLINE_LOADS]
     if top:
         s += ". Largest: " + ", ".join(f"{l['name']} {number(l['share_pct'], '%', whole=True)}" for l in top)
     if r["unmetered_pct"] is not None:
@@ -285,7 +302,7 @@ def main(argv=None):
     if a.out:
         json.dump(res, open(a.out, "w"), indent=1, default=str)
     print(res["headline"])
-    for l in res["loads"][:8]:
+    for l in res["loads"][:LOADS_PRINTED]:
         print(f"  {l['name']:40} {l['kwh']:8.1f} kWh  share {l['share_pct'] or 0:5.1f}%  vs prev {l['vs_prev_pct'] if l['vs_prev_pct'] is None else round(l['vs_prev_pct'])}")
     for p in res["pumps"]:
         print(f"  pump {p['name']:35} {p['run_hours_per_day']:.1f} h/day at {p['running_power_w']} W")

@@ -15,6 +15,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Callable
 
+from .ha_client import error_short_chars
+
 
 @dataclass
 class Node:
@@ -138,7 +140,7 @@ def read(client) -> tuple[dict | None, str | None]:
     try:
         return client.energy_prefs(), None
     except Exception as e:  # noqa: BLE001 — unreadable settings fall back, they never stop a report
-        return None, f"{type(e).__name__}: {str(e)[:200]}"
+        return None, f"{type(e).__name__}: {str(e)[:error_short_chars()]}"
 
 
 def usable(prefs: dict | None) -> bool:

@@ -24,6 +24,8 @@ from typing import Callable
 from . import button_data
 from vesta_shared.messaging import uncited
 
+from .kiosk import fault_note_chars, fault_title_chars
+
 log = logging.getLogger("vesta")
 
 #: the words on the buttons under an answer that offers a fault (tools._ticket in a chat)
@@ -54,7 +56,8 @@ class FaultOffers:
         notes = notes if isinstance(notes, dict) else {}
         title = str(notes.get("title") or "").strip() or f"Check on site: {asked.strip()}"
         # its note is read in the Kiosk, where "[2]" leads to no page (architecture review 4, 2026-10-13)
-        self.state.new_ticket_offer(chat, title[:200], None, uncited(str(notes.get("summary") or ""))[:2000] or None, inv)
+        self.state.new_ticket_offer(chat, title[:fault_title_chars()], None,
+                                    uncited(str(notes.get("summary") or ""))[:fault_note_chars()] or None, inv)
 
     def keep_page(self, chat: int, page: str) -> None:
         """The page goes with the fault if a person creates it (owner, 2026-10-11): each offer waiting in this chat its

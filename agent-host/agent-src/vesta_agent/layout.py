@@ -25,7 +25,8 @@ from datetime import datetime
 
 from vesta_shared.message_format import (INCIDENT_TITLE, MARK_ICONS, STAGE_ICONS, STATUS, TO, UNTITLED, document,
                                          parts as shape_parts, stage_words)
-from vesta_shared.messaging import TELEGRAM_LIMIT, tg_len
+from vesta_shared.limits import limit
+from vesta_shared.messaging import telegram_message_chars, tg_len
 from vesta_shared.timeutil import moment_label
 
 from .delivery import fit
@@ -104,8 +105,12 @@ def parts(body: str = "", status: str = "", head=None, lead: str = "", mark: str
     return {"head": head_of(head) or "", "lead": lead or "", "body": body or "", "status": status or "", "mark": mark}
 
 
-#: What the middle (the alert, the action) always keeps, however long the head's history and the status are.
-MIDDLE_FLOOR = 300
+def middle_floor() -> int:
+    """What the middle (the alert, the action) always keeps, however long the head's history and the status are."""
+    return limit("telegram.alert_middle_chars", 300, unit="characters", group="text", lo=50, hi=2000,
+                 says="What an alert's message always keeps of the alert itself, however long its history.",
+                 reached="The oldest history lines go first (\"… N earlier notices\"), then the alert is shortened "
+                         "with \"…\".", told="person")
 
 
 def render(p: dict, limit: int | None = None) -> str:
@@ -117,7 +122,7 @@ def render(p: dict, limit: int | None = None) -> str:
 
     ⚠️ NEVER A NEGATIVE ROOM (architecture review 20): a heading and a status longer than the limit asked fit() for a
     negative size, which never returns — the agent would have stopped answering."""
-    limit = int(limit or p.get("limit") or TELEGRAM_LIMIT)
+    limit = int(limit or p.get("limit") or telegram_message_chars())
     h = head_of(p.get("head"))
     status = fit(stage_line(h, (p.get("status") or "").strip(), p.get("mark")), max(limit // 4, 40))
     middle = "\n".join(x.strip() for x in (p.get("lead"), p.get("body")) if x and x.strip())
@@ -125,7 +130,7 @@ def render(p: dict, limit: int | None = None) -> str:
         tail = f"\n\n{STATUS}:\n{status}" if status else ""
         return fit(middle, max(limit - tg_len(tail), 20)) + tail if middle else tail.lstrip("\n")
     title, to, history = title_line(h), h["to"], list(h["history"])
-    floor, dropped, cap = min(MIDDLE_FLOOR, tg_len(middle)), 0, None
+    floor, dropped, cap = min(middle_floor(), tg_len(middle)), 0, None
 
     def framed(mid: str) -> str:
         more = [f"- … {dropped} earlier notice{'s' if dropped > 1 else ''}"] if dropped else []

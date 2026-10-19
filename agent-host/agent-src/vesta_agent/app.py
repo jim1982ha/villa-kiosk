@@ -63,6 +63,7 @@ from .routing import Origin, Routing
 from .scheduler import EVERY as SCHEDULER_EVERY, Scheduler
 from .command_offers import CommandOffers
 from .command_request import Request, Requests
+from vesta_shared.limits import limit
 from vesta_shared.messaging import SIREN_TITLE
 from .fault_offers import FaultOffers
 from .skills import SEEDED, Skills, script_env
@@ -114,8 +115,14 @@ def pack_needs_build(path: str) -> bool:
 
 #: How often the agent reads the VESTA Kiosk's faults (one closed in the Cockpit settles its alert's messages).
 KIOSK_EVERY_S = 300
-#: The largest photo the AI is shown: the Anthropic API takes an image of at most 5 MB.
-PHOTO_MAX_BYTES = 5 * 1024 * 1024
+
+
+def photo_max_bytes() -> int:
+    """The largest photo the AI is shown: the Anthropic API takes an image of at most 5 MB."""
+    return limit("telegram.photo_bytes", 5242880, unit="bytes", group="ai", lo=102400, hi=5242880,
+                 says="The largest photo a person sends that the AI looks at (the AI takes 5 MB at most).",
+                 reached="The photo is not looked at; the person is asked to send it again or describe it.",
+                 told="person")
 
 
 class Vesta:
@@ -338,17 +345,20 @@ class Vesta:
         log.info("HA MCP: %d tools on the server, %d shown to the model", len(names), len(self.toolbox().read_tool_names()))
 
     # ------------------------------------------------------------------ code-run scripts
-    def code_command(self, skill, command: str, values: dict | None = None, timeout: int = 900) -> dict:
+    def code_command(self, skill, command: str, values: dict | None = None, timeout: int | None = None) -> dict:
         """A command the skill declares (a code job, a hook): its decision, or {} when it failed (script_run.py)."""
         return script_run.run_command(self.s, self.state, skill, command, values, timeout=timeout).result()
 
-    async def run_code_job(self, skill, command: str, timeout: int = 900, values: dict | None = None,
+    async def run_code_job(self, skill, command: str, timeout: int | None = None, values: dict | None = None,
                            origin: Origin | None = None) -> dict:
         ans = await asyncio.to_thread(script_run.run_command, self.s, self.state, skill, command, values, timeout=timeout)
         if not ans.ok:
             # a scheduled run's end row says the script stopped (in_progress.InProgress.verdict): the Overview's
             # "Scheduled jobs run" read the claim and said "run at 02:00" of a night check that stopped at once
-            self.work.verdict(FAILED, f"{command.split()[0] if command.split() else '?'} stopped: {ans.error or 'no output'}"[:160])
+            self.work.verdict(FAILED, f"{command.split()[0] if command.split() else '?'} stopped: {ans.error or 'no output'}"[:limit(
+                "jobs.failure_line_chars", 160, unit="characters", group="text", lo=40, hi=2000,
+                says="The longest line saying why a scheduled job stopped (Overview › Scheduled jobs run).",
+                reached="The rest of the line is cut.", told="")])
         res = ans.result()
         # faults changed (the night check rewrote its findings, a recheck closed one): carry_out brings the Kiosk's in line
         await self._safe(self.outcome.carry_out(res, skill.name, origin))
@@ -357,9 +367,17 @@ class Vesta:
     def build_pack(self) -> dict:
         p = subprocess.run([sys.executable, "-m", "vesta_shared.build_pack", "--out", self.s.pack_path,
                             "--store", self.s.store_path, "--zone", self.s.timezone],
-                           cwd=self.s.out_dir, env=script_env(self.s), capture_output=True, text=True, timeout=900)
+                           cwd=self.s.out_dir, env=script_env(self.s), capture_output=True, text=True, timeout=limit(
+                               "pack.build_timeout_s", 900, unit="seconds", group="run", lo=60, hi=7200,
+                               says="How long the nightly reading of the villa's devices (the skills' list of what "
+                                    "exists) may take.",
+                               reached="It stops; the skills keep yesterday's list and the failure is logged.",
+                               told="person"))
         ok = p.returncode == 0
-        self.state.log("pack", {"ok": ok, "stderr": scrub((p.stderr or "")[-400:], self.s.secrets()) if not ok else ""})
+        kept = limit("errors.pack_stderr_chars", 400, unit="characters", group="keep", lo=100, hi=20000,
+                     says="How much of the device list's own error output is kept when it fails.",
+                     reached="Only its end is kept.", told="")
+        self.state.log("pack", {"ok": ok, "stderr": scrub((p.stderr or "")[-kept:], self.s.secrets()) if not ok else ""})
         log.info("Knowledge pack %s", "built" if ok else "FAILED (see the state log)")
         try:
             return json.loads(p.stdout or "{}")
@@ -408,7 +426,11 @@ class Vesta:
             cmd = sk.on_event.get("critical_event")
             if cmd:
                 handled = True
-                res = await self.run_code_job(sk, cmd, 300, {"event": path})
+                res = await self.run_code_job(sk, cmd, limit(
+                    "alerts.hook_timeout_s", 300, unit="seconds", group="run", lo=30, hi=3600,
+                    says="How long a skill may take to handle one alert of the villa's own rules.",
+                    reached="That handling stops and counts as failed; the villa's own alert was already sent.",
+                    told="person"), {"event": path})
                 log.info("Alert handled by %s: %s%s", sk.name, res.get("decision") or "no decision",
                          f", incident #{res['incident_id']}" if res.get("incident_id") else "")
         if not handled:
@@ -491,11 +513,11 @@ class Vesta:
         if self.tg is None or not file_id:
             return None
         try:
-            data = await self.tg.download(file_id, limit=PHOTO_MAX_BYTES)
+            data = await self.tg.download(file_id, limit=photo_max_bytes())
         except TelegramError as e:
             log.warning("A photo could not be fetched from Telegram: %s", e)
             await self.delivery.send(chat, "This photo could not be fetched from Telegram, or it is too large "
-                                           f"(over {PHOTO_MAX_BYTES // 1_000_000} MB). Send it again, or describe it.")
+                                           f"(over {photo_max_bytes() // 1_000_000} MB). Send it again, or describe it.")
             return None
         log.info("Photo received in chat %s (%d KB)", chat, len(data) // 1024)
         return base64.b64encode(data).decode("ascii"), mime
@@ -631,7 +653,10 @@ class Vesta:
         for sk in self.skills.all().values():
             if not sk.before_answer:
                 continue
-            ans = script_run.run_command(self.s, self.state, sk, sk.before_answer, timeout=60)
+            ans = script_run.run_command(self.s, self.state, sk, sk.before_answer, timeout=limit(
+                "chat.status_check_timeout_s", 60, unit="seconds", group="run", lo=5, hi=600,
+                says="How long a skill's check before each chat answer (the villa's status) may take.",
+                reached="The AI is told the check could not run just now, and says so if asked.", told="ai"))
             text = (ans.result() or {}).get("text") if ans.ok else None
             if text:
                 out.append(f"[Checked just now by the {sk.name} skill; answer from this, never from memory]\n{text}")
@@ -743,7 +768,10 @@ class Vesta:
             return
         now = datetime.now(timezone.utc)
         last = self.state.owner_told(problem)
-        if last and now - datetime.fromisoformat(last) < timedelta(hours=12):
+        again = limit("notices.owner_repeat_hours", 12, unit="hours", group="text", lo=1, hi=168,
+                      says="How often the owner is told again that the AI cannot answer (no credit, a refused key).",
+                      reached="Not told again before this many hours.", told="")
+        if last and now - datetime.fromisoformat(last) < timedelta(hours=again):
             return
         self.state.mark_owner_told(problem, now.isoformat())
         await self.outcome.carry_out({"send": [{"to": "owner", "title": "The AI cannot answer", "text": text}]},
@@ -795,7 +823,10 @@ class Vesta:
         ans = script_run.run(dataclasses.replace(self.s, asker=script_run.PAGE), self.state, skill, script, final,
                              by=script_run.PAGE)
         return {"ok": ans.ok, "exit": ans.code, "verdict": ans.verdict, "verdict_words": ans.verdict_words, "seconds": ans.seconds,
-                "output": ans.stdout[:60_000], "error": ans.error}
+                "output": ans.stdout[:limit("page.try_output_chars", 60000, unit="characters", group="text", lo=1000, hi=1000000,
+                                            says="How much of a script's output Skills › Try shows.",
+                                            reached="The rest of the output is not shown on the page.")],
+                "error": ans.error}
 
     def kiosk_cadence(self) -> dict | None:
         """This agent's timing for the Kiosk's heartbeat (agent-contract.json `heartbeat.cadence`): how often its code

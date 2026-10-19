@@ -24,12 +24,13 @@ import re
 from datetime import datetime
 from typing import AsyncIterator, Awaitable, Callable
 
-from vesta_shared.messaging import TELEGRAM_LIMIT, split_message, tg_len
+from vesta_shared.limits import limit
+from vesta_shared.messaging import split_message, telegram_caption_chars, telegram_message_chars, tg_len
 
 from . import layout
 from .in_progress import InProgress
 from .routing import JOB, Origin, Routing
-from .telegram import CAPTION, TelegramError
+from .telegram import TelegramError
 
 log = logging.getLogger("vesta")
 
@@ -38,7 +39,15 @@ log = logging.getLogger("vesta")
 # never showed it at all — sent while the previous one still runs, Telegram does not pass it on. Every 5.5 s each one
 # arrives once the last has ended.
 TYPING_EVERY_S = 5.5
-PHOTOS_PER_REPLY = 4             # the camera pictures a reply carries, the last ones looked at
+
+
+def photos_per_reply() -> int:
+    """The camera pictures a reply carries, the last ones looked at."""
+    return limit("telegram.photos_per_reply", 4, unit="pictures", group="text", lo=1, hi=10,
+                 says="Camera pictures one reply carries (the last ones the AI looked at).",
+                 reached="Earlier pictures of that reply are not sent; nobody is told.", told="")
+
+
 NO_PICTURE = "\n\n(The camera picture could not be sent.)"
 
 Photo = tuple[str, str]          # (base64, mime)
@@ -59,9 +68,10 @@ def plain_text(s: str) -> str:
     return s
 
 
-def fit(text: str, limit: int = TELEGRAM_LIMIT) -> str:
-    """One message's text at most `limit` (Telegram's units), cut between lines with "…" — for an edit, which cannot
-    be split as a send is."""
+def fit(text: str, limit: int | None = None) -> str:
+    """One message's text at most `limit` (Telegram's units; the villa's message limit by default), cut between lines
+    with "…" — for an edit, which cannot be split as a send is."""
+    limit = limit or telegram_message_chars()
     if tg_len(text) <= limit:
         return text
     head = split_message(text, limit - 2)[0]
@@ -160,7 +170,7 @@ class Delivery:
 
     async def settle(self, chat_id: int, message_id: int | None, msg: dict, said: str, keyboard: dict | None = None) -> bool:
         """A pressed message stays whole, what the press did written under it, its buttons gone (or `keyboard`, the ones
-        still to press). ⚠️ WITHIN ITS OWN LIMIT (review 32): a page's message is a file's caption (Telegram: CAPTION) —
+        still to press). ⚠️ WITHIN ITS OWN LIMIT (review 32): a page's message is a file's caption (Telegram: its caption limit) —
         rendered at the text's 4,096, the caption was cut at the end and the decision never showed, the buttons gone with
         no word. `msg`: the pressed message as Telegram gave it."""
         if not message_id:
@@ -168,7 +178,8 @@ class Delivery:
         caption = msg.get("caption") is not None or bool(msg.get("document") or msg.get("photo"))
         body = str(msg.get("text") or msg.get("caption") or "")
         return await self.edit(chat_id, message_id, layout.render(layout.parts(body=body, status=said),
-                                                                  CAPTION if caption else None), keyboard)
+                                                                  telegram_caption_chars() if caption else None),
+                               keyboard)
 
     async def buttons(self, chat_id: int, message_id: int, keyboard: dict | None) -> bool:
         """Put buttons under one of the agent's messages already sent, its text untouched. False: off, or refused."""
@@ -193,7 +204,7 @@ class Delivery:
         """The answer to a person, with the camera pictures the AI looked at (the last PHOTOS_PER_REPLY): the
         answer is the last one's caption, or follows them when it carries the Continue button. A picture
         Telegram refuses does not take the answer with it."""
-        photos = list(photos)[-PHOTOS_PER_REPLY:]
+        photos = list(photos)[-photos_per_reply():]
         if not (text or keyboard):
             # ⚠️ NO WORDS, STILL THE PICTURES (architecture review 19): a reply whose sentence was dropped (an approval
             # request shown in the chat says it all) lost the camera picture asked for with it

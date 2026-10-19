@@ -43,12 +43,55 @@ from vesta_shared import past  # noqa: E402  (a read of the past with how far it
 from vesta_shared.store import Notes, notes_of  # noqa: E402  (an alert's notes: one reader)
 
 from vesta_shared.device_state import NO_VALUE, OFFLINE, RestartDrops  # noqa: E402  (the one "does this device answer")
+from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the VESTA Agent page's Limits tab)
 # ⚠️ WHAT A CONTROL CAN PROVE (architecture review 32 follow-up, 2026-10-11): an on/off control that stayed OFF the whole
 # period — and the days before — while another device ran is not what turned that device on. An account blamed a
 # switch that had never once been on. Any control, any device: nothing here names one.
 CONTROL_DOMAINS = ("switch", "light", "fan", "input_boolean", "valve", "siren", "humidifier")
 OFF_STATES, ON_STATES = {"off", "closed"}, {"on", "open"}
-MAX_LINES = 120                           # per part: enough for a night, short enough to reason about
+MAX_LINES = limit("investigate.max_lines", 120, unit="lines", group="ai", lo=10, hi=2000,  # enough for a night
+                  says="Lines of one device's periods, and of the other changes around an incident, handed to the AI.",
+                  reached="The rest is counted in an \"… N more\" line.", told="ai")
+FIND_MATCHES = limit("investigate.find_matches", 20, unit="devices", group="read", lo=1, hi=200,
+                     says="Devices an investigation may find for the words the person used.",
+                     reached="A further matching device is never offered.", told="")
+SAME_DEVICE_SEARCH = limit("investigate.same_device_search", 40, unit="devices", group="read", lo=1, hi=500,
+                           says="Devices searched by serial number when looking for the other parts of the same box.",
+                           reached="Further parts of the same box are not found.", told="")
+SAME_ROOM_SEARCH = limit("investigate.same_room_search", 60, unit="devices", group="read", lo=1, hi=500,
+                         says="Devices of the same room read when looking for what could share a supply.",
+                         reached="The room's further devices are not looked at.", told="")
+NEIGHBOURS_SHOWN = limit("investigate.neighbours_shown", 12, unit="devices", group="ai", lo=1, hi=200,
+                         says="Neighbours named per line (same box, same room) when an investigation finds a device.",
+                         reached="The further neighbours are not named.", told="")
+TIMELINE_DEVICES = limit("investigate.timeline_devices", 12, unit="devices", group="read", lo=1, hi=100,
+                         says="Devices read in one timeline of an investigation.",
+                         reached="The further devices named are not read.", told="")
+LEVEL_CHANGES_SHOWN = limit("investigate.level_changes_shown", 20, unit="lines", group="ai", lo=1, hi=500,
+                            says="Level changes of one device listed in its timeline.",
+                            reached="The further level changes are not listed.", told="")
+AROUND_LISTED = limit("investigate.around_listed", 40, unit="devices", group="ai", lo=1, hi=1000,
+                      says="Devices that stopped answering, answered again, and notifications sent, listed around an "
+                           "incident (each list).",
+                      reached="The further ones are not listed.", told="")
+NOISY_NAMED = limit("investigate.noisy_named", 8, unit="devices", group="ai", lo=1, hi=200,
+                    says="Constantly changing devices named as left out of the context around an incident.",
+                    reached="The further ones are left out without being named.", told="")
+TRACES_READ = limit("investigate.traces_read", 10, unit="runs", group="read", lo=1, hi=100,
+                    says="Recent runs of an automation read to see what it actually did.",
+                    reached="Older runs are not read (the villa's system keeps only its last few anyway).", told="")
+RECORD_LINE_CHARS = limit("investigate.record_line_chars", 120, unit="characters", group="text", lo=20, hi=2000,
+                          says="Length of each VESTA alert or night-check finding quoted in an investigation.",
+                          reached="The line is cut.", told="")
+WRONG_IDS_NAMED = limit("investigate.wrong_ids_named", 3, unit="names", group="text", lo=1, hi=50,
+                        says="Wrongly written device names quoted back when the AI asks for a timeline.",
+                        reached="The further wrong names are not quoted.", told="")
+ERROR_CHARS = limit("investigate.error_chars", 300, unit="characters", group="text", lo=50, hi=5000,
+                    says="Length of the error an investigation step hands back when it fails.",
+                    reached="The error text is cut.", told="")
+BASELINE_DAYS = limit("investigate.baseline_days", 3, unit="days", group="read", lo=0, hi=30,
+                      says="Days before the period read as a device's normal, when the AI names no other number.",
+                      reached="Older days are not part of the normal.", told="ai")
 # ⚠️ THE THRESHOLDS ARE THE SKILL'S, NOT THE SCRIPT'S (architecture review 32; the 0.12.80 rule): settings.yaml, with a
 # villa's own villa.settings.yaml on top. A missing one is named, never guessed (`th`).
 SKILL = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -105,7 +148,7 @@ def read(client, eid: str, start: datetime, end: datetime,
 def find(client, what: str, where: str | None, pack=None) -> dict:
     """The entities `what` (and `where`) mean, with their neighbours. Universal: Home Assistant's own search, devices
     and areas — no list of devices anywhere."""
-    args = {"query": what, "exact_match": False, "limit": 20,
+    args = {"query": what, "exact_match": False, "limit": FIND_MATCHES,
             "result_fields": ["entity_id", "friendly_name", "state", "area"]}
     if where:
         args["area_filter"] = where
@@ -134,9 +177,9 @@ def find(client, what: str, where: str | None, pack=None) -> dict:
         unit = f" {it['unit']}" if it["unit"] else ""
         lines.append(f"{it['name']} ({it['entity_id']}) — {it['area'] or 'no room'} — now {it['state']}{unit}")
         if it["same_box"]:
-            lines.append("  same physical device: " + ", ".join(f"{n} ({x})" for x, n in it["same_box"][:12]))
+            lines.append("  same physical device: " + ", ".join(f"{n} ({x})" for x, n in it["same_box"][:NEIGHBOURS_SHOWN]))
         if it["same_room"]:
-            lines.append("  powered devices in the same room: " + ", ".join(f"{n} ({x})" for x, n in it["same_room"][:12]))
+            lines.append("  powered devices in the same room: " + ", ".join(f"{n} ({x})" for x, n in it["same_room"][:NEIGHBOURS_SHOWN]))
     return {"lines": lines, "entities": out}
 
 
@@ -162,7 +205,7 @@ def _same_box(client, e: dict, exclude: list[str], asked: dict | None = None, pa
         dev = once("ha_get_device", e["device_id"], {"device_id": e["device_id"]}) if e.get("device_id") else {}
         out += [(x["entity_id"], x.get("name") or x["entity_id"]) for x in (dev.get("entities") or [])]
         if len(prefix) >= 8:                            # a serial or a MAC, never a word
-            res = once("ha_search", prefix, {"query": prefix, "exact_match": True, "limit": 40,
+            res = once("ha_search", prefix, {"query": prefix, "exact_match": True, "limit": SAME_DEVICE_SEARCH,
                                              "result_fields": ["entity_id", "friendly_name"]})
             out += [(x["entity_id"], x.get("friendly_name") or x["entity_id"]) for x in res.get("entities") or []]
     except Exception:  # noqa: BLE001 — a neighbour list is a help, never a reason to fail
@@ -180,7 +223,7 @@ def _same_room(client, items: list[dict]) -> None:
     """For each room of the found entities, its switches and power sensors: what may share a circuit or a cabinet."""
     for room in {it["area"] for it in items if it["area"]}:
         try:
-            res = client.tool("ha_search", {"area_filter": room, "limit": 60,
+            res = client.tool("ha_search", {"area_filter": room, "limit": SAME_ROOM_SEARCH,
                                             "result_fields": ["entity_id", "friendly_name"]}) or {}
         except Exception:  # noqa: BLE001
             continue
@@ -430,7 +473,7 @@ def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_da
         if hidden > 0:
             lines.append(f"  ({hidden} short ordinary periods not listed: like its normal)")
         if on:
-            for j in level_jumps(rows, start, end, on)[:20]:
+            for j in level_jumps(rows, start, end, on)[:LEVEL_CHANGES_SHOWN]:
                 lines.append(f"  {at(j['at'], zone, span_days)} level changes from about {j['from']:.0f} to {j['to']:.0f}")
         totals: dict[str, float] = {}
         for p in ps:
@@ -633,10 +676,10 @@ def around(client, store, start: datetime, end: datetime, focus: list[str], zone
         # drop for the restart's, never a reconnect of the device's own
         lines += [f"  {at(t, zone, span_days)}  {n} ({e})" + ("  — with the restart, not back since"
                                                                  if drops.kept_down(e, t) else "")
-                  for t, n, e in _first_per(offline)[:40]]
+                  for t, n, e in _first_per(offline)[:AROUND_LISTED]]
     if back:
         lines.append("…and answered again:")
-        lines += [f"  {at(t, zone, span_days)}  {n} ({e})" for t, n, e in _first_per(back)[:40]]
+        lines += [f"  {at(t, zone, span_days)}  {n} ({e})" for t, n, e in _first_per(back)[:AROUND_LISTED]]
     reran = []
     for kind, ts in system.items():
         # one line for all the rules a reload or a start re-ran, its words the skill's (settings.yaml words); the
@@ -658,7 +701,7 @@ def around(client, store, start: datetime, end: datetime, focus: list[str], zone
             ran.append({"id": eid, "name": a["name"], "times": [t.isoformat() for t in ts], **able})
     if sent:
         lines.append("Notifications sent:")
-        lines += [f"  {at(t, zone, span_days)}  {n}" for t, n in sent[:40]]
+        lines += [f"  {at(t, zone, span_days)}  {n}" for t, n in sent[:AROUND_LISTED]]
     if events:
         lines.append("Other changes (doors, locks, switches, people, focus devices):")
         lines += [f"  {at(t, zone, span_days)}  {n}: {s}" for t, n, s, _ in events[:MAX_LINES]]
@@ -671,14 +714,14 @@ def around(client, store, start: datetime, end: datetime, focus: list[str], zone
     if not book.whole:
         lines.append(f"⚠️ {past.unread('the logbook', at(book.reach, zone, span_days))} "
                      "(too many entries) — say so, and narrow the period to read the rest")
-    noisy = sorted(((n, e) for e, n in count.items() if n / hours > th("noise_per_hour") and e not in focus), reverse=True)[:8]
+    noisy = sorted(((n, e) for e, n in count.items() if n / hours > th("noise_per_hour") and e not in focus), reverse=True)[:NOISY_NAMED]
     if noisy:
         lines.append("Left out as background (change constantly): " + ", ".join(e for _, e in noisy))
     # the same, as data — the investigation page builds its facts from it (page.py --around)
-    data = {"offline": [{"at": t.isoformat(), "name": n, "id": e} for t, n, e in _first_per(offline)[:40]],
-            "back": [{"at": t.isoformat(), "name": n, "id": e} for t, n, e in _first_per(back)[:40]],
+    data = {"offline": [{"at": t.isoformat(), "name": n, "id": e} for t, n, e in _first_per(offline)[:AROUND_LISTED]],
+            "back": [{"at": t.isoformat(), "name": n, "id": e} for t, n, e in _first_per(back)[:AROUND_LISTED]],
             "automations": ran, "system_runs": reran,
-            "notifications": [{"at": t.isoformat(), "name": n} for t, n in sent[:40]],
+            "notifications": [{"at": t.isoformat(), "name": n} for t, n in sent[:AROUND_LISTED]],
             "settings": {"coincide_s": th("coincide_s")}}
     return {"lines": lines, "data": data}
 
@@ -819,7 +862,7 @@ def _harmless(calls: set) -> list[str]:
 def _traced(client, eid: str, start: datetime, end: datetime) -> str:
     """What the runs Home Assistant still keeps (its last few) did inside the period, in the same words."""
     try:
-        listed = client.tool("ha_get_automation_traces", {"automation_id": eid, "limit": 10}) or {}
+        listed = client.tool("ha_get_automation_traces", {"automation_id": eid, "limit": TRACES_READ}) or {}
     except Exception:  # noqa: BLE001
         return ""
     calls: set = set()
@@ -861,11 +904,11 @@ def _vesta(store, start: datetime, end: datetime, zone: ZoneInfo, span_days: boo
             if start <= t < end:
                 msg = notes_of(i).get(Notes.MESSAGE) or i["rule_id"]
                 closed = f", closed {at(datetime.fromisoformat(i['closed_at']), zone, True)}" if i.get("closed_at") else ", still open"
-                out.append(f"  {at(t, zone, span_days)}  alert #{i['id']} {i['severity']}: {msg.splitlines()[0][:120]}{closed}")
+                out.append(f"  {at(t, zone, span_days)}  alert #{i['id']} {i['severity']}: {msg.splitlines()[0][:RECORD_LINE_CHARS]}{closed}")
         for f in store.findings(None):
             d = f.get("reopened_day") or f.get("opened_day") or ""
             if start.astimezone(zone).date().isoformat() <= d <= end.astimezone(zone).date().isoformat():
-                out.append(f"  {d}  night check {f['severity']}: {str(f['summary'])[:120]} ({f['status']})")
+                out.append(f"  {d}  night check {f['severity']}: {str(f['summary'])[:RECORD_LINE_CHARS]} ({f['status']})")
     except Exception:  # noqa: BLE001 — the agent's records are a help, never a reason to fail
         return []
     return (["VESTA Agent alerts and findings:"] + out) if out else []
@@ -879,7 +922,7 @@ def main(argv=None):
     ap.add_argument("--what"); ap.add_argument("--where")
     ap.add_argument("--entities", action="append")       # may be given several times: each one is a short text
     ap.add_argument("--start"); ap.add_argument("--end")
-    ap.add_argument("--baseline-days", default="3")
+    ap.add_argument("--baseline-days", default=str(BASELINE_DAYS))
     ap.add_argument("--out", help="timeline / around: also save the reading as data (charts, events), for the investigation page")
     a = ap.parse_args(argv)
     ctx = script.Context(a, skill=SKILL)                    # its settings.yaml: the one "running"'s share among them
@@ -904,11 +947,11 @@ def main(argv=None):
             wrong = [x for x in ids if not ENTITY_ID.match(x)]
             if wrong:
                 raise SystemExit(f"--entities takes the ids find gives (like sensor.a), separated by "
-                                 f"commas: {', '.join(repr(x) for x in wrong[:3])} is not one. Run find first.")
+                                 f"commas: {', '.join(repr(x) for x in wrong[:WRONG_IDS_NAMED])} is not one. Run find first.")
             if a.cmd == "timeline":
                 if not ids:
                     raise SystemExit("timeline needs --entities: ids from find, separated by commas.")
-                res = timeline(ctx.client, ids[:12], start, end, float(a.baseline_days), zone, series=bool(a.out),
+                res = timeline(ctx.client, ids[:TIMELINE_DEVICES], start, end, float(a.baseline_days), zone, series=bool(a.out),
                                now=ctx.now, params=ctx.params)
                 if a.out:
                     # the whole reading, charts included, for the investigation page; the AI gets the lines only
@@ -928,7 +971,7 @@ def main(argv=None):
     except SystemExit:
         raise
     except Exception as e:  # noqa: BLE001 — said plainly to the model, which says it to the person
-        print(json.dumps({"error": f"{type(e).__name__}: {str(e)[:300]}"}))
+        print(json.dumps({"error": f"{type(e).__name__}: {str(e)[:ERROR_CHARS]}"}))
         return 1
     # a setting the villa's own file still sets although this skill retired it: said, never silently ignored
     told = skill_settings.retired(SKILL, "settings.yaml")

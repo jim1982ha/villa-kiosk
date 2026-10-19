@@ -32,6 +32,7 @@ from vesta_shared import page as charts  # noqa: E402  (the charts every page dr
 from vesta_shared.page import number, templates  # noqa: E402  (the one number rule)
 from vesta_shared.timeutil import day_time_label, lasting  # noqa: E402  (the one day format, duration)
 from investigation_facts import KEY_MAX, facts as investigation_facts  # noqa: E402  (what the records establish)
+from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the VESTA Agent page's Limits tab)
 
 TPL = templates(os.path.join(HERE, ".."))
 
@@ -118,12 +119,21 @@ VERDICTS = ("consistent", "not supported", "cannot tell")
 #: detailed"). Derived, never typed (review 32): room kept for the longest "To:" the agent writes (roles only since
 #: 0.12.181 — 120 kept for a "To:" naming several people cut the summary ~90 characters short; review 3, 2026-10-13).
 DETAILS = " Details in the attached page."
-TITLE_MAX, TO_ROOM = 90, len(TO_LONGEST)
+TITLE_MAX = limit("investigate.title_chars", 90, unit="characters", group="text", lo=30, hi=200,
+                  says="Length of an investigation's title (the summary gets what the message has left).",
+                  reached="The AI is asked to shorten it.", told="ai")
+TO_ROOM = len(TO_LONGEST)
 #: the message starts with the recorded facts (investigation_facts.key_line), then the AI's summary
 SUMMARY_MAX = TELEGRAM_CAPTION - TITLE_MAX - TO_ROOM - KEY_MAX - len(DETAILS) - 6     # the line breaks between them
 #: what the summary is, as investigate's SKILL.md asks for it (a test holds the two to the same words: architecture review
 #: 4, 2026-10-13 — the instructions said 3 to 5 sentences, the refusal 4 to 6)
 SUMMARY_SENTENCES = "3 to 5 sentences"
+FACTS_LISTED = limit("investigate.facts_listed", 20, unit="facts", group="ai", lo=1, hi=500,
+                     says="Facts established and ruled out by the records, handed to the AI to check its account.",
+                     reached="The further facts are not handed to the AI (the page shows them all).", told="")
+WRONG_NAMED = limit("investigate.wrong_named", 3, unit="items", group="text", lo=1, hi=50,
+                    says="Faulty sources or verdicts quoted back to the AI when it writes an investigation's page.",
+                    reached="The further faulty ones are not quoted.", told="")
 
 
 #: every text of the account a reference may stand in (owner, 2026-10-12: "I am expecting to see the text section where
@@ -305,13 +315,13 @@ def make(a) -> int:
                 and not CITE.search(str(c["source"])) and not RECORDS.search(str(c["source"]))]
     if unlinked:
         print("investigation: a cause's `source` is the web page it came from, as [n] (its place in `sources`), or "
-              f"\"the records\" — not a name: {'; '.join(unlinked[:3])}", file=sys.stderr)
+              f"\"the records\" — not a name: {'; '.join(unlinked[:WRONG_NAMED])}", file=sys.stderr)
         return 1
     bad = [str(c.get("cause") or "?") for c in notes.get("causes") or []
            if isinstance(c, dict) and c.get("source") and c.get("verdict") not in VERDICTS]
     if bad:
         print(f"investigation: a lead from the web needs its verdict against the records ({', '.join(VERDICTS)}): "
-              f"{'; '.join(bad[:3])}", file=sys.stderr)
+              f"{'; '.join(bad[:WRONG_NAMED])}", file=sys.stderr)
         return 1
     data, around = _read_json(a.data), _read_json(a.around)        # unread: the page without them, said in its result
     found = investigation_facts(data, around, notes)
@@ -324,7 +334,7 @@ def make(a) -> int:
     doc = document(str(notes["title"]).strip(), "", [(None, [x for x in (found["key"], bubble + DETAILS) if x])])
     print(json.dumps({"html": a.out, "html_chars": len(html), "charts": html.count("<svg"),
                       # what the page states from the records: the AI reads it against its account before sending
-                      "established": found["established"][:20], "ruled_out": found["ruled_out"][:20],
+                      "established": found["established"][:FACTS_LISTED], "ruled_out": found["ruled_out"][:FACTS_LISTED],
                       "unknown_fields": sorted(set(notes) - set(INVESTIGATION_FIELDS)),
                       **({"data": "could not be read: no chart and no recorded facts"} if a.data and data is None else {}),
                       **({"around": "could not be read: nothing ruled out from it"} if a.around and around is None else {}),

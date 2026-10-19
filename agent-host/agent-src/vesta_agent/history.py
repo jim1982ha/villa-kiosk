@@ -19,6 +19,8 @@ from datetime import datetime, timedelta, timezone
 
 import yaml
 
+from vesta_shared.limits import limit
+
 # the rules' settings as the page names them: policy.FIELDS, the one table (a path it does not know is shown as
 # written). This file kept its own copy, and two labels had drifted from the page's.
 from .places import title
@@ -57,12 +59,15 @@ class History:
             return c.lastrowid
 
     #: where a change was made, and its chip's colour on the page (the page held this table, architecture review 9)
-    CHIPS = {"Rules": "", "Skills": "warn", "Release": "gray", "Import": "", "Undo": "gray"}
+    CHIPS = {"Rules": "", "Limits": "", "Skills": "warn", "Release": "gray", "Import": "", "Undo": "gray"}
 
-    def rows(self, limit: int = 200) -> list[dict]:
+    def rows(self, most: int | None = None) -> list[dict]:
         out = []
         for r in self.db.execute("select id, at, place, what, target, undone_by, before is not null as had_before, "
-                                 "after is not null as had_after from changes order by id desc limit ?", (limit,)):
+                                 "after is not null as had_after from changes order by id desc limit ?", (most or limit(
+                                     "page.changes_listed", 200, unit="changes", group="keep", lo=20, hi=5000,
+                                     says="Changes made on the VESTA Agent page that Overview › Page changes lists.",
+                                     reached="Older changes are not listed.", told=""),)):
             d = dict(r)
             d["target"] = json.loads(d["target"])
             d["chip"] = self.CHIPS.get(d["place"], "")

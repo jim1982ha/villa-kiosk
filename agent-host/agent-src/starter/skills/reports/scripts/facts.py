@@ -43,6 +43,16 @@ from vesta_shared.daily import energy_daily_features  # noqa: E402  (a meter's d
 from vesta_shared.energy_setup import used as energy_used  # noqa: E402  (the villa's total: the Kiosk's rule)
 from vesta_shared import result  # noqa: E402  (the night check's rule ids, written once)
 from vesta_shared import battery  # noqa: E402  (the night check's battery findings: their ids, one owner)
+from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the Limits tab)
+
+HEADLINE_TITLES = limit("reports.headline_titles", 5, unit="titles", group="text", lo=1, hi=50,
+                        says="Things to do named in a report's headline (their total is always given).",
+                        reached="The others are counted, not named.", told="person")
+HERO_TITLES = limit("reports.hero_titles", 3, unit="titles", group="text", lo=1, hi=50,
+                    says="Open tasks named at the top of a report (their total is always given).",
+                    reached="The others are counted, not named.", told="person")
+ERROR_CHARS = limit("reports.error_chars", 300, unit="characters", group="text", lo=80, hi=5000,
+                    says="Longest error text kept when one section of a report fails.", reached="The rest is cut.", told="")
 from vesta_shared.skill_settings import retired  # noqa: E402  (a villa setting the skill no longer reads: said)
 from vesta_shared.timeutil import day_label, day_time_label, local_day, month_label, villa_date, villa_time  # noqa: E402  (the one day format)
 from vesta_shared import agent_records  # noqa: E402  (the agent's records: one reader)
@@ -345,7 +355,7 @@ def s_headline(c: Ctx) -> dict:
     items = todo(c)
     return {**c.light(items), "to_do": len(items), "alerts": len(c.incidents()) + len(c.ha_alerts()),
             "kwh": c.energy.get("total_kwh"), "vs_prev_pct": _r(c.energy.get("total_vs_prev_pct")),
-            "to_do_titles": [t["title"] for t in items[:5]]}
+            "to_do_titles": [t["title"] for t in items[:HEADLINE_TITLES]]}
 
 
 def s_hero(c: Ctx) -> dict:
@@ -354,7 +364,7 @@ def s_hero(c: Ctx) -> dict:
     return {**c.light(tasks), "cost": c.energy.get("total_cost"), "currency": c.energy.get("currency"),
             "kwh": c.energy.get("total_kwh"), "tariff": c.energy.get("tariff"), "incidents": len(inc),
             "handled": sum(1 for i in c.incidents() if i.get("closed_at")), "open_tasks": len(tasks),
-            "task_titles": [t["title"] for t in tasks[:3]]}
+            "task_titles": [t["title"] for t in tasks[:HERO_TITLES]]}
 
 
 def s_kpis(c: Ctx) -> dict:
@@ -689,7 +699,7 @@ def facts(kind: str, c: Ctx) -> dict:
             out["sections"][sid] = data
             continue
         except Exception as e:  # noqa: BLE001 — one section's failure never sinks the report
-            data = {"error": f"{type(e).__name__}: {e}"[:300]}
+            data = {"error": f"{type(e).__name__}: {e}"[:ERROR_CHARS]}
             out["problems"].append(f"section {sid}: {data['error']}")
         out["order"].append(sid)
         if sec.get("style") and isinstance(data, dict):

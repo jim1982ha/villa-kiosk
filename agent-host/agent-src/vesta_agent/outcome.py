@@ -42,6 +42,7 @@ from datetime import datetime, timezone
 from typing import Awaitable, Callable
 
 from vesta_shared.result import FAULTS_CHANGED
+from vesta_shared.ha_client import error_short_chars
 
 from . import layout
 from vesta_shared.message_format import PRESSED_STAGE, ROLES
@@ -289,7 +290,7 @@ class Outcome:
                     self.state.log("action_ignored", {"action": kind, "skill": skill_name})
                     log.warning("Skill %s asked for an action this agent does not know: %s", skill_name, kind)
             except Exception as e:  # noqa: BLE001
-                self.state.log("action_failed", {"action": kind, "error": f"{type(e).__name__}: {str(e)[:200]}"})
+                self.state.log("action_failed", {"action": kind, "error": f"{type(e).__name__}: {str(e)[:error_short_chars()]}"})
                 log.warning("action %s failed (%s: %s)", kind, type(e).__name__, e)
         if faults_moved:
             try:

@@ -47,6 +47,11 @@ from vesta_shared.stats import med  # noqa: E402
 from vesta_shared.timeutil import schedule_hours_per_day, hhmm_to_minutes  # noqa: E402
 from vesta_shared.messaging import fmt_money  # noqa: E402
 import vesta_shared.daily as F  # noqa: E402  (a day of a meter: shared, not another skill's file)
+from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the Limits tab)
+
+MEASURED_DAYS = limit("filtration.measured_days", 7, unit="days", group="read", lo=1, hi=60,
+                      says="Days of a pump's power and water flow read to measure how it really runs.",
+                      reached="Older days are not used for the filtration advice.", told="")
 
 
 def interpolate(curve: list[list[float]], x: float) -> float | None:
@@ -143,9 +148,9 @@ def run(args) -> dict:
     p_eid = asset["entities"].get("power")
     measured_w, measured_hours, days_used = None, None, 0
     if p_eid:
-        rows = cli.statistics([p_eid], day_end - timedelta(days=8), day_end, "hour", ("mean", "min", "max")).get(p_eid, [])
+        rows = cli.statistics([p_eid], day_end - timedelta(days=MEASURED_DAYS + 1), day_end, "hour", ("mean", "min", "max")).get(p_eid, [])
         _, feats = F.power_days(asset, rows, pack.time_zone, params)                       # the one "running"
-        last7 = [feats[d] for d in sorted(feats) if today - timedelta(days=7) < d <= today]
+        last7 = [feats[d] for d in sorted(feats) if today - timedelta(days=MEASURED_DAYS) < d <= today]
         rp = [f["running_power"] for f in last7 if f.get("running_power")]
         rh = [f["run_hours"] for f in last7 if f.get("run_hours") is not None]
         measured_w, measured_hours, days_used = med(rp), med(rh), len(rp)
@@ -154,7 +159,7 @@ def run(args) -> dict:
     flow, method, confidence = None, None, None
     flow_eid = next((r["entity_id"] for r in pack.entities("water") if r["asset"] == slug and (r.get("device_class") == "volume_flow_rate" or (r.get("unit") or "").endswith("/h"))), None)
     if flow_eid:
-        rows = cli.statistics([flow_eid], day_end - timedelta(days=7), day_end, "hour", ("mean",)).get(flow_eid, [])
+        rows = cli.statistics([flow_eid], day_end - timedelta(days=MEASURED_DAYS), day_end, "hour", ("mean",)).get(flow_eid, [])
         vals = [r["mean"] for r in rows if r.get("mean")]
         if vals:
             flow, method, confidence = med(vals), f"measured by {flow_eid}", "high"

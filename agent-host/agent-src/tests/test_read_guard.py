@@ -12,7 +12,9 @@ import pytest
 
 from ha_fake import FakeHA, tool
 from vesta_shared.ha_client import HAError, McpClient
-from vesta_shared.read_guard import LOGBOOK_SLICE, LOGBOOK_VILLA_HOURS, refused
+from vesta_shared.read_guard import logbook_slice, logbook_villa_hours, refused
+
+LOGBOOK_VILLA_HOURS = logbook_villa_hours()
 
 LOGS = dict(source="string", hours_back="number", entity_id="string", end_time="string", slug="string")
 #: (tool, arguments, a word of why it is refused — None: allowed)
@@ -43,7 +45,7 @@ def test_the_one_table():
     assert "investigate" not in refused("ha_get_logs", {"hours_back": 168}) and "script" not in \
         refused("ha_get_logs", {"hours_back": 168})
     # a script's client reads the whole villa's logbook by slices the guard lets through
-    assert LOGBOOK_SLICE.total_seconds() / 3600 == LOGBOOK_VILLA_HOURS
+    assert logbook_slice().total_seconds() / 3600 == LOGBOOK_VILLA_HOURS
 
 
 class Session:

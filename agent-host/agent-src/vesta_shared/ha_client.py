@@ -27,7 +27,8 @@ import urllib.error
 import urllib.request
 
 from .past import History, Logbook, until
-from .read_guard import LOGBOOK_SLICE, READ_ACTIONS, READ_TOOLS, WRITE_TOOLS, refused  # noqa: F401 (READ_ACTIONS, READ_TOOLS: read here by name)
+from .limits import limit
+from .read_guard import READ_ACTIONS, READ_TOOLS, WRITE_TOOLS, logbook_slice, refused  # noqa: F401 (READ_ACTIONS, READ_TOOLS: read here by name)
 
 
 class HABase:
@@ -140,11 +141,11 @@ class McpSession:
     HEADERS = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream",
                "User-Agent": BROWSER_UA}
 
-    def __init__(self, url: str, timeout: int = 90):
+    def __init__(self, url: str, timeout: int | None = None):
         if not url:
             raise HAError("VESTA_HA_MCP_URL is not set")
         self.url = url
-        self.timeout = timeout
+        self.timeout = timeout          # None: the villa's limit, read at each call
         self.sid: str | None = None
         self._id = 0
 
@@ -153,7 +154,7 @@ class McpSession:
         urllib raises on 4xx/5xx; the status, headers and body are read from the error the same way."""
         req = urllib.request.Request(self.url, data=payload, method="POST", headers={**self.HEADERS, **headers})
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as r:
+            with urllib.request.urlopen(req, timeout=self.timeout or read_timeout_s()) as r:
                 return r.status, {k.lower(): v for k, v in r.headers.items()}, r.read()
         except urllib.error.HTTPError as e:
             return e.code, {k.lower(): v for k, v in (e.headers or {}).items()}, e.read() or b""
@@ -209,10 +210,66 @@ class McpSession:
         return self._post("tools/call", {"name": name, "arguments": args}) or {}
 
 
-#: history() reads by time slices (ha-mcp fetches the whole period on every page): its page, first slice and bounds
-HISTORY_PAGE = 1000
-HISTORY_SLICE, HISTORY_MIN_SLICE, HISTORY_MAX_SLICE = timedelta(hours=6), timedelta(minutes=5), timedelta(days=2)
-HISTORY_MAX_CALLS = 400          # a 10-day read of a meter reporting every second stays inside it
+# history() reads by time slices (ha-mcp fetches the whole period on every page): its page, first slice and bounds —
+# each the villa's limit (vesta_shared.limits), read when a reading starts
+def read_timeout_s() -> float:
+    return limit("villa.read_timeout_s", 90, unit="seconds", group="read", lo=10, hi=600,
+                 says="How long the agent waits for the villa's system to answer one read.",
+                 reached="That read fails: the AI is told \"The villa's system did not answer\", a skill's step fails.",
+                 told="ai")
+
+
+def history_page() -> int:
+    return limit("history.page_rows", 1000, unit="readings", group="read", lo=100, hi=1000,
+                 says="Readings a skill asks for in one page of a device's history (the villa's system gives 1,000 at "
+                      "most).",
+                 reached="The skill reads the next page, or a shorter slice of time.", told="")
+
+
+def history_first_slice() -> timedelta:
+    return timedelta(hours=limit("history.first_slice_hours", 6, unit="hours", group="read", lo=1, hi=48,
+                                 says="The first stretch of time a skill reads of a device's history in one go.",
+                                 reached="A busy stretch is halved, a quiet one doubled.", told=""))
+
+
+def history_min_slice() -> timedelta:
+    return timedelta(minutes=limit("history.min_slice_minutes", 5, unit="minutes", group="read", lo=1, hi=60,
+                                   says="The shortest stretch a skill halves a busy history down to before paging "
+                                        "through it.",
+                                   reached="That stretch is read page after page.", told=""))
+
+
+def history_max_slice() -> timedelta:
+    return timedelta(days=limit("history.max_slice_days", 2, unit="days", group="read", lo=1, hi=10,
+                                says="The longest stretch of a quiet device's history a skill reads in one go.",
+                                reached="The next stretch starts there.", told=""))
+
+
+def history_max_calls() -> int:
+    return limit("history.max_calls", 400, unit="reads", group="read", lo=10, hi=5000,
+                 says="Reads of the villa's system one device's history may take (a 10-day read of a meter reporting "
+                      "every second fits).",
+                 reached="The reading stops there; the skill says the period was read only up to that moment.",
+                 told="person")
+
+
+def history_slice_pages() -> int:
+    return limit("history.slice_pages", 20, unit="pages", group="read", lo=1, hi=200,
+                 says="Pages read of the shortest stretch of a very busy device's history.",
+                 reached="The reading stops there and says how far it got.", told="person")
+
+
+def error_chars() -> int:
+    return limit("errors.detail_chars", 300, unit="characters", group="text", lo=50, hi=5000,
+                 says="How much of an error's own text is kept when a read or a script fails.",
+                 reached="The rest of the error's text is cut.", told="")
+
+
+def error_short_chars() -> int:
+    return limit("errors.short_detail_chars", 200, unit="characters", group="text", lo=50, hi=5000,
+                 says="How much of an error's text a short failure note keeps (a template, a list that could not be "
+                      "read).",
+                 reached="The rest of the error's text is cut.", told="")
 
 
 def _when(row: dict) -> datetime | None:
@@ -222,7 +279,7 @@ def _when(row: dict) -> datetime | None:
         return None
 
 
-def paged(fetch, step: int, max_pages: int = 20) -> tuple[list, bool]:
+def paged(fetch, step: int, max_pages: int) -> tuple[list, bool]:
     """Every row of a paged read, each once, and whether the read reached its end. `fetch(offset) -> (rows, has_more,
     next_offset)`.
 
@@ -280,10 +337,10 @@ class McpClient(HABase):
         except json.JSONDecodeError:
             body = {"text": text}
         if res.get("isError"):
-            raise HAError(f"{name} failed: {str(body)[:300]}")
+            raise HAError(f"{name} failed: {str(body)[:error_chars()]}")
         body = _unwrap(body)
         if isinstance(body, dict) and body.get("success") is False and not (partial and "errors" in body):
-            raise HAError(f"{name} failed: {str(body.get('error') or body.get('message') or body)[:300]}")
+            raise HAError(f"{name} failed: {str(body.get('error') or body.get('message') or body)[:error_chars()]}")
         return body
 
     def energy_prefs(self):
@@ -305,7 +362,14 @@ class McpClient(HABase):
     def all_entity_ids(self) -> list[str]:
         if self._all_ids is None:
             ov = self.tool("ha_get_overview", {"detail_level": "minimal", "include_entity_id": True,
-                                               "include_state": False, "max_entities_per_domain": 5000})
+                                               "include_state": False,
+                                               "max_entities_per_domain": limit(
+                                                   "devices.per_domain", 5000, unit="devices", group="read", lo=100,
+                                                   hi=50000,
+                                                   says="Devices of one kind (lights, sensors…) the agent lists from "
+                                                        "the villa's system.",
+                                                   reached="Devices of that kind past this number are not known to "
+                                                           "the skills.", told="")})
             ids = []
             for dom in (ov.get("domain_stats") or {}).values():
                 ids += [e["entity_id"] for e in dom.get("entities", []) if e.get("entity_id")]
@@ -338,15 +402,21 @@ class McpClient(HABase):
 
     def statistics(self, entity_ids, start, end, period="hour", types=("mean", "min", "max")):
         out = {}
+        page = limit("statistics.page_rows", 1000, unit="rows", group="read", lo=100, hi=1000,
+                     says="Hourly or daily figures a skill asks for in one page of a device's statistics.",
+                     reached="The skill reads the next page.", told="")
+        pages = limit("statistics.max_pages", 200, unit="pages", group="read", lo=1, hi=2000,
+                      says="Pages of statistics read for one device (200 pages are years of hourly figures).",
+                      reached="The reading stops there, without saying so.", told="")
         for eid in entity_ids:
             def fetch(offset, eid=eid):
                 body = self.tool("ha_get_history", {
                     "entity_ids": eid, "source": "statistics", "period": period, "statistic_types": list(types),
                     "start_time": start.astimezone(timezone.utc).isoformat(), "end_time": end.astimezone(timezone.utc).isoformat(),
-                    "limit": 1000, "offset": offset})
+                    "limit": page, "offset": offset})
                 ent = next(iter(body.get("entities") or []), {})
                 return ent.get("statistics") or [], ent.get("has_more"), ent.get("next_offset")
-            rows, _ = paged(fetch, 1000, max_pages=200)       # a year of hours is 9 pages: 200 is no loop
+            rows, _ = paged(fetch, page, max_pages=pages)     # a year of hours is 9 pages of 1,000
             for r in rows:
                 if not isinstance(r.get("start"), (int, float)):
                     r["start"] = int(datetime.fromisoformat(str(r["start"])).timestamp() * 1000)
@@ -385,25 +455,28 @@ class McpClient(HABase):
 
     def _history_one(self, eid, start, end) -> tuple[list[dict], datetime | None]:
         """(the rows, where the reading stopped before `end` — None when it read to the end)."""
+        page = history_page()
+
         def fetch(a, b, offset=0):
             body = self.tool("ha_get_history", {
                 "entity_ids": eid, "source": "history", "order": "asc", "minimal_response": True,
-                "significant_changes_only": False, "limit": HISTORY_PAGE, "offset": offset,
+                "significant_changes_only": False, "limit": page, "offset": offset,
                 "start_time": a.isoformat(), "end_time": b.isoformat()})
             ent = next(iter(body.get("entities") or []), {})
             return ent.get("states") or [], ent.get("has_more"), ent.get("next_offset")
 
         rows: list[dict] = []
-        at, span, calls = start, HISTORY_SLICE, 0
-        while at < end and calls < HISTORY_MAX_CALLS:
+        at, span, calls = start, history_first_slice(), 0
+        min_span, max_span, max_calls = history_min_slice(), history_max_slice(), history_max_calls()
+        while at < end and calls < max_calls:
             to = min(end, at + span)
             batch, more, _ = fetch(at, to)
             calls += 1
-            if more and span > HISTORY_MIN_SLICE:
+            if more and span > min_span:
                 span /= 2                                 # too many readings in this slice: a shorter one, same start
                 continue
             if more:                                      # a slice of minutes still holds more: its pages, as before
-                batch, whole = paged(lambda off, a=at, b=to: fetch(a, b, off), HISTORY_PAGE, max_pages=20)
+                batch, whole = paged(lambda off, a=at, b=to: fetch(a, b, off), page, max_pages=history_slice_pages())
                 if not whole:                             # even its pages could not hold it: read no further
                     rows.extend(batch[1:] if rows and batch and batch[0].get("state") == rows[-1].get("state") else batch)
                     return rows, _when(rows[-1]) or at
@@ -411,8 +484,8 @@ class McpClient(HABase):
                 batch = batch[1:]                         # the carried-over state, stamped at the slice's start
             rows.extend(batch)
             at = to
-            if len(batch) < HISTORY_PAGE // 4:
-                span = min(span * 2, HISTORY_MAX_SLICE)
+            if len(batch) < page // 4:
+                span = min(span * 2, max_span)
         return rows, (at if at < end else None)           # the call cap: nothing read after `at`
 
     def helpers(self):
@@ -503,7 +576,7 @@ class McpClient(HABase):
     def logbook(self, start, end, entity_id=None):
         """Every logbook row in [start, end), oldest first (one entity's, or the whole villa's).
 
-        ⚠️ THE WHOLE VILLA BY SLICES OF LOGBOOK_SLICE (villa, 2026-10-15: an /investigate's `around` over a week ran
+        ⚠️ THE WHOLE VILLA BY SLICES OF logbook_slice() (villa, 2026-10-15: an /investigate's `around` over a week ran
         minutes, a call every 15 s): ha-mcp fetches the WHOLE period from Home Assistant at every page, and a week of the
         villa's logbook is some thirty pages — thirty reads of the whole week. A slice is read in a page or two, each
         fetching its own hours only. One entity's logbook is filtered by Home Assistant itself: one read."""
@@ -521,7 +594,7 @@ class McpClient(HABase):
         """(every row of [start, end), where the reading stopped before `end` — None when it read to the end)."""
         cut = None
         out, seen, at = [], set(), start
-        step = (end - start) if entity_id else LOGBOOK_SLICE
+        step = (end - start) if entity_id else logbook_slice()
         while at < end:
             to = min(end, at + step)
             rows, whole, last = self._logbook_slice(at, to, entity_id)
@@ -547,16 +620,23 @@ class McpClient(HABase):
         # (seen on the villa: one 3-day read became 20 identical calls, and every flip of a
         # device was counted 20 times by the reconnect check). Rows are kept once each, and the
         # reading stops at the first page that adds nothing.
+        page = limit("logbook.page_rows", 1000, unit="lines", group="read", lo=100, hi=1000,
+                     says="Logbook lines a skill asks for in one page (the villa's system gives 500 at most).",
+                     reached="The skill reads the next page.", told="")
+
         def fetch(offset):
             args = {"source": "logbook", "hours_back": hours, "end_time": end.astimezone(timezone.utc).isoformat(),
-                    "limit": 1000, "offset": offset, "order": "oldest"}
+                    "limit": page, "offset": offset, "order": "oldest"}
             if entity_id:
                 args["entity_id"] = entity_id
             body = self.tool("ha_get_logs", args)
             return body.get("entries") or [], body.get("has_more"), None
         # ⚠️ PAGES UNTIL THE END (2026-10-13): 20 pages of ha-mcp's 500 rows read 10,000 of a 3-day logbook's 13,031.
         # 200 pages is 100,000 rows; a read stopped before the end says where (logbook_cut).
-        rows, whole = paged(fetch, 1000, max_pages=200)
+        rows, whole = paged(fetch, page, max_pages=limit(
+            "logbook.max_pages", 200, unit="pages", group="read", lo=1, hi=2000,
+            says="Pages of logbook a skill reads for one stretch of time (200 pages are 100,000 lines).",
+            reached="The reading stops there and says how far it got.", told="person"))
         out, last = [], start
         for r in rows:
             try:
@@ -595,7 +675,7 @@ class McpClient(HABase):
         """Home Assistant renders `text` now (ha_eval_template: read-only, it acts on nothing). A failed render raises."""
         body = self.tool("ha_eval_template", {"template": str(text), "timeout": 10})
         if not isinstance(body, dict) or "result" not in body:
-            raise HAError(f"ha_eval_template gave no result: {str(body)[:200]}")
+            raise HAError(f"ha_eval_template gave no result: {str(body)[:error_short_chars()]}")
         return str(body["result"])
 
 

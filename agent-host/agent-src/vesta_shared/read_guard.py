@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from datetime import timedelta
 
+from .limits import limit
+
 #: The only ha-mcp tools a skill script's client calls. Anything else is refused there, whoever asks.
 READ_TOOLS = {
     "ha_get_state", "ha_get_entity", "ha_get_device", "ha_search", "ha_eval_template", "ha_get_history",
@@ -34,21 +36,31 @@ ARG_FORBIDDEN: dict[str, set] = {"ha_get_logs": {"slug"}}
 #: ⚠️ A WEEK OF THE WHOLE VILLA, PAGE AFTER PAGE (villa, 2026-10-15): an /investigate read 8 to 15 October's logbook of
 #: every device, a call every 15 seconds for 14 minutes — ha-mcp fetches the whole period from the villa's system at
 #: each page.
-LOGBOOK_VILLA_HOURS = 6
-LOGBOOK_SLICE = timedelta(hours=LOGBOOK_VILLA_HOURS)
+def logbook_villa_hours() -> float:
+    """How many hours of the whole villa's logbook one call may read (the AI's, and a script's slice)."""
+    return limit("logbook.villa_window_hours", 6, unit="hours", group="read", lo=1, hi=48,
+                 says="How many hours of the whole villa's logbook may be read in one go (one device's logbook has no "
+                      "such window); a longer period is read in slices of this size.",
+                 reached="The AI's longer read is refused with the reason; a skill reads on, slice after slice.",
+                 told="ai")
+
+
+def logbook_slice() -> timedelta:
+    return timedelta(hours=logbook_villa_hours())
 
 
 def logbook_too_wide(name: str, args: dict) -> str | None:
-    """Why this ha_get_logs call is refused (the villa-wide logbook over more than LOGBOOK_VILLA_HOURS), or None."""
+    """Why this ha_get_logs call is refused (the villa-wide logbook over more than logbook_villa_hours()), or None."""
     if name != "ha_get_logs" or (args.get("source") or "logbook") != "logbook" or args.get("entity_id"):
         return None
     try:
         hours = float(args.get("hours_back") or 1)
     except (TypeError, ValueError):
         return None
-    if hours <= LOGBOOK_VILLA_HOURS:
+    window = logbook_villa_hours()
+    if hours <= window:
         return None
-    return (f"The logbook of the whole villa is read {LOGBOOK_VILLA_HOURS} hours at a time at most (asked: {hours:g}). "
+    return (f"The logbook of the whole villa is read {window:g} hours at a time at most (asked: {hours:g}). "
             "Name the entity_id for a longer period, or read the hours around the moment that matters.")
 
 

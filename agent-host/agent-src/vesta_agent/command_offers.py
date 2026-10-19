@@ -20,13 +20,22 @@ from __future__ import annotations
 import logging
 from typing import Awaitable, Callable
 
+from vesta_shared.limits import limit
+
 from . import button_data, intake
+from .telegram import toast_chars
 
 log = logging.getLogger("vesta")
 
 #: the event the press stands for: what Home Assistant fires when a person types a command
 TYPED = "telegram_command"
-QUESTION_MAX = 3500                      # a question kept for a press (a Telegram message is at most 4,096)
+
+
+def question_max() -> int:
+    """A question kept for a press (a Telegram message is at most 4,096)."""
+    return limit("chat.offered_question_chars", 3500, unit="characters", group="ai", lo=200, hi=4000,
+                 says="How much of a question an \"Investigate this\" button keeps for the investigation it starts.",
+                 reached="The rest of the question is not passed on; nobody is told.", told="")
 
 
 def typed(chat: int, user_id: int | None, name: str | None, command: str, question: str) -> dict:
@@ -50,7 +59,7 @@ class CommandOffers:
     def rows(self, chat: int, answer: str, asked: str, person_id: int | None, request=None) -> list[list[dict]]:
         """The buttons under `answer`: one per offerable command skill it names, for the person who asked `asked`.
         None under an answer of that same skill's request (it is that investigation), none without a question."""
-        question = " ".join((asked or "").split())[:QUESTION_MAX]
+        question = " ".join((asked or "").split())[:question_max()]
         if not answer or not question:
             return []
         on = self.skills.commands()
@@ -85,7 +94,7 @@ class CommandOffers:
         if not self.state.claim_command_offer(p.parts[0], p.chat):
             return await p.toast("Already started.")
         said = f"{(sk.offer or {}).get('pressed') or '/' + sk.command}: “{offer['question']}”"
-        await p.toast(said[:190])
+        await p.toast(said[:toast_chars()])
         pressed = p.q.get("data")
         kept = [r for r in [[b for b in row if b.get("callback_data") != pressed]
                             for row in ((p.msg.get("reply_markup") or {}).get("inline_keyboard") or [])] if r]

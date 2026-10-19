@@ -3,11 +3,12 @@
 // The tabs are one module each (architecture review, 2026-10-06: one 1,324-line file); this one starts the page.
 import { go, guard, page } from "./core.js";
 import { costs } from "./costs.js";
+import { limits } from "./limits.js";
 import { overview } from "./overview.js";
 import { rules } from "./rules.js";
 import { skills } from "./skills.js";
 
-page.views = { overview, rules, "rules-file": () => rules("file"), skills, costs };
+page.views = { overview, rules, "rules-file": () => rules("file"), skills, costs, limits };
 
 // ---------------------------------------------------------------- theme (Light / Auto / Dark)
 export function setTheme(mode) {

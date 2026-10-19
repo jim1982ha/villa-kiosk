@@ -17,7 +17,10 @@ import logging
 import time
 from dataclasses import dataclass
 
-from .skills import run_command as _fill_and_run, run_script as _run
+from vesta_shared.ha_client import error_chars
+from vesta_shared.limits import limit
+
+from .skills import run_command as _fill_and_run, run_script as _run, script_timeout_s
 
 log = logging.getLogger("vesta")
 
@@ -79,24 +82,24 @@ class ScriptAnswer:
 #: The exit a script gets when the agent stops (SIGTERM): stopped with it, never a failure.
 STOPPED_BY_SIGTERM = -15
 
-def run(settings, state, skill, script: str, args: list[str], *, by: str, timeout: int = 900) -> ScriptAnswer:
+def run(settings, state, skill, script: str, args: list[str], *, by: str, timeout: int | None = None) -> ScriptAnswer:
     """One command with arguments already checked (skills.validate_script_args)."""
     t0 = time.monotonic()
     if by == AI:
         # ⚠️ A SCRIPT RUNNING IS SEEN WHILE IT RUNS (retro, 2026-10-15): only its end was logged ("took 40.9 s"), so a
         # script reading the logbook for minutes was invisible — and its calls were blamed on the AI's own tool
         log.info("Skill %s: %s %s started", skill.name, script, (args[0] if args else ""))
-    code, out, err = _run(settings, skill, script, args, timeout)
+    code, out, err = _run(settings, skill, script, args, timeout or script_timeout_s())
     return _answer(settings, state, skill, script, args, code, out, err, time.monotonic() - t0, by)
 
 
 def run_command(settings, state, skill, command: str, values: dict | None = None, *, by: str = JOB,
-                timeout: int = 900) -> ScriptAnswer:
+                timeout: int | None = None) -> ScriptAnswer:
     """A command the skill itself declares (skill.yaml: a code job, a hook, on_limit), its {placeholders} filled."""
     t0 = time.monotonic()
     script = command.split()[0] if command.split() else "?"
     try:
-        code, out, err = _fill_and_run(settings, skill, command, values, timeout)
+        code, out, err = _fill_and_run(settings, skill, command, values, timeout or script_timeout_s())
     except (KeyError, ValueError, IndexError) as e:
         code, out, err = 1, "", f"the command {command!r} cannot be filled ({type(e).__name__})"
     return _answer(settings, state, skill, script, command.split()[1:], code, out, err, time.monotonic() - t0, by)
@@ -116,9 +119,12 @@ def _answer(settings, state, skill, script, args, code, out, err, seconds, by) -
         log.info("Skill %s: %s stopped with the agent", skill.name, script)
     else:
         # every failure counts, whoever ran it (Overview → failures; agent_status)
-        state.log("script_failed", {**record, "stderr": ans.stderr[-800:]})
+        kept = limit("errors.script_stderr_chars", 800, unit="characters", group="keep", lo=100, hi=20000,
+                     says="How much of a failed script's own error output is kept (Overview › failures).",
+                     reached="Only its end is kept.", told="")
+        state.log("script_failed", {**record, "stderr": ans.stderr[-kept:]})
         log.warning("Skill %s: %s failed (exit %s)%s", skill.name, script, code,
-                    f": {ans.error[:300]}" if ans.error else "")
+                    f": {ans.error[:error_chars()]}" if ans.error else "")
     if by == PAGE:
         log.info("UI: tried %s %s %s (exit %s, %.1f s)", skill.name, script, " ".join(args), code, ans.seconds)
     elif ans.ok:

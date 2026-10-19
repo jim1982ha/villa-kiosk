@@ -22,6 +22,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Awaitable, Callable
 
+from vesta_shared.limits import limit
+
 from .api_errors import CHAT, NOT_COME
 from .in_progress import ANSWER, ANSWER_NAME, CHAT_JOB, HELD, TELL, InProgress, Item
 from .job_notices import JobNotices
@@ -129,7 +131,10 @@ class ChatJobs:
 
         ⚠️ A QUESTION CUT BY A RESTART IS SAID, NOT LOST (owner, 2026-10-15: an /investigate running when the agent was
         updated "went quiet"): only a job's waiting message was kept, a question being answered lived in memory only."""
-        async with self.work.kept(Item(ANSWER, ANSWER_NAME, chat=int(chat), asked=" ".join(str(asked).split())[:80])):
+        async with self.work.kept(Item(ANSWER, ANSWER_NAME, chat=int(chat), asked=" ".join(str(asked).split())[:limit(
+            "jobs.asked_chars", 80, unit="characters", group="text", lo=20, hi=2000,
+            says="How much of a question an answer in progress shows on the Overview.",
+            reached="The rest of the question is cut.", told="")])):
             yield
 
     async def recover(self) -> int:

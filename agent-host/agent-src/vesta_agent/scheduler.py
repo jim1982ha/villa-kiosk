@@ -26,13 +26,24 @@ import logging
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from vesta_shared.limits import limit
+
 from .in_progress import AGAIN, SCHEDULED, InProgress, Item
 
 log = logging.getLogger("vesta.scheduler")
 
 TICK_SECONDS = 30
 EVERY = timedelta(minutes=5)
-WINDOW = timedelta(minutes=30)
+
+
+def window() -> timedelta:
+    """How late a scheduled job still runs: a restart inside it does not lose the job, nor run it twice."""
+    return timedelta(minutes=limit("jobs.catch_up_minutes", 30, unit="minutes", group="run", lo=5, hi=720,
+                                   says="How late a scheduled job still runs when the agent was stopped at its time "
+                                        "(an update, a restart).",
+                                   reached="Later than this, that day's run is skipped.", told=""))
+
+
 PACK_AT = "01:30"
 
 
@@ -43,7 +54,7 @@ def slot_for(spec: str, now: datetime) -> datetime | None:
     parts = spec.split()
     h, m = map(int, parts[-1].split(":"))
     slot = now.replace(hour=h, minute=m, second=0, microsecond=0)
-    if now < slot or now - slot > WINDOW:
+    if now < slot or now - slot > window():
         return None
     if len(parts) == 2:
         cond = parts[0]
@@ -160,7 +171,11 @@ class Scheduler:
             self._last_every = now
             for sk in skills.values():
                 if sk.every_5_min and self._start(f"{sk.name}:every_5_min",
-                                                  lambda sk=sk: self.run_code(sk, sk.every_5_min, 300)):
+                                                  lambda sk=sk: self.run_code(sk, sk.every_5_min, limit(
+                                                      "jobs.five_minute_timeout_s", 300, unit="seconds", group="run",
+                                                      lo=30, hi=3600,
+                                                      says="How long a skill's every-5-minutes check may run.",
+                                                      reached="It is stopped and counts as failed.", told="person"))):
                     started.append(f"{sk.name}:every_5_min")
         slot = slot_for(PACK_AT, now)
         if slot and self._claim("engine:pack", slot) and self._start("engine:pack", self.rebuild_pack):

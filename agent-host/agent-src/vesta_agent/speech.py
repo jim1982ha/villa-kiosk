@@ -14,6 +14,8 @@ import re
 
 import aiohttp
 
+from vesta_shared.limits import limit
+
 log = logging.getLogger("vesta.speech")
 
 # What a skill script may name: the shape only — it reaches a URL path and a header.
@@ -24,7 +26,7 @@ CONTENT = "format=wav; codec=pcm; sample_rate=16000; bit_rate=16; channel=1; lan
 
 
 async def speech_to_text(ha_url: str, token: str, stt: dict, headers: dict | None = None,
-                         timeout: int = 90) -> tuple[str | None, str | None]:
+                         timeout: int | None = None) -> tuple[str | None, str | None]:
     """(text, None) or (None, why not). Never raises; never logs the token or the words."""
     entity, language, wav = str(stt.get("entity") or ""), str(stt.get("language") or ""), str(stt.get("wav") or "")
     if not STT_ENTITY.match(entity):
@@ -41,7 +43,10 @@ async def speech_to_text(ha_url: str, token: str, stt: dict, headers: dict | Non
     h = {**(headers or {}), "Authorization": f"Bearer {token}", "Content-Type": "audio/wav",
          "X-Speech-Content": CONTENT.format(language=language)}
     try:
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as http:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout or limit(
+            "voice.transcribe_timeout_s", 90, unit="seconds", group="run", lo=10, hi=600,
+            says="How long the villa's speech-to-text may take to write a voice message out.",
+            reached="The voice message is not understood; the person is told.", told="person"))) as http:
             async with http.post(f"{ha_url.rstrip('/')}/api/stt/{entity}", data=body, headers=h) as r:
                 if r.status != 200:
                     # 415: this speech-to-text does not take this language or format

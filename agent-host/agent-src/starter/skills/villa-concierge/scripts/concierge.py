@@ -27,11 +27,20 @@ from vesta_shared.problems import Problems  # noqa: E402  (what is still open: o
 from vesta_shared.store import Store  # noqa: E402
 from vesta_shared.messaging import incident_tag  # noqa: E402  ("Incident #N", the same everywhere)
 from vesta_shared.offline import devices_offline  # noqa: E402  (the one reading of "offline now")
+from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the Limits tab)
 
 
 
 # ------------------------------------------------------------------ status
-SHOW = 12        # names listed per line; the rest counted ("and 3 more")
+SHOW = limit("chat.names_per_line", 12, unit="names", group="ai", lo=1, hi=500,
+             says="Names listed on each line of the villa status the AI reads before answering in a chat.",
+             reached="The others are counted: 'and N more'.", told="ai")
+ALERT_TITLE_CHARS = limit("chat.alert_title_chars", 120, unit="characters", group="text", lo=40, hi=1000,
+                          says="Longest open-alert title in the villa status the AI reads.", reached="A longer one is cut.",
+                          told="")
+PROBLEM_TITLE_CHARS = limit("chat.problem_title_chars", 160, unit="characters", group="text", lo=40, hi=1000,
+                            says="Longest open-problem title in the villa status the AI reads.",
+                            reached="A longer one is cut.", told="")
 #: The families the status reads (offline, a lock open, an alarm on). Its own list, beside the reports' and the night
 #: check's (test_offline holds the three side by side).
 FAMILIES = ("security", "power", "energy", "runtime", "level", "battery")
@@ -79,9 +88,9 @@ def status(pack: KnowledgePack, states: dict, store: Store | None) -> dict:
     if offline_names:
         lines.append(f"Offline ({len(offline_names)}): " + _names(offline_names))
     if alerts:
-        lines.append(f"Open alerts ({len(alerts)}): " + _names([f"{incident_tag(p['incident'])} · {p['title'][:120]}" for p in alerts]))
+        lines.append(f"Open alerts ({len(alerts)}): " + _names([f"{incident_tag(p['incident'])} · {p['title'][:ALERT_TITLE_CHARS]}" for p in alerts]))
     if tasks:
-        lines.append(f"Open problems ({len(tasks)}): " + _names([p["title"][:160] for p in tasks]))
+        lines.append(f"Open problems ({len(tasks)}): " + _names([p["title"][:PROBLEM_TITLE_CHARS] for p in tasks]))
     if watch:
         lines.append("Watch: " + _names(watch))
     if colour == "green":

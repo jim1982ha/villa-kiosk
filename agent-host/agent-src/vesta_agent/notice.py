@@ -34,8 +34,9 @@ named who a message was for. The skill now writes only what happened; this write
 from __future__ import annotations
 
 from vesta_shared.message_format import MARK_ICONS, acted, PRESSED_STAGE, ROLE_WORDS, STEPS, UNTITLED, audience
+from vesta_shared.limits import limit
 from vesta_shared.messaging import incident_tag
-from vesta_shared.problems import AGAIN_DAYS
+from vesta_shared.problems import again_days
 from vesta_shared.timeutil import moment_label
 
 from datetime import datetime, timezone
@@ -47,9 +48,12 @@ from . import layout
 #: Between a step's line and the desk's words on the bottom line.
 STEP_SEP = " — "
 EXISTING = "existing"
-#: An incident's history kept: its first notice, a line counting those dropped, and the latest ones (review 28: after
-#: 20 notices the first alert vanished without a word).
-HISTORY_KEPT = 20
+def history_kept() -> int:
+    """An incident's history kept: its first notice, a line counting those dropped, and the latest ones (review 28:
+    after 20 notices the first alert vanished without a word)."""
+    return limit("alerts.history_lines", 20, unit="lines", group="text", lo=4, hi=500,
+                 says="Lines of an alert's story kept (sent, reminded, escalated…): the first always, then the latest.",
+                 reached="The ones between are counted in a \"… N earlier notices\" line.", told="person")
 
 
 def note_press(state, incident: int, label: str, name: str, mark: str | None = None, option: str = "") -> None:
@@ -73,12 +77,13 @@ def note_step(state, incident: int, stage: str, note: str) -> None:
 
 def _kept(history: list[dict]) -> list[dict]:
     """The history with its first notice always kept and the dropped ones counted ("- … 3 earlier notices")."""
-    if len(history) <= HISTORY_KEPT:
+    most = history_kept()
+    if len(history) <= most:
         return history
     first, rest = history[0], history[1:]
     dropped = sum(h.get("dropped", 1) if h.get("dropped") else 0 for h in rest)
     rest = [h for h in rest if not h.get("dropped")]
-    cut = len(rest) - (HISTORY_KEPT - 2)
+    cut = len(rest) - (most - 2)
     return [first, {"dropped": dropped + cut}] + rest[cut:]
 
 
@@ -278,7 +283,7 @@ class Notices:
         has none; `reach`: the words for a step to no role, as recorded). The ONE wording of a step, in its history
         line and on its own bottom line (`bottom`)."""
         s = STEPS.get(stage or "")
-        times = f", {_ordinal(run)} time in {AGAIN_DAYS} days" if isinstance(run, int) and run > 1 else ""
+        times = f", {_ordinal(run)} time in {again_days()} days" if isinstance(run, int) and run > 1 else ""
         return (s.line if s else "{sent} {at} (to: {who})").format(
             sent=s.sent if s else "Sent", at=when(at, self.tz), times=times, who=self._who(roles, reach))
 

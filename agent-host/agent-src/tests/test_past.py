@@ -38,7 +38,7 @@ def test_the_one_sentence_for_a_read_stopped_short():
 
 def test_a_history_read_carries_where_it_stopped_and_the_old_call_still_answers_as_before(monkeypatch):
     from vesta_shared import ha_client
-    monkeypatch.setattr(ha_client, "HISTORY_MAX_CALLS", 8)
+    monkeypatch.setattr(ha_client, "history_max_calls", lambda: 8)
     start, end = NOW - timedelta(days=3), NOW
     rows = [(start + timedelta(seconds=5 * i), f"{i % 7}.0") for i in range(3 * 86400 // 5)]
     client = McpClient("http://unused", "UTC", session=Recorder(rows))

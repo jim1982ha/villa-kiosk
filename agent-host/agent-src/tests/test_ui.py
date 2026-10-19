@@ -334,7 +334,7 @@ def test_a_run_records_its_brain_model_tokens_and_what_was_asked(ui, monkeypatch
     assert d["profile"] == "economy" and d["model"] == PROFILES["economy"][0] and d["turns"] == 3 and d["ms"] == 4200
     assert d["tokens"] == {"input_tokens": 800, "output_tokens": 90, "cache_read_input_tokens": 5000}
     assert d["cost_usd"] == 0.12 and d["asked"] == question and len(question) == 600
-    assert pasted["asked"] == "y" * runner.ASKED_CHARS and runner.ASKED_CHARS == 2000          # a limit still, a generous one
+    assert pasted["asked"] == "y" * runner.asked_chars() and runner.asked_chars() == 2000          # a limit still, a generous one
 
     async def fn(c):
         return await (await c.get("/api/costs?days=7")).json()

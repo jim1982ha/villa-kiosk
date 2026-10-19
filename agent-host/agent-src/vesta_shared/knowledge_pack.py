@@ -33,6 +33,8 @@ import re
 from dataclasses import dataclass, field, asdict
 from typing import Any
 
+from .limits import limit
+
 SUFFIXES = [
     "_power_factor", "_apparent_power", "_reactive_power", "_energy_returned", "_energy_consumed",
     "_cycling_count_1h", "_runtime_hours", "_expected_runtime", "_last_confirmed_run", "_power_baseline",
@@ -521,8 +523,21 @@ def build_pack(registry: dict, helpers: list[dict], states: dict | None = None,
 
     unknown_area = sorted({r["entity_id"] for fam in ("power", "energy", "runtime", "battery", "level", "water", "security")
                            for r in families.get(fam, []) if not r["area"]})
-    retention = {"raw_history_days": 10, "logbook_days": 10, "statistics": "permanent",
-                 "agent_feature_store_months": 24, "photos_days": 30}
+    # what the reports' footer says the villa keeps: the villa's own figures when they differ (vesta_shared.limits)
+    retention = {"raw_history_days": limit("villa.history_days", 10, unit="days", group="keep", lo=1, hi=3650,
+                                           says="How many days of detailed history the villa's system keeps, as the "
+                                                "reports' footer says it (the villa's system's own setting is not read).",
+                                           reached="Older periods have no detailed history; only hourly figures of "
+                                                   "meters remain.", told="person"),
+                 "logbook_days": limit("villa.logbook_days", 10, unit="days", group="keep", lo=1, hi=3650,
+                                       says="How many days of logbook the villa's system keeps, as the reports' footer "
+                                            "says it.",
+                                       reached="Older periods have no logbook.", told="person"),
+                 "statistics": "permanent",
+                 "agent_feature_store_months": 24,
+                 "photos_days": limit("villa.photos_days", 30, unit="days", group="keep", lo=1, hi=3650,
+                                      says="How many days of camera pictures are kept, as the reports' footer says it.",
+                                      reached="Older pictures are gone.", told="person")}
     pack = KnowledgePack(
         villa=villa or cfg.get("location_name") or "villa",
         time_zone=cfg.get("time_zone") or "UTC",

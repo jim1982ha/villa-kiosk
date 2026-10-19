@@ -123,7 +123,7 @@ def test_a_dense_history_is_read_by_slices_each_once_and_whole():
 def test_a_history_read_cut_short_says_where(monkeypatch):
     # review 32: stopped at its cap, it returned what it had, and the last state read was stretched to the end
     from vesta_shared import ha_client
-    monkeypatch.setattr(ha_client, "HISTORY_MAX_CALLS", 8)
+    monkeypatch.setattr(ha_client, "history_max_calls", lambda: 8)
     start = T - timedelta(days=3)
     rows = [(start + timedelta(seconds=5 * i), f"{i % 7}.0") for i in range(3 * 86400 // 5)]
     client = McpClient("http://unused", "UTC", session=Recorder(rows))
@@ -175,7 +175,8 @@ def test_the_ai_reads_the_whole_villas_logbook_a_few_hours_at_a_time(tmp_path):
     from ha_fake import FakeHA, tool
     from helpers import make_agent
     from vesta_agent.routing import CONVERSATION, Origin
-    from vesta_shared.read_guard import LOGBOOK_VILLA_HOURS
+    from vesta_shared.read_guard import logbook_villa_hours
+    LOGBOOK_VILLA_HOURS = logbook_villa_hours()
     ha = FakeHA(tools=[tool("ha_get_logs", source="string", hours_back="number", entity_id="string", end_time="string")])
     v = make_agent(tmp_path, {"people": [{"telegram_id": 111, "name": "Owner", "role": "owner"}], "chats": {"owner": -1},
                               "ha_read_tools": ["ha_get_logs"]}, reader=ha)

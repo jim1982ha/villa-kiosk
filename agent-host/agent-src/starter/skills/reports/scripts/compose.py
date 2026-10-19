@@ -56,6 +56,16 @@ from vesta_shared.message_format import document, for_the_ai, split_title  # noq
 from vesta_shared.store import Incident, Store  # noqa: E402
 from vesta_shared.timeutil import day_label, said  # noqa: E402  (the one day format; a stored time in words)
 from vesta_shared.problems import Problems  # noqa: E402  (what is still open: one owner)
+from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the Limits tab)
+
+DIGEST_OPEN_LINES = limit("reports.digest_open_lines", 8, unit="lines", group="text", lo=1, hi=200,
+                          says="Lines of open problems the facility manager's morning message lists (open alerts are always all listed).",
+                          reached="Further open problems are not listed and no 'and N more' is said.", told="")
+TITLE_CHARS = limit("reports.title_chars", 160, unit="characters", group="text", lo=40, hi=1000,
+                    says="Longest problem title in the morning message.", reached="A longer title is cut.", told="")
+SUBJECT_CHARS = limit("reports.subject_chars", 60, unit="characters", group="text", lo=20, hi=400,
+                      says="Longest name of what a problem is about, when the villa's device list does not name it.",
+                      reached="A longer name is cut.", told="")
 from vesta_shared.page import bars, line, linked, number, pairs, say, templates  # noqa: E402  (the charts, the numbers, the sentences: shared)
 
 TPL = templates(os.path.join(HERE, ".."))       # this skill's templates/, then the shared head (vesta_shared.page)
@@ -105,7 +115,7 @@ def fm_daily(pack: KnowledgePack, store: Store, as_of: date) -> str:
         # what the problem is about, named as every list names it (knowledge_pack.subject: a whole device's fault by
         # its device, any other by its reading); the summary's own words for an entity the pack does not know
         return (pack.subject(p["entity_id"], p["rule_id"] in WHOLE_DEVICE)[1] if p.get("entity_id") else None) \
-            or p["title"].split("\n")[0][:60]
+            or p["title"].split("\n")[0][:SUBJECT_CHARS]
 
     # ⚠️ NEW AND STILL OPEN AS PROBLEMS ANSWER THEM (architecture review 13): this read its own "new" (findings
     # since yesterday, a closed one included) and listed a noted alert twice, under "Also noted" and "Still open"
@@ -129,10 +139,10 @@ def fm_daily(pack: KnowledgePack, store: Store, as_of: date) -> str:
         # nothing (no reply ever did). It used to print task numbers; a maintenance finding is closed in the VESTA Kiosk. (Owner, 2026-10-11: the
         # line "Still open: 6. An alert: press Done … the rest: close it in the VESTA Kiosk" gave no useful indication.)
         alerts = [p for p in open_now if p["incident"]]
-        sections.append(("Still open", [f"- {incident_tag(p['incident'])} · {p['title'][:160]}" for p in alerts]
+        sections.append(("Still open", [f"- {incident_tag(p['incident'])} · {p['title'][:TITLE_CHARS]}" for p in alerts]
                          + _grouped([{"kind": p["rule_id"], "severity": p["severity"],
-                                      "subject": name_of(p), "title": p["title"][:160]}
-                                     for p in open_now if not p["incident"]], group_from, words)[:8]))
+                                      "subject": name_of(p), "title": p["title"][:TITLE_CHARS]}
+                                     for p in open_now if not p["incident"]], group_from, words)[:DIGEST_OPEN_LINES]))
     if not sections:
         sections.append((None, ["Nothing new, nothing open."]))
     return document(title(pack.villa, "daily", as_of), "", sections)

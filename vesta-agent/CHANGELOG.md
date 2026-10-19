@@ -1,3 +1,16 @@
+## 0.12.273
+
+What you will see:
+- A new tab on the VESTA Agent page: Limits. It lists every limit on what the agent reads, tells and keeps — 141
+  written in the agent's code, every number in the skills' settings, and the rules' brains, spending limits and
+  keeping times — grouped (reading the villa's data, what the AI receives, one AI run, what counts as a problem, text
+  and messages, how long things are kept, skill settings, rules), with a search box, 10 to a page.
+- Each limit says what it limits, what happens when it is reached, whether anyone is told ("Nobody is told" in red),
+  and where else the same value is shown. A changed value says what its usual value was.
+- Change a value and press Save: it is saved where the agent reads it, so the Rules and Skills tabs show the new
+  value too, and it appears in Overview › Page changes with Undo. Nothing on the other tabs has moved.
+- Nothing behaves differently until you change a value: every limit keeps today's value.
+
 ## 0.12.272
 
 What you will see:

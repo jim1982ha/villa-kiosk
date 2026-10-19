@@ -192,7 +192,7 @@ def test_each_tool_call_is_recorded_in_short_with_the_run(agent):
                        {"tool": "web_search", "args": {"query": "storm warning Bali"}},
                        {"tool": "ha_get_state", "args": {"entity_id": "sensor.x"}}]
     long = runner.step("mcp__vesta__save_file", {"name": "a.json", "content": "z" * 5000, "deep": {"a": {"b": {"c": [1]}}}})
-    assert long["args"]["content"] == "z" * runner.ARG_CHARS + "…" and long["args"]["deep"]["a"]["b"] == '{"c": [1]}'
+    assert long["args"]["content"] == "z" * runner.arg_chars() + "…" and long["args"]["deep"]["a"]["b"] == '{"c": [1]}'
 
 
 

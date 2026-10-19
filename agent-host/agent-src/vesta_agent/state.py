@@ -14,6 +14,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable
 
 from vesta_shared import agent_records
+from vesta_shared.ha_client import error_chars
+from vesta_shared.limits import limit
 
 SCHEMA = """
 create table if not exists approvals(
@@ -195,7 +197,7 @@ class State:
 
     def set_unreachable(self, chat: int, error: str | None) -> None:
         if error:
-            self.put(f"unreachable:{int(chat)}", json.dumps({"at": utcnow().isoformat(), "error": error[:300]}))
+            self.put(f"unreachable:{int(chat)}", json.dumps({"at": utcnow().isoformat(), "error": error[:error_chars()]}))
         elif self.get(f"unreachable:{int(chat)}") is not None:
             self.drop(f"unreachable:{int(chat)}")
 
@@ -332,12 +334,17 @@ class State:
 
     # Home Assistant's own Telegram messages (its telegram_sent event), by the context of the automation run that
     # sent them: a VESTA rule's vesta_critical_event comes from the same run, so its incident can take them over.
-    HA_SENT_KEEP_H = 24
+    @staticmethod
+    def ha_sent_keep_h() -> int:
+        return limit("alerts.villa_messages_kept_hours", 24, unit="hours", group="keep", lo=1, hi=720,
+                     says="How long the agent remembers the villa's own Telegram alerts, to put its alert story under "
+                          "them.",
+                     reached="An older one of the villa's alerts gets its story in a new message.", told="")
 
     def note_ha_sent(self, context_id: str, chat: int | str, message_id: int | str, at: datetime | None = None) -> None:
         now = at or utcnow()
         self.put(f"hasent:{context_id}:{chat}:{message_id}", now.isoformat())
-        cutoff = (now - timedelta(hours=self.HA_SENT_KEEP_H)).isoformat()
+        cutoff = (now - timedelta(hours=self.ha_sent_keep_h())).isoformat()
         with self._lock:
             self.db.execute("delete from kv where k like 'hasent:%' and v < ?", (cutoff,))
             self.db.commit()

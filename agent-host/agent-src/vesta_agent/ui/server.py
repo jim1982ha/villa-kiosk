@@ -25,6 +25,7 @@ from datetime import datetime, timezone
 
 import yaml
 from aiohttp import web
+from vesta_shared.limits import limit
 
 from .. import __version__, requests_box, status, tool_access
 from ..config import STARTER_DIR, Settings
@@ -34,6 +35,7 @@ from ..skills import FILE_NAME, REQUIRED_FILES, SKILL_NAME, TRASH, VILLA_CHOICES
 from ..state import State
 from . import setup_copy
 from .changes import PageFiles, Refused, _read, _write, page_policy, rev, rules_problems, undoable
+from .limits_tab import LimitsTab
 from .policy_doc import apply_form, to_form
 
 log = logging.getLogger("vesta.ui")
@@ -89,6 +91,7 @@ class UI:
                              off=lambda: page_policy(settings.policy_path).skills_off)
         self.history = History(settings.history_path)
         self.files = PageFiles(settings, self.history)     # every write, checked and recorded (changes.py)
+        self.limits = LimitsTab(settings, self.files)      # the Limits tab: each value saved where it lives
 
     # ------------------------------------------------------------------ plumbing
     def app(self) -> web.Application:
@@ -109,6 +112,8 @@ class UI:
         r.add_post("/api/jobs/missing", self.jobs_add_missing)
         r.add_get("/api/entities", self.entities)
         r.add_get("/api/costs", self.costs)
+        r.add_get("/api/limits", self.limits_get)
+        r.add_put("/api/limits", self.limits_put)
         r.add_get("/api/skills", self.skills_list)
         r.add_post("/api/skills", self.skill_create)
         r.add_delete("/api/skills/{name}", self.skill_delete)
@@ -281,6 +286,16 @@ class UI:
         return {"text": text, "rev": r, "form": form, "problems": probs, "languages": LANGUAGES,
                 "profiles": profile_labels(), "schema": form_schema()}
 
+
+    # ------------------------------------------------------------------ limits
+    async def limits_get(self, _request):
+        return web.json_response(self.limits.rows())
+
+    async def limits_put(self, request):
+        body = await request.json()
+        if not isinstance(body.get("id"), dict) or "value" not in body:
+            raise Refused(["No limit sent."])
+        return web.json_response(self.limits.save(body["id"], body["value"]))
 
     async def policy_form(self, request):
         body = await request.json()
@@ -526,7 +541,10 @@ class UI:
             for k in range(max(i2 - i1, j2 - j1)):
                 rows.append({"here": here[i1 + k] if i1 + k < i2 else None,
                              "release": there[j1 + k] if j1 + k < j2 else None, "same": tag == "equal"})
-        return web.json_response({"rows": rows[:4000], "engine": __version__})
+        cap = limit("page.compare_rows", 4000, unit="lines", group="text", lo=100, hi=100000,
+                    says="How many lines Skills › Compare shows of a skill file beside the release's.",
+                    reached="Lines after it are not shown in the comparison.")
+        return web.json_response({"rows": rows[:cap], "engine": __version__})
 
     async def skill_keep(self, request):
         name = request.match_info["name"]

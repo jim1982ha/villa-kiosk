@@ -28,12 +28,26 @@ from vesta_shared import periods                         # the period kinds and 
 from vesta_shared.past import unread                     # the one "could not be read whole: nothing is known after"
 from vesta_shared.periods import did
 from vesta_shared.timeutil import clock, lasting  # the one clock, the one duration wording
+from vesta_shared.limits import limit                     # every limit, set on the VESTA Agent page's Limits tab
+
+TARGETS_NAMED = limit("investigate.targets_named", 6, unit="devices", group="text", lo=1, hi=100,
+                      says="Devices named for what an automation can act on, in an investigation's page.",
+                      reached="The rest is counted in an \"and N more\".", told="person")
+NAMES_IN_A_ROW = limit("investigate.names_in_a_row", 8, unit="devices", group="text", lo=1, hi=100,
+                       says="Devices named in one row of an investigation's log (stopped or answered again together).",
+                       reached="The rest is counted in an \"and N more\".", told="person")
+AUTOMATION_RUNS_SHOWN = limit("investigate.automation_runs_shown", 3, unit="runs", group="text", lo=1, hi=100,
+                              says="Runs of one automation shown in an investigation's log.",
+                              reached="Its further runs are not shown in the log.", told="")
+LOG_ROWS = limit("investigate.log_rows", 80, unit="rows", group="text", lo=10, hi=2000,
+                 says="Rows of an investigation page's log.",
+                 reached="The further rows are not on the page.", told="")
 
 
 def _on(a: dict) -> str:
     """What an automation that can change things acts on: the devices it names, else its kinds of action."""
     named = [t.get("name") or t.get("id") for t in a.get("targets") or []]
-    return ", ".join(named[:6]) + (f" and {len(named) - 6} more" if len(named) > 6 else "") if named else \
+    return ", ".join(named[:TARGETS_NAMED]) + (f" and {len(named) - TARGETS_NAMED} more" if len(named) > TARGETS_NAMED else "") if named else \
         "(" + ", ".join(a.get("changes") or []) + ")"
 
 
@@ -86,7 +100,7 @@ def _and(xs: list[str]) -> str:
     return xs[0] if len(xs) == 1 else ", ".join(xs[:-1]) + " and " + xs[-1] if xs else ""
 
 
-def _names(xs: list[str], most: int = 8) -> str:
+def _names(xs: list[str], most: int = NAMES_IN_A_ROW) -> str:
     return ", ".join(xs[:most]) + (f" and {len(xs) - most} more" if len(xs) > most else "")
 
 
@@ -166,7 +180,7 @@ def facts(data: dict | None, around: dict | None, notes: dict | None = None) -> 
         else:
             unproven.append((a, close))
             what = "what it can do could not be read"
-        for t in close[:3]:
+        for t in close[:AUTOMATION_RUNS_SHOWN]:
             rows.append({"at": t, "pill": "usual", "text": f"Automation “{a.get('name')}” runs — {what}"})
     for a, close in acted:
         mine = {t.get("id") for t in a.get("targets") or []} & read
@@ -211,7 +225,7 @@ def facts(data: dict | None, around: dict | None, notes: dict | None = None) -> 
         for name, rules in warned.items()]
 
     rows.sort(key=lambda r: r["at"])
-    log = [{"time": clock(r["at"]), "text": r["text"], "pill": r["pill"]} for r in rows[:80]]
+    log = [{"time": clock(r["at"]), "text": r["text"], "pill": r["pill"]} for r in rows[:LOG_ROWS]]
     # what a person saw or did is not in the records: kept, marked as reported, after the recorded moments
     log += [{"time": str(r.get("time") or ""), "text": str(r["text"]), "pill": "reported"} for r in told]
     return {"log": log, "findings": findings, "alerts": alerts, "recorded": bool(rows),
@@ -249,7 +263,9 @@ def _lanes(data: dict, went: list[dict], acted: list, unproven: list) -> list[di
     return out
 
 
-KEY_MAX = 200
+KEY_MAX = limit("investigate.key_line_chars", 200, unit="characters", group="text", lo=60, hi=600,
+                says="Length of the recorded facts that open an investigation's chat message.",
+                reached="The longest unusual periods that fit are named, the rest counted in \"+N more\".", told="person")
 
 
 def key_line(flagged: list[dict], clock) -> str:

@@ -10,6 +10,8 @@ import logging
 import os
 from datetime import datetime, timezone
 
+from vesta_shared.limits import limit
+
 from .policy import Person
 from .speech import speech_to_text
 from .telegram import TelegramError
@@ -57,7 +59,13 @@ class Voice:
             with open(path, "wb") as f:
                 f.write(audio)
             sk, cmd = hook
-            res = await asyncio.to_thread(self.code_command, sk, cmd, {"audio": path, "language": person.language}, 120)
+            res = await asyncio.to_thread(self.code_command, sk, cmd, {"audio": path, "language": person.language},
+                                         limit("voice.script_timeout_s", 120, unit="seconds", group="run", lo=10,
+                                               hi=1800,
+                                               says="How long a skill may take to prepare a voice message to be "
+                                                    "written out.",
+                                               reached="The voice message is not understood; the person is told.",
+                                               told="person"))
             st = res.get("stt") if isinstance(res.get("stt"), dict) else None
             if not st:
                 await self.send(cid, str(res.get("error") or "This voice message could not be prepared."))

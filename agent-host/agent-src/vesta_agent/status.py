@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 
 from vesta_shared.agent_records import run_cost   # what a run cost: one reading, shared with the skills
 from vesta_shared import agent_records
+from vesta_shared.limits import limit
 from .api_errors import cause, what_to_do, why_job_sentence
 from .in_progress import CUT, ENDED, FAILED, run_ends
 
@@ -137,9 +138,15 @@ def report(state, store_path: str, hours: int = 24, now: datetime | None = None,
                                                              "reply", "assignee", "closed_at")})
         except Exception as e:  # noqa: BLE001 — a status answer never fails on the store
             incidents.append({"error": type(e).__name__})
+    events_shown = limit("ai.status_events", 60, unit="events", group="ai", lo=10, hi=2000,
+                         says="The latest things the agent did that the AI is shown when asked what it did.",
+                         reached="Older ones are not shown (their counts stay whole).", told="")
+    incidents_shown = limit("ai.status_incidents", 40, unit="alerts", group="ai", lo=5, hi=1000,
+                            says="The latest alerts the AI is shown when asked what the agent did.",
+                            reached="Older ones are not shown (their counts stay whole).", told="")
     return {"since": since.isoformat(), "until": now.isoformat(), "scheduled_jobs": jobs,
-            "counts": counts, "figures": figures(records, cost), "ai_cost_usd": round(cost, 3), "events": events[-60:],
-            "incidents": incidents[-40:]}
+            "counts": counts, "figures": figures(records, cost), "ai_cost_usd": round(cost, 3),
+            "events": events[-events_shown:], "incidents": incidents[-incidents_shown:]}
 
 
 def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_label=None, name_of=None) -> dict:
@@ -228,7 +235,10 @@ def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_la
             # the daily chart's Y axis, from the one axis rule (vesta_shared.axis): the page only draws it
             "axis": _cost_axis(max([by_day.get(d, 0.0) for d in days_list] + [0.01])),
             "by_work": group("work"), "by_model": group("model"),
-            "runs": sorted(runs + made, key=lambda r: r["at"], reverse=True)[:300],
+            "runs": sorted(runs + made, key=lambda r: r["at"], reverse=True)[:limit(
+                "costs.runs_listed", 300, unit="runs", group="keep", lo=20, hi=5000,
+                says="The latest runs the Costs tab lists one by one.",
+                reached="Older runs are not listed (the totals still count them).", told="")],
             # the Costs tab's "Tools in this period": each tool, how many runs used it and how many times
             "tools": _tool_counts(runs)}
 
@@ -254,7 +264,11 @@ def steps_of(recorded, name_of=None) -> list[dict]:
     return out
 
 
-SUMMARY_CHARS = 160      # a step's line; the page ellipsizes it to its width, the tooltip has the rest
+def summary_chars() -> int:
+    """A step's line; the page ellipsizes it to its width, the tooltip has the rest."""
+    return limit("costs.step_chars", 160, unit="characters", group="text", lo=40, hi=2000,
+                 says="The longest line describing one step of a run on the Costs tab.",
+                 reached="The line ends with \"…\".", told="person")
 
 
 def step_summary(tool: str, args: dict, name_of=None) -> str:
@@ -289,7 +303,8 @@ def step_summary(tool: str, args: dict, name_of=None) -> str:
         said = " · ".join(p for p in (f"to {a.get('to', '?')}", str(a.get("attachment") or "")) if p)
     else:
         said = " ".join(f"{k}={_short(v)}" for k, v in a.items())
-    return said if len(said) <= SUMMARY_CHARS else said[:SUMMARY_CHARS - 1].rstrip() + "…"
+    most = summary_chars()
+    return said if len(said) <= most else said[:most - 1].rstrip() + "…"
 
 
 def script_args(args) -> list[str]:
@@ -357,7 +372,10 @@ def _plural(word: str) -> str:
     return word + ("es" if word.endswith(("s", "sh", "ch", "x")) else "s")
 
 
-def _short(v, most: int = 40) -> str:
+def _short(v, most: int | None = None) -> str:
+    most = most or limit("costs.step_value_chars", 40, unit="characters", group="text", lo=10, hi=500,
+                         says="The longest value of one setting a step's line on the Costs tab shows.",
+                         reached="The value ends with \"…\".", told="person")
     text = v if isinstance(v, str) else json.dumps(v, ensure_ascii=False, default=str)
     return text if len(text) <= most else text[:most - 1] + "…"
 

@@ -9,14 +9,34 @@ from __future__ import annotations
 
 import re
 
-TELEGRAM_LIMIT = 4096
+from .limits import limit
+
+
+def telegram_message_chars() -> int:
+    """The longest message the agent sends in one piece (Telegram's own maximum is 4,096)."""
+    return limit("telegram.message_chars", 4096, unit="characters", group="text", lo=500, hi=4096,
+                 says="The longest message sent in one piece in Telegram (Telegram's own maximum is 4,096).",
+                 reached="A longer message is sent as several, in order; an edited message is cut with \"…\".",
+                 told="person")
+
+
+def telegram_caption_chars() -> int:
+    """A photo's or a file's caption (Telegram takes 1,024)."""
+    return limit("telegram.caption_chars", 1000, unit="characters", group="text", lo=200, hi=1024,
+                 says="The longest text sent with a photo or a file (Telegram takes 1,024).",
+                 reached="The rest of the text follows as its own message; an investigation's summary is written to "
+                         "fit.", told="person")
+
+
+#: The values when a script starts — a skill script reads them once; the engine calls the functions at each use
+TELEGRAM_LIMIT = telegram_message_chars()
 
 #: The ONE title of every message about the siren — "the siren cannot be requested" (outcome), "Siren switched off"
 #: (app) — above "To:" in the one layout (architecture review round 3, 2026-10-19: "Siren request" and "Siren").
 SIREN_TITLE = "Siren"
 #: A photo's or a file's caption: Telegram takes 1,024, kept under it — ONE number for the agent that sends and edits it
 #: and for a skill that writes one (reports' investigation summary; architecture review 32: 1,000 and 1,024 by hand)
-TELEGRAM_CAPTION = 1000
+TELEGRAM_CAPTION = telegram_caption_chars()
 
 
 def no_code(s: str) -> str:
@@ -83,13 +103,14 @@ def tg_len(text: str) -> int:
     return len(text.encode("utf-16-le")) // 2
 
 
-def split_message(text: str, limit: int = TELEGRAM_LIMIT) -> list[str]:
+def split_message(text: str, limit: int | None = None) -> list[str]:
     """`text` in parts Telegram takes (at most `limit` of its units each), IN ORDER, cut between paragraphs, else
     between lines, else — a single line longer than a message — inside it.
 
     ⚠️ IN ORDER (architecture review 15, 2026-10-10): a paragraph longer than a message (a long list with no blank
     line) was sent before the text above it, cut in the middle of a line — the list arrived first, its introduction
     second."""
+    limit = limit or telegram_message_chars()
     if tg_len(text) <= limit:
         return [text]
     pieces: list[str] = []                       # the smallest units, in order, each with what joins it to the next

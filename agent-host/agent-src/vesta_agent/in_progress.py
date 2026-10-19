@@ -34,6 +34,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Awaitable, Callable
 
+from vesta_shared.limits import limit
+
 from .routing import JOB
 
 #: the kinds of work. HELD: a job on schedule holding the chats it sends to ("already being made" there) — memory only.
@@ -142,7 +144,8 @@ class InProgress:
                 after()
             if item.kind == SCHEDULED:
                 self._end(item, CUT if cut else item.outcome or (FAILED if raised else ENDED),
-                          item.why or (f"{type(raised).__name__}: {raised}"[:160] if raised else None))
+                          item.why or (f"{type(raised).__name__}: {raised}"[:limit(
+                              "jobs.failure_line_chars", 160)] if raised else None))
             if not cut:
                 self._clear(item)
                 if ended:

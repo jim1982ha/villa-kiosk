@@ -17,7 +17,8 @@ import re
 
 #: the page's top tabs: key (its address, #rules) → its name. index.html is filled from it (architecture review 9: the
 #: names were typed there, and again as the first word of every place below — checked against this at import)
-TABS = {"overview": "Overview", "rules": "Rules", "skills": "Skills", "costs": "Costs"}
+# "limits": the Limits tab (owner, 2026-10-20: every limit on one page, perhaps for a while only — ui/limits_tab.py)
+TABS = {"overview": "Overview", "rules": "Rules", "skills": "Skills", "costs": "Costs", "limits": "Limits"}
 
 #: key → (the title the page shows, the place it sits in: a top tab, or "Tab › Card")
 PLACES: dict[str, tuple[str, str]] = {

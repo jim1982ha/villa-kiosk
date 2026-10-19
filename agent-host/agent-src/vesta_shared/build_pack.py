@@ -15,7 +15,7 @@ import json
 import sys
 from datetime import datetime, timezone
 
-from .ha_client import client_from_args
+from .ha_client import client_from_args, error_short_chars
 from .critical import BLUEPRINT, critical_entities
 from .knowledge_pack import build_pack, pack_diff_summary
 from .store import Store
@@ -84,7 +84,7 @@ def _critical(cli, previous: str) -> list[str]:
     try:
         return sorted(critical_entities(cli.automation_configs(BLUEPRINT)))
     except Exception as e:  # noqa: BLE001 — the villa's system not readable now
-        print(f"The critical devices could not be read ({str(e)[:200]}): the last list is kept.", file=sys.stderr)
+        print(f"The critical devices could not be read ({str(e)[:error_short_chars()]}): the last list is kept.", file=sys.stderr)
         try:
             return list(json.load(open(previous, encoding="utf-8")).get("critical") or [])
         except (OSError, ValueError):

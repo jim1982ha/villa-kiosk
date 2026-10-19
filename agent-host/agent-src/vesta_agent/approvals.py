@@ -17,6 +17,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Awaitable, Callable
 
 from vesta_shared.message_format import acted
+from vesta_shared.limits import limit
 
 from .notice import when
 from .policy import Decision
@@ -28,9 +29,21 @@ TITLE = "Approval request"
 
 #: A device still on its way after an approval (a curtain says "closed" until it has finished moving): looked at this
 #: often, for this long; then the request says done or not done. A restart takes it up again (resume).
-FOLLOW_EVERY_S, FOLLOW_FOR_S = 5, 90
-#: How far back the AI is told of decided requests (the waiting ones, whatever their age, until they expire).
-DECIDED_FOR = timedelta(hours=2)
+FOLLOW_EVERY_S = 5
+
+
+def follow_for_s() -> float:
+    return limit("actions.follow_seconds", 90, unit="seconds", group="run", lo=10, hi=900,
+                 says="How long an approved action is watched for the device to get there (a curtain still moving).",
+                 reached="The request then says done or not done, as the device stands.", told="person")
+
+
+def decided_for() -> timedelta:
+    """How far back the AI is told of decided requests (the waiting ones, whatever their age, until they expire)."""
+    return timedelta(hours=limit("ai.decided_requests_hours", 2, unit="hours", group="ai", lo=1, hi=168,
+                                 says="How far back the AI is told what became of approval requests before it "
+                                      "answers.",
+                                 reached="Older decided requests are not in front of it.", told=""))
 
 #: What a decided request says under its line: what, when, then who — written by message_format.acted, as a pressed
 #: button's line and the Cockpit's steps are (one writer, architecture review 2026-10-19); the tail is each state's own.
@@ -147,10 +160,10 @@ class Approvals:
             await asyncio.gather(*list(self._watching))
 
     async def _follow(self, aid: str, decision: Decision) -> None:
-        """Read the device again until it gets there (or FOLLOW_FOR_S passes); then the record and every copy say the same
+        """Read the device again until it gets there (or follow_for_s() passes); then the record and every copy say the same
         thing: done, or not done."""
         waited = 0.0
-        while waited < FOLLOW_FOR_S:
+        while waited < follow_for_s():
             await asyncio.sleep(FOLLOW_EVERY_S)
             waited += FOLLOW_EVERY_S
             body = await asyncio.to_thread(self.actions.recheck, decision)
@@ -224,7 +237,10 @@ class Approvals:
         asked three hours before and approved now was in neither list)."""
         now = now or datetime.now(timezone.utc)
         waiting = [a for a in self.state.approvals_in("pending") if datetime.fromisoformat(a["expires_at"]) > now]
-        decided = self.state.approvals_decided_since((now - DECIDED_FOR).isoformat())[:5]
+        decided = self.state.approvals_decided_since((now - decided_for()).isoformat())[:limit(
+            "ai.decided_requests_shown", 5, unit="requests", group="ai", lo=1, hi=100,
+            says="Decided approval requests the AI is told about before it answers.",
+            reached="Older decided requests are not in front of it; nobody is told.", told="")]
         lines = [f"- waiting: {a['action'].get('plain', '?')} (asked {self._at(a['created_at'])})" for a in waiting] \
             or ["- nothing is waiting for approval"]
         for a in decided:
