@@ -42,6 +42,22 @@ def test_a_device_that_never_peaked_asks_for_no_floor():
     assert thr == 0.0 and all(d["run_hours"] == 0 for d in days.values())
 
 
+def test_raw_readings_run_by_the_same_rule_as_hourly_figures():
+    # /investigate reads raw readings: bucketed per hour (max, mean of its readings), then the ONE running_threshold
+    from datetime import datetime, timedelta, timezone
+    t0 = datetime(2026, 10, 1, tzinfo=timezone.utc)
+    readings = []
+    for h in range(6):                                   # each hour: idle at 2 W, one 1000 W reading, a reading lost
+        readings += [(t0 + timedelta(hours=h, minutes=m), v) for m, v in ((0, 2.0), (20, 1000.0), (40, 2.0), (50, None))]
+    rows = daily.hour_rows_of(readings)
+    assert len(rows) == 6 and rows[0]["max"] == 1000.0 and round(rows[0]["mean"], 6) == round(1004 / 3, 6)
+    assert daily.threshold_from_readings(readings, _params()) == daily.running_threshold(None, rows, _params()) == 200
+    import sys
+    sys.path.insert(0, os.path.join(SKILLS, "investigate", "scripts"))
+    import investigate                                   # the investigation asks the same rule
+    assert investigate.threshold([(t, str(v)) for t, v in readings], _params()) == 200
+
+
 def test_no_script_keeps_its_own_running_threshold():
     for skill, script in (("preventive-maintenance", "nightly.py"), ("roi-energy", "energy_period.py"),
                           ("roi-energy", "filtration_optimiser.py")):

@@ -43,7 +43,7 @@ from vesta_shared import result as R  # noqa: E402  (what the engine is asked to
 from vesta_shared import script  # noqa: E402  (client, store, settings, zone: one set-up)
 from vesta_shared import skill_settings  # noqa: E402  (rules.yaml, the villa's on top)
 from vesta_shared.messaging import incident_tag  # noqa: E402
-from vesta_shared.message_format import PRESSED, ROLE_SHORT, acted  # noqa: E402  ("<what> on <time> (<who>)": one wording)
+from vesta_shared.message_format import PRESSED, ROLE_SHORT, acted, closing  # noqa: E402  ("<what> on <time> (<who>)", "Cleared on <time>.": one wording each)
 from vesta_shared import kiosk_words  # noqa: E402
 from vesta_shared.timeutil import lasting  # noqa: E402
 from vesta_shared.device_state import has_value, out_for  # noqa: E402  ("is it back": one answer)
@@ -441,7 +441,8 @@ def _reprioritised(store: Store, cur: dict, p: dict, sev: str, now: datetime, ro
     elif cur["state"] in Incident.CHASED and does(sev, route) != "chase":
         now_does = does(sev, route)
         store.update_incident(cur["id"], state=Incident.DIGEST if now_does == "digest" else Incident.LOGGED)
-        out["actions"] += Problems(store).settle(f"incident:{cur['id']}", note=f"Lowered to {sev}.")
+        if Problems(store).settle(f"incident:{cur['id']}", note=f"Lowered to {sev}."):
+            out["actions"].append(R.faults_changed())          # its task closed: the engine's repair closes its fault
         words = (RULES.get("lowered_words") or {}).get(now_does) or "Lowered to {priority} on {time}."
         out.setdefault("settle", []).append(R.settle(cur["id"], words.replace("{priority}", sev)))
 
@@ -460,11 +461,9 @@ def _ladder(store: Store, iid: int, ev: dict, now: datetime, sev: str, route: di
         store.update_incident(iid, state=Incident.ASKED, asked_at=now.isoformat(), assignee=CHASE["asks"])
         eid, check = ev.get("entity_id", ""), route.get("check") or ""
         title = again or ev["message"]
-        tid, how = Problems(store).reopen_task("incident", iid, ev["rule_id"], eid, title[:250], check, note=note)
-        if how == "reopened":
-            out["actions"].append(R.reopened(tid, title, note))
-        else:   # new — or still open: either way the engine makes its fault what the task says (tickets.repair)
-            out["actions"].append(R.fault(title[:200], task_id=tid, check=check, entity_id=eid))
+        Problems(store).reopen_task("incident", iid, ev["rule_id"], eid, title[:250], check, note=note)
+        # new, reopened or still open: the engine makes its fault what the task says (tickets.repair, Problems.card)
+        out["actions"].append(R.faults_changed())
     elif does(sev, route) == "digest":
         store.update_incident(iid, state=Incident.DIGEST)
     else:
@@ -545,9 +544,9 @@ def resolved(store: Store, ev: dict, now: datetime) -> dict:
         if late:
             out["incident_id"], out["decision"] = late["id"], "resolved_late"
             out["ha_messages"] = [R.ha_message(late["id"], context=ev.get("_context_id"), stage="closed",
-                                               **about(late, "Cleared on {time}."))]
+                                               **about(late, closing()))]
         return out
-    _close(store, inc, now, out, "Cleared on {time}.")
+    _close(store, inc, now, out, closing())
     out["incident_id"], out["decision"] = inc["id"], "resolved"
     # Home Assistant's all-clear takes the incident's number and the original alert, and replaces its older ones
     # its status in the desk's words, as every other end says it (never "✅ <the alert's name> — resolved after …")
@@ -555,7 +554,7 @@ def resolved(store: Store, ev: dict, now: datetime) -> dict:
     # 15:40 to Owner" beside "Closing note sent 15:40 to FM" — one end, two lines. Now ONE: "Closing note sent … to
     # Owner & FM"
     out["ha_messages"] = [R.ha_message(inc["id"], context=ev.get("_context_id"), stage="closed",
-                                       **about(inc, "Cleared on {time}."))]
+                                       **about(inc, closing()))]
     store.audit("alert-desk", "resolved", {"incident": inc["id"]})
     return out
 
@@ -565,7 +564,10 @@ def _close(store: Store, inc: dict, now: datetime, out: dict, settled: str,
     """An incident that is over: closed with its task and its Kiosk fault (`note`: what the fault says), its messages in
     every chat lose their buttons and say `settled`; the facility manager, when still chased, is told the same — ONE
     wording per end (owner, 2026-10-11: the group read "Cleared in Home Assistant on …" and the
-    facility manager "Closed: Home Assistant reports it cleared on … No reply needed." for the same end)."""
+    facility manager "Closed: Home Assistant reports it cleared on … No reply needed." for the same end).
+
+    `settled` is message_format.closing — "Cleared on {time}." with what the end adds after a colon — the words the
+    villa's own all-clear says too (owner, 2026-10-19: one closing wording; "Closed on …" is no longer written)."""
     out["actions"] += Problems(store).close_incident(inc["id"], Incident.RESOLVED, now.isoformat(), note)
     # its alert and reminders, in every chat, lose their buttons: nobody presses for something already over
     out.setdefault("settle", []).append(R.settle(inc["id"], settled))
@@ -711,7 +713,7 @@ def seen_again(store: Store, now: datetime, client, clear_minutes: float, out: d
                 continue
             said = "; ".join(f"{(now_states[e].get('attributes') or {}).get('friendly_name') or e} is "
                              f"{now_states[e]['state']}" for e in ents)
-        _close(store, store.incident(inc["id"]), now, out, f"Cleared on {{time}}: {said}.",
+        _close(store, store.incident(inc["id"]), now, out, closing(said),
                note="Cleared: back to normal, read again by the VESTA Agent.")
         store.audit("alert-desk", "seen_again", {"incident": inc["id"], "now": said})
         closed.append(inc["id"])
@@ -759,8 +761,8 @@ def rule_gone(store: Store, now: datetime, client, clear_minutes: float, out: di
         if now - datetime.fromisoformat(since) < timedelta(minutes=clear_minutes):
             continue
         _close(store, store.incident(inc["id"]), now, out,
-               "Closed on {time}: the automation that sent it no longer exists (its entity ID changed, or it was "
-               "deleted). Its next alert comes with a new number.",
+               closing("the automation that sent it no longer exists (its entity ID changed, or it was deleted). "
+                       "Its next alert comes with a new number"),
                note="Closed: the automation that sent it no longer exists (its entity ID changed, or it was deleted).")
         store.audit("alert-desk", "rule_gone", {"incident": inc["id"], "rule": inc["rule_id"]})
         closed.append(inc["id"])
@@ -817,7 +819,7 @@ def abandoned(store: Store, ev: dict, now: datetime) -> dict:
         return out
     out["incident_id"] = inc["id"]
     if str(ev.get("still_true")).lower() == "false":
-        cleared = "Cleared on {time}: back to normal when the alert stopped watching it."
+        cleared = closing("back to normal when the alert stopped watching it")
         _close(store, inc, now, out, cleared)
         out["decision"] = "abandoned_cleared"
         # ⚠️ ITS OWN MESSAGE SAYS THE SAME END (architecture review 23): taken over with the rule's "🔶 no longer
@@ -995,7 +997,7 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
         if cur:
             out["actions"] += Problems(store).close_incident(cur["id"], Incident.RECOVERED, now.isoformat())
             out["send"] += tell("P1", "closed", incident=cur["id"], chased=True,
-                                **about(cur, "Closed on {time}: the villa is back online and answers again"))
+                                **about(cur, closing("the villa is back online and answers again")))
     # alert fatigue: a rule firing more than N times in 30 days without acknowledgement
     limit = params.behaviour("alert_fatigue_per_month")
     since = (now - timedelta(days=30)).isoformat()

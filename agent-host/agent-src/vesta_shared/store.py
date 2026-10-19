@@ -152,7 +152,10 @@ class Store:
         # a finding that comes back (vesta_shared.problems AGAIN_DAYS) keeps when it came back and the days it was seen —
         # columns of their own, since the night rewrites `detail` each time it sees it (architecture review 23)
         cols = {r["name"] for r in self.db.execute("PRAGMA table_info(findings)")}
-        for col in ("reopened_day", "reopened_at", "occurrences"):
+        # seen_at / settle_minutes: when its source was last read still bad, and the settle time its skill gave with it
+        # — a person's close holds until a reading that long after it (Problems.wants_open; architecture review,
+        # 2026-10-19)
+        for col in ("reopened_day", "reopened_at", "occurrences", "seen_at", "settle_minutes"):
             if col not in cols:
                 self.db.execute(f"ALTER TABLE findings ADD COLUMN {col} TEXT")
         # ...and so does an incident (architecture review 24): its earlier runs, each with when it opened, closed and how
@@ -233,6 +236,13 @@ class Store:
     def finding(self, fid: int) -> dict | None:
         r = self.db.execute("SELECT * FROM findings WHERE id=?", (fid,)).fetchone()
         return dict(r) if r else None
+
+    def finding_seen(self, fid: int, at: str, settle_minutes: float | None) -> None:
+        """Finding `fid` read still bad at `at`; `settle_minutes`: how long after a person's close such a reading must
+        come to count (its skill's setting; None: the skill named none)."""
+        self.db.execute("UPDATE findings SET seen_at=?, settle_minutes=? WHERE id=?",
+                        (at, None if settle_minutes is None else str(float(settle_minutes)), fid))
+        self.db.commit()
 
     def set_finding_detail(self, fid: int, detail: dict) -> None:
         self.db.execute("UPDATE findings SET detail=? WHERE id=?", (json.dumps(detail), fid))
@@ -429,6 +439,14 @@ class Store:
         return [dict(r) for r in self.db.execute(
             "SELECT * FROM tasks WHERE status='open' AND reopened_by IS NOT NULL AND reopen_told_at IS NULL "
             "ORDER BY reopened_at, id")]
+
+    def untold_findings_reopened(self, note: str) -> list[dict]:
+        """The open tasks about a FINDING the agent reopened with `note` (Problems.STILL_THERE: a person's close, then
+        the source read still bad) that nobody has been told of yet (oldest first) — the preventive-maintenance recheck
+        tells them and marks each (reopening_told). An alert's is the alert desk's to tell (its source is an incident)."""
+        return [dict(r) for r in self.db.execute(
+            "SELECT * FROM tasks WHERE status='open' AND reopened_by IS NULL AND reopen_note=? AND reopen_told_at IS NULL "
+            "AND source LIKE 'finding:%' ORDER BY reopened_at, id", (note,))]
 
     def reopening_told(self, task_id: int) -> None:
         self.db.execute("UPDATE tasks SET reopen_told_at=? WHERE id=?", (_now(), task_id))

@@ -23,8 +23,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from vesta_shared.message_format import (INCIDENT_TITLE, MARK_ICONS, STAGE_ICONS, STAGE_WORDS, STATUS, TO, UNTITLED, document,
-                                         parts as shape_parts)
+from vesta_shared.message_format import (INCIDENT_TITLE, MARK_ICONS, STAGE_ICONS, STATUS, TO, UNTITLED, document,
+                                         parts as shape_parts, stage_words)
 from vesta_shared.messaging import TELEGRAM_LIMIT, tg_len
 from vesta_shared.timeutil import moment_label
 
@@ -95,7 +95,7 @@ def stage_line(h, status: str, mark: str | None = None) -> str:
     if not word:
         return status
     icon = MARK_ICONS.get(mark or "") if not (mark == "unchecked" and word != "closed") else None
-    return f"{icon or STAGE_ICONS[word]} {status or STAGE_WORDS[word]}"
+    return f"{icon or STAGE_ICONS[word]} {status or stage_words(word)}"
 
 
 def parts(body: str = "", status: str = "", head=None, lead: str = "", mark: str | None = None) -> dict:

@@ -7,7 +7,7 @@ command: proposal
 brain: economy
 limit_usd: 0.2
 # what the agent shows a person who sends /proposal alone
-usage: "/proposal accept 3, /proposal later 3 or /proposal ignore 3 (the number on the report)"
+usage: "the monthly report lists Proposal 3; the owner answers /proposal accept 3 (do it), /proposal later 3 (ask again next report) or /proposal ignore 3 (never again)"
 
 tools: []
 

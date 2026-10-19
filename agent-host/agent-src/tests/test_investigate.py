@@ -409,13 +409,13 @@ def test_a_device_that_runs_briefly_and_rarely_is_still_seen_running():
             continue
         rows.append((t, f"{1.6 + (t.second % 3) * 0.1:.1f}"))
         t += timedelta(seconds=10)
-    on = investigate.threshold([investigate.number(v) for _, v in rows])
+    on = investigate.threshold(rows)
     assert on is not None and 2 < on < 750
     ref = investigate.normal(rows, T(9, 0), on)
     assert ref["runs_per_day"] > 10 and ref["run_longest_s"] == 8 and 1.5 < ref["rest_median"] < 2.0
     # …and a reading that only drifts (a temperature) is still read as levels, never as runs
     temps = [24.0 + (i % 30) / 10 for i in range(2000)]
-    assert investigate.threshold(temps) is None
+    assert investigate.threshold([(T(6, 0) + timedelta(minutes=i), str(v)) for i, v in enumerate(temps)]) is None
 
 
 # ---- facts first (owner, 2026-10-11: "the investigate skill is not providing any added-value against a 'normal'
@@ -719,6 +719,14 @@ def test_the_page_names_each_band_and_draws_the_strip(tmp_path):
     assert strip.index("An empty lane means off") < strip.index("<svg")
     assert "Heater Relay" in strip and "Other devices that stopped reporting" in strip and "Next Relay" in strip
     assert "02:00–15:00 · off" not in strip                                 # "off" is the empty lane: nothing drawn
+    # the shared charts (vesta_shared.page) draw in the investigation's own colours: a band in its kind's, a lane's
+    # mark in LANE_STYLE's — the colour its legend says
+    import page as inv_page
+    chart = page[page.index("Heater Power</h2>"):page.index("How many minutes it ran each hour")]
+    for word, colour in map(inv_page.band_of, ("no power", "running")):
+        assert f'fill="{colour}" opacity=".14"' in chart and word in chart, word
+    went = inv_page.LANE_STYLE["went"][1]
+    assert f'fill="{went}"/>' in strip and inv_page.LANE_STYLE["went"][0] in strip
 
 
 def test_every_band_kind_has_its_own_word_and_colour():
@@ -916,6 +924,41 @@ def test_every_word_of_a_chart_is_page_text_at_the_reports_size():
     import re
     note = re.search(r"(?:^|[}\n])\.note\{([^}]*)\}", head).group(1)
     assert "font-size:13px" in head[head.index(".chart .ax{"):][:200] and "font-size:13px" in note   # the notes' size
+
+
+def test_no_starter_script_reaches_into_a_private_name_of_vesta_shared():
+    # owner, 2026-10-19: the investigation's charts live in vesta_shared.page; its page.py imported six private names
+    # (_axis, _framed, _scale, _ticks, _tip, _nice) to draw them itself. A skill's script uses vesta_shared's public
+    # names only, imported or through a module it imported.
+    import ast
+    import glob
+    hits = []
+    for path in glob.glob(os.path.join(STARTER_SKILLS, "*", "scripts", "*.py")):
+        tree = ast.parse(open(path, encoding="utf-8").read())
+        shared_mods = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("vesta_shared"):
+                for a in node.names:
+                    if a.name.startswith("_") and not a.name.startswith("__"):
+                        hits.append(f"{os.path.basename(path)}: from {node.module} import {a.name}")
+                    if node.module == "vesta_shared":
+                        shared_mods.add(a.asname or a.name)
+            elif isinstance(node, ast.Import):
+                shared_mods |= {a.asname or a.name for a in node.names if a.name.startswith("vesta_shared")}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id in shared_mods \
+                    and node.attr.startswith("_") and not node.attr.startswith("__"):
+                hits.append(f"{os.path.basename(path)}: {node.value.id}.{node.attr}")
+    assert not hits, hits
+
+
+def test_both_pages_draw_a_legend_and_a_pill_one_way():
+    # owner, 2026-10-19: the investigation's own legend macro and the report's inline legend, a pill built by hand in
+    # both templates — one `legend` and one `pill` (vesta_shared/templates/page_parts.html) now
+    for skill, name in (("investigate", "investigation.html"), ("reports", "report.html")):
+        src = open(os.path.join(STARTER_SKILLS, skill, "templates", name), encoding="utf-8").read()
+        assert '{% from "page_parts.html" import legend, pill %}' in src, name
+        assert 'class="st ' not in src and "macro legend" not in src and 'class="legend"' not in src, name
 
 
 def test_a_device_that_reports_a_value_has_no_state_band():

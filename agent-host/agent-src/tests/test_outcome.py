@@ -226,5 +226,43 @@ def test_the_result_builder_refuses_buttons_without_their_incident():
     from vesta_shared import result as R
     with pytest.raises(ValueError):
         R.message("fm", "x", buttons=True)
-    assert R.fault("Door open", task_id=3, check="the lock", entity_id="a,b") == {
-        "action": "ticket", "summary": "Door open", "task_id": 3, "note": "What to do: the lock", "entity_id": None}
+    # a chat's fault (no task) is the only one built with its words (architecture review, 2026-10-19)
+    assert R.fault("Door open", check="the lock", entity_id="a,b") == {
+        "action": "ticket", "summary": "Door open", "note": "What to do: the lock", "entity_id": None}
+    # a skill edited on a villa before 0.6.258 still passes a task id: still built, read as faults_changed
+    assert R.fault("Door open", task_id=3)["task_id"] == 3
+
+
+# ---------------------------------------------------------------------- a fault action carries only what is read
+OLD_SHAPES = [
+    {"action": "ticket", "summary": "Battery low", "task_id": 1, "note": "What to do: x", "entity_id": None},
+    {"action": "ticket.reopen", "task_id": 1, "title": "Battery low", "note": "Back again."},
+    {"action": "ticket.resolve", "task_id": 1, "note": "Cleared", "who": "Wayan"},
+    1,                                    # a task id: an edited desk adding Problems.settle's return to its actions
+]
+
+
+@pytest.mark.parametrize("action", [{"action": "faults_changed"}, *OLD_SHAPES])
+def test_a_task_change_moves_the_faults_whatever_shape_the_skill_sends(agent, action):
+    # architecture review, 2026-10-19: the three old shapes carried words the engine never read; a starter skill now
+    # sends faults_changed, and one edited on a villa (updates keep it) still sends the old shapes — both repair
+    v, kiosk = agent
+    Store(v.s.store_path).add_task("PM-Y", "sensor.example_battery", "Battery low")
+    run(v.outcome.carry_out({"actions": [action]}, "preventive-maintenance"))
+    assert kiosk.tickets == [("Battery low", "sensor.example_battery")]         # the repair ran: its task has its fault
+
+
+def test_a_result_that_moved_no_task_runs_no_repair(agent):
+    v, kiosk = agent
+    Store(v.s.store_path).add_task("PM-Y", "sensor.example_battery", "Battery low")
+    run(v.outcome.carry_out({"actions": [], "send": []}, "preventive-maintenance"))
+    assert kiosk.tickets == []
+
+
+def test_the_starter_skills_build_no_old_fault_shape():
+    # the old builders stay for a villa's edited skill only; every starter skill says faults_changed
+    import re
+    from helpers import STARTER_SKILLS
+    src = "".join(open(os.path.join(d, f)).read() for d, _, fs in os.walk(STARTER_SKILLS) for f in fs if f.endswith(".py"))
+    assert not re.search(r"\b(?:R|result)\.(?:reopened|resolved)\(|task_id=t\[", src)
+    assert not re.search(r"\b(?:R|result)\.fault\([^)]*task_id=", src)

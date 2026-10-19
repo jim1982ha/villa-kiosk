@@ -60,3 +60,58 @@ def test_the_heartbeat_carries_it():
     asyncio.run(k.heartbeat("all quiet", BEAT["cadence"]))
     asyncio.run(k.heartbeat())
     assert sent == [("/agent/v1/heartbeat", BEAT), ("/agent/v1/heartbeat", None)]
+
+
+def _beating(answer: dict) -> Kiosk:
+    k = Kiosk("http://kiosk.invalid", "t")
+
+    async def req(method, path, body=None):
+        return 200, dict(answer)
+    k._req = req
+    return k
+
+
+@pytest.mark.parametrize("minutes, every", [(1, 30.0), (6, 120.0), (15, 300.0)])
+def test_the_interval_follows_the_kiosks_window(minutes, every):
+    # architecture review, 2026-10-19: 120 s was typed, the answer thrown away — a Kiosk set to "offline after 1 minute"
+    # flipped the agent online and offline every cycle. A third of the window, never under 30 s
+    k = _beating({"ok": True, "offline_after_minutes": minutes})
+    first = k.every                                              # before any answer: the interval it starts with
+    asyncio.run(k.heartbeat())
+    assert (first, k.every) == (120, every)
+
+
+def test_an_answer_without_a_window_keeps_the_interval():
+    k = _beating({"ok": True, "offline_after_minutes": 1})
+    asyncio.run(k.heartbeat())
+    k._req = _beating({"ok": True})._req
+    asyncio.run(k.heartbeat())
+    assert k.every == 30.0
+
+
+def test_a_refused_cadence_is_said_once_and_the_beat_counts(caplog):
+    k = _beating({"ok": True, "offline_after_minutes": 6, "cadence": "refused: checkMinutes 1-1440"})
+    with caplog.at_level("WARNING", logger="vesta.kiosk"):
+        for _ in range(3):
+            asyncio.run(k.heartbeat("all quiet", BEAT["cadence"]))
+    said = [r for r in caplog.records if "did not take" in r.getMessage()]
+    assert len(said) == 1 and "refused: checkMinutes" in said[0].getMessage() and k.every == 120.0
+
+
+def test_the_loop_waits_the_interval_the_answer_set(monkeypatch):
+    import vesta_agent.kiosk as K
+    k = _beating({"ok": True, "offline_after_minutes": 1})
+    waited = []
+
+    async def run():
+        stop = asyncio.Event()
+
+        async def wait_for(aw, timeout):
+            waited.append(timeout)
+            aw.close()
+            stop.set()
+            raise asyncio.TimeoutError
+        monkeypatch.setattr(K.asyncio, "wait_for", wait_for)
+        await k.heartbeats(stop)
+    asyncio.run(run())
+    assert waited == [30.0]

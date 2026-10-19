@@ -281,8 +281,9 @@ Decisions of 2026-09-30 (owner):
   included `ignore missing`) and falls back to its plain text whenever `sensor.vesta_message_layout`
   (`homeassistant/packages/vesta_message.yaml`) is not "ok" or Telegram refuses; test_ha_message_layout holds both to
   message_format. Never make a blueprint's alert wait on the agent (option C was rejected for that reason).
-  0.12.179: a blueprint gives a STAGE (vm_stage new / existing / closed / help, vm_who for a press), never the status
-  words or icons: the jinja writes them from message_format's STAGE_ICONS, MARK_ICONS, STAGE_WORDS and PRESSED.
+  0.12.179: a blueprint gives a STAGE (vm_stage new / existing / closed), never the status words or icons: the jinja
+  writes them from message_format's STAGE_ICONS and STAGE_WORDS (0.12.267: the press — vm_who, 'help', PRESSED — is
+  no longer drawn there; an all-clear is 'closed' with no status; "To:" follows vm_priority).
 - Architecture review 2026-10-13 (0.12.179): `command_request.Requests` is a command skill's request across its turns
   (web searches kept as records); `vesta_shared.periods` + `timeutil.lasting` are the investigation's kinds, words and
   durations for both skill folders. skill.yaml `modes` is retired.
@@ -634,3 +635,77 @@ then fixed with the probe's scenarios as the tests. Decided:
   `offline_families`, nightly `WATCHED_FAMILIES`, concierge `FAMILIES`) stay in their skills and DIFFER today
   (reports: + battery, network; night: + water, generation); test_offline holds them side by side until the owner
   decides whether to make them one.
+
+## The night check owns each number asked twice (owner, 2026-10-19, 0.12.267)
+
+- **A pump's "Watch" and a battery's "replace / watch" are the night check's.** The weekly page's equipment card is
+  "Watch" exactly when the one list (playbook.todo: clues + Problems.open_problems) names its reading; a battery row's
+  level is `facts.night_battery_says`: "replace" from an open PM-BATTERY-CRIT / LOW problem (open_problems, so a fault a
+  person closed is not shown), "watch" from an open PM-BATTERY-TREND finding read from the store (INFO: never a task,
+  never on the list). The page's own thresholds and the power_step / battery_trend clues are gone.
+- **`vesta_shared/battery.py`** owns a battery's charge (`charge`; device_state.battery_charge is a re-export for a
+  villa-edited skill), its projection (`projection(points, floor_pct, level)`, the floor the caller's setting) and the
+  rule ids the reports read (CRIT, LOW, TREND, REPLACE) — kept out of result.py on purpose (one owner per subject).
+- **A retired setting is named**: a skill file's `retired: {dotted.path: what decides it now}`;
+  `skill_settings.retired` gives one sentence per key a villa.<file> still sets. Callers: facts (the report's problems),
+  investigate main (`settings_not_used` + stderr). reports.yaml `retired_kinds` does the same for a playbook `when` kind.
+- **One "running" for /investigate**: `daily.threshold_from_readings` = `running_threshold` over `hour_rows_of(raw
+  readings)` (per hour: max, plain mean of the readings — not time-weighted). investigate keeps only its flat_spread
+  check (hi = the highest reading, which the old 99.9th percentile already was below 1 000 readings). The share lives in
+  four skill files (preventive-maintenance, roi-energy, reports, investigate), held equal by test_skill_settings.
+- **Charts by time are vesta_shared.page's**: timechart, hourchart, strip (colours and words as parameters); a skill
+  binds its own (investigate page.py: band_of, LANE_STYLE via lane_colour). No starter script uses a `_` name of
+  vesta_shared (AST test). `legend` and `pill` are macros of vesta_shared/templates/page_parts.html — a separate file
+  because an `{% include %}` does not share its macros.
+
+## The villa's own alerts: "To:" by the desk's table, one closing wording, no press (owner, 2026-10-19, 0.12.267)
+
+- **"To:" by priority is the alert desk's table, also on the villa side**: `message_format.priority_to(rules)` reads
+  the desk's released rules.yaml (`people_roles`, `priority_does`: `ALERT_DESK_RULES`) as data and `jinja_words` writes
+  it into the template (`vm_priority_to`). A blueprint passes `vm_priority` (only when its "Who the message is for"
+  follows the agent) and `vm_to` ('' then); the template says the priority's words, else `vm_to`, else the villa-wide
+  helper. test_ha_message_layout holds every priority to `desk.reaches`. The villa's own copy of rules.yaml
+  (villa.rules.yaml) is NOT read: the template is a released file, copied by hand.
+- **One closing wording**: `message_format.closing(tail)` is STAGE_WORDS["closed"] and every desk end; the template fills
+  "{time}" with `timeutil.MOMENT_FORMAT`; `stage_words(word, time="")` is the agent's fallback ("Cleared.", never a
+  "{time}" shown). A blueprint's all-clear gives `vm_stage: closed` and no status; a duration it knows is its text.
+- **The template draws no press**: vm_who, 'help', the button labels and the strftime are gone with the villa's task
+  rule (vesta_task_actions), which no enabled rule feeds since 2026-08-25.
+- **How the template reaches a villa**: by hand — the Agent has no access to /config (`homeassistant_api: false`).
+  Copy `agent-src/homeassistant/custom_templates/vesta_message.jinja` to /config/custom_templates/, run
+  `homeassistant.reload_custom_templates`, and only then save blueprints that pass `vm_priority`: with the old
+  template a rule following the agent says the villa-wide "To:".
+
+## One rule for a close, actions that carry what is read, one Kiosk door, the Kiosk's window (architecture review, 2026-10-19, 0.12.267)
+
+Owner: "proceed with the recommended implementation", four cards.
+- **A person's close holds until the source is read again, still bad** — for an alert and a night fault alike. The
+  alert keeps its path (`desk.quiet_after_done` reads the device after `clear_minutes` and reopens the incident;
+  settle follows). A finding: every reading RECORDS the fact — `store.finding_seen` (findings `seen_at`,
+  `settle_minutes`) through `Problems.record` (the night; the recheck's new findings, `at`=its now) and
+  `Problems.seen` (recheck.py's reading of a device whose finding is open — it skipped those) — and
+  `Problems.wants_open` decides: `still_there_after_close` (read `settle_minutes` or more after the person's close)
+  opens it again, `reopen_note` = `problems.STILL_THERE` ("Still there after the close.", the desk's words). The settle
+  time travels on the finding, as the desk carries its check on the incident, so the engine's repair (settle_all)
+  decides the same without reading a skill. Skills before code: preventive-maintenance settings.yaml
+  `still_there_after_close` {minutes (10, the desk's clear_minutes), tell, title, words}; none in code — missing, it is
+  named on stderr and the close holds. The FM is told by `recheck.still_there_untold` (store.untold_findings_reopened:
+  a finding's task reopened with STILL_THERE, untold — whoever reopened it: the recheck, the night, the repair).
+- **A task's fault action carries nothing to read**: `result.faults_changed()`; `Problems.settle` / `settle_all` →
+  task ids, `record` `task_ids` / `record_night` `resolved` → ids, `close_incident` / `close_finding` → `result.moved`
+  (a script's `actions`). `result.fault` is a chat's fault only. `outcome.carry_out` still reads ticket{task_id},
+  ticket.resolve, ticket.reopen and a bare task id as faults_changed — a starter skill edited on a villa sends them;
+  `result.reopened` / `resolved` / `fault(task_id=)` stay for it (test_outcome: no starter skill builds one). The new
+  ids are `record`'s `task_ids` and `record_night`'s `resolved`; `tasks` (a new task's dict, with its words),
+  `reopen_actions` and `resolve_actions` stay, built from the ids, kept for a skill edited before 0.12.267 (its
+  nightly.py / recheck.py unpack them — test_problem_close runs the old lines).
+- **The Kiosk-version gate is `Kiosk._gated`**, inside add_ticket, amend, reopen_ticket, resolve_ticket: an unlisted
+  kind is written without `kind`, or dropped when it is in `notStatusChanges` (it would read as a status change); an
+  unlisted declared field (`ticket.fields`) is not written (a person's value stays). An info listing nothing → the
+  agreement's `ticketUpdate.kindsBeforeList` / `ticket.fieldsBeforeList` (new keys; the Kiosk's sets just before it
+  listed them, 2.496.356 / 2.496.382). takes/says are gone; `Kiosk.refresh` re-reads the info while it lists no kinds
+  (the repair calls it). ⚠️ The agreement file changed on the Agent's side first: the Kiosk gets the identical JSON
+  before release.
+- **The heartbeat's interval is the Kiosk's**: `kiosk.beat_every(answer, current)` — a third of
+  `offline_after_minutes`, floor `BEAT_FLOOR_S` (30), `BEAT_BEFORE_ANSWER_S` (120) until the first answer; a
+  `"cadence": "refused: …"` answer is logged once (the beat counted).

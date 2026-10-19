@@ -19,7 +19,6 @@ import os
 import re
 import sys
 from datetime import datetime
-from html import escape as _esc
 from zoneinfo import ZoneInfo
 
 from markupsafe import Markup, escape
@@ -29,9 +28,9 @@ sys.path.insert(0, HERE)
 from vesta_shared import periods  # noqa: E402  (the period kinds and their words: investigate.py's)
 from vesta_shared.message_format import TO_LONGEST, document, for_the_ai  # noqa: E402  (the one shape: title, To:, sections)
 from vesta_shared.messaging import CITE, TELEGRAM_CAPTION, uncited  # noqa: E402
-from vesta_shared.page import (H, PAD_B, PAD_L, PAD_R, PAD_T, W, _axis, _framed, _scale, _ticks,  # noqa: E402
-                               _tip, number as _nice, templates)
-from vesta_shared.timeutil import clock, day_label, day_time_label, lasting  # noqa: E402  (the one clock, day format, duration)
+from vesta_shared import page as charts  # noqa: E402  (the charts every page draws: timechart, hourchart, strip)
+from vesta_shared.page import number, templates  # noqa: E402  (the one number rule)
+from vesta_shared.timeutil import day_time_label, lasting  # noqa: E402  (the one day format, duration)
 from investigation_facts import KEY_MAX, facts as investigation_facts  # noqa: E402  (what the records establish)
 
 TPL = templates(os.path.join(HERE, ".."))
@@ -52,126 +51,6 @@ def band_of(kind: str) -> tuple[str, str]:
     return (word, BAND_COLOURS[periods.base(kind)]) if word else OTHER_BAND
 
 
-def timechart(series: list, unit: str, zone: ZoneInfo, marks: list = (), normals: list = ()) -> str:
-    """A device's readings over the period, by TIME (investigate.py timeline --out: [time, value], None = no number):
-    the Y axis and its grid as every chart here, the unusual periods (`marks`: [start, end, kind]) shaded in their
-    band's colour and named when there is room, the same hours of the days before (`normals`: series) faint behind, a
-    value on hover or tap. A gap where the device gave no number."""
-    pts = []
-    for t, v in series:
-        try:
-            pts.append((datetime.fromisoformat(t), None if v is None else float(v)))
-        except (TypeError, ValueError):
-            continue
-    vals = [v for _, v in pts if v is not None]
-    if len(vals) < 2:
-        return '<p class="note">Not enough readings to draw.</p>'
-    behind = []
-    for s in normals:
-        line = []
-        for t, v in s:
-            try:
-                line.append((datetime.fromisoformat(t), None if v is None else float(v)))
-            except (TypeError, ValueError):
-                continue
-        behind.append(line)
-    every_val = vals + [v for line in behind for _, v in line if v is not None]
-    t0, t1 = pts[0][0], pts[-1][0]
-    span = (t1 - t0).total_seconds() or 1.0
-    lo, hi, ticks = _ticks(min(0.0, min(every_val)), max(every_val) * 1.1 or 1)
-    y = _scale(lo, hi, PAD_T, H - PAD_B)
-    x = lambda t: PAD_L + (t - t0).total_seconds() / span * (W - PAD_L - PAD_R)
-    long = span > 86400
-    lab = lambda t: clock(t, zone, days=long)                                                    # noqa: E731
-    out = [f'<svg viewBox="0 0 {W} {H}" role="img" aria-label="{_esc(unit)} over the period">',
-           *_axis(ticks, y, PAD_L, W - PAD_R)]
-    for m in marks:
-        a_, b_, kind = (list(m) + [""])[:3]
-        try:
-            ma, mb = max(datetime.fromisoformat(a_), t0), min(datetime.fromisoformat(b_), t1)
-        except (TypeError, ValueError):
-            continue
-        if mb > ma:
-            word, colour = band_of(kind)
-            w_ = max(x(mb) - x(ma), 1)
-            out.append(f'<rect x="{x(ma):.1f}" y="{PAD_T}" width="{w_:.1f}" height="{H - PAD_B - PAD_T}" '
-                       f'fill="{colour}" opacity=".14"/>')
-            if w_ >= 6.2 * len(word) + 6:                # named where the word fits; the legend names them all
-                out.append(f'<text x="{x(ma) + w_ / 2:.1f}" y="{PAD_T + 10}" font-size="10" text-anchor="middle" '
-                           f'fill="{colour}">{_esc(word)}</text>')
-
-    def drawn(line: list) -> str:
-        path, pen = [], False
-        for t, v in line:
-            if v is None:
-                pen = False
-                continue
-            path.append(f"{'L' if pen else 'M'}{x(t):.1f},{y(v):.1f}")
-            pen = True
-        return " ".join(path)
-    for line in behind:                                  # the days before, dashed: what "usual" looks like
-        out.append(f'<path class="normal" d="{drawn(line)}" fill="none" stroke="{USUAL}" stroke-width="1" '
-                   f'stroke-dasharray="3 2" opacity=".8"/>')
-    out.append(f'<path d="{drawn(pts)}" fill="none" stroke="{READINGS}" stroke-width="1.8"/>')
-    for k in range(5):                               # five times under the axis
-        t = t0 + (t1 - t0) * k / 4
-        anchor = "start" if k == 0 else "end" if k == 4 else "middle"
-        out.append(f'<text x="{x(t):.1f}" y="{H - 6}" font-size="10" text-anchor="{anchor}" fill="var(--ink2)">{lab(t)}</text>')
-    u = f" {unit}" if unit else ""
-    every = max(1, len(pts) // 100)
-    for i in range(0, len(pts) - 1, every):
-        (t, v), (tn, _) = pts[i], pts[min(i + every, len(pts) - 1)]
-        if v is not None:
-            out.append(_tip(x(t), y(v), x(t), x(tn), PAD_T, H - PAD_B, f"{lab(t)} · {_nice(v)}{u}"))
-    out.append("</svg>")
-    return _framed("".join(out))
-
-
-def hourchart(per_hour: dict, zone: ZoneInfo) -> str:
-    """Minutes running in each hour (or day) of the period, as bars, its usual for the same hour as a tick on each
-    (investigate.py running_per_hour) — a device that runs a few seconds now and then shows its trouble here at once."""
-    bins = []
-    for b in per_hour.get("bins") or []:
-        try:
-            bins.append((datetime.fromisoformat(b["at"]), float(b.get("minutes") or 0), b.get("usual")))
-        except (KeyError, TypeError, ValueError):
-            continue
-    if not bins:
-        return ""
-    day = per_hour.get("unit") == "day"
-    top = max([m for _, m, _ in bins] + [u for _, _, u in bins if isinstance(u, (int, float))] + [1.0])
-    # an hour holds 60 minutes: the scale stops there (2026-10-12: it went to 80), a day at its own top
-    lo, hi, ticks = (0.0, 60.0, [0.0, 15.0, 30.0, 45.0, 60.0]) if not day and top > 45 else _ticks(0.0, top * 1.1)
-    y = _scale(lo, hi, PAD_T, H - PAD_B)
-    slot = (W - PAD_L - PAD_R) / len(bins)
-    lab = (lambda t: day_label(t.astimezone(zone))) if day else (lambda t: clock(t, zone, days=False))   # noqa: E731
-    out = [f'<svg viewBox="0 0 {W} {H}" role="img" aria-label="Minutes running per {"day" if day else "hour"}">',
-           *_axis(ticks, y, PAD_L, W - PAD_R)]
-    usual = []
-    for i, (t, m, u) in enumerate(bins):
-        x0 = PAD_L + i * slot
-        if m > 0:
-            out.append(f'<rect x="{x0 + slot * .15:.1f}" y="{y(m):.1f}" width="{slot * .7:.1f}" '
-                       f'height="{max(y(0) - y(m), .5):.1f}" fill="{READINGS}"/>')
-        if isinstance(u, (int, float)):
-            usual.append((x0, x0 + slot, y(u)))
-        said = f"{lab(t)} · ran {_nice(m)} min" + (f" (usually {_nice(float(u))} min)" if isinstance(u, (int, float))
-                                                    else "")
-        out.append(_tip(x0 + slot / 2, y(max(m, u or 0)), x0, x0 + slot, PAD_T, H - PAD_B, said))
-    if usual:
-        # ⚠️ ONE LINE, OVER THE BARS (2026-10-12): a dash per hour, most at 0, read as a broken axis under the bars
-        path = " ".join(f"{'M' if i == 0 else 'L'}{a_:.1f},{yy:.1f} L{b_:.1f},{yy:.1f}" for i, (a_, b_, yy) in enumerate(usual))
-        out.append(f'<path class="usual" d="{path}" fill="none" stroke="{USUAL}" stroke-width="2" '
-                   'stroke-linejoin="round"/>')
-    every = max(1, len(bins) // 6)
-    for i in range(0, len(bins), every):
-        out.append(f'<text x="{PAD_L + i * slot:.1f}" y="{H - 6}" font-size="10" fill="var(--ink2)">{lab(bins[i][0])}'
-                   '</text>')
-    out.append("</svg>")
-    return _framed("".join(out))
-
-
-LANE_H, LANE_LABEL = 22, 12
 #: what each band or mark of the strip is: its legend word and colour — the strip and its legend read this one table
 #: ("off" is the empty lane: nothing drawn)
 LANE_STYLE = {"on": ("on or open", "var(--acc)", "band"), "other": ("in another state", "var(--c4)", "band"),
@@ -189,42 +68,22 @@ def strip_legend(lanes: list[dict]) -> list[dict]:
             for k in dict.fromkeys(seen) if k in LANE_STYLE]
 
 
+def lane_colour(as_: str | None, shape: str) -> str:
+    """A strip band's or mark's colour (LANE_STYLE); one it does not name: "in another state" / "stopped reporting"."""
+    return LANE_STYLE.get(as_ or "", LANE_STYLE["other" if shape == "band" else "went"])[1]
+
+
+# The investigation's charts: the shared ones (vesta_shared.page), in this page's colours and words.
+def timechart(series: list, unit: str, zone: ZoneInfo, marks: list = (), normals: list = ()) -> str:
+    return charts.timechart(series, unit, zone, marks, normals, band=band_of, readings=READINGS, usual=USUAL)
+
+
+def hourchart(per_hour: dict, zone: ZoneInfo) -> str:
+    return charts.hourchart(per_hour, zone, bar=READINGS, usual=USUAL)
+
+
 def strip(lanes: list[dict], start: datetime, end: datetime, zone: ZoneInfo) -> str:
-    """Other things on the SAME time axis as the charts (investigation_facts.lanes): one lane each — a device without
-    numbers as bands of its states ("off" left empty), events as marks — every band and mark answering on tap."""
-    if not lanes or end <= start:
-        return ""
-    span = (end - start).total_seconds()
-    x = lambda t: PAD_L + (t - start).total_seconds() / span * (W - PAD_L - PAD_R)    # noqa: E731
-    long = span > 86400
-    lab = lambda t: clock(t, zone, days=long)     # noqa: E731
-    h = len(lanes) * (LANE_H + LANE_LABEL) + 18
-    out = [f'<svg viewBox="0 0 {W} {h}" role="img" aria-label="What else happened, on the same time axis">']
-    for i, lane in enumerate(lanes):
-        top = i * (LANE_H + LANE_LABEL) + LANE_LABEL
-        out.append(f'<text x="{PAD_L}" y="{top - 3}" font-size="10" fill="var(--ink2)">{_esc(lane["name"])}</text>')
-        out.append(f'<rect x="{PAD_L}" y="{top}" width="{W - PAD_L - PAD_R}" height="{LANE_H - 6}" fill="var(--ink2)" '
-                   'opacity=".06"/>')
-        for b in lane.get("bands") or []:
-            a_, b_ = max(b["start"], start), min(b["end"], end)
-            if b_ <= a_ or b.get("as") in ("off", "value"):        # off: the empty lane; a value: not a state
-                continue
-            out.append(f'<rect x="{x(a_):.1f}" y="{top}" width="{max(x(b_) - x(a_), 1.5):.1f}" height="{LANE_H - 6}" '
-                       f'fill="{LANE_STYLE.get(b.get("as"), LANE_STYLE["other"])[1]}" opacity=".55"/>')
-            out.append(_tip(x(a_), top + (LANE_H - 6) / 2, x(a_), max(x(b_), x(a_) + 3), top, top + LANE_H - 6,
-                            f"{lab(a_)}–{lab(b_)} · {b['state']}"))
-        for e in lane.get("marks") or []:
-            if start <= e["at"] <= end:
-                out.append(f'<rect x="{x(e["at"]) - 1:.1f}" y="{top}" width="3" height="{LANE_H - 6}" '
-                           f'fill="{LANE_STYLE.get(e.get("as"), LANE_STYLE["went"])[1]}"/>')
-                out.append(_tip(x(e["at"]), top + (LANE_H - 6) / 2, x(e["at"]) - 3, x(e["at"]) + 3, top,
-                                top + LANE_H - 6, f"{lab(e['at'])} · {e['text']}"))
-    for k in range(5):
-        t = start + (end - start) * k / 4
-        anchor = "start" if k == 0 else "end" if k == 4 else "middle"
-        out.append(f'<text x="{x(t):.1f}" y="{h - 4}" font-size="10" text-anchor="{anchor}" fill="var(--ink2)">{lab(t)}</text>')
-    out.append("</svg>")
-    return _framed("".join(out))
+    return charts.strip(lanes, start, end, zone, lane_colour)
 
 
 def normal_words(ref: dict, unit: str) -> str:
@@ -243,8 +102,8 @@ def normal_words(ref: dict, unit: str) -> str:
                    + (f" and never more than {lasting(ref['run_longest_s'])}"
                       if lasting(ref.get("run_longest_s", ref["run_median_s"])) != lasting(ref["run_median_s"])
                       else "") + ".")
-    level = [f"while running it read about {_nice(float(ref['level_median']))}{u}" if "level_median" in ref else "",
-             f"at rest about {_nice(float(ref['rest_median']))}{u}" if "rest_median" in ref else ""]
+    level = [f"while running it read about {number(float(ref['level_median']))}{u}" if "level_median" in ref else "",
+             f"at rest about {number(float(ref['rest_median']))}{u}" if "rest_median" in ref else ""]
     level = [x for x in level if x]
     if level:
         said = "; ".join(level)

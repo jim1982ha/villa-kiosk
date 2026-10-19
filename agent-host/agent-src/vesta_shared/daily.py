@@ -7,7 +7,7 @@ broken its energy reports. Pure functions: statistics rows in, numbers per local
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import date
+from datetime import date, datetime
 
 from .params import MissingParameter
 from .stats import med
@@ -91,6 +91,28 @@ def running_threshold(asset: dict | None, hour_rows: list[dict], params) -> floa
             helper_thr = None
     cands = [t for t in (data_thr, helper_thr) if t]
     return min(cands) if cands else params.behaviour("on_threshold_floor_w")
+
+
+def hour_rows_of(readings: list[tuple[datetime, float | None]]) -> list[dict]:
+    """Raw readings (moment, value) as the hourly rows Home Assistant's statistics give: per hour, the highest reading
+    (`max`) and the mean of its readings (`mean`). A reading with no value (offline, no value) is left out."""
+    by_hour: dict[datetime, list[float]] = defaultdict(list)
+    for t, v in readings:
+        if v is not None:
+            by_hour[t.replace(minute=0, second=0, microsecond=0)].append(float(v))
+    return [{"start": h.isoformat(), "max": max(vs), "mean": sum(vs) / len(vs)} for h, vs in sorted(by_hour.items())]
+
+
+def threshold_from_readings(readings: list[tuple[datetime, float | None]], params) -> float:
+    """Power above which a device counts as running, from its raw readings: the ONE rule (running_threshold) over
+    those readings bucketed per hour (hour_rows_of).
+
+    ⚠️ ONE "RUNNING" FOR /investigate TOO (owner, 2026-10-19: "the night check owns each number asked twice"): the
+    investigation counted a device running above 10 % of its top 0.1 % readings, at least 2 W — its own rule, beside
+    the night check's, the energy figures' and the weekly page's. Its settings running_fraction, high_quantile and
+    running_min are retired; on_threshold_fraction (a villa helper vesta_on_threshold_fraction for every skill) is the
+    share for all of them."""
+    return running_threshold(None, hour_rows_of(readings), params)
 
 
 def power_days(asset: dict | None, hour_rows: list[dict], zone: str, params) -> tuple[float | None, dict[date, dict]]:

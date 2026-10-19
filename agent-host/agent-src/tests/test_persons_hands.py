@@ -42,7 +42,7 @@ def test_an_alert_clearing_does_not_close_it_either_but_a_persons_done_does():
     assert pb.close_incident(iid, Incident.RESOLVED, st.now(), "Cleared in Home Assistant") == []
     assert st.task(tid)["status"] == "open"                        # Home Assistant clearing it: still the owner's
     done = pb.close_incident(iid, Incident.DONE, st.now(), "Done by Wayan on Telegram.", who="Wayan")
-    assert [a["task_id"] for a in done] == [tid] and st.task(tid)["status"] == "done"
+    assert done == [{"action": "faults_changed"}] and st.task(tid)["status"] == "done"
 
 
 def test_a_problem_that_came_back_is_the_agents_and_closes_with_its_source():
@@ -52,7 +52,8 @@ def test_a_problem_that_came_back_is_the_agents_and_closes_with_its_source():
     pb.close(tid, "cleared")
     pb.reopen_task("finding", fid, "PM-X", "sensor.example_pump", "Pump weak (again: 2 times in 7 days)")
     assert not pb.in_persons_hands(st.task(tid))
-    assert [a["task_id"] for a in pb.close_finding(st.finding(fid), "2026-10-09")] == [tid]
+    assert pb.close_finding(st.finding(fid), "2026-10-09") == [{"action": "faults_changed"}]
+    assert st.task(tid)["status"] == "cleared"
 
 
 def test_every_list_reads_a_persons_close_the_same_way():

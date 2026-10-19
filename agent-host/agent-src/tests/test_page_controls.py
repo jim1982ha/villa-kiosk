@@ -259,6 +259,10 @@ def test_rules_tools_are_served_from_the_agents_list(ui):
     assert t["server"] == "ha-mcp 8.6.0" and t["groups"][0]["tools"][0]["title"] == "Get Entity State"
     assert [x["name"] for x in t["never"]] == ["ha_restart"]
     assert {r["key"] for r in t["roles"]} >= {"cameras", "create_ticket"}
+    # each row says which tab its switch comes from (owner, 2026-10-19: the 11 rows mixed the two tabs unsaid)
+    by = {r["key"]: r["from"] for r in t["roles"]}
+    assert by["cameras"] == "Villa system tools" and by["create_ticket"] == "Agent tools"
+    assert "(${g.from})" in page_js()                          # and the table draws it beside the name
     shutil.rmtree(ui.data_dir)
 
 
@@ -572,3 +576,19 @@ def test_the_overview_says_how_each_scheduled_run_ended(ui):
     assert rows["reports:0:07:00"]["words"] == "not prepared (the Anthropic account has run out of credit)"
     assert rows["alert-desk:0:02:00"]["words"] == "run" and rows["alert-desk:0:02:00"]["outcome"] == "claimed"
     assert "j.words" in page_js() and "j.ran_at" not in page_js()
+
+
+def test_a_command_skill_says_how_it_is_used_and_a_skill_without_tools_has_no_tools_tab():
+    # owner, 2026-10-19: the proposals skill's page said "only when a person writes /proposal" — neither what to write
+    # nor when it applies — and showed a Skill tools tab that said only "lists none"
+    from vesta_agent import skills as S
+    from helpers import body_of
+    sk = S.Skill(name="proposals", path="", description="", command="proposal",
+                 usage="the monthly report lists Proposal 3; the owner answers /proposal accept 3")
+    chat = [r for r in S.when_it_runs(sk) if r["when"] == "in a chat"][0]
+    assert chat["note"] == ("only when a person writes /proposal — for example: "
+                            "the monthly report lists Proposal 3; the owner answers /proposal accept 3")
+    assert [r for r in S.when_it_runs(S.Skill(name="x", path="", description="", command="x"))
+            if r["when"] == "in a chat"][0]["note"] == "only when a person writes /x"
+    about = body_of(page_js(), "aboutSkill")
+    assert "hasTools && [\"tools\"" in about and "const hasTools = !!(d.tools && d.tools.length)" in about

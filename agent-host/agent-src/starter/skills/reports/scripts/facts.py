@@ -42,6 +42,8 @@ from vesta_shared import daily  # noqa: E402  (a device's day: the one "running"
 from vesta_shared.daily import energy_daily_features  # noqa: E402  (a meter's day: one reading for every skill)
 from vesta_shared.energy_setup import used as energy_used  # noqa: E402  (the villa's total: the Kiosk's rule)
 from vesta_shared import result  # noqa: E402  (the night check's rule ids, written once)
+from vesta_shared import battery  # noqa: E402  (the night check's battery findings: their ids, one owner)
+from vesta_shared.skill_settings import retired  # noqa: E402  (a villa setting the skill no longer reads: said)
 from vesta_shared.timeutil import day_label, day_time_label, local_day, month_label, villa_date, villa_time  # noqa: E402  (the one day format)
 from vesta_shared import agent_records  # noqa: E402  (the agent's records: one reader)
 from vesta_shared.problems import Problems  # noqa: E402  (what is still open: one owner)
@@ -433,17 +435,11 @@ def s_happened(c: Ctx) -> dict:
     return {"rows": _grouped(_alert_rows(c))}
 
 
-def _status_from(series: list[tuple[str, float]], drop_pct: float) -> str:
-    vals = [v for _, v in series]
-    if len(vals) < 6:
-        return "OK"
-    recent, before = statistics.mean(vals[-3:]), statistics.mean(vals[:-3])
-    return "Watch" if before and (before - recent) / before * 100 >= drop_pct else "OK"
-
-
 def s_equipment(c: Ctx) -> dict:
     days = int(c.need("card_days"))
-    drop = float(c.need("pump", "watch_drop_pct"))
+    # ⚠️ "WATCH" HAS ONE OWNER (owner, 2026-10-19: "the night check owns each number asked twice"): a card is "Watch"
+    # exactly when the one list names its device — its clues and the night's open findings (a pump's running power
+    # that dropped is the night's PM-POWER-CHANGE). The card's own "last 3 days 10 % under the days before" is gone.
     # ⚠️ BY WHAT THE ITEM MEASURES, NOT ITS RELAY (villa, 2026-10-19): two pumps on one relay are one device; the house
     # pump's finding set the pool pump's card to "Watch" too (knowledge_pack.reading_key)
     watched = {c.pack.reading_key(e) for it in todo(c) for e in it.get("entity_ids") or []}
@@ -463,8 +459,7 @@ def s_equipment(c: Ctx) -> dict:
             continue                                  # did not run in the period: no card to draw
         # ⚠️ BY THE ONE DEVICE IDENTITY (architecture review 13): the to-do list names devices by device_of, and this
         # compared them with the asset slug — no card was ever set to "Watch" by it (a regression of 0.12.115)
-        mark = c.pack.reading_key(pw) in watched
-        status = "Watch" if mark else (_status_from(series, drop) if unit == "W" else "OK")
+        status = "Watch" if c.pack.reading_key(pw) in watched else "OK"
         cards.append({"id": f"card-{slug}", "title": c.pack.reading_name(pw, slug), "subtitle": subtitle,
                       "unit": unit, "series": series, "status": status,
                       "figures": {"first": series[0][1] if series else None, "last": series[-1][1] if series else None,
@@ -493,8 +488,32 @@ def _extra_card(c: Ctx, spec: dict, days: int) -> dict:
                         "alert_at": alert}}
 
 
+def night_battery_says(c: Ctx) -> dict[str, tuple[str, str]]:
+    """What the night check says of each battery, by its reading (knowledge_pack.reading_key): (level, its sentence) —
+    "replace" for an open PM-BATTERY-CRIT / LOW problem (the one list's input, Problems.open_problems: a fault a
+    person closed is not shown), "watch" for an open PM-BATTERY-TREND finding (a report-only finding: never a task, so
+    read from the night's own record)."""
+    says: dict[str, tuple[str, str]] = {}
+    if c.store is None:
+        return says                       # no record of the night: nothing said, every battery shows its charge only
+    for f in c.store.findings(status="open"):
+        if f["rule_id"] == battery.TREND:
+            says[c.pack.reading_key(f["entity_id"])] = ("watch", _no_code(f["summary"]))
+    for t in c.tasks():
+        if t["rule_id"] in battery.REPLACE and t.get("entity_id"):
+            says[c.pack.reading_key(t["entity_id"])] = ("replace", t["title"])
+    return says
+
+
 def s_batteries(c: Ctx) -> dict:
-    repl, watch, show = c.need("battery", "replace_below_pct"), c.need("battery", "watch_below_pct"), c.need("battery", "show")
+    """Every battery's charge, lowest first; its level is the NIGHT CHECK's (night_battery_says), never this page's.
+
+    ⚠️ ONE JUDGE (owner, 2026-10-19: "the night check owns each number asked twice"): the page drew red under its own
+    20 % and amber under 35 %, and its playbook projected "weeks left" to that 20 %, while the night check said
+    "replace now" under 10 %, "within the week" under 20 % and "days left" to 10 % — two "replace" lines and two
+    projections for one cell."""
+    show = c.need("battery", "show")
+    says = night_battery_says(c)
     rows = []
     for r in c.pack.families.get("battery", []):
         v = _num((c.states().get(r["entity_id"]) or {}).get("state"))
@@ -502,12 +521,12 @@ def s_batteries(c: Ctx) -> dict:
         pct = battery_pct(c, r, v)
         if pct is None:
             continue                      # volts with no nominal: the night check asks for it, never a guess
-        lvl = "replace" if pct < repl else ("watch" if pct < watch else "ok")
+        lvl, said = says.get(c.pack.reading_key(r["entity_id"]), ("ok", None))
         # named as the device it powers (knowledge_pack.reading_name: its own device, never its radio bridge)
         rows.append({"name": c.pack.reading_name(r["entity_id"], r.get("name") or r["entity_id"]), "pct": round(pct), "level": lvl,
-                     "volts": round(v, 2) if unit == "V" else None})
+                     "volts": round(v, 2) if unit == "V" else None, **({"night": said} if said else {})})
     rows.sort(key=lambda x: x["pct"])
-    return {"count": len(rows), "rows": rows[: int(show)], "replace_below_pct": repl,
+    return {"count": len(rows), "rows": rows[: int(show)],
             "status": "Watch" if any(x["level"] != "ok" for x in rows) else "OK"}
 
 
@@ -653,6 +672,8 @@ def facts(kind: str, c: Ctx) -> dict:
     out = {"kind": kind, "eyebrow": rep.get("eyebrow", ""), "villa": c.pack.villa, "zone": c.Z.key,
            "order": [], "sections": {}, "to_write": [], "problems": []}
     c.problems = out["problems"]       # a section that cannot say something names it here
+    # a threshold the villa's villa.reports.yaml still sets although the skill retired it (reports.yaml `retired`)
+    out["problems"] += retired(SKILL, "reports.yaml")
     for sec in rep.get("sections") or []:
         sid = sec.get("id")
         fn = BUILD.get(sid)

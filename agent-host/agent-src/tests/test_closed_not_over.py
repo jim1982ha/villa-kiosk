@@ -51,8 +51,7 @@ def test_a_close_on_a_door_still_unlocked_reopens_it_still_there_and_the_desk_wa
     (fm,) = [s for s in out["send"] if s["to"] == "fm"]
     assert fm["stage"] == "still" and fm["status"].endswith("still open. VESTA keeps watching it.")
     # "still there", never "back again" (review 25)
-    assert [a for a in out["actions"] if a["action"] in ("ticket.reopen", "ticket")]
-    assert all(a.get("note") != "Back again." for a in out["actions"])
+    assert {"action": "faults_changed"} in out["actions"]               # its fault follows its task (the repair)
     # ... and the Cockpit card says it: the words travel on the task (architecture review, 2026-10-18)
     assert [t["reopen_note"] for t in store.tasks("open")] == ["Still there after the close."]
     # locked later: the desk itself closes it — Home Assistant's rule no longer watches it

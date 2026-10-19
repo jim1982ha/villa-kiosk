@@ -282,7 +282,10 @@ def when_it_runs(sk: Skill) -> list[dict]:
         acts.append(row("an answer to one of its alerts", script=sk.on_reply))
     if sk.before_answer:
         acts.append(row("before every answer in a chat", script=sk.before_answer))
-    acts.append(row("in a chat", note=f"only when a person writes /{sk.command}" if sk.command
+    # a command skill's row says how it is used, in the skill's own words (`usage`, an example — owner, 2026-10-19:
+    # "only when a person writes /proposal" said neither what to write nor when it applies)
+    acts.append(row("in a chat", note=(f"only when a person writes /{sk.command} — for example: {sk.usage}" if sk.usage
+                                       else f"only when a person writes /{sk.command}") if sk.command
                     else "when a person asks about it"))
     return acts
 

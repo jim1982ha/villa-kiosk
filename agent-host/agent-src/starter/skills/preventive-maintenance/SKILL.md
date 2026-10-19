@@ -47,8 +47,10 @@ closure, and never raise the same thing twice.
    Nothing else is asked.
 2. The engine runs the batch at 02:00 (skill.yaml, no model, no token):
    `nightly.py --out nightly.json`. Its output, in the engine's standard form:
-   - `actions`: one `ticket` per task (`tasks_to_create`): the engine records it in
-     the VESTA Kiosk's Facility records and keeps its id so the reply loop can close it.
+   - `faults_changed`: a task opened, reopened or closed (`tasks_to_create`,
+     `tasks_resolved`: their ids): the engine brings the VESTA Kiosk's faults up to date
+     from the tasks. A fault a person closed while its problem is still there opens
+     again once it is read still bad (settings.yaml `still_there_after_close`).
    - `send`: each P2 finding (a critical device offline, a battery at 10%), to the
      FM at once with the check to perform.
    - The 07:00 FM digest (reports skill) reads the open problems themselves

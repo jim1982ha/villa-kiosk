@@ -1,10 +1,11 @@
 # What the investigation counts as unusual, against each device's own normal (the days before). A villa's own
 # villa.settings.yaml may change any of them (kept by updates). Moved out of the script (architecture review 32).
 behaviour:
-  running_fraction: 0.10      # "running" above this share of its high readings (its top `high_quantile`)…
-  high_quantile: 0.999        # its high readings: the top 0.1 % — a device that runs a few seconds an hour still has them
-  running_min: 2.0            # …and never below this reading
-  flat_spread: 0.5            # a device whose readings spread less than this share of its high is read as levels, not runs
+  # "Running" is the villa's one rule (the night check's, the energy figures', the weekly page's): an hour whose peak
+  # passes this share of the device's typical peak ran. Keep it equal to the other skills' (a test holds them equal):
+  # to change it for the whole villa, set the villa helper input_number.vesta_on_threshold_fraction instead.
+  on_threshold_fraction: 0.2
+  flat_spread: 0.5            # a device whose readings spread less than this share of its highest is read as levels, not runs
   longer_ratio: 2             # a run longer than this many times its longest normal one is flagged…
   longer_extra_s: 300         # …and longer than it by at least this
   level_high_ratio: 1.5       # a run drawing this many times its usual level is flagged
@@ -29,3 +30,10 @@ behaviour:
 words:
   rules_reloaded: "The rules were reloaded: every rule ran once to re-check itself, none of them acted"
   system_started: "The villa's system started: every rule ran once to re-check itself, none of them acted"
+
+# Settings this skill no longer reads: a villa's villa.settings.yaml that still sets one is told so in the
+# investigation's answer (vesta_shared.skill_settings.retired), never silently ignored.
+retired:
+  behaviour.running_fraction: "running is the villa's one rule now, behaviour.on_threshold_fraction (or the villa helper vesta_on_threshold_fraction)"
+  behaviour.high_quantile: "running is the villa's one rule now, behaviour.on_threshold_fraction (or the villa helper vesta_on_threshold_fraction)"
+  behaviour.running_min: "running is the villa's one rule now, behaviour.on_threshold_fraction (or the villa helper vesta_on_threshold_fraction)"

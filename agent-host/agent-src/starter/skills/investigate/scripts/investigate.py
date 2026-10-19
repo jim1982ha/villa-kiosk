@@ -35,6 +35,8 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from vesta_shared import script, skill_settings  # noqa: E402  (client, store, zone: one set-up for every skill script)
+from vesta_shared import daily  # noqa: E402  (the villa's one "running")
+from vesta_shared.params import VillaParams  # noqa: E402
 from vesta_shared import periods as kinds  # noqa: E402  (the period kinds and their words, read by the report page too)
 from vesta_shared.timeutil import clock, lasting  # noqa: E402  (the one clock, the one duration wording)
 from vesta_shared import past  # noqa: E402  (a read of the past with how far it got; the one "could not be read whole")
@@ -49,7 +51,8 @@ OFF_STATES, ON_STATES = {"off", "closed"}, {"on", "open"}
 MAX_LINES = 120                           # per part: enough for a night, short enough to reason about
 # ⚠️ THE THRESHOLDS ARE THE SKILL'S, NOT THE SCRIPT'S (architecture review 32; the 0.12.80 rule): settings.yaml, with a
 # villa's own villa.settings.yaml on top. A missing one is named, never guessed (`th`).
-SETTINGS = skill_settings.load(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."), "settings.yaml")
+SKILL = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SETTINGS = skill_settings.load(SKILL, "settings.yaml")
 BEHAVIOUR = skill_settings.behaviour(SETTINGS)
 #: What the investigation says when the villa's system re-ran every rule itself (settings.yaml `words`): one line for
 #: a reload or a start, never a "ran … check whether it did" line per rule.
@@ -267,23 +270,23 @@ def normal(rows: list[tuple[datetime, str]], end: datetime, on_above: float | No
     return out
 
 
-def threshold(values: list[float]) -> float | None:
-    """Above this a numeric entity counts as running: a share (running_fraction) of its HIGH readings — the top
-    `high_quantile` of them, so a single spike does not set it — at least a little above zero. None for an entity that
-    hardly moves (a temperature): read as levels, not runs.
+def threshold(rows: list[tuple[datetime, str]], params=None) -> float | None:
+    """Above this a numeric entity counts as running: the villa's ONE rule (vesta_shared.daily.threshold_from_readings,
+    the night check's, the energy figures' and the weekly page's) over its readings bucketed per hour. `params`: the
+    villa's settings (script.Context.params; this skill's settings.yaml alone when not given). None for an entity that
+    hardly moves (a temperature): read as levels, not runs (flat_spread).
 
-    ⚠️ HIGH IS ITS TOP READINGS, NOT ITS 95th PERCENTILE (2026-10-11): a meter reporting its idle every few seconds and
-    running a few seconds an hour has 99 % of its readings at rest — its 95th percentile WAS its rest, its runs were
-    never counted ("normal: 0 runs a day"), and an investigation could say neither "longer than any normal run" nor
-    "its supply was off"."""
-    vals = sorted(v for v in values if v is not None)
+    ⚠️ ONE "RUNNING" (owner, 2026-10-19): it was a share (running_fraction 0.10) of the top 0.1 % of the readings, at
+    least running_min 2 W: a second rule beside the villa's. An hour's MAXIMUM keeps a device that runs a few seconds an
+    hour (a meter reporting its idle every few seconds, 2026-10-11: its 95th percentile was its rest, its runs were
+    never counted) seen running, as its top readings did."""
+    vals = sorted(v for _, s in rows if (v := number(s)) is not None)
     if len(vals) < 5:
         return None
-    hi = vals[min(len(vals) - 1, int(len(vals) * th("high_quantile")))]
-    lo = vals[int(len(vals) * 0.05)]
+    hi, lo = vals[-1], vals[int(len(vals) * 0.05)]
     if hi <= 0 or (hi - lo) < hi * th("flat_spread"):
         return None
-    return max(hi * th("running_fraction"), th("running_min"))
+    return daily.threshold_from_readings([(t, number(s)) for t, s in rows], params or VillaParams(defaults=BEHAVIOUR))
 
 
 CHART_POINTS = 400                        # a chart's points: each the highest reading of its slice (a surge stays seen)
@@ -384,9 +387,10 @@ def chart_series(rows: list[tuple[datetime, str]], start: datetime, end: datetim
 
 
 def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_days: float, zone: ZoneInfo,
-             series: bool = False, now: datetime | None = None) -> dict:
+             series: bool = False, now: datetime | None = None, params=None) -> dict:
     """`series`: each numeric device's readings for a chart too (--out: the investigation page, page.py). `now`: the
-    time it is (the clock when not given) — no reading goes past it."""
+    time it is (the clock when not given) — no reading goes past it. `params`: the villa's settings (the one
+    "running": threshold)."""
     span_days = (end - start).total_seconds() > 86400
     parts = []
     names = client.states(ids)
@@ -399,7 +403,7 @@ def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_da
             continue
         base_rows, base_reach, _ = read(client, eid, start - timedelta(days=baseline_days), start, now) \
             if baseline_days > 0 else ([], start, None)
-        on = threshold([number(s) for _, s in base_rows + rows])
+        on = threshold(base_rows + rows, params)
         ps = periods(rows, reach, on)
         ref = normal(base_rows, base_reach, on) if base_rows else {}
         lines = [f"{eid}: {len(rows)} readings" + (f"; counted as running above {on:g}" if on else "")]
@@ -878,7 +882,7 @@ def main(argv=None):
     ap.add_argument("--baseline-days", default="3")
     ap.add_argument("--out", help="timeline / around: also save the reading as data (charts, events), for the investigation page")
     a = ap.parse_args(argv)
-    ctx = script.Context(a)
+    ctx = script.Context(a, skill=SKILL)                    # its settings.yaml: the one "running"'s share among them
     zone = ctx.Z                                           # the villa's time zone
     try:
         if a.cmd == "find":
@@ -905,7 +909,7 @@ def main(argv=None):
                 if not ids:
                     raise SystemExit("timeline needs --entities: ids from find, separated by commas.")
                 res = timeline(ctx.client, ids[:12], start, end, float(a.baseline_days), zone, series=bool(a.out),
-                               now=ctx.now)
+                               now=ctx.now, params=ctx.params)
                 if a.out:
                     # the whole reading, charts included, for the investigation page; the AI gets the lines only
                     with open(a.out, "w", encoding="utf-8") as f:
@@ -926,6 +930,11 @@ def main(argv=None):
     except Exception as e:  # noqa: BLE001 — said plainly to the model, which says it to the person
         print(json.dumps({"error": f"{type(e).__name__}: {str(e)[:300]}"}))
         return 1
+    # a setting the villa's own file still sets although this skill retired it: said, never silently ignored
+    told = skill_settings.retired(SKILL, "settings.yaml")
+    if told:
+        res["settings_not_used"] = told
+        print("\n".join(told), file=sys.stderr)
     print(json.dumps(res, ensure_ascii=False, default=str))
     return 0
 

@@ -141,7 +141,8 @@ def test_the_bottom_line_shows_the_stage_by_its_icon():
                   "unchecked") == "☑️ Done pressed by Fabien. Note: VESTA cannot check this one."
     assert bottom("#3-P2 (closed)\nTo: JM", "Cleared on 11/10/2026 10:27.") == \
         "✅ Cleared on 11/10/2026 10:27."
-    assert bottom("#3-P2 (closed)\nTo: JM") == "✅ Closed: nothing more to do"
+    # the stage's own words, with no moment to give: never a "{time}" shown (owner, 2026-10-19: one closing wording)
+    assert bottom("#3-P2 (closed)\nTo: JM") == "✅ Cleared."
     assert bottom("#3-P2 (existing)\nTo: JM", "x", "unchecked") == "⚠️ ⚙️ x"         # ☑️ only on a closure
     # a copy sent before 0.12.152 ("For: JM, P2 Incident: Follow Up #3") is never drawn half old, half new: it gets
     # the new heading whole when it changes (Notices.retitle — test_an_old_copy_gets_the_new_heading_whole)

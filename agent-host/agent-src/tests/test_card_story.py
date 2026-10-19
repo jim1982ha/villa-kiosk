@@ -76,8 +76,30 @@ def test_a_kiosk_that_does_not_show_them_gets_none(tmp_path):
     old.info = {"contract": 1}                                          # a Kiosk before 2.496.356: no step_kinds
     k, t, state, notices, iid, uid = villa(tmp_path, old)
     told(notices, state, iid, 1)
+    before = list(k.ticket(uid)["updates"])
     run(t.repair())
     assert not [u for u in k.ticket(uid)["updates"] if u.get("kind") == "noted"]
+    # nor without its kind (the Kiosk's gate, Kiosk._gated): it would read as the fault changing status
+    assert k.ticket(uid)["updates"] == before and k.ticket(uid)["status"] == "open"
+
+
+def test_a_kiosk_updated_since_the_agent_started_gets_them_at_the_next_repair(tmp_path):
+    # the repair reads /agent/v1/info again while the one held lists no step kinds (Kiosk.refresh): the gate then lets
+    # the lines through — never a restart of the agent
+    from kiosk_fake import STEP_KINDS, TICKET_FIELDS
+    k = FakeKiosk()
+    k.info = {"contract": 1}                                            # what it said when the agent started
+    real = k._req
+
+    async def updated(method, path, body=None):
+        if path == "/agent/v1/info":                                    # updated since: it lists them now
+            return 200, {"contract": 1, "step_kinds": list(STEP_KINDS), "ticket_fields": list(TICKET_FIELDS)}
+        return await real(method, path, body)
+    k._req = updated
+    k, t, state, notices, iid, uid = villa(tmp_path, k)
+    told(notices, state, iid, 1)
+    run(t.repair())
+    assert [u for u in k.ticket(uid)["updates"] if u.get("kind") == "noted"]
 
 
 def test_a_reworded_line_is_never_written_on_the_card_again(tmp_path):

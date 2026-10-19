@@ -315,8 +315,10 @@ def test_a_done_on_telegram_resolves_the_fault_by_the_person(tmp_path):
           "bad_states": ["unlocked"]}
     iid = desk.intake(store, ev, T0, occupancy_reader=lambda: "x")["incident_id"]
     out = desk.reply(store, iid, "done", "fm", T0 + timedelta(minutes=5), name="Fabien")
-    (res,) = [a for a in out["actions"] if a["action"] == "ticket.resolve"]
-    assert res["who"] == "Fabien"
+    # who closed it travels on the task (Problems.card), never on the action (architecture review, 2026-10-19)
+    assert {"action": "faults_changed"} in out["actions"]
+    task = store.last_task(f"incident:{iid}")
+    assert Problems(store).card(task)["who"] == "Fabien" and task["status"] == "done"
 
 
 # ---------------------------------------------------------------------- review 31
@@ -511,3 +513,63 @@ def test_a_faults_note_follows_what_to_do_unless_a_person_wrote_it():
     assert run(k.amend("va-3", amend)) == 1 and ticket(doc, "va-3")["note"].startswith("What to do: ")
     assert run(k.amend("va-4", amend)) == 0                                             # closed: as it was
     assert run(k.held_tickets())["va-1"]["note"] == "What to do: the breaker and the supply"
+
+
+# ---------------------------------------------------------------------- 8 · the Kiosk-version gate, the only door
+def _every_write(k: Kiosk) -> dict:
+    """Every write the agent makes to a fault, on Kiosk `k`: a new fault with every field, then each amend, a resolve
+    (the agent's clearing, then a person's Done) and a reopening. Returns the fault as the Kiosk holds it."""
+    from vesta_agent.kiosk import noted, retitled, tagged, todo
+    tid = run(k.add_ticket("Pump offline for 2 h", entity_id="switch.pump", note="What to do: power", document_ids=["d1"],
+                           number=5, origin="alert", check="minutes",
+                           pattern={"titlePattern": "Pump offline for {since}", "since": "2026-10-19T00:00:00Z"}))
+    run(k.amend(tid, retitled("Pump offline for 3 h"), tagged(6, "night", "nightly", {"titlePattern": "P {since}",
+                                                                                         "since": "2026-10-19T01:00:00Z"}),
+                noted([{"at": "2026-10-19T00:05:00Z", "note": "Reminder sent (to: FM)"}]), todo("What to do: the plug")))
+    k.person_renames(tid, "Pump — Wayan on it")
+    run(k.amend(tid, retitled("Pump offline for 4 h")))                       # under a person's title: a reading step
+    run(k.resolve_ticket(tid, note="Cleared: back online."))
+    run(k.reopen_ticket(tid, "Pump offline again", "Back again."))
+    run(k.resolve_ticket(tid, note="Done", who="Wayan"))
+    return k.ticket(tid)
+
+
+def _kinds_and_fields(t: dict) -> tuple[set, set]:
+    declared = set(json.load(open(CONTRACT))["ticket"]["fields"])
+    return {u["kind"] for u in t["updates"] if u.get("kind") and u.get("by") != "Owner"}, set(t) & declared
+
+
+def test_a_kiosk_that_lists_everything_gets_every_kind_and_field_the_agent_writes():
+    kinds, fields = _kinds_and_fields(_every_write(FakeKiosk()))
+    agreed = json.load(open(CONTRACT))
+    assert kinds == set(agreed["ticketUpdate"]["kinds"]) and fields == set(agreed["ticket"]["fields"]), (kinds, fields)
+
+
+def test_a_kiosk_that_lists_nothing_gets_only_the_agreements_base_sets():
+    # architecture review, 2026-10-19: the gate was asked for ONE kind and ONE field; every other one was written
+    # whatever the Kiosk — an older one shows a kind it does not know as a change of status
+    agreed = json.load(open(CONTRACT))
+    k = FakeKiosk()
+    k.info = {"contract": 1}                                    # a Kiosk before 2.496.356: no step_kinds, no ticket_fields
+    t = _every_write(k)
+    kinds, fields = _kinds_and_fields(t)
+    assert kinds <= set(agreed["ticketUpdate"]["kindsBeforeList"]) and kinds, kinds
+    assert fields <= set(agreed["ticket"]["fieldsBeforeList"]) and fields, fields
+    assert "titlePattern" not in t and "since" not in t
+    assert not [u for u in t["updates"] if "Reminder sent" in str(u.get("note"))]   # never as a change of status
+    assert t["alertNumber"] == 6 and t["note"] == "What to do: the plug"          # what it reads still moves
+
+
+def test_an_unlisted_kind_that_changes_the_status_is_written_as_before_kinds():
+    from vesta_agent.kiosk import cleared_step, last_close
+    k = FakeKiosk()
+    k.info = {"contract": 1, "step_kinds": ["retitled", "reading"], "ticket_fields": []}  # before "cleared", "reopened"
+    tid = run(k.add_ticket("Pump weak", entity_id="switch.pump", number=5))
+    run(k.resolve_ticket(tid, note="Cleared: back online."))
+    t = k.ticket(tid)
+    close = last_close(t["updates"])
+    assert "kind" not in close and cleared_step(close)           # still read as the agent's clearing, by its note
+    run(k.reopen_ticket(tid, "Pump weak again", "Back again."))
+    back = k.ticket(tid)["updates"][-1]
+    assert (back["status"], back.get("kind"), back["note"]) == ("open", None, "Back again.")   # a status step, as before
+    assert "entityId" not in t and "alertNumber" not in t       # a Kiosk that lists no field takes none

@@ -22,7 +22,8 @@ from typing import Any
 from vesta_shared.params import VillaParams
 from vesta_shared.result import COUNTER_RESET, PARAM_MISSING  # the ids other skills read: written once
 from vesta_shared.stats import med, pct_change, step_index
-from vesta_shared.device_state import battery_charge, is_offline
+from vesta_shared import battery  # a battery's charge, its projection and its rule ids: one owner
+from vesta_shared.device_state import is_offline
 from vesta_shared.timeutil import day_label, lasting, weekday_name
 
 P2, P3, INFO = "P2", "P3", "INFO"
@@ -215,22 +216,22 @@ def battery_rules(asset: dict, entity_id: str, unit: str | None, level: float | 
     out: list[Finding] = []
     slug = asset["slug"]
     warn, crit = params.behaviour("battery_warn_pct"), params.behaviour("battery_crit_pct")
+    # ⚠️ THE ONE JUDGE OF A BATTERY (owner, 2026-10-19): the weekly page shows these findings, it no longer judges
     if unit == "%" and level is not None:
         if level <= crit:
-            out.append(Finding("PM-BATTERY-CRIT", entity_id, slug, "battery", P2 if asset.get("critical") else P3,
+            out.append(Finding(battery.CRIT, entity_id, slug, "battery", P2 if asset.get("critical") else P3,
                                f"{asset['name']} battery at {level:.0f}%: replace now.", {"level": level}, "Replace the battery."))
         elif level <= warn:
-            out.append(Finding("PM-BATTERY-LOW", entity_id, slug, "battery", P3,
+            out.append(Finding(battery.LOW, entity_id, slug, "battery", P3,
                                f"{asset['name']} battery at {level:.0f}%: replace within the week.", {"level": level}, "Replace the battery."))
-        # days to empty from the last days (vesta_shared.params: battery_trend_*)
+        # days to empty from the last days (settings.yaml battery_trend_*), to its crit level (vesta_shared.battery)
         pts = [(i, v) for i, (_, v) in enumerate(series[-int(params.behaviour("battery_trend_days")):])]
         if len(pts) >= params.behaviour("battery_trend_min_points"):
-            from vesta_shared.stats import slope_per_hour
-            slope = slope_per_hour([(float(i), v) for i, v in pts])  # % per day here
-            if slope is not None and slope < -params.behaviour("battery_trend_drop_per_day") and level is not None:
-                days_left = (level - crit) / (-slope)
+            p = battery.projection(pts, crit, level)
+            if p is not None and p["per_day"] < -params.behaviour("battery_trend_drop_per_day"):
+                slope, days_left = p["per_day"], p["days_left"]
                 if days_left < params.behaviour("battery_trend_warn_days"):
-                    out.append(Finding("PM-BATTERY-TREND", entity_id, slug, "battery", INFO,
+                    out.append(Finding(battery.TREND, entity_id, slug, "battery", INFO,
                                        f"{asset['name']} battery is falling {abs(slope):.1f} points a day, about {days_left:.0f} days left.",
                                        {"slope_per_day": round(slope, 2), "days_left": round(days_left)}, "Plan the replacement."))
     elif unit == "V":
@@ -239,8 +240,8 @@ def battery_rules(asset: dict, entity_id: str, unit: str | None, level: float | 
             out.append(Finding(PARAM_MISSING, entity_id, slug, "battery", INFO,
                                f"{asset['name']} reports a battery voltage ({level} V) but no nominal voltage is set: "
                                f"create input_number.{slug}_battery_nominal_v to get a percentage.", {"reading_v": level, "name": asset["name"]}, ""))
-        elif level is not None and battery_charge(level, "V", nominal) < params.behaviour("battery_low_fraction_of_nominal") * 100:
-            out.append(Finding("PM-BATTERY-LOW", entity_id, slug, "battery", P3,
+        elif level is not None and battery.charge(level, "V", nominal) < params.behaviour("battery_low_fraction_of_nominal") * 100:
+            out.append(Finding(battery.LOW, entity_id, slug, "battery", P3,
                                f"{asset['name']} battery at {level:.2f} V, below {params.behaviour('battery_low_fraction_of_nominal'):.0%} of its {nominal:.2f} V nominal.",
                                {"level_v": level, "nominal_v": nominal}, "Replace the battery."))
     return out

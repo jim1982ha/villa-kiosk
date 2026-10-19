@@ -15,7 +15,7 @@ behaviour:
   silence_hours: 24                     # a sensor that has not reported for this long
   unavailable_minutes: 10              # offline this long: its fault opens (the night check, and recheck.py every 5 minutes)
   back_online_minutes: 10               # a device found offline, back this long: its fault closes (recheck.py)
-  on_threshold_fraction: 0.2            # fraction of running power that counts as "on"
+  on_threshold_fraction: 0.2            # fraction of running power that counts as "on" — the villa's one rule, held equal in every skill: change it with the helper vesta_on_threshold_fraction
   on_threshold_floor_w: 1.0             # an asset with no data to judge from: "on" above this
   energy_gap_hours: 3                   # a meter's day with more hours missing is not judged
   silence_history_hours: 72             # how far back a quiet sensor's reporting is looked at
@@ -45,3 +45,15 @@ behaviour:
 reopened_in_kiosk:
   tell: fm
   title: "Fault reopened in the Cockpit"
+
+# A fault of the night check's a person closed in the Cockpit while its problem was still there (owner, architecture
+# review 2026-10-19: one rule with the alert desk's). The close holds until the device is read again — recheck.py
+# within 5 minutes for the rules this skill reads again (skill.yaml `rechecks`), else the next night check — at least
+# `minutes` after the close and still bad: the fault opens again ("Still there after the close.") and `tell` (a role)
+# is told once under `title`. `words`: the message's body — {when} the close's time, {what} the fault. `minutes` is the
+# alert desk's clear_minutes (rules.yaml); without it a person's close holds.
+still_there_after_close:
+  minutes: 10
+  tell: fm
+  title: "Fault still there after the close"
+  words: "Closed in the Cockpit on {when}, but still there: {what}. Please look again."

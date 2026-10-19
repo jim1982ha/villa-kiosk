@@ -3,8 +3,8 @@
 Taken out of outcome.py (architecture review, 2026-10-07): the module that carries out a script's result also held
 the tickets and the alert buttons, eleven dependencies for three jobs. Its callers: the AI's create_ticket tool
 (create), and the reconciliation at each start, each night and after every result that moved a fault (repair) —
-a script's ticket / ticket.resolve / ticket.reopen action only says a fault moved (outcome.py); what the fault must say
-comes from its task (Problems.card).
+a script's faults_changed action (or an older ticket / ticket.resolve / ticket.reopen) only says a fault moved
+(outcome.py); what the fault must say comes from its task (Problems.card).
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from typing import Awaitable, Callable
 from vesta_shared import kiosk_words, result
 from vesta_shared.problems import Problems
 
-from .kiosk import MINE, NOTED, KioskError, noted, retitled, tagged, todo
+from .kiosk import MINE, KioskError, noted, retitled, tagged, todo
 from .outcome_words import ticket_title
 
 log = logging.getLogger("vesta.outcome")
@@ -89,14 +89,14 @@ class Tickets:
         return tid
 
     def _pattern(self, want: dict, card: dict | None = None) -> dict | None:
-        """{"titlePattern", "since"} for a fault the agent titles, to a Kiosk that reads them (Kiosk.takes); None for a
-        title a person wrote, or nothing to word."""
-        if not want.get("pattern") or not self.kiosk.takes("titlePattern") or (card or {}).get("person_titled"):
+        """{"titlePattern", "since"} for a fault the agent titles (a Kiosk that does not read them never gets them: its
+        gate, Kiosk._gated); None for a title a person wrote, or nothing to word."""
+        if not want.get("pattern") or (card or {}).get("person_titled"):
             return None
         return {"titlePattern": ticket_title(want["pattern"])[:200], "since": want["since"]}
 
     async def reopen(self, a: dict) -> bool:
-        """ticket.reopen {task_id, title, note}: the task's fault open again in the Kiosk under its new title — or, when it
+        """{task_id, title, note}: the task's fault open again in the Kiosk under its new title — or, when it
         never had one or it is gone, a new one for the task (architecture review 24: one problem, one fault)."""
         task = self._store().task(int(a["task_id"]))
         if not task or not self.kiosk.enabled:
@@ -135,17 +135,13 @@ class Tickets:
         except Exception as e:  # noqa: BLE001 — the next start or night tries again
             log.warning("The Kiosk's tickets could not be read (%s)", type(e).__name__)
             return nothing
-        if not self.kiosk.says(NOTED):
-            try:
-                await self.kiosk.check()          # a Kiosk updated since the agent started says so now
-            except Exception as e:  # noqa: BLE001 — the card's Telegram lines wait for the next repair
-                log.debug("The Kiosk's info could not be read (%s)", type(e).__name__)
+        await self.kiosk.refresh()                # a Kiosk updated since the agent started says what it shows now
         await self._take_in(problems, held)
         # every problem's task as its facts say (Problems.settle_all): over — closed; still there — open (again)
         if moved := problems.settle_all(set(held)):
+            now_open = sum(1 for tid in moved if (store.task(tid) or {}).get("status") == "open")
             log.info("Tasks brought in line with their problems: %s", ", ".join(
-                f"{sum(1 for a in moved if a['action'] == k)} {w}" for k, w in
-                (("ticket.resolve", "closed"), ("ticket.reopen", "reopened"), ("ticket", "new")) if any(a["action"] == k for a in moved)))
+                f"{n} {w}" for n, w in ((len(moved) - now_open, "closed"), (now_open, "opened")) if n))
         moved_cards = await self._converge(problems, held)
         made = 0
         for t in problems.open_tasks():
@@ -288,8 +284,9 @@ class Tickets:
                     if said and card.get("note") != said:
                         amends.append(todo(said))
                     # what happened on Telegram — reminders, escalation, a button pressed (owner, 2026-10-14) — from this
-                    # task's run on (an earlier run's lines belong to the fault as it was then)
-                    if want["number"] and self.kiosk.says(NOTED):
+                    # task's run on (an earlier run's lines belong to the fault as it was then); a Kiosk that shows no
+                    # such line gets none (its gate, Kiosk._gated)
+                    if want["number"]:
                         since = _moment(t.get("reopened_at") or t.get("created_at"))
                         have = {at for at, _note in card.get("noted") or []}            # by its moment (kiosk.noted)
                         lines = [x for x in self.story(want["number"]) if (since is None or (_moment(x["at"]) or since) >= since)

@@ -3,7 +3,7 @@
    references as [n]), the charts, what the records rule out and cannot tell, what would have warned earlier, every
    recorded moment in time order (folded), how it was checked and what the web contributed. Facts, charts and groups are
    laid out by code from the readings (investigation_facts.py, `f`); the AI writes the notes (`n`). #}
-{% macro legend(items) %}{% if items %}<p class="note legend">{% for b in items %}<span class="key">{% if b.shape == "line" %}<span class="sw line" style="border-color:{{ b.colour }}"></span>{% elif b.shape == "dash" %}<span class="sw dash" style="border-color:{{ b.colour }}"></span>{% elif b.shape == "mark" %}<span class="sw mark" style="background:{{ b.colour }}"></span>{% else %}<span class="sw" style="background:{{ b.colour }}"></span>{% endif %} {{ b.word }}</span>{% endfor %}</p>{% endif %}{% endmacro %}
+{% from "page_parts.html" import legend, pill %}
 <body><main class="wrap">
 <header class="head">
   {# Light / Auto / Dark, as on the VESTA Agent page — CSS only (page_head.html): the Kiosk opens a report with scripts off #}
@@ -18,7 +18,7 @@
   <div class="stack">
   {% if n.summary %}<div class="card"><p>{{ cite(n.summary) }}</p></div>{% endif %}
   {# a block per cause, not a three-column table: on a phone the columns cut words in two #}
-  {% for c in n.causes %}<div class="card"><p><b>{{ loop.index }}. {{ cite(c.cause) }}</b>{% if c.verdict %} <span class="st {{ {"consistent": "watch", "not supported": "ok", "cannot tell": "flat"}.get(c.verdict, "flat") }}">{{ c.verdict }}</span>{% endif %}</p>
+  {% for c in n.causes %}<div class="card"><p><b>{{ loop.index }}. {{ cite(c.cause) }}</b>{% if c.verdict %} {{ pill({"consistent": "watch", "not supported": "ok", "cannot tell": "flat"}.get(c.verdict, "flat"), c.verdict) }}{% endif %}</p>
     {% if c.evidence %}<p><span class="note">What points to it:</span> {{ cite(c.evidence) }}</p>{% endif %}
     {% if c.confirm %}<p><span class="note">How to confirm on site:</span> {{ cite(c.confirm) }}</p>{% endif %}
     {% if c.source %}<p class="note">Where the lead came from: {{ named(c.source) }}</p>{% endif %}</div>
@@ -63,7 +63,7 @@
 {% if f.log %}
 <details class="card fold"><summary><h2>Everything recorded, in time order ({{ f.log | length }})</h2></summary>
   <div class="tbl"><table><tr><th style="white-space:nowrap">When</th><th>What</th></tr>
-  {% for t in f.log %}<tr><td style="white-space:nowrap">{{ t.time }}</td><td><span class="st {{ {"unusual": "bad", "usual": "ok", "reported": "watch"}[t.pill] }}">{{ t.pill }}</span> {{ t.text }}</td></tr>{% endfor %}
+  {% for t in f.log %}<tr><td style="white-space:nowrap">{{ t.time }}</td><td>{{ pill({"unusual": "bad", "usual": "ok", "reported": "watch"}[t.pill], t.pill) }} {{ t.text }}</td></tr>{% endfor %}
   </table></div>
   <p class="note">“unusual”: against the device's own normal, or a device that stopped reporting; “usual”: an ordinary event{% if f.log | selectattr("pill", "equalto", "reported") | list %}; “reported”: what a person saw or did, not in the records{% endif %}.</p>
 </details>

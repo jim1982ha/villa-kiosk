@@ -1,8 +1,9 @@
 """The VESTA Kiosk agent interface v1: the heartbeat and the Facility tickets.
 
 Only two jobs, one mechanism each:
-  presence   POST /agent/v1/heartbeat every 2 minutes: the Kiosk shows the agent
-             online / offline (its own window, 5 min by default)
+  presence   POST /agent/v1/heartbeat: the Kiosk shows the agent online / offline, by a window
+             it hands out in its answer (offline_after_minutes); the agent beats three
+             times within it (beat_every)
   FM tasks   a ticket in the Facility records (GET, then PUT /agent/v1/fm-data with
              the revision read): the facility manager's work lives in one place,
              and the Kiosk stamps every record the agent writes "By VESTA Agent"
@@ -30,7 +31,23 @@ from vesta_shared import agreement
 log = logging.getLogger("vesta.kiosk")
 
 CONTRACT = 1
-HEARTBEAT_EVERY = 120
+
+#: The heartbeat's interval before the Kiosk has answered one (seconds); then a third of the window it hands out
+#: (`offline_after_minutes`), never under BEAT_FLOOR_S. ⚠️ THE KIOSK'S WINDOW, READ (architecture review, 2026-10-19):
+#: 120 s was typed here and the answer thrown away — a Kiosk set to "offline after 1 minute" showed the agent offline
+#: and online by turns, every cycle.
+BEAT_BEFORE_ANSWER_S = 120
+BEAT_FLOOR_S = 30
+BEATS_PER_WINDOW = 3
+
+
+def beat_every(answer: dict, current: float) -> float:
+    """The heartbeat's interval after the Kiosk's `answer`: a third of its `offline_after_minutes`, never under
+    BEAT_FLOOR_S; `current` when the answer names no window."""
+    minutes = (answer or {}).get("offline_after_minutes")
+    if isinstance(minutes, bool) or not isinstance(minutes, (int, float)) or minutes <= 0:
+        return current
+    return max(float(BEAT_FLOOR_S), minutes * 60 / BEATS_PER_WINDOW)
 
 
 
@@ -279,6 +296,8 @@ class Kiosk:
         self.headers = {"Authorization": f"Bearer {token}", **(headers or {})}
         self.enabled = bool(url and token)
         self.info: dict | None = None
+        self.every: float = BEAT_BEFORE_ANSWER_S        # the heartbeat's interval: beat_every, from the Kiosk's answer
+        self._cadence_refused: str | None = None        # the Kiosk's last "refused: …" of our cadence, said once
         self._lock = asyncio.Lock()
 
     async def _req(self, method: str, path: str, body: dict | None = None) -> tuple[int, dict]:
@@ -307,13 +326,24 @@ class Kiosk:
         self.info = data
         return True
 
-    async def heartbeat(self, status: str | None = None, cadence: dict | None = None) -> None:
+    async def heartbeat(self, status: str | None = None, cadence: dict | None = None) -> dict:
         """`cadence`: this agent's own timing (agent-contract.json `heartbeat`: checkMinutes, nightlyAt) — the Kiosk's
-        Overview (i) says it instead of a copy of the defaults (architecture review, 2026-10-15)."""
+        Overview (i) says it instead of a copy of the defaults (architecture review, 2026-10-15). Returns the Kiosk's
+        answer; its window (`offline_after_minutes`) sets the next interval (`every`, beat_every). A cadence the Kiosk
+        did not take ("cadence": "refused: …", with a 200) is said once in the log — the beat itself counted."""
         body = {k: v for k, v in (("status", status), ("cadence", cadence)) if v}
-        code, _ = await self._req("POST", "/agent/v1/heartbeat", body or None)
+        code, answer = await self._req("POST", "/agent/v1/heartbeat", body or None)
         if code != 200:
             raise KioskError(f"heartbeat answered {code}", status=code)
+        self.every = beat_every(answer, self.every)
+        said = answer.get("cadence")
+        if isinstance(said, str) and said.startswith("refused"):
+            if said != self._cadence_refused:
+                log.warning("The Kiosk did not take this agent's timing: %s", said[:200])
+            self._cadence_refused = said
+        else:
+            self._cadence_refused = None
+        return answer
 
     async def heartbeats(self, stop: asyncio.Event, status=lambda: None, cadence=lambda: None) -> None:
         reported = None
@@ -328,7 +358,7 @@ class Kiosk:
                     log.warning("Kiosk heartbeat failed: %s", e)
                 reported = str(e)
             try:
-                await asyncio.wait_for(stop.wait(), timeout=HEARTBEAT_EVERY)
+                await asyncio.wait_for(stop.wait(), timeout=self.every)
             except asyncio.TimeoutError:
                 pass
 
@@ -405,8 +435,8 @@ class Kiosk:
                 t["origin"] = origin
             if check:
                 t["check"] = check
-            t.update({k: v for k, v in (pattern or {}).items() if v})     # titlePattern, since (takes())
-            tickets.append(t)
+            t.update({k: v for k, v in (pattern or {}).items() if v})     # titlePattern, since
+            tickets.append(self._gated(None, t))
             data["tickets"] = tickets
             return tid
         return await self._edit(change)
@@ -430,11 +460,13 @@ class Kiosk:
             tickets = list(data.get("tickets") or [])
             for i, t in enumerate(tickets):
                 if isinstance(t, dict) and t.get("id") == tid:
-                    n = 0
+                    n, was = 0, t
                     for a in amends:
                         nt = a(t)
                         if nt is not None:
                             t, n = nt, n + 1
+                    t = self._gated(was, t)
+                    n = 0 if t == was else n                  # all it changed is what this Kiosk cannot read
                     if n:
                         tickets[i] = t
                         data["tickets"] = tickets
@@ -442,15 +474,57 @@ class Kiosk:
             return 0
         return await self._edit(change) if amends else 0
 
-    def takes(self, field: str) -> bool:
-        """This Kiosk reads the fault field `field` (/agent/v1/info `ticket_fields`, 2.496.382+): an older one would show
-        a title pattern's "{since}" as it is."""
-        return field in ((self.info or {}).get("ticket_fields") or [])
+    # ⚠️ THE KIOSK-VERSION GATE IS THE ONLY DOOR (architecture review, 2026-10-19): takes(field) / says(kind) existed,
+    # and callers remembered to ask for ONE kind ("noted") and ONE field ("titlePattern"); every other kind and field was
+    # written whatever the Kiosk — an older one shows a kind it does not know as a change of status. Now every ticket
+    # this class writes passes _gated, and nothing outside it asks.
+    def _kinds(self) -> frozenset[str]:
+        """The step kinds this Kiosk shows: its /agent/v1/info `step_kinds` (2.496.356+), else the agreement's
+        `ticketUpdate.kindsBeforeList` — what a Kiosk took before it listed them."""
+        listed = (self.info or {}).get("step_kinds")
+        return frozenset(listed if isinstance(listed, list) else
+                         agreement.section("ticketUpdate").get("kindsBeforeList") or ())
 
-    def says(self, kind: str) -> bool:
-        """This Kiosk shows fault steps of `kind` (/agent/v1/info `step_kinds`, 2.496.356+): an older one would read a
-        "noted" line as the fault changing status."""
-        return kind in ((self.info or {}).get("step_kinds") or [])
+    def _fields(self) -> frozenset[str]:
+        """The fault fields this Kiosk reads: its /agent/v1/info `ticket_fields` (2.496.382+), else the agreement's
+        `ticket.fieldsBeforeList`."""
+        listed = (self.info or {}).get("ticket_fields")
+        return frozenset(listed if isinstance(listed, list) else agreement.section("ticket").get("fieldsBeforeList") or ())
+
+    def _shown(self, u: dict) -> dict | None:
+        """A step this agent adds, as this Kiosk can read it: a kind it does not list is written without (the shape
+        before kinds — a close by its note, the agreement's clearedNotePrefixes); a kind that changes no status
+        (`notStatusChanges`: a Telegram line, a title) is not written at all — without its kind it would read as a
+        change of status."""
+        kind = u.get("kind")
+        if not kind or kind in self._kinds():
+            return u
+        if kind in (agreement.section("ticketUpdate").get("notStatusChanges") or ()):
+            return None
+        return {k: v for k, v in u.items() if k != "kind"}
+
+    def _gated(self, before: dict | None, after: dict) -> dict:
+        """Ticket `after` (`before`: as it was read, None for a new one) as this Kiosk can read it: a field the
+        agreement declares (`ticket.fields`) that it does not read keeps what it had (absent on a new one); each step
+        added passes _shown. What a person wrote before stays as it was."""
+        declared, takes = set(agreement.section("ticket").get("fields") or {}), self._fields()
+        out = {k: v for k, v in after.items() if k not in declared or k in takes}
+        out.update({k: before[k] for k in declared - takes if before and k in before and k in after})
+        old = len((before or {}).get("updates") or [])
+        ups = list(after.get("updates") or [])
+        out["updates"] = ups[:old] + [s for s in (self._shown(u) if isinstance(u, dict) else u for u in ups[old:])
+                                      if s is not None]
+        return out
+
+    async def refresh(self) -> None:
+        """/agent/v1/info read again when the one held lists no step kinds: a Kiosk updated since the agent started
+        says what it now shows (the repair asks at each round). Its failure is the next round's to retry."""
+        if isinstance((self.info or {}).get("step_kinds"), list):
+            return
+        try:
+            await self.check()
+        except Exception as e:  # noqa: BLE001 — the gate keeps the agreement's base sets meanwhile
+            log.debug("The Kiosk's info could not be read (%s)", type(e).__name__)
 
     async def reopen_ticket(self, tid: str, title: str, note: str | None = None) -> bool:
         """One of the agent's resolved tickets open again — its problem came back (architecture review 24: each return
@@ -464,9 +538,9 @@ class Kiosk:
                     mine = not person_titled(t)                 # a title a person wrote stays theirs (review 26)
                     if mine and str(t.get("title") or "") != title[:200]:
                         upd["was"] = str(t.get("title") or "")  # the title it replaces: the card's "Was:" (review 31)
-                    t = {k: v for k, v in t.items() if k != "resolvedAt"}
-                    tickets[i] = dict(t, status="open", title=title[:200] if mine else t.get("title"),
-                                      updates=list(t.get("updates") or []) + [upd])
+                    was, t = t, {k: v for k, v in t.items() if k != "resolvedAt"}
+                    tickets[i] = self._gated(was, dict(t, status="open", title=title[:200] if mine else t.get("title"),
+                                                       updates=list(t.get("updates") or []) + [upd]))
                     data["tickets"] = tickets
                     return True
             return False
@@ -495,8 +569,8 @@ class Kiosk:
                             "by": "", "who": who[:80], "photoIds": [], **({"note": note[:500]} if note else {})}]
                     else:
                         upd["kind"] = CLEARED
-                    tickets[i] = dict(t, status="resolved", resolvedAt=now,
-                                      updates=list(t.get("updates") or []) + [upd])
+                    tickets[i] = self._gated(t, dict(t, status="resolved", resolvedAt=now,
+                                                     updates=list(t.get("updates") or []) + [upd]))
                     data["tickets"] = tickets
                     return True
             return False

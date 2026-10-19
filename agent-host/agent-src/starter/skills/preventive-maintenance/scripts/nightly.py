@@ -264,21 +264,33 @@ def run(args) -> dict:
     night = Problems(store).record_night(
         findings, today.isoformat(), state_rules=STATE_RULES,
         event_rules=EVENT_RULES, worsened_step=params.behaviour("worsened_step_pct"),
-        resolved_note="Cleared: the nightly check no longer sees it.", handed_over=handed_over)
-    new, still_open, closed, tasks = night["new"], night["still_open"], night["closed"], night["tasks"]
+        resolved_note="Cleared: the nightly check no longer sees it.", handed_over=handed_over,
+        settle_minutes=still_there_minutes(ctx.settings))
+    new, still_open, closed, tasks = night["new"], night["still_open"], night["closed"], night["task_ids"]
     again = night["again"]
-    resolved = night["resolve_actions"]
+    resolved = night["resolved"]
     store.beat("maintenance_nightly", day_end.astimezone(timezone.utc).isoformat())
     store.audit("preventive-maintenance", "nightly", {"as_of": today.isoformat(), "new": len(new), "closed": len(closed)})
 
     result = {"as_of": today.isoformat(), "villa": pack.villa, "features_written": features_written,
               "new_findings": new, "still_open": still_open, "closed": closed, "handed_over": night["handed_over"], "again": again,
-              "tasks_to_create": tasks, "tasks_resolved": [a["task_id"] for a in resolved], "resolve_actions": resolved,
-              "reopen_actions": night["reopen_actions"], "notes": notes}
+              "tasks_to_create": tasks, "tasks_resolved": resolved, "notes": notes}
     if args.out:
         with open(args.out, "w", encoding="utf-8") as fh:
             json.dump(result, fh, indent=1, default=str)
     return result
+
+
+def still_there_minutes(settings: dict) -> float | None:
+    """settings.yaml `still_there_after_close.minutes`: how long after a person's close a reading still bad opens the
+    fault again (Problems.wants_open). None — named on stderr, never guessed — when the settings give none: a person's
+    close then holds."""
+    v = (settings.get("still_there_after_close") or {}).get("minutes")
+    if isinstance(v, (int, float)) and not isinstance(v, bool):
+        return float(v)
+    print("preventive-maintenance settings.yaml: still_there_after_close needs `minutes`: a fault closed while its "
+          "problem is still there stays closed", file=sys.stderr)
+    return None
 
 
 #: The families whose devices are read for being offline (and, for `level`, silent).
@@ -426,13 +438,11 @@ def main(argv=None):
     args = ap.parse_args(argv)
     res = run(args)
     out = {k: res[k] for k in ("as_of", "features_written", "tasks_to_create", "notes")}
-    out[result.FAULTS_CHANGED] = bool(res["new_findings"] or res["still_open"] or res["closed"] or res.get("handed_over") or res["again"])
-    # The engine's standard output: each task a Facility ticket in the VESTA Kiosk, and a P2
-    # finding sent to the facility manager at once rather than at the 07:00 digest.
-    # the ticket's title says what is wrong, its note what to check (two fields, not one sentence)
-    out["actions"] = [result.fault(t["todo_summary"], task_id=t["task_id"], check=t.get("check"), entity_id=t.get("entity_id"))
-                      for t in res["tasks_to_create"]]
-    out["actions"] += res["resolve_actions"] + res.get("reopen_actions", [])
+    # The engine's standard output: the Kiosk's faults brought up to date from the tasks (what each says is the task's:
+    # Problems.card), and a P2 finding sent to the facility manager at once rather than at the 07:00 digest
+    out[result.FAULTS_CHANGED] = bool(res["new_findings"] or res["still_open"] or res["closed"] or res.get("handed_over")
+                                      or res["again"] or res["tasks_to_create"] or res["tasks_resolved"])
+    out["actions"] = []
     out["send"] = told_now(res)
     print(json.dumps(out, indent=1, default=str))
     return 0

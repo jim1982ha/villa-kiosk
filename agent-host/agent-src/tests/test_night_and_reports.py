@@ -32,9 +32,8 @@ def test_a_pump_that_ran_short_keeps_its_fault_until_a_quiet_night(tmp_path):
                   "Pool Pump ran 3.0 h against 8.0 h scheduled.", {}, "Check the timer.")
     rules = dict(state_rules=nightly.STATE_RULES, event_rules=nightly.EVENT_RULES, worsened_step=15)
     night = Problems(st).record_night([f], "2026-10-05", **rules)
-    acts = [result.fault(t["todo_summary"], task_id=t["task_id"], check=t["check"], entity_id=t["entity_id"])
-            for t in night["tasks"]]
-    asyncio.run(v.outcome.carry_out({"actions": acts, result.FAULTS_CHANGED: True}, "preventive-maintenance"))
+    assert night["task_ids"]
+    asyncio.run(v.outcome.carry_out({"actions": [result.faults_changed()]}, "preventive-maintenance"))
     asyncio.run(v.tickets.repair())
     assert k.tickets and not k.resolved and Problems(st).open_problems()
     Problems(st).record_night([], "2026-10-06", **rules)                                # a night without it

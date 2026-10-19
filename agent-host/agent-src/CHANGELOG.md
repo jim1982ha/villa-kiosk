@@ -1,5 +1,87 @@
 # Changelog
 
+## 0.6.258 (19 October 2026)
+
+The night check owns each number asked twice (owner, 19 October: "proceed with the recommended implementation").
+- The page (owner, 2026-10-19): tool_access.catalog's role rows carry `from` (the tab their switch is in, places
+  titles) and rules.js draws it; skills.js shows no Tools tab for a skill that lists none (`hasTools`);
+  skills.when_it_runs words a command skill's chat row with its `usage` as an example; proposals' usage rewritten.
+  Test: test_a_command_skill_says_how_it_is_used_and_a_skill_without_tools_has_no_tools_tab (two mutations red).
+- A PUMP'S "RUNNING POWER DROPPED" HAS ONE OWNER: an equipment card on the weekly page is "Watch" exactly when the one
+  list names its device (its clues and the night's open findings — PM-POWER-CHANGE for a pump's power). Gone: the
+  card's own "last 3 days 10 % under the days before" (facts._status_from, reports.yaml thresholds.pump.watch_drop_pct)
+  and the playbook's "running power stepped down" clue (playbook.clue_power_step, its reports.yaml entry). Tests:
+  test_reports (the same 850 W → 740 W is "OK" with nothing found at night, "Watch" with the finding; one to-do line).
+- A BATTERY'S STATE HAS ONE OWNER: new vesta_shared/battery.py — `charge` (device_state.battery_charge moved here, its
+  old name kept as a re-export for a villa-edited skill), `projection(points, floor_pct, level=None)` → {per_day,
+  days_left} (the night's PM-BATTERY-TREND projects to its battery_crit_pct, passed in) and the rule ids CRIT / LOW /
+  TREND. The weekly page draws each battery's charge and the night's verdict: "replace" from an open PM-BATTERY-CRIT /
+  LOW problem, "watch" from an open PM-BATTERY-TREND finding, with the finding's sentence (`night`) under the bars when
+  the AI wrote none. Gone: the page's 20 % / 35 % (reports.yaml battery.replace_below_pct / watch_below_pct) and the
+  "battery falling" clue (its own weeks left to 20 %). Tests: test_reports, test_one_day_format, a unit test of
+  battery.projection and of the night's trend sentence.
+- A RETIRED SETTING IS NAMED: `skill_settings.retired(skill_dir, file)` — a skill's `retired:` maps a dotted setting to
+  what decides it now; a villa.<file> that still sets one gets one sentence ("villa.reports.yaml sets
+  thresholds.pump.watch_drop_pct, which is no longer used: …"): the report's problems, the investigation's answer
+  (`settings_not_used`, and the script's log). A villa playbook entry of a retired `when` kind (power_step,
+  battery_trend: reports.yaml `retired_kinds`) says so instead of "unknown when kind".
+- "RUNNING" FOR /investigate IS THE VILLA'S ONE RULE: `daily.hour_rows_of` buckets raw readings per hour (max, mean of
+  the readings) and `daily.threshold_from_readings` asks `running_threshold`; investigate.threshold(rows, params) uses
+  it (its flat_spread check stays). Retired: running_fraction, high_quantile, running_min (named if a villa file sets
+  them). Measured: the test heater's threshold 250 W → 150 W, the idle-every-10-s meter 75 W → 150 W; every
+  investigate test passed unchanged. on_threshold_fraction is now in four skill files (investigate's added), held
+  equal by test_skill_settings, each saying the villa helper vesta_on_threshold_fraction is how to change it.
+- THE INVESTIGATION'S CHARTS ARE THE SHARED PAGE MODULE'S: timechart, hourchart and strip moved to vesta_shared.page,
+  their colours and words parameters (band, readings, usual, bar, colour_of); investigate's page.py binds its
+  BAND_COLOURS / LANE_STYLE and imports no private name (test over every starter script). One `legend` and one `pill`
+  macro in vesta_shared/templates/page_parts.html, imported by report.html and investigation.html (the report's
+  energy-days legend takes the investigation's look; `.legend i` removed from page_head.html).
+Owner-approved fixes to the villa's own alert messages (19 October).
+- "TO:" BY PRIORITY IS THE ALERT DESK'S TABLE: message_format.priority_to reads the desk's released rules.yaml
+  (people_roles, priority_does) and jinja_words writes it into vesta_message.jinja as vm_priority_to; the template
+  says it when a rule passes vm_priority (P1 "Owner & FM", P2 "FM", P3 "digest", P4 "log", as desk.reaches and the
+  agent's card), else vm_to, else the villa-wide helper, as before. The blueprints drop their hand-written
+  "P1 → Owner, Facility Manager" expression. Tests: test_ha_message_layout (every priority → the desk's own words;
+  the table read from the settings, never typed; "P1", "'digest'" forbidden outside the words block).
+- ONE CLOSING WORDING: message_format.closing(tail) — "Cleared on {time}." / "Cleared on {time}: <tail>." — is
+  STAGE_WORDS["closed"] (it was "Closed: nothing more to do", reached by no renderer) and every end of the desk
+  (resolved, seen again, stopped watching, the rule gone, the villa back online: "Closed on …" retired). The template
+  fills "{time}" with its clock in timeutil.MOMENT_FORMAT (moment_label's, now one constant); the agent, with no time
+  to give, says "Cleared." (stage_words). Tests: test_ha_message_layout, test_alert_desk (the desk's note IS the
+  stage's words; the rule-gone end opens with them), test_one_saying.
+- THE TEMPLATE NO LONGER DRAWS A PRESS: vm_who, the 'help' stage, the "Done"/"Need help" labels and the hand-written
+  strftime are gone (no enabled rule sends task_text; only the agent chases). PRESSED stays the agent's.
+Architecture review, 19 October (owner: "proceed with the recommended implementation").
+- ONE RULE FOR A CLOSE WHILE THE PROBLEM IS STILL THERE: a person's close holds until the source is read again and is
+  still bad; then the task opens again saying "Still there after the close." (problems.STILL_THERE) and the facility
+  manager is told by the skill. An alert keeps today's path (desk.quiet_after_done). A finding: each reading records
+  the fact — store.finding_seen (findings.seen_at, settle_minutes; migrated), written by Problems.record (the night,
+  the recheck's new findings) and Problems.seen (recheck.py's reading of a device whose finding is open; it skipped
+  them) — and Problems.wants_open decides (still_there_after_close: read its settle time or more after the close).
+  The settle time, recipient, title and words are preventive-maintenance settings.yaml `still_there_after_close`
+  (minutes 10 = the alert desk's clear_minutes; none in code: a missing one is named on stderr and the close holds);
+  recheck.still_there_untold tells each once (store.untold_findings_reopened). A night fault closed in the Cockpit
+  while the pump was still unavailable stayed closed, nothing said. Tests: test_back_online (reopens at the recheck
+  after the settle time, told once; a close after the device came back stays closed), test_problem_close (re-pinned).
+- FAULT ACTIONS CARRY ONLY WHAT IS READ: a task's change is result.faults_changed() ({"action": "faults_changed"});
+  Problems.settle / settle_all return task ids, record `task_ids` / record_night `resolved` ids (their old `tasks`,
+  `reopen_actions`, `resolve_actions` kept, built from the ids, for a skill edited before 0.12.267), close_incident /
+  close_finding [faults_changed] (result.moved); desk._ladder / _reprioritised, nightly and recheck send it.
+  result.fault is a chat's fault. The engine still reads ticket {task_id}, ticket.resolve, ticket.reopen (and a task
+  id in `actions`) as the same — a starter skill edited on a villa sends them; result.reopened / resolved and
+  fault(task_id=) stay for it. nightly's --out: tasks_to_create / tasks_resolved are id lists. Tests: test_outcome
+  (every shape repairs; no starter skill builds an old one), the desk, back-online and close tests re-pinned.
+- THE KIOSK-VERSION GATE IS THE KIOSK CLIENT'S ONLY DOOR: Kiosk._gated runs in add_ticket, amend, reopen_ticket and
+  resolve_ticket: a step kind the Kiosk does not list is written without its kind (a close read by its note), or not
+  at all when it changes no status (notStatusChanges: it would read as a change of status); a declared field it does
+  not list is not written. A Kiosk that lists nothing gets the agreement's base sets (ticketUpdate.kindsBeforeList,
+  ticket.fieldsBeforeList — new keys, the Kiosk's 2.496.355 and 2.496.381 sets). takes / says are gone; tickets
+  asks nothing (Kiosk.refresh re-reads /agent/v1/info while it lists no kinds). Tests: test_fault_steps, test_card_story.
+- THE HEARTBEAT FOLLOWS THE KIOSK'S WINDOW: its interval is a third of the answer's offline_after_minutes, never under
+  30 s, 120 s until the first answer (kiosk.beat_every; HEARTBEAT_EVERY gone); a "cadence": "refused: …" answer is
+  logged once. A Kiosk set to "offline after 1 minute" showed the agent offline and online by turns. Tests:
+  test_kiosk_cadence.
+
 ## 0.6.257 (19 October 2026)
 
 Architecture review scan 4, 19 October (one verdict per fact, one sentence per outcome, places named once).

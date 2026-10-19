@@ -38,6 +38,10 @@ _ORDER = result.PRIORITY_ORDER
 #: A state finding closed this many days ago or less that the night sees again is the SAME problem, back — not a new one.
 AGAIN_DAYS = 7
 
+#: What a task's fault says when it opens again because its problem was read still there after a person closed it —
+#: as the alert desk's reopening says it (its quiet_after_done), one sentence for both.
+STILL_THERE = "Still there after the close."
+
 
 def occurrences(finding: dict | None) -> list[str]:
     """The days a finding was seen in the AGAIN_DAYS up to its latest reopening (kept to that window as it reopens)."""
@@ -152,24 +156,35 @@ class Problems:
     # back the fault actions to carry out.
     def close_incident(self, iid: int, state: str, now_iso: str, note: str = "", who: str | None = None, **fields) -> list[dict]:
         """The incident ends in `state` (closed now). When that state ends its Problem (Incident.ANSWERED_OR_CLEARED)
-        its open task closes too — done by a person, or cleared — and its Kiosk fault is to be resolved with `note`, by
-        `who` when a person did it (review 29: a Telegram Done showed "resolved … by VESTA Agent" on the card)."""
+        its open task closes too — done by a person, or cleared — its close saying `note`, by `who` when a person did
+        it (review 29: a Telegram Done showed "resolved … by VESTA Agent" on the card). Returns a script's `actions`
+        for it: [result.faults_changed()] when a task moved (result.moved)."""
         self.store.update_incident(iid, state=state, closed_at=now_iso, **fields)
-        return self.settle(f"incident:{int(iid)}", note=note, who=who)
+        return result.moved(self.settle(f"incident:{int(iid)}", note=note, who=who))
 
     def close_finding(self, finding: dict, day: str, note: str = "") -> list[dict]:
-        """The night check no longer sees a finding: it closes, its task is cleared, its Kiosk fault resolved."""
+        """The night check no longer sees a finding: it closes, its task is cleared (its Kiosk fault follows: the
+        repair). Returns a script's `actions` for it (result.moved)."""
         self.store.close_finding(finding["rule_id"], finding["entity_id"], day)
-        return self.settle(f"finding:{int(finding['id'])}", note=note)
+        return result.moved(self.settle(f"finding:{int(finding['id'])}", note=note))
+
+    def seen(self, finding_id: int, at: str, settle_minutes: float | None) -> list[int]:
+        """Open finding `finding_id` read still bad at `at` (a reading of its source: the recheck's, every few minutes,
+        for a rule its skill reads again) — recorded, then settled: the ids of the tasks that moved. `settle_minutes`:
+        how long after a person's close such a reading must come to open the task again (wants_open)."""
+        self.store.finding_seen(int(finding_id), at, settle_minutes)
+        return self.settle(f"finding:{int(finding_id)}")
 
     # ⚠️ THE NIGHT'S LEDGER, HERE (architecture review 7, 2026-10-07): nightly.py kept it inline — raised,
     # an event closed the same night, a rerun not news twice, worsened, closed tonight, its task opened. Which
     # rules are states and which are events, the worsened step and which severities get a task stay the skill's.
     def record_night(self, findings, day: str, _muted_at_iso: str | None = None, *, state_rules, event_rules, worsened_step: float,
-                     resolved_note: str = "", handed_over: dict[tuple[str, str], str] | None = None) -> dict:
-        """The night check's findings for `day`: {new, still_open, closed, again (came back: AGAIN_DAYS), tasks,
-        resolve_actions, reopen_actions (a returning finding's fault open again)}. (`_muted_at_iso`: what a
-        night check edited before 0.12.132 still passes — Mute is gone, it is ignored.)
+                     resolved_note: str = "", handed_over: dict[tuple[str, str], str] | None = None,
+                     at: str | None = None, settle_minutes: float | None = None) -> dict:
+        """The night check's findings for `day`: {new, still_open, closed, again (came back: AGAIN_DAYS), task_ids (the
+        ids of the tasks opened or opened again), resolved (the ids of the tasks closed)} — ids only: what each fault
+        says is Problems.card's, the repair writes it. (`_muted_at_iso`: what a night check edited before 0.12.132
+        still passes — Mute is gone, it is ignored.) `at`, `settle_minutes`: record's.
         A finding has rule_id, entity_id, family, severity, summary, detail, check, day and as_dict().
         The night sees everything: a state finding it did not see tonight closes (`record` is the rest).
 
@@ -178,7 +193,8 @@ class Problems:
         ⚠️ LEFT OUT IS NOT CLEARED (architecture review scan 1, 2026-10-19): a device offline at 5 minutes, then alerted
         on by the villa's rule at 10, read "Cleared: the nightly check no longer sees it" at 02:00 while still off."""
         handed_over = handed_over or {}
-        out = self.record(findings, day, state_rules=state_rules, event_rules=event_rules, worsened_step=worsened_step)
+        out = self.record(findings, day, state_rules=state_rules, event_rules=event_rules, worsened_step=worsened_step,
+                          at=at, settle_minutes=settle_minutes)
         fired = {(f.rule_id, f.entity_id) for f in findings}
         closed, resolve = [], []
         handed = []
@@ -187,13 +203,20 @@ class Problems:
             (handed if note else closed).append(o)
             # ⚠️ ITS TASK AND ITS KIOSK TICKET CLOSE WITH IT (villa, 2026-10-01): the finding closed, the ticket
             # stayed "Open fault" for ever, and the Kiosk's Cockpit filled with faults long gone
-            resolve += self.close_finding(o, day, note or resolved_note)
-        return {**out, "closed": closed, "handed_over": handed, "resolve_actions": resolve}
+            self.store.close_finding(o["rule_id"], o["entity_id"], day)
+            resolve += self.settle(f"finding:{int(o['id'])}", note=note or resolved_note)
+        # `resolve_actions`: kept for a skill edited before 0.12.267 (its nightly.py reads each one's task_id)
+        return {**out, "closed": closed, "handed_over": handed, "resolved": resolve,
+                "resolve_actions": [result.resolved(tid, (self.store.task(tid) or {}).get("close_note")) for tid in resolve]}
 
-    def record(self, findings, day: str, *, state_rules, event_rules, worsened_step: float) -> dict:
+    def record(self, findings, day: str, *, state_rules, event_rules, worsened_step: float, at: str | None = None,
+               settle_minutes: float | None = None) -> dict:
         """Findings seen now, recorded — new, still open, back again (AGAIN_DAYS) — each with its task: {new,
-        still_open, again, tasks, reopen_actions}. Closes nothing: a check that reads only part of the villa (recheck.py,
-        every 5 minutes) cannot say what it did not see is over."""
+        still_open, again, task_ids (the ids of the tasks opened or opened again)}. Closes nothing: a check that reads only
+        part of the villa (recheck.py, every 5 minutes) cannot say what it did not see is over.
+
+        Each finding is recorded as SEEN at `at` (now when not said), with `settle_minutes` — the skill's settle time
+        after a person's close (None: it named none, and a close then holds): the fact wants_open reads."""
         new, still_open, again = [], [], []
         for f in findings:
             f.day = day
@@ -207,6 +230,7 @@ class Problems:
                 fid, is_new = back, False
             else:
                 fid, is_new = self.store.raise_finding(f.rule_id, f.entity_id, f.family, day, f.severity, f.summary, f.detail)
+            self.store.finding_seen(fid, at or self.store.now(), settle_minutes)
             d = f.as_dict()
             d["id"] = fid
             if back is not None:
@@ -235,15 +259,23 @@ class Problems:
         # still open with its task closed by the agent — open again (the same night run twice reopened the finding in
         # place and no pass looked: Timmerflotte_2623); never had one — a new one (villa, 2026-10-14). A person's close
         # keeps a still-true problem quiet: wants_open says so.
-        tasks, reopen = [], []
+        ids, old_tasks, old_reopen = [], [], []
         for d in new + again + still_open:
-            for a in self.settle(f"finding:{int(d['id'])}"):
-                if a["action"] == "ticket":
-                    tasks.append({"task_id": a["task_id"], "todo_summary": a["summary"], "check": d.get("check") or "",
-                                  "severity": d["severity"], "entity_id": d["entity_id"]})
-                elif a["action"] == "ticket.reopen":
-                    reopen.append(a)
-        return {"new": new, "still_open": still_open, "again": again, "tasks": tasks, "reopen_actions": reopen}
+            src = f"finding:{int(d['id'])}"
+            had = self.store.last_task(src)
+            for tid in self.settle(src):
+                ids.append(tid)
+                # kept for a skill edited before 0.12.267: its nightly.py / recheck.py read `tasks` (a NEW task, with its
+                # words) and `reopen_actions` (a task opened again) — built from the ids; the engine reads both as
+                # faults_changed
+                if had and had["id"] == tid:
+                    old_reopen.append(result.reopened(tid, self.source_title(src), (self.store.task(tid) or {}).get(
+                        "reopen_note") or "Back again."))
+                else:
+                    old_tasks.append({"task_id": tid, "todo_summary": (self.store.task(tid) or {}).get("summary") or "",
+                                      "check": d.get("check") or "", "severity": d["severity"], "entity_id": d["entity_id"]})
+        return {"new": new, "still_open": still_open, "again": again, "task_ids": ids,
+                "tasks": old_tasks, "reopen_actions": old_reopen}           # the last two: kept for a skill edited before 0.12.267
 
     def _came_back(self, f, day: str, may: bool) -> int | None:
         """⚠️ THE SAME PROBLEM, BACK (architecture review 22): a device offline every night and back by noon was closed
@@ -366,17 +398,23 @@ class Problems:
     # cleared it, then the same night was run again, which reopens the day's row in place (store.raise_finding) where
     # no pass looks. Now every pass only records the facts (the source opened, closed, came back; a person's gesture)
     # and asks settle(), which works the task out from them.
+    # ⚠️ A PERSON'S CLOSE HOLDS UNTIL THE SOURCE IS READ AGAIN, STILL BAD (owner, architecture review 2026-10-19): one
+    # Close button, two rules — an alert closed in the Cockpit was read again after the desk's clear_minutes and
+    # reopened ("…, but … still reads …: still open"), a night check's fault closed while the pump was still unavailable
+    # stayed closed, nothing said, until the finding closed and came back. Now one rule: a finding read still bad
+    # (record, seen: its `seen_at`) its skill's settle time or more after the close opens its task again, saying
+    # STILL_THERE. An alert's reading stays the alert desk's (quiet_after_done reopens the incident, then this follows).
     def wants_open(self, source: str) -> bool:
         """Should the task about `source` ("finding:3", "incident:5") be open now? Open while its finding or incident
         lasts — a finding at a severity that earns a task — unless a person closed it since the problem's latest return
-        (closed_by_person: a still-true problem a person closed stays quiet). A task a person REOPENED is theirs
-        (in_persons_hands): settle closes it only on a person's Done."""
+        (closed_by_person) and its source has not been read still bad since (a finding: still_there_after_close). A
+        task a person REOPENED is theirs (in_persons_hands): settle closes it only on a person's Done."""
         kind, sid = self._source({"source": source})
         if kind == "finding":
             row = self.store.finding(sid)
             if not row or row["status"] != "open" or row["severity"] not in TASK_SEVERITIES:
                 return False
-            return not self.closed_by_person(source, row.get("reopened_at") or "")
+            return not self.closed_by_person(source, row.get("reopened_at") or "") or self.still_there_after_close(source)
         if kind == "incident":
             inc = self.store.incident(sid)
             if not inc or self.source_gone({"source": source}):
@@ -386,12 +424,30 @@ class Problems:
             return not self.closed_by_person(source, inc.get("reopened_at") or "")
         return False
 
-    def settle(self, source: str, note: str = "", who: str | None = None) -> list[dict]:
-        """The task about `source` made what wants_open says, and the Kiosk fault actions that follow (result.fault /
-        reopened / resolved): over — closed (DONE when its incident was answered Done, by `who`; else CLEARED), its
-        fault resolved with `note`; still there and its last task closed by the agent, or by a person before the
-        problem came back — open again ("Back again." unless `note` says otherwise); a finding still there that never
-        had a task — a new one. An incident's first task is the desk's to open (only some alerts ask for one)."""
+    def still_there_after_close(self, source: str) -> bool:
+        """A person closed the latest task about finding `source`, and the finding was read still bad (its `seen_at`)
+        its `settle_minutes` or more after that close. False when either is missing: a skill that names no settle time
+        leaves a person's close as it is."""
+        from datetime import timedelta
+        kind, sid = self._source({"source": source})
+        row = self.store.finding(sid) if kind == "finding" else None
+        last = self.store.last_task(source)
+        if not (row and last and last.get("status") in (DONE, CLOSED_IN_KIOSK)):
+            return False
+        seen, done, wait = _moment(row.get("seen_at")), _moment(last.get("done_at")), row.get("settle_minutes")
+        try:
+            return bool(seen and done and wait is not None and seen >= done + timedelta(minutes=float(wait)))
+        except ValueError:
+            return False
+
+    def settle(self, source: str, note: str = "", who: str | None = None) -> list[int]:
+        """The task about `source` made what wants_open says; returns the ids of the tasks that moved (opened, opened
+        again, closed) — what each fault then says is card()'s, tickets.repair writes it. Over — closed (DONE when its
+        incident was answered Done, by `who`; else CLEARED), its close saying `note`; still there and its last task
+        closed by the agent, or by a person before the problem came back — open again ("Back again." unless `note`
+        says otherwise); closed by a person and read still bad since (still_there_after_close) — open again, STILL_THERE;
+        a finding still there that never had a task — a new one. An incident's first task is the desk's to open (only
+        some alerts ask for one)."""
         kind, sid = self._source({"source": source})
         if kind not in ("finding", "incident"):
             return []                                    # no source of its own: it waits for a person
@@ -404,37 +460,39 @@ class Problems:
             if status == CLEARED and self.in_persons_hands(last):
                 return []                                # a person's reopening: only a person closes it (their Done does)
             self.close(last["id"], status, note, who if status == DONE else None)
-            return [result.resolved(last["id"], note or None, who if status == DONE else None)]
+            return [last["id"]]
         if last and last["status"] == "open":
             return []
         title = self.source_title(source)
         if last:
             # ⚠️ ONE OPENER (architecture review, 2026-10-19): this reopened the last task itself, the alert desk through
             # reopen_task — a third way (open_task, for a raised priority) made a second task and a second Kiosk fault
+            why = STILL_THERE if kind == "finding" and self.still_there_after_close(source) else note or "Back again."
             tid, how = self.reopen_task(kind, sid, last["rule_id"], last["entity_id"], title[:250],
-                                        self.check_of(last), note=note or "Back again.")
-            return [result.reopened(tid, title, note or "Back again.")] if how == "reopened" else []
+                                        self.check_of(last), note=why)
+            return [tid] if how == "reopened" else []
         if kind != "finding":
             return []
         row = self.store.finding(sid)
         check = json.loads(row.get("detail") or "{}").get("check") or ""
-        tid = self.store.add_task(row["rule_id"], row["entity_id"], title[:250], source=source, check_text=check or None)
-        return [result.fault(title[:200], task_id=tid, check=check, entity_id=row["entity_id"])]
+        return [self.store.add_task(row["rule_id"], row["entity_id"], title[:250], source=source, check_text=check or None)]
 
-    def settle_all(self, faults: set[str] | None = None) -> list[dict]:
-        """settle() for every open problem and every open task — the repair's one pass. `faults`: the fault ids the Kiosk
-        still holds; a task brought back whose fault is gone loses its id, so the repair makes a new one."""
+    def settle_all(self, faults: set[str] | None = None) -> list[int]:
+        """settle() for every open problem and every open task — the repair's one pass: the ids of the tasks that moved.
+        `faults`: the fault ids the Kiosk still holds; a task brought back whose fault is gone loses its id, so the
+        repair makes a new one."""
         sources = {f"finding:{int(f['id'])}" for f in self.store.findings(status="open")}
         sources |= {f"incident:{int(i['id'])}" for i in self.store.incidents(open_only=True)}
         sources |= {t["source"] for t in self.open_tasks() if t.get("source")}
         out = []
         for src in sorted(sources):
-            acts = self.settle(src)
-            for a in acts:
-                uid = (self.store.task(a["task_id"]) or {}).get("todo_uid") if a.get("action") == "ticket.reopen" else None
+            ids = self.settle(src)
+            for tid in ids:
+                task = self.store.task(tid) or {}
+                uid = task.get("todo_uid") if task.get("status") == "open" else None
                 if uid and faults is not None and uid not in faults:
-                    self.store.set_task_uid(a["task_id"], None)
-            out += acts
+                    self.store.set_task_uid(tid, None)
+            out += ids
         return out
 
     def source_title(self, source: str) -> str:
@@ -589,3 +647,13 @@ class Problems:
         src = (task or {}).get("source") or ""
         kind, _, sid = src.partition(":")
         return (kind, int(sid)) if sid.isdigit() else (None, None)
+
+
+def _moment(iso):
+    """A stored moment ("…+00:00", or the Kiosk's "…Z") as an aware datetime; None when it cannot be read."""
+    from datetime import datetime, timezone
+    try:
+        t = datetime.fromisoformat(str(iso).replace("Z", "+00:00")) if iso else None
+    except ValueError:
+        return None
+    return t.replace(tzinfo=timezone.utc) if t and t.tzinfo is None else t

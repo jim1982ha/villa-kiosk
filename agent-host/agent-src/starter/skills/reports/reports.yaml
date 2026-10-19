@@ -8,7 +8,8 @@
 
 # ---------------------------------------------------------------- running
 # When a device counts as running: the night check's and the energy figures' one rule (vesta_shared.daily), with
-# this skill's own default. A villa helper input_number.vesta_on_threshold_fraction overrides it for every skill.
+# this skill's own default. It is held equal in every skill (a test): to change it, set the villa helper
+# input_number.vesta_on_threshold_fraction, which overrides it for every skill — not this file.
 behaviour:
   on_threshold_fraction: 0.2   # an hour whose peak passes this share of the device's typical peak ran, for mean ÷ peak of it
 
@@ -17,12 +18,9 @@ thresholds:
   light:                       # the colour of a report, from the severities of what is open
     red: [P1]
     amber: [P2, P3]
-  battery:
-    replace_below_pct: 20      # red bar, "replace"
-    watch_below_pct: 35        # amber bar
+  battery:                     # a battery's red "replace" / amber "watch" is the night check's finding, never judged here
     show: 8                    # the lowest N batteries are drawn
-  pump:
-    watch_drop_pct: 10         # Watch when the running power of the last 3 days is this much under the days before
+  # an equipment card is "Watch" when the one list names its device (the night check's findings, the clues)
   circuits_show: 8             # rows of the circuit table, largest first
   alert_follow_window_min: 15  # a logbook run this close to an incident of the same rule is that incident (shown once)
   circuit_change_max_pct: 300  # a change bigger than this (from almost nothing) shows as ">+300%", not "+10900%"
@@ -36,6 +34,17 @@ thresholds:
     P2: Now
     P3: Soon
     P4: Plan
+
+# Settings this skill no longer reads (owner, 2026-10-19: "the night check owns each number asked twice"): a villa's
+# villa.reports.yaml that still sets one is named in the report's problems, never silently ignored.
+retired:
+  thresholds.pump.watch_drop_pct: "an equipment card is Watch when the night check finds its running power changed (preventive-maintenance drift_pct)"
+  thresholds.battery.replace_below_pct: "a battery's replace / watch is the night check's (preventive-maintenance battery_warn_pct, battery_crit_pct)"
+  thresholds.battery.watch_below_pct: "a battery's replace / watch is the night check's (preventive-maintenance battery_warn_pct, battery_crit_pct)"
+# The same for a playbook entry's `when` kind.
+retired_kinds:
+  power_step: "a pump's running power that dropped is the night check's finding (preventive-maintenance drift_pct)"
+  battery_trend: "a falling battery is the night check's finding (preventive-maintenance battery_trend_*)"
 
 # Families whose devices count for "devices offline". Which are critical is the villa's one list: its "critical
 # devices offline" rule (owner, 2026-10-18; the knowledge pack's is_critical) — no family makes a device critical.
@@ -73,24 +82,13 @@ not_measured_yet:
 # The villa adds its own entries (its pool, its onsen, its cabinet...) in villa.reports.yaml.
 # An entry without `when` is knowledge only: no clue, but the AI reads it with the clues (for what
 # no figure shows yet, e.g. "the onsen pump's power slides for two hours before it runs dry").
-#   when kinds:  power_step {drop_pct, min_days, days, min_hours}  a motor's running power steps down
-#                (min_hours: hours a day it runs, before and after: a pump that runs a few minutes now and
-#                then has hourly means diluted by its stops, so its "power" follows its use, not its water)
-#                run_change {change_pct, min_days, days, min_hours}  a motor's hours of running per day change
-#                battery_trend {below_pct, days}               a battery falling: weeks left
+#   when kinds:  run_change {change_pct, min_days, days, min_hours}  a motor's hours of running per day change
 #                offline {families}                            a watched device not answering now
 #                use_while_empty {mode_entity, empty, days}    electricity used while the villa is empty
+# A pump's running power that dropped and a falling battery are not clues: the night check finds them (its
+# PM-POWER-CHANGE, PM-BATTERY-* findings), and they reach the one list as open problems.
 playbook:
   pumps:
-    - name: running power stepped down
-      title: "{subject}: running power down {drop_pct}% since {step_date}"
-      when: {kind: power_step, drop_pct: 10, min_days: 3, days: 30, min_hours: 3}
-      look_at: "the pump's hourly power over 30 days around {step_date}, its hours of running per day, the logbook of that day"
-      means: "at the same running hours, less power usually means less water moved — a full skimmer basket, a low water level, a valve half closed, a clogged filter, air in the line"
-      check: "water level and air at the skimmer, empty the basket, valve positions, photograph the filter gauge before any backwash"
-      ask: "was anything done in the pump room on {step_date} or the day before?"
-      horizon: "Now"
-      cost_of_ignoring: "cheap to fix now; the motor strains and the water turns if it is left"
     - name: running time changed
       title: "{subject}: {hours_before} h a day before {change_date}, {hours_after} h since"
       when: {kind: run_change, change_pct: 30, min_days: 3, days: 30, min_hours: 2}
@@ -100,15 +98,6 @@ playbook:
       ask: "was the timer changed on purpose?"
       horizon: "Soon"
       cost_of_ignoring: "a pump that stops early leaves the water untreated; one that runs longer costs electricity"
-  batteries:
-    - name: battery falling
-      title: "{subject}: battery {level_pct}%, about {weeks_left} weeks left"
-      when: {kind: battery_trend, below_pct: 35, days: 30}
-      look_at: "the battery's daily level over 30 days"
-      means: "falling {fall_per_week} points a week: it reaches {replace_below_pct}% in about {weeks_left} weeks"
-      check: "replace the cell at the next visit, before it reaches the replace level"
-      horizon: "Soon"
-      cost_of_ignoring: "the device goes silent and the rules that watch it go blind"
   locks_and_doors:
     - name: a safety device offline
       title: "{subject} offline since {since}"

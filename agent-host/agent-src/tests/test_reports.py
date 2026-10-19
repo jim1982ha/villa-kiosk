@@ -91,16 +91,34 @@ def _facts(tmp, fx):
     return json.loads(r.stdout), json.load(open(tmp / "facts.json"))
 
 
+def _night_found(tmp):
+    """What the night check left open in the villa's store: the pump's running power down (850 W → 740 W), battery A
+    to replace."""
+    from vesta_shared.store import Store
+    st = Store(str(tmp / "s.sqlite"))
+    st.raise_finding("PM-POWER-CHANGE", "sensor.example_pump_power", "power", "2026-10-03", "P3",
+                     "Garden pump draws 13% lower than its 30-day normal (740 W vs 850 W).", {"change_pct": -12.9})
+    st.raise_finding("PM-BATTERY-CRIT", "sensor.example_battery_a", "battery", "2026-10-04", "P3",
+                     "Battery A battery at 12%: replace now.", {"level": 12})
+
+
 def test_the_weekly_facts_come_from_home_assistant_and_reports_yaml(tmp_path):
     fx = _villa(tmp_path)
+    # ⚠️ THE NIGHT CHECK OWNS EACH NUMBER ASKED TWICE (owner, 2026-10-19): with nothing found at night, the same 850 W →
+    # 740 W and the same 12 % battery are drawn, never judged by the page — "Watch" and "replace" are the night's
+    printed, facts = _facts(tmp_path, fx)
+    assert facts["sections"]["equipment"]["cards"][0]["status"] == "OK"
+    assert facts["sections"]["batteries"]["rows"][0]["level"] == "ok"
+    _night_found(tmp_path)
     printed, facts = _facts(tmp_path, fx)
     s = facts["sections"]
     assert facts["order"][:3] == ["header", "headline", "kpis"] and not facts["problems"]
     assert s["header"]["title"] == "Example Villa, week 40"
     assert [r["kwh"] for r in s["energy_days"]["rows"]][:2] == [40.0, 41.0]          # HA's daily statistics
     card = s["equipment"]["cards"][0]
-    assert card["title"] == "Garden pump" and card["status"] == "Watch"                # 850 W → 740 W: a drop
-    assert s["batteries"]["rows"][0] == {"name": "Battery A", "pct": 12, "level": "replace", "volts": None}
+    assert card["title"] == "Garden pump" and card["status"] == "Watch"                # the night's PM-POWER-CHANGE
+    assert s["batteries"]["rows"][0] == {"name": "Battery A", "pct": 12, "level": "replace", "volts": None,
+                                         "night": "Battery A battery at 12%: replace now."}
     assert s["kpis"]["offline_critical"] == 1                               # the lock: on the villa's critical list
     assert {w["id"] for w in printed["to_write"]} >= {"headline", "card-pump.reading"}
 
@@ -111,13 +129,13 @@ def test_a_threshold_missing_from_reports_yaml_is_named_never_guessed(tmp_path, 
     shutil.copytree(os.path.join(STARTER_SKILLS, "reports"), skill)
     import yaml
     cfg = yaml.safe_load((skill / "reports.yaml").read_text())
-    del cfg["thresholds"]["battery"]["replace_below_pct"]
+    del cfg["thresholds"]["battery"]["show"]
     (skill / "reports.yaml").write_text(yaml.safe_dump(cfg))
     r = _run(str(skill / "scripts" / "facts.py"), "fm-weekly", "--pack", str(tmp_path / "pack.json"),
              "--store", str(tmp_path / "s.sqlite"), "--energy", str(tmp_path / "week.json"), "--fixture-dir", str(fx),
              "--out", str(tmp_path / "facts.json"))
     facts = json.load(open(tmp_path / "facts.json"))
-    assert facts["sections"]["batteries"] == {"error": "reports.yaml: parameter missing: thresholds.battery.replace_below_pct"}
+    assert facts["sections"]["batteries"] == {"error": "reports.yaml: parameter missing: thresholds.battery.show"}
     assert facts["sections"]["energy_days"]["rows"]                                    # the rest still computed
 
 
@@ -164,16 +182,34 @@ def test_a_report_stopped_at_its_limit_is_still_sent_and_says_what_is_missing(tm
 def test_the_playbook_turns_the_villas_data_into_one_list_of_what_needs_doing(tmp_path):
     fx = _villa(tmp_path)
     _, facts = _facts(tmp_path, fx)
+    # ⚠️ THE PUMP'S DROP IS THE NIGHT CHECK'S (owner, 2026-10-19): no clue of the page's own finds the 850 W → 740 W —
+    # with nothing found at night, the list has no pump line; with the night's PM-POWER-CHANGE open, it has exactly one
+    assert not [r for r in facts["sections"]["todo"]["rows"] if r["kind"].startswith("pumps/")
+                or r["kind"] == "PM-POWER-CHANGE"]
+    _night_found(tmp_path)
+    _, facts = _facts(tmp_path, fx)
     rows = facts["sections"]["todo"]["rows"]
-    step = next(r for r in rows if r["kind"] == "pumps/running power stepped down")
-    assert step["title"] == "Garden pump: running power down 13% since 2 Oct"                     # reports.yaml's title
-    assert step["figures"]["after_w"] == 740 and step["figures"]["hours_before"] == step["figures"]["hours_after"] == 8
-    assert step["ask"] == "was anything done in the pump room on 2 Oct or the day before?"
+    (step,) = [r for r in rows if "sensor.example_pump_power" in r["entity_ids"]]
+    assert step["kind"] == "PM-POWER-CHANGE" and step["title"].startswith("Garden pump draws 13% lower")
     lock = next(r for r in rows if r["kind"] == "locks_and_doors/a safety device offline")
     assert lock["title"] == "Front door lock offline since 4 Oct, 10:00"
     # no record of the agent listening that week: only the rules whose every run is an alert can say so
     assert facts["sections"]["quiet"]["did_not_happen"] == ["no door left unlocked and no supply left open"]
     assert {w["id"] for w in facts["to_write"]} >= {f"{step['id']}.reading", f"{step['id']}.ask", "quiet"}
+
+
+def test_a_villa_playbook_entry_of_a_retired_kind_is_named(tmp_path):
+    fx = _villa(tmp_path)
+    skill = tmp_path / "skills" / "reports"
+    shutil.copytree(os.path.join(STARTER_SKILLS, "reports"), skill)
+    (skill / "villa.reports.yaml").write_text(json.dumps({"playbook": {"pumps": [
+        {"name": "pool pump weaker", "when": {"kind": "power_step", "drop_pct": 5}}]}}))
+    _run(str(skill / "scripts" / "facts.py"), "fm-weekly", "--pack", str(tmp_path / "pack.json"),
+         "--store", str(tmp_path / "s.sqlite"), "--energy", str(tmp_path / "week.json"), "--fixture-dir", str(fx),
+         "--out", str(tmp_path / "facts.json"))
+    problems = json.load(open(tmp_path / "facts.json"))["sections"]["todo"]["problems"]    # the list's own problems
+    assert any(p.startswith("playbook pumps/pool pump weaker: when kind 'power_step' is no longer used: ")
+               for p in problems), problems
 
 
 def test_what_did_not_happen_is_said_only_for_what_was_watched(tmp_path):
@@ -339,15 +375,20 @@ def test_the_villas_own_playbook_and_cards_are_added_to_the_shipped_ones(tmp_pat
     (skill / "villa.reports.yaml").write_text(json.dumps({
         "playbook": {"pumps": [{"name": "garden pump dry run", "means": "it slides before it stops"}]},
         "cards": [{"kind": "energy_daily", "entity": "sensor.example_pump_energy", "title": "Garden pump energy"}],
-        "thresholds": {"battery": {"replace_below_pct": 15}}}))
+        "thresholds": {"battery": {"replace_below_pct": 15, "show": 1}, "pump": {"watch_drop_pct": 5}}}))
     r = _run(str(skill / "scripts" / "facts.py"), "fm-weekly", "--pack", str(tmp_path / "pack.json"),
              "--store", str(tmp_path / "s.sqlite"), "--energy", str(tmp_path / "week.json"), "--fixture-dir", str(fx),
              "--out", str(tmp_path / "facts.json"))
     printed, facts = json.loads(r.stdout), json.load(open(tmp_path / "facts.json"))
     assert [k["name"] for k in printed["knowledge"]] == ["garden pump dry run"]              # knowledge, not a clue
     assert "Garden pump energy" in [c["title"] for c in facts["sections"]["equipment"]["cards"]]
-    assert facts["sections"]["batteries"]["replace_below_pct"] == 15                          # the villa's threshold
-    assert facts["sections"]["batteries"]["rows"][0]["level"] == "replace"                    # 12 % < 15 %
+    assert len(facts["sections"]["batteries"]["rows"]) == 1                                   # the villa's threshold
+    # ⚠️ A RETIRED THRESHOLD IS NAMED, NEVER SILENTLY IGNORED (owner, 2026-10-19): the night check judges a battery and
+    # a pump's power now; the villa's own file still setting the page's old thresholds is told in the report's problems
+    assert facts["sections"]["batteries"]["rows"][0]["level"] == "ok"                         # 12 %: the night found nothing
+    told = [p for p in facts["problems"] if "no longer used" in p]
+    assert len(told) == 2 and all(p.startswith("villa.reports.yaml sets thresholds.") for p in told), facts["problems"]
+    assert any("battery.replace_below_pct" in p for p in told) and any("pump.watch_drop_pct" in p for p in told)
 
 
 def _hours(fx, name, series):
@@ -409,12 +450,17 @@ def test_a_finding_the_night_no_longer_sees_closes_its_task_and_its_ticket(tmp_p
         assert r.returncode == 0, r.stderr
         return json.loads(r.stdout)
     first = night("2026-10-01", "2026-09-27T07:00:00+00:00")                       # silent four days: a task
-    (made,) = [a for a in first["actions"] if a["action"] == "ticket"]
+    (made,) = first["tasks_to_create"]
+    assert first["faults_changed"] is True
+    from vesta_shared.store import Store as _S
+    # recorded as seen, with the skill's settle time after a person's close (settings.yaml still_there_after_close)
+    (seen,) = [f for f in _S(str(tmp_path / "s.sqlite")).findings("open")]
+    assert seen["seen_at"] and float(seen["settle_minutes"]) == 10.0
     second = night("2026-10-02", "2026-10-02T01:55:00+00:00")                      # reporting again
-    assert [a for a in second["actions"] if a["action"] == "ticket.resolve"] == [
-        {"action": "ticket.resolve", "task_id": made["task_id"], "note": "Cleared: the nightly check no longer sees it."}]
+    assert second["faults_changed"] is True
     from vesta_shared.store import Store
-    assert Store(str(tmp_path / "s.sqlite")).task(made["task_id"])["status"] == "cleared"
+    task = Store(str(tmp_path / "s.sqlite")).task(made)
+    assert (task["status"], task["close_note"]) == ("cleared", "Cleared: the nightly check no longer sees it.")
 
 
 
@@ -670,7 +716,8 @@ def test_the_monitoring_table_lists_devices_not_their_sensors():
     # every section names a device the same way (knowledge_pack.device_of): the to-do list groups a clue and a task
     # about one plug under its device, and the batteries are named as the device they power
     assert playbook._device(c, "sensor.spa_pump_power", "x") == playbook._device(c, "switch.spa_relay", "x") == "device:plug"
-    c.need = lambda *p: {"replace_below_pct": 20, "watch_below_pct": 35, "show": 8}[p[-1]]
+    c.need = lambda *p: {"show": 8}[p[-1]]
+    c.store = None                                                    # no night record: every battery shows its charge
     pack.families["battery"].append(row("sensor.plug_battery", "Plug Battery", "plug", "battery"))
     pack.families["battery"].append(row("sensor.porch_battery", "Porch Battery", None, "battery"))
     c._states["sensor.plug_battery"] = {"state": "15"}
@@ -754,7 +801,7 @@ def test_an_equipment_card_is_watched_when_the_to_do_list_names_its_device():
                                   "house_ch": {"name": "House Pump", "manufacturer": "Maker", "model": "Pro EM", "via": "relay"}})
     c = facts.Ctx.__new__(facts.Ctx)
     c.pack, c.cfg = pack, {}
-    c.need = lambda *p: {"card_days": 14, "watch_drop_pct": 10}[p[-1]]
+    c.need = lambda *p: {"card_days": 14}[p[-1]]
     d1, d2 = date(2026, 10, 1), date(2026, 10, 2)
     c.running_days = lambda eid, asset, days: ([(d1, 700.0, 8.0), (d2, 700.0, 8.0)] if eid == "sensor.pool_power"   # steady
                                                else [(d1, None, 0.5), (d2, None, 1.1)])                             # bursts
@@ -769,7 +816,7 @@ def test_an_equipment_card_is_watched_when_the_to_do_list_names_its_device():
     assert facts.s_equipment(c)["cards"][1]["status"] != "Watch"
 
 
-def test_a_volt_battery_is_judged_by_its_charge_not_its_reading():
+def test_a_volt_battery_is_read_by_its_charge_not_its_reading():
     # architecture review 13 (live defect): a 3.0 V cell was read as "3 %" by the "battery falling" clue
     import sys as _s
     _s.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
@@ -783,20 +830,43 @@ def test_a_volt_battery_is_judged_by_its_charge_not_its_reading():
                          families={"battery": [{"entity_id": "sensor.station_battery", "name": "Station", "unit": "V",
                                                 "asset": "station", "family": "battery"}]},
                          assets={}, areas=[], people=[], channels={}, unknown_area=[], unclassified=[], retention={})
+    # 2026-10-19: the clue is gone (a falling battery is the night check's PM-BATTERY-TREND); the batteries section
+    # still reads a volt cell by its charge
     c = facts.Ctx.__new__(facts.Ctx)
     c.pack, c.Z, c.end = pack, ZoneInfo("UTC"), date(2026, 10, 4)
-    c.e_dt = None
-    c.need = lambda *p: 20
+    c.need = lambda *p: 8
+    c.store = None
     c._states = {"sensor.station_battery": {"state": "1.0"}}
-    days = [{"mean": 1.3 - i * 0.03} for i in range(11)]                          # 1.30 V down to 1.00 V of 3.0
-    c.cli = type("Cli", (), {"statistics": lambda self, ids, s, e, p, k: {"sensor.station_battery": days}})()
     params = VillaParams(helpers=[{"entity_id": "input_number.station_battery_nominal_v", "helper_type": "input_number",
                                    "id": "station_battery_nominal_v"}], states={"input_number.station_battery_nominal_v": "3.0"})
     c.params = lambda: params
-    (clue,) = playbook.clue_battery_trend(c, {"below_pct": 40, "days": 10})
-    assert clue["level_pct"] == 33 and clue["fall_per_week"] > 0                # 1.0 V of 3.0 is 33 %, not "1 %"
+    (row,) = facts.s_batteries(c)["rows"]
+    assert row["pct"] == 33 and row["volts"] == 1.0                              # 1.0 V of 3.0 is 33 %, not "1 %"
+    assert playbook.battery_pct(c, {"unit": "V", "asset": "station"}, 1.0) == 33.3
     c.params = lambda: VillaParams()
-    assert playbook.clue_battery_trend(c, {"below_pct": 40, "days": 10}) == []        # no nominal: never a guess
+    assert facts.s_batteries(c)["rows"] == []                                    # no nominal: never a guess
+
+
+def test_a_batterys_projection_is_one_rule():
+    # vesta_shared.battery.projection: the night check's "days left", to the floor it passes (its battery_crit_pct)
+    from vesta_shared import battery
+    p = battery.projection([(i, 60 - 2 * i) for i in range(7)], 10)                # 60 % down 2 points a day, now 48 %
+    assert round(p["per_day"], 6) == -2 and round(p["days_left"], 6) == 19      # (48 − 10) ÷ 2
+    assert round(battery.projection([(i, 60 - 2 * i) for i in range(7)], 10, level=30)["days_left"], 6) == 10
+    assert battery.projection([(i, 50 + i) for i in range(5)], 10)["days_left"] is None    # rising: no end in sight
+    assert battery.projection([(0, 50), (1, 49)], 10) is None                   # two points: no slope
+    # the night check's PM-BATTERY-TREND projects to ITS crit setting (settings.yaml battery_crit_pct, 10 %)
+    import sys as _s
+    from datetime import date
+    _s.path.insert(0, os.path.join(STARTER_SKILLS, "preventive-maintenance", "scripts"))
+    import rules
+    from vesta_shared.params import VillaParams
+    series = [(f"2026-10-{d:02d}", 40.0 - 2 * d) for d in range(1, 15)]           # 38 % down to 12 %... 2 points a day
+    found = rules.battery_rules({"slug": "door", "name": "Door"}, "sensor.door_battery", "%", 30.0, series,
+                                VillaParams(defaults=rules.DEFAULTS), date(2026, 10, 14))
+    (trend,) = [f for f in found if f.rule_id == battery.TREND]
+    assert trend.detail == {"slope_per_day": -2.0, "days_left": 10}             # (30 − 10) ÷ 2
+    assert trend.summary == "Door battery is falling 2.0 points a day, about 10 days left."
 
 
 def test_every_page_names_a_device_one_way():

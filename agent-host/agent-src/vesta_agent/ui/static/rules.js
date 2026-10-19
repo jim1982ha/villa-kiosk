@@ -332,7 +332,7 @@ export function toolsCard(f, t, reload) {
     const fm = f.tool_access.fm;             // group → allowed, as the form says it (policy_doc.to_form)
     return [
       table(["Tools", SCHEMA.roles.owner, SCHEMA.roles.fm, "Guest"], t.roles.map((g) => [
-          h("b", {}, g.label),
+          [h("b", {}, g.label), h("span", { class: "muted" }, ` (${g.from})`)],
           h("label", { class: "switch" }, h("input", { type: "checkbox", checked: true, disabled: true, "aria-label": `${g.label}: owner` })),
           h("label", { class: "switch" }, h("input", { type: "checkbox", checked: fm[g.key], "aria-label": `${g.label}: facility manager`,
             onchange: (e) => { fm[g.key] = e.target.checked; markDirty(); } })),

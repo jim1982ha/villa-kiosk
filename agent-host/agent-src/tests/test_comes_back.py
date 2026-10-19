@@ -79,9 +79,9 @@ def test_an_alert_back_again_reopens_its_own_fault_titled_with_how_often(tmp_pat
     store = Store(str(tmp_path / "s.sqlite"))
     iid, last = _flapping(store, 4)
     assert len(store.tasks(None)) == 1                                             # never a new task for it
-    (back,) = [a for a in last["actions"] if a["action"].startswith("ticket")]
-    assert back["action"] == "ticket.reopen" and back["title"].endswith("(again: 4 times in 7 days)")
-    assert back["task_id"] == store.tasks(None)[0]["id"]                          # the first one, open again each time
+    assert last["actions"] == [{"action": "faults_changed"}]                       # what it says: the task's (card)
+    (task,) = store.tasks(None)                                                    # the first one, open again each time
+    assert task["reopened_at"] and task["summary"].endswith("(again: 4 times in 7 days)"), task   # Done since
     # its Telegram messages are "back", their history line says so
     assert {s["stage"] for s in last["send"]} == {"back"}
 
@@ -128,8 +128,8 @@ def test_the_kiosk_fault_keeps_again_in_its_name(tmp_path):
     first = pb.record_night([F()], "2026-10-07", **rules)
     pb.close_finding(store.finding(first["new"][0]["id"]), "2026-10-08", "back")
     night = pb.record_night([F()], "2026-10-09", **rules)
-    (back,) = night["reopen_actions"]
-    assert pb.current_title(store.task(back["task_id"])) == "Relay offline (again: 2 times in 7 days)"
+    (back,) = night["task_ids"]
+    assert pb.current_title(store.task(back)) == "Relay offline (again: 2 times in 7 days)"
 
 
 def test_a_reopened_task_whose_old_resolution_is_seen_reopens_its_fault_and_a_lost_resolve_is_redone(tmp_path):
@@ -252,6 +252,6 @@ def test_lowered_then_raised_reopens_the_one_fault_in_the_kiosk(tmp_path):
     res = desk.intake(store, ev("automation.ap", "sensor.ap", 70, priority="P2", **e), T0 + timedelta(minutes=70))
     run(v.tickets.repair())
     assert len(store.tasks(None)) == 1 and store.tasks(None)[0]["reopen_note"] == "Raised to P2."
-    assert [a["action"] for a in res["actions"]] == ["ticket.reopen"]
+    assert res["actions"] == [{"action": "faults_changed"}]
     assert len(k.tickets) == 1 and k.reopened == [("t1", "Motion at sensor.ap")]       # the same fault, open again
     assert k.ticket("t1")["updates"][-1]["note"] == "Raised to P2."

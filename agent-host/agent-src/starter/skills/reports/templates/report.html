@@ -1,4 +1,5 @@
 {% include "page_head.html" %}
+{% from "page_parts.html" import legend, pill %}
 <body><main class="wrap">
 {% if without_ai %}<p class="no-ai" role="note"><b>Made without the AI.</b> {{ without_ai }} Every figure and chart below is complete; VESTA's readings are missing.</p>{% endif %}
 {% for sid in order %}{% set s = sections[sid] %}
@@ -98,7 +99,7 @@
   <div class="grid2">
   {% for c in s.cards %}
     <div class="asset">
-      <div class="t">{{ c.title }} <span class="st {{ 'watch' if c.status == 'Watch' else 'ok' }}">{{ c.status }}</span></div>
+      <div class="t">{{ c.title }} {{ pill('watch' if c.status == 'Watch' else 'ok', c.status) }}</div>
       <div class="s">{{ c.subtitle }}</div>
       {{ chart_line(c.series, c.unit, c.get("alert_at")) }}
       {% set r = reading(c.id ~ ".reading") %}{% if r %}<div class="s">{{ r }}</div>{% endif %}
@@ -108,16 +109,16 @@
 </section>
 {% elif sid == "batteries" %}
 <section class="asset">
-  <div class="t">Batteries <span class="st {{ 'watch' if s.status == 'Watch' else 'ok' }}">{{ s.status }}</span></div>
+  <div class="t">Batteries {{ pill('watch' if s.status == 'Watch' else 'ok', s.status) }}</div>
   <div class="s">{{ s.count }} sensors on batteries — the lowest {{ s.rows|length }}</div>
   {% for b in s.rows %}<div class="bat"><span>{{ b.name }}</span><span class="bar"><i class="{{ b.level }}" style="width:{{ [b.pct, 2]|max }}%"></i></span><span class="num">{% if b.volts is not none %}{{ b.volts }} V{% else %}{{ b.pct }}%{% endif %}</span></div>{% endfor %}
-  {% set r = reading("batteries") %}{% if r %}<div class="s">{{ r }}</div>{% elif s.replace_below_pct is not none %}<div class="s">Replace under {{ s.replace_below_pct }}%.</div>{% endif %}
+  {% set r = reading("batteries") %}{% if r %}<div class="s">{{ r }}</div>{% else %}{% for b in s.rows if b.night %}<div class="s">{{ b.night }}</div>{% endfor %}{% endif %}
 </section>
 {% elif sid == "energy_days" %}
 <section>
   <h2>Energy this week</h2>
   <div class="card"><div class="s">kWh per day, whole villa</div>{{ chart_pairs(s.rows) }}
-  <div class="legend"><span><i style="background:var(--acc)"></i>This week</span><span><i style="background:var(--grid)"></i>Last week</span></div></div>
+  {{ legend([{"word": "This week", "colour": "var(--acc)"}, {"word": "Last week", "colour": "var(--grid)"}]) }}</div>
 </section>
 {% elif sid == "circuits" %}
 <section class="card tbl"><table><tr><th>Circuit</th><th class="num">kWh</th><th class="num">Share</th><th class="num">vs last</th><th>Basis</th></tr>
@@ -130,8 +131,8 @@
 <section>
   <h2>What we fixed, what we suggest</h2>
   <div class="grid2">
-  {% for f in s.fixed %}<div class="asset"><span class="st ok">Fixed</span><b>{{ f.title }}</b><div class="s">Closed {{ day(f.day) }}.</div></div>{% endfor %}
-  {% for p in s.proposals %}<div class="asset"><span class="st watch">Proposal {{ p.id }}</span><b>{{ p.title }}</b><div class="s">{{ sentence(p.detail) }}{% if p.benefit %} {{ sentence(p.benefit) }}{% endif %}</div>
+  {% for f in s.fixed %}<div class="asset">{{ pill("ok", "Fixed") }}<b>{{ f.title }}</b><div class="s">Closed {{ day(f.day) }}.</div></div>{% endfor %}
+  {% for p in s.proposals %}<div class="asset">{{ pill("watch", "Proposal " ~ p.id) }}<b>{{ p.title }}</b><div class="s">{{ sentence(p.detail) }}{% if p.benefit %} {{ sentence(p.benefit) }}{% endif %}</div>
     <div class="answer">To answer, write in the chat: <b>/proposal accept {{ p.id }}</b>, <b>/proposal later {{ p.id }}</b> or <b>/proposal ignore {{ p.id }}</b>.</div></div>{% endfor %}
   {% if not (s.fixed or s.proposals) %}<p class="note">Nothing fixed or proposed this month.</p>{% endif %}
   </div>
@@ -152,10 +153,10 @@
   <div class="card tbl"><table><tr><th>Item</th><th>State</th><th>Effect</th></tr>
   {# ⚠️ NOT THE VILLA'S DEVICES (owner, 2026-10-19): an offline sensor is in "Do this week" and the "devices offline"
      figure; this section says whether the monitoring itself worked #}
-  <tr><td>The VESTA Agent</td>{% if s.listening_since %}<td><span class="st watch">Listening since {{ when(s.listening_since) }}</span></td><td>Alerts before then come from the villa's system only</td>{% else %}<td><span class="st ok">Listening</span></td><td>The whole period</td>{% endif %}</tr>
-  {% for r in s.counter_resets %}<tr><td>{{ r.item }}</td><td><span class="st watch">counter stepped back</span></td><td>{{ day(r.day) }} excluded from totals</td></tr>{% endfor %}
-  {% if s.rules_total %}<tr><td>Safety rules</td><td><span class="st {{ 'ok' if s.rules_on == s.rules_total else 'watch' }}">{{ s.rules_on }} of {{ s.rules_total }} on</span></td><td></td></tr>{% endif %}
-  {% if s.ai_cost_usd is not none %}<tr><td>VESTA cost this period</td><td><span class="st ok">US$ {{ "%.2f"|format(s.ai_cost_usd) }}</span></td><td>the AI's replies and reports</td></tr>{% endif %}
+  <tr><td>The VESTA Agent</td>{% if s.listening_since %}<td>{{ pill("watch", "Listening since " ~ when(s.listening_since)) }}</td><td>Alerts before then come from the villa's system only</td>{% else %}<td>{{ pill("ok", "Listening") }}</td><td>The whole period</td>{% endif %}</tr>
+  {% for r in s.counter_resets %}<tr><td>{{ r.item }}</td><td>{{ pill("watch", "counter stepped back") }}</td><td>{{ day(r.day) }} excluded from totals</td></tr>{% endfor %}
+  {% if s.rules_total %}<tr><td>Safety rules</td><td>{{ pill('ok' if s.rules_on == s.rules_total else 'watch', s.rules_on ~ ' of ' ~ s.rules_total ~ ' on') }}</td><td></td></tr>{% endif %}
+  {% if s.ai_cost_usd is not none %}<tr><td>VESTA cost this period</td><td>{{ pill("ok", "US$ " ~ "%.2f"|format(s.ai_cost_usd)) }}</td><td>the AI's replies and reports</td></tr>{% endif %}
   </table></div>
 </section>
 {% elif sid == "gaps" %}

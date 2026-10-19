@@ -23,6 +23,12 @@ answers "not found" for (its own 404, never a failed read) closes here, saying s
 ⚠️ A FAULT A PERSON REOPENED IS TOLD BY THIS SKILL (architecture review round 2, 2026-10-19): the engine marks a
 person's "Reopen fault" on the task (store.untold_reopenings) and this script tells it, to the role and under the
 title of settings.yaml `reopened_in_kiosk` — the engine used to send it itself, to a role and under a title of its own.
+
+⚠️ A CLOSE WHILE IT IS STILL THERE (owner, architecture review 2026-10-19: one rule with the alert desk's): a pump's
+fault closed in the Cockpit while it was still unavailable stayed closed, nothing said — this script skipped every
+device with an open finding. Now a device still offline is recorded as SEEN at each reading (Problems.seen); a reading
+settings.yaml `still_there_after_close.minutes` or more after a person's close opens the fault again ("Still there after
+the close."), and its `tell` is told once, under its `title` (still_there_untold — a night check's reopening too).
 """
 from __future__ import annotations
 
@@ -42,6 +48,7 @@ from vesta_shared.device_state import OFFLINE, out_for  # noqa: E402  ("is it ba
 from vesta_shared.problems import Problems  # noqa: E402
 from vesta_shared.timeutil import day_time_label  # noqa: E402
 import nightly as N  # noqa: E402  (what is offline: the night's one reading of it)
+from vesta_shared.problems import STILL_THERE  # noqa: E402
 
 
 
@@ -67,38 +74,45 @@ def back_online(store, client, now: datetime, minutes: float, zone: str) -> dict
     # only what has no state is asked about: "not found" is Home Assistant's answer, a missing row is not
     gone = client().not_found([e for e in ids if e not in states]) if len(states) < len(ids) else set()
     day = now.astimezone(ZoneInfo(zone)).date().isoformat()
-    closed, deleted, actions, rules = [], [], [], rechecked()
+    closed, deleted, moved, rules = [], [], [], rechecked()
     for f in rows:
         es = ents[f["id"]]
         if es and all(e in gone for e in es):
-            actions += Problems(store).close_finding(f, day, GONE_NOTE)
+            moved += Problems(store).close_finding(f, day, GONE_NOTE)
             closed.append(f["id"]); deleted.append(f["id"])
         elif f["rule_id"] in rules and out_for(client(), [e for e in es if e not in gone], states, OFFLINE, now,
                                                       minutes, unknown_tells=True):
-            actions += Problems(store).close_finding(f, day, "Cleared: back online.")
+            moved += Problems(store).close_finding(f, day, "Cleared: back online.")
             closed.append(f["id"])
     if closed:
         store.audit("preventive-maintenance", "back_online", {"findings": closed, "gone": deleted})
-    return {"closed": closed, "gone": deleted, "actions": actions}
+    return {"closed": closed, "gone": deleted, "actions": result.moved(moved)}
 
 
-def gone_offline(store, pack, client, now: datetime, params, zone: str) -> dict:
-    """{actions: [the Kiosk faults to open or reopen], send: [the facility manager's message for a critical device],
-    found: [finding ids]}. Only a device with no open finding: one already open is the night check's to restate."""
+def gone_offline(store, pack, client, now: datetime, params, zone: str, settle_minutes: float | None = None) -> dict:
+    """{actions: [faults_changed when a task moved], send: [the facility manager's message for a critical device],
+    found: [finding ids]}. A device with no open finding gets one; one whose finding is open is recorded as seen still
+    offline at `now` (Problems.seen, with the skill's `settle_minutes`): its words stay the night check's to restate,
+    but a person's close of its fault that long ago or more no longer holds."""
     none = {"actions": [], "send": [], "found": []}
     if pack is None or client() is None:
         return none
     ids = sorted({r["entity_id"] for fam in N.WATCHED_FAMILIES for r in pack.entities(fam)})
     at = now.astimezone(ZoneInfo(zone))
-    found = [f for f in N.offline_findings(pack, client().states(ids), at, params, set(N.alerted_offline(store, pack)))
-             if not store.open_finding(f.rule_id, f.entity_id)]
+    found, moved = [], []
+    for f in N.offline_findings(pack, client().states(ids), at, params, set(N.alerted_offline(store, pack))):
+        row = store.open_finding(f.rule_id, f.entity_id)
+        if row:
+            moved += Problems(store).seen(row["id"], now.isoformat(), settle_minutes)
+        else:
+            found.append(f)
     if not found:
-        return none
+        return {**none, "actions": result.moved(moved)}
     day = at.date().isoformat()
     rec = Problems(store).record(found, day, state_rules=N.STATE_RULES, event_rules=N.EVENT_RULES,
-                                 worsened_step=params.behaviour("worsened_step_pct"))
-    actions = [result.fault(t["todo_summary"], task_id=t["task_id"], check=t.get("check"), entity_id=t.get("entity_id"))
-               for t in rec["tasks"]] + rec["reopen_actions"]
+                                 worsened_step=params.behaviour("worsened_step_pct"), at=now.isoformat(),
+                                 settle_minutes=settle_minutes)
+    actions = result.moved(moved + rec["task_ids"])
     send = N.told_now({"villa": pack.villa, "as_of": day, "new_findings": rec["new"], "again": rec["again"]},
                       title=f"{pack.villa or 'The villa'}, devices offline on {day_time_label(at)}.")
     store.audit("preventive-maintenance", "gone_offline", {"findings": [d["id"] for d in rec["new"] + rec["again"]]})
@@ -127,6 +141,29 @@ def reopened_untold(store, zone: str, settings: dict) -> list[dict]:
     return out
 
 
+def still_there_untold(store, zone: str, settings: dict) -> list[dict]:
+    """The messages for the night check's faults opened again because their problem was read still there after a
+    person closed them (Problems.STILL_THERE) that nobody has been told of yet, each told once: to settings.yaml
+    `still_there_after_close.tell`, under its `title`, its `words` ({when} the close, {what} the fault). Without them
+    nothing is sent and the tasks stay untold — named on stderr, never guessed."""
+    words = settings.get("still_there_after_close") or {}
+    to, title, body = (str(words.get(k) or "") for k in ("tell", "title", "words"))
+    rows = store.untold_findings_reopened(STILL_THERE)
+    if not rows:
+        return []
+    if not (to and title and body):
+        print("preventive-maintenance settings.yaml: still_there_after_close needs `tell` (a role), `title` and `words`: "
+              f"{len(rows)} reopened fault(s) not told", file=sys.stderr)
+        return []
+    out = []
+    for t in rows:
+        what = Problems(store).current_title(t)
+        out.append(result.message(to, body.replace("{when}", kiosk_words.when(t.get("done_at"), zone))
+                                  .replace("{what}", what.rstrip(".")), title=title))
+        store.reopening_told(t["id"])
+    return out
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     script.arguments(ap, pack=True)
@@ -134,9 +171,10 @@ def main(argv=None):
     ctx = script.Context(a, skill=os.path.dirname(HERE))
     now = datetime.fromisoformat(a.now) if getattr(a, "now", None) else datetime.now(timezone.utc)
     res = back_online(ctx.store, lambda: ctx.live_client, now, ctx.params.behaviour("back_online_minutes"), ctx.zone)
-    found = gone_offline(ctx.store, ctx.pack, lambda: ctx.live_client, now, ctx.params, ctx.zone)
-    told = reopened_untold(ctx.store, ctx.zone, ctx.settings)
-    print(json.dumps({"actions": res["actions"] + found["actions"], "send": found["send"] + told,
+    found = gone_offline(ctx.store, ctx.pack, lambda: ctx.live_client, now, ctx.params, ctx.zone,
+                         N.still_there_minutes(ctx.settings))
+    told = reopened_untold(ctx.store, ctx.zone, ctx.settings) + still_there_untold(ctx.store, ctx.zone, ctx.settings)
+    print(json.dumps({"actions": result.moved(res["actions"] + found["actions"]), "send": found["send"] + told,
                       result.FAULTS_CHANGED: bool(res["closed"] or found["actions"])}, default=str))
     return 0
 

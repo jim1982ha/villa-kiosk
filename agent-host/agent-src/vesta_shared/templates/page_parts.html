@@ -1,0 +1,10 @@
+{# The parts every VESTA page draws the same way (the reports skill's report.html, the investigate skill's
+   investigation.html): `{% from "page_parts.html" import legend, pill %}` beside `{% include "page_head.html" %}`.
+   ⚠️ ONE COPY (owner, 2026-10-19): the investigation had its own legend macro and the report an inline legend of
+   another look; each built its status pill by hand. An include does not share its macros, hence this file. #}
+
+{# What a chart draws, under it: items {word, colour, shape: line | dash | mark | band (the default)}. #}
+{% macro legend(items) %}{% if items %}<p class="note legend">{% for b in items %}<span class="key">{% if b.shape == "line" %}<span class="sw line" style="border-color:{{ b.colour }}"></span>{% elif b.shape == "dash" %}<span class="sw dash" style="border-color:{{ b.colour }}"></span>{% elif b.shape == "mark" %}<span class="sw mark" style="background:{{ b.colour }}"></span>{% else %}<span class="sw" style="background:{{ b.colour }}"></span>{% endif %} {{ b.word }}</span>{% endfor %}</p>{% endif %}{% endmacro %}
+
+{# A status in a pill: its tone (ok, watch, bad, flat: page_head.html's colours) and its word. #}
+{% macro pill(tone, word) %}<span class="st {{ tone }}">{{ word }}</span>{% endmacro %}

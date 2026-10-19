@@ -112,20 +112,38 @@ def fault_note(check: str | None) -> str | None:
     return f"What to do: {check}" if check else None
 
 
-def fault(summary: str, *, task_id: int | None = None, check: str | None = None, entity_id: str | None = None) -> dict:
-    """A task as a fault in the VESTA Kiosk: its title says what is wrong, its note what to check."""
-    return {"action": "ticket", "summary": summary, "task_id": task_id, "note": fault_note(check),
-            "entity_id": entity_id if entity_id and "," not in entity_id else None}
+def fault(summary: str, *, check: str | None = None, entity_id: str | None = None, task_id: int | None = None) -> dict:
+    """A fault in the VESTA Kiosk about NO task (a chat's): its title says what is wrong, its note what to check.
+    (`task_id`: only a skill edited on a villa before 0.6.258 passes it — the engine reads that as faults_changed.)"""
+    return {"action": "ticket", "summary": summary, "note": fault_note(check),
+            "entity_id": entity_id if entity_id and "," not in entity_id else None,
+            **({"task_id": task_id} if task_id else {})}
 
 
+# ⚠️ A FAULT ACTION CARRIES ONLY WHAT IS READ (architecture review, 2026-10-19): a task's fault opened, reopened or
+# resolved was three actions full of words — a title, a note, who — that the engine collapsed into "a fault moved" and
+# never read: tickets.repair makes every fault what Problems.card says. A task's change is now this one action. The
+# engine still reads the older three (an edited starter skill on a villa keeps sending them) as the same.
+def faults_changed() -> dict:
+    """The Kiosk's faults about tasks must be brought up to date (a task opened, reopened or closed): the engine runs
+    its repair, which works out what each fault says. The same as a result's top-level FAULTS_CHANGED."""
+    return {"action": FAULTS_CHANGED}
+
+
+#: The older shapes of a task's fault change, kept for a skill edited on a villa (updates keep it) that still builds
+#: them: the engine reads each as faults_changed(), its words unread. The starter skills no longer call them
+#: (tests/test_outcome.py holds it).
 def reopened(task_id: int, title: str, note: str = "") -> dict:
-    """Task `task_id`'s Kiosk fault open again under `title`: its problem came back (vesta_shared.problems)."""
     return {"action": "ticket.reopen", "task_id": int(task_id), "title": title[:200], "note": note[:500]}
 
 
 def resolved(task_id: int, note: str | None = None, who: str | None = None) -> dict:
-    """A task's fault resolved in the VESTA Kiosk — by `who` when a person did it (their name on the card)."""
     return {"action": "ticket.resolve", "task_id": task_id, "note": note or None, **({"who": who} if who else {})}
+
+
+def moved(task_ids) -> list[dict]:
+    """[faults_changed()] when any task's fault moved, else []: what Problems.close_* hand a script's `actions`."""
+    return [faults_changed()] if list(task_ids) else []
 
 
 def snapshot(entity_id: str, incident: int) -> dict:

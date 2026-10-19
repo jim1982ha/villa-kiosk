@@ -145,7 +145,7 @@ def status(text: str) -> str:
     """Where a notice says it stands: what follows the history ("- …" lines) under its last "Status:" (the alert or the
     request first, the history, where it stands last — one block since 2026-10-13; a press's note replaces it:
     vesta_agent/layout.py)."""
-    from vesta_shared.message_format import MARK_ICONS, STAGE_ICONS, STAGE_WORDS, STATUS
+    from vesta_shared.message_format import MARK_ICONS, STAGE_ICONS, STATUS, stage_words
     label = f"\n\n{STATUS}:\n"
     probe = "\n\n" + text if text.startswith(f"{STATUS}:\n") else text
     lines = probe.rsplit(label, 1)[1].split("\n") if label in probe else []
@@ -155,7 +155,7 @@ def status(text: str) -> str:
     # the icon in front (layout.stage_line) is the stage again — pinned by test_one_saying, set aside here; a bottom
     # line that is only the stage ("⚠️ New alert") says nothing of its own
     for word, icon in STAGE_ICONS.items():
-        if last == f"{icon} {STAGE_WORDS[word]}":
+        if last == f"{icon} {stage_words(word)}":
             return ""
     for icon in sorted([*STAGE_ICONS.values(), *MARK_ICONS.values()], key=len, reverse=True):
         if last.startswith(f"{icon} "):

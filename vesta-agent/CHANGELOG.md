@@ -1,3 +1,46 @@
+## 0.12.267
+
+What you will see:
+- Rules › AI tools › Tools by role: each row says which tab its switch comes from — "Cameras (Villa system tools)",
+  "Web search (Agent tools)". The table mixes the villa system's tool groups with the Agent tools a role may lose,
+  which is why it shows 11 rows where the Agent tools tab shows 9.
+- Skills: a skill that lists no tool has no "Skill tools" tab any more (it only said "lists none").
+- Skills › proposals: the "in a chat" row says how to answer, with an example — the monthly report lists Proposal 3,
+  the owner answers /proposal accept 3, /proposal later 3 or /proposal ignore 3. The same example answers
+  "/proposal" sent alone.
+- On the weekly page, a pump's card turns "Watch" only when the night check found something about it (its running
+  power changed, its running time, it went offline). The card no longer judges its own last three days, and the to-do
+  list no longer has a second "running power down" line beside the night check's own.
+- The batteries section shows each battery's charge as before, but its red "replace" and amber "watch" are the night
+  check's: red when the night check asked for the battery to be replaced (under 10 % now, under 20 % within the week),
+  amber when it found the battery falling fast enough to be empty within two weeks — with the night check's own
+  sentence under the bars ("Door battery is falling 2.0 points a day, about 10 days left."). The page's own 20 % / 35 %
+  marks and its "about N weeks left" line are gone, so one battery no longer gets two different "replace" dates.
+- If the villa's own settings file still sets one of the removed thresholds, the report says so once ("…, which is no
+  longer used: …") instead of quietly ignoring it; /investigate does the same for its retired settings.
+- /investigate counts a device as "running" by the same rule as the night check and the energy figures. On the test
+  data the threshold moved (a heater: 250 W → 150 W; a meter that idles every few seconds: 75 W → 150 W); the runs it
+  finds there are the same.
+- The investigation page's charts look as before; the weekly page's "This week / Last week" key under the energy chart
+  now has the same look as the investigation's keys.
+- The villa's own alert and the VESTA Agent's copy of it name the same people. A rule set to follow the agent's
+  setting now says "To: Owner & FM" for a P1, "To: FM" for a P2, "To: digest" for a P3 and "To: log" for a P4 — the
+  alert desk's own table — where the rule wrote its own list (a P3 said "To: FM", then the agent's copy "To: digest").
+- Every alert that is over ends the same way: "✅ Cleared on 19/10/2026 14:05." — on the villa's own all-clear, on the
+  leak and pump-protection all-clear (which had no "Status:" at all), and on every end the agent writes ("Closed on …"
+  is gone; the automation that no longer exists and the villa back online now read "Cleared on …: …"). How long the
+  problem lasted stays in the alert's text ("Resolved after 12 min.").
+- These need the new alert template (vesta_message.jinja) copied to the villa's custom_templates folder, then the
+  edited VESTA rules saved — the template first.
+- A night check's fault you close in the Cockpit while the device is still offline no longer stays closed in silence:
+  about 10 minutes later, if the device is still offline, the fault opens again saying "Still there after the close."
+  and the facility manager gets one message, "Fault still there after the close". An alert's fault already did this;
+  both now follow the same rule. A fault closed after the device came back stays closed.
+- An older VESTA Kiosk is only sent what it can show: a Telegram line or another kind of step it does not know is
+  never shown as a change of status on a fault card.
+- With the Kiosk set to show the Agent offline after 1 minute, the Agent no longer flips between online and offline:
+  it reports in three times within whatever window the Kiosk uses.
+
 ## 0.12.266
 
 What you will see:

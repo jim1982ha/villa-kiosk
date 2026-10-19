@@ -74,8 +74,40 @@ STATUS = "Status"
 #: existing, closed — or what the skill marked (vesta_shared.result.MARKS).
 STAGE_ICONS = {"new": "⚠️", "existing": "⚠️ ⚙️", "closed": "✅"}
 MARK_ICONS = {"help": "🆘", "unchecked": "☑️"}
-#: The bottom line of a stage that has none of its own (the first alert says only what Home Assistant said).
-STAGE_WORDS = {"new": "New alert", "existing": "Still open", "closed": "Closed: nothing more to do"}
+#: ⚠️ WHAT, WHEN, THEN WHO (owner, 2026-10-19: "✅ Done on 19/10/2026 02:10 (JM)"): every line saying a person's act —
+#: a press, an approval, a close or reopen in the Cockpit — reads "<what> on <when> (<who>)" (acted).
+def acted(what: str, when: str, who: str = "") -> str:
+    """A person's act as every line says it: "Done on 19/10/2026 02:10 (JM)", "Closed in the Cockpit on … (Fabien)" —
+    no full stop, a sentence may go on; no brackets when nobody is named.
+
+    ⚠️ THE ONE WRITER (architecture review, 2026-10-19): PRESSED, an approval's "Approved / Refused / Expired on …"
+    (vesta_agent/approvals.STATES) and the desk's "Noted on …" each wrote the shape again by hand; a change of the
+    owner's wording would have reached some of them."""
+    return f"{what} on {when}" + (f" ({who})" if who else "")
+
+
+def closing(tail: str = "") -> str:
+    """How an alert that is over says it, with the engine's "{time}" (the villa's time, filled when shown): "Cleared on
+    {time}." — or "Cleared on {time}: <tail>." when the end has more to say (what the device reads now, the rule that
+    no longer exists).
+
+    ⚠️ ONE CLOSING WORDING (owner, 2026-10-19, recommended and approved): the desk said "Cleared on …", "Closed on …"
+    by its ends, the villa's own all-clear "Resolved after 12 min", "Cleared just inside the 30 min limit…" or no status
+    at all, and STAGE_WORDS["closed"] "Closed: nothing more to do", a line no renderer reached. The desk's won; the
+    desk's every end and the villa's template (vesta_message.jinja, its clock for "{time}") read it here."""
+    return acted("Cleared", "{time}") + (f": {tail}" if tail else "") + "."
+
+
+#: The bottom line of a stage that has none of its own (the first alert says only what Home Assistant said). "{time}":
+#: the villa's time, filled by whoever shows it (`stage_words`).
+STAGE_WORDS = {"new": "New alert", "existing": "Still open", "closed": closing()}
+
+
+def stage_words(word: str, time: str = "") -> str:
+    """A stage's own bottom line, its "{time}" filled with `time`; with no time to give (the agent redrawing a copy
+    that has no status of its own) the moment is left out — "Cleared." — never a "{time}" shown."""
+    words = STAGE_WORDS[word]
+    return words.replace("{time}", time) if time else words.replace(" on {time}", "")
 
 class Step(NamedTuple):
     """One step of an alert's life, as its card says it (vesta_agent/notice.py)."""
@@ -119,22 +151,10 @@ STEPS: dict[str, Step] = {
 PRESSED_STAGE = "pressed"
 #: What a pressed Done / Need help leaves on its message ("{time}": the villa's time then, timeutil.moment_label).
 #: ⚠️ ONE WORDING (architecture review, 2026-10-13): Home Assistant's own job messages said "✅ Done - JM" and
-#: "🆘 Help requested - JM" where the agent's said "Done pressed by JM on 12/10/2026 17:13." — the HA template
-#: (homeassistant/custom_templates/vesta_message.jinja) carries these tables too, and its test holds it to them.
-#: ⚠️ WHAT, WHEN, THEN WHO (owner, 2026-10-19: "✅ Done on 19/10/2026 02:10 (JM)"): every line saying a person's act —
-#: a press, an approval, a close or reopen in the Cockpit — reads "<what> on <when> (<who>)" (acted).
-def acted(what: str, when: str, who: str = "") -> str:
-    """A person's act as every line says it: "Done on 19/10/2026 02:10 (JM)", "Closed in the Cockpit on … (Fabien)" —
-    no full stop, a sentence may go on; no brackets when nobody is named.
-
-    ⚠️ THE ONE WRITER (architecture review, 2026-10-19): PRESSED, an approval's "Approved / Refused / Expired on …"
-    (vesta_agent/approvals.STATES) and the desk's "Noted on …" each wrote the shape again by hand; a change of the
-    owner's wording would have reached some of them."""
-    return f"{what} on {when}" + (f" ({who})" if who else "")
-
-
-#: A pressed button's line, with the engine's placeholders ("{time}": the villa's time then; the villa's own template
-#: fills the same three: vesta_message.jinja's vm_pressed).
+#: "🆘 Help requested - JM" where the agent's said "Done pressed by JM on 12/10/2026 17:13."
+#: (acted, above, writes every such line.)
+#: A pressed button's line, with the engine's placeholders ("{time}": the villa's time then). The villa's own template
+#: no longer draws a press (owner, 2026-10-19: only the agent chases; its task rule sent nothing since 2026-08-25).
 PRESSED = acted("{label}", "{time}", "{name}") + "."
 #: Sections whose items are notes — what happened, said by the agent — rather than the things reported.
 NOTE_SECTIONS = frozenset({STATUS})
@@ -375,14 +395,40 @@ JINJA_END = "{#- END WORDS -#}"
 JINJA_FILE = os.path.join(os.path.dirname(__file__), "..", "homeassistant", "custom_templates", "vesta_message.jinja")
 
 
+#: The alert desk's own settings (its released rules.yaml): whom each priority reaches is ITS table (people_roles,
+#: priority_does) — read here as data for the villa's template, never typed (skills before code).
+ALERT_DESK_RULES = os.path.join(os.path.dirname(__file__), "..", "starter", "skills", "alert-desk", "rules.yaml")
+
+
+def priority_to(rules: dict) -> dict[str, str]:
+    """What an alert card's "To:" says for each priority, by the alert desk's `rules` (its rules.yaml): the roles of
+    people_roles that priority reaches, short ("Owner & FM", "FM") — none, what the priority does instead
+    (priority_does: "digest", "log"; "log" when it says nothing), as the agent's own card says it (desk.reaches)."""
+    roles, does = rules.get("people_roles") or {}, rules.get("priority_does") or {}
+    out = {}
+    for p in ("P1", "P2", "P3", "P4"):
+        reached = [r for r, sevs in roles.items() if r != "digest" and p in (sevs or [])]
+        out[p] = audience(reached, short=True) or does.get(p, "log")
+    return out
+
+
 def jinja_words() -> str:
     """The agent's words as the villa's own alert template reads them: the roles (every way a "To:" may name one, and
-    how an alert card says it), the stages' icons and words, a pressed button's line.
+    how an alert card says it), whom each priority reaches (the alert desk's table), the stages' icons and words, and
+    how a moment is written (timeutil.MOMENT_FORMAT, the clock of "Cleared on {time}.").
 
     ⚠️ ONE SET OF WORDS (architecture review, 2026-10-17): the template kept its own copy — "Owner & Facility Manager"
     after alert cards said "Owner & FM" (owner, 2026-10-16), so an alert read one way for a second, then the other once
     the agent took it over. The template is a second renderer by necessity (an alert never waits on the agent); its
-    words are not."""
+    words are not.
+
+    ⚠️ "TO:" BY PRIORITY IS THE DESK'S TABLE (owner, 2026-10-19, recommended and approved): every critical blueprint
+    wrote "P1 → Owner, Facility Manager, else Facility Manager" by hand, so a changed people_roles made the villa's own
+    message say one "To:" and the agent's rewrite another a second later. A rule now passes its priority (vm_priority)."""
+    import yaml
+    from .timeutil import MOMENT_FORMAT
+    with open(ALERT_DESK_RULES, encoding="utf-8") as f:
+        rules = yaml.safe_load(f) or {}
     lit = lambda v: json.dumps(v, ensure_ascii=False)
     names = {w.lower(): r for words in (ROLE_WORDS, ROLE_SHORT) for r, w in words.items()}
     return "\n".join([
@@ -390,9 +436,10 @@ def jinja_words() -> str:
         f"{{%- set vm_role_of = {lit(names)} -%}}",
         f"{{%- set vm_role_words = {lit([[r, w] for r, w in ROLE_SHORT.items()])} -%}}",
         f"{{%- set vm_and = {lit(AND)} -%}}",
-        f"{{%- set vm_icons = {lit({**STAGE_ICONS, 'help': MARK_ICONS['help']})} -%}}",
+        f"{{%- set vm_priority_to = {lit(priority_to(rules))} -%}}",
+        f"{{%- set vm_icons = {lit(STAGE_ICONS)} -%}}",
         f"{{%- set vm_words = {lit(STAGE_WORDS)} -%}}",
-        f"{{%- set vm_pressed = {lit(PRESSED)} -%}}",
+        f"{{%- set vm_time_format = {lit(MOMENT_FORMAT)} -%}}",
         JINJA_END,
     ])
 

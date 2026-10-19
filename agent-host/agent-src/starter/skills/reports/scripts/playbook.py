@@ -10,8 +10,8 @@ import statistics
 from datetime import date, datetime, time, timedelta
 from typing import TYPE_CHECKING
 
-from vesta_shared.device_state import battery_charge  # the night check's own reading
-from vesta_shared.stats import slope_per_hour, step_index  # the night check's step detector
+from vesta_shared import battery  # a battery's charge: the night check's own reading
+from vesta_shared.stats import step_index  # the night check's step detector
 from vesta_shared.timeutil import day_time_label, said  # the one day format; a stored time in words
 from vesta_shared.past import unread  # the one "could not be read whole: nothing is known after"
 from vesta_shared.result import PRIORITY_ORDER, WHOLE_DEVICE  # the one list of priorities; a whole device's faults
@@ -65,26 +65,6 @@ def _best_split(vals: list[float], min_days: int) -> tuple[int, float] | None:
     return (idx, pct) if idx is not None else None
 
 
-def clue_power_step(c, when):
-    out = []
-    for slug, a in sorted(c.pack.assets.items()):
-        pw = (a.get("entities") or {}).get("power")
-        if a.get("kind") != "motor" or not pw:
-            continue
-        rows = [r for r in _days_power(c, pw, a, int(when.get("days", 30))) if r[1] is not None]
-        best = _best_split([r[1] for r in rows], int(when.get("min_days", 3)))
-        if best and -best[1] >= float(when["drop_pct"]):
-            k = best[0]
-            if min(statistics.mean(r[2] for r in rows[:k]), statistics.mean(r[2] for r in rows[k:])) < float(when.get("min_hours", 0)):
-                continue                             # a few minutes a day: its hourly means are not its power
-            out.append({"subject": c.pack.reading_name(pw, slug), "entity_id": pw, "step_date": rows[k][0].isoformat(),
-                        "before_w": round(statistics.mean(r[1] for r in rows[:k])),
-                        "after_w": round(statistics.mean(r[1] for r in rows[k:])), "drop_pct": round(-best[1]),
-                        "hours_before": round(statistics.mean(r[2] for r in rows[:k]), 1),
-                        "hours_after": round(statistics.mean(r[2] for r in rows[k:]), 1)})
-    return out
-
-
 def clue_run_change(c, when):
     out = []
     for slug, a in sorted(c.pack.assets.items()):
@@ -102,29 +82,6 @@ def clue_run_change(c, when):
             out.append({"subject": c.pack.reading_name(pw, slug), "entity_id": pw, "change_date": rows[k][0].isoformat(),
                         "hours_before": round(statistics.mean(r[2] for r in rows[:k]), 1),
                         "hours_after": round(statistics.mean(r[2] for r in rows[k:]), 1), "change_pct": round(best[1])})
-    return out
-
-
-def clue_battery_trend(c, when):
-    repl = float(c.need("battery", "replace_below_pct"))
-    days = int(when.get("days", 30))
-    s = datetime.combine(c.end - timedelta(days=days - 1), time(0), c.Z)
-    out = []
-    for r in c.pack.families.get("battery", []):
-        # ⚠️ ITS CHARGE, NOT ITS READING (architecture review 13): a 3.0 V cell was read as "3 %" here and made a
-        # false "battery falling" clue, while the batteries section converted it — both ask battery_pct now
-        now_v = battery_pct(c, r, _num((c.states().get(r["entity_id"]) or {}).get("state")))
-        if now_v is None or now_v >= float(when["below_pct"]):
-            continue
-        rows = c.cli.statistics([r["entity_id"]], s, c.e_dt, "day", ("mean",)).get(r["entity_id"], [])
-        pts = [(i, p) for i, x in enumerate(rows) if (p := battery_pct(c, r, _num(x.get("mean")))) is not None]
-        fall = None
-        if len(pts) >= 5:
-            fall = round(-(slope_per_hour(pts) or 0) * 7, 1)      # the points are (day index, level): per day
-        if not fall or fall <= 0 or now_v <= repl:
-            continue                    # no trend to project, or already due: the batteries section shows it
-        out.append({"subject": c.pack.reading_name(r["entity_id"], r["entity_id"]), "entity_id": r["entity_id"], "level_pct": round(now_v),
-                    "fall_per_week": fall, "weeks_left": round((now_v - repl) / fall, 1), "replace_below_pct": repl})
     return out
 
 
@@ -166,8 +123,10 @@ def clue_use_while_empty(c, when):
              "kwh_per_other_day": round(statistics.mean(other_days), 1) if other_days else "no occupied day"}]
 
 
-CLUES = {"power_step": clue_power_step, "run_change": clue_run_change, "battery_trend": clue_battery_trend,
-         "offline": clue_offline, "use_while_empty": clue_use_while_empty}
+# ⚠️ NO power_step, NO battery_trend (owner, 2026-10-19: "the night check owns each number asked twice"): a pump's
+# running power that dropped is the night's PM-POWER-CHANGE finding, a falling battery its PM-BATTERY-TREND — they
+# reach the one list as open problems; a second detector here said the same thing by other numbers.
+CLUES = {"run_change": clue_run_change, "offline": clue_offline, "use_while_empty": clue_use_while_empty}
 
 
 def clues(c: "Ctx") -> tuple[list[dict], list[str]]:
@@ -182,7 +141,11 @@ def clues(c: "Ctx") -> tuple[list[dict], list[str]]:
                 continue                             # knowledge only: handed to the AI, never a clue
             fn = CLUES.get(when.get("kind"))
             if fn is None:
-                problems.append(f"playbook {group}/{e.get('name')}: unknown when kind {when.get('kind')!r}")
+                # a kind the skill retired (reports.yaml retired_kinds: the night check owns it now) is said as such
+                gone = (c.cfg.get("retired_kinds") or {}).get(when.get("kind"))
+                problems.append(f"playbook {group}/{e.get('name')}: " + (
+                    f"when kind {when.get('kind')!r} is no longer used: {gone}" if gone
+                    else f"unknown when kind {when.get('kind')!r}"))
                 continue
             try:
                 found = fn(c, when)
@@ -335,7 +298,7 @@ def one_list(clue_rows: list[dict], problems: list[dict], device_of, name_of, ho
 
 def battery_pct(c, r: dict, value) -> float | None:
     """A battery's charge in %, from its reading: % as it is, volts against the nominal the villa set for it
-    (device_state.battery_charge); None when it cannot be told (volts with no nominal: never a guess)."""
+    (vesta_shared.battery.charge); None when it cannot be told (volts with no nominal: never a guess)."""
     unit = (r.get("unit") or "%").strip()
     nominal = c.params().asset_optional_number(r.get("asset") or "", "battery_nominal_v") if unit == "V" else None
-    return battery_charge(value, unit, nominal)
+    return battery.charge(value, unit, nominal)

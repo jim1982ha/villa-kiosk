@@ -5,8 +5,9 @@ A skill script prints its decision in the standard form; this module does it:
   send:       [{to: here | owner | fm, text, incident_id?, keyboard?: true, attachment?: <a file of the out folder>}]
               keyboard = the alert buttons of the message's incident_id
   (a skill builds these with vesta_shared/result.py: the shape there, the words in the skill)
-  actions:    ticket {summary, entity_id?, note?, task_id?} · ticket.resolve {task_id | ticket_id, note?}
-              snapshot.get {entity_id, incident_id}
+  actions:    faults_changed (a task's fault opened, reopened or closed: the repair) · ticket {summary, entity_id?,
+              note?} (a fault about no task: a chat's) · snapshot.get {entity_id, incident_id}
+              (older, still read as faults_changed: ticket {task_id, …}, ticket.resolve, ticket.reopen)
   siren_gate: {armed, prompt, to}  → an Approve / Refuse request to the owner for the policy's siren; with no
               siren configured, the prompt itself to `to`
   incident_id                  → the incident of the result (a message without its own)
@@ -259,11 +260,18 @@ class Outcome:
         # and the repair worked the same cards out from the tasks — two routes, a 2-day "redo the close" window for when
         # the first failed, and a person's Done that could meet the agent's close. A fault about a task is now the
         # repair's (tickets.repair: Problems.card, at once); only a fault with no task (a chat's) is made here.
+        # ⚠️ A TASK'S FAULT ACTION CARRIES NOTHING TO READ (architecture review, 2026-10-19): a skill says
+        # result.faults_changed(); the older shapes — ticket with a task_id, ticket.resolve, ticket.reopen, their words
+        # unread — still come from a starter skill edited on a villa (updates keep it), and mean the same.
         faults_moved = bool(res.get(FAULTS_CHANGED))
         for a in res.get("actions") or []:
+            if isinstance(a, int) and not isinstance(a, bool):
+                faults_moved = True     # a task id: an edited desk adding Problems.settle's return to its actions
+                continue
             kind = (a or {}).get("action")
             try:
-                if kind in ("ticket", "ticket.resolve", "ticket.reopen") and (kind != "ticket" or a.get("task_id")):
+                if kind == FAULTS_CHANGED or (kind in ("ticket", "ticket.resolve", "ticket.reopen")
+                                              and (kind != "ticket" or a.get("task_id"))):
                     faults_moved = True
                 elif kind == "ticket":
                     if await self.tickets.create(a.get("summary", ""), a.get("entity_id") or None, a.get("note") or None):

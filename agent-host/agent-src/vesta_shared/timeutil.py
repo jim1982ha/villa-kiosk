@@ -70,10 +70,16 @@ def day_label(d: date, weekday: bool = False, long: bool = False, year: bool = F
     return f"{out} {d.year}" if year else out
 
 
+#: How every notice writes a moment ("11/10/2026 07:05"): `moment_label`, and the villa's own alert template, which
+#: fills "Cleared on {time}." with its clock (message_format.jinja_words writes this format into it). Locale-free
+#: directives only: the same text on any machine.
+MOMENT_FORMAT = "%d/%m/%Y %H:%M"
+
+
 def moment_label(d: datetime, zone: "str | ZoneInfo") -> str:
     """A moment as every notice writes it: "11/10/2026 07:05", in the villa's time (vesta_agent/notice.when)."""
     t = d.astimezone(ZoneInfo(zone) if isinstance(zone, str) else zone)
-    return f"{day_label(t.date(), numeric=True)} {t:%H:%M}"
+    return t.strftime(MOMENT_FORMAT)
 
 
 def day_time_label(d: datetime, weekday: bool = False, year: bool = False) -> str:

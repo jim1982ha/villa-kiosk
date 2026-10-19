@@ -90,17 +90,9 @@ def out_for(client, entity_ids, states: dict, bad, now, minutes: float, unknown_
     return True
 
 
-def battery_charge(value: float | None, unit: str | None, nominal_v: float | None = None) -> float | None:
-    """A battery's charge in %: as the sensor gives it (%), or its voltage against its nominal voltage (V).
-    None when it cannot be told — volts with no nominal set (the night check asks for the helper)."""
-    if value is None:
-        return None
-    unit = (unit or "%").strip()
-    if unit == "%":
-        return float(value)
-    if unit == "V":
-        return round(min(100.0, value / nominal_v * 100), 1) if nominal_v else None
-    return None
+# A battery's charge lives in vesta_shared.battery (its one owner, 2026-10-19). The name stays here for a starter skill
+# a villa edited (kept by updates) that still imports it.
+from .battery import charge as battery_charge  # noqa: E402,F401
 
 
 def ha_restarts(logbook: list[dict]) -> list:

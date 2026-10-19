@@ -2,9 +2,12 @@
 (vesta_shared.problems), not by each skill remembering to."""
 from __future__ import annotations
 
+from datetime import datetime, timedelta
+
 import pytest
 
-from vesta_shared.problems import CLEARED, DONE, Problems
+from vesta_shared.problems import CLEARED, DONE, STILL_THERE, Problems
+from vesta_shared.result import faults_changed
 from vesta_shared.store import Incident, Store
 
 NOW = "2026-10-07T12:00:00+00:00"
@@ -28,7 +31,8 @@ def test_an_incident_closed_in_a_state_closes_its_task_only_when_that_state_ends
     assert inc["state"] == state and inc["closed_at"] == NOW and inc["reply"] == "x"
     task = store.task(tid)
     if closes_as:
-        assert task["status"] == closes_as and actions == [{"action": "ticket.resolve", "task_id": tid, "note": "why"}]
+        # a fault action carries only what is read (architecture review, 2026-10-19): its close's words are the task's
+        assert task["status"] == closes_as and actions == [faults_changed()] and task["close_note"] == "why"
     else:
         assert task["status"] == "open" and actions == []
     # and the nightly reconcile agrees with what was decided here
@@ -41,7 +45,8 @@ def test_a_finding_no_longer_seen_closes_with_its_task_and_its_fault(tmp_path):
     tid, _ = Problems(store).open_task("finding", fid, "PM-X", "sensor.example", "Pump weak")
     actions = Problems(store).close_finding(store.finding(fid), "2026-10-07", "Cleared: the nightly check no longer sees it.")
     assert store.finding(fid)["status"] == "closed" and store.task(tid)["status"] == CLEARED
-    assert actions == [{"action": "ticket.resolve", "task_id": tid, "note": "Cleared: the nightly check no longer sees it."}]
+    assert actions == [faults_changed()]
+    assert store.task(tid)["close_note"] == "Cleared: the nightly check no longer sees it."
 
 
 class _F:
@@ -63,13 +68,13 @@ def test_the_nights_ledger_list_in_list_out(tmp_path):
     n1 = pb.record_night([_F("S-POWER", "a", "P2", change_pct=-20), _F("S-GONE", "b"), _F("E-RUN", "c", "P4")],
                          "2026-10-06", **rules)
     assert {d["rule_id"] for d in n1["new"]} == {"S-POWER", "S-GONE", "E-RUN"}
-    assert [t["entity_id"] for t in n1["tasks"]] == ["a", "b"]                          # P2 and P3 only
+    assert [store.task(t)["entity_id"] for t in n1["task_ids"]] == ["a", "b"]             # P2 and P3 only
     assert store.finding(next(d["id"] for d in n1["new"] if d["rule_id"] == "E-RUN"))["status"] == "closed"
     n2 = pb.record_night([_F("E-RUN", "c", "P4")], "2026-10-07", **rules)
     assert "muted" not in n2                                        # nothing is silenced any more (owner, 2026-10-10)
     # not seen tonight: closed with its task and fault
     assert sorted(c["rule_id"] for c in n2["closed"]) == ["S-GONE", "S-POWER"]
-    assert sorted(a["task_id"] for a in n2["resolve_actions"]) == sorted(t["task_id"] for t in n1["tasks"])
+    assert sorted(n2["resolved"]) == sorted(n1["task_ids"])
 
 
 def test_a_still_open_finding_that_worsened_is_news_again(tmp_path):
@@ -89,7 +94,7 @@ def test_the_same_night_run_again_tells_an_event_once(tmp_path):
     rules = dict(state_rules=set(), event_rules={"E-RUN"}, worsened_step=15)
     first = Problems(store).record_night([_F("E-RUN", "c", "P3")], "2026-10-07", **rules)
     again = Problems(store).record_night([_F("E-RUN", "c", "P3")], "2026-10-07", **rules)
-    assert len(first["new"]) == 1 and again["new"] == [] and again["tasks"] == []
+    assert len(first["new"]) == 1 and again["new"] == [] and again["task_ids"] == []
 
 
 def test_mute_leftovers_close_and_an_edited_skill_still_runs(tmp_path):
@@ -117,9 +122,9 @@ def test_a_device_offline_every_night_is_the_same_problem_again_not_a_new_one(tm
         assert night["new"] == [] and [d["id"] for d in night["again"]] == [fid] and night["again"][0]["again"] == n
         # architecture review 23: the Kiosk fault says it too — its title is the task's
         # architecture review 24: its own task and Kiosk fault open again, titled with how often — never a new one
-        (back,) = night["reopen_actions"]
-        assert night["tasks"] == [] and back["title"] == f"Plug offline (again: {n + 1} times in 7 days)"
-        assert store.task(back["task_id"])["status"] == "open" and len(store.tasks(None)) == 1
+        (back,) = night["task_ids"]
+        assert pb.card(store.task(back))["title"] == f"Plug offline (again: {n + 1} times in 7 days)"
+        assert store.task(back)["status"] == "open" and len(store.tasks(None)) == 1
         # ...and so does what every reader shows: listed as of the day it came back, never "still open since the 7th"
         (row,) = pb.since(day)["new"]
         assert row["title"] == f"Plug offline (again: {n + 1} times in 7 days)" and row["since"] == day
@@ -136,7 +141,7 @@ def test_a_fault_closed_by_hand_the_time_before_never_hides_it_when_it_comes_bac
     pb = Problems(store)
     rules = dict(state_rules={"PM-UNAVAILABLE"}, event_rules=set(), worsened_step=15)
     first = pb.record_night([_F("PM-UNAVAILABLE", "switch.plug", "P2")], "2026-10-07", **rules)
-    pb.closed_in_kiosk(first["tasks"][0]["task_id"])                                   # closed by hand
+    pb.closed_in_kiosk(first["task_ids"][0])                                              # closed by hand
     assert pb.open_problems() == []                                                    # handled: not listed
     pb.close_finding(store.finding(first["new"][0]["id"]), "2026-10-08", "Cleared: back online.")
     pb.record_night([_F("PM-UNAVAILABLE", "switch.plug", "P2")], "2026-10-09", **rules)
@@ -151,15 +156,30 @@ def test_an_open_problem_that_never_had_a_fault_gets_one_and_a_hand_closed_one_s
     rules = dict(state_rules={"PM-UNAVAILABLE"}, event_rules=set(), worsened_step=15)
     store.raise_finding("PM-UNAVAILABLE", "sensor.a", "a", "2026-10-09", "P3", "A offline for 39 h.", {})  # no task
     night = pb.record_night([_F("PM-UNAVAILABLE", "sensor.a", "P3", summary="A offline for 63 h.")], "2026-10-10", **rules)
-    assert [t["entity_id"] for t in night["tasks"]] == ["sensor.a"] and night["tasks"][0]["todo_summary"] == "A offline for 63 h."
-    assert pb.record_night([_F("PM-UNAVAILABLE", "sensor.a", "P3")], "2026-10-11", **rules)["tasks"] == []  # once
-    # closed by hand while still offline: it stays quiet (a person's close silences a still-true problem)
-    pb.closed_in_kiosk(night["tasks"][0]["task_id"])
-    assert pb.record_night([_F("PM-UNAVAILABLE", "sensor.a", "P3")], "2026-10-12", **rules)["tasks"] == []
+    (tid,) = night["task_ids"]
+    assert store.task(tid)["entity_id"] == "sensor.a" and store.task(tid)["summary"] == "A offline for 63 h."
+    assert pb.record_night([_F("PM-UNAVAILABLE", "sensor.a", "P3")], "2026-10-11", **rules)["task_ids"] == []  # once
+    # ⚠️ RE-PINNED (owner, architecture review 2026-10-19: one rule for a close while the problem is still there). It
+    # pinned "a person's close silences a still-true problem" for good; now the close holds until the source is read
+    # again its skill's settle time after the close, still bad — then the task opens again, saying why
+    pb.closed_in_kiosk(tid)
+    closed_at = datetime.fromisoformat(store.task(tid)["done_at"])
+    soon = (closed_at + timedelta(minutes=9)).isoformat()
+    assert pb.record_night([_F("PM-UNAVAILABLE", "sensor.a", "P3")], "2026-10-12", at=soon, settle_minutes=10,
+                           **rules)["task_ids"] == []                                      # read too soon: it holds
+    later = (closed_at + timedelta(minutes=10)).isoformat()
+    assert pb.record_night([_F("PM-UNAVAILABLE", "sensor.a", "P3")], "2026-10-12", at=later, settle_minutes=10,
+                           **rules)["task_ids"] == [tid]
+    assert (store.task(tid)["status"], store.task(tid)["reopen_note"]) == ("open", STILL_THERE)
+    assert pb.card(store.task(tid))["reopen_note"] == "Still there after the close."
+    # a skill that names no settle time leaves a person's close as it is
+    pb.closed_in_kiosk(tid)
+    assert pb.record_night([_F("PM-UNAVAILABLE", "sensor.a", "P3")], "2026-10-12", at="2099-01-01T00:00:00+00:00",
+                           **rules)["task_ids"] == []
     # a severity without a fault gets none
     store.raise_finding("PM-UNAVAILABLE", "sensor.b", "b", "2026-10-09", "P4", "B.", {})
     assert pb.record_night([_F("PM-UNAVAILABLE", "sensor.a", "P3"), _F("PM-UNAVAILABLE", "sensor.b", "P4")],
-                           "2026-10-13", **rules)["tasks"] == []
+                           "2026-10-13", **rules)["task_ids"] == []
 
 
 def test_unseen_names_an_open_problem_with_no_fault_and_no_persons_close(tmp_path):
@@ -208,8 +228,49 @@ def test_a_night_run_twice_after_its_problem_was_cleared_gives_it_its_fault_back
 
         def as_dict(self):
             return {k: getattr(self, k) for k in ("rule_id", "entity_id", "family", "severity", "summary", "detail", "check", "day")}
-    (task,) = pb.record_night([F()], "2026-10-09", **rules)["tasks"]
+    (task,) = pb.record_night([F()], "2026-10-09", **rules)["task_ids"]
     pb.close_finding(store.open_finding("PM-UNAVAILABLE", "sensor.x"), "2026-10-10", "Cleared: back online.")
     rerun = pb.record_night([F()], "2026-10-09", **rules)
-    assert [a["task_id"] for a in rerun["reopen_actions"]] == [task["task_id"]]
-    assert store.task(task["task_id"])["status"] == "open" and pb.unseen() == []
+    assert rerun["task_ids"] == [task]
+    assert store.task(task)["status"] == "open" and pb.unseen() == []
+
+
+def test_a_night_check_edited_before_0_12_267_still_runs_and_still_moves_its_faults(tmp_path):
+    # owner rule: a starter skill edited on a villa is kept by updates — the engine keeps reading its older shapes. The
+    # lines below are the old nightly.py's and recheck.py's own (0.12.266), unpacking record_night / record
+    import asyncio
+    from helpers import make_agent
+    from kiosk_fake import FakeKiosk
+    from vesta_shared import result
+    k = FakeKiosk()
+    v = make_agent(tmp_path, {"people": [{"telegram_id": 222, "name": "JM", "role": "fm"}]}, kiosk=k)
+    store = Store(v.s.store_path)
+    rules = dict(state_rules={"PM-UNAVAILABLE"}, event_rules=set(), worsened_step=15)
+
+    def old_nightly(findings, day):
+        night = Problems(store).record_night(findings, day, **rules,
+                                             resolved_note="Cleared: the nightly check no longer sees it.")
+        new, still_open, closed, tasks = night["new"], night["still_open"], night["closed"], night["tasks"]
+        resolved = night["resolve_actions"]
+        res = {"tasks_to_create": tasks, "tasks_resolved": [a["task_id"] for a in resolved], "resolve_actions": resolved,
+               "reopen_actions": night["reopen_actions"]}
+        actions = [result.fault(t["todo_summary"], task_id=t["task_id"], check=t.get("check"), entity_id=t.get("entity_id"))
+                   for t in res["tasks_to_create"]]
+        actions += res["resolve_actions"] + res.get("reopen_actions", [])
+        asyncio.run(v.outcome.carry_out({"actions": actions}, "preventive-maintenance"))
+        return actions
+
+    def old_recheck(findings, day):
+        rec = Problems(store).record(findings, day, **rules)
+        return [result.fault(t["todo_summary"], task_id=t["task_id"], check=t.get("check"), entity_id=t.get("entity_id"))
+                for t in rec["tasks"]] + rec["reopen_actions"]
+
+    made = old_nightly([_F("PM-UNAVAILABLE", "switch.plug", "P2", summary="Plug offline")], "2026-10-07")
+    assert [a["action"] for a in made] == ["ticket"] and k.tickets == [("Plug offline", "switch.plug")]
+    gone = old_nightly([], "2026-10-08")
+    assert [(a["action"], a["note"]) for a in gone] == [("ticket.resolve", "Cleared: the nightly check no longer sees it.")]
+    assert k.resolved == ["t1"]
+    back = old_nightly([_F("PM-UNAVAILABLE", "switch.plug", "P2", summary="Plug offline")], "2026-10-09")
+    assert [a["action"] for a in back] == ["ticket.reopen"] and back[0]["title"].endswith("(again: 2 times in 7 days)")
+    assert [t for t, _ in k.reopened] == ["t1"] and len(k.tickets) == 1           # its one fault, open again
+    assert [a["action"] for a in old_recheck([_F("PM-UNAVAILABLE", "sensor.other", "P3")], "2026-10-09")] == ["ticket"]

@@ -31,16 +31,40 @@ def merge(shipped, villa, first: tuple[str, ...] = (), key: str | None = None):
     return villa if villa is not None else shipped
 
 
+def _read(skill_dir: str, name: str) -> dict:
+    try:
+        with open(os.path.join(skill_dir, name), encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+        return data if isinstance(data, dict) else {}
+    except OSError:
+        return {}
+
+
 def load(skill_dir: str, filename: str, first: tuple[str, ...] = ()) -> dict:
     """`filename` of the skill (its shipped settings), with `villa.<filename>` merged on top; {} when absent."""
-    def read(name):
-        try:
-            with open(os.path.join(skill_dir, name), encoding="utf-8") as f:
-                data = yaml.safe_load(f) or {}
-            return data if isinstance(data, dict) else {}
-        except OSError:
-            return {}
-    return merge(read(filename), read(VILLA_PREFIX + filename), first)
+    return merge(_read(skill_dir, filename), _read(skill_dir, VILLA_PREFIX + filename), first)
+
+
+def retired(skill_dir: str, filename: str) -> list[str]:
+    """One sentence per setting the villa's own `villa.<filename>` still sets although the skill retired it: the
+    shipped file's `retired:` maps the setting's dotted path ("thresholds.pump.watch_drop_pct") to what decides it now.
+
+    ⚠️ NAMED, NEVER SILENTLY IGNORED (owner, 2026-10-19): a villa that tuned a threshold the skill no longer reads
+    would see its change do nothing, unsaid. The caller says the sentences where its reader looks (a report's
+    problems, an investigation's answer)."""
+    gone = _read(skill_dir, filename).get("retired") or {}
+    villa = _read(skill_dir, VILLA_PREFIX + filename)
+    out = []
+    for path, why in gone.items():
+        v = villa
+        for k in str(path).split("."):
+            v = v.get(k, _ABSENT) if isinstance(v, dict) else _ABSENT
+        if v is not _ABSENT:
+            out.append(f"{VILLA_PREFIX}{filename} sets {path}, which is no longer used: {why}")
+    return out
+
+
+_ABSENT = object()
 
 
 def behaviour(settings: dict) -> dict[str, float]:

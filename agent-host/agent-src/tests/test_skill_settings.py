@@ -59,6 +59,43 @@ def test_the_reports_and_the_alert_desk_name_the_same_vesta_rules():
     assert "alert-desk" + '", "rules.yaml' not in src and '"..", "alert-desk"' not in src
 
 
+def test_a_villa_setting_a_retired_key_is_told_never_ignored(tmp_path):
+    # owner, 2026-10-19: a villa.<file> override of a removed key must be named
+    (tmp_path / "s.yaml").write_text(yaml.safe_dump({"thresholds": {"a": 1},
+                                                     "retired": {"thresholds.pump.drop": "the night check decides it"}}))
+    assert skill_settings.retired(str(tmp_path), "s.yaml") == []                       # no villa file: nothing to say
+    (tmp_path / "villa.s.yaml").write_text(yaml.safe_dump({"thresholds": {"a": 2, "pump": {"other": 1}}}))
+    assert skill_settings.retired(str(tmp_path), "s.yaml") == []                       # a sibling key is not the retired one
+    (tmp_path / "villa.s.yaml").write_text(yaml.safe_dump({"thresholds": {"pump": {"drop": 5}}}))
+    assert skill_settings.retired(str(tmp_path), "s.yaml") == [
+        "villa.s.yaml sets thresholds.pump.drop, which is no longer used: the night check decides it"]
+
+
+def test_the_investigations_retired_running_settings_are_named(tmp_path):
+    # /investigate's own "running" settings retired (2026-10-19): a villa file still setting them is told in its answer
+    import shutil
+    shutil.copy(os.path.join(STARTER_SKILLS, "investigate", "settings.yaml"), tmp_path / "settings.yaml")
+    (tmp_path / "villa.settings.yaml").write_text(yaml.safe_dump({"behaviour": {"running_min": 5, "high_quantile": 0.99,
+                                                                                "running_fraction": 0.2, "flat_spread": 0.4}}))
+    told = skill_settings.retired(str(tmp_path), "settings.yaml")
+    assert sorted(t.split(" sets ")[1].split(",")[0] for t in told) == [
+        "behaviour.high_quantile", "behaviour.running_fraction", "behaviour.running_min"]
+    src = open(os.path.join(STARTER_SKILLS, "investigate", "scripts", "investigate.py"), encoding="utf-8").read()
+    assert 'skill_settings.retired(SKILL, "settings.yaml")' in src
+
+
+def test_every_skill_runs_by_the_same_share_of_its_peak():
+    # owner, 2026-10-19: "running" is the villa's one rule (vesta_shared.daily.running_threshold); its share is written
+    # in each skill that asks it, so the files are held equal — the villa helper vesta_on_threshold_fraction changes all
+    files = {"preventive-maintenance": "settings.yaml", "roi-energy": "settings.yaml", "reports": "reports.yaml",
+             "investigate": "settings.yaml"}
+    got = {s: yaml.safe_load(open(os.path.join(STARTER_SKILLS, s, f)))["behaviour"]["on_threshold_fraction"]
+           for s, f in files.items()}
+    assert len(set(got.values())) == 1, got
+    for s, f in files.items():
+        assert "vesta_on_threshold_fraction" in open(os.path.join(STARTER_SKILLS, s, f)).read(), s   # how to change it
+
+
 def test_the_proposals_thresholds_are_the_skills():
     import sys
     sys.path.insert(0, os.path.join(STARTER_SKILLS, "roi-energy", "scripts"))

@@ -361,13 +361,10 @@ export function aboutSkill(name, d) {
   // Skill tools: the agent's one verdict (tool_access.health: its `line`, drawn as it is — the same line the skills
   // list shows), then every tool as a card — core.tileCard, the commands' own card without their switch (a tool is
   // switched on or off in Rules, for every skill at once: the tab's (i), `where_tools`, says so in the agent's words)
-  const tools = () => {
-    if (!d.tools || !d.tools.length) return h("p", { class: "muted" }, d.line || "");
-    return [d.line ? h("p", {}, h("b", { class: "warn-text" }, d.line)) : null,
+  const tools = () => [d.line ? h("p", {}, h("b", { class: "warn-text" }, d.line)) : null,
       h("div", { class: "tool-grid three" }, d.tools.map((n) => tileCard(n.label, {
         on: n.on, chip: n.on ? null : h("span", { class: "chip off tiny" }, n.words),
         words: h("div", { class: "muted" }, h("code", {}, n.tool)) })))];
-  };
   // Skill commands: a card per command (core.toggleCard), three a line, each with its Offline Test
   const runs = () => (d.scripts || []).map((sc) => h("div", { class: "cmd-group" },
     h("div", { class: "cmd-script" }, h("code", {}, sc.script)),
@@ -385,8 +382,11 @@ export function aboutSkill(name, d) {
   // a skill without scripts has no Commands tab
   const hasRuns = !!(d.scripts && d.scripts.length);
   // what the switches do, behind the Commands tab's (i), as every other explanation on the page
-  const tabs = tabbed("about", [hasRuns && ["commands", ABOUT_TEXT.commands, ABOUT_TEXT.switches, runs], ["tools", ABOUT_TEXT.tools, d.where_tools || null, tools]]);
+  // a skill that lists no tool has no Tools tab (owner, 2026-10-19: an empty tab saying "lists none" told nothing)
+  const hasTools = !!(d.tools && d.tools.length);
+  const tabs = (hasRuns || hasTools) ? tabbed("about", [hasRuns && ["commands", ABOUT_TEXT.commands, ABOUT_TEXT.switches, runs],
+    hasTools && ["tools", ABOUT_TEXT.tools, d.where_tools || null, tools]]) : null;
   return h("div", { class: "about" },
     h("section", { class: "about-sec" }, h("h3", {}, place("skill_when", { skill: name })), acts()),   // the open skill named
-    h("section", { class: "about-sec" }, tabs.bar, tabs.body));
+    tabs ? h("section", { class: "about-sec" }, tabs.bar, tabs.body) : null);
 }

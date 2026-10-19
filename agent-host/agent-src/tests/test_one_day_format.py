@@ -73,8 +73,16 @@ def test_the_report_draws_a_volt_battery_against_its_nominal_and_skips_one_it_ca
                                    "id": "station_battery_nominal_v"}],
                          states={"input_number.station_battery_nominal_v": "3.0"})
     from vesta_shared.knowledge_pack import KnowledgePack
+    # ⚠️ THE LEVEL IS THE NIGHT CHECK'S (owner, 2026-10-19): a battery the night found falling is "watch" at 99 %, one
+    # it said to replace is "replace" whatever its charge — the page draws the charge and judges nothing itself
+    night = types.SimpleNamespace(findings=lambda status: [
+        {"rule_id": "PM-BATTERY-TREND", "entity_id": "sensor.station_battery",
+         "summary": "Station battery is falling 2.0 points a day, about 9 days left."}])
     c = types.SimpleNamespace(
-        need=lambda *p: {"replace_below_pct": 20, "watch_below_pct": 35, "show": 8}[p[-1]],
+        need=lambda *p: {"show": 8}[p[-1]],
+        store=night,
+        tasks=lambda: [{"rule_id": "PM-BATTERY-LOW", "entity_id": "sensor.door_battery",
+                        "title": "Door battery at 55%: replace within the week."}],
         # a real pack (the one device lookup every section asks: knowledge_pack.device_of), with no devices kept
         pack=KnowledgePack(villa="V", time_zone="UTC", generated_at="", ha_version=None, families={"battery": [
             {"entity_id": "sensor.station_battery", "name": "Station", "unit": "V", "asset": "station"},
@@ -85,8 +93,11 @@ def test_the_report_draws_a_volt_battery_against_its_nominal_and_skips_one_it_ca
                         "sensor.door_battery": {"state": "55"}},
         params=lambda: params)
     rows = {r["name"]: r for r in facts.s_batteries(c)["rows"]}
-    assert rows["Station"]["pct"] == 99 and rows["Station"]["volts"] == 2.97 and rows["Station"]["level"] == "ok"
-    assert "Other" not in rows and rows["Door"]["pct"] == 55
+    assert rows["Station"]["pct"] == 99 and rows["Station"]["volts"] == 2.97 and rows["Station"]["level"] == "watch"
+    assert rows["Station"]["night"].startswith("Station battery is falling")             # the finding's own sentence
+    assert "Other" not in rows and rows["Door"]["pct"] == 55 and rows["Door"]["level"] == "replace"
+    c.store, c.tasks = types.SimpleNamespace(findings=lambda status: []), lambda: []
+    assert {r["level"] for r in facts.s_batteries(c)["rows"]} == {"ok"}                  # nothing found: nothing judged
 
 
 def test_a_home_assistant_or_store_time_is_the_villas_once_converted():

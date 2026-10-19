@@ -119,7 +119,10 @@ def test_the_templates_words_are_written_from_the_agents_never_by_hand():
     block = src[src.index(JINJA_BEGIN):src.index(JINJA_END) + len(JINJA_END)]
     assert block == jinja_words(), "run: python -m vesta_shared.message_format"
     rest = src.replace(block, "")
-    for word in ("Facility Manager", "'FM'", '"FM"', "New alert", "Still open", "pressed by", "⚠️", "✅", "🆘"):
+    # owner, 2026-10-19: whom a priority reaches ("P1" → the roles), the closing words and the clock's format are the
+    # agent's too — and the press's labels and its hand-written date went with the press
+    for word in ("Facility Manager", "'FM'", '"FM"', "New alert", "Still open", "pressed by", "⚠️", "✅", "🆘",
+                 "P1", "'digest'", "Cleared", "Closed", "%d", "%H", "'Done'", "Need help"):
         assert word not in rest.split("-#}", 1)[1], f"{word!r} is written by hand outside the words block"
 
 
@@ -140,11 +143,12 @@ def test_the_check_sensor_reads_ok_with_this_file_and_missing_without_it(tmp_pat
     assert empty.from_string(state).render() == "changed"
 
 
-def _status(stage, status="", who="", at=None) -> str:
-    """The bottom line the file writes for a rule that gives its stage (vm_stage), in plain text."""
-    src = ("{%- set vm_title, vm_to, vm_text, vm_status = 'T', 'R', 'x', s -%}{%- set vm_stage, vm_who = g, w -%}"
+def _status(stage, status="", at=None) -> str:
+    """The bottom line the file writes for a rule that gives its stage (vm_stage), in plain text; `at`: the villa's
+    clock (now()), absent outside Home Assistant."""
+    src = ("{%- set vm_title, vm_to, vm_text, vm_status = 'T', 'R', 'x', s -%}{%- set vm_stage = g -%}"
            "{% include 'vesta_message.jinja' ignore missing %}")
-    out = _env().from_string(src).render(s=status, g=stage, w=who, **({"now": lambda: at} if at else {}))
+    out = _env().from_string(src).render(s=status, g=stage, **({"now": lambda: at} if at else {}))
     return html.unescape(re.sub(r"</?(b|blockquote|i)>", "", out)).split(f"\n{STATUS}:\n", 1)[1]
 
 
@@ -152,21 +156,82 @@ def test_the_bottom_line_is_said_in_the_agents_own_words_for_every_stage():
     # architecture review, 2026-10-13: the same Done read "✅ Done - JM" on a job Home Assistant sent and "✅ Done pressed
     # by JM on 12/10/2026 17:13." on the agent's alerts — Home Assistant copied the words by hand into every rule
     from datetime import datetime, timezone
-    from vesta_agent.layout import stage_line
-    from vesta_shared.message_format import PRESSED
-    from vesta_shared.timeutil import moment_label
-    head = {"new": "#1-P2 (new)", "existing": "#1-P2 (existing)", "closed": "#1-P2 (closed)", "help": "#1-P2 (existing)"}
-    mark = {"help": "help"}
-    for stage in head:
-        for status in ("", "Reminder: no answer after 15 min"):
-            if stage == "help" and not status:
-                continue                                            # Need help is always said (who, or what to do)
-            assert _status(stage, status) == stage_line(head[stage], status, mark.get(stage)), (stage, status)
+    from vesta_agent.layout import fill_time, stage_line
+    head = {"new": "#1-P2 (new)", "existing": "#1-P2 (existing)", "closed": "#1-P2 (closed)"}
     at = datetime(2026, 10, 13, 9, 2, tzinfo=timezone.utc)
-    for stage, label in (("closed", "Done"), ("help", "Need help")):
-        said = PRESSED.format(label=label, name="JM", time=moment_label(at, "UTC"))
-        assert _status(stage, "", "JM", at) == stage_line(head[stage], said, mark.get(stage))
-        assert _status(stage, "Tick it on the Jobs tab.", "JM", at) == \
-            stage_line(head[stage], f"{said} Tick it on the Jobs tab.", mark.get(stage))
-    assert _status("closed", "", "JM", at) == "✅ Done on 13/10/2026 09:02 (JM)."
+    for stage in head:
+        for status in ("", "Still not clear after 30 min: no longer tracking this incident"):
+            # the agent fills "{time}" before it lays a message out (posting, the thread's close): the same moment
+            said = stage_line(head[stage], fill_time(status or _words(stage), at, "UTC"))
+            assert _status(stage, status, at) == said, (stage, status)
     assert _status("", "⚠️ written by hand") == "⚠️ written by hand"         # a rule saved before: as it is
+
+
+def _words(stage):
+    from vesta_shared.message_format import STAGE_WORDS
+    return STAGE_WORDS[stage]
+
+
+def test_an_all_clear_says_the_agents_closing_with_the_villas_clock():
+    # owner, 2026-10-19 (one closing wording, recommended and approved): the villa's own all-clear said "Resolved after
+    # 12 min", "Cleared just inside the 30 min limit…" or no status at all, the desk "Cleared on …" / "Closed on …". A
+    # rule now gives the stage alone; the file writes the desk's words with its own clock, as the desk's end reads them
+    from datetime import datetime, timezone
+    from vesta_shared.message_format import STAGE_WORDS, closing
+    from vesta_shared.timeutil import moment_label
+    at = datetime(2026, 10, 19, 14, 5, tzinfo=timezone.utc)
+    assert STAGE_WORDS["closed"] == closing()
+    assert _status("closed", "", at) == "✅ " + closing().replace("{time}", moment_label(at, "UTC"))
+    assert _status("closed", "", at) == "✅ Cleared on 19/10/2026 14:05."
+    assert _status("closed") == "✅ Cleared."                     # no clock (never in Home Assistant): no "{time}"
+
+
+def _desk():
+    import importlib.util
+    from helpers import STARTER_SKILLS
+    spec = importlib.util.spec_from_file_location("desk_for_jinja", os.path.join(STARTER_SKILLS, "alert-desk",
+                                                                                 "scripts", "desk.py"))
+    desk = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(desk)
+    return desk
+
+
+def test_to_follows_the_priority_by_the_alert_desks_own_table():
+    # owner, 2026-10-19 (recommended and approved): every critical blueprint wrote "P1 → Owner, Facility Manager, else
+    # Facility Manager" by hand, so a changed people_roles made the villa's first message say one "To:" and the
+    # agent's rewrite another a second later. A rule passes its priority; the file says whom the desk reaches with it
+    # (desk.reaches), as the agent's card does — the roles, else what the priority does ("To: digest", 0.12.265)
+    from vesta_shared.message_format import audience
+    from vesta_shared.result import PRIORITIES
+    desk = _desk()
+    src = ("{%- set vm_title, vm_to, vm_text, vm_status = 'T', r, 'x', '' -%}{%- set vm_priority = p -%}"
+           "{% include 'vesta_message.jinja' ignore missing %}")
+    t = _env().from_string(src)
+    helper = lambda e: "Owner, Facility Manager" if e == "input_text.vesta_alert_audience" else "unknown"
+    for p in PRIORITIES:
+        reached = desk.reaches(p)
+        roles = [r for r in reached if r in ("owner", "fm")]
+        said = audience(roles, short=True) if roles else reached[0]
+        for given in (p, p.lower(), f" {p} "):
+            assert t.render(r="", p=given, states=helper).split("\n")[1] == f"To: {html.escape(said)}", (p, given)
+    assert [t.render(r="", p=p).split("\n")[1] for p in PRIORITIES] == \
+        ["To: Owner &amp; FM", "To: FM", "To: digest", "To: log"]
+    # no priority ("Follow Vesta Agent Setting" for the priority, or a rule that names its own "To:"): as before
+    assert t.render(r="", p="agent", states=helper).split("\n")[1] == "To: Owner &amp; FM"     # the villa-wide helper
+    assert t.render(r="", p="", states=lambda e: "Facility Manager").split("\n")[1] == "To: FM"
+    assert t.render(r="Owner", p="").split("\n")[1] == "To: Owner"
+    assert _env().from_string("{%- set vm_title, vm_to, vm_text, vm_status = 'T', 'Owner', 'x', '' -%}"
+                              "{% include 'vesta_message.jinja' ignore missing %}").render().split("\n")[1] == "To: Owner"
+
+
+def test_the_priority_table_is_read_from_the_alert_desks_settings_never_typed(tmp_path, monkeypatch):
+    # skills before code: a villa whose desk sends P2 to the owner too reads it so in the template's words
+    import vesta_shared.message_format as mf
+    with open(mf.ALERT_DESK_RULES, encoding="utf-8") as f:
+        rules = yaml.safe_load(f)
+    rules["people_roles"]["owner"] = ["P1", "P2"]
+    rules["priority_does"]["P4"] = "digest"
+    alt = tmp_path / "rules.yaml"
+    alt.write_text(yaml.safe_dump(rules), encoding="utf-8")
+    monkeypatch.setattr(mf, "ALERT_DESK_RULES", str(alt))
+    assert '"P2": "Owner & FM"' in mf.jinja_words() and '"P4": "digest"' in mf.jinja_words()

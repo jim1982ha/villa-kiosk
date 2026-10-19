@@ -12,6 +12,7 @@ import pytest
 from helpers import PYTHONPATH, STARTER_SKILLS
 from villa_timeline import TimelineVilla
 from vesta_shared.store import Store
+from vesta_shared.problems import Problems
 
 spec = importlib.util.spec_from_file_location("desk", os.path.join(STARTER_SKILLS, "alert-desk", "scripts", "desk.py"))
 desk = importlib.util.module_from_spec(spec)
@@ -27,6 +28,12 @@ def event(blueprint="critical_condition", phase="opened", rule="automation.criti
             "summary": f"{label}\nFront door is unlocked", "timestamp": T0.isoformat(), **extra}
 
 
+def moved(res) -> bool:
+    """The desk asked the engine to bring the Kiosk's faults up to date: a task's fault action carries only that
+    (architecture review, 2026-10-19 — the title, note and who it used to carry were never read)."""
+    return {"action": "faults_changed"} in res["actions"]
+
+
 @pytest.fixture
 def store(tmp_path):
     return Store(str(tmp_path / "store.sqlite"))
@@ -38,8 +45,8 @@ def test_opened_goes_to_the_fm_with_the_ladder_and_becomes_a_ticket(store):
     fm = [s for s in res["send"] if s["to"] == "fm"]
     # the incident's number is the heading the engine writes (notice.py); the skill's text is the body alone
     assert fm and fm[0]["keyboard"] is True and fm[0]["incident_id"] == res["incident_id"] and fm[0]["stage"] == "new"
-    ticket = [a for a in res["actions"] if a["action"] == "ticket"]
-    assert ticket and ticket[0]["entity_id"] == "lock.front_door" and ticket[0]["task_id"]
+    task = store.last_task(f"incident:{res['incident_id']}")
+    assert moved(res) and task["entity_id"] == "lock.front_door" and task["status"] == "open"
     assert not [s for s in res["send"] if s["to"] == "owner"]        # P2: the FM only
 
 
@@ -48,9 +55,13 @@ def test_resolved_closes_the_incident_and_its_ticket(store):
     res = desk.intake(store, event(phase="resolved"), T0 + timedelta(minutes=20))
     assert res["decision"] == "resolved" and res["incident_id"] == iid
     assert store.incident(iid)["state"] == "resolved"
-    assert [a for a in res["actions"] if a["action"] == "ticket.resolve"]
+    assert moved(res) and store.last_task(f"incident:{iid}")["status"] == "cleared"
     assert res["send"][0]["status"] == "Cleared on {time}."   # its own part, the same words everywhere
     assert res["settle"] == [{"incident_id": iid, "note": "Cleared on {time}."}]
+    # ⚠️ ONE CLOSING WORDING (owner, 2026-10-19): the desk's end is the closed stage's own words — what the villa's
+    # template writes under its all-clear (vesta_message.jinja, "{time}" its clock), never a second copy here
+    from vesta_shared.message_format import STAGE_WORDS
+    assert res["settle"][0]["note"] == STAGE_WORDS["closed"] == res["ha_messages"][0]["status"]
     # the chase stops: no reminder for it any more
     assert desk.tick(store, T0 + timedelta(minutes=30))["reasked"] == []
 
@@ -72,7 +83,7 @@ def test_an_opened_only_rule_closes_through_the_ladder(store):
     assert iid in res["reasked"]
     out = desk.reply(store, iid, "done", "fm", T0 + timedelta(minutes=20))
     assert store.incident(iid)["state"] == "done"
-    assert [a for a in out["actions"] if a["action"] == "ticket.resolve"]
+    assert moved(out) and store.last_task(f"incident:{iid}")["status"] == "done"
 
 
 def test_routing_by_blueprint(store):
@@ -231,7 +242,7 @@ def test_a_door_locked_after_its_rule_stopped_watching_closes_its_alert(store):
     res = _tick(store, villa, 106)
     assert res["cleared"] == [iid] and store.incident(iid)["state"] == "resolved"
     assert res["settle"] == [{"incident_id": iid, "note": "Cleared on {time}: front_door is locked."}]
-    assert [a for a in res["actions"] if a["action"] == "ticket.resolve"]          # its Kiosk fault closes too
+    assert moved(res) and store.last_task(f"incident:{iid}")["status"] == "cleared"   # its Kiosk fault closes too
     assert [s for s in res["send"] if s["to"] == "fm" and s["status"] == "Cleared on {time}: front_door is locked."
             and s["stage"] == "closed"], res["send"]
     assert not _tick(store, villa, 120).get("cleared")                  # closed once
@@ -392,9 +403,9 @@ def test_an_alert_back_within_four_hours_is_the_same_incident_back_again(store):
     assert [s for s in again["send"] if s["to"] == "fm" and s["status"] == "Back again: 2 times in 7 days"
             and s["keyboard"]]
     # its fault in the Kiosk open again — the same one, titled with how often (architecture review 24: a new one each time)
-    (back,) = [a for a in again["actions"] if a["action"] == "ticket.reopen"]
-    assert back["title"].endswith("(again: 2 times in 7 days)") and not [a for a in again["actions"] if a["action"] == "ticket"]
-    assert len(store.tasks(None)) == 1
+    (task,) = store.tasks(None)
+    assert moved(again) and task["status"] == "open"
+    assert Problems(store).card(task)["title"].endswith("(again: 2 times in 7 days)")
     assert len(store.incidents(open_only=False)) == 1
     # Home Assistant's later events for this new run find it
     assert json.loads(store.incident(iid)["payload"])["ha_incident"].endswith(str(1790000000 + 75 * 60))
@@ -416,7 +427,8 @@ def test_after_done_the_desk_reads_the_device_once_and_reopens_what_is_still_bad
     assert res["not_quiet"] == [iid] and store.incident(iid)["closed_at"] is None
     (fm,) = [s for s in res["send"] if s["to"] == "fm"]
     assert fm["status"] == "Done (FM), but front_door still reads unlocked: still open. VESTA keeps watching it." and fm["keyboard"]
-    assert [a for a in res["actions"] if a["action"] == "ticket.reopen"]      # its own fault, open again
+    task = store.last_task(f"incident:{iid}")                                  # its own fault, open again
+    assert moved(res) and task["status"] == "open" and task["reopen_note"] == "Still there after the close."
     assert not _tick(store, villa, 60).get("not_quiet")                         # read once
 
 
@@ -544,7 +556,7 @@ def test_an_incident_logged_under_home_assistants_word_is_chased_once_its_priori
     store.update_incident(iid, severity="warning", state="logged")
     res = _overdue(store, at=T0 + timedelta(days=1), priority="P2")
     inc = store.incident(iid)
-    assert (inc["severity"], inc["state"]) == ("P2", "asked") and [a["action"] for a in res["actions"]] == ["ticket"]
+    assert (inc["severity"], inc["state"]) == ("P2", "asked") and res["actions"] == [{"action": "faults_changed"}]
 
 
 # ── who hears each notice: ONE answer (desk.tell, architecture review 2026-10-15) ───────────────────────────────────
@@ -703,6 +715,9 @@ def test_an_alert_whose_automation_is_gone_is_closed_saying_why_and_its_fault_wi
     assert res["rule_gone"] == [iid] and store.incident(iid)["closed_at"]
     said = [m for m in res["send"] if "no longer exists" in (m.get("status") or "")]
     assert said and "Its next alert comes with a new number." in said[0]["status"], res["send"]
+    # one closing wording (owner, 2026-10-19): every end opens with the closed stage's words, its own after a colon
+    from vesta_shared.message_format import STAGE_WORDS
+    assert said[0]["status"].startswith(STAGE_WORDS["closed"].removesuffix(".") + ": "), said[0]["status"]
     assert res.get("settle")                                               # its messages lose their buttons
     task = store.last_task(f"incident:{iid}")
     assert task and task["status"] != "open", task                         # its Kiosk fault closes with it
@@ -825,7 +840,7 @@ def test_a_priority_lowered_while_its_alert_is_chased_stops_the_chase(store):
     inc = store.incident(iid)
     assert inc["severity"] == "P3" and inc["state"] == "digest"
     assert store.last_task(f"incident:{iid}")["status"] != "open"                       # its task closed…
-    assert [a for a in res["actions"] if a["action"] == "ticket.resolve"]              # …and its Kiosk fault
+    assert moved(res)                                                                    # …and its Kiosk fault
     assert res["settle"] == [{"incident_id": iid,                                         # every copy says why
                               "note": "Lowered to P3 on {time}: kept for the next daily digest. No reply needed."}]
     later = desk.tick(store, T0 + timedelta(minutes=60))
@@ -845,7 +860,7 @@ def test_a_rule_saved_at_a_lower_priority_stops_the_chase_without_alerting_again
     assert res["decision"] == "restated" and not res["send"]                            # still nothing sent
     assert inc["severity"] == "P3" and inc["state"] == "digest"
     assert store.last_task(f"incident:{iid}")["status"] != "open"
-    assert [a for a in res["actions"] if a["action"] == "ticket.resolve"]
+    assert moved(res)
     assert res["settle"] and res["settle"][0]["incident_id"] == iid
     later = desk.tick(store, T0 + timedelta(minutes=60))
     assert later["reasked"] == [] and not [s for s in later["send"] if s.get("incident_id") == iid]
@@ -865,9 +880,7 @@ def test_lowered_then_raised_is_one_task_reopened_saying_why(store):
     res = desk.intake(store, event(priority="P2"), T0 + timedelta(minutes=70), occupancy_reader=lambda: "occupied")
     tasks = store.tasks(None)
     assert len(tasks) == 1 and tasks[0]["status"] == "open" and tasks[0]["reopen_note"] == "Raised to P2."
-    (back,) = [a for a in res["actions"] if a["action"].startswith("ticket")]
-    assert back == {"action": "ticket.reopen", "task_id": tasks[0]["id"], "title": event()["summary"],
-                    "note": "Raised to P2."}
+    assert res["actions"] == [{"action": "faults_changed"}]                             # what the fault says: the task's
     assert desk.RULES["raised_words"] == "Raised to {priority}."                        # the skill's words
 
 

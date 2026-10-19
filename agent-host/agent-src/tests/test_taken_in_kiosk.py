@@ -73,7 +73,7 @@ def test_a_taken_alert_still_closes_when_home_assistant_clears_it(tmp_path):
     k.person_moves(uid, by="Owner", at="2026-10-15T00:40:00.000Z")
     run(t.repair())
     acts = Problems(st).close_incident(iid, Incident.RESOLVED, st.now(), "Cleared in Home Assistant.")
-    assert st.incident(iid)["closed_at"] and [a["action"] for a in acts] == ["ticket.resolve"]
+    assert st.incident(iid)["closed_at"] and [a["action"] for a in acts] == ["faults_changed"]
 
 
 def test_every_copy_says_it_and_loses_its_buttons_without_being_settled(tmp_path):

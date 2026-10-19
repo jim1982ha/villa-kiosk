@@ -33,7 +33,7 @@ def test_a_closed_source_closes_its_task_and_says_which(pb):
     fid = finding(pb)
     tid, _ = pb.open_task("finding", fid, "PM-A", "sensor.example_a", "A is off")
     other, _ = pb.open_task("finding", finding(pb, "PM-B", "sensor.example_b"), "PM-B", "sensor.example_b", "B")
-    assert [a["task_id"] for a in pb.close_finding(pb.store.finding(fid), "2026-10-09")] == [tid]
+    assert pb.close_finding(pb.store.finding(fid), "2026-10-09") == [{"action": "faults_changed"}]   # only what is read
     assert pb.store.task(tid)["status"] == CLEARED and pb.store.task(other)["status"] == "open"
 
 
@@ -148,7 +148,6 @@ def test_settle_reopens_a_task_through_the_one_opener(pb, monkeypatch):
     pb.close(tid, "cleared")
     calls, real = [], pb.reopen_task
     monkeypatch.setattr(pb, "reopen_task", lambda *a, **k: calls.append((a, k)) or real(*a, **k))
-    acts = pb.settle(f"finding:{fid}", note="Seen again tonight.")
-    assert acts == [{"action": "ticket.reopen", "task_id": tid, "title": "sensor.example_a is off", "note": "Seen again tonight."}]
+    assert pb.settle(f"finding:{fid}", note="Seen again tonight.") == [tid]           # the ids that moved, no words
     assert calls and calls[0][0][:4] == ("finding", fid, "PM-A", "sensor.example_a") and calls[0][1] == {"note": "Seen again tonight."}
     assert pb.store.task(tid)["status"] == "open" and pb.store.task(tid)["reopen_note"] == "Seen again tonight."
