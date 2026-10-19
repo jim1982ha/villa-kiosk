@@ -97,6 +97,7 @@ KV_FAMILIES: dict[str, str] = {
     "request_searches:": RECORDS,   # a command skill's request's web searches, for its page (command_request.py)
     "job:": CURRENT,                # a scheduled job's last slot: the Overview's "last run", one per job
     "jobrun:": CURRENT,             # a scheduled run in progress: one left at start was cut by a stop (in_progress.py)
+    "jobend:": CURRENT,             # how a scheduled job's last run ended (ended / failed / cut, when, why): in_progress.py
     "chatjob:": CURRENT,            # a chat's job or question in progress: one left at start was cut (in_progress.py)
     "siren:": CURRENT,              # when the siren must stop
     "listening_since": CURRENT,     # when the agent's record started (agent_records.listening_since)
@@ -232,6 +233,14 @@ class State:
     def runs_kept(self) -> dict[str, str]:
         """{job: value} of every scheduled run's row."""
         return {k[len("jobrun:"):]: v for k, v in self.kv_prefix("jobrun:").items()}
+
+    def keep_run_end(self, job: str, value: str) -> None:
+        """How `job`'s last scheduled run ended (in_progress.py writes it, its json; one row per job)."""
+        self.put(f"jobend:{job}", value)
+
+    def run_ends(self) -> dict[str, str]:
+        """{job: value} of every scheduled job's last end."""
+        return {k[len("jobend:"):]: v for k, v in self.kv_prefix("jobend:").items()}
 
     def keep_chat_work(self, chat: int, name: str, value: str | None) -> None:
         """A chat's job or question in progress (its record, json; None: nothing left to take up)."""

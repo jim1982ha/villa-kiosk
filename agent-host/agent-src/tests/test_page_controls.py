@@ -282,8 +282,8 @@ def test_the_skill_page_is_read_from_the_skills_own_files_at_every_look(ui):
                 "  dose.py:\n    description: how much to add\n    flags: {--litres: text, --product: [chlorine, acid]}\n"
                 "schedule:\n  - when: \"Mon 09:00\"\n    run: \"check.py ph\"\n")
     after = call(ui, look)
-    assert [n["tool"] for n in before["needs"]] == ["ha_get_state"]
-    assert [n["tool"] for n in after["needs"]] == ["ha_get_history", "web_search"]
+    assert [n["tool"] for n in before["tools"]] == ["ha_get_state"]
+    assert [n["tool"] for n in after["tools"]] == ["ha_get_history", "web_search"]
     assert [(s["script"], [c["name"] for c in s["commands"]]) for s in after["scripts"]] == \
         [("check.py", ["chlorine", "ph"]), ("dose.py", [])]
     dose = after["scripts"][1]
@@ -526,3 +526,49 @@ def test_a_skills_when_rows_name_every_way_the_engine_starts_it(ui):
     assert [a["when"] for a in when_it_runs(sk)] == [
         "every day at 07:00", "every 5 minutes", "a critical alert from a VESTA rule", "a voice message",
         "an answer to one of its alerts", "before every answer in a chat", "in a chat"]
+
+
+def test_a_skill_pages_tools_heading_is_the_agents_one_verdict(ui):
+    # architecture review scan 4 (2026-10-19): the skill page counted "N of M not available" itself (over a missing or
+    # never-readable tool, which health() leaves out) while the list showed health's line; its (i) said a tool switched
+    # off made the skill "not working" — the rule the owner reversed on 2026-10-10. The page draws the verdict object.
+    from helpers import body_of
+    from vesta_agent import tool_access
+    from vesta_agent.ui.changes import page_policy
+
+    async def fn(c):
+        return (await (await c.get("/api/skills/reports", headers=HDR)).json(),
+                (await (await c.get("/api/skills", headers=HDR)).json())["skills"])
+    d, rows = call(ui, fn)
+    h = tool_access.health(page_policy(ui.policy_path), tool_access.saved_server_tools(ui.data_dir),
+                           Skills(ui.skills_dir).get("reports"))
+    assert (d["line"], d["tools"], d["where_tools"]) == (h["line"], h["tools"], h["where_tools"]) and "needs" not in d
+    assert next(r for r in rows if r["name"] == "reports")["line"] == h["line"]
+    js = page_js()
+    about = body_of(js, "aboutSkill")
+    assert "d.line" in about and "d.where_tools" in about and "d.needs" not in about and "n.words" in about
+    assert "s.line" in body_of(js, "skills")
+    # no verdict of the page's own on a skill's tools
+    assert "not available" not in js and "WHERE_TOOLS" not in js and "not working" not in about and "all switched on" not in js
+
+
+def test_the_overview_says_how_each_scheduled_run_ended(ui):
+    # architecture review scan 4 (2026-10-19): "Scheduled jobs run" read the scheduler's claim and said "run at 07:00"
+    # of a run that failed; the row now carries the end row's outcome in the agent's words (status.jobs_run)
+    import json
+    from datetime import datetime, timezone
+    from vesta_agent.state import State
+    st = State(ui.state_path)
+    slot = datetime.now(timezone.utc).isoformat()
+    st.put("job:reports:0:07:00", slot)
+    st.keep_run_end("reports:0:07:00", json.dumps({"outcome": "failed", "why": "the Anthropic account has run out of credit",
+                                                   "slot": slot, "at": slot}))
+    st.put("job:alert-desk:0:02:00", slot)                                  # an older engine's row: the claim alone
+
+    async def fn(c):
+        return (await (await c.get("/api/overview", headers=HDR)).json())["last_24h"]["scheduled_jobs"]
+    rows = {r["job"]: r for r in call(ui, fn)}
+    assert rows["reports:0:07:00"]["outcome"] == "failed" and rows["reports:0:07:00"]["at"] == slot
+    assert rows["reports:0:07:00"]["words"] == "not prepared (the Anthropic account has run out of credit)"
+    assert rows["alert-desk:0:02:00"]["words"] == "run" and rows["alert-desk:0:02:00"]["outcome"] == "claimed"
+    assert "j.words" in page_js() and "j.ran_at" not in page_js()

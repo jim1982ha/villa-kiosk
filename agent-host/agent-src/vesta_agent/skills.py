@@ -59,6 +59,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+from .places import where
 from .intake import OWN_COMMANDS  # noqa: E402  (the agent's own commands: one list)
 from typing import Any
 from dataclasses import dataclass, field
@@ -796,7 +797,7 @@ def validate_script_args(skill: Skill | None, skill_name: str, script: str, args
     args = [str(a) for a in (args or [])]
     if not spec.runnable(args[0] if spec.commands is not None and args else None):
         raise ToolError(f"{script}{' ' + args[0] if spec.commands is not None and args else ''} is switched off for this "
-                        f"villa (VESTA Agent page → Skills → {skill_name}). Say so plainly; do not try another way.")
+                        f"villa ({where('skill_commands')}, skill {skill_name}). Say so plainly; do not try another way.")
     final: list[str] = []
     i = 0
     if spec.commands is not None:

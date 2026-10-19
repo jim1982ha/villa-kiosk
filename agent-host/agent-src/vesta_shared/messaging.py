@@ -10,6 +10,10 @@ from __future__ import annotations
 import re
 
 TELEGRAM_LIMIT = 4096
+
+#: The ONE title of every message about the siren — "the siren cannot be requested" (outcome), "Siren switched off"
+#: (app) — above "To:" in the one layout (architecture review round 3, 2026-10-19: "Siren request" and "Siren").
+SIREN_TITLE = "Siren"
 #: A photo's or a file's caption: Telegram takes 1,024, kept under it — ONE number for the agent that sends and edits it
 #: and for a skill that writes one (reports' investigation summary; architecture review 32: 1,000 and 1,024 by hand)
 TELEGRAM_CAPTION = 1000

@@ -62,7 +62,7 @@ def test_a_chat_job_runs_once_its_waiting_message_first_and_always_ends():
 
     async def go():
         assert jobs.start(7, "fm-weekly", work, waiting_mid=42)
-        assert not jobs.start(7, "fm-weekly", work)                  # never twice in one chat
+        assert not jobs.start(7, "fm-weekly", work)                  # never twice in one chat (Started: not new)
         assert jobs.start(8, "fm-weekly", lambda o: asyncio.sleep(0))  # another chat: its own
         await asyncio.sleep(0.03)
         assert jobs.running(7, "fm-weekly") and 7 in d.tg.typing_in  # "typing…" while it works
@@ -71,8 +71,36 @@ def test_a_chat_job_runs_once_its_waiting_message_first_and_always_ends():
     asyncio.run(go())
     assert seen == [Origin(7, JOB, job="fm-weekly")]                  # the job runs knowing its own name
     assert not jobs.running(7, "fm-weekly")
-    # it ended without a result: its waiting message (the pressed one) says so
-    assert d.tg.edits == [(7, 42, "The fm-weekly job ended without a result this time. Ask again in a moment.")]
+    # its task died: its waiting message (the pressed one) says so, in the one sentence (api_errors.NOT_COME)
+    assert d.tg.edits == [(7, 42, "The fm-weekly report you asked for could not be prepared: its work stopped with an "
+                                  "error. Ask again in a moment.")]
+
+
+def test_a_scheduled_run_says_scheduled_not_asked_for_here(monkeypatch):
+    # architecture review scan 4 (2026-10-19): a report running ON SCHEDULE, asked for meanwhile, answered "asked for
+    # here started at 08:00" — nobody had asked. start() says who started it and since when (Started)
+    from vesta_agent import chat_jobs as CJ
+    d = _Delivery()
+    jobs = ChatJobs(d, _safe)
+    gate = asyncio.Event()
+
+    async def work(origin):
+        await gate.wait()
+
+    async def go():
+        async with jobs.held([7], "fm-weekly"):
+            st = jobs.start(7, "fm-weekly", work)
+            assert (st.kind, st.by) == (CJ.RUNNING_SINCE, CJ.SCHEDULED) and not st
+        first = jobs.start(7, "fm-weekly", work)
+        assert (first.kind, first.by) == (CJ.NEW, CJ.ASKED) and first and first.since.tzinfo is not None
+        again = jobs.start(7, "fm-weekly", work)
+        assert (again.kind, again.by, again.since) == (CJ.JUST_STARTED, CJ.ASKED, first.since)   # the same request
+        monkeypatch.setattr(CJ, "JUST_STARTED_S", 0)
+        later = jobs.start(7, "fm-weekly", work)
+        assert (later.kind, later.by) == (CJ.RUNNING_SINCE, CJ.ASKED)
+        gate.set()
+        await jobs.idle()
+    asyncio.run(go())
 
 
 def test_each_turn_has_its_own_waiting_message():

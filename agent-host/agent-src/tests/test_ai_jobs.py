@@ -99,7 +99,37 @@ def test_when_its_steps_fail_too_the_chat_reads_why(jobs, monkeypatch):
     jobs.steps_sent[0] = False
     sk, job = jobs.j.find("rep-weekly")
     asyncio.run(jobs.j.run(sk, job, Origin(ASKER, JOB)))
-    assert jobs.d.sent == [(ASKER, f"Report not prepared\nTo: this chat\n{for_job('rep-weekly', 'busy')}")]
+    assert jobs.d.sent == [(ASKER, f"Report not prepared\nTo: this chat\n{for_job('rep-weekly', 'busy', Origin(ASKER, JOB))}")]
+    assert "Ask again" in jobs.d.sent[0][1] and "next time" not in jobs.d.sent[0][1]     # asked for here: no next time
+
+
+def test_a_run_that_sent_nothing_is_recorded_counted_and_told_once(jobs, monkeypatch):
+    # architecture review scan 4 (2026-10-19): the AI wrote the report and never called send_message — logged "done"
+    # with its cost, counted as a reply written, nobody told on schedule
+    from vesta_shared import agent_records
+    from vesta_agent import status
+    from vesta_agent.api_errors import NO_RESULT, NOT_COME
+    FakeAI("The weekly report, written but never sent.").install(monkeypatch)
+    sk, job = jobs.j.find("rep-weekly")
+    asyncio.run(jobs.j.run(sk, job, Origin(ASKER, JOB)))
+    why = "the AI wrote its answer but did not send it"
+    assert jobs.d.sent == [(ASKER, f"Report not prepared\nTo: this chat\n{NOT_COME('rep-weekly', why, NO_RESULT)}")]
+    records = jobs.j.state.calls_since("2000-01-01")
+    assert [agent_records.detail(c) for c in records if c["kind"] == agent_records.JOB_NO_RESULT] == [{"job": "rep-weekly", "why": why}]
+    fig = dict(status.figures(records, 0.0))
+    assert fig["failures"] == 1 and fig["reports made"] == 0 and fig["replies written"] == 0
+    # on schedule: the one sentence goes to the job's own chat
+    jobs.d.sent.clear()
+    asyncio.run(jobs.j.run(sk, job))
+    assert [c for c, _ in jobs.d.sent] == [-2] and jobs.d.sent[0][1].endswith(NOT_COME("rep-weekly", why, NO_RESULT))
+    # the Costs tab shows the row with the words, beside the run
+    rows = [r for r in status.costs(jobs.j.state)["runs"] if r.get("no_result")]
+    assert len(rows) == 2 and rows[0]["no_result"] == {"why": why} and rows[0]["work"] == "rep-weekly" and rows[0]["cost"] == 0.0
+    # stopped at its limit with nothing sent: the cause says so
+    FakeAI("", stopped_at_limit=True).install(monkeypatch)
+    jobs.d.sent.clear()
+    asyncio.run(jobs.j.run(sk, job, Origin(ASKER, JOB)))
+    assert jobs.d.sent[0][1].endswith(NOT_COME("rep-weekly", "it stopped at its spending limit before sending it", NO_RESULT))
 
 
 def test_a_job_not_set_up_says_so_the_same_way_everywhere(jobs):
@@ -114,4 +144,18 @@ def test_a_job_not_set_up_says_so_the_same_way_everywhere(jobs):
 def test_the_lookups(jobs):
     assert jobs.j.find("rep-weekly")[0].name == "rep" and jobs.j.find("nope") is None
     assert [j["name"] for j in jobs.j.without_ai_able()] == ["rep-weekly"]
-    assert asyncio.run(jobs.j.start("nope", ASKER)).startswith("There is no job nope")
+    assert asyncio.run(jobs.j.start("nope", ASKER)).startswith("There is no nope report")
+
+
+def test_a_report_already_running_says_who_started_it_and_since_when():
+    # architecture review scan 4 (2026-10-19): a run on schedule, asked for meanwhile, read "asked for here started at
+    # 08:00" though nobody had asked; the time by the one formatter (notice.when)
+    from datetime import datetime, timezone
+    from vesta_agent.ai_jobs import being_made
+    from vesta_agent.chat_jobs import ASKED, RUNNING_SINCE, SCHEDULED, Started
+    since = datetime(2026, 10, 19, 0, 1, tzinfo=timezone.utc)                  # 08:01 in Asia/Makassar
+    assert being_made("fm-weekly", Started(RUNNING_SINCE, since, SCHEDULED), "Asia/Makassar") == (
+        "The fm-weekly report scheduled at 19/10/2026 08:01 is still being made: its result will be sent here when it is ready.")
+    assert being_made("fm-weekly", Started(RUNNING_SINCE, since, ASKED), "Asia/Makassar") == (
+        "The fm-weekly report asked for here started at 19/10/2026 08:01 and is still being made: its result will be sent "
+        "here when it is ready.")

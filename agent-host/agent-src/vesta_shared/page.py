@@ -60,8 +60,27 @@ def _axis(ticks: list[float], y, x0: float, x1: float) -> list[str]:
     return out
 
 
-def _nice(v: float) -> str:
-    return f"{v:,.0f}" if abs(v) >= 10 else f"{v:.2f}".rstrip("0").rstrip(".")
+def number(v, unit: str | None = None, *, whole: bool = False) -> str:
+    """A figure as every page and headline writes it — ONE rule (architecture review round 3, 2026-10-19: the
+    reports' composer wrote 12.34 as "12.3" and 0.15 as "0.2", the charts "12" and "0.15", the energy headline "12"):
+    nothing is "—"; a whole number, or any from 100 on, with its thousands ("1,234"); from 10 on one decimal
+    ("12.3"); under 10 up to two ("0.15", "1.5"); `whole` rounds to the unit (a KPI tile: "999"). A `unit` follows
+    with a space, "%" without ("35%")."""
+    if v is None:
+        return "—"
+    v = float(v)
+    if whole or v.is_integer() or abs(v) >= 100:
+        s = f"{v:,.0f}"
+    elif abs(v) >= 10:
+        s = f"{v:,.1f}".rstrip("0").rstrip(".")
+    else:
+        s = f"{v:.2f}".rstrip("0").rstrip(".")
+    if s == "-0":
+        s = "0"
+    return s if not unit else (s + unit if unit == "%" else f"{s} {unit}")
+
+
+_nice = number  # the charts' own name for it, kept for their lines (number is the one rule)
 
 
 def _tip(x: float, y: float, x0: float, x1: float, top: float, bottom: float, label: str, w_: float = W) -> str:

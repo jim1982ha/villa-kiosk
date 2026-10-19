@@ -31,6 +31,8 @@ from vesta_shared import script  # noqa: E402  (client, pack, store, settings, z
 from vesta_shared.params import MissingParameter  # noqa: E402
 from vesta_shared.stats import med, pct_change  # noqa: E402
 from vesta_shared.messaging import fmt_money  # noqa: E402
+from vesta_shared.page import number  # noqa: E402  (the one number rule of every page and headline)
+from vesta_shared.timeutil import day_label  # noqa: E402  (the one day format)
 from vesta_shared.timeutil import villa_day  # noqa: E402
 import vesta_shared.daily as F  # noqa: E402  (a day of a meter: shared, not another skill's file)
 import vesta_shared.energy_setup as E  # noqa: E402  (the Energy settings' rule, the Kiosk's)
@@ -253,19 +255,21 @@ def from_names(pack, params, read, load, a, b, prev_a, prev_b) -> dict:
 def headline(r: dict) -> str:
     if r["total_kwh"] is None:
         return "Total not known: the villa's Energy settings name no grid meter."
-    s = f"{r['villa']}: {r['total_kwh']:.0f} kWh from {r['start']} to {r['end']}"
+    # whole figures and the one day format (timeutil.day_label: "5 Oct", never 2026-10-05), as every page says them
+    a, b = (day_label(date.fromisoformat(str(r[k])[:10])) for k in ("start", "end"))
+    s = f"{r['villa']}: {number(r['total_kwh'], 'kWh', whole=True)} from {a} to {b}"
     if r["total_cost"] is not None:
         s += f", {fmt_money(r['total_cost'], r['currency'])}"
     if r["total_vs_prev_pct"] is not None:
         s += f" ({r['total_vs_prev_pct']:+.0f}% vs previous {r['period']})"
     top = [l for l in r["loads"] if l["family"] == "energy"][:3]
     if top:
-        s += ". Largest: " + ", ".join(f"{l['name']} {l['share_pct']:.0f}%" for l in top)
+        s += ". Largest: " + ", ".join(f"{l['name']} {number(l['share_pct'], '%', whole=True)}" for l in top)
     if r["unmetered_pct"] is not None:
-        s += f". Not metered: {r['unmetered_pct']:.0f}%"
+        s += f". Not metered: {number(r['unmetered_pct'], '%', whole=True)}"
     if r.get("overlap_kwh"):
-        s += (f". {r['overlap_kwh']:.0f} kWh is counted twice: some devices are set up beside the meter they are "
-              "part of, not inside it")
+        s += (f". {number(r['overlap_kwh'], 'kWh', whole=True)} is counted twice: some devices are set up beside the "
+              "meter they are part of, not inside it")
     return s + "."
 
 

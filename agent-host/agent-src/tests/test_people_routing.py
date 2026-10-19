@@ -16,6 +16,7 @@ import yaml
 from helpers import body, make_agent, settings, status as status_of
 from vesta_agent.layout import head_text
 from vesta_shared.message_format import UNTITLED
+from vesta_shared.messaging import SIREN_TITLE
 from telegram_fake import BOT
 from vesta_agent import button_data, status, tool_access
 from vesta_agent.delivery import Delivery
@@ -199,8 +200,10 @@ def test_every_message_the_agent_sends_on_its_own_is_in_the_one_layout_and_style
     run(v.outcome.carry_out({"send": [{"to": "fm", "text": "Something with no title."}]}))
     texts = [t for _, t, _ in v.tg.sent] + [t for _, _, t in v.tg.edits]
     titles = {t.split("\n", 1)[0] for t in texts}
-    assert {"Approval request", "Siren request", "Not reachable on Telegram", "Siren",
+    # one siren title (vesta_shared.messaging.SIREN_TITLE): "the siren cannot be requested" and "Siren switched off"
+    assert {"Approval request", SIREN_TITLE, "Not reachable on Telegram",
             "The AI cannot answer", UNTITLED} <= titles, titles
+    assert not {t for t in titles if "iren" in t} - {SIREN_TITLE}, titles
     for t in texts:
         assert t.split("\n")[1].startswith("To: ") and "-------" not in t and not t.startswith("For:"), t
         kinds = [e["type"] for e in telegram_entities(t)]
@@ -329,7 +332,7 @@ def test_the_siren_that_cannot_be_requested_says_so_in_the_agents_layout(tmp_pat
     v = make_agent(tmp_path, {"people": PEOPLE, "siren_entity": "switch.siren"})          # acting is off: refused
     run(v.outcome.carry_out({"siren_gate": R.siren(True, "Intrusion suspected.", ("owner", "fm"))}, "alert-desk"))
     texts = [t for _, t, _ in v.tg.sent]
-    assert texts and all(t.startswith("Siren request\nTo: ") and "\nIntrusion suspected.\n\nStatus:\nThe siren cannot be "
+    assert texts and all(t.startswith(f"{SIREN_TITLE}\nTo: ") and "\nIntrusion suspected.\n\nStatus:\nThe siren cannot be "
                          "requested: " in t for t in texts)
 
 
@@ -638,3 +641,18 @@ def test_a_photo_with_a_long_heading_is_posted_as_one_message_and_recorded_as_se
         and text.endswith("to JM\n⚠️ ⚙️ Still open")                           # one caption: one message
     # the first notice always kept, the newest kept, those between counted (review 28)
     assert "10:29 to JM" in text and "10:01 to JM" not in text
+
+
+def test_the_villas_time_is_filled_into_a_message_in_one_place_and_a_pending_request_reads_from_the_one_table():
+    # architecture review round 3, 2026-10-19 — (a) posting, the thread's close and restate, and a taken-over message
+    # each replaced "{time}" by hand; (b) a pending request's words were written in actions.py beside the approvals'
+    # one table of states, whose "pending" row said ""
+    from datetime import datetime, timezone
+    from vesta_agent import layout
+    from vesta_agent.approvals import STATES, note
+    at = datetime(2026, 10, 10, 9, 4, tzinfo=timezone.utc)
+    assert layout.fill_time("Asked on {time}.", at, "Asia/Makassar") == "Asked on 10/10/2026 17:04."
+    assert layout.fill_time(None, at, "UTC") == "" and layout.fill_time("no time", at, "UTC") == "no time"
+    assert note("pending", who="the owner", minutes=15, time="10/10/2026 17:04") == \
+        "Waiting for approval by the owner (asked on 10/10/2026 17:04, expires in 15 min)."
+    assert "{who}" in STATES["pending"][2] and "{minutes}" in STATES["pending"][2]

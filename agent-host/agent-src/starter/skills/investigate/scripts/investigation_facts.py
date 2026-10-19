@@ -27,7 +27,7 @@ from zoneinfo import ZoneInfo
 from vesta_shared import periods                         # the period kinds and their words (investigate.py's)
 from vesta_shared.past import unread                     # the one "could not be read whole: nothing is known after"
 from vesta_shared.periods import did
-from vesta_shared.timeutil import day_time_label, lasting  # the one day format, the one duration wording
+from vesta_shared.timeutil import clock, lasting  # the one clock, the one duration wording
 
 
 def _on(a: dict) -> str:
@@ -53,8 +53,7 @@ class _Clock:
         self.days = bool(a and b and (b - a).total_seconds() > 86400)
 
     def __call__(self, t: datetime) -> str:
-        t = t.astimezone(self.zone)
-        return day_time_label(t) if self.days else f"{t:%H:%M}"
+        return clock(t, self.zone, days=self.days)
 
 
 def _flagged(data: dict) -> list[dict]:

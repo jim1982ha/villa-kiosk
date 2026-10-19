@@ -115,17 +115,25 @@ def test_a_persons_phone_and_network_gear_are_known_by_their_integration_never_b
 
 
 def test_an_integration_down_is_one_group_named_for_it():
-    # architecture review 7: the merge sat inline in the night's run; a function in, groups out
-    g = lambda eid, plat, h: {"asset": {"slug": eid}, "entity_id": eid, "hours": h, "state": "unavailable",  # noqa: E731
-                              "names": [eid.title()], "critical": False, "platform": plat}
+    # architecture review 7: the merge sat inline in the night's run; round 3 (2026-10-19): it is the one reading's
+    # (vesta_shared.offline.merged_integrations), the night check words it (nightly.integration_name)
+    from datetime import datetime, timedelta, timezone
+    from vesta_shared.offline import Group, merged_integrations
+    import nightly
+    now = datetime(2026, 10, 10, 2, tzinfo=timezone.utc)
+    g = lambda eid, plat, h: Group(key=eid, label=None, asset=eid, asset_name=eid.title(), family="power", platform=plat,  # noqa: E731
+                                   state="unavailable", since=now - timedelta(hours=h), hours=h, critical=False,
+                                   names=[eid.title()], entity_ids=[eid])
     groups = {"d1": g("a", "zigbee", 2), "d2": g("b", "zigbee", 5), "d3": g("c", "zigbee", 1), "d4": g("d", "wifi", 3)}
-    out = F.integration_down(groups, 3)
-    assert set(out) == {"zigbee", "d4"} and out["zigbee"]["hours"] == 5
+    out = {x.key: x for x in merged_integrations(groups, 3, now)}
+    assert set(out) == {"zigbee", "d"} and out["zigbee"].hours == 5 and out["zigbee"].integration == "zigbee"
+    assert out["zigbee"].entity_ids == ["a", "b", "c"] and out["zigbee"].names == ["A", "B", "C"]
     # critical only when one of its devices is on the villa's list (owner, 2026-10-18), never for being a group
-    assert out["zigbee"]["critical"] is False
-    assert F.integration_down({**groups, "d2": {**groups["d2"], "critical": True}}, 3)["zigbee"]["critical"] is True
-    assert out["zigbee"]["asset"]["name"] == "zigbee integration (3 devices)" and groups["d1"]   # the input untouched
-    assert F.integration_down(groups, 4) == groups
+    assert out["zigbee"].critical is False
+    crit = {**groups, "d2": Group(**{**groups["d2"].__dict__, "critical": True})}
+    assert {x.key: x for x in merged_integrations(crit, 3, now)}["zigbee"].critical is True
+    assert nightly.integration_name("zigbee", 3) == "zigbee integration (3 devices)" and groups["d1"].entity_ids == ["a"]
+    assert merged_integrations(groups, 4, now) == list(groups.values())
 
 
 def test_does_this_device_answer_has_one_reading():

@@ -113,7 +113,7 @@ def test_every_point_of_a_reports_chart_says_its_day_and_value():
     bars = compose.bars([{"label": "W1", "value": 30}, {"label": "W2", "value": None}])
     assert bars.count('class="pt"') == 1 and 'aria-label="W1 · 30"' in bars
     pairs = compose.pairs([{"day": "Mon", "kwh": 12.5, "prev_kwh": 10}])
-    assert 'aria-label="Mon · 12 kWh · before 10"' in pairs
+    assert 'aria-label="Mon · 12.5 kWh · before 10"' in pairs      # one number rule (page.number): 12.5 is said whole
 
 
 def test_the_alerts_are_folded_with_their_count_in_every_report():
@@ -126,3 +126,47 @@ def test_the_alerts_are_folded_with_their_count_in_every_report():
         html = compose.page({"zone": "UTC", "order": [sid], "sections": {sid: {"rows": rows}}}, {})
         assert f'<details class="fold">\n  <summary><h2>{title} (3)</h2></summary>' in html, sid
         assert "<details class=\"fold\" open" not in html
+
+
+def test_a_moment_on_an_investigation_is_one_clock():
+    # architecture review round 3, 2026-10-19: four clocks on one investigation (see test_investigate's one-clock test)
+    from vesta_shared.timeutil import clock
+    z = ZoneInfo("Asia/Makassar")
+    t = datetime(2026, 10, 8, 19, 9, 46, tzinfo=ZoneInfo("UTC"))                   # 03:09:46 on 9 Oct at the villa
+    assert clock(t, z, days=False) == "03:09" and clock(t, z, days=True) == "9 Oct, 03:09"
+    assert clock(t, z, days=False, seconds=True) == "03:09:46" and clock(t, "Asia/Makassar", days=True, seconds=True) \
+        == "9 Oct, 03:09:46"
+
+
+def test_a_stored_day_or_moment_is_read_into_words_once():
+    # the playbook's _fill.show and the composer's day()/when() each sniffed facts.json's ISO strings their own way
+    from vesta_shared.timeutil import month_label, said
+    assert said("2026-10-05") == "5 Oct" and said("2026-10-05", weekday=True) == "Mon 5 Oct"
+    assert said("2026-10-06T16:15") == "6 Oct, 16:15" and said("2026-10-06T16:15", weekday=True, day=True) == "Tue 6 Oct"
+    assert said("2026-10-06T08:15+00:00", "Asia/Makassar", weekday=True) == "Tue 6 Oct, 16:15"   # an aware time: the villa's
+    assert said("2026-10-06T08:15+00:00", weekday=True) == "Tue 6 Oct, 08:15"                    # no zone given: as it is
+    assert said("not a day") == "not a day" and said(12) == 12 and said(None) is None and said("2026-13-45") == "2026-13-45"
+    assert month_label(date(2026, 10, 5)) == "October 2026" and day_label(date(2026, 10, 5), short=True) == "Mon"
+    sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
+    import playbook
+    assert playbook._fill("since {a}, on {b}: {c}", {"a": "2026-10-06T16:15", "b": "2026-10-05", "c": 3}) == \
+        "since 6 Oct, 16:15, on 5 Oct: 3"
+
+
+def test_a_figure_is_written_by_one_rule_on_every_page_and_headline():
+    # the composer wrote 12.34 as "12.3" and a 0.15 tariff as "0.2"; the charts "12" and "0.15"; the energy headline "12"
+    from vesta_shared.page import number
+    assert (number(None), number(12), number(12.34), number(0.15), number(1234.5), number(1.5), number(999.4, whole=True)) == \
+        ("—", "12", "12.3", "0.15", "1,234", "1.5", "999")
+    assert number(12.34, "kWh") == "12.3 kWh" and number(35.4, "%", whole=True) == "35%" and number(-0.001) == "0"
+    sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
+    import compose
+    html = compose.page({"zone": "UTC", "order": ["hero"], "sections": {"hero": {"kwh": 12.34, "tariff": 0.15, "cost": 2, "colour": "good", "text": "Green: x",
+                        "currency": "USD", "vs_prev_pct": 2}}}, {})
+    assert "(12.3 kWh at 0.15 USD/kWh)" in html
+    sys.path.insert(0, os.path.join(STARTER_SKILLS, "roi-energy", "scripts"))
+    import energy_period
+    said = energy_period.headline({"villa": "V", "total_kwh": 123.4, "start": "2026-10-05", "end": "2026-10-11",
+                                   "total_cost": None, "total_vs_prev_pct": None, "period": "week", "unmetered_pct": 12.6,
+                                   "loads": [{"family": "energy", "name": "Pool pump", "share_pct": 35.4}]})
+    assert said == "V: 123 kWh from 5 Oct to 11 Oct. Largest: Pool pump 35%. Not metered: 13%."

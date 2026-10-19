@@ -24,8 +24,9 @@ export async function overview() {
   if (r) {
     kids.push(card(place("last_day"), "From the agent's own records.",
       figures(r.figures),                 // added up by the agent (status.figures), never here
+      // each run's outcome in the agent's words (status.jobs_run `words`: done / not prepared (why) / stopped by a restart)
       r.scheduled_jobs.length ? h("div", { class: "divided" }, h("h2", {}, place("jobs_run")),
-        paged(["Job", "Ran at"], [...r.scheduled_jobs].reverse().map((j) => [j.label || j.job, new Date(j.ran_at).toLocaleString()]))) : null));
+        paged(["Job", "Ran at", "Outcome"], [...r.scheduled_jobs].reverse().map((j) => [j.label || j.job, new Date(j.at).toLocaleString(), j.words]))) : null));
   } else {
     kids.push(card(place("last_day"), "The agent has not recorded anything yet."));
   }

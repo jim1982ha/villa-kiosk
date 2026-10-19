@@ -13,7 +13,6 @@ from typing import Awaitable, Callable
 from vesta_shared.message_format import UNTITLED, audience, fill_to, pages
 
 from . import layout
-from .notice import when
 from .routing import Origin
 from .telegram import CAPTION
 
@@ -36,8 +35,8 @@ class Poster:
         an approval, a snapshot): the earlier copy in this chat goes. `told`: the roles this step of the incident went to
         (its bottom line says them: notice.Notices.bottom). The message id, or None when nothing arrived."""
         # "{time}": the moment it says what happened, as every notice writes one (10/10/2026 15:04, the villa's time)
-        now = when(datetime.now(timezone.utc), self.tz)
-        text, status, lead = (x.replace("{time}", now) for x in (text, status or "", lead or ""))
+        now = datetime.now(timezone.utc)
+        text, status, lead = (layout.fill_time(x, now, self.tz) for x in (text, status, lead))
         # ⚠️ ONE LAYOUT (owner, 2026-10-12): every message sent on its own is headed by its title and "To:" — an alert's
         # "#9-P2 (new)", a report's, an approval's "Approval request"; the last resort UNTITLED (notice.heading) — and a
         # message given a title carries it in the asker's chat too. Only an answer to the person who asked, or a

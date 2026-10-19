@@ -41,7 +41,8 @@ _APPROVED = acted("Approved", "{time}", "{by}") + "."
 #: and here, twice each. state → (what the AI is told, after "by <name> on <time>"; the press's toast when it comes after
 #: this state; the note every copy shows under its line — `note()`).
 STATES: dict[str, tuple[str, str, str]] = {
-    "pending": ("waiting for approval", "Still waiting.", ""),
+    "pending": ("waiting for approval", "Still waiting.",
+                "Waiting for approval by {who} (asked on {time}, expires in {minutes} min)."),
     "approved": ("approved, its result not recorded yet", "Already approved.", _APPROVED),
     "moving": ("approved; the device was still on its way", "Already approved: on its way.", _APPROVED),
     "done": ("approved, and done", "Already approved and done.", _APPROVED),
@@ -56,9 +57,12 @@ STATES: dict[str, tuple[str, str, str]] = {
 }
 
 
-def note(state: str, by: str = "", why: str = "", time: str = "{time}") -> str:
-    """What every copy of a request says under its line once it is in `state` ("{time}": now, filled when shown)."""
-    return STATES[state][2].format(by=by or "someone", why=why or "the villa's rules changed", time=time)
+def note(state: str, by: str = "", why: str = "", time: str = "{time}", who: str = "", minutes="") -> str:
+    """What every copy of a request says under its line once it is in `state` ("{time}": now, filled when shown);
+    `who` and `minutes`: a pending request's — who may approve it, how long it waits (the request's own words were
+    written in actions.py beside this table until architecture review round 3, 2026-10-19)."""
+    return STATES[state][2].format(by=by or "someone", why=why or "the villa's rules changed", time=time,
+                                   who=who or "someone", minutes=minutes)
 
 
 def toast(state: str) -> str:

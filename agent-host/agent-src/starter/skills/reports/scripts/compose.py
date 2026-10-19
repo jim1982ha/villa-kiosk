@@ -54,9 +54,9 @@ from vesta_shared.messaging import fmt_money, incident_tag  # noqa: E402
 from vesta_shared.result import WHOLE_DEVICE  # noqa: E402  (what a whole device's faults are)
 from vesta_shared.message_format import document, for_the_ai, split_title  # noqa: E402  (the one shape: title, To:, sections)
 from vesta_shared.store import Incident, Store  # noqa: E402
-from vesta_shared.timeutil import day_label, day_time_label  # noqa: E402  (the one day format, duration)
+from vesta_shared.timeutil import day_label, said  # noqa: E402  (the one day format; a stored time in words)
 from vesta_shared.problems import Problems  # noqa: E402  (what is still open: one owner)
-from vesta_shared.page import bars, line, linked, pairs, say, templates  # noqa: E402  (the charts, the sentences: shared)
+from vesta_shared.page import bars, line, linked, number, pairs, say, templates  # noqa: E402  (the charts, the numbers, the sentences: shared)
 
 TPL = templates(os.path.join(HERE, ".."))       # this skill's templates/, then the shared head (vesta_shared.page)
 NUM = re.compile(r"(?<![\w.])-?\d{1,3}(?:,\d{3})+(?:\.\d+)?|(?<![\w.])-?\d+(?:\.\d+)?")
@@ -234,10 +234,9 @@ def page(facts: dict, notes: dict, limit: str | None = None, without_ai: str | N
         mark = Markup('<span class="mark">VESTA\'s reading</span> ') if kinds.get(k) == "reading" else ""
         return mark + linked(text)
 
-    def num(v, nd=1):
-        if v is None:
-            return "—"
-        return f"{v:,.0f}" if nd == 0 or (isinstance(v, (int, float)) and float(v).is_integer()) else f"{v:,.{nd}f}"
+    def num(v, nd=None):
+        # the one number rule of every page (vesta_shared.page.number); nd=0 is the template's "to the unit"
+        return number(v, whole=nd == 0)
 
     def pct(v):
         return "—" if v is None else f"{'+' if v > 0 else '−' if v < 0 else ''}{abs(v):.0f}%"
@@ -246,19 +245,13 @@ def page(facts: dict, notes: dict, limit: str | None = None, without_ai: str | N
     # Home Assistant time (UTC, its zone cut off) was shown as if it were the villa's
     zone = ZoneInfo(facts.get("zone") or "UTC")
 
+    # a stored day or moment in words (timeutil.said, the one reader): facts.py gives the villa's time already
+    # (facts._local); an aware time is converted
     def day(s):
-        try:
-            return day_label(date.fromisoformat(str(s)[:10]), weekday=True)
-        except ValueError:
-            return s or ""
+        return said(s, zone, weekday=True, day=True) or ""
 
     def when(s):
-        # facts.py gives the villa's time already (facts._local); an aware time is converted
-        try:
-            t = datetime.fromisoformat(str(s))
-        except ValueError:
-            return s or ""
-        return day_time_label(t.astimezone(zone) if t.tzinfo else t, weekday=True)
+        return said(s, zone, weekday=True) or ""
 
     sections = facts.get("sections") or {}
     header = sections.get("header") or {}

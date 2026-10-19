@@ -91,12 +91,14 @@ def test_the_check_runs_every_five_minutes_and_reads_nothing_when_nothing_is_off
 
 
 def test_an_integration_down_finding_names_every_device_it_stands_for():
-    sys.path.insert(0, os.path.join(SKILL, "scripts"))
-    import features as F
-    groups = {k: {"entity_id": e, "hours": 9, "names": [e], "platform": "shelly", "critical": False}
+    from datetime import datetime, timedelta, timezone
+    from vesta_shared.offline import Group, merged_integrations
+    now = datetime(2026, 10, 10, 2, tzinfo=timezone.utc)
+    groups = {k: Group(key=k, label=None, asset=e, asset_name=e, family="power", platform="shelly", state="unavailable",
+                       since=now - timedelta(hours=9), hours=9, critical=False, names=[e], entity_ids=[e])
               for k, e in zip(("a", "b", "c"), ENTS)}
-    (merged,) = F.integration_down(groups, 3).values()
-    assert merged["entity_ids"] == ENTS
+    (merged,) = merged_integrations(groups, 3, now)
+    assert merged.entity_ids == ENTS and merged.integration == "shelly"
 
 
 def test_a_p2_back_again_is_told_at_once_with_how_often():

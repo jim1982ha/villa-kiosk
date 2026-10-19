@@ -29,9 +29,9 @@ sys.path.insert(0, HERE)
 from vesta_shared import periods  # noqa: E402  (the period kinds and their words: investigate.py's)
 from vesta_shared.message_format import TO_LONGEST, document, for_the_ai  # noqa: E402  (the one shape: title, To:, sections)
 from vesta_shared.messaging import CITE, TELEGRAM_CAPTION, uncited  # noqa: E402
-from vesta_shared.page import (H, PAD_B, PAD_L, PAD_R, PAD_T, W, _axis, _framed, _nice, _scale, _ticks,  # noqa: E402
-                               _tip, templates)
-from vesta_shared.timeutil import day_label, day_time_label, lasting  # noqa: E402  (the one day format, duration)
+from vesta_shared.page import (H, PAD_B, PAD_L, PAD_R, PAD_T, W, _axis, _framed, _scale, _ticks,  # noqa: E402
+                               _tip, number as _nice, templates)
+from vesta_shared.timeutil import clock, day_label, day_time_label, lasting  # noqa: E402  (the one clock, day format, duration)
 from investigation_facts import KEY_MAX, facts as investigation_facts  # noqa: E402  (what the records establish)
 
 TPL = templates(os.path.join(HERE, ".."))
@@ -82,7 +82,7 @@ def timechart(series: list, unit: str, zone: ZoneInfo, marks: list = (), normals
     y = _scale(lo, hi, PAD_T, H - PAD_B)
     x = lambda t: PAD_L + (t - t0).total_seconds() / span * (W - PAD_L - PAD_R)
     long = span > 86400
-    lab = lambda t: day_time_label(t.astimezone(zone)) if long else f"{t.astimezone(zone):%H:%M}"
+    lab = lambda t: clock(t, zone, days=long)                                                    # noqa: E731
     out = [f'<svg viewBox="0 0 {W} {H}" role="img" aria-label="{_esc(unit)} over the period">',
            *_axis(ticks, y, PAD_L, W - PAD_R)]
     for m in marks:
@@ -144,7 +144,7 @@ def hourchart(per_hour: dict, zone: ZoneInfo) -> str:
     lo, hi, ticks = (0.0, 60.0, [0.0, 15.0, 30.0, 45.0, 60.0]) if not day and top > 45 else _ticks(0.0, top * 1.1)
     y = _scale(lo, hi, PAD_T, H - PAD_B)
     slot = (W - PAD_L - PAD_R) / len(bins)
-    lab = (lambda t: day_label(t.astimezone(zone))) if day else (lambda t: f"{t.astimezone(zone):%H:%M}")
+    lab = (lambda t: day_label(t.astimezone(zone))) if day else (lambda t: clock(t, zone, days=False))   # noqa: E731
     out = [f'<svg viewBox="0 0 {W} {H}" role="img" aria-label="Minutes running per {"day" if day else "hour"}">',
            *_axis(ticks, y, PAD_L, W - PAD_R)]
     usual = []
@@ -197,7 +197,7 @@ def strip(lanes: list[dict], start: datetime, end: datetime, zone: ZoneInfo) -> 
     span = (end - start).total_seconds()
     x = lambda t: PAD_L + (t - start).total_seconds() / span * (W - PAD_L - PAD_R)    # noqa: E731
     long = span > 86400
-    lab = lambda t: day_time_label(t.astimezone(zone)) if long else f"{t.astimezone(zone):%H:%M}"     # noqa: E731
+    lab = lambda t: clock(t, zone, days=long)     # noqa: E731
     h = len(lanes) * (LANE_H + LANE_LABEL) + 18
     out = [f'<svg viewBox="0 0 {W} {h}" role="img" aria-label="What else happened, on the same time axis">']
     for i, lane in enumerate(lanes):

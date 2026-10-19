@@ -188,19 +188,59 @@ def may_start_job(policy: Policy, server_tools: list[dict], person, chat_id: int
     return person is not None and "start_job" in allowed_for(policy, server_tools, person.role, chat_id)
 
 
+#: A tool's state on a skill's page, in the agent's words (the page drew "not in the villa's system" itself, review scan 4)
+STATE_WORDS = {"on": "on", "off": "off", "missing": "not in the villa's system", "never": "never available"}
+
+
+def where_tools() -> str:
+    """Where a skill's tools are switched, and what a tool switched off means for it: said by the agent, drawn by the
+    page (the page's own sentence said a tool switched off made the skill "not working" — the rule the owner reversed
+    on 2026-10-10)."""
+    return (f"Switched on or off in {where('tools')}, for every skill at once. A tool switched off there is simply gone "
+            "without: the skill runs, and its AI is told what this run lacks.")
+
+
+def start_job_off(who: str = "you") -> str:
+    """The one refusal of a report started from a chat by someone it is not switched on for — said to the person
+    pressing a report button ("you") and to the AI about the person who asked ("this person"): two audiences, one
+    sentence (architecture review scan 4: tools.py and app.py each worded it)."""
+    return f"Starting a report from a chat is not switched on for {who} here ({where('tool_roles')})."
+
+
 def health(policy: Policy, server_tools: list[dict] | None, skill, load_problem: str | None = None) -> dict:
-    """Is this skill working, and what it goes without, in words: {"ok", "problem", "line", "without"}. `skill` None:
-    it did not load (`load_problem` says why; without one it was switched off). A loaded skill works: a tool it uses
-    that the villa switched off is in `without` — said, offered to switch on, never a reason it stops (owner,
-    2026-10-10). One answer for the page's list and a skill's page (architecture review 6: each wrote its own)."""
+    """Is this skill working, and what it goes without, in words — THE verdict on a skill's tools, for the page's list
+    and the skill's page alike: {"ok", "problem", "line", "without", "tools", "where_tools"}. `skill` None: it did not
+    load (`load_problem` says why; without one it was switched off). A loaded skill works: a tool it uses that the
+    villa switched off is in `without` — said, offered to switch on, never a reason it stops (owner, 2026-10-10).
+
+    `line`: what the skills list shows under the description and the skill page's "Skill tools" heading says — None
+    when there is nothing to say (every tool on). `tools`: every tool of the skill, {tool, label, state, words, on}
+    (None when skill.yaml lists none). ⚠️ THE PAGE DRAWS, IT COMPUTES NOTHING (architecture review scan 4, 2026-10-19):
+    the skill page counted "N of M not available" itself over a missing or never-readable tool, which `without`
+    deliberately leaves out, so the list and the page disagreed on the same skill."""
     if skill is None:
         problem = load_problem or "switched off"
-        return {"ok": False, "problem": problem, "line": problem, "without": []}
+        return {"ok": False, "problem": problem, "line": problem, "without": [], "tools": None, "where_tools": where_tools()}
     without = unavailable(policy, server_tools, skill)
-    # `line`: the skills list's one line (the page parsed "It needs…" out of `problem`, architecture review 8)
-    line = None if not without else "Works without a tool switched off." if len(without) == 1 else \
-        f"Works without {len(without)} tools switched off."
-    return {"ok": True, "problem": None, "line": line, "without": without}
+    tools = None if getattr(skill, "tools", None) is None else _tools(policy, _listing(server_tools), skill)
+    if tools is None:
+        line = "Its skill.yaml lists no tool: its reports get every tool switched on."
+    elif not tools:
+        line = "None: the AI needs no tool of its own for this skill."
+    elif not without:
+        line = None
+    else:
+        line = "Works without a tool switched off." if len(without) == 1 else f"Works without {len(without)} tools switched off."
+    return {"ok": True, "problem": None, "line": line, "without": without, "tools": tools, "where_tools": where_tools()}
+
+
+def _tools(policy: Policy, listed: dict[str, dict] | None, skill) -> list[dict]:
+    """Each tool of the skill, and whether the AI has it here (tool_state), with the state's words."""
+    out = []
+    for t in getattr(skill, "tools", None) or []:
+        state, name = tool_state(policy, listed, t)
+        out.append({"tool": t, "label": name, "on": state == "on", "state": state, "words": STATE_WORDS[state]})
+    return out
 
 
 def switch_on(form: dict, tool: str) -> dict:
@@ -261,13 +301,15 @@ def unavailable(policy: Policy, server_tools: list[dict] | None, skill, allowed:
 
 
 def needs(policy: Policy, listed: dict | None, skill) -> list[dict]:
-    """Skills → "Tools it needs": each tool of the skill, and whether the AI has it here (tool_state)."""
+    """Skills → "Skill tools": each tool of the skill, and whether the AI has it here, from the SAVED list's shape
+    (read_list): health()'s `tools` rows, for a caller holding that shape."""
     by = {t["name"]: t for t in (listed or {}).get("tools") or []} or None
-    out = []
-    for t in getattr(skill, "tools", None) or []:
-        state, name = tool_state(policy, by, t)
-        out.append({"tool": t, "label": name, "on": state == "on", "state": state})
-    return out
+    return _tools(policy, by, skill)
+
+
+def listing(server_tools: list[dict] | None) -> dict[str, dict] | None:
+    """The server's tools as tool_state() reads them (the page's setup preview judges a skill's tools by it)."""
+    return _listing(server_tools)
 
 
 def _title(tool: dict) -> str:

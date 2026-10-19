@@ -36,7 +36,7 @@ from zoneinfo import ZoneInfo
 
 from vesta_shared import script, skill_settings  # noqa: E402  (client, store, zone: one set-up for every skill script)
 from vesta_shared import periods as kinds  # noqa: E402  (the period kinds and their words, read by the report page too)
-from vesta_shared.timeutil import lasting  # noqa: E402  (the one duration wording)
+from vesta_shared.timeutil import clock, lasting  # noqa: E402  (the one clock, the one duration wording)
 from vesta_shared import past  # noqa: E402  (a read of the past with how far it got; the one "could not be read whole")
 from vesta_shared.store import Notes, notes_of  # noqa: E402  (an alert's notes: one reader)
 
@@ -73,9 +73,10 @@ def parse_time(text: str, zone: ZoneInfo) -> datetime:
 
 
 def at(t: datetime, zone: ZoneInfo, day: bool = False) -> str:
-    """A moment as the answer writes it: "09/10 03:09:46" (with the day when the period spans several)."""
-    t = t.astimezone(zone)
-    return f"{t:%d/%m %H:%M:%S}" if day else f"{t:%H:%M:%S}"
+    """A moment as the lines the AI reads write it: "03:09:46" — WITH its seconds (a 71-second drop, a run of 8 s:
+    the AI reasons on them) — and its day when the period spans several ("9 Oct, 03:09:46"). The one clock
+    (timeutil.clock): the page says the same moment "03:09", and the AI's own rows the same way."""
+    return clock(t, zone, days=day, seconds=True)
 
 
 def number(state) -> float | None:

@@ -216,12 +216,13 @@ def preview(settings, skills, setup: dict, server_tools: list[dict] | None) -> d
         rows.append({"what": "instructions.md", "kind": "instructions", "change": "same" if mine == setup["instructions"] else "changed",
                      "detail": "your standing rules for the agent"})
     pol = Policy(merged)
-    by = {t["name"] for t in server_tools or []}
+    listed = tool_access.listing(server_tools)
     jobs = pol.jobs
     for name, sk in parsed.items():
         for t in sk.tools or []:
-            if server_tools is not None and t.startswith("ha_") and t != "ha_call_service" and t not in by:
-                misfits.append(f"{name} needs {t}, which this Home Assistant's MCP server does not have: the AI goes without it.")
+            # one reading of a tool's state (tool_access.tool_state): this wrote its own "not on the server" test
+            if tool_access.tool_state(pol, listed, t)[0] == "missing":
+                misfits.append(f"{name} uses {t}, which the villa's system does not have: the AI goes without it.")
         for b in tool_access.unavailable(pol, server_tools, sk):
             misfits.append(f"{name} will work without a tool switched off here: {b['why']}")
         for _, job in ai_jobs({name: sk}):

@@ -654,6 +654,7 @@ def test_the_monitoring_table_lists_devices_not_their_sensors():
         critical=["switch.spa_relay"])                # the villa's one list (its "critical devices offline" rule)
     c = facts.Ctx.__new__(facts.Ctx)
     c.pack, c.Z = pack, ZoneInfo("UTC")
+    c.now = datetime(2026, 10, 9, 12, tzinfo=ZoneInfo("UTC"))
     c.cfg = {"offline_families": ["power", "switch", "network", "battery"], }
     off = lambda at: {"state": "unavailable", "last_changed": at}
     c._states = {"sensor.spa_pump_power": off("2026-10-09T09:05:00+00:00"), "sensor.jet_pump_power": off("2026-10-09T09:01:00+00:00"),

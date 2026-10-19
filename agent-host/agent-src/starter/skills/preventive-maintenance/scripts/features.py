@@ -150,26 +150,8 @@ def device_name(names: list[str]) -> str:
     return names[0] + (f" (+{len(names) - 1} entities of the same device)" if len(names) > 1 else "")
 
 
-def integration_down(groups: dict[str, dict], min_devices: float) -> dict[str, dict]:
-    """Offline devices grouped by device (key → group): `min_devices` or more of one integration offline together
-    are one group — the integration is down — named for it. Pure (architecture review 7: it sat in the night's run)."""
-    out = dict(groups)
-    by_platform: dict[str, list[str]] = {}
-    for key, g in groups.items():
-        by_platform.setdefault(g.get("platform") or key.split(":")[0], []).append(key)
-    for plat, keys in by_platform.items():
-        if plat not in ("x", "None") and len(keys) >= min_devices:
-            first = groups[keys[0]]
-            # critical when one of its devices is (owner, 2026-10-18: one list) — no longer critical by being a group
-            crit = any(groups[k].get("critical") for k in keys)
-            merged = {"asset": {"slug": f"integration_{plat}", "name": f"{plat} integration ({len(keys)} devices)", "critical": crit},
-                      "entity_id": first["entity_id"], "hours": max((groups[k]["hours"] or 0) for k in keys),
-                      "state": "unavailable", "names": [groups[k]["names"][0] for k in keys], "critical": crit,
-                      "entity_ids": [groups[k]["entity_id"] for k in keys]}
-            for k in keys:
-                out.pop(k)
-            out[plat] = merged
-    return out
+# an integration down (several devices of one integration offline together) is merged by the one reading of
+# "offline now", vesta_shared.offline.merged_integrations (architecture review round 3, 2026-10-19; it was here)
 
 
 # a finding's life — worsened, closing tonight — belongs to vesta_shared.problems (review 7); named here as before

@@ -127,8 +127,8 @@ def test_a_script_stopped_with_the_agent_is_not_a_failure_and_a_cut_run_is_no_re
     script_run._answer(s, st, sk, "investigate.py", ["find"], script_run.STOPPED_BY_SIGTERM, "", "", 3.0, "ai")
     script_run._answer(s, st, sk, "investigate.py", ["find"], 1, "", "boom", 3.0, "ai")      # a real failure
     st.log(agent_records.RUN_CUT, {"who": "Owner@1", "cost_usd": None, "tokens": {"input_tokens": 10}})
-    figures = dict(status.figures({k: n for k, n in _counts(st).items()}, 0.0))
-    assert figures["failures"] == 1 and figures["replies written"] == 0
+    figures = dict(status.figures(st.calls_since("2000-01-01"), 0.0))
+    assert figures["failures"] == 1 and figures["replies written"] == 0 and figures["reports made"] == 0
     assert [r["interrupted"] for r in status.costs(st)["runs"]] == [True]
 
 

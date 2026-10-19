@@ -103,7 +103,7 @@ with the facts; if one seems misleading, say why in "cannot_tell".
 
        {"title": "at most 90 characters",
         "summary": "3 to 5 sentences, at most 640 characters: the most likely cause and what points to it, and what to check on site first",
-        "timeline": [{"time": "09/10 07:30", "text": "what a person saw or did", "unusual": true}],
+        "timeline": [{"time": "07:30", "text": "what a person saw or did", "unusual": true}],
         "causes": [{"cause": "…", "evidence": "what in the records points to it", "confirm": "how to confirm on site"}],
         "cannot_tell": ["what no sensor saw, a gap in the records, what only a person on site can check"],
         "warned_earlier": ["a sensor, rule or change that would have warned"],
@@ -113,7 +113,8 @@ with the facts; if one seems misleading, say why in "cannot_tell".
    - `summary`: the message shows it under the line of recorded times and durations: explain them, in other words
      than theirs, rather than give them again.
    - `timeline`: only what a person saw or did that the records do not show (the page draws the recorded one); leave it
-     out when there is none.
+     out when there is none. Its `time` as the rules below say: "07:30", or "9 Oct, 07:30" when the account spans
+     several days — the page lists it beside the recorded moments, worded the same way.
    - `causes`: most likely first. A cause that came from a lead also has `"source"`, written `"[2]"` for a web page (its
      place in `sources`) or `"the records"`, and `"verdict"`: `"consistent"` (the records fit it), `"not supported"`
      (they contradict it: the page then lists it under ruled out) or `"cannot tell"` (no record can judge it; say what

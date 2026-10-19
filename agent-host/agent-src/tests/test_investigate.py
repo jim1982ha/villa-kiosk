@@ -1014,3 +1014,36 @@ def test_find_names_the_parts_listed_under_the_device_as_the_same_box():
     text = "\n".join(investigate.find(_Client(), "heater", None, pack)["lines"])
     assert "sensor.heater_phase_a_power" in text, text
     assert "sensor.heater_phase_a_power" not in "\n".join(investigate.find(_Client(), "heater", None)["lines"])
+
+
+def test_one_clock_the_ais_reported_row_and_the_recorded_row_word_their_time_the_same_way():
+    # architecture review round 3, 2026-10-19: the lines the AI read said "09/10 03:09:46", the page's log
+    # "9 Oct, 03:09", its charts "03:09", and SKILL.md asked the AI to write "09/10 07:30" — into the same column.
+    # One clock (timeutil.clock): the AI's row and the recorded row beside it read the same way, with the day only
+    # when the period spans several; the lines the AI reads keep their seconds (a 71-second drop needs them).
+    import json
+    import investigate
+    import investigation_facts
+    from vesta_shared.timeutil import clock
+    skill = open(os.path.join(STARTER_SKILLS, "investigate", "SKILL.md")).read()
+    assert '"time": "07:30"' in skill and '"9 Oct, 07:30"' in skill and "09/10" not in skill
+    assert clock(T(9, 7, 30), Z, days=False) == "07:30" and clock(T(9, 7, 30), Z, days=True) == "9 Oct, 07:30"
+    client = _Around()
+    read = investigate.timeline(client, ["sensor.heater_power"], T(9, 2), T(9, 15), 3, Z, series=True)
+    data = json.loads(json.dumps({"start": T(9, 2).isoformat(), "end": T(9, 15).isoformat(), "zone": "UTC", **read},
+                                 default=str))
+    around = {"start": data["start"], "end": data["end"], "zone": "UTC",
+              **investigate.around(client, None, T(9, 2), T(9, 15), ["sensor.heater_power"], Z)["data"]}
+    one_day = r"^\d\d:\d\d$"
+    rows = investigation_facts.facts(data, around, {"timeline": [{"time": "07:30", "text": "Water on the floor"}]})["log"]
+    assert {r["pill"] for r in rows} >= {"unusual", "reported"} and all(re.match(one_day, r["time"]) for r in rows), rows
+    # the same investigation over several days: the day on every row, the AI's included, as SKILL.md asks for it
+    days = r"^\d{1,2} [A-Z][a-z]{2}, \d\d:\d\d$"
+    long = {**data, "end": T(10, 15).isoformat()}
+    rows = investigation_facts.facts(long, around, {"timeline": [{"time": "9 Oct, 07:30", "text": "Water"}]})["log"]
+    assert all(re.match(days, r["time"]) for r in rows), rows
+    assert ("9 Oct, 03:09", "unusual") in {(r["time"], r["pill"]) for r in rows}
+    # the lines the AI reads: the same moment with its seconds — "9 Oct, 03:09:46" is the page's "9 Oct, 03:09"
+    lines = [x.strip() for x in investigate.timeline(client, ["sensor.heater_power"], T(9, 2), T(10, 15), 3, Z)["lines"]]
+    line = next(x for x in lines if x.startswith("9 Oct, 03:09:46"))
+    assert line[:len("9 Oct, 03:09")] == "9 Oct, 03:09" and not any("09/10" in x for x in lines)

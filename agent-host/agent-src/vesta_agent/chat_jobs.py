@@ -17,15 +17,42 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import time
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Awaitable, Callable
 
-from .in_progress import ANSWER, ANSWER_NAME, CHAT_JOB, TELL, InProgress, Item
+from .api_errors import CHAT, NOT_COME
+from .in_progress import ANSWER, ANSWER_NAME, CHAT_JOB, HELD, TELL, InProgress, Item
 from .job_notices import JobNotices
 from .routing import JOB, Origin
 
 log = logging.getLogger("vesta")
 
 Work = Callable[[Origin], Awaitable[None]]
+
+#: A report asked for again this soon after it started is the same request, not a second one.
+JUST_STARTED_S = 60
+#: Started.kind: started by this call · started in the last JUST_STARTED_S (the same request) · running since earlier
+NEW, JUST_STARTED, RUNNING_SINCE = "new", "just_started", "running_since"
+#: Started.by: asked for in this chat · a scheduled run holding this chat (in_progress.InProgress.held)
+ASKED, SCHEDULED = "asked", "scheduled"
+
+
+@dataclass(frozen=True)
+class Started:
+    """What `ChatJobs.start` answers: whether this call started the job, since when it runs, and who started it.
+
+    ⚠️ ONE ANSWER, WORDED BY THE CALLER (architecture review scan 4, 2026-10-19): start() answered a bool, and its two
+    callers (ai_jobs.start, start_without_ai) each read `started_at` back, applied the "just started" window and
+    formatted the time themselves — and a report running ON SCHEDULE read "asked for here started at 08:00" though
+    nobody had asked. `by` says who did."""
+    kind: str                     # NEW | JUST_STARTED | RUNNING_SINCE
+    since: datetime               # when it started (UTC)
+    by: str                       # ASKED | SCHEDULED
+
+    def __bool__(self) -> bool:
+        return self.kind == NEW
 
 
 class ChatJobs:
@@ -45,11 +72,6 @@ class ChatJobs:
     # ------------------------------------------------------------------ what runs
     def running(self, chat: int, name: str) -> bool:
         return self.work.running(chat, name)
-
-    def started_at(self, chat: int, name: str) -> float | None:
-        """When this chat's job `name` started (time.time()), while it runs; None otherwise."""
-        j = self.work.get(chat, name)
-        return j.started if j else None
 
     # ------------------------------------------------------------------ a conversation's turn
     def turn(self, chat: int) -> None:
@@ -72,13 +94,17 @@ class ChatJobs:
                 self._typing_on(chat, j.name)
 
     # ------------------------------------------------------------------ a job
-    def start(self, chat: int, name: str, work: Work, waiting_mid: int | None = None, role: str | None = None) -> bool:
-        """Start `work` as this chat's job `name`; False when it already runs here (never twice). `waiting_mid`: the
-        message that stands for it until its result (a pressed button's); without one, the turn's reply does.
-        `role`: who asked (routing.Origin.role): the run uses what they may."""
+    def start(self, chat: int, name: str, work: Work, waiting_mid: int | None = None, role: str | None = None) -> Started:
+        """Start `work` as this chat's job `name` — or say since when it already runs here (never twice: Started).
+        `waiting_mid`: the message that stands for it until its result (a pressed button's); without one, the turn's
+        reply does. `role`: who asked (routing.Origin.role): the run uses what they may."""
         chat = int(chat)
-        if self.work.running(chat, name):
-            return False
+        have = self.work.get(chat, name)
+        if have is not None:
+            at = float(have.started or time.time())
+            by = SCHEDULED if have.kind == HELD else ASKED
+            kind = JUST_STARTED if by == ASKED and time.time() - at < JUST_STARTED_S else RUNNING_SINCE
+            return Started(kind, datetime.fromtimestamp(at, timezone.utc), by)
         key = ("press", chat, int(waiting_mid)) if waiting_mid else ("turn", chat, self._turn.get(chat, 0))
         job = self.work.begin(Item(CHAT_JOB, name, chat=chat, mid=waiting_mid, turn=key))
         self.notices.started(key, name)
@@ -94,7 +120,7 @@ class ChatJobs:
         task = asyncio.create_task(self._safe(run()))
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
-        return True
+        return Started(NEW, datetime.fromtimestamp(float(job.started or time.time()), timezone.utc), ASKED)
 
     @contextlib.asynccontextmanager
     async def answering(self, chat: int, asked: str):
@@ -158,7 +184,9 @@ class ChatJobs:
         if what == "delete":
             await self.delivery.delete(chat, mid)
         else:
-            await self.delivery.edit(chat, mid, f"The {job} job ended without a result this time. Ask again in a moment.")
+            # only a job whose task died (an exception) ends this way: a job whose AI sent nothing sends its own
+            # sentence as its result (ai_jobs.AiJobs.run), which deletes the waiting message like any result
+            await self.delivery.edit(chat, mid, NOT_COME(job, "its work stopped with an error", CHAT))
 
     def _typing_on(self, chat: int, name: str) -> None:
         """⚠️ "typing…" UNTIL THE RESULT IS THERE (owner, 2026-10-07): the job holds the chat's one "typing…"

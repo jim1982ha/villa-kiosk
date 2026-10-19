@@ -21,10 +21,12 @@ changes; a "For: …" heading recorded before 0.12.175 is laid out under UNTITLE
 """
 from __future__ import annotations
 
+from datetime import datetime
 
 from vesta_shared.message_format import (INCIDENT_TITLE, MARK_ICONS, STAGE_ICONS, STAGE_WORDS, STATUS, TO, UNTITLED, document,
                                          parts as shape_parts)
 from vesta_shared.messaging import TELEGRAM_LIMIT, tg_len
+from vesta_shared.timeutil import moment_label
 
 from .delivery import fit
 
@@ -33,6 +35,13 @@ OLD_RULE = "\n-------\n"
 #: A heading recorded before 0.12.175: "For: JM".
 OLD_FOR = "For: "
 PARTS = ("head", "lead", "body", "status", "mark")
+
+
+def fill_time(text: str | None, now: datetime, zone: str) -> str:
+    """"{time}" in a message's text, status or note: the villa's time at `now`, as every notice writes a moment
+    (10/10/2026 15:04, timeutil.moment_label). ⚠️ THE ONE PLACE (architecture review round 3, 2026-10-19): posting, the
+    thread's close and restate, and a taken-over message each replaced it by hand."""
+    return (text or "").replace("{time}", moment_label(now, zone))
 
 def head(title: str, to: str = "", history=(), word: str | None = None) -> dict:
     """A message's heading as facts, never as text: its `title` ("#9-P2", "Approval request"), who it is for (`to`,

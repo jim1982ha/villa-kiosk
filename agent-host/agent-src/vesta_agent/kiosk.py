@@ -58,19 +58,49 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-# What a step in a fault's history is — the agreement's `ticketUpdate.kinds` (agent-contract.json), never a note's
+# What a step in a fault's history is — the agreement's `ticketUpdate.kinds` (agent-contract.json), READ FROM THE FILE
+# (architecture review round 3, 2026-10-19: they were typed here and pinned to the file after the fact), never a note's
 # first words (architecture review 26: the Kiosk took "Now: …" for a status step and showed it under the title it
 # repeated). A step without a kind changes the status.
-REOPENED, RETITLED, READING, NOTED, CLEARED = "reopened", "retitled", "reading", "noted", "cleared"
-OLD_TITLE_NOTE = "Now: "            # this agent's title step before the kinds (0.12.150 and earlier), still read
+KINDS: tuple[str, ...] = tuple(str(k) for k in agreement.section("ticketUpdate").get("kinds") or ())
 
 
-#: Who the Kiosk names on a step the agent wrote (its proxy stamps it); a step written here, not yet through it, has none.
-AGENT_BY = "VESTA Agent"
+def _kind(name: str) -> str:
+    """The agreement's step kind this engine writes under `name`; one the agreement does not declare is said once in
+    the log (the Kiosk's proxy refuses a step of a kind it does not know — a copy of the file too old for this engine)."""
+    if name not in KINDS:
+        log.warning("The agreement with the Kiosk declares no step kind %r (ticketUpdate.kinds: %s)", name, list(KINDS))
+    return name
+
+
+REOPENED, RETITLED, READING, NOTED, CLEARED = (_kind(k) for k in ("reopened", "retitled", "reading", "noted", "cleared"))
+#: This agent's title step before the kinds (0.12.150 and earlier), still read. ⚠️ NOT IN THE AGREEMENT: the Kiosk reads
+#: the same words in its src/fm/faultNotes.ts (its twin of this line); the agreement names no key for it, and that file
+#: is the Kiosk's to change (a Kiosk release) — so this literal stays, beside its twin's name.
+OLD_TITLE_NOTE = "Now: "
+
+
+#: Who the Kiosk names on a step the agent wrote (its proxy stamps it): the agreement's `ticket.agentStamp`, read from
+#: the file. A step written here, not yet through the proxy, has none.
+AGENT_BY: str = str(agreement.section("ticket").get("agentStamp") or "")
+if not AGENT_BY:
+    log.warning("The agreement with the Kiosk names no ticket.agentStamp: every stamped step reads as a person's")
 
 
 def _mine(u: dict) -> bool:
     return (u.get("by") or AGENT_BY) == AGENT_BY
+
+
+def taken_step(u: dict) -> bool:
+    """The step a PERSON took the fault on with ("Open Ticket": in progress) — the agreement's `ticket.takenStep`, read
+    from the file: its `status`, its `kind` (none), and `by` not the stamp `byNot` names (the agent's own steps,
+    stamped by the proxy or not yet, are never a take-on)."""
+    rule = agreement.section("ticket").get("takenStep") or {}
+    if not rule:
+        return False
+    not_by = agreement.section("ticket").get(str(rule.get("byNot") or "")) or AGENT_BY
+    return (u.get("status") == rule.get("status") and (u.get("kind") or None) == rule.get("kind")
+            and (u.get("by") or AGENT_BY) != not_by)
 
 
 def agent_title(t: dict) -> str | None:
@@ -156,7 +186,7 @@ def fault_of(t: dict) -> dict:
         return str(ups[-1].get(key) or "") if ups else ""
 
     # the step a PERSON took it on with ("Open Ticket": in progress), its who and when — never an agent's step
-    took = [u for u in ups if u.get("status") == "in_progress" and not u.get("kind") and not _mine(u)]
+    took = [u for u in ups if taken_step(u)]
     close = last_close(ups)
     reopens = [u for u in ups if u.get("kind") == REOPENED]
     return {"status": str(t.get("status") or ""), "title": str(t.get("title") or ""),

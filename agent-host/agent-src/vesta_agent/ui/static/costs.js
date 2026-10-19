@@ -33,9 +33,10 @@ export async function costs(days = 7) {
   PROFILES = c.profiles || {};
   if (c.none) return fill($view, card("Costs", "The agent has not recorded anything yet (it has not run in agent mode)."));
   const period = dropdown([[7, "Last 7 days"], [30, "Last 30 days"], [90, "Last 90 days"]], days, (v) => costs(Number(v)), "Period");
-  const busiest = c.by_day.reduce((m, d) => (d.cost > m.cost ? d : m), { day: null, cost: 0 });
+  // the four figures as the agent adds them up (status.costs: period, runs_count, per_run, busiest), never here
+  const busiest = c.busiest || { day: null, cost: 0 };
   const kpis = figures([[`Last ${days} days`, usd(c.period)], ["Runs", String(c.runs_count)],
-    ["Per run", usd(c.runs_count ? c.period / c.runs_count : 0)],
+    ["Per run", usd(c.per_run || 0)],
     [busiest.day ? `Busiest day (${new Date(busiest.day + "T12:00:00").toLocaleDateString([], { day: "numeric", month: "short" })})` : "Busiest day", usd(busiest.cost)]]);
   // the cost of each day: bars drawn in SVG, with a Y axis (US$) and its grid lines (owner, 2026-10-01: "always
   // the Y axis and grid lines"), and a date under every bar for a week, every few days for longer
@@ -66,16 +67,18 @@ export async function costs(days = 7) {
   const runRows = c.runs.map((r) => [
     new Date(r.at).toLocaleString([], { dateStyle: "short", timeStyle: "short" }),
     runWhat(r),
-    r.without_ai ? "Without the AI" : brain(r.profile, r.model),
+    r.without_ai ? "Without the AI" : r.no_result ? "—" : brain(r.profile, r.model),
     usedTools(r.steps),
     { v: r.tokens_in === null || r.tokens_in === undefined ? "—" : `${ktok((r.tokens_in || 0) + (r.cache_read || 0) + (r.cache_write || 0))} / ${ktok(r.tokens_out)}`, cls: "num" },
     { v: r.interrupted && !r.cost ? "not reported" : usd(r.cost), cls: "num" },
     r.without_ai ? madeWithoutAi(r.without_ai)
+      // a run that ended without sending its report (agent_records.JOB_NO_RESULT): the agent's words of why
+      : r.no_result ? h("span", { class: "chips one-line" }, infoButton("Not sent", r.no_result.why), h("span", { class: "chip off" }, "not sent"))
       // the (!) a failed run has, its words in the tooltip (owner, 2026-10-15: "a single (!) icon, the details in tooltip")
       : r.interrupted ? alertButton("Stopped by a restart", () => h("div", {}, h("b", {}, "Stopped by a restart of the agent."),
         h("div", { class: "tooltip-detail" }, "It was still working when the agent restarted. Anthropic reports a run's cost when it ends, so this one's is not here: the Anthropic Console has it.")))
-      : r.stopped ? h("span", { class: "chip off" }, "stopped at its limit") : r.error ? alertButton("This run failed", () => h("div", {}, h("b", {}, r.error_words || "This run failed."),
-      h("div", { class: "tooltip-detail" }, r.error))) : ""]);
+      : r.stopped ? h("span", { class: "chip off" }, "stopped at its limit") : r.error ? alertButton("This run failed", () => h("div", {}, h("b", {}, r.cause ? `This run failed: ${r.cause}.` : "This run failed."),
+      r.what_to_do ? h("div", {}, r.what_to_do) : null, h("div", { class: "tooltip-detail" }, r.error))) : ""]);
   fill($view,
     // the period's selector on the title's line, on the right (owner, 2026-10-06); the figures below a separator
     h("section", { class: "card" },

@@ -57,10 +57,13 @@ def test_a_title_change_is_a_retitled_step_keeping_the_title_before_and_never_a_
     assert not run(k.amend(tid, retitled("Motion battery at 7%")))                     # already says it: nothing written
 
 
-def test_every_kind_the_agent_writes_is_one_the_agreement_declares():
+def test_the_agent_reads_its_step_kinds_from_the_agreement():
+    # architecture review round 3, 2026-10-19: the five kinds were typed in kiosk.py and pinned to the file after the
+    # fact; now kiosk.KINDS IS the file's list, and every kind the engine writes is one of them
     from vesta_agent import kiosk
     kinds = json.load(open(CONTRACT))["ticketUpdate"]["kinds"]
-    assert {kiosk.REOPENED, kiosk.RETITLED, kiosk.READING, kiosk.NOTED, kiosk.CLEARED} == set(kinds)
+    assert list(kiosk.KINDS) == kinds
+    assert {kiosk.REOPENED, kiosk.RETITLED, kiosk.READING, kiosk.NOTED, kiosk.CLEARED} <= set(kiosk.KINDS)
 
 
 def test_a_reopening_in_the_kiosk_is_read_from_its_step_and_an_old_now_note_still_names_the_agents_title():

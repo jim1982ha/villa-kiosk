@@ -16,6 +16,12 @@ readers each applied their own rule. Here, once:
 
 The stored rows are the ones before (state.py owns their keys): `jobrun:<job key>` = the slot, `chatjob:<chat>:<name>`
 = {"started", "mid"} or {"started", "asked"}. A row of an older engine ending "|delivered" is read as arrived.
+
+⚠️ HOW A SCHEDULED RUN ENDED IS WRITTEN HERE TOO (architecture review scan 4, 2026-10-19): `jobend:<job key>` =
+{"outcome": ended | failed | cut, "at", "why", "slot"}, written by `kept` — the one place that sees every end. The
+Overview's "Scheduled jobs run" read the scheduler's claim (`job:`, written BEFORE the run) and said "run at 08:00" of
+a run that failed or was cut. A body that knows better than "it raised" says so with `verdict` (an AI job whose model
+could not run, a script that stopped): the row carries its words. `run_ends(state)` reads the rows back.
 """
 from __future__ import annotations
 
@@ -42,6 +48,8 @@ AGAIN, TELL, NOTHING = "run again in its window", "tell the chat", "nothing"
 ON_START = {SCHEDULED: AGAIN, CHAT_JOB: TELL, ANSWER: TELL}
 #: an older engine marked a scheduled run's row delivered instead of clearing it
 _OLD_DELIVERED = "|delivered"
+#: how a scheduled run ended (its `jobend:` row): cleanly, with a failure (raised, or said by `verdict`), cut by a stop
+ENDED, FAILED, CUT = "ended", "failed", "cut"
 
 #: the scheduled run this task works for (set by `kept`): what Delivery.send gets to a chat is its result
 _RUN: contextvars.ContextVar["Item | None"] = contextvars.ContextVar("scheduled_run", default=None)
@@ -59,6 +67,8 @@ class Item:
     turn: tuple | None = None     # the conversation turn (or pressed message) a chat job belongs to: memory only
     arrived: bool = False         # a message of it reached a chat
     begun: bool = False
+    outcome: str | None = None    # a scheduled run: what its body said of it (verdict), before "it raised" decides
+    why: str | None = None
 
     @property
     def then(self) -> str:
@@ -66,13 +76,14 @@ class Item:
         return NOTHING if self.arrived else ON_START.get(self.kind, NOTHING)
 
     def cut_text(self, tz: str) -> str:
-        """What the chat is told at the next start (TELL)."""
+        """What the chat is told at the next start (TELL): a report's sentence is api_errors.NOT_COME's."""
+        from .api_errors import CUT as CUT_ASKED, NOT_COME
         from .notice import when
         at = when(datetime.fromtimestamp(float(self.started or time.time()), timezone.utc), tz)
         if self.kind == ANSWER:
             return (f"Your question at {at} (“{self.asked or '…'}”) was interrupted by a restart of the agent: "
                     "send it again to have its answer.")
-        return f"The {self.name} job asked for at {at} was stopped by a restart of the agent: ask again to have it."
+        return NOT_COME(self.name, "the agent was restarted meanwhile", CUT_ASKED, when=at)
 
 
 class InProgress:
@@ -113,11 +124,14 @@ class InProgress:
         the record: the next start decides (`left`)."""
         self.begin(item)
         token = _RUN.set(item) if item.kind == SCHEDULED else None
-        cut = False
+        cut, raised = False, None
         try:
             yield item
         except asyncio.CancelledError:
             cut = True                    # the agent is stopping: its record stays, the next start decides
+            raise
+        except Exception as e:  # noqa: BLE001 — noted for the run's end row, then raised as it was
+            raised = e
             raise
         finally:
             if token is not None:
@@ -126,10 +140,23 @@ class InProgress:
                 del self._now[(item.chat, item.name)]
             if after:
                 after()
+            if item.kind == SCHEDULED:
+                self._end(item, CUT if cut else item.outcome or (FAILED if raised else ENDED),
+                          item.why or (f"{type(raised).__name__}: {raised}"[:160] if raised else None))
             if not cut:
                 self._clear(item)
                 if ended:
                     await ended()
+
+    def verdict(self, outcome: str, why: str | None = None) -> bool:
+        """The scheduled run this task works for did not deliver as a clean end would say (FAILED: the report was not
+        prepared, `why` in the words its chat read) — its end row says so. False when no scheduled run works here (a
+        job asked for in a chat: its chat was told, nothing to record)."""
+        run = _RUN.get()
+        if run is None:
+            return False
+        run.outcome, run.why = outcome, why
+        return True
 
     @contextlib.asynccontextmanager
     async def held(self, chats: list[int], name: str):
@@ -181,6 +208,12 @@ class InProgress:
         return out
 
     # ------------------------------------------------------------------ the rows (keys: state.py)
+    def _end(self, item: Item, outcome: str, why: str | None) -> None:
+        if self.state is None:
+            return
+        self.state.keep_run_end(item.name, json.dumps({"outcome": outcome, "why": why, "slot": item.slot,
+                                                       "at": datetime.now(timezone.utc).isoformat()}))
+
     def _write(self, item: Item) -> None:
         if self.state is None:
             return
@@ -198,3 +231,16 @@ class InProgress:
             self.state.keep_run(item.name, None)
         elif item.kind in (CHAT_JOB, ANSWER):
             self.state.keep_chat_work(item.chat, item.name, None)
+
+
+def run_ends(state) -> dict[str, dict]:
+    """How each scheduled job's last run ended: {job key: {"outcome", "at", "why", "slot"}} (status.report reads it)."""
+    out = {}
+    for key, v in state.run_ends().items():
+        try:
+            rec = json.loads(v)
+        except ValueError:
+            continue
+        if isinstance(rec, dict) and rec.get("outcome") and rec.get("at"):
+            out[key] = rec
+    return out

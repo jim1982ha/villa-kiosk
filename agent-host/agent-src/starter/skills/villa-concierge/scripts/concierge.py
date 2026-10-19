@@ -17,6 +17,7 @@ import json
 import os
 import sys
 import unicodedata
+from datetime import datetime, timezone
 
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -25,12 +26,15 @@ from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
 from vesta_shared.problems import Problems  # noqa: E402  (what is still open: one owner)
 from vesta_shared.store import Store  # noqa: E402
 from vesta_shared.messaging import incident_tag  # noqa: E402  ("Incident #N", the same everywhere)
-from vesta_shared.device_state import is_offline  # noqa: E402  (the one "offline")
+from vesta_shared.offline import devices_offline  # noqa: E402  (the one reading of "offline now")
 
 
 
 # ------------------------------------------------------------------ status
 SHOW = 12        # names listed per line; the rest counted ("and 3 more")
+#: The families the status reads (offline, a lock open, an alarm on). Its own list, beside the reports' and the night
+#: check's (test_offline holds the three side by side).
+FAMILIES = ("security", "power", "energy", "runtime", "level", "battery")
 
 
 def _names(items: list[str]) -> str:
@@ -47,22 +51,18 @@ def status(pack: KnowledgePack, states: dict, store: Store | None) -> dict:
     red when one the villa marks critical is offline, a lock open or an alarm on; amber when anything else is
     offline, on watch, or a problem or an alert is open; green only when nothing is."""
     problems, offline, watch = [], {}, []
-    for fam in ("security", "power", "energy", "runtime", "level", "battery"):
+    # ⚠️ ONE "OFFLINE" (architecture review 30, then round 3 of 2026-10-19): the one reading of the night check and the
+    # reports — "unknown" is not offline, a device per row, the villa's critical list (pack.is_critical), a device the
+    # villa's system knows nothing about left out — with no minimum: the chat says every one
+    for g in devices_offline(pack, states, datetime.now(timezone.utc), FAMILIES):
+        if g.critical:
+            problems.append(f"{g.name} offline")
+        else:
+            offline[g.key] = g.name
+    for fam in FAMILIES:
         for r in pack.entities(fam):
-            st = states.get(r["entity_id"], {})
-            s = st.get("state")
-            # ⚠️ ONE "OFFLINE" (architecture review 30): "unknown" is a sensor with no value on a warm day while its device
-            # reports — the villa read AMBER, "Offline: Weather Station", where the night check and the report said none
-            if is_offline(s):
-                key, name = pack.device_of(r["entity_id"])
-                if name is None:
-                    continue                               # a device Home Assistant knows nothing about
-                if pack.is_critical(r["entity_id"]):         # the villa's one list (vesta_shared.critical)
-                    if f"{name} offline" not in problems:
-                        problems.append(f"{name} offline")
-                else:
-                    offline.setdefault(key, name)
-            elif fam == "security" and r["entity_id"].startswith("lock.") and s == "unlocked":
+            s = states.get(r["entity_id"], {}).get("state")
+            if fam == "security" and r["entity_id"].startswith("lock.") and s == "unlocked":
                 problems.append(f"{r['name']} unlocked")
             elif fam == "security" and r.get("device_class") in ("moisture", "smoke") and s == "on":
                 problems.append(f"{r['name']} ALARM")

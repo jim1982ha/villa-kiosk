@@ -25,6 +25,7 @@ from typing import Any, Callable
 from vesta_shared.message_format import ROLE_WORDS
 
 from . import button_data
+from .approvals import note as approval_note
 from .policy import NOT_REGISTERED, Decision, Person, Policy, action_hash
 from .routing import Routing
 from .state import State
@@ -256,7 +257,7 @@ class Actions:
                        {"inline_keyboard": [[{"text": "Approve", "callback_data": button_data.make(button_data.APPROVAL, aid, "y")},
                                              {"text": "Refuse", "callback_data": button_data.make(button_data.APPROVAL, aid, "n")}]]}, aid,
                        to="owner" if d.required_role == "owner" or origin_chat is None else None,
-                       status=f"Waiting for approval by {who} (asked on {{time}}, expires in {policy.approval_ttl_minutes} min).")
+                       status=approval_note("pending", who=who, minutes=policy.approval_ttl_minutes))
         return (f"Approval requested from {who} (buttons sent). Nothing happens until a person approves. "
                 f"Do not say it is done."), msg
 

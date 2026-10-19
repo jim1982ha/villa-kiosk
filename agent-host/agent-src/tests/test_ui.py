@@ -294,6 +294,9 @@ def test_the_costs_tab_reads_every_run_from_the_agents_records(ui):
     bob = next(r for r in c["runs"] if r["person"] == "Bob")
     assert bob["model"] is None and bob["tokens_in"] is None and bob["chat"] == "private chat"   # recorded before 0.6.9
     assert len(c["by_day"]) == 30 and sum(d["cost"] for d in c["by_day"]) == 1.5
+    # "Per run" and "Busiest day" are added up by the agent, never by the page (architecture review scan 4)
+    assert c["per_run"] == 0.5 and c["busiest"]["cost"] == 1.25 and c["busiest"]["day"] in {d["day"] for d in c["by_day"]}
+    assert "c.per_run" in page_js() and "c.busiest" in page_js() and "c.period / c.runs_count" not in page_js()
 
 
 def test_a_run_records_its_brain_model_tokens_and_what_was_asked(ui, monkeypatch):

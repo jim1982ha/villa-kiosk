@@ -453,8 +453,8 @@ class Toolbox:
                 if not (self.start_job and self._on("start_job")):
                     # the redirect only where start_job IS one of this run's tools (architecture review 14): with it
                     # switched off for this person, the AI was sent to a tool it did not have
-                    return _err(f"This command is the {job} report's own, and starting reports from a chat is switched off "
-                                "for this person here. Say so plainly; do not try another way.")
+                    return _err(f"This command is the {job} report's own. {tool_access.start_job_off('this person')} "
+                                "Say so plainly; do not try another way.")
                 return _err(f"Asked for in a chat, this is the {job} job: call start_job with name {job}. "
                             "It runs with its own brain and limit and sends its result to this chat.")
             try:

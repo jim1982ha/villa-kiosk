@@ -12,15 +12,17 @@ in the middle of the agent's wiring. Tests had to build the whole agent to reach
 from __future__ import annotations
 
 import logging
-import time
 from datetime import datetime, timezone
-from zoneinfo import ZoneInfo
 from typing import Awaitable, Callable
 
 from vesta_shared import agent_records
 
 from . import job_steps
-from .api_errors import AI_DOWN, for_job, why_job_sentence
+from .api_errors import AI_DOWN, CHAT, NO_RESULT, NOT_COME, for_job, why_job, why_job_sentence
+from .chat_jobs import JUST_STARTED, NEW, SCHEDULED, Started
+from .in_progress import ENDED, FAILED
+from .notice import when
+from .places import where
 from .policy import LANGUAGES as LANG
 from .routing import Origin, Routing, job_to
 from .skills import ai_jobs
@@ -35,11 +37,24 @@ def run_folder(name: str) -> str:
 
 def not_set(name: str) -> str:
     """What a chat reads when a job policy.yaml does not name is asked for (it has no agreed model or limit)."""
-    return f"The {name} job is not set up yet (VESTA Agent page → Rules → AI jobs), so it cannot run."
+    return f"The {name} report is not set up yet ({where('ai')}), so it cannot run."
 
 
-#: A report asked for again this soon after it started is the same request, not a second one.
-JUST_STARTED_S = 60
+def being_made(name: str, st: Started, tz: str) -> str:
+    """A report already running when it is asked for again: since when, and who started it — "scheduled at 08:00" for
+    a run nobody asked for (it read "asked for here started at 08:00", architecture review scan 4). The one sentence
+    for the AI's instruction and for the person pressing a report button; the time by the one formatter (notice.when)."""
+    at = when(st.since, tz)
+    if st.by == SCHEDULED:
+        return (f"The {name} report scheduled at {at} is still being made: its result will be sent here when it is "
+                "ready.")
+    return (f"The {name} report asked for here started at {at} and is still being made: its result will be sent here "
+            "when it is ready.")
+
+
+#: What a job's AI run left when it sent nothing: the cause its chat and its Costs row read
+_NO_RESULT = {"limit": "it stopped at its spending limit before sending it",
+              "unsent": "the AI wrote its answer but did not send it", "nothing": "the AI ended its work without sending anything"}
 
 
 class AiJobs:
@@ -71,10 +86,12 @@ class AiJobs:
         the skill's `on_limit` code step still finishes the work (a report is sent with what is done)."""
         name = job["name"]
         cfg = self.policy().jobs.get(name)
+        work = self.chat_jobs.work                     # in_progress.InProgress: a scheduled run's end row says how it went
         if cfg is None:
-            log.warning("AI job %s (skill %s) is not set in policy.yaml: it does not run. "
-                        "VESTA Agent page → Rules → AI jobs → Add them.", name, skill.name)
+            log.warning("AI job %s (skill %s) is not set in policy.yaml: it does not run (%s: Add them).",
+                        name, skill.name, where("ai"))
             self.state.log("job_not_set", {"job": name, "skill": skill.name})
+            work.verdict(FAILED, f"not set up in {where('ai')}")
             if origin:
                 await self.delivery.send(origin.chat, not_set(name), origin=origin)
             return
@@ -104,16 +121,32 @@ class AiJobs:
             problem = res.problem or "unknown"
             log.warning("AI job %s did not run: %s", name, problem)
             made = await self.run_without_ai(skill, job, problem, origin, folder)
+            work.verdict(ENDED if made else FAILED, f"made without the AI: {why_job(problem)}" if made else why_job(problem))
             if to and not made:
                 await self.outcome.carry_out({"send": [{"to": job_to(job, origin), "title": "Report not prepared",
-                                                        "text": for_job(name, problem)}]},
+                                                        "text": for_job(name, problem, origin)}]},
                                              origin=origin)
             return
         log.info("AI job %s done (%s USD%s)", name, res.cost_usd,
                  ", stopped at its limit" if res.stopped_at_limit else "")
+        delivered = res.sent
         if res.stopped_at_limit and job.get("on_limit"):
-            await job_steps.run(folder, self.state, self.skills, self.outcome, skill, job["on_limit"],
-                                {"to": job_to(job, origin), "started": started, "limit": f"{cfg['limit_usd']:g}"}, origin)
+            done = await job_steps.run(folder, self.state, self.skills, self.outcome, skill, job["on_limit"],
+                                       {"to": job_to(job, origin), "started": started, "limit": f"{cfg['limit_usd']:g}"}, origin)
+            delivered += done.sent
+        if delivered == 0:
+            # ⚠️ A RUN THAT SENT NOTHING IS ITS OWN OUTCOME (architecture review scan 4, 2026-10-19): the AI wrote the
+            # report (res.text) and never called send_message — the run was logged "done" with its cost, counted as a
+            # reply written, and on schedule nobody was told; in a chat the waiting message was edited to "ended
+            # without a result" as if the task had died. Now: recorded, a failure on the Overview, and ONE sentence
+            # sent as the job's result (so the waiting message goes like any result), to the chat that asked or the
+            # job's own `to`.
+            why = _NO_RESULT["limit" if res.stopped_at_limit else "unsent" if res.text.strip() else "nothing"]
+            log.warning("AI job %s sent nothing: %s", name, why)
+            self.state.log(agent_records.JOB_NO_RESULT, agent_records.no_result(name, why))
+            work.verdict(FAILED, why)
+            await self.outcome.carry_out({"send": [{"to": job_to(job, origin), "title": "Report not prepared",
+                                                    "text": NOT_COME(name, why, NO_RESULT)}]}, origin=origin)
 
     async def run_without_ai(self, skill, job: dict, problem: str, origin: Origin | None = None, folder=None) -> bool:
         """The job's `without_ai` steps (skill.yaml), when the AI could not run: True when they sent its work.
@@ -141,27 +174,24 @@ class AiJobs:
         (`role`) may use there (turn.job_terms)."""
         found = self.find(name)
         if not found or not found[1].get("on_request"):
-            return f"There is no job {name} that can be started from a chat."
+            return f"There is no {name} report that can be started from a chat."
         if name not in self.policy().jobs:
             return not_set(name)
         sk, job = found
         # ⚠️ THE AGENT SAYS WHETHER IT IS RUNNING, NOT THE AI'S MEMORY (villa, 2026-10-07 01:22): asked again 30 s after
         # the report was sent, the AI answered "already being generated" from the conversation and started nothing.
-        # A second start while one runs would make the report twice.
+        # A second start while one runs would make the report twice (chat_jobs.ChatJobs.start: Started).
         cfg = self.policy().jobs[name]
-        started = self.chat_jobs.start(chat, name, lambda origin: self.run(sk, job, origin), role=role)
-        at = self.chat_jobs.started_at(chat, name)
-        when = datetime.fromtimestamp(at or time.time(), ZoneInfo(self.s.timezone)).strftime("%H:%M")
+        st = self.chat_jobs.start(chat, name, lambda origin: self.run(sk, job, origin), role=role)
         # ⚠️ THE START TIME, SAID BY THE AGENT (owner, 2026-10-09: the waiting message read "Still in progress" for a
         # report that had just started). The model called start_job twice in one turn, the second answer said "still
-        # running", and the model told the person that. A report started in the last minute IS just started: both
-        # answers say so, with its time, and say what to tell the person.
-        if started or (at is not None and time.time() - at < JUST_STARTED_S):
-            return (f"Started {name} now, at {when} (brain {cfg['profile']}, limit {cfg['limit_usd']:g} USD). Tell the "
-                    "person in one short sentence that it has just started and will arrive in this chat in a few "
-                    "minutes. Do not say it is still running or in progress.")
-        return (f"The {name} report asked for here started at {when} and is still being made: its result will be sent "
-                "here when it is ready. Tell the person when it started.")
+        # running", and the model told the person that. A report started in the last minute IS just started
+        # (chat_jobs.JUST_STARTED_S): both answers say so, with its time, and say what to tell the person.
+        if st.kind in (NEW, JUST_STARTED):
+            return (f"Started {name} now, at {when(st.since, self.s.timezone)} (brain {cfg['profile']}, limit "
+                    f"{cfg['limit_usd']:g} USD). Tell the person in one short sentence that it has just started and will "
+                    "arrive in this chat in a few minutes. Do not say it is still running or in progress.")
+        return being_made(name, st, self.s.timezone) + " Tell the person when it started."
 
     def without_ai_able(self) -> list[dict]:
         """The jobs a person may start from a chat that can be made without the AI (skill.yaml without_ai), set up."""
@@ -178,12 +208,10 @@ class AiJobs:
 
         async def made(origin: Origin) -> None:
             if not await self.run_without_ai(sk, job, problem if problem in AI_DOWN else "unknown", origin):
-                await self.delivery.send(chat, f"The {name} report could not be made without the AI either: its "
-                                               "figures could not be read. Try again later.", origin=origin)
-        started = self.chat_jobs.start(chat, name, made, waiting_mid)
-        at = self.chat_jobs.started_at(chat, name)
+                await self.delivery.send(chat, NOT_COME(name, "its figures could not be read without the AI either", CHAT),
+                                         origin=origin)
+        st = self.chat_jobs.start(chat, name, made, waiting_mid)
         # the same "just started" window as start (architecture review 12: this path had none)
-        if started or (at is not None and time.time() - at < JUST_STARTED_S):
+        if st.kind in (NEW, JUST_STARTED):
             return f"Making the {job['button']} without the AI, from its figures and charts: it will be sent here."
-        when = datetime.fromtimestamp(at or time.time(), ZoneInfo(self.s.timezone)).strftime("%H:%M")
-        return f"This report is already being made since {when}: it will be sent here."
+        return being_made(name, st, self.s.timezone)

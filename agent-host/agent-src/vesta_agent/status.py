@@ -10,21 +10,28 @@ from datetime import datetime, timedelta, timezone
 
 from vesta_shared.agent_records import run_cost   # what a run cost: one reading, shared with the skills
 from vesta_shared import agent_records
-from .api_errors import why_job_sentence
+from .api_errors import cause, what_to_do, why_job_sentence
+from .in_progress import CUT, ENDED, FAILED, run_ends
 
 # agent_status: the records worth telling a person about, and the fields of each (never a chat id or a token)
 STATUS_KINDS = ("critical_event", "ladder", "executed", "requested", "approved", "refused_by_person", "failed",
                 "action_failed", "send_failed", "script_failed", "code_script_failed", "script_refused", "pack",
-                "ticket_skipped")    # code_script_failed: a failed script before 0.6.60 (records kept settings.keep days)
+                "ticket_skipped", agent_records.JOB_NO_RESULT)
+#                                   code_script_failed: a failed script before 0.6.60 (records kept settings.keep days)
 STATUS_FIELDS = ("rule", "phase", "handled", "incident", "by", "reply", "tool", "ticket", "entity", "service",
-                 "skill", "script", "reason", "error", "code", "entities")
+                 "skill", "script", "reason", "error", "code", "entities", "job", "why")
 
 
 # ⚠️ THE FIGURES ARE ADDED UP HERE, never by the page (architecture review 8): the Overview summed four failure kinds
 # itself and missed action_failed — a failed action on the villa counted nowhere. A refusal (script_refused) is the
 # agent's guard working, not a failure.
-FAILURE_KINDS = ("failed", "action_failed", "send_failed", "script_failed", "code_script_failed")
+FAILURE_KINDS = ("failed", "action_failed", "send_failed", "script_failed", "code_script_failed", agent_records.JOB_NO_RESULT)
 ACTION_KINDS = ("executed", "direct")
+
+#: The Overview's "Scheduled jobs run": how a run ended, in the agent's words (in_progress.py's outcomes); RUNNING is a
+#: run claimed and still recorded as running; None an older row that has only the claim
+RUNNING = "running"
+OUTCOME_WORDS = {ENDED: "done", FAILED: "not prepared", CUT: "stopped by a restart", RUNNING: "running", None: "run"}
 
 
 def unreachable(state, policy) -> list[str]:
@@ -42,12 +49,63 @@ def unreachable(state, policy) -> list[str]:
     return out
 
 
-def figures(counts: dict[str, int], cost: float) -> list[list]:
-    """The period's figures, [label, value] in the order the Overview shows them."""
+def figures(records, cost: float) -> list[list]:
+    """The period's figures from its records (rows with "kind" and "detail"), [label, value] in the order the Overview
+    shows them.
+
+    ⚠️ EACH FIGURE MEANS WHAT ITS LABEL SAYS (architecture review scan 4, 2026-10-19): "replies written" counted every
+    run row — the AI jobs and the runs that failed included — while "failures" counted only the failure kinds, so a
+    morning of refused calls read "6 replies written, 0 failures". Now a run is read as costs() reads it: its `who`
+    (agent_records.job_of) says reply or report, its `problem` says failure; a report made without the AI is a report
+    made; a job whose AI sent nothing (JOB_NO_RESULT) a failure."""
+    counts: dict[str, int] = {}
+    replies = reports = failures = 0
+    for c in records:
+        kind = c["kind"]
+        counts[kind] = counts.get(kind, 0) + 1
+        if kind == agent_records.RUN:
+            d = agent_records.detail(c)
+            if d.get("problem"):
+                failures += 1
+            elif agent_records.job_of(str(d.get("who") or "")) is not None:
+                reports += 1
+            else:
+                replies += 1
+        elif kind == agent_records.WITHOUT_AI:
+            d = agent_records.detail(c)
+            reports += 1 if int(d.get("sent") or 0) > 0 and not d.get("failed") else 0
+        elif kind in FAILURE_KINDS:
+            failures += 1
     n = lambda *kinds: sum(counts.get(k, 0) for k in kinds)  # noqa: E731
     return [["alerts followed", n("critical_event")], ["buttons pressed", n("ladder")],
-            ["actions done", n(*ACTION_KINDS)], ["replies written", n(agent_records.RUN)],
-            ["AI cost (USD)", f"{cost:.2f}"], ["failures", n(*FAILURE_KINDS)]]
+            ["actions done", n(*ACTION_KINDS)], ["replies written", replies], ["reports made", reports],
+            ["AI cost (USD)", f"{cost:.2f}"], ["failures", failures]]
+
+
+def jobs_run(state, since: datetime, label=None) -> list[dict]:
+    """The Overview's "Scheduled jobs run": each scheduled job claimed since `since`, with how its run ended — from
+    the end row in_progress.kept writes (outcome, when, why), RUNNING while its run is still recorded, and the claim
+    alone (`job:`, written before the run) for a row an older engine left. `words` is what the page draws."""
+    ends, running = run_ends(state), state.runs_kept()
+    out = []
+    for job, slot in state.jobs_run():
+        end = ends.get(job)
+        if end and end.get("slot") == slot:
+            outcome, at, why = end["outcome"], end["at"], end.get("why")
+        elif job in running:
+            outcome, at, why = RUNNING, slot, None
+        else:
+            outcome, at, why = None, slot, None
+        try:
+            if datetime.fromisoformat(at) < since:
+                continue
+        except ValueError:
+            continue
+        word = OUTCOME_WORDS.get(outcome, outcome)
+        # `label`: what a person reads for the slot key (scheduler.job_label)
+        out.append({"job": job, "label": label(job) if label else job, "at": at, "outcome": outcome or "claimed",
+                    "why": why, "words": f"{word} ({why})" if why else word})
+    return out
 
 
 def report(state, store_path: str, hours: int = 24, now: datetime | None = None, label=None) -> dict:
@@ -55,18 +113,12 @@ def report(state, store_path: str, hours: int = 24, now: datetime | None = None,
     actions asked and done, the failures. Read from its own records only; it changes nothing."""
     now = now or datetime.now(timezone.utc)
     since = now - timedelta(hours=hours)
-    jobs = []
-    for job, slot in state.jobs_run():
-        try:
-            if datetime.fromisoformat(slot) >= since:
-                # `label`: what a person reads for the slot key (scheduler.job_label) — the time is `ran_at`'s
-                jobs.append({"job": job, "label": label(job) if label else job, "ran_at": slot})
-        except ValueError:
-            continue
+    jobs = jobs_run(state, since, label)
     counts: dict[str, int] = {}
     cost = 0.0
     events = []
-    for c in state.calls_since(since.isoformat()):
+    records = state.calls_since(since.isoformat())
+    for c in records:
         counts[c["kind"]] = counts.get(c["kind"], 0) + 1
         d = agent_records.detail(c)
         if c["kind"] == agent_records.RUN:
@@ -85,13 +137,8 @@ def report(state, store_path: str, hours: int = 24, now: datetime | None = None,
         except Exception as e:  # noqa: BLE001 — a status answer never fails on the store
             incidents.append({"error": type(e).__name__})
     return {"since": since.isoformat(), "until": now.isoformat(), "scheduled_jobs": jobs,
-            "counts": counts, "figures": figures(counts, cost), "ai_cost_usd": round(cost, 3), "events": events[-60:],
+            "counts": counts, "figures": figures(records, cost), "ai_cost_usd": round(cost, 3), "events": events[-60:],
             "incidents": incidents[-40:]}
-
-
-def _error_words(problem: str | None) -> str:
-    from .api_errors import FOR_PERSON
-    return FOR_PERSON.get(problem or "unknown", FOR_PERSON["unknown"])
 
 
 def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_label=None) -> dict:
@@ -106,15 +153,19 @@ def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_la
         if c["kind"] not in agent_records.COSTS_KINDS:
             continue
         d = agent_records.detail(c)
-        if c["kind"] == agent_records.WITHOUT_AI:
-            # a job made by its code steps when the AI could not run (ai_jobs.AiJobs.run_without_ai): shown among the runs,
-            # at no cost, and not counted as an AI run
-            made.append({"at": c["at"], "kind": "job", "work": str(d.get("job") or "?"), "person": None, "chat": None,
-                         "asked": None, "profile": None, "model": None, "tokens_in": None, "tokens_out": None,
-                         "cache_read": None, "cache_write": None, "cost": 0.0, "stopped": False, "error": None,
-                         "error_words": None, "turns": None, "seconds": None, "steps": [],
-                         "without_ai": {"why": why_job_sentence(d.get("problem") or "unknown"), "sent": int(d.get("sent") or 0),
-                                        "failed": d.get("failed")}})
+        if c["kind"] in (agent_records.WITHOUT_AI, agent_records.JOB_NO_RESULT):
+            # a job made by its code steps when the AI could not run (ai_jobs.AiJobs.run_without_ai), or one whose AI
+            # run sent nothing (JOB_NO_RESULT): shown among the runs beside the AI run, at no cost, not counted as one
+            row = {"at": c["at"], "kind": "job", "work": str(d.get("job") or "?"), "person": None, "chat": None,
+                   "asked": None, "profile": None, "model": None, "tokens_in": None, "tokens_out": None,
+                   "cache_read": None, "cache_write": None, "cost": 0.0, "stopped": False, "error": None,
+                   "cause": None, "what_to_do": None, "turns": None, "seconds": None, "steps": []}
+            if c["kind"] == agent_records.WITHOUT_AI:
+                row["without_ai"] = {"why": why_job_sentence(d.get("problem") or "unknown"), "sent": int(d.get("sent") or 0),
+                                     "failed": d.get("failed")}
+            else:
+                row["no_result"] = {"why": str(d.get("why") or "the AI sent nothing")}
+            made.append(row)
             continue
         who = str(d.get("who") or "")
         if agent_records.job_of(who) is not None:
@@ -132,8 +183,10 @@ def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_la
                      "cost": round(cost, 4), "stopped": bool(d.get("stopped_at_limit")), "error": d.get("error"),
                      # cut by a stop of the agent: its tokens so far, and no cost — Anthropic reports it at a run's end
                      "interrupted": c["kind"] == agent_records.RUN_CUT,
-                     # the reason in plain words (api_errors.FOR_PERSON), for the error's (!) on the Costs tab
-                     "error_words": _error_words(d.get("problem")) if d.get("error") else None,
+                     # the cause in plain words and what to do (api_errors.CAUSES), for the error's (!) on the Costs tab —
+                     # never the first-person sentence a chat reads (architecture review scan 4)
+                     "cause": cause(d.get("problem") or "unknown") if d.get("error") else None,
+                     "what_to_do": what_to_do(d.get("problem") or "unknown") if d.get("error") else None,
                      "turns": d.get("turns"), "seconds": round(d["ms"] / 1000) if isinstance(d.get("ms"), (int, float)) else None,
                      "steps": [x for x in d.get("steps") or [] if isinstance(x, dict)]})
     runs.sort(key=lambda r: r["at"], reverse=True)
@@ -161,8 +214,12 @@ def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_la
     days_list = [(today - timedelta(days=k)).isoformat() for k in range(days - 1, -1, -1)]
     in_last = lambda n: [r for r in runs if local(datetime.fromisoformat(r["at"])).date() > today - timedelta(days=n)]  # noqa: E731
     month = [r for r in runs if local(datetime.fromisoformat(r["at"])).date().replace(day=1) == today.replace(day=1)]
+    busiest = max(days_list, key=lambda d: by_day.get(d, 0.0)) if any(by_day.get(d) for d in days_list) else None
     return {"days": days, "today": total(in_last(1)), "last_7_days": total(in_last(7)), "this_month": total(month),
             "period": total(runs), "runs_count": len(runs),
+            # the Costs tab's other two figures, added up here, never by the page (architecture review scan 4)
+            "per_run": round(total(runs) / len(runs), 4) if runs else 0.0,
+            "busiest": {"day": busiest, "cost": round(by_day.get(busiest, 0.0), 2) if busiest else 0.0},
             "by_day": [{"day": d, "cost": round(by_day.get(d, 0.0), 2)} for d in days_list],
             # the daily chart's Y axis, from the one axis rule (vesta_shared.axis): the page only draws it
             "axis": _cost_axis(max([by_day.get(d, 0.0) for d in days_list] + [0.01])),

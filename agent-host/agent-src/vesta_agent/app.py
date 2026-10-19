@@ -38,7 +38,7 @@ from zoneinfo import ZoneInfo
 from . import button_data, intake, requests_box, script_run, tool_access
 from .ai_jobs import AiJobs
 from .chat_jobs import ChatJobs
-from .in_progress import InProgress
+from .in_progress import FAILED, InProgress
 from .incidents import Incidents
 from .siren import Siren
 from .actions import Actions, related_entities
@@ -57,10 +57,12 @@ from .alert_buttons import AlertButtons
 from .outcome import Outcome
 from .voice import Voice
 from .tickets import Tickets
+from .places import tab, where
 from .policy import NOT_REGISTERED, Person, Policy, problems as policy_problems
 from .routing import Origin, Routing
 from .scheduler import EVERY as SCHEDULER_EVERY, Scheduler
 from .command_request import Request, Requests
+from vesta_shared.messaging import SIREN_TITLE
 from .fault_offers import FaultOffers
 from .skills import SEEDED, Skills, script_env
 from .state import State
@@ -304,7 +306,7 @@ class Vesta:
         # People rows with no person but a group still answer its members (policy.member): only an empty list is "nobody"
         if not pol.destinations:
             log.warning("People is empty: the agent answers nobody and posts nowhere. In each chat to use, send /whoami "
-                        "to the bot and add the ids on the VESTA Agent page, Rules › People.")
+                        "to the bot and add the ids in %s.", where("people"))
         log.info("Acting on the villa is %s", "ON" if pol.act_enabled else "OFF (informs only)")
 
     async def refresh_server_tools(self):
@@ -338,7 +340,12 @@ class Vesta:
 
     async def run_code_job(self, skill, command: str, timeout: int = 900, values: dict | None = None,
                            origin: Origin | None = None) -> dict:
-        res = await asyncio.to_thread(self.code_command, skill, command, values, timeout)
+        ans = await asyncio.to_thread(script_run.run_command, self.s, self.state, skill, command, values, timeout=timeout)
+        if not ans.ok:
+            # a scheduled run's end row says the script stopped (in_progress.InProgress.verdict): the Overview's
+            # "Scheduled jobs run" read the claim and said "run at 02:00" of a night check that stopped at once
+            self.work.verdict(FAILED, f"{command.split()[0] if command.split() else '?'} stopped: {ans.error or 'no output'}"[:160])
+        res = ans.result()
         # faults changed (the night check rewrote its findings, a recheck closed one): carry_out brings the Kiosk's in line
         await self._safe(self.outcome.carry_out(res, skill.name, origin))
         return res
@@ -435,8 +442,8 @@ class Vesta:
             return
         if got.action == "command_off":
             cmd = (self.skills.all(include_off=True).get(got.invoked).command if got.invoked else "") or ""
-            await self.delivery.send(got.chat, f"The {got.invoked} skill is switched off on this villa (VESTA Agent page › "
-                                               f"Skills). Write your question without /{cmd}.")
+            await self.delivery.send(got.chat, f"The {got.invoked} skill is switched off on this villa ({tab('skills')}). "
+                                               f"Write your question without /{cmd}.")
             return
         if got.action == "new":
             self.state.set_session(got.chat, None)
@@ -675,7 +682,7 @@ class Vesta:
 
     async def _press_report(self, p: "Press") -> None:
         if not tool_access.may_start_job(self.policy(), self.server_tools, p.person, p.chat):
-            return await p.toast("Starting a report is not switched on for you here.")
+            return await p.toast(tool_access.start_job_off())
         problem, name = p.parts
         # the pressed message stands for the report until it arrives (chat_jobs.py)
         said = self.jobs.start_without_ai(name, problem, p.chat, waiting_mid=int(p.mid) if p.mid else None)
@@ -701,7 +708,7 @@ class Vesta:
         return shown
 
     async def _tell_owner_siren(self, text: str) -> None:
-        await self.outcome.carry_out({"send": [{"to": "owner", "text": text, "title": "Siren"}]})
+        await self.outcome.carry_out({"send": [{"to": "owner", "text": text, "title": SIREN_TITLE}]})
 
     async def _tell_unreachable(self, chat: int, error: str) -> None:
         """⚠️ TOLD ON TELEGRAM, ONCE (architecture review 25): only the VESTA Agent page named a person Telegram refuses —

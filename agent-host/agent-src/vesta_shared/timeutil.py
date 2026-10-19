@@ -49,15 +49,19 @@ def villa_day(zone: "str | ZoneInfo", as_of: str | None = None, last_finished: b
     return today - timedelta(days=1) if last_finished else today
 
 
-def day_label(d: date, weekday: bool = False, long: bool = False, year: bool = False, numeric: bool = False) -> str:
+def day_label(d: date, weekday: bool = False, long: bool = False, year: bool = False, numeric: bool = False,
+              short: bool = False) -> str:
     """A day as every message and report writes it: "5 Oct", never "05 Oct". weekday: "Mon 5 Oct"; long:
-    "Monday 5 October"; year: "… 2026"; numeric: "05/10/2026", as a message's title and its notices say it.
+    "Monday 5 October"; year: "… 2026"; numeric: "05/10/2026", as a message's title and its notices say it; short:
+    the weekday alone, "Mon" (a column of days).
 
     ⚠️ ONE FORMAT (2026-10-05): seven hand-written strftime("%d %b") calls in the skills, four stripping
     the leading zero and three not, so the same report said "05 Oct" in one line and "5 Oct" in the next.
     (Seven helpers here — ms_to_local, parse_iso, fmt_day… — had no caller at all; they went.) Seven more
     ("%a %d %b": "Mon 05 Oct") were found by the architecture review of 2026-10-07: weekday and long are here
     so no skill needs its own."""
+    if short:
+        return f"{d:%a}"
     if numeric:
         return f"{d:%d}/{d:%m}/{d.year}"
     out = f"{d.day} {d:%B}" if long else f"{d.day} {d:%b}"
@@ -75,6 +79,51 @@ def moment_label(d: datetime, zone: "str | ZoneInfo") -> str:
 def day_time_label(d: datetime, weekday: bool = False, year: bool = False) -> str:
     """A day and a time: "5 Oct, 09:30" (weekday: "Mon 5 Oct, 09:30")."""
     return f"{day_label(d, weekday=weekday, year=year)}, {d:%H:%M}"
+
+
+def month_label(d: date) -> str:
+    """A month as a report's title says it: "October 2026"."""
+    return f"{d:%B} {d.year}"
+
+
+def clock(t: datetime, zone: "str | ZoneInfo", *, days: bool, seconds: bool = False) -> str:
+    """A moment on an investigation, in the villa's time: "03:09" — with its day when the period spans several
+    ("9 Oct, 03:09", day_time_label) — and with its seconds where they matter ("03:09:46": the lines the AI reads,
+    where a 71-second drop must keep its seconds).
+
+    ⚠️ ONE CLOCK (architecture review round 3, 2026-10-19): the lines the AI read said "09/10 03:09:46", the page's
+    log "9 Oct, 03:09" and its charts "03:09", and SKILL.md asked the AI to write "09/10 07:30" — which the page then
+    put in the same column as "9 Oct, 03:09"."""
+    t = t.astimezone(ZoneInfo(zone) if isinstance(zone, str) else zone)
+    hm = f"{t:%H:%M:%S}" if seconds else f"{t:%H:%M}"
+    return f"{day_label(t.date())}, {hm}" if days else hm
+
+
+def said(value, zone: "str | ZoneInfo | None" = None, *, weekday: bool = False, day: bool = False):
+    """A figure as a report page says it: an ISO day ("2026-10-05") reads "5 Oct", an ISO moment
+    ("2026-10-05T09:30", with or without its zone) "5 Oct, 09:30" — in the villa's `zone` when the moment carries
+    one; `weekday`: "Mon 5 Oct…"; `day`: a moment reads as its day alone ("Since 5 Oct."). Anything else, as it is.
+
+    ⚠️ ONE READER OF A STORED TIME (architecture review round 3, 2026-10-19): the playbook's `_fill.show` and the
+    composer's `day()` / `when()` each sniffed the ISO strings facts.json keeps, by their lengths, with their own
+    fallbacks. facts.json keeps ISO; this is the one place a page turns it into words."""
+    if not isinstance(value, str):
+        return value
+    s = value
+    if len(s) == 10 and s[4] == "-" and s[7] == "-":
+        try:
+            return day_label(date.fromisoformat(s), weekday=weekday)
+        except ValueError:
+            return value
+    if len(s) >= 16 and s[10] == "T":
+        try:
+            t = datetime.fromisoformat(s)
+        except ValueError:
+            return value
+        if t.tzinfo and zone:
+            t = t.astimezone(ZoneInfo(zone) if isinstance(zone, str) else zone)
+        return day_label(t.date(), weekday=weekday) if day else day_time_label(t, weekday=weekday)
+    return value
 
 
 def hhmm_to_minutes(s: str) -> int:

@@ -76,3 +76,14 @@ def title(key: str, **names: str) -> str:
 def where(key: str) -> str:
     """The way a sentence sends the reader there: "Rules › AI tools"."""
     return f"{PLACES[key][1]} › {title(key)}"
+
+
+#: the page itself, as a sentence names it to someone in a chat
+PAGE = "VESTA Agent page"
+
+
+def tab(key: str) -> str:
+    """The way a sentence sends the reader to a whole tab: "VESTA Agent page › Skills". ⚠️ EVERY SENTENCE NAMING A
+    PLACE GOES THROUGH HERE (architecture review scan 4, 2026-10-19): four sentences in ai_jobs, app and skills wrote
+    "VESTA Agent page → Rules → AI jobs" by hand — one named a card that no longer exists (tests/test_places_named.py)."""
+    return f"{PAGE} › {TABS[key]}"

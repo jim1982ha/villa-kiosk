@@ -29,7 +29,6 @@ import logging
 from vesta_shared.messaging import incident_tag
 
 from . import layout
-from .notice import when
 
 log = logging.getLogger("vesta.thread")
 
@@ -115,7 +114,7 @@ class IncidentThread:
         ⚠️ ALL OF THEM, NOT THE ONE PRESSED (owner, 2026-10-01): a P1 goes to the owner's chat and the facility
         manager's; pressed in one, the others kept buttons that only answered "already closed"."""
         async with self._lock(iid):
-            note = note.replace("{time}", when(datetime.now(timezone.utc), self.tz))     # 10/10/2026 17:13, as every notice
+            note = layout.fill_time(note, datetime.now(timezone.utc), self.tz)         # 10/10/2026 17:13, as every notice
             n = 0
             for chat, rec in self.state.incident_chats(iid):
                 if rec.get("settled") and self.retitle:
@@ -143,7 +142,7 @@ class IncidentThread:
         incident is open and ends as any does (its close still says how). For an alert someone took on in the VESTA
         Kiosk (owner, 2026-10-15). Returns how many chats show it now."""
         async with self._lock(iid):
-            note = note.replace("{time}", when(datetime.now(timezone.utc), self.tz))
+            note = layout.fill_time(note, datetime.now(timezone.utc), self.tz)
             n = 0
             for chat, rec in self.state.incident_chats(iid):
                 if rec.get("settled") or not rec.get("mid"):

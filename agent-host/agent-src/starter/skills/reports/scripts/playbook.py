@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 from vesta_shared.device_state import battery_charge  # the night check's own reading
 from vesta_shared.stats import slope_per_hour, step_index  # the night check's step detector
-from vesta_shared.timeutil import day_label, day_time_label  # the one day format
+from vesta_shared.timeutil import day_time_label, said  # the one day format; a stored time in words
 from vesta_shared.past import unread  # the one "could not be read whole: nothing is known after"
 from vesta_shared.result import PRIORITY_ORDER, WHOLE_DEVICE  # the one list of priorities; a whole device's faults
 
@@ -42,21 +42,9 @@ def _when(row: dict) -> datetime | None:
 
 # ---------------------------------------------------------------- the clues (reports.yaml playbook)
 def _fill(text, figures: dict) -> str:
-    """A playbook text with the clue's figures in it; a date as a person writes it ("23 Sep")."""
-    def show(v):
-        if isinstance(v, str) and len(v) == 16 and v[10] == "T":
-            try:
-                return day_time_label(datetime.fromisoformat(v))
-            except ValueError:
-                return v
-        if isinstance(v, str) and len(v) == 10 and v[4] == "-" and v[7] == "-":
-            try:
-                return day_label(date.fromisoformat(v))
-            except ValueError:
-                return v
-        return v
+    """A playbook text with the clue's figures in it; a date as a person writes it ("23 Sep", timeutil.said)."""
     try:
-        return str(text or "").format(**{k: show(v) for k, v in figures.items() if not isinstance(v, (list, dict))})
+        return str(text or "").format(**{k: said(v) for k, v in figures.items() if not isinstance(v, (list, dict))})
     except (KeyError, IndexError, ValueError):
         return str(text or "")
 

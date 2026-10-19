@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from helpers import run_kit, run_terms, body
 import asyncio
+import json
 
 import pytest
 import yaml
@@ -328,7 +329,9 @@ def test_a_report_button_pressed_by_someone_who_may_not_start_one_is_refused(age
     agent.state.remember_message(FM, 900)
     asyncio.run(agent.on_ha_event("telegram_callback", {"id": "cb1", "data": "w:credit:rep-weekly", "chat_id": FM,
                                                         "user_id": FM, "message": {"message_id": 900, "chat": {"id": FM}}}))
-    assert agent.tg.toasts == [("cb1", "Starting a report is not switched on for you here.")]
+    from vesta_agent import tool_access
+    assert agent.tg.toasts == [("cb1", tool_access.start_job_off())]            # the one refusal (tools.py says it too)
+    assert tool_access.start_job_off().startswith("Starting a report from a chat is not switched on for you here (Rules")
     assert not agent.chat_jobs.running(FM, "rep-weekly") and agent.tg.edits == []
 
 
@@ -344,6 +347,12 @@ def test_a_refused_run_that_read_and_wrote_nothing_cost_nothing(tmp_path):
     st.log("run", {"who": "Owner@1", "cost_usd": 0.05})                 # before 0.6.9: no token counts, kept
     c = status.costs(st)
     assert sorted(r["cost"] for r in c["runs"]) == [0.0, 0.05, 0.34] and c["period"] == 0.39
+    # the Costs tab's (!) says the cause and what to do — never the first-person sentence a chat reads (scan 4)
+    refused = next(r for r in c["runs"] if r["error"])
+    assert (refused["cause"], refused["what_to_do"]) == api_errors.CAUSES["credit"][:2]
+    assert "I cannot answer" not in json.dumps(c) and "error_words" not in json.dumps(c)
+    from helpers import page_js
+    assert "r.cause" in page_js() and "r.what_to_do" in page_js() and "error_words" not in page_js()
     assert run_cost({"cost_usd": 0.033, "tokens": {}}) == 0.033                 # counts unknown: the figure stands
     assert cost_between(str(tmp_path / "s.db"), "2000-01-01", "2100-01-01") == 0.39   # the reports read the same
 
@@ -385,3 +394,26 @@ def test_a_follow_up_turn_joins_the_first_by_a_rule_for_every_field():
         ("the answer", "S2", True, "credit", 0.5, 2)
     assert both.attached == ["a.html", "p.html"] and both.pages == {"a.html": 7, "p.html": 9} and both.approvals == ["r1"]
     assert both.earlier == "last words"
+
+
+def test_one_table_of_causes_and_one_sentence_for_a_report_that_did_not_come():
+    # architecture review scan 4 (2026-10-19): FOR_PERSON, why_job and NEEDS_THE_OWNER were three tables keyed by the
+    # same kinds; four sentences said "what you asked for did not come", one of them a lie ("will run again at its
+    # next time" for a report asked for in a chat)
+    for k, (c, do, owner) in api_errors.CAUSES.items():
+        assert api_errors.FOR_PERSON[k] == f"I cannot answer right now: {c}. {do}"
+        assert api_errors.why_job(k) == c and api_errors.cause(k) == c and api_errors.what_to_do(k) == do
+        assert (k in api_errors.NEEDS_THE_OWNER) == bool(owner)
+    assert set(api_errors.NEEDS_THE_OWNER) == {"credit", "key"} == set(api_errors.NEEDS_THE_OWNER) & api_errors.AI_DOWN
+    assert api_errors.NEEDS_THE_OWNER["credit"] == ("The VESTA Agent has stopped answering: the Anthropic account has run "
+                                                   "out of credit. Add credit in the Anthropic Console (Billing); nothing "
+                                                   "else needs changing.")
+    assert api_errors.why_job("whatever") == api_errors.CAUSES["unknown"][0]
+    n = api_errors.NOT_COME
+    assert n("fm-weekly", "x", api_errors.CHAT) == "The fm-weekly report you asked for could not be prepared: x. Ask again in a moment."
+    assert n("fm-weekly", "x", api_errors.SCHEDULE) == "The fm-weekly report could not be prepared: x. It will run again at its next time."
+    assert n("fm-weekly", "x", api_errors.CUT, when="16/10/2026 14:30") == \
+        "The fm-weekly report you asked for at 16/10/2026 14:30 could not be prepared: x. Ask again to have it."
+    assert n("fm-weekly", "x", api_errors.NO_RESULT) == "The fm-weekly report could not be prepared: x. Ask for it again in a moment."
+    assert api_errors.for_job("fm-weekly", "busy", origin=object()) == n("fm-weekly", api_errors.cause("busy"), api_errors.CHAT)
+    assert api_errors.for_job("fm-weekly", "busy") == n("fm-weekly", api_errors.cause("busy"), api_errors.SCHEDULE)

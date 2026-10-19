@@ -24,6 +24,9 @@ RUN_CUT = "run_cut"
 
 JOB = "job:"
 WITHOUT_AI = "without_ai"        # the record's kind (state.log): a job made by its code steps, the AI unavailable
+#: An AI job whose run ended without sending its report (ai_jobs.AiJobs.run: the AI wrote, or not, and sent nothing):
+#: its own outcome — a row on the Costs tab beside the run, a failure on the Overview, one sentence to its chat.
+JOB_NO_RESULT = "job_no_result"
 
 
 def for_job(name: str) -> str:
@@ -49,7 +52,12 @@ def without_ai(job: str, problem: str, sent: int, failed: str | None) -> dict:
     return {"job": job, "problem": problem, "sent": sent, "failed": failed}
 
 
-COSTS_KINDS = (RUN, RUN_CUT, WITHOUT_AI)        # the Costs tab's rows: kept and pruned together (state.prune)
+def no_result(job: str, why: str) -> dict:
+    """The record of a job that delivered nothing: `why` in the agent's words (what the Costs row and the chat say)."""
+    return {"job": job, "why": why}
+
+
+COSTS_KINDS = (RUN, RUN_CUT, WITHOUT_AI, JOB_NO_RESULT)   # the Costs tab's rows: kept and pruned together (state.prune)
 
 
 def detail(row) -> dict:

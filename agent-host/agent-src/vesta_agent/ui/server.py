@@ -447,13 +447,14 @@ class UI:
         if sk is None:
             return web.json_response({"name": name, "ok": False, "off": name in pol.skills_off, "release": rel,
                                       "problem": h["problem"]})
-        listed = tool_access.read_list(self.s.data_dir)
         # ⚠️ ROWS, NOT SENTENCES (architecture review 8), and the skill's own (review 5, 2026-10-13: skills.when_it_runs)
         acts = when_it_runs(sk)
         scripts = [spec.view() for _, spec in sorted(sk.scripts.items())]      # skills.Script: one reading
         return web.json_response({
             "name": name, "ok": h["ok"], "off": name in pol.skills_off, "description": sk.description,
-            "release": rel, "engine": __version__, "needs": tool_access.needs(pol, listed, sk) if sk.tools is not None else None,
+            "release": rel, "engine": __version__,
+            # Skill tools: the verdict object whole (tool_access.health) — its line, its rows, where they are switched
+            "tools": h["tools"], "line": h["line"], "where_tools": h["where_tools"],
             "acts": acts, "scripts": scripts, "without": h["without"],
             "out_files": self._out_files()})
 

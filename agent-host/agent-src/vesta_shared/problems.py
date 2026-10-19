@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import json
 
-from . import result
+from . import agreement, result
 from .messaging import no_code as _no_code
 from .store import Incident, Notes, Store, notes_of
 
@@ -98,6 +98,14 @@ def villa_day_of(iso: str) -> str:
         return villa_date(iso, os.environ.get("TZ") or "UTC").isoformat()
     except Exception:  # noqa: BLE001 — a zone this machine does not know: the stored date
         return str(iso)[:10]
+
+
+def agreed(field: str, word: str) -> str | None:
+    """`word` as the agreement with the Kiosk declares it for a fault's `field` ("origins": alert, night, chat;
+    "checks": minutes, nightly — agent-contract.json `ticket`), read from the file; None for a word it does not declare
+    (the card then shows its generic icon, no clock) — never a copy of its lists here (architecture review round 3,
+    2026-10-19)."""
+    return word if word and word in (agreement.section("ticket").get(field) or ()) else None
 
 
 class Problems:
@@ -463,9 +471,9 @@ class Problems:
                 "pattern": pattern, "since": d.get("since") if pattern else None,
                 "number": sid if kind == "incident" else None,
                 # where it came from, the Kiosk card's source icon (owner, 2026-10-14): an alert or the night check
-                "origin": {"incident": "alert", "finding": "night"}.get(kind or ""),
+                "origin": agreed("origins", {"incident": "alert", "finding": "night"}.get(kind or "", "")),
                 # how it is read again, the card's "Next check" (owner, 2026-10-15)
-                "check": ("minutes" if kind == "incident" or task.get("rule_id") in rechecked else "nightly")
+                "check": agreed("checks", "minutes" if kind == "incident" or task.get("rule_id") in rechecked else "nightly")
                 if kind in ("incident", "finding") else None,
                 "note": task.get("close_note") or "Closed: the problem is over.", "who": task.get("closed_who") or None,
                 "reopen_note": task.get("reopen_note") or None,

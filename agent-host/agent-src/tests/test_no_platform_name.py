@@ -68,7 +68,8 @@ def test_the_sent_yaml_texts_and_the_models_speaking_rule():
 #: The Agent's page: every file the browser shows a person (its JS and HTML), read without its code comments.
 PAGE = os.path.join(ROOT, "vesta_agent", "ui", "static")
 #: The page's words served from Python: the place names (tabs and titles), the tools' lines, the sign-in refusal.
-PAGE_SPOKEN = ["vesta_agent/places.py", "vesta_agent/tool_access.py", "vesta_agent/ui/server.py"]
+PAGE_SPOKEN = ["vesta_agent/places.py", "vesta_agent/tool_access.py", "vesta_agent/ui/server.py",
+               "vesta_agent/ui/setup_copy.py"]       # the setup preview's misfits (said "this Home Assistant's MCP server")
 
 
 def _without_comments(src: str, html: bool = False) -> str:

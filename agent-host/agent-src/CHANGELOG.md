@@ -1,5 +1,91 @@
 # Changelog
 
+## 0.6.257 (19 October 2026)
+
+Architecture review scan 4, 19 October (one verdict per fact, one sentence per outcome, places named once).
+- ONE VERDICT ON WHETHER A SKILL WORKS: tool_access.health is the verdict object the page draws — its `line` (the
+  skills list and the skill page's "Skill tools" heading say the same), its `tools` rows with each tool's state in
+  words (STATE_WORDS), `where_tools` behind the tab's (i), in the owner's rule of 2026-10-10 (a tool switched off is
+  gone without; the skill runs). skills.js counted "N of M not available" itself and its (i) still said a switched-off
+  tool made the skill "not working". setup_copy judges a tool by tool_state and says "the villa's system" (it said
+  "this Home Assistant's MCP server"); test_no_platform_name reads it. Tests: test_tool_access, test_page_controls
+  (the heading equals health.line through HTTP; no verdict words of the page's own).
+- A JOB WHOSE AI SENT NOTHING IS ITS OWN OUTCOME: AiJobs.run judges "did this job deliver" (TurnResult.sent plus its
+  on_limit steps'): a run neither failed nor sent is recorded (agent_records.JOB_NO_RESULT {job, why}), a failure on
+  the Overview, a row on the Costs tab beside the run ("not sent", the why), and told ONCE — the one sentence
+  (api_errors.NOT_COME, NO_RESULT) sent through Outcome as the job's result, so the waiting message goes like any
+  result; on schedule it goes to the job's own chats. It was logged "done" with its cost, counted as a reply written,
+  nobody told on schedule, and in a chat the waiting message edited to "ended without a result" (now only for a task
+  that died). Tests: test_ai_jobs (recorded, counted, told once; the limit's cause), test_jobs.
+- "SCHEDULED JOBS RUN" SAYS WHAT THE RUN DID: in_progress.kept writes how a scheduled run ended (jobend: ended /
+  failed / cut, when, why — state.keep_run_end); a body that knows better says so (InProgress.verdict: an AI job's
+  model could not run, made without the AI, sent nothing, not set up; a code job's script that stopped).
+  status.jobs_run reads it (RUNNING while the run's row stands; the claim alone for an older row); the Overview draws
+  an Outcome column ("done", "not prepared (why)", "stopped by a restart"). The scheduler's claim (job:) is unchanged.
+  Tests: test_in_progress (each end, a chat's job leaves none), test_scheduler_runner_stop (a cut run reads "cut"),
+  test_page_controls (the row through HTTP).
+- ONE SENTENCE FOR "WHAT YOU ASKED FOR DID NOT COME": api_errors.NOT_COME(name, cause, asked, when) — asked in a chat
+  ("Ask again in a moment."), on schedule ("It will run again at its next time." — only there: a report asked for in
+  a chat read it too), cut by a restart (at its time), no result. for_job takes the origin; chat_jobs, in_progress
+  (cut_text) and ai_jobs call it; "report" is the one noun a person reads (not_set, "There is no … report").
+  Tests: test_api_errors, test_in_progress, test_chat_jobs, test_jobs.
+- THE OVERVIEW'S FIGURES MEAN WHAT THEIR LABELS SAY: status.figures reads the records as the Costs tab does (who →
+  reply or report, problem → failure): "replies written" counts chat runs without a problem, "reports made" (new)
+  the job runs and the reports made without the AI, "failures" the failure kinds and every run with a problem. "Per
+  run" and "Busiest day" come from status.costs (per_run, busiest); the page only draws them. Tests: test_script_run,
+  test_run_records, test_ui.
+- ONE TABLE OF CAUSES: api_errors.CAUSES {kind: (cause, what to do, what the owner does)}; FOR_PERSON, why_job and
+  NEEDS_THE_OWNER are built from it (the person's sentences take one shape: "I cannot answer right now: cause. what
+  to do"). The Costs tab's (!) gets the cause and what to do, never the first-person sentence (error_words gone).
+  Test: test_api_errors.
+- EVERY SENTENCE NAMING A PLACE GOES THROUGH places: places.tab("skills") for a whole tab; not_set points at
+  Rules › AI brains and limits (it named "AI jobs", a card that no longer exists); the start_job refusal is one
+  sentence, tool_access.start_job_off (app.py and tools.py each worded it). tests/test_places_named.py greps the
+  tracked engine for "page →" / "page ›" outside places.py.
+- "ALREADY BEING MADE" SAID ONCE, TRUTHFULLY: ChatJobs.start answers Started(kind new / just_started /
+  running_since, since, by asked / scheduled); ai_jobs.being_made words it once for the AI's instruction and the
+  report button's answer — "scheduled at 19/10/2026 08:00" when a run nobody asked for holds the chat (it read
+  "asked for here started at 08:00"); the time by notice.when. JUST_STARTED_S lives in chat_jobs; started_at is gone.
+  Tests: test_chat_jobs (a scheduled run says scheduled), test_jobs.
+Architecture review round 3 (shared leads): one clock on an investigation and one number rule; the agreement's words
+read from the file; one filler of "{time}", the waiting words in the one table, one siren title; one reading of
+"devices offline now".
+- ONE CLOCK ON AN INVESTIGATION (`vesta_shared.timeutil.clock(t, zone, days=, seconds=)`): the lines the AI reads
+  (investigate.py `at`), the page's log (investigation_facts `_Clock`), its three charts (page.py) and the example
+  SKILL.md gives the AI all word a moment the same way — "03:09", "9 Oct, 03:09" when the period spans several days.
+  The lines the AI reads keep their seconds ("03:09:46", "9 Oct, 03:09:46": a 71-second drop needs them); they said
+  "09/10 03:09:46" before, and SKILL.md asked for "09/10 07:30" into the same column as "9 Oct, 03:09". SKILL.md's
+  rules and step numbers are unchanged (the page's "SKILL.md step 6" still names step 6). `month_label(d)` and
+  `day_label(d, short=True)` replace the reports' two strftime calls; `timeutil.said(value, zone, weekday=, day=)` is
+  the ONE reader of a stored ISO day or moment (playbook `_fill` and compose `day()` / `when()` each sniffed them by
+  length); facts.json keeps ISO. Tests: test_investigate (one clock: the AI's row and the recorded row), test_one_day_format.
+- ONE NUMBER RULE (`vesta_shared.page.number(v, unit=None, whole=)`): the reports' composer, the charts and the energy
+  headline each had their own ("12.3" / "12" / "12"; a 0.15 tariff was "0.2"). Now: whole numbers and from 100 on with
+  their thousands, one decimal from 10 on, two under 10, `whole` for a tile; the energy headline's dates through
+  `day_label` ("5 Oct to 11 Oct", not 2026-10-05).
+- THE AGENT READS THE AGREEMENT'S WORDS FROM THE FILE: kiosk.py's step kinds (`KINDS` = `ticketUpdate.kinds`), the
+  agent's stamp (`AGENT_BY` = `ticket.agentStamp`), the take-on step (`taken_step`, `ticket.takenStep`: status, no
+  kind, by anyone but the stamp) and the card's origin and check words (`problems.agreed`, `ticket.origins` /
+  `ticket.checks`: a word the agreement does not declare is not written). They were typed in the engine and pinned to
+  the file after the fact; now one assertion per table says the engine reads it (test_contract_ticket,
+  test_fault_steps; the host's test_kiosk_contract stays THE pin that the copy is the Kiosk's). `OLD_TITLE_NOTE`
+  ("Now: ") stays a literal: the agreement names no key for it, its twin is the Kiosk's faultNotes.ts.
+- ONE FILLER OF "{time}" (`layout.fill_time(text, now, zone)`): posting, the thread's close and restate, and a
+  taken-over message's status each replaced it by hand. The waiting words of a pending approval request live in the
+  approvals' one table (`STATES["pending"]`, `note("pending", who=, minutes=)`), not in actions.py beside it. One
+  siren title, `vesta_shared.messaging.SIREN_TITLE` ("Siren"): outcome's "the siren cannot be requested" reads it
+  (it said "Siren request"); app.py's "Siren switched off" message already says the word (its literal is to be
+  replaced by the constant).
+- ONE READING OF "DEVICES OFFLINE NOW" (`vesta_shared.offline.devices_offline(pack, states, now, families,
+  min_minutes=, alerted=, integration_min=)` → `Group`): the night check and recheck.py (`nightly.offline_findings`:
+  its settings, its words, an integration down worded by `nightly.integration_name`), the reports' monitoring table
+  (`facts.Ctx.offline`) and the concierge's status each walked the pack their own way. One grouping
+  (`pack.device_key`), one name (the device's own, else its asset's, else its entity's), "a device the villa's system
+  knows nothing about is not the villa's" applied once; the merge of an integration down moved from features.py to
+  `offline.merged_integrations`. No threshold in vesta_shared: the minimum, the alerted devices and the integration
+  count are each caller's. The three family lists stay in their skills (test_offline keeps them side by side; they
+  differ today: the reports add battery and network, the night check water and generation — the owner's call).
+
 ## 0.6.256 (19 October 2026)
 
 Architecture review, 19 October (the Telegram layer, measured with a probe on the real harness): one copy per chat

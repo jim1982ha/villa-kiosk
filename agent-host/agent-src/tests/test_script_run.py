@@ -66,10 +66,18 @@ def test_the_overview_counts_every_failure_and_only_failures():
     # architecture review 8: the page summed four kinds itself and missed action_failed; the agent adds them up now
     from vesta_agent.status import FAILURE_KINDS, STATUS_KINDS, figures
     assert set(FAILURE_KINDS) <= set(STATUS_KINDS)
-    counts = {"failed": 1, "action_failed": 2, "send_failed": 3, "script_failed": 4, "code_script_failed": 5,
-              "script_refused": 100, "executed": 6, "direct": 7, "run": 8}
-    got = dict(figures(counts, 0.256))
-    assert got["failures"] == 15 and got["actions done"] == 13 and got["replies written"] == 8 and got["AI cost (USD)"] == "0.26"
+    # architecture review scan 4 (2026-10-19): "replies written" counted every run — the AI jobs and the refused runs
+    # included; now a run is read as the Costs tab reads it (who → reply or report; problem → failure)
+    rows = lambda kind, n, detail=None: [{"kind": kind, "detail": json.dumps(detail or {})}] * n  # noqa: E731
+    records = (rows("failed", 1) + rows("action_failed", 2) + rows("send_failed", 3) + rows("script_failed", 4)
+               + rows("code_script_failed", 5) + rows("script_refused", 100) + rows("executed", 6) + rows("direct", 7)
+               + rows("run", 5, {"who": "Owner@1"}) + rows("run", 2, {"who": "job:fm-weekly"})
+               + rows("run", 1, {"who": "Owner@1", "problem": "credit", "error": "api billing_error"})
+               + rows("without_ai", 1, {"job": "fm-weekly", "sent": 1, "failed": None})
+               + rows("job_no_result", 1, {"job": "fm-weekly", "why": "x"}))
+    got = dict(figures(records, 0.256))
+    assert got["failures"] == 17 and got["actions done"] == 13 and got["replies written"] == 5 and got["reports made"] == 3
+    assert got["AI cost (USD)"] == "0.26"
     assert "figures(r.figures)" in page_js() and "count(" not in page_js().split("export async function overview")[1].split("export ")[0]
 
 
@@ -126,3 +134,19 @@ def test_a_code_job_finds_the_knowledge_pack_without_being_given_it(tmp_path):
                {"p.py": "import json, os\nprint(json.dumps({'pack': os.environ.get('VESTA_PACK')}))\n"})
     v = make_agent(tmp_path, {"people": [], "chats": {}})
     assert v.code_command(v.skills.get("probe"), "p.py") == {"pack": v.s.pack_path} and v.s.pack_path
+
+
+def test_a_scheduled_code_job_that_stops_says_so_in_its_end_row(agent):
+    # architecture review scan 4 (2026-10-19): a code job's script that stopped raised nothing, so the run's end row
+    # (in_progress.kept) would have read "ended" — app.run_code_job says the verdict with why
+    from vesta_agent.in_progress import SCHEDULED, Item, run_ends
+    sk = agent.skills.get("probe")
+
+    async def go(command, key):
+        async with agent.work.kept(Item(SCHEDULED, key, slot="2026-10-19T02:00:00+00:00")):
+            await agent.run_code_job(sk, command, 30)
+    asyncio.run(go("p.py boom", "probe:0:02:00"))
+    asyncio.run(go("p.py ok", "probe:1:02:00"))
+    ends = run_ends(agent.state)
+    assert ends["probe:0:02:00"]["outcome"] == "failed" and ends["probe:0:02:00"]["why"].startswith("p.py stopped: ")
+    assert SECRET not in ends["probe:0:02:00"]["why"] and ends["probe:1:02:00"] == {**ends["probe:1:02:00"], "outcome": "ended", "why": None}

@@ -43,8 +43,8 @@ from typing import Awaitable, Callable
 from vesta_shared.result import FAULTS_CHANGED
 
 from . import layout
-from .notice import when
 from vesta_shared.message_format import PRESSED_STAGE, ROLES
+from vesta_shared.messaging import SIREN_TITLE
 from .incidents import Incidents
 from .posting import Poster
 from .routing import Origin, Routing
@@ -55,10 +55,6 @@ from .routing import Origin, Routing
 HA_SENT_WAIT_S = (0.5, 1.0, 2.0)
 
 log = logging.getLogger("vesta.outcome")
-
-#: The title of "the siren cannot be requested", above "To:" (message_format: the one layout).
-SIREN_TITLE = "Siren request"
-
 
 #: What a script result can ask the engine to carry out — the keys carry_out reads. ⚠️ ONE LIST
 #: (architecture review, 0.12.38): the model's run_skill_script tool kept its own copy, so a key added here
@@ -313,8 +309,8 @@ class Outcome:
         for chat, mid in found:
             # Home Assistant's own alert, taken over: the incident's text, the earlier messages' times, its buttons
             kb = self.buttons.keyboard(int(iid), chat, skill_name) if skill_name and self.buttons.open(iid) else None
-            # "{time}" in its status: the villa's time now, as every message of the agent's writes it
-            status = (h.get("status") or "").replace("{time}", when(datetime.now(timezone.utc), self.poster.tz))
+            # "{time}" in its status: the villa's time now, as every message of the agent's writes it (layout.fill_time)
+            status = layout.fill_time(h.get("status"), datetime.now(timezone.utc), self.poster.tz)
             # ⚠️ "TO:" FOLLOWS THE PRIORITY (owner, 2026-10-17, reversing 2026-10-16's #43 knowingly): the rule's own
             # message is about the roles this step goes to, else those its priority reaches — never the roles of the
             # chat the rule posts in (a P3's message in the owner's group read "To: Owner")

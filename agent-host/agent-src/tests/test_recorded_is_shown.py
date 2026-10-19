@@ -10,6 +10,7 @@ import asyncio
 import re
 
 from helpers import make_agent, restarted
+from vesta_shared.messaging import SIREN_TITLE
 from telegram_fake import BOT
 from vesta_agent import button_data
 
@@ -153,7 +154,7 @@ def test_the_intrusion_is_said_when_no_owner_chat_takes_the_siren_request(tmp_pa
     run(v.outcome.carry_out({"siren_gate": R.siren(True, "Intrusion suspected.", ("owner", "fm"))}, "alert-desk"))
     (chat, text, kb), = v.tg.sent
     assert chat == FABIEN and kb is None
-    assert text.startswith("Siren request\nTo: ") and \
+    assert text.startswith(f"{SIREN_TITLE}\nTo: ") and \
         "\nIntrusion suspected.\n\nStatus:\nThe siren cannot be requested: no chat of the owner's" in text
 
 
@@ -188,8 +189,9 @@ def test_a_report_asked_for_in_a_chat_and_cut_by_a_stop_says_so_at_the_start(tmp
     v = restarted(v)
     (chat, mid, text), = v.tg.edits
     assert (chat, mid) == (JM, 4242)
-    assert re.match(r"The weekly job asked for at \d\d/\d\d/\d{4} \d\d:\d\d was stopped by a restart of the agent: "
-                    r"ask again", text)
+    # the one sentence for a report that did not come, its cut variant (api_errors.NOT_COME, scan 4)
+    assert re.match(r"The weekly report you asked for at \d\d/\d\d/\d{4} \d\d:\d\d could not be prepared: the agent was "
+                    r"restarted meanwhile\. Ask again to have it\.", text)
     v = restarted(v)
     assert len(v.tg.edits) == 1                                            # said once
 
@@ -268,7 +270,7 @@ def test_a_report_whose_result_came_is_never_said_stopped(tmp_path):
     run(ask())
     edits = len(v.tg.edits)
     v = restarted(v)
-    assert len(v.tg.edits) == edits and not any("stopped by a restart" in t for _, t, _ in v.tg.sent)
+    assert len(v.tg.edits) == edits and not any("restarted meanwhile" in t for _, t, _ in v.tg.sent)
 
 
 def test_a_scheduled_report_that_arrived_is_not_sent_again_after_a_stop(tmp_path):

@@ -92,7 +92,7 @@ def test_a_report_asked_for_in_a_chat_runs_as_its_job(agent):
         return msg
     msg = run(go())
     assert msg.startswith("Started fm-weekly") and agent.runs[-1]["profile"] == "performance"
-    assert run(agent.jobs.start("no-such-job", ASKER)).startswith("There is no job")
+    assert run(agent.jobs.start("no-such-job", ASKER)).startswith("There is no no-such-job report")
     assert "not set up yet" in run(agent.jobs.start("fm-daily", ASKER))                # asked for, not in policy.yaml
     tb = agent.toolbox()
     person = Person(ASKER, "Asker", "fm")
@@ -178,19 +178,18 @@ def _asked_in_chat(agent, tmp_path, monkeypatch, page: bool, job_name: str = "fm
                    fails: str | None = None):
     """The person asks in the chat; the conversation starts the job and replies; the job (a moment later)
     sends its page — or ends without one."""
-    page_path = os.path.join(agent.s.out_dir, "fm_weekly.html")
-    open(page_path, "w").write("<html></html>")
-
     async def act(run_):
         if run_["who"].startswith("job:"):
             await asyncio.sleep(0.02)                    # the job takes a while
             if page:
-                # through the job's own send_message tool, as the model sends its result
-                # the origin the job runs with: its chat and its name (chat_jobs.ChatJobs.start)
-                send = next(t for t in agent.toolbox().tool_objects(None, Origin(ASKER, JOB, job=job_name))
-                            if t.name == "send_message")
-                await send.handler({"to": "here", "text": "Three things need attention.",
-                                    **({} if text_only else {"attachment": "fm_weekly.html"})})
+                # the page, in the run's own folder (architecture review 14: each run works in out/runs/NAME-TIME)
+                os.makedirs(run_["folder"], exist_ok=True)
+                open(os.path.join(run_["folder"], "fm_weekly.html"), "w").write("<html></html>")
+                # through the RUN'S OWN send_message tool, as the model sends its result (architecture review 14: the
+                # fake acts through the run's tools — a tool built apart would not count as the run's `sent`, and the
+                # job would be judged to have delivered nothing, scan 4)
+                await run_["call"]("send_message", {"to": "here", "text": "Three things need attention.",
+                                                     **({} if text_only else {"attachment": "fm_weekly.html"})})
         else:
             await agent.jobs.start(job_name, ASKER)       # what the start_job tool does
 
@@ -219,10 +218,20 @@ def test_a_report_asked_for_in_a_chat_is_one_message_replaced_by_the_page(agent,
     assert [text for _, text, _ in tg.sent] == ["Your weekly report is on its way.", "Three things need attention."]
 
 
-def test_a_job_that_ends_without_its_page_says_so_in_the_waiting_message(agent, tmp_path, monkeypatch):
+def test_a_job_whose_ai_sent_nothing_tells_the_chat_once_as_its_result(agent, tmp_path, monkeypatch):
+    # architecture review scan 4 (2026-10-19): the AI ran, wrote nothing to the chat, and the waiting message was EDITED
+    # to "ended without a result" as if the task had died, while the run counted as a reply written. The job's one
+    # sentence is its result now: it replaces the waiting message like a page would, and the run is recorded as its own
+    # outcome (agent_records.JOB_NO_RESULT)
+    from vesta_shared import agent_records
+    from vesta_agent.api_errors import NO_RESULT, NOT_COME
     tg = _asked_in_chat(agent, tmp_path, monkeypatch, page=False)
-    assert tg.deleted == []
-    assert len(tg.edits) == 1 and "ended without a result" in tg.edits[0][2]
+    assert len(tg.deleted) == 1 and tg.edits == []
+    (said,) = [t for _, t, _ in tg.sent][1:]
+    assert said.startswith("Report not prepared\nTo: ") and body(said) == NOT_COME(
+        "fm-weekly", "the AI ended its work without sending anything", NO_RESULT)
+    assert [agent_records.detail(c)["job"] for c in agent.state.calls_since("2000-01-01")
+            if c["kind"] == agent_records.JOB_NO_RESULT] == ["fm-weekly"]
 
 
 def test_a_requested_weekly_sends_only_the_page():
@@ -259,9 +268,10 @@ def test_a_report_asked_for_in_a_chat_that_fails_is_one_message_saying_why(agent
     assert len(tg.deleted) == 1 and tg.edits == []
     (said,) = [t for _, t, _ in tg.sent][1:]
     # titled as every message the agent sends on its own, in the asker's chat too (owner, 2026-10-12: one layout)
+    # asked for in a chat, it will NOT "run again at its next time" (architecture review scan 4): ask again
     assert said.startswith("Report not prepared\nTo: ") and body(said) == (
-        "The fm-weekly report could not be prepared: Anthropic's servers were overloaded or down. It will run again at "
-        "its next time.")
+        "The fm-weekly report you asked for could not be prepared: Anthropic's servers are overloaded or down at the "
+        "moment. Ask again in a moment.")
 
 
 def test_the_ai_is_never_told_sent_for_a_message_telegram_refused(agent):
@@ -314,14 +324,14 @@ def test_asked_again_the_agent_not_the_ais_memory_says_whether_the_report_runs(a
             await gate.wait()
     ai = FakeAI("", act=act).install(monkeypatch)
 
-    from vesta_agent import ai_jobs as AJ
+    from vesta_agent import chat_jobs as CJ
 
     async def go():
         first = await agent.jobs.start("fm-weekly", ASKER)
         # owner, 2026-10-09: the model called start_job twice in one turn and told the person a report that had just
         # started was "still in progress" — asked again at once, it is still the report that just started
         twice = await agent.jobs.start("fm-weekly", ASKER)
-        monkeypatch.setattr(AJ, "JUST_STARTED_S", 0)                    # later on: it is running, since its start
+        monkeypatch.setattr(CJ, "JUST_STARTED_S", 0)                    # later on: it is running, since its start
         again = await agent.jobs.start("fm-weekly", ASKER)
         gate.set()
         await asyncio.sleep(0.05)
@@ -330,9 +340,10 @@ def test_asked_again_the_agent_not_the_ais_memory_says_whether_the_report_runs(a
         await asyncio.sleep(0.05)
         return first, twice, again, after
     first, twice, again, after = run(go())
-    assert re.match(r"Started fm-weekly now, at \d\d:\d\d \(brain performance", first)
+    # the time by the one formatter every notice uses (notice.when: 19/10/2026 08:01)
+    assert re.match(r"Started fm-weekly now, at \d\d/\d\d/\d{4} \d\d:\d\d \(brain performance", first)
     assert "Do not say it is still running or in progress." in first
     assert twice.startswith("Started fm-weekly now, at ") and "still being made" not in twice
-    assert re.match(r"The fm-weekly report asked for here started at \d\d:\d\d and is still being made", again)
+    assert re.match(r"The fm-weekly report asked for here started at \d\d/\d\d/\d{4} \d\d:\d\d and is still being made", again)
     assert after.startswith("Started fm-weekly now")                     # it ended: a new ask starts it again
     assert sum(r["who"] == "job:fm-weekly" for r in ai.runs) == 2        # never twice at once

@@ -57,8 +57,9 @@ def test_each_kind_cut_by_a_stop_gets_its_kinds_decision_at_the_next_start(tmp_p
     assert answer.cut_text(TZ) == ("Your question at 16/10/2026 14:30 (“How is the pool?”) was interrupted by a restart "
                                 "of the agent: send it again to have its answer.")
     assert (job.kind, job.chat, job.mid, job.then) == (CHAT_JOB, 111, 4242, TELL)
-    assert job.cut_text(TZ) == ("The fm-weekly job asked for at 16/10/2026 14:30 was stopped by a restart of the "
-                                "agent: ask again to have it.")
+    # the one sentence for a report that did not come (api_errors.NOT_COME), its cut variant
+    assert job.cut_text(TZ) == ("The fm-weekly report you asked for at 16/10/2026 14:30 could not be prepared: the agent "
+                                "was restarted meanwhile. Ask again to have it.")
     w = _again(tmp_path)
     assert w.left(SCHEDULED, CHAT_JOB, ANSWER) == []                         # read once
 
@@ -180,3 +181,45 @@ def test_a_scheduled_job_holds_only_the_chats_where_it_is_not_already_running(tm
     asyncio.run(go())
     assert w.state.chat_work_kept() == [(111, "fm-daily", json.dumps({"started": w.get(111, "fm-daily").started,
                                                                       "mid": 9}))]
+
+
+@pytest.mark.parametrize("how,outcome,why", [("ends", "ended", None), ("fails", "failed", "RuntimeError: the script failed"),
+                                             ("verdict", "failed", "the AI sent nothing"), ("cut", "cut", None)])
+def test_how_a_scheduled_run_ended_is_written_by_the_one_bookkeeping(tmp_path, how, outcome, why):
+    # architecture review scan 4 (2026-10-19): the Overview read the scheduler's claim, written BEFORE the run, and said
+    # "run at 08:00" of a run that failed or was cut. kept() — the one cut/finally — writes how it ended; a body that
+    # knows better than "it raised" (an AI job whose model could not run) says so with verdict()
+    from vesta_agent.in_progress import FAILED, run_ends
+    w = _work(tmp_path)
+
+    async def go():
+        item = Item(SCHEDULED, "reports:0:07:00", slot=SLOT)
+        if how == "cut":
+            await _cut(w, item)
+            return
+        async with w.kept(item):
+            if how == "fails":
+                raise RuntimeError("the script failed")
+            if how == "verdict":
+                assert w.verdict(FAILED, "the AI sent nothing")
+    if how == "fails":
+        with pytest.raises(RuntimeError):
+            asyncio.run(go())
+    else:
+        asyncio.run(go())
+    ends = run_ends(w.state)
+    assert list(ends) == ["reports:0:07:00"]
+    end = ends["reports:0:07:00"]
+    assert (end["outcome"], end["why"], end["slot"]) == (outcome, why, SLOT) and datetime.fromisoformat(end["at"])
+    assert not w.verdict(FAILED, "nothing runs here")                       # outside a scheduled run: refused
+
+
+def test_a_chats_job_leaves_no_end_row(tmp_path):
+    from vesta_agent.in_progress import run_ends
+    w = _work(tmp_path)
+
+    async def go():
+        async with w.kept(Item(CHAT_JOB, "fm-weekly", chat=111, mid=9)):
+            pass
+    asyncio.run(go())
+    assert run_ends(w.state) == {}

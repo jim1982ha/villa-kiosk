@@ -202,3 +202,34 @@ def test_two_jobs_of_a_skill_at_the_same_time_both_run_and_housekeeping_never_ho
         await sch.idle()
     asyncio.run(go())
     assert ran == ["a.py", "a.py"]
+
+
+def test_a_run_cut_by_a_stop_shows_cut_on_the_overview(tmp_path):
+    # architecture review scan 4 (2026-10-19): "Scheduled jobs run" said "run at 07:00" of a run a stop had cut
+    from helpers import make_skill
+    from vesta_agent import status
+    s = settings(str(tmp_path))
+    make_skill(s.skills_dir, "rep", {"description": "t", "schedule": [{"when": "07:00", "name": "rep-daily", "prompt": "x", "to": "fm"}]})
+    st = State(s.state_path)
+    hold = asyncio.Event()
+
+    async def run_model(skill, job):
+        await hold.wait()
+
+    async def nothing(*a):
+        pass
+
+    sch = Scheduler(s, Skills(s.skills_dir), st, nothing, run_model, nothing)
+
+    def rows():
+        return [(r["job"], r["outcome"], r["words"]) for r in status.report(st, s.store_path, 24, now=at(7, 2))["scheduled_jobs"]]
+
+    async def go():
+        await sch.tick(at(7, 1))
+        await asyncio.sleep(0)
+        assert rows() == [("rep:0:07:00", "running", "running")]              # claimed, still running
+        for t in sch._running.values():
+            t.cancel()
+        await asyncio.gather(*sch._running.values(), return_exceptions=True)
+    asyncio.run(go())
+    assert rows() == [("rep:0:07:00", "cut", "stopped by a restart")]

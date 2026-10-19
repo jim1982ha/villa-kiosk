@@ -1,5 +1,5 @@
 // VESTA Agent page — the Skills tab.
-import { api, ask, dropdown, field, fill, go, guard, h, infoButton, markDirty, page, paged, place, plural, popup, problemsBox, reasons, saveWith, setBar, showBar, subTabs, tabbed, tell, tileCard, titleWithInfo, toast, toggleCard, $view, where, withInfo } from "./core.js";
+import { api, ask, dropdown, field, fill, go, guard, h, infoButton, markDirty, page, paged, place, plural, popup, problemsBox, reasons, saveWith, setBar, showBar, subTabs, tabbed, tell, tileCard, titleWithInfo, toast, toggleCard, $view, where } from "./core.js";
 import { openTools } from "./rules.js";
 import { fileEditor } from "./viewer.js";
 
@@ -36,7 +36,8 @@ export async function skills(select = null) {
     list.length ? list.map((s) => h("div", { class: "skill-item" + (s.name === select ? " on" : "") + (s.off ? " is-off" : ""), "data-skill": s.name },
       h("button", { type: "button", class: "skill-open", onclick: () => show(s.name) },
         h("div", { class: "skill-name" }, h("b", {}, s.name), ...skillChips(s)),
-        h("div", { class: "d" }, s.off ? "Off · kept, not used" : s.ok ? s.description : s.line)),
+        // the agent's verdict on its tools under the description, when it has one (tool_access.health `line`)
+        h("div", { class: "d" }, s.off ? "Off · kept, not used" : s.ok ? [s.description, s.line ? h("div", { class: "muted small" }, s.line) : null] : s.line)),
       skillSwitch(s.name, !s.off, select))) : h("p", { class: "muted" }, "No skill yet. The starter skills are copied at the agent's first start."),
     h("div", { class: "actions" }, h("button", { class: "btn ghost", onclick: newSkill }, "New skill")));
   const pane = h("div");
@@ -53,9 +54,6 @@ export async function skills(select = null) {
     openSkill(name, pane, list.find((s) => s.name === name));
   }
 }
-
-// where the tools a skill needs are switched (Tools it needs: its (i))
-const WHERE_TOOLS = `Switched on or off in ${where("tools")}. A tool switched off there makes this skill "not working": its AI jobs do not run.`;
 
 export async function setCommand(skill, script, command, on, box) {
   try { await api("PUT", `api/skills/${encodeURIComponent(skill)}/commands`, { script, command, on }); toast(`${command || script} switched ${on ? "on" : "off"} for the AI.`); }
@@ -360,17 +358,14 @@ export function aboutSkill(name, d) {
   const acts = () => paged(["When", "What runs"], d.acts.map((a) => [a.when,
     [a.job ? h("b", {}, a.job) : a.script ? h("code", {}, a.script) : h("span", { class: "muted" }, a.note || ""),
      a.kind ? h("span", { class: "chip gray tiny" }, KIND[a.kind]) : null]]));
-  // Skill tools: a one-line verdict and its (i), then every tool as a card — core.tileCard, the commands'
-  // own card without their switch (a tool is switched on or off in Rules, for every skill at once)
+  // Skill tools: the agent's one verdict (tool_access.health: its `line`, drawn as it is — the same line the skills
+  // list shows), then every tool as a card — core.tileCard, the commands' own card without their switch (a tool is
+  // switched on or off in Rules, for every skill at once: the tab's (i), `where_tools`, says so in the agent's words)
   const tools = () => {
-    if (d.needs === null || d.needs === undefined) return h("p", { class: "muted" }, "Its skill.yaml lists none: its reports get every tool switched on.");
-    if (!d.needs.length) return h("p", { class: "muted" }, "None: the AI needs no tool of its own for this skill.");
-    const off = d.needs.filter((n) => !n.on);
-    const verdict = off.length ? h("b", { class: "warn-text" }, `${off.length} of ${d.needs.length} not available`) : `${plural(d.needs.length, "tool", "tools")}, all switched on`;
-    const state = { off: "off", missing: "not in the villa's system", never: "never available" };
-    return [h("p", {}, withInfo(verdict, WHERE_TOOLS)),
-      h("div", { class: "tool-grid three" }, d.needs.map((n) => tileCard(n.label, {
-        on: n.on, chip: n.on ? null : h("span", { class: "chip off tiny" }, state[n.state] || "off"),
+    if (!d.tools || !d.tools.length) return h("p", { class: "muted" }, d.line || "");
+    return [d.line ? h("p", {}, h("b", { class: "warn-text" }, d.line)) : null,
+      h("div", { class: "tool-grid three" }, d.tools.map((n) => tileCard(n.label, {
+        on: n.on, chip: n.on ? null : h("span", { class: "chip off tiny" }, n.words),
         words: h("div", { class: "muted" }, h("code", {}, n.tool)) })))];
   };
   // Skill commands: a card per command (core.toggleCard), three a line, each with its Offline Test
@@ -390,7 +385,7 @@ export function aboutSkill(name, d) {
   // a skill without scripts has no Commands tab
   const hasRuns = !!(d.scripts && d.scripts.length);
   // what the switches do, behind the Commands tab's (i), as every other explanation on the page
-  const tabs = tabbed("about", [hasRuns && ["commands", ABOUT_TEXT.commands, ABOUT_TEXT.switches, runs], ["tools", ABOUT_TEXT.tools, null, tools]]);
+  const tabs = tabbed("about", [hasRuns && ["commands", ABOUT_TEXT.commands, ABOUT_TEXT.switches, runs], ["tools", ABOUT_TEXT.tools, d.where_tools || null, tools]]);
   return h("div", { class: "about" },
     h("section", { class: "about-sec" }, h("h3", {}, place("skill_when", { skill: name })), acts()),   // the open skill named
     h("section", { class: "about-sec" }, tabs.bar, tabs.body));

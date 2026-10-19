@@ -77,3 +77,17 @@ def test_the_sample_reads_as_the_agreement_says():
     assert (held["taken_by"], held["taken_at"]) == (step["who"], step["at"])             # the take-on the chase stops on
     assert held["agent_title"] == T["sample"]["title"]                                   # its own title, by the stamp
     assert [n for _at, n in held["noted"]] == ["Reminder sent to Facility Manager"]
+
+
+def test_the_agent_reads_the_agreement_never_a_copy():
+    # one assertion per table the engine reads from the file (architecture review round 3, 2026-10-19: the kinds,
+    # the stamp, the take-on step, the origins and the checks were typed in the engine and pinned here after the fact)
+    from vesta_shared.problems import agreed
+    assert list(kiosk.KINDS) == U["kinds"]                                             # ticketUpdate.kinds
+    assert kiosk.AGENT_BY == T["agentStamp"]                                           # ticket.agentStamp
+    step = {"status": T["takenStep"]["status"], "who": "Wayan", "by": "Facility manager"}
+    assert kiosk.taken_step(step) and not kiosk.taken_step({**step, "by": T["agentStamp"]})   # ticket.takenStep
+    assert not kiosk.taken_step({**step, "kind": U["kinds"][0]}) and not kiosk.taken_step({**step, "status": "open"})
+    assert not kiosk.taken_step({k: v for k, v in step.items() if k != "by"})          # unstamped: the agent's own
+    assert [agreed("origins", w) for w in T["origins"]] == T["origins"] and agreed("origins", "elsewhere") is None
+    assert [agreed("checks", w) for w in T["checks"]] == T["checks"] and agreed("checks", "hourly") is None

@@ -36,6 +36,7 @@ from vesta_shared.timeutil import day_label, day_time_label, villa_day  # noqa: 
 from vesta_shared.past import unread  # noqa: E402  (the one "could not be read whole: nothing is known after")
 from vesta_shared.message_format import document, split_title  # noqa: E402  (the one shape of a message)
 from vesta_shared.device_state import has_value, is_offline  # noqa: E402
+from vesta_shared.offline import devices_offline  # noqa: E402  (the one reading of "offline now")
 from vesta_shared.problems import Problems, again_title  # noqa: E402  (a problem's lifecycle: one owner)
 from vesta_shared import result  # noqa: E402  (what the engine is asked to do: its shape; R is rules.py)
 from vesta_shared import daily  # noqa: E402  (a device's day: the one running threshold)
@@ -303,50 +304,35 @@ def alerted_offline(store, pack) -> dict[str, int]:
 
 
 def offline_findings(pack, states: dict, now: datetime, params, alerted: set[str] = frozenset()) -> list:
-    """The devices offline now, as PM-UNAVAILABLE findings — the ONE reading of it, for the night check and for
-    recheck.py every 5 minutes. One finding per physical device (device_id when the registry gives it, otherwise the
-    integration + asset), never one per entity; `integration_down_devices` or more of one integration: one finding.
+    """The devices offline now, as PM-UNAVAILABLE findings — for the night check and for recheck.py every 5 minutes,
+    from the ONE reading of "offline now" (vesta_shared.offline.devices_offline, the reports' and the concierge's too)
+    over this skill's WATCHED_FAMILIES, with its settings: `unavailable_minutes`, `integration_down_devices`. One
+    finding per physical device, never one per entity; an integration down: one finding, worded here.
 
     ⚠️ FOUND AT ONCE, NOT AT 02:00 (owner, 2026-10-18 — architecture review, offline devices #1): Timmerflotte_5969
     dropped at 21:46 and stood "Unavailable" in the Cockpit for 4 h 14 min before the night check opened its fault —
     the recheck read every 5 minutes whether a device was BACK, never whether one had gone."""
-    groups: dict[str, dict] = {}
-    for fam in WATCHED_FAMILIES:
-        for row in pack.entities(fam):
-            st = states.get(row["entity_id"])
-            # ⚠️ "unknown" IS NOT OFFLINE (villa, 2026-10-04): it is a sensor with no value to give — a
-            # wind chill on a warm day — while its device reports. Lost is "unavailable".
-            if not st or not is_offline(st.get("state")):
-                continue
-            asset = pack.assets.get(row["asset"], {"slug": row["asset"], "name": row["name"], "critical": False})
-            hours = None
-            if st.get("last_changed"):
-                try:
-                    hours = (now - datetime.fromisoformat(st["last_changed"]).astimezone(now.tzinfo)).total_seconds() / 3600
-                except ValueError:
-                    hours = None
-            # one physical device, whatever part of it the entity is on (a meter's phase is the meter)
-            key = pack.device_key(row["entity_id"], row)
-            crit = pack.is_critical(row["entity_id"])         # the villa's one list (vesta_shared.critical)
-            g = groups.setdefault(key, {"asset": asset, "entity_id": row["entity_id"], "hours": hours,
-                                        "state": st.get("state"), "names": [], "critical": crit,
-                                        "platform": row.get("platform") or "x"})
-            g["names"].append(row["name"]); g["critical"] = g["critical"] or crit
-            if hours is not None and (g["hours"] is None or hours > g["hours"]):
-                g["hours"] = hours
-    # a device an open alert already follows is that alert's (alerted_offline); its group is left out before the
-    # integration is counted, so the others of its integration stay what they are
-    groups = {k: g for k, g in groups.items()
-              if (pack.physical_device_of(g["entity_id"]) or g["entity_id"]) not in alerted}
     out = []
-    for g in F.integration_down(groups, params.behaviour("integration_down_devices")).values():
-        a = dict(g["asset"]); a["critical"] = g["critical"]
-        if not a["slug"].startswith("integration_"):
-            if len(g["names"]) > 1:
-                a["name"] = F.device_name(g["names"])
-            a = _device_named(pack, a, g["entity_id"])
-        out += R.availability_rules(a, g["entity_id"], g["state"], g["hours"], params, g.get("entity_ids"), now=now)
+    for g in devices_offline(pack, states, now, WATCHED_FAMILIES, min_minutes=params.behaviour("unavailable_minutes"),
+                             alerted=frozenset(alerted), integration_min=params.behaviour("integration_down_devices")):
+        if g.integration:
+            a = {"slug": f"integration_{g.integration}", "name": integration_name(g.integration, len(g.entity_ids)),
+                 "critical": g.critical}
+        else:
+            a = dict(pack.assets.get(g.asset) or {"slug": g.asset, "name": g.asset_name, "critical": False})
+            a["critical"] = g.critical
+            if len(g.names) > 1:
+                a["name"] = F.device_name(g.names)
+            if g.label:                      # named as the villa's system names the device, never one of its entities
+                a["name"] = g.label
+        out += R.availability_rules(a, g.entity_id, g.state, g.hours, params, g.entity_ids if g.integration else None,
+                                    now=now)
     return out
+
+
+def integration_name(platform: str, devices: int) -> str:
+    """An integration down, as its finding names it: "zigbee integration (3 devices)"."""
+    return f"{platform} integration ({devices} devices)"
 
 
 def told_now(res: dict, title: str | None = None) -> list[dict]:

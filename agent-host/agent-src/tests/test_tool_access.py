@@ -335,18 +335,35 @@ def test_a_tool_call_kept_for_the_costs_tab_loses_a_token_by_its_shape():
     assert jwt not in st["input"] and "hunter2xyz" not in st["input"] and st["tool"] == "ha_eval_template"
 
 
-def test_whether_a_skill_works_is_one_answer(monkeypatch):
-    # architecture review 6: the page's list and a skill's page each wrote their own "ok / why"
-    monkeypatch.setattr(tool_access, "unavailable", lambda p, t, sk: [{"tool": "ha_get_history", "why": "History is off."}])
-    assert tool_access.health(None, [], None, "skill.yaml: bad") == {"ok": False, "problem": "skill.yaml: bad", "line": "skill.yaml: bad", "without": []}
+def test_whether_a_skill_works_is_one_answer():
+    # architecture review 6: the page's list and a skill's page each wrote their own "ok / why"; architecture review
+    # scan 4 (2026-10-19): the skill page still counted "N of M not available" itself — health() is THE verdict object
+    from types import SimpleNamespace
+    from vesta_agent.places import where
+    said = tool_access.where_tools()
+    assert tool_access.health(None, [], None, "skill.yaml: bad") == {"ok": False, "problem": "skill.yaml: bad", "line": "skill.yaml: bad",
+                                                                     "without": [], "tools": None, "where_tools": said}
     assert tool_access.health(None, [], None)["problem"] == "switched off"
-    h = tool_access.health(None, [], object())
+    server = [{"name": "ha_get_state", "annotations": {"readOnlyHint": True, "title": "Get state"}},
+              {"name": "ha_get_history", "annotations": {"readOnlyHint": True, "title": "Get history"}}]
+    sk = SimpleNamespace(tools=["ha_get_state", "ha_get_history"])
+    h = tool_access.health(Policy({"ha_read_tools": ["ha_get_state"]}), server, sk)
     # a loaded skill works: what it goes without is said, never "not working" (owner, 2026-10-10)
-    assert h["ok"] and h["problem"] is None and h["without"][0]["tool"] == "ha_get_history"
+    assert h["ok"] and h["problem"] is None and [w["tool"] for w in h["without"]] == ["ha_get_history"]
     # the list's one line (architecture review 8: the page parsed "It needs…" out of the sentence)
     assert h["line"] == "Works without a tool switched off."
-    monkeypatch.setattr(tool_access, "unavailable", lambda p, t, sk: [])
-    assert tool_access.health(None, [], object()) == {"ok": True, "problem": None, "line": None, "without": []}
+    # every tool as a row the page draws, its state in the agent's words
+    assert [(t["tool"], t["label"], t["state"], t["on"], t["words"]) for t in h["tools"]] == [
+        ("ha_get_state", "Get state", "on", True, "on"), ("ha_get_history", "Get history", "off", False, "off")]
+    # where tools are switched, and what a switched-off one means: the skill runs (owner, 2026-10-10), said by the agent
+    assert said.startswith(f"Switched on or off in {where('tools')}") and "the skill runs" in said and "not working" not in said
+    assert h["where_tools"] == said
+    assert tool_access.health(Policy({"ha_read_tools": ["ha_get_state"]}), server, SimpleNamespace(tools=["ha_get_state", "ha_get_history"]))["line"] \
+        == h["line"]
+    all_on = tool_access.health(Policy({"ha_read_tools": ["ha_get_state", "ha_get_history"]}), server, sk)
+    assert all_on["line"] is None and all_on["without"] == [] and all(t["on"] for t in all_on["tools"])    # nothing to say
+    assert tool_access.health(Policy({}), server, SimpleNamespace(tools=None))["line"] == "Its skill.yaml lists no tool: its reports get every tool switched on."
+    assert tool_access.health(Policy({}), server, SimpleNamespace(tools=[]))["line"] == "None: the AI needs no tool of its own for this skill."
 
 
 # ---------------------------------------------------------------- architecture review 14: one turn
@@ -436,7 +453,9 @@ def test_the_ai_is_sent_to_start_job_only_when_it_has_it(agent):
     assert "call start_job" in refusal(fm, FM)["content"][0]["text"]
     policy_edit(agent, tool_access={"fm": {"start_job": False}})
     said = refusal(fm, FM)
-    assert said.get("is_error") and "start_job" not in said["content"][0]["text"] and "switched off" in said["content"][0]["text"]
+    # the one refusal, said to the AI about the person (tool_access.start_job_off: app.py says it to the presser)
+    assert said.get("is_error") and "start_job" not in said["content"][0]["text"]
+    assert tool_access.start_job_off("this person") in said["content"][0]["text"]
 
 
 def test_a_switched_off_copy_never_knocks_out_the_live_skill(agent):

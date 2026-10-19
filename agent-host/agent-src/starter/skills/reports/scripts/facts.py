@@ -42,11 +42,11 @@ from vesta_shared import daily  # noqa: E402  (a device's day: the one "running"
 from vesta_shared.daily import energy_daily_features  # noqa: E402  (a meter's day: one reading for every skill)
 from vesta_shared.energy_setup import used as energy_used  # noqa: E402  (the villa's total: the Kiosk's rule)
 from vesta_shared import result  # noqa: E402  (the night check's rule ids, written once)
-from vesta_shared.timeutil import day_label, day_time_label, local_day, villa_date, villa_time  # noqa: E402  (the one day format)
+from vesta_shared.timeutil import day_label, day_time_label, local_day, month_label, villa_date, villa_time  # noqa: E402  (the one day format)
 from vesta_shared import agent_records  # noqa: E402  (the agent's records: one reader)
 from vesta_shared.problems import Problems  # noqa: E402  (what is still open: one owner)
 
-from vesta_shared.device_state import is_offline  # noqa: E402  (the night check's own reading)
+from vesta_shared.offline import devices_offline  # noqa: E402  (the one reading of "offline now")
 from vesta_shared.past import automation_run, unread  # noqa: E402  (one reading of "a rule ran"; the one "could not be read whole")
 from vesta_shared.store import Notes, notes_of  # noqa: E402  (an alert's notes: one reader)
 from playbook import (  # noqa: E402  (the clues and the one list of what needs doing)
@@ -311,34 +311,17 @@ class Ctx:
                 for p in Problems(self.store).open_problems()]
 
     def offline(self) -> list[dict]:
-        """The DEVICES offline: one row per Home Assistant device, by its name, since its first sensor went.
+        """The DEVICES offline: one row per Home Assistant device, by its name, since its first sensor went — the one
+        reading of it (vesta_shared.offline.devices_offline: the night check's and the concierge's), over this skill's
+        `offline_families`, with no minimum (the page lists every one).
 
         ⚠️ DEVICES, NOT THEIR SENSORS (owner, 2026-10-09: "make sure this table only reports devices, and not entities
         related to a device"). It listed sensors: a phone's Wi-Fi traffic as two rows "RX" and "TX", one pump plug as
         "Jacuzzi Pump Power" beside its relay. A sensor with no device keeps its own row; a device Home Assistant
         knows nothing about (no name, maker or model: a phone seen on the Wi-Fi) is not one of the villa's."""
-        out: list[dict] = []
-        by_key: dict = {}
-        for fam in self.cfg.get("offline_families") or []:
-            for r in self.pack.families.get(fam, []):
-                st = self.states().get(r["entity_id"]) or {}
-                if not is_offline(st.get("state")):
-                    continue
-                key, name = self.pack.device_of(r["entity_id"])
-                if name is None:
-                    continue
-                since = _local(st.get("last_changed"), self.Z)
-                cur = by_key.get(key)
-                if cur is None:
-                    by_key[key] = cur = {"name": name, "since": since,
-                                         "critical": self.pack.is_critical(r["entity_id"]), "family": fam,
-                                         "entity_id": r["entity_id"]}
-                    out.append(cur)
-                else:
-                    cur["critical"] = cur["critical"] or self.pack.is_critical(r["entity_id"])
-                    if since and (not cur["since"] or since < cur["since"]):
-                        cur["since"] = since
-        return out
+        return [{"name": g.name, "since": _local(g.since.isoformat(), self.Z) if g.since else "", "critical": g.critical,
+                 "family": g.family, "entity_id": g.entity_id}
+                for g in devices_offline(self.pack, self.states(), self.now, self.cfg.get("offline_families") or [])]
 
 
 def _local(iso, zone) -> str:
@@ -350,7 +333,7 @@ def _local(iso, zone) -> str:
 # ---------------------------------------------------------------- the sections
 def s_header(c: Ctx) -> dict:
     title = (f"{c.pack.villa}, week {c.start.isocalendar()[1]}" if c.kind == "fm-weekly"
-             else f"{c.pack.villa}, {c.start.strftime('%B %Y')}")
+             else f"{c.pack.villa}, {month_label(c.start)}")
     return {"villa": c.pack.villa, "title": title,
             "dates": f"{day_label(c.start, long=True)} to {day_label(c.end, long=True, year=True)}",
             "generated": day_time_label(c.now.astimezone(c.Z), weekday=True, year=True) + f" {c.Z.key}"}
@@ -536,7 +519,7 @@ def s_energy_days(c: Ctx) -> dict:
     rows = []
     for k in range(c.days):
         d = c.start + timedelta(days=k)
-        rows.append({"day": d.strftime("%a"), "date": d.isoformat(), "kwh": per.get(d), "prev_kwh": per.get(d - timedelta(days=c.days))})
+        rows.append({"day": day_label(d, short=True), "date": d.isoformat(), "kwh": per.get(d), "prev_kwh": per.get(d - timedelta(days=c.days))})
     return {"rows": rows}
 
 
