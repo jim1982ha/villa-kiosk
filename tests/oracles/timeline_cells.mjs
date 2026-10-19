@@ -36,7 +36,38 @@ ck("no history, no cells", timelineCells([], now, 24, B).length === 0);
 ck("a window that ended at a sighting is drawn up to it, not to now",
    timelineCells([{ t: at(30), state: "on" }], at(20), 1, B).every((c) => c.to <= at(20)));
 const st = readFileSync(new URL("../../src/components/panels/StateTimeline.tsx", import.meta.url), "utf8");
-ck("StateTimeline draws exactly these", /timelineCells\(data, end \?\? \(timeKey \+ 1\) \* bucketMs, hours, bucketMs,/.test(st) && /timelineRuns\(cells, colorFor\)/.test(st));
+ck("StateTimeline draws exactly these", /timelineCells\(data, end \?\? timeKey, hours, bucketMs,/.test(st) && /const timeKey = bandEnd\(Date\.now\(\), bucketMs\)/.test(st) && /timelineRuns\(cells, colorFor\)/.test(st));
+
+// ── a day's and a week's slice (owner, 2026-10-20: the tooltip follows the chart's step) ──
+{
+  const { firstCellStart, DAY_MS, bandEnd } = await import("@/utils/timelineCells");
+  const { cellSummary, fmtCellSpan } = await import("@/components/panels/chartUtils");
+  const t = new Date(2026, 9, 15, 14, 30).getTime();             // a Thursday afternoon, the machine's own time zone
+  ck("a week's band ends within five minutes of now, never days ahead", bandEnd(t, 7 * DAY_MS) - t <= B && bandEnd(t, 7 * DAY_MS) > t);
+  ck("  ...a five-minute band at the next five minutes, as before", bandEnd(t + 1, B) === (Math.floor((t + 1) / B) + 1) * B);
+  const d0 = new Date(firstCellStart(t, DAY_MS));
+  ck("a day's slice starts at LOCAL midnight", d0.getHours() === 0 && d0.getMinutes() === 0 && d0.getDate() === 15, d0);
+  const w0 = new Date(firstCellStart(t, 7 * DAY_MS));
+  ck("a week's slice starts on a Monday, at local midnight", w0.getDay() === 1 && w0.getHours() === 0 && w0.getDate() === 12, w0);
+  ck("five minutes keep the clock's own edges", firstCellStart(t, B) === Math.floor(t / B) * B);
+  const day = new Date(2026, 9, 14).getTime(), end = day + DAY_MS;
+  const cells = timelineCells([{ t: day - 3_600_000, state: "off" }, { t: day + 3_600_000, state: "unavailable" },
+    { t: day + 3_600_000 + 600_000, state: "off" }, { t: day + 7_200_000, state: "unavailable" },
+    { t: day + 7_200_000 + 300_000, state: "off" }], end, 24, DAY_MS);
+  const c = cells.find((x) => x.from === day);
+  ck("a day's slice adds up the time of each state", c && c.spent.unavailable === 900_000 && c.spent.off === DAY_MS - 900_000, c && c.spent);
+  ck("  ...and how many times each began in it", c && c.entered.unavailable === 2 && c.entered.off === 2, c && c.entered);
+  const rows = cellSummary(c.spent, c.entered, (s) => s);
+  ck("its tooltip: one line a state, the longest first, with its count", rows.length === 2 && rows[0].text === "off · 23 h 45 min · 2 times"
+     && rows[1].text === "unavailable · 15 min · 2 times", rows.map((r) => r.text));
+  ck("a five-minute slice still says its times", fmtCellSpan(t, t + B, B, 1).includes("–"));
+  const wk = fmtCellSpan(w0.getTime(), w0.getTime() + 7 * DAY_MS, 7 * DAY_MS, 8760);
+  ck("a week's slice says its first and last day, never a clock time", wk.includes(" – ") && !/\d\d:\d\d/.test(wk), wk);
+  ck("a day's slice says its day, never a clock time", !/\d\d:\d\d/.test(fmtCellSpan(day, end, DAY_MS, 720)));
+  const stt = readFileSync(new URL("../../src/components/panels/StateTimeline.tsx", import.meta.url), "utf8");
+  ck("StateTimeline's tooltip says a day's or a week's slice as time per state",
+     /bucketMs >= DAY_MS\s*\? cellSummary\(hover\.cell\.spent, hover\.cell\.entered, wordsFor\)/.test(stt));
+}
 
 done("✅ the timeline's cells, by value");
 

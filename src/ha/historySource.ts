@@ -56,7 +56,7 @@ export interface HistoryPort {
 /** A history a chart asks for. `hours` is a window ending now; `since` (epoch
  *  ms) a window from a fixed start — a calendar period — to now. */
 export type HistoryRequest =
-  /** Numeric, in the range's step (historyRange `period`: five minutes up to a week, a day, a week): the recorder's
+  /** Numeric, in the range's step (historyRange `period`: five minutes up to a day, an hour for a week, a day, a week): the recorder's
    *  long-term figures for a day or a week, else what is kept of every change, in that step. */
   | { kind: "trend"; ids: readonly string[]; hours: number; period?: StatisticsPeriod }
   /** Numeric, every change as reported (the pressure tendency). */

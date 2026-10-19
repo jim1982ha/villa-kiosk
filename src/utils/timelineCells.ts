@@ -7,6 +7,7 @@
 // inside StateTimeline's render (round 12, 2.496.193).
 
 import type { StateHistoryPoint } from "@/types/ha.types";
+import { localMidnight } from "@/utils/localDay";
 
 /** One drawn cell — a time bucket. */
 export interface Cell {
@@ -23,6 +24,28 @@ export interface Cell {
   baseline?: string;
   /** Every transition inside this cell — the tooltip lists all of them. */
   events: StateHistoryPoint[];
+  /** How long each state was in force in this cell, and how many times it began in it — what a day's or a week's
+   *  tooltip says instead of listing every change (owner, 2026-10-20: the tooltip follows the chart's step). */
+  spent: Record<string, number>;
+  entered: Record<string, number>;
+}
+
+export const DAY_MS = 24 * 3600 * 1000;
+
+/** Where a band drawn "until now" ends: the next edge of its step — but never more than five minutes ahead. A day's or a
+ *  week's next edge counted from 1970 is days away, and the last state was drawn into the future (2026-10-20). */
+export function bandEnd(now: number, bucketMs: number): number {
+  const tick = Math.min(bucketMs, 5 * 60_000);
+  return (Math.floor(now / tick) + 1) * tick;
+}
+
+/** Where the first cell begins: on the clock's own edges (:00, :05 …) for a step under a day; a day's or a week's on
+ *  the villa's LOCAL midnight (a week's on a Monday), as the recorder's daily and weekly figures — never on UTC's
+ *  midnight, which read "15 Oct, 08:00" at the villa. */
+export function firstCellStart(start: number, bucketMs: number): number {
+  if (bucketMs < DAY_MS) return Math.floor(start / bucketMs) * bucketMs;
+  const midnight = localMidnight(start);
+  return bucketMs >= 7 * DAY_MS ? localMidnight(midnight, -((new Date(midnight).getDay() + 6) % 7)) : midnight;
 }
 
 /**
@@ -38,7 +61,7 @@ export function timelineCells(
   if (data.length === 0) return [];
   const start = now - hours * 3600 * 1000;
   const span = now - start;
-  const first = Math.floor(start / bucketMs) * bucketMs;
+  const first = firstCellStart(start, bucketMs);
   const count = Math.ceil((now - first) / bucketMs);
   const idxOf = (t: number) => Math.floor((t - first) / bucketMs);
   const out: Cell[] = [];
@@ -47,7 +70,7 @@ export function timelineCells(
     out.push({
       left: ((from - start) / span) * 100,
       width: (bucketMs / span) * 100,
-      from, to: from + bucketMs, states: [], events: [],
+      from, to: from + bucketMs, states: [], events: [], spent: {}, entered: {},
     });
   }
   for (let i = 0; i < data.length; i++) {
@@ -60,11 +83,16 @@ export function timelineCells(
     const b = Math.min(count - 1, idxOf(Math.min(segEnd, now) - 1));
     for (let k = a; k <= b; k++) {
       if (!out[k].states.includes(data[i].state)) out[k].states.push(data[i].state);
+      const ms = Math.min(segEnd, now, out[k].to) - Math.max(segStart, start, out[k].from);
+      if (ms > 0) out[k].spent[data[i].state] = (out[k].spent[data[i].state] ?? 0) + ms;
     }
     // The transition itself is an EVENT, filed under the bucket it fell in
     // so the tooltip can list exactly what happened and when.
     const e = idxOf(segStart);
-    if (e >= 0 && e < count) out[e].events.push(data[i]);
+    if (e >= 0 && e < count && segStart >= start) {
+      out[e].events.push(data[i]);
+      out[e].entered[data[i].state] = (out[e].entered[data[i].state] ?? 0) + 1;
+    }
   }
   // Drop the resting state from both the paint and the event list, then
   // discard any bucket that had nothing else in it.

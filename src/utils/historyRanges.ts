@@ -12,7 +12,7 @@ export interface HistoryRange {
   hours: number;
   /** Heading for the section ("Last 7 days"). */
   title: string;
-  /** THE time step its charts are drawn in (owner, 2026-10-20): five minutes up to a week, a day for a month, a
+  /** THE time step its charts are drawn in (owner, 2026-10-20): five minutes up to a day, an hour for a week, a day for a month, a
    *  week for a year — a state band's slices and a numeric line's values alike (historySource reads by it). */
   grainMs: number;
   /** The recorder-statistics bucket for a MEASUREMENT over this range — its grain, as the recorder names it — and
@@ -31,11 +31,13 @@ export type RangeKey = "1h" | "24h" | "1w" | "1m" | "1y";
 
 const MIN = 60_000, DAY = 24 * 60 * MIN;
 export const RANGES: readonly HistoryRange[] = [
+  // the title says the period the toggle names (owner, 2026-10-20: "1w" read "Last 7 days"); 1w is hourly (owner,
+  // 2026-10-20: five-minute values over a week were 2,016 points a line)
   { key: "1h", label: "1h", hours: 1, title: "Last hour", grainMs: 5 * MIN, period: "5minute", totalPeriod: "hour" },
   { key: "24h", label: "24h", hours: 24, title: "Last 24 hours", grainMs: 5 * MIN, period: "5minute", totalPeriod: "hour" },
-  { key: "1w", label: "1w", hours: 168, title: "Last 7 days", grainMs: 5 * MIN, period: "5minute", totalPeriod: "day" },
-  { key: "1m", label: "1m", hours: 720, title: "Last 30 days", grainMs: DAY, period: "day", totalPeriod: "day" },
-  { key: "1y", label: "1y", hours: 8760, title: "Last 12 months", grainMs: 7 * DAY, period: "week", totalPeriod: "week" },
+  { key: "1w", label: "1w", hours: 168, title: "Last week", grainMs: 60 * MIN, period: "hour", totalPeriod: "day" },
+  { key: "1m", label: "1m", hours: 720, title: "Last month", grainMs: DAY, period: "day", totalPeriod: "day" },
+  { key: "1y", label: "1y", hours: 8760, title: "Last year", grainMs: 7 * DAY, period: "week", totalPeriod: "week" },
 ];
 
 /** Every key, in the toggle's order — the one list every history toggle shows. */
