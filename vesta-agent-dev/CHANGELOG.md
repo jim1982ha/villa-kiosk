@@ -1,3 +1,49 @@
+## 0.12.266
+
+What you will see:
+- A skill's page and the skills list say the same thing about its tools. Under a skill's description the list shows
+  "Works without a tool switched off." only when there is something to say; the skill's "Skill tools" heading says
+  that same line, each tool card says "on", "off", "not in the villa's system" or "never available", and the (i)
+  explains that a tool switched off in Rules › AI tools is simply gone without — the skill still runs. The page no
+  longer counts "2 of 13 not available" on its own, and the setup preview says "the villa's system" where it named
+  the platform.
+- A report whose AI finished without sending it is no longer a silent "done": you get one message — "The fm-weekly
+  report could not be prepared: the AI wrote its answer but did not send it. Ask for it again in a moment." — in the
+  chat that asked (it replaces the "on its way" message) or in the report's own chat on schedule; the Overview counts
+  it as a failure and the Costs tab shows a "not sent" row beside the run.
+- The Overview's "Scheduled jobs run" has an Outcome column: "done", "not prepared (the Anthropic account has run out
+  of credit)", "stopped by a restart", "running" — it said "run at 07:00" of a run that failed or was cut.
+- One sentence when a report you asked for does not come: "The fm-weekly report you asked for could not be prepared:
+  …. Ask again in a moment." A report asked for in a chat no longer promises "It will run again at its next time"
+  (only a scheduled one does); a report cut by a restart or whose work stopped reads the same shape. It is always
+  "report", never "job", in what you read.
+- The Overview's figures mean what they say: "replies written" counts chat replies only, a new "reports made" counts
+  the reports, "failures" includes every reply or report the AI could not make. The Costs tab's "Per run" and
+  "Busiest day" are the agent's figures.
+- The Costs tab's (!) on a failed run says the cause and what to do ("the Anthropic account has run out of credit —
+  The owner can add credit in the Anthropic Console (Billing).") instead of a sentence written for a chat ("I cannot
+  answer right now…"). Every sentence about a failed run uses the same words for the same cause.
+- Every message that sends you somewhere on this page names the place as the page does: "Rules › AI brains and
+  limits" (a report not set up pointed at "Rules → AI jobs", a card that no longer exists), "VESTA Agent page ›
+  Skills"; "Starting a report from a chat is not switched on for you here (Rules › AI tools › Tools by role)" is the
+  one refusal, for you and for the AI alike.
+- Asked for a report that is already running, you are told who started it: "The fm-weekly report scheduled at
+  19/10/2026 08:00 is still being made" for the morning run (it read "asked for here started at 08:00" though nobody
+  had asked), with the date and time written as on every notice.
+- On an investigation, every time is written the same way: the lines the AI reasons on, the page's log, its charts
+  and what the AI adds of its own all say "03:09" — "9 Oct, 03:09" when the investigation spans several days. (The
+  AI's lines said "09/10 03:09:46" and its own rows "09/10 07:30" beside the page's "9 Oct, 03:09".)
+- Every figure on a report page and in the energy summary follows one rule: "12.3 kWh", "0.15 USD/kWh", "1,234"
+  — no more "12 kWh" on one line and "12.3" on the next, and a tariff of 0.15 no longer reads "0.2". The energy
+  summary's dates read "5 Oct to 11 Oct".
+- A waiting approval request says the same words whichever way it was asked: "Waiting for approval by the owner
+  (asked on …, expires in 15 min)."
+- The message "the siren cannot be requested" is titled "Siren", as "Siren switched off" is.
+- "Devices offline" is one reading in the weekly report, in the night check's faults and in a chat's "is everything
+  OK": the same devices, named the same way, since the same moment.
+- Nothing else changes for you: the words the VESTA Agent writes on a Cockpit fault (its steps, its stamp, where a
+  fault came from) are now read from the agreement file the Cockpit ships, instead of being typed again in the agent.
+
 ## 0.12.265
 
 What you will see:
