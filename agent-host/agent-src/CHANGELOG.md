@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.6.265 (20 October 2026)
+
+How far back the villa's detailed history goes is MEASURED on the villa, and every reader switches to the long-term
+figures before it (owner, 2026-10-20: "be clever enough to switch to long-term memory when necessary" — ha-mcp only
+says "~10 day retention" in its help and never reads the real setting nor switches; the skills read a period older than
+it as empty and said "nothing recorded").
+- New `vesta_shared.retention`: `measure(client)` — the oldest change of sun.sun the villa's system still holds (a day
+  window at a time, by halving: about 12 reads), in days; the knowledge pack's nightly build stores it
+  (`retention.raw_history_days` / `logbook_days`, None when it cannot be measured). It replaces the 10 days the pack
+  claimed (the limits `villa.history_days` and `villa.logbook_days` are gone: the footer prints the measure).
+- `HABase.detailed_days` (script.Context sets it from the pack) and `kept_from(now)`; `History` and `Logbook` carry
+  `older_than_kept`: where detail begins when the period starts before it. One sentence: `retention.not_kept`.
+- investigate: a device's timeline over a period (partly) older than the detail says so and lists its long-term
+  figures for that part (`older_figures`: one an hour up to a week, one a day beyond; mean, min, max, change), or that
+  none are kept of it (doors, locks, switches) — never "nothing recorded"; the logbook's `around` says the logbook
+  before it is no longer kept.
+- reports: an alert count over a period older than the logbook kept is said as "counted from …".
+- The AI's own reads (tools.Toolbox): a history read reaching before the detail gets `older_than_detail` in its answer
+  — the note, and the long-term figures of that part read by the engine (or the devices that have none); a logbook
+  read gets the note.
+- Tests (test_retention): the days measured on a synthetic villa (12.25 and 30 days); History/Logbook through HABase
+  and the real McpClient; Context gives the pack's measure to its client; an investigation 20 days back reads the
+  pump's figures and says the door has none; the AI's answer gets figures and note, untouched when kept or not
+  measured; through the real Toolbox. Mutation-proved.
+
 ## 0.6.264 (20 October 2026)
 
 Every limit on what the agent reads, says and keeps is declared where it applies and set in one place: the VESTA Agent

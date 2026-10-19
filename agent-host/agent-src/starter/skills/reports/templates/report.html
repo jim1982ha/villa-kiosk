@@ -167,7 +167,7 @@
   {% else %}<p class="note">No gap found.</p>{% endif %}
 </section>
 {% elif sid == "footer" %}
-<p class="foot">Figures come from the villa's own meters and sensors, read through the villa's system. Nothing in this report was changed on the villa without a person's approval.{% if s.retention %} The villa's system keeps raw history {{ s.retention.raw_history_days }} days; statistics permanently.{% endif %}</p>
+<p class="foot">Figures come from the villa's own meters and sensors, read through the villa's system. Nothing in this report was changed on the villa without a person's approval.{% if s.retention and s.retention.raw_history_days %} The villa's system keeps every change {{ s.retention.raw_history_days|round|int }} days (measured on the villa), and hourly figures of measured values for good.{% endif %}</p>
 {% endif %}
 {% endif %}
 {% endfor %}

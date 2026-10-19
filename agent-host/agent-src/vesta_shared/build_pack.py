@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from .ha_client import client_from_args, error_short_chars
 from .critical import BLUEPRINT, critical_entities
 from .knowledge_pack import build_pack, pack_diff_summary
+from .retention import measure
 from .store import Store
 
 
@@ -59,7 +60,7 @@ def main(argv=None):
     channels = json.loads(args.channels) if args.channels else None
     pack = build_pack(registry, helpers, states, bom, people, channels,
                       generated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"), villa=args.villa,
-                      critical=_critical(cli, args.out))
+                      critical=_critical(cli, args.out), detailed_days=_detailed_days(cli))
     with open(args.out, "w", encoding="utf-8") as f:
         f.write(pack.to_json())
     summary = {"villa": pack.villa, "families": {k: len(v) for k, v in pack.families.items()},
@@ -76,6 +77,16 @@ def main(argv=None):
         summary["gone"] = [e["entity_id"] for e in gone]
     print(json.dumps(summary, indent=1))
     return 0
+
+
+def _detailed_days(cli) -> float | None:
+    """How many days of detailed history the villa's system holds, measured (vesta_shared.retention); None when it
+    cannot be read now — the readers then take every period as kept, as before."""
+    try:
+        return measure(cli)
+    except Exception as e:  # noqa: BLE001 — the villa's system not readable now
+        print(f"How far the villa's history goes could not be measured ({str(e)[:error_short_chars()]}).", file=sys.stderr)
+        return None
 
 
 def _critical(cli, previous: str) -> list[str]:

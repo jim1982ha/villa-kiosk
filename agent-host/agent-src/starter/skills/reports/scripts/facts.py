@@ -59,6 +59,7 @@ from vesta_shared import agent_records  # noqa: E402  (the agent's records: one 
 from vesta_shared.problems import Problems  # noqa: E402  (what is still open: one owner)
 
 from vesta_shared.offline import devices_offline  # noqa: E402  (the one reading of "offline now")
+from vesta_shared.retention import days_words  # noqa: E402  (how long the villa's system keeps detail, in words)
 from vesta_shared.past import automation_run, unread  # noqa: E402  (one reading of "a rule ran"; the one "could not be read whole")
 from vesta_shared.store import Notes, notes_of  # noqa: E402  (an alert's notes: one reader)
 from playbook import (  # noqa: E402  (the clues and the one list of what needs doing)
@@ -242,6 +243,11 @@ class Ctx:
                 book = self.cli.logbook_read(self.s_dt, self.e_dt, entity_id=eid, now=self.now)
             except Exception:  # noqa: BLE001
                 continue
+            if book.older_than_kept is not None:
+                # ⚠️ A MONTH OLDER THAN THE LOGBOOK KEPT (owner, 2026-10-20): counted from where it begins, and said
+                self.problems.append(f"{self.alert_words(rinfo)}: counted from "
+                                     f"{day_time_label(book.older_than_kept.astimezone(self.Z), weekday=True)} — the "
+                                     f"villa's system keeps its logbook {days_words(self.cli.detailed_days)} only.")
             if not book.whole:
                 # ⚠️ A COUNT FROM A READ STOPPED SHORT IS A FLOOR (round 2, 2026-10-16): said, never given as the week's
                 self.problems.append(f"{self.alert_words(rinfo)}: "

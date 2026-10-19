@@ -1,3 +1,15 @@
+## 0.12.274
+
+What you will see:
+- The agent now knows how far back your villa's system keeps every change: it measures it each night (on your villa
+  today about 11 days; the villa's system's default is 10) instead of assuming 10 days.
+- Asked about something older than that, it no longer says "nothing was recorded". It says the detail is no longer
+  kept, and answers from the villa's long-term figures instead (one an hour for up to a week, one a day beyond: the
+  average, lowest and highest of power, energy, temperatures…), saying the answer comes from those figures. For a
+  door, a lock or a switch, which have no long-term figures, it says that part cannot be known.
+- An investigation of an older period shows those figures for each device; the monthly report says when its alert
+  count starts where the logbook begins; the report's last line gives the measured number of days.
+
 ## 0.12.273
 
 What you will see:

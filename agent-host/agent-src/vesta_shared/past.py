@@ -88,9 +88,16 @@ class History:
     change. `cut`: {entity: where its reading stopped}, only for a reading that stopped before `end`."""
 
     def __init__(self, rows: dict[str, list[dict]], start: datetime, end: datetime,
-                 cut: dict[str, datetime] | None = None):
+                 cut: dict[str, datetime] | None = None, kept_from: datetime | None = None):
         self.rows, self.start, self.end = rows, start, max(start, end)
         self.cut = {e: t for e, t in (cut or {}).items() if t is not None and t < self.end}
+        self.kept_from = kept_from
+
+    @property
+    def older_than_kept(self) -> datetime | None:
+        """Where the villa's detail begins, when this period starts before it (vesta_shared.retention): the part
+        before it is not "nothing happened" but "no longer kept"; None when the whole period is kept."""
+        return self.kept_from if self.kept_from is not None and self.start < self.kept_from else None
 
     def reach(self, entity_id: str) -> datetime:
         """How far this entity's reading got: the period's end, or where it stopped."""
@@ -133,9 +140,16 @@ class History:
 class Logbook:
     """The logbook's rows over [start, end) and how far the reading reached (`cut`: where it stopped, or None)."""
 
-    def __init__(self, rows: list[dict], start: datetime, end: datetime, cut: datetime | None = None):
+    def __init__(self, rows: list[dict], start: datetime, end: datetime, cut: datetime | None = None,
+                 kept_from: datetime | None = None):
         self.rows, self.start, self.end = rows, start, max(start, end)
         self.cut = cut if cut is not None and cut < self.end else None
+        self.kept_from = kept_from
+
+    @property
+    def older_than_kept(self) -> datetime | None:
+        """Where the villa's logbook begins, when this period starts before it (History.older_than_kept)."""
+        return self.kept_from if self.kept_from is not None and self.start < self.kept_from else None
 
     @property
     def reach(self) -> datetime:

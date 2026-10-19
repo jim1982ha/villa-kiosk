@@ -31,7 +31,7 @@ import os
 import re
 import statistics
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from vesta_shared import script, skill_settings  # noqa: E402  (client, store, zone: one set-up for every skill script)
@@ -40,6 +40,7 @@ from vesta_shared.params import VillaParams  # noqa: E402
 from vesta_shared import periods as kinds  # noqa: E402  (the period kinds and their words, read by the report page too)
 from vesta_shared.timeutil import clock, lasting  # noqa: E402  (the one clock, the one duration wording)
 from vesta_shared import past  # noqa: E402  (a read of the past with how far it got; the one "could not be read whole")
+from vesta_shared import retention  # noqa: E402  (where the villa's detail ends, and the figures that take over)
 from vesta_shared.store import Notes, notes_of  # noqa: E402  (an alert's notes: one reader)
 
 from vesta_shared.device_state import NO_VALUE, OFFLINE, RestartDrops  # noqa: E402  (the one "does this device answer")
@@ -437,11 +438,23 @@ def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_da
     span_days = (end - start).total_seconds() > 86400
     parts = []
     names = client.states(ids)
+    # ⚠️ OLDER THAN THE DETAIL KEPT IS NOT "NOTHING RECORDED" (owner, 2026-10-20): before kept_from the villa's system
+    # holds no change any more, only its long-term figures of measured values — read for that part, and said
+    kept = client.kept_from(now)
+    older = None
+    if kept is not None and start < kept:
+        try:
+            older = retention.older_figures(client, ids, start, min(end, kept))
+        except Exception:  # noqa: BLE001 — said below as "no figures", never left out
+            older = (retention.figure_period(start, min(end, kept)), {})
     for eid in ids:
         # where the history could not be read further (vesta_shared.ha_client: its cap) — never stretched past it
         rows, reach, cut = read(client, eid, start, end, now)
+        before = _older_lines(eid, older, kept, start, zone, span_days, client.detailed_days) if older else []
         if not rows:
-            parts.append({"entity_id": eid, "lines": [f"{eid}: nothing recorded in this period."], "nothing": True,
+            parts.append({"entity_id": eid, "lines": [f"{eid}: nothing recorded in this period." if not older
+                                                      else f"{eid}: no change of it is kept for this period."] + before,
+                          "nothing": True,
                           "label": ((names.get(eid) or {}).get("attributes") or {}).get("friendly_name") or spoken(eid)})
             continue
         base_rows, base_reach, _ = read(client, eid, start - timedelta(days=baseline_days), start, now) \
@@ -449,7 +462,7 @@ def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_da
         on = threshold(base_rows + rows, params)
         ps = periods(rows, reach, on)
         ref = normal(base_rows, base_reach, on) if base_rows else {}
-        lines = [f"{eid}: {len(rows)} readings" + (f"; counted as running above {on:g}" if on else "")]
+        lines = [f"{eid}: {len(rows)} readings" + (f"; counted as running above {on:g}" if on else "")] + before
         if cut:
             lines.append(f"  ⚠️ {past.unread('its history', at(cut, zone, span_days))} "
                          "(too many readings) — say so, and narrow the period to read the rest")
@@ -501,6 +514,25 @@ def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_da
     return {"lines": [l for p in parts for l in p["lines"]], "entities": parts, "baseline_days": baseline_days,
             # what the page needs of this skill's settings to join the readings (page.py)
             "settings": {"coincide_s": th("coincide_s")}}
+
+
+def _older_lines(eid: str, older, kept: datetime, start: datetime, zone: ZoneInfo, span_days: bool,
+                 days: float) -> list[str]:
+    """The part of the period before the villa's detail: said, and its long-term figures when the villa keeps some."""
+    period, figures = older
+    lines = [f"  ⚠️ {retention.not_kept('Its history', at(kept, zone, True), days)}."]
+    rows = figures.get(eid) or []
+    if not rows:
+        return lines + ["    No long-term figures are kept of this device: that part cannot be known — say so."]
+    lines.append(f"    Its long-term figures from {at(start, zone, True)} (one a {period}; from figures, not from each "
+                 "change — say so):")
+    for r in rows[:MAX_LINES]:
+        t = datetime.fromtimestamp(r["start"] / 1000, tz=timezone.utc)
+        vals = ", ".join(f"{k} {r[k]:.4g}" for k in ("mean", "min", "max", "change") if isinstance(r.get(k), (int, float)))
+        lines.append(f"    {at(t, zone, True)}  {vals}")
+    if len(rows) > MAX_LINES:
+        lines.append(f"    … {len(rows) - MAX_LINES} more figures (narrow the period to see them)")
+    return lines
 
 
 def _saved(p: dict) -> dict:
@@ -614,6 +646,7 @@ def around(client, store, start: datetime, end: datetime, focus: list[str], zone
     hours = max((end - start).total_seconds() / 3600, 1)
     book = client.logbook_read(start, end, now=now)
     rows = book.rows
+    gone = book.older_than_kept
     count: dict[str, int] = {}
     for r in rows:
         count[r.get("entity_id") or ""] = count.get(r.get("entity_id") or "", 0) + 1
@@ -708,6 +741,9 @@ def around(client, store, start: datetime, end: datetime, focus: list[str], zone
         if len(events) > MAX_LINES:
             lines.append(f"  … {len(events) - MAX_LINES} more")
     lines += _vesta(store, start, end, zone, span_days)
+    if gone is not None:
+        lines.append(f"⚠️ {retention.not_kept('The logbook', at(gone, zone, True), client.detailed_days)} — what "
+                     "happened earlier cannot be listed: say so, never \"nothing happened\".")
     if not lines:
         lines.append("Nothing else was recorded in this period.")
     # where the logbook could not be read further (vesta_shared.past) — never taken for "nothing else"

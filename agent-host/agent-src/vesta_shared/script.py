@@ -52,7 +52,14 @@ class Context:
     @cached_property
     def client(self):
         from .ha_client import client_from_args
-        return client_from_args(self.args)
+        cli = client_from_args(self.args)
+        # where the villa's detail ends, as the pack measured it (vesta_shared.retention): every reader says "no longer
+        # kept" there, and reads the long-term figures for before it
+        days = ((self.pack.retention or {}).get("raw_history_days") if getattr(self.args, "pack", None) and self.pack
+                else None)
+        if isinstance(days, (int, float)) and not isinstance(days, bool):
+            cli.detailed_days = float(days)
+        return cli
 
     @cached_property
     def live_client(self):

@@ -48,7 +48,7 @@ class HABase:
         if end <= start:
             return History({e: [] for e in ids}, start, start)
         rows = self.history(ids, start, end)
-        return History(rows, start, end, dict(getattr(self, "history_cut", None) or {}))
+        return History(rows, start, end, dict(getattr(self, "history_cut", None) or {}), self.kept_from(now))
 
     def logbook_read(self, start: datetime, end: datetime, entity_id: str | None = None,
                      now: datetime | None = None) -> "Logbook":
@@ -57,7 +57,17 @@ class HABase:
         if end <= start:
             return Logbook([], start, start)
         rows = self.logbook(start, end, entity_id) if entity_id is not None else self.logbook(start, end)
-        return Logbook(rows, start, end, getattr(self, "logbook_cut", None))
+        return Logbook(rows, start, end, getattr(self, "logbook_cut", None), self.kept_from(now))
+
+    #: How many days of detailed history the villa's system holds (the knowledge pack's measure, vesta_shared.retention;
+    #: script.Context sets it): None when not known — every period is then read as kept
+    detailed_days: "float | None" = None
+
+    def kept_from(self, now: datetime | None = None) -> "datetime | None":
+        """Where the villa's detailed history begins now (its every change, its logbook), or None when not known."""
+        if not self.detailed_days:
+            return None
+        return (now or datetime.now(timezone.utc)) - timedelta(days=float(self.detailed_days))
 
     # statistics ---------------------------------------------------------
     def statistics(self, entity_ids: Iterable[str], start: datetime, end: datetime,
@@ -442,7 +452,7 @@ class McpClient(HABase):
         if end <= start:
             return History({e: [] for e in ids}, start, start)
         rows, cut = self._history(ids, start, end)          # the cut carried with the rows, not left on the client
-        return History(rows, start, end, cut)
+        return History(rows, start, end, cut, self.kept_from(now))
 
     def _history(self, entity_ids, start, end) -> tuple[dict[str, list[dict]], dict[str, datetime]]:
         out: dict[str, list[dict]] = {}
@@ -588,7 +598,7 @@ class McpClient(HABase):
         if end <= start:
             return Logbook([], start, start)
         rows, cut = self._logbook(start, end, entity_id)  # the cut carried with the rows, not left on the client
-        return Logbook(rows, start, end, cut)
+        return Logbook(rows, start, end, cut, self.kept_from(now))
 
     def _logbook(self, start, end, entity_id=None) -> tuple[list[dict], datetime | None]:
         """(every row of [start, end), where the reading stopped before `end` — None when it read to the end)."""

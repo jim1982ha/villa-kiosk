@@ -419,8 +419,9 @@ def _norm_entities(registry: dict, states: dict | None) -> list[dict]:
 def build_pack(registry: dict, helpers: list[dict], states: dict | None = None,
                bom_rows: list[dict] | None = None, people: list[dict] | None = None,
                channels: dict | None = None, generated_at: str = "", villa: str | None = None,
-               critical=()) -> KnowledgePack:
-    """`critical`: the entities the villa's own "critical devices offline" rule watches (vesta_shared.critical)."""
+               critical=(), detailed_days: float | None = None) -> KnowledgePack:
+    """`critical`: the entities the villa's own "critical devices offline" rule watches (vesta_shared.critical).
+    `detailed_days`: how many days of every change the villa's system holds, measured (vesta_shared.retention)."""
     cfg = registry.get("config", {})
     # ⚠️ HIDDEN IS LEFT OUT TOO (owner, 2026-10-15): a lock fitted the wrong way round is corrected AT THE SOURCE — a
     # template lock reads the real one inverted, and the real one is hidden in the villa's system (never disabled: the
@@ -523,16 +524,10 @@ def build_pack(registry: dict, helpers: list[dict], states: dict | None = None,
 
     unknown_area = sorted({r["entity_id"] for fam in ("power", "energy", "runtime", "battery", "level", "water", "security")
                            for r in families.get(fam, []) if not r["area"]})
-    # what the reports' footer says the villa keeps: the villa's own figures when they differ (vesta_shared.limits)
-    retention = {"raw_history_days": limit("villa.history_days", 10, unit="days", group="keep", lo=1, hi=3650,
-                                           says="How many days of detailed history the villa's system keeps, as the "
-                                                "reports' footer says it (the villa's system's own setting is not read).",
-                                           reached="Older periods have no detailed history; only hourly figures of "
-                                                   "meters remain.", told="person"),
-                 "logbook_days": limit("villa.logbook_days", 10, unit="days", group="keep", lo=1, hi=3650,
-                                       says="How many days of logbook the villa's system keeps, as the reports' footer "
-                                            "says it.",
-                                       reached="Older periods have no logbook.", told="person"),
+    # what the villa's system keeps, MEASURED on the villa (vesta_shared.retention, build_pack): the readers' "no longer
+    # kept" and the reports' footer — None when it could not be measured
+    retention = {"raw_history_days": detailed_days,
+                 "logbook_days": detailed_days,
                  "statistics": "permanent",
                  "agent_feature_store_months": 24,
                  "photos_days": limit("villa.photos_days", 30, unit="days", group="keep", lo=1, hi=3650,

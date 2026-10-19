@@ -33,7 +33,7 @@ from datetime import datetime
 from typing import Any, Awaitable, Callable, NamedTuple
 
 from claude_agent_sdk import create_sdk_mcp_server, tool
-from vesta_shared import read_guard
+from vesta_shared import read_guard, retention
 from vesta_shared.limits import limit
 from vesta_shared.messaging import no_platform_name
 
@@ -352,11 +352,31 @@ class Toolbox:
                     self.photos.append(photo)
             text = scrub("".join(b.get("text", "") for b in blocks if b.get("type") == "text"), self._secrets())
             text = without_hidden(text, self._hidden())       # every read tool, never the search alone
+            if not res.get("isError") and name in ("ha_get_history", "ha_get_logs"):
+                # ⚠️ OLDER THAN THE DETAIL KEPT (owner, 2026-10-20): said in the answer, with the long-term figures of
+                # that part — the AI never reads "no change" where the villa's system no longer keeps any
+                text = await asyncio.to_thread(self._older_part, name, args, text)
             out = {"content": ([{"type": "text", "text": self.parts.serve(key, text, part)}] if text else []) + images}
             if res.get("isError"):
                 out["is_error"] = True
             return out
         return handler
+
+    def _older_part(self, name: str, args: dict, text: str) -> str:
+        days = self._detailed_days()
+        if name == "ha_get_logs":
+            return retention.ai_logbook_answer(args, text, days)
+        from vesta_shared.ha_client import McpClient
+        return retention.ai_history_answer(McpClient(session=self.reader.mcp), args, text, days)
+
+    def _detailed_days(self) -> float | None:
+        """How many days of detailed history the villa's system holds (the knowledge pack's measure), read once per run."""
+        if "_days" not in self.__dict__:
+            from vesta_shared.knowledge_pack import KnowledgePack
+            pack = KnowledgePack.read(self.s.pack_path)
+            d = ((pack.retention or {}).get("raw_history_days") if pack else None)
+            self.__dict__["_days"] = float(d) if isinstance(d, (int, float)) and not isinstance(d, bool) else None
+        return self.__dict__["_days"]
 
     def _hidden(self) -> set[str]:
         """The entities hidden in the villa's system (the knowledge pack's), read once per run."""
