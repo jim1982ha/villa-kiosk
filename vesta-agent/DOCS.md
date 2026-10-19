@@ -221,9 +221,11 @@ reports skill (Skills → reports → New file): it is added to the shipped one,
 and app updates keep it while still updating the shipped file.
 
 **AI jobs.** The daily digest, the weekly and the monthly report are the skills'
-AI jobs. Each has its own brain and spending limit per run, set on the VESTA
-Agent page → Rules → **AI jobs** (`settings.jobs` in `policy.yaml`). **A job
-that is not set does not run**: the page shows a banner with **Add them**, and
+AI jobs. All the jobs of one skill run with ONE brain, and each has its own
+spending limit per run, set on the VESTA Agent page → Rules → **AI brains and
+limits** (`settings.skill_brains` and `settings.jobs` in `policy.yaml`; an older
+file's brain per job is still read, and moved to its skill's one brain by the
+page's next save). **A job that is not set does not run**: the page shows a banner with **Add them**, and
 the log says so. A report can be asked for in a chat (`/ask make the weekly
 report`): it runs as its job, with the same brain and limit, and the page comes
 back to that chat. If a report reaches its limit, it is still sent with what is

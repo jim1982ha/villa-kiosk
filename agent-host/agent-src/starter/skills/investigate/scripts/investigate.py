@@ -451,11 +451,19 @@ def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_da
         # where the history could not be read further (vesta_shared.ha_client: its cap) — never stretched past it
         rows, reach, cut = read(client, eid, start, end, now)
         before = _older_lines(eid, older, kept, start, zone, span_days, client.detailed_days) if older else []
+        # the older part drawn from the figures too (each one's highest, as the readings' slices are): the page's chart
+        # covers the whole period, that part marked as figures (page.py)
+        figs = [(datetime.fromtimestamp(r["start"] / 1000, tz=timezone.utc), str(r.get("max", r.get("mean"))))
+                for r in (older[1].get(eid) or [])] if older else []
+        attrs0 = (names.get(eid) or {}).get("attributes") or {}
         if not rows:
-            parts.append({"entity_id": eid, "lines": [f"{eid}: nothing recorded in this period." if not older
-                                                      else f"{eid}: no change of it is kept for this period."] + before,
-                          "nothing": True,
-                          "label": ((names.get(eid) or {}).get("attributes") or {}).get("friendly_name") or spoken(eid)})
+            part = {"entity_id": eid, "lines": [f"{eid}: nothing recorded in this period." if not older
+                                                else f"{eid}: no change of it is kept for this period."] + before,
+                    "nothing": not figs, "label": attrs0.get("friendly_name") or spoken(eid)}
+            if series and figs:
+                part.update(name=attrs0.get("friendly_name") or eid, unit=attrs0.get("unit_of_measurement") or "",
+                            series=chart_series(figs, start, end, min(end, kept)), figures_until=kept.isoformat())
+            parts.append(part)
             continue
         base_rows, base_reach, _ = read(client, eid, start - timedelta(days=baseline_days), start, now) \
             if baseline_days > 0 else ([], start, None)
@@ -501,7 +509,8 @@ def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_da
             part["control"] = "off" if seen and seen <= OFF_STATES else "on" if seen and seen <= ON_STATES else None
         if series and any(number(v) is not None for _, v in rows):
             part.update(name=attrs.get("friendly_name") or eid, unit=attrs.get("unit_of_measurement") or "",
-                        series=chart_series(rows, start, end, reach),
+                        series=chart_series(figs + rows, start, end, reach),
+                        **({"figures_until": kept.isoformat()} if figs else {}),
                         # ⚠️ THE CHART THAT FITS THE DEVICE (owner, 2026-10-12: "would you use other metric?"): a device
                         # that RUNS gets its minutes running per hour against its usual — its days before drawn as
                         # lines were spikes nobody could read; one read as LEVELS (a temperature) keeps them, dashed

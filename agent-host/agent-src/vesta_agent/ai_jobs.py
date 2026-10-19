@@ -25,7 +25,7 @@ from .notice import when
 from .places import where
 from .policy import LANGUAGES as LANG
 from .routing import Origin, Routing, job_to
-from .skills import ai_jobs
+from .skills import ai_jobs, job_owners
 
 log = logging.getLogger("vesta")
 
@@ -68,6 +68,10 @@ class AiJobs:
     def all(self) -> list[tuple]:
         return ai_jobs(self.skills.all())
 
+    def settings(self) -> dict[str, dict]:
+        """Each job that runs: {name: {profile, limit_usd}} — its own limit, its skill's one brain (policy.job_settings)."""
+        return self.policy().job_settings(job_owners(self.skills.all()))
+
     def find(self, name: str) -> tuple | None:
         """(skill, job) of the job with this name, or None."""
         return next(((sk, j) for sk, j in self.all() if j["name"] == name), None)
@@ -79,13 +83,14 @@ class AiJobs:
         return "English"
 
     async def run(self, skill, job: dict, origin: Origin | None = None) -> None:
-        """An AI job of a skill: its model and spending limit are policy.yaml's settings.jobs[name].
+        """An AI job of a skill: its spending limit is policy.yaml's settings.jobs[name], its model its skill's one brain
+        (settings.skill_brains; owner, 2026-10-20).
 
         ⚠️ NOT SET, NOT RUN (owner, 2026-10-01): a job policy.yaml does not name has no agreed cost, so it
         is skipped and the log says so (the VESTA Agent page offers to add it). When the limit stops it,
         the skill's `on_limit` code step still finishes the work (a report is sent with what is done)."""
         name = job["name"]
-        cfg = self.policy().jobs.get(name)
+        cfg = self.settings().get(name)
         work = self.chat_jobs.work                     # in_progress.InProgress: a scheduled run's end row says how it went
         if cfg is None:
             log.warning("AI job %s (skill %s) is not set in policy.yaml: it does not run (%s: Add them).",
@@ -175,13 +180,14 @@ class AiJobs:
         found = self.find(name)
         if not found or not found[1].get("on_request"):
             return f"There is no {name} report that can be started from a chat."
-        if name not in self.policy().jobs:
+        jobs = self.settings()
+        if name not in jobs:
             return not_set(name)
         sk, job = found
         # ⚠️ THE AGENT SAYS WHETHER IT IS RUNNING, NOT THE AI'S MEMORY (villa, 2026-10-07 01:22): asked again 30 s after
         # the report was sent, the AI answered "already being generated" from the conversation and started nothing.
         # A second start while one runs would make the report twice (chat_jobs.ChatJobs.start: Started).
-        cfg = self.policy().jobs[name]
+        cfg = jobs[name]
         st = self.chat_jobs.start(chat, name, lambda origin: self.run(sk, job, origin), role=role)
         # ⚠️ THE START TIME, SAID BY THE AGENT (owner, 2026-10-09: the waiting message read "Still in progress" for a
         # report that had just started). The model called start_job twice in one turn, the second answer said "still
@@ -195,7 +201,7 @@ class AiJobs:
 
     def without_ai_able(self) -> list[dict]:
         """The jobs a person may start from a chat that can be made without the AI (skill.yaml without_ai), set up."""
-        jobs = self.policy().jobs
+        jobs = self.settings()
         return [j for _, j in self.all() if j.get("on_request") and j.get("without_ai") and j["name"] in jobs]
 
     def start_without_ai(self, name: str, problem: str, chat: int, waiting_mid: int | None = None) -> str:

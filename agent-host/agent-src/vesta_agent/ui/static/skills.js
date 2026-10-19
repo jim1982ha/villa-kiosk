@@ -387,6 +387,8 @@ export function aboutSkill(name, d) {
   const tabs = (hasRuns || hasTools) ? tabbed("about", [hasRuns && ["commands", ABOUT_TEXT.commands, ABOUT_TEXT.switches, runs],
     hasTools && ["tools", ABOUT_TEXT.tools, d.where_tools || null, tools]]) : null;
   return h("div", { class: "about" },
+    // the skill's whole description first (owner, 2026-10-20): the list on the left cuts it to a few lines
+    d.description ? h("p", { class: "about-desc" }, d.description) : null,
     h("section", { class: "about-sec" }, h("h3", {}, place("skill_when", { skill: name })), acts()),   // the open skill named
     tabs ? h("section", { class: "about-sec" }, tabs.bar, tabs.body) : null);
 }

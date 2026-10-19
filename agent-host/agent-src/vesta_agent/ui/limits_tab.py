@@ -22,7 +22,7 @@ from ruamel.yaml.comments import CommentedMap, CommentedSeq
 from vesta_shared import limits
 
 from ..places import where
-from ..policy import DEFAULT_BEHAVIOUR, DEFAULTS, KEEP, PROFILES, RESET_WORDS, WORDS
+from ..policy import DEFAULT_BEHAVIOUR, DEFAULTS, KEEP, PROFILES, RESET_WORDS, WORDS, Policy
 from .changes import Refused, _read
 from .policy_doc import _yaml
 
@@ -232,10 +232,17 @@ class LimitsTab:
              DEFAULT_BEHAVIOUR["conversation_reset"], "choice", list(RESET_WORDS), None, None, ai,
              "When a chat's earlier messages are forgotten by the AI."),
         ]
+        # one brain for all the AI jobs of a skill (owner, 2026-10-20), then each job's own limit
+        from ..skills import Skills, job_owners
+        owners = job_owners(Skills(self.s.skills_dir).all())
+        pol = Policy(raw)
+        for skill in sorted(set(owners.values())):
+            brain = pol.skill_brain(skill, [n for n, s in owners.items() if s == skill])
+            if brain:
+                rows.append((["settings", "skill_brains", skill], brain, brain, "choice", list(PROFILES), None, None,
+                             ai, f"The brain every AI job of the {skill} skill runs with."))
         for name, job in (st.get("jobs") or {}).items() if isinstance(st.get("jobs"), dict) else []:
             if isinstance(job, dict):
-                rows.append((["settings", "jobs", name, "profile"], job.get("profile"), job.get("profile"), "choice",
-                             list(PROFILES), None, None, ai, f"The brain of the AI job {name}."))
                 rows.append((["settings", "jobs", name, "limit_usd"], job.get("limit_usd"), job.get("limit_usd"),
                              "number", None, 0.05, None, ai, f"The most one run of the AI job {name} may cost (US$)."))
         keep = st.get("keep") if isinstance(st.get("keep"), dict) else {}
@@ -300,6 +307,6 @@ class LimitsTab:
 
     def _save_policy(self, path: list, value) -> dict:
         text, r = self.files.policy_now()
-        new = set_in(text, path, value)
+        new = self.files.form_policy(set_in(text, path, value))
         self.files.save_policy(new, r, PLACE, f"{'.'.join(path)}: → {value}")    # checked by the agent's own rules
         return {"ok": True}

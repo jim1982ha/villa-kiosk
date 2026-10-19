@@ -392,7 +392,8 @@ def test_undo_is_offered_exactly_for_what_undo_handles():
 def test_add_them_sets_every_missing_ai_job_with_its_starter_values_in_one_recorded_change(ui):
     # architecture review 8: the banner's button read, changed and wrote the whole form from the page
     raw = yaml.safe_load(open(ui.policy_path))
-    raw.setdefault("settings", {})["jobs"] = {"fm-daily": {"profile": "economy", "limit_usd": 0.5}}
+    raw.setdefault("settings", {})["jobs"] = {"fm-daily": {"profile": "economy", "limit_usd": 0.5}}  # an older file:
+    raw["settings"].pop("skill_brains", None)                                                     # a brain per job
     raw["settings"]["web_search"] = True
     with open(ui.policy_path, "w") as f:
         yaml.safe_dump(raw, f)
@@ -405,8 +406,9 @@ def test_add_them_sets_every_missing_ai_job_with_its_starter_values_in_one_recor
     st, body, st2, again, hist = call(ui, fn)
     jobs = yaml.safe_load(open(ui.policy_path))["settings"]
     assert st == 200 and body["added"] == ["fm-weekly", "owner-monthly"] and st2 == 200 and again["added"] == []
-    assert jobs["jobs"]["fm-daily"] == {"profile": "economy", "limit_usd": 0.5}             # a set job untouched
-    assert jobs["jobs"]["owner-monthly"] == {"profile": "performance", "limit_usd": 6}      # its skill's default
+    # a set job keeps its limit; its older own brain is now its skill's one brain (owner, 2026-10-20)
+    assert jobs["jobs"]["fm-daily"] == {"limit_usd": 0.5} and jobs["skill_brains"] == {"reports": "economy"}
+    assert jobs["jobs"]["owner-monthly"] == {"limit_usd": 6}                                # its skill's default
     assert jobs["web_search"] is True and hist[0]["what"] == "AI jobs added: fm-weekly, owner-monthly"
 
 
@@ -690,3 +692,59 @@ def test_every_runs_steps_are_served_each_in_a_line_the_page_draws(ui):
     from helpers import body_of
     more = body_of(page_js(), "runMore")
     assert "x.summary" in more and "x.raw" in more and "JSON.stringify" not in body_of(page_js(), "costs") + more
+
+
+def test_an_older_files_brain_per_job_is_read_and_moved_to_its_skill_by_the_next_save(ui):
+    # owner, 2026-10-20 (one brain a skill): the villa's file names a brain per job (auto, auto, auto); the agent reads it
+    # unchanged, and the page's next save writes the skill's one brain and leaves each job its limit — comments kept
+    text = open(ui.policy_path).read()
+    raw = yaml.safe_load(text)
+    raw["settings"].pop("skill_brains", None)
+    raw["settings"]["jobs"] = {"fm-daily": {"profile": "auto", "limit_usd": 1}, "fm-weekly": {"profile": "auto", "limit_usd": 2},
+                               "owner-monthly": {"profile": "auto", "limit_usd": 6}}
+    with open(ui.policy_path, "w") as f:
+        f.write("# the villa's own note\n" + yaml.safe_dump(raw))
+
+    async def fn(c):
+        before = (await (await c.get("/api/jobs")).json())["jobs"]
+        doc = await (await c.get("/api/policy")).json()
+        r = await c.put("/api/policy/form", json={"form": doc["form"], "rev": doc["rev"]}, headers=HDR)
+        doc2 = await (await c.get("/api/policy")).json()
+        return before, r.status, doc2
+    before, status, doc2 = call(ui, fn)
+    assert all(j["set"] and j["skill_brain"] == "auto" and j["current"]["profile"] == "auto" for j in before)
+    assert status == 200
+    written = open(ui.policy_path).read()
+    s = yaml.safe_load(written)["settings"]
+    assert s["skill_brains"] == {"reports": "auto"} and "# the villa's own note" in written
+    assert s["jobs"] == {"fm-daily": {"limit_usd": 1}, "fm-weekly": {"limit_usd": 2}, "owner-monthly": {"limit_usd": 6}}
+    assert doc2["form"]["settings"]["skill_brains"] == {"reports": "auto"}               # the form reads it back
+
+    # the form round-trips a change of the skill's brain, and one job's limit
+    async def change(c):
+        doc = await (await c.get("/api/policy")).json()
+        doc["form"]["settings"]["skill_brains"]["reports"] = "economy"
+        doc["form"]["settings"]["jobs"]["fm-weekly"]["limit_usd"] = 3
+        r = await c.put("/api/policy/form", json={"form": doc["form"], "rev": doc["rev"]}, headers=HDR)
+        return r.status, (await (await c.get("/api/jobs")).json())["jobs"]
+    status, jobs = call(ui, change)
+    assert status == 200
+    assert {j["name"]: (j["current"]["profile"], j["current"]["limit_usd"]) for j in jobs} == {
+        "fm-daily": ("economy", 1.0), "fm-weekly": ("economy", 3.0), "owner-monthly": ("economy", 6.0)}
+
+
+def test_add_them_gives_a_skill_without_a_brain_its_starter_brain(ui):
+    # a file with no AI job and no skill brain: "Add them" sets every job's limit AND the skill's one brain, or the
+    # jobs it adds would still not run (owner, 2026-10-20: one brain a skill)
+    raw = yaml.safe_load(open(ui.policy_path))
+    raw["settings"].pop("jobs", None)
+    raw["settings"].pop("skill_brains", None)
+    with open(ui.policy_path, "w") as f:
+        yaml.safe_dump(raw, f)
+
+    async def fn(c):
+        await _json(c, "post", "/api/jobs/missing", json={})
+        return (await (await c.get("/api/jobs")).json())["jobs"]
+    jobs = call(ui, fn)
+    assert yaml.safe_load(open(ui.policy_path))["settings"]["skill_brains"] == {"reports": "auto"}
+    assert all(j["set"] and j["current"]["profile"] == "auto" for j in jobs)

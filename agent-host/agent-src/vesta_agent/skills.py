@@ -500,8 +500,8 @@ def switch_command(skill_path: str, script: Script, command: str | None, on: boo
 
 
 def _ai_job(path: str, job: dict, where: str) -> dict:
-    """An AI job's own fields (owner, 2026-10-01): its name — the key of its model and spending limit in
-    policy.yaml settings.jobs, without which it does not run —, the chat its result goes to, whether a
+    """An AI job's own fields (owner, 2026-10-01): its name — the key of its spending limit in policy.yaml
+    settings.jobs, without which it does not run (its brain is its skill's one: settings.skill_brains) —, the chat its result goes to, whether a
     person may start it from a chat, the starter values the VESTA Agent page offers, and the code step
     that still finishes its work when the spending limit stops it."""
     name = str(job.get("name") or "")
@@ -592,6 +592,11 @@ def _check_command(path: str, cmd: str, where: str) -> str:
 def ai_jobs(skills: dict) -> list[tuple["Skill", dict]]:
     """Every AI job the skills declare, in skill order: what policy.yaml settings.jobs configures."""
     return [(sk, job) for _, sk in sorted(skills.items()) for job in sk.schedule if job.get("prompt")]
+
+
+def job_owners(skills: dict) -> dict[str, str]:
+    """{AI job: the skill that declares it}: whose brain it runs with (policy.Policy.job_settings)."""
+    return {job["name"]: sk.name for sk, job in ai_jobs(skills)}
 
 
 class Skills:

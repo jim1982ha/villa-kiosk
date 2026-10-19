@@ -39,14 +39,17 @@ function row(r, probs, again) {
   const field = input(r, (v) => { value = v; save.disabled = same(v, r.value) || v === null; });
   if (r.kind === "measured") save.hidden = true;
   const bounds = [r.lo !== null && r.lo !== undefined ? `from ${r.lo}` : "", r.hi !== null && r.hi !== undefined ? `to ${r.hi}` : ""].filter(Boolean).join(" ");
+  // ⚠️ TWO COLUMNS, LOW ROWS (owner, 2026-10-20): what happens when it is reached is part of the limit's description,
+  // and the value's unit, bounds and Save sit on the value's own line
   return [
     h("div", { class: "limit-what" },
       h("b", {}, r.label), " ", infoButton(r.name, `${r.name} — written at ${(r.where || []).join(", ")}`),
-      h("div", { class: "muted" }, r.also),
-      same(r.value, r.default) ? null : h("div", { class: "muted" }, `Changed from its usual ${shown(r.default)}.`)),
-    h("div", { class: "limit-value" }, field, r.unit ? h("span", { class: "muted" }, r.unit) : null, save,
-      bounds ? h("div", { class: "muted limit-bounds" }, bounds) : null),
-    h("div", {}, r.reached || "—", r.told ? h("div", {}, h("span", { class: "chip" + (r.told.startsWith("Nobody") ? " off" : "") }, r.told)) : null),
+      r.reached || r.told ? h("div", { class: "limit-reached" }, r.reached ? `Reached: ${r.reached} ` : "",
+        r.told ? h("span", { class: "chip tiny" + (r.told.startsWith("Nobody") ? " off" : "") }, r.told) : null) : null,
+      h("div", { class: "muted small" }, r.also,
+        same(r.value, r.default) ? ` Changed from its usual ${shown(r.default)}.` : "")),
+    h("div", { class: "limit-value" }, field, r.unit ? h("span", { class: "muted" }, r.unit) : null,
+      bounds ? h("span", { class: "muted small" }, bounds) : null, save),
   ];
 }
 
@@ -61,8 +64,8 @@ export async function limits() {
     return rows.length ? [key, `${title} (${rows.length})`, null, () => {
       const list = rows.filter(match);
       if (!list.length) return h("p", { class: "muted" }, "No limit here matches the search.");
-      return paged(["Limit", "Value", "When it is reached"],
-        list.map((r) => row(r, probs, again)), 10, { cls: "limits", widths: ["48%", "26%", "26%"] });
+      return paged(["Limit", "Value"],
+        list.map((r) => row(r, probs, again)), 10, { cls: "limits", widths: ["62%", "38%"] });
     }] : null;
   });
   const tabs = tabbed("limits", groups);

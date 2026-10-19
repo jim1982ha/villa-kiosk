@@ -389,6 +389,7 @@ table.rows td .switch input { width: 44px; flex: none; }   /* not the cell-wide 
 /* a grid item is as wide as its content by default: the phone's row of tabs (one line, scrolled) pushed the section 5 px out */
 .about > * { min-width: 0; }
 .about-sec p { margin: 4px 0 8px; }
+.about-desc { margin: 0; overflow-wrap: anywhere; }
 .chip.tiny { font-size: 11px; padding: 1px 8px; }
 .cmd-group { margin: 10px 0 0; }
 .cmd-script code { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-dim); }
@@ -542,10 +543,13 @@ table.rows td > * + .chip, table.rows td .cell-v > * + .chip { margin-left: 8px;
 /* the Limits tab (limits.js) */
 .limits-search { margin: 4px 0 12px; }
 .limits-search input { width: 100%; max-width: 420px; }
-table.limits td { vertical-align: top; }
-.limit-what .muted { margin-top: 2px; }
-.limit-value { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.limit-value input[type=number] { width: 110px; }
-.limit-bounds { flex-basis: 100%; }
+table.limits td { vertical-align: top; padding-top: 6px; padding-bottom: 6px; }
+.limit-what { line-height: 1.3; }
+.limit-what .muted, .limit-reached { margin-top: 1px; }
+.limit-reached { font-size: var(--text-xs); }
+.limit-value { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; white-space: nowrap; }
+table.limits .limit-value input[type=number] { width: 96px; flex: 0 0 96px; min-height: 34px; padding: 4px 10px; }
+table.limits .limit-value .btn, table.limits .limit-value .dropdown { min-height: 34px; }
+@media (max-width: 640px) { .limit-value { flex-wrap: wrap; white-space: normal; } }
 .limit-words { display: flex; flex-wrap: wrap; gap: 4px 12px; }
 .limit-word { display: inline-flex; align-items: center; gap: 4px; font-size: var(--text-xs); }

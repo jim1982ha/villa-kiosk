@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.6.268 (20 October 2026)
+
+One brain for all the AI jobs of a skill (owner, 2026-10-20): policy.yaml `settings.skill_brains: {skill: brain}`, and
+`settings.jobs.<job>: {limit_usd}`. `Policy.job_settings(owners)` is the one reading of a job's brain and limit, with
+`owners` from `skills.job_owners` (the skills' own declarations). An older file's `profile` per job is still read: the
+skill's brain is the strongest of them, logged once when they differ. Every form save of the page (Rules forms, Add
+them, the Limits tab) moves it to the skill (`policy_doc.brains_moved`, comments kept; a file in the new shape is
+unchanged byte for byte). Rules › AI brains and limits: one brain row per skill, its jobs and their limits under it.
+`/api/jobs` gives `skill_brain` and `brain_default`; Add them sets a skill's starter brain when it has none. Setup
+copy, Page changes wording, the Limits tab (one brain row per skill), policy.example.yaml and DOCS follow. The reports
+skill's owner-monthly starter brain is auto. Tests: the real run path (one change, every job), the older file read and
+moved on save, the form round-trip, Add them. Mutation-proved.
+- Long-term figures where the skills read older periods: the investigation page's chart covers the whole period, the
+  part before the detail kept drawn from the hourly figures (each one's highest) on a band "from the hourly figures:
+  every change is no longer kept" (page.FIGURES); the reports' "electricity while the villa is empty" clue says where
+  its count begins (playbook). Tests in test_retention, mutation-proved.
+- Skills › About: the skill's whole description above "When the … skill runs" (skills.js aboutSkill).
+- Limits tab: two columns — what happens when the limit is reached, and who is told, inside its description; the value,
+  its unit, its bounds and Save on one line; lower rows (limits.js, app.css).
+
 ## 0.6.267 (20 October 2026)
 
 - Costs › Every run: a chat run's chat name ("fm private chat") sits on its title line, after the steps or "Whole

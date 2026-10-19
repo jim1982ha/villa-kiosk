@@ -155,3 +155,33 @@ def test_every_reader_of_a_script_knows_where_detail_begins(tmp_path):
     (tmp_path / "fx").mkdir()
     ctx = script.Context(argparse.Namespace(pack=str(pack), fixture_dir=str(tmp_path / "fx"), zone="UTC"))
     assert ctx.client.detailed_days == 11.5
+
+
+def test_the_investigation_page_draws_the_older_part_from_the_figures_and_says_so():
+    sys.path.insert(0, os.path.join(STARTER_SKILLS, "investigate", "scripts"))
+    import investigate
+    import page
+    from zoneinfo import ZoneInfo
+    v = Villa()
+    v.detailed_days = KEPT_DAYS
+    start, end = NOW - timedelta(days=14), NOW - timedelta(days=11)          # across where the detail begins
+    res = investigate.timeline(v, ["sensor.pump_power"], start, end, 0, ZoneInfo("UTC"), series=True, now=NOW)
+    pump = res["entities"][0]
+    first = next(p for p in pump["series"] if p[1] is not None)
+    assert pump["figures_until"] and datetime.fromisoformat(first[0]) < start + timedelta(hours=1)   # from the start
+    html = page.investigation({"title": "t", "summary": "s"}, {**res, "zone": "UTC"})
+    assert "from the hourly figures: every change is no longer kept" in html
+
+
+def test_the_empty_villa_clue_says_where_its_count_begins():
+    sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
+    import playbook
+    from types import SimpleNamespace
+    from zoneinfo import ZoneInfo
+    v = Villa()
+    v.detailed_days = KEPT_DAYS
+    end = NOW.date()
+    c = SimpleNamespace(cli=v, Z=ZoneInfo("UTC"), now=NOW, start=end - timedelta(days=20), end=end,
+                        e_dt=NOW, problems=[], total_from=lambda: True, daily_total=lambda a, b: {})
+    playbook.clue_use_while_empty(c, {"mode_entity": "binary_sensor.door", "days": 20, "empty": ["off"]})
+    assert any("counted from" in p and "12 days only" in p for p in c.problems)

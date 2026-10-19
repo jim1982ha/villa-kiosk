@@ -76,7 +76,17 @@ def lane_colour(as_: str | None, shape: str) -> str:
 
 # The investigation's charts: the shared ones (vesta_shared.page), in this page's colours and words.
 def timechart(series: list, unit: str, zone: ZoneInfo, marks: list = (), normals: list = ()) -> str:
-    return charts.timechart(series, unit, zone, marks, normals, band=band_of, readings=READINGS, usual=USUAL)
+    return charts.timechart(series, unit, zone, marks, normals, band=chart_band, readings=READINGS, usual=USUAL)
+
+
+def chart_band(kind: str) -> tuple[str, str]:
+    """A chart band's word and colour: the figures' part, or a period's (band_of)."""
+    return FIGURES_BAND if kind == FIGURES else band_of(kind)
+
+
+#: the part of a chart drawn from the villa's long-term figures, its detail no longer kept (vesta_shared.retention)
+FIGURES = "figures"
+FIGURES_BAND = ("from the hourly figures: every change is no longer kept", "var(--c5)")
 
 
 def hourchart(per_hour: dict, zone: ZoneInfo) -> str:
@@ -215,9 +225,11 @@ def investigation(notes: dict, data: dict | None, around: dict | None = None, se
             marks = [(p["start"], p["end"], p.get("kind") or "") for p in e.get("periods") or [] if p.get("why")]
             normals = [n["series"] for n in e.get("normal_series") or [] if n.get("series")]
             unit = e.get("unit") or ""
+            if e.get("figures_until") and e["series"]:
+                marks.append((e["series"][0][0], e["figures_until"], FIGURES))
             legend = [{"word": f"what it read{f' ({unit})' if unit else ''}", "colour": READINGS, "shape": "line"}]
             legend += [{"word": w, "colour": c, "shape": "band"}
-                       for w, c in dict.fromkeys(band_of(k) for _, _, k in marks)]
+                       for w, c in dict.fromkeys(chart_band(k) for _, _, k in marks)]
             if normals:
                 legend.append({"word": f"what it read at the same hours on each of the {len(normals)} "
                                        f"day{'s' if len(normals) > 1 else ''} before", "colour": USUAL, "shape": "dash"})

@@ -67,8 +67,11 @@ export function rulesForms(doc, jobs = [], tools = null) {
 
   // the AI
   const sel = (opts, value, set, label) => dropdown(Object.entries(opts), value, (v) => { set(v); markDirty(); }, label);
-  // AI jobs: each skill's scheduled AI work, with its own brain and spending limit
+  // AI jobs: each skill's scheduled AI work — ONE brain for all the jobs of a skill (owner, 2026-10-20), and each job's
+  // own spending limit. The brain shown is the one its jobs run with (server._jobs: an older file's, until a save
+  // writes it as the skill's: policy_doc.brains_moved).
   f.settings.jobs = f.settings.jobs || {};
+  f.settings.skill_brains = f.settings.skill_brains || {};
   // The AI: one table, one row per piece of AI work (chat answers, then each skill's AI job), like
   // Allowed actions; then the conversation settings.
   const aiBody = h("tbody");
@@ -95,24 +98,37 @@ export function rulesForms(doc, jobs = [], tools = null) {
       { cls: "with-caption", v: [sel(SCHEMA.resets, f.settings.conversation_reset, (v) => (f.settings.conversation_reset = v), W("settings.conversation_reset")),
         h("div", { class: "muted" }, W("settings.conversation_reset"))] },
       { cls: "x", v: null }]),
-    ...jobs.map((j) => {
+    ...[...new Set(jobs.map((j) => j.skill))].flatMap((skill) => {
+      const its = jobs.filter((j) => j.skill === skill);
+      const brain = f.settings.skill_brains[skill] ?? its[0].skill_brain;
+      return [tableRow([
+        [h("b", {}, `${skill} skill`), h("div", { class: "muted" }, `one brain for its ${plural(its.length, "AI job", "AI jobs")}`)],
+        brain ? sel(PROFILES, brain, (v) => (f.settings.skill_brains[skill] = v), `Brain of the ${skill} skill's AI jobs`)
+          : { cls: "muted", v: "No brain yet: its jobs do not run." },
+        { v: null }, { v: null }, { cls: "x", v: null }]), ...its.map(jobRow)];
+    }));
+  // one job of a skill: its own limit; its brain is its skill's (the line above it)
+  function jobRow(j) {
       const cur = f.settings.jobs[j.name];
       const what = [h("b", {}, j.name),
-        h("div", { class: "muted" }, `${j.skill} · ${j.when_words}${j.on_request ? ", or when asked in a chat" : ""}`)];
+        h("div", { class: "muted" }, `${j.when_words}${j.on_request ? ", or when asked in a chat" : ""}`)];
       // ⚠️ WHO ASKS DECIDES, NEVER THE SKILL (owner, 2026-10-10): on schedule everything switched on; asked for in a
       // chat, what that person may use there. Its skill's list is shown on the skill's page, as what it uses.
       const got = { cls: "tools-got", v: h("span", { class: "muted" }, "By who asks") };
       if (!cur) {
         return tableRow([what, { colspan: 2, cls: "muted", v: "Not set: this job does not run." }, got,
-          { cls: "x", v: h("button", { class: "btn icon ghost", title: "Set this job", onclick: () => { f.settings.jobs[j.name] = { ...j.default }; drawAi(); markDirty(); } }, "+") }]);
+          { cls: "x", v: h("button", { class: "btn icon ghost", title: "Set this job", onclick: () => {
+            f.settings.jobs[j.name] = { ...j.default };
+            if (!(f.settings.skill_brains[j.skill] ?? j.skill_brain)) f.settings.skill_brains[j.skill] = j.brain_default;
+            drawAi(); markDirty(); } }, "+") }]);
       }
       return tableRow([what,
-        sel(PROFILES, cur.profile, (v) => (cur.profile = v), "Brain"),
+        { cls: "muted", v: `${j.skill}'s brain` },
         limitInput(cur.limit_usd, (v) => (cur.limit_usd = v), `Limit per run of ${j.name} (USD)`, "for each run"), got,
         { cls: "x", v: h("button", { class: "btn icon ghost", title: "Stop this job", onclick: () => { delete f.settings.jobs[j.name]; drawAi(); markDirty(); } }, "×") }]);
-    }));
+  }
   drawAi();
-  const ai = card(place("ai"), "Which brain does each piece of work, the most ONE piece of work may cost (one chat reply, or one run of a job — not a monthly budget), and which tools a report gets: what the person who asks may use (on schedule, everything switched on). A reply that reaches its limit stops and offers Continue; a report that reaches it is still sent with what is done. A job that is not set does not run.",
+  const ai = card(place("ai"), "Which brain does each piece of work (one for all the AI jobs of a skill), the most ONE piece of work may cost (one chat reply, or one run of a job — not a monthly budget), and which tools a report gets: what the person who asks may use (on schedule, everything switched on). A reply that reaches its limit stops and offers Continue; a report that reaches it is still sent with what is done. A job that is not set does not run.",
     table(["Work", "Brain", withInfo("Limit (US$)", limitNote),
       withInfo(place("tools"), `Every answer and every report gets the tools switched on in ${where("tools")}, by the role of the person who asks: the owner everything, the facility manager (and anyone in a group listed for the facility manager) less what ${where("tools")} refuses them. A report on schedule gets everything switched on. A skill's own list limits nothing: the AI works without what a run lacks.`),
       ""], aiBody, { cls: "ai", widths: ["30%", "22%", "15%", null, "44"] }));

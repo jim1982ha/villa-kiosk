@@ -155,11 +155,13 @@ def test_an_ai_job_without_a_name_switches_its_skill_off(tmp_path):
 def test_settings_jobs_in_policy_yaml():
     p = Policy({"settings": {"jobs": {"a": {"profile": "economy", "limit_usd": 1}, "b": {"profile": "huge", "limit_usd": 1},
                                       "c": {"profile": "auto", "limit_usd": 0.01}}}})
-    assert p.jobs == {"a": {"profile": "economy", "limit_usd": 1.0}}       # the agent: lenient, b and c do not run
+    assert p.jobs == {"a": {"limit_usd": 1.0, "profile": "economy"}}       # the agent: lenient, b and c do not run
+    assert p.job_settings({}) == {"a": {"profile": "economy", "limit_usd": 1.0}}   # an older file's brain, still read
     out = problems({"settings": {"jobs": {"b": {"profile": "huge", "limit_usd": 1}, "c": {"profile": "auto", "limit_usd": 0.01},
-                                          "d": {"profile": "auto", "limit_usd": 1, "model": "x"}}}})
+                                          "d": {"profile": "auto", "limit_usd": 1, "model": "x"}},
+                                 "skill_brains": {"reports": "huge"}}})
     assert any("jobs.b.profile" in x for x in out) and any("jobs.c.limit_usd" in x for x in out)
-    assert any("jobs.d must give profile and limit_usd only" in x for x in out)
+    assert any("jobs.d must give limit_usd only" in x for x in out) and any("skill_brains.reports" in x for x in out)
 
 
 def test_every_report_a_person_may_ask_for_runs_as_its_job():

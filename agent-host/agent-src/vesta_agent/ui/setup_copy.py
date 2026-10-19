@@ -32,7 +32,7 @@ from .. import __version__, tool_access
 from ..history import policy_change
 from ..places import title, where
 from ..policy import RULE_WORDS, WORDS, Policy, problems as policy_problems, setup_fields
-from ..skills import FILE_NAME, SKILL_NAME, VILLA_PREFIX, SkillError, skill_files, parse_skill, ai_jobs
+from ..skills import FILE_NAME, SKILL_NAME, VILLA_PREFIX, SkillError, skill_files, parse_skill, ai_jobs, job_owners
 
 # ⚠️ WHAT THE EXPORT OFFERS, IN ITS WORDS (architecture review 9): the page typed these and one named a card that no
 # longer existed ("The AI", "allowed lists"). key → (the words, the note under them, ticked at first), in order.
@@ -217,7 +217,7 @@ def preview(settings, skills, setup: dict, server_tools: list[dict] | None) -> d
                      "detail": "your standing rules for the agent"})
     pol = Policy(merged)
     listed = tool_access.listing(server_tools)
-    jobs = pol.jobs
+    jobs = pol.job_settings(job_owners(parsed))          # each job's limit and its skill's one brain
     for name, sk in parsed.items():
         for t in sk.tools or []:
             # one reading of a tool's state (tool_access.tool_state): this wrote its own "not on the server" test

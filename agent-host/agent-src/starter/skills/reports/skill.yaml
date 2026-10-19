@@ -20,9 +20,10 @@ scripts:
     job_only: {fm-daily: fm-daily, fm-weekly: fm-weekly, owner-monthly: owner-monthly}
     flags: {--energy: infile, --facts: infile, --notes: infile, --page: infile, --as-of: date, --out: outfile}
     inject: [pack, store, zone]
-# AI jobs: each `name` is the key of its model and spending limit in policy.yaml settings.jobs (VESTA
-# Agent page → Rules → AI jobs); a job that policy.yaml does not name does not run. `default` is what
-# the page offers when it adds the job. `on_limit` is the code step that still sends the page, with what
+# AI jobs: each `name` is the key of its spending limit in policy.yaml settings.jobs (VESTA Agent page → Rules →
+# AI brains and limits); all of a skill's jobs run with ONE brain, settings.skill_brains (owner, 2026-10-20). A job
+# that policy.yaml does not name does not run. `default` is what the page offers when it adds the job (the skill's
+# brain, when it has none yet: the strongest of its jobs' `profile`). `on_limit` is the code step that still sends the page, with what
 # is done, when the limit stops the job ({to}: here when asked in a chat, else the job's `to`).
 # `without_ai` are the code steps that still make the report when the AI cannot run (no credit, a refused key,
 # Anthropic unreachable): the figures and charts, said to be made without the AI ({why}), in order, each one
@@ -70,7 +71,7 @@ schedule:
     to: owner
     on_request: true
     description: the owner's monthly report (last month, or the month a person names)
-    default: {profile: performance, limit_usd: 6}
+    default: {profile: auto, limit_usd: 6}
     on_limit: "compose.py owner-monthly --facts facts.json --notes notes.json --out owner_monthly.html --finish {to} --since {started} --limit {limit}"
     button: Monthly report
     without_ai:

@@ -198,15 +198,29 @@ class UI:
 
     # ------------------------------------------------------------------ AI jobs
     def _jobs(self) -> list[dict]:
-        """The AI jobs the skills declare, and whether policy.yaml sets their model and limit (else they do not run)."""
-        from ..skills import ai_jobs
-        set_ = page_policy(self.s.policy_path).jobs
+        """The AI jobs the skills declare, and whether policy.yaml sets their skill's brain and their limit (else they
+        do not run). `skill_brain`: the one brain of its skill's jobs (owner, 2026-10-20), None when not set;
+        `brain_default`: what "Add them" gives a skill with none (the strongest of its jobs' starter values)."""
+        from ..policy import PROFILE_ORDER
+        from ..skills import ai_jobs, job_owners
         from ..scheduler import describe
+        pol = page_policy(self.s.policy_path)
+        every = ai_jobs(self.skills.all())
+        owners = job_owners(self.skills.all())
+        set_ = pol.job_settings(owners)
+        defaults = {}
+        for sk, j in every:
+            p = (j.get("default") or {}).get("profile")
+            if p in PROFILE_ORDER and PROFILE_ORDER.index(p) >= PROFILE_ORDER.index(defaults.get(sk.name, p)):
+                defaults[sk.name] = p
         listed = {t["name"]: t for t in (tool_access.read_list(self.s.data_dir) or {}).get("tools") or []}
         return [{"name": j["name"], "skill": sk.name, "when": j["when"], "to": j.get("to"),
                  "when_words": describe(j["when"])[0], "runs_per_month": describe(j["when"])[1],
                  "on_request": j.get("on_request", False), "description": j.get("description") or "",
-                 "default": j.get("default") or {}, "set": j["name"] in set_, "current": set_.get(j["name"]),
+                 "default": {"limit_usd": (j.get("default") or {}).get("limit_usd", 1)}, "set": j["name"] in set_,
+                 "current": set_.get(j["name"]), "limit_usd": (pol.jobs.get(j["name"]) or {}).get("limit_usd"),
+                 "skill_brain": pol.skill_brain(sk.name, [n for n, s in owners.items() if s == sk.name]),
+                 "brain_default": defaults.get(sk.name, "auto"),
                  # Rules › AI brains and limits › "AI tools": its skill's list (None: everything switched on)
                  "tools": None if sk.tools is None else [tool_access.label(t, listed) for t in sk.tools]}
                 for sk, j in ai_jobs(self.skills.all())]
@@ -221,7 +235,13 @@ class UI:
         if not missing:
             return web.json_response({"ok": True, "added": []})
         settings = to_form(self.files.policy_now()[0])["settings"]
-        settings["jobs"] = {**settings["jobs"], **{j["name"]: dict(j["default"]) for j in missing}}
+        settings["jobs"] = {**settings["jobs"], **{j["name"]: dict(j["default"]) for j in missing
+                                                   if j["limit_usd"] is None}}
+        # a skill with no brain yet gets its starter one: its jobs run with it (owner, 2026-10-20: one brain a skill)
+        brains = dict(settings.get("skill_brains") or {})
+        brains.update({j["skill"]: j["brain_default"] for j in missing if not j["skill_brain"]})
+        if brains:
+            settings["skill_brains"] = brains
         names = [j["name"] for j in missing]
         self.files.edit_policy({"settings": settings}, f"AI jobs added: {', '.join(names)}")
         return web.json_response({"ok": True, "added": names})
@@ -303,7 +323,8 @@ class UI:
         form = body.get("form")
         if not isinstance(form, dict):
             raise Refused(["No form sent."])
-        return web.json_response(self.files.save_policy(apply_form(text, form), str(body.get("rev") or "")))
+        return web.json_response(self.files.save_policy(self.files.form_policy(apply_form(text, form)),
+                                                        str(body.get("rev") or "")))
 
     async def policy_text(self, request):
         body = await request.json()

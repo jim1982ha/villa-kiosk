@@ -14,6 +14,7 @@ from vesta_shared import battery  # a battery's charge: the night check's own re
 from vesta_shared.stats import step_index  # the night check's step detector
 from vesta_shared.timeutil import day_time_label, said  # the one day format; a stored time in words
 from vesta_shared.past import unread  # the one "could not be read whole: nothing is known after"
+from vesta_shared.retention import days_words  # how long the villa's system keeps detail, in words
 from vesta_shared.result import PRIORITY_ORDER, WHOLE_DEVICE  # the one list of priorities; a whole device's faults
 from vesta_shared.limits import limit  # every limit, set on the Limits tab
 
@@ -108,6 +109,11 @@ def clue_use_while_empty(c, when):
     got = c.cli.history_read([ent], s, c.e_dt, now=c.now)
     if not got.changes(ent):
         return []
+    if got.older_than_kept is not None:
+        # days before the villa's detail are not known (vesta_shared.retention): said, never counted as either
+        c.problems.append("Electricity while the villa is empty: counted from "
+                          f"{day_time_label(got.older_than_kept.astimezone(c.Z))} — the villa's system keeps its "
+                          f"history {days_words(c.cli.detailed_days)} only.")
     if not got.whole(ent):
         c.problems.append("Electricity while the villa is empty: "
                           + unread("its mode", day_time_label(got.reach(ent).astimezone(c.Z)))
