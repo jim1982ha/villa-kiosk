@@ -17,8 +17,8 @@ import { ck, done, tsFiles } from "../consistency/check.mjs";
 const table = JSON.parse(readFileSync(new URL("../../rootfs/usr/share/vesta/ha-commands.json", import.meta.url), "utf8"));
 const types = new Set([...table.websocket, ...table.camera]);
 const domains = new Set(table.serviceDomains);
-// called in the owner's session only (its control reads an entity no other profile is relayed — readDomains)
-const ownerDomains = new Set(table.ownerServiceDomains);
+// a light's scene choice: its domain is called by every profile, on such a select only (the proxy judges the entity)
+const ownerDomains = new Set([table.sceneSelect.domain]);
 
 const SRC = new URL("../../src/", import.meta.url).pathname;
 const walk = tsFiles;
@@ -49,7 +49,7 @@ const badCalls = [...calls].filter(([c]) => {
   return d === "homeassistant" ? !table.homeassistantServices.includes(s) : !domains.has(d) && !ownerDomains.has(d);
 }).map(([c, f]) => `${c} (${f})`);
 ck("every service domain is in the table (homeassistant.* by service)", badCalls.length === 0, badCalls);
-ck("an owner-only domain is never one another profile may call or read (the proxy relays neither)",
+ck("the scene choice's domain is never a whole domain another profile may call or read (the proxy judges each select)",
    [...ownerDomains].every((d) => !domains.has(d) && !table.readDomains.includes(d)) && ownerDomains.has("select"), [...ownerDomains]);
 const { TOGGLEABLE_DOMAINS } = await import("@/utils/quickAction");
 const badToggle = [...TOGGLEABLE_DOMAINS].filter((d) => !domains.has(d));
@@ -71,7 +71,7 @@ for (const { f, src } of files) {
 // `update.*` is an owner-only scan (Cockpit's updates count sits behind seeUpdates), and so is `person.*`: a
 // person's whereabouts never leave the add-on for a guest or ops session (readDomains' own note), and the presence
 // window shows its People to the owner only (components/hud/PresenceTile — PresenceWindow).
-// …and the owner-only service domains (ownerServiceDomains: a light's scene choice is a select the owner alone reads).
+// …and the scene choice's domain (sceneSelect: only a light's scene choice of it is read by another profile).
 const OWNER_ONLY = new Set(["update", "person", ...ownerDomains]);
 const unread = [...scanned].filter(([d]) => !OWNER_ONLY.has(d) && !readable.has(d)).map(([d, f]) => `${d} (${f})`);
 ck("  ...the people of the presence window are the owner's only",

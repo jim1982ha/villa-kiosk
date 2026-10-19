@@ -24,8 +24,8 @@ export const HAServices = {
   /** `light.turn_on` with the data utils/panelRules builds (a colour, an effect, a colour temperature). */
   setLight: (ws: WS, id: string, data: Record<string, unknown>) =>
     ws.callService("light", "turn_on", data, t(id)),
-  /** A light's scene choice (panelRules.sceneSelectOf): the owner's only — the add-on relays `select` to no other
-   *  profile (ha-commands.json ownerServiceDomains). */
+  /** A light's scene choice (panelRules.sceneSelectOf): every profile — the add-on lets this select through, and no
+   *  other (ha-commands.json sceneSelect). */
   selectOption: (ws: WS, id: string, option: string) =>
     ws.callService("select", "select_option", { option }, t(id)),
 

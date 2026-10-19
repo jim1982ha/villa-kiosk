@@ -92,9 +92,15 @@ ck("a preset is marked within a light's rounding, not beyond", presetIsCurrent({
   ck("  ...never another device's, never one named otherwise, never one with no options, never a light with no device",
      R.sceneSelectOf("light.lamp", ents, devs) === null && R.sceneSelectOf("light.nowhere", ents, devs) === null
      && R.sceneSelectOf("light.strip", ents, { ...devs, "select.strip_scene": "d9" }) === null);
-  ck("  ...a name that ends in \"Scene\" is enough, whatever its id",
+  ck("  ...its id decides, never its name: the add-on lets through the same selects (owner, 2026-10-20: every profile)",
      R.sceneSelectOf("light.strip", { ...ents, "select.strip_x": S("Strip Scene", ["Ocean"]) },
-       { "light.strip": "d1", "select.strip_x": "d1" }) === "select.strip_x");
+       { "light.strip": "d1", "select.strip_x": "d1" }) === null);
+  const rule = new RegExp(JSON.parse(readFileSync(new URL("../../rootfs/usr/share/vesta/ha-commands.json", import.meta.url), "utf8")).sceneSelect.objectId);
+  const ids = ["scene", "strip_scene", "led_strip_scene", "scenes", "strip_scene_2", "scenery", "_scene", "x_scene_mode"];
+  const app = (o) => R.sceneSelectOf("light.l", { "light.l": { state: "on", attributes: {} }, [`select.${o}`]: S("x", ["a"]) },
+                                   { "light.l": "d", [`select.${o}`]: "d" }) !== null;
+  ck("  ...the app's rule and the add-on's are ONE rule (ha-commands.json sceneSelect.objectId)",
+     ids.every((o) => app(o) === rule.test(o)), ids.map((o) => [o, app(o), rule.test(o)]));
   const fx = R.lightChoices({ supported_color_modes: ["hs"], effect_list: ["off", "Scene"] });
   ck("a pick: the select's option first, then the light's own scene mode (its effect named Scene, any case)",
      JSON.stringify(R.scenePick(fx, "light.strip", "select.strip_scene", ["Ocean", "Forest"], "Ocean")) === JSON.stringify([
