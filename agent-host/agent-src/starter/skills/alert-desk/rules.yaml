@@ -57,6 +57,13 @@ routes:
     severity: P3        # findings from the preventive-maintenance batch
     cooldown_min: 1440
 
+# A VESTA rule whose kind (blueprint) has no route above, and which names no priority itself: by its name — its
+# entity id without "automation." — starting with `critical_`, else the rest (owner, 2026-10-19: "if the alert name
+# has critical_ in its name: P1; if not, P2"). Its cooldown and chase are the defaults'.
+unrouted:
+  critical_: P1
+  other: P2
+
 siren:
   # The siren never fires on a single signal. Two independent signals inside
   # the window, the villa empty, and one explicit human approval.

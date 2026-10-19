@@ -81,13 +81,23 @@ def now_utc(fake: str | None = None) -> datetime:
 
 
 def route_for(rule_id: str, blueprint: str | None = None) -> dict:
-    """A route by the rule's blueprint first (the live event names it), then by rule id prefix."""
+    """A route by the rule's blueprint first (the live event names it), then by rule id prefix; a VESTA rule (it names
+    a blueprint) that neither matches takes rules.yaml `unrouted`, by its name.
+
+    ⚠️ AN UNCLASSIFIED ALERT IS NOT A DIGEST LINE (owner, 2026-10-19): a rule of a kind with no route fell to the
+    defaults' P3 — kept for the next morning's digest. Now its name decides: `critical_…` is P1, any other P2."""
     r = dict(RULES["defaults"])
     for cand in RULES["routes"]:
         if (blueprint and cand.get("blueprint") == blueprint) or \
                 (cand.get("prefix") and rule_id.startswith(cand["prefix"])):
             r.update(cand)
-            break
+            return r
+    if blueprint:
+        by_name = RULES.get("unrouted") or {}
+        name = rule_id.removeprefix("automation.")
+        said = by_name.get("critical_") if name.startswith("critical_") else by_name.get("other")
+        if said:                                     # a villa file without it: the defaults', never a guess
+            r["severity"] = said
     return r
 
 

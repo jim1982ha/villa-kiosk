@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.250 (19 October 2026)
+
+- alert-desk: a VESTA rule whose kind (blueprint) has no route and which names no priority takes rules.yaml
+  `unrouted` by its name — its entity id without "automation." starting with `critical_` is P1, any other P2 (owner,
+  2026-10-19). It fell to the defaults' P3 (the next morning's digest). The kinds with a route keep theirs; a rule's
+  own priority still wins; the agent's own findings (PM-, critical_internet) are unchanged. A villa file without
+  `unrouted` keeps the defaults', never a guess. Test: test_a_rule_of_a_kind_with_no_route_takes_its_names_priority
+  (four mutations red).
+- On the villa (not in this release): the VESTA blueprint critical_battery (low batteries, its rule
+  critical_battery---low_battery created switched off), and audit_config_integrity with "VESTA priority", "Who the
+  message is for" and a vesta_critical_event — both alerts reach the agent, which classifies them by this rule.
+
 ## 0.6.249 (19 October 2026)
 
 The second week-42 report checked (owner, 2026-10-19), and the owner's two asks on the page.

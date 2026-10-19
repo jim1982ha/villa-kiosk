@@ -800,3 +800,17 @@ def test_a_rule_deleted_while_its_alert_is_open_still_closes_it(store):
     clear = desk._params(None).behaviour("clear_minutes")
     _tick(store, villa, 5)
     assert _tick(store, villa, 5 + clear)["rule_gone"] == [iid]
+
+
+def test_a_rule_of_a_kind_with_no_route_takes_its_names_priority():
+    # owner, 2026-10-19: "if the alert name has critical_ in its name: P1; if not, P2" — the kinds with a route
+    # keep it, and a rule's own priority still wins
+    follows = {"priority": "", "severity": "critical"}
+    assert desk.priority(follows, desk.route_for("automation.critical_battery_low_battery", "critical_battery")) == "P1"
+    assert desk.priority(follows, desk.route_for("automation.audit_config_integrity_critical_automation_off",
+                                                 "audit_config_integrity")) == "P2"
+    assert desk.priority(follows, desk.route_for("automation.shelly_pattern_pool_pump", "critical_schedule")) == "P2"
+    assert desk.priority(follows, desk.route_for("automation.critical_water_leak", "critical_binary_trip")) == "P1"
+    assert desk.priority({"priority": "P4"}, desk.route_for("automation.critical_battery_x", "critical_battery")) == "P4"
+    assert desk.route_for("PM-SILENT")["severity"] == "P3"                 # the agent's own findings: as before
+    assert desk.route_for("something_else")["severity"] == desk.RULES["defaults"]["severity"]
