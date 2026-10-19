@@ -93,6 +93,10 @@ class Notes:
     the Kiosk in between lost its "kiosk_reopened" and the facility manager was never told. `Store.note` changes only the
     keys it is given, against the record as it stands at that moment."""
     MESSAGE, BLUEPRINT = "message", "blueprint"                  # the alert's claim, read beyond the desk
+    # what to do on site, as the alert's route (the alert desk's rules.yaml) says it NOW: the desk carries it here, as
+    # it carries the claim, for the Kiosk fault's note and the morning digest (Problems.check_of) — the words stay the
+    # skill's. Absent on an incident from before 0.6.255: those readers fall back to the task's own check_text.
+    CHECK = "check"
     KIOSK_REOPENED = "kiosk_reopened"                            # mail: who reopened its fault in the Kiosk, and when
     UNREACHED = "unreached"                                      # mail: Telegram refused every chat of the FM's
 

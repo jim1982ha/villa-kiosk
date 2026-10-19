@@ -2,8 +2,8 @@
 """reports: the composer — the chat texts, and the weekly and monthly pages from their facts.
 
   compose.py fm-daily      --pack pack.json --store S [--as-of D]                 -> text (chat)
-  compose.py owner-weekly  --pack pack.json --store S --energy week.json [--page P] [--facts F] -> 3 lines (chat),
-                           page attached; with the page's facts.json, its count of alerts
+  compose.py owner-weekly  --pack pack.json --store S --energy week.json --facts F [--page P] -> 3 lines (chat),
+                           page attached; every number the lines say is the page's (facts.json's kpis)
   compose.py fm-weekly     --facts facts.json [--notes notes.json] --out page.html
   compose.py owner-monthly --facts facts.json [--notes notes.json] --out page.html
 
@@ -54,7 +54,7 @@ from vesta_shared.messaging import fmt_money, incident_tag  # noqa: E402
 from vesta_shared.result import WHOLE_DEVICE  # noqa: E402  (what a whole device's faults are)
 from vesta_shared.message_format import document, for_the_ai, split_title  # noqa: E402  (the one shape: title, To:, sections)
 from vesta_shared.store import Incident, Store  # noqa: E402
-from vesta_shared.timeutil import day_label, day_time_label, villa_date  # noqa: E402  (the one day format, duration)
+from vesta_shared.timeutil import day_label, day_time_label  # noqa: E402  (the one day format, duration)
 from vesta_shared.problems import Problems  # noqa: E402  (what is still open: one owner)
 from vesta_shared.page import bars, line, linked, pairs, say, templates  # noqa: E402  (the charts, the sentences: shared)
 
@@ -138,31 +138,34 @@ def fm_daily(pack: KnowledgePack, store: Store, as_of: date) -> str:
     return document(title(pack.villa, "daily", as_of), "", sections)
 
 
+#: The owner's Monday figures, each the weekly page's own (facts.py s_kpis): alerts, critical ones, alerts still open,
+#: maintenance problems open.
+OWNER_FIGURES = ("alerts", "p1", "alerts_open", "open_tasks")
+#: What a line says for a figure the page does not give (a facts.json written by an older facts.py): named, not guessed.
+NOT_GIVEN = "n/a"
+
+
 def owner_weekly(pack: KnowledgePack, store: Store, energy: dict, page: bool = False, kpis: dict | None = None) -> str:
     """The owner's Monday lines. `page`: the facility manager's weekly page goes with them (owner, 2026-10-12: the
     lines said "Details in the FM weekly page", a page only the facility manager was sent). `kpis`: that page's own
-    figures (facts.json's kpis section) — its count of alerts, the villa's own included, is then the one said.
+    figures (facts.json's kpis section): every number said is one of them (OWNER_FIGURES); one it lacks reads NOT_GIVEN.
 
-    ⚠️ ONE COUNT OF ALERTS (owner, 2026-10-19: "maintain consistency in calculations"): these lines counted only the
-    alerts the agent recorded, while the page sent with them also counted those the villa's system raised while the
-    agent was not listening — two numbers for one week, side by side."""
-    inc = [i for i in store.incident_occurrences()            # every run, a reopened alert's included
-           if energy["start"] <= villa_date(i["opened_at"], pack.time_zone or "UTC").isoformat() <= energy["end"]]
-    p1 = sum(1 for i in inc if i["severity"] == "P1")
-    n_alerts = (kpis or {}).get("alerts", len(inc))
-    # the alerts and the maintenance problems still open, counted apart as the concierge counts them: every open
-    # problem was called an "FM task", an alert included
-    still = Problems(store).open_problems()
-    alerts_open = sum(1 for p in still if p["incident"])
-    open_tasks = len(still) - alerts_open
+    ⚠️ EVERY NUMBER IS THE PAGE'S (owner, 2026-10-19: "maintain consistency in calculations"; architecture review the
+    same evening): the count of alerts was unified that morning, but the critical ones, the alerts still open and the
+    problems open were still counted here, by other rules than the page's (every open problem, against the page's
+    problems opened in the week and its to-do list grouped by device) — the Monday message and its attached page
+    disagreed. Nothing is computed here any more; `store` stays for the callers' signature."""
+    del store
+    n = {k: (kpis or {}).get(k, NOT_GIVEN) for k in OWNER_FIGURES}
+    quiet = all(n[k] == 0 for k in OWNER_FIGURES if k != "alerts")
     kwh = f"{energy['total_kwh']:.0f} kWh" if energy.get("total_kwh") is not None else "kWh n/a"
     vs = f" ({energy['total_vs_prev_pct']:+.0f}%)" if energy.get("total_vs_prev_pct") is not None else ""
     cost = f", {fmt_money(energy['total_cost'], energy['currency'])}" if energy.get("total_cost") else ""
     return document(title(pack.villa, "weekly", date.fromisoformat(energy["end"])), "", [
         ("Energy this week", [f"- {kwh}{vs}{cost}."]),
-        ("Alerts and problems", [f"- {n_alerts} alert(s), {p1} critical, {alerts_open} still open; {open_tasks} "
-                                 f"maintenance problem(s) open.",
-                                 "- All quiet." if not still and not p1 else "- Details in the attached page." if page
+        ("Alerts and problems", [f"- {n['alerts']} alert(s), {n['p1']} critical, {n['alerts_open']} still open; "
+                                 f"{n['open_tasks']} maintenance problem(s) open.",
+                                 "- All quiet." if quiet else "- Details in the attached page." if page
                                  else "- The facility manager has the details in their weekly page."])])
 
 
@@ -348,6 +351,11 @@ def main(argv=None):
         print("owner-weekly needs --energy: first run roi-energy energy_period.py --period week --out <file>.json, "
               "then pass that file.", file=sys.stderr)
         return 1
+    if a.cmd == "owner-weekly" and not a.facts:
+        # every number the lines say is the weekly page's (owner_weekly): without its facts there are none to say
+        print("owner-weekly needs --facts: first run facts.py fm-weekly --energy <week>.json --out facts.json, "
+              "then pass that file.", file=sys.stderr)
+        return 1
     if not a.pack:
         print(f"{a.cmd} needs --pack.", file=sys.stderr); return 1
     s = script.Context(a)
@@ -360,7 +368,7 @@ def main(argv=None):
             print(f"fm-daily: {e}", file=sys.stderr)
             return 1
     else:
-        kpis = (json.load(open(a.facts, encoding="utf-8")).get("sections") or {}).get("kpis") if a.facts else None
+        kpis = (json.load(open(a.facts, encoding="utf-8")).get("sections") or {}).get("kpis")
         doc = owner_weekly(pack, store, json.load(open(a.energy)), page=bool(a.page), kpis=kpis)
     attached = {"attachment": os.path.basename(a.page)} if a.page else {}
     if mode == "no_ai":

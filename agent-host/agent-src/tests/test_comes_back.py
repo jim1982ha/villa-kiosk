@@ -202,3 +202,56 @@ def test_a_returning_fault_the_kiosk_never_had_is_made_with_its_check_note(tmp_p
                           "Look at the pump's strainer.")
     assert run(v.tickets.reopen({"task_id": tid, "title": "Onsen pump low (again: 2 times in 7 days)", "note": "Back again."}))
     assert k.notes[-1] == "What to do: Look at the pump's strainer."
+
+
+# ---------------------------------------------------------------------- what to do: one owner, the rule's words now
+def test_the_check_follows_the_rules_words_on_telegram_the_digest_and_the_kiosk(tmp_path, monkeypatch):
+    # architecture review, 2026-10-19: Telegram read the route's check live, the Kiosk fault's note froze it at its
+    # making, the digest's "Still open" line read a key nobody wrote — three answers to "what to do"
+    k = FakeKiosk()
+    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)
+    store = Store(v.s.store_path)
+    route = next(r for r in desk.RULES["routes"] if r.get("blueprint") == "critical_watchdog")
+    monkeypatch.setitem(route, "check", "Power and network of the device named.")
+    first = desk.intake(store, ev("automation.ap", "sensor.ap", 0, blueprint="critical_watchdog", state="disconnected",
+                                  bad_states=["disconnected"]), T0)
+    iid = first["incident_id"]
+    assert first["send"][0]["text"].endswith("\nWhat to do: Power and network of the device named.")
+    run(v.tickets.repair())
+    assert k.notes == ["What to do: Power and network of the device named."]
+    # the route's words edited while the alert is open (a villa's own rules.yaml, kept by updates)
+    monkeypatch.setitem(route, "check", "Look at the switch in the rack first.")
+    again = desk.intake(store, ev("automation.ap", "sensor.ap", 300, blueprint="critical_watchdog", state="disconnected",
+                                  bad_states=["disconnected"]), T0 + timedelta(hours=5))      # a repeat, past the cooldown
+    assert again["decision"] == "repeat" and again["incident_id"] == iid
+    assert again["send"][0]["text"].endswith("\nWhat to do: Look at the switch in the rack first.")
+    (still,) = Problems(store).open_problems()
+    assert still["check"] == "Look at the switch in the rack first."                      # the digest's line
+    run(v.tickets.repair())
+    assert k.notes == ["What to do: Look at the switch in the rack first."]              # the fault's note
+    # edited again, with no alert in between: a tick carries it (the words have ONE owner, the route)
+    monkeypatch.setitem(route, "check", "Call the network contractor.")
+    desk.tick(store, T0 + timedelta(hours=5, minutes=5))
+    assert Problems(store).open_problems()[0]["check"] == "Call the network contractor."
+    run(v.tickets.repair())
+    assert k.notes == ["What to do: Call the network contractor."]
+
+
+def test_lowered_then_raised_reopens_the_one_fault_in_the_kiosk(tmp_path):
+    # architecture review, 2026-10-19: an alert lowered to P3 (its task closed "Lowered to P3.") and raised back got a
+    # second task and a second Cockpit fault for the same number — and the double check skips a fault a task holds
+    k = FakeKiosk()
+    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)
+    store = Store(v.s.store_path)
+    e = dict(blueprint="critical_watchdog", state="disconnected", bad_states=["disconnected"])
+    iid = desk.intake(store, ev("automation.ap", "sensor.ap", 0, **e), T0)["incident_id"]
+    run(v.tickets.repair())
+    desk.intake(store, ev("automation.ap", "sensor.ap", 5, priority="P3", **e), T0 + timedelta(minutes=5))
+    run(v.tickets.repair())
+    assert k.resolved == ["t1"] and store.incident(iid)["state"] == "digest"
+    res = desk.intake(store, ev("automation.ap", "sensor.ap", 70, priority="P2", **e), T0 + timedelta(minutes=70))
+    run(v.tickets.repair())
+    assert len(store.tasks(None)) == 1 and store.tasks(None)[0]["reopen_note"] == "Raised to P2."
+    assert [a["action"] for a in res["actions"]] == ["ticket.reopen"]
+    assert len(k.tickets) == 1 and k.reopened == [("t1", "Motion at sensor.ap")]       # the same fault, open again
+    assert k.ticket("t1")["updates"][-1]["note"] == "Raised to P2."

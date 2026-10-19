@@ -854,3 +854,43 @@ def test_a_rule_saved_at_a_lower_priority_stops_the_chase_without_alerting_again
 def test_what_a_priority_does_is_read_from_the_settings():
     assert {p: desk.does(p) for p in ("P1", "P2", "P3", "P4")} == desk.RULES["priority_does"]
     assert desk.does("P2", {"ladder": False}) == "log"                                  # a route without the ladder
+
+
+def test_lowered_then_raised_is_one_task_reopened_saying_why(store):
+    # architecture review, 2026-10-19: a first opening went through open_task, which knows only OPEN tasks — lowered
+    # (its task closed "Lowered to P3.") then raised, the alert got a second task and a second Kiosk fault
+    iid = desk.intake(store, event(), T0, occupancy_reader=lambda: "occupied")["incident_id"]
+    desk.intake(store, event(priority="P3"), T0 + timedelta(minutes=5), occupancy_reader=lambda: "occupied")
+    assert store.last_task(f"incident:{iid}")["status"] != "open"
+    res = desk.intake(store, event(priority="P2"), T0 + timedelta(minutes=70), occupancy_reader=lambda: "occupied")
+    tasks = store.tasks(None)
+    assert len(tasks) == 1 and tasks[0]["status"] == "open" and tasks[0]["reopen_note"] == "Raised to P2."
+    (back,) = [a for a in res["actions"] if a["action"].startswith("ticket")]
+    assert back == {"action": "ticket.reopen", "task_id": tasks[0]["id"], "title": event()["summary"],
+                    "note": "Raised to P2."}
+    assert desk.RULES["raised_words"] == "Raised to {priority}."                        # the skill's words
+
+
+def test_the_desks_durations_are_worded_as_both_apps_word_one(store, monkeypatch):
+    # architecture review, 2026-10-19: "No answer after 90 min", "in 5 min", "for 120 min" beside the agreement's
+    # "1 h 30 min" (timeutil.lasting, agent-contract duration.cases) everywhere else
+    from vesta_shared.params import VillaParams
+    params = VillaParams(defaults={**desk.DEFAULTS, "reask_minutes": 90, "escalate_minutes": 150})
+    iid = desk.intake(store, event(), T0, occupancy_reader=lambda: "occupied")["incident_id"]
+    reminder = desk.tick(store, T0 + timedelta(minutes=91), params)
+    assert reminder["reasked"] == [iid] and reminder["send"][0]["status"] == "No answer after 1 h 30 min"
+    escalated = desk.tick(store, T0 + timedelta(minutes=151), params)
+    assert escalated["escalated"] == [iid] and escalated["send"][0]["status"] == "No answer from FM after 2 h 30 min"
+    monkeypatch.setitem(desk.RULES["siren"], "window_min", 90)
+    monkeypatch.setattr(desk, "siren_minutes", lambda: 120)
+    for n, e in enumerate(("binary_sensor.a", "binary_sensor.b")):
+        store.new_incident(f"k{n}", "automation.critical_presence_guard_x", e, "P1",
+                           {"message": "Motion", "blueprint": "critical_presence_guard"}, T0.isoformat())
+    gate = desk.siren_gate(store, {"occupancy": "empty"}, T0 + timedelta(minutes=1))
+    assert gate["armed"] and "2 independent sensors in 1 h 30 min while the villa is empty" in gate["prompt"]
+    assert gate["prompt"].endswith("Approving sounds the siren for 2 h.")
+    store.beat("ha_events", T0.isoformat())
+    silent = desk.tick(store, T0 + timedelta(minutes=150), params)
+    assert silent["send"] and "Villa silent since" in silent["send"][0]["status"]
+    inc = store.find_open_incident("critical_internet---villa_silent|agent")
+    assert "for 2 h 30 min:" in json.loads(inc["payload"])["message"]

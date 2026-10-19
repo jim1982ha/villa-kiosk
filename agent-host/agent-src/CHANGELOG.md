@@ -1,8 +1,47 @@
 # Changelog
 
+## 0.6.255 (19 October 2026)
+
+Architecture review, 19 October (six leads: one owner of "what to do", a new number says the week, one opener, the
+desk's durations, the Monday lines' figures, dead duplicates).
+- "What to do" on site has ONE owner, the alert desk's route (rules.yaml `check`), and every reader gets its current
+  words. Telegram read it live, the task froze it at its opening for the Kiosk fault's note, and the digest's "Still
+  open" line read a key nobody wrote (an alert's line had no check, a finding's had one). The desk now carries it on
+  the incident (store.Notes.CHECK: desk.carry_check at an opening, a repeat, a restate, a return and every tick), as it
+  carries the claim; Problems.check_of reads the SOURCE (the carried check, a finding's detail.check the night
+  rewrites) and the task's check_text only for a record from before; Problems.card carries it as `todo`; the repair
+  amends the fault's note (kiosk.todo, in the one write) — only a note the agent wrote ("What to do: …", "Check: …"),
+  a person's stays. No agreement change: a ticket's `note` is a field the agent may change. Tests:
+  test_the_check_follows_the_rules_words_on_telegram_the_digest_and_the_kiosk (four mutations red),
+  test_what_to_do_is_the_sources_words_now_…, test_a_faults_note_follows_what_to_do_unless_a_person_wrote_it.
+- A NEW number of an alert seen this week says so: its "Alert sent" line counts the week ("…, 3rd time in 7 days")
+  as a "Back at" line does — message_format.STEPS "new" carries {times}, notice.record writes its run; the count is
+  problems.incident_runs, as before. It said New while the card and the digest said "(again: 3 times in 7 days)".
+  Tests: test_a_new_number_within_the_week_counts_it_too, test_a_new_number_of_an_alert_seen_this_week_says_so_on_its_card
+  (two mutations red).
+- One opener for an alert's task: desk._ladder always goes through Problems.reopen_task (open / reopened / new); a
+  priority raised after a lowering reopens the SAME task and Kiosk fault, saying rules.yaml `raised_words` ("Raised to
+  P2."); Problems.settle reopens through the same method. Before, the raise went through open_task (open tasks only)
+  and made a second task and a second fault for the same number. Tests:
+  test_lowered_then_raised_is_one_task_reopened_saying_why, test_lowered_then_raised_reopens_the_one_fault_in_the_kiosk,
+  test_settle_reopens_a_task_through_the_one_opener (three mutations red).
+- alert-desk: its durations ("No answer after … ", "No answer from FM after …", the siren's window and sounding time,
+  the villa-silent message) are worded by timeutil.lasting ("1 h 30 min"), as everywhere else. Test:
+  test_the_desks_durations_are_worded_as_both_apps_word_one (two mutations red).
+- reports: the owner's Monday lines read every number from the weekly page's own figures (facts.py s_kpis: alerts, p1
+  — new —, alerts_open, open_tasks) and compute nothing; `compose.py owner-weekly` requires --facts (the job and
+  SKILL.md already pass it); a figure an older facts.json lacks reads "n/a". The critical ones, the alerts still open
+  and the problems open were still counted by the composer, by other rules than the page's. Tests:
+  test_the_owners_weekly_line_says_the_pages_own_figures, test_an_alert_that_came_back_counts_each_run_in_the_week
+  (two mutations red).
+- Deleted, no caller: outcome_words.clean_summary (messaging.no_code is the one copy), Kiosk.ticket_states /
+  update_ticket / note_ticket / tag_ticket (their tests call amend(retitled / tagged)), Tickets.resolve (a
+  ticket.resolve action only runs the repair), tickets.kiosk_reopen_note (kiosk_words.reopened). The test that
+  counted tag_ticket calls could never fail (the repair never called it): it now checks the record's revision.
+
 ## 0.6.254 (19 October 2026)
 
-- alert-desk rules.yaml: `unrouted` carries the owner's decision and the two designs he rejected (a route per rule, a
+- alert-desk rules.yaml: `unrouted` carries the owner's decision and the two designs the owner rejected (a route per rule, a
   whole blueprint raised to P1), so neither is proposed again. No behaviour change. Agent CLAUDE.md: the checks are
   `tools/release.py gates`, which also records the starter skills (it said a whole-tree ruff must be clean: 57 errors).
 

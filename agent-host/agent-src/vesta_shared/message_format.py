@@ -102,7 +102,9 @@ class Step(NamedTuple):
 #: The Kiosk's card tells what chased, escalated or brought an alert back — never the first alert (the fault itself)
 #: nor the closing (its close step says it).
 STEPS: dict[str, Step] = {
-    "new": Step("Alert sent", "new", timed=False, noted=False),
+    # a NEW number within the week says it too (architecture review, 2026-10-19): a return after reopen_hours is a new
+    # number (owner, 2026-10-18), and its card and the digest said "(again: 3 times in 7 days)" while Telegram said New
+    "new": Step("Alert sent", "new", timed=False, noted=False, line="Alert sent {at}{times} (to: {who})"),
     "reminder": Step("Reminder sent", "existing", timed=True, noted=True),
     "escalated": Step("Escalation sent", "existing", timed=True, noted=True),
     "update": Step("Update sent", "existing", timed=False, noted=False),

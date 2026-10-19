@@ -856,15 +856,24 @@ def test_the_morning_digest_says_what_is_new_and_still_open_as_problems_answer_i
     assert text.startswith("V, daily report on 05/10/2026.\nTo:\n\nNew since yesterday:\n- ") and "press Done" not in text
 
 
-def test_the_owners_weekly_line_counts_alerts_apart_from_maintenance(tmp_path):
+def test_the_owners_weekly_line_says_the_pages_own_figures(tmp_path):
+    # architecture review, 2026-10-19: the count of alerts was the page's (owner: "maintain consistency in
+    # calculations") but the critical ones, the alerts still open and the problems open were still counted here, by
+    # other rules — the Monday message and its attached page disagreed. Every number is now the page's kpis
     sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
     import compose
-    pack, store = _problems_villa(tmp_path)
-    text = compose.owner_weekly(pack, store, {"start": "2026-09-28", "end": "2026-10-04", "total_kwh": None})
-    assert "2 still open; 2 maintenance problem(s) open" in text                  # not "4 FM task(s)"
-    # with the weekly page's figures, the page's count of alerts (the villa's own included): one number for one week
+    pack, store = _problems_villa(tmp_path)          # a store whose own counts (1 alert, 2 open, 2 problems) differ
     week = {"start": "2026-09-28", "end": "2026-10-04", "total_kwh": None}
-    assert "- 7 alert(s)," in compose.owner_weekly(pack, store, week, kpis={"alerts": 7})
+    kpis = {"alerts": 7, "p1": 3, "alerts_open": 4, "open_tasks": 5}
+    text = compose.owner_weekly(pack, store, week, kpis=kpis)
+    assert "- 7 alert(s), 3 critical, 4 still open; 5 maintenance problem(s) open." in text
+    assert "- The facility manager has the details in their weekly page." in text
+    assert compose.OWNER_FIGURES == tuple(kpis)
+    quiet = compose.owner_weekly(pack, store, week, kpis={"alerts": 2, "p1": 0, "alerts_open": 0, "open_tasks": 0})
+    assert "- 2 alert(s), 0 critical, 0 still open; 0 maintenance problem(s) open." in quiet and "- All quiet." in quiet
+    # a facts.json from an older facts.py (no p1): the figure is named missing, never counted here
+    older = compose.owner_weekly(pack, store, week, kpis={"alerts": 7, "alerts_open": 4, "open_tasks": 5})
+    assert "- 7 alert(s), n/a critical, 4 still open; 5 maintenance problem(s) open." in older
 
 
 def test_the_owners_monday_lines_carry_the_weekly_page_they_point_to(tmp_path, monkeypatch, capsys):
@@ -876,16 +885,22 @@ def test_the_owners_monday_lines_carry_the_weekly_page_they_point_to(tmp_path, m
     import compose
     pack, store = _problems_villa(tmp_path)
     week = {"start": "2026-09-28", "end": "2026-10-04", "total_kwh": None}
-    assert "- Details in the attached page." in compose.owner_weekly(pack, store, week, page=True)
-    assert "attached" not in compose.owner_weekly(pack, store, week)          # no page sent: no page promised
+    kpis = {"alerts": 1, "p1": 0, "alerts_open": 1, "open_tasks": 2}
+    assert "- Details in the attached page." in compose.owner_weekly(pack, store, week, page=True, kpis=kpis)
+    assert "attached" not in compose.owner_weekly(pack, store, week, kpis=kpis)     # no page sent: no page promised
     (tmp_path / "week.json").write_text(_json.dumps(week))
+    (tmp_path / "facts.json").write_text(_json.dumps({"sections": {"kpis": kpis}}))
     (tmp_path / "fm_weekly.html").write_text("<html></html>")
     monkeypatch.setattr(compose.script, "Context", lambda a: type("C", (), {"pack": pack, "store": store,
                                                                             "day": staticmethod(lambda d: None)})())
     base = ["owner-weekly", "--pack", "p", "--energy", str(tmp_path / "week.json"), "--page", str(tmp_path / "fm_weekly.html")]
+    assert compose.main(base) == 1                                          # the page's figures are the lines': required
+    assert "needs --facts" in capsys.readouterr().err
+    base += ["--facts", str(tmp_path / "facts.json")]
     assert compose.main(base) == 0
     out = _json.loads(capsys.readouterr().out)
     assert out["attachment"] == "fm_weekly.html" and "attached page" in out["message"]["text"]
+    assert "- 1 alert(s), 0 critical, 1 still open; 2 maintenance problem(s) open." in out["message"]["text"]
     assert compose.main(base + ["--finish", "owner", "--no-ai", "no credit."]) == 0
     sent = _json.loads(capsys.readouterr().out)["send"][0]
     assert sent["attachment"] == "fm_weekly.html" and "attached page" in sent["text"]
@@ -942,9 +957,12 @@ def test_an_alert_that_came_back_counts_each_run_in_the_week(tmp_path):
         store.update_incident(iid, closed_at=(start + timedelta(hours=k)).isoformat(), state="done")
         store.reopen_incident(iid, (start + timedelta(hours=k, minutes=30)).isoformat())
     assert len([i for i in c.incidents() if i["id"] == iid]) == 3                         # each run of it in the week
+    kpis = facts.s_kpis(c)
+    assert (kpis["alerts"], kpis["p1"], kpis["alerts_open"]) == (3, 3, 1)                   # the page's own figures…
     end = (c.e_dt - timedelta(days=1)).date().isoformat()
-    text = compose.owner_weekly(c.pack, store, {"start": c.s_dt.date().isoformat(), "end": end, "total_kwh": None})
-    assert "3 alert(s), 3 critical" in text
+    text = compose.owner_weekly(c.pack, store, {"start": c.s_dt.date().isoformat(), "end": end, "total_kwh": None},
+                                kpis=kpis)
+    assert "3 alert(s), 3 critical, 1 still open" in text                                 # …are the Monday lines'
 
 
 def test_an_alerts_lasted_column_is_said_as_both_apps_say_a_duration(tmp_path):

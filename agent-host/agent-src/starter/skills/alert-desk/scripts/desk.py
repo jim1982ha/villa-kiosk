@@ -165,10 +165,24 @@ def tell(sev: str, stage: str, *, incident: int, ladder: bool = True, chased: bo
 def details(payload: dict, rule_id: str) -> str:
     """The original alert — Home Assistant's own message, and what to check — as every later message about the
     incident repeats it (owner, 2026-10-09: a chat keeps only an incident's latest message, so each one says
-    everything)."""
+    everything). The check is the route's as it stands now (rules.yaml): its one owner."""
     text = payload.get("message") or rule_id
     check = route_for(rule_id, payload.get("blueprint")).get("check")
     return f"{text}\nWhat to do: {check}" if check else text
+
+
+def carry_check(store: Store, iid: int, route: dict, p: dict | None = None) -> str:
+    """The route's "what to do" as it stands now, written on incident `iid` (store.Notes.CHECK) for the readers outside
+    this desk — the Kiosk fault's note, the morning digest's "Still open" line (Problems.check_of) — as the desk carries
+    the alert's claim. Written only when the words changed; returns them. `p`: the notes as already read.
+
+    ⚠️ ONE OWNER OF "WHAT TO DO" (architecture review, 2026-10-19): Telegram read the route live, the task froze the
+    words at its opening for the Kiosk, and the digest read a key nobody wrote — three answers. The words stay in
+    rules.yaml; every reader gets them from here."""
+    check = route.get("check") or ""
+    if (p if p is not None else notes_of(store.incident(iid))).get(Notes.CHECK) != check:
+        store.note(iid, {Notes.CHECK: check})
+    return check
 
 
 def about(inc: dict, status: str) -> dict:
@@ -345,9 +359,12 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
     if back:
         return reopen(store, back, ev, now, sev, route, out, zone=zone)
     iid = store.new_incident(key, rule_id, eid, sev, ev, now.isoformat())
+    carry_check(store, iid, route, ev)
     out["incident_id"] = iid
     out["decision"] = "new"
-    text = details(ev, rule_id)      # no status: "New" is the heading's (Incident: New #N)
+    # no status: "New" is the heading's (Incident: New #N) — and its "Alert sent" line counts the week when the same
+    # alert was seen this week under another number (message_format.STEPS, from problems.incident_runs)
+    text = details(ev, rule_id)
     if ev.get("snapshot"):
         out["actions"].append(R.snapshot(ev["snapshot"], iid))
     out["ha_messages"] = [R.ha_message(iid, text, ev.get("_context_id"), stage="new")]
@@ -383,6 +400,7 @@ def _restated(store: Store, cur: dict, ev: dict, sev: str, now: datetime, route:
     cur = dict(cur)                                # a store row
     # it fired again: whatever was seen clearing is not over
     p = store.note(cur["id"], {k: ev[k] for k in RESTATED if ev.get(k) is not None}, drop=("clear_since",))
+    carry_check(store, cur["id"], route, p)
     _reprioritised(store, cur, p, sev, now, route, out)
     return store.incident(cur["id"])
 
@@ -395,8 +413,12 @@ def _reprioritised(store: Store, cur: dict, p: dict, sev: str, now: datetime, ro
         return
     store.update_incident(cur["id"], severity=sev)
     if cur["state"] in (Incident.LOGGED, Incident.DIGEST):
+        # raised back to a chase after a lowering: the SAME task and Kiosk fault open again (one problem, one fault),
+        # the reopening saying why (rules.yaml raised_words, as a lowering says lowered_words)
+        words = RULES.get("raised_words") or "Raised to {priority}."
         _ladder(store, cur["id"], {**p, "rule_id": cur["rule_id"], "entity_id": cur["entity_id"],
-                                   "message": p.get("message") or cur["rule_id"]}, now, sev, route, out)
+                                   "message": p.get("message") or cur["rule_id"]}, now, sev, route, out,
+                note=words.replace("{priority}", sev))
     elif cur["state"] in Incident.CHASED and does(sev, route) != "chase":
         now_does = does(sev, route)
         store.update_incident(cur["id"], state=Incident.DIGEST if now_does == "digest" else Incident.LOGGED)
@@ -408,20 +430,22 @@ def _reprioritised(store: Store, cur: dict, p: dict, sev: str, now: datetime, ro
 def _ladder(store: Store, iid: int, ev: dict, now: datetime, sev: str, route: dict, out: dict,
             again: str | None = None, note: str = "Back again.") -> None:
     """Where an incident opened (or opened `again`, under that title) starts: the facility manager asked, with its task
-    and Kiosk fault — the same ones open again when it came back (Problems.reopen_task) — (P1, P2 with the ladder); the
-    morning list (P3); the record (P4)."""
+    and Kiosk fault — the same ones open again when it came back, or was raised back to a chase, `note` saying why
+    (Problems.reopen_task: the ONE opener; new only when it never had one) — (P1, P2 with the ladder); the morning
+    list (P3); the record (P4).
+
+    ⚠️ ONE OPENER (architecture review, 2026-10-19): a first opening went through open_task, which knows only OPEN
+    tasks — an alert lowered to P3 (its task closed "Lowered to P3.") and raised again got a second task and a second
+    Kiosk fault for the same number, and the repair's double check skips a fault a task holds."""
     if does(sev, route) == "chase":
         store.update_incident(iid, state=Incident.ASKED, asked_at=now.isoformat(), assignee=CHASE["asks"])
         eid, check = ev.get("entity_id", ""), route.get("check") or ""
-        if again:
-            tid, how = Problems(store).reopen_task("incident", iid, ev["rule_id"], eid, again[:250], check, note=note)
-            if how == "reopened":
-                out["actions"].append(R.reopened(tid, again, note))
-            elif how == "new":
-                out["actions"].append(R.fault(again[:200], task_id=tid, check=check, entity_id=eid))
-            return
-        tid, _ = Problems(store).open_task("incident", iid, ev["rule_id"], eid, ev["message"][:250], check)
-        out["actions"].append(R.fault(ev["message"][:200], task_id=tid, check=check, entity_id=eid))
+        title = again or ev["message"]
+        tid, how = Problems(store).reopen_task("incident", iid, ev["rule_id"], eid, title[:250], check, note=note)
+        if how == "reopened":
+            out["actions"].append(R.reopened(tid, title, note))
+        else:   # new — or still open: either way the engine makes its fault what the task says (tickets.repair)
+            out["actions"].append(R.fault(title[:200], task_id=tid, check=check, entity_id=eid))
     elif does(sev, route) == "digest":
         store.update_incident(iid, state=Incident.DIGEST)
     else:
@@ -464,6 +488,7 @@ def reopen(store: Store, inc: dict, ev: dict, now: datetime, sev: str, route: di
     else:
         # Home Assistant no longer watches it: the desk does (seen_again)
         p = store.note(inc["id"], {"abandoned": True}, drop=("check_quiet",), closed_at=None, reply=None)
+    carry_check(store, inc["id"], route, p)
     inc = store.incident(inc["id"])
     runs = incident_runs(inc, store)
     title = again_title(str(p.get("message") or inc["rule_id"])[:200], runs - 1)
@@ -751,6 +776,7 @@ def restated(store: Store, ev: dict, now: datetime) -> dict:
     out["incident_id"], out["decision"] = cur["id"], "restated"
     p = store.note(cur["id"], {k: ev[k] for k in RESTATES if ev.get(k) is not None})
     route = route_for(ev["rule_id"], ev.get("blueprint"))
+    carry_check(store, cur["id"], route, p)
     sev = priority(ev, route)
     # ⚠️ SAVED AT A LOWER PRIORITY, STILL CHASED (owner, 2026-10-19: "is it possible to lower a priority?"): the rule
     # saved with P3 changed the number only; the FM was still reminded until the rule alerted again
@@ -814,9 +840,11 @@ def siren_gate(store: Store, ev: dict, now: datetime) -> dict:
     armed = len(signals) >= cfg["min_signals"] and mode == EMPTY
     prompt = ""
     if armed:
-        # The engine turns this into an Approve / Refuse request to the owner (outcome.carry_out).
-        prompt = (f"Intrusion suspected: {len(signals)} independent sensors in {cfg['window_min']} min while the villa is {mode}: "
-                  f"{', '.join(sorted(signals))}. Look at the snapshot. Approving sounds the siren for {siren_minutes()} min.")
+        # The engine turns this into an Approve / Refuse request to the owner (outcome.carry_out). Its durations as
+        # both apps word one (timeutil.lasting: "1 h 30 min", never "90 min")
+        prompt = (f"Intrusion suspected: {len(signals)} independent sensors in {lasting(cfg['window_min'] * 60)} while "
+                  f"the villa is {mode}: {', '.join(sorted(signals))}. Look at the snapshot. Approving sounds the siren "
+                  f"for {lasting(siren_minutes() * 60)}.")
     return R.siren(armed, prompt, ("owner", "fm"), signals=sorted(signals), occupancy=mode,
                    reason=None if armed else ("villa not empty" if mode != EMPTY else "single signal"))
 
@@ -886,6 +914,9 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
         out["rule_gone"] = rule_gone(store, now, client, params.behaviour("clear_minutes"), out)
     for inc in store.incidents(open_only=True):
         p = notes_of(inc)
+        # the route's "what to do" edited while the alert is open (a villa's rules.yaml): the Kiosk fault's note and
+        # the digest follow within a tick, as Telegram's next message does
+        carry_check(store, inc["id"], route_for(inc["rule_id"], p.get(Notes.BLUEPRINT)), p)
         said = store.take_note(inc["id"], Notes.KIOSK_REOPENED, assignee=CHASE["asks"]) \
             if p.get(Notes.KIOSK_REOPENED) else None
         if said:
@@ -916,14 +947,15 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
         if inc["state"] == Incident.ASKED and age >= timedelta(minutes=reask) and \
                 store.move(inc["id"], (Incident.ASKED,), Incident.REASKED, reasked_at=now.isoformat()):
             out["send"] += tell(inc["severity"], "reminder", incident=inc["id"], chased=True,
-                                # the engine writes the step first: "Reminder sent … to FM — No answer after 15 min"
-                                **about(inc, f"No answer after {int(reask)} min"))
+                                # the engine writes the step first: "Reminder sent … to FM — No answer after 15 min";
+                                # the duration as both apps word one (timeutil.lasting: "1 h 30 min", never "90 min")
+                                **about(inc, f"No answer after {lasting(reask * 60)}"))
             out["reasked"].append(inc["id"])
         elif inc["state"] == Incident.REASKED and age >= timedelta(minutes=escal) and \
                 store.move(inc["id"], (Incident.REASKED,), Incident.ESCALATED, escalated_at=now.isoformat(),
                            assignee=CHASE["escalates_to"]):
             out["send"] += tell(inc["severity"], "escalated", incident=inc["id"],
-                                **about(inc, f"No answer from {role_said(CHASE['asks'])} after {int(escal)} min"))
+                                **about(inc, f"No answer from {role_said(CHASE['asks'])} after {lasting(escal * 60)}"))
             out["escalated"].append(inc["id"])
     # villa silent: the engine's Home Assistant connection has been down too long
     last = store.last_beat(HA_BEAT)
@@ -931,7 +963,7 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
         key = "critical_internet---villa_silent|agent"
         if not store.find_open_incident(key):
             iid = store.new_incident(key, "critical_internet---villa_silent", "agent", "P1",
-                                     {"message": f"No contact with the villa's system for {int((now - datetime.fromisoformat(last)).total_seconds() // 60)} min: internet, power or the villa's system is down."},
+                                     {"message": f"No contact with the villa's system for {lasting((now - datetime.fromisoformat(last)).total_seconds())}: internet, power or the villa's system is down."},
                                      now.isoformat())
             store.update_incident(iid, state=Incident.ASKED, asked_at=now.isoformat(), assignee=CHASE["asks"])
             out["send"] += tell("P1", "new", incident=iid, ladder=False,   # the priority is the heading's; the villa's time

@@ -301,7 +301,9 @@ class Notices:
         chats = [[int(c), sorted(self.roles_for(c, to))] for c, to in sent]
         line = {"at": (at or datetime.now(timezone.utc)).isoformat(), "chats": chats,
                 "stage": stage if stage in STEPS else ("update" if history else "new")}
-        if line["stage"] == "back":
+        # the steps whose line counts the week (message_format.STEPS "{times}"): a return, and a new number of an alert
+        # already seen this week — ONE count, problems.incident_runs
+        if line["stage"] in ("back", "new"):
             try:
                 run = self.runs(int(incident))
             except Exception:  # noqa: BLE001 — the line is written without its count, never not at all

@@ -464,3 +464,27 @@ its fault. Decided (owner: "implement the recommended finding", card 1 of 4):
   ONE predicate — night check, recheck, chat status and reports. The Kiosk's proxy reads the same rule. Nothing is
   critical for what it is (no lock/motor/schedule rule, no family). A failed read keeps the last list.
 - Card 4 (one meaning of "offline": "unknown" is not lost) is the Kiosk's (2.496.410); the Agent already had it.
+
+## One owner of "what to do", one opener, the week on a new number, the page's figures (architecture review, 2026-10-19, 0.12.264)
+
+- **"What to do" has ONE owner — the alert desk's route (rules.yaml `check`)**, and every reader gets its current
+  words: Telegram reads the route live (`desk.details`); the desk CARRIES it on the incident (`store.Notes.CHECK`,
+  `desk.carry_check` at an opening, a repeat, a restate, a return and every tick), as it carries the claim; the Kiosk
+  fault's note and the digest's "Still open" line read `Problems.check_of`, which reads the SOURCE (an incident's
+  carried check, a finding's `detail.check` the night rewrites) and the task's `check_text` only for a record from
+  before. `Problems.card` carries it as `todo` (`check` there is the recheck cadence) and `tickets._converge` amends the
+  fault's note (`kiosk.todo`) — only a note the agent wrote (`TODO_LABELS`); a person's note stays theirs, as their
+  title does. The agreement already lets the agent change a ticket's `note` (a ticket field; the proxy forbids only
+  removals and unknown top-level keys), so no contract change.
+- **One opener for an alert's task**: `desk._ladder` always goes through `Problems.reopen_task` (open — reopened —
+  new), with rules.yaml `raised_words` ("Raised to P2.") when a lowered priority is raised again, and
+  `Problems.settle` reopens through the same method. Lowered then raised is one task and one Kiosk fault reopened.
+- **A new number within the week says it**: `message_format.STEPS` "new" carries `{times}` and `notice.record` writes
+  `run` for it as for "back" ("Alert sent …, 3rd time in 7 days (to: FM)"); the count stays `problems.incident_runs`.
+- **The desk's durations** go through `timeutil.lasting` (the agreement's `duration.cases`), never "N min" by hand.
+- **The owner's Monday lines** say the weekly page's own figures only (`facts.s_kpis`: alerts, p1, alerts_open,
+  open_tasks; `compose.OWNER_FIGURES`); `compose.py owner-weekly` requires `--facts`; a figure an older facts.json
+  lacks reads "n/a", never a count of the composer's own.
+- Deleted: `outcome_words.clean_summary` (= `messaging.no_code`), `Kiosk.ticket_states` / `update_ticket` /
+  `note_ticket` / `tag_ticket` (one-line wrappers over `amend`), `Tickets.resolve` (no caller: a `ticket.resolve` action
+  only runs the repair), `tickets.kiosk_reopen_note` (callers use `kiosk_words.reopened`).

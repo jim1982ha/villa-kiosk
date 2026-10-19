@@ -224,3 +224,44 @@ def test_a_follow_rule_of_a_kind_with_no_route_is_retitled_by_its_names_priority
     # with the owner's buttons (P1) — never left with its villa-wide "To:"
     assert agent.thread.shown(1)[GROUP]["mid"] == 500 or (GROUP, 500) in agent.tg.deleted
     assert FM_CHAT in agent.thread.shown(1)                            # the FM is told either way
+
+
+def test_a_new_number_within_the_week_counts_it_too():
+    # architecture review, 2026-10-19: a return after reopen_hours is a NEW number (owner, 2026-10-18), and its card
+    # and the digest said "(again: 3 times in 7 days)" while its Telegram message said New, as if the first
+    from datetime import datetime
+    from vesta_agent.notice import Notices
+    at = datetime.fromisoformat("2026-10-16T18:03:00+00:00")
+    n = Notices(None, lambda: None, "UTC")
+    assert n.step("new", {"fm"}, at, 3) == "Alert sent 16/10/2026 18:03, 3rd time in 7 days (to: FM)"
+    assert n.step("new", {"fm"}, at, 1) == "Alert sent 16/10/2026 18:03 (to: FM)"
+
+    class Kept:                                                      # the state: an incident's history, kept
+        def __init__(self):
+            self.h = {}
+
+        def incident_history(self, i):
+            return list(self.h.get(i, []))
+
+        def set_incident_history(self, i, h):
+            self.h[i] = h
+    kept = Kept()
+    n = Notices(kept, lambda: None, "UTC", runs=lambda iid: {7: 3, 8: 1}[iid])
+    n.record(7, "new", [(FM, "fm")], at)
+    n.record(8, "new", [(FM, "fm")], at)
+    n.record(7, "reminder", [(FM, "fm")], at)
+    assert [h.get("run") for h in kept.incident_history(7)] == [3, None]      # ONE count: problems.incident_runs
+    assert kept.incident_history(8)[0]["run"] == 1
+
+
+def test_a_new_number_of_an_alert_seen_this_week_says_so_on_its_card(agent):
+    # the same rule alerted yesterday under another number (closed hours ago: past reopen_hours): today's "New" card
+    # counts the week on its first line, as the Cockpit's "(again: 2 times in 7 days)" and the digest do
+    from vesta_shared.store import Store
+    st = Store(agent.s.store_path)
+    day_ago = datetime.now(timezone.utc) - timedelta(days=1)
+    old = st.new_incident(f"{RULE}|sensor.phase_c", RULE, "sensor.phase_c", "P2", {"message": "Phase C high"}, day_ago.isoformat())
+    st.update_incident(old, closed_at=(day_ago + timedelta(minutes=30)).isoformat(), state="resolved")
+    rule(agent, "opened", 2, 500)
+    hist = head_text(agent.notices.heading(FM_CHAT, old + 1)).split("\n")[2:]
+    assert re.fullmatch(rf"- Alert sent {T}, 2nd time in 7 days \(to: FM\)", hist[0]), hist

@@ -91,6 +91,9 @@ priority_does:
 lowered_words:
   digest: "Lowered to {priority} on {time}: kept for the next daily digest. No reply needed."
   log: "Lowered to {priority} on {time}: recorded only. No reply needed."
+# Raised back to `chase` after a lowering: the SAME task and Cockpit fault open again (one problem, one fault), the
+# fault's reopening step saying this ("{priority}" filled in).
+raised_words: "Raised to {priority}."
 
 people_roles:
   # role -> which severities reach that chat: every message about an alert, from the first to its close

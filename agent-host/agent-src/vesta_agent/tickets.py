@@ -1,8 +1,10 @@
 """The VESTA Kiosk's Facility records as the agent keeps them: a fault ticket per open task, resolved with it.
 
 Taken out of outcome.py (architecture review, 2026-10-07): the module that carries out a script's result also held
-the tickets and the alert buttons, eleven dependencies for three jobs. Its callers: a script's result (ticket,
-ticket.resolve), the AI's create_ticket tool, and the reconciliation at each start and each night (repair).
+the tickets and the alert buttons, eleven dependencies for three jobs. Its callers: the AI's create_ticket tool
+(create), and the reconciliation at each start, each night and after every result that moved a fault (repair) —
+a script's ticket / ticket.resolve / ticket.reopen action only says a fault moved (outcome.py); what the fault must say
+comes from its task (Problems.card).
 """
 from __future__ import annotations
 
@@ -14,21 +16,17 @@ from typing import Awaitable, Callable
 from vesta_shared import kiosk_words, result
 from vesta_shared.problems import Problems
 
-from .kiosk import MINE, NOTED, KioskError, noted, retitled, tagged
+from .kiosk import MINE, NOTED, KioskError, noted, retitled, tagged, todo
 from .outcome_words import ticket_title
 
 log = logging.getLogger("vesta.outcome")
 
 
 def kiosk_close_note(ticket: dict, zone: str) -> str:
-    """The note a fault closed in the VESTA Kiosk leaves on its alert's messages: "Closed in the VESTA Kiosk by Wayan on
-    10/10/2026 17:13." — who (the name typed, else the profile) and when the Kiosk recorded (vesta_shared.kiosk_words)."""
+    """The note a fault closed in the VESTA Kiosk leaves on its alert's messages: "Closed in the Cockpit on
+    10/10/2026 17:13 (Wayan)." — who (the name typed, else the profile) and when the Kiosk recorded
+    (vesta_shared.kiosk_words, plus the full stop a settle note ends with)."""
     return kiosk_words.closed(ticket.get("by") or "", ticket.get("resolved_at"), zone) + "."
-
-
-def kiosk_reopen_note(ticket: dict, summary: str | None, zone: str) -> str:
-    """What the facility manager reads when a person reopened a fault in the VESTA Kiosk (vesta_shared.kiosk_words)."""
-    return kiosk_words.reopened(ticket.get("reopened_by") or "", ticket.get("reopened_at"), zone, summary)
 
 
 class Tickets:
@@ -113,15 +111,6 @@ class Tickets:
         # fault read "Back again." where "Check: …" belongs — the reopening's note was taken for the fault's)
         return bool(await self.create(a.get("title") or task.get("summary") or "", task.get("entity_id") or None,
                                       result.fault_note(Problems(self._store()).check_of(task)), task["id"]))
-
-    async def resolve(self, a: dict) -> bool:
-        """ticket.resolve {task_id | ticket_id, note?}: the Kiosk's ticket resolved."""
-        task = self._store().task(int(a.get("task_id") or 0)) if a.get("task_id") else None
-        uid = (task or {}).get("todo_uid") or a.get("ticket_id")
-        if uid and self.kiosk.enabled and await self.kiosk.resolve_ticket(uid, note=a.get("note"), **({"who": a["who"]} if a.get("who") else {})):
-            log.info("Kiosk ticket %s resolved", uid)
-            return True
-        return False
 
     async def repair(self) -> dict[str, int]:
         """The open tasks and the Kiosk's faults agree (at each start and each night, owner, 2026-10-01), in three steps:
@@ -234,9 +223,9 @@ class Tickets:
             if t["status"] == "open" or not card or card["status"] == "resolved":
                 continue
             if _before(t.get("done_at"), card.get("reopened_at")):
-                if not problems.reopened_in_kiosk(t["id"], card.get("reopened_by") or "",
-                                                  kiosk_reopen_note(card, None, self.timezone)) and self.tell_fm:
-                    await self.tell_fm(kiosk_reopen_note(card, t.get("summary") or card["title"], self.timezone))
+                by, at = card.get("reopened_by") or "", card.get("reopened_at")
+                if not problems.reopened_in_kiosk(t["id"], by, kiosk_words.reopened(by, at, self.timezone)) and self.tell_fm:
+                    await self.tell_fm(kiosk_words.reopened(by, at, self.timezone, t.get("summary") or card["title"]))
                 log.info("Kiosk ticket %s reopened by a person: its task is open again", uid)
         if closed:
             log.info("Kiosk tickets closed by a person: %d task(s) closed with them", closed)
@@ -287,11 +276,16 @@ class Tickets:
                             or (want["check"] and card.get("check") != want["check"]) \
                             or (pattern and (card.get("title_pattern"), card.get("since")) != (pattern["titlePattern"], pattern["since"])):
                         amends.append(tagged(want["number"], want["origin"], want["check"], pattern))
+                    # what to do on site, as its problem says it NOW (Problems.card todo): the route's check edited, a
+                    # finding's check rewritten by the night — written at the fault's making only until 0.12.263
+                    said = result.fault_note(want["todo"])
+                    if said and card.get("note") != said:
+                        amends.append(todo(said))
                     # what happened on Telegram — reminders, escalation, a button pressed (owner, 2026-10-14) — from this
                     # task's run on (an earlier run's lines belong to the fault as it was then)
                     if want["number"] and self.kiosk.says(NOTED):
                         since = _moment(t.get("reopened_at") or t.get("created_at"))
-                        have = {at for at, _note in card.get("noted") or []}            # by its moment (Kiosk.note_ticket)
+                        have = {at for at, _note in card.get("noted") or []}            # by its moment (kiosk.noted)
                         lines = [x for x in self.story(want["number"]) if (since is None or (_moment(x["at"]) or since) >= since)
                                  and x["at"] not in have]
                         if lines:

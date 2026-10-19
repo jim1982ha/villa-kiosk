@@ -396,8 +396,11 @@ class Problems:
             return []
         title = self.source_title(source)
         if last:
-            self.store.reopen_task(last["id"], title[:250], note=note or "Back again.")
-            return [result.reopened(last["id"], title, note or "Back again.")]
+            # ⚠️ ONE OPENER (architecture review, 2026-10-19): this reopened the last task itself, the alert desk through
+            # reopen_task — a third way (open_task, for a raised priority) made a second task and a second Kiosk fault
+            tid, how = self.reopen_task(kind, sid, last["rule_id"], last["entity_id"], title[:250],
+                                        self.check_of(last), note=note or "Back again.")
+            return [result.reopened(tid, title, note or "Back again.")] if how == "reopened" else []
         if kind != "finding":
             return []
         row = self.store.finding(sid)
@@ -436,7 +439,9 @@ class Problems:
         every look, or a finding of a rule in `rechecked` (the skills' `rechecks`) — "nightly" — any other finding —
         or None),
         note and who (its close: what it says, the person who closed it — None: the agent's own clearing),
-        reopen_note (what its reopening says — None: it was never reopened by its problem)}.
+        reopen_note (what its reopening says — None: it was never reopened by its problem),
+        todo (what to do on site, as its problem's source says it NOW: check_of — the fault's note follows it; "" when
+        nothing says; not `check`, which is the recheck cadence)}.
 
         ⚠️ A REOPENING SAYS WHY, LIKE A CLOSE (architecture review, 2026-10-18): the desk wrote "Still there after the close."
         on an action nothing read, and the Kiosk wrote its own "Back again" — a door never locked after a Done read as if
@@ -458,7 +463,8 @@ class Problems:
                 "check": ("minutes" if kind == "incident" or task.get("rule_id") in rechecked else "nightly")
                 if kind in ("incident", "finding") else None,
                 "note": task.get("close_note") or "Closed: the problem is over.", "who": task.get("closed_who") or None,
-                "reopen_note": task.get("reopen_note") or None}
+                "reopen_note": task.get("reopen_note") or None,
+                "todo": self.check_of(task)}
 
     def unseen(self) -> list[dict]:
         """Open findings that should be a fault and are not — wants_open with no open task. settle_all leaves none;
@@ -499,8 +505,23 @@ class Problems:
         return self.title_of(task)
 
     def check_of(self, task: dict) -> str:
-        """What to check on site ("" when the task does not say)."""
-        return task.get("check_text") or ""
+        """What to do on site, as the problem's SOURCE says it now ("" when nothing says): an alert's route check, carried
+        on its incident by the alert desk (store.Notes.CHECK, the words in its rules.yaml); a finding's `check` in its
+        detail, which the night check rewrites; the task's own `check_text` only for a record from before either
+        (0.6.254 and earlier), or a task with no source.
+
+        ⚠️ ONE OWNER OF "WHAT TO DO" (architecture review, 2026-10-19): the task froze the check at its opening — the
+        Kiosk fault's note and the digest kept the first words while Telegram read the route live, and a finding's
+        check rewritten by the night (a pump's draw lower, then higher) never reached its card."""
+        kind, sid = self._source(task)
+        said = None
+        if kind == "incident":
+            inc = self.store.incident(sid)
+            said = notes_of(inc).get(Notes.CHECK) if inc else None
+        elif kind == "finding":
+            row = self.store.finding(sid)
+            said = json.loads(row.get("detail") or "{}").get("check") if row else None
+        return str(said) if said is not None else (task.get("check_text") or "")
 
     def open_problems(self) -> list[dict]:
         """THE answer to "what is still open", for every reader (the weekly list, the daily digest, the
@@ -521,12 +542,15 @@ class Problems:
                         "figures": {k: v for k, v in d.items() if isinstance(v, (int, float, str)) and k != "check"}})
         for i in self.store.incidents(open_only=True):
             p = notes_of(i)
-            out.append({"id": f"incident-{i['id']}", "source": f"incident:{i['id']}", "rule_id": i["rule_id"],
+            src = f"incident:{i['id']}"
+            out.append({"id": f"incident-{i['id']}", "source": src, "rule_id": i["rule_id"],
                         "entity_id": i["entity_id"], "severity": i["severity"],
                         # its latest run is when it opened, how often it came back is in its title (review 24: a
                         # reopened alert stayed "still open since the 1st", never new, never "again")
                         "title": again_title(_no_code(p.get("message") or i["rule_id"]), incident_runs(i, self.store) - 1),
-                        "check": p.get("check") or "",
+                        # what to do, as the Kiosk fault's note says it (check_of): the digest's "Still open" line read a
+                        # key the desk never wrote, so an alert's line had no check where a finding's had one
+                        "check": self.check_of(self.store.last_task(src) or {"source": src}),
                         # the VILLA's day it opened (review 30: the UTC date dated an alert of 06:30 at UTC+8 the day
                         # before — under "Still open" where "Also noted" was due)
                         "since": villa_day_of(i.get("reopened_at") or i["opened_at"]), "incident": i["id"],

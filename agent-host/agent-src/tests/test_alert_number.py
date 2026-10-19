@@ -7,6 +7,7 @@ import asyncio
 
 from kiosk_fake import FakeKiosk
 from test_fault_steps import kiosk_holding, ticket
+from vesta_agent.kiosk import tagged
 from vesta_agent.tickets import Tickets
 from vesta_shared.problems import Problems
 from vesta_shared.store import Store
@@ -34,8 +35,8 @@ def test_the_real_kiosk_writes_the_number_and_gives_it_once_to_a_fault_made_with
     assert ticket(doc, tid)["alertNumber"] == 5
     other = run(k.add_ticket("Battery low"))
     assert "alertNumber" not in ticket(doc, other)                       # no alert behind it: no number
-    assert run(k.tag_ticket(other, 7)) and ticket(doc, other)["alertNumber"] == 7
-    assert not run(k.tag_ticket(other, 7))                            # already says it: nothing written
+    assert run(k.amend(other, tagged(7))) and ticket(doc, other)["alertNumber"] == 7
+    assert not run(k.amend(other, tagged(7)))                          # already says it: nothing written
     assert run(k.held_tickets())[other]["alert_number"] == 7
 
 
@@ -59,14 +60,9 @@ def test_the_repair_numbers_an_open_alert_fault_made_before_and_leaves_it_alone_
     store.set_task_uid(task, uid)
     run(t.repair())
     assert kiosk.numbers == {uid: iid}
-    calls = []
-    real = kiosk.tag_ticket
-    async def counted(tid, number=None, origin=None):
-        calls.append(tid)
-        return await real(tid, number, origin)
-    kiosk.tag_ticket = counted
+    rev = kiosk.doc["rev"]
     run(t.repair())
-    assert calls == []                                                   # it says it already: not asked again
+    assert kiosk.doc["rev"] == rev                                       # it says it already: nothing written again
 
 
 # ---------------------------------------------------------------------- where it came from (owner, 2026-10-14)

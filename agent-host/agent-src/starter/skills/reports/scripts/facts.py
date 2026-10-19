@@ -379,6 +379,8 @@ def s_kpis(c: Ctx) -> dict:
     return {"open_tasks": len(items), "new": sum(1 for t in items if (villa_date(t["since"], c.Z) or c.start) >= c.start),
             "carried": sum(1 for t in items if (villa_date(t["since"], c.Z) or c.start) < c.start),
             "alerts": len(inc) + len(c.ha_alerts()), "alerts_open": sum(1 for i in inc if not i.get("closed_at")),
+            # the owner's Monday lines read these four (compose.owner_weekly), never a count of their own
+            "p1": sum(1 for i in inc if i.get("severity") == "P1"),
             "kwh": _r(c.energy.get("total_kwh")), "vs_prev_pct": _r(c.energy.get("total_vs_prev_pct")),
             "offline": len(off), "offline_critical": sum(1 for o in off if o["critical"])}
 

@@ -85,7 +85,7 @@ def person_titled(t: dict) -> bool:
 
 def fault_of(t: dict) -> dict:
     """One Facility fault as the agent reads it: {status, title, agent_title, resolved_at, by, cleared, reopened_at,
-    reopened_by, taken_at, taken_by, noted, …} — `by` the profile of its last step ("Facility manager" who closed it),
+    reopened_by, taken_at, taken_by, noted, note, …} — `by` the profile of its last step ("Facility manager" who closed it),
     `agent_title` the title the agent last gave it (None: never said), `cleared` whether its last close was the agent's
     own clearing, `reopened_*` / `taken_*` a PERSON's last reopening / "Open Ticket", from its steps. Pure: what a
     person did is read from the Kiosk's steps here and nowhere else (architecture review scan 2, 2026-10-19: the
@@ -104,6 +104,7 @@ def fault_of(t: dict) -> dict:
             "agent_title": agent_title(t), "resolved_at": str(t.get("resolvedAt") or ""),
             "by": last("who") or last("by"), "alert_number": t.get("alertNumber"), "origin": t.get("origin"),
             "check": t.get("check"), "title_pattern": t.get("titlePattern"), "since": t.get("since"),
+            "note": str(t.get("note") or ""),                     # what to do on site (the agreement's ticket.fields)
             "person_titled": person_titled(t), "cleared": bool(closes) and closes[-1].get("kind") == CLEARED,
             "noted": [(str(u.get("at") or ""), str(u.get("note") or "")) for u in ups if u.get("kind") == NOTED],
             **({"reopened_at": str(reopens[-1].get("at") or ""),
@@ -146,6 +147,23 @@ def noted(lines: list[dict]) -> Amend:
         new = [{"at": x["at"], "status": t.get("status") or "open", "photoIds": [], "kind": NOTED,
                 "note": str(x["note"])[:500]} for x in lines if x["at"] not in have]
         return dict(t, updates=list(t.get("updates") or []) + new) if new else None
+    return amend
+
+
+#: How this agent labels a fault's note ("What to do: …"; "Check: …" until review 29): a note so labelled is the agent's
+#: to bring up to date; any other note on a fault is a person's and stays theirs, as a person's title does.
+TODO_LABELS = ("What to do: ", "Check: ")
+
+
+def todo(note: str) -> Amend:
+    """An open fault's note says what to do on site NOW — its problem's words as they stand (Problems.card `todo`,
+    result.fault_note): the route's check edited in the alert desk's rules.yaml, a finding's check the night rewrote.
+    Only a note this agent wrote (TODO_LABELS), or none; nothing when it is closed, says it, or a person wrote it."""
+    def amend(t: dict) -> dict | None:
+        cur = str(t.get("note") or "")
+        if t.get("status") == "resolved" or cur == note or (cur and not cur.startswith(TODO_LABELS)):
+            return None
+        return dict(t, note=note[:2000])
     return amend
 
 
@@ -300,15 +318,8 @@ class Kiosk:
             return tid
         return await self._edit(change)
 
-    async def ticket_states(self) -> dict[str, str]:
-        """{ticket id: status} of the Facility records, as the Kiosk holds them now."""
-        return {tid: t["status"] for tid, t in (await self.held_tickets()).items()}
-
     async def held_tickets(self) -> dict[str, dict]:
-        """{ticket id: {status, title, agent_title, resolved_at, by, cleared, reopened_at, reopened_by}} of the Facility records,
-        as the Kiosk holds them now: `by` the profile of its last step ("Facility manager" who closed it), `agent_title`
-        the title the agent last gave it (None: never said), `cleared` whether its last close was the agent's own
-        clearing, `reopened_*` its last reopening, from its steps."""
+        """{ticket id: fault_of(the record)} of the Facility records, as the Kiosk holds them now."""
         status, got = await self._req("GET", "/agent/v1/fm-data")
         if status != 200:
             raise KioskError(f"reading the Facility records answered {status}")
@@ -316,8 +327,8 @@ class Kiosk:
         return {t["id"]: fault_of(t) for t in data.get("tickets") or [] if isinstance(t, dict) and isinstance(t.get("id"), str)}
 
     async def amend(self, tid: str, *amends: "Amend") -> int:
-        """Ticket `tid` changed by each of `amends` in turn (retitled, tagged, noted: what the agent puts right on an
-        open fault), in ONE write. How many changed it; 0 when it is gone or none did.
+        """Ticket `tid` changed by each of `amends` in turn (retitled, tagged, noted, todo: what the agent puts right on
+        an open fault), in ONE write. How many changed it; 0 when it is gone or none did.
 
         ⚠️ ONE WRITE PER FAULT (architecture review scan 2, 2026-10-19): bringing a fault up to date wrote the whole
         Facility record once per field — title, tags, Telegram lines: three reads, three writes, three new revisions,
@@ -338,10 +349,6 @@ class Kiosk:
             return 0
         return await self._edit(change) if amends else 0
 
-    async def update_ticket(self, tid: str, title: str) -> bool:
-        """An open ticket says what is wrong NOW (retitled). False when it is gone, closed, or already says it."""
-        return await self.amend(tid, retitled(title)) > 0
-
     def takes(self, field: str) -> bool:
         """This Kiosk reads the fault field `field` (/agent/v1/info `ticket_fields`, 2.496.382+): an older one would show
         a title pattern's "{since}" as it is."""
@@ -351,16 +358,6 @@ class Kiosk:
         """This Kiosk shows fault steps of `kind` (/agent/v1/info `step_kinds`, 2.496.356+): an older one would read a
         "noted" line as the fault changing status."""
         return kind in ((self.info or {}).get("step_kinds") or [])
-
-    async def note_ticket(self, tid: str, lines: list[dict]) -> bool:
-        """Lines of what happened about an open fault on Telegram (noted). False when it is gone, closed, or has them
-        all."""
-        return await self.amend(tid, noted(lines)) > 0
-
-    async def tag_ticket(self, tid: str, number: int | None = None, origin: str | None = None,
-                         check: str | None = None, pattern: dict | None = None) -> bool:
-        """A fault's alert number, origin, check and title pattern (tagged). False when it is gone or already says them."""
-        return await self.amend(tid, tagged(number, origin, check, pattern)) > 0
 
     async def reopen_ticket(self, tid: str, title: str, note: str | None = None) -> bool:
         """One of the agent's resolved tickets open again — its problem came back (architecture review 24: each return

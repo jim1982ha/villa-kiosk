@@ -16,7 +16,7 @@ from datetime import datetime, timedelta, timezone
 from villa_timeline import TimelineVilla
 from helpers import STARTER_SKILLS, make_agent
 from kiosk_fake import FakeKiosk
-from vesta_agent.kiosk import Kiosk
+from vesta_agent.kiosk import Kiosk, retitled
 from vesta_shared.problems import Problems
 from vesta_shared.store import Store
 
@@ -47,13 +47,13 @@ def test_a_title_change_is_a_retitled_step_keeping_the_title_before_and_never_a_
     k, doc = kiosk_holding()
     tid = run(k.add_ticket("Motion battery at 9%"))
     assert ticket(doc, tid)["updates"][0]["title"] == "Motion battery at 9%"        # the title the agent gave it
-    assert run(k.update_ticket(tid, "Motion battery at 7%"))
+    assert run(k.amend(tid, retitled("Motion battery at 7%")))
     t = ticket(doc, tid)
     step = t["updates"][-1]
     assert t["title"] == "Motion battery at 7%"
     assert step["kind"] == "retitled" and step["was"] == "Motion battery at 9%" and step["title"] == "Motion battery at 7%"
     assert "note" not in step                                                         # no "Now: …" for the card to guess at
-    assert not run(k.update_ticket(tid, "Motion battery at 7%"))                     # already says it: nothing written
+    assert not run(k.amend(tid, retitled("Motion battery at 7%")))                     # already says it: nothing written
 
 
 def test_every_kind_the_agent_writes_is_one_the_agreement_declares():
@@ -81,11 +81,11 @@ def test_a_title_a_person_wrote_stays_and_the_agents_reading_goes_under_it():
     k, doc = kiosk_holding()
     tid = run(k.add_ticket("Front door lock unavailable"))
     ticket(doc, tid)["title"] = "Front door lock — part ordered"                     # Fabien renames it in the Kiosk
-    assert run(k.update_ticket(tid, "Front door lock offline 3 days"))
+    assert run(k.amend(tid, retitled("Front door lock offline 3 days")))
     t = ticket(doc, tid)
     assert t["title"] == "Front door lock — part ordered"
     assert t["updates"][-1]["kind"] == "reading" and t["updates"][-1]["title"] == "Front door lock offline 3 days"
-    assert not run(k.update_ticket(tid, "Front door lock offline 3 days"))           # the same reading: not again
+    assert not run(k.amend(tid, retitled("Front door lock offline 3 days")))           # the same reading: not again
     # its problem comes back after a close: open again, still under the person's title
     t["status"], t["resolvedAt"] = "resolved", "2026-10-10T09:00:00Z"
     assert run(k.reopen_ticket(tid, "Front door lock unavailable", "Back again."))
@@ -225,7 +225,7 @@ def test_a_rename_step_from_the_kiosk_is_a_persons_title_and_an_old_ticket_is_pr
             {"at": "2026-10-10T01:00:00Z", "status": "open", "by": "Facility manager", "kind": "retitled",
              "title": "Pump — part ordered", "was": "Pump at 9 %", "photoIds": []}]})
     assert person_titled(ticket(doc, "va-1")) and person_titled(ticket(doc, "va-2"))
-    assert run(k.update_ticket("va-1", "Pump at 0 %")) and run(k.update_ticket("va-2", "Pump at 0 %"))
+    assert run(k.amend("va-1", retitled("Pump at 0 %"))) and run(k.amend("va-2", retitled("Pump at 0 %")))
     assert ticket(doc, "va-1")["title"] == "Pump at 2 %" and ticket(doc, "va-2")["title"] == "Pump — part ordered"
     assert ticket(doc, "va-1")["updates"][-1]["kind"] == "reading"                  # its reading under the title, never over
 
@@ -456,3 +456,22 @@ def test_what_a_person_did_to_a_fault_is_read_from_its_steps_alone():
     assert (f["taken_at"], f["taken_by"]) == ("2026-10-19T00:30Z", "Wayan") and f["by"] == "Wayan"
     t["updates"] = t["updates"][:4]
     assert "taken_at" not in fault_of(t)                       # the agent's own step is never a person taking it on
+
+
+# ---------------------------------------------------------------------- 7 · what to do follows its problem's words
+def test_a_faults_note_follows_what_to_do_unless_a_person_wrote_it():
+    # architecture review, 2026-10-19: the note was written at the fault's making only; the route's check edited, or a
+    # finding's check rewritten by the night, never reached the Cockpit
+    from vesta_agent.kiosk import todo
+    k, doc = kiosk_holding(
+        {"id": "va-1", "title": "Pump offline", "status": "open", "note": "Check: the breaker", "updates": []},
+        {"id": "va-2", "title": "Pump offline", "status": "open", "note": "Part ordered, due Monday", "updates": []},
+        {"id": "va-3", "title": "Pump offline", "status": "open", "updates": []},
+        {"id": "va-4", "title": "Pump offline", "status": "resolved", "note": "What to do: the breaker", "updates": []})
+    amend = todo("What to do: the breaker and the supply")
+    assert run(k.amend("va-1", amend)) == 1 and ticket(doc, "va-1")["note"] == "What to do: the breaker and the supply"
+    assert run(k.amend("va-1", amend)) == 0                                             # says it: nothing written
+    assert run(k.amend("va-2", amend)) == 0 and ticket(doc, "va-2")["note"] == "Part ordered, due Monday"   # theirs
+    assert run(k.amend("va-3", amend)) == 1 and ticket(doc, "va-3")["note"].startswith("What to do: ")
+    assert run(k.amend("va-4", amend)) == 0                                             # closed: as it was
+    assert run(k.held_tickets())["va-1"]["note"] == "What to do: the breaker and the supply"

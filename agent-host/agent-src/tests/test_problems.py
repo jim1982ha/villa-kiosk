@@ -122,3 +122,33 @@ def test_the_store_owns_its_sql_and_an_incidents_states_have_one_spelling():
         src = open(f, encoding="utf-8").read()
         assert not re.search(r"\.db\.execute\(\s*[\"'](SELECT|UPDATE|DELETE|INSERT)", src), f
         assert not re.search(r"update_incident\([^)]*state=[\"']", src), f
+
+
+def test_what_to_do_is_the_sources_words_now_and_the_tasks_only_for_a_record_from_before(pb):
+    # architecture review, 2026-10-19: the task froze the check at its opening; the night rewrites a finding's check
+    # (a pump's draw lower, then higher) and the alert desk carries its route's — the fault's note follows them
+    fid = finding(pb)
+    tid, _ = pb.open_task("finding", fid, "PM-A", "sensor.example_a", "A is off", "its battery")
+    pb.store.set_finding_detail(fid, {"check": "its wiring"})
+    assert pb.check_of(pb.store.task(tid)) == "its wiring"
+    iid = pb.store.new_incident("k", "r", "lock.example_door", "P2", {"message": "Door unlocked"})
+    alert, _ = pb.open_task("incident", iid, "r", "lock.example_door", "Door unlocked", "Lock it.")
+    assert pb.check_of(pb.store.task(alert)) == "Lock it."                   # not carried yet (a desk from before)
+    pb.store.note(iid, {"check": "Lock it and check the latch."})
+    assert pb.check_of(pb.store.task(alert)) == "Lock it and check the latch."
+    assert pb.open_problems()[0]["check"] == "Lock it and check the latch."  # the digest's line, the same path
+    assert pb.check_of({"source": "none:0", "check_text": "the old words"}) == "the old words"
+
+
+def test_settle_reopens_a_task_through_the_one_opener(pb, monkeypatch):
+    # architecture review, 2026-10-19: settle reopened the last task itself, the alert desk through reopen_task — one
+    # opener now (pin the caller)
+    fid = finding(pb)
+    tid, _ = pb.open_task("finding", fid, "PM-A", "sensor.example_a", "A is off", "its battery")
+    pb.close(tid, "cleared")
+    calls, real = [], pb.reopen_task
+    monkeypatch.setattr(pb, "reopen_task", lambda *a, **k: calls.append((a, k)) or real(*a, **k))
+    acts = pb.settle(f"finding:{fid}", note="Seen again tonight.")
+    assert acts == [{"action": "ticket.reopen", "task_id": tid, "title": "sensor.example_a is off", "note": "Seen again tonight."}]
+    assert calls and calls[0][0][:4] == ("finding", fid, "PM-A", "sensor.example_a") and calls[0][1] == {"note": "Seen again tonight."}
+    assert pb.store.task(tid)["status"] == "open" and pb.store.task(tid)["reopen_note"] == "Seen again tonight."
