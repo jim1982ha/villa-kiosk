@@ -157,9 +157,14 @@ todo_groups:
 alert_on_every_run: [critical_condition]
 # ...except a run started by the villa's system itself: such a rule re-checks its condition each time the rules are
 # reloaded or the system starts, and stops at once when it does not hold (villa, week 42: 400 such re-checks were
-# counted as "critical alerts" — the rules had been reloaded 57 times, and none had alerted). The words are the
-# event's name, as the logbook says what started a run ("triggered by event 'automation_reloaded'").
-not_an_alert_when_started_by: [automation_reloaded, homeassistant_start, homeassistant_started]
+# counted as "critical alerts" — the rules had been reloaded 57 times, and none had alerted). The words are what the
+# logbook gives as a run's start (its `source`), exactly: "event 'automation_reloaded'" for a reload; a start is
+# written in words, not as an event (week 42 again: seven "alerts" at the restart of 17 Oct, 16:59).
+not_an_alert_when_started_by:
+  - "event 'automation_reloaded'"
+  - "event 'homeassistant_start'"
+  - "event 'homeassistant_started'"
+  - "Home Assistant starting"
 
 # What became of an alert, in the alerts table: per state the alert desk gives an incident. A state with no
 # words here is named in the report's problems, never shown raw.

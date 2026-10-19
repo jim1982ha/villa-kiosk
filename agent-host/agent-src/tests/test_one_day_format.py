@@ -41,12 +41,17 @@ def test_the_day_a_script_works_on():
 
 
 def test_a_home_assistant_time_on_the_report_is_the_villas():
-    # the offline row's "since" is Home Assistant's last_changed: UTC with its zone cut off
+    # a time on the page is the villa's: "listening since" is a UTC instant
     sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
     import compose
     html = compose.page({"zone": "Asia/Makassar", "order": ["monitoring"], "sections": {"monitoring": {
-        "offline": [{"item": "Pool pump", "since": "2026-10-06T08:15+00:00", "critical": False}], "ai_cost_usd": None}}}, {})
-    assert "missing since Tue 6 Oct, 16:15" in html
+        "listening_since": "2026-10-06T08:15+00:00", "ai_cost_usd": None}}}, {})
+    assert "Listening since Tue 6 Oct, 16:15" in html
+    # ⚠️ never the villa's devices (owner, 2026-10-19): an offline sensor given to it is not drawn
+    html = compose.page({"zone": "Asia/Makassar", "order": ["monitoring"], "sections": {"monitoring": {
+        "offline": [{"item": "Pool pump", "since": "2026-10-06T08:15+00:00", "critical": False}],
+        "listening_since": None, "ai_cost_usd": None}}}, {})
+    assert "Pool pump" not in html and "Offline" not in html and "The whole period" in html
 
 
 def test_a_devices_state_is_read_one_way_by_the_reports_and_the_night_check():
@@ -109,3 +114,15 @@ def test_every_point_of_a_reports_chart_says_its_day_and_value():
     assert bars.count('class="pt"') == 1 and 'aria-label="W1 · 30"' in bars
     pairs = compose.pairs([{"day": "Mon", "kwh": 12.5, "prev_kwh": 10}])
     assert 'aria-label="Mon · 12 kWh · before 10"' in pairs
+
+
+def test_the_alerts_are_folded_with_their_count_in_every_report():
+    # owner, 2026-10-19: "Alerts that fired" collapsed by default, in every report with it (the monthly's "What happened")
+    sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
+    import compose
+    rows = [{"when_h": "Mon 12 Oct, 22:28", "what": "Leak", "lasted": "1 min", "outcome": "Cleared", "times": 2},
+            {"when_h": "Tue 13 Oct, 10:00", "what": "Door", "lasted": "", "outcome": "Cleared", "times": 1}]
+    for sid, title in (("alerts", "Alerts that fired"), ("happened", "What happened")):
+        html = compose.page({"zone": "UTC", "order": [sid], "sections": {sid: {"rows": rows}}}, {})
+        assert f'<details class="fold">\n  <summary><h2>{title} (3)</h2></summary>' in html, sid
+        assert "<details class=\"fold\" open" not in html

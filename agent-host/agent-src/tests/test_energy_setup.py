@@ -5,6 +5,7 @@ and the weekly page's days follow them. Invented ids throughout."""
 from __future__ import annotations
 
 import json
+import sys
 import os
 from datetime import datetime, timedelta, timezone
 
@@ -196,3 +197,30 @@ def test_with_no_settings_the_old_guess_stays_and_its_note_names_no_setting(tmp_
     assert out["note"] == ("No total: the villa's Energy settings name no grid meter, and no meter is recognisably the "
                            "main one. Adding the grid meter to the villa system's Energy settings gives the total.")
     assert "input_" not in said and "Home Assistant" not in said and " HA" not in said
+
+
+def test_a_finished_week_is_worked_out_again_when_the_pack_or_the_code_changes(tmp_path):
+    # villa, 2026-10-19: week 42 was kept under the period alone, and the report made after an update read the
+    # figures made before it ("Main Power Device" three times, a name the update had fixed)
+    from test_reports import _run
+    sys.path.insert(0, os.path.join(STARTER_SKILLS, "roi-energy", "scripts"))
+    import energy_period
+    fx = _villa(tmp_path)
+
+    def week():
+        r = _run(os.path.join(STARTER_SKILLS, "roi-energy", "scripts", "energy_period.py"), "--pack", str(tmp_path / "pack.json"),
+                 "--period", "custom", "--start", "2026-09-28", "--end", "2026-10-04", "--fixture-dir", str(fx),
+                 "--zone", "UTC", "--store", str(tmp_path / "s.sqlite"), "--out", str(tmp_path / "week.json"))
+        assert r.returncode == 0, r.stderr
+        return json.load(open(tmp_path / "week.json"))
+    assert week()["from_cache"] is False and week()["from_cache"] is True          # the same week, kept
+    pack = json.load(open(tmp_path / "pack.json"))
+    pack["generated_at"] = "2026-10-05T01:30:00+00:00"                            # the night rebuilt the pack
+    (tmp_path / "pack.json").write_text(json.dumps(pack))
+    assert week()["from_cache"] is False
+    # the code: the tag follows the script and the shared rules it computes with
+    from vesta_shared.knowledge_pack import KnowledgePack
+    p = KnowledgePack.load(str(tmp_path / "pack.json"))
+    tag = energy_period.calc_tag(p)
+    p.generated_at = "other"
+    assert energy_period.calc_tag(p) != tag

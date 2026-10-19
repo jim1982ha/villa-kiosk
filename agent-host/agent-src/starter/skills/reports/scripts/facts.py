@@ -219,7 +219,7 @@ class Ctx:
         notify entities' messages instead was tried and failed: the wall tablet gets every automation's
         messages, and nothing in the record says which rule sent one."""
         every_run = {str(b).removesuffix(".yaml") for b in self.cfg.get("alert_on_every_run") or []}
-        rechecks = [f"'{e}'" for e in self.cfg.get("not_an_alert_when_started_by") or []]
+        rechecks = [str(e) for e in self.cfg.get("not_an_alert_when_started_by") or [] if e]
         window = float(self.need("alert_follow_window_min")) * 60
         out = []
         known = [(i.get("rule_id"), datetime.fromisoformat(i["opened_at"])) for i in self.incidents() if i.get("opened_at")]
@@ -240,7 +240,7 @@ class Ctx:
                 said = str(r.get("message") or "")
                 if t is None or not said.startswith("triggered"):
                     continue                         # switched on or off, reloaded: not a run
-                if any(w in said or w in str(r.get("source") or "") for w in rechecks):
+                if str(r.get("source") or "") in rechecks or any(said.endswith(f"by {w}") for w in rechecks):
                     continue                         # the villa's system re-checking its rules: not an alert
                 if followed_by_agent(eid, t, known, window):
                     continue                         # the agent followed it: shown once, as the agent's
@@ -553,13 +553,16 @@ def s_circuits(c: Ctx) -> dict:
 
 
 def s_monitoring(c: Ctx) -> dict:
-    rows = [{"item": o["name"], "state": "Offline", "since": o["since"], "critical": o["critical"]} for o in c.offline()]
+    """Did the monitoring itself work this period: the agent listening, the safety rules on, the meters' counters, what
+    the AI cost. ⚠️ NEVER THE VILLA'S DEVICES (owner, 2026-10-19: "it should only list the monitoring related points"):
+    an offline sensor was listed here as well as in "Do this week" and the "devices offline" figure."""
+    since = c.listening_since()
     resets = [f for f in c.store.findings(since_day=c.start.isoformat()) if f["rule_id"] == result.COUNTER_RESET]
     rules = c.vesta_rules()
     st = c.rule_states()
     on = sum(1 for eid in rules if (st.get(eid) or {}).get("state") == "on") if rules else None
-    # named as the device, once each, like the offline rows (knowledge_pack.device_of)
-    return {"offline": rows, "counter_resets": [{"item": c.pack.device_name(f["entity_id"], c.name(f["entity_id"])), "day": f["opened_day"]}
+    # named as the device, once each (knowledge_pack.device_of)
+    return {"listening_since": since.isoformat() if since is not None and since > c.s_dt else None, "counter_resets": [{"item": c.pack.device_name(f["entity_id"], c.name(f["entity_id"])), "day": f["opened_day"]}
                                                 for f in resets],
             "rules_on": on, "rules_total": len(rules),
             "ai_cost_usd": c.ai_cost()}

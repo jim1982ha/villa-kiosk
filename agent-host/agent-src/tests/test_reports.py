@@ -9,6 +9,10 @@ from helpers import PYTHONPATH, ROOT, STARTER_SKILLS
 from vesta_shared.ha_client import HABase  # noqa: E402
 
 COMPOSE = os.path.join(STARTER_SKILLS, "reports", "scripts", "compose.py")
+# ⚠️ THE SCRIPTS' FOLDER, FOR EVERY TEST OF THIS FILE (2026-10-19): facts.py imports its sibling playbook.py, and only
+# some tests put the folder on the path — run alone or in another order, ten tests failed on "No module named
+# 'playbook'", and a mutation run on this file could not tell a caught mutant from that.
+sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
 
 
 def test_a_step_without_its_input_stops_and_says_what_to_run(tmp_path):
@@ -266,8 +270,9 @@ class _Book(HABase):
         self.reads = getattr(self, "reads", 0) + 1
         rows = [{"when": w, "entity_id": entity_id, "message": "triggered by lock.example_door"} for w in self.runs.get(entity_id, [])]
         # the villa's system re-checking its rules when they are reloaded or it starts: runs, never alerts
-        rechecks = [{"when": "2026-09-30T13:00:00+00:00", "entity_id": entity_id, "message": f"triggered by event '{e}'",
-                     "source": f"event '{e}'"} for e in ("automation_reloaded", "homeassistant_started")]
+        # (each as the logbook writes it: a reload as an event, a start in words — week 42 counted both)
+        rechecks = [{"when": "2026-09-30T13:00:00+00:00", "entity_id": entity_id, "message": f"triggered by {src}",
+                     "source": src} for src in ("event 'automation_reloaded'", "Home Assistant starting")]
         return rows + rechecks + [{"when": "2026-09-30T12:00:00+00:00", "entity_id": entity_id, "message": "turned off"}]
 
 
@@ -958,3 +963,13 @@ def test_an_alerts_lasted_column_is_said_as_both_apps_say_a_duration(tmp_path):
     facts, c, store = _ctx(tmp_path)
     said = {r["what"]: r["lasted"] for r in facts._alert_rows(c)}
     assert [said[f"Case {n}"] for n in range(len(cases))] == [case["words"] for case in cases]
+
+
+def test_the_monitoring_section_says_how_the_agent_listened_never_the_villas_devices(tmp_path):
+    # owner, 2026-10-19: "it should only list the monitoring related points ... never anything related to VILLA devices"
+    facts, c, _ = _ctx(tmp_path, _Book([], []))
+    c.listening_since = lambda: c.s_dt + timedelta(days=2)              # started during the week
+    m = facts.s_monitoring(c)
+    assert m["listening_since"] == (c.s_dt + timedelta(days=2)).isoformat() and "offline" not in m
+    c.listening_since = lambda: c.s_dt - timedelta(days=30)             # there all week
+    assert facts.s_monitoring(c)["listening_since"] is None

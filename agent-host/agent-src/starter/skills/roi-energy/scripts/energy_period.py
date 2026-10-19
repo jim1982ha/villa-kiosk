@@ -65,7 +65,7 @@ def run(args) -> dict:
     n_days = (b - a).days + 1
     prev_a, prev_b = a - timedelta(days=n_days), a - timedelta(days=1)
     # v2: the total and the devices follow the villa's Energy settings — a period cached by the name guess is not reused
-    key = f"energy:v2:{args.period}:{a}:{b}"
+    key = f"energy:v2:{args.period}:{a}:{b}:{calc_tag(pack)}"
     store = ctx.store
     if store and not args.no_cache:
         cached = store.cache_get(key)
@@ -149,6 +149,22 @@ def run(args) -> dict:
     if store:
         store.cache_put(key, result)
     return result
+
+
+def calc_tag(pack) -> str:
+    """What a period's figures were worked out with: the code that computes them (this script and the shared day and
+    Energy-settings rules) and the knowledge pack that names them. A finished period is kept under it.
+
+    ⚠️ A FINISHED WEEK WAS KEPT FOR EVER (villa, 2026-10-19): its figures were stored under the period alone, so an
+    update that named each pump by its own device left week 42's energy table "Main Power Device" three times — the
+    report made after the update read the figures made before it."""
+    import hashlib
+    h = hashlib.sha1()
+    for f in (__file__, F.__file__, E.__file__):
+        with open(f, "rb") as fh:
+            h.update(fh.read())
+    h.update(str(getattr(pack, "generated_at", "") or "").encode())
+    return h.hexdigest()[:12]
 
 
 def from_settings(prefs, pack, read, load, a, b, prev_a, prev_b) -> dict:

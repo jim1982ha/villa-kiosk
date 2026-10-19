@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.6.249 (19 October 2026)
+
+The second week-42 report checked (owner, 2026-10-19), and the owner's two asks on the page.
+- reports: a rule's run started by the villa's system starting is not an alert either — the logbook writes it in words
+  ("triggered by Home Assistant starting"), not as an event: seven "alerts" at the 17 Oct 16:59 restart. reports.yaml
+  not_an_alert_when_started_by now lists what the logbook gives as a run's `source`, exactly.
+- energy_period: a finished period's figures are kept under calc_tag (this script, vesta_shared.daily and
+  energy_setup, and the pack's build time): week 42 was kept under the period alone, and the report made after
+  0.12.257 read the figures made before it ("Main Power Device" three times).
+- report.html: "Alerts that fired" (weekly) and "What happened" (monthly: the same alerts) are folded by default,
+  their count in the heading (owner).
+- "Is the monitoring itself healthy" lists no villa device (owner: they are in "Do this week" and the "devices
+  offline" figure): the agent listening (since when, when it started during the period), the safety rules, meters'
+  counters stepping back, the AI's cost.
+- tests/test_reports.py puts the report scripts on its own path: ten tests failed alone or in another order ("No
+  module named 'playbook'"), so a mutation run on that file could not tell a caught mutant — every mutation of the
+  day re-run on a clean baseline, each red by its own test.
+
 ## 0.6.248 (19 October 2026)
 
 The week 42 FM weekly report, checked line by line against the villa (owner, 2026-10-19), and every report kept on one
