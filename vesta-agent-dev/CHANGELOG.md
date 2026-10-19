@@ -1,3 +1,17 @@
+## 0.12.271
+
+What you will see:
+- Costs › Every run: a run's "N steps" pill sits on its title line ("Reply to Fabien  8 steps ▸").
+- When a reply in a chat suggests writing /investigate ("write /investigate followed by your question…"), it now
+  carries a "🔎 Investigate this" button. Pressing it starts the investigation of the question you asked, exactly as
+  if you had typed "/investigate" and your question: the same page with its charts, the same fault buttons after it.
+- Once pressed, the reply says "Investigating: “your question” (your name)" and that button goes; any other button
+  under the same reply stays. Pressing it again, or a second person pressing it in a group, starts nothing more.
+- The button appears only for someone who may write /investigate in that chat, and is checked again when pressed:
+  if the investigate skill was switched off, or the group was taken out of People in between, nothing starts and a
+  short notice says why.
+- Skills › investigate › When the skill runs: the "in a chat" line mentions the button.
+
 ## 0.12.270
 
 What you will see:
