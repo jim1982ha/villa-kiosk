@@ -40,11 +40,14 @@ export interface Screen {
   /** The device Advanced Settings was opened for (its table filtered to it);
    *  null when opened from Settings. */
   editorFocus: string | null;
+  /** The device panel a window was opened FROM (its wrench: Advanced Settings, the Cockpit's fault form, the guest's
+   *  report), with its own Back: closing that window opens it again. null when the window was opened otherwise. */
+  panelReturn: { to: Surface | "guestReport"; nav: PanelNav } | null;
 }
 
 export const START: Screen = {
   nav: NO_PANEL, windows: NO_SURFACES, list: null,
-  cockpitTab: "overview", faultFor: null, ticketFor: null, guestReportFor: null, editorFocus: null,
+  cockpitTab: "overview", faultFor: null, ticketFor: null, guestReportFor: null, editorFocus: null, panelReturn: null,
 };
 
 export type ScreenAction =
@@ -88,6 +91,9 @@ export function screenReducer(s: Screen, a: ScreenAction, doors: Doors): Screen 
   const win = (windows: Surfaces, w: Surface, open: boolean) =>
     surfacesReducer(windows, open ? { type: "open", surface: w, doors } : { type: "close", surface: w });
   const panel = (act: Parameters<typeof panelNavReducer>[1]) => panelNavReducer(s.nav, act);
+  // closing a window a device panel opened gives that panel back, with its own Back (Screen.panelReturn)
+  const returned = (w: Surface | "guestReport"): Partial<Screen> =>
+    s.panelReturn?.to === w ? { nav: s.panelReturn.nav, panelReturn: null } : {};
   switch (a.type) {
     case "openWindow": {
       if (!mayOpen(a.window, doors)) return s;
@@ -95,20 +101,28 @@ export function screenReducer(s: Screen, a: ScreenAction, doors: Doors): Screen 
         editorFocus: a.window === "configEditor" ? null : s.editorFocus };
     }
     case "closeWindow":
-      return { ...s, windows: win(s.windows, a.window, false),
+      return { ...s, windows: win(s.windows, a.window, false), ...returned(a.window),
         faultFor: a.window === "cockpit" ? null : s.faultFor,
         ticketFor: a.window === "cockpit" ? null : s.ticketFor,
         editorFocus: a.window === "configEditor" ? null : s.editorFocus };
     case "cockpitTab": return { ...s, cockpitTab: a.tab };
-    case "openDevice": return { ...s, nav: panel({ type: "open", panel: a.panel }) };
+    case "openDevice": return { ...s, nav: panel({ type: "open", panel: a.panel }), panelReturn: a.panel ? null : s.panelReturn };
     case "handOver":
       // ⚠️ THE ORDER IS THE RULE: nothing changes unless a panel opens.
       if (!a.panel) return s;
-      return { ...s, windows: win(s.windows, a.from, false),
+      return { ...s, windows: win(s.windows, a.from, false), panelReturn: null,
         nav: panel({ type: "openFrom", panel: a.panel, from: { kind: "surface", surface: a.from } }) };
     case "openReading": return { ...s, nav: panel({ type: "drill", panel: a.panel }) };
     case "switchPanel": return { ...s, nav: panel({ type: "switch", panel: a.panel }) };
-    case "closePanel": return { ...s, nav: panel({ type: "close" }) };
+    case "closePanel": {
+      // ⚠️ CLOSE RETURNS TO WHERE THE DEVICE CAME FROM (owner, 2026-10-20: a device opened from the Cockpit closed the
+      // Cockpit with it): its first step — a window or a list — opens again, every panel since closes
+      const origin = s.nav.back[0];
+      const next = { ...s, nav: panel({ type: "close" }), panelReturn: null };
+      if (origin?.kind === "surface") return { ...next, windows: win(next.windows, origin.surface, true) };
+      if (origin?.kind === "list") return { ...next, list: origin.list };
+      return next;
+    }
     case "openList": return { ...s, list: a.list };
     case "closeList": return s.list ? { ...s, list: null } : s;
     case "openFromList":
@@ -124,20 +138,22 @@ export function screenReducer(s: Screen, a: ScreenAction, doors: Doors): Screen 
     case "editDevice": {
       const id = s.nav.panel?.entityId;
       if (!id || !mayOpen("configEditor", doors)) return s;
-      return { ...s, nav: NO_PANEL, editorFocus: id, windows: win(s.windows, "configEditor", true) };
+      return { ...s, nav: NO_PANEL, editorFocus: id, windows: win(s.windows, "configEditor", true),
+        panelReturn: { to: "configEditor", nav: s.nav } };
     }
     case "reportFault": {
       const id = s.nav.panel?.entityId;
       if (!id) return s;
       // raising a fault is the Overview's (owner, 2026-10-14): its form opens there, pointed at the device
-      if (doors.facility) return { ...s, nav: NO_PANEL, faultFor: id, cockpitTab: "overview", windows: win(s.windows, "cockpit", true) };
-      return { ...s, nav: NO_PANEL, guestReportFor: id };
+      if (doors.facility) return { ...s, nav: NO_PANEL, faultFor: id, cockpitTab: "overview", windows: win(s.windows, "cockpit", true),
+        panelReturn: { to: "cockpit", nav: s.nav } };
+      return { ...s, nav: NO_PANEL, guestReportFor: id, panelReturn: { to: "guestReport", nav: s.nav } };
     }
     case "faultFormOpened": return s.faultFor === null ? s : { ...s, faultFor: null };
     case "editTicket": return doors.facility ? { ...s, ticketFor: a.id, cockpitTab: "tickets" } : s;
     case "ticketEditOpened": return s.ticketFor === null ? s : { ...s, ticketFor: null };
     case "reportProblem": return { ...s, guestReportFor: "" };
-    case "closeGuestReport": return s.guestReportFor === null ? s : { ...s, guestReportFor: null };
+    case "closeGuestReport": return s.guestReportFor === null ? s : { ...s, guestReportFor: null, ...returned("guestReport") };
   }
 }
 
