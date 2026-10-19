@@ -1,3 +1,9 @@
+## 2.496.425
+
+### Fixed
+- Nothing to see: 2.496.424 was pushed but never published — one of its checks compared a recap's date in the
+  machine's own language and failed on the build server. The check now reads the word, not the date.
+
 ## 2.496.424
 
 ### Fixed
