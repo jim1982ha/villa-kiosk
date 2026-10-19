@@ -6,7 +6,7 @@
 
 import { useState, type ReactNode } from "react";
 import { Pencil, Wrench, X } from "lucide-react";
-import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
+import { useFmData } from "@/fm/FmDataContext";
 import type { WorkAction, WorkActionKind } from "@/fm/deviceWork";
 import InlineConfirm from "@/components/common/InlineConfirm";
 
@@ -32,7 +32,7 @@ export function useConfirmedClose(): ConfirmedClose {
     cancel: () => setAsking(null),
     close: async (key, ids) => {
       setProblem(null);
-      const { done, note: why } = fmSaveOutcome(await closeTickets(ids));
+      const { done, note: why } = await closeTickets(ids);
       // On success the card's records leave its list; only a failure stays to say so.
       setAsking(null);
       if (!done && why) setProblem({ key, text: why });

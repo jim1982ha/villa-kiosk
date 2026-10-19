@@ -196,17 +196,28 @@ export function lineIcon(group: AttentionGroup, item: AttentionItem): LineSource
 
 /** A line's source icons and the status colour of each (owner, 2026-10-14: the source as an icon, in place of the
  *  warning sign; two stacked when a line holds a device's live state and its fault). */
-export interface LineSources { sources: IssueSource[]; kinds: AttentionTone[] }
+export interface LineSources { sources: IssueSource[]; severities: AttentionSeverity[] }
 export function lineSources(item: AttentionItem): LineSources {
-  const own = { sources: [item.source ?? "live"], kinds: [attentionTone(item)] } as LineSources;
-  return item.fault ? { sources: [...own.sources, item.fault.source ?? "person"], kinds: [...own.kinds, attentionTone(item.fault)] } : own;
+  const own = { sources: [item.source ?? "live"], severities: [attentionSeverity(item)] } as LineSources;
+  return item.fault ? { sources: [...own.sources, item.fault.source ?? "person"], severities: [...own.severities, attentionSeverity(item.fault)] } : own;
 }
 
-/** What colours a problem's icon (the .cockpit-attention-<tone> class): its kind — and a CRITICAL offline device its
- *  own, red, where any other offline device is amber (owner, 2026-10-18: "critical" = red and told at once). */
+/** What a problem IS: its kind — and a CRITICAL offline device its own, where any other offline device is just
+ *  offline (owner, 2026-10-18: "critical" = red and told at once). */
 export type AttentionTone = AttentionKind | "critical";
 export function attentionTone(item: AttentionItem): AttentionTone {
   return item.kind === "unavailable" && item.critical ? "critical" : item.kind;
+}
+
+/** How SERIOUS a problem is, on every surface — the Cockpit button, a card's icon, the Recap's row (the
+ *  .cockpit-attention-<severity> class): red (danger) only for an alarm or a critical device offline; a fault, any
+ *  other offline device and a late task are a warning, amber (owner, 2026-10-18). ⚠️ ONE OWNER (architecture review,
+ *  2026-10-19): the button read this rule while the card's icon still painted every fault red from a stylesheet
+ *  written before the decision. */
+export type AttentionSeverity = "danger" | "warn";
+export function attentionSeverity(item: AttentionItem): AttentionSeverity {
+  const tone = attentionTone(item);
+  return tone === "alarm" || tone === "critical" ? "danger" : "warn";
 }
 
 /**
@@ -476,11 +487,11 @@ export function attentionFor(att: VillaProblems, may: (entityId: string) => bool
 export const healthClass = (health: VillaHealth): string =>
   health.level === "danger" ? " has-alert" : health.level === "warn" ? " has-warn" : "";
 
-/** The level is read from EVERY problem; the count is the ROWS, the number the badge shows. Danger is an alarm or a
- *  CRITICAL device offline (owner, 2026-10-18); any other offline device, a fault or a late task is a warning. */
+/** The level is read from EVERY problem (attentionSeverity: danger is an alarm or a CRITICAL device offline, owner
+ *  2026-10-18; anything else a warning); the count is the ROWS, the number the badge shows. */
 export function villaHealthFrom(groups: readonly AttentionGroup[]): VillaHealth {
   if (groups.length === 0) return { level: "ok", summary: "Everything looks fine." };
-  const hasDanger = groups.some((g) => g.items.some((i) => i.kind === "alarm" || attentionTone(i) === "critical"));
+  const hasDanger = groups.some((g) => g.items.some((i) => attentionSeverity(i) === "danger"));
   const n = groups.length;
   return {
     level: hasDanger ? "danger" : "warn",

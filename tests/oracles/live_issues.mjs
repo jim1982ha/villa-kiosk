@@ -211,17 +211,17 @@ const night = groupAttention(buildAttentionItems({
   entityMap: {}, alertThresholds: {}, resolvedRooms: {}, selectableIds: [],
   folding: new Map([["sensor.example_battery", "sensor.example_temperature"]]),
   fmData: fm([agentRec({ id: "n1", entityId: "sensor.example_battery", origin: "night", title: "Example offline" })]) }))[0];
-ck("  ...an offline device and its night check's fault: ONE line, two icons — Live (amber), Night check (red)",
-   JSON.stringify(lineSources(night.items[0])) === JSON.stringify({ sources: ["live", "night"], kinds: ["unavailable", "fault"] }),
+ck("  ...an offline device and its night check's fault: ONE line, two icons — Live and Night check, both a warning (amber)",
+   JSON.stringify(lineSources(night.items[0])) === JSON.stringify({ sources: ["live", "night"], severities: ["warn", "warn"] }),
    lineSources(night.items[0]));
 const I = await import("@/components/fm/sourceIcons");
 const drawn = draw(h(I.SourceIcons, lineSources(night.items[0])));
-ck("  ...drawn one under the other, each in its status colour, named for a screen reader",
-   (drawn.match(/<svg/g) || []).length === 2 && /cockpit-attention-unavailable[\s\S]*cockpit-attention-fault/.test(drawn)
-   && /aria-label="Live and Night check"/.test(drawn), drawn);
-const people = draw(h(I.SourceIcons, { sources: ["owner", "fm", "guest"], kinds: ["fault"] }));
+ck("  ...drawn one under the other, each in its severity's colour, named for a screen reader",
+   (drawn.match(/<svg/g) || []).length === 2 && /cockpit-attention-warn[\s\S]*cockpit-attention-warn/.test(drawn)
+   && !/cockpit-attention-(fault|unavailable|alarm|critical|schedule)/.test(drawn) && /aria-label="Live and Night check"/.test(drawn), drawn);
+const people = draw(h(I.SourceIcons, { sources: ["owner", "fm", "guest"], severities: ["warn"] }));
 ck("  ...a profile is the top bar's badge: its letters in a circle (O, FM, G), in the line's colour",
-   /source-role-badge cockpit-attention-icon cockpit-attention-fault"[^>]*>O</.test(people)
+   /source-role-badge cockpit-attention-icon cockpit-attention-warn"[^>]*>O</.test(people)
    && /source-role-badge two[^"]*"[^>]*>FM</.test(people) && /class="source-role-badge[^"]*"[^>]*>G</.test(people), people);
 ck("  ...every source has its icon and its words in the (i)'s legend",
    S.ISSUE_SOURCES.every((x) => I.SOURCE_ICON[x] && I.SOURCE_WORDS[x])

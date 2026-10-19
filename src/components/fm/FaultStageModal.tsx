@@ -22,7 +22,7 @@
 
 import { useState } from "react";
 
-import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
+import { useFmData } from "@/fm/FmDataContext";
 import { faultTitle, parseAmount } from "@/fm/fmEngine";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
@@ -91,7 +91,7 @@ export default function FaultStageModal({
     );
     setBusy(false);
     // Closes when saved or queued; stays, with the reason, only when refused.
-    const { done, note: why } = fmSaveOutcome(result);
+    const { done, note: why } = result;
     if (done) onClose(); else setFailed(why);
   };
 

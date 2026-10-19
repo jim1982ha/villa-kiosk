@@ -11,7 +11,7 @@
 import { useEffect, useState } from "react";
 import { useConfig } from "@/config/ConfigContext";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
-import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
+import { useFmData } from "@/fm/FmDataContext";
 import type { FmTicket } from "@/fm/fmTypes";
 import { stageOf } from "@/fm/fmEngine";
 import EvidenceRow from "./EvidenceRow";
@@ -95,8 +95,7 @@ export default function FaultForm({ editing, presetEntity, deviceOptions, onDone
           };
           // Same fields either way — updateTicket leaves status, openedAt and resolvedAt alone, so correcting a
           // description never rewrites the record's history.
-          const { done, note: why } = fmSaveOutcome(
-            editing ? await updateTicket(editing.id, fields) : await addTicket(fields, { asTicket: true }));
+          const { done, note: why } = editing ? await updateTicket(editing.id, fields) : await addTicket(fields, { asTicket: true });
           // Closed only when saved or queued: a refused save used to throw away what was typed (2.496.252).
           if (done) onDone(); else setFormError(why);
         }}

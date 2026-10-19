@@ -14,6 +14,7 @@
 import { useState, type ReactNode } from "react";
 import { ChevronLeft, Wrench } from "lucide-react";
 import { linkedSwitchProps, usePanelActions } from "./PanelActionsContext";
+import { linkedStateWords } from "./panelHeader";
 import { badgeImage } from "@/babylon/badgeIcons";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import DeviceReadings from "./DeviceReadings";
@@ -180,7 +181,7 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
               <div style={{ minWidth: 0 }}>
                 <div className="panel-linked-label" title={linked.label}>{linked.label}</div>
                 <div className="muted" style={{ fontSize: "var(--text-2xs)" }}>
-                  {!linked.known ? "Unavailable" : linked.isOn ? "On" : "Off"} · linked entity
+                  {linkedStateWords(linked)} · linked entity
                 </div>
               </div>
             </div>

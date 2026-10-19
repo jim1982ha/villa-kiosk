@@ -2,13 +2,16 @@
   "_what": "What each profile may see and do, declared ONCE. The app (src/auth/permissions.ts) imports this file to decide what each profile is SHOWN; the proxy (rootfs/usr/bin/supervisor-proxy.py, ROLE_CAPABILITIES) reads it to decide what each profile may DO. Change a profile's rights HERE, and nowhere else. Capability names are described where the app declares them (the Capability list in permissions.ts); tests/oracles/role_table.mjs and tests/proxy-rules.py fail on a name neither side knows.",
   "_viewCameras": "Not written as a capability: a profile may view cameras exactly when 'camera' is not among its deniedTypes. The proxy derives viewCameras from that, so the two cannot disagree.",
   "_administer": "Server-side only: exempt from the Home Assistant allow-lists and the service confinement, may revoke every session and read telemetry. The app never asks for it.",
+  "_label": "A profile's display name, declared ONCE (architecture review, 2026-10-19): the sign-in card and 'Signed in as' (src/auth/roles.ts ROLE_LABELS), the stamp on every step a profile writes on a fault ('by Guest', fmCommands) and the word a card reads back to say who raised it (fm/issueSource) — and the name the proxy accepts on a guest's own report (_fm_guest_steps_ok, GUEST_LABEL). It was written in the app and copied as a literal into the proxy and its test. Stored records keep the word they were stamped with: change a label and older steps still read the old one.",
   "profiles": {
     "guest": {
+      "label": "Guest",
       "allowedCategories": ["comfort", "light", "network", "access_control"],
       "deniedTypes": ["camera", "binary_sensor"],
       "capabilities": ["controlEntities", "openSettings", "customizeAppearance", "reportFault"]
     },
     "owner": {
+      "label": "Owner",
       "allowedCategories": "all",
       "deniedTypes": [],
       "capabilities": [
@@ -17,6 +20,7 @@
       ]
     },
     "ops": {
+      "label": "Facility manager",
       "allowedCategories": "all",
       "deniedTypes": [],
       "capabilities": [

@@ -11,7 +11,7 @@ import Dropdown from "@/components/common/Dropdown";
 import SaveButton from "@/components/common/SaveButton";
 import { Plus, Sparkles, Save, Download } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
-import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
+import { useFmData } from "@/fm/FmDataContext";
 import { budgetStatus, localStamp, parseAmount } from "@/fm/fmEngine";
 import { COST_CATEGORY_NAMES } from "@/fm/fmTypes";
 import { useFmTerms } from "@/fm/useFmTerms";
@@ -196,9 +196,9 @@ export default function SpendTab(
                 // `at` is set once, when the spend happened, and is never
                 // rewritten by a later correction — it is what the monthly
                 // total and the cap are computed from.
-                const { done, note: why } = fmSaveOutcome(editingId
+                const { done, note: why } = editingId
                   ? await updateCost(editingId, fields)
-                  : await addCost({ ...fields, at: new Date().toISOString() }));
+                  : await addCost({ ...fields, at: new Date().toISOString() });
                 // Empty the form only when saved or queued (2.496.252).
                 if (done) resetForm(); else setFormError(why);
               }}

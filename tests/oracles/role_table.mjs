@@ -9,7 +9,7 @@ register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 import { readFileSync } from "node:fs";
 const { CAPABILITIES, hasCapability, isCategoryAllowed, isTypeAllowed } = await import("@/auth/permissions");
-const { ROLE_ORDER, isRole } = await import("@/auth/roles");
+const { ROLE_ORDER, ROLE_LABELS, isRole } = await import("@/auth/roles");
 const { CATEGORY_ORDER } = await import("@/config/EntityCategories");
 
 const table = JSON.parse(readFileSync(new URL("../../rootfs/usr/share/vesta/roles.json", import.meta.url), "utf8"));
@@ -35,5 +35,10 @@ const wrongCat = profiles.flatMap((r) => CATEGORY_ORDER.filter((c) => isCategory
 ck("isCategoryAllowed is the table", wrongCat.length === 0, wrongCat.join());
 ck("isTypeAllowed is the table (a guest is shown no camera, ops is)",
    !isTypeAllowed("guest", "camera") && isTypeAllowed("ops", "camera") && isTypeAllowed("owner", "camera"));
+// the display names too (architecture review, 2026-10-19): the sign-in card, "Signed in as" and the stamp on a
+// fault's steps come from the table, as does the name the proxy accepts on a guest's report (tests/proxy-rules.py)
+ck("each profile's display name is the table's (ROLE_LABELS)",
+   profiles.every((r) => typeof table.profiles[r].label === "string" && table.profiles[r].label.length > 0 && ROLE_LABELS[r] === table.profiles[r].label),
+   profiles.map((r) => `${r}: ${ROLE_LABELS[r]} / ${table.profiles[r].label}`));
 
 done("✅ the app reads its rights from the one role table");

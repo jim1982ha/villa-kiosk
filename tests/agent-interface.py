@@ -471,13 +471,17 @@ async def main() -> None:
     status, body = await jget("/agent-status", cookie("ops"))
     ck("  ...and the refused beat changed nothing", body.get("cadence") == beat["cadence"], body)
     presence = TMP / "data" / "agent-presence.json"
-    presence.write_text(json.dumps({"last_seen": time.time() - 6 * 60, "status": None}))
+    presence.write_text(json.dumps({"last_seen": time.time() - 6 * 60, "status": None, "cadence": beat["cadence"]}))
     status, body = await jget("/agent-status", cookie("ops"))
     ck("six minutes of silence (window 5): offline — computed, so a restart cannot lie",
        body.get("state") == "offline", body)
+    # architecture review, 2026-10-19: the stored timing was answered offline too, so every card read "Next check:
+    # within 5 min" days after the Agent had stopped
+    ck("  ...and the cadence is withheld (null): no clock without an Agent to keep it", body.get("cadence") is None, body)
     agent(enabled=True, token=TOKEN, offline_after_minutes=10)
     status, body = await jget("/agent-status", cookie("ops"))
     ck("  ...and the window is the option's", body.get("state") == "online", body)
+    ck("  ...online again, its stored timing is shown again", body.get("cadence") == beat["cadence"], body)
 
     # ── the villa model (PLAN A4) ────────────────────────────────────────
     print("\n  the villa model:")

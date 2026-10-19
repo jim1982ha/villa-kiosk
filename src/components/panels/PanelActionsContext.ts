@@ -64,8 +64,11 @@ export interface PanelActions {
     /** Live state — drives both the switch position and the header ring. */
     isOn: boolean;
     /** False when HA cannot say (unavailable, a lock in motion): the switch
-     *  is shown "Unavailable" and cannot be thrown (utils/devicePower). */
+     *  cannot be thrown (utils/devicePower). */
     known: boolean;
+    /** Where it stands with its device (stateColors.contactOf): the row's word
+     *  is panelHeader.linkedStateWords — "Unavailable" only when LOST. */
+    contact: "lost" | "no-value" | "ok";
     toggle: () => void;
   };
   /** The open device's OTHER readings (deviceGroups.deviceReadings: its

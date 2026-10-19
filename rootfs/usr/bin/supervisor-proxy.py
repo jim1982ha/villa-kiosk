@@ -385,6 +385,10 @@ def _role_capabilities(table: dict) -> dict:
 
 ROLES_TABLE = _load_roles()
 ROLE_CAPABILITIES = _role_capabilities(ROLES_TABLE)
+# The Guest profile's display name — what the app stamps on a guest's own report (roles.json `profiles.guest.label`,
+# src/auth/roles.ts ROLE_LABELS), read from the one table (architecture review, 2026-10-19: it was the literal "Guest"
+# here and in tests/proxy-rules.py). FAIL CLOSED: no table, no name — only an unsigned raising step passes.
+GUEST_LABEL = ((ROLES_TABLE.get("profiles") or {}).get("guest") or {}).get("label")
 
 
 def _may(role: str, capability: str) -> bool:
@@ -1927,12 +1931,13 @@ def _fm_guest_write_ok(old, new) -> bool:
 
 
 def _fm_guest_steps_ok(updates) -> bool:
-    """A guest report's history: none, or the one raising step — open, no kind, by "Guest" or nobody."""
+    """A guest report's history: none, or the one raising step — open, no kind, by the Guest profile's name
+    (GUEST_LABEL, the role table's) or nobody."""
     if updates is None:
         return True
     return (isinstance(updates, list) and len(updates) <= 1
             and all(isinstance(u, dict) and u.get("status") == "open" and not u.get("kind")
-                    and u.get("by") in (None, "Guest") and not u.get("who") for u in updates))
+                    and u.get("by") in (None, GUEST_LABEL) and not u.get("who") for u in updates))
 
 
 def _fm_reader_view(request: web.Request, stored):
@@ -3730,7 +3735,12 @@ def _agent_cadence(value) -> dict | None:
 
 
 def _agent_presence() -> dict:
-    """not_configured / offline / online, from the token and the last heartbeat."""
+    """not_configured / offline / online, from the token and the last heartbeat.
+
+    ⚠️ THE CADENCE ONLY WHILE ONLINE (architecture review, 2026-10-19): the last heartbeat's stored timing was answered
+    whatever the state, so every card read "Next check: within 5 min" and the (i) "it checks every 5 minutes" days
+    after the Agent had stopped. ONE owner of "is there a clock": an offline Agent has none (null), and the Kiosk then
+    says "by the VESTA Agent" / "it checks regularly" on its own."""
     if not _agent_token():
         return {"state": "not_configured"}
     minutes = _agent_offline_minutes()
@@ -3743,7 +3753,7 @@ def _agent_presence() -> dict:
         "last_seen": datetime.fromtimestamp(last, timezone.utc).isoformat(timespec="seconds")
         .replace("+00:00", "Z") if last else None,
         "status": doc.get("status") if isinstance(doc, dict) else None,
-        "cadence": _agent_cadence(doc.get("cadence")) if isinstance(doc, dict) else None,
+        "cadence": _agent_cadence(doc.get("cadence")) if online and isinstance(doc, dict) else None,
         "offline_after_minutes": minutes,
     }
 

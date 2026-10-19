@@ -29,7 +29,7 @@ export interface PanelHeader {
   };
   /** The linked switch (EntityMapping.linkedEntityId), when it has one and
    *  this profile may control it. */
-  linked: { label: string; isOn: boolean; known: boolean } | null;
+  linked: LinkedState & { label: string } | null;
   /** A camera's motion sensor (read-only): detecting or not. */
   motion: { label: string; isOn: boolean } | null;
 }
@@ -40,8 +40,22 @@ export interface HeaderInput {
   config: LookConfig;
   canControl: boolean;
   /** The linked switch as the page's optimistic hook holds it: on/off as just
-   *  pressed, and whether Home Assistant knows its position at all. */
-  linkedSwitch: { isOn: boolean; known: boolean } | null;
+   *  pressed, whether its position is known at all, and where the entity
+   *  stands with its device. */
+  linkedSwitch: LinkedState | null;
+}
+
+/** A linked entity's switch: its position (`isOn`, as just pressed), whether its position is known at all (`known`:
+ *  not for a lock in motion, devicePower), and its contact (stateColors.contactOf). */
+export interface LinkedState { isOn: boolean; known: boolean; contact: "lost" | "no-value" | "ok" }
+
+/** The word under a linked entity's name: "Unavailable" only when contact is LOST, "Unknown" when the device answers
+ *  but this entity has no value (or its position is not known), else On / Off. ⚠️ UNKNOWN IS NOT LOST CONTACT (owner,
+ *  2026-10-18): the row read "Unavailable" for both. */
+export function linkedStateWords(l: LinkedState): string {
+  if (l.contact === "lost") return "Unavailable";
+  if (l.contact === "no-value" || !l.known) return "Unknown";
+  return l.isOn ? "On" : "Off";
 }
 
 export function panelHeader({ panel, entities, config, canControl, linkedSwitch }: HeaderInput): PanelHeader {
@@ -74,7 +88,7 @@ export function panelHeader({ panel, entities, config, canControl, linkedSwitch 
       ringState: look.ring,
     },
     linked: linkedId && canControl && linkedSwitch
-      ? { label: labelOf(linkedId, config.entityMap, entities), isOn: linkedSwitch.isOn, known: linkedSwitch.known }
+      ? { label: labelOf(linkedId, config.entityMap, entities), ...linkedSwitch }
       : null,
     // Read-only, shown whatever the profile (knowing a camera has motion
     // detection wired up is not a control action). "on" is the sensor's own

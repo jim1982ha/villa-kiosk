@@ -154,5 +154,5 @@ export function ReadinessChecks({ readiness, label, onOpenEntity, onOpenCheck, s
 export function CheckDetail({ check }: { check: ReadinessCheck }) {
   const lead = "Check the faults";
   if (!check.sources?.length || !check.detail.startsWith(lead)) return <>{check.detail}</>;
-  return <>Check the <SourceIconRow sources={check.sources} /> faults{check.detail.slice(lead.length)}</>;
+  return <>Check the <SourceIconRow sources={check.sources} severity={check.state === "fail" ? "danger" : "warn"} /> faults{check.detail.slice(lead.length)}</>;
 }

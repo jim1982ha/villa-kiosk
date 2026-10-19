@@ -30,7 +30,7 @@ export function useMonthlyDocument(kind: DocumentKind, build: (month: string, vi
 
   const keep = async (md: string, m: string) => {
     // "Saved" only when it was; otherwise the store's banner says why.
-    if (await saveDocument({ kind, month: m, markdown: md }) === "saved") setSaved(true);
+    if ((await saveDocument({ kind, month: m, markdown: md })).result === "saved") setSaved(true);
   };
 
   return {

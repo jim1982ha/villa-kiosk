@@ -48,8 +48,22 @@ const door = items.find((i) => i.entityId === "lock.door" || i.entityId === "sen
 const th = items.find((i) => i.entityId === "sensor.th_humidity");
 ck("a device on the rule's list offline is critical, whichever of its entities the rule names", door?.critical === true, items);
 ck("  ...one not on it is not", th?.critical === false, th);
-ck("  ...red for the critical one, amber for the other (their icons' tone)",
-   attentionTone(door) === "critical" && lineSources(th).kinds[0] === "unavailable" && lineSources(door).kinds[0] === "critical");
+ck("  ...red for the critical one, amber for the other (their icons' severity)",
+   attentionTone(door) === "critical" && lineSources(th).severities[0] === "warn" && lineSources(door).severities[0] === "danger");
+// ONE severity rule on every surface (architecture review, 2026-10-19): the Cockpit button already read it while the
+// card's icon still painted every fault red — a fault is a warning (owner, 2026-10-18)
+{
+  const { attentionSeverity } = await import("@/config/attention");
+  const fault = { kind: "fault", entityId: "sensor.x", title: "Pump offline", detail: "", source: "night" };
+  const alarm = { kind: "alarm", entityId: "sensor.x", title: "Leak", detail: "" };
+  const late = { kind: "schedule", title: "Pool filter", detail: "" };
+  ck("a fault is a warning (amber), an alarm and a critical device offline danger (red), a late task a warning",
+     attentionSeverity(fault) === "warn" && attentionSeverity(alarm) === "danger" && attentionSeverity(door) === "danger"
+     && attentionSeverity(th) === "warn" && attentionSeverity(late) === "warn");
+  const health = (i) => villaHealthFrom(groupAttention([i])).level;
+  ck("  ...and the villa's health agrees, item by item: a fault alone is warn, an alarm alone danger",
+     health(fault) === "warn" && health(alarm) === "danger" && health(door) === "danger" && health(th) === "warn", [health(fault), health(alarm)]);
+}
 ck("the villa's health: danger with a critical device offline",
    villaHealthFrom(groupAttention(items)).level === "danger");
 ck("  ...a warning when only devices off the list are offline",

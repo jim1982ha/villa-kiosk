@@ -8,7 +8,7 @@
 
 import { useState } from "react";
 import { Check, CalendarClock, Trash2 } from "lucide-react";
-import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
+import { useFmData } from "@/fm/FmDataContext";
 import { useDeviceIdentity } from "@/config/VillaModel";
 import { openCounts } from "@/fm/deviceWork";
 import { TONE_OF, toneClass } from "@/fm/tone";
@@ -160,7 +160,7 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
           onCancel={() => setOpenId(null)}
           onSave={async (payload, cost) => {
             // Close only when saved or queued; a refused save keeps the form (2.496.252).
-            const { done, note: why } = fmSaveOutcome(await logCompletion(payload, cost));
+            const { done, note: why } = await logCompletion(payload, cost);
             if (done) setOpenId(null);
             return done ? null : why;
           }}
