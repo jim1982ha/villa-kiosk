@@ -12,6 +12,7 @@ turn and sends what this decides; nothing here talks to Telegram. The rules, in 
     6. the faults the AI offered: their buttons under the answer (or under the page's message)
     7. a command the answer tells the person to write ("/investigate …"): its button, on their own question
     8. a request for approval shown in this chat IS the answer: no other text under it — unless buttons must go
+    9. the platform underneath is never named: "the villa's system" (messaging.no_platform_name)
 
 The ORDER is the design: 8 looks at the buttons 4–7 left; 6 can replace an empty answer with the offers named; 7 reads
 the answer as it will be sent.
@@ -24,6 +25,7 @@ from typing import Callable
 
 from . import ai_down, button_data
 from .api_errors import AI_DOWN, FOR_PERSON
+from vesta_shared.messaging import no_platform_name
 
 log = logging.getLogger("vesta.reply")
 
@@ -103,4 +105,6 @@ class TurnReply:
             if answer:
                 log.info("Chat %s: the AI's reply not sent, the approval request shown there says it all", cid)
             answer = ""
-        return Reply(answer, keyboard, offered)
+        # 9. ⚠️ NEVER THE PLATFORM'S NAME (owner, 2026-10-15; a chat read "… trace through Home Assistant's history and
+        # logs" on 2026-10-20 although the instructions forbid it): the engine says it, not the model's choice
+        return Reply(no_platform_name(answer), keyboard, offered)

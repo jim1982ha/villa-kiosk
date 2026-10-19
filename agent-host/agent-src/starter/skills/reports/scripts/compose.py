@@ -50,7 +50,7 @@ from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
 from vesta_shared import result as R  # noqa: E402  (what the engine is asked to do: its shape)
 from vesta_shared import script  # noqa: E402  (pack, store, zone, day: one set-up)
 from vesta_shared.params import MissingParameter  # noqa: E402
-from vesta_shared.messaging import fmt_money, incident_tag  # noqa: E402
+from vesta_shared.messaging import fmt_money, incident_tag, no_platform_name_in  # noqa: E402
 from vesta_shared.result import WHOLE_DEVICE  # noqa: E402  (what a whole device's faults are)
 from vesta_shared.message_format import document, for_the_ai, split_title  # noqa: E402  (the one shape: title, To:, sections)
 from vesta_shared.store import Incident, Store  # noqa: E402
@@ -223,6 +223,7 @@ def checked_notes(facts: dict, notes: dict) -> tuple[dict, list[dict]]:
 
 def page(facts: dict, notes: dict, limit: str | None = None, without_ai: str | None = None) -> str:
     """`without_ai`: why the AI could not write (its job's without_ai steps): the page says so at the top."""
+    notes = no_platform_name_in(notes)       # the AI's sentences never name the platform (messaging.no_platform_name)
     kinds = {w["id"]: w.get("kind", "reading") for w in facts.get("to_write") or []}
 
     def reading(k):

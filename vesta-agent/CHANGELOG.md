@@ -1,3 +1,13 @@
+## 0.12.272
+
+What you will see:
+- The agent no longer names the platform underneath in what you read from it: a reply, a message it sends, a report
+  page, an investigation's page and its message say "the villa's system" (or "the villa's history", "the villa's
+  records"), even when the AI writes the platform's name. A web address, a technical name written as code, and
+  words like HACS stay as they are.
+- Skills: the description lines say "the villa's system" too ("Nightly maintenance checks on the villa's history…").
+- The investigation page's last lines say "the villa's records".
+
 ## 0.12.271
 
 What you will see:

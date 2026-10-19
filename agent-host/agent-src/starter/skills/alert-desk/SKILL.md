@@ -1,11 +1,11 @@
 ---
 name: alert-desk
-description: Receives every critical alert of the VESTA rules (Home Assistant's vesta_critical_event), removes duplicates, routes by severity to the owner and facility-manager chats, runs the Done / Need help chase with the 15 and 45 minute ladder, gates the siren behind two signals and one human approval, and watches the villa from outside (villa silent). The engine runs it on every alert, every ladder button and every 5 minutes; you only read its status.
+description: Receives every critical alert of the VESTA rules (the villa system's vesta_critical_event), removes duplicates, routes by severity to the owner and facility-manager chats, runs the Done / Need help chase with the 15 and 45 minute ladder, gates the siren behind two signals and one human approval, and watches the villa from outside (villa silent). The engine runs it on every alert, every ladder button and every 5 minutes; you only read its status.
 ---
 
 # alert-desk
 
-Home Assistant detects in seconds and already sends its own Telegram message.
+The villa's system detects in seconds and already sends its own Telegram message.
 This desk makes those alerts land, get handled, and stop repeating. It never
 decides alone to act on the villa.
 
@@ -17,15 +17,15 @@ decides alone to act on the villa.
 
 ## Inputs (all run by the engine, never by you)
 
-1. `vesta_critical_event` from Home Assistant, fired by the VESTA rules AFTER their own message:
+1. `vesta_critical_event` from the villa's system, fired by the VESTA rules AFTER their own message:
    `{blueprint, rule_id, incident_id, phase, label, entities, summary, timestamp, priority?, claim?}`.
-   - `opened`: a new incident. `resolved`: Home Assistant says it cleared (the chase stops).
+   - `opened`: a new incident. `resolved`: the villa's system says it cleared (the chase stops).
      `abandoned`: the rule stopped watching while it was still true (the owner hears it).
      `restated`: the rule was saved, reloaded or the villa's system started — it sends what it claims now, and its
      open alert is judged by that from now on (no message to anyone).
    - `priority` (P1–P4, the rule's "VESTA priority" input) decides who hears it (`people_roles`);
-     without one, the rule's route in `rules.yaml`. Home Assistant's own `severity` word is not a priority.
-   - `claim`: a Home Assistant template the rule wrote with its own entities and limits, true while
+     without one, the rule's route in `rules.yaml`. The villa system's own `severity` word is not a priority.
+   - `claim`: a template of the villa's system the rule wrote with its own entities and limits, true while
      what the alert reports still holds. Every 5 minutes (`tick`) the desk renders it for every open
      incident: false for `clear_minutes` (10) closes it, with its Kiosk fault; a device that does not
      answer keeps it open, said once. An alert from a rule that sends no claim but its `bad_states`
@@ -34,13 +34,13 @@ decides alone to act on the villa.
    - `abandoned` with `still_true: false` (back to normal just as the rule gave up) closes the
      incident; still true, the owner hears it.
    - An alert back within `reopen_hours` (4) of its incident closing reopens it: "Back again: N
-     times since …", under its own number, Home Assistant's latest words, its ladder started again
+     times since …", under its own number, the villa system's latest words, its ladder started again
      and its OWN task and Kiosk fault open again, titled "(again: N times in 7 days)". Each run is
      counted on its own by the digest, the reports and the retune proposal.
    - An alert that no chat of the facility manager's received (Telegram refused them all) is handed
      to the owner at the next tick.
-2. The engine's own connection to Home Assistant: while it is up, a beat every minute. Its absence
-   is how the desk knows the villa is cut off (internet, power, Home Assistant down).
+2. The engine's own connection to the villa's system: while it is up, a beat every minute. Its absence
+   is how the desk knows the villa is cut off (internet, power, the villa's system down).
 3. Ladder button presses (Done / Need help) carrying the incident number.
 
 ## Procedure per alert (`desk.py intake`)
@@ -49,7 +49,7 @@ The decision is one of:
 - `maintenance_mode`: `input_boolean.maintenance_mode` is on, nothing sent unless P1.
 - `counted`: the same rule on the same entity is already open and inside its cooldown. Nothing sent.
 - `repeat`: open and past the cooldown: one "still there, N times since" message to the roles its
-  priority reaches (as the first alert), with Home Assistant's latest words and claim.
+  priority reaches (as the first alert), with the villa system's latest words and claim.
 - `new`: the roles its priority reaches (rules.yaml `people_roles`) get the message, the asked role's
   (`chase.asks`) with the ladder buttons;
   a P1 or P2 also becomes a Facility ticket in the VESTA Kiosk; a camera snapshot travels with
@@ -61,7 +61,7 @@ The decision is one of:
 Every message about an incident is titled `#N-P2 (new)` (or `existing`, `closed`), then "To:" with the people it
 went to, the original alert and what to check, then "Status:" with what was sent and where it stands; the engine
 writes the title, "To:" and "Status:" (the skill gives the text and the status apart). A chat shows only an incident's
-latest message: the engine deletes the earlier ones when a new one lands, Home Assistant's own alert
+latest message: the engine deletes the earlier ones when a new one lands, the villa system's own alert
 included (it is rewritten with the incident's number as soon as the desk knows it).
 
 ## The chase ladder (every 5 minutes: `desk.py tick`)
@@ -72,9 +72,9 @@ person asks, read the value in force, never quote a number from here.
 - After `reask_minutes` (rules.yaml `behaviour`) without reply: one reminder to the role the chase asks
   (`chase.asks`), with the buttons.
 - After `escalate_minutes`: escalation to `chase.escalates_to`, the incident assigned to them.
-- Only one chase may run: the agent's. Home Assistant's `vesta_task_actions` ignores these
+- Only one chase may run: the agent's. The villa system's `vesta_task_actions` ignores these
   events (they never carry `task_text`).
-- Villa silent: no contact with Home Assistant for `villa_silent_minutes` opens one P1 incident to both chats;
+- Villa silent: no contact with the villa's system for `villa_silent_minutes` opens one P1 incident to both chats;
   the next contact closes it with a "back online" line.
 - Alert fatigue: a rule that fired more than `alert_fatigue_per_month` times in 30 days becomes a "retune" proposal in the
   weekly report. Nothing is changed automatically.

@@ -116,3 +116,112 @@ def test_the_page_reader_keeps_strings_and_drops_comments():
     js = 'a = "x // Home Assistant"; // Home Assistant\n/* HA */ b = `HA`;'
     kept = _without_comments(js)
     assert "x // Home Assistant" in kept and "`HA`" in kept and "/* HA */" not in kept and kept.count("Home Assistant") == 1
+
+
+# --- the engine's guarantee: what the AI writes to a person never names the platform -------------------------------
+# owner, 2026-10-20: a chat read "The investigate skill will trace through Home Assistant's history and logs around that
+# time…" although the instructions' rule 6 forbids it — the skills it read named Home Assistant, and a model's choice
+# is not a guarantee (owner rule "don't rely on the model choosing"). vesta_shared.messaging.no_platform_name says it.
+
+def test_the_platform_name_is_said_as_the_villas_system_and_code_and_links_stay():
+    from vesta_shared.messaging import no_platform_name as said
+    for text, want in [
+        ("The investigate skill will trace through Home Assistant's history and logs around that time.",
+         "The investigate skill will trace through the villa's history and logs around that time."),
+        ("Home Assistant recorded no run.", "The villa's system recorded no run."),
+        ("It is not in HA.", "It is not in the villa's system."),
+        ("HA's logbook shows it.", "The villa's logbook shows it."),
+        ("Check your Home Assistant first.", "Check the villa's system first."),
+        ("The home  assistant restarted.\n- HA was down", "The villa's system restarted.\n- The villa's system was down"),
+        ("In HA: 3 rules.", "In the villa's system: 3 rules."),
+        # never inside another word, an id, a tool's name, a link or code
+        ("Install HACS, then ha_get_history, HA_TOKEN and HA-MCP.", "Install HACS, then ha_get_history, HA_TOKEN and HA-MCP."),
+        ("See https://www.home-assistant.io/docs/HA and www.example.org/search?q=HA&lang=en.",
+         "See https://www.home-assistant.io/docs/HA and www.example.org/search?q=HA&lang=en."),
+        ("Run `Home Assistant` or ```\nHA restart\n``` then.", "Run `Home Assistant` or ```\nHA restart\n``` then."),
+        ("Ha, a shark.", "Ha, a shark."),
+        ("", ""),
+    ]:
+        assert said(text) == want, text
+
+
+def test_a_chat_answer_naming_home_assistant_reaches_telegram_as_the_villas_system(tmp_path, monkeypatch):
+    import asyncio
+    from ai_fake import FakeAI
+    from helpers import make_agent
+    owner = 111
+    v = make_agent(tmp_path, {"people": [{"telegram_id": owner, "name": "JM", "role": "owner"}]})
+
+    async def sends(call):        # what the AI sends itself (send_message) goes the same way
+        await call["call"]("send_message", {"to": "here", "text": "First, HA restarted at 03:00."})
+    FakeAI("The investigate skill will trace through Home Assistant's history and logs around that time.",
+           act=sends).install(monkeypatch)
+    asyncio.run(v.converse(owner, v.policy().person(owner), "why did the pump stop?"))
+    said = [text for chat, text, _ in v.tg.sent if chat == owner]
+    assert said[-1] == "The investigate skill will trace through the villa's history and logs around that time."
+    assert any(t.endswith("First, the villa's system restarted at 03:00.") for t in said), said
+    assert not [t for t in said if NAMED.search(t)], said
+
+
+def test_the_pages_the_ai_writes_never_name_it():
+    import sys
+    from helpers import STARTER_SKILLS
+    sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
+    import compose
+    facts = {"zone": "UTC", "order": ["headline"], "to_write": [{"id": "headline", "kind": "reading"}],
+             "sections": {"headline": {"colour": "amber", "text": "Amber"}}}
+    page = compose.page(facts, {"headline": "Home Assistant shows the pump ran 9 h."})
+    assert "The villa&#39;s system shows the pump ran 9 h." in page and "Home Assistant" not in page
+
+
+def test_the_investigation_page_and_its_message_never_name_it(tmp_path):
+    from test_investigate import _page
+    notes = {"title": "The heater on 9 October", "summary": "HA shows the heater ran 3 h.",
+             "cannot_tell": ["Whether Home Assistant's clock was right."]}
+    code, err, page, out = _page(tmp_path, notes, readings=False)
+    assert code == 0, err
+    assert "The villa&#39;s system shows the heater ran 3 h." in page and "the villa&#39;s clock" in page
+    assert out["message"]["text"].startswith("The villa's system shows the heater ran 3 h.")
+    assert not NAMED.search(re.sub(r"<!--.*?-->", "", page, flags=re.S))
+
+
+# --- the skills' own words: what the Agent page shows and what the AI reads to speak from ---------------------------
+
+def _front_matter(path: str) -> dict:
+    """A SKILL.md's front matter, line by line ("key: value"): its description is prose with colons, not YAML."""
+    text = open(path, encoding="utf-8").read()
+    head = text.split("---")[1] if text.startswith("---") else ""
+    return dict(ln.split(":", 1) for ln in head.strip().splitlines() if ":" in ln)
+
+
+def test_the_starter_skills_describe_themselves_without_the_platform_name():
+    # owner, 2026-10-20: preventive-maintenance's line on the Agent page read "Nightly maintenance checks on Home
+    # Assistant's history", investigate's SKILL.md "from Home Assistant's records" — words the AI repeats to a person
+    skills = os.path.join(ROOT, "starter", "skills")
+    hits = []
+    for name in sorted(os.listdir(skills)):
+        said = []
+        y = os.path.join(skills, name, "skill.yaml")
+        if os.path.exists(y):
+            sk = yaml.safe_load(open(y, encoding="utf-8")) or {}
+            said += [("skill.yaml", sk.get("description") or "")]
+            said += [(f"skill.yaml {s}", (d or {}).get("description") or "") for s, d in (sk.get("scripts") or {}).items()]
+            said += [(f"skill.yaml {s} {c}", w) for s, d in (sk.get("scripts") or {}).items()
+                     for c, w in ((d or {}).get("commands") or {}).items()]
+        md = os.path.join(skills, name, "SKILL.md")
+        if os.path.exists(md):
+            said += [("SKILL.md", str(_front_matter(md).get("description") or ""))]
+        hits += [f"{name} {where}: {text[:70]!r}" for where, text in said if NAMED.search(str(text))]
+    assert hits == [], hits
+    # and the investigation page's own words (it was read nowhere: "rests only on Home Assistant's records")
+    page = re.sub(r"\{#.*?#\}|<!--.*?-->", " ",
+                  open(os.path.join(skills, "investigate", "templates", "investigation.html"), encoding="utf-8").read(),
+                  flags=re.S)
+    assert not NAMED.findall(page), [ln for ln in page.splitlines() if NAMED.search(ln)]
+
+
+def test_the_instructions_say_what_the_villas_system_is_once():
+    rules_text = open(os.path.join(ROOT, "starter/config/instructions.md"), encoding="utf-8").read()
+    named = [ln for ln in rules_text.splitlines() if NAMED.search(ln)]
+    assert len(named) == 2 and "the villa's system (Home Assistant underneath)" in named[0], named
+    assert named[1].startswith("6. ")             # the rule that forbids it to a person

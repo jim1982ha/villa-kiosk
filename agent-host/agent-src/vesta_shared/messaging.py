@@ -35,6 +35,49 @@ def uncited(text: str) -> str:
     return " ".join(re.sub(r"\s*" + CITE.pattern, "", text or "").split())
 
 
+#: What `no_platform_name` never touches: a code block or span, a link — said or written as code, a name is exact.
+_KEPT = r"```.*?```|`[^`\n]*`|(?:https?://|www\.)[^\s<>\"'`)\]]+"
+#: The platform's name: "Home Assistant" (any case), or "HA" alone as a word — never inside another (HACS, ha_get_history,
+#: HA_TOKEN, HA-MCP); with the word before it that it replaces ("the", "your" …) and its possessive.
+_NAMED = (r"(?P<det>\b(?i:the|your|this|its|their|our|my|a|an)\s+)?"
+          r"(?P<name>(?i:\bHome\s+Assistant\b)|(?<![\w./-])HA(?![\w/-]))(?P<poss>['’]s\b)?")
+_PLATFORM = re.compile(f"(?P<kept>{_KEPT})|{_NAMED}", re.S)
+#: Where a sentence starts: the text's start, after . ! ? and a space, or a line's start (a list's dash kept).
+_STARTS = re.compile(r"(?:\A|[.!?]\s+|\n[ \t]*(?:[-*•][ \t]+)?)\Z")
+
+
+def no_platform_name(text: str) -> str:
+    """`text` without the platform's name, for what the AI writes to a person (owner, 2026-10-15: "never mention Home
+    Assistant": say "the villa's system"). Told so in its instructions, the AI still wrote "The investigate skill will
+    trace through Home Assistant's history and logs" to a chat — the engine delivers the rule, the model's choice does
+    not (owner rule "don't rely on the model choosing").
+
+    "Home Assistant's history" → "the villa's history"; "Home Assistant" / "in HA" → "the villa's system"; the word
+    before it that it replaces goes with it ("your Home Assistant" → "the villa's system"); capital at a sentence's
+    start. Code (`…`, ```…```) and links stay as written."""
+    def said(m: re.Match) -> str:
+        if m["kept"]:
+            return m["kept"]
+        words = "the villa's" if m["poss"] else "the villa's system"
+        det = m["det"] or ""
+        if (det[:1].isupper()) or (not det and _STARTS.search(m.string, 0, m.start())):
+            words = words[0].upper() + words[1:]
+        return words
+    return _PLATFORM.sub(said, text or "")
+
+
+def no_platform_name_in(notes, keep: tuple[str, ...] = ()):
+    """`no_platform_name` on every text of the AI's notes for a page (a dict of texts, lists and dicts), the fields
+    `keep` left as written (an investigation's `sources`: a web page's own title is quoted, not said)."""
+    if isinstance(notes, str):
+        return no_platform_name(notes)
+    if isinstance(notes, list):
+        return [no_platform_name_in(x) for x in notes]
+    if isinstance(notes, dict):
+        return {k: v if k in keep else no_platform_name_in(v) for k, v in notes.items()}
+    return notes
+
+
 def tg_len(text: str) -> int:
     """A text's length as Telegram counts it: UTF-16 units (an emoji is two)."""
     return len(text.encode("utf-16-le")) // 2

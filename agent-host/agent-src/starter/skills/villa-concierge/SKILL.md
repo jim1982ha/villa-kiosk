@@ -12,8 +12,8 @@ what was asked, and — once done — what the villa now reports.
 ## Files
 
 - `scripts/concierge.py`    status, find
-- `scripts/voice.py`        a voice message's audio, made ready for Home Assistant's speech-to-text
-- Shared: `vesta_shared`, part of the engine (pack, store, HA client, params)
+- `scripts/voice.py`        a voice message's audio, made ready for the villa system's speech-to-text
+- Shared: `vesta_shared`, part of the engine (pack, store, the villa's system's client, params)
 
 ## Who is talking
 
@@ -24,7 +24,7 @@ registered") and is logged; nothing else.
 Answer in the language the message is written in — for a voice message, the
 language spoken. The language saved for the person (shown with the message)
 is only for a message that does not tell ("ok", a number) and for what you
-send on your own. Device names stay as in Home Assistant.
+send on your own. Device names stay as in the villa's system.
 
 ## A question about what happened, and why
 
@@ -39,7 +39,7 @@ Before reading or acting on a place, resolve it with
 text search (ha_search): an entity id or a device name can carry a room's word
 without being in that room.
 
-- The Home Assistant area decides. Give `--where` the area as Home Assistant
+- The villa's area decides. Give `--where` the area as the villa's system
   names it (the areas are in the knowledge pack; "cuisine" is the Kitchen area
   unless the area has that alias). `place.areas` in the answer: only those
   areas' devices count, plus a device with no area whose name says the place.
@@ -56,7 +56,7 @@ message. Treat it as the same message typed. When the transcription makes no
 sense, say what you heard and ask once.
 
 `on_event.voice_message` runs `voice.py prepare`: it turns the Telegram audio
-into the WAV Home Assistant's speech-to-text takes, and chooses the
+into the WAV the villa system's speech-to-text takes, and chooses the
 speech-to-text and the language (`villa.voice.yaml`, optional: `stt:` an
 `stt.*` entity when the villa has several, `language:` a code to always use
 instead of the person's saved one). The engine sends that WAV to Home
@@ -103,7 +103,7 @@ alert-desk gate.
 
 - New device: the nightly pack diff produced "New device seen: X, measuring
   power. Which room?". Ask it once in the owner chat. The answer becomes
-  the owner's to set in Home Assistant (the agent does not change the registry).
+  the owner's to set in the villa's system (the agent does not change the registry).
   Until then the device is listed as "room unknown" in the reports.
 - Proposals: the monthly report carries "VESTA suggests" items with a number. They
   are answered only with the /proposal command ("/proposal accept 3", "/proposal later 3",

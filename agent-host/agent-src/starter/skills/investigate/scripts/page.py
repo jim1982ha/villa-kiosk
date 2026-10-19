@@ -27,7 +27,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from vesta_shared import periods  # noqa: E402  (the period kinds and their words: investigate.py's)
 from vesta_shared.message_format import TO_LONGEST, document, for_the_ai  # noqa: E402  (the one shape: title, To:, sections)
-from vesta_shared.messaging import CITE, TELEGRAM_CAPTION, uncited  # noqa: E402
+from vesta_shared.messaging import CITE, TELEGRAM_CAPTION, no_platform_name_in, uncited  # noqa: E402
 from vesta_shared import page as charts  # noqa: E402  (the charts every page draws: timechart, hourchart, strip)
 from vesta_shared.page import number, templates  # noqa: E402  (the one number rule)
 from vesta_shared.timeutil import day_time_label, lasting  # noqa: E402  (the one day format, duration)
@@ -254,6 +254,9 @@ def make(a) -> int:
         print(f"investigation: the notes need at least a title and a summary (the fields: {', '.join(INVESTIGATION_FIELDS)}).",
               file=sys.stderr)
         return 1
+    # the AI's account never names the platform, on the page or in its message (messaging.no_platform_name); a web
+    # page's own title is quoted as it is
+    notes = no_platform_name_in(notes, keep=("sources",))
     summary = " ".join(str(notes["summary"]).split())
     if len(" ".join(str(notes["title"]).split())) > TITLE_MAX:
         print(f"investigation: the title is longer than {TITLE_MAX} characters: say the device and the day, shorter.",

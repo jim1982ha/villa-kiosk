@@ -5,14 +5,14 @@ description: The one composer of every VESTA document: the 07:00 FM daily digest
 
 # reports
 
-The scripts compute every figure (facts.py reads Home Assistant, the store and the
+The scripts compute every figure (facts.py reads the villa's system, the store and the
 energy period); you write only the sentences reports.yaml asks for, from those
 figures; compose.py lays the page out and checks your sentences.
 
 ## Files
 
 - `reports.yaml`         the reports: sections and their order, thresholds, the playbook, the words, the sentences you write
-- `scripts/facts.py`     every figure of a weekly or monthly page (Home Assistant, the store, the energy period)
+- `scripts/facts.py`     every figure of a weekly or monthly page (the villa's system, the store, the energy period)
 - `scripts/compose.py`   fm-daily and owner-weekly (chat text); fm-weekly and owner-monthly (the page, from facts + notes, charts inline)
 - `templates/report.html` the page: one part per section (its head, the style every VESTA page shares, is the agent's own)
 - `villa.reports.yaml`   (the villa's, optional) its own playbook entries, cards and thresholds; app updates keep it
@@ -53,7 +53,7 @@ the conclusions are yours.
    open tasks, merged by device and grouped by kind (one line per device; "4 monitoring devices
    offline" rather than four lines) — each with its playbook guidance (what to look at, what it means,
    what to check, what to ask), and `to_write`: every sentence the page needs, with its instruction.
-3. For each line of `to_do`, before you write: look at what its `look_at` says, in Home Assistant
+3. For each line of `to_do`, before you write: look at what its `look_at` says, in the villa's system
    (ha_get_history for statistics or history, ha_get_logs for the logbook, ha_get_automation_traces,
    ha_get_state). Confirm it, date it, explain it; tie lines together (a pump drawing less power AND
    running as long as before means less water moved, not less running; many devices stopping in the
@@ -63,11 +63,11 @@ the conclusions are yours.
    a pump, a relay, a filter, a Wi-Fi link), run web_search once before you write it: look up
    that device's model, or the symptom, and add the most useful link to the sentence (the
    manual, the usual cause, a typical price). These searches are part of the report, not extra
-   spending. Use the web to back what Home Assistant shows, never instead of it. If no reliable
+   spending. Use the web to back what the villa's system shows, never instead of it. If no reliable
    source comes up, write "no reliable source found".
 4. Write every sentence of `to_write` in the reader's language: conclusions, not descriptions —
    what it is, what it means, what to do, when, and the question to ask. Your numbers may be your
-   own (what you read in Home Assistant); write them as you would to the owner, rounded and dated.
+   own (what you read in the villa's system); write them as you would to the owner, rounded and dated.
    Save them with `save_file` as `notes.json`: `{"<id>": "<sentence>", ...}`.
 5. `reports` `compose.py fm-weekly --facts facts.json --notes notes.json --out fm_weekly.html` (or
    `owner-monthly ... --out owner_monthly.html`). Your readings show as "VESTA's reading"; a slot

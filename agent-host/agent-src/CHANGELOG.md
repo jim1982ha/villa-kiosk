@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.6.263 (20 October 2026)
+
+What the AI writes to a person never names the platform underneath: "the villa's system" (owner rule, 2026-10-15; a
+chat on 20 October read "The investigate skill will trace through Home Assistant's history and logs around that time…"
+although instructions.md rule 6 forbids it — the skills the AI reads named it, and the rule was left to the model).
+- New `vesta_shared.messaging.no_platform_name(text)`: "Home Assistant's X" (and "HA's X") → "the villa's X"; "Home
+  Assistant" (any case) and "HA" standing alone → "the villa's system", the word before it that it replaces going with
+  it ("your / the / this / a … Home Assistant"); a capital at a sentence's or a list line's start. Never touched: "HA"
+  inside or joined to another word (HACS, ha_get_history, HA_TOKEN, HA-MCP, /HA), code spans and blocks, links.
+  `no_platform_name_in(notes, keep=())`: the same on every text of a page's notes (dicts and lists), `keep` as written.
+- Applied where the AI's words leave for a person, once each: TurnReply.compose's final text (rule 9), the AI's own
+  send_message text (tools._send), the report page's notes (reports compose.page) and the investigation's notes, its
+  page and its chat message (investigate page.py; its `sources` — a web page's own title — kept). Logs and the Agent's
+  page untouched.
+- Starter skills say "the villa's system" / "the villa's records" instead of Home Assistant in every description
+  (preventive-maintenance's skill.yaml, investigate's and alert-desk's SKILL.md, investigate.py's script line) and in
+  the prose the AI may repeat (alert-desk, investigate, preventive-maintenance, reports, roi-energy, villa-concierge
+  SKILL.md; reports' job prompts and its reading instruction). Every rule kept, word for word apart from the name;
+  step numbers unchanged. The investigation page's own footer and "no web page" line said "Home Assistant's records".
+  Code comments, tool names (ha_*) and the logbook text reports.yaml matches ("Home Assistant starting") unchanged.
+- instructions.md names it once, where the AI needs to know what it is ("the villa's system (Home Assistant
+  underneath)"), and in rule 6, which forbids it; rules 4 and 8 say "the villa's system".
+- Tests (test_no_platform_name): the function by value (12 sentences: possessive, "in HA", a capital, "your", a list
+  line; HACS, ha_get_history, HA_TOKEN, HA-MCP, links, code unchanged); a chat turn whose AI answers "Home
+  Assistant's history" and sends "HA restarted" reaching Telegram as the villa's; a report page and an investigation
+  page and its message from notes naming it; every starter skill's descriptions (skill.yaml, its scripts and commands,
+  SKILL.md front matter) and the investigation page template; instructions.md naming it only twice. Mutation-proved
+  (17 mutants, each RED by its own test).
+
 ## 0.6.262 (19 October 2026)
 
 A reply that tells the person to write /investigate carries a button that does it (owner's screenshot, 19 October: asked

@@ -211,7 +211,7 @@ reports:
       - id: todo
         write_each:
           reading: >-
-            What was seen, with your numbers and dates from Home Assistant, and what it most likely means:
+            What was seen, with your numbers and dates from the villa's records, and what it most likely means:
             one or two sentences. For a grouped line, the common cause if the data shows one.
           check: "What to check or do on site, concrete, from the playbook entry."
           ask: "The question to the facility manager, if the entry has one, with the date filled in."

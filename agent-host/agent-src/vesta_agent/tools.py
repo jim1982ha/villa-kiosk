@@ -34,6 +34,7 @@ from typing import Any, Awaitable, Callable, NamedTuple
 
 from claude_agent_sdk import create_sdk_mcp_server, tool
 from vesta_shared import read_guard
+from vesta_shared.messaging import no_platform_name
 
 from . import __version__, script_run, status, tool_access
 from .policy import Person, Policy
@@ -571,8 +572,9 @@ class Toolbox:
                 return _err(f"{att} is not a file in the out folder.")
             if self.carry_out is None:
                 return _err("Messages cannot be sent from here.")
-            # every chat of its role, with the heading of a message sent on its own: the one way out (outcome.py)
-            item = {"to": to, "text": args.get("text", ""), **({"attachment": att} if att else {}),
+            # every chat of its role, with the heading of a message sent on its own: the one way out (outcome.py). The
+            # AI's words never name the platform (TurnReply's rule 9, for what it sends itself)
+            item = {"to": to, "text": no_platform_name(args.get("text", "")), **({"attachment": att} if att else {}),
                     **({"title": str(args["title"])} if args.get("title") else {})}
             done = await self.carry_out({"send": [item]}, None, origin, self.s.out_dir)
             mid = done.get("sent")

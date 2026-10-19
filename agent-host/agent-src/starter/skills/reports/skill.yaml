@@ -1,6 +1,6 @@
 description: The facility manager's daily digest and weekly page, the owner's weekly lines and monthly proof (HTML pages)
 # The tools a report's AI gets (among those switched on in Rules › AI tools): what VESTA's readings
-# look at in Home Assistant, the notes it saves for compose.py, and the message that carries the page.
+# look at in the villa's system, the notes it saves for compose.py, and the message that carries the page.
 tools: [ha_get_state, ha_get_history, ha_search, ha_get_entity, ha_get_device, ha_eval_template, ha_get_logs,
         ha_get_automation_traces, ha_list_floors_areas, ha_get_overview, save_file, send_message, web_search]
 scripts:
@@ -60,7 +60,7 @@ schedule:
     prompt: >-
       It is Monday 08:00. Read the reports skill and make the facility manager's weekly report, following its
       steps "A weekly or monthly report": the week's energy, facts.py fm-weekly, your readings from the clues,
-      the playbook and Home Assistant, saved in notes.json (in {fm_language}), compose.py fm-weekly, then
+      the playbook and the villa's system, saved in notes.json (in {fm_language}), compose.py fm-weekly, then
       send_message to fm with the page attached, title= and text= the `message` compose.py printed. On schedule
       only, then send the owner the owner-weekly `message` (compose.py owner-weekly --energy week.json --facts facts.json --page
       fm_weekly.html) with the same page attached (attachment= the `attachment` it printed): title= as it is, text= in {owner_language}, its layout kept (section labels, an empty line between items);
@@ -83,5 +83,5 @@ schedule:
       It is the first of the month, 08:00. Read the reports skill and make the owner's monthly report for last
       month, following its steps "A weekly or monthly report" (with the filtration optimiser and the proposals
       first, so the page carries them): the month's energy, facts.py owner-monthly, your readings from the
-      clues, the playbook and Home Assistant, saved in notes.json (in {owner_language}), compose.py
+      clues, the playbook and the villa's system, saved in notes.json (in {owner_language}), compose.py
       owner-monthly, then send_message to owner with the page attached, title= and text= the `message` compose.py printed.

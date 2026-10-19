@@ -1,6 +1,6 @@
 ---
 name: investigate
-description: Investigates what happened and why, from Home Assistant's records — a short message with the whole account as an HTML page (what the records establish and rule out, timeline, charts, causes ranked by likelihood, what cannot be known, what would have warned earlier). Used when the person writes /investigate.
+description: Investigates what happened and why, from the villa's records — a short message with the whole account as an HTML page (what the records establish and rule out, timeline, charts, causes ranked by likelihood, what cannot be known, what would have warned earlier). Used when the person writes /investigate.
 ---
 
 # investigate
@@ -12,7 +12,7 @@ everything the steps below ask for, then answer once, completely.
 
 ## Files
 
-- `scripts/investigate.py`: `find`, `timeline`, `around`. Reads Home Assistant (read-only) and returns short, checked
+- `scripts/investigate.py`: `find`, `timeline`, `around`. Reads the villa's system (read-only) and returns short, checked
   facts, in the villa's time.
 - `scripts/page.py`: makes the page and the short message from your account and the readings.
 - `settings.yaml`: what counts as unusual (a villa's villa.settings.yaml may change it).
@@ -64,7 +64,7 @@ everything the steps below ask for, then answer once, completely.
        with other evidence.
    - For an automation that should have warned, read it with ha_config_get_automation: which case does it watch, and
      why did it (not) warn?
-   - When nothing in Home Assistant acted, name what did: a person, the device's own control (a pressure switch, a
+   - When nothing in the villa's system acted, name what did: a person, the device's own control (a pressure switch, a
      thermostat, a timer) or a power cut. For every long or unusual run, look both ways: did the device cause the
      damage, or did the damage keep it running (water escaping keeps a pump running; an open window keeps cooling on)?
 
@@ -80,11 +80,11 @@ everything the steps below ask for, then answer once, completely.
    - At most 5 searches. The words of a search are the pattern, the kind of device and its make and model, and for
      weather or a grid outage at most the town. The villa, its address, its people and its devices' names stay out.
    - Each lead is a question for the records: say what they show for or against it. Times and numbers always come
-     from Home Assistant.
+     from the villa's records.
 
 7. **Reason before writing.** For each unusual thing, ask what physically explains it. Keep several causes when the
-   evidence allows, rank them, and give for each what points to it and what would confirm it. Keep apart what Home
-   Assistant SHOWS (measured, with times), what it most likely MEANS, and what it CANNOT tell (no sensor there, no
+   evidence allows, rank them, and give for each what points to it and what would confirm it. Keep apart what the records
+   SHOW (measured, with times), what that most likely MEANS, and what they CANNOT tell (no sensor there, no
    reading, a gap): a guess is never written as a measurement. Then: what would have warned earlier or limited the
    damage (a missing sensor, an alert on how long something runs, a rule that only watches the opposite case, a switch
    that does not actually control the device).

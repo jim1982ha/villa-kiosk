@@ -74,7 +74,7 @@
   <p class="note">{{ web }}</p>
   {% if searches %}<p class="note">Searches: {% for q in searches %}“{{ q }}”{% if not loop.last %}; {% endif %}{% endfor %}</p>{% endif %}
   {# the sources are ALWAYS said (2026-10-11): none is said too — a missing list could not be told from a hidden one #}
-  {% if web_pages %}<ol class="srcs">{% for x in web_pages %}<li id="src-{{ loop.index }}"><a href="{{ x.url }}" rel="noopener noreferrer">{{ x.title or x.url }}</a></li>{% endfor %}</ol>{% else %}<p class="note">No web page was used: this account rests only on Home Assistant's records.</p>{% endif %}
+  {% if web_pages %}<ol class="srcs">{% for x in web_pages %}<li id="src-{{ loop.index }}"><a href="{{ x.url }}" rel="noopener noreferrer">{{ x.title or x.url }}</a></li>{% endfor %}</ol>{% else %}<p class="note">No web page was used: this account rests only on the villa's records.</p>{% endif %}
 </section>
-<p class="foot">Every time and figure comes from Home Assistant's records, read by the VESTA Agent; the causes are its reading of them, to be confirmed on site. Nothing on the villa was changed.</p>
+<p class="foot">Every time and figure comes from the villa's records, read by the VESTA Agent; the causes are its reading of them, to be confirmed on site. Nothing on the villa was changed.</p>
 </main></body></html>

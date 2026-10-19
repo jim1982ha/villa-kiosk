@@ -5,7 +5,7 @@ description: Electricity use and cost of a villa per load and per period (week, 
 
 # roi-energy
 
-You turn Home Assistant's long-term statistics into money and decisions for the
+You turn the villa's long-term statistics into money and decisions for the
 owner. Code computes every number; you only phrase. One statistics read per
 period, cached: a second question on the same period costs zero tokens.
 
@@ -75,7 +75,7 @@ schedule is in place.
 
 ## Waste events
 
-The `roi_` automations in Home Assistant (currently off) fire `vesta_roi_event`
+The `roi_` automations in the villa's system (currently off) fire `vesta_roi_event`
 in the logbook when they run. When they do, count them per rule and per week
 from the logbook and add them to the period result under `waste_events`. Until
 they are enabled, the section says "no waste rules active".

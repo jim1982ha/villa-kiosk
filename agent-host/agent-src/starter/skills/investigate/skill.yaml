@@ -1,4 +1,4 @@
-# investigate — what happened, and why: a full account from Home Assistant's records, a page with a short message.
+# investigate — what happened, and why: a full account from the villa's records, a page with a short message.
 # Run ONLY on its command (below): the AI is never offered it otherwise, so the line below is what the Agent page shows.
 description: Investigates what happened and why — an incident, a fault, damage, a flood, a power cut, a device that stopped or behaved strangely, "check the logs/history", "what caused", "since when", "how long", "who or what turned it on". Answers with a short message and the full account as an HTML page (timeline, charts, likely causes, what would have warned earlier).
 
@@ -37,7 +37,7 @@ tools: [ha_search, ha_get_entity, ha_get_device, ha_get_state, ha_get_history, h
 
 scripts:
   investigate.py:
-    description: Reads Home Assistant for an investigation and returns short, checked facts (read-only)
+    description: Reads the villa's system for an investigation and returns short, checked facts (read-only)
     commands:
       find: the devices a word or a room means, and what sits next to them (same physical device, same room)
       timeline: what each device did in a period, as periods with times and levels, compared with its own normal
