@@ -70,6 +70,14 @@ const panel = draw(h(PresencePanel, { presence: off, why, showPeople: true, canO
 ck("a row is a button only when it opens something; the others are plain text (no hover, no pointer)",
    (panel.match(/<button type="button" class="presence-row opens">/g) ?? []).length === 1
    && (panel.match(/<div class="presence-row">/g) ?? []).length === 3, panel.slice(0, 500));
+const all = draw(h(PresencePanel, { presence: off, why, showPeople: true, canOpen: () => true, onOpenEntity: () => {},
+  onClose: () => {}, historyOf: (id) => h("i", { "data-history": id }) }));
+ck("the latest movement is never a button, even with a window to open — its history is drawn under it (owner, 2026-10-19)",
+   !/<button type="button" class="presence-row opens"><span>Hall<\/span>/.test(all) && /<div class="presence-row"><span>Hall<\/span>/.test(all)
+   && /<i data-history="binary_sensor.hall_motion"><\/i>/.test(all), all);
+ck("  ...drawn by the sensor's own history (ReadingHistory, as its window draws it), and the window passes it",
+   /historyOf=\{\(id\) => <ReadingHistory entityId=\{id\} \/>\}/.test(src("components/hud/PresenceTile.tsx"))
+   && /<ReadingHistory entityId=\{mapping\.entityId\} mappingType=\{mapping\.type\} \/>/.test(src("components/panels/SensorPanel.tsx")));
 ck("  ...a profile that may not see people gets no People at all",
    !/People/.test(draw(h(PresencePanel, { presence: off, why, showPeople: false, canOpen: () => false, onOpenEntity: () => {}, onClose: () => {} }))));
 

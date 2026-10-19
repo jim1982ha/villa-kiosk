@@ -7,12 +7,11 @@
 
 import { Activity } from "lucide-react";
 import BasePanel from "./BasePanel";
-import LastDayTimeline from "./LastDayTimeline";
-import NumericHistory from "./NumericHistory";
+import ReadingHistory from "./ReadingHistory";
 import ReadingPill from "./ReadingPill";
 import type { PanelProps } from "@/types/panel.types";
 import { useConfig } from "@/config/ConfigContext";
-import { historyOf, readingOf } from "@/config/reading";
+import { readingOf } from "@/config/reading";
 import { binarySensorClassInfo } from "@/config/BinarySensorClasses";
 import { effectiveSensorClass, SENSOR_CLASS_ICON } from "@/config/SensorClasses";
 
@@ -49,11 +48,9 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
           </>
         )}
       </div>
-      {/* ONE history, by what the sensor reports — config/reading's historyOf,
-          the rule the grouped device window shares. */}
-      {historyOf(r) === "states" ? <LastDayTimeline entityId={mapping.entityId} colorFor={r.stateColor ?? undefined} />
-        : historyOf(r) === "words" ? <LastDayTimeline entityId={mapping.entityId} legend />
-        : <NumericHistory series={[{ id: mapping.entityId, label: "Reading", unit, color: r.seriesColor }]} />}
+      {/* ONE history, by what the sensor reports — config/reading's historyOf, drawn by ReadingHistory (the
+          presence window draws a sensor's the same way). */}
+      <ReadingHistory entityId={mapping.entityId} mappingType={mapping.type} />
     </BasePanel>
   );
 }

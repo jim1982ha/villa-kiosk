@@ -148,10 +148,53 @@ console.log("\n  the line of sight aims at the device, not its badge:");
   sweep.step([cam], { x: 0, y: 1.6, z: 0 }, 1000);
   ck("the ray ends at the device's height (ty), not the badge's", Math.abs(aimedAt - 2.38) < 1e-6, aimedAt);
   ck("  ...so the wall hides it", sweep.occluded.has("camera.patio"));
+}
+
+console.log("\n  one pass's badges, by value (badgeFrame.ts — the wiring EntityVisuals hands its Babylon reads to):");
+{
+  // architecture review, 2026-10-19: these were two regexes on EntityVisuals' text; the frame is driven here instead
+  const { BadgeFrame, drawnThisPass } = await import("@/babylon/badgeFrame");
+  const aims = new Map(), now0 = 1e6;
+  let now = now0;
+  const sweep = new OcclusionSweep({ settleMs: 250, nearM: 1.2, slackM: 0.1, now: () => now,
+    cast: (ox, oy, oz, dx, dy, dz, len) => {
+      const x = Math.round(ox + dx * (len + 0.1)), y = oy + dy * (len + 0.1);   // where the ray ends: which device, how high
+      aims.set(x, y);
+      return x === 6 && y < 2.51 ? "wall_1F" : null;                           // the wall stands before the patio only
+    } });
+  const f = new BadgeFrame();
+  const lbl = {};
+  const pass = (walking, marks) => {
+    f.begin();
+    // a patio camera: its badge floats at 2.56 m, its device's centre 0.18 m lower; a lamp behind the eye
+    f.add("camera.patio", lbl, 6, 2.56, 0, 400, 300, 0.5, 0.18, sweep.occluded.has("camera.patio"));
+    f.add("light.behind", lbl, -3, 1, 0, 100, 100, 1.4, 0, sweep.occluded.has("light.behind"));
+    const shown = f.end();
+    return { shown, step: f.walls(sweep, { enabled: true, walking, eye: { x: 0, y: 1.6, z: 0 }, budgetMs: 1000, markDirty: () => marks.n++ }) };
+  };
+  const marks = { n: 0 };
+  let r = pass(true, marks);
+  ck("a walker who has just stopped: no ray yet, and the layout is owed a pass (settling)", r.step === "settling" && marks.n === 1 && aims.size === 0, r.step);
+  now += 300;
+  r = pass(true, marks);
+  ck("  ...then the wall hides the camera: the sight aims at its DEVICE (2.38 m), under the wall's top, not its badge",
+     Math.abs(aims.get(6) - 2.38) < 1e-6 && r.shown[0].occluded && !r.shown[1].occluded && Math.abs(r.shown[0].ty - 2.38) < 1e-9, [...aims]);
+  const kept = { drawnBadge: function (id) { return this.ids.has(id); }, ids: new Set(["camera.patio", "light.behind"]) };
+  ck("drawn: never behind a wall, never behind the camera — even when the pass keeps both",
+     !drawnThisPass(r.shown[0], kept) && !r.shown[1].inFront && !drawnThisPass(r.shown[1], kept));
+  r = pass(false, marks);
+  ck("leaving the walk forgets every answer: the overview sees through walls", r.step === "off" && sweep.occluded.size === 0
+     && !r.shown[0].occluded && drawnThisPass(r.shown[0], kept));
+  const first = r.shown[0];
+  r = pass(false, marks);
+  ck("the badges are pooled: the next pass reuses the same objects (no allocation per frame)", r.shown[0] === first && r.shown.length === 2);
+  f.begin(); f.add("camera.patio", lbl, 6, 2.56, 0, 400, 300, 0.5, 0.18, false);
+  ck("  ...and a pass with fewer badges is cut to its own count", f.end().length === 1);
   const ev = readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8");
-  ck("every shown badge carries its device's height", /s\.ty = wp\.y - \(this\.sightDrop\.get\(id\) \?\? 0\);/.test(ev));
-  const refresh = ev.slice(ev.indexOf("  private refreshWallOcclusion("), ev.indexOf("\n  }\n", ev.indexOf("  private refreshWallOcclusion(")));
-  ck("the caller runs wallStep with the gate's mark (the pass it must not drop)", /wallStep\(this\.occlusion, shown, cam\.globalPosition, budget, \(\) => this\.markLayoutDirty\(\)\)/.test(refresh));
+  ck("EntityVisuals hands the frame each badge's device drop and the sweep's answer, and walks the walls through it",
+     /frame\.add\(id, lbl, wp\.x, wp\.y, wp\.z, p\.x, p\.y, p\.z, this\.sightDrop\.get\(id\) \?\? 0, this\.occlusion\.occluded\.has\(id\)\);/.test(ev)
+     && /this\.frame\.walls\(this\.occlusion, \{\s*enabled: WALL_OCCLUSION, walking: this\.firstPerson, eye: cam\.globalPosition,[\s\S]{0,120}markDirty: \(\) => this\.markLayoutDirty\(\),/.test(ev)
+     && /s\.lbl\.container\.isVisible = drawnThisPass\(s, this\.pass\);/.test(ev));
 }
 
 console.log("\n  the walker's own room is never grouped (owner, 2026-10-08: inside Bedroom 2, its badges were a chip):");

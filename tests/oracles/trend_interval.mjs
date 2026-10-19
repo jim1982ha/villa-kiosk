@@ -61,7 +61,7 @@ ck("the timeline has ONE interval (no bucketMinutes anywhere) and paints through
 }
 ck("numeric device charts (sensor, pumps, device groups) ask for the trend, through the one section",
    /kind: "trend"/.test(src("components/panels/NumericHistory.tsx"))
-   && /<NumericHistory series=/.test(src("components/panels/SensorPanel.tsx")) && /<NumericHistory named series=/.test(src("components/panels/DeviceGroupPanel.tsx")));
+   && /<NumericHistory series=/.test(src("components/panels/ReadingHistory.tsx")) && /<NumericHistory named series=/.test(src("components/panels/DeviceGroupPanel.tsx")));
 // The rule itself (an offline reading with a unit is a measurement) is
 // config/sensorReading.readingKind, behind config/reading (driven by value in
 // reading.mjs); this pins that the grouped panel charts by that kind.

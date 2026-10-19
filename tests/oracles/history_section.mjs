@@ -60,7 +60,8 @@ console.log("\n  who charts states, and how:");
   ck("the section charts the moved window where it ENDS and titles it", /end=\{lastSeen\}/.test(day) && /title=\{historyTitle\(range\.title, lastSeen\)\}/.test(day));
   ck("  ...and hands the chart the fetch's status whole", /status=\{status\}/.test(day));
   ck("Generic and Sensor (binary and text) use the section", /<LastDayTimeline entityId=\{mapping\.entityId\} legend \/>/.test(src("GenericPanel.tsx"))
-     && (src("SensorPanel.tsx").match(/<LastDayTimeline /g) ?? []).length === 2);
+     && /<ReadingHistory entityId=\{mapping\.entityId\}/.test(src("SensorPanel.tsx"))
+     && (src("ReadingHistory.tsx").match(/<LastDayTimeline /g) ?? []).length === 2);
   const tl = src("StateTimeline.tsx");
   ck("an empty timeline says what an empty line chart says", /return <ChartEmpty status=\{status\} height=\{height\} bar \/>;/.test(tl));
   ck("a failed Energy setup says so instead of a skeleton forever",
