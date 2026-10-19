@@ -1,3 +1,49 @@
+## 2.496.427
+
+### Fixed
+- The monthly recap's "Faults and response" line counts open work the way the Tickets tab and the recap's own
+  readiness section do: one per device. A pump with two faults nobody had taken on read "Open: 2" at the top of
+  section 3 and "1 detected fault" in section 5 of the same recap. It now reads "Open faults: 1 · Tickets in
+  progress: 1 (one per device, as the Overview and Tickets count them) · Resolved (all time): N".
+- A lock that said "jammed", one still locking or unlocking, one the villa's system has lost contact with and one
+  with no value to give each have their own word. The Recap's "Doors locked" check called all four "not reporting"
+  while the alarm check above it named the same lock "Jammed", and a lock out of contact was counted there AND under
+  "All devices reporting". The check now reads "1 unlocked, 1 jammed, 1 moving, 1 not reporting."; a lock out of
+  contact is counted once, under "All devices reporting"; the bottom bar's Locks tile says "1 Jammed", "1 Moving",
+  "1 Unavailable" or "1 Unknown" instead of "1 Unknown" for all of them (a single lock: "Jammed", never its raw state).
+- The recap's "Standing against schedule" table is the Schedule tab's board, worst first — overdue tasks, then never
+  recorded, then due soon, then on schedule — under a first line "Tasks needing attention: N" that is the tab's
+  own number. It listed tasks in the order they were created, an overdue one under on-schedule ones, with no count.
+
+### Changed
+- Dates inside a saved recap, statement or snapshot are written 2026-09-05 whatever the phone's language — the form
+  the "Generated:" stamp already used. A row read "05 Sept 2026" on one phone and "Sep 5, 2026" on another; a saved
+  document is read years later, possibly on a different device, and must keep one shape. Screens keep showing dates
+  in the phone's language.
+- One word per due state everywhere: the Schedule tab's pill, the Overview's late-task line and the recap's table say
+  "Overdue", "Never recorded", "Due soon" or "On schedule" from one table, and the recap's table carries the tab's own
+  sentence in a "Due" column ("3 days overdue (by 2026-09-24)") instead of "**Overdue by 3d**".
+- One sentence per cap state, everywhere: the Spend tab's note, the spend statement and the recap's spend lines, and
+  the cost banner in a form all say the same "Approaching the cap — …" or "Cap reached. …". The statement had no
+  sentence while the month was approaching the cap, the cost banner a third wording. The Schedule tab's money stat
+  reads "Minor spend this month" in the villa's currency; it was a bare number under "spent this month".
+- One word per readiness check state and one verdict: the Recap's rows, the monthly recap's section 5 and the saved
+  snapshot all print "Pass", "Warning" or "Fail" under "Check | Result | Finding"; the recap said "Attention" and
+  "Detail" where the snapshot said "Warning" and "Finding". The snapshot's verdict is the tab's sentence ("Ready, with
+  things worth fixing"), no longer shouted ("READY, WITH FINDINGS"), and the snapshot opens with the same Period /
+  Generated / Scope header as the recap and the statement instead of its own "Taken …" line.
+
+### Under the hood
+- The open-work figures left the engine's ticket table (it keeps the per-record ones: resolved, mean time, closed with
+  no action); the recap asks the device fold for them, as the Tickets tab does.
+- A month key is parsed once (monthBounds, on the villa's local calendar) for the recap's month end, the documents'
+  default month and the Period heading — three hand parsings before, one through toISOString on a local boundary.
+- The place of a record — its device, the device's name, its room — is built by one function for the fault form, a
+  guest's report and the Spend tab; each assembled it by hand from a different name source.
+- New checks, each proven to go red: the recap's open figures equal the Tickets tab's cards; one due word and
+  sentence; the standing table is the board; the cap sentence per state; one check word and verdict; a document's
+  dates; one word per lock fact; one builder of a record's place.
+
 ## 2.496.426
 
 ### Fixed
