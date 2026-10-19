@@ -205,7 +205,7 @@ console.log("\n  the window: the approved boards 6 and 7");
   ck("each screen opens at its top (the body scrolls back on every switch)",
      /useEffect\(\(\) => \{ topRef\.current\?\.closest\("\.modal-body"\)\?\.scrollTo\(\{ top: 0 \}\); \}, \[view\]\);/.test(wp));
   ck("every history chart has the app's hover tooltip — the lines (ChartTip) and the rain bars (BarChart's)",
-     /<LineChart label=/.test(panel) && !/<ChartTip /.test(panel) && /<BarChart label="Rain history"/.test(panel)
+     /<LineChart stepMs=\{stepMs\} label=/.test(panel) && !/<ChartTip /.test(panel) && /<BarChart label="Rain history"/.test(panel)
      && /<ChartTip /.test(readFileSync(new URL("../../src/components/panels/LineChart.tsx", import.meta.url), "utf8")));
   ck("the three advice cards are the rules above, fed the live readings",
      /windowAdvice\(\{/.test(panel) && /laundryAdvice\(\{/.test(panel) && /outdoorsAdvice\(\{/.test(panel));

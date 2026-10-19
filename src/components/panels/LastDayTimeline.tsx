@@ -17,6 +17,7 @@ import StateTimeline from "./StateTimeline";
 import { useStateHistory } from "@/hooks/useStateHistory";
 import { historyTitle } from "@/ha/historySource";
 import { useHistoryRange, HistoryHeader } from "./historyRange";
+import { aggregationWords } from "./chartUtils";
 import { historyStateColor, NOT_KEPT, NOT_KEPT_COLOR, NOT_KEPT_WORDS, paletteColorFor } from "@/utils/stateColors";
 
 export default function LastDayTimeline({
@@ -44,7 +45,7 @@ export default function LastDayTimeline({
   const paint = colorFor ?? palette ?? historyStateColor(entityId);
   return (
     <div className="field">
-      <HistoryHeader title={historyTitle(range.title, lastSeen)} picker={picker} />
+      <HistoryHeader title={historyTitle(range.title, lastSeen)} picker={picker} step={aggregationWords(range.grainMs, null)} />
       <StateTimeline
         data={data}
         colorFor={paint}

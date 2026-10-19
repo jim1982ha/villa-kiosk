@@ -3,7 +3,7 @@
 // utils/chartGeometry's hover answer, not a helper here.
 
 import type { StateHistoryPoint } from "@/types/ha.types";
-import { clockTime, dayMonth, dayTime } from "@/utils/dateText";
+import { clockTime, dayMonth, dayTime, monthShort } from "@/utils/dateText";
 import { NOT_KEPT_WORDS } from "@/utils/stateColors";
 
 export function fmtChartValue(v: number): string {
@@ -35,10 +35,35 @@ export function fmtDuration(ms: number): string {
 /** What a state band's slice covers, at the band's own step (owner, 2026-10-20: "adjust the tooltip to the time
  *  aggregation"): "14:20 – 14:25" for five minutes, the day ("15 Oct") for a day, "13 Oct – 19 Oct" for a week. */
 export function fmtCellSpan(from: number, to: number, stepMs: number, spanHours: number): string {
-  const DAY = 24 * 3600 * 1000;
-  if (stepMs < DAY) return `${fmtChartStamp(from, spanHours)} – ${fmtChartTime(to)}`;
-  if (stepMs < 7 * DAY) return dayMonth(from);
-  return `${dayMonth(from)} – ${dayMonth(to - 1)}`;
+  if (stepMs < DAY_MS) return `${fmtChartStamp(from, spanHours)} – ${fmtChartTime(to)}`;
+  return fmtStepStamp(from, stepMs, spanHours);
+}
+
+const DAY_MS = 24 * 3600 * 1000;
+
+/** ⚠️ A VALUE'S MOMENT AT ITS OWN STEP (owner, 2026-10-20: a daily value read "231 W · 15 Oct, 00:00"): under a day,
+ *  its time (with the day when the window needs it); a day's value, the day alone; a week's, its first and last day;
+ *  a month's, the month. Never a clock time for a day or longer — every chart's tooltip says it this way. */
+export function fmtStepStamp(t: number, stepMs: number, spanHours: number): string {
+  if (stepMs >= 28 * DAY_MS) return monthShort(t);
+  if (stepMs >= 7 * DAY_MS) return `${dayMonth(t)} – ${dayMonth(t + stepMs - 1)}`;
+  if (stepMs >= DAY_MS) return dayMonth(t);
+  return fmtChartStamp(t, spanHours);
+}
+
+/** How a chart's values were made from the readings, said beside its title (owner, 2026-10-20: "show the aggregation
+ *  used … avg or sum"): its step ("5-min", "hourly", "daily", "weekly", "monthly") and, for a measured value, "avg" (the
+ *  mean over the step), for a total "sum"; an on/off band has neither — its step alone. */
+export type Aggregation = "avg" | "sum" | null;
+export function stepWords(stepMs: number): string {
+  if (stepMs >= 28 * DAY_MS) return "monthly";
+  if (stepMs >= 7 * DAY_MS) return "weekly";
+  if (stepMs >= DAY_MS) return "daily";
+  if (stepMs >= 3_600_000) return "hourly";
+  return `${Math.round(stepMs / 60_000)}-min`;
+}
+export function aggregationWords(stepMs: number, aggregation: Aggregation): string {
+  return aggregation ? `${stepWords(stepMs)} ${aggregation}` : stepWords(stepMs);
 }
 
 /** A day's or a week's slice in words, one line per state: how long it held, and how many times it began when more

@@ -18,7 +18,7 @@ import { drawableWindow, type TimeWindow } from "@/utils/lineChart";
 import { chartGeometry, type ChartGeometry } from "@/utils/chartGeometry";
 import { emptyHistoryText, type HistoryStatus } from "@/utils/statisticsSeries";
 import { NOT_KEPT_COLOR, STATUS_COLOR } from "@/utils/stateColors";
-import { fmtChartValue, fmtChartTick, fmtChartStamp, fmtOutage } from "./chartUtils";
+import { fmtChartValue, fmtChartTick, fmtStepStamp, fmtOutage } from "./chartUtils";
 import { formatUnitValue } from "@/utils/entityValue";
 import { useChartPointer } from "./useChartPointer";
 import ChartTip from "./ChartTip";
@@ -73,7 +73,7 @@ const keyOf = (l: LineSpec): ReactNode => (l.cls
   ? <i className={`key ${l.cls.split(" ")[0]}`} />
   : <span style={{ color: l.color }}>{l.dashed ? "┄" : "●"}</span>);
 
-export default function LineChart({ lines, window, height = 150, status, label }: {
+export default function LineChart({ lines, window, height = 150, status, label, stepMs }: {
   lines: readonly LineSpec[];
   /** The span that was asked for — the x-axis. Omitted: the readings' own span. */
   window?: TimeWindow;
@@ -84,6 +84,9 @@ export default function LineChart({ lines, window, height = 150, status, label }
   status: HistoryStatus;
   /** Its accessible name. */
   label: string;
+  /** REQUIRED: the step its values are (five minutes, an hour, a day, a week): the tooltip says a value's moment at it —
+   *  a day's value never with a clock time (chartUtils.fmtStepStamp, owner 2026-10-20). */
+  stepMs: number;
 }) {
   const H = height, BOT = height - 12;
   const plot = { left: 0, right: W, top: TOP, bottom: BOT };
@@ -133,7 +136,7 @@ export default function LineChart({ lines, window, height = 150, status, label }
             {hover && <line x1={hover.x} y1={TOP} x2={hover.x} y2={BOT} className="spark-crosshair" vectorEffect="non-scaling-stroke" />}
           </svg>
           {hover && (
-            <ChartTip x={hover.x / W} y={TOP / H} stamp={fmtChartStamp(hover.t, g.spanHours)}
+            <ChartTip x={hover.x / W} y={TOP / H} stamp={fmtStepStamp(hover.t, stepMs, g.spanHours)}
               rows={lines.flatMap((l, i) => {
                 const r = hover.readings[i], out = hover.outages[i];
                 const who = lines.length > 1 ? `${l.label} ` : "";

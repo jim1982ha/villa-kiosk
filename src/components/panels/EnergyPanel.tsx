@@ -22,7 +22,7 @@ import {
 } from "@/config/energyFlow";
 import { useConfig } from "@/config/ConfigContext";
 import { resolveSiteTitle } from "@/config/AppConfig";
-import { historyRange, RANGE_KEYS, useSegmentedChoice } from "./historyRange";
+import { ChartStep, historyRange, RANGE_KEYS, useSegmentedChoice } from "./historyRange";
 import ChartTip from "./ChartTip";
 import BarChart from "./BarChart";
 import { ChartEmpty } from "./LineChart";
@@ -32,7 +32,7 @@ import { DataWindow, Figure, LiveNote, ObservationCards } from "./WindowPieces";
 // Ten a page, with the app's one pager (the settings logs use it too).
 import { usePaged, Pager, PAGE_CARDS } from "@/components/common/Paged";
 import type { BarSeg } from "@/utils/barChart";
-import { fmtChartTime } from "./chartUtils";
+import { aggregationWords, fmtChartTime, fmtStepStamp } from "./chartUtils";
 import { useHA } from "@/ha/HAStateStore";
 import { useHistory } from "@/hooks/useHistory";
 import { fetchEnergySetup, energyRequest, energyChanges, type EnergyWindowSetup } from "@/ha/HAEnergyAPI";
@@ -134,22 +134,22 @@ function NowView({ setup, costUnit, house, colourOf }: { setup: EnergyWindowSetu
       <ObservationCards cards={T.cards} />
 
       <div className="weather-tile chart energy-wide">
-        <div className="weather-chart-head"><div className="weather-eyebrow">Today, hour by hour</div><div className="weather-legend">kWh per hour</div></div>
+        <div className="weather-chart-head"><div className="weather-eyebrow">Today, hour by hour<ChartStep words={aggregationWords(PERIOD_MS.hour, "sum")} /></div><div className="weather-legend">kWh</div></div>
         <BarChart label="Energy used today, hour by hour" fmt={kwh} unit="kWh"
           buckets={todayP.buckets.map((b) => ({ t: b.t, segs: segsOf(b, () => [{ key: "used", label: "Used", v: b.split!.used, cls: "e-used" }]) }))}
-          stamp={(t) => `${fmtChartTime(t)}–${fmtChartTime(t + 3_600_000)}`}
+          stamp={(t) => fmtStepStamp(t, PERIOD_MS.hour, 24)}
           ticks={energyRange("24h").ticks(hours.length).map((i) => ({ i, label: energyRange("24h").bucketLabel(hours[i]) }))}
         />
       </div>
 
       <div className="weather-tile chart energy-wide">
         <div className="weather-chart-head">
-          <div className="weather-eyebrow">Last 7 days</div>
+          <div className="weather-eyebrow">Last 7 days<ChartStep words={aggregationWords(PERIOD_MS.day, "sum")} /></div>
           <div className="weather-legend">{fmtKwh(T.weekTotal)} kWh{typical ? ` · typical day ${fmtKwh(typical)}` : ""}</div>
         </div>
         <BarChart label="Energy used, the last seven days" fmt={kwh} unit="kWh"
           buckets={weekP.buckets.map((b, i) => ({ t: b.t, segs: segsOf(b, () => [{ key: "used", label: "Used", v: b.split!.used, cls: standout?.index === i ? "e-standout" : "e-used" }]) }))}
-          stamp={(t) => new Date(t).toLocaleDateString([], { weekday: "long", day: "numeric", month: "short" })}
+          stamp={(t) => fmtStepStamp(t, PERIOD_MS.day, 168)}
           ticks={days.map((t, i) => ({ i, label: weekdayShort(t) }))} typical={typical}
         />
       </div>
@@ -322,7 +322,7 @@ function HistoryView({ setup, costUnit, range: rangeKey, colourOf }: { setup: En
 
       <div className="weather-tile chart energy-wide">
         <div className="weather-chart-head">
-          <div className="weather-eyebrow">{hasCost ? `Energy and cost per ${unit}` : "Energy used, by device"}</div>
+          <div className="weather-eyebrow">{hasCost ? `Energy and cost per ${unit}` : "Energy used, by device"}<ChartStep words={aggregationWords(PERIOD_MS[range.period], "sum")} /></div>
           <div className="weather-legend">
             {series.map((s) => <span key={s.id}><i className={`key ${s.cls}`} />{s.label}</span>)}
             {hasCost && <span><i className="key cost line" />Cost · {formatMoney(costTotal, costUnit)}</span>}
@@ -337,7 +337,7 @@ function HistoryView({ setup, costUnit, range: rangeKey, colourOf }: { setup: En
             t: b.t,
             segs: segsOf(b, () => seriesSegs(series, b.split!)),
           }))}
-          stamp={(t) => label(t)} ticks={tickIdx.map((i) => ({ i, label: label(starts[i]) }))} />
+          stamp={(t) => fmtStepStamp(t, PERIOD_MS[range.period], (now - starts[0]) / 3_600_000)} ticks={tickIdx.map((i) => ({ i, label: label(starts[i]) }))} />
       </div>
 
       <div className="weather-tile chart energy-wide">

@@ -49,11 +49,17 @@ export function useHistoryRange(
 
 /** The heading row every history section uses: its title on the left, the
  *  range picker on the right. Keeps the three views visually identical. */
-export function HistoryHeader({ title, picker }: { title: string; picker: ReactNode }) {
+export function HistoryHeader({ title, picker, step }: { title: string; picker: ReactNode; step: string }) {
   return (
     <div className="timeline-head">
-      <label className="entity-label">{title}</label>
+      <label className="entity-label">{title}<ChartStep words={step} /></label>
       {picker}
     </div>
   );
+}
+
+/** The step and aggregation beside a chart's title ("· daily avg", chartUtils.aggregationWords): the same look in a
+ *  device panel's header and the Weather and Energy windows' chart heads (owner, 2026-10-20). */
+export function ChartStep({ words }: { words: string }) {
+  return <span className="chart-step"> · {words}</span>;
 }
