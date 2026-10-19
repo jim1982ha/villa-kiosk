@@ -12,7 +12,7 @@ import { Wrench } from "lucide-react";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useDeviceIdentity } from "@/config/VillaModel";
 import { useFmData } from "@/fm/FmDataContext";
-import { faultTitle, localStamp, STAGE_WORDS, stageOf, ticketStats } from "@/fm/fmEngine";
+import { faultTitle, keptDays, localStamp, STAGE_WORDS, stageOf, ticketStats, type FmRetention } from "@/fm/fmEngine";
 import { pillClass } from "@/fm/tone";
 import { closedActions, openCounts, ticketActions, ticketCards, workRecord, type DeviceWork, type WorkAction } from "@/fm/deviceWork";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
@@ -36,7 +36,7 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
   editTicket?: string;
   onEditOpened?: () => void;
 }) {
-  const { data, removeTicket } = useFmData();
+  const { data, retention, removeTicket } = useFmData();
   const terms = useFmTerms();
   const { deviceOfRecord } = useDeviceIdentity();
   const label = useEntityLabel();
@@ -53,7 +53,6 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editTicket]);
 
-  const stats = ticketStats(data.tickets);
   // in progress: the cards below, one per device (openCounts) — the other figures are per record (a repair's time)
   const inProgress = openCounts(data.tickets, deviceOfRecord).tickets;
   const tickets = useMemo(() => ticketCards(data.tickets, deviceOfRecord), [data.tickets, deviceOfRecord]);
@@ -121,17 +120,7 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
 
   return (
     <div className="fm-stack">
-      <div className="fm-summary">
-        <div className="fm-stat"><span className="n">{inProgress}</span><span className="l">in progress</span></div>
-        <div className="fm-stat">
-          <span className="n">{stats.meanResolutionHours === null ? "—" : `${stats.meanResolutionHours.toFixed(0)}h`}</span>
-          <span className="l">mean resolution</span>
-        </div>
-        {/* closes with no work done, apart from the repairs (review 31: they made the mean say 4.5 h for a 48 h repair) */}
-        {stats.closedWithoutAction > 0 && (
-          <div className="fm-stat"><span className="n">{stats.closedWithoutAction}</span><span className="l">closed, no action</span></div>
-        )}
-      </div>
+      <TicketFigures tickets={data.tickets} inProgress={inProgress} retention={retention} />
 
       {editing && <FaultForm key={editing.id} editing={editing} deviceOptions={deviceOptions} onDone={() => setEditingId(null)} />}
 
@@ -153,6 +142,44 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
       </FoldedList>
 
       {staging && <FaultStageModal tickets={staging.tickets} to={staging.to} onClose={() => setStaging(null)} />}
+    </div>
+  );
+}
+
+/**
+ * The tab's figures — in progress, the mean resolution, the closes with no action — and the period they cover.
+ *
+ * ⚠️ THE PERIOD IS THE RECORD THE SERVER STILL KEEPS (architecture review, 2026-10-19): it drops a no-action close after
+ * its window and a repair after the evidence window (supervisor-proxy _fm_expire), so a figure over "everything" was a
+ * figure over whatever had not expired yet. Counted over the shorter of the two windows the server PUBLISHES with the
+ * record (fmEngine.keptDays), and named under the figures. Drawn by tests/oracles/facility_numbers.mjs.
+ */
+export function TicketFigures({ tickets, inProgress, retention, now = Date.now() }: {
+  tickets: readonly FmTicket[];
+  /** Tickets in progress, one per device (deviceWork.openCounts). */
+  inProgress: number;
+  /** The server's retention windows (FmDataContext.retention); null: not said, the figures cover what is held. */
+  retention: FmRetention | null;
+  now?: number;
+}) {
+  const days = retention ? keptDays(retention) : null;
+  const stats = ticketStats(tickets, days === null ? undefined : { start: now - days * 86_400_000, end: now + 1 });
+  return (
+    <div className="fm-stack">
+      <div className="fm-summary">
+        <div className="fm-stat"><span className="n">{inProgress}</span><span className="l">in progress</span></div>
+        <div className="fm-stat">
+          <span className="n">{stats.meanResolutionHours === null ? "—" : `${stats.meanResolutionHours.toFixed(0)}h`}</span>
+          <span className="l">mean resolution</span>
+        </div>
+        {/* closes with no work done, apart from the repairs (review 31: they made the mean say 4.5 h for a 48 h repair) */}
+        {stats.closedWithoutAction > 0 && (
+          <div className="fm-stat"><span className="n">{stats.closedWithoutAction}</span><span className="l">closed, no action</span></div>
+        )}
+      </div>
+      <p className="muted fm-row-sub">
+        Mean resolution and closes within the kept record{days === null ? "" : ` (${days} days)`}.
+      </p>
     </div>
   );
 }

@@ -90,7 +90,8 @@ export const STATUS_COLOR = {
    *  two it spent motoring — the one reading that palette exists to keep
    *  separate. See TRANSITIONAL_STATES. */
   transitional: "var(--status-pending)",
-  /** Home Assistant has lost contact — state genuinely unknown. */
+  /** Home Assistant has lost contact ("unavailable") — never "unknown", which
+   *  is a device answering with no value (contactOf "no-value": idle). */
   unavailable: "var(--status-warning)",
   /** Needs attention. */
   alert: "var(--status-danger)",
@@ -241,6 +242,11 @@ export function statusKeyFor(state: string, domain?: string): StatusKey {
   // unknown", they are an entity that has nothing to report. Same COLOUR, not
   // the same fact — converging them into the set would make `isUnavailable`
   // start answering true for them.
+  //
+  // ⚠️ "UNKNOWN" IS IDLE, NOT LOST (owner, 2026-10-19 — architecture review): contactOf calls it "no-value", a
+  // device that answers with nothing to say, and its map badge sits quiet ("off"). Its history bar and its pill
+  // were the amber "contact lost" all the same. Only "unavailable" (and the blank/"none" above) keeps the amber.
+  if (s === "unknown") return "idle";
   if (s === "" || s === "none" || UNKNOWN_STATES.has(s)) {
     return "unavailable";
   }
@@ -331,13 +337,20 @@ export function paletteColorFor(states: string[]): (state: string) => string {
 
 /**
  * Any chart's colouring, with the one rule every chart shares: an
- * unavailable or unknown stretch is ALWAYS the legend's unavailable colour
- * (STATUS_COLOR.unavailable), whatever the device's own mapping says. The
- * timeline applies it to whatever `colorFor` it is given, so no panel can
- * forget it (2.496.179).
+ * unavailable stretch is ALWAYS the legend's "contact lost" colour
+ * (STATUS_COLOR.unavailable), and an unknown one ALWAYS its quiet idle colour,
+ * whatever the device's own mapping says. The timeline applies it to whatever
+ * `colorFor` it is given, so no panel can forget it (2.496.179).
+ *
+ * ⚠️ UNKNOWN WAS AMBER TOO (to 2.496.427): a sensor with no value to give — its
+ * device answering — drew "contact lost" minutes in its history bar while its
+ * map badge sat quiet. contactOf owns the split: "lost" amber, "no-value" idle.
  */
 export function paintState(colorFor: (state: string) => string): (state: string) => string {
-  return (state: string) => (UNKNOWN_STATES.has(state) ? STATUS_COLOR.unavailable : colorFor(state));
+  return (state: string) => {
+    if (!UNKNOWN_STATES.has(state)) return colorFor(state);
+    return contactOf(state) === "lost" ? STATUS_COLOR.unavailable : STATUS_COLOR.idle;
+  };
 }
 
 /** Where a lock's bolt is, as every reader of a lock asks it: "thrown" (locked — the quiet, secure rest state), "open"

@@ -6,17 +6,17 @@
 
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
-import { clockTime, dayTime } from "@/utils/dateText";
+import { dayTime } from "@/utils/dateText";
 import { presenceOf, presenceWhy, recapPresenceText, sinceText, type Presence, type PresenceWhy } from "./presence";
 
 /** "since" in words, as every presence line says it ("14:20", "Sat 17 Oct, 21:00"). */
-export const presenceSince = (at: string | null): string => sinceText(at, clockTime, dayTime);
+export const presenceSince = (at: string | null): string => sinceText(at, dayTime);
 
 export interface VillaPresence {
   presence: Presence;
   /** When it last changed, in words ("" when the villa's system does not say). */
   since: string;
-  /** The Recap's line: "Villa occupied since 09:12". */
+  /** The Recap's line: "Villa occupied since 19 Oct, 09:12". */
   recap: string;
   /** Why — the people and sensors the sensor watches (its window); read when asked. */
   why: () => PresenceWhy;

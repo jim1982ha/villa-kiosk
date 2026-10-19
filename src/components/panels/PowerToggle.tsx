@@ -3,6 +3,7 @@
 // One component so the markup, the "on" styling and the Power icon live in a
 // single place instead of being copy-pasted into every panel.
 
+import type { ReactNode } from "react";
 import { Power } from "lucide-react";
 import { usePendingAck } from "@/hooks/usePendingAck";
 import { useAskFirst } from "@/hooks/useAskFirst";
@@ -21,9 +22,26 @@ interface Props {
    *  reads the same answer, so a tap on such a device's map badge opens this
    *  panel rather than acting. */
   ask?: SwitchAsk | null;
+  /** The smaller button that sits in a row beside the device's other choices (PowerSection). */
+  compact?: boolean;
 }
 
-export default function PowerToggle({ on, onClick, ask = null }: Props) {
+/**
+ * The power button's section of a device window. With nothing `beside` it, the big button alone, as it always was;
+ * with something beside it (a light's colours and effects, LightChoices), ONE row: a compact On button and those
+ * choices next to it (owner, 2026-10-19: the On button took the window's top, and the strip's colours were nowhere).
+ */
+export function PowerSection({ beside, ...props }: Omit<Props, "compact"> & { beside?: ReactNode }) {
+  if (!beside) return <PowerToggle {...props} />;
+  return (
+    <div className="power-row">
+      <PowerToggle {...props} compact />
+      {beside}
+    </div>
+  );
+}
+
+export default function PowerToggle({ on, onClick, ask = null, compact = false }: Props) {
   // `on` is derived purely from HA's live entity state, so the button gave no
   // feedback at all for the round-trip between a tap and the real
   // state_changed event landing — on a slow link that read as "did that even
@@ -54,11 +72,11 @@ export default function PowerToggle({ on, onClick, ask = null }: Props) {
 
   return (
     <button
-      className={`big-toggle ${on ? "on" : ""}${pending ? " pending" : ""}`}
+      className={`big-toggle${compact ? " compact" : ""}${on ? " on" : ""}${pending ? " pending" : ""}`}
       onClick={request}
       aria-busy={pending}
     >
-      <Power size={24} /> {on ? "On" : "Off"}
+      <Power size={compact ? 20 : 24} /> {on ? "On" : "Off"}
     </button>
   );
 }

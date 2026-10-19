@@ -117,6 +117,17 @@ ck("the one-step close is one command, and both screens call it — through the 
   // written in the runner's locale, "05 Sept 2026" here and "Sep 5, 2026" on CI). Midday, so any runner's day is the 5th.
   ck("a past month's recap tells a fault fixed that month, as it stood then, even reopened since — its dates as 2026-09-05",
      recap.includes(`| 2026-08-28 | Pool pump seized | ${E.STAGE_WORDS.closed.word} | 2026-09-05 |`), recap.split("## 3.")[1]);
+  // ⚠️ THE FIGURES ARE THE MONTH'S (architecture review, 2026-10-19): "Resolved (all time)" and "Closed without action"
+  // counted every record the server still kept — September's recap regenerated in January read "Closed without action: 0"
+  const blip = (id, at) => ({ id, title: id, status: "resolved", openedAt: at, resolvedAt: at, photoIds: [],
+    updates: [st(at, "resolved", { kind: "cleared", note: "Closed without action" })] });
+  const months = { ...EMPTY_FM_DATA, tickets: [...sept.tickets, blip("b1", "2026-09-10T12:00:00.000Z"), blip("b2", "2026-08-10T12:00:00.000Z"),
+    blip("b3", "2026-08-11T12:00:00.000Z")] };
+  const s3 = (m) => R.buildMonthlyRecap({ fm: months, month: m, villaName: "V", readiness: null, deviceOfRecord: byRecord }).split("## 3.")[1].split("## ")[0];
+  ck("the recap's resolution figures are its month's: September one repair and one close with no action, August none and two",
+     s3("2026-09").includes("Resolved this month: **1**") && s3("2026-09").includes("Closed without action this month (not counted as repairs): **1**")
+     && s3("2026-08").includes("Resolved this month: **0**") && s3("2026-08").includes("Closed without action this month (not counted as repairs): **2**")
+     && s3("2026-09").includes("Mean time to resolution this month: **") && !/all time/.test(s3("2026-09")), [s3("2026-09"), s3("2026-08")]);
 }
 
 console.log("\n  a document's dates are locale-free; the month's bounds computed once (owner's decision, 2026-10-19):");

@@ -121,5 +121,39 @@ eq("  ...whole units from 100 up, cents below", formatMoney(12.5, "EUR", "en-US"
 eq("  ...an unfamiliar code is written AS the code, never as a wrong symbol", formatMoney(1500, "XQZ", "en-US").replace(/\s/g, " "), "XQZ 1,500");
 eq("a short date renders without throwing", typeof shortDate("2026-07-24T00:00:00Z"), "string");
 
+console.log("\n  a figure names its period (architecture review, 2026-10-19: \"Resolved (all time)\" was the kept record):");
+{
+  const { keptDays, monthBounds } = await import("@/fm/fmEngine");
+  const { h, draw, text } = await import("../consistency/screen.mjs");
+  const { TicketFigures } = await import("@/components/fm/TicketsTab");
+  const NOW = Date.parse("2026-12-31T12:00:00Z"), DAY = 86_400_000;
+  const iso = (ms) => new Date(ms).toISOString();
+  // closed `daysAgo`, after `hours` open; `cleared`: with no work done
+  const closed = (id, daysAgo, hours, cleared) => {
+    const end = NOW - daysAgo * DAY;
+    return { id, title: id, status: "resolved", openedAt: iso(end - hours * HOUR), resolvedAt: iso(end), photoIds: [],
+      updates: [{ at: iso(end), status: "resolved", photoIds: [], ...(cleared ? { kind: "cleared", note: "Closed without action" } : {}) }] };
+  };
+  const tickets = [closed("blip91", 91, 1, true), closed("blip89", 89, 1, true), closed("fix100", 100, 2), closed("fix10", 10, 6)];
+  eq("the kept record is the shorter window the server publishes (0 = for ever, not a bound)",
+     [keptDays({ clearedDays: 90, repairedDays: 550 }), keptDays({ clearedDays: 90, repairedDays: 0 }), keptDays({ clearedDays: 0, repairedDays: 0 })], [90, 90, null]);
+  const kept = ticketStats(tickets, { start: NOW - 90 * DAY, end: NOW + 1 });
+  eq("over the kept record: the 91-day-old no-action close and the 100-day-old repair are out",
+     [kept.closedWithoutAction, kept.resolved, kept.meanResolutionHours], [1, 1, 6]);
+  eq("  ...with no window, every record given (the old figures)", [ticketStats(tickets).closedWithoutAction, ticketStats(tickets).resolved], [2, 2]);
+  const tab = text(draw(h(TicketFigures, { tickets, inProgress: 0, retention: { clearedDays: 90, repairedDays: 550 }, now: NOW })));
+  eq("the Tickets tab draws those figures, and names their window",
+     tab, "|0|in progress|6h|mean resolution|1|closed, no action|Mean resolution and closes within the kept record (90 days).|");
+  const unsaid = text(draw(h(TicketFigures, { tickets, inProgress: 0, retention: null, now: NOW })));
+  eq("  ...a server that did not say: what is held, and no number of days claimed", unsaid.endsWith("|Mean resolution and closes within the kept record.|"), true);
+  // the month as it stood at its end: fixed in November, reopened and cleared in December — November's repair
+  const twice = { ...closed("twice", 5, 1, true), openedAt: "2026-11-10T00:00:00Z",
+    updates: [{ at: "2026-11-10T04:00:00Z", status: "resolved", photoIds: [] }, { at: "2026-12-20T00:00:00Z", status: "open", photoIds: [], kind: "reopened" },
+      { at: iso(NOW - 5 * DAY), status: "resolved", photoIds: [], kind: "cleared", note: "Closed without action" }] };
+  const nov = ticketStats([twice], monthBounds("2026-11")), dec = ticketStats([twice], monthBounds("2026-12"));
+  eq("a month counts its own closes, each as it stood then: November a 4 h repair, December a close with no action",
+     [nov.resolved, nov.meanResolutionHours, nov.closedWithoutAction, dec.resolved, dec.closedWithoutAction], [1, 4, 0, 0, 1]);
+}
+
 console.log(`\n${fail ? `❌ ${fail} failed` : "✅ the owner's numbers hold"}`);
 process.exit(fail ? 1 : 0);

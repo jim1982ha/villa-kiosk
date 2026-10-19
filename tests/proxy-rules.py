@@ -607,6 +607,11 @@ try:
        proxy._fm_reader_view(None, STORED) is STORED and proxy._fm_writer_merge(None, STORED, {"x": 1}) == {"x": 1})
 finally:
     proxy._role_for = _real_role_for
+# The record's retention windows, published beside it (2.496.428): the app's Tickets figures name the period they
+# cover from these, never from a copy of the numbers.
+ck("the record publishes its two retention windows: no-action closes, and repairs (the evidence window)",
+   proxy._fm_retention() == {"retention": {"clearedDays": proxy.FM_CLEARED_FAULT_RETENTION_DAYS,
+                                           "repairedDays": proxy._evidence_retention_days()}})
 # The view on the GET AND on the 409 body is driven over HTTP now:
 # tests/store-doors.py ("a guest's STALE write gets the empty view back").
 

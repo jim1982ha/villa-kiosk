@@ -33,4 +33,12 @@ ck("\"Open Ticket\" writes the agreement's take-on step: in progress, no kind, n
 ck("  ...and the sample's own take-on step is one too",
    T.sample.updates.filter((u) => u.status === "in_progress" && !u.kind && u.by !== T.agentStamp).length === 1);
 
+// what an older Kiosk took before /agent/v1/info listed kinds and fields (the VESTA Agent writes only these to it)
+const U = contract.ticketUpdate;
+ck("the kinds a Kiosk took before it listed them are kinds this Kiosk knows",
+   Array.isArray(U.kindsBeforeList) && U.kindsBeforeList.length > 0 && U.kindsBeforeList.every((k) => U.kinds.includes(k)), U.kindsBeforeList);
+ck("  ...and the fields too",
+   Array.isArray(T.fieldsBeforeList) && T.fieldsBeforeList.length > 0
+   && T.fieldsBeforeList.every((f) => Object.keys(T.fields).includes(f)), T.fieldsBeforeList);
+
 done("✅ the Kiosk holds the agent's fault as the agreement declares it");

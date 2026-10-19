@@ -8,8 +8,6 @@
 import { Eye, Trash2 } from "lucide-react";
 import { useFmData } from "@/fm/FmDataContext";
 import { localStamp } from "@/fm/fmEngine";
-
-import { monthLabel } from "@/fm/fmEngine";
 import { DOCUMENT_KINDS } from "@/fm/monthlyDocument";
 import type { FmSavedDocument } from "@/fm/fmTypes";
 import AgentMark from "./AgentMark";
@@ -40,7 +38,8 @@ export function SavedDocumentRows({ kind, docs: all, onOpen, onRemove }: {
 
   if (docs.length === 0) return null;
 
-  const { noun, plural } = DOCUMENT_KINDS[kind];
+  // each titled by what it is about: its month, or the moment it was taken (DOCUMENT_KINDS[kind].title)
+  const { noun, plural, title } = DOCUMENT_KINDS[kind];
 
   return (
     <div className="fm-stack">
@@ -52,7 +51,7 @@ export function SavedDocumentRows({ kind, docs: all, onOpen, onRemove }: {
           <div key={doc.id} className="fm-row">
             <div className="fm-row-main">
               <div className="fm-row-title">
-                <strong>{monthLabel(doc.month)}</strong>
+                <strong>{title(doc)}</strong>
               </div>
               <RecordMeta when={`Saved ${localStamp(doc.generatedAt)}`}>
                 <AgentMark record={doc} />
@@ -64,7 +63,7 @@ export function SavedDocumentRows({ kind, docs: all, onOpen, onRemove }: {
             <button
               className="icon-btn"
               onClick={() => onRemove(doc.id)}
-              aria-label={`Delete saved ${noun} for ${monthLabel(doc.month)}`}
+              aria-label={`Delete saved ${noun} for ${title(doc)}`}
               title={`Delete this saved ${noun}`}
             >
               <Trash2 size={16} />

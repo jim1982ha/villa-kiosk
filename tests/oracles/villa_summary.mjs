@@ -31,7 +31,7 @@ const villa = new Set(["lock.front", "lock.back", "lock.gate", "lock.shed", "loc
 const devices = { ids: [...villa], unavailable: ["lock.gate", "climate.bed"], has: (id) => villa.has(id), isCritical: () => false, deviceOfRecord: (id) => id };
 
 const facts = villaSummary({ entities, devices, resolvedRooms: {}, thresholds: {} });
-const report = buildReadiness(entities, EMPTY_FM_DATA, devices, {}, []);
+const report = buildReadiness(entities, EMPTY_FM_DATA, { devices: devices, attentionItems: [] }, {});
 const check = (id) => report.checks.find((c) => c.id === id);
 
 console.log("  locks — one word per fact (architecture review, 2026-10-19: jammed, moving, lost and no-value were all \"not reporting\"):");
@@ -48,8 +48,7 @@ ck("  ...and still warns — a door nobody can confirm is not secured", check("l
 ck("the report and the tile flag the same doors",
    JSON.stringify([...L.unlocked, ...L.jammed, ...L.moving, ...L.unknown].sort()) === JSON.stringify([...check("locks").entityIds].sort()));
 {
-  const only = (state) => buildReadiness({ "lock.a": E("lock.a", "locked"), "lock.b": E("lock.b", state) }, EMPTY_FM_DATA,
-    { ids: ["lock.a", "lock.b"], unavailable: state === "unavailable" ? ["lock.b"] : [], has: () => true, isCritical: () => false, deviceOfRecord: (id) => id }, {}, [])
+  const only = (state) => buildReadiness({ "lock.a": E("lock.a", "locked"), "lock.b": E("lock.b", state) }, EMPTY_FM_DATA, { devices: { ids: ["lock.a", "lock.b"], unavailable: state === "unavailable" ? ["lock.b"] : [], has: () => true, isCritical: () => false, deviceOfRecord: (id) => id }, attentionItems: [] }, {})
     .checks.find((c) => c.id === "locks");
   ck("  ...each fact alone, its own word: jammed / moving / not reporting",
      only("jammed").detail === "1 jammed." && only("unlocking").detail === "1 moving." && only("unknown").detail === "1 not reporting.",

@@ -11,11 +11,34 @@
 // "Saved" went back to "Save snapshot" after 2.5 s where the other two stayed
 // (architecture review, round two, 2026-10-17).
 
-import { monthKey } from "./fmEngine";
+import { localStamp, monthKey, monthLabel } from "./fmEngine";
 import { localMonthStart } from "@/utils/localDay";
-import type { FmData, FmSavedDocument } from "./fmTypes";
+import type { FmData, FmSavedDocument, FmTerms } from "./fmTypes";
+import type { ReadinessResult } from "./readiness";
+import { buildMonthlyRecap, buildReadinessSnapshot, buildSpendStatement } from "./fmDocuments";
 
 export type DocumentKind = FmSavedDocument["kind"];
+
+/**
+ * Everything a document is made from — built ONCE, by the Cockpit's Facility tabs (FacilitySections), and handed to
+ * each kind's `build`.
+ *
+ * ⚠️ EACH TAB GATHERED ITS OWN (architecture review, 2026-10-19): the recap, the statement and the snapshot each read
+ * the record, the terms, the device identity and the villa's name themselves, and the recap was handed device counts
+ * beside the readiness that already held them.
+ */
+export interface DocumentInputs {
+  fm: FmData;
+  /** The owner's contract terms (cap, currency, category names). */
+  terms: FmTerms;
+  /** The live readiness, for the profile looking (fm/readiness — the Recap tab's own). */
+  readiness: ReadinessResult;
+  villaName: string;
+  /** The moment of the document; absent: the clock when it is made (a document is of the moment someone asked). */
+  now?: number;
+  /** The device a record's entity field names (VillaModel.useDeviceIdentity) — open work counted per device card. */
+  deviceOfRecord: (field: string) => string;
+}
 
 export interface DocumentKindInfo {
   /** What one is called on screen: "snapshot". */
@@ -24,12 +47,32 @@ export interface DocumentKindInfo {
   plural: string;
   /** The word in its file name: villa-readiness-2026-10.md. */
   fileWord: string;
+  /** What it is ABOUT: a month (the recap, the statement), or the moment it was taken (the snapshot). */
+  about: "month" | "moment";
+  /** Its title in the saved list: its month — or, for a moment, the moment it was saved, in the documents' fixed form
+   *  (fmEngine.localStamp, the "Generated:" stamp). ⚠️ THREE SNAPSHOTS THIS MONTH WERE ALL "October 2026" (architecture
+   *  review, 2026-10-19): every kind was titled by its month. */
+  title: (doc: Pick<FmSavedDocument, "month" | "generatedAt">) => string;
+  /** The document, from the inputs, for `month`. */
+  build: (inputs: DocumentInputs, month: string) => string;
 }
 
+const byMonth = (doc: Pick<FmSavedDocument, "month">) => monthLabel(doc.month);
+
 export const DOCUMENT_KINDS: Record<DocumentKind, DocumentKindInfo> = {
-  recap: { noun: "recap", plural: "recaps", fileWord: "operations" },
-  spend: { noun: "statement", plural: "statements", fileWord: "spend" },
-  readiness: { noun: "snapshot", plural: "snapshots", fileWord: "readiness" },
+  recap: {
+    noun: "recap", plural: "recaps", fileWord: "operations", about: "month", title: byMonth,
+    build: (i, month) => buildMonthlyRecap({ ...i, month }),
+  },
+  spend: {
+    noun: "statement", plural: "statements", fileWord: "spend", about: "month", title: byMonth,
+    build: (i, month) => buildSpendStatement(i.fm, month, i.villaName, i.terms),
+  },
+  readiness: {
+    noun: "snapshot", plural: "snapshots", fileWord: "readiness", about: "moment",
+    title: (doc) => localStamp(doc.generatedAt),
+    build: (i, month) => buildReadinessSnapshot(i.readiness, i.villaName, month),
+  },
 };
 
 /** The file a document downloads as: the villa's name, what it is, its month. */

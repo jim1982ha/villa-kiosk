@@ -47,6 +47,9 @@ export interface PanelActions {
      *  being on rings the badge without recolouring the device's own glyph.
      *  See deviceActivity.badgeFaceAndRing. */
     ringState?: DeviceSurfaceState;
+    /** A CRITICAL device that lost contact (deviceLook.critical, 2.496.428): every lost pill of this window — the
+     *  reading's, the "UNAVAILABLE" notice's, the lock's — takes the danger red (config/reading.lostPillTone). */
+    critical: boolean;
   };
   /** Persist a new badge colour for the open entity (null = category default). Without may.edit the badge is a
    *  plain, non-interactive icon. */

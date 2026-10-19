@@ -34,9 +34,10 @@ import { fetchLogbookEvents } from "@/ha/HALogbookAPI";
 import { useRoomFloors } from "@/config/useRoomFloors";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import { useVillaAttention } from "./useVillaAttention";
+import { categoryMembers } from "@/config/activeDevices";
 import { storeLookSource } from "@/utils/deviceActivity";
 import {
-  buildCategoryTiles, buildRoomGroups, buildFloorGroups,
+  buildRoomGroups, buildFloorGroups,
   buildActivityFeed, pivotTiles, tileLine, type Pivot, type ActivityEntry,
 } from "./cockpitData";
 import type { AttentionGroup } from "@/config/attention";
@@ -107,14 +108,18 @@ export default function CockpitOverview({ onOpenEntity, doors, reportFaultFor, o
   // Shared with HUD's own top-bar alert icon/overflow-menu badge — see
   // useVillaAttention's own docstring for why that sharing is load-bearing,
   // not just tidiness (the two used to disagree).
-  const { selectableIds, attentionGroups } = useVillaAttention();
+  // the profile's devices (VillaAttention.devices: only those it may open) — the tiles, the rooms and the feed
+  const { devices: shown, attentionGroups } = useVillaAttention();
+  const deviceIds = shown.ids;
+  // one tile per category, its devices — deliberately non-judgmental (a light being on isn't a problem), kept apart
+  // from the attention list so the page doesn't read as "everything is red"
   const categoryTiles = useMemo(
-    () => buildCategoryTiles(selectableIds, entities, config.entityMap),
-    [selectableIds, entities, config.entityMap],
+    () => categoryMembers(deviceIds, entities, config.entityMap),
+    [deviceIds, entities, config.entityMap],
   );
   const roomGroups = useMemo(
-    () => buildRoomGroups(selectableIds, resolvedRooms, roomFloors),
-    [selectableIds, resolvedRooms, roomFloors],
+    () => buildRoomGroups(deviceIds, resolvedRooms, roomFloors),
+    [deviceIds, resolvedRooms, roomFloors],
   );
   const floorGroups = useMemo(() => buildFloorGroups(roomGroups), [roomGroups]);
 
@@ -131,8 +136,8 @@ export default function CockpitOverview({ onOpenEntity, doors, reportFaultFor, o
   const villaActivity = useMemo((): ActivityEntry[] | "loading" | "error" => {
     if (activity.status === "loading") return "loading";
     if (activity.status === "failed") return "error";
-    return buildActivityFeed(activity.data, entities, config.entityMap, selectableIds);
-  }, [activity.status, activity.data, entities, config.entityMap, selectableIds]);
+    return buildActivityFeed(activity.data, entities, config.entityMap, deviceIds);
+  }, [activity.status, activity.data, entities, config.entityMap, deviceIds]);
 
   // "Other" (not "Unplaced" or any other invented word) for the no-floor
   // bucket — the SAME label the room pivot's own no-room bucket already

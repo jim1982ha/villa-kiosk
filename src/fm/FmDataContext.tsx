@@ -34,6 +34,7 @@ import {
 
 // The write's result and what a screen does with it live in fm/fmSave.ts (pure,
 // so an oracle can drive them); re-exported here for the screens.
+import type { FmRetention } from "./fmEngine";
 import { fmSaveOutcome, type FmSaveOutcome, type FmWriteResult } from "./fmSave";
 
 interface FmDataContextValue {
@@ -43,6 +44,8 @@ interface FmDataContextValue {
   ready: boolean;
   /** Set when the last write failed, so the UI can say so instead of pretending. */
   saveError: string | null;
+  /** How long the server keeps a closed fault, as it published it with the record (null until read, or not said). */
+  retention: FmRetention | null;
   reload: () => Promise<void>;
   addSchedule: (s: Omit<FmSchedule, "id" | "createdAt">) => Promise<FmSaveOutcome>;
   updateSchedule: (id: string, patch: Partial<FmSchedule>) => Promise<FmSaveOutcome>;
@@ -110,6 +113,7 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<FmData>(EMPTY_FM_DATA);
   const [ready, setReady] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [retention, setRetention] = useState<FmRetention | null>(null);
   // Read the latest data inside a mutator without making every mutator depend
   // on it (which would re-create them all on every keystroke elsewhere).
   const ref = useRef(data);
@@ -121,7 +125,8 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
    *  pushes everything local), its revision, writes in flight, writes started
    *  during a fetch, a failed write still only on this device. */
   const doc = useRef(new SyncedDocument({
-    fetch: fetchFmData,
+    // the record's retention windows ride along with it (fmApi.fetchFmData), kept for the Tickets figures
+    fetch: async () => { const got = await fetchFmData(); if (got) setRetention(got.retention); return got; },
     save: (next: FmData, rev: string, carryOver: Record<string, unknown>) => saveFmData(next, rev, carryOver),
     diff: diffFmData,
     isEmpty: fmDiffIsEmpty,
@@ -290,7 +295,7 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
 
   return (
     <FmDataContext.Provider value={{
-      data, ready, saveError, reload,
+      data, ready, saveError, retention, reload,
       addSchedule, updateSchedule, removeSchedule, removeAllSchedules,
       logCompletion, addCost, updateCost, addTicket, updateTicket,
       removeCost, removeTicket, removeCompletion, advanceTickets, closeTickets,

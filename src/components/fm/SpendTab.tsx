@@ -17,9 +17,9 @@ import { useFmTerms } from "@/fm/useFmTerms";
 import { useProfile } from "@/auth/ProfileContext";
 import { roleCan } from "@/auth/permissions";
 import ContractTermsEditor from "./ContractTermsEditor";
-import { buildSpendStatement } from "@/fm/fmDocuments";
 import type { FmCost } from "@/fm/fmTypes";
 import { useMonthlyDocument } from "@/fm/useMonthlyDocument";
+import type { DocumentInputs } from "@/fm/monthlyDocument";
 import EvidenceRow from "./EvidenceRow";
 import DeviceSearchPicker, { type DeviceOption } from "./DeviceSearchPicker";
 import NotesField from "./NotesField";
@@ -35,8 +35,10 @@ import FormActions from "./FormActions";
 import { TONE_OF, toneClass } from "@/fm/tone";
 
 export default function SpendTab(
-  { onOpenEntity, deviceOptions }: {
+  { onOpenEntity, deviceOptions, inputs }: {
     onOpenEntity?: (id: string) => void;
+    /** What the statement is made from, built once by FacilitySections (monthlyDocument.DocumentInputs). */
+    inputs: DocumentInputs;
     /** Built once by FacilitySections and shared with the ticket form, so
      *  both offer exactly the same devices. */
     deviceOptions: DeviceOption[];
@@ -65,7 +67,7 @@ export default function SpendTab(
   // Save" (useMonthlyDocument), so a statement is a point-in-time record of
   // this month's spend rather than something that silently changes if an
   // entry is edited or deleted afterwards. Its month is the whole tab's.
-  const statement = useMonthlyDocument("spend", (m, villaName) => buildSpendStatement(data, m, villaName, terms));
+  const statement = useMonthlyDocument("spend", inputs);
   const month = statement.month;
 
   const resetForm = () => {

@@ -49,3 +49,25 @@ export function kelvinToRgb(kelvin: number): RGB {
 
 /** brightness 0-255 -> 0-100 % */
 export const brightnessToPct = (b: number): number => Math.round((b / 255) * 100);
+
+/** "#rrggbb" for an RGB in 0-1 — what a colour input holds. */
+export function rgbToHex({ r, g, b }: RGB): string {
+  return "#" + [r, g, b].map((v) => Math.round(clamp(v, 0, 1) * 255).toString(16).padStart(2, "0")).join("");
+}
+
+/** A "#rrggbb" as hue 0-360 / saturation 0-100 (the colour's value dropped: a light's brightness is its own slider);
+ *  null for anything else. */
+export function hexToHs(hex: string): { hue: number; sat: number } | null {
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex.trim());
+  if (!m) return null;
+  const [r, g, b] = [m[1], m[2], m[3]].map((x) => parseInt(x, 16) / 255);
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+  const sat = max === 0 ? 0 : (d / max) * 100;
+  let hue = 0;
+  if (d > 0) {
+    if (max === r) hue = 60 * (((g - b) / d) % 6);
+    else if (max === g) hue = 60 * ((b - r) / d + 2);
+    else hue = 60 * ((r - g) / d + 4);
+  }
+  return { hue: Math.round((hue + 360) % 360), sat: Math.round(sat) };
+}

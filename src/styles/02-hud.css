@@ -786,6 +786,22 @@
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   border-radius: 14px; background: var(--bg-input);
 }
+/* A device the villa's system has lost contact with wears the WHOLE tile in its badge's unavailable language
+   (owner, 2026-10-19: only the icon square was dashed): the dashed amber edge, an amber tint, its reading in amber
+   (categorySurface's `unavailable` row, the .status-pill.unavailable tint). A critical one wears its badge's red ring
+   instead (deviceLook.critical). The 2px edge comes out of the button's padding, so the tile keeps its size.
+   SummaryEntityRow.rowLookClass decides which. */
+.summary-entity-row.is-lost {
+  border: 2px dashed var(--status-warning);
+  background: color-mix(in srgb, var(--status-warning) 12%, var(--bg-input));
+}
+.summary-entity-row.is-lost .summary-entity-main { padding: 8px 10px; }
+.summary-entity-row.is-lost .summary-entity-state { color: var(--status-warning); }
+.summary-entity-row.is-lost.is-critical {
+  border: 2px solid var(--status-danger);
+  background: color-mix(in srgb, var(--status-danger) 12%, var(--bg-input));
+}
+.summary-entity-row.is-lost.is-critical .summary-entity-state { color: var(--status-danger); }
 /* ⚠️ BASIS 0, NOT auto (owner, 2026-10-12: on a phone "Outdoor Terrace Light
    Terrace" pushed its switch onto a second line, alone at the left). The row
    wraps — only so the switch's "Unlock …?" can open on its own line — and a

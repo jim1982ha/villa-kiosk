@@ -20,7 +20,7 @@ import {
 } from "./fmEngine";
 import { COST_CATEGORY_NAMES, NO_FM_TERMS, type FmData, type FmTerms } from "./fmTypes";
 import type { BudgetStatus } from "./fmEngine";
-import { CHECK_WORDS, VERDICT_WORDS, type ReadinessResult } from "./readiness";
+import { AVAILABILITY_CHECK_LABEL, CHECK_WORDS, VERDICT_WORDS, type ReadinessResult } from "./readiness";
 import { openCounts } from "./deviceWork";
 import { docDate } from "@/utils/dateText";
 import { formatMoney } from "@/utils/money";
@@ -36,11 +36,11 @@ export interface RecapInput {
   /** The villa's one answer to "which device does this record's entity field name" (VillaModel.useDeviceIdentity
    *  deviceOfRecord) — the open faults and tickets are counted per DEVICE card, as the Overview and Tickets count. */
   deviceOfRecord: (field: string) => string;
-  /** Optional live readiness snapshot, included as the closing section. */
-  readiness?: ReadinessResult;
-  /** Devices currently unavailable, for the uptime section. */
-  offlineDeviceCount?: number;
-  totalDeviceCount?: number;
+  /** Optional live readiness snapshot, included as the closing section — and the device availability section's
+   *  figures (its `availability`: the devices its "All devices reporting" check covers). ⚠️ THE COUNTS CAME TWICE
+   *  (architecture review, 2026-10-19): offlineDeviceCount and totalDeviceCount were passed beside the readiness that
+   *  already held them, from a role-blind list the check did not use. */
+  readiness?: ReadinessResult | null;
   /** The owner's contract terms (cap, currency, category names). */
   terms?: FmTerms;
   /** The recap date — "as at recap date" in the standing and readiness sections. The clock, unless a test passes one. */
@@ -216,23 +216,25 @@ export function buildMonthlyRecap(input: RecapInput): string {
   const monthEnd = monthBounds(month).end;
   const inMonth = fm.tickets.filter((t) => monthKey(t.openedAt) === month || resolvedInMonth(t, month))
     .map((t) => ({ ...t, ...ticketAt(t, monthEnd) }));
-  const stats = ticketStats(fm.tickets);
+  // the resolution figures are THE MONTH'S, as its table is (architecture review, 2026-10-19: "Resolved (all time)" was
+  // the record the server still keeps — September's recap made in January read "Closed without action: 0")
+  const stats = ticketStats(fm.tickets, monthBounds(month));
   // open work counted per DEVICE card, as the Tickets tab and §5 count it (deviceWork.openCounts); the figures that
   // are per record — resolved, the mean — are ticketStats'. ⚠️ This line counted records (architecture review,
   // 2026-10-19): a pump with two faults read "Open: 2" here and "1 detected fault" in §5 of the same recap.
   const open = openCounts(fm.tickets, input.deviceOfRecord);
   L.push(`## 3. Faults and response`);
   L.push(`- Open faults: **${open.faults}** · Tickets in progress: **${open.tickets}** (one per device, as the Overview `
-    + `and Tickets count them) · Resolved (all time): **${stats.resolved}**`);
+    + `and Tickets count them) · Resolved this month: **${stats.resolved}**`);
   if (stats.meanResolutionHours !== null) {
     // Named when it covers fewer tickets than "Resolved" reports, so the two
     // figures cannot be read as describing the same set when they do not.
     const covers = stats.meanCoversTickets === stats.resolved
       ? "" : ` (from ${stats.meanCoversTickets} of ${stats.resolved} — the rest `
         + `carry no usable resolution time)`;
-    L.push(`- Mean time to resolution: **${stats.meanResolutionHours.toFixed(1)} hours**${covers}`);
+    L.push(`- Mean time to resolution this month: **${stats.meanResolutionHours.toFixed(1)} hours**${covers}`);
   }
-  if (stats.closedWithoutAction) L.push(`- Closed without action (not counted as repairs): **${stats.closedWithoutAction}**`);
+  if (stats.closedWithoutAction) L.push(`- Closed without action this month (not counted as repairs): **${stats.closedWithoutAction}**`);
   L.push("");
   if (inMonth.length) {
     L.push(`| Opened | Fault | Status | Resolved | Evidence |`);
@@ -250,13 +252,18 @@ export function buildMonthlyRecap(input: RecapInput): string {
   }
 
   // ── 4. Device availability ───────────────────────────────────────────────
-  if (input.totalDeviceCount) {
-    const off = input.offlineDeviceCount ?? 0;
-    const pct = ((input.totalDeviceCount - off) / input.totalDeviceCount) * 100;
+  // the readiness check's own devices (ReadinessResult.availability) — the ones §5's "All devices reporting" counts
+  const avail = readiness?.availability;
+  if (avail?.total) {
+    const off = avail.offline.length;
+    const pct = ((avail.total - off) / avail.total) * 100;
     L.push(`## 4. Device availability (at recap date)`);
-    L.push(`- **${input.totalDeviceCount - off} of ${input.totalDeviceCount}** devices reporting `
+    L.push(`- **${avail.total - off} of ${avail.total}** devices reporting `
       + `(${pct.toFixed(1)}%)`);
-    if (off > 0) L.push(`- ${off} device(s) currently offline — see the faults section above.`);
+    // ⚠️ "SEE THE FAULTS SECTION ABOVE" POINTED AT NOTHING (architecture review, 2026-10-19): a device not answering is
+    // not a fault record; it is a row of the Overview's Open issues, and the readiness check names it below.
+    if (off > 0) L.push(`- ${off} device(s) currently offline — listed under "Open issues" on the Overview, `
+      + `and under "${AVAILABILITY_CHECK_LABEL}" below.`);
     L.push("");
   }
 

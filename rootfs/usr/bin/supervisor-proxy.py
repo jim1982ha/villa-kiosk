@@ -1646,6 +1646,13 @@ def _fm_cleared_step(step) -> bool:
     return note in (table.get("clearedNotes") or ()) or note.startswith(tuple(table.get("clearedNotePrefixes") or ()))
 
 
+def _fm_retention() -> dict:
+    """The two windows above, as the app reads them beside the record (`retention` on GET /fm-data): its Tickets
+    figures name the period the record still holds, never a copy of these numbers (architecture review, 2026-10-19:
+    "Resolved (all time)" counted only what had not expired yet). Days; 0 = kept for ever."""
+    return {"retention": {"clearedDays": FM_CLEARED_FAULT_RETENTION_DAYS, "repairedDays": _evidence_retention_days()}}
+
+
 def _fm_expire(doc, now: float | None = None):
     """The Facility record without the closed faults past their window."""
     if not isinstance(doc, dict) or not isinstance(doc.get("tickets"), list):
@@ -2693,7 +2700,7 @@ def _store_unreadable_response(key: str) -> web.Response:
 
 
 def _store_get_handler(store: JsonStore, key: str, what: str, *,
-                       capability: str | None = None, view=None, gate=None, tidy=None):
+                       capability: str | None = None, view=None, gate=None, tidy=None, published=None):
     """The GET door of one store: `{key: document, "rev": revision}`.
 
     `capability` gates it (None = any authorized caller — a guest still has to
@@ -2702,7 +2709,10 @@ def _store_get_handler(store: JsonStore, key: str, what: str, *,
     document). `gate(request, capability, message)` replaces _refuse for a
     caller that is not a browser session — the VESTA Agent's bearer token
     (_agent_refuse). `tidy(stored)` drops what the store no longer keeps (the
-    closed faults past their window, _fm_expire) before anyone sees it."""
+    closed faults past their window, _fm_expire) before anyone sees it.
+    `published()` is what the store says ABOUT itself beside the document (the
+    Facility record's retention windows, _fm_retention) — never inside it, so
+    a client writing its copy back never stores it."""
     gate = gate or _refuse
 
     async def get_handler(request: web.Request) -> web.Response:
@@ -2724,7 +2734,7 @@ def _store_get_handler(store: JsonStore, key: str, what: str, *,
         if tidy is not None:
             stored = tidy(stored)
         return web.json_response(
-            {key: view(request, stored) if view else stored, "rev": store.rev()},
+            {key: view(request, stored) if view else stored, "rev": store.rev(), **(published() if published else {})},
             headers={"Cache-Control": "no-store"},
         )
 
@@ -3119,7 +3129,7 @@ device_config_put_handler = _store_put_handler(
 # difference is who may write it. /agent/v1/fm-data opens the SAME store.
 FM_DATA = JsonStore("fm-data.json", {}, FM_DATA_MAX_BYTES)
 fm_data_get_handler = _store_get_handler(
-    FM_DATA, "data", "facility manager data", view=_fm_reader_view, tidy=_fm_expire)
+    FM_DATA, "data", "facility manager data", view=_fm_reader_view, tidy=_fm_expire, published=_fm_retention)
 fm_data_put_handler = _store_put_handler(
     FM_DATA, "data", "facility manager data",
     # "guest" is admitted at the ROLE gate but constrained by the write guard
@@ -3712,26 +3722,47 @@ async def agent_heartbeat_handler(request: web.Request) -> web.Response:
             return web.json_response({"error": "status must be a string of at most 200 characters"},
                                      status=400)
         cadence = body.get("cadence") if isinstance(body, dict) else None
-        if cadence is not None and _agent_cadence(cadence) is None:
-            return web.json_response({"error": "cadence: checkMinutes 1-1440 and nightlyAt HH:MM, as "
-                                               "agent-contract.json heartbeat declares"}, status=400)
+    # ⚠️ A MALFORMED CADENCE NEVER REFUSES THE BEAT (owner, 2026-10-19). It answered 400 before the beat was recorded,
+    # so a running Agent whose timing had one wrong field showed Offline for good. The beat counts; the timing is
+    # dropped (stored null: the Kiosk then gives no number), logged once, and the answer says why.
+    why = _agent_cadence_problem(cadence) if cadence is not None else None
     await AGENT_PRESENCE.replace({"last_seen": time.time(), "status": status,
-                                  "cadence": _agent_cadence(cadence) if cadence is not None else None})
-    return web.json_response({"ok": True, "offline_after_minutes": _agent_offline_minutes()})
+                                  "cadence": _agent_cadence(cadence)})
+    answer = {"ok": True, "offline_after_minutes": _agent_offline_minutes()}
+    global _CADENCE_REFUSAL_LOGGED
+    if why is not None:
+        answer["cadence"] = f"refused: {why}"
+        if _CADENCE_REFUSAL_LOGGED != why:
+            print(f"[supervisor-proxy] agent heartbeat: cadence dropped ({why}); the beat still counts", flush=True)
+            _CADENCE_REFUSAL_LOGGED = why
+    else:
+        _CADENCE_REFUSAL_LOGGED = None
+    return web.json_response(answer)
+
+
+#: The last malformed-cadence reason logged — one line per new reason, not one per beat (every few minutes).
+_CADENCE_REFUSAL_LOGGED: str | None = None
+
+
+def _agent_cadence_problem(value) -> str | None:
+    """Why a heartbeat's `cadence` is not agent-contract.json's shape, or None when it is (_agent_cadence's rule)."""
+    if not isinstance(value, dict):
+        return "cadence must be an object {checkMinutes, nightlyAt}"
+    minutes, nightly = value.get("checkMinutes"), value.get("nightlyAt")
+    if not (isinstance(minutes, int) and not isinstance(minutes, bool) and 1 <= minutes <= 1440):
+        return "checkMinutes must be a whole number 1-1440"
+    if not (isinstance(nightly, str) and re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", nightly)):
+        return "nightlyAt must be HH:MM"
+    return None
 
 
 def _agent_cadence(value) -> dict | None:
     """The agent's own timing as its heartbeat says it (agent-contract.json `heartbeat.cadence`), or None when it is
     not that shape. ⚠️ THE AGENT'S CLOCK, TOLD — NOT COPIED (architecture review, 2026-10-15): the Overview's (i) said
     "checks every 5 minutes, nightly check at 02:00" whatever the villa had set."""
-    if not isinstance(value, dict):
+    if _agent_cadence_problem(value) is not None:
         return None
-    minutes, nightly = value.get("checkMinutes"), value.get("nightlyAt")
-    if not (isinstance(minutes, int) and not isinstance(minutes, bool) and 1 <= minutes <= 1440):
-        return None
-    if not (isinstance(nightly, str) and re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", nightly)):
-        return None
-    return {"checkMinutes": minutes, "nightlyAt": nightly}
+    return {"checkMinutes": value["checkMinutes"], "nightlyAt": value["nightlyAt"]}
 
 
 def _agent_presence() -> dict:

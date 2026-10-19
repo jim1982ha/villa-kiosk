@@ -43,6 +43,13 @@
       "noted",
       "cleared"
     ],
+    "_kindsBeforeList": "The step kinds a Kiosk took before /agent/v1/info listed them (`step_kinds`, 2.496.356): what the VESTA Agent writes to a Kiosk whose info lists none. Another kind is written without its `kind`, or not at all when it is one of `notStatusChanges` (without its kind it would read as a change of status).",
+    "kindsBeforeList": [
+      "reopened",
+      "retitled",
+      "reading",
+      "cleared"
+    ],
     "notStatusChanges": [
       "noted",
       "retitled",
@@ -418,7 +425,7 @@
       ]
     }
   },
-  "_heartbeat": "POST /agent/v1/heartbeat: the VESTA Agent says it is alive. `status`: a short text (at most 200 characters). `cadence` (optional): its own timing, which the Kiosk shows in the Overview's (i) instead of a copy of the defaults (architecture review, 2026-10-15) — `checkMinutes` how often it looks at its alerts and faults (1-1440), `nightlyAt` the villa time of its nightly check (HH:MM). Without it the Kiosk says no number. Shown only while the Agent is online: once its heartbeats stop (/agent-status `offline`) the Kiosk's proxy answers `cadence: null`, and the Kiosk says \"by the VESTA Agent\" and \"it checks regularly\" instead of a stale number.",
+  "_heartbeat": "POST /agent/v1/heartbeat: the VESTA Agent says it is alive. `status`: a short text (at most 200 characters). `cadence` (optional): its own timing, which the Kiosk shows in the Overview's (i) instead of a copy of the defaults (architecture review, 2026-10-15) — `checkMinutes` how often it looks at its alerts and faults (1-1440), `nightlyAt` the villa time of its nightly check (HH:MM). Without it the Kiosk says no number. Shown only while the Agent is online: once its heartbeats stop (/agent-status `offline`) the Kiosk's proxy answers `cadence: null`, and the Kiosk says \"by the VESTA Agent\" and \"it checks regularly\" instead of a stale number. A `cadence` of another shape never refuses the beat: the beat counts (the Agent is online), the timing is dropped (stored null, so the Kiosk gives no number) and the answer carries `\"cadence\": \"refused: <why>\"`.",
   "heartbeat": {
     "fields": {
       "status": "string, at most 200 characters",
@@ -455,6 +462,15 @@
       "entityId": "the device's entity",
       "note": "what to do on site"
     },
+    "_fieldsBeforeList": "The fields of `fields` a Kiosk read before /agent/v1/info listed them (`ticket_fields`, 2.496.382): what the VESTA Agent writes to a Kiosk whose info lists none. Another declared field is not written.",
+    "fieldsBeforeList": [
+      "alertNumber",
+      "check",
+      "documentIds",
+      "entityId",
+      "note",
+      "origin"
+    ],
     "takenStep": {
       "status": "in_progress",
       "kind": null,

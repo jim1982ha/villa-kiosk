@@ -11,7 +11,7 @@
 // children; they render only while the device can be commanded.
 
 import type { ReactNode } from "react";
-import PowerToggle from "./PowerToggle";
+import { PowerSection } from "./PowerToggle";
 import UnavailableNotice from "./UnavailableNotice";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
@@ -27,12 +27,15 @@ interface Props {
   device: string;
   /** Draw the power button (devicePower.deviceSwitch: its flip, and its ask). */
   power?: boolean;
+  /** Beside the power button, in one row with a compact button (PowerToggle.PowerSection) — a light's colours and
+   *  effects. Like the children, only while the device can be commanded. */
+  beside?: ReactNode;
   /** Shown whatever the state (a reading that is informative offline too). */
   always?: ReactNode;
   children?: ReactNode;
 }
 
-export default function ControlFrame({ entity, mapping, device, power, always, children }: Props) {
+export default function ControlFrame({ entity, mapping, device, power, beside, always, children }: Props) {
   const { ws } = useHA();
   // ⚠️ LOST CONTACT, NOT "UNKNOWN" (owner, 2026-10-18; architecture review 2026-10-19): a device whose state is
   // "unknown" is answering — it can be commanded (a toggle needs no value), so its controls stay, without the notice;
@@ -46,10 +49,11 @@ export default function ControlFrame({ entity, mapping, device, power, always, c
       {power && (() => {
         const sw = deviceSwitch(entity, mapping.entityId, mapping);
         return (
-          <PowerToggle
+          <PowerSection
             on={sw.position === "on"}
             onClick={() => HAServices.power(ws, entity, mapping.entityId)}
             ask={sw.ask}
+            beside={beside}
           />
         );
       })()}

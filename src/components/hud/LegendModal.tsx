@@ -41,6 +41,9 @@ const BADGE_ITEMS: { label: string; state: DeviceSurfaceState; ringState?: Devic
     note: "Filled red — the device needs attention (an unlocked door, a leak, low battery…)" },
   { label: "Unavailable", state: "unavailable",
     note: "Neutral square, dashed amber ring — contact with this device is lost" },
+  // deviceActivity.badgeFaceAndRing: a CRITICAL device that lost contact keeps the muted face, its ring turns red
+  { label: "Red ring", state: "unavailable", ringState: "alert",
+    note: "A critical device has lost contact" },
 ];
 
 /** A room chip: its border says whether something is on; its number's colour
@@ -52,7 +55,7 @@ const CHIP_RINGS: { label: string; frame: "active" | "rest"; note: string }[] = 
 const CHIP_COUNTS: { label: string; health: "alert" | "unavailable" | "ok"; note: string }[] = [
   { label: "Green number", health: "ok", note: "All right — every device is reporting and nothing needs attention" },
   { label: "Amber number", health: "unavailable", note: "Contact is lost with a device in the room" },
-  { label: "Red number", health: "alert", note: "Something in the room needs attention (an unlocked door, a leak…) — shown before amber" },
+  { label: "Red number", health: "alert", note: "Something in the room needs attention (an unlocked door, a leak, a critical device that lost contact…) — shown before amber" },
 ];
 
 /** The coloured status pill each device PANEL shows, and the colours of the
@@ -64,7 +67,9 @@ const STATUS_ITEMS: { label: string; swatch: string; note: string }[] = [
   { label: "Off / idle", swatch: STATUS_COLOR.idle, note: "Device is off or in its resting state — or a door or window standing open" },
   { label: "In progress", swatch: STATUS_COLOR.transitional,
     note: "Moving between the two — opening, closing, locking, arming" },
-  { label: "Unavailable", swatch: STATUS_COLOR.unavailable, note: "Contact lost — state unknown" },
+  { label: "Unavailable", swatch: STATUS_COLOR.unavailable, note: "Contact lost" },
+  // "unknown": the device answers with nothing to say (stateColors.contactOf "no-value") — grey, never amber
+  { label: "No value reported", swatch: STATUS_COLOR.idle, note: "The device is answering but has no value to give right now" },
   { label: "Alert", swatch: STATUS_COLOR.alert, note: "Needs attention (e.g. unlocked door, jammed lock, leak) — or, in a sensor's history, a detection (motion, occupancy)" },
 ];
 

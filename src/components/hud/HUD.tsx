@@ -53,7 +53,7 @@ import { openRoomDial, roomDialItems, roomsOnFloor, type RadialItem, type RoomDi
 import LegendModal from "./LegendModal";
 import type { Doors } from "@/auth/doors";
 import { useVillaAttention } from "@/components/cockpit/useVillaAttention";
-import { healthClass } from "@/config/attention";
+import type { VillaHealthLevel } from "@/config/attention";
 import { formatCountBadge } from "@/utils/countBadge";
 import { useAgent } from "@/agent/AgentContext";
 import { awaitingAnswer } from "@/agent/agentView";
@@ -583,7 +583,7 @@ export default function HUD({
                 bottom right — and the agent's own window opens from the
                 Cockpit's footer. Without one, the ⚠ as before. */}
             <button
-              className={`icon-btn${doors.agent ? " agent-btn" : ""}${healthClass(health)}`}
+              className={`icon-btn${doors.agent ? " agent-btn" : ""}${HEALTH_CLASS[health.level]}`}
               onClick={onOpenCockpit}
               title={(attentionGroups.length > 0 ? health.summary : "Cockpit — villa status at a glance")
                 + (doors.agent ? ` · ${agentTitle}` : "")}
@@ -799,3 +799,9 @@ export default function HUD({
     </>
   );
 }
+
+/** The top bar's Cockpit button, as the villa's health says it: red for danger, amber for a warning, plain when all is
+ *  fine (attention.villaHealthFrom gives the level; the class is this screen's). ⚠️ THE LEVEL WAS WORKED OUT AND NEVER
+ *  SHOWN (architecture review, 2026-10-19 evening): the button turned red for ANY open problem — one late pool task, one
+ *  ordinary sensor offline — while 2.496.410 promised red only for an alarm or a critical device offline. */
+export const HEALTH_CLASS: Record<VillaHealthLevel, string> = { danger: " has-alert", warn: " has-warn", ok: "" };

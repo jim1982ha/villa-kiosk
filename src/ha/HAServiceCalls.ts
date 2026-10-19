@@ -21,8 +21,9 @@ export const HAServices = {
   // --- Lights ---
   setLightBrightness: (ws: WS, id: string, brightness: number) =>
     ws.callService("light", "turn_on", { brightness }, t(id)),
-  setLightColorTemp: (ws: WS, id: string, kelvin: number) =>
-    ws.callService("light", "turn_on", { color_temp_kelvin: kelvin }, t(id)),
+  /** `light.turn_on` with the data utils/panelRules builds (a colour, an effect, a colour temperature). */
+  setLight: (ws: WS, id: string, data: Record<string, unknown>) =>
+    ws.callService("light", "turn_on", data, t(id)),
 
   // --- Climate ---
   setTemperature: (ws: WS, id: string, temperature: number) =>

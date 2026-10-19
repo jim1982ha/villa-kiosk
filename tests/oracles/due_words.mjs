@@ -56,8 +56,8 @@ ck("  ...and no word of its own", !/Overdue by|\bLate\b/.test(standing));
 console.log("\n  the Overview's late-task line says the same word:");
 {
   // late whatever the clock: one never done, one done years ago
-  const items = buildAttentionItems({ unavailableIds: [], entities: {}, entityMap: {}, alertThresholds: {}, resolvedRooms: {}, selectableIds: [],
-    folding: new Map(), fmData: { ...EMPTY_FM_DATA, schedules: [sched("n", "Pest control", 30), sched("o", "AC service", 30)],
+  const items = buildAttentionItems({ devices: (await import("../consistency/devices.mjs")).devicesOf(), entities: {}, entityMap: {},
+    alertThresholds: {}, resolvedRooms: {}, fmData: { ...EMPTY_FM_DATA, schedules: [sched("n", "Pest control", 30), sched("o", "AC service", 30)],
       completions: [{ id: "c", scheduleId: "o", at: "2020-01-01T12:00:00Z", by: "Op", photoIds: [] }] } });
   const detail = Object.fromEntries(items.filter((i) => i.kind === "schedule").map((i) => [i.title, i.detail]));
   ck("never recorded / overdue, from the table", detail["Pest control"] === E.DUE_WORDS.never.word && detail["AC service"] === E.DUE_WORDS.overdue.word, detail);

@@ -411,9 +411,38 @@ export function resolvedInMonth(t: FmTicket, month: string): boolean {
   return ats.some((a) => monthKey(a) === month);
 }
 
-export function ticketStats(tickets: readonly FmTicket[]): TicketStats {
+/** A period the figures are about: [start, end) in ms. */
+export interface TicketWindow { start: number; end: number }
+
+/** How long the server keeps a closed fault (GET /fm-data's `retention`, supervisor-proxy _fm_retention): a close with
+ *  no work done, and a repair (the evidence window). Days; 0 = for ever. */
+export interface FmRetention { clearedDays: number; repairedDays: number }
+
+/** The days the record still holds BOTH kinds of close — the shorter window (0 = for ever, so not a bound); null when
+ *  neither expires. The Tickets figures are about this period, and say so. */
+export function keptDays(r: FmRetention): number | null {
+  const bounded = [r.clearedDays, r.repairedDays].filter((d) => Number.isFinite(d) && d > 0);
+  return bounded.length ? Math.min(...bounded) : null;
+}
+
+/** A fault as it stood at `end`: its status changes up to then, its status and resolution then (ticketAt). */
+function ticketUpTo(t: FmTicket, end: number): FmTicket {
+  const at = ticketAt(t, end);
+  return { ...t, ...at, resolvedAt: at.resolvedAt, updates: t.updates?.filter((u) => Date.parse(u.at) <= end) };
+}
+
+/**
+ * The resolution figures. `window`: only the faults whose last close (as they stood at its end) falls inside it —
+ * the recap's month (monthBounds), the Tickets tab's kept record (keptDays). Without one: every record given.
+ *
+ * ⚠️ "RESOLVED (ALL TIME)" WAS THE KEPT RECORD (architecture review, 2026-10-19): the server drops a no-action close
+ * after 90 days and a repair after the evidence window (_fm_expire), so September's recap regenerated in January read
+ * "Closed without action: 0". A figure names its period now, and the period is one the record still holds.
+ */
+export function ticketStats(tickets: readonly FmTicket[], window?: TicketWindow): TicketStats {
   let resolved = 0, cleared = 0, totalMs = 0, timed = 0;
-  for (const t of tickets) {
+  for (const whole of tickets) {
+    const t = window ? ticketUpTo(whole, window.end) : whole;
     // ⚠️ AN UNKNOWN STATUS COUNTS AS OPEN (stageOf). A bare `else` once counted ANY row whose status was missing,
     // empty or corrupt as RESOLVED — a fault silently removed from the facility report by bad data, the one
     // direction this must never fail in. The open ones are deviceWork.openCounts', per device.
@@ -421,6 +450,10 @@ export function ticketStats(tickets: readonly FmTicket[]): TicketStats {
     // ⚠️ A CLOSE WITH NO WORK IS NOT A REPAIR (review 31): ten 10-minute Wi-Fi blips cleared by the agent made a
     // 48 h fridge repair read "4.5 h", one duplicate closed after 92 days "2208 h"
     const lastResolve = lastResolution(t);
+    if (window) {
+      const closedAt = Date.parse(lastResolve?.at ?? t.resolvedAt ?? "");
+      if (!(closedAt >= window.start && closedAt < window.end)) continue;
+    }
     if (lastResolve && isClearedStep(lastResolve)) { cleared++; continue; }
     resolved++;
     const ms = openTimeMs(t);
@@ -601,8 +634,12 @@ export function withTicketAdvanced(
     })),
     completions: resolving
       ? [...d.completions, {
+          // ⚠️ WRITTEN AS THE STEP IS (owner, 2026-10-19): `by` the profile that recorded it, `who` the name typed for
+          // who did the work — the shape a VESTA Agent completion has had all along (its `by` the agent's, `who` the
+          // person). The typed name went into `by` (to 2.496.427), so the same field meant "did it" for a person and
+          // "recorded it" for the Agent. workedBy reads both, old rows included.
           id: k.id("cp"), scheduleId: "", ticketId: id, at,
-          by: step.who ?? by ?? "—", note: step.note, photoIds: step.photoIds, costId,
+          by: by ?? "—", ...(step.who ? { who: step.who } : {}), note: step.note, photoIds: step.photoIds, costId,
         }]
       : d.completions,
     costs: costId ? [...d.costs, { ...cost!, id: costId, at, photoIds: step.photoIds }] : d.costs,

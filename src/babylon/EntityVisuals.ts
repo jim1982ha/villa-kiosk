@@ -800,7 +800,21 @@ export class EntityVisuals {
    *  room-chip member and mesh here is painted from deviceLook / readingOf
    *  through this — the live cache above, the mesh-resolved mappings, and the
    *  current config (read through a getter: the object is replaced per edit). */
-  private readonly lookSource: LookSource = mapLookSource(this.lastState, this.mapping, () => this.config);
+  private readonly lookSource: LookSource = mapLookSource(this.lastState, this.mapping, () => this.lookConfig());
+  /** The villa's critical devices, folded onto their devices (deviceGroups.criticalDevices) — pushed by the page
+   *  (setCriticalDevices). A critical device that lost contact rings red here as on the Cockpit (2.496.428). */
+  private critical: ReadonlySet<string> = new Set();
+  private lookCfg: { from: AppConfig; crit: ReadonlySet<string>; cfg: LookSource["config"] } | null = null;
+  /** What `lookSource` reads as its config: the live config's two slices and the critical list — rebuilt only when
+   *  either object is replaced, never per badge. */
+  private lookConfig(): LookSource["config"] {
+    const c = this.lookCfg;
+    if (c && c.from === this.config && c.crit === this.critical) return c.cfg;
+    const crit = this.critical;
+    const cfg = { entityMap: this.config.entityMap, alertThresholds: this.config.alertThresholds, isCritical: (id: string) => crit.has(id) };
+    this.lookCfg = { from: this.config, crit, cfg };
+    return cfg;
+  }
   /** User size multiplier (Settings slider) and live bird's-eye zoom factor;
    *  the badge container is scaled by their product. */
   /** Last line emitted by logPlacement, so the pass logs only on CHANGE. */
@@ -1047,6 +1061,15 @@ export class EntityVisuals {
   repaintBadges(): void {
     this.rebuildLabels();
     this.requestRender();
+  }
+
+  /** The villa's critical devices (folded) — every badge, card and room chip repaints when the list changes. */
+  setCriticalDevices(ids: ReadonlySet<string>): void {
+    if (ids.size === this.critical.size && [...ids].every((id) => this.critical.has(id))) return;
+    this.critical = ids;
+    // a room chip's number takes its colour in the layout pass (summaryLook.roomHealth): redo it
+    this.markLayoutDirty();
+    this.repaintBadges();
   }
 
   /** Every entity that actually resolved to geometry in the loaded model —

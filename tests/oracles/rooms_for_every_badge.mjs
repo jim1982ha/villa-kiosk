@@ -16,6 +16,7 @@ const P = await import("@/config/devicePlace");
 const { NO_ROOM_LABEL } = await import("@/config/roomKey");
 const { buildAttentionItems, groupAttention } = await import("@/config/attention");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
+const { devicesOf } = await import("../consistency/devices.mjs");
 
 console.log("  the rule:");
 {
@@ -80,14 +81,13 @@ console.log("\n  the fallback chain (empty means absent):");
   // "" for the lock; `??` stopped there and the Overview card read "Other".
   const ticket = { id: "t1", title: "Battery", status: "open", entityId: "sensor.door_battery", room: "Front",
     openedAt: "2026-10-16T00:00:00Z", photoIds: [], updates: [] };
-  const opts = { unavailableIds: [], entities: {}, entityMap: {}, alertThresholds: {}, selectableIds: [],
-    fmData: { ...EMPTY_FM_DATA, tickets: [ticket] }, folding: new Map([["sensor.door_battery", "lock.door"]]) };
+  const opts = { devices: devicesOf({ folding: new Map([["sensor.door_battery", "lock.door"]]) }), entities: {}, entityMap: {}, alertThresholds: {},
+    fmData: { ...EMPTY_FM_DATA, tickets: [ticket] } };
   const card = (resolvedRooms) => groupAttention(buildAttentionItems({ ...opts, resolvedRooms }))[0]?.room;
   ck("the Overview card: the device has no room → its sensor's", card(rooms) === "Entrance", card(rooms));
   const none = { "lock.door": "", "sensor.door_battery": "" };
   ck("  ...both have none → the room stored on the ticket", card(none) === "Front", card(none));
-  ck("  ...and with no room anywhere, 'Other'", groupAttention(buildAttentionItems({ ...opts, resolvedRooms: none,
-     fmData: { ...EMPTY_FM_DATA, tickets: [{ ...ticket, room: "" }] } }))[0]?.room === NO_ROOM_LABEL);
+  ck("  ...and with no room anywhere, 'Other'", groupAttention(buildAttentionItems({ ...opts, resolvedRooms: none, fmData: { ...EMPTY_FM_DATA, tickets: [{ ...ticket, room: "" }] } }))[0]?.room === NO_ROOM_LABEL);
 }
 
 console.log("\n  the floor of a room:");

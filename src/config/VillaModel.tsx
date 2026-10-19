@@ -98,15 +98,12 @@ export function VillaModelProvider({ sets, children }: { sets: VillaSets; childr
     [entityMap, deviceGroups, dismissedIds, mappedEntityIds, visibleEntities, entityDeviceIds, folding, critical],
   );
   const attention = useMemo((): VillaProblems => {
-    const unavailableIds = devices.unavailable as string[];
-    const selectableIds = devices.ids as string[];
     const attentionItems = buildAttentionItems({
-      unavailableIds, entities, entityMap, alertThresholds: config.alertThresholds, resolvedRooms, fmData, selectableIds, folding,
-      critical });
+      devices, entities, entityMap, alertThresholds: config.alertThresholds, resolvedRooms, fmData });
     // NOT grouped here: grouping is per profile (attentionFor), and a
     // role-blind grouping had no reader (until 2.496.268 it ran anyway).
-    return { unavailableIds, selectableIds, attentionItems };
-  }, [devices, entities, entityMap, config.alertThresholds, resolvedRooms, fmData, folding, critical]);
+    return { devices, attentionItems };
+  }, [devices, entities, entityMap, config.alertThresholds, resolvedRooms, fmData]);
 
   // Advanced Settings' device list and what it must say is missing — the same dismissal as every set above.
   const settings = useMemo(() => {

@@ -462,14 +462,25 @@ async def main() -> None:
     status, body = await jget("/agent-status", cookie("ops"))
     ck("the agreement's heartbeat: its timing is kept and shown (architecture review, 2026-10-15)",
        r.status == 200 and body.get("cadence") == beat["cadence"], (r.status, body))
+    # ⚠️ THE BEAT USED TO BE REFUSED WHOLE (400, to 2.496.427): a running Agent whose timing had one wrong field showed
+    # Offline for good. A malformed cadence is dropped, the beat still counts (owner, 2026-10-19).
+    dropped = []
     for bad in ({"checkMinutes": 0, "nightlyAt": "02:00"}, {"checkMinutes": 5, "nightlyAt": "2am"},
                 {"checkMinutes": True, "nightlyAt": "02:00"}, "every 5 min"):
+        presence_file = TMP / "data" / "agent-presence.json"
+        presence_file.write_text(json.dumps({"last_seen": time.time() - 60 * 60, "status": None, "cadence": beat["cadence"]}))
         r = await post("/agent/v1/heartbeat", headers=bearer(), json={"status": "x", "cadence": bad})
-        if r.status != 400:
-            break
-    ck("  ...a timing of another shape is refused (400), never shown", r.status == 400, (bad, r.status))
-    status, body = await jget("/agent-status", cookie("ops"))
-    ck("  ...and the refused beat changed nothing", body.get("cadence") == beat["cadence"], body)
+        answer = await r.json()
+        status, body = await jget("/agent-status", cookie("ops"))
+        stored = json.loads(presence_file.read_text()).get("cadence", "absent")
+        dropped.append((bad, r.status, answer.get("cadence"), body.get("state"), body.get("cadence"), stored))
+    ck("  ...a malformed cadence is dropped, the beat still counts (online, cadence null), and the answer says why",
+       all(st == 200 and isinstance(why, str) and why.startswith("refused: ") and state == "online" and cad is None
+           for _, st, why, state, cad, _ in dropped), dropped)
+    ck("  ...and it is never stored (the record's cadence is null, not the malformed one)",
+       all(kept is None for *_, kept in dropped), dropped)
+    r = await post("/agent/v1/heartbeat", headers=bearer(), json=beat)
+    ck("  ...a well-formed beat's answer names no refusal", r.status == 200 and "cadence" not in await r.json())
     presence = TMP / "data" / "agent-presence.json"
     presence.write_text(json.dumps({"last_seen": time.time() - 6 * 60, "status": None, "cadence": beat["cadence"]}))
     status, body = await jget("/agent-status", cookie("ops"))

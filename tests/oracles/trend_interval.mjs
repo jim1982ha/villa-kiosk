@@ -38,8 +38,9 @@ ck("two outages in one interval are one shaded interval, from the first's start 
 const none = T.fiveMinuteSeries({ points: [{ t: t0, v: 5 }], gaps: [{ from: t0 + M, to: t0 + 10 * M }], window: { from: t0, to: t0 + 10 * M } });
 ck("an interval with no available minute has no value (no invented reading)", none.points.length === 1, none.points);
 
-ck("unavailable and unknown are the legend's colour on ANY timeline mapping", paintState(() => "green")("unavailable") === STATUS_COLOR.unavailable
-   && paintState(() => "green")("unknown") === STATUS_COLOR.unavailable && paintState(() => "green")("connected") === "green");
+// 2.496.428 (owner): an unknown stretch is a device answering with no value — the quiet idle colour, never "contact lost"
+ck("unavailable is the legend's lost colour and unknown its idle one, on ANY timeline mapping", paintState(() => "green")("unavailable") === STATUS_COLOR.unavailable
+   && paintState(() => "green")("unknown") === STATUS_COLOR.idle && paintState(() => "green")("connected") === "green");
 const pal = paletteColorFor(["unavailable", "connected", "disconnected"]);
 ck("  ...a text sensor's palette never spends a colour on them — the AP's first real state keeps the first colour",
    pal("unavailable") === STATUS_COLOR.unavailable && pal("connected") === paletteColorFor(["connected"])("connected"));

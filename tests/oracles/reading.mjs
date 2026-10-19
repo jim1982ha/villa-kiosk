@@ -114,4 +114,18 @@ console.log("\n  which history goes under it (architecture review 11)");
      && !/stateColor\)\.map/.test(g));
   ck("both windows draw a pill through ReadingPill", ["SensorPanel", "DeviceGroupPanel"].every((f) => /<ReadingPill /.test(src(`components/panels/${f}.tsx`)) && !/className=\{`status-pill/.test(src(`components/panels/${f}.tsx`))));
 }
+console.log("\n  an unknown stretch in a history bar (owner, 2026-10-19)");
+{
+  // ⚠️ "UNKNOWN" WAS PAINTED AS CONTACT LOST (to 2.496.427): every history bar drew an unknown stretch in the amber the
+  // legend calls "Contact lost", under a quiet badge, and a lock reporting "unknown" wore an amber pill. Unknown is a
+  // device answering with no value (stateColors.contactOf "no-value"): the quiet idle colour, the quiet pill.
+  const { chartColours, lockPill } = await import("@/config/reading");
+  const { STATUS_COLOR } = await import("@/utils/stateColors");
+  const paint = chartColours(() => "green");
+  ck("an unknown stretch is not the lost colour; an unavailable one is",
+     paint("unknown") !== STATUS_COLOR.unavailable && paint("unavailable") === STATUS_COLOR.unavailable, [paint("unknown"), paint("unavailable")]);
+  ck("  ...an unknown stretch is the idle colour, whatever the window's own colouring says", paint("unknown") === STATUS_COLOR.idle);
+  ck("a lock reporting 'unknown' wears the quiet pill; a lost lock (or none at all) the amber one",
+     lockPill("lock.x", "unknown").tone === "off" && lockPill("lock.x", "unavailable").tone === "unavailable" && lockPill("lock.x", undefined).tone === "unavailable");
+}
 done("✅ a reading is one answer in every window");

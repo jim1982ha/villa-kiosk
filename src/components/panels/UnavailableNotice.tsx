@@ -11,6 +11,8 @@
 import { AlertTriangle } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { missingFromHa, NOT_IN_HA } from "@/utils/stateColors";
+import { lostPillTone } from "@/config/reading";
+import { usePanelActions } from "./PanelActionsContext";
 
 interface Props {
   /** Noun for the device kind, e.g. "light", "fan", "switch" — now used for
@@ -22,6 +24,8 @@ interface Props {
 
 export default function UnavailableNotice({ device = "device", entityId }: Props) {
   const { entities } = useHA();
+  // a critical device that lost contact: red, as the Cockpit paints it (the header's look decides — reading.lostPillTone)
+  const tone = lostPillTone("unavailable", usePanelActions().badge?.critical ?? false);
   // ⚠️ NOT THE SAME AS LOST CONTACT (owner, 2026-10-14): a 3D object named after an entity Home Assistant no longer
   // has showed "UNAVAILABLE" and "Not enough history yet" — as if it might come back. It will not until the model
   // or a re-mapping changes, so it says that, in the words every surface uses (NOT_IN_HA).
@@ -44,7 +48,7 @@ export default function UnavailableNotice({ device = "device", entityId }: Props
     + "known, so controls are disabled until it reports in again.";
   return (
     <div className="center" style={{ margin: "8px 0 20px" }}>
-      <span className="status-pill unavailable" title={detail} aria-label={detail}>
+      <span className={`status-pill ${tone}`} title={detail} aria-label={detail}>
         <AlertTriangle size={16} />
         UNAVAILABLE
       </span>

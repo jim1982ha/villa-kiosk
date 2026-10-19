@@ -15,10 +15,10 @@ import { alarmText } from "@/config/reading";
 import type { Threshold } from "@/config/ThresholdConfig";
 import { labelOf } from "@/config/EntityMap";
 import { deviceRoom, deviceRoomOrRecord, firstRoom, roomLabel } from "@/config/devicePlace";
-import { criticalDevices, deviceOf, recordEntity } from "@/config/deviceGroups";
-import { DUE_WORDS, faultTitle, fmAttention, STAGE_WORDS, stageOf, type FmStage } from "@/fm/fmEngine";
+import { devicesFor, recordEntity, type VillaDevices } from "@/config/deviceGroups";
+import { DUE_WORDS, faultTitle, fmAttention, stageOf, type FmStage } from "@/fm/fmEngine";
 import { lastNoted } from "@/fm/faultNotes";
-import { deviceWorkKey, groupByDevice, lineActions, overviewActions, type WorkAction, type WorkRecord } from "@/fm/deviceWork";
+import { deviceWorkKey, groupByDevice } from "@/fm/deviceWork";
 import { faultSource, type IssueSource } from "@/fm/issueSource";
 import type { FmData, FmTicketCheck } from "@/fm/fmTypes";
 import type { HassEntity } from "@/types/ha.types";
@@ -137,71 +137,6 @@ export function groupAttention(items: readonly AttentionItem[]): AttentionGroup[
     || a.title.localeCompare(b.title) || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
 }
 
-/** What a card's buttons do (owner, 2026-10-14) — on its records only (its own fault lines and those folded onto a
- *  live state's line by mergeFaults): fm/deviceWork.overviewActions' answer, in the order drawn. Empty when it holds
- *  none, so a card that is only what Home Assistant reports has no button. */
-export function cardActions(group: AttentionGroup): WorkAction[] {
-  return overviewActions(cardRecords(group), problemLines(group));
-}
-
-/** One line's own Close (deviceWork.lineActions): on a card holding several problems, each closes alone. */
-export function itemActions(group: AttentionGroup, item: AttentionItem): WorkAction[] {
-  return lineActions(itemRecords(item), problemLines(group));
-}
-
-/** How many of a card's lines carry a record a person can close. */
-function problemLines(group: AttentionGroup): number {
-  return group.items.filter((i) => itemRecords(i).length > 0).length;
-}
-
-/** The records of one line — its fault, or the fault folded onto its live state, with their copies. */
-function itemRecords(i: AttentionItem): WorkRecord[] {
-  const f = i.kind === "fault" ? i : i.fault;
-  return f ? [f.ticketId, ...(f.twins ?? [])].flatMap((id) => (id
-    ? [{ id, stage: f.stage ?? "fault" }] : [])) : [];
-}
-
-/** The records on a card — its faults and tickets, each with its stage. */
-export function cardRecords(group: AttentionGroup): WorkRecord[] {
-  return group.items.flatMap(itemRecords);
-}
-
-/** A problem's line inside ITS row: under a device, what attentionLine says ("Unlocked", "Entrance door unlocked");
- *  in a row that is the problem itself (no device), only a status the row does not show already ("In progress"; an
- *  open fault's line is empty — its title is the row's, its Close the line's). Every row shows its problems this way,
- *  one or several. */
-export function attentionLineIn(group: AttentionGroup, item: AttentionItem): string {
-  return group.key.startsWith("device:") ? attentionLine(item) : faultStatus(item) ?? item.detail ?? "";
-}
-
-/** What a fault's line must say of its status: nothing while it is open, its stage's word (fmEngine.STAGE_WORDS:
- *  "In progress") once someone took it.
- *  ⚠️ "OPEN FAULT:" BEFORE EVERY FAULT SAID NOTHING (owner, 2026-10-14: "this seems providing no value"): the row's
- *  icon says it is a fault and its Close that it is open — the words only pushed the text to a second line.
- *  undefined for anything that is not a fault. */
-function faultStatus(item: AttentionItem): string | undefined {
-  if (item.kind !== "fault") return undefined;
-  return item.stage === "ticket" ? STAGE_WORDS.ticket.word : "";
-}
-
-/** The icons a problem's line shows inside its row: its own sources only where the row's icons do not say them already
- *  — the row's are its first line's (CockpitOverview draws them beside the device's name).
- *  ⚠️ ONE ICON PER MEANING (owner, 2026-10-13: "the icon is redundant"): every line repeated its row's icon — a red "!"
- *  beside "House & Pool Relay" and again before "Open fault: …". A row mixing kinds (a lock "Unlocked" with a fault on
- *  its battery) still marks the line whose kind is not the row's. */
-export function lineIcon(group: AttentionGroup, item: AttentionItem): LineSources | null {
-  const own = lineSources(item), row = lineSources(group.items[0] ?? item);
-  return item === group.items[0] || JSON.stringify(own) === JSON.stringify(row) ? null : own;
-}
-
-/** A line's source icons and the status colour of each (owner, 2026-10-14: the source as an icon, in place of the
- *  warning sign; two stacked when a line holds a device's live state and its fault). */
-export interface LineSources { sources: IssueSource[]; severities: AttentionSeverity[] }
-export function lineSources(item: AttentionItem): LineSources {
-  const own = { sources: [item.source ?? "live"], severities: [attentionSeverity(item)] } as LineSources;
-  return item.fault ? { sources: [...own.sources, item.fault.source ?? "person"], severities: [...own.severities, attentionSeverity(item.fault)] } : own;
-}
-
 /** What a problem IS: its kind — and a CRITICAL offline device its own, where any other offline device is just
  *  offline (owner, 2026-10-18: "critical" = red and told at once). */
 export type AttentionTone = AttentionKind | "critical";
@@ -255,12 +190,6 @@ function foldTwins(items: AttentionItem[]): AttentionItem[] {
   return out;
 }
 
-/** "(6 times)" after a line that stands for several identical records (foldTwins); "" for one. */
-function timesSaid(item: AttentionItem): string {
-  const n = 1 + (item.twins?.length ?? 0);
-  return n > 1 ? ` (${n} times)` : "";
-}
-
 function mergeFaults(items: AttentionItem[]): AttentionItem[] {
   // copies: the villa model's items are shared by every render and profile — a fault written onto one would stay
   // there after it was closed
@@ -278,35 +207,6 @@ function mergeFaults(items: AttentionItem[]): AttentionItem[] {
   });
 }
 
-/** Does `title` already say `word` ("Laundry Room door unlocked" says "Unlocked"), as a whole word, whatever its case? */
-function saysWord(title: string, word: string): boolean {
-  const w = word.trim().toLowerCase();
-  if (!w) return false;
-  return new RegExp(`(^|[^\\p{L}\\p{N}])${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|[^\\p{L}\\p{N}])`, "u")
-    .test(title.toLowerCase());
-}
-
-/** One problem's line inside a device's row. A state needs no more than its
- *  word ("Unlocked", "Unavailable"); a fault or a schedule names itself, since
- *  its title is what is wrong, not the device ("Entrance door unlocked"; "In
- *  progress: …" once someone took it, faultStatus). */
-export function attentionLine(item: AttentionItem): string {
-  const titled = (i: AttentionItem) => { const st = faultStatus(i); return `${st ? `${st}: ${i.title}` : i.title}${timesSaid(i)}`; };
-  if (item.fault) {
-    const st = faultStatus(item.fault);
-    const fault = `${st ? `${st.toLowerCase()}: ` : ""}${item.fault.title}${timesSaid(item.fault)}`;
-    // ⚠️ "UNAVAILABLE — … OFFLINE FOR 9 H" SAID IT TWICE (owner, 2026-10-14): the fault on an unavailable line says the
-    // device is offline already. ⚠️ SO DID "UNLOCKED — #41 · LAUNDRY ROOM DOOR UNLOCKED" (owner, 2026-10-18): a state
-    // word the fault's title already says is not said before it. A word the fault does not say stays: "Not in Home
-    // Assistant", a live reading ("92 %").
-    const word = item.detail ?? "";
-    const said = (item.kind === "unavailable" && word === "Unavailable") || saysWord(item.fault.title, word);
-    return said ? fault.charAt(0).toUpperCase() + fault.slice(1) : `${word} — ${fault}`;
-  }
-  if (item.kind === "fault") return titled(item);
-  return item.kind === "schedule" ? `${item.detail}: ${item.title}` : item.detail ?? "";
-}
-
 /**
  * Everything currently wrong, in one list — replaces the split between the
  * HUD's unavailable-devices badge and Facility's separate attention badge.
@@ -316,7 +216,11 @@ export function attentionLine(item: AttentionItem): string {
  * `alert`).
  */
 export function buildAttentionItems(opts: {
-  unavailableIds: readonly string[];
+  /** The villa's devices (deviceGroups.villaDevices) — ASKED, never restated: which are not answering, which may raise
+   *  an alarm (its ids), each problem's device (deviceOf, the one fold every count uses), which are critical.
+   *  ⚠️ FOUR OPTIONS SAID IT AGAIN (architecture review, 2026-10-19): unavailableIds, selectableIds, the folding and
+   *  the critical list, and the critical devices were worked out a second time here from the last two. */
+  devices: VillaDevices;
   entities: Record<string, HassEntity>;
   entityMap: Record<string, EntityMapping>;
   /** The villa's per-entity alert overrides — what makes a reading red on
@@ -324,25 +228,16 @@ export function buildAttentionItems(opts: {
   alertThresholds: Record<string, Threshold>;
   resolvedRooms: Record<string, string>;
   fmData: FmData;
-  selectableIds: readonly string[];
-  /** member entity → the entity standing for its device
-   *  (deviceGroups.deviceFolding), so groupAttention folds a lock's own
-   *  alarm and a ticket raised on its battery sensor into ONE row. */
-  folding: ReadonlyMap<string, string>;
-  /** The villa's critical entities (useCriticalDevices: GET /critical-devices) — a device is critical when it, or any
-   *  entity folded onto it, is listed. Empty: nothing is (the list not read yet, or the villa has no such rule). */
-  critical?: ReadonlySet<string>;
 }): AttentionItem[] {
-  const { unavailableIds, entities, entityMap, alertThresholds, resolvedRooms, fmData, selectableIds, folding } = opts;
+  const { devices, entities, entityMap, alertThresholds, resolvedRooms, fmData } = opts;
   const items: AttentionItem[] = [];
-  // a critical entity stands for its device (the fold): the rule may name a lock's battery sensor, the model the lock
-  const criticalIds = criticalDevices(opts.critical, folding);
 
-  for (const id of unavailableIds) {
+  for (const id of devices.unavailable) {
     items.push({
       id: `unavailable:${id}`,
       kind: "unavailable",
-      critical: criticalIds.has(id),
+      // a critical entity stands for its device (the fold): the rule may name a lock's battery sensor, the model the lock
+      critical: devices.isCritical(id),
       title: labelOf(id, entityMap, entities),
       // an object the model names whose entity Home Assistant does not have says so, as everywhere (NOT_IN_HA)
       detail: missingFromHa(entities, id) ? NOT_IN_HA : "Unavailable",
@@ -389,13 +284,13 @@ export function buildAttentionItems(opts: {
   // rule, binary_sensors only and blind to config.alertThresholds: an
   // unlocked door, a sensor past its threshold, a binary_sensor the villa had
   // overridden were red on the map and absent from "Needs attention".
-  // Restricted to selectableIds (never a raw HA domain scan): a bare
+  // Restricted to the villa's devices (never a raw HA domain scan): a bare
   // Zigbee2MQTT relay-lock/config sub-entity is technically a binary_sensor
   // too, and was never meant to be villa-facing. An unavailable device is
   // never `alert` (its face is the amber "unavailable"), so it is listed once,
   // above, as that.
   const looks = storeLookSource(entities, { entityMap, alertThresholds });
-  for (const id of selectableIds) {
+  for (const id of devices.ids) {
     const entity = entities[id];
     if (!entity || !deviceLook(id, looks).alert) continue;
     items.push({
@@ -417,7 +312,7 @@ export function buildAttentionItems(opts: {
   // the worst case is a row of its own, as before grouping. Never by name.
   for (const i of items) {
     if (!i.entityId) continue;
-    const key = deviceOf(folding, i.entityId);   // the one fold every count and the Tickets tab use
+    const key = devices.deviceOf(i.entityId);   // the one fold every count and the Tickets tab use
     i.device = {
       key,
       label: labelOf(key, entityMap, entities),
@@ -433,12 +328,13 @@ export function buildAttentionItems(opts: {
 /** The villa's problems, role-blind — what the villa model holds. Nothing
  *  counts or shows these directly: a profile's view is attentionFor's. */
 export interface VillaProblems {
-  unavailableIds: string[];
-  selectableIds: string[];
+  /** The villa's devices the items were built over (VillaModel.devices). */
+  devices: VillaDevices;
   attentionItems: AttentionItem[];
 }
 
-/** What needs attention as ONE PROFILE is shown it. */
+/** What needs attention as ONE PROFILE is shown it — and the profile's devices (`devices`: only those it may open,
+ *  deviceGroups.devicesFor), the ONE view the Overview, the top bar and the Recap count from. */
 export interface VillaAttention extends VillaProblems {
   /** One row per device (groupAttention) — what the badge, the phone menu and
    *  the Cockpit list COUNT and show. */
@@ -471,21 +367,12 @@ export function attentionFor(att: VillaProblems, may: (entityId: string) => bool
   // from problems this profile may open, so it cannot name a hidden one.
   const attentionGroups = groupAttention(attentionItems);
   return {
-    ...att,
-    unavailableIds: att.unavailableIds.filter(may),
-    selectableIds: att.selectableIds.filter(may),
+    devices: devicesFor(att.devices, may),
     attentionItems,
     attentionGroups,
     health: villaHealthFrom(attentionGroups),
   };
 }
-
-/** The top bar's Cockpit button, as the villa's health says it: red for danger, amber for a warning, plain when all is
- *  fine. ⚠️ THE LEVEL WAS WORKED OUT AND NEVER SHOWN (architecture review, 2026-10-19 evening): the button turned red
- *  for ANY open problem — one late pool task, one ordinary sensor offline — while 2.496.410 promised red only for an
- *  alarm or a critical device offline. */
-export const healthClass = (health: VillaHealth): string =>
-  health.level === "danger" ? " has-alert" : health.level === "warn" ? " has-warn" : "";
 
 /** The level is read from EVERY problem (attentionSeverity: danger is an alarm or a CRITICAL device offline, owner
  *  2026-10-18; anything else a warning); the count is the ROWS, the number the badge shows. */

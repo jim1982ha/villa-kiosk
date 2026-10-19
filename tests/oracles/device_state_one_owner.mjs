@@ -130,8 +130,12 @@ const unknownReaders = [
 // map's amber badge, as the Cockpit's offline lists (stateColors.contactOf; architecture review scan 1, 2026-10-19:
 // an "unknown" sensor rang amber on the map, and a lock in "unknown" was painted red, while the Cockpit called it fine)
 const { contactOf } = await import("@/utils/stateColors");
+// ⚠️ AND THE HISTORY BAR SPLITS THEM TOO (owner, 2026-10-19): statusKeyFor read "unknown" as "unavailable", so an
+// unknown stretch was painted the amber of lost contact under a quiet badge. "unknown" is idle now.
 const bothMembersAgree = ["unavailable", "unknown"].every((st) =>
-  UNKNOWN_STATES.has(st) && isUnavailable(ent("lock.a", st)) === true && statusKeyFor(st, "lock") === "unavailable")
+  UNKNOWN_STATES.has(st) && isUnavailable(ent("lock.a", st)) === true)
+  && statusKeyFor("unavailable", "lock") === "unavailable" && statusKeyFor("unknown", "lock") === "idle"
+  && statusKeyFor("", "sensor") === "unavailable" && statusKeyFor("none", "sensor") === "unavailable"
   && badgeFaceAndRing(read("lock", ent("lock.a", "unavailable"))).face === "unavailable"
   && contactOf("unavailable") === "lost" && contactOf(undefined) === "lost" && contactOf("unknown") === "no-value"
   && contactOf("locked") === "ok";
@@ -197,7 +201,7 @@ ck("the device_class table is still consulted", binarySensorClassInfo("moisture"
   const { badgeKindFor } = await import("@/utils/deviceActivity");
   ck("a linked entity on counts as ON for a room chip, never as needs-attention", badgeKindFor({ ...read("sensor", power), linkedOn: true }) === "on");
 }
-ck("both members of UNKNOWN_STATES show no value; only \"unavailable\" is lost contact (contactOf)", bothMembersAgree);
+ck("both members of UNKNOWN_STATES show no value; only \"unavailable\" is lost contact (contactOf) — on the history bar too", bothMembersAgree);
 ck("  ...an \"unknown\" device is quiet on the map — never the amber of lost contact, never a lock's red", unknownIsQuiet);
 ck("no reader spells the pair out for itself", strayPairs.length === 0);
 ck("  ...and the deliberately wider set is still wider",
