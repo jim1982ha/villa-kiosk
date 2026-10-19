@@ -173,7 +173,7 @@ console.log("\n  the caller:");
      !/this\.pass\.(chipRoom|groupsFromBuckets|pairFocusedRoom|placeEntityGroups|settleChips|deriveChips)\(/.test(ev)
      && (ev.match(/this\.pass\.begin\(\);/g) ?? []).length === 1);
   ck("EntityVisuals draws a badge by the pass's own predicate, and takes its cards from it",
-     /&& this\.pass\.drawnBadge\(s\.id\);/.test(ev) && /linkOffsetYInPixels = -cardLift\(lay, scale\);/.test(ev));
+     /isVisible = drawnThisPass\(s, this\.pass\);/.test(ev) && /linkOffsetYInPixels = -cardLift\(lay, scale\);/.test(ev));
   ck("  ...and keeps none of its state, steps or the helpers that moved",
      !/private (roomClustered|entityGrouped|chipWhyCount|seatLog|pendingGroups)\b|private (placeEntityGroups|pairFocusedRoom|settleChips|dropEscalatedGroups|chipRoom|deriveChips|planeOf|measuredAt|sortCardMembers|drawnCells|cellMax)\(/.test(ev));
 }

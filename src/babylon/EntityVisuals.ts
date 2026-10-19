@@ -110,7 +110,8 @@ import { Storeys } from "./storeys";
 import { FloorProbe } from "./floorProbe";
 import { axisWorldScale, stripExtent } from "./meshUnits";
 import type { LightReading } from "./lightPoolSet";
-import { OcclusionSweep, owesLayout, wallStep } from "./occlusionSweep";
+import { OcclusionSweep, owesLayout } from "./occlusionSweep";
+import { BadgeFrame, drawnThisPass } from "./badgeFrame";
 import { LayoutGate } from "./layoutGate";
 import { WalkerView, walkExemptRooms } from "./walkerView";
 import type { RoomChip } from "./roomChips";
@@ -745,11 +746,9 @@ export class EntityVisuals {
   // zoom-only decision, same outputs. Only allocation and scheduling change.
   /** The badge layout's gate — marking it asks for the frame that draws the mark (layoutGate.ts). */
   private readonly gate = new LayoutGate(() => this.requestRender());
-  /** Grow-only store of ShownLabel objects, reused across frames. Kept
-   *  SEPARATE from `shown` (which is truncated to the live count each pass) so
-   *  truncation cannot drop the objects and force reallocation next frame. */
-  private shownPool: ShownLabel[] = [];
-  private shown: ShownLabel[] = [];
+  /** This pass's badges before grouping, pooled across frames (badgeFrame.ts: which take part, where, behind a
+   *  wall, drawn — the wiring a check drives by value). */
+  private readonly frame = new BadgeFrame();
   private boxesPool: { halfW: number; halfH: number; cy: number }[] = [];
   private boxes: { halfW: number; halfH: number; cy: number }[] = [];
   /** The placement pass's answer: does badge i (of this pass's `shown`) draw
@@ -3278,75 +3277,28 @@ export class EntityVisuals {
 
     // Every badge that passes the non-view culls (category / floor / enabled).
     // Deliberately NOT filtered by what is currently framed — see groupBadges.
-    // Reused across frames (see shownPool) rather than rebuilt.
-    const shown = this.shown;
-    let shownCount = 0;
-
+    // Pooled across frames (badgeFrame.ts) rather than rebuilt.
+    // NOTE: suppressedEntityIds (hidden-in-HA / config-diagnostic) is
+    // deliberately NOT filtered here (badgeEligible says why). The badge must
+    // vanish with its device when FloorManager hides that floor: badgeEligible
+    // reads the entity's bound MESH, not the anchor's own parent chain (a fan's
+    // anchor sits on its spin pivot's non-rotating parent, never disabled).
+    const frame = this.frame;
+    frame.begin();
     for (const [id, lbl] of this.labels) {
       if (!this.badgeEligible(id, lbl, hidden)) {
         lbl.container.isVisible = false;
         continue;
       }
-      // NOTE: suppressedEntityIds (hidden-in-HA / config-diagnostic) is
-      // deliberately NOT filtered here. A previous version hid the badge
-      // entirely for any suppressed entity — which regressed every UniFi
-      // access-point "State" sensor (diagnostic-category by the integration's
-      // own convention) off the map, even though each was deliberately bound
-      // to real geometry. The map represents physical devices spatially; HA's
-      // "diagnostic" classification is about decluttering a flat SETTINGS
-      // list, a different concern entirely — a device someone bothered to
-      // bind to a mesh should stay tappable regardless of it. The room-
-      // cluster CHIP's count is filtered instead (see updateClusters), which
-      // is the only place a mismatch against SummaryGroupPanel's list
-      // actually mattered.
-      // The badge must vanish with its device when FloorManager hides that
-      // floor. Read enabled-state/floorIndex from the entity's actual bound
-      // mesh (byEntity), not the anchor's OWN parent chain: most anchors are
-      // parented straight to their mesh (see buildLabelAnchors) so the two
-      // agree, but a fan's anchor is deliberately detached onto its spin
-      // pivot's non-rotating parent (see detachFanLabelAnchor) so the badge
-      // doesn't spin with the blades — that parent is a shared container
-      // FloorManager never touches, so it's always "enabled" with no
-      // floorIndex of its own. Reading the anchor's parent for THAT case
-      // silently stopped culling the fan's badge on the other floor.
-      // The anchor's WORLD position is what grouping runs on (see groupBadges);
-      // its projection is only needed to draw it. Anchors projecting behind
-      // the camera (z outside [0,1]) have no valid screen position, so they
-      // can't be drawn — but they still take part in grouping, exactly so
-      // that turning the camera can't change how a room is presented.
       const wp = lbl.anchor.getAbsolutePosition();
       const p = this.projTmp;
       Vector3.ProjectToRef(wp, Matrix.IdentityReadOnly, tm, vp, p);
-      // Reuse this slot's object if the pool already has one — only a badge
-      // count above the high-water mark ever allocates, so the steady state
-      // allocates nothing at all.
-      let s = this.shownPool[shownCount];
-      if (!s) {
-        s = {
-          id, lbl, x: 0, y: 0, wx: 0, wy: 0, wz: 0, sx: 0, sy: 0, sz: 0,
-          inFront: false, occluded: false,
-        };
-        this.shownPool[shownCount] = s;
-      }
-      s.id = id;
-      s.lbl = lbl;
-      s.x = p.x;
-      s.y = p.y;
-      s.wx = wp.x;
-      s.wy = wp.y;
-      s.wz = wp.z;
-      s.ty = wp.y - (this.sightDrop.get(id) ?? 0);
-      s.inFront = p.z >= 0 && p.z <= 1;
-      s.occluded = this.occlusion.occluded.has(id);
-      shown[shownCount] = s;
-      shownCount++;
+      frame.add(id, lbl, wp.x, wp.y, wp.z, p.x, p.y, p.z, this.sightDrop.get(id) ?? 0, this.occlusion.occluded.has(id));
     }
-    // Truncate to this frame's count. The objects themselves stay alive in
-    // shownPool, so refilling next frame reuses them.
-    shown.length = shownCount;
+    const shown = frame.end();
     // Answers are for the pose this pass is drawing, so this runs AFTER the
     // world positions are collected and BEFORE anything reads `occluded`.
-    this.refreshWallOcclusion(shown, cam);
+    this.refreshWallOcclusion(cam);
 
     // ── The focus, and how long each half of it lasts: roomFocus.ts ────────
     // Resolved BEFORE any grouping runs, so a single pass cannot group with a
@@ -3540,13 +3492,8 @@ export class EntityVisuals {
       // be small: there is no per-badge displacement to set.
       s.lbl.container.linkOffsetXInPixels = 0;
       s.lbl.container.linkOffsetYInPixels = baseY;
-      s.lbl.container.isVisible = s.inFront
-        // A wall between the eye and the device, while walking. Sits beside
-        // `inFront` deliberately: both are gates on DRAWING a badge whose
-        // grouping has already been decided, so neither can move a badge or
-        // change which pile it belongs to.
-        && !s.occluded
-        && this.pass.drawnBadge(s.id);
+      // in front, not behind a wall while walking, kept by the pass (badgeFrame.drawnThisPass)
+      s.lbl.container.isVisible = drawnThisPass(s, this.pass);
     }
     this.renderChips(chips);
     this.updateEntityGroups(shown, pending);
@@ -3619,23 +3566,18 @@ export class EntityVisuals {
    * it (see floorProbe's header) — so a hidden storey's slab, or a ceiling
    * hidden in overview, cannot occlude anything.
    */
-  private refreshWallOcclusion(shown: ShownLabel[], cam: Camera): void {
-    if (!WALL_OCCLUSION || !this.firstPerson || shown.length === 0) {
-      // Leaving first-person must not strand a hidden badge — the overview has
-      // no notion of occlusion at all.
-      if (this.occlusion.occluded.size) {
-        this.occlusion.reset(true);
-        for (const s of shown) s.occluded = false;
-      }
-      return;
-    }
-    // A TIME budget, halved on a phone — see occlusionSweep.ts.
-    const budget = this.pointer === "coarse" ? OCCLUSION_MS_COARSE : OCCLUSION_MS_BUDGET;
-    const pass = wallStep(this.occlusion, shown, cam.globalPosition, budget, () => this.markLayoutDirty());
-    if (pass === "idle") return;
+  private refreshWallOcclusion(cam: Camera): void {
+    // A TIME budget, halved on a phone — see occlusionSweep.ts. Off the walk, or with nothing shown, the frame
+    // forgets every answer (badgeFrame.walls).
+    const pass = this.frame.walls(this.occlusion, {
+      enabled: WALL_OCCLUSION, walking: this.firstPerson, eye: cam.globalPosition,
+      budgetMs: this.pointer === "coarse" ? OCCLUSION_MS_COARSE : OCCLUSION_MS_BUDGET,
+      markDirty: () => this.markLayoutDirty(),
+    });
+    if (pass === "off" || pass === "idle") return;
     // Settling: no rays while moving, but a frame must come to start the sweep
     // the moment the camera stops.
-    if (pass !== "settling") this.reportWalkCost(shown.length);
+    if (pass !== "settling") this.reportWalkCost(this.frame.shown.length);
     // owed a pass (wallStep marked the layout dirty): a frame must come, or the gate never opens again
     if (owesLayout(pass)) this.requestRender();
   }

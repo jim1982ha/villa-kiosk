@@ -1,3 +1,17 @@
+## 2.496.422
+
+### Changed
+- Villa presence: the latest movement's history (1h · 12h · 24h · 7d) is drawn right in the window, as the sensor's
+  own window draws it, and its row no longer opens anything.
+
+### Under the hood
+- The map's per-moment badge pass (which badges take part, where each stands, which are behind a wall while walking,
+  which are drawn) is one small piece (babylon/badgeFrame.ts) that a check now runs with real values: the line of
+  sight aims at the device, not its floating badge (2.496.311's defect), leaving the walk forgets every wall, a
+  badge behind the camera or a wall is never drawn, and the badges are reused every frame (no new memory per frame).
+  Two checks that only read the code's text are replaced. Nothing on the map changes.
+- One drawing of a sensor's history (panels/ReadingHistory), shared by its own window and the presence window.
+
 ## 2.496.421
 
 ### Fixed
