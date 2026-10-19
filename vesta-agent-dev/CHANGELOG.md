@@ -1,3 +1,30 @@
+## 0.12.265
+
+What you will see:
+- A critical alert rings your group once. The villa's own message there becomes the alert's card (its number, "To:",
+  Done / Need help); the desk no longer deletes it to post the same card again. The facility manager's chat and your
+  private chat each get their one copy as before.
+- "To:" follows the alert's priority, never the chat it was posted in: a P3 — kept for the next daily digest — reads
+  "To: digest" in your group (it read "To: Owner"), a P4 "To: log"; a P2 reads "To: FM", and "To: Owner & FM" once
+  you are brought in. The same line on every copy of the alert.
+- Every copy of an alert carries the same title word: an alert closed with Done and reopened from the Cockpit reads
+  "(existing)" in your group as in the facility manager's chat (your group kept "(closed)"); what closed it ("Done on
+  … (Wayan).") stays your group's own last line, and the reopen request stays the facility manager's. Each chat keeps
+  listing its own steps only.
+- Approvals say who decided and when the way a pressed button does: "Approved on 19/10/2026 10:00 (JM).", "Refused on
+  … (JM). Nothing was done.", "Expired on …: nothing was done." — one shape for every line about a person's act.
+- A fault the VESTA Agent closed itself ("Cleared: …") and that someone then renamed in the Cockpit no longer shows
+  "Closed in the Cockpit on … (Facility manager)" in its alert's history: how a fault was closed is read the way the
+  Cockpit itself reads it, by the step that really closed it.
+- One fault the Cockpit refuses to record no longer stops the others: the rest are still recorded and brought up to
+  date, the log says the Cockpit's own reason, and a chat asking for a fault reads that reason instead of a code word.
+- A night check's fault you reopen in the Cockpit is announced under the title "Fault reopened in the Cockpit" (it
+  said "Kiosk" over a message saying "Cockpit"); who receives it and the title are the preventive-maintenance skill's
+  settings (`reopened_in_kiosk`), sent within 5 minutes.
+- An investigation covering a reload of the villa's rules says it in one line ("The rules were reloaded: every rule
+  ran once to re-check itself, none of them acted"), on the answer and the page, instead of one "Automation … ran …
+  check whether it did" line per rule; a rule switched on or off by hand is no longer counted as a run.
+
 ## 0.12.264
 
 What you will see:
