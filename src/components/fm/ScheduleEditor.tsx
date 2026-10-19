@@ -11,7 +11,7 @@ import { useState } from "react";
 import Dropdown from "@/components/common/Dropdown";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
-import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
+import { useFmData } from "@/fm/FmDataContext";
 import { scheduleStatus, shortDate } from "@/fm/fmEngine";
 import type { FmSchedule } from "@/fm/fmTypes";
 import AgentMark from "./AgentMark";
@@ -57,8 +57,7 @@ export default function ScheduleEditor() {
 
   const save = async () => {
     if (!write.ok) { setFormError(write.problem); return; }
-    const { done, note: why } = fmSaveOutcome(
-      write.kind === "edit" ? await updateSchedule(write.id, write.patch) : await addSchedule(write.fields));
+    const { done, note: why } = write.kind === "edit" ? await updateSchedule(write.id, write.patch) : await addSchedule(write.fields);
     // Close only when saved or queued; a refused save keeps the draft (2.496.252).
     if (done) cancel(); else setFormError(why);
   };

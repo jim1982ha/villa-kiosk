@@ -12,7 +12,8 @@ import { Wrench } from "lucide-react";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useDeviceIdentity } from "@/config/VillaModel";
 import { useFmData } from "@/fm/FmDataContext";
-import { faultTitle, localStamp, stageOf, ticketStats } from "@/fm/fmEngine";
+import { faultTitle, localStamp, STAGE_WORDS, stageOf, ticketStats } from "@/fm/fmEngine";
+import { pillClass } from "@/fm/tone";
 import { closedActions, openCounts, ticketActions, ticketCards, workRecord, type DeviceWork, type WorkAction } from "@/fm/deviceWork";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
 import RecordCard, { type RecordCardProps } from "./RecordCard";
@@ -95,6 +96,12 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
     );
   };
 
+  /** A record's status pill: its stage's one word and tone (fmEngine.STAGE_WORDS — the recap's word too). */
+  const stagePill = (t: FmTicket) => {
+    const s = STAGE_WORDS[stageOf(t)];
+    return { text: s.word, tone: pillClass(s.tone) };
+  };
+
   /** A ticket in progress: ONE card — every record taken on with it, its pill on the first, its buttons inside at the
    *  bottom (owner, 2026-10-14: the device's name above it said again what its chip says; the pill and the buttons sat
    *  outside the card). */
@@ -103,7 +110,7 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
     return (
       <div key={g.key} className="fm-record-card">
         <div className="fm-ticket-records">
-          {g.records.map((t, i) => record(t, i === 0 ? { text: "In progress", tone: "due-soon" } : undefined,
+          {g.records.map((t, i) => record(t, i === 0 ? stagePill(t) : undefined,
             i === 0 ? <WorkButtons actions={ticketActions(g.records.map(workRecord))} cardKey={g.key} closer={closer}
               onAction={onAction} /> : undefined, false))}
         </div>
@@ -140,7 +147,7 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
       <FoldedList title="Closed" rows={closed} unit="closed record">
         {(t) => (
           // reopened, it is a fault again: back on the Overview's list (the VESTA Agent reads it, never guesses)
-          record(t, { text: "Resolved", tone: "ok" },
+          record(t, stagePill(t),
             <WorkButtons actions={closedActions(workRecord(t))} cardKey={`closed:${t.id}`} closer={closer} onAction={onAction} />)
         )}
       </FoldedList>

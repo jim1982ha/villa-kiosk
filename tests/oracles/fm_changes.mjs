@@ -58,6 +58,22 @@ ck("an unknown fault changes nothing", E.withTicketAdvanced(t0, "nope", "resolve
   ck("  ...a patch that does not change the title records no step",
      E.withTicketPatch(t0, "t1", { note: "x", title: "Leak" }, { now: "later" }).tickets[0].updates === undefined);
 }
+{
+  // architecture review 2026-10-19: a rename takes the Agent's duration pattern away AT ONCE — the card kept saying
+  // "offline for 6 d 2 h" (the pattern, worded now) until the Agent read the step and cleared it; never with it off
+  const at = "2026-09-27T10:00:00.000Z";
+  const agentFault = { ...EMPTY_FM_DATA, tickets: [{ id: "t5", status: "open", openedAt: "2026-09-20T00:00:00.000Z", photoIds: [], alertNumber: 5,
+    title: "Pump offline for 129 h.", titlePattern: "Pump offline for {since}.", since: "2026-09-20T00:00:00.000Z" }] };
+  const before = E.faultTitle(agentFault.tickets[0], Date.parse(at));
+  const after = E.withTicketPatch(agentFault, "t5", { title: "Pump plug dead" }, { now: at }, "Owner").tickets[0];
+  ck("a rename takes the pattern away: the card says the new title at once, though `since` is old",
+     before.startsWith("#5 · Pump offline for ") && !before.includes("{since}") && E.faultTitle(after, Date.parse(at)) === "#5 · Pump plug dead",
+     [before, E.faultTitle(after, Date.parse(at))]);
+  ck("  ...the pattern and its moment are ABSENT on the record (agent-contract.json: absent when a person retitled it)",
+     !("titlePattern" in after) && !("since" in after) && after.updates.at(-1).kind === "retitled", Object.keys(after));
+  ck("  ...a patch that keeps the title keeps them: the Agent's wording goes on",
+     E.withTicketPatch(agentFault, "t5", { note: "x" }, { now: at }).tickets[0].titlePattern === "Pump offline for {since}.");
+}
 const patched = E.withTicketPatch(t0, "t1", { status: "resolved" }, { now: "2026-09-27T13:00:00.000Z" });
 ck("a patch to resolved stamps the time; one that keeps it keeps it",
    patched.tickets[0].resolvedAt === "2026-09-27T13:00:00.000Z"

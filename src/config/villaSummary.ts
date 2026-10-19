@@ -23,7 +23,7 @@ import type { HassEntity } from "@/types/ha.types";
 // POWER, by name: "N on" counts a device switched on (deviceActivity owns both
 // meanings of "on"; a lights/AC tile counts this one).
 import { isSwitchedOn } from "@/utils/deviceActivity";
-import { isOffline, lockBolt } from "@/utils/stateColors";
+import { contactOf, isOffline, lockBolt, type LockBolt } from "@/utils/stateColors";
 import { effectiveSensorClass, toBaseUnit } from "./SensorClasses";
 import { levelForValue, type Threshold } from "./ThresholdConfig";
 import { domainOf } from "@/utils/entityDomain";
@@ -31,14 +31,29 @@ import { domainOf } from "@/utils/entityDomain";
 /** Only `.has` is called — villaDevices(...) satisfies it, and so does a Set. */
 export type Allowed = { has(entityId: string): boolean };
 
+/** Every lock, in exactly ONE of the five lists after `ids` — the bolt as stateColors.lockBolt reads it, and lost
+ *  contact as contactOf says it. ⚠️ `unknown` HELD FOUR FACTS (architecture review, 2026-10-19): jammed, moving,
+ *  unavailable and "no value" were one list, so the readiness check said "not reporting" of a lock that had just
+ *  said "jammed", and an unavailable lock was counted under Doors AND under "All devices reporting". */
 export interface LockFacts {
   ids: string[];
   locked: string[];
   unlocked: string[];
-  /** Neither locked nor unlocked: unavailable, jammed, unknown, locking… —
-   *  never counted as unlocked, because that is a claim about a door. */
+  /** The lock said so: not secured, the retry stays offered. */
+  jammed: string[];
+  /** Locking or unlocking: on its way, neither rest state observed. */
+  moving: string[];
+  /** Contact lost (unavailable): the devices-online list's — never counted as a door fact as well. */
+  lost: string[];
+  /** The device answers but the lock gives no value ("unknown") — never counted as unlocked, because that is a claim
+   *  about a door. */
   unknown: string[];
 }
+
+/** The tile's and the checks' word for each lock fact that is not a rest state — one word per fact, everywhere. */
+export const LOCK_FACT_WORDS: Record<"jammed" | "moving" | "lost" | "unknown", string> = {
+  jammed: "Jammed", moving: "Moving", lost: "Unavailable", unknown: "Unknown",
+};
 export interface OnOffFacts { ids: string[]; on: string[] }
 export interface ClimateFacts {
   ids: string[];
@@ -86,12 +101,17 @@ const idsOf = (es: readonly HassEntity[]) => es.map((e) => e.entity_id);
 export function lockFacts(entities: Record<string, HassEntity>, allowed?: Allowed, index?: DomainIndex): LockFacts | null {
   const locks = ofDomain(entities, "lock", allowed, index);
   if (!locks.length) return null;
+  // the one reading of a lock (stateColors.lockBolt): an "open" lock is unlocked too; jammed, moving, unknown are
+  // neither — and "unknown" is split by contact (contactOf): lost, or answering with no value
+  const bolt = (b: LockBolt) => idsOf(locks.filter((l) => lockBolt(l.state) === b));
   return {
     ids: idsOf(locks),
-    // the one reading of a lock (stateColors.lockBolt): an "open" lock is unlocked too; jammed, moving, unknown are neither
-    locked: idsOf(locks.filter((l) => lockBolt(l.state) === "thrown")),
-    unlocked: idsOf(locks.filter((l) => lockBolt(l.state) === "open")),
-    unknown: idsOf(locks.filter((l) => !["thrown", "open"].includes(lockBolt(l.state)))),
+    locked: bolt("thrown"),
+    unlocked: bolt("open"),
+    jammed: bolt("jammed"),
+    moving: bolt("moving"),
+    lost: idsOf(locks.filter((l) => lockBolt(l.state) === "unknown" && contactOf(l.state) === "lost")),
+    unknown: idsOf(locks.filter((l) => lockBolt(l.state) === "unknown" && contactOf(l.state) !== "lost")),
   };
 }
 

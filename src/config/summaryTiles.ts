@@ -8,7 +8,7 @@ import type { ComponentType } from "react";
 import { Snowflake, Zap, CloudSun } from "lucide-react";
 import type { Threshold } from "./ThresholdConfig";
 import { locksGroup, lightsGroup } from "./summaryGroups";
-import { villaSummary } from "./villaSummary";
+import { LOCK_FACT_WORDS, villaSummary } from "./villaSummary";
 import { fmtTemp } from "@/utils/panelRules";
 import { formatUnitValue, formatSensorParts } from "@/utils/entityValue";
 import type { WeatherStation } from "./weatherStation";
@@ -78,10 +78,14 @@ export function deriveTiles(
   const locksG = locksGroup(facts.locks, entities, entityMap);
   if (locksG && facts.locks) {
     const f = facts.locks;
-    const locks = f.ids.map((id) => entities[id]).filter((e): e is HassEntity => !!e);
-    const unlockedN = f.unlocked.length;
     const allLocked = f.locked.length === f.ids.length;
     const single = f.ids.length === 1;
+    // The one number that matters first — how many are open — then each fact the lock itself said, one word per fact
+    // (villaSummary.LOCK_FACT_WORDS, the readiness check's too): "1 Jammed", "1 Moving", "1 Unavailable", "1 Unknown".
+    // ⚠️ "N UNKNOWN" STOOD FOR FOUR FACTS (architecture review, 2026-10-19): a jammed lock, one locking, one lost and
+    // one with no value all read "Unknown" here while the alarm beside it said "Jammed".
+    const worst = (["unlocked", "jammed", "moving", "lost", "unknown"] as const).find((k) => f[k].length > 0);
+    const word = (k: NonNullable<typeof worst>) => (k === "unlocked" ? "Unlocked" : LOCK_FACT_WORDS[k]);
     tiles.push({
       id: "__locks", kind: "locks",
       icon: locksG.icon,
@@ -103,15 +107,11 @@ export function deriveTiles(
       // Same shape as the single-lock branch above and the light tile's "2 On".
       // The single lock's word is lockFacts' too — which list it is in — never
       // a second reading of its raw state beside the facts the tile already has.
-      value: single
-        ? (f.locked.length ? "Locked" : f.unlocked.length ? "Unlocked" : locks[0].state)
-        : allLocked ? "Locked"
-          : unlockedN > 0 ? `${unlockedN} Unlocked`
-            // Not all locked, yet none actually UNLOCKED: every remainder is
-            // unavailable or jammed. Counting those as unlocked would be a
-            // plain lie about a door, on the tile whose whole job is to be
-            // trusted at a glance — so they are reported as what they are.
-            : `${f.unknown.length} Unknown`,
+      // Not all locked, yet none actually UNLOCKED: every remainder is jammed,
+      // moving, lost or without a value. Counting those as unlocked would be a
+      // plain lie about a door, on the tile whose whole job is to be trusted at
+      // a glance — so they are reported as what they are.
+      value: allLocked || !worst ? "Locked" : single ? word(worst) : `${f[worst].length} ${word(worst)}`,
       tone: allLocked ? "neutral" : "warn",
       category: "access_control",
       entityIds: locksG.entityIds,

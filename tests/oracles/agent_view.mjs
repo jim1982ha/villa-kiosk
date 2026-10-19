@@ -18,6 +18,7 @@ const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf
 const online = parseAgentStatus({ state: "online", last_seen: "2026-09-29T00:00:00Z", offline_after_minutes: 5 });
 const offline = parseAgentStatus({ state: "offline", last_seen: null });
 const off = parseAgentStatus({ state: "not_configured" });
+const { nextCheck } = await import("@/fm/faultTiming");
 const msg = (over = {}) => parseAgentMessages({ messages: [{
   id: "msg_1", title: "Pump", kind: "recommendation", severity: "warning", state: "open",
   buttons: [{ id: "approve", label: "Approve" }], can_answer: true, created_at: "2026-09-29T00:00:00Z", ...over,
@@ -248,6 +249,18 @@ console.log("\n  the agreement's sample, as the app reads it (2.496.234):");
      contract.message.kinds.every((k) => parseAgentMessages({ messages: [{ ...want, kind: k }] })[0].kind === k)
      && contract.message.severities.every((v) => parseAgentMessages({ messages: [{ ...want, severity: v }] })[0].severity === v)
      && contract.message.states.every((v) => parseAgentMessages({ messages: [{ ...want, state: v }] })[0].state === v));
+}
+
+// a card's "Next check" with the Agent gone quiet: the proxy answers no cadence while it is offline (tests/agent-interface.py,
+// architecture review 2026-10-19), and the card says who checks, never a number the Agent is no longer keeping
+console.log("\n  the Agent's clock, only while it is online:");
+{
+  const alert = [{ source: "alert", check: "minutes" }];
+  const quiet = parseAgentStatus({ state: "offline", last_seen: "2026-09-29T00:00:00Z", cadence: null });
+  ck("offline: 'Next check: by the VESTA Agent' — no 'within 5 min' from a heartbeat days old",
+     quiet.cadence === null && nextCheck(alert, quiet.cadence) === "Next check: by the VESTA Agent", nextCheck(alert, quiet.cadence));
+  const awake = parseAgentStatus({ state: "online", last_seen: "2026-09-29T00:00:00Z", cadence: { checkMinutes: 5, nightlyAt: "02:00" } });
+  ck("  ...online, its own number", nextCheck(alert, awake.cadence) === "Next check: within 5 min");
 }
 
 done("✅ the agent is shown to the right people, with the right buttons");

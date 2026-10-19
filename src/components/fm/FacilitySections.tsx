@@ -17,6 +17,7 @@
 // Faults a dozen — and letting the dialog resize around every tab switch was
 // jarring. See that class's own comment in styles.css.
 
+import { useVillaAttention } from "@/components/cockpit/useVillaAttention";
 import { useMemo, useState } from "react";
 import type { ModalTab } from "@/components/common/ModalTabs";
 import {
@@ -27,7 +28,7 @@ import { usePresence } from "@/config/usePresence";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { roleCan } from "@/auth/permissions";
-import { useFmData, useFacilityLiveView } from "@/fm/FmDataContext";
+import { useFmData } from "@/fm/FmDataContext";
 import { buildReadiness, type CheckTarget } from "@/fm/readiness";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import { buildDeviceOptions } from "./DeviceSearchPicker";
@@ -55,8 +56,8 @@ export const FACILITY_TABS: ModalTab<FacilityTab>[] = [
  * One Facility tab's content, inside the Cockpit (2.496.273: the Facility
  * window was merged into the Cockpit — owner, 2026-10-04: "remove 1 menu from
  * the top bar … show the same information in a single one"). Mounted only
- * while a Facility tab is open, so the maintenance record is watched live only
- * then (useFacilityLiveView).
+ * while a Facility tab is open; the maintenance record is watched live by the
+ * Cockpit window itself, whichever tab shows (useFacilityLiveView, registered by the window).
  */
 export default function FacilitySections({
   tab, onOpenEntity, editTicket, onTicketEditOpened,
@@ -76,14 +77,15 @@ export default function FacilitySections({
   const presenceLine = usePresence()?.recap ?? null;
   const { role } = useProfile();
   const { data, ready, saveError } = useFmData();
-  useFacilityLiveView();
   const { devices } = useVillaModel();
   const totalDeviceCount = devices.ids.length;
 
   // The list a readiness check opens — its own devices (readiness.CheckTarget).
   const [checkList, setCheckList] = useState<CheckTarget | null>(null);
-  const readiness = useMemo(() => buildReadiness(entities, data, devices, config.entityMap),
-    [entities, data, devices, config.entityMap]);
+  // the villa's alarms as the Cockpit lists them (one rule: attention's), so readiness and the top bar agree
+  const { attentionItems } = useVillaAttention();
+  const readiness = useMemo(() => buildReadiness(entities, data, devices, config.entityMap, attentionItems),
+    [entities, data, devices, config.entityMap, attentionItems]);
   const deviceOptions = useMemo(
     () => buildDeviceOptions(devices, config.entityMap, entities, resolvedRooms),
     [devices, config.entityMap, entities, resolvedRooms],

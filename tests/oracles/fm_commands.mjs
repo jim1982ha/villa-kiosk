@@ -6,6 +6,8 @@ register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { applyFmCommand } = await import("@/fm/fmCommands");
 const { faultWhen } = await import("@/fm/faultNotes");
+const { ROLE_LABELS } = await import("@/auth/roles");
+const { faultSource } = await import("@/fm/issueSource");
 
 let n = 0;
 const k = (by) => ({ now: "2026-10-14T06:20:00.000Z", id: (p) => `${p}${++n}`, by });
@@ -21,6 +23,15 @@ ck("a new fault: open, stamped now, its first step the raising — by the profil
 ck("  ...and its card says so", faultWhen(t, stamp) === "Opened 06:20 by Owner", faultWhen(t, stamp));
 const guest = applyFmCommand(EMPTY, { type: "addTicket", ticket: { title: "Noisy AC", photoIds: [], reportedBy: "guest" } }, k("Guest"));
 ck("a guest's report: by Guest", faultWhen(guest.tickets[0], stamp) === "Opened 06:20 by Guest");
+// The stamp is the role table's label (roles.json profiles.<role>.label — ONE table for the app and the proxy,
+// architecture review 2026-10-19), and it is the word STORED on every step so far: "Guest", "Owner", "Facility
+// manager". A renamed label is a decision about old records too, so the words are pinned here on purpose.
+ck("the stamp is the role table's label — the word every stored step carries",
+   ROLE_LABELS.guest === "Guest" && ROLE_LABELS.owner === "Owner" && ROLE_LABELS.ops === "Facility manager", ROLE_LABELS);
+const byTable = applyFmCommand(EMPTY, { type: "addTicket", ticket: { title: "Dripping tap", photoIds: [] } }, k(ROLE_LABELS.owner));
+ck("  ...and a card reads the stamp back through the same table (its source icon: the Owner's badge)",
+   faultWhen(byTable.tickets[0], stamp) === "Opened 06:20 by Owner" && faultSource(byTable.tickets[0]) === "owner"
+   && faultSource({ ...t, updates: [{ ...t.updates[0], by: ROLE_LABELS.ops }] }) === "fm");
 const agent = { ...t, source: "vesta_agent", updates: [{ ...t.updates[0], by: "VESTA Agent" }] };
 ck("the VESTA Agent's own fault does not repeat its mark on this line", faultWhen(agent, stamp) === "Opened 06:20");
 

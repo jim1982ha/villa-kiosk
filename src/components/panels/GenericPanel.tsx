@@ -5,13 +5,14 @@ import { Info } from "lucide-react";
 import BasePanel from "./BasePanel";
 import LastDayTimeline from "./LastDayTimeline";
 import type { PanelProps } from "@/types/panel.types";
-import { isUnavailable } from "@/utils/stateColors";
+import { isOffline } from "@/utils/stateColors";
 import UnavailableNotice from "./UnavailableNotice";
 
 export default function GenericPanel({ entity, mapping, onClose }: PanelProps) {
   return (
     <BasePanel title={mapping.label} entityId={mapping.entityId} icon={<Info size={22} />} history={false} onClose={onClose}>
-      {isUnavailable(entity) ? <UnavailableNotice entityId={mapping.entityId} /> : (
+      {/* the lost-contact notice only for LOST contact (stateColors.isOffline); "unknown" is a state, shown as one */}
+      {isOffline(entity) ? <UnavailableNotice entityId={mapping.entityId} /> : (
         <div className="center" style={{ margin: "8px 0 16px" }}>
           <span className="value-large">{entity?.state ?? "unknown"}</span>
         </div>

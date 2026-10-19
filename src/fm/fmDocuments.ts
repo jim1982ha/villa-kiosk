@@ -14,17 +14,28 @@
 // document unchanged, needs no viewer, and stays readable if it is ever
 // archived as plain text years later for a dispute.
 
-import { budgetStatus, completionsInMonth, localStamp, monthKey, monthLabel, scheduleStatus, shortDate, resolvedInMonth, ticketAt, ticketStats, workedBy } from "./fmEngine";
+import {
+  budgetStatus, capNotes, completionsInMonth, dueLine, DUE_WORDS, fmAttention, localStamp, monthBounds, monthKey,
+  monthLabel, resolvedInMonth, scheduleBoard, STAGE_WORDS, stageOf, ticketAt, ticketStats, workedBy,
+} from "./fmEngine";
 import { COST_CATEGORY_NAMES, NO_FM_TERMS, type FmData, type FmTerms } from "./fmTypes";
 import type { BudgetStatus } from "./fmEngine";
-import type { ReadinessResult } from "./readiness";
-import { stampText } from "@/utils/dateText";
+import { CHECK_WORDS, VERDICT_WORDS, type ReadinessResult } from "./readiness";
+import { openCounts } from "./deviceWork";
+import { docDate } from "@/utils/dateText";
 import { formatMoney } from "@/utils/money";
+
+// ⚠️ EVERY DATE IN A DOCUMENT IS dateText.docDate ("2026-09-05"), THE FORM "Generated:" ALREADY USED (owner's decision,
+// 2026-10-19): a saved recap or statement is read years later, on any device; its rows were written in the generating
+// phone's locale ("05 Sept 2026" / "Sep 5, 2026") beside a fixed stamp. Screens keep the reader's locale (shortDate).
 
 export interface RecapInput {
   fm: FmData;
   month: string;
   villaName: string;
+  /** The villa's one answer to "which device does this record's entity field name" (VillaModel.useDeviceIdentity
+   *  deviceOfRecord) — the open faults and tickets are counted per DEVICE card, as the Overview and Tickets count. */
+  deviceOfRecord: (field: string) => string;
   /** Optional live readiness snapshot, included as the closing section. */
   readiness?: ReadinessResult;
   /** Devices currently unavailable, for the uptime section. */
@@ -32,6 +43,8 @@ export interface RecapInput {
   totalDeviceCount?: number;
   /** The owner's contract terms (cap, currency, category names). */
   terms?: FmTerms;
+  /** The recap date — "as at recap date" in the standing and readiness sections. The clock, unless a test passes one. */
+  now?: number;
 }
 
 /**
@@ -78,10 +91,8 @@ export function spendSummary(b: BudgetStatus, terms: FmTerms = NO_FM_TERMS): str
   if (b.majorSpend > 0) {
     out.push(`- **${COST_CATEGORY_NAMES.major} maintenance (outside the cap):** ${money(b.majorSpend)}`);
   }
-  if (b.state === "exceeded") {
-    out.push(`- ⚠️ The monthly cap was reached. Spend beyond it belongs to `
-      + `${COST_CATEGORY_NAMES.major} maintenance, on whatever terms the agreement sets.`);
-  }
+  // the cap's sentence, the Spend tab's own (fmEngine.capNotes) — this wrote a third one, and none for "approaching"
+  out.push(...capNotes(b).map((note) => `- ⚠️ ${note}`));
   return out;
 }
 
@@ -96,16 +107,28 @@ export function spendTable(b: BudgetStatus, terms: FmTerms = NO_FM_TERMS): strin
     `| Date | Item | Category | Amount |`,
     `|---|---|---|---|`,
     ...b.entries.slice().sort((x, y) => Date.parse(x.at) - Date.parse(y.at)).map(
-      (c) => `| ${shortDate(c.at)} | ${cell(c.label)} `
+      (c) => `| ${docDate(c.at)} | ${cell(c.label)} `
         + `| ${COST_CATEGORY_NAMES[c.category]} | ${formatMoney(c.amountIdr, terms.currency)} |`),
   ];
 }
 
-export 
-/** Shared `# title` / Period / Generated / Scope preamble both document flavours below
- *  open with — kept in one place so the financial-reporting disclaimer can't drift
- *  between them. */
-function documentHeader(titleSuffix: string, villaName: string, month: string, scopeDescription: string): string[] {
+/** The readiness checks as a table — the recap's §5 and the snapshot print the SAME rows: each check's word
+ *  (readiness.CHECK_WORDS, a failing one in bold) and its finding. ⚠️ TWO TABLES (architecture review, 2026-10-19):
+ *  "Pass / Attention / **Fail**" under "Detail" in the recap, "Pass / Warning / Fail" under "Finding" in the snapshot. */
+export function readinessTable(readiness: Pick<ReadinessResult, "checks">): string[] {
+  return [
+    `| Check | Result | Finding |`,
+    `|---|---|---|`,
+    ...readiness.checks.map((c) => {
+      const w = CHECK_WORDS[c.state];
+      return `| ${cell(c.label)} | ${w.tone === "danger" ? `**${w.word}**` : w.word} | ${cell(c.detail)} |`;
+    }),
+  ];
+}
+
+/** Shared `# title` / Period / Generated / Scope preamble every document opens with — kept in one place so the
+ *  financial-reporting disclaimer can't drift between them. */
+export function documentHeader(titleSuffix: string, villaName: string, month: string, scopeDescription: string): string[] {
   return [
     `# ${villaName} — ${titleSuffix}`,
     `**Period:** ${monthLabel(month)}  `,
@@ -120,7 +143,7 @@ function documentHeader(titleSuffix: string, villaName: string, month: string, s
 
 export function buildMonthlyRecap(input: RecapInput): string {
   const { fm, month, villaName, readiness } = input;
-  const now = Date.now();
+  const now = input.now ?? Date.now();
   const L: string[] = [];
 
   L.push(...documentHeader(
@@ -139,33 +162,39 @@ export function buildMonthlyRecap(input: RecapInput): string {
     L.push(`| Date | Task | Clause | By | Evidence | Note |`);
     L.push(`|---|---|---|---|---|---|`);
     for (const { completion: c, schedule: s } of done) {
-      L.push(`| ${shortDate(c.at)} | ${cell(s?.title ?? "(removed task)")} | ${cell(s?.clause ?? "—")} `
+      L.push(`| ${docDate(c.at)} | ${cell(s?.title ?? "(removed task)")} | ${cell(s?.clause ?? "—")} `
         + `| ${cell(workedBy(c))} | ${c.photoIds.length} photo(s) | ${cell(c.note ?? "")} |`);
     }
   }
   L.push("");
 
   // Current standing against the schedule — the evidence trail for whether the
-  // villa is being kept to the agreed maintenance standard.
+  // villa is being kept to the agreed maintenance standard. THE BOARD, worst first (fmEngine.scheduleBoard — the
+  // Schedule tab's list), and its count of late tasks (fmAttention — the tab's "N tasks need attention", the HUD's).
+  // ⚠️ IT WALKED THE STORED ORDER WITH A FILTER OF ITS OWN (architecture review, 2026-10-19): an overdue task sat
+  // under on-schedule ones, and the tab's headline number had no line here.
   L.push(`### Standing against schedule (as at recap date)`);
-  const active = fm.schedules.filter((s) => s.enabled);
-  if (active.length === 0) {
+  const board = scheduleBoard(fm, now);
+  if (board.length === 0) {
     L.push(`_No maintenance schedule configured._`);
   } else {
-    L.push(`| Task | Required every | Last done | Status |`);
-    L.push(`|---|---|---|---|`);
-    for (const s of active) {
-      const st = scheduleStatus(s, fm.completions, now);
-      const status = st.state === "ok" ? "On schedule"
-        : st.state === "due-soon" ? "Due soon"
-          : st.state === "overdue" ? `**Overdue by ${Math.abs(Math.round(st.daysUntilDue ?? 0))}d**`
-            : "**Never recorded**";
+    const late = fmAttention(fm, now).lateTasks.length;
+    L.push(`- Tasks needing attention: **${late}** (overdue or never recorded)`);
+    L.push("");
+    L.push(`| Task | Required every | Last done | Status | Due |`);
+    L.push(`|---|---|---|---|---|`);
+    for (const st of board) {
+      const s = st.schedule;
+      // its state's ONE word (DUE_WORDS, the Schedule tab's pill's), the late ones in bold; its sentence (dueLine,
+      // the tab's) with the date in the document's form
+      const w = DUE_WORDS[st.state];
+      const by = Number.isFinite(st.dueAt) && st.dueAt ? ` (by ${docDate(st.dueAt)})` : "";
       // s.title is operator-entered free text (see ScheduleEditor) and, unlike
       // every other table in this file, was never pipe-escaped — a task
       // title containing "|" silently split into extra table columns. Caught
       // by rendering this output as an actual table instead of raw text.
       L.push(`| ${cell(s.title)} | ${s.everyDays} days | `
-        + `${st.last ? shortDate(st.last.at) : "—"} | ${status} |`);
+        + `${st.last ? docDate(st.last.at) : "—"} | ${w.tone === "danger" ? `**${w.word}**` : w.word} | ${dueLine(st)}${by} |`);
     }
   }
   L.push("");
@@ -184,13 +213,17 @@ export function buildMonthlyRecap(input: RecapInput): string {
   // ── 3. Faults ──────────────────────────────────────────────────────────────
   // ⚠️ THE MONTH AS IT WAS (review 31): chosen and shown from the fault's steps — reopened in October, a fault fixed in
   // September left September's recap while its cost stayed in §2
-  const [yy, mm] = month.split("-").map(Number);
-  const monthEnd = new Date(yy, mm, 1).toISOString();
+  const monthEnd = monthBounds(month).end;
   const inMonth = fm.tickets.filter((t) => monthKey(t.openedAt) === month || resolvedInMonth(t, month))
     .map((t) => ({ ...t, ...ticketAt(t, monthEnd) }));
   const stats = ticketStats(fm.tickets);
+  // open work counted per DEVICE card, as the Tickets tab and §5 count it (deviceWork.openCounts); the figures that
+  // are per record — resolved, the mean — are ticketStats'. ⚠️ This line counted records (architecture review,
+  // 2026-10-19): a pump with two faults read "Open: 2" here and "1 detected fault" in §5 of the same recap.
+  const open = openCounts(fm.tickets, input.deviceOfRecord);
   L.push(`## 3. Faults and response`);
-  L.push(`- Open: **${stats.open}** · In progress: **${stats.inProgress}** · Resolved (all time): **${stats.resolved}**`);
+  L.push(`- Open faults: **${open.faults}** · Tickets in progress: **${open.tickets}** (one per device, as the Overview `
+    + `and Tickets count them) · Resolved (all time): **${stats.resolved}**`);
   if (stats.meanResolutionHours !== null) {
     // Named when it covers fewer tickets than "Resolved" reports, so the two
     // figures cannot be read as describing the same set when they do not.
@@ -205,8 +238,9 @@ export function buildMonthlyRecap(input: RecapInput): string {
     L.push(`| Opened | Fault | Status | Resolved | Evidence |`);
     L.push(`|---|---|---|---|---|`);
     for (const t of inMonth.sort((x, y) => Date.parse(x.openedAt) - Date.parse(y.openedAt))) {
-      L.push(`| ${shortDate(t.openedAt)} | ${cell(t.title)} `
-        + `| ${t.status.replace("_", " ")} | ${t.resolvedAt ? shortDate(t.resolvedAt) : "—"} `
+      L.push(`| ${docDate(t.openedAt)} | ${cell(t.title)} `
+        // its stage's one word, the Tickets tab's pill's (STAGE_WORDS) — it printed the stored status ("in progress")
+        + `| ${STAGE_WORDS[stageOf(t)].word} | ${t.resolvedAt ? docDate(t.resolvedAt) : "—"} `
         + `| ${t.photoIds.length} photo(s) |`);
     }
     L.push("");
@@ -229,12 +263,7 @@ export function buildMonthlyRecap(input: RecapInput): string {
   // ── 5. Readiness ─────────────────────────────────────────────────────────
   if (readiness) {
     L.push(`## 5. Guest-readiness check (at recap date)`);
-    L.push(`| Check | Result | Detail |`);
-    L.push(`|---|---|---|`);
-    for (const c of readiness.checks) {
-      const icon = c.state === "pass" ? "Pass" : c.state === "warn" ? "Attention" : "**Fail**";
-      L.push(`| ${cell(c.label)} | ${icon} | ${cell(c.detail)} |`);
-    }
+    L.push(...readinessTable(readiness));
     L.push("");
   }
 
@@ -286,25 +315,21 @@ export function buildSpendStatement(
  * statement — same store, same "generate then save" shape, so a handover pack
  * can include the check that was actually run on the day.
  */
-export function buildReadinessSnapshot(readiness: ReadinessResult, villaName: string): string {
-  const now = new Date();
-  const verdict = readiness.overall === "pass"
-    ? "READY"
-    : readiness.overall === "warn" ? "READY, WITH FINDINGS" : "NOT READY";
+/** `month`: the month it is filed under (the saved list's; a snapshot is of now — monthlyDocument.monthsOffered). The
+ *  same header as the recap and the statement (documentHeader: its "Generated:" is the moment taken), the verdict in
+ *  the tab's words (readiness.VERDICT_WORDS), the checks as the recap's §5 prints them (readinessTable).
+ *  ⚠️ IT HAD A HEADER, A VERDICT AND A TABLE OF ITS OWN (architecture review, 2026-10-19): "READY, WITH FINDINGS"
+ *  over a tab saying "Ready, with things worth fixing", "Warning" where the recap said "Attention", and a "Taken"
+ *  line in the phone's locale beside the other documents' fixed stamp. */
+export function buildReadinessSnapshot(readiness: ReadinessResult, villaName: string, month: string): string {
   const lines = [
-    `# Readiness snapshot — ${villaName}`,
+    ...documentHeader("readiness snapshot", villaName, month,
+      "the guest-readiness checks as they stood when generated, from live device state."),
+    `**${VERDICT_WORDS[readiness.overall]}** — ${readiness.passed} of ${readiness.total} checks passing.`,
     "",
-    `**${verdict}** — ${readiness.passed} of ${readiness.total} checks passing.`,
+    ...readinessTable(readiness),
     "",
-    `Taken ${stampText(now)}.`,
-    "",
-    "| Check | Result | Finding |",
-    "| --- | --- | --- |",
+    "_Generated by VESTA, from live device state at the moment shown above._",
   ];
-  for (const c of readiness.checks) {
-    const state = c.state === "pass" ? "Pass" : c.state === "warn" ? "Warning" : "Fail";
-    lines.push(`| ${cell(c.label)} | ${state} | ${cell(c.detail)} |`);
-  }
-  lines.push("", "_Computed from live device state at the moment shown above._");
   return lines.join("\n");
 }

@@ -15,7 +15,7 @@ import PowerToggle from "./PowerToggle";
 import UnavailableNotice from "./UnavailableNotice";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
-import { isUnavailable } from "@/utils/stateColors";
+import { isOffline } from "@/utils/stateColors";
 import { deviceSwitch } from "@/utils/devicePower";
 import type { HassEntity } from "@/types/ha.types";
 import type { EntityMapping } from "@/types/scene.types";
@@ -34,7 +34,11 @@ interface Props {
 
 export default function ControlFrame({ entity, mapping, device, power, always, children }: Props) {
   const { ws } = useHA();
-  if (isUnavailable(entity)) {
+  // ⚠️ LOST CONTACT, NOT "UNKNOWN" (owner, 2026-10-18; architecture review 2026-10-19): a device whose state is
+  // "unknown" is answering — it can be commanded (a toggle needs no value), so its controls stay, without the notice;
+  // its power button then sits "off" until the device says (devicePower: no position). Only "unavailable" or a
+  // missing entity is lost (stateColors.isOffline), and then the notice replaces the controls.
+  if (isOffline(entity)) {
     return <><UnavailableNotice device={device} entityId={mapping.entityId} />{always}</>;
   }
   return (

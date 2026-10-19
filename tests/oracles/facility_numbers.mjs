@@ -23,6 +23,7 @@ register("../consistency/alias-hook.mjs", import.meta.url);
 const {
   ticketStats, scheduleStatus, budgetStatus, monthLabel, shortDate,
 } = await import("@/fm/fmEngine");
+const { openCounts } = await import("@/fm/deviceWork");
 const { formatMoney } = await import("@/utils/money");
 const { spendSummary } = await import("@/fm/fmDocuments");
 
@@ -50,8 +51,9 @@ eq("...but the mean covers only the usable one", mixed.meanCoversTickets, 1);
 eq("...and it is that one's duration", mixed.meanResolutionHours, 2);
 eq("with nothing timed, the mean is null rather than 0",
    ticketStats([t({ resolvedAt: undefined })]).meanResolutionHours, null);
-// An unknown status counts as OPEN, never resolved — the rule fmEngine states.
-eq("a corrupt status counts as open", ticketStats([t({ status: "" })]).open, 1);
+// An unknown status counts as OPEN, never resolved — the rule fmEngine states. What is open is counted per device
+// card (deviceWork.openCounts — the Tickets tab's unit, and now the recap's); ticketStats keeps the per-record figures.
+eq("a corrupt status counts as open", openCounts([t({ status: "" })], (id) => id).faults, 1);
 eq("...and is not silently resolved", ticketStats([t({ status: "" })]).resolved, 0);
 
 console.log("\n  how a fault was closed is its last STATUS step (architecture review, 2026-10-15):");

@@ -30,6 +30,7 @@ import { formatCountBadge } from "@/utils/countBadge";
 import ModalFooter from "@/components/common/ModalFooter";
 import ModalTabs, { type ModalTab } from "@/components/common/ModalTabs";
 import FacilitySections, { FACILITY_TABS, type FacilityTab } from "@/components/fm/FacilitySections";
+import { useFacilityLiveView } from "@/fm/FmDataContext";
 import CockpitOverview from "./CockpitOverview";
 
 export interface CockpitModalProps {
@@ -70,6 +71,11 @@ export default function CockpitModal({
   // A profile without the Facility door sees the Cockpit's view alone, no strip.
   const tabs: ModalTab<CockpitTab>[] = doors.facility ? [OVERVIEW_TAB, ...FACILITY_TABS] : [OVERVIEW_TAB];
   const shownTab: CockpitTab = doors.facility ? tab : "overview";
+  // The maintenance record is watched live WHILE THIS WINDOW IS OPEN, whichever tab shows (useFacilityLiveView: every
+  // STORE_ACTIVE_MS instead of the heartbeat). ⚠️ ONE REGISTRATION, THE WINDOW'S (architecture review, 2026-10-19):
+  // it was the Facility tabs' alone, so the Overview's "Open issues" — the list the (i) promised was "read again every
+  // 15 seconds while it is open" — was read every three minutes until someone opened Tickets.
+  useFacilityLiveView();
   // The agent's presence and what waits for this profile's answer, for the
   // footer button's label — read here, as the top bar reads them for its dot
   // (agentView.awaitingAnswer), instead of being handed across (2.496.268).

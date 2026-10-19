@@ -59,7 +59,7 @@ ck("open → fault, in progress → ticket, resolved → closed",
 ck("  ...a status this build does not know is a FAULT — never hidden, never closed", E.stageOf({ status: "escalated" }) === "fault" && E.stageOf({}) === "fault");
 const odd = fm([{ ...rec("z", "lock.door"), status: "escalated" }]);
 ck("  ...counted as an open fault, listed on the Overview, absent from Tickets",
-   E.ticketStats(odd.tickets).open === 1 && E.fmAttention(odd).unresolved.length === 1
+   W.openCounts(odd.tickets, deviceOf).faults === 1 && E.fmAttention(odd).unresolved.length === 1
    && W.ticketCards(odd.tickets, deviceOf).length === 0);
 
 console.log("\n  Mark in progress: one ticket per device, each fault its own record:");
@@ -211,17 +211,17 @@ const night = groupAttention(buildAttentionItems({
   entityMap: {}, alertThresholds: {}, resolvedRooms: {}, selectableIds: [],
   folding: new Map([["sensor.example_battery", "sensor.example_temperature"]]),
   fmData: fm([agentRec({ id: "n1", entityId: "sensor.example_battery", origin: "night", title: "Example offline" })]) }))[0];
-ck("  ...an offline device and its night check's fault: ONE line, two icons — Live (amber), Night check (red)",
-   JSON.stringify(lineSources(night.items[0])) === JSON.stringify({ sources: ["live", "night"], kinds: ["unavailable", "fault"] }),
+ck("  ...an offline device and its night check's fault: ONE line, two icons — Live and Night check, both a warning (amber)",
+   JSON.stringify(lineSources(night.items[0])) === JSON.stringify({ sources: ["live", "night"], severities: ["warn", "warn"] }),
    lineSources(night.items[0]));
 const I = await import("@/components/fm/sourceIcons");
 const drawn = draw(h(I.SourceIcons, lineSources(night.items[0])));
-ck("  ...drawn one under the other, each in its status colour, named for a screen reader",
-   (drawn.match(/<svg/g) || []).length === 2 && /cockpit-attention-unavailable[\s\S]*cockpit-attention-fault/.test(drawn)
-   && /aria-label="Live and Night check"/.test(drawn), drawn);
-const people = draw(h(I.SourceIcons, { sources: ["owner", "fm", "guest"], kinds: ["fault"] }));
+ck("  ...drawn one under the other, each in its severity's colour, named for a screen reader",
+   (drawn.match(/<svg/g) || []).length === 2 && /cockpit-attention-warn[\s\S]*cockpit-attention-warn/.test(drawn)
+   && !/cockpit-attention-(fault|unavailable|alarm|critical|schedule)/.test(drawn) && /aria-label="Live and Night check"/.test(drawn), drawn);
+const people = draw(h(I.SourceIcons, { sources: ["owner", "fm", "guest"], severities: ["warn"] }));
 ck("  ...a profile is the top bar's badge: its letters in a circle (O, FM, G), in the line's colour",
-   /source-role-badge cockpit-attention-icon cockpit-attention-fault"[^>]*>O</.test(people)
+   /source-role-badge cockpit-attention-icon cockpit-attention-warn"[^>]*>O</.test(people)
    && /source-role-badge two[^"]*"[^>]*>FM</.test(people) && /class="source-role-badge[^"]*"[^>]*>G</.test(people), people);
 ck("  ...every source has its icon and its words in the (i)'s legend",
    S.ISSUE_SOURCES.every((x) => I.SOURCE_ICON[x] && I.SOURCE_WORDS[x])
@@ -230,7 +230,7 @@ ck("  ...every source has its icon and its words in the (i)'s legend",
 console.log("\n  the Recap's readiness says what is found, never the goal over a contradiction (owner, 2026-10-14):");
 const { buildReadiness } = await import("@/fm/readiness");
 const noDevices = { ids: [], unavailable: [], has: () => false, deviceOf: (id) => id, deviceOfRecord: (id) => id, isCritical: () => false };
-const readyWith = (tickets) => buildReadiness({}, fm(tickets), noDevices).checks.find((c) => c.id === "tickets");
+const readyWith = (tickets) => buildReadiness({}, fm(tickets), noDevices, {}, []).checks.find((c) => c.id === "tickets");
 const mixedOpen = readyWith([agentRec({ id: "n1", origin: "night", entityId: "x.n1" }), agentRec({ id: "n2", origin: "night", entityId: "x.n2" }),
   agentRec({ id: "a1", alertNumber: 5, entityId: "x.a1" }), { ...rec("g", "x.g"), reportedBy: "guest" },
   { ...rec("t", "x.t"), status: "in_progress" }, { ...rec("r", "x.r"), status: "resolved", resolvedAt: "2026-10-14T09:00:00Z" }]);
@@ -242,7 +242,7 @@ ck("4 faults and 1 ticket: \"4 detected faults (1 open ticket)\", where to deal 
 // ticket card in Tickets, so one open ticket — not "2 open tickets" over one card
 const pumpBy = (devs) => buildReadiness({}, fm([{ ...rec("p1", "switch.pump"), status: "in_progress" },
   { ...rec("p2", "sensor.pump_power"), status: "in_progress" }, rec("p3", "sensor.pump_temp")]),
-  { ...noDevices, deviceOf: devs, deviceOfRecord: devs }).checks.find((c) => c.id === "tickets");
+  { ...noDevices, deviceOf: devs, deviceOfRecord: devs }, {}, []).checks.find((c) => c.id === "tickets");
 const onePump = pumpBy((id) => (id.includes("pump") ? "switch.pump" : id));
 ck("  ...counted per device, as drawn: one device's 2 tickets + 1 fault = \"1 detected fault (1 open ticket)\"",
    onePump.label === "1 detected fault (1 open ticket)" && onePump.state === "warn", onePump);
@@ -250,7 +250,7 @@ ck("  ...and three devices are three", pumpBy((id) => id).label === "1 detected 
 // the Recap files a record as every screen does — by the record's device (deviceOfRecord: a list of several sensors
 // included), never by its raw field looked up as one entity (review "One answer per question" #1, 2026-10-19)
 const byRecord = buildReadiness({}, fm([rec("m1", "sensor.gone,sensor.pump_power"), rec("m2", "sensor.pump_power")]),
-  { ...noDevices, deviceOf: (id) => id, deviceOfRecord: (id) => (id.includes("pump") ? "sensor.pump_power" : id) }).checks.find((c) => c.id === "tickets");
+  { ...noDevices, deviceOf: (id) => id, deviceOfRecord: (id) => (id.includes("pump") ? "sensor.pump_power" : id) }, {}, []).checks.find((c) => c.id === "tickets");
 ck("  ...a fault naming several sensors counts on its device's card", byRecord.label === "1 detected fault (0 open tickets)", byRecord);
 const onlyFaults = readyWith([agentRec({ id: "n1", origin: "night" })]);
 ck("  ...one fault, no ticket: singular, and only Overview", onlyFaults.label === "1 detected fault (0 open tickets)"
@@ -286,9 +286,44 @@ ck("  ...the Overview's Recent activity too, folded by default (owner, 2026-10-1
 // a ticket's card AS DRAWN (pill on the title line, buttons inside on the right): tests/oracles/cockpit_cards.mjs; its
 // buttons as drawn: "the buttons, drawn" below. WIRING the Tickets tab alone holds (it needs the Facility data to render):
 ck("a ticket is ONE card: the first record carries the pill and the ticket's buttons, the closed one its Reopen, no device name above",
-   /<div key=\{g\.key\} className="fm-record-card">/.test(ticketsTab) && /record\(t, i === 0 \? \{ text: "In progress", tone: "due-soon" \} : undefined,\s*i === 0 \? <WorkButtons actions=\{ticketActions\(g\.records\.map\(workRecord\)\)\}/.test(ticketsTab)
-   && /record\(t, \{ text: "Resolved", tone: "ok" \},\s*<WorkButtons actions=\{closedActions\(workRecord\(t\)\)\}/.test(ticketsTab)
+   /<div key=\{g\.key\} className="fm-record-card">/.test(ticketsTab) && /record\(t, i === 0 \? stagePill\(t\) : undefined,\s*i === 0 \? <WorkButtons actions=\{ticketActions\(g\.records\.map\(workRecord\)\)\}/.test(ticketsTab)
+   && /record\(t, stagePill\(t\),\s*<WorkButtons actions=\{closedActions\(workRecord\(t\)\)\}/.test(ticketsTab)
    && !/const title = head\.entityId/.test(ticketsTab));
+{
+  // ONE WORD AND ONE TONE PER STAGE (architecture review, 2026-10-19): the pill's word and colour and the recap's Status
+  // column are fmEngine.STAGE_WORDS, BY VALUE — the pill said "In progress" in the Schedule's due-soon colour while the
+  // recap printed the stored status ("in progress"). The pill as drawn: cockpit_cards.mjs.
+  const { pillClass } = await import("@/fm/tone");
+  const { buildMonthlyRecap } = await import("@/fm/fmDocuments");
+  const pill = (t) => { const s = E.STAGE_WORDS[E.stageOf(t)]; return { text: s.word, tone: pillClass(s.tone) }; };
+  const taken = { ...rec("w", "x.y", "in_progress"), openedAt: "2026-09-10T10:00:00.000Z" };
+  const closed = { ...rec("z", "x.y", "resolved"), openedAt: "2026-09-11T10:00:00.000Z", resolvedAt: "2026-09-12T10:00:00.000Z" };
+  ck("a ticket in progress is \"In progress\" in the warning tone, a closed one \"Resolved\" in the ok tone, an open fault's word is \"Open\"",
+     pill(taken).text === "In progress" && pill(taken).tone === "tone-warn" && pill(closed).text === "Resolved" && pill(closed).tone === "tone-ok"
+     && E.STAGE_WORDS.fault.word === "Open", [pill(taken), pill(closed)]);
+  const recap = buildMonthlyRecap({ fm: fm([taken, closed]), month: "2026-09", villaName: "V", readiness: null, deviceOfRecord: deviceOf });
+  const row = (t) => recap.split("\n").find((l) => l.includes(`| ${t.title} |`)) ?? "";
+  ck("  ...the recap's Status column says the SAME word as the pill, for both", row(taken).includes(`| ${pill(taken).text} |`)
+     && row(closed).includes(`| ${pill(closed).text} |`) && !/\| in progress \|/.test(recap), [row(taken), row(closed)]);
+  ck("  ...the Tickets tab draws its pills from the table, no word of its own", /STAGE_WORDS\[stageOf\(t\)\]/.test(ticketsTab)
+     && !/"In progress"|"Resolved"|due-soon/.test(ticketsTab));
+
+  // THE RECAP'S OPEN FIGURES ARE THE TICKETS TAB'S CARDS (architecture review, 2026-10-19): the pump's power and energy
+  // sensors are one device with two faults nobody took on and two records taken on together — ONE card with Open
+  // Ticket, ONE ticket card. The recap's "Open" line counted records (2 and 2) while its own §5 and the tab counted cards.
+  const pumpWork = [rec("f1", "sensor.pump_energy"), rec("f2", "sensor.pump_power"),
+    { ...rec("k1", "sensor.pump_energy", "in_progress"), openedAt: "2026-09-01T10:00:00.000Z" },
+    { ...rec("k2", "sensor.pump_power", "in_progress"), openedAt: "2026-09-02T10:00:00.000Z" }];
+  const counts = W.openCounts(pumpWork, deviceOf);
+  const pumpRecap = buildMonthlyRecap({ fm: fm(pumpWork), month: "2026-09", villaName: "V", readiness: null, deviceOfRecord: deviceOf });
+  const openLine = pumpRecap.split("\n").find((l) => l.startsWith("- Open faults:")) ?? "";
+  ck("the recap's open figures equal the Tickets tab's cards: one device, one fault card, one ticket card — never the four records",
+     counts.faults === 1 && counts.tickets === 1 && W.ticketCards(pumpWork, deviceOf).length === 1
+     && openLine.includes(`Open faults: **${counts.faults}**`) && openLine.includes(`Tickets in progress: **${counts.tickets}**`)
+     && !/\*\*2\*\*/.test(openLine), openLine);
+  ck("  ...and the per-record figures stay per record: nothing is resolved here, and the engine's table no longer counts open work",
+     E.ticketStats(pumpWork).resolved === 0 && !("open" in E.ticketStats(pumpWork)) && !("inProgress" in E.ticketStats(pumpWork)));
+}
 const spendTab = readFileSync(new URL("../../src/components/fm/SpendTab.tsx", import.meta.url), "utf8");
 const todayTab = readFileSync(new URL("../../src/components/fm/TodayTab.tsx", import.meta.url), "utf8");
 ck("ONE card for every Cockpit list (architecture review, 2026-10-15): Overview, Tickets, Schedule, Spend, Recent work draw RecordCard, nothing of their own",

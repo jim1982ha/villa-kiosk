@@ -676,6 +676,10 @@ button {
    instant something's offline — same colour language as the map badge ring
    and the status pill's "Unavailable" state, so it reads as the same signal. */
 .icon-btn.has-alert { color: var(--status-danger); border-color: var(--status-danger); }
+/* a warning (a late task, an ordinary device offline, a fault): amber, its count too — red is an alarm or a critical
+   device offline only (attention.healthClass) */
+.icon-btn.has-warn { color: var(--status-warning); border-color: var(--status-warning); }
+.icon-btn.has-warn .icon-btn-count { background: var(--status-warning); }
 .icon-btn { position: relative; }
 /* Count sits fully INSIDE the button's box, not hanging off its corner: this
    button lives in .hud-group-scroll, whose `overflow-x: auto` also clips

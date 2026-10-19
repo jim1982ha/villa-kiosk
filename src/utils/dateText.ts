@@ -14,6 +14,8 @@
 
 const at = (t: string | number | Date): Date => (t instanceof Date ? t : new Date(t));
 const valid = (d: Date) => !Number.isNaN(d.getTime());
+/** Two digits, for the fixed forms (docDate, momentText). */
+const two = (n: number) => String(n).padStart(2, "0");
 
 /** "14:05" — a time today, a chart's axis. */
 export function clockTime(t: string | number | Date): string {
@@ -54,12 +56,20 @@ export function stampText(t: string | number | Date): string {
     : "";
 }
 
+/** "2026-10-03" — a date inside a SAVED DOCUMENT (a recap's or statement's row, a snapshot): the reader's local day,
+ *  in the one fixed form the documents' "Generated:" stamp already uses (fmEngine.localStamp), whatever the phone's
+ *  language. ⚠️ A document is archived and read years later, possibly on another device: a row written in the
+ *  generating phone's locale ("05 Sept 2026" / "Sep 5, 2026") changed shape with the browser, and one check comparing
+ *  such a row died on the build server (2.496.424). Screens keep the reader's locale (fullDate). */
+export function docDate(t: string | number | Date): string {
+  const d = at(t);
+  return valid(d) ? `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}` : "";
+}
+
 /** "20/10/2026 02:00" — a moment as the VESTA Agent's messages write it on Telegram (its timeutil.moment_label): day,
  *  month, year, then the time, the same on every screen whatever the reader's locale (owner, 2026-10-19: the Overview's
  *  "Next check" tooltip, "20/10/2026 02:00"). */
 export function momentText(t: string | number | Date): string {
   const d = at(t);
-  if (!valid(d)) return "";
-  const two = (n: number) => String(n).padStart(2, "0");
-  return `${two(d.getDate())}/${two(d.getMonth() + 1)}/${d.getFullYear()} ${two(d.getHours())}:${two(d.getMinutes())}`;
+  return valid(d) ? `${two(d.getDate())}/${two(d.getMonth() + 1)}/${d.getFullYear()} ${two(d.getHours())}:${two(d.getMinutes())}` : "";
 }

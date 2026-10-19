@@ -1,3 +1,107 @@
+## 2.496.427
+
+### Fixed
+- The monthly recap's "Faults and response" line counts open work the way the Tickets tab and the recap's own
+  readiness section do: one per device. A pump with two faults nobody had taken on read "Open: 2" at the top of
+  section 3 and "1 detected fault" in section 5 of the same recap. It now reads "Open faults: 1 · Tickets in
+  progress: 1 (one per device, as the Overview and Tickets count them) · Resolved (all time): N".
+- A lock that said "jammed", one still locking or unlocking, one the villa's system has lost contact with and one
+  with no value to give each have their own word. The Recap's "Doors locked" check called all four "not reporting"
+  while the alarm check above it named the same lock "Jammed", and a lock out of contact was counted there AND under
+  "All devices reporting". The check now reads "1 unlocked, 1 jammed, 1 moving, 1 not reporting."; a lock out of
+  contact is counted once, under "All devices reporting"; the bottom bar's Locks tile says "1 Jammed", "1 Moving",
+  "1 Unavailable" or "1 Unknown" instead of "1 Unknown" for all of them (a single lock: "Jammed", never its raw state).
+- The recap's "Standing against schedule" table is the Schedule tab's board, worst first — overdue tasks, then never
+  recorded, then due soon, then on schedule — under a first line "Tasks needing attention: N" that is the tab's
+  own number. It listed tasks in the order they were created, an overdue one under on-schedule ones, with no count.
+
+### Changed
+- Dates inside a saved recap, statement or snapshot are written 2026-09-05 whatever the phone's language — the form
+  the "Generated:" stamp already used. A row read "05 Sept 2026" on one phone and "Sep 5, 2026" on another; a saved
+  document is read years later, possibly on a different device, and must keep one shape. Screens keep showing dates
+  in the phone's language.
+- One word per due state everywhere: the Schedule tab's pill, the Overview's late-task line and the recap's table say
+  "Overdue", "Never recorded", "Due soon" or "On schedule" from one table, and the recap's table carries the tab's own
+  sentence in a "Due" column ("3 days overdue (by 2026-09-24)") instead of "**Overdue by 3d**".
+- One sentence per cap state, everywhere: the Spend tab's note, the spend statement and the recap's spend lines, and
+  the cost banner in a form all say the same "Approaching the cap — …" or "Cap reached. …". The statement had no
+  sentence while the month was approaching the cap, the cost banner a third wording. The Schedule tab's money stat
+  reads "Minor spend this month" in the villa's currency; it was a bare number under "spent this month".
+- One word per readiness check state and one verdict: the Recap's rows, the monthly recap's section 5 and the saved
+  snapshot all print "Pass", "Warning" or "Fail" under "Check | Result | Finding"; the recap said "Attention" and
+  "Detail" where the snapshot said "Warning" and "Finding". The snapshot's verdict is the tab's sentence ("Ready, with
+  things worth fixing"), no longer shouted ("READY, WITH FINDINGS"), and the snapshot opens with the same Period /
+  Generated / Scope header as the recap and the statement instead of its own "Taken …" line.
+
+### Under the hood
+- The open-work figures left the engine's ticket table (it keeps the per-record ones: resolved, mean time, closed with
+  no action); the recap asks the device fold for them, as the Tickets tab does.
+- A month key is parsed once (monthBounds, on the villa's local calendar) for the recap's month end, the documents'
+  default month and the Period heading — three hand parsings before, one through toISOString on a local boundary.
+- The place of a record — its device, the device's name, its room — is built by one function for the fault form, a
+  guest's report and the Spend tab; each assembled it by hand from a different name source.
+- New checks, each proven to go red: the recap's open figures equal the Tickets tab's cards; one due word and
+  sentence; the standing table is the board; the cap sentence per state; one check word and verdict; a document's
+  dates; one word per lock fact; one builder of a record's place.
+
+## 2.496.426
+
+### Fixed
+- A fault's card icon in the Cockpit is amber, like the rest of its line and the Recap's "Check the … faults" row.
+  It was red — the colour the app promised, since 2.496.423, only for an alarm or a critical device not reporting —
+  because the icon's colour was decided in a stylesheet written before that rule, while the Cockpit button read
+  the right one. One rule for every surface now: red only for an alarm or a critical device, amber for a fault,
+  an ordinary device offline or a late task.
+- A device's window no longer says "UNAVAILABLE" and "Contact with this device is lost" for a sensor whose device
+  is answering but has nothing to report (a wind chill on a warm day, a switch between gestures). The pill reads
+  "UNKNOWN" in the quiet grey, with no warning icon; a switch in that state keeps its controls; a linked entity's
+  row reads "Unknown" instead of "Unavailable". "Unavailable" and the lost-contact notice now mean what the map
+  and the Cockpit already meant since 2.496.410: contact really lost. The history bar is unchanged.
+- "Next check: within 5 min" and the (i)'s "it checks every 5 minutes" no longer show on faults days after the
+  VESTA Agent has gone quiet. While the Agent is offline the cards say "Next check: by the VESTA Agent" and the (i)
+  "it checks regularly…"; its own numbers come back with its next heartbeat.
+
+### Under the hood
+- Each profile's display name ("Guest", "Owner", "Facility manager") is declared once, in the role table the app and
+  the add-on's proxy both read; the proxy used to hold its own copy of "Guest" to accept a guest's report. Stored
+  records keep the words they were stamped with.
+- Every Facility save (a fault, its stage, a guest's report, a cost, a task, a completion, Close) gets its "did it
+  save?" answer from the store itself instead of each form working it out — the shape of the 2.496.252 defect, a form
+  that skipped that step, can no longer happen.
+
+## 2.496.425
+
+### Fixed
+- Nothing to see: 2.496.424 was pushed but never published — one of its checks compared a recap's date in the
+  machine's own language and failed on the build server. The check now reads the word, not the date.
+
+## 2.496.424
+
+### Fixed
+- The Cockpit's Overview reads its open issues again every 15 seconds while the window is open, as its (i) says. It
+  was read every 3 minutes until a Facility tab (Tickets, Schedule…) was opened: a fault taken on from another phone,
+  or cleared by the VESTA Agent, could sit on the Overview for up to three minutes.
+- Renaming a fault (Edit ticket → Summary) shows the new name everywhere at once: on its card, and in the "Open a
+  ticket" and "Resolve the ticket" windows (their banner and the cost line, now "#5 · …" as the card says it). A fault
+  the VESTA Agent opened kept the Agent's wording on its card ("Pump offline for 6 d 2 h") until the Agent's next pass,
+  and for ever while the Agent was off.
+
+### Changed
+- A ticket's stage has one word and one colour everywhere: "In progress" (amber) and "Resolved" (green), on the
+  Tickets tab's pills and in the monthly recap's Status column, and "Open" in the recap for a fault nobody has taken
+  on. The recap printed the stored status in lowercase ("in progress", "open"), and the pill borrowed the Schedule's
+  "due soon" colour.
+
+## 2.496.423
+
+### Fixed
+- The Cockpit button in the top bar is red only for an alarm or a critical device not reporting, as promised in
+  2.496.410; a late task, an ordinary device offline or a fault turn it amber (its count too). It turned red for any
+  open problem.
+- The Recap (readiness) has an "alarm" check: a leak sounding, or any device the map shows red, makes the villa
+  "Not ready" — it said "Ready, with things worth fixing" during an alarm, and the saved snapshot "READY, WITH
+  FINDINGS". It reads the Cockpit's own list of alarms, so the two can no longer disagree.
+
 ## 2.496.422
 
 ### Changed

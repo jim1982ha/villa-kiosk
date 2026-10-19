@@ -21,8 +21,27 @@ import { locksGroup, lightsGroup, type SummaryGroup } from "@/config/summaryGrou
 import type { EntityMapping } from "@/types/scene.types";
 import { AirVent, Cctv, WifiOff } from "lucide-react";
 import type { FmData } from "./fmTypes";
+import type { AttentionItem } from "@/config/attention";
+import type { Tone } from "./tone";
 
 export type CheckState = "pass" | "warn" | "fail";
+
+/** Each check state's ONE word and tone, as the Recap's rows, the saved snapshot and the recap's §5 say it (the tab
+ *  draws the word as its icon, in the tone's colour). ⚠️ TWO SPELLINGS (architecture review, 2026-10-19): the recap
+ *  wrote "Attention" where the snapshot wrote "Warning" for the same amber check, and the tone sat apart in fm/tone. */
+export const CHECK_WORDS: Record<CheckState, { word: string; tone: Tone }> = {
+  pass: { word: "Pass", tone: "ok" },
+  warn: { word: "Warning", tone: "warn" },
+  fail: { word: "Fail", tone: "danger" },
+};
+
+/** The verdict over every check, in the tab's words — and the snapshot's, which shouted "READY, WITH FINDINGS" over
+ *  a tab saying "Ready, with things worth fixing" (architecture review, 2026-10-19). */
+export const VERDICT_WORDS: Record<CheckState, string> = {
+  pass: "Ready for the next guest",
+  warn: "Ready, with things worth fixing",
+  fail: "Not ready",
+};
 
 export interface ReadinessCheck {
   id: string;
@@ -86,8 +105,24 @@ export function buildReadiness(
   devices: VillaDevices,
   /** The user's own device names (config.entityMap) — a one-door villa's list is named after its door. */
   entityMap: Record<string, EntityMapping>,
+  /** The villa's alarms as the Cockpit lists them (attention items of kind "alarm": every device the map paints red,
+   *  the villa's alert thresholds included) — the one rule, never a second reading of the entities here. */
+  alarms: readonly AttentionItem[],
 ): ReadinessResult {
   const checks: ReadinessCheck[] = [];
+
+  // ── No alarm ─────────────────────────────────────────────────────────────
+  // ⚠️ AN ALARM MADE THE VILLA "READY, WITH THINGS WORTH FIXING" (architecture review, 2026-10-19 evening): these checks
+  // had no alarm of their own — a leak sounding read amber here, and the saved snapshot said "READY, WITH FINDINGS",
+  // while the top bar was red. An alarm is what makes the villa not ready, as it makes the top bar red.
+  const sounding = alarms.filter((a) => a.kind === "alarm");
+  checks.push({
+    id: "alarms",
+    label: sounding.length === 0 ? "No alarm" : `${sounding.length} alarm${sounding.length === 1 ? "" : "s"}`,
+    state: sounding.length === 0 ? "pass" : "fail",
+    detail: sounding.length === 0 ? "Nothing is in alarm." : sounding.map((a) => `${a.title}: ${a.detail}`).join(" · "),
+    entityIds: sounding.flatMap((a) => (a.entityId ? [a.entityId] : [])),
+  });
   // ⚠️ HOW BAD, AS THE TOP BAR SAYS IT (architecture review "One answer per question" #3, 2026-10-19): the top bar
   // turns red for a CRITICAL device not answering, and amber for any other, a fault or a late task (owner,
   // 2026-10-18 — attention.villaHealthFrom). These checks went red past two devices or two faults, whichever they
@@ -134,19 +169,27 @@ export function buildReadiness(
   // locked" while the tile, for the same lock, said "Unknown". Still a warning
   // — a door nobody can confirm is not a secured door — but named for what it
   // is, so the check never claims a door is open when nothing said so.
+  //
+  // ⚠️ ONE WORD PER FACT, ONE COUNT PER FACT (architecture review, 2026-10-19): a jammed, a moving and an unavailable
+  // lock were all "not reporting" here while the alarm check named the same lock "Jammed" — and the unavailable one
+  // was counted here AND under "All devices reporting". A lock whose contact is LOST is that check's alone; this one
+  // names what the lock itself said: unlocked, jammed, moving, or no value to give.
   const locks = lockFacts(entities, devices);
   if (locks) {
-    const notLocked = [...locks.unlocked, ...locks.unknown];
+    const notLocked = [...locks.unlocked, ...locks.jammed, ...locks.moving, ...locks.unknown];
     const parts = [
       locks.unlocked.length ? `${locks.unlocked.length} unlocked` : "",
+      locks.jammed.length ? `${locks.jammed.length} jammed` : "",
+      locks.moving.length ? `${locks.moving.length} moving` : "",
       locks.unknown.length ? `${locks.unknown.length} not reporting` : "",
     ].filter(Boolean);
+    const answering = locks.ids.length - locks.lost.length;
     checks.push({
       id: "locks",
       label: "Doors locked",
       state: notLocked.length === 0 ? "pass" : "warn",
       detail: notLocked.length === 0
-        ? `All ${locks.ids.length} lock${locks.ids.length === 1 ? "" : "s"} secured.`
+        ? `All ${answering} lock${answering === 1 ? "" : "s"} secured.`
         : `${parts.join(", ")}.`,
       entityIds: notLocked,
       // every lock, as the summary tile opens them (summaryGroups) — not only the failing ones

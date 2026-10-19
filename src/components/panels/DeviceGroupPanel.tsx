@@ -86,8 +86,9 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
     >
       {/* EVERY member offline → the same shared notice every other panel shows
           (UnavailableNotice), instead of this panel's own "Unavailable" text —
-          one presentation of "HA lost contact" across the whole app. */}
-      {rows.length > 0 && rows.every((r) => r.reading.unavailable) ? (
+          one presentation of "HA lost contact" across the whole app. Offline is
+          LOST contact (reading.contact); members with no value show UNKNOWN. */}
+      {rows.length > 0 && rows.every((r) => r.reading.contact === "lost") ? (
         <UnavailableNotice device="device" entityId={primaryMapping.entityId} />
       ) : (
         <div className="row-buttons" style={{ marginBottom: 18 }}>

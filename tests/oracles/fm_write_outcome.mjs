@@ -74,16 +74,30 @@ const { fmSaveOutcome } = await import("@/fm/fmSave");
 const o = Object.fromEntries(["saved", "unchanged", "offline", "refused"].map((r) => [r, fmSaveOutcome(r)]));
 ck("saved / unchanged: done, nothing to say", o.saved.done && o.saved.note === null && o.unchanged.done && o.unchanged.note === null);
 ck("offline: DONE (queued), and the person is told it will be sent — never 'try again'",
-   o.offline.done === true && /sent automatically/.test(o.offline.note) && !/try again/i.test(o.offline.note), o.offline);
-ck("refused: NOT done — the form keeps what was typed, and says so", o.refused.done === false && /still here/.test(o.refused.note), o.refused);
+   o.offline.done === true && o.offline.queued === true && /sent automatically/.test(o.offline.note) && !/try again/i.test(o.offline.note), o.offline);
+ck("refused: NOT done — the form keeps what was typed, and says so", o.refused.done === false && !o.refused.queued && /still here/.test(o.refused.note), o.refused);
+ck("  ...and each carries the write's own result (the one 'Saved' label that means saved, not queued)",
+   ["saved", "unchanged", "offline", "refused"].every((r) => o[r].result === r) && !o.saved.queued);
+
+// ⚠️ THE STORE ANSWERS "DID IT SAVE?" ITSELF (architecture review, 2026-10-19): fmSaveOutcome was applied by hand at
+// eight call sites, and the 2.496.252 defect was a form that skipped the line. Now FmDataContext.run applies it and
+// every mutator returns done / note / queued — no screen names fmSaveOutcome at all.
+const { readdirSync } = await import("node:fs");
+const SRC = new URL("../../src/", import.meta.url);
+const everyFile = (dir, out = []) => { for (const e of readdirSync(dir, { withFileTypes: true })) {
+  const u = new URL(e.name + (e.isDirectory() ? "/" : ""), dir); if (e.isDirectory()) everyFile(u, out); else if (/\.(ts|tsx)$/.test(e.name)) out.push(u); } return out; };
+const callers = everyFile(SRC).filter((u) => /fmSaveOutcome/.test(readFileSync(u, "utf8"))).map((u) => u.href.slice(SRC.href.length));
+ck("fmSaveOutcome is named by its definition and the store only — no screen applies it by hand",
+   callers.sort().join() === "fm/FmDataContext.tsx,fm/fmSave.ts", callers);
+ck("  ...the store's one way in applies it to every write", /fmSaveOutcome\(await mutate\(/.test(ctx) && !/export \{ fmSaveOutcome/.test(ctx));
 
 // the Overview's and the Tickets tab's Close save through their one shared piece, WorkButtons (2026-10-16)
 const SAVES = ["components/fm/GuestReportModal.tsx", "components/fm/FaultStageModal.tsx", "components/fm/WorkButtons.tsx", "components/fm/FaultForm.tsx",
   "components/fm/SpendTab.tsx", "components/fm/ScheduleEditor.tsx", "components/fm/TodayTab.tsx"];
 const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
-ck("every Facility save asks fmSaveOutcome; the old wording is gone",
-   SAVES.every((f) => /fmSaveOutcome\(/.test(src(f))) && !SAVES.some((f) => /fmWriteProblem/.test(src(f))) && !/fmWriteProblem/.test(ctx + src("fm/fmSave.ts")),
-   SAVES.filter((f) => !/fmSaveOutcome\(/.test(src(f))));
+ck("every Facility save reads `done` off what its mutator returned; the old wording is gone",
+   SAVES.every((f) => /const \{ done, note: why[^}]*\} = /.test(src(f))) && !SAVES.some((f) => /fmWriteProblem/.test(src(f))) && !/fmWriteProblem/.test(ctx + src("fm/fmSave.ts")),
+   SAVES.filter((f) => !/const \{ done, note: why[^}]*\} = /.test(src(f))));
 // The defect's shape: a mutator awaited as a statement, then the form emptied regardless.
 const blind = SAVES.filter((f) => /await (add|update|log|advance|close)[A-Za-z]*\([^;]*\);\s*(resetForm|cancel|setOpenId\(null\))/.test(strip(src(f))));
 ck("  ...and no form empties itself after a save it did not look at", blind.length === 0, blind);

@@ -17,11 +17,18 @@ export type FmWriteResult = "saved" | "refused" | "offline" | "unchanged";
 
 /**
  * What a Facility screen does with a write's result — THE one decision, for
- * every form and every button that saves (2.496.252).
+ * every form and every button that saves (2.496.252). ⚠️ APPLIED BY THE
+ * STORE, NOT BY EACH SCREEN (architecture review, 2026-10-19): every mutator
+ * of FmDataContext returns this (run), so no form can skip it — the 2.496.252
+ * defect was one that did. This function is internal to the store; a screen
+ * reads `done` and `note` off what its mutator returned.
  *
- *   done  — the form may empty or the dialog close: the change is saved, or it
- *           is QUEUED on this device and will be sent on its own (offline).
- *   note  — what to tell the person, or null.
+ *   result — the write's own result, for the one screen that says "Saved"
+ *            only when saved (useMonthlyDocument).
+ *   done   — the form may empty or the dialog close: the change is saved, or
+ *            it is QUEUED on this device and will be sent on its own (offline).
+ *   note   — what to tell the person, or null.
+ *   queued — kept on this device, to be sent on its own (offline).
  *
  * ⚠️ OFFLINE IS DONE, NOT "TRY AGAIN". An offline write stays on this device
  * and the next refresh re-sends it (mutate, syncedDocument), so the old words —
@@ -31,8 +38,9 @@ export type FmWriteResult = "saved" | "refused" | "offline" | "unchanged";
  * whatever happened, so a REFUSED save threw away what the facility manager
  * had typed. Refused is the only result that keeps the form.
  */
-export function fmSaveOutcome(r: FmWriteResult): { done: boolean; note: string | null } {
-  if (r === "refused") return { done: false, note: "The add-on refused this — nothing was saved. What you typed is still here." };
-  if (r === "offline") return { done: true, note: "Saved on this device — it will be sent automatically when the add-on can be reached." };
-  return { done: true, note: null };
+export interface FmSaveOutcome { result: FmWriteResult; done: boolean; note: string | null; queued: boolean }
+export function fmSaveOutcome(r: FmWriteResult): FmSaveOutcome {
+  if (r === "refused") return { result: r, done: false, note: "The add-on refused this — nothing was saved. What you typed is still here.", queued: false };
+  if (r === "offline") return { result: r, done: true, note: "Saved on this device — it will be sent automatically when the add-on can be reached.", queued: true };
+  return { result: r, done: true, note: null, queued: false };
 }

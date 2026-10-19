@@ -373,9 +373,10 @@
   font-size: var(--text-2xs); font-weight: 600; padding: 3px 9px; border-radius: 999px;
   white-space: nowrap; background: var(--bg-input); color: var(--text-secondary);
 }
-.fm-badge.overdue, .fm-badge.never { background: var(--status-danger); color: #fff; }
-.fm-badge.due-soon { background: var(--status-warning); color: #fff; }
-.fm-badge.ok { background: var(--status-on); color: #fff; }
+/* by its tone (fm/tone pillClass: a ticket's stage, a task's due state) — filled, its ok too */
+.fm-badge.tone-danger { background: var(--status-danger); color: #fff; }
+.fm-badge.tone-warn { background: var(--status-warning); color: #fff; }
+.fm-badge.tone-ok { background: var(--status-on); color: #fff; }
 
 .fm-check-icon { flex: 0 0 auto; display: flex; }
 .fm-check-icon.pass { color: var(--status-on); }

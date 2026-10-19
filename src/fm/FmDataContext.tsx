@@ -34,8 +34,7 @@ import {
 
 // The write's result and what a screen does with it live in fm/fmSave.ts (pure,
 // so an oracle can drive them); re-exported here for the screens.
-export { fmSaveOutcome, type FmWriteResult } from "./fmSave";
-import type { FmWriteResult } from "./fmSave";
+import { fmSaveOutcome, type FmSaveOutcome, type FmWriteResult } from "./fmSave";
 
 interface FmDataContextValue {
   data: FmData;
@@ -45,27 +44,27 @@ interface FmDataContextValue {
   /** Set when the last write failed, so the UI can say so instead of pretending. */
   saveError: string | null;
   reload: () => Promise<void>;
-  addSchedule: (s: Omit<FmSchedule, "id" | "createdAt">) => Promise<FmWriteResult>;
-  updateSchedule: (id: string, patch: Partial<FmSchedule>) => Promise<FmWriteResult>;
-  removeSchedule: (id: string) => Promise<FmWriteResult>;
+  addSchedule: (s: Omit<FmSchedule, "id" | "createdAt">) => Promise<FmSaveOutcome>;
+  updateSchedule: (id: string, patch: Partial<FmSchedule>) => Promise<FmSaveOutcome>;
+  removeSchedule: (id: string) => Promise<FmSaveOutcome>;
   /** Delete every schedule in one write — the Today tab's "delete all" action.
    *  Same policy as a single removeSchedule: completions already logged stay
    *  (they're evidence of work actually done, not of the task still existing),
    *  only the schedule entries themselves go. */
-  removeAllSchedules: () => Promise<FmWriteResult>;
+  removeAllSchedules: () => Promise<FmSaveOutcome>;
   /** Log a completion, optionally recording what it cost in the same action —
    *  the two belong together and splitting them loses the link. */
   logCompletion: (
     c: Omit<FmCompletion, "id" | "costId">,
     cost?: Omit<FmCost, "id" | "at" | "photoIds">,
-  ) => Promise<FmWriteResult>;
-  addCost: (c: Omit<FmCost, "id">) => Promise<FmWriteResult>;
+  ) => Promise<FmSaveOutcome>;
+  addCost: (c: Omit<FmCost, "id">) => Promise<FmSaveOutcome>;
   /** Correct a recorded spend entry. Amending is ordinary work (a mistyped
    *  amount, a missing receipt photo) — only ERASING one needs the superadmin
    *  code, because that destroys the record rather than fixing it. */
-  updateCost: (id: string, patch: Partial<FmCost>) => Promise<FmWriteResult>;
+  updateCost: (id: string, patch: Partial<FmCost>) => Promise<FmSaveOutcome>;
   /** `asTicket`: "Open a ticket" — it starts in progress (fmCommands); otherwise a fault (a guest's report). */
-  addTicket: (t: Omit<FmTicket, "id" | "openedAt" | "status">, opts?: { asTicket?: boolean }) => Promise<FmWriteResult>;
+  addTicket: (t: Omit<FmTicket, "id" | "openedAt" | "status">, opts?: { asTicket?: boolean }) => Promise<FmSaveOutcome>;
   /** Move a fault to its next stage AND record the proof behind that move.
    *
    *  One mutator for every transition rather than one per stage: they differ
@@ -82,23 +81,23 @@ interface FmDataContextValue {
     step: { who?: string; note?: string; photoIds: string[] },
     /** Filed once, on the first of them. */
     cost?: Omit<FmCost, "id" | "at" | "photoIds">,
-  ) => Promise<FmWriteResult>;
+  ) => Promise<FmSaveOutcome>;
   /** Close a fault in ONE step, nothing done ("Close": no action needed):
    *  resolved now, with a "Closed without action" update, and no completion
    *  or cost (the "closeTickets" command). The same write as every other. */
-  closeTickets: (ids: readonly string[]) => Promise<FmWriteResult>;
-  updateTicket: (id: string, patch: Partial<FmTicket>) => Promise<FmWriteResult>;
+  closeTickets: (ids: readonly string[]) => Promise<FmSaveOutcome>;
+  updateTicket: (id: string, patch: Partial<FmTicket>) => Promise<FmSaveOutcome>;
   /** Erase a spend entry for good. Needs a single-use superadmin token — the
    *  server rejects the write without one, so this is not a UI-level rule. */
-  removeCost: (id: string, elevation: string) => Promise<FmWriteResult>;
+  removeCost: (id: string, elevation: string) => Promise<FmSaveOutcome>;
   /** Erase a fault, its history and its evidence photos. Superadmin only. */
-  removeTicket: (id: string, elevation: string) => Promise<FmWriteResult>;
+  removeTicket: (id: string, elevation: string) => Promise<FmSaveOutcome>;
   /** Erase a logged completion and the cost logged with it. Superadmin only. */
-  removeCompletion: (id: string, elevation: string) => Promise<FmWriteResult>;
+  removeCompletion: (id: string, elevation: string) => Promise<FmSaveOutcome>;
   /** Keep a generated report/spend statement (see FmSavedDocument) so it can
    *  be reopened or handed over later without regenerating it. */
-  saveDocument: (doc: Omit<FmSavedDocument, "id" | "generatedAt">) => Promise<FmWriteResult>;
-  removeDocument: (id: string) => Promise<FmWriteResult>;
+  saveDocument: (doc: Omit<FmSavedDocument, "id" | "generatedAt">) => Promise<FmSaveOutcome>;
+  removeDocument: (id: string) => Promise<FmSaveOutcome>;
   /** Internal — see useFacilityLiveView. Declares that this screen is showing
    *  the data right now, so the store polls at the on-screen cadence. Returns
    *  its own unregister. */
@@ -254,10 +253,12 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
 
   // ONE way in for every change (fmCommands.applyFmCommand): this says WHICH command; who did it — the signed-in
   // profile, on every step of a fault, for the card's "by …" and the VESTA Agent's notes — when, and the new ids are
-  // stamped there, the same for every write.
+  // stamped there, the same for every write. And ONE answer to "did it save?" (fmSave.fmSaveOutcome): every mutator
+  // returns done / note / queued, so no screen decides it for itself — the 2.496.252 defect was a form that skipped
+  // that line (architecture review, 2026-10-19).
   const { role } = useProfile();
-  const run = useCallback((cmd: FmCommand, elevation?: string) =>
-    mutate((d) => applyFmCommand(d, cmd, { ...stamp(), by: role ? ROLE_LABELS[role] : undefined }), elevation),
+  const run = useCallback(async (cmd: FmCommand, elevation?: string): Promise<FmSaveOutcome> =>
+    fmSaveOutcome(await mutate((d) => applyFmCommand(d, cmd, { ...stamp(), by: role ? ROLE_LABELS[role] : undefined }), elevation)),
   [mutate, role]);
 
   const addSchedule = useCallback((schedule: Omit<FmSchedule, "id" | "createdAt">) => run({ type: "addSchedule", schedule }), [run]);
@@ -300,10 +301,10 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
   );
 }
 
-/** Call from any panel that DISPLAYS facility records. While one is mounted
- *  the store re-reads every STORE_ACTIVE_MS instead of every three minutes,
- *  so a fault marked in progress on another device lands in seconds on the
- *  screen someone is actually watching. Costs nothing when no panel is open. */
+/** Call from the WINDOW that displays facility records (CockpitModal — once, whichever tab shows: its Overview lists
+ *  the open faults too). While one is mounted the store re-reads every STORE_ACTIVE_MS instead of every three
+ *  minutes, so a fault marked in progress on another device lands in seconds on the screen someone is actually
+ *  watching. Costs nothing when no window is open. */
 export function useFacilityLiveView(): void {
   const { registerWatcher } = useFmData();
   useEffect(() => registerWatcher(), [registerWatcher]);

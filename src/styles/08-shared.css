@@ -120,17 +120,12 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
   border: 1.6px solid currentColor; font-size: 8px; font-weight: 700; line-height: 1; letter-spacing: 0;
 }
 .source-role-badge.two { font-size: 6.5px; }
-/* These two were SWAPPED, which inverted the one distinction the status
-   vocabulary exists to protect (utils/stateColors, babylon/colors): amber is
-   "Home Assistant has lost contact, the state is unknown", red is "a confirmed
-   problem". Cockpit painted an unavailable device as a confirmed alarm and a
-   confirmed fault as merely unreachable — the same device shown red here and
-   amber on the map badge beside it. `schedule` stays amber deliberately: it is
-   a maintenance item, and amber is Facility Manager's established "due soon"
-   tier (.fm-badge.due-soon), not a claim about connectivity. */
-.cockpit-attention-unavailable { color: var(--status-warning); }
-.cockpit-attention-fault, .cockpit-attention-alarm, .cockpit-attention-critical { color: var(--status-danger); }
-.cockpit-attention-schedule { color: var(--status-warning); }
+/* A problem's icon in its SEVERITY (config/attention.attentionSeverity — the one rule the Cockpit button, the
+   card and the Recap's row share, owner 2026-10-18): red only for an alarm or a critical device offline; a fault,
+   any other offline device and a late task are a warning, amber. The five per-kind rules this replaces still
+   painted every fault red after that decision (architecture review, 2026-10-19). */
+.cockpit-attention-danger { color: var(--status-danger); }
+.cockpit-attention-warn { color: var(--status-warning); }
 /* An issue's problems, one or several (config/attention.groupAttention): one line each, inside the card's text. */
 .cockpit-attention-subs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .cockpit-attention-sub { display: flex; flex-direction: column; gap: 4px; }

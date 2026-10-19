@@ -6,6 +6,7 @@
 import { CalendarCog, MessageCircle, MoonStar, Radio, Siren, UserRound } from "lucide-react";
 import type { AriaAttributes, ComponentType } from "react";
 import { ROLE_INITIALS, type Role } from "@/auth/roles";
+import type { AttentionSeverity } from "@/config/attention";
 import type { IssueSource } from "@/fm/issueSource";
 
 type IconProps = { size?: number | string; className?: string; "aria-hidden"?: AriaAttributes["aria-hidden"] };
@@ -33,32 +34,35 @@ export const SOURCE_WORDS: Record<IssueSource, string> = {
   owner: "Owner", fm: "Facility manager", person: "Person", guest: "Guest", schedule: "Schedule",
 };
 
-/** A problem's source icons, stacked when a line holds two (a device's live state and its fault). Each in its own
- *  status colour (`kinds`: the class suffix — the status vocabulary: amber lost contact or due, red a confirmed
- *  problem). */
-export function SourceIcons({ sources, kinds, size = 16 }: {
+/** A problem's source icons, stacked when a line holds two (a device's live state and its fault). Each in its
+ *  problem's severity (config/attention.attentionSeverity — the class suffix: amber a warning, red danger). */
+export function SourceIcons({ sources, severities, size = 16 }: {
   sources: readonly IssueSource[];
-  kinds: readonly string[];
+  severities: readonly AttentionSeverity[];
   size?: number;
 }) {
   return (
     <span className="cockpit-source-icons" aria-label={sources.map((s) => SOURCE_WORDS[s]).join(" and ")}>
       {sources.map((s, i) => {
         const Icon = SOURCE_ICON[s];
-        return <Icon key={`${s}-${i}`} size={size} aria-hidden className={`cockpit-attention-icon cockpit-attention-${kinds[i] ?? kinds[0]}`} />;
+        return <Icon key={`${s}-${i}`} size={size} aria-hidden className={`cockpit-attention-icon cockpit-attention-${severities[i] ?? severities[0]}`} />;
       })}
     </span>
   );
 }
 
 /** The sources of several faults on one line ("Check the ⏾ ⚑ faults in Overview", the Recap's readiness) — side by
- *  side, each in the fault's red, named for a screen reader. */
-export function SourceIconRow({ sources, size = 15 }: { sources: readonly IssueSource[]; size?: number }) {
+ *  side, each in the line's severity (a fault is a warning: amber, owner 2026-10-18), named for a screen reader. */
+export function SourceIconRow({ sources, severity, size = 15 }: {
+  sources: readonly IssueSource[];
+  severity: AttentionSeverity;
+  size?: number;
+}) {
   return (
     <span className="source-icon-row" aria-label={sources.map((s) => SOURCE_WORDS[s]).join(", ")}>
       {sources.map((s) => {
         const Icon = SOURCE_ICON[s];
-        return <Icon key={s} size={size} aria-hidden className="cockpit-attention-icon cockpit-attention-fault" />;
+        return <Icon key={s} size={size} aria-hidden className={`cockpit-attention-icon cockpit-attention-${severity}`} />;
       })}
     </span>
   );

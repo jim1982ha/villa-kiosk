@@ -22,14 +22,13 @@
 
 import { useState } from "react";
 import { Camera, Check, Wrench } from "lucide-react";
-import { useConfig } from "@/config/ConfigContext";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
-import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
+import { useFmData } from "@/fm/FmDataContext";
 import { uploadEvidence } from "@/fm/fmApi";
 import NotesField from "./NotesField";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import ModalFooter from "@/components/common/ModalFooter";
-import { deviceRoom } from "@/config/devicePlace";
+import { useRecordPlace } from "./useRecordPlace";
 
 export default function GuestReportModal({
   entityId, onClose,
@@ -43,7 +42,7 @@ export default function GuestReportModal({
   // useModalA11y. It registers useBackToClose itself, so calling both would
   // push this surface onto the dismissal stack twice.
   const dialogRef = useModalA11y(onClose);
-  const { resolvedRooms } = useConfig();
+  const place = useRecordPlace();
   const label = useEntityLabel();
   const [title, setTitle] = useState("");
   const [note, setNote] = useState("");
@@ -77,9 +76,7 @@ export default function GuestReportModal({
     setSendError(null);
     const result = await addTicket({
       title: title.trim(),
-      entityId,
-      deviceLabel,
-      room: entityId ? deviceRoom(resolvedRooms, entityId) : undefined,
+      ...place(entityId),   // the device, its name on screen and its room: ONE builder (fm/recordPlace)
       note: note.trim() || undefined,
       photoIds,
       reportedBy: "guest",
@@ -89,8 +86,8 @@ export default function GuestReportModal({
     // whatever the write did, and a guest cannot check afterwards.
     // Offline counts as sent: it is queued and goes on its own — telling the
     // guest to try again filed the report twice (2.496.252).
-    const { done, note: why } = fmSaveOutcome(result);
-    if (done) { setQueued(why !== null); setSent(true); } else setSendError(why);
+    const { done, note: why, queued } = result;
+    if (done) { setQueued(queued); setSent(true); } else setSendError(why);
   };
 
   return (

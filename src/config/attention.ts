@@ -16,7 +16,7 @@ import type { Threshold } from "@/config/ThresholdConfig";
 import { labelOf } from "@/config/EntityMap";
 import { deviceRoom, deviceRoomOrRecord, firstRoom, roomLabel } from "@/config/devicePlace";
 import { criticalDevices, deviceOf, recordEntity } from "@/config/deviceGroups";
-import { faultTitle, fmAttention, stageOf } from "@/fm/fmEngine";
+import { DUE_WORDS, faultTitle, fmAttention, STAGE_WORDS, stageOf, type FmStage } from "@/fm/fmEngine";
 import { lastNoted } from "@/fm/faultNotes";
 import { deviceWorkKey, groupByDevice, lineActions, overviewActions, type WorkAction, type WorkRecord } from "@/fm/deviceWork";
 import { faultSource, type IssueSource } from "@/fm/issueSource";
@@ -33,8 +33,9 @@ export interface AttentionItem {
   /** Where it comes from (fm/issueSource): its icon on the card. Live for a state; a fault's own (faultSource). */
   source?: IssueSource;
   title: string;
-  /** Short status word — "Open", "Overdue", "Leak detected", etc. */
-  detail: string;
+  /** Short status word — "Unavailable", "Overdue", "Leak detected", etc. Absent on a fault: what its line says of its
+   *  status is its stage's word (faultStatus, fmEngine.STAGE_WORDS), never one of its own. */
+  detail?: string;
   room?: string;
   /** Present when this item can be drilled into (opens the entity's own
    *  panel) — a fault/schedule with no device behind it (a whole-villa task,
@@ -43,8 +44,9 @@ export interface AttentionItem {
   /** Set on a fault: the record it is, so its card can take it on or close it
    *  (FmDataContext.advanceTickets / closeTickets). */
   ticketId?: string;
-  /** Set on a fault: where its record stands (fmEngine.stageOf) — a fault nobody has taken on, or a ticket. */
-  stage?: "fault" | "ticket";
+  /** Set on a fault: where its record stands (fmEngine.stageOf) — a fault nobody has taken on, or a ticket (never
+   *  closed: a closed record is on no list). */
+  stage?: FmStage;
   /** The villa DEVICE the entity belongs to (deviceGroups.deviceFolding: the
    *  owner's device groups, then Home Assistant's device registry) — what
    *  groupAttention folds on. Set exactly when `entityId` is. */
@@ -156,7 +158,7 @@ function problemLines(group: AttentionGroup): number {
 function itemRecords(i: AttentionItem): WorkRecord[] {
   const f = i.kind === "fault" ? i : i.fault;
   return f ? [f.ticketId, ...(f.twins ?? [])].flatMap((id) => (id
-    ? [{ id, stage: f.stage === "ticket" ? "ticket" as const : "fault" as const }] : [])) : [];
+    ? [{ id, stage: f.stage ?? "fault" }] : [])) : [];
 }
 
 /** The records on a card — its faults and tickets, each with its stage. */
@@ -169,16 +171,17 @@ export function cardRecords(group: AttentionGroup): WorkRecord[] {
  *  open fault's line is empty — its title is the row's, its Close the line's). Every row shows its problems this way,
  *  one or several. */
 export function attentionLineIn(group: AttentionGroup, item: AttentionItem): string {
-  return group.key.startsWith("device:") ? attentionLine(item) : faultStatus(item) ?? item.detail;
+  return group.key.startsWith("device:") ? attentionLine(item) : faultStatus(item) ?? item.detail ?? "";
 }
 
-/** What a fault's line must say of its status: nothing while it is open, "In progress" once someone took it.
+/** What a fault's line must say of its status: nothing while it is open, its stage's word (fmEngine.STAGE_WORDS:
+ *  "In progress") once someone took it.
  *  ⚠️ "OPEN FAULT:" BEFORE EVERY FAULT SAID NOTHING (owner, 2026-10-14: "this seems providing no value"): the row's
  *  icon says it is a fault and its Close that it is open — the words only pushed the text to a second line.
  *  undefined for anything that is not a fault. */
 function faultStatus(item: AttentionItem): string | undefined {
   if (item.kind !== "fault") return undefined;
-  return item.stage === "ticket" ? "In progress" : "";
+  return item.stage === "ticket" ? STAGE_WORDS.ticket.word : "";
 }
 
 /** The icons a problem's line shows inside its row: its own sources only where the row's icons do not say them already
@@ -193,17 +196,28 @@ export function lineIcon(group: AttentionGroup, item: AttentionItem): LineSource
 
 /** A line's source icons and the status colour of each (owner, 2026-10-14: the source as an icon, in place of the
  *  warning sign; two stacked when a line holds a device's live state and its fault). */
-export interface LineSources { sources: IssueSource[]; kinds: AttentionTone[] }
+export interface LineSources { sources: IssueSource[]; severities: AttentionSeverity[] }
 export function lineSources(item: AttentionItem): LineSources {
-  const own = { sources: [item.source ?? "live"], kinds: [attentionTone(item)] } as LineSources;
-  return item.fault ? { sources: [...own.sources, item.fault.source ?? "person"], kinds: [...own.kinds, attentionTone(item.fault)] } : own;
+  const own = { sources: [item.source ?? "live"], severities: [attentionSeverity(item)] } as LineSources;
+  return item.fault ? { sources: [...own.sources, item.fault.source ?? "person"], severities: [...own.severities, attentionSeverity(item.fault)] } : own;
 }
 
-/** What colours a problem's icon (the .cockpit-attention-<tone> class): its kind — and a CRITICAL offline device its
- *  own, red, where any other offline device is amber (owner, 2026-10-18: "critical" = red and told at once). */
+/** What a problem IS: its kind — and a CRITICAL offline device its own, where any other offline device is just
+ *  offline (owner, 2026-10-18: "critical" = red and told at once). */
 export type AttentionTone = AttentionKind | "critical";
 export function attentionTone(item: AttentionItem): AttentionTone {
   return item.kind === "unavailable" && item.critical ? "critical" : item.kind;
+}
+
+/** How SERIOUS a problem is, on every surface — the Cockpit button, a card's icon, the Recap's row (the
+ *  .cockpit-attention-<severity> class): red (danger) only for an alarm or a critical device offline; a fault, any
+ *  other offline device and a late task are a warning, amber (owner, 2026-10-18). ⚠️ ONE OWNER (architecture review,
+ *  2026-10-19): the button read this rule while the card's icon still painted every fault red from a stylesheet
+ *  written before the decision. */
+export type AttentionSeverity = "danger" | "warn";
+export function attentionSeverity(item: AttentionItem): AttentionSeverity {
+  const tone = attentionTone(item);
+  return tone === "alarm" || tone === "critical" ? "danger" : "warn";
 }
 
 /**
@@ -285,11 +299,12 @@ export function attentionLine(item: AttentionItem): string {
     // device is offline already. ⚠️ SO DID "UNLOCKED — #41 · LAUNDRY ROOM DOOR UNLOCKED" (owner, 2026-10-18): a state
     // word the fault's title already says is not said before it. A word the fault does not say stays: "Not in Home
     // Assistant", a live reading ("92 %").
-    const said = (item.kind === "unavailable" && item.detail === "Unavailable") || saysWord(item.fault.title, item.detail);
-    return said ? fault.charAt(0).toUpperCase() + fault.slice(1) : `${item.detail} — ${fault}`;
+    const word = item.detail ?? "";
+    const said = (item.kind === "unavailable" && word === "Unavailable") || saysWord(item.fault.title, word);
+    return said ? fault.charAt(0).toUpperCase() + fault.slice(1) : `${word} — ${fault}`;
   }
   if (item.kind === "fault") return titled(item);
-  return item.kind === "schedule" ? `${item.detail}: ${item.title}` : item.detail;
+  return item.kind === "schedule" ? `${item.detail}: ${item.title}` : item.detail ?? "";
 }
 
 /**
@@ -340,16 +355,14 @@ export function buildAttentionItems(opts: {
   const fm = fmAttention(fmData);
   for (const t of fm.unresolved) {
     const entityId = recordEntity(t.entityId, (x) => x in entities);   // the one the Tickets tab files it under too
-    const stage = stageOf(t) === "ticket" ? "ticket" : "fault";
     items.push({
       id: `fault:${t.id}`,
       kind: "fault",
       title: faultTitle(t),
-      detail: stage === "ticket" ? "In progress" : "Fault",
       room: t.room,
       entityId,
       ticketId: t.id,
-      stage,
+      stage: stageOf(t),
       latest: lastNoted(t),
       source: faultSource(t),
       check: t.check,
@@ -363,7 +376,7 @@ export function buildAttentionItems(opts: {
       id: `schedule:${s.schedule.id}`,
       kind: "schedule",
       title: s.schedule.title,
-      detail: s.state === "never" ? "Never recorded" : "Overdue",
+      detail: DUE_WORDS[s.state].word,   // its state's ONE word (the Schedule's pill's, the recap's)
       source: "schedule",
       room: s.schedule.room,
       entityId: s.schedule.entityId,
@@ -467,11 +480,18 @@ export function attentionFor(att: VillaProblems, may: (entityId: string) => bool
   };
 }
 
-/** The level is read from EVERY problem; the count is the ROWS, the number the badge shows. Danger is an alarm or a
- *  CRITICAL device offline (owner, 2026-10-18); any other offline device, a fault or a late task is a warning. */
+/** The top bar's Cockpit button, as the villa's health says it: red for danger, amber for a warning, plain when all is
+ *  fine. ⚠️ THE LEVEL WAS WORKED OUT AND NEVER SHOWN (architecture review, 2026-10-19 evening): the button turned red
+ *  for ANY open problem — one late pool task, one ordinary sensor offline — while 2.496.410 promised red only for an
+ *  alarm or a critical device offline. */
+export const healthClass = (health: VillaHealth): string =>
+  health.level === "danger" ? " has-alert" : health.level === "warn" ? " has-warn" : "";
+
+/** The level is read from EVERY problem (attentionSeverity: danger is an alarm or a CRITICAL device offline, owner
+ *  2026-10-18; anything else a warning); the count is the ROWS, the number the badge shows. */
 export function villaHealthFrom(groups: readonly AttentionGroup[]): VillaHealth {
   if (groups.length === 0) return { level: "ok", summary: "Everything looks fine." };
-  const hasDanger = groups.some((g) => g.items.some((i) => i.kind === "alarm" || attentionTone(i) === "critical"));
+  const hasDanger = groups.some((g) => g.items.some((i) => attentionSeverity(i) === "danger"));
   const n = groups.length;
   return {
     level: hasDanger ? "danger" : "warn",

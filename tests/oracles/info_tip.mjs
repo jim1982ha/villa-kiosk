@@ -74,6 +74,15 @@ const beat = JSON.parse(readFileSync(new URL("../../rootfs/usr/share/vesta/agent
 ck("  ...the Kiosk reads the timing the agreement's heartbeat carries, as the proxy shows it",
    JSON.stringify(parseAgentStatus({ state: "online", status: beat.status, cadence: beat.cadence }).cadence) === JSON.stringify(beat.cadence)
    && parseAgentStatus({ state: "online" }).cadence === null);
+// the proxy withholds the cadence while the Agent is offline (tests/agent-interface.py, architecture review 2026-10-19):
+// the (i) then says no number, from the same words it has for an Agent that never said
+{
+  const gone = parseAgentStatus({ state: "offline", last_seen: "2026-09-29T00:00:00Z", cadence: null });
+  const said = faultTiming(true, gone.cadence).note;
+  ck("  ...an Agent gone quiet: 'it checks regularly', never the last heartbeat's number",
+     gone.cadence === null && /it checks regularly, and runs its nightly check at the time set in the VESTA Agent/.test(said)
+     && !/it checks every \d+ minutes|nightly check runs at \d\d:\d\d/.test(said), said);
+}
 ck("  ...Live does not name Home Assistant (owner, 2026-10-14)", !/Home Assistant/.test(withAgent.rows.find((r) => r.source === "live").what));
 ck("without an Agent: no row of the Agent's — nothing claims to open or close by itself",
    !alone.rows.some((r) => ["alert", "night", "chat"].includes(r.source)) && alone.rows.some((r) => r.source === "guest")

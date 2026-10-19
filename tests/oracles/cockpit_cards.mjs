@@ -8,15 +8,20 @@ const { default: RecordCard } = await import("@/components/fm/RecordCard");
 const { AttentionCard } = await import("@/components/cockpit/CockpitOverview");
 const { cockpitCard } = await import("@/config/cockpitCard");
 const { groupAttention } = await import("@/config/attention");
+const { STAGE_WORDS } = await import("@/fm/fmEngine");
+const { pillClass } = await import("@/fm/tone");
 
 console.log("  a ticket's card:");
-const ticket = draw(h(RecordCard, { title: "#33 · Test lock unavailable", status: { text: "In progress", tone: "due-soon" },
+// its pill: the stage's one word and tone (fmEngine.STAGE_WORDS through fm/tone pillClass), not the Schedule's due-soon
+const ticket = draw(h(RecordCard, { title: "#33 · Test lock unavailable",
+  status: { text: STAGE_WORDS.ticket.word, tone: pillClass(STAGE_WORDS.ticket.tone) },
   when: "Opened 2026-10-15 00:08", pills: h("span", { className: "fm-clause" }, "Test lock"),
   notes: ["What to do: power", "Reminder sent to Facility Manager (00:24)"], amount: "IDR 1,000",
   erase: { title: "Erase", detail: "x", run: async () => {} }, onOpen: () => {},
   actions: h(React.Fragment, null, btn("Mark resolved"), btn("Close")) }));
 const head = inside(ticket, "fm-record-head"), body = inside(ticket, "fm-record-body");
-ck("its pill on the title line", /#33 · Test lock unavailable[\s\S]*In progress/.test(head) && /fm-badge due-soon/.test(head), head);
+ck("its pill on the title line, in its tone's class (a filled pill: .fm-badge.tone-warn, 07-facility.css)",
+   /#33 · Test lock unavailable[\s\S]*In progress/.test(head) && /fm-badge tone-warn/.test(head) && !/due-soon/.test(head), head);
 ck("  ...its buttons INSIDE the card, on the right of its text (owner, 2026-10-14)",
    /fm-record-actions[\s\S]*Mark resolved[\s\S]*Close/.test(body) && /fm-row-main[\s\S]*fm-record-actions/.test(body)
    && inside(ticket, "fm-record-card").includes("Mark resolved"), body);

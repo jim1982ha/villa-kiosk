@@ -33,7 +33,7 @@ import { binaryLook } from "./binaryLook";
 import { stateLabelFor } from "./BinarySensorClasses";
 import { deviceRowText, formatSensorParts, prettyState } from "@/utils/entityValue";
 import { domainOf } from "@/utils/entityDomain";
-import { isUnavailable, paintState, statusKeyFor, STATUS_PILL_CLASS } from "@/utils/stateColors";
+import { contactOf, isUnavailable, paintState, statusKeyFor, STATUS_PILL_CLASS } from "@/utils/stateColors";
 import { coverStateLabel } from "@/utils/panelRules";
 
 /** The colour a measurement's number (and its chart) takes at each level. */
@@ -45,7 +45,13 @@ const LEVEL_COLOR: Record<AlertLevel, string> = {
 
 export interface Reading {
   kind: ReadingKind;
+  /** No value can be shown (stateColors.isUnavailable: lost contact OR "unknown"). */
   unavailable: boolean;
+  /** Where the entity stands with its device (stateColors.contactOf): "lost" — the device is offline, the window
+   *  says so; "no-value" — the device reports but this entity has nothing to say ("unknown": a wind chill on a warm
+   *  day); "ok". ⚠️ UNKNOWN IS NOT LOST CONTACT (owner, 2026-10-18; architecture review 2026-10-19): the window
+   *  shouted UNAVAILABLE and "Contact with this device is lost" for a sensor whose device was answering. */
+  contact: "lost" | "no-value" | "ok";
   /** How alarming: a binary sensor in its problem state, or a measurement
    *  outside the owner's thresholds. */
   level: AlertLevel;
@@ -73,7 +79,9 @@ export interface Reading {
  * for an on/off sensor); `alertThresholds` the owner's limits and alert states.
  *
  * Offline always wins: an unavailable sensor never shows its class's "Clear"
- * or "No leak", which would claim a reading that was never taken.
+ * or "No leak", which would claim a reading that was never taken. An entity
+ * with NO VALUE ("unknown") shows UNKNOWN in the quiet pill — not an alarm,
+ * not lost contact: its device is answering (stateColors.contactOf).
  */
 export function readingOf(
   id: string,
@@ -84,6 +92,9 @@ export function readingOf(
   const kind = readingKind(entity, mappingType);
   const threshold = alertThresholds[id];
   const unavailable = isUnavailable(entity);
+  const contact = contactOf(entity?.state);
+  const lost = contact === "lost";
+  const noValue = contact === "no-value";
   const deviceClass = entity?.attributes.device_class as string | undefined;
   if (kind === "binary") {
     const look = binaryLook(id, deviceClass, threshold?.alertState);
@@ -92,12 +103,13 @@ export function readingOf(
     const alarm = !unavailable && level === "danger";
     const words = look.word(state);
     return {
-      kind, unavailable, level,
-      value: unavailable ? "UNAVAILABLE" : alarm ? words.toUpperCase() : words,
+      kind, unavailable, contact, level,
+      value: lost ? "UNAVAILABLE" : noValue ? "UNKNOWN" : alarm ? words.toUpperCase() : words,
       unit: "",
-      pill: unavailable ? "unavailable" : alarm ? "danger" : look.tone(state),
-      alarm: unavailable || alarm,
-      color: unavailable ? "var(--status-warning)" : "var(--text-primary)",
+      // "off" is the pill vocabulary's quiet tone (03-panels .status-pill.off): nothing to say, nothing wrong
+      pill: lost ? "unavailable" : noValue ? "off" : alarm ? "danger" : look.tone(state),
+      alarm: lost || alarm,
+      color: lost ? "var(--status-warning)" : "var(--text-primary)",
       seriesColor: LEVEL_COLOR[level],
       stateColor: look.color,
     };
@@ -105,12 +117,12 @@ export function readingOf(
   const level = readingLevel(entity, kind, threshold, undefined);
   const parts = entity ? formatSensorParts(entity) : { value: "", unit: "" };
   return {
-    kind, unavailable, level,
-    value: unavailable ? "UNAVAILABLE" : parts.value || (entity?.state ?? "—"),
+    kind, unavailable, contact, level,
+    value: lost ? "UNAVAILABLE" : noValue ? "UNKNOWN" : parts.value || (entity?.state ?? "—"),
     unit: unavailable ? "" : parts.unit,
-    pill: unavailable ? "unavailable" : null,
-    alarm: unavailable || level === "danger",
-    color: unavailable ? "var(--status-warning)" : kind === "text" ? "var(--text-primary)" : LEVEL_COLOR[level],
+    pill: lost ? "unavailable" : noValue ? "off" : null,
+    alarm: lost || level === "danger",
+    color: lost ? "var(--status-warning)" : noValue || kind === "text" ? "var(--text-primary)" : LEVEL_COLOR[level],
     seriesColor: LEVEL_COLOR[level],
     stateColor: null,
   };

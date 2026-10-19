@@ -20,6 +20,7 @@ import { CATEGORY_LABELS } from "@/config/EntityCategories";
 import { patchMapping } from "@/config/mappingEdits";
 import { readingRows } from "@/config/readingRows";
 import { deviceSwitch } from "@/utils/devicePower";
+import { contactOf } from "@/utils/stateColors";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { useOptimisticToggle } from "@/hooks/useOptimisticToggle";
 import { useAskFirst, type AskFirst } from "@/hooks/useAskFirst";
@@ -90,7 +91,9 @@ export function useOpenPanelActions({ screen, go, panelFor, readingsOf, doors }:
   // components/panels/panelHeader, from the open panel and live data; the
   // switch's state is the optimistic hook's.
   const header = panelHeader({ panel: activePanel, entities, config, canControl,
-    linkedSwitch: linkedPower ? { isOn: linkedToggle.isOn, known: linkedPower.position !== "unknown" } : null });
+    linkedSwitch: linkedPower && linkedEntityId
+      ? { isOn: linkedToggle.isOn, known: linkedPower.position !== "unknown", contact: contactOf(entities[linkedEntityId]?.state) }
+      : null });
   return {
     linkedAsk,
     actions: {

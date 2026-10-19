@@ -18,7 +18,7 @@ const entities = Object.fromEntries([
 ].map((e) => [e.entity_id, e]));
 const villa = new Set(Object.keys(entities));
 const devices = { ids: [...villa], unavailable: ["climate.bed", "camera.pool", "sensor.door_battery"], has: (id) => villa.has(id), deviceOf: (id) => id, deviceOfRecord: (id) => id, isCritical: () => false };
-const r = buildReadiness(entities, EMPTY_FM_DATA, devices, {});
+const r = buildReadiness(entities, EMPTY_FM_DATA, devices, {}, []);
 const opens = (c) => c.opens ? `${c.opens.label} → ${c.opens.group.title} [${c.opens.group.entityIds.join(",")}]${c.opens.health ? " (health)" : ""}` : "-";
 
 console.log("  each check's own list, by value:");
@@ -42,7 +42,7 @@ ck("every failing check about devices has its button, with its own words",
    && rowOf("Cameras online").includes("|View cameras [icon]|"), rows);
 // (owner, 2026-10-18: the devices not reporting as pills, "the same way the unlocked device or on lights are shown")
 ck("  ...every check names its devices as chips — the devices not reporting too",
-   /fm-entity-chip/.test(html.split('<div class="fm-row ')[1]) && rowOf("Doors locked").includes("|back|") && rowOf("Cameras online").includes("|pool|"), rows);
+   /fm-entity-chip/.test(html.split('<div class="fm-row ').find((x) => x.includes("All devices reporting")) ?? "") && rowOf("Doors locked").includes("|back|") && rowOf("Cameras online").includes("|pool|"), rows);
 ck("  ...and nothing in it leaves Recap: no Overview link", !/Overview/.test(rowOf("All devices reporting")));
 const fs = readFileSync(new URL("../../src/components/fm/FacilitySections.tsx", import.meta.url), "utf8");
 // The wiring a drawing cannot reach (it needs the Facility data): the button's list opens in Recap, as a list.
@@ -58,11 +58,11 @@ console.log("\n  how bad, as the top bar says it (review \"One answer per questi
   const plain = stateOf(r);
   ck("devices not answering, none critical: amber, however many (3 here) — air conditioning and cameras alike",
      plain["devices-online"] === "warn" && plain.climate === "warn" && plain.cameras === "warn" && r.overall === "warn", plain);
-  const crit = stateOf(buildReadiness(entities, EMPTY_FM_DATA, { ...devices, isCritical: (id) => id === "camera.pool" }, {}));
+  const crit = stateOf(buildReadiness(entities, EMPTY_FM_DATA, { ...devices, isCritical: (id) => id === "camera.pool" }, {}, []));
   ck("  ...one CRITICAL device not answering: red, in its own checks only",
      crit["devices-online"] === "fail" && crit.cameras === "fail" && crit.climate === "warn", crit);
   const rec = (id) => ({ id, title: id, status: "open", openedAt: "2026-10-19T08:00:00Z", entityId: `x.${id}`, photoIds: [] });
-  const five = buildReadiness({}, { ...EMPTY_FM_DATA, tickets: ["a", "b", "c", "d", "e"].map(rec) }, { ...devices, unavailable: [] }, {});
+  const five = buildReadiness({}, { ...EMPTY_FM_DATA, tickets: ["a", "b", "c", "d", "e"].map(rec) }, { ...devices, unavailable: [] }, {}, []);
   ck("  ...five faults: amber — a fault is a warning, however many", five.checks.find((c) => c.id === "tickets").state === "warn"
      && five.overall === "warn", five.checks.find((c) => c.id === "tickets"));
   ck("  ...and the critical rule is the Overview's: a critical entity stands for its device",
@@ -72,16 +72,70 @@ console.log("\n  how bad, as the top bar says it (review \"One answer per questi
 console.log("\n  one tinted card (fm/tone): each state says its tone, the stylesheet draws a tone once:");
 {
   const { TONE_OF, toneClass } = await import("@/fm/tone");
+  const { DUE_WORDS } = await import("@/fm/fmEngine");
+  const { CHECK_WORDS } = await import("@/fm/readiness");
   const drawnRow = (state) => draw(h(ReadinessChecks, { readiness: { ...r, checks: [{ ...r.checks[0], state }] }, label: (id) => id,
     onOpenEntity: () => {}, onOpenCheck: () => {}, startOpen: true }));
   ck("a Recap check drawn amber or red by its tone, never by the Schedule's words",
      /class="fm-row tone-warn"/.test(drawnRow("warn")) && /class="fm-row tone-danger"/.test(drawnRow("fail")) && !/state-/.test(drawnRow("fail")));
   ck("  ...the same three tones for a task, a check and the spending cap",
-     [TONE_OF.due["due-soon"], TONE_OF.check.warn, TONE_OF.cap.approaching].every((t) => toneClass(t) === "tone-warn")
-     && [TONE_OF.check.fail, TONE_OF.cap.exceeded].every((t) => toneClass(t) === "tone-danger") && toneClass(TONE_OF.check.pass) === "");
+     [DUE_WORDS["due-soon"].tone, CHECK_WORDS.warn.tone, TONE_OF.cap.approaching].every((t) => toneClass(t) === "tone-warn")
+     && [CHECK_WORDS.fail.tone, TONE_OF.cap.exceeded].every((t) => toneClass(t) === "tone-danger") && toneClass(CHECK_WORDS.pass.tone) === "");
   const css = ["07-facility", "08-shared"].map((f) => readFileSync(new URL(`../../src/styles/${f}.css`, import.meta.url), "utf8")).join("\n");
   ck("  ...and the tinted frame is written once", (css.match(/color-mix\(in srgb, var\(--status-(warning|danger)\) [67]%, var\(--bg-card\)\)/g) ?? []).length === 0
      && (css.match(/color-mix\(in srgb, var\(--tone\) var\(--tone-fill\), var\(--bg-card\)\)/g) ?? []).length === 1);
+}
+
+
+console.log("\n  an alarm makes the villa not ready, as it makes the top bar red (review, 2026-10-19 evening):");
+{
+  const alarm = { id: "alarm:binary_sensor.kitchen_leak", kind: "alarm", title: "Kitchen leak", detail: "Leak detected",
+    source: "live", entityId: "binary_sensor.kitchen_leak" };
+  const late = { id: "schedule:pool", kind: "schedule", title: "Pool filter", detail: "Overdue", source: "schedule" };
+  const calm = buildReadiness({}, EMPTY_FM_DATA, { ...devices, unavailable: [] }, {}, [late]);
+  const leak = buildReadiness({}, EMPTY_FM_DATA, { ...devices, unavailable: [] }, {}, [late, alarm]);
+  const row = (res) => res.checks.find((c) => c.id === "alarms");
+  ck("no alarm: the check passes, and a late task is no alarm", row(calm).state === "pass" && row(calm).label === "No alarm");
+  ck("  ...a leak sounding: the check fails, names it, and the verdict is NOT READY",
+     row(leak).state === "fail" && row(leak).detail === "Kitchen leak: Leak detected" && leak.overall === "fail"
+     && row(leak).entityIds.join() === "binary_sensor.kitchen_leak", row(leak));
+  const { healthClass, villaHealthFrom } = await import("@/config/attention");
+  const g = (items) => [{ items }];
+  ck("the top bar's Cockpit button: red for an alarm, amber for a late task, plain when all is fine",
+     healthClass(villaHealthFrom(g([alarm]))) === " has-alert" && healthClass(villaHealthFrom(g([late]))) === " has-warn"
+     && healthClass(villaHealthFrom([])) === "");
+  const hud = readFileSync(new URL("../../src/components/hud/HUD.tsx", import.meta.url), "utf8");
+  ck("  ...the button takes that class, and the Recap is given the Cockpit's own alarms",
+     /\$\{healthClass\(health\)\}/.test(hud) && !/attentionGroups\.length > 0 \? " has-alert"/.test(hud)
+     && /buildReadiness\(entities, data, devices, config\.entityMap, attentionItems\)/.test(fs));
+}
+
+console.log("\n  one word per check state and one verdict, on the tab, in the recap and in the snapshot (review, 2026-10-19):");
+{
+  const { CHECK_WORDS, VERDICT_WORDS } = await import("@/fm/readiness");
+  const R = await import("@/fm/fmDocuments");
+  const one = (state) => ({ checks: [{ id: "c", label: `Check ${state}`, state, detail: "what was found" }], passed: state === "pass" ? 1 : 0, total: 1, overall: state });
+  const wordOf = (state) => (CHECK_WORDS[state].tone === "danger" ? `**${CHECK_WORDS[state].word}**` : CHECK_WORDS[state].word);
+  ck("three states, three words: Pass, Warning, Fail", Object.entries(CHECK_WORDS).map(([k, w]) => `${k}:${w.word}/${w.tone}`).join() === "pass:Pass/ok,warn:Warning/warn,fail:Fail/danger");
+  for (const state of ["pass", "warn", "fail"]) {
+    const res = one(state);
+    const tab = text(draw(h(ReadinessChecks, { readiness: res, label: (id) => id, onOpenEntity: () => {}, onOpenCheck: () => {}, startOpen: true })));
+    const snap = R.buildReadinessSnapshot(res, "V", "2026-09");
+    const recap = R.buildMonthlyRecap({ fm: EMPTY_FM_DATA, month: "2026-09", villaName: "V", readiness: res, deviceOfRecord: (id) => id });
+    const row = `| Check ${state} | ${wordOf(state)} | what was found |`;
+    ck(`${state}: the tab's verdict is VERDICT_WORDS', the snapshot's the same sentence; the check's row is the same in the recap and the snapshot`,
+       tab.includes(`|${VERDICT_WORDS[state]}|${res.passed} of 1 checks passing|`) && snap.includes(`**${VERDICT_WORDS[state]}** — ${res.passed} of 1 checks passing.`)
+       && snap.includes(row) && recap.includes(row) && snap.includes("| Check | Result | Finding |") && recap.includes("| Check | Result | Finding |"),
+       { tab, snap: snap.split("\n").filter((l) => l.startsWith("|") || l.startsWith("**")), recap: recap.split("## 5.")[1] });
+  }
+  const snap = R.buildReadinessSnapshot(one("warn"), "V", "2026-09");
+  ck("the snapshot opens with the documents' shared header (its Generated stamp is the moment taken), no \"Taken\" line, nothing shouted",
+     snap.startsWith("# V — readiness snapshot\n**Period:** ") && /^\*\*Generated:\*\* \d{4}-\d{2}-\d{2} \d{2}:\d{2}  $/m.test(snap) && /^\*\*Scope:\*\* /m.test(snap)
+     && !/Taken |READY|Attention/.test(snap), snap.split("\n").slice(0, 5));
+  const code = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, "");
+  ck("  ...and neither the tab nor the documents spell a verdict or a check word themselves",
+     !/Ready for the next guest|Not ready|worth fixing/.test(code("components/fm/ReadinessTab.tsx"))
+     && !/"Pass"|"Warning"|"Attention"|"Fail"|READY|"Detail"/.test(code("fm/fmDocuments.ts")) && /readinessTable\(readiness\)/.test(code("fm/fmDocuments.ts")));
 }
 
 done("✅ every readiness check opens its own devices, the same way");

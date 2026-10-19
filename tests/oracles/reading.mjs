@@ -27,6 +27,12 @@ console.log("  on/off sensors");
   ck("offline wins: 'UNAVAILABLE' in an amber pill — never 'No leak', a reading never taken", gone.pill === "unavailable" && gone.value === "UNAVAILABLE" && gone.alarm);
   const pir = readingOf("binary_sensor.hall", ent("binary_sensor.hall", "on", { device_class: "motion" }), "binary_sensor", T);
   ck("the owner's alert state makes a motion sensor an alarm", pir.level === "danger" && pir.alarm && pir.pill === "danger");
+  // ⚠️ UNKNOWN IS NOT LOST CONTACT (owner, 2026-10-18; architecture review 2026-10-19): the window shouted UNAVAILABLE,
+  // amber, with the warning icon, for a sensor whose device was answering with nothing to say
+  const blank = readingOf("binary_sensor.leak", ent("binary_sensor.leak", "unknown", { device_class: "moisture" }), "binary_sensor", T);
+  ck("no value ('unknown'): 'UNKNOWN' in the quiet pill — not 'UNAVAILABLE', not an alarm, contact kept",
+     blank.value === "UNKNOWN" && blank.pill === "off" && !blank.alarm && blank.contact === "no-value" && blank.unavailable
+     && gone.contact === "lost" && ok.contact === "ok", blank);
 }
 
 console.log("\n  measurements");
@@ -43,6 +49,32 @@ console.log("\n  measurements");
   ck("offline: still a measurement (its chart shades the outage), shown as an amber pill", off.kind === "measurement" && off.pill === "unavailable" && off.value === "UNAVAILABLE" && off.seriesColor === "var(--status-on)");
   const ap = readingOf("sensor.ap", ent("sensor.ap", "connected"), "sensor", {});
   ck("a sensor whose state is words: text, never coloured by a level", ap.kind === "text" && ap.pill === null && ap.color === "var(--text-primary)");
+  const blank = readingOf("sensor.cellar_temp", ent("sensor.cellar_temp", "unknown", { unit_of_measurement: "°C" }), "sensor", T);
+  ck("no value ('unknown'): 'UNKNOWN', quiet, plain, no alarm — the device is answering (owner, 2026-10-18)",
+     blank.value === "UNKNOWN" && blank.pill === "off" && !blank.alarm && blank.color === "var(--text-primary)" && blank.contact === "no-value", blank);
+  ck("  ...no entity at all is lost contact, as before", readingOf("sensor.gone", undefined, "sensor", {}).contact === "lost");
+}
+
+console.log("\n  the device window's lost-contact notice and its linked row");
+{
+  // The notice ("Contact with this device is lost…") replaces a window's controls only for LOST contact
+  // (stateColors.isOffline: "unavailable" or no entity) — an "unknown" device keeps its controls. Pinned on the
+  // panels' source: UnavailableNotice and ControlFrame read the live store (useHA), which needs a browser to build.
+  const { isOffline } = await import("@/utils/stateColors");
+  ck("isOffline decides the notice: lost for 'unavailable' and a missing entity, not for 'unknown'",
+     isOffline(ent("switch.x", "unavailable")) && isOffline(undefined) && !isOffline(ent("switch.x", "unknown")) && !isOffline(ent("switch.x", "on")));
+  const src = (p) => readFileSync(new URL(`../../src/components/panels/${p}`, import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+  const PANELS = ["ControlFrame.tsx", "GenericPanel.tsx"];
+  ck("the control frame and the generic window show the notice on isOffline, never on isUnavailable",
+     PANELS.every((p) => /isOffline\(entity\)[\s\S]*<UnavailableNotice/.test(src(p)) && !/isUnavailable/.test(src(p))),
+     PANELS.filter((p) => !/isOffline\(entity\)/.test(src(p)) || /isUnavailable/.test(src(p))));
+  ck("  ...and the grouped window only when every member's contact is lost",
+     /rows\.every\(\(r\) => r\.reading\.contact === "lost"\)/.test(src("DeviceGroupPanel.tsx")));
+  const { linkedStateWords } = await import("@/components/panels/panelHeader");
+  const w = (contact, known = true, isOn = false) => linkedStateWords({ isOn, known, contact });
+  ck("the linked row: 'Unavailable' only when contact is lost, 'Unknown' for no value (or a lock in motion), else On / Off",
+     w("lost") === "Unavailable" && w("no-value") === "Unknown" && w("ok", false) === "Unknown" && w("ok", true, true) === "On" && w("ok") === "Off");
+  ck("  ...and the window prints that word", /\{linkedStateWords\(linked\)\} · linked entity/.test(src("BasePanel.tsx")));
 }
 
 console.log("\n  the rows of 'Also on this device'");

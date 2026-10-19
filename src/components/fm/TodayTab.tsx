@@ -8,11 +8,13 @@
 
 import { useState } from "react";
 import { Check, CalendarClock, Trash2 } from "lucide-react";
-import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
+import { useFmData } from "@/fm/FmDataContext";
 import { useDeviceIdentity } from "@/config/VillaModel";
 import { openCounts } from "@/fm/deviceWork";
-import { TONE_OF, toneClass } from "@/fm/tone";
-import { budgetStatus, localStamp, scheduleBoard, shortDate, type ScheduleStatus, parseAmount, fmAttention, workedBy } from "@/fm/fmEngine";
+import { pillClass, toneClass } from "@/fm/tone";
+import { budgetStatus, dueLine, DUE_WORDS, localStamp, scheduleBoard, shortDate, type ScheduleStatus, parseAmount, fmAttention, workedBy } from "@/fm/fmEngine";
+import { COST_CATEGORY_NAMES } from "@/fm/fmTypes";
+import { useFmTerms } from "@/fm/useFmTerms";
 import EvidenceRow from "./EvidenceRow";
 import RecentWorkList from "./RecentWorkList";
 import NotesField from "./NotesField";
@@ -23,29 +25,17 @@ import { formatMoney } from "@/utils/money";
 import CostFields from "./CostFields";
 import FormActions from "./FormActions";
 
-const STATE_LABEL: Record<ScheduleStatus["state"], string> = {
-  overdue: "Overdue",
-  never: "Never recorded",
-  "due-soon": "Due soon",
-  ok: "On schedule",
-};
-
-/** Same wording either side of "never": a target date is shown regardless —
- *  see fmEngine.scheduleStatus for why "never" now always carries a dueAt —
- *  so the operator sees WHEN a task is due even before it's ever been logged
- *  once, not just after. */
+/** The engine's sentence (fmEngine.dueLine — the recap's too) with the date in the reader's locale. Same wording
+ *  either side of "never": a target date is shown regardless — see fmEngine.scheduleStatus for why "never" now
+ *  always carries a dueAt — so the operator sees WHEN a task is due even before it's ever been logged once. */
 function dueText(s: ScheduleStatus): string {
-  const by = s.dueAt ? ` (by ${shortDate(s.dueAt)})` : "";
-  if (s.state === "never") return `No completion recorded yet${by}`;
-  const d = Math.round(s.daysUntilDue ?? 0);
-  if (d < 0) return `${Math.abs(d)} day${Math.abs(d) === 1 ? "" : "s"} overdue${by}`;
-  if (d === 0) return `Due today${by}`;
-  return `Due in ${d} day${d === 1 ? "" : "s"}${by}`;
+  return `${dueLine(s)}${s.dueAt ? ` (by ${shortDate(s.dueAt)})` : ""}`;
 }
 
 export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) => void }) {
   const { data, logCompletion, removeSchedule, removeAllSchedules } = useFmData();
   const { deviceOfRecord } = useDeviceIdentity();
+  const terms = useFmTerms();
   const board = scheduleBoard(data);
   const [openId, setOpenId] = useState<string | null>(null);
   // Bulk delete is destructive across every task at once — require an
@@ -97,14 +87,12 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
           <span className="l">tickets in progress</span>
         </div>
         <div className="fm-stat">
-          <span className="n">{/* A bare figure by design — this stat reads as a number under the
-              words "spent this month". It got there via
-              formatMoney(...).replace("IDR ", ""), stripping the prefix by
-              matching the literal the formatter used to hardcode: correct
-              exactly while the currency could never be anything else, and
-              silently wrong the moment it can. Asking for none says it. */}
-          {formatMoney(budgetStatus(data.costs).minorSpend, "")}</span>
-          <span className="l">spent this month</span>
+          {/* The month's money as the Spend tab and the statement say it: the capped category's spend, in the
+              villa's currency (useFmTerms), under the category's name. ⚠️ It read "spent this month" over a bare
+              Minor figure with no currency (architecture review, 2026-10-19) — the Spend tab's three totals, a step
+              away, said more and said it differently. */}
+          <span className="n">{formatMoney(budgetStatus(data.costs, undefined, terms).minorSpend, terms.currency)}</span>
+          <span className="l">{COST_CATEGORY_NAMES.minor} spend this month</span>
         </div>
       </div>
 
@@ -128,8 +116,9 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
         {board.map((s) => (
           // THE Cockpit card (RecordCard): its state pill on the title line, Log and the bin inside, on the right of
           // its text (architecture review, 2026-10-15 — the layout the owner set for tickets); its tint says how late
-          <RecordCard key={s.schedule.id} tone={toneClass(TONE_OF.due[s.state])} title={s.schedule.title}
-            status={{ text: STATE_LABEL[s.state], tone: s.state }}
+          // its state's ONE word and tone (fmEngine.DUE_WORDS — the recap's and the Overview's too)
+          <RecordCard key={s.schedule.id} tone={toneClass(DUE_WORDS[s.state].tone)} title={s.schedule.title}
+            status={{ text: DUE_WORDS[s.state].word, tone: pillClass(DUE_WORDS[s.state].tone) }}
             when={`${dueText(s)} · every ${s.schedule.everyDays} days`
               + (s.last ? ` · last ${localStamp(s.last.at)} by ${workedBy(s.last)}` : "")}
             pills={<>
@@ -160,7 +149,7 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
           onCancel={() => setOpenId(null)}
           onSave={async (payload, cost) => {
             // Close only when saved or queued; a refused save keeps the form (2.496.252).
-            const { done, note: why } = fmSaveOutcome(await logCompletion(payload, cost));
+            const { done, note: why } = await logCompletion(payload, cost);
             if (done) setOpenId(null);
             return done ? null : why;
           }}

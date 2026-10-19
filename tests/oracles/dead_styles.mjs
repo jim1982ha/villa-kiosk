@@ -44,7 +44,7 @@ const LIBRARY = new Set(["lucide"]);
 const dead = [...classes].filter(([c]) => !named(c) && !built(c) && !LIBRARY.has(c)).map(([c, f]) => `${c} (${f})`);
 ck("every class a stylesheet styles is drawn by some screen", dead.length === 0, dead);
 ck("  ...a built class counts: the Energy slots e-s0..5 come from `e-s${i}`", built("e-s3") && !built("badge"));
-ck("  ...but only for a suffix the code writes: cockpit-attention-fault yes, cockpit-attention-body no",
-   built("cockpit-attention-fault") && !built("cockpit-attention-body"));
+ck("  ...but only for a suffix the code writes: cockpit-attention-warn yes, cockpit-attention-body no",
+   built("cockpit-attention-warn") && built("cockpit-attention-danger") && !built("cockpit-attention-body"));
 
 done("✅ no stylesheet rule for an element that no longer exists");

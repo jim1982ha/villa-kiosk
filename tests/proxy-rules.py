@@ -513,6 +513,16 @@ if cam_mismatch:
     print(f"          disagree for: {', '.join(cam_mismatch)}")
 ck("the agent holds only its own three capabilities",
    proxy.ROLE_CAPABILITIES["agent"] == {"agentRead", "agentWrite", "agentMessage"})
+# the profiles' display names live in the table too (architecture review, 2026-10-19): the app's ROLE_LABELS
+# (tests/oracles/role_table.mjs) and the name the proxy accepts on a guest's own report, never a literal
+ck("every profile has its display name in the table, and the proxy's guest name is the table's (no literal)",
+   all(isinstance(row.get("label"), str) and row["label"] for row in ROLES_JSON["profiles"].values())
+   and proxy.GUEST_LABEL == ROLES_JSON["profiles"]["guest"]["label"]
+   and '"Guest"' not in inspect.getsource(proxy._fm_guest_steps_ok))
+_guest_step = lambda by: [{"status": "open", "photoIds": [], "by": by}]
+ck("  ...a report's raising step signed with that name passes; signed with another word it is refused",
+   proxy._fm_guest_steps_ok(_guest_step(ROLES_JSON["profiles"]["guest"]["label"]))
+   and not proxy._fm_guest_steps_ok(_guest_step("Visitor")) and proxy._fm_guest_steps_ok(None))
 # seeUpdates counts Home Assistant's update.* entities. The proxy lets a
 # profile read them only by `administer` (the update domain is not in
 # readDomains), so giving seeUpdates to a profile without it would show a
@@ -580,7 +590,9 @@ try:
        proxy._fm_guest_write_ok(STORED, merged))
     bad = proxy._fm_writer_merge(None, STORED, {**view, "tickets": [{**report, "status": "resolved"}]})
     ck("  ...a pre-resolved one is still refused", not proxy._fm_guest_write_ok(STORED, bad))
-    # since 2.496.350 a report carries its raising step: a guest's own, never someone else's
+    # since 2.496.350 a report carries its raising step: a guest's own, never someone else's. "Guest" is the word
+    # STORED on every guest report so far (the app's stamp, roles.json profiles.guest.label) — a literal on purpose:
+    # a renamed label must turn this red, not quietly refuse every old report.
     step = {"at": "2026-10-14T06:20:00Z", "status": "open", "photoIds": [], "by": "Guest"}
     signed = proxy._fm_writer_merge(None, STORED, {**view, "tickets": [{**report, "updates": [step]}]})
     ck("  ...a report with its raising step signed Guest passes", proxy._fm_guest_write_ok(STORED, signed))
