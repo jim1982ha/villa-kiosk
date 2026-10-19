@@ -244,7 +244,7 @@ jobs:
           p = pathlib.Path("vesta-agent-dev/config.yaml")
           out = []
           for line in p.read_text().splitlines(keepends=True):
-              line = re.sub(r"^name:.*$", 'name: "VESTA Agent (dev)"', line)
+              line = re.sub(r"^name:.*$", 'name: "VESTA Agent"', line)   # no "(dev)" on the store's card (owner, 2026-10-20)
               line = re.sub(r"^slug:.*$", "slug: vesta_agent_dev", line)
               line = re.sub(r"^image:.*$",
                             f'image: "ghcr.io/{os.environ["OWNER"]}/vesta-agent-agent-dev-{{arch}}"', line)
