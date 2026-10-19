@@ -1,3 +1,9 @@
+## 2.496.434
+
+### Changed
+- The VESTA (dev2) card in the villa system's app store carries the "Experimental" badge: it is the test channel.
+  The VESTA card (main) does not.
+
 ## 2.496.433
 
 ### Fixed
