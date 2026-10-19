@@ -1,3 +1,28 @@
+## 2.496.426
+
+### Fixed
+- A fault's card icon in the Cockpit is amber, like the rest of its line and the Recap's "Check the … faults" row.
+  It was red — the colour the app promised, since 2.496.423, only for an alarm or a critical device not reporting —
+  because the icon's colour was decided in a stylesheet written before that rule, while the Cockpit button read
+  the right one. One rule for every surface now: red only for an alarm or a critical device, amber for a fault,
+  an ordinary device offline or a late task.
+- A device's window no longer says "UNAVAILABLE" and "Contact with this device is lost" for a sensor whose device
+  is answering but has nothing to report (a wind chill on a warm day, a switch between gestures). The pill reads
+  "UNKNOWN" in the quiet grey, with no warning icon; a switch in that state keeps its controls; a linked entity's
+  row reads "Unknown" instead of "Unavailable". "Unavailable" and the lost-contact notice now mean what the map
+  and the Cockpit already meant since 2.496.410: contact really lost. The history bar is unchanged.
+- "Next check: within 5 min" and the (i)'s "it checks every 5 minutes" no longer show on faults days after the
+  VESTA Agent has gone quiet. While the Agent is offline the cards say "Next check: by the VESTA Agent" and the (i)
+  "it checks regularly…"; its own numbers come back with its next heartbeat.
+
+### Under the hood
+- Each profile's display name ("Guest", "Owner", "Facility manager") is declared once, in the role table the app and
+  the add-on's proxy both read; the proxy used to hold its own copy of "Guest" to accept a guest's report. Stored
+  records keep the words they were stamped with.
+- Every Facility save (a fault, its stage, a guest's report, a cost, a task, a completion, Close) gets its "did it
+  save?" answer from the store itself instead of each form working it out — the shape of the 2.496.252 defect, a form
+  that skipped that step, can no longer happen.
+
 ## 2.496.425
 
 ### Fixed
