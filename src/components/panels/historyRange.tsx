@@ -15,41 +15,10 @@
 
 import { useState, type ReactNode } from "react";
 import SegmentedGroup from "@/components/common/SegmentedGroup";
-import type { StatisticsPeriod } from "@/utils/statisticsSeries";
 
-export interface HistoryRange {
-  hours: number;
-  /** Heading for the section ("Last 12 hours"). */
-  title: string;
-  /* No timeline bucket width per range any more: every device trend is drawn
-     in the ONE five-minute interval (utils/trendInterval, 2.496.179). */
-  /** The recorder-statistics bucket for a MEASUREMENT over this range (at most
-   *  ~720 points a line), and for a TOTAL (rain: per hour, or per day). */
-  period: StatisticsPeriod;
-  totalPeriod: StatisticsPeriod;
-}
-
-export type RangeKey = "1h" | "12h" | "24h" | "7d" | "30d";
-
-const RANGES: (HistoryRange & { key: RangeKey; label: string })[] = [
-  { key: "1h", label: "1h", hours: 1, title: "Last hour", period: "5minute", totalPeriod: "hour" },
-  { key: "12h", label: "12h", hours: 12, title: "Last 12 hours", period: "5minute", totalPeriod: "hour" },
-  { key: "24h", label: "24h", hours: 24, title: "Last 24 hours", period: "5minute", totalPeriod: "hour" },
-  { key: "7d", label: "7d", hours: 168, title: "Last 7 days", period: "hour", totalPeriod: "day" },
-  { key: "30d", label: "30d", hours: 720, title: "Last 30 days", period: "hour", totalPeriod: "day" },
-];
-
-/** What a device panel offers — raw state history, so no 30 days of it. */
-export const DEVICE_RANGES: readonly RangeKey[] = ["1h", "12h", "24h", "7d"];
-/** What the Weather window offers — statistics, so a month is cheap. */
-export const WEATHER_RANGES: readonly RangeKey[] = ["12h", "24h", "7d", "30d"];
-
-const DEFAULT_KEY: RangeKey = "24h";
-
-/** The range behind a key. */
-export function historyRange(key: RangeKey): HistoryRange {
-  return RANGES.find((r) => r.key === key)!;
-}
+// The table itself is pure (utils/historyRanges): an oracle reads it by value.
+export { historyRange, RANGE_KEYS, type HistoryRange, type RangeKey } from "@/utils/historyRanges";
+import { DEFAULT_KEY, historyRange, RANGES, type HistoryRange, type RangeKey } from "@/utils/historyRanges";
 
 /**
  * A segmented choice — the pill row of the history pickers — and the choice
@@ -58,19 +27,23 @@ export function historyRange(key: RangeKey): HistoryRange {
  * Energy window's calendar ones; both windows put it in their header.
  */
 export function useSegmentedChoice<K extends string>(
-  options: readonly { key: K; label: ReactNode; title?: string }[], initial: K, ariaLabel: string, className: string,
+  options: readonly { key: K; label: ReactNode; title?: string; disabled?: boolean }[], initial: K, ariaLabel: string,
+  className: string,
 ): { key: K; picker: ReactNode } {
   const [picked, setPicked] = useState<K>(initial);
-  const key = options.some((o) => o.key === picked) ? picked : initial;
+  const key = options.some((o) => o.key === picked && !o.disabled) ? picked : initial;
   const picker = <SegmentedGroup options={options} active={key} onChange={setPicked} ariaLabel={ariaLabel} className={className} />;
   return { key, picker };
 }
 
-/** Returns the active range plus a ready-rendered picker for it. */
+/** Returns the active range plus a ready-rendered picker for it: every toggle shows the five; `greyed` are the ones
+ *  this view has nothing to draw for — shown, not pressable (owner, 2026-10-20). */
 export function useHistoryRange(
-  offered: readonly RangeKey[] = DEVICE_RANGES, className = "timeline-ranges",
+  className = "timeline-ranges", greyed: readonly RangeKey[] = [],
 ): { range: HistoryRange; picker: ReactNode } {
-  const { key, picker } = useSegmentedChoice(RANGES.filter((r) => offered.includes(r.key)), DEFAULT_KEY, "History range", className);
+  const { key, picker } = useSegmentedChoice(
+    RANGES.map((r) => ({ key: r.key, label: r.label, title: r.title, disabled: greyed.includes(r.key) })),
+    DEFAULT_KEY, "History range", className);
   return { range: historyRange(key), picker };
 }
 

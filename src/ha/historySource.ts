@@ -24,10 +24,10 @@
 // Pure apart from the port: tests/oracles/history_source.mjs.
 
 import { gapsFrom } from "@/utils/historyGaps";
-import { statisticsSeries, type StatisticField, type StatisticsPeriod } from "@/utils/statisticsSeries";
-import { fiveMinuteSeries } from "@/utils/trendInterval";
+import { PERIOD_MS, statisticsSeries, type StatisticField, type StatisticsPeriod } from "@/utils/statisticsSeries";
+import { fiveMinuteSeries, intervalSeries } from "@/utils/trendInterval";
 import { windowEndingAt } from "@/utils/lineChart";
-import { UNKNOWN_STATES } from "@/utils/stateColors";
+import { NOT_KEPT, UNKNOWN_STATES } from "@/utils/stateColors";
 import type { HistorySeries, StateHistoryPoint, StatisticPeriod } from "@/types/ha.types";
 import { dayTime } from "@/utils/dateText";
 
@@ -48,13 +48,17 @@ export interface HistoryPort {
     ids: string[], start: string, period: StatisticsPeriod, end?: string,
     types?: ReadonlyArray<StatisticField>,
   ): Promise<Record<string, StatisticPeriod[]>>;
+  /** Where the villa's system's detail begins at `now` (keptFromRows over KEPT_PROBE's history) — undefined when not
+   *  known. Optional: a port without it (a test's fake) greys nothing. */
+  keptFrom?(now: number): Promise<number | undefined>;
 }
 
 /** A history a chart asks for. `hours` is a window ending now; `since` (epoch
  *  ms) a window from a fixed start — a calendar period — to now. */
 export type HistoryRequest =
-  /** Numeric, in the one five-minute trend interval every device chart uses. */
-  | { kind: "trend"; ids: readonly string[]; hours: number }
+  /** Numeric, in the range's step (historyRange `period`: five minutes up to a week, a day, a week): the recorder's
+   *  long-term figures for a day or a week, else what is kept of every change, in that step. */
+  | { kind: "trend"; ids: readonly string[]; hours: number; period?: StatisticsPeriod }
   /** Numeric, every change as reported (the pressure tendency). */
   | { kind: "readings"; id: string; hours: number }
   /** Raw states — no numeric parse — for each id (the camera's status bar). */
@@ -108,7 +112,8 @@ export function historyKey(q: HistoryRequest | HistoryRequests): string {
   const one = (r: HistoryRequest) => {
     const ids = "ids" in r ? [...r.ids].join(",") : r.id;
     const extra = r.kind === "statistics"
-      ? `|${r.period}|${[...r.fields].join(",")}|${r.since ?? ""}` : "";
+      ? `|${r.period}|${[...r.fields].join(",")}|${r.since ?? ""}`
+      : r.kind === "trend" ? `|${r.period ?? "5minute"}` : "";
     return `${r.kind}:${ids}|${r.hours ?? ""}${extra}`;
   };
   if ("kind" in q && typeof q.kind === "string") return one(q as HistoryRequest);
@@ -163,14 +168,18 @@ async function readings(port: HistoryPort, id: string, window: { from: number; t
  * own "is anything alive in here" test vacuous. Colour is not this module's
  * business (stateColors.paintState: unavailable amber, unknown idle).
  */
-async function states(port: HistoryPort, id: string, window: { from: number; to: number }): Promise<StateHistoryPoint[]> {
+async function states(port: HistoryPort, id: string, window: { from: number; to: number },
+  kept?: number): Promise<StateHistoryPoint[]> {
   const points = (await port.stateRows(id, window.from, window.to))
     // ⚠️ COERCED AT THE DOOR: Home Assistant sends a null `state` on a freshly
     // added entity's early rows, and every consumer believed the declared type.
     .map((s) => ({ t: new Date(s.last_changed).getTime(), state: String(s.state ?? "") }))
     .filter((p) => Number.isFinite(p.t));
   // Consecutive equal states (only attributes changed) are one segment.
-  const out: StateHistoryPoint[] = [];
+  // ⚠️ OLDER THAN THE VILLA KEEPS (owner, 2026-10-20): the window opens on NOT_KEPT until its first change kept —
+  // grey "No longer kept", never a blank, an "unknown" or an outage
+  const out: StateHistoryPoint[] = kept !== undefined && kept > window.from && !(points.length && points[0].t <= window.from)
+    ? [{ t: window.from, state: NOT_KEPT }] : [];
   for (const p of points) {
     if (out.length === 0 || out[out.length - 1].state !== p.state) out.push(p);
   }
@@ -183,13 +192,13 @@ async function states(port: HistoryPort, id: string, window: { from: number; to:
  * this stop" rather than showing an empty strip.
  */
 async function stateWindow(port: HistoryPort, id: string, hours: number, now: number): Promise<StateWindow> {
-  const alive = (h: StateHistoryPoint[]) => h.some((pt) => !UNKNOWN_STATES.has(pt.state));
-  const h = await states(port, id, { from: now - hours * HOUR_MS, to: now });
+  const alive = (h: StateHistoryPoint[]) => h.some((pt) => !UNKNOWN_STATES.has(pt.state) && pt.state !== NOT_KEPT);
+  const h = await states(port, id, { from: now - hours * HOUR_MS, to: now }, await keptFrom(port, now));
   if (alive(h)) return { data: h };
   const deep = await states(port, id, { from: now - LAST_SEEN_LOOKBACK_HOURS * HOUR_MS, to: now });
   let seen = 0;
   for (const pt of deep) {
-    if (!UNKNOWN_STATES.has(pt.state) && pt.t > seen) seen = pt.t;
+    if (!UNKNOWN_STATES.has(pt.state) && pt.state !== NOT_KEPT && pt.t > seen) seen = pt.t;
   }
   if (seen === 0) return { data: h };
   // Keep the window's own length; only move where it ENDS — at the sighting —
@@ -223,6 +232,74 @@ async function statistics(
     fields.map((f) => [f, statisticsSeries(res[id], f, period, window)]))]));
 }
 
+// ── How far back the villa's system keeps every change ────────────────────
+/** A device every villa's system has, changing twice a day: its oldest change kept is where the detail begins. */
+export const KEPT_PROBE = "sun.sun";
+/** How far back the probe looks: past it, every window is taken as kept. */
+export const KEPT_LOOKBACK_DAYS = 400;
+const KEPT_CACHE_MS = HOUR_MS;
+const keptCache = new WeakMap<HistoryPort, { at: number; value: number | undefined }>();
+
+/** How far back the probe looks, from `now`. */
+export function keptLookFrom(now: number): number {
+  return now - KEPT_LOOKBACK_DAYS * 24 * HOUR_MS;
+}
+
+/** Where the detail begins, from the probe's rows: its oldest change — undefined when it has none (no probe on this
+ *  villa: nothing is greyed) or when its history reaches the look-back's start (everything asked is kept). */
+export function keptFromRows(rows: readonly StateRow[], lookFrom: number): number | undefined {
+  let oldest = Infinity;
+  for (const r of rows) {
+    const t = new Date(r.last_changed).getTime();
+    if (Number.isFinite(t) && t < oldest) oldest = t;
+  }
+  return Number.isFinite(oldest) && oldest > lookFrom ? oldest : undefined;
+}
+
+/**
+ * Where the villa's system's detail begins now — the oldest change it still keeps (its recorder's purge_keep_days,
+ * 10 by default; Settings change it) — or undefined when not known. Read once an hour.
+ *
+ * ⚠️ OLDER IS "NO LONGER KEPT", NOT "NOTHING HAPPENED" (owner, 2026-10-20). A month's or a year's window reaches past
+ * it: a state band greys that part, a numeric line reads the recorder's long-term figures (or shades it grey).
+ */
+export async function keptFrom(port: HistoryPort, now: number): Promise<number | undefined> {
+  const c = keptCache.get(port);
+  if (c && now - c.at < KEPT_CACHE_MS) return c.value;
+  let value: number | undefined;
+  try {
+    value = port.keptFrom ? await port.keptFrom(now) : undefined;
+  } catch {
+    value = undefined;                      // not known: nothing greyed, as before
+  }
+  keptCache.set(port, { at: now, value });
+  return value;
+}
+
+/** A numeric series with the part of its window older than `kept` marked "no longer kept". */
+export function withNotKept(s: HistorySeries, kept: number | undefined): HistorySeries {
+  if (kept === undefined || kept <= s.window.from) return s;
+  const to = Math.min(kept, s.window.to);
+  return { ...s, gaps: [{ from: s.window.from, to, notKept: true }, ...s.gaps.filter((g) => g.to > to)] };
+}
+
+/** A numeric trend in the range's step: five minutes from every change kept; a day or a week from the recorder's
+ *  long-term figures (they are kept for good) — or, for a device it keeps none of, from every change kept, in that
+ *  step. Whatever is older than the detail kept and not in the figures is marked "no longer kept". */
+async function trend(port: HistoryPort, ids: readonly string[], period: StatisticsPeriod,
+  window: { from: number; to: number }, now: number): Promise<Record<string, HistorySeries>> {
+  const kept = await keptFrom(port, now);
+  const figures = period === "5minute" ? {} : await statistics(port, ids, period, ["mean"], window);
+  const out: Record<string, HistorySeries> = {};
+  for (const id of ids) {
+    const fig = figures[id]?.mean;
+    if (fig && fig.points.length) { out[id] = fig; continue; }
+    const raw = await readings(port, id, window);
+    out[id] = withNotKept(period === "5minute" ? fiveMinuteSeries(raw) : intervalSeries(raw, PERIOD_MS[period]), kept);
+  }
+  return out;
+}
+
 /** Answer one request at `now`. */
 export async function loadOne<R extends HistoryRequest>(port: HistoryPort, r: R, now: number): Promise<HistoryAnswer<R>> {
   const window = requestWindow(r, now);
@@ -230,11 +307,13 @@ export async function loadOne<R extends HistoryRequest>(port: HistoryPort, r: R,
     Object.fromEntries(await Promise.all(ids.map(async (id) => [id, await f(id)] as const)));
   switch (r.kind) {
     case "trend":
-      return await each(r.ids, async (id) => fiveMinuteSeries(await readings(port, id, window))) as HistoryAnswer<R>;
+      return await trend(port, r.ids, r.period ?? "5minute", window, now) as HistoryAnswer<R>;
     case "readings":
       return await readings(port, r.id, window) as HistoryAnswer<R>;
-    case "states":
-      return await each(r.ids, (id) => states(port, id, window)) as HistoryAnswer<R>;
+    case "states": {
+      const kept = await keptFrom(port, now);
+      return await each(r.ids, (id) => states(port, id, window, kept)) as HistoryAnswer<R>;
+    }
     case "stateWindow":
       return await stateWindow(port, r.id, r.hours, now) as HistoryAnswer<R>;
     case "statistics":

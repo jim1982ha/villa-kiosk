@@ -214,6 +214,9 @@ export interface HistoryGap {
    *  the five-minute intervals it touched (utils/trendInterval) — what the
    *  tooltip reports. */
   actual?: { from: number; to: number };
+  /** Not an outage: the part of the window older than what the villa's system still keeps of every change (its
+   *  recorder's days — historySource.keptFrom). Drawn grey, "No longer kept" (owner, 2026-10-20), never amber. */
+  notKept?: boolean;
 }
 
 /** What a numeric history fetch returns: the readings, AND where there were

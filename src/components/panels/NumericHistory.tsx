@@ -32,7 +32,7 @@ export default function NumericHistory({ series, named = false }: {
   const { range, picker } = useHistoryRange();
   const ids = series.map((s) => s.id);
   const { data, status } = useHistorySource(
-    ids.length ? { trend: { kind: "trend", ids, hours: range.hours } } : null);
+    ids.length ? { trend: { kind: "trend", ids, hours: range.hours, period: range.period } } : null);
   const history = data?.trend ?? {};
   const line = (s: NumericSeries, extra: { scale?: "own"; dashed?: boolean } = {}) => ({
     pts: history[s.id]?.points ?? [], gaps: history[s.id]?.gaps ?? [], label: s.label,

@@ -17,7 +17,7 @@ import type { HistoryPoint, HistoryGap } from "@/types/ha.types";
 import { drawableWindow, type TimeWindow } from "@/utils/lineChart";
 import { chartGeometry, type ChartGeometry } from "@/utils/chartGeometry";
 import { emptyHistoryText, type HistoryStatus } from "@/utils/statisticsSeries";
-import { STATUS_COLOR } from "@/utils/stateColors";
+import { NOT_KEPT_COLOR, STATUS_COLOR } from "@/utils/stateColors";
 import { fmtChartValue, fmtChartTick, fmtChartStamp, fmtOutage } from "./chartUtils";
 import { formatUnitValue } from "@/utils/entityValue";
 import { useChartPointer } from "./useChartPointer";
@@ -110,7 +110,7 @@ export default function LineChart({ lines, window, height = 150, status, label }
             {/* A band per line, in its own slice of the plot: which sensor was
                 out is part of the fact. Before the lines — SVG paints in order. */}
             {g.series.flatMap((s, i) => s.bands.map((b, j) => (
-              <rect key={`gap${i}-${j}`} x={b.x} y={b.y} width={b.w} height={b.h} fill={STATUS_COLOR.unavailable} opacity={0.18} />
+              <rect key={`gap${i}-${j}`} x={b.x} y={b.y} width={b.w} height={b.h} fill={b.gap.notKept ? NOT_KEPT_COLOR : STATUS_COLOR.unavailable} opacity={b.gap.notKept ? 0.5 : 0.18} />
             )))}
             {g.series.map((sg, i) => {
               const l = lines[i];

@@ -1,3 +1,17 @@
+## 2.496.431
+
+### Changed
+- Every history chart offers the same five periods: 1h, 24h, 1w, 1m, 1y — a device's small chart, its on/off band,
+  the Weather window and the Energy window. 1h, 24h and 1w are drawn in 5-minute values; 1m one value a day; 1y one a
+  week. The 12h, 7d and 30d choices are gone.
+- 1m and 1y of a measured value (power, temperature, humidity…) come from the villa system's long-term figures, kept
+  for good — no longer limited to the ~11 days of every change it keeps.
+- An on/off band (a switch, a door) has no long-term figures: for 1m and 1y it draws the days still kept, and the
+  older part in grey, "No longer kept". The same grey on a line chart whose device has no long-term figures.
+- A period a chart has nothing at all for is greyed in its toggle: the Energy window's 1h (its figures are hourly).
+- Energy window: 24h is the last 24 hours, one bar an hour; 1w one bar a day (7); 1m one a day (30); 1y one a
+  month (12), as the villa system's own Energy dashboard and the bills count it.
+
 ## 2.496.430
 
 ### Changed

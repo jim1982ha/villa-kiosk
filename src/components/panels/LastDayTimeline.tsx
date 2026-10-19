@@ -17,7 +17,7 @@ import StateTimeline from "./StateTimeline";
 import { useStateHistory } from "@/hooks/useStateHistory";
 import { historyTitle } from "@/ha/historySource";
 import { useHistoryRange, HistoryHeader } from "./historyRange";
-import { historyStateColor, paletteColorFor } from "@/utils/stateColors";
+import { historyStateColor, NOT_KEPT, NOT_KEPT_COLOR, NOT_KEPT_WORDS, paletteColorFor } from "@/utils/stateColors";
 
 export default function LastDayTimeline({
   entityId, colorFor, legend = false,
@@ -38,7 +38,9 @@ export default function LastDayTimeline({
   const { range, picker } = useHistoryRange();
   const { data, status, lastSeen } = useStateHistory(entityId, range.hours);
   const { entities } = useHA();
-  const palette = !colorFor && legend ? paletteColorFor(data.map((p) => p.state)) : undefined;
+  // the "no longer kept" stretch is not one of the device's states: never in its palette (historySource.keptFrom)
+  const held = data.map((p) => p.state).filter((s) => s !== NOT_KEPT);
+  const palette = !colorFor && legend ? paletteColorFor(held) : undefined;
   const paint = colorFor ?? palette ?? historyStateColor(entityId);
   return (
     <div className="field">
@@ -48,9 +50,11 @@ export default function LastDayTimeline({
         colorFor={paint}
         status={status}
         hours={range.hours}
+        grainMs={range.grainMs}
         end={lastSeen}
         labelFor={stateWords(entityId, entities[entityId]?.attributes.device_class as string | undefined)}
-        legend={palette && [...new Set(data.map((p) => p.state))].map((s) => ({ state: s, color: palette(s) }))}
+        legend={palette && [...[...new Set(held)].map((s) => ({ state: s, color: palette(s) })),
+          ...(held.length < data.length ? [{ state: NOT_KEPT, color: NOT_KEPT_COLOR, label: NOT_KEPT_WORDS }] : [])]}
       />
     </div>
   );

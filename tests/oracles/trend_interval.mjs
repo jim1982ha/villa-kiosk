@@ -47,8 +47,9 @@ ck("  ...a text sensor's palette never spends a colour on them — the AP's firs
 
 const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
 const st = src("components/panels/StateTimeline.tsx");
-ck("the timeline has ONE interval (no bucketMinutes anywhere) and paints through paintState (reading.chartColours)",
-   /const bucketMs = TREND_INTERVAL_MS;/.test(st) && /const colorFor = useMemo\(\(\) => chartColours\(ownColour\)/.test(st)
+// ⚠️ ONE STEP PER RANGE (owner, 2026-10-20): the range's grainMs (utils/historyRanges), five minutes when not said
+ck("the timeline cuts its slices in the range's step (no bucketMinutes anywhere) and paints through paintState (reading.chartColours)",
+   /const bucketMs = grainMs \?\? TREND_INTERVAL_MS;/.test(st) && /grainMs=\{range\.grainMs\}/.test(src("components/panels/LastDayTimeline.tsx")) && /const colorFor = useMemo\(\(\) => chartColours\(ownColour\)/.test(st)
    && !["components/panels/historyRange.tsx", "components/panels/SensorPanel.tsx", "components/panels/GenericPanel.tsx", "components/panels/LastDayTimeline.tsx", "components/panels/CameraPanel.tsx"].some((f) => /bucketMinutes/.test(src(f))));
 {
   // Driven through the history source with a fake Home Assistant: a pump

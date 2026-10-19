@@ -25,6 +25,14 @@ import { domainOf } from "./entityDomain";
  *  shape is one literal copied to each reader with nothing between them. */
 export const UNKNOWN_STATES: ReadonlySet<string> = new Set(["unavailable", "unknown"]);
 
+/** A history's stretch OLDER than what the villa's system still keeps of every change (its recorder's days): not a
+ *  state the device was in, and never "unknown" or "unavailable" — historySource opens a window with it, a history
+ *  bar paints it STATUS_COLOR.notKept and words it NOT_KEPT_WORDS (owner, 2026-10-20). */
+export const NOT_KEPT = "\u0000not_kept";
+export const NOT_KEPT_WORDS = "No longer kept";
+/** Its colour: a neutral grey beside the status colours — never one of them, it says nothing of the device. */
+export const NOT_KEPT_COLOR = "var(--hairline-strong)";
+
 export function isUnavailable(entity: HassEntity | undefined): boolean {
   return entity == null || UNKNOWN_STATES.has(entity.state);
 }
