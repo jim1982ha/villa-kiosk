@@ -160,7 +160,8 @@ class Vesta:
         self.tickets = Tickets(kiosk=self.kiosk, state=self.state, store_path=settings.store_path,
                                settle_alert=self.thread.close, timezone=settings.timezone,
                                story=lambda iid: self.notices.story(iid), restate_alert=self._alert_taken,
-                               rechecked=lambda: {r for sk in self.skills.all().values() for r in sk.rechecks})
+                               rechecked=lambda: {r for sk in self.skills.all().values() for r in sk.rechecks},
+                               day_rechecked=lambda: {r for sk in self.skills.all().values() for r in sk.day_checked})
         # a fault offered in a chat, start to end (fault_offers.py, review 32)
         self.requests = Requests(self.state, self.skills)   # a command skill's request, its turns (command_request.py)
         self.fault_offers = FaultOffers(self.state, self.delivery, self.tickets,
@@ -790,14 +791,17 @@ class Vesta:
 
     def kiosk_cadence(self) -> dict | None:
         """This agent's timing for the Kiosk's heartbeat (agent-contract.json `heartbeat.cadence`): how often its code
-        jobs look (the scheduler's tick) and when the job a skill marks `kiosk: nightly_check` runs — read at each beat,
-        so a changed schedule or a skill switched off shows at the next one. None without such a job: the Kiosk then
-        says no number rather than a wrong one."""
-        nightly = next((j["when"] for sk in self.skills.all().values() for j in sk.schedule
-                        if j.get("kiosk") == "nightly_check"), None)
+        jobs look (the scheduler's tick), when the job a skill marks `kiosk: nightly_check` runs, and the times of the
+        jobs it marks `kiosk: day_check` (`dayChecksAt`, absent when none) — read at each beat, so a changed schedule or
+        a skill switched off shows at the next one. None without a nightly job: the Kiosk then says no number rather
+        than a wrong one."""
+        skills = self.skills.all().values()
+        nightly = next((j["when"] for sk in skills for j in sk.schedule if j.get("kiosk") == "nightly_check"), None)
         if not nightly:
             return None
-        return {"checkMinutes": int(SCHEDULER_EVERY.total_seconds() // 60), "nightlyAt": nightly}
+        day = sorted({t for sk in skills for t in sk.day_checks_at})
+        return {"checkMinutes": int(SCHEDULER_EVERY.total_seconds() // 60), "nightlyAt": nightly,
+                **({"dayChecksAt": day} if day else {})}
 
     async def _safe(self, coro):
         try:

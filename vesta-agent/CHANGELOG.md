@@ -1,3 +1,18 @@
+## 0.12.268
+
+What you will see:
+- The night check's faults about a battery or a sensor that stopped reporting are read again during the day, at
+  08:00, 12:00, 16:00 and 20:00, instead of waiting for the next night. A fault whose problem is gone closes in the
+  Cockpit then, saying "Cleared: the check at 12:00 no longer sees it."; one still there stays open. Only those faults
+  are read again — the full night check still runs once, at 02:00.
+- A pump's power or energy, a temperature over its limit and a device that keeps reconnecting are judged on a whole
+  day, so they are still read again at the night check; a device offline is still read every 5 minutes.
+- The Cockpit card's "Next check" says the next of those day times for the faults read in the day (once the Kiosk is
+  2.496.429 or later; an older one keeps saying the nightly time). A card holding both an alert and a night check
+  fault shows the sooner of the two.
+- A fault closed in the Cockpit while the battery is still low opens again at the next of these readings, as it did
+  at night, and the facility manager is told once. Nobody is messaged when a fault clears.
+
 ## 0.12.267
 
 What you will see:

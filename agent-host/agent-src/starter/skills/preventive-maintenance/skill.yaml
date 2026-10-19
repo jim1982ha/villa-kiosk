@@ -7,8 +7,19 @@ scripts:
     inject: [pack, store, zone]
 every_5_min: "recheck.py"     # a device gone offline gets its fault now; one back closes it now — never the next night
 rechecks: [PM-UNAVAILABLE]    # what recheck.py reads again: its Kiosk card says "Next check: within 5 min", the others the nightly time
+# The night's open findings read again during the day by `recheck.py day` (owner, 2026-10-19: "refresh the open ones every
+# 4 hours during the days"), each by its own rule: one no longer found closes ("Cleared: the check at 12:00 no longer sees
+# it."), one still found stays. Their Kiosk card says the next of the day_check times below. Only rules a short read can
+# judge (recheck.DAY_READS); the others are judged on a finished day and keep their nightly check.
+day_rechecks: [PM-BATTERY-CRIT, PM-BATTERY-LOW, PM-SILENT]
 schedule:
   - when: "02:00"             # code only: zero tokens; the 07:00 digest carries the words
     run: "nightly.py --out nightly.json"
     timeout: 1800
     kiosk: nightly_check      # the Kiosk's (i) says this job's time (the heartbeat's cadence)
+  # the day recheck, every 4 hours during the day (code only, no AI): move, add or remove a time here — none switches it
+  # off (the cards then say the nightly time). The Kiosk is told these times (the heartbeat's dayChecksAt).
+  - {when: "08:00", run: "recheck.py day", timeout: 600, kiosk: day_check}
+  - {when: "12:00", run: "recheck.py day", timeout: 600, kiosk: day_check}
+  - {when: "16:00", run: "recheck.py day", timeout: 600, kiosk: day_check}
+  - {when: "20:00", run: "recheck.py day", timeout: 600, kiosk: day_check}

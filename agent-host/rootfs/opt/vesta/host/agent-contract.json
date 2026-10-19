@@ -425,21 +425,27 @@
       ]
     }
   },
-  "_heartbeat": "POST /agent/v1/heartbeat: the VESTA Agent says it is alive. `status`: a short text (at most 200 characters). `cadence` (optional): its own timing, which the Kiosk shows in the Overview's (i) instead of a copy of the defaults (architecture review, 2026-10-15) — `checkMinutes` how often it looks at its alerts and faults (1-1440), `nightlyAt` the villa time of its nightly check (HH:MM). Without it the Kiosk says no number. Shown only while the Agent is online: once its heartbeats stop (/agent-status `offline`) the Kiosk's proxy answers `cadence: null`, and the Kiosk says \"by the VESTA Agent\" and \"it checks regularly\" instead of a stale number. A `cadence` of another shape never refuses the beat: the beat counts (the Agent is online), the timing is dropped (stored null, so the Kiosk gives no number) and the answer carries `\"cadence\": \"refused: <why>\"`.",
+  "_heartbeat": "POST /agent/v1/heartbeat: the VESTA Agent says it is alive. `status`: a short text (at most 200 characters). `cadence` (optional): its own timing, which the Kiosk shows in the Overview's (i) instead of a copy of the defaults (architecture review, 2026-10-15) — `checkMinutes` how often it looks at its alerts and faults (1-1440), `nightlyAt` the villa time of its nightly check (HH:MM), `dayChecksAt` (optional, owner 2026-10-19) the villa times it reads its \"day\" faults again during the day: a list of 0-12 HH:MM, kept sorted — the card's \"Next check\" of such a fault is the next of them or `nightlyAt`, whichever comes first; an agent that does not send it has its \"day\" faults read as nightly. Without it the Kiosk says no number. Shown only while the Agent is online: once its heartbeats stop (/agent-status `offline`) the Kiosk's proxy answers `cadence: null`, and the Kiosk says \"by the VESTA Agent\" and \"it checks regularly\" instead of a stale number. A `cadence` of another shape never refuses the beat: the beat counts (the Agent is online), the timing is dropped (stored null, so the Kiosk gives no number) and the answer carries `\"cadence\": \"refused: <why>\"`.",
   "heartbeat": {
     "fields": {
       "status": "string, at most 200 characters",
-      "cadence": "{checkMinutes, nightlyAt}, optional"
+      "cadence": "{checkMinutes, nightlyAt, dayChecksAt?}, optional"
     },
     "sample": {
       "status": "all quiet",
       "cadence": {
         "checkMinutes": 5,
-        "nightlyAt": "02:00"
+        "nightlyAt": "02:00",
+        "dayChecksAt": [
+          "08:00",
+          "12:00",
+          "16:00",
+          "20:00"
+        ]
       }
     }
   },
-  "_ticket": "The Facility fault the VESTA Agent writes and reads (/agent/v1/fm-data), declared ONCE (architecture review, 2026-10-15: these were copies on each side, and a renamed stamp would have silently stopped the agent retitling its faults). `agentStamp`: the name the Kiosk's proxy stamps on every step and completion the agent writes, and `source` on every record it creates or changes — the agent tells its own steps from a person's by them. `origins`: where the agent made a fault from (its `origin` field: an alert, its nightly check, a chat's \"Create this fault\"), the Kiosk's source icon. `checks`: how the agent reads a fault again to close it (its `check` field) — \"minutes\" at every look (heartbeat.cadence.checkMinutes), \"nightly\" at its nightly check (heartbeat.cadence.nightlyAt) — the card's \"Next check\" (owner, 2026-10-15). `fields`: what the agent writes on a fault beyond the Kiosk's own — the Kiosk lists the ones it reads in /agent/v1/info `ticket_fields`, and the agent writes a newer one only to a Kiosk that lists it. `takenStep`: a person took the fault on in the Kiosk (\"Open Ticket\") — a step with status in_progress, no kind, not stamped agentStamp: the agent stops chasing its alert. `sample`: one fault as the Kiosk holds it after the agent made it and a person took it on; both sides read it in their tests.",
+  "_ticket": "The Facility fault the VESTA Agent writes and reads (/agent/v1/fm-data), declared ONCE (architecture review, 2026-10-15: these were copies on each side, and a renamed stamp would have silently stopped the agent retitling its faults). `agentStamp`: the name the Kiosk's proxy stamps on every step and completion the agent writes, and `source` on every record it creates or changes — the agent tells its own steps from a person's by them. `origins`: where the agent made a fault from (its `origin` field: an alert, its nightly check, a chat's \"Create this fault\"), the Kiosk's source icon. `checks`: how the agent reads a fault again to close it (its `check` field) — \"minutes\" at every look (heartbeat.cadence.checkMinutes), \"day\" during the day at its set times (heartbeat.cadence.dayChecksAt) and at its nightly check, closing it once no longer found (owner, 2026-10-19: night-check faults read again every few hours, not once a day), \"nightly\" at its nightly check only (heartbeat.cadence.nightlyAt) — the card's \"Next check\", the soonest of its faults' next reads (owner, 2026-10-15). The Kiosk lists the ones it reads in /agent/v1/info `ticket_checks`; the agent writes \"day\" only to a Kiosk that lists it, and \"nightly\" to an older one. `fields`: what the agent writes on a fault beyond the Kiosk's own — the Kiosk lists the ones it reads in /agent/v1/info `ticket_fields`, and the agent writes a newer one only to a Kiosk that lists it. `takenStep`: a person took the fault on in the Kiosk (\"Open Ticket\") — a step with status in_progress, no kind, not stamped agentStamp: the agent stops chasing its alert. `sample`: one fault as the Kiosk holds it after the agent made it and a person took it on; both sides read it in their tests.",
   "ticket": {
     "agentStamp": "VESTA Agent",
     "source": "vesta_agent",
@@ -450,6 +456,7 @@
     ],
     "checks": [
       "minutes",
+      "day",
       "nightly"
     ],
     "fields": {
@@ -470,6 +477,11 @@
       "entityId",
       "note",
       "origin"
+    ],
+    "_checksBeforeList": "The checks of `checks` a Kiosk read before /agent/v1/info listed them (`ticket_checks`, 2.496.429): what the VESTA Agent writes to a Kiosk whose info lists none — a fault it reads again during the day is written \"nightly\" there.",
+    "checksBeforeList": [
+      "minutes",
+      "nightly"
     ],
     "takenStep": {
       "status": "in_progress",

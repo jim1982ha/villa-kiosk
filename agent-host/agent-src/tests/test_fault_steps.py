@@ -17,7 +17,10 @@ from datetime import datetime, timedelta, timezone
 from villa_timeline import TimelineVilla
 from helpers import STARTER_SKILLS, make_agent
 from kiosk_fake import FakeKiosk
-from vesta_agent.kiosk import Kiosk, retitled
+from vesta_agent.kiosk import Kiosk, retitled, tagged
+from vesta_shared import agreement
+
+_AGREEMENT_CHECKS_BEFORE = agreement.section("ticket")["checksBeforeList"]
 from vesta_shared.problems import Problems
 from vesta_shared.store import Store
 
@@ -384,15 +387,42 @@ def test_each_fault_says_how_the_agent_reads_it_again_for_its_cards_next_check(t
     pb.open_task("finding", low, "PM-BATTERY-LOW", "sensor.door_b", "Door B battery at 12%")
     iid = st.new_incident("rule_x|lock.front", "rule_x", "lock.front", "P2", {"summary": "Front door unlocked"})
     pb.open_task("incident", iid, "rule_x", "lock.front", "Front door unlocked")
+    # owner, 2026-10-19: a battery is read again at the day recheck's times (skill.yaml day_rechecks), and one device
+    # with an alert AND a night fault has two faults, each saying its own clock — the card shows the soonest
+    both, _ = st.raise_finding("PM-BATTERY-LOW", "lock.front", "front", "2026-10-15", "P3", "Front door battery at 15%", {})
+    pb.open_task("finding", both, "PM-BATTERY-LOW", "lock.front", "Front door battery at 15%")
     run(v.tickets.repair())
-    by_entity = {t.get("entityId"): t.get("check") for t in k._all()}
-    assert by_entity == {"sensor.room_a": "minutes", "sensor.door_b": "nightly", "lock.front": "minutes"}, by_entity
+    by_entity = {(t.get("entityId"), t.get("origin")): t.get("check") for t in k._all()}
+    assert by_entity == {("sensor.room_a", "night"): "minutes", ("sensor.door_b", "night"): "day",
+                         ("lock.front", "alert"): "minutes", ("lock.front", "night"): "day"}, by_entity
     chat = run(v.tickets.create("Pool light flickers"))                                # a chat's: no clock
     assert "check" not in k.ticket(chat)
     for t in k._all():                                                                  # a fault made before 0.12.212
         t.pop("check", None)
     run(v.tickets.repair())
-    assert {t.get("entityId"): t.get("check") for t in k._all() if t["id"] != chat} == by_entity    # tagged again
+    assert {(t.get("entityId"), t.get("origin")): t.get("check") for t in k._all() if t["id"] != chat} == by_entity
+    # a Kiosk from before the day recheck (its info lists no ticket_checks) is told "nightly" — true too, the night
+    # reads it as well — never a word it cannot show
+    k.info.pop("ticket_checks")
+    for t in k._all():
+        t.pop("check", None)
+    run(v.tickets.repair())
+    assert {(t.get("entityId"), t.get("origin")): t.get("check") for t in k._all() if t["id"] != chat} == {
+        **by_entity, ("sensor.door_b", "night"): "nightly", ("lock.front", "night"): "nightly"}
+
+
+def test_a_kiosk_that_shows_no_day_check_never_gets_the_word(tmp_path):
+    # the gate (Kiosk._gated): a check word the Kiosk's info does not list is not written — the fault keeps its own
+    k = FakeKiosk({"id": "va-1", "title": "Door battery", "status": "open", "check": "nightly", "updates": []})
+    k.info.pop("ticket_checks")
+    assert k.checks() == frozenset(_AGREEMENT_CHECKS_BEFORE)
+    run(k.amend("va-1", tagged(None, "night", "day")))
+    assert k.ticket("va-1")["check"] == "nightly"
+    tid = run(k.add_ticket("New", check="day"))
+    assert "check" not in k.ticket(tid)
+    k.info["ticket_checks"] = ["minutes", "day", "nightly"]
+    run(k.amend("va-1", tagged(None, "night", "day")))
+    assert k.ticket("va-1")["check"] == "day"
 
 
 def test_the_rules_the_skill_says_it_reads_again_are_the_ones_recheck_reads():

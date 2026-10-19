@@ -522,7 +522,7 @@ def test_a_skills_when_rows_name_every_way_the_engine_starts_it(ui):
     # every field of a skill that starts it has its row; a new field must be placed here, shown or not
     starts = {"schedule", "every_5_min", "on_event", "on_reply", "before_answer", "command"}
     others = {"name", "path", "description", "tools", "scripts", "buttons", "also", "deliver", "usage", "brain",
-              "limit_usd", "rechecks"}
+              "limit_usd", "rechecks", "day_rechecks"}
     assert {f.name for f in dataclasses.fields(Skill)} == starts | others
     sk = Skill("x", "/x", schedule=[{"when": "07:00", "name": "j", "prompt": "p", "run": None}], every_5_min="a.py t",
                on_event={"critical_event": "b.py c", "voice_message": "v.py p"}, on_reply="d.py r",

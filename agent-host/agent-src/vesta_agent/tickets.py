@@ -33,9 +33,11 @@ class Tickets:
     def __init__(self, *, kiosk, state, store_path: str, settle_alert: Callable[[int, str], Awaitable[int]],
                  timezone: str = "UTC", story: Callable[[int], list[dict]] | None = None,
                  restate_alert: Callable[[int, str], Awaitable[int]] | None = None,
-                 rechecked: Callable[[], set[str]] | None = None):
+                 rechecked: Callable[[], set[str]] | None = None,
+                 day_rechecked: Callable[[], set[str]] | None = None):
         self.kiosk = kiosk
         self.rechecked = rechecked or set     # the rules the skills read again every few minutes (Skill.rechecks)
+        self.day_rechecked = day_rechecked or set   # … and at their day recheck's times (Skill.day_checked)
         self.timezone = timezone              # the villa's: the note's time (notice.when)
         self.state = state
         self.store_path = store_path
@@ -76,7 +78,7 @@ class Tickets:
                 note = ((note or "") + f"\n(The investigation report could not be attached: {why}.)").strip()
         # its alert's number and where it came from (Problems.card); a fault with no task is a chat's ("Create this fault")
         task = self._store().task(int(task_id)) if task_id else None
-        want = Problems(self._store()).card(task, self.rechecked()) if task else {"number": None, "origin": "chat", "check": None}
+        want = self._card(Problems(self._store()), task) if task else {"number": None, "origin": "chat", "check": None}
         tid = await self.kiosk.add_ticket(ticket_title(title)[:200], entity_id=entity_id, note=note, document_ids=docs,
                                           **({"number": want["number"]} if want["number"] else {}),
                                           **({"origin": want["origin"]} if want["origin"] else {}),
@@ -87,6 +89,10 @@ class Tickets:
             self._store().set_task_uid(int(task_id), tid)
         self.state.log("executed", {"tool": "ticket", "ticket": tid, "entity": entity_id})
         return tid
+
+    def _card(self, problems: Problems, task: dict) -> dict:
+        """Problems.card for `task`, with the skills' reading cadences and the check words this Kiosk shows."""
+        return problems.card(task, self.rechecked(), self.day_rechecked(), self.kiosk.checks())
 
     def _pattern(self, want: dict, card: dict | None = None) -> dict | None:
         """{"titlePattern", "since"} for a fault the agent titles (a Kiosk that does not read them never gets them: its
@@ -254,7 +260,7 @@ class Tickets:
             card = held.get(uid) if uid else None
             if not card:
                 continue
-            want = problems.card(t, self.rechecked())
+            want = self._card(problems, t)
             try:
                 if want["open"] and card["status"] == "resolved":
                     # its problem came back and the fault's reopening did not reach the Kiosk

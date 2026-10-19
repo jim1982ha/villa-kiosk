@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.6.259 (19 October 2026)
+
+The night's open faults read again during the day (owner, 19 October: "refresh the open ones every 4 hours during the
+days … just re-check the identified ones").
+- preventive-maintenance: `recheck.py day`, run without the AI by four schedule entries marked `kiosk: day_check`
+  (08:00, 12:00, 16:00, 20:00 — the villa moves, adds or removes them in skill.yaml; none switches it off), reads the
+  open findings of skill.yaml `day_rechecks` (PM-BATTERY-CRIT, PM-BATTERY-LOW, PM-SILENT) each by its own rule over its
+  own device — `recheck.DAY_READS` calls the night's own functions, `nightly.battery_findings` and
+  `nightly.silent_findings`, moved out of nightly.run (one implementation per rule). Never a full night, never another
+  finding, never a new one; a state not read back or a battery with no value closes nothing. Left nightly, judged on a
+  finished day: PM-POWER-CHANGE, PM-ENERGY-CHANGE, PM-RUNHOURS, PM-LEVEL-HIGH; PM-RECONNECT-LOOP (the villa-wide
+  logbook); PM-UNAVAILABLE stays every 5 minutes.
+- `Problems.record_rechecked(rechecked, seen, day, at, note=, settle_minutes=)`: each finding read is recorded seen
+  (Problems.seen — a person's close the settle time or more before opens it again, "Still there after the close.") or
+  closed and settled with `note`; only among those read. One close wording: nightly.CLEARED / `cleared_note` —
+  "Cleared: the nightly check no longer sees it." at night, "Cleared: the check at 12:00 no longer sees it." in the
+  day. Nobody is messaged for a close (the night's rule).
+- The card's "Next check": `Problems.card(task, rechecked, day_rechecked, checks)` says "day" for a rule a day recheck
+  reads, to a Kiosk whose /agent/v1/info lists it in `ticket_checks` (`Kiosk.checks()`; else the agreement's
+  `ticket.checksBeforeList`, and "nightly"); `Kiosk._gated` writes no check word the Kiosk does not show; `refresh`
+  re-reads the info while it lists no `ticket_checks`. Skill.day_rechecks, Skill.day_checks_at, Skill.day_checked;
+  skills.KIOSK_JOBS + "day_check". The heartbeat's cadence carries `dayChecksAt` (absent without a day recheck).
+- The agreement (agent-contract.json) copied from the Kiosk 2.496.429: ticket.checks + "day", ticket.checksBeforeList,
+  heartbeat cadence `dayChecksAt`, info `ticket_checks`.
+- Tests: test_day_recheck (the day recheck end to end, a read that failed, a person's close and reopening,
+  record_rechecked, back again at night, the skill's lists, the scheduler's times), test_fault_steps (one device with an
+  alert and a night fault: "minutes" and "day"; an older Kiosk: "nightly"; the gate), test_kiosk_cadence,
+  test_contract_ticket.
+
 ## 0.6.258 (19 October 2026)
 
 The night check owns each number asked twice (owner, 19 October: "proceed with the recommended implementation").

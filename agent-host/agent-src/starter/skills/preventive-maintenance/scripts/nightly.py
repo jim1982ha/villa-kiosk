@@ -32,7 +32,7 @@ sys.path.insert(0, HERE)
 
 from vesta_shared import script  # noqa: E402  (client, pack, store, settings, zone: one set-up)
 from vesta_shared.messaging import incident_tag, no_code as _no_code  # noqa: E402
-from vesta_shared.timeutil import day_label, day_time_label, villa_day  # noqa: E402
+from vesta_shared.timeutil import clock, day_label, day_time_label, villa_day  # noqa: E402
 from vesta_shared.past import unread  # noqa: E402  (the one "could not be read whole: nothing is known after")
 from vesta_shared.message_format import document, split_title  # noqa: E402  (the one shape of a message)
 from vesta_shared.device_state import has_value, is_offline  # noqa: E402
@@ -149,16 +149,7 @@ def run(args) -> dict:
     states = cli.states()
     battery_entities = [r["entity_id"] for r in pack.entities("battery")]
     bat_stats = cli.statistics(battery_entities, day_end - timedelta(days=14), day_end, "day", ("mean",)) if battery_entities else {}
-    for row in pack.entities("battery"):
-        asset = _device_named(pack, pack.assets.get(row["asset"], {"slug": row["asset"], "name": row["name"],
-                                                                   "critical": False}), row["entity_id"])
-        st = states.get(row["entity_id"], {})
-        try:
-            level = float(st.get("state")) if has_value(st.get("state")) else None
-        except ValueError:
-            level = None
-        series = [(str(r["start"]), r["mean"]) for r in bat_stats.get(row["entity_id"], []) if r.get("mean") is not None]
-        findings += R.battery_rules(asset, row["entity_id"], row.get("unit"), level, series, params, today)
+    findings += battery_findings(pack, states, params, today, bat_stats)
 
     alerted = alerted_offline(store, pack)
     findings += offline_findings(pack, states, now_ref, params, set(alerted))
@@ -167,50 +158,7 @@ def run(args) -> dict:
     handed_over = {(o["rule_id"], o["entity_id"]): f"Followed by alert {incident_tag(alerted[dev])}, which says when it is back."
                    for o in store.findings(status="open") if o["rule_id"] == "PM-UNAVAILABLE"
                    for dev in [pack.physical_device_of(o["entity_id"]) or o["entity_id"]] if dev in alerted}
-    quiet_rows: list[tuple[dict, dict, datetime]] = []
-    for fam in ("level",):                       # silence: a level sensor online and quiet
-        for row in pack.entities(fam):
-            st = states.get(row["entity_id"])
-            if not st:
-                continue
-            asset = pack.assets.get(row["asset"], {"slug": row["asset"], "name": row["name"], "critical": False})
-            lc = st.get("last_changed")
-            if not is_offline(st.get("state")) and st.get("state") != "unknown":
-                # ⚠️ SILENT MEANS NOT REPORTING, NOT UNCHANGED (villa, 2026-10-01): last_reported moves at
-                # each report (HA 2024.3+). But many integrations write only on a CHANGE, and every
-                # restart stamps all of them (villa, 2026-10-04) — so quiet alone proves nothing; the
-                # sensor's own history decides below whether it normally reports all the time.
-                lr = st.get("last_reported") or lc
-                try:
-                    since = datetime.fromisoformat(lr).astimezone(Z) if lr else None
-                except ValueError:
-                    since = None
-                if since is not None:
-                    quiet_rows.append((row, asset, since))
-    # silence: one finding per device, and only for a sensor that normally reports all the time
-    silence_hours = params.behaviour("silence_hours")
-    long_quiet = [(r, a, t) for r, a, t in quiet_rows if (now_ref - t).total_seconds() / 3600 >= silence_hours
-                  and not _device_still_talks(pack, states, r["entity_id"], now_ref, silence_hours)]
-    if long_quiet:
-        # judged on the hours just BEFORE it went quiet (features.reporting_share)
-        hist_hours = int(params.behaviour("silence_history_hours"))
-        share_min = params.behaviour("silence_reporting_share")
-        q_from = min(t for _, _, t in long_quiet) - timedelta(hours=hist_hours)
-        q_stats = cli.statistics([r["entity_id"] for r, _, _ in long_quiet], q_from, now_ref, "hour", ("mean", "min", "max"))
-        silent_groups: dict[str, dict] = {}
-        for row, asset, since in long_quiet:
-            share, hours = F.reporting_share(q_stats.get(row["entity_id"], []), int(since.timestamp() * 1000), hist_hours)
-            if share is None or hours < params.behaviour("silence_min_history_hours") or share < share_min:
-                continue                  # reports on change only, or too little history to say: not a fault
-            key = pack.device_key(row["entity_id"], row)
-            g = silent_groups.setdefault(key, {"asset": asset, "entity_id": row["entity_id"], "since": since, "names": []})
-            g["names"].append(row["name"])
-            g["since"] = min(g["since"], since)
-        for g in silent_groups.values():
-            a = dict(g["asset"])
-            a["name"] = F.device_name(g["names"])
-            a = _device_named(pack, a, g["entity_id"])
-            findings += R.silence_rules(a, g["entity_id"], (now_ref - g["since"]).total_seconds() / 3600, params, now=now_ref)
+    findings += silent_findings(cli, pack, states, now_ref, params, Z)
 
     level_rows = [r for r in pack.entities("level")
                   if params.has(f"{r['asset']}_max_c") or params.has(f"{r['asset']}_max_humidity_pct")]
@@ -264,7 +212,7 @@ def run(args) -> dict:
     night = Problems(store).record_night(
         findings, today.isoformat(), state_rules=STATE_RULES,
         event_rules=EVENT_RULES, worsened_step=params.behaviour("worsened_step_pct"),
-        resolved_note="Cleared: the nightly check no longer sees it.", handed_over=handed_over,
+        resolved_note=cleared_note(), handed_over=handed_over,
         settle_minutes=still_there_minutes(ctx.settings))
     new, still_open, closed, tasks = night["new"], night["still_open"], night["closed"], night["task_ids"]
     again = night["again"]
@@ -291,6 +239,89 @@ def still_there_minutes(settings: dict) -> float | None:
     print("preventive-maintenance settings.yaml: still_there_after_close needs `minutes`: a fault closed while its "
           "problem is still there stays closed", file=sys.stderr)
     return None
+
+
+#: What a fault closed because a check no longer sees its problem says — the night's and the day recheck's, one
+#: wording (owner, 2026-10-19: "refresh the open ones every 4 hours during the days"): {check} is "nightly check", or
+#: "check at 12:00" for a day recheck (cleared_note).
+CLEARED = "Cleared: the {check} no longer sees it."
+
+
+def cleared_note(at: datetime | None = None, zone: str | None = None) -> str:
+    """CLEARED for the night (`at` None), or for a day recheck at `at`, its villa time said ("… the check at 12:00 …")."""
+    return CLEARED.format(check="nightly check" if at is None else f"check at {clock(at, zone or 'UTC', days=False)}")
+
+
+# ⚠️ ONE RULE, READ AT NIGHT OR FOR ONE FINDING IN THE DAY (owner, 2026-10-19: "just re-check the identified ones to
+# update their status"): the night's battery and silence readings were inline in run(); recheck.py's day recheck now
+# runs the very same functions over the rows of the findings still open (`rows`), never a second copy of a rule.
+def battery_findings(pack, states: dict, params, today: date, stats: dict | None = None,
+                     rows: list[dict] | None = None) -> list:
+    """The battery rules (rules.battery_rules) over `rows` (every battery of the pack when None), each read from
+    `states`; `stats`: {entity: daily means} for the trend (none: no trend is judged)."""
+    out = []
+    for row in pack.entities("battery") if rows is None else rows:
+        asset = _device_named(pack, pack.assets.get(row["asset"], {"slug": row["asset"], "name": row["name"],
+                                                                   "critical": False}), row["entity_id"])
+        st = states.get(row["entity_id"], {})
+        try:
+            level = float(st.get("state")) if has_value(st.get("state")) else None
+        except ValueError:
+            level = None
+        series = [(str(r["start"]), r["mean"]) for r in (stats or {}).get(row["entity_id"], []) if r.get("mean") is not None]
+        out += R.battery_rules(asset, row["entity_id"], row.get("unit"), level, series, params, today)
+    return out
+
+
+def silent_findings(cli, pack, states: dict, now_ref: datetime, params, Z, rows: list[dict] | None = None) -> list:
+    """PM-SILENT: a level sensor online, quiet for `silence_hours`, whose device says nothing else either, and which
+    normally reports all the time (its hours before it went quiet) — one finding per device. `rows`: the level rows to
+    judge (every one of the pack when None); their statistics are read only for those quiet long enough."""
+    quiet_rows: list[tuple[dict, dict, datetime]] = []
+    for row in pack.entities("level") if rows is None else rows:   # silence: a level sensor online and quiet
+        st = states.get(row["entity_id"])
+        if not st:
+            continue
+        asset = pack.assets.get(row["asset"], {"slug": row["asset"], "name": row["name"], "critical": False})
+        lc = st.get("last_changed")
+        if not is_offline(st.get("state")) and st.get("state") != "unknown":
+            # ⚠️ SILENT MEANS NOT REPORTING, NOT UNCHANGED (villa, 2026-10-01): last_reported moves at
+            # each report (HA 2024.3+). But many integrations write only on a CHANGE, and every
+            # restart stamps all of them (villa, 2026-10-04) — so quiet alone proves nothing; the
+            # sensor's own history decides below whether it normally reports all the time.
+            lr = st.get("last_reported") or lc
+            try:
+                since = datetime.fromisoformat(lr).astimezone(Z) if lr else None
+            except ValueError:
+                since = None
+            if since is not None:
+                quiet_rows.append((row, asset, since))
+    # silence: one finding per device, and only for a sensor that normally reports all the time
+    silence_hours = params.behaviour("silence_hours")
+    long_quiet = [(r, a, t) for r, a, t in quiet_rows if (now_ref - t).total_seconds() / 3600 >= silence_hours
+                  and not _device_still_talks(pack, states, r["entity_id"], now_ref, silence_hours)]
+    out = []
+    if long_quiet:
+        # judged on the hours just BEFORE it went quiet (features.reporting_share)
+        hist_hours = int(params.behaviour("silence_history_hours"))
+        share_min = params.behaviour("silence_reporting_share")
+        q_from = min(t for _, _, t in long_quiet) - timedelta(hours=hist_hours)
+        q_stats = cli.statistics([r["entity_id"] for r, _, _ in long_quiet], q_from, now_ref, "hour", ("mean", "min", "max"))
+        silent_groups: dict[str, dict] = {}
+        for row, asset, since in long_quiet:
+            share, hours = F.reporting_share(q_stats.get(row["entity_id"], []), int(since.timestamp() * 1000), hist_hours)
+            if share is None or hours < params.behaviour("silence_min_history_hours") or share < share_min:
+                continue                  # reports on change only, or too little history to say: not a fault
+            key = pack.device_key(row["entity_id"], row)
+            g = silent_groups.setdefault(key, {"asset": asset, "entity_id": row["entity_id"], "since": since, "names": []})
+            g["names"].append(row["name"])
+            g["since"] = min(g["since"], since)
+        for g in silent_groups.values():
+            a = dict(g["asset"])
+            a["name"] = F.device_name(g["names"])
+            a = _device_named(pack, a, g["entity_id"])
+            out += R.silence_rules(a, g["entity_id"], (now_ref - g["since"]).total_seconds() / 3600, params, now=now_ref)
+    return out
 
 
 #: The families whose devices are read for being offline (and, for `level`, silent).

@@ -64,8 +64,11 @@ def test_every_origin_the_agent_writes_is_declared(tmp_path):
     n, _ = pb.open_task("finding", 3, "battery_low", "sensor.example", "y")
     written = {pb.card(st.task(a))["origin"], pb.card(st.task(n))["origin"], "chat"}   # chat: tickets.create, no task
     assert written <= set(T["origins"]), written
-    checks = {pb.card(st.task(a))["check"], pb.card(st.task(n))["check"], pb.card(st.task(n), {"battery_low"})["check"]}
+    checks = {pb.card(st.task(a))["check"], pb.card(st.task(n))["check"], pb.card(st.task(n), {"battery_low"})["check"],
+              pb.card(st.task(n), set(), {"battery_low"}, T["checks"])["check"]}
     assert checks == set(T["checks"]), checks                      # every clock the card can say, each one declared
+    # a Kiosk that lists no check words (before 2.496.429) is told only the ones it read then
+    assert pb.card(st.task(n), set(), {"battery_low"}, T["checksBeforeList"])["check"] == "nightly"
 
 
 def test_the_sample_reads_as_the_agreement_says():

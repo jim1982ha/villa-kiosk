@@ -29,7 +29,27 @@ def test_a_villa_that_moves_its_nightly_check_says_the_new_time(tmp_path):
     raw = yaml.safe_load(open(path))
     raw["schedule"][0]["when"] = "04:30"
     yaml.safe_dump(raw, open(path, "w"))
-    assert v.kiosk_cadence() == {"checkMinutes": 5, "nightlyAt": "04:30"}   # read again at the next beat
+    assert v.kiosk_cadence() == {**BEAT["cadence"], "nightlyAt": "04:30"}   # read again at the next beat
+
+
+def test_the_day_recheck_times_are_the_skills_day_check_jobs(tmp_path):
+    # owner, 2026-10-19: "make sure you update the `Next check:` section accordingly" — the Kiosk is told the times of
+    # the jobs the skill marks `kiosk: day_check`, read at each beat; none, and the cadence says none
+    v = make_agent(tmp_path, {}, skills=("preventive-maintenance",))
+    path = os.path.join(v.s.skills_dir, "preventive-maintenance", "skill.yaml")
+    raw = yaml.safe_load(open(path))
+    days = [j for j in raw["schedule"] if j.get("kiosk") == "day_check"]
+    assert sorted(j["when"] for j in days) == BEAT["cadence"]["dayChecksAt"]
+    assert all(j["run"] == "recheck.py day" and not j.get("prompt") for j in days)      # code only: no AI
+    days[0]["when"] = "07:30"
+    yaml.safe_dump(raw, open(path, "w"))
+    assert v.kiosk_cadence()["dayChecksAt"] == sorted(["07:30"] + BEAT["cadence"]["dayChecksAt"][1:])
+    raw["schedule"] = [j for j in raw["schedule"] if j.get("kiosk") != "day_check"]
+    yaml.safe_dump(raw, open(path, "w"))
+    assert v.kiosk_cadence() == {k: x for k, x in BEAT["cadence"].items() if k != "dayChecksAt"}
+    # and no card says "day" any more: with no day recheck, its rules are read at night (Skill.day_checked)
+    sk = v.skills.all()["preventive-maintenance"]
+    assert sk.day_rechecks and sk.day_checked == []
 
 
 def test_without_a_nightly_job_no_number_is_told(tmp_path):

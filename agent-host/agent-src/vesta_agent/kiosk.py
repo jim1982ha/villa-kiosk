@@ -327,7 +327,7 @@ class Kiosk:
         return True
 
     async def heartbeat(self, status: str | None = None, cadence: dict | None = None) -> dict:
-        """`cadence`: this agent's own timing (agent-contract.json `heartbeat`: checkMinutes, nightlyAt) — the Kiosk's
+        """`cadence`: this agent's own timing (agent-contract.json `heartbeat`: checkMinutes, nightlyAt, dayChecksAt) — the Kiosk's
         Overview (i) says it instead of a copy of the defaults (architecture review, 2026-10-15). Returns the Kiosk's
         answer; its window (`offline_after_minutes`) sets the next interval (`every`, beat_every). A cadence the Kiosk
         did not take ("cadence": "refused: …", with a 200) is said once in the log — the beat itself counted."""
@@ -415,8 +415,8 @@ class Kiosk:
         """`number`: the alert's number, as every chat names it ("#5"), when the fault comes from one — the Kiosk's card
         shows it beside the title (owner, 2026-10-14), so the Telegram message and the card are seen to be one problem.
         `origin`: where the agent made it from — "alert", "night" (its nightly check) or "chat" — the card's source icon.
-        `check`: how the agent reads it again to close it — "minutes" or "nightly" (agent-contract `ticket.checks`) — the
-        card's "Next check". `pattern`: {"titlePattern", "since"}, the duration the card words when shown."""
+        `check`: how the agent reads it again to close it — "minutes", "day" or "nightly" (agent-contract `ticket.checks`;
+        one this Kiosk does not show is not written: _gated) — the card's "Next check". `pattern`: {"titlePattern", "since"}, the duration the card words when shown."""
         tid = self._ticket_id()
 
         def change(data: dict) -> str:
@@ -491,6 +491,13 @@ class Kiosk:
         listed = (self.info or {}).get("ticket_fields")
         return frozenset(listed if isinstance(listed, list) else agreement.section("ticket").get("fieldsBeforeList") or ())
 
+    def checks(self) -> frozenset[str]:
+        """The words of a fault's `check` this Kiosk shows ("Next check: …"): its /agent/v1/info `ticket_checks`
+        (2.496.429+), else the agreement's `ticket.checksBeforeList` — what a Kiosk read before it listed them.
+        Problems.card is told them, and _gated writes no other."""
+        listed = (self.info or {}).get("ticket_checks")
+        return frozenset(listed if isinstance(listed, list) else agreement.section("ticket").get("checksBeforeList") or ())
+
     def _shown(self, u: dict) -> dict | None:
         """A step this agent adds, as this Kiosk can read it: a kind it does not list is written without (the shape
         before kinds — a close by its note, the agreement's clearedNotePrefixes); a kind that changes no status
@@ -510,6 +517,11 @@ class Kiosk:
         declared, takes = set(agreement.section("ticket").get("fields") or {}), self._fields()
         out = {k: v for k, v in after.items() if k not in declared or k in takes}
         out.update({k: before[k] for k in declared - takes if before and k in before and k in after})
+        # a check word it does not show ("day" to a Kiosk before 2.496.429) is not written: the fault keeps its own
+        if out.get("check") is not None and out["check"] not in self.checks():
+            out.pop("check")
+            if before and before.get("check") is not None:
+                out["check"] = before["check"]
         old = len((before or {}).get("updates") or [])
         ups = list(after.get("updates") or [])
         out["updates"] = ups[:old] + [s for s in (self._shown(u) if isinstance(u, dict) else u for u in ups[old:])
@@ -517,9 +529,9 @@ class Kiosk:
         return out
 
     async def refresh(self) -> None:
-        """/agent/v1/info read again when the one held lists no step kinds: a Kiosk updated since the agent started
-        says what it now shows (the repair asks at each round). Its failure is the next round's to retry."""
-        if isinstance((self.info or {}).get("step_kinds"), list):
+        """/agent/v1/info read again when the one held lists no step kinds or no check words: a Kiosk updated since the
+        agent started says what it now shows (the repair asks at each round). Its failure is the next round's to retry."""
+        if all(isinstance((self.info or {}).get(k), list) for k in ("step_kinds", "ticket_checks")):
             return
         try:
             await self.check()

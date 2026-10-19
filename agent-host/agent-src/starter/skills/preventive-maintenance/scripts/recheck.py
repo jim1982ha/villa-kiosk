@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Every 5 minutes: a device gone offline gets its fault now; one found offline that is back closes it now; so does
-any fault about a device deleted from Home Assistant.
+any fault about a device deleted from Home Assistant. With `day` (at the times of the schedule entries marked
+`kiosk: day_check`): the night's open findings of the rules skill.yaml `day_rechecks` names, read again — and only those.
 
   python recheck.py --store vesta_store.sqlite [--pack pack.json] [--fixture-dir DIR] [--now 2026-10-10T14:00:00+00:00]
+  python recheck.py day --store vesta_store.sqlite [--pack pack.json] …
 
 ⚠️ FOUND AT ONCE, NOT AT 02:00 (owner, 2026-10-18 — architecture review, offline devices #1): Timmerflotte_5969 dropped
 at 21:46 and stood "Unavailable" in the Cockpit for 4 h 14 min before the night check opened its fault. Here the
@@ -49,6 +51,8 @@ from vesta_shared.problems import Problems  # noqa: E402
 from vesta_shared.timeutil import day_time_label  # noqa: E402
 import nightly as N  # noqa: E402  (what is offline: the night's one reading of it)
 from vesta_shared.problems import STILL_THERE  # noqa: E402
+from vesta_shared import battery  # noqa: E402  (the battery rules' ids: one owner)
+from vesta_shared.device_state import has_value  # noqa: E402
 
 
 
@@ -58,6 +62,16 @@ def rechecked(skill_dir: str = os.path.dirname(HERE)) -> set[str]:
     import yaml
     with open(os.path.join(skill_dir, "skill.yaml"), encoding="utf-8") as f:
         return set((yaml.safe_load(f) or {}).get("rechecks") or [])
+def day_rechecked(skill_dir: str = os.path.dirname(HERE)) -> set[str]:
+    """The rules whose open findings the day recheck reads again (`recheck.py day`, at the times of the schedule entries
+    marked `kiosk: day_check`): the skill's own `day_rechecks` (skill.yaml) — what the Kiosk's card says "Next check: at
+    12:00" of. Only those this script knows how to read for one finding (DAY_READS) are read; another is named on
+    stderr and keeps its nightly check."""
+    import yaml
+    with open(os.path.join(skill_dir, "skill.yaml"), encoding="utf-8") as f:
+        return set((yaml.safe_load(f) or {}).get("day_rechecks") or [])
+
+
 GONE_NOTE = "Closed: this device no longer exists in the villa's system."
 ENTITY_ID = re.compile(r"^[a-z0-9_]+\.[a-z0-9_]+$")     # only a real entity id can be "not found"
 
@@ -119,6 +133,94 @@ def gone_offline(store, pack, client, now: datetime, params, zone: str, settle_m
     return {"actions": actions, "send": send, "found": [d["id"] for d in rec["new"] + rec["again"]]}
 
 
+def _battery_rows(pack, f: dict) -> list[dict]:
+    """The battery row of finding `f` (its own entity), [] when the pack no longer lists it."""
+    return [r for r in pack.entities("battery") if r["entity_id"] == f["entity_id"]]
+
+
+def _silence_rows(pack, f: dict) -> list[dict]:
+    """The level rows of finding `f`'s device — the night judges a device's silence over all of them (one finding per
+    device, kept under the first one quiet)."""
+    rows = pack.entities("level")
+    mine = next((r for r in rows if r["entity_id"] == f["entity_id"]), None)
+    if mine is None:
+        return []
+    key = pack.device_key(mine["entity_id"], mine)
+    return [r for r in rows if pack.device_key(r["entity_id"], r) == key]
+
+
+#: How the day recheck reads one open finding again, per rule — {rule: (its rows, the entities whose state is read for
+#: them, what the night's own function finds over them)}. A rule absent here is not read in the day: it keeps its nightly
+#: check (the Kiosk card says so only when skill.yaml `day_rechecks` leaves it out, test_day_recheck holds them equal).
+#: ⚠️ ONLY WHAT A SHORT READ CAN SAY (owner, 2026-10-19): a battery's level and a quiet sensor are read now, as the night
+#: reads them. A pump's draw and use (PM-POWER-CHANGE, PM-ENERGY-CHANGE, PM-RUNHOURS) and a temperature's day
+#: (PM-LEVEL-HIGH) are judged on a FINISHED day — at 12:00 the day is half there and would close what the next night
+#: opens again; a reconnect loop needs the villa-wide logbook (the villa's system's own restarts are in it), the night's
+#: heaviest read. An offline device is recheck.py's every 5 minutes (`rechecks`).
+DAY_READS = {
+    "PM-BATTERY-CRIT": (_battery_rows, lambda pack, f, rows: [r["entity_id"] for r in rows],
+                        lambda c, pack, states, now, params, Z, rows: N.battery_findings(pack, states, params, now.date(),
+                                                                                         rows=rows)),
+    "PM-SILENT": (_silence_rows,
+                  lambda pack, f, rows: [r["entity_id"] for r in rows]
+                  + sorted(pack.entities_of_device(pack.device_id_of(f["entity_id"]))),
+                  lambda c, pack, states, now, params, Z, rows: N.silent_findings(c, pack, states, now, params, Z,
+                                                                                  rows=rows)),
+}
+DAY_READS["PM-BATTERY-LOW"] = DAY_READS["PM-BATTERY-CRIT"]
+
+
+def day_recheck(store, pack, client, now: datetime, params, zone: str, settle_minutes: float | None = None,
+                rules: set[str] | None = None) -> dict:
+    """The night's open findings of `rules` (skill.yaml `day_rechecks`) read again now, each by its own rule over its
+    own device (DAY_READS, the night's functions): one still found is recorded as seen — a person's close that long ago
+    or more no longer holds (Problems.wants_open) —, one no longer found closes, saying so with the time
+    (nightly.cleared_note). Nothing else is touched: no other finding, no new one (the night opens those). Returns
+    {actions, closed, seen}; Home Assistant is asked for nothing when no such finding is open.
+
+    ⚠️ NOT THE NEXT NIGHT (owner, 2026-10-19: "instead of waiting 24h to recheck the faults found during the nightly
+    check, refresh the open ones every 4 hours during the days"): a battery changed at 09:00 stayed an open fault in the
+    Cockpit until 02:00 the next night. A reading that fails, or an entity whose state was not read, closes nothing."""
+    none = {"actions": [], "closed": [], "seen": []}
+    rules = day_rechecked() if rules is None else rules
+    for r in sorted(rules - set(DAY_READS)):
+        print(f"preventive-maintenance: {r} cannot be read again in the day: it keeps its nightly check", file=sys.stderr)
+    open_ = [f for f in store.findings(status="open") if f["rule_id"] in rules and f["rule_id"] in DAY_READS]
+    if not open_ or pack is None or client() is None:
+        return none
+    Z = ZoneInfo(zone)
+    at = now.astimezone(Z)
+    plan = []
+    for f in open_:
+        rows_of, ids_of, _ = DAY_READS[f["rule_id"]]
+        rows = rows_of(pack, f)
+        if rows:
+            plan.append((f, rows, ids_of(pack, f, rows)))
+    states = client().states(sorted({e for _, _, ids in plan for e in ids})) if plan else {}
+    rechecked, seen = [], []
+    for f, rows, _ in plan:
+        st = states.get(f["entity_id"]) or {}
+        # ⚠️ NOT READ IS NOT GONE: a state the read did not bring back (a timeout), or a battery with no value now,
+        # leaves the finding to the night — its close would say the problem is over when nothing was seen
+        if not st or (f["rule_id"] in (battery.CRIT, battery.LOW) and not has_value(st.get("state"))):
+            continue
+        try:
+            found = DAY_READS[f["rule_id"]][2](client(), pack, states, at, params, Z, rows)
+        except Exception as e:  # noqa: BLE001 — a read that failed closes nothing; the night reads it again
+            print(f"preventive-maintenance: {f['rule_id']} of {f['entity_id']} could not be read again "
+                  f"({type(e).__name__})", file=sys.stderr)
+            continue
+        rechecked.append(f["id"])
+        if any(x.rule_id == f["rule_id"] and x.entity_id == f["entity_id"] for x in found):
+            seen.append(f["id"])
+    if not rechecked:
+        return none
+    rec = Problems(store).record_rechecked(rechecked, seen, at.date().isoformat(), now.isoformat(),
+                                           note=N.cleared_note(now, zone), settle_minutes=settle_minutes)
+    store.audit("preventive-maintenance", "day_recheck", {"read": rechecked, "closed": rec["closed"]})
+    return {"actions": result.moved(rec["task_ids"]), "closed": rec["closed"], "seen": rec["seen"]}
+
+
 def reopened_untold(store, zone: str, settings: dict) -> list[dict]:
     """The messages for the faults a person reopened in the Cockpit that nobody has been told of yet, each told once:
     to settings.yaml `reopened_in_kiosk.tell`, under its `title`, the body the one wording of a reopening
@@ -167,9 +269,20 @@ def still_there_untold(store, zone: str, settings: dict) -> list[dict]:
 def main(argv=None):
     ap = argparse.ArgumentParser()
     script.arguments(ap, pack=True)
+    ap.add_argument("what", nargs="?", choices=["day"],
+                    help="day: the day recheck of the night's open findings (skill.yaml `day_rechecks`), at the times "
+                         "of the schedule entries marked `kiosk: day_check` — nothing else")
     a = ap.parse_args(argv)
     ctx = script.Context(a, skill=os.path.dirname(HERE))
     now = datetime.fromisoformat(a.now) if getattr(a, "now", None) else datetime.now(timezone.utc)
+    if a.what == "day":
+        day = day_recheck(ctx.store, ctx.pack, lambda: ctx.live_client, now, ctx.params, ctx.zone,
+                          N.still_there_minutes(ctx.settings))
+        # the night's own rule for a close: nobody is messaged (told_now tells what is new or back, never a close);
+        # the Kiosk's faults follow through the engine's repair
+        print(json.dumps({"actions": day["actions"], "send": [], result.FAULTS_CHANGED: bool(day["actions"])},
+                         default=str))
+        return 0
     res = back_online(ctx.store, lambda: ctx.live_client, now, ctx.params.behaviour("back_online_minutes"), ctx.zone)
     found = gone_offline(ctx.store, ctx.pack, lambda: ctx.live_client, now, ctx.params, ctx.zone,
                          N.still_there_minutes(ctx.settings))

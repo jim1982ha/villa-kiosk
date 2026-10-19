@@ -709,3 +709,27 @@ Owner: "proceed with the recommended implementation", four cards.
 - **The heartbeat's interval is the Kiosk's**: `kiosk.beat_every(answer, current)` — a third of
   `offline_after_minutes`, floor `BEAT_FLOOR_S` (30), `BEAT_BEFORE_ANSWER_S` (120) until the first answer; a
   `"cadence": "refused: …"` answer is logged once (the beat counted).
+
+## The night's open faults read again in the day (owner, 2026-10-19, 0.12.268)
+
+Owner: "refresh the open ones every 4 hours during the days … just re-check the identified ones".
+- **A partial reading records; the night OR a day recheck of the very findings it read may close them.** Amends
+  0.12.241's "only the whole night may close": `Problems.record_rechecked(rechecked, seen, day, at, note=,
+  settle_minutes=)`, beside record / record_night, records each finding read as seen (`Problems.seen`) or closes it
+  and settles — only among the ids it was given. A reading that does not name what it judged (the 5-minute recheck's
+  new offline findings: `record`) still closes nothing. settle() decides every task as before (a person's close, its
+  still-there reopening, a person's reopening, AGAIN_DAYS: a day close seen again by the night is "again").
+- **Skills before code**: the times are the preventive-maintenance schedule entries marked `kiosk: day_check` (one per
+  time, the schedule's idiom — not a copy in settings.yaml, which the scheduler and the cadence would not read); the
+  rules are skill.yaml `day_rechecks`; the close's words are nightly.CLEARED / `cleared_note` (one wording, with the
+  time). The engine only carries them: `Skill.day_checks_at` → the heartbeat's `dayChecksAt`, `Skill.day_checked`
+  (empty without a day_check job) → `Problems.card`.
+- **One implementation per rule**: `recheck.DAY_READS` runs the night's `nightly.battery_findings` /
+  `nightly.silent_findings` over one finding's rows. Read in the day: PM-BATTERY-CRIT, PM-BATTERY-LOW, PM-SILENT.
+  Nightly: PM-POWER-CHANGE, PM-ENERGY-CHANGE, PM-RUNHOURS, PM-LEVEL-HIGH (judged on a finished day: at 12:00 it is half
+  there), PM-RECONNECT-LOOP (needs the villa-wide logbook, where the villa system's own restarts are). Not read back is
+  not gone: a missing state or a battery with no value closes nothing.
+- **"day" only to a Kiosk that shows it**: `Kiosk.checks()` (info `ticket_checks`, else the agreement's
+  `ticket.checksBeforeList`) is passed to `Problems.card`, which says "day" only when listed, else "nightly" (true too);
+  `Kiosk._gated` writes no check word the Kiosk does not list. A device with an alert's fault ("minutes") and a night
+  fault ("day") has two faults; the Kiosk card shows the soonest.
