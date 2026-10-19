@@ -6,6 +6,12 @@
 # in `villa.reports.yaml` beside this file (VESTA Agent page → Skills → reports → New file): it is added
 # to this one, and app updates keep it while they still update this file.
 
+# ---------------------------------------------------------------- running
+# When a device counts as running: the night check's and the energy figures' one rule (vesta_shared.daily), with
+# this skill's own default. A villa helper input_number.vesta_on_threshold_fraction overrides it for every skill.
+behaviour:
+  on_threshold_fraction: 0.2   # an hour whose peak passes this share of the device's typical peak ran, for mean ÷ peak of it
+
 # ---------------------------------------------------------------- judgements
 thresholds:
   light:                       # the colour of a report, from the severities of what is open
@@ -17,7 +23,6 @@ thresholds:
     show: 8                    # the lowest N batteries are drawn
   pump:
     watch_drop_pct: 10         # Watch when the running power of the last 3 days is this much under the days before
-    run_min_w: 15              # an hour whose mean power is above this counts as running
   circuits_show: 8             # rows of the circuit table, largest first
   alert_follow_window_min: 15  # a logbook run this close to an incident of the same rule is that incident (shown once)
   circuit_change_max_pct: 300  # a change bigger than this (from almost nothing) shows as ">+300%", not "+10900%"

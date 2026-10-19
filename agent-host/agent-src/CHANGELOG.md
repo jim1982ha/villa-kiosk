@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.6.247 (19 October 2026)
+
+One "running" for every page (owner, 2026-10-19: "do both").
+- vesta_shared.daily.power_daily_features: an hour runs when its MAXIMUM passes the threshold, for mean ÷ max of it
+  (was: its mean). A pump in short bursts never has an hourly mean near its running power: the villa's pressure pump
+  read 0 h in the night check on a day it used 3.0 kWh at about 3 kW; now 1.1 h. New `draw_w` (energy over run hours).
+- daily.typical_peak: the threshold's reference is the hourly maximum at the middle of the ENERGY drawn (maxima
+  weighted by their mean), not the median of every hour — for a pump off most of the day that was idle noise (the
+  jacuzzi pump 1 W, the pool pump 2.4 W under its own 10 W idle peaks). Tried on the villa and dropped: from the
+  highest peak down (a lone 546 W reading of a 34 W pump stayed the reference), and several hours behind the
+  reference (four 4–7 kW start-ups of a 1 kW pump did).
+- daily.running_series: one measure of power per series (running_power when every day it ran has a steady hour,
+  else draw_w).
+- reports: the weekly page asks daily (facts.Ctx.hour_rows / running_days; playbook._days_power) instead of its own
+  "hourly mean above run_min_w" (it read the pressure pump at 18 h a day). reports.yaml: run_min_w removed,
+  `behaviour: on_threshold_fraction` added (the facts script's Context now reads reports.yaml's behaviour).
+- Measured on the villa (17–18 Oct; September replay): house pump 1.1 h/day (energy ÷ power ≈ 1 h), pool 6.5,
+  jacuzzi 7.5, massage jet 3.1, onsen 13.9 — each within its kWh ÷ running power. Tests: test_device_day (bursts,
+  the typical peak's three traps, one measure, the weekly caller), each shown red by tools/mutate.py.
+
 ## 0.6.246 (19 October 2026)
 
 Architecture review scan 3 (2026-10-19).

@@ -38,6 +38,7 @@ SKILL = os.path.dirname(HERE)
 from vesta_shared import script  # noqa: E402  (client, pack, store, zone, now: one set-up)
 from vesta_shared.messaging import no_code as _no_code  # noqa: E402
 from vesta_shared.timeutil import lasting  # noqa: E402  (how long something lasted, the Kiosk's words)
+from vesta_shared import daily  # noqa: E402  (a device's day: the one "running")
 from vesta_shared.daily import energy_daily_features  # noqa: E402  (a meter's day: one reading for every skill)
 from vesta_shared.energy_setup import used as energy_used  # noqa: E402  (the villa's total: the Kiosk's rule)
 from vesta_shared import result  # noqa: E402  (the night check's rule ids, written once)
@@ -179,21 +180,25 @@ class Ctx:
             self._rule_states = self.cli.states(sorted(info)) if info else {}
         return self._rule_states
 
-    def hourly_means(self, entity_id: str, days: int) -> dict[date, list[float]]:
-        """An entity's hourly means per day over the last `days` days of the period, read once per run (a longer
-        window asked later reads again, once)."""
+    def hour_rows(self, entity_id: str, days: int) -> list[dict]:
+        """An entity's hourly statistics (mean, min, max) over the last `days` days of the period, read once per run
+        (a longer window asked later reads again, once)."""
         have = self._hourly.get(entity_id)
         if have is None or have[0] < days:
             s = datetime.combine(self.end - timedelta(days=days - 1), time(0), self.Z)
-            rows = self.cli.statistics([entity_id], s, self.e_dt, "hour", ("mean",)).get(entity_id, [])
-            per: dict[date, list[float]] = {}
-            for r in rows:
-                v = _num(r.get("mean"))
-                if v is not None:
-                    per.setdefault(local_day(r["start"], self.Z), []).append(v)
-            have = self._hourly[entity_id] = (days, per)
+            rows = self.cli.statistics([entity_id], s, self.e_dt, "hour", ("mean", "min", "max")).get(entity_id, [])
+            have = self._hourly[entity_id] = (days, rows)
         first = self.end - timedelta(days=days - 1)
-        return {d: v for d, v in have[1].items() if d >= first}
+        return [r for r in have[1] if local_day(r["start"], self.Z) >= first]
+
+    def running_days(self, entity_id: str, asset: dict | None, days: int) -> list[tuple[date, float | None, float]]:
+        """(day, power while running — None on a day it did not run —, run hours) for each day with data, by the one "running"
+        (vesta_shared.daily: the night check's and the energy figures' rule).
+
+        ⚠️ ONE "RUNNING" (owner, 2026-10-19): this page counted an hour whose MEAN passed 15 W as an hour run — the
+        house pressure pump, a few minutes of bursts in most hours, read 18 h on a day it ran about 1 h."""
+        _, feats = daily.power_days(asset, self.hour_rows(entity_id, days), self.pack.time_zone, self.params())
+        return daily.running_series(feats)
 
     def ha_alerts(self) -> list[dict]:
         if self._ha_alerts is None:
@@ -275,11 +280,9 @@ class Ctx:
         add = lambda ids, d: sum(per[i].get(d, 0.0) for i in ids)  # noqa: E731
         return {d: round(energy_used(add(t["grid_in"], d), add(t["grid_out"], d), add(t["solar"], d)), 2) for d in days}
 
-    def running_power(self, entity_id: str, days: int) -> list[tuple[str, float]]:
-        """Mean power per day over the hours the device ran (hourly mean above run_min_w)."""
-        thr = float(self.need("pump", "run_min_w"))
-        per = {d: [v for v in vals if v > thr] for d, vals in self.hourly_means(entity_id, days).items()}
-        return [(d.isoformat(), round(statistics.mean(v))) for d, v in sorted(per.items()) if v]
+    def running_power(self, entity_id: str, asset: dict | None, days: int) -> list[tuple[str, float]]:
+        """Power per day while the device ran (running_days)."""
+        return [(d.isoformat(), round(w)) for d, w, _ in self.running_days(entity_id, asset, days) if w is not None]
 
     def ai_cost(self) -> float | None:
         s, e = self.s_dt.astimezone(timezone.utc).isoformat(), self.e_dt.astimezone(timezone.utc).isoformat()
@@ -460,7 +463,7 @@ def s_equipment(c: Ctx) -> dict:
         pw = (a.get("entities") or {}).get("power")
         if a.get("kind") != "motor" or not pw:
             continue
-        series = c.running_power(pw, days)
+        series = c.running_power(pw, a, days)
         if len(series) < 2:
             continue                                  # did not run in the period: no card to draw
         # ⚠️ BY THE ONE DEVICE IDENTITY (architecture review 13): the to-do list names devices by device_of, and this
@@ -695,7 +698,7 @@ def main(argv=None):
         print(f"{a.cmd} needs --energy: first run roi-energy energy_period.py --period "
               f"{'month' if a.cmd == 'owner-monthly' else 'week'} --out <file>.json, then pass that file.", file=sys.stderr)
         return 1
-    s = script.Context(a)
+    s = script.Context(a, skill=SKILL, settings_file="reports.yaml")    # its `behaviour:` (the one "running")
     c = Ctx(a.cmd, s.pack, s.store, s.client, json.load(open(a.energy)), load_cfg(), s.zone, s.now,
             os.environ.get("VESTA_STATE"), params=lambda: s.params)
     res = facts(a.cmd, c)

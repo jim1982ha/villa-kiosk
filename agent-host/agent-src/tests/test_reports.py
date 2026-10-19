@@ -39,8 +39,8 @@ def _villa(tmp):
     day = [{"start": int((START + timedelta(days=d)).timestamp() * 1000), "change": 40.0 + d % 3, "sum": 0}
            for d in range(28)]
     pump_day = [{"start": r["start"], "change": 6.0, "sum": 0} for r in day]
-    hour = [{"start": int((START + timedelta(hours=h)).timestamp() * 1000), "mean": (850.0 if h < 24 * 25 else 740.0)
-             if 8 <= h % 24 < 16 else 2.0} for h in range(24 * 28)]
+    hour = [{"start": int((START + timedelta(hours=h)).timestamp() * 1000), "mean": w, "min": w, "max": w}
+            for h in range(24 * 28) for w in [(850.0 if h < 24 * 25 else 740.0) if 8 <= h % 24 < 16 else 2.0]]
     (fx / "stats_day_energy.json").write_text(json.dumps({"period_type": "day", "entities": [
         {"entity_id": "sensor.example_main_energy", "statistics": day},
         {"entity_id": "sensor.example_pump_energy", "statistics": pump_day}]}))
@@ -300,10 +300,10 @@ def test_a_report_run_reads_home_assistant_once_per_thing(tmp_path):
             return {}
     cli = Counting()
     c.cli = cli
-    c.hourly_means("sensor.example_pump_power", 7)
-    c.hourly_means("sensor.example_pump_power", 30)                  # a longer window: read again, once
-    c.hourly_means("sensor.example_pump_power", 7)
-    c.hourly_means("sensor.example_pump_power", 30)
+    c.hour_rows("sensor.example_pump_power", 7)
+    c.hour_rows("sensor.example_pump_power", 30)                  # a longer window: read again, once
+    c.hour_rows("sensor.example_pump_power", 7)
+    c.hour_rows("sensor.example_pump_power", 30)
     assert len(cli.calls) == 2
 
 
@@ -737,7 +737,7 @@ def test_an_equipment_card_is_watched_when_the_to_do_list_names_its_device():
     c = facts.Ctx.__new__(facts.Ctx)
     c.pack, c.cfg = pack, {}
     c.need = lambda *p: {"card_days": 14, "watch_drop_pct": 10}[p[-1]]
-    c.running_power = lambda eid, days: [("2026-10-01", 700.0), ("2026-10-02", 700.0)]        # steady: no drop of its own
+    c.running_power = lambda eid, asset, days: [("2026-10-01", 700.0), ("2026-10-02", 700.0)]        # steady: no drop of its own
     c._todo = [{"device": "device:plug"}]
     (card,) = facts.s_equipment(c)["cards"]
     assert card["status"] == "Watch"

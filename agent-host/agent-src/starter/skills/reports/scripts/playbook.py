@@ -61,14 +61,10 @@ def _fill(text, figures: dict) -> str:
         return str(text or "")
 
 
-def _days_power(c: "Ctx", entity_id: str, days: int) -> list[tuple[date, float, float]]:
-    """Per day: (day, mean running power, hours running), from HA's hourly means."""
-    thr = float(c.need("pump", "run_min_w"))
-    out = []
-    for d, vals in sorted(c.hourly_means(entity_id, days).items()):
-        run = [v for v in vals if v > thr]
-        out.append((d, round(statistics.mean(run)) if run else 0.0, len(run)))
-    return out
+def _days_power(c: "Ctx", entity_id: str, asset: dict | None, days: int) -> list[tuple[date, float, float]]:
+    """Per day: (day, power while running — None on a day it did not run —, hours running), by the one "running"
+    (Ctx.running_days)."""
+    return c.running_days(entity_id, asset, days)
 
 
 def _best_split(vals: list[float], min_days: int) -> tuple[int, float] | None:
@@ -87,7 +83,7 @@ def clue_power_step(c, when):
         pw = (a.get("entities") or {}).get("power")
         if a.get("kind") != "motor" or not pw:
             continue
-        rows = [r for r in _days_power(c, pw, int(when.get("days", 30))) if r[2] > 0]
+        rows = [r for r in _days_power(c, pw, a, int(when.get("days", 30))) if r[1] is not None]
         best = _best_split([r[1] for r in rows], int(when.get("min_days", 3)))
         if best and -best[1] >= float(when["drop_pct"]):
             k = best[0]
@@ -107,7 +103,7 @@ def clue_run_change(c, when):
         pw = (a.get("entities") or {}).get("power")
         if a.get("kind") != "motor" or not pw:
             continue
-        rows = _days_power(c, pw, int(when.get("days", 30)))
+        rows = _days_power(c, pw, a, int(when.get("days", 30)))
         best = _best_split([float(r[2]) for r in rows], int(when.get("min_days", 3)))
         if best and abs(best[1]) >= float(when["change_pct"]):
             k = best[0]
