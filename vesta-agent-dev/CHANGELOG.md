@@ -1,3 +1,13 @@
+## 0.12.256
+
+What you will see:
+- The house pump's running hours are right in both the weekly report and the night check. It runs in short bursts:
+  the night check counted 0 hours and the weekly report 18 hours on a day it ran about 1 hour (3.0 kWh at 3 kW). Both
+  now say 1.1 hours, by one rule.
+- The weekly report's "running power" card for a pump that runs in bursts shows what it draws while running
+  (about 3,000 W), not an hourly average (about 170 W).
+- The other pumps read as before (pool 6.5 h, jacuzzi 7.5 h, massage jet 3.1 h, onsen 13.9 h a day on 17–18 Oct).
+
 ## 0.12.255
 
 What you will see:
