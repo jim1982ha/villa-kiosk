@@ -25,7 +25,9 @@ export interface AgentStatus {
   cadence: AgentCadence | null;
 }
 
-export interface AgentCadence { checkMinutes: number; nightlyAt: string }
+/** `dayChecksAt` (owner, 2026-10-19): the villa times ("HH:MM", sorted) the Agent reads its night-check faults again
+ *  during the day — absent from an older Agent, which reads them at its nightly check only. */
+export interface AgentCadence { checkMinutes: number; nightlyAt: string; dayChecksAt?: string[] }
 
 export type AgentMessageKind = "message" | "report" | "recommendation";
 export type AgentSeverity = "info" | "warning" | "critical";
@@ -77,8 +79,9 @@ export function parseAgentStatus(raw: unknown): AgentStatus {
 
 function parseCadence(raw: unknown): AgentCadence | null {
   const c = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
-  return c && typeof c.checkMinutes === "number" && typeof c.nightlyAt === "string"
-    ? { checkMinutes: c.checkMinutes, nightlyAt: c.nightlyAt } : null;
+  if (!(c && typeof c.checkMinutes === "number" && typeof c.nightlyAt === "string")) return null;
+  const day = Array.isArray(c.dayChecksAt) ? c.dayChecksAt.filter((t): t is string => typeof t === "string") : null;
+  return { checkMinutes: c.checkMinutes, nightlyAt: c.nightlyAt, ...(day ? { dayChecksAt: day } : {}) };
 }
 
 export function parseAgentMessages(raw: unknown): AgentMessage[] {

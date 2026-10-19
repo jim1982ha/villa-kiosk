@@ -3747,13 +3747,21 @@ _CADENCE_REFUSAL_LOGGED: str | None = None
 def _agent_cadence_problem(value) -> str | None:
     """Why a heartbeat's `cadence` is not agent-contract.json's shape, or None when it is (_agent_cadence's rule)."""
     if not isinstance(value, dict):
-        return "cadence must be an object {checkMinutes, nightlyAt}"
+        return "cadence must be an object {checkMinutes, nightlyAt, dayChecksAt?}"
     minutes, nightly = value.get("checkMinutes"), value.get("nightlyAt")
     if not (isinstance(minutes, int) and not isinstance(minutes, bool) and 1 <= minutes <= 1440):
         return "checkMinutes must be a whole number 1-1440"
-    if not (isinstance(nightly, str) and re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", nightly)):
+    if not (isinstance(nightly, str) and _HHMM.fullmatch(nightly)):
         return "nightlyAt must be HH:MM"
+    day = value.get("dayChecksAt")
+    if day is not None and not (isinstance(day, list) and len(day) <= 12
+                                and all(isinstance(t, str) and _HHMM.fullmatch(t) for t in day)):
+        return "dayChecksAt must be a list of at most 12 HH:MM"
     return None
+
+
+#: A villa time as the heartbeat's cadence says it.
+_HHMM = re.compile(r"(?:[01]\d|2[0-3]):[0-5]\d")
 
 
 def _agent_cadence(value) -> dict | None:
@@ -3762,7 +3770,12 @@ def _agent_cadence(value) -> dict | None:
     "checks every 5 minutes, nightly check at 02:00" whatever the villa had set."""
     if _agent_cadence_problem(value) is not None:
         return None
-    return {"checkMinutes": value["checkMinutes"], "nightlyAt": value["nightlyAt"]}
+    cadence = {"checkMinutes": value["checkMinutes"], "nightlyAt": value["nightlyAt"]}
+    if value.get("dayChecksAt") is not None:
+        # the times it reads its "day" faults again (owner, 2026-10-19), kept sorted and once each: the Kiosk words
+        # "16:00, 20:00" in that order
+        cadence["dayChecksAt"] = sorted(set(value["dayChecksAt"]))
+    return cadence
 
 
 def _agent_presence() -> dict:
@@ -3930,6 +3943,10 @@ async def agent_info_handler(request: web.Request) -> web.Response:
         # the fault fields this Kiosk reads (agent-contract.json ticket.fields): the agent writes a newer one ("titlePattern",
         # 2.496.382) only when it is listed here — an older Kiosk would show "{since}" as it is
         "ticket_fields": sorted(((AGENT_CONTRACT_TABLE.get("ticket") or {}).get("fields") or {}).keys()),
+        # how this Kiosk reads a fault being read again (agent-contract.json ticket.checks): the agent writes "day"
+        # (2.496.429: night-check faults read again during the day) only when it is listed here — an older Kiosk would
+        # show such a fault with no Next check time
+        "ticket_checks": list((AGENT_CONTRACT_TABLE.get("ticket") or {}).get("checks") or []),
         "offline_after_minutes": _agent_offline_minutes(),
         "message_retention_days": _agent_retention_days(),
     }, headers={"Cache-Control": "no-store"})

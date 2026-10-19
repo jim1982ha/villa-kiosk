@@ -479,6 +479,33 @@ async def main() -> None:
            for _, st, why, state, cad, _ in dropped), dropped)
     ck("  ...and it is never stored (the record's cadence is null, not the malformed one)",
        all(kept is None for *_, kept in dropped), dropped)
+    # owner, 2026-10-19: night-check faults read again during the day — the times the Agent says, kept sorted
+    day = {"checkMinutes": 5, "nightlyAt": "02:00", "dayChecksAt": ["20:00", "08:00", "16:00", "12:00", "08:00"]}
+    r = await post("/agent/v1/heartbeat", headers=bearer(), json={"status": "x", "cadence": day})
+    answer = await r.json()
+    status, body = await jget("/agent-status", cookie("ops"))
+    ck("its day times are kept sorted, once each, and shown with its timing",
+       r.status == 200 and "cadence" not in answer
+       and body.get("cadence") == {"checkMinutes": 5, "nightlyAt": "02:00", "dayChecksAt": ["08:00", "12:00", "16:00", "20:00"]},
+       (r.status, answer, body))
+    r = await post("/agent/v1/heartbeat", headers=bearer(), json={"status": "x", "cadence": {**day, "dayChecksAt": []}})
+    status, body = await jget("/agent-status", cookie("ops"))
+    ck("  ...an empty list is a list (no day times)", body.get("cadence", {}).get("dayChecksAt") == [], body)
+    dropped = []
+    for bad in (["8:00"], ["08:00", "24:00"], "08:00", [800], [f"{h:02d}:00" for h in range(13)]):
+        presence_file = TMP / "data" / "agent-presence.json"
+        presence_file.write_text(json.dumps({"last_seen": time.time() - 60 * 60, "status": None, "cadence": beat["cadence"]}))
+        r = await post("/agent/v1/heartbeat", headers=bearer(), json={"status": "x", "cadence": {**day, "dayChecksAt": bad}})
+        answer = await r.json()
+        status, body = await jget("/agent-status", cookie("ops"))
+        dropped.append((bad, r.status, answer.get("cadence"), body.get("state"), body.get("cadence")))
+    ck("  ...a malformed list (not HH:MM, more than 12) drops the timing, the beat still counts",
+       all(st == 200 and str(why).startswith("refused: dayChecksAt") and state == "online" and cad is None
+           for _, st, why, state, cad in dropped), dropped)
+    status, body = await jget("/agent/v1/info", bearer())
+    ck("/agent/v1/info lists the checks this Kiosk reads, from the agreement (the Agent writes \"day\" only then)",
+       status == 200 and body.get("ticket_checks") == json.loads((ROOT / "rootfs" / "usr" / "share" / "vesta"
+       / "agent-contract.json").read_text())["ticket"]["checks"] and "day" in body["ticket_checks"], body)
     r = await post("/agent/v1/heartbeat", headers=bearer(), json=beat)
     ck("  ...a well-formed beat's answer names no refusal", r.status == 200 and "cadence" not in await r.json())
     presence = TMP / "data" / "agent-presence.json"

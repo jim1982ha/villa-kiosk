@@ -70,6 +70,22 @@ ck("  ...the nightly check's say so; the Agent's timing is the one it TOLD, neve
 ck("  ...an Agent that did not say: no number at all", !/\d\d:\d\d|every \d+ minutes,/.test(withAgent.note)
    && /at the time set in the VESTA Agent/.test(withAgent.note), withAgent.note);
 const { parseAgentStatus } = await import("@/agent/agentApi");
+// owner, 2026-10-19: night-check problems are read again during the day — the night row says when, in the Agent's own
+// numbers when it said them; an older Agent (no day times) reads them at its nightly check only; none said: no number
+{
+  const goes = (c) => faultTiming(true, c).rows.find((r) => r.source === "night")?.goes ?? "";
+  const day = goes({ checkMinutes: 5, nightlyAt: "02:00", dayChecksAt: ["08:00", "12:00", "16:00", "20:00"] });
+  ck("  ...a night-check problem is read again during the day at the Agent's times and at its nightly check, closed once gone",
+     /reads it again during the day at 08:00, 12:00, 16:00 and 20:00, and at its nightly check \(02:00\), and closes it once it no longer finds it/.test(day), day);
+  const older = goes({ checkMinutes: 5, nightlyAt: "04:30" });
+  ck("  ...an Agent that says no day times: at its nightly check only, never 'during the day'",
+     /reads it again at its nightly check \(04:30\)/.test(older) && !/during the day|undefined/.test(older)
+     && goes({ checkMinutes: 5, nightlyAt: "04:30", dayChecksAt: [] }) === older, older);
+  const none = goes(null);
+  ck("  ...an Agent that said nothing: generic words, no number",
+     /during the day at the times set in it, and at its nightly check/.test(none) && !/\d\d:\d\d/.test(none), none);
+  ck("  ...one day time is one time", /during the day at 12:00, and/.test(goes({ checkMinutes: 5, nightlyAt: "02:00", dayChecksAt: ["12:00"] })));
+}
 const beat = JSON.parse(readFileSync(new URL("../../rootfs/usr/share/vesta/agent-contract.json", import.meta.url), "utf8")).heartbeat.sample;
 ck("  ...the Kiosk reads the timing the agreement's heartbeat carries, as the proxy shows it",
    JSON.stringify(parseAgentStatus({ state: "online", status: beat.status, cadence: beat.cadence }).cadence) === JSON.stringify(beat.cadence)

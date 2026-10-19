@@ -162,7 +162,7 @@ export function cockpitCard(group: AttentionGroup, cadence: AgentCadence | null,
   return {
     key: group.key, title: group.title, room: group.room, entityId: group.entityId,
     lead: group.items[0] ? lineSources(group.items[0]) : null,
-    nextCheck: { text: nextCheck(group.items, cadence), at: at ? momentText(at) : null },
+    nextCheck: { text: nextCheck(group.items, cadence, now), at: at ? momentText(at) : null },
     actions: cardActions(group),
     lines: group.items.map(line),
   };

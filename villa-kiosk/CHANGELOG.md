@@ -1,3 +1,16 @@
+## 2.496.429
+
+### Changed
+- A problem found by the nightly check can now be read again during the day by the VESTA Agent, at the times it is
+  set to (for example 08:00, 12:00, 16:00 and 20:00), and goes from the Overview as soon as it is no longer found,
+  instead of waiting for the next night. Its card's "Next check:" says the next of those times ("Next check: 16:00"),
+  or the nightly check's time when that comes first; hovering it shows the date and time.
+- A card that holds both an alert's problem and a nightly check's says the sooner of the two: "Next check: within
+  5 min" while the alert is being watched, the day time when that comes first.
+- The (i) beside "Open a ticket" says so on the Night check line: the VESTA Agent reads those problems again during
+  the day at its times and at its nightly check, and closes the ones it no longer finds. A VESTA Agent that does not
+  read them during the day keeps the nightly time on the card and in the (i).
+
 ## 2.496.428
 
 ### Fixed
