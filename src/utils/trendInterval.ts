@@ -13,6 +13,7 @@
 // Pure: tests/oracles/trend_interval.mjs.
 
 import type { HistoryGap, HistorySeries } from "@/types/ha.types";
+import { firstCellStart } from "@/utils/timelineCells";
 
 export const TREND_INTERVAL_MIN = 5;
 export const TREND_INTERVAL_MS = TREND_INTERVAL_MIN * 60_000;
@@ -41,7 +42,10 @@ export function fiveMinuteSeries(s: HistorySeries): HistorySeries {
 export function intervalSeries(s: HistorySeries, B: number): HistorySeries {
   const { from, to } = s.window;
   if (!(to > from)) return s;
-  const first = Math.floor(from / B) * B;
+  // ⚠️ THE BAND'S OWN EDGES (architecture review, 2026-10-20): a day or a week begins at the villa's midnight (a week
+  // on a Monday), as the recorder's figures and the state band do (timelineCells.firstCellStart) — this line cut its
+  // weeks on the 1970 Thursday and its days on UTC's midnight, so two charts of one panel showed different weeks
+  const first = firstCellStart(from, B);
   const pts = [...s.points].sort((a, b) => a.t - b.t);
   const gaps = [...s.gaps].sort((a, b) => a.from - b.from);
   // Where the signal is KNOWN: from each reading until the next reading, an

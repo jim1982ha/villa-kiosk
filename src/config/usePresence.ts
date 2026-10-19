@@ -14,6 +14,8 @@ export const presenceSince = (at: string | null): string => sinceText(at, dayTim
 
 export interface VillaPresence {
   presence: Presence;
+  /** The sensor picked in Settings › Villa (its band in the window). */
+  sensorId: string;
   /** When it last changed, in words ("" when the villa's system does not say). */
   since: string;
   /** The Recap's line: "Villa occupied since 19 Oct, 09:12". */
@@ -29,5 +31,5 @@ export function usePresence(): VillaPresence | null {
   const presence = presenceOf(config.presenceSensor, entities);
   if (!presence) return null;
   const since = presenceSince(presence.since);
-  return { presence, since, recap: recapPresenceText(presence, since), why: () => presenceWhy(config.presenceSensor, entities) };
+  return { presence, sensorId: config.presenceSensor, since, recap: recapPresenceText(presence, since), why: () => presenceWhy(config.presenceSensor, entities) };
 }

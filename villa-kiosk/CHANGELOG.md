@@ -1,3 +1,15 @@
+## 2.496.439
+
+### Changed
+- Villa presence window: its chart is the villa's own presence over time — Occupied / Empty, in the colours of its
+  "now" line — right under that line. It showed the latest movement sensor's history ("Clear"), read as the villa's.
+  The latest movement keeps its line, without a chart.
+
+### Fixed
+- A device the villa keeps no long-term figures of: its 1m and 1y line now counts its days from the villa's own
+  midnight and its weeks from Monday, as its on/off band and the villa's figures do; its weeks ran Thursday to Wednesday
+  and its days from 08:00, so two charts of one panel could show different weeks (architecture review, 20 October).
+
 ## 2.496.438
 
 ### Changed
