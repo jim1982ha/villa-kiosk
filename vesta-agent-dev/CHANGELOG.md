@@ -1,3 +1,8 @@
+## 0.12.260
+
+What you will see: nothing new — a check that an alert from a rule on "Follow Vesta Agent Setting" (the new battery
+and audit rules) ends up in your group as the VESTA Agent's card, with the priority and "To:" its name gives.
+
 ## 0.12.259
 
 What you will see:
