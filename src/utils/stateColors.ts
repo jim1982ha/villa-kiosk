@@ -31,7 +31,7 @@ export const UNKNOWN_STATES: ReadonlySet<string> = new Set(["unavailable", "unkn
 export const NOT_KEPT = "\u0000not_kept";
 export const NOT_KEPT_WORDS = "No longer kept";
 /** Its colour: a neutral grey beside the status colours — never one of them, it says nothing of the device. */
-export const NOT_KEPT_COLOR = "var(--hairline-strong)";
+export const NOT_KEPT_COLOR = "var(--not-kept)";   // its own colour, never Off's grey (owner, 2026-10-20)
 
 export function isUnavailable(entity: HassEntity | undefined): boolean {
   return entity == null || UNKNOWN_STATES.has(entity.state);

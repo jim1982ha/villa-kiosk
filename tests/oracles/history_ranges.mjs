@@ -62,8 +62,13 @@ console.log("\n  what is no longer kept:");
   ck("its tooltip says so, never 'Unavailable'", fmtOutage({ from: now - 30 * DAY, to: kept, notKept: true }, now).startsWith(NOT_KEPT_WORDS)
      && !/Unavailable/.test(fmtOutage({ from: now - 30 * DAY, to: kept, notKept: true }, now)));
   const paint = chartColours(() => "var(--status-on)");
-  ck("a state band paints it grey, never the lost amber nor the idle colour",
+  ck("a state band paints it in its own colour, never the lost amber nor the idle colour",
      paint(NOT_KEPT) === NOT_KEPT_COLOR && NOT_KEPT_COLOR !== STATUS_COLOR.unavailable && NOT_KEPT_COLOR !== STATUS_COLOR.idle);
+  // owner, 2026-10-20: the grey it had read as "Off" — its own token, defined in every theme, never a grey one
+  const css = (await import("node:fs")).readFileSync(new URL("../../src/styles/01-base.css", import.meta.url), "utf8");
+  const offGrey = /--hairline-strong|--hairline\b|--text-dim|--bg-/;
+  ck("  ...its own token, set in each of the three themes, not a grey of the page",
+     NOT_KEPT_COLOR === "var(--not-kept)" && (css.match(/^\s*--not-kept: rgba\(/gm) || []).length === 3 && !offGrey.test(NOT_KEPT_COLOR));
 }
 
 console.log("\n  the shared reader picks the source by the step:");
