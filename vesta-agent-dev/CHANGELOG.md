@@ -1,3 +1,8 @@
+## 0.12.279
+
+What you will see:
+- In the villa system's app store, the agent's card is called "VESTA Agent" — no "(dev)" any more.
+
 ## 0.12.278
 
 What you will see:
