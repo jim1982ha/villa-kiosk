@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.6.262 (19 October 2026)
+
+A reply that tells the person to write /investigate carries a button that does it (owner's screenshot, 19 October: asked
+about the pool pump, the reply ended "write /investigate followed by your question…").
+- skill.yaml `offer: {label, pressed?}` (skills.Skill.offer; only on a skill with `command:`, label required, nothing
+  else): a command skill a chat reply may offer. The investigate starter skill: "🔎 Investigate this" / "Investigating";
+  proposals has none (it needs a number). The page's "in a chat" row says the button too (when_it_runs).
+- New `command_offers.CommandOffers`, the offer start to end. `rows`: every "/command" the answer names
+  (intake.SKILL_TOKEN, the skills switched on) whose skill has `offer`, not under that same skill's own request, with a
+  question asked — judged by `app.Vesta.gate` (intake.gate with the villa's rules, now one method that handle_message
+  uses too) on the message the button stands for: "/<command> <question>" typed by the asker in that chat. The
+  question kept is the turn's `asked` (the person's words), in State `command_offer:<id>` (a RECORDS family, pruned
+  with the records); the button's data is `o:<id>` (button_data.COMMAND, FOR_PEOPLE_ONLY).
+- `press`: the offer read (unused, this chat), the gate asked again for the person pressing (a group taken out of
+  People since, a skill switched off since: a toast, nothing runs, the button stays), then claimed once
+  (State.claim_command_offer; a second press: "Already started."), the toast and the message's status say
+  "<pressed>: “<question>” (<name>)", the pressed button goes and the reply's other buttons stay (its reply_markup),
+  and app.handle_message runs the typed command — the same intake, command_request, brain, limit, page and fault offer.
+- turn_reply: rule 7 (the command offers, added to the other buttons); the approval rule is now 8.
+- `Delivery.settle(chat, mid, msg, said, keyboard=None)`: a pressed message, whole, its status under it within its own
+  limit (a caption's 1,024) — FaultOffers' "_say" moved there and both use it.
+- Tests: test_command_offer (9: the button for the owner and the facility manager with the question kept, none
+  without the mention / for a switched-off skill / for someone the villa does not know / without a question / under
+  the investigation itself, the press equal to typing it (skill, tools, brain, limit, prompt), once, judged again at
+  the press, the other buttons kept, the claim, skill.yaml checks); test_turn_reply rule 7; test_page_controls'
+  fields list and row. Mutations red: see ARCHITECTURE.md.
+
 ## 0.6.261 (19 October 2026)
 
 Costs › Every run: the question whole, and each step in a line (owner's screenshots, 19 October).

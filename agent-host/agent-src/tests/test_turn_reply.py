@@ -64,9 +64,15 @@ class Approvals:
         return self.shown and bool(ids)
 
 
-def compose(r, *, jobs=None, offers=None, approvals=None, state=None, **kw):
+class Commands:
+    """command_offers.CommandOffers: a button under every answer naming "/go", on the question asked."""
+    def rows(self, chat, answer, asked, person_id, request=None):
+        return [[{"text": "Go", "callback_data": f"o:{asked}"}]] if "/go" in answer and asked else []
+
+
+def compose(r, *, jobs=None, offers=None, approvals=None, state=None, commands=None, **kw):
     tr = TurnReply(jobs=jobs or Jobs(), state=state or State(), fault_offers=offers or Offers(),
-                   approvals=approvals or Approvals())
+                   approvals=approvals or Approvals(), command_offers=commands or Commands())
     return asyncio.run(tr.compose(CHAT, r, **kw))
 
 
@@ -143,7 +149,18 @@ def test_6_offered_faults_go_under_the_answer_and_a_page_is_kept_for_them():
     assert [r[0]["text"] for r in got.keyboard["inline_keyboard"]] == ["Continue", "Create"]
 
 
-def test_7_an_approval_request_shown_here_is_the_answer_unless_buttons_must_go():
+def test_7_a_command_the_answer_names_is_a_button_added_to_the_others():
+    got = compose(res(text="For more, write /go and your question.", stopped_at_limit=True, limit_usd=1),
+                  offers=Offers(["o1"]), asked="the pump?")
+    assert [r[0]["text"] for r in got.keyboard["inline_keyboard"]] == ["Continue", "Create", "Go"]
+    assert got.keyboard["inline_keyboard"][-1][0]["callback_data"] == "o:the pump?"     # the person's own question
+    assert compose(res(text="The pump is fine."), asked="the pump?").keyboard is None
+    # under an approval request shown here, the answer that names it is kept with its button
+    got = compose(res(text="Write /go for more.", approvals=["a1"]), approvals=Approvals(shown=True), asked="pump")
+    assert got.text == "Write /go for more." and got.keyboard
+
+
+def test_8_an_approval_request_shown_here_is_the_answer_unless_buttons_must_go():
     shown = Approvals(shown=True)
     assert compose(res(text="Approval request sent.", approvals=["a1"]), approvals=shown).text == ""
     assert compose(res(text="Approval request sent.", approvals=["a1"])).text == "Approval request sent."

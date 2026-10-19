@@ -13,10 +13,12 @@ export const brain = (p, m) => [p ? (PROFILES[p] || p).replace(/ \(.*/, "") : nu
 export function runWhat(r) {
   const label = r.kind === "job" ? r.work : `Reply to ${r.person || "someone"}`;
   const steps = r.steps || [];
-  return h("div", { class: "what" }, h("b", {}, label),
+  // the steps' pill on the title's line (owner, 2026-10-19: "show the pills X steps on the same line as Reply to…")
+  return h("div", { class: "what" },
+    h("div", { class: "what-head" }, h("b", {}, label),
+      steps.length || r.asked ? moreButton(steps.length ? plural(steps.length, "step", "steps") : "Whole question") : null),
     r.kind === "chat" && r.chat ? h("div", { class: "muted" }, r.chat) : null,
-    r.asked ? h("div", { class: "muted what-asked", title: r.asked }, `“${r.asked}”`) : null,
-    steps.length || r.asked ? moreButton(steps.length ? plural(steps.length, "step", "steps") : "Whole question") : null);
+    r.asked ? h("div", { class: "muted what-asked", title: r.asked }, `“${r.asked}”`) : null);
 }
 
 // Under a run, across the table: what was asked, whole, then each step in a line — its number, its tool, and the

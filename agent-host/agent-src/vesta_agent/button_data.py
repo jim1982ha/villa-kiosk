@@ -12,11 +12,12 @@ CONTINUE = "c"      # Continue an answer at its limit:  c:<continuation id>
 ALERT = "i"         # Done / Need help on an alert: i:<incident id>:<option>
 REPORT = "w"        # a report without the AI:          w:<problem>:<job>
 TICKET = "t"        # a fault the AI offered:           t:<offer id>:<y|n>
+COMMAND = "o"       # a command skill a reply offered:  o:<offer id> (its skill and question kept: command_offers.py)
 
-PARTS = {APPROVAL: 2, CONTINUE: 1, ALERT: 2, REPORT: 2, TICKET: 2}
+PARTS = {APPROVAL: 2, CONTINUE: 1, ALERT: 2, REPORT: 2, TICKET: 2, COMMAND: 1}
 # who may press is the handler's to judge; these need a person policy.yaml knows before anything else is read
 # (an approval checks it itself, with the press recorded for the owner to see)
-FOR_PEOPLE_ONLY = {CONTINUE, ALERT, REPORT, TICKET}
+FOR_PEOPLE_ONLY = {CONTINUE, ALERT, REPORT, TICKET, COMMAND}
 
 
 def make(kind: str, *parts) -> str:

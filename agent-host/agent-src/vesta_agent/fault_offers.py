@@ -21,8 +21,7 @@ import os
 import shutil
 from typing import Callable
 
-from . import button_data, layout
-from .telegram import CAPTION
+from . import button_data
 from vesta_shared.messaging import uncited
 
 log = logging.getLogger("vesta")
@@ -114,12 +113,5 @@ class FaultOffers:
         await self._say(p, f"Fault created for the facility manager by {p.person.name}: {offer['title']}")
 
     async def _say(self, p, said: str) -> None:
-        """The message stays whole, its buttons gone, the decision under it. ⚠️ WITHIN ITS OWN LIMIT (review 32): a page's
-        message is a file's caption (Telegram: CAPTION) — rendered at the text's 4,096, the caption was cut at the end
-        and the decision never showed, the buttons gone with no word."""
-        if not p.mid:
-            return
-        caption = p.msg.get("caption") is not None or bool(p.msg.get("document") or p.msg.get("photo"))
-        body = str(p.msg.get("text") or p.msg.get("caption") or "")
-        await self.delivery.edit(p.chat, p.mid, layout.render(layout.parts(body=body, status=said),
-                                                              CAPTION if caption else None))
+        """The message stays whole, its buttons gone, the decision under it (Delivery.settle, within its own limit)."""
+        await self.delivery.settle(p.chat, p.mid, p.msg, said)

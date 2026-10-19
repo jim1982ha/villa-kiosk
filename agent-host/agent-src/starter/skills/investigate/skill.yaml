@@ -11,6 +11,12 @@ brain: auto
 limit_usd: 3
 # what the agent shows a person who sends /investigate alone
 usage: "/investigate why did the water heater stop last night?"
+# ⚠️ OFFERED FROM A CHAT (owner, 2026-10-19): a reply that tells the person to write /investigate carries this button;
+# pressing it investigates the question they asked, exactly as typing "/investigate <their question>" would. Only a
+# person who may write /investigate in that chat gets it.
+offer:
+  label: "🔎 Investigate this"
+  pressed: Investigating
 # Web research is part of EVERY investigation (owner, 2026-10-12: "always use web_search by default"): SKILL.md step 6.
 # The page cannot be made without a web search where web search is available, nor without its sources cited.
 # ⚠️ WHAT EVERY /investigate ANSWER CARRIES (owner, 2026-10-11: "always trigger the full use of the skill — HTML report in

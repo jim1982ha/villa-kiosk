@@ -95,6 +95,7 @@ KV_FAMILIES: dict[str, str] = {
     "saved_by_model:": RECORDS,     # a file the AI saved (its run folder is deleted with the out folder's files)
     "owner_told:": RECORDS,         # when the owner was last told of a problem (a 12-hour pause)
     "request_searches:": RECORDS,   # a command skill's request's web searches, for its page (command_request.py)
+    "command_offer:": RECORDS,      # a command skill a reply offered: its skill, the person's question (command_offers.py)
     "job:": CURRENT,                # a scheduled job's last slot: the Overview's "last run", one per job
     "jobrun:": CURRENT,             # a scheduled run in progress: one left at start was cut by a stop (in_progress.py)
     "jobend:": CURRENT,             # how a scheduled job's last run ended (ended / failed / cut, when, why): in_progress.py
@@ -374,6 +375,37 @@ class State:
         except ValueError:
             return []
         return [str(q) for q in kept] if isinstance(kept, list) else []
+
+    # A command skill a chat reply offered (command_offers.py): the button's data holds only its id — Telegram allows 64
+    # bytes, the person's question is longer.
+    def new_command_offer(self, chat: int, skill: str, question: str, by: int | None) -> str:
+        oid = secrets.token_urlsafe(9)
+        self.put(f"command_offer:{oid}", json.dumps({"chat": int(chat), "skill": skill, "question": question, "by": by,
+                                                     "used": False}))
+        return oid
+
+    def command_offer(self, oid: str, chat: int) -> dict | None:
+        """The offer pressed in `chat`, still unused; None when it is not this chat's, gone, or already pressed."""
+        try:
+            o = json.loads(self.get(f"command_offer:{oid}") or "null")
+        except ValueError:
+            return None
+        return o if isinstance(o, dict) and o.get("chat") == int(chat) and not o.get("used") else None
+
+    def claim_command_offer(self, oid: str, chat: int) -> dict | None:
+        """The offer, used up by this press — None when another press already took it (a double tap, a second person):
+        one request per offer, like start_job's "already being made"."""
+        with self._lock:
+            r = self.db.execute("select v from kv where k=?", (f"command_offer:{oid}",)).fetchone()
+            try:
+                o = json.loads(r["v"]) if r else None
+            except ValueError:
+                o = None
+            if not isinstance(o, dict) or o.get("chat") != int(chat) or o.get("used"):
+                return None
+            self.db.execute("update kv set v=? where k=?", (json.dumps({**o, "used": True}), f"command_offer:{oid}"))
+            self.db.commit()
+        return o
 
     # ------------------------------------------------------------------ own messages
     # ⚠️ HOW A PRESS OR A REPLY IS KNOWN TO BE FOR THE AGENT. Home Assistant and the

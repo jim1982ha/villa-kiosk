@@ -295,6 +295,9 @@ table.data.runs td { vertical-align: top; }
   border: 1px solid var(--hairline-strong); border-radius: 999px; background: none; color: var(--text-secondary); font: inherit; font-size: var(--text-xs); cursor: pointer; }
 .more-btn:hover, .more-btn[aria-expanded="true"] { background: var(--bg-input); color: var(--text-primary); }
 .more-btn .caret { color: var(--text-dim); }
+/* a run's title and its steps' pill on one line (costs.runWhat) */
+.what-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.what-head .more-btn { margin-top: 0; }
 table.data tr:has(+ tr.row-more:not([hidden])) td { border-bottom: 0; }
 table.data tr.row-more td { padding-top: 0; }
 table.data tr.row-more[hidden] { display: none; }   /* over the phone's card rows (display: grid), which outrank [hidden] */

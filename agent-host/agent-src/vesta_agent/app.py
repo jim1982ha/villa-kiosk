@@ -61,6 +61,7 @@ from .places import tab, where
 from .policy import NOT_REGISTERED, Person, Policy, problems as policy_problems
 from .routing import Origin, Routing
 from .scheduler import EVERY as SCHEDULER_EVERY, Scheduler
+from .command_offers import CommandOffers
 from .command_request import Request, Requests
 from vesta_shared.messaging import SIREN_TITLE
 from .fault_offers import FaultOffers
@@ -191,8 +192,10 @@ class Vesta:
                            system_prompt=self.system_prompt, tell_owner=self._tell_owner, safe=self._safe)
         self.jobs = AiJobs(settings, self.state, self.policy, self.skills, self.delivery, self.chat_jobs, self.outcome,
                            turns=self.turns, safe=self._safe)
+        # a command skill a reply names, offered as a button and run as if typed (command_offers.py)
+        self.command_offers = CommandOffers(self.state, self.skills, self.gate, self.handle_message, self.delivery)
         self.turn_reply = TurnReply(jobs=self.jobs, state=self.state, fault_offers=self.fault_offers,
-                                    approvals=self.approvals)
+                                    approvals=self.approvals, command_offers=self.command_offers)
         self.bot_username: str | None = None
         self._locks: dict[int, asyncio.Lock] = {}
         self._kiosk_read = 0.0            # when the Kiosk's faults were last read (housekeeping)
@@ -417,11 +420,16 @@ class Vesta:
         Store(self.s.store_path).beat("ha_events", datetime.now(timezone.utc).isoformat())
 
     # ------------------------------------------------------------------ messages
+    def gate(self, event_type: str, m: dict) -> intake.Intake:
+        """What the agent does with this message, by the villa's rules now (intake.gate): a message that arrived, and
+        the one a command offer's button stands for (command_offers.py) — judged by the same rule."""
+        on = self.skills.commands()
+        return intake.gate(event_type, m, self.policy(), self.bot_username, self.state.is_own_message, on,
+                           {c: s for c, s in self.skills.commands(include_off=True).items() if c not in on})
+
     async def handle_message(self, event_type: str, m: dict):
         """A Telegram message, as Home Assistant fired it (fields checked live on 2026-09-30): intake.py decides."""
-        on = self.skills.commands()
-        got = intake.gate(event_type, m, self.policy(), self.bot_username, self.state.is_own_message, on,
-                          {c: s for c, s in self.skills.commands(include_off=True).items() if c not in on})
+        got = self.gate(event_type, m)
         from_id = m.get("user_id")
         if got.action != "drop":
             # ⚠️ THE START OF THE TIMELINE (owner, 2026-10-09: the log must cover "the moment the message to request a
@@ -656,7 +664,7 @@ class Vesta:
         kind, parts = button_data.read(data)
         handle = {button_data.APPROVAL: self.approvals.press, button_data.CONTINUE: self._press_continue,
                   button_data.ALERT: self._press_alert, button_data.REPORT: self._press_report,
-                  button_data.TICKET: self._press_ticket}.get(kind)
+                  button_data.TICKET: self._press_ticket, button_data.COMMAND: self.command_offers.press}.get(kind)
         if handle is None:
             return await toast("Unknown button.")
         person = pol.member(presser, cid, q.get("from_first"))      # a listed group's member presses with its role

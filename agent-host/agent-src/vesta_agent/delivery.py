@@ -26,9 +26,10 @@ from typing import AsyncIterator, Awaitable, Callable
 
 from vesta_shared.messaging import TELEGRAM_LIMIT, split_message, tg_len
 
+from . import layout
 from .in_progress import InProgress
 from .routing import JOB, Origin, Routing
-from .telegram import TelegramError
+from .telegram import CAPTION, TelegramError
 
 log = logging.getLogger("vesta")
 
@@ -156,6 +157,18 @@ class Delivery:
         if not ok:
             self.state.log("edit_refused", {"chat": chat_id, "message": message_id})
         return bool(ok)
+
+    async def settle(self, chat_id: int, message_id: int | None, msg: dict, said: str, keyboard: dict | None = None) -> bool:
+        """A pressed message stays whole, what the press did written under it, its buttons gone (or `keyboard`, the ones
+        still to press). ⚠️ WITHIN ITS OWN LIMIT (review 32): a page's message is a file's caption (Telegram: CAPTION) —
+        rendered at the text's 4,096, the caption was cut at the end and the decision never showed, the buttons gone with
+        no word. `msg`: the pressed message as Telegram gave it."""
+        if not message_id:
+            return False
+        caption = msg.get("caption") is not None or bool(msg.get("document") or msg.get("photo"))
+        body = str(msg.get("text") or msg.get("caption") or "")
+        return await self.edit(chat_id, message_id, layout.render(layout.parts(body=body, status=said),
+                                                                  CAPTION if caption else None), keyboard)
 
     async def buttons(self, chat_id: int, message_id: int, keyboard: dict | None) -> bool:
         """Put buttons under one of the agent's messages already sent, its text untouched. False: off, or refused."""

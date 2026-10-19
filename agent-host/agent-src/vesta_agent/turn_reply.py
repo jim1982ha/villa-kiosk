@@ -10,9 +10,11 @@ turn and sends what this decides; nothing here talks to Telegram. The rules, in 
     4. the AI cannot answer: a report asked for is still made from its figures, or offered
     5. stopped at the limit: a Continue button
     6. the faults the AI offered: their buttons under the answer (or under the page's message)
-    7. a request for approval shown in this chat IS the answer: no other text under it — unless buttons must go
+    7. a command the answer tells the person to write ("/investigate …"): its button, on their own question
+    8. a request for approval shown in this chat IS the answer: no other text under it — unless buttons must go
 
-The ORDER is the design: 7 looks at the buttons 4–6 left; 6 can replace an empty answer with the offers named.
+The ORDER is the design: 8 looks at the buttons 4–7 left; 6 can replace an empty answer with the offers named; 7 reads
+the answer as it will be sent.
 """
 from __future__ import annotations
 
@@ -34,11 +36,12 @@ class Reply:
 
 
 class TurnReply:
-    def __init__(self, *, jobs, state, fault_offers, approvals):
+    def __init__(self, *, jobs, state, fault_offers, approvals, command_offers):
         self.jobs = jobs                    # ai_jobs.AiJobs: the reports that can be made without the AI
         self.state = state                  # state.State: a Continue's record
         self.fault_offers = fault_offers    # fault_offers.FaultOffers: the faults the AI offered in this chat
         self.approvals = approvals          # approvals.Approvals: the requests shown in a chat
+        self.command_offers = command_offers  # command_offers.CommandOffers: a command skill the answer names
 
     async def compose(self, cid: int, res, *, asked: str = "", page: str | None = None,
                       may_start_job: Callable[[], bool] = lambda: False, is_continue: bool = False,
@@ -87,8 +90,12 @@ class TurnReply:
             self.fault_offers.keep_page(cid, page)
         answer, offer_rows, offered = await self.fault_offers.show(cid, page_mid, answer)
         rows += offer_rows
+        # 7. ⚠️ THE COMMAND THE ANSWER SUGGESTS, A BUTTON (owner, 2026-10-19: "write /investigate followed by your
+        # question…" — "a button that directly triggers the suggested investigation"): on the PERSON'S question, for a
+        # person who may write it here; nothing runs before the press
+        rows += self.command_offers.rows(cid, answer, asked, person_id, request)
         keyboard = {"inline_keyboard": rows} if rows else None
-        # 7. ⚠️ A REQUEST SHOWN HERE IS THE ANSWER (owner, 2026-10-10: "Approval request sent." under it, twice
+        # 8. ⚠️ A REQUEST SHOWN HERE IS THE ANSWER (owner, 2026-10-10: "Approval request sent." under it, twice
         # "redundant"): told not to, the AI still wrote it — and pressed at once, the request was decided before that line
         # came, so nothing removed it. No written reply after a request put in this chat (anything else the person
         # asked, the AI answers with send_message — tools.ha_call_service tells it so).

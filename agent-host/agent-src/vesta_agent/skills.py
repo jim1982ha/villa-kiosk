@@ -35,6 +35,9 @@ and skill.yaml (what the engine needs):
       - {option: done, label: Done}              option: what on_reply is given; label: the words on the button
       - {option: need_help, label: Need help, mark: help}   mark: the icon its footer shows (message_format)
     before_answer: "concierge.py status"   what the AI is given before EVERY answer in a chat: the script's "text"
+    command: investigate             a skill only its "/investigate" starts (with usage, brain, limit_usd, deliver)
+    offer: {label: "Investigate this", pressed: Investigating}   a command skill a chat answer may offer: a reply that
+                                     names "/investigate" carries this button, which runs it on the person's question
 
 Nothing is compiled or cached across calls: a changed folder counts at the next
 use, a deleted one is gone with its schedule. A skill whose skill.yaml is broken
@@ -260,6 +263,11 @@ class Skill:
     # performance) and its limit per answer; everything else keeps the Rules page's.
     brain: str | None = None
     limit_usd: float | None = None
+    # ⚠️ OFFERED FROM A CHAT (owner, 2026-10-19: a reply about the pool pump ended "write /investigate followed by your
+    # question" — "a button that directly triggers the suggested investigation"): {"label": the button's words, "pressed":
+    # what the message says once pressed}. Only a skill that can run on the person's question as written declares it
+    # (proposals needs a number: none). The engine places and runs it (command_offers.py), the skill says whether and how.
+    offer: dict[str, str] | None = None
 
     @property
     def day_checks_at(self) -> list[str]:
@@ -302,8 +310,10 @@ def when_it_runs(sk: Skill) -> list[dict]:
         acts.append(row("before every answer in a chat", script=sk.before_answer))
     # a command skill's row says how it is used, in the skill's own words (`usage`, an example — owner, 2026-10-19:
     # "only when a person writes /proposal" said neither what to write nor when it applies)
-    acts.append(row("in a chat", note=(f"only when a person writes /{sk.command} — for example: {sk.usage}" if sk.usage
-                                       else f"only when a person writes /{sk.command}") if sk.command
+    # and its button (`offer`), which is the command typed for the person: the same row, said (0.12.271)
+    pressed = f" (or presses “{sk.offer['label']}” under a reply that suggests it)" if sk.offer else ""
+    acts.append(row("in a chat", note=(f"only when a person writes /{sk.command}{pressed} — for example: {sk.usage}"
+                                       if sk.usage else f"only when a person writes /{sk.command}{pressed}") if sk.command
                     else "when a person asks about it"))
     return acts
 
@@ -342,6 +352,14 @@ def parse_skill(name: str, path: str) -> Skill:
                 sk.limit_usd = -1.0
             if not 0.05 <= sk.limit_usd <= 20:
                 raise SkillError("limit_usd: a number of US$ per answer, from 0.05 to 20")
+    offer = raw.get("offer")
+    if offer is not None:
+        if not sk.command:
+            raise SkillError("offer: only a skill with a command has it (pressing it writes that command)")
+        if not isinstance(offer, dict) or set(offer) - {"label", "pressed"} or \
+                not all(isinstance(v, str) and v.strip() for v in offer.values()) or not str(offer.get("label") or "").strip():
+            raise SkillError("offer: {label: the button's words, pressed: what the message says once pressed (optional)}")
+        sk.offer = {k: v.strip()[:60] for k, v in offer.items()}
     deliver = raw.get("deliver") or {}
     if deliver:
         if not sk.command:

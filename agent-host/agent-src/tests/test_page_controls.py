@@ -522,7 +522,7 @@ def test_a_skills_when_rows_name_every_way_the_engine_starts_it(ui):
     # every field of a skill that starts it has its row; a new field must be placed here, shown or not
     starts = {"schedule", "every_5_min", "on_event", "on_reply", "before_answer", "command"}
     others = {"name", "path", "description", "tools", "scripts", "buttons", "also", "deliver", "usage", "brain",
-              "limit_usd", "rechecks", "day_rechecks"}
+              "limit_usd", "rechecks", "day_rechecks", "offer"}     # offer: the command, typed by a button
     assert {f.name for f in dataclasses.fields(Skill)} == starts | others
     sk = Skill("x", "/x", schedule=[{"when": "07:00", "name": "j", "prompt": "p", "run": None}], every_5_min="a.py t",
                on_event={"critical_event": "b.py c", "voice_message": "v.py p"}, on_reply="d.py r",
@@ -530,6 +530,9 @@ def test_a_skills_when_rows_name_every_way_the_engine_starts_it(ui):
     assert [a["when"] for a in when_it_runs(sk)] == [
         "every day at 07:00", "every 5 minutes", "a critical alert from a VESTA rule", "a voice message",
         "an answer to one of its alerts", "before every answer in a chat", "in a chat"]
+    # a command offered as a button says so on the same row (the command, typed for the person)
+    offered = when_it_runs(dataclasses.replace(sk, offer={"label": "Look into it"}))[-1]["note"]
+    assert offered.startswith("only when a person writes /x (or presses “Look into it” under a reply")
 
 
 def test_a_skill_pages_tools_heading_is_the_agents_one_verdict(ui):

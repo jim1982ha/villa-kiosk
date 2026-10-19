@@ -758,3 +758,28 @@ climbing reply after reply.
   declaring skill via `Turns.job(..., skill)`; a command's via `chat_terms(..., skill)`), then each `read_skill` /
   `run_skill_script` `skill` argument the AI passed, in order, once each — recorded as RUN/RUN_CUT `skills`;
   `status.costs` serves `skills` (empty for older rows); `costs.js usedSkills` draws chips, "—" for none.
+
+## A command a reply suggests, as a button (owner, 2026-10-19, 0.12.271)
+
+Owner's screenshot: asked about the pool pump in a private chat, the reply ended "write /investigate followed by your
+question about the pool pump history…" — he wanted a button that starts it.
+- **Which skill**: the skill says it, skill.yaml `offer: {label, pressed?}` (only with `command:`; investigate has it,
+  proposals does not — it needs a number). The engine names no skill.
+- **One owner, start to end**: `command_offers.CommandOffers` — `rows` (turn_reply rule 7, buttons added to the
+  others) and `press` (button_data.COMMAND `o:<id>`). The question is the PERSON'S (`asked`), kept in State
+  `command_offer:` (RECORDS); the data carries only the id (Telegram's 64 bytes).
+- **Who may, one rule**: the button IS "/<command> <question>" typed in that chat (`command_offers.typed`, the event
+  Home Assistant fires), judged by `app.Vesta.gate` — intake.gate with the villa's rules, the method handle_message
+  uses — for the asker at the reply and for the presser at the press. No second copy of "who may run a command skill".
+  Today that is anyone the villa knows in a chat it lists, with the skill switched on; a rule added to intake.gate
+  reaches the button by itself.
+- **The press**: read, judged, claimed once (`State.claim_command_offer`; nothing awaited between the read and the
+  claim), said under the message (`Delivery.settle`, shared with FaultOffers; the pressed button goes, the others stay
+  from the message's reply_markup), then `handle_message` runs the typed command — so the request, its brain, limit,
+  page and fault offer are the typed one's (test: the run's skill, tools, limit, brain and prompt equal typing it).
+- No button under the same skill's own request, nor without a question (a Continue, a photo with no words).
+- Mutations red (tests/test_command_offer.py, test_turn_reply.py, test_page_controls.py): no question allowed; `offer`
+  ignored; the same-request skip removed; the gate skipped at the reply, and at the press; the gate loosened to "not
+  dropped", or to always; the claim not checked (press) and its used/chat check, its write; the answer kept instead of
+  the question; every button removed on the press; the rows replacing the others (turn_reply); the press routed to the
+  fault handler; another question run; the skill.yaml checks (no command, unknown key, no label); the page's row.
