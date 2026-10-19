@@ -434,11 +434,27 @@ ck("a guest's Energy window may read its cost (energy/info)", refuse("guest", "e
 ck("a guest may run a scene and toggle an input_boolean (the app offers both)",
    refuse("guest", "call_service", domain="scene", service="turn_on") is None
    and refuse("guest", "call_service", domain="input_boolean", service="toggle") is None)
-ck("a light's scene choice (select) is the owner's: refused for a guest and ops, never in the relayed domains",
-   refuse("guest", "call_service", domain="select", service="select_option") is not None
-   and refuse("ops", "call_service", domain="select", service="select_option") is not None
-   and refuse("owner", "call_service", domain="select", service="select_option") is None
-   and not frozenset(_table["ownerServiceDomains"]) & (proxy.ALLOWED_SERVICE_DOMAINS | proxy.READ_DOMAINS))
+# owner, 2026-10-20: "Guest should be able to change this setting" — a light's scene choice, and that select only
+ck("a light's scene choice: a guest and ops may pick in it, named by its id",
+   refuse("guest", "call_service", domain="select", service="select_option",
+          target={"entity_id": "select.led_strip_scene"}, service_data={"option": "Ocean"}) is None
+   and refuse("ops", "call_service", domain="select", service="select_option",
+              target={"entity_id": ["select.led_strip_scene"]}) is None)
+ck("  ...never another select, never one unnamed, never an area or a device, never another service",
+   refuse("guest", "call_service", domain="select", service="select_option",
+          target={"entity_id": "select.boiler_mode"}) is not None
+   and refuse("guest", "call_service", domain="select", service="select_option",
+              target={"entity_id": ["select.led_strip_scene", "select.boiler_mode"]}) is not None
+   and refuse("guest", "call_service", domain="select", service="select_option") is not None
+   and refuse("guest", "call_service", domain="select", service="select_option", target={"area_id": "kitchen"}) is not None
+   and refuse("guest", "call_service", domain="select", service="select_option",
+              target={"entity_id": "select.led_strip_scene", "device_id": "d1"}) is not None
+   and refuse("guest", "call_service", domain="select", service="select_next",
+              target={"entity_id": "select.led_strip_scene"}) is not None
+   and "select" not in proxy.ALLOWED_SERVICE_DOMAINS | proxy.READ_DOMAINS)
+ck("  ...read by every profile, and no other select",
+   proxy._read_allowed("guest", "select.led_strip_scene") and not proxy._read_allowed("guest", "select.boiler_mode")
+   and not proxy._read_allowed("ops", "select.scenery"))
 ck("  ...still never a system service or a write frame",
    refuse("guest", "call_service", domain="homeassistant", service="restart") is not None
    and refuse("guest", "call_service", domain="script", service="turn_on") is not None

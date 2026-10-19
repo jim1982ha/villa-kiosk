@@ -1,3 +1,10 @@
+## 2.496.438
+
+### Changed
+- A light's scene picker is for every profile, the guest's and the facility manager's too: the add-on now lets
+  through a light's scene choice (a select named `…_scene`) and only that one — any other select of the villa (a
+  device's configuration) stays the owner's, and a pick aimed at a room or a device instead of that select is refused.
+
 ## 2.496.437
 
 ### Changed

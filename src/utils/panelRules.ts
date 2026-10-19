@@ -132,9 +132,9 @@ export function lightTemperatureData(kelvin: number): Record<string, unknown> {
 /** A light's SCENE CHOICE: a `select` of the light's own device that picks its scenes (owner, 2026-10-20: an LED
  *  strip's Effect list was only "off" and "Scene", its 38 scenes sat in a select of the same device nobody showed).
  *  Generic, never a villa's names: the select is on the light's device (the villa system's device registry,
- *  `entityDeviceIds`) and is NAMED a scene choice — its id or its name ends in "scene" (the word the integrations
- *  that expose one use: "<device> Scene", `select.<device>_scene`) — and has options. Its first such by id; null for a
- *  light with none (or one whose session may not read selects: the add-on relays them to the owner only). */
+ *  `entityDeviceIds`) and its id says it is the scene choice — `select.scene` or `select.<…>_scene`, the add-on's own
+ *  rule (ha-commands.json `sceneSelect`: the one select every profile reads and may pick in; tests/oracles holds the
+ *  two equal) — and has options. Its first such by id; null for a light with none. */
 export function sceneSelectOf(
   lightId: string,
   entities: Readonly<Record<string, { state: string; attributes: Record<string, unknown> } | undefined>>,
@@ -142,11 +142,7 @@ export function sceneSelectOf(
 ): string | null {
   const dev = entityDeviceIds[lightId];
   if (!dev) return null;
-  const named = (id: string) => {
-    const obj = id.slice(id.indexOf(".") + 1);
-    const name = String(entities[id]?.attributes?.friendly_name ?? "");
-    return obj === "scene" || obj.endsWith("_scene") || /(^|\s)scene$/i.test(name.trim());
-  };
+  const named = (id: string) => /^(?:.+_)?scene$/.test(id.slice(id.indexOf(".") + 1));
   const found = Object.keys(entityDeviceIds)
     .filter((id) => entityDeviceIds[id] === dev && id.startsWith("select.") && named(id)
       && sceneOptions(entities[id]?.attributes).length > 0)

@@ -421,6 +421,45 @@ ALLOWED_SERVICE_DOMAINS = frozenset(HA_COMMANDS.get("serviceDomains", ()))
 ALLOWED_HOMEASSISTANT_SERVICES = frozenset(HA_COMMANDS.get("homeassistantServices", ()))
 
 
+# A light's scene choice (ha-commands.json `sceneSelect`): the one select a non-owner reads and calls a service on.
+# FAIL CLOSED: an unreadable rule matches nothing.
+_SCENE = HA_COMMANDS.get("sceneSelect") if isinstance(HA_COMMANDS.get("sceneSelect"), dict) else {}
+SCENE_SELECT_DOMAIN = str(_SCENE.get("domain") or "")
+try:
+    SCENE_SELECT_RE = re.compile(str(_SCENE["objectId"])) if _SCENE.get("objectId") else None
+except re.error:
+    SCENE_SELECT_RE = None
+SCENE_SELECT_SERVICES = frozenset(_SCENE.get("services") or ())
+
+
+def _scene_select(entity_id: str) -> bool:
+    """Whether this entity is a light's scene choice (ha-commands.json `sceneSelect`)."""
+    domain, _, obj = str(entity_id).partition(".")
+    return bool(SCENE_SELECT_RE and SCENE_SELECT_DOMAIN and domain == SCENE_SELECT_DOMAIN and obj
+                and SCENE_SELECT_RE.fullmatch(obj))
+
+
+def _call_targets(obj: dict) -> list[str] | None:
+    """The entity ids a call_service frame names (its target and its service_data), or None when it names none or
+    aims at an area, a device, a floor or a label — a target this process cannot judge entity by entity."""
+    ids: list[str] = []
+    for part in (obj.get("target"), obj.get("service_data")):
+        if part is None:
+            continue
+        if not isinstance(part, dict):
+            return None
+        if any(k in part for k in ("area_id", "device_id", "floor_id", "label_id")):
+            return None
+        e = part.get("entity_id")
+        if e is None:
+            continue
+        for x in (e if isinstance(e, list) else [e]):
+            if not isinstance(x, str):
+                return None
+            ids.append(x)
+    return ids or None
+
+
 # The entity domains a non-owner session may read — see the docstring's
 # "What a non-owner session can READ". FAIL CLOSED like the rest of the table.
 READ_DOMAINS = frozenset(HA_COMMANDS.get("readDomains", ()))
@@ -436,6 +475,8 @@ def _read_allowed(role: str, entity_id: str) -> bool:
     else is held to READ_DOMAINS, and to `viewCameras` for a camera."""
     if _may(role, "administer"):
         return True
+    if _scene_select(entity_id):
+        return True                      # a light's scene choice: read by every profile (ha-commands.json)
     domain = str(entity_id).partition(".")[0]
     if domain not in READ_DOMAINS:
         return False
@@ -497,7 +538,7 @@ def _rest_query_allowed(role: str, tail: str, query) -> bool:
     return bool(ids) and all(_read_allowed(role, i) for i in ids)
 
 
-def _service_call_allowed(role: str, domain: str, service: str) -> bool:
+def _service_call_allowed(role: str, domain: str, service: str, targets: list[str] | None = None) -> bool:
     """Whether a call_service (WS) / services/<domain>/<service> (REST) frame
     from this role may reach Core. Owner administers the kiosk and is exempt
     (matches its "manageModel"/full capability set in permissions.ts); every
@@ -507,6 +548,9 @@ def _service_call_allowed(role: str, domain: str, service: str) -> bool:
         return True
     if domain == "homeassistant":
         return service in ALLOWED_HOMEASSISTANT_SERVICES
+    if SCENE_SELECT_DOMAIN and domain == SCENE_SELECT_DOMAIN and domain not in ALLOWED_SERVICE_DOMAINS:
+        # a light's scene choice only, named entity by entity (`targets`; the REST twin names none: refused)
+        return service in SCENE_SELECT_SERVICES and bool(targets) and all(_scene_select(t) for t in targets)
     return domain in ALLOWED_SERVICE_DOMAINS
 
 
@@ -807,7 +851,7 @@ def _ws_frame_refusal(role: str, obj: dict) -> str | None:
     if msg_type in CAMERA_WS_TYPES and not _may(role, "viewCameras"):
         return "This profile may not view cameras."
     if msg_type == "call_service" and not _service_call_allowed(
-        role, str(obj.get("domain", "")), str(obj.get("service", "")),
+        role, str(obj.get("domain", "")), str(obj.get("service", "")), _call_targets(obj),
     ):
         return "This profile may not call this service."
     return None
