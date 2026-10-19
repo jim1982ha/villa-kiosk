@@ -1,3 +1,10 @@
+## 0.12.259
+
+What you will see:
+- An alert from a rule the VESTA Agent has no setting for is no longer kept for the next morning's digest: a rule
+  named critical_… is handled as P1 (you and the facility manager at once), any other as P2. The kinds of rule it
+  already knows keep their priority, and a priority picked in a rule still wins.
+
 ## 0.12.258
 
 What you will see in the reports:
