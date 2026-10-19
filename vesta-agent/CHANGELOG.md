@@ -1,3 +1,9 @@
+## 0.12.282
+
+What you will see:
+- Rules › AI tools › Tools by role: the line under the table about who approves an action is gone (it belongs to
+  Allowed actions, which says it).
+
 ## 0.12.281
 
 What you will see:

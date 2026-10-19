@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.272 (20 October 2026)
+
+- Rules › AI tools › Tools by role: the line "Asking for an action is decided by Allowed actions: who approves stays
+  there." is gone (owner, 2026-10-20) — who approves is Allowed actions' own, said there.
+
 ## 0.6.271 (20 October 2026)
 
 - Limits tab: "Changed from its usual …" only under a value that differs from its usual one (the test was inverted:

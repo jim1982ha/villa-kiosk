@@ -355,8 +355,8 @@ export function toolsCard(f, t, reload) {
           h("label", { class: "switch" }, h("input", { type: "checkbox", checked: fm[g.key], "aria-label": `${g.label}: facility manager`,
             onchange: (e) => { fm[g.key] = e.target.checked; markDirty(); } })),
           { cls: "muted", v: h("span", { title: "There is no guest role yet: the agent answers only the owner and the facility manager" }, "—") }]),
-        { cls: "roles", widths: [null, { width: "18%", cls: "owner" }, { width: "18%", cls: "fm" }, { width: "14%", cls: "guest" }] }),
-      h("p", { class: "muted" }, `Asking for an action is decided by "${place("actions")}": who approves stays there.`)];
+        { cls: "roles", widths: [null, { width: "18%", cls: "owner" }, { width: "18%", cls: "fm" }, { width: "14%", cls: "guest" }] })];
+    // (owner, 2026-10-20: the line about who approves an action is "Allowed actions"' own — not this table's)
   };
   const tabs = tabbed("tools", [["ha", place("ha_tools"), haInfo, ha], ["own", place("agent_tools"), null, own],
                                 ["roles", place("tool_roles"), ROLES_INFO, roles]]);
