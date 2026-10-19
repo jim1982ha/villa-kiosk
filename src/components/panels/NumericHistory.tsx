@@ -13,7 +13,8 @@
 // window.
 
 import LineChart from "./LineChart";
-import { useHistoryRange, HistoryHeader } from "./historyRange";
+import { useHistoryRange, HistoryHeader, ChartStep } from "./historyRange";
+import { aggregationWords } from "./chartUtils";
 import { useHistorySource } from "@/hooks/useHistorySource";
 
 export interface NumericSeries {
@@ -30,6 +31,8 @@ export default function NumericHistory({ series, named = false }: {
   named?: boolean;
 }) {
   const { range, picker } = useHistoryRange();
+  // a device's measured value: the mean over the range's step (historySource "trend")
+  const step = aggregationWords(range.grainMs, "avg");
   const ids = series.map((s) => s.id);
   const { data, status } = useHistorySource(
     ids.length ? { trend: { kind: "trend", ids, hours: range.hours, period: range.period } } : null);
@@ -43,8 +46,8 @@ export default function NumericHistory({ series, named = false }: {
   if (series.length === 1 && !named) {
     return (
       <div className="field">
-        <HistoryHeader title={range.title} picker={picker} />
-        <LineChart label="History" height={110} window={history[series[0].id]?.window} status={status}
+        <HistoryHeader title={range.title} picker={picker} step={step} />
+        <LineChart stepMs={range.grainMs} label="History" height={110} window={history[series[0].id]?.window} status={status}
           lines={[line(series[0])]} />
       </div>
     );
@@ -53,8 +56,8 @@ export default function NumericHistory({ series, named = false }: {
     const [a, b] = series;
     return (
       <div className="field">
-        <HistoryHeader title={range.title} picker={picker} />
-        <LineChart label={`${a.label} and ${b.label} history`} height={120}
+        <HistoryHeader title={range.title} picker={picker} step={step} />
+        <LineChart stepMs={range.grainMs} label={`${a.label} and ${b.label} history`} height={120}
           window={history[a.id]?.window} status={status}
           lines={[line(a, { scale: "own" }), line(b, { dashed: true, scale: "own" })]} />
         <div className="row" style={{ gap: 16, marginTop: 8, fontSize: "var(--text-xs)" }}>
@@ -69,9 +72,9 @@ export default function NumericHistory({ series, named = false }: {
       {series.map((s, i) => (
         <div className="field" key={s.id}>
           {i === 0
-            ? <HistoryHeader title={`${s.label} — ${range.title.toLowerCase()}`} picker={picker} />
-            : <label className="entity-label">{s.label} — {range.title.toLowerCase()}</label>}
-          <LineChart label={`${s.label} history`} height={110} window={history[s.id]?.window} status={status}
+            ? <HistoryHeader title={`${s.label} — ${range.title.toLowerCase()}`} picker={picker} step={step} />
+            : <label className="entity-label">{s.label} — {range.title.toLowerCase()}<ChartStep words={step} /></label>}
+          <LineChart stepMs={range.grainMs} label={`${s.label} history`} height={110} window={history[s.id]?.window} status={status}
             lines={[line(s)]} />
         </div>
       ))}

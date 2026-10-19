@@ -41,6 +41,12 @@ export function fullDate(t: string | number | Date): string {
   return valid(d) ? d.toLocaleDateString([], { day: "2-digit", month: "short", year: "numeric" }) : "";
 }
 
+/** "Oct 2026" — a month as one value of a chart (a year drawn a month a bar). */
+export function monthShort(t: string | number | Date): string {
+  const d = at(t);
+  return valid(d) ? d.toLocaleDateString([], { month: "short", year: "numeric" }) : "";
+}
+
 /** "October 2026" — the month a report covers, spelled for a heading. */
 export function monthYear(t: string | number | Date): string {
   const d = at(t);

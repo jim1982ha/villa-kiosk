@@ -1,3 +1,15 @@
+## 2.496.435
+
+### Changed
+- A daily or weekly value's tooltip shows its day ("15 Oct") or its week ("13 Oct – 19 Oct"), never a clock time
+  ("15 Oct, 00:00"); the Energy window's 1y bars show their month ("Oct 2026").
+- Beside every chart's title, how its value is made: "LAST MONTH · daily avg", "LAST 24 HOURS · 5-min avg",
+  "· weekly avg" over a year; the rain and energy bars "· hourly sum", "· daily sum", "· monthly sum"; an on/off band
+  just its step ("· daily"). The same on the device panels, the Weather window and the Energy window.
+
+### Fixed
+- Weather window, 1y: the rain bars were cut into hourly slots; they are weekly now, as the period's figures.
+
 ## 2.496.434
 
 ### Changed

@@ -18,7 +18,7 @@
 import { useState, type ReactNode } from "react";
 import { useInterval } from "@/hooks/useInterval";
 import { CloudSun } from "lucide-react";
-import { fmtChartValue, fmtChartTick, fmtChartTime, fmtChartStamp, fmtDuration } from "./chartUtils";
+import { aggregationWords, fmtChartValue, fmtChartTick, fmtChartTime, fmtDuration, fmtStepStamp } from "./chartUtils";
 import { formatUnitValue } from "@/utils/entityValue";
 import BarChart from "./BarChart";
 import { DataWindow, Figure, LiveNote, ObservationCards } from "./WindowPieces";
@@ -27,8 +27,8 @@ import { barNote, seriesBuckets } from "@/utils/barChart";
 import LineChart, { ChartEmpty } from "./LineChart";
 import { useHA } from "@/ha/HAStateStore";
 import { useHistorySource } from "@/hooks/useHistorySource";
-import { useHistoryRange, type HistoryRange } from "./historyRange";
-import { peakOf, seriesExtent, seriesTotal, type HistoryStatus } from "@/utils/statisticsSeries";
+import { ChartStep, useHistoryRange, type HistoryRange } from "./historyRange";
+import { PERIOD_MS, peakOf, seriesExtent, seriesTotal, type HistoryStatus } from "@/utils/statisticsSeries";
 import { isUnavailable } from "@/utils/stateColors";
 import type { HassEntity, HistorySeries } from "@/types/ha.types";
 import {
@@ -397,16 +397,16 @@ function HistoryView({ station, range }: { station: WeatherStation; range: Histo
         }).map((f) => <Figure key={f.label} label={f.label} value={f.value} />)}
       </div>
       <div className="weather-charts">
-        <ChartTile title="Temperature" legend={[["Outside", "out"], ["Inside", "in"]]} win={win} status={status}
+        <ChartTile stepMs={PERIOD_MS[range.period]} title="Temperature" legend={[["Outside", "out"], ["Inside", "in"]]} win={win} status={status}
           lines={[line("temperature", { cls: "out", label: "Outside", unit: "°" }), line("indoorTemperature", { cls: "in dashed", label: "Inside", unit: "°" })]} />
-        <ChartTile title="Humidity" legend={[["Outside", "water"], ["Inside", "in"]]} win={win} status={status}
+        <ChartTile stepMs={PERIOD_MS[range.period]} title="Humidity" legend={[["Outside", "water"], ["Inside", "in"]]} win={win} status={status}
           lines={[line("humidity", { cls: "water", label: "Outside", unit: "%" }), line("indoorHumidity", { cls: "in dashed", label: "Inside", unit: "%" })]} />
-        <ChartTile title="Wind" legend={[["Speed", "out area"], ["Gust", "ink"]]} win={win} status={status}
+        <ChartTile stepMs={PERIOD_MS[range.period]} title="Wind" legend={[["Speed", "out area"], ["Gust", "ink"]]} win={win} status={status}
           lines={[line("windSpeed", { cls: "out", area: true, label: "Speed", unit: ` ${unitOf("windSpeed")}` }), line("windGust", { cls: "ink thin", label: "Gust", unit: ` ${unitOf("windGust")}` }, "max")]} />
-        {rainId && <RainTile s={rain} win={win} status={status} perDay={range.totalPeriod === "day"} unit={unitOf("rainToday") || "mm"} />}
-        <ChartTile title="Pressure" note={p && P ? `${Math.round(p.min)} – ${Math.round(P.max)} ${unitOf("pressure")}` : undefined}
+        {rainId && <RainTile s={rain} win={win} status={status} stepMs={PERIOD_MS[range.totalPeriod]} unit={unitOf("rainToday") || "mm"} />}
+        <ChartTile stepMs={PERIOD_MS[range.period]} title="Pressure" note={p && P ? `${Math.round(p.min)} – ${Math.round(P.max)} ${unitOf("pressure")}` : undefined}
           win={win} status={status} lines={[line("pressure", { cls: "out", label: "Pressure", unit: ` ${unitOf("pressure")}` })]} />
-        <ChartTile title="Sun & UV" legend={[["Sunlight", "warm area"], ["UV", "uv"]]} win={win} status={status}
+        <ChartTile stepMs={PERIOD_MS[range.period]} title="Sun & UV" legend={[["Sunlight", "warm area"], ["UV", "uv"]]} win={win} status={status}
           lines={[line("solar", { cls: "warm", area: true, ownScale: true, label: "Sunlight", unit: " W/m²" }), line("uv", { cls: "uv", ownScale: true, label: "UV", unit: "" }, "max")]} />
       </div>
     </div>
@@ -418,8 +418,10 @@ interface Line { s: HistorySeries | undefined; cls: string; label: string; unit:
 const CHART_PX = 150;
 
 /** A Weather chart: its head, then the app's one line chart (LineChart). */
-function ChartTile({ title, legend, note, lines, win, status }: {
+function ChartTile({ title, legend, note, lines, win, status, stepMs }: {
   title: string; legend?: [string, string][]; note?: string; lines: Line[]; win: { from: number; to: number }; status: HistoryStatus;
+  /** The step of its figures (the recorder's statistics period): beside its title and in its tooltip. */
+  stepMs: number;
 }) {
   // Every line the station has a sensor for — one with no readings still has
   // its outage, and its band says so.
@@ -427,11 +429,11 @@ function ChartTile({ title, legend, note, lines, win, status }: {
   return (
     <div className="weather-tile chart">
       <div className="weather-chart-head">
-        <div className="weather-eyebrow">{title}</div>
+        <div className="weather-eyebrow">{title}<ChartStep words={aggregationWords(stepMs, "avg")} /></div>
         {legend && <div className="weather-legend">{legend.map(([n, c]) => <span key={n}><i className={`key ${c}`} />{n}</span>)}</div>}
         {note && <div className="weather-legend">{note}</div>}
       </div>
-      <LineChart label={`${title} history`} height={CHART_PX} status={status} window={win.to > win.from ? win : undefined}
+      <LineChart stepMs={stepMs} label={`${title} history`} height={CHART_PX} status={status} window={win.to > win.from ? win : undefined}
         lines={present.map((l) => ({
           pts: l.s.points, gaps: l.s.gaps, label: l.label, unit: l.unit, cls: l.cls, area: l.area,
           scale: l.ownScale ? "fromZero" as const : "shared" as const,
@@ -440,13 +442,14 @@ function ChartTile({ title, legend, note, lines, win, status }: {
   );
 }
 
-function RainTile({ s, win, status, perDay, unit }: {
-  s: HistorySeries | undefined; win: { from: number; to: number }; status: HistoryStatus; perDay: boolean; unit: string;
+function RainTile({ s, win, status, stepMs, unit }: {
+  s: HistorySeries | undefined; win: { from: number; to: number }; status: HistoryStatus; stepMs: number; unit: string;
 }) {
   // One bar a bucket, from zero, in the app's one bar chart (utils/barChart):
   // a bucket the recorder has no reading for is an outage band, never a dry
   // hour (utils/statisticsSeries).
-  const slot = perDay ? 86_400_000 : 3_600_000;
+  // a bar a bucket of its own period — an hour, a day or a WEEK (1y: it read weeks into hourly slots before)
+  const slot = stepMs;
   const buckets = s && (s.points.length > 0 || status === "ready")
     ? seriesBuckets({ points: s.points, window: win }, slot, { key: "rain", label: "Rain", cls: "water" })
     : [];
@@ -459,15 +462,15 @@ function RainTile({ s, win, status, perDay, unit }: {
   return (
     <div className="weather-tile chart">
       <div className="weather-chart-head">
-        <div className="weather-eyebrow">Rain</div>
-        <div className="weather-legend">per {perDay ? "day" : "hour"} · {unit}</div>
+        <div className="weather-eyebrow">Rain<ChartStep words={aggregationWords(stepMs, "sum")} /></div>
+        <div className="weather-legend">{unit}</div>
       </div>
       {n === 0
         ? <ChartEmpty status={status} />
         : (
           <BarChart label="Rain history" buckets={buckets} height={CHART_PX} unit={unit} note={note}
             fmt={(v) => (unit ? formatUnitValue(v, unit) : fmtChartValue(v))}
-            stamp={(t) => `${perDay ? "day of " : "hour from "}${fmtChartStamp(t, spanH)}`}
+            stamp={(t) => fmtStepStamp(t, stepMs, spanH)}
             ticks={[{ i: 0, label: fmtChartTick(buckets[0].t, spanH) }, { i: Math.floor(n / 2), label: fmtChartTick(buckets[Math.floor(n / 2)].t, spanH) }, { i: n - 1, label: "now" }]} />
         )}
     </div>
