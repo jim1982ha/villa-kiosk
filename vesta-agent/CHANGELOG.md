@@ -1,3 +1,11 @@
+## 0.12.284
+
+What you will see:
+- A real "dropped and reconnected" fault no longer closes at the 12:00 (or 08:00, 16:00, 20:00) check and comes back
+  at night: the daytime check now counts the same three days as the night check.
+- Limits › Skill settings: the reports' "jobs_default" lines are gone (they changed nothing: Rules sets the reports'
+  brain and limit); a line whose save would make a skill your own copy (and so pause its updates) says so.
+
 ## 0.12.283
 
 What you will see:

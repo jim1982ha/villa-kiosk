@@ -182,3 +182,24 @@ def test_a_reload_of_virtual_devices_is_not_a_reconnect_loop():
     assert sum(flips["switch.relay"].values()) == 12                    # 45 s: a real reconnect
     assert sum(flips["sensor.gone"].values()) == 1                      # never back: a drop
     assert sum(F.flips_per_day(rows, "UTC", 3)["fan.ceiling"].values()) == 12   # without the setting: counted, as before
+
+
+def test_the_day_recheck_counts_the_same_three_days_as_the_night():
+    # architecture review, 2026-10-20: at 12:00 the recheck read 72 hours but counted calendar days ending today — two
+    # and a half days against a three-day threshold: a real loop of 12 drops "cleared" at noon, opened again at night
+    from datetime import date, datetime, timedelta, timezone
+    import rules as R
+    noon = datetime(2026, 10, 19, 12, 0, tzinfo=timezone.utc)
+    rows = []
+    for k in range(12):                                      # one drop every 6 hours over the last 72 hours
+        t = noon - timedelta(hours=3 + 6 * k)
+        rows += [{"entity_id": "switch.relay", "state": "unavailable", "when": t.isoformat()},
+                 {"entity_id": "switch.relay", "state": "on", "when": (t + timedelta(minutes=1)).isoformat()}]
+    flips = F.flips_per_day(rows, "UTC", 3, 10, end=noon)["switch.relay"]
+    assert sum(flips.values()) == 12
+    (loop,) = R.flap_rules({"slug": "relay", "name": "Relay"}, "switch.relay", flips, date(2026, 10, 19), PM_PARAMS)
+    assert "12 times in 3 days" in loop.summary
+    midnight = datetime(2026, 10, 19, tzinfo=timezone.utc)
+    night = F.flips_per_day([r for r in rows if datetime.fromisoformat(r["when"]) < midnight], "UTC", 3, 10,
+                            end=midnight)["switch.relay"]
+    assert set(night) == {date(2026, 10, 16), date(2026, 10, 17), date(2026, 10, 18)}   # midnight: calendar days, as before

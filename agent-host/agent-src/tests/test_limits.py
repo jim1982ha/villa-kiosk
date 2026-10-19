@@ -304,3 +304,16 @@ def test_delete_skill_is_on_about_and_on_files_under_one_name():
     assert 'h("button", { class: "btn danger push-right", onclick: delSkill }, "Delete Skill")' in js
     assert 'card(aboutSkill(name, d), h("div", { class: "actions" }, delSkillButton()))' in js
     assert "Delete the skill\")" not in js and js.count("delSkillButton()") == 2
+
+
+def test_the_tab_lists_no_value_that_changes_nothing_and_says_what_a_save_to_a_skills_file_does(ui):
+    # architecture review, 2026-10-20: reports' jobs_default rows were editable while Rules decides what runs; a save to
+    # a skill's own file (skill.yaml, a number inside a list) stopped its updates, unsaid
+    copy_skill("reports", ui.skills_dir)
+    rows = _rows(ui)["rows"]
+    assert not [r for r in rows if r["id"].get("skill") == "reports" and r["id"].get("path", [None])[0] == "jobs_default"]
+    inv = next(r for r in rows if r["id"].get("skill") == "investigate" and r["id"]["file"] == "skill.yaml"
+               and r["id"]["path"] == ["limit_usd"])
+    assert "makes this skill your own copy" in inv["also"]
+    villa = next(r for r in rows if r["id"].get("path") == ["behaviour", "baseline_days"])
+    assert "your own copy" not in villa["also"]                    # saved in the villa's own file: updates go on

@@ -206,6 +206,13 @@ class KnowledgePack:
     # offer either (tools.without_hidden) — the Rules page says hidden devices are ignored by the agent.
     hidden: list[str] = field(default_factory=list)
 
+    @property
+    def detailed_days(self) -> float | None:
+        """How many days of every change the villa's system holds, as the pack measured it (vesta_shared.retention);
+        None when not measured. ONE reading of it (architecture review, 2026-10-20: three readers each parsed it)."""
+        d = (self.retention or {}).get("raw_history_days")
+        return float(d) if isinstance(d, (int, float)) and not isinstance(d, bool) else None
+
     def is_critical(self, entity_id: str | None) -> bool:
         """`entity_id` is one of the villa's critical devices: named in its list, or an entity of a device it names
         (a relay listed, its power sensor dropping with it)."""

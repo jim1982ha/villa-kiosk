@@ -257,7 +257,7 @@ def reconnect_findings(cli, pack, states: dict, end: datetime, today: date, para
         # a count from a read cut short is a floor, said where the night's notes are read
         notes.append(unread("The logbook", day_time_label(book.reach.astimezone(Z))) + " — reconnect counts may be low.")
     flips = F.flips_per_day(lb, zone, params.behaviour("restart_settle_minutes"),
-                            params.behaviour("reconnect_min_drop_seconds"))
+                            params.behaviour("reconnect_min_drop_seconds"), end=end)
     # ONE finding per DEVICE, named as a person reads it (villa, 2026-10-04: a relay, its firmware
     # entity and its uptime sensor were three lines, two of them raw entity ids)
     rows_by_eid = {r["entity_id"]: r for fam in pack.families for r in pack.entities(fam)}

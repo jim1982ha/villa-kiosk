@@ -254,3 +254,29 @@ def test_a_reconnect_loop_is_read_again_in_the_day(tmp_path):
     st = Store(str(tmp_path / "s.sqlite"))
     assert st.finding(f_fan[0])["status"] == "closed" and st.task(f_fan[1])["status"] == "cleared"
     assert st.finding(f_relay[0])["status"] == "open" and st.finding(f_relay[0])["seen_at"] == NOW.isoformat()
+
+
+def test_a_loop_spread_over_the_whole_three_days_stays_open_at_noon(tmp_path):
+    # architecture review, 2026-10-20: the noon recheck counted two and a half days — 12 real drops spread over the last
+    # 72 hours read as 10, and the fault "cleared" at noon to open again at night
+    relay = "switch.example_relay"
+    (tmp_path / "pack.json").write_text(json.dumps({
+        "villa": "Example Villa", "time_zone": "UTC", "generated_at": "x", "ha_version": None, "areas": [], "people": [],
+        "channels": {}, "unknown_area": [], "unclassified": [], "retention": {"raw_history_days": 10},
+        "families": {"network": [_row(relay, "Pool relay", "network", "relay", "dev_r")]}, "assets": {}}))
+    store = Store(str(tmp_path / "s.sqlite"))
+    f_relay = _found(store, "PM-RECONNECT-LOOP", relay, "Pool relay dropped and reconnected 12 times in 3 days.")
+    fx = tmp_path / "fx"
+    fx.mkdir()
+    (fx / "states.json").write_text(json.dumps({"states": {relay: _st("on", 60)}}))
+    entries = []
+    # six drops on the afternoon three days back (inside the last 72 hours, before the calendar's three days) and five
+    # yesterday: eleven in 72 hours, five in the calendar's days
+    times = [NOW - timedelta(days=3) + timedelta(hours=1 + 2 * k) for k in range(6)] + \
+            [NOW - timedelta(days=1) + timedelta(hours=k) for k in range(5)]
+    for t in times:
+        entries += [{"entity_id": relay, "state": "unavailable", "when": t.isoformat()},
+                    {"entity_id": relay, "state": "on", "when": (t + timedelta(minutes=1)).isoformat()}]
+    (fx / "logbook.json").write_text(json.dumps({"entries": entries}))
+    _day(tmp_path)
+    assert Store(str(tmp_path / "s.sqlite")).finding(f_relay[0])["status"] == "open"

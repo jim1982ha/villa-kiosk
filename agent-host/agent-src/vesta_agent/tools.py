@@ -374,8 +374,7 @@ class Toolbox:
         if "_days" not in self.__dict__:
             from vesta_shared.knowledge_pack import KnowledgePack
             pack = KnowledgePack.read(self.s.pack_path)
-            d = ((pack.retention or {}).get("raw_history_days") if pack else None)
-            self.__dict__["_days"] = float(d) if isinstance(d, (int, float)) and not isinstance(d, bool) else None
+            self.__dict__["_days"] = pack.detailed_days if pack else None
         return self.__dict__["_days"]
 
     def _hidden(self) -> set[str]:

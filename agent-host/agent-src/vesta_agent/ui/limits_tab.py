@@ -171,6 +171,10 @@ class LimitsTab:
                 continue
             lines = text.splitlines()
             for path, shipped, line in _leaves(doc):
+                if fn == "skill.yaml" and path[0] == "jobs_default":
+                    # the AI jobs' starting brain and limit: what runs is Rules' settings.skill_ai (the rows below);
+                    # this one only seeds "Add them" — listed, it changed nothing (architecture review, 2026-10-20)
+                    continue
                 in_list = any(isinstance(k, int) for k in path)
                 own = fn == "skill.yaml" or in_list
                 over = None if own else _get(villa, path)
@@ -180,6 +184,11 @@ class LimitsTab:
                 also = f"Also in Skills › {skill} › Files › {villa_fn if over is not None else fn}."
                 if over is not None:
                     also += f" Changed for this villa in {villa_fn} (the skill's own value: {shipped})."
+                if own:
+                    # ⚠️ SAID BEFORE IT IS DONE (architecture review, 2026-10-20): a save here writes the skill's own
+                    # file — the skill becomes the villa's copy and its updates wait (skills.py: "edited")
+                    also += (" Saving it here makes this skill your own copy: its updates then wait for you in "
+                             f"Skills › {skill} › Compare.")
                 if path[0] == "behaviour":
                     also += (f" If the villa's system has a helper input_number.vesta_{path[-1]}, that helper's value "
                              "wins over this one.")
@@ -200,8 +209,8 @@ class LimitsTab:
         it is the villa's own setting."""
         from vesta_shared.knowledge_pack import KnowledgePack
         pack = KnowledgePack.read(self.s.pack_path)
-        days = (pack.retention or {}).get("raw_history_days") if pack else None
-        value = f"{days:.1f} days" if isinstance(days, (int, float)) and not isinstance(days, bool) else "not measured yet"
+        days = pack.detailed_days if pack else None
+        value = f"{days:.1f} days" if days is not None else "not measured yet"
         return [{"id": {"src": "measured", "key": "detailed_history_days"}, "group": "keep", "section": "villa",
                  "name": "detailed history kept (measured)",
                  "label": "How long the villa's system keeps every change and its logbook, measured each night on the "

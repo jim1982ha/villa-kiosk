@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.274 (20 October 2026)
+
+Architecture review of 20 October (the day's changes), its Strong candidates:
+- The reconnect period has ONE owner: features.flips_per_day(..., end) files each drop under the 24-hour periods ending
+  at `end` — at the night's end (midnight) the calendar days, as before; at the day recheck the true last 72 hours. The
+  12:00 recheck counted two and a half days against a three-day threshold: a real loop "cleared" at noon and opened
+  again at night. nightly.reconnect_findings passes its `end`; drops after it are not counted. Tests: the same
+  logbook at midnight and noon, and a loop spread over the whole 72 hours kept open by the real day recheck.
+- Limits tab: no `jobs_default` rows (the reports' starting brain and limit — Rules' settings.skill_ai is what runs, so
+  they changed nothing), and every row whose save writes a skill's own file (skill.yaml, a number inside a list) says
+  that the skill then becomes the villa's copy, its updates waiting in Skills › Compare.
+- `KnowledgePack.detailed_days`: the one reading of the measured days (script.Context, tools, the Limits tab each
+  parsed it).
+
 ## 0.6.273 (20 October 2026)
 
 - Skills: the button is "Delete Skill" (it read "Delete the skill"), and it is on the About tab too, not only on

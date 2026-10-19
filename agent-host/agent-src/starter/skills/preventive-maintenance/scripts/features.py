@@ -9,7 +9,7 @@ parameters.
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from vesta_shared.device_state import RestartDrops, is_offline  # the one "does this device answer"
@@ -94,7 +94,7 @@ def runs_from_history(states: list[dict], on_threshold_w: float, zone: str, min_
 
 
 def flips_per_day(logbook: list[dict], zone: str, settle_minutes: float = 0,
-                  min_drop_seconds: float = 0) -> dict[str, dict[date, int]]:
+                  min_drop_seconds: float = 0, end: datetime | None = None) -> dict[str, dict[date, int]]:
     """Count drops to "unavailable" per entity per day from logbook rows, leaving out those within `settle_minutes` of
     a Home Assistant restart (device_state.in_restart: its own "started" entry) — every restart takes every entity
     through "unavailable", and three restarts in three days read as "dropped and reconnected 10 times" for a relay that
@@ -109,7 +109,12 @@ def flips_per_day(logbook: list[dict], zone: str, settle_minutes: float = 0,
     10 times in 3 days" in one night — every ceiling fan, a template lock, template sensors). Each time the villa's system
     reloads its virtual devices (a template, a helper or a package saved), every one of them reads "unavailable" for
     about 50 ms; nine such reloads in two days read as Wi-Fi trouble. A drop back within `min_drop_seconds` (the
-    night's setting reconnect_min_drop_seconds) is not counted; one still offline at the end of the read is."""
+    night's setting reconnect_min_drop_seconds) is not counted; one still offline at the end of the read is.
+
+    ⚠️ `end`: THE DAYS ARE THE 24-HOUR PERIODS ENDING AT IT (architecture review, 2026-10-20). A drop is filed under the
+    day of `end` minus its whole days before `end` — at the night's end (midnight) the calendar days, as before; at the
+    12:00 day recheck the last 72 hours, never two and a half days counted against a three-day threshold (a real loop
+    closed at noon and opened again at night). None: calendar days in `zone`."""
     drops = RestartDrops(logbook, settle_minutes)        # the one answer (vesta_shared.device_state)
     out: dict[str, dict[date, int]] = defaultdict(lambda: defaultdict(int))
     timeline: dict[str, list[tuple[datetime, bool]]] = defaultdict(list)
@@ -126,11 +131,22 @@ def flips_per_day(logbook: list[dict], zone: str, settle_minutes: float = 0,
                 continue
             if drops.at_restart(eid, t):                  # came with a restart: never the device's own reconnect
                 continue
+            if end is not None and t >= end:
+                continue                                  # after the period read: not its day
             back = next((u for u, o in rows[i + 1:] if not o), None)
             if back is not None and (back - t).total_seconds() < min_drop_seconds:
                 continue                                  # back within the blink of a reload
-            out[eid][t.astimezone(ZoneInfo(zone)).date()] += 1
+            out[eid][_day_of(t, end, zone)] += 1
     return {k: dict(v) for k, v in out.items()}
+
+
+def _day_of(t: datetime, end: datetime | None, zone: str) -> date:
+    """The day a moment is counted under: its calendar day in `zone`, or — with `end` — the day of `end` (the moment
+    just before it) less the whole days `t` lies before `end` (flips_per_day)."""
+    if end is None:
+        return t.astimezone(ZoneInfo(zone)).date()
+    last = (end - timedelta(microseconds=1)).astimezone(ZoneInfo(zone)).date()
+    return last - timedelta(days=int((end - t).total_seconds() // 86400))
 
 
 def reporting_share(hour_rows: list[dict], until_ms: int | None = None, hours: int | None = None) -> tuple[float | None, int]:
