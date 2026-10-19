@@ -6,6 +6,7 @@ import { React, h, draw, inside, btn } from "../consistency/screen.mjs";
 import { ck, done } from "../consistency/check.mjs";
 const { default: RecordCard } = await import("@/components/fm/RecordCard");
 const { AttentionCard } = await import("@/components/cockpit/CockpitOverview");
+const { cockpitCard } = await import("@/config/cockpitCard");
 const { groupAttention } = await import("@/config/attention");
 
 console.log("  a ticket's card:");
@@ -32,7 +33,7 @@ const [group] = groupAttention([
   { id: "fault:f1", kind: "fault", title: "#33 · Test lock unavailable", detail: "Fault", entityId: "lock.example", ticketId: "f1",
     stage: "fault", source: "alert", device: { key: "lock.example", label: "Test lock", room: "Hall" } }]);
 const CADENCE = { checkMinutes: 5, nightlyAt: "02:00" };
-const issue = draw(h(AttentionCard, { group, onOpenEntity: () => {}, cadence: CADENCE,
+const issue = draw(h(AttentionCard, { card: cockpitCard(group, CADENCE), onOpenEntity: () => {},
   actions: h(React.Fragment, null, btn("Open Ticket"), btn("Close")) }));
 ck("it IS the Cockpit card: title, the room under it, its source icons before it, a chevron",
    /class="fm-record-card"/.test(issue) && /fm-record-lead[\s\S]*<svg/.test(inside(issue, "fm-record-head"))
@@ -75,8 +76,8 @@ ck("  ...drawn as the hover text of the card's Next check", /<span class="fm-rec
 const [roomless] = groupAttention([{ id: "fault:f9", kind: "fault", title: "Relay dropped", detail: "Fault", entityId: "sensor.relay_t",
   ticketId: "f9", stage: "fault", source: "night", device: { key: "sensor.relay_t", label: "Relay" } }]);
 ck("  ...a device no room holds still has its room line: Other, as By Room files it",
-   /fm-record-subtitle[^>]*>Other</.test(draw(h(AttentionCard, { group: roomless, onOpenEntity: () => {}, cadence: CADENCE }))));
-const lone = draw(h(AttentionCard, { group: { ...group, entityId: undefined }, onOpenEntity: () => {}, cadence: CADENCE }));
+   /fm-record-subtitle[^>]*>Other</.test(draw(h(AttentionCard, { card: cockpitCard(roomless, CADENCE), onOpenEntity: () => {} }))));
+const lone = draw(h(AttentionCard, { card: cockpitCard({ ...group, entityId: undefined }, CADENCE), onOpenEntity: () => {} }));
 ck("  ...a problem with no device: no chevron, nothing to tap, no buttons", !/chevron-right/.test(lone) && !/role="button"/.test(lone) && !/fm-record-actions/.test(lone));
 
 // owner, 2026-10-18: "#55" (its own siren before it) sat further right than "#41" above it (its icons are the card's):
@@ -89,7 +90,7 @@ ck("  ...a problem with no device: no chevron, nothing to tap, no buttons", !/ch
     { id: "alarm:lock.door", kind: "alarm", title: "Door lock", detail: "Unlocked", entityId: "lock.door", source: "live", device: dev },
     { id: "fault:f1", kind: "fault", title: "#41 · Door unlocked", detail: "Fault", entityId: "lock.door", ticketId: "f1", stage: "fault", source: "alert", device: dev },
     { id: "fault:f2", kind: "fault", title: "#55 · Door unlocked", detail: "Fault", entityId: "lock.door", ticketId: "f2", stage: "fault", source: "alert", device: dev }]);
-  const lines = inside(draw(h(AttentionCard, { group: two, onOpenEntity: () => {}, cadence: CADENCE })), "fm-record-body")
+  const lines = inside(draw(h(AttentionCard, { card: cockpitCard(two, CADENCE), onOpenEntity: () => {} })), "fm-record-body")
     .split('<li class="cockpit-attention-sub">').slice(1);
   const gutter = (css.match(/\.fm-record-head:has\(> \.fm-record-lead\) \+ \.fm-record-body \{ padding-left: (\d+)px/) ?? [])[1];
   const hung = (css.match(/\.fm-record-gutter > \.fm-record-gutter-icon \{[^}]*position: absolute; left: -(\d+)px/) ?? [])[1];
@@ -144,7 +145,7 @@ ck("  ...nothing to erase by holding it (its bin removes it): no hold-to-erase o
   const [two] = groupAttention([
     { id: "fault:x", kind: "fault", title: words, detail: "Fault", entityId: "lock.door4", ticketId: "x", stage: "fault", source: "alert", device: dev },
     { id: "fault:y", kind: "fault", title: "Another", detail: "Fault", entityId: "lock.door4", ticketId: "y", stage: "fault", source: "alert", device: dev }]);
-  const card = draw(h(AttentionCard, { group: two, onOpenEntity: () => {}, cadence: CADENCE, lineActions: () => btn("Close") }));
+  const card = draw(h(AttentionCard, { card: cockpitCard(two, CADENCE), onOpenEntity: () => {}, lineActions: () => btn("Close") }));
   ck("  ...a problem's words sit in one cut line, whole on hover; its own Close in its own slot beside them",
      card.includes(`<span class="cockpit-attention-sub-title" title="${words}">${words}</span>`)
      && (card.match(/<span class="cockpit-line-act">/g) ?? []).length === 2, card.slice(0, 600));

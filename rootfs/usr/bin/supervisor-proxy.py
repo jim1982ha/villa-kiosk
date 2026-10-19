@@ -3467,6 +3467,28 @@ def _agent_answers() -> dict:
     return out
 
 
+def _agent_unanswerable(message: dict, answer, profile: str | None, now: float, online: bool):
+    """Why `profile` may not answer this Agent message now — (status, words) — or None when it may. ONE rule for the
+    page's buttons (can_answer) and the press door (_agent_press_refusal): open (no answer yet, not expired), with
+    buttons, the profile allowed, the agent online to act on it.
+
+    ⚠️ ASKED TWICE (architecture review scan 3, 2026-10-19): the view and the door each wrote the four questions; one
+    had already lost "online" once (2.496.251)."""
+    if answer is not None:
+        return 409, "already answered"
+    exp = _iso_epoch(message.get("expires_at"))
+    if exp is not None and exp <= now:
+        return 409, "this message has expired"
+    if not message.get("buttons"):
+        return 400, "this message has no buttons"
+    if profile not in (message.get("allowed_profiles") or []):
+        return 403, "This profile may not answer this message."
+    if not online:
+        # Nobody would act on it (PLAN A8)
+        return 409, "The VESTA Agent is offline: nobody would act on this answer now."
+    return None
+
+
 def _agent_messages_view(request: web.Request, stored):
     """What an owner or facility manager sees: newest first, each message with
     its state (open / answered / expired), who answered, and whether THIS
@@ -3493,8 +3515,7 @@ def _agent_messages_view(request: web.Request, stored):
         state = "answered" if answer else ("expired" if exp is not None and exp <= now else "open")
         out.append({**m, "state": state,
                     "answer": {k: answer.get(k) for k in ("button_id", "profile", "at")} if answer else None,
-                    "can_answer": state == "open" and bool(m.get("buttons")) and agent_here
-                    and role in (m.get("allowed_profiles") or [])})
+                    "can_answer": _agent_unanswerable(m, answer, role, now, agent_here) is None})
     return {"messages": out}
 
 
@@ -3520,18 +3541,14 @@ def _agent_press_refusal(stored, message_id: str, button_id: str, profile: str):
         return web.json_response(
             {"error": "already answered",
              "answer": {k: earlier.get(k) for k in ("button_id", "profile", "at")}}, status=409)
-    exp = _iso_epoch(message.get("expires_at"))
-    if exp is not None and exp <= time.time():
-        return web.json_response({"error": "this message has expired"}, status=409)
-    if button_id not in {b.get("id") for b in message.get("buttons") or []}:
+    if message.get("buttons") and button_id not in {b.get("id") for b in message.get("buttons") or []}:
         return web.json_response({"error": "no such button on this message"}, status=400)
-    if profile not in (message.get("allowed_profiles") or []):
-        return _forbidden("This profile may not answer this message.")
-    if _agent_presence()["state"] != "online":
-        # Nobody would act on it (PLAN A8): the same rule can_answer applies.
-        return web.json_response({"error": "The VESTA Agent is offline: nobody would act on this answer now."},
-                                 status=409)
-    return None
+    # the rule the page's buttons follow (_agent_unanswerable), the earlier answer already handled above
+    why = _agent_unanswerable(message, None, profile, time.time(), _agent_presence()["state"] == "online")
+    if why is None:
+        return None
+    status, words = why
+    return _forbidden(words) if status == 403 else web.json_response({"error": words}, status=status)
 
 
 def _agent_choices_with(stored, message_id: str, button_id: str, profile: str) -> dict:
@@ -3822,18 +3839,21 @@ KIOSK_ROOMS = JsonStore("kiosk-rooms.json", {"rooms": {}}, 1_000_000)
 
 
 def _kiosk_rooms_merge(request: web.Request, stored, value):
-    """Keep only `rooms`, stamped with when and by whom it was shared."""
-    rooms = value.get("rooms") if isinstance(value, dict) else None
-    return {"rooms": rooms, "at": _now_iso(), "by": _role_for(request)}
+    """Keep `rooms` — and each device's `names` and `categories` as the Kiosk shows them (agentView.deviceViews) —
+    stamped with when and by whom they were shared."""
+    value = value if isinstance(value, dict) else {}
+    return {"rooms": value.get("rooms"), "names": value.get("names") or {}, "categories": value.get("categories") or {},
+            "at": _now_iso(), "by": _role_for(request)}
 
 
 def _kiosk_rooms_guard(request: web.Request, body, old, new):
-    rooms = new.get("rooms")
-    if not isinstance(rooms, dict) or len(rooms) > 10_000 or not all(
-            isinstance(k, str) and AGENT_ENTITY_RE.fullmatch(k)
-            and isinstance(v, str) and 0 < len(v) <= 100 for k, v in rooms.items()):
-        return web.json_response(
-            {"error": "rooms must map entity ids to room names (at most 100 characters)"}, status=400)
+    for key, what in (("rooms", "room names"), ("names", "device names"), ("categories", "categories")):
+        m = new.get(key)
+        if not isinstance(m, dict) or len(m) > 10_000 or not all(
+                isinstance(k, str) and AGENT_ENTITY_RE.fullmatch(k)
+                and isinstance(v, str) and 0 < len(v) <= 100 for k, v in m.items()):
+            return web.json_response(
+                {"error": f"{key} must map entity ids to {what} (at most 100 characters)"}, status=400)
     return None
 
 
@@ -3935,8 +3955,11 @@ async def agent_villa_model_handler(request: web.Request) -> web.Response:
                   if isinstance(e, str) and AGENT_ENTITY_RE.fullmatch(e) and e not in dismissed})
     areas = await _ha_areas(request.app["session"], ids)
     shared = KIOSK_ROOMS.read()
-    kiosk_rooms = shared.get("rooms") if isinstance(shared, dict) \
-        and isinstance(shared.get("rooms"), dict) else {}
+    told = lambda key: shared.get(key) if isinstance(shared, dict) and isinstance(shared.get(key), dict) else {}  # noqa: E731
+    kiosk_rooms = told("rooms")
+    # each device's name and category as the Kiosk shows them (agentView.deviceViews, shared beside the rooms):
+    # this module never re-derives the Kiosk's label or category rule (architecture review scan 3, 2026-10-19)
+    kiosk_names, kiosk_categories = told("names"), told("categories")
     devices = []
     for eid in ids:
         mapping = entity_map.get(eid) if isinstance(entity_map.get(eid), dict) else {}
@@ -3944,9 +3967,9 @@ async def agent_villa_model_handler(request: web.Request) -> web.Response:
         fallback = kiosk_rooms.get(eid) if not area and isinstance(kiosk_rooms.get(eid), str) else None
         devices.append({
             "entity_id": eid,
-            "name": mapping.get("label") or friendly or eid,
+            "name": kiosk_names.get(eid) or mapping.get("label") or friendly or eid,
             "type": mapping.get("type") or eid.partition(".")[0],
-            "category": mapping.get("category"),
+            "category": kiosk_categories.get(eid) or mapping.get("category"),
             "disabled": bool(mapping.get("disabled")),
             "group_id": group_of.get(eid),
             "room": area or fallback or None,

@@ -1039,6 +1039,17 @@ ck("  ...and only those (another blueprint whose name starts the same is not it)
    _used == ["automation.example_watch", "automation.example_watch_two"])
 ck("  ...with no agreement, nothing is critical", proxy._critical_from_configs(_cfgs, {}) == ([], []))
 
+# ── who may answer an Agent message now: ONE rule for the page's buttons and the press door (architecture review
+#    scan 3, 2026-10-19 — _agent_unanswerable; the two had drifted once, 2.496.251)
+_msg = {"buttons": [{"id": "ok"}], "allowed_profiles": ["owner"], "expires_at": None}
+_U = proxy._agent_unanswerable
+ck("an open message, its profile, the agent online: answerable", _U(_msg, None, "owner", 0, True) is None)
+ck("  ...answered, expired, no buttons, another profile, the agent offline: each says why",
+   _U(_msg, {"button_id": "ok"}, "owner", 0, True)[0] == 409
+   and _U({**_msg, "expires_at": "2000-01-01T00:00:00+00:00"}, None, "owner", 10**10, True) == (409, "this message has expired")
+   and _U({**_msg, "buttons": []}, None, "owner", 0, True)[0] == 400
+   and _U(_msg, None, "ops", 0, True)[0] == 403 and _U(_msg, None, "owner", 0, False)[0] == 409)
+
 print()
 print("✅ the proxy's pure rules hold" if FAIL == 0
       else "❌ A PROXY RULE IS BROKEN")

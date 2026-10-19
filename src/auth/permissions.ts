@@ -153,6 +153,26 @@ export function isTypeAllowed(role: Role, type: EntityType): boolean {
   return !PERMISSION_MATRIX[role].deniedTypes.includes(type);
 }
 
+/** What a profile may be shown of the villa beyond its devices' own badges — ONE answer every surface asks: the
+ *  motion toast, the presence window's people and latest movement, the scene's motion beams (through its role-filtered
+ *  config's deniedTypes, filterConfigForRole).
+ *
+ *  ⚠️ ASKED SITE BY SITE (architecture review scan 2, 2026-10-19): 2.496.210 hid motion from a guest in the toast and
+ *  the beams, each with its own test of "binary_sensor"; the presence window (2.496.415) asked neither and told a
+ *  guest "Latest movement · Living room motion · moving now". These are UI rules: the proxy enforces only what its
+ *  readDomains say (a person's whereabouts, the cameras). No role: nothing. */
+export interface ProfileView {
+  /** Motion and presence detectors: the toast, a beam, "Latest movement". */
+  motion: boolean;
+  /** A person's whereabouts (the `seePeople` capability: the proxy never relays a person to the others). */
+  people: boolean;
+}
+
+export function profileView(role: Role | null | undefined): ProfileView {
+  if (role == null) return { motion: false, people: false };
+  return { motion: isTypeAllowed(role, "binary_sensor"), people: hasCapability(role, "seePeople") };
+}
+
 /** Categories the role must never see — merged into the scene's hidden set. */
 function deniedCategories(role: Role): Category[] {
   return CATEGORY_ORDER.filter((c) => !isCategoryAllowed(role, c));

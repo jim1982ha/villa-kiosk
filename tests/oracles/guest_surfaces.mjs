@@ -29,8 +29,25 @@ ck("the Energy tile (and so the Energy window) exists only when the profile may 
 const cockpit = (src("components/cockpit/CockpitModal.tsx") + src("components/cockpit/CockpitOverview.tsx"));
 ck("the Cockpit does not fetch energy at all (its 'Energy today' block is gone)",
    !/fetchEnergySetup|useHistorySource|usedToday|EnergyPanel/.test(cockpit));
-ck("the motion toast is skipped for a profile denied motion sensors",
-   /const who = roleRef\.current;\s*if \(!who \|\| !isTypeAllowed\(who, "binary_sensor"\)\) return;/.test(src("pages/Dashboard.tsx")));
+// what a profile may be shown (auth/permissions.profileView, by value) — and every surface that shows motion asks it
+// (architecture review scan 2, 2026-10-19: the presence window told a guest "Latest movement … moving now")
+{
+  const { profileView } = await import("@/auth/permissions");
+  const { h, draw } = await import("../consistency/screen.mjs");
+  const { PresencePanel } = await import("@/components/hud/PresenceTile");
+  ck("a guest sees no motion and no person; the owner both; no profile nothing",
+     !profileView("guest").motion && !profileView("guest").people && profileView("owner").motion && profileView("owner").people
+     && !profileView(null).motion && !profileView(null).people);
+  const why = { people: [], lastActivity: { entityId: "binary_sensor.hall_motion", name: "Hall motion", moving: true, at: null },
+    listsSensors: true, settings: [] };
+  const drawn = (showMovement) => draw(h(PresencePanel, { presence: { state: "occupied", label: "Occupied", tone: "active", since: null },
+    why, showPeople: false, showMovement, canOpen: () => false, onOpenEntity: () => {}, onClose: () => {} }));
+  ck("  ...the presence window shows its latest movement only to a profile that sees motion",
+     /Latest movement/.test(drawn(true)) && !/Latest movement|Hall motion/.test(drawn(false)));
+  ck("the motion toast and the presence window ask it",
+     /if \(!profileView\(roleRef\.current\)\.motion\) return;/.test(src("pages/Dashboard.tsx"))
+     && /const sees = profileView\(role\);[\s\S]*showPeople=\{sees\.people\} showMovement=\{sees\.motion\}/.test(src("components/hud/PresenceTile.tsx")));
+}
 ck("the 3D motion glow / beam is skipped under the role-filtered config",
    /private applyMotionRouting\(entity: HassEntity\): void \{\s*if \(this\.config\.deniedTypes\?\.includes\("binary_sensor"\)\) return;/.test(src("babylon/EntityVisuals.ts")));
 

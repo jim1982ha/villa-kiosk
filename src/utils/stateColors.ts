@@ -38,7 +38,17 @@ export function isUnavailable(entity: HassEntity | undefined): boolean {
  *  listed every "unknown" device as Unavailable while the VESTA Agent, since 2026-10-04, calls only "unavailable"
  *  lost. One meaning now, the Agent's. */
 export function isOffline(entity: HassEntity | undefined): boolean {
-  return entity == null || entity.state === "unavailable";
+  return contactOf(entity?.state) === "lost";
+}
+
+/** Where a state stands with its device: "lost" (unavailable, or no state at all), "no-value" (unknown: the device
+ *  reports, this entity has nothing to say), "ok". ⚠️ ONE ANSWER FOR THE MAP AND THE COCKPIT (architecture review
+ *  scan 1, 2026-10-19): since 2.496.410 the Cockpit called only "unavailable" offline, while the map still rang an
+ *  "unknown" sensor amber ("Contact is lost", the legend says), its row read "Unavailable", the device picker said
+ *  offline — and a lock in "unknown" was painted red. Every "is contact lost" reader asks this, on a state string too
+ *  (a history point, a camera's status). */
+export function contactOf(state: string | undefined | null): "lost" | "no-value" | "ok" {
+  return !state || state === "unavailable" ? "lost" : state === "unknown" ? "no-value" : "ok";
 }
 
 /** What every surface calls a device whose entity Home Assistant does not have at all — a 3D object named after an
@@ -328,4 +338,22 @@ export function paletteColorFor(states: string[]): (state: string) => string {
  */
 export function paintState(colorFor: (state: string) => string): (state: string) => string {
   return (state: string) => (UNKNOWN_STATES.has(state) ? STATUS_COLOR.unavailable : colorFor(state));
+}
+
+/** Where a lock's bolt is, as every reader of a lock asks it: "thrown" (locked — the quiet, secure rest state), "open"
+ *  (unlocked, or open: not secured, as the lock itself says), "jammed" (it said so: not secured, the retry stays
+ *  offered), "moving" (locking / unlocking: on its way, nobody observed either rest state) or "unknown" (contact lost, or
+ *  no value). Never "open" on anything short of the lock saying so.
+ *
+ *  ⚠️ FIVE ANSWERS (architecture review scan 2, 2026-10-19): the switch (entityState.switchPosition), the summary's
+ *  counts (villaSummary), the lock window's header icon, its pill icon and its button each read the raw state their
+ *  own way — the header showed an OPEN padlock for a jammed, locking or unavailable lock while the pill beside it
+ *  showed a closed one, and the summary counted an "open" lock as neither locked nor unlocked. */
+export type LockBolt = "thrown" | "open" | "jammed" | "moving" | "unknown";
+export function lockBolt(state: string | undefined | null): LockBolt {
+  if (contactOf(state) !== "ok") return "unknown";
+  if (state === "locked") return "thrown";
+  if (state === "unlocked" || state === "open") return "open";
+  if (state === "jammed") return "jammed";
+  return TRANSITIONAL_STATES.has(state as string) ? "moving" : "unknown";
 }

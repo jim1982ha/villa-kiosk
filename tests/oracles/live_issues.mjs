@@ -11,6 +11,7 @@ import { h, draw, text } from "../consistency/screen.mjs";
 import { ck, done } from "../consistency/check.mjs";
 const E = await import("@/fm/fmEngine");
 const W = await import("@/fm/deviceWork");
+const { cockpitCard } = await import("@/config/cockpitCard");
 const { groupAttention, cardActions, cardRecords, attentionLineIn, buildAttentionItems } = await import("@/config/attention");
 const { screenReducer, START } = await import("@/pages/screen");
 
@@ -341,7 +342,7 @@ ck("  ...and each one is a note in the Tickets tab, with its time",
    N.faultNoteLines(told, (a) => a.slice(11, 16)));
 {
   const { AttentionCard } = await import("@/components/cockpit/CockpitOverview");
-  const card = draw(h(AttentionCard, { group: groupAttention(withLatest)[0], onOpenEntity: () => {}, cadence: { checkMinutes: 5, nightlyAt: "02:00" } }));
+  const card = draw(h(AttentionCard, { card: cockpitCard(groupAttention(withLatest)[0], { checkMinutes: 5, nightlyAt: "02:00" }), onOpenEntity: () => {} }));
   ck("  ...shown on the Overview card, under the fault's line", /fault s[\s\S]*class="cockpit-attention-latest">🆘 Need help pressed by Fabien · /.test(card), text(card));
 }
 
@@ -358,7 +359,7 @@ ck("the Overview's title line: the (i) then Open a ticket, for the profiles that
 // Here only the wiring a drawing cannot reach — the Overview hands cardActions to the shared buttons, and acts on
 // what each button names (its stage, its records), with no status or rule of its own
 ck("a card draws what cardActions says (no rule of its own)",
-   /const acts = cardActions\(group\);/.test(ov) && /<WorkButtons actions=\{acts\} cardKey=\{group\.key\} closer=\{closer\}/.test(ov)
+   /const acts = card\.actions;/.test(ov) && /<WorkButtons actions=\{acts\} cardKey=\{card\.key\} closer=\{closer\}/.test(ov)
    && /a\.step\.kind === "stage" \? setStaging\(\{ tickets: records\(a\.ids\), to: a\.step\.to \}\) : onEditTicket\(a\.ids\[0\]\)/.test(ov)
    && !/closeTickets|InlineConfirm|in_progress"|"resolved"/.test(ov + tt));
 
@@ -395,7 +396,7 @@ console.log("\n  one line per problem (owner, 2026-10-17: \"#49 · One mains pha
     selectableIds: [], folding: new Map(), fmData: fm([...six, { ...rec("g", "lock.door"), title: "Door unlocked" }]) });
   const groups = groupAttention(items);
   const g = groups.find((x) => x.items.some((i) => i.title.includes("phase lost")));
-  const card = draw(h(AttentionCard, { group: g, onOpenEntity: () => {}, cadence: { checkMinutes: 5, nightlyAt: "02:00" } }));
+  const card = draw(h(AttentionCard, { card: cockpitCard(g, { checkMinutes: 5, nightlyAt: "02:00" }), onOpenEntity: () => {} }));
   const said = text(card);
   ck("six records saying the same are ONE line, counted", (said.match(/#49 · One mains phase lost/g) || []).length === 1
      && /#49 · One mains phase lost \(6 times\)/.test(said), said);

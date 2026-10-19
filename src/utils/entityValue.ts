@@ -18,7 +18,7 @@
 // any such check.
 import type { HassEntity } from "@/types/ha.types";
 import type { EntityType } from "@/types/scene.types";
-import { isUnavailable } from "./stateColors.ts";
+import { contactOf, isUnavailable } from "./stateColors.ts";
 import { binaryWord } from "@/config/binarySensorWords";
 
 /** Status/enum SENSOR states meaning "all good, nothing to report".
@@ -168,7 +168,7 @@ export function formatSensorValue(
  * Everything else — scaling, unit hugging, enum tidying — is the shared rule.
  */
 export function deviceRowText(s: HassEntity, domain: string): string {
-  if (isUnavailable(s)) return "Unavailable";
+  if (isUnavailable(s)) return contactOf(s.state) === "lost" ? "Unavailable" : "Unknown";
   if (domain === "climate") {
     const cur = s.attributes.current_temperature as number | null | undefined;
     const target = s.attributes.temperature as number | null | undefined;

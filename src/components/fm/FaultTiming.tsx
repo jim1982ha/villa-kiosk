@@ -14,13 +14,13 @@ import { faultTiming } from "@/fm/faultTiming";
 import { stageOf } from "@/fm/fmEngine";
 import { useFmData } from "@/fm/FmDataContext";
 import { useAgent } from "@/agent/AgentContext";
-import { agentVisible } from "@/agent/agentView";
-import { AGENT_SOURCE } from "@/fm/fmTypes";
+import { agentSourcesShown } from "@/agent/agentView";
+import { agentOwned } from "@/fm/issueSource";
 
 export default function FaultTiming() {
   const { status } = useAgent();
   const { data } = useFmData();
-  const agent = agentVisible(status) || data.tickets.some((t) => t.source === AGENT_SOURCE && stageOf(t) !== "closed");
+  const agent = agentSourcesShown(status, data.tickets.some((t) => agentOwned(t) && stageOf(t) !== "closed"));
   const { groups, note } = faultTiming(agent, status?.cadence ?? null);
   return (
     // two-thirds wider than an (i)'s card: its three columns take fewer lines on a desktop (owner, 2026-10-14); a phone

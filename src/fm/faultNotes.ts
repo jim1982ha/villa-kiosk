@@ -9,7 +9,7 @@
 
 import { isTicketResolved, stageOf, statusChanges, stepsInTimeOrder } from "./fmEngine";
 import type { FmTicket, FmTicketUpdate } from "./fmTypes";
-import { AGENT_SOURCE } from "./fmTypes";
+import { agentOwned } from "./issueSource";
 
 /** A note written before steps had a kind (VESTA Agent before 0.12.151): its title change read "Now: <new title>".
  *  The one place the old words are still read — stored history is never rewritten. */
@@ -45,7 +45,7 @@ export function faultWhen(t: FmTicket, stamp: (at: string) => string): string {
   const by = (u?: FmTicketUpdate) => (u?.who || u?.by ? ` by ${u.who || u.by}` : "");
   // who raised it: its first step, when that step is the raising (fmCommands.addTicket stamps it, as every other step)
   // — a person; the VESTA Agent's own faults already wear its mark beside this line (AgentMark)
-  const raised = t.source !== AGENT_SOURCE && steps[0]?.status === "open" && !steps[0]?.kind ? by(steps[0]) : "";
+  const raised = !agentOwned(t) && steps[0]?.status === "open" && !steps[0]?.kind ? by(steps[0]) : "";
   const parts = [`Opened ${stamp(t.openedAt)}${raised}`];
   if (t.status === "open" && last?.kind === "reopened") parts.push(`reopened ${stamp(last.at)}${by(last)}`);
   if (stageOf(t) === "ticket" && last?.status === "in_progress") parts.push(`in progress since ${stamp(last.at)}${by(last)}`);

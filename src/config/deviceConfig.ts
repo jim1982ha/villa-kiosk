@@ -322,6 +322,23 @@ export function applySharedConfigDiff(target: SharedDeviceConfig, diff: SharedCo
 // own changes, and the push rebases them onto the server's freshest copy.
 const BASELINE_KEY = "villa-kiosk:shared-config-baseline";
 
+/** The villa's location to take from Home Assistant's own, or null to keep the one set. Only while it is NOT SET — 0
+ *  and 0 here AND in the copy this device last synced with the villa (`baseline`); never on a device that has not
+ *  synced yet (`baseline` null: the villa's own value is still on its way).
+ *
+ *  ⚠️ IT WAS ADOPTED ON EVERY LOAD (architecture review scan 3, 2026-10-19): since latitude and longitude are the
+ *  villa's (2.496.406), a value typed in Settings was put back to Home Assistant's by the next owner device that
+ *  loaded — and pushed as an edit — and a device that may not write kept Home Assistant's against the villa's. */
+export function locationToAdopt(
+  local: { latitude: number; longitude: number },
+  baseline: Partial<{ latitude: number; longitude: number }> | null,
+  ha: { latitude?: unknown; longitude?: unknown } | null | undefined,
+): { latitude: number; longitude: number } | null {
+  if (!ha || typeof ha.latitude !== "number" || typeof ha.longitude !== "number" || baseline === null) return null;
+  const unset = (p: Partial<{ latitude: number; longitude: number }>) => !p.latitude && !p.longitude;
+  return unset(local) && unset(baseline) ? { latitude: ha.latitude, longitude: ha.longitude } : null;
+}
+
 export function loadSyncBaseline(): SharedDeviceConfig | null {
   try {
     const raw = readJson<unknown>(BASELINE_KEY);

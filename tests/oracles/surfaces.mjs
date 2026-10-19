@@ -57,4 +57,12 @@ ck("  ...the Cockpit (Facility's tabs included) and the Agent hand a device over
    (dash.match(/onOpenEntity=\{\(id\) => handOver\("(cockpit|agent)", id\)\}/g) ?? []).length === 2);
 ck("the top bar mounts no window: it asks the Dashboard to open the Cockpit",
    !/CockpitModal|cockpitOpen/.test(hud) && /onClick=\{onOpenCockpit\}/.test(hud) && !/onOpenAgent|onOpenEntity/.test(hud));
+// a row a window draws clickable is one its hand-over opens: both ask the same answer (architecture review scan 2,
+// 2026-10-19 — Dashboard.devicePanel; 2.496.416 kept the two in step by hand)
+{
+  const dash = readFileSync(new URL("../../src/pages/Dashboard.tsx", import.meta.url), "utf8");
+  ck("\"can this row be opened\" and the hand-over ask the one devicePanel",
+     /canOpen=\{\(id\) => devicePanel\(id\) !== null\}/.test(dash) && /type: "handOver", from, panel: devicePanel\(entityId\)/.test(dash)
+     && !/panelFor\(identity\.deviceOf\(/.test(dash.replace(/const devicePanel = useCallback\(\(entityId: string\) => panelFor\(identity\.deviceOf\(entityId\)\)/, "")));
+}
 done("✅ one owner for the windows over the map");

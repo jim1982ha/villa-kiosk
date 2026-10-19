@@ -17,7 +17,7 @@ import { useState } from "react";
 import { useBackToClose } from "@/hooks/useBackToClose";
 import { useConfig } from "@/config/ConfigContext";
 import AskDialog from "@/components/common/AskDialog";
-import { roomKey } from "@/config/roomKey";
+import { addRoom, removeRoom as roomRemoved } from "@/config/mappingEdits";
 import type { TeleportPoint, Vec3 } from "@/types/scene.types";
 import type { SceneManager } from "@/babylon/SceneManager";
 
@@ -80,26 +80,21 @@ export default function TeleportMenu({ manager, currentFloor, onClose, onTelepor
   /** Returns a rejection string for AskDialog, or nothing on success. */
   const addRoomHere = (name: string): string | void => {
     if (!manager) return "The scene is not ready yet.";
-    // The name is kept VERBATIM — `roomKey` is for comparing, never for
-    // storing (see its header). Only the collision test is normalised.
-    const key = roomKey(name);
-    const clash = config.teleportPoints.find((p) => roomKey(p.name) === key);
+    // config/mappingEdits.addRoom: the name kept as typed, a clash (whatever its case) refused — and the list built
+    // from the config as it is when the edit runs, never the one this menu captured.
     // Rejected INLINE rather than through a second dialog: the native flow was
     // prompt → alert → prompt, which threw away what was typed and asked twice.
-    if (clash) return `"${clash.name}" already exists — remove or rename it first.`;
     const { position, target } = captureCurrentPose();
-    update({
-      teleportPoints: [...config.teleportPoints, { name, floor: currentFloor, position, target }],
-    });
+    const room = addRoom({ name, floor: currentFloor, position, target });
+    const clash = room.clash(config);
+    if (clash) return clash;
+    update(room.edit);
     setAsk(null);
   };
 
   const removeRoom = (name: string) => {
-    // By KEY, so the row the user is looking at goes whatever case it was typed
-    // in. Deduping on the way in makes this at most one row in practice; it
-    // matters for the entries an older build already stored.
-    const key = roomKey(name);
-    update({ teleportPoints: config.teleportPoints.filter((p) => roomKey(p.name) !== key) });
+    // By KEY, whatever case it was typed in (config/mappingEdits.removeRoom), against the latest config.
+    update(roomRemoved(name));
   };
 
   return (

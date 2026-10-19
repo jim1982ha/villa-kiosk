@@ -60,7 +60,7 @@ const src = (f) => readFileSync(new URL(`../../src/${f}`, import.meta.url), "utf
 ck("under the floors on every screen, picked in Settings › Villa from on/off sensors, shared by every screen",
    /<PresenceTile onOpen=\{onOpenPresence\} \/>/.test(src("components/hud/HUD.tsx"))
    // its window is the Dashboard's, as every window over the map (pages/surfaces)
-   && /\{shown\("presence"\) && \(\s*<PresenceWindow onClose=\{\(\) => closeSurface\("presence"\)\} onOpenEntity=\{\(id\) => handOver\("presence", id\)\}\s*canOpen=\{\(id\) => !!panelFor\(identity\.deviceOf\(id\)\)\} \/>/.test(src("pages/Dashboard.tsx"))
+   && /\{shown\("presence"\) && \(\s*<PresenceWindow onClose=\{\(\) => closeSurface\("presence"\)\} onOpenEntity=\{\(id\) => handOver\("presence", id\)\}\s*canOpen=\{\(id\) => devicePanel\(id\) !== null\} \/>/.test(src("pages/Dashboard.tsx"))
    && /<EntityPicker value=\{config\.presenceSensor\} domains=\{\["binary_sensor"\]\}/.test(src("components/settings/ConfigEditorModal.tsx"))
    && /presenceSensor: villaText,/.test(src("config/deviceConfig.ts")));
 

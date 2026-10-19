@@ -51,7 +51,7 @@ ck("no Back step is recorded and the open panel stays",
 // handOver, driven by value in screen.mjs (a refused device leaves the window
 // open); the page only sends it the panel it found.
 ck("the hand-over closes its window only after a panel was found",
-   /go\(\{ type: "handOver", from, panel: panelFor\(identity\.deviceOf\(entityId\)\) \}\)/.test(dash) && !/closeSurface\(from\)/.test(dash));
+   /go\(\{ type: "handOver", from, panel: devicePanel\(entityId\) \}\)/.test(dash) && !/closeSurface\(from\)/.test(dash));
 ck("every window a device can be handed from has words for its Back",
    ["cockpit", "agent"].every((w) => typeof SURFACE_LABEL[w] === "string" && SURFACE_LABEL[w].length > 0));
 done("✅ a panel opened from another window can go back to it");

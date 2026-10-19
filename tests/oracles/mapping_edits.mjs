@@ -142,4 +142,18 @@ console.log("\n  nothing builds a mapping patch by hand any more:");
   ck("the check read the screens", files.length > 50, String(files.length));
 }
 
+// rooms added and removed from the config as it is when the edit runs (architecture review scan 3, 2026-10-19)
+{
+  const { addRoom, removeRoom } = await import("@/config/mappingEdits");
+  const base = { teleportPoints: [{ name: "Kitchen", floor: 1 }, { name: "Fitted", floor: 1, fitted: true }] };
+  const room = addRoom({ name: "Rooftop", floor: 3 });
+  const later = { teleportPoints: [...base.teleportPoints, { name: "Pool", floor: 1 }] };   // a pull landed meanwhile
+  ck("a room is added to the config as it is NOW, the name kept as typed",
+     room.edit(later).teleportPoints.map((p) => p.name).join() === "Kitchen,Fitted,Pool,Rooftop");
+  const dup = addRoom({ name: "  kitchen ", floor: 1 });
+  ck("  ...a name that exists, whatever its case, is refused with its words and changes nothing",
+     dup.clash(base) === '"Kitchen" already exists — remove or rename it first.' && Object.keys(dup.edit(base)).length === 0);
+  ck("  ...and removed by its name whatever the case, the other rooms (fitted ones too) untouched",
+     removeRoom("KITCHEN")(later).teleportPoints.map((p) => p.name).join() === "Fitted,Pool");
+}
 done("✅ every mapping edit reads the latest config; two in a moment both land");

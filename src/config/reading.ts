@@ -173,6 +173,9 @@ export interface StatePill {
 const pillTone = (id: string, state: string | undefined): string =>
   STATUS_PILL_CLASS[statusKeyFor(state ?? "", id)];
 
+/** Where a lock's bolt is (stateColors.lockBolt): the one reading a panel asks here, with its pill. */
+export { lockBolt, type LockBolt } from "@/utils/stateColors";
+
 /** The lock window's pill: the state the lock actually reported, shouted
  *  ("UNLOCKING", "JAMMED"), "UNKNOWN" when there is no lock entity at all. */
 export function lockPill(id: string, state: string | undefined): StatePill {

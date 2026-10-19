@@ -29,6 +29,18 @@ ck("owner and facility manager, never a guest",
 ck("nothing while the agent is not configured", !agentVisible(off));
 ck("  ...nor before the first answer (no flash of 'offline')", !agentVisible(null));
 ck("configured: shown, online or offline", agentVisible(online) && agentVisible(offline));
+// the (i)'s Agent rows: an Agent configured, or one of its faults still open — never neither (2.496.360; one rule since
+// architecture review scan 1, 2026-10-19 — it lived inside FaultTiming's JSX)
+{
+  const { agentSourcesShown } = await import("@/agent/agentView");
+  const { agentOwned } = await import("@/fm/issueSource");
+  ck("the Agent's sources are listed with an Agent, or with a fault of its still open — not with neither",
+     agentSourcesShown(online, false) && agentSourcesShown(off, true) && agentSourcesShown(null, true)
+     && !agentSourcesShown(off, false) && !agentSourcesShown(null, false));
+  ck("  ...and \"the Agent's\" is one test of a record's stamp", agentOwned({ source: "vesta_agent" }) !== agentOwned({ source: "kiosk" }));
+  ck("  ...which the (i), the mark and the fault's \"Opened by\" all ask",
+     ["components/fm/FaultTiming.tsx", "components/fm/AgentMark.tsx", "fm/faultNotes.ts"].every((f) => /agentOwned\(/.test(src(f)) && !/AGENT_SOURCE/.test(src(f))));
+}
 
 console.log("\n  buttons:");
 ck("the server says answerable (open, allowed, agent online): offered", buttonsShown(msg()));
@@ -127,9 +139,25 @@ ck("  ...and NOT again when nothing changed (a reload, the tablet waking)",
    roomsToShare({ "light.a": "Living", "light.b": "Hall" }, first.key) === null);
 ck("  ...but again when a room moves", roomsToShare({ "light.a": "Kitchen", "light.b": "Hall" }, first.key) !== null);
 ck("  ...and never an empty list", roomsToShare({ "sensor.x": null }, null) === null);
+// each device's name and category as the Kiosk shows them, beside its room (architecture review scan 3, 2026-10-19:
+// the add-on's villa model read the stored id-fallback label and the stored category itself)
+{
+  const { deviceViews } = await import("@/agent/agentView");
+  const v = deviceViews({ "switch.pool_pump_switch": { label: "pool_pump_switch", type: "switch" },
+                          "binary_sensor.front_door": { type: "binary_sensor" } },
+                        { "switch.pool_pump_switch": { attributes: { friendly_name: "Pool pump" } },
+                          "binary_sensor.front_door": { attributes: { friendly_name: "Front door", device_class: "door" } } });
+  ck("a device is named and filed as the Kiosk shows it: a stored id-fallback label is no name, device_class counts",
+     v["switch.pool_pump_switch"].name === "Pool pump" && v["binary_sensor.front_door"].category === "access_control", v);
+  const shared = roomsToShare({ "switch.pool_pump_switch": "Pool" }, null, v);
+  ck("  ...shared with its room, and again when a name changes",
+     shared.names["switch.pool_pump_switch"] === "Pool pump" && shared.categories["binary_sensor.front_door"] === "access_control"
+     && roomsToShare({ "switch.pool_pump_switch": "Pool" }, shared.key, v) === null
+     && roomsToShare({ "switch.pool_pump_switch": "Pool" }, shared.key, { ...v, "switch.pool_pump_switch": { name: "Pump", category: "energy" } }) !== null);
+}
 const share = src("agent/RoomShare.tsx");
 ck("RoomShare remembers what it sent in the device's storage, and asks roomsToShare",
-   share.includes("roomsToShare(resolvedRooms, readString(LAST_SENT_KEY)") && share.includes("writeString(LAST_SENT_KEY, share.key)"));
+   share.includes("roomsToShare(resolvedRooms, readString(LAST_SENT_KEY) ?? sentThisLoad, views)") && share.includes("writeString(LAST_SENT_KEY, share.key)"));
 const marks = ["TicketsTab", "RecentWorkList", "SpendTab", "TodayTab", "ScheduleEditor", "SavedDocumentsList"]
   .filter((f) => !/<AgentMark record=\{/.test(src(`components/fm/${f}.tsx`)));
 ck("every Facility list shows the 'by VESTA Agent' mark", marks.length === 0, marks);

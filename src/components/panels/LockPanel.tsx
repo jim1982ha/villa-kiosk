@@ -5,7 +5,7 @@ import type { PanelProps } from "@/types/panel.types";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { usePendingAck } from "@/hooks/usePendingAck";
-import { lockPill } from "@/config/reading";
+import { lockBolt, lockPill } from "@/config/reading";
 import { tapFeedback, successFeedback } from "@/utils/haptics";
 import ControlFrame from "./ControlFrame";
 import InlineConfirm from "@/components/common/InlineConfirm";
@@ -14,7 +14,10 @@ import { switchAsk } from "@/utils/devicePower";
 
 export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
   const { ws } = useHA();
-  const locked = entity?.state === "locked";
+  // where its bolt is — the one reading (stateColors.lockBolt): the header's icon, the pill's and the button agree
+  const bolt = lockBolt(entity?.state);
+  const locked = bolt === "thrown";
+  const PadIcon = bolt === "open" ? Unlock : Lock;
   // The pill reads the lock's ACTUAL state rather than `locked ? … : …`.
   // The old ternary had only two answers for a domain with five real ones, so
   // every state that wasn't literally "locked" — the "locking"/"unlocking" the
@@ -51,7 +54,7 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
     <BasePanel
       title={mapping.label}
       entityId={mapping.entityId}
-      icon={locked ? <Lock size={22} /> : <Unlock size={22} />}
+      icon={<PadIcon size={22} />}
       onClose={onClose}
     >
       {/* The shared frame: its notice when HA has lost the lock, the state
@@ -64,8 +67,7 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
               icon, for the same reason meshVariants falls an unauthored state
               back to the closed pose: never imply a door is open on anything
               short of the device saying so. */}
-          {entity?.state === "unlocked" || entity?.state === "open"
-            ? <Unlock size={16} /> : <Lock size={16} />}
+          <PadIcon size={16} />
           {pill.text}
         </span>
       </div>

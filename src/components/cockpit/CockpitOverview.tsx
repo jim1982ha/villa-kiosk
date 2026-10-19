@@ -39,7 +39,8 @@ import {
   buildCategoryTiles, buildRoomGroups, buildFloorGroups,
   buildActivityFeed, pivotTiles, tileLine, type Pivot, type ActivityEntry,
 } from "./cockpitData";
-import { attentionLineIn, cardActions, itemActions, lineIcon, lineSources, type AttentionGroup, type AttentionItem } from "@/config/attention";
+import type { AttentionGroup } from "@/config/attention";
+import { cockpitCard, type CardLine, type CardView } from "@/config/cockpitCard";
 import { SourceIcons } from "@/components/fm/sourceIcons";
 import RecordCard from "@/components/fm/RecordCard";
 import FoldedList from "@/components/common/FoldedList";
@@ -47,10 +48,7 @@ import { useVillaModel } from "@/config/VillaModel";
 import { buildDeviceOptions } from "@/components/fm/DeviceSearchPicker";
 import FaultForm from "@/components/fm/FaultForm";
 import FaultTiming from "@/components/fm/FaultTiming";
-import { nextCheck, nextCheckAt } from "@/fm/faultTiming";
-import { momentText } from "@/utils/dateText";
 import { useAgent } from "@/agent/AgentContext";
-import type { AgentCadence } from "@/agent/agentApi";
 import FaultStageModal from "@/components/fm/FaultStageModal";
 import { localStamp } from "@/fm/fmEngine";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
@@ -289,23 +287,23 @@ function CockpitAttentionRow({ group, onOpenEntity, canManage, onEditTicket }: {
   onEditTicket: (ticketId: string) => void;
 }) {
   const { status } = useAgent();
+  const card = cockpitCard(group, status?.cadence ?? null);
   // ONE close-question per card, its own Close and each line's: asking on one puts the others' buttons back
   const closer = useConfirmedClose();
-  return <AttentionCard group={group} onOpenEntity={onOpenEntity} cadence={status?.cadence ?? null}
-    actions={useCardActions(group, canManage, onEditTicket, closer)}
-    lineActions={canManage ? (item) => <LineClose group={group} item={item} closer={closer} /> : undefined} />;
+  return <AttentionCard card={card} onOpenEntity={onOpenEntity}
+    actions={useCardActions(card, canManage, onEditTicket, closer)}
+    lineActions={canManage ? (line) => <LineClose card={card} line={line} closer={closer} /> : undefined} />;
 }
 
-/** One problem's own Close, on a card holding several (attention.itemActions): its question in place of the button,
- *  why it did not land under its line. */
-function LineClose({ group, item, closer }: { group: AttentionGroup; item: AttentionItem; closer: ConfirmedClose }) {
-  const acts = itemActions(group, item);
-  if (acts.length === 0) return null;
-  const key = `${group.key}|${item.id}`;
+/** One problem's own Close, on a card holding several (cockpitCard: the line's `actions`): its question in place of
+ *  the button, why it did not land under its line. */
+function LineClose({ card, line, closer }: { card: CardView; line: CardLine; closer: ConfirmedClose }) {
+  if (line.actions.length === 0) return null;
+  const key = `${card.key}|${line.key}`;
   const problem = closer.problemFor(key);
   return (
     <>
-      <WorkButtons actions={acts} cardKey={key} closer={closer} name={attentionLineIn(group, item) || group.title}
+      <WorkButtons actions={line.actions} cardKey={key} closer={closer} name={line.text || card.title}
         className="cockpit-line-actions" onAction={() => {}} />
       {problem && <div className="fm-inline-error" role="alert">{problem}</div>}
     </>
@@ -314,33 +312,31 @@ function LineClose({ group, item, closer }: { group: AttentionGroup; item: Atten
 
 /** The card itself, drawn — THE Cockpit card (RecordCard), as every list's (architecture review, 2026-10-15): its
  *  source icons before the device's name, the room under it, its problems' lines, its buttons on the right of them.
- *  Tapping it opens the device; its buttons take their own presses. Pure: a check draws it. */
-export function AttentionCard({ group, onOpenEntity, cadence, actions, lineActions }: {
-  group: AttentionGroup;
+ *  Tapping it opens the device; its buttons take their own presses. Draws `card` (config/cockpitCard) and nothing
+ *  else: what it says is decided there, by value. Pure: a check draws it. */
+export function AttentionCard({ card, onOpenEntity, actions, lineActions }: {
+  card: CardView;
   onOpenEntity: (id: string) => void;
-  /** The VESTA Agent's own timing (its heartbeat), for the card's "Next check" — null: it did not say. */
-  cadence: AgentCadence | null;
   actions?: ReactNode;
   /** A line's own buttons (its Close, on a card holding several problems). */
-  lineActions?: (item: AttentionItem) => ReactNode;
+  lineActions?: (line: CardLine) => ReactNode;
 }) {
-  const tappable = !!group.entityId;
-  // hovering "Next check" says when, as a date and time (owner, 2026-10-19: "20/10/2026 02:00")
-  const checkAt = nextCheckAt(group.items, cadence);
+  const open = card.entityId;
   return (
     <RecordCard
-      title={group.title}
-      subtitle={group.room}
+      title={card.title}
+      subtitle={card.room}
       // where its (first) problem comes from, in place of a warning sign (owner, 2026-10-14) — legend: the (i)
-      lead={group.items[0] ? <SourceIcons {...lineSources(group.items[0])} /> : undefined}
-      trailing={tappable ? <ChevronRight size={16} className="muted" aria-hidden /> : undefined}
-      // when its problems are read again, on the room's line under the chevron (owner, 2026-10-15)
-      aside={nextCheck(group.items, cadence)}
-      asideTip={checkAt ? momentText(checkAt) : undefined}
-      onOpen={tappable ? () => onOpenEntity(group.entityId as string) : undefined}
+      lead={card.lead ? <SourceIcons {...card.lead} /> : undefined}
+      trailing={open ? <ChevronRight size={16} className="muted" aria-hidden /> : undefined}
+      // when its problems are read again, on the room's line under the chevron (owner, 2026-10-15); hovering it says
+      // when, as a date and time (owner, 2026-10-19)
+      aside={card.nextCheck.text}
+      asideTip={card.nextCheck.at ?? undefined}
+      onOpen={open ? () => onOpenEntity(open) : undefined}
       body={(
         <ul className="cockpit-attention-subs">
-          {group.items.map((item) => <CockpitAttentionSub key={item.id} group={group} item={item} actions={lineActions?.(item)} />)}
+          {card.lines.map((line) => <CockpitAttentionSub key={line.key} line={line} actions={lineActions?.(line)} />)}
         </ul>
       )}
       actions={actions ?? undefined}
@@ -348,18 +344,16 @@ export function AttentionCard({ group, onOpenEntity, cadence, actions, lineActio
   );
 }
 
-function CockpitAttentionSub({ group, item, actions }: { group: AttentionGroup; item: AttentionItem; actions?: ReactNode }) {
-  const icons = lineIcon(group, item);
-  // what last happened about it on Telegram — a reminder, an escalation, a button pressed (owner, 2026-10-14)
-  const latest = item.latest ?? item.fault?.latest;
+function CockpitAttentionSub({ line, actions }: { line: CardLine; actions?: ReactNode }) {
   return (
     <li className="cockpit-attention-sub">
       <div className="cockpit-attention-sub-line fm-record-gutter">
         {/* in the card's icon column (RecordCard's gutter), not before the text: every line's text lines up */}
-        {icons && <span className="fm-record-gutter-icon"><SourceIcons {...icons} size={14} /></span>}
+        {line.icons && <span className="fm-record-gutter-icon"><SourceIcons {...line.icons} size={14} /></span>}
         <span className="cockpit-attention-sub-text">
-          <span className="cockpit-attention-sub-title" title={attentionLineIn(group, item)}>{attentionLineIn(group, item)}</span>
-          {latest && <span className="cockpit-attention-latest">{latest.note} · {localStamp(latest.at)}</span>}
+          <span className="cockpit-attention-sub-title" title={line.text}>{line.text}</span>
+          {/* what last happened about it on Telegram — a reminder, an escalation, a button pressed (owner, 2026-10-14) */}
+          {line.latest && <span className="cockpit-attention-latest">{line.latest.note} · {localStamp(line.latest.at)}</span>}
         </span>
         {/* a press on it is its own: never the card's tap-to-open */}
         {actions && <span className="cockpit-line-act" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>{actions}</span>}
@@ -369,18 +363,18 @@ function CockpitAttentionSub({ group, item, actions }: { group: AttentionGroup; 
 }
 
 /** A card's buttons, for the profiles that manage Facility work — WHICH buttons, on which records and with which
- *  question is attention.cardActions' answer (fm/deviceWork, tested by value); WorkButtons draws them. */
-function useCardActions(group: AttentionGroup, canManage: boolean, onEditTicket: (ticketId: string) => void,
+ *  question is the card's (cockpitCard `actions`: fm/deviceWork, tested by value); WorkButtons draws them. */
+function useCardActions(card: CardView, canManage: boolean, onEditTicket: (ticketId: string) => void,
   closer: ConfirmedClose) {
   const { data } = useFmData();
   const [staging, setStaging] = useState<{ tickets: FmTicket[]; to: FmTicketStatus } | null>(null);
-  const acts = cardActions(group);
+  const acts = card.actions;
   if (!canManage || acts.length === 0) return null;
   const records = (ids: readonly string[]) => ids.map((id) => data.tickets.find((t) => t.id === id)).filter((t): t is FmTicket => !!t);
-  const problem = closer.problemFor(group.key);
+  const problem = closer.problemFor(card.key);
   return (
     <>
-      <WorkButtons actions={acts} cardKey={group.key} closer={closer} name={group.title} className="fm-fault-actions"
+      <WorkButtons actions={acts} cardKey={card.key} closer={closer} name={card.title} className="fm-fault-actions"
         onAction={(a) => (a.step.kind === "stage" ? setStaging({ tickets: records(a.ids), to: a.step.to }) : onEditTicket(a.ids[0]))} />
       {problem && <div className="fm-inline-error" role="alert">{problem}</div>}
       {staging && <FaultStageModal tickets={staging.tickets} to={staging.to} onClose={() => setStaging(null)} />}

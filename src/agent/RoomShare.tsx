@@ -17,11 +17,12 @@
 // or a re-calibration). Without storage (a private window) it falls back to
 // once per page load.
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useConfig } from "@/config/ConfigContext";
+import { useHA } from "@/ha/HAStateStore";
 import { readString, writeString } from "@/utils/storedJson";
 import { shareKioskRooms } from "./agentApi";
-import { roomsToShare } from "./agentView";
+import { deviceViews, roomsToShare } from "./agentView";
 
 /** Let a burst of recalculations settle (a model load re-resolves every room). */
 const SETTLE_MS = 5000;
@@ -29,20 +30,25 @@ const LAST_SENT_KEY = "villa:agent:rooms-sent";
 let sentThisLoad: string | null = null;
 
 export default function RoomShare() {
-  const { resolvedRooms } = useConfig();
+  const { resolvedRooms, config } = useConfig();
+  const { entities } = useHA();
+  // each device's name and category as the Kiosk shows them (agentView.deviceViews) — a STRING, so a state push that
+  // changes no name or category changes nothing here (and never restarts the settle timer below)
+  const viewsKey = JSON.stringify(deviceViews(config.entityMap, entities));
+  const views = useMemo(() => JSON.parse(viewsKey) as ReturnType<typeof deviceViews>, [viewsKey]);
 
   useEffect(() => {
-    const share = roomsToShare(resolvedRooms, readString(LAST_SENT_KEY) ?? sentThisLoad);
+    const share = roomsToShare(resolvedRooms, readString(LAST_SENT_KEY) ?? sentThisLoad, views);
     if (!share) return;
     const t = setTimeout(() => {
-      void shareKioskRooms(share.rooms).then((ok) => {
+      void shareKioskRooms(share.rooms, share.names, share.categories).then((ok) => {
         if (!ok) return;
         sentThisLoad = share.key;
         writeString(LAST_SENT_KEY, share.key);
       });
     }, SETTLE_MS);
     return () => clearTimeout(t);
-  }, [resolvedRooms]);
+  }, [resolvedRooms, views]);
 
   return null;
 }

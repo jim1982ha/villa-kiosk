@@ -1,3 +1,42 @@
+## 2.496.421
+
+### Fixed
+- The villa's latitude and longitude set in Settings stay as set: the location of the villa's system is taken only
+  while none is set — it was put back on every load of an owner's device, and pushed to every screen.
+- The VESTA Agent now names each device and files it under a category exactly as the Kiosk shows it (its Telegram
+  messages included): this device shares its answer with the add-on beside the rooms it already shared.
+
+### Changed (behind the scenes)
+- Adding or removing a room from the room menu is worked out from the settings as they are when it is saved, never
+  from a copy taken when the menu opened.
+- Whether a profile may answer an Agent message is one rule for the page's buttons and for the press.
+
+## 2.496.420
+
+### Fixed
+- The villa presence window no longer shows "Latest movement" to a profile that sees no motion anywhere else (the
+  guest's): the same rule as the motion notice and the map's motion beams.
+- A lock's window shows the same padlock at its top as on its status label: an open padlock only when the lock says it
+  is unlocked or open — never for a lock that is jammed, moving or out of contact. A lock reporting "open" now counts
+  as unlocked in the Recap and the summary.
+
+### Changed (behind the scenes)
+- One reading of a lock for the switch, the counts and the lock window; one answer to "what may this profile be
+  shown"; one answer to "can this row be opened" for every window.
+
+## 2.496.419
+
+### Fixed
+- A device whose sensor has no value to give right now ("unknown" — a gesture sensor between gestures, a wind chill
+  on a still day) is no longer shown as having lost contact: no amber badge or room count on the map, its row reads
+  "Unknown" instead of "Unavailable", the device picker no longer calls it offline — as the Cockpit already said. A
+  lock in that state is no longer painted red. Amber means "contact lost", as the colours legend says.
+
+### Changed (behind the scenes)
+- Each Cockpit card is worked out in one place (its words, icons, Next check, buttons) and the page only draws it.
+- One rule for "this came from the VESTA Agent" (its mark, a fault's "Opened by", the (i)'s Agent rows); one
+  shared reading of the villa's presence for the tile, its window and the Recap.
+
 ## 2.496.418
 
 ### Added

@@ -12,7 +12,8 @@
 // first. tests/oracles/mapping_edits.mjs drives every edit by value.
 
 import type { AppConfig } from "./AppConfig";
-import type { EntityMapping } from "@/types/scene.types";
+import type { EntityMapping, TeleportPoint } from "@/types/scene.types";
+import { roomKey } from "./roomKey";
 import type { HassEntity } from "@/types/ha.types";
 import { createDefaultMapping, isOwnLabel } from "./EntityMap";
 import { forgetEntities } from "./dismissedEntities";
@@ -121,4 +122,26 @@ export function unbindMesh(meshName: string): ConfigEdit {
  *  AND the decision is recorded, so the model cannot bring them back. */
 export function forgetMappings(ids: readonly string[]): ConfigEdit {
   return (config) => forgetEntities(config.entityMap, config.dismissedEntityIds, ids);
+}
+
+/** A room or viewpoint added where the camera stands — refused (its words returned) when one of that name exists,
+ *  whatever its case (roomKey: for comparing, never for storing — the name is kept as typed). Judged against the
+ *  config as it is when the edit runs.
+ *
+ *  ⚠️ IT CLOSED OVER A CONFIG FROM EARLIER (architecture review scan 3, 2026-10-19): the room menu built the new list
+ *  from the config it had captured — a calibration adopted or a pull from another device landing while it was open
+ *  was written over, the very defect this module exists for. */
+export function addRoom(point: TeleportPoint): { edit: ConfigEdit; clash: (config: AppConfig) => string | null } {
+  const key = roomKey(point.name);
+  const clash = (config: AppConfig) => {
+    const c = config.teleportPoints.find((p) => roomKey(p.name) === key);
+    return c ? `"${c.name}" already exists — remove or rename it first.` : null;
+  };
+  return { clash, edit: (config) => (clash(config) ? {} : { teleportPoints: [...config.teleportPoints, point] }) };
+}
+
+/** A room removed by its name, whatever case it was typed in (an older build stored duplicates: all go). */
+export function removeRoom(name: string): ConfigEdit {
+  const key = roomKey(name);
+  return (config) => ({ teleportPoints: config.teleportPoints.filter((p) => roomKey(p.name) !== key) });
 }
