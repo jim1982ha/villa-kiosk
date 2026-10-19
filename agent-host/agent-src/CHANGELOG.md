@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.253 (19 October 2026)
+
+- alert-desk: a rule SAVED at a new priority while its alert is open (phase "restated") now changes what the alert
+  does, as a repeat does: desk._reprioritised, shared by `_restated` and `restated`. It changed the number only, and
+  the FM was still reminded until the rule alerted again (owner: "is it possible to lower a priority?"). Still nothing
+  is sent on a restate. Test: test_a_rule_saved_at_a_lower_priority_stops_the_chase_without_alerting_again (red with
+  the old restated).
+
 ## 0.6.252 (19 October 2026)
 
 Architecture review, 19 October evening (owner: "proceed to all of the recommended ones"), cards 2 and 3.

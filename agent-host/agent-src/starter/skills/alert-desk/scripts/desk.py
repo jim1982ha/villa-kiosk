@@ -383,18 +383,26 @@ def _restated(store: Store, cur: dict, ev: dict, sev: str, now: datetime, route:
     cur = dict(cur)                                # a store row
     # it fired again: whatever was seen clearing is not over
     p = store.note(cur["id"], {k: ev[k] for k in RESTATED if ev.get(k) is not None}, drop=("clear_since",))
-    if cur["severity"] != sev:
-        store.update_incident(cur["id"], severity=sev)
-        if cur["state"] in (Incident.LOGGED, Incident.DIGEST):
-            _ladder(store, cur["id"], {**p, "rule_id": cur["rule_id"], "entity_id": cur["entity_id"],
-                                       "message": p.get("message") or cur["rule_id"]}, now, sev, route, out)
-        elif cur["state"] in Incident.CHASED and does(sev, route) != "chase":
-            now_does = does(sev, route)
-            store.update_incident(cur["id"], state=Incident.DIGEST if now_does == "digest" else Incident.LOGGED)
-            out["actions"] += Problems(store).settle(f"incident:{cur['id']}", note=f"Lowered to {sev}.")
-            words = (RULES.get("lowered_words") or {}).get(now_does) or "Lowered to {priority} on {time}."
-            out.setdefault("settle", []).append(R.settle(cur["id"], words.replace("{priority}", sev)))
+    _reprioritised(store, cur, p, sev, now, route, out)
     return store.incident(cur["id"])
+
+
+def _reprioritised(store: Store, cur: dict, p: dict, sev: str, now: datetime, route: dict, out: dict) -> None:
+    """Open alert `cur` (its payload `p`) now at priority `sev`: the ladder started when it chases on an incident that
+    was not chased; the chase stopped, its task and Kiosk fault closed and every copy saying why, when it no longer
+    does. Whether the rule alerted again or was only saved (restated)."""
+    if cur["severity"] == sev:
+        return
+    store.update_incident(cur["id"], severity=sev)
+    if cur["state"] in (Incident.LOGGED, Incident.DIGEST):
+        _ladder(store, cur["id"], {**p, "rule_id": cur["rule_id"], "entity_id": cur["entity_id"],
+                                   "message": p.get("message") or cur["rule_id"]}, now, sev, route, out)
+    elif cur["state"] in Incident.CHASED and does(sev, route) != "chase":
+        now_does = does(sev, route)
+        store.update_incident(cur["id"], state=Incident.DIGEST if now_does == "digest" else Incident.LOGGED)
+        out["actions"] += Problems(store).settle(f"incident:{cur['id']}", note=f"Lowered to {sev}.")
+        words = (RULES.get("lowered_words") or {}).get(now_does) or "Lowered to {priority} on {time}."
+        out.setdefault("settle", []).append(R.settle(cur["id"], words.replace("{priority}", sev)))
 
 
 def _ladder(store: Store, iid: int, ev: dict, now: datetime, sev: str, route: dict, out: dict,
@@ -741,10 +749,12 @@ def restated(store: Store, ev: dict, now: datetime) -> dict:
     if not cur:
         return out
     out["incident_id"], out["decision"] = cur["id"], "restated"
-    store.note(cur["id"], {k: ev[k] for k in RESTATES if ev.get(k) is not None})
-    sev = priority(ev, route_for(ev["rule_id"], ev.get("blueprint")))
-    if sev != cur["severity"]:
-        store.update_incident(cur["id"], severity=sev)
+    p = store.note(cur["id"], {k: ev[k] for k in RESTATES if ev.get(k) is not None})
+    route = route_for(ev["rule_id"], ev.get("blueprint"))
+    sev = priority(ev, route)
+    # ⚠️ SAVED AT A LOWER PRIORITY, STILL CHASED (owner, 2026-10-19: "is it possible to lower a priority?"): the rule
+    # saved with P3 changed the number only; the FM was still reminded until the rule alerted again
+    _reprioritised(store, cur, p, sev, now, route, out)
     store.audit("alert-desk", "restated", {"incident": cur["id"], "priority": sev})
     return out
 

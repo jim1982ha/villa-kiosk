@@ -1,3 +1,9 @@
+## 0.12.262
+
+What you will see:
+- Changing an open alert's rule to a lower VESTA priority and saving it now stops the chase straight away. Before, it
+  stopped only the next time the rule alerted again.
+
 ## 0.12.261
 
 What you will see:

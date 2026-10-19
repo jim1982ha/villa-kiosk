@@ -835,6 +835,22 @@ def test_a_priority_lowered_while_its_alert_is_chased_stops_the_chase(store):
     assert store.incident(iid)["state"] == "asked" and store.last_task(f"incident:{iid}")["status"] == "open"
 
 
+def test_a_rule_saved_at_a_lower_priority_stops_the_chase_without_alerting_again(store):
+    # owner, 2026-10-19 ("is it possible to lower a priority?"): the rule saved with P3 while its alert was open sends
+    # "restated", not a new alert — the number changed and the FM was still reminded until the rule alerted again
+    iid = desk.intake(store, event(), T0, occupancy_reader=lambda: "occupied")["incident_id"]
+    res = desk.intake(store, event(phase="restated", priority="P3"), T0 + timedelta(minutes=5),
+                      occupancy_reader=lambda: "occupied")
+    inc = store.incident(iid)
+    assert res["decision"] == "restated" and not res["send"]                            # still nothing sent
+    assert inc["severity"] == "P3" and inc["state"] == "digest"
+    assert store.last_task(f"incident:{iid}")["status"] != "open"
+    assert [a for a in res["actions"] if a["action"] == "ticket.resolve"]
+    assert res["settle"] and res["settle"][0]["incident_id"] == iid
+    later = desk.tick(store, T0 + timedelta(minutes=60))
+    assert later["reasked"] == [] and not [s for s in later["send"] if s.get("incident_id") == iid]
+
+
 def test_what_a_priority_does_is_read_from_the_settings():
     assert {p: desk.does(p) for p in ("P1", "P2", "P3", "P4")} == desk.RULES["priority_does"]
     assert desk.does("P2", {"ladder": False}) == "log"                                  # a route without the ladder
