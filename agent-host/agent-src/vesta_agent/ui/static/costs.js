@@ -15,9 +15,10 @@ export function runWhat(r) {
   const steps = r.steps || [];
   // the steps' pill on the title's line (owner, 2026-10-19: "show the pills X steps on the same line as Reply to…")
   return h("div", { class: "what" },
+    // the chat it came from on the same line, after the pill (owner, 2026-10-20)
     h("div", { class: "what-head" }, h("b", {}, label),
-      steps.length || r.asked ? moreButton(steps.length ? plural(steps.length, "step", "steps") : "Whole question") : null),
-    r.kind === "chat" && r.chat ? h("div", { class: "muted" }, r.chat) : null,
+      steps.length || r.asked ? moreButton(steps.length ? plural(steps.length, "step", "steps") : "Whole question") : null,
+      r.kind === "chat" && r.chat ? h("span", { class: "muted" }, r.chat) : null),
     r.asked ? h("div", { class: "muted what-asked", title: r.asked }, `“${r.asked}”`) : null);
 }
 

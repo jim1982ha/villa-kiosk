@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.267 (20 October 2026)
+
+- Costs › Every run: a chat run's chat name ("fm private chat") sits on its title line, after the steps or "Whole
+  question" pill (owner, 2026-10-20), no longer on a line of its own (costs.js runWhat).
+
 ## 0.6.266 (20 October 2026)
 
 - The knowledge pack's rules are 4 (PACK_RULES): a pack without the measured days of detailed history is rebuilt when

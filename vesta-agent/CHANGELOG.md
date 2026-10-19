@@ -1,3 +1,9 @@
+## 0.12.276
+
+What you will see:
+- Costs › Every run: the chat a reply came from ("fm private chat") is on the same line as "Reply to …" and its
+  pill, so each run takes a line less.
+
 ## 0.12.275
 
 What you will see:
