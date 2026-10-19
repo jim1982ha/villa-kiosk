@@ -1,3 +1,13 @@
+## 0.12.258
+
+What you will see in the reports:
+- A restart of the villa's system is no longer counted as alerts (week 42 showed seven at 17 Oct, 16:59).
+- The energy table names each pump and meter phase as the villa's system does — a week already worked out is worked
+  out again after an update, instead of keeping its old names.
+- "Alerts that fired" (weekly) and "What happened" (monthly) are folded by default, with their count; one tap opens them.
+- "Is the monitoring itself healthy" no longer lists villa devices: it says whether the VESTA Agent listened all
+  period, the safety rules, meters whose counter stepped back, and what the AI cost.
+
 ## 0.12.257
 
 What you will see in the reports (weekly, monthly, the daily digest and the owner's Monday lines alike):
