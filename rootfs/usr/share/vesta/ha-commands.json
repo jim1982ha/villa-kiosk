@@ -16,6 +16,8 @@
   ],
   "_serviceDomains": "The domains a kiosk button calls a service in (light.turn_on, scene.turn_on, …).",
   "serviceDomains": ["light", "climate", "lock", "cover", "fan", "switch", "media_player", "scene", "input_boolean"],
+  "_ownerServiceDomains": "Domains a kiosk control calls only in the OWNER's session (exempt from these lists): never relayed for another profile, which cannot read them either (not in readDomains). select: a light's scene choice (panelRules.sceneSelectOf) — every select of the villa would open with it.",
+  "ownerServiceDomains": ["select"],
   "_homeassistantServices": "homeassistant.* also holds system services (restart, stop, set_location…); only these.",
   "homeassistantServices": ["toggle"],
   "_readDomains": "The entity domains a non-owner session may READ at all — states, state_changed events, history, the logbook and the entity registry are narrowed to these by the proxy. Everything the kiosk draws or scans: ENTITY_DOMAINS (src/types/ha.types.ts) plus sun, scene and weather. A person, a tracker, an alarm panel, a calendar never leaves the add-on for a guest or ops session; camera states go only to a profile that may view cameras.",

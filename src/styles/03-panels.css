@@ -144,8 +144,16 @@ input[type="range"]::-moz-range-thumb {
 }
 .light-choices { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
 .light-choices .field { margin: 0; }
-.light-swatches { display: flex; flex-wrap: wrap; gap: 10px; }
+/* ⚠️ ONE GRID, EVERY SWATCH ITS CELL (owner, 2026-10-20: "align better the colour bubbles"): a wrapping row let the
+   last swatch — a <label>, the colour picker — take the modal's label margins (.modal-body label: 14 px above) and
+   sit lower and smaller than the presets. Equal columns of one size, the picker in the next cell like any other. */
+.light-swatches { display: grid; grid-template-columns: repeat(auto-fill, 36px); gap: 10px; align-items: center; }
 /* 36 px: a fingertip's target on an iPhone, nine to a row on an iPad's window. */
+.light-swatches .light-swatch {
+  margin: 0; box-sizing: border-box; font-size: inherit; width: 36px; height: 36px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.light-swatches .light-swatch-custom { color: var(--text-primary); }
 .light-swatch {
   position: relative; width: 36px; height: 36px; flex: 0 0 auto; padding: 0;
   border: none; border-radius: 50%; cursor: pointer;

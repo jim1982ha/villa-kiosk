@@ -434,6 +434,11 @@ ck("a guest's Energy window may read its cost (energy/info)", refuse("guest", "e
 ck("a guest may run a scene and toggle an input_boolean (the app offers both)",
    refuse("guest", "call_service", domain="scene", service="turn_on") is None
    and refuse("guest", "call_service", domain="input_boolean", service="toggle") is None)
+ck("a light's scene choice (select) is the owner's: refused for a guest and ops, never in the relayed domains",
+   refuse("guest", "call_service", domain="select", service="select_option") is not None
+   and refuse("ops", "call_service", domain="select", service="select_option") is not None
+   and refuse("owner", "call_service", domain="select", service="select_option") is None
+   and not frozenset(_table["ownerServiceDomains"]) & (proxy.ALLOWED_SERVICE_DOMAINS | proxy.READ_DOMAINS))
 ck("  ...still never a system service or a write frame",
    refuse("guest", "call_service", domain="homeassistant", service="restart") is not None
    and refuse("guest", "call_service", domain="script", service="turn_on") is not None

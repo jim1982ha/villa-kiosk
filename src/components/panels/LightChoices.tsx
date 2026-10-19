@@ -63,10 +63,13 @@ interface Props {
   temperature?: ReactNode;
   onColour: (hue: number, sat: number) => void;
   onEffect: (effect: string) => void;
+  /** The light's scene choice, when its device has one (panelRules.sceneSelectOf): its options, the scene it shows
+   *  ("" when none — unknown), and what a pick does. It REPLACES the Effect picker (one control). */
+  scene?: { options: readonly string[]; value: string; onPick: (option: string) => void };
   disabled?: boolean;
 }
 
-export default function LightChoices({ choices, attrs, temperature, onColour, onEffect, disabled }: Props) {
+export default function LightChoices({ choices, attrs, temperature, onColour, onEffect, scene, disabled }: Props) {
   const cur = currentHs(attrs);
   const effect = typeof attrs?.effect === "string" ? attrs.effect : "";
   const effectOptions = [
@@ -109,7 +112,20 @@ export default function LightChoices({ choices, attrs, temperature, onColour, on
         </div>
       )}
       {choices.temperatureInRow && temperature}
-      {choices.effects.length > 0 && (
+      {/* ⚠️ THE SCENES THEMSELVES, NOT "off / Scene" (owner, 2026-10-20): a light whose device has a scene choice shows
+          its scenes in the one picker; the Effect list stays for a light with none */}
+      {scene && (
+        <Dropdown
+          className="light-effect"
+          ariaLabel="Scene"
+          value={scene.options.includes(scene.value) ? scene.value : ""}
+          options={[...(scene.options.includes(scene.value) ? [] : [{ value: "", label: "Scene" }]),
+            ...scene.options.map((o) => ({ value: o, label: o }))]}
+          disabled={disabled}
+          onChange={(v) => { if (v) scene.onPick(v); }}
+        />
+      )}
+      {!scene && choices.effects.length > 0 && (
         <Dropdown
           className="light-effect"
           ariaLabel="Effect"

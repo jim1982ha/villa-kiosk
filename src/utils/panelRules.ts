@@ -128,3 +128,47 @@ export function lightEffectData(choices: Pick<LightChoices, "effects">, effect: 
 export function lightTemperatureData(kelvin: number): Record<string, unknown> {
   return { color_temp_kelvin: Math.round(kelvin) };
 }
+
+/** A light's SCENE CHOICE: a `select` of the light's own device that picks its scenes (owner, 2026-10-20: an LED
+ *  strip's Effect list was only "off" and "Scene", its 38 scenes sat in a select of the same device nobody showed).
+ *  Generic, never a villa's names: the select is on the light's device (the villa system's device registry,
+ *  `entityDeviceIds`) and is NAMED a scene choice — its id or its name ends in "scene" (the word the integrations
+ *  that expose one use: "<device> Scene", `select.<device>_scene`) — and has options. Its first such by id; null for a
+ *  light with none (or one whose session may not read selects: the add-on relays them to the owner only). */
+export function sceneSelectOf(
+  lightId: string,
+  entities: Readonly<Record<string, { state: string; attributes: Record<string, unknown> } | undefined>>,
+  entityDeviceIds: Readonly<Record<string, string>>,
+): string | null {
+  const dev = entityDeviceIds[lightId];
+  if (!dev) return null;
+  const named = (id: string) => {
+    const obj = id.slice(id.indexOf(".") + 1);
+    const name = String(entities[id]?.attributes?.friendly_name ?? "");
+    return obj === "scene" || obj.endsWith("_scene") || /(^|\s)scene$/i.test(name.trim());
+  };
+  const found = Object.keys(entityDeviceIds)
+    .filter((id) => entityDeviceIds[id] === dev && id.startsWith("select.") && named(id)
+      && sceneOptions(entities[id]?.attributes).length > 0)
+    .sort();
+  return found[0] ?? null;
+}
+
+/** A scene select's options (its `options` attribute, names only). */
+export function sceneOptions(attrs: Record<string, unknown> | undefined): string[] {
+  return Array.isArray(attrs?.options) ? (attrs.options as unknown[]).filter((o): o is string => typeof o === "string" && o !== "") : [];
+}
+
+/** What picking one scene sends, in order: the select's option first; then, when the light's effect_list has an
+ *  effect named "Scene" (any case: the light's own mode that runs the chosen scene), `light.turn_on` with it. A name
+ *  the select does not offer sends nothing. */
+export function scenePick(
+  choices: Pick<LightChoices, "effects">, lightId: string, selectId: string, options: readonly string[], option: string,
+): { domain: "select" | "light"; service: string; data: Record<string, unknown>; entityId: string }[] {
+  if (!options.includes(option)) return [];
+  const mode = choices.effects.find((e) => e.toLowerCase() === "scene");
+  return [
+    { domain: "select", service: "select_option", data: { option }, entityId: selectId },
+    ...(mode ? [{ domain: "light" as const, service: "turn_on", data: { effect: mode }, entityId: lightId }] : []),
+  ];
+}
