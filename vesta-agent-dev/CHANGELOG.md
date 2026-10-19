@@ -1,3 +1,18 @@
+## 0.12.277
+
+What you will see:
+- Rules › AI brains and limits: the reports skill has ONE brain for its three reports (daily digest, weekly,
+  monthly), set on its own line; each report keeps its own spending limit on the lines under it. Your current choice
+  (Auto for all three) stays; the first time anything is saved on the Rules page, the file is rewritten in the new
+  form, with nothing to do on your part.
+- Skills: each skill's whole description is shown at the top of its page, above "When the … skill runs".
+- Limits: two columns. What happens when a limit is reached, and whether anyone is told, is under the limit's name;
+  the value, its unit, "from … to …" and Save sit on one line; each row is much lower.
+- An investigation of an older period: its chart now covers the whole period — the part older than what the villa
+  keeps in detail is drawn from the hourly figures, on a band saying so.
+- The weekly and monthly reports' "electricity while the villa is empty" says from which day it counts when the
+  period goes further back than the villa keeps.
+
 ## 0.12.276
 
 What you will see:
