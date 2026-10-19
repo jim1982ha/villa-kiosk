@@ -22,7 +22,7 @@ import {
 } from "@/config/energyFlow";
 import { useConfig } from "@/config/ConfigContext";
 import { resolveSiteTitle } from "@/config/AppConfig";
-import { useSegmentedChoice } from "./historyRange";
+import { historyRange, RANGE_KEYS, useSegmentedChoice } from "./historyRange";
 import ChartTip from "./ChartTip";
 import BarChart from "./BarChart";
 import { ChartEmpty } from "./LineChart";
@@ -53,7 +53,7 @@ export default function EnergyPanel({ onClose, fallback }: { onClose: () => void
   const house = resolveSiteTitle(config, haConfig?.location_name);
   // The period picker lives in the HEADER on the history screen, as the
   // Weather window's does — the same control (useSegmentedChoice).
-  const { key: range, picker } = useSegmentedChoice(RANGE_OPTIONS, "week", "Period", "weather-ranges");
+  const { key: range, picker } = useSegmentedChoice(RANGE_OPTIONS, "1w", "Period", "weather-ranges");
   // A statistic's name: the device's own name in HA's Energy settings, else its
   // entity's, without the trailing "energy" every one of them carries.
   const nameOf = (id: string) =>
@@ -77,7 +77,7 @@ export default function EnergyPanel({ onClose, fallback }: { onClose: () => void
     <DataWindow title="Energy" icon={<Zap size={22} />} className="energy-modal" onClose={onClose}
       live={<LiveNote>Energy dashboard</LiveNote>} picker={picker}
       now={() => (setup ? <NowView setup={setup} costUnit={costUnit} house={house} colourOf={colourOf} /> : loading)}
-      history={() => (setup ? <HistoryView setup={setup} costUnit={costUnit} range={range} colourOf={colourOf} /> : loading)} />
+      history={() => (setup ? <HistoryView setup={setup} costUnit={costUnit} range={range as EnergyRangeKey} colourOf={colourOf} /> : loading)} />
   );
 }
 
@@ -138,7 +138,7 @@ function NowView({ setup, costUnit, house, colourOf }: { setup: EnergyWindowSetu
         <BarChart label="Energy used today, hour by hour" fmt={kwh} unit="kWh"
           buckets={todayP.buckets.map((b) => ({ t: b.t, segs: segsOf(b, () => [{ key: "used", label: "Used", v: b.split!.used, cls: "e-used" }]) }))}
           stamp={(t) => `${fmtChartTime(t)}–${fmtChartTime(t + 3_600_000)}`}
-          ticks={energyRange("day").ticks(hours.length).map((i) => ({ i, label: energyRange("day").bucketLabel(hours[i]) }))}
+          ticks={energyRange("24h").ticks(hours.length).map((i) => ({ i, label: energyRange("24h").bucketLabel(hours[i]) }))}
         />
       </div>
 
@@ -278,7 +278,10 @@ const kwh = (v: number) => `${fmtKwh(v)} kWh`;
 
 // ── History and trends ───────────────────────────────────────────────────
 
-const RANGE_OPTIONS = ENERGY_RANGES.map((r) => ({ key: r.key, label: r.label }));
+// the app's five periods, those the window has no row for greyed (owner, 2026-10-20: "the toggle UI consistent
+// everywhere, but grey the buttons that are not applicable")
+const RANGE_OPTIONS = RANGE_KEYS.map((k) => ({ key: k, label: historyRange(k).label, title: historyRange(k).title,
+  disabled: !ENERGY_RANGES.some((r) => r.key === k) }));
 
 const SHAPES = [
   { key: "list" as const, label: <List size={16} />, title: "As a list" },

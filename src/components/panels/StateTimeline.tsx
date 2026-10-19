@@ -19,7 +19,7 @@ import { useChartPointer } from "./useChartPointer";
 // every panel's history bar and the camera's status rail, so the drift would
 // have shown as one word spelled two ways on one screen. Its words and its
 // offline colour come from config/reading, like every other surface's.
-import { readableState, chartColours } from "@/config/reading";
+import { readableState, chartColours, NOT_KEPT, NOT_KEPT_WORDS } from "@/config/reading";
 import { TREND_INTERVAL_MS } from "@/utils/trendInterval";
 import { timelineCells, timelineRuns } from "@/utils/timelineCells";
 import type { HistoryStatus } from "@/utils/statisticsSeries";
@@ -96,20 +96,25 @@ interface Props {
    * resting state is a legitimate reading rather than background.
    */
   baselineStates?: string[];
+  /** The step its slices are cut in: the range's (historyRange `grainMs` — five minutes up to a week, a day for a
+   *  month, a week for a year: owner, 2026-10-20); five minutes when not said (the camera's rail). */
+  grainMs?: number;
 }
 
 export default function StateTimeline({
   data, hours, end, colorFor: ownColour, labelFor = readableState, height, legend, status, vertical,
-  baselineStates,
+  baselineStates, grainMs,
 }: Props) {
   // Unavailable/unknown are the legend's colour on EVERY timeline, whatever
   // the panel's mapping (config/reading.chartColours).
   const colorFor = useMemo(() => chartColours(ownColour), [ownColour]);
+  // the part older than the villa's system keeps: its own words, whatever the device's (historySource.keptFrom)
+  const wordsFor = (s: string) => (s === NOT_KEPT ? NOT_KEPT_WORDS : labelFor(s));
   // Where the pointer is along the bar, as a fraction (the app's one rule:
   // useChartPointer) — along whichever axis the bar runs.
   const { frac, handlers } = useChartPointer<HTMLDivElement>(vertical ? "y" : "x");
 
-  const bucketMs = TREND_INTERVAL_MS;
+  const bucketMs = grainMs ?? TREND_INTERVAL_MS;
   // Joined so the memo below has a stable primitive dep rather than a new
   // array identity on every render.
   const baselineKey = (baselineStates ?? []).join("\u0000");
@@ -176,12 +181,12 @@ export default function StateTimeline({
                     { key: "_range", text: `${fmtChartStamp(hover.cell.from, hours)} – ${fmtChartTime(hover.cell.to)}` },
                     // Only the resting state here: the state alone IS the answer.
                     ...(hover.cell.states.length === 0
-                      ? [{ key: "_base", event: true, marker: dot(hover.cell.baseline ?? ""), text: labelFor(hover.cell.baseline ?? "") }]
+                      ? [{ key: "_base", event: true, marker: dot(hover.cell.baseline ?? ""), text: wordsFor(hover.cell.baseline ?? "") }]
                       // No transition landed here: a state in force throughout
                       // the span (the time range above already says so).
                       : hover.cell.events.length === 0
-                        ? hover.cell.states.map((st) => ({ key: st, event: true, marker: dot(st), text: labelFor(st) }))
-                        : hover.cell.events.map((ev, k) => ({ key: `e${k}`, event: true, marker: dot(ev.state), text: `${labelFor(ev.state)} · ${fmtChartStamp(ev.t, hours)}` }))),
+                        ? hover.cell.states.map((st) => ({ key: st, event: true, marker: dot(st), text: wordsFor(st) }))
+                        : hover.cell.events.map((ev, k) => ({ key: `e${k}`, event: true, marker: dot(ev.state), text: `${wordsFor(ev.state)} · ${fmtChartStamp(ev.t, hours)}` }))),
                   ]} />
         )}
       </div>

@@ -27,7 +27,10 @@ const DIR = new URL("../../src/components/panels/", import.meta.url);
 const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
 const timeline = strip(readFileSync(new URL("StateTimeline.tsx", DIR), "utf8"));
 const body = timeline.slice(timeline.indexOf("export default function StateTimeline("));
-eq("the tooltip words states with labelFor, not prettyState", /\{labelFor\(/.test(body) && !/\{prettyState\(/.test(body), true);
+// the stretch no longer kept has its own words, every state of the device labelFor's (owner, 2026-10-20)
+eq("the tooltip words states with labelFor, not prettyState",
+   /const wordsFor = \(s: string\) => \(s === NOT_KEPT \? NOT_KEPT_WORDS : labelFor\(s\)\);/.test(body)
+   && /\{wordsFor\(/.test(body) && !/\{prettyState\(/.test(body), true);
 const sites = [];
 for (const f of readdirSync(DIR).filter((n) => n.endsWith(".tsx") && n !== "StateTimeline.tsx" && n !== "CameraPanel.tsx")) {
   for (const m of strip(readFileSync(new URL(f, DIR), "utf8")).matchAll(/<StateTimeline\b[\s\S]*?\/>/g)) sites.push({ f, ok: /labelFor=\{/.test(m[0]) });

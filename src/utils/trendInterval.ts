@@ -30,7 +30,15 @@ export const TREND_INTERVAL_MS = TREND_INTERVAL_MIN * 60_000;
  * (:00, :05, …), the same edges on every chart and for everyone.
  */
 export function fiveMinuteSeries(s: HistorySeries): HistorySeries {
-  const B = TREND_INTERVAL_MS;
+  return intervalSeries(s, TREND_INTERVAL_MS);
+}
+
+/**
+ * The same, in intervals of `B` ms: the step a range is drawn in (historyRange `grainMs` — five minutes up to a
+ * week, a day for a month, a week for a year: owner, 2026-10-20). A numeric device the recorder keeps no long-term
+ * figures of is drawn this way from what the villa's system still keeps (historySource).
+ */
+export function intervalSeries(s: HistorySeries, B: number): HistorySeries {
   const { from, to } = s.window;
   if (!(to > from)) return s;
   const first = Math.floor(from / B) * B;
@@ -55,22 +63,23 @@ export function fiveMinuteSeries(s: HistorySeries): HistorySeries {
     }
     if (w > 0) points.push({ t: Math.max(t0, from), v: sum / w });
   }
-  return { points, gaps: widenGaps(gaps, from, to), window: s.window };
+  return { points, gaps: widenGaps(gaps, from, to, B), window: s.window };
 }
 
 /** Outages widened to whole five-minute intervals (merged where they then
  *  meet), each with its real span in `actual`. */
-export function widenGaps(gaps: readonly HistoryGap[], from: number, to: number): HistoryGap[] {
-  const B = TREND_INTERVAL_MS;
+export function widenGaps(gaps: readonly HistoryGap[], from: number, to: number, B = TREND_INTERVAL_MS): HistoryGap[] {
   const out: HistoryGap[] = [];
   for (const g of [...gaps].sort((a, b) => a.from - b.from)) {
     const w = {
       from: Math.max(from, Math.floor(g.from / B) * B),
       to: Math.min(to, Math.ceil(g.to / B) * B),
       actual: { from: g.actual?.from ?? g.from, to: g.actual?.to ?? g.to },
+      ...(g.notKept ? { notKept: true } : {}),
     };
     const last = out[out.length - 1];
-    if (last && w.from <= last.to) {
+    // "no longer kept" and an outage stay two bands: different facts, different colours
+    if (last && w.from <= last.to && !!last.notKept === !!w.notKept) {
       last.to = Math.max(last.to, w.to);
       last.actual = { from: last.actual!.from, to: Math.max(last.actual!.to, w.actual.to) };
     } else out.push(w);

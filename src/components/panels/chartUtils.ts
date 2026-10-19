@@ -4,6 +4,7 @@
 
 import type { StateHistoryPoint } from "@/types/ha.types";
 import { clockTime, dayMonth, dayTime } from "@/utils/dateText";
+import { NOT_KEPT_WORDS } from "@/utils/stateColors";
 
 export function fmtChartValue(v: number): string {
   if (!Number.isFinite(v)) return "";
@@ -33,7 +34,10 @@ export function fmtDuration(ms: number): string {
 
 /** An outage in a chart's tooltip: "Unavailable · 05:21–05:24 (3 min)", or
  *  "Unavailable since 05:21" for one still running at `now` (the window's end). */
-export function fmtOutage(gap: { from: number; to: number; actual?: { from: number; to: number } }, now: number): string {
+export function fmtOutage(gap: { from: number; to: number; actual?: { from: number; to: number }; notKept?: boolean },
+  now: number): string {
+  // older than the villa's system keeps: not an outage (historySource.keptFrom, owner 2026-10-20)
+  if (gap.notKept) return `${NOT_KEPT_WORDS} · before ${dayTime(gap.to)}`;
   // The real times, when the band was widened to whole five-minute intervals.
   const g = gap.actual ?? gap;
   if (!Number.isFinite(g.to) || g.to >= now) return `Unavailable since ${fmtChartTime(g.from)} (${fmtDuration(now - g.from)})`;

@@ -246,6 +246,8 @@
   background: var(--accent-soft); color: var(--accent); font-weight: 600;
   box-shadow: var(--elev-1);
 }
+/* A choice the view has nothing to draw for: still there, greyed (SegmentedGroup `disabled`). */
+.segmented button:disabled { opacity: 0.35; cursor: not-allowed; }
 
 /* Icon-only variant (theme selector in the Settings header): compact, not
    full-width, square buttons — the Sun/Moon/Monitor glyphs are self-explanatory. */

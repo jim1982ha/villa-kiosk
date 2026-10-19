@@ -13,6 +13,9 @@ export interface SegmentedOption<K extends string> {
   label: ReactNode;
   /** Tooltip, and the accessible name when the label is an icon alone. */
   title?: string;
+  /** Shown, greyed and not pressable: a choice this view has nothing to draw for (owner, 2026-10-20: "the toggle
+   *  UI consistent everywhere, but grey the buttons that are not applicable"). */
+  disabled?: boolean;
 }
 
 export default function SegmentedGroup<K extends string>({
@@ -28,8 +31,9 @@ export default function SegmentedGroup<K extends string>({
   return (
     <div className={`segmented${className ? ` ${className}` : ""}`} role="group" aria-label={ariaLabel}>
       {options.map((o) => (
-        <button key={o.key} type="button" className={o.key === active ? "active" : ""}
-          onClick={() => onChange(o.key)} aria-pressed={o.key === active} title={o.title} aria-label={o.title}>
+        <button key={o.key} type="button" className={o.key === active ? "active" : ""} disabled={o.disabled}
+          aria-disabled={o.disabled || undefined}
+          onClick={() => { if (!o.disabled) onChange(o.key); }} aria-pressed={o.key === active} title={o.title} aria-label={o.title}>
           {o.label}
         </button>
       ))}

@@ -109,10 +109,9 @@ console.log("\n  the callers:");
   ck("  ...which reports a failure as 'failed', and drops the other range's answer",
      /\.catch\(\(\) => \{ if \(!cancelled\) \{ setData\(initialRef\.current\); setStatus\("failed"\); \} \}\)/.test(hook));
   const range = readFileSync(new URL("../../src/components/panels/historyRange.tsx", import.meta.url), "utf8");
-  ck("one range table: the Weather window's ranges are in it, with their statistics periods",
-     /key: "30d"[^}]*period: "hour", totalPeriod: "day"/.test(range) && /WEATHER_RANGES[^=]*= \["12h", "24h", "7d", "30d"\]/.test(range));
+  ck("one range table, read from its pure module (utils/historyRanges)", /from "@\/utils\/historyRanges"/.test(range) && !/const RANGES\b/.test(range));
   const panel = readFileSync(new URL("../../src/components/panels/WeatherPanel.tsx", import.meta.url), "utf8");
-  ck("the Weather window has no range table of its own", !/const RANGES\b/.test(panel) && /useHistoryRange\(WEATHER_RANGES/.test(panel));
+  ck("the Weather window has no range table of its own, and offers the same five", !/const RANGES\b/.test(panel) && /useHistoryRange\("weather-ranges"\)/.test(panel));
   ck("'No rain' is said only over readings; no readings says so (utils/barChart.barNote, driven in bar_chart.mjs)",
      /barNote\(buckets, `No rain readings in the last \$\{span\}`, `No rain in the last \$\{span\}`\)/.test(panel));
   ck("the Rain figure is a dash, not '0.0 mm', when there is nothing to sum",

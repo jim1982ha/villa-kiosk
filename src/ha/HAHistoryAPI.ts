@@ -4,7 +4,7 @@
 // chart asks for, and every rule about windows, gaps and outages, is the
 // source's; this only fetches.
 
-import type { HistoryPort, StateRow } from "./historySource";
+import { KEPT_PROBE, keptFromRows, keptLookFrom, type HistoryPort, type StateRow } from "./historySource";
 import { ingressApiBase } from "./ingress";
 import { backendFetch } from "@/auth/sessionLost";
 
@@ -32,5 +32,10 @@ export function haHistoryPort(ws: StatisticsPort): HistoryPort {
       return data[0] ?? [];
     },
     getStatisticsDuringPeriod: (...args) => ws.getStatisticsDuringPeriod(...args),
+    // where the villa's system's detail begins: the oldest change of the probe it still keeps (historySource.keptFrom)
+    async keptFrom(now) {
+      const from = keptLookFrom(now);
+      return keptFromRows(await this.stateRows(KEPT_PROBE, from, now), from);
+    },
   };
 }

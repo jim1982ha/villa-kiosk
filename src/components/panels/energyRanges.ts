@@ -12,8 +12,12 @@
 import type { StatisticsPeriod } from "@/utils/statisticsSeries";
 import type { EnergyPeriodKind } from "@/config/energyModel";
 import { fmtChartTime } from "./chartUtils";
+import type { RangeKey } from "@/utils/historyRanges";
 
-export type EnergyRangeKey = "day" | "week" | "month" | "year";
+// ⚠️ THE APP'S FIVE PERIODS (owner, 2026-10-20: every toggle the same — historyRange RANGE_KEYS). The Energy window
+// shows four of them; "1h" stays in its toggle, greyed: the recorder's energy figures are hourly, so an hour is one
+// bar. A year stays a bar a MONTH (12 bars, as the villa's own Energy dashboard and its bills), not 52 weekly ones.
+export type EnergyRangeKey = Exclude<RangeKey, "1h">;
 
 export interface EnergyRange {
   key: EnergyRangeKey;
@@ -37,10 +41,10 @@ const weekday = (t: number) => new Date(t).toLocaleDateString([], { weekday: "sh
 export const weekdayShort = (t: number) => new Date(t).toLocaleDateString([], { weekday: "short" });
 
 export const ENERGY_RANGES: readonly EnergyRange[] = [
-  { key: "day", label: "Day", period: "hour", kind: "hoursToday", unit: "hour", bucketLabel: fmtChartTime, ticks: () => [0, 6, 12, 18, 23] },
-  { key: "week", label: "Week", period: "day", kind: "last7", unit: "day", bucketLabel: weekday, ticks: every },
-  { key: "month", label: "Month", period: "day", kind: "last30", unit: "day", bucketLabel: weekday, ticks: () => [0, 7, 14, 21, 29] },
-  { key: "year", label: "Year", period: "month", kind: "last12Months", unit: "month", bucketLabel: (t) => new Date(t).toLocaleDateString([], { month: "short" }), ticks: every },
+  { key: "24h", label: "24h", period: "hour", kind: "last24Hours", unit: "hour", bucketLabel: fmtChartTime, ticks: () => [0, 6, 12, 18, 23] },
+  { key: "1w", label: "1w", period: "day", kind: "last7", unit: "day", bucketLabel: weekday, ticks: every },
+  { key: "1m", label: "1m", period: "day", kind: "last30", unit: "day", bucketLabel: weekday, ticks: () => [0, 7, 14, 21, 29] },
+  { key: "1y", label: "1y", period: "month", kind: "last12Months", unit: "month", bucketLabel: (t) => new Date(t).toLocaleDateString([], { month: "short" }), ticks: every },
 ];
 
 export function energyRange(key: EnergyRangeKey): EnergyRange {

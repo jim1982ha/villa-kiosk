@@ -27,7 +27,7 @@ import { barNote, seriesBuckets } from "@/utils/barChart";
 import LineChart, { ChartEmpty } from "./LineChart";
 import { useHA } from "@/ha/HAStateStore";
 import { useHistorySource } from "@/hooks/useHistorySource";
-import { useHistoryRange, WEATHER_RANGES, type HistoryRange } from "./historyRange";
+import { useHistoryRange, type HistoryRange } from "./historyRange";
 import { peakOf, seriesExtent, seriesTotal, type HistoryStatus } from "@/utils/statisticsSeries";
 import { isUnavailable } from "@/utils/stateColors";
 import type { HassEntity, HistorySeries } from "@/types/ha.types";
@@ -70,7 +70,7 @@ export default function WeatherPanel({ station, onClose }: { station: WeatherSta
   const [now, setNow] = useState(() => Date.now());
   useInterval(() => setNow(Date.now()), 10_000);
   const r = useReadings(station);
-  const { range, picker } = useHistoryRange(WEATHER_RANGES, "weather-ranges");
+  const { range, picker } = useHistoryRange("weather-ranges");
   return (
     <DataWindow title="Weather" icon={<CloudSun size={22} />} onClose={onClose}
       live={r.updated && <LiveNote>live · {ago(r.updated, now)}</LiveNote>} picker={picker}

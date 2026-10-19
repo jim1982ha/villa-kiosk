@@ -305,6 +305,7 @@ export function energyPeriod(
 /** The buckets a view shows, oldest first. */
 export type EnergyPeriodKind =
   | "hoursToday"      // today's 24 hours
+  | "last24Hours"     // the last 24 hours, this one included (the history's "24h": owner, 2026-10-20)
   | "last7Complete"   // the seven days before today (today is not complete)
   | "last7"           // the last seven days, today included
   | "last30"          // the last thirty days, today included
@@ -314,6 +315,10 @@ export function periodStarts(kind: EnergyPeriodKind, now: number): number[] {
     case "hoursToday": {
       const m = localMidnight(now);
       return Array.from({ length: 24 }, (_, h) => m + h * 3_600_000);
+    }
+    case "last24Hours": {
+      const h = Math.floor(now / 3_600_000) * 3_600_000;
+      return Array.from({ length: 24 }, (_, i) => h + (i - 23) * 3_600_000);
     }
     case "last7Complete": return Array.from({ length: 7 }, (_, i) => localMidnight(now, i - 7));
     case "last7": return Array.from({ length: 7 }, (_, i) => localMidnight(now, i - 6));
