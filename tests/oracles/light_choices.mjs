@@ -73,11 +73,60 @@ ck("a light reporting only rgb_color: its colour is still known", JSON.stringify
 ck("a preset is marked within a light's rounding, not beyond", presetIsCurrent({ hue: 0, sat: 100 }, { hue: 356, sat: 92 }) && !presetIsCurrent({ hue: 0, sat: 100 }, { hue: 30, sat: 100 })
    && presetIsCurrent({ hue: 0, sat: 0 }, { hue: 40, sat: 4 }) && !presetIsCurrent({ hue: 0, sat: 100 }, { hue: 0, sat: 4 }));
 
+// A light's SCENE CHOICE (owner, 2026-10-20: the strip's Effect list was "off" and "Scene"; its scenes sat in a select
+// of the same device). By value: which select is the light's scene choice, and what a pick sends.
+{
+  const S = (name, options) => ({ state: "unknown", attributes: { friendly_name: name, ...(options ? { options } : {}) } });
+  const ents = {
+    "light.strip": { state: "off", attributes: {} },
+    "select.strip_scene": S("Strip Scene", ["Ocean", "Forest"]),
+    "select.strip_power_on_behavior": S("Strip Power on behavior", ["on", "off"]),
+    "select.other_scene": S("Other Scene", ["Sunset"]),
+    "select.strip_mode": S("Strip Mode", ["a"]),
+    "select.lamp_effect_scene": S("Lamp effect scene", []),
+  };
+  const devs = { "light.strip": "d1", "select.strip_scene": "d1", "select.strip_power_on_behavior": "d1",
+                 "select.strip_mode": "d1", "select.other_scene": "d2", "light.lamp": "d3", "select.lamp_effect_scene": "d3" };
+  ck("its device's select named a scene choice, with options, is the light's scene choice",
+     R.sceneSelectOf("light.strip", ents, devs) === "select.strip_scene", R.sceneSelectOf("light.strip", ents, devs));
+  ck("  ...never another device's, never one named otherwise, never one with no options, never a light with no device",
+     R.sceneSelectOf("light.lamp", ents, devs) === null && R.sceneSelectOf("light.nowhere", ents, devs) === null
+     && R.sceneSelectOf("light.strip", ents, { ...devs, "select.strip_scene": "d9" }) === null);
+  ck("  ...a name that ends in \"Scene\" is enough, whatever its id",
+     R.sceneSelectOf("light.strip", { ...ents, "select.strip_x": S("Strip Scene", ["Ocean"]) },
+       { "light.strip": "d1", "select.strip_x": "d1" }) === "select.strip_x");
+  const fx = R.lightChoices({ supported_color_modes: ["hs"], effect_list: ["off", "Scene"] });
+  ck("a pick: the select's option first, then the light's own scene mode (its effect named Scene, any case)",
+     JSON.stringify(R.scenePick(fx, "light.strip", "select.strip_scene", ["Ocean", "Forest"], "Ocean")) === JSON.stringify([
+       { domain: "select", service: "select_option", data: { option: "Ocean" }, entityId: "select.strip_scene" },
+       { domain: "light", service: "turn_on", data: { effect: "Scene" }, entityId: "light.strip" }]),
+     R.scenePick(fx, "light.strip", "select.strip_scene", ["Ocean"], "Ocean"));
+  ck("  ...a light with no Scene effect: the select alone; a name not offered: nothing",
+     R.scenePick(R.lightChoices({ supported_color_modes: ["hs"] }), "light.strip", "select.s", ["Ocean"], "Ocean").length === 1
+     && R.scenePick(fx, "light.strip", "select.s", ["Ocean"], "Desert").length === 0);
+  const withScene = draw(h(LightChoices, { choices: fx, attrs: { effect: "Scene" }, onColour: () => {}, onEffect: () => {},
+    scene: { options: ["Ocean", "Forest"], value: "unknown", onPick: () => {} } }));
+  ck("drawn: the scene picker replaces the Effect one — \"Scene\" while none is known, no \"off / Scene\" list",
+     /aria-label="Scene: Scene"/.test(withScene) && !/aria-label="Effect/.test(withScene), text(withScene));
+  const known = draw(h(LightChoices, { choices: fx, attrs: {}, onColour: () => {}, onEffect: () => {},
+    scene: { options: ["Ocean", "Forest"], value: "Forest", onPick: () => {} } }));
+  ck("  ...and the scene it shows when the select says one", /aria-label="Scene: Forest"/.test(known), text(known));
+}
+
+// The colour swatches: ONE grid, the picker in its own cell, never the modal's label margins (owner, 2026-10-20)
+const panelsCss = readFileSync(new URL("../../src/styles/03-panels.css", import.meta.url), "utf8");
+ck("the swatches are one grid of equal cells, the colour picker held to a swatch's size and margin",
+   /\.light-swatches \{ display: grid; grid-template-columns: repeat\(auto-fill, 36px\)/.test(panelsCss)
+   && /\.light-swatches \.light-swatch \{\s*margin: 0;[^}]*width: 36px; height: 36px;/.test(panelsCss));
+
 // The caller: the light's window sends every choice through these, and gives ControlFrame the row only when there is one.
 const panel = readFileSync(new URL("../../src/components/panels/LightPanel.tsx", import.meta.url), "utf8");
 ck("the light's window sends what the rule builds", /onColour=\{\(hue, sat\) => send\(lightColourData\(choices, hue, sat\)\)\}/.test(panel)
    && /onEffect=\{\(effect\) => send\(lightEffectData\(choices, effect\)\)\}/.test(panel)
    && /HAServices\.setLight\(ws, mapping\.entityId, lightTemperatureData\(v\)\)/.test(panel)
-   && /beside=\{choices\.any && \(/.test(panel));
+   && /beside=\{\(choices\.any \|\| !!scene\) && \(/.test(panel)
+   && /const sceneId = sceneSelectOf\(mapping\.entityId, entities, entityDeviceIds\);/.test(panel)
+   && /for \(const c of scenePick\(choices, mapping\.entityId, sceneId, sceneOptions\(sceneAttrs\), option\)\)/.test(panel)
+   && /scene=\{scene\}/.test(panel));
 
 done("✅ a light's colours and effects sit beside a compact On button");

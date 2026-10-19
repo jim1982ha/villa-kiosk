@@ -17,6 +17,8 @@ import { ck, done, tsFiles } from "../consistency/check.mjs";
 const table = JSON.parse(readFileSync(new URL("../../rootfs/usr/share/vesta/ha-commands.json", import.meta.url), "utf8"));
 const types = new Set([...table.websocket, ...table.camera]);
 const domains = new Set(table.serviceDomains);
+// called in the owner's session only (its control reads an entity no other profile is relayed — readDomains)
+const ownerDomains = new Set(table.ownerServiceDomains);
 
 const SRC = new URL("../../src/", import.meta.url).pathname;
 const walk = tsFiles;
@@ -44,9 +46,11 @@ console.log(`  services the app calls by name: ${[...calls.keys()].sort().join("
 ck("found the service calls (the power flips are devicePower's — held to this table by device_power.mjs)", calls.has("light.turn_on") && calls.has("scene.turn_on"), [...calls.keys()]);
 const badCalls = [...calls].filter(([c]) => {
   const [d, s] = c.split(".");
-  return d === "homeassistant" ? !table.homeassistantServices.includes(s) : !domains.has(d);
+  return d === "homeassistant" ? !table.homeassistantServices.includes(s) : !domains.has(d) && !ownerDomains.has(d);
 }).map(([c, f]) => `${c} (${f})`);
 ck("every service domain is in the table (homeassistant.* by service)", badCalls.length === 0, badCalls);
+ck("an owner-only domain is never one another profile may call or read (the proxy relays neither)",
+   [...ownerDomains].every((d) => !domains.has(d) && !table.readDomains.includes(d)) && ownerDomains.has("select"), [...ownerDomains]);
 const { TOGGLEABLE_DOMAINS } = await import("@/utils/quickAction");
 const badToggle = [...TOGGLEABLE_DOMAINS].filter((d) => !domains.has(d));
 ck("every domain a tile toggles by variable (quickAction's toggle set) is in the table", badToggle.length === 0, badToggle);
@@ -67,7 +71,8 @@ for (const { f, src } of files) {
 // `update.*` is an owner-only scan (Cockpit's updates count sits behind seeUpdates), and so is `person.*`: a
 // person's whereabouts never leave the add-on for a guest or ops session (readDomains' own note), and the presence
 // window shows its People to the owner only (components/hud/PresenceTile — PresenceWindow).
-const OWNER_ONLY = new Set(["update", "person"]);
+// …and the owner-only service domains (ownerServiceDomains: a light's scene choice is a select the owner alone reads).
+const OWNER_ONLY = new Set(["update", "person", ...ownerDomains]);
 const unread = [...scanned].filter(([d]) => !OWNER_ONLY.has(d) && !readable.has(d)).map(([d, f]) => `${d} (${f})`);
 ck("  ...the people of the presence window are the owner's only",
    /const sees = profileView\(role\);[\s\S]*showPeople=\{sees\.people\}/.test(readFileSync(new URL("../../src/components/hud/PresenceTile.tsx", import.meta.url), "utf8")));
