@@ -26,6 +26,38 @@ console.log("  handing a device over from a window");
   ck("⚠️ a device this profile may not see: NOTHING changes — the window stays open (2.496.274)", none.windows.agent && none.nav.panel === null && none.nav.back.length === 0);
 }
 
+console.log("\n  Close returns to where the device came from (owner, 2026-10-20)");
+{
+  const s = run(OWNER, { type: "openWindow", window: "cockpit", tab: "faults" }, { type: "handOver", from: "cockpit", panel: P("fan.all") });
+  const c = screenReducer(s, { type: "closePanel" }, OWNER);
+  ck("a device the Cockpit handed over: Close closes the device and the Cockpit is back, on its tab",
+     c.nav.panel === null && c.windows.cockpit && c.cockpitTab === "faults", c.windows);
+  const deep = run(OWNER, { type: "openWindow", window: "cockpit" }, { type: "handOver", from: "cockpit", panel: P("switch.pump") },
+    { type: "openReading", panel: P("sensor.pump_power") }, { type: "closePanel" });
+  ck("  ...from a reading opened inside it too: every panel closes, the Cockpit is back", deep.nav.panel === null && deep.windows.cockpit);
+  const room = { kind: "room", room: "Kitchen", entityIds: ["light.a"] };
+  const l = run(OWNER, { type: "openList", list: room }, { type: "openFromList", panel: P("light.a") }, { type: "closePanel" });
+  ck("  ...a device from a room's list: Close gives the list back", l.nav.panel === null && l.list && l.list.room === "Kitchen");
+  const m = run(OWNER, { type: "openDevice", panel: P("light.a") }, { type: "closePanel" });
+  ck("  ...a device opened from the map: Close opens nothing", m.nav.panel === null && !m.windows.cockpit && m.list === null);
+  const e = run(OWNER, { type: "openWindow", window: "agent" }, { type: "handOver", from: "agent", panel: P("light.a") },
+    { type: "editDevice" }, { type: "closeWindow", window: "configEditor" });
+  ck("Advanced Settings opened from a device: closing it gives the device back, with its own Back",
+     e.nav.panel && e.nav.panel.entityId === "light.a" && label(e) === "VESTA Agent" && !e.windows.configEditor, e.nav);
+  const f = run(OWNER, { type: "openDevice", panel: P("light.a") }, { type: "reportFault" }, { type: "closeWindow", window: "cockpit" });
+  ck("the Cockpit's fault form opened from a device: closing the Cockpit gives the device back", f.nav.panel && f.nav.panel.entityId === "light.a");
+  const g = run(GUEST, { type: "openDevice", panel: P("light.a") }, { type: "reportFault" }, { type: "closeGuestReport" });
+  ck("a guest's report from a device: closing it gives the device back", g.nav.panel && g.nav.panel.entityId === "light.a");
+  const plain = run(OWNER, { type: "openWindow", window: "cockpit" }, { type: "closeWindow", window: "cockpit" });
+  ck("a window opened on its own: closing it opens no device", plain.nav.panel === null);
+  const stale = run(OWNER, { type: "openDevice", panel: P("light.a") }, { type: "reportFault" },
+    { type: "handOver", from: "cockpit", panel: P("light.b") }, { type: "back" }, { type: "closeWindow", window: "cockpit" });
+  ck("  ...a device the Cockpit handed over since: the old one is not brought back", stale.nav.panel === null, stale.nav);
+  const map = run(OWNER, { type: "openDevice", panel: P("light.a") }, { type: "reportFault" },
+    { type: "openDevice", panel: P("light.b") }, { type: "back" }, { type: "closeWindow", window: "cockpit" });
+  ck("  ...nor after a device opened from the map", map.nav.panel === null, map.nav);
+}
+
 console.log("\n  the panel's own moves");
 {
   const s = run(OWNER, { type: "openDevice", panel: P("switch.pump") }, { type: "openReading", panel: P("sensor.pump_power") });

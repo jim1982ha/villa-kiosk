@@ -1,3 +1,18 @@
+## 2.496.434
+
+### Changed
+- The VESTA (dev2) card in the villa system's app store carries the "Experimental" badge: it is the test channel.
+  The VESTA card (main) does not.
+
+## 2.496.433
+
+### Fixed
+- A device opened from the Cockpit (or the VESTA Agent window, the presence window, a room's or a category's list):
+  its Close now closes the device only and gives the window or the list back, on the tab it was on — like Back. It
+  closed the Cockpit with it. From a reading opened inside the device, Close also returns there.
+- The same for what a device opens: Advanced Settings opened from a device's pencil, the Cockpit's "Raise a fault"
+  opened from its wrench, and a guest's problem report — closing them gives the device back, with its own Back.
+
 ## 2.496.432
 
 ### Changed
