@@ -79,7 +79,9 @@ def test_limit_reads_the_file_and_falls_back_on_a_bad_value(tmp_path, monkeypatc
 def test_the_tab_lists_the_code_the_skills_and_the_rules(ui):
     data = _rows(ui)
     src = {r["id"]["src"] for r in data["rows"]}
-    assert src == {"code", "skill", "policy"} and data["problems"] == []
+    assert src == {"code", "skill", "policy", "measured"} and data["problems"] == []
+    kept = next(r for r in data["rows"] if r["id"]["src"] == "measured")
+    assert kept["value"] == "not measured yet" and "purge_keep_days" in kept["also"]
     pm = next(r for r in data["rows"] if r["id"].get("skill") == "preventive-maintenance"
               and r["id"]["path"] == ["behaviour", "baseline_days"])
     assert pm["value"] == 30 and "window for the rolling median" in pm["label"]
@@ -257,3 +259,13 @@ def test_a_value_set_on_the_tab_reaches_the_ais_own_reads(tmp_path, monkeypatch)
     asyncio.run(tools["ha_get_history"].handler({"entity_ids": "sensor.example_power", "limit": 20}))
     assert ha.calls[-1][1]["limit"] == 20                                     # the AI's own number stands
     assert asyncio.run(tools["ha_get_logs"].handler({"source": "logbook", "hours_back": 3})).get("is_error")
+
+
+def test_the_days_kept_are_shown_as_measured_and_never_saved(ui):
+    from vesta_shared.knowledge_pack import build_pack
+    with open(ui.pack_path, "w", encoding="utf-8") as f:
+        f.write(build_pack({"entities": []}, [], detailed_days=11.27).to_json())
+    kept = next(r for r in _rows(ui)["rows"] if r["id"]["src"] == "measured")
+    assert kept["value"] == "11.3 days" and kept["group"] == "keep"
+    status, _ = _put(ui, kept["id"], 30)
+    assert status == 400                                         # the villa's own setting: never set from here

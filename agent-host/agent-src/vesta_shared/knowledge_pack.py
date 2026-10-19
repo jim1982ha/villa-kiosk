@@ -151,8 +151,9 @@ class Asset:
 #: of the hidden locks. Raise it with every rule that changes what the pack holds; the agent rebuilds an older one at start
 #: (app.pack_needs_build). 1: hidden entities left out (0.6.197). 2: the villa's critical devices from its own rule, and
 #: the hidden entities named (0.6.234). 3: a device the owner named is kept as such (devices' "named": a Wi-Fi client
-#: is not the villa's, 0.6.248).
-PACK_RULES = 3
+#: is not the villa's, 0.6.248). 4: the days of detailed history the villa's system keeps, measured (0.6.265) — rebuilt
+#: at start, so an update measures it at once instead of at the next 01:30 (owner, 2026-10-20).
+PACK_RULES = 4
 
 
 

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.266 (20 October 2026)
+
+- The knowledge pack's rules are 4 (PACK_RULES): a pack without the measured days of detailed history is rebuilt when
+  the agent starts, so an update measures it at once — not at the next 01:30 (owner, 2026-10-20, updating at 01:40).
+- The Limits tab shows the measured days ("detailed history kept (measured)", group How long things are kept): the
+  villa's own setting (recorder purge_keep_days), shown and never saved from the page (a save is refused).
+- `retention.figure_period`: the 7 days up to which older figures are read one an hour is a limit
+  (`history.hourly_figures_days`).
+- Tests: the tab's measured row (not measured yet; 11.3 days from a pack; a save refused).
+
 ## 0.6.265 (20 October 2026)
 
 How far back the villa's detailed history goes is MEASURED on the villa, and every reader switches to the long-term

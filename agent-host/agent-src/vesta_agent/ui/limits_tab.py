@@ -148,6 +148,7 @@ class LimitsTab:
         for skill in self.skills():
             out += self._skill_rows(skill)
         out += self._policy_rows()
+        out += self._measured_rows()
         return {"groups": GROUP_TITLES, "rows": out, "problems": problems, "file": self.path}
 
     def _file_values(self) -> dict:
@@ -193,6 +194,25 @@ class LimitsTab:
                              "hi": None, "reached": "", "told": "", "also": also,
                              "where": [f"{skill}/{villa_fn if (over is not None or not own) else fn}"]})
         return rows
+
+    def _measured_rows(self) -> list[dict]:
+        """What the villa's system keeps, as the agent measured it (vesta_shared.retention): shown, never set here —
+        it is the villa's own setting."""
+        from vesta_shared.knowledge_pack import KnowledgePack
+        pack = KnowledgePack.read(self.s.pack_path)
+        days = (pack.retention or {}).get("raw_history_days") if pack else None
+        value = f"{days:.1f} days" if isinstance(days, (int, float)) and not isinstance(days, bool) else "not measured yet"
+        return [{"id": {"src": "measured", "key": "detailed_history_days"}, "group": "keep", "section": "villa",
+                 "name": "detailed history kept (measured)",
+                 "label": "How long the villa's system keeps every change and its logbook, measured each night on the "
+                          "villa (the oldest change it still holds). Older periods are read from its long-term "
+                          "figures, said as such.",
+                 "value": value, "default": value, "kind": "measured", "choices": None, "unit": "", "lo": None,
+                 "hi": None, "reached": "Before it, only long-term figures of measured values remain (one an hour); "
+                                        "doors, locks and switches have none.", "told": TOLD["person"],
+                 "also": "Set in the villa's own configuration (recorder: purge_keep_days; 10 days when it says "
+                         "nothing). The agent measures it and never changes it.",
+                 "where": ["the knowledge pack, rebuilt each night and when the agent starts after an update"]}]
 
     def _policy_rows(self) -> list[dict]:
         text, _ = self.files.policy_now()

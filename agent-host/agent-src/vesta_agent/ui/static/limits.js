@@ -10,6 +10,7 @@ const shown = (v) => (Array.isArray(v) ? v.join(", ") : v === null || v === unde
 
 // the value's field: a number, a choice, or a list of words (ticked from the words it may hold)
 function input(r, set) {
+  if (r.kind === "measured") return h("b", {}, String(r.value));        // the villa's own setting: shown, never set here
   if (r.kind === "choice") {
     return dropdown((r.choices || []).map((c) => [c, c]), r.value, (v) => set(v), r.name);
   }
@@ -36,6 +37,7 @@ function row(r, probs, again) {
     }
   } }, "Save");
   const field = input(r, (v) => { value = v; save.disabled = same(v, r.value) || v === null; });
+  if (r.kind === "measured") save.hidden = true;
   const bounds = [r.lo !== null && r.lo !== undefined ? `from ${r.lo}` : "", r.hi !== null && r.hi !== undefined ? `to ${r.hi}` : ""].filter(Boolean).join(" ");
   return [
     h("div", { class: "limit-what" },

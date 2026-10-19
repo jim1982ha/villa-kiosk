@@ -1,3 +1,11 @@
+## 0.12.275
+
+What you will see:
+- The measurement of how far back your villa keeps every change now runs as soon as the agent starts after this
+  update, not only at 01:30.
+- Limits tab › How long things are kept: a new line "detailed history kept (measured)" shows that number of days. It
+  is your villa system's own setting, so it is shown there but not changed from the page.
+
 ## 0.12.274
 
 What you will see:

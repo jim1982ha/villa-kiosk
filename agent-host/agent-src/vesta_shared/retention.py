@@ -15,6 +15,8 @@ from __future__ import annotations
 import json
 from datetime import datetime, timedelta, timezone
 
+from .limits import limit
+
 #: A device every villa's system has, changing twice a day: its oldest change is where the detailed history begins
 PROBE = "sun.sun"
 LONGEST_DAYS = 3650
@@ -62,7 +64,11 @@ def not_kept(what: str, kept_from_words: str, days: float) -> str:
 
 def figure_period(start: datetime, end: datetime) -> str:
     """Hourly figures for up to a week, a figure a day beyond (a month of hours is 720 lines to read)."""
-    return "hour" if (end - start) <= timedelta(days=7) else "day"
+    days = limit("history.hourly_figures_days", 7, unit="days", group="read", lo=1, hi=90,
+                 says="For a period older than the detail kept, up to how many days the long-term figures are read one "
+                      "an hour; a longer period gets one a day.",
+                 reached="A longer period is read one figure a day.", told="ai")
+    return "hour" if (end - start) <= timedelta(days=days) else "day"
 
 
 def older_figures(client, ids, start: datetime, kept_from: datetime) -> tuple[str, dict[str, list[dict]]]:
