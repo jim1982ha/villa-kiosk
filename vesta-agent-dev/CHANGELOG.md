@@ -1,3 +1,16 @@
+## 0.12.269
+
+What you will see:
+- Costs › AI runs › Every run: each reply's cost is now what that reply cost. Until now, from the second reply of a
+  conversation on, a reply showed what the whole conversation had cost so far — so the figures climbed reply after
+  reply (0.44, 0.50, 0.52 … 0.56 US$ for short Economy replies that cost one to six cents each).
+- The past figures were over-counted and stay as they were: the chat replies after the first of each conversation
+  (scheduled reports were right). In the screenshot of 19 October, ten replies in one chat added up to about
+  US$ 4.62 on the Costs tab, where they really cost about US$ 0.95 — roughly five times too much. The Anthropic
+  Console has the real amounts for those days. From this version on, the totals, the chart and "Per run" are right.
+- Every run has a "Skills" column before "Tools called": the skill a report or a command belongs to, and each skill the
+  AI read or ran during the run, in the order it used them. Runs from before this version show "—".
+
 ## 0.12.268
 
 What you will see:
