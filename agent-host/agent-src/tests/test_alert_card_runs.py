@@ -199,3 +199,28 @@ def test_every_step_is_one_line_of_the_step_table_and_said_the_same_everywhere()
         said = n.bottom(stage, {"fm"}, "why", at)
         assert said == (f"{line.removesuffix(' (to: FM)')} — why (to: FM)" if step.timed else "why"), stage
         assert [s["note"] for s in n.story(7)] == ([f"{step.sent} (to: Facility Manager)"] if step.noted else []), stage
+
+
+def follows(v, blueprint: str, rule_id: str, mid: int):
+    """A rule on "Follow Vesta Agent Setting": its own message in the group, then its event with no priority."""
+    ctx = f"RUN-{rule_id}"
+    run(v.on_ha_event("telegram_sent", {"chat_id": GROUP, "message_id": mid, "bot": BOT, CONTEXT_KEY: ctx}))
+    run(v.on_ha_event("vesta_critical_event", {
+        "blueprint": blueprint, "rule_id": rule_id, "incident_id": f"{rule_id}-1", "phase": "opened",
+        "severity": "critical", "priority": "", "label": "Check", "entities": ["sensor.x"], "summary": "🔔 Check\nx",
+        "timestamp": datetime.now(timezone.utc).isoformat(), CONTEXT_KEY: ctx}))
+
+
+@pytest.mark.parametrize("blueprint, rule_id, prio, to", [
+    ("critical_battery", "automation.critical_battery_low_battery", "P1", "To: Owner & FM"),
+    ("audit_config_integrity", "automation.audit_config_integrity_critical_automation_off", "P2", "To: FM")])
+def test_a_follow_rule_of_a_kind_with_no_route_is_retitled_by_its_names_priority(agent, blueprint, rule_id, prio, to):
+    # owner, 2026-10-19: the villa's own message cannot know the priority of a rule on "Follow" (its "To:" is the
+    # villa-wide setting); the agent's card replaces it in the group with the priority its name gives, and its "To:"
+    follows(agent, blueprint, rule_id, 500)
+    grp = card(agent, GROUP)
+    assert grp.split("\n")[0].startswith(f"#1-{prio} (new)") and grp.split("\n")[1] == to, grp
+    # the villa's own message is taken over: rewritten in place (P2: no buttons for the owner), or replaced by the card
+    # with the owner's buttons (P1) — never left with its villa-wide "To:"
+    assert agent.thread.shown(1)[GROUP]["mid"] == 500 or (GROUP, 500) in agent.tg.deleted
+    assert FM_CHAT in agent.thread.shown(1)                            # the FM is told either way

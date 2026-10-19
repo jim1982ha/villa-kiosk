@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.251 (19 October 2026)
+
+- Test only (owner, 2026-10-19: "double check this"): a rule on "Follow Vesta Agent Setting" of a kind with no route —
+  the villa's critical_battery and audit_config_integrity — runs through the agent end to end: its own message in the
+  owner's group (its "To:" the villa-wide setting) is taken over by the card of the priority its name gives (P1 "To:
+  Owner & FM", replaced with the owner's buttons; P2 "To: FM", rewritten in place), and the FM is told.
+  test_alert_card_runs::test_a_follow_rule_of_a_kind_with_no_route_is_retitled_by_its_names_priority, both red when
+  rules.yaml `unrouted` is changed.
+
 ## 0.6.250 (19 October 2026)
 
 - alert-desk: a VESTA rule whose kind (blueprint) has no route and which names no priority takes rules.yaml
