@@ -67,21 +67,25 @@ export function rulesForms(doc, jobs = [], tools = null) {
 
   // the AI
   const sel = (opts, value, set, label) => dropdown(Object.entries(opts), value, (v) => { set(v); markDirty(); }, label);
-  // AI jobs: each skill's scheduled AI work — ONE brain for all the jobs of a skill (owner, 2026-10-20), and each job's
-  // own spending limit. The brain shown is the one its jobs run with (server._jobs: an older file's, until a save
-  // writes it as the skill's: policy_doc.brains_moved).
-  f.settings.jobs = f.settings.jobs || {};
-  f.settings.skill_brains = f.settings.skill_brains || {};
-  // The AI: one table, one row per piece of AI work (chat answers, then each skill's AI job), like
+  // AI jobs: each skill's scheduled AI work — ONE brain and ONE limit per run for all the jobs of a skill (owner,
+  // 2026-10-20: "define the cap only once … for the report skill as a whole"). The pair shown is the one its jobs run
+  // with (server._jobs: an older file's, until a save writes it as the skill's: policy_doc.ai_moved).
+  f.settings.skill_ai = f.settings.skill_ai || {};
+  // The AI: one table, one row per piece of AI work (chat answers, then each skill with AI jobs), like
   // Allowed actions; then the conversation settings.
   const aiBody = h("tbody");
   const limitInput = (value, set, label, per) => h("div", {},
     h("input", { type: "number", step: "0.05", min: 0.05, value, "aria-label": label, oninput: on((t) => set(num(t.value))) }),
     h("div", { class: "muted" }, per));
+  const skillsOf = () => [...new Set(jobs.map((j) => j.skill))];
+  // what a skill's jobs run with: the page's own edit, else what the agent read (an older file's included)
+  const pairOf = (skill) => f.settings.skill_ai[skill] ?? jobs.find((j) => j.skill === skill).skill_ai;
+  // a change writes the skill's pair (an older file's moves to it on save)
+  const own = (skill) => (f.settings.skill_ai[skill] ??= { ...pairOf(skill) });
   // how often a job runs, in words and per month: the scheduler's answer (/api/jobs), not re-parsed here
   // the month's ceiling: computed when the (i) of "Limit (US$)" opens, from the limits as they are on the page
   const limitNote = () => {
-    const n = jobs.reduce((s, j) => s + ((f.settings.jobs[j.name] || {}).limit_usd || 0) * j.runs_per_month, 0);
+    const n = jobs.reduce((s, j) => s + ((pairOf(j.skill) || {}).limit_usd || 0) * j.runs_per_month, 0);
     return `The most ONE piece of work may cost: one chat reply, or one run of a job — not a monthly budget. At their limits, `
       + `the scheduled runs cost at most about US$ ${n.toFixed(2)} a month. Chat replies, and reports asked for in a chat, come on top: `
       + "see the Costs tab for what was really spent.";
@@ -98,41 +102,39 @@ export function rulesForms(doc, jobs = [], tools = null) {
       { cls: "with-caption", v: [sel(SCHEMA.resets, f.settings.conversation_reset, (v) => (f.settings.conversation_reset = v), W("settings.conversation_reset")),
         h("div", { class: "muted" }, W("settings.conversation_reset"))] },
       { cls: "x", v: null }]),
-    ...[...new Set(jobs.map((j) => j.skill))].flatMap((skill) => {
-      const its = jobs.filter((j) => j.skill === skill);
-      const brain = f.settings.skill_brains[skill] ?? its[0].skill_brain;
-      return [tableRow([
-        [h("b", {}, `${skill} skill`), h("div", { class: "muted" }, `one brain for its ${plural(its.length, "AI job", "AI jobs")}`)],
-        brain ? sel(PROFILES, brain, (v) => (f.settings.skill_brains[skill] = v), `Brain of the ${skill} skill's AI jobs`)
-          : { cls: "muted", v: "No brain yet: its jobs do not run." },
-        { v: null }, { v: null }, { cls: "x", v: null }]), ...its.map(jobRow)];
-    }));
-  // one job of a skill: its own limit; its brain is its skill's (the line above it)
-  function jobRow(j) {
-      const cur = f.settings.jobs[j.name];
-      const what = [h("b", {}, j.name),
-        h("div", { class: "muted" }, `${j.when_words}${j.on_request ? ", or when asked in a chat" : ""}`)];
-      // ⚠️ WHO ASKS DECIDES, NEVER THE SKILL (owner, 2026-10-10): on schedule everything switched on; asked for in a
-      // chat, what that person may use there. Its skill's list is shown on the skill's page, as what it uses.
-      const got = { cls: "tools-got", v: h("span", { class: "muted" }, "By who asks") };
-      if (!cur) {
-        return tableRow([what, { colspan: 2, cls: "muted", v: "Not set: this job does not run." }, got,
-          { cls: "x", v: h("button", { class: "btn icon ghost", title: "Set this job", onclick: () => {
-            f.settings.jobs[j.name] = { ...j.default };
-            if (!(f.settings.skill_brains[j.skill] ?? j.skill_brain)) f.settings.skill_brains[j.skill] = j.brain_default;
-            drawAi(); markDirty(); } }, "+") }]);
-      }
-      return tableRow([what,
-        { cls: "muted", v: `${j.skill}'s brain` },
-        limitInput(cur.limit_usd, (v) => (cur.limit_usd = v), `Limit per run of ${j.name} (USD)`, "for each run"), got,
-        { cls: "x", v: h("button", { class: "btn icon ghost", title: "Stop this job", onclick: () => { delete f.settings.jobs[j.name]; drawAi(); markDirty(); } }, "×") }]);
+    ...skillsOf().map(skillRow));
+  // one skill with AI jobs: its one brain and one limit per run, its jobs named under it (no line of their own)
+  function skillRow(skill) {
+    const its = jobs.filter((j) => j.skill === skill);
+    const pair = pairOf(skill);
+    const what = [h("b", {}, `${skill} skill`),
+      ...its.map((j) => h("div", { class: "muted small" }, `${j.name} · ${j.when_words}${j.on_request ? ", or when asked in a chat" : ""}`))];
+    // ⚠️ WHO ASKS DECIDES, NEVER THE SKILL (owner, 2026-10-10): on schedule everything switched on; asked for in a
+    // chat, what that person may use there. Its skill's list is shown on the skill's page, as what it uses.
+    const got = { cls: "tools-got", v: h("span", { class: "muted" }, "By who asks") };
+    if (!pair) {
+      return tableRow([what, { colspan: 2, cls: "muted", v: "Not set: its AI jobs do not run." }, got,
+        { cls: "x", v: h("button", { class: "btn icon ghost", title: "Set this skill's AI jobs", onclick: () => {
+          f.settings.skill_ai[skill] = { ...its[0].skill_default }; drawAi(); markDirty(); } }, "+") }]);
+    }
+    return tableRow([what,
+      sel(PROFILES, pair.brain, (v) => (own(skill).brain = v), `Brain of the ${skill} skill's AI jobs`),
+      limitInput(pair.limit_usd, (v) => (own(skill).limit_usd = v), `Limit per run of the ${skill} skill's AI jobs (USD)`, "for each run"),
+      got,
+      { cls: "x", v: h("button", { class: "btn icon ghost", title: "Stop this skill's AI jobs", onclick: () => {
+        delete f.settings.skill_ai[skill];
+        // an older file's entries for them go too, or they would still be read
+        for (const j of its) if (f.settings.jobs) delete f.settings.jobs[j.name];
+        if (f.settings.skill_brains) delete f.settings.skill_brains[skill];
+        its.forEach((j) => (j.skill_ai = null));
+        drawAi(); markDirty(); } }, "×") }]);
   }
   drawAi();
-  const ai = card(place("ai"), "Which brain does each piece of work (one for all the AI jobs of a skill), the most ONE piece of work may cost (one chat reply, or one run of a job — not a monthly budget), and which tools a report gets: what the person who asks may use (on schedule, everything switched on). A reply that reaches its limit stops and offers Continue; a report that reaches it is still sent with what is done. A job that is not set does not run.",
+  const ai = card(place("ai"), "Which brain does each piece of work, the most ONE piece of work may cost (one chat reply, or one run of any AI job of a skill — not a monthly budget; one brain and one limit for all the AI jobs of a skill), and which tools a report gets: what the person who asks may use (on schedule, everything switched on). A reply that reaches its limit stops and offers Continue; a report that reaches it is still sent with what is done. A skill that is not set does not run its AI jobs.",
     table(["Work", "Brain", withInfo("Limit (US$)", limitNote),
       withInfo(place("tools"), `Every answer and every report gets the tools switched on in ${where("tools")}, by the role of the person who asks: the owner everything, the facility manager (and anyone in a group listed for the facility manager) less what ${where("tools")} refuses them. A report on schedule gets everything switched on. A skill's own list limits nothing: the AI works without what a run lacks.`),
       ""], aiBody, { cls: "ai", widths: ["30%", "22%", "15%", null, "44"] }));
-  const missing = jobs.filter((j) => !j.set).map((j) => j.name);      // the agent's answer (server._jobs)
+  const missing = jobs.filter((j) => !j.skill_ai).map((j) => j.name);      // the agent's answer (server._jobs)
 
   // people
   const languages = (p) => ({ ...doc.languages, ...(p.language && !(p.language in doc.languages) ? { [p.language]: p.language } : {}) });

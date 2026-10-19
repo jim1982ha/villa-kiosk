@@ -162,3 +162,23 @@ def test_a_sensor_without_a_value_now_and_then_is_not_a_reconnect_loop():
     asset = {"slug": "relay", "name": "Relay"}
     (loop,) = R.flap_rules(asset, "switch.relay", flips["switch.relay"], date(2026, 10, 12), PM_PARAMS)
     assert loop.rule_id == "PM-RECONNECT-LOOP"
+
+
+def test_a_reload_of_virtual_devices_is_not_a_reconnect_loop():
+    # villa, 2026-10-20: 19 faults "dropped and reconnected 10 times in 3 days" in one night — every ceiling fan, a
+    # template lock, template sensors: each save of a template, a helper or a package reloads them, "unavailable" for
+    # ~50 ms. A drop back within the night's reconnect_min_drop_seconds is not counted; a real one, and one never
+    # back, are.
+    rows = []
+    for i in range(12):
+        t = f"2026-10-1{1 + i // 6}T{8 + i % 6:02d}:00:00"
+        rows += [{"entity_id": "fan.ceiling", "state": "unavailable", "when": t + ".100000+00:00"},
+                 {"entity_id": "fan.ceiling", "state": "off", "when": t + ".150000+00:00"},
+                 {"entity_id": "switch.relay", "state": "unavailable", "when": t + ".000000+00:00"},
+                 {"entity_id": "switch.relay", "state": "on", "when": t.replace(":00:00", ":00:45") + ".000000+00:00"}]
+    rows.append({"entity_id": "sensor.gone", "state": "unavailable", "when": "2026-10-12T23:59:59.000000+00:00"})
+    flips = F.flips_per_day(rows, "UTC", 3, 10)
+    assert "fan.ceiling" not in flips                                  # 50 ms: the reload's blink
+    assert sum(flips["switch.relay"].values()) == 12                    # 45 s: a real reconnect
+    assert sum(flips["sensor.gone"].values()) == 1                      # never back: a drop
+    assert sum(F.flips_per_day(rows, "UTC", 3)["fan.ceiling"].values()) == 12   # without the setting: counted, as before

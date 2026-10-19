@@ -137,6 +137,9 @@ def _say(path: str) -> str:
             if len(parts) == 4 else f"AI job {parts[2]}"
     if parts[:2] == ["settings", "skill_brains"] and len(parts) == 3:
         return f"Brain of the {parts[2]} skill's AI jobs"
+    if parts[:2] == ["settings", "skill_ai"] and len(parts) >= 3:
+        return (f"{parts[2]} skill's AI jobs: " + {"brain": "brain", "limit_usd": "limit per run (US$)"}.get(parts[3], parts[3])
+                if len(parts) == 4 else f"Brain and limit of the {parts[2]} skill's AI jobs")
     if parts[:2] == ["settings", "keep"] and len(parts) == 3:
         return f"Records kept: {parts[2].replace('_', ' ')}"
     if parts[0] == "allowed_services" and len(parts) >= 2:

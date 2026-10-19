@@ -14,6 +14,8 @@ and skill.yaml (what the engine needs):
         flags: {--period: [week, month], --out: outfile, --as-of: date, --what: text}
         inject: [pack, store, zone]  what the engine adds itself
         job_only: {week: weekly}     a command that, asked for in a chat, runs only as that AI job
+    jobs_default: {brain: auto, limit_usd: 2}   the starter brain and limit per run of ALL its AI jobs: what the
+                                     VESTA Agent page offers for the skill (policy.yaml settings.skill_ai sets them)
     schedule:                        what the scheduler starts
       - when: "07:00"                "HH:MM" daily, "Mon 08:00" weekly, "1 08:00" monthly
         prompt: "..."                a model job (costs tokens)
@@ -233,6 +235,9 @@ class Skill:
     tools: list[str] | None = None
     scripts: dict[str, Script] = field(default_factory=dict)
     schedule: list[dict] = field(default_factory=list)
+    # ⚠️ ONE BRAIN AND ONE LIMIT FOR A SKILL'S AI JOBS (owner, 2026-10-20): the starter values the page offers,
+    # {"brain", "limit_usd"} — None for a skill with no AI job. policy.yaml settings.skill_ai is what they run with.
+    jobs_default: dict | None = None
     every_5_min: str | None = None
     # the rules whose findings every_5_min reads again — the rest wait for the nightly check: the Kiosk card's "Next check"
     # (owner, 2026-10-15). The skill says it, the engine only carries it to the card.
@@ -424,6 +429,7 @@ def parse_skill(name: str, path: str) -> Skill:
         if job.get("prompt"):
             entry.update(_ai_job(path, job, f"schedule[{i}]"))
         sk.schedule.append(entry)
+    sk.jobs_default = _jobs_default(raw.get("jobs_default"), [j for j in sk.schedule if j.get("prompt")])
     if raw.get("every_5_min"):
         sk.every_5_min = _check_command(path, str(raw["every_5_min"]), "every_5_min")
     if raw.get("rechecks") is not None:
@@ -499,11 +505,37 @@ def switch_command(skill_path: str, script: Script, command: str | None, on: boo
             + yaml.safe_dump(keep, sort_keys=False)) if keep else None
 
 
+def _jobs_default(given, jobs: list[dict]) -> dict | None:
+    """The starter brain and limit per run of a skill's AI jobs: its `jobs_default`; for a skill written before it (a
+    villa's own edit, kept by updates), the strongest brain and the largest limit its jobs' own `default` gave."""
+    if not jobs:
+        if given is not None:
+            raise SkillError("jobs_default: only a skill with AI jobs (a schedule entry with a prompt) has it")
+        return None
+    if given is not None:
+        if not isinstance(given, dict) or set(given) - {"brain", "limit_usd"}:
+            raise SkillError("jobs_default: give brain and limit_usd")
+        brain = str(given.get("brain") or "auto")
+        if brain not in BRAINS:
+            raise SkillError(f"jobs_default.brain: {brain} is not one of {', '.join(BRAINS)}")
+        try:
+            lim = float(given.get("limit_usd"))
+        except (TypeError, ValueError):
+            lim = -1.0
+        if not 0.05 <= lim <= 20:
+            raise SkillError("jobs_default.limit_usd: a number of US$ per run, from 0.05 to 20")
+        return {"brain": brain, "limit_usd": lim}
+    olds = [j.get("default") or {} for j in jobs]
+    brains = [d["profile"] for d in olds if d.get("profile") in BRAINS] or ["auto"]
+    limits = [float(d["limit_usd"]) for d in olds if isinstance(d.get("limit_usd"), (int, float))] or [1.0]
+    return {"brain": max(brains, key=BRAINS.index), "limit_usd": max(limits)}
+
+
 def _ai_job(path: str, job: dict, where: str) -> dict:
-    """An AI job's own fields (owner, 2026-10-01): its name — the key of its spending limit in policy.yaml
-    settings.jobs, without which it does not run (its brain is its skill's one: settings.skill_brains) —, the chat its result goes to, whether a
-    person may start it from a chat, the starter values the VESTA Agent page offers, and the code step
-    that still finishes its work when the spending limit stops it."""
+    """An AI job's own fields (owner, 2026-10-01): its name, the chat its result goes to, whether a person may start
+    it from a chat, and the code step that still finishes its work when the spending limit stops it. Its brain and its
+    limit per run are its skill's (policy.yaml settings.skill_ai, owner 2026-10-20); a job's own `default` is an older
+    skill's, read by _jobs_default only."""
     name = str(job.get("name") or "")
     if not JOB_NAME.match(name):
         raise SkillError(f"{where}: an AI job needs a name (lower case, digits, - and _), the key of its "
@@ -590,13 +622,18 @@ def _check_command(path: str, cmd: str, where: str) -> str:
 
 
 def ai_jobs(skills: dict) -> list[tuple["Skill", dict]]:
-    """Every AI job the skills declare, in skill order: what policy.yaml settings.jobs configures."""
+    """Every AI job the skills declare, in skill order: each runs with its skill's policy.yaml settings.skill_ai."""
     return [(sk, job) for _, sk in sorted(skills.items()) for job in sk.schedule if job.get("prompt")]
 
 
 def job_owners(skills: dict) -> dict[str, str]:
-    """{AI job: the skill that declares it}: whose brain it runs with (policy.Policy.job_settings)."""
+    """{AI job: the skill that declares it}: whose brain and limit it runs with (policy.Policy.job_settings)."""
     return {job["name"]: sk.name for sk, job in ai_jobs(skills)}
+
+
+def job_starters(skills: dict) -> dict[str, dict]:
+    """{skill: its jobs' starter {"brain", "limit_usd"}} for every skill with AI jobs (Skill.jobs_default)."""
+    return {sk.name: dict(sk.jobs_default) for _, sk in sorted(skills.items()) if sk.jobs_default}
 
 
 class Skills:

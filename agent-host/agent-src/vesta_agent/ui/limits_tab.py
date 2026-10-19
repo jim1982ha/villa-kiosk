@@ -214,6 +214,15 @@ class LimitsTab:
                          "nothing). The agent measures it and never changes it.",
                  "where": ["the knowledge pack, rebuilt each night and when the agent starts after an update"]}]
 
+    def _skill_pairs(self, raw: dict) -> dict[str, tuple[dict | None, dict]]:
+        """{skill with AI jobs: (the brain and limit per run its jobs run with — None when not set, its starter pair)}."""
+        from ..skills import Skills, job_owners, job_starters
+        every = Skills(self.s.skills_dir).all()
+        owners, starters = job_owners(every), job_starters(every)
+        pol = Policy(raw)
+        return {skill: (pol.skill_setting(skill, owners, starters), starters.get(skill) or {})
+                for skill in sorted(set(owners.values()))}
+
     def _policy_rows(self) -> list[dict]:
         text, _ = self.files.policy_now()
         try:
@@ -232,19 +241,13 @@ class LimitsTab:
              DEFAULT_BEHAVIOUR["conversation_reset"], "choice", list(RESET_WORDS), None, None, ai,
              "When a chat's earlier messages are forgotten by the AI."),
         ]
-        # one brain for all the AI jobs of a skill (owner, 2026-10-20), then each job's own limit
-        from ..skills import Skills, job_owners
-        owners = job_owners(Skills(self.s.skills_dir).all())
-        pol = Policy(raw)
-        for skill in sorted(set(owners.values())):
-            brain = pol.skill_brain(skill, [n for n, s in owners.items() if s == skill])
-            if brain:
-                rows.append((["settings", "skill_brains", skill], brain, brain, "choice", list(PROFILES), None, None,
-                             ai, f"The brain every AI job of the {skill} skill runs with."))
-        for name, job in (st.get("jobs") or {}).items() if isinstance(st.get("jobs"), dict) else []:
-            if isinstance(job, dict):
-                rows.append((["settings", "jobs", name, "limit_usd"], job.get("limit_usd"), job.get("limit_usd"),
-                             "number", None, 0.05, None, ai, f"The most one run of the AI job {name} may cost (US$)."))
+        # one brain and one limit per run for all the AI jobs of a skill (owner, 2026-10-20)
+        for skill, (pair, start) in self._skill_pairs(raw).items():
+            if pair:
+                rows.append((["settings", "skill_ai", skill, "brain"], pair["brain"], start["brain"], "choice",
+                             list(PROFILES), None, None, ai, f"The brain every AI job of the {skill} skill runs with."))
+                rows.append((["settings", "skill_ai", skill, "limit_usd"], pair["limit_usd"], start["limit_usd"], "number",
+                             None, 0.05, None, ai, f"The most one run of any AI job of the {skill} skill may cost (US$)."))
         keep = st.get("keep") if isinstance(st.get("keep"), dict) else {}
         for k, (default, lo, hi) in KEEP.items():
             rows.append((["settings", "keep", k], keep.get(k, default), default, "number", None, lo, hi,
@@ -307,6 +310,13 @@ class LimitsTab:
 
     def _save_policy(self, path: list, value) -> dict:
         text, r = self.files.policy_now()
+        if len(path) == 4 and path[0] == "settings" and path[1] == "skill_ai":
+            # a skill's pair is written whole: an older file's (or a pair not written yet) becomes the skill's entry,
+            # never a half one the agent would refuse
+            pair = dict(self._skill_pairs(yaml.safe_load(text or "") or {}).get(path[2], (None, {}))[0] or {})
+            if not pair:
+                raise Refused([f"The {path[2]} skill's AI jobs are not set: set them in {where('ai')} first."])
+            path, value = [path[0], path[1], path[2]], {**pair, path[3]: value}
         new = self.files.form_policy(set_in(text, path, value))
         self.files.save_policy(new, r, PLACE, f"{'.'.join(path)}: → {value}")    # checked by the agent's own rules
         return {"ok": True}

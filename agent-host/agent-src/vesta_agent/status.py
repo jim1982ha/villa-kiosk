@@ -259,7 +259,10 @@ def steps_of(recorded, name_of=None) -> list[dict]:
         else:
             summary = raw = str(x.get("input") or "")
         # `code`: the line is a command line, drawn in the typewriter face (the only one that is)
+        args = x.get("args") if isinstance(x.get("args"), dict) else {}
+        # `skill`: the skill the step read or ran a script of — the Costs tab's first column of a run's steps
         out.append({"n": len(out) + 1, "tool": tool, "summary": summary, "raw": raw,
+                    "skill": str(args.get("skill") or "") if tool in ("read_skill", "run_skill_script") else "",
                     "code": tool == "run_skill_script" and isinstance(x.get("args"), dict)})
     return out
 

@@ -183,8 +183,10 @@ class Policy:
         # ⚠️ A SAFETY STOP, SO NEVER ABSENT: an unreadable value still stops the siren (and the problem is named).
         self.siren_auto_off_min: int = v["siren_auto_off_min"]
         self.behaviour: dict = v["behaviour"]
-        # each AI job's limit {name: {limit_usd}} — an older file's own `profile` kept beside it, read by skill_brain
-        # only; the brain a job runs with is job_settings'
+        # ⚠️ ONE BRAIN AND ONE LIMIT FOR ALL THE AI JOBS OF A SKILL (owner, 2026-10-20): {skill: {brain, limit_usd}}.
+        # What a job runs with is job_settings'. The two older shapes are still read until the page's next save moves
+        # them (policy_doc.ai_moved): `jobs` {job: {limit_usd[, profile]}} and `skill_brains` {skill: brain}.
+        self.skill_ai: dict[str, dict] = v["skill_ai"]
         self.jobs: dict[str, dict] = v["jobs"]
         self.skill_brains: dict[str, str] = v["skill_brains"]
         self.keep: dict[str, int] = v["keep"]
@@ -233,17 +235,29 @@ class Policy:
                 "Rules › AI brains and limits sets the skill's one brain.", skill or "?", ", ".join(sorted(old)), strongest)
         return strongest
 
-    def job_settings(self, owners: dict[str, str]) -> dict[str, dict]:
-        """Each AI job that runs: {name: {profile, limit_usd}} — its own limit, its skill's brain. `owners`: {job: its
-        skill}, from the skills' own declarations (skills.job_owners). A job with no limit, or whose skill has no brain,
-        is absent: it does not run (owner, 2026-10-01)."""
+    def skill_setting(self, skill: str, owners: dict[str, str], starters: dict[str, dict]) -> dict | None:
+        """The brain and the limit per run every AI job of `skill` runs with, {"brain", "limit_usd"}: its skill_ai
+        entry; for an older file that set any of its jobs, the brain those set (skill_brain) and the skill's own
+        starter limit (skills.Skill.jobs_default — owner, 2026-10-20: "set this limit to 2 USD", never the largest of
+        the old ones). None: not set — its jobs do not run (owner, 2026-10-01)."""
+        if skill in self.skill_ai:
+            return dict(self.skill_ai[skill])
+        mates = [n for n, s in owners.items() if s == skill]
+        if skill not in self.skill_brains and not any(n in self.jobs for n in mates):
+            return None
+        brain = self.skill_brain(skill, mates)
+        limit = (starters.get(skill) or {}).get("limit_usd")
+        return {"brain": brain, "limit_usd": float(limit)} if brain and limit else None
+
+    def job_settings(self, owners: dict[str, str], starters: dict[str, dict]) -> dict[str, dict]:
+        """Each AI job that runs: {name: {profile, limit_usd}} — its skill's one brain and one limit per run.
+        `owners`: {job: its skill} and `starters`: {skill: its starter values}, the skills' own declarations
+        (skills.job_owners, skills.job_starters). A job whose skill is not set is absent: it does not run."""
         out = {}
-        for name, j in self.jobs.items():
-            skill = owners.get(name)
-            mates = [n for n, s in owners.items() if s == skill] if skill else [name]
-            brain = self.skill_brain(skill, mates)
-            if brain:
-                out[name] = {"profile": brain, "limit_usd": j["limit_usd"]}
+        for name, skill in owners.items():
+            got = self.skill_setting(skill, owners, starters)
+            if got:
+                out[name] = {"profile": got["brain"], "limit_usd": got["limit_usd"]}
         return out
 
     # ------------------------------------------------------------------ people
@@ -494,8 +508,7 @@ FIELDS: dict[str, tuple[str, bool, str | None]] = {
     "settings.reply_limit_usd": ("Limit per reply (US$)", True, "ai"),
     "settings.web_search": ("Web search", True, "ai"),
     "settings.conversation_reset": ("Delete conversation context at", True, "ai"),
-    "settings.skill_brains": ("Brain of a skill's AI jobs", True, "ai"),
-    "settings.jobs": ("AI jobs", True, "ai"),
+    "settings.skill_ai": ("Brain and limit of a skill's AI jobs", True, "ai"),
     "settings.keep": ("How long records are kept", True, "keep"),
     "act_enabled": ("The agent may act on the villa", True, None),
     "approval_ttl_minutes": ("Approve buttons work for (minutes)", True, None),
@@ -616,7 +629,7 @@ def read_policy(raw: dict) -> tuple[dict, list[str]]:
             out.append(f"Unknown section {k!r}: a misspelt name is ignored by the agent.")
 
     # ---- settings
-    beh, jobs, keep, brains = dict(DEFAULT_BEHAVIOUR), {}, {k: d for k, (d, _lo, _hi) in KEEP.items()}, {}
+    beh, jobs, keep, brains, skill_ai = dict(DEFAULT_BEHAVIOUR), {}, {k: d for k, (d, _lo, _hi) in KEEP.items()}, {}, {}
     s = raw.get("settings")
     if s is not None and not isinstance(s, dict):
         out.append("settings must be a set of name: value.")
@@ -641,8 +654,25 @@ def read_policy(raw: dict) -> tuple[dict, list[str]]:
                 beh["conversation_reset"] = val
             else:
                 out.append(f"settings.conversation_reset must be one of {', '.join(CONVERSATION_RESETS)}.")
+        elif k == "skill_ai":
+            # ⚠️ ONE BRAIN AND ONE LIMIT PER RUN FOR A SKILL'S AI JOBS (owner, 2026-10-20): the reports' three jobs had
+            # a brain and a limit each. An entry not understood is absent: its jobs do not run.
+            if not isinstance(val, dict):
+                out.append("settings.skill_ai must be skill name: {brain, limit_usd}.")
+                continue
+            for name, e in val.items():
+                if not isinstance(e, dict) or set(e) != {"brain", "limit_usd"}:
+                    out.append(f"settings.skill_ai.{name} must give brain and limit_usd.")
+                    continue
+                lim = e.get("limit_usd")
+                if not _one_of(e.get("brain"), PROFILES):
+                    out.append(f"settings.skill_ai.{name}.brain must be one of {', '.join(PROFILES)}.")
+                elif isinstance(lim, bool) or not isinstance(lim, (int, float)) or lim < 0.05:
+                    out.append(f"settings.skill_ai.{name}.limit_usd must be a number of at least 0.05.")
+                else:
+                    skill_ai[str(name)] = {"brain": e["brain"], "limit_usd": float(lim)}
         elif k == "skill_brains":
-            # ⚠️ ONE BRAIN FOR A SKILL'S AI JOBS (owner, 2026-10-20): the reports' three jobs had a brain each
+            # the 0.12.277 shape (a skill's brain; each job's limit in `jobs`): read until the page's next save
             if not isinstance(val, dict):
                 out.append("settings.skill_brains must be skill name: brain.")
                 continue
@@ -652,9 +682,8 @@ def read_policy(raw: dict) -> tuple[dict, list[str]]:
                 else:
                     out.append(f"settings.skill_brains.{name} must be one of {', '.join(PROFILES)}.")
         elif k == "jobs":
-            # a job left out, or not understood, is absent: it does not run (owner, 2026-10-01). Its brain is its
-            # skill's (skill_brains); an older file's `profile` here is still read (skill_brain) until the page's next
-            # save moves it there (policy_doc.brains_moved)
+            # an older file's AI jobs, each with its limit (and before 0.12.277 its `profile`): read until the page's
+            # next save moves them to their skill's settings.skill_ai (policy_doc.ai_moved)
             if not isinstance(val, dict):
                 out.append("settings.jobs must be job name: {limit_usd}.")
                 continue
@@ -688,7 +717,7 @@ def read_policy(raw: dict) -> tuple[dict, list[str]]:
                     out.append(f"settings.keep.{name} must be a whole number from {lo} to {hi}.")
         else:
             out.append(f"Unknown setting {k!r}.")
-    v["behaviour"], v["jobs"], v["keep"], v["skill_brains"] = beh, jobs, keep, brains
+    v["behaviour"], v["jobs"], v["keep"], v["skill_brains"], v["skill_ai"] = beh, jobs, keep, brains, skill_ai
 
     # ---- acting, and the two numbers
     # an unreadable value is OFF (the default), never on

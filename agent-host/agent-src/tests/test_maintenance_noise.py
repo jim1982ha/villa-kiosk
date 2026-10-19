@@ -522,3 +522,22 @@ def test_a_reading_that_holds_still_while_its_device_reports_is_not_silent():
     assert nightly._device_still_talks(pack, talks, "sensor.disk", now, 24)
     assert not nightly._device_still_talks(pack, quiet, "sensor.disk", now, 24)   # the whole device quiet: silent
     assert not nightly._device_still_talks(pack, gone, "sensor.disk", now, 24)    # an offline reading says nothing
+
+
+def test_the_night_leaves_out_a_reload_of_virtual_devices(tmp_path):
+    # villa, 2026-10-20: 19 "dropped and reconnected 10 times in 3 days" faults in one night — each save of a template,
+    # a helper or a package reloads them, "unavailable" for ~50 ms. Through the night check itself (its setting
+    # reconnect_min_drop_seconds), not the counting helper alone.
+    fx = tmp_path / "fx"
+    fx.mkdir()
+    (fx / "states.json").write_text(json.dumps({"states": {}}))
+    entries = []
+    for k in range(12):
+        t = datetime(2026, 10, 2 + k // 6, 11, 5 * (k % 6), tzinfo=timezone.utc)
+        entries += [{"entity_id": "fan.example_fan", "state": "unavailable", "when": t.isoformat()},
+                    {"entity_id": "fan.example_fan", "state": "off", "when": (t + timedelta(milliseconds=50)).isoformat()}]
+    (fx / "logbook.json").write_text(json.dumps({"entries": entries}))
+    _pack(tmp_path, {"runtime": [_row("fan.example_fan", "Ceiling fan", family="runtime", asset="fan", device="dev-fan")]},
+          {"fan": {"slug": "fan", "name": "Ceiling fan", "entities": {}}})
+    _night(tmp_path, "--as-of", AS_OF)
+    assert _open(tmp_path, "PM-RECONNECT-LOOP") == []                       # twelve reloads: no fault

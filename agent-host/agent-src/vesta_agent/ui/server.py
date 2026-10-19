@@ -193,55 +193,41 @@ class UI:
                                   "instance": self.s.instance,
                                   "policy_problems": pol, "skills": self._skill_rows(), "last_24h": report,
                                   "unreachable": unreachable,
-                                  "jobs_not_set": [j["name"] for j in self._jobs() if not j["set"]],
+                                  "jobs_not_set": [j["name"] for j in self._jobs() if not j["skill_ai"]],
                                   "setup": setup_copy.offer()})
 
     # ------------------------------------------------------------------ AI jobs
     def _jobs(self) -> list[dict]:
-        """The AI jobs the skills declare, and whether policy.yaml sets their skill's brain and their limit (else they
-        do not run). `skill_brain`: the one brain of its skill's jobs (owner, 2026-10-20), None when not set;
-        `brain_default`: what "Add them" gives a skill with none (the strongest of its jobs' starter values)."""
-        from ..policy import PROFILE_ORDER
-        from ..skills import ai_jobs, job_owners
+        """The AI jobs the skills declare, and whether policy.yaml sets their skill's one brain and one limit per run
+        (owner, 2026-10-20; else they do not run). `skill_ai`: that pair as the jobs run with it, None when not set;
+        `skill_default`: what "Add them" gives the skill (its skill.yaml jobs_default)."""
+        from ..skills import ai_jobs, job_owners, job_starters
         from ..scheduler import describe
         pol = page_policy(self.s.policy_path)
-        every = ai_jobs(self.skills.all())
-        owners = job_owners(self.skills.all())
-        set_ = pol.job_settings(owners)
-        defaults = {}
-        for sk, j in every:
-            p = (j.get("default") or {}).get("profile")
-            if p in PROFILE_ORDER and PROFILE_ORDER.index(p) >= PROFILE_ORDER.index(defaults.get(sk.name, p)):
-                defaults[sk.name] = p
+        every = self.skills.all()
+        owners, starters = job_owners(every), job_starters(every)
         listed = {t["name"]: t for t in (tool_access.read_list(self.s.data_dir) or {}).get("tools") or []}
         return [{"name": j["name"], "skill": sk.name, "when": j["when"], "to": j.get("to"),
                  "when_words": describe(j["when"])[0], "runs_per_month": describe(j["when"])[1],
                  "on_request": j.get("on_request", False), "description": j.get("description") or "",
-                 "default": {"limit_usd": (j.get("default") or {}).get("limit_usd", 1)}, "set": j["name"] in set_,
-                 "current": set_.get(j["name"]), "limit_usd": (pol.jobs.get(j["name"]) or {}).get("limit_usd"),
-                 "skill_brain": pol.skill_brain(sk.name, [n for n, s in owners.items() if s == sk.name]),
-                 "brain_default": defaults.get(sk.name, "auto"),
+                 "skill_ai": pol.skill_setting(sk.name, owners, starters),
+                 "skill_default": starters.get(sk.name) or {"brain": "auto", "limit_usd": 1.0},
                  # Rules › AI brains and limits › "AI tools": its skill's list (None: everything switched on)
                  "tools": None if sk.tools is None else [tool_access.label(t, listed) for t in sk.tools]}
-                for sk, j in ai_jobs(self.skills.all())]
+                for sk, j in ai_jobs(every)]
 
     async def jobs(self, _request):
         return web.json_response({"jobs": self._jobs()})
 
     async def jobs_add_missing(self, _request):
-        """The banner's "Add them": every AI job policy.yaml does not set, with its skill's starter values — written
-        here, through the same checks as a save (the page read, changed and wrote the whole form itself, review 8)."""
-        missing = [j for j in self._jobs() if not j["set"]]
+        """The banner's "Add them": every skill whose AI jobs policy.yaml does not set gets its starter brain and limit
+        per run (skill.yaml jobs_default) — written here, through the same checks as a save."""
+        missing = [j for j in self._jobs() if not j["skill_ai"]]
         if not missing:
             return web.json_response({"ok": True, "added": []})
         settings = to_form(self.files.policy_now()[0])["settings"]
-        settings["jobs"] = {**settings["jobs"], **{j["name"]: dict(j["default"]) for j in missing
-                                                   if j["limit_usd"] is None}}
-        # a skill with no brain yet gets its starter one: its jobs run with it (owner, 2026-10-20: one brain a skill)
-        brains = dict(settings.get("skill_brains") or {})
-        brains.update({j["skill"]: j["brain_default"] for j in missing if not j["skill_brain"]})
-        if brains:
-            settings["skill_brains"] = brains
+        settings["skill_ai"] = {**(settings.get("skill_ai") or {}),
+                                **{j["skill"]: dict(j["skill_default"]) for j in missing}}
         names = [j["name"] for j in missing]
         self.files.edit_policy({"settings": settings}, f"AI jobs added: {', '.join(names)}")
         return web.json_response({"ok": True, "added": names})

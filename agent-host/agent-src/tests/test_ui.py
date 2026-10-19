@@ -155,8 +155,7 @@ def test_the_page_lists_the_ai_jobs_says_which_are_not_set_and_sets_them(ui):
     import yaml as _yaml
     with open(ui.policy_path) as f:
         raw = _yaml.safe_load(f)
-    raw["settings"].pop("jobs", None)                                      # a policy.yaml from before 0.12.0
-    raw["settings"].pop("skill_brains", None)
+    raw["settings"].pop("skill_ai", None)                                  # a policy.yaml from before 0.12.0
     with open(ui.policy_path, "w") as f:
         _yaml.safe_dump(raw, f)
 
@@ -165,9 +164,8 @@ def test_the_page_lists_the_ai_jobs_says_which_are_not_set_and_sets_them(ui):
         before = (await (await c.get("/api/overview")).json())["jobs_not_set"]
         doc = await (await c.get("/api/policy")).json()
         form = doc["form"]
-        for j in jobs:                                                     # what "Add them" does
-            form["settings"]["jobs"][j["name"]] = j["default"]
-            form["settings"].setdefault("skill_brains", {})[j["skill"]] = j["brain_default"]
+        for j in jobs:                                                     # what "Add them" does: the skill's pair
+            form["settings"]["skill_ai"][j["skill"]] = j["skill_default"]
         r = await c.put("/api/policy/form", json={"form": form, "rev": doc["rev"]}, headers=HDR)
         after = (await (await c.get("/api/overview")).json())["jobs_not_set"]
         return jobs, before, r.status, after
@@ -176,7 +174,7 @@ def test_the_page_lists_the_ai_jobs_says_which_are_not_set_and_sets_them(ui):
     assert sorted(before) == ["fm-daily", "fm-weekly", "owner-monthly"] and status == 200 and after == []
     with open(ui.policy_path) as f:
         written = _yaml.safe_load(f)["settings"]
-    assert written["jobs"]["owner-monthly"] == {"limit_usd": 6} and written["skill_brains"] == {"reports": "auto"}
+    assert written["skill_ai"] == {"reports": {"brain": "auto", "limit_usd": 2.0}} and "jobs" not in written
 
 
 def test_the_page_names_its_files_with_the_version_and_reports_its_errors_to_the_log(ui, caplog):

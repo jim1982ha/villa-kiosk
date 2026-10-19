@@ -25,7 +25,7 @@ from .notice import when
 from .places import where
 from .policy import LANGUAGES as LANG
 from .routing import Origin, Routing, job_to
-from .skills import ai_jobs, job_owners
+from .skills import ai_jobs, job_owners, job_starters
 
 log = logging.getLogger("vesta")
 
@@ -69,8 +69,10 @@ class AiJobs:
         return ai_jobs(self.skills.all())
 
     def settings(self) -> dict[str, dict]:
-        """Each job that runs: {name: {profile, limit_usd}} — its own limit, its skill's one brain (policy.job_settings)."""
-        return self.policy().job_settings(job_owners(self.skills.all()))
+        """Each job that runs: {name: {profile, limit_usd}} — its skill's one brain and one limit per run
+        (policy.job_settings)."""
+        every = self.skills.all()
+        return self.policy().job_settings(job_owners(every), job_starters(every))
 
     def find(self, name: str) -> tuple | None:
         """(skill, job) of the job with this name, or None."""
@@ -83,8 +85,8 @@ class AiJobs:
         return "English"
 
     async def run(self, skill, job: dict, origin: Origin | None = None) -> None:
-        """An AI job of a skill: its spending limit is policy.yaml's settings.jobs[name], its model its skill's one brain
-        (settings.skill_brains; owner, 2026-10-20).
+        """An AI job of a skill: its brain and its spending limit per run are its skill's one pair, policy.yaml
+        settings.skill_ai (owner, 2026-10-20).
 
         ⚠️ NOT SET, NOT RUN (owner, 2026-10-01): a job policy.yaml does not name has no agreed cost, so it
         is skipped and the log says so (the VESTA Agent page offers to add it). When the limit stops it,

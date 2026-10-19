@@ -18,15 +18,11 @@ settings:
   reply_limit_usd: 1              # a reply that reaches it stops, keeps what it wrote, and offers a Continue button
   web_search: true                # Claude's own web search (weather warnings, manuals); never used to decide an action
   conversation_reset: daily_04_00 # daily_04_00, after_8h_silence or never; /new starts a new conversation at any time
-  # The AI jobs of the skills: ONE brain for all the jobs of a skill (auto, economy or performance), and the
-  # spending limit of each run of each job, by the name its skill gives it. A job not named here, or whose skill
-  # has no brain, does not run (the VESTA Agent page offers to add it).
-  skill_brains:
-    reports: auto                 # the digest, the weekly and the monthly report
-  jobs:
-    fm-daily: {limit_usd: 1}      # the 07:00 digest
-    fm-weekly: {limit_usd: 2}     # the facility manager's weekly report
-    owner-monthly: {limit_usd: 6} # the owner's monthly report
+  # The AI jobs of the skills, by skill: ONE brain (auto, economy or performance) and ONE spending limit for each run
+  # of any of its jobs (not a monthly budget). A skill not named here does not run its AI jobs (the VESTA Agent page
+  # offers to add it).
+  skill_ai:
+    reports: {brain: auto, limit_usd: 2}   # the 07:00 digest, the weekly and the monthly report
   # How long the agent keeps what it records; the oldest is deleted every night. Left out: these defaults.
   # keep:
   #   runs_days: 400              # each AI run (the Costs tab)

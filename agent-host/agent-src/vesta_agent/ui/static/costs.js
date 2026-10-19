@@ -13,12 +13,12 @@ export const brain = (p, m) => [p ? (PROFILES[p] || p).replace(/ \(.*/, "") : nu
 export function runWhat(r) {
   const label = r.kind === "job" ? r.work : `Reply to ${r.person || "someone"}`;
   const steps = r.steps || [];
-  // the steps' pill on the title's line (owner, 2026-10-19: "show the pills X steps on the same line as Reply to…")
+  // the steps' pill on the title's line (owner, 2026-10-19: "show the pills X steps on the same line as Reply to…"),
+  // after the chat it came from and at the line's right end (owner, 2026-10-20)
   return h("div", { class: "what" },
-    // the chat it came from on the same line, after the pill (owner, 2026-10-20)
     h("div", { class: "what-head" }, h("b", {}, label),
-      steps.length || r.asked ? moreButton(steps.length ? plural(steps.length, "step", "steps") : "Whole question") : null,
-      r.kind === "chat" && r.chat ? h("span", { class: "muted" }, r.chat) : null),
+      r.kind === "chat" && r.chat ? h("span", { class: "muted" }, r.chat) : null,
+      steps.length || r.asked ? moreButton(steps.length ? plural(steps.length, "step", "steps") : "Whole question") : null),
     r.asked ? h("div", { class: "muted what-asked", title: r.asked }, `“${r.asked}”`) : null);
 }
 
@@ -28,9 +28,14 @@ export function runMore(r) {
   const steps = r.steps || [];
   return h("div", { class: "run-more" },
     r.asked ? h("p", { class: "run-asked" }, `“${r.asked}”`) : null,
-    steps.length ? h("ol", { class: "steps" }, steps.map((x) => h("li", { title: x.raw || null },
-      h("span", { class: "step-n" }, String(x.n)), h("span", { class: "chip gray" }, x.tool),
-      h(x.code ? "code" : "span", { class: "step-sum" }, x.summary || "")))) : null);
+    // a header, and the skill each step read or ran a script of first (owner, 2026-10-20: the Tools called column
+    // repeated these steps, and went)
+    steps.length ? h("ol", { class: "steps" },
+      h("li", { class: "steps-head" }, h("span", {}, "Skill"), h("span", { class: "step-n" }, "#"), h("span", {}, "Tool"),
+        h("span", {}, "What it did")),
+      steps.map((x) => h("li", { title: x.raw || null },
+        h("span", { class: "step-skill" }, x.skill || "—"), h("span", { class: "step-n" }, String(x.n)),
+        h("span", { class: "chip gray" }, x.tool), h(x.code ? "code" : "span", { class: "step-sum" }, x.summary || "")))) : null);
 }
 
 // ⚠️ EVERYTHING ON THIS TAB FOLLOWS THE PERIOD CHOSEN, 7 DAYS UNLESS ANOTHER IS (owner, 2026-10-06): the figures,
@@ -73,11 +78,10 @@ export async function costs(days = 7) {
     { v: "Cost", cls: "num" }, { v: "Per run", cls: "num" }], rows.map((g) => [g.name.replace(/^claude-/, ""), { v: g.runs, cls: "num" },
     { v: g.recorded ? ktok(g.tokens_in) : "—", cls: "num" }, { v: g.recorded ? ktok(g.tokens_out) : "—", cls: "num" }, { v: usd(g.cost), cls: "num" }, { v: usd(g.cost / g.runs), cls: "num" }]));
   const runRows = c.runs.map((r) => ({ more: (r.steps || []).length || r.asked ? runMore(r) : null, cells: [
-    new Date(r.at).toLocaleString([], { dateStyle: "short", timeStyle: "short" }),
+    { v: new Date(r.at).toLocaleString([], { dateStyle: "short", timeStyle: "short" }), cls: "nowrap" },
     runWhat(r),
     r.without_ai ? "Without the AI" : r.no_result ? "—" : brain(r.profile, r.model),
     usedSkills(r.skills),
-    usedTools(r.steps),
     { v: r.tokens_in === null || r.tokens_in === undefined ? "—" : `${ktok((r.tokens_in || 0) + (r.cache_read || 0) + (r.cache_write || 0))} / ${ktok(r.tokens_out)}`, cls: "num" },
     { v: r.interrupted && !r.cost ? "not reported" : usd(r.cost), cls: "num" },
     r.without_ai ? madeWithoutAi(r.without_ai)
@@ -100,10 +104,11 @@ export async function costs(days = 7) {
       ["model", place("by_model"), "Which model did the work.", () => groupTable(c.by_model, "Model")]]),
     tabbedCard(`${place("runs")} · last ${days} days`, "runs", [
       ["runs", place("every_run"), `${c.runs_count} runs, newest first. Open a run's steps to see what was asked, whole, and each tool it used (recorded from agent 0.6.42 on).`,
-        () => paged([{ v: "When", half: true }, { v: "What", half: true }, "Brain · model", "Skills", place("tools_called"),
+        () => paged([{ v: "When", half: true }, { v: "What", half: true }, "Brain · model", "Skills",
                      { v: "Tokens in / out", cls: "num", half: true }, { v: "Cost", cls: "num", half: true }, ""], runRows, 10,
-                    // the columns named, the row's cells at their top (a long question no longer centres the others)
-                    { cls: "runs", widths: ["9%", "30%", "11%", "12%", null, "10%", "8%", "44"] })],
+                    // the columns named, the row's cells at their top (a long question no longer centres the others);
+                    // When on one line (owner, 2026-10-20: the Tools called column's room went to it)
+                    { cls: "runs", widths: ["14%", null, "12%", "14%", "11%", "9%", "44"] })],
       ["tools", place("tools_called"), `Each tool the AI called, in how many runs and how many times. A tool never called is a candidate to switch off (${where("tools")}).`,
         () => (c.tools && c.tools.length ? paged(["Tool", { v: "Runs", cls: "num" }, { v: "Calls", cls: "num" }],
           c.tools.map((t) => [h("code", {}, t.tool), { v: t.runs, cls: "num" }, { v: t.calls, cls: "num" }]))
@@ -135,9 +140,3 @@ export function usedSkills(skills) {
   return (skills || []).length ? h("div", { class: "chips" }, skills.map((k) => h("span", { class: "chip" }, k))) : "—";
 }
 
-export function usedTools(steps) {
-  const n = {};
-  for (const x of steps || []) n[x.tool] = (n[x.tool] || 0) + 1;
-  const keys = Object.keys(n);
-  return keys.length ? h("div", { class: "chips" }, keys.map((k) => h("span", { class: "chip" }, n[k] > 1 ? `${k} ×${n[k]}` : k))) : "—";
-}

@@ -40,14 +40,16 @@ def to_form(text: str) -> dict:
     if not isinstance(raw, dict):
         raw = {}
     settings = dict(DEFAULT_BEHAVIOUR)
-    settings["jobs"] = {}
+    settings["skill_ai"] = {}
     if isinstance(raw.get("settings"), dict):
         settings.update({k: v for k, v in raw["settings"].items() if k in DEFAULT_BEHAVIOUR})
-        if isinstance(raw["settings"].get("jobs"), dict):
-            settings["jobs"] = raw["settings"]["jobs"]
-        # one brain per skill's AI jobs (owner, 2026-10-20): carried through, or a save would drop it (_set)
-        if isinstance(raw["settings"].get("skill_brains"), dict):
-            settings["skill_brains"] = raw["settings"]["skill_brains"]
+        # one brain and one limit per skill's AI jobs (owner, 2026-10-20)
+        if isinstance(raw["settings"].get("skill_ai"), dict):
+            settings["skill_ai"] = raw["settings"]["skill_ai"]
+        # an older file's AI jobs: carried through as written, or a save would drop them before ai_moved moves them
+        for old in ("jobs", "skill_brains"):
+            if isinstance(raw["settings"].get(old), dict):
+                settings[old] = raw["settings"][old]
         # settings.keep has no form fields (Rules (file) edits it): carried through as written, or a
         # save of the Rules form would drop the villa's limits (0.6.41)
         if isinstance(raw["settings"].get("keep"), dict):
@@ -77,35 +79,48 @@ def to_form(text: str) -> dict:
     }
 
 
-def brains_moved(text: str, owners: dict[str, str]) -> str:
-    """The file with an older shape's brain per AI job moved to its skill's one brain (owner, 2026-10-20): each skill
-    whose jobs still name a `profile` and that has no skill_brains entry gets the brain those jobs run with now
-    (Policy.skill_brain: the strongest of them), and an owned job keeps its limit only. A job no skill declares keeps
-    its own `profile` (nothing else would give it a brain). Every save the page's forms make goes through it
-    (changes.PageFiles.form_policy: the Rules forms, "Add them", the Limits tab); the file edited as text is written
-    as typed. A file already in the new shape comes back unchanged, byte for byte."""
+def ai_moved(text: str, owners: dict[str, str], starters: dict[str, dict]) -> str:
+    """The file with an older shape's AI jobs moved to their skill's one brain and one limit per run, settings.skill_ai
+    (owner, 2026-10-20). Both older shapes: `jobs` {job: {profile, limit_usd}} (before 0.12.277), and `skill_brains`
+    {skill: brain} beside `jobs` {job: {limit_usd}} (0.12.277). A skill that one of them sets, and that skill_ai does
+    not, gets what its jobs run with now (Policy.skill_setting: their brain, the skill's own starter limit); its jobs'
+    and its brain's old entries go, and an emptied `jobs` or `skill_brains` with them. A job no skill declares stays as
+    written. Every save the page's forms make goes through it (changes.PageFiles.form_policy: the Rules forms, "Add
+    them", the Limits tab); the file edited as text is written as typed. A file in the new shape comes back unchanged,
+    byte for byte."""
     from ..policy import Policy
     y = _yaml()
     doc = y.load(text) if (text or "").strip() else None
     settings = doc.get("settings") if isinstance(doc, CommentedMap) else None
-    jobs = settings.get("jobs") if isinstance(settings, CommentedMap) else None
-    if not isinstance(jobs, CommentedMap) or not any(
-            isinstance(j, dict) and "profile" in j and n in owners for n, j in jobs.items()):
+    if not isinstance(settings, CommentedMap):
+        return text
+    jobs, brains = settings.get("jobs"), settings.get("skill_brains")
+    jobs = jobs if isinstance(jobs, CommentedMap) else CommentedMap()
+    brains = brains if isinstance(brains, CommentedMap) else CommentedMap()
+    skills = set(owners.values())
+    old = sorted({owners[n] for n in jobs if n in owners} | {s for s in brains if s in skills})
+    if not old:
         return text
     pol = Policy(yaml.safe_load(text) or {})
-    brains = settings.get("skill_brains")
-    for skill in sorted({owners[n] for n, j in jobs.items() if n in owners and isinstance(j, dict) and "profile" in j}):
-        if isinstance(brains, dict) and skill in brains:
-            continue
-        brain = pol.skill_brain(skill, [n for n, s in owners.items() if s == skill])
-        if brain:
-            if not isinstance(brains, CommentedMap):
-                settings.insert(list(settings).index("jobs"), "skill_brains", CommentedMap())
-                brains = settings["skill_brains"]
-            brains[skill] = brain
-    for n, j in jobs.items():
-        if n in owners and isinstance(j, dict) and "profile" in j:
-            del j["profile"]
+    ai = settings.get("skill_ai")
+    if not isinstance(ai, CommentedMap):
+        at = min((list(settings).index(k) for k in ("skill_brains", "jobs") if k in settings), default=len(settings))
+        settings.insert(at, "skill_ai", CommentedMap())
+        ai = settings["skill_ai"]
+    for skill in old:
+        if skill not in ai:
+            got = pol.skill_setting(skill, owners, starters)
+            if not got:
+                continue                               # nothing to run with: left as written, still not set
+            lim = got["limit_usd"]
+            ai[skill] = CommentedMap([("brain", got["brain"]), ("limit_usd", int(lim) if float(lim).is_integer() else lim)])
+        for n in [n for n in jobs if owners.get(n) == skill]:
+            del jobs[n]
+        if skill in brains:
+            del brains[skill]
+    for key, left in (("jobs", jobs), ("skill_brains", brains)):
+        if key in settings and not left:
+            del settings[key]
     buf = io.StringIO()
     y.dump(doc, buf)
     return buf.getvalue()

@@ -93,7 +93,8 @@ def runs_from_history(states: list[dict], on_threshold_w: float, zone: str, min_
     return out
 
 
-def flips_per_day(logbook: list[dict], zone: str, settle_minutes: float = 0) -> dict[str, dict[date, int]]:
+def flips_per_day(logbook: list[dict], zone: str, settle_minutes: float = 0,
+                  min_drop_seconds: float = 0) -> dict[str, dict[date, int]]:
     """Count drops to "unavailable" per entity per day from logbook rows, leaving out those within `settle_minutes` of
     a Home Assistant restart (device_state.in_restart: its own "started" entry) — every restart takes every entity
     through "unavailable", and three restarts in three days read as "dropped and reconnected 10 times" for a relay that
@@ -102,16 +103,33 @@ def flips_per_day(logbook: list[dict], zone: str, settle_minutes: float = 0) -> 
     ⚠️ A DROP IS "unavailable", NEVER "unknown" (architecture review, 2026-10-13): "unknown" is a sensor that answers
     with no value (device_state) — counted, a wind chill on a still day read as a Wi-Fi problem. A device Home Assistant
     loses goes "unavailable"; its other entities going "unknown" with it add nothing (the device counts its busiest
-    entity's day, nightly)."""
+    entity's day, nightly).
+
+    ⚠️ A DROP OF A FEW MILLISECONDS IS A RELOAD, NOT A RECONNECT (villa, 2026-10-20: 19 faults "dropped and reconnected
+    10 times in 3 days" in one night — every ceiling fan, a template lock, template sensors). Each time the villa's system
+    reloads its virtual devices (a template, a helper or a package saved), every one of them reads "unavailable" for
+    about 50 ms; nine such reloads in two days read as Wi-Fi trouble. A drop back within `min_drop_seconds` (the
+    night's setting reconnect_min_drop_seconds) is not counted; one still offline at the end of the read is."""
     drops = RestartDrops(logbook, settle_minutes)        # the one answer (vesta_shared.device_state)
     out: dict[str, dict[date, int]] = defaultdict(lambda: defaultdict(int))
+    timeline: dict[str, list[tuple[datetime, bool]]] = defaultdict(list)
     for r in logbook:
-        if not r.get("entity_id") or not is_offline(r.get("state")):
-            continue
-        t = datetime.fromisoformat(r["when"])
-        if drops.at_restart(r["entity_id"], t):           # came with a restart: never the device's own reconnect
-            continue
-        out[r["entity_id"]][t.astimezone(ZoneInfo(zone)).date()] += 1
+        if r.get("entity_id") and r.get("when"):
+            try:
+                timeline[r["entity_id"]].append((datetime.fromisoformat(r["when"]), is_offline(r.get("state"))))
+            except ValueError:
+                continue
+    for eid, rows in timeline.items():
+        rows.sort(key=lambda x: x[0])
+        for i, (t, off) in enumerate(rows):
+            if not off:
+                continue
+            if drops.at_restart(eid, t):                  # came with a restart: never the device's own reconnect
+                continue
+            back = next((u for u, o in rows[i + 1:] if not o), None)
+            if back is not None and (back - t).total_seconds() < min_drop_seconds:
+                continue                                  # back within the blink of a reload
+            out[eid][t.astimezone(ZoneInfo(zone)).date()] += 1
     return {k: dict(v) for k, v in out.items()}
 
 

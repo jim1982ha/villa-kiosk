@@ -32,7 +32,7 @@ from .. import __version__, tool_access
 from ..history import policy_change
 from ..places import title, where
 from ..policy import RULE_WORDS, WORDS, Policy, problems as policy_problems, setup_fields
-from ..skills import FILE_NAME, SKILL_NAME, VILLA_PREFIX, SkillError, skill_files, parse_skill, ai_jobs, job_owners
+from ..skills import FILE_NAME, SKILL_NAME, VILLA_PREFIX, SkillError, skill_files, parse_skill, ai_jobs, job_owners, job_starters
 
 # ⚠️ WHAT THE EXPORT OFFERS, IN ITS WORDS (architecture review 9): the page typed these and one named a card that no
 # longer existed ("The AI", "allowed lists"). key → (the words, the note under them, ticked at first), in order.
@@ -60,6 +60,8 @@ def offer() -> dict:
             "stays": [{"words": w, "note": n} for w, n in STAYS]}
 # what each part carries: policy.FIELDS, the one table of the file's settings
 AI_SETTINGS = tuple(k.split(".", 1)[1] for k in setup_fields("ai"))
+# an older villa's AI jobs (`jobs`, `skill_brains`) are carried as written: the page's next save moves them to skill_ai
+OLD_AI_SETTINGS = ("jobs", "skill_brains")
 TOOL_SECTIONS = tuple(setup_fields("tools"))
 ACTION_SECTIONS = tuple(setup_fields("actions"))
 MAX_FILES = 400
@@ -76,7 +78,7 @@ def export(settings, skills, parts: set[str]) -> bytes:
     rules: dict = {}
     s = raw.get("settings") if isinstance(raw.get("settings"), dict) else {}
     if "ai" in parts:
-        rules["settings"] = {k: s[k] for k in AI_SETTINGS if k in s}
+        rules["settings"] = {k: s[k] for k in AI_SETTINGS + OLD_AI_SETTINGS if k in s}
     if "keep" in parts and "keep" in s:
         rules.setdefault("settings", {})["keep"] = s["keep"]
     if "actions" in parts:
@@ -189,7 +191,7 @@ def preview(settings, skills, setup: dict, server_tools: list[dict] | None) -> d
     current = _policy_raw(settings.policy_path)
     merged = _merged_rules(current, setup["rules"])
     if setup["rules"]:
-        for label, keys in ((WORDS["settings"], [("settings", k) for k in AI_SETTINGS]),
+        for label, keys in ((WORDS["settings"], [("settings", k) for k in AI_SETTINGS + OLD_AI_SETTINGS]),
                             (WORDS["settings.keep"], [("settings", "keep")]),
                             (WORDS["allowed_services"], [(k, None) for k in ACTION_SECTIONS]),
                             (title("tools"), [(k, None) for k in TOOL_SECTIONS])):
@@ -217,7 +219,7 @@ def preview(settings, skills, setup: dict, server_tools: list[dict] | None) -> d
                      "detail": "your standing rules for the agent"})
     pol = Policy(merged)
     listed = tool_access.listing(server_tools)
-    jobs = pol.job_settings(job_owners(parsed))          # each job's limit and its skill's one brain
+    jobs = pol.job_settings(job_owners(parsed), job_starters(parsed))   # its skill's one brain and limit per run
     for name, sk in parsed.items():
         for t in sk.tools or []:
             # one reading of a tool's state (tool_access.tool_state): this wrote its own "not on the server" test

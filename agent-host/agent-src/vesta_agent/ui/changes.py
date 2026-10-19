@@ -23,7 +23,7 @@ from ..config import Settings
 from ..history import History, policy_change
 from ..policy import Policy, problems as policy_problems
 from ..skills import FILE_NAME, SKILL_NAME, SkillError, parse_skill, to_trash
-from .policy_doc import apply_form, brains_moved, to_form
+from .policy_doc import ai_moved, apply_form, to_form
 
 log = logging.getLogger("vesta.ui")
 
@@ -114,10 +114,11 @@ class PageFiles:
         return self.save_policy(self.form_policy(apply_form(text, change)), r, place, what)
 
     def form_policy(self, text: str) -> str:
-        """policy.yaml as a form of the page writes it: an older file's brain per AI job moved to its skill's one brain
-        (policy_doc.brains_moved; owner, 2026-10-20), by the skills' own declarations of their jobs."""
-        from ..skills import Skills, job_owners
-        return brains_moved(text, job_owners(Skills(self.s.skills_dir).all()))
+        """policy.yaml as a form of the page writes it: an older file's AI jobs moved to their skill's one brain and one
+        limit per run (policy_doc.ai_moved; owner, 2026-10-20), by the skills' own declarations of their jobs."""
+        from ..skills import Skills, job_owners, job_starters
+        every = Skills(self.s.skills_dir).all()
+        return ai_moved(text, job_owners(every), job_starters(every))
 
     def skill_dir(self, name: str, must_exist: bool = True) -> str:
         if not SKILL_NAME.match(name or ""):

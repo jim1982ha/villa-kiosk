@@ -169,16 +169,15 @@ def test_a_jobs_run_is_recorded_with_the_skill_that_declares_it(jobs, monkeypatc
     assert [r["skill"] for r in ai.runs] == ["rep"]
 
 
-def test_one_brain_for_a_skill_is_the_brain_every_one_of_its_jobs_runs_with(tmp_path, monkeypatch):
-    # owner, 2026-10-20: ONE brain for all the AI jobs of a skill (the reports' three), each job its own limit — through
-    # the real run (AiJobs.run → Turns): one change of the skill's brain changes what every job runs with
+def test_one_brain_and_one_limit_for_a_skill_are_what_every_one_of_its_jobs_runs_with(tmp_path, monkeypatch):
+    # owner, 2026-10-20: ONE brain and ONE limit per run for all the AI jobs of a skill (the reports' three) — through
+    # the real run (AiJobs.run → Turns): one change of the skill's pair changes what every job runs with
     s = settings(str(tmp_path))
-    make_skill(s.skills_dir, "rep", {"tools": [], "schedule": [
+    make_skill(s.skills_dir, "rep", {"tools": [], "jobs_default": {"brain": "auto", "limit_usd": 2}, "schedule": [
         {"when": "Mon 08:00", "name": "rep-weekly", "to": "fm", "prompt": "make it"},
         {"when": "1 08:00", "name": "rep-monthly", "to": "owner", "prompt": "make it"}]}, {})
     people = [{"telegram_id": -1, "name": "Owners", "role": "owner"}, {"telegram_id": -2, "name": "Managers", "role": "fm"}]
-    raw = {"settings": {"skill_brains": {"rep": "economy"},
-                        "jobs": {"rep-weekly": {"limit_usd": 1}, "rep-monthly": {"limit_usd": 6}}}, "people": people}
+    raw = {"settings": {"skill_ai": {"rep": {"brain": "economy", "limit_usd": 1.5}}}, "people": people}
     pol = [Policy(raw)]
 
     async def safe(coro):
@@ -199,15 +198,21 @@ def test_one_brain_for_a_skill_is_the_brain_every_one_of_its_jobs_runs_with(tmp_
         for name in ("rep-weekly", "rep-monthly"):
             asyncio.run(j.run(*j.find(name)))
         return [(r["profile"], r["limit_usd"]) for r in ai.runs[-2:]]
-    assert run_all() == [("economy", 1.0), ("economy", 6.0)]
-    raw["settings"]["skill_brains"]["rep"] = "performance"                 # the one change, on Rules
+    assert run_all() == [("economy", 1.5), ("economy", 1.5)]
+    raw["settings"]["skill_ai"]["rep"] = {"brain": "performance", "limit_usd": 4}      # the one change, on Rules
     pol[0] = Policy(raw)
-    assert run_all() == [("performance", 1.0), ("performance", 6.0)]
-    # an older file: a brain per job, no skill brain — every job runs with the strongest of them
+    assert run_all() == [("performance", 4.0), ("performance", 4.0)]
+    # the two older files: their brain as it was, the SKILL's starter limit (never the jobs' own)
     pol[0] = Policy({"settings": {"jobs": {"rep-weekly": {"profile": "economy", "limit_usd": 1},
                                            "rep-monthly": {"profile": "auto", "limit_usd": 6}}}, "people": people})
-    assert run_all() == [("auto", 1.0), ("auto", 6.0)]
+    assert run_all() == [("auto", 2.0), ("auto", 2.0)]
+    pol[0] = Policy({"settings": {"skill_brains": {"rep": "economy"}, "jobs": {"rep-weekly": {"limit_usd": 1}}},
+                     "people": people})
+    assert run_all() == [("economy", 2.0), ("economy", 2.0)]
     pol[0] = Policy({"settings": {"jobs": {"rep-weekly": {"limit_usd": 1}}}, "people": people})   # no brain: not run
     n = len(ai.runs)
     asyncio.run(j.run(*j.find("rep-weekly")))
+    assert len(ai.runs) == n
+    pol[0] = Policy({"people": people})                                                    # nothing set: not run
+    asyncio.run(j.run(*j.find("rep-monthly")))
     assert len(ai.runs) == n

@@ -1,4 +1,5 @@
-"""AI jobs: named in their skill, configured in policy.yaml settings.jobs (owner, 2026-10-01).
+"""AI jobs: named in their skill, run with their skill's one brain and limit, policy.yaml settings.skill_ai (owner,
+2026-10-01; one pair a skill: 2026-10-20).
 Synthetic skills and data only."""
 from __future__ import annotations
 
@@ -31,7 +32,7 @@ def run(coro):
 def agent(tmp_path, monkeypatch):
     v = make_agent(tmp_path, {"people": [{"telegram_id": ASKER, "name": "Asker", "role": "fm"}],
                               "chats": {"owner": GROUP, "fm": GROUP}, "ha_read_tools": ["ha_get_state"],
-                              "settings": {"jobs": {"fm-weekly": {"profile": "performance", "limit_usd": 2.5}}}},
+                              "settings": {"skill_ai": {"reports": {"brain": "performance", "limit_usd": 2.5}}}},
                    skills=["reports"], reader=FakeHA(tools=[tool("ha_get_state")]))
     v.bot_username = BOT["username"]
     v.code = []
@@ -59,17 +60,29 @@ def job(v, name):
     return next(j for sk, j in ai_jobs(v.skills.all()) if j["name"] == name)
 
 
-def test_a_job_policy_yaml_does_not_name_does_not_run(agent, caplog):
+def _unset(agent):
+    """The villa's rules without the reports skill's AI jobs set."""
+    raw = yaml.safe_load(open(agent.s.policy_path)) or {}
+    raw["settings"].pop("skill_ai", None)
+    with open(agent.s.policy_path, "w") as f:
+        yaml.safe_dump(raw, f)
+    os.utime(agent.s.policy_path, (os.path.getmtime(agent.s.policy_path) + 5,) * 2)
+
+
+def test_a_job_whose_skill_policy_yaml_does_not_set_does_not_run(agent, caplog):
+    _unset(agent)
     sk = agent.skills.get("reports")
     run(agent.jobs.run(sk, job(agent, "fm-daily")))
     assert agent.runs == []
     assert any("fm-daily" in r.getMessage() and "not set in policy.yaml" in r.getMessage() for r in caplog.records)
+    assert "not set up yet" in run(agent.jobs.start("fm-weekly", ASKER))              # asked for, not set
 
 
-def test_a_set_job_runs_with_its_own_brain_and_limit(agent):
-    run(agent.jobs.run(agent.skills.get("reports"), job(agent, "fm-weekly")))
-    (r,) = agent.runs
-    assert (r["profile"], r["limit_usd"], r["who"]) == ("performance", 2.5, "job:fm-weekly")
+def test_every_job_of_a_set_skill_runs_with_its_one_brain_and_limit(agent):
+    for name in ("fm-weekly", "fm-daily"):
+        run(agent.jobs.run(agent.skills.get("reports"), job(agent, name)))
+    assert [(r["profile"], r["limit_usd"], r["who"]) for r in agent.runs] == [
+        ("performance", 2.5, "job:fm-weekly"), ("performance", 2.5, "job:fm-daily")]
     assert agent.code == []                                               # finished within its limit
 
 
@@ -93,7 +106,6 @@ def test_a_report_asked_for_in_a_chat_runs_as_its_job(agent):
     msg = run(go())
     assert msg.startswith("Started fm-weekly") and agent.runs[-1]["profile"] == "performance"
     assert run(agent.jobs.start("no-such-job", ASKER)).startswith("There is no no-such-job report")
-    assert "not set up yet" in run(agent.jobs.start("fm-daily", ASKER))                # asked for, not in policy.yaml
     tb = agent.toolbox()
     person = Person(ASKER, "Asker", "fm")
     assert "start_job" in [t.name for t in tb.tool_objects(person, Origin(ASKER, CONVERSATION))]
@@ -152,16 +164,26 @@ def test_an_ai_job_without_a_name_switches_its_skill_off(tmp_path):
     assert sk.all() == {} and "needs a name" in sk.problems()["pool-care"]
 
 
-def test_settings_jobs_in_policy_yaml():
-    p = Policy({"settings": {"jobs": {"a": {"profile": "economy", "limit_usd": 1}, "b": {"profile": "huge", "limit_usd": 1},
-                                      "c": {"profile": "auto", "limit_usd": 0.01}}}})
-    assert p.jobs == {"a": {"limit_usd": 1.0, "profile": "economy"}}       # the agent: lenient, b and c do not run
-    assert p.job_settings({}) == {"a": {"profile": "economy", "limit_usd": 1.0}}   # an older file's brain, still read
-    out = problems({"settings": {"jobs": {"b": {"profile": "huge", "limit_usd": 1}, "c": {"profile": "auto", "limit_usd": 0.01},
-                                          "d": {"profile": "auto", "limit_usd": 1, "model": "x"}},
-                                 "skill_brains": {"reports": "huge"}}})
-    assert any("jobs.b.profile" in x for x in out) and any("jobs.c.limit_usd" in x for x in out)
-    assert any("jobs.d must give limit_usd only" in x for x in out) and any("skill_brains.reports" in x for x in out)
+def test_settings_skill_ai_in_policy_yaml():
+    owners = {"a1": "a", "a2": "a", "b1": "b", "c1": "c"}
+    starters = {"a": {"brain": "auto", "limit_usd": 2.0}, "b": {"brain": "auto", "limit_usd": 2.0},
+                "c": {"brain": "auto", "limit_usd": 2.0}}
+    p = Policy({"settings": {"skill_ai": {"a": {"brain": "economy", "limit_usd": 1}, "b": {"brain": "huge", "limit_usd": 1},
+                                          "c": {"brain": "auto"}}}})
+    assert p.skill_ai == {"a": {"brain": "economy", "limit_usd": 1.0}}       # the agent: lenient, b and c do not run
+    assert p.job_settings(owners, starters) == {"a1": {"profile": "economy", "limit_usd": 1.0},
+                                                "a2": {"profile": "economy", "limit_usd": 1.0}}
+    out = problems({"settings": {"skill_ai": {"b": {"brain": "huge", "limit_usd": 1}, "c": {"brain": "auto"},
+                                              "d": {"brain": "auto", "limit_usd": 0.01}}}})
+    assert any("skill_ai.b.brain" in x for x in out) and any("skill_ai.c must give brain and limit_usd" in x for x in out)
+    assert any("skill_ai.d.limit_usd" in x for x in out)
+    # the two older shapes still read without a problem: their brain, the skill's starter limit
+    old = {"settings": {"jobs": {"a1": {"profile": "economy", "limit_usd": 1}, "a2": {"profile": "auto", "limit_usd": 6}},
+                        "skill_brains": {"b": "performance"}}}
+    assert problems(old) == []
+    assert Policy(old).job_settings(owners, starters) == {"a1": {"profile": "auto", "limit_usd": 2.0},
+                                                          "a2": {"profile": "auto", "limit_usd": 2.0},
+                                                          "b1": {"profile": "performance", "limit_usd": 2.0}}
 
 
 def test_every_report_a_person_may_ask_for_runs_as_its_job():
@@ -349,3 +371,22 @@ def test_asked_again_the_agent_not_the_ais_memory_says_whether_the_report_runs(a
     assert re.match(r"The fm-weekly report asked for here started at \d\d/\d\d/\d{4} \d\d:\d\d and is still being made", again)
     assert after.startswith("Started fm-weekly now")                     # it ended: a new ask starts it again
     assert sum(r["who"] == "job:fm-weekly" for r in ai.runs) == 2        # never twice at once
+
+
+def test_a_skills_starter_pair_is_its_jobs_default_or_an_older_skills_strongest(tmp_path):
+    # owner, 2026-10-20: the reports skill states its jobs' brain and limit ONCE (2 US$). A villa's own older copy of a
+    # skill (kept by updates) gave a starter per job: the strongest brain and the largest limit of them stand in
+    from helpers import make_skill
+    from vesta_agent.skills import job_starters
+    from helpers import STARTER_SKILLS
+    assert job_starters(Skills(STARTER_SKILLS).all())["reports"] == {"brain": "auto", "limit_usd": 2.0}
+    d = str(tmp_path / "skills")
+    make_skill(d, "old", {"schedule": [
+        {"when": "07:00", "name": "o-daily", "prompt": "p", "default": {"profile": "economy", "limit_usd": 1}},
+        {"when": "Mon 08:00", "name": "o-weekly", "prompt": "p", "default": {"profile": "performance", "limit_usd": 4}}]}, {})
+    assert job_starters(Skills(d).all())["old"] == {"brain": "performance", "limit_usd": 4.0}
+    with pytest.raises(SkillError):
+        make_skill(d, "bad", {"jobs_default": {"brain": "huge", "limit_usd": 2},
+                              "schedule": [{"when": "07:00", "name": "b-daily", "prompt": "p"}]}, {})
+        from vesta_agent.skills import parse_skill
+        parse_skill("bad", os.path.join(d, "bad"))

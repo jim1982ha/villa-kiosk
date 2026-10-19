@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.6.269 (20 October 2026)
+
+- One brain and one spending limit per run for all the AI jobs of a skill (owner, 2026-10-20: "define the cap only once
+  … for the report skill as a whole"): policy.yaml `settings.skill_ai: {skill: {brain, limit_usd}}` replaces 0.12.277's
+  `skill_brains` + `jobs.<job>: {limit_usd}`. `Policy.skill_setting` is the one reading; `job_settings(owners, starters)`
+  gives each declared job its skill's pair. A skill's starter pair is its skill.yaml `jobs_default` (reports: auto,
+  2 US$; an older skill copy falls back to its jobs' strongest brain and largest limit), `skills.job_starters`. Both older
+  file shapes are read without a problem — the brain as 0.12.277 resolved it, the skill's starter limit, never the
+  jobs' own — and every form save moves them to `skill_ai` (`policy_doc.ai_moved`, comments kept; a new-shape file
+  unchanged byte for byte). Rules › AI brains and limits: one row per skill (brain, limit for each run, tools, +/×), its
+  jobs named under it. `/api/jobs` gives `skill_ai` and `skill_default`; Add them writes the starter pair. The Limits
+  tab (one brain and one limit row per skill, saved whole), setup copy, history words, policy.example.yaml and DOCS
+  follow. Tests: the real job path, both older shapes read and migrated, the form round-trip, Add them, the tab,
+  `jobs_default` and its fallback. Mutation-proved.
+- Night check: a drop back within `reconnect_min_drop_seconds` (preventive-maintenance behaviour, 10 s) is not a
+  reconnect (features.flips_per_day). The villa's 20 October night opened 19 "dropped and reconnected 10 times in 3
+  days" faults: every ceiling fan, two inverted locks, a test lock, a curtain and template sensors — each save of a
+  template, helper or package reloads the villa system's virtual devices, "unavailable" for ~50 ms, nine times in two
+  days. Measured on the villa's logbook of 17–20 October: 30 entities over the line before, 2 real devices after (a
+  Thread sensor, a relay; the hidden TV is left out already). Tests: the counting by value and the night check itself.
+- Costs › Every run: the chat name before the steps pill, the pill at the line's right end; the Tools called column
+  gone (the steps list them); a run's steps have a header and the skill each step read or ran a script of first
+  (status.steps_of `skill`); When on one line.
+- Limits tab: Save at the right end of its line.
+
 ## 0.6.268 (20 October 2026)
 
 One brain for all the AI jobs of a skill (owner, 2026-10-20): policy.yaml `settings.skill_brains: {skill: brain}`, and

@@ -495,12 +495,12 @@ export function jobsBanner(names, after) {
   if (!names || !names.length) return null;
   const btn = h("button", { class: "btn primary", onclick: async () => {
     btn.disabled = true;
-    try { await addMissingJobs(); toast("AI jobs added. Change their brain or limit under Rules."); after(); }
+    try { await addMissingJobs(); toast("AI jobs added. Change their skill's brain or limit under Rules."); after(); }
     catch (e) { btn.disabled = false; tell("Not added", e.problems); }
   } }, "Add them");
   return h("div", { class: "banner" },
     h("div", {}, h("b", {}, `${names.length} AI job${names.length > 1 ? "s are" : " is"} not set: ${names.length > 1 ? "they don't" : "it doesn't"} run.`),
-      h("div", { class: "muted" }, names.join(", "), " — each needs a brain and a spending limit.")), btn);
+      h("div", { class: "muted" }, names.join(", "), " — their skill needs a brain and a spending limit per run.")), btn);
 }
 
 export function go(tab) {

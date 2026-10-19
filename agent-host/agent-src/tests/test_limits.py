@@ -269,3 +269,22 @@ def test_the_days_kept_are_shown_as_measured_and_never_saved(ui):
     assert kept["value"] == "11.3 days" and kept["group"] == "keep"
     status, _ = _put(ui, kept["id"], 30)
     assert status == 400                                         # the villa's own setting: never set from here
+
+
+def test_a_skills_ai_jobs_have_one_brain_and_one_limit_row_saved_whole(ui):
+    # owner, 2026-10-20: one brain and one limit per run for all the AI jobs of a skill — an older file's (a limit per
+    # job) is shown as the skill's pair, and a change from the tab writes the pair whole, the older entries gone
+    copy_skill("reports", ui.skills_dir)
+    raw = yaml.safe_load(open(ui.policy_path))
+    raw["settings"].pop("skill_ai", None)
+    raw["settings"]["jobs"] = {"fm-daily": {"profile": "auto", "limit_usd": 1}, "owner-monthly": {"profile": "auto", "limit_usd": 6}}
+    with open(ui.policy_path, "w") as f:
+        yaml.safe_dump(raw, f)
+    rows = [r for r in _rows(ui)["rows"] if r["id"]["src"] == "policy" and "skill_ai" in r["id"]["path"]]
+    assert {tuple(r["id"]["path"]): r["value"] for r in rows} == {
+        ("settings", "skill_ai", "reports", "brain"): "auto", ("settings", "skill_ai", "reports", "limit_usd"): 2.0}
+    assert not any("jobs" in r["id"]["path"] for r in _rows(ui)["rows"] if r["id"]["src"] == "policy")
+    status, _ = _put(ui, {"src": "policy", "path": ["settings", "skill_ai", "reports", "limit_usd"]}, 3)
+    assert status == 200
+    s = yaml.safe_load(open(ui.policy_path))["settings"]
+    assert s["skill_ai"] == {"reports": {"brain": "auto", "limit_usd": 3}} and "jobs" not in s

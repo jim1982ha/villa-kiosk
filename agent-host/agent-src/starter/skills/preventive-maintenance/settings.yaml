@@ -32,6 +32,7 @@ behaviour:
   # (architecture review 4, 2026-10-13: these were typed in rules.py / nightly.py, out of a villa's reach)
   reconnect_days: 3                     # the logbook read for reconnect loops, and the window the rule counts in
   reconnect_events: 10                  # this many drops in that window: a reconnect loop
+  reconnect_min_drop_seconds: 10        # a drop back within this is the villa's system reloading its virtual devices, not a reconnect
   ran_min_hours: 0.1                    # a day an asset ran at least this long counts as a day it ran
   intermittent_share: 0.5               # an asset that ran on fewer than this share of its days is intermittent…
   intermittent_min_days: 3              # …or on fewer days than this
