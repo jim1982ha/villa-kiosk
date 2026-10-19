@@ -1,5 +1,5 @@
 // VESTA Agent page — the Costs tab.
-import { alertButton, api, card, dropdown, figures, fill, h, infoButton, page, paged, place, svg, tabbed, titleWithInfo, $view, where } from "./core.js";
+import { alertButton, api, card, dropdown, figures, fill, h, infoButton, moreButton, page, paged, place, plural, svg, tabbed, titleWithInfo, $view, where } from "./core.js";
 
 // ---------------------------------------------------------------- costs
 export const usd = (v) => "US$ " + (v || 0).toFixed((v || 0) > 0 && v < 0.01 ? 4 : 2);
@@ -7,22 +7,27 @@ export const ktok = (n) => (n === null || n === undefined ? "—" : n >= 1e6 ? (
 let PROFILES = {};                     // the brains' names, from this tab's own answer (no shared page field)
 export const brain = (p, m) => [p ? (PROFILES[p] || p).replace(/ \(.*/, "") : null, m ? m.replace(/^claude-/, "") : null].filter(Boolean).join(" · ") || "—";
 
-// A run's "What": its label alone in the table; where it came from and what was asked as its tooltip
-// (owner, 2026-10-04: "don't show the details directly in the table"). A tap shows the same lines under
-// it — a phone has no hover, and the detail must stay reachable there.
+// A run's "What" (owner, 2026-10-19): its label, the chat it came from, and the question as it was asked — whole,
+// held to three lines here, all of it in its tooltip and on the run's line underneath (runMore). The steps open on
+// demand under the row, across every column: squeezed into this column they pushed the row tall.
 export function runWhat(r) {
   const label = r.kind === "job" ? r.work : `Reply to ${r.person || "someone"}`;
-  const details = [r.kind === "chat" && r.chat ? r.chat : null, r.asked ? `“${r.asked}”` : null].filter(Boolean);
   const steps = r.steps || [];
-  if (!details.length && !steps.length) return h("b", {}, label);
-  // what was asked, then each tool the AI called, in order (4A): a tap shows them under the run
-  const box = h("div", { class: "what-tip", title: details.join("\n"), tabindex: "0", role: "button", "aria-expanded": "false" },
-    h("b", {}, label), h("div", { class: "muted what-detail" }, details.map((d) => h("div", {}, d)),
-      steps.length ? h("ol", { class: "steps" }, steps.map((x) => h("li", {}, h("code", {}, x.tool), x.input ? ` ${x.input}` : ""))) : null));
-  const toggle = () => box.setAttribute("aria-expanded", String(box.getAttribute("aria-expanded") !== "true"));
-  box.addEventListener("click", toggle);
-  box.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
-  return box;
+  return h("div", { class: "what" }, h("b", {}, label),
+    r.kind === "chat" && r.chat ? h("div", { class: "muted" }, r.chat) : null,
+    r.asked ? h("div", { class: "muted what-asked", title: r.asked }, `“${r.asked}”`) : null,
+    steps.length || r.asked ? moreButton(steps.length ? plural(steps.length, "step", "steps") : "Whole question") : null);
+}
+
+// Under a run, across the table: what was asked, whole, then each step in a line — its number, its tool, and the
+// agent's summary of what it asked for (status.step_summary); the arguments as they were are the line's tooltip.
+export function runMore(r) {
+  const steps = r.steps || [];
+  return h("div", { class: "run-more" },
+    r.asked ? h("p", { class: "run-asked" }, `“${r.asked}”`) : null,
+    steps.length ? h("ol", { class: "steps" }, steps.map((x) => h("li", { title: x.raw || null },
+      h("span", { class: "step-n" }, String(x.n)), h("span", { class: "chip gray" }, x.tool),
+      h(x.code ? "code" : "span", { class: "step-sum" }, x.summary || "")))) : null);
 }
 
 // ⚠️ EVERYTHING ON THIS TAB FOLLOWS THE PERIOD CHOSEN, 7 DAYS UNLESS ANOTHER IS (owner, 2026-10-06): the figures,
@@ -64,7 +69,7 @@ export async function costs(days = 7) {
   const groupTable = (rows, title) => paged([title, { v: "Runs", cls: "num" }, { v: "Tokens in", cls: "num" }, { v: "Tokens out", cls: "num" },
     { v: "Cost", cls: "num" }, { v: "Per run", cls: "num" }], rows.map((g) => [g.name.replace(/^claude-/, ""), { v: g.runs, cls: "num" },
     { v: g.recorded ? ktok(g.tokens_in) : "—", cls: "num" }, { v: g.recorded ? ktok(g.tokens_out) : "—", cls: "num" }, { v: usd(g.cost), cls: "num" }, { v: usd(g.cost / g.runs), cls: "num" }]));
-  const runRows = c.runs.map((r) => [
+  const runRows = c.runs.map((r) => ({ more: (r.steps || []).length || r.asked ? runMore(r) : null, cells: [
     new Date(r.at).toLocaleString([], { dateStyle: "short", timeStyle: "short" }),
     runWhat(r),
     r.without_ai ? "Without the AI" : r.no_result ? "—" : brain(r.profile, r.model),
@@ -79,7 +84,7 @@ export async function costs(days = 7) {
       : r.interrupted ? alertButton("Stopped by a restart", () => h("div", {}, h("b", {}, "Stopped by a restart of the agent."),
         h("div", { class: "tooltip-detail" }, "It was still working when the agent restarted. Anthropic reports a run's cost when it ends, so this one's is not here: the Anthropic Console has it.")))
       : r.stopped ? h("span", { class: "chip off" }, "stopped at its limit") : r.error ? alertButton("This run failed", () => h("div", {}, h("b", {}, r.cause ? `This run failed: ${r.cause}.` : "This run failed."),
-      r.what_to_do ? h("div", {}, r.what_to_do) : null, h("div", { class: "tooltip-detail" }, r.error))) : ""]);
+      r.what_to_do ? h("div", {}, r.what_to_do) : null, h("div", { class: "tooltip-detail" }, r.error))) : ""] }));
   fill($view,
     // the period's selector on the title's line, on the right (owner, 2026-10-06); the figures below a separator
     h("section", { class: "card" },
@@ -91,9 +96,11 @@ export async function costs(days = 7) {
       ["work", place("by_work"), "Chat replies, and each AI job.", () => groupTable(c.by_work, "Work")],
       ["model", place("by_model"), "Which model did the work.", () => groupTable(c.by_model, "Model")]]),
     tabbedCard(`${place("runs")} · last ${days} days`, "runs", [
-      ["runs", place("every_run"), `${c.runs_count} runs, newest first. Press a run to see what was asked and which tools it used (recorded from agent 0.6.42 on).`,
+      ["runs", place("every_run"), `${c.runs_count} runs, newest first. Open a run's steps to see what was asked, whole, and each tool it used (recorded from agent 0.6.42 on).`,
         () => paged([{ v: "When", half: true }, { v: "What", half: true }, "Brain · model", "Skills", place("tools_called"),
-                     { v: "Tokens in / out", cls: "num", half: true }, { v: "Cost", cls: "num", half: true }, ""], runRows)],
+                     { v: "Tokens in / out", cls: "num", half: true }, { v: "Cost", cls: "num", half: true }, ""], runRows, 10,
+                    // the columns named, the row's cells at their top (a long question no longer centres the others)
+                    { cls: "runs", widths: ["9%", "30%", "11%", "12%", null, "10%", "8%", "44"] })],
       ["tools", place("tools_called"), `Each tool the AI called, in how many runs and how many times. A tool never called is a candidate to switch off (${where("tools")}).`,
         () => (c.tools && c.tools.length ? paged(["Tool", { v: "Runs", cls: "num" }, { v: "Calls", cls: "num" }],
           c.tools.map((t) => [h("code", {}, t.tool), { v: t.runs, cls: "num" }, { v: t.calls, cls: "num" }]))

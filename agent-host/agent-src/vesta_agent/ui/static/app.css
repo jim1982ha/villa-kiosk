@@ -285,11 +285,19 @@ svg.bars .base { stroke: var(--text-dim); }
 .dropdown-option.on { color: var(--accent); font-weight: 600; }
 .dropdown-option.on::after { content: "\2713"; margin-left: auto; padding-left: 12px; }
 
-/* A run's "What" (costs.js runWhat): the details are its tooltip, and a tap shows them under it */
-.what-tip { cursor: help; }
-.what-tip b { text-decoration: underline dotted var(--text-dim); text-underline-offset: 3px; }
-.what-tip .what-detail { display: none; font-size: var(--text-xs); margin-top: 2px; }
-.what-tip[aria-expanded="true"] .what-detail { display: block; }
+/* Costs › Every run (owner, 2026-10-19): every cell at the row's top; a run's "What" is its label, its chat and its
+   question held to three lines (all of it in the tooltip); the steps open under the row, across every column */
+table.data.runs td { vertical-align: top; }
+.what { display: grid; gap: 2px; min-width: 0; }
+.what-asked { font-size: var(--text-xs); overflow-wrap: anywhere; cursor: help;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.more-btn { justify-self: start; display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; padding: 2px 10px; min-height: 26px;
+  border: 1px solid var(--hairline-strong); border-radius: 999px; background: none; color: var(--text-secondary); font: inherit; font-size: var(--text-xs); cursor: pointer; }
+.more-btn:hover, .more-btn[aria-expanded="true"] { background: var(--bg-input); color: var(--text-primary); }
+.more-btn .caret { color: var(--text-dim); }
+table.data tr:has(+ tr.row-more:not([hidden])) td { border-bottom: 0; }
+table.data tr.row-more td { padding-top: 0; }
+table.data tr.row-more[hidden] { display: none; }   /* over the phone's card rows (display: grid), which outrank [hidden] */
 
 /* A paged data table (core.js paged) on a phone (owner, 2026-10-05: columns overlapped): each row a card,
    each value on its own line with its column's name; an empty value (a row's last chip column) takes no line. */
@@ -306,6 +314,8 @@ svg.bars .base { stroke: var(--text-dim); }
   table.data td { grid-column: 1 / -1; }
   table.data td.ph-half { grid-column: auto; flex-direction: column; align-items: flex-start; justify-content: flex-start; text-align: left; gap: 0; padding: 4px 0; }
   table.data td.ph-half:nth-child(even of .ph-half) { align-items: flex-end; text-align: right; }
+  table.data tr:has(+ tr.row-more:not([hidden])) { border-bottom: 0; padding-bottom: 0; }
+  table.data tr.row-more td { display: block; text-align: left; }
 }
 
 /* ---- the page's own dialog (core.js ask): never the browser's confirm/alert/prompt (owner, 2026-10-06).
@@ -410,9 +420,15 @@ pre.out { font-family: var(--font-mono); font-size: 12.5px; line-height: 1.6; ba
 .compare-row pre + pre { border-left: 1px solid var(--hairline); }
 .compare-row.diff pre { background: rgba(184, 128, 31, 0.12); }
 .compare-row pre.gap { background: var(--bg-input); }
-/* costs: a run's steps */
-ol.steps { margin: 6px 0 0; padding-left: 20px; text-align: left; }
-ol.steps code { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-primary); }
+/* costs: under a run, what was asked and its steps — one line each, a long one ellipsized (its tooltip has it all) */
+.run-more { background: var(--bg-input); border-radius: var(--radius); padding: 10px 14px; min-width: 0; }
+.run-asked { margin: 0 0 8px; font-size: var(--text-sm); color: var(--text-primary); white-space: pre-wrap; overflow-wrap: anywhere; }
+ol.steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 4px 10px; align-items: center; }
+ol.steps li { display: contents; }
+ol.steps .step-n { color: var(--text-dim); font-size: var(--text-xs); font-variant-numeric: tabular-nums; text-align: right; }
+ol.steps .chip { justify-self: start; }
+ol.steps .step-sum { font-size: var(--text-sm); color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+ol.steps code.step-sum { font-family: var(--font-mono); font-size: var(--text-xs); }
 /* overview: copying a setup */
 .grid.two { grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); }
 .box { border: 1px solid var(--hairline); border-radius: var(--radius); padding: 14px 16px; }

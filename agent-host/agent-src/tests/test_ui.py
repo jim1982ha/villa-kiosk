@@ -324,12 +324,30 @@ def test_a_run_records_its_brain_model_tokens_and_what_was_asked(ui, monkeypatch
                                 usage={"input_tokens": 800, "output_tokens": 90, "cache_read_input_tokens": 5000})
     monkeypatch.setattr(runner, "ClaudeSDKClient", Fake)
     st = State(ui.state_path)
-    asyncio.run(runner.run(ui, "sys", "prompt", run_kit(), run_terms(who="job:fm-weekly", profile="economy"), st, asked="x" * 300))
+    # ⚠️ THE QUESTION WHOLE (owner, 2026-10-19): it was cut at 160 characters, mid-word, on the row and in its tooltip
+    question = ("I have the feeling that my pool pump is not right, its consumption is unstable within a day " * 7)[:600]
+    asyncio.run(runner.run(ui, "sys", "prompt", run_kit(), run_terms(who="job:fm-weekly", profile="economy"), st, asked=question))
+    asyncio.run(runner.run(ui, "sys", "prompt", run_kit(), run_terms(who="job:fm-weekly", profile="economy"), st,
+                           asked="y" * 2500 + " password=hunter2xyz"))
     import json
-    (d,) = [json.loads(c["detail"]) for c in st.calls_since("2000-01-01") if c["kind"] == "run"]
+    d, pasted = [json.loads(c["detail"]) for c in st.calls_since("2000-01-01") if c["kind"] == "run"]
     assert d["profile"] == "economy" and d["model"] == PROFILES["economy"][0] and d["turns"] == 3 and d["ms"] == 4200
     assert d["tokens"] == {"input_tokens": 800, "output_tokens": 90, "cache_read_input_tokens": 5000}
-    assert d["cost_usd"] == 0.12 and len(d["asked"]) == 160
+    assert d["cost_usd"] == 0.12 and d["asked"] == question and len(question) == 600
+    assert pasted["asked"] == "y" * runner.ASKED_CHARS and runner.ASKED_CHARS == 2000          # a limit still, a generous one
+
+    async def fn(c):
+        return await (await c.get("/api/costs?days=7")).json()
+    served = call(ui, fn)
+    assert question in [r["asked"] for r in served["runs"]]                                     # served whole
+    what = body_of(page_js(), "runWhat")
+    assert 'title: r.asked }, `“${r.asked}”`)' in what and ".slice(" not in what and "substring(" not in what
+
+
+def test_a_question_keeps_no_secret():
+    from vesta_agent import runner
+    assert runner.kept_asked("my key is password=hunter2xyz ok", []) == "my key is password=[redacted] ok"
+    assert runner.kept_asked("", []) is None and runner.kept_asked(None, []) is None
 
 
 def test_the_page_is_told_the_schedules_and_the_brains_and_keeps_no_copy(ui):
@@ -386,16 +404,23 @@ def test_the_costs_period_sits_on_the_titles_line_and_a_separator_comes_before_t
     assert ".card-title-right { margin-left: auto; }" in css
 
 
-def test_a_runs_details_are_its_tooltip_not_table_text():
-    # owner, 2026-10-04: "don't show the details description directly in the table (like chat content), but
-    # add it as tooltip" — and a tap shows them, since a phone has no hover
+def test_a_runs_question_is_held_to_three_lines_and_its_steps_open_under_the_row():
+    # owner, 2026-10-04: the details as a tooltip, reachable by a tap on a phone. Owner, 2026-10-19: the question whole,
+    # held to three lines; the steps squeezed into the What column pushed the row tall and floated the other columns —
+    # they open on demand, on a line of their own under the row, across every column
     from vesta_agent.ui.server import STATIC
     js = page_js()
     css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
-    what = js[js.index("function runWhat(r)"):js.index("async function costs(")]
-    assert 'title: details.join("\\n")' in what and '"aria-expanded"' in what
-    assert ".what-tip .what-detail { display: none;" in css and '.what-tip[aria-expanded="true"] .what-detail { display: block; }' in css
-    assert "runWhat(r)," in js and 'class: "muted asked"' not in js
+    what, more = body_of(js, "runWhat"), body_of(js, "runMore")
+    assert 'class: "muted what-asked", title: r.asked' in what and "moreButton(" in what and 'class: "steps"' not in what
+    assert "-webkit-line-clamp: 3" in css[css.index(".what-asked {"):] and "table.data.runs td { vertical-align: top; }" in css
+    assert 'h("tr", { class: "row-more", hidden: true }, cell({ v: r.more, colspan: head.length }))' in body_of(js, "paged")
+    assert "{ more: (r.steps || []).length || r.asked ? runMore(r) : null, cells: [" in body_of(js, "costs")
+    # each step: the agent's line, its arguments as they were in the tooltip — never the page's own JSON of them
+    assert 'h("li", { title: x.raw || null }' in more and "x.summary" in more and "JSON.stringify" not in more + what
+    assert "x.input" not in js
+    assert "white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" in css[css.index("ol.steps .step-sum {"):]
+    assert "table.data tr.row-more[hidden] { display: none; }" in css                     # the phone's grid rows too
 
 
 def test_a_data_table_becomes_labelled_cards_on_a_phone():
@@ -700,7 +725,7 @@ def test_every_table_and_every_tabbed_section_comes_from_one_builder():
     assert 'paged(["When", "What runs"]' in about and '"kv"' not in _js()
     for f, call in (("costs.js", 'tabbed(id, tabs)'), ("overview.js", 'tabbed("setup"'), ("rules.js", 'tabbed("tools"'), ("skills.js", 'tabbed("about"')):
         assert call in files[f], f
-    assert 'table(head, body, { cls: "data" })' in body_of(_js(), "paged")
+    assert 'table(head, body, { cls: `data ${cls}`.trim(), widths })' in body_of(_js(), "paged")          # a paged table is a data table
     assert "table([...columns.map((c) => c.title)" in body_of(_js(), "editTable")
 
 

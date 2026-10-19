@@ -5,6 +5,7 @@ and the UI's overview: one reading of the records, two places to show it.
 """
 from __future__ import annotations
 
+import json
 import os
 from datetime import datetime, timedelta, timezone
 
@@ -141,10 +142,11 @@ def report(state, store_path: str, hours: int = 24, now: datetime | None = None,
             "incidents": incidents[-40:]}
 
 
-def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_label=None) -> dict:
+def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_label=None, name_of=None) -> dict:
     """What the AI cost, run by run, from the agent's own records (the cost the Anthropic API reported for each
     run): the VESTA Agent page's Costs tab. Each run: when, the work (a chat reply, or an AI job), who asked
-    and what, the brain and model, the tokens, the cost. Read-only; never a chat id (`chat_label` names the chat)."""
+    and what, the brain and model, the tokens, the cost, and each step in a line (step_summary). Read-only; never a
+    chat id (`chat_label` names the chat); `name_of(entity_id)` names a device in a step (the knowledge pack's)."""
     now = now or datetime.now(timezone.utc)
     since = now - timedelta(days=days)
     local = (lambda t: t.astimezone(zone)) if zone else (lambda t: t)
@@ -188,7 +190,7 @@ def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_la
                      "cause": cause(d.get("problem") or "unknown") if d.get("error") else None,
                      "what_to_do": what_to_do(d.get("problem") or "unknown") if d.get("error") else None,
                      "turns": d.get("turns"), "seconds": round(d["ms"] / 1000) if isinstance(d.get("ms"), (int, float)) else None,
-                     "steps": [x for x in d.get("steps") or [] if isinstance(x, dict)],
+                     "steps": steps_of(d.get("steps"), name_of),
                      # the skills it used, in order (runner.skills_of); a run recorded before 0.6.260 has none: "—"
                      "skills": [str(x) for x in d.get("skills") or [] if x]})
     runs.sort(key=lambda r: r["at"], reverse=True)
@@ -229,6 +231,135 @@ def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_la
             "runs": sorted(runs + made, key=lambda r: r["at"], reverse=True)[:300],
             # the Costs tab's "Tools in this period": each tool, how many runs used it and how many times
             "tools": _tool_counts(runs)}
+
+
+# ---------------------------------------------------------------- a run's steps, each in a line
+def steps_of(recorded, name_of=None) -> list[dict]:
+    """A run's steps as the Costs tab draws them: `{n, tool, summary, raw, code}` — the line it reads and, for its tooltip,
+    the arguments as they were. A step recorded before 0.6.261 kept only its line (`input`): shown as it was kept."""
+    out = []
+    for x in recorded or []:
+        if not isinstance(x, dict):
+            continue
+        tool = str(x.get("tool") or "?")
+        if isinstance(x.get("args"), dict):
+            args = x["args"]
+            summary = step_summary(tool, args, name_of)
+            raw = json.dumps(args, ensure_ascii=False, indent=1, default=str) if args else ""
+        else:
+            summary = raw = str(x.get("input") or "")
+        # `code`: the line is a command line, drawn in the typewriter face (the only one that is)
+        out.append({"n": len(out) + 1, "tool": tool, "summary": summary, "raw": raw,
+                    "code": tool == "run_skill_script" and isinstance(x.get("args"), dict)})
+    return out
+
+
+SUMMARY_CHARS = 160      # a step's line; the page ellipsizes it to its width, the tooltip has the rest
+
+
+def step_summary(tool: str, args: dict, name_of=None) -> str:
+    """One tool call in a line a person reads (owner, 2026-10-19: "I don't like the way the details are displayed"):
+    read_skill → the skill; run_skill_script → its command line; a read of the villa → the devices by name and the
+    period; ha_search → "lights matching “dining”"; ha_call_service → "light.turn_off · 2 lights: …"; web_search →
+    the query; save_file → the file; send_message → "to here · page.html"; any other → key=value, cut."""
+    a = args or {}
+    names = lambda v: _named(_ids(v), name_of)  # noqa: E731
+    if tool == "read_skill":
+        said = " · ".join(str(a[k]) for k in ("skill", "file") if a.get(k))
+    elif tool == "run_skill_script":
+        said = command_line(a.get("script"), a.get("args"))
+    elif tool in ("ha_get_history", "ha_get_state", "ha_get_logs"):
+        who = names(a.get("entity_ids") if tool == "ha_get_history" else a.get("entity_id"))
+        parts = [str(a["source"]) if tool == "ha_get_logs" and a.get("source") else None, who,
+                 f"“{a['search']}”" if tool == "ha_get_logs" and a.get("search") else None, _period(a)]
+        said = " · ".join(p for p in parts if p)
+    elif tool == "ha_search":
+        what = _plural(str(a["domain_filter"])) if a.get("domain_filter") else "anything"
+        said = f"{what} matching “{a.get('query', '')}”" + (f" in {a['area_filter']}" if a.get("area_filter") else "")
+    elif tool == "ha_call_service":
+        ids = _ids(a.get("entity_id"))
+        target = (f"{len(ids)} {_plural(ids[0].split('.')[0]) if '.' in ids[0] else 'devices'}: {_named(ids, name_of)}"
+                  if len(ids) > 1 else _named(ids, name_of))
+        said = " · ".join(p for p in (f"{a.get('domain', '')}.{a.get('service', '')}", target) if p)
+    elif tool == "web_search":
+        said = f"“{a.get('query', '')}”"
+    elif tool == "save_file":
+        said = str(a.get("name") or "")
+    elif tool == "send_message":
+        said = " · ".join(p for p in (f"to {a.get('to', '?')}", str(a.get("attachment") or "")) if p)
+    else:
+        said = " ".join(f"{k}={_short(v)}" for k, v in a.items())
+    return said if len(said) <= SUMMARY_CHARS else said[:SUMMARY_CHARS - 1].rstrip() + "…"
+
+
+def script_args(args) -> list[str]:
+    """A script's arguments as the list the script is run with — whether the model sent a list, that list written as
+    JSON text, or a command line. ⚠️ ONE READING FOR THE RUN AND THE PAGE (2026-10-19): the run did list(args) on a
+    text and spread it letter by letter ("[", "\"", "-", "-", "p", …), so the call was refused and the model had to
+    try again — the Costs page showed the same text letter-spaced."""
+    import shlex
+    if isinstance(args, str):
+        try:
+            back = json.loads(args)
+        except ValueError:
+            back = None
+        if isinstance(back, list):
+            return [str(x) for x in back]
+        try:
+            return shlex.split(args)
+        except ValueError:
+            return args.split()
+    return [str(x) for x in args] if isinstance(args, list) else []
+
+
+def command_line(script, args) -> str:
+    """A script and its arguments as one would type them: "energy_period.py --period week --out week.json"."""
+    import shlex
+    return " ".join([str(script or "?"), *map(shlex.quote, script_args(args))])
+
+
+def _ids(v) -> list[str]:
+    """Entity ids as a tool takes them: one, a list, or "a, b" in one text."""
+    if isinstance(v, list):
+        return [str(x).strip() for x in v if str(x).strip()]
+    if isinstance(v, str):
+        return [x.strip() for x in v.split(",") if x.strip()]
+    return []
+
+
+def _named(ids: list[str], name_of=None, most: int = 3) -> str:
+    """The devices by name when the knowledge pack names them, else by id; the first `most`, then "+N more"."""
+    shown = [(name_of(i) if name_of else None) or i for i in ids[:most]]
+    return ", ".join(shown) + (f" +{len(ids) - most} more" if len(ids) > most else "")
+
+
+def _period(a: dict) -> str | None:
+    """The period a read covers, in words: "last 7 days, by day", "last 6 h", "from 2026-10-12 08:00"."""
+    out = []
+    start, rel = a.get("start_time"), None
+    if isinstance(start, str) and start[:-1].isdigit() and start[-1:] in ("h", "d"):
+        n = int(start[:-1])
+        rel = f"last {n} h" if start[-1] == "h" else f"last {n} day" + ("s" if n != 1 else "")
+    if a.get("hours_back") is not None:
+        rel = f"last {a['hours_back']} h"
+    if rel:
+        out.append(rel)
+    elif start:
+        out.append(f"from {str(start)[:16].replace('T', ' ')}")
+    if a.get("end_time"):
+        out.append(f"to {str(a['end_time'])[:16].replace('T', ' ')}")
+    if a.get("period"):
+        out.append(f"by {a['period']}")
+    return ", ".join(out) or None
+
+
+def _plural(word: str) -> str:
+    return word + ("es" if word.endswith(("s", "sh", "ch", "x")) else "s")
+
+
+def _short(v, most: int = 40) -> str:
+    text = v if isinstance(v, str) else json.dumps(v, ensure_ascii=False, default=str)
+    return text if len(text) <= most else text[:most - 1] + "…"
 
 
 def _tool_counts(runs: list[dict]) -> list[dict]:

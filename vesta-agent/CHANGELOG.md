@@ -1,3 +1,20 @@
+## 0.12.270
+
+What you will see:
+- A report or a question no longer needs a second try when the AI writes a script's options as text: the agent
+  reads them as the list they are (it spread them letter by letter and refused the call — the weekly report's
+  first try on 19 October).
+- Costs › AI runs › Every run: the question someone asked is now kept whole, no longer cut after a line and a half
+  in the middle of a word. On the row it shows up to three lines; the rest is in its tooltip and under the row when
+  you open it. Questions asked before this version stay cut, as they were saved.
+- A run's details no longer fill the "What" column. The row stays short: what it was, the chat, the question, and a
+  small "11 steps ▸" button. Pressing it opens a panel under the row, across the whole table, with one line per step:
+  its number, the tool, and in plain words what it asked for — "energy_period.py --period week --out week.json",
+  "lights matching “dining”", "light.turn_off · 2 lights: Dining table, Hall", "to here · fm_weekly.html". A long
+  line ends with "…"; hovering over a line shows exactly what the AI sent. Devices are named as the villa names them.
+- The other columns now line up at the top of each row, and the "Skills" column has room for its title.
+- Runs from before this version show their steps as they were saved (the older wording), in the same panel.
+
 ## 0.12.269
 
 What you will see:

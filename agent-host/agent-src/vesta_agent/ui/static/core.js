@@ -298,17 +298,41 @@ export function field(label, input, hint) {
 
 // A table of many rows, 10 to a page (owner, 2026-10-01): `head` the column titles, `rows` arrays of cells;
 // a cell is a node, a text, or {v, cls}. Newest first is the caller's order.
-export function paged(head, rows, per = 10) {
+export function paged(head, rows, per = 10, { cls = "", widths = null } = {}) {
   const body = h("tbody");
   // each cell carries its column's name: on a phone the row becomes a card, every value labelled (app.css);
   // a column whose head says `half` shares its line there with the next half one (owner, 2026-10-05)
   const label = head.map((c) => String(isCell(c) ? c.v : c || ""));
   const half = head.map((c) => !!(isCell(c) && c.half));
+  const line = (cells) => h("tr", {}, cells.map((c, i) => cell(c, "td", { cls: half[i] ? "ph-half" : null, label: label[i] })));
+  // a row is its cells, or {cells, more}: `more` drawn on its own line under the row, across every column, while the
+  // row's moreButton is open (Costs › Every run: a run's question and steps, owner 2026-10-19 — they were squeezed
+  // into the What column and pushed the row tall)
+  // (each row's two lines are made once: a page turned and back keeps a row open with its button saying so)
+  const made = new Map();
+  const drawn = (r) => {
+    if (Array.isArray(r)) return [line(r)];
+    if (!made.has(r)) made.set(r, r.more ? [line(r.cells), h("tr", { class: "row-more", hidden: true }, cell({ v: r.more, colspan: head.length }))] : [line(r.cells)]);
+    return made.get(r);
+  };
   // newest first: the pages go to "older" (the one pager, pagedBlock)
-  const pager = pagedBlock(() => rows.length, (from, to) => body.replaceChildren(...rows.slice(from, to).map((cells) =>
-    h("tr", {}, cells.map((c, i) => cell(c, "td", { cls: half[i] ? "ph-half" : null, label: label[i] }))))), per, ["‹ Newer", "Older ›", "rows"]);
+  const pager = pagedBlock(() => rows.length, (from, to) => body.replaceChildren(...rows.slice(from, to).flatMap(drawn)),
+    per, ["‹ Newer", "Older ›", "rows"]);
   pager.redraw();
-  return h("div", {}, h("div", { class: "tbl" }, table(head, body, { cls: "data" })), pager.nav);
+  return h("div", {}, h("div", { class: "tbl" }, table(head, body, { cls: `data ${cls}`.trim(), widths })), pager.nav);
+}
+
+// The button that opens a paged row's `more` (the line under it): "11 steps ▸", "▾" while open.
+export function moreButton(label) {
+  const btn = h("button", { type: "button", class: "more-btn", "aria-expanded": "false" }, label, h("span", { class: "caret" }, "▸"));
+  btn.addEventListener("click", () => {
+    const more = btn.closest("tr")?.nextElementSibling;
+    if (!more || !more.classList.contains("row-more")) return;
+    more.hidden = !more.hidden;
+    btn.setAttribute("aria-expanded", String(!more.hidden));
+    btn.lastChild.textContent = more.hidden ? "▸" : "▾";
+  });
+  return btn;
 }
 
 // ⚠️ THE ONE TABLE (DRY, owner 2026-10-08: "all the tables formatted the same way, from the same code"). Every table on

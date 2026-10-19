@@ -236,8 +236,11 @@ class UI:
             zone = None
         route = Routing(page_policy(self.s.policy_path))
         from ..policy import profile_labels
+        from vesta_shared.knowledge_pack import KnowledgePack
+        pack = KnowledgePack.read(self.s.pack_path)        # a step names a device as the pack does; none yet: its id
         return web.json_response({**status.costs(State(self.s.state_path), days, zone=zone,
-                                                 chat_label=lambda cid: route.label(int(cid))),
+                                                 chat_label=lambda cid: route.label(int(cid)),
+                                                 name_of=pack.name_of if pack else None),
                                   "profiles": profile_labels()})
 
     # ------------------------------------------------------------------ the villa's devices

@@ -186,9 +186,14 @@ def test_each_tool_call_is_recorded_in_short_with_the_run(agent):
                                      ToolUseBlock("2", "WebSearch", {"query": "storm warning Bali"}),
                                      ToolUseBlock("3", "mcp__vesta__ha_get_state", {"entity_id": "sensor.x", "vesta_part": 2})],
                             model="haiku"))
-    assert c.steps == [{"tool": "run_skill_script", "input": "concierge.py find --what lights"},
-                       {"tool": "web_search", "input": "storm warning Bali"},
-                       {"tool": "ha_get_state", "input": '"entity_id": "sensor.x"'}]
+    # the arguments as they were (status.step_summary says them in a line), `vesta_part` left out
+    assert c.steps == [{"tool": "run_skill_script", "args": {"skill": "villa-concierge", "script": "concierge.py",
+                                                             "args": ["find", "--what", "lights"]}},
+                       {"tool": "web_search", "args": {"query": "storm warning Bali"}},
+                       {"tool": "ha_get_state", "args": {"entity_id": "sensor.x"}}]
+    long = runner.step("mcp__vesta__save_file", {"name": "a.json", "content": "z" * 5000, "deep": {"a": {"b": {"c": [1]}}}})
+    assert long["args"]["content"] == "z" * runner.ARG_CHARS + "…" and long["args"]["deep"]["a"]["b"] == '{"c": [1]}'
+
 
 
 def test_only_the_text_after_the_last_tool_call_is_the_answer():
@@ -331,8 +336,12 @@ def test_the_saved_list_reads_back_as_the_server_gave_it(tmp_path):
 def test_a_tool_call_kept_for_the_costs_tab_loses_a_token_by_its_shape():
     # architecture review 5: runner had its own scrubber, which knew only the configured secrets
     jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ4eXoxMjMifQ.abcdefghijk"
-    (st,) = runner.kept_steps([{"tool": "ha_eval_template", "input": f"token={jwt} and password=hunter2xyz"}], ["known-secret-1"])
-    assert jwt not in st["input"] and "hunter2xyz" not in st["input"] and st["tool"] == "ha_eval_template"
+    (st,) = runner.kept_steps([{"tool": "ha_eval_template", "args": {"template": f"token={jwt} and password=hunter2xyz",
+                                                                     "password": "s3cr3tvalue", "x": "known-secret-1"}}],
+                              ["known-secret-1"])
+    kept = str(st["args"])
+    assert jwt not in kept and "hunter2xyz" not in kept and "s3cr3tvalue" not in kept and "known-secret-1" not in kept
+    assert st["tool"] == "ha_eval_template" and set(st["args"]) == {"template", "password", "x"}       # still the arguments
 
 
 def test_whether_a_skill_works_is_one_answer():
@@ -509,3 +518,20 @@ def test_the_skill_page_and_a_run_tell_each_tool_the_same_way(agent):
     without = {w["tool"] for w in tool_access.health(pol, server, sk)["without"]}
     assert page == {"ha_get_state": "on", "ha_get_history": "off", "ha_call_event": "never", "ha_not_here": "missing"}
     assert without == {t for t, st in page.items() if st == "off"}
+
+
+def test_a_scripts_arguments_sent_as_text_run_as_the_list_they_are():
+    # 2026-10-19 (the owner's Costs screenshot): the weekly report's first call sent its arguments as the JSON text of a
+    # list; the run spread it letter by letter, refused it, and the model had to call again. One reading, for the run
+    # and the page.
+    from vesta_agent import status
+    want = ["--period", "week", "--out", "week.json"]
+    assert status.script_args(want) == want
+    assert status.script_args('["--period","week","--out","week.json"]') == want
+    assert status.script_args("--period week --out week.json") == want
+    assert status.script_args(None) == [] and status.script_args("") == []
+    assert status.command_line("energy_period.py", '["--period","week"]') == "energy_period.py --period week"
+    import inspect
+    from vesta_agent import tools
+    src = inspect.getsource(tools)
+    assert 'status.script_args(args.get("args")' in src and 'list(args.get("args")' not in src

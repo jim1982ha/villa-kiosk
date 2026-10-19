@@ -267,7 +267,7 @@ class Toolbox:
             finally:
                 # who called the villa's system, and for how long: the AI's own calls, beside its scripts' lines
                 # (retro, 2026-10-15: ha-mcp's log names the request, never the caller)
-                log.info("AI: %s %s took %.1f s", name, step(name, args)["input"][:100], time.monotonic() - t0)
+                log.info("AI: %s %s took %.1f s", name, status.step_summary(**step(name, args))[:100], time.monotonic() - t0)
             blocks = res.get("content") or []
             images = [b for b in blocks if b.get("type") == "image"]
             for b in images:
@@ -458,7 +458,7 @@ class Toolbox:
                 return _err(f"Asked for in a chat, this is the {job} job: call start_job with name {job}. "
                             "It runs with its own brain and limit and sends its result to this chat.")
             try:
-                final = validate_script_args(skill, sk, sc, list(args.get("args") or []), self.s.out_dir)
+                final = validate_script_args(skill, sk, sc, status.script_args(args.get("args") or []), self.s.out_dir)
             except ToolError as e:
                 self.state.log("script_refused", {"skill": sk, "script": sc, "args": args.get("args"), "reason": str(e)})
                 return _err(str(e))

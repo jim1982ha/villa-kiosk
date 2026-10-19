@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.6.261 (19 October 2026)
+
+Costs › Every run: the question whole, and each step in a line (owner's screenshots, 19 October).
+- status.script_args: one reading of a script's arguments (a list, its JSON text, or a command line) for the run
+  (tools.run_skill_script: list(text) spread it letter by letter and the call was refused) and the page
+  (command_line). Test: test_a_scripts_arguments_sent_as_text_run_as_the_list_they_are (one mutation red).
+- The question was cut at 160 characters by runner.run (`(asked or "")[:160]`, both the finished and the cut run's
+  record), mid-word on the row and in its tooltip. Now `runner.kept_asked`: whole up to `ASKED_CHARS` = 2,000 (any
+  typed or spoken question; a pasted page stays bounded in a record kept a year), through `redact.scrub` (it was not
+  scrubbed before). Questions recorded before this version stay cut.
+- A step records its arguments (`runner.step` → `{tool, args}`, `vesta_part` dropped, each text cut to `ARG_CHARS` =
+  300, lists to 25 items, three levels deep; `kept_steps` scrubs them as one JSON text) instead of a 160-character
+  line. Its old line spread a script's `args` sent as text letter by letter (`map(str, "[\"--period\", …]")`).
+- `status.steps_of` serves each step as `{n, tool, summary, raw, code}`; `status.step_summary(tool, args, name_of)`
+  is its line: read_skill → the skill; run_skill_script → `command_line` (a list, or that list as JSON text, joined
+  with shlex quoting); ha_get_history/state/logs → the devices by name (knowledge pack, else the id; three, then
+  "+N more") and the period; ha_search → "lights matching “dining”"; ha_call_service → "light.turn_off · 2 lights:
+  …"; web_search → the query in quotes; save_file → the name; send_message → "to here · page.html"; any other →
+  key=value, each value 40 characters, the line 160, cut with "…". `raw` is the arguments as indented JSON (the
+  tooltip). A step recorded before shows its old line as it was. The UI server passes `KnowledgePack.name_of`; the
+  tool log line (`tools.py`) uses the same summary.
+- Page: `core.paged(head, rows, per, {cls, widths})` takes a row `{cells, more}` — `more` on a line of its own under
+  the row, across every column, opened by `core.moreButton` ("11 steps ▸"); each row's two lines are made once, so a
+  page turned and back keeps its state. costs.js `runWhat` (label, chat, the question held to three lines, its tooltip
+  the whole question) and `runMore` (the whole question, then a grid of number · tool chip · summary, each line
+  ellipsized, `raw` its tooltip, the command line in the typewriter face). Every run: cells at the top, columns given
+  widths. CSS for both themes from the existing tokens; `.what-tip`/`.what-detail` removed.
+- Tests: test_ui (a 600-character question recorded and served whole, 2,000 the limit, a secret scrubbed; the page
+  draws the served text, no cutting; the layout pins), test_page_controls (/api/costs serves each tool kind's line,
+  the list-as-text script, names from the pack, the cut, an older step), test_tool_access (a step keeps its bounded
+  arguments; scrubbed by key and by shape).
+
 ## 0.6.260 (19 October 2026)
 
 Each AI run's own cost, not its conversation's (owner's screenshot, 19 October: one chat's Haiku replies of ~48k tokens

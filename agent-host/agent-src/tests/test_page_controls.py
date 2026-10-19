@@ -613,3 +613,77 @@ def test_every_run_names_the_skills_it_used_before_the_tools_it_called(ui):
     assert '"Brain · model", "Skills", place("tools_called")' in js and "usedSkills(r.skills),\n    usedTools(r.steps)" in js
     drawn = body_of(page_js(), "usedSkills")
     assert 'skills.map((k) => h("span", { class: "chip" }, k))' in drawn and ': "—"' in drawn
+
+
+def test_every_runs_steps_are_served_each_in_a_line_the_page_draws(ui):
+    # owner, 2026-10-19: "I don't like the way the details are displayed" — every tool call as raw JSON in the What
+    # column, a script's arguments spread letter by letter. The agent says each step in a line; the page draws it.
+    import json
+    from vesta_agent import runner
+    from vesta_agent.state import State
+    from vesta_shared import agent_records
+    with open(ui.pack_path, "w") as f:          # the knowledge pack names one of the two lights; the other keeps its id
+        json.dump({"villa": "x", "time_zone": "UTC", "generated_at": "2026-10-01T02:00:00+00:00", "ha_version": None,
+                   "families": {"lighting": [{"entity_id": "light.example_dining", "name": "Dining table", "area": ""}]},
+                   "assets": {}, "areas": [], "people": [], "channels": {}, "unknown_area": [], "unclassified": [],
+                   "retention": {}}, f)
+    calls = [("mcp__vesta__read_skill", {"skill": "reports"}),
+             ("mcp__vesta__run_skill_script", {"skill": "reports", "script": "energy_period.py",
+                                               "args": ["--period", "week", "--out", "week.json"], "vesta_part": 1}),
+             # the list written as text, as the model sometimes sends it: the same command line, never "[ \" - - p …"
+             ("mcp__vesta__run_skill_script", {"skill": "reports", "script": "energy_period.py",
+                                               "args": '["--period","week","--out","week.json"]'}),
+             ("mcp__vesta__ha_get_history", {"entity_ids": "light.example_dining, sensor.example_power", "start_time": "7d",
+                                             "period": "day"}),
+             ("mcp__vesta__ha_get_logs", {"source": "logbook", "hours_back": 6, "entity_id": "light.example_dining"}),
+             ("mcp__vesta__ha_search", {"domain_filter": "light", "query": "dining", "result_fields": ["entity_id", "friendly_name"]}),
+             ("mcp__vesta__ha_call_service", {"domain": "light", "service": "turn_off",
+                                              "entity_id": ["light.example_dining", "light.example_hall"]}),
+             ("WebSearch", {"query": "pool pump unstable consumption"}),
+             ("mcp__vesta__save_file", {"name": "week.json", "content": "{}" * 400}),
+             ("mcp__vesta__send_message", {"to": "here", "text": "Your week", "attachment": "fm_weekly.html"}),
+             ("mcp__vesta__start_job", {"name": "fm-weekly", "why": "the owner asked for this week's report again " * 3})]
+    st = State(ui.state_path)
+    st.log(agent_records.RUN, {"who": "Owner@111", "cost_usd": 0.02, "asked": "new",
+                               "steps": runner.kept_steps([runner.step(n, a) for n, a in calls], [])})
+    st.log(agent_records.RUN, {"who": "Owner@111", "cost_usd": 0.01, "asked": "one", "steps": runner.kept_steps([
+        runner.step("mcp__vesta__ha_call_service", {"domain": "light", "service": "turn_on", "entity_id": "light.example_dining"}),
+        runner.step("WebSearch", {"query": "pump " * 60})], [])})
+    st.log(agent_records.RUN, {"who": "Owner@111", "cost_usd": 0.01, "asked": "old",                 # before 0.6.261
+                               "steps": [{"tool": "ha_get_state", "input": '"entity_id": "sensor.x"'}]})
+
+    async def fn(c):
+        return await _json(c, "get", "/api/costs?days=7")
+    status, got = call(ui, fn)
+    assert status == 200
+    steps = {r["asked"]: r["steps"] for r in got["runs"]}
+    new = steps["new"]
+    assert [(s["n"], s["tool"]) for s in new][:3] == [(1, "read_skill"), (2, "run_skill_script"), (3, "run_skill_script")]
+    assert [s["summary"] for s in new] == [
+        "reports",
+        "energy_period.py --period week --out week.json",
+        "energy_period.py --period week --out week.json",
+        "Dining table, sensor.example_power · last 7 days, by day",
+        "logbook · Dining table · last 6 h",
+        "lights matching “dining”",
+        "light.turn_off · 2 lights: Dining table, light.example_hall",
+        "“pool pump unstable consumption”",
+        "week.json",
+        "to here · fm_weekly.html",
+        new[-1]["summary"]]
+    other = new[-1]["summary"]          # a tool with no line of its own: key=value, cut with an ellipsis
+    assert other.startswith("name=fm-weekly why=the owner asked") and other.endswith("…") and len(other) <= 160
+    # the arguments as they were, for the line's tooltip: vesta_part dropped, a long text bounded
+    assert json.loads(new[1]["raw"]) == {"skill": "reports", "script": "energy_period.py",
+                                         "args": ["--period", "week", "--out", "week.json"]}
+    assert json.loads(new[8]["raw"])["content"].endswith("…") and [s["code"] for s in new][1:3] == [True, True]
+    one, long = steps["one"]
+    assert one["summary"] == "light.turn_on · Dining table"                                   # one device: its name alone
+    assert long["summary"].startswith("“pump pump") and long["summary"].endswith("…") and len(long["summary"]) == 160
+    # a step recorded before 0.6.261 kept only its line: shown as it was kept
+    assert steps["old"] == [{"n": 1, "tool": "ha_get_state", "summary": '"entity_id": "sensor.x"',
+                             "raw": '"entity_id": "sensor.x"', "code": False}]
+    # the page draws the agent's line; its tooltip the arguments — no JSON of its own
+    from helpers import body_of
+    more = body_of(page_js(), "runMore")
+    assert "x.summary" in more and "x.raw" in more and "JSON.stringify" not in body_of(page_js(), "costs") + more

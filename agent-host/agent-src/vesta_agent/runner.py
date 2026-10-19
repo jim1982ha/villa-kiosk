@@ -159,24 +159,34 @@ def tool_key(name: str) -> str:
 
 
 def step(name: str, args) -> dict:
-    """One tool call, for the record: what was called and, in a line, with what. Never more: an answer can hold
-    anything, and the record is read on the Costs tab."""
+    """One tool call, for the record: what was called and with what — its arguments kept as they were, each value
+    bounded (an answer or a file's content can hold anything). The Costs tab says them in a line
+    (status.step_summary); the record keeps the arguments, so a better line never needs a new record.
+
+    ⚠️ ARGUMENTS, NOT A LINE (owner, 2026-10-19): the record held a 160-character line made here, a script's string
+    `args` spread letter by letter ("[ " - - p e r i o d …") and every other tool as cut JSON."""
     args = dict(args or {}) if isinstance(args, dict) else {}
     args.pop("vesta_part", None)
-    key = tool_key(name)
-    if key == "run_skill_script":
-        said = " ".join([str(args.get("script") or ""), *map(str, args.get("args") or [])]).strip()
-    elif key == "ha_call_service":
-        said = f"{args.get('domain', '')}.{args.get('service', '')} {args.get('entity_id') or ''}".strip()
-    elif key == "web_search":
-        said = str(args.get("query") or "")
-    elif key == "send_message":
-        said = f"to {args.get('to', '?')}" + (f", {args['attachment']}" if args.get("attachment") else "")
-    elif key == "save_file":
-        said = str(args.get("name") or "")
-    else:
-        said = json.dumps(args, ensure_ascii=False, sort_keys=True, default=str)[1:-1] if args else ""
-    return {"tool": key, "input": said[:160]}
+    return {"tool": tool_key(name), "args": _bounded(args)}
+
+
+ARG_CHARS = 300         # one argument value as a run's record keeps it (a file's content, a message's text: their start)
+ARG_ITEMS = 25          # the items of a list argument kept (a service call's entities)
+
+
+def _bounded(v, depth: int = 0):
+    """`v` with every text cut to ARG_CHARS, every list to ARG_ITEMS, nothing deeper than three levels."""
+    if isinstance(v, str):
+        return v if len(v) <= ARG_CHARS else v[:ARG_CHARS] + "…"
+    if isinstance(v, (int, float, bool)) or v is None:
+        return v
+    if depth >= 3:
+        return _bounded(json.dumps(v, ensure_ascii=False, default=str), depth)
+    if isinstance(v, dict):
+        return {str(k): _bounded(x, depth + 1) for k, x in list(v.items())[:ARG_ITEMS]}
+    if isinstance(v, (list, tuple)):
+        return [_bounded(x, depth + 1) for x in list(v)[:ARG_ITEMS]]
+    return _bounded(str(v), depth)
 
 
 def make_guard(allowed: set[str], state, who: str, searched: list | None = None):
@@ -242,9 +252,43 @@ def skills_of(started_for: str | None, used: list[str]) -> list[str]:
     return list(dict.fromkeys([*([started_for] if started_for else []), *used]))
 
 
+def _secrets(settings) -> list[str]:
+    return settings.secrets() if hasattr(settings, "secrets") else []
+
+
 def kept_steps(steps: list[dict], secrets: list[str]) -> list[dict]:
-    """The tool calls kept with a run (the Costs tab), through the one scrubber (redact.py)."""
-    return [{**st, "input": scrub(st["input"], secrets)} for st in steps]
+    """The tool calls kept with a run (the Costs tab), through the one scrubber (redact.py). Scrubbed as one text,
+    so a "password" key and its value are caught together; each text again if that text no longer reads back."""
+    out = []
+    for st in steps:
+        text = json.dumps(st.get("args") or {}, ensure_ascii=False, default=str)
+        try:
+            args = json.loads(scrub(text, secrets))
+        except ValueError:
+            args = _scrub_each(st.get("args") or {}, secrets)
+        out.append({**st, "args": args})
+    return out
+
+
+def _scrub_each(v, secrets: list[str]):
+    if isinstance(v, str):
+        return scrub(v, secrets)
+    if isinstance(v, dict):
+        return {k: _scrub_each(x, secrets) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_scrub_each(x, secrets) for x in v]
+    return v
+
+
+# ⚠️ THE QUESTION WHOLE (owner, 2026-10-19): the Costs tab showed what was asked cut at 160 characters, mid-word, its
+# tooltip too. 2,000 keeps any question a person types or says whole (a long voice message is about 1,000), and still
+# bounds a pasted page in a record kept for a year (runs_days) and served 300 rows at a time.
+ASKED_CHARS = 2000
+
+
+def kept_asked(asked: str | None, secrets: list[str]) -> str | None:
+    """What was asked, as a run's record keeps it: whole up to ASKED_CHARS, through the one scrubber."""
+    return scrub((asked or "")[:ASKED_CHARS], secrets) or None
 
 
 def with_time(settings, prompt: str, now: datetime | None = None) -> str:
@@ -288,8 +332,8 @@ async def run(settings, system_prompt: str, prompt: str, kit, terms, state, resu
         # by Anthropic only at a run's end, so the record says it was cut rather than guess a price
         state.log(RUN_CUT, {"who": terms.who, "cost_usd": None, "stopped_at_limit": False, "denied": [],
                         "error": None, "profile": terms.profile, "model": opts.model, "tokens": c.partial_tokens(),
-                        "turns": None, "ms": None, "asked": (asked or "")[:160] or None, "problem": None,
-                        "steps": kept_steps(c.steps, settings.secrets() if hasattr(settings, "secrets") else []),
+                        "turns": None, "ms": None, "asked": kept_asked(asked, _secrets(settings)), "problem": None,
+                        "steps": kept_steps(c.steps, _secrets(settings)),
                         "skills": skills_of(terms.skill, c.skills)})
         raise
     except Exception as e:  # noqa: BLE001
@@ -298,7 +342,7 @@ async def run(settings, system_prompt: str, prompt: str, kit, terms, state, resu
         if c.problem == "unknown":
             log.exception("agent run failed")
     texts, session_id, stopped, cost, usage, turns, ms = c.texts, c.session_id, c.stopped, c.cost, c.usage, c.turns, c.ms
-    steps = kept_steps(c.steps, settings.secrets() if hasattr(settings, "secrets") else [])
+    steps = kept_steps(c.steps, _secrets(settings))
     err, problem = c.err or (f"api {c.kind}" if c.kind else None), c.problem
     if problem:
         # the kind and the status only: the raw prose may quote the request
@@ -321,7 +365,7 @@ async def run(settings, system_prompt: str, prompt: str, kit, terms, state, resu
         state.log(RUN, {"who": terms.who, "cost_usd": cost, "stopped_at_limit": stopped, "denied": denied, "error": err,
                         "profile": terms.profile,
                         "model": opts.model, "tokens": tokens, "turns": turns, "ms": ms,
-                        "asked": (asked or "")[:160] or None, "problem": problem,
+                        "asked": kept_asked(asked, _secrets(settings)), "problem": problem,
                         # ⚠️ THE TOOLS IT USED (0.6.42): the Costs tab's "Tools used", and how often each tool is used
                         "steps": steps, "skills": skills_of(terms.skill, c.skills),
                         "session": session_id, "session_total_usd": total})
