@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.271 (20 October 2026)
+
+- Limits tab: "Changed from its usual …" only under a value that differs from its usual one (the test was inverted:
+  every row said it, beside its own usual value — owner's screenshot). Test pins it.
+
 ## 0.6.270 (20 October 2026)
 
 - The day recheck (08:00, 12:00, 16:00, 20:00) reads the open reconnect loops again (owner, 2026-10-20: "yes" — 17 false

@@ -47,7 +47,7 @@ function row(r, probs, again) {
       r.reached || r.told ? h("div", { class: "limit-reached" }, r.reached ? `Reached: ${r.reached} ` : "",
         r.told ? h("span", { class: "chip tiny" + (r.told.startsWith("Nobody") ? " off" : "") }, r.told) : null) : null,
       h("div", { class: "muted small" }, r.also,
-        same(r.value, r.default) ? ` Changed from its usual ${shown(r.default)}.` : "")),
+        same(r.value, r.default) ? "" : ` Changed from its usual ${shown(r.default)}.`)),
     h("div", { class: "limit-value" }, field, r.unit ? h("span", { class: "muted" }, r.unit) : null,
       bounds ? h("span", { class: "muted small" }, bounds) : null, save),
   ];

@@ -288,3 +288,10 @@ def test_a_skills_ai_jobs_have_one_brain_and_one_limit_row_saved_whole(ui):
     assert status == 200
     s = yaml.safe_load(open(ui.policy_path))["settings"]
     assert s["skill_ai"] == {"reports": {"brain": "auto", "limit_usd": 3}} and "jobs" not in s
+
+
+def test_only_a_changed_value_says_it_was_changed():
+    # owner's screenshot, 2026-10-20: every row read "Changed from its usual 5000" beside 5000 — the test was inverted
+    from helpers import page_js
+    js = page_js()
+    assert 'same(r.value, r.default) ? "" : ` Changed from its usual ${shown(r.default)}.`' in js
