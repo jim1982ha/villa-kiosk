@@ -112,10 +112,10 @@ class AiJobs:
         log.info("AI job %s started (%s, limit %g USD)%s", name, cfg["profile"], cfg["limit_usd"],
                  " on request" if origin else "")
         if origin:
-            res = await self.turns.job(name, cfg, prompt, origin, folder, to)
+            res = await self.turns.job(name, cfg, prompt, origin, folder, to, skill.name)
         else:
             async with self.chat_jobs.held(to, name):       # on schedule: asked for meanwhile, it is "already being made"
-                res = await self.turns.job(name, cfg, prompt, origin, folder, to)
+                res = await self.turns.job(name, cfg, prompt, origin, folder, to, skill.name)
         if res.failed:
             # before 0.6.41 a failed job logged "done" and nobody was told: the report simply never came
             problem = res.problem or "unknown"

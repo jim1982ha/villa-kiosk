@@ -33,6 +33,9 @@ class Terms:
     profile: str                   # policy.PROFILES key: its model and effort
     limit_usd: float               # the run stops here (max_budget_usd)
     who: str                       # agent_records: whose run it is in the Costs tab
+    # the skill the run was started for (a scheduled job's, or the command skill a person called): the first of the
+    # Costs tab's "Skills" for that run, before those the AI read or ran (runner.Collector.skills)
+    skill: str | None = None
 
     @property
     def model(self) -> str:
@@ -99,20 +102,21 @@ THEN = {
 
 
 def chat_terms(settings, policy, server_tools: list[dict], person, chat: int, brain: str | None = None,
-               limit_usd: float | None = None) -> Terms:
+               limit_usd: float | None = None, skill: str | None = None) -> Terms:
     """A person answered in a chat: what THEY may use there, the villa's chat brain and reply limit — or the brain and
     limit the command skill it was called for names (skills.Skill.brain / limit_usd)."""
     return Terms(frozenset(tool_access.allowed_for(policy, server_tools, person.role if person else None, chat)),
                  brain or settings.profile, float(limit_usd if limit_usd is not None else settings.reply_limit_usd),
-                 agent_records.for_person(person.name if person else None, chat))
+                 agent_records.for_person(person.name if person else None, chat), skill)
 
 
-def job_terms(policy, server_tools: list[dict], name: str, cfg: dict, origin: Origin | None) -> Terms:
+def job_terms(policy, server_tools: list[dict], name: str, cfg: dict, origin: Origin | None,
+              skill: str | None = None) -> Terms:
     """A skill's AI job: what the person who asked for it may use (origin.role, in origin.chat) — SYSTEM when it runs
     on schedule — never the skill's own list (owner, 2026-10-10); its brain and limit are policy.yaml's for the job."""
     role = (origin.role if origin else tool_access.SYSTEM)
     return Terms(frozenset(tool_access.allowed_for(policy, server_tools, role, origin.chat if origin else None)),
-                 cfg["profile"], float(cfg["limit_usd"]), agent_records.for_job(name))
+                 cfg["profile"], float(cfg["limit_usd"]), agent_records.for_job(name), skill)
 
 
 class Turns:
@@ -131,16 +135,17 @@ class Turns:
         (app.lock), and a Continue reads what the turn before it saved. `request`: the command skill's request it answers
         (command_request.Request): its skill's own brain and limit, its id and web searches for the toolbox."""
         terms = chat_terms(self.s, self.policy(), await self.server_tools(), person, chat,
-                           request.brain if request else None, request.limit_usd if request else None)
+                           request.brain if request else None, request.limit_usd if request else None,
+                           request.name if request else None)
         return await self._run(terms, self.s.in_folder(f"chats/{chat}"), prompt, person,
                                Origin(chat, CONVERSATION, role=person.role if person else None),
                                resume, asked, [chat], image, request)
 
     async def job(self, name: str, cfg: dict, prompt: str, origin: Origin | None, run_settings,
-                  told: list[int]) -> TurnResult:
+                  told: list[int], skill: str | None = None) -> TurnResult:
         """A skill's AI job, in `run_settings`' folder (the one its code steps use after it). `told`: the chats its
-        result goes to, so the owner is not told twice in the same chat."""
-        terms = job_terms(self.policy(), await self.server_tools(), name, cfg, origin)
+        result goes to, so the owner is not told twice in the same chat. `skill`: the skill that declares it."""
+        terms = job_terms(self.policy(), await self.server_tools(), name, cfg, origin, skill)
         return await self._run(terms, run_settings, prompt, None, origin, None, None, told)
 
     async def _run(self, terms: Terms, run_settings, prompt, person, origin, resume, asked, told: list[int],

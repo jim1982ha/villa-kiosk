@@ -68,6 +68,7 @@ export async function costs(days = 7) {
     new Date(r.at).toLocaleString([], { dateStyle: "short", timeStyle: "short" }),
     runWhat(r),
     r.without_ai ? "Without the AI" : r.no_result ? "—" : brain(r.profile, r.model),
+    usedSkills(r.skills),
     usedTools(r.steps),
     { v: r.tokens_in === null || r.tokens_in === undefined ? "—" : `${ktok((r.tokens_in || 0) + (r.cache_read || 0) + (r.cache_write || 0))} / ${ktok(r.tokens_out)}`, cls: "num" },
     { v: r.interrupted && !r.cost ? "not reported" : usd(r.cost), cls: "num" },
@@ -91,7 +92,7 @@ export async function costs(days = 7) {
       ["model", place("by_model"), "Which model did the work.", () => groupTable(c.by_model, "Model")]]),
     tabbedCard(`${place("runs")} · last ${days} days`, "runs", [
       ["runs", place("every_run"), `${c.runs_count} runs, newest first. Press a run to see what was asked and which tools it used (recorded from agent 0.6.42 on).`,
-        () => paged([{ v: "When", half: true }, { v: "What", half: true }, "Brain · model", place("tools_called"),
+        () => paged([{ v: "When", half: true }, { v: "What", half: true }, "Brain · model", "Skills", place("tools_called"),
                      { v: "Tokens in / out", cls: "num", half: true }, { v: "Cost", cls: "num", half: true }, ""], runRows)],
       ["tools", place("tools_called"), `Each tool the AI called, in how many runs and how many times. A tool never called is a candidate to switch off (${where("tools")}).`,
         () => (c.tools && c.tools.length ? paged(["Tool", { v: "Runs", cls: "num" }, { v: "Calls", cls: "num" }],
@@ -116,6 +117,12 @@ export function madeWithoutAi(w) {
       ? `${w.why} The report was still made from its figures and charts, and sent saying so; VESTA's readings are missing.`
       : `${w.why} Its figures could not be made either${w.failed ? ` (${w.failed} failed)` : ""}${w.sent ? "; part of it was sent" : ""}.`),
     h("span", { class: ok ? "chip warn" : "chip off" }, ok ? "without the AI" : "not made"));
+}
+
+// the skills a run used, in order, as the agent lists them (status.costs: the one it was started for, then those the AI
+// read or ran a script of); a run recorded before agent 0.6.260 has none
+export function usedSkills(skills) {
+  return (skills || []).length ? h("div", { class: "chips" }, skills.map((k) => h("span", { class: "chip" }, k))) : "—";
 }
 
 export function usedTools(steps) {

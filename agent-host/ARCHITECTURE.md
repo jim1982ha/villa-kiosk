@@ -733,3 +733,28 @@ Owner: "refresh the open ones every 4 hours during the days … just re-check th
   `ticket.checksBeforeList`) is passed to `Problems.card`, which says "day" only when listed, else "nightly" (true too);
   `Kiosk._gated` writes no check word the Kiosk does not list. A device with an alert's fault ("minutes") and a night
   fault ("day") has two faults; the Kiosk card shows the soonest.
+
+## A run's own cost, and the skills it used (owner, 2026-10-19, 0.12.269)
+
+Owner's screenshot: one chat's Haiku replies of about 48k tokens on the Costs tab at 0.44, 0.50, 0.52 … 0.56 USD,
+climbing reply after reply.
+- **Measured, not supposed**: `ResultMessage.total_cost_usd` is the CONVERSATION's running total. The bundled CLI
+  (2.1.284) writes a "cost-state" entry into a conversation's transcript and, on resume, restores it (`Cae` → the
+  cost tracker), so `total_cost_usd` (`Tg()`) carries every earlier reply — across a restart of the agent too, the
+  transcript being under CLAUDE_CONFIG_DIR. The CLI's own budget check subtracts it: "spent" = `Tg() −
+  costLedger.restoredCostUSD()`, so `max_budget_usd` was always per run. `usage` is this run's (the screenshot's tokens
+  go up and down). Arithmetic: a 47.3k-token Haiku reply costs at most ~0.06 USD even all written to the cache; the
+  recorded steps (0.50 → 0.52 → 0.54 → 0.55 → 0.56) are each reply's real cost.
+- **One rule, in agent_records**: a run record keeps `session` and `session_total_usd` (the SDK's total);
+  `session_before(rows, resume, who)` is the latest recorded total of the resumed conversation (`State.runs_of`: by
+  session or by chat, newest first) — a Continue pressed by someone else finds it by session; a record before 0.6.260
+  (no `session`, its `cost_usd` the CLI's total) is the base the first time an older conversation is resumed;
+  `turn_cost(total, before)` = the difference, or the whole total when it is below (the CLI found no cost-state and
+  counted afresh). A run cut by a stop records no total: what it spent, if the CLI kept it, lands in the next reply.
+- Past rows are left as they are: they carry no conversation id, so which earlier reply each total included is not
+  certain (a conversation also resets by itself). Scheduled jobs (never resumed) and each conversation's first reply
+  were right; every later reply of a conversation showed the conversation so far.
+- **Skills**: `runner.skills_of(terms.skill, collected)` — `Terms.skill` is the skill a run was started for (an AI job's
+  declaring skill via `Turns.job(..., skill)`; a command's via `chat_terms(..., skill)`), then each `read_skill` /
+  `run_skill_script` `skill` argument the AI passed, in order, once each — recorded as RUN/RUN_CUT `skills`;
+  `status.costs` serves `skills` (empty for older rows); `costs.js usedSkills` draws chips, "—" for none.

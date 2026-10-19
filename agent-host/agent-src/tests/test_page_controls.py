@@ -592,3 +592,24 @@ def test_a_command_skill_says_how_it_is_used_and_a_skill_without_tools_has_no_to
             if r["when"] == "in a chat"][0]["note"] == "only when a person writes /x"
     about = body_of(page_js(), "aboutSkill")
     assert "hasTools && [\"tools\"" in about and "const hasTools = !!(d.tools && d.tools.length)" in about
+
+
+def test_every_run_names_the_skills_it_used_before_the_tools_it_called(ui):
+    # owner, 2026-10-19: a "Skills" column in Costs › Every run, before "Tools called"; the agent lists them, the page draws
+    from vesta_agent.state import State
+    from vesta_shared import agent_records
+    st = State(ui.state_path)
+    st.log(agent_records.RUN, {"who": "Owner@111", "cost_usd": 0.02, "asked": "old", "steps": []})      # before 0.6.260
+    st.log(agent_records.RUN, {"who": "Owner@111", "cost_usd": 0.03, "asked": "new", "skills": ["reports", "investigate"],
+                               "steps": [{"tool": "read_skill", "input": "reports"}]})
+
+    async def fn(c):
+        return await _json(c, "get", "/api/costs?days=7")
+    status, got = call(ui, fn)
+    assert status == 200
+    assert {r["asked"]: r["skills"] for r in got["runs"]} == {"new": ["reports", "investigate"], "old": []}
+    from helpers import body_of
+    js = body_of(page_js(), "costs")
+    assert '"Brain · model", "Skills", place("tools_called")' in js and "usedSkills(r.skills),\n    usedTools(r.steps)" in js
+    drawn = body_of(page_js(), "usedSkills")
+    assert 'skills.map((k) => h("span", { class: "chip" }, k))' in drawn and ': "—"' in drawn

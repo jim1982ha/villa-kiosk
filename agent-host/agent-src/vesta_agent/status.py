@@ -159,7 +159,7 @@ def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_la
             row = {"at": c["at"], "kind": "job", "work": str(d.get("job") or "?"), "person": None, "chat": None,
                    "asked": None, "profile": None, "model": None, "tokens_in": None, "tokens_out": None,
                    "cache_read": None, "cache_write": None, "cost": 0.0, "stopped": False, "error": None,
-                   "cause": None, "what_to_do": None, "turns": None, "seconds": None, "steps": []}
+                   "cause": None, "what_to_do": None, "turns": None, "seconds": None, "steps": [], "skills": []}
             if c["kind"] == agent_records.WITHOUT_AI:
                 row["without_ai"] = {"why": why_job_sentence(d.get("problem") or "unknown"), "sent": int(d.get("sent") or 0),
                                      "failed": d.get("failed")}
@@ -188,7 +188,9 @@ def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_la
                      "cause": cause(d.get("problem") or "unknown") if d.get("error") else None,
                      "what_to_do": what_to_do(d.get("problem") or "unknown") if d.get("error") else None,
                      "turns": d.get("turns"), "seconds": round(d["ms"] / 1000) if isinstance(d.get("ms"), (int, float)) else None,
-                     "steps": [x for x in d.get("steps") or [] if isinstance(x, dict)]})
+                     "steps": [x for x in d.get("steps") or [] if isinstance(x, dict)],
+                     # the skills it used, in order (runner.skills_of); a run recorded before 0.6.260 has none: "—"
+                     "skills": [str(x) for x in d.get("skills") or [] if x]})
     runs.sort(key=lambda r: r["at"], reverse=True)
 
     def total(rs):

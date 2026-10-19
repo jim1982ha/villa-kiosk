@@ -51,7 +51,8 @@ class FakeAI:
 
         call = {"web_search": web_search, "who": terms.who, "prompt": prompt, "allowed": kit.names, "tools": set(terms.tools), "resume": resume,
                 "limit_usd": terms.limit_usd, "profile": terms.profile, "asked": asked, "system_prompt": system_prompt,
-                "folder": settings.out_dir, "call": call_tool, "image": image}
+                "folder": settings.out_dir, "call": call_tool, "image": image,
+                "skill": terms.skill}
         self.runs.append(call)
         if self.act:
             await self.act(call)

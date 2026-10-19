@@ -27,12 +27,14 @@ from claude_agent_sdk import (AssistantMessage, ClaudeAgentOptions, ClaudeSDKCli
 
 from .api_errors import NO_RETRY, classify
 from .redact import scrub
-from vesta_shared.agent_records import RUN, RUN_CUT, run_cost
+from vesta_shared.agent_records import RUN, RUN_CUT, run_cost, session_before, turn_cost
 
 log = logging.getLogger("vesta.runner")
 
 WEB_SEARCH = "WebSearch"
 MAX_STEPS = 40          # the tools one run used, as the Costs tab shows them (a report uses about 20)
+# the tools that use a skill, their `skill` argument naming it (tools.Toolbox: read_skill, run_skill_script)
+SKILL_TOOLS = ("read_skill", "run_skill_script")
 
 # Named anyway, in case a future CLI adds a tool while tools=[] is set.
 BUILTIN_DENY = ["Bash", "BashOutput", "KillShell", "Read", "Write", "Edit", "MultiEdit", "NotebookEdit", "Glob", "Grep",
@@ -83,6 +85,7 @@ class Collector:
         # twice. A text followed by a tool call is the AI working; a new tool call starts the answer afresh.
         self.segments: list[list[str]] = [[]]
         self.steps: list[dict] = []          # each tool the AI called: its name, and what it asked, in short
+        self.skills: list[str] = []          # the skills it read or ran a script of, in order, once each (skills_of)
         self.session_id, self.stopped, self.cost, self.err = session_id, False, None, None
         self.usage, self.turns, self.ms = {}, None, None
         self.kind, self.status, self.exc_name, self.raw = None, None, None, ""
@@ -102,6 +105,8 @@ class Collector:
                 if isinstance(b, ToolUseBlock):
                     if len(self.steps) < MAX_STEPS:
                         self.steps.append(step(b.name, b.input))
+                    if tool_key(b.name) in SKILL_TOOLS and isinstance(b.input, dict) and b.input.get("skill"):
+                        self.skills.append(str(b.input["skill"])[:60])
                     if self.segments[-1]:
                         self.segments.append([])
                 elif isinstance(b, TextBlock) and b.text.strip():
@@ -231,6 +236,12 @@ def build_options(settings, system_prompt: str, kit, terms, state,
     return opts, denied
 
 
+def skills_of(started_for: str | None, used: list[str]) -> list[str]:
+    """The Costs tab's "Skills" of a run (owner, 2026-10-19): the skill it was started for (a job's, a command's), then
+    each one the AI read or ran a script of — in order, once each."""
+    return list(dict.fromkeys([*([started_for] if started_for else []), *used]))
+
+
 def kept_steps(steps: list[dict], secrets: list[str]) -> list[dict]:
     """The tool calls kept with a run (the Costs tab), through the one scrubber (redact.py)."""
     return [{**st, "input": scrub(st["input"], secrets)} for st in steps]
@@ -278,7 +289,8 @@ async def run(settings, system_prompt: str, prompt: str, kit, terms, state, resu
         state.log(RUN_CUT, {"who": terms.who, "cost_usd": None, "stopped_at_limit": False, "denied": [],
                         "error": None, "profile": terms.profile, "model": opts.model, "tokens": c.partial_tokens(),
                         "turns": None, "ms": None, "asked": (asked or "")[:160] or None, "problem": None,
-                        "steps": kept_steps(c.steps, settings.secrets() if hasattr(settings, "secrets") else [])})
+                        "steps": kept_steps(c.steps, settings.secrets() if hasattr(settings, "secrets") else []),
+                        "skills": skills_of(terms.skill, c.skills)})
         raise
     except Exception as e:  # noqa: BLE001
         c.fail(e)
@@ -296,6 +308,11 @@ async def run(settings, system_prompt: str, prompt: str, kit, terms, state, resu
     # what was asked — never the answer, never a secret. Before 0.6.9 only who and the cost were kept.
     tokens = {k: usage.get(k) for k in ("input_tokens", "output_tokens", "cache_read_input_tokens",
                                          "cache_creation_input_tokens") if isinstance(usage.get(k), int)}
+    # ⚠️ THIS RUN'S COST, NOT THE CONVERSATION'S (owner, 2026-10-19): the SDK's figure is the resumed conversation's
+    # running total (agent_records.session_before); the record keeps both, the next run of the conversation reads it
+    total = cost
+    if total is not None:
+        cost = turn_cost(total, session_before(state.runs_of(resume, terms.who), resume, terms.who) if resume else 0.0)
     # no tokens, no cost (agent_records.run_cost): a refused request is not 0.033 USD in the log or the record
     cost = run_cost({"cost_usd": cost, "tokens": tokens}) if cost is not None else None
     retrying = bool(err and resume and not texts and problem not in NO_RETRY)
@@ -306,7 +323,8 @@ async def run(settings, system_prompt: str, prompt: str, kit, terms, state, resu
                         "model": opts.model, "tokens": tokens, "turns": turns, "ms": ms,
                         "asked": (asked or "")[:160] or None, "problem": problem,
                         # ⚠️ THE TOOLS IT USED (0.6.42): the Costs tab's "Tools used", and how often each tool is used
-                        "steps": steps})
+                        "steps": steps, "skills": skills_of(terms.skill, c.skills),
+                        "session": session_id, "session_total_usd": total})
     if retrying:
         # the session could not be resumed (lost, or from an older version): answer in a new one
         # the same run for the Costs tab: what was asked goes with it (it was dropped, so the answered run had none)

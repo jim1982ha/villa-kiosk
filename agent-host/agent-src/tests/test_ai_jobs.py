@@ -159,3 +159,11 @@ def test_a_report_already_running_says_who_started_it_and_since_when():
     assert being_made("fm-weekly", Started(RUNNING_SINCE, since, ASKED), "Asia/Makassar") == (
         "The fm-weekly report asked for here started at 19/10/2026 08:01 and is still being made: its result will be sent "
         "here when it is ready.")
+
+
+def test_a_jobs_run_is_recorded_with_the_skill_that_declares_it(jobs, monkeypatch):
+    # owner, 2026-10-19: Costs › Every run's "Skills" — a scheduled AI job's own skill counts, first (runner.skills_of)
+    ai = FakeAI("Sent.").install(monkeypatch)
+    sk, job = jobs.j.find("rep-weekly")
+    asyncio.run(jobs.j.run(sk, job))
+    assert [r["skill"] for r in ai.runs] == ["rep"]

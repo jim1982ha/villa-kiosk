@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.6.260 (19 October 2026)
+
+Each AI run's own cost, not its conversation's (owner's screenshot, 19 October: one chat's Haiku replies of ~48k tokens
+at 0.44 … 0.56 USD, climbing).
+- Measured: the SDK's `ResultMessage.total_cost_usd` on a resumed conversation is the conversation's running total —
+  the bundled CLI 2.1.284 restores a "cost-state" from the transcript on resume (and its own budget check subtracts it,
+  so `max_budget_usd` stayed per run). `usage` is the run's own.
+- runner.run records `session` and `session_total_usd`; the run's cost is `agent_records.turn_cost(total,
+  session_before(State.runs_of(resume, who), resume, who))`: the total minus the conversation's last recorded total
+  (by session; a pre-0.6.260 row of the chat, whose cost was the CLI's total, the first time; the whole total when it is
+  lower — a count started afresh). Holds across a restart (the records are the base). Past rows are not rewritten.
+- Costs › Every run: a "Skills" column before "Tools called". A run records `skills` — the skill it was started for
+  (`Terms.skill`: an AI job's declaring skill, `Turns.job(..., skill)`; a command skill's, `chat_terms(..., skill)`),
+  then each `read_skill` / `run_skill_script` skill, in order, once each (`runner.skills_of`); `status.costs` serves
+  them, `costs.js usedSkills` draws them as chips, "—" for an older row.
+- Tests: test_run_records (a resumed conversation's turns each with their own cost, across a restart and a Continue by
+  someone else; an older conversation's first resume; a count started afresh; the skills of a chat and a job run),
+  test_page_controls (/api/costs serves the skills; the page draws them before the tools), test_ai_jobs (a job's run
+  carries its skill), test_ticket_offer (a command's run carries its skill; an ordinary message none).
+
 ## 0.6.259 (19 October 2026)
 
 The night's open faults read again during the day (owner, 19 October: "refresh the open ones every 4 hours during the

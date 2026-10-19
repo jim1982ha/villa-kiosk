@@ -154,6 +154,13 @@ class State:
     def calls_since(self, since_iso: str) -> list[dict]:
         return [dict(r) for r in self.db.execute("select * from calls where at>=? order by id", (since_iso,))]
 
+    def runs_of(self, session: str, who: str, limit: int = 50) -> list[dict]:
+        """The AI runs of a conversation or of its chat, newest first, their details read (agent_records.session_before)."""
+        rows = self.db.execute("select detail from calls where kind=? and (json_extract(detail, '$.session')=? or "
+                               "json_extract(detail, '$.who')=?) order by id desc limit ?",
+                               (agent_records.RUN, session, who, limit))
+        return [agent_records.detail(r) for r in rows]
+
     # ------------------------------------------------------------------ kv
     def kv_prefix(self, prefix: str) -> dict[str, str]:
         return {r["k"]: r["v"] for r in self.db.execute("select k, v from kv where substr(k, 1, ?)=?", (len(prefix), prefix))}

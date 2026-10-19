@@ -85,6 +85,37 @@ def run_cost(detail: dict) -> float:
     return float(c) if isinstance(c, (int, float)) else 0.0
 
 
+def session_before(rows: list[dict], session: str | None, who: str) -> float:
+    """What a conversation had cost before this run: the running total its last recorded run was told (0.0 for a new
+    one). `rows`: run records' details, newest first (State.runs_of).
+
+    ⚠️ THE SDK'S COST IS THE CONVERSATION'S, NOT THE RUN'S (owner's screenshot, 2026-10-19: one chat's Haiku replies of
+    48k tokens recorded at 0.44, 0.50, 0.52 … 0.56 USD, climbing — a 48k Haiku reply costs at most about 0.06 USD).
+    A resumed conversation's ResultMessage.total_cost_usd is its running total: the Claude CLI keeps a "cost-state" in
+    the conversation's transcript and restores it on resume, so it survives a restart of the agent too. The run's own
+    cost is that total minus this one, which the run records keep (`session`, `session_total_usd`) for the same reason.
+
+    A run recorded before those fields (before 0.6.260) recorded the CLI's total as its cost: the chat's latest such
+    run is the base the first time an older conversation is resumed — never the whole conversation again."""
+    if not session:
+        return 0.0
+    for d in rows:
+        total = d.get("session_total_usd")
+        if d.get("session") == session and isinstance(total, (int, float)):
+            return float(total)
+    for d in rows:
+        if d.get("who") == who:
+            c = d.get("cost_usd")
+            return float(c) if "session" not in d and isinstance(c, (int, float)) else 0.0
+    return 0.0
+
+
+def turn_cost(total: float, before: float) -> float:
+    """One run's cost from the conversation's running total and what it had cost before. A total under `before` is a
+    count started afresh (the CLI found no cost-state to restore): it is all this run's."""
+    return round(total - before, 6) if total >= before else total
+
+
 def _rows(path: str | None, sql: str, args: tuple) -> list:
     if not path or not os.path.exists(path):
         return []

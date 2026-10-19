@@ -137,3 +137,92 @@ def _counts(st):
     for c in st.calls_since("2000-01-01"):
         out[c["kind"]] = out.get(c["kind"], 0) + 1
     return out
+
+
+# ---------------------------------------------------------------- one run's cost, not the conversation's (0.6.260)
+def _sdk(monkeypatch, rounds):
+    """A fake SDK client answering each run with the next list of messages."""
+    answers = iter(rounds)
+
+    class Fake:
+        def __init__(self, options):
+            self.msgs = next(answers)
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def query(self, prompt):
+            pass
+
+        async def receive_response(self):
+            for m in self.msgs:
+                yield m
+    monkeypatch.setattr(runner, "ClaudeSDKClient", Fake)
+
+
+def _answer(session, total, blocks=None):
+    """A run's messages as the SDK sends them: `total` is ResultMessage.total_cost_usd — on a resumed conversation the
+    CLI's running total (it restores the conversation's "cost-state" from its transcript, restart or not)."""
+    return [AssistantMessage(content=blocks or [TextBlock(text="Done.")], model="m"),
+            ResultMessage(subtype="success", duration_ms=10, duration_api_ms=5, is_error=False, num_turns=1,
+                          session_id=session, total_cost_usd=total, result="Done.",
+                          usage={"input_tokens": 900, "output_tokens": 20, "cache_read_input_tokens": 40000})]
+
+
+def test_each_turn_of_a_resumed_conversation_records_its_own_cost_even_across_a_restart(monkeypatch, tmp_path):
+    # owner's screenshot, 2026-10-19: one chat's Haiku replies of ~48k tokens at 0.44, 0.50 … 0.56 USD — climbing,
+    # because each was the conversation's running total; a 48k Haiku reply costs at most about 0.06 USD
+    _sdk(monkeypatch, [_answer("s1", 0.30), _answer("s1", 0.34), _answer("s1", 0.37)])
+    s = settings(str(tmp_path))
+    st = State(s.state_path)
+    asyncio.run(runner.run(s, "sys", "p", run_kit(), run_terms(who="Owner@1"), st, asked="one"))
+    two = asyncio.run(runner.run(s, "sys", "p", run_kit(), run_terms(who="Owner@1"), st, resume="s1", asked="two"))
+    assert two.cost_usd == 0.04
+    st = State(s.state_path)                       # the agent restarted: the conversation goes on, its total too
+    # … continued by someone else in the chat (a Continue another person pressed): the conversation is what counts
+    asyncio.run(runner.run(s, "sys", "p", run_kit(), run_terms(who="Ann@1"), st, resume="s1", asked="three"))
+    c = status.costs(st)
+    assert [(r["asked"], r["cost"]) for r in c["runs"]] == [("three", 0.03), ("two", 0.04), ("one", 0.3)]
+    assert c["period"] == 0.37                      # the Costs tab adds up the runs: the conversation's real total
+
+
+def test_an_older_conversation_resumed_once_does_not_count_its_history_again(monkeypatch, tmp_path):
+    # a run recorded before 0.6.260 kept the CLI's running total as its cost, and no session: it is the base
+    s = settings(str(tmp_path))
+    st = State(s.state_path)
+    st.log(agent_records.RUN, {"who": "Owner@1", "cost_usd": 0.50, "tokens": {"input_tokens": 9, "output_tokens": 9}})
+    st.log(agent_records.RUN, {"who": "Other@2", "cost_usd": 0.90, "tokens": {"input_tokens": 9, "output_tokens": 9}})
+    _sdk(monkeypatch, [_answer("old", 0.56), _answer("fresh", 0.20)])
+    asyncio.run(runner.run(s, "sys", "p", run_kit(), run_terms(who="Owner@1"), st, resume="old", asked="again"))
+    # the CLI found no cost to restore: its total is below what the conversation had cost — all of it is this run's
+    asyncio.run(runner.run(s, "sys", "p", run_kit(), run_terms(who="Owner@1"), st, resume="old", asked="anew"))
+    got = {r["asked"]: r["cost"] for r in status.costs(st)["runs"] if r["asked"]}
+    assert got == {"again": 0.06, "anew": 0.2}
+
+
+def test_a_run_without_a_resume_and_the_rules_of_the_base():
+    rows = [{"who": "A@1", "session": "s2", "session_total_usd": 0.4}, {"who": "A@1", "session": "s1", "session_total_usd": 0.2}]
+    assert agent_records.session_before(rows, "s1", "A@1") == 0.2
+    assert agent_records.session_before(rows, None, "A@1") == 0.0
+    assert agent_records.session_before(rows, "s9", "A@1") == 0.0      # the chat's runs carry other sessions: none known
+    assert agent_records.turn_cost(0.5, 0.2) == 0.3 and agent_records.turn_cost(0.1, 0.2) == 0.1
+
+
+def test_a_run_records_the_skills_it_used_in_order_once_each(monkeypatch, tmp_path):
+    from claude_agent_sdk import ToolUseBlock
+    blocks = [ToolUseBlock(id="1", name="mcp__vesta__read_skill", input={"skill": "reports"}),
+              ToolUseBlock(id="2", name="mcp__vesta__run_skill_script", input={"skill": "investigate", "script": "investigate.py"}),
+              ToolUseBlock(id="3", name="mcp__vesta__read_skill", input={"skill": "reports"}),
+              ToolUseBlock(id="4", name="mcp__vesta__ha_get_state", input={"entity_id": "x"})]
+    _sdk(monkeypatch, [_answer("s1", 0.1, blocks), _answer("s2", 0.1, blocks)])
+    s = settings(str(tmp_path))
+    st = State(s.state_path)
+    asyncio.run(runner.run(s, "sys", "p", run_kit(), run_terms(who="Owner@1"), st, asked="chat"))
+    from vesta_agent.turn import Terms
+    job = Terms(frozenset(), "auto", 1.0, agent_records.for_job("fm-weekly"), "maintenance")   # the job's own skill first
+    asyncio.run(runner.run(s, "sys", "p", run_kit(), job, st))
+    got = {r["work"]: r["skills"] for r in status.costs(st)["runs"]}
+    assert got == {"Chat replies": ["reports", "investigate"], "fm-weekly": ["maintenance", "reports", "investigate"]}

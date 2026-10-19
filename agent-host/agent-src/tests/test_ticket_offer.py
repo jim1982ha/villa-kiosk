@@ -439,6 +439,8 @@ def test_an_investigation_uses_its_own_brain_while_every_other_answer_keeps_the_
     n = len(ai.runs)
     run(v.converse(JM, v.policy().person(JM), "the heater", invoked="investigate"))
     assert all((r["profile"], r["limit_usd"]) == ("auto", 3.0) for r in ai.runs[n:])   # its page follow-up too
+    # the Costs tab's "Skills" (owner, 2026-10-19): the command skill it was called for; an ordinary message has none
+    assert ai.runs[n]["skill"] == "investigate" and ai.runs[n - 1]["skill"] is None
 
 
 def test_a_web_search_the_ai_made_reaches_the_runs_scripts(tmp_path, monkeypatch):
