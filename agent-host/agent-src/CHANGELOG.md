@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.254 (19 October 2026)
+
+- alert-desk rules.yaml: `unrouted` carries the owner's decision and the two designs he rejected (a route per rule, a
+  whole blueprint raised to P1), so neither is proposed again. No behaviour change. Agent CLAUDE.md: the checks are
+  `tools/release.py gates`, which also records the starter skills (it said a whole-tree ruff must be clean: 57 errors).
+
 ## 0.6.253 (19 October 2026)
 
 - alert-desk: a rule SAVED at a new priority while its alert is open (phase "restated") now changes what the alert

@@ -60,6 +60,9 @@ routes:
 # A VESTA rule whose kind (blueprint) has no route above, and which names no priority itself: by its name — its
 # entity id without "automation." — starting with `critical_`, else the rest (owner, 2026-10-19: "if the alert name
 # has critical_ in its name: P1; if not, P2"). Its cooldown and chase are the defaults'.
+# DECIDED, do not re-propose (owner, 2026-10-19): a route per rule ("Keep the same logic as before for the skill"),
+# and a whole blueprint raised to P1 (critical_condition stays P2 by its route). A new kind gets a route above or
+# this default, nothing else.
 unrouted:
   critical_: P1
   other: P2
