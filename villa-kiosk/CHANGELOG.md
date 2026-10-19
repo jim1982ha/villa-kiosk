@@ -1,3 +1,18 @@
+## 2.496.432
+
+### Changed
+- Each chart's title says the period its toggle names: Last hour, Last 24 hours, Last week, Last month, Last year
+  (1w read "Last 7 days", 1m "Last 30 days", 1y "Last 12 months").
+- 1w is drawn one value an hour (it was every 5 minutes): from the villa system's hourly figures for a measured value,
+  in hourly slices for an on/off band.
+- An on/off band's tooltip follows the chart's step. Over 1m (a slice a day) it names the day, over 1y (a slice a
+  week) its first and last day — "13 Oct – 19 Oct", never "15 Oct, 08:00 – 08:00" — and says how long each state
+  held and how many times it began: "Clear · 6 d 23 h · 7 times", "Unavailable · 14 min · 7 times", the longest first.
+  Over 1h and 24h (five-minute slices) and 1w (hourly slices) it still lists each change with its time.
+- A day's and a week's slices start at the villa's own midnight (a week on a Monday), as the villa's daily and weekly
+  figures do; they started at 08:00.
+- The band no longer runs past now: over 1m and 1y its last state was drawn several days into the future.
+
 ## 2.496.431
 
 ### Changed

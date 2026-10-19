@@ -22,9 +22,11 @@ const kept = now - 11 * DAY;                                  // the villa's sys
 console.log("  the table:");
 ck("five periods, in the toggle's order", RANGE_KEYS.join() === "1h,24h,1w,1m,1y", RANGE_KEYS);
 ck("  ...an hour, a day, a week, 30 days, a year", RANGES.map((r) => r.hours).join() === "1,24,168,720,8760");
-ck("  ...five minutes up to a week, a day for a month, a week for a year",
-   RANGES.map((r) => r.grainMs / MIN).join() === `5,5,5,${24 * 60},${7 * 24 * 60}`);
-ck("  ...the recorder's bucket is that step", RANGES.map((r) => r.period).join() === "5minute,5minute,5minute,day,week");
+ck("  ...five minutes up to a day, an hour for a week, a day for a month, a week for a year (owner, 2026-10-20)",
+   RANGES.map((r) => r.grainMs / MIN).join() === `5,5,60,${24 * 60},${7 * 24 * 60}`);
+ck("  ...the recorder's bucket is that step", RANGES.map((r) => r.period).join() === "5minute,5minute,hour,day,week");
+ck("  ...each title says the period its toggle names",
+   RANGES.map((r) => r.title).join() === "Last hour,Last 24 hours,Last week,Last month,Last year", RANGES.map((r) => r.title));
 ck("  ...the rain's: an hour, an hour, a day, a day, a week", RANGES.map((r) => r.totalPeriod).join() === "hour,hour,day,day,week");
 ck("a year is drawn in 53 slices, not 105,120", (() => {
   const y = historyRange("1y");

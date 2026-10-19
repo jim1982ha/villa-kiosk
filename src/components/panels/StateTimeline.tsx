@@ -10,7 +10,7 @@
 
 import { useMemo } from "react";
 import type { StateHistoryPoint } from "@/types/ha.types";
-import { fmtChartTime, fmtChartStamp } from "./chartUtils";
+import { cellSummary, fmtCellSpan, fmtChartStamp } from "./chartUtils";
 import ChartTip from "./ChartTip";
 import { useChartPointer } from "./useChartPointer";
 // ⚠️ NOT A LOCAL COPY. This file carried its own `prettyState` — same two
@@ -21,7 +21,7 @@ import { useChartPointer } from "./useChartPointer";
 // offline colour come from config/reading, like every other surface's.
 import { readableState, chartColours, NOT_KEPT, NOT_KEPT_WORDS } from "@/config/reading";
 import { TREND_INTERVAL_MS } from "@/utils/trendInterval";
-import { timelineCells, timelineRuns } from "@/utils/timelineCells";
+import { bandEnd, DAY_MS, timelineCells, timelineRuns } from "@/utils/timelineCells";
 import type { HistoryStatus } from "@/utils/statisticsSeries";
 import { ChartEmpty } from "./LineChart";
 
@@ -96,7 +96,7 @@ interface Props {
    * resting state is a legitimate reading rather than background.
    */
   baselineStates?: string[];
-  /** The step its slices are cut in: the range's (historyRange `grainMs` — five minutes up to a week, a day for a
+  /** The step its slices are cut in: the range's (historyRange `grainMs` — five minutes up to a day, an hour for a week, a day for a
    *  month, a week for a year: owner, 2026-10-20); five minutes when not said (the camera's rail). */
   grainMs?: number;
 }
@@ -122,10 +122,11 @@ export default function StateTimeline({
   // every render. This is what makes a bucketed bar stable: `now` advancing a
   // few milliseconds no longer nudges anything, so identical data renders
   // identically every time.
-  const timeKey = Math.floor(Date.now() / bucketMs);
+  // ⚠️ A DAY'S OR A WEEK'S STEP STILL ENDS AT NOW (2026-10-20): timelineCells.bandEnd
+  const timeKey = bandEnd(Date.now(), bucketMs);
 
   const cells = useMemo(
-    () => timelineCells(data, end ?? (timeKey + 1) * bucketMs, hours, bucketMs, baselineKey ? baselineKey.split("\u0000") : []),
+    () => timelineCells(data, end ?? timeKey, hours, bucketMs, baselineKey ? baselineKey.split("\u0000") : []),
     [data, hours, end, bucketMs, timeKey, baselineKey]);
 
   const runs = useMemo(() => timelineRuns(cells, colorFor), [cells, colorFor]);
@@ -178,9 +179,14 @@ export default function StateTimeline({
           // horizontal bar — never over the cells being pointed at.
           <ChartTip x={vertical ? 1 : hover.frac} y={vertical ? hover.frac : 1}
             rows={[
-                    { key: "_range", text: `${fmtChartStamp(hover.cell.from, hours)} – ${fmtChartTime(hover.cell.to)}` },
+                    { key: "_range", text: fmtCellSpan(hover.cell.from, hover.cell.to, bucketMs, hours) },
+                    // ⚠️ A DAY OR A WEEK IS SAID AS TIME PER STATE (owner, 2026-10-20): a week's slice listed its every
+                    // change — 34 lines over the panel; its step decides what the tooltip says
+                    ...(bucketMs >= DAY_MS
+                      ? cellSummary(hover.cell.spent, hover.cell.entered, wordsFor)
+                          .map((r) => ({ key: r.state, event: true, marker: dot(r.state), text: r.text }))
                     // Only the resting state here: the state alone IS the answer.
-                    ...(hover.cell.states.length === 0
+                    : hover.cell.states.length === 0
                       ? [{ key: "_base", event: true, marker: dot(hover.cell.baseline ?? ""), text: wordsFor(hover.cell.baseline ?? "") }]
                       // No transition landed here: a state in force throughout
                       // the span (the time range above already says so).

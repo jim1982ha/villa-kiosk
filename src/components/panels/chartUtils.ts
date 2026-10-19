@@ -32,6 +32,24 @@ export function fmtDuration(ms: number): string {
   return rh ? `${d} d ${rh} h` : `${d} d`;
 }
 
+/** What a state band's slice covers, at the band's own step (owner, 2026-10-20: "adjust the tooltip to the time
+ *  aggregation"): "14:20 – 14:25" for five minutes, the day ("15 Oct") for a day, "13 Oct – 19 Oct" for a week. */
+export function fmtCellSpan(from: number, to: number, stepMs: number, spanHours: number): string {
+  const DAY = 24 * 3600 * 1000;
+  if (stepMs < DAY) return `${fmtChartStamp(from, spanHours)} – ${fmtChartTime(to)}`;
+  if (stepMs < 7 * DAY) return dayMonth(from);
+  return `${dayMonth(from)} – ${dayMonth(to - 1)}`;
+}
+
+/** A day's or a week's slice in words, one line per state: how long it held, and how many times it began when more
+ *  than once — the states that held longest first. Its changes one by one are a five-minute slice's. */
+export function cellSummary(spent: Record<string, number>, entered: Record<string, number>,
+  words: (state: string) => string): { state: string; text: string }[] {
+  return Object.entries(spent).sort((a, b) => b[1] - a[1]).map(([state, ms]) => ({
+    state, text: `${words(state)} · ${fmtDuration(ms)}${(entered[state] ?? 0) > 1 ? ` · ${entered[state]} times` : ""}`,
+  }));
+}
+
 /** An outage in a chart's tooltip: "Unavailable · 05:21–05:24 (3 min)", or
  *  "Unavailable since 05:21" for one still running at `now` (the window's end). */
 export function fmtOutage(gap: { from: number; to: number; actual?: { from: number; to: number }; notKept?: boolean },
