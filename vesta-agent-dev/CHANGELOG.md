@@ -1,3 +1,10 @@
+## 0.12.280
+
+What you will see:
+- A "dropped and reconnected" fault is read again at 08:00, 12:00, 16:00 and 20:00, like batteries and quiet sensors:
+  one that is no longer true closes the same day ("Cleared: the check at 12:00 no longer sees it."), and its card's
+  "Next check" says the next of those times instead of 02:00.
+
 ## 0.12.279
 
 What you will see:
