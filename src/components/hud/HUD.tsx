@@ -53,6 +53,7 @@ import { openRoomDial, roomDialItems, roomsOnFloor, type RadialItem, type RoomDi
 import LegendModal from "./LegendModal";
 import type { Doors } from "@/auth/doors";
 import { useVillaAttention } from "@/components/cockpit/useVillaAttention";
+import { healthClass } from "@/config/attention";
 import { formatCountBadge } from "@/utils/countBadge";
 import { useAgent } from "@/agent/AgentContext";
 import { awaitingAnswer } from "@/agent/agentView";
@@ -582,7 +583,7 @@ export default function HUD({
                 bottom right — and the agent's own window opens from the
                 Cockpit's footer. Without one, the ⚠ as before. */}
             <button
-              className={`icon-btn${doors.agent ? " agent-btn" : ""}${attentionGroups.length > 0 ? " has-alert" : ""}`}
+              className={`icon-btn${doors.agent ? " agent-btn" : ""}${healthClass(health)}`}
               onClick={onOpenCockpit}
               title={(attentionGroups.length > 0 ? health.summary : "Cockpit — villa status at a glance")
                 + (doors.agent ? ` · ${agentTitle}` : "")}

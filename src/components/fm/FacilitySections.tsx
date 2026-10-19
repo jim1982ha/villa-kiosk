@@ -17,6 +17,7 @@
 // Faults a dozen — and letting the dialog resize around every tab switch was
 // jarring. See that class's own comment in styles.css.
 
+import { useVillaAttention } from "@/components/cockpit/useVillaAttention";
 import { useMemo, useState } from "react";
 import type { ModalTab } from "@/components/common/ModalTabs";
 import {
@@ -82,8 +83,10 @@ export default function FacilitySections({
 
   // The list a readiness check opens — its own devices (readiness.CheckTarget).
   const [checkList, setCheckList] = useState<CheckTarget | null>(null);
-  const readiness = useMemo(() => buildReadiness(entities, data, devices, config.entityMap),
-    [entities, data, devices, config.entityMap]);
+  // the villa's alarms as the Cockpit lists them (one rule: attention's), so readiness and the top bar agree
+  const { attentionItems } = useVillaAttention();
+  const readiness = useMemo(() => buildReadiness(entities, data, devices, config.entityMap, attentionItems),
+    [entities, data, devices, config.entityMap, attentionItems]);
   const deviceOptions = useMemo(
     () => buildDeviceOptions(devices, config.entityMap, entities, resolvedRooms),
     [devices, config.entityMap, entities, resolvedRooms],

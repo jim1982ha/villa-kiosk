@@ -18,7 +18,7 @@ const entities = Object.fromEntries([
 ].map((e) => [e.entity_id, e]));
 const villa = new Set(Object.keys(entities));
 const devices = { ids: [...villa], unavailable: ["climate.bed", "camera.pool", "sensor.door_battery"], has: (id) => villa.has(id), deviceOf: (id) => id, deviceOfRecord: (id) => id, isCritical: () => false };
-const r = buildReadiness(entities, EMPTY_FM_DATA, devices, {});
+const r = buildReadiness(entities, EMPTY_FM_DATA, devices, {}, []);
 const opens = (c) => c.opens ? `${c.opens.label} → ${c.opens.group.title} [${c.opens.group.entityIds.join(",")}]${c.opens.health ? " (health)" : ""}` : "-";
 
 console.log("  each check's own list, by value:");
@@ -42,7 +42,7 @@ ck("every failing check about devices has its button, with its own words",
    && rowOf("Cameras online").includes("|View cameras [icon]|"), rows);
 // (owner, 2026-10-18: the devices not reporting as pills, "the same way the unlocked device or on lights are shown")
 ck("  ...every check names its devices as chips — the devices not reporting too",
-   /fm-entity-chip/.test(html.split('<div class="fm-row ')[1]) && rowOf("Doors locked").includes("|back|") && rowOf("Cameras online").includes("|pool|"), rows);
+   /fm-entity-chip/.test(html.split('<div class="fm-row ').find((x) => x.includes("All devices reporting")) ?? "") && rowOf("Doors locked").includes("|back|") && rowOf("Cameras online").includes("|pool|"), rows);
 ck("  ...and nothing in it leaves Recap: no Overview link", !/Overview/.test(rowOf("All devices reporting")));
 const fs = readFileSync(new URL("../../src/components/fm/FacilitySections.tsx", import.meta.url), "utf8");
 // The wiring a drawing cannot reach (it needs the Facility data): the button's list opens in Recap, as a list.
@@ -58,11 +58,11 @@ console.log("\n  how bad, as the top bar says it (review \"One answer per questi
   const plain = stateOf(r);
   ck("devices not answering, none critical: amber, however many (3 here) — air conditioning and cameras alike",
      plain["devices-online"] === "warn" && plain.climate === "warn" && plain.cameras === "warn" && r.overall === "warn", plain);
-  const crit = stateOf(buildReadiness(entities, EMPTY_FM_DATA, { ...devices, isCritical: (id) => id === "camera.pool" }, {}));
+  const crit = stateOf(buildReadiness(entities, EMPTY_FM_DATA, { ...devices, isCritical: (id) => id === "camera.pool" }, {}, []));
   ck("  ...one CRITICAL device not answering: red, in its own checks only",
      crit["devices-online"] === "fail" && crit.cameras === "fail" && crit.climate === "warn", crit);
   const rec = (id) => ({ id, title: id, status: "open", openedAt: "2026-10-19T08:00:00Z", entityId: `x.${id}`, photoIds: [] });
-  const five = buildReadiness({}, { ...EMPTY_FM_DATA, tickets: ["a", "b", "c", "d", "e"].map(rec) }, { ...devices, unavailable: [] }, {});
+  const five = buildReadiness({}, { ...EMPTY_FM_DATA, tickets: ["a", "b", "c", "d", "e"].map(rec) }, { ...devices, unavailable: [] }, {}, []);
   ck("  ...five faults: amber — a fault is a warning, however many", five.checks.find((c) => c.id === "tickets").state === "warn"
      && five.overall === "warn", five.checks.find((c) => c.id === "tickets"));
   ck("  ...and the critical rule is the Overview's: a critical entity stands for its device",
@@ -82,6 +82,30 @@ console.log("\n  one tinted card (fm/tone): each state says its tone, the styles
   const css = ["07-facility", "08-shared"].map((f) => readFileSync(new URL(`../../src/styles/${f}.css`, import.meta.url), "utf8")).join("\n");
   ck("  ...and the tinted frame is written once", (css.match(/color-mix\(in srgb, var\(--status-(warning|danger)\) [67]%, var\(--bg-card\)\)/g) ?? []).length === 0
      && (css.match(/color-mix\(in srgb, var\(--tone\) var\(--tone-fill\), var\(--bg-card\)\)/g) ?? []).length === 1);
+}
+
+
+console.log("\n  an alarm makes the villa not ready, as it makes the top bar red (review, 2026-10-19 evening):");
+{
+  const alarm = { id: "alarm:binary_sensor.kitchen_leak", kind: "alarm", title: "Kitchen leak", detail: "Leak detected",
+    source: "live", entityId: "binary_sensor.kitchen_leak" };
+  const late = { id: "schedule:pool", kind: "schedule", title: "Pool filter", detail: "Overdue", source: "schedule" };
+  const calm = buildReadiness({}, EMPTY_FM_DATA, { ...devices, unavailable: [] }, {}, [late]);
+  const leak = buildReadiness({}, EMPTY_FM_DATA, { ...devices, unavailable: [] }, {}, [late, alarm]);
+  const row = (res) => res.checks.find((c) => c.id === "alarms");
+  ck("no alarm: the check passes, and a late task is no alarm", row(calm).state === "pass" && row(calm).label === "No alarm");
+  ck("  ...a leak sounding: the check fails, names it, and the verdict is NOT READY",
+     row(leak).state === "fail" && row(leak).detail === "Kitchen leak: Leak detected" && leak.overall === "fail"
+     && row(leak).entityIds.join() === "binary_sensor.kitchen_leak", row(leak));
+  const { healthClass, villaHealthFrom } = await import("@/config/attention");
+  const g = (items) => [{ items }];
+  ck("the top bar's Cockpit button: red for an alarm, amber for a late task, plain when all is fine",
+     healthClass(villaHealthFrom(g([alarm]))) === " has-alert" && healthClass(villaHealthFrom(g([late]))) === " has-warn"
+     && healthClass(villaHealthFrom([])) === "");
+  const hud = readFileSync(new URL("../../src/components/hud/HUD.tsx", import.meta.url), "utf8");
+  ck("  ...the button takes that class, and the Recap is given the Cockpit's own alarms",
+     /\$\{healthClass\(health\)\}/.test(hud) && !/attentionGroups\.length > 0 \? " has-alert"/.test(hud)
+     && /buildReadiness\(entities, data, devices, config\.entityMap, attentionItems\)/.test(fs));
 }
 
 done("✅ every readiness check opens its own devices, the same way");

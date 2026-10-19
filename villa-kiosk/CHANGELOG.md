@@ -1,3 +1,13 @@
+## 2.496.423
+
+### Fixed
+- The Cockpit button in the top bar is red only for an alarm or a critical device not reporting, as promised in
+  2.496.410; a late task, an ordinary device offline or a fault turn it amber (its count too). It turned red for any
+  open problem.
+- The Recap (readiness) has an "alarm" check: a leak sounding, or any device the map shows red, makes the villa
+  "Not ready" — it said "Ready, with things worth fixing" during an alarm, and the saved snapshot "READY, WITH
+  FINDINGS". It reads the Cockpit's own list of alarms, so the two can no longer disagree.
+
 ## 2.496.422
 
 ### Changed

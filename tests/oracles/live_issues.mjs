@@ -230,7 +230,7 @@ ck("  ...every source has its icon and its words in the (i)'s legend",
 console.log("\n  the Recap's readiness says what is found, never the goal over a contradiction (owner, 2026-10-14):");
 const { buildReadiness } = await import("@/fm/readiness");
 const noDevices = { ids: [], unavailable: [], has: () => false, deviceOf: (id) => id, deviceOfRecord: (id) => id, isCritical: () => false };
-const readyWith = (tickets) => buildReadiness({}, fm(tickets), noDevices).checks.find((c) => c.id === "tickets");
+const readyWith = (tickets) => buildReadiness({}, fm(tickets), noDevices, {}, []).checks.find((c) => c.id === "tickets");
 const mixedOpen = readyWith([agentRec({ id: "n1", origin: "night", entityId: "x.n1" }), agentRec({ id: "n2", origin: "night", entityId: "x.n2" }),
   agentRec({ id: "a1", alertNumber: 5, entityId: "x.a1" }), { ...rec("g", "x.g"), reportedBy: "guest" },
   { ...rec("t", "x.t"), status: "in_progress" }, { ...rec("r", "x.r"), status: "resolved", resolvedAt: "2026-10-14T09:00:00Z" }]);
@@ -242,7 +242,7 @@ ck("4 faults and 1 ticket: \"4 detected faults (1 open ticket)\", where to deal 
 // ticket card in Tickets, so one open ticket — not "2 open tickets" over one card
 const pumpBy = (devs) => buildReadiness({}, fm([{ ...rec("p1", "switch.pump"), status: "in_progress" },
   { ...rec("p2", "sensor.pump_power"), status: "in_progress" }, rec("p3", "sensor.pump_temp")]),
-  { ...noDevices, deviceOf: devs, deviceOfRecord: devs }).checks.find((c) => c.id === "tickets");
+  { ...noDevices, deviceOf: devs, deviceOfRecord: devs }, {}, []).checks.find((c) => c.id === "tickets");
 const onePump = pumpBy((id) => (id.includes("pump") ? "switch.pump" : id));
 ck("  ...counted per device, as drawn: one device's 2 tickets + 1 fault = \"1 detected fault (1 open ticket)\"",
    onePump.label === "1 detected fault (1 open ticket)" && onePump.state === "warn", onePump);
@@ -250,7 +250,7 @@ ck("  ...and three devices are three", pumpBy((id) => id).label === "1 detected 
 // the Recap files a record as every screen does — by the record's device (deviceOfRecord: a list of several sensors
 // included), never by its raw field looked up as one entity (review "One answer per question" #1, 2026-10-19)
 const byRecord = buildReadiness({}, fm([rec("m1", "sensor.gone,sensor.pump_power"), rec("m2", "sensor.pump_power")]),
-  { ...noDevices, deviceOf: (id) => id, deviceOfRecord: (id) => (id.includes("pump") ? "sensor.pump_power" : id) }).checks.find((c) => c.id === "tickets");
+  { ...noDevices, deviceOf: (id) => id, deviceOfRecord: (id) => (id.includes("pump") ? "sensor.pump_power" : id) }, {}, []).checks.find((c) => c.id === "tickets");
 ck("  ...a fault naming several sensors counts on its device's card", byRecord.label === "1 detected fault (0 open tickets)", byRecord);
 const onlyFaults = readyWith([agentRec({ id: "n1", origin: "night" })]);
 ck("  ...one fault, no ticket: singular, and only Overview", onlyFaults.label === "1 detected fault (0 open tickets)"

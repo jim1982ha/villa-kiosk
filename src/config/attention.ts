@@ -467,6 +467,13 @@ export function attentionFor(att: VillaProblems, may: (entityId: string) => bool
   };
 }
 
+/** The top bar's Cockpit button, as the villa's health says it: red for danger, amber for a warning, plain when all is
+ *  fine. ⚠️ THE LEVEL WAS WORKED OUT AND NEVER SHOWN (architecture review, 2026-10-19 evening): the button turned red
+ *  for ANY open problem — one late pool task, one ordinary sensor offline — while 2.496.410 promised red only for an
+ *  alarm or a critical device offline. */
+export const healthClass = (health: VillaHealth): string =>
+  health.level === "danger" ? " has-alert" : health.level === "warn" ? " has-warn" : "";
+
 /** The level is read from EVERY problem; the count is the ROWS, the number the badge shows. Danger is an alarm or a
  *  CRITICAL device offline (owner, 2026-10-18); any other offline device, a fault or a late task is a warning. */
 export function villaHealthFrom(groups: readonly AttentionGroup[]): VillaHealth {

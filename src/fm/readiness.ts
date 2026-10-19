@@ -21,6 +21,7 @@ import { locksGroup, lightsGroup, type SummaryGroup } from "@/config/summaryGrou
 import type { EntityMapping } from "@/types/scene.types";
 import { AirVent, Cctv, WifiOff } from "lucide-react";
 import type { FmData } from "./fmTypes";
+import type { AttentionItem } from "@/config/attention";
 
 export type CheckState = "pass" | "warn" | "fail";
 
@@ -86,8 +87,24 @@ export function buildReadiness(
   devices: VillaDevices,
   /** The user's own device names (config.entityMap) — a one-door villa's list is named after its door. */
   entityMap: Record<string, EntityMapping>,
+  /** The villa's alarms as the Cockpit lists them (attention items of kind "alarm": every device the map paints red,
+   *  the villa's alert thresholds included) — the one rule, never a second reading of the entities here. */
+  alarms: readonly AttentionItem[],
 ): ReadinessResult {
   const checks: ReadinessCheck[] = [];
+
+  // ── No alarm ─────────────────────────────────────────────────────────────
+  // ⚠️ AN ALARM MADE THE VILLA "READY, WITH THINGS WORTH FIXING" (architecture review, 2026-10-19 evening): these checks
+  // had no alarm of their own — a leak sounding read amber here, and the saved snapshot said "READY, WITH FINDINGS",
+  // while the top bar was red. An alarm is what makes the villa not ready, as it makes the top bar red.
+  const sounding = alarms.filter((a) => a.kind === "alarm");
+  checks.push({
+    id: "alarms",
+    label: sounding.length === 0 ? "No alarm" : `${sounding.length} alarm${sounding.length === 1 ? "" : "s"}`,
+    state: sounding.length === 0 ? "pass" : "fail",
+    detail: sounding.length === 0 ? "Nothing is in alarm." : sounding.map((a) => `${a.title}: ${a.detail}`).join(" · "),
+    entityIds: sounding.flatMap((a) => (a.entityId ? [a.entityId] : [])),
+  });
   // ⚠️ HOW BAD, AS THE TOP BAR SAYS IT (architecture review "One answer per question" #3, 2026-10-19): the top bar
   // turns red for a CRITICAL device not answering, and amber for any other, a fault or a late task (owner,
   // 2026-10-18 — attention.villaHealthFrom). These checks went red past two devices or two faults, whichever they
