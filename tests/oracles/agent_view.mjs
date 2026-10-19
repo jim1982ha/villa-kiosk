@@ -261,6 +261,15 @@ console.log("\n  the Agent's clock, only while it is online:");
      quiet.cadence === null && nextCheck(alert, quiet.cadence) === "Next check: by the VESTA Agent", nextCheck(alert, quiet.cadence));
   const awake = parseAgentStatus({ state: "online", last_seen: "2026-09-29T00:00:00Z", cadence: { checkMinutes: 5, nightlyAt: "02:00" } });
   ck("  ...online, its own number", nextCheck(alert, awake.cadence) === "Next check: within 5 min");
+  // owner, 2026-10-19: its day times, as the proxy relays them; an older Agent's cadence has none, and a night fault
+  // read during the day then says the nightly time
+  const night = [{ source: "night", check: "day" }], at1310 = new Date(2026, 9, 19, 13, 10);
+  const day = parseAgentStatus({ state: "online", cadence: { checkMinutes: 5, nightlyAt: "02:00", dayChecksAt: ["08:00", "16:00"] } });
+  ck("  ...its day times are read: a night fault says the next one",
+     JSON.stringify(day.cadence?.dayChecksAt) === '["08:00","16:00"]' && nextCheck(night, day.cadence, at1310) === "Next check: 16:00");
+  ck("  ...an older Agent's (no day times, or not a list): none read, the nightly time",
+     !("dayChecksAt" in awake.cadence) && !("dayChecksAt" in parseAgentStatus({ state: "online", cadence: { checkMinutes: 5, nightlyAt: "02:00", dayChecksAt: "16:00" } }).cadence)
+     && nextCheck(night, awake.cadence, at1310) === "Next check: 02:00");
 }
 
 done("✅ the agent is shown to the right people, with the right buttons");
