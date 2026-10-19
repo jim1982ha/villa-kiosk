@@ -300,10 +300,10 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
   );
 }
 
-/** Call from any panel that DISPLAYS facility records. While one is mounted
- *  the store re-reads every STORE_ACTIVE_MS instead of every three minutes,
- *  so a fault marked in progress on another device lands in seconds on the
- *  screen someone is actually watching. Costs nothing when no panel is open. */
+/** Call from the WINDOW that displays facility records (CockpitModal — once, whichever tab shows: its Overview lists
+ *  the open faults too). While one is mounted the store re-reads every STORE_ACTIVE_MS instead of every three
+ *  minutes, so a fault marked in progress on another device lands in seconds on the screen someone is actually
+ *  watching. Costs nothing when no window is open. */
 export function useFacilityLiveView(): void {
   const { registerWatcher } = useFmData();
   useEffect(() => registerWatcher(), [registerWatcher]);

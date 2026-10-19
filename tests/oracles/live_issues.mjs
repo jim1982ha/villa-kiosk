@@ -286,9 +286,28 @@ ck("  ...the Overview's Recent activity too, folded by default (owner, 2026-10-1
 // a ticket's card AS DRAWN (pill on the title line, buttons inside on the right): tests/oracles/cockpit_cards.mjs; its
 // buttons as drawn: "the buttons, drawn" below. WIRING the Tickets tab alone holds (it needs the Facility data to render):
 ck("a ticket is ONE card: the first record carries the pill and the ticket's buttons, the closed one its Reopen, no device name above",
-   /<div key=\{g\.key\} className="fm-record-card">/.test(ticketsTab) && /record\(t, i === 0 \? \{ text: "In progress", tone: "due-soon" \} : undefined,\s*i === 0 \? <WorkButtons actions=\{ticketActions\(g\.records\.map\(workRecord\)\)\}/.test(ticketsTab)
-   && /record\(t, \{ text: "Resolved", tone: "ok" \},\s*<WorkButtons actions=\{closedActions\(workRecord\(t\)\)\}/.test(ticketsTab)
+   /<div key=\{g\.key\} className="fm-record-card">/.test(ticketsTab) && /record\(t, i === 0 \? stagePill\(t\) : undefined,\s*i === 0 \? <WorkButtons actions=\{ticketActions\(g\.records\.map\(workRecord\)\)\}/.test(ticketsTab)
+   && /record\(t, stagePill\(t\),\s*<WorkButtons actions=\{closedActions\(workRecord\(t\)\)\}/.test(ticketsTab)
    && !/const title = head\.entityId/.test(ticketsTab));
+{
+  // ONE WORD AND ONE TONE PER STAGE (architecture review, 2026-10-19): the pill's word and colour and the recap's Status
+  // column are fmEngine.STAGE_WORDS, BY VALUE — the pill said "In progress" in the Schedule's due-soon colour while the
+  // recap printed the stored status ("in progress"). The pill as drawn: cockpit_cards.mjs.
+  const { pillClass } = await import("@/fm/tone");
+  const { buildMonthlyRecap } = await import("@/fm/fmDocuments");
+  const pill = (t) => { const s = E.STAGE_WORDS[E.stageOf(t)]; return { text: s.word, tone: pillClass(s.tone) }; };
+  const taken = { ...rec("w", "x.y", "in_progress"), openedAt: "2026-09-10T10:00:00.000Z" };
+  const closed = { ...rec("z", "x.y", "resolved"), openedAt: "2026-09-11T10:00:00.000Z", resolvedAt: "2026-09-12T10:00:00.000Z" };
+  ck("a ticket in progress is \"In progress\" in the warning tone, a closed one \"Resolved\" in the ok tone, an open fault's word is \"Open\"",
+     pill(taken).text === "In progress" && pill(taken).tone === "tone-warn" && pill(closed).text === "Resolved" && pill(closed).tone === "tone-ok"
+     && E.STAGE_WORDS.fault.word === "Open", [pill(taken), pill(closed)]);
+  const recap = buildMonthlyRecap({ fm: fm([taken, closed]), month: "2026-09", villaName: "V", readiness: null });
+  const row = (t) => recap.split("\n").find((l) => l.includes(`| ${t.title} |`)) ?? "";
+  ck("  ...the recap's Status column says the SAME word as the pill, for both", row(taken).includes(`| ${pill(taken).text} |`)
+     && row(closed).includes(`| ${pill(closed).text} |`) && !/\| in progress \|/.test(recap), [row(taken), row(closed)]);
+  ck("  ...the Tickets tab draws its pills from the table, no word of its own", /STAGE_WORDS\[stageOf\(t\)\]/.test(ticketsTab)
+     && !/"In progress"|"Resolved"|due-soon/.test(ticketsTab));
+}
 const spendTab = readFileSync(new URL("../../src/components/fm/SpendTab.tsx", import.meta.url), "utf8");
 const todayTab = readFileSync(new URL("../../src/components/fm/TodayTab.tsx", import.meta.url), "utf8");
 ck("ONE card for every Cockpit list (architecture review, 2026-10-15): Overview, Tickets, Schedule, Spend, Recent work draw RecordCard, nothing of their own",

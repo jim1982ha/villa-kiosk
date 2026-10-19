@@ -111,8 +111,9 @@ ck("the one-step close is one command, and both screens call it — through the 
     photoIds: ["p"], updates: [st("2026-09-05T00:00:00.000Z", "resolved", { who: "Made" }),
       st("2026-10-02T00:00:00.000Z", "open", { kind: "reopened" })] }] };
   const recap = R.buildMonthlyRecap({ fm: sept, month: "2026-09", villaName: "V", readiness: null });
+  // its Status column in the stage's one word (STAGE_WORDS, the Tickets tab's pill's), as it stood then
   ck("a past month's recap tells a fault fixed that month, as it stood then, even reopened since",
-     /\| Pool pump seized \| resolved \| 05 Sept 2026 \|/.test(recap) || /Pool pump seized \| resolved \|/.test(recap), recap.split("## 3.")[1]);
+     recap.includes(`| Pool pump seized | ${E.STAGE_WORDS.closed.word} | 05 Sept 2026 |`), recap.split("## 3.")[1]);
 }
 
 done("✅ the Facility rules, in the engine");

@@ -14,6 +14,7 @@ import {
 } from "./fmTypes";
 import { fullDate, monthYear } from "@/utils/dateText";
 import { fmtDuration } from "@/components/panels/chartUtils";
+import type { Tone } from "./tone";
 
 const DAY_MS = 86_400_000;
 
@@ -243,6 +244,17 @@ export function stageOf(t: { status?: FmTicket["status"] }): FmStage {
   if (isTicketResolved(t)) return "closed";
   return t.status === "in_progress" ? "ticket" : "fault";
 }
+
+/** Each stage's ONE word and tone, as every screen and report says it: the Tickets tab's pill (its colour: fm/tone
+ *  pillClass), the recap's Status column, the Overview's line (config/attention faultStatus — which says NOTHING for an
+ *  open fault, owner 2026-10-14: "OPEN FAULT:" before every fault said nothing; the open word is for a table).
+ *  ⚠️ THREE SPELLINGS (architecture review, 2026-10-19): the pill said "In progress" in the Schedule's due-soon colour,
+ *  the recap printed the stored status ("in progress"), and the Overview's item carried a "Fault" nothing read. */
+export const STAGE_WORDS: Record<FmStage, { word: string; tone: Tone }> = {
+  fault: { word: "Open", tone: "warn" },
+  ticket: { word: "In progress", tone: "warn" },
+  closed: { word: "Resolved", tone: "ok" },
+};
 
 /** A fault's title as every list shows it: "#5 · House Pump Power …" when it came from a VESTA Agent alert — the
  *  number its Telegram messages carry (FmTicket.alertNumber) — else its title alone. A duration in it is worded now,
@@ -484,6 +496,12 @@ export function withTicketPatch(d: FmData, id: string, patch: Partial<FmTicket>,
           at: k.now, status: next.status, kind: "retitled" as const, title: patch.title, was: t.title, photoIds: [],
           ...(by ? { by } : {}),
         }];
+        // ⚠️ THEIR TITLE, AS IT IS, AT ONCE (architecture review, 2026-10-19): the Agent's duration pattern kept winning
+        // over the new title (faultTitle) until the Agent read this step and cleared it — never with the Agent off.
+        // Absent is the contract's shape for a retitled fault (agent-contract.json ticket.fields.titlePattern); the
+        // Agent's own clearing stays the same rule for a fault renamed before this build.
+        delete next.titlePattern;
+        delete next.since;
       }
       return next;
     }),

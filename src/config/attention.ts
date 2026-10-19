@@ -16,7 +16,7 @@ import type { Threshold } from "@/config/ThresholdConfig";
 import { labelOf } from "@/config/EntityMap";
 import { deviceRoom, deviceRoomOrRecord, firstRoom, roomLabel } from "@/config/devicePlace";
 import { criticalDevices, deviceOf, recordEntity } from "@/config/deviceGroups";
-import { faultTitle, fmAttention, stageOf } from "@/fm/fmEngine";
+import { faultTitle, fmAttention, STAGE_WORDS, stageOf, type FmStage } from "@/fm/fmEngine";
 import { lastNoted } from "@/fm/faultNotes";
 import { deviceWorkKey, groupByDevice, lineActions, overviewActions, type WorkAction, type WorkRecord } from "@/fm/deviceWork";
 import { faultSource, type IssueSource } from "@/fm/issueSource";
@@ -33,8 +33,9 @@ export interface AttentionItem {
   /** Where it comes from (fm/issueSource): its icon on the card. Live for a state; a fault's own (faultSource). */
   source?: IssueSource;
   title: string;
-  /** Short status word — "Open", "Overdue", "Leak detected", etc. */
-  detail: string;
+  /** Short status word — "Unavailable", "Overdue", "Leak detected", etc. Absent on a fault: what its line says of its
+   *  status is its stage's word (faultStatus, fmEngine.STAGE_WORDS), never one of its own. */
+  detail?: string;
   room?: string;
   /** Present when this item can be drilled into (opens the entity's own
    *  panel) — a fault/schedule with no device behind it (a whole-villa task,
@@ -43,8 +44,9 @@ export interface AttentionItem {
   /** Set on a fault: the record it is, so its card can take it on or close it
    *  (FmDataContext.advanceTickets / closeTickets). */
   ticketId?: string;
-  /** Set on a fault: where its record stands (fmEngine.stageOf) — a fault nobody has taken on, or a ticket. */
-  stage?: "fault" | "ticket";
+  /** Set on a fault: where its record stands (fmEngine.stageOf) — a fault nobody has taken on, or a ticket (never
+   *  closed: a closed record is on no list). */
+  stage?: FmStage;
   /** The villa DEVICE the entity belongs to (deviceGroups.deviceFolding: the
    *  owner's device groups, then Home Assistant's device registry) — what
    *  groupAttention folds on. Set exactly when `entityId` is. */
@@ -156,7 +158,7 @@ function problemLines(group: AttentionGroup): number {
 function itemRecords(i: AttentionItem): WorkRecord[] {
   const f = i.kind === "fault" ? i : i.fault;
   return f ? [f.ticketId, ...(f.twins ?? [])].flatMap((id) => (id
-    ? [{ id, stage: f.stage === "ticket" ? "ticket" as const : "fault" as const }] : [])) : [];
+    ? [{ id, stage: f.stage ?? "fault" }] : [])) : [];
 }
 
 /** The records on a card — its faults and tickets, each with its stage. */
@@ -169,16 +171,17 @@ export function cardRecords(group: AttentionGroup): WorkRecord[] {
  *  open fault's line is empty — its title is the row's, its Close the line's). Every row shows its problems this way,
  *  one or several. */
 export function attentionLineIn(group: AttentionGroup, item: AttentionItem): string {
-  return group.key.startsWith("device:") ? attentionLine(item) : faultStatus(item) ?? item.detail;
+  return group.key.startsWith("device:") ? attentionLine(item) : faultStatus(item) ?? item.detail ?? "";
 }
 
-/** What a fault's line must say of its status: nothing while it is open, "In progress" once someone took it.
+/** What a fault's line must say of its status: nothing while it is open, its stage's word (fmEngine.STAGE_WORDS:
+ *  "In progress") once someone took it.
  *  ⚠️ "OPEN FAULT:" BEFORE EVERY FAULT SAID NOTHING (owner, 2026-10-14: "this seems providing no value"): the row's
  *  icon says it is a fault and its Close that it is open — the words only pushed the text to a second line.
  *  undefined for anything that is not a fault. */
 function faultStatus(item: AttentionItem): string | undefined {
   if (item.kind !== "fault") return undefined;
-  return item.stage === "ticket" ? "In progress" : "";
+  return item.stage === "ticket" ? STAGE_WORDS.ticket.word : "";
 }
 
 /** The icons a problem's line shows inside its row: its own sources only where the row's icons do not say them already
@@ -285,11 +288,12 @@ export function attentionLine(item: AttentionItem): string {
     // device is offline already. ⚠️ SO DID "UNLOCKED — #41 · LAUNDRY ROOM DOOR UNLOCKED" (owner, 2026-10-18): a state
     // word the fault's title already says is not said before it. A word the fault does not say stays: "Not in Home
     // Assistant", a live reading ("92 %").
-    const said = (item.kind === "unavailable" && item.detail === "Unavailable") || saysWord(item.fault.title, item.detail);
-    return said ? fault.charAt(0).toUpperCase() + fault.slice(1) : `${item.detail} — ${fault}`;
+    const word = item.detail ?? "";
+    const said = (item.kind === "unavailable" && word === "Unavailable") || saysWord(item.fault.title, word);
+    return said ? fault.charAt(0).toUpperCase() + fault.slice(1) : `${word} — ${fault}`;
   }
   if (item.kind === "fault") return titled(item);
-  return item.kind === "schedule" ? `${item.detail}: ${item.title}` : item.detail;
+  return item.kind === "schedule" ? `${item.detail}: ${item.title}` : item.detail ?? "";
 }
 
 /**
@@ -340,16 +344,14 @@ export function buildAttentionItems(opts: {
   const fm = fmAttention(fmData);
   for (const t of fm.unresolved) {
     const entityId = recordEntity(t.entityId, (x) => x in entities);   // the one the Tickets tab files it under too
-    const stage = stageOf(t) === "ticket" ? "ticket" : "fault";
     items.push({
       id: `fault:${t.id}`,
       kind: "fault",
       title: faultTitle(t),
-      detail: stage === "ticket" ? "In progress" : "Fault",
       room: t.room,
       entityId,
       ticketId: t.id,
-      stage,
+      stage: stageOf(t),
       latest: lastNoted(t),
       source: faultSource(t),
       check: t.check,

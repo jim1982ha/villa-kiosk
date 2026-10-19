@@ -1,3 +1,20 @@
+## 2.496.424
+
+### Fixed
+- The Cockpit's Overview reads its open issues again every 15 seconds while the window is open, as its (i) says. It
+  was read every 3 minutes until a Facility tab (Tickets, Schedule…) was opened: a fault taken on from another phone,
+  or cleared by the VESTA Agent, could sit on the Overview for up to three minutes.
+- Renaming a fault (Edit ticket → Summary) shows the new name everywhere at once: on its card, and in the "Open a
+  ticket" and "Resolve the ticket" windows (their banner and the cost line, now "#5 · …" as the card says it). A fault
+  the VESTA Agent opened kept the Agent's wording on its card ("Pump offline for 6 d 2 h") until the Agent's next pass,
+  and for ever while the Agent was off.
+
+### Changed
+- A ticket's stage has one word and one colour everywhere: "In progress" (amber) and "Resolved" (green), on the
+  Tickets tab's pills and in the monthly recap's Status column, and "Open" in the recap for a fault nobody has taken
+  on. The recap printed the stored status in lowercase ("in progress", "open"), and the pill borrowed the Schedule's
+  "due soon" colour.
+
 ## 2.496.423
 
 ### Fixed

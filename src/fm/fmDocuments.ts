@@ -14,7 +14,7 @@
 // document unchanged, needs no viewer, and stays readable if it is ever
 // archived as plain text years later for a dispute.
 
-import { budgetStatus, completionsInMonth, localStamp, monthKey, monthLabel, scheduleStatus, shortDate, resolvedInMonth, ticketAt, ticketStats, workedBy } from "./fmEngine";
+import { budgetStatus, completionsInMonth, localStamp, monthKey, monthLabel, scheduleStatus, shortDate, resolvedInMonth, STAGE_WORDS, stageOf, ticketAt, ticketStats, workedBy } from "./fmEngine";
 import { COST_CATEGORY_NAMES, NO_FM_TERMS, type FmData, type FmTerms } from "./fmTypes";
 import type { BudgetStatus } from "./fmEngine";
 import type { ReadinessResult } from "./readiness";
@@ -206,7 +206,8 @@ export function buildMonthlyRecap(input: RecapInput): string {
     L.push(`|---|---|---|---|---|`);
     for (const t of inMonth.sort((x, y) => Date.parse(x.openedAt) - Date.parse(y.openedAt))) {
       L.push(`| ${shortDate(t.openedAt)} | ${cell(t.title)} `
-        + `| ${t.status.replace("_", " ")} | ${t.resolvedAt ? shortDate(t.resolvedAt) : "—"} `
+        // its stage's one word, the Tickets tab's pill's (STAGE_WORDS) — it printed the stored status ("in progress")
+        + `| ${STAGE_WORDS[stageOf(t)].word} | ${t.resolvedAt ? shortDate(t.resolvedAt) : "—"} `
         + `| ${t.photoIds.length} photo(s) |`);
     }
     L.push("");

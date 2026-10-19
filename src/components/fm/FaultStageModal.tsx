@@ -23,7 +23,7 @@
 import { useState } from "react";
 
 import { useFmData, fmSaveOutcome } from "@/fm/FmDataContext";
-import { parseAmount } from "@/fm/fmEngine";
+import { faultTitle, parseAmount } from "@/fm/fmEngine";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
 import NotesField from "./NotesField";
@@ -81,7 +81,7 @@ export default function FaultStageModal({
       amountIdr > 0
         ? {
             amountIdr, category,
-            label: `Ticket: ${ticket.title}`,
+            label: `Ticket: ${faultTitle(ticket)}`,
             note: note.trim() || undefined,
             entityId: ticket.entityId,
             deviceLabel: ticket.deviceLabel,
@@ -110,7 +110,8 @@ export default function FaultStageModal({
           <h2>{copy.title}</h2>
         </div>
         <div className="modal-body fm-stack">
-          {tickets.map((t) => <div key={t.id} className="fm-banner">{t.title}</div>)}
+          {/* the fault as its card names it (fmEngine.faultTitle: "#5 · …", a duration worded now) — not the stored title */}
+          {tickets.map((t) => <div key={t.id} className="fm-banner">{faultTitle(t)}</div>)}
           <label className="fm-field">
             <span>Who{asksCost ? " did the work" : "'s handling it"} (optional)</span>
             <input value={who} onChange={(e) => setWho(e.target.value)}

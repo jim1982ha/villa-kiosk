@@ -28,7 +28,7 @@ import { usePresence } from "@/config/usePresence";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { roleCan } from "@/auth/permissions";
-import { useFmData, useFacilityLiveView } from "@/fm/FmDataContext";
+import { useFmData } from "@/fm/FmDataContext";
 import { buildReadiness, type CheckTarget } from "@/fm/readiness";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import { buildDeviceOptions } from "./DeviceSearchPicker";
@@ -56,8 +56,8 @@ export const FACILITY_TABS: ModalTab<FacilityTab>[] = [
  * One Facility tab's content, inside the Cockpit (2.496.273: the Facility
  * window was merged into the Cockpit — owner, 2026-10-04: "remove 1 menu from
  * the top bar … show the same information in a single one"). Mounted only
- * while a Facility tab is open, so the maintenance record is watched live only
- * then (useFacilityLiveView).
+ * while a Facility tab is open; the maintenance record is watched live by the
+ * Cockpit window itself, whichever tab shows (useFacilityLiveView, registered by the window).
  */
 export default function FacilitySections({
   tab, onOpenEntity, editTicket, onTicketEditOpened,
@@ -77,7 +77,6 @@ export default function FacilitySections({
   const presenceLine = usePresence()?.recap ?? null;
   const { role } = useProfile();
   const { data, ready, saveError } = useFmData();
-  useFacilityLiveView();
   const { devices } = useVillaModel();
   const totalDeviceCount = devices.ids.length;
 
