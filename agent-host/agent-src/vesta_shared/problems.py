@@ -368,6 +368,8 @@ class Problems:
             inc = self.store.incident(sid)
             if not inc or self.source_gone({"source": source}):
                 return False
+            if inc.get("state") in (Incident.LOGGED, Incident.DIGEST):
+                return False                     # not chased (its priority lowered while open): no task, no fault
             return not self.closed_by_person(source, inc.get("reopened_at") or "")
         return False
 

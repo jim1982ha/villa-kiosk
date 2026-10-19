@@ -814,3 +814,27 @@ def test_a_rule_of_a_kind_with_no_route_takes_its_names_priority():
     assert desk.priority({"priority": "P4"}, desk.route_for("automation.critical_battery_x", "critical_battery")) == "P4"
     assert desk.route_for("PM-SILENT")["severity"] == "P3"                 # the agent's own findings: as before
     assert desk.route_for("something_else")["severity"] == desk.RULES["defaults"]["severity"]
+
+
+def test_a_priority_lowered_while_its_alert_is_chased_stops_the_chase(store):
+    # architecture review, 2026-10-19 evening: a rule lowered from P2 to P3 while its alert was open changed the number
+    # only — the FM reminded, the owner told after 45 min, its Kiosk fault left open, for a digest item
+    iid = desk.intake(store, event(), T0, occupancy_reader=lambda: "occupied")["incident_id"]
+    assert store.incident(iid)["state"] == "asked" and store.last_task(f"incident:{iid}")["status"] == "open"
+    res = desk.intake(store, event(priority="P3"), T0 + timedelta(minutes=5), occupancy_reader=lambda: "occupied")
+    inc = store.incident(iid)
+    assert inc["severity"] == "P3" and inc["state"] == "digest"
+    assert store.last_task(f"incident:{iid}")["status"] != "open"                       # its task closed…
+    assert [a for a in res["actions"] if a["action"] == "ticket.resolve"]              # …and its Kiosk fault
+    assert res["settle"] == [{"incident_id": iid,                                         # every copy says why
+                              "note": "Lowered to P3 on {time}: kept for the next daily digest. No reply needed."}]
+    later = desk.tick(store, T0 + timedelta(minutes=60))
+    assert later["reasked"] == [] and not [s for s in later["send"] if s.get("incident_id") == iid]
+    # raised again: the chase starts again, as before
+    desk.intake(store, event(priority="P2"), T0 + timedelta(minutes=70), occupancy_reader=lambda: "occupied")
+    assert store.incident(iid)["state"] == "asked" and store.last_task(f"incident:{iid}")["status"] == "open"
+
+
+def test_what_a_priority_does_is_read_from_the_settings():
+    assert {p: desk.does(p) for p in ("P1", "P2", "P3", "P4")} == desk.RULES["priority_does"]
+    assert desk.does("P2", {"ladder": False}) == "log"                                  # a route without the ladder

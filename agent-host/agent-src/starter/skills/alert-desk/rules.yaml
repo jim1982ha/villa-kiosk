@@ -75,6 +75,20 @@ siren:
   # The human step is the owner's Approve button (the siren is an owner-only device in
   # policy.yaml); how long it sounds is policy.yaml's siren_auto_off_min.
 
+# What a priority does to an alert — the one place (architecture review, 2026-10-19 evening): `chase` (the chase's
+# asked role is asked to answer, reminded, then the owner told; with its task and Kiosk fault), `digest` (the next
+# morning's list) or `log` (recorded only). A priority changed while its alert is open does what the new one says:
+# raised to `chase`, the chase starts; lowered from it, the chase stops, its task and fault close, and every copy of
+# its card says so (`lowered_words`, "{priority}" and "{time}" filled in).
+priority_does:
+  P1: chase
+  P2: chase
+  P3: digest
+  P4: log
+lowered_words:
+  digest: "Lowered to {priority} on {time}: kept for the next daily digest. No reply needed."
+  log: "Lowered to {priority} on {time}: recorded only. No reply needed."
+
 people_roles:
   # role -> which severities reach that chat: every message about an alert, from the first to its close
   owner: [P1]

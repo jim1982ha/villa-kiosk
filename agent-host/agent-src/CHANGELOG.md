@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.6.252 (19 October 2026)
+
+Architecture review, 19 October evening (owner: "proceed to all of the recommended ones"), cards 2 and 3.
+- alert-desk: what a priority does is rules.yaml `priority_does` (chase / digest / log), read by `_ladder` and by
+  `_restated` (desk.does). A priority LOWERED while its alert is chased now stops the chase: the incident goes to the
+  digest (or the log), its task and Kiosk fault close (Problems.settle — wants_open is false for a LOGGED or DIGEST
+  incident), and every copy of its card loses its buttons and says `lowered_words`. It changed the number only: the FM
+  reminded, the owner told after 45 min, the fault left open, for a digest item. A route without the ladder records,
+  as before. Tests: test_a_priority_lowered_while_its_alert_is_chased_stops_the_chase (three mutations red),
+  test_what_a_priority_does_is_read_from_the_settings. Not changed: the night check's 02:00 message to the FM
+  (findings, addressed by role in another skill — see the owner's note).
+- knowledge_pack.subject(entity_id, whole_device): what a problem is about, key and name — a whole device's fault
+  (result.WHOLE_DEVICE: offline, silent, keeps dropping) by its device, any other by its reading. The to-do list
+  (playbook.one_list's device_of / name_of take it) and the daily digest (compose.fm_daily) ask it: two pumps' power
+  findings on one relay were one line "House & Pool Relay" beside the cards "House Pump" and "Pool Pump". Test:
+  test_a_problem_is_named_by_its_reading_unless_it_is_about_the_whole_device (two mutations red).
+
 ## 0.6.251 (19 October 2026)
 
 - Test only (owner, 2026-10-19: "double check this"): a rule on "Follow Vesta Agent Setting" of a kind with no route —

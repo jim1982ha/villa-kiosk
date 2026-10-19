@@ -29,6 +29,11 @@ FAULTS_CHANGED = "faults_changed"
 PRIORITIES = ("P1", "P2", "P3", "P4")
 PRIORITY_ORDER = {p: i for i, p in enumerate(PRIORITIES)}
 
+#: The night check's findings about a WHOLE device (offline, silent, keeps dropping: grouped per physical device by the
+#: night, knowledge_pack.device_key); every other finding is about one reading (a pump's power, a battery, a level).
+#: What a report names a problem by follows it (knowledge_pack.subject).
+WHOLE_DEVICE = frozenset({"PM-UNAVAILABLE", "PM-SILENT", "PM-RECONNECT-LOOP"})
+
 PARAM_MISSING = "PM-PARAM-MISSING"
 COUNTER_RESET = "PM-COUNTER-RESET"
 

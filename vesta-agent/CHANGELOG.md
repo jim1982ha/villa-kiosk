@@ -1,3 +1,12 @@
+## 0.12.261
+
+What you will see:
+- An alert whose priority you lower while it is open (for example P2 to P3) stops being chased: no more reminder to
+  the facility manager, no escalation to you, its Cockpit fault closes, and its message says "Lowered to P3: kept for
+  the next daily digest. No reply needed."
+- The reports' to-do list and the daily digest name a problem as the cards do: a pump's finding by the pump ("House
+  Pump"), the relay's own problem (offline, keeps dropping) by the relay — two pumps on one relay are two lines.
+
 ## 0.12.260
 
 What you will see: nothing new — a check that an alert from a rule on "Follow Vesta Agent Setting" (the new battery

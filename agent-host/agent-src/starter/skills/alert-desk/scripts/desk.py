@@ -365,9 +365,21 @@ RESTATED = ("message", "summary", "label", "claim", "bad_states", "mode", "state
             "reason")
 
 
+def does(sev: str, route: dict | None = None) -> str:
+    """What priority `sev` does to an alert (rules.yaml priority_does): "chase", "digest" or "log" — a route without the
+    ladder never chases: it records (as before: the roi_ and audit_ routes)."""
+    d = RULES["priority_does"].get(sev, "log")
+    return "log" if d == "chase" and route is not None and not route.get("ladder", True) else d
+
+
 def _restated(store: Store, cur: dict, ev: dict, sev: str, now: datetime, route: dict, out: dict) -> dict:
-    """`cur` with what Home Assistant says of it now (RESTATED), and its priority — the ladder started when a priority
-    that chases arrives on an incident that was only logged (an alert opened before its rule carried one)."""
+    """`cur` with what Home Assistant says of it now (RESTATED), and its priority — what the new priority does
+    (priority_does): the ladder started when it chases on an incident that was not chased; the chase stopped when it
+    no longer does.
+
+    ⚠️ LOWERED, STILL CHASED (architecture review, 2026-10-19 evening): a rule's priority lowered from P2 to P3 while
+    its alert was open changed the number only — the facility manager was reminded, the owner told after 45 min, and
+    its Kiosk fault stayed open, for an alert now meant for the morning digest."""
     cur = dict(cur)                                # a store row
     # it fired again: whatever was seen clearing is not over
     p = store.note(cur["id"], {k: ev[k] for k in RESTATED if ev.get(k) is not None}, drop=("clear_since",))
@@ -376,6 +388,12 @@ def _restated(store: Store, cur: dict, ev: dict, sev: str, now: datetime, route:
         if cur["state"] in (Incident.LOGGED, Incident.DIGEST):
             _ladder(store, cur["id"], {**p, "rule_id": cur["rule_id"], "entity_id": cur["entity_id"],
                                        "message": p.get("message") or cur["rule_id"]}, now, sev, route, out)
+        elif cur["state"] in Incident.CHASED and does(sev, route) != "chase":
+            now_does = does(sev, route)
+            store.update_incident(cur["id"], state=Incident.DIGEST if now_does == "digest" else Incident.LOGGED)
+            out["actions"] += Problems(store).settle(f"incident:{cur['id']}", note=f"Lowered to {sev}.")
+            words = (RULES.get("lowered_words") or {}).get(now_does) or "Lowered to {priority} on {time}."
+            out.setdefault("settle", []).append(R.settle(cur["id"], words.replace("{priority}", sev)))
     return store.incident(cur["id"])
 
 
@@ -384,7 +402,7 @@ def _ladder(store: Store, iid: int, ev: dict, now: datetime, sev: str, route: di
     """Where an incident opened (or opened `again`, under that title) starts: the facility manager asked, with its task
     and Kiosk fault — the same ones open again when it came back (Problems.reopen_task) — (P1, P2 with the ladder); the
     morning list (P3); the record (P4)."""
-    if sev in ("P1", "P2") and route.get("ladder", True):
+    if does(sev, route) == "chase":
         store.update_incident(iid, state=Incident.ASKED, asked_at=now.isoformat(), assignee=CHASE["asks"])
         eid, check = ev.get("entity_id", ""), route.get("check") or ""
         if again:
@@ -396,7 +414,7 @@ def _ladder(store: Store, iid: int, ev: dict, now: datetime, sev: str, route: di
             return
         tid, _ = Problems(store).open_task("incident", iid, ev["rule_id"], eid, ev["message"][:250], check)
         out["actions"].append(R.fault(ev["message"][:200], task_id=tid, check=check, entity_id=eid))
-    elif sev == "P3":
+    elif does(sev, route) == "digest":
         store.update_incident(iid, state=Incident.DIGEST)
     else:
         store.update_incident(iid, state=Incident.LOGGED)

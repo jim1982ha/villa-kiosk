@@ -14,7 +14,7 @@ from vesta_shared.device_state import battery_charge  # the night check's own re
 from vesta_shared.stats import slope_per_hour, step_index  # the night check's step detector
 from vesta_shared.timeutil import day_label, day_time_label  # the one day format
 from vesta_shared.past import unread  # the one "could not be read whole: nothing is known after"
-from vesta_shared.result import PRIORITY_ORDER  # the one list of priorities
+from vesta_shared.result import PRIORITY_ORDER, WHOLE_DEVICE  # the one list of priorities; a whole device's faults
 
 if TYPE_CHECKING:
     from facts import Ctx
@@ -142,8 +142,8 @@ def clue_battery_trend(c, when):
 
 def clue_offline(c, when):
     fams = set(when.get("families") or [])
-    return [{"subject": o["name"], "since": o["since"], "family": o["family"], "entity_id": o["entity_id"]}
-            for o in c.offline() if o["family"] in fams]
+    return [{"subject": o["name"], "since": o["since"], "family": o["family"], "entity_id": o["entity_id"],
+             "whole_device": True} for o in c.offline() if o["family"] in fams]
 
 
 def clue_use_while_empty(c, when):
@@ -227,12 +227,13 @@ def todo(c: "Ctx") -> list[dict]:
     if c._todo is not None:
         return c._todo
 
-    def device_of(entity_id, fallback):
-        return _device(c, entity_id, fallback)
+    def device_of(entity_id, fallback, whole):
+        # what the problem is about: its device, or its reading (knowledge_pack.subject)
+        return c.pack.subject(entity_id, whole)[0] if entity_id else fallback
 
-    def name_of(entity_id):
-        # the device's name as the knowledge pack has it; an entity it does not know keeps its own sentence
-        return c.pack.device_name(entity_id, None)
+    def name_of(entity_id, whole):
+        # its name as the knowledge pack has it; an entity it does not know keeps its own sentence
+        return c.pack.subject(entity_id, whole)[1] if entity_id else None
 
     c._todo = one_list(clues(c)[0], c.tasks(), device_of, name_of, c.need("horizon"),
                        int(c.need("todo", "group_from")), float(c.need("todo", "same_time_minutes")),
@@ -278,8 +279,9 @@ def one_list(clue_rows: list[dict], problems: list[dict], device_of, name_of, ho
     when there are at least `group_from` and `group_words` (reports.yaml todo_groups) or the playbook
     entry gives that kind a group line. The PDF mock-ups' "Do this week": one list, no repeats.
 
-    ⚠️ PLAIN INPUTS (architecture review, 2026-10-01): it reads nothing itself — `device_of(entity_id,
-    fallback)` and `name_of(entity_id)` are the only questions it asks — so its rules are tested with
+    ⚠️ PLAIN INPUTS (architecture review, 2026-10-01): it reads nothing itself — `device_of(entity_id, fallback,
+    whole_device)` and `name_of(entity_id, whole_device)` are the only questions it asks (whole_device: a task of a
+    result.WHOLE_DEVICE rule, or an offline clue — knowledge_pack.subject) — so its rules are tested with
     lists, without a villa, a store or Home Assistant."""
     order = SEVERITY_ORDER
     items: dict[str, dict] = {}
@@ -305,7 +307,8 @@ def one_list(clue_rows: list[dict], problems: list[dict], device_of, name_of, ho
     for cl in clue_rows:
         f = cl["figures"]
         sev = cl.get("severity") or severity_for(cl.get("horizon"))
-        add({"from": "clue", "kind": f"{cl['group']}/{cl['entry']}", "device": device_of(f.get("entity_id"), cl["subject"] or cl["id"]),
+        add({"from": "clue", "kind": f"{cl['group']}/{cl['entry']}",
+             "device": device_of(f.get("entity_id"), cl["subject"] or cl["id"], bool(f.get("whole_device"))),
              "subject": cl["subject"], "title": cl["title"], "severity": sev, "horizon": cl.get("horizon") or horizon.get(sev),
              "why": cl["playbook"].get("means", ""), "check": cl["playbook"].get("check", ""), "ask": cl["playbook"].get("ask", ""),
              "cost": cl["playbook"].get("cost_of_ignoring", ""), "since": str(f.get("since") or f.get("step_date") or f.get("change_date") or ""),
@@ -313,8 +316,9 @@ def one_list(clue_rows: list[dict], problems: list[dict], device_of, name_of, ho
              "entity_ids": [f["entity_id"]] if f.get("entity_id") else []})
     for pr in problems:
         title = pr["title"].split("\n")[0]
-        add({"from": "task", "kind": pr["kind"], "device": device_of(pr.get("entity_id"), pr["id"]),
-             "subject": name_of(pr.get("entity_id")) or title, "title": title, "severity": pr["severity"],
+        whole = pr["kind"] in WHOLE_DEVICE
+        add({"from": "task", "kind": pr["kind"], "device": device_of(pr.get("entity_id"), pr["id"], whole),
+             "subject": name_of(pr.get("entity_id"), whole) or title, "title": title, "severity": pr["severity"],
              "horizon": horizon.get(pr["severity"]), "why": "", "check": pr.get("check") or "", "ask": "", "cost": "",
              "since": pr["since"], "figures": pr["figures"], "task_ids": [pr["id"]], "also": [], "group_title": None,
              "entity_ids": [pr["entity_id"]] if pr.get("entity_id") else []})

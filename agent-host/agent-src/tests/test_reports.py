@@ -466,8 +466,8 @@ def test_the_one_list_is_built_from_plain_inputs():
                  "title": "Pump draws less", "since": "2026-09-21", "figures": {}, "check": ""}
     silent = [{"id": f"finding-{k}", "kind": "PM-SILENT", "entity_id": f"sensor.s{k}", "severity": "P3",
                "title": f"S{k} silent", "since": "2026-10-01T09:28", "figures": {}} for k in range(2, 5)]
-    rows = playbook.one_list([clue], [pump_task, *silent], lambda eid, fb: {"sensor.pump_power": "pump"}.get(eid, eid or fb),
-                          lambda eid: {"sensor.s2": "S2", "sensor.s3": "S3", "sensor.s4": "S4"}.get(eid),
+    rows = playbook.one_list([clue], [pump_task, *silent], lambda eid, fb, whole: {"sensor.pump_power": "pump"}.get(eid, eid or fb),
+                          lambda eid, whole: {"sensor.s2": "S2", "sensor.s3": "S3", "sensor.s4": "S4"}.get(eid),
                           {"P1": "Now", "P2": "Now", "P3": "Soon", "P4": "Plan"}, 3, 10,
                           {"PM-SILENT": "{n} sensors silent", "same_time": "All since {since}: one cause."})
     assert [r["title"] for r in rows] == ["Pump: power down", "3 sensors silent"]      # clue + task merged; 3 grouped
@@ -973,3 +973,37 @@ def test_the_monitoring_section_says_how_the_agent_listened_never_the_villas_dev
     assert m["listening_since"] == (c.s_dt + timedelta(days=2)).isoformat() and "offline" not in m
     c.listening_since = lambda: c.s_dt - timedelta(days=30)             # there all week
     assert facts.s_monitoring(c)["listening_since"] is None
+
+
+def test_a_problem_is_named_by_its_reading_unless_it_is_about_the_whole_device():
+    # architecture review, 2026-10-19 evening: two pumps on one relay — the cards said "House Pump" and "Pool Pump",
+    # the to-do list merged both pumps' findings into one line named "House & Pool Relay"
+    import facts
+    import playbook
+    from vesta_shared.knowledge_pack import KnowledgePack
+    dev = {"name": "", "manufacturer": "Maker", "model": "Pro EM"}
+    pack = KnowledgePack(villa="V", time_zone="UTC", generated_at="", ha_version=None,
+                         families={"power": [{"entity_id": "sensor.house_power", "name": "Power", "device_id": "house_ch",
+                                              "asset": "house", "family": "power"},
+                                             {"entity_id": "sensor.pool_power", "name": "Power", "device_id": "pool_ch",
+                                              "asset": "pool", "family": "power"}],
+                                   "network": [{"entity_id": "switch.relay", "name": "Relay", "device_id": "relay",
+                                                "asset": "relay", "family": "network"}]},
+                         assets={}, areas=[], people=[], channels={}, unknown_area=[], unclassified=[], retention={},
+                         devices={"relay": {**dev, "name": "House & Pool Relay", "via": ""},
+                                  "house_ch": {**dev, "name": "House Pump", "via": "relay"},
+                                  "pool_ch": {**dev, "name": "Pool Pump", "via": "relay"}})
+    task = lambda tid, rule, eid, title: {"id": tid, "kind": rule, "rule_id": rule, "entity_id": eid,  # noqa: E731
+                                         "severity": "P3", "title": title, "since": "2026-10-18", "figures": {}, "check": ""}
+    c = facts.Ctx.__new__(facts.Ctx)
+    c.pack, c.cfg, c._todo, c._clues = pack, {}, None, ([], [])
+    c.need = lambda *p: {("horizon",): {"P1": "Now", "P2": "Now", "P3": "Soon", "P4": "Plan"},
+                         ("todo", "group_from"): 9, ("todo", "same_time_minutes"): 10}[p]
+    c.tasks = lambda: [task("finding-1", "PM-POWER-CHANGE", "sensor.house_power", "House power down"),
+                       task("finding-2", "PM-POWER-CHANGE", "sensor.pool_power", "Pool power down"),
+                       task("finding-3", "PM-RECONNECT-LOOP", "switch.relay", "Relay keeps dropping")]
+    rows = playbook.todo(c)
+    assert sorted(r["subject"] for r in rows) == ["House & Pool Relay", "House Pump", "Pool Pump"]   # three lines
+    # the digest names them the same way
+    assert pack.subject("sensor.house_power", False)[1] == "House Pump"
+    assert pack.subject("sensor.house_power", True)[1] == "House & Pool Relay"

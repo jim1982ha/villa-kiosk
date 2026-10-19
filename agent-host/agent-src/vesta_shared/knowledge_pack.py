@@ -357,6 +357,18 @@ class KnowledgePack:
         own = self.device_id_of(entity_id)
         return f"device:{own}" if own and self.device_label(own) else self.device_of(entity_id)[0]
 
+    def subject(self, entity_id: str, whole_device: bool, default: str | None = None) -> tuple[str, str | None]:
+        """What a problem is about, as every list groups and names it: (key, name). A whole device's fault (offline,
+        silent, keeps dropping: result.WHOLE_DEVICE) is its physical device's (device_of, device_name); any other is
+        the reading's own (reading_key, reading_name).
+
+        ⚠️ EACH LIST CHOSE (architecture review, 2026-10-19 evening): the cards named the pump ("House Pump"), the to-do
+        list grouped and named the relay ("House & Pool Relay", the other pump's finding merged under it), the digest
+        named the relay too."""
+        if whole_device:
+            return self.device_of(entity_id)[0], self.device_name(entity_id, default)
+        return self.reading_key(entity_id), self.reading_name(entity_id, default)
+
     def name_of(self, entity_id: str, default: str | None = None) -> str | None:
         """An entity's name as the pack has it; `default` when the pack does not name it."""
         return (self.row(entity_id) or {}).get("name") or default

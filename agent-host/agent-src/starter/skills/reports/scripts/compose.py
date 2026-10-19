@@ -51,6 +51,7 @@ from vesta_shared import result as R  # noqa: E402  (what the engine is asked to
 from vesta_shared import script  # noqa: E402  (pack, store, zone, day: one set-up)
 from vesta_shared.params import MissingParameter  # noqa: E402
 from vesta_shared.messaging import fmt_money, incident_tag  # noqa: E402
+from vesta_shared.result import WHOLE_DEVICE  # noqa: E402  (what a whole device's faults are)
 from vesta_shared.message_format import document, for_the_ai, split_title  # noqa: E402  (the one shape: title, To:, sections)
 from vesta_shared.store import Incident, Store  # noqa: E402
 from vesta_shared.timeutil import day_label, day_time_label, villa_date  # noqa: E402  (the one day format, duration)
@@ -100,9 +101,11 @@ def fm_daily(pack: KnowledgePack, store: Store, as_of: date) -> str:
         raise MissingParameter("todo.group_from", said="reports.yaml: parameter missing: thresholds.todo.group_from")
     group_from = int(group_from)
     words = {k: v for k, v in (cfg.get("todo_groups") or {}).items() if k != "same_time"}
-    def name_of(entity_id, text):
-        # the device's name from the knowledge pack; the summary's own words for an entity it does not know
-        return pack.device_name(entity_id, None) or text.split("\n")[0][:60]
+    def name_of(p):
+        # what the problem is about, named as every list names it (knowledge_pack.subject: a whole device's fault by
+        # its device, any other by its reading); the summary's own words for an entity the pack does not know
+        return (pack.subject(p["entity_id"], p["rule_id"] in WHOLE_DEVICE)[1] if p.get("entity_id") else None) \
+            or p["title"].split("\n")[0][:60]
 
     # ⚠️ NEW AND STILL OPEN AS PROBLEMS ANSWER THEM (architecture review 13): this read its own "new" (findings
     # since yesterday, a closed one included) and listed a noted alert twice, under "Also noted" and "Still open"
@@ -117,7 +120,7 @@ def fm_daily(pack: KnowledgePack, store: Store, as_of: date) -> str:
     sections = []
     if new:
         sections.append(("New since yesterday", _grouped([{"kind": p["rule_id"], "severity": p["severity"],
-                                                           "subject": name_of(p["entity_id"], p["title"]),
+                                                           "subject": name_of(p),
                                                            "title": p["title"]} for p in new], group_from, words)))
     if noted:
         sections.append(("Also noted (no action needed yet)", [f"- {p['title']}" for p in view["new"] if p["incident"] in noted]))
@@ -128,7 +131,7 @@ def fm_daily(pack: KnowledgePack, store: Store, as_of: date) -> str:
         alerts = [p for p in open_now if p["incident"]]
         sections.append(("Still open", [f"- {incident_tag(p['incident'])} · {p['title'][:160]}" for p in alerts]
                          + _grouped([{"kind": p["rule_id"], "severity": p["severity"],
-                                      "subject": name_of(p["entity_id"], p["title"]), "title": p["title"][:160]}
+                                      "subject": name_of(p), "title": p["title"][:160]}
                                      for p in open_now if not p["incident"]], group_from, words)[:8]))
     if not sections:
         sections.append((None, ["Nothing new, nothing open."]))
