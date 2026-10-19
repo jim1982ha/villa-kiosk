@@ -488,3 +488,65 @@ its fault. Decided (owner: "implement the recommended finding", card 1 of 4):
 - Deleted: `outcome_words.clean_summary` (= `messaging.no_code`), `Kiosk.ticket_states` / `update_ticket` /
   `note_ticket` / `tag_ticket` (one-line wrappers over `amend`), `Tickets.resolve` (no caller: a `ticket.resolve` action
   only runs the repair), `tickets.kiosk_reopen_note` (callers use `kiosk_words.reopened`).
+
+## The Telegram layer, measured: one copy per chat, "To:" from the priority, one title word, one writer (architecture review, 2026-10-19, 0.12.265)
+
+Four leads measured with a probe on the real harness (`tests/helpers.make_agent`, the alert desk, the fake Telegram),
+then fixed with the probe's scenarios as the tests. Decided:
+- **One copy per chat, whatever wrote it.** The villa's own message of a step, taken over in a chat (`ha_messages`:
+  its number, heading and buttons — `Outcome.adopt_ha`, `IncidentThread.adopt`), IS the desk's copy there: a desk
+  message of the same (incident, chat, step) is not sent to that chat (`Outcome.carry_out`, right after adoption; the
+  chat still gets this result's snapshot and counts as reached for `first_in_line`). `Routing.deliveries` keeps the
+  desk's own dedupe (a chat listed for both roles). The rule sits in Outcome, not routing, because what adoption showed
+  is known only once Telegram answered and routing's roles (`Notices.audiences`) are what the taken-over copy says. A
+  P1 had rung the owner's group twice: the rule's message edited, then deleted for an identical one. "A failed send
+  never leaves the chat empty" stays for every chat with no taken-over copy (`IncidentThread._post`: new first, then
+  the older goes).
+- **"To:" follows the priority, never the chat the rule posts in** (owner, 2026-10-17). Skills before code: the alert
+  desk carries whom a priority reaches on the incident (`store.Notes.TO`; `desk.reaches` = people_roles' roles, else
+  the priority_does word — "digest", "log"; `desk.carry_to` at an opening, a reopening, a priority change and every
+  tick, as `carry_check`). The engine reads it: `Incidents.reaches` → `Notices.to_line`, the ONE "To:" of every copy
+  of an incident — the roles the priority reaches, widened by every step's roles (an escalation names the owner); a
+  priority nobody is sent reads "To: digest" / "To: log", and its step lines "(to: digest)" (`Notices._who`, the
+  line's own `reach` record). `Notices.record` writes the roles given and `reach`, never the chat's roles, so no
+  later heading reads the chat out of the history; `Notices.went_to` is the one order for a taken-over message's roles
+  (this step's, the priority's, this result's, the incident's so far). The chat-role fallback remains ONLY for a message
+  about no incident, and — knowingly — for an incident of an older desk that carried no `Notes.TO` (until its next
+  tick writes it): a shipped villa may run the older skill.
+- **The title word and "To:" are the INCIDENT's — the same in every copy; the Status lines are each chat's own**
+  (#55 unchanged; the direction stated to the owner on the review page). `IncidentThread.sync` re-heads EVERY copy: a
+  chat the step does not concern (`quiet`, from `Notices.concerns`) keeps its own words and lines and takes only the
+  heading through `Notices.retitle`, which is now "the title word (`Notices.word`, closed ↔ existing both ways) and
+  the 'To:' (`to_line`) as the incident stands now", computed in that one place; `close()` and `_head_now` use the
+  same. Measured: Done by the FM, the fault reopened in the Cockpit, the tick's reopen request to the FM — the owner's
+  group kept "(closed)" over "Done on … (Wayan)." while the FM's copy read "(existing)". Two older tests pinned the
+  opposite ("a step to the FM leaves the group's copy untouched"); they now pin the direction: the group's own Status
+  lines untouched, its word and "To:" the incident's.
+- **One writer of "<what> on <when> (<who>)"**: `message_format.acted` writes `PRESSED`, the approvals' three notes
+  (`approvals.STATES`, each state's tail kept) and the desk's "Noted on … (who): label". A mutation of `acted` goes red
+  in the villa's template test, the approvals' pinned notes and the desk's.
+
+## Round two seams: a close by the agreement, a refusal that stops nothing, a reopening told by its skill, one "ran" (architecture review, 2026-10-19, 0.12.265)
+
+- **How a fault was closed is the agreement's rule, read from the file**: `vesta_shared/agreement.py` loads the host's
+  `agent-contract.json` once (`/opt/vesta/host/`, else the checkout's `rootfs/opt/vesta/host/` — the tests' copy) and
+  `kiosk.status_changes` / `last_close` / `cleared_step` read `ticketUpdate` (notStatusChanges, clearedNotes,
+  clearedNotePrefixes) exactly as the Kiosk's fmEngine.lastResolution and the proxy's _fm_last_resolution do: the last
+  STATUS CHANGE in time order, an unreadable time first, a kindless close by its note. `fault_of` keeps its interface
+  (`cleared` is None when no step closed it; `by` is the close's person on a closed fault). No list of the agreement is
+  typed in the engine; tests/test_contract_ticket.py replays all 16 `histories`.
+- **`KioskError` says whether the Kiosk refused or was not reached** (`status`, `said`, `refused`): the repair's two
+  loops (`tickets._repair` creating, `_converge` amending) log the Kiosk's sentence and go on to the next fault; only
+  an unreached Kiosk (status None: connection refused, a timeout) ends the round. tools.py quotes the sentence to the
+  chat. The stand-in's `FakeKiosk.refuses(tid, status, sentence)` plays the proxy's no.
+- **A person's reopening is a mark the engine sets and a skill clears**: `store.reopen_task(at=…)` keeps the Kiosk's
+  own time, `reopen_told_at` NULL = untold (`untold_reopenings`, `reopening_told`; migrated: rows from before are told).
+  `Problems.reopened_in_kiosk` marks an alert's told when it mails the desk; a night fault's waits for the
+  preventive-maintenance recheck (`reopened_untold`), whose recipient role and title are its settings.yaml
+  `reopened_in_kiosk`, the body `kiosk_words.reopened`. The engine sends nothing of its own (no `tell_fm`, no title in
+  vesta_agent/); with an older recheck.py the task stays marked.
+- **"An automation ran" is one reading**: `vesta_shared.past.automation_run(row) -> Run(at, started_by, is_system)`
+  (only a "triggered…" row; `system_run` names a reload or a start from the logbook's shape: `SYSTEM_RELOAD`,
+  `SYSTEM_START`). The reports' facts apply the skill's `not_an_alert_when_started_by` to `started_by`; the
+  investigation keeps runs only in `automations` and carries a reload or a start as `system_runs` with the skill's
+  sentence (investigate settings.yaml `words`) — one line on the answer, one "usual" row on the page.

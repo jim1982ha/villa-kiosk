@@ -15,6 +15,7 @@ set the two attributes: a starter skill edited on the villa is kept by updates a
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import NamedTuple
 
 
 def unread(what: str, when: str) -> str:
@@ -34,6 +35,50 @@ def _when(row: dict) -> datetime | None:
         return datetime.fromisoformat(str(row.get("last_changed") or row.get("last_updated")))
     except (TypeError, ValueError):
         return None
+
+
+# ---------------------------------------------------------------- an automation's run, read off a logbook row
+#: How the logbook names a run the villa's SYSTEM started, in the logbook's own words (a row's `source`, the end of its
+#: "triggered by …" message) — never a villa's data: a reload of the rules fires every rule once
+#: ("event 'automation_reloaded'"), so does a start ("event 'homeassistant_start'" / "…_started"; older: the words
+#: "Home Assistant starting"). Such a run re-checks the rule's condition and stops: it is nobody's action.
+SYSTEM_RELOAD = ("event 'automation_",)
+SYSTEM_START = ("event 'homeassistant_", "Home Assistant starting")
+TRIGGERED, TRIGGERED_BY = "triggered", "triggered by "
+
+
+class Run(NamedTuple):
+    """One run of an automation: when, what started it (the logbook's words: "state of lock.x", "time",
+    "event 'automation_reloaded'"; "" when the row does not say), whether the villa's system started it itself."""
+    at: datetime
+    started_by: str
+    is_system: bool
+
+
+def system_run(started_by: str) -> str | None:
+    """"reloaded" when the rules were reloaded, "started" when the system started; None for any other start."""
+    s = str(started_by or "")
+    if s.startswith(SYSTEM_RELOAD):
+        return "reloaded"
+    if s.startswith(SYSTEM_START):
+        return "started"
+    return None
+
+
+def automation_run(row: dict) -> Run | None:
+    """The run a logbook row of an automation records, or None: only a "triggered…" row is a run — "turned on",
+    "turned off" are the switch, not a run (architecture review round 2, 2026-10-19: the investigation counted every
+    row as a run and worded a reload at 16:59 as 23 "Automation “X” ran … check whether it did" lines; the weekly
+    page already kept "triggered" rows only). The two readers now share this one reading."""
+    message = str(row.get("message") or "")
+    if not message.startswith(TRIGGERED):
+        return None
+    try:
+        at = datetime.fromisoformat(str(row.get("when") or row.get("last_changed") or ""))
+    except ValueError:
+        return None
+    started_by = str(row.get("source") or "") or (message[len(TRIGGERED_BY):] if message.startswith(TRIGGERED_BY) else "")
+    return Run(at, started_by, system_run(started_by) is not None)
 
 
 class History:

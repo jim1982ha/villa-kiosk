@@ -37,3 +37,11 @@ behaviour:
   intermittent_min_days: 3              # …or on fewer days than this
   full_day_hours: 20                    # a day with this many hours of data is judged against its schedule
   energy_baseline_min_kwh: 0.05         # a normal daily use below this is too small to judge a change against
+
+# A fault of the night check's that a person reopened in the Cockpit ("Reopen fault"): who is told and under which
+# title, by recheck.py within 5 minutes. `tell` is a role (fm, owner); the message's body is the one wording of a
+# reopening ("Reopened in the Cockpit on … (Owner): Pump weak. Please look again."). The engine marks the reopening on
+# the task; this skill tells it (an alert's reopening is the alert desk's, told through its own rules).
+reopened_in_kiosk:
+  tell: fm
+  title: "Fault reopened in the Cockpit"

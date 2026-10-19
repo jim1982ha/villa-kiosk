@@ -11,6 +11,7 @@ import asyncio
 import importlib.util
 import json
 import os
+import sys
 from datetime import datetime, timedelta, timezone
 
 from villa_timeline import TimelineVilla
@@ -123,12 +124,19 @@ def test_the_repair_gives_an_open_problem_with_no_fault_its_fault(tmp_path, capl
 
 
 # ---------------------------------------------------------------------- 4, 6 · a reopening is read, and someone is told
-def _closed_night_fault(tmp_path, k, told):
-    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)
+PM = os.path.join(STARTER_SKILLS, "preventive-maintenance")
+sys.path.insert(0, os.path.join(PM, "scripts"))
 
-    async def tell(text):
-        told.append(text)
-    v.tickets.tell_fm = tell
+
+def _told(st) -> list[dict]:
+    """What the preventive-maintenance recheck sends for a person's reopening (its every-5-minutes run)."""
+    import recheck
+    from vesta_shared import skill_settings
+    return recheck.reopened_untold(st, "UTC", skill_settings.load(PM, "settings.yaml"))
+
+
+def _closed_night_fault(tmp_path, k):
+    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)
     st, pb = Store(v.s.store_path), Problems(Store(v.s.store_path))
     fid, _ = st.raise_finding("PM-X", "sensor.pump", "power", "2026-10-07", "P3", "Pump weak", {})
     tid, _ = pb.open_task("finding", fid, "PM-X", "sensor.pump", "Pump weak")
@@ -138,26 +146,50 @@ def _closed_night_fault(tmp_path, k, told):
     return v, st, tid
 
 
-def test_a_night_fault_a_person_reopens_tells_the_facility_manager(tmp_path):
-    k, told = FakeKiosk(), []
-    v, st, tid = _closed_night_fault(tmp_path, k, told)
+def test_a_night_fault_a_person_reopens_is_told_by_its_skill_once_under_the_cockpits_name(tmp_path):
+    # architecture review round 2, 2026-10-19: the engine sent it itself, to "fm" under "Fault reopened in the Kiosk"
+    # over a body saying "the Cockpit"; now the repair marks the reopening and the skill's recheck tells it, to the
+    # role and under the title of its settings.yaml — the message then goes out through outcome like any other
+    k = FakeKiosk()
+    v, st, tid = _closed_night_fault(tmp_path, k)
+    k.person_reopens("t-pump", by="Owner", at="2099-01-01T07:05:00.000Z")
+    run(v.tickets.repair())
+    assert st.task(tid)["status"] == "open" and st.task(tid)["reopened_at"] == "2099-01-01T07:05:00.000Z"  # the Kiosk's
+    (m,) = _told(st)
+    assert m["to"] == "fm" and m["title"] == "Fault reopened in the Cockpit" and "Kiosk" not in m["title"]
+    assert m["text"] == "Reopened in the Cockpit on 01/01/2099 07:05 (Owner): Pump weak. Please look again."
+    assert _told(st) == []                                                            # once
+    run(v.tickets.repair())
+    assert _told(st) == []                                                            # a later repair: still once
+    run(v.outcome.carry_out({"send": [m]}, "preventive-maintenance"))
+    (sent,) = [t for c, t, _ in v.tg.sent if c == FM]
+    assert sent.startswith("Fault reopened in the Cockpit\n") and "Please look again." in sent
+
+
+def test_who_is_told_of_a_reopening_and_the_title_are_the_skills_settings(tmp_path):
+    import recheck
+    from vesta_shared import skill_settings
+    k = FakeKiosk()
+    v, st, tid = _closed_night_fault(tmp_path, k)
     k.person_reopens("t-pump", by="Owner")
     run(v.tickets.repair())
-    assert st.task(tid)["status"] == "open"
-    assert len(told) == 1 and told[0].startswith("Reopened in the Cockpit on ") \
-        and told[0].endswith(": Pump weak. Please look again.")
-    run(v.tickets.repair())
-    assert len(told) == 1                                                             # once
+    (tmp_path / "settings.yaml").write_text("reopened_in_kiosk:\n  tell: owner\n  title: Reopened fault\n")
+    (m,) = recheck.reopened_untold(st, "UTC", skill_settings.load(str(tmp_path), "settings.yaml"))
+    assert (m["to"], m["title"]) == ("owner", "Reopened fault")
+    # without the settings nothing is sent and the task stays untold: named, never guessed
+    k.person_reopens("t-pump", by="Owner", at="2099-01-02T00:00:00.000Z")
+    st.close_task(tid); run(v.tickets.repair())
+    assert recheck.reopened_untold(st, "UTC", {}) == [] and len(st.untold_reopenings()) == 1
 
 
 def test_a_fault_picked_up_after_a_close_that_did_not_land_is_closed_again_not_taken_for_a_reopening(tmp_path):
     # the agent's resolve failed (the Kiosk down a moment); Fabien then pressed "Mark in progress": no "Reopen fault"
     # step — the close is retried, nobody is told to look again at a job just taken
-    k, told = FakeKiosk(), []
-    v, st, tid = _closed_night_fault(tmp_path, k, told)
+    k = FakeKiosk()
+    v, st, tid = _closed_night_fault(tmp_path, k)
     k.person_moves("t-pump", by="Facility manager")
     run(v.tickets.repair())
-    assert st.task(tid)["status"] != "open" and "t-pump" in k.resolved and told == []
+    assert st.task(tid)["status"] != "open" and "t-pump" in k.resolved and _told(st) == []
 
 
 # ---------------------------------------------------------------------- 2 · a device that does not answer
@@ -242,13 +274,14 @@ def test_who_resolved_and_who_reopened_are_the_cards(tmp_path):
 
 def test_a_reopen_of_a_fault_closed_days_ago_is_heard(tmp_path):
     from datetime import datetime, timedelta, timezone
-    k, told = FakeKiosk(), []
-    v, st, tid = _closed_night_fault(tmp_path, k, told)
+    k = FakeKiosk()
+    v, st, tid = _closed_night_fault(tmp_path, k)
     with st.db:                                                                     # closed five days ago
         st.db.execute("UPDATE tasks SET done_at=? WHERE id=?", ((datetime.now(timezone.utc) - timedelta(days=5)).isoformat(), tid))
     k.person_reopens("t-pump", by="Owner")
     run(v.tickets.repair())
-    assert st.task(tid)["status"] == "open" and told and told[0].startswith("Reopened in the Cockpit on 01/01/2099 00:00 (Owner): ")
+    told = _told(st)
+    assert st.task(tid)["status"] == "open" and told and told[0]["text"].startswith("Reopened in the Cockpit on 01/01/2099 00:00 (Owner): ")
 
 
 def test_a_person_who_renames_a_fault_to_the_agents_own_words_keeps_it():
@@ -264,12 +297,12 @@ def test_a_person_who_renames_a_fault_to_the_agents_own_words_keeps_it():
 def test_an_old_closed_fault_picked_up_again_is_left_to_the_person(tmp_path):
     # the retry of a close that did not land is for two days; past them, a fault a person moved is theirs
     from datetime import datetime, timedelta, timezone
-    k, told = FakeKiosk(), []
-    v, st, tid = _closed_night_fault(tmp_path, k, told)
+    k = FakeKiosk()
+    v, st, tid = _closed_night_fault(tmp_path, k)
     with st.db:
         st.db.execute("UPDATE tasks SET done_at=? WHERE id=?", ((datetime.now(timezone.utc) - timedelta(days=5)).isoformat(), tid))
     run(v.tickets.repair())
-    assert "t-pump" not in k.resolved and st.task(tid)["status"] != "open" and told == []
+    assert "t-pump" not in k.resolved and st.task(tid)["status"] != "open" and _told(st) == []
 
 
 def test_a_done_on_telegram_resolves_the_fault_by_the_person(tmp_path):

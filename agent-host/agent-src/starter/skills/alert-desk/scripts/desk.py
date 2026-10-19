@@ -43,7 +43,7 @@ from vesta_shared import result as R  # noqa: E402  (what the engine is asked to
 from vesta_shared import script  # noqa: E402  (client, store, settings, zone: one set-up)
 from vesta_shared import skill_settings  # noqa: E402  (rules.yaml, the villa's on top)
 from vesta_shared.messaging import incident_tag  # noqa: E402
-from vesta_shared.message_format import PRESSED, ROLE_SHORT  # noqa: E402  ("<button> on <time> (<name>).": one wording)
+from vesta_shared.message_format import PRESSED, ROLE_SHORT, acted  # noqa: E402  ("<what> on <time> (<who>)": one wording)
 from vesta_shared import kiosk_words  # noqa: E402
 from vesta_shared.timeutil import lasting  # noqa: E402
 from vesta_shared.device_state import has_value, out_for  # noqa: E402  ("is it back": one answer)
@@ -183,6 +183,23 @@ def carry_check(store: Store, iid: int, route: dict, p: dict | None = None) -> s
     if (p if p is not None else notes_of(store.incident(iid))).get(Notes.CHECK) != check:
         store.note(iid, {Notes.CHECK: check})
     return check
+
+
+def reaches(sev: str) -> list[str]:
+    """Whom priority `sev` reaches, as an alert card's "To:" says it: its roles (rules.yaml people_roles) — none, what
+    the priority does instead (priority_does: "digest", "log"), so the card says "To: digest" rather than the roles of
+    whatever chat the villa's rule posted in (owner, 2026-10-17: "To:" follows the priority, never the chat)."""
+    return recipients(sev) or [does(sev)]
+
+
+def carry_to(store: Store, iid: int, sev: str, p: dict | None = None) -> list[str]:
+    """Whom `sev` reaches (`reaches`), written on incident `iid` (store.Notes.TO) for the engine's heading of every copy
+    — as the desk carries the check and the claim, so the engine never types people_roles. Written only when it
+    changed (a priority raised or lowered while the alert is open); returns it. `p`: the notes as already read."""
+    to = reaches(sev)
+    if (p if p is not None else notes_of(store.incident(iid))).get(Notes.TO) != to:
+        store.note(iid, {Notes.TO: to})
+    return to
 
 
 def about(inc: dict, status: str) -> dict:
@@ -360,6 +377,7 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
         return reopen(store, back, ev, now, sev, route, out, zone=zone)
     iid = store.new_incident(key, rule_id, eid, sev, ev, now.isoformat())
     carry_check(store, iid, route, ev)
+    carry_to(store, iid, sev, ev)
     out["incident_id"] = iid
     out["decision"] = "new"
     # no status: "New" is the heading's (Incident: New #N) — and its "Alert sent" line counts the week when the same
@@ -412,6 +430,7 @@ def _reprioritised(store: Store, cur: dict, p: dict, sev: str, now: datetime, ro
     if cur["severity"] == sev:
         return
     store.update_incident(cur["id"], severity=sev)
+    carry_to(store, cur["id"], sev, p)                 # its card's "To:" follows the new priority at once
     if cur["state"] in (Incident.LOGGED, Incident.DIGEST):
         # raised back to a chase after a lowering: the SAME task and Kiosk fault open again (one problem, one fault),
         # the reopening saying why (rules.yaml raised_words, as a lowering says lowered_words)
@@ -489,6 +508,7 @@ def reopen(store: Store, inc: dict, ev: dict, now: datetime, sev: str, route: di
         # Home Assistant no longer watches it: the desk does (seen_again)
         p = store.note(inc["id"], {"abandoned": True}, drop=("check_quiet",), closed_at=None, reply=None)
     carry_check(store, inc["id"], route, p)
+    carry_to(store, inc["id"], sev, p)
     inc = store.incident(inc["id"])
     runs = incident_runs(inc, store)
     title = again_title(str(p.get("message") or inc["rule_id"])[:200], runs - 1)
@@ -892,7 +912,7 @@ def reply(store: Store, iid: int, option: str, sender_role: str, now: datetime, 
         out["send"].append(here(helped, "pressed", mark=button.get("mark")))
     else:
         store.update_incident(iid, reply=label)
-        out["send"].append(here(f"Noted on {{time}} ({who}): {label}", "pressed"))
+        out["send"].append(here(acted("Noted", "{time}", who) + f": {label}", "pressed"))
     # the answer, on the alert and its reminders in every chat (a button press has already done it, by name)
     if option in BUTTONS:
         out["settle"] = [R.settle(iid, pressed, mark=button.get("mark"))]
@@ -917,6 +937,7 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
         # the route's "what to do" edited while the alert is open (a villa's rules.yaml): the Kiosk fault's note and
         # the digest follow within a tick, as Telegram's next message does
         carry_check(store, inc["id"], route_for(inc["rule_id"], p.get(Notes.BLUEPRINT)), p)
+        carry_to(store, inc["id"], inc["severity"], p)     # an incident of an older desk gets it at the next tick
         said = store.take_note(inc["id"], Notes.KIOSK_REOPENED, assignee=CHASE["asks"]) \
             if p.get(Notes.KIOSK_REOPENED) else None
         if said:

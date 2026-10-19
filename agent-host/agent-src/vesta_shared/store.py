@@ -97,6 +97,13 @@ class Notes:
     # it carries the claim, for the Kiosk fault's note and the morning digest (Problems.check_of) — the words stay the
     # skill's. Absent on an incident from before 0.6.255: those readers fall back to the task's own check_text.
     CHECK = "check"
+    # whom the alert's PRIORITY reaches, as its card's "To:" says it (the alert desk's people_roles): its roles
+    # ("owner", "fm"), or — a priority that reaches nobody — what it does instead ("digest", "log"), the desk's own
+    # words (priority_does). Carried by the desk as it carries the check, so the engine never types the table; the
+    # heading of every copy reads it (vesta_agent/notice.py). ⚠️ "TO:" FOLLOWS THE PRIORITY, NEVER THE CHAT THE RULE
+    # POSTS IN (owner, 2026-10-17): a P3's own message in the owner's group read "To: Owner". Absent on an incident of
+    # an older desk: the heading then says the roles the incident went to.
+    TO = "to"
     KIOSK_REOPENED = "kiosk_reopened"                            # mail: who reopened its fault in the Kiosk, and when
     UNREACHED = "unreached"                                      # mail: Telegram refused every chat of the FM's
 
@@ -136,6 +143,12 @@ class Store:
         for col in ("source", "check_text", "reopened_at", "reopened_by", "close_note", "closed_who", "reopen_note"):
             if col not in cols:
                 self.db.execute(f"ALTER TABLE tasks ADD COLUMN {col} TEXT")
+        # reopen_told_at: when someone was told of a PERSON's reopening of the task's fault in the Kiosk — NULL until a
+        # skill tells them (the preventive-maintenance recheck, every 5 minutes; an alert's: the desk, marked at once).
+        # A row from before the column was told at the time (the engine itself sent it): marked as told, never again.
+        if "reopen_told_at" not in cols:
+            self.db.execute("ALTER TABLE tasks ADD COLUMN reopen_told_at TEXT")
+            self.db.execute("UPDATE tasks SET reopen_told_at=reopened_at WHERE reopened_by IS NOT NULL")
         # a finding that comes back (vesta_shared.problems AGAIN_DAYS) keeps when it came back and the days it was seen —
         # columns of their own, since the night rewrites `detail` each time it sees it (architecture review 23)
         cols = {r["name"] for r in self.db.execute("PRAGMA table_info(findings)")}
@@ -400,11 +413,25 @@ class Store:
         r = self.db.execute("SELECT * FROM tasks WHERE source=? ORDER BY id DESC LIMIT 1", (source,)).fetchone()
         return dict(r) if r else None
 
-    def reopen_task(self, task_id: int, summary: str, by: str | None = None, note: str | None = None) -> None:
-        """Open again (`by`: the person who reopened its fault in the Kiosk; None: its problem came back), `note` what its
-        fault's reopening says (Problems.card)."""
-        self.db.execute("UPDATE tasks SET status='open', done_at=NULL, summary=?, reopened_at=?, reopened_by=?, reopen_note=? "
-                        "WHERE id=?", (summary, _now(), by, note or None, task_id))
+    def reopen_task(self, task_id: int, summary: str, by: str | None = None, note: str | None = None,
+                    at: str | None = None) -> None:
+        """Open again (`by`: the person who reopened its fault in the Kiosk, `at` when the Kiosk recorded it — now when
+        not said; None: its problem came back), `note` what its fault's reopening says (Problems.card). A person's
+        reopening is untold until a skill tells someone (reopening_told)."""
+        self.db.execute("UPDATE tasks SET status='open', done_at=NULL, summary=?, reopened_at=?, reopened_by=?, reopen_note=?, "
+                        "reopen_told_at=NULL WHERE id=?", (summary, at or _now(), by, note or None, task_id))
+        self.db.commit()
+
+    def untold_reopenings(self) -> list[dict]:
+        """The open tasks whose fault a PERSON reopened in the Kiosk and nobody has been told of yet (oldest first). A
+        skill tells them and marks each (reopening_told); an engine running with an older skill that does not simply
+        leaves them marked untold — nothing is lost, nothing is sent twice."""
+        return [dict(r) for r in self.db.execute(
+            "SELECT * FROM tasks WHERE status='open' AND reopened_by IS NOT NULL AND reopen_told_at IS NULL "
+            "ORDER BY reopened_at, id")]
+
+    def reopening_told(self, task_id: int) -> None:
+        self.db.execute("UPDATE tasks SET reopen_told_at=? WHERE id=?", (_now(), task_id))
         self.db.commit()
 
     def tasks(self, status: str | None = "open") -> list[dict]:

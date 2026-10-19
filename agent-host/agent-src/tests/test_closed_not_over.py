@@ -98,6 +98,7 @@ def test_a_fault_a_person_reopens_in_the_kiosk_stays_open_and_the_facility_manag
     assert "t-door" not in k.resolved                                                        # never undone
     assert st.task(tid)["status"] == "open" and st.task(tid)["reopened_by"] == "Owner"
     assert st.incident(iid)["closed_at"] is None
+    assert st.untold_reopenings() == []                      # an alert's reopening is the desk's to tell: marked told
     out = desk.tick(st, datetime.now(timezone.utc))
     (fm,) = [s for s in out["send"] if s["to"] == "fm"]
     assert fm["status"] == "Reopened in the Cockpit on 01/01/2099 00:00 (Owner). Please look again." and fm["keyboard"]
@@ -166,6 +167,44 @@ def test_each_run_keeps_its_own_words_and_the_counts_are_one_pass(tmp_path):
     assert len(runs) == 2 and runs[0] == (T0 + timedelta(hours=2)).isoformat()         # the first run, 50 days old, gone
 
 
+def test_a_fault_the_agent_cleared_and_a_person_renamed_is_never_a_persons_close(tmp_path):
+    # architecture review round 2, 2026-10-19: the agent's own clearing landed after the alert's return had reopened
+    # the task (a flap), the facility manager then renamed the closed fault — its rename step carries "resolved" too,
+    # and the LAST step's kind was read: "Closed in the Cockpit on … (Facility manager)" went into the alert's history
+    k = FakeKiosk()
+    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)
+    settled = []
+
+    async def settle(iid, note):
+        settled.append(note)
+        return 0
+    v.tickets.settle_alert = settle
+    st, pb = Store(v.s.store_path), Problems(Store(v.s.store_path))
+    iid = st.new_incident("automation.door|lock.door", "automation.door", "lock.door", "P2", {"message": "Door unlocked"})
+    tid, _ = pb.open_task("incident", iid, "automation.door", "lock.door", "Door unlocked")
+    st.set_task_uid(tid, "t-door")
+    st.reopen_task(tid, "Door unlocked")                                    # its return reopened the task…
+    k.held("t-door")
+    assert run(k.resolve_ticket("t-door", note="Cleared: back online."))    # …then the clearing landed (kind cleared)
+    k.person_renames("t-door", "Wi-Fi blip", by="Facility manager",        # and the FM renamed the closed fault,
+                     at="2099-01-01T00:00:00.000Z")                        # after it (the rename step says "resolved")
+    run(v.tickets.repair())
+    assert st.task(tid)["status"] == "open" and st.incident(iid)["closed_at"] is None
+    assert not [n for n in settled if n.startswith("Closed in the Cockpit")], settled
+
+
+def test_a_reopening_told_before_the_mark_existed_is_never_told_again(tmp_path):
+    # a store from before 0.6.256: its person-reopened tasks were told by the engine at the time (migration)
+    path = str(tmp_path / "s.sqlite")
+    st = Store(path)
+    fid, _ = st.raise_finding("PM-X", "sensor.pump", "power", "2026-10-07", "P3", "Pump weak", {})
+    tid, _ = Problems(st).open_task("finding", fid, "PM-X", "sensor.pump", "Pump weak")
+    st.reopen_task(tid, "Pump weak", by="Owner")
+    assert [t["id"] for t in st.untold_reopenings()] == [tid]
+    st.db.execute("ALTER TABLE tasks DROP COLUMN reopen_told_at"); st.db.commit(); st.db.close()
+    assert Store(path).untold_reopenings() == []
+
+
 def test_a_night_fault_a_person_reopens_is_theirs_until_they_close_it(tmp_path):
     # its finding closed (the night no longer sees it): without the person's mark, the next repair cleared it again
     k = FakeKiosk()
@@ -180,3 +219,8 @@ def test_a_night_fault_a_person_reopens_is_theirs_until_they_close_it(tmp_path):
     run(v.tickets.repair())
     run(v.tickets.repair())
     assert st.task(tid)["status"] == "open" and "t-pump" not in k.resolved
+    # the reopening waits, marked, for its skill's recheck to tell it (round 2, 2026-10-19) — once
+    assert [t["id"] for t in st.untold_reopenings()] == [tid]
+    st.reopening_told(tid)
+    run(v.tickets.repair())
+    assert st.untold_reopenings() == []

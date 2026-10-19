@@ -351,3 +351,85 @@ def test_a_press_on_a_copy_no_record_points_to_removes_it(agent):
     stray = rec["mid"] + 100
     assert run(agent.thread.stray(iid, GROUP, stray)) and (GROUP, stray) in agent.tg.deleted
     assert not run(agent.thread.stray(iid, GROUP, rec["mid"]))                  # its own message is never a stray
+
+
+def villa_alert(v, rule: str, blueprint: str | None, context: str = "RUN-1", mid: int = 500):
+    """The villa's own message in the owner's group, then its rule's event (one run, one context) — a rule of another
+    priority than ha_alert's: its route in the desk's rules.yaml decides (P1 critical_binary_trip, P3 the default)."""
+    run(v.on_ha_event("telegram_sent", {"chat_id": GROUP, "message_id": mid, "bot": BOT, CONTEXT_KEY: context}))
+    run(v.on_ha_event("vesta_critical_event", {
+        "blueprint": blueprint, "rule_id": rule, "incident_id": rule + "-1", "phase": "opened", "severity": "critical",
+        "label": "Laundry door unlocked", "entities": ["lock.laundry"], "summary": SUMMARY,
+        "timestamp": datetime.now(timezone.utc).isoformat(), CONTEXT_KEY: context}))
+
+
+def test_the_villas_message_taken_over_is_the_desks_copy_in_that_chat(agent):
+    # architecture review, 2026-10-19 (measured): a P1 rang the owner's group twice — the villa's own message was taken
+    # over (number, heading, buttons), then deleted for an identical one of the desk's. ONE copy per chat, whatever
+    # wrote it: the taken-over message stays, the desk's copy of the same step is not sent there; every other chat of
+    # the priority gets its one message
+    villa_alert(agent, "automation.critical_water_leak", "critical_binary_trip")           # P1: owner and FM
+    assert agent.tg.deleted == [], agent.tg.deleted
+    (grp,) = shown(agent, GROUP)
+    assert grp.startswith("#1-P1 (new)\nTo: Owner & FM\n") and SUMMARY in grp
+    group_edit = next(kb for (c, mid, _), kb in zip(agent.tg.edits, agent.tg.edit_keyboards) if (c, mid) == (GROUP, 500))
+    assert group_edit and all(b["callback_data"].startswith("i:1:") for b in group_edit["inline_keyboard"][0])
+    assert [c for c, _t, _k in agent.tg.sent] == [OWNER, FM_CHAT]          # one each; none to the group
+    assert agent.thread.shown(1)[GROUP]["mid"] == 500 and agent.thread.shown(1)[GROUP]["buttons"]
+    # the copies are one picture: the same heading in every chat
+    heads = {c: r["text"].split("\n")[:2] for c, r in agent.thread.shown(1).items()}
+    assert heads == {GROUP: ["#1-P1 (new)", "To: Owner & FM"], OWNER: ["#1-P1 (new)", "To: Owner & FM"],
+                     FM_CHAT: ["#1-P1 (new)", "To: Owner & FM"]}, heads
+    # a later step of the desk's (its reminder: a P1's goes to the owner and the FM) replaces the older copy where it
+    # lands — the taken-over one as any other: one copy per chat, still
+    tick(agent, 20)
+    assert sorted(agent.tg.deleted) == sorted([(GROUP, 500), (OWNER, 1001), (FM_CHAT, 1002)]), agent.tg.deleted
+    assert all(len(shown(agent, c)) == 1 and "Reminder sent" in status(shown(agent, c)[0]) for c in (GROUP, OWNER, FM_CHAT))
+
+
+def test_to_follows_the_priority_a_p3_in_the_owners_group_is_never_to_owner(agent):
+    # owner, 2026-10-17: "To:" follows the PRIORITY, never the roles of the chat the rule posts in. Measured
+    # 2026-10-19: a P3's own message, taken over in the owner's group, read "To: Owner" — the chat's roles, since a P3
+    # reaches nobody (the desk's people_roles). It reads what the priority does instead, in the desk's own words
+    villa_alert(agent, "automation.maintenance_pump", None)                                 # the default route: P3
+    (grp,) = shown(agent, GROUP)
+    assert grp.startswith("#1-P3 (new)\nTo: digest\n") and status(grp) == "" and agent.tg.sent == [], grp
+    assert agent.notices.reaches(1) == ["digest"]
+    # the rule alerts again: its new message is taken over as a still-there — its step line too never names the chat
+    villa_alert(agent, "automation.maintenance_pump", None, context="RUN-2", mid=501)
+    (grp,) = shown(agent, GROUP)
+    assert grp.startswith("#1-P3 (existing)\nTo: digest\n") and "Owner" not in grp, grp
+    assert re.search(r"\n- Alert sent .+ \(to: digest\)\n", grp) and status(grp).endswith("(to: digest)"), grp
+    # the Kiosk's story of it, the same words (never "Owner")
+    assert all("Owner" not in x["note"] for x in agent.tickets.story(1))
+    # a P2 (the FM's) in the same group: "To: FM" — and an escalation to the owner widens it (the owner IS involved)
+    ha_alert(agent, context="RUN-3", mid=502)
+    assert shown(agent, GROUP)[-1].startswith("#2-P2 (new)\nTo: FM\n")
+    tick(agent, 20)
+    tick(agent, 50)
+    assert all(r["text"].split("\n")[1] == "To: Owner & FM" for r in agent.thread.shown(2).values())
+
+
+def test_every_copy_carries_the_incidents_word_and_its_own_status_lines(agent):
+    # architecture review, 2026-10-19 (measured): P2, the villa's copy in the owner's group; Done by Wayan; the fault
+    # reopened in the Cockpit; the tick asked the FM again. The group kept "#1-P2 (closed)" over "Done on … (Wayan)."
+    # while the FM's copy read "(existing)". Direction stated to the owner: the title word and "To:" are the
+    # INCIDENT's — the same in every copy; the Status lines are each chat's own (#55 unchanged)
+    ha_alert(agent)
+    fm_mid = 1000 + len(agent.tg.sent)
+    iid = int(agent.tg.sent[-1][2]["inline_keyboard"][0][0]["callback_data"].split(":")[1])
+    run(agent.on_ha_event("telegram_callback", {"id": "cb", "data": f"i:{iid}:done", "chat_id": FM_CHAT, "user_id": FM,
+                                                "message": {"message_id": fm_mid, "chat": {"id": FM_CHAT}}, "bot": BOT}))
+    words = lambda: {c: r["text"].split("\n")[0] for c, r in agent.thread.shown(iid).items()}
+    assert words() == {GROUP: "#1-P2 (closed)", FM_CHAT: "#1-P2 (closed)"}, words()
+    from vesta_shared.store import Notes, Store
+    st = Store(agent.s.store_path)
+    st.note(iid, {Notes.KIOSK_REOPENED: "Reopened in the Cockpit on 19/10/2026 10:00 (JM)"})
+    st.update_incident(iid, closed_at=None, state="asked")
+    tick(agent, 5)
+    assert words() == {GROUP: "#1-P2 (existing)", FM_CHAT: "#1-P2 (existing)"}, words()
+    group, fm = (agent.thread.shown(iid)[c]["text"] for c in (GROUP, FM_CHAT))
+    assert re.fullmatch(r"Done on \d\d/\d\d/\d{4} \d\d:\d\d \(Wayan\)\.", status(group)), group   # its own last line
+    assert status(fm).startswith("Reopen request sent ") and "Reopened in the Cockpit" in status(fm), fm
+    assert "Reopen" not in group and "Done on" not in fm.rsplit("\n", 1)[1]
+    assert group.split("\n")[1] == fm.split("\n")[1] == "To: FM"

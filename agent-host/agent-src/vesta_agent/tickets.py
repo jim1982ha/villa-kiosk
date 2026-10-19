@@ -31,13 +31,11 @@ def kiosk_close_note(ticket: dict, zone: str) -> str:
 
 class Tickets:
     def __init__(self, *, kiosk, state, store_path: str, settle_alert: Callable[[int, str], Awaitable[int]],
-                 timezone: str = "UTC", tell_fm: Callable[[str], Awaitable[object]] | None = None,
-                 story: Callable[[int], list[dict]] | None = None,
+                 timezone: str = "UTC", story: Callable[[int], list[dict]] | None = None,
                  restate_alert: Callable[[int, str], Awaitable[int]] | None = None,
                  rechecked: Callable[[], set[str]] | None = None):
         self.kiosk = kiosk
         self.rechecked = rechecked or set     # the rules the skills read again every few minutes (Skill.rechecks)
-        self.tell_fm = tell_fm                # a message to the facility manager (a night fault reopened in the Kiosk)
         self.timezone = timezone              # the villa's: the note's time (notice.when)
         self.state = state
         self.store_path = store_path
@@ -159,6 +157,14 @@ class Tickets:
                 if await self.create(problems.current_title(t), t.get("entity_id") or None,
                                             result.fault_note(check), t["id"]):
                     made += 1
+            except KioskError as e:
+                # ⚠️ A REFUSED FAULT STOPS NO OTHER (architecture review round 2, 2026-10-19): one fault the proxy refused
+                # ended the repair for every fault after it, every 5 minutes, and the log said "KioskError". The Kiosk's
+                # own sentence is logged; only a Kiosk that cannot be reached at all ends the round (the rest would fail
+                # the same way; the next repair tries again)
+                log.warning("A missing Kiosk ticket could not be created: %s", e)
+                if not e.refused:
+                    break
             except Exception as e:  # noqa: BLE001 — the next start or night tries again
                 log.warning("A missing Kiosk ticket could not be created (%s)", type(e).__name__)
                 break
@@ -215,8 +221,9 @@ class Tickets:
                     await self.settle_alert(iid, kiosk_close_note(card, self.timezone))
                 closed += 1
         # ⚠️ A PERSON'S REOPENING IS THEIRS (architecture review 25), WHATEVER THE FAULT'S AGE (review 29): read from the
-        # Kiosk's "Reopen fault" step, never guessed from timings (review 26): its task opens again and the facility
-        # manager is asked — an alert's by the desk (Problems.reopened_in_kiosk), a night check's fault here
+        # Kiosk's "Reopen fault" step, never guessed from timings (review 26): its task opens again and someone is told
+        # — an alert's by the desk (Problems.reopened_in_kiosk), a night check's by its skill's recheck, from the task's
+        # untold mark (round 2, 2026-10-19: this engine sent it itself, to a role and under a title of its own)
         for t in problems.store.tasks(None):
             uid = t.get("todo_uid")
             card = held.get(uid) if uid else None
@@ -224,8 +231,7 @@ class Tickets:
                 continue
             if _before(t.get("done_at"), card.get("reopened_at")):
                 by, at = card.get("reopened_by") or "", card.get("reopened_at")
-                if not problems.reopened_in_kiosk(t["id"], by, kiosk_words.reopened(by, at, self.timezone)) and self.tell_fm:
-                    await self.tell_fm(kiosk_words.reopened(by, at, self.timezone, t.get("summary") or card["title"]))
+                problems.reopened_in_kiosk(t["id"], by, kiosk_words.reopened(by, at, self.timezone), at=at)
                 log.info("Kiosk ticket %s reopened by a person: its task is open again", uid)
         if closed:
             log.info("Kiosk tickets closed by a person: %d task(s) closed with them", closed)
@@ -294,6 +300,11 @@ class Tickets:
                 elif card["status"] != "resolved" and (t.get("done_at") or "") >= recent:
                     n = await self.kiosk.resolve_ticket(uid, note=want["note"], **({"who": want["who"]} if want["who"] else {}))
                     fixed += n; resolved += n
+            except KioskError as e:
+                # a refusal of this fault is this fault's: the next one is tried (see the repair's own loop above)
+                log.warning("Kiosk ticket %s could not be brought up to date: %s", uid, e)
+                if not e.refused:
+                    break
             except Exception as e:  # noqa: BLE001 — the next start or night tries again
                 log.warning("A Kiosk ticket could not be brought up to date (%s)", type(e).__name__)
                 break

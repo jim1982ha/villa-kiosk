@@ -194,13 +194,12 @@ def test_every_message_the_agent_sends_on_its_own_is_in_the_one_layout_and_style
     run(v.on_ha_event("telegram_callback", press))                              # …and every copy settled
     run(v.outcome.carry_out({"siren_gate": R.siren(True, "Intrusion suspected.", ("owner",))}, "alert-desk"))
     run(v._tell_unreachable(FABIEN, "403"))                                     # a person Telegram refuses
-    run(v.tickets.tell_fm("A fault was reopened in the Kiosk."))
     run(v._tell_owner_siren("Siren switched off."))
     run(v._tell_owner("credit", []))
     run(v.outcome.carry_out({"send": [{"to": "fm", "text": "Something with no title."}]}))
     texts = [t for _, t, _ in v.tg.sent] + [t for _, _, t in v.tg.edits]
     titles = {t.split("\n", 1)[0] for t in texts}
-    assert {"Approval request", "Siren request", "Not reachable on Telegram", "Fault reopened in the Kiosk", "Siren",
+    assert {"Approval request", "Siren request", "Not reachable on Telegram", "Siren",
             "The AI cannot answer", UNTITLED} <= titles, titles
     for t in texts:
         assert t.split("\n")[1].startswith("To: ") and "-------" not in t and not t.startswith("For:"), t
@@ -348,6 +347,14 @@ def test_an_approved_request_says_what_happened_and_who_approved_it_never_the_re
                        status="Waiting for approval by the owner")
     assert layout.render(layout.changed(req, status="Approved by JM on 10/10/2026 17:13.", body="Opened Bedroom3 Curtain.")) == \
         "Approval request\nTo: JM\nOpened Bedroom3 Curtain.\n\nStatus:\nApproved by JM on 10/10/2026 17:13."
+    # what a decided request says under its line: "<what> on <when> (<who>)" — written by message_format.acted, the
+    # ONE writer of a person's act (architecture review, 2026-10-19: a pressed button, an approval, the desk's "Noted"
+    # and the Cockpit's steps each wrote the shape by hand), each state's tail its own
+    from vesta_agent.approvals import note
+    assert note("approved", "JM", time="10/10/2026 17:13") == "Approved on 10/10/2026 17:13 (JM)."
+    assert note("done", "JM", time="10/10/2026 17:13") == "Approved on 10/10/2026 17:13 (JM)."
+    assert note("refused", "JM", time="10/10/2026 17:13") == "Refused on 10/10/2026 17:13 (JM). Nothing was done."
+    assert note("expired", time="10/10/2026 17:13") == "Expired on 10/10/2026 17:13: nothing was done."
 
 
 def test_a_request_shown_in_the_askers_chat_is_not_announced_again(tmp_path, monkeypatch):

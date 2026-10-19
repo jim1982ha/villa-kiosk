@@ -49,8 +49,12 @@ OFF_STATES, ON_STATES = {"off", "closed"}, {"on", "open"}
 MAX_LINES = 120                           # per part: enough for a night, short enough to reason about
 # ⚠️ THE THRESHOLDS ARE THE SKILL'S, NOT THE SCRIPT'S (architecture review 32; the 0.12.80 rule): settings.yaml, with a
 # villa's own villa.settings.yaml on top. A missing one is named, never guessed (`th`).
-BEHAVIOUR = skill_settings.behaviour(skill_settings.load(
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."), "settings.yaml"))
+SETTINGS = skill_settings.load(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."), "settings.yaml")
+BEHAVIOUR = skill_settings.behaviour(SETTINGS)
+#: What the investigation says when the villa's system re-ran every rule itself (settings.yaml `words`): one line for
+#: a reload or a start, never a "ran … check whether it did" line per rule.
+WORDS: dict = SETTINGS.get("words") or {}
+SYSTEM_WORDS = {"reloaded": "rules_reloaded", "started": "system_started"}
 
 
 def th(name: str) -> float:
@@ -565,7 +569,7 @@ def around(client, store, start: datetime, end: datetime, focus: list[str], zone
     count: dict[str, int] = {}
     for r in rows:
         count[r.get("entity_id") or ""] = count.get(r.get("entity_id") or "", 0) + 1
-    autos, offline, back, sent, events = {}, [], [], [], []
+    autos, offline, back, sent, events, system = {}, [], [], [], [], {}
     went_ids = {r.get("entity_id") for r in rows if str(r.get("state")) in OFFLINE}
     for r in rows:
         eid, state, when = r.get("entity_id") or "", str(r.get("state") or ""), r.get("when")
@@ -576,6 +580,15 @@ def around(client, store, start: datetime, end: datetime, focus: list[str], zone
         dom = eid.split(".")[0]
         name = r.get("name") or eid
         if dom == "automation":
+            # ⚠️ A RUN, NOT A ROW (architecture review round 2, 2026-10-19): "turned on/off" rows were runs, and a reload
+            # of the rules at 16:59 made 23 "Automation “X” ran … check whether it did" lines. One reading of "a rule
+            # ran" (vesta_shared.past.automation_run); a run the villa's system started itself is said once, below
+            run = past.automation_run(r)
+            if run is None:
+                continue
+            if run.is_system:
+                system.setdefault(past.system_run(run.started_by), []).append(t)
+                continue
             a = autos.setdefault(eid, {"name": name, "times": [], "why": r.get("message") or ""})
             a["times"].append(t)
         elif state in OFFLINE:
@@ -619,6 +632,15 @@ def around(client, store, start: datetime, end: datetime, focus: list[str], zone
     if back:
         lines.append("…and answered again:")
         lines += [f"  {at(t, zone, span_days)}  {n} ({e})" for t, n, e in _first_per(back)[:40]]
+    reran = []
+    for kind, ts in system.items():
+        # one line for all the rules a reload or a start re-ran, its words the skill's (settings.yaml words); the
+        # moments to the minute (every rule fires within the same seconds)
+        minutes = sorted({t.replace(second=0, microsecond=0) for t in ts})
+        said = WORDS.get(SYSTEM_WORDS[kind]) or f"(investigate's settings.yaml has no words.{SYSTEM_WORDS[kind]})"
+        lines.append(f"{said} ({', '.join(at(t, zone, span_days)[:-3] for t in minutes)}; {len(ts)} rule run(s))")
+        reran.append({"kind": kind, "at": min(ts).isoformat(), "times": [t.isoformat() for t in minutes],
+                      "runs": len(ts), "text": said})
     ran = []
     if autos:
         lines.append("Automations that ran (and what each one is able to do):")
@@ -650,7 +672,8 @@ def around(client, store, start: datetime, end: datetime, focus: list[str], zone
     # the same, as data — the investigation page builds its facts from it (page.py --around)
     data = {"offline": [{"at": t.isoformat(), "name": n, "id": e} for t, n, e in _first_per(offline)[:40]],
             "back": [{"at": t.isoformat(), "name": n, "id": e} for t, n, e in _first_per(back)[:40]],
-            "automations": ran, "notifications": [{"at": t.isoformat(), "name": n} for t, n in sent[:40]],
+            "automations": ran, "system_runs": reran,
+            "notifications": [{"at": t.isoformat(), "name": n} for t, n in sent[:40]],
             "settings": {"coincide_s": th("coincide_s")}}
     return {"lines": lines, "data": data}
 

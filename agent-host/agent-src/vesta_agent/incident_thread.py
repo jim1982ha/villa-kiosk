@@ -159,21 +159,30 @@ class IncidentThread:
             return self.reheading(chat, int(iid))
         return self.retitle(iid, head, chat) if self.retitle else head
 
-    async def sync(self, iid: int | str, parts: dict, skip=(), keyboard=None, head_for=None) -> int:
+    async def sync(self, iid: int | str, parts: dict, skip=(), keyboard=None, head_for=None, quiet=()) -> int:
         """Every copy of incident `iid` outside `skip` (the chats just sent it) shows `parts` too — the same title,
         "To:", history and status in every chat, edited quietly (an edit makes no sound) (owner, 2026-10-11: "this should
-        be exactly the same, since we are speaking about the same incident"). A copy still asked to answer keeps its
-        buttons (`keyboard(chat)`). Returns how many changed."""
+        be exactly the same, since we are speaking about the same incident"). A copy in `quiet` — a chat none of whose
+        roles this step went to (each chat its own steps: owner, 2026-10-18, #55) — keeps its own words, body and
+        status, and takes only the heading (`head_for`): the title word and "To:" are the INCIDENT's, the same in every
+        copy (architecture review, 2026-10-19: a fault reopened in the Cockpit left the owner's group reading "(closed)"
+        over "Done on … (Wayan)." while the facility manager's copy read "(existing)"). A copy still asked to answer
+        keeps its buttons (`keyboard(chat)`). Returns how many changed."""
         async with self._lock(iid):
             n = 0
             for chat, rec in self.state.incident_chats(iid):
                 if chat in skip or not rec.get("mid"):
                     continue
-                p = {**parts, "limit": layout.of(rec).get("limit")}
-                if head_for:
-                    p["head"] = head_for(chat)                  # this chat's own heading (each chat its own steps)
-                elif self.retitle:
-                    p["head"] = self.retitle(iid, p.get("head") or "", chat)
+                own = layout.of(rec)
+                if chat in quiet:
+                    # its own words, its own steps; the title word and "To:" as the incident stands now (retitle)
+                    p = {**own, "head": self.retitle(iid, own.get("head") or "", chat) if self.retitle else own.get("head")}
+                else:
+                    p = {**parts, "limit": own.get("limit")}
+                    if head_for:
+                        p["head"] = head_for(chat)              # this chat's own heading (each chat its own steps)
+                    elif self.retitle:
+                        p["head"] = self.retitle(iid, p.get("head") or "", chat)
                 if layout.render(p) == rec.get("text"):
                     continue
                 live = rec.get("buttons") and not rec.get("settled")

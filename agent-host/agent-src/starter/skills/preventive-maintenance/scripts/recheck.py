@@ -19,6 +19,10 @@ every 5 minutes, and once all are back online (`back_online_minutes`), it closes
 ⚠️ A DEVICE DELETED FROM HOME ASSISTANT (owner, 2026-10-14): its fault stayed open until 02:00, then closed "Cleared:
 the nightly check no longer sees it" — as if it had come back. Any open finding whose every entity Home Assistant
 answers "not found" for (its own 404, never a failed read) closes here, saying so. Nothing is read when nothing is open.
+
+⚠️ A FAULT A PERSON REOPENED IS TOLD BY THIS SKILL (architecture review round 2, 2026-10-19): the engine marks a
+person's "Reopen fault" on the task (store.untold_reopenings) and this script tells it, to the role and under the
+title of settings.yaml `reopened_in_kiosk` — the engine used to send it itself, to a role and under a title of its own.
 """
 from __future__ import annotations
 
@@ -33,7 +37,7 @@ from zoneinfo import ZoneInfo
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-from vesta_shared import result, script  # noqa: E402
+from vesta_shared import kiosk_words, result, script  # noqa: E402
 from vesta_shared.device_state import OFFLINE, out_for  # noqa: E402  ("is it back": one answer)
 from vesta_shared.problems import Problems  # noqa: E402
 from vesta_shared.timeutil import day_time_label  # noqa: E402
@@ -101,6 +105,28 @@ def gone_offline(store, pack, client, now: datetime, params, zone: str) -> dict:
     return {"actions": actions, "send": send, "found": [d["id"] for d in rec["new"] + rec["again"]]}
 
 
+def reopened_untold(store, zone: str, settings: dict) -> list[dict]:
+    """The messages for the faults a person reopened in the Cockpit that nobody has been told of yet, each told once:
+    to settings.yaml `reopened_in_kiosk.tell`, under its `title`, the body the one wording of a reopening
+    (kiosk_words.reopened: who, when the Kiosk recorded it, what). Without the two settings nothing is sent and the
+    tasks stay untold — named on stderr, never guessed."""
+    words = settings.get("reopened_in_kiosk") or {}
+    to, title = str(words.get("tell") or ""), str(words.get("title") or "")
+    rows = store.untold_reopenings()
+    if not rows:
+        return []
+    if not (to and title):
+        print("preventive-maintenance settings.yaml: reopened_in_kiosk needs `tell` (a role) and `title`: "
+              f"{len(rows)} reopened fault(s) not told", file=sys.stderr)
+        return []
+    out = []
+    for t in rows:
+        out.append(result.message(to, kiosk_words.reopened(t.get("reopened_by") or "", t.get("reopened_at"), zone,
+                                                           t.get("summary") or ""), title=title))
+        store.reopening_told(t["id"])
+    return out
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     script.arguments(ap, pack=True)
@@ -109,7 +135,8 @@ def main(argv=None):
     now = datetime.fromisoformat(a.now) if getattr(a, "now", None) else datetime.now(timezone.utc)
     res = back_online(ctx.store, lambda: ctx.live_client, now, ctx.params.behaviour("back_online_minutes"), ctx.zone)
     found = gone_offline(ctx.store, ctx.pack, lambda: ctx.live_client, now, ctx.params, ctx.zone)
-    print(json.dumps({"actions": res["actions"] + found["actions"], "send": found["send"],
+    told = reopened_untold(ctx.store, ctx.zone, ctx.settings)
+    print(json.dumps({"actions": res["actions"] + found["actions"], "send": found["send"] + told,
                       result.FAULTS_CHANGED: bool(res["closed"] or found["actions"])}, default=str))
     return 0
 

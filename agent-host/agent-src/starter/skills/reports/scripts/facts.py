@@ -47,10 +47,10 @@ from vesta_shared import agent_records  # noqa: E402  (the agent's records: one 
 from vesta_shared.problems import Problems  # noqa: E402  (what is still open: one owner)
 
 from vesta_shared.device_state import is_offline  # noqa: E402  (the night check's own reading)
-from vesta_shared.past import unread  # noqa: E402  (the one "could not be read whole: nothing is known after")
+from vesta_shared.past import automation_run, unread  # noqa: E402  (one reading of "a rule ran"; the one "could not be read whole")
 from vesta_shared.store import Notes, notes_of  # noqa: E402  (an alert's notes: one reader)
 from playbook import (  # noqa: E402  (the clues and the one list of what needs doing)
-    MissingParameter, _num, _when, battery_pct, clues, todo)
+    MissingParameter, _num, battery_pct, clues, todo)
 
 
 def load_cfg() -> dict:
@@ -236,12 +236,12 @@ class Ctx:
                                      + unread("its runs", day_time_label(book.reach.astimezone(self.Z), weekday=True))
                                      + " — its alerts after that are not counted.")
             for r in book.rows:
-                t = _when(r)
-                said = str(r.get("message") or "")
-                if t is None or not said.startswith("triggered"):
-                    continue                         # switched on or off, reloaded: not a run
-                if str(r.get("source") or "") in rechecks or any(said.endswith(f"by {w}") for w in rechecks):
+                run = automation_run(r)              # one reading of "a rule ran" (vesta_shared.past): switched on or
+                if run is None:                      # off is not a run
+                    continue
+                if run.started_by in rechecks:
                     continue                         # the villa's system re-checking its rules: not an alert
+                t = run.at
                 if followed_by_agent(eid, t, known, window):
                     continue                         # the agent followed it: shown once, as the agent's
                 out.append({"when": t.isoformat(), "what": self.alert_words(rinfo), "lasted": None, "severity": None,

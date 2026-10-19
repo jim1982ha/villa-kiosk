@@ -144,7 +144,11 @@ def test_a_run_that_came_back_starts_at_a_back_at_line_and_a_reminder_carries_it
     lines = status_lines(esc)
     assert re.fullmatch(rf"⚠️ ⚙️ Escalation sent {T} — No answer from FM after 45 min \(to: Owner\)", lines[-1]), lines
     assert not any("(to: FM)" in ln for ln in lines), lines     # the FM's steps are the FM chat's
-    assert card(agent, FM_CHAT) == fm_before                    # and the owner's step leaves the FM's copy alone
+    # and the owner's step leaves the FM's copy's own lines alone — only "To:" follows the incident, which now involves
+    # the owner (architecture review, 2026-10-19: the title word and "To:" are the incident's, the same in every copy)
+    fm_now = card(agent, FM_CHAT)
+    assert status_lines(fm_now) == status_lines(fm_before) and fm_now.split("\n")[0] == fm_before.split("\n")[0]
+    assert fm_before.split("\n")[1] == "To: FM" and fm_now.split("\n")[1] == "To: Owner & FM", fm_now
 
 
 def test_the_back_line_counts_the_runs_and_an_older_record_has_none():

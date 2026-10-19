@@ -207,3 +207,21 @@ def test_the_investigation_page_says_the_reach_and_ends_a_lane_there():
                                   {"start": T(9, 2).isoformat(), "end": T(9, 15).isoformat(), "zone": "UTC"})
     (cannot,) = [g for g in f["findings"] if g["title"] == "What the records cannot tell"]
     assert "Back Door: its records could not be read whole: nothing is known after 04:00." in cannot["groups"][0]["items"]
+
+
+def test_an_automations_run_is_read_off_a_logbook_row_one_way():
+    # architecture review round 2, 2026-10-19: the weekly page kept "triggered" rows only, the investigation counted
+    # every row; now both read vesta_shared.past.automation_run — a run, what started it, whether the system did
+    at = "2026-10-17T16:59:00+00:00"
+    assert past.automation_run({"when": at, "message": "turned off"}) is None
+    assert past.automation_run({"when": at, "message": "turned on"}) is None
+    assert past.automation_run({"when": "not a time", "message": "triggered by time"}) is None
+    run = past.automation_run({"when": at, "message": "triggered by state of lock.example"})
+    assert run == (datetime.fromisoformat(at), "state of lock.example", False)
+    assert past.automation_run({"when": at, "message": "triggered", "source": "time"}).started_by == "time"
+    reload = past.automation_run({"when": at, "message": "triggered by event 'automation_reloaded'",
+                                  "source": "event 'automation_reloaded'"})
+    assert reload.is_system and past.system_run(reload.started_by) == "reloaded"
+    assert past.automation_run({"when": at, "message": "triggered by Home Assistant starting"}).is_system
+    assert past.system_run("event 'homeassistant_started'") == "started"
+    assert past.system_run("Home Assistant starting") == "started" and past.system_run("time") is None

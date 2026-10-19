@@ -123,13 +123,19 @@ PRESSED_STAGE = "pressed"
 #: (homeassistant/custom_templates/vesta_message.jinja) carries these tables too, and its test holds it to them.
 #: ⚠️ WHAT, WHEN, THEN WHO (owner, 2026-10-19: "✅ Done on 19/10/2026 02:10 (JM)"): every line saying a person's act —
 #: a press, an approval, a close or reopen in the Cockpit — reads "<what> on <when> (<who>)" (acted).
-PRESSED = "{label} on {time} ({name})."
-
-
 def acted(what: str, when: str, who: str = "") -> str:
     """A person's act as every line says it: "Done on 19/10/2026 02:10 (JM)", "Closed in the Cockpit on … (Fabien)" —
-    no full stop, a sentence may go on; no brackets when nobody is named."""
+    no full stop, a sentence may go on; no brackets when nobody is named.
+
+    ⚠️ THE ONE WRITER (architecture review, 2026-10-19): PRESSED, an approval's "Approved / Refused / Expired on …"
+    (vesta_agent/approvals.STATES) and the desk's "Noted on …" each wrote the shape again by hand; a change of the
+    owner's wording would have reached some of them."""
     return f"{what} on {when}" + (f" ({who})" if who else "")
+
+
+#: A pressed button's line, with the engine's placeholders ("{time}": the villa's time then; the villa's own template
+#: fills the same three: vesta_message.jinja's vm_pressed).
+PRESSED = acted("{label}", "{time}", "{name}") + "."
 #: Sections whose items are notes — what happened, said by the agent — rather than the things reported.
 NOTE_SECTIONS = frozenset({STATUS})
 

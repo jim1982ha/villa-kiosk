@@ -249,10 +249,13 @@ def test_one_incident_one_picture_in_every_chat_of_the_same_people(tmp_path):
     # every role it went to, never a name (owner, 2026-10-13)
     assert text.startswith("#5 (existing)\nTo: Owner & FM\n") and \
         re.search(r"\n⚠️ ⚙️ Reminder sent \d\d/\d\d/\d{4} \d\d:\d\d — No answer after 15 min \(to: FM\)$", text), text
-    # the group: neither sent the reminder nor edited — its copy as first sent, its buttons kept
+    # the group: not sent the reminder, no FM line, its own status kept, its buttons kept — only the title word and
+    # "To:" follow the incident (architecture review, 2026-10-19: they are the incident's, the same in every copy; the
+    # Status lines are each chat's own, #55 unchanged): "(new)" became "(existing)" with the facility manager's
     first_group = next(t for c, t, _ in v.tg.sent if c == GROUP)
-    assert not [c for c, _, _ in v.tg.sent[3:] if c == GROUP] and shown[GROUP] == first_group
-    assert "Reminder" not in shown[GROUP] and not [e for e in v.tg.edits if e[0] == GROUP]
+    assert not [c for c, _, _ in v.tg.sent[3:] if c == GROUP] and first_group.startswith("#5 (new)\nTo: Owner & FM\n")
+    assert shown[GROUP].startswith("#5 (existing)\nTo: Owner & FM\n") and "Reminder" not in shown[GROUP], shown[GROUP]
+    assert shown[GROUP].split("\n")[2:] == first_group.split("\n")[2:-1] + ["⚠️ ⚙️ Still open"], shown[GROUP]
     group = v.thread.shown(5)[GROUP]
     assert group["buttons"] and not group["settled"]
 

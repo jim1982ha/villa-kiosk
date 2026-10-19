@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from vesta_shared.problems import Problems, incident_runs
 from vesta_shared.result import PRIORITIES
-from vesta_shared.store import Incident, Store
+from vesta_shared.store import Incident, Notes, Store, notes_of
 
 
 class Incidents:
@@ -43,6 +43,13 @@ class Incidents:
         """Its priority (P1…P4): the notices' heading says it."""
         sev = str((self._get(iid) or {}).get("severity") or "")
         return sev if sev in PRIORITIES else None
+
+    def reaches(self, iid: int) -> list[str] | None:
+        """Whom its priority reaches, as the alert desk carried it (store.Notes.TO): roles ("owner", "fm"), or what the
+        priority does instead ("digest", "log") when it reaches nobody — the heading's "To:" (owner, 2026-10-17: it
+        follows the priority, never the chat). None for an incident the desk did not say (an older desk, no incident)."""
+        to = notes_of(self._get(iid)).get(Notes.TO)
+        return [str(x) for x in to] if isinstance(to, list) else None
 
     def unreached(self, iid: int) -> None:
         """Telegram refused every chat of the people asked to answer it: the alert desk hands it on at its next tick."""

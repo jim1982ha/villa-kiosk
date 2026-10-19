@@ -21,3 +21,11 @@ behaviour:
   state_lane_max: 8           # an entity with more different states than this reports a value (a time, a text), not a state
   coincide_s: 600             # the page puts an event next to an unusual moment when it happened within this of it
   restart_settle_minutes: 10  # a device answering again within this of a Home Assistant restart was the restart's, not its own
+
+# What the investigation says when the villa's system re-ran every rule itself — a reload of the rules, a start: ONE
+# line for all of them (the moments and how many rule runs follow it), never "Automation “X” ran … check whether it
+# did" per rule (architecture review round 2, 2026-10-19: one reload at 16:59 made 23 such lines). The investigation
+# page says the same sentence in its log, at the first moment.
+words:
+  rules_reloaded: "The rules were reloaded: every rule ran once to re-check itself, none of them acted"
+  system_started: "The villa's system started: every rule ran once to re-check itself, none of them acted"

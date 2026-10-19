@@ -37,6 +37,7 @@ from vesta_shared import read_guard
 
 from . import __version__, script_run, status, tool_access
 from .policy import Person, Policy
+from .kiosk import KioskError
 from .redact import scrub  # noqa: F401 — callers import it from here too
 from .routing import Origin, Routing
 from .outcome import has_work
@@ -356,6 +357,9 @@ class Toolbox:
                            "was created; you may say they can create it with the button.")
             try:
                 await self.ticket(title=title[:200], entity_id=ent, note=note)
+            except KioskError as e:
+                # the Kiosk's own words, so the person hears why (not "KioskError")
+                return _err(f"The Kiosk did not record the ticket: {e}.")
             except Exception as e:  # noqa: BLE001
                 return _err(f"The Kiosk did not record the ticket ({type(e).__name__}).")
             # recorded once, by tickets.create (architecture review 16: logged here too, each ticket counted twice)

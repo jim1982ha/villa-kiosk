@@ -1,5 +1,66 @@
 # Changelog
 
+## 0.6.256 (19 October 2026)
+
+Architecture review, 19 October (the Telegram layer, measured with a probe on the real harness): one copy per chat
+whatever wrote it, "To:" from the priority, one title word per incident, one writer of "what on when (who)".
+- ONE COPY PER CHAT, WHATEVER WROTE IT: the villa's own message of a step, taken over in a chat (ha_messages: the
+  number, the heading, the buttons), is the desk's copy there — the desk's message of the same step is no longer sent
+  to that chat (outcome.carry_out, after adopt_ha: the (incident, chat, step) adoption showed; the chat still gets
+  this result's snapshot, and counts as reached for `first_in_line`). A P1 rang the owner's group twice: the rule's
+  message edited, then deleted for an identical one (measured: EDITS (GROUP, 500), SENT GROUP, DELETED (GROUP, 500)).
+  Decided in Outcome, not routing: what adoption showed is known only once Telegram answered, and routing's roles
+  (Notices.audiences) are what the taken-over copy says. Test: test_the_villas_message_taken_over_is_the_desks_copy_in_that_chat
+  (two mutations red).
+- "TO:" FOLLOWS THE PRIORITY, NEVER THE CHAT (owner, 2026-10-17): the alert desk carries whom a priority reaches on the
+  incident (store.Notes.TO, desk.reaches / carry_to — at an opening, a reopening, a priority change and every tick,
+  as it carries the check), in rules.yaml's own terms: the roles of people_roles, else what the priority does instead
+  (priority_does: "digest", "log"). The engine reads it (Incidents.reaches → Notices.to_line): every copy's "To:" is
+  the roles the priority reaches widened by every step's (an escalation names the owner); a priority nobody is sent
+  reads "To: digest" / "To: log", and its steps "(to: digest)" — a P3's own message in the owner's group read
+  "To: Owner" (measured). Its history line is recorded with the roles given and `reach` (never the chat's roles), so
+  no later heading reads the chat out of it; Notices.went_to is the one order for a taken-over message's roles (the
+  step's, the priority's, this result's, the incident's). An incident of an older desk (no Notes.TO) keeps the old
+  reading until the next tick carries it. Test: test_to_follows_the_priority_a_p3_in_the_owners_group_is_never_to_owner
+  (four mutations red: desk.reaches, Notices.to_line, Notices.record, Outcome.adopt_ha).
+- ONE TITLE WORD PER INCIDENT, EACH CHAT ITS OWN STATUS LINES (#55 unchanged): IncidentThread.sync re-heads EVERY
+  copy; a chat the step does not concern (`quiet`) keeps its own words and lines and takes only the heading through
+  Notices.retitle — now "the title word and 'To:' as the incident stands now", both ways (closed ↔ existing; it was
+  one-way, closed only). Measured: Done by the FM, the fault reopened in the Cockpit, the tick asked the FM again —
+  the owner's group kept "#1-P2 (closed)" over "Done on … (Wayan)." while the FM's copy read "(existing)". Now both
+  read "(existing)"; the group keeps "Done on … (Wayan)." as its own last line. Consequence pinned in two older tests:
+  a reminder to the FM alone turns the group's "(new)" into "(existing)" (its own "⚠️ ⚙️ Still open"), an escalation
+  widens the FM copy's "To:" — never their Status lines. Test: test_every_copy_carries_the_incidents_word_and_its_own_status_lines
+  (three mutations red: sync's quiet branch, retitle's word, Outcome's quiet set).
+- ONE WRITER OF "<what> on <when> (<who>)": message_format.acted writes PRESSED, the approvals' "Approved / Refused /
+  Expired on …" (STATES, their tails kept) and the desk's "Noted on … (who): label". A mutation of acted goes red in
+  test_ha_message_layout (the villa's template words), test_people_routing (the approvals' notes, pinned) and
+  test_alert_desk.
+Architecture review round 2, 19 October (seam leads: how a fault was closed, a refused fault, a reopened night
+fault, "an automation ran").
+- How a Kiosk fault was closed is read by the agreement's own rule (`ticketUpdate`: notStatusChanges, clearedNotes,
+  clearedNotePrefixes — read from the host's agent-contract.json at run time through `vesta_shared.agreement`, never
+  typed again): the last close is the last STATUS CHANGE in time order (a rename or a Telegram line noted after it
+  carries "resolved" too; a step whose time cannot be read sorts first), and "cleared" is that step's kind, or its
+  note for a close written before kinds. kiosk.fault_of read the last step in list order by its kind alone, so a blip
+  the agent cleared and the facility manager renamed was written into its alert's history as "Closed in the Cockpit on
+  … (Facility manager)". test_contract_ticket replays every history the agreement lists (6 of 16 read the other way).
+- A fault the Kiosk refuses stops no other: `KioskError` carries the answer's status and the proxy's own sentence
+  (`refused`: it answered; unreached: connection refused, a timeout), the repair logs the sentence and goes on to the
+  next fault — only an unreached Kiosk ends the round — and the chat answer quotes it ("The Kiosk did not record the
+  ticket: writing the Facility records answered 403: …", not "KioskError"). tests/kiosk_fake.py `refuses()`.
+- A night fault a person reopened in the Cockpit is told by its own skill: the engine marks the reopening on the task
+  (`reopen_told_at`, migrated: rows from before are told; `store.untold_reopenings`, `reopening_told`; the Kiosk's own
+  time in `reopened_at`), and the preventive-maintenance recheck sends it to settings.yaml `reopened_in_kiosk.tell`
+  under its `title` ("Fault reopened in the Cockpit"), the body kiosk_words.reopened as before. `Tickets.tell_fm`
+  and the engine's "Fault reopened in the Kiosk" title are gone; an alert's reopening stays the desk's (marked told).
+  An older recheck.py that does not send leaves the task marked: nothing lost, nothing sent twice.
+- "An automation ran" is one reading, `vesta_shared.past.automation_run(row)` → (at, started_by, is_system): only a
+  "triggered…" row is a run, `is_system` from the logbook's own shape (a reload of the rules, a start). The weekly
+  page applies its `not_an_alert_when_started_by` list to `started_by`; the investigation keeps runs only and says a
+  reload or a start as ONE line (settings.yaml `words.rules_reloaded` / `system_started`, carried to the page as
+  `system_runs`) instead of a "ran … check whether it did" line per rule (23 for one reload at 16:59).
+
 ## 0.6.255 (19 October 2026)
 
 Architecture review, 19 October (six leads: one owner of "what to do", a new number says the week, one opener, the

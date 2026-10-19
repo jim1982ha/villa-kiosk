@@ -36,6 +36,7 @@ class FakeKiosk(Kiosk):
         self.info = {"contract": 1, "step_kinds": list(STEP_KINDS), "ticket_fields": list(TICKET_FIELDS)}
         self.documents: list | None = []
         self._made: list[str] = []
+        self._refused: dict[str, tuple[int, str]] = {}   # refuses(): {ticket id: (status, the proxy's sentence)}
 
     # ------------------------------------------------------------------ the one thing replaced: the transport
     async def _req(self, method, path, body=None):
@@ -44,6 +45,11 @@ class FakeKiosk(Kiosk):
                 return 200, copy.deepcopy(self.doc)
             if body.get("rev") != self.doc["rev"]:
                 return 409, {"error": "changed since read"}
+            for tid, (status, sentence) in self._refused.items():
+                was = next((t for t in self._all() if t.get("id") == tid), None)
+                now = next((t for t in body["data"].get("tickets") or [] if t.get("id") == tid), None)
+                if was != now:                                # a write that touches a refused fault: the proxy's no
+                    return status, {"error": sentence}
             self.doc["data"], self.doc["rev"] = copy.deepcopy(body["data"]), self.doc["rev"] + 1   # in place: a test
                                                                                                 # may hold self.doc
             return 200, {}
@@ -62,6 +68,11 @@ class FakeKiosk(Kiosk):
             return None
         self.documents.append(html)
         return f"d{len(self.documents)}"
+
+    def refuses(self, tid: str, status: int = 403, sentence: str = "this write is not allowed") -> None:
+        """The Kiosk's proxy refuses every write that changes fault `tid` (a new one included: its id is the next the
+        agent makes, t1, t2 …), answering `status` and its own `sentence` — as it refuses a removal or an unknown field."""
+        self._refused[tid] = (status, sentence)
 
     # ------------------------------------------------------------------ what a person does in the Cockpit
     def _all(self) -> list[dict]:
@@ -93,24 +104,28 @@ class FakeKiosk(Kiosk):
         """Picked up ("Open ticket" in the Cockpit): in progress, the person's step last."""
         self._step(tid, {"at": at, "status": "in_progress", "by": by}, status="in_progress")
 
-    def person_renames(self, tid: str, title: str, by: str = "Owner") -> None:
+    def person_renames(self, tid: str, title: str, by: str = "Owner", at: str = PERSON_AT) -> None:
         was = self.ticket(tid).get("title")
-        self._step(tid, {"at": PERSON_AT, "status": self.ticket(tid)["status"], "by": by, "kind": RETITLED,
+        self._step(tid, {"at": at, "status": self.ticket(tid)["status"], "by": by, "kind": RETITLED,
                          "title": title, "was": was}, title=title)
 
     # ------------------------------------------------------------------ views, read from the document
+    def _kept(self) -> list[str]:
+        """The ids the agent made that the document holds (one the proxy refused was never written)."""
+        return [t for t in self._made if any(x.get("id") == t for x in self._all())]
+
     @property
     def tickets(self) -> list[tuple]:
         return [((self.ticket(t).get("updates") or [{}])[0].get("title") or self.ticket(t)["title"],
-                 self.ticket(t).get("entityId")) for t in self._made]
+                 self.ticket(t).get("entityId")) for t in self._kept()]
 
     @property
     def notes(self) -> list:
-        return [self.ticket(t).get("note") for t in self._made]
+        return [self.ticket(t).get("note") for t in self._kept()]
 
     @property
     def ticket_documents(self) -> list[list[str]]:
-        return [list(self.ticket(t).get("documentIds") or []) for t in self._made]
+        return [list(self.ticket(t).get("documentIds") or []) for t in self._kept()]
 
     @property
     def titles(self) -> dict[str, str]:

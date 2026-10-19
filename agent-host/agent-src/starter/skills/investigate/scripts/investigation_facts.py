@@ -147,6 +147,10 @@ def facts(data: dict | None, around: dict | None, notes: dict | None = None) -> 
         rows.append({"at": _t(xs[0]["at"]), "pill": "usual",
                      "text": _names([x["name"] for x in xs]) + (" reports" if len(xs) == 1 else " report") + " again"})
 
+    # the villa's system re-running every rule (a reload, a start): one line, the skill's words (investigate.py around)
+    for x in around.get("system_runs") or []:
+        if _t(x.get("at")) and x.get("text"):
+            rows.append({"at": _t(x["at"]), "pill": "usual", "text": str(x["text"])})
     acted, unproven, harmless_other = [], [], 0
     for a in around.get("automations") or []:
         times = [t for t in (_t(x) for x in a.get("times") or []) if t]

@@ -15,6 +15,40 @@ from vesta_shared.store import Store
 
 CONTRACT = os.path.join(os.path.dirname(__file__), "..", "..", "rootfs", "opt", "vesta", "host", "agent-contract.json")
 T = json.load(open(CONTRACT))["ticket"]
+U = json.load(open(CONTRACT))["ticketUpdate"]
+
+
+def test_the_agreement_the_agent_reads_is_the_hosts_file():
+    from vesta_shared import agreement
+    assert agreement.section("ticketUpdate") == U and agreement.section("ticket") == T
+    assert agreement.section("no such section") == {}
+
+
+def test_every_agreed_history_reads_as_the_agreement_says():
+    """How a closed fault was closed — the agreement's `ticketUpdate.histories`, every case, through fault_of: the
+    Kiosk's two readers (fmEngine.lastResolution, the proxy's _fm_last_resolution) replay the same file. Before
+    (architecture review round 2, 2026-10-19) six of them read the other way: a cleared blip renamed afterwards, one
+    with a Telegram line noted after it, time order against list order, a close before kinds by its note or its
+    prefix, a step whose time cannot be read."""
+    for case in U["histories"]["cases"]:
+        held = kiosk.fault_of({"id": "va-h", "title": "x", "status": "resolved", "resolvedAt": case["resolvedAt"],
+                               "updates": case["updates"]})
+        assert held["cleared"] is case["cleared"], case["_"]
+        step = case["updates"][case["last"]] if case["last"] is not None else {}
+        assert held["by"] == (step.get("who") or step.get("by") or ""), case["_"]
+        assert held["resolved_at"] == case["resolvedAt"]
+
+
+def test_the_lists_are_the_agreements_never_a_copy():
+    # a note the agreement does not name is a repair; the same note on a kindless close is a clearing only through
+    # the file's own list (no literal of it in the engine)
+    close = {"at": "2026-06-01T00:00:00Z", "status": "resolved", "note": "Fixed"}
+    assert kiosk.cleared_step(close) is False
+    assert kiosk.cleared_step(dict(close, note=U["clearedNotes"][0])) is True
+    assert kiosk.cleared_step(dict(close, note=U["clearedNotePrefixes"][0] + " x")) is True
+    assert [u.get("kind") for u in kiosk.status_changes([
+        {"at": "2026-06-01T00:00:00Z", "status": "resolved", "kind": U["notStatusChanges"][0]},
+        {"at": "2026-06-01T00:00:00Z", "status": "resolved", "kind": "cleared"}])] == ["cleared"]
 
 
 def test_the_agent_knows_its_own_steps_by_the_agreements_stamp():

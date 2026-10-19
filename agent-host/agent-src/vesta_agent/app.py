@@ -157,8 +157,6 @@ class Vesta:
                                     thread=self.thread, run_job=self.run_code_job)
         self.tickets = Tickets(kiosk=self.kiosk, state=self.state, store_path=settings.store_path,
                                settle_alert=self.thread.close, timezone=settings.timezone,
-                               tell_fm=lambda text: self.outcome.carry_out({"send": [{"to": "fm", "text": text,
-                                                                                 "title": "Fault reopened in the Kiosk"}]}),
                                story=lambda iid: self.notices.story(iid), restate_alert=self._alert_taken,
                                rechecked=lambda: {r for sk in self.skills.all().values() for r in sk.rechecks})
         # a fault offered in a chat, start to end (fault_offers.py, review 32)
@@ -170,7 +168,7 @@ class Vesta:
         # the heading of every message the agent sends on its own (notice.py): who it is for, the incident, its history
         incidents = Incidents(settings.store_path)        # the alert desk's incidents, as the engine reads them
         self.notices = Notices(self.state, self.policy, settings.timezone, severity=incidents.severity,
-                               closed=incidents.closed, runs=incidents.runs)
+                               closed=incidents.closed, runs=incidents.runs, reaches=incidents.reaches)
         self.thread.retitle = self.notices.retitle           # a settled copy of a closed incident is headed "Closed"
         self.thread.reheading = self.notices.heading         # a replaced status: every earlier step listed again
         # putting one message in one chat (posting.py): the alerts and the approval requests both use it

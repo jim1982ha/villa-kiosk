@@ -62,6 +62,14 @@ class _Client(HABase):
     def logbook(self, start, end):
         rows = [{"when": T(9, 3, 14, 46).isoformat(), "entity_id": "automation.heater_watch", "name": "heater watch",
                  "message": "triggered by numeric state"},
+                # the rules reloaded at 06:02 (next to the 06:00 moment): every rule ran once to re-check itself, and
+                # one was switched off by hand — none of these is a run of the rule's own
+                {"when": T(9, 6, 2, 1).isoformat(), "entity_id": "automation.heater_watch", "name": "heater watch",
+                 "message": "triggered by event 'automation_reloaded'", "source": "event 'automation_reloaded'"},
+                {"when": T(9, 6, 2, 2).isoformat(), "entity_id": "automation.morning", "name": "morning",
+                 "message": "triggered by event 'automation_reloaded'", "source": "event 'automation_reloaded'"},
+                {"when": T(9, 6, 3).isoformat(), "entity_id": "automation.morning", "name": "morning",
+                 "message": "turned off"},
                 {"when": T(9, 6, 1, 25).isoformat(), "entity_id": "switch.next_relay", "name": "Next Relay",
                  "state": "unavailable"},
                 {"when": T(9, 13, 8).isoformat(), "entity_id": "switch.next_relay", "name": "Next Relay", "state": "off"},
@@ -100,6 +108,28 @@ def test_around_lists_what_else_happened_and_leaves_background_out():
     assert gone < text.index("06:01:25  Next Relay") < back < text.index("13:08:00  Next Relay")
     assert "heater watch" in text and "06:11:25  Owner phone" in text
     assert "Left out as background" in text and "sensor.clock" in text
+
+
+def test_a_reload_of_the_rules_is_one_line_never_a_run_per_rule():
+    # architecture review round 2, 2026-10-19: a reload at 16:59 made 23 "Automation “X” ran at 16:59 and can act on …
+    # check whether it did" lines; "turned on/off" rows counted as runs too. One reading (vesta_shared.past.automation_run)
+    import investigate
+    out = investigate.around(_Client(), None, T(9, 2), T(9, 15), ["sensor.heater_power"], Z)
+    reload_lines = [x for x in out["lines"] if x.startswith("The rules were reloaded: ")]
+    assert reload_lines == ["The rules were reloaded: every rule ran once to re-check itself, none of them acted (06:02; 2 rule run(s))"]
+    (watch,) = [x for x in out["lines"] if x.strip().startswith("heater watch (")]
+    assert "1× from 03:14:46 to 03:14:46" in watch                          # its own run only
+    assert not any("morning" in x for x in out["lines"] if not x.startswith("The rules were reloaded"))
+    assert [a["id"] for a in out["data"]["automations"]] == ["automation.heater_watch"]
+    (reran,) = out["data"]["system_runs"]
+    assert (reran["kind"], reran["runs"], reran["times"]) == ("reloaded", 2, [T(9, 6, 2).isoformat()])
+    # …and the page: one "usual" line at 06:02, no "can act on" for the rule the reload re-ran next to the 06:00 moment
+    _, f = _facts()
+    log = [(r["time"], r["pill"], r["text"]) for r in f["log"]]
+    assert ("06:02", "usual", "The rules were reloaded: every rule ran once to re-check itself, none of them acted") in log
+    checks = [i for g in f["findings"] if g["title"] == "To check" for x in g["groups"] for i in x["items"]]
+    assert not [c for c in checks if "06:02" in c or "morning" in c], checks
+    assert not any("06:02" in t and "Automation" in x for t, _, x in log), log
 
 
 def test_no_device_of_any_villa_is_written_in_the_skill():

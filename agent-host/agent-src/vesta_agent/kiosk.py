@@ -25,6 +25,8 @@ from typing import Callable
 
 import aiohttp
 
+from vesta_shared import agreement
+
 log = logging.getLogger("vesta.kiosk")
 
 CONTRACT = 1
@@ -36,7 +38,20 @@ HEARTBEAT_EVERY = 120
 MINE = "va-"
 
 class KioskError(RuntimeError):
-    pass
+    """What the Kiosk answered, or that it could not be reached. `status`: the answer of a refusal (403: a write its
+    proxy forbids, 409: a record that kept changing, 5xx…) — None when the Kiosk could not be reached at all (connection
+    refused, a timeout: every fault after it would fail the same way); `said`: the proxy's own sentence, kept whole.
+    ⚠️ THE SENTENCE TRAVELS (architecture review round 2, 2026-10-19): only "KioskError" reached the log and the chat
+    ("The Kiosk did not record the ticket (KioskError).") while the proxy had said why."""
+
+    def __init__(self, message: str, status: int | None = None, said: str = ""):
+        super().__init__(message)
+        self.status, self.said = status, said
+
+    @property
+    def refused(self) -> bool:
+        """The Kiosk answered and said no — the next fault may still go through; unreached (None), it will not."""
+        return self.status is not None
 
 
 def _now() -> str:
@@ -83,13 +98,58 @@ def person_titled(t: dict) -> bool:
     return mine is None or str(t.get("title") or "") != mine
 
 
+def _epoch(iso) -> float | None:
+    """A step's moment as a number; None when it cannot be read."""
+    try:
+        return datetime.fromisoformat(str(iso).replace("Z", "+00:00")).timestamp()
+    except (TypeError, ValueError):
+        return None
+
+
+def status_changes(ups: list[dict]) -> list[dict]:
+    """The steps that CHANGED the fault's status, in time order — the agreement's `ticketUpdate.histories` rule, as the
+    Kiosk's own two readers follow it (fmEngine.statusChanges, the proxy's _fm_last_resolution): a step without a kind
+    changes the status, so do reopened and cleared; a kind in the agreement's `notStatusChanges` (a title step, a line
+    from Telegram) carries the status the fault had and changes nothing. Stable: steps at one moment keep their order;
+    a step whose time cannot be read sorts FIRST (it never outranks a dated close)."""
+    skip = set(agreement.section("ticketUpdate").get("notStatusChanges") or ())
+    steps = [(i, u) for i, u in enumerate(ups) if u.get("status") and u.get("kind") not in skip]
+    steps.sort(key=lambda p: (_epoch(p[1].get("at")) or 0.0, p[0]))
+    return [u for _, u in steps]
+
+
+def last_close(ups: list[dict]) -> dict | None:
+    """The step that last resolved the fault — of its status changes, never a title or a Telegram line written after
+    it (those carry "resolved" too). None when no step closed it (how it was closed cannot be told)."""
+    done = [u for u in status_changes(ups) if u.get("status") == "resolved"]
+    return done[-1] if done else None
+
+
+def cleared_step(step: dict) -> bool:
+    """A close with no work done: kind "cleared", or — written before steps carried a kind — a note the agreement names
+    (`clearedNotes`, `clearedNotePrefixes`). Only a close is read by its note (the agreement's histories)."""
+    if step.get("kind"):
+        return step.get("kind") == CLEARED
+    table = agreement.section("ticketUpdate")
+    note = str(step.get("note") or "")
+    return note in (table.get("clearedNotes") or ()) or note.startswith(tuple(table.get("clearedNotePrefixes") or ()))
+
+
 def fault_of(t: dict) -> dict:
     """One Facility fault as the agent reads it: {status, title, agent_title, resolved_at, by, cleared, reopened_at,
-    reopened_by, taken_at, taken_by, noted, note, …} — `by` the profile of its last step ("Facility manager" who closed it),
-    `agent_title` the title the agent last gave it (None: never said), `cleared` whether its last close was the agent's
-    own clearing, `reopened_*` / `taken_*` a PERSON's last reopening / "Open Ticket", from its steps. Pure: what a
-    person did is read from the Kiosk's steps here and nowhere else (architecture review scan 2, 2026-10-19: the
-    reading sat in closures inside the network call — testable only through a fake Kiosk)."""
+    reopened_by, taken_at, taken_by, noted, note, …} — `by` who closed it, on a closed fault ("Facility manager"; its last
+    close's step), on an open one who last moved it (its last step), `agent_title` the title the agent last gave it (None: never said),
+    `cleared` whether its last close was one with no work done — the agent's own clearing — (None: no step closed it),
+    `reopened_*` / `taken_*` a PERSON's last reopening / "Open Ticket", from its steps. Pure: what a person did is
+    read from the Kiosk's steps here and nowhere else (architecture review scan 2, 2026-10-19: the reading sat in
+    closures inside the network call — testable only through a fake Kiosk).
+
+    ⚠️ HOW IT WAS CLOSED IS THE AGREEMENT'S RULE (architecture review round 2, 2026-10-19): this took the last step in
+    LIST order saying "resolved" — a rename or a Telegram line noted after the agent's own clearing carries "resolved"
+    too — and knew only the kind, so a blip the agent cleared and a person renamed was written into its alert's
+    history as "Closed in the Cockpit on … (Facility manager)". Now `last_close` / `cleared_step` read the agreement's
+    `ticketUpdate` (notStatusChanges, clearedNotes, clearedNotePrefixes) exactly as the Kiosk's own readers do;
+    tests/test_contract_ticket.py replays every history the agreement lists."""
     ups = [u for u in t.get("updates") or [] if isinstance(u, dict)]
 
     def last(key: str) -> str:
@@ -97,15 +157,17 @@ def fault_of(t: dict) -> dict:
 
     # the step a PERSON took it on with ("Open Ticket": in progress), its who and when — never an agent's step
     took = [u for u in ups if u.get("status") == "in_progress" and not u.get("kind") and not _mine(u)]
-    # its last close was the agent's own clearing (resolve_ticket without a person: kind CLEARED), never a person's
-    closes = [u for u in ups if u.get("status") == "resolved"]
+    close = last_close(ups)
     reopens = [u for u in ups if u.get("kind") == REOPENED]
     return {"status": str(t.get("status") or ""), "title": str(t.get("title") or ""),
             "agent_title": agent_title(t), "resolved_at": str(t.get("resolvedAt") or ""),
-            "by": last("who") or last("by"), "alert_number": t.get("alertNumber"), "origin": t.get("origin"),
+            # who: on a closed fault, the person of its last close; on an open one, of its last step (taken on, moved)
+            "by": (str(close.get("who") or close.get("by") or "") if close and t.get("status") == "resolved"
+                   else last("who") or last("by")),
+            "alert_number": t.get("alertNumber"), "origin": t.get("origin"),
             "check": t.get("check"), "title_pattern": t.get("titlePattern"), "since": t.get("since"),
             "note": str(t.get("note") or ""),                     # what to do on site (the agreement's ticket.fields)
-            "person_titled": person_titled(t), "cleared": bool(closes) and closes[-1].get("kind") == CLEARED,
+            "person_titled": person_titled(t), "cleared": cleared_step(close) if close else None,
             "noted": [(str(u.get("at") or ""), str(u.get("note") or "")) for u in ups if u.get("kind") == NOTED],
             **({"reopened_at": str(reopens[-1].get("at") or ""),
                 "reopened_by": str(reopens[-1].get("who") or reopens[-1].get("by") or "")} if reopens else {}),
@@ -209,7 +271,7 @@ class Kiosk:
             return False
         status, data = await self._req("GET", "/agent/v1/info")
         if status != 200:
-            raise KioskError(f"/agent/v1/info answered {status}")
+            raise KioskError(f"/agent/v1/info answered {status}", status=status)
         if data.get("contract") != CONTRACT:
             raise KioskError(f"the Kiosk speaks agreement {data.get('contract')}, this agent {CONTRACT}")
         self.info = data
@@ -221,7 +283,7 @@ class Kiosk:
         body = {k: v for k, v in (("status", status), ("cadence", cadence)) if v}
         code, _ = await self._req("POST", "/agent/v1/heartbeat", body or None)
         if code != 200:
-            raise KioskError(f"heartbeat answered {code}")
+            raise KioskError(f"heartbeat answered {code}", status=code)
 
     async def heartbeats(self, stop: asyncio.Event, status=lambda: None, cadence=lambda: None) -> None:
         reported = None
@@ -250,7 +312,7 @@ class Kiosk:
             for attempt in (1, 2):
                 status, got = await self._req("GET", "/agent/v1/fm-data")
                 if status != 200:
-                    raise KioskError(f"reading the Facility records answered {status}")
+                    raise KioskError(f"reading the Facility records answered {status}", status=status)
                 data = got.get("data") if isinstance(got.get("data"), dict) else {}
                 data = dict(data)
                 before = json.dumps(data, sort_keys=True, default=str)
@@ -263,8 +325,9 @@ class Kiosk:
                     return result
                 if status == 409 and attempt == 1:
                     continue
-                raise KioskError(f"writing the Facility records answered {status}: {str(res.get('error', ''))[:200]}")
-        raise KioskError("the Facility records kept changing")
+                said = str(res.get("error", ""))[:200]
+                raise KioskError(f"writing the Facility records answered {status}: {said}", status=status, said=said)
+        raise KioskError("the Facility records kept changing", status=409)
 
     async def add_document(self, html: bytes) -> str | None:
         """Store one HTML page for a fault (the VESTA Kiosk 2.496.326 and later: /agent/v1/fm-document) — its id, or None
@@ -322,7 +385,7 @@ class Kiosk:
         """{ticket id: fault_of(the record)} of the Facility records, as the Kiosk holds them now."""
         status, got = await self._req("GET", "/agent/v1/fm-data")
         if status != 200:
-            raise KioskError(f"reading the Facility records answered {status}")
+            raise KioskError(f"reading the Facility records answered {status}", status=status)
         data = got.get("data") if isinstance(got.get("data"), dict) else {}
         return {t["id"]: fault_of(t) for t in data.get("tickets") or [] if isinstance(t, dict) and isinstance(t.get("id"), str)}
 

@@ -279,14 +279,18 @@ class Problems:
                 return sid
         return None
 
-    def reopened_in_kiosk(self, task_id: int, by: str = "", said: str | None = None) -> int | None:
-        """A person reopened a closed task's fault in the VESTA Kiosk: the task is open again, theirs until they close
-        it (the night check's "gone" never closes it); its incident, if any, opens again and its facility manager is
-        asked at once (the alert desk: payload "kiosk_reopened"). Returns that incident's id.
+    def reopened_in_kiosk(self, task_id: int, by: str = "", said: str | None = None, at: str | None = None) -> int | None:
+        """A person reopened a closed task's fault in the VESTA Kiosk (`at`: when the Kiosk recorded it): the task is
+        open again, theirs until they close it (the night check's "gone" never closes it); its incident, if any, opens
+        again and its facility manager is asked at once (the alert desk: payload "kiosk_reopened") — that reopening is
+        told. Returns that incident's id; None when no desk tells it: the task stays an untold reopening
+        (store.untold_reopenings) for a skill to tell — the preventive-maintenance recheck, every 5 minutes, under its
+        own recipient and title (architecture review round 2, 2026-10-19: the engine sent it itself, to a role and
+        under a title typed in vesta_agent/ — "Fault reopened in the Kiosk" over a body saying "the Cockpit").
 
         ⚠️ A PERSON'S REOPENING IS NEVER UNDONE (architecture review 25): the agent resolved it again within 5 minutes."""
         task = self.store.task(task_id)
-        self.store.reopen_task(task_id, task.get("summary") or "", by=by or "a person")
+        self.store.reopen_task(task_id, task.get("summary") or "", by=by or "a person", at=at)
         kind, sid = self._source(task)
         if kind == "incident" and sid:
             inc = self.store.incident(sid)
@@ -295,6 +299,7 @@ class Problems:
                 # is asked (its chase.asks: a skill's setting, never the engine's)
                 self.store.note(sid, {Notes.KIOSK_REOPENED: said or by or "a person"}, drop=("check_quiet",),
                                 closed_at=None, reply=None, state=Incident.ASKED, asked_at=self.store.now())
+                self.store.reopening_told(task_id)
                 return sid
         return None
 
