@@ -1,3 +1,18 @@
+## 0.12.257
+
+What you will see in the reports (weekly, monthly, the daily digest and the owner's Monday lines alike):
+- "Critical alerts" counts real alerts only. The villa's system re-checks its rules each time they are reloaded; week
+  42 counted 400 such re-checks as alerts ("403"). The owner's Monday line now gives the same number as the page.
+- Each pump and meter phase is named as it is in the villa's system: "House Pump" and "Pool Pump", not "House & Pool
+  Relay" twice; "Main Power Phase A/B/C", not "Main Power Device" three times; battery sensors by their own name, not
+  "Zigbee2MQTT Bridge". A pump's "Watch" mark is its own, never its neighbour's on the same relay.
+- A guest's phone or laptop that left the Wi-Fi is no longer "a monitoring device offline".
+- A pump that runs in short bursts (the house pump) shows its hours running per day; its power cannot be known from
+  hourly figures, and is no longer shown (it read 1,500 to 6,410 W and suggested a leak).
+- A reading that holds still while its device keeps reporting (the system monitor's disk use) is no longer "has not
+  reported".
+- The page's footer no longer names the platform underneath.
+
 ## 0.12.256
 
 What you will see:
