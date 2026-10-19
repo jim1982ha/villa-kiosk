@@ -189,43 +189,9 @@ def run(args) -> dict:
         findings += R.level_rules(asset, row["entity_id"], row.get("device_class"), series, today, params)
 
     # ---- forensics: reconnect loops from the logbook -------------------------
-    try:
-        book = cli.logbook_read(day_end - timedelta(days=int(params.behaviour("reconnect_days"))), day_end, now=now_ref)
-        lb = book.rows
-    except Exception:  # logbook is optional
-        book, lb = None, []
-    if book is not None and not book.whole:
-        # a count from a read cut short is a floor, said where the night's notes are read
-        notes.append(unread("The logbook", day_time_label(book.reach.astimezone(Z))) + " — reconnect counts may be low.")
-    flips = F.flips_per_day(lb, zone, params.behaviour("restart_settle_minutes"),
-                            params.behaviour("reconnect_min_drop_seconds"))
-    # ONE finding per DEVICE, named as a person reads it (villa, 2026-10-04: a relay, its firmware
-    # entity and its uptime sensor were three lines, two of them raw entity ids)
-    rows_by_eid = {r["entity_id"]: r for fam in pack.families for r in pack.entities(fam)}
-    by_device: dict[str, dict] = {}
-    # ⚠️ A HIDDEN ENTITY IS NOT CHECKED (owner, 2026-10-19: the LG TV, hidden in the villa's system, was a "dropped and
-    # reconnected 10 times" fault): the logbook lists every entity, and this was the one check that read past the
-    # pack's own rule (knowledge_pack: hidden entities left out of every family, `pack.hidden`)
-    hidden = set(pack.hidden)
-    for eid, per_day in flips.items():
-        if eid in hidden:
-            continue
-        row = rows_by_eid.get(eid, {})
-        slug = row.get("asset") or next((s for s, a in pack.assets.items() if eid in a["entities"].values()), None)
-        # ⚠️ ITS DEVICE, CLASSIFIED OR NOT (2026-10-13): a relay's uptime sensor is in no family, had no device, and its
-        # drops were a second fault for the same relay
-        key = pack.device_key(eid, {**row, "asset": row.get("asset") or slug})
-        g = by_device.setdefault(key, {"eid": _standing_entity(pack, eid, rows_by_eid), "slug": slug,
-                                       "name": row.get("name"), "per_day": {}})
-        for d, n in per_day.items():
-            g["per_day"][d] = max(g["per_day"].get(d, 0), n)      # the device's drops, not the sum of its entities'
-        g["name"] = g["name"] or row.get("name")
-    window_start = day_end - timedelta(days=int(params.behaviour("reconnect_days")))
-    for g in by_device.values():
-        asset = dict(pack.assets.get(g["slug"], {"slug": g["slug"] or g["eid"]}))
-        asset["name"] = asset.get("name") or g["name"] or _plain_name(g["eid"])
-        findings += R.flap_rules(_device_named(pack, asset, g["eid"]), g["eid"], g["per_day"], today, params,
-                                 restarted=_restarted(pack, states, g["eid"], window_start))
+    found, said = reconnect_findings(cli, pack, states, day_end, today, params, zone, Z, now_ref)
+    findings += found
+    notes += said
 
     # ---- persist findings, dedup, close ---------------------------------------
     # the night's ledger is Problems' (vesta_shared/problems.py); what is a state, an event, worse, a task: here
@@ -275,6 +241,57 @@ def cleared_note(at: datetime | None = None, zone: str | None = None) -> str:
 # ⚠️ ONE RULE, READ AT NIGHT OR FOR ONE FINDING IN THE DAY (owner, 2026-10-19: "just re-check the identified ones to
 # update their status"): the night's battery and silence readings were inline in run(); recheck.py's day recheck now
 # runs the very same functions over the rows of the findings still open (`rows`), never a second copy of a rule.
+def reconnect_findings(cli, pack, states: dict, end: datetime, today: date, params, zone: str, Z, now_ref: datetime,
+                       only: set[str] | None = None) -> tuple[list, list[str]]:
+    """The reconnect loops over the `reconnect_days` ending at `end` (one finding per device), and the notes a read cut
+    short adds — the night's (end: the day judged's end) and the day recheck's (end: now; `only`: the entities of the
+    findings it reads again). ONE reading for both (owner, 2026-10-20: a loop is read again every 4 hours too)."""
+    findings: list = []
+    notes: list[str] = []
+    try:
+        book = cli.logbook_read(end - timedelta(days=int(params.behaviour("reconnect_days"))), end, now=now_ref)
+        lb = book.rows
+    except Exception:  # logbook is optional
+        book, lb = None, []
+    if book is not None and not book.whole:
+        # a count from a read cut short is a floor, said where the night's notes are read
+        notes.append(unread("The logbook", day_time_label(book.reach.astimezone(Z))) + " — reconnect counts may be low.")
+    flips = F.flips_per_day(lb, zone, params.behaviour("restart_settle_minutes"),
+                            params.behaviour("reconnect_min_drop_seconds"))
+    # ONE finding per DEVICE, named as a person reads it (villa, 2026-10-04: a relay, its firmware
+    # entity and its uptime sensor were three lines, two of them raw entity ids)
+    rows_by_eid = {r["entity_id"]: r for fam in pack.families for r in pack.entities(fam)}
+    by_device: dict[str, dict] = {}
+    # ⚠️ A HIDDEN ENTITY IS NOT CHECKED (owner, 2026-10-19: the LG TV, hidden in the villa's system, was a "dropped and
+    # reconnected 10 times" fault): the logbook lists every entity, and this was the one check that read past the
+    # pack's own rule (knowledge_pack: hidden entities left out of every family, `pack.hidden`)
+    hidden = set(pack.hidden)
+    for eid, per_day in flips.items():
+        if eid in hidden:
+            continue
+        row = rows_by_eid.get(eid, {})
+        slug = row.get("asset") or next((s for s, a in pack.assets.items() if eid in a["entities"].values()), None)
+        # ⚠️ ITS DEVICE, CLASSIFIED OR NOT (2026-10-13): a relay's uptime sensor is in no family, had no device, and its
+        # drops were a second fault for the same relay
+        key = pack.device_key(eid, {**row, "asset": row.get("asset") or slug})
+        g = by_device.setdefault(key, {"eid": _standing_entity(pack, eid, rows_by_eid), "slug": slug,
+                                       "name": row.get("name"), "per_day": {}})
+        for d, n in per_day.items():
+            g["per_day"][d] = max(g["per_day"].get(d, 0), n)      # the device's drops, not the sum of its entities'
+        g["name"] = g["name"] or row.get("name")
+        g.setdefault("members", []).append(eid)
+    window_start = end - timedelta(days=int(params.behaviour("reconnect_days")))
+    for g in by_device.values():
+        asset = dict(pack.assets.get(g["slug"], {"slug": g["slug"] or g["eid"]}))
+        asset["name"] = asset.get("name") or g["name"] or _plain_name(g["eid"])
+        if only is not None and g["eid"] not in only and not (set(g.get("members") or ()) & only):
+            continue
+        findings += R.flap_rules(_device_named(pack, asset, g["eid"]), g["eid"], g["per_day"], today, params,
+                                 restarted=_restarted(pack, states, g["eid"], window_start))
+
+    return findings, notes
+
+
 def battery_findings(pack, states: dict, params, today: date, stats: dict | None = None,
                      rows: list[dict] | None = None) -> list:
     """The battery rules (rules.battery_rules) over `rows` (every battery of the pack when None), each read from

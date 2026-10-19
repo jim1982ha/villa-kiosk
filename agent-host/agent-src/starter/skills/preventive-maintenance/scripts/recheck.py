@@ -155,8 +155,10 @@ def _silence_rows(pack, f: dict) -> list[dict]:
 #: ⚠️ ONLY WHAT A SHORT READ CAN SAY (owner, 2026-10-19): a battery's level and a quiet sensor are read now, as the night
 #: reads them. A pump's draw and use (PM-POWER-CHANGE, PM-ENERGY-CHANGE, PM-RUNHOURS) and a temperature's day
 #: (PM-LEVEL-HIGH) are judged on a FINISHED day — at 12:00 the day is half there and would close what the next night
-#: opens again; a reconnect loop needs the villa-wide logbook (the villa's system's own restarts are in it), the night's
-#: heaviest read. An offline device is recheck.py's every 5 minutes (`rechecks`).
+#: opens again. An offline device is recheck.py's every 5 minutes (`rechecks`).
+#: ⚠️ A RECONNECT LOOP TOO (owner, 2026-10-20: 17 false loops waited for the night to close): the villa-wide logbook of
+#: the last `reconnect_days`, the night's own reading (nightly.reconnect_findings), read ONCE per day recheck whatever
+#: the number of loops open (_loops).
 DAY_READS = {
     "PM-BATTERY-CRIT": (_battery_rows, lambda pack, f, rows: [r["entity_id"] for r in rows],
                         lambda c, pack, states, now, params, Z, rows: N.battery_findings(pack, states, params, now.date(),
@@ -168,6 +170,21 @@ DAY_READS = {
                                                                                   rows=rows)),
 }
 DAY_READS["PM-BATTERY-LOW"] = DAY_READS["PM-BATTERY-CRIT"]
+
+_LOOPS: dict = {}
+
+
+def _loops(c, pack, states, now, params, Z, rows) -> list:
+    """The reconnect loops of the days ending now — read once per day recheck (one logbook read for every loop open)."""
+    key = (id(c), now.isoformat())
+    if key not in _LOOPS:
+        _LOOPS.clear()
+        _LOOPS[key] = N.reconnect_findings(c, pack, states, now, now.date(), params, str(Z), Z, now)[0]
+    return _LOOPS[key]
+
+
+DAY_READS["PM-RECONNECT-LOOP"] = (lambda pack, f: [{"entity_id": f["entity_id"]}],
+                                  lambda pack, f, rows: [f["entity_id"]], _loops)
 
 
 def day_recheck(store, pack, client, now: datetime, params, zone: str, settle_minutes: float | None = None,

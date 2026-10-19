@@ -224,3 +224,33 @@ def test_the_scheduler_runs_the_day_recheck_at_the_skills_times_without_the_ai(t
     asyncio.run(go())
     assert sk.day_checks_at == ["08:00", "12:00", "16:00", "20:00"] and model == []
     assert not any(c == "recheck.py day" for c, _ in code)                           # 10:05: no day recheck
+
+
+def test_a_reconnect_loop_is_read_again_in_the_day(tmp_path):
+    # owner, 2026-10-20: 17 false "dropped and reconnected" faults waited for the next night to close. The day recheck
+    # reads them again (the night's own reading, nightly.reconnect_findings): a fan whose "drops" were 50-ms reloads
+    # closes, a relay that really drops stays.
+    fan, relay = "fan.example_fan", "switch.example_relay"
+    (tmp_path / "pack.json").write_text(json.dumps({
+        "villa": "Example Villa", "time_zone": "UTC", "generated_at": "x", "ha_version": None, "areas": [], "people": [],
+        "channels": {}, "unknown_area": [], "unclassified": [], "retention": {"raw_history_days": 10},
+        "families": {"runtime": [_row(fan, "Ceiling fan", "runtime", "fan", "dev_f")],
+                     "network": [_row(relay, "Pool relay", "network", "relay", "dev_r")]}, "assets": {}}))
+    store = Store(str(tmp_path / "s.sqlite"))
+    f_fan = _found(store, "PM-RECONNECT-LOOP", fan, "Ceiling fan dropped and reconnected 10 times in 3 days.")
+    f_relay = _found(store, "PM-RECONNECT-LOOP", relay, "Pool relay dropped and reconnected 12 times in 3 days.")
+    fx = tmp_path / "fx"
+    fx.mkdir()
+    (fx / "states.json").write_text(json.dumps({"states": {fan: _st("off", 60), relay: _st("on", 60)}}))
+    entries = []
+    for k in range(12):
+        t = NOW - timedelta(hours=2 + 4 * k)
+        entries += [{"entity_id": fan, "state": "unavailable", "when": t.isoformat()},
+                    {"entity_id": fan, "state": "off", "when": (t + timedelta(milliseconds=50)).isoformat()},
+                    {"entity_id": relay, "state": "unavailable", "when": (t + timedelta(minutes=1)).isoformat()},
+                    {"entity_id": relay, "state": "on", "when": (t + timedelta(minutes=2)).isoformat()}]
+    (fx / "logbook.json").write_text(json.dumps({"entries": entries}))
+    _day(tmp_path)
+    st = Store(str(tmp_path / "s.sqlite"))
+    assert st.finding(f_fan[0])["status"] == "closed" and st.task(f_fan[1])["status"] == "cleared"
+    assert st.finding(f_relay[0])["status"] == "open" and st.finding(f_relay[0])["seen_at"] == NOW.isoformat()

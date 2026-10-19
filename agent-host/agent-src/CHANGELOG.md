@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.270 (20 October 2026)
+
+- The day recheck (08:00, 12:00, 16:00, 20:00) reads the open reconnect loops again (owner, 2026-10-20: "yes" — 17 false
+  loops waited for the night to close): preventive-maintenance skill.yaml `day_rechecks` adds PM-RECONNECT-LOOP, and
+  recheck.DAY_READS reads it with the night's own reading, now one function (`nightly.reconnect_findings(..., end,
+  today, ..., only)`), the villa-wide logbook of the last reconnect_days read ONCE per day recheck whatever the number
+  of loops open. A loop no longer found closes ("Cleared: the check at 12:00 no longer sees it."), one still there is
+  recorded as seen. The Kiosk's "Next check" for such a fault is the next day-check time. Test (test_day_recheck): a
+  fan whose drops were reloads closes, a relay that really drops stays. Mutation-proved.
+
 ## 0.6.269 (20 October 2026)
 
 - One brain and one spending limit per run for all the AI jobs of a skill (owner, 2026-10-20: "define the cap only once
