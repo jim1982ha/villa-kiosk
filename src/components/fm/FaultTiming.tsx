@@ -23,29 +23,28 @@ export default function FaultTiming() {
   const agent = agentSourcesShown(status, data.tickets.some((t) => agentOwned(t) && stageOf(t) !== "closed"));
   const { groups, note } = faultTiming(agent, status?.cadence ?? null);
   return (
-    // two-thirds wider than an (i)'s card: its three columns take fewer lines on a desktop (owner, 2026-10-14); a phone
+    // twice an (i)'s card: its four columns take fewer lines on a desktop (owner, 2026-10-14 / 2026-10-19); a phone
     // still gets the screen's width
-    <InfoTip label="What the icons mean, and when each problem comes and goes" width={Math.round(INFO_TIP_WIDTH * 1.66)}>
+    <InfoTip label="What the icons mean, and when each problem comes and goes" width={INFO_TIP_WIDTH * 2}>
       <strong className="info-pop-title">What the icons mean, and when each problem comes and goes</strong>
+      {/* ⚠️ ONE ROW PER SOURCE, FOUR COLUMNS (owner, 2026-10-19: "too big as tooltip — maybe a table would take less
+          space"): what it is, when it appears and when it goes side by side, each a few words, instead of a name with
+          its description under it and "Appears / Goes" stacked beside — the card is about half as tall. A phone stacks
+          each row (04-modals.css). */}
       <table className="info-pop-table">
-        {/* "Appears" and "Goes" in ONE column, the same width: the card is less tall (owner, 2026-10-15) */}
-        <thead><tr><th>Source</th><th>When</th></tr></thead>
+        <thead><tr><th>Source</th><th>What it is</th><th>Appears</th><th>Goes</th></tr></thead>
         {/* the Kiosk's sources, then the Agent's, each under its heading (owner, 2026-10-15) — headed only when both show */}
         {groups.map((g) => (
           <tbody key={g.title}>
-            {groups.length > 1 && <tr className="info-pop-group"><th colSpan={2}>{g.title}</th></tr>}
+            {groups.length > 1 && <tr className="info-pop-group"><th colSpan={4}>{g.title}</th></tr>}
             {g.rows.map((r) => {
               const Icon = SOURCE_ICON[r.source];
               return (
                 <tr key={r.source}>
-                  <td>
-                    <span className="info-pop-source"><Icon size={15} aria-hidden /> <b>{SOURCE_WORDS[r.source]}</b></span>
-                    <span className="info-pop-what">{r.what}</span>
-                  </td>
-                  <td>
-                    <span className="info-pop-when"><b>Appears:</b> {r.opens}</span>
-                    <span className="info-pop-when"><b>Goes:</b> {r.goes}</span>
-                  </td>
+                  <td><span className="info-pop-source"><Icon size={15} aria-hidden /> <b>{SOURCE_WORDS[r.source]}</b></span></td>
+                  <td className="info-pop-what">{r.what}</td>
+                  <td className="info-pop-when" data-label="Appears:">{r.opens}</td>
+                  <td className="info-pop-when" data-label="Goes:">{r.goes}</td>
                 </tr>
               );
             })}

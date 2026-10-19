@@ -1,3 +1,15 @@
+## 2.496.430
+
+### Changed
+- The icon key (the (i) beside "Open a ticket") is about half as tall: one row per source, four columns — what it
+  is, when it appears, when it goes — in a few words each. On a phone each source is one block, as before.
+- "Night check" is now "Maintenance check", still with the moon: the VESTA Agent's maintenance check opens a fault
+  within minutes for a device that goes offline and reads its faults again during the day, so "Night check" named only
+  one of its runs. Its row says so: it appears within minutes for a device that goes offline and at the nightly check
+  for everything else; it goes when the Agent no longer finds it — each card's "Next check:" says when it looks again
+  (within 5 min, at a time of day, or at the nightly check). It said "Appears: Nightly check" and "read again at
+  08:00, 12:00, 16:00 and 20:00" for every such problem, which was true only of some.
+
 ## 2.496.429
 
 ### Changed

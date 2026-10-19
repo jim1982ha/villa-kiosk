@@ -206,14 +206,14 @@ ck("a fault's source is read from its record: the Agent's origin, its alert numb
 const lineSources = (g) => cockpitCard(g, null).lead;
 const night = groupAttention(buildAttentionItems({ devices: devicesOf({ unavailable: ["sensor.example_temperature"], folding: new Map([["sensor.example_battery", "sensor.example_temperature"]]) }), entities: { "sensor.example_temperature": ent("sensor.example_temperature", "unavailable"),
               "sensor.example_battery": ent("sensor.example_battery", "unavailable") }, entityMap: {}, alertThresholds: {}, resolvedRooms: {}, fmData: fm([agentRec({ id: "n1", entityId: "sensor.example_battery", origin: "night", title: "Example offline" })]) }))[0];
-ck("  ...an offline device and its night check's fault: ONE line, two icons — Live and Night check, both a warning (amber)",
+ck("  ...an offline device and its night check's fault: ONE line, two icons — Live and Maintenance check, both a warning (amber)",
    JSON.stringify(lineSources(night)) === JSON.stringify({ sources: ["live", "night"], severities: ["warn", "warn"] }),
    lineSources(night));
 const I = await import("@/components/fm/sourceIcons");
 const drawn = draw(h(I.SourceIcons, lineSources(night)));
 ck("  ...drawn one under the other, each in its severity's colour, named for a screen reader",
    (drawn.match(/<svg/g) || []).length === 2 && /cockpit-attention-warn[\s\S]*cockpit-attention-warn/.test(drawn)
-   && !/cockpit-attention-(fault|unavailable|alarm|critical|schedule)/.test(drawn) && /aria-label="Live and Night check"/.test(drawn), drawn);
+   && !/cockpit-attention-(fault|unavailable|alarm|critical|schedule)/.test(drawn) && /aria-label="Live and Maintenance check"/.test(drawn), drawn);
 const people = draw(h(I.SourceIcons, { sources: ["owner", "fm", "guest"], severities: ["warn"] }));
 ck("  ...a profile is the top bar's badge: its letters in a circle (O, FM, G), in the line's colour",
    /source-role-badge cockpit-attention-icon cockpit-attention-warn"[^>]*>O</.test(people)

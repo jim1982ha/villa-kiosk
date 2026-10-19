@@ -28,9 +28,12 @@ export const SOURCE_ICON: Record<IssueSource, IconType> = {
   owner: roleBadge("owner"), fm: roleBadge("ops"), person: UserRound, guest: roleBadge("guest"), schedule: CalendarCog,
 };
 
-/** Its word — the (i)'s table says what it is and when it comes and goes (fm/faultTiming). */
+/** Its word — the (i)'s table says what it is and when it comes and goes (fm/faultTiming). ⚠️ "MAINTENANCE CHECK", NOT
+ *  "NIGHT CHECK" (owner, 2026-10-19): the VESTA Agent's maintenance skill also opens a fault within minutes for a device
+ *  that goes offline and reads its faults again during the day, so "night" named only one of its runs. The moon stays
+ *  (owner: "keep the night icon so that user knows it has been created by the nightly check"). */
 export const SOURCE_WORDS: Record<IssueSource, string> = {
-  live: "Live", alert: "Alert", night: "Night check", chat: "Chat",
+  live: "Live", alert: "Alert", night: "Maintenance check", chat: "Chat",
   owner: "Owner", fm: "Facility manager", person: "Person", guest: "Guest", schedule: "Schedule",
 };
 
