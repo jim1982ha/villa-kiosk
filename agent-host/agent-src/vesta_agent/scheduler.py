@@ -81,7 +81,8 @@ def describe(spec: str) -> tuple[str, float]:
 
 
 
-ENGINE_JOBS = {"engine:pack": "knowledge pack", "engine:housekeeping": "housekeeping"}
+# what a person reads for the engine's own jobs (owner, 2026-10-20: "knowledge pack" named nothing on the page)
+ENGINE_JOBS = {"engine:pack": "Villa's device list (refreshed)", "engine:housekeeping": "Old records removed"}
 
 
 def job_key(skill: str, index: int, when: str) -> str:
@@ -178,8 +179,14 @@ class Scheduler:
                                                       reached="It is stopped and counts as failed.", told="person"))):
                     started.append(f"{sk.name}:every_5_min")
         slot = slot_for(PACK_AT, now)
-        if slot and self._claim("engine:pack", slot) and self._start("engine:pack", self.rebuild_pack):
-            started.append("engine:pack")
+        if slot and self._claim("engine:pack", slot):
+            async def pack(slot=slot):
+                # ⚠️ ITS END RECORDED LIKE EVERY SCHEDULED JOB'S (owner, 2026-10-20: Scheduled jobs run said "done" for
+                # the night check and "run" for this one — it wrote no end row): done, or stopped by a restart
+                async with self.work.kept(Item(SCHEDULED, "engine:pack", slot=slot.isoformat())):
+                    await self.rebuild_pack()
+            if self._start("engine:pack", pack):
+                started.append("engine:pack")
         for sk in skills.values():
             for i, job in enumerate(sk.schedule):
                 slot = slot_for(job["when"], now)

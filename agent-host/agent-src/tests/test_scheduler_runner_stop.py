@@ -8,7 +8,7 @@ import signal
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import yaml
 
@@ -233,3 +233,24 @@ def test_a_run_cut_by_a_stop_shows_cut_on_the_overview(tmp_path):
         await asyncio.gather(*sch._running.values(), return_exceptions=True)
     asyncio.run(go())
     assert rows() == [("rep:0:07:00", "cut", "stopped by a restart")]
+
+
+def test_the_villas_device_list_refresh_says_done_like_every_job(tmp_path):
+    # owner, 2026-10-20: Scheduled jobs run read "knowledge pack · run" beside "nightly.py · done" — a word nobody knew,
+    # and no end recorded. Its name is the villa's device list, and its run ends like every scheduled job's.
+    from vesta_agent import status
+    from vesta_agent.scheduler import job_label
+    s = settings(str(tmp_path))
+    state = State(s.state_path)
+
+    async def nothing(*a):
+        return None
+    sch = Scheduler(s, Skills(s.skills_dir), state, nothing, nothing, nothing)
+
+    async def go():
+        await sch.tick(at(1, 35))
+        await sch.idle()
+    asyncio.run(go())
+    rows = {r["job"]: r for r in status.jobs_run(state, at(0, 0) - timedelta(days=1),
+                                                  lambda j: job_label(j, Skills(s.skills_dir)))}
+    assert rows["engine:pack"]["words"] == "done" and rows["engine:pack"]["label"] == "Villa's device list (refreshed)"

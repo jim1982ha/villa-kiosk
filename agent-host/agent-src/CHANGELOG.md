@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.273 (20 October 2026)
+
+- Skills: the button is "Delete Skill" (it read "Delete the skill"), and it is on the About tab too, not only on
+  Files — one button and one handler for both (skills.js delSkillButton; owner, 2026-10-20). Test pins both places.
+- Overview › Scheduled jobs run: the engine's nightly job is "Villa's device list (refreshed)" (scheduler.ENGINE_JOBS;
+  "knowledge pack" named nothing a person knows — the Limits tab's measured line says the same), and its run is kept
+  like every scheduled job's (in_progress kept, Item SCHEDULED "engine:pack"), so it reads "done" — it read "run"
+  beside the night check's "done". Housekeeping's label is "Old records removed". Test through the real scheduler.
+
 ## 0.6.272 (20 October 2026)
 
 - Rules › AI tools › Tools by role: the line "Asking for an action is decided by Allowed actions: who approves stays

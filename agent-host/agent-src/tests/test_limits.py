@@ -295,3 +295,12 @@ def test_only_a_changed_value_says_it_was_changed():
     from helpers import page_js
     js = page_js()
     assert 'same(r.value, r.default) ? "" : ` Changed from its usual ${shown(r.default)}.`' in js
+
+
+def test_delete_skill_is_on_about_and_on_files_under_one_name():
+    # owner, 2026-10-20: "Delete Skill", and on the About tab too — one button, one handler
+    from helpers import page_js
+    js = page_js()
+    assert 'h("button", { class: "btn danger push-right", onclick: delSkill }, "Delete Skill")' in js
+    assert 'card(aboutSkill(name, d), h("div", { class: "actions" }, delSkillButton()))' in js
+    assert "Delete the skill\")" not in js and js.count("delSkillButton()") == 2

@@ -212,7 +212,7 @@ class LimitsTab:
                                         "doors, locks and switches have none.", "told": TOLD["person"],
                  "also": "Set in the villa's own configuration (recorder: purge_keep_days; 10 days when it says "
                          "nothing). The agent measures it and never changes it.",
-                 "where": ["the knowledge pack, rebuilt each night and when the agent starts after an update"]}]
+                 "where": ["the villa's device list, refreshed each night and when the agent starts after an update"]}]
 
     def _skill_pairs(self, raw: dict) -> dict[str, tuple[dict | None, dict]]:
         """{skill with AI jobs: (the brain and limit per run its jobs run with — None when not set, its starter pair)}."""

@@ -275,7 +275,16 @@ export async function openSkill(name, pane, info, path = ABOUT) {
   const card = (...kids) => fill(pane, h("div", { class: "card skill-pane" }, back, head, blocked, notLoaded, releaseBanner,
     h("div", { class: "skill-bar" }, tabs, pill), ...kids));
 
-  if (path === ABOUT) { card(aboutSkill(name, d)); setBar(null); return; }
+  // the skill's one Delete, on About and on Files alike (owner, 2026-10-20: "Delete Skill", on About too)
+  const delSkill = async () => {
+    if (!(await ask({ title: `Delete the skill ${name}?`, ok: "Delete Skill", danger: true,
+                      text: "The agent stops using it at once. It is kept in skills/.trash, and does not come back on its own." }))) return;
+    try { await api("DELETE", `api/skills/${enc}`); page.dirty = false; toast(`Skill ${name} deleted.`); skills(); }
+    catch (e) { tell("Not deleted", reasons(e)); }
+  };
+  const delSkillButton = () => h("button", { class: "btn danger push-right", onclick: delSkill }, "Delete Skill");
+
+  if (path === ABOUT) { card(aboutSkill(name, d), h("div", { class: "actions" }, delSkillButton())); setBar(null); return; }
   if (path === COMPARE) { card(await comparePanel(name, rel)); setBar(null); return; }
 
   // ---- Files: the list, the editor, the file's actions
@@ -323,12 +332,6 @@ export async function openSkill(name, pane, info, path = ABOUT) {
     try { await api("DELETE", `api/skills/${enc}/file?path=${encodeURIComponent(path)}`); page.dirty = false; toast(`${path} deleted.`); openSkill(name, pane, info, "SKILL.md"); }
     catch (e) { fill(probs, problemsBox(reasons(e), "Not deleted:")); }
   };
-  const delSkill = async () => {
-    if (!(await ask({ title: `Delete the skill ${name}?`, ok: "Delete the skill", danger: true,
-                      text: "The agent stops using it at once. It is kept in skills/.trash, and does not come back on its own." }))) return;
-    try { await api("DELETE", `api/skills/${enc}`); page.dirty = false; toast(`Skill ${name} deleted.`); skills(); }
-    catch (e) { tell("Not deleted", reasons(e)); }
-  };
   card(h("div", { class: "files-row" }, fileList, more),
     (differs.size || villa.size || view.toggle) ? h("div", { class: "file-bar" }, (differs.size || villa.size) ? h("p", { class: "muted small legend" },
       differs.size ? [h("span", { class: "dot warn" }), " differs from the release  "] : null,
@@ -337,7 +340,7 @@ export async function openSkill(name, pane, info, path = ABOUT) {
     h("div", { class: "actions" },
       h("button", { class: "btn ghost", onclick: newFile }, "New file"),
       files.find((x) => x.path === path)?.deletable ? h("button", { class: "btn ghost", onclick: delFile }, "Delete this file") : null,
-      h("button", { class: "btn danger push-right", onclick: delSkill }, "Delete the skill")));
+      delSkillButton()));
   setBar({ save, discard: () => load(path), idle: path ? `Editing ${path}. Saves are checked before they are written.` : "" });
   if (path) await load(path);
   if (fileList.isConnected) fits();

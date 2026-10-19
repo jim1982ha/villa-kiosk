@@ -651,7 +651,7 @@ def test_a_scheduled_job_is_named_not_its_slot_key():
               "preventive-maintenance": types.SimpleNamespace(schedule=[{"when": "02:00", "run": "nightly.py --x"}])}
     assert job_label(job_key("reports", 0, "07:00"), skills) == "fm-daily"
     assert job_label(job_key("preventive-maintenance", 0, "02:00"), skills) == "preventive-maintenance › nightly.py"
-    assert job_label("engine:pack", skills) == "knowledge pack"
+    assert job_label("engine:pack", skills) == "Villa's device list (refreshed)"
     assert job_label("gone:3:Mon 08:00", skills) == "gone" and job_label("reports:9:07:00", skills) == "reports"
     assert job_key("reports", 0, "Mon 08:00") == "reports:0:Mon 08:00"          # the stored key never changes
     assert "j.label || j.job" in page_js()

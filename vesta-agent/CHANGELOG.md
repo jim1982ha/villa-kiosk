@@ -1,3 +1,12 @@
+## 0.12.283
+
+What you will see:
+- Skills: "Delete Skill" (it read "Delete the skill"), now also at the bottom of a skill's About tab, not only under
+  its Files.
+- Overview › Scheduled jobs run: "knowledge pack" is now "Villa's device list (refreshed)" — the Agent's nightly read
+  of your villa's devices, names and rooms — and its outcome says "done" like the other jobs (it said "run"). The
+  Limits tab names it the same way.
+
 ## 0.12.282
 
 What you will see:
