@@ -237,11 +237,15 @@ jobs:
               line = re.sub(r"^panel_icon:.*$", "panel_icon: mdi:home-plus-outline", line)
               line = re.sub(r"^image:.*$",
                             f"image: ghcr.io/{os.environ['OWNER']}/villa-kiosk-dev2-{{arch}}", line)
+              if re.match(r"^stage:", line):
+                  continue
               out.append(line)
+          # the store's "Experimental" badge on the test channel's card (owner, 2026-10-20)
+          out.append("stage: experimental\n")
           p.write_text("".join(out))
           PATCH
           python3 -c "import yaml" 2>/dev/null || pip3 install --quiet pyyaml
-          python3 -c "import yaml;d=yaml.safe_load(open('villa-kiosk-dev2/config.yaml'));assert d['slug']=='villa_kiosk_dev2' and 'ports' not in d, d; print('dev2 manifest ok:', d['version'])"
+          python3 -c "import yaml;d=yaml.safe_load(open('villa-kiosk-dev2/config.yaml'));assert d['slug']=='villa_kiosk_dev2' and 'ports' not in d and d['stage']=='experimental', d; print('dev2 manifest ok:', d['version'])"
 
       - name: Commit if changed
         run: |
