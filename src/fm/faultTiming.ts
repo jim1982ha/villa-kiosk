@@ -30,20 +30,19 @@ export interface SourceRow {
 }
 
 const ROWS: Record<IssueSource, Omit<SourceRow, "source">> = {
-  live: { what: "What the Kiosk shows right now on its map — a device with a red badge: unavailable, missing, unlocked, "
-      + "too hot… Seen on this screen only: nobody is told", opens: "At once, as the map shows it",
-    goes: "By itself, as soon as the device is back to normal" },
+  live: { what: "What the map shows right now — unavailable, missing, unlocked, too hot… Nobody is told", opens: "At once",
+    goes: "As soon as the device is back to normal" },
   alert: { what: "A VESTA alert from one of the villa's rules, numbered as on Telegram (#5)",
     opens: "As soon as the alert is raised",
-    goes: "Within minutes of it being back to normal; its words and Telegram's reminders follow" },
-  night: { what: "Found by the nightly check: a device offline or deleted, a battery, energy use, Wi-Fi drops, run time",
-    opens: "Nightly check",
-    // ⚠️ NO COPY OF WHICH PROBLEMS ARE READ AGAIN WHEN (architecture review, 2026-10-15): "Offline or deleted: within
-    // minutes" stood here beside the Agent's own list — each card's Next check says it, from the fault itself. The
-    // Agent's day times are worded from its cadence (nightGoes), this is the sentence without them
-    goes: "When the VESTA Agent no longer finds it, at the time its card's Next check says; until then each nightly "
-      + "check updates the figures" },
-  chat: { what: "Created from a Telegram chat with the VESTA Agent (\"Create this fault\")",
+    goes: "Within minutes of it being back to normal" },
+  night: { what: "The VESTA Agent's maintenance check: a device offline or deleted, a battery, a silent sensor, energy "
+      + "use, Wi-Fi drops, run time",
+    // worded from the Agent's cadence (nightOpens / nightGoes); these are the sentences without its numbers
+    opens: "Within minutes for a device that goes offline; at the nightly check for everything else",
+    // ⚠️ NO COPY OF WHICH PROBLEMS ARE READ AGAIN WHEN (architecture review, 2026-10-15): each card's Next check says
+    // it, from the fault itself — the (i) names the clocks, never which problem uses which
+    goes: "When the VESTA Agent no longer finds it. Each card's Next check says when it looks again" },
+  chat: { what: "From a Telegram chat with the VESTA Agent (\"Create this fault\")",
     opens: "When someone presses Create this fault", goes: "When someone resolves or closes it" },
   owner: { what: "A ticket the Owner opened (Open a ticket)", opens: "At once, already in progress",
     goes: "When someone resolves or closes it" },
@@ -72,18 +71,25 @@ function timesWords(times: readonly string[]): string {
   return times.length < 2 ? times.join("") : `${times.slice(0, -1).join(", ")} and ${times[times.length - 1]}`;
 }
 
-/** When a night-check problem goes (owner, 2026-10-19: "refresh the open ones every 4 hours during the days … by
- *  closing the ones that are not active anymore"): the VESTA Agent reads it again during the day at its times and at
- *  its nightly check — in its own numbers when its heartbeat said them; an Agent that said a cadence with no day times
- *  (an older one) reads it at its nightly check only; one that said nothing gets generic words. */
+/** When a maintenance-check problem appears (owner, 2026-10-19: the (i) said "Nightly check" while a device that goes
+ *  offline gets its fault within minutes, from the Agent's 5-minute look) — the nightly time in its own numbers. */
+function nightOpens(c: AgentCadence | null): string {
+  return c ? `Within minutes for a device that goes offline; at the nightly check (${c.nightlyAt}) for everything else`
+    : ROWS.night.opens;
+}
+
+/** When a maintenance-check problem goes: when the VESTA Agent no longer finds it, at the clock its card's Next check
+ *  names — every few minutes, at its times of day, or at its nightly check — in its own numbers when its heartbeat said
+ *  them. ⚠️ THE CLOCKS, NEVER WHICH PROBLEM USES WHICH (owner, 2026-10-19: "Goes: … during the day at 08:00 …" stood
+ *  for every problem, while an offline device is read every 5 minutes and energy use only at night; that list is the
+ *  Agent's skill's, and a copy here would drift). */
 function nightGoes(c: AgentCadence | null): string {
-  const after = "and closes it once it no longer finds it — its card's Next check says when; each check also updates "
-    + "the figures";
-  if (!c) return `The VESTA Agent reads it again during the day at the times set in it, and at its nightly check, ${after}`;
+  if (!c) return `${ROWS.night.goes}: every few minutes, at times of the day, or at its nightly check`;
+  const every = c.checkMinutes === 1 ? "within 1 min" : `within ${c.checkMinutes} min`;
   const day = c.dayChecksAt ?? [];
-  if (!day.length) return `The VESTA Agent reads it again at its nightly check (${c.nightlyAt}), ${after}`;
-  return `The VESTA Agent reads it again during the day at ${timesWords(day)}, and at its nightly check `
-    + `(${c.nightlyAt}), ${after}`;
+  const clocks = day.length ? `${every}, at a time of day (${timesWords(day)}), or at the nightly check (${c.nightlyAt})`
+    : `${every}, or at the nightly check (${c.nightlyAt})`;
+  return `${ROWS.night.goes}: ${clocks}`;
 }
 
 /** The table's two groups (owner, 2026-10-15): what the Kiosk and its people produce, then what the VESTA Agent does. */
@@ -94,7 +100,7 @@ export interface SourceGroup { title: string; rows: readonly SourceRow[] }
 export function faultTiming(agent: boolean, cadence: AgentCadence | null = null):
   { rows: readonly SourceRow[]; groups: readonly SourceGroup[]; note: string } {
   const rows = ISSUE_SOURCES.filter((s) => agent || !AGENT_SOURCES.has(s))
-    .map((source) => ({ source, ...ROWS[source], ...(source === "night" ? { goes: nightGoes(cadence) } : {}) }));
+    .map((source) => ({ source, ...ROWS[source], ...(source === "night" ? { opens: nightOpens(cadence), goes: nightGoes(cadence) } : {}) }));
   const groups = [{ title: "From the Kiosk", rows: rows.filter((r) => !AGENT_SOURCES.has(r.source)) },
     { title: "From the VESTA Agent", rows: rows.filter((r) => AGENT_SOURCES.has(r.source)) }].filter((g) => g.rows.length);
   return {

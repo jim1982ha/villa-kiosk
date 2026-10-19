@@ -400,10 +400,18 @@
 /* the (i)'s table of sources (FaultTiming): the icon and its word, what it is under them */
 .info-pop-source { display: inline-flex; align-items: center; gap: 6px; color: var(--text-primary); white-space: nowrap; }
 .info-pop-source > b { font-weight: 600; }
-.info-pop-what { display: block; margin-top: 2px; color: var(--text-dim); }
-.info-pop-table td:first-child { width: 42%; }
-.info-pop-when { display: block; }
-.info-pop-when > b { font-weight: 600; color: var(--text-primary); }
+/* The sources' table (FaultTiming): four columns, a few words each, smaller type — one line or two per source. */
+.info-pop-table td.info-pop-what { color: var(--text-dim); width: 34%; }
+.info-pop-table td.info-pop-when { color: var(--text-primary); width: 24%; }
+.info-pop-table td, .info-pop-table th { font-size: var(--text-xs, 0.85em); line-height: 1.35; }
+@media (max-width: 640px) {
+  /* a phone: each source one block — its name, then what it is, appears and goes, one under the other */
+  .info-pop-table thead { display: none; }
+  .info-pop-table tr, .info-pop-table td { display: block; width: auto; }
+  .info-pop-table td { border-bottom: none; padding: 1px 0; }
+  .info-pop-table tbody tr { border-bottom: 1px solid var(--hairline); padding: 4px 0; }
+  .info-pop-table td.info-pop-when::before { content: attr(data-label); font-weight: 600; margin-right: 4px; }
+}
 .info-pop .row { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; }
 .info-pop .row span:first-child { color: var(--text-dim); flex: 0 0 auto; }
 .info-pop .row span:last-child { color: var(--text-primary); word-break: break-all; text-align: right; }

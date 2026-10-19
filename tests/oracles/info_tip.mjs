@@ -38,7 +38,8 @@ ck("an (i) may ask for a wider card (the Overview's table: 847 px) — kept insi
    wide.width === 847 && wide.left === 12, wide);
 const roomy = infoTipPlacement({ left: 1340, right: 1378, top: 236, bottom: 274 }, { width: 1920, height: 1000 }, 560, 847);
 ck("  ...with room, its right edge on the (i)'s", roomy.width === 847 && roomy.left + roomy.width === 1378, roomy);
-ck("  ...the Overview's (i) asks for two-thirds more than the default", /width=\{Math\.round\(INFO_TIP_WIDTH \* 1\.66\)\}/.test(src("components/fm/FaultTiming.tsx")));
+ck("  ...the Overview's (i) asks for twice the default: four columns (owner, 2026-10-19: \"too big as tooltip\")", /width=\{INFO_TIP_WIDTH \* 2\}/.test(src("components/fm/FaultTiming.tsx"))
+   && /<th>Source<\/th><th>What it is<\/th><th>Appears<\/th><th>Goes<\/th>/.test(src("components/fm/FaultTiming.tsx")));
 const tall = infoTipPlacement({ left: 300, right: 330, top: 100, bottom: 130 }, phone, 2000);
 ck("a card taller than the screen stops at its edge (and scrolls inside only then)", !tall.above && tall.top + tall.maxHeight <= 844 - 12, tall);
 
@@ -61,11 +62,12 @@ ck("  ...the Kiosk's sources first, then the Agent's, each group under its headi
    && withAgent.groups[1].rows.map((r) => r.source).join() === "alert,night,chat"
    && alone.groups.length === 1, withAgent.groups.map((g) => [g.title, g.rows.map((r) => r.source)]));
 ck("  ...Live is what the Kiosk's map shows, and nobody is told",
-   /the Kiosk shows right now on its map/.test(withAgent.rows[0].what) && /nobody is told/.test(withAgent.rows[0].what)
+   /What the map shows right now/.test(withAgent.rows[0].what) && /Nobody is told/.test(withAgent.rows[0].what)
    && withAgent.rows[0].source === "live");
 const told = faultTiming(true, { checkMinutes: 15, nightlyAt: "04:30" });
 ck("  ...the nightly check's say so; the Agent's timing is the one it TOLD, never a copy (architecture review, 2026-10-15)",
-   withAgent.rows.find((r) => r.source === "night")?.opens === "Nightly check"
+   /^Within minutes for a device that goes offline; at the nightly check for everything else$/.test(withAgent.rows.find((r) => r.source === "night")?.opens ?? "")
+   && told.rows.find((r) => r.source === "night")?.opens === "Within minutes for a device that goes offline; at the nightly check (04:30) for everything else"
    && /it checks every 15 minutes, and its nightly check runs at 04:30\./.test(told.note) && !/02:00|every 5 minutes/.test(told.note), told.note);
 ck("  ...an Agent that did not say: no number at all", !/\d\d:\d\d|every \d+ minutes,/.test(withAgent.note)
    && /at the time set in the VESTA Agent/.test(withAgent.note), withAgent.note);
@@ -75,16 +77,17 @@ const { parseAgentStatus } = await import("@/agent/agentApi");
 {
   const goes = (c) => faultTiming(true, c).rows.find((r) => r.source === "night")?.goes ?? "";
   const day = goes({ checkMinutes: 5, nightlyAt: "02:00", dayChecksAt: ["08:00", "12:00", "16:00", "20:00"] });
-  ck("  ...a night-check problem is read again during the day at the Agent's times and at its nightly check, closed once gone",
-     /reads it again during the day at 08:00, 12:00, 16:00 and 20:00, and at its nightly check \(02:00\), and closes it once it no longer finds it/.test(day), day);
+  // owner, 2026-10-19: the row names the three clocks — never which problem uses which (the card's Next check says it)
+  ck("  ...a maintenance-check problem goes when the Agent no longer finds it, at one of its three clocks, in its numbers",
+     day === "When the VESTA Agent no longer finds it. Each card's Next check says when it looks again: within 5 min, at a time of day (08:00, 12:00, 16:00 and 20:00), or at the nightly check (02:00)", day);
   const older = goes({ checkMinutes: 5, nightlyAt: "04:30" });
   ck("  ...an Agent that says no day times: at its nightly check only, never 'during the day'",
-     /reads it again at its nightly check \(04:30\)/.test(older) && !/during the day|undefined/.test(older)
+     /within 5 min, or at the nightly check \(04:30\)$/.test(older) && !/time of day|undefined/.test(older)
      && goes({ checkMinutes: 5, nightlyAt: "04:30", dayChecksAt: [] }) === older, older);
   const none = goes(null);
   ck("  ...an Agent that said nothing: generic words, no number",
-     /during the day at the times set in it, and at its nightly check/.test(none) && !/\d\d:\d\d/.test(none), none);
-  ck("  ...one day time is one time", /during the day at 12:00, and/.test(goes({ checkMinutes: 5, nightlyAt: "02:00", dayChecksAt: ["12:00"] })));
+     /every few minutes, at times of the day, or at its nightly check$/.test(none) && !/\d\d:\d\d/.test(none), none);
+  ck("  ...one day time is one time", /at a time of day \(12:00\), or/.test(goes({ checkMinutes: 5, nightlyAt: "02:00", dayChecksAt: ["12:00"] })));
 }
 const beat = JSON.parse(readFileSync(new URL("../../rootfs/usr/share/vesta/agent-contract.json", import.meta.url), "utf8")).heartbeat.sample;
 ck("  ...the Kiosk reads the timing the agreement's heartbeat carries, as the proxy shows it",
