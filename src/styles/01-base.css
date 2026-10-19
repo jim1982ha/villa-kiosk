@@ -264,6 +264,8 @@
 
   --hairline: rgba(23, 25, 26, 0.10);
   --hairline-strong: rgba(23, 25, 26, 0.18);
+  /* a period the villa's system no longer keeps: a muted blue, never the grey of Off (owner, 2026-10-20) */
+  --not-kept: rgba(84, 108, 172, 0.30);
   --scrim: rgba(23, 25, 26, 0.28);
   --scrim-strong: rgba(23, 25, 26, 0.48);
   --chip-bg: rgba(255, 253, 248, 0.76);
@@ -324,6 +326,8 @@
 
   --hairline: rgba(241, 239, 232, 0.12);
   --hairline-strong: rgba(241, 239, 232, 0.24);
+  /* a period the villa's system no longer keeps: a muted blue, never the grey of Off (owner, 2026-10-20) */
+  --not-kept: rgba(132, 152, 214, 0.38);
   --scrim: rgba(4, 6, 5, 0.55);
   --scrim-strong: rgba(4, 6, 5, 0.78);
   --chip-bg: rgba(16, 19, 17, 0.64);
@@ -380,6 +384,8 @@
 
   --hairline: rgba(201, 196, 182, 0.10);
   --hairline-strong: rgba(201, 196, 182, 0.18);
+  /* a period the villa's system no longer keeps: a muted blue, never the grey of Off (owner, 2026-10-20) */
+  --not-kept: rgba(132, 152, 214, 0.38);
   --scrim: rgba(0, 0, 0, 0.62);
   --scrim-strong: rgba(0, 0, 0, 0.85);
   --chip-bg: rgba(10, 12, 10, 0.70);

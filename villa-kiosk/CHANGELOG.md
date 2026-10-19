@@ -1,3 +1,9 @@
+## 2.496.436
+
+### Changed
+- "No longer kept" (the part of a 1m or 1y chart older than what the villa's system keeps) is drawn in a muted blue,
+  in its band, its line charts' shading and its legend: the grey it had read as "Off".
+
 ## 2.496.435
 
 ### Changed
