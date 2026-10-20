@@ -5,7 +5,7 @@
 # no-compile operation. The {arch} placeholder + version resolve to e.g.
 # ghcr.io/jim1982ha/villa-kiosk-amd64:2.0.0 — published by .github/workflows/build.yaml.
 name: VESTA (dev2)
-version: "2.496.444"
+version: "2.496.445"
 slug: villa_kiosk_dev2
 description: Interactive 3D map of your property — live devices, energy, security and maintenance at a glance
 url: https://github.com/jim1982ha/villa-kiosk
@@ -145,13 +145,11 @@ panel_title: VESTA dev2
 #   VESTA Agent host. A `password` field, so the form masks it; its SHAPE (at
 #   least 16 characters) is checked by the proxy — a short token counts as not
 #   configured. It lets the agent read and update Facility records (never
-#   delete them), post messages with buttons and report its presence; a wrong
+#   delete them) and report its presence; a wrong
 #   token counts toward the passcode lockout like a wrong PIN, and it never
 #   opens anything else in the kiosk.
 # offline_after_minutes (default 5): the agent is shown offline when no
 #   heartbeat arrived within this window.
-# message_retention_days (default 90): how long agent messages and the answers
-#   given to them are kept.
 options:
   guest_pin: ""
   owner_pin: ""
@@ -166,7 +164,6 @@ options:
   vesta_agent:
     token: ""
     offline_after_minutes: 5
-    message_retention_days: 90
 schema:
   guest_pin: match(^[0-9]{4}$|^$)?
   owner_pin: match(^[0-9]{4}$|^$)?
@@ -181,5 +178,4 @@ schema:
   vesta_agent:
     token: password?
     offline_after_minutes: int(1,60)?
-    message_retention_days: int(1,365)?
 stage: experimental

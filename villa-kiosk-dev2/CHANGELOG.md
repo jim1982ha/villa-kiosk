@@ -1,3 +1,10 @@
+## 2.496.445
+
+### Removed
+- Nothing changes on screen. The add-on no longer accepts messages from the VESTA Agent, which nobody could see since
+  its window was removed in 2.496.443 (the Agent never sent any: people talk to it on Telegram). The VESTA Agent
+  settings lose "Keep agent messages for (days)", and the stored messages, if any, are deleted at the next start.
+
 ## 2.496.444
 
 ### Fixed
