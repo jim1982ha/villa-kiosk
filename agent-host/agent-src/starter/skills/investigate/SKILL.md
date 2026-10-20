@@ -88,7 +88,10 @@ what happened, and why".
 7. **Reason before writing.** For each unusual thing, ask what physically explains it. Keep several causes when the
    evidence allows, rank them, and give for each what points to it and what would confirm it. Keep apart what the records
    SHOW (measured, with times), what that most likely MEANS, and what they CANNOT tell (no sensor there, no
-   reading, a gap): a guess is never written as a measurement. Then: what would have warned earlier or limited the
+   reading, a gap): a guess is never written as a measurement. A claim about WHEN it happens ("at night too", "all
+   day") is read hour by hour first (the "starts in each hour" line, or ha_get_history source=statistics period=hour
+   over those hours): what it does in the hours nobody uses it tells a fault that acts on its own (a leak) from one
+   that follows use. Then: what would have warned earlier or limited the
    damage (a missing sensor, an alert on how long something runs, a rule that only watches the opposite case, a switch
    that does not actually control the device).
 

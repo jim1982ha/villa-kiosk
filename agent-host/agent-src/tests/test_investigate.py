@@ -1106,3 +1106,46 @@ def test_a_rule_that_runs_only_while_the_villa_is_empty_says_so():
             return {"config": {"actions": [{"action": "notify.send_message"}], "variables": {"vg_run_when": "empty"}}}
     got = investigate.automation_able(C(), "automation.x", T(9, 2), T(9, 15))
     assert got["text"].endswith("; it alerts only while the villa is empty"), got["text"]
+
+
+def _periods_data(spans):
+    """A timeline --out of one device whose unusual periods are `spans`: (kind, start minute, length minutes, why)."""
+    t0 = datetime(2026, 10, 14, tzinfo=ZoneInfo("UTC"))
+    return {"zone": "UTC", "start": t0.isoformat(), "end": (t0 + timedelta(days=7)).isoformat(),
+            "entities": [{"entity_id": "sensor.p", "label": "Pump Power", "periods": [
+                {"kind": k, "why": w, "start": (t0 + timedelta(minutes=a)).isoformat(),
+                 "end": (t0 + timedelta(minutes=a + n)).isoformat(), "seconds": n * 60} for k, a, n, w in spans]}]}
+
+
+def test_a_repeated_problem_is_one_row_and_the_finding_after_it_stays_on_the_page():
+    # villa, 2026-10-21: 80 rows of a relay's Wi-Fi drops (14-15 Oct) filled the log; the pump's stop-start of 16 Oct,
+    # the finding, was cut off
+    mod, _ = _facts()
+    drops = [("offline", 10 * i, 1 + (i == 7), "it stopped reporting") for i in range(100)]
+    bursts = [("stops and restarts 8 times", 3 * 1440 + 60 * i, 10, "runs of about 30 s each") for i in range(2)]
+    f = mod.facts(_periods_data(drops + bursts), {})
+    log = [r["text"] for r in f["log"]]
+    assert log[0] == ("Pump Power: 100 times “stopped reporting”, from 14 Oct, 00:00 to 14 Oct, 16:31, the longest "
+                      "2 min at 14 Oct, 01:10 — it stopped reporting")
+    assert [x for x in log if x.startswith("Pump Power stopped and restarted 8 times in 10 min")] == log[1:]
+    assert f["established"] == log                                    # what the AI reads back is what the page says
+
+
+def test_past_the_row_limit_the_unusual_rows_stay_and_the_rest_is_counted(monkeypatch):
+    mod, _ = _facts()
+    monkeypatch.setattr(mod, "LOG_ROWS", 3)
+    around = {"system_runs": [{"at": (datetime(2026, 10, 14, tzinfo=ZoneInfo("UTC")) + timedelta(minutes=m)).isoformat(),
+                               "text": "the villa's system re-ran its rules"} for m in range(0, 5)]}
+    f = mod.facts(_periods_data([("offline", 600, 5, "it stopped reporting"), ("running", 900, 50, "longer")]), around)
+    pills = [r["pill"] for r in f["log"]]
+    assert pills.count("unusual") == 2 and pills.count("usual") == 2
+    assert f["log"][-1]["text"] == "4 more ordinary moments are not listed (the page's limit of rows)."
+
+
+def test_a_rule_that_only_sends_a_chat_message_switches_nothing():
+    import investigate
+    class Sends:
+        def tool(self, name, args):
+            return {"config": {"actions": [{"action": "telegram_bot.send_message", "data": {"message": "x"}}]}}
+    t = datetime(2026, 10, 14, tzinfo=ZoneInfo("UTC"))
+    assert investigate.automation_able(Sends(), "automation.x", t, t)["can"] == "nothing"

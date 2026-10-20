@@ -20,6 +20,7 @@ WORDS = {
     NO_VALUE: ("reported no value", "stopped reporting"),
     RESTARTS: ("stopped and restarted", "kept stopping and restarting"),
     RUNNING: ("ran", "ran longer or harder than usual"),
+    IDLE: ("drew more than usual at rest", "drew more than usual at rest"),       # flagged only so (investigate)
 }
 
 

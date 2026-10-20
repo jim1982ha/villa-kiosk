@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.296 (21 October 2026)
+
+- investigation_facts: past `investigate.log_repeats` (3) a device's flagged periods of one kind are one log row (count,
+  first, last, the longest); past `log_rows` the unusual rows are kept first and the rest counted. `established` reads
+  the same rows.
+- investigate: `telegram_bot` is a messaging domain (HARMLESS); an idle period at least `level_change_gap_s` long whose
+  mean is `rest_high_share` (0.02) of the rest-to-running gap above its usual rest is flagged (periods.WORDS gains IDLE).
+- investigate SKILL.md: a claim about WHEN is read hour by hour first.
+
 ## 0.6.295 (21 October 2026)
 
 - investigate timeline: `days_line` — a runs or level device's daily mean over `days_context` (14) days from the

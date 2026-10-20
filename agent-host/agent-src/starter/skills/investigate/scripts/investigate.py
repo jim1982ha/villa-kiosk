@@ -901,6 +901,14 @@ def _notable(ps: list[dict], ref: dict, on: float | None) -> list[dict]:
         elif p["kind"] == kinds.NO_POWER and rest and rest > 0 and p["seconds"] >= th("offline_min_s"):
             why.append(f"it read 0 instead of its usual {rest:g} at rest")
             alerts.append((th("offline_min_s"), f"it reads 0 for {lasting(th('offline_min_s'))}"))
+        elif p["kind"] == kinds.IDLE and rest is not None and level and "mean" in p \
+                and p["seconds"] >= th("level_change_gap_s") and p["mean"] - rest >= (level - rest) * th("rest_high_share"):
+            # ⚠️ A REST THAT DRAWS IS NEWS (villa, 2026-10-21): a pump resting at 37 instead of 0.87 from 19:00 on, its
+            # circuit live between runs, went unsaid: only a rest at 0 was judged. Measured against the gap between its
+            # rest and its run, so a rest wandering between 0 and 2 is never one
+            why.append(f"it read about {p['mean']:.3g} at rest instead of its usual {rest:g}")
+            alerts.append((th("level_change_gap_s"), f"it reads more than {rest + (level - rest) * th('rest_high_share'):.3g} "
+                                                     f"at rest for {lasting(th('level_change_gap_s'))}"))
         elif p["kind"] in (kinds.OFFLINE, kinds.NO_VALUE) and p["seconds"] >= th("offline_min_s"):
             why.append("it " + kinds.did(p["kind"]))
             alerts.append((th("offline_min_s"), f"it stops reporting for {lasting(th('offline_min_s'))}"))
@@ -1053,7 +1061,7 @@ def around(client, store, start: datetime, end: datetime, focus: list[str], zone
 # What an action does, by its kind (`domain.service`, or the kind of step): only these change nothing on the villa.
 #: ⚠️ WHAT AN AUTOMATION CAN DO, READ — NEVER INFERRED FROM ITS RUNNING THEN (review 32 follow-up): an account named a
 #: watchdog that "ran during the event" as a possible cause; all it could do was notify and record a date.
-HARMLESS = {"notify": "notifies", "persistent_notification": "notifies", "tts": "speaks a message",
+HARMLESS = {"notify": "notifies", "persistent_notification": "notifies", "telegram_bot": "sends a message", "tts": "speaks a message",
             "logbook": "writes the logbook", "system_log": "writes the log", "input_datetime": "records a value",
             "input_text": "records a value", "input_number": "records a value", "counter": "records a value",
             "input_select": "records a value", "event": "fires an event", "delay": None, "wait": None, "stop": None}

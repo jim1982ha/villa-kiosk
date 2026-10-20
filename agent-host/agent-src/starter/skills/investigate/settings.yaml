@@ -13,6 +13,8 @@ behaviour:
   offline_min_s: 60           # a device silent, without a value or reading exactly 0 (supply off) this long is flagged
   zero_rest_share: 0.05       # a device whose rest reads exactly 0 this share of the time on the days before rests at
                               # 0: its 0 is rest, not "no power" (a pump idling between 0 and 1.2 W)
+  rest_high_share: 0.02       # a rest reading above its usual rest by this share of the gap up to its running level,
+                              # for level_change_gap_s, is flagged (a pump drawing 37 W between runs instead of 1 W)
   starts_ratio: 3             # a device that started this many times more often than in the same hours before…
   starts_min: 6               # …and at least this many times, is flagged as starting far more often than usual
                               # (the same two say "far more often" for a state: a door opened, a switch turned on)

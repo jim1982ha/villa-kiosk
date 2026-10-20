@@ -39,6 +39,9 @@ NAMES_IN_A_ROW = limit("investigate.names_in_a_row", 8, unit="devices", group="t
 AUTOMATION_RUNS_SHOWN = limit("investigate.automation_runs_shown", 3, unit="runs", group="text", lo=1, hi=100,
                               says="Runs of one automation shown in an investigation's log.",
                               reached="Its further runs are not shown in the log.", told="")
+LOG_REPEATS = limit("investigate.log_repeats", 3, unit="periods", group="text", lo=1, hi=100,
+                    says="Unusual periods of the same kind on one device listed one by one in an investigation's log.",
+                    reached="More are said in one row: how many, from when to when, and the longest.", told="person")
 LOG_ROWS = limit("investigate.log_rows", 80, unit="rows", group="text", lo=10, hi=2000,
                  says="Rows of an investigation page's log.",
                  reached="The further rows are not on the page.", told="")
@@ -120,11 +123,26 @@ def facts(data: dict | None, around: dict | None, notes: dict | None = None) -> 
 
     # ------------------------------------------------------------------ each device, against its own normal
     ran = [e for e in data.get("entities") or [] if e.get("runs") and not e.get("control")]
+    # ⚠️ ONE ROW PER REPEATED PROBLEM (villa, 2026-10-21: a relay's 80 Wi-Fi drops of 14-15 Oct filled the log and the
+    # pump's stop-start from 16 Oct, the finding, was cut off the page): past LOG_REPEATS, a device's periods of one
+    # kind are one row, with how many, from when to when and the longest
+    same: dict[tuple, list[dict]] = {}
     for f in flagged:
-        rows.append({"at": f["start"], "pill": "unusual",
-                     "text": f"{f['name']} {did(f['kind'])} "
-                             f"{'in' if periods.base(f['kind']) == periods.RESTARTS else 'for'} {lasting(f['seconds'])}, "
-                             f"until {clock(f['end'])} — {f['why']}"})
+        same.setdefault((f["name"], periods.base(f["kind"])), []).append(f)
+    for (name, kind), fs in same.items():
+        if len(fs) > LOG_REPEATS:
+            top = max(fs, key=lambda x: x["seconds"])
+            rows.append({"at": fs[0]["start"], "pill": "unusual",
+                         "text": f"{name}: {len(fs)} times “{periods.band(kind) or did(kind)}”, from {clock(fs[0]['start'])} "
+                                 f"to {clock(fs[-1]['end'])}, the longest {lasting(top['seconds'])} at "
+                                 f"{clock(top['start'])} — {top['why']}"})
+            continue
+        for f in fs:
+            rows.append({"at": f["start"], "pill": "unusual",
+                         "text": f"{f['name']} {did(f['kind'])} "
+                                 f"{'in' if periods.base(f['kind']) == periods.RESTARTS else 'for'} "
+                                 f"{lasting(f['seconds'])}, until {clock(f['end'])} — {f['why']}"})
+    for f in flagged:
         al = f.get("alert") or {}
         fired = _t(al.get("at"))
         # ⚠️ EARLIER MEANS IN TIME TO MATTER: an alert 11 s before a 71-s drop-out ended warned of nothing — only one
@@ -224,8 +242,12 @@ def facts(data: dict | None, around: dict | None, notes: dict | None = None) -> 
          "again": [clock(t) for t, _ in times[1:]]} for rule, times in rules.items()]}
         for name, rules in warned.items()]
 
-    rows.sort(key=lambda r: r["at"])
-    log = [{"time": clock(r["at"]), "text": r["text"], "pill": r["pill"]} for r in rows[:LOG_ROWS]]
+    # past LOG_ROWS, the unusual rows are kept before the usual ones, and the page says how many it left out
+    kept = sorted(rows, key=lambda r: (r["pill"] != "unusual", r["at"]))[:LOG_ROWS]
+    log = [{"time": clock(r["at"]), "text": r["text"], "pill": r["pill"]} for r in sorted(kept, key=lambda r: r["at"])]
+    if len(rows) > len(kept):
+        log.append({"time": "", "pill": "usual",
+                    "text": f"{len(rows) - len(kept)} more ordinary moments are not listed (the page's limit of rows)."})
     # what a person saw or did is not in the records: kept, marked as reported, after the recorded moments
     log += [{"time": str(r.get("time") or ""), "text": str(r["text"]), "pill": "reported"} for r in told]
     return {"log": log, "findings": findings, "alerts": alerts, "recorded": bool(rows),

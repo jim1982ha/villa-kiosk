@@ -42,7 +42,7 @@ TPL = templates(os.path.join(HERE, ".."))
 #: ⚠️ PLAIN WORDS, COLOURS APART (owner, 2026-10-12: "what is supply? what is stop-start? … too similar colours"):
 #: each kind its own hue, none the readings' green or the usual line's blue.
 BAND_COLOURS = {periods.NO_POWER: "var(--crit)", periods.OFFLINE: "var(--ink2)", periods.NO_VALUE: "var(--ink2)",
-                periods.RESTARTS: "var(--c5)", periods.RUNNING: "var(--warn)"}
+                periods.RESTARTS: "var(--c5)", periods.RUNNING: "var(--warn)", periods.IDLE: "var(--c4)"}
 OTHER_BAND = ("unusual", "var(--crit)")
 READINGS, USUAL = "var(--acc)", "var(--c3)"           # the device's own line, and its usual: never a band's colour
 

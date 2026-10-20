@@ -245,3 +245,16 @@ def test_a_change_that_began_before_its_days_before_is_said_from_the_daily_figur
     said = inv.timeline(_WithDays(pump(False), steady), ["sensor.x"], FROM, E, 3, Z, now=E)["lines"]
     day = [ln for ln in said if "day by day" in ln]
     assert day and "⟵" not in day[0], said
+
+
+def test_a_rest_drawing_far_above_its_usual_rest_is_flagged_and_its_ordinary_wander_is_not():
+    # villa, 2026-10-21: a pump resting at 37 instead of 0.87 from 19:00 on went unsaid (only a rest at 0 was judged)
+    def rest(mean):
+        t = datetime(2026, 10, 20, 19, 0, tzinfo=Z)
+        ps = [{"kind": inv.kinds.IDLE, "start": t, "end": t + timedelta(minutes=40), "seconds": 2400,
+               "mean": mean, "min": mean - 1, "max": mean + 1}]
+        shown, _ = inv.worth_a_line(ps, {"run_median_s": 33, "run_longest_s": 40, "level_median": 899,
+                                         "rest_median": 0.87}, 300)
+        return shown[0].get("why")
+    assert rest(37) == "it read about 37 at rest instead of its usual 0.87"
+    assert rest(1.9) is None

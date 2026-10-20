@@ -1,3 +1,15 @@
+## 0.12.306
+
+What you will see (the House Pump investigation of 00:36):
+- The page's list of everything recorded no longer stops on 15 October. A problem that repeats is now one line ("House
+  & Pool Relay Uptime: N times “stopped reporting”, from … to …, the longest 8 min"), so the pump's stop-start from
+  16 October, the finding itself, is on the list. If the list is still too long, the unusual lines are kept and the
+  page says how many ordinary ones it left out.
+- Rules that only send a Telegram message are no longer listed under "To check" as if they could switch the pump.
+- A device drawing much more than usual at rest is now marked: since about 19:00 on 20 October the House Pump reads
+  32-38 W between runs instead of about 1 W, and the page did not say so.
+- An investigation checks the hours one by one before saying something also happens at night.
+
 ## 0.12.305
 
 What you will see:
