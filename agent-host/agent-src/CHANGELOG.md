@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.6.287 (20 October 2026)
+
+- `offer: after_reading` judges the conversation: State.conversation_read keeps the reading tools a session used
+  (kv `session_read:<session>`, RECORDS family), joined with the resumed one's; app._converse passes them on as
+  TurnResult.read (owner, 2026-10-20: the House Pump question asked again was answered in 7 s from the earlier
+  readings, read nothing, and got no button). Test: test_command_offer (a resumed turn that reads nothing still
+  offers; a new conversation does not).
+- skill.yaml `reads_history` (Skill.reads_history, "when the AI reads a device's history" on the skill's page): every
+  ha_get_history of the AI (source history) is answered with that command's lines over the period and devices the
+  villa's system read — investigate's `timeline` — in place of the readings (Toolbox._history_facts); a command that
+  fails is said ("could not be worked out… never answer from a part"), never replaced by the readings (owner,
+  2026-10-20: "I never want to see wrong responses"; the chat read the House Pump's 100 newest readings as its
+  afternoon). Test: test_history_facts.
+- investigate timeline, every kind against the same hours of its days before (owner: "universally handle all type of
+  dataset"): `shape` runs · level · state · counter; `starts_line` (how often it started; `starts_ratio`,
+  `starts_min`), `level_line` (range vs the usual band, when it left it; `level_band_margin`), `state_lines` (times
+  per state), `counter_line` (rise; `rise_ratio`); levels and counters list no per-reading period, a state with more
+  than `ordinary_hide_over` changes neither. `rests_at_zero` (`zero_rest_share`): a device whose rest reads 0 has no
+  "no power" periods. Test: test_investigate_shapes (each kind flagged in trouble, nothing on a normal day).
+
 ## 0.6.286 (20 October 2026)
 
 - skill.yaml `offer: after_reading: [tools]` (Skill.offer_after): a chat answer whose turn used one of those reading

@@ -20,6 +20,10 @@ offer:
   label: "🔎 Investigate this"
   pressed: Investigating
   after_reading: [ha_get_history, ha_get_logs]
+# ⚠️ EVERY HISTORY READ OF THE AI, WORKED OUT (owner, 2026-10-20: "I never want to see wrong responses"; a chat answer
+# read the House Pump's 100 newest readings — 15 minutes at rest — as its whole afternoon): wherever the AI reads a
+# device's history (a chat, a report), it gets this command's lines over the whole period, never raw readings.
+reads_history: "investigate.py timeline --entities {entities} --start {start} --end {end}"
 # Web research is part of EVERY investigation (owner, 2026-10-12: "always use web_search by default"): SKILL.md step 6.
 # The page cannot be made without a web search where web search is available, nor without its sources cited.
 # ⚠️ WHAT EVERY /investigate ANSWER CARRIES (owner, 2026-10-11: "always trigger the full use of the skill — HTML report in

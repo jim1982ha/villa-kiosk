@@ -238,9 +238,11 @@ def _same_room(client, items: list[dict]) -> None:
 
 
 # ------------------------------------------------------------------ timeline
-def periods(rows: list[tuple[datetime, str]], end: datetime, on_above: float | None) -> list[dict]:
+def periods(rows: list[tuple[datetime, str]], end: datetime, on_above: float | None,
+            zero_is_rest: bool = False) -> list[dict]:
     """The rows as periods of one condition each: "running" (above on_above), "idle", "no power" (exactly 0 where the
-    device usually reads a little at rest), "offline", "no value", or the state itself for a non-numeric entity."""
+    device usually reads a little at rest — never for one whose rest reads 0 too, `zero_is_rest`), "offline", "no
+    value", or the state itself for a non-numeric entity."""
     def kind(state: str) -> str:
         if state in OFFLINE:
             return kinds.OFFLINE
@@ -251,7 +253,7 @@ def periods(rows: list[tuple[datetime, str]], end: datetime, on_above: float | N
             return state
         if v > on_above:
             return kinds.RUNNING
-        return kinds.NO_POWER if v == 0 else kinds.IDLE
+        return kinds.NO_POWER if v == 0 and not zero_is_rest else kinds.IDLE
 
     out: list[dict] = []
     for i, (t, s) in enumerate(rows):
@@ -297,9 +299,135 @@ def level_jumps(rows: list[tuple[datetime, str]], start: datetime, end: datetime
     return out
 
 
-def normal(rows: list[tuple[datetime, str]], end: datetime, on_above: float | None) -> dict:
+def rests_at_zero(rows: list[tuple[datetime, str]], on_above: float | None) -> bool:
+    """Whether the device's rest reads exactly 0 often on the days before (settings `zero_rest_share`).
+
+    ⚠️ ITS 0 IS REST, NOT "NO POWER" (owner, 2026-10-20: "I never want to see wrong responses"). The House Pump idles
+    between 0 and 1.7 W: every 0 was a "no power" period, 140 lines of them, one flagged "it read 0 instead of its usual
+    1.21 at rest" — and its real trouble, starting every few minutes, sank under them."""
+    if on_above is None:
+        return False
+    rest = [v for _, s in rows if (v := number(s)) is not None and v <= on_above]
+    return bool(rest) and sum(1 for v in rest if v == 0) / len(rest) >= th("zero_rest_share")
+
+
+def starts_line(ps: list[dict], base: list[dict], start: datetime, end: datetime, baseline_days: float) -> dict | None:
+    """How many times it started in [start, end), against the same hours of each day before (a period of a day or
+    less) or its daily rate (a longer one); flagged when far more often (settings `starts_ratio`, `starts_min`).
+
+    ⚠️ HOW OFTEN, NOT ONLY HOW LONG (owner, 2026-10-20). Each of the House Pump's runs that afternoon was of its usual
+    length and level, so no run was unusual — it was starting every few minutes instead of a few times a day, and
+    nothing said so."""
+    n = sum(1 for p in ps if p["kind"] == kinds.RUNNING and start <= p["start"] < end)
+    span = (end - start).total_seconds()
+    if not base or span <= 0:
+        return {"starts": n, "line": f"  started {n} times in {lasting(span)}"}
+    if span <= 86400:
+        days = int(baseline_days)
+        before = [sum(1 for p in base if p["kind"] == kinds.RUNNING
+                      and start - timedelta(days=k) <= p["start"] < end - timedelta(days=k)) for k in range(1, days + 1)]
+        usual, said = max(before), f"the same hours of the {days} days before: " + ", ".join(map(str, reversed(before)))
+    else:
+        b0, b1 = base[0]["start"], base[-1]["end"]
+        rate = sum(1 for p in base if p["kind"] == kinds.RUNNING) / max((b1 - b0).total_seconds(), 1)
+        usual = round(rate * span)
+        said = f"about {usual} in as long before"
+    line = f"  started {n} times in {lasting(span)} ({said})"
+    if n >= th("starts_min") and n >= th("starts_ratio") * max(usual, 1):
+        line += f"  ⟵ about {n / max(usual, 1):.0f}× more often than usual"
+    return {"starts": n, "usual": usual, "line": line}
+
+
+# ⚠️ EVERY KIND OF DEVICE, AGAINST ITS OWN PAST (owner, 2026-10-20: "the skill shall universally handle all type of
+# dataset returned by Home Assistant"). A device that RUNS (a pump, a heater) was the only kind compared with its days
+# before; a LEVEL (a temperature), a STATE (a door) and a COUNTER (energy) got one line per reading — 70 to 106 lines,
+# a room 6 °C warmer or a door opened 50 times said nowhere. Each kind now gets its few lines against the same hours of
+# the days before, flagged ⟵ when far off; its moments are listed only when they add something.
+def shape(rows: list[tuple[datetime, str]], on_above: float | None) -> str:
+    """runs · counter (a total that only grows: energy) · level (a measure: temperature) · state (on/off, open, a mode)."""
+    if on_above is not None:
+        return "runs"
+    vals = [number(s) for _, s in rows if s not in OFFLINE | NO_VALUE]
+    if not vals or any(v is None for v in vals):
+        return "state"
+    steps = [b - a for a, b in zip(vals, vals[1:]) if b != a]
+    return "counter" if len(steps) >= 3 and sum(1 for d in steps if d > 0) >= 0.9 * len(steps) and vals[-1] > vals[0] \
+        else "level"
+
+
+def _windows(start: datetime, end: datetime, baseline_days: float) -> list[tuple[datetime, datetime]]:
+    """The same hours on each day before, newest first (a period of a day or less): [(start, end), …]."""
+    if (end - start).total_seconds() > 86400:
+        return []
+    return [(start - timedelta(days=k), end - timedelta(days=k)) for k in range(1, int(baseline_days) + 1)]
+
+
+def _in(rows, a, b):
+    return [(t, number(s)) for t, s in rows if a <= t < b and number(s) is not None]
+
+
+def level_line(rows, base_rows, start, end, baseline_days, zone, span_days) -> str:
+    """Lowest, highest and average of the period; the same hours before: their lowest and highest; when it left them."""
+    now = _in(rows, start, end) or _in(rows[:1], rows[0][0], end)
+    if not now:
+        return "  no reading in this period"
+    vs = [v for _, v in now]
+    line = f"  between {min(vs):.4g} and {max(vs):.4g} (average {sum(vs) / len(vs):.4g})"
+    before = [b for a, z in _windows(start, end, baseline_days) if (b := [v for _, v in _in(base_rows, a, z)])]
+    if not before:
+        return line
+    lo, hi = min(min(b) for b in before), max(max(b) for b in before)
+    margin = max((hi - lo) * th("level_band_margin"), abs(hi) * 0.01)
+    line += f"; the same hours of the {len(before)} days before: {lo:.4g} to {hi:.4g}"
+    up = next((t for t, v in now if v > hi + margin), None)
+    down = next((t for t, v in now if v < lo - margin), None)
+    if up:
+        line += f"  ⟵ above its usual highest from {at(up, zone, span_days)}, up to {max(vs):.4g}"
+    if down:
+        line += f"  ⟵ below its usual lowest from {at(down, zone, span_days)}, down to {min(vs):.4g}"
+    return line
+
+
+def counter_line(rows, base_rows, start, end, baseline_days) -> str:
+    """How much the total rose in the period (a reset to 0 not counted as a fall), against the same hours before."""
+    def rise(rs):
+        vs = [v for _, v in rs]
+        return sum(b - a for a, b in zip(vs, vs[1:]) if b > a)
+    got = rise(_in(rows, start, end))
+    line = f"  rose by {got:.4g} in {lasting((end - start).total_seconds())}"
+    before = [rise(_in(base_rows, a, z)) for a, z in _windows(start, end, baseline_days)]
+    if not before:
+        return line
+    usual = max(before)
+    line += " (the same hours of the %d days before: %s)" % (len(before), ", ".join(f"{b:.4g}" for b in reversed(before)))
+    if usual > 0 and got >= th("rise_ratio") * usual:
+        line += f"  ⟵ about {got / usual:.0f}× faster than usual"
+    elif usual > 0 and got * th("rise_ratio") <= min(before):
+        line += "  ⟵ far slower than usual"
+    return line
+
+
+def state_lines(ps: list[dict], base: list[dict], start, end, baseline_days) -> list[str]:
+    """Per state: how many times it went to it and for how long in all, against the same hours before."""
+    out = []
+    names = [k for k in dict.fromkeys(p["kind"] for p in ps) if k not in (kinds.OFFLINE, kinds.NO_VALUE)]
+    for k in names[:int(th("state_lane_max"))]:
+        mine = [p for p in ps if p["kind"] == k and start <= p["start"] < end]
+        line = f"  {k}: {len(mine)} times, {lasting(sum(p['seconds'] for p in ps if p['kind'] == k))} in all"
+        before = [sum(1 for p in base if p["kind"] == k and a <= p["start"] < z)
+                  for a, z in _windows(start, end, baseline_days)]
+        if before:
+            usual = max(before)
+            line += " (the same hours of the %d days before: %s times)" % (len(before), ", ".join(map(str, reversed(before))))
+            if len(mine) >= th("starts_min") and len(mine) >= th("starts_ratio") * max(usual, 1):
+                line += f"  ⟵ about {len(mine) / max(usual, 1):.0f}× more often than usual"
+        out.append(line)
+    return out
+
+
+def normal(rows: list[tuple[datetime, str]], end: datetime, on_above: float | None, zero_is_rest: bool = False) -> dict:
     """The entity's own normal over the baseline days: how often and how long it runs, at what level."""
-    ps = periods(rows, end, on_above)
+    ps = periods(rows, end, on_above, zero_is_rest)
     days = max((end - rows[0][0]).total_seconds() / 86400, 0.5) if rows else 1
     runs = [p for p in ps if p["kind"] == kinds.RUNNING]
     out = {"days": round(days, 1), "runs_per_day": round(len(runs) / days, 1)}
@@ -469,13 +597,16 @@ def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_da
         base_rows, base_reach, _ = read(client, eid, start - timedelta(days=baseline_days), start, now) \
             if baseline_days > 0 else ([], start, None)
         on = threshold(base_rows + rows, params)
-        ps = periods(rows, reach, on)
-        ref = normal(base_rows, base_reach, on) if base_rows else {}
+        zero_rest = rests_at_zero(base_rows or rows, on)
+        ps = periods(rows, reach, on, zero_rest)
+        base_ps = periods(base_rows, base_reach, on, zero_rest) if base_rows else []
+        ref = normal(base_rows, base_reach, on, zero_rest) if base_rows else {}
         lines = [f"{eid}: {len(rows)} readings" + (f"; counted as running above {on:g}" if on else "")] + before
         if cut:
             lines.append(f"  ⚠️ {past.unread('its history', at(cut, zone, span_days))} "
                          "(too many readings) — say so, and narrow the period to read the rest")
-        if ref:
+        kind_of = shape(rows, on)
+        if ref and kind_of == "runs":
             r = ref
             lines.append("  normal (the %g days before): %s runs a day%s%s%s" % (
                 r["days"], r["runs_per_day"],
@@ -483,7 +614,20 @@ def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_da
                 f", longest {lasting(r['run_longest_s'])}" if "run_longest_s" in r else "",
                 f", at about {r['level_median']:g}" if "level_median" in r else "")
                 + (f"; at rest {r['rest_median']:g}" if "rest_median" in r else ""))
+        starts = starts_line(ps, base_ps, start, reach, baseline_days) if on else None
+        if starts:
+            lines.append(starts["line"])
+        if kind_of == "level":
+            lines.append(level_line(rows, base_rows, start, reach, baseline_days, zone, span_days))
+        elif kind_of == "counter":
+            lines.append(counter_line(rows, base_rows, start, reach, baseline_days))
+        elif kind_of == "state":
+            lines += state_lines(ps, base_ps, start, reach, baseline_days)
         shown, hidden = worth_a_line(ps, ref, on)
+        if kind_of in ("level", "counter") or (kind_of == "state" and len(ps) > th("ordinary_hide_over")):
+            # its summary above says it; the moments it stopped reporting stay listed
+            hidden += sum(1 for p in shown if p["kind"] not in (kinds.OFFLINE, kinds.NO_VALUE))
+            shown = [p for p in shown if p["kind"] in (kinds.OFFLINE, kinds.NO_VALUE)]
         for p in shown[:MAX_LINES]:
             lvl = f" at {p['mean']:.4g} (from {p['min']:.4g} to {p['max']:.4g})" if "mean" in p and on else \
                 (f" reading {p['mean']:.4g}" if "mean" in p else "")
@@ -493,18 +637,21 @@ def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_da
         if len(shown) > MAX_LINES:
             lines.append(f"  … {len(shown) - MAX_LINES} more periods (narrow the period to see them)")
         if hidden > 0:
-            lines.append(f"  ({hidden} short ordinary periods not listed: like its normal)")
+            lines.append(f"  ({hidden} short ordinary periods not listed: like its normal)" if kind_of == "runs" else
+                         f"  ({hidden} changes not listed: the lines above sum them up)")
         if on:
             for j in level_jumps(rows, start, end, on)[:LEVEL_CHANGES_SHOWN]:
                 lines.append(f"  {at(j['at'], zone, span_days)} level changes from about {j['from']:.0f} to {j['to']:.0f}")
         totals: dict[str, float] = {}
         for p in ps:
             totals[p["kind"]] = totals.get(p["kind"], 0) + p["seconds"]
-        lines.append("  in total: " + ", ".join(f"{k} {lasting(v)}" for k, v in sorted(totals.items(), key=lambda x: -x[1])))
+        if kind_of == "runs":                         # a state's lines above already say its time in each
+            lines.append("  in total: " + ", ".join(f"{k} {lasting(v)}" for k, v in sorted(totals.items(), key=lambda x: -x[1])))
         attrs = (names.get(eid) or {}).get("attributes") or {}
         part = {"entity_id": eid, "running_above": on, "normal": ref, "lines": lines,
                 "periods": [_saved(p) for p in shown[:MAX_LINES]], **({"cut": cut.isoformat()} if cut else {}),
-                "label": attrs.get("friendly_name") or eid, "runs": sum(1 for p in ps if p["kind"] == kinds.RUNNING)}
+                "label": attrs.get("friendly_name") or eid, "runs": sum(1 for p in ps if p["kind"] == kinds.RUNNING),
+                **({"starts": starts} if starts else {})}
         if eid.split(".")[0] in CONTROL_DOMAINS:
             seen = {str(v) for _, v in base_rows + rows if str(v) not in OFFLINE | NO_VALUE}
             part["control"] = "off" if seen and seen <= OFF_STATES else "on" if seen and seen <= ON_STATES else None
@@ -515,7 +662,7 @@ def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_da
                         # ⚠️ THE CHART THAT FITS THE DEVICE (owner, 2026-10-12: "would you use other metric?"): a device
                         # that RUNS gets its minutes running per hour against its usual — its days before drawn as
                         # lines were spikes nobody could read; one read as LEVELS (a temperature) keeps them, dashed
-                        **({"per_hour": running_per_hour(ps, start, end, periods(base_rows, base_reach, on), baseline_days)}
+                        **({"per_hour": running_per_hour(ps, start, end, base_ps, baseline_days)}
                            if on else {"normal_series": same_hours_before(base_rows, start, end, baseline_days)}))
         elif series:
             part["states"] = state_series(rows, start, end)        # a lane under the charts (page.py)

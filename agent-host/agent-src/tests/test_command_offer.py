@@ -223,3 +223,30 @@ def test_after_reading_is_the_skills_list_and_a_wrong_one_is_refused(tmp_path):
         {"description": "d", "command": "x", "offer": {"label": "Go", "after_reading": "ha_get_history"}}))
     with pytest.raises(SkillError):
         parse_skill("x", str(bad))
+
+
+def test_an_answer_from_what_the_conversation_read_before_carries_it_too(tmp_path, monkeypatch):
+    # owner, 2026-10-20: the House Pump question asked again was answered in 7 s from the turn before's readings — it
+    # read nothing itself, and no button came. The conversation's readings count; a new conversation starts with none.
+    from ai_fake import FakeAI
+    from vesta_agent import runner
+    ha = FakeHA(tools=[ha_tool("ha_get_history", entity_ids="string")], answers={"ha_get_history": "[]"})
+    v = make_agent(tmp_path, {"people": PEOPLE, "ha_read_tools": ["ha_get_history"]},
+                   skills=("investigate",), kiosk=FakeKiosk(), reader=ha)
+    run(v.refresh_server_tools())
+    turns = {"n": 0}
+
+    async def reads_first(run_):
+        turns["n"] += 1
+        if turns["n"] == 1:
+            await run_["call"]("ha_get_history", {"entity_ids": "sensor.pump_power"})
+    ai = FakeAI(lambda call: runner.RunResult("It ran 21 h this week.", "s1", False, 0.01, [], None, None),
+                act=reads_first).install(monkeypatch)
+    run(v.converse(JM, v.policy().person(JM), ASKED))
+    run(v.converse(JM, v.policy().person(JM), ASKED))                    # the same conversation, nothing read
+    assert ai.runs[-1]["resume"] == "s1"
+    assert [b["text"] for b in _offered(v, JM)[0]] == [LABEL]
+    v.state.set_session(JM, None)                                         # a new conversation: nothing read in it
+    ai.answer = lambda call: runner.RunResult("Hello.", "s2", False, 0.01, [], None, None)
+    run(v.converse(JM, v.policy().person(JM), "hello"))
+    assert _offered(v, JM)[0] == []

@@ -353,7 +353,11 @@ class Toolbox:
                     self.photos.append(photo)
             text = scrub("".join(b.get("text", "") for b in blocks if b.get("type") == "text"), self._secrets())
             text = without_hidden(text, self._hidden())       # every read tool, never the search alone
-            if not res.get("isError") and name in ("ha_get_history", "ha_get_logs"):
+            facts = await asyncio.to_thread(self._history_facts, args, text) \
+                if name == "ha_get_history" and not res.get("isError") else None
+            if facts is not None:
+                text = facts                                # the period worked out: what the AI answers from
+            elif not res.get("isError") and name in ("ha_get_history", "ha_get_logs"):
                 # ⚠️ OLDER THAN THE DETAIL KEPT (owner, 2026-10-20): said in the answer, with the long-term figures of
                 # that part — the AI never reads "no change" where the villa's system no longer keeps any
                 text = await asyncio.to_thread(self._older_part, name, args, text)
@@ -364,6 +368,45 @@ class Toolbox:
                 self.read.append(name)
             return out
         return handler
+
+    def _history_facts(self, args: dict, text: str) -> str | None:
+        """A history read answered with the facts of its WHOLE period (a skill's `reads_history`: investigate's
+        timeline), in place of the readings the villa's system sent — None when no skill reads histories, or the read
+        is of long-term figures (source statistics: already the whole period).
+
+        ⚠️ NEVER THE NEWEST 100 AS THE PERIOD (owner, 2026-10-20: "I never want to see wrong responses"). The AI got
+        the House Pump's 100 newest readings of 8,700 — 15 minutes at rest — and said it "alternated between 0 and
+        1.2 W" all afternoon, while it started every few minutes at 750-1,100 W. The period and the devices are the
+        villa's system's own answer (its reading of "12h", "yesterday"); the skill's command reads every change in it.
+        When it cannot, the AI is told to say so: never the sample as a fallback."""
+        if args.get("source") == "statistics":
+            return None
+        sk = next((s for s in self.skills.all().values() if s.reads_history), None)
+        if sk is None:
+            return None
+        try:
+            outer = json.loads(text)
+        except ValueError:
+            return None
+        body = outer.get("data") if isinstance(outer, dict) and isinstance(outer.get("data"), dict) else outer
+        if not isinstance(body, dict) or body.get("source") not in (None, "history"):
+            return None
+        per = body.get("period") or {}
+        ids = [e["entity_id"] for e in body.get("entities") or [] if isinstance(e, dict) and e.get("entity_id")]
+        if not ids or not per.get("start") or not per.get("end"):
+            return None
+        from . import script_run
+        ans = script_run.run_command(self.s, self.state, sk, sk.reads_history,
+                                     {"entities": ",".join(ids), "start": str(per["start"]), "end": str(per["end"])},
+                                     by=script_run.AI)
+        lines = (ans.result() or {}).get("lines") if ans.ok else None
+        if not lines:
+            return json.dumps({"error": f"The history of {', '.join(ids)} could not be worked out just now "
+                                        f"({ans.error or 'no answer'}). Say you could not read it; never answer from a "
+                                        "part of it."}, ensure_ascii=False)
+        return (f"[Worked out by the {sk.name} skill from EVERY recorded change of {per['start']} to {per['end']}, "
+                "the whole period you asked for, compared with the days before: answer from these lines and name the "
+                "period. Lines flagged ⟵ are unusual against the device's own normal.]\n" + "\n".join(map(str, lines)))
 
     def _older_part(self, name: str, args: dict, text: str) -> str:
         days = self._detailed_days()

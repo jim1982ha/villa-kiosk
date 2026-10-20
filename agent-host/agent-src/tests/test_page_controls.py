@@ -522,7 +522,7 @@ def test_a_skills_when_rows_name_every_way_the_engine_starts_it(ui):
     acts = call(ui, fn)
     assert {"when": "before every answer in a chat", "job": None, "script": "concierge.py", "kind": "code"} in acts
     # every field of a skill that starts it has its row; a new field must be placed here, shown or not
-    starts = {"schedule", "every_5_min", "on_event", "on_reply", "before_answer", "command"}
+    starts = {"schedule", "every_5_min", "on_event", "on_reply", "before_answer", "command", "reads_history"}
     others = {"name", "path", "description", "tools", "scripts", "buttons", "also", "deliver", "usage", "brain",
               "limit_usd", "rechecks", "offer",     # offer: the command, typed by a button
               "offer_after",         # the readings after which that button comes: said in the "in a chat" row

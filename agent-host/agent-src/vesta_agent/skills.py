@@ -251,6 +251,11 @@ class Skill:
     # engine runs before each answer, its result put in front of the AI: what a person must be told is never left to
     # the AI deciding to look.
     before_answer: str | None = None
+    # ⚠️ A DEVICE'S PAST, WORKED OUT — NEVER A SAMPLE OF IT (owner, 2026-10-20: "I never want to see wrong responses";
+    # the House Pump's 100 newest readings, 15 minutes of rest, were answered as its whole afternoon): the command whose
+    # lines answer every history read of the AI, from every reading of the period ({entities}, {start}, {end}). The
+    # skill says how a past is read; the engine only puts its lines where the raw readings were (tools.Toolbox).
+    reads_history: str | None = None
     # ⚠️ A SKILL ONLY ITS COMMAND STARTS (owner, 2026-10-11: investigate "only triggered when user mentions
     # /investigation in the question, and never if not" — then "only allow /investigate"): the AI never sees it among its skills, its tools refuse it,
     # and a message carrying "/<command>" tells the AI to use it (intake.gate, Toolbox.gated). Without the "/".
@@ -306,6 +311,8 @@ def when_it_runs(sk: Skill) -> list[dict]:
         acts.append(row("an answer to one of its alerts", script=sk.on_reply))
     if sk.before_answer:
         acts.append(row("before every answer in a chat", script=sk.before_answer))
+    if sk.reads_history:
+        acts.append(row("when the AI reads a device's history", script=sk.reads_history))
     # a command skill's row says how it is used, in the skill's own words (`usage`, an example — owner, 2026-10-19:
     # "only when a person writes /proposal" said neither what to write nor when it applies)
     # and its button (`offer`), which is the command typed for the person: the same row, said (0.12.271)
@@ -442,6 +449,11 @@ def parse_skill(name: str, path: str) -> Skill:
     sk.buttons = _buttons(raw.get("buttons"))
     if raw.get("before_answer"):
         sk.before_answer = _check_command(path, str(raw["before_answer"]), "before_answer")
+    if raw.get("reads_history"):
+        sk.reads_history = _check_command(path, str(raw["reads_history"]), "reads_history")
+        missing = [k for k in ("{entities}", "{start}", "{end}") if k not in sk.reads_history]
+        if missing:
+            raise SkillError(f"reads_history: the command takes {', '.join(missing)}")
     asked = {j["name"] for j in sk.schedule if j.get("on_request")}
     for script, spec in sk.scripts.items():
         for cmd, job in spec.job_only.items():

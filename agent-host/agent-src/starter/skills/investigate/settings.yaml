@@ -11,6 +11,15 @@ behaviour:
   level_high_ratio: 1.5       # a run drawing this many times its usual level is flagged
   level_low_ratio: 0.6        # …and one drawing less than this share of it
   offline_min_s: 60           # a device silent, without a value or reading exactly 0 (supply off) this long is flagged
+  zero_rest_share: 0.05       # a device whose rest reads exactly 0 this share of the time on the days before rests at
+                              # 0: its 0 is rest, not "no power" (a pump idling between 0 and 1.2 W)
+  starts_ratio: 3             # a device that started this many times more often than in the same hours before…
+  starts_min: 6               # …and at least this many times, is flagged as starting far more often than usual
+                              # (the same two say "far more often" for a state: a door opened, a switch turned on)
+  level_band_margin: 0.25     # a level beyond its usual highest / lowest of the same hours by this share of their
+                              # spread is flagged (a room 6 °C warmer than on the days before)
+  rise_ratio: 3               # a counter (energy) rising this many times faster, or slower, than in the same hours
+                              # before is flagged
   cycle_short_s: 180          # periods shorter than this, in a row, are stop-start cycling…
   cycle_min_runs: 3           # …when at least this many of them are runs…
   cycle_min_periods: 6        # …among at least this many periods
