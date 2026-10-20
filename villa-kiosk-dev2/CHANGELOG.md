@@ -1,3 +1,14 @@
+## 2.496.454
+
+### Changed
+- "Keep maintenance records for (days)" moved from the app's configuration page into VESTA: **Advanced Settings ›
+  System › Maintenance records** (owner only). Type the number of days and leave the field; it applies to every
+  device at once. 0 keeps the records for ever.
+- It starts at 365 days (one year). A value saved on the configuration page before is not carried over: if you had
+  your own, type it again in Advanced Settings. The old field disappears from the configuration page by itself
+  after the update.
+- The lines under Recent work and Spend ("… older than 365 days is no longer kept") now say where it is set.
+
 ## 2.496.453
 
 ### Changed

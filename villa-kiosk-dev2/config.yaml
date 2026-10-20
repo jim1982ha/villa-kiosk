@@ -5,7 +5,7 @@
 # no-compile operation. The {arch} placeholder + version resolve to e.g.
 # ghcr.io/jim1982ha/villa-kiosk-amd64:2.0.0 — published by .github/workflows/build.yaml.
 name: VESTA (dev2)
-version: "2.496.453"
+version: "2.496.454"
 slug: villa_kiosk_dev2
 description: Interactive 3D map of your property — live devices, energy, security and maintenance at a glance
 url: https://github.com/jim1982ha/villa-kiosk
@@ -96,23 +96,14 @@ panel_title: VESTA dev2
 # to the value it explains.
 #
 # ── Tunable policy ──────────────────────────────────────────────────────────
-# These four are POLICY, not preference: how long records are kept, how long a
-# session lasts, how hard a wrong passcode bites. No single number is right for
+# These are POLICY, not preference: how long a session lasts, how hard a wrong
+# passcode bites. (How long maintenance records are kept is a VESTA setting
+# since 2.496.454 — Advanced Settings › System — no longer an option here.) No single number is right for
 # every property, which is why they are options here rather than constants in
 # the add-on's code that an operator would have to patch and then lose on the
 # next update. All are read live — a change applies without restarting the
 # add-on — and clamped server-side, so a hand-edited value can never turn into
 # "keep nothing" or "never expire".
-#
-# evidence_retention_days (default 365: one year of history). Photo evidence older than this is
-#   deleted from the add-on's own storage; repaired faults, completions and
-#   costs older than this leave the Facility record too (2.496.449; a
-#   scheduled task keeps its latest completion). Raise it if your own obligation runs
-#   longer; set 0 to switch age-based deletion OFF entirely and keep evidence
-#   until you remove the record it belongs to. This is INDEPENDENT of the
-#   automatic clean-up of photos nothing references any more (a photo you
-#   removed from a fault, or attached to a form you then cancelled) — that
-#   always runs, because those files are pure waste at any age.
 #
 # session_days (default 30). How long a profile stays signed in on a device
 #   before the passcode is asked for again. A wall-mounted kiosk wants a long
@@ -157,7 +148,6 @@ options:
   ops_pin: ""
   superadmin_pin: ""
   public_model_access: false
-  evidence_retention_days: 365
   session_days: 30
   telemetry_max_events: 500
   pin_lockout_minutes: 5
@@ -171,7 +161,6 @@ schema:
   ops_pin: match(^[0-9]{4}$|^$)?
   superadmin_pin: match(^[0-9]{6}$|^$)?
   public_model_access: bool?
-  evidence_retention_days: int(0,3650)?
   session_days: int(1,365)?
   telemetry_max_events: int(50,5000)?
   pin_lockout_minutes: int(1,1440)?

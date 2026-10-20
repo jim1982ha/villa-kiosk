@@ -75,9 +75,6 @@ read live — a changed value takes effect without restarting the add-on.
   five wrong passcodes in a row. The lockout is tracked per source address, so
   raising it slows down someone guessing without locking the household out of
   their own villa.
-- **`evidence_retention_days`** (default 365, one year) — how long Facility
-  Manager photo evidence is kept before automatic deletion. See *Facility
-  workspace* below. Set it to 0 to keep evidence indefinitely.
 - **`telemetry_max_events`** (default 500) — how much diagnostic history (load
   timings, JS errors, sync results) the add-on keeps, visible in the app under
   **Advanced Settings → Device telemetry**. Raise it while chasing an
@@ -159,7 +156,14 @@ that opens the kiosk sees the same record:
 | File | What it holds |
 |---|---|
 | `/data/fm-data.json` | Maintenance schedule, completions, spend entries, faults |
-| `/data/fm-evidence/` | Photo evidence, downscaled in the browser before upload, pruned after `evidence_retention_days` (default 365 days, one year) |
+| `/data/fm-evidence/` | Photo evidence, downscaled in the browser before upload, pruned after the records window below |
+
+**How long records are kept** is set in the app, by the Owner: **Advanced
+Settings → System → Keep maintenance records for (days)** (default 365, one
+year). Photos, repaired faults, work done and money spent older than that are
+deleted; 0 keeps them for ever. A task's latest completion is always kept, and
+a fault closed with no work done leaves after 90 days. Photos no record points
+at any more are cleaned up whatever the setting.
 
 The maintenance schedule starts completely empty — nothing is pre-filled for
 any villa. Add each task from the **Schedule** tab: a title, an interval
