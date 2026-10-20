@@ -1,3 +1,9 @@
+## 2.496.455
+
+### Fixed
+- A device's own window (a light, a sensor, a lock…) is again as tall as what it shows, with no empty space under its
+  chart. The one fixed height of 2.496.447 stays for every other window: the device lists, Settings, Facility.
+
 ## 2.496.454
 
 ### Changed
