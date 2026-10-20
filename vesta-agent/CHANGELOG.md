@@ -1,3 +1,10 @@
+## 0.12.294
+
+What you will see:
+- A low battery is now one fault until it is really changed: a battery that fell to 20 % stays reported until it reads
+  above 25 % (a critically low one, 10 %, until above 15 %), instead of clearing at 21 % and coming back at 20 % the
+  next morning.
+
 ## 0.12.293
 
 What you will see:

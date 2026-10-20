@@ -541,3 +541,19 @@ def test_the_night_leaves_out_a_reload_of_virtual_devices(tmp_path):
           {"fan": {"slug": "fan", "name": "Ceiling fan", "entities": {}}})
     _night(tmp_path, "--as-of", AS_OF)
     assert _open(tmp_path, "PM-RECONNECT-LOOP") == []                       # twelve reloads: no fault
+
+
+# ------------------------------------------------------------------------------------------ battery margin
+def test_the_night_keeps_an_open_low_battery_until_five_points_above_its_line(tmp_path):
+    """Owner, 2026-10-20 ("yes, 5 points"): the night closes a state rule it no longer finds — a LOW battery read at
+    22 % is still the open fault (closes above 25 %), never closed tonight to reopen at 20 % tomorrow."""
+    from vesta_shared.store import Store
+    row = {**_row("sensor.example_bat", "Door battery", "battery", "door"), "unit": "%"}
+    _pack(tmp_path, {"battery": [row]})
+    Store(str(tmp_path / "s.sqlite")).raise_finding("PM-BATTERY-LOW", "sensor.example_bat", "door", "2026-10-01", "P3",
+                                                    "Door battery at 19%: replace within the week.", {})
+    fx = tmp_path / "fx"
+    fx.mkdir()
+    (fx / "states.json").write_text(json.dumps({"states": {"sensor.example_bat": {"state": "22", "attributes": {}}}}))
+    _night(tmp_path, "--as-of", AS_OF)
+    assert len(_open(tmp_path, "PM-BATTERY-LOW")) == 1

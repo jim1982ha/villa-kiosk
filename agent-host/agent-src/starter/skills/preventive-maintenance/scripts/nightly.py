@@ -105,7 +105,7 @@ def run(args) -> dict:
     states = cli.states()
     battery_entities = [r["entity_id"] for r in pack.entities("battery")]
     bat_stats = cli.statistics(battery_entities, day_end - timedelta(days=BATTERY_READ_DAYS), day_end, "day", ("mean",)) if battery_entities else {}
-    findings += battery_findings(pack, states, params, today, bat_stats)
+    findings += battery_findings(pack, states, params, today, bat_stats, store=store)
 
     alerted = alerted_offline(store, pack)
     findings += offline_findings(pack, states, now_ref, params, set(alerted))
@@ -345,10 +345,14 @@ def reconnect_findings(cli, pack, states: dict, end: datetime, today: date, para
 
 
 def battery_findings(pack, states: dict, params, today: date, stats: dict | None = None,
-                     rows: list[dict] | None = None) -> list:
+                     rows: list[dict] | None = None, store=None) -> list:
     """The battery rules (rules.battery_rules) over `rows` (every battery of the pack when None), each read from
-    `states`; `stats`: {entity: daily means} for the trend (none: no trend is judged)."""
+    `states`; `stats`: {entity: daily means} for the trend (none: no trend is judged); `store`: its open findings keep
+    their margin (rules.battery_rules `held`)."""
     out = []
+    held: dict[str, set] = {}
+    for o in store.findings(status="open") if store is not None else []:
+        held.setdefault(o["entity_id"], set()).add(o["rule_id"])
     for row in pack.entities("battery") if rows is None else rows:
         asset = _device_named(pack, pack.assets.get(row["asset"], {"slug": row["asset"], "name": row["name"],
                                                                    "critical": False}), row["entity_id"])
@@ -358,7 +362,8 @@ def battery_findings(pack, states: dict, params, today: date, stats: dict | None
         except ValueError:
             level = None
         series = [(str(r["start"]), r["mean"]) for r in (stats or {}).get(row["entity_id"], []) if r.get("mean") is not None]
-        out += R.battery_rules(asset, row["entity_id"], row.get("unit"), level, series, params, today)
+        out += R.battery_rules(asset, row["entity_id"], row.get("unit"), level, series, params, today,
+                              frozenset(held.get(row["entity_id"], ())))
     return out
 
 

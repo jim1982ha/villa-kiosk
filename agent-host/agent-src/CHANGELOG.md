@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.284 (20 October 2026)
+
+- PM-BATTERY-LOW / -CRIT keep a margin once open (owner: "yes, 5 points"): settings.yaml
+  `battery_clear_margin_points` (5); rules.battery_rules takes `held`, the battery rules already open for the entity,
+  and holds each up to its line plus the margin (the voltage LOW too). nightly.battery_findings reads them from the
+  store, for the night and for recheck.py alike. The margin never opens a fault; the trend still projects to
+  `battery_crit_pct`.
+
 ## 0.6.283 (20 October 2026)
 
 - Every open finding of the night is read again every 5 minutes (owner: "remove the split, check every 5 min for all

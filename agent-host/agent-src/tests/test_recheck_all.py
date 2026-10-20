@@ -385,3 +385,33 @@ def test_the_logbook_kept_between_ticks_counts_as_a_whole_read_and_reads_only_th
     assert cli.reads[0] == (NOW - timedelta(days=3), NOW) and cli.reads[2] == (NOW, later)    # only the new minutes
     assert not any(r.get("entity_id") == noisy for r in kept.rows)                            # only what a count reads
     assert kept.whole
+
+
+@pytest.mark.parametrize("rule,eid,level,stays", [
+    ("PM-BATTERY-LOW", BAT_LOW, "22", True), ("PM-BATTERY-LOW", BAT_LOW, "25", True), ("PM-BATTERY-LOW", BAT_LOW, "26", False),
+    ("PM-BATTERY-CRIT", BAT_CRIT, "15", True), ("PM-BATTERY-CRIT", BAT_CRIT, "16", False)])
+def test_an_open_battery_fault_closes_only_five_points_above_its_line(tmp_path, rule, eid, level, stays):
+    """Owner, 2026-10-20 ("yes, 5 points"): a battery hovering on 20/21 % is one fault, not one opened and closed a
+    reading: LOW (opens at 20 %) closes above 25 %, CRIT (opens at 10 %) above 15 %."""
+    _pack(tmp_path)
+    store = Store(str(tmp_path / "s.sqlite"))
+    fid, _ = _found(store, rule, eid, "battery low.")
+    _villa(tmp_path, {eid: _st(level, 60)})
+    _tick(tmp_path)
+    assert Store(str(tmp_path / "s.sqlite")).finding(fid)["status"] == ("open" if stays else "closed")
+
+
+def test_the_margin_never_opens_a_fault(tmp_path):
+    """The margin holds an open fault only: a battery at 22 % with nothing open is not low (the night's own rule)."""
+    import importlib
+    sys.path.insert(0, os.path.join(SKILL, "scripts"))
+    R = importlib.import_module("rules")
+    from vesta_shared.params import VillaParams
+    import yaml
+    defaults = yaml.safe_load(open(os.path.join(SKILL, "settings.yaml")))["behaviour"]
+    p = VillaParams({}, {}, defaults)
+    a = {"slug": "door_a", "name": "Door A", "critical": False}
+    day = NOW.date()
+    assert R.battery_rules(a, BAT_LOW, "%", 22, [], p, day) == []
+    assert [f.rule_id for f in R.battery_rules(a, BAT_LOW, "%", 22, [], p, day, frozenset({"PM-BATTERY-LOW"}))] == ["PM-BATTERY-LOW"]
+    assert [f.rule_id for f in R.battery_rules(a, BAT_LOW, "%", 12, [], p, day, frozenset({"PM-BATTERY-CRIT"}))] == ["PM-BATTERY-CRIT"]

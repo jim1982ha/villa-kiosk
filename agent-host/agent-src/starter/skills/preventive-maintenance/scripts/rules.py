@@ -228,16 +228,21 @@ def power_rules(asset: dict, entity_id: str, series: dict[date, dict], today: da
 
 # -------------------------------------------------------------- battery family
 def battery_rules(asset: dict, entity_id: str, unit: str | None, level: float | None, series: list[tuple[str, float]],
-                  params: VillaParams, today: date) -> list[Finding]:
+                  params: VillaParams, today: date, held: frozenset[str] = frozenset()) -> list[Finding]:
+    """`held`: the battery rules already open for this entity — one stays found up to its level plus
+    `battery_clear_margin_points`, so a battery hovering on its line is one fault, not one a reading (owner, 2026-10-20)."""
     out: list[Finding] = []
     slug = asset["slug"]
+    margin = params.behaviour("battery_clear_margin_points")
     warn, crit = params.behaviour("battery_warn_pct"), params.behaviour("battery_crit_pct")
+    low_at = margin if battery.LOW in held else 0                       # the margin of a fault already open
+    crit_at, warn_at = crit + (margin if battery.CRIT in held else 0), warn + low_at
     # ⚠️ THE ONE JUDGE OF A BATTERY (owner, 2026-10-19): the weekly page shows these findings, it no longer judges
     if unit == "%" and level is not None:
-        if level <= crit:
+        if level <= crit_at:
             out.append(Finding(battery.CRIT, entity_id, slug, "battery", P2 if asset.get("critical") else P3,
                                f"{asset['name']} battery at {level:.0f}%: replace now.", {"level": level}, "Replace the battery."))
-        elif level <= warn:
+        elif level <= warn_at:
             out.append(Finding(battery.LOW, entity_id, slug, "battery", P3,
                                f"{asset['name']} battery at {level:.0f}%: replace within the week.", {"level": level}, "Replace the battery."))
         # days to empty from the last days (settings.yaml battery_trend_*), to its crit level (vesta_shared.battery)
@@ -256,7 +261,7 @@ def battery_rules(asset: dict, entity_id: str, unit: str | None, level: float | 
             out.append(Finding(PARAM_MISSING, entity_id, slug, "battery", INFO,
                                f"{asset['name']} reports a battery voltage ({level} V) but no nominal voltage is set: "
                                f"create input_number.{slug}_battery_nominal_v to get a percentage.", {"reading_v": level, "name": asset["name"]}, ""))
-        elif level is not None and battery.charge(level, "V", nominal) < params.behaviour("battery_low_fraction_of_nominal") * 100:
+        elif level is not None and battery.charge(level, "V", nominal) < params.behaviour("battery_low_fraction_of_nominal") * 100 + low_at:
             out.append(Finding(battery.LOW, entity_id, slug, "battery", P3,
                                f"{asset['name']} battery at {level:.2f} V, below {params.behaviour('battery_low_fraction_of_nominal'):.0%} of its {nominal:.2f} V nominal.",
                                {"level_v": level, "nominal_v": nominal}, "Replace the battery."))

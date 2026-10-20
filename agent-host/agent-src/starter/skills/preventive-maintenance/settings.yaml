@@ -12,6 +12,7 @@ behaviour:
   min_days_for_baseline: 7
   battery_warn_pct: 20
   battery_crit_pct: 10
+  battery_clear_margin_points: 5        # an open battery fault closes only above its level plus this (owner, 2026-10-20: a battery hovering at 20/21 % opened and closed all day)
   silence_hours: 24                     # a sensor that has not reported for this long
   unavailable_minutes: 10              # offline this long: its fault opens (the night check, and recheck.py every 5 minutes)
   back_online_minutes: 10               # a device found offline, back this long: its fault closes (recheck.py)
