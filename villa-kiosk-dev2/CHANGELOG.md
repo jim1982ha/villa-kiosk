@@ -1,3 +1,10 @@
+## 2.496.447
+
+### Changed
+- Every window keeps one height whatever it shows: a device list switching Per Room / Per Floor, a device window, a
+  form. On a tablet it is the height of the Settings window; on a phone a device window is one height and every other
+  window fills the screen. A question box ("Turn off 1 fan?") and the badge colour picker keep their own small size.
+
 ## 2.496.446
 
 ### Changed
