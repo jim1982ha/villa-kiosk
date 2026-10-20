@@ -97,7 +97,7 @@ ck("every path the app requests is answered", not unreachable,
    f"the app fetches these and nothing answers: {', '.join(unreachable)}")
 
 # ⚠️ THE CHECKS ABOVE COMPARE FIRST SEGMENTS, AND nginx's `location = /x` IS
-# EXACT (2.496.239). `/agent-messages/clear` shares its first segment with
+# EXACT (2.496.239). `/agent-messages/clear` (removed 2.496.445) shared its first segment with
 # `location = /agent-messages`, so it read as published while nginx would have
 # handed it to the SPA fallback. Each WHOLE literal path the app requests must
 # be matched by a location that reaches the proxy: equal to an exact one, or
