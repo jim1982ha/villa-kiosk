@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, asdict
 from datetime import date, timedelta
+import re
 from typing import Any
 
 from vesta_shared.params import VillaParams
@@ -343,3 +344,51 @@ def flap_rules(asset: dict, entity_id: str, flips_by_day: dict[date, int], today
     return [Finding("PM-RECONNECT-LOOP", entity_id, asset["slug"], "network", P3,
                     f"{asset['name']} dropped and reconnected {n} times in {window} days: {cause}.",
                     {"flips_3d": n, "days": window, "restarted": restarted}, check)]
+
+
+# -------------------------------------------------------- configuration family
+HIDDEN_IN_RULE = "PM-HIDDEN-IN-RULE"
+#: A rule's words about itself, never what it watches: an id mentioned in its description or a step's note is prose.
+_PROSE_KEYS = frozenset({"alias", "description", "note", "notes", "name"})
+
+
+def ids_named(config, ids) -> set[str]:
+    """The ids of `ids` a rule's configuration names WHOLE — in an input, a target, a template — and never inside a
+    longer id ("lock.door" is not named by "lock.door_inverted") nor in its prose (_PROSE_KEYS)."""
+    texts: list[str] = []
+
+    def walk(v, key=None):
+        if key in _PROSE_KEYS:
+            return
+        if isinstance(v, dict):
+            for k, x in v.items():
+                walk(x, k)
+        elif isinstance(v, list):
+            for x in v:
+                walk(x)
+        elif isinstance(v, str):
+            texts.append(v)
+    walk(config)
+    text = "\n".join(texts)
+    return {i for i in ids if re.search(r"(?<![\w])" + re.escape(i) + r"(?![\w])", text)}
+
+
+def hidden_in_rule_rules(rules: list[dict], hidden, name_of) -> list[Finding]:
+    """PM-HIDDEN-IN-RULE: one finding per villa rule (automation or script) that names a device hidden in the villa's
+    system. A hidden device is left out of every VESTA check (the pack), but a rule naming it still alerts on it — the
+    owner had a false "offline" alert from a rule still watching a lock he had replaced by its corrected copy (owner,
+    2026-10-20). `rules`: [{"entity_id", "kind", "config"}]; `name_of(entity_id)`: a device's name."""
+    out = []
+    for r in rules:
+        named = sorted(ids_named(r.get("config") or {}, hidden))
+        if not named:
+            continue
+        rule = str((r.get("config") or {}).get("alias") or name_of(r["entity_id"]))
+        n = len(named)
+        names = ", ".join(name_of(e) for e in named)
+        out.append(Finding(HIDDEN_IN_RULE, r["entity_id"], r["entity_id"], "configuration", P3,
+                           f"The rule {rule} watches {n} device{'s' if n > 1 else ''} hidden in the villa's system: {names}.",
+                           {"name": rule, "kind": r.get("kind"), "hidden": named, "count": n},
+                           "Point the rule at the device you see instead (a hidden device is left out of every check), "
+                           "or take the hidden one out of the rule."))
+    return out

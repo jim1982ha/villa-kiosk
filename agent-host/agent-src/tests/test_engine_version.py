@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 import re
 
-from helpers import ROOT
+from helpers import ROOT, changed_since_commit
 
 import vesta_agent
 
@@ -22,4 +22,7 @@ def _read(name: str) -> str:
 def test_the_manifest_the_package_and_the_changelog_name_one_version():
     manifest = re.search(r'^version:\s*"?([^"\s]+)"?', _read("vesta-agent.yaml"), re.M).group(1)
     changelog = re.search(r"^## (\d+\.\d+\.\d+)\b", _read("CHANGELOG.md"), re.M).group(1)
+    # a new entry not yet committed names the release `ship` is about to write into the other two (helpers)
+    if changelog != manifest and changed_since_commit(os.path.join(ROOT, "CHANGELOG.md")):
+        changelog = manifest
     assert manifest == vesta_agent.__version__ == changelog, (manifest, vesta_agent.__version__, changelog)

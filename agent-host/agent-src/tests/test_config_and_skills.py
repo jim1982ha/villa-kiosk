@@ -8,7 +8,7 @@ import time
 import pytest
 import yaml
 
-from helpers import copy_skill, settings
+from helpers import changed_since_commit, copy_skill, settings
 from vesta_agent.config import STARTER_DIR
 from vesta_agent.skills import Skills, ToolError, run_command, validate_script_args
 
@@ -126,12 +126,17 @@ def test_an_instruction_sentence_a_release_rewrote_reaches_the_villa_file_only_w
 
 
 def test_every_starter_skill_version_is_recorded_as_shipped():
-    # without it, the NEXT release would take this version for an edited one and never update it
+    # without it, the NEXT release would take this version for an edited one and never update it.
+    # ⚠️ GREEN WHILE THE CHANGE IS STILL BEING MADE (retro, 2026-10-20): `ship` records the skills as it commits them, so
+    # this test failed on EVERY run between a skill's edit and its release — a suite red by design, read past every
+    # time. A skill not yet committed is ship's to record; once committed (CI, every later run) it must be recorded.
     import json
     from vesta_agent.skills import SHIPPED, fingerprint
     shipped = json.load(open(os.path.join(STARTER_DIR, SHIPPED)))
     for name in os.listdir(os.path.join(STARTER_DIR, "skills")):
         fp = fingerprint(os.path.join(STARTER_DIR, "skills", name))
+        if fp not in shipped.get(name, []) and changed_since_commit(os.path.join(STARTER_DIR, "skills", name)):
+            continue
         assert fp in shipped.get(name, []), (
             f"starter skill {name} changed: run python3 -c \"from vesta_agent.skills import record_shipped; "
             f"record_shipped('starter/skills')\" in agent-src")

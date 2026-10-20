@@ -65,7 +65,7 @@ MIN_RUN_MINUTES = limit("night.min_run_minutes", 30, unit="minutes", group="dete
 
 STATE_RULES = {"PM-POWER-CHANGE", "PM-ENERGY-CHANGE", "PM-UNAVAILABLE",
                "PM-BATTERY-LOW", "PM-BATTERY-CRIT", "PM-SILENT", "PM-RECONNECT-LOOP", "PM-LEVEL-HIGH",
-               result.PARAM_MISSING}
+               R.HIDDEN_IN_RULE, result.PARAM_MISSING}
 EVENT_RULES = {"PM-RUNHOURS", "PM-RUN-SAG", "PM-EXPECTED-SILENT", result.COUNTER_RESET, "PM-BATTERY-TREND"}
 
 
@@ -193,6 +193,11 @@ def run(args) -> dict:
     findings += found
     notes += said
 
+    # ---- the villa's rules still watching a hidden device ----------------------
+    found, said = hidden_in_rule_findings(cli, pack, states, store)
+    findings += found
+    notes += said
+
     # ---- persist findings, dedup, close ---------------------------------------
     # the night's ledger is Problems' (vesta_shared/problems.py); what is a state, an event, worse, a task: here
     night = Problems(store).record_night(
@@ -213,6 +218,26 @@ def run(args) -> dict:
         with open(args.out, "w", encoding="utf-8") as fh:
             json.dump(result, fh, indent=1, default=str)
     return result
+
+
+def hidden_in_rule_findings(cli, pack, states: dict, store) -> tuple[list, list[str]]:
+    """PM-HIDDEN-IN-RULE (rules.hidden_in_rule_rules) over the villa's rules naming a hidden entity (pack.hidden). A
+    reading that fails keeps the open ones as they are — the night saw nothing, it must not say they are cleared."""
+    hidden = list(getattr(pack, "hidden", None) or [])
+    if not hidden:
+        return [], []
+
+    def name_of(eid):
+        return ((states.get(eid) or {}).get("attributes") or {}).get("friendly_name") or _plain_name(eid)
+    try:
+        rules = cli.rules_mentioning(hidden)
+    except Exception as e:  # the villa's search or a rule's read failed: what was open stays open
+        kept = [R.Finding(o["rule_id"], o["entity_id"], o["entity_id"], o["family"], o["severity"], o["summary"],
+                          {k: v for k, v in json.loads(o["detail"] or "{}").items() if k != "check"},
+                          json.loads(o["detail"] or "{}").get("check", ""))
+                for o in store.findings(status="open") if o["rule_id"] == R.HIDDEN_IN_RULE]
+        return kept, [f"The villa's rules could not be read for hidden devices ({type(e).__name__}): nothing changed."]
+    return R.hidden_in_rule_rules(rules, hidden, name_of), []
 
 
 def still_there_minutes(settings: dict) -> float | None:

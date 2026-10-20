@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.276 (20 October 2026)
+
+Retro of 20 October:
+- PM-HIDDEN-IN-RULE (preventive-maintenance, nightly, P3, a state rule): one fault per villa automation or script that
+  names an entity hidden in the villa's system (pack.hidden) — whole ids only (rules.ids_named: never inside a longer
+  id, never in a rule's alias, description or notes). A night that cannot read the rules keeps the open ones. Read by
+  the new client method rules_mentioning (one ha_search per hidden id, every page, each rule read once:
+  ha_config_get_automation / ha_config_get_script, now a READ_TOOL). Owner, 2026-10-20: the "critical devices
+  offline" rule still watched two locks replaced by corrected copies and alerted on one.
+- test_every_starter_skill_version_is_recorded_as_shipped skips a skill git sees changed and not yet committed (`ship`
+  records it as it commits); a committed, unrecorded one still fails. The suite was red between every skill edit and
+  its release.
+
 ## 0.6.275 (20 October 2026)
 
 Architecture review of 20 October, #6 — one list of the faults read again in the day:

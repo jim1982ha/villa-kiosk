@@ -16,7 +16,8 @@ from .limits import limit
 #: The only ha-mcp tools a skill script's client calls. Anything else is refused there, whoever asks.
 READ_TOOLS = {
     "ha_get_state", "ha_get_entity", "ha_get_device", "ha_search", "ha_eval_template", "ha_get_history",
-    "ha_get_logs", "ha_get_automation_traces", "ha_config_get_automation", "ha_config_list_helpers",
+    "ha_get_logs", "ha_get_automation_traces", "ha_config_get_automation", "ha_config_get_script",
+    "ha_config_list_helpers",
     "ha_list_floors_areas", "ha_get_camera_image", "ha_get_todo", "ha_get_overview", "ha_get_system_health",
 }
 WRITE_TOOLS = {"ha_call_service"}

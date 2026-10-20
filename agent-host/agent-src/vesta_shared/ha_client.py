@@ -93,6 +93,12 @@ class HABase:
         """The configs of the villa's automations whose configuration mentions `text` (a blueprint's name)."""
         raise NotImplementedError
 
+    def rules_mentioning(self, texts: Iterable[str]) -> list[dict]:
+        """The villa's automations and scripts whose configuration mentions any of `texts` (as the villa's own search
+        finds them: a text inside a longer one counts — the caller judges a whole id): [{"entity_id", "kind"
+        ("automation" | "script"), "config"}], each once."""
+        raise NotImplementedError
+
     def registry(self) -> dict:
         """{'entities': [...], 'devices': [...], 'areas': [...]}"""
         raise NotImplementedError
@@ -538,6 +544,32 @@ class McpClient(HABase):
             cfg = got.get("config") if isinstance(got, dict) else None
             if isinstance(cfg, dict):
                 out.append(cfg)
+        return out
+
+    def rules_mentioning(self, texts):
+        # one search per text, read on while it says has_more (a rule on a later page would be missed in silence), then
+        # each rule read whole once
+        found: dict[str, str] = {}
+        for text in dict.fromkeys(texts):
+            offset = 0
+            while True:
+                body = self.tool("ha_search", {"query": text, "fields": ["automations", "scripts", "config_has_more",
+                                                                         "config_next_offset"], "limit": 50,
+                                               "offset": offset})
+                for kind in ("automation", "script"):
+                    for r in body.get(kind + "s") or []:
+                        if r.get("entity_id"):
+                            found.setdefault(r["entity_id"], kind)
+                if not body.get("config_has_more") or body.get("config_next_offset") in (None, offset):
+                    break
+                offset = body["config_next_offset"]
+        out = []
+        for eid, kind in found.items():
+            got = (self.tool("ha_config_get_automation", {"identifier": eid}) if kind == "automation"
+                   else self.tool("ha_config_get_script", {"script_id": eid}))
+            cfg = got.get("config") if isinstance(got, dict) else None
+            if isinstance(cfg, dict):
+                out.append({"entity_id": eid, "kind": kind, "config": cfg})
         return out
 
     def registry(self):

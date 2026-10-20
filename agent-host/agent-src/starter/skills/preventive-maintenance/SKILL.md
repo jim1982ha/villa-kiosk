@@ -82,6 +82,7 @@ closure, and never raise the same thing twice.
 | PM-SILENT | level | A sensor online but not reporting for 24 h. | `vesta_silence_hours` |
 | PM-LEVEL-HIGH | level | A temperature or humidity above `<asset>_max_c` / `<asset>_max_humidity_pct` when such a helper exists. | asset helper |
 | PM-RECONNECT-LOOP | network | Ten or more drop/reconnect events in three days for one device (logbook). | `vesta_reconnect_events`, `vesta_reconnect_days` |
+| PM-HIDDEN-IN-RULE | configuration | A villa rule (automation or script) still names a device hidden in the villa's system: one finding per rule, naming the hidden devices. A hidden device is left out of every VESTA check, but the rule still alerts on it. Nightly only. | none |
 | PM-PARAM-MISSING | any | A rule could not run for lack of a helper. Says which one. | none |
 
 What an asset is, decided by the knowledge pack: "motor" (a schedule, a runtime

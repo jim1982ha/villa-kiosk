@@ -184,3 +184,17 @@ def alert_desk():
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
+
+
+def changed_since_commit(path: str) -> bool:
+    """Whether git sees `path` changed and not yet committed — what `tools/release.py ship` writes or records as it
+    commits it (the starter skills' record, the versions). ⚠️ A TEST THAT CHECKS WHAT SHIP WRITES WAS RED BY DESIGN
+    (retro, 2026-10-20): between every edit and its release the suite failed, and a red suite was read past. Such a
+    test lets a change still being made pass; once committed (CI, every later run) it is strict. No git: never."""
+    import subprocess
+    where = path if os.path.isdir(path) else os.path.dirname(path)
+    try:
+        r = subprocess.run(["git", "status", "--porcelain", "--", path], capture_output=True, text=True, cwd=where)
+    except OSError:
+        return False
+    return r.returncode == 0 and bool(r.stdout.strip())

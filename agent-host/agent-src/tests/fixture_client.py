@@ -25,6 +25,7 @@ class FixtureClient(HABase):
       logbook.json                          {'entries': [...]}
       templates.json                        {template text: what Home Assistant renders it as}
       energy_prefs.json                     ha_manage_energy_prefs(mode=get)'s `config` (absent: no settings read)
+      rules.json                            [{"entity_id", "kind", "config"}]: the villa's automations and scripts
     """
 
     def __init__(self, fixture_dir: str, zone: str = "UTC", extra_helpers: str | None = None):
@@ -99,6 +100,16 @@ class FixtureClient(HABase):
             from vesta_shared.ha_client import HAError
             raise HAError("ha_search failed: the villa's system did not answer")
         return [c for c in got if text in json.dumps(c)]
+
+    def rules_mentioning(self, texts):
+        """rules.json: those mentioning any of `texts` (a text inside a longer one counts, as the villa's search);
+        anything else in the file: the villa's system not answering."""
+        got = self._load("rules.json", [])
+        if not isinstance(got, list):
+            from vesta_shared.ha_client import HAError
+            raise HAError("ha_search failed: the villa's system did not answer")
+        texts = list(texts)
+        return [r for r in got if any(t in json.dumps(r["config"]) for t in texts)]
 
     def registry(self):
         return self._load("registry.json", {"entities": [], "areas": [], "devices": []})
