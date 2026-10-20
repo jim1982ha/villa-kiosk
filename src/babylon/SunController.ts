@@ -180,9 +180,6 @@ export class SunController {
    * `real` vs `alt` is the day/night PREVIEW pin: they differ only when
    * Settings is forcing a side of the horizon, which is what made a simulated
    * 04:00 render as bright noon with no stars and no moon.
-   * `drawn` is the sun disc's true altitude@azimuth on the overview's arc
-   * round the villa (skyBodies.placeBodies), `frame` where it lands on screen and
-   * `held` when it is waiting at the screen edge.
    */
   private reportSky(
     date: Date, real: number, alt: number, azimuth: number,
@@ -193,7 +190,7 @@ export class SunController {
     const line = `sky: ${clock}${skySimActive() ? " (sim)" : ""}`
       + ` alt=${deg(alt)}° real=${deg(real)}° az=${deg(azimuth)}°`
       + ` day=${alt > 0 ? "y" : "n"} nightT=${nightT.toFixed(2)} preview=${preview}`
-      + (this.sky ? this.sky.sunReport() : " sky=off");
+      + (this.sky ? "" : " sky=off");
     if (line === this.lastSkyLine) return;
     this.lastSkyLine = line;
     tapDebug(line, "sky");

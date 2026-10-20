@@ -48,12 +48,12 @@ export function categoryMembers(
 }
 
 /** One service call of a bulk switch. */
-export interface BulkCall { domain: string; service: "turn_on" | "turn_off"; entityIds: string[] }
+export interface BulkCall { domain: string; service: "turn_on" | "turn_off" | "lock" | "unlock"; entityIds: string[] }
 
 /**
  * Switch a mixed list all on or all off: ONE call PER DOMAIN, each with its
  * own ids — `light.turn_off` for the lights, `switch.turn_off` for the
- * switches. Only domains with a plain turn_on/turn_off are included.
+ * switches; a lock is "on" while unlocked, so turning on UNLOCKS and off LOCKS. Only the domains asked are included.
  */
 export function bulkSwitchPlan(entityIds: readonly string[], turnOn: boolean, domains: ReadonlySet<string>): BulkCall[] {
   const byDomain = new Map<string, string[]>();
@@ -62,14 +62,20 @@ export function bulkSwitchPlan(entityIds: readonly string[], turnOn: boolean, do
     if (!domains.has(d)) continue;
     byDomain.set(d, [...(byDomain.get(d) ?? []), id]);
   }
-  return [...byDomain].map(([domain, ids]) => ({ domain, service: turnOn ? "turn_on" : "turn_off", entityIds: ids }));
+  return [...byDomain].map(([domain, ids]) => ({
+    domain,
+    service: domain === "lock" ? (turnOn ? "unlock" : "lock") : (turnOn ? "turn_on" : "turn_off"),
+    entityIds: ids,
+  }));
 }
 
 /** What a bulk switch is about to do, in words (owner, 2026-10-20: the button said "Turn all off" over a list of
  *  temperatures and curtains it never touches): the devices it switches, counted by kind — "Turn off 1 fan",
- *  "Turn on 4 lights and 2 fans". `ids`: exactly the ones it will switch (the plan's), in a domain this names. */
+ *  "Turn on 4 lights and 2 fans", "Lock 1 lock", "Turn off 2 lights and lock 1 lock". `ids`: exactly the ones it
+ *  will switch, in a domain this names. */
 const KIND: Readonly<Record<string, [string, string]>> = {
   light: ["light", "lights"], fan: ["fan", "fans"], switch: ["switch", "switches"], input_boolean: ["switch", "switches"],
+  lock: ["lock", "locks"],
 };
 export function bulkWords(ids: readonly string[], turnOn: boolean): string {
   const counts = new Map<string, number>();
@@ -78,10 +84,17 @@ export function bulkWords(ids: readonly string[], turnOn: boolean): string {
     if (!kind) continue;
     counts.set(kind[0], (counts.get(kind[0]) ?? 0) + 1);
   }
-  const parts = [...counts].map(([one, n]) => {
+  const said = (one: string) => {
+    const n = counts.get(one)!;
     const many = Object.values(KIND).find(([o]) => o === one)![1];
     return `${n} ${n === 1 ? one : many}`;
-  });
-  const list = parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}` : parts[0] ?? "nothing";
-  return `Turn ${turnOn ? "on" : "off"} ${list}`;
+  };
+  const and = (parts: string[]) => (parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}` : parts[0]);
+  const switched = [...counts.keys()].filter((k) => k !== "lock").map(said);
+  const phrases = [
+    ...(switched.length ? [`turn ${turnOn ? "on" : "off"} ${and(switched)}`] : []),
+    ...(counts.has("lock") ? [`${turnOn ? "unlock" : "lock"} ${said("lock")}`] : []),
+  ];
+  const text = phrases.length ? phrases.join(" and ") : `turn ${turnOn ? "on" : "off"} nothing`;
+  return text[0].toUpperCase() + text.slice(1);
 }

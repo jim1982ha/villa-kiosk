@@ -11,7 +11,7 @@
 
 import type { HassEntity } from "@/types/ha.types";
 import { phantomEntity } from "@/utils/phantomEntity";
-import { TOGGLEABLE_DOMAINS } from "@/utils/quickAction";
+import { ROW_SWITCH_DOMAINS } from "@/utils/quickAction";
 import { domainOf } from "@/utils/entityDomain";
 import { NO_ROOM_LABEL } from "./roomKey";
 import { roomLabel } from "./devicePlace";
@@ -94,7 +94,7 @@ export interface SummaryRows {
   notInHa: HassEntity[];
   /** The three, in that order: what the list draws. */
   rows: HassEntity[];
-  /** What "Turn all on/off" may address: real entities of a toggleable domain. */
+  /** What "Turn all on/off" may address: real entities a row has a switch for (ROW_SWITCH_DOMAINS: locks included). */
   toggleables: HassEntity[];
 }
 
@@ -124,6 +124,6 @@ export function summaryRows(
   return {
     onMap, offMap, notInHa,
     rows: [...onMap, ...offMap, ...notInHa],
-    toggleables: [...onMap, ...offMap].filter((e) => TOGGLEABLE_DOMAINS.has(domainOf(e.entity_id))),
+    toggleables: [...onMap, ...offMap].filter((e) => ROW_SWITCH_DOMAINS.has(domainOf(e.entity_id))),
   };
 }

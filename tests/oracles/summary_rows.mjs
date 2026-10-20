@@ -51,6 +51,9 @@ ck("one order for every by-room list — \"Other\" last even after a room alphab
   ck("ONE 'Turn all on/off' control, for the header and each heading (BulkToggle)",
      elements(parseTsx("components/panels/SummaryGroupPanel.tsx"), "button").filter((el) => propText(el, "title") === "words").length === 1
      && toggles.length === 2 && toggles.includes("toggleables") && toggles.includes("toggleables.filter((e) => inSection.has(e.entity_id))"), toggles);
+  ck("  ...shown over any heading with ONE device a row switches (owner, 2026-10-20: a lone switch, four locks), never zero",
+     /if \(devices\.length === 0\) return null;/.test(panel) && !/devices\.length < 2/.test(panel)
+     && /bulkSwitchPlan\(devices\.map\(\(e\) => e\.entity_id\), !anyOn, ROW_SWITCH_DOMAINS\)/.test(panel));
   ck("  ...a floor is the villa's one answer (devicePlace, through useRoomFloors), not a second rule", /useRoomFloors\(\)/.test(panel) && /floorOfRoom\(roomFloors, room\)/.test(panel));
   const seg = elements(parseTsx("components/panels/SummaryGroupPanel.tsx"), "SegmentedGroup");
   ck("  ...the window opens Per Room, and offers the toggle when the list asks for it",

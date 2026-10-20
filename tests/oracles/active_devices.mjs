@@ -109,6 +109,20 @@ console.log("\n  what a bulk switch says it will do (owner, 2026-10-20):");
      A.bulkWords(["light.a", "fan.b", "light.c", "light.d", "fan.e", "light.f"], true) === "Turn on 4 lights and 2 fans");
   ck("  ...a switch and an on/off helper are both switches; what it never touches is never counted",
      A.bulkWords(["switch.p", "input_boolean.q", "sensor.t", "cover.c"], false) === "Turn off 2 switches");
+  ck("locks lock and unlock (owner, 2026-10-20: Access Control had none): \"Lock 1 lock\", \"Unlock 4 locks\"",
+     A.bulkWords(["lock.a"], false) === "Lock 1 lock" && A.bulkWords(["lock.a", "lock.b", "lock.c", "lock.d"], true) === "Unlock 4 locks");
+  ck("  ...a mixed heading says both: \"Turn off 2 lights and lock 1 lock\"",
+     A.bulkWords(["light.a", "lock.b", "light.c"], false) === "Turn off 2 lights and lock 1 lock", A.bulkWords(["light.a", "lock.b", "light.c"], false));
+  const plan = A.bulkSwitchPlan(["lock.a", "light.b"], false, new Set(["lock", "light"]));
+  ck("  ...and a lock is locked (lock.lock), never sent turn_off; turning on unlocks",
+     plan.find((c) => c.domain === "lock").service === "lock" && plan.find((c) => c.domain === "light").service === "turn_off"
+     && A.bulkSwitchPlan(["lock.a"], true, new Set(["lock"]))[0].service === "unlock", plan);
+  const { ROW_SWITCH_DOMAINS } = await import("@/utils/quickAction");
+  const { summaryRows } = await import("@/config/summaryRows");
+  const ents = { "lock.a": e("lock.a", "locked"), "switch.s": e("switch.s", "off"), "sensor.t": e("sensor.t", "21") };
+  const r = summaryRows(Object.keys(ents), { entities: ents, mapped: new Set(Object.keys(ents)), suppressed: new Set(), filterSuppressed: true, mayListUnmapped: true });
+  ck("a heading's switch addresses every device a row switches — a lock and a lone switch included, a reading never",
+     ROW_SWITCH_DOMAINS.has("lock") && r.toggleables.map((x) => x.entity_id).sort().join() === "lock.a,switch.s", r.toggleables.map((x) => x.entity_id));
 }
 
 done("✅ one meaning of on; one call per domain; an offline measurement keeps its chart");

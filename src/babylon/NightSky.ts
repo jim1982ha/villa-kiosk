@@ -13,15 +13,14 @@
 // install). It cannot place a moon in a sky, it is opt-in, and it must never be
 // a prerequisite for anything here (skyMoment).
 //
-// WHERE the moon is drawn is not decided here: SkyDome places both bodies
-// with one call (skyBodies.placeBodies) and hands this class the moon's
-// placement to paint (paintMoon), and the night's fade for the stars
-// (setNight).
+// WHERE the moon is drawn is not decided here: SkyDome places it
+// (skyBodies.placeMoon) and hands this class the placement to paint
+// (paintMoon), and the night's fade for the stars (setNight). In the overview
+// no moon is drawn (owner, 2026-10-20).
 
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
-import { MOON_SPANS, type InSky, type OnArc, type VillaBox } from "./skyBodies";
-import { disposeGlow, drawOnArc, makeGlow, type Glow } from "./skyArc";
+import type { InSky } from "./skyBodies";
 import type { MoonNow } from "./skyMoment";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
@@ -33,9 +32,7 @@ import type { Scene } from "@babylonjs/core/scene";
 
 /** Walking: distance from the camera, in world units. Inside the sky dome's
  *  500 radius so it always reads as "in the sky", and far inside the 10000
- *  default far plane so ordinary depth testing lets the villa occlude it. In
- *  the overview the moon is a point on the sphere round the villa instead
- *  (skyBodies.placeBodies), placed with the sun. */
+ *  default far plane so ordinary depth testing lets the villa occlude it. */
 const MOON_DIST = 380;
 const STAR_RADIUS = 470;
 /** Moon disc size in world units at MOON_DIST — about 1.7°, a little larger
@@ -53,10 +50,6 @@ export class NightSky {
   private moon: Mesh;
   private moonMat: StandardMaterial;
   private moonTex: DynamicTexture;
-  /** Whether the moon was last painted on the overview's arc (its glow shows
-   *  there only). */
-  private onArc = false;
-  private moonGlow: Glow;
   private starLayers: { mesh: Mesh; mat: StandardMaterial; peak: number }[] = [];
   /** Last phase the texture was drawn for, so a per-minute update does not
    *  redraw an identical disc. The moon's lit fraction moves ~3% per hour, so
@@ -106,7 +99,7 @@ export class NightSky {
     // orient the crescent. The parallactic tilt is therefore baked into the
     // TEXTURE instead (see drawMoon), which sidesteps the conflict entirely.
     moon.billboardMode = Mesh.BILLBOARDMODE_ALL;
-    moon.infiniteDistance = true;      // walking: position is read as a camera offset (see update)
+    moon.infiniteDistance = true;      // position is read as a camera offset (see paintMoon)
     moon.isPickable = false;
     moon.applyFog = false;
     moon.checkCollisions = false;
@@ -115,7 +108,6 @@ export class NightSky {
     // drop it once the camera moved far enough from the origin.
     moon.alwaysSelectAsActiveMesh = true;
     this.moon = moon;
-    this.moonGlow = makeGlow(scene, "moonGlow", new Color3(0.55, 0.62, 0.75));
 
     this.setEnabled(false);
   }
@@ -131,27 +123,14 @@ export class NightSky {
   }
 
   /**
-   * Paint the moon where skyBodies.placeBodies put it (null: not drawn), lit
-   * as `look` says. In the overview it is a point on the sphere round the
-   * villa — up, over the villa; set, under it — with its glow; walking, the
-   * true direction at sky distance.
+   * Paint the moon where skyBodies.placeMoon put it (null: not drawn) — its
+   * true direction at sky distance — lit as `look` says.
    */
-  paintMoon(p: OnArc | InSky | null, look: MoonNow, villa: VillaBox | null): void {
-    this.onArc = p !== null && p.onArc;
-    let alpha = 0;
-    if (p && p.onArc) {
-      alpha = p.alpha;
-      drawOnArc(this.moon, this.moonGlow, p, villa as VillaBox, MOON_SIZE, MOON_SPANS, alpha, 0.25);
-    } else if (p) {
-      this.moon.infiniteDistance = true;   // position is read as a camera offset
-      this.moon.scaling.setAll(1);
-      this.moon.position = new Vector3(p.dir.x, p.dir.y, p.dir.z).scale(MOON_DIST);
-      alpha = p.alpha;
-      this.moonGlow.mat.alpha = 0;
-    }
+  paintMoon(p: InSky | null, look: MoonNow): void {
+    const alpha = p ? p.alpha : 0;
+    if (p) this.moon.position = new Vector3(p.dir.x, p.dir.y, p.dir.z).scale(MOON_DIST);
     this.moonMat.alpha = alpha;
     this.moon.setEnabled(alpha > 0);
-    this.moonGlow.mesh.setEnabled(this.onArc && alpha > 0);
     if (!(alpha > 0)) return;
 
     // Redraw only when the disc would actually look different.
@@ -298,7 +277,6 @@ export class NightSky {
 
   setEnabled(on: boolean): void {
     this.moon.setEnabled(on && this.moonMat.alpha > 0);
-    this.moonGlow.mesh.setEnabled(on && this.onArc && this.moonMat.alpha > 0);
     for (const l of this.starLayers) l.mesh.setEnabled(on && l.mat.alpha > 0);
   }
 
@@ -306,7 +284,6 @@ export class NightSky {
     this.moon.dispose();
     this.moonMat.dispose();
     this.moonTex.dispose();
-    disposeGlow(this.moonGlow);
     for (const l of this.starLayers) { l.mesh.dispose(); l.mat.dispose(); }
   }
 }
