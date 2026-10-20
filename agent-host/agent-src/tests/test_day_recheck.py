@@ -191,6 +191,31 @@ def test_the_rules_read_in_the_day_are_the_skills_and_each_has_its_reading():
     assert not set(sk.day_rechecks) & set(sk.rechecks)               # every 5 minutes is sooner: one clock each
 
 
+def test_a_rule_the_skill_names_without_a_day_reading_stops_the_run_and_says_which(tmp_path):
+    # architecture review 2026-10-20, #6: skill.yaml `day_rechecks` is the one list (the card's "Next check: at 12:00");
+    # a rule in it that recheck.py cannot read was a line on stderr while its card kept promising the check
+    skill = copy_skill("preventive-maintenance", str(tmp_path / "skills"))
+    y = os.path.join(skill, "skill.yaml")
+    with open(y, encoding="utf-8") as fh:
+        text = fh.read()
+    with open(y, "w", encoding="utf-8") as fh:
+        fh.write(text.replace("day_rechecks: [PM-BATTERY-CRIT,", "day_rechecks: [PM-POWER-CHANGE, PM-BATTERY-CRIT,"))
+    _pack(tmp_path)
+    store, f = _night_findings(tmp_path)
+    _villa(tmp_path, {BAT_LOW: _st("100", 30)})            # the door battery was changed: a run would close it
+    r = subprocess.run([sys.executable, os.path.join(skill, "scripts", "recheck.py"), "day", "--pack",
+                        str(tmp_path / "pack.json"), "--store", str(tmp_path / "s.sqlite"), "--fixture-dir",
+                        str(tmp_path / "fx"), "--now", NOW.isoformat(), "--zone", "UTC"],
+                       capture_output=True, text=True, env={**os.environ, "PYTHONPATH": PYTHONPATH}, timeout=60)
+    assert r.returncode == 1 and r.stdout == ""
+    last = r.stderr.strip().splitlines()[-1]                 # what Overview › Scheduled jobs run says of the stop
+    assert "PM-POWER-CHANGE" in last and "day_rechecks" in last and "PM-BATTERY" not in last
+    assert Store(str(tmp_path / "s.sqlite")).finding(f["low"][0])["status"] == "open"    # refused, nothing read
+    recheck = _recheck_module()
+    assert recheck.unreadable({"PM-SILENT", "PM-RUNHOURS", "PM-LEVEL-HIGH"}) == ["PM-LEVEL-HIGH", "PM-RUNHOURS"]
+    assert recheck.unreadable(recheck.day_rechecked()) == []                        # the shipped skill reads all
+
+
 def test_the_scheduler_runs_the_day_recheck_at_the_skills_times_without_the_ai(tmp_path):
     from vesta_agent.scheduler import Scheduler
     from vesta_agent.skills import Skills

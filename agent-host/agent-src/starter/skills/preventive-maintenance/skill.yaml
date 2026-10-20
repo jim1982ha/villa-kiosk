@@ -10,7 +10,8 @@ rechecks: [PM-UNAVAILABLE]    # what recheck.py reads again: its Kiosk card says
 # The night's open findings read again during the day by `recheck.py day` (owner, 2026-10-19: "refresh the open ones every
 # 4 hours during the days"), each by its own rule: one no longer found closes ("Cleared: the check at 12:00 no longer sees
 # it."), one still found stays. Their Kiosk card says the next of the day_check times below. Only rules a short read can
-# judge (recheck.DAY_READS); the others are judged on a finished day and keep their nightly check.
+# judge (recheck.DAY_READS); the others are judged on a finished day and keep their nightly check. A rule named here that
+# recheck.py cannot read in the day stops the day recheck, and Overview says which.
 day_rechecks: [PM-BATTERY-CRIT, PM-BATTERY-LOW, PM-SILENT, PM-RECONNECT-LOOP]
 schedule:
   - when: "02:00"             # code only: zero tokens; the 07:00 digest carries the words

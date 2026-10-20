@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.275 (20 October 2026)
+
+Architecture review of 20 October, #6 — one list of the faults read again in the day:
+- skill.yaml `day_rechecks` is the ONE list of WHICH rules the day recheck reads (what the Kiosk card's "Next check: at
+  12:00" says); recheck.DAY_READS is only HOW, a named RecheckRule(rows, entities, found) per rule instead of positional
+  lambda tuples. A rule the skill names without a RecheckRule is refused (recheck.Unreadable): `recheck.py day` exits 1
+  and its last stderr line, which Overview shows, names it — it was a stderr line and a silent skip while the card kept
+  promising. Test: a copied skill naming PM-POWER-CHANGE stops the run, reads nothing and says which; three mutations red.
+
 ## 0.6.274 (20 October 2026)
 
 Architecture review of 20 October (the day's changes), its Strong candidates:

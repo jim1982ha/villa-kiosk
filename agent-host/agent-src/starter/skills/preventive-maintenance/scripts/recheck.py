@@ -40,6 +40,7 @@ import os
 import re
 import sys
 from datetime import datetime, timezone
+from typing import Callable, NamedTuple
 from zoneinfo import ZoneInfo
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -65,8 +66,7 @@ def rechecked(skill_dir: str = os.path.dirname(HERE)) -> set[str]:
 def day_rechecked(skill_dir: str = os.path.dirname(HERE)) -> set[str]:
     """The rules whose open findings the day recheck reads again (`recheck.py day`, at the times of the schedule entries
     marked `kiosk: day_check`): the skill's own `day_rechecks` (skill.yaml) — what the Kiosk's card says "Next check: at
-    12:00" of. Only those this script knows how to read for one finding (DAY_READS) are read; another is named on
-    stderr and keeps its nightly check."""
+    12:00" of. Each must have its reading here (DAY_READS); one that has none stops the run (Unreadable)."""
     import yaml
     with open(os.path.join(skill_dir, "skill.yaml"), encoding="utf-8") as f:
         return set((yaml.safe_load(f) or {}).get("day_rechecks") or [])
@@ -149,9 +149,19 @@ def _silence_rows(pack, f: dict) -> list[dict]:
     return [r for r in rows if pack.device_key(r["entity_id"], r) == key]
 
 
-#: How the day recheck reads one open finding again, per rule — {rule: (its rows, the entities whose state is read for
-#: them, what the night's own function finds over them)}. A rule absent here is not read in the day: it keeps its nightly
-#: check (the Kiosk card says so only when skill.yaml `day_rechecks` leaves it out, test_day_recheck holds them equal).
+class RecheckRule(NamedTuple):
+    """How the day recheck reads one open finding of a rule again: `rows` (finding → its pack rows, [] when the pack no
+    longer lists it), `entities` (finding, rows → the entities whose state is read), `found` (client, pack, states, now,
+    params, zone, rows → what the night's own function finds over them)."""
+    rows: Callable
+    entities: Callable
+    found: Callable
+
+
+#: How the day recheck reads one open finding again, per rule (RecheckRule). WHICH rules are read in the day is the
+#: skill's one list (skill.yaml `day_rechecks`, what the Kiosk card's "Next check: at 12:00" says); this is only HOW.
+#: A rule the skill names that has no reading here is REFUSED (unreadable): the run stops and Overview says which
+#: (architecture review 2026-10-20, #6: it was a line on stderr while the card kept promising the check).
 #: ⚠️ ONLY WHAT A SHORT READ CAN SAY (owner, 2026-10-19): a battery's level and a quiet sensor are read now, as the night
 #: reads them. A pump's draw and use (PM-POWER-CHANGE, PM-ENERGY-CHANGE, PM-RUNHOURS) and a temperature's day
 #: (PM-LEVEL-HIGH) are judged on a FINISHED day — at 12:00 the day is half there and would close what the next night
@@ -159,15 +169,15 @@ def _silence_rows(pack, f: dict) -> list[dict]:
 #: ⚠️ A RECONNECT LOOP TOO (owner, 2026-10-20: 17 false loops waited for the night to close): the villa-wide logbook of
 #: the last `reconnect_days`, the night's own reading (nightly.reconnect_findings), read ONCE per day recheck whatever
 #: the number of loops open (_loops).
-DAY_READS = {
-    "PM-BATTERY-CRIT": (_battery_rows, lambda pack, f, rows: [r["entity_id"] for r in rows],
-                        lambda c, pack, states, now, params, Z, rows: N.battery_findings(pack, states, params, now.date(),
-                                                                                         rows=rows)),
-    "PM-SILENT": (_silence_rows,
-                  lambda pack, f, rows: [r["entity_id"] for r in rows]
-                  + sorted(pack.entities_of_device(pack.device_id_of(f["entity_id"]))),
-                  lambda c, pack, states, now, params, Z, rows: N.silent_findings(c, pack, states, now, params, Z,
-                                                                                  rows=rows)),
+DAY_READS: dict[str, RecheckRule] = {
+    "PM-BATTERY-CRIT": RecheckRule(_battery_rows, lambda pack, f, rows: [r["entity_id"] for r in rows],
+                                   lambda c, pack, states, now, params, Z, rows: N.battery_findings(
+                                       pack, states, params, now.date(), rows=rows)),
+    "PM-SILENT": RecheckRule(_silence_rows,
+                             lambda pack, f, rows: [r["entity_id"] for r in rows]
+                             + sorted(pack.entities_of_device(pack.device_id_of(f["entity_id"]))),
+                             lambda c, pack, states, now, params, Z, rows: N.silent_findings(c, pack, states, now,
+                                                                                             params, Z, rows=rows)),
 }
 DAY_READS["PM-BATTERY-LOW"] = DAY_READS["PM-BATTERY-CRIT"]
 
@@ -183,8 +193,17 @@ def _loops(c, pack, states, now, params, Z, rows) -> list:
     return _LOOPS[key]
 
 
-DAY_READS["PM-RECONNECT-LOOP"] = (lambda pack, f: [{"entity_id": f["entity_id"]}],
-                                  lambda pack, f, rows: [f["entity_id"]], _loops)
+DAY_READS["PM-RECONNECT-LOOP"] = RecheckRule(lambda pack, f: [{"entity_id": f["entity_id"]}],
+                                             lambda pack, f, rows: [f["entity_id"]], _loops)
+
+
+class Unreadable(Exception):
+    """The skill names rules for the day recheck that have no day reading here (DAY_READS)."""
+
+
+def unreadable(rules: set[str]) -> list[str]:
+    """The rules of `rules` the day recheck cannot read (no RecheckRule), sorted."""
+    return sorted(set(rules) - set(DAY_READS))
 
 
 def day_recheck(store, pack, client, now: datetime, params, zone: str, settle_minutes: float | None = None,
@@ -200,19 +219,21 @@ def day_recheck(store, pack, client, now: datetime, params, zone: str, settle_mi
     Cockpit until 02:00 the next night. A reading that fails, or an entity whose state was not read, closes nothing."""
     none = {"actions": [], "closed": [], "seen": []}
     rules = day_rechecked() if rules is None else rules
-    for r in sorted(rules - set(DAY_READS)):
-        print(f"preventive-maintenance: {r} cannot be read again in the day: it keeps its nightly check", file=sys.stderr)
-    open_ = [f for f in store.findings(status="open") if f["rule_id"] in rules and f["rule_id"] in DAY_READS]
+    if unreadable(rules):
+        # ⚠️ REFUSED, NOT SKIPPED (architecture review 2026-10-20, #6): the card of such a fault says "Next check: at
+        # 12:00" (the skill's list) — a check that never ran would be a promise nobody keeps
+        raise Unreadable(", ".join(unreadable(rules)))
+    open_ = [f for f in store.findings(status="open") if f["rule_id"] in rules]
     if not open_ or pack is None or client() is None:
         return none
     Z = ZoneInfo(zone)
     at = now.astimezone(Z)
     plan = []
     for f in open_:
-        rows_of, ids_of, _ = DAY_READS[f["rule_id"]]
-        rows = rows_of(pack, f)
+        rule = DAY_READS[f["rule_id"]]
+        rows = rule.rows(pack, f)
         if rows:
-            plan.append((f, rows, ids_of(pack, f, rows)))
+            plan.append((f, rows, rule.entities(pack, f, rows)))
     states = client().states(sorted({e for _, _, ids in plan for e in ids})) if plan else {}
     rechecked, seen = [], []
     for f, rows, _ in plan:
@@ -222,7 +243,7 @@ def day_recheck(store, pack, client, now: datetime, params, zone: str, settle_mi
         if not st or (f["rule_id"] in (battery.CRIT, battery.LOW) and not has_value(st.get("state"))):
             continue
         try:
-            found = DAY_READS[f["rule_id"]][2](client(), pack, states, at, params, Z, rows)
+            found = DAY_READS[f["rule_id"]].found(client(), pack, states, at, params, Z, rows)
         except Exception as e:  # noqa: BLE001 — a read that failed closes nothing; the night reads it again
             print(f"preventive-maintenance: {f['rule_id']} of {f['entity_id']} could not be read again "
                   f"({type(e).__name__})", file=sys.stderr)
@@ -293,8 +314,14 @@ def main(argv=None):
     ctx = script.Context(a, skill=os.path.dirname(HERE))
     now = datetime.fromisoformat(a.now) if getattr(a, "now", None) else datetime.now(timezone.utc)
     if a.what == "day":
-        day = day_recheck(ctx.store, ctx.pack, lambda: ctx.live_client, now, ctx.params, ctx.zone,
-                          N.still_there_minutes(ctx.settings))
+        try:
+            day = day_recheck(ctx.store, ctx.pack, lambda: ctx.live_client, now, ctx.params, ctx.zone,
+                              N.still_there_minutes(ctx.settings))
+        except Unreadable as e:
+            # the last stderr line is what Overview › Scheduled jobs run says of a stopped run
+            print(f"day_rechecks names {e}, which cannot be read in the day: remove it from the skill's day_rechecks "
+                  "(its faults then say the nightly time)", file=sys.stderr)
+            return 1
         # the night's own rule for a close: nobody is messaged (told_now tells what is new or back, never a close);
         # the Kiosk's faults follow through the engine's repair
         print(json.dumps({"actions": day["actions"], "send": [], result.FAULTS_CHANGED: bool(day["actions"])},

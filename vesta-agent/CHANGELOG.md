@@ -1,3 +1,10 @@
+## 0.12.285
+
+What you will see:
+- A fault card's "Next check: at 12:00" is now always a check that runs. If the maintenance skill's list of faults
+  read again in the day names one the daytime check cannot read, that check stops and Overview › Scheduled jobs run
+  says which one to remove. Before, it skipped it silently while the card kept promising the check.
+
 ## 0.12.284
 
 What you will see:
