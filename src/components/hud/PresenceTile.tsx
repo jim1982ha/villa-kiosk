@@ -4,14 +4,14 @@
 // config/presence's (by value, tested); this draws it. No sensor picked in Settings › Villa: no tile.
 
 import { CircleQuestionMark, House, Users } from "lucide-react";
-import { type Presence, type PresenceWhy } from "@/config/presence";
+import { presenceStateWords, type Presence, type PresenceWhy } from "@/config/presence";
 import { presenceSince as since, usePresence } from "@/config/usePresence";
 import { STATUS_COLOR } from "@/utils/stateColors";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import ModalFooter from "@/components/common/ModalFooter";
 import { useProfile } from "@/auth/ProfileContext";
 import { profileView } from "@/auth/permissions";
-import ReadingHistory from "@/components/panels/ReadingHistory";
+import LastDayTimeline from "@/components/panels/LastDayTimeline";
 
 const ICON = { occupied: Users, empty: House, unknown: CircleQuestionMark };
 /** The tile's own short word (a 50 px rail): the panel's heading says it in full. */
@@ -35,7 +35,8 @@ export function PresenceWindow({ onClose, onOpenEntity, canOpen }: {
   if (!p) return null;
   return <PresencePanel presence={p.presence} why={p.why()} showPeople={sees.people} showMovement={sees.motion}
     canOpen={canOpen} onOpenEntity={onOpenEntity} onClose={onClose}
-    historyOf={(id) => <ReadingHistory entityId={id} />} />;
+    presenceHistory={<LastDayTimeline entityId={p.sensorId} words={(s) => presenceStateWords(s).label}
+      colorFor={(s) => STATUS_COLOR[presenceStateWords(s).tone]} />} />;
 }
 
 /** The tile, drawn — pure (a check draws it). */
@@ -67,13 +68,14 @@ function Row({ entityId, name, said, onOpen }: { entityId: string; name: string;
 /** Why the villa counts as empty or occupied: who it watches (the owner only), the latest movement among the sensors
  *  it watches with its history, the settings that decide it — all from the sensor's own lists (config/presence).
  *  Pure (a check draws it): the history is drawn by `historyOf`, the window's ReadingHistory. */
-export function PresencePanel({ presence: p, why, showPeople, showMovement = true, canOpen, onOpenEntity, onClose, historyOf }: {
+export function PresencePanel({ presence: p, why, showPeople, showMovement = true, canOpen, onOpenEntity, onClose, presenceHistory }: {
   presence: Presence; why: PresenceWhy; showPeople: boolean;
   /** Its latest movement — never for a profile that sees no motion (profileView: a guest). */
   showMovement?: boolean; canOpen: (entityId: string) => boolean;
   onOpenEntity: (entityId: string) => void; onClose: () => void;
-  /** The latest movement's history, drawn in the window (owner, 2026-10-19) — so its row opens nothing. */
-  historyOf?: (entityId: string) => React.ReactNode;
+  /** The villa's presence itself over time — Occupied / Empty (owner, 2026-10-20: the only band was the latest
+   *  movement's, "Clear", read as the villa's) — right under its "now". */
+  presenceHistory?: React.ReactNode;
 }) {
   const dialogRef = useModalA11y(onClose);
   const when = since(p.since);
@@ -88,6 +90,7 @@ export function PresencePanel({ presence: p, why, showPeople, showMovement = tru
           <div className="presence-now" style={{ "--tone": STATUS_COLOR[p.tone] } as React.CSSProperties}>
             <strong>{p.label}</strong>{when ? <span className="muted"> · since {when}</span> : null}
           </div>
+          {presenceHistory}
           {showPeople && (
             <>
               <div className="settings-section-title">People</div>
@@ -105,13 +108,12 @@ export function PresencePanel({ presence: p, why, showPeople, showMovement = tru
               <div className="settings-section-title">Latest movement</div>
               {act ? (
                 <>
-                  {/* ⚠️ NOT A BUTTON (owner, 2026-10-19): it opened the sensor's window for its history, which is
-                      now drawn right under it */}
+                  {/* ⚠️ NOT A BUTTON, AND NO CHART OF ITS OWN (owner, 2026-10-20: its "Clear" band was read as the
+                      villa's; the villa's Occupied / Empty band replaces it, under "now") */}
                   <ul className="presence-list">
                     <Row entityId={act.entityId} name={act.name}
                       said={act.moving ? "moving now" : `quiet since ${since(act.at)}`} />
                   </ul>
-                  {historyOf?.(act.entityId)}
                 </>
               ) : <p className="muted body-text">{why.listsSensors ? "None of the sensors this one watches reports." : "This sensor does not list the sensors it watches."}</p>}
             </>

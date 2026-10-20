@@ -177,7 +177,7 @@ console.log("\n  each surface asks config/reading, and nothing lower");
     ["\"Also on this device\"", "config/readingRows.ts", /\browText\(id, e\)/],
     ["the alarm line", "config/attention.ts", /detail: alarmText\(id, entity\)/],
     ["Recent activity", "components/cockpit/cockpitData.ts", /message: stateWords\(raw\.entity_id,/],
-    ["a history bar's tooltip", "components/panels/LastDayTimeline.tsx", /labelFor=\{stateWords\(entityId,/],
+    ["a history bar's tooltip", "components/panels/LastDayTimeline.tsx", /labelFor=\{words \?\? stateWords\(entityId,/],
   ]) {
     const t = src(file);
     ck(`${name} calls reading`, call.test(t) && /from "(@\/config|\.)\/reading"/.test(t));

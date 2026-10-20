@@ -71,14 +71,22 @@ ck("a row is a button only when it opens something; the others are plain text (n
    (panel.match(/<button type="button" class="presence-row opens">/g) ?? []).length === 1
    && (panel.match(/<div class="presence-row">/g) ?? []).length === 3, panel.slice(0, 500));
 const all = draw(h(PresencePanel, { presence: off, why, showPeople: true, canOpen: () => true, onOpenEntity: () => {},
-  onClose: () => {}, historyOf: (id) => h("i", { "data-history": id }) }));
-ck("the latest movement is never a button, even with a window to open — its history is drawn under it (owner, 2026-10-19)",
+  onClose: () => {}, presenceHistory: h("i", { "data-presence": "band" }) }));
+ck("the latest movement is never a button, and has no chart of its own: the villa's band replaces it (owner, 2026-10-20)",
    !/<button type="button" class="presence-row opens"><span>Hall<\/span>/.test(all) && /<div class="presence-row"><span>Hall<\/span>/.test(all)
-   && /<i data-history="binary_sensor.hall_motion"><\/i>/.test(all), all);
-ck("  ...drawn by the sensor's own history (ReadingHistory, as its window draws it), and the window passes it",
-   /historyOf=\{\(id\) => <ReadingHistory entityId=\{id\} \/>\}/.test(src("components/hud/PresenceTile.tsx"))
-   && /<ReadingHistory entityId=\{mapping\.entityId\} mappingType=\{mapping\.type\} \/>/.test(src("components/panels/SensorPanel.tsx")));
+   && !/data-history/.test(all) && /<\/div><i data-presence="band"><\/i>/.test(all), all);
 ck("  ...a profile that may not see people gets no People at all",
    !/People/.test(draw(h(PresencePanel, { presence: off, why, showPeople: false, canOpen: () => false, onOpenEntity: () => {}, onClose: () => {} }))));
 
+// owner, 2026-10-20: the window's only band was the latest movement's ("Clear") — the villa's own, in its words
+ck("the presence band says the villa's words, as its 'now' does: on Empty, off Occupied, else unknown — same colours",
+   ["on", "off", "unavailable"].every((st) => {
+     const now = P.presenceOf("binary_sensor.x", { "binary_sensor.x": { entity_id: "binary_sensor.x", state: st, attributes: {}, last_changed: null } });
+     const w = P.presenceStateWords(st);
+     return w.label === now.label && w.tone === now.tone;
+   }));
+const tileSrc = readFileSync(new URL("../../src/components/hud/PresenceTile.tsx", import.meta.url), "utf8");
+ck("  ...drawn in the window, right under its 'now', from the sensor picked in Settings",
+   /presenceHistory=\{<LastDayTimeline entityId=\{p\.sensorId\} words=\{\(s\) => presenceStateWords\(s\)\.label\}/.test(tileSrc)
+   && /<\/div>\s*\{presenceHistory\}/.test(tileSrc));
 done("✅ the villa's presence, always in sight");

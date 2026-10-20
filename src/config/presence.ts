@@ -37,6 +37,15 @@ export function presenceOf(sensorId: string, entities: Readonly<Record<string, H
   return { state: unknown, label: "Presence unknown", tone: "unavailable", since: e ? since : null };
 }
 
+/** One state of the picked sensor in the villa's words — "Empty" (on), "Occupied" (off), "Presence unknown" — and its
+ *  colour, the same as presenceOf's: what the presence window's band says over time (owner, 2026-10-20: the band under
+ *  "Latest movement" said "Clear" — a motion sensor's word — while the villa was Occupied). */
+export function presenceStateWords(state: string): { label: string; tone: StatusKey } {
+  if (state === "on") return { label: "Empty", tone: "idle" };
+  if (state === "off") return { label: "Occupied", tone: "active" };
+  return { label: "Presence unknown", tone: "unavailable" };
+}
+
 export interface PresencePerson { entityId: string; name: string; home: boolean; place: string; since: string | null }
 export interface PresenceActivity { entityId: string; name: string; moving: boolean; at: string | null }
 export interface PresenceSetting { entityId: string; name: string; value: string; unit: string }

@@ -113,4 +113,21 @@ console.log("\n  a greyed choice:");
      && /onClick=\{\(\) => \{ if \(!o\.disabled\) onChange\(o\.key\); \}\}/.test(seg));
 }
 
+// architecture review, 2026-10-20: a line without long-term figures cut its weeks on the 1970 Thursday and its days on
+// UTC's midnight, the band beside it on the villa's own — one edge rule for both
+{
+  const { PERIOD_MS } = await import("@/utils/statisticsSeries");
+  ck("each range's step is its period's length, said once", RANGES.every((r) => r.grainMs === PERIOD_MS[r.period]));
+  const to = new Date(2026, 9, 20, 4, 0).getTime();
+  for (const key of ["1m", "1y"]) {
+    const r = historyRange(key), from = to - r.hours * 3_600_000;
+    const raw = { points: [{ t: from - 1, v: 5 }], gaps: [], window: { from, to } };
+    const line = intervalSeries(raw, r.grainMs).points.map((p) => p.t).slice(1);
+    const band = timelineCells([{ t: from - 1, state: "on" }], to, r.hours, r.grainMs).map((c) => c.from).slice(1);
+    ck(`  ...${key}: the line's values and the band's slices start at the same moments (the villa's midnight${key === "1y" ? ", a Monday" : ""})`,
+       line.length > 3 && JSON.stringify(line.slice(0, band.length)) === JSON.stringify(band.slice(0, line.length))
+       && line.every((t) => new Date(t).getHours() === 0 && (key !== "1y" || new Date(t).getDay() === 1)), [line.slice(0, 3), band.slice(0, 3)]);
+  }
+}
+
 done("✅ five periods, each in its step; older than kept is said");

@@ -21,7 +21,7 @@ import { aggregationWords } from "./chartUtils";
 import { historyStateColor, NOT_KEPT, NOT_KEPT_COLOR, NOT_KEPT_WORDS, paletteColorFor } from "@/utils/stateColors";
 
 export default function LastDayTimeline({
-  entityId, colorFor, legend = false,
+  entityId, colorFor, legend = false, words,
 }: {
   entityId: string;
   /** Optional — the entity's own domain rules are used by default, which is
@@ -35,6 +35,9 @@ export default function LastDayTimeline({
    *  domain): a palette over the states the window actually holds, with a
    *  legend saying which is which. Ignored when `colorFor` is given. */
   legend?: boolean;
+  /** How a state is said, when the entity's own words are not the ones (the villa's presence: "Empty"/"Occupied",
+   *  never its sensor's "Detected"/"Clear"). */
+  words?: (state: string) => string;
 }) {
   const { range, picker } = useHistoryRange();
   const { data, status, lastSeen } = useStateHistory(entityId, range.hours);
@@ -53,7 +56,7 @@ export default function LastDayTimeline({
         hours={range.hours}
         grainMs={range.grainMs}
         end={lastSeen}
-        labelFor={stateWords(entityId, entities[entityId]?.attributes.device_class as string | undefined)}
+        labelFor={words ?? stateWords(entityId, entities[entityId]?.attributes.device_class as string | undefined)}
         legend={palette && [...[...new Set(held)].map((s) => ({ state: s, color: palette(s) })),
           ...(held.length < data.length ? [{ state: NOT_KEPT, color: NOT_KEPT_COLOR, label: NOT_KEPT_WORDS }] : [])]}
       />

@@ -3,7 +3,7 @@
 // so an oracle drives it by value (tests/oracles/history_ranges.mjs). The toggle and its hook are
 // components/panels/historyRange.tsx; the shared reader (ha/historySource) reads by `period`.
 
-import type { StatisticsPeriod } from "@/utils/statisticsSeries";
+import { PERIOD_MS, type StatisticsPeriod } from "@/utils/statisticsSeries";
 
 export interface HistoryRange {
   key: RangeKey;
@@ -29,15 +29,17 @@ export interface HistoryRange {
 // (historySource, by `period`), and a state band greys what is no longer kept.
 export type RangeKey = "1h" | "24h" | "1w" | "1m" | "1y";
 
-const MIN = 60_000, DAY = 24 * 60 * MIN;
+// ⚠️ THE STEP IS SAID ONCE (architecture review, 2026-10-20): `grainMs` is its `period`'s length (PERIOD_MS), never a
+// second number that could say otherwise
+const range = (r: Omit<HistoryRange, "grainMs">): HistoryRange => ({ ...r, grainMs: PERIOD_MS[r.period] });
 export const RANGES: readonly HistoryRange[] = [
   // the title says the period the toggle names (owner, 2026-10-20: "1w" read "Last 7 days"); 1w is hourly (owner,
   // 2026-10-20: five-minute values over a week were 2,016 points a line)
-  { key: "1h", label: "1h", hours: 1, title: "Last hour", grainMs: 5 * MIN, period: "5minute", totalPeriod: "hour" },
-  { key: "24h", label: "24h", hours: 24, title: "Last 24 hours", grainMs: 5 * MIN, period: "5minute", totalPeriod: "hour" },
-  { key: "1w", label: "1w", hours: 168, title: "Last week", grainMs: 60 * MIN, period: "hour", totalPeriod: "day" },
-  { key: "1m", label: "1m", hours: 720, title: "Last month", grainMs: DAY, period: "day", totalPeriod: "day" },
-  { key: "1y", label: "1y", hours: 8760, title: "Last year", grainMs: 7 * DAY, period: "week", totalPeriod: "week" },
+  range({ key: "1h", label: "1h", hours: 1, title: "Last hour", period: "5minute", totalPeriod: "hour" }),
+  range({ key: "24h", label: "24h", hours: 24, title: "Last 24 hours", period: "5minute", totalPeriod: "hour" }),
+  range({ key: "1w", label: "1w", hours: 168, title: "Last week", period: "hour", totalPeriod: "day" }),
+  range({ key: "1m", label: "1m", hours: 720, title: "Last month", period: "day", totalPeriod: "day" }),
+  range({ key: "1y", label: "1y", hours: 8760, title: "Last year", period: "week", totalPeriod: "week" }),
 ];
 
 /** Every key, in the toggle's order — the one list every history toggle shows. */
