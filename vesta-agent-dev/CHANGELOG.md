@@ -1,3 +1,12 @@
+## 0.12.301
+
+What you will see:
+- A question asked in French (or any language) is answered in that language, whatever language is saved for you.
+  "es-tu sûr que ça va ?" was answered in English.
+- Asked what a device did over a period ("why has the House Pump been starting and stopping this afternoon?"), the
+  Agent reads that device's history for that period before answering. At 20:45 it read nothing and answered from the
+  night check's daily figures, guessing the afternoon.
+
 ## 0.12.300
 
 What you will see:
