@@ -13,7 +13,7 @@ import {
   type FmCompletion, type FmCost, type FmData, type FmSchedule, type FmTicket, type FmTicketUpdate,
 } from "./fmTypes";
 import { fullDate, monthYear } from "@/utils/dateText";
-import { localMonthStart } from "@/utils/localDay";
+import { addLocalDays, localMonthStart } from "@/utils/localDay";
 import { fmtDuration } from "@/components/panels/chartUtils";
 import type { Tone } from "./tone";
 
@@ -74,10 +74,10 @@ export function scheduleStatus(
     // to `now` for schedules created before that field existed, which reads
     // as "due in `everyDays`" rather than a wrong date.
     const baseline = schedule.createdAt ? Date.parse(schedule.createdAt) : now;
-    const dueAt = baseline + schedule.everyDays * DAY_MS;
+    const dueAt = addLocalDays(baseline, schedule.everyDays);
     return { schedule, last: null, dueAt, daysUntilDue: (dueAt - now) / DAY_MS, state: "never" };
   }
-  const dueAt = Date.parse(last.at) + schedule.everyDays * DAY_MS;
+  const dueAt = addLocalDays(Date.parse(last.at), schedule.everyDays);
   const daysUntilDue = (dueAt - now) / DAY_MS;
   // ⚠️ AN UNREADABLE DATE MUST NOT READ AS COMPLIANT. An unparseable `last.at`
   // makes dueAt NaN, and every comparison against NaN is false — so the ladder

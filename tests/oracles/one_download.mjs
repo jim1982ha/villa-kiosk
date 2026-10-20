@@ -20,7 +20,5 @@ ck("  ...the Recap, Spend and Readiness documents save through downloadFile", us
 
 const weather = readFileSync(ROOT + "src/components/panels/WeatherPanel.tsx", "utf8");
 ck("Weather's \"ago\" is the app's one duration (fmtDuration), not its own rounding", /fmtDuration\(now - Date\.parse\(iso\)\)/.test(weather) && !/Math\.round\(s \/ 3600\)/.test(weather));
-const cockpit = readFileSync(ROOT + "src/components/cockpit/CockpitOverview.tsx", "utf8");
-ck("the Cockpit's activity is fetched through useHistory, not an eighth hand-written effect", /useHistory\("logbook/.test(cockpit) && !/let cancelled/.test(cockpit));
 
 done("✅ shared pieces are used, not copied");

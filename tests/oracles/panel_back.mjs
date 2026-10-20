@@ -33,9 +33,9 @@ ck("a reading opened from its device: Back reopens the device, one step",
    rd1.panel.entityId === "reading" && R(rd1, { type: "back" }).panel.entityId === "device"
    && R(rd1, { type: "back" }).back.length === 0 && reopenOf(rd1) === null);
 const fromCockpit = run({ type: "openFrom", panel: P("pump"), from: { kind: "surface", surface: "cockpit" } });
-ck("a device handed over by the Cockpit or the VESTA Agent: Back closes it and names the window to reopen",
+ck("a device handed over by the Cockpit: Back closes it and names the window to reopen",
    reopenOf(fromCockpit)?.surface === "cockpit" && R(fromCockpit, { type: "back" }).panel === null
-   && ["cockpit", "agent"].every((w) => dash.includes(`onOpenEntity={(id) => handOver("${w}", id)}`)));
+   && dash.includes(`onOpenEntity={(id) => handOver("cockpit", id)}`));
 const room = { kind: "list", list: { kind: "room", room: "Kitchen", entityIds: ["a"] } };
 ck("a device from a room or category list: Back names the list to reopen",
    reopenOf(run({ type: "openFrom", panel: P("a"), from: room }))?.list.room === "Kitchen");
@@ -53,5 +53,5 @@ ck("no Back step is recorded and the open panel stays",
 ck("the hand-over closes its window only after a panel was found",
    /go\(\{ type: "handOver", from, panel: devicePanel\(entityId\) \}\)/.test(dash) && !/closeSurface\(from\)/.test(dash));
 ck("every window a device can be handed from has words for its Back",
-   ["cockpit", "agent"].every((w) => typeof SURFACE_LABEL[w] === "string" && SURFACE_LABEL[w].length > 0));
+   Object.keys(SURFACE_LABEL).every((w) => typeof SURFACE_LABEL[w] === "string" && SURFACE_LABEL[w].length > 0));
 done("✅ a panel opened from another window can go back to it");

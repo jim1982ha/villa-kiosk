@@ -23,8 +23,8 @@ export interface Doors {
   settings: boolean;
   /** The Facility workspace. */
   facility: boolean;
-  /** The VESTA Agent's window — and with it the robot on the Cockpit button
-   *  and the Cockpit footer's "VESTA Agent". */
+  /** The VESTA Agent's presence: the robot on the Cockpit button, its dot online / offline. (Its own window was
+   *  removed, 2.496.443: the agent sends the Kiosk no messages — people talk to it on Telegram.) */
   agent: boolean;
   /** The Cockpit's count of firmware / add-on updates waiting. */
   updates: boolean;

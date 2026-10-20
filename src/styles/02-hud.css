@@ -724,24 +724,21 @@
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   margin-bottom: 14px;
 }
-/* Room sub-heading within a section (on-map / not-on-map) — quieter than
-   .summary-offmap-heading (a sub-level of it, not a peer): no border/accent
-   colour, just enough weight to separate one room's devices from the next. */
+/* "Scenes for this room" strip's heading — quieter than .summary-offmap-heading. */
 .summary-room-heading {
   margin: 10px 2px 6px; font-size: var(--text-2xs); font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-secondary);
 }
-.summary-room-heading:first-child { margin-top: 0; }
-/* A category's list grouped by floor (SummaryGroupPanel byFloor): "1F" on the
-   left, that floor's "Turn all on/off" right-aligned on the same line, one
-   level above the room headings. */
-.summary-floor + .summary-floor { margin-top: 14px; }
-.summary-floor-heading {
+/* The Per Room / Per Floor toggle (SummaryGroupPanel), above the list. */
+.summary-grouping { margin: 0 0 10px; }
+/* One heading of a device list (summaryRows.listSections: a room or a floor): its name on the left, its own
+   "Turn all on/off" right-aligned on the same line. */
+.summary-section + .summary-section { margin-top: 14px; }
+.summary-section-heading {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
   min-height: 38px; margin: 0 2px 6px;
   font-size: var(--text-sm); font-weight: 700; letter-spacing: 0.04em; color: var(--text-primary);
 }
-.summary-floor-heading + div > .summary-room-heading { margin-top: 0; }
 /* "Scenes for this room" strip — SummaryGroupPanel's roomScenes, room-cluster
    panel only. Sits BELOW the device list (the room's own devices are why the
    modal was opened; scenes are a secondary shortcut for the same room),

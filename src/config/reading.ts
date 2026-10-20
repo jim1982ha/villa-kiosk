@@ -14,7 +14,7 @@
 // Now every window asks here and only lays the answer out.
 //
 // ⚠️ AND THE LISTS ASK HERE TOO (architecture review 2026-10-16, step 1). The
-// device lists, the Cockpit's alarm line and Recent activity each reached past
+// device lists and the Cockpit's alarm line each reached past
 // this module into entityValue and BinarySensorClasses for their words, so a
 // change of wording made here reached the windows alone. They ask rowText,
 // alarmText and stateWords now — the same words they printed before
@@ -161,7 +161,7 @@ export function rowText(id: string, entity: HassEntity): string {
 }
 
 /** How a state of this entity is worded — for a state that is not its current
- *  one (Recent activity, a history bar's tooltip): a binary sensor's "on" and
+ *  one (a history bar's tooltip): a binary sensor's "on" and
  *  "off" in its class's words, every other state readable ("Not home"). */
 export function stateWords(id: string, deviceClass: string | undefined): (state: string) => string {
   return stateLabelFor(id, deviceClass);

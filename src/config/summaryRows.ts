@@ -1,13 +1,13 @@
 // src/config/summaryRows.ts
 // WHICH ROWS A DEVICE LIST SHOWS, and in which rooms — the list a SummaryBar
-// tile, a room chip, a Cockpit tile or the Facility views open
-// (SummaryGroupPanel). Pure: tests/oracles/summary_rows.mjs drives it by value.
+// tile, a room chip, a top-bar category or the Facility views open
+// (SummaryGroupPanel), and under which headings (listSections). Pure: tests/oracles/summary_rows.mjs drives it by value.
 //
 // ⚠️ IT WAS THE PANEL'S BODY (until 2.496.276). The three buckets, the guest's
 // off-map rule, the phantom stand-ins and "the list agrees with the count that
 // opened it" lived inline in a .tsx, pinned only by a regex on one line; and
 // "by room, alphabetical, no-room last" was written twice — here and in the
-// Cockpit's room tiles (cockpitData.buildRoomGroups).
+// Cockpit's room tiles (removed 2.496.442 with the tiles themselves).
 
 import type { HassEntity } from "@/types/ha.types";
 import { phantomEntity } from "@/utils/phantomEntity";
@@ -17,7 +17,7 @@ import { NO_ROOM_LABEL } from "./roomKey";
 import { roomLabel } from "./devicePlace";
 
 /** Alphabetical, the no-room bucket ("Other") always last — the one order of
- *  every by-room list (the device list, the Cockpit's room tiles). */
+ *  every by-room list. */
 export function byRoomOrder(a: string, b: string): number {
   if (a === NO_ROOM_LABEL) return b === NO_ROOM_LABEL ? 0 : 1;
   if (b === NO_ROOM_LABEL) return -1;
@@ -38,13 +38,9 @@ export function bucketByRoom<T>(items: readonly T[], idOf: (t: T) => string, roo
 }
 
 /**
- * bucketByRoom's rooms, gathered under their floor (owner, 2026-10-12: a
- * category's list "per Floor", each floor with its own "Turn all on/off").
- * Floors ascending; rooms with no floor (null) last, in the order bucketByRoom
- * gave them. `floorOf` answers per ROOM — the Cockpit's own rule
- * (cockpitData.buildRoomGroups: Home Assistant's Floor first, the floor plan's
- * per-room floor as the fallback), so the two screens cannot file a room on
- * different floors.
+ * bucketByRoom's rooms, gathered under their floor. Floors ascending; rooms with no floor (null) last, in the order
+ * bucketByRoom gave them. `floorOf` answers per ROOM — config/devicePlace's one answer, decided over every device of
+ * the villa, so two lists cannot file one room on two floors.
  */
 export function bucketByFloor<T>(
   rooms: readonly [string, T[]][], floorOf: (room: string) => number | null,
@@ -59,17 +55,32 @@ export function bucketByFloor<T>(
   return [...floors.entries()].sort(([a], [b]) => (a ?? Infinity) - (b ?? Infinity));
 }
 
-/**
- * The floors a device list is shown under — or null when its rooms are all on ONE floor (a room's
- * list, a floor's list), which then stays a plain list of rooms. Decided by the LIST, not by who
- * opened it (owner, 2026-10-12: the bottom bar's "Lights" and the top bar's "Lights" opened two
- * different windows, because each opener had to switch the grouping on, and one did not).
- */
-export function floorSections<T>(
-  rooms: readonly [string, T[]][], floorOf: (room: string) => number | null,
-): [number | null, [string, T[]][]][] | null {
-  const floors = bucketByFloor(rooms, floorOf);
-  return floors.length > 1 ? floors : null;
+/** How a device list is split: by room (the default) or by floor — the toggle of every device list (owner,
+ *  2026-10-20: the Cockpit's Room / Floor / Category tiles moved here, each heading with its own "Turn all on/off"). */
+export type Grouping = "room" | "floor";
+
+/** One heading of a device list and the devices under it. */
+interface ListSection<T> { key: string; title: string; items: T[] }
+
+/** `items` under their headings: each room (byRoomOrder), or each floor ("1F", "2F" ascending, the no-floor ones
+ *  last as NO_ROOM_LABEL) with its devices in their rooms' order. */
+export function listSections<T>(
+  items: readonly T[], idOf: (t: T) => string, roomOf: (id: string) => string,
+  floorOf: (room: string) => number | null, grouping: Grouping,
+): ListSection<T>[] {
+  const rooms = bucketByRoom(items, idOf, roomOf);
+  if (grouping === "room") return rooms.map(([room, members]) => ({ key: `room:${room}`, title: room, items: members }));
+  return bucketByFloor(rooms, floorOf).map(([floor, floorRooms]) => ({
+    key: `floor:${floor ?? "none"}`,
+    title: floor != null ? `${floor}F` : NO_ROOM_LABEL,
+    items: floorRooms.flatMap(([, members]) => members),
+  }));
+}
+
+/** Whether the list offers the Room / Floor toggle: only when it spans more than one room — a room's own list has one
+ *  heading either way. */
+export function offersGrouping<T>(items: readonly T[], idOf: (t: T) => string, roomOf: (id: string) => string): boolean {
+  return bucketByRoom(items, idOf, roomOf).length > 1;
 }
 
 export interface SummaryRows {

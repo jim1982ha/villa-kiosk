@@ -3,7 +3,7 @@
 // below (classifyDeviceActivity / badgeKindFor / badgeFaceAndRing /
 // meshLookFor), and since 2.496.245 its inputs too — `deviceLook(id, source)`
 // and `groupLook(looks)` at the end of this file, which every badge, list row,
-// room chip, group card, Cockpit tile and the "Needs attention" list ask.
+// room chip, group card and the "Needs attention" list ask.
 //
 // One place that turns a live HA entity into "on"/"off"/"alert"/"info" —
 // used everywhere a device needs a coloured badge/ring: the 3D map badge

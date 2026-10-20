@@ -5,7 +5,7 @@
 import type { StateHistoryPoint } from "@/types/ha.types";
 import { clockTime, dayMonth, dayTime, monthShort } from "@/utils/dateText";
 import { NOT_KEPT_WORDS } from "@/utils/stateColors";
-import { nextEdge } from "@/utils/timelineCells";
+import { DAY_MS, nextEdge } from "@/utils/timelineCells";
 
 export function fmtChartValue(v: number): string {
   if (!Number.isFinite(v)) return "";
@@ -40,7 +40,6 @@ export function fmtCellSpan(from: number, to: number, stepMs: number, spanHours:
   return fmtStepStamp(from, stepMs, spanHours);
 }
 
-const DAY_MS = 24 * 3600 * 1000;
 
 /** ⚠️ A VALUE'S MOMENT AT ITS OWN STEP (owner, 2026-10-20: a daily value read "231 W · 15 Oct, 00:00"): under a day,
  *  its time (with the day when the window needs it); a day's value, the day alone; a week's, its first and last day;

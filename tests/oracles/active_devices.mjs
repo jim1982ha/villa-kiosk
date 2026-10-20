@@ -42,15 +42,14 @@ console.log("\n  how many are on, per category:");
   };
   const entities = { "lock.front": e("lock.front", "locked"), "lock.back": e("lock.back", "unlocked"),
     "light.a": e("light.a", "on"), "sensor.t": e("sensor.t", "24") };
-  // "On" per category is the TILE's count (cockpitData.tileStats → groupLook), over the category's
-  // members — the one rule; categoryMembers only says which devices a category holds (2.496.268).
-  const { tileStats } = await import("@/components/cockpit/cockpitData");
-  const { storeLookSource } = await import("@/utils/deviceActivity");
+  // "On" per category is groupLook's POWER count over the category's members — the one rule;
+  // categoryMembers only says which devices a category holds (2.496.268).
+  const { storeLookSource, deviceLook, groupLook } = await import("@/utils/deviceActivity");
   const src = storeLookSource(entities, { entityMap, alertThresholds: {} });
   const members = Object.fromEntries(A.categoryMembers(Object.keys(entityMap), entities, entityMap).map((c) => [c.category, c.entityIds]));
-  const ac = tileStats(members.access_control, src), co = tileStats(members.comfort, src);
-  ck("two locks, one unlocked: 2 devices · 1 on (was 2 on)", ac.total === 2 && ac.onCount === 1, JSON.stringify(ac));
-  ck("a temperature reading adds a device, not an 'on'", co.total === 1 && co.onCount === 0, JSON.stringify(co));
+  const on = (ids) => groupLook(ids.map((id) => deviceLook(id, src)), { showingDevices: false }).onCount;
+  ck("two locks, one unlocked: 1 on (was 2 on)", members.access_control.length === 2 && on(members.access_control) === 1);
+  ck("a temperature reading adds a device, not an 'on'", members.comfort.length === 1 && on(members.comfort) === 0);
   ck("an unmapped device is not counted", A.categoryMembers(["switch.x"], { "switch.x": e("switch.x", "on") }, {}).every((c) => c.entityIds.length === 0));
 }
 
@@ -95,19 +94,11 @@ ck("alarm level: out of range is danger; a binary sensor in its alert state is d
    && S.readingLevel(e("binary_sensor.leak", "on"), "binary", undefined, "on") === "danger"
    && S.readingLevel(e("sensor.ap", "down"), "text", { max: 1 }, undefined) === "normal");
 
-console.log("\n  the Cockpit's tiles (rooms, floors, categories — one wording):");
+console.log("\n  a category's devices:");
 {
-  const { tileStats, tileLine } = await import("@/components/cockpit/cockpitData");
-  const ents = { "lock.a": e("lock.a", "locked"), "lock.b": e("lock.b", "unlocked"), "sensor.t": e("sensor.t", "unavailable"), "light.x": e("light.x", "on") };
-  const { storeLookSource } = await import("@/utils/deviceActivity");
-  const src = storeLookSource(ents, { entityMap: {}, alertThresholds: {} });
-  const s = tileStats(["lock.a", "lock.b", "sensor.t", "light.x"], src);
-  ck("counts devices, those on (a locked lock is not), and those offline", s.total === 4 && s.onCount === 2 && s.offline === 1, JSON.stringify(s));
-  ck("  ...worded once: \"4 devices · 2 on · 1 offline\"", tileLine(s) === "4 devices · 2 on · 1 offline", tileLine(s));
-  ck("  ...a quiet room says only its size", tileLine(tileStats(["lock.a"], src)) === "1 device");
-  ck("  ...and an empty one \"None\"", tileLine(tileStats([], src)) === "None");
+  const ents = { "lock.a": e("lock.a", "locked"), "lock.b": e("lock.b", "unlocked") };
   const counts = A.categoryMembers(["lock.a", "lock.b"], ents, { "lock.a": { type: "lock", category: "access_control" }, "lock.b": { type: "lock", category: "access_control" } });
-  ck("a category tile knows its devices (it opens their list now)", counts.find((c) => c.category === "access_control").entityIds.join() === "lock.a,lock.b");
+  ck("a category knows its devices (its list opens them)", counts.find((c) => c.category === "access_control").entityIds.join() === "lock.a,lock.b");
 }
 
 done("✅ one meaning of on; one call per domain; an offline measurement keeps its chart");

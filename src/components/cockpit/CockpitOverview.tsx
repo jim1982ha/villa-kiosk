@@ -1,50 +1,21 @@
 // src/components/cockpit/CockpitOverview.tsx
-// The Cockpit's own view — its Overview tab: what needs attention, the
-// villa by room / floor / category, recent activity, updates. Split from
-// CockpitModal (2.496.274), which is now only the window: its tabs, the
-// Facility sections and the footer. The grid's tiles are cockpitData.pivotTiles
-// (pure, tested by value).
-//
-// Every section here is read-only on its own face — the one exception is the
-// grid, whose tiles drill into SummaryGroupPanel (the same device list every
-// other "all the devices in X" view opens). Everything routes through
-// selectableDeviceIds/entityMap/resolvedRooms, never a raw HA domain query
-// (see cockpitData.ts's own docstring).
+// The Cockpit's own view — its Overview tab: the open issues, one card per device. Split from CockpitModal
+// (2.496.274), which is now only the window: its tabs, the Facility sections and the footer. The villa by room / floor
+// / category and Recent activity were removed (owner, 2026-10-20): the split per room or floor lives in every device
+// list (SummaryGroupPanel), and the activity feed told nothing used.
 
-import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
-import { createPortal } from "react-dom";
-import {
-  MapPin, Building2, LayoutGrid,
-  Activity, ChevronRight, Plus,
-} from "lucide-react";
-import SegmentedGroup from "@/components/common/SegmentedGroup";
-import { fmtChartTime } from "@/components/panels/chartUtils";
-import { useHistory } from "@/hooks/useHistory";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { ChevronRight, Plus } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
-import { useProfile } from "@/auth/ProfileContext";
 import { useFmData } from "@/fm/FmDataContext";
 import WorkButtons, { useConfirmedClose, type ConfirmedClose } from "@/components/fm/WorkButtons";
-import { roleCan } from "@/auth/permissions";
 import type { Doors } from "@/auth/doors";
-import { CATEGORY_LABELS, CATEGORY_ICONS } from "@/config/EntityCategories";
-import { categoryChipStyle } from "@/components/common/categoryChip";
-import { useResolvedTheme } from "@/hooks/useResolvedTheme";
-import { fetchLogbookEvents } from "@/ha/HALogbookAPI";
-import { useRoomFloors } from "@/config/useRoomFloors";
-import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import { useVillaAttention } from "./useVillaAttention";
-import { categoryMembers } from "@/config/activeDevices";
-import { storeLookSource } from "@/utils/deviceActivity";
-import {
-  buildRoomGroups, buildFloorGroups,
-  buildActivityFeed, pivotTiles, tileLine, type Pivot, type ActivityEntry,
-} from "./cockpitData";
 import type { AttentionGroup } from "@/config/attention";
 import { cockpitCard, type CardLine, type CardView } from "@/config/cockpitCard";
 import { SourceIcons } from "@/components/fm/sourceIcons";
 import RecordCard from "@/components/fm/RecordCard";
-import FoldedList from "@/components/common/FoldedList";
 import { useVillaModel } from "@/config/VillaModel";
 import { buildDeviceOptions } from "@/components/fm/DeviceSearchPicker";
 import FaultForm from "@/components/fm/FaultForm";
@@ -54,9 +25,6 @@ import FaultStageModal from "@/components/fm/FaultStageModal";
 import { localStamp } from "@/fm/fmEngine";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
 
-
-
-const PIVOT_ICON = { room: MapPin, floor: Building2 } as const;
 
 export default function CockpitOverview({ onOpenEntity, doors, reportFaultFor, onFaultFormOpened, onEditTicket, onReportProblem }: {
   onOpenEntity: (entityId: string) => void;
@@ -71,23 +39,8 @@ export default function CockpitOverview({ onOpenEntity, doors, reportFaultFor, o
   /** A guest's "Report a problem". */
   onReportProblem: () => void;
 }) {
-  const { entities, ws } = useHA();
-  // Each room's floor: the villa's one answer (config/devicePlace), the category lists' too.
-  const roomFloors = useRoomFloors();
+  const { entities } = useHA();
   const { config, resolvedRooms } = useConfig();
-  // How every device looks, read from the store (utils/deviceActivity) — a
-  // tile's "N on" is its POWER count.
-  const looks = useMemo(() => storeLookSource(entities, config), [entities, config]);
-  const { role } = useProfile();
-  // Category tiles below composite their colours in JS — see the hook.
-  const theme = useResolvedTheme();
-  const [pivot, setPivot] = useState<Pivot>("room");
-  // Drill-down opened by tapping a room/floor row below — reuses
-  // SummaryGroupPanel, the same device-list modal every other "all the
-  // devices in X" view in the app already opens (room clusters on the map,
-  // the bottom Summary bar's tiles), rather than a bespoke list here.
-  const [pivotDrill, setPivotDrill] = useState<{ label: string; entityIds: string[]; icon: ComponentType<{ size?: number | string }> } | null>(null);
-  const canControl = roleCan(role, "controlEntities");
   // Taking a fault on, closing it and raising one are Facility work: the profiles that manage it. Everyone else
   // who may report (a guest) gets "Report a problem".
   const canManage = doors.facility;
@@ -108,50 +61,7 @@ export default function CockpitOverview({ onOpenEntity, doors, reportFaultFor, o
   // Shared with HUD's own top-bar alert icon/overflow-menu badge — see
   // useVillaAttention's own docstring for why that sharing is load-bearing,
   // not just tidiness (the two used to disagree).
-  // the profile's devices (VillaAttention.devices: only those it may open) — the tiles, the rooms and the feed
-  const { devices: shown, attentionGroups } = useVillaAttention();
-  const deviceIds = shown.ids;
-  // one tile per category, its devices — deliberately non-judgmental (a light being on isn't a problem), kept apart
-  // from the attention list so the page doesn't read as "everything is red"
-  const categoryTiles = useMemo(
-    () => categoryMembers(deviceIds, entities, config.entityMap),
-    [deviceIds, entities, config.entityMap],
-  );
-  const roomGroups = useMemo(
-    () => buildRoomGroups(deviceIds, resolvedRooms, roomFloors),
-    [deviceIds, resolvedRooms, roomFloors],
-  );
-  const floorGroups = useMemo(() => buildFloorGroups(roomGroups), [roomGroups]);
-
-  // Recent activity — HA's own Logbook (via websocket, see HALogbookAPI.ts
-  // for why not the classic REST endpoint), fetched once on open (a report
-  // you glance at, not a live-updating feed; re-opening Cockpit re-fetches).
-  // Described + filtered to this villa's own selectable devices in
-  // cockpitData.ts's buildActivityFeed — HA's raw logbook is unfiltered and
-  // genuinely noisy (a bare date/time helper alone produced roughly one
-  // entry every six seconds in a real pull).
-  // The fetch-and-say-where-it-stands effect is hooks/useHistory's, the one
-  // every chart uses (architecture review 11: this was its eighth copy).
-  const activity = useHistory("logbook-6h", () => fetchLogbookEvents(ws, 6), [] as Awaited<ReturnType<typeof fetchLogbookEvents>>);
-  const villaActivity = useMemo((): ActivityEntry[] | "loading" | "error" => {
-    if (activity.status === "loading") return "loading";
-    if (activity.status === "failed") return "error";
-    return buildActivityFeed(activity.data, entities, config.entityMap, deviceIds);
-  }, [activity.status, activity.data, entities, config.entityMap, deviceIds]);
-
-  // "Other" (not "Unplaced" or any other invented word) for the no-floor
-  // bucket — the SAME label the room pivot's own no-room bucket already
-  // uses (cockpitData.ts's NO_ROOM), which is itself the one term every
-  // room/category grouping across the app already uses for "doesn't
-  // resolve to one of the real ones". Reusing it here, not a second word
-  // for the same idea.
-  // ONE tile for every grouping (2.496.235): rooms and floors were bars, the
-  // categories tiles — the same question ("what is in here, how much is on,
-  // is any of it lost?") drawn two ways. Every tile opens its device list.
-  const tiles = useMemo(
-    () => pivotTiles(pivot, { categories: categoryTiles, rooms: roomGroups, floors: floorGroups }, CATEGORY_LABELS, looks),
-    [pivot, categoryTiles, roomGroups, floorGroups, looks],
-  );
+  const { attentionGroups } = useVillaAttention();
 
   return (
     <>
@@ -193,88 +103,6 @@ export default function CockpitOverview({ onOpenEntity, doors, reportFaultFor, o
         </div>
       )}
 
-      {/* ── Room / floor / category breakdown ──────────────────── */}
-      {/* One selector, one section — category used to be its own
-          always-visible block above this pivot, which meant the modal
-          showed two overlapping "how are devices grouped" views at
-          once. Now a third tab on the same Room/Floor toggle, so only
-          one grouping is ever on screen and the section title always
-          names whichever is showing. */}
-      <div className="settings-section-title cockpit-pivot-header">
-        <span>By {pivot}</span>
-        <SegmentedGroup ariaLabel="Group by" className="cockpit-pivot" active={pivot} onChange={setPivot} options={[
-          { key: "room", label: <><MapPin size={16} /> Room</> },
-          { key: "floor", label: <><Building2 size={16} /> Floor</> },
-          { key: "category", label: <><LayoutGrid size={16} /> Category</> },
-        ]} />
-      </div>
-      <div className="cockpit-category-grid">
-        {tiles.map((t) => {
-          // A category's own colour while any of its devices is on
-          // (VESTA-DESIGN.md §0 — a house at rest reports nothing as
-          // active); a room or floor neutral, amber while a device in it
-          // is offline.
-          const chip = t.category ? categoryChipStyle(t.category, t.stats.onCount > 0) : null;
-          const Icon = t.category ? CATEGORY_ICONS[t.category] : PIVOT_ICON[t.pivot as "room" | "floor"];
-          return (
-            // Keyed by theme too: the category surface is composited in
-            // JS from the theme's tokens, frozen at render time.
-            <button
-              key={`${t.key}:${theme}`}
-              type="button"
-              className="cockpit-category-tile"
-              onClick={() => setPivotDrill({ label: t.label, entityIds: t.entityIds, icon: Icon })}
-              aria-label={`Show ${t.label}'s devices — ${tileLine(t.stats)}`}
-            >
-              <div
-                className={`cockpit-category-icon${chip ? "" : t.stats.offline > 0 ? " is-warn" : " is-neutral"}`}
-                style={chip ?? undefined}
-              >
-                <Icon size={18} />
-              </div>
-              <div className="cockpit-tile-text">
-                <div className="cockpit-category-label">{t.label}</div>
-                <div className={`body-text cockpit-tile-line${t.stats.offline > 0 ? " is-warn" : " muted"}`}>
-                  {tileLine(t.stats)}
-                </div>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* ── Recent activity ─────────────────────────────────────── */}
-      {/* Folded by default, as Tickets' Closed (owner, 2026-10-18): the same FoldedList, a page at a time. */}
-      {Array.isArray(villaActivity) && villaActivity.length > 0 ? (
-        <FoldedList title="Recent activity" rows={villaActivity} unit="event">
-          {(e) => (
-            <div key={`${e.t}-${e.name}-${e.message}`} className="cockpit-activity-row">
-              <span className="cockpit-activity-time muted">{fmtChartTime(e.t)}</span>
-              <span className="cockpit-activity-text"><strong>{e.name}</strong> {e.message}</span>
-            </div>
-          )}
-        </FoldedList>
-      ) : (
-        <>
-          <div className="settings-section-title"><Activity size={16} style={{ verticalAlign: -2 }} /> Recent activity</div>
-          {villaActivity === "loading" && <p className="muted body-text">Loading…</p>}
-          {villaActivity === "error" && <p className="muted body-text">Couldn't read the activity log.</p>}
-          {Array.isArray(villaActivity) && <p className="muted body-text">Nothing in the last 6 hours.</p>}
-        </>
-      )}
-
-      {/* ── Updates available (Owner only, small) ──────────────── */}
-    {/* Out of the Cockpit window's box, as it was before the Overview had its
-        own file: a fixed overlay inside the scrolling body could be clipped. */}
-    {pivotDrill && createPortal(
-      <SummaryGroupPanel
-        group={{ title: pivotDrill.label, icon: pivotDrill.icon, entityIds: pivotDrill.entityIds }}
-        canControl={canControl}
-        onClose={() => setPivotDrill(null)}
-        onOpenEntity={(id) => { setPivotDrill(null); onOpenEntity(id); }}
-      />,
-      document.body,
-    )}
     </>
   );
 }

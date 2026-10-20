@@ -66,8 +66,8 @@ export interface EntityStoreState {
    *  floor_id — see HassAreaRegistryEntry/HassFloorRegistryEntry), live the
    *  same way entityAreaNames is. Absent for any entity whose Area has no
    *  Floor assigned (or that resolves to no Area at all) — see
-   *  cockpitData.ts's buildRoomGroups for the geometric (sh3dRooms) fallback
-   *  this feeds into, same precedence as room resolution itself. */
+   *  config/devicePlace for the floor-plan fallback this feeds into, same
+   *  precedence as room resolution itself. */
   entityFloorNumbers: Record<string, number>;
   /** entity_id -> HA's own device_id (from the entity registry) — the
    *  authoritative "these entities belong to the same physical device"

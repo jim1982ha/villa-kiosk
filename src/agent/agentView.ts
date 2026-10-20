@@ -2,7 +2,7 @@
 // The decisions the agent UI makes, as pure functions — so an oracle can drive
 // them by value (tests/oracles/agent_view.mjs) instead of reading components.
 
-import type { AgentMessage, AgentStatus } from "./agentApi";
+import type { AgentStatus } from "./agentApi";
 import { displayLabelFor } from "@/config/EntityMap";
 import { effectiveCategory, subjectOf } from "@/config/EntityCategories";
 import type { Category, EntityType } from "@/types/scene.types";
@@ -20,43 +20,6 @@ export function agentVisible(status: AgentStatus | null): boolean {
  *  (2.496.360: its rows vanished from the (i) while its icons stayed on the cards). `openAgentFault`: one is open. */
 export function agentSourcesShown(status: AgentStatus | null, openAgentFault: boolean): boolean {
   return agentVisible(status) || openAgentFault;
-}
-
-/** May THIS device offer a message's buttons right now? The SERVER decides
- *  (canAnswer): open, this profile allowed, and the agent online — nobody
- *  would act on an answer while it is offline (A8).
- *
- *  ⚠️ THE PAGE USED TO ADD THE "ONLINE" HALF ITSELF (until 2.496.251), from
- *  its own status poll, and the proxy's press door never asked it: a press
- *  from a tab opened before the agent went offline was stored for nobody.
- *  One owner per predicate — the proxy's _agent_messages_view. */
-export function buttonsShown(message: AgentMessage): boolean {
-  return message.canAnswer && message.buttons.length > 0;
-}
-
-/** The count on the top-bar button: open messages this profile can answer. */
-export function awaitingAnswer(messages: readonly AgentMessage[]): number {
-  return messages.filter((m) => buttonsShown(m)).length;
-}
-
-/** "Answered by Facility manager · Approve" — the button's label if it still
- *  exists on the message, else its id. */
-export function answerLine(message: AgentMessage, profileLabel: (p: string) => string): string | null {
-  if (!message.answer) return null;
-  const button = message.buttons.find((b) => b.id === message.answer?.buttonId);
-  return `Answered by ${profileLabel(message.answer.profile)} · ${button?.label || message.answer.buttonId}`;
-}
-
-/** Does clearing this message need a "sure?" first? Only while it is still
- *  OPEN with buttons: cleared, its question is gone and the agent never gets
- *  an answer. Answered, expired or plain messages clear at once. */
-export function clearNeedsConfirm(message: AgentMessage): boolean {
-  return message.state === "open" && message.buttons.length > 0;
-}
-
-/** The ids "Clear answered" removes: every answered or expired message. */
-export function settledIds(messages: readonly AgentMessage[]): string[] {
-  return messages.filter((m) => m.state === "answered" || m.state === "expired").map((m) => m.id);
 }
 
 /** What RoomShare should send, or null when nothing needs sending: the rooms

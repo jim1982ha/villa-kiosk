@@ -1,6 +1,6 @@
 // src/agent/AgentContext.tsx
-// The VESTA Agent as the Kiosk's screen sees it: presence and messages, kept
-// fresh for a profile that may see them (viewAgent: owner, facility manager).
+// The VESTA Agent as the Kiosk's screen sees it: its presence, kept fresh for a
+// profile that may see it (viewAgent: owner, facility manager).
 //
 // ⚠️ A GUEST'S DEVICE ASKS NOTHING. The provider is mounted for every profile
 // (it sits with FmDataProvider inside ProfileGate), but without viewAgent it
@@ -10,11 +10,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useProfile } from "@/auth/ProfileContext";
 import { roleCan } from "@/auth/permissions";
-import { useStoreRefresh, STORE_ACTIVE_MS } from "@/hooks/useStoreRefresh";
-import {
-  answerAgentMessage, clearAgentMessages, fetchAgentMessages, fetchAgentStatus, readAgent,
-  type AgentMessage, type AgentStatus, type AnswerResult,
-} from "./agentApi";
+import { useStoreRefresh } from "@/hooks/useStoreRefresh";
+import { fetchAgentStatus, type AgentStatus } from "./agentApi";
 import { agentVisible } from "./agentView";
 import RoomShare from "./RoomShare";
 
@@ -27,14 +24,8 @@ const AGENT_POLL_MS = 60 * 1000;
 interface AgentContextValue {
   /** null until the first answer (and whenever the add-on cannot be reached). */
   status: AgentStatus | null;
-  messages: AgentMessage[];
   /** Show anything about the agent at all (profile may, and it is configured). */
   visible: boolean;
-  answer: (messageId: string, buttonId: string) => Promise<AnswerResult>;
-  /** Clear these messages for everyone; null on success, else what went wrong. */
-  clear: (ids: readonly string[]) => Promise<string | null>;
-  refresh: () => void;
-  registerWatcher: () => () => void;
 }
 
 const AgentContext = createContext<AgentContextValue | null>(null);
@@ -43,49 +34,22 @@ export function AgentProvider({ children }: { children: ReactNode }) {
   const { role } = useProfile();
   const allowed = roleCan(role, "viewAgent");
   const [status, setStatus] = useState<AgentStatus | null>(null);
-  const [messages, setMessages] = useState<AgentMessage[]>([]);
-  const [watchers, setWatchers] = useState(0);
 
   const refresh = useCallback(() => {
     if (!allowed) return;
-    // The sequence is agentApi.readAgent's; this only applies its answer.
-    void readAgent({ status: fetchAgentStatus, messages: fetchAgentMessages }).then((r) => {
-      if (r.status) setStatus(r.status);
-      if (r.messages) setMessages(r.messages);
-    });
+    // unreachable keeps the last status: a blip must not blank the presence
+    void fetchAgentStatus().then((s) => { if (s) setStatus(s); });
   }, [allowed]);
 
   // Switching to a profile without viewAgent must drop what the last one saw.
   useEffect(() => {
-    if (!allowed) { setStatus(null); setMessages([]); }
+    if (!allowed) setStatus(null);
   }, [allowed]);
 
-  const registerWatcher = useCallback(() => {
-    setWatchers((n) => n + 1);
-    return () => setWatchers((n) => n - 1);
-  }, []);
-  useStoreRefresh(refresh, watchers > 0 ? STORE_ACTIVE_MS : AGENT_POLL_MS);
-
-  const answer = useCallback(async (messageId: string, buttonId: string) => {
-    const result = await answerAgentMessage(messageId, buttonId);
-    refresh();                           // either way, show the server's truth
-    return result;
-  }, [refresh]);
-
-  const clear = useCallback(async (ids: readonly string[]) => {
-    if (ids.length === 0) return null;
-    const result = await clearAgentMessages(ids);
-    // Gone from this screen at once; the re-read below confirms it.
-    if (result.ok) setMessages((list) => list.filter((m) => !ids.includes(m.id)));
-    refresh();
-    return result.ok ? null : result.message;
-  }, [refresh]);
+  useStoreRefresh(refresh, AGENT_POLL_MS);
 
   const visible = allowed && agentVisible(status);
-  const value = useMemo(
-    () => ({ status, messages, visible, answer, clear, refresh, registerWatcher }),
-    [status, messages, visible, answer, clear, refresh, registerWatcher],
-  );
+  const value = useMemo(() => ({ status, visible }), [status, visible]);
   return (
     <AgentContext.Provider value={value}>
       {visible && <RoomShare />}
@@ -98,12 +62,4 @@ export function useAgent(): AgentContextValue {
   const ctx = useContext(AgentContext);
   if (!ctx) throw new Error("useAgent must be used within an AgentProvider");
   return ctx;
-}
-
-/** Call from the panel that shows the agent's messages: while it is open they
- *  re-read every STORE_ACTIVE_MS, so an answer given on another device lands
- *  in seconds on the screen someone is watching. */
-export function useAgentLiveView(): void {
-  const { registerWatcher } = useAgent();
-  useEffect(() => registerWatcher(), [registerWatcher]);
 }

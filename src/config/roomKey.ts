@@ -42,7 +42,7 @@ export function roomKey(name: string | undefined | null): string {
  * What a device with no resolvable room is filed under, on screen.
  *
  * One constant because it is a user-visible LABEL, and three copies of it
- * (the map's badge grouping, the Cockpit's room list and the group panel) can
+ * (the map's badge grouping and the group panel) can
  * drift into three different words for the same bucket. It is deliberately not
  * derived from roomKey(): this is what a person reads, not a comparison key.
  */
