@@ -1,3 +1,10 @@
+## 0.12.298
+
+What you will see:
+- For a device that runs on a schedule (any device whose schedule the Agent already knows, as the nightly check
+  does), answers and investigations also say how many times it started OUTSIDE its scheduled hours, against the same
+  hours of the days before, and mark it when that is far more than usual.
+
 ## 0.12.297
 
 What you will see:

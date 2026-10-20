@@ -425,6 +425,46 @@ def state_lines(ps: list[dict], base: list[dict], start, end, baseline_days) -> 
     return out
 
 
+def schedule_of(pack, eid: str) -> str | None:
+    """The schedule of the asset `eid` belongs to, as the knowledge pack attached it (the nightly check's own link:
+    one per asset, a villa's `vesta_asset_aliases` correcting the grouping) — None when it has none, or no pack."""
+    row = pack.row(eid) if pack is not None else None
+    asset = pack.asset(row["asset"]) if row and row.get("asset") else None
+    return (asset or {}).get("schedule")
+
+
+def schedule_line(ps: list[dict], base: list[dict], sched: list[tuple[datetime, str]], name: str, start: datetime,
+                  end: datetime, baseline_days: float) -> str:
+    """How many of its starts fell outside the hours its schedule expects it, against the same hours before — by the
+    same rule as how often it started (`starts_ratio`, `starts_min`).
+
+    ⚠️ ANY DEVICE THAT RUNS AND HAS A SCHEDULE (owner, 2026-10-20: "make sure everything you are doing is not hardcoded
+    and specific to a device, device class or family"): the schedule is whatever the knowledge pack attached to the
+    device's asset, and "unusual" is the device's own days before — no device, kind or number named here."""
+    windows, opened = [], None
+    for t, s in sched:
+        if s == "on" and opened is None:
+            opened = t
+        elif s != "on" and opened is not None:
+            windows.append((opened, t))
+            opened = None
+    if opened is not None:
+        windows.append((opened, end))
+
+    def outside(a, b):
+        return sum(1 for p in (ps if a >= start else base) if p["kind"] == kinds.RUNNING and a <= p["start"] < b
+                   and not any(x <= p["start"] < y for x, y in windows))
+    n = outside(start, end)
+    line = f"  outside the hours of its schedule ({name}): started {n} times"
+    before = [outside(a, z) for a, z in _windows(start, end, baseline_days)]
+    if before:
+        usual = max(before)
+        line += " (the same hours of the %d days before: %s)" % (len(before), ", ".join(map(str, reversed(before))))
+        if n >= th("starts_min") and n >= th("starts_ratio") * max(usual, 1):
+            line += f"  ⟵ about {n / max(usual, 1):.0f}× more often than usual"
+    return line
+
+
 def normal(rows: list[tuple[datetime, str]], end: datetime, on_above: float | None, zero_is_rest: bool = False) -> dict:
     """The entity's own normal over the baseline days: how often and how long it runs, at what level."""
     ps = periods(rows, end, on_above, zero_is_rest)
@@ -560,7 +600,7 @@ def chart_series(rows: list[tuple[datetime, str]], start: datetime, end: datetim
 
 
 def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_days: float, zone: ZoneInfo,
-             series: bool = False, now: datetime | None = None, params=None) -> dict:
+             series: bool = False, now: datetime | None = None, params=None, pack=None) -> dict:
     """`series`: each numeric device's readings for a chart too (--out: the investigation page, page.py). `now`: the
     time it is (the clock when not given) — no reading goes past it. `params`: the villa's settings (the one
     "running": threshold)."""
@@ -617,6 +657,11 @@ def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_da
         starts = starts_line(ps, base_ps, start, reach, baseline_days) if on else None
         if starts:
             lines.append(starts["line"])
+        sched = schedule_of(pack, eid) if on else None
+        if sched:
+            srows, _, _ = read(client, sched, start - timedelta(days=baseline_days), end, now)
+            sname = ((client.states([sched]).get(sched) or {}).get("attributes") or {}).get("friendly_name") or sched
+            lines.append(schedule_line(ps, base_ps, srows, sname, start, reach, baseline_days))
         if kind_of == "level":
             lines.append(level_line(rows, base_rows, start, reach, baseline_days, zone, span_days))
         elif kind_of == "counter":
@@ -1156,7 +1201,7 @@ def main(argv=None):
                 if not ids:
                     raise SystemExit("timeline needs --entities: ids from find, separated by commas.")
                 res = timeline(ctx.client, ids[:TIMELINE_DEVICES], start, end, float(a.baseline_days), zone, series=bool(a.out),
-                               now=ctx.now, params=ctx.params)
+                               now=ctx.now, params=ctx.params, pack=ctx.pack)
                 if a.out:
                     # the whole reading, charts included, for the investigation page; the AI gets the lines only
                     with open(a.out, "w", encoding="utf-8") as f:

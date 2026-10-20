@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.288 (20 October 2026)
+
+- investigate timeline: `schedule_line` — starts outside the hours of the schedule the knowledge pack attached to the
+  device's asset (`schedule_of`: pack.row → pack.asset → schedule, the nightly check's own link), against the same
+  hours of the days before, flagged by `starts_ratio` / `starts_min`. No device, kind or family named (owner,
+  2026-10-20). investigate.py now gets the pack (`inject: [pack, store, zone]`; find's same-device lookup had none).
+  Test: test_investigate_shapes (flagged in trouble, quiet on a normal day, absent without a schedule).
+
 ## 0.6.287 (20 October 2026)
 
 - `offer: after_reading` judges the conversation: State.conversation_read keeps the reading tools a session used

@@ -104,3 +104,43 @@ def test_each_kind_says_its_trouble_in_a_few_lines_and_a_normal_day_flags_nothin
 def test_a_pump_whose_rest_touches_0_never_reads_as_having_no_power():
     said = "\n".join(lines(pump, True))
     assert "no power" not in said and "instead of its usual" not in said, said
+
+
+class _Pack:
+    """A knowledge pack whose asset "x" carries a schedule: on 08:00-10:00 and 18:00-19:00 each day."""
+    def row(self, eid):
+        return {"entity_id": eid, "asset": "x"}
+
+    def asset(self, slug):
+        return {"schedule": "schedule.x_hours"} if slug == "x" else None
+
+
+def _schedule():
+    out, d = [], S
+    while d < E:
+        out += [(d.replace(hour=8), "on"), (d.replace(hour=10), "off"), (d.replace(hour=18), "on"), (d.replace(hour=19), "off")]
+        d += timedelta(days=1)
+    return [(datetime(2026, 10, 16, 23, tzinfo=Z), "off")] + out
+
+
+class _WithSchedule(_Client):
+    def history(self, ids, start, end):
+        if ids[0] != "schedule.x_hours":
+            return super().history(ids, start, end)
+        rows = _schedule()
+        before = [r for r in rows if r[0] < start][-1:]
+        return {ids[0]: [{"state": v, "last_changed": max(t, start).isoformat()}
+                         for t, v in before + [r for r in rows if start <= r[0] < end]]}
+
+
+def test_starts_outside_its_schedule_are_compared_with_its_own_days_before():
+    # owner, 2026-10-20: "not hardcoded and specific to a device, device class or family" — the schedule is the one the
+    # knowledge pack attached to the device's asset; "unusual" is its own days before
+    def outside(trouble, pack):
+        return [ln for ln in inv.timeline(_WithSchedule(pump(trouble)), ["sensor.x"], FROM, E, 3, Z, now=E,
+                                          pack=pack)["lines"] if "outside the hours of its schedule" in ln]
+    (bad,) = outside(True, _Pack())
+    assert "⟵" in bad and "more often than usual" in bad, bad
+    (good,) = outside(False, _Pack())
+    assert "⟵" not in good, good
+    assert outside(True, None) == []                        # no schedule known: nothing said about one
