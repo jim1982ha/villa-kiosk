@@ -1,3 +1,10 @@
+## 2.496.453
+
+### Changed
+- Facility records now keep one year of history by default: maintenance photos, repaired faults, work done and
+  money spent are kept 365 days (it was 550). "Spend older than 365 days is no longer kept." says so under the
+  figures. If you set your own value in the app's configuration, it stays as you set it.
+
 ## 2.496.452
 
 ### Fixed
