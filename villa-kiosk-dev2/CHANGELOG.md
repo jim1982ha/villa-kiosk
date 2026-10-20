@@ -1,3 +1,11 @@
+## 2.496.449
+
+### Changed
+- Facility work done and money spent are no longer kept for ever: like a repaired fault, they leave the record after
+  the add-on's "Keep maintenance records for (days)" setting (550 days by default; 0 keeps them for ever). A task's
+  latest completion is always kept, so its next due date stays right, and so is work tied to a fault still listed.
+  Recent work and Spend say how long they are kept, under their lists.
+
 ## 2.496.448
 
 ### Changed

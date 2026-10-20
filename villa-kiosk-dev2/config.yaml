@@ -5,7 +5,7 @@
 # no-compile operation. The {arch} placeholder + version resolve to e.g.
 # ghcr.io/jim1982ha/villa-kiosk-amd64:2.0.0 — published by .github/workflows/build.yaml.
 name: VESTA (dev2)
-version: "2.496.448"
+version: "2.496.449"
 slug: villa_kiosk_dev2
 description: Interactive 3D map of your property — live devices, energy, security and maintenance at a glance
 url: https://github.com/jim1982ha/villa-kiosk
@@ -106,7 +106,9 @@ panel_title: VESTA dev2
 #
 # evidence_retention_days (default 550, ~18 months: a 12-month agreement plus
 #   the yield-up/dispute window after it). Photo evidence older than this is
-#   deleted from the add-on's own storage. Raise it if your own obligation runs
+#   deleted from the add-on's own storage; repaired faults, completions and
+#   costs older than this leave the Facility record too (2.496.449; a
+#   scheduled task keeps its latest completion). Raise it if your own obligation runs
 #   longer; set 0 to switch age-based deletion OFF entirely and keep evidence
 #   until you remove the record it belongs to. This is INDEPENDENT of the
 #   automatic clean-up of photos nothing references any more (a photo you
