@@ -34,7 +34,7 @@ const folding = deviceFolding({}, [], {});
 const d = villaDevices({ entityMap: {}, deviceGroups: [], dismissed: dis, mappedEntityIds: mapped,
   entities, entityDeviceIds: {}, folding });
 ck("it is one of the villa's devices, and an unavailable one", d.has(TV) && d.unavailable.includes(TV), d.unavailable);
-const items = buildAttentionItems({ devices: d, entities, entityMap: {}, alertThresholds: {},
+const items = buildAttentionItems({ devices: d, entities, entityMap: {},
   resolvedRooms: {}, fmData: emptyFm });
 const sees = visibleTo("owner", { mapped, entityMap: {}, entities });
 const att = attentionFor({ attentionItems: items, devices: d }, (id) => sees.has(id));

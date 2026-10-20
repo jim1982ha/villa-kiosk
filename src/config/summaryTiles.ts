@@ -6,7 +6,6 @@
 
 import type { ComponentType } from "react";
 import { Snowflake, Zap, CloudSun } from "lucide-react";
-import type { Threshold } from "./ThresholdConfig";
 import { locksGroup, lightsGroup } from "./summaryGroups";
 import { LOCK_FACT_WORDS, villaSummary } from "./villaSummary";
 import { fmtTemp } from "@/utils/panelRules";
@@ -47,7 +46,6 @@ export function deriveTiles(
   entityMap: Record<string, EntityMapping>,
   resolvedRooms: Record<string, string>,
   can: (c: Category) => boolean,
-  thresholds: Record<string, Threshold>,
   /** HA's device registry (entity_id → device_id) — how the weather station's
    *  sensors are grouped into one station. */
   /** The villa's weather station, found ONCE by the caller (it is O(entities
@@ -65,7 +63,7 @@ export function deriveTiles(
   // tile and the report can no longer disagree about the same door. This
   // function only chooses the words, the tone and what a tap opens.
   const facts = villaSummary({
-    entities, devices: allowed ?? { has: () => true }, resolvedRooms, thresholds,
+    entities, devices: allowed ?? { has: () => true }, resolvedRooms,
   });
 
   // ── Door locks ───────────────────────────────────────────────────────
@@ -195,20 +193,9 @@ export function deriveTiles(
       // also drops a trailing zero, so 3000 W now reads "3 kW" rather than
       // "3.0 kW" — the same spelling the badge has always used.
       value: formatUnitValue(totalW, "W"),
-      // A HARDCODED `totalW > 3000` used to live here, and it was exactly the
-      // per-site tuning constant CLAUDE.md's first hard rule forbids: 3 kW is
-      // an idle afternoon in a villa with a pool pump and an alarming spike in
-      // a small apartment. It was right for the machine it was written on and
-      // wrong everywhere else — a tile permanently red on one install and
-      // never lit on another.
-      //
-      // The tile now inherits the alert state of its own members, the way the
-      // Locks tile already does: it warns if any contributing power sensor is
-      // over the threshold configured FOR THAT SENSOR (config.alertThresholds,
-      // which ships empty — see ThresholdConfig). With none configured it stays
-      // informational, which is the honest default: the app has no basis for
-      // calling any wattage high in a villa it has never seen.
-      tone: facts.power.alert ? "warn" : "neutral",
+      // Informational: the app has no basis for calling any wattage high in a villa it has never seen (a hardcoded
+      // `totalW > 3000` once made the tile permanently red on one install and never lit on another).
+      tone: "neutral",
       category: "energy",
       entityIds: facts.power.ids, title: "Energy", canControl: false,
     });

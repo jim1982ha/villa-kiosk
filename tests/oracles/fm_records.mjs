@@ -3,7 +3,7 @@
 // "fm-records.json: …"), so a status, category or collection the kiosk writes
 // is one the add-on accepts.
 //
-// Before 2.496.245 the proxy carried FM_TICKET_STATUSES / FM_COST_CATEGORIES
+// Before 2.496.245 the proxy carried its own lists of statuses and cost categories
 // and fmApi.ts its own FM_COLLECTIONS — two literal copies of one vocabulary.
 // These drive values through the app's own modules; only the literal union
 // TYPES are read as text, because a type has no value to drive.
@@ -18,8 +18,6 @@ const table = JSON.parse(readFileSync(new URL("../../rootfs/usr/share/vesta/fm-r
 const same = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
 
 console.log("  the app reads the table:");
-ck("its fault statuses are the table's", same(T.FM_TICKET_STATUSES, table.ticketStatuses), T.FM_TICKET_STATUSES);
-ck("its cost categories are the table's", same(T.FM_COST_CATEGORIES, table.costCategories), T.FM_COST_CATEGORIES);
 ck("its collections are the table's", same(T.FM_COLLECTIONS, table.collections), T.FM_COLLECTIONS);
 ck("  ...and the empty record has exactly those collections",
    same(Object.keys(T.EMPTY_FM_DATA).sort(), [...table.collections].sort()), Object.keys(T.EMPTY_FM_DATA));

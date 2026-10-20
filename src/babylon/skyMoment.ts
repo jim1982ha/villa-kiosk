@@ -1,7 +1,7 @@
 // src/babylon/skyMoment.ts
 // Everything the sky needs for one moment — pure numbers, no Babylon: how the
 // villa is lit and the sky coloured (Settings' day/night preview included),
-// and where the moon really is (the real clock, always).
+// and where the sun and the moon really are (the real clock, always).
 //
 // ⚠️ "REAL TIME OR PREVIEW TIME" WAS DECIDED IN THREE PLACES (until
 // 2.496.401): SunController computed the sun twice and handed the real one
@@ -42,6 +42,8 @@ export interface SkyMoment {
   light: SunGeometry;
   /** Toward the PREVIEW sun: the sky's colour and twilight. */
   skySun: Vec3;
+  /** Toward the REAL sun: where its disc is drawn. */
+  sun: Vec3;
   /** The real moon; null when no position is known (the villa's day/night
    *  state alone) — the moon and the stars are then left as they are. */
   moon: MoonNow | null;
@@ -57,8 +59,8 @@ export interface SkyMoment {
  * The sky at `date` over `place`. `preview` "day"/"night" PINS the sun to that
  * side of the horizon for the villa's light and the sky's colour — Math.abs,
  * not a sign flip, so forcing "day" at 3am and at noon look the same — and
- * never moves a body: the moon follows the real clock (skyBodies — owner,
- * 2026-10-17).
+ * never moves a body: the sun's disc and the moon follow the real clock
+ * (skyBodies, "day the sun, night the moon" — owner, 2026-10-17).
  */
 export function skyMoment(date: Date, place: SkyPlace, preview: DayNightPreview = "auto"): SkyMoment {
   const { latitude, longitude } = place;
@@ -89,7 +91,7 @@ export function skyMoment(date: Date, place: SkyPlace, preview: DayNightPreview 
     parallacticAngle: m.parallacticAngle,
   };
   return {
-    light, skySun: towardBody(altitude, azimuth), moon,
+    light, skySun: towardBody(altitude, azimuth), sun: towardBody(realAltitude, azimuth), moon,
     moonT: sunGeometry(realAltitude, azimuth).nightT, realAltitude, altitude, azimuth,
   };
 }
@@ -119,5 +121,6 @@ export function guessedMoment(aboveHorizon: boolean, preview: DayNightPreview = 
   const dir = unit(-0.4, -1, -0.6), [x, y, z] = isDay ? unit(0.4, 1, 0.6) : unit(0.2, -1, 0.2);
   const nightT = isDay ? 0 : 1;
   const synth = Math.asin(Math.max(-1, Math.min(1, y)));
-  return { light: { isDay, dir, nightT }, skySun: { x, y, z }, moon: null, moonT: nightT, realAltitude: synth, altitude: synth, azimuth: 0 };
+  const sun = { x, y, z };
+  return { light: { isDay, dir, nightT }, skySun: sun, sun, moon: null, moonT: nightT, realAltitude: synth, altitude: synth, azimuth: 0 };
 }

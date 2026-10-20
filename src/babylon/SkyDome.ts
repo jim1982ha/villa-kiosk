@@ -5,20 +5,55 @@
 // villa's latitude/longitude and the time of day: blue by day, warm at dusk, deep
 // blue at night. No texture assets required (SweetHome's sky never exports to GLB).
 
-import { placeMoon, type Vec3 } from "./skyBodies";
+import { placeBodies, sunWarmth, SUN_SPANS, villaBox, type BodiesNow, type OnArc, type Vec3, type VillaBox } from "./skyBodies";
+import { disposeGlow, drawOnArc, makeGlow, viewOf, type Glow } from "./skyArc";
 import type { MoonNow, SkyMoment } from "./skyMoment";
 import type { NightSky } from "./NightSky";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
+import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
+import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
+import { Constants } from "@babylonjs/core/Engines/constants";
+import { Color3 } from "@babylonjs/core/Maths/math.color";
 import type { Scene } from "@babylonjs/core/scene";
-import type { Mesh } from "@babylonjs/core/Meshes/mesh";
+import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { SkyMaterial } from "@babylonjs/materials/sky/skyMaterial";
-import "./skyShader";   // the material's own sun is off in the overview (no sun is drawn there: skyBodies)
+import "./skyShader";   // the material's own sun is off in the overview (it is not where the disc is)
+
+/** The billboard's own extent, halo included; the bright core is about a
+ *  third of it (see drawSun). In the overview it is scaled to the villa
+ *  (skyBodies.SUN_SPANS) — the disc must read as the sun, not a dot. */
+const SUN_PLANE = 46;
+const SUN_TEX = 256;
 
 export class SkyDome {
   private box: Mesh;
   private mat: SkyMaterial;
+  private sunDisc: Mesh;
+  private sunMat: StandardMaterial;
+  private sunTex: DynamicTexture;
+  /** Last warmth the disc was painted for, so a per-minute sun update does not
+   *  repaint an identical gradient. */
+  private sunKey = "";
+  /** Whether the sky as a whole is on — the disc is a part of it and must not
+   *  come back on its own when the dome is off. */
+  private enabled = true;
+  /** Where the disc was last DRAWN, as a unit direction, or null when it is
+   *  not drawn at all. Reported on the `sky` debug channel: it is the one
+   *  field that answers "why can't I see the sun". Null rather
+   *  than a stale number because `drawn=` used to keep reporting the true
+   *  altitude all night, which reads as a placement and is not one — an
+   *  instrument must not answer a question it did not measure. */
+  private drawn: { alt: number; az: number; x: number; y: number; held: boolean } | null = null;
+  /** The villa the overview's arc goes round (skyBodies.villaBox), from the
+   *  model's extents; null until a model is in — no arc, no body. */
+  private villa: VillaBox | null = null;
+  private sunGlow: Glow;
+
+  private scene: Scene;
+
   constructor(scene: Scene) {
+    this.scene = scene;
     const mat = new SkyMaterial("skyMaterial", scene);
     mat.backFaceCulling = false;     // we view it from the inside
     mat.useSunPosition = true;       // drive the sun from SunController, not inclination
@@ -63,26 +98,139 @@ export class SkyDome {
     box.checkCollisions = false;
     box.ignoreCameraMaxZ = true;     // never clipped by the camera far plane
     this.box = box;
+
+    // ── The sun disc, and why it is a MESH and not the material's own sun ────
+    //
+    // SkyMaterial draws a sun, but `sunPosition` is ONE input with TWO outputs:
+    // where that disc lands AND what colour the whole sky is. The overview
+    // camera's visible cone is entirely below the horizon (see BAND_MIN), so
+    // inside SkyMaterial the two outputs are in direct conflict — an
+    // above-horizon sun is out of frame (2.388.0, 2.392.0) and a below-horizon
+    // one renders night at noon (2.394.0, reverted the same evening). Seven
+    // releases were spent proving there is no third option.
+    //
+    // Splitting them dissolves the conflict rather than trading one wrong for
+    // the other: `mat.sunPosition` keeps the TRUE direction, so the sky's
+    // colour, gradient and twilight are physically honest, and the disc is a
+    // separate billboard on the overview's arc round the villa
+    // (skyBodies.placeBodies, which places the moon in the same call).
+    this.sunTex = new DynamicTexture(
+      "sunTex", { width: SUN_TEX, height: SUN_TEX }, scene, true);
+    this.sunTex.hasAlpha = true;
+
+    const sunMat = new StandardMaterial("sunMat", scene);
+    sunMat.emissiveTexture = this.sunTex;
+    // Set so needAlphaBlending() is true and alphaMode below is honoured at
+    // all; it is also what `alpha` scales for the sunrise/sunset fade.
+    sunMat.opacityTexture = this.sunTex;
+    sunMat.disableLighting = true;
+    sunMat.diffuseColor = Color3.Black();
+    sunMat.specularColor = Color3.Black();
+    sunMat.backFaceCulling = false;
+    // ADDITIVE, unlike the moon's ordinary blend, because a sun is a light
+    // source: it must blow the sky out toward white rather than paint a warm
+    // film over it. Alpha-blending a semi-transparent halo over a sky BRIGHTER
+    // than the halo would darken it into a visible grey ring.
+    sunMat.alphaMode = Constants.ALPHA_ADD;
+    sunMat.alpha = 0;
+    this.sunMat = sunMat;
+
+    const sun = MeshBuilder.CreatePlane("sunDisc", { size: SUN_PLANE }, scene);
+    sun.material = sunMat;
+    sun.billboardMode = Mesh.BILLBOARDMODE_ALL;
+    // A point in the world on the arc round the villa (skyArc.drawOnArc).
+    sun.isPickable = false;
+    sun.applyFog = false;
+    sun.checkCollisions = false;
+    // Its bounding box sits at the position, not at the camera it actually
+    // follows, so frustum culling would drop it as soon as the camera moved far
+    // enough from the origin — an invisible sun, which is the exact bug this
+    // whole mesh exists to fix.
+    sun.alwaysSelectAsActiveMesh = true;
+    sun.setEnabled(false);
+    this.sunDisc = sun;
+
+    this.sunGlow = makeGlow(scene, "sunGlow", new Color3(1, 0.85, 0.6));
+
+    // The camera never moves a body's point (skyBodies.ts), but it decides
+    // whether the body is SHOWN and where it waits when its point is off
+    // screen. onBeforeRenderObservable and not a timer: it fires exactly on the
+    // frames that are actually drawn, after the camera has moved for them.
+    scene.onBeforeRenderObservable.add(() => this.trackView());
+  }
+
+  /**
+   * Paint the disc: a hot core in a soft halo, warming toward the horizon.
+   *
+   * PROCEDURAL, like the moon and the stars, because the add-on's target is an
+   * iPad on a villa wall with no internet — a sun PNG would work on a
+   * developer's desk and simply be missing on the wall.
+   *
+   * `warmth` runs 0 (high sun: white core, pale gold halo) to 1 (on the
+   * horizon: orange core, deep amber halo). Redrawn only when it actually
+   * changes — see sunKey.
+   */
+  private drawSun(warmth: number): void {
+    const ctx = this.sunTex.getContext() as CanvasRenderingContext2D;
+    const S = SUN_TEX;
+    const c = S / 2;
+    const w = Math.max(0, Math.min(1, warmth));
+    // Channel ramps, not named colours, so the horizon shift is continuous.
+    const g1 = Math.round(244 - 54 * w), b1 = Math.round(206 - 146 * w);
+    const g2 = Math.round(208 - 58 * w), b2 = Math.round(126 - 66 * w);
+    const g3 = Math.round(176 - 46 * w), b3 = Math.round(94 - 44 * w);
+
+    ctx.clearRect(0, 0, S, S);
+    const g = ctx.createRadialGradient(c, c, 0, c, c, c);
+    g.addColorStop(0, "rgba(255,255,252,1)");
+    g.addColorStop(0.17, `rgba(255,${g1},${b1},1)`);      // edge of the core
+    g.addColorStop(0.32, `rgba(255,${g2},${b2},0.5)`);
+    g.addColorStop(0.62, `rgba(255,${g3},${b3},0.14)`);
+    g.addColorStop(1, `rgba(255,${g3},${b3},0)`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, S, S);
+
+    this.sunTex.update();
   }
 
   /** The moon and the stars' painter — optional to the sky. */
   private moon: NightSky | null = null;
 
-  /** The moon and the stars, painted from here — the moon placed
-   *  (skyBodies.placeMoon) whenever the hour or the drop changes. This is the
-   *  ONE owner of the moon's state: the moment and the drop.
+  /** Re-show the bodies for the frame about to be drawn: whether each is
+   *  shown, and where it waits if its point is off screen. Their POINTS are
+   *  not touched here — a body's point is the hour's, never the camera's. A
+   *  few vector operations per drawn frame; nothing here asks for a frame. */
+  private trackView(): void {
+    if (this.dropUnits <= 0 || !this.scene.activeCamera) return;
+    this.place();
+  }
+
+  /** The villa the overview's arc goes round, from the model's extents
+   *  (SceneManager.adoptModelExtents). */
+  setVilla(min: Vec3, max: Vec3): void {
+    this.villa = villaBox(min, max);
+    this.place();
+  }
+
+  /** The moon and the stars, painted from here — the moon placed by the same
+   *  call as the sun (skyBodies.placeBodies), in the same frame, whenever the
+   *  hour, the drop, the villa or the view changes. This is the ONE owner of
+   *  the bodies' state: the moment, the villa and the drop.
    *
-   *  ⚠️ THE DROP WAS HANDED TO EACH BODY SEPARATELY (until 2.496.297): the moon
-   *  stayed where the overview had put it until the next sky-clock tick. */
+   *  ⚠️ THE DROP WAS HANDED TO EACH BODY SEPARATELY (until 2.496.297), and
+   *  only the sun was re-placed when it changed: the moon stayed where the
+   *  overview had put it until the next sky-clock tick. Until 2.496.401 the
+   *  moon kept its own copy of the drop and the villa, and replayed its last
+   *  update every frame to be re-placed. */
   setMoon(moon: NightSky): void {
     this.moon = moon;
     if (this.moonNow) moon.setNight(this.nightT);
     this.place();
   }
 
-  /** Where the moon really is and its night fade (skyMoment), kept so a drop
-   *  change re-places it without waiting for the next astronomical tick. */
-  private now: { moon: Vec3 | null; moonT: number } = { moon: null, moonT: 0 };
+  /** Where the bodies really are (skyMoment), kept so a drop, villa or view
+   *  change re-places them without waiting for the next astronomical tick. */
+  private now: BodiesNow = { sun: { x: 0, y: 1, z: 0 }, moon: null, moonT: 0 };
   /** The moon's phase, null until a moment brings one. */
   private moonNow: MoonNow | null = null;
   /** The stars' night fade, by Settings' preview. */
@@ -91,7 +239,7 @@ export class SkyDome {
 
   /**
    * Update the sky for a moment (skyMoment): the sky's colour from the
-   * PREVIEW sun, the moon from the REAL one, the stars
+   * PREVIEW sun, the sun's disc and the moon from the REAL ones, the stars
    * from the preview's night. A moment without a moon (no coordinates) leaves
    * the moon and the stars as they were.
    */
@@ -99,13 +247,14 @@ export class SkyDome {
     // ⚠️ THE MATERIAL GETS THE SKY'S SUN, always, in every view. It is what
     // tells SkyMaterial whether it is day, so any adjustment here is a lie
     // about the hour — a below-horizon value renders night at noon (2.394.0).
+    // Where the disc is DRAWN is the billboard's business (placeBodies).
     this.mat.sunPosition = new Vector3(m.skySun.x, m.skySun.y, m.skySun.z).scale(300);
     if (m.moon) {
       this.moonNow = m.moon;
       this.nightT = m.light.nightT;
       this.moon?.setNight(m.light.nightT);
     }
-    this.now = { moon: this.moonNow ? this.moonNow.dir : null, moonT: m.moon ? m.moonT : this.now.moonT };
+    this.now = { sun: m.sun, moon: this.moonNow ? this.moonNow.dir : null, moonT: m.moon ? m.moonT : this.now.moonT };
     this.place();
     const isDay = m.light.isDay;
     // Night: drop the luminance hard so the dome reads as a deep night sky rather
@@ -118,8 +267,8 @@ export class SkyDome {
   }
 
   /**
-   * Push the horizon DOWN in the view, so the graded band stays on screen at a
-   * steeper downward tilt than it otherwise would.
+   * Push the horizon DOWN in the view, so the graded band and the sun stay on
+   * screen at a steeper downward tilt than they otherwise would.
    *
    * ── Why this is a material setting and not a transform (2.224.0) ──────────
    * The obvious instinct — move the dome, scale it, re-anchor it nearer the
@@ -135,8 +284,9 @@ export class SkyDome {
    * A positive Y makes downward rays read as less-downward, so directions that
    * previously fell below the horizon (and clamped to the flat slab of colour
    * seen under the villa in overview) now sample the real gradient instead.
-   * (The material's own sun disc, computed from the UN-offset direction, is
-   * switched off whenever the offset is on: skyShader.)
+   * Crucially the sun disc is computed from the UN-offset direction, so it
+   * keeps its true position and stays perfectly round — the horizon slides
+   * down past it rather than the sun being squashed or dragged along.
    *
    * Units are world units against the dome's RADIUS (500), not degrees, because
    * the vector is not normalised before the offset is added — so the angle this
@@ -152,21 +302,66 @@ export class SkyDome {
   }
 
   /**
-   * Place the moon (skyBodies.placeMoon) and hand it to NightSky. In the
-   * overview no body is drawn (owner, 2026-10-20); walking, the material draws
-   * the real sun and the moon is in its true direction.
+   * Place both bodies for the current view (skyBodies.placeBodies) and paint
+   * them: the sun's disc here, the moon by NightSky. In the overview the sun
+   * is on the arc round the villa — its true compass side and height, so it
+   * rises on the east side, passes over the roof and sets on the west side;
+   * walking, the material draws the real sun and the disc is off.
    */
   private place(): void {
-    if (this.moon && this.moonNow) this.moon.paintMoon(placeMoon(this.now.moon, this.now.moonT, this.dropUnits > 0), this.moonNow);
+    // First person shows the material's own disc in a sky the viewer is
+    // genuinely standing under, so the billboard would only ever be a second
+    // sun beside the real one.
+    const overview = this.dropUnits > 0;
+    const p = placeBodies(this.now, { overview, villa: this.villa, view: overview ? viewOf(this.scene) : null });
+    this.paintSun(p.sun);
+    if (this.moon && this.moonNow) this.moon.paintMoon(p.moon, this.moonNow, this.villa);
+  }
+
+  private paintSun(sun: OnArc | null): void {
+    const alpha = sun ? sun.alpha : 0;
+    if (sun) drawOnArc(this.sunDisc, this.sunGlow, sun, this.villa as VillaBox, SUN_PLANE, SUN_SPANS, alpha, 0.55);
+    this.sunMat.alpha = alpha;
+    this.sunDisc.setEnabled(this.enabled && alpha > 0);
+    this.sunGlow.mesh.setEnabled(this.enabled && alpha > 0);
+    const deg = (r: number) => Math.round((r * 180) / Math.PI);
+    this.drawn = sun && alpha > 0
+      ? { alt: deg(sun.alt), az: deg(Math.atan2(sun.side.x, sun.side.z)), x: sun.screen.x, y: sun.screen.y, held: sun.held }
+      : null;
+    if (!sun || !(alpha > 0)) return;
+
+    const warmth = sunWarmth(sun.alt);
+    const key = warmth.toFixed(2);
+    if (key !== this.sunKey) { this.sunKey = key; this.drawSun(warmth); }
+  }
+
+  /** Where the disc is drawn — the sun's true altitude and azimuth in degrees,
+   *  where it lands on screen (0 is the left/top edge, 1 the right/bottom) and
+   *  whether it is waiting at the edge: the `sky` debug channel's words for
+   *  it. */
+  sunReport(): string {
+    if (this.drawn === null) return " disc=hidden";
+    const d = this.drawn;
+    return ` drawn=${d.alt}°@${d.az}° frame=${d.x.toFixed(2)},${d.y.toFixed(2)}${d.held ? " held" : ""}`
+      + ` discAlpha=${this.sunMat.alpha.toFixed(2)}`;
   }
 
   setEnabled(on: boolean): void {
+    this.enabled = on;
     this.box.setEnabled(on);
+    // Never turned on FROM here — place() owns whether the sun is up at all,
+    // and re-enabling a set sun would hang a disc in the night sky.
+    if (!on) { this.sunDisc.setEnabled(false); this.sunGlow.mesh.setEnabled(false); }
+    else this.place();
   }
 
   dispose(): void {
     this.box.dispose();
     this.mat.dispose();
+    this.sunDisc.dispose();
+    this.sunMat.dispose();
+    this.sunTex.dispose();
+    disposeGlow(this.sunGlow);
   }
 }
 

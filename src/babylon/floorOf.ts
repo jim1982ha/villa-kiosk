@@ -30,6 +30,11 @@ export interface StructureFloor { floor: number; y: number }
  *  module is import-free; tests/oracles/floor_of.mjs holds the two equal. */
 export const FLOOR_MIN_MOUNT = 0.30;
 
+/** How far under a storey's floor surface the bottom of a thing may read and
+ *  still be lying ON it — export rounding, not a mounting height. A ceiling
+ *  lamp's box ends well under the slab, a slab's thickness away (12 cm). */
+export const FLOOR_REST_SLACK = 0.02;
+
 /**
  * The 1-based floor of a mesh. Structure carries its pipeline level (0-based).
  * Anything else stands on the storey the plan puts its centre on — the same
@@ -42,15 +47,29 @@ export const FLOOR_MIN_MOUNT = 0.30;
  * second. The model's own structure knows its storeys (`structure`, one slab
  * per pipeline level), so that decides next, with the same clearance; the
  * fixed split is left only for a model that carries neither.
+ *
+ * ⚠️ A THING WHOLLY ON AN UPPER FLOOR IS ON IT (2.496.451). The clearance
+ * reads a thing whose centre is less than 0.30 m over an upper floor as
+ * hanging from the ceiling below — right for a lamp, wrong for anything lying
+ * on that floor: a 20 cm face of an upstairs planter, exported as part of a
+ * living-room curtain, lay flat on the upstairs floor and was drawn in the
+ * ground-floor overview as an orange disc floating over the TV. The bottom of
+ * the box tells the two apart where the centre cannot: a ceiling lamp ends
+ * under the slab, a thing lying on the floor starts at its surface. So with
+ * `minY` known, the storey the box rests on wins when it is higher.
  */
 export function floorOf(
   role: { isStructure: boolean; level: number }, centreY: number, plan?: FloorPlan | null,
-  structure?: readonly StructureFloor[],
+  structure?: readonly StructureFloor[], minY?: number,
 ): number {
   if (role.isStructure) return role.level + 1;
   if (plan && plan.count >= 2) {
     const level = plan.levelAt(centreY);
-    if (level !== null) return level;
+    if (level !== null) {
+      // levelAt(y + clearance) = the highest storey whose floor is at or under y.
+      const rests = minY === undefined ? null : plan.levelAt(minY + FLOOR_REST_SLACK + FLOOR_MIN_MOUNT);
+      return rests !== null && rests > level ? rests : level;
+    }
   }
   if (structure && structure.length >= 2) {
     let pick = structure[0].floor;

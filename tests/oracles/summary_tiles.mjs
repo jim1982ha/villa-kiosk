@@ -18,7 +18,7 @@ const entityMap = {};
 const everything = () => true;
 const noEnergy = (c) => c !== "energy";
 const station = { roles: { temperature: "sensor.out_t" }, entityIds: ["sensor.out_t"] };
-const tiles = (can = everything, st = null, ents = entities, unit = "°C") => deriveTiles(ents, entityMap, {}, can, {}, st, undefined, unit);
+const tiles = (can = everything, st = null, ents = entities, unit = "°C") => deriveTiles(ents, entityMap, {}, can, st, undefined, unit);
 const byKind = (ts) => Object.fromEntries(ts.map((t) => [t.kind, t]));
 
 console.log("  what each tile says:");

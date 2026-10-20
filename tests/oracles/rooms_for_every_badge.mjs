@@ -81,7 +81,7 @@ console.log("\n  the fallback chain (empty means absent):");
   // "" for the lock; `??` stopped there and the Overview card read "Other".
   const ticket = { id: "t1", title: "Battery", status: "open", entityId: "sensor.door_battery", room: "Front",
     openedAt: "2026-10-16T00:00:00Z", photoIds: [], updates: [] };
-  const opts = { devices: devicesOf({ folding: new Map([["sensor.door_battery", "lock.door"]]) }), entities: {}, entityMap: {}, alertThresholds: {},
+  const opts = { devices: devicesOf({ folding: new Map([["sensor.door_battery", "lock.door"]]) }), entities: {}, entityMap: {},
     fmData: { ...EMPTY_FM_DATA, tickets: [ticket] } };
   const card = (resolvedRooms) => groupAttention(buildAttentionItems({ ...opts, resolvedRooms }))[0]?.room;
   ck("the Overview card: the device has no room → its sensor's", card(rooms) === "Entrance", card(rooms));

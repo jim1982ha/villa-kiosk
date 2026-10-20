@@ -38,7 +38,7 @@ const ticket = (id, title, entityId, extra = {}) => ({ id, title, status: "open"
 const folding = new Map([["sensor.door_battery", "lock.door"]]);
 const villa = devicesOf({ ids: Object.keys(entities), unavailable: ["light.lamp"], folding });
 const build = (tickets, more = {}) => buildAttentionItems({
-  devices: villa, entities, entityMap, alertThresholds: {}, resolvedRooms,
+  devices: villa, entities, entityMap, resolvedRooms,
   fmData: { ...EMPTY_FM_DATA, tickets }, ...more,
 });
 
@@ -186,7 +186,7 @@ const pumpMap = { ...entityMap, "sensor.pump_power": { entityId: "sensor.pump_po
 const registry = { "sensor.pump_power": "dev-pump", "sensor.pump_energy": "dev-pump", "lock.door": "dev-door" };
 const pumpFold = deviceFolding(pumpMap, [], registry);
 const pumpRows = groupAttention(buildAttentionItems({
-  devices: devicesOf({ ids: Object.keys(pumpMap), folding: pumpFold }), entities: pumpEntities, entityMap: pumpMap, alertThresholds: {},
+  devices: devicesOf({ ids: Object.keys(pumpMap), folding: pumpFold }), entities: pumpEntities, entityMap: pumpMap,
   resolvedRooms: { ...resolvedRooms, "sensor.pump_power": "Pool" },
   fmData: { ...EMPTY_FM_DATA, tickets: [ticket("pm-1", "Pump used 0.09 kWh/day", "sensor.pump_energy")] },
 }));

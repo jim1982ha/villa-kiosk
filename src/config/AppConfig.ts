@@ -5,7 +5,6 @@ import type { Category, EntityMapping, EntityType, TeleportPoint } from "@/types
 import { hasVariantSuffix, inferTypeFromEntityId } from "./EntityMap";
 import { ENTITY_MAP } from "./EntityMap";
 import { TELEPORT_POINTS } from "./TeleportPoints";
-import { DEFAULT_THRESHOLDS, type Threshold } from "./ThresholdConfig";
 import { DEFAULT_EYE_HEIGHT } from "@/babylon/walkerSpawn";
 import { EMPTY_FM_CONTRACT, type FmContract } from "@/fm/fmTypes";
 import { readJson, writeJson, removeStored } from "@/utils/storedJson";
@@ -189,7 +188,6 @@ export interface AppConfig {
    */
   dismissedEntityIds: string[];
   teleportPoints: TeleportPoint[];
-  alertThresholds: Record<string, Threshold>;
   /** The maintenance contract's money rules — monthly cap, category names,
    *  warning share (fm/fmTypes.ts). SHARED: they describe the villa's
    *  agreement, so every device reads the same terms. Empty by default. */
@@ -335,7 +333,6 @@ export const DEFAULT_CONFIG: AppConfig = {
   meshBindings: {},
   dismissedEntityIds: [],
   teleportPoints: TELEPORT_POINTS,
-  alertThresholds: DEFAULT_THRESHOLDS,
   fmContract: EMPTY_FM_CONTRACT,
   eyeHeight: DEFAULT_EYE_HEIGHT,
   walkSpeed: 1,
@@ -453,6 +450,11 @@ export function upgradeStaleTypes(config: AppConfig): AppConfig {
   return entityMap ? { ...config, entityMap } : config;
 }
 
+/** Keys an older version stored and nothing reads any more — dropped where every config enters memory, so a device
+ *  that still holds one stops carrying it. `alertThresholds`: per-sensor min/max limits no screen ever set (removed
+ *  2.496.450). */
+export const RETIRED_KEYS: readonly string[] = ["alertThresholds"];
+
 /**
  * Every setting present and valid — the ONE place a default or a bound is
  * applied (round 10, 2.496.155). A missing or null value takes DEFAULT_CONFIG's
@@ -464,6 +466,7 @@ export function upgradeStaleTypes(config: AppConfig): AppConfig {
  */
 function completeConfig(config: AppConfig): AppConfig {
   const out = { ...config } as Record<string, unknown>;
+  for (const k of RETIRED_KEYS) delete out[k];
   for (const [k, v] of Object.entries(DEFAULT_CONFIG)) if (out[k] === undefined || out[k] === null) out[k] = v;
   const c = out as unknown as AppConfig;
   c.entityIconScale = clampIconScale(c.entityIconScale);
@@ -479,14 +482,12 @@ export function loadConfig(): AppConfig {
       ...DEFAULT_CONFIG,
       ...stored,
       // ⚠️ THE USER'S OWN SLICES ARE TAKEN AS STORED — nothing spread under
-      // them (round 10, 2.496.163). The seeds (ENTITY_MAP, DEFAULT_THRESHOLDS,
-      // TELEPORT_POINTS) are empty, so the spread merged nothing; but it was
+      // them (round 10, 2.496.163). The seeds (ENTITY_MAP, TELEPORT_POINTS) are empty, so the spread merged nothing; but it was
       // the very path by which a seeded entry resurrected itself after being
       // deleted ("stale entities I can't get rid of", CLAUDE.md). Gone, rather
       // than relying on the seeds staying empty.
       entityMap: stored.entityMap ?? {},
       meshBindings: stored.meshBindings ?? {},
-      alertThresholds: stored.alertThresholds ?? {},
       render: adoptRenderLookDefaults({ ...DEFAULT_CONFIG.render, ...(stored.render ?? {}) }),
       teleportPoints: stored.teleportPoints ?? [],
     });

@@ -1,3 +1,51 @@
+## 2.496.453
+
+### Changed
+- Facility records now keep one year of history by default: maintenance photos, repaired faults, work done and
+  money spent are kept 365 days (it was 550). "Spend older than 365 days is no longer kept." says so under the
+  figures. If you set your own value in the app's configuration, it stays as you set it.
+
+## 2.496.452
+
+### Fixed
+- Villa presence: "Occupied · since …", each person's "since …" and the latest movement's "quiet since …" now say when
+  that state really began, not when the villa's system was last restarted (a restart rewrites the same state, which
+  is the short white gap you could see in the presence band). When the villa has been in that state for longer than
+  the system keeps, it says "since before <that day>". While the history is being read, the line shows "…" instead of
+  a time.
+- "Empty · since …" uses the moment the villa last became empty, as the villa's presence helper records it, when the
+  helper has that record (it survives restarts and goes further back than the kept history).
+
+### Changed
+- Facility: every maintenance-check fault's card now says "Next check: within 5 min", because the VESTA Agent reads
+  every open one again at each look. Nothing else changes on screen. An older VESTA Agent keeps working.
+
+## 2.496.451
+
+### Fixed
+- The overview's sun and moon are back, exactly as before 2.496.448: that release removed them by mistake, taking the
+  orange spot in the living room for the sun.
+- The orange spot in the living room overview, over the TV, is gone. It was a small flat piece of the upstairs orange
+  planter that the 3D model had attached to the big living-room curtain: it lies on the upstairs floor, so it was
+  hidden from inside the room but drawn in the ground floor's overview. Anything lying on an upper floor now belongs
+  to that floor, whatever object the model filed it under; ceiling lamps stay with the room they light.
+
+## 2.496.450
+
+### Removed
+- Nothing changes on the screen. The app carried an unfinished feature: a lower and upper limit per sensor (turning a
+  reading red past it), which no screen ever let anyone set, so it never did anything. It is gone, with the few other
+  pieces of the app nothing used. A tablet that still remembers an empty list of those limits loads as before and
+  forgets it.
+
+## 2.496.449
+
+### Changed
+- Facility work done and money spent are no longer kept for ever: like a repaired fault, they leave the record after
+  the add-on's "Keep maintenance records for (days)" setting (550 days by default; 0 keeps them for ever). A task's
+  latest completion is always kept, so its next due date stays right, and so is work tied to a fault still listed.
+  Recent work and Spend say how long they are kept, under their lists.
+
 ## 2.496.448
 
 ### Changed

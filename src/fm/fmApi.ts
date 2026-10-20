@@ -45,7 +45,9 @@ export function parseRetention(raw: unknown): FmRetention | null {
   const r = raw as Record<string, unknown>;
   const day = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null);
   const clearedDays = day(r.clearedDays), repairedDays = day(r.repairedDays);
-  return clearedDays === null || repairedDays === null ? null : { clearedDays, repairedDays };
+  if (clearedDays === null || repairedDays === null) return null;
+  // an add-on before 2.496.449 does not say `recordsDays`: it kept completions and costs for ever (0)
+  return { clearedDays, repairedDays, recordsDays: day(r.recordsDays) ?? 0 };
 }
 
 export async function fetchFmData(): Promise<(StoreFetch<FmData> & { retention: FmRetention | null }) | null> {

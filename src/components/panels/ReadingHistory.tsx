@@ -7,7 +7,6 @@
 import LastDayTimeline from "./LastDayTimeline";
 import NumericHistory from "./NumericHistory";
 import { useHA } from "@/ha/HAStateStore";
-import { useConfig } from "@/config/ConfigContext";
 import { historyOf, readingOf } from "@/config/reading";
 import { domainOf } from "@/utils/entityDomain";
 
@@ -17,9 +16,8 @@ export default function ReadingHistory({ entityId, mappingType }: {
   mappingType?: string;
 }) {
   const { entities } = useHA();
-  const { config } = useConfig();
   const entity = entities[entityId];
-  const r = readingOf(entityId, entity, mappingType ?? domainOf(entityId), config.alertThresholds);
+  const r = readingOf(entityId, entity, mappingType ?? domainOf(entityId));
   const unit = entity?.attributes.unit_of_measurement ?? "";
   return historyOf(r) === "states" ? <LastDayTimeline entityId={entityId} colorFor={r.stateColor ?? undefined} />
     : historyOf(r) === "words" ? <LastDayTimeline entityId={entityId} legend />

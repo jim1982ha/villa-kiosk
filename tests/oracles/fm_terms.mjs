@@ -47,7 +47,6 @@ const costs = [
   const editOld = E.projectedSpend(costs, { amount: 950, category: "minor", replacing: "old" }, terms, now);
   ck("an edited entry is judged in ITS month, not today's", editOld.month === "2026-08" && editOld.minorSpend === 950, JSON.stringify(editOld));
   ck("no cap: never over", !E.projectedSpend(costs, { amount: 1e9, category: "minor" }, { monthlyCap: 0, warnAt: 0.8 }, now).over);
-  ck("wouldExceedCap is the same check", E.wouldExceedCap(costs, 400, terms, now) && !E.wouldExceedCap(costs, 399, terms, now));
   ck("the warning share is the owner's", E.budgetStatus(costs, "2026-09", { monthlyCap: 1000, warnAt: 0.5 }).state === "approaching"
      && E.budgetStatus(costs, "2026-09", { monthlyCap: 1000, warnAt: 0.7 }).state === "ok");
 }

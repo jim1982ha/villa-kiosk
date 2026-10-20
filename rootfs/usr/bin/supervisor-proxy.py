@@ -1011,7 +1011,7 @@ OPTIONS = {
     "ops_pin": Option("text", "", pattern=PIN_RE),
     "superadmin_pin": Option("text", "", pattern=SUPERADMIN_PIN_RE),
     "public_model_access": Option("bool", False),
-    "evidence_retention_days": Option("int", 550, 0, 3650),
+    "evidence_retention_days": Option("int", 365, 0, 3650),
     "session_days": Option("int", 30, 1, 365),
     "telemetry_max_events": Option("int", 500, 50, 5000),
     "pin_lockout_minutes": Option("int", 5, 1, 1440),
@@ -1716,7 +1716,7 @@ def _fm_ticket_expired(ticket, now: float) -> bool:
 
 # ⚠️ HOW A FAULT WAS CLOSED: THE APP'S ANSWER, NOT A COPY (architecture review, 2026-10-15). This took the last step
 # saying "resolved" in list order — a title change or a Telegram line written after the close carries "resolved" too,
-# so a cleared Wi-Fi blip renamed afterwards was kept 550 days instead of 90. The same reading as the app's
+# so a cleared Wi-Fi blip renamed afterwards was kept the full evidence window instead of 90 days. The same reading as the app's
 # fmEngine.lastResolution / isClearedStep, from the same lists (agent-contract.json ticketUpdate).
 def _fm_last_resolution(ticket):
     """The step that last resolved `ticket`: of the steps that change its status, in time order."""
@@ -1739,19 +1739,52 @@ def _fm_cleared_step(step) -> bool:
 
 
 def _fm_retention() -> dict:
-    """The two windows above, as the app reads them beside the record (`retention` on GET /fm-data): its Tickets
+    """The windows above, as the app reads them beside the record (`retention` on GET /fm-data): its Tickets
     figures name the period the record still holds, never a copy of these numbers (architecture review, 2026-10-19:
-    "Resolved (all time)" counted only what had not expired yet). Days; 0 = kept for ever."""
-    return {"retention": {"clearedDays": FM_CLEARED_FAULT_RETENTION_DAYS, "repairedDays": _evidence_retention_days()}}
+    "Resolved (all time)" counted only what had not expired yet). Days; 0 = kept for ever. `recordsDays` is the
+    window of completions and costs (_fm_expire) — the repaired fault's, said under its own name."""
+    days = _evidence_retention_days()
+    return {"retention": {"clearedDays": FM_CLEARED_FAULT_RETENTION_DAYS, "repairedDays": days, "recordsDays": days}}
+
+
+# ── AND HOW LONG WORK DONE AND MONEY SPENT ARE KEPT (owner, 2026-10-20) ─────
+# Completions (work signed off) and costs (money spent) were kept FOREVER while closed faults expired: "It shouldn't
+# be kept forever: apply the same consistent retention policy". They are records of work done, so they take the
+# repaired fault's window — evidence_retention_days, counted from their own date (`at`); 0 keeps them for ever. Two
+# completions are kept past it, because what they answer still matters: a scheduled task's LATEST completion (its
+# next due date is counted from it: a task every 2 years must not read "never done") and one tied to a fault the
+# record still holds (the fault and the work that fixed it go together).
+def _fm_dated_expired(rec, now: float, days: int) -> bool:
+    """True when this dated record (a completion, a cost) is past `days` — never when its date cannot be read."""
+    at = _iso_epoch(rec.get("at")) if isinstance(rec, dict) else None
+    return days > 0 and at is not None and now - at > days * 86400
 
 
 def _fm_expire(doc, now: float | None = None):
-    """The Facility record without the closed faults past their window."""
-    if not isinstance(doc, dict) or not isinstance(doc.get("tickets"), list):
+    """The Facility record without the closed faults, completions and costs past their window."""
+    if not isinstance(doc, dict):
         return doc
     now = time.time() if now is None else now
-    kept = [t for t in doc["tickets"] if not _fm_ticket_expired(t, now)]
-    return doc if len(kept) == len(doc["tickets"]) else dict(doc, tickets=kept)
+    out = dict(doc)
+    if isinstance(doc.get("tickets"), list):
+        out["tickets"] = [t for t in doc["tickets"] if not _fm_ticket_expired(t, now)]
+    days = _evidence_retention_days()
+    if isinstance(doc.get("completions"), list):
+        held = {t.get("id") for t in out.get("tickets") or () if isinstance(t, dict)}
+        latest: dict = {}
+        for c in doc["completions"]:
+            if isinstance(c, dict) and c.get("scheduleId") and _iso_epoch(c.get("at")) is not None:
+                best = latest.get(c["scheduleId"])
+                if best is None or _iso_epoch(c["at"]) > _iso_epoch(best.get("at")):
+                    latest[c["scheduleId"]] = c
+        keep_ids = {id(c) for c in latest.values()}
+        out["completions"] = [c for c in doc["completions"]
+                              if not _fm_dated_expired(c, now, days) or id(c) in keep_ids
+                              or (isinstance(c, dict) and c.get("ticketId") and c.get("ticketId") in held)]
+    if isinstance(doc.get("costs"), list):
+        out["costs"] = [k for k in doc["costs"] if not _fm_dated_expired(k, now, days)]
+    changed = any(isinstance(doc.get(k), list) and len(out[k]) != len(doc[k]) for k in ("tickets", "completions", "costs"))
+    return out if changed else doc
 
 
 # A guest may append at most this many reports in one write. One is the normal
@@ -3063,8 +3096,8 @@ FM_DATA_MAX_BYTES = 4_000_000
 # complexity for no benefit.
 FM_EVIDENCE_NAME = "fm-evidence"
 FM_EVIDENCE_MAX_BYTES = 3_000_000     # generous headroom over a downscaled JPEG
-# Evidence age limit — the DEFAULT is ~18 months (a 12-month agreement plus the
-# yield-up/dispute window after it). See _evidence_retention_days().
+# Evidence age limit — the DEFAULT is 365 days (one year of history; owner,
+# 2026-10-20). See _evidence_retention_days().
 FM_EVIDENCE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{6,64}$")
 # How long an unreferenced photo is kept before it is treated as garbage. It
 # exists solely to cover the gap between "uploaded" and "saved": the client
@@ -3491,16 +3524,12 @@ _CADENCE_REFUSAL_LOGGED: str | None = None
 def _agent_cadence_problem(value) -> str | None:
     """Why a heartbeat's `cadence` is not agent-contract.json's shape, or None when it is (_agent_cadence's rule)."""
     if not isinstance(value, dict):
-        return "cadence must be an object {checkMinutes, nightlyAt, dayChecksAt?}"
+        return "cadence must be an object {checkMinutes, nightlyAt}"
     minutes, nightly = value.get("checkMinutes"), value.get("nightlyAt")
     if not (isinstance(minutes, int) and not isinstance(minutes, bool) and 1 <= minutes <= 1440):
         return "checkMinutes must be a whole number 1-1440"
     if not (isinstance(nightly, str) and _HHMM.fullmatch(nightly)):
         return "nightlyAt must be HH:MM"
-    day = value.get("dayChecksAt")
-    if day is not None and not (isinstance(day, list) and len(day) <= 12
-                                and all(isinstance(t, str) and _HHMM.fullmatch(t) for t in day)):
-        return "dayChecksAt must be a list of at most 12 HH:MM"
     return None
 
 
@@ -3511,15 +3540,11 @@ _HHMM = re.compile(r"(?:[01]\d|2[0-3]):[0-5]\d")
 def _agent_cadence(value) -> dict | None:
     """The agent's own timing as its heartbeat says it (agent-contract.json `heartbeat.cadence`), or None when it is
     not that shape. ⚠️ THE AGENT'S CLOCK, TOLD — NOT COPIED (architecture review, 2026-10-15): the Overview's (i) said
-    "checks every 5 minutes, nightly check at 02:00" whatever the villa had set."""
+    "checks every 5 minutes, nightly check at 02:00" whatever the villa had set. Only these two are kept: anything else
+    an older Agent sends is dropped, never refused."""
     if _agent_cadence_problem(value) is not None:
         return None
-    cadence = {"checkMinutes": value["checkMinutes"], "nightlyAt": value["nightlyAt"]}
-    if value.get("dayChecksAt") is not None:
-        # the times it reads its "day" faults again (owner, 2026-10-19), kept sorted and once each: the Kiosk words
-        # "16:00, 20:00" in that order
-        cadence["dayChecksAt"] = sorted(set(value["dayChecksAt"]))
-    return cadence
+    return {"checkMinutes": value["checkMinutes"], "nightlyAt": value["nightlyAt"]}
 
 
 def _agent_presence() -> dict:

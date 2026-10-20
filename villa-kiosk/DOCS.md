@@ -75,7 +75,7 @@ read live — a changed value takes effect without restarting the add-on.
   five wrong passcodes in a row. The lockout is tracked per source address, so
   raising it slows down someone guessing without locking the household out of
   their own villa.
-- **`evidence_retention_days`** (default 550, ~18 months) — how long Facility
+- **`evidence_retention_days`** (default 365, one year) — how long Facility
   Manager photo evidence is kept before automatic deletion. See *Facility
   workspace* below. Set it to 0 to keep evidence indefinitely.
 - **`telemetry_max_events`** (default 500) — how much diagnostic history (load
@@ -159,7 +159,7 @@ that opens the kiosk sees the same record:
 | File | What it holds |
 |---|---|
 | `/data/fm-data.json` | Maintenance schedule, completions, spend entries, faults |
-| `/data/fm-evidence/` | Photo evidence, downscaled in the browser before upload, pruned after `evidence_retention_days` (default ~18 months) |
+| `/data/fm-evidence/` | Photo evidence, downscaled in the browser before upload, pruned after `evidence_retention_days` (default 365 days, one year) |
 
 The maintenance schedule starts completely empty — nothing is pre-filled for
 any villa. Add each task from the **Schedule** tab: a title, an interval

@@ -115,7 +115,6 @@ ck("every Facility card: its pills and when on one line under the title (RecordM
   // review 26: a step says what it is (agent-contract.json ticketUpdate) — the card read the agent's title changes by
   // their first words and took them for status steps. Driven through the functions, with a fixed clock.
   const { faultNoteLines, faultWhen } = await import("../../src/fm/faultNotes.ts");
-  const { FM_TICKET_UPDATE_KINDS } = await import("@/fm/fmTypes");
   const at = (h) => `2026-10-10T${String(h).padStart(2, "0")}:00:00Z`;
   const stamp = (s) => s.slice(5, 13).replace("T", " ");
   const t = { id: "t", status: "in_progress", openedAt: at(1), title: "Motion battery at 7%", note: "Check: Replace the battery.",
@@ -157,8 +156,9 @@ ck("every Facility card: its pills and when on one line under the title (RecordM
     { at: at(7), status: "open", by: "Owner", kind: "reopened", note: "Still beeping", photoIds: [] }] };
   ck("a reopened fault says when and by whom", faultWhen(reopened, stamp) === "Opened 10-10 01 by VESTA Agent · reopened 10-10 07 by Owner", faultWhen(reopened, stamp));
   const contract = JSON.parse(readFileSync(new URL("../../rootfs/usr/share/vesta/agent-contract.json", import.meta.url), "utf8"));
+  const kinds = /export type FmTicketUpdateKind = ([^;]+);/.exec(src("fm/fmTypes.ts"))?.[1].match(/"[^"]+"/g)?.map((k) => k.slice(1, -1));
   ck("the step kinds are the agreement's, the one list both sides read",
-     JSON.stringify(FM_TICKET_UPDATE_KINDS) === JSON.stringify(contract.ticketUpdate.kinds) && contract.ticketUpdate.kinds.includes("reopened"));
+     JSON.stringify(kinds) === JSON.stringify(contract.ticketUpdate.kinds) && contract.ticketUpdate.kinds.includes("reopened"), kinds);
 }
 const faults = src("components/fm/TicketsTab.tsx");
 ck("a fault card no longer repeats its history's status lines, and reads its notes and when through faultNotes",
@@ -183,15 +183,11 @@ console.log("\n  the Agent's clock, only while it is online:");
      quiet.cadence === null && nextCheck(alert, quiet.cadence) === "Next check: by the VESTA Agent", nextCheck(alert, quiet.cadence));
   const awake = parseAgentStatus({ state: "online", last_seen: "2026-09-29T00:00:00Z", cadence: { checkMinutes: 5, nightlyAt: "02:00" } });
   ck("  ...online, its own number", nextCheck(alert, awake.cadence) === "Next check: within 5 min");
-  // owner, 2026-10-19: its day times, as the proxy relays them; an older Agent's cadence has none, and a night fault
-  // read during the day then says the nightly time
-  const night = [{ source: "night", check: "day" }], at1310 = new Date(2026, 9, 19, 13, 10);
-  const day = parseAgentStatus({ state: "online", cadence: { checkMinutes: 5, nightlyAt: "02:00", dayChecksAt: ["08:00", "16:00"] } });
-  ck("  ...its day times are read: a night fault says the next one",
-     JSON.stringify(day.cadence?.dayChecksAt) === '["08:00","16:00"]' && nextCheck(night, day.cadence, at1310) === "Next check: 16:00");
-  ck("  ...an older Agent's (no day times, or not a list): none read, the nightly time",
-     !("dayChecksAt" in awake.cadence) && !("dayChecksAt" in parseAgentStatus({ state: "online", cadence: { checkMinutes: 5, nightlyAt: "02:00", dayChecksAt: "16:00" } }).cadence)
-     && nextCheck(night, awake.cadence, at1310) === "Next check: 02:00");
+  // owner, 2026-10-20: the Agent reads every open night finding at every look and no longer says day times; an older
+  // one that still does is harmless — its times are not read
+  const old = parseAgentStatus({ state: "online", cadence: { checkMinutes: 5, nightlyAt: "02:00", dayChecksAt: ["08:00", "16:00"] } });
+  ck("  ...an older Agent's day times are dropped: its timing is the two numbers",
+     JSON.stringify(old.cadence) === '{"checkMinutes":5,"nightlyAt":"02:00"}', old.cadence);
 }
 
 done("✅ the agent is shown to the right people, with its presence and its clock");

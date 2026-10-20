@@ -18,18 +18,18 @@ ck("the agreement declares the agent's fault: stamp, source, origins, the take-o
    T && T.agentStamp && T.source && Array.isArray(T.origins) && T.takenStep && T.sample, Object.keys(T || {}));
 ck("the proxy stamps the agreement's words, never its own copy",
    /AGENT_SOURCE = str\(_AGENT_TICKET\.get\("source"\)/.test(proxy) && /AGENT_NAME = str\(_AGENT_TICKET\.get\("agentStamp"\)/.test(proxy));
-// owner, 2026-10-19: "day" — a night-check fault read again during the day; the app reads the agreement's list, and a
-// check the agreement does not declare reads as its source's usual clock (never a time from nowhere)
+// the app reads the agreement's list, and a check the agreement does not declare (an older Agent's retired "day", owner
+// 2026-10-20) reads as its source's usual clock (never a time from nowhere)
 {
   const { AGENT_CHECKS } = await import("@/fm/fmTypes");
   const { nextCheck } = await import("@/fm/faultTiming");
-  ck("the app reads the agreement's checks, \"day\" among them; a Kiosk without the list was told the older two",
-     JSON.stringify(AGENT_CHECKS) === JSON.stringify(T.checks) && T.checks.includes("day")
+  ck("the app reads the agreement's checks — every look and the nightly check, no \"day\" any more; a Kiosk without the list was told the same two",
+     JSON.stringify(AGENT_CHECKS) === JSON.stringify(T.checks) && JSON.stringify(T.checks) === JSON.stringify(["minutes", "nightly"])
      && JSON.stringify(T.checksBeforeList) === JSON.stringify(["minutes", "nightly"]) && T.checksBeforeList.every((c) => T.checks.includes(c)));
-  const C = { checkMinutes: 5, nightlyAt: "02:00", dayChecksAt: ["16:00"] }, NOW = new Date(2026, 9, 19, 13, 10);
+  const C = { checkMinutes: 5, nightlyAt: "02:00" }, NOW = new Date(2026, 9, 19, 13, 10);
   ck("  ...an undeclared check falls back to its source's clock",
      nextCheck([{ source: "alert", check: "weekly" }], C, NOW) === "Next check: within 5 min"
-     && nextCheck([{ source: "night", check: "day" }], C, NOW) === "Next check: 16:00");
+     && nextCheck([{ source: "night", check: "day" }], C, NOW) === "Next check: within 5 min");
   ck("  ...the proxy lists them to the Agent from the agreement (by value: tests/agent-interface.py)",
      /"ticket_checks": list\(\(AGENT_CONTRACT_TABLE\.get\("ticket"\) or \{\}\)\.get\("checks"\) or \[\]\)/.test(proxy));
 }

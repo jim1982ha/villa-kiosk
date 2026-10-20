@@ -11,7 +11,7 @@ import Dropdown from "@/components/common/Dropdown";
 import SaveButton from "@/components/common/SaveButton";
 import { Plus, Sparkles, Save, Download } from "lucide-react";
 import { useFmData } from "@/fm/FmDataContext";
-import { budgetStatus, capNotes, localStamp, parseAmount } from "@/fm/fmEngine";
+import { budgetStatus, capNotes, localStamp, parseAmount, recordsKeptNote } from "@/fm/fmEngine";
 import { COST_CATEGORY_NAMES } from "@/fm/fmTypes";
 import { useFmTerms } from "@/fm/useFmTerms";
 import { useProfile } from "@/auth/ProfileContext";
@@ -44,7 +44,9 @@ export default function SpendTab(
     deviceOptions: DeviceOption[];
   },
 ) {
-  const { data, addCost, updateCost, removeCost } = useFmData();
+  const { data, addCost, updateCost, removeCost, retention } = useFmData();
+  // how long spend is kept (owner, 2026-10-20: the record's retention, said beside the list it shortens)
+  const kept = recordsKeptNote(retention, "Spend");
   const place = useRecordPlace();
   const { role } = useProfile();
   const terms = useFmTerms();
@@ -220,6 +222,8 @@ export default function SpendTab(
             </>} />
         ))}
       </div>
+
+      {kept && <p className="muted body-text fm-kept-note">{kept}</p>}
 
       {/* The month's statement (its buttons sit with the Month, above): the same explicit Generate -> Save shape as
           the recap (fmDocuments.buildSpendStatement), for handing this month's spend over on its own, and keeping a

@@ -99,11 +99,11 @@ export function VillaModelProvider({ sets, children }: { sets: VillaSets; childr
   );
   const attention = useMemo((): VillaProblems => {
     const attentionItems = buildAttentionItems({
-      devices, entities, entityMap, alertThresholds: config.alertThresholds, resolvedRooms, fmData });
+      devices, entities, entityMap, resolvedRooms, fmData });
     // NOT grouped here: grouping is per profile (attentionFor), and a
     // role-blind grouping had no reader (until 2.496.268 it ran anyway).
     return { devices, attentionItems };
-  }, [devices, entities, entityMap, config.alertThresholds, resolvedRooms, fmData]);
+  }, [devices, entities, entityMap, resolvedRooms, fmData]);
 
   // Advanced Settings' device list and what it must say is missing — the same dismissal as every set above.
   const settings = useMemo(() => {

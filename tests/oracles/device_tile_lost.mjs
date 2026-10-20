@@ -17,7 +17,7 @@ const entities = {
   "sensor.critical_ok": ent("sensor.critical_ok", "3"),
 };
 const critical = new Set(["sensor.critical", "sensor.critical_ok"]);
-const looks = storeLookSource(entities, { entityMap: {}, alertThresholds: {}, isCritical: (id) => critical.has(id) });
+const looks = storeLookSource(entities, { entityMap: {}, isCritical: (id) => critical.has(id) });
 
 const tile = (id) => draw(h(SummaryEntityRow, {
   label: id, stateText: "x", look: deviceLook(id, looks), badgeSrc: "data:,", notInHa: false, offMap: false,

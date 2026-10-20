@@ -68,7 +68,9 @@ export type HistoryRequest =
   | { kind: "stateWindow"; id: string; hours: number }
   /** The recorder's statistics, one series per id per field. */
   | { kind: "statistics"; ids: readonly string[]; period: StatisticsPeriod;
-      fields: readonly StatisticField[]; hours?: number; since?: number };
+      fields: readonly StatisticField[]; hours?: number; since?: number }
+  /** When each id's CURRENT state began, as far back as the villa keeps (stateSince). */
+  | { kind: "since"; ids: readonly string[]; hours?: undefined };
 
 export interface StateWindow {
   data: StateHistoryPoint[];
@@ -84,6 +86,7 @@ export type HistoryAnswer<R extends HistoryRequest> =
   : R extends { kind: "states" } ? Record<string, StateHistoryPoint[]>
   : R extends { kind: "stateWindow" } ? StateWindow
   : R extends { kind: "statistics" } ? Record<string, Partial<Record<StatisticField, HistorySeries>>>
+  : R extends { kind: "since" } ? Record<string, StateSince | null>
   : never;
 
 /** Several requests answered together, over ONE `now`. */
@@ -232,6 +235,59 @@ async function statistics(
     fields.map((f) => [f, statisticsSeries(res[id], f, period, window)]))]));
 }
 
+// ── When the current state began ──────────────────────────────────────────
+/** When a state began: `at` (epoch ms), or — `before` — some time before `at`, the oldest moment the villa still
+ *  keeps (or the look-back's start). `state` is the state the history ends in. */
+export interface StateSince { at: number; before: boolean; state: string }
+
+/**
+ * When the state an entity is in NOW began, from its recorded history — never its `last_changed`.
+ *
+ * ⚠️ A RESTART IS NOT A CHANGE (owner, 2026-10-20: "Occupied · since 20 Oct, 15:01", the moment of his restart, while
+ * the villa had been occupied all day). The villa's system rewrites a template's or a person's state on a restart —
+ * unavailable or unknown for a moment, then the same state again — and stamps a new `last_changed` on it. So a run of
+ * one state is read across any stretch of unavailable/unknown and across rewrites of the same state; it starts where
+ * a DIFFERENT real state ended. A run that reaches the oldest row kept started "before" it — said so, not invented.
+ * An entity that is unavailable or unknown NOW: since the start of that stretch.
+ */
+export function stateSince(rows: readonly StateRow[], kept?: number): StateSince | null {
+  const pts = rows.map((r) => ({ t: new Date(r.last_changed).getTime(), state: String(r.state ?? "") }))
+    .filter((p) => Number.isFinite(p.t)).sort((a, b) => a.t - b.t);
+  if (!pts.length) return null;
+  const now = pts[pts.length - 1].state;
+  const blip = (st: string) => UNKNOWN_STATES.has(st) || st === "";
+  let start = pts[pts.length - 1].t;
+  for (let i = pts.length - 1; i >= 0; i--) {
+    const st = pts[i].state;
+    if (st === now || (blip(st) && !blip(now))) {
+      if (st === now) start = pts[i].t;
+      continue;
+    }
+    return { at: start, before: false, state: now };
+  }
+  return { at: Math.max(pts[0].t, kept ?? -Infinity), before: true, state: now };
+}
+
+/** The live entity over the history's answer: a change the recorder has not written yet is a real change, at its
+ *  `last_changed`; otherwise the history's start of the run. undefined when the history has no answer for it. */
+export function stateSinceNow(h: StateSince | null | undefined, live: { state: string; last_changed?: string } | undefined): StateSince | null | undefined {
+  if (h === undefined) return undefined;
+  if (live && (!h || live.state !== h.state)) {
+    const t = Date.parse(live.last_changed ?? "");
+    return Number.isFinite(t) ? { at: t, before: false, state: live.state } : null;
+  }
+  return h;
+}
+
+/** How far back a "since" looks when the villa does not say how much it keeps. */
+export const SINCE_LOOKBACK_HOURS = LAST_SEEN_LOOKBACK_HOURS;
+
+async function since(port: HistoryPort, id: string, now: number): Promise<StateSince | null> {
+  const kept = await keptFrom(port, now);
+  const from = kept ?? now - SINCE_LOOKBACK_HOURS * HOUR_MS;
+  return stateSince(await port.stateRows(id, from, now), from);
+}
+
 // ── How far back the villa's system keeps every change ────────────────────
 /** A device every villa's system has, changing twice a day: its oldest change kept is where the detail begins. */
 export const KEPT_PROBE = "sun.sun";
@@ -318,6 +374,8 @@ export async function loadOne<R extends HistoryRequest>(port: HistoryPort, r: R,
       return await stateWindow(port, r.id, r.hours, now) as HistoryAnswer<R>;
     case "statistics":
       return await statistics(port, r.ids, r.period, r.fields, window) as HistoryAnswer<R>;
+    case "since":
+      return await each(r.ids, (id) => since(port, id, now)) as HistoryAnswer<R>;
   }
 }
 

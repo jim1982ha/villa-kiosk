@@ -13,9 +13,6 @@
 // A/C), and only for devices a person can switch. A sensor (motion, door,
 // temperature), a camera, a weather station is never "on".
 
-import type { HassEntity } from "@/types/ha.types";
-import type { Category, EntityMapping } from "@/types/scene.types";
-import { CATEGORY_ORDER, effectiveCategory, subjectOf } from "./EntityCategories";
 import { domainOf } from "@/utils/entityDomain";
 
 // ⚠️ POWER IS deviceActivity's (2.496.245). `hasOnOff` / `isActive` lived
@@ -25,27 +22,6 @@ import { domainOf } from "@/utils/entityDomain";
 // DeviceLook.active = ACTIVITY); this module keeps the counting and the bulk
 // switch, and counts POWER, by name.
 
-
-interface CategoryMembers { category: Category; entityIds: string[] }
-
-/** Per category: which of these devices are in it. Devices without a mapping
- *  are left out (a category comes from the mapping).
- *
- *  It counts nothing: "on" is groupLook's POWER count, asked by whoever draws
- *  the devices (until 2.496.268 it also counted, a second copy of that rule). */
-export function categoryMembers(
-  ids: readonly string[], entities: Record<string, HassEntity>, entityMap: Record<string, EntityMapping>,
-): CategoryMembers[] {
-  const members = new Map<Category, string[]>(CATEGORY_ORDER.map((c) => [c, []]));
-  for (const id of ids) {
-    const mapping = entityMap[id];
-    if (!mapping) continue;
-    const entity = entities[id];
-    const cat = effectiveCategory(subjectOf(id, mapping, entity));
-    members.get(cat)?.push(id);
-  }
-  return CATEGORY_ORDER.map((category) => ({ category, entityIds: members.get(category) ?? [] }));
-}
 
 /** One service call of a bulk switch. */
 export interface BulkCall { domain: string; service: "turn_on" | "turn_off" | "lock" | "unlock"; entityIds: string[] }

@@ -101,7 +101,7 @@ console.log("\n  the callers:");
   const files = walk(SRC).filter((f) => /\/(components|hooks)\//.test(f));
   const readers = files.filter((f) => /\buseHistorySource\(/.test(readFileSync(f, "utf8"))).map((f) => f.slice(SRC.length)).sort();
   ck(`found every reader of history, all through the source (${readers.length})`,
-     readers.join() === "components/panels/CameraPanel.tsx,components/panels/EnergyPanel.tsx,components/panels/NumericHistory.tsx,components/panels/WeatherPanel.tsx,hooks/useStateHistory.ts", readers);
+     readers.join() === "components/panels/CameraPanel.tsx,components/panels/EnergyPanel.tsx,components/panels/NumericHistory.tsx,components/panels/WeatherPanel.tsx,hooks/useStateHistory.ts,hooks/useStateSince.ts", readers);
   const bypass = files.filter((f) => /getStatisticsDuringPeriod\(|history\/period|haHistoryPort\(|loadHistory\(|loadOne\(/.test(readFileSync(f, "utf8"))
     && !f.endsWith("hooks/useHistorySource.ts")).map((f) => f.slice(SRC.length));
   ck("no panel reaches Home Assistant's history around the source", bypass.length === 0, bypass);
@@ -122,6 +122,34 @@ console.log("\n  the callers:");
   ck("a failed history says it could not load (emptyHistoryText, through LineChart's ChartEmpty, which the rain tile uses too)",
      emptyHistoryText("failed") === "Couldn't load this history." && /const text = emptyHistoryText\(status\);/.test(lcSrc)
      && /import LineChart, \{ ChartEmpty \} from "\.\/LineChart";/.test(panel));
+}
+
+console.log("\n  when the current state began (owner, 2026-10-20: \"Occupied · since 15:01\" was his restart):");
+{
+  const { stateSince, stateSinceNow } = await import("@/ha/historySource");
+  const M = 60_000, T = (m) => new Date(t0 + m * M).toISOString(), r = (m, state) => ({ state, last_changed: T(m) });
+  const restart = [r(0, "on"), r(60, "off"), r(300, "unavailable"), r(301, "off"), r(302, "off")];
+  const s = stateSince(restart, t0);
+  ck("a restart in the middle of a run (unavailable, then the same state rewritten): the run's REAL start",
+     s?.at === t0 + 60 * M && !s.before && s.state === "off", s);
+  ck("  ...an unknown blip and a same-state rewrite alone change nothing either",
+     stateSince([r(0, "home"), r(10, "not_home"), r(20, "unknown"), r(21, "not_home"), r(22, "not_home")])?.at === t0 + 10 * M);
+  ck("a real change: its own time", stateSince([...restart, r(400, "on")])?.at === t0 + 400 * M);
+  ck("  ...a different state across an outage: the run starts when the new state was first seen",
+     stateSince([r(0, "on"), r(10, "unavailable"), r(30, "off")])?.at === t0 + 30 * M);
+  const old = stateSince([r(0, "off"), r(50, "unavailable"), r(51, "off")], t0 + 5 * M);
+  ck("a run older than the villa keeps: \"before\" the oldest moment kept, never the first row's stamp",
+     old?.before === true && old.at === t0 + 5 * M, old);
+  ck("unavailable NOW: since that stretch began", stateSince([r(0, "on"), r(10, "unavailable"), r(11, "unavailable")])?.at === t0 + 10 * M);
+  ck("no history: no answer", stateSince([]) === null);
+  ck("the live state over the history: a change not yet recorded is a real change, at its own time",
+     stateSinceNow(s, { state: "on", last_changed: T(500) })?.at === t0 + 500 * M
+     && stateSinceNow(s, { state: "off", last_changed: T(302) }) === s && stateSinceNow(undefined, { state: "off" }) === undefined);
+  const asked = [];
+  const port = fakePort({ stateRows: async (id, from, to) => { asked.push({ id, from, to }); return restart; }, keptFrom: async () => t0 - 9 * M });
+  const a = await loadOne(port, { kind: "since", ids: ["binary_sensor.x"] }, t0 + 600 * M);
+  ck("  ...asked of the history source like any chart, from as far back as the villa keeps",
+     a["binary_sensor.x"]?.at === t0 + 60 * M && asked[0]?.from === t0 - 9 * M, { a, asked });
 }
 
 done("✅ one history source; absent is never zero");

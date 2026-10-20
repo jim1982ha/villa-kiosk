@@ -52,5 +52,3 @@ export function useMonthlyDocument(kind: DocumentKind, inputs: DocumentInputs) {
     download: () => { if (markdown) downloadFile(documentFileName(kind, villaName, month), markdown, "text/markdown"); },
   };
 }
-
-export type MonthlyDocument = ReturnType<typeof useMonthlyDocument>;

@@ -11,10 +11,12 @@
 // and swapped its chart for the text timeline.
 
 import type { HassEntity } from "@/types/ha.types";
-import { levelForValue, type AlertLevel, type Threshold } from "./ThresholdConfig";
 import { isUnavailable } from "@/utils/stateColors";
 
 export type ReadingKind = "binary" | "measurement" | "text";
+
+/** How alarming a reading is. */
+export type AlertLevel = "normal" | "danger";
 
 /**
  * - binary: a binary_sensor (on/off, worded by its device class);
@@ -32,12 +34,8 @@ export function readingKind(entity: HassEntity | undefined, mappingType: string)
   return isUnavailable(entity) && typeof unit === "string" && unit !== "" ? "measurement" : "text";
 }
 
-/** How alarming the reading is: a binary sensor in its alert state is
- *  danger; a measurement outside its thresholds is; text never is. */
-export function readingLevel(
-  entity: HassEntity | undefined, kind: ReadingKind, threshold: Threshold | undefined, alertState: string | undefined,
-): AlertLevel {
-  if (kind === "binary") return alertState !== undefined && entity?.state === alertState ? "danger" : "normal";
-  const n = Number(entity?.state);
-  return kind === "measurement" && Number.isFinite(n) ? levelForValue(n, threshold) : "normal";
+/** How alarming the reading is: a binary sensor in its alert state is danger; a measurement or text never is (the
+ *  per-sensor min/max limits were removed, 2.496.450: no screen ever set them). */
+export function readingLevel(entity: HassEntity | undefined, kind: ReadingKind, alertState: string | undefined): AlertLevel {
+  return kind === "binary" && alertState !== undefined && entity?.state === alertState ? "danger" : "normal";
 }

@@ -11,10 +11,6 @@
 // off — e.g. connectivity) state is inherently a problem — so the panel's
 // danger styling matches what the sensor actually monitors instead of
 // assuming every binary_sensor is a leak alarm.
-//
-// A per-entity config.alertThresholds override always wins over the
-// `alarmState` default here (see SensorPanel.tsx) — this table only supplies
-// the sensible starting point for a class the user hasn't customised.
 
 import { prettyState } from "@/utils/entityValue";
 import { binaryWord } from "./binarySensorWords";
@@ -96,7 +92,7 @@ export function stateLabelFor(entityId: string, deviceClass?: string): (state: s
 
 /**
  * THE rule for "which state of this binary_sensor is a problem", and the only
- * place the per-entity override is combined with the device_class default.
+ * place it is decided, from the device_class.
  *
  * ⚠️ IT EXISTED TWICE, AND THE TWO COPIES DISAGREED ON EVERY MOTION SENSOR.
  * `SensorPanel` resolved `threshold?.alertState ?? classInfo.alarmState`, so a
@@ -112,17 +108,8 @@ export function stateLabelFor(entityId: string, deviceClass?: string): (state: s
  * state is `off`, so the badge alerted while the device was CONNECTED and
  * went quiet when it dropped.
  *
- * ⚠️ `override` IS A REQUIRED PARAMETER THAT MAY BE `undefined`. A caller that
- * holds `config.alertThresholds` and forgets to pass it would otherwise be
- * indistinguishable from one that has no override to give — the defect
- * pattern this repo has paid for elsewhere. Saying `undefined` is a
- * statement; omitting the argument was an accident waiting to happen.
  */
-export function alertStateFor(
-  deviceClass: string | undefined,
-  override: string | undefined,
-): string | undefined {
-  if (override !== undefined) return override;
+export function alertStateFor(deviceClass: string | undefined): string | undefined {
   const alarm = binarySensorClassInfo(deviceClass).alarmState;
   return alarm === "none" ? undefined : alarm;
 }
@@ -160,8 +147,8 @@ export function detectionStateFor(deviceClass: string | undefined): "on" | undef
 
 /** The state a sensor's WINDOW colours red: its problem state (alertStateFor),
  *  else, for a detector, its detection (detectionStateFor). */
-export function colourAlertStateFor(deviceClass: string | undefined, override: string | undefined): string | undefined {
-  return alertStateFor(deviceClass, override) ?? detectionStateFor(deviceClass);
+export function colourAlertStateFor(deviceClass: string | undefined): string | undefined {
+  return alertStateFor(deviceClass) ?? detectionStateFor(deviceClass);
 }
 
 /** binary_sensor device_classes whose "on" means someone or something MOVED.

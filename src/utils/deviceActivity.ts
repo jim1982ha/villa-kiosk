@@ -18,7 +18,6 @@
 import type { HassEntity } from "@/types/ha.types";
 import type { EntityMapping, EntityType } from "@/types/scene.types";
 import type { DeviceSurfaceState } from "@/config/EntityCategories";
-import type { Threshold } from "@/config/ThresholdConfig";
 import { alertStateFor } from "@/config/BinarySensorClasses";
 import { inferTypeFromEntityId } from "@/config/EntityMap";
 import { TRANSITIONAL_STATES, contactOf, statusKeyFor } from "@/utils/stateColors";
@@ -33,15 +32,14 @@ export type DeviceActivity = "on" | "off" | "alert" | "info";
  * Everything a badge is painted from, as ONE argument.
  *
  * ⚠️ IT WAS THREE POSITIONAL PARAMETERS AND A MISSING FOURTH. Whether a
- * binary_sensor's reading is a problem depends on its `device_class` and on
- * the villa's own per-entity override — neither of which the old
- * `(type, entity, linkedOn)` could express, so the badge answered a different
+ * binary_sensor's reading is a problem depends on its `device_class` — which the old
+ * `(type, entity, linkedOn)` could not express, so the badge answered a different
  * question from the panel that opens when you tap it. Adding a fourth optional
  * parameter would have reproduced the defect this repo keeps paying for: an
  * omission that looks exactly like "there is nothing to pass".
  *
  * ⚠️ `alertState` IS REQUIRED AND MAY BE `undefined`. "This entity has no
- * override" is a statement the caller makes; forgetting to look is not.
+ * alarm state" is a statement the caller makes; forgetting to look is not.
  * It is resolved by readingOf (below) from a LookSource — no caller builds a
  * DeviceReading by hand any more.
  */
@@ -52,8 +50,8 @@ export interface DeviceReading {
    *  pump-power sensor. Held differently by each caller (the map keeps a live
    *  set, a panel reads the store), so the RULE is shared and not the plumbing. */
   linkedOn: boolean;
-  /** The villa's per-entity alert override, already resolved against the
-   *  device_class default. `undefined` means "this reading is never a fault". */
+  /** The state that is a fault for this reading's device_class (alertStateFor). `undefined` means "this reading is
+   *  never a fault". */
   alertState: string | undefined;
   /** On the villa's critical list (LookSource.config.isCritical — the list its "critical devices offline" rule
    *  watches, folded onto the device). Only matters once contact is lost: the ring turns red. */
@@ -322,14 +320,12 @@ export interface LookSource {
   /** What the caller DRAWS this device as (the map: the mesh's resolved
    *  mapping; a list: the entity map, else the id's domain). */
   typeOf(entityId: string): EntityType;
-  /** The entity map (for `linkedEntityId`) and the villa's per-entity alert
-   *  overrides — resolved here, never by a caller. `isCritical`: is this device
+  /** The entity map (for `linkedEntityId`) — resolved here, never by a caller. `isCritical`: is this device
    *  on the villa's critical list, folded onto its device (deviceGroups
    *  `devices.isCritical` — the predicate the Cockpit's red reads). Absent:
    *  nothing is critical (the Cockpit's own tiles, which say it themselves). */
   config: {
     entityMap: Record<string, EntityMapping>;
-    alertThresholds: Record<string, Threshold>;
     isCritical?: (entityId: string) => boolean;
   };
   /** A linked switch the person has just thrown and Home Assistant has not yet
@@ -368,7 +364,7 @@ export interface DeviceLook {
   linkedOn: boolean;
 }
 
-/** The one DeviceReading for this device, alert override and linked entity
+/** The one DeviceReading for this device, its linked entity
  *  resolved from the source — what the mesh rule (meshLookFor) reads too. */
 export function readingOf(entityId: string, source: LookSource): DeviceReading {
   const entity = source.state(entityId) ?? phantomEntity(entityId);
@@ -384,9 +380,7 @@ export function readingOf(entityId: string, source: LookSource): DeviceReading {
     type: source.typeOf(entityId),
     entity,
     linkedOn,
-    alertState: alertStateFor(
-      entity.attributes.device_class as string | undefined,
-      source.config.alertThresholds[entityId]?.alertState),
+    alertState: alertStateFor(entity.attributes.device_class as string | undefined),
     critical: source.config.isCritical?.(entityId) ?? false,
   };
 }

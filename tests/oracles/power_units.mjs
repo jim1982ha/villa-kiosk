@@ -36,7 +36,7 @@ ck("the fix totals correctly", Math.abs(newTotal - truth) < 1e-9);
 // villaSummary.powerFacts, so that is what is asked here — a copy can agree
 // with itself forever.
 const { powerFacts } = await import("@/config/villaSummary");
-const shipped = powerFacts(Object.fromEntries(SENSORS.map((e) => [e.entity_id, e])), {});
+const shipped = powerFacts(Object.fromEntries(SENSORS.map((e) => [e.entity_id, e])));
 ck("the Energy tile's own facts total the same", shipped && Math.abs(shipped.totalW - truth) < 1e-9);
 // ⚠️ TWO ERRORS IN OPPOSITE DIRECTIONS. The 3.2 kW mains counted as 3.2 W
 // (losing 3196.8) while the 500 mW standby counted as 500 W (gaining 499.5),

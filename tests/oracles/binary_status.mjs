@@ -22,18 +22,16 @@ const { binaryLook } = await import("@/config/binaryLook");
 const { detectionStateFor, alertStateFor, secureStateFor } = await import("@/config/BinarySensorClasses");
 
 console.log("\n  config/binaryLook, by value (2.496.285):");
-const leak = binaryLook("binary_sensor.kitchen_leak", "moisture", undefined);
+const leak = binaryLook("binary_sensor.kitchen_leak", "moisture");
 ck("a leak sensor: no leak = green pill 'No leak', a leak = danger pill 'Leak detected', red bar",
    leak.tone("off") === "on" && leak.word("off") === "No leak" && leak.tone("on") === "danger" && leak.word("on") === "Leak detected"
    && leak.color("on") === STATUS_COLOR.alert && leak.problem === "on");
-const door = binaryLook("binary_sensor.door", "door", undefined);
+const door = binaryLook("binary_sensor.door", "door");
 ck("a door: closed green, open grey — and no problem state", door.tone("off") === "on" && door.tone("on") === "off" && door.problem === undefined);
-const watched = binaryLook("binary_sensor.door", "door", "on");
-ck("  ...the owner's alert state wins: open is danger", watched.tone("on") === "danger" && watched.danger("on") && watched.tone("off") === "on");
-const pir = binaryLook("binary_sensor.hall", "motion", undefined);
+const pir = binaryLook("binary_sensor.hall", "motion");
 ck("a motion sensor: quiet green, detection red in its window — yet not a problem (the map keeps it as information)",
    pir.color("off") === STATUS_COLOR.active && pir.color("on") === STATUS_COLOR.alert && pir.problem === undefined && !pir.danger("on")
-   && ["motion", "occupancy"].every((c) => detectionStateFor(c) === "on") && alertStateFor("motion", undefined) === undefined);
+   && ["motion", "occupancy"].every((c) => detectionStateFor(c) === "on") && alertStateFor("motion") === undefined);
 ck("  ...only motion and occupancy are detectors; openings and locks have a secure state",
    ["door", "moisture", "presence", undefined].every((c) => detectionStateFor(c) === undefined)
    && ["door", "garage_door", "window", "opening", "lock"].every((c) => secureStateFor(c) === "off")
@@ -61,9 +59,6 @@ ck("  ...'Clear' and a quiet motion sensor green, an offline battery amber, an o
    rows["binary_sensor.det_smoke_clear"].tone === "on" && rows["binary_sensor.hall"].tone === "on"
    && rows["binary_sensor.det_battery"].tone === "unavailable" && rows["binary_sensor.gate"].tone === "off");
 ck("  ...a measurement inside its limits takes no tone (plain secondary text)", rows["sensor.det_temperature"].tone === undefined);
-const owned = readingRows(["binary_sensor.hall"], { "binary_sensor.hall": ent("binary_sensor.hall", "off", "motion") }, {},
-  { "binary_sensor.hall": { alertState: "off" } });
-ck("  ...the owner's alert state wins here too", owned[0].tone === "danger");
 const list = readFileSync(new URL("../../src/components/panels/DeviceReadings.tsx", import.meta.url), "utf8");
 const dash = readFileSync(new URL("../../src/pages/Dashboard.tsx", import.meta.url), "utf8");
 const css = readFileSync(new URL("../../src/styles/04-modals.css", import.meta.url), "utf8");

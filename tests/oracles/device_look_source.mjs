@@ -6,7 +6,7 @@
 // device-list rows through a raw `state === "on"`. So a device LINKED to a lock
 // that was UNLOCKED, or a cover that was OPEN, rang on the map and sat plain in
 // the list one tap away. deviceLook now resolves the linked entity and the
-// alert override itself, from a LookSource; this drives the SAME states through
+// reading itself, from a LookSource; this drives the SAME states through
 // the map's adapter (mapLookSource — EntityVisuals' live cache) and the store's
 // (storeLookSource — every React surface) and asserts identical looks.
 import { register } from "node:module";
@@ -35,16 +35,13 @@ const CLASSES = { binary_sensor: [undefined, "motion", "moisture", "connectivity
 // What a device can be LINKED to, in every position devicePower knows.
 const LINKS = [null, ["switch.pump", "on"], ["switch.pump", "off"], ["lock.gate", "unlocked"], ["lock.gate", "locked"],
                ["cover.blind", "open"], ["cover.blind", "closed"], ["switch.pump", "unavailable"], ["switch.pump", null]];
-const OVERRIDES = [undefined, "on", "off"];
 
 const cases = [];
 for (const [type, states] of Object.entries(DEVICES)) {
   for (const state of states) {
     for (const dc of CLASSES[type] ?? [undefined]) {
       for (const link of LINKS) {
-        for (const override of type === "binary_sensor" ? OVERRIDES : [undefined]) {
-          cases.push({ type, state, dc, link, override });
-        }
+        cases.push({ type, state, dc, link });
       }
     }
   }
@@ -56,10 +53,7 @@ const world = (c) => {
   const entities = { [did]: ent(did, c.state, c.dc ? { device_class: c.dc } : {}) };
   if (c.link && c.link[1] !== null) entities[c.link[0]] = ent(c.link[0], c.link[1]);
   const mapping = { entityId: did, type: c.type, ...(c.link ? { linkedEntityId: c.link[0] } : {}) };
-  const config = {
-    entityMap: { [did]: mapping },
-    alertThresholds: c.override !== undefined ? { [did]: { alertState: c.override } } : {},
-  };
+  const config = { entityMap: { [did]: mapping } };
   return { did, entities, config, mapping };
 };
 
@@ -72,7 +66,7 @@ for (const c of cases) {
   const bad = FIELDS.filter((f) => viaStore[f] !== viaMap[f]);
   if (bad.length) differ.push({ c, bad, viaStore, viaMap });
 }
-console.log(`  ${cases.length} (type, state, class, link, override) cases through both adapters`);
+console.log(`  ${cases.length} (type, state, class, link) cases through both adapters`);
 ck("the map's adapter and the store's give the SAME look in every case", differ.length === 0, differ.slice(0, 3));
 
 console.log("\n  the linked entity is devicePower's, on both sides:");
@@ -92,13 +86,6 @@ ck("  ...linked to an entity HA never reported: not", look("sensor", "5", ["swit
 ck("the ring is the badge's own colour, never red; the face stays its own state",
    look("camera", "idle", ["switch.pump", "on"]).face === "active" && look("sensor", "5", ["switch.pump", "on"]).face === "off");
 
-console.log("\n  the alert override is resolved by deviceLook, not by its callers:");
-{
-  const w = world({ type: "binary_sensor", state: "on", dc: "motion", override: "on" });
-  ck("a motion sensor the villa marked 'on is a fault' is red", deviceLook(w.did, storeLookSource(w.entities, w.config)).alert === true);
-  const q = world({ type: "binary_sensor", state: "on", dc: "moisture", override: "off" });
-  ck("  ...a leak sensor the villa marked 'off is the fault' is not red while on", deviceLook(q.did, storeLookSource(q.entities, q.config)).alert === false);
-}
 
 console.log("\n  the panel header's optimistic switch, and its drawn type:");
 {
@@ -108,19 +95,19 @@ console.log("\n  the panel header's optimistic switch, and its drawn type:");
   ck("  ...thrown off: the ring goes with it", deviceLook(w.did, pending(false)).ring === "off"
      && deviceLook(w.did, storeLookSource({ ...w.entities, "switch.pump": ent("switch.pump", "on") }, w.config, { pendingPower: () => false })).ring === "off");
   ck("  ...nothing pending: the confirmed state, as the map", deviceLook(w.did, pending(undefined)).ring === "off");
-  const asLock = storeLookSource({ "switch.x": ent("switch.x", "unlocked") }, { entityMap: {}, alertThresholds: {} }, { drawnAs: { entityId: "switch.x", type: "lock" } });
+  const asLock = storeLookSource({ "switch.x": ent("switch.x", "unlocked") }, { entityMap: {} }, { drawnAs: { entityId: "switch.x", type: "lock" } });
   ck("a device drawn as a lock by its mesh binding is read as a lock", deviceLook("switch.x", asLock).type === "lock" && deviceLook("switch.x", asLock).alert);
   // The map's own counterpart: the mapping its mesh resolved to wins over the
   // entity map (a mesh binding can draw a device as another type).
   const onMap = mapLookSource(new Map([["switch.x", ent("switch.x", "unlocked")]]), new Map([["switch.x", { type: "lock" }]]),
-    () => ({ entityMap: { "switch.x": { entityId: "switch.x", type: "switch" } }, alertThresholds: {} }));
+    () => ({ entityMap: { "switch.x": { entityId: "switch.x", type: "switch" } } }));
   ck("  ...and on the map, the mesh's mapping is the type it is drawn as — the same look as the header's",
      deviceLook("switch.x", onMap).type === "lock" && deviceLook("switch.x", onMap).face === deviceLook("switch.x", asLock).face);
 }
 
 console.log("\n  never reported:");
 {
-  const none = deviceLook("light.ghost", storeLookSource({}, { entityMap: {}, alertThresholds: {} }));
+  const none = deviceLook("light.ghost", storeLookSource({}, { entityMap: {} }));
   ck("a device HA never reported looks unavailable (the phantom), power unknown",
      none.face === "unavailable" && none.ring === "unavailable" && none.unavailable && none.power === "unknown");
 }
