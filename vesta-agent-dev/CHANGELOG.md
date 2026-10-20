@@ -1,3 +1,11 @@
+## 0.12.309
+
+What you will see:
+- A device you hide, unhide, rename, add or delete in the villa's system reaches the Agent about a minute later: the
+  Rules page's device pickers offer it (LG TV, unhidden at 02:00, was missing), and a fault about a device you deleted
+  or hid clears at the next check. Before, the Agent read its devices again only at 01:30 each night.
+- Restarting the Agent also reads the devices again (in the background, it does not slow the start).
+
 ## 0.12.308
 
 What you will see:
