@@ -1,3 +1,16 @@
+## 2.496.440
+
+### Fixed
+- Every chart counts a day from midnight to midnight and a week from Monday to Sunday, also in the weeks the clocks
+  change for summer time: after a change, every day and week began at 01:00 or 23:00 instead. An outage drawn on a
+  daily or weekly chart now covers its own day or its Monday-to-Sunday week. It covered a Thursday-to-Wednesday week.
+  A week's tooltip names its Monday and its Sunday.
+- A guest can pick a scene only on a light's own scene choice. The app checked the setting's name alone, so a device
+  setting named like a scene, on a boiler or a camera, would have been open to a guest too (none is, on your villa).
+- Every device window shows its history chart first, then "Also on this device" under it. A lock (and any window
+  using the standard chart) showed the device's other readings above its chart, while a sensor's window showed them
+  below. The windows now share one place for the chart, so a new one cannot differ.
+
 ## 2.496.439
 
 ### Changed

@@ -434,6 +434,25 @@ ck("a guest's Energy window may read its cost (energy/info)", refuse("guest", "e
 ck("a guest may run a scene and toggle an input_boolean (the app offers both)",
    refuse("guest", "call_service", domain="scene", service="turn_on") is None
    and refuse("guest", "call_service", domain="input_boolean", service="toggle") is None)
+# architecture review #5 (2026-10-20): and only one ON A LIGHT'S DEVICE, as Core answers it — none before it has
+ck("before Core has said which selects sit on a light's device, no scene choice is open to a guest",
+   proxy._LIGHT_SCENE_SELECTS == frozenset()
+   and refuse("guest", "call_service", domain="select", service="select_option",
+               target={"entity_id": "select.led_strip_scene"}) is not None
+   and not proxy._read_allowed("guest", "select.led_strip_scene"))
+ck("  ...Core's answer keeps only the selects named as a scene choice; an unreadable one changes nothing",
+   proxy._light_scenes_from('["select.led_strip_scene", "select.hall_light_power_on_behavior"]') == frozenset({"select.led_strip_scene"})
+   and proxy._light_scenes_from(["select.led_strip_scene"]) == frozenset({"select.led_strip_scene"})
+   and proxy._light_scenes_from("not json") is None and proxy._light_scenes_from({"a": 1}) is None
+   and proxy._light_scenes_from([1]) is None)
+proxy._LIGHT_SCENE_SELECTS = frozenset({"select.led_strip_scene"})
+ck("  ...and a select NAMED as a scene but on no light's device stays closed",
+   refuse("guest", "call_service", domain="select", service="select_option",
+          target={"entity_id": "select.boiler_scene"}) is not None
+   and not proxy._read_allowed("guest", "select.boiler_scene"))
+ck("  ...Core is asked through the add-on's own token, at start and every few minutes",
+   "light\\." in proxy.LIGHT_SCENES_TEMPLATE and 60 <= proxy.LIGHT_SCENES_REFRESH_S <= 900
+   and 'asyncio.create_task(_learn_light_scenes(a["session"]))' in Path(PROXY).read_text())
 # owner, 2026-10-20: "Guest should be able to change this setting" — a light's scene choice, and that select only
 ck("a light's scene choice: a guest and ops may pick in it, named by its id",
    refuse("guest", "call_service", domain="select", service="select_option",

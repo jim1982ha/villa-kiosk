@@ -5,6 +5,7 @@
 import type { StateHistoryPoint } from "@/types/ha.types";
 import { clockTime, dayMonth, dayTime, monthShort } from "@/utils/dateText";
 import { NOT_KEPT_WORDS } from "@/utils/stateColors";
+import { nextEdge } from "@/utils/timelineCells";
 
 export function fmtChartValue(v: number): string {
   if (!Number.isFinite(v)) return "";
@@ -46,7 +47,7 @@ const DAY_MS = 24 * 3600 * 1000;
  *  a month's, the month. Never a clock time for a day or longer — every chart's tooltip says it this way. */
 export function fmtStepStamp(t: number, stepMs: number, spanHours: number): string {
   if (stepMs >= 28 * DAY_MS) return monthShort(t);
-  if (stepMs >= 7 * DAY_MS) return `${dayMonth(t)} – ${dayMonth(t + stepMs - 1)}`;
+  if (stepMs >= 7 * DAY_MS) return `${dayMonth(t)} – ${dayMonth(nextEdge(t, stepMs) - 1)}`;
   if (stepMs >= DAY_MS) return dayMonth(t);
   return fmtChartStamp(t, spanHours);
 }

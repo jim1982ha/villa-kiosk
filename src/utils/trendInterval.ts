@@ -13,7 +13,7 @@
 // Pure: tests/oracles/trend_interval.mjs.
 
 import type { HistoryGap, HistorySeries } from "@/types/ha.types";
-import { firstCellStart } from "@/utils/timelineCells";
+import { cellEdges, cellIndex } from "@/utils/timelineCells";
 
 export const TREND_INTERVAL_MIN = 5;
 export const TREND_INTERVAL_MS = TREND_INTERVAL_MIN * 60_000;
@@ -45,7 +45,7 @@ export function intervalSeries(s: HistorySeries, B: number): HistorySeries {
   // ⚠️ THE BAND'S OWN EDGES (architecture review, 2026-10-20): a day or a week begins at the villa's midnight (a week
   // on a Monday), as the recorder's figures and the state band do (timelineCells.firstCellStart) — this line cut its
   // weeks on the 1970 Thursday and its days on UTC's midnight, so two charts of one panel showed different weeks
-  const first = firstCellStart(from, B);
+  const edges = cellEdges(from, to, B);
   const pts = [...s.points].sort((a, b) => a.t - b.t);
   const gaps = [...s.gaps].sort((a, b) => a.from - b.from);
   // Where the signal is KNOWN: from each reading until the next reading, an
@@ -58,8 +58,8 @@ export function intervalSeries(s: HistorySeries, B: number): HistorySeries {
     if (b > a) spans.push({ a, b: Math.min(b, to), v: pts[i].v });
   }
   const points: { t: number; v: number }[] = [];
-  for (let t0 = first; t0 < to; t0 += B) {
-    const t1 = t0 + B;
+  for (let k = 0; k + 1 < edges.length && edges[k] < to; k++) {
+    const t0 = edges[k], t1 = edges[k + 1];
     let w = 0, sum = 0;
     for (const sp of spans) {
       const a = Math.max(sp.a, t0), b = Math.min(sp.b, t1);
@@ -74,10 +74,13 @@ export function intervalSeries(s: HistorySeries, B: number): HistorySeries {
  *  meet), each with its real span in `actual`. */
 export function widenGaps(gaps: readonly HistoryGap[], from: number, to: number, B = TREND_INTERVAL_MS): HistoryGap[] {
   const out: HistoryGap[] = [];
+  // on the chart's own step edges (timelineCells.cellEdges): a week's outage was widened on the 1970 Thursday
+  const edges = to > from ? cellEdges(from, to, B) : [from, to];
   for (const g of [...gaps].sort((a, b) => a.from - b.from)) {
+    const k = cellIndex(edges, Math.max(from, g.from)), j = cellIndex(edges, Math.min(to, g.to) - 1);
     const w = {
-      from: Math.max(from, Math.floor(g.from / B) * B),
-      to: Math.min(to, Math.ceil(g.to / B) * B),
+      from: Math.max(from, edges[Math.max(0, k)]),
+      to: Math.min(to, edges[Math.min(edges.length - 1, j + 1)]),
       actual: { from: g.actual?.from ?? g.from, to: g.actual?.to ?? g.to },
       ...(g.notKept ? { notKept: true } : {}),
     };

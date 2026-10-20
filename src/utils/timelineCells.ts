@@ -7,7 +7,7 @@
 // inside StateTimeline's render (round 12, 2.496.193).
 
 import type { StateHistoryPoint } from "@/types/ha.types";
-import { localMidnight } from "@/utils/localDay";
+import { localMidnight, localMonthStart } from "@/utils/localDay";
 
 /** One drawn cell — a time bucket. */
 export interface Cell {
@@ -44,8 +44,37 @@ export function bandEnd(now: number, bucketMs: number): number {
  *  midnight, which read "15 Oct, 08:00" at the villa. */
 export function firstCellStart(start: number, bucketMs: number): number {
   if (bucketMs < DAY_MS) return Math.floor(start / bucketMs) * bucketMs;
+  if (bucketMs >= 28 * DAY_MS) return localMonthStart(start);
   const midnight = localMidnight(start);
   return bucketMs >= 7 * DAY_MS ? localMidnight(midnight, -((new Date(midnight).getDay() + 6) % 7)) : midnight;
+}
+
+/** The edge after `edge`: a step under a day is a fixed length; a day ends at the NEXT local midnight, a week at the
+ *  next Monday's, a month on the next 1st — counted on the calendar, never as 24 h × n, which put every edge after a
+ *  summer-time change at 01:00 or 23:00 (owner, 2026-10-20: "a week from Monday to Sunday, a day from midnight to
+ *  midnight … everywhere"). */
+export function nextEdge(edge: number, bucketMs: number): number {
+  if (bucketMs < DAY_MS) return edge + bucketMs;
+  if (bucketMs >= 28 * DAY_MS) return localMonthStart(edge, 1);
+  return localMidnight(edge, bucketMs >= 7 * DAY_MS ? 7 : 1);
+}
+
+/** ⚠️ THE ONE RULE FOR A CHART'S STEP EDGES — every cell, value and widened outage of every chart is cut on these:
+ *  from the edge at or before `from` to the first edge at or after `to`. */
+export function cellEdges(from: number, to: number, bucketMs: number): number[] {
+  const edges = [firstCellStart(from, bucketMs)];
+  while (edges[edges.length - 1] < to) edges.push(nextEdge(edges[edges.length - 1], bucketMs));
+  if (edges.length === 1) edges.push(nextEdge(edges[0], bucketMs));
+  return edges;
+}
+
+/** The cell `t` falls in: k with edges[k] <= t < edges[k + 1]; -1 before the first, edges.length - 1 after the last. */
+export function cellIndex(edges: readonly number[], t: number): number {
+  let lo = 0, hi = edges.length - 1;
+  if (t < edges[0]) return -1;
+  if (t >= edges[hi]) return hi;
+  while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (edges[mid] <= t) lo = mid; else hi = mid; }
+  return lo;
 }
 
 /**
@@ -61,16 +90,16 @@ export function timelineCells(
   if (data.length === 0) return [];
   const start = now - hours * 3600 * 1000;
   const span = now - start;
-  const first = firstCellStart(start, bucketMs);
-  const count = Math.ceil((now - first) / bucketMs);
-  const idxOf = (t: number) => Math.floor((t - first) / bucketMs);
+  const edges = cellEdges(start, now, bucketMs);
+  const count = edges.length - 1;
+  const idxOf = (t: number) => cellIndex(edges, t);
   const out: Cell[] = [];
   for (let k = 0; k < count; k++) {
-    const from = first + k * bucketMs;
+    const from = edges[k], to = edges[k + 1];
     out.push({
       left: ((from - start) / span) * 100,
-      width: (bucketMs / span) * 100,
-      from, to: from + bucketMs, states: [], events: [], spent: {}, entered: {},
+      width: ((to - from) / span) * 100,
+      from, to, states: [], events: [], spent: {}, entered: {},
     });
   }
   for (let i = 0; i < data.length; i++) {

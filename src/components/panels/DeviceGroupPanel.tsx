@@ -80,8 +80,23 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
       title={group.label ?? primaryMapping.label}
       entityId={primaryMapping.entityId}
       icon={<Layers size={22} />}
-      history={false}
       deviceReadings={false}
+      history={<>
+        {/* One range for the whole group — a temp+humidity pair plotted over two
+            different windows would invite exactly the wrong comparison. */}
+        <NumericHistory named series={numericRows.map((r, i) => ({
+          id: r.id, label: r.label, unit: r.unit, color: SERIES_COLORS[i % SERIES_COLORS.length] }))} />
+        {/* each on/off or words member's own state history, drawn as in its own
+            window (config/reading's historyOf — a words member had none here) */}
+        {rows.filter((r) => historyOf(r.reading) !== "numbers").map((r) => (
+          <div key={`h-${r.id}`}>
+            <div className="muted body-text" style={{ margin: "12px 0 4px" }}>{r.label}</div>
+            {historyOf(r.reading) === "states"
+              ? <LastDayTimeline entityId={r.id} colorFor={r.reading.stateColor ?? undefined} />
+              : <LastDayTimeline entityId={r.id} legend />}
+          </div>
+        ))}
+      </>}
       onClose={onClose}
     >
       {/* EVERY member offline → the same shared notice every other panel shows
@@ -118,20 +133,6 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
         </div>
       )}
 
-      {/* One range for the whole group — a temp+humidity pair plotted over two
-          different windows would invite exactly the wrong comparison. */}
-      <NumericHistory named series={numericRows.map((r, i) => ({
-        id: r.id, label: r.label, unit: r.unit, color: SERIES_COLORS[i % SERIES_COLORS.length] }))} />
-      {/* each on/off or words member's own state history, drawn as in its own
-          window (config/reading's historyOf — a words member had none here) */}
-      {rows.filter((r) => historyOf(r.reading) !== "numbers").map((r) => (
-        <div key={`h-${r.id}`}>
-          <div className="muted body-text" style={{ margin: "12px 0 4px" }}>{r.label}</div>
-          {historyOf(r.reading) === "states"
-            ? <LastDayTimeline entityId={r.id} colorFor={r.reading.stateColor ?? undefined} />
-            : <LastDayTimeline entityId={r.id} legend />}
-        </div>
-      ))}
     </BasePanel>
   );
 }

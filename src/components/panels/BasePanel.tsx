@@ -48,13 +48,16 @@ interface Props {
    *  (ModalFooter's `leading`): a way elsewhere that must stay visible
    *  however far the body scrolls. The Weather window's "History and trends". */
   footerLeading?: ReactNode;
-  /** Opt OUT of the automatic history section at the end of the body. Pass
-   *  false only when the panel renders a history view of its own that this
-   *  one cannot express — a numeric line chart (SensorPanel), two series on
-   *  shared axes (DeviceGroupPanel), a palette legend for unknown states
-   *  (GenericPanel). Anything else should take the shared one: the default is
+  /** The history section: ONE slot, drawn by this chrome after the panel's
+   *  own content and ABOVE "Also on this device", so every window orders them
+   *  the same. Omitted → the shared on/off band (LastDayTimeline); a panel
+   *  whose history the band cannot express passes its own chart HERE (a
+   *  sensor's numbers, a group's series, a palette legend), never in its
+   *  children — that is how the lock window came to show its readings above
+   *  its chart while the sensor window showed them below (2.496.440). false
+   *  only for a window with no single device (WindowPieces). The default is
    *  what guarantees a new panel type can't quietly ship without history. */
-  history?: false;
+  history?: false | ReactNode;
   /** Opt OUT of "Also on this device" (PanelActions.readings) — only for a
    *  panel that already shows every reading of the device (DeviceGroupPanel). */
   deviceReadings?: false;
@@ -206,10 +209,6 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
             </div>
           )}
           {children}
-          {/* The device's other readings — the same physical device, one place
-              (2.496.260). A grouped lock kept only a read-only summary, and a
-              pump plug's energy meter had no panel of its own to be found in. */}
-          {deviceReadings !== false && <DeviceReadings />}
           {/* The "last N hours" history section — rendered HERE, in the shared
               chrome, for the same reason the linked-entity switch above is:
               so every panel about a device gets it identically and a NEW panel
@@ -221,9 +220,17 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
               range-picker work that touched this area twice could not have
               caught it either, because it audited the panels that already HAD
               a timeline; a panel with none is invisible to that check. Made
-              structural rather than fixed twice. */}
+              structural rather than fixed twice. A panel's own chart comes in
+              through the same slot (the `history` prop), so it sits at the
+              same place. */}
           {/* Not for an entity Home Assistant does not have: it has no history to wait for (its notice says why). */}
-          {history !== false && entityId && !missingFromHa(entities, entityId) && <LastDayTimeline entityId={entityId} />}
+          {history !== false && entityId && !missingFromHa(entities, entityId)
+            && (history ?? <LastDayTimeline entityId={entityId} />)}
+          {/* The device's other readings — the same physical device, one place
+              (2.496.260), always UNDER the history. A grouped lock kept only a
+              read-only summary, and a pump plug's energy meter had no panel of
+              its own to be found in. */}
+          {deviceReadings !== false && <DeviceReadings />}
         </div>
         {/* The shared footer (ModalFooter): the left group is always there,
             empty or not, so Close sits right as in every dialog. */}
