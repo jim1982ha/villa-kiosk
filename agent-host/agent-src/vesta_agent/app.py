@@ -691,7 +691,8 @@ class Vesta:
         kind, parts = button_data.read(data)
         handle = {button_data.APPROVAL: self.approvals.press, button_data.CONTINUE: self._press_continue,
                   button_data.ALERT: self._press_alert, button_data.REPORT: self._press_report,
-                  button_data.TICKET: self._press_ticket, button_data.COMMAND: self.command_offers.press}.get(kind)
+                  button_data.TICKET: self._press_ticket, button_data.COMMAND: self.command_offers.press,
+                  button_data.DECLINE: self.command_offers.decline}.get(kind)
         if handle is None:
             return await toast("Unknown button.")
         person = pol.member(presser, cid, q.get("from_first"))      # a listed group's member presses with its role

@@ -19,6 +19,8 @@ usage: "/investigate why did the water heater stop last night?"
 offer:
   label: "🔎 Investigate this"
   pressed: Investigating
+  # a button beside it that says no (owner, 2026-10-20: "add a button to reject the Investigation"): both go, nothing runs
+  decline: "No, thanks"
   after_reading: [ha_get_history, ha_get_logs]
 # ⚠️ EVERY HISTORY READ OF THE AI, WORKED OUT (owner, 2026-10-20: "I never want to see wrong responses"; a chat answer
 # read the House Pump's 100 newest readings — 15 minutes at rest — as its whole afternoon): wherever the AI reads a

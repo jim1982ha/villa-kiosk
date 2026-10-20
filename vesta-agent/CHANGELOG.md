@@ -1,3 +1,11 @@
+## 0.12.299
+
+What you will see:
+- Answers about a device that started many times now say how many starts fell in EACH hour of the period, next to the
+  most it had in that hour on the days before. The House Pump answer said it "went idle" after its 13:28 burst; it in
+  fact kept starting at 15:00, 15:20 … 17:50, and those starts were hidden as "like its normal".
+- Under "🔎 Investigate this", a "No, thanks" button: pressing it removes both buttons and starts nothing.
+
 ## 0.12.298
 
 What you will see:

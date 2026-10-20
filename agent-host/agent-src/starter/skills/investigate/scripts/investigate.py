@@ -311,6 +311,29 @@ def rests_at_zero(rows: list[tuple[datetime, str]], on_above: float | None) -> b
     return bool(rest) and sum(1 for v in rest if v == 0) / len(rest) >= th("zero_rest_share")
 
 
+def by_hour(times: list[datetime], before: list[datetime], start: datetime, end: datetime, baseline_days: float,
+            zone: ZoneInfo) -> str | None:
+    """How many of `times` fell in each hour of the period, each beside the most that hour had on one of the days
+    before ("13:00 17 (1)"): None for a period over a day, or one of a single hour.
+
+    ⚠️ WHERE IN THE PERIOD, NOT ONLY HOW MANY (owner, 2026-10-20). The House Pump's burst of 13:28 was listed, and its
+    starts at 15:00, 15:20 … 17:50 — each over 3 minutes apart, so each "ordinary" — were hidden under "like its
+    normal": the answer said it "went idle" after the burst. Every hour is said, an empty one too."""
+    span = (end - start).total_seconds()
+    if span > 86400 or span <= 3600:
+        return None
+    first = start.astimezone(zone).replace(minute=0, second=0, microsecond=0)
+    slots, t = [], first
+    while t < end:
+        a, b = max(t, start), min(t + timedelta(hours=1), end)
+        n = sum(1 for x in times if a <= x < b)
+        usual = max((sum(1 for x in before if a - timedelta(days=k) <= x < b - timedelta(days=k))
+                     for k in range(1, int(baseline_days) + 1)), default=None)
+        slots.append(f"{t.strftime('%H:%M')} {n}" + (f" ({usual})" if usual is not None else ""))
+        t += timedelta(hours=1)
+    return " · ".join(slots)
+
+
 def starts_line(ps: list[dict], base: list[dict], start: datetime, end: datetime, baseline_days: float) -> dict | None:
     """How many times it started in [start, end), against the same hours of each day before (a period of a day or
     less) or its daily rate (a longer one); flagged when far more often (settings `starts_ratio`, `starts_min`).
@@ -407,7 +430,7 @@ def counter_line(rows, base_rows, start, end, baseline_days) -> str:
     return line
 
 
-def state_lines(ps: list[dict], base: list[dict], start, end, baseline_days) -> list[str]:
+def state_lines(ps: list[dict], base: list[dict], start, end, baseline_days, zone) -> list[str]:
     """Per state: how many times it went to it and for how long in all, against the same hours before."""
     out = []
     names = [k for k in dict.fromkeys(p["kind"] for p in ps) if k not in (kinds.OFFLINE, kinds.NO_VALUE)]
@@ -422,6 +445,9 @@ def state_lines(ps: list[dict], base: list[dict], start, end, baseline_days) -> 
             if len(mine) >= th("starts_min") and len(mine) >= th("starts_ratio") * max(usual, 1):
                 line += f"  ⟵ about {len(mine) / max(usual, 1):.0f}× more often than usual"
         out.append(line)
+        if "⟵" in line and (hours := by_hour([p["start"] for p in mine], [p["start"] for p in base if p["kind"] == k],
+                                             start, end, baseline_days, zone)):
+            out.append(f"    {k} in each hour (in brackets the most on one of the days before): {hours}")
     return out
 
 
@@ -657,6 +683,10 @@ def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_da
         starts = starts_line(ps, base_ps, start, reach, baseline_days) if on else None
         if starts:
             lines.append(starts["line"])
+            hours = by_hour([p["start"] for p in ps if p["kind"] == kinds.RUNNING],
+                            [p["start"] for p in base_ps if p["kind"] == kinds.RUNNING], start, reach, baseline_days, zone)
+            if hours:
+                lines.append(f"  starts in each hour (in brackets the most on one of the days before): {hours}")
         sched = schedule_of(pack, eid) if on else None
         if sched:
             srows, _, _ = read(client, sched, start - timedelta(days=baseline_days), end, now)
@@ -667,7 +697,7 @@ def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_da
         elif kind_of == "counter":
             lines.append(counter_line(rows, base_rows, start, reach, baseline_days))
         elif kind_of == "state":
-            lines += state_lines(ps, base_ps, start, reach, baseline_days)
+            lines += state_lines(ps, base_ps, start, reach, baseline_days, zone)
         shown, hidden = worth_a_line(ps, ref, on)
         if kind_of in ("level", "counter") or (kind_of == "state" and len(ps) > th("ordinary_hide_over")):
             # its summary above says it; the moments it stopped reporting stay listed
@@ -682,7 +712,9 @@ def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_da
         if len(shown) > MAX_LINES:
             lines.append(f"  … {len(shown) - MAX_LINES} more periods (narrow the period to see them)")
         if hidden > 0:
-            lines.append(f"  ({hidden} short ordinary periods not listed: like its normal)" if kind_of == "runs" else
+            lines.append((f"  ({hidden} periods not listed one by one: the counts above include them)"
+                          if starts and "⟵" in starts["line"] else
+                          f"  ({hidden} short ordinary periods not listed: like its normal)") if kind_of == "runs" else
                          f"  ({hidden} changes not listed: the lines above sum them up)")
         if on:
             for j in level_jumps(rows, start, end, on)[:LEVEL_CHANGES_SHOWN]:

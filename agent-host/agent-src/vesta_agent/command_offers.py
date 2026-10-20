@@ -10,6 +10,7 @@ that reply to carry a button that starts the investigation itself.
              be, judged by intake.gate itself — at the reply AND again at the press (no second copy of the rule)
   what       the PERSON'S question that turn answered (the turn's `asked`), never the AI's paraphrase; kept in State
              (`command_offer:`, pruned with the records), the button holding only its id — Telegram allows 64 bytes
+  declined   its second button, when the skill names one (`offer: decline`): used up the same way, nothing runs
   pressed    once (State.claim_command_offer): said under the message, that button gone and the others kept, then
              app.handle_message runs the typed command — the same intake, the same command_request, the same reply
 
@@ -82,7 +83,12 @@ class CommandOffers:
             if not self._may(chat, person_id, None, sk, question):
                 continue
             oid = self.state.new_command_offer(chat, name, question, person_id)
-            rows.append([{"text": sk.offer["label"], "callback_data": button_data.make(button_data.COMMAND, oid)}])
+            row = [{"text": sk.offer["label"], "callback_data": button_data.make(button_data.COMMAND, oid)}]
+            if sk.offer.get("decline"):
+                # ⚠️ IT CAN BE SAID NO TO (owner, 2026-10-20: "add a button to reject the Investigation"): the offer is
+                # used up, both its buttons go, nothing runs
+                row.append({"text": sk.offer["decline"], "callback_data": button_data.make(button_data.DECLINE, oid)})
+            rows.append(row)
         return rows
 
     # ------------------------------------------------------------------ pressed
@@ -101,10 +107,28 @@ class CommandOffers:
             return await p.toast("Already started.")
         said = f"{(sk.offer or {}).get('pressed') or '/' + sk.command}: “{offer['question']}”"
         await p.toast(said[:toast_chars()])
-        pressed = p.q.get("data")
-        kept = [r for r in [[b for b in row if b.get("callback_data") != pressed]
-                            for row in ((p.msg.get("reply_markup") or {}).get("inline_keyboard") or [])] if r]
+        kept = _without_offer(p.msg, p.parts[0])
         await self.delivery.settle(p.chat, p.mid, p.msg, f"{said} ({p.person.name})",
                                    {"inline_keyboard": kept} if kept else None)
         log.info("Chat %s: %s pressed /%s on the question asked", p.chat, p.person.name, sk.command)
         await self.run(TYPED, typed(p.chat, p.presser, p.q.get("from_first"), sk.command, offer["question"]))
+
+    async def decline(self, p) -> None:
+        """The offer's "No" (skill.yaml `offer: decline`): used up like a press, both its buttons gone, nothing run."""
+        offer = self.state.command_offer(p.parts[0], p.chat)
+        if not offer or not self.state.claim_command_offer(p.parts[0], p.chat):
+            return await p.toast("Already answered.")
+        sk = self.skills.get(offer["skill"])
+        said = ((sk.offer or {}).get("decline") if sk else None) or "Declined"
+        await p.toast(said[:toast_chars()])
+        kept = _without_offer(p.msg, p.parts[0])
+        await self.delivery.settle(p.chat, p.mid, p.msg, f"{said} ({p.person.name})",
+                                   {"inline_keyboard": kept} if kept else None)
+        log.info("Chat %s: %s declined /%s", p.chat, p.person.name, sk.command if sk else offer["skill"])
+
+
+def _without_offer(msg: dict, oid: str) -> list[list[dict]]:
+    """The message's buttons without offer `oid`'s two (Investigate and its No): the others stay."""
+    mine = {button_data.make(button_data.COMMAND, oid), button_data.make(button_data.DECLINE, oid)}
+    return [r for r in [[b for b in row if b.get("callback_data") not in mine]
+                        for row in ((msg.get("reply_markup") or {}).get("inline_keyboard") or [])] if r]

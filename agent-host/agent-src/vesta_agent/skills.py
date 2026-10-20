@@ -369,9 +369,10 @@ def parse_skill(name: str, path: str) -> Skill:
         if not isinstance(after, list) or not all(isinstance(t, str) and t.strip() for t in after):
             raise SkillError("offer: after_reading is a list of reading tools (ha_get_history, …)")
         offer = {k: v for k, v in offer.items() if k != "after_reading"} if isinstance(offer, dict) else offer
-        if not isinstance(offer, dict) or set(offer) - {"label", "pressed"} or \
+        if not isinstance(offer, dict) or set(offer) - {"label", "pressed", "decline"} or \
                 not all(isinstance(v, str) and v.strip() for v in offer.values()) or not str(offer.get("label") or "").strip():
             raise SkillError("offer: {label: the button's words, pressed: what the message says once pressed (optional), "
+                             "decline: the words of a button beside it that declines it (optional), "
                              "after_reading: the reading tools after which an answer carries it (optional)}")
         sk.offer_after = tuple(t.strip() for t in after)
         sk.offer = {k: v.strip()[:limit(

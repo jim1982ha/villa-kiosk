@@ -144,3 +144,37 @@ def test_starts_outside_its_schedule_are_compared_with_its_own_days_before():
     (good,) = outside(False, _Pack())
     assert "⟵" not in good, good
     assert outside(True, None) == []                        # no schedule known: nothing said about one
+
+
+def scattered(trouble):
+    """The afternoon of 20 October as the readings show it: a burst of starts under 3 minutes apart (13:15-13:59), then
+    starts 3 to 9 minutes apart all afternoon — each "ordinary" alone."""
+    rnd, rows, t = random.Random(4), [], S
+    nxt = S + timedelta(minutes=60)
+    burst = (datetime(2026, 10, 20, 13, 15, tzinfo=Z), datetime(2026, 10, 20, 13, 59, tzinfo=Z))
+    while t < E:
+        if t >= nxt:
+            rows += [(t, 1050.0), (t + timedelta(seconds=2), 820.0)]
+            t += timedelta(seconds=rnd.randint(20, 35))
+            if trouble and burst[0] <= t < burst[1]:
+                gap = rnd.uniform(1, 2.5)
+            elif trouble and t >= burst[1]:
+                gap = rnd.uniform(3.2, 9)
+            else:
+                gap = rnd.uniform(60, 180)
+            nxt = t + timedelta(minutes=gap)
+            if trouble and t < burst[0] < nxt:
+                nxt = burst[0]                               # the burst starts on time
+        rows.append((t, rnd.choice([0.0, 1.1, 1.6])))
+        t += timedelta(seconds=15)
+    return rows
+
+
+def test_starts_after_a_burst_are_said_hour_by_hour_never_as_its_normal():
+    # owner, 2026-10-20: the answer said the House Pump "went idle" after its 13:28 burst — its later starts, each over
+    # 3 minutes apart, were hidden as "like its normal"
+    said = lines(scattered, True)
+    (hours,) = [ln for ln in said if "starts in each hour" in ln]
+    later = [int(h.split()[1]) for h in hours.split(": ", 1)[1].split(" · ") if h[:2] in ("15", "16", "17")]
+    assert later and all(n > 0 for n in later), hours
+    assert not [ln for ln in said if "like its normal" in ln], said

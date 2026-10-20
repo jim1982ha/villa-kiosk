@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.289 (20 October 2026)
+
+- investigate timeline: `by_hour` — runs' starts (and a flagged state's entries) per hour of a period of 1-24 h, each
+  beside the most that hour had on one day before; periods hidden while the device starts far more often than usual
+  are said as "the counts above include them", never "like its normal" (owner, 2026-10-20: the answer said the House
+  Pump went idle after its burst while it kept starting all afternoon). Test: test_investigate_shapes (the afternoon
+  of 20 October's shape).
+- skill.yaml `offer: decline` and button kind `d:<offer id>` (CommandOffers.decline): the offer's "No" — used up like a
+  press, both its buttons removed (`_without_offer`), nothing run; investigate names "No, thanks" (owner: "add a
+  button to reject the Investigation"). Test: test_command_offer.
+
 ## 0.6.288 (20 October 2026)
 
 - investigate timeline: `schedule_line` — starts outside the hours of the schedule the knowledge pack attached to the

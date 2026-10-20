@@ -250,3 +250,16 @@ def test_an_answer_from_what_the_conversation_read_before_carries_it_too(tmp_pat
     ai.answer = lambda call: runner.RunResult("Hello.", "s2", False, 0.01, [], None, None)
     run(v.converse(JM, v.policy().person(JM), "hello"))
     assert _offered(v, JM)[0] == []
+
+
+def test_the_offer_can_be_declined_both_buttons_go_and_nothing_runs(tmp_path, monkeypatch):
+    # owner, 2026-10-20: "add a button to reject the Investigation"
+    v, ai = _villa(tmp_path, monkeypatch)
+    run(v.converse(JM, v.policy().person(JM), ASKED))
+    offers, message = _offered(v, JM)
+    no = next(b for b in _buttons(message[2]) if button_data.read(b["callback_data"])[0] == button_data.DECLINE)
+    assert no["text"] == "No, thanks" and button_data.read(no["callback_data"])[1] == button_data.read(offers[0]["callback_data"])[1]
+    _press(v, JM, no, message)
+    assert _investigations(ai) == []                                     # nothing ran
+    _press(v, JM, offers[0], message)                                    # the Investigate button, pressed after
+    assert _investigations(ai) == [] and v.tg.toasts[-1][1] in ("Already started.", "Already answered.")
