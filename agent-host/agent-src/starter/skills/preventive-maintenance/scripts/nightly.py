@@ -37,6 +37,7 @@ from vesta_shared.past import unread  # noqa: E402  (the one "could not be read 
 from vesta_shared.message_format import document, split_title  # noqa: E402  (the one shape of a message)
 from vesta_shared.device_state import has_value, is_offline  # noqa: E402
 from vesta_shared.offline import devices_offline  # noqa: E402  (the one reading of "offline now")
+from vesta_shared.store import alerted_states  # noqa: E402  (which states an alert is about: the desk's reading)
 from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the Limits tab)
 from vesta_shared.problems import Problems, again_title  # noqa: E402  (a problem's lifecycle: one owner)
 from vesta_shared import result  # noqa: E402  (what the engine is asked to do: its shape; R is rules.py)
@@ -396,12 +397,17 @@ def alerted_offline(store, pack) -> dict[str, int]:
 
     ⚠️ ONE PROBLEM, ONE FAULT (architecture review, offline devices #3, 2026-10-18): a lock the villa's own rule alerted
     on at 10 minutes (#, Telegram card, its Kiosk fault) got a second fault "offline for …" from this check, with its
-    own message at 02:00 — and, once recheck.py opened faults every 5 minutes, at the same minute."""
+    own message at 02:00 — and, once recheck.py opened faults every 5 minutes, at the same minute.
+
+    ⚠️ ONLY AN ALERT ABOUT STATES (2026-10-20): a numeric rule's events carry its blueprint's default bad_states
+    ["unavailable"] — an open OVERLOAD alert on the main meter hid that meter's offline fault. Which states an alert is
+    about is the alert desk's reading (vesta_shared.store.alerted_states), not the payload's raw list."""
     out: dict[str, int] = {}
     for inc in store.incidents(open_only=True):
-        p = json.loads(inc.get("payload") or "{}")
-        if "unavailable" not in (p.get("bad_states") or []):
+        said = alerted_states(inc)
+        if not said or "unavailable" not in said[1]:
             continue
+        p = json.loads(inc.get("payload") or "{}")
         for e in (p.get("entities") or []) + [inc.get("entity_id")]:
             if e:
                 out.setdefault(pack.physical_device_of(e) or e, int(inc["id"]))   # its whole device: a phase is its meter's

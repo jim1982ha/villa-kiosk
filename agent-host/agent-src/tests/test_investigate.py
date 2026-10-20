@@ -1090,3 +1090,19 @@ def test_one_clock_the_ais_reported_row_and_the_recorded_row_word_their_time_the
     lines = [x.strip() for x in investigate.timeline(client, ["sensor.heater_power"], T(9, 2), T(10, 15), 3, Z)["lines"]]
     line = next(x for x in lines if x.startswith("9 Oct, 03:09:46"))
     assert line[:len("9 Oct, 03:09")] == "9 Oct, 03:09" and not any("09/10" in x for x in lines)
+
+
+def test_a_rule_that_runs_only_while_the_villa_is_empty_says_so():
+    # "When this rule runs" (owner, 2026-10-20): the blueprint input run_when, a stand-alone rule's variable vg_run_when
+    import investigate
+    from vesta_shared.critical import run_when
+    assert run_when({"use_blueprint": {"input": {"run_when": "empty"}}}) == "empty"
+    assert run_when({"variables": {"vg_run_when": "occupied"}}) == "occupied"
+    assert run_when({"use_blueprint": {"input": {}}}) == run_when({"variables": {"vg_run_when": "sometimes"}}) == "always"
+
+    class C:
+        def tool(self, name, args):
+            assert name == "ha_config_get_automation"
+            return {"config": {"actions": [{"action": "notify.send_message"}], "variables": {"vg_run_when": "empty"}}}
+    got = investigate.automation_able(C(), "automation.x", T(9, 2), T(9, 15))
+    assert got["text"].endswith("; it alerts only while the villa is empty"), got["text"]

@@ -143,6 +143,8 @@ todo_groups:
 # in Home Assistant's logbook count as alerts for the times the agent was not listening. Not the others:
 # a schedule rule runs every day to check, a presence rule mostly stops at its conditions; their alerts
 # come from the agent's own record (the event they raise when they alert).
+# A rule's "villa became empty / someone came in" second look (its "When this rule runs" choice) stops in its
+# CONDITIONS when it finds nothing, so it leaves no run in the logbook; a run it starts is an alert (2026-10-20).
 alert_on_every_run: [critical_condition]
 # ...except a run started by the villa's system itself: such a rule re-checks its condition each time the rules are
 # reloaded or the system starts, and stops at once when it does not hold (villa, week 42: 400 such re-checks were
@@ -188,6 +190,12 @@ nothing_happened:
   critical_watchdog: no critical device lost
   critical_schedule: no equipment missed its schedule
   critical_system: no safety rule switched off
+# ...and when some rules of a blueprint watch only part of the time ("When this rule runs", owner 2026-10-20): the line
+# says so, never "no door left unlocked" for the hours a rule did not watch
+nothing_happened_scope:
+  empty: "(watched only while the villa is empty)"
+  occupied: "(watched only while someone is in)"
+  mixed: "(some of these rules watch only while the villa is empty, or only while someone is in)"
 
 # ---------------------------------------------------------------- the reports
 # Each section: `id` (its part of templates/report.html, `{% elif sid == "<id>" %}`), `style` if it has

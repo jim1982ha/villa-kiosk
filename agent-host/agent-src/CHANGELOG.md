@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.279 (20 October 2026)
+
+- Copy the setup: a new part, the Limits tab's values (limits.yaml), ticked by default — checked on import against
+  this agent's code (an unknown limit or a value out of its range is left out and said), shown as a row of the
+  preview and written in one change of the history (LimitsTab.fitting / changes / write). The AI settings go in the
+  current shape: an older file's `jobs` / `skill_brains` are moved as the page's next save would (policy_doc.ai_moved)
+  before export. `skills_off` carries only skills the villa has; an import leaves out, and says, one it will not have.
+- vesta_shared.store.alerted_states: which states an open alert is about, ONE reading for the alert desk (rule_states)
+  and the night check (alerted_offline). A numeric rule's events carry its blueprint's default bad_states
+  ["unavailable"]; the night check took an open overload alert as already following the meter going offline.
+- vesta_shared.critical.run_when: a critical rule's "When this rule runs" (blueprint input `run_when`, stand-alone
+  variable `vg_run_when`). The reports' quiet lines say when the rules watch (reports.yaml nothing_happened_scope);
+  investigate says it after what a rule is able to do (settings.yaml words.runs_when_*); alert-desk and
+  villa-concierge SKILL.md explain the choice.
+
 ## 0.6.278 (20 October 2026)
 
 - One name for a job everywhere: its skill, then what ran (skills.job_title). An AI job reads "reports › fm-daily"

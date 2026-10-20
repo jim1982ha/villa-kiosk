@@ -9,7 +9,13 @@ skills (their villa.* files only if asked) and the shareable part of the rules:
   actions   allowed_services: each service and who decides
   tools     what the AI can use: ha_read_tools, agent_tools, tool_access, and the skills switched off
   keep      settings.keep: how long records are kept
+  limits    limits.yaml: the Limits tab's values of the limits written in the agent's code (2026-10-20: they stayed
+            behind; those inside the skills and the rules travel with them)
   instructions   instructions.md (off unless ticked: the standing rules are often the villa's own)
+
+The AI settings go in the CURRENT shape (settings.skill_ai, one brain and one limit per skill): a villa whose rules
+were never saved since that change still holds the older `jobs` / `skill_brains`, moved here exactly as the page's
+next save would move them (policy_doc.ai_moved). The skills switched off name only skills the villa has.
 
 An import shows every change (added, replaced, changed, same) and what does not fit this villa, then writes only
 on Apply — skills through the same checks as a save (a replaced skill moved to skills/.trash, this villa's own
@@ -33,6 +39,7 @@ from ..history import policy_change
 from ..places import title, where
 from ..policy import RULE_WORDS, WORDS, Policy, problems as policy_problems, setup_fields
 from ..skills import FILE_NAME, SKILL_NAME, VILLA_PREFIX, SkillError, skill_files, parse_skill, ai_jobs, job_owners, job_starters
+from vesta_shared import limits as code_limits
 
 # ⚠️ WHAT THE EXPORT OFFERS, IN ITS WORDS (architecture review 9): the page typed these and one named a card that no
 # longer existed ("The AI", "allowed lists"). key → (the words, the note under them, ticked at first), in order.
@@ -45,6 +52,8 @@ PART_WORDS = {
     "actions": (f"{title('actions')}: each service and who decides", None, True),
     "tools": (f"{title('tools')}: tool switches, per role, skills switched off", None, True),
     "keep": (WORDS["settings.keep"], None, True),
+    "limits": ("The Limits tab's values", "the limits written in the agent's code; those inside the skills and the "
+               "rules go with them", True),
     "instructions": ("instructions.md", "your standing rules for the agent", False),
 }
 PARTS = tuple(PART_WORDS)
@@ -74,7 +83,8 @@ class NotASetup(ValueError):
 
 # ---------------------------------------------------------------------- out
 def export(settings, skills, parts: set[str]) -> bytes:
-    raw = _policy_raw(settings.policy_path)
+    have = skills.all(include_off=True)
+    raw = _policy_current(settings.policy_path, have)
     rules: dict = {}
     s = raw.get("settings") if isinstance(raw.get("settings"), dict) else {}
     if "ai" in parts:
@@ -85,11 +95,14 @@ def export(settings, skills, parts: set[str]) -> bytes:
         rules.update({k: raw[k] for k in ACTION_SECTIONS if k in raw})
     if "tools" in parts:
         rules.update({k: raw[k] for k in TOOL_SECTIONS if k in raw})
+        if isinstance(rules.get("skills_off"), list):
+            rules["skills_off"] = [n for n in rules["skills_off"] if n in have]      # a skill since deleted: nothing
+    limits_now = _limits_raw(os.path.join(settings.config_dir, code_limits.FILE)) if "limits" in parts else {}
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         names = []
         if "skills" in parts:
-            for name, sk in sorted(skills.all(include_off=True).items()):
+            for name, sk in sorted(have.items()):
                 names.append(name)
                 for rel in sorted(skill_files(sk.path)):
                     if os.path.basename(rel).startswith(VILLA_PREFIX) and "villa_files" not in parts:
@@ -97,11 +110,38 @@ def export(settings, skills, parts: set[str]) -> bytes:
                     z.write(os.path.join(sk.path, rel), f"skills/{name}/{rel}")
         if rules:
             z.writestr("rules.yaml", yaml.safe_dump(rules, sort_keys=False, allow_unicode=True))
+        if limits_now:
+            z.writestr(code_limits.FILE, yaml.safe_dump(limits_now, sort_keys=True, allow_unicode=True))
         if "instructions" in parts and os.path.exists(settings.instructions_path):
             z.write(settings.instructions_path, "instructions.md")
         z.writestr("setup.json", json.dumps({"made_with": __version__, "at": datetime.now(timezone.utc).isoformat(),
                                              "parts": sorted(parts), "skills": names}, indent=1))
     return buf.getvalue()
+
+
+def _policy_current(path: str, skills: dict) -> dict:
+    """The rules as the page would save them: an older file's AI jobs moved to their skill's one brain and limit
+    (policy_doc.ai_moved, the page's own move), everything else as written."""
+    from .policy_doc import ai_moved
+    try:
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+    except OSError:
+        return {}
+    try:
+        raw = yaml.safe_load(ai_moved(text, job_owners(skills), job_starters(skills))) or {}
+    except yaml.YAMLError:
+        return {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def _limits_raw(path: str) -> dict:
+    try:
+        with open(path, encoding="utf-8") as f:
+            raw = yaml.safe_load(f) or {}
+    except (OSError, yaml.YAMLError):
+        return {}
+    return raw if isinstance(raw, dict) else {}
 
 
 def _policy_raw(path: str) -> dict:
@@ -115,7 +155,7 @@ def _policy_raw(path: str) -> dict:
 
 # ---------------------------------------------------------------------- in
 def read(data: bytes) -> dict:
-    """The setup file, checked: only skill folders, rules.yaml, instructions.md and setup.json; each path a plain
+    """The setup file, checked: only skill folders, rules.yaml, limits.yaml, instructions.md and setup.json; each path a plain
     name (no folder outside, no hidden file); sizes bounded. Raises NotASetup."""
     try:
         z = zipfile.ZipFile(io.BytesIO(data))
@@ -124,7 +164,7 @@ def read(data: bytes) -> dict:
     infos = [i for i in z.infolist() if not i.is_dir()]
     if len(infos) > MAX_FILES or sum(i.file_size for i in infos) > MAX_UNPACKED:
         raise NotASetup("This setup is too large.")
-    out = {"meta": None, "rules": None, "instructions": None, "skills": {}}
+    out = {"meta": None, "rules": None, "instructions": None, "limits": None, "skills": {}}
     for i in infos:
         parts = i.filename.split("/")
         if i.filename == "setup.json":
@@ -136,6 +176,11 @@ def read(data: bytes) -> dict:
             out["rules"] = rules
         elif i.filename == "instructions.md":
             out["instructions"] = z.read(i).decode("utf-8")
+        elif i.filename == code_limits.FILE:
+            lim = yaml.safe_load(z.read(i).decode("utf-8")) or {}
+            if not isinstance(lim, dict):
+                raise NotASetup(f"{code_limits.FILE} is not a list of limits.")
+            out["limits"] = lim
         elif len(parts) >= 3 and parts[0] == "skills" and SKILL_NAME.match(parts[1]) and len(parts) <= 6 \
                 and all(FILE_NAME.match(x) for x in parts[2:]):
             out["skills"].setdefault(parts[1], {})["/".join(parts[2:])] = z.read(i)
@@ -146,8 +191,9 @@ def read(data: bytes) -> dict:
     return out
 
 
-def _merged_rules(current: dict, imported: dict | None) -> dict:
-    """This villa's rules with the imported sections in place (settings merged key by key)."""
+def _merged_rules(current: dict, imported: dict | None, known: set[str] | None = None) -> dict:
+    """This villa's rules with the imported sections in place (settings merged key by key). `known`: the skills this
+    villa will have — a skill switched off that is none of them is left out (unknown_off says which)."""
     out = json.loads(json.dumps(current, default=str))
     for k, v in (imported or {}).items():
         if k == "settings" and isinstance(v, dict):
@@ -155,8 +201,18 @@ def _merged_rules(current: dict, imported: dict | None) -> dict:
             s.update(v)
             out["settings"] = s
         elif k in (*ACTION_SECTIONS, *TOOL_SECTIONS):
-            out[k] = v
+            out[k] = [n for n in v if n in known] if k == "skills_off" and known is not None and isinstance(v, list) else v
     return out
+
+
+def unknown_off(imported: dict | None, known: set[str]) -> list[str]:
+    """The skills a setup switches off that this villa will not have."""
+    off = (imported or {}).get("skills_off")
+    return [n for n in off if n not in known] if isinstance(off, list) else []
+
+
+def _known(skills, setup: dict) -> set[str]:
+    return set(skills.all(include_off=True)) | set(setup["skills"])
 
 
 def preview(settings, skills, setup: dict, server_tools: list[dict] | None) -> dict:
@@ -189,7 +245,17 @@ def preview(settings, skills, setup: dict, server_tools: list[dict] | None) -> d
             except (SkillError, yaml.YAMLError, OSError) as e:
                 misfits.append(f"{name}: the agent would switch this skill off here ({e}).")
     current = _policy_raw(settings.policy_path)
-    merged = _merged_rules(current, setup["rules"])
+    known = _known(skills, setup)
+    merged = _merged_rules(current, setup["rules"], known)
+    misfits += [f"The setup switches off {n}, a skill this villa does not have: left out." for n in unknown_off(setup["rules"], known)]
+    if setup.get("limits"):
+        from .limits_tab import LimitsTab
+        tab = LimitsTab(settings, None)
+        ok, why = tab.fitting(setup["limits"])
+        misfits += [f"The Limits tab's values: {w}" for w in why]
+        diff = tab.changes(ok)
+        rows.append({"what": "The Limits tab's values", "kind": "limits", "change": "changed" if diff else "same",
+                     "detail": "; ".join(f"{k}: {a} → {b}" for k, (a, b) in sorted(diff.items())) or "identical"})
     if setup["rules"]:
         for label, keys in ((WORDS["settings"], [("settings", k) for k in AI_SETTINGS + OLD_AI_SETTINGS]),
                             (WORDS["settings.keep"], [("settings", "keep")]),
@@ -275,11 +341,17 @@ def apply(pf, setup: dict, prev: dict) -> None:
     if setup["rules"] and any(r["kind"] == "rules" and r["change"] != "same" for r in prev["rows"]):
         from .policy_doc import apply_form, to_form
         text, r = pf.policy_now()
-        merged = _merged_rules(_policy_raw(s.policy_path), setup["rules"])
+        merged = _merged_rules(_policy_raw(s.policy_path), setup["rules"], set(os.listdir(s.skills_dir)) | set(setup["skills"]))
         form = {k: merged[k] for k in ("settings", *ACTION_SECTIONS, *TOOL_SECTIONS) if k in merged}
         if "settings" in form:
             form["settings"] = {**to_form(text)["settings"], **form["settings"]}
         pf.save_policy(apply_form(text, form), r, "Import", "Rules from a setup: " + policy_change(text, apply_form(text, form)))
+    if setup.get("limits") and any(r["kind"] == "limits" and r["change"] != "same" for r in prev["rows"]):
+        from .limits_tab import LimitsTab
+        tab = LimitsTab(s, pf)
+        ok, _ = tab.fitting(setup["limits"])
+        new = {k: b for k, (_a, b) in tab.changes(ok).items()}
+        tab.write(new, "Import", "The Limits tab's values from a setup: " + ", ".join(f"{k} → {v}" for k, v in sorted(new.items())))
     if setup["instructions"] is not None and "instructions.md" in changed:
         # undoable like any text (Overview › Page changes): it was recorded as a kind Undo did not know
         pf.text_change("Import", "instructions.md from a setup", {"kind": "instructions"}, setup["instructions"])

@@ -35,6 +35,7 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from vesta_shared import script, skill_settings  # noqa: E402  (client, store, zone: one set-up for every skill script)
+from vesta_shared.critical import run_when  # noqa: E402  (a rule's "When this rule runs": one reading)
 from vesta_shared import daily  # noqa: E402  (the villa's one "running")
 from vesta_shared.params import VillaParams  # noqa: E402
 from vesta_shared import periods as kinds  # noqa: E402  (the period kinds and their words, read by the report page too)
@@ -838,6 +839,7 @@ def automation_able(client, eid: str, start: datetime, end: datetime) -> dict:
         return {"text": f"its configuration could not be read ({type(e).__name__}): not proven either way",
                 "can": "unproven", "changes": []}
     cfg = body.get("config") if isinstance(body.get("config"), dict) else body
+    scope = _scope(cfg if isinstance(cfg, dict) else {})
     if isinstance(cfg, dict) and cfg.get("use_blueprint"):
         # ⚠️ A BLUEPRINT IS READ, ITS INPUTS FILLED (owner, 2026-10-12: five automations said "could not be read"): the
         # blueprint's own actions, each {"__input__": name} replaced by this automation's input or the default
@@ -849,12 +851,12 @@ def automation_able(client, eid: str, start: datetime, end: datetime) -> dict:
             did = _traced(client, eid, start, end)
             return {"text": f"built from the blueprint {path}, whose actions cannot be read here — not proven either way"
                             + (f"; its recorded runs in this period did: {did}" if did else
-                               "; its runs of this period are no longer kept"),
+                               "; its runs of this period are no longer kept") + scope,
                     "can": "unproven", "changes": []}
     calls, targets = set(), set()
     _actions((cfg or {}).get("actions") or (cfg or {}).get("action") or [], calls, targets)
     changes = _changes(calls)
-    out = {"text": _say_actions(calls), "can": "changes" if changes else "nothing", "changes": changes,
+    out = {"text": _say_actions(calls) + scope, "can": "changes" if changes else "nothing", "changes": changes,
            "does": _harmless(calls)}
     if changes:
         # what it can act ON, by name: "it can switch the jacuzzi's relay" says at once whether it could touch the device
@@ -863,6 +865,16 @@ def automation_able(client, eid: str, start: datetime, end: datetime) -> dict:
             out["text"] += "; on: " + ", ".join(f"{t['name']} ({t['id']})" for t in out["targets"])
     return out
 
+
+
+def _scope(cfg: dict) -> str:
+    """"; it alerts only while the villa is empty" — a rule's "When this rule runs" choice (vesta_shared.critical.run_when),
+    in this skill's words; "" for a rule that always runs."""
+    when = run_when(cfg)
+    if when == "always":
+        return ""
+    said = WORDS.get(f"runs_when_{when}") or f"(investigate's settings.yaml has no words.runs_when_{when})"
+    return f"; {said}"
 
 def _from_blueprint(client, use: dict):
     """A blueprint automation's actions with its inputs filled in — None when the blueprint cannot be read."""

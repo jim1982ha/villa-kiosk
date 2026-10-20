@@ -30,6 +30,9 @@ behaviour:
 words:
   rules_reloaded: "The rules were reloaded: every rule ran once to re-check itself, none of them acted"
   system_started: "The villa's system started: every rule ran once to re-check itself, none of them acted"
+  # a rule's "When this rule runs" choice (owner, 2026-10-20), said after what it is able to do
+  runs_when_empty: "it alerts only while the villa is empty"
+  runs_when_occupied: "it alerts only while someone is in"
 
 # Settings this skill no longer reads: a villa's villa.settings.yaml that still sets one is told so in the
 # investigation's answer (vesta_shared.skill_settings.retired), never silently ignored.

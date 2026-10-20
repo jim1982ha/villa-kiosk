@@ -119,6 +119,22 @@ def notes_of(inc) -> dict:
     return p if isinstance(p, dict) else {}
 
 
+def alerted_states(inc) -> tuple[list[str], set[str]] | None:
+    """(entities, bad states) when an incident's alert said which states are bad — its `bad_states`, else the `state`
+    it alerted on — and its states are what it is about (no `mode`, or "state"); None otherwise.
+
+    ⚠️ A NUMBER'S BAD STATES ONLY SAY WHEN IT CANNOT BE READ (2026-10-20): a numeric rule (critical_condition in
+    `numeric` mode, e.g. a phase over 6200 W) sends its blueprint's default bad_states ["unavailable"] in every event.
+    The alert desk read them as "this alert is about being unavailable" and so did the night check, which then took an
+    open OVERLOAD alert as already covering the meter's offline fault. ONE reading, here, for both skills."""
+    p = notes_of(inc)
+    if p.get("mode") not in (None, "state"):
+        return None
+    ents = [e for e in (p.get("entities") or [(dict(inc) if inc is not None else {}).get("entity_id")]) if e]
+    bad = p.get("bad_states") or ([p["state"]] if p.get("state") else [])
+    return (ents, set(bad)) if ents and bad else None
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 

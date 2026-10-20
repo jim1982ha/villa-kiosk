@@ -1096,3 +1096,29 @@ def test_a_problem_is_named_by_its_reading_unless_it_is_about_the_whole_device()
     # the digest names them the same way
     assert pack.subject("sensor.house_power", False)[1] == "House Pump"
     assert pack.subject("sensor.house_power", True)[1] == "House & Pool Relay"
+
+
+class _ScopedBook(_Book):
+    """The villa's shape since 2026-10-20: the door rule watches only while the villa is empty ("When this rule runs",
+    the blueprint input run_when)."""
+    def __init__(self, when):
+        super().__init__([], [])
+        self.when = when
+
+    def tool(self, name, args):
+        got = super().tool(name, args)
+        if args["identifier"] == "automation.example_door":
+            got["config"]["use_blueprint"]["input"] = {"run_when": self.when, "villa_empty_entity": ["binary_sensor.x_empty"]}
+        return got
+
+
+def test_a_quiet_line_says_when_its_rules_watch(tmp_path):
+    # owner, 2026-10-20: "no door left unlocked" is not true for the hours a rule set to "only while empty" did not watch
+    (tmp_path / "a").mkdir(); (tmp_path / "b").mkdir()
+    facts, c, _ = _ctx(tmp_path / "a")
+    c.cli = _ScopedBook("empty")
+    assert facts.s_quiet(c)["did_not_happen"] == [
+        "no door left unlocked and no supply left open (watched only while the villa is empty)"]
+    facts, c, _ = _ctx(tmp_path / "b")                                  # the rules are read once a day: another villa
+    c.cli = _ScopedBook("always")
+    assert facts.s_quiet(c)["did_not_happen"] == ["no door left unlocked and no supply left open"]

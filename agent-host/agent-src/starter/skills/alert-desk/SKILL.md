@@ -89,6 +89,14 @@ message then says who pressed what, and when. Typing the word works too.
 | Done | incident closed, its Kiosk ticket resolved; the device is read once `clear_minutes` (10) later. Still bad (its rule names its bad states): the incident opens again, "still there" — "Done (…), but … still reads …: still open. VESTA keeps watching it." — and the desk closes it when it is right. Not knowable (an older alert, a number): the people asked are told what it reads. The same for a fault closed in the Kiosk ("Closed in the Kiosk, but …"); a fault a person REOPENS in the Kiosk asks the facility manager again at once |
 | Need help | escalated to the owner with the detail |
 
+## When a critical rule runs
+
+Each critical rule has a "When this rule runs" choice (2026-10-20): Always (the default), Only while the villa is
+empty, or Only while someone is in, read from the same "Villa empty" helper. A rule set to one of the last two raises
+nothing outside those hours — so "no alert" then means "not watched", never "nothing happened" — and it looks again
+when the villa becomes empty (or someone comes in), alerting then on a problem already there. If the helper has no
+answer (after a restart), the rule alerts anyway.
+
 ## The siren: strict human validation
 
 `rules.yaml` section `siren`. The gate arms only when all three hold:

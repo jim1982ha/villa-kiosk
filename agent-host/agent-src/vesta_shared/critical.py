@@ -22,6 +22,21 @@ def built_from(config: dict, blueprint: str = BLUEPRINT) -> bool:
     return (name[:-5] if name.endswith(".yaml") else name) == blueprint
 
 
+#: The critical rules' "When this rule runs" choice (owner, 2026-10-20): the blueprints' input, the stand-alone
+#: rules' variable; "always" when a rule does not say.
+RUN_WHEN_INPUT, RUN_WHEN_VARIABLE, RUN_WHEN = "run_when", "vg_run_when", ("always", "empty", "occupied")
+
+
+def run_when(config: dict) -> str:
+    """When a rule runs, as its configuration says: "always", "empty" (only while the villa is empty) or "occupied"
+    (only while someone is in) — its blueprint input, else its own variable; anything else is "always"."""
+    c = config or {}
+    v = ((c.get("use_blueprint") or {}).get("input") or {}).get(RUN_WHEN_INPUT)
+    if v is None:
+        v = (c.get("variables") or {}).get(RUN_WHEN_VARIABLE)
+    return v if v in RUN_WHEN else "always"
+
+
 def critical_entities(configs) -> set[str]:
     """The entity ids every automation in `configs` built from the blueprint watches (a string or a list)."""
     out: set[str] = set()

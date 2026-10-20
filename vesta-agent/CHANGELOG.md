@@ -1,3 +1,18 @@
+## 0.12.289
+
+What you will see:
+- Overview › Copy the setup has a new choice, ticked: "The Limits tab's values". The file now carries the values
+  you changed on the Limits tab; an import shows them and leaves out any this agent does not have, saying so.
+- The setup file writes the AI brains and limits as the Rules page shows them today: one brain and one limit per
+  skill (your reports: brain auto, US$2 per run). It used to copy an older shape, one limit per report.
+- A skill switched off that no longer exists is no longer carried in the setup file, and an import says it left
+  one out.
+- The night check opens a device's "offline" fault even while an alert about a number is open on it: an overload
+  alert on the main meter used to hide the meter going offline.
+- Weekly reports: "no door left unlocked" now says "(watched only while the villa is empty)" when the rules were set
+  to watch only then ("When this rule runs" in the critical rules). Investigations say it of a rule too, and the AI
+  explains the choice when asked why something did not alert.
+
 ## 0.12.288
 
 What you will see:

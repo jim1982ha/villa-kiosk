@@ -61,6 +61,7 @@ from vesta_shared.problems import Problems  # noqa: E402  (what is still open: o
 from vesta_shared.offline import devices_offline  # noqa: E402  (the one reading of "offline now")
 from vesta_shared.retention import days_words  # noqa: E402  (how long the villa's system keeps detail, in words)
 from vesta_shared.past import automation_run, unread  # noqa: E402  (one reading of "a rule ran"; the one "could not be read whole")
+from vesta_shared.critical import run_when  # noqa: E402  (a rule's "When this rule runs": one reading)
 from vesta_shared.store import Notes, notes_of  # noqa: E402  (an alert's notes: one reader)
 from playbook import (  # noqa: E402  (the clues and the one list of what needs doing)
     MissingParameter, _num, battery_pct, clues, todo)
@@ -154,10 +155,11 @@ class Ctx:
         return {eid: r["alias"] for eid, r in self.vesta_rule_info().items()}
 
     def vesta_rule_info(self) -> dict[str, dict]:
-        """automation entity id -> {alias, blueprint} for the VESTA rules."""
+        """automation entity id -> {alias, blueprint, run_when} for the VESTA rules (run_when: its "When this rule runs"
+        choice, vesta_shared.critical.run_when)."""
         if self._rules is not None:
             return self._rules
-        key = f"vesta_rules2:{self.now.date().isoformat()}"
+        key = f"vesta_rules3:{self.now.date().isoformat()}"        # 3: with run_when
         cached = self.store.cache_get(key)
         if isinstance(cached, dict):
             self._rules = cached
@@ -174,7 +176,7 @@ class Ctx:
                 path = str(((conf or {}).get("use_blueprint") or {}).get("path") or "")
                 hit = next((bp for bp in bps if bp in path), None)
                 if hit:
-                    rules[eid] = {"alias": str(conf.get("alias") or eid), "blueprint": hit}
+                    rules[eid] = {"alias": str(conf.get("alias") or eid), "blueprint": hit, "run_when": run_when(conf)}
             self.store.cache_put(key, rules)
         self._rules = rules
         return rules
@@ -661,7 +663,16 @@ def s_quiet(c: Ctx) -> dict:
     since = c.listening_since()
     knows = (lambda bp: True) if since is not None and since <= c.s_dt else (lambda bp: bp in every_run)
     st = c.rule_states()
-    return {"did_not_happen": [w for bp, w in words.items() if bp not in fired and knows(bp)],
+    scope_words = c.cfg.get("nothing_happened_scope") or {}
+
+    def scoped(bp: str, w: str) -> str:
+        # its rules' "When this rule runs": all "always" → as written; else the line says when they watch
+        whens = {r.get("run_when", "always") for r in info.values() if str(r.get("blueprint", "")).removesuffix(".yaml") == bp}
+        if whens <= {"always"}:
+            return w
+        key = next(iter(whens)) if len(whens) == 1 else "mixed"
+        return f"{w} {scope_words[key]}" if scope_words.get(key) else w
+    return {"did_not_happen": [scoped(bp, w) for bp, w in words.items() if bp not in fired and knows(bp)],
             "rules_on": sum(1 for eid in info if (st.get(eid) or {}).get("state") == "on") if info else None,
             "rules_total": len(info)}
 

@@ -151,6 +151,35 @@ class LimitsTab:
         out += self._measured_rows()
         return {"groups": GROUP_TITLES, "rows": out, "problems": problems, "file": self.path}
 
+    # ------------------------------------------------------------------ a setup's limits (setup_copy)
+    def fitting(self, values: dict) -> tuple[dict, list[str]]:
+        """The values of `values` this agent can take — a limit its code declares, each value one the Limits tab would
+        accept (limits.check) — and, for the rest, why not (a setup made by another version may name others)."""
+        declared, _ = limits.scan(self.roots())
+        ok, why = {}, []
+        for key, value in (values or {}).items():
+            d = declared.get(str(key))
+            if d is None:
+                why.append(f"{key}: no such limit in this agent's code, left out.")
+            elif (bad := limits.check(d, value)) is not None:
+                why.append(f"{bad} Left out.")
+            else:
+                ok[str(key)] = value
+        return ok, why
+
+    def changes(self, values: dict) -> dict:
+        """{key: (this villa's value now, the new one)} for each of `values` that differs."""
+        declared, _ = limits.scan(self.roots())
+        now = self._file_values()
+        return {k: (now.get(k, declared[k].default), v) for k, v in values.items() if now.get(k, declared[k].default) != v}
+
+    def write(self, values: dict, origin: str, what: str) -> None:
+        """Set `values` in limits.yaml in ONE change of the page's history, the way the tab's own Save writes one."""
+        text = _read(self.path).decode("utf-8") or "# Limits set on the VESTA Agent page's Limits tab (vesta_shared.limits).\n"
+        for k, v in values.items():
+            text = set_in(text, [k], v)
+        self.files.text_change(origin, what, {"kind": "limits"}, text)
+
     def _file_values(self) -> dict:
         try:
             data = yaml.safe_load(_read(self.path).decode("utf-8") or "") or {}

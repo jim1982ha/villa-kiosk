@@ -35,7 +35,7 @@ from datetime import datetime, timedelta, timezone
 import yaml
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-from vesta_shared.store import Incident, Notes, Store, notes_of  # noqa: E402  (PYTHONPATH is set by the engine)
+from vesta_shared.store import Incident, Notes, Store, alerted_states, notes_of  # noqa: E402  (PYTHONPATH is set by the engine)
 from vesta_shared.params import VillaParams  # noqa: E402
 from vesta_shared.timeutil import day_time_label, villa_time  # noqa: E402
 from vesta_shared.problems import AGAIN_DAYS, Problems, again_title, incident_runs  # noqa: E402  (a problem's lifecycle: one owner)
@@ -593,13 +593,8 @@ def rule_states(inc: dict) -> tuple[list[str], set[str]] | None:
     """(entities, bad states) when the incident's alert said which states are bad — its `bad_states`, else the `state`
     it alerted on — and its states are what it is about (no `mode`, or "state": a number's bad states only say when it
     cannot be read); None otherwise. An alert's own `claim` comes first (still_there): this is what an alert sent
-    before its rule carried one tells."""
-    p = notes_of(inc)
-    if p.get("mode") not in (None, "state"):
-        return None
-    ents = [e for e in (p.get("entities") or [inc["entity_id"]]) if e]
-    bad = p.get("bad_states") or ([p["state"]] if p.get("state") else [])
-    return (ents, set(bad)) if ents and bad else None
+    before its rule carried one tells. The reading is vesta_shared.store.alerted_states, the night check's too."""
+    return alerted_states(inc)
 
 
 def judged(inc: dict) -> bool:
