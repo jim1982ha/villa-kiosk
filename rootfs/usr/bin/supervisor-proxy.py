@@ -1739,19 +1739,52 @@ def _fm_cleared_step(step) -> bool:
 
 
 def _fm_retention() -> dict:
-    """The two windows above, as the app reads them beside the record (`retention` on GET /fm-data): its Tickets
+    """The windows above, as the app reads them beside the record (`retention` on GET /fm-data): its Tickets
     figures name the period the record still holds, never a copy of these numbers (architecture review, 2026-10-19:
-    "Resolved (all time)" counted only what had not expired yet). Days; 0 = kept for ever."""
-    return {"retention": {"clearedDays": FM_CLEARED_FAULT_RETENTION_DAYS, "repairedDays": _evidence_retention_days()}}
+    "Resolved (all time)" counted only what had not expired yet). Days; 0 = kept for ever. `recordsDays` is the
+    window of completions and costs (_fm_expire) — the repaired fault's, said under its own name."""
+    days = _evidence_retention_days()
+    return {"retention": {"clearedDays": FM_CLEARED_FAULT_RETENTION_DAYS, "repairedDays": days, "recordsDays": days}}
+
+
+# ── AND HOW LONG WORK DONE AND MONEY SPENT ARE KEPT (owner, 2026-10-20) ─────
+# Completions (work signed off) and costs (money spent) were kept FOREVER while closed faults expired: "It shouldn't
+# be kept forever: apply the same consistent retention policy". They are records of work done, so they take the
+# repaired fault's window — evidence_retention_days, counted from their own date (`at`); 0 keeps them for ever. Two
+# completions are kept past it, because what they answer still matters: a scheduled task's LATEST completion (its
+# next due date is counted from it: a task every 2 years must not read "never done") and one tied to a fault the
+# record still holds (the fault and the work that fixed it go together).
+def _fm_dated_expired(rec, now: float, days: int) -> bool:
+    """True when this dated record (a completion, a cost) is past `days` — never when its date cannot be read."""
+    at = _iso_epoch(rec.get("at")) if isinstance(rec, dict) else None
+    return days > 0 and at is not None and now - at > days * 86400
 
 
 def _fm_expire(doc, now: float | None = None):
-    """The Facility record without the closed faults past their window."""
-    if not isinstance(doc, dict) or not isinstance(doc.get("tickets"), list):
+    """The Facility record without the closed faults, completions and costs past their window."""
+    if not isinstance(doc, dict):
         return doc
     now = time.time() if now is None else now
-    kept = [t for t in doc["tickets"] if not _fm_ticket_expired(t, now)]
-    return doc if len(kept) == len(doc["tickets"]) else dict(doc, tickets=kept)
+    out = dict(doc)
+    if isinstance(doc.get("tickets"), list):
+        out["tickets"] = [t for t in doc["tickets"] if not _fm_ticket_expired(t, now)]
+    days = _evidence_retention_days()
+    if isinstance(doc.get("completions"), list):
+        held = {t.get("id") for t in out.get("tickets") or () if isinstance(t, dict)}
+        latest: dict = {}
+        for c in doc["completions"]:
+            if isinstance(c, dict) and c.get("scheduleId") and _iso_epoch(c.get("at")) is not None:
+                best = latest.get(c["scheduleId"])
+                if best is None or _iso_epoch(c["at"]) > _iso_epoch(best.get("at")):
+                    latest[c["scheduleId"]] = c
+        keep_ids = {id(c) for c in latest.values()}
+        out["completions"] = [c for c in doc["completions"]
+                              if not _fm_dated_expired(c, now, days) or id(c) in keep_ids
+                              or (isinstance(c, dict) and c.get("ticketId") and c.get("ticketId") in held)]
+    if isinstance(doc.get("costs"), list):
+        out["costs"] = [k for k in doc["costs"] if not _fm_dated_expired(k, now, days)]
+    changed = any(isinstance(doc.get(k), list) and len(out[k]) != len(doc[k]) for k in ("tickets", "completions", "costs"))
+    return out if changed else doc
 
 
 # A guest may append at most this many reports in one write. One is the normal

@@ -155,5 +155,18 @@ console.log("\n  a figure names its period (architecture review, 2026-10-19: \"R
      [nov.resolved, nov.meanResolutionHours, nov.closedWithoutAction, dec.resolved, dec.closedWithoutAction], [1, 4, 0, 0, 1]);
 }
 
+// owner, 2026-10-20: work done and money spent are kept for the record's window, said under their lists
+{
+  const { recordsKeptNote } = await import("@/fm/fmEngine");
+  const { parseRetention } = await import("@/fm/fmApi");
+  eq("the window of work done and money spent is read beside the record; an older add-on (none said) kept them for ever",
+     [parseRetention({ clearedDays: 90, repairedDays: 550, recordsDays: 550 }).recordsDays,
+      parseRetention({ clearedDays: 90, repairedDays: 550 }).recordsDays], [550, 0]);
+  eq("  ...and said under the list it shortens; nothing said when kept for ever or not known",
+     [recordsKeptNote({ clearedDays: 90, repairedDays: 550, recordsDays: 550 }, "Spend"),
+      recordsKeptNote({ clearedDays: 90, repairedDays: 0, recordsDays: 0 }, "Work"), recordsKeptNote(null, "Work")],
+     ["Spend older than 550 days is no longer kept.", null, null]);
+}
+
 console.log(`\n${fail ? `❌ ${fail} failed` : "✅ the owner's numbers hold"}`);
 process.exit(fail ? 1 : 0);

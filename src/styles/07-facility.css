@@ -139,6 +139,8 @@
    is actually wrong, which is the point — criticality should read as a
    deliberate, occasional signal, not decoration applied uniformly. */
 .fm-list { display: flex; flex-direction: column; gap: 8px; }
+/* How long work done or money spent is kept (fmEngine.recordsKeptNote), under its list. */
+.fm-kept-note { margin: 8px 2px 0; font-size: var(--text-xs); }
 .fm-row {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
   padding: 12px 14px; border-radius: 12px;

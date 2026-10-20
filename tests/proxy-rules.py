@@ -649,9 +649,36 @@ finally:
     proxy._role_for = _real_role_for
 # The record's retention windows, published beside it (2.496.428): the app's Tickets figures name the period they
 # cover from these, never from a copy of the numbers.
-ck("the record publishes its two retention windows: no-action closes, and repairs (the evidence window)",
+ck("the record publishes its retention windows: no-action closes, repairs, and work done and money spent (one window)",
    proxy._fm_retention() == {"retention": {"clearedDays": proxy.FM_CLEARED_FAULT_RETENTION_DAYS,
-                                           "repairedDays": proxy._evidence_retention_days()}})
+                                           "repairedDays": proxy._evidence_retention_days(),
+                                           "recordsDays": proxy._evidence_retention_days()}})
+# owner, 2026-10-20: completions and costs are no longer kept for ever — the repaired fault's window, from their own date
+_real_days = proxy._evidence_retention_days
+try:
+    proxy._evidence_retention_days = lambda: 550
+    NOW = 2_000_000_000.0
+    iso = lambda days_ago: __import__("datetime").datetime.fromtimestamp(NOW - days_ago * 86400, __import__("datetime").timezone.utc).isoformat()
+    doc = {"tickets": [{"id": "t-kept", "status": "resolved", "resolvedAt": iso(10),
+                        "updates": [{"status": "resolved", "at": iso(10)}]}],
+           "completions": [
+               {"id": "c-new", "scheduleId": "s1", "at": iso(10)},
+               {"id": "c-old", "scheduleId": "s1", "at": iso(600)},           # older than the window, not s1's latest
+               {"id": "c-latest-old", "scheduleId": "s2", "at": iso(700)},    # s2's latest: its due date counts from it
+               {"id": "c-fault", "scheduleId": "", "ticketId": "t-kept", "at": iso(600)},   # tied to a fault still kept
+               {"id": "c-orphan", "scheduleId": "", "at": iso(600)},
+               {"id": "c-undated", "scheduleId": "", "at": "?"}],
+           "costs": [{"id": "k-new", "at": iso(30)}, {"id": "k-old", "at": iso(551)}, {"id": "k-undated", "at": None}]}
+    out = proxy._fm_expire(doc, NOW)
+    ck("an old completion and an old cost leave the record by themselves",
+       [c["id"] for c in out["completions"]] == ["c-new", "c-latest-old", "c-fault", "c-undated"]
+       and [k["id"] for k in out["costs"]] == ["k-new", "k-undated"])
+    ck("  ...a task's latest completion and one tied to a fault still held stay; an unreadable date is kept",
+       {"c-latest-old", "c-fault", "c-undated"} <= {c["id"] for c in out["completions"]})
+    proxy._evidence_retention_days = lambda: 0
+    ck("  ...0 keeps every completion and cost for ever (the record comes back unchanged)", proxy._fm_expire(doc, NOW) is doc)
+finally:
+    proxy._evidence_retention_days = _real_days
 # The view on the GET AND on the 409 body is driven over HTTP now:
 # tests/store-doors.py ("a guest's STALE write gets the empty view back").
 

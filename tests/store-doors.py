@@ -179,7 +179,7 @@ async def main() -> None:
     ck("the GET leaves out a no-action close past 90 days and a repair past the evidence window (550)",
        [t["id"] for t in body["data"]["tickets"]] == kept_ids, [t["id"] for t in body["data"]["tickets"]])
     ck("  ...and says so beside the record: the two windows the app names its figures by",
-       body.get("retention") == {"clearedDays": 90, "repairedDays": 550} and "retention" not in body["data"], body.get("retention"))
+       body.get("retention") == {"clearedDays": 90, "repairedDays": 550, "recordsDays": 550} and "retention" not in body["data"], body.get("retention"))
     status, body2 = await call("GET", "/agent/v1/fm-data", agent)
     ck("  ...and so does the agent's GET", [t["id"] for t in body2["data"]["tickets"]] == kept_ids, body2)
     status, put = await call("PUT", "/fm-data", ops, {"data": aged, "rev": body["rev"]})
@@ -195,7 +195,7 @@ async def main() -> None:
     ck("evidence window 0: repairs are kept for ever, no-action closes still leave",
        [t["id"] for t in body["data"]["tickets"]] == ["open1", "cleared89", "fixed100", "fixed549", "fixed551", "old400"],
        [t["id"] for t in body["data"]["tickets"]])
-    ck("  ...and the published window says it: repairs 0 (for ever)", body.get("retention") == {"clearedDays": 90, "repairedDays": 0},
+    ck("  ...and the published window says it: repairs 0 (for ever)", body.get("retention") == {"clearedDays": 90, "repairedDays": 0, "recordsDays": 0},
        body.get("retention"))
 
     await client.close()

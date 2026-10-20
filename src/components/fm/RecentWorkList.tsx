@@ -15,7 +15,7 @@
 
 import { useMemo } from "react";
 import { useFmData } from "@/fm/FmDataContext";
-import { localStamp, completionSource, workedBy } from "@/fm/fmEngine";
+import { localStamp, completionSource, workedBy, recordsKeptNote } from "@/fm/fmEngine";
 import { useFmTerms } from "@/fm/useFmTerms";
 import AgentMark from "./AgentMark";
 import RecordCard from "./RecordCard";
@@ -23,7 +23,7 @@ import { formatMoney } from "@/utils/money";
 import FoldedList from "@/components/common/FoldedList";
 
 export default function RecentWorkList() {
-  const { data, removeCompletion } = useFmData();
+  const { data, removeCompletion, retention } = useFmData();
   const terms = useFmTerms();
 
   const rows = useMemo(() => {
@@ -40,7 +40,10 @@ export default function RecentWorkList() {
       }));
   }, [data.completions, data.schedules, data.tickets, data.costs]);
 
+  // how long work done is kept (owner, 2026-10-20: the record's retention, said beside the list it shortens)
+  const kept = recordsKeptNote(retention, "Work");
   return (
+    <>
     <FoldedList title="Recent work" rows={rows} unit="completion">
       {({ completion: c, title, cost }) => (
         <RecordCard key={c.id} title={title}
@@ -51,5 +54,7 @@ export default function RecentWorkList() {
             run: (token) => removeCompletion(c.id, token) }} />
       )}
     </FoldedList>
+    {kept && <p className="muted body-text fm-kept-note">{kept} A task's latest completion is always kept.</p>}
+    </>
   );
 }
