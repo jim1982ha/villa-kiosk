@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.286 (20 October 2026)
+
+- skill.yaml `offer: after_reading: [tools]` (Skill.offer_after): a chat answer whose turn used one of those reading
+  tools carries the skill's button, named in the answer or not. Toolbox.read lists the reading tools a run used
+  (successful calls, each once), carried by TurnResult.read (THEN: joined) to CommandOffers.rows(read=). The
+  investigate starter skill names ha_get_history and ha_get_logs (owner, 2026-10-20: the House Pump answer skipped
+  the /investigate line and carried no button). Tests: test_command_offer (read → button; a state read → none; the
+  parse refuses a non-list).
+
 ## 0.6.285 (20 October 2026)
 
 - agent-contract.json copied from Kiosk 2.496.452: no "day" check word, no heartbeat `dayChecksAt`. `ticket.checks`

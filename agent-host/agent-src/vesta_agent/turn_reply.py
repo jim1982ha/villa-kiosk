@@ -95,7 +95,9 @@ class TurnReply:
         # 7. ⚠️ THE COMMAND THE ANSWER SUGGESTS, A BUTTON (owner, 2026-10-19: "write /investigate followed by your
         # question…" — "a button that directly triggers the suggested investigation"): on the PERSON'S question, for a
         # person who may write it here; nothing runs before the press
-        rows += self.command_offers.rows(cid, answer, asked, person_id, request)
+        # — and the one a skill offers after the readings it names (`offer: after_reading`, owner 2026-10-20: the reply
+        # skipped the line, so no button came)
+        rows += self.command_offers.rows(cid, answer, asked, person_id, request, read=res.read)
         keyboard = {"inline_keyboard": rows} if rows else None
         # 8. ⚠️ A REQUEST SHOWN HERE IS THE ANSWER (owner, 2026-10-10: "Approval request sent." under it, twice
         # "redundant"): told not to, the AI still wrote it — and pressed at once, the request was decided before that line

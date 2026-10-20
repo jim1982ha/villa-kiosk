@@ -7,10 +7,12 @@ the same check of who may — on the PERSON'S question, once (vesta_agent/comman
 from __future__ import annotations
 
 import asyncio
+import pathlib
 
 import yaml
 
 from helpers import make_agent
+from ha_fake import FakeHA, tool as ha_tool
 from kiosk_fake import FakeKiosk
 from telegram_fake import BOT
 from vesta_agent import button_data
@@ -187,3 +189,37 @@ def test_only_a_command_skill_may_be_offered_and_its_button_has_words(tmp_path):
             parse_skill(name, make_skill(str(tmp_path), name, spec))
     sk = parse_skill("ok", make_skill(str(tmp_path), "ok", {"command": "go", "offer": {"label": "Go"}}))
     assert sk.offer == {"label": "Go"}
+
+
+def test_an_answer_that_read_the_past_carries_the_button_without_naming_the_command(tmp_path, monkeypatch):
+    # owner, 2026-10-20: asked why the House Pump kept starting, the reply read its history and skipped the line naming
+    # /investigate — no button came. The skill's `offer: after_reading` puts it there whatever the AI wrote.
+    from ai_fake import FakeAI
+    for tool, args, offered in (("ha_get_history", {"entity_ids": "sensor.pump_power"}, True),
+                                ("ha_get_logs", {"source": "logbook"}, True),
+                                ("ha_get_state", {"entity_id": "sensor.pump_power"}, False)):
+        ha = FakeHA(tools=[ha_tool("ha_get_history", entity_ids="string"), ha_tool("ha_get_logs", source="string"),
+                           ha_tool("ha_get_state", entity_id="string")],
+                    answers={t: "[]" for t in ("ha_get_history", "ha_get_logs", "ha_get_state")})
+        v = make_agent(tmp_path / tool, {"people": PEOPLE, "ha_read_tools": ["ha_get_history", "ha_get_logs", "ha_get_state"]},
+                       skills=("investigate",), kiosk=FakeKiosk(), reader=ha)
+        run(v.refresh_server_tools())
+
+        async def reads(run_, tool=tool, args=args):
+            await run_["call"](tool, args)
+        FakeAI("It ran 21 h this week.", act=reads).install(monkeypatch)
+        run(v.converse(JM, v.policy().person(JM), ASKED))
+        assert [b["text"] for b in _offered(v, JM)[0]] == ([LABEL] if offered else []), tool
+
+
+def test_after_reading_is_the_skills_list_and_a_wrong_one_is_refused(tmp_path):
+    import pytest
+    from vesta_agent.skills import SkillError, parse_skill
+    sk = parse_skill("investigate", str(pathlib.Path(__file__).parent.parent / "starter" / "skills" / "investigate"))
+    assert set(sk.offer_after) == {"ha_get_history", "ha_get_logs"} and "after_reading" not in sk.offer
+    bad = tmp_path / "x"
+    bad.mkdir()
+    (bad / "skill.yaml").write_text(yaml.safe_dump(
+        {"description": "d", "command": "x", "offer": {"label": "Go", "after_reading": "ha_get_history"}}))
+    with pytest.raises(SkillError):
+        parse_skill("x", str(bad))

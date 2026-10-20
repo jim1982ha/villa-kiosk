@@ -14,9 +14,12 @@ usage: "/investigate why did the water heater stop last night?"
 # ⚠️ OFFERED FROM A CHAT (owner, 2026-10-19): a reply that tells the person to write /investigate carries this button;
 # pressing it investigates the question they asked, exactly as typing "/investigate <their question>" would. Only a
 # person who may write /investigate in that chat gets it.
+# after_reading (owner, 2026-10-20: the reply about the House Pump skipped that line, and no button came): an answer
+# whose turn read any of these — a device's past, its logbook — carries the button too, named or not.
 offer:
   label: "🔎 Investigate this"
   pressed: Investigating
+  after_reading: [ha_get_history, ha_get_logs]
 # Web research is part of EVERY investigation (owner, 2026-10-12: "always use web_search by default"): SKILL.md step 6.
 # The page cannot be made without a web search where web search is available, nor without its sources cited.
 # ⚠️ WHAT EVERY /investigate ANSWER CARRIES (owner, 2026-10-11: "always trigger the full use of the skill — HTML report in

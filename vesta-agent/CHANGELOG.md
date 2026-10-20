@@ -1,3 +1,10 @@
+## 0.12.296
+
+What you will see:
+- In a chat, an answer for which the Agent had to read a device's history or logbook now always carries the
+  "🔎 Investigate this" button, whether or not the answer mentions /investigate. Pressing it investigates the question
+  you asked. A simple answer ("turn on the pool light", "is the pump on?") carries none.
+
 ## 0.12.295
 
 What you will see:

@@ -62,6 +62,7 @@ class TurnResult:
     offered: int = 0               # faults it offered (Toolbox.offered)
     pages: dict[str, int] = field(default_factory=dict)   # a file sent → its message (Toolbox.pages)
     earlier: str = ""              # RunResult.earlier
+    read: list[str] = field(default_factory=list)   # the reading tools it used, each once (Toolbox.read)
 
     @property
     def failed(self) -> bool:
@@ -97,7 +98,7 @@ THEN = {
     "stopped_at_limit": lambda a, b: b, "problem": lambda a, b: b, "error": lambda a, b: b,
     "cost_usd": _summed_cost, "sent": lambda a, b: a + b, "offered": lambda a, b: a + b,
     "photos": lambda a, b: a + b, "approvals": lambda a, b: a + b, "attached": lambda a, b: a + b,
-    "pages": lambda a, b: {**a, **b},
+    "pages": lambda a, b: {**a, **b}, "read": lambda a, b: a + [t for t in b if t not in a],
 }
 
 
@@ -157,7 +158,8 @@ class Turns:
         out = TurnResult(res.text, res.session_id, res.stopped_at_limit, res.cost_usd, res.problem, res.error,
                          list(tb.photos), terms.limit_usd, list(tb.approvals), sent=getattr(tb, "sent", 0),
                          earlier=getattr(res, "earlier", ""), attached=list(getattr(tb, "attached", [])),
-                         offered=len(getattr(tb, "offered", [])), pages=dict(getattr(tb, "pages", {})))
+                         offered=len(getattr(tb, "offered", [])), pages=dict(getattr(tb, "pages", {})),
+                         read=list(getattr(tb, "read", [])))
         if out.problem:
             # no credit, a refused key: every reply and report stops until the owner acts (app._tell_owner decides)
             await self._safe(self.tell_owner(out.problem, told))

@@ -271,6 +271,11 @@ class Skill:
     # what the message says once pressed}. Only a skill that can run on the person's question as written declares it
     # (proposals needs a number: none). The engine places and runs it (command_offers.py), the skill says whether and how.
     offer: dict[str, str] | None = None
+    # ⚠️ OFFERED WITHOUT BEING NAMED (owner, 2026-10-20: asked "why has the House Pump been starting and stopping…",
+    # the reply skipped the line naming /investigate the concierge skill asks for, so no button came): `offer:
+    # after_reading:` — the reading tools after which a chat answer carries the button, whether or not it names the
+    # command. The skill says which readings are "looking into what happened"; the engine only matches them.
+    offer_after: tuple[str, ...] = ()
 
     @property
     def skill_md(self) -> str:
@@ -304,7 +309,8 @@ def when_it_runs(sk: Skill) -> list[dict]:
     # a command skill's row says how it is used, in the skill's own words (`usage`, an example — owner, 2026-10-19:
     # "only when a person writes /proposal" said neither what to write nor when it applies)
     # and its button (`offer`), which is the command typed for the person: the same row, said (0.12.271)
-    pressed = f" (or presses “{sk.offer['label']}” under a reply that suggests it)" if sk.offer else ""
+    pressed = (f" (or presses “{sk.offer['label']}” under a reply that suggests it"
+               + (" or that looked into what happened" if sk.offer_after else "") + ")") if sk.offer else ""
     acts.append(row("in a chat", note=(f"only when a person writes /{sk.command}{pressed} — for example: {sk.usage}"
                                        if sk.usage else f"only when a person writes /{sk.command}{pressed}") if sk.command
                     else "when a person asks about it"))
@@ -352,9 +358,15 @@ def parse_skill(name: str, path: str) -> Skill:
     if offer is not None:
         if not sk.command:
             raise SkillError("offer: only a skill with a command has it (pressing it writes that command)")
+        after = offer.get("after_reading", []) if isinstance(offer, dict) else None
+        if not isinstance(after, list) or not all(isinstance(t, str) and t.strip() for t in after):
+            raise SkillError("offer: after_reading is a list of reading tools (ha_get_history, …)")
+        offer = {k: v for k, v in offer.items() if k != "after_reading"} if isinstance(offer, dict) else offer
         if not isinstance(offer, dict) or set(offer) - {"label", "pressed"} or \
                 not all(isinstance(v, str) and v.strip() for v in offer.values()) or not str(offer.get("label") or "").strip():
-            raise SkillError("offer: {label: the button's words, pressed: what the message says once pressed (optional)}")
+            raise SkillError("offer: {label: the button's words, pressed: what the message says once pressed (optional), "
+                             "after_reading: the reading tools after which an answer carries it (optional)}")
+        sk.offer_after = tuple(t.strip() for t in after)
         sk.offer = {k: v.strip()[:limit(
                 "skills.offer_label_chars", 60, unit="characters", group="text", lo=10, hi=64,
                 says="The longest text of a button a reply offers (\"🔎 Investigate this\").",

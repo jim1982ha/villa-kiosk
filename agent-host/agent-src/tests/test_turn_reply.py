@@ -66,8 +66,8 @@ class Approvals:
 
 class Commands:
     """command_offers.CommandOffers: a button under every answer naming "/go", on the question asked."""
-    def rows(self, chat, answer, asked, person_id, request=None):
-        return [[{"text": "Go", "callback_data": f"o:{asked}"}]] if "/go" in answer and asked else []
+    def rows(self, chat, answer, asked, person_id, request=None, read=()):
+        return [[{"text": "Go", "callback_data": f"o:{asked}"}]] if ("/go" in answer or "ha_get_history" in read) and asked else []
 
 
 def compose(r, *, jobs=None, offers=None, approvals=None, state=None, commands=None, **kw):

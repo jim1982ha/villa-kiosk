@@ -242,6 +242,7 @@ class Toolbox:
         self.attached: list[str] = []  # the files those messages carried (a command skill's page: app._delivered)
         self.pages: dict[str, int] = {}  # each of those files → the message it went with, in the asker's chat
         self.offered: list[str] = []   # the faults offered in this run (tools._ticket in a chat)
+        self.read: list[str] = []      # the villa's reading tools this run used, each once (command_offers: after_reading)
         # the approval requests this run sent: one shown in the asker's chat is the answer there (app._converse)
         self.approvals: list[str] = []
         # ⚠️ tool_access DECIDES, THIS CLASS BUILDS (architecture review, 2026-10-06): allowed_for's answer — through
@@ -359,6 +360,8 @@ class Toolbox:
             out = {"content": ([{"type": "text", "text": self.parts.serve(key, text, part)}] if text else []) + images}
             if res.get("isError"):
                 out["is_error"] = True
+            elif name not in self.read:
+                self.read.append(name)
             return out
         return handler
 

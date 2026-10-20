@@ -56,9 +56,11 @@ class CommandOffers:
         return got.action == "converse" and got.invoked == sk.name
 
     # ------------------------------------------------------------------ shown
-    def rows(self, chat: int, answer: str, asked: str, person_id: int | None, request=None) -> list[list[dict]]:
-        """The buttons under `answer`: one per offerable command skill it names, for the person who asked `asked`.
-        None under an answer of that same skill's request (it is that investigation), none without a question."""
+    def rows(self, chat: int, answer: str, asked: str, person_id: int | None, request=None,
+             read=()) -> list[list[dict]]:
+        """The buttons under `answer`: one per offerable command skill it names, or whose `after_reading` tools the
+        turn used (`read`), for the person who asked `asked`. None under an answer of that same skill's request (it is
+        that investigation), none without a question."""
         question = " ".join((asked or "").split())[:question_max()]
         if not answer or not question:
             return []
@@ -67,6 +69,10 @@ class CommandOffers:
         for m in intake.SKILL_TOKEN.finditer(answer):
             name = on.get(m.group(1).lower())
             if name and name not in named:
+                named.append(name)
+        for name in on.values():
+            sk = self.skills.get(name)
+            if sk is not None and set(sk.offer_after) & set(read) and name not in named:
                 named.append(name)
         rows = []
         for name in named:
