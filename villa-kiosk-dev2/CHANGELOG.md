@@ -1,3 +1,14 @@
+## 2.496.456
+
+### Fixed
+- Cockpit › a fault's **Open Ticket**: the "Open a ticket" window answers again — you can type in its fields, add a
+  photo, and press Cancel or Open Ticket. It was drawn inside the fault's card, and every press on it jolted the
+  window back into that card. Every window of the app (Settings, a device, Cockpit, the questions it asks) now opens
+  over the whole screen, whatever opened it.
+- Cockpit on an iPhone: a card's **Close** and its question "Close this? No action needed." now fit the card — the
+  question on the left, Cancel and Close together on the right (or under it on a narrow screen). The row used to run
+  past the card's edge, cutting off Close. A press on a card's button no longer makes the whole card jump.
+
 ## 2.496.455
 
 ### Fixed
