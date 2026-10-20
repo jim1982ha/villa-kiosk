@@ -1,3 +1,11 @@
+## 0.12.286
+
+What you will see:
+- A new fault in the Cockpit when one of your villa's rules still watches a device you have hidden: "The rule … watches
+  2 devices hidden in the villa's system: …". VESTA leaves a hidden device out of all its checks, but a rule naming it
+  still alerts on it, as the "critical devices offline" rule did with the two replaced Aqara locks. Point the rule at
+  the device you see, or take the hidden one out; the fault closes at the next night check.
+
 ## 0.12.285
 
 What you will see:
