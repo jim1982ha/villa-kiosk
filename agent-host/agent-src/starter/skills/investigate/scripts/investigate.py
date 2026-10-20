@@ -651,6 +651,13 @@ def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_da
         figs = [(datetime.fromtimestamp(r["start"] / 1000, tz=timezone.utc), str(r.get("max", r.get("mean"))))
                 for r in (older[1].get(eid) or [])] if older else []
         attrs0 = (names.get(eid) or {}).get("attributes") or {}
+        if not rows and eid not in names and not figs:
+            # ⚠️ AN ID NO DEVICE HAS IS NOT A QUIET DEVICE (villa, 2026-10-20 21:57): the AI asked for an id it made up and
+            # read "nothing recorded" as the pump doing nothing
+            parts.append({"entity_id": eid, "lines": [f"{eid}: no device of the villa's system has this id: nothing can "
+                                                      "be said about it. Find the device's ids first (search)."],
+                          "nothing": True, "label": spoken(eid)})
+            continue
         if not rows:
             part = {"entity_id": eid, "lines": [f"{eid}: nothing recorded in this period." if not older
                                                 else f"{eid}: no change of it is kept for this period."] + before,

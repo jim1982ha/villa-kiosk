@@ -178,3 +178,18 @@ def test_starts_after_a_burst_are_said_hour_by_hour_never_as_its_normal():
     later = [int(h.split()[1]) for h in hours.split(": ", 1)[1].split(" · ") if h[:2] in ("15", "16", "17")]
     assert later and all(n > 0 for n in later), hours
     assert not [ln for ln in said if "like its normal" in ln], said
+
+
+def test_an_id_no_device_has_is_said_so_never_as_nothing_recorded():
+    # villa, 2026-10-20 21:57: the AI read the history of an id it made up, and "nothing recorded" read as a quiet pump
+    class _Unknown(HABase):
+        def states(self, ids):
+            return {}
+
+        def history(self, ids, start, end):
+            return {}
+    said = inv.timeline(_Unknown(), ["switch.made_up"], FROM, E, 3, Z, now=E)["lines"]
+    assert any("no device of the villa's system has this id" in ln for ln in said), said
+    assert not any("nothing recorded" in ln for ln in said), said
+    quiet = inv.timeline(_Client([]), ["sensor.x"], FROM, E, 3, Z, now=E)["lines"]   # a real device that said nothing
+    assert any("nothing recorded" in ln for ln in quiet), quiet

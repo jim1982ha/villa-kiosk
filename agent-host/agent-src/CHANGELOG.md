@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.293 (20 October 2026)
+
+- investigate timeline: an id with no state, no reading and no figure says "no device of the villa's system has this
+  id", never "nothing recorded" (villa, 21:57: the AI read the history of switch.house_pump, which does not exist).
+  Test: test_investigate_shapes (mutation-proved).
+
 ## 0.6.292 (20 October 2026)
 
 - villa-concierge "A question about what happened": start_time/end_time as villa times covering the whole period named
