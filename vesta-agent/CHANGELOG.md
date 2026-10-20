@@ -1,3 +1,9 @@
+## 0.12.292
+
+What you will see:
+- Skills › a skill › About, "When the … skill runs": the When column is now the same width on every skill and never
+  wraps — proposals' "in a chat" stays on one line, as preventive-maintenance's times do.
+
 ## 0.12.291
 
 What you will see:

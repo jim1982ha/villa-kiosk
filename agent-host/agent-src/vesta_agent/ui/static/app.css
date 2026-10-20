@@ -299,6 +299,13 @@ table.data.runs td { vertical-align: top; }
 .what-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .what-head .more-btn { margin-top: 0; margin-left: auto; }
 td.nowrap { white-space: nowrap; }
+/* Skills › About, "When the … skill runs": ONE width for the When column on every skill, never wrapped (owner,
+   2026-10-20: "in a chat" took two lines beside proposals' long text while preventive-maintenance's column was wide).
+   18em holds the longest When the engine writes ("a critical alert from a VESTA rule", 34 characters); the What
+   column takes the rest. Desktop only: on a phone the rows are labelled cards (below). */
+@media (min-width: 601px) {
+  table.data.skill-runs th:first-child, table.data.skill-runs td:first-child { width: 18em; white-space: nowrap; }
+}
 table.data tr:has(+ tr.row-more:not([hidden])) td { border-bottom: 0; }
 table.data tr.row-more td { padding-top: 0; }
 table.data tr.row-more[hidden] { display: none; }   /* over the phone's card rows (display: grid), which outrank [hidden] */

@@ -360,7 +360,7 @@ export function aboutSkill(name, d) {
   const KIND = { ai: "AI job", code: "code, no AI" };
   const acts = () => paged(["When", "What runs"], d.acts.map((a) => [a.when,
     [a.job ? h("b", {}, a.job) : a.script ? h("code", {}, a.script) : h("span", { class: "muted" }, a.note || ""),
-     a.kind ? h("span", { class: "chip gray tiny" }, KIND[a.kind]) : null]]));
+     a.kind ? h("span", { class: "chip gray tiny" }, KIND[a.kind]) : null]]), 10, { cls: "skill-runs" });
   // Skill tools: the agent's one verdict (tool_access.health: its `line`, drawn as it is — the same line the skills
   // list shows), then every tool as a card — core.tileCard, the commands' own card without their switch (a tool is
   // switched on or off in Rules, for every skill at once: the tab's (i), `where_tools`, says so in the agent's words)

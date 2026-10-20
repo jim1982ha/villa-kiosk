@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.282 (20 October 2026)
+
+- Skills › About's runs table: one width for the When column on every skill (`table.data.skill-runs`, 18em, nowrap,
+  desktop only); test_ui checks it holds every starter skill's When.
+
 ## 0.6.281 (20 October 2026)
 
 - A rewrite's backup (owner: "isn't it a risk of never receiving the information?"): result.edit(…, fallback=, to=,

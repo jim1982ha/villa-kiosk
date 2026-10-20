@@ -952,3 +952,20 @@ def test_a_runs_steps_put_the_number_first_across_the_whole_width():
     css = open(os.path.join(os.path.dirname(__file__), "..", "vesta_agent", "ui", "static", "app.css"), encoding="utf-8").read()
     rule = css[css.index("ol.steps {"):css.index("}", css.index("ol.steps {"))]
     assert "width: 100%" in rule and "minmax(0, 1fr)" in rule
+
+
+def test_the_skill_runs_when_column_is_one_width_on_every_skill():
+    # owner, 2026-10-20: proposals' "in a chat" wrapped on two lines while preventive-maintenance's When column was
+    # wide — the column followed each skill's text. One width, never wrapped, wide enough for every When the engine
+    # writes for the starter skills.
+    import glob
+    from vesta_agent import skills as S
+    from vesta_agent.ui.server import STATIC
+    css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
+    assert ("table.data.skill-runs th:first-child, table.data.skill-runs td:first-child "
+            "{ width: 18em; white-space: nowrap; }") in css
+    assert '{ cls: "skill-runs" }' in body_of(page_js(), "aboutSkill")
+    starter = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "starter", "skills")
+    whens = {a["when"] for d in glob.glob(os.path.join(starter, "*"))
+             for a in S.when_it_runs(S.parse_skill(os.path.basename(d), d))}
+    assert "in a chat" in whens and max(map(len, whens)) <= 36, sorted(whens, key=len)[-3:]   # ~0.5em a character
