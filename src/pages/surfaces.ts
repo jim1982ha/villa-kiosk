@@ -5,7 +5,7 @@
 // ⚠️ THE WINDOWS HAD NO OWNER (until 2.496.268). The Cockpit was opened and
 // mounted inside the top bar while Facility, the VESTA Agent, Settings and the
 // Rooms list lived in the Dashboard, each a flag of its own: the top bar took
-// onOpenFacility, onOpenAgent, onOpenEntity and the doors just to hand clicks
+// onOpenFacility, onOpenAgent (its window removed 2.496.443), onOpenEntity and the doors just to hand clicks
 // across, "close this window, then open that device" was written out four
 // times, and "may this profile open it?" was checked at some openers and not
 // others. One state now, one rule for what may open, one hand-over.
@@ -17,27 +17,25 @@ import { roomLook } from "@/babylon/summaryLook";
 import type { DeviceLook } from "@/utils/deviceActivity";
 
 /** A window over the map. Several may be open at once: Advanced Settings
- *  opens over Settings. (The Cockpit footer's "VESTA Agent" LEAVES the
- *  Cockpit — its button says so — so those two are never stacked.) */
-export type Surface = "rooms" | "cockpit" | "agent" | "settings" | "configEditor" | "presence";
+ *  opens over Settings. */
+export type Surface = "rooms" | "cockpit" | "settings" | "configEditor" | "presence";
 
 export type Surfaces = Readonly<Record<Surface, boolean>>;
 
 /** What a window is called on a "Back to …" button. */
 export const SURFACE_LABEL: Readonly<Record<Surface, string>> = {
-  rooms: "Rooms", cockpit: "Cockpit", agent: "VESTA Agent", settings: "Settings",
+  rooms: "Rooms", cockpit: "Cockpit", settings: "Settings",
   configEditor: "Advanced Settings", presence: "Villa presence",
 };
 
 export const NO_SURFACES: Surfaces = {
-  rooms: false, cockpit: false, agent: false, settings: false, configEditor: false, presence: false,
+  rooms: false, cockpit: false, settings: false, configEditor: false, presence: false,
 };
 
 /** May this profile open `s`? The doors (auth/doors) say, once — every
  *  opener asks here, so a window a profile may not see never opens. */
 export function mayOpen(s: Surface, doors: Doors): boolean {
   switch (s) {
-    case "agent": return doors.agent;
     case "settings":
     case "configEditor": return doors.settings;
     default: return true;

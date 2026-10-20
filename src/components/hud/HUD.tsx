@@ -56,7 +56,6 @@ import { useVillaAttention } from "@/components/cockpit/useVillaAttention";
 import type { VillaHealthLevel } from "@/config/attention";
 import { formatCountBadge } from "@/utils/countBadge";
 import { useAgent } from "@/agent/AgentContext";
-import { awaitingAnswer } from "@/agent/agentView";
 
 // Label-size stepper (next to the category filter): each click moves
 // entityIconScale by this much, clamped to the shared
@@ -150,13 +149,10 @@ export default function HUD({
 
   // (Facility's own button and count are gone, 2.496.273: its tabs live in the
   // Cockpit, and the Cockpit's count already includes faults and overdue work.)
-  // The VESTA Agent: its presence dot, and how many of its messages wait for
-  // an answer THIS profile can give (agentView.awaitingAnswer).
-  const { status: agentStatus, messages: agentMessages } = useAgent();
+  // The VESTA Agent: its presence dot.
+  const { status: agentStatus } = useAgent();
   const agentOnline = agentStatus?.state === "online";
-  const agentWaiting = useMemo(() => awaitingAnswer(agentMessages), [agentMessages]);
-  const agentTitle = `VESTA Agent — ${agentOnline ? "online" : "offline"}`
-    + (agentWaiting > 0 ? `, ${agentWaiting} message${agentWaiting === 1 ? "" : "s"} to answer` : "");
+  const agentTitle = `VESTA Agent — ${agentOnline ? "online" : "offline"}`;
   // The agent's presence as the dot on its robot — the top bar's and the
   // phone menu's are this one element (.status-dot, 2.496.247).
   const agentDot = <span className={`status-dot ${agentOnline ? "on" : "warn"}`} aria-hidden="true" />;
@@ -580,8 +576,7 @@ export default function HUD({
             {/* ONE button for the Cockpit and the agent (2.496.242): with an
                 agent configured the Cockpit's icon IS the robot — its count
                 (top right) stays the Cockpit's, the agent's presence dot sits
-                bottom right — and the agent's own window opens from the
-                Cockpit's footer. Without one, the ⚠ as before. */}
+                bottom right. Without one, the ⚠ as before. */}
             <button
               className={`icon-btn${doors.agent ? " agent-btn" : ""}${HEALTH_CLASS[health.level]}`}
               onClick={onOpenCockpit}

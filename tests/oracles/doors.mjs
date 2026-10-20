@@ -54,7 +54,7 @@ console.log("\n  every surface reads the one answer:");
 const dash = src("pages/Dashboard.tsx"), hud = src("components/hud/HUD.tsx"), cockpit = (src("components/cockpit/CockpitModal.tsx") + src("components/cockpit/CockpitOverview.tsx"));
 ck("Dashboard computes it once and mounts every window behind it",
    (dash.match(/doorsFor\(/g) ?? []).length === 1
-   && ["agent", "settings", "configEditor"].every((s) => new RegExp(`\\{shown\\("${s}"\\) && \\(`).test(dash))
+   && ["settings", "configEditor"].every((s) => new RegExp(`\\{shown\\("${s}"\\) && \\(`).test(dash))
    // 2.496.273: Facility is the Cockpit's tabs, behind the same door
    && /const tabs: ModalTab<CockpitTab>\[\] = doors\.facility \? \[OVERVIEW_TAB, \.\.\.FACILITY_TABS\] : \[OVERVIEW_TAB\];/.test(cockpit)
    && /const shown = \(surface: Surface\) => surfaceShown\(screen\.windows, surface, doors\);/.test(dash));
@@ -65,7 +65,8 @@ ck("no window's visibility is implied by a callback being passed (no `? () => �
 ck("the top bar draws Settings and the agent's robot from doors — and no Facility button (its tabs are the Cockpit's)",
    (hud.match(/\{doors\.facility && \(/g) ?? []).length === 0 && (hud.match(/\{doors\.settings && \(/g) ?? []).length === 1   // ONE Settings row, shared by both menus (accountRows, 2.496.335)
    && !/\{onOpenFacility && \(|\{canOpenSettings && \(/.test(hud));
-ck("the Cockpit's updates count and agent footer read doors, not roleCan",
-   /doors\.updates\s*\? Object\.values\(entities\)/.test(cockpit) && !/roleCan\(role, "seeUpdates"\)/.test(cockpit) && /doors\.agent \? \(/.test(cockpit));
+ck("the Cockpit's updates count reads doors, not roleCan — and names them in its tooltip (config/updatesWaiting)",
+   /doors\.updates \? updatesWaiting\(entities\) : \[\]/.test(cockpit) && !/roleCan\(role, "seeUpdates"\)/.test(cockpit)
+   && /title=\{updatesTip\(updates\)\}/.test(cockpit));
 
 done("✅ which doors a profile has is said once");

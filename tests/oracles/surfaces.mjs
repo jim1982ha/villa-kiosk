@@ -15,17 +15,17 @@ const open = (st, s, d) => S.surfacesReducer(st, { type: "open", surface: s, doo
 
 console.log("  what may open:");
 ck("a profile without the door never opens it — whichever opener asks",
-   ["settings", "configEditor", "agent"].every((s) => !open(S.NO_SURFACES, s, guest)[s]));
+   ["settings", "configEditor"].every((s) => !open(S.NO_SURFACES, s, guest)[s]));
 ck("  ...the Cockpit and the Rooms list are open to every profile",
    open(S.NO_SURFACES, "cockpit", guest).cockpit && open(S.NO_SURFACES, "rooms", guest).rooms);
 const stacked = open(open(S.NO_SURFACES, "settings", all), "configEditor", all);
 ck("Advanced Settings opens OVER Settings (both open), and closing it leaves Settings",
    stacked.settings && stacked.configEditor && S.surfacesReducer(stacked, { type: "close", surface: "configEditor" }).settings);
 ck("  ...an unchanged state is the same object (no re-render for nothing)",
-   open(stacked, "settings", all) === stacked && S.surfacesReducer(S.NO_SURFACES, { type: "close", surface: "agent" }) === S.NO_SURFACES);
+   open(stacked, "settings", all) === stacked && S.surfacesReducer(S.NO_SURFACES, { type: "close", surface: "settings" }) === S.NO_SURFACES);
 
 ck("a window open when the profile switches to one without its door is no longer shown",
-   S.shown(open(S.NO_SURFACES, "agent", all), "agent", all) && !S.shown(open(S.NO_SURFACES, "agent", all), "agent", guest));
+   S.shown(open(S.NO_SURFACES, "settings", all), "settings", all) && !S.shown(open(S.NO_SURFACES, "settings", all), "settings", guest));
 
 console.log("\n  a chip's rooms and its chooser:");
 ck("a chip's rooms: distinct, no blanks; none named → its own room",
@@ -53,8 +53,8 @@ const rd = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8
 const dash = rd("pages/Dashboard.tsx"), hud = rd("components/hud/HUD.tsx");
 ck("the Dashboard holds the windows in ONE reducer — no window flag of its own (pages/screen, which wraps surfaces)",
    /screenReducer\(s, x\.a, x\.doors\), START\)/.test(dash) && !/set(Teleport|Settings|ConfigEditor|Facility|Agent)Open|useReducer\(surfacesReducer/.test(dash));
-ck("  ...the Cockpit (Facility's tabs included) and the Agent hand a device over the same way",
-   (dash.match(/onOpenEntity=\{\(id\) => handOver\("(cockpit|agent)", id\)\}/g) ?? []).length === 2);
+ck("  ...the Cockpit (Facility's tabs included) hands a device over through handOver",
+   (dash.match(/onOpenEntity=\{\(id\) => handOver\("cockpit", id\)\}/g) ?? []).length === 1 && !/"agent"/.test(rd("pages/surfaces.ts")));
 ck("the top bar mounts no window: it asks the Dashboard to open the Cockpit",
    !/CockpitModal|cockpitOpen/.test(hud) && /onClick=\{onOpenCockpit\}/.test(hud) && !/onOpenAgent|onOpenEntity/.test(hud));
 // a row a window draws clickable is one its hand-over opens: both ask the same answer (architecture review scan 2,

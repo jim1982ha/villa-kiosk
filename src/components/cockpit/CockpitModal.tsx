@@ -10,12 +10,11 @@
 // Every section here is read-only reporting on its own face; a device opens its own window (onOpenEntity).
 
 import { useMemo } from "react";
-import { Bot, LayoutDashboard, RefreshCw } from "lucide-react";
+import { LayoutDashboard, RefreshCw } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import type { Doors } from "@/auth/doors";
-import { useAgent } from "@/agent/AgentContext";
-import { awaitingAnswer } from "@/agent/agentView";
+import { updatesTip, updatesWaiting } from "@/config/updatesWaiting";
 import { formatCountBadge } from "@/utils/countBadge";
 import ModalFooter from "@/components/common/ModalFooter";
 import ModalTabs, { type ModalTab } from "@/components/common/ModalTabs";
@@ -26,12 +25,8 @@ import CockpitOverview from "./CockpitOverview";
 export interface CockpitModalProps {
   onClose: () => void;
   onOpenEntity: (entityId: string) => void;
-  /** Which windows this profile may open (auth/doors): the footer's "VESTA
-   *  Agent" is drawn only with `doors.agent`, the updates count only with
-   *  `doors.updates`. */
+  /** What this profile may see and do (auth/doors): the updates count only with `doors.updates`. */
   doors: Doors;
-  /** Open the VESTA Agent window. */
-  onOpenAgent: () => void;
   /** The open tab: the Cockpit's own view, or one of the Facility tabs (with
    *  `doors.facility`). Held by the caller, so "Edit ticket" lands on
    *  Tickets and Back from a device returns to the tab it left. */
@@ -55,7 +50,7 @@ export type CockpitTab = "overview" | FacilityTab;
 const OVERVIEW_TAB: ModalTab<CockpitTab> = { id: "overview", label: "Overview", icon: LayoutDashboard };
 
 export default function CockpitModal({
-  onClose, onOpenEntity, doors, onOpenAgent, tab, onTab, reportFaultFor, onFaultFormOpened,
+  onClose, onOpenEntity, doors, tab, onTab, reportFaultFor, onFaultFormOpened,
   editTicket, onEditTicket, onTicketEditOpened, onReportProblem,
 }: CockpitModalProps) {
   // A profile without the Facility door sees the Cockpit's view alone, no strip.
@@ -66,18 +61,12 @@ export default function CockpitModal({
   // it was the Facility tabs' alone, so the Overview's "Open issues" — the list the (i) promised was "read again every
   // 15 seconds while it is open" — was read every three minutes until someone opened Tickets.
   useFacilityLiveView();
-  // The agent's presence and what waits for this profile's answer, for the
-  // footer button's label — read here, as the top bar reads them for its dot
-  // (agentView.awaitingAnswer), instead of being handed across (2.496.268).
-  const { status: agentStatus, messages: agentMessages } = useAgent();
-  const agentOnline = agentStatus?.state === "online";
-  const agentWaiting = useMemo(() => awaitingAnswer(agentMessages), [agentMessages]);
   const dialogRef = useModalA11y(onClose);
   // Firmware / add-on updates waiting — Home Assistant's own `update` domain counts them, per device and per add-on.
   const { entities } = useHA();
-  const updatesAvailable = useMemo(() => (doors.updates
-    ? Object.values(entities).filter((e) => e.entity_id.startsWith("update.") && e.state === "on").length : 0),
-  [entities, doors.updates]);
+  // ...and WHICH, said on hover (owner, 2026-10-20) — still nothing to press (config/updatesWaiting).
+  const updates = useMemo(() => (doors.updates ? updatesWaiting(entities) : []), [entities, doors.updates]);
+  const updatesAvailable = updates.length;
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -96,7 +85,7 @@ export default function CockpitModal({
               SAYS so — nothing to press; it used to be a line at the bottom of the Overview. */}
           {updatesAvailable > 0 && (
             <span className="icon-btn header-icon-btn header-icon-badge" role="status"
-              title={`${updatesAvailable} update${updatesAvailable === 1 ? "" : "s"} available`}
+              title={updatesTip(updates)}
               aria-label={`${updatesAvailable} update${updatesAvailable === 1 ? "" : "s"} available`}>
               <RefreshCw size={18} />
               <span className="icon-btn-count" aria-hidden="true">{formatCountBadge(updatesAvailable)}</span>
@@ -115,18 +104,7 @@ export default function CockpitModal({
           )}
         </div>
 
-        {/* The VESTA Agent's door on the left when there is an agent — placed
-            the way Settings places "Advanced Settings": a ghost button that
-            leaves the dialog, never beside Close. */}
-        {/* ONE footer on every tab (owner, 2026-10-14): the VESTA Agent's door, then Close — no tab of its own note */}
-        <ModalFooter onClose={onClose}
-          leading={doors.agent ? (
-          <button className="btn ghost" onClick={() => { onClose(); onOpenAgent(); }}
-            title={`VESTA Agent — ${agentOnline ? "online" : "offline"}`
-              + (agentWaiting > 0 ? `, ${agentWaiting} message${agentWaiting === 1 ? "" : "s"} to answer` : "")}>
-            <Bot size={18} /> VESTA Agent{agentWaiting > 0 ? ` (${formatCountBadge(agentWaiting)})` : ""}
-          </button>
-        ) : undefined} />
+        <ModalFooter onClose={onClose} />
       </div>
     </div>
   );

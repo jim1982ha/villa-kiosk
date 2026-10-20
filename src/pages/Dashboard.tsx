@@ -32,7 +32,6 @@ import RoomChoiceSheet, { type RoomChoice } from "@/components/hud/RoomChoiceShe
 import { useProfile } from "@/auth/ProfileContext";
 import { panelMapping, profileView, roleCan } from "@/auth/permissions";
 import { doorsFor } from "@/auth/doors";
-import AgentModal from "@/components/agent/AgentModal";
 import { useAgent } from "@/agent/AgentContext";
 import GuestReportModal from "@/components/fm/GuestReportModal";
 import { useHA } from "@/ha/HAStateStore";
@@ -844,7 +843,6 @@ export default function Dashboard() {
           onClose={() => closeSurface("cockpit")}
           onOpenEntity={(id) => handOver("cockpit", id)}
           doors={doors}
-          onOpenAgent={() => openSurface("agent")}
           tab={screen.cockpitTab}
           onTab={(tab) => go({ type: "cockpitTab", tab })}
           reportFaultFor={screen.faultFor ?? undefined}
@@ -856,12 +854,6 @@ export default function Dashboard() {
         />
       )}
 
-      {shown("agent") && (
-        <AgentModal
-          onClose={() => closeSurface("agent")}
-          onOpenEntity={(id) => handOver("agent", id)}
-        />
-      )}
 
       {screen.guestReportFor !== null && (
         <GuestReportModal
