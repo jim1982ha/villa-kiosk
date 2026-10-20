@@ -601,9 +601,6 @@ class Vesta:
             res = await self.turns.chat(person, cid, prompt, resume=resume, asked=asked, image=image, request=request)
             if res.session_id:
                 self.state.set_session(cid, res.session_id)
-                # what the conversation read so far, this turn's readings included (a skill's offer judges it)
-                res = dataclasses.replace(res, read=self.state.conversation_read(
-                    res.session_id, resume if isinstance(resume, str) else None, res.read))
             log.info("Answered %s in chat %s (%s, %.0f s)%s", person.name if person else "system", cid,
                      f"{res.cost_usd:.3f} USD" if isinstance(res.cost_usd, (int, float)) else "cost unknown",
                      time.monotonic() - began, f", error {res.error}" if res.error else "")

@@ -225,9 +225,9 @@ def test_after_reading_is_the_skills_list_and_a_wrong_one_is_refused(tmp_path):
         parse_skill("x", str(bad))
 
 
-def test_an_answer_from_what_the_conversation_read_before_carries_it_too(tmp_path, monkeypatch):
-    # owner, 2026-10-20: the House Pump question asked again was answered in 7 s from the turn before's readings — it
-    # read nothing itself, and no button came. The conversation's readings count; a new conversation starts with none.
+def test_a_later_answer_that_read_nothing_carries_no_button_in_the_same_conversation(tmp_path, monkeypatch):
+    # owner, 2026-10-20: "i see the button `investigate this` for all the message responded by the agent" — 0.12.297
+    # carried a conversation's readings to every later answer in it; the button follows the answer's own readings only
     from ai_fake import FakeAI
     from vesta_agent import runner
     ha = FakeHA(tools=[ha_tool("ha_get_history", entity_ids="string")], answers={"ha_get_history": "[]"})
@@ -243,13 +243,9 @@ def test_an_answer_from_what_the_conversation_read_before_carries_it_too(tmp_pat
     ai = FakeAI(lambda call: runner.RunResult("It ran 21 h this week.", "s1", False, 0.01, [], None, None),
                 act=reads_first).install(monkeypatch)
     run(v.converse(JM, v.policy().person(JM), ASKED))
-    run(v.converse(JM, v.policy().person(JM), ASKED))                    # the same conversation, nothing read
-    assert ai.runs[-1]["resume"] == "s1"
     assert [b["text"] for b in _offered(v, JM)[0]] == [LABEL]
-    v.state.set_session(JM, None)                                         # a new conversation: nothing read in it
-    ai.answer = lambda call: runner.RunResult("Hello.", "s2", False, 0.01, [], None, None)
-    run(v.converse(JM, v.policy().person(JM), "hello"))
-    assert _offered(v, JM)[0] == []
+    run(v.converse(JM, v.policy().person(JM), "is everything ok?"))      # the same conversation, nothing read
+    assert ai.runs[-1]["resume"] == "s1" and _offered(v, JM)[0] == []
 
 
 def test_the_offer_can_be_declined_both_buttons_go_and_nothing_runs(tmp_path, monkeypatch):

@@ -98,7 +98,9 @@ KV_FAMILIES: dict[str, str] = {
     "owner_told:": RECORDS,         # when the owner was last told of a problem (a 12-hour pause)
     "request_searches:": RECORDS,   # a command skill's request's web searches, for its page (command_request.py)
     "command_offer:": RECORDS,      # a command skill a reply offered: its skill, the person's question (command_offers.py)
-    "session_read:": RECORDS,       # the reading tools a conversation used so far (conversation_read)
+    # retired (0.12.300: the Investigate button follows only the answer's own readings): the rows 0.12.297-299 wrote
+    # are pruned with the records
+    "session_read:": RECORDS,
     "job:": CURRENT,                # a scheduled job's last slot: the Overview's "last run", one per job
     "jobrun:": CURRENT,             # a scheduled run in progress: one left at start was cut by a stop (in_progress.py)
     "jobend:": CURRENT,             # how a scheduled job's last run ended (ended / failed / cut, when, why): in_progress.py
@@ -605,18 +607,6 @@ class State:
                             "on conflict(chat_id) do update set session_id=excluded.session_id, last_used=excluded.last_used",
                             (int(chat_id), session_id, now.isoformat()))
             self.db.commit()
-
-    def conversation_read(self, session_id: str, resumed: str | None, read: list[str]) -> list[str]:
-        """The reading tools a conversation has used so far: those of the one it `resumed` and this turn's `read`,
-        kept under `session_id`. ⚠️ AN ANSWER FROM WHAT WAS READ BEFORE (owner, 2026-10-20: the House Pump question
-        asked again was answered in 7 s from the readings of the turn before, read nothing, and got no "Investigate
-        this"): a skill's `offer: after_reading` judges the conversation, not only its last turn."""
-        before = json.loads(self.get(f"session_read:{resumed}") or "[]") if resumed else []
-        kept = json.loads(self.get(f"session_read:{session_id}") or "[]")
-        out = list(dict.fromkeys([*before, *kept, *read]))
-        if out:
-            self.put(f"session_read:{session_id}", json.dumps(out))
-        return out
 
     # ------------------------------------------------------------------ continue
     def new_continuation(self, chat_id: int, session_id: str, requested_by: int | None,

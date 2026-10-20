@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.290 (20 October 2026)
+
+- State.conversation_read and its use in app._converse removed: `offer: after_reading` judges the answer's own turn
+  again (owner, 2026-10-20: "i see the button `investigate this` for all the message responded by the agent"). The
+  `session_read:` rows 0.6.287-289 wrote are pruned with the records. Test: test_command_offer (a later answer in the
+  same conversation that read nothing carries none).
+
 ## 0.6.289 (20 October 2026)
 
 - investigate timeline: `by_hour` — runs' starts (and a flagged state's entries) per hour of a period of 1-24 h, each
