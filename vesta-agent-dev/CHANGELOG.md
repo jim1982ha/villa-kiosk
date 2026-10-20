@@ -1,3 +1,9 @@
+## 0.12.303
+
+What you will see:
+- When the Agent asks for the past of a device that does not exist (at 21:57 it made up a name for the House Pump),
+  it is told so plainly, instead of "nothing recorded", which it took for a pump that did nothing.
+
 ## 0.12.302
 
 What you will see:
