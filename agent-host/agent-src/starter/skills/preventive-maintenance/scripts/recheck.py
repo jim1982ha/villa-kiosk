@@ -128,7 +128,7 @@ def gone_offline(store, pack, client, now: datetime, params, zone: str, settle_m
                                  settle_minutes=settle_minutes)
     actions = result.moved(moved + rec["task_ids"])
     send = N.told_now({"villa": pack.villa, "as_of": day, "new_findings": rec["new"], "again": rec["again"]},
-                      title=f"{pack.villa or 'The villa'}, devices offline on {day_time_label(at)}.")
+                      title=f"{pack.villa or 'The villa'}, devices offline on {day_time_label(at)}.", store=store, at=now)
     store.audit("preventive-maintenance", "gone_offline", {"findings": [d["id"] for d in rec["new"] + rec["again"]]})
     return {"actions": actions, "send": send, "found": [d["id"] for d in rec["new"] + rec["again"]]}
 
@@ -322,16 +322,18 @@ def main(argv=None):
             print(f"day_rechecks names {e}, which cannot be read in the day: remove it from the skill's day_rechecks "
                   "(its faults then say the nightly time)", file=sys.stderr)
             return 1
-        # the night's own rule for a close: nobody is messaged (told_now tells what is new or back, never a close);
+        # a close sends nothing new: a P2 told earlier says it on its own message (told_cleared, owner 2026-10-20);
         # the Kiosk's faults follow through the engine's repair
-        print(json.dumps({"actions": day["actions"], "send": [], result.FAULTS_CHANGED: bool(day["actions"])},
-                         default=str))
+        print(json.dumps({"actions": day["actions"], "send": [],
+                          "edits": N.told_cleared(ctx.store, day["closed"], now, ctx.zone, ctx.settings),
+                          result.FAULTS_CHANGED: bool(day["actions"])}, default=str))
         return 0
     res = back_online(ctx.store, lambda: ctx.live_client, now, ctx.params.behaviour("back_online_minutes"), ctx.zone)
     found = gone_offline(ctx.store, ctx.pack, lambda: ctx.live_client, now, ctx.params, ctx.zone,
                          N.still_there_minutes(ctx.settings))
     told = reopened_untold(ctx.store, ctx.zone, ctx.settings) + still_there_untold(ctx.store, ctx.zone, ctx.settings)
     print(json.dumps({"actions": result.moved(res["actions"] + found["actions"]), "send": found["send"] + told,
+                      "edits": N.told_cleared(ctx.store, res["closed"], now, ctx.zone, ctx.settings),
                       result.FAULTS_CHANGED: bool(res["closed"] or found["actions"])}, default=str))
     return 0
 

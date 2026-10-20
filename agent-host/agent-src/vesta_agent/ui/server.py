@@ -372,6 +372,11 @@ class UI:
         dest = to_trash(self.s.skills_dir, path, name)
         log.info("UI: skill %s deleted (kept in skills/%s)", name, TRASH)
         self.files.folder_change("Skills", f"{name} deleted (kept in skills/{TRASH})", name, dest, None)
+        # a deleted skill is no longer switched off either (owner, 2026-10-20: a deleted test skill stayed in skills_off)
+        off = to_form(self.files.policy_now()[0])["skills_off"]
+        if name in off:
+            self.files.edit_policy({"skills_off": [x for x in off if x != name]}, f"{name} no longer switched off: deleted",
+                                   "Skills")
         return web.json_response({"deleted": name, "kept_in": f"{TRASH}/{os.path.basename(dest)}"})
 
     async def skill_files(self, request):

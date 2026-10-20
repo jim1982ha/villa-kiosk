@@ -60,6 +60,9 @@ closure, and never raise the same thing twice.
      again once it is read still bad (settings.yaml `still_there_after_close`).
    - `send`: each P2 finding (a critical device offline, a battery at 10%), to the
      FM at once with the check to perform.
+   - `edits`: a P2 told earlier that has cleared is said on ITS message, rewritten —
+     the item marked, the title too once all cleared (settings.yaml `told_cleared`);
+     never a new message.
    - The 07:00 FM digest (reports skill) reads the open problems themselves
      (`vesta_shared.problems`): a problem that came back within 7 days is listed
      as new, "(again: N times in 7 days)", and so is its Kiosk fault.

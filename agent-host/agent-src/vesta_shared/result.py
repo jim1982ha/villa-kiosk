@@ -76,7 +76,7 @@ def _mark(m: dict, mark: str | None) -> dict:
 
 def message(to: str, text: str, *, status: str | None = None, incident: int | None = None, buttons: bool = False,
             attachment: str | None = None, stage: str | None = None, mark: str | None = None,
-            title: str | None = None, first_in_line: bool = False) -> dict:
+            title: str | None = None, first_in_line: bool = False, key: str | None = None) -> dict:
     """A message for `to` (here · owner · fm). `buttons`: the alert's Done / Need help for `incident`; `stage`: what
     this notice about it is (STAGES) — the engine writes its heading and its history line. "{time}" in `text` is the
     villa's time when it is sent (10/10/2026 15:04), as in a settle note. `status`: where it stands, shown under a line
@@ -104,7 +104,27 @@ def message(to: str, text: str, *, status: str | None = None, incident: int | No
         m["attachment"] = attachment
     if title:
         m["title"] = title          # a report's title: the agent writes it, and "To:" under it (message_format.titled)
+    if key is not None:
+        m["key"] = _key(key)        # a later result may rewrite it in place (edit), never a new message
     return _mark(m, mark)
+
+
+def _key(key: str) -> str:
+    key = str(key)
+    if not key or len(key) > 120 or "\n" in key:
+        raise ValueError("a message key is one line of at most 120 characters")
+    return key
+
+
+def edit(key: str, text: str, title: str | None = None) -> dict:
+    """Rewrite the message sent earlier with `key` (message(key=…)), in every chat it went to, in its layout: its new
+    `text` and, when given, its new `title`. ⚠️ NEVER A NEW MESSAGE (owner, 2026-10-20): one that can no longer be
+    rewritten (Telegram refuses, it was deleted, the text is longer than one message) is left as it is — the engine
+    logs it. Carried under a result's "edits"."""
+    e = {"key": _key(key), "text": text}
+    if title:
+        e["title"] = title
+    return e
 
 
 def fault_note(check: str | None) -> str | None:

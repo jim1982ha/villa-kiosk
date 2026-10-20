@@ -190,6 +190,20 @@ class State:
     # tools.py — each parsing its own. The stored keys are unchanged, so the
     # records an agent already holds keep working with no migration.
 
+    # A message a skill may rewrite later (result.message key=, result.edit): where it went in each chat, its title and
+    # its "To:" as sent — Outcome.rewrite puts it back in the same layout (owner, 2026-10-20).
+    def keep_message(self, key: str, chat: int, record: dict) -> None:
+        self.put(f"message:{key}:{int(chat)}", json.dumps(record))
+
+    def kept_messages(self, key: str) -> dict[int, dict]:
+        out = {}
+        for k, v in self.kv_prefix(f"message:{key}:").items():
+            try:
+                out[int(k.rsplit(":", 1)[1])] = json.loads(v)
+            except (ValueError, IndexError):
+                continue
+        return out
+
     # A chat Telegram refused the last message to: a person who never opened a private chat with the bot, a group the
     # bot left or whose id changed. One row per chat, gone at the next message that arrives (delivery.py).
     def unreachable(self) -> dict[int, dict]:

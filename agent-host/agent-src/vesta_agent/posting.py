@@ -18,8 +18,10 @@ from vesta_shared.messaging import telegram_caption_chars, telegram_message_char
 
 
 class Poster:
-    def __init__(self, *, send: Callable[..., Awaitable], thread=None, notices=None, timezone_name: str = "UTC"):
+    def __init__(self, *, send: Callable[..., Awaitable], thread=None, notices=None, timezone_name: str = "UTC",
+                 edit: Callable[..., Awaitable] | None = None):
         self.send = send                # delivery.Delivery.send — the message id, or None when nothing arrived
+        self.edit = edit                # delivery.Delivery.edit — a message already sent, rewritten (rewrite)
         self.thread = thread            # incident_thread.IncidentThread: what each chat shows of an incident or request
         self.notices = notices          # notice.Notices: the heading
         self.tz = timezone_name         # "{time}" in a message: the villa's time when it is sent
@@ -44,7 +46,7 @@ class Poster:
         # title and "To:" — every role it went to (`also`), the same in every chat — and cuts a long one into whole
         # messages "(1/2)", "(2/2)". A text a skill already wrote in the shape, with "To:" left for the agent, is filled.
         answering = bool(origin and origin.holds and chat == origin.chat)
-        to = audience(also or (self.notices.roles_for(chat, roles) if self.notices else ())) if incident is None else ""
+        to = self.to_line(chat, roles, also) if incident is None else ""
         filled = fill_to(text, to) if incident is None and not plain else None
         head = None
         if filled is not None:
@@ -67,6 +69,20 @@ class Poster:
         if mid and thread is not None and self.thread is not None:
             await self.thread.post(thread, chat, mid, {**p, "limit": limit}, buttons=bool(keyboard), keyboard=keyboard)
         return mid
+
+    def to_line(self, chat: int, roles=(), also=None) -> str:
+        """The "To:" of a message sent on its own in `chat` — post's, and rewrite's for the same message."""
+        return audience(also or (self.notices.roles_for(chat, roles) if self.notices else ()))
+
+    async def rewrite(self, chat: int, message_id: int, title: str, to: str, text: str) -> bool:
+        """A titled message already sent, rewritten in place in the same layout (owner, 2026-10-20: a P2 of the night
+        check that clears is said on its own message, never a new one). Only a message that was ONE page and still is;
+        False when it cannot be (two pages, Telegram off or refusing: an old or deleted message) — the caller says
+        nothing more."""
+        docs = pages(title, to, text, telegram_message_chars())
+        if self.edit is None or len(docs) != 1:
+            return False
+        return bool(await self.edit(int(chat), int(message_id), docs[0]))
 
     async def _pages(self, chat, title, to, text, keyboard, document, photo, origin) -> int | None:
         """A titled report, one message per page; its file, photo and buttons go with the last. The last id, or None

@@ -40,6 +40,7 @@ from ..places import title, where
 from ..policy import RULE_WORDS, WORDS, Policy, problems as policy_problems, setup_fields
 from ..skills import FILE_NAME, SKILL_NAME, VILLA_PREFIX, SkillError, skill_files, parse_skill, ai_jobs, job_owners, job_starters
 from vesta_shared import limits as code_limits
+from .policy_doc import existing_off
 
 # ⚠️ WHAT THE EXPORT OFFERS, IN ITS WORDS (architecture review 9): the page typed these and one named a card that no
 # longer existed ("The AI", "allowed lists"). key → (the words, the note under them, ticked at first), in order.
@@ -54,7 +55,8 @@ PART_WORDS = {
     "keep": (WORDS["settings.keep"], None, True),
     "limits": ("The Limits tab's values", "the limits written in the agent's code; those inside the skills and the "
                "rules go with them", True),
-    "instructions": ("instructions.md", "your standing rules for the agent", False),
+    # ticked at first (owner, 2026-10-20): "copy this villa as it is" includes its standing rules
+    "instructions": ("instructions.md", "your standing rules for the agent", True),
 }
 PARTS = tuple(PART_WORDS)
 #: what never leaves a villa: (words, note)
@@ -96,7 +98,7 @@ def export(settings, skills, parts: set[str]) -> bytes:
     if "tools" in parts:
         rules.update({k: raw[k] for k in TOOL_SECTIONS if k in raw})
         if isinstance(rules.get("skills_off"), list):
-            rules["skills_off"] = [n for n in rules["skills_off"] if n in have]      # a skill since deleted: nothing
+            rules["skills_off"] = existing_off(rules["skills_off"], have)      # a skill since deleted: nothing
     limits_now = _limits_raw(os.path.join(settings.config_dir, code_limits.FILE)) if "limits" in parts else {}
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
@@ -201,14 +203,14 @@ def _merged_rules(current: dict, imported: dict | None, known: set[str] | None =
             s.update(v)
             out["settings"] = s
         elif k in (*ACTION_SECTIONS, *TOOL_SECTIONS):
-            out[k] = [n for n in v if n in known] if k == "skills_off" and known is not None and isinstance(v, list) else v
+            out[k] = existing_off(v, known) if k == "skills_off" and known is not None and isinstance(v, list) else v
     return out
 
 
 def unknown_off(imported: dict | None, known: set[str]) -> list[str]:
     """The skills a setup switches off that this villa will not have."""
     off = (imported or {}).get("skills_off")
-    return [n for n in off if n not in known] if isinstance(off, list) else []
+    return [n for n in off if n not in existing_off(off, known)] if isinstance(off, list) else []
 
 
 def _known(skills, setup: dict) -> set[str]:

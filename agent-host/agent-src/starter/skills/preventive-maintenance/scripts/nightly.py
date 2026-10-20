@@ -215,6 +215,9 @@ def run(args) -> dict:
     result = {"as_of": today.isoformat(), "villa": pack.villa, "features_written": features_written,
               "new_findings": new, "still_open": still_open, "closed": closed, "handed_over": night["handed_over"], "again": again,
               "tasks_to_create": tasks, "tasks_resolved": resolved, "notes": notes}
+    # the P2s told at once, kept to be rewritten; and the earlier ones that cleared tonight, said on their own message
+    result["send"] = told_now(result, store=store, at=now_ref)
+    result["edits"] = told_cleared(store, [o["id"] for o in closed], now_ref, zone, ctx.settings)
     if args.out:
         with open(args.out, "w", encoding="utf-8") as fh:
             json.dump(result, fh, indent=1, default=str)
@@ -446,20 +449,77 @@ def integration_name(platform: str, devices: int) -> str:
     return f"{platform} integration ({devices} devices)"
 
 
-def told_now(res: dict, title: str | None = None) -> list[dict]:
+#: a P2 message of this skill, kept to rewrite when one of its items clears (settings.yaml `told_cleared`): TOLD + its
+#: moment holds {title, sections}; TOLD + "of:" + a finding's id, the key of the message that carried it
+TOLD = "pm-told:"
+
+
+def told_now(res: dict, title: str | None = None, store=None, at: datetime | None = None) -> list[dict]:
     """The facility manager's message at 02:00: each P2 found new — or back again, with how often (architecture review
     23: it came back in silence) — with what to do, in the one shape of every alert and report (vesta_shared.
-    message_format; review 30: it kept "For: … / -------" and its own "What to check:")."""
+    message_format; review 30: it kept "For: … / -------" and its own "What to check:"). With the skill's `store`, the
+    message is kept under a key (result.message key=), so that a P2 clearing later rewrites it (told_cleared)."""
     def item(d):
         note = result.fault_note(d.get("check"))
         return f"- {_no_code(again_title(d.get('summary', ''), d.get('again')))}" + (f"\n{note}" if note else "")
-    new = [item(d) for d in res["new_findings"] if d.get("severity") == "P2"]
-    back = [item(d) for d in res["again"] if d.get("severity") == "P2"]
-    if not (new or back):
+    sections = [(label, [[d.get("id"), item(d)] for d in ds if d.get("severity") == "P2"])
+                for label, ds in (("New", res["new_findings"]), ("Back again", res["again"]))]
+    if not any(items for _, items in sections):
         return []
     title = title or f"{res.get('villa') or 'The villa'}, night check on {day_label(date.fromisoformat(res['as_of']), numeric=True)}."
-    body = split_title(document(title, "", [("New", new), ("Back again", back)]))[1]
-    return [result.message("fm", body, title=title)]
+    key = None
+    ids = [i for _, items in sections for i, _ in items]
+    if store is not None and all(isinstance(i, int) for i in ids):
+        key = f"{TOLD}{(at or datetime.now(timezone.utc)).astimezone(timezone.utc).isoformat()}"
+        store.cache_put(key, {"title": title, "sections": sections, "cleared": {}})
+        for i in ids:
+            store.cache_put(f"{TOLD}of:{i}", key)
+    return [result.message("fm", _told_body(title, sections, {}, ""), title=title, key=key)]
+
+
+def _told_body(title: str, sections, cleared: dict, line: str) -> str:
+    """The P2 message's text: each item, a cleared one with `line` ({time}: when it cleared) after its first line."""
+    def said(i, text):
+        if str(i) not in cleared:
+            return text
+        first, _, rest = text.partition("\n")
+        return f"{first} {line.format(time=cleared[str(i)])}" + (f"\n{rest}" if rest else "")
+    return split_title(document(title, "", [(label, [said(i, t) for i, t in items]) for label, items in sections
+                                            if items]))[1]
+
+
+def told_cleared(store, closed_ids, at: datetime, zone: str, settings: dict) -> list[dict]:
+    """The P2 messages to rewrite now that these findings cleared (owner, 2026-10-20: "when a P2 clears, Telegram must
+    say so — as an UPDATE of the existing message, never a new message"): each cleared item marked with settings.yaml
+    `told_cleared.line`, the title `all_title` once every item of the message cleared. Nothing when `tell` is off, or
+    when the words are not given (named on stderr, never guessed)."""
+    words = settings.get("told_cleared") or {}
+    if not words.get("tell"):
+        return []
+    line = words.get("line")
+    if not isinstance(line, str) or "{time}" not in line:
+        print("preventive-maintenance settings.yaml: told_cleared needs `line` with {time}: a P2 that clears is not "
+              "said on its message", file=sys.stderr)
+        return []
+    when = clock(at, zone or "UTC", days=False)
+    keys = []
+    for fid in closed_ids or ():
+        key = store.cache_get(f"{TOLD}of:{int(fid)}")
+        rec = store.cache_get(key) if key else None
+        if not rec:
+            continue
+        rec.setdefault("cleared", {})[str(int(fid))] = when
+        store.cache_put(key, rec)
+        if key not in keys:
+            keys.append(key)
+    out = []
+    for key in keys:
+        rec = store.cache_get(key)
+        ids = [str(i) for _, items in rec["sections"] for i, _ in items]
+        done = all(i in rec["cleared"] for i in ids)
+        title = words["all_title"].format(title=rec["title"]) if done and words.get("all_title") else rec["title"]
+        out.append(result.edit(key, _told_body(rec["title"], rec["sections"], rec["cleared"], line), title=title))
+    return out
 
 
 def _device_still_talks(pack, states: dict, entity_id: str, now: datetime, hours: float) -> bool:
@@ -542,7 +602,8 @@ def main(argv=None):
     out[result.FAULTS_CHANGED] = bool(res["new_findings"] or res["still_open"] or res["closed"] or res.get("handed_over")
                                       or res["again"] or res["tasks_to_create"] or res["tasks_resolved"])
     out["actions"] = []
-    out["send"] = told_now(res)
+    out["send"] = res["send"] if "send" in res else told_now(res)
+    out["edits"] = res.get("edits") or []
     print(json.dumps(out, indent=1, default=str))
     return 0
 

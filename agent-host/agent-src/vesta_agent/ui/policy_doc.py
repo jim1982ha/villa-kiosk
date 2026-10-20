@@ -126,6 +126,29 @@ def ai_moved(text: str, owners: dict[str, str], starters: dict[str, dict]) -> st
     return buf.getvalue()
 
 
+def existing_off(names, have) -> list:
+    """THE rule for `skills_off` (owner, 2026-10-20: "thfdsdsjfsf", a skill long deleted, stayed switched off): only
+    names of skills the villa has. Used by every save of the page (known_off), the setup export and its import."""
+    return [n for n in (names or []) if n in have]
+
+
+def known_off(text: str, have: set[str]) -> str:
+    """The file with `skills_off` holding only the skills the villa has (existing_off). A file with nothing to drop
+    comes back unchanged, byte for byte."""
+    y = _yaml()
+    doc = y.load(text) if (text or "").strip() else None
+    off = doc.get("skills_off") if isinstance(doc, CommentedMap) else None
+    if not isinstance(off, list):
+        return text
+    keep = existing_off(off, have)
+    if len(keep) == len(off):
+        return text
+    doc["skills_off"] = _node(keep)
+    buf = io.StringIO()
+    y.dump(doc, buf)
+    return buf.getvalue()
+
+
 def _node(value: Any) -> Any:
     """A plain value as a ruamel node, in block style ("key: value" on lines), [] / {} when empty."""
     if isinstance(value, dict):

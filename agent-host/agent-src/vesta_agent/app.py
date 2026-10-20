@@ -184,7 +184,7 @@ class Vesta:
         self.thread.reheading = self.notices.heading         # a replaced status: every earlier step listed again
         # putting one message in one chat (posting.py): the alerts and the approval requests both use it
         self.poster = Poster(send=self.delivery.send, thread=self.thread, notices=self.notices,
-                             timezone_name=settings.timezone)
+                             timezone_name=settings.timezone, edit=self.delivery.edit)
         # an approval request from start to end (approvals.py); the siren's gate asks through it too
         self.approvals = Approvals(state=self.state, policy=self.policy, actions=self.actions, thread=self.thread,
                                    post=self.poster.post, timezone_name=settings.timezone, safe=self._safe)

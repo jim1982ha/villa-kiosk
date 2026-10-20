@@ -61,7 +61,7 @@ log = logging.getLogger("vesta.outcome")
 #: What a script result can ask the engine to carry out — the keys carry_out reads. ⚠️ ONE LIST
 #: (architecture review, 0.12.38): the model's run_skill_script tool kept its own copy, so a key added here
 #: would be carried out on schedule and silently skipped when the model ran the same script.
-CARRIED_KEYS = ("send", "actions", "siren_gate", "settle", "ha_messages")
+CARRIED_KEYS = ("send", "actions", "siren_gate", "settle", "ha_messages", "edits")
 
 
 def has_work(res) -> bool:
@@ -81,7 +81,8 @@ async def camera_photo(reader, entity_id) -> tuple[str, str] | None:
 
 class Outcome:
     def __init__(self, *, policy: Callable, state, send: Callable[..., Awaitable], actions, reader, tickets, buttons,
-                 thread, notices=None, out_dir: str = "", timezone_name: str = "UTC", poster=None, ask=None, incidents=None):
+                 thread, notices=None, out_dir: str = "", timezone_name: str = "UTC", poster=None, ask=None, incidents=None,
+                 edit: Callable[..., Awaitable] | None = None):
         self.policy = policy
         self.state = state
         self.actions = actions
@@ -97,7 +98,22 @@ class Outcome:
         self.ask: Callable[..., Awaitable[int]] | None = ask
         # putting one message in one chat (posting.py), shared with the approvals; built from `send` (delivery.Delivery.send)
         # and the parts above when alone
-        self.poster = poster or Poster(send=send, thread=thread, notices=notices, timezone_name=timezone_name)
+        self.poster = poster or Poster(send=send, thread=thread, notices=notices, timezone_name=timezone_name, edit=edit)
+
+    async def rewrite(self, e: dict, skill_name: str | None) -> int:
+        """A message sent earlier with this `key` (result.message key=), rewritten in every chat it went to, in its
+        layout (Poster.rewrite). Never a new message: one that can no longer be rewritten is logged, nothing said."""
+        key, n = str(e.get("key") or ""), 0
+        if not key:
+            return 0
+        for chat, rec in self.state.kept_messages(key).items():
+            if await self.poster.rewrite(chat, rec["mid"], e.get("title") or rec.get("title") or "", rec.get("to") or "",
+                                         str(e.get("text") or "")):
+                n += 1
+            else:
+                self.state.log("rewrite_skipped", {"key": key, "chat": chat, "skill": skill_name})
+                log.info("Skill %s: its message %s in chat %s could not be rewritten; nothing sent", skill_name, key, chat)
+        return n
 
     # ------------------------------------------------------------------ carry out
     async def carry_out(self, res: dict, skill_name: str | None = None, origin: Origin | None = None,
@@ -105,7 +121,7 @@ class Outcome:
         """Do what the script decided. Returns what was done, for the caller's answer and the tests. `folder`: the run's
         own (config.Settings.in_folder), where its attachments are; the out folder itself without one. `skip`: chats
         already told (the owner told of a refused key is not told twice in the chat that just read it)."""
-        done = {"sent": 0, "not_sent": 0, "tickets": 0, "resolved": 0, "unrouted": 0}
+        done = {"sent": 0, "not_sent": 0, "tickets": 0, "resolved": 0, "unrouted": 0, "edited": 0}
         if not isinstance(res, dict) or not res:
             return done
         route = Routing(self.policy())
@@ -205,6 +221,12 @@ class Outcome:
             chats.add(chat)
             done["sent"] += 1
             done.setdefault("messages", {})[chat] = mid          # each chat's message: a page's buttons go under it
+            if item.get("key") and not iid:
+                # a message a later result may rewrite (result.edit): where it went, its title and its "To:" as sent
+                self.state.keep_message(item["key"], chat, {"mid": int(mid), "title": item.get("title") or "",
+                                                            "to": self.poster.to_line(chat, roles, sent_to.get(id(item)))})
+        for e in res.get("edits") or []:
+            done["edited"] += await self.rewrite(e, skill_name)
         if self.notices:
             for (iid, stage), chs in noticed.items():
                 self.notices.record(iid, stage, chs)

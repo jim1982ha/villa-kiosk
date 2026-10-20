@@ -47,6 +47,15 @@ reopened_in_kiosk:
   tell: fm
   title: "Fault reopened in the Cockpit"
 
+# A P2 of this skill (a critical device offline, a battery at 10 %) is told to the facility manager at once; when it
+# clears, that SAME message says so — rewritten, never a new message (owner, 2026-10-20). `line`: added after the
+# cleared item ({time}: the villa's time it cleared); `all_title`: the message's title once every item of it cleared
+# ({title}: its own). `tell: false` leaves the messages as sent. A message Telegram no longer lets be rewritten stays.
+told_cleared:
+  tell: true
+  line: "✅ Back to normal at {time}"
+  all_title: "{title} All back to normal."
+
 # A fault of the night check's a person closed in the Cockpit while its problem was still there (owner, architecture
 # review 2026-10-19: one rule with the alert desk's). The close holds until the device is read again — recheck.py
 # within 5 minutes for the rules this skill reads again (skill.yaml `rechecks`), else the next night check — at least

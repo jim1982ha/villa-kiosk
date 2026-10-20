@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.280 (20 October 2026)
+
+- A message a skill may rewrite later: result.message(key=…) — the engine keeps where it went, its title and its
+  "To:" (State.keep_message / kept_messages) — and result.edit(key, text, title) under a result's `edits`
+  (outcome.CARRIED_KEYS): Outcome.rewrite → Poster.rewrite renders the same single-page layout and edits it in place
+  (Delivery.edit). Never a new message: a message of two pages, or one Telegram refuses, is left and logged
+  (rewrite_skipped).
+- preventive-maintenance: a P2 it told (told_now, with its store) is kept; when one of its findings clears — the
+  night, the day recheck, the back-online read — told_cleared rewrites that message: the item marked, the title too
+  once every item cleared (settings.yaml `told_cleared`: tell, line, all_title).
+- Copy the setup: instructions.md ticked at first. policy_doc.existing_off is THE rule for `skills_off` (only skills
+  the villa has): the export, the import, every save of the page (PageFiles.form_policy → known_off) and deleting a
+  switched-off skill (it leaves the list).
+
 ## 0.6.279 (20 October 2026)
 
 - Copy the setup: a new part, the Limits tab's values (limits.yaml), ticked by default — checked on import against

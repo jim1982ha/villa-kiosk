@@ -112,3 +112,44 @@ def test_an_import_shows_and_writes_the_limits_and_leaves_an_unknown_skill_out(t
     assert yaml.safe_load(open(os.path.join(other.config_dir, "limits.yaml"))) == {"investigate.max_lines": 300}
     pol = yaml.safe_load(open(other.policy_path))
     assert pol["skills_off"] == ["reports"]
+
+
+# owner, 2026-10-20: "make sure the 'your standing rules for the agent' option is checked by default"
+def test_the_standing_rules_are_ticked_at_first():
+    from vesta_agent.ui.setup_copy import offer
+    ticks = {p["key"]: p["on"] for p in offer()["parts"]}
+    assert ticks["instructions"] is True and all(ticks.values())
+
+
+# owner, 2026-10-20 ("fully fix all gaps"): the villa's own file keeps no skill it does not have — every save of the
+# page cleans it, and deleting a switched-off skill takes it off the list
+def test_a_page_save_drops_a_switched_off_skill_the_villa_does_not_have(tmp_path):
+    s = _with_old_ai(tmp_path)
+    async def fn(c):
+        from vesta_agent.ui.changes import rev
+        r = await c.put("/api/policy/form", json={"form": {"settings": {"web_search": True}},
+                                                  "rev": rev(open(s.policy_path, "rb").read())}, headers=HDR)
+        return r.status, await r.json()
+    st, body = _call(s, fn)
+    assert st == 200, body
+    assert "thfdsdsjfsf" not in (yaml.safe_load(open(s.policy_path)).get("skills_off") or [])
+
+
+def test_deleting_a_switched_off_skill_takes_it_off_the_list(tmp_path):
+    s = _villa(tmp_path)
+    with open(s.policy_path, "a", encoding="utf-8") as f:
+        f.write("skills_off:\n- investigate\n")
+    async def fn(c):
+        r = await c.delete("/api/skills/investigate", json={}, headers=HDR)
+        return r.status, await r.json()
+    st, body = _call(s, fn)
+    assert st == 200, body
+    assert "investigate" not in (yaml.safe_load(open(s.policy_path)).get("skills_off") or [])
+
+
+def test_known_off_keeps_a_clean_file_byte_for_byte():
+    from vesta_agent.ui.policy_doc import existing_off, known_off
+    text = "settings: {web_search: true}  # mine\nskills_off:\n- reports\n"
+    assert known_off(text, {"reports"}) == text
+    assert yaml.safe_load(known_off(text, set()))["skills_off"] == []
+    assert existing_off(["a", "b"], {"b"}) == ["b"]
