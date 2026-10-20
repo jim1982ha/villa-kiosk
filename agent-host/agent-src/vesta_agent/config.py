@@ -237,7 +237,17 @@ def load() -> Settings:
 INSTRUCTION_REWRITES = (
     ("6. One question at most per message. Short. The reader's language.",
      "6. One question at most per message. Short for a status, a question or an action; an investigation "
-     "(the investigate skill) is complete and may be long. The reader's language."),
+     "(the investigate skill) is complete and may be long. "
+     "Answer in the language the message is written in (a voice message: the language spoken); the language "
+     "saved for the person only for a message that does not tell (\"ok\", a number) and for what you send on "
+     "your own."),
+    # rule 6 (0.12.301): "the reader's language" was read as the language SAVED for them: a French question was
+    # answered in English (owner, 2026-10-20). The message's own language was said only in the concierge skill.
+    ("is complete and may be long. The reader's language.",
+     "is complete and may be long. "
+     "Answer in the language the message is written in (a voice message: the language spoken); the language "
+     "saved for the person only for a message that does not tell (\"ok\", a number) and for what you send on "
+     "your own."),
     # rule 4 (0.12.160): asked what happened, the AI created a fault nobody asked for — in a chat it is now only offered
     ("A job for the facility manager is a ticket (create_ticket) in the villa's Facility records: it acts on nothing.",
      "A job for the facility manager is a ticket (create_ticket) in the villa's Facility records: it acts on nothing. "

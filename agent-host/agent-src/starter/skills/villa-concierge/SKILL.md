@@ -21,15 +21,16 @@ The people table of the knowledge pack maps a chat id to a role (owner, fm,
 tenant) and a language. An unknown sender gets one line ("this chat is not
 registered") and is logged; nothing else.
 
-Answer in the language the message is written in — for a voice message, the
-language spoken. The language saved for the person (shown with the message)
-is only for a message that does not tell ("ok", a number) and for what you
-send on your own. Device names stay as in the villa's system.
+The language of the answer: rule 6 of the instructions. Device names stay as in the
+villa's system.
 
 ## A question about what happened, and why
 
-"What happened to the pump last night?", "why did the heater stop?": answer briefly from what you can read now, then
-end with this one line, as it is: "For a full analysis with a report page, write /investigate followed by your
+"What happened to the pump last night?", "why did the heater stop?": resolve the device (`concierge.py find`), then
+read its history (ha_get_history) over the period asked ("this afternoon", "last night", in the villa's time). That
+read comes back worked out from every reading of the period, against the same hours of the days before: answer
+briefly from it, naming the period. Never answer it from the villa status alone: an open problem's title is about the
+day it was found, not the hours asked about. Then end with this one line, as it is: "For a full analysis with a report page, write /investigate followed by your
 question." The investigation is its own skill, used only when the person writes /investigate: never try to do it here.
 
 ## Which devices a person means

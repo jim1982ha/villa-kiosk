@@ -10,6 +10,9 @@ turned it on or off — about any device, room or event, now or in the past (a f
 ran too long, a door, an alarm, a strange bill, a device that stopped). They want the whole, true story: read
 everything the steps below ask for, then answer once, completely.
 
+A message without /investigate is not for this skill: read the villa-concierge skill and follow its "A question about
+what happened, and why".
+
 ## Files
 
 - `scripts/investigate.py`: `find`, `timeline`, `around`. Reads the villa's system (read-only) and returns short, checked

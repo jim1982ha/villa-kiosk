@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.291 (20 October 2026)
+
+- Instructions rule 6: "The reader's language" becomes "the language the message is written in; the saved one only
+  for a message that does not tell" (the AI took the saved language: owner, 2026-10-20, a French question answered in
+  English). The sentence moves out of villa-concierge; INSTRUCTION_REWRITES brings an installed villa's rule 6 to it.
+- villa-concierge "A question about what happened": resolve the device, read its history over the period asked (so
+  `reads_history` works it out), never answer from the status's problem titles. investigate SKILL.md: a message
+  without /investigate goes to that section (the 20:45 turn read only the investigate skill and answered from the
+  status).
+
 ## 0.6.290 (20 October 2026)
 
 - State.conversation_read and its use in app._converse removed: `offer: after_reading` judges the answer's own turn
