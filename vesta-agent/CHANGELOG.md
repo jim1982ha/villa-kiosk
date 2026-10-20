@@ -1,3 +1,11 @@
+## 0.12.305
+
+What you will see:
+- Answers about a measuring device (a pump's power, a temperature) also give its daily average over the last 14 days,
+  and say when it changed: "since 16 Oct about 15× its average of the days before". At 00:13 the House Pump's
+  afternoon was compared with 17-19 October, days already in trouble, and called "close to its normal pattern"; its
+  daily average had gone from 2-28 W to 70-125 W on 16 October.
+
 ## 0.12.304
 
 What you will see (the House Pump answer of 00:13):

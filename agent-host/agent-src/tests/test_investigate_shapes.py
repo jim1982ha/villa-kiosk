@@ -220,3 +220,28 @@ def test_a_burst_says_its_runs_against_the_usual_run():
         return [p["why"] for p in shown if "runs of about" in (p.get("why") or "")]
     assert ["as long as its usual run of" in w for w in burst(30)] == [True], burst(30)
     assert ["shorter than its usual run of" in w for w in burst(8)] == [True], burst(8)
+
+
+class _WithDays(_Client):
+    """Its daily averages from the long-term figures: `means` from 7 October on (villa shape, numbers invented)."""
+    def __init__(self, rows, means):
+        super().__init__(rows)
+        self.means = means
+
+    def statistics(self, ids, start, end, period="hour", types=("mean",)):
+        day0 = datetime(2026, 10, 7, tzinfo=Z)
+        return {ids[0]: [{"start": int((day0 + timedelta(days=i)).timestamp() * 1000), "mean": m}
+                         for i, m in enumerate(self.means) if start <= day0 + timedelta(days=i) < end]}
+
+
+def test_a_change_that_began_before_its_days_before_is_said_from_the_daily_figures():
+    # villa, 2026-10-21 00:13: the pump changed on 16 October; asked about the 20th, its 3 days before were already like
+    # it and 101 starts read "close to its normal pattern"
+    changed = [9, 28, 3, 2.5, 4.5, 8.4, 6, 5, 9, 70, 81, 125, 103, 113]          # 7 to 20 October
+    said = inv.timeline(_WithDays(pump(False), changed), ["sensor.x"], FROM, E, 3, Z, now=E)["lines"]
+    day = [ln for ln in said if "day by day" in ln]
+    assert day and "⟵ since 16 Oct" in day[0] and "already like this" in day[0], said
+    steady = [9, 8, 3, 2.5, 4.5, 8.4, 6, 5, 9, 7, 8, 6, 9, 7]
+    said = inv.timeline(_WithDays(pump(False), steady), ["sensor.x"], FROM, E, 3, Z, now=E)["lines"]
+    day = [ln for ln in said if "day by day" in ln]
+    assert day and "⟵" not in day[0], said

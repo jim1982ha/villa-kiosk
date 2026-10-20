@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.295 (21 October 2026)
+
+- investigate timeline: `days_line` — a runs or level device's daily mean over `days_context` (14) days from the
+  long-term figures, flagged ⟵ when the days from its baseline on are `days_change_ratio` (3) times above or below
+  the days before them, naming the day it began (none without `days_context_min` earlier days, or without figures).
+  Test: test_investigate_shapes (mutation-proved).
+
 ## 0.6.294 (21 October 2026)
 
 - investigate: a stop-start burst's reason says its runs against the usual run ("as long as / shorter than / longer

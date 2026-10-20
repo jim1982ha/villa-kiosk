@@ -362,6 +362,41 @@ def starts_line(ps: list[dict], base: list[dict], start: datetime, end: datetime
     return {"starts": n, "usual": usual, "line": line}
 
 
+def days_line(client, eid: str, start: datetime, end: datetime, baseline_days: float, zone: ZoneInfo) -> str | None:
+    """Its daily average over the `days_context` days to `end`, from the villa's long-term figures; flagged ⟵ when the
+    days from its days before on are far from the days before them (settings `days_change_ratio`).
+
+    ⚠️ THE DAYS BEFORE CAN ALREADY BE THE TROUBLE (villa, 2026-10-21 00:13): the House Pump changed on 16 October
+    (2-28 W a day on average, then 70-125 W); asked about the 20th, its three days before were already like it and 101
+    starts read "close to its normal pattern"."""
+    try:
+        rows = (client.statistics([eid], (end - timedelta(days=th("days_context"))).astimezone(zone)
+                                  .replace(hour=0, minute=0, second=0, microsecond=0), end, "day", ("mean",))
+                or {}).get(eid) or []
+    except Exception:  # noqa: BLE001 — a device the villa keeps no figures of: no line, never a failure
+        return None
+    days = [(datetime.fromtimestamp(r["start"] / 1000, tz=zone), float(r["mean"])) for r in rows
+            if isinstance(r.get("mean"), (int, float))]
+    split = start - timedelta(days=baseline_days)
+    earlier = [v for d, v in days if d + timedelta(days=1) <= split]
+    recent = [(d, v) for d, v in days if d + timedelta(days=1) > split]
+    if len(earlier) < th("days_context_min") or not recent:
+        return None
+    line = "  day by day, its average (long-term figures): " + " · ".join(f"{d:%d %b} {v:.3g}" for d, v in days)
+    usual, ratio = statistics.median(earlier), th("days_change_ratio")
+    now = statistics.median(v for _, v in recent)
+    if usual > 0 and (now >= usual * ratio or now <= usual / ratio):
+        far = (lambda v: v >= usual * ratio) if now >= usual * ratio else (lambda v: v <= usual / ratio)
+        since = recent[-1][0]
+        for d, v in reversed(days):
+            if not far(v):
+                break
+            since = d
+        line += (f"  ⟵ since {since:%d %b} about {now / usual:.2g}× its average of the days before ({usual:.3g}): "
+                 f"the days before used as \"usual\" above were already like this")
+    return line
+
+
 # ⚠️ EVERY KIND OF DEVICE, AGAINST ITS OWN PAST (owner, 2026-10-20: "the skill shall universally handle all type of
 # dataset returned by Home Assistant"). A device that RUNS (a pump, a heater) was the only kind compared with its days
 # before; a LEVEL (a temperature), a STATE (a door) and a COUNTER (energy) got one line per reading — 70 to 106 lines,
@@ -700,6 +735,8 @@ def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_da
             srows, _, _ = read(client, sched, start - timedelta(days=baseline_days), end, now)
             sname = ((client.states([sched]).get(sched) or {}).get("attributes") or {}).get("friendly_name") or sched
             lines.append(schedule_line(ps, base_ps, srows, sname, start, reach, baseline_days))
+        if kind_of in ("runs", "level") and (dl := days_line(client, eid, start, end, baseline_days, zone)):
+            lines.append(dl)
         if kind_of == "level":
             lines.append(level_line(rows, base_rows, start, reach, baseline_days, zone, span_days))
         elif kind_of == "counter":

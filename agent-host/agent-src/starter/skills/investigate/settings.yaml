@@ -28,6 +28,9 @@ behaviour:
   level_change_ratio: 0.33    # a reading this share away from its level is a change of level…
   level_change_gap_s: 120     # …once it has lasted this long (and a run's level is judged only over this long)
   burst_run_short_ratio: 0.67 # a burst's runs under this share of the usual run are "shorter" (over 1/it "longer")
+  days_context: 14           # days of its daily average said with every reading of a measuring device…
+  days_context_min: 4         # …when at least this many come before its days before…
+  days_change_ratio: 3        # …flagged when the days since are this many times above (or below) them
   noise_per_hour: 30          # an entity changing more often than this an hour is background, not an event
   state_lane_max: 8           # an entity with more different states than this reports a value (a time, a text), not a state
   coincide_s: 600             # the page puts an event next to an unusual moment when it happened within this of it
