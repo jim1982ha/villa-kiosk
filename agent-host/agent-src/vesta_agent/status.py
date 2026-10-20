@@ -149,11 +149,20 @@ def report(state, store_path: str, hours: int = 24, now: datetime | None = None,
             "events": events[-events_shown:], "incidents": incidents[-incidents_shown:]}
 
 
-def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_label=None, name_of=None) -> dict:
+def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_label=None, name_of=None,
+          skill_of=None) -> dict:
     """What the AI cost, run by run, from the agent's own records (the cost the Anthropic API reported for each
-    run): the VESTA Agent page's Costs tab. Each run: when, the work (a chat reply, or an AI job), who asked
-    and what, the brain and model, the tokens, the cost, and each step in a line (step_summary). Read-only; never a
-    chat id (`chat_label` names the chat); `name_of(entity_id)` names a device in a step (the knowledge pack's)."""
+    run): the VESTA Agent page's Costs tab. Each run: when, the job (a chat reply, or an AI job named as Overview
+    names it: "reports › fm-daily", skills.job_title), who asked and what, the brain and model, the tokens, the cost,
+    and each step in a line (step_summary). Read-only; never a chat id (`chat_label` names the chat);
+    `name_of(entity_id)` names a device in a step (the knowledge pack's); `skill_of(job name)` the skill that declares
+    a job (skills.job_owners) — a job no skill declares any more keeps its bare name."""
+    from .skills import job_title
+
+    def job_words(name: str) -> str:
+        owner = skill_of(name) if skill_of else None
+        return job_title(owner, name) if owner else name
+
     now = now or datetime.now(timezone.utc)
     since = now - timedelta(days=days)
     local = (lambda t: t.astimezone(zone)) if zone else (lambda t: t)
@@ -165,7 +174,7 @@ def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_la
         if c["kind"] in (agent_records.WITHOUT_AI, agent_records.JOB_NO_RESULT):
             # a job made by its code steps when the AI could not run (ai_jobs.AiJobs.run_without_ai), or one whose AI
             # run sent nothing (JOB_NO_RESULT): shown among the runs beside the AI run, at no cost, not counted as one
-            row = {"at": c["at"], "kind": "job", "work": str(d.get("job") or "?"), "person": None, "chat": None,
+            row = {"at": c["at"], "kind": "job", "job": job_words(str(d.get("job") or "?")), "person": None, "chat": None,
                    "asked": None, "profile": None, "model": None, "tokens_in": None, "tokens_out": None,
                    "cache_read": None, "cache_write": None, "cost": 0.0, "stopped": False, "error": None,
                    "cause": None, "what_to_do": None, "turns": None, "seconds": None, "steps": [], "skills": []}
@@ -178,14 +187,14 @@ def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_la
             continue
         who = str(d.get("who") or "")
         if agent_records.job_of(who) is not None:
-            kind, work, person, chat = "job", agent_records.job_of(who), None, None
+            kind, job, person, chat = "job", job_words(agent_records.job_of(who) or "?"), None, None
         else:
             name, cid = agent_records.person_of(who)
-            kind, work, person = "chat", "Chat replies", name or None
+            kind, job, person = "chat", "Chat replies", name or None
             chat = chat_label(cid) if chat_label and cid.lstrip("-").isdigit() else None
         tok = d.get("tokens") or {}
         cost = run_cost(d)
-        runs.append({"at": c["at"], "kind": kind, "work": work, "person": person, "chat": chat, "asked": d.get("asked"),
+        runs.append({"at": c["at"], "kind": kind, "job": job, "person": person, "chat": chat, "asked": d.get("asked"),
                      "profile": d.get("profile"), "model": d.get("model"),
                      "tokens_in": tok.get("input_tokens"), "tokens_out": tok.get("output_tokens"),
                      "cache_read": tok.get("cache_read_input_tokens"), "cache_write": tok.get("cache_creation_input_tokens"),
@@ -234,7 +243,7 @@ def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_la
             "by_day": [{"day": d, "cost": round(by_day.get(d, 0.0), 2)} for d in days_list],
             # the daily chart's Y axis, from the one axis rule (vesta_shared.axis): the page only draws it
             "axis": _cost_axis(max([by_day.get(d, 0.0) for d in days_list] + [0.01])),
-            "by_work": group("work"), "by_model": group("model"),
+            "by_job": group("job"), "by_model": group("model"),
             "runs": sorted(runs + made, key=lambda r: r["at"], reverse=True)[:limit(
                 "costs.runs_listed", 300, unit="runs", group="keep", lo=20, hi=5000,
                 says="The latest runs the Costs tab lists one by one.",

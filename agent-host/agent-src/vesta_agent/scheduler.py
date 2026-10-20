@@ -93,8 +93,10 @@ def job_key(skill: str, index: int, when: str) -> str:
 
 def job_label(key: str, skills: dict) -> str:
     """What a person reads for a slot key (owner, 2026-10-08: "reports:0:07:00" repeated the time the Ran at column
-    already shows): an AI job's own name (fm-daily), a code job's skill and script (preventive-maintenance ›
-    nightly.py), the engine's jobs in words — never the entry's index or time."""
+    already shows): its skill and what ran (skills.job_title) — an AI job's name (reports › fm-daily, owner
+    2026-10-20), a code job's script (preventive-maintenance › nightly.py); the engine's jobs, which belong to no
+    skill, in words — never the entry's index or time."""
+    from .skills import job_title
     if key in ENGINE_JOBS:
         return ENGINE_JOBS[key]
     skill, _, rest = key.partition(":")
@@ -105,9 +107,9 @@ def job_label(key: str, skills: dict) -> str:
     except (ValueError, IndexError):
         job = None
     if job and job.get("name"):
-        return job["name"]
+        return job_title(skill, job["name"])
     if job and job.get("run"):
-        return f"{skill} › {str(job['run']).split()[0]}"
+        return job_title(skill, str(job["run"]).split()[0])
     return skill
 
 class Scheduler:

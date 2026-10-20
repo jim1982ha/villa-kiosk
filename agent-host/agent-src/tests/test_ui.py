@@ -286,7 +286,8 @@ def test_the_costs_tab_reads_every_run_from_the_agents_records(ui):
     c, other = call(ui, fn)
     # an unknown period falls back to the tab's own default: the last 7 days (owner, 2026-10-06)
     assert other["days"] == 7 and c["runs_count"] == 3 and c["period"] == 1.5
-    assert [(g["name"], g["runs"], g["cost"]) for g in c["by_work"]] == [("fm-weekly", 1, 1.25), ("Chat replies", 2, 0.25)]
+    # the job named by its skill, as Overview names it (owner, 2026-10-20: "reports › …")
+    assert [(g["name"], g["runs"], g["cost"]) for g in c["by_job"]] == [("reports › fm-weekly", 1, 1.25), ("Chat replies", 2, 0.25)]
     assert {g["name"] for g in c["by_model"]} == {"claude-sonnet-5", "claude-haiku-4-5", "not recorded"}
     # the group says itself that nothing was recorded (the page compared the name, architecture review 9)
     assert {g["name"]: g["recorded"] for g in c["by_model"]}["not recorded"] is False and "g.recorded ?" in page_js()
@@ -452,7 +453,7 @@ def test_a_run_recorded_before_jobs_had_names_counts_under_its_name(tmp_path):
     assert st.rename_job_runs({"reports:07:00": "fm-daily", "reports:1 08:00": "owner-monthly"}) == 2
     assert st.rename_job_runs({"reports:07:00": "fm-daily", "reports:1 08:00": "owner-monthly"}) == 0     # once
     c = status.costs(st, 30)
-    by = {g["name"]: g["runs"] for g in c["by_work"]}
+    by = {g["name"]: g["runs"] for g in c["by_job"]}
     assert by == {"fm-daily": 2, "owner-monthly": 1, "other:09:00": 1}                # an unknown one keeps its label
     import inspect
     from vesta_agent.app import Vesta
@@ -649,7 +650,7 @@ def test_a_scheduled_job_is_named_not_its_slot_key():
     from vesta_agent.scheduler import job_key, job_label
     skills = {"reports": types.SimpleNamespace(schedule=[{"when": "07:00", "name": "fm-daily", "prompt": "x"}]),
               "preventive-maintenance": types.SimpleNamespace(schedule=[{"when": "02:00", "run": "nightly.py --x"}])}
-    assert job_label(job_key("reports", 0, "07:00"), skills) == "fm-daily"
+    assert job_label(job_key("reports", 0, "07:00"), skills) == "reports › fm-daily"
     assert job_label(job_key("preventive-maintenance", 0, "02:00"), skills) == "preventive-maintenance › nightly.py"
     assert job_label("engine:pack", skills) == "Villa's device list (refreshed)"
     assert job_label("gone:3:Mon 08:00", skills) == "gone" and job_label("reports:9:07:00", skills) == "reports"
@@ -658,9 +659,9 @@ def test_a_scheduled_job_is_named_not_its_slot_key():
 
 
 def test_the_costs_tab_is_two_cards_of_two_tabs_and_the_page_one_width():
-    # owner, 2026-10-08: By work + By model in one card, Every run + Tools in another; the page half again as wide
+    # owner, 2026-10-08: By job (was By work) + By model in one card, Every run + Tools in another; the page half again as wide
     js = body_of(page_js(), "costs")
-    assert js.count("tabbedCard(") == 2 and all(f'place("{k}")' in js for k in ("by_work", "by_model", "every_run", "tools_called"))
+    assert js.count("tabbedCard(") == 2 and all(f'place("{k}")' in js for k in ("by_job", "by_model", "every_run", "tools_called"))
     css = open(os.path.join(os.path.dirname(__file__), "..", "vesta_agent", "ui", "static", "app.css"), encoding="utf-8").read()
     assert "--page-width: 1650px" in css and "1100px" not in css and css.count("max-width: var(--page-width)") == 4
     assert ".skills { display: grid; grid-template-columns: 364px 1fr;" in css     # the skills list, 30% wider
@@ -918,3 +919,36 @@ def test_rules_reminds_to_install_the_agent_before_new_alert_rules():
     from test_no_platform_name import NAMED
     line = acting[acting.index('h("div", { class: "muted" }, "Install VESTA Agent'):]
     assert not NAMED.search(line.split("));", 1)[0]), line
+
+
+def test_a_job_is_named_by_its_skill_on_the_costs_tab_as_on_the_overview(tmp_path):
+    # owner, 2026-10-20: "fm-daily" alone after the notion of "work" went; the standard is "preventive-maintenance ›
+    # recheck.py" — one rule (skills.job_title) for Overview › Scheduled jobs run and Costs › Cost breakdown / runs
+    import json
+    from datetime import datetime, timedelta, timezone
+    from vesta_agent import status
+    from vesta_agent.state import State
+    from vesta_agent.skills import job_title
+    st = State(str(tmp_path / "s.db"))
+    now = datetime.now(timezone.utc)
+    for d in ({"who": "job:fm-daily", "cost_usd": 0.3}, {"who": "job:old-job", "cost_usd": 0.1}, {"who": "Ann@1", "cost_usd": 0.2}):
+        st.db.execute("insert into calls(at, kind, detail) values (?, 'run', ?)", ((now - timedelta(hours=1)).isoformat(), json.dumps(d)))
+    st.db.commit()
+    c = status.costs(st, 7, now=now, skill_of={"fm-daily": "reports"}.get)
+    assert job_title("reports", "fm-daily") == "reports › fm-daily"
+    assert {g["name"] for g in c["by_job"]} == {"reports › fm-daily", "old-job", "Chat replies"}   # a job no skill declares: its name
+    assert {r["job"] for r in c["runs"]} == {"reports › fm-daily", "old-job", "Chat replies"}
+    js = page_js()
+    assert 'groupTable(c.by_job, "Job")' in js and 'place("by_job")' in js and "Work" not in body_of(js, "costs")
+
+
+def test_a_runs_steps_put_the_number_first_across_the_whole_width():
+    # owner, 2026-10-20: "#" as the first column, the table using all the width on a desktop
+    more = body_of(page_js(), "runMore")
+    head = more[more.index('"steps-head"'):]
+    assert head.index('"#"') < head.index('"Skill"') < head.index('"Tool"') < head.index('"What it did"')
+    row = more[more.index("steps.map"):]
+    assert row.index("String(x.n)") < row.index("x.skill") < row.index("x.tool")
+    css = open(os.path.join(os.path.dirname(__file__), "..", "vesta_agent", "ui", "static", "app.css"), encoding="utf-8").read()
+    rule = css[css.index("ol.steps {"):css.index("}", css.index("ol.steps {"))]
+    assert "width: 100%" in rule and "minmax(0, 1fr)" in rule

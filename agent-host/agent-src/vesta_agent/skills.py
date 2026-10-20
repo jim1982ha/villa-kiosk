@@ -631,6 +631,13 @@ def job_owners(skills: dict) -> dict[str, str]:
     return {job["name"]: sk.name for sk, job in ai_jobs(skills)}
 
 
+def job_title(skill: str, what: str) -> str:
+    """THE words for one job of a skill, wherever the page names one (owner, 2026-10-20: "follow the same standard as
+    preventive-maintenance › recheck.py"): its skill, then what ran — an AI job's name ("reports › fm-daily") or a code
+    job's script ("preventive-maintenance › nightly.py"). Overview › Scheduled jobs run and the Costs tab both use it."""
+    return f"{skill} › {what}"
+
+
 def job_starters(skills: dict) -> dict[str, dict]:
     """{skill: its jobs' starter {"brain", "limit_usd"}} for every skill with AI jobs (Skill.jobs_default)."""
     return {sk.name: dict(sk.jobs_default) for _, sk in sorted(skills.items()) if sk.jobs_default}

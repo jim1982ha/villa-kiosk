@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.278 (20 October 2026)
+
+- One name for a job everywhere: its skill, then what ran (skills.job_title). An AI job reads "reports › fm-daily"
+  in Overview › Scheduled jobs run and on the Costs tab, as a code job already read "preventive-maintenance ›
+  recheck.py". The costs answer says `job` and `by_job` (was `work`, `by_work`).
+- Costs › Every run: a run's steps show their number first, across the run's whole width.
+
 ## 0.6.277 (20 October 2026)
 
 - The Kiosk agreement copied from Kiosk 2.496.445: its message channel (/agent/v1/messages, /choices), never

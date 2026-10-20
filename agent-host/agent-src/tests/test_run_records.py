@@ -224,5 +224,5 @@ def test_a_run_records_the_skills_it_used_in_order_once_each(monkeypatch, tmp_pa
     from vesta_agent.turn import Terms
     job = Terms(frozenset(), "auto", 1.0, agent_records.for_job("fm-weekly"), "maintenance")   # the job's own skill first
     asyncio.run(runner.run(s, "sys", "p", run_kit(), job, st))
-    got = {r["work"]: r["skills"] for r in status.costs(st)["runs"]}
+    got = {r["job"]: r["skills"] for r in status.costs(st)["runs"]}
     assert got == {"Chat replies": ["reports", "investigate"], "fm-weekly": ["maintenance", "reports", "investigate"]}

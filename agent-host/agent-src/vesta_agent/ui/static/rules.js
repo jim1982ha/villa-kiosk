@@ -86,7 +86,7 @@ export function rulesForms(doc, jobs = [], tools = null) {
   // the month's ceiling: computed when the (i) of "Limit (US$)" opens, from the limits as they are on the page
   const limitNote = () => {
     const n = jobs.reduce((s, j) => s + ((pairOf(j.skill) || {}).limit_usd || 0) * j.runs_per_month, 0);
-    return `The most ONE piece of work may cost: one chat reply, or one run of a job — not a monthly budget. At their limits, `
+    return `The most ONE reply or ONE run may cost: one chat reply, or one run of a job — not a monthly budget. At their limits, `
       + `the scheduled runs cost at most about US$ ${n.toFixed(2)} a month. Chat replies, and reports asked for in a chat, come on top: `
       + "see the Costs tab for what was really spent.";
   };
@@ -130,8 +130,8 @@ export function rulesForms(doc, jobs = [], tools = null) {
         drawAi(); markDirty(); } }, "×") }]);
   }
   drawAi();
-  const ai = card(place("ai"), "Which brain does each piece of work, the most ONE piece of work may cost (one chat reply, or one run of any AI job of a skill — not a monthly budget; one brain and one limit for all the AI jobs of a skill), and which tools a report gets: what the person who asks may use (on schedule, everything switched on). A reply that reaches its limit stops and offers Continue; a report that reaches it is still sent with what is done. A skill that is not set does not run its AI jobs.",
-    table(["Work", "Brain", withInfo("Limit (US$)", limitNote),
+  const ai = card(place("ai"), "Which brain answers the chats and runs each skill's AI jobs, and the most ONE reply or ONE run may cost (one chat reply, or one run of any AI job of a skill — not a monthly budget; one brain and one limit for all the AI jobs of a skill), and which tools a report gets: what the person who asks may use (on schedule, everything switched on). A reply that reaches its limit stops and offers Continue; a report that reaches it is still sent with what is done. A skill that is not set does not run its AI jobs.",
+    table(["Chat or skill", "Brain", withInfo("Limit (US$)", limitNote),
       withInfo(place("tools"), `Every answer and every report gets the tools switched on in ${where("tools")}, by the role of the person who asks: the owner everything, the facility manager (and anyone in a group listed for the facility manager) less what ${where("tools")} refuses them. A report on schedule gets everything switched on. A skill's own list limits nothing: the AI works without what a run lacks.`),
       ""], aiBody, { cls: "ai", widths: ["30%", "22%", "15%", null, "44"] }));
   const missing = jobs.filter((j) => !j.skill_ai).map((j) => j.name);      // the agent's answer (server._jobs)

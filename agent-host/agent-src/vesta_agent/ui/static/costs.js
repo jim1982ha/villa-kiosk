@@ -11,7 +11,7 @@ export const brain = (p, m) => [p ? (PROFILES[p] || p).replace(/ \(.*/, "") : nu
 // held to three lines here, all of it in its tooltip and on the run's line underneath (runMore). The steps open on
 // demand under the row, across every column: squeezed into this column they pushed the row tall.
 export function runWhat(r) {
-  const label = r.kind === "job" ? r.work : `Reply to ${r.person || "someone"}`;
+  const label = r.kind === "job" ? r.job : `Reply to ${r.person || "someone"}`;
   const steps = r.steps || [];
   // the steps' pill on the title's line (owner, 2026-10-19: "show the pills X steps on the same line as Reply to…"),
   // after the chat it came from and at the line's right end (owner, 2026-10-20)
@@ -31,15 +31,16 @@ export function runMore(r) {
     // a header, and the skill each step read or ran a script of first (owner, 2026-10-20: the Tools called column
     // repeated these steps, and went)
     steps.length ? h("ol", { class: "steps" },
-      h("li", { class: "steps-head" }, h("span", {}, "Skill"), h("span", { class: "step-n" }, "#"), h("span", {}, "Tool"),
+      // the step's number first (owner, 2026-10-20), the table across the run's whole width
+      h("li", { class: "steps-head" }, h("span", { class: "step-n" }, "#"), h("span", {}, "Skill"), h("span", {}, "Tool"),
         h("span", {}, "What it did")),
       steps.map((x) => h("li", { title: x.raw || null },
-        h("span", { class: "step-skill" }, x.skill || "—"), h("span", { class: "step-n" }, String(x.n)),
+        h("span", { class: "step-n" }, String(x.n)), h("span", { class: "step-skill" }, x.skill || "—"),
         h("span", { class: "chip gray" }, x.tool), h(x.code ? "code" : "span", { class: "step-sum" }, x.summary || "")))) : null);
 }
 
 // ⚠️ EVERYTHING ON THIS TAB FOLLOWS THE PERIOD CHOSEN, 7 DAYS UNLESS ANOTHER IS (owner, 2026-10-06): the figures,
-// the chart, by work, by model, every run and the tools.
+// the chart, by job, by model, every run and the tools.
 export async function costs(days = 7) {
   fill($view, h("p", { class: "muted" }, "Loading…"));
   const c = await api("GET", `api/costs?days=${days}`);
@@ -97,11 +98,11 @@ export async function costs(days = 7) {
     h("section", { class: "card" },
       titleWithInfo(place("cost"), "As the Anthropic API reported it for each run: a chat reply, or a run of an AI job. Tokens in count what the agent re-read from its cache too. Everything on this tab follows the period chosen here.", "h2", period),
       h("div", { class: "divided" }, kpis), h("div", { class: "divided" }, h("h2", {}, place("cost_day")), chart)),
-    // ⚠️ TWO CARDS OF TWO TABS (owner, 2026-10-08): "By work" and "By model" are one question asked two ways, and so
+    // ⚠️ TWO CARDS OF TWO TABS (owner, 2026-10-08): "By job" and "By model" are one question asked two ways, and so
     // are "Every run" and the tools those runs used — each pair is one card, its tab kept when the period changes
     tabbedCard(`${place("cost_split")} · last ${days} days`, "spend", [
-      ["work", place("by_work"), "Chat replies, and each AI job.", () => groupTable(c.by_work, "Work")],
-      ["model", place("by_model"), "Which model did the work.", () => groupTable(c.by_model, "Model")]]),
+      ["job", place("by_job"), "Chat replies, and each AI job, named by its skill (reports › fm-daily).", () => groupTable(c.by_job, "Job")],
+      ["model", place("by_model"), "Which model ran each reply and each job.", () => groupTable(c.by_model, "Model")]]),
     tabbedCard(`${place("runs")} · last ${days} days`, "runs", [
       ["runs", place("every_run"), `${c.runs_count} runs, newest first. Open a run's steps to see what was asked, whole, and each tool it used (recorded from agent 0.6.42 on).`,
         () => paged([{ v: "When", half: true }, { v: "What", half: true }, "Brain · model", "Skills",

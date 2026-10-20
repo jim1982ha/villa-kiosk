@@ -51,7 +51,7 @@ PLACES: dict[str, tuple[str, str]] = {
     "cost": ("AI cost", "Costs"),
     "cost_day": ("Per day", "Costs › AI cost"),
     "cost_split": ("Cost breakdown", "Costs"),
-    "by_work": ("By work", "Costs › Cost breakdown"),
+    "by_job": ("By job", "Costs › Cost breakdown"),
     "by_model": ("By model", "Costs › Cost breakdown"),
     "runs": ("AI runs", "Costs"),
     "every_run": ("Every run", "Costs › AI runs"),

@@ -124,7 +124,7 @@ def test_a_run_that_sent_nothing_is_recorded_counted_and_told_once(jobs, monkeyp
     assert [c for c, _ in jobs.d.sent] == [-2] and jobs.d.sent[0][1].endswith(NOT_COME("rep-weekly", why, NO_RESULT))
     # the Costs tab shows the row with the words, beside the run
     rows = [r for r in status.costs(jobs.j.state)["runs"] if r.get("no_result")]
-    assert len(rows) == 2 and rows[0]["no_result"] == {"why": why} and rows[0]["work"] == "rep-weekly" and rows[0]["cost"] == 0.0
+    assert len(rows) == 2 and rows[0]["no_result"] == {"why": why} and rows[0]["job"] == "rep-weekly" and rows[0]["cost"] == 0.0
     # stopped at its limit with nothing sent: the cause says so
     FakeAI("", stopped_at_limit=True).install(monkeypatch)
     jobs.d.sent.clear()

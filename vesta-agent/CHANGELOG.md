@@ -1,3 +1,12 @@
+## 0.12.288
+
+What you will see:
+- A scheduled report is named by its skill, like the other jobs: "reports › fm-daily" in Overview › Scheduled jobs
+  run, and in Costs (Cost breakdown and Every run), where it read "fm-daily".
+- Costs › Cost breakdown: "By work" is now "By job", its column "Job". Rules › AI brains and limits: the first
+  column is "Chat or skill" (was "Work").
+- Costs › Every run: a run's steps show the step number first, and the table uses the whole width.
+
 ## 0.12.287
 
 What you will see:

@@ -249,9 +249,12 @@ class UI:
         from ..policy import profile_labels
         from vesta_shared.knowledge_pack import KnowledgePack
         pack = KnowledgePack.read(self.s.pack_path)        # a step names a device as the pack does; none yet: its id
+        from ..skills import job_owners
+        owners = job_owners(self.skills.all())              # an AI job's skill, for its words (skills.job_title)
         return web.json_response({**status.costs(State(self.s.state_path), days, zone=zone,
                                                  chat_label=lambda cid: route.label(int(cid)),
-                                                 name_of=pack.name_of if pack else None),
+                                                 name_of=pack.name_of if pack else None,
+                                                 skill_of=owners.get),
                                   "profiles": profile_labels()})
 
     # ------------------------------------------------------------------ the villa's devices

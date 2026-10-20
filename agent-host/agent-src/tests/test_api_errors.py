@@ -226,11 +226,11 @@ def test_a_report_the_ai_cannot_make_is_made_from_its_figures_and_says_why(agent
     assert [body(t) for t in to_fm] == ["287 kWh this week. (Made without the AI: The Anthropic account has run out of credit.)"]
     assert [body(t) for c, t, _ in agent.tg.sent if c == OWNER_CHAT] == [api_errors.NEEDS_THE_OWNER["credit"]]
     (row,) = [r for r in status.costs(agent.state)["runs"] if r.get("without_ai")]
-    assert row["work"] == "rep-weekly" and row["cost"] == 0 and row["without_ai"] == {
+    assert row["job"] == "rep-weekly" and row["cost"] == 0 and row["without_ai"] == {
         "why": "The Anthropic account has run out of credit.", "sent": 1, "failed": None}
     c = status.costs(agent.state)
     assert c["runs_count"] == len([r for r in c["runs"] if not r.get("without_ai")])   # not an AI run
-    assert all(g["name"] != "rep-weekly" for g in c["by_work"])        # nor in what the AI cost
+    assert all(g["name"] != "rep-weekly" for g in c["by_job"])        # nor in what the AI cost
 
 
 def test_a_step_that_fails_stops_the_report_and_an_old_file_never_stands_in(agent, monkeypatch):
