@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.299 (21 October 2026)
+
+- ha_events.REGISTRY_EVENTS (entity_registry_updated, device_registry_updated) subscribed; app.devices_changed reads
+  the knowledge pack again once the registries have been still `pack.registry_settle_s` (60); a start with a usable
+  pack reads it again in the background. build_pack holds one lock (night, start, registry change).
+
 ## 0.6.298 (21 October 2026)
 
 - policy.yaml `asleep_entities` (Rules › Protected devices › "Unavailable by design"), read by vesta_shared.asleep

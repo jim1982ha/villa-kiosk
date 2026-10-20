@@ -32,8 +32,12 @@ import aiohttp
 
 log = logging.getLogger("vesta.ha_events")
 
+#: the villa's registries changed (a device hidden, unhidden, renamed, added or deleted): the agent reads its devices
+#: again (app.devices_changed) — owner, 2026-10-21: an entity unhidden at 02:00 stayed missing from the Rules pickers,
+#: and a deleted one kept its fault, until the 01:30 rebuild of the next night
+REGISTRY_EVENTS = ("entity_registry_updated", "device_registry_updated")
 EVENT_TYPES = ("vesta_critical_event", "telegram_text", "telegram_command", "telegram_callback",
-               "telegram_attachment", "telegram_sent")
+               "telegram_attachment", "telegram_sent") + REGISTRY_EVENTS
 #: Where an event's data carries the context id of whatever fired it (an automation run: its message and its
 #: vesta_critical_event share it). Home Assistant puts the context beside the data; this copies it in.
 CONTEXT_KEY = "_context_id"

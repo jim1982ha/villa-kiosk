@@ -28,6 +28,7 @@ import os
 import signal
 import subprocess
 import sys
+import threading
 import time
 import dataclasses
 from dataclasses import dataclass
@@ -45,7 +46,7 @@ from .actions import Actions, related_entities
 from .api_errors import NEEDS_THE_OWNER
 from .delivery import Delivery
 from .config import STARTER_DIR
-from .ha_events import CONTEXT_KEY, HaEvents
+from .ha_events import CONTEXT_KEY, REGISTRY_EVENTS, HaEvents
 from . import layout
 from .approvals import Approvals
 from .posting import Poster
@@ -136,6 +137,10 @@ class Vesta:
         self.skills = skills or Skills(settings.skills_dir, os.path.join(STARTER_DIR, "skills"),
                                        off=lambda: self.policy().skills_off)
         self._policy: Policy | None = None
+        # one reading of the villa's devices at a time (the night's, the start's, one after a registry change)
+        self._pack_lock = threading.Lock()
+        self._devices_due: float | None = None
+        self._devices_task: asyncio.Task | None = None
         self.reader = reader or McpClient(settings.ha_mcp_url, settings.timezone, write=False)
         self.writer_factory = writer_factory or (lambda: McpClient(settings.ha_mcp_url, settings.timezone, write=True))
         if telegram is not None:
@@ -312,6 +317,10 @@ class Vesta:
                 log.info("Skill %s works without: %s", sk.name, " ".join(b["why"] for b in without))
         if pack_needs_build(self.s.pack_path):
             await asyncio.to_thread(self.build_pack)
+        else:
+            # ⚠️ A RESTART READS THE DEVICES AGAIN (owner, 2026-10-21): what changed while the agent was stopped (an
+            # entity unhidden, a device deleted) waited for 01:30; read in the background, the start is not held up
+            self.devices_changed(0)
         pol = self.policy()
         # People rows with no person but a group still answer its members (policy.member): only an empty list is "nobody"
         if not pol.destinations:
@@ -364,6 +373,10 @@ class Vesta:
         return res
 
     def build_pack(self) -> dict:
+        with self._pack_lock:
+            return self._build_pack()
+
+    def _build_pack(self) -> dict:
         p = subprocess.run([sys.executable, "-m", "vesta_shared.build_pack", "--out", self.s.pack_path,
                             "--store", self.s.store_path, "--zone", self.s.timezone],
                            cwd=self.s.out_dir, env=script_env(self.s), capture_output=True, text=True, timeout=limit(
@@ -397,7 +410,28 @@ class Vesta:
         log.info("Housekeeping (settings.keep): removed %s", ", ".join(f"{v} {k.replace('_', ' ')}" for k, v in gone.items()))
 
     # ------------------------------------------------------------------ Home Assistant's events
+    def devices_changed(self, settle: float | None = None) -> None:
+        """The villa's devices changed (ha_events.REGISTRY_EVENTS): read them again once they have been still for
+        `settle` seconds (a rename of ten entities is one reading, not ten)."""
+        if settle is None:
+            settle = limit("pack.registry_settle_s", 60, unit="seconds", group="run", lo=0, hi=3600,
+                           says="How long after the last change to the villa's devices (hidden, renamed, added, "
+                                "deleted) the agent reads them again.",
+                           reached="Each further change waits this long again; one reading follows the last.", told="")
+        self._devices_due = time.monotonic() + settle
+        if self._devices_task is None or self._devices_task.done():
+            self._devices_task = asyncio.create_task(self._devices_when_still())
+
+    async def _devices_when_still(self) -> None:
+        while self._devices_due is not None and time.monotonic() < self._devices_due:
+            await asyncio.sleep(max(0.0, self._devices_due - time.monotonic()))
+        self._devices_due = None
+        log.info("The villa's devices changed: reading them again")
+        await self._safe(asyncio.to_thread(self.build_pack))
+
     async def on_ha_event(self, event_type: str, data: dict) -> None:
+        if event_type in REGISTRY_EVENTS:
+            return self.devices_changed()
         if event_type == "vesta_critical_event":
             return await self.on_critical(data)
         if event_type == "telegram_sent":
