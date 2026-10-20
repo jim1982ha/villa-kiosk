@@ -25,7 +25,7 @@ import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
 import { effectiveCategory, subjectOf } from "@/config/EntityCategories";
 import { deviceLook, groupLook, storeLookSource, type LookSource } from "@/utils/deviceActivity";
-import { bulkSwitchPlan } from "@/config/activeDevices";
+import { bulkSwitchPlan, bulkWords } from "@/config/activeDevices";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { TOGGLEABLE_DOMAINS } from "@/utils/quickAction";
 import type { HassEntity } from "@/types/ha.types";
@@ -83,7 +83,7 @@ interface Props {
  * Bulk-toggling many devices from one tap is easy to trigger by accident, so it
  * asks first, the LockPanel unlock pattern. Icon-only: the text cost too much
  * width, on a phone above all; the icon carries the direction (Power = will
- * turn on, PowerOff = will turn off) and the tooltip spells it out. "On" is
+ * turn on, PowerOff = will turn off) and the tooltip says what it will switch (bulkWords: "Turn off 1 fan"). "On" is
  * POWER (groupLook's onCount), and the switch is config/activeDevices' — one
  * call PER DOMAIN. Nothing for fewer than two devices: a row's own switch is
  * that control already.
@@ -93,6 +93,9 @@ function BulkToggle({ devices, looks }: { devices: HassEntity[]; looks: LookSour
   const [confirming, setConfirming] = useState(false);
   if (devices.length < 2) return null;
   const anyOn = groupLook(devices.map((e) => deviceLook(e.entity_id, looks)), { showingDevices: true }).onCount > 0;
+  // what it will change, said (owner, 2026-10-20): the devices now on when it turns off, else those now off
+  const changing = devices.map((e) => e.entity_id).filter((id) => (deviceLook(id, looks).power === "on") === anyOn);
+  const words = bulkWords(changing, !anyOn);
   const run = () => {
     for (const call of bulkSwitchPlan(devices.map((e) => e.entity_id), !anyOn, TOGGLEABLE_DOMAINS)) {
       void callService(call.domain, call.service, {}, { entity_id: call.entityIds });
@@ -100,13 +103,14 @@ function BulkToggle({ devices, looks }: { devices: HassEntity[]; looks: LookSour
     setConfirming(false);
   };
   return confirming ? (
-    <InlineConfirm confirmLabel={anyOn ? "Turn off?" : "Turn on?"} onConfirm={run} onCancel={() => setConfirming(false)} />
+    <InlineConfirm question={`${words}?`} confirmLabel={anyOn ? "Turn off" : "Turn on"} onConfirm={run}
+      onCancel={() => setConfirming(false)} />
   ) : (
     <button
       className="icon-btn"
       onClick={() => setConfirming(true)}
-      title={anyOn ? "Turn all off" : "Turn all on"}
-      aria-label={anyOn ? "Turn all off" : "Turn all on"}
+      title={words}
+      aria-label={words}
     >
       {anyOn ? <PowerOff size={18} /> : <Power size={18} />}
     </button>

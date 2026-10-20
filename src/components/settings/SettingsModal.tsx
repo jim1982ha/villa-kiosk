@@ -8,10 +8,9 @@
 // token-less through the add-on's Supervisor proxy, so there's nothing to enter.
 
 import { eyeHeightOf } from "@/babylon/walkerSpawn";
-import { useState } from "react";
-import ModalFooter from "@/components/common/ModalFooter";
+import ModalFooter, { footerExits } from "@/components/common/ModalFooter";
+import { useAppNotice } from "@/components/hud/AppNotice";
 import SegmentedGroup from "@/components/common/SegmentedGroup";
-import UnsavedChanges from "@/components/common/UnsavedChanges";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import {
   Sliders, Sun, Sunrise, Moon, Monitor, SunMoon, MousePointerClick, Move, Circle, CreditCard, PanelBottom,
@@ -61,7 +60,6 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
   const slice = useDraftedSlice(SETTINGS_KEYS);
   const v = slice.view;
 
-  const [askingClose, setAskingClose] = useState(false);
 
   const commit = {
     dirty: slice.dirty,
@@ -75,17 +73,10 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
     },
   };
 
-  // ⚠️ CLOSE ASKS WHEN THERE IS SOMETHING TO LOSE, and closes straight away
-  // when there is not — a question with only one sensible answer is noise.
-  const closeModal = () => {
-    if (slice.dirty) { setAskingClose(true); return; }
-    slice.flush();
-    onClose();
-  };
-  // Focus trap + Escape + focus restore (see useModalA11y). Declared AFTER
-  // closeModal deliberately — it closes over it, and this modal's close path
-  // has to flush the debounced settings draft, so Escape must run the same
-  // flush-then-close that the Close button and backdrop click do.
+  // Escape and the backdrop are Cancel (ModalFooter's footerExits, the footer's own): every change undone, said in a
+  // passing notice — no question first (owner, 2026-10-20).
+  const notice = useAppNotice();
+  const closeModal = footerExits(commit, onClose, notice).cancel;
   const dialogRef = useModalA11y(closeModal);
 
   // Shown as typed, stored trimmed.
@@ -349,11 +340,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
 
         </div>{/* end modal-body */}
 
-        {/* ⚠️ THE FOOTER OWNS THE CLOSE QUESTION for its own button; this file
-            owns it for Escape and the backdrop. Both raise the SAME
-            `UnsavedChanges` component, so the wording, the button order and —
-            the one that matters — which answer the backdrop maps to cannot
-            drift apart between the two gestures. */}
+        {/* Save and Cancel are the footer's (footerExits); Escape and the backdrop run the same Cancel. */}
         <ModalFooter
           leading={can("editConfig") ? (
             <button className="btn ghost" onClick={onOpenConfigEditor}>
@@ -361,16 +348,9 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             </button>
           ) : undefined}
           commit={commit}
-          onClose={() => { slice.flush(); onClose(); }}
+          onClose={onClose}
         />
       </div>
-      {askingClose && (
-        <UnsavedChanges
-          onSave={() => { commit.save(); setAskingClose(false); onClose(); }}
-          onDiscard={() => { commit.discard(); setAskingClose(false); onClose(); }}
-          onStay={() => setAskingClose(false)}
-        />
-      )}
     </div>
   );
 }

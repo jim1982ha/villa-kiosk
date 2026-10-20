@@ -10,43 +10,26 @@
 // different ideas about where a Save goes. The test could notice a missing
 // part; it could not make the parts identical. This can.
 //
-// ⚠️ TWO BUTTONS: Save · Close. It was THREE until 2.770.0, and the third was
-// redundant on its own terms.
+// ⚠️ TWO BUTTONS: Save · Cancel (owner, 2026-10-20: "clicking Save shall save and close the modal, as expected in a
+// standard UX … rename Close to Cancel … Cancel shall revert all done modifications", every tab of the dialog
+// included). It was Save (stays) · Close (asks Save / Discard / Stay): one question too many for the two answers a
+// person means.
 //
-//   Save     commits and STAYS. It is the only button that does not close.
-//   Close    closes — asking first if there is anything unsaved, and that
-//            question already offers Save · Discard · Stay.
+//   Save     commits AND closes, then a passing notice says "saved and applied" — a refused write stays open
+//            with its error (`save` resolving `false`).
+//   Cancel   throws the draft away (every tab: the draft is the dialog's, one for all its tabs) and closes; the
+//            notice says the changes were cancelled — said only when there were any.
 //
-// ⚠️ CANCEL WAS DELETED BECAUSE `UnsavedChanges` ALREADY OFFERS IT. Its only
-// distinct behaviour was "discard without being asked", which is exactly the
-// Discard answer in the dialog Close raises — so the footer carried a shortcut
-// past a safety question, one press from an edit gone with no confirmation. On
-// a clean draft it was indistinguishable from Close, which is the worse half:
-// two buttons that did the same thing most of the time and quietly different
-// things the rest. Standard behaviour is one exit that asks; the owner asked
-// for it in those terms and they are right.
+// ⚠️ SAVE IS THE ONLY ONE THAT GREYS (nothing changed). Cancel is always live: it is the ONLY way out, these
+// dialogs have no X, and Escape and the backdrop are not discoverable on a wall-mounted tablet.
 //
-// ⚠️ SAVE IS THE ONLY ONE THAT GREYS. Close is always live: it is now the ONLY
-// way out, these dialogs have no X, and Escape and the backdrop are not
-// discoverable on a wall-mounted tablet — which is what `test_modal_shell` was
-// written for after a dialog shipped with no exit. A `disabled` on Close would
-// now strand the operator completely rather than merely inconvenience them.
-//
-// ⚠️ LABELLED ON DESKTOP, ICON-ONLY ON A PHONE. Three labelled buttons plus a
-// version string did not fit a 360px footer and the row wrapped, which is why
-// everything went icon-only in 2.667.0. Two do fit with room to spare, so the
-// label is restored where there is width for it and dropped at the phone tier —
-// the icon and `--touch-min` square are unchanged there. The accessible name is
-// on the button either way, so the visible text is never the only label.
-//
-// ⚠️ AND THE UNSAVED QUESTION IS ONE COMPONENT, shared with `ModalTabs` —
-// switching tab and closing ask the same thing, and two copies would drift on
-// the answer that matters: which one the backdrop maps to.
+// ⚠️ LABELLED ON DESKTOP, ICON-ONLY ON A PHONE: the icon and `--touch-min` square at the phone tier; the
+// accessible name is on the button either way.
 
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Save as SaveIcon, X } from "lucide-react";
 
-import UnsavedChanges from "./UnsavedChanges";
+import { useAppNotice } from "@/components/hud/AppNotice";
 
 /** An editable draft a dialog can commit. ⚠️ THE DIALOG OWNS IT, NOT THIS
  *  COMPONENT: a draft that lives in the footer would be lost the moment a tab
@@ -70,11 +53,8 @@ export interface ModalCommit {
    *  must leave the dialog open with its error, or the operator watches their
    *  edit disappear and has no idea it did not land. */
   save: () => void | boolean | Promise<unknown>;
-  /** Throw the draft away. ⚠️ STILL REQUIRED AFTER THE CANCEL BUTTON WENT: it
-   *  is what the Discard answer in `UnsavedChanges` calls. Removing the button
-   *  removed a shortcut, not the capability — a dialog whose draft could not be
-   *  thrown away would trap an operator who opened it by mistake. */
-  discard?: () => void;
+  /** Throw the draft away — every tab's (Cancel, Escape, the backdrop). */
+  discard: () => void;
 }
 
 export default function ModalFooter({
@@ -85,13 +65,13 @@ export default function ModalFooter({
   /** A left-hand CONTROL rather than a hint — Settings' "Advanced Settings"
    *  opener. ⚠️ It stays on the left rather than joining the action group: it
    *  navigates somewhere else, and a button that leaves the dialog must not sit
-   *  in the row where Save and Close are. Wins over `note`. */
+   *  in the row where Save and Cancel are. Wins over `note`. */
   leading?: ReactNode;
   /** The dialog's draft. ⚠️ OMITTED (undefined) = a dialog with NOTHING TO
    *  SAVE — the legend, a colour picker, the Cockpit, a device panel: the
    *  footer is then the left slot and ONE primary exit (`closeLabel`, "Close"
    *  by default), the shape eight dialogs wrote out by hand with their own
-   *  `<span />` spacer until 2.496.263. `null` keeps Save · Close with Save
+   *  `<span />` spacer until 2.496.263. `null` keeps Save · Cancel with Save
    *  explaining that changes apply as they are made. */
   commit?: ModalCommit | null;
   onClose: () => void;
@@ -101,13 +81,8 @@ export default function ModalFooter({
 }) {
   const dirty = commit?.dirty === true;
   const saving = commit?.saving === true;
-  /** Set when Close was pressed with a draft pending. */
-  const [asking, setAsking] = useState(false);
-
-  const close = () => (dirty ? setAsking(true) : onClose());
-  // ⚠️ NOT A BUTTON ANY MORE — reached only through the Discard answer of the
-  // question `close` raises. The draft is thrown away and the dialog goes.
-  const discardAndClose = () => { commit?.discard?.(); onClose(); };
+  const notice = useAppNotice();
+  const { save, cancel } = footerExits(commit ?? null, onClose, notice);
 
   // ⚠️ THE EMPTY SPACER IS LOAD-BEARING. `.modal-footer` is `space-between`,
   // so the right-hand group renders on the LEFT without a first child to push
@@ -145,42 +120,50 @@ export default function ModalFooter({
           disabled={busy || saving || !dirty}
           aria-label={dirty ? "Save" : "Nothing to save"}
           title={commit
-            ? (dirty ? "Save — stores your changes and stays here"
+            ? (dirty ? "Save — stores your changes, applies them and closes"
                      : "Nothing has been changed yet")
             : "Everything in this dialog applies as you change it — there is "
               + "nothing waiting to be saved"}
-          onClick={() => { void commit?.save(); }}
+          onClick={save}
         >
           <SaveIcon size={18} aria-hidden />
           <span className="btn-label">Save</span>
         </button>
         <button
           className="btn"
-          aria-label="Close"
-          title={dirty ? "Close — asks what to do with your changes" : "Close"}
-          onClick={close}
+          aria-label="Cancel"
+          title={dirty ? "Cancel — undoes every change made here, on every tab, and closes" : "Cancel — closes"}
+          onClick={cancel}
         >
           <X size={18} aria-hidden />
-          <span className="btn-label">Close</span>
+          <span className="btn-label">Cancel</span>
         </button>
       </div>
-
-      {asking && (
-        <UnsavedChanges
-          saving={saving}
-          onSave={() => {
-            // ⚠️ CLOSES ONLY IF THE WRITE SUCCEEDED. A refused save that closed
-            // anyway would show the operator their edit vanishing while the
-            // error explaining it went with the dialog.
-            void Promise.resolve(commit?.save()).then((ok) => {
-              setAsking(false);
-              if (ok !== false) onClose();
-            });
-          }}
-          onDiscard={() => { setAsking(false); discardAndClose(); }}
-          onStay={() => setAsking(false)}
-        />
-      )}
     </div>
   );
 }
+
+/** A dialog's two exits, the same from its footer, Escape and the backdrop (`cancel`): what each does to the draft,
+ *  when the dialog closes, and what the passing notice says. Pure but for the calls it is handed. */
+export function footerExits(commit: ModalCommit | null, onClose: () => void,
+  notice: (m: { text: string; tone: "info" }) => void) {
+  return {
+    save: () => {
+      if (!commit?.dirty) { onClose(); return; }
+      void Promise.resolve(commit.save()).then((ok) => {
+        if (ok === false) return;                        // refused: stays open, its error in the footer
+        onClose();
+        notice({ text: SAVED_NOTICE, tone: "info" });
+      });
+    },
+    cancel: () => {
+      const changed = commit?.dirty === true;
+      if (changed) commit!.discard();
+      onClose();
+      if (changed) notice({ text: CANCELLED_NOTICE, tone: "info" });
+    },
+  };
+}
+
+export const SAVED_NOTICE = "All changes saved and applied.";
+export const CANCELLED_NOTICE = "All changes cancelled — nothing was kept.";
