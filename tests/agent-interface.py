@@ -382,6 +382,26 @@ async def main() -> None:
        / "agent-contract.json").read_text())["ticket"]["checks"] and "day" not in body["ticket_checks"], body)
     r = await post("/agent/v1/heartbeat", headers=bearer(), json=beat)
     ck("  ...a well-formed beat's answer names no refusal", r.status == 200 and "cadence" not in await r.json())
+    # ⚠️ THE KIOSK OWNS THE DEVICES ASLEEP BY DESIGN (owner, 2026-10-21): the Agent reads them in every beat's answer
+    contract_answer = json.loads((ROOT / "rootfs" / "usr" / "share" / "vesta" / "agent-contract.json").read_text())[
+        "heartbeat"]["answer"]
+    cfg_file = TMP / "data" / "device-config.json"
+    cfg_file.unlink(missing_ok=True)
+    r = await post("/agent/v1/heartbeat", headers=bearer(), json=beat)
+    none_marked = (await r.json()).get("unavailableByDesign")
+    cfg_file.write_text(json.dumps({"unavailableByDesign": [
+        "binary_sensor.back_door", "sensor.b_temp", "binary_sensor.back_door", "{{ states('x') }}", 7]}))
+    r = await post("/agent/v1/heartbeat", headers=bearer(), json=beat)
+    answer = await r.json()
+    ck("the beat's answer carries the devices asleep by design, as the agreement declares it (sorted, once, ids only)",
+       r.status == 200 and "unavailableByDesign" in contract_answer
+       and answer.get("unavailableByDesign") == ["binary_sensor.back_door", "sensor.b_temp"], answer)
+    ck("  ...an empty list when none is marked (no setting stored)", none_marked == [], none_marked)
+    cfg_file.write_text(json.dumps({"unavailableByDesign": "binary_sensor.x"}))
+    r = await post("/agent/v1/heartbeat", headers=bearer(), json=beat)
+    ck("  ...and a setting of another shape is an empty list, never a refused beat",
+       r.status == 200 and (await r.json()).get("unavailableByDesign") == [])
+    cfg_file.unlink(missing_ok=True)
     presence = TMP / "data" / "agent-presence.json"
     presence.write_text(json.dumps({"last_seen": time.time() - 6 * 60, "status": None, "cadence": beat["cadence"]}))
     status, body = await jget("/agent-status", cookie("ops"))

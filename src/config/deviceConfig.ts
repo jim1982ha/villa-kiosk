@@ -17,6 +17,10 @@
 //     dismissedEntityIds  entities the owner removed as "no longer in HA" —
 //                    a decision about the VILLA's model, so dismissing on a
 //                    phone must dismiss on the wall tablet too
+//     unavailableByDesign  the devices that sleep between reports, whose
+//                    "unavailable" is normal (ha/unavailableByDesign) — a fact
+//                    about the villa's devices, and the VESTA Agent reads it
+//                    from the stored document (the heartbeat's answer)
 //     fmContract     the maintenance contract's cap and category names
 //     latitude, longitude, northOffsetDeg   where the villa is and which way
 //                    north lies on its model — the sun and moon are drawn from
@@ -70,6 +74,7 @@ interface SharedItems {
   deviceGroups: DeviceGroup;
   teleportPoints: TeleportPoint;
   dismissedEntityIds: true;
+  unavailableByDesign: true;
   fmContract: FmContract;
   latitude: number;
   longitude: number;
@@ -134,6 +139,15 @@ const recordsKept: SharedKeyRow<number, number> = {
   empty: RECORDS_KEPT_DAYS_DEFAULT,
 };
 
+/** A plain list of entity ids: its own index — adding one on one device and removing a DIFFERENT one on another must
+ *  not cancel each other out, which is exactly what comparing the two lists wholesale would do. */
+const idList: SharedKeyRow<string[], true> = {
+  index: (arr) => Object.fromEntries(arr.map((id) => [id, true as const])),
+  fromIndex: Object.keys,
+  parse: (raw) => (Array.isArray(raw) ? raw.filter((v): v is string => typeof v === "string") : undefined),
+  empty: [],
+};
+
 const SHARED_KEYS: { [K in SharedConfigKey]: SharedKeyRow<AppConfig[K], SharedItems[K]> } = {
   entityMap: { index: sameRecord, fromIndex: sameRecord, parse: asRecord, empty: {} },
   meshBindings: { index: sameRecord, fromIndex: sameRecord, parse: asRecord, empty: {} },
@@ -145,15 +159,8 @@ const SHARED_KEYS: { [K in SharedConfigKey]: SharedKeyRow<AppConfig[K], SharedIt
   teleportPoints: {
     index: (arr) => keyBy(arr, (p) => p.name), fromIndex: Object.values, parse: asArray, empty: [],
   },
-  // A plain id list is its own index — dismissing an entity on one device and
-  // un-dismissing a DIFFERENT one on another must not cancel each other out,
-  // which is exactly what comparing the two lists wholesale would do.
-  dismissedEntityIds: {
-    index: (arr) => Object.fromEntries(arr.map((id) => [id, true as const])),
-    fromIndex: Object.keys,
-    parse: (raw) => (Array.isArray(raw) ? raw.filter((v): v is string => typeof v === "string") : undefined),
-    empty: [],
-  },
+  dismissedEntityIds: idList,
+  unavailableByDesign: idList,
   // One value, not a collection: indexed as a single item, so a change on
   // one device replaces it whole and an untouched copy carries nothing.
   fmContract: {

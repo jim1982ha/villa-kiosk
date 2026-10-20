@@ -193,6 +193,13 @@ export interface AppConfig {
    * permanent invisible blocklist that hides a working device.
    */
   dismissedEntityIds: string[];
+  /** Devices whose "unavailable" is their design, not a fault (owner, 2026-10-21): a battery sensor that sleeps
+   *  between reports — a Wi-Fi door contact drops off minutes after each report until the door moves again. SHARED
+   *  (a fact about the villa's devices) and read through ONE place, the entity store (ha/unavailableByDesign): they
+   *  show their last real state, never "unavailable", so no live fault, no offline count, no unavailable look. The
+   *  VESTA Agent reads the same list from the heartbeat's answer and skips its offline checks for them. Empty by
+   *  default: which devices sleep is the villa's to say. */
+  unavailableByDesign: string[];
   teleportPoints: TeleportPoint[];
   /** The maintenance contract's money rules — monthly cap, category names,
    *  warning share (fm/fmTypes.ts). SHARED: they describe the villa's
@@ -344,6 +351,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   entityMap: ENTITY_MAP,
   meshBindings: {},
   dismissedEntityIds: [],
+  unavailableByDesign: [],
   teleportPoints: TELEPORT_POINTS,
   fmContract: EMPTY_FM_CONTRACT,
   eyeHeight: DEFAULT_EYE_HEIGHT,

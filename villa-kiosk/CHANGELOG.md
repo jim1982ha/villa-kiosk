@@ -1,3 +1,20 @@
+## 2.496.458
+
+### New
+- **Advanced Settings › Devices › Asleep between reports.** Pick the devices that sleep between reports, such as a
+  battery door sensor that goes "unavailable" a few minutes after each report until the door moves again. For each one
+  you pick:
+  - VESTA shows what it last reported ("Closed", since when it reported it), on the map, in the lists, in its window
+    and on its charts — never "Unavailable", never the amber "lost contact" look;
+  - no live "Unavailable" card in the Cockpit, no offline count, no red badge on the top bar or in the Recap;
+  - right after VESTA opens, it reads that last report from the villa's history (the last 10 days). If the device has
+    not reported in that time, it shows "Unknown" until its next report;
+  - the VESTA Agent is told the same list and skips its offline checks for these devices (once the Agent version
+    that reads it is installed).
+
+  The list is shared by every screen and starts empty. One thing to know: a device on this list whose battery dies
+  keeps showing its last report; take a device off the list to see "Unavailable" again.
+
 ## 2.496.457
 
 ### Fixed

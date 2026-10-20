@@ -3526,7 +3526,8 @@ async def agent_heartbeat_handler(request: web.Request) -> web.Response:
     why = _agent_cadence_problem(cadence) if cadence is not None else None
     await AGENT_PRESENCE.replace({"last_seen": time.time(), "status": status,
                                   "cadence": _agent_cadence(cadence)})
-    answer = {"ok": True, "offline_after_minutes": _agent_offline_minutes()}
+    answer = {"ok": True, "offline_after_minutes": _agent_offline_minutes(),
+              "unavailableByDesign": _unavailable_by_design()}
     global _CADENCE_REFUSAL_LOGGED
     if why is not None:
         answer["cadence"] = f"refused: {why}"
@@ -3536,6 +3537,17 @@ async def agent_heartbeat_handler(request: web.Request) -> web.Response:
     else:
         _CADENCE_REFUSAL_LOGGED = None
     return web.json_response(answer)
+
+
+def _unavailable_by_design() -> list[str]:
+    """The villa's devices asleep by design (device-config.json `unavailableByDesign`, picked in Advanced Settings ›
+    Devices): their "unavailable" is normal, and the VESTA Agent skips its offline checks for them (agent-contract.json
+    `heartbeat.answer`). ⚠️ THE KIOSK OWNS THE LIST (owner, 2026-10-21): the Kiosk is always installed, the Agent may
+    not be — the Agent reads it in every heartbeat's answer. Entity ids only (AGENT_ENTITY_RE), each once, sorted; an
+    unreadable or absent setting is an empty list, never a refused beat."""
+    cfg = DEVICE_CONFIG.read()
+    raw = cfg.get("unavailableByDesign") if isinstance(cfg, dict) else None
+    return sorted({e for e in raw if isinstance(e, str) and AGENT_ENTITY_RE.fullmatch(e)}) if isinstance(raw, list) else []
 
 
 #: The last malformed-cadence reason logged — one line per new reason, not one per beat (every few minutes).

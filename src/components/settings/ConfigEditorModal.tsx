@@ -22,6 +22,7 @@ import ConfigEditor from "./ConfigEditor";
 import BindingsTable from "./BindingsTable";
 import TelemetryPanel from "./TelemetryPanel";
 import GroupedDevices from "./GroupedDevices";
+import UnavailableByDesign from "./UnavailableByDesign";
 import EntityPicker from "./EntityPicker";
 import InlineConfirm from "@/components/common/InlineConfirm";
 import ModalFooter from "@/components/common/ModalFooter";
@@ -344,6 +345,9 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
 
               <div className="settings-section-title">Grouped devices</div>
               <GroupedDevices />
+
+              <div className="settings-section-title">Asleep between reports</div>
+              <UnavailableByDesign />
             </>
           )}
 

@@ -19,6 +19,8 @@ import { hasBootMark } from "@/utils/bootTimeline";
 import { placesAfterRefresh, entityRegistryFacts, deviceUnits } from "./registryResolve";
 import type { HassEntity, HassServiceTarget } from "@/types/ha.types";
 import type { ServiceOutcome } from "./serviceOutcome";
+import { recallFrom, UnavailableByDesign, lastReport, type RecordedState } from "./unavailableByDesign";
+import { recordedStates } from "./HAHistoryAPI";
 
 /** Subset of HA's `get_config` we use to auto-fill onboarding (location + name). */
 export interface HAConfig {
@@ -80,6 +82,9 @@ export interface EntityStoreState {
    *  Empty until the device registry answers. */
   deviceUnits: Record<string, string>;
   connection: ConnectionState;
+  /** The devices asleep by design the store applies (setUnavailableByDesign) — what a chart of their history reads
+   *  (useHistorySource: asleep is no change), so nothing keeps its own copy of the list. */
+  unavailableByDesign: ReadonlySet<string>;
   /** HA instance config (location, name, unit system, currency), fetched on
    *  connect. Null until then. */
   haConfig: HAConfig | null;
@@ -105,14 +110,19 @@ export interface EntityStoreOptions {
    *  registries within milliseconds of each other, and an integration reload
    *  emits a long run of them; only the last event's answer matters. */
   registryDebounceMs?: number;
+  /** The villa's recorded states of `ids` between two moments, per entity, oldest first — where a device that sleeps
+   *  between reports finds its last one on a fresh load (ha/unavailableByDesign). Default: the history/period read a
+   *  panel's chart already makes. */
+  history?: (ids: readonly string[], from: number, to: number) => Promise<Record<string, RecordedState[]>>;
 }
+
 
 const REGISTRY_EVENTS = ["entity_registry_updated", "device_registry_updated", "area_registry_updated", "floor_registry_updated"];
 
 export class EntityStore {
   readonly ws: HAWebSocket;
   private state: EntityStoreState = {
-    entities: {}, suppressedEntityIds: new Set(), hiddenInHaEntityIds: new Set(),
+    entities: {}, suppressedEntityIds: new Set(), hiddenInHaEntityIds: new Set(), unavailableByDesign: new Set(),
     entityAreaNames: {}, entityFloorNumbers: {}, entityDeviceIds: {}, deviceUnits: {},
     connection: "disconnected", haConfig: null, lastError: null, serviceError: null,
   };
@@ -121,6 +131,11 @@ export class EntityStore {
   private readonly allSubs = new Set<EntityCallback>();
   private readonly batch: PushBatch<HassEntity>;
   private readonly registryDebounceMs: number;
+  /** The devices that sleep between reports: what the app is given of them (ha/unavailableByDesign). */
+  private readonly byDesign = new UnavailableByDesign();
+  private readonly history: NonNullable<EntityStoreOptions["history"]>;
+  /** The devices whose history this session already read (once each, per joining the list). */
+  private readonly recalled = new Set<string>();
   private registryTimer: ReturnType<typeof setTimeout> | undefined;
   /** Settles once connect()'s subscriptions are registered — what the
    *  on-connected pass waits for, so the states are read AFTER the
@@ -130,6 +145,7 @@ export class EntityStore {
   constructor(ws: HAWebSocket = new HAWebSocket(), opts: EntityStoreOptions = {}) {
     this.ws = ws;
     this.registryDebounceMs = opts.registryDebounceMs ?? 750;
+    this.history = opts.history ?? recordedStates;
     // Live events reach React in ONE batch per window — utils/pushBatch.
     this.batch = new PushBatch<HassEntity>(opts.pushWindowMs ?? 250, (drained) => {
       const next = { ...this.state.entities };
@@ -174,6 +190,42 @@ export class EntityStore {
     domain: string, service: string, data?: Record<string, unknown>, target?: HassServiceTarget,
   ): Promise<ServiceOutcome> => this.ws.callService(domain, service, data ?? {}, target);
 
+  // ── the devices asleep by design ──────────────────────────────────────────
+  /** The villa's list (AppConfig.unavailableByDesign), given from inside the sign-in gate (UnavailableByDesignSync) —
+   *  so, with no device listed before it, the history is never read without a session. Every device that joins or
+   *  leaves it is shown again at once, and a joining one's last report read if needed. */
+  setUnavailableByDesign = (ids: ReadonlySet<string>): void => {
+    for (const id of ids) if (!this.byDesign.has(id)) this.recalled.delete(id);
+    this.show(this.byDesign.setIds(ids, this.snapshot()));
+    this.set({ unavailableByDesign: new Set(ids) });
+    void this.recall();
+  };
+
+  private show(views: HassEntity[]): void {
+    for (const v of views) {
+      this.batch.push(v);
+      this.notify(v);
+    }
+  }
+
+  /** A listed device the villa's system calls "unavailable" with no report seen yet: its last one, from history. */
+  private async recall(): Promise<void> {
+    const ids = Object.keys(this.snapshot()).filter((id) => this.byDesign.needsRecall(id) && !this.recalled.has(id));
+    if (ids.length === 0) return;
+    ids.forEach((id) => this.recalled.add(id));
+    const to = Date.now();
+    try {
+      const rows = await this.history(ids, recallFrom(to), to);
+      this.show(ids.flatMap((id) => {
+        const row = lastReport(rows[id] ?? []);
+        const view = row ? this.byDesign.recall(id, row) : null;
+        return view ? [view] : [];
+      }));
+    } catch (err) {
+      devLog("[HA] history of the devices asleep by design failed (they read unknown until they report)", err);
+    }
+  }
+
   // ── the socket ───────────────────────────────────────────────────────────
   /** Listen to the socket. Returns the undo. Separate from the constructor so
    *  a React adapter can attach in an effect and detach in its cleanup. */
@@ -211,8 +263,9 @@ export class EntityStore {
       await this.ws.subscribeEvents("state_changed", (event) => {
         const ns = (event as StateChangedEvent).data?.new_state;
         if (!ns) return;
-        this.batch.push(ns);   // React, once per window
-        this.notify(ns);       // the 3D layer, now
+        const seen = this.byDesign.see(ns);   // a device asleep by design: as it last reported
+        this.batch.push(seen);   // React, once per window
+        this.notify(seen);       // the 3D layer, now
       });
       // A rename, a new Area assignment, a device moved between areas —
       // every kiosk session follows the moment HA reports it. COALESCED:
@@ -262,12 +315,14 @@ export class EntityStore {
     const tFetched = performance.now();
     const prev = this.state.entities;
     const map: Record<string, HassEntity> = {};
-    for (const e of all) map[e.entity_id] = e;
+    const seen = all.map((e) => this.byDesign.see(e));   // a device asleep by design: as it last reported
+    for (const e of seen) map[e.entity_id] = e;
     // A full fetch supersedes anything still batched (it is at least as new).
     this.batch.dispose();
     this.set({ entities: map });
+    void this.recall();
     let pushed = 0;
-    for (const e of all) {
+    for (const e of seen) {
       const before = prev[e.entity_id];
       if (before && before.state === e.state && before.last_updated === e.last_updated) continue;
       pushed++;
