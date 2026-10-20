@@ -1,3 +1,14 @@
+## 2.496.457
+
+### Fixed
+- A device you hid in the villa's system is no longer one of VESTA's devices: no live card in the Cockpit (the
+  Master Bedroom Aqara Inverted lock you stopped using no longer shows "Unlocked · Next check: live"), and it is not
+  counted on the map, the top bar or the Recap. VESTA kept it because it was still in its own device list, without
+  asking whether the villa's system still shows it.
+- The Cockpit's updates button no longer counts an update you hid in the villa's system (the media server's
+  "TheLysHouse_Theater"): it now lists what the villa's own Settings lists. A version you chose to skip there was
+  already left out.
+
 ## 2.496.456
 
 ### Fixed

@@ -21,7 +21,7 @@ const dead = (id) => ({ entity_id: id, state: "unavailable", attributes: {} });
 const map = (...ids) => Object.fromEntries(ids.map((id) => [id, { entityId: id, type: "sensor", label: id }]));
 
 const base = {
-  deviceGroups: [], dismissed: new Set(),
+  deviceGroups: [], dismissed: new Set(), hidden: new Set(),
   mappedEntityIds: new Set(), entityDeviceIds: {},
 };
 
@@ -87,6 +87,12 @@ const offlineCase = villaDevices({
   },
 });
 
+// owner, 2026-10-21: a lock hidden in the villa's system (no longer used) still made a live "Unlocked" card
+const hiddenCase = villaDevices({
+  ...base, entityMap: map("lock.used", "lock.dropped"),
+  entities: { "lock.used": live("lock.used"), "lock.dropped": dead("lock.dropped") },
+  hidden: new Set(["lock.dropped"]),
+});
 console.log(`  reality filter kept: ${filtered.ids}`);
 console.log(`  offline subset     : ${offlineCase.unavailable} of ${offlineCase.ids}`);
 
@@ -126,6 +132,8 @@ ck("  ...choosing temperature as the one that stays", pair.ids[0] === "sensor.ha
 ck("config debris is not a device", !filtered.has("sensor.debris"));
 ck("a disabled device is not a device", !filtered.has("sensor.hidden"));
 ck("a dismissed device is not a device", !filtered.has("sensor.removed"));
+ck("a device hidden in the villa's system is not a device, nor offline",
+   hiddenCase.ids.join() === "lock.used" && hiddenCase.unavailable.length === 0, { ids: hiddenCase.ids, off: hiddenCase.unavailable });
 ck("a real one survives all three", filtered.ids.join() === "sensor.real");
 ck("offline is drawn from the same list, not from the raw entity map",
    offlineCase.unavailable.join() === "sensor.down" && offlineCase.ids.length === 2);
@@ -135,4 +143,8 @@ ck("the old positional tuple has no callers left", legacy.length === 0);
 // a profile can see. No screen builds it at all.
 ck("no screen builds the villa's devices itself — only the villa model does (all, and visible)",
    callCounts.length === 1 && callCounts[0][0] === "config/VillaModel.tsx" && callCounts[0][1] === 2, callCounts);
+// …and the villa model hands both sets the store's ONE reading of "hidden" (registryResolve.hiddenInHa), not a copy
+const model = readFileSync(join(SRC, "config/VillaModel.tsx"), "utf8");
+ck("the villa model passes the villa's hidden entities to both device sets",
+   /hiddenInHaEntityIds: hidden \} = useHA\(\)/.test(model) && (model.match(/dismissed: dismissedIds, hidden,/g) ?? []).length === 2);
 process.exit(fail ? 1 : 0);

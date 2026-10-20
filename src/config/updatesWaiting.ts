@@ -19,10 +19,13 @@ export function updateName(e: HassEntity): string {
   return ["Villa system", ...words.slice(2)].join(" ");
 }
 
-/** The names of the updates waiting (an `update` entity that is "on"), sorted. */
-export function updatesWaiting(entities: Readonly<Record<string, HassEntity>>): string[] {
+/** The names of the updates waiting (an `update` entity that is "on"), sorted — as the villa's own Settings lists
+ *  them: never one hidden in the villa's system (`hidden`: the store's one reading of it, registryResolve), nor a
+ *  version skipped there (its entity then reads "off" itself).
+ *  ⚠️ owner, 2026-10-21: the Cockpit counted "1" for a media server's update the owner had hidden — Settings showed none. */
+export function updatesWaiting(entities: Readonly<Record<string, HassEntity>>, hidden: ReadonlySet<string>): string[] {
   return Object.values(entities)
-    .filter((e) => domainOf(e.entity_id) === "update" && e.state === "on")
+    .filter((e) => domainOf(e.entity_id) === "update" && e.state === "on" && !hidden.has(e.entity_id))
     .map(updateName)
     .sort((a, b) => a.localeCompare(b));
 }
