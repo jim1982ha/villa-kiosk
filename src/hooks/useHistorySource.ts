@@ -21,8 +21,8 @@ import { useHistory, type HistoryResult } from "./useHistory";
 export function useHistorySource<Q extends HistoryRequests>(
   requests: Q | null, refresh?: string | number,
 ): HistoryResult<HistoryAnswers<Q> | null> {
-  const { ws } = useHA();
-  const port = useMemo(() => haHistoryPort(ws), [ws]);
+  const { ws, unavailableByDesign } = useHA();
+  const port = useMemo(() => haHistoryPort(ws, unavailableByDesign), [ws, unavailableByDesign]);
   const key = requests ? `${historyKey(requests)}#${refresh ?? ""}` : null;
   return useHistory<HistoryAnswers<Q> | null>(
     key, () => loadHistory(port, requests!, Date.now()), null);

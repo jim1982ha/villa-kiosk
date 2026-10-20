@@ -1,5 +1,6 @@
 import { ConfigProvider } from "@/config/ConfigContext";
 import DeviceConfigSync from "@/config/DeviceConfigSync";
+import UnavailableByDesignSync from "@/ha/UnavailableByDesignSync";
 import { FmDataProvider } from "@/fm/FmDataContext";
 import { AgentProvider } from "@/agent/AgentContext";
 import { HAStateProvider } from "@/ha/HAStateStore";
@@ -24,6 +25,9 @@ export default function App() {
                   add-on's /device-config store. Inside the gate: that
                   endpoint needs the session the gate establishes. */}
               <DeviceConfigSync />
+              {/* Headless — the devices asleep by design, handed to the
+                  entity store that applies them (ha/unavailableByDesign). */}
+              <UnavailableByDesignSync />
               {/* The Config Editor is a modal over the Dashboard (see
                   ConfigEditorModal), not a route — leaving it never unmounts
                   the villa scene, so there's no GLB reload. */}

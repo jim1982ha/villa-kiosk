@@ -49,6 +49,8 @@ interface HAStateContextType extends EntityStoreState {
   callService: (domain: string, service: string, data?: Record<string, unknown>, target?: HassServiceTarget) => Promise<ServiceOutcome>;
   /** Open the token-less connection to HA through the add-on's Supervisor proxy. */
   connect: () => Promise<void>;
+  /** The devices asleep by design (AppConfig.unavailableByDesign): given once, by UnavailableByDesignSync. */
+  setUnavailableByDesign: (ids: ReadonlySet<string>) => void;
 }
 
 const HAStateContext = createContext<HAStateContextType | null>(null);
@@ -76,6 +78,7 @@ export function HAStateProvider({ children }: { children: ReactNode }) {
       subscribeAll: store.subscribeAll,
       callService: store.callService,
       connect: store.connect,
+      setUnavailableByDesign: store.setUnavailableByDesign,
     }),
     [state, store],
   );
