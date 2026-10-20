@@ -14,6 +14,7 @@ import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
+import { elements, parseTsx, propText } from "../consistency/jsx.mjs";
 import { devicesOf } from "../consistency/devices.mjs";
 const { rowText, alarmText, stateWords, lockPill, coverPill, readableState, chartColours } = await import("@/config/reading");
 const { readingRows } = await import("@/config/readingRows");
@@ -177,7 +178,9 @@ console.log("\n  each surface asks config/reading, and nothing lower");
     ["\"Also on this device\"", "config/readingRows.ts", /\browText\(id, e\)/],
     ["the alarm line", "config/attention.ts", /detail: alarmText\(id, entity\)/],
     ["Recent activity", "components/cockpit/cockpitData.ts", /message: stateWords\(raw\.entity_id,/],
-    ["a history bar's tooltip", "components/panels/LastDayTimeline.tsx", /labelFor=\{words \?\? stateWords\(entityId,/],
+    // the prop the bar is drawn with, read from the tree (consistency/jsx), whatever its layout
+    ["a history bar's tooltip", "components/panels/LastDayTimeline.tsx", { test: () => elements(parseTsx("components/panels/LastDayTimeline.tsx"), "StateTimeline")
+      .some((el) => /^words \?\? stateWords\(entityId,/.test(String(propText(el, "labelFor")))) }],
   ]) {
     const t = src(file);
     ck(`${name} calls reading`, call.test(t) && /from "(@\/config|\.)\/reading"/.test(t));

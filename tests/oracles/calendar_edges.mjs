@@ -37,4 +37,39 @@ const mon = cellEdges(spring, spring + 1, WEEK)[0];
 ck("a week's tooltip names its Monday and its Sunday, also in the week the clocks change",
    fmtStepStamp(mon, WEEK, 8760) === `${dayMonth(mon)} – ${dayMonth(new Date(2026, 2, 29, 12).getTime())}`, fmtStepStamp(mon, WEEK, 8760));
 
+const { scheduleStatus } = await import("@/fm/fmEngine");
+const at9 = new Date(2026, 2, 25, 9).getTime();
+const due = (createdAt) => scheduleStatus({ id: "s", everyDays: 7, createdAt: new Date(createdAt).toISOString() }, [], at9).dueAt;
+const dueCompleted = scheduleStatus({ id: "s", everyDays: 7 }, [{ scheduleId: "s", at: new Date(at9).toISOString() }], at9).dueAt;
+ck("a task every 7 days keeps its clock time across a clock change (09:00 stays 09:00)",
+   new Date(due(at9)).getHours() === 9 && new Date(due(at9)).getDate() === 1 && new Date(dueCompleted).getHours() === 9,
+   [new Date(due(at9)).toString(), new Date(dueCompleted).toString()]);
+
+// ⚠️ THE GATE (retro, 2026-10-20): a calendar edge is never made from a fixed day length. Every file that holds a day's
+// length is classified here — a NEW one fails until someone says why its use is a duration, not a calendar step — and
+// flooring a time to a day or a week (Math.floor(t / DAY) …, t % DAY) is refused outside the one owner of the edges.
+const { readdirSync, readFileSync, statSync } = await import("node:fs");
+const { join } = await import("node:path");
+const DAY_LENGTH = /\b(DAY_MS|WEEK_MS)\b|86_?400_?000|864e5|24 \* 3_?600 \* 1_?000|24 \* 60 \* 60 \* 1_?000|1_?000 \* 60 \* 60 \* 24|3_?600_?000 \* 24/;
+const DAY_FLOOR = /Math\.(floor|ceil|round)\([^;\n]*\/\s*\(?\s*(\d+ \* )?(DAY_MS|WEEK_MS|86_?400_?000)|%\s*\(?\s*(\d+ \* )?(DAY_MS|WEEK_MS|86_?400_?000)/;
+const CLASSIFIED = {
+  "utils/timelineCells.ts": "THE owner of a chart's step edges (cellEdges): compares a step against a day, steps on the calendar",
+  "utils/statisticsSeries.ts": "the recorder periods' nominal lengths (PERIOD_MS) — sizes and comparisons, edges come from cellEdges",
+  "utils/sunCalc.ts": "astronomy: Julian days are fixed 86 400 s days by definition",
+  "components/panels/chartUtils.ts": "compares a step against a day and a week to choose words",
+  "components/panels/StateTimeline.tsx": "compares a step against a day to choose the tooltip's form",
+  "fm/fmEngine.ts": "\"due in N days\" as a duration figure; the due date itself is addLocalDays",
+  "components/fm/TicketsTab.tsx": "the server's retention, a duration in days",
+};
+const srcRoot = new URL("../../src/", import.meta.url).pathname;
+const files = (d) => readdirSync(d).flatMap((f) => { const p = join(d, f); return statSync(p).isDirectory() ? files(p) : /\.tsx?$/.test(p) ? [p] : []; });
+const code = (f) => readFileSync(f, "utf8").split("\n").filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join("\n");
+const all = files(srcRoot).map((f) => [f.slice(srcRoot.length), code(f)]);
+const unclassified = all.filter(([f, c]) => DAY_LENGTH.test(c) && !(f in CLASSIFIED)).map(([f]) => f);
+ck("every file holding a day's length is classified (a calendar edge comes from localDay / cellEdges)", unclassified.length === 0, unclassified);
+const stale = Object.keys(CLASSIFIED).filter((f) => !all.some(([g, c]) => g === f && DAY_LENGTH.test(c)));
+ck("  ...and no classified file has stopped holding one (the list shrinks with the code)", stale.length === 0, stale);
+const floors = all.filter(([f, c]) => f !== "utils/timelineCells.ts" && DAY_FLOOR.test(c)).map(([f]) => f);
+ck("  ...and nothing floors a time to a day or a week outside timelineCells", floors.length === 0, floors);
+
 done("✅ a day is midnight to midnight, a week Monday to Sunday, on both sides of a clock change");

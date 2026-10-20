@@ -10,6 +10,7 @@ import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
+import { elements, guardsOf, parseTsx } from "../consistency/jsx.mjs";
 const { dismissedEntitySet, orphanObjects, inventoryGaps } = await import("@/config/dismissedEntities");
 const { villaDevices, deviceFolding } = await import("@/config/deviceGroups");
 const { effectiveMapped, visibleTo } = await import("@/config/villaVisibility");
@@ -60,7 +61,8 @@ ck("  ...and a row of the model has no bin", /onRemove=\{sceneEntityIds\.has\(ke
 ck("the device's window says it is not in Home Assistant, and what to do",
    /missingFromHa\(entities, entityId\)/.test(notice) && /NOT_IN_HA/.test(notice) && /Rename or remove its object in the 3D model/.test(notice));
 ck("  ...and waits for no history it will never have",
-   /!missingFromHa\(entities, entityId\)\s*&& \(history \?\? <LastDayTimeline/.test(src("components/panels/BasePanel.tsx")));
+   (() => { const bands = elements(parseTsx("components/panels/BasePanel.tsx"), "LastDayTimeline");
+     return bands.length === 1 && guardsOf(bands[0]).includes("!missingFromHa(entities, entityId)"); })());
 ck("the three windows that show the notice give it their entity",
    /UnavailableNotice device=\{device\} entityId=\{mapping\.entityId\}/.test(src("components/panels/ControlFrame.tsx"))
    && /UnavailableNotice entityId=\{mapping\.entityId\}/.test(src("components/panels/GenericPanel.tsx"))

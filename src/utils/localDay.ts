@@ -14,6 +14,14 @@ export function localMidnight(now: number, offsetDays = 0): number {
   return d.getTime();
 }
 
+/** The same clock time `days` calendar days later — a day is midnight to midnight, so "every 7 days" keeps 09:00
+ *  across a summer-time change (owner, 2026-10-20), where 7 × 24 h landed on 08:00 or 10:00. */
+export function addLocalDays(t: number, days: number): number {
+  const d = new Date(t);
+  d.setDate(d.getDate() + days);
+  return d.getTime();
+}
+
 /** Local midnight on the 1st of the month `now` falls in, moved by `offsetMonths`. */
 export function localMonthStart(now: number, offsetMonths = 0): number {
   const d = new Date(now);

@@ -7,6 +7,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
+import { childTags, elements, parseTsx } from "../consistency/jsx.mjs";
 const { linkedSwitchProps } = await import("@/components/panels/PanelActionsContext");
 
 const toggle = () => {};
@@ -34,23 +35,9 @@ ck("  ...and the five that were use it", users.length >= 5, users.length);
 // its chart among its own content. Every chart now goes through BasePanel's
 // `history` slot, and the chrome draws that slot before the readings. Read
 // with the compiler's own tree, so a `>` inside a prop cannot fool it.
-const ts = (await import("typescript")).default;
 const CHARTS = new Set(["LastDayTimeline", "NumericHistory", "ReadingHistory", "LineChart", "StateTimeline"]);
-const tagOf = (n) => (ts.isJsxElement(n) ? n.openingElement : n).tagName?.getText();
-const strays = [];
-for (const f of walk(root)) {
-  const text = readFileSync(f, "utf8");
-  if (!/<BasePanel\b/.test(text)) continue;
-  const sf = ts.createSourceFile(f, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-  const visit = (n) => {
-    if (ts.isJsxElement(n) && tagOf(n) === "BasePanel") {
-      const inChildren = (c) => { if ((ts.isJsxElement(c) || ts.isJsxSelfClosingElement(c)) && CHARTS.has(tagOf(c))) strays.push(`${f.slice(root.length)}: <${tagOf(c)}>`); ts.forEachChild(c, inChildren); };
-      n.children.forEach(inChildren);
-    }
-    ts.forEachChild(n, visit);
-  };
-  visit(sf);
-}
+const strays = walk(root).filter((f) => /<BasePanel\b/.test(readFileSync(f, "utf8")))
+  .flatMap((f) => elements(parseTsx(f), "BasePanel").flatMap((el) => childTags(el).filter((t) => CHARTS.has(t)).map((t) => `${f.slice(root.length)}: <${t}>`)));
 ck("no window draws a chart among its own content: charts go in BasePanel's history slot", strays.length === 0, strays);
 const base = src("components/panels/BasePanel.tsx");
 const slotAt = base.search(/\(history \?\? <LastDayTimeline entityId=\{entityId\} \/>\)/), readingsAt = base.indexOf("<DeviceReadings />");

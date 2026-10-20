@@ -67,7 +67,8 @@ export function energyToday(
   const daily = week.buckets.map((b) => b.split?.used);
   const typical = typicalDay(daily);
   const standout = standoutDay(daily, typical);
-  const dayFraction = (now - localMidnight(now)) / 86_400_000;
+  // of TODAY's own length: 23 or 25 hours on a clock-change day
+  const dayFraction = (now - localMidnight(now)) / (localMidnight(now, 1) - localMidnight(now));
   const deviceTypical = (id: string) => typicalDay(days.map((t) => week.at(id, t)));
   const leaves = setup.devices.filter((d) => d.children.length === 0);
   const leader = deviceRanking(split).filter((u) => u.node.children.length === 0)[0];
