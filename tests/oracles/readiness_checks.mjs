@@ -66,7 +66,7 @@ console.log("\n  how bad, as the top bar says it (review \"One answer per questi
   const { buildAttentionItems } = await import("@/config/attention");
   const calmDevices = { ...devices, unavailable: [] };
   const five = buildReadiness({}, fiveData, { devices: calmDevices, attentionItems: buildAttentionItems({ devices: calmDevices, entities: {},
-    entityMap: {}, alertThresholds: {}, resolvedRooms: {}, fmData: fiveData }) }, {});
+    entityMap: {}, resolvedRooms: {}, fmData: fiveData }) }, {});
   ck("  ...five faults: amber — a fault is a warning, however many", five.checks.find((c) => c.id === "tickets").state === "warn"
      && five.overall === "warn", five.checks.find((c) => c.id === "tickets"));
   ck("  ...and the critical rule is the Overview's: a critical entity stands for its device",
@@ -155,7 +155,7 @@ console.log("\n  the Recap counts what the profile is shown (architecture review
   const villaDev = devicesOf({ ids: [...villa], unavailable: ["climate.bed", "camera.pool", "sensor.door_battery"] });
   const rec = (id, entityId) => ({ id, title: id, status: "open", openedAt: "2026-10-19T08:00:00Z", entityId, photoIds: [] });
   const data = { ...EMPTY_FM_DATA, tickets: [rec("cam", "camera.pool"), rec("ac", "climate.bed")] };
-  const problems = { devices: villaDev, attentionItems: buildAttentionItems({ devices: villaDev, entities, entityMap: {}, alertThresholds: {},
+  const problems = { devices: villaDev, attentionItems: buildAttentionItems({ devices: villaDev, entities, entityMap: {},
     resolvedRooms: {}, fmData: data }) };
   const owner = buildReadiness(entities, data, attentionFor(problems, () => true), {});
   const noCams = buildReadiness(entities, data, attentionFor(problems, (id) => !id.startsWith("camera.")), {});

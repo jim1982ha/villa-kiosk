@@ -164,7 +164,7 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
  *  it would take the month past the owner's monthly cap (see
  *  fmEngine's budgetStatus().cap), the operator is told BEFORE
  *  saving, because that is when the minor-vs-major decision is still theirs
- *  to make. No-op with no cap configured — wouldExceedCap is never true then. */
+ *  to make. No-op with no cap configured — projectedSpend is never over then. */
 function LogCompletion({
   scheduleId, onCancel, onSave,
 }: {

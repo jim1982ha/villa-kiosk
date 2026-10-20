@@ -1,3 +1,11 @@
+## 2.496.450
+
+### Removed
+- Nothing changes on the screen. The app carried an unfinished feature: a lower and upper limit per sensor (turning a
+  reading red past it), which no screen ever let anyone set, so it never did anything. It is gone, with the few other
+  pieces of the app nothing used. A tablet that still remembers an empty list of those limits loads as before and
+  forgets it.
+
 ## 2.496.449
 
 ### Changed

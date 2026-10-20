@@ -22,7 +22,7 @@ const ENTITIES = {
   "light.lost": ent("light.lost", "unavailable"), "sensor.t": ent("sensor.t", "24"),
   "sensor.power": ent("sensor.power", "120"), "switch.pump": ent("switch.pump", "on"),
 };
-const CONFIG = { entityMap: { "sensor.power": { entityId: "sensor.power", type: "sensor", linkedEntityId: "switch.pump" } }, alertThresholds: {} };
+const CONFIG = { entityMap: { "sensor.power": { entityId: "sensor.power", type: "sensor", linkedEntityId: "switch.pump" } } };
 const src = storeLookSource(ENTITIES, CONFIG);
 const L = (id) => deviceLook(id, src);
 const count = (ids, showingDevices = false) => groupLook(ids.map(L), { showingDevices });

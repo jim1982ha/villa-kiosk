@@ -62,7 +62,7 @@ export function useOpenPanelActions({ screen, go, panelFor, readingsOf, doors, i
   const goBack = useCallback(() => go({ type: "back" }), [go]);
   const backText = backLabel(screen, (id) => labelOf(id, config.entityMap, entities), (c) => CATEGORY_LABELS[c]);
   const readings: ReadingRow[] = activePanel
-    ? readingRows(readingsOf(activePanel.entityId), entities, config.entityMap, config.alertThresholds)
+    ? readingRows(readingsOf(activePanel.entityId), entities, config.entityMap)
     : [];
 
   // The open panel's LINKED entity (EntityMapping.linkedEntityId). Its switch

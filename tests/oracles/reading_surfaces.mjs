@@ -51,18 +51,10 @@ for (const [u, unit] of ["W", "kW", "Wh", "kWh", "VA", "%", "°C", "°F", "°", 
   for (const s of [...NUMBERS, ...OFFLINE]) add(`sensor.unit${u}_${s || "blank"}`, s, unit === "" ? {} : { unit_of_measurement: unit });
 for (const s of ["connected", "not_home", "_odd_start", "fault", "ok", "Normal", "partlycloudy", "a_very_long_status_indeed_truly"])
   add(`sensor.words_${s}`, s, { device_class: "enum" });
-add("sensor.cellar_temp", "30", { unit_of_measurement: "°C", device_class: "temperature" });   // past the limit below
-add("sensor.cellar_cold", "2", { unit_of_measurement: "°C", device_class: "temperature" });
 for (const [d, s] of [["light", "on"], ["light", "off"], ["switch", "on"], ["fan", "off"], ["person", "not_home"], ["device_tracker", "home"],
   ["camera", "idle"], ["input_number", "3.0"], ["weather", "partlycloudy"], ["media_player", "playing"], ["alarm_control_panel", "armed_away"]])
   add(`${d}.x_${s}`, s);
 const ids = Object.keys(E);
-// The owner's limits and alert overrides, as used: a measurement past its max
-// or under its min, a detector made an alarm, a hazard made quiet.
-const alertThresholds = {
-  "sensor.cellar_temp": { max: 28 }, "sensor.cellar_cold": { min: 5 },
-  "binary_sensor.motion_on": { alertState: "on" }, "binary_sensor.moisture_on": { alertState: "none" },
-};
 console.log(`  ${ids.length} fixture entities\n`);
 
 const diff = (f) => ids.filter((id) => !f(id)).map((id) => `${id}: ${JSON.stringify(E[id].state)}`);
@@ -72,7 +64,7 @@ console.log("  a list row (the device lists, \"Also on this device\")");
 {
   const bad = diff((id) => rowText(id, E[id]) === oldRow(id, E[id]));
   ck("rowText writes exactly what deviceRowText wrote, for every fixture", bad.length === 0, bad.slice(0, 5));
-  const rows = readingRows(ids, E, {}, alertThresholds);
+  const rows = readingRows(ids, E, {});
   const badRows = rows.filter((r) => r.text !== oldRow(r.id, E[r.id])).map((r) => r.id);
   ck("  ...and so do the rows of \"Also on this device\"", rows.length === ids.length && badRows.length === 0, badRows.slice(0, 5));
   ck("  (the set reaches every branch: scaled, climate arrow, class words, offline)",
@@ -85,17 +77,13 @@ console.log("\n  the Cockpit's alarm line");
   const bad = diff((id) => alarmText(id, E[id]) === oldAlarm(id, E[id]));
   ck("alarmText says what the alarm line said, for every fixture (alarm or not)", bad.length === 0, bad.slice(0, 5));
   const entityMap = Object.fromEntries(ids.map((id) => [id, { entityId: id, type: domainOf(id) }]));
-  const items = buildAttentionItems({ devices: devicesOf({ ids }), entities: E, entityMap, alertThresholds, resolvedRooms: {}, fmData: EMPTY_FM_DATA }).filter((i) => i.kind === "alarm");
+  const items = buildAttentionItems({ devices: devicesOf({ ids }), entities: E, entityMap, resolvedRooms: {}, fmData: EMPTY_FM_DATA }).filter((i) => i.kind === "alarm");
   const badItems = items.filter((i) => i.detail !== oldAlarm(i.entityId, E[i.entityId])).map((i) => `${i.entityId}: ${i.detail}`);
   ck(`every alarm Needs attention lists (${items.length}) is worded as before`, badItems.length === 0, badItems.slice(0, 5));
   const listed = new Set(items.map((i) => i.entityId));
-  ck("  (the alarms include a hazard, an override, a lost connection, a lock and a fault word)",
-     ["binary_sensor.smoke_on", "binary_sensor.motion_on", "binary_sensor.connectivity_off", "lock.l_unlocked", "lock.l_jammed", "sensor.words_fault"]
+  ck("  (the alarms include a hazard, a lost connection, a lock and a fault word — never a motion sensor seeing someone)",
+     !listed.has("binary_sensor.motion_on") && ["binary_sensor.smoke_on", "binary_sensor.connectivity_off", "lock.l_unlocked", "lock.l_jammed", "sensor.words_fault"]
        .every((id) => listed.has(id)), [...listed]);
-  // ⚠️ TODAY'S BEHAVIOUR, KEPT (the owner decides): a reading past the owner's
-  // limit is red in its window (config/reading) but is not an alarm here —
-  // the map's rule (deviceLook) reads only alert STATES, never min/max.
-  ck("  (a reading past the owner's limit is not listed, as before)", !listed.has("sensor.cellar_temp") && !listed.has("sensor.cellar_cold"));
 }
 
 // ── step 2: the control windows' pills and the history bar ────────────────
@@ -141,7 +129,7 @@ console.log("\n  the history bar (StateTimeline)");
   // a binary sensor's class look, a words sensor's palette, a constant.
   const fns = [
     ...ids.map((id) => [id, historyStateColor(id)]),
-    ...ids.filter((id) => domainOf(id) === "binary_sensor").map((id) => [`look ${id}`, binaryLook(id, E[id].attributes.device_class, alertThresholds[id]?.alertState).color]),
+    ...ids.filter((id) => domainOf(id) === "binary_sensor").map((id) => [`look ${id}`, binaryLook(id, E[id].attributes.device_class).color]),
     ["palette", paletteColorFor(STATES)], ["constant", () => "green"],
   ];
   const bad = [];

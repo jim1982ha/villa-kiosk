@@ -18,7 +18,6 @@ import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { historyOf, readingOf } from "@/config/reading";
 import { binarySensorClassInfo } from "@/config/BinarySensorClasses";
 import { domainOf } from "@/utils/entityDomain";
-import { useConfig } from "@/config/ConfigContext";
 import LastDayTimeline from "./LastDayTimeline";
 
 interface Props {
@@ -47,19 +46,17 @@ const SERIES_COLORS = ["var(--accent-teal)", "var(--accent)", "var(--accent-warm
 
 export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Props) {
   const { entities } = useHA();
-  const { config } = useConfig();
   const entityLabel = useEntityLabel();
   const ids = [group.primaryEntityId, ...group.memberEntityIds];
 
   // Each member's reading is config/reading's — the SAME answer its own
-  // sensor window gives: its words, its pill, its alarm and the owner's
-  // thresholds. ⚠️ This window used to assemble it from the pieces itself and
-  // never asked for the thresholds: a temperature over its limit was red alone
-  // and plain here, a detector in alarm lost its capitals and warning icon.
+  // sensor window gives: its words, its pill and its alarm. ⚠️ This window used
+  // to assemble it from the pieces itself: a detector in alarm lost its capitals
+  // and warning icon.
   const rows = ids.map((id) => {
     const entity = entities[id];
     const numeric = Number(entity?.state);
-    const reading = readingOf(id, entity, domainOf(id) === "binary_sensor" ? "binary_sensor" : "sensor", config.alertThresholds);
+    const reading = readingOf(id, entity, domainOf(id) === "binary_sensor" ? "binary_sensor" : "sensor");
     return {
       id,
       label: entityLabel(id),

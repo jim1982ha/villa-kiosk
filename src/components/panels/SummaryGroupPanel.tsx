@@ -140,7 +140,7 @@ export default function SummaryGroupPanel({
   const theme = useResolvedTheme();
   /** How every row looks — utils/deviceActivity's deviceLook over the store,
    *  the SAME rule and the same inputs the map badge is painted from (its
-   *  linked entity through devicePower, its alert override from config). A
+   *  linked entity through devicePower, its device_class alarm). A
    *  linked entity is frequently not itself in this group (a pump's switch
    *  lives elsewhere), so this reads the whole store, not the group's list. */
   // ...and the villa's critical list as the villa model folds it (devices.isCritical): a critical device that lost

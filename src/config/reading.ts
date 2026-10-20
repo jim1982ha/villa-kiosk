@@ -5,9 +5,6 @@
 // The sensor window, the grouped device window and "Also on this device" each
 // used to assemble a reading from the same pieces — readingKind, readingLevel,
 // binaryLook, the formatter, isUnavailable — and each assembled it differently:
-//   · the grouped window never asked for the owner's thresholds (readingLevel
-//     was called only by the sensor window), so a temperature over its limit
-//     was red alone and plain in its group;
 //   · a grouped detector in alarm lost the capitals and the warning icon;
 //   · the rows coloured binary sensors only.
 // Six releases in one day (2.496.279–297) each re-fixed one of those windows.
@@ -27,8 +24,7 @@
 // chartColours now — same words, same tones (same oracle).
 
 import type { HassEntity } from "@/types/ha.types";
-import type { AlertLevel, Threshold } from "./ThresholdConfig";
-import { readingKind, readingLevel, type ReadingKind } from "./sensorReading";
+import { readingKind, readingLevel, type AlertLevel, type ReadingKind } from "./sensorReading";
 import { binaryLook } from "./binaryLook";
 import { stateLabelFor } from "./BinarySensorClasses";
 import { deviceRowText, formatSensorParts, prettyState } from "@/utils/entityValue";
@@ -42,7 +38,6 @@ import { coverStateLabel } from "@/utils/panelRules";
 /** The colour a measurement's number (and its chart) takes at each level. */
 const LEVEL_COLOR: Record<AlertLevel, string> = {
   normal: "var(--status-on)",
-  warning: "var(--status-warning)",
   danger: "var(--status-danger)",
 };
 
@@ -55,8 +50,7 @@ export interface Reading {
    *  day); "ok". ⚠️ UNKNOWN IS NOT LOST CONTACT (owner, 2026-10-18; architecture review 2026-10-19): the window
    *  shouted UNAVAILABLE and "Contact with this device is lost" for a sensor whose device was answering. */
   contact: "lost" | "no-value" | "ok";
-  /** How alarming: a binary sensor in its problem state, or a measurement
-   *  outside the owner's thresholds. */
+  /** How alarming: a binary sensor in its problem state. */
   level: AlertLevel;
   /** What to print: the number, the words — in CAPITALS when it is an alarm
    *  or offline, as a pill shouts them. */
@@ -79,7 +73,7 @@ export interface Reading {
 
 /**
  * The reading of `id`. `mappingType` is how the villa maps it ("binary_sensor"
- * for an on/off sensor); `alertThresholds` the owner's limits and alert states.
+ * for an on/off sensor).
  *
  * Offline always wins: an unavailable sensor never shows its class's "Clear"
  * or "No leak", which would claim a reading that was never taken. An entity
@@ -90,18 +84,16 @@ export function readingOf(
   id: string,
   entity: HassEntity | undefined,
   mappingType: string,
-  alertThresholds: Readonly<Record<string, Threshold>>,
 ): Reading {
   const kind = readingKind(entity, mappingType);
-  const threshold = alertThresholds[id];
   const unavailable = isUnavailable(entity);
   const contact = contactOf(entity?.state);
   const lost = contact === "lost";
   const noValue = contact === "no-value";
   const deviceClass = entity?.attributes.device_class as string | undefined;
   if (kind === "binary") {
-    const look = binaryLook(id, deviceClass, threshold?.alertState);
-    const level = readingLevel(entity, kind, threshold, look.problem);
+    const look = binaryLook(id, deviceClass);
+    const level = readingLevel(entity, kind, look.problem);
     const state = entity?.state === "on" ? "on" : "off";
     const alarm = !unavailable && level === "danger";
     const words = look.word(state);
@@ -117,7 +109,7 @@ export function readingOf(
       stateColor: look.color,
     };
   }
-  const level = readingLevel(entity, kind, threshold, undefined);
+  const level = readingLevel(entity, kind, undefined);
   const parts = entity ? formatSensorParts(entity) : { value: "", unit: "" };
   return {
     kind, unavailable, contact, level,
@@ -132,11 +124,9 @@ export function readingOf(
 }
 
 /** The `.status-pill`-style tone for a reading shown as a ROW's value ("Also
- *  on this device"): its pill tone, or a measurement's level when it is out of
- *  bounds; a normal number keeps the row's quiet colour (undefined). */
+ *  on this device"): its pill tone; a number keeps the row's quiet colour (undefined). */
 export function rowTone(r: Reading): string | undefined {
-  if (r.pill) return r.pill;
-  return r.level === "normal" ? undefined : r.level;
+  return r.pill ?? undefined;
 }
 
 /** Which history goes under a reading: the states of an on/off sensor, the

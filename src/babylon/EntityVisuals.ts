@@ -811,7 +811,7 @@ export class EntityVisuals {
     const c = this.lookCfg;
     if (c && c.from === this.config && c.crit === this.critical) return c.cfg;
     const crit = this.critical;
-    const cfg = { entityMap: this.config.entityMap, alertThresholds: this.config.alertThresholds, isCritical: (id: string) => crit.has(id) };
+    const cfg = { entityMap: this.config.entityMap, isCritical: (id: string) => crit.has(id) };
     this.lookCfg = { from: this.config, crit, cfg };
     return cfg;
   }
@@ -5526,8 +5526,8 @@ export class EntityVisuals {
     const setDiffuse = this.diffuseOf(mesh);
 
     // What the mesh shows is utils/deviceActivity's meshLookFor — the SAME
-    // classification the badge is painted from (device_class, the villa's
-    // alert override, in-between states). Only the painting is here.
+    // classification the badge is painted from (device_class, in-between
+    // states). Only the painting is here.
     const look = meshLookFor(readingOf(state.entity_id, this.lookSource));
     // A device authored as POSE meshes (lock.foo__locked / __unlocked, a
     // door "__open"/"__closed") shows its state by which pose is visible

@@ -97,7 +97,7 @@ console.log("\n  ONE card per device, on the Overview and in Tickets, and the co
   const records = [{ ...rec("p1", "sensor.pump_energy"), openedAt: at(1) }, { ...rec("p2", "sensor.pump_power", "in_progress"), openedAt: at(2) },
     rec("l1", "lock.door"), rec("n1", undefined), { ...rec("n2", undefined, "in_progress"), openedAt: at(4) },
     { ...rec("d1", "lock.back", "in_progress"), openedAt: at(3) }, { ...rec("z", "lock.back", "resolved"), resolvedAt: at(5) }];
-  const overview = groupAttention(buildAttentionItems({ devices: devicesOf({ folding }), entities: {}, entityMap: {}, alertThresholds: {}, resolvedRooms: {}, fmData: fm(records) }));
+  const overview = groupAttention(buildAttentionItems({ devices: devicesOf({ folding }), entities: {}, entityMap: {}, resolvedRooms: {}, fmData: fm(records) }));
   const tickets = W.ticketCards(records, fold);
   const counts = W.openCounts(records, fold);
   const has = (g, kind) => cardActions(g).some((a) => a.kind === kind);
@@ -129,7 +129,7 @@ console.log("\n  a fault naming several sensors sits on ONE card, on every scree
   const entities = { "sensor.pump_energy": { entity_id: "sensor.pump_energy", state: "unavailable", attributes: {} } };
   const of = recordDeviceOf(folding, (id) => id in entities);
   const records = [rec("m1", "sensor.gone,sensor.pump_energy"), { ...rec("m2", "sensor.gone,sensor.pump_energy"), status: "in_progress" }];
-  const overview = groupAttention(buildAttentionItems({ devices: devicesOf({ unavailable: ["sensor.pump_energy"], folding }), entities, entityMap: {}, alertThresholds: {}, resolvedRooms: {}, fmData: fm(records) }));
+  const overview = groupAttention(buildAttentionItems({ devices: devicesOf({ unavailable: ["sensor.pump_energy"], folding }), entities, entityMap: {}, resolvedRooms: {}, fmData: fm(records) }));
   const tickets = W.ticketCards(records, of);
   ck("the Overview card, the Tickets card and every record's key are the pump's",
      records.every((t) => W.recordWorkKey(t, of) === "device:sensor.pump_power") && tickets.map((t) => t.key).join() === "device:sensor.pump_power"
@@ -138,7 +138,7 @@ console.log("\n  a fault naming several sensors sits on ONE card, on every scree
   ck("  ...counted once: one device with a fault and a ticket", JSON.stringify(W.openCounts(records, of)) === JSON.stringify({ faults: 1, tickets: 1, total: 1 }),
      W.openCounts(records, of));
   ck("  ...and with its device offline, the fault knows it (it joins the device's Unavailable line)",
-     buildAttentionItems({ devices: devicesOf({ folding }), entities, entityMap: {}, alertThresholds: {}, resolvedRooms: {}, fmData: fm(records.slice(0, 1)) }).find((i) => i.id === "fault:m1")?.offline === true);
+     buildAttentionItems({ devices: devicesOf({ folding }), entities, entityMap: {}, resolvedRooms: {}, fmData: fm(records.slice(0, 1)) }).find((i) => i.id === "fault:m1")?.offline === true);
 }
 
 console.log("\n  where things land:");
@@ -155,7 +155,7 @@ ck("a guest's Report a problem: the guest form, on no device", screenReducer(STA
 ck("  ...and a guest cannot be sent to the Tickets tab", screenReducer(START, { type: "editTicket", id: "b" }, GUEST).ticketFor === null);
 
 console.log("\n  the alert's number, as Telegram writes it (owner, 2026-10-14):");
-const numbered = buildAttentionItems({ devices: devicesOf(), entities: {}, entityMap: {}, alertThresholds: {}, resolvedRooms: {}, fmData: fm([{ ...rec("n", "switch.pump"), title: "House Pump Power has not run", alertNumber: 5 }, rec("p", "lock.door")]) });
+const numbered = buildAttentionItems({ devices: devicesOf(), entities: {}, entityMap: {}, resolvedRooms: {}, fmData: fm([{ ...rec("n", "switch.pump"), title: "House Pump Power has not run", alertNumber: 5 }, rec("p", "lock.door")]) });
 ck("a fault from a VESTA Agent alert reads \"#5 · …\" on its card; one without a number, its title alone",
    numbered.find((i) => i.ticketId === "n")?.title === "#5 · House Pump Power has not run" && numbered.find((i) => i.ticketId === "p")?.title === "fault p",
    numbered.map((i) => i.title));
@@ -166,7 +166,7 @@ const ov = readFileSync(new URL("../../src/components/cockpit/CockpitOverview.ts
 console.log("\n  an offline device is ONE line (owner, 2026-10-14: the same Timmerflotte said \"Unavailable\" and \"offline for 9 h\"):");
 const ent = (id, state) => ({ entity_id: id, state, attributes: {}, last_changed: "", last_updated: "" });
 const offlineDevice = (batteryState) => groupAttention(buildAttentionItems({ devices: devicesOf({ unavailable: ["sensor.example_temperature"], folding: new Map([["sensor.example_battery", "sensor.example_temperature"]]) }), entities: { "sensor.example_temperature": ent("sensor.example_temperature", "unavailable"),
-              "sensor.example_battery": ent("sensor.example_battery", batteryState) }, entityMap: {}, alertThresholds: {}, resolvedRooms: {}, fmData: fm([{ ...rec("off", "sensor.example_battery"), title: "Example has been offline for 9 h." }]) }));
+              "sensor.example_battery": ent("sensor.example_battery", batteryState) }, entityMap: {}, resolvedRooms: {}, fmData: fm([{ ...rec("off", "sensor.example_battery"), title: "Example has been offline for 9 h." }]) }));
 const [one] = offlineDevice("unavailable");
 ck("the fault on another entity of the device, itself unavailable, goes onto the device's Unavailable line",
    one.items.length === 1 && one.items[0].kind === "unavailable" && one.items[0].fault?.ticketId === "off"
@@ -205,7 +205,7 @@ ck("a fault's source is read from its record: the Agent's origin, its alert numb
    && S.faultSource(rec("p", "x.y")) === "person");
 const lineSources = (g) => cockpitCard(g, null).lead;
 const night = groupAttention(buildAttentionItems({ devices: devicesOf({ unavailable: ["sensor.example_temperature"], folding: new Map([["sensor.example_battery", "sensor.example_temperature"]]) }), entities: { "sensor.example_temperature": ent("sensor.example_temperature", "unavailable"),
-              "sensor.example_battery": ent("sensor.example_battery", "unavailable") }, entityMap: {}, alertThresholds: {}, resolvedRooms: {}, fmData: fm([agentRec({ id: "n1", entityId: "sensor.example_battery", origin: "night", title: "Example offline" })]) }))[0];
+              "sensor.example_battery": ent("sensor.example_battery", "unavailable") }, entityMap: {}, resolvedRooms: {}, fmData: fm([agentRec({ id: "n1", entityId: "sensor.example_battery", origin: "night", title: "Example offline" })]) }))[0];
 ck("  ...an offline device and its night check's fault: ONE line, two icons — Live and Maintenance check, both a warning (amber)",
    JSON.stringify(lineSources(night)) === JSON.stringify({ sources: ["live", "night"], severities: ["warn", "warn"] }),
    lineSources(night));
@@ -228,7 +228,7 @@ const noDevices = { ids: [], unavailable: [], has: () => false, deviceOf: (id) =
 // the Recap reads ONE profile view: its devices and the problems the Overview lists for it (attention items)
 const ready = (tickets, devs = noDevices) => {
   const data = fm(tickets);
-  const view = { devices: devs, attentionItems: buildAttentionItems({ devices: devs, entities: {}, entityMap: {}, alertThresholds: {}, resolvedRooms: {}, fmData: data }) };
+  const view = { devices: devs, attentionItems: buildAttentionItems({ devices: devs, entities: {}, entityMap: {}, resolvedRooms: {}, fmData: data }) };
   return buildReadiness({}, data, view, {}).checks.find((c) => c.id === "tickets");
 };
 const readyWith = (tickets) => ready(tickets);
@@ -363,7 +363,7 @@ const told = { ...rec("s", "switch.pump"), status: "open", updates: [
   { at: "2026-10-14T09:10:00.000Z", status: "open", photoIds: [], kind: "noted", note: "🆘 Need help pressed by Fabien" }] };
 const reopenedThenTold = { ...told, updates: [{ at: "2026-10-13T08:00:00.000Z", status: "resolved", photoIds: [] },
   { at: "2026-10-14T07:00:00.000Z", status: "open", photoIds: [], kind: "reopened", by: "Owner" }, ...told.updates.slice(1)] };
-const withLatest = buildAttentionItems({ devices: devicesOf(), entities: {}, entityMap: {}, alertThresholds: {}, resolvedRooms: {}, fmData: fm([told]) });
+const withLatest = buildAttentionItems({ devices: devicesOf(), entities: {}, entityMap: {}, resolvedRooms: {}, fmData: fm([told]) });
 ck("the card's line under the fault: the LAST thing Telegram said, with its time",
    withLatest[0].latest?.note === "🆘 Need help pressed by Fabien" && withLatest[0].latest.at === "2026-10-14T09:10:00.000Z", withLatest[0].latest);
 ck("  ...a noted line is never a status change: \"reopened by Owner\" still read under it",
@@ -424,7 +424,7 @@ console.log("\n  one line per problem (owner, 2026-10-17: \"#49 · One mains pha
   const lost = (id) => ({ ...rec(id, "sensor.phase_a_voltage,sensor.phase_b_voltage"), title: "One mains phase lost", alertNumber: 49 });
   const six = ["a", "b", "c", "d", "e", "f"].map(lost);
   const ents = { "sensor.phase_b_voltage": { entity_id: "sensor.phase_b_voltage", state: "230", attributes: { friendly_name: "Phase B Voltage" } } };
-  const items = buildAttentionItems({ devices: devicesOf(), entities: ents, entityMap: {}, alertThresholds: {}, resolvedRooms: {}, fmData: fm([...six, { ...rec("g", "lock.door"), title: "Door unlocked" }]) });
+  const items = buildAttentionItems({ devices: devicesOf(), entities: ents, entityMap: {}, resolvedRooms: {}, fmData: fm([...six, { ...rec("g", "lock.door"), title: "Door unlocked" }]) });
   const groups = groupAttention(items);
   const g = groups.find((x) => x.items.some((i) => i.title.includes("phase lost")));
   const card = draw(h(AttentionCard, { card: cockpitCard(g, { checkMinutes: 5, nightlyAt: "02:00" }), onOpenEntity: () => {} }));

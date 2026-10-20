@@ -29,7 +29,7 @@ const ent = (id, state, dc) => ({
 /** A badge reading with no per-entity override configured. */
 const read = (type, e) => ({
   type, entity: e, linkedOn: false,
-  alertState: alertStateFor(e.attributes.device_class, undefined),
+  alertState: alertStateFor(e.attributes.device_class),
 });
 
 let fail = 0;
@@ -39,7 +39,7 @@ const ck = (n, ok) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}`); if (!o
 const motion = ent("binary_sensor.hall", "on", "motion");
 const motionBadge = badgeFaceAndRing(read("binary_sensor", motion));
 const motionHistory = statusKeyFor("on", "binary_sensor");
-const motionIsFault = alertStateFor("motion", undefined) === "on";
+const motionIsFault = alertStateFor("motion") === "on";
 
 console.log("  a motion sensor reading `on`:");
 console.log(`      badge face   : ${motionBadge.face}`);
@@ -64,18 +64,6 @@ const lockPositions = {
   locking: switchPosition(ent("lock.front", "locking"), "lock"),
 };
 console.log("  lock switch positions:", JSON.stringify(lockPositions));
-
-/* ── 4b. the villa's own override outranks the device_class default ───── */
-// This is why `alertState` is a REQUIRED argument. An owner who decides that
-// motion in a closed wing IS a fault sets it per entity, and the map badge has
-// to honour it — before this, only the panel could see it at all.
-const overridden = badgeFaceAndRing({
-  type: "binary_sensor", entity: motion, linkedOn: false,
-  alertState: alertStateFor("motion", "on"),
-});
-const overrideWins = alertStateFor("motion", "on") === "on"
-  && alertStateFor("moisture", "off") === "off";
-console.log(`  motion + per-entity override "on" -> badge ${overridden.face}`);
 
 /* ── 5. the two alert word-lists became one ───────────────────────────── */
 // `jammed` and `triggered` were in the status table and NOT in the private set
@@ -178,8 +166,6 @@ ck("an unavailable lock claims NO position",
 // retry. Only an unobserved state withholds the control.
 ck("a jammed lock reads not-secured, and keeps its retry", lockPositions.jammed === "on");
 ck("a lock in motion claims no position", lockPositions.locking === "unknown");
-ck("a per-entity override outranks the device_class default", overrideWins);
-ck("  ...and it reaches the map badge, not just the panel", overridden.face === "alert");
 ck("the status table's alert words now reach the badge", nowAlerts);
 ck("no second alert word-list in the tree", privateLists.length === 0);
 ck("the device_class override is combined in exactly one module", overrideCombos.length === 0);

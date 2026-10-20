@@ -115,7 +115,6 @@ ck("every Facility card: its pills and when on one line under the title (RecordM
   // review 26: a step says what it is (agent-contract.json ticketUpdate) — the card read the agent's title changes by
   // their first words and took them for status steps. Driven through the functions, with a fixed clock.
   const { faultNoteLines, faultWhen } = await import("../../src/fm/faultNotes.ts");
-  const { FM_TICKET_UPDATE_KINDS } = await import("@/fm/fmTypes");
   const at = (h) => `2026-10-10T${String(h).padStart(2, "0")}:00:00Z`;
   const stamp = (s) => s.slice(5, 13).replace("T", " ");
   const t = { id: "t", status: "in_progress", openedAt: at(1), title: "Motion battery at 7%", note: "Check: Replace the battery.",
@@ -157,8 +156,9 @@ ck("every Facility card: its pills and when on one line under the title (RecordM
     { at: at(7), status: "open", by: "Owner", kind: "reopened", note: "Still beeping", photoIds: [] }] };
   ck("a reopened fault says when and by whom", faultWhen(reopened, stamp) === "Opened 10-10 01 by VESTA Agent · reopened 10-10 07 by Owner", faultWhen(reopened, stamp));
   const contract = JSON.parse(readFileSync(new URL("../../rootfs/usr/share/vesta/agent-contract.json", import.meta.url), "utf8"));
+  const kinds = /export type FmTicketUpdateKind = ([^;]+);/.exec(src("fm/fmTypes.ts"))?.[1].match(/"[^"]+"/g)?.map((k) => k.slice(1, -1));
   ck("the step kinds are the agreement's, the one list both sides read",
-     JSON.stringify(FM_TICKET_UPDATE_KINDS) === JSON.stringify(contract.ticketUpdate.kinds) && contract.ticketUpdate.kinds.includes("reopened"));
+     JSON.stringify(kinds) === JSON.stringify(contract.ticketUpdate.kinds) && contract.ticketUpdate.kinds.includes("reopened"), kinds);
 }
 const faults = src("components/fm/TicketsTab.tsx");
 ck("a fault card no longer repeats its history's status lines, and reads its notes and when through faultNotes",

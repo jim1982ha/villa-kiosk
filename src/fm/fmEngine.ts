@@ -243,15 +243,6 @@ export function projectedSpend(
   return { month, minorSpend, cap, over: state === "exceeded", state };
 }
 
-/** Whether a new capped expense of `amount` would reach the cap — warned
- *  about before it is committed. Never true with no cap. */
-export function wouldExceedCap(
-  costs: readonly FmCost[], amount: number,
-  terms: Pick<FmTerms, "monthlyCap" | "warnAt"> = NO_FM_TERMS, now = Date.now(),
-): boolean {
-  return projectedSpend(costs, { amount, category: "minor" }, terms, now).over;
-}
-
 /** The figures that are PER RECORD — a repair's time, the closed ones. What is OPEN is counted per DEVICE card, as
  *  the Overview and the Tickets tab draw it (deviceWork.openCounts) — the recap's "Open" line read this per record
  *  while its own readiness section and the Tickets tab counted cards (architecture review, 2026-10-19). */

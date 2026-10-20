@@ -15,9 +15,9 @@ const { badgeKindFor, meshLookFor } = await import("@/utils/deviceActivity");
 const { alertStateFor } = await import("@/config/BinarySensorClasses");
 
 const ent = (state, attrs = {}) => ({ entity_id: "x.y", state, attributes: attrs, last_changed: "", last_updated: "" });
-const read = (type, state, attrs = {}, override) => ({
+const read = (type, state, attrs = {}) => ({
   type, entity: ent(state, attrs), linkedOn: false,
-  alertState: alertStateFor(attrs.device_class, override),
+  alertState: alertStateFor(attrs.device_class),
 });
 
 console.log("  the cases the old mesh rule got wrong:");
@@ -35,8 +35,6 @@ console.log("  the cases the old mesh rule got wrong:");
   ck("a leak sensor on: pulses", meshLookFor(leak).on === true && badgeKindFor(leak) === "alert");
   const net = read("binary_sensor", "off", { device_class: "connectivity" });
   ck("a connectivity sensor gone OFF: pulses (the old rule never did)", meshLookFor(net).on === true && !oldPulse("off"));
-  const quiet = read("binary_sensor", "on", { device_class: "moisture" }, "none");
-  ck("the villa's override 'never a fault' silences the pulse", badgeKindFor(quiet) !== "alert" && meshLookFor(quiet).on === false, [badgeKindFor(quiet), meshLookFor(quiet)]);
   ck("an unavailable sensor: flagged, not pulsing", meshLookFor(read("binary_sensor", "unavailable")).unavailable === true && meshLookFor(read("binary_sensor", "unavailable")).on === false);
   ck("a buffering player glows; one merely 'on' (idle) does not — like its badge",
      meshLookFor(read("media_player", "buffering")).on === true && meshLookFor(read("media_player", "on")).on === false);

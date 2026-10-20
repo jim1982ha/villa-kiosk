@@ -34,10 +34,9 @@ export interface BinaryLook {
   danger(state: string): boolean;
 }
 
-/** `override`: the owner's own alert state for this sensor (config.alertThresholds). */
-export function binaryLook(entityId: string, deviceClass: string | undefined, override: string | undefined): BinaryLook {
-  const problem = alertStateFor(deviceClass, override);
-  const colourAlert = colourAlertStateFor(deviceClass, override);
+export function binaryLook(entityId: string, deviceClass: string | undefined): BinaryLook {
+  const problem = alertStateFor(deviceClass);
+  const colourAlert = colourAlertStateFor(deviceClass);
   const secure = secureStateFor(deviceClass);
   const status = (s: string) => binaryStatus(s, colourAlert, secure);
   const danger = (s: string) => problem !== undefined && s === problem;

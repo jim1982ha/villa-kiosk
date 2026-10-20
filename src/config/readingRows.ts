@@ -6,11 +6,9 @@
 // ⚠️ THE ROWS HAD WORDS AND NO COLOUR (until 2.496.297). A smoke detector's
 // "Smoke detected" listed under its battery read in the same grey as "Clear",
 // while the detector's own window showed it red. A sensor's row now takes its
-// tone from config/reading — the one answer its own window gives (2.496.305:
-// a measurement past the owner's limit is coloured too).
+// tone from config/reading — the one answer its own window gives.
 
 import type { HassEntity } from "@/types/ha.types";
-import type { Threshold } from "./ThresholdConfig";
 import { labelOf } from "./EntityMap";
 import { readingOf, rowText, rowTone } from "./reading";
 import { domainOf } from "@/utils/entityDomain";
@@ -29,7 +27,6 @@ export function readingRows(
   ids: readonly string[],
   entities: Record<string, HassEntity>,
   entityMap: Record<string, { label?: string } | undefined>,
-  alertThresholds: Record<string, Threshold>,
 ): ReadingRow[] {
   return ids.map((id) => {
     const e = entities[id];
@@ -38,10 +35,9 @@ export function readingRows(
       id,
       label: labelOf(id, entityMap, entities),
       text: e ? rowText(id, e) : "",
-      // A sensor's row takes the tone its own window gives it (config/reading):
-      // a binary state's pill tone, a measurement out of the owner's bounds.
+      // A sensor's row takes the tone its own window gives it (config/reading): a binary state's pill tone.
       tone: e && (domain === "binary_sensor" || domain === "sensor")
-        ? rowTone(readingOf(id, e, domain, alertThresholds))
+        ? rowTone(readingOf(id, e, domain))
         : undefined,
     };
   });

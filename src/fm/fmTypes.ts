@@ -124,13 +124,9 @@ export interface FmCost extends FmProvenance {
 }
 
 export type FmTicketStatus = "open" | "in_progress" | "resolved";
-/** Every status, in the table's order (fm-records.json). */
-export const FM_TICKET_STATUSES = FM_RECORDS.ticketStatuses as readonly FmTicketStatus[];
 
 /** A cost's category — see FmCost. */
 export type FmCostCategory = "minor" | "major";
-/** Every category, in the table's order (fm-records.json). */
-export const FM_COST_CATEGORIES = FM_RECORDS.costCategories as readonly FmCostCategory[];
 
 /** One recorded step in a fault's life — raised, picked up, resolved.
  *
@@ -163,8 +159,6 @@ export interface FmTicketUpdate {
 }
 
 export type FmTicketUpdateKind = "reopened" | "retitled" | "reading" | "noted" | "cleared";
-/** Every kind, from the agreement the VESTA Agent writes by. */
-export const FM_TICKET_UPDATE_KINDS = AGENT_CONTRACT.ticketUpdate.kinds as readonly FmTicketUpdateKind[];
 /** The kinds that carry the status the fault already had and never change it (fmEngine.statusChanges), and the notes a
  *  close written before kinds existed said "nothing done" with — the agreement's, read by this app AND by the proxy's
  *  expiry of old closed faults (architecture review, 2026-10-15: the proxy kept its own copy, and it had drifted). */

@@ -42,15 +42,14 @@ console.log("\n  how many are on, per category:");
   };
   const entities = { "lock.front": e("lock.front", "locked"), "lock.back": e("lock.back", "unlocked"),
     "light.a": e("light.a", "on"), "sensor.t": e("sensor.t", "24") };
-  // "On" per category is groupLook's POWER count over the category's members — the one rule;
-  // categoryMembers only says which devices a category holds (2.496.268).
+  // "On" per category is groupLook's POWER count over the category's members — the one rule
+  // (which devices a category holds is villaVisibility.categoryMembers, driven below).
   const { storeLookSource, deviceLook, groupLook } = await import("@/utils/deviceActivity");
-  const src = storeLookSource(entities, { entityMap, alertThresholds: {} });
-  const members = Object.fromEntries(A.categoryMembers(Object.keys(entityMap), entities, entityMap).map((c) => [c.category, c.entityIds]));
+  const src = storeLookSource(entities, { entityMap });
+  const members = { access_control: ["lock.front", "lock.back"], comfort: ["sensor.t"] };
   const on = (ids) => groupLook(ids.map((id) => deviceLook(id, src)), { showingDevices: false }).onCount;
   ck("two locks, one unlocked: 1 on (was 2 on)", members.access_control.length === 2 && on(members.access_control) === 1);
   ck("a temperature reading adds a device, not an 'on'", members.comfort.length === 1 && on(members.comfort) === 0);
-  ck("an unmapped device is not counted", A.categoryMembers(["switch.x"], { "switch.x": e("switch.x", "on") }, {}).every((c) => c.entityIds.length === 0));
 }
 
 console.log("\n  switching a mixed list:");
@@ -89,18 +88,11 @@ ck("a number is a measurement; words are text; a binary sensor is binary",
 ck("an OFFLINE power sensor is still a measurement — its chart stays (it became text)",
    S.readingKind(e("sensor.p", "unavailable", { unit_of_measurement: "W" }), "sensor") === "measurement");
 ck("  ...an offline sensor with no unit is text, as before", S.readingKind(e("sensor.ap", "unavailable"), "sensor") === "text");
-ck("alarm level: out of range is danger; a binary sensor in its alert state is danger; text never",
-   S.readingLevel(e("sensor.t", "40"), "measurement", { max: 30 }, undefined) === "danger"
-   && S.readingLevel(e("binary_sensor.leak", "on"), "binary", undefined, "on") === "danger"
-   && S.readingLevel(e("sensor.ap", "down"), "text", { max: 1 }, undefined) === "normal");
-
-console.log("\n  a category's devices:");
-{
-  const ents = { "lock.a": e("lock.a", "locked"), "lock.b": e("lock.b", "unlocked") };
-  const counts = A.categoryMembers(["lock.a", "lock.b"], ents, { "lock.a": { type: "lock", category: "access_control" }, "lock.b": { type: "lock", category: "access_control" } });
-  ck("a category knows its devices (its list opens them)", counts.find((c) => c.category === "access_control").entityIds.join() === "lock.a,lock.b");
-}
-
+ck("alarm level: a binary sensor in its alert state is danger; a measurement and text never (no per-sensor limits since 2.496.450)",
+   S.readingLevel(e("binary_sensor.leak", "on"), "binary", "on") === "danger"
+   && S.readingLevel(e("binary_sensor.leak", "off"), "binary", "on") === "normal"
+   && S.readingLevel(e("sensor.t", "40"), "measurement", undefined) === "normal"
+   && S.readingLevel(e("sensor.ap", "down"), "text", undefined) === "normal");
 
 console.log("\n  what a bulk switch says it will do (owner, 2026-10-20):");
 {

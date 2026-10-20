@@ -25,7 +25,6 @@ import type { HassEntity } from "@/types/ha.types";
 import { isSwitchedOn } from "@/utils/deviceActivity";
 import { contactOf, isOffline, lockBolt, type LockBolt } from "@/utils/stateColors";
 import { effectiveSensorClass, toBaseUnit } from "./SensorClasses";
-import { levelForValue, type Threshold } from "./ThresholdConfig";
 import { domainOf } from "@/utils/entityDomain";
 
 /** Only `.has` is called — villaDevices(...) satisfies it, and so does a Set. */
@@ -70,8 +69,6 @@ export interface PowerFacts {
   /** Total draw, normalised to watts BEFORE summing (a 3.2 kW mains meter
    *  once contributed 3.2). A member whose unit cannot be scaled adds 0. */
   totalW: number;
-  /** Any member over the threshold configured FOR IT (none ship). */
-  alert: boolean;
 }
 export interface VillaSummary {
   locks: LockFacts | null;
@@ -136,9 +133,7 @@ export function climateFacts(entities: Record<string, HassEntity>, allowed?: All
   };
 }
 
-export function powerFacts(
-  entities: Record<string, HassEntity>, thresholds: Record<string, Threshold>, index?: DomainIndex,
-): PowerFacts | null {
+export function powerFacts(entities: Record<string, HassEntity>, index?: DomainIndex): PowerFacts | null {
   // By CLASS, not a regex over the unit — "kW" is power too (SensorClasses).
   const sensors = ofDomain(entities, "sensor", undefined, index).filter(
     (e) => effectiveSensorClass(e.attributes.device_class as string | undefined,
@@ -148,10 +143,6 @@ export function powerFacts(
     ids: idsOf(sensors),
     totalW: sensors.reduce(
       (sum, e) => sum + (toBaseUnit(e.state, e.attributes.unit_of_measurement as string | undefined) ?? 0), 0),
-    alert: sensors.some((e) => {
-      const v = Number(e.state);
-      return Number.isFinite(v) && levelForValue(v, thresholds[e.entity_id]) !== "normal";
-    }),
   };
 }
 
@@ -160,7 +151,6 @@ export function villaSummary(input: {
   /** The villa's own devices — scopes locks, lights and AC (see header). */
   devices: Allowed;
   resolvedRooms: Record<string, string>;
-  thresholds: Record<string, Threshold>;
 }): VillaSummary {
   const { entities, devices } = input;
   const index = domainIndex(entities);
@@ -168,6 +158,6 @@ export function villaSummary(input: {
     locks: lockFacts(entities, devices, index),
     lights: lightFacts(entities, devices, index),
     climate: climateFacts(entities, devices, index),
-    power: powerFacts(entities, input.thresholds, index),
+    power: powerFacts(entities, index),
   };
 }

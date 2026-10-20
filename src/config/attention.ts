@@ -12,7 +12,6 @@
 
 import { deviceLook, storeLookSource } from "@/utils/deviceActivity";
 import { alarmText } from "@/config/reading";
-import type { Threshold } from "@/config/ThresholdConfig";
 import { labelOf } from "@/config/EntityMap";
 import { deviceRoom, deviceRoomOrRecord, firstRoom, roomLabel } from "@/config/devicePlace";
 import { devicesFor, recordEntity, type VillaDevices } from "@/config/deviceGroups";
@@ -223,13 +222,10 @@ export function buildAttentionItems(opts: {
   devices: VillaDevices;
   entities: Record<string, HassEntity>;
   entityMap: Record<string, EntityMapping>;
-  /** The villa's per-entity alert overrides — what makes a reading red on
-   *  the map, so it is what makes it an alarm here (deviceLook). */
-  alertThresholds: Record<string, Threshold>;
   resolvedRooms: Record<string, string>;
   fmData: FmData;
 }): AttentionItem[] {
-  const { devices, entities, entityMap, alertThresholds, resolvedRooms, fmData } = opts;
+  const { devices, entities, entityMap, resolvedRooms, fmData } = opts;
   const items: AttentionItem[] = [];
 
   for (const id of devices.unavailable) {
@@ -280,16 +276,14 @@ export function buildAttentionItems(opts: {
 
   // ── A RED BADGE IS ALWAYS HERE (2.496.245) ─────────────────────────────
   // Every device the map paints red: its deviceLook — the badge's own rule,
-  // the villa's alert overrides included — says `alert`. This was its own
-  // rule, binary_sensors only and blind to config.alertThresholds: an
-  // unlocked door, a sensor past its threshold, a binary_sensor the villa had
-  // overridden were red on the map and absent from "Needs attention".
+  // says `alert`. This was its own rule, binary_sensors only: an unlocked door
+  // was red on the map and absent from "Needs attention".
   // Restricted to the villa's devices (never a raw HA domain scan): a bare
   // Zigbee2MQTT relay-lock/config sub-entity is technically a binary_sensor
   // too, and was never meant to be villa-facing. An unavailable device is
   // never `alert` (its face is the amber "unavailable"), so it is listed once,
   // above, as that.
-  const looks = storeLookSource(entities, { entityMap, alertThresholds });
+  const looks = storeLookSource(entities, { entityMap });
   for (const id of devices.ids) {
     const entity = entities[id];
     if (!entity || !deviceLook(id, looks).alert) continue;

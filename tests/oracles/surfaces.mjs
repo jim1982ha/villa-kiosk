@@ -33,7 +33,7 @@ ck("a chip's rooms: distinct, no blanks; none named → its own room",
 const { deviceLook, storeLookSource } = await import("@/utils/deviceActivity");
 const ents = { "light.a": { entity_id: "light.a", state: "on", attributes: {} }, "lock.b": { entity_id: "lock.b", state: "unlocked", attributes: {} },
                "light.c": { entity_id: "light.c", state: "unavailable", attributes: {} } };
-const src = storeLookSource(ents, { entityMap: {}, alertThresholds: {} });
+const src = storeLookSource(ents, { entityMap: {} });
 const where = { "light.a": "Bed", "lock.b": "bath ", "light.c": "Bath" };
 const rows = S.roomChoicesFor(["Bed", "Bath"], ["light.a", "lock.b", "light.c", "light.ghost"], (id) => where[id],
   (id) => (ents[id] ? deviceLook(id, src) : undefined));

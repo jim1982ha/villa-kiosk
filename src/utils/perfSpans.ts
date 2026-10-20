@@ -128,17 +128,6 @@ export function spanCensus(): string {
     .join(",");
 }
 
-/** Wrap a synchronous call. The ender runs even if `fn` throws — an exception
- *  mid-work is exactly when the timing is interesting. */
-export function span<T>(name: string, fn: () => T): T {
-  const end = beginSpan(name);
-  try {
-    return fn();
-  } finally {
-    end();
-  }
-}
-
 /** Milliseconds of `[aStart,aEnd]` also inside `[bStart,bEnd]`. */
 function overlapMs(aStart: number, aEnd: number, bStart: number, bEnd: number): number {
   return Math.max(0, Math.min(aEnd, bEnd) - Math.max(aStart, bStart));
