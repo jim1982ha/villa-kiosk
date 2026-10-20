@@ -16,9 +16,7 @@ from vesta_agent.skills import SkillError, parse_skill
 
 CONTRACT = os.path.join(os.path.dirname(__file__), "..", "..", "rootfs", "opt", "vesta", "host", "agent-contract.json")
 BEAT = json.load(open(CONTRACT))["heartbeat"]["sample"]
-#: What this agent tells: the agreement's sample without `dayChecksAt` — optional there, and sent by no agent since every
-#: fault is read again every 5 minutes (owner, 2026-10-20); the Kiosk's copy of the agreement drops it on its side
-SAID = {k: x for k, x in BEAT["cadence"].items() if k != "dayChecksAt"}
+SAID = BEAT["cadence"]
 
 
 def test_the_starter_skills_tell_the_agreements_sample(tmp_path):

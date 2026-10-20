@@ -1,3 +1,9 @@
+## 0.12.295
+
+What you will see:
+- Nothing changes on screen. The Agent now carries the same agreement as the Kiosk 2.496.452: the retired "during the
+  day" check is gone on both sides (every fault is already read again every 5 minutes).
+
 ## 0.12.294
 
 What you will see:

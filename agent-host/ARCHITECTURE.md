@@ -728,8 +728,9 @@ recheck below (its times, `day_rechecks`, `kiosk: day_check`, `dayChecksAt`, the
   read was 9 s / 14,838 rows (2026-10-20). Kept: the restarts and every row of an entity that went offline (all a count
   reads); each tick reads [kept end, now) only; a cut read is kept as far as it reached. Same count as a whole read
   (test_recheck_all).
-- The agreement still lists "day" and `dayChecksAt` (the Kiosk's file, copied — never edited on one side); this agent
-  writes neither.
+- The agreement dropped "day" and `dayChecksAt` (Kiosk 2.496.452, copied in 0.12.295). `ticket.checks` ==
+  `checksBeforeList` (minutes, nightly): every Kiosk reads both, so `Kiosk.checks()` and `_gated`'s check-word gate
+  went too (test_contract_ticket pins that every word the card says is in `checksBeforeList`).
 
 ## The night's open faults read again in the day (owner, 2026-10-19, 0.12.268) — superseded 0.12.293
 

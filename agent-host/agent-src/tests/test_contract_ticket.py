@@ -66,8 +66,8 @@ def test_every_origin_the_agent_writes_is_declared(tmp_path):
     assert written <= set(T["origins"]), written
     checks = {pb.card(st.task(a))["check"], pb.card(st.task(n))["check"], pb.card(st.task(n), {"battery_low"})["check"],
               pb.card(st.task(n), {"*"})["check"]}
-    # every clock the card can say, each one declared — and one a Kiosk read before it listed them (2.496.429): the
-    # agreement's "day" is no longer written (owner, 2026-10-20: every fault read every 5 minutes)
+    # every clock the card can say, each one declared — and one a Kiosk read before it listed them (2.496.429), so no
+    # Kiosk is ever sent a word it does not show and the agent asks none which it reads (the "day" gate went with "day")
     assert checks == {"minutes", "nightly"} and checks <= set(T["checks"]) and checks <= set(T["checksBeforeList"]), checks
 
 

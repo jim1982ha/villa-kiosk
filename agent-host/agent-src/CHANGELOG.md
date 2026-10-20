@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.285 (20 October 2026)
+
+- agent-contract.json copied from Kiosk 2.496.452: no "day" check word, no heartbeat `dayChecksAt`. `ticket.checks`
+  == `checksBeforeList`, so `Kiosk.checks()` and `_gated`'s check-word gate are removed (`refresh` waits on
+  `step_kinds` only); test_kiosk_cadence's sample is the agreement's whole cadence; test_fault_steps' "day" gate test
+  removed.
+
 ## 0.6.284 (20 October 2026)
 
 - PM-BATTERY-LOW / -CRIT keep a margin once open (owner: "yes, 5 points"): settings.yaml

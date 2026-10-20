@@ -18,9 +18,6 @@ from villa_timeline import TimelineVilla
 from helpers import STARTER_SKILLS, make_agent
 from kiosk_fake import FakeKiosk
 from vesta_agent.kiosk import Kiosk, retitled, tagged
-from vesta_shared import agreement
-
-_AGREEMENT_CHECKS_BEFORE = agreement.section("ticket")["checksBeforeList"]
 from vesta_shared.problems import Problems
 from vesta_shared.store import Store
 
@@ -407,20 +404,6 @@ def test_each_fault_says_how_the_agent_reads_it_again_for_its_cards_next_check(t
         t.pop("check", None)
     run(v.tickets.repair())
     assert {(t.get("entityId"), t.get("origin")): t.get("check") for t in k._all() if t["id"] != chat} == by_entity
-
-
-def test_a_kiosk_that_shows_no_day_check_never_gets_the_word(tmp_path):
-    # the gate (Kiosk._gated): a check word the Kiosk's info does not list is not written — the fault keeps its own
-    k = FakeKiosk({"id": "va-1", "title": "Door battery", "status": "open", "check": "nightly", "updates": []})
-    k.info.pop("ticket_checks")
-    assert k.checks() == frozenset(_AGREEMENT_CHECKS_BEFORE)
-    run(k.amend("va-1", tagged(None, "night", "day")))
-    assert k.ticket("va-1")["check"] == "nightly"
-    tid = run(k.add_ticket("New", check="day"))
-    assert "check" not in k.ticket(tid)
-    k.info["ticket_checks"] = ["minutes", "day", "nightly"]
-    run(k.amend("va-1", tagged(None, "night", "day")))
-    assert k.ticket("va-1")["check"] == "day"
 
 
 def test_a_duration_in_a_faults_title_is_worded_by_the_kiosk_when_it_shows_it(tmp_path):
