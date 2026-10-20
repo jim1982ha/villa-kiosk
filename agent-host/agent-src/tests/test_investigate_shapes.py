@@ -193,3 +193,30 @@ def test_an_id_no_device_has_is_said_so_never_as_nothing_recorded():
     assert not any("nothing recorded" in ln for ln in said), said
     quiet = inv.timeline(_Client([]), ["sensor.x"], FROM, E, 3, Z, now=E)["lines"]   # a real device that said nothing
     assert any("nothing recorded" in ln for ln in quiet), quiet
+
+
+def test_a_start_surge_is_not_a_change_of_level_and_a_real_one_still_is():
+    # villa, 2026-10-21 00:13: each start's 2-s surge (3,050 W) stayed the run's "level", and the settled 750 W after it
+    # read as "level changes from about 3,050 to 750"
+    t0 = datetime(2026, 10, 20, 13, 49, tzinfo=Z)
+    surge = [(t0, "3050")] + [(t0 + timedelta(seconds=2 + 10 * i), str(750 + i % 3)) for i in range(40)]
+    assert inv.level_jumps(surge, FROM, E, 10) == []
+    real = [(t0 + timedelta(seconds=10 * i), "750" if i < 30 else "1500") for i in range(60)]
+    got = inv.level_jumps(real, FROM, E, 10)
+    assert [(round(j["from"]), round(j["to"])) for j in got] == [(750, 1500)], got
+
+
+def test_a_burst_says_its_runs_against_the_usual_run():
+    # villa, 2026-10-21 00:13: "⟵ runs of about 25 s each" was read as "runs shorter than normal" (usual: 33 s)
+    def burst(run_s):
+        ps, t = [], datetime(2026, 10, 20, 13, 28, tzinfo=Z)
+        for _ in range(8):
+            ps.append({"kind": inv.kinds.RUNNING, "start": t, "end": t + timedelta(seconds=run_s), "seconds": run_s,
+                       "mean": 800.0, "min": 750.0, "max": 900.0})
+            t += timedelta(seconds=run_s)
+            ps.append({"kind": inv.kinds.IDLE, "start": t, "end": t + timedelta(seconds=60), "seconds": 60})
+            t += timedelta(seconds=60)
+        shown, _ = inv.worth_a_line(ps, {"run_median_s": 33, "run_longest_s": 40, "level_median": 800}, 300)
+        return [p["why"] for p in shown if "runs of about" in (p.get("why") or "")]
+    assert ["as long as its usual run of" in w for w in burst(30)] == [True], burst(30)
+    assert ["shorter than its usual run of" in w for w in burst(8)] == [True], burst(8)

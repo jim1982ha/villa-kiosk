@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.294 (21 October 2026)
+
+- investigate: a stop-start burst's reason says its runs against the usual run ("as long as / shorter than / longer
+  than its usual run of 33 s"; settings `burst_run_short_ratio`). `level_jumps`: a level must hold
+  `level_change_gap_s` before a change from it is reported (a start's surge no longer read as one).
+  Tests: test_investigate_shapes (both mutation-proved).
+- villa-concierge "A question about what happened": only what the lines say; a line without ⟵ is the device's normal;
+  a cause only when a line shows it; another device a lead only when its own readings change at the same moments; a
+  ticket only for something marked ⟵. "This afternoon" just after midnight is yesterday's.
+
 ## 0.6.293 (20 October 2026)
 
 - investigate timeline: an id with no state, no reading and no figure says "no device of the villa's system has this

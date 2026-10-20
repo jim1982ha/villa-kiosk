@@ -290,12 +290,13 @@ def level_jumps(rows: list[tuple[datetime, str]], start: datetime, end: datetime
         if base is None:
             base, since = v, t
             continue
+        # ⚠️ A LEVEL IS ONE THAT HELD (villa, 2026-10-21 00:13): a start's surge (3,050 W for 2 s) stayed the "level" of
+        # the run, so the settled 750 W after it read as "level changes from about 3,050 to 750". `since` is when the
+        # level began: one that did not hold the gap is replaced by what follows, never reported as a change
         if abs(v - base) >= base * th("level_change_ratio"):
-            if since is None or (t - since).total_seconds() >= th("level_change_gap_s"):
+            if (t - since).total_seconds() >= th("level_change_gap_s"):
                 out.append({"at": t, "from": base, "to": v})
-                base, since = v, t
-        else:
-            since = t
+            base, since = v, t
     return out
 
 
@@ -828,7 +829,8 @@ def _cycles(ps: list[dict]) -> list[dict]:
                         "end": group[-1]["end"], "seconds": (group[-1]["end"] - group[0]["start"]).total_seconds(),
                         **({"mean": sum(levels) / len(levels), "min": min(p["min"] for p in runs),
                             "max": max(p["max"] for p in runs)} if levels else {}),
-                        "why": "runs of about " + lasting(statistics.median(p["seconds"] for p in runs)) + " each"})
+                        "why": "runs of about " + lasting(statistics.median(p["seconds"] for p in runs)) + " each",
+                        "run_s": statistics.median(p["seconds"] for p in runs)})
             i = j
         else:
             out.append(ps[i])
@@ -865,6 +867,14 @@ def _notable(ps: list[dict], ref: dict, on: float | None) -> list[dict]:
         elif p["kind"] in (kinds.OFFLINE, kinds.NO_VALUE) and p["seconds"] >= th("offline_min_s"):
             why.append("it " + kinds.did(p["kind"]))
             alerts.append((th("offline_min_s"), f"it stops reporting for {lasting(th('offline_min_s'))}"))
+        # ⚠️ A BURST SAYS ITS RUNS AGAINST THE USUAL RUN (villa, 2026-10-21 00:13): "⟵ runs of about 25 s each" alone
+        # was read as "runs shorter than normal" for a pump whose usual run is 33 s
+        if "run_s" in p and ref.get("run_median_s"):
+            usual = ref["run_median_s"]
+            how = ("shorter than" if p["run_s"] < usual * th("burst_run_short_ratio") else
+                   "longer than" if p["run_s"] > usual / th("burst_run_short_ratio") else "as long as")
+            p["why"] += (f" ({how} its usual run of {lasting(usual)}: it is the stopping and restarting in a row that "
+                         "is marked)" if how == "as long as" else f" ({how} its usual run of {lasting(usual)})")
         if why:
             p["why"] = "; ".join(why)
         # ⚠️ WHAT WOULD HAVE WARNED, BY THE RULE THAT FLAGGED IT (the facts-first page, 2026-10-11): the earliest moment

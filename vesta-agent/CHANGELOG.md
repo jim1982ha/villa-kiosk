@@ -1,3 +1,14 @@
+## 0.12.304
+
+What you will see (the House Pump answer of 00:13):
+- A burst of starts now says how its runs compare with the device's usual run. "Runs of about 25 s" was read as
+  "shorter than normal" although the pump usually runs 33 s.
+- No more "power level shifted from 3,050 W to 750 W": that was the 2-second surge of each start, not a change of
+  level.
+- Answers stick to what the readings show: when they say "usual", the answer says it is normal; another device (the
+  relay that keeps reconnecting) is named only when its own readings change at the same moments; a fault is offered
+  only for something unusual.
+
 ## 0.12.303
 
 What you will see:
