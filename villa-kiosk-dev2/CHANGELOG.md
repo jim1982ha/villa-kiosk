@@ -1,3 +1,18 @@
+## 2.496.444
+
+### Fixed
+- 2.496.443 was never offered: one of its files was left out of the release. This is that release, complete (the
+  Agent window removed; the updates count names its updates).
+
+## 2.496.443
+
+### Changed
+- The Cockpit's "VESTA Agent" button and its window are removed. The window could only ever say "No messages from the
+  VESTA Agent yet": the Agent sends the Kiosk no messages (people talk to it on Telegram), and its online / offline
+  state is the dot on the top bar's robot.
+- Hovering the Cockpit's updates count names what can be upgraded: "Upgrade(s) available for:" then one line per
+  update. The count still opens nothing.
+
 ## 2.496.442
 
 ### Changed
