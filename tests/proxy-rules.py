@@ -656,19 +656,19 @@ ck("the record publishes its retention windows: no-action closes, repairs, and w
 # owner, 2026-10-20: completions and costs are no longer kept for ever — the repaired fault's window, from their own date
 _real_days = proxy._evidence_retention_days
 try:
-    proxy._evidence_retention_days = lambda: 550
+    proxy._evidence_retention_days = lambda: 365
     NOW = 2_000_000_000.0
     iso = lambda days_ago: __import__("datetime").datetime.fromtimestamp(NOW - days_ago * 86400, __import__("datetime").timezone.utc).isoformat()
     doc = {"tickets": [{"id": "t-kept", "status": "resolved", "resolvedAt": iso(10),
                         "updates": [{"status": "resolved", "at": iso(10)}]}],
            "completions": [
                {"id": "c-new", "scheduleId": "s1", "at": iso(10)},
-               {"id": "c-old", "scheduleId": "s1", "at": iso(600)},           # older than the window, not s1's latest
-               {"id": "c-latest-old", "scheduleId": "s2", "at": iso(700)},    # s2's latest: its due date counts from it
-               {"id": "c-fault", "scheduleId": "", "ticketId": "t-kept", "at": iso(600)},   # tied to a fault still kept
-               {"id": "c-orphan", "scheduleId": "", "at": iso(600)},
+               {"id": "c-old", "scheduleId": "s1", "at": iso(400)},           # older than the window, not s1's latest
+               {"id": "c-latest-old", "scheduleId": "s2", "at": iso(500)},    # s2's latest: its due date counts from it
+               {"id": "c-fault", "scheduleId": "", "ticketId": "t-kept", "at": iso(400)},   # tied to a fault still kept
+               {"id": "c-orphan", "scheduleId": "", "at": iso(400)},
                {"id": "c-undated", "scheduleId": "", "at": "?"}],
-           "costs": [{"id": "k-new", "at": iso(30)}, {"id": "k-old", "at": iso(551)}, {"id": "k-undated", "at": None}]}
+           "costs": [{"id": "k-new", "at": iso(30)}, {"id": "k-old", "at": iso(366)}, {"id": "k-undated", "at": None}]}
     out = proxy._fm_expire(doc, NOW)
     ck("an old completion and an old cost leave the record by themselves",
        [c["id"] for c in out["completions"]] == ["c-new", "c-latest-old", "c-fault", "c-undated"]

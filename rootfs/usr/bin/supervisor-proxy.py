@@ -1011,7 +1011,7 @@ OPTIONS = {
     "ops_pin": Option("text", "", pattern=PIN_RE),
     "superadmin_pin": Option("text", "", pattern=SUPERADMIN_PIN_RE),
     "public_model_access": Option("bool", False),
-    "evidence_retention_days": Option("int", 550, 0, 3650),
+    "evidence_retention_days": Option("int", 365, 0, 3650),
     "session_days": Option("int", 30, 1, 365),
     "telemetry_max_events": Option("int", 500, 50, 5000),
     "pin_lockout_minutes": Option("int", 5, 1, 1440),
@@ -1716,7 +1716,7 @@ def _fm_ticket_expired(ticket, now: float) -> bool:
 
 # ⚠️ HOW A FAULT WAS CLOSED: THE APP'S ANSWER, NOT A COPY (architecture review, 2026-10-15). This took the last step
 # saying "resolved" in list order — a title change or a Telegram line written after the close carries "resolved" too,
-# so a cleared Wi-Fi blip renamed afterwards was kept 550 days instead of 90. The same reading as the app's
+# so a cleared Wi-Fi blip renamed afterwards was kept the full evidence window instead of 90 days. The same reading as the app's
 # fmEngine.lastResolution / isClearedStep, from the same lists (agent-contract.json ticketUpdate).
 def _fm_last_resolution(ticket):
     """The step that last resolved `ticket`: of the steps that change its status, in time order."""
@@ -3096,8 +3096,8 @@ FM_DATA_MAX_BYTES = 4_000_000
 # complexity for no benefit.
 FM_EVIDENCE_NAME = "fm-evidence"
 FM_EVIDENCE_MAX_BYTES = 3_000_000     # generous headroom over a downscaled JPEG
-# Evidence age limit — the DEFAULT is ~18 months (a 12-month agreement plus the
-# yield-up/dispute window after it). See _evidence_retention_days().
+# Evidence age limit — the DEFAULT is 365 days (one year of history; owner,
+# 2026-10-20). See _evidence_retention_days().
 FM_EVIDENCE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{6,64}$")
 # How long an unreferenced photo is kept before it is treated as garbage. It
 # exists solely to cover the gap between "uploaded" and "saved": the client

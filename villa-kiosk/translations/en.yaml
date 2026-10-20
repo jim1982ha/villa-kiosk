@@ -58,8 +58,7 @@ configuration:
     name: Keep maintenance records for (days)
     description: >-
       How long maintenance photos, repaired faults, work done and money spent
-      are kept. The default 550 is about 18 months — a 12-month agreement plus
-      the dispute window after it. Raise it if your own obligation runs longer,
+      are kept. The default 365 keeps one year of history. Raise it if your own obligation runs longer,
       or set 0 to keep them for ever. A task's latest completion is always
       kept. Separate from the automatic clean-up of photos no record points at
       any more, which always runs.

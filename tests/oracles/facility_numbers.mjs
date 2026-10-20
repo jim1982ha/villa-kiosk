@@ -136,12 +136,12 @@ console.log("\n  a figure names its period (architecture review, 2026-10-19: \"R
   };
   const tickets = [closed("blip91", 91, 1, true), closed("blip89", 89, 1, true), closed("fix100", 100, 2), closed("fix10", 10, 6)];
   eq("the kept record is the shorter window the server publishes (0 = for ever, not a bound)",
-     [keptDays({ clearedDays: 90, repairedDays: 550 }), keptDays({ clearedDays: 90, repairedDays: 0 }), keptDays({ clearedDays: 0, repairedDays: 0 })], [90, 90, null]);
+     [keptDays({ clearedDays: 90, repairedDays: 365 }), keptDays({ clearedDays: 90, repairedDays: 0 }), keptDays({ clearedDays: 0, repairedDays: 0 })], [90, 90, null]);
   const kept = ticketStats(tickets, { start: NOW - 90 * DAY, end: NOW + 1 });
   eq("over the kept record: the 91-day-old no-action close and the 100-day-old repair are out",
      [kept.closedWithoutAction, kept.resolved, kept.meanResolutionHours], [1, 1, 6]);
   eq("  ...with no window, every record given (the old figures)", [ticketStats(tickets).closedWithoutAction, ticketStats(tickets).resolved], [2, 2]);
-  const tab = text(draw(h(TicketFigures, { tickets, inProgress: 0, retention: { clearedDays: 90, repairedDays: 550 }, now: NOW })));
+  const tab = text(draw(h(TicketFigures, { tickets, inProgress: 0, retention: { clearedDays: 90, repairedDays: 365 }, now: NOW })));
   eq("the Tickets tab draws those figures, and names their window",
      tab, "|0|in progress|6h|mean resolution|1|closed, no action|Mean resolution and closes within the kept record (90 days).|");
   const unsaid = text(draw(h(TicketFigures, { tickets, inProgress: 0, retention: null, now: NOW })));
@@ -160,12 +160,12 @@ console.log("\n  a figure names its period (architecture review, 2026-10-19: \"R
   const { recordsKeptNote } = await import("@/fm/fmEngine");
   const { parseRetention } = await import("@/fm/fmApi");
   eq("the window of work done and money spent is read beside the record; an older add-on (none said) kept them for ever",
-     [parseRetention({ clearedDays: 90, repairedDays: 550, recordsDays: 550 }).recordsDays,
-      parseRetention({ clearedDays: 90, repairedDays: 550 }).recordsDays], [550, 0]);
+     [parseRetention({ clearedDays: 90, repairedDays: 365, recordsDays: 365 }).recordsDays,
+      parseRetention({ clearedDays: 90, repairedDays: 365 }).recordsDays], [365, 0]);
   eq("  ...and said under the list it shortens; nothing said when kept for ever or not known",
-     [recordsKeptNote({ clearedDays: 90, repairedDays: 550, recordsDays: 550 }, "Spend"),
+     [recordsKeptNote({ clearedDays: 90, repairedDays: 365, recordsDays: 365 }, "Spend"),
       recordsKeptNote({ clearedDays: 90, repairedDays: 0, recordsDays: 0 }, "Work"), recordsKeptNote(null, "Work")],
-     ["Spend older than 550 days is no longer kept.", null, null]);
+     ["Spend older than 365 days is no longer kept.", null, null]);
 }
 
 console.log(`\n${fail ? `❌ ${fail} failed` : "✅ the owner's numbers hold"}`);
