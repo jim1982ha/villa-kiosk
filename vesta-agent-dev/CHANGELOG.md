@@ -1,3 +1,9 @@
+## 0.12.300
+
+What you will see:
+- "🔎 Investigate this" comes back only under an answer that itself read a device's history or logbook. Since
+  0.12.297 it came under every later answer of the same conversation ("is everything OK?" too).
+
 ## 0.12.299
 
 What you will see:
