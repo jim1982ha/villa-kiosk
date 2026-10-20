@@ -30,7 +30,7 @@ class Poster:
                    keyboard: dict | None = None, document: str | None = None, photo=None,
                    thread: int | str | None = None, plain: bool = False, origin: Origin | None = None,
                    stage: str | None = None, mark: str | None = None, also=None,
-                   title: str | None = None, told=None) -> int | None:
+                   title: str | None = None, told=None, reply_to: int | None = None) -> int | None:
         """The message in `chat`: its heading — who it is for (`roles`), the incident and its history — unless it answers
         the person who asked, in their chat, or is `plain`; its parts laid out (layout.py) to fit ONE Telegram message —
         a photo's or a file's caption included, so the copy recorded is the message sent; then its `thread` (an incident,
@@ -54,7 +54,7 @@ class Poster:
         elif incident is None and not plain and (title or (self.notices and not answering)):
             title = title or UNTITLED
             if not (status or lead or thread is not None):
-                return await self._pages(chat, title, to, text, keyboard, document, photo, origin)
+                return await self._pages(chat, title, to, text, keyboard, document, photo, origin, reply_to)
             head = layout.head(title, to or "this chat")
         elif incident is not None and self.notices and not plain and not answering:
             head = self.notices.heading(chat, incident, roles, stage, also)
@@ -65,7 +65,7 @@ class Poster:
         # photo and a separate text — only the text was recorded, so the next snapshot left the old photo behind
         limit = telegram_caption_chars() if (photo or document) else telegram_message_chars()
         mid = await self.send(chat, layout.render(p, limit), keyboard=keyboard, document=document, photo=photo,
-                              origin=origin)
+                              origin=origin, **({"reply_to": reply_to} if reply_to else {}))
         if mid and thread is not None and self.thread is not None:
             await self.thread.post(thread, chat, mid, {**p, "limit": limit}, buttons=bool(keyboard), keyboard=keyboard)
         return mid
@@ -78,13 +78,13 @@ class Poster:
         """A titled message already sent, rewritten in place in the same layout (owner, 2026-10-20: a P2 of the night
         check that clears is said on its own message, never a new one). Only a message that was ONE page and still is;
         False when it cannot be (two pages, Telegram off or refusing: an old or deleted message) — the caller says
-        nothing more."""
+        nothing more here: Outcome.rewrite decides the backup."""
         docs = pages(title, to, text, telegram_message_chars())
         if self.edit is None or len(docs) != 1:
             return False
         return bool(await self.edit(int(chat), int(message_id), docs[0]))
 
-    async def _pages(self, chat, title, to, text, keyboard, document, photo, origin) -> int | None:
+    async def _pages(self, chat, title, to, text, keyboard, document, photo, origin, reply_to=None) -> int | None:
         """A titled report, one message per page; its file, photo and buttons go with the last. The last id, or None
         when a page did not arrive."""
         limit = telegram_caption_chars() if (photo or document) else telegram_message_chars()
@@ -93,7 +93,8 @@ class Poster:
         for i, doc in enumerate(docs):
             last = i == len(docs) - 1
             mid = await self.send(chat, doc, keyboard=keyboard if last else None, document=document if last else None,
-                                  photo=photo if last else None, origin=origin)
+                                  photo=photo if last else None, origin=origin,
+                                  **({"reply_to": reply_to} if reply_to and i == 0 else {}))
             if not mid:
                 return None
         return mid

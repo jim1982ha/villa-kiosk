@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.281 (20 October 2026)
+
+- A rewrite's backup (owner: "isn't it a risk of never receiving the information?"): result.edit(…, fallback=, to=,
+  fallback_title=). Outcome.rewrite is the one decision: a chat whose kept copy cannot be rewritten (refused, deleted,
+  two pages) gets ONE new message — a reply to that copy (Delivery.send reply_to → Telegram reply_parameters), else
+  once without the reply — never twice (State.fallback_told / mark_fallback_told); with no copy kept at all, the
+  backup goes to `to` like any message (Outcome.unkept_backups). Telegram's "message is not modified" stays a success.
+- preventive-maintenance: told_cleared gives the backup — one line per item that cleared NOW (settings.yaml
+  `told_cleared.fallback`, {time} and {what}); told_now keeps the message's role.
+
 ## 0.6.280 (20 October 2026)
 
 - A message a skill may rewrite later: result.message(key=…) — the engine keeps where it went, its title and its

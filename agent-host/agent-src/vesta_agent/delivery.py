@@ -111,16 +111,17 @@ class Delivery:
         self._waiting: dict[int, dict] = {}   # chat → its one "typing…" loop and what holds it (hold)
 
     # ------------------------------------------------------------------ one message
-    async def send(self, chat_id: int, text: str, *, keyboard: dict | None = None, document: str | None = None, photo: Photo | None = None, origin: Origin | None = None) -> int | None:
+    async def send(self, chat_id: int, text: str, *, keyboard: dict | None = None, document: str | None = None, photo: Photo | None = None, origin: Origin | None = None, reply_to: int | None = None) -> int | None:
         """The message's id, or None: nothing arrived. `origin`: on whose behalf — a job asked for in a chat
-        (kind JOB) makes this its result, which replaces the chat's "being prepared" message."""
+        (kind JOB) makes this its result, which replaces the chat's "being prepared" message. `reply_to`: one of the
+        agent's messages this one answers (a rewrite's backup, Outcome.rewrite)."""
         if self.tg is None:
             self.state.log("send_skipped", {"chat": chat_id, "reason": "Telegram is off (\"Agent replies on Telegram\" is off)"})
             log.info("Telegram off: a message for chat %s was not sent", chat_id)
             return None
         try:
             ids = await self.tg.send(int(chat_id), plain_text(text), keyboard=keyboard, document=document,
-                                     photo_b64=photo)
+                                     photo_b64=photo, **({"reply_to": int(reply_to)} if reply_to else {}))
         except TelegramError as e:
             ids = e.delivered
             log.warning("send failed%s: %s", f" after {len(ids)} part(s) arrived" if ids else "", e)

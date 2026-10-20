@@ -116,14 +116,24 @@ def _key(key: str) -> str:
     return key
 
 
-def edit(key: str, text: str, title: str | None = None) -> dict:
+def edit(key: str, text: str, title: str | None = None, *, fallback: str | None = None, to: str | None = None,
+         fallback_title: str | None = None) -> dict:
     """Rewrite the message sent earlier with `key` (message(key=…)), in every chat it went to, in its layout: its new
-    `text` and, when given, its new `title`. ⚠️ NEVER A NEW MESSAGE (owner, 2026-10-20): one that can no longer be
-    rewritten (Telegram refuses, it was deleted, the text is longer than one message) is left as it is — the engine
-    logs it. Carried under a result's "edits"."""
+    `text` and, when given, its new `title`. Carried under a result's "edits".
+
+    ⚠️ AND A BACKUP WHEN IT CANNOT BE (owner, 2026-10-20: "isn't it a risk of never receiving the information?"): with
+    `fallback`, a chat whose copy cannot be rewritten (Telegram refuses, it was deleted, it was two pages) gets ONE new
+    message saying `fallback`, as a reply to the copy it could not rewrite; when no copy was kept at all, it goes to
+    `to` (a role) under `fallback_title`. Without `fallback`, it is left as it is — the engine logs it."""
     e = {"key": _key(key), "text": text}
     if title:
         e["title"] = title
+    if fallback:
+        e["fallback"] = str(fallback)
+        if to:
+            e["to"] = str(to)
+        if fallback_title:
+            e["fallback_title"] = str(fallback_title)
     return e
 
 

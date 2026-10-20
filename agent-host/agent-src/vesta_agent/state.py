@@ -195,6 +195,19 @@ class State:
     def keep_message(self, key: str, chat: int, record: dict) -> None:
         self.put(f"message:{key}:{int(chat)}", json.dumps(record))
 
+    @staticmethod
+    def _fallback_key(key: str, chat: int, text: str) -> str:
+        import hashlib
+        return f"message_fallback:{key}:{int(chat)}:{hashlib.sha1(text.encode()).hexdigest()}"
+
+    def fallback_told(self, key: str, chat: int, text: str) -> bool:
+        """Was this backup of a rewrite (result.edit fallback) already sent in `chat`? Never twice: a result carried again
+        (a retry, a restart) finds it marked."""
+        return self.get(self._fallback_key(key, chat, text)) is not None
+
+    def mark_fallback_told(self, key: str, chat: int, text: str) -> None:
+        self.put(self._fallback_key(key, chat, text), "1")
+
     def kept_messages(self, key: str) -> dict[int, dict]:
         out = {}
         for k, v in self.kv_prefix(f"message:{key}:").items():

@@ -471,7 +471,7 @@ def told_now(res: dict, title: str | None = None, store=None, at: datetime | Non
     ids = [i for _, items in sections for i, _ in items]
     if store is not None and all(isinstance(i, int) for i in ids):
         key = f"{TOLD}{(at or datetime.now(timezone.utc)).astimezone(timezone.utc).isoformat()}"
-        store.cache_put(key, {"title": title, "sections": sections, "cleared": {}})
+        store.cache_put(key, {"title": title, "sections": sections, "cleared": {}, "to": "fm"})
         for i in ids:
             store.cache_put(f"{TOLD}of:{i}", key)
     return [result.message("fm", _told_body(title, sections, {}, ""), title=title, key=key)]
@@ -502,7 +502,7 @@ def told_cleared(store, closed_ids, at: datetime, zone: str, settings: dict) -> 
               "said on its message", file=sys.stderr)
         return []
     when = clock(at, zone or "UTC", days=False)
-    keys = []
+    keys: dict[str, list[str]] = {}                     # message → the items that cleared NOW (its backup's lines)
     for fid in closed_ids or ():
         key = store.cache_get(f"{TOLD}of:{int(fid)}")
         rec = store.cache_get(key) if key else None
@@ -510,15 +510,24 @@ def told_cleared(store, closed_ids, at: datetime, zone: str, settings: dict) -> 
             continue
         rec.setdefault("cleared", {})[str(int(fid))] = when
         store.cache_put(key, rec)
-        if key not in keys:
-            keys.append(key)
+        keys.setdefault(key, []).append(str(int(fid)))
+    backup = words.get("fallback")
+    if backup is not None and ("{time}" not in str(backup) or "{what}" not in str(backup)):
+        print("preventive-maintenance settings.yaml: told_cleared `fallback` needs {time} and {what}: no backup when "
+              "the message cannot be rewritten", file=sys.stderr)
+        backup = None
     out = []
-    for key in keys:
+    for key, now_ids in keys.items():
         rec = store.cache_get(key)
         ids = [str(i) for _, items in rec["sections"] for i, _ in items]
         done = all(i in rec["cleared"] for i in ids)
         title = words["all_title"].format(title=rec["title"]) if done and words.get("all_title") else rec["title"]
-        out.append(result.edit(key, _told_body(rec["title"], rec["sections"], rec["cleared"], line), title=title))
+        # the backup (owner, 2026-10-20): a message the engine cannot rewrite gets ONE reply naming what cleared now
+        said = {str(i): t for _, items in rec["sections"] for i, t in items}
+        lines = [backup.format(time=when, what=said[i].partition("\n")[0].removeprefix("- ")) for i in now_ids
+                 if backup and i in said]
+        out.append(result.edit(key, _told_body(rec["title"], rec["sections"], rec["cleared"], line), title=title,
+                               fallback="\n".join(lines) or None, to=rec.get("to") or "fm", fallback_title=rec["title"]))
     return out
 
 

@@ -102,18 +102,46 @@ class Outcome:
 
     async def rewrite(self, e: dict, skill_name: str | None) -> int:
         """A message sent earlier with this `key` (result.message key=), rewritten in every chat it went to, in its
-        layout (Poster.rewrite). Never a new message: one that can no longer be rewritten is logged, nothing said."""
+        layout (Poster.rewrite). ⚠️ THE ONE DECISION OF A BACKUP (owner, 2026-10-20: "isn't it a risk of never receiving
+        the information?"): a chat whose copy cannot be rewritten (Telegram refuses, deleted, two pages) gets the edit's
+        `fallback` — ONE new message, a reply to that copy, or without the reply when Telegram refuses it — and never
+        twice (State.fallback_told). Without a `fallback`, logged and nothing said. Returns the chats told either way."""
         key, n = str(e.get("key") or ""), 0
         if not key:
             return 0
+        fallback = str(e.get("fallback") or "")
         for chat, rec in self.state.kept_messages(key).items():
-            if await self.poster.rewrite(chat, rec["mid"], e.get("title") or rec.get("title") or "", rec.get("to") or "",
-                                         str(e.get("text") or "")):
+            title = e.get("title") or rec.get("title") or ""
+            if await self.poster.rewrite(chat, rec["mid"], title, rec.get("to") or "", str(e.get("text") or "")):
                 n += 1
-            else:
+                continue
+            if not fallback:
                 self.state.log("rewrite_skipped", {"key": key, "chat": chat, "skill": skill_name})
                 log.info("Skill %s: its message %s in chat %s could not be rewritten; nothing sent", skill_name, key, chat)
+                continue
+            if self.state.fallback_told(key, chat, fallback):
+                continue
+            head = rec.get("title") or e.get("fallback_title") or title
+            mid = await self.poster.post(chat, fallback, title=head, reply_to=int(rec["mid"]))
+            if not mid:
+                mid = await self.poster.post(chat, fallback, title=head)
+            if mid:
+                self.state.mark_fallback_told(key, chat, fallback)
+                self.state.log("rewrite_fallback", {"key": key, "chat": chat, "skill": skill_name})
+                log.info("Skill %s: its message %s in chat %s could not be rewritten; its backup was sent", skill_name, key, chat)
+                n += 1
+            else:
+                self.state.log("rewrite_skipped", {"key": key, "chat": chat, "skill": skill_name, "backup": "not sent"})
         return n
+
+    def unkept_backups(self, res: dict) -> list[dict]:
+        """The backups of rewrites with NO copy kept anywhere (its first message never arrived, or the record is gone):
+        each goes as a message to the edit's `to`, under its `fallback_title` — the same message path as any other."""
+        out = []
+        for e in res.get("edits") or []:
+            if isinstance(e, dict) and e.get("fallback") and e.get("to") and not self.state.kept_messages(str(e.get("key") or "")):
+                out.append({"to": e["to"], "text": e["fallback"], **({"title": e["fallback_title"]} if e.get("fallback_title") else {})})
+        return out
 
     # ------------------------------------------------------------------ carry out
     async def carry_out(self, res: dict, skill_name: str | None = None, origin: Origin | None = None,
@@ -129,7 +157,7 @@ class Outcome:
         gate_prompt = gate.get("prompt") if gate.get("armed") else None
         chats: set[int] = set()
         pol = self.policy()
-        items = list(res.get("send") or [])
+        items = list(res.get("send") or []) + self.unkept_backups(res)
         if gate_prompt and not pol.siren_entity:
             # no siren to ask for: the warning itself goes to the gate's people (it was dropped before, 0.12.80)
             items += [{"to": to, "text": gate_prompt} for to in gate.get("to") or ("owner",)]

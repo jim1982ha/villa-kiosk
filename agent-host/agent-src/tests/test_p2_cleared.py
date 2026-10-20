@@ -130,3 +130,112 @@ def test_a_message_longer_than_one_page_or_no_way_to_edit_is_never_rewritten():
     assert asyncio.run(p.rewrite(-2, 101, "Title.", "Facility manager", long)) is False and tele.edited == []
     assert asyncio.run(Poster(send=tele.send).rewrite(-2, 101, "Title.", "Facility manager", "short")) is False
     assert asyncio.run(p.rewrite(-2, 101, "Title.", "Facility manager", "short")) is True
+
+
+# ── the backup (owner, 2026-10-20: "isn't it a risk of never receiving the information?") ────────────────────────
+BACKUP = {"told_cleared": {**WORDS["told_cleared"], "fallback": "✅ Back to normal at {time}: {what}"}}
+
+
+class ReplyTele(Tele):
+    """Telegram refusing every edit; refusing a reply too when `reply_ok` is False."""
+    def __init__(self, reply_ok=True, edits_ok=False):
+        super().__init__(edits_ok=edits_ok)
+        self.reply_ok, self.replies = reply_ok, []
+
+    async def send(self, chat, text, reply_to=None, **k):
+        if reply_to is not None:
+            self.replies.append(reply_to)
+            if not self.reply_ok:
+                return None
+        return await super().send(chat, text, **k)
+
+
+def _told_then_cleared(tmp_path, tele, ids=(41,)):
+    store, out = Cache(), _outcome(tmp_path, tele)
+    (m,) = nightly.told_now(NIGHT, store=store, at=AT)
+    asyncio.run(out.carry_out({"send": [m]}, "preventive-maintenance"))
+    edits = nightly.told_cleared(store, list(ids), AT, "Asia/Makassar", BACKUP)
+    done = asyncio.run(out.carry_out({"edits": edits}, "preventive-maintenance"))
+    return out, edits, done
+
+
+def test_an_edit_refused_sends_one_reply_naming_what_cleared(tmp_path):
+    tele = ReplyTele()
+    out, _, done = _told_then_cleared(tmp_path, tele)
+    assert tele.replies == [101] and len(tele.sent) == 2 and done["edited"] == 1          # one reply, to the P2 message
+    backup = tele.sent[-1][1]
+    assert "✅ Back to normal at 12:30: Pool relay offline for 1 h" in backup and "Gate lock" not in backup
+    assert any(c["kind"] == "rewrite_fallback" for c in out.state.calls())
+
+
+def test_a_reply_refused_is_sent_once_without_the_reply(tmp_path):
+    tele = ReplyTele(reply_ok=False)
+    _told_then_cleared(tmp_path, tele)
+    assert tele.replies == [101] and len(tele.sent) == 2                                    # the plain one arrived
+
+
+def test_an_edit_that_lands_or_says_it_already_shows_sends_nothing(tmp_path):
+    tele = ReplyTele(edits_ok=True)                    # Telegram's "message is not modified" is answered as a success
+    _, _, done = _told_then_cleared(tmp_path, tele)
+    assert tele.replies == [] and len(tele.sent) == 1 and done["edited"] == 1
+
+
+def test_not_modified_is_a_success_for_telegram_itself():
+    from vesta_agent.telegram import Telegram, TelegramError
+
+    class T(Telegram):
+        async def api(self, method, **data):
+            raise TelegramError(f"{method}: 400 Bad Request: message is not modified")
+    assert asyncio.run(T("t0k3n").edit(-2, 101, "same")) is True
+
+
+def test_the_backup_is_never_sent_twice(tmp_path):
+    tele = ReplyTele()
+    out, edits, _ = _told_then_cleared(tmp_path, tele)
+    asyncio.run(out.carry_out({"edits": edits}, "preventive-maintenance"))                  # the same result again
+    assert len(tele.sent) == 2 and tele.replies == [101]
+
+
+def test_a_message_of_two_pages_gets_the_reply(tmp_path):
+    from vesta_agent import posting
+    tele = ReplyTele(edits_ok=True)
+    out = _outcome(tmp_path, tele)
+    store = Cache()
+    (m,) = nightly.told_now(NIGHT, store=store, at=AT)
+    asyncio.run(out.carry_out({"send": [m]}, "preventive-maintenance"))
+    edits = nightly.told_cleared(store, [41], AT, "Asia/Makassar", BACKUP)
+    real = posting.pages
+    # the rewrite is two pages (it carries "What to do"); the backup stays one
+    posting.pages = lambda title, to, text, limit: ["page 1", "page 2"] if "What to do" in text else real(title, to, text, limit)
+    try:
+        asyncio.run(out.carry_out({"edits": edits}, "preventive-maintenance"))
+    finally:
+        posting.pages = real
+    assert tele.edited == [] and tele.replies == [101] and len(tele.sent) == 2
+
+
+def test_no_copy_kept_anywhere_the_backup_goes_to_its_role(tmp_path):
+    tele = ReplyTele()
+    store, out = Cache(), _outcome(tmp_path, tele)
+    nightly.told_now(NIGHT, store=store, at=AT)                                               # never arrived: nothing kept
+    edits = nightly.told_cleared(store, [41], AT, "Asia/Makassar", BACKUP)
+    asyncio.run(out.carry_out({"edits": edits}, "preventive-maintenance"))
+    (chat, text), = tele.sent
+    assert chat == -2 and "Pool relay offline for 1 h" in text and tele.replies == []
+
+
+def test_the_reply_reaches_telegram_as_a_reply(tmp_path):
+    from vesta_agent.delivery import Delivery
+
+    class Tg:
+        def __init__(self):
+            self.calls = []
+
+        async def send(self, chat, text, **k):
+            self.calls.append(k)
+            return [7]
+    tg = Tg()
+    d = Delivery(tg, State(settings(str(tmp_path)).state_path), policy=lambda: Policy({}))
+    assert asyncio.run(d.send(-2, "backup", reply_to=101)) == 7 and tg.calls[-1].get("reply_to") == 101
+    asyncio.run(d.send(-2, "plain"))
+    assert "reply_to" not in tg.calls[-1]

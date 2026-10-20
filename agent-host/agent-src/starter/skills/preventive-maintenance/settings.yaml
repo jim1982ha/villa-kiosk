@@ -55,6 +55,9 @@ told_cleared:
   tell: true
   line: "✅ Back to normal at {time}"
   all_title: "{title} All back to normal."
+  # when the message cannot be rewritten (Telegram refuses, it was deleted, it was two pages): ONE reply to it, a line
+  # per item that cleared — {time} when, {what} the item (owner, 2026-10-20: never a cleared P2 left unsaid)
+  fallback: "✅ Back to normal at {time}: {what}"
 
 # A fault of the night check's a person closed in the Cockpit while its problem was still there (owner, architecture
 # review 2026-10-19: one rule with the alert desk's). The close holds until the device is read again — recheck.py

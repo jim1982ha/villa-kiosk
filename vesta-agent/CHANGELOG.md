@@ -1,3 +1,10 @@
+## 0.12.291
+
+What you will see:
+- When a P2's own Telegram message cannot be updated to say it cleared (Telegram refuses, the message was deleted or
+  ran to two pages), the facility manager now gets ONE short reply to that message instead: "✅ Back to normal at
+  14:05: Pool relay offline for 1 h". It is never sent twice, and never when the update worked.
+
 ## 0.12.290
 
 What you will see:
