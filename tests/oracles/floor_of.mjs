@@ -30,6 +30,19 @@ const one = new Storeys([{ name: "a", floorY: 0, storey: 1, pts: sq(0, 5, 0, 5) 
 ck("a plan of ONE storey cannot say: the height split decides (upstairs stays upstairs)", F.floorOf(entity, 4, one) === 2);
 ck("no plan, no structure levels: the height split", F.floorOf(entity, 2.9, null) === 2 && F.floorOf(entity, 2.7, null) === 1);
 
+console.log("\n  a thing lying ON an upper floor (2.496.451 — an upstairs planter face drawn in the ground-floor overview):");
+const up = new Storeys([
+  { name: "a", floorY: 0, storey: 1, pts: sq(0, 5, 0, 5) }, { name: "b", floorY: 2.6, storey: 2, pts: sq(0, 5, 0, 5) },
+]);
+ck("a flat face on the 2F floor surface (centre under the clearance) is 2F, not 1F",
+   F.floorOf(entity, 2.6, up, undefined, 2.6) === 2 && F.floorOf(entity, 2.6, up) === 1);
+ck("  ...its bottom reading a hair under the surface (export rounding) still rests on 2F",
+   F.floorOf(entity, 2.6, up, undefined, 2.6 - F.FLOOR_REST_SLACK / 2) === 2);
+ck("  ...a ceiling lamp whose box ends under the slab stays 1F", F.floorOf(entity, 2.45, up, undefined, 2.3) === 1);
+ck("  ...the bottom only ever moves a thing UP: a tall box reaching below the 2F floor keeps its centre's storey",
+   F.floorOf(entity, 3.2, up, undefined, 0.5) === 2 && F.floorOf(entity, 3.4, up, undefined, 2.6) === 2);
+ck("  ...the slack is rounding, far under a slab's thickness", F.FLOOR_REST_SLACK > 0 && F.FLOOR_REST_SLACK <= 0.05);
+
 console.log("\n  no plan, but the model's own storeys (2.496.261 — no plan meant two floors):");
 const struct = F.structureFloors([
   { role: { isStructure: true, level: 0 }, minY: -0.1 }, { role: { isStructure: true, level: 0 }, minY: 0 },
@@ -68,7 +81,7 @@ console.log("\n  the callers:");
 const src = (p) => readFileSync(new URL(`../../src/babylon/${p}`, import.meta.url), "utf8");
 const fm = src("FloorManager.ts"), sm = src("SceneManager.ts");
 ck("FloorManager decides through floorOf with the plan AND the structure's storeys, and holds no height constant of its own",
-   /floorOf\(role, centreY, this\.plan, structure\)/.test(fm) && /const structure = structureFloors\(this\.indexed\);/.test(fm) && !/FLOOR_SPLIT_Y\s*=/.test(fm));
+   /floorOf\(role, centreY, this\.plan, structure, low\)/.test(fm) && /const structure = structureFloors\(this\.indexed\);/.test(fm) && !/FLOOR_SPLIT_Y\s*=/.test(fm));
 ck("the stair triggers go through stairTarget; no floor number is written into them",
    /stairTarget\(this\.floorsDetected, this\.currentFloor, true\)/.test(fm) && /stairTarget\(this\.floorsDetected, this\.currentFloor, false\)/.test(fm)
    && !/currentFloor === [12]/.test(fm) && !/switchToFloor\([12]\)/.test(fm));

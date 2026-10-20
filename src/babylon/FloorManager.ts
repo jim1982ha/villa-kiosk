@@ -150,8 +150,8 @@ export class FloorManager {
     this.floorBaseY.clear();
     // The model's own storeys, for a villa whose plan cannot say (floorOf).
     const structure = structureFloors(this.indexed);
-    for (const { mesh: m, role, centreY } of this.indexed) {
-      const floor = floorOf(role, centreY, this.plan, structure);
+    for (const { mesh: m, role, centreY, minY: low } of this.indexed) {
+      const floor = floorOf(role, centreY, this.plan, structure, low);
       m.metadata = { ...(m.metadata ?? {}), floorIndex: floor };
       const list = this.floorMeshes.get(floor) ?? [];
       list.push(m);
