@@ -1,3 +1,14 @@
+## 0.12.293
+
+What you will see:
+- Every open fault from the night check is now checked again every 5 minutes, and every fault card in the Kiosk says
+  "Next check: within 5 min". There is no longer a separate check at 08:00, 12:00, 16:00 and 20:00, and no fault waits
+  for the next night.
+- A fault about a whole day (a pump that used too little power, ran too short, a room too hot) is checked against the
+  last full day, never the day so far: it cannot clear in the morning before the pump has run. It clears on the
+  first check after a normal day has ended (shortly after midnight).
+- The 02:00 night check is still where new faults are found.
+
 ## 0.12.292
 
 What you will see:
