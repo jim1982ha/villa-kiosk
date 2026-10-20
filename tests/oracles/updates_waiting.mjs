@@ -18,9 +18,15 @@ const E = Object.fromEntries([
   u("light.x", "on", "Not an update"),
 ].map((e) => [e.entity_id, e]));
 
-const names = updatesWaiting(E);
+const names = updatesWaiting(E, new Set());
 ck("only updates that are waiting (\"on\"), by their software's title, else their name without Update/Firmware, sorted",
    JSON.stringify(names) === JSON.stringify(["EmberZNet Zigbee", "Gym Light", "Mosquitto broker", "Onsen pump", "Villa system Core"]), names);
+// owner, 2026-10-21: a media server's update HIDDEN in the villa's system was counted, the villa's Settings showed none
+const hid = updatesWaiting({ ...E, "update.theater": u("update.theater", "on", "Theater Update", "Theater") }, new Set(["update.theater", "update.light"]));
+ck("an update hidden in the villa's system is left out, as its Settings does",
+   JSON.stringify(hid) === JSON.stringify(["EmberZNet Zigbee", "Mosquitto broker", "Onsen pump", "Villa system Core"]), hid);
+ck("the pill reads the store's one set of hidden ids", /updatesWaiting\(entities, hiddenInHaEntityIds\)/.test(
+   (await import("node:fs")).readFileSync(new URL("../../src/components/cockpit/CockpitModal.tsx", import.meta.url), "utf8")));
 ck("the platform's own name never reaches the screen", !names.some((n) => n.includes(PLATFORM)) && updateName(u("update.p", "on", PLATFORM)) === "Villa system");
 ck("the tooltip: one heading, one line per update",
    updatesTip(["A", "B"]) === "Upgrade(s) available for:\n- A\n- B", updatesTip(["A", "B"]));

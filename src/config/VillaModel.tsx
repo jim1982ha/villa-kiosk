@@ -80,7 +80,7 @@ const Ctx = createContext<VillaModel | null>(null);
 
 export function VillaModelProvider({ sets, children }: { sets: VillaSets; children: ReactNode }) {
   const { mappedEntityIds, visibleEntities, sceneEntityIds, dismissedIds } = sets;
-  const { entities, entityDeviceIds, connected } = useHA();
+  const { entities, entityDeviceIds, connected, hiddenInHaEntityIds: hidden } = useHA();
   const { config, resolvedRooms } = useConfig();
   const { data: fmData } = useFmData();
   const critical = useCriticalDevices();
@@ -90,12 +90,14 @@ export function VillaModelProvider({ sets, children }: { sets: VillaSets; childr
   // registry, so it is computed when those change, not on every state push.
   const { folding } = useDeviceIdentity();
   const devices = useMemo(
-    () => villaDevices({ entityMap, deviceGroups, dismissed: dismissedIds, mappedEntityIds, entities, entityDeviceIds, folding, critical }),
-    [entityMap, deviceGroups, dismissedIds, mappedEntityIds, entities, entityDeviceIds, folding, critical],
+    () => villaDevices({ entityMap, deviceGroups, dismissed: dismissedIds, hidden, mappedEntityIds, entities,
+      entityDeviceIds, folding, critical }),
+    [entityMap, deviceGroups, dismissedIds, hidden, mappedEntityIds, entities, entityDeviceIds, folding, critical],
   );
   const visibleDevices = useMemo(
-    () => villaDevices({ entityMap, deviceGroups, dismissed: dismissedIds, mappedEntityIds, entities: visibleEntities, entityDeviceIds, folding, critical }),
-    [entityMap, deviceGroups, dismissedIds, mappedEntityIds, visibleEntities, entityDeviceIds, folding, critical],
+    () => villaDevices({ entityMap, deviceGroups, dismissed: dismissedIds, hidden, mappedEntityIds, entities: visibleEntities,
+      entityDeviceIds, folding, critical }),
+    [entityMap, deviceGroups, dismissedIds, hidden, mappedEntityIds, visibleEntities, entityDeviceIds, folding, critical],
   );
   const attention = useMemo((): VillaProblems => {
     const attentionItems = buildAttentionItems({

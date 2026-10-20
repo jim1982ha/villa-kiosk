@@ -64,9 +64,10 @@ export default function CockpitModal({
   useFacilityLiveView();
   const dialogRef = useModalA11y(onClose);
   // Firmware / add-on updates waiting — Home Assistant's own `update` domain counts them, per device and per add-on.
-  const { entities } = useHA();
+  const { entities, hiddenInHaEntityIds } = useHA();
   // ...and WHICH, said on hover (owner, 2026-10-20) — still nothing to press (config/updatesWaiting).
-  const updates = useMemo(() => (doors.updates ? updatesWaiting(entities) : []), [entities, doors.updates]);
+  const updates = useMemo(() => (doors.updates ? updatesWaiting(entities, hiddenInHaEntityIds) : []),
+    [entities, hiddenInHaEntityIds, doors.updates]);
   const updatesAvailable = updates.length;
 
   return (

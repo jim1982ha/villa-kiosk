@@ -187,13 +187,20 @@ function selectableDeviceIds(
   entities: Record<string, HassEntity>,
   dismissed: ReadonlySet<string>,
   repOf: ReadonlyMap<string, string>,
+  hidden: ReadonlySet<string>,
 ): string[] {
   const reps = new Set<string>();
   for (const id of new Set([...mappedEntityIds, ...Object.keys(entityMap)])) {
     if (entityMap[id]?.disabled) continue;
     if (!mappedEntityIds.has(id) && !entities[id]) continue;
     if (dismissed.has(id)) continue;
-    reps.add(repOf.get(id) ?? id);
+    const rep = repOf.get(id) ?? id;
+    // ⚠️ HIDDEN IN THE VILLA'S SYSTEM IS NOT A DEVICE (owner, 2026-10-21): a template lock the owner stopped using and
+    // hid there still made a live "Unlocked" card in the Cockpit — kept in the Kiosk's device config, it was never
+    // asked whether the villa's system still shows it. Hidden by anyone (registryResolve.hiddenInHa), it or the
+    // entity its device stands under.
+    if (hidden.has(id) || hidden.has(rep)) continue;
+    reps.add(rep);
   }
   return [...reps];
 }
@@ -289,6 +296,8 @@ export interface VillaDeviceInput {
   /** The dismissed devices, as the villa model computed them ONCE (dismissedEntities.dismissedEntitySet — never an
    *  object the model names). Recomputed here per call until 2.496.351, twice per state push. */
   dismissed: ReadonlySet<string>;
+  /** Hidden in the villa's system, by anyone (the store's hiddenInHaEntityIds, registryResolve): never a device. */
+  hidden: ReadonlySet<string>;
   /** Entity ids the 3D model itself carries — a device can be one of these
    *  without Home Assistant knowing it, and vice versa. */
   mappedEntityIds: ReadonlySet<string>;
@@ -325,7 +334,8 @@ export interface VillaDevices {
 
 export function villaDevices(input: VillaDeviceInput): VillaDevices {
   const folding = input.folding ?? deviceFolding(input.entityMap, input.deviceGroups, input.entityDeviceIds);
-  const ids = selectableDeviceIds(input.entityMap, input.mappedEntityIds, input.entities, input.dismissed, folding);
+  const ids = selectableDeviceIds(input.entityMap, input.mappedEntityIds, input.entities, input.dismissed, folding,
+    input.hidden);
   const set = new Set(ids);
   return {
     ids,

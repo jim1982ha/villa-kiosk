@@ -31,7 +31,7 @@ ck("  ...while a plain row's still does (a stale row, not in the model)", dis.ha
 console.log("\n  reported everywhere:");
 const mapped = effectiveMapped(scene, {}, dis);
 const folding = deviceFolding({}, [], {});
-const d = villaDevices({ entityMap: {}, deviceGroups: [], dismissed: dis, mappedEntityIds: mapped,
+const d = villaDevices({ entityMap: {}, deviceGroups: [], hidden: new Set(), dismissed: dis, mappedEntityIds: mapped,
   entities, entityDeviceIds: {}, folding });
 ck("it is one of the villa's devices, and an unavailable one", d.has(TV) && d.unavailable.includes(TV), d.unavailable);
 const items = buildAttentionItems({ devices: d, entities, entityMap: {},
