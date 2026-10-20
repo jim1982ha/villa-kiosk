@@ -1,3 +1,9 @@
+## 0.12.287
+
+What you will see:
+- Nothing. The agreement with the Kiosk is updated to Kiosk 2.496.445, which removed the agent messages it never
+  sent (people talk to the VESTA Agent on Telegram).
+
 ## 0.12.286
 
 What you will see:

@@ -8,8 +8,9 @@ Only two jobs, one mechanism each:
              the revision read): the facility manager's work lives in one place,
              and the Kiosk stamps every record the agent writes "By VESTA Agent"
 
-The Kiosk's messages and choices (/agent/v1/messages, /choices) are not used:
-people talk to the agent on Telegram (decision D4, 2026-09-30).
+The Kiosk's messages and choices (/agent/v1/messages, /choices) were never used —
+people talk to the agent on Telegram (decision D4, 2026-09-30) — and the Kiosk
+removed them in 2.496.445.
 
 ⚠️ THE AGENT NEVER REMOVES A RECORD. The Kiosk refuses it anyway (403); every
 write here starts from the document just read and only adds or updates.

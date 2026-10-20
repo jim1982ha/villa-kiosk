@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.277 (20 October 2026)
+
+- The Kiosk agreement copied from Kiosk 2.496.445: its message channel (/agent/v1/messages, /choices), never
+  used by the agent, is gone; the entity-id pattern moved to the top level. Nothing the agent does changes.
+
 ## 0.6.276 (20 October 2026)
 
 Retro of 20 October:
