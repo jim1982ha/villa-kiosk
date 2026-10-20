@@ -46,6 +46,7 @@ import PinPad from "@/components/auth/PinPad";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import { requestElevation } from "./elevation";
 import type { PinOutcome } from "./pinOutcome";
+import DialogLayer from "@/components/common/DialogLayer";
 
 export interface ElevationIntent {
   /** What is about to be destroyed, in the operator's words: "Delete fault". */
@@ -133,7 +134,7 @@ function SuperadminPrompt({
   return (
     // ⚠️ `superadmin-backdrop`: on a phone every .modal-backdrop turns into a full-screen sheet pinned top-left, right
     // for a .modal and wrong for this small card — it sat in the corner, its head under the status bar (owner, 2026-10-14)
-    <div className="modal-backdrop superadmin-backdrop" onClick={onCancel}>
+    <DialogLayer className="modal-backdrop superadmin-backdrop" onClick={onCancel}>
       <div
         ref={dialogRef}
         className="superadmin-prompt"
@@ -168,7 +169,7 @@ function SuperadminPrompt({
           />
         )}
       </div>
-    </div>
+    </DialogLayer>
   );
 }
 

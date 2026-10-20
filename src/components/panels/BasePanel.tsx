@@ -27,6 +27,7 @@ import ModalFooter from "@/components/common/ModalFooter";
 import { useHA } from "@/ha/HAStateStore";
 import { missingFromHa } from "@/utils/stateColors";
 import { deviceRoom } from "@/config/devicePlace";
+import DialogLayer from "@/components/common/DialogLayer";
 
 interface Props {
   title: string;
@@ -126,7 +127,7 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
     : icon && <div className="panel-icon">{icon}</div>;
 
   return (
-    <div className="modal-backdrop panel-modal-backdrop" onClick={onClose}>
+    <DialogLayer className="modal-backdrop panel-modal-backdrop" onClick={onClose}>
       <div
         ref={dialogRef}
         // `device-details`: a window about ONE device fits its content (owner, 2026-10-20: the one height of 2.496.447
@@ -264,6 +265,6 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
           onClose={() => setColorOpen(false)}
         />
       )}
-    </div>
+    </DialogLayer>
   );
 }

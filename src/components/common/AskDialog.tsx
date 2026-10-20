@@ -38,6 +38,7 @@
 import { useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import { useModalA11y } from "@/hooks/useModalA11y";
+import DialogLayer from "@/components/common/DialogLayer";
 
 interface Props {
   title: string;
@@ -101,7 +102,7 @@ export default function AskDialog({
     // small centred card on a phone. Without it these fall through to the base
     // `.modal` rules, which are written for long full-screen sheets and would
     // render a two-line question edge-to-edge with square corners.
-    <div className="modal-backdrop panel-modal-backdrop" onClick={onCancel} style={{ zIndex: 90 }}>
+    <DialogLayer className="modal-backdrop panel-modal-backdrop" onClick={onCancel} style={{ zIndex: 90 }}>
       <div
         ref={dialogRef}
         className="modal panel-modal ask-dialog"
@@ -166,6 +167,6 @@ export default function AskDialog({
           </div>
         </div>
       </div>
-    </div>
+    </DialogLayer>
   );
 }

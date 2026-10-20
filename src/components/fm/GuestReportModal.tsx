@@ -29,6 +29,7 @@ import NotesField from "./NotesField";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import ModalFooter from "@/components/common/ModalFooter";
 import { useRecordPlace } from "./useRecordPlace";
+import DialogLayer from "@/components/common/DialogLayer";
 
 export default function GuestReportModal({
   entityId, onClose,
@@ -91,7 +92,7 @@ export default function GuestReportModal({
   };
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <DialogLayer className="modal-backdrop" onClick={onClose}>
       <div
         ref={dialogRef}
         className="modal guest-report"
@@ -186,6 +187,6 @@ export default function GuestReportModal({
           </>
         )}
       </div>
-    </div>
+    </DialogLayer>
   );
 }

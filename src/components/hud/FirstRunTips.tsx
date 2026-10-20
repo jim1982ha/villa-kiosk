@@ -12,6 +12,7 @@ import { Armchair, Compass, Info } from "lucide-react";
 import { markFirstRunTipsSeen } from "@/utils/viewPrefs";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import ModalFooter from "@/components/common/ModalFooter";
+import DialogLayer from "@/components/common/DialogLayer";
 
 export default function FirstRunTips({ onClose }: { onClose: () => void }) {
   const dismiss = () => { markFirstRunTipsSeen(); onClose(); };
@@ -44,7 +45,7 @@ export default function FirstRunTips({ onClose }: { onClose: () => void }) {
     // these it fell through to the base full-screen top-anchored sheet meant
     // for long forms (Settings), which is why it rendered up at the top with a
     // big empty area below instead of centered like every other popup.
-    <div className="modal-backdrop panel-modal-backdrop first-run-backdrop" onClick={dismiss}>
+    <DialogLayer className="modal-backdrop panel-modal-backdrop first-run-backdrop" onClick={dismiss}>
       <div ref={dialogRef} className="modal panel-modal first-run-tips" role="dialog" aria-modal="true" aria-label="Quick tips" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>Quick tips</h2>
@@ -67,6 +68,6 @@ export default function FirstRunTips({ onClose }: { onClose: () => void }) {
         </div>
         <ModalFooter onClose={dismiss} closeLabel="Got it, thanks" />
       </div>
-    </div>
+    </DialogLayer>
   );
 }

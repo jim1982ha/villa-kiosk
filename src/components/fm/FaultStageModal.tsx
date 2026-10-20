@@ -29,6 +29,7 @@ import EvidenceRow from "./EvidenceRow";
 import NotesField from "./NotesField";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import CostFields from "./CostFields";
+import DialogLayer from "@/components/common/DialogLayer";
 
 // A fault becomes a TICKET when someone takes it on (owner, 2026-10-14): the dialog speaks of the ticket.
 const STAGE_COPY: Record<FmTicketStatus, { title: string; cta: string; note: string }> = {
@@ -96,7 +97,7 @@ export default function FaultStageModal({
   };
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <DialogLayer className="modal-backdrop" onClick={onClose}>
       <div
         ref={dialogRef}
         className="modal"
@@ -147,6 +148,6 @@ export default function FaultStageModal({
           </button>
         </div>
       </div>
-    </div>
+    </DialogLayer>
   );
 }
