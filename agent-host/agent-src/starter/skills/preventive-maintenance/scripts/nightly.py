@@ -256,8 +256,16 @@ def hidden_in_rule_findings(cli, pack, states: dict, store) -> tuple[list, list[
         return [], []
 
     def name_of(eid):
-        return ((states.get(eid) or {}).get("attributes") or {}).get("friendly_name") or _plain_name(eid)
+        return ((now.get(eid) or states.get(eid) or {}).get("attributes") or {}).get("friendly_name") or _plain_name(eid)
     try:
+        # ⚠️ ONLY A HIDDEN DEVICE THAT NO LONGER ANSWERS (owner, 2026-10-21: "this should not" be a fault): a device is
+        # hidden to tidy the villa's screens too — the cabinet's board temperature, one mains phase, a camera's person
+        # detection, each live and rightly watched by its rule. The case this rule is for (2026-10-20) is a rule still
+        # watching a device replaced by its copy: that one is offline or gone.
+        now = cli.states(hidden)
+        hidden = [e for e in hidden if (now.get(e) or {}).get("state") is None or is_offline(now[e].get("state"))]
+        if not hidden:
+            return [], []
         rules = cli.rules_mentioning(hidden)
     except Exception as e:  # the villa's search or a rule's read failed: what was open stays open
         kept = [R.Finding(o["rule_id"], o["entity_id"], o["entity_id"], o["family"], o["severity"], o["summary"],

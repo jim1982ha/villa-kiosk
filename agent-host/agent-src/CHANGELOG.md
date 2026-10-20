@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.297 (21 October 2026)
+
+- PM-HIDDEN-IN-RULE: only hidden entities that no longer answer (offline, or no state) are looked for in the villa's
+  rules (nightly.hidden_in_rule_findings reads their states first); a live hidden one is a tidied screen, not a fault.
+  The open ones on live devices close at the next recheck.
+
 ## 0.6.296 (21 October 2026)
 
 - investigation_facts: past `investigate.log_repeats` (3) a device's flagged periods of one kind are one log row (count,

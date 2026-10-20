@@ -33,11 +33,11 @@ SCRIPT = {"entity_id": "script.alert_photo", "kind": "script", "config": {
                   "note": f"never {RAW}: it is hidden"}]}}
 
 
-def _night(tmp, rules, hidden=(RAW,)):
+def _night(tmp, rules, hidden=(RAW,), raw="unavailable"):
     fx = tmp / "fx"
     fx.mkdir(exist_ok=True)
     (fx / "states.json").write_text(json.dumps({"states": {
-        RAW: {"state": "unlocked", "attributes": {"friendly_name": "Front Door Raw"}, "last_changed": "2026-10-03T00:00:00+00:00"},
+        RAW: {"state": raw, "attributes": {"friendly_name": "Front Door Raw"}, "last_changed": "2026-10-03T00:00:00+00:00"},
         FIXED: {"state": "locked", "attributes": {"friendly_name": "Front Door"}, "last_changed": "2026-10-03T00:00:00+00:00"}}}))
     (fx / "rules.json").write_text(json.dumps(rules))
     (tmp / "pack.json").write_text(json.dumps({
@@ -65,6 +65,13 @@ def test_a_rule_watching_a_hidden_device_is_one_fault_naming_it(tmp_path):
                                  "Front Door Raw.")
     assert json.loads(got[0]["detail"])["hidden"] == [RAW]
     assert "Home Assistant" not in got[0]["summary"]
+
+
+def test_a_hidden_device_that_answers_is_no_fault(tmp_path):
+    # owner, 2026-10-21: five rules watching live hidden devices (a board temperature, one mains phase, a camera's
+    # person detection) were faults — a device is hidden to tidy the screens too; the case is the replaced, silent one
+    _night(tmp_path, [WATCHDOG, SCRIPT], raw="unlocked")
+    assert _open(tmp_path) == []
 
 
 def test_the_fault_closes_once_the_rule_is_pointed_at_the_device_you_see(tmp_path):

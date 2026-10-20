@@ -1,3 +1,12 @@
+## 0.12.307
+
+What you will see:
+- The Cockpit's faults "The rule … watches 1 device hidden in the villa's system" close by themselves within 5
+  minutes. Those rules watch devices you hid only to tidy the screens (the cabinet's board temperature, one mains
+  phase, the server room camera's person detection, a button, the doorbell), and they are right to watch them. The
+  fault now appears only when the hidden device no longer answers: a rule still watching a device replaced by its
+  copy, the case of 20 October.
+
 ## 0.12.306
 
 What you will see (the House Pump investigation of 00:36):

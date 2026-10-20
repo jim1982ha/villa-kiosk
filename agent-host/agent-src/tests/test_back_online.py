@@ -373,3 +373,4 @@ def test_without_its_settle_time_a_persons_close_holds_and_the_missing_setting_i
     import nightly
     assert nightly.still_there_minutes({"still_there_after_close": {"minutes": 10}}) == 10.0
     assert nightly.still_there_minutes({}) is None                                      # never a default of the code
+
