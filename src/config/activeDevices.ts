@@ -64,3 +64,24 @@ export function bulkSwitchPlan(entityIds: readonly string[], turnOn: boolean, do
   }
   return [...byDomain].map(([domain, ids]) => ({ domain, service: turnOn ? "turn_on" : "turn_off", entityIds: ids }));
 }
+
+/** What a bulk switch is about to do, in words (owner, 2026-10-20: the button said "Turn all off" over a list of
+ *  temperatures and curtains it never touches): the devices it switches, counted by kind — "Turn off 1 fan",
+ *  "Turn on 4 lights and 2 fans". `ids`: exactly the ones it will switch (the plan's), in a domain this names. */
+const KIND: Readonly<Record<string, [string, string]>> = {
+  light: ["light", "lights"], fan: ["fan", "fans"], switch: ["switch", "switches"], input_boolean: ["switch", "switches"],
+};
+export function bulkWords(ids: readonly string[], turnOn: boolean): string {
+  const counts = new Map<string, number>();
+  for (const id of ids) {
+    const kind = KIND[domainOf(id)];
+    if (!kind) continue;
+    counts.set(kind[0], (counts.get(kind[0]) ?? 0) + 1);
+  }
+  const parts = [...counts].map(([one, n]) => {
+    const many = Object.values(KIND).find(([o]) => o === one)![1];
+    return `${n} ${n === 1 ? one : many}`;
+  });
+  const list = parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}` : parts[0] ?? "nothing";
+  return `Turn ${turnOn ? "on" : "off"} ${list}`;
+}

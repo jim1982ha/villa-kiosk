@@ -1,3 +1,14 @@
+## 2.496.446
+
+### Changed
+- Settings' footer is Save · Cancel. Save saves your changes and closes; Cancel undoes every change made in the window,
+  on every tab, and closes. A passing note at the top of the screen then says "All changes saved and applied." or
+  "All changes cancelled — nothing was kept." (only when something had changed). Escape and a tap outside the window
+  are Cancel. The "You have unsaved changes" question is gone, on closing and on changing tab.
+- Every "Turn all on / off" button says what it will switch, in its tooltip and its question: "Turn off 1 fan",
+  "Turn on 4 lights and 2 fans". It only ever switches lights, fans and switches; readings, curtains and locks are
+  never touched.
+
 ## 2.496.445
 
 ### Removed

@@ -101,4 +101,14 @@ console.log("\n  a category's devices:");
   ck("a category knows its devices (its list opens them)", counts.find((c) => c.category === "access_control").entityIds.join() === "lock.a,lock.b");
 }
 
+
+console.log("\n  what a bulk switch says it will do (owner, 2026-10-20):");
+{
+  ck("one device: \"Turn off 1 fan\"", A.bulkWords(["fan.vmc"], false) === "Turn off 1 fan", A.bulkWords(["fan.vmc"], false));
+  ck("  ...by kind, plural, \"and\" before the last: \"Turn on 4 lights and 2 fans\"",
+     A.bulkWords(["light.a", "fan.b", "light.c", "light.d", "fan.e", "light.f"], true) === "Turn on 4 lights and 2 fans");
+  ck("  ...a switch and an on/off helper are both switches; what it never touches is never counted",
+     A.bulkWords(["switch.p", "input_boolean.q", "sensor.t", "cover.c"], false) === "Turn off 2 switches");
+}
+
 done("✅ one meaning of on; one call per domain; an offline measurement keeps its chart");

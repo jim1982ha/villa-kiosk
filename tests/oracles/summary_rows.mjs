@@ -49,7 +49,7 @@ ck("one order for every by-room list — \"Other\" last even after a room alphab
   const panel = read("components/panels/SummaryGroupPanel.tsx");
   const toggles = elements(parseTsx("components/panels/SummaryGroupPanel.tsx"), "BulkToggle").map((el) => propText(el, "devices"));
   ck("ONE 'Turn all on/off' control, for the header and each heading (BulkToggle)",
-     (panel.match(/title=\{anyOn \? "Turn all off" : "Turn all on"\}/g) ?? []).length === 1
+     elements(parseTsx("components/panels/SummaryGroupPanel.tsx"), "button").filter((el) => propText(el, "title") === "words").length === 1
      && toggles.length === 2 && toggles.includes("toggleables") && toggles.includes("toggleables.filter((e) => inSection.has(e.entity_id))"), toggles);
   ck("  ...a floor is the villa's one answer (devicePlace, through useRoomFloors), not a second rule", /useRoomFloors\(\)/.test(panel) && /floorOfRoom\(roomFloors, room\)/.test(panel));
   const seg = elements(parseTsx("components/panels/SummaryGroupPanel.tsx"), "SegmentedGroup");

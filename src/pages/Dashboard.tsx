@@ -13,7 +13,7 @@ import RoomLabel from "@/components/hud/RoomLabel";
 import ServiceErrorToast from "@/components/hud/ServiceErrorToast";
 import ConnectionBanner from "@/components/hud/ConnectionBanner";
 import UpdateBanner from "@/components/hud/UpdateBanner";
-import AppNotice, { type AppNoticeMessage } from "@/components/hud/AppNotice";
+import AppNotice, { AppNoticeContext, type AppNoticeMessage } from "@/components/hud/AppNotice";
 import { NoticeStack } from "@/components/hud/Notice";
 import FirstRunTips from "@/components/hud/FirstRunTips";
 import SummaryBar from "@/components/hud/SummaryBar";
@@ -687,6 +687,7 @@ export default function Dashboard() {
 
   return (
     <VillaModelProvider sets={villaSets}>
+    <AppNoticeContext.Provider value={setNotice}>
       <BabylonCanvas
         key={modelKey}
         onManager={setManager}
@@ -893,6 +894,7 @@ export default function Dashboard() {
           viewHeadingDeg={manager ? () => manager.viewHeadingDeg() : undefined}
         />
       )}
+    </AppNoticeContext.Provider>
     </VillaModelProvider>
   );
 }
