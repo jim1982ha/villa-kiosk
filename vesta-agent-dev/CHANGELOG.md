@@ -1,3 +1,17 @@
+## 0.12.308
+
+What you will see:
+- Rules › Protected devices has a new list, **Unavailable by design**: devices that sleep between their reports (your
+  laundry door sensor, and the two you will add). For a device on it, and every other part of the same device:
+  - its "unavailable" is never a fault, never a "dropped and reconnected" fault, never "stopped reporting" in an
+    investigation, and never listed as offline in the villa status or the reports;
+  - an offline fault already open for it closes within 5 minutes ("unavailable by design");
+  - the alert desk judges an alert on it (a door left open) by its last report, never by "unavailable": the alert is
+    not closed just because the sensor went to sleep;
+  - when the AI reads it, it is told the device is asleep, not lost, and that its state is its last report.
+- Not covered by this list: an alert your own rules in the villa's system send (for example a "critical devices
+  offline" rule that watches it), and the VESTA Kiosk's own screens.
+
 ## 0.12.307
 
 What you will see:
