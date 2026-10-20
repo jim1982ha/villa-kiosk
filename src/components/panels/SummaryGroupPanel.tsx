@@ -27,7 +27,7 @@ import { effectiveCategory, subjectOf } from "@/config/EntityCategories";
 import { deviceLook, groupLook, storeLookSource, type LookSource } from "@/utils/deviceActivity";
 import { bulkSwitchPlan, bulkWords } from "@/config/activeDevices";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
-import { TOGGLEABLE_DOMAINS } from "@/utils/quickAction";
+import { ROW_SWITCH_DOMAINS } from "@/utils/quickAction";
 import type { HassEntity } from "@/types/ha.types";
 import type { Category } from "@/types/scene.types";
 import { listSections, offersGrouping, summaryRows, type Grouping } from "@/config/summaryRows";
@@ -85,19 +85,19 @@ interface Props {
  * width, on a phone above all; the icon carries the direction (Power = will
  * turn on, PowerOff = will turn off) and the tooltip says what it will switch (bulkWords: "Turn off 1 fan"). "On" is
  * POWER (groupLook's onCount), and the switch is config/activeDevices' — one
- * call PER DOMAIN. Nothing for fewer than two devices: a row's own switch is
- * that control already.
+ * call PER DOMAIN (a lock: lock / unlock). Shown over any heading with a device a row switches (owner, 2026-10-20:
+ * one switch, four locks — every heading that has one).
  */
 function BulkToggle({ devices, looks }: { devices: HassEntity[]; looks: LookSource }) {
   const { callService } = useHA();
   const [confirming, setConfirming] = useState(false);
-  if (devices.length < 2) return null;
+  if (devices.length === 0) return null;
   const anyOn = groupLook(devices.map((e) => deviceLook(e.entity_id, looks)), { showingDevices: true }).onCount > 0;
   // what it will change, said (owner, 2026-10-20): the devices now on when it turns off, else those now off
   const changing = devices.map((e) => e.entity_id).filter((id) => (deviceLook(id, looks).power === "on") === anyOn);
   const words = bulkWords(changing, !anyOn);
   const run = () => {
-    for (const call of bulkSwitchPlan(devices.map((e) => e.entity_id), !anyOn, TOGGLEABLE_DOMAINS)) {
+    for (const call of bulkSwitchPlan(devices.map((e) => e.entity_id), !anyOn, ROW_SWITCH_DOMAINS)) {
       void callService(call.domain, call.service, {}, { entity_id: call.entityIds });
     }
     setConfirming(false);
@@ -269,7 +269,6 @@ export default function SummaryGroupPanel({
     // room-vs-setpoint reasoning moved with it; see config/reading's rowText.
     const stateText = rowText(id, e);
 
-    const isLock = domain === "lock";
     // `rowInHa` gates every CONTROL on the row. A phantom is rendered so the
     // device is reported, not so it can be operated: Home Assistant would
     // reject the service call, and nothing would ever come back to change the
@@ -290,7 +289,7 @@ export default function SummaryGroupPanel({
     const sw = deviceSwitch(e, id, { label, requireConfirm: config.entityMap[id]?.requireConfirm });
     const position = sw.position;
     const canToggle = canControl && rowInHa && position !== "unknown"
-      && (TOGGLEABLE_DOMAINS.has(domain) || isLock);
+      && ROW_SWITCH_DOMAINS.has(domain);
     // EXACTLY what the map paints: `look` above is deviceLook, the map's own
     // rule with the map's own inputs. This used to re-derive the surface from
     // classifyDeviceActivity plus its own unavailable check, which matched the

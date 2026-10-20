@@ -428,11 +428,17 @@
     width: 100%;
     max-width: 420px;
     max-height: 80dvh;
+    /* one height for every device window on a phone too (owner, 2026-10-20) */
+    height: 80dvh;
     border-radius: 20px;
     border: 1px solid var(--hairline-strong);
     /* No card padding: the header/body/footer carry it (the modal shell). */
     padding: 0;
   }
+
+  /* ...and every other window the full screen, like Settings; a question box and the colour picker keep their size */
+  .modal:not(.panel-modal):not(.ask-dialog):not(.badge-color-modal) { height: 100dvh; }
+  .modal.panel-modal.ask-dialog, .modal.panel-modal.badge-color-modal { height: auto; }
 
   /* (Config table is card-styled at all widths now — see the base rules.) */
 

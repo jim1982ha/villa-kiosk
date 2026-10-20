@@ -115,7 +115,11 @@
      (680 px), Settings reached 90vh because its content is long, and
      Advanced Settings shrank to its content — three heights for one kind of
      window (owner). One height, here. */
-  .modal.settings-modal { height: 90vh; }
+  /* ⚠️ AND EVERY OTHER WINDOW (owner, 2026-10-20: "all the modal to keep the same height whatever the content is",
+     the baseline a full device list): a device list switching Per Room / Per Floor, a device window, a form — one
+     height. A question box (AskDialog, `.ask-dialog`) and the colour picker are not windows of content: they keep
+     their own size. */
+  .modal:not(.ask-dialog):not(.badge-color-modal) { height: 90vh; }
 }
 /* Header is a row: title left, the icon-only theme selector right. */
 /* min-height: the tallest thing a header holds (a 44px device icon) plus the

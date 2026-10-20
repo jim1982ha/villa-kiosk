@@ -60,8 +60,15 @@ const cornerX = roots.filter(([, s]) => /modal-header[\s\S]{0,300}aria-label="Cl
 ck("no dialog hides its exit as a corner ✕ — Close is in the footer, as everywhere", cornerX.length === 0, cornerX);
 
 const allCss = css.map(([, s]) => noComments(s)).join("\n");
-ck("every settings-family dialog has ONE fixed height (Advanced Settings shrank to its content)",
-   /\.modal\.settings-modal \{ height: 90vh; \}/.test(allCss) && !tsx.some(([, s]) => /modal-fixed-height/.test(s)) && !/\.modal-fixed-height/.test(allCss));
+// ONE HEIGHT for every window (owner, 2026-10-20: "keep the same height whatever the content is"; it was the settings
+// family's alone), a question box and the colour picker excepted — on a tablet and on a phone
+ck("every window has ONE fixed height on a tablet; a question box and the colour picker keep theirs",
+   /\.modal:not\(\.ask-dialog\):not\(\.badge-color-modal\) \{ height: 90vh; \}/.test(allCss)
+   && /className="modal panel-modal ask-dialog"/.test(readFileSync(new URL("../../src/components/common/AskDialog.tsx", import.meta.url), "utf8"))
+   && !tsx.some(([, s]) => /modal-fixed-height/.test(s)) && !/\.modal-fixed-height/.test(allCss));
+ck("  ...and on a phone: the device windows one height, every other window the full screen",
+   /max-height: 80dvh;[\s\S]{0,120}height: 80dvh;/.test(allCss)
+   && /\.modal:not\(\.panel-modal\):not\(\.ask-dialog\):not\(\.badge-color-modal\) \{ height: 100dvh; \}/.test(allCss));
 
 if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
 console.log("\n✅ one modal shell");

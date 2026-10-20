@@ -26,6 +26,11 @@ import { deviceSwitch } from "@/utils/devicePower";
 export const TOGGLEABLE_DOMAINS: ReadonlySet<string> =
   new Set(["light", "switch", "input_boolean", "fan"]);
 
+/** Every device a device list's row carries a switch for — the toggles and the locks (lock/unlock) — and so what a
+ *  heading's "Turn all on / off" addresses (owner, 2026-10-20: "Access Control" had four lock switches and no
+ *  heading button). One set for the row and the heading. */
+export const ROW_SWITCH_DOMAINS: ReadonlySet<string> = new Set([...TOGGLEABLE_DOMAINS, "lock"]);
+
 /**
  * Types for which "Confirm before toggling" is worth offering at all — the
  * ones a tap would otherwise act on instantly (see isQuickToggle below), plus
