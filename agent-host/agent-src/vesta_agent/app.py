@@ -410,6 +410,14 @@ class Vesta:
         log.info("Housekeeping (settings.keep): removed %s", ", ".join(f"{v} {k.replace('_', ' ')}" for k, v in gone.items()))
 
     # ------------------------------------------------------------------ Home Assistant's events
+    def kiosk_answered(self, answer: dict) -> None:
+        """The Kiosk's answer to a heartbeat: its list of devices unavailable by design (vesta_shared.asleep), kept
+        beside the knowledge pack for every check — a Kiosk that does not say it leaves the kept one as it is."""
+        from vesta_shared import asleep
+        ids = asleep.told(answer)
+        if ids is not None and asleep.save(self.s.pack_path, ids):
+            log.info("The VESTA Kiosk's devices unavailable by design: %s", ", ".join(ids) or "none")
+
     def devices_changed(self, settle: float | None = None) -> None:
         """The villa's devices changed (ha_events.REGISTRY_EVENTS): read them again once they have been still for
         `settle` seconds (a rename of ten entities is one reading, not ten)."""
@@ -889,7 +897,8 @@ class Vesta:
             events = HaEvents(self.s.ha_url, self.s.ha_token, self.on_ha_event, self.beat, headers=self.cf_headers)
             tasks.append(asyncio.create_task(events.run(stop)))
         if self.kiosk.enabled:
-            tasks.append(asyncio.create_task(self.kiosk.heartbeats(stop, cadence=self.kiosk_cadence)))
+            tasks.append(asyncio.create_task(self.kiosk.heartbeats(stop, cadence=self.kiosk_cadence,
+                                                                   answered=self.kiosk_answered)))
         tasks.append(asyncio.create_task(requests_box.serve(self.s.data_dir, self.on_request, stop)))
         tasks.append(asyncio.create_task(self.siren.watch(stop)))     # stops the siren on time, after a restart too
         await stop.wait()

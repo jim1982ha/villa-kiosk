@@ -379,11 +379,13 @@ class Kiosk:
             self._cadence_refused = None
         return answer
 
-    async def heartbeats(self, stop: asyncio.Event, status=lambda: None, cadence=lambda: None) -> None:
+    async def heartbeats(self, stop: asyncio.Event, status=lambda: None, cadence=lambda: None,
+                         answered=lambda answer: None) -> None:
+        """`answered(answer)`: what the Kiosk said back to each beat (its list of devices unavailable by design)."""
         reported = None
         while not stop.is_set():
             try:
-                await self.heartbeat(status(), cadence())
+                answered(await self.heartbeat(status(), cadence()))
                 if reported:
                     log.info("Kiosk heartbeat: back")
                 reported = None

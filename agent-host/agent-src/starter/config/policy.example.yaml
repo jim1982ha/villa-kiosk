@@ -58,10 +58,6 @@ siren_auto_off_min: 3
 # Never acted on, never reported as real devices (a test lock, for example).
 excluded_entities: []
 
-# Unavailable by design: devices that sleep between their reports (a battery door contact that goes "unavailable"
-# minutes after each open or close). Their "unavailable" is never reported; what they read is their last real state.
-asleep_entities: []
-
 # Lights, covers and fans for both roles; TVs and speakers at once for a registered person; locks, siren, automations for the owner.
 # service: who may approve.
 #   any    = the owner or the facility manager approves (Approve / Refuse buttons)

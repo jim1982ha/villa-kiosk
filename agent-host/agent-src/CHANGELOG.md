@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.300 (21 October 2026)
+
+- The devices unavailable by design are the VESTA Kiosk's list (owner, 2026-10-21): the heartbeat answer's
+  `unavailableByDesign` (agent-contract.json copied from Kiosk 2.496.458), kept by app.kiosk_answered beside the
+  knowledge pack (vesta_shared.asleep FILE / told / save / listed). policy.yaml `asleep_entities` retired (Policy,
+  FIELDS, the example; policy_doc.apply_form drops it); the Rules page shows the Kiosk's list read only.
+
 ## 0.6.299 (21 October 2026)
 
 - ha_events.REGISTRY_EVENTS (entity_registry_updated, device_registry_updated) subscribed; app.devices_changed reads

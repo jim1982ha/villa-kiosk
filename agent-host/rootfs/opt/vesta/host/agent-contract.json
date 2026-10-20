@@ -402,10 +402,17 @@
     }
   },
   "_heartbeat": "POST /agent/v1/heartbeat: the VESTA Agent says it is alive. `status`: a short text (at most 200 characters). `cadence` (optional): its own timing, which the Kiosk shows in the Overview's (i) instead of a copy of the defaults (architecture review, 2026-10-15) — `checkMinutes` how often it looks at its alerts and faults (1-1440), `nightlyAt` the villa time of its nightly check (HH:MM), anything else in it is dropped. Without it the Kiosk says no number. Shown only while the Agent is online: once its heartbeats stop (/agent-status `offline`) the Kiosk's proxy answers `cadence: null`, and the Kiosk says \"by the VESTA Agent\" and \"it checks regularly\" instead of a stale number. A `cadence` of another shape never refuses the beat: the beat counts (the Agent is online), the timing is dropped (stored null, so the Kiosk gives no number) and the answer carries `\"cadence\": \"refused: <why>\"`.",
+  "_unavailableByDesign": "The heartbeat's answer carries `unavailableByDesign`: the entity ids the villa's owner marked, in the Kiosk's Advanced Settings › Devices › Asleep between reports, as devices that sleep between reports (a battery door sensor goes \"unavailable\" minutes after each report until it next reports). Their \"unavailable\" is normal: the Kiosk shows their last report and raises nothing, and the VESTA Agent skips its offline checks for them. The Kiosk owns the list (it is always installed; the Agent may not be): sorted, each id once, matching `entityPattern`, an empty list when none is marked — read from the stored device configuration on every beat (owner, 2026-10-21; added within version 1: an agent that does not read it loses nothing).",
   "heartbeat": {
     "fields": {
       "status": "string, at most 200 characters",
       "cadence": "{checkMinutes, nightlyAt}, optional"
+    },
+    "answer": {
+      "ok": "true",
+      "offline_after_minutes": "integer: minutes of silence before the Kiosk shows the agent offline",
+      "unavailableByDesign": "list of entity ids, sorted, each once: the devices asleep by design; [] when none",
+      "cadence": "present only when the beat's cadence was dropped: \"refused: <why>\""
     },
     "sample": {
       "status": "all quiet",

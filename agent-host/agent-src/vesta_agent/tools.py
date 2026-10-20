@@ -454,11 +454,12 @@ class Toolbox:
         return self.__dict__["_days"]
 
     def _asleep(self):
-        """Is an entity unavailable by design (the policy's list, each listed one's whole device: the pack)? Read
-        once per run."""
+        """Is an entity unavailable by design (the Kiosk's list as last told, vesta_shared.asleep; each listed one's
+        whole device: the pack)? Read once per run."""
         if "_asleep_of" not in self.__dict__:
+            from vesta_shared.asleep import listed as kiosk_list
             from vesta_shared.knowledge_pack import KnowledgePack
-            listed = set(getattr(self.policy, "asleep", None) or ())
+            listed = set(kiosk_list(self.s.pack_path))
             pack = KnowledgePack.read(self.s.pack_path) if listed else None
             if pack is not None:
                 pack.asleep_are(listed)

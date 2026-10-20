@@ -1,3 +1,13 @@
+## 0.12.310
+
+What you will see:
+- "Unavailable by design" is now ONE list, kept in the VESTA Kiosk: Advanced Settings › Devices › Asleep between
+  reports (Kiosk 2.496.458). The Agent reads it from the Kiosk about once a minute and keeps it, so it still holds while
+  the Kiosk does not answer; every check of 0.12.308 now uses that list.
+- Rules › Protected devices shows the Kiosk's list as "Asleep between reports", read only, with where to change it. The
+  Agent's own field of 0.12.308 is gone: add the Laundry Door Sensor again in the Kiosk; the Agent's copy disappears from
+  its settings at the next save of the Rules page.
+
 ## 0.12.309
 
 What you will see:

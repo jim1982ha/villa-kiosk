@@ -1,5 +1,5 @@
-"""Devices unavailable by design (Rules › Protected devices, owner 2026-10-21): a battery device asleep between its
-reports. One list (policy.yaml's asleep_entities), one predicate (KnowledgePack.is_asleep, a listed entity standing for
+"""Devices unavailable by design (owner 2026-10-21): a battery device asleep between its reports. One list — the VESTA
+Kiosk's, handed over in its heartbeat answer and kept beside the knowledge pack — one predicate (KnowledgePack.is_asleep, a listed entity standing for
 its whole physical device), read by every check that judges "unavailable" (vesta_shared.asleep)."""
 from __future__ import annotations
 
@@ -9,31 +9,53 @@ from datetime import datetime, timedelta, timezone
 
 from helpers import STARTER_SKILLS
 from test_offline import NOW, STATES, _pack
-from vesta_agent.policy import FIELDS, Policy
+from vesta_agent.app import Vesta
+from vesta_agent.policy import FIELDS
 from vesta_agent.tools import with_asleep
 from vesta_shared import asleep
 from vesta_shared.offline import devices_offline
 
 
-def _policy(tmp_path, ids):
-    p = tmp_path / "policy.yaml"
-    p.write_text("asleep_entities: [" + ", ".join(ids) + "]\n")
-    return str(p)
+def _kept(tmp_path, ids):
+    """The Kiosk's list as the agent keeps it, beside a pack at tmp_path; the pack's path."""
+    pack = str(tmp_path / "pack.json")
+    asleep.save(pack, ids)
+    return pack
 
 
-def test_the_list_is_read_from_the_policy_and_named_on_the_page(tmp_path):
-    assert Policy.load(_policy(tmp_path, ["binary_sensor.door"])).asleep == {"binary_sensor.door"}
-    assert asleep.listed(_policy(tmp_path, ["Binary_Sensor.Door"])) == {"binary_sensor.door"}
-    assert asleep.listed(str(tmp_path / "none.yaml")) == frozenset()
-    assert FIELDS["asleep_entities"][0] == "Unavailable by design"
+def test_the_kiosk_hands_the_list_over_and_the_agent_keeps_it_beside_its_pack(tmp_path):
+    pack = str(tmp_path / "pack.json")
+    assert asleep.listed(pack) == frozenset()                                        # never told: none
+    assert asleep.told({"every": 60}) is None                                        # a Kiosk older than the list
+    assert asleep.told({"unavailableByDesign": ["Binary_Sensor.Door", 3]}) == ["binary_sensor.door"]
+
+    class _App:
+        kiosk_answered = Vesta.kiosk_answered
+
+        class s:
+            pack_path = pack
+    _App().kiosk_answered({"unavailableByDesign": ["binary_sensor.door"]})
+    assert asleep.listed(pack) == {"binary_sensor.door"}
+    _App().kiosk_answered({"every": 60})                                             # said nothing: kept as it was
+    assert asleep.listed(pack) == {"binary_sensor.door"}
+    _App().kiosk_answered({"unavailableByDesign": []})                               # emptied in the Kiosk
+    assert asleep.listed(pack) == frozenset()
+    # the agent's own list of 0.12.308 is gone: the Rules page no longer edits one
+    assert "asleep_entities" not in FIELDS
+
+
+def test_the_rules_page_drops_the_retired_own_list_on_its_next_save():
+    from vesta_agent.ui import policy_doc
+    out = policy_doc.apply_form("asleep_entities: [binary_sensor.door]\n", policy_doc.to_form(""))
+    assert "asleep_entities" not in out
 
 
 def test_a_device_listed_is_never_offline_and_its_other_entities_sleep_with_it(tmp_path, monkeypatch):
-    monkeypatch.setenv("VESTA_POLICY", _policy(tmp_path, ["switch.spa_relay"]))
+    monkeypatch.setenv("VESTA_PACK", _kept(tmp_path, ["switch.spa_relay"]))
     names = [g.name for g in devices_offline(_pack(), STATES, NOW, ["power", "switch", "battery"])]
     # the relay's plug (its power sensors are on the same device) is asleep; the lone battery still counts
     assert names == ["Lone Battery"]
-    monkeypatch.setenv("VESTA_POLICY", "")
+    monkeypatch.setenv("VESTA_PACK", "")
     assert "Spa Plug" in [g.name for g in devices_offline(_pack(), STATES, NOW, ["power", "switch", "battery"])]
 
 

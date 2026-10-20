@@ -279,7 +279,10 @@ class UI:
         """The Rules tab in ONE answer (architecture review 9: four requests in a row, joined on the page): the file and
         its form, the AI jobs, the devices for the pickers, the tools. Built from a lenient reading of policy.yaml, so a
         broken file still answers, its problems named."""
-        return web.json_response({**self._policy_doc(), "jobs": self._jobs(), **self._entities(), "tools": self._tools()})
+        from vesta_shared.asleep import listed
+        return web.json_response({**self._policy_doc(), "jobs": self._jobs(), **self._entities(), "tools": self._tools(),
+                                  # the VESTA Kiosk's list, as the agent was last told it (shown, never edited here)
+                                  "unavailable_by_design": sorted(listed(self.s.pack_path))})
 
     async def policy_get(self, _request):
         return web.json_response(self._policy_doc())
