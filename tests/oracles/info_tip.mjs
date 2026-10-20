@@ -72,22 +72,18 @@ ck("  ...the nightly check's say so; the Agent's timing is the one it TOLD, neve
 ck("  ...an Agent that did not say: no number at all", !/\d\d:\d\d|every \d+ minutes,/.test(withAgent.note)
    && /at the time set in the VESTA Agent/.test(withAgent.note), withAgent.note);
 const { parseAgentStatus } = await import("@/agent/agentApi");
-// owner, 2026-10-19: night-check problems are read again during the day — the night row says when, in the Agent's own
-// numbers when it said them; an older Agent (no day times) reads them at its nightly check only; none said: no number
+// owner, 2026-10-20: the Agent reads every open maintenance-check finding again at every look — the night row says when,
+// in the Agent's own numbers when it said them; none said: no number. An older Agent's day times change nothing.
 {
   const goes = (c) => faultTiming(true, c).rows.find((r) => r.source === "night")?.goes ?? "";
-  const day = goes({ checkMinutes: 5, nightlyAt: "02:00", dayChecksAt: ["08:00", "12:00", "16:00", "20:00"] });
-  // owner, 2026-10-19: the row names the three clocks — never which problem uses which (the card's Next check says it)
-  ck("  ...a maintenance-check problem goes when the Agent no longer finds it, at one of its three clocks, in its numbers",
-     day === "When the VESTA Agent no longer finds it. Each card's Next check says when it looks again: within 5 min, at a time of day (08:00, 12:00, 16:00 and 20:00), or at the nightly check (02:00)", day);
-  const older = goes({ checkMinutes: 5, nightlyAt: "04:30" });
-  ck("  ...an Agent that says no day times: at its nightly check only, never 'during the day'",
-     /within 5 min, or at the nightly check \(04:30\)$/.test(older) && !/time of day|undefined/.test(older)
-     && goes({ checkMinutes: 5, nightlyAt: "04:30", dayChecksAt: [] }) === older, older);
+  const told = goes({ checkMinutes: 5, nightlyAt: "02:00" });
+  ck("  ...a maintenance-check problem goes when the Agent no longer finds it, at its next look or its nightly check",
+     told === "When the VESTA Agent no longer finds it. Each card's Next check says when it looks again: within 5 min, or at the nightly check (02:00)", told);
+  ck("  ...an older Agent still sending day times: the same words, no time of day",
+     goes({ checkMinutes: 5, nightlyAt: "02:00", dayChecksAt: ["08:00", "16:00"] }) === told);
   const none = goes(null);
   ck("  ...an Agent that said nothing: generic words, no number",
-     /every few minutes, at times of the day, or at its nightly check$/.test(none) && !/\d\d:\d\d/.test(none), none);
-  ck("  ...one day time is one time", /at a time of day \(12:00\), or/.test(goes({ checkMinutes: 5, nightlyAt: "02:00", dayChecksAt: ["12:00"] })));
+     /every few minutes, or at its nightly check$/.test(none) && !/\d\d:\d\d|time/.test(none), none);
 }
 const beat = JSON.parse(readFileSync(new URL("../../rootfs/usr/share/vesta/agent-contract.json", import.meta.url), "utf8")).heartbeat.sample;
 ck("  ...the Kiosk reads the timing the agreement's heartbeat carries, as the proxy shows it",

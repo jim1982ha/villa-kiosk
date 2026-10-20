@@ -171,10 +171,9 @@ export const CLEARED_NOTE_PREFIXES = AGENT_CONTRACT.ticketUpdate.clearedNotePref
 export type FmTicketOrigin = "alert" | "night" | "chat";
 export const AGENT_ORIGINS = AGENT_CONTRACT.ticket.origins as readonly FmTicketOrigin[];
 export const AGENT_SOURCE = AGENT_CONTRACT.ticket.source as "vesta_agent";
-/** How the VESTA Agent reads a fault again to close it (FmTicket.check): at every look, during the day at its times
- *  and at its nightly check ("day", owner 2026-10-19), or at its nightly check only — the card's "Next check"
- *  (fm/faultTiming.nextCheck), from the agreement's `ticket.checks`. */
-export type FmTicketCheck = "minutes" | "day" | "nightly";
+/** How the VESTA Agent reads a fault again to close it (FmTicket.check): at every look, or at its nightly check only
+ *  — the card's "Next check" (fm/faultTiming.nextCheck), from the agreement's `ticket.checks`. */
+export type FmTicketCheck = "minutes" | "nightly";
 export const AGENT_CHECKS = AGENT_CONTRACT.ticket.checks as readonly FmTicketCheck[];
 
 /** A fault raised against a device or room. */

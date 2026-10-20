@@ -5,7 +5,7 @@
 
 import { CircleQuestionMark, House, Users } from "lucide-react";
 import { presenceStateWords, type Presence, type PresenceWhy } from "@/config/presence";
-import { presenceSince as since, usePresence } from "@/config/usePresence";
+import { sinceWords as since, usePresence, usePresenceWhy } from "@/config/usePresence";
 import { STATUS_COLOR } from "@/utils/stateColors";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import ModalFooter from "@/components/common/ModalFooter";
@@ -20,7 +20,7 @@ const SHORT = { occupied: "In", empty: "Empty", unknown: "?" };
 export default function PresenceTile({ onOpen }: { onOpen: () => void }) {
   const p = usePresence();
   if (!p) return null;
-  return <div className="hud-stack"><PresenceButton presence={p.presence} onClick={onOpen} /></div>;
+  return <div className="hud-stack"><PresenceButton presence={p.presence} when={p.since} onClick={onOpen} /></div>;
 }
 
 /** The villa's presence window, as the Dashboard opens it (pages/surfaces "presence"). A person's whereabouts are
@@ -32,17 +32,17 @@ export function PresenceWindow({ onClose, onOpenEntity, canOpen }: {
   const { role } = useProfile();
   const sees = profileView(role);
   const p = usePresence();
+  const why = usePresenceWhy();
   if (!p) return null;
-  return <PresencePanel presence={p.presence} why={p.why()} showPeople={sees.people} showMovement={sees.motion}
+  return <PresencePanel presence={p.presence} when={p.since} why={why} showPeople={sees.people} showMovement={sees.motion}
     canOpen={canOpen} onOpenEntity={onOpenEntity} onClose={onClose}
     presenceHistory={<LastDayTimeline entityId={p.sensorId} words={(s) => presenceStateWords(s).label}
       colorFor={(s) => STATUS_COLOR[presenceStateWords(s).tone]} />} />;
 }
 
-/** The tile, drawn — pure (a check draws it). */
-export function PresenceButton({ presence: p, onClick }: { presence: Presence; onClick: () => void }) {
+/** The tile, drawn — pure (a check draws it). `when`: since when, in words (usePresence). */
+export function PresenceButton({ presence: p, when, onClick }: { presence: Presence; when: string; onClick: () => void }) {
   const Icon = ICON[p.state];
-  const when = since(p.since);
   const said = p.state === "empty" && when ? `Empty since ${when}` : p.label;
   return (
     <button type="button" className="icon-btn hud-presence-btn" data-presence={p.state}
@@ -68,8 +68,8 @@ function Row({ entityId, name, said, onOpen }: { entityId: string; name: string;
 /** Why the villa counts as empty or occupied: who it watches (the owner only), the latest movement among the sensors
  *  it watches with its history, the settings that decide it — all from the sensor's own lists (config/presence).
  *  Pure (a check draws it): the history is drawn by `historyOf`, the window's ReadingHistory. */
-export function PresencePanel({ presence: p, why, showPeople, showMovement = true, canOpen, onOpenEntity, onClose, presenceHistory }: {
-  presence: Presence; why: PresenceWhy; showPeople: boolean;
+export function PresencePanel({ presence: p, when, why, showPeople, showMovement = true, canOpen, onOpenEntity, onClose, presenceHistory }: {
+  presence: Presence; when: string; why: PresenceWhy; showPeople: boolean;
   /** Its latest movement — never for a profile that sees no motion (profileView: a guest). */
   showMovement?: boolean; canOpen: (entityId: string) => boolean;
   onOpenEntity: (entityId: string) => void; onClose: () => void;
@@ -78,7 +78,6 @@ export function PresencePanel({ presence: p, why, showPeople, showMovement = tru
   presenceHistory?: React.ReactNode;
 }) {
   const dialogRef = useModalA11y(onClose);
-  const when = since(p.since);
   const act = why.lastActivity;
   const opener = (id: string) => (canOpen(id) ? onOpenEntity : undefined);
   return (

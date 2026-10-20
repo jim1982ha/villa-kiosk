@@ -66,11 +66,6 @@ function agentClock(c: AgentCadence | null): string {
   return `it checks ${every}, and its nightly check runs at ${c.nightlyAt}`;
 }
 
-/** "08:00, 12:00 and 16:00". */
-function timesWords(times: readonly string[]): string {
-  return times.length < 2 ? times.join("") : `${times.slice(0, -1).join(", ")} and ${times[times.length - 1]}`;
-}
-
 /** When a maintenance-check problem appears (owner, 2026-10-19: the (i) said "Nightly check" while a device that goes
  *  offline gets its fault within minutes, from the Agent's 5-minute look) — the nightly time in its own numbers. */
 function nightOpens(c: AgentCadence | null): string {
@@ -79,17 +74,13 @@ function nightOpens(c: AgentCadence | null): string {
 }
 
 /** When a maintenance-check problem goes: when the VESTA Agent no longer finds it, at the clock its card's Next check
- *  names — every few minutes, at its times of day, or at its nightly check — in its own numbers when its heartbeat said
- *  them. ⚠️ THE CLOCKS, NEVER WHICH PROBLEM USES WHICH (owner, 2026-10-19: "Goes: … during the day at 08:00 …" stood
- *  for every problem, while an offline device is read every 5 minutes and energy use only at night; that list is the
- *  Agent's skill's, and a copy here would drift). */
+ *  names — every few minutes, or at its nightly check — in its own numbers when its heartbeat said them. ⚠️ THE
+ *  CLOCKS, NEVER WHICH PROBLEM USES WHICH (owner, 2026-10-19: that list is the Agent's skill's, and a copy here would
+ *  drift). */
 function nightGoes(c: AgentCadence | null): string {
-  if (!c) return `${ROWS.night.goes}: every few minutes, at times of the day, or at its nightly check`;
+  if (!c) return `${ROWS.night.goes}: every few minutes, or at its nightly check`;
   const every = c.checkMinutes === 1 ? "within 1 min" : `within ${c.checkMinutes} min`;
-  const day = c.dayChecksAt ?? [];
-  const clocks = day.length ? `${every}, at a time of day (${timesWords(day)}), or at the nightly check (${c.nightlyAt})`
-    : `${every}, or at the nightly check (${c.nightlyAt})`;
-  return `${ROWS.night.goes}: ${clocks}`;
+  return `${ROWS.night.goes}: ${every}, or at the nightly check (${c.nightlyAt})`;
 }
 
 /** The table's two groups (owner, 2026-10-15): what the Kiosk and its people produce, then what the VESTA Agent does. */
@@ -119,11 +110,13 @@ export interface CheckedProblem { source?: IssueSource; check?: FmTicketCheck; f
 
 type Clock = FmTicketCheck | "hand";
 
-/** Who reads one fault again to close it: the VESTA Agent at its next look, during the day at its times, or at its
- *  nightly check (the fault's `check`; an older fault without one: its source's usual clock), else only a person. */
+/** Who reads one fault again to close it: the VESTA Agent at its next look or at its nightly check (the fault's
+ *  `check`), else only a person. A fault without a check the agreement declares — an older one, or one an older Agent
+ *  wrote with a check since retired — reads at its source's usual clock: an alert's and a nightly-check fault's is
+ *  every look (owner, 2026-10-20: the Agent reads every open nightly-check finding again every few minutes). */
 function clockOf(p: CheckedProblem): Clock {
-  if (p.check && AGENT_CHECKS.includes(p.check)) return p.check;   // one the agreement does not declare: its source's
-  return p.source === "alert" ? "minutes" : p.source === "night" ? "nightly" : "hand";
+  if (p.check && AGENT_CHECKS.includes(p.check)) return p.check;
+  return p.source === "alert" || p.source === "night" ? "minutes" : "hand";
 }
 
 /** The clocks of a card's faults (a problem and the fault merged onto it); empty for a card that is only what the map
@@ -144,22 +137,15 @@ function nextAt(hhmm: string, now: Date): Date | null {
 }
 
 /** When the VESTA Agent next reads a fault of `clock`, and the card's words for it: its next look ("within 5 min"),
- *  the soonest of its day times and its nightly check for "day" (an Agent that said no day times: the nightly check),
  *  its nightly check ("02:00"). */
 function nextOf(clock: FmTicketCheck, c: AgentCadence, now: Date): { at: Date; words: string } | null {
   if (clock === "minutes") return { at: new Date(now.getTime() + c.checkMinutes * 60_000), words: `within ${c.checkMinutes} min` };
-  const times = clock === "day" ? [...(c.dayChecksAt ?? []), c.nightlyAt] : [c.nightlyAt];
-  let best: { at: Date; words: string } | null = null;
-  for (const t of times) {
-    const at = nextAt(t, now);
-    if (at && (!best || at < best.at)) best = { at, words: t };
-  }
-  return best;
+  const at = nextAt(c.nightlyAt, now);
+  return at && { at, words: c.nightlyAt };
 }
 
 /** ⚠️ THE SOONEST BY MOMENT, NOT BY RANK (owner, 2026-10-19): a card can hold an alert's fault and a night check's
- *  ("Alert and Night check"), and a night fault is now read again during the day — a fixed order of clocks cannot say
- *  whether 16:00 comes before the nightly 02:00 or after the next look. Each fault's next moment is computed and the
+ *  ("Alert and Night check"), each read at its own clock — the next look or the nightly 02:00. Each fault's next moment is computed and the
  *  card says the soonest. `undefined`: the card is only what the map shows now; `hand`: only a person closes it;
  *  `agent`: the Agent does but did not say when. */
 function soonest(problems: readonly CheckedProblem[], cadence: AgentCadence | null, now: Date):
@@ -178,7 +164,7 @@ function soonest(problems: readonly CheckedProblem[], cadence: AgentCadence | nu
 }
 
 /** WHEN the card's "Next check" happens, as a moment (owner, 2026-10-19: hovering it shows "20/10/2026 02:00"): the
- *  soonest of its faults' next reads — `now` plus the Agent's `checkMinutes`, its next day time, its next `nightlyAt`;
+ *  soonest of its faults' next reads — `now` plus the Agent's `checkMinutes`, or its next `nightlyAt`;
  *  null when it has no time (live, by hand, or an Agent that did not say its cadence) — the same moment nextCheck words. */
 export function nextCheckAt(problems: readonly CheckedProblem[], cadence: AgentCadence | null, now: Date = new Date()): Date | null {
   const next = soonest(problems, cadence, now);
@@ -186,8 +172,8 @@ export function nextCheckAt(problems: readonly CheckedProblem[], cadence: AgentC
 }
 
 /** A card's "Next check" (owner, 2026-10-15: "when the next test for this card will be done"), beside its room: the
- *  soonest of its faults' next reads — the VESTA Agent's next look ("within 5 min"), its next day time or nightly
- *  check ("16:00", "02:00"), or "by hand" when only a person closes it; a card that is only what the map shows now:
+ *  soonest of its faults' next reads — the VESTA Agent's next look ("within 5 min") or its nightly
+ *  check ("02:00"), or "by hand" when only a person closes it; a card that is only what the map shows now:
  *  "live". The Agent's numbers are the ones it says (its heartbeat's `cadence`) — never a copy: one that does not say
  *  gets none. */
 export function nextCheck(problems: readonly CheckedProblem[], cadence: AgentCadence | null, now: Date = new Date()): string {

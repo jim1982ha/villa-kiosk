@@ -59,7 +59,7 @@ ck("  ...each card says when its problems are read again, the Agent's numbers it
    && said([{ source: "night", check: "nightly" }], { checkMinutes: 15, nightlyAt: "04:30" }) === "Next check: 04:30"
    && said([{ source: "live", fault: { source: "night", check: "minutes" } }]) === "Next check: within 5 min"   // offline: rechecked
    && said([{ source: "night", check: "nightly" }, { source: "alert", check: "minutes" }]) === "Next check: within 5 min"
-   && said([{ source: "alert" }]) === "Next check: within 5 min" && said([{ source: "night" }]) === "Next check: 02:00" // older
+   && said([{ source: "alert" }]) === "Next check: within 5 min" && said([{ source: "night" }]) === "Next check: within 5 min" // older: read at every look now
    && said([{ source: "owner" }]) === "Next check: by hand" && said([{ source: "chat" }]) === "Next check: by hand"
    && said([{ source: "live" }, { source: "guest" }]) === "Next check: by hand"
    && said([{ source: "schedule" }]) === "Next check: by hand"
@@ -76,43 +76,23 @@ ck("  ...and hovering it says when: the nightly check's next run, the Agent's ne
    && at([{ source: "alert", check: "minutes" }]) === "19/10/2026 02:15"
    && at([{ source: "live" }]) === null && at([{ source: "owner" }]) === null && at([{ source: "night" }], null) === null,
    [at([{ source: "night", check: "nightly" }]), at([{ source: "alert", check: "minutes" }])]);
-// owner, 2026-10-19: night-check faults are read again during the day ("day") — the card says the soonest real moment
-// among the Agent's day times and its nightly check, and a card with an alert's fault AND a night check's says the
-// sooner of the two
+// owner, 2026-10-20: the Agent reads every open night finding again at every look ("minutes"); a fault an older Agent
+// wrote "day" — a check the agreement no longer declares — and one written with no check read at their source's clock:
+// for a maintenance check, every look. A card says the soonest real moment of its faults.
 {
-  const DAY = { checkMinutes: 5, nightlyAt: "02:00", dayChecksAt: ["08:00", "12:00", "16:00", "20:00"] };
-  const night = [{ source: "night", check: "day" }];
+  const t1310 = new Date(2026, 9, 19, 13, 10);
   const when = (problems, cadence, now) => { const d = nextCheckAt(problems, cadence, now); return d ? momentText(d) : null; };
-  const t1310 = new Date(2026, 9, 19, 13, 10), t2130 = new Date(2026, 9, 19, 21, 30), t0130 = new Date(2026, 9, 19, 1, 30);
-  ck("  ...a night fault read again during the day: the next of the Agent's day times",
-     nextCheck(night, DAY, t1310) === "Next check: 16:00" && when(night, DAY, t1310) === "19/10/2026 16:00",
-     [nextCheck(night, DAY, t1310), when(night, DAY, t1310)]);
-  ck("  ...after the last day time: its nightly check, or tomorrow's first day time when that comes first",
-     nextCheck(night, DAY, t2130) === "Next check: 02:00" && when(night, DAY, t2130) === "20/10/2026 02:00"
-     && nextCheck(night, { ...DAY, nightlyAt: "09:00" }, t2130) === "Next check: 08:00"
-     && when(night, { ...DAY, nightlyAt: "09:00" }, t2130) === "20/10/2026 08:00"
-     && nextCheck(night, DAY, t0130) === "Next check: 02:00",
-     [nextCheck(night, DAY, t2130), nextCheck(night, { ...DAY, nightlyAt: "09:00" }, t2130), nextCheck(night, DAY, t0130)]);
-  ck("  ...an Agent that says no day times (an older one): the nightly time, never empty or undefined",
-     nextCheck(night, CADENCE, t1310) === "Next check: 02:00" && nextCheck(night, { ...DAY, dayChecksAt: [] }, t1310) === "Next check: 02:00"
-     && when(night, CADENCE, t1310) === "20/10/2026 02:00" && nextCheck(night, null, t1310) === "Next check: by the VESTA Agent",
-     [nextCheck(night, CADENCE, t1310), nextCheck(night, { ...DAY, dayChecksAt: [] }, t1310)]);
-  ck("  ...one card, an alert's fault and a night check's: the sooner — the Agent's next look",
-     nextCheck([{ source: "night", check: "day" }, { source: "alert", check: "minutes" }], DAY, t1310) === "Next check: within 5 min"
-     && nextCheck([{ source: "live", fault: { source: "night", check: "day" } }, { source: "alert", check: "minutes" }], DAY, t1310) === "Next check: within 5 min"
-     && when([{ source: "alert", check: "minutes" }, { source: "night", check: "day" }], DAY, t1310) === "19/10/2026 13:15");
-  ck("  ...but a day time sooner than the next look wins (a moment, not a rank)",
-     nextCheck([{ source: "alert", check: "minutes" }, { source: "night", check: "day" }], DAY, new Date(2026, 9, 19, 15, 58)) === "Next check: 16:00");
-  ck("  ...a night fault read during the day and one read nightly only: the day time",
-     nextCheck([{ source: "night", check: "nightly" }, { source: "night", check: "day" }], DAY, t1310) === "Next check: 16:00"
-     && nextCheck([{ source: "night", check: "nightly" }], DAY, t1310) === "Next check: 02:00");
-  ck("  ...a live item beside them keeps its rule: the faults decide; live alone stays live; a person's beside a day fault: the day time",
-     nextCheck([{ source: "live" }, { source: "night", check: "day" }], DAY, t1310) === "Next check: 16:00"
-     && nextCheck([{ source: "live" }], DAY, t1310) === "Next check: live"
-     && nextCheck([{ source: "owner" }, { source: "night", check: "day" }], DAY, t1310) === "Next check: 16:00");
-  ck("  ...the card draws the day time and its moment",
-     (() => { const v = cockpitCard({ ...group, items: [{ ...group.items[1], source: "night", check: "day" }] }, DAY, t1310).nextCheck;
-       return v.text === "Next check: 16:00" && v.at === "19/10/2026 16:00"; })());
+  ck("  ...every night fault: within the Agent's look — what it writes now, an older Agent's \"day\", or none",
+     [{ source: "night", check: "minutes" }, { source: "night", check: "day" }, { source: "night" }]
+       .every((p) => nextCheck([p], CADENCE, t1310) === "Next check: within 5 min" && when([p], CADENCE, t1310) === "19/10/2026 13:15"));
+  ck("  ...a fault written \"nightly\" keeps its nightly time; beside an every-look fault, the sooner wins",
+     nextCheck([{ source: "night", check: "nightly" }], CADENCE, t1310) === "Next check: 02:00"
+     && nextCheck([{ source: "night", check: "nightly" }, { source: "alert", check: "minutes" }], CADENCE, t1310) === "Next check: within 5 min"
+     && nextCheck([{ source: "live", fault: { source: "night", check: "day" } }], CADENCE, new Date(2026, 9, 19, 1, 58)) === "Next check: within 5 min");
+  ck("  ...a live item beside them keeps its rule: the faults decide; live alone stays live; a person's alone: by hand",
+     nextCheck([{ source: "live" }, { source: "night", check: "minutes" }], CADENCE, t1310) === "Next check: within 5 min"
+     && nextCheck([{ source: "live" }], CADENCE, t1310) === "Next check: live"
+     && nextCheck([{ source: "night", check: "day" }], null, t1310) === "Next check: by the VESTA Agent");
 }
 ck("  ...drawn as the hover text of the card's Next check", /<span class="fm-record-aside muted" title="\d\d\/\d\d\/\d{4} \d\d:\d\d">Next check/.test(issue));
 // owner, 2026-10-15: "there should always be the room line, to respect a consistent layout"

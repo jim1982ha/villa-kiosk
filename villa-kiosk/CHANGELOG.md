@@ -1,3 +1,18 @@
+## 2.496.452
+
+### Fixed
+- Villa presence: "Occupied · since …", each person's "since …" and the latest movement's "quiet since …" now say when
+  that state really began, not when the villa's system was last restarted (a restart rewrites the same state, which
+  is the short white gap you could see in the presence band). When the villa has been in that state for longer than
+  the system keeps, it says "since before <that day>". While the history is being read, the line shows "…" instead of
+  a time.
+- "Empty · since …" uses the moment the villa last became empty, as the villa's presence helper records it, when the
+  helper has that record (it survives restarts and goes further back than the kept history).
+
+### Changed
+- Facility: every maintenance-check fault's card now says "Next check: within 5 min", because the VESTA Agent reads
+  every open one again at each look. Nothing else changes on screen. An older VESTA Agent keeps working.
+
 ## 2.496.451
 
 ### Fixed

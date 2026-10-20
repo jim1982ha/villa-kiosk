@@ -3524,16 +3524,12 @@ _CADENCE_REFUSAL_LOGGED: str | None = None
 def _agent_cadence_problem(value) -> str | None:
     """Why a heartbeat's `cadence` is not agent-contract.json's shape, or None when it is (_agent_cadence's rule)."""
     if not isinstance(value, dict):
-        return "cadence must be an object {checkMinutes, nightlyAt, dayChecksAt?}"
+        return "cadence must be an object {checkMinutes, nightlyAt}"
     minutes, nightly = value.get("checkMinutes"), value.get("nightlyAt")
     if not (isinstance(minutes, int) and not isinstance(minutes, bool) and 1 <= minutes <= 1440):
         return "checkMinutes must be a whole number 1-1440"
     if not (isinstance(nightly, str) and _HHMM.fullmatch(nightly)):
         return "nightlyAt must be HH:MM"
-    day = value.get("dayChecksAt")
-    if day is not None and not (isinstance(day, list) and len(day) <= 12
-                                and all(isinstance(t, str) and _HHMM.fullmatch(t) for t in day)):
-        return "dayChecksAt must be a list of at most 12 HH:MM"
     return None
 
 
@@ -3544,15 +3540,11 @@ _HHMM = re.compile(r"(?:[01]\d|2[0-3]):[0-5]\d")
 def _agent_cadence(value) -> dict | None:
     """The agent's own timing as its heartbeat says it (agent-contract.json `heartbeat.cadence`), or None when it is
     not that shape. ⚠️ THE AGENT'S CLOCK, TOLD — NOT COPIED (architecture review, 2026-10-15): the Overview's (i) said
-    "checks every 5 minutes, nightly check at 02:00" whatever the villa had set."""
+    "checks every 5 minutes, nightly check at 02:00" whatever the villa had set. Only these two are kept: anything else
+    an older Agent sends is dropped, never refused."""
     if _agent_cadence_problem(value) is not None:
         return None
-    cadence = {"checkMinutes": value["checkMinutes"], "nightlyAt": value["nightlyAt"]}
-    if value.get("dayChecksAt") is not None:
-        # the times it reads its "day" faults again (owner, 2026-10-19), kept sorted and once each: the Kiosk words
-        # "16:00, 20:00" in that order
-        cadence["dayChecksAt"] = sorted(set(value["dayChecksAt"]))
-    return cadence
+    return {"checkMinutes": value["checkMinutes"], "nightlyAt": value["nightlyAt"]}
 
 
 def _agent_presence() -> dict:
