@@ -1,3 +1,19 @@
+## 0.12.297
+
+What you will see:
+- The "🔎 Investigate this" button also comes under a follow-up answer in the same conversation that relies on what
+  the Agent already read (asking the same question again, "and since when?"), not only under the answer that read it.
+  A new conversation (/new) starts with none.
+- Answers about what a device did are now worked out from EVERY reading of the period, compared with the same hours
+  of the days before — never from the last few minutes of readings. Asked about the House Pump, the Agent no longer
+  says "it alternates between 0 and 1.2 W" (that was the pump at rest); it says it started 54 times in 4 hours
+  against 4 or 5 in the same hours of the days before.
+- Every kind of device gets the same care, against its own past: a pump or heater (how often and how long it ran), a
+  temperature or humidity (its range against its usual range), a door or a switch (how many times against usual), an
+  energy total (how much it rose against usual). Only what is far from usual is marked.
+- A pump whose resting reading touches 0 W is no longer said to have "had no power" each time.
+- The same figures are used by /investigate, so its report and the chat answer agree.
+
 ## 0.12.296
 
 What you will see:
