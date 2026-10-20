@@ -22,6 +22,7 @@ import { useHA } from "@/ha/HAStateStore";
 import { useDraftedSlice } from "@/hooks/useDraftedSlice";
 import { DEFAULT_SITE_TITLE, type RenderConfig } from "@/config/AppConfig";
 import type { SceneManager } from "@/babylon/SceneManager";
+import DialogLayer from "@/components/common/DialogLayer";
 
 interface Props {
   manager: SceneManager | null;
@@ -102,7 +103,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
   const eyeHeight = eyeHeightOf(v.eyeHeight);
 
   return (
-    <div className="modal-backdrop" onClick={closeModal}>
+    <DialogLayer className="modal-backdrop" onClick={closeModal}>
       <div
         ref={dialogRef}
         className="modal settings-modal"
@@ -351,6 +352,6 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
           onClose={onClose}
         />
       </div>
-    </div>
+    </DialogLayer>
   );
 }

@@ -21,6 +21,7 @@ import ModalTabs, { type ModalTab } from "@/components/common/ModalTabs";
 import FacilitySections, { FACILITY_TABS, type FacilityTab } from "@/components/fm/FacilitySections";
 import { useFacilityLiveView } from "@/fm/FmDataContext";
 import CockpitOverview from "./CockpitOverview";
+import DialogLayer from "@/components/common/DialogLayer";
 
 export interface CockpitModalProps {
   onClose: () => void;
@@ -69,7 +70,7 @@ export default function CockpitModal({
   const updatesAvailable = updates.length;
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <DialogLayer className="modal-backdrop" onClick={onClose}>
       <div
         ref={dialogRef}
         className="modal settings-modal cockpit-modal"
@@ -106,6 +107,6 @@ export default function CockpitModal({
 
         <ModalFooter onClose={onClose} />
       </div>
-    </div>
+    </DialogLayer>
   );
 }

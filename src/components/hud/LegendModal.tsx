@@ -14,6 +14,7 @@ import { useConfig } from "@/config/ConfigContext";
 import { overviewKeyHelp } from "@/babylon/overviewKeys";
 import { healthPill } from "@/babylon/colors";
 import ModalFooter from "@/components/common/ModalFooter";
+import DialogLayer from "@/components/common/DialogLayer";
 
 /** What the MAP badge actually does per state — mirrors config/
  *  EntityCategories.categorySurface exactly (VESTA-DESIGN.md §0): neutral by
@@ -87,7 +88,7 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
     // card. It already reuses .modal-header/-body/-footer below; sharing
     // the outer width too means this is a genuine "same modal, different
     // content" reuse instead of its own one-off sizing.
-    <div className="modal-backdrop" onClick={onClose}>
+    <DialogLayer className="modal-backdrop" onClick={onClose}>
       <div
         ref={dialogRef}
         className="modal settings-modal legend-modal"
@@ -212,6 +213,6 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
         </div>
         <ModalFooter onClose={onClose} />
       </div>
-    </div>
+    </DialogLayer>
   );
 }

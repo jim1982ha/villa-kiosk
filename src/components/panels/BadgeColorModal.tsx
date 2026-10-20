@@ -8,6 +8,7 @@
 import { RotateCcw } from "lucide-react";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import ModalFooter from "@/components/common/ModalFooter";
+import DialogLayer from "@/components/common/DialogLayer";
 
 // A spread of distinct, pleasant badge colours. Identity swatches (not a data
 // scale), so no ramp/validator needed — just visibly different from each other.
@@ -47,7 +48,7 @@ export default function BadgeColorModal({ current, categoryColor, onChange, onCl
     // (Settings/Config Editor): top-anchored, edge-to-edge, square corners.
     // This is a short picker, same category as the device panel itself, so it
     // should get the same small centered rounded card on phones.
-    <div className="modal-backdrop panel-modal-backdrop" onClick={onClose} style={{ zIndex: 80 }}>
+    <DialogLayer className="modal-backdrop panel-modal-backdrop" onClick={onClose} style={{ zIndex: 80 }}>
       <div
         ref={dialogRef}
         className="modal panel-modal badge-color-modal"
@@ -92,6 +93,6 @@ export default function BadgeColorModal({ current, categoryColor, onChange, onCl
 
         <ModalFooter onClose={onClose} />
       </div>
-    </div>
+    </DialogLayer>
   );
 }

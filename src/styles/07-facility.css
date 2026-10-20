@@ -88,6 +88,14 @@
 .fm-record-body > .fm-row-main { flex: 1 1 260px; min-width: 0; }
 .fm-record-actions { flex: 0 0 auto; margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .fm-record-actions .modal-actions { justify-content: flex-end; flex-wrap: wrap; }
+/* ⚠️ A CARD'S "Close this? No action needed." ON A PHONE (owner, 2026-10-21: "very buggy" on iPhone): the row of
+   buttons is sized to its content (flex: 0 0 auto), and the question with Cancel and Close is wider than a phone's
+   card — it ran out of the card, its Close cut off at the edge. Asking, the row takes the whole width; the question
+   takes what is left and wraps, the two buttons stay together at the end (as a problem's own line does below). */
+.fm-record-actions:has(> .modal-actions) { flex: 1 1 100%; min-width: 0; }
+.fm-record-actions > .modal-actions { flex: 1 1 100%; min-width: 0; align-items: center; gap: 8px 12px; }
+.fm-record-actions > .modal-actions .body-text { flex: 1 1 12em; min-width: 0; }
+.fm-record-actions > .modal-actions .btn { flex: 0 0 auto; }
 .fm-ticket-records { display: flex; flex-direction: column; }
 .fm-ticket-records > .fm-record + .fm-record { border-top: 1px solid var(--hairline); padding-top: 8px; margin-top: 8px; }
 /* The Spend tab's month totals on one line, each an equal share of the width with its word above its amount, Record
@@ -186,7 +194,11 @@
 @media (hover: hover) {
   .fm-openable:hover { border-color: var(--hairline-strong); }
 }
-.fm-openable:active { transform: translateY(1px); }
+/* …the card's own press only: a finger on one of its buttons (or on a field) nudged the whole card under it — on a
+   phone, the card holding a Close and its question shook on every tap (owner, 2026-10-21) */
+.fm-openable:active:not(:has(button:active, a:active, input:active, textarea:active, select:active)) {
+  transform: translateY(1px);
+}
 
 /* Evidence thumbnails are buttons (they open the viewer), so they must not
    inherit the default button chrome. */

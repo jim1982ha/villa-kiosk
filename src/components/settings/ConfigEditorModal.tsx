@@ -25,6 +25,7 @@ import GroupedDevices from "./GroupedDevices";
 import EntityPicker from "./EntityPicker";
 import InlineConfirm from "@/components/common/InlineConfirm";
 import ModalFooter from "@/components/common/ModalFooter";
+import DialogLayer from "@/components/common/DialogLayer";
 
 /** ⚠️ EVERY TAB CARRIES TWO PANELS, AND THAT IS A RULE RATHER THAN AN
  *  ACCIDENT. This screen was a stack of six collapsible sections and read as
@@ -248,7 +249,7 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
   const glbUpload = useGlbUpload(canUploadModel, onModelChanged);
 
   return (
-    <div className="modal-backdrop" onClick={onBack}>
+    <DialogLayer className="modal-backdrop" onClick={onBack}>
       <div
         ref={dialogRef}
         className="modal settings-modal config-editor-modal"
@@ -373,6 +374,6 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
             and a tab switch can lose nothing. */}
         <ModalFooter onClose={onBack} note={`v${__APP_VERSION__}`} />
       </div>
-    </div>
+    </DialogLayer>
   );
 }

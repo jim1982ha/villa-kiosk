@@ -12,6 +12,7 @@ import ModalFooter from "@/components/common/ModalFooter";
 import { useProfile } from "@/auth/ProfileContext";
 import { profileView } from "@/auth/permissions";
 import LastDayTimeline from "@/components/panels/LastDayTimeline";
+import DialogLayer from "@/components/common/DialogLayer";
 
 const ICON = { occupied: Users, empty: House, unknown: CircleQuestionMark };
 /** The tile's own short word (a 50 px rail): the panel's heading says it in full. */
@@ -81,7 +82,7 @@ export function PresencePanel({ presence: p, when, why, showPeople, showMovement
   const act = why.lastActivity;
   const opener = (id: string) => (canOpen(id) ? onOpenEntity : undefined);
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <DialogLayer className="modal-backdrop" onClick={onClose}>
       <div ref={dialogRef} className="modal settings-modal presence-modal" onClick={(e) => e.stopPropagation()}
         role="dialog" aria-modal="true" aria-label="Villa presence">
         <div className="modal-header"><h2>Villa presence</h2></div>
@@ -129,6 +130,6 @@ export function PresencePanel({ presence: p, when, why, showPeople, showMovement
         </div>
         <ModalFooter onClose={onClose} />
       </div>
-    </div>
+    </DialogLayer>
   );
 }
