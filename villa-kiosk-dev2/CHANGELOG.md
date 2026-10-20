@@ -1,3 +1,13 @@
+## 2.496.448
+
+### Changed
+- The overview no longer draws a sun or a moon disc: the orange circle over the villa at midday was the sun's
+  position marker, not part of the house. The sky's light and colours are unchanged; walking, you still see the real
+  sun and the moon in the sky.
+- Every room or floor heading with a device that has its own switch now has "Turn all on / off", even for one
+  device, and locks count: "Lock 1 lock", "Unlock 4 locks", "Turn off 2 lights and lock 1 lock". It always asks
+  first, and readings, curtains and cameras are never touched.
+
 ## 2.496.447
 
 ### Changed
