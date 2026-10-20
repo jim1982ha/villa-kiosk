@@ -129,7 +129,9 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
     <div className="modal-backdrop panel-modal-backdrop" onClick={onClose}>
       <div
         ref={dialogRef}
-        className={`modal panel-modal${className ? ` ${className}` : ""}`}
+        // `device-details`: a window about ONE device fits its content (owner, 2026-10-20: the one height of 2.496.447
+        // "wrongly applied to the Entity details ones … keep an adjusted height"); a list of devices keeps the one height
+        className={`modal panel-modal${entityId ? " device-details" : ""}${className ? ` ${className}` : ""}`}
         style={deviceTint ? {
           ["--device-fill" as string]: deviceTint.fill,
           ["--device-ink" as string]: deviceTint.ink,
