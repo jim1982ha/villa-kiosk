@@ -2,7 +2,7 @@
 #
 # Supervisor renders `name` as each field's label and `description` as the
 # help text underneath it. Without this file the UI shows the raw option key
-# ("evidence_retention_days") and nothing else — every explanation lived in
+# ("session_days") and nothing else — every explanation lived in
 # comments inside config.yaml, which is a file the operator configuring the
 # add-on never opens.
 #
@@ -54,14 +54,6 @@ configuration:
       ON means the villa's floor plan can be downloaded by anyone who can
       reach this add-on, with no passcode — only use it behind something like
       Cloudflare Access.
-  evidence_retention_days:
-    name: Keep maintenance records for (days)
-    description: >-
-      How long maintenance photos, repaired faults, work done and money spent
-      are kept. The default 365 keeps one year of history. Raise it if your own obligation runs longer,
-      or set 0 to keep them for ever. A task's latest completion is always
-      kept. Separate from the automatic clean-up of photos no record points at
-      any more, which always runs.
   session_days:
     name: Stay signed in for (days)
     description: >-

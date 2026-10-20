@@ -10,7 +10,7 @@ enforced by nothing.
 WHY THE RULE MATTERS. Supervisor renders translations/en.yaml's `name` as each
 field's label and `description` as the help text under it. A field missing from
 that file does not fail, warn, or look broken — it renders as its raw key
-("evidence_retention_days") with no explanation, on the one page an operator
+("session_days") with no explanation, on the one page an operator
 configuring this add-on ever sees. That is also the page where the PINs are
 set, so a missing description is a security control with no instructions.
 

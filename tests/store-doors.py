@@ -188,8 +188,8 @@ async def main() -> None:
        (status, put, [t["id"] for t in on_disk("fm-data.json")["tickets"]]))
     status, put = await call("PUT", "/agent/v1/fm-data", agent, {"data": body2["data"], "rev": put["rev"]})
     ck("the agent writing its copy back is not a delete it may not make", status == 200, (status, put))
-    options["evidence_retention_days"] = 0
-    (DATA / "options.json").write_text(json.dumps(options))
+    # the owner's "keep for ever" in Advanced Settings (2.496.454: a shared setting, no longer an add-on option)
+    (DATA / "device-config.json").write_text(json.dumps({"recordsKeptDays": 0}))
     (DATA / "fm-data.json").write_text(json.dumps(aged))
     status, body = await call("GET", "/fm-data", ops)
     ck("evidence window 0: repairs are kept for ever, no-action closes still leave",

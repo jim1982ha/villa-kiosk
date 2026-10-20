@@ -412,7 +412,8 @@ export interface FmRetention { clearedDays: number; repairedDays: number; record
 
 /** The line under a list of work done or money spent: how long it is kept — null when kept for ever or not said. */
 export function recordsKeptNote(r: FmRetention | null, what: string): string | null {
-  return r && r.recordsDays > 0 ? `${what} older than ${r.recordsDays} days is no longer kept.` : null;
+  return r && r.recordsDays > 0
+    ? `${what} older than ${r.recordsDays} days is no longer kept (Advanced Settings › System).` : null;
 }
 
 /** The days the record still holds BOTH kinds of close — the shorter window (0 = for ever, so not a bound); null when
