@@ -25,6 +25,8 @@
 //                    app's browser had never been told; the wall tablet had)
 //     presenceSensor the villa's "is it empty?" on/off sensor (config/presence):
 //                    picked once, the presence tile on every screen follows
+//     recordsKeptDays how long the Facility record is kept (0 = for ever): the
+//                    server applies it, so it can only be the villa's
 //
 //   PER-DEVICE — describes THIS CLIENT's look/feel, where different answers on
 //   different hardware are correct, not a drift to be reconciled: render
@@ -38,7 +40,7 @@
 // GLB's own payload through a second channel.
 
 import { ingressPath } from "@/ha/ingress";
-import type { AppConfig, DeviceGroup } from "./AppConfig";
+import { RECORDS_KEPT_DAYS_DEFAULT, RECORDS_KEPT_DAYS_MAX, type AppConfig, type DeviceGroup } from "./AppConfig";
 import { EMPTY_FM_CONTRACT, type FmContract } from "@/fm/fmTypes";
 import type { EntityMapping, TeleportPoint } from "@/types/scene.types";
 import { backendFetch } from "@/auth/sessionLost";
@@ -73,6 +75,7 @@ interface SharedItems {
   longitude: number;
   northOffsetDeg: number;
   presenceSensor: string;
+  recordsKeptDays: number;
 }
 
 export type SharedConfigKey = keyof SharedItems;
@@ -120,6 +123,17 @@ const villaText: SharedKeyRow<string, string> = {
   empty: "",
 };
 
+/** How long the Facility record is kept: a whole number of days from 0 (for ever) to the server's ceiling. Its empty
+ *  is the app's default — what the server applies while the villa has stored none — so a device on the default
+ *  proposes nothing. */
+const recordsKept: SharedKeyRow<number, number> = {
+  index: (v) => ({ value: v }),
+  fromIndex: (items) => items.value ?? RECORDS_KEPT_DAYS_DEFAULT,
+  parse: (raw) => (Number.isInteger(raw) && (raw as number) >= 0 && (raw as number) <= RECORDS_KEPT_DAYS_MAX
+    ? (raw as number) : undefined),
+  empty: RECORDS_KEPT_DAYS_DEFAULT,
+};
+
 const SHARED_KEYS: { [K in SharedConfigKey]: SharedKeyRow<AppConfig[K], SharedItems[K]> } = {
   entityMap: { index: sameRecord, fromIndex: sameRecord, parse: asRecord, empty: {} },
   meshBindings: { index: sameRecord, fromIndex: sameRecord, parse: asRecord, empty: {} },
@@ -152,6 +166,7 @@ const SHARED_KEYS: { [K in SharedConfigKey]: SharedKeyRow<AppConfig[K], SharedIt
   longitude: villaNumber,
   northOffsetDeg: villaNumber,
   presenceSensor: villaText,
+  recordsKeptDays: recordsKept,
 };
 
 /** The AppConfig fields stored centrally, in the one order every document is

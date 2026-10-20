@@ -165,7 +165,7 @@ console.log("\n  a figure names its period (architecture review, 2026-10-19: \"R
   eq("  ...and said under the list it shortens; nothing said when kept for ever or not known",
      [recordsKeptNote({ clearedDays: 90, repairedDays: 365, recordsDays: 365 }, "Spend"),
       recordsKeptNote({ clearedDays: 90, repairedDays: 0, recordsDays: 0 }, "Work"), recordsKeptNote(null, "Work")],
-     ["Spend older than 365 days is no longer kept.", null, null]);
+     ["Spend older than 365 days is no longer kept (Advanced Settings › System).", null, null]);
 }
 
 console.log(`\n${fail ? `❌ ${fail} failed` : "✅ the owner's numbers hold"}`);

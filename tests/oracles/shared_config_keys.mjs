@@ -23,6 +23,7 @@ const sample = {
   longitude: 115.2,
   northOffsetDeg: 117,
   presenceSensor: "binary_sensor.example_empty",
+  recordsKeptDays: 180,
 };
 const edit = {
   entityMap: (v, n) => ({ ...v, [`light.n${n}`]: { type: "light", label: `N${n}` } }),
@@ -35,10 +36,11 @@ const edit = {
   longitude: (v, n) => v + n,
   northOffsetDeg: (v, n) => v + n,
   presenceSensor: (v, n) => `${v}_${n}`,
+  recordsKeptDays: (v, n) => v + n,
 };
 // Keys holding ONE value rather than a collection: a change replaces it whole,
 // so two devices' edits cannot both survive — the later one wins.
-const SINGLE = new Set(["fmContract", "latitude", "longitude", "northOffsetDeg", "presenceSensor"]);
+const SINGLE = new Set(["fmContract", "latitude", "longitude", "northOffsetDeg", "presenceSensor", "recordsKeptDays"]);
 const base = Object.fromEntries(KEYS.map((k) => [k, sample[k]]));
 const J = JSON.stringify;
 
@@ -50,7 +52,7 @@ console.log("\n  reading what the server holds:");
   const parsed = dc.parseSharedConfig({ ...base, fromANewerVersion: 1 });
   ck("every shared key is read back as stored", KEYS.every((k) => J(parsed[k]) === J(base[k])));
   ck("a key this version does not know is dropped", !("fromANewerVersion" in parsed));
-  const wrong = dc.parseSharedConfig({ entityMap: [], meshBindings: "x", deviceGroups: {}, teleportPoints: 3, dismissedEntityIds: "a", fmContract: 5, latitude: "x", longitude: null, northOffsetDeg: NaN, presenceSensor: 3 });
+  const wrong = dc.parseSharedConfig({ entityMap: [], meshBindings: "x", deviceGroups: {}, teleportPoints: 3, dismissedEntityIds: "a", fmContract: 5, latitude: "x", longitude: null, northOffsetDeg: NaN, presenceSensor: 3, recordsKeptDays: 1.5 });
   ck("a wrong-shaped value is left out, so the device keeps its own", Object.keys(wrong).length === 0, J(wrong));
   ck("a dismissed list keeps only its ids", J(dc.parseSharedConfig({ dismissedEntityIds: ["a", 3, null, "b"] }).dismissedEntityIds) === J(["a", "b"]));
   ck("nothing usable reads as nothing", J(dc.parseSharedConfig(null)) === "{}" && J(dc.parseSharedConfig([1])) === "{}");
@@ -132,5 +134,22 @@ console.log("\n  where the villa is and which way north lies — shared, never a
   const dash = (await import("node:fs")).readFileSync(new URL("../../src/pages/Dashboard.tsx", import.meta.url), "utf8");
   ck("  ...and the Dashboard asks it", /const loc = locationToAdopt\(config, loadSyncBaseline\(\), haConfig\);\s*if \(loc\) update\(loc\);/.test(dash)
      && !/update\(\{ latitude: haConfig\.latitude/.test(dash));
+}
+// how long the Facility record is kept: the villa's, set in Advanced Settings (owner, 2026-10-20: it was an add-on
+// option). The server applies it, so the app's default and ceiling are the server's.
+{
+  const { RECORDS_KEPT_DAYS_DEFAULT: DEF, RECORDS_KEPT_DAYS_MAX: MAX } = await import("@/config/AppConfig");
+  const proxySrc = (await import("node:fs")).readFileSync(new URL("../../rootfs/usr/bin/supervisor-proxy.py", import.meta.url), "utf8");
+  const row = proxySrc.match(/^RECORDS_KEPT_DAYS = Option\("int", (\d+), 0, (\d+)\)$/m);
+  ck("the app's default and ceiling are the server's", !!row && Number(row[1]) === DEF && Number(row[2]) === MAX, row && row.slice(1).join());
+  const nothing = dc.baselineFromServer({});
+  ck("nothing stored: the default, one year", nothing.recordsKeptDays === DEF && DEF === 365, nothing.recordsKeptDays);
+  ck("a device still on the default proposes nothing",
+     dc.isSharedConfigDiffEmpty(dc.diffSharedConfig(nothing, { ...nothing, recordsKeptDays: DEF })));
+  ck("the owner's \"keep for ever\" (0) is proposed, as an edit",
+     J(dc.describeSharedConfigDiff(dc.diffSharedConfig(nothing, { ...nothing, recordsKeptDays: 0 }))) === J({ recordsKeptDays: 1 }));
+  const read = (v) => dc.parseSharedConfig({ recordsKeptDays: v }).recordsKeptDays;
+  ck("whole days from 0 to the ceiling are read; anything else keeps the device's own",
+     read(0) === 0 && read(MAX) === MAX && [-1, MAX + 1, 1.5, "30", null].every((v) => read(v) === undefined));
 }
 done("✅ every shared key is read, diffed, replayed and baselined from its one row");

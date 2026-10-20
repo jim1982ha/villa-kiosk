@@ -138,9 +138,11 @@ AUTH = {"Authorization": f"Bearer {TOKEN}"}
 # someone names it here, which is a log warning; the allowlist's failure mode
 # was silently discarding a setting the operator had deliberately chosen.
 #: Each a PATH (a nested option is under its group): the agent's message retention left with its messages (2.496.445),
-#: in both places it was ever stored.
+#: in both places it was ever stored; how long maintenance records are kept became a VESTA setting (2.496.454,
+#: _evidence_retention_days) — a value stored here is not carried over: the setting starts at its default.
 REMOVED_OPTIONS = {("sh3d_path",), ("model_path",),
-                   ("agent_message_retention_days",), ("vesta_agent", "message_retention_days")}
+                   ("agent_message_retention_days",), ("vesta_agent", "message_retention_days"),
+                   ("evidence_retention_days",)}
 
 # The add-on's OWN persistent volume (Supervisor gives every add-on /data and
 # preserves it across restarts/updates). Central model files live here now —
@@ -1011,7 +1013,6 @@ OPTIONS = {
     "ops_pin": Option("text", "", pattern=PIN_RE),
     "superadmin_pin": Option("text", "", pattern=SUPERADMIN_PIN_RE),
     "public_model_access": Option("bool", False),
-    "evidence_retention_days": Option("int", 365, 0, 3650),
     "session_days": Option("int", 30, 1, 365),
     "telemetry_max_events": Option("int", 500, 50, 5000),
     "pin_lockout_minutes": Option("int", 5, 1, 1440),
@@ -1408,12 +1409,32 @@ def _session_ttl() -> int:
     return opt("session_days") * 86400
 
 
+#: How long the Facility record is kept, in days — its photos, repaired faults, work done and money spent; 0 keeps them
+#: for ever. The villa's shared setting `recordsKeptDays` (device-config.json), set by the owner in Advanced Settings ›
+#: System (owner, 2026-10-20: "more a setting that shall be available to set in the UI"; the add-on option
+#: evidence_retention_days until 2.496.454). The default and ceiling are the app's (AppConfig RECORDS_KEPT_DAYS_*).
+RECORDS_KEPT_DAYS = Option("int", 365, 0, 3650)
+
+
 def _evidence_retention_days() -> int:
-    """Age at which an evidence photo is deleted. 0 disables the sweep — for
-    an operator whose own retention obligation outlives any default we could
-    pick. Referenced-photo garbage collection is unaffected either way: this
-    is about age, not about whether anything still points at the file."""
-    return opt("evidence_retention_days")
+    """Age at which an evidence photo and the records are deleted. 0 disables the sweep — for an operator whose own
+    retention obligation outlives any default we could pick. Referenced-photo garbage collection is unaffected either
+    way: this is about age, not about whether anything still points at the file.
+
+    ⚠️ AN UNREADABLE SETTINGS FILE KEEPS EVERYTHING (0). This decides what is DELETED: falling back to the default
+    while the file cannot be read would delete, under an owner's "keep for ever", what that owner chose to keep. Not
+    stored, or not a number: the default, clamped like an option."""
+    stored, readable = DEVICE_CONFIG.read_status()
+    if not readable:
+        return 0
+    raw = stored.get("recordsKeptDays", RECORDS_KEPT_DAYS.default) if isinstance(stored, dict) else RECORDS_KEPT_DAYS.default
+    if isinstance(raw, bool):
+        return RECORDS_KEPT_DAYS.default
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return RECORDS_KEPT_DAYS.default
+    return max(RECORDS_KEPT_DAYS.lo, min(RECORDS_KEPT_DAYS.hi, value))
 
 
 def _telemetry_max_events() -> int:
@@ -1688,8 +1709,8 @@ FM_PROTECTED_COLLECTIONS = ("completions", "costs", "tickets")
 #   * closed with NO work done (its last resolving step is kind "cleared": the
 #     Kiosk's "Close", the agent clearing a problem that went away) —
 #     FM_CLEARED_FAULT_RETENTION_DAYS. It evidences nothing that happened.
-#   * repaired — as long as its photos (evidence_retention_days), the window
-#     the owner already sets for evidence; 0 there keeps them for ever.
+#   * repaired — as long as its photos (_evidence_retention_days), the window
+#     the owner sets in Advanced Settings; 0 there keeps them for ever.
 # A close written before steps carried a kind falls in the second, longer
 # window: kept too long is the safe direction.
 #
@@ -1750,7 +1771,7 @@ def _fm_retention() -> dict:
 # ── AND HOW LONG WORK DONE AND MONEY SPENT ARE KEPT (owner, 2026-10-20) ─────
 # Completions (work signed off) and costs (money spent) were kept FOREVER while closed faults expired: "It shouldn't
 # be kept forever: apply the same consistent retention policy". They are records of work done, so they take the
-# repaired fault's window — evidence_retention_days, counted from their own date (`at`); 0 keeps them for ever. Two
+# repaired fault's window — _evidence_retention_days, counted from their own date (`at`); 0 keeps them for ever. Two
 # completions are kept past it, because what they answer still matters: a scheduled task's LATEST completion (its
 # next due date is counted from it: a task every 2 years must not read "never done") and one tied to a fault the
 # record still holds (the fault and the work that fixed it go together).
@@ -3096,8 +3117,8 @@ FM_DATA_MAX_BYTES = 4_000_000
 # complexity for no benefit.
 FM_EVIDENCE_NAME = "fm-evidence"
 FM_EVIDENCE_MAX_BYTES = 3_000_000     # generous headroom over a downscaled JPEG
-# Evidence age limit — the DEFAULT is 365 days (one year of history; owner,
-# 2026-10-20). See _evidence_retention_days().
+# Evidence age limit: the owner's setting in Advanced Settings, 365 days by
+# default (one year of history). See _evidence_retention_days().
 FM_EVIDENCE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{6,64}$")
 # How long an unreferenced photo is kept before it is treated as garbage. It
 # exists solely to cover the gap between "uploaded" and "saved": the client

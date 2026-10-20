@@ -9,7 +9,7 @@
 import { roleCan } from "@/auth/permissions";
 import { useState } from "react";
 import { useDraftCommit } from "@/hooks/useDraftCommit";
-import type { AppConfig } from "@/config/AppConfig";
+import { RECORDS_KEPT_DAYS_MAX, type AppConfig } from "@/config/AppConfig";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import { Boxes, Home, LogOut, Upload, Wrench } from "lucide-react";
 import ModalTabs, { type ModalTab } from "@/components/common/ModalTabs";
@@ -34,7 +34,10 @@ import ModalFooter from "@/components/common/ModalFooter";
  *  each one a SUBJECT ("where the villa is", "what devices exist", "what this
  *  box is doing") rather than a container.
  *
- *  ⚠️ AND THE NON-OWNER VIEW WAS SIZED TOO. Both System panels are owner-only,
+ *  System holds a third since 2.496.454: how long the maintenance record is kept, a setting of what this box does
+ *  with the villa's records (owner, 2026-10-20: moved here from the add-on's configuration page).
+ *
+ *  ⚠️ AND THE NON-OWNER VIEW WAS SIZED TOO. Every System panel is owner-only,
  *  so that whole tab is filtered out rather than rendered empty — a non-owner
  *  gets two tabs holding two panels apiece, which is the same shape. */
 type SettingsTab = "villa" | "devices" | "system";
@@ -150,6 +153,33 @@ function PresenceSensor() {
       <p className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-xs)" }}>
         The on/off sensor that is on when the villa is empty. Shown on every screen as the presence tile under the
         floors — Occupied, Empty or Unknown — and tapping it tells why.
+      </p>
+    </>
+  );
+}
+
+/** How long the Facility record is kept (config/recordsKeptDays): the villa's, applied by the server. Commits on
+ *  blur/Enter or after a pause, like the coordinates; a value that is not a whole number of days in range commits
+ *  nothing and the field falls back to the stored one. */
+function RecordsKept() {
+  const { config, update } = useConfig();
+  const field = useDraftCommit<string>((_key, text) => {
+    const n = Number(text);
+    if (text.trim() !== "" && Number.isInteger(n) && n >= 0 && n <= RECORDS_KEPT_DAYS_MAX) update({ recordsKeptDays: n });
+  }, COORD_COMMIT_MS);
+  return (
+    <>
+      <label htmlFor="records-kept">Keep maintenance records for (days)</label>
+      <input
+        id="records-kept" inputMode="numeric" style={{ maxWidth: 140 }}
+        value={field.drafts.recordsKeptDays ?? String(config.recordsKeptDays)}
+        onChange={(e) => field.draft("recordsKeptDays", e.target.value)}
+        onBlur={() => field.flush("recordsKeptDays")}
+        onKeyDown={(e) => e.key === "Enter" && field.flush("recordsKeptDays")}
+      />
+      <p className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-xs)" }}>
+        Photos, repaired faults, work done and money spent older than this are deleted. 0 keeps them for ever. A
+        task's latest completion is always kept. Up to {RECORDS_KEPT_DAYS_MAX} days.
       </p>
     </>
   );
@@ -328,6 +358,9 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
                   reason somebody opens this tab. */}
               <div className="settings-section-title">Device telemetry</div>
               <TelemetryPanel />
+
+              <div className="settings-section-title">Maintenance records</div>
+              <RecordsKept />
 
               <div className="settings-section-title">Session</div>
               <LogoutAllSection />

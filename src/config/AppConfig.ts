@@ -156,6 +156,12 @@ export interface AppConfig {
    * it is each villa's own (owner, 2026-10-18).
    */
   presenceSensor: string;
+  /**
+   * How long the Facility record keeps its photos, repaired faults, work done and money spent, in days; 0 keeps them
+   * for ever. The villa's, set by the owner in Advanced Settings › System (owner, 2026-10-20: it was the add-on
+   * option `evidence_retention_days` until 2.496.454). The server applies it (supervisor-proxy _evidence_retention_days).
+   */
+  recordsKeptDays: number;
   theme: "dark" | "light" | "auto" | "night";
   /** The storey being shown. 1-based; see TeleportPoint.floor for why this
    *  is not a two-value union. */
@@ -321,12 +327,18 @@ export interface DeviceGroup {
 // import this module (tests/oracles/config_complete.mjs).
 const env = (import.meta.env ?? {}) as Partial<ImportMetaEnv>;
 
+/** One year of history (owner, 2026-10-20); the server's own default is the same number (RECORDS_KEPT_DAYS). */
+export const RECORDS_KEPT_DAYS_DEFAULT = 365;
+/** The longest window the field accepts — ten years, the server's clamp. */
+export const RECORDS_KEPT_DAYS_MAX = 3650;
+
 export const DEFAULT_CONFIG: AppConfig = {
   siteTitle: "",
   latitude: env.VITE_LAT ? Number(env.VITE_LAT) : 0,
   longitude: env.VITE_LNG ? Number(env.VITE_LNG) : 0,
   northOffsetDeg: 0,
   presenceSensor: "",
+  recordsKeptDays: RECORDS_KEPT_DAYS_DEFAULT,
   theme: "auto",
   currentFloor: 1,
   entityMap: ENTITY_MAP,
