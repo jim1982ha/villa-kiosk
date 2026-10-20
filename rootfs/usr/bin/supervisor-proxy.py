@@ -137,7 +137,10 @@ AUTH = {"Authorization": f"Bearer {TOKEN}"}
 # A denylist cannot do that. Its failure mode is a stale key lingering until
 # someone names it here, which is a log warning; the allowlist's failure mode
 # was silently discarding a setting the operator had deliberately chosen.
-REMOVED_OPTION_KEYS = {"sh3d_path", "model_path"}
+#: Each a PATH (a nested option is under its group): the agent's message retention left with its messages (2.496.445),
+#: in both places it was ever stored.
+REMOVED_OPTIONS = {("sh3d_path",), ("model_path",),
+                   ("agent_message_retention_days",), ("vesta_agent", "message_retention_days")}
 
 # The add-on's OWN persistent volume (Supervisor gives every add-on /data and
 # preserves it across restarts/updates). Central model files live here now —
@@ -1018,7 +1021,6 @@ OPTIONS = {
     # Before 2.496.218 the agent's settings were flat keys.
     "vesta_agent.token": Option("secret", "", pattern=AGENT_TOKEN_RE, older=[("agent_token",)]),
     "vesta_agent.offline_after_minutes": Option("int", 5, 1, 60, older=[("agent_offline_after_minutes",)]),
-    "vesta_agent.message_retention_days": Option("int", 90, 1, 365, older=[("agent_message_retention_days",)]),
 }
 
 
@@ -1067,14 +1069,19 @@ def opt(name: str, options: dict | None = None):
 
 def migrate_options(stored: dict) -> dict | None:
     """The stored options to write back, or None when nothing is stale:
-    retired keys (REMOVED_OPTION_KEYS) dropped, and every option still in an
+    retired options (REMOVED_OPTIONS) dropped, and every option still in an
     OLDER place moved to its current one, value kept — the owner's token and
     switch must survive an update. Pure: tests/agent-interface.py drives it."""
     out = json.loads(json.dumps(stored))
     changed = False
-    for key in REMOVED_OPTION_KEYS & set(out):
-        del out[key]
-        changed = True
+    for path in REMOVED_OPTIONS:
+        found, _ = _stored_at(out, path)
+        if found:
+            parent = out
+            for key in path[:-1]:
+                parent = parent[key]
+            del parent[path[-1]]
+            changed = True
     for name, row in OPTIONS.items():
         path = tuple(name.split("."))
         found_any, kept = False, None
@@ -1133,7 +1140,8 @@ async def _cleanup_stale_options(session: ClientSession) -> None:
         cleaned = migrate_options(options)
         if cleaned is None:
             return
-        stale = sorted(set(options) - set(cleaned))
+        stale = sorted((set(options) - set(cleaned))
+                       | {".".join(p) for p in REMOVED_OPTIONS if _stored_at(options, p)[0]})
         async with session.post(
             f"http://{SUPERVISOR}/addons/self/options", headers=AUTH,
             json={"options": cleaned},
@@ -1147,6 +1155,26 @@ async def _cleanup_stale_options(session: ClientSession) -> None:
                 )
     except Exception as err:  # noqa: BLE001 — best-effort, must never block startup
         print(f"[supervisor-proxy] stale-option cleanup skipped: {err}", flush=True)
+
+
+#: Files this process once kept in /data and no longer reads: removed at start, once, so a retired store never lingers
+#: on an install (2.496.445: the agent's messages and the answers to them).
+RETIRED_DATA_FILES = ("agent-messages.json", "agent-choices.json")
+
+
+def _remove_retired_data() -> list[str]:
+    """Delete RETIRED_DATA_FILES from the data directory; the names actually removed. Best-effort: a file that will not
+    go stays, and the next start tries again."""
+    gone = []
+    for name in RETIRED_DATA_FILES:
+        try:
+            os.unlink(_data(name))
+            gone.append(name)
+        except FileNotFoundError:
+            pass
+        except OSError as err:
+            print(f"[supervisor-proxy] retired file {name} kept: {err}", flush=True)
+    return gone
 
 
 def _rooms_rel(model_rel: str) -> str:
@@ -2687,8 +2715,8 @@ class JsonStore:
     lock, and two locks on one file is no lock — the read-check-write of one
     door could interleave with the other's. The lock now lives with the file.
 
-    Doors (_store_get_handler, _store_put_handler, and the append doors for
-    messages, choices, telemetry) decide WHO may do WHAT; this decides nothing
+    Doors (_store_get_handler, _store_put_handler, and the append door for
+    telemetry) decide WHO may do WHAT; this decides nothing
     about callers.
     """
 
@@ -2845,10 +2873,6 @@ def _store_put_handler(store: JsonStore, key: str, what: str, *,
         and error text. It appends one event into a bounded ring.
       * EVIDENCE PHOTOS are binary blobs on their own POST/GET pair, streamed
         and content-checked rather than parsed as JSON.
-
-    Neither are the agent's messages and choices: each is ONE item appended to
-    a list the server owns (agent_messages_post_handler,
-    agent_choices_put_handler), never a document a client sends whole.
 
     That role difference was once the excuse for a SECOND, hand-written PUT
     handler for the FM store. Copying the handler copied its auth/validation
@@ -3217,49 +3241,28 @@ fm_data_put_handler = _store_put_handler(
 
 AGENT = "agent"
 #: THE AGREEMENT WITH THE AGENT: /usr/share/vesta/agent-contract.json (the
-#: roles.json precedent) — version, message kinds, severities, states, limits
-#: and samples, read here, by the app, and by the agent host's copy (its CI
-#: compares the two). FAIL CLOSED: unreadable, the agent door answers nothing
-#: (version 0, no kinds).
+#: roles.json precedent) — version, the fault's shape, the entity-id pattern,
+#: read here, by the app, and by the agent host's copy (its CI compares the
+#: two). FAIL CLOSED: unreadable, the agent door answers nothing (version 0,
+#: no entity id passes). Its message channel (/agent/v1/messages, /choices, and
+#: the Kiosk's agent window) was removed in 2.496.445: the agent never used it —
+#: people talk to it on Telegram (decision D4, 2026-09-30).
 def _load_agent_contract() -> dict:
-    return _load_vesta_table("agent-contract.json", "the agent interface refuses every message")
+    return _load_vesta_table("agent-contract.json", "the agent interface refuses every request")
 
 
 AGENT_CONTRACT_TABLE = _load_agent_contract()
-_AGENT_MSG = AGENT_CONTRACT_TABLE.get("message") or {}
-_AGENT_LIMITS = _AGENT_MSG.get("limits") or {}
 AGENT_CONTRACT = int(AGENT_CONTRACT_TABLE.get("version") or 0)
 #: Its settings are rows of OPTIONS: `agent_enabled` (THE switch, above the
 #: group on the page) and the `vesta_agent.*` fields.
-AGENT_STORE_MAX_BYTES = 2_000_000
-#: Beyond the retention window, a hard cap: an agent posting in a loop must not
-#: grow /data (or the Kiosk's message list) without bound.
-AGENT_MAX_MESSAGES = 500
-AGENT_MESSAGE_KINDS = tuple(_AGENT_MSG.get("kinds") or ())
-AGENT_SEVERITIES = tuple(_AGENT_MSG.get("severities") or ())
-#: Who may press an agent's buttons: every profile holding the contract's
-#: answering capability in roles.json — never a guest (PLAN A8). Was a second
-#: list, ("owner", "ops"), which a profile newly given the agent would have
-#: been missing from: it would see messages it could never answer.
-AGENT_ANSWER_PROFILES = tuple(
-    r for r, row in (ROLES_TABLE.get("profiles") or {}).items()
-    if AGENT_CONTRACT_TABLE.get("answeringCapability") in (row.get("capabilities") or ()))
-AGENT_MAX_BUTTONS = int(_AGENT_LIMITS.get("buttons") or 0)
-AGENT_MAX_TITLE = int(_AGENT_LIMITS.get("title") or 0)
-AGENT_MAX_BODY = int(_AGENT_LIMITS.get("body") or 0)
-AGENT_MAX_ENTITIES = int(_AGENT_LIMITS.get("entities") or 0)
-AGENT_MAX_LABEL = int(_AGENT_LIMITS.get("buttonLabel") or 0)
-AGENT_BUTTON_ID_RE = re.compile(_AGENT_MSG.get("buttonIdPattern") or r"(?!)")
-AGENT_ENTITY_RE = re.compile(_AGENT_MSG.get("entityPattern") or r"(?!)")
+#: An entity id as the agent may name one (kiosk-rooms, villa-model): checked before an id reaches a template.
+AGENT_ENTITY_RE = re.compile(AGENT_CONTRACT_TABLE.get("entityPattern") or r"(?!)")
 #: What every Facility record the agent creates or changes carries (PLAN F6) — the agreement's `ticket` (the agent tells
 #: its own steps from a person's by them: declared once, architecture review 2026-10-15). Unreadable agreement: the
 #: words this server always wrote, so a stamp never goes missing.
 _AGENT_TICKET = AGENT_CONTRACT_TABLE.get("ticket") or {}
 AGENT_SOURCE = str(_AGENT_TICKET.get("source") or "vesta_agent")
 AGENT_NAME = str(_AGENT_TICKET.get("agentStamp") or "VESTA Agent")
-AGENT_MESSAGES = JsonStore("agent-messages.json", {"messages": []}, AGENT_STORE_MAX_BYTES)
-AGENT_CHOICES = JsonStore("agent-choices.json", {"choices": [], "next_seq": 1},
-                          AGENT_STORE_MAX_BYTES)
 AGENT_PRESENCE = JsonStore("agent-presence.json", {}, 10_000)
 
 #: This add-on's own version, for /agent/v1/info. Read once from the Supervisor
@@ -3291,10 +3294,6 @@ def _agent_config_warning() -> str | None:
 
 def _agent_offline_minutes() -> int:
     return opt("vesta_agent.offline_after_minutes")
-
-
-def _agent_retention_days() -> int:
-    return opt("vesta_agent.message_retention_days")
 
 
 def _now_iso() -> str:
@@ -3446,325 +3445,6 @@ async def agent_fm_document_handler(request: web.Request) -> web.Response:
     return await _store_evidence(request, ".html")
 
 
-# ── Messages and choices (PLAN A6) ───────────────────────────────────────────
-
-def _agent_prune_messages(messages: list, now: float | None = None) -> list:
-    """Messages inside the retention window, newest AGENT_MAX_MESSAGES."""
-    cutoff = (time.time() if now is None else now) - _agent_retention_days() * 86400
-    kept = [m for m in messages if isinstance(m, dict)
-            and (_iso_epoch(m.get("created_at")) or 0) >= cutoff]
-    return kept[-AGENT_MAX_MESSAGES:]
-
-
-def _agent_prune_choices(choices: list, now: float | None = None) -> list:
-    cutoff = (time.time() if now is None else now) - _agent_retention_days() * 86400
-    return [c for c in choices if isinstance(c, dict) and (_iso_epoch(c.get("at")) or 0) >= cutoff]
-
-
-def _agent_validate_message(body) -> tuple[dict | None, str | None]:
-    """A message as the agent may post it, normalised — or the reason not."""
-    if not isinstance(body, dict):
-        return None, "body must be a JSON object"
-    kind = body.get("kind", "message")
-    if kind not in AGENT_MESSAGE_KINDS:
-        return None, f"kind must be one of {', '.join(AGENT_MESSAGE_KINDS)}"
-    title = body.get("title")
-    if not isinstance(title, str) or not title.strip() or len(title) > AGENT_MAX_TITLE:
-        return None, f"title must be a non-empty string of at most {AGENT_MAX_TITLE} characters"
-    text = body.get("body", "")
-    if not isinstance(text, str) or len(text) > AGENT_MAX_BODY:
-        return None, f"body must be a string of at most {AGENT_MAX_BODY} characters"
-    severity = body.get("severity", "info")
-    if severity not in AGENT_SEVERITIES:
-        return None, f"severity must be one of {', '.join(AGENT_SEVERITIES)}"
-    entities = body.get("entities", [])
-    if not isinstance(entities, list) or len(entities) > AGENT_MAX_ENTITIES or not all(
-            isinstance(e, str) and AGENT_ENTITY_RE.fullmatch(e) for e in entities):
-        return None, f"entities must be a list of at most {AGENT_MAX_ENTITIES} entity ids"
-    buttons = body.get("buttons", [])
-    if not isinstance(buttons, list) or len(buttons) > AGENT_MAX_BUTTONS:
-        return None, f"buttons must be a list of at most {AGENT_MAX_BUTTONS}"
-    clean_buttons, seen = [], set()
-    for b in buttons:
-        if not isinstance(b, dict) or not isinstance(b.get("id"), str) \
-                or not AGENT_BUTTON_ID_RE.fullmatch(b["id"]) or b["id"] in seen \
-                or not isinstance(b.get("label"), str) or not b["label"].strip() \
-                or len(b["label"]) > AGENT_MAX_LABEL:
-            return None, f"each button needs a unique id ({AGENT_BUTTON_ID_RE.pattern}) and a label (1-{AGENT_MAX_LABEL})"
-        seen.add(b["id"])
-        clean_buttons.append({"id": b["id"], "label": b["label"].strip()})
-    profiles = body.get("allowed_profiles", list(AGENT_ANSWER_PROFILES))
-    if not isinstance(profiles, list) or not profiles or not all(
-            p in AGENT_ANSWER_PROFILES for p in profiles):
-        return None, f"allowed_profiles must be a non-empty subset of {', '.join(AGENT_ANSWER_PROFILES)}"
-    expires = body.get("expires_at")
-    if expires is not None and _iso_epoch(expires) is None:
-        return None, "expires_at must be an ISO-8601 timestamp or null"
-    return {
-        "id": f"msg_{secrets.token_hex(8)}",
-        "kind": kind,
-        "title": title.strip(),
-        "body": text,
-        "severity": severity,
-        "entities": entities,
-        "buttons": clean_buttons,
-        "allowed_profiles": sorted(set(profiles), key=AGENT_ANSWER_PROFILES.index),
-        "expires_at": expires,
-        "created_at": _now_iso(),
-    }, None
-
-
-async def agent_messages_post_handler(request: web.Request) -> web.Response:
-    """Publish a message, report or recommendation; returns its id."""
-    if (refused := _agent_refuse(request, "agentMessage")) is not None:
-        return refused
-    try:
-        body = await request.json()
-    except (ValueError, UnicodeDecodeError):
-        return web.json_response({"error": "invalid JSON body"}, status=400)
-    message, error = _agent_validate_message(body)
-    if error:
-        return web.json_response({"error": error}, status=400)
-    try:
-        await AGENT_MESSAGES.update(lambda doc: {
-            "messages": _agent_prune_messages(list(doc.get("messages") or [])) + [message]})
-    except StoreUnreadable:
-        return web.json_response({"error": "the message store could not be read"}, status=409)
-    except StoreTooLarge:
-        return web.json_response({"error": "message store full"}, status=413)
-    return web.json_response({"ok": True, "id": message["id"],
-                              "created_at": message["created_at"]}, status=201)
-
-
-def _agent_answers() -> dict:
-    """{message_id: choice} — the first (only) answer to each message."""
-    doc = AGENT_CHOICES.read()
-    out = {}
-    for c in doc.get("choices") or [] if isinstance(doc, dict) else []:
-        if isinstance(c, dict) and c.get("message_id") not in out:
-            out[c.get("message_id")] = c
-    return out
-
-
-def _agent_unanswerable(message: dict, answer, profile: str | None, now: float, online: bool):
-    """Why `profile` may not answer this Agent message now — (status, words) — or None when it may. ONE rule for the
-    page's buttons (can_answer) and the press door (_agent_press_refusal): open (no answer yet, not expired), with
-    buttons, the profile allowed, the agent online to act on it.
-
-    ⚠️ ASKED TWICE (architecture review scan 3, 2026-10-19): the view and the door each wrote the four questions; one
-    had already lost "online" once (2.496.251)."""
-    if answer is not None:
-        return 409, "already answered"
-    exp = _iso_epoch(message.get("expires_at"))
-    if exp is not None and exp <= now:
-        return 409, "this message has expired"
-    if not message.get("buttons"):
-        return 400, "this message has no buttons"
-    if profile not in (message.get("allowed_profiles") or []):
-        return 403, "This profile may not answer this message."
-    if not online:
-        # Nobody would act on it (PLAN A8)
-        return 409, "The VESTA Agent is offline: nobody would act on this answer now."
-    return None
-
-
-def _agent_messages_view(request: web.Request, stored):
-    """What an owner or facility manager sees: newest first, each message with
-    its state (open / answered / expired), who answered, and whether THIS
-    profile may press its buttons.
-
-    ⚠️ THE STATE IS COMPUTED, NOT STORED. "answered" lives in the choices store
-    and "expired" in the clock; a stored copy of either would be a second
-    answer to one question, and the two stores are written by different
-    parties under different locks."""
-    role = _role_for(request)
-    answers = _agent_answers()
-    now = time.time()
-    # ⚠️ "ANSWERABLE NOW" IS DECIDED HERE, ONCE (2.496.251). The page used to
-    # AND this with its own `status.state === "online"`, and the press door
-    # below never asked: a press from a tab opened before the agent went
-    # offline was stored for an agent that was not there to act on it. The
-    # agent's presence is part of the answer, and _agent_press_refusal asks
-    # the same question.
-    agent_here = _agent_presence()["state"] == "online"
-    out = []
-    for m in reversed(_agent_prune_messages(list((stored or {}).get("messages") or []), now)):
-        answer = answers.get(m.get("id"))
-        exp = _iso_epoch(m.get("expires_at"))
-        state = "answered" if answer else ("expired" if exp is not None and exp <= now else "open")
-        out.append({**m, "state": state,
-                    "answer": {k: answer.get(k) for k in ("button_id", "profile", "at")} if answer else None,
-                    "can_answer": _agent_unanswerable(m, answer, role, now, agent_here) is None})
-    return {"messages": out}
-
-
-agent_messages_get_handler = _store_get_handler(
-    AGENT_MESSAGES, "data", "agent messages", capability="viewAgent", view=_agent_messages_view)
-
-
-def _agent_press_refusal(stored, message_id: str, button_id: str, profile: str):
-    """Why this press may not be recorded, as the answer to send — or None.
-
-    One press, on an open message, with one of its buttons, by a profile it
-    allows, while the agent is online. First press wins; a later one gets 409 and who answered. Judged
-    against `stored`, the choices read under the store's lock, so two presses
-    racing each other cannot both win."""
-    messages = AGENT_MESSAGES.read().get("messages") or []
-    message = next((m for m in messages if isinstance(m, dict)
-                    and m.get("id") == message_id), None)
-    if message is None:
-        return web.json_response({"error": "no such message"}, status=404)
-    earlier = next((c for c in (stored or {}).get("choices") or []
-                    if isinstance(c, dict) and c.get("message_id") == message_id), None)
-    if earlier is not None:
-        return web.json_response(
-            {"error": "already answered",
-             "answer": {k: earlier.get(k) for k in ("button_id", "profile", "at")}}, status=409)
-    if message.get("buttons") and button_id not in {b.get("id") for b in message.get("buttons") or []}:
-        return web.json_response({"error": "no such button on this message"}, status=400)
-    # the rule the page's buttons follow (_agent_unanswerable), the earlier answer already handled above
-    why = _agent_unanswerable(message, None, profile, time.time(), _agent_presence()["state"] == "online")
-    if why is None:
-        return None
-    status, words = why
-    return _forbidden(words) if status == 403 else web.json_response({"error": words}, status=status)
-
-
-def _agent_choices_with(stored, message_id: str, button_id: str, profile: str) -> dict:
-    """The choices document with one press appended. The stored choices come
-    from disk, never from the client, so a press can add one answer and cannot
-    rewrite anybody else's; the sequence number, profile and time are the
-    server's."""
-    stored = stored if isinstance(stored, dict) else {}
-    have = [c for c in stored.get("choices") or [] if isinstance(c, dict)]
-    seq = max([int(stored.get("next_seq") or 1)]
-              + [int(c.get("seq", 0)) + 1 for c in have if isinstance(c.get("seq"), int)])
-    press = {"seq": seq, "message_id": message_id, "button_id": button_id,
-             "profile": profile, "at": _now_iso()}
-    return {"choices": _agent_prune_choices(have) + [press], "next_seq": seq + 1}
-
-
-agent_choices_get_handler = _store_get_handler(
-    AGENT_CHOICES, "data", "agent choices", capability="viewAgent")
-
-
-async def agent_choices_put_handler(request: web.Request) -> web.Response:
-    """A button press in the Kiosk: `{"data": {"choices": [{message_id,
-    button_id}]}}` — exactly ONE new choice (no `seq`), appended.
-
-    ⚠️ AN APPEND, NOT A DOCUMENT. This door was the whole-document PUT with a
-    merge and a guard, and the merge had to hand the guard what the client sent
-    through a key stashed on the request — the guard could not otherwise tell
-    the press from the stored list. The press is parsed once here and both
-    questions are asked of it directly."""
-    if (refused := _refuse(request, "viewAgent",
-                           "You do not have permission to edit agent choices.")) is not None:
-        return refused
-    try:
-        body = await request.json()
-    except (json.JSONDecodeError, ValueError):
-        return web.json_response({"error": "invalid JSON"}, status=400)
-    value = body.get("data") if isinstance(body, dict) else None
-    sent = value.get("choices") if isinstance(value, dict) else None
-    attempt = [c for c in sent if isinstance(c, dict) and "seq" not in c] \
-        if isinstance(sent, list) else []
-    if len(attempt) != 1 or len(sent) != 1:
-        return web.json_response({"error": "send exactly one new choice"}, status=400)
-    message_id = str(attempt[0].get("message_id", ""))
-    button_id = str(attempt[0].get("button_id", ""))
-    profile = _role_for(request)
-
-    def change(stored):
-        if (veto := _agent_press_refusal(stored, message_id, button_id, profile)) is not None:
-            raise Veto(veto)
-        return _agent_choices_with(stored, message_id, button_id, profile)
-
-    try:
-        _, _, rev = await AGENT_CHOICES.update(change)
-    except Veto as refused:
-        return refused.response
-    except StoreUnreadable:
-        return _store_unreadable_response("choices")
-    except StoreTooLarge:
-        return web.json_response({"error": "choice store full"}, status=413)
-    return web.json_response({"ok": True, "rev": rev})
-
-
-#: Exactly the ids _agent_validate_message has minted since the interface began.
-AGENT_MESSAGE_ID_RE = re.compile(r"msg_[0-9a-f]{16}")
-
-
-def _agent_messages_without(stored, ids: set) -> tuple[dict, list]:
-    """(the messages document without `ids`, the ids actually removed). An id
-    that names nothing is ignored; everything else in the document is kept."""
-    doc = stored if isinstance(stored, dict) else {}
-    kept, cleared = [], []
-    for m in doc.get("messages") or []:
-        if isinstance(m, dict) and m.get("id") in ids:
-            cleared.append(m["id"])
-        else:
-            kept.append(m)
-    return {**doc, "messages": kept}, cleared
-
-
-async def agent_messages_clear_handler(request: web.Request) -> web.Response:
-    """A person clears messages from the Kiosk's agent area: `{"ids": [...]}`.
-
-    The same gate as a button press (viewAgent: owner and facility manager,
-    never a guest, never cross-site). Each id must be of the msg_ form the
-    server mints; an id that names nothing (already cleared, pruned) is simply
-    ignored, so two devices clearing the same message both succeed.
-
-    ⚠️ THE CHOICES ARE LEFT ALONE. A cleared message stops being shown; an
-    answer a person gave stays in the agent's cursor (/agent/v1/choices),
-    which the agent may not have read yet. Not under /agent/v1: the agent
-    itself never clears what people read."""
-    if (refused := _refuse(request, "viewAgent",
-                           "You do not have permission to clear agent messages.")) is not None:
-        return refused
-    try:
-        body = await request.json()
-    except (ValueError, UnicodeDecodeError):
-        return web.json_response({"error": "invalid JSON"}, status=400)
-    ids = body.get("ids") if isinstance(body, dict) else None
-    if not isinstance(ids, list) or not ids or len(ids) > AGENT_MAX_MESSAGES or not all(
-            isinstance(i, str) and AGENT_MESSAGE_ID_RE.fullmatch(i) for i in ids):
-        return web.json_response(
-            {"error": f"ids must be a list of 1-{AGENT_MAX_MESSAGES} message ids (msg_…)"},
-            status=400)
-    cleared: list = []
-
-    def change(stored):
-        doc, gone = _agent_messages_without(stored, set(ids))
-        cleared.extend(gone)
-        return doc
-
-    try:
-        await AGENT_MESSAGES.update(change)
-    except StoreUnreadable:
-        return _store_unreadable_response("messages")
-    except StoreTooLarge:
-        return web.json_response({"error": "message store full"}, status=413)
-    return web.json_response({"ok": True, "cleared": cleared})
-
-
-async def agent_choices_handler(request: web.Request) -> web.Response:
-    """Button presses made in the Kiosk after `since`, oldest first — the
-    agent's cursor over people's answers (PLAN A4)."""
-    if (refused := _agent_refuse(request, "agentRead")) is not None:
-        return refused
-    try:
-        since = int(request.query.get("since", "0"))
-    except ValueError:
-        return web.json_response({"error": "since must be an integer"}, status=400)
-    doc = AGENT_CHOICES.read()
-    items = sorted((c for c in doc.get("choices") or []
-                    if isinstance(c, dict) and isinstance(c.get("seq"), int) and c["seq"] > since),
-                   key=lambda c: c["seq"])[:500]
-    return web.json_response({"choices": items, "next_seq": doc.get("next_seq", 1)},
-                             headers={"Cache-Control": "no-store"})
-
-
 # ── Presence (PLAN A7) ───────────────────────────────────────────────────────
 
 async def agent_heartbeat_handler(request: web.Request) -> web.Response:
@@ -3773,7 +3453,7 @@ async def agent_heartbeat_handler(request: web.Request) -> web.Response:
     ⚠️ PERSISTED, SO A RESTART NEVER SHOWS A FALSE "ONLINE". Presence is
     computed from the last heartbeat's time on every read; an in-memory flag
     would come back from a restart either stale or wrong."""
-    if (refused := _agent_refuse(request, "agentMessage")) is not None:
+    if (refused := _agent_refuse(request, "agentPresence")) is not None:
         return refused
     status = cadence = None
     if request.can_read_body:
@@ -4012,7 +3692,6 @@ async def agent_info_handler(request: web.Request) -> web.Response:
         # show such a fault with no Next check time
         "ticket_checks": list((AGENT_CONTRACT_TABLE.get("ticket") or {}).get("checks") or []),
         "offline_after_minutes": _agent_offline_minutes(),
-        "message_retention_days": _agent_retention_days(),
     }, headers={"Cache-Control": "no-store"})
 
 
@@ -4143,6 +3822,8 @@ def build_app(data_dir: str | None = None) -> web.Application:
         os.makedirs(_data(WWW_NAME), exist_ok=True)
         _session_secret()  # create the signing key on first boot
         await _cleanup_stale_options(a["session"])
+        if (gone := _remove_retired_data()):
+            print(f"[supervisor-proxy] removed retired file(s): {gone}", flush=True)
         await _learn_own_version(a["session"])
         a["light_scenes"] = asyncio.create_task(_learn_light_scenes(a["session"]))
         if (warning := _agent_config_warning()) is not None:
@@ -4178,10 +3859,6 @@ def build_app(data_dir: str | None = None) -> web.Application:
     # The Kiosk's side of the VESTA Agent (owner and facility manager).
     app.router.add_get("/critical-devices", critical_devices_handler)
     app.router.add_get("/agent-status", agent_status_handler)
-    app.router.add_get("/agent-messages", agent_messages_get_handler)
-    app.router.add_post("/agent-messages/clear", agent_messages_clear_handler)
-    app.router.add_get("/agent-choices", agent_choices_get_handler)
-    app.router.add_put("/agent-choices", agent_choices_put_handler)
     app.router.add_put("/kiosk-rooms", kiosk_rooms_put_handler)
     # The VESTA Agent interface v1 (bearer token; 404 while agent_token is empty).
     app.router.add_get("/agent/v1/info", agent_info_handler)
@@ -4190,8 +3867,6 @@ def build_app(data_dir: str | None = None) -> web.Application:
     app.router.add_put("/agent/v1/fm-data", agent_fm_put_handler)
     app.router.add_post("/agent/v1/fm-evidence", agent_fm_evidence_handler)
     app.router.add_post("/agent/v1/fm-document", agent_fm_document_handler)
-    app.router.add_post("/agent/v1/messages", agent_messages_post_handler)
-    app.router.add_get("/agent/v1/choices", agent_choices_handler)
     app.router.add_post("/agent/v1/heartbeat", agent_heartbeat_handler)
     return app
 

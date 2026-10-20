@@ -31,6 +31,6 @@
   },
   "_agent": "THE VESTA AGENT IS NOT A PROFILE. It never appears on the profile picker, never holds a cookie, and reaches only /agent/v1/* by bearer token. Its capabilities are its own; the app never reads this row.",
   "agent": {
-    "capabilities": ["agentRead", "agentWrite", "agentMessage"]
+    "capabilities": ["agentRead", "agentWrite", "agentPresence"]
   }
 }

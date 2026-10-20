@@ -552,7 +552,7 @@ ck("viewCameras is exactly the profiles the kiosk shows cameras to", not cam_mis
 if cam_mismatch:
     print(f"          disagree for: {', '.join(cam_mismatch)}")
 ck("the agent holds only its own three capabilities",
-   proxy.ROLE_CAPABILITIES["agent"] == {"agentRead", "agentWrite", "agentMessage"})
+   proxy.ROLE_CAPABILITIES["agent"] == {"agentRead", "agentWrite", "agentPresence"})
 # the profiles' display names live in the table too (architecture review, 2026-10-19): the app's ROLE_LABELS
 # (tests/oracles/role_table.mjs) and the name the proxy accepts on a guest's own report, never a literal
 ck("every profile has its display name in the table, and the proxy's guest name is the table's (no literal)",
@@ -1092,16 +1092,16 @@ ck("  ...and only those (another blueprint whose name starts the same is not it)
    _used == ["automation.example_watch", "automation.example_watch_two"])
 ck("  ...with no agreement, nothing is critical", proxy._critical_from_configs(_cfgs, {}) == ([], []))
 
-# ── who may answer an Agent message now: ONE rule for the page's buttons and the press door (architecture review
-#    scan 3, 2026-10-19 — _agent_unanswerable; the two had drifted once, 2.496.251)
-_msg = {"buttons": [{"id": "ok"}], "allowed_profiles": ["owner"], "expires_at": None}
-_U = proxy._agent_unanswerable
-ck("an open message, its profile, the agent online: answerable", _U(_msg, None, "owner", 0, True) is None)
-ck("  ...answered, expired, no buttons, another profile, the agent offline: each says why",
-   _U(_msg, {"button_id": "ok"}, "owner", 0, True)[0] == 409
-   and _U({**_msg, "expires_at": "2000-01-01T00:00:00+00:00"}, None, "owner", 10**10, True) == (409, "this message has expired")
-   and _U({**_msg, "buttons": []}, None, "owner", 0, True)[0] == 400
-   and _U(_msg, None, "ops", 0, True)[0] == 403 and _U(_msg, None, "owner", 0, False)[0] == 409)
+# ── the Agent's message channel is gone (2.496.445): no store, no route, no setting, no answering rule left
+_routes = {r.resource.canonical for r in proxy.build_app(data_dir=tempfile.mkdtemp()).router.routes() if r.resource is not None}
+ck("no route of the message channel is left (the agent's /messages and /choices, the Kiosk's /agent-messages and /agent-choices)",
+   not ({"/agent/v1/messages", "/agent/v1/choices", "/agent-messages", "/agent-messages/clear", "/agent-choices"} & _routes)
+   and {"/agent/v1/heartbeat", "/agent/v1/info", "/agent-status"} <= _routes)
+ck("  ...nor its stores, its retention setting or its answering rule",
+   not any(hasattr(proxy, n) for n in ("AGENT_MESSAGES", "AGENT_CHOICES", "_agent_unanswerable", "_agent_retention_days"))
+   and "vesta_agent.message_retention_days" not in proxy.OPTIONS
+   and ("vesta_agent", "message_retention_days") in proxy.REMOVED_OPTIONS
+   and set(proxy.RETIRED_DATA_FILES) == {"agent-messages.json", "agent-choices.json"})
 
 print()
 print("✅ the proxy's pure rules hold" if FAIL == 0

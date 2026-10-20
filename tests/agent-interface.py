@@ -86,6 +86,8 @@ async def fake_supervisor() -> TestServer:
 
     async def template(request):
         tpl = (await request.json())["template"]
+        if tpl == proxy.LIGHT_SCENES_TEMPLATE:            # the scene-choice ask at start (2.496.440): none here
+            return web.Response(text="[]")
         start = tpl.index("for e in ") + len("for e in ")
         ids = json.loads(tpl[start:tpl.index(" %}", start)])
         areas = {"light.living_ceiling": ["Living", "Ground", "Ceiling"],
@@ -107,8 +109,12 @@ async def main() -> None:
     client = TestClient(TestServer(proxy.build_app(data_dir=str(TMP / "data"))))
     stores = {n: v.path for n, v in vars(proxy).items() if isinstance(v, proxy.JsonStore)}
     ck(f"build_app(data_dir) moves every store ({len(stores)}) and the options",
-       len(stores) >= 7 and all(p.startswith(str(TMP / "data") + "/") for p in stores.values())
+       len(stores) >= 5 and all(p.startswith(str(TMP / "data") + "/") for p in stores.values())
        and proxy._data("options.json") == str(TMP / "data" / "options.json"), stores)
+    # an older version's message stores, left on the install: the start must remove them (2.496.445)
+    (TMP / "data").mkdir(parents=True, exist_ok=True)
+    (TMP / "data" / "agent-messages.json").write_text('{"messages": []}')
+    (TMP / "data" / "agent-choices.json").write_text('{"choices": [], "next_seq": 1}')
     await client.start_server()
     get, put, post = client.get, client.put, client.post
 
@@ -152,19 +158,22 @@ async def main() -> None:
     options(agent_enabled=False, vesta_agent={"enabled": True, "token": TOKEN})
     status, _ = await jget("/agent/v1/info", bearer())
     ck("2.496.218's in-group switch wins over the top-level default beside it, until moved", status == 200, status)
+    # the message retention left with the messages (2.496.445): dropped in both places it was ever stored
     pre218 = {"owner_pin": "1234", "sh3d_path": "x", "agent_enabled": True, "agent_token": TOKEN,
               "agent_offline_after_minutes": 7, "agent_message_retention_days": 30,
               "vesta_agent": {"token": "", "offline_after_minutes": 5, "message_retention_days": 90}}
     moved = proxy.migrate_options(pre218)
-    ck("from before 2.496.218: the three settings move into the group, the switch stays on top",
+    ck("from before 2.496.218: the settings move into the group, the switch stays on top, the retention goes",
        moved == {"owner_pin": "1234", "agent_enabled": True, "vesta_agent": {"token": TOKEN,
-                 "offline_after_minutes": 7, "message_retention_days": 30}}, moved)
+                 "offline_after_minutes": 7}}, moved)
     from218 = {"owner_pin": "1234", "agent_enabled": False,
                "vesta_agent": {"enabled": True, "token": TOKEN, "offline_after_minutes": 7, "message_retention_days": 90}}
     moved218 = proxy.migrate_options(from218)
-    ck("from 2.496.218: the switch moves OUT of the group, on as it was",
+    ck("from 2.496.218: the switch moves OUT of the group, on as it was; the retention goes",
        moved218 == {"owner_pin": "1234", "agent_enabled": True, "vesta_agent": {"token": TOKEN,
-                    "offline_after_minutes": 7, "message_retention_days": 90}}, moved218)
+                    "offline_after_minutes": 7}}, moved218)
+    ck("  ...from 2.496.444 (the retention alone left): dropped",
+       proxy.migrate_options({"vesta_agent": {"token": TOKEN, "message_retention_days": 90}}) == {"vesta_agent": {"token": TOKEN}})
     ck("  ...and there is nothing to do on an install already moved",
        proxy.migrate_options(moved218) is None)
     options(**moved218)
@@ -174,13 +183,14 @@ async def main() -> None:
 
     # ── the token, and only the token (PLAN A3) ──────────────────────────
     print("\n  the bearer gate:")
-    agent(enabled=True, token=TOKEN, offline_after_minutes=5, message_retention_days=90)
+    agent(enabled=True, token=TOKEN, offline_after_minutes=5)
     reset_lockout()
     status, body = await jget("/agent/v1/info", bearer())
     ck("the right token reads /agent/v1/info", status == 200, status)
     ck("  ...contract 1, the Kiosk's own version, the agent's capabilities",
        body and body["contract"] == 1 and body["version"] == "9.9.9"
-       and body["capabilities"] == ["agentMessage", "agentRead", "agentWrite"], body)
+       and body["capabilities"] == ["agentPresence", "agentRead", "agentWrite"]
+       and "message_retention_days" not in body, body)
     status, _ = await jget("/agent/v1/info", {"X-VK-Peer": "10.0.0.5"})
     ck("no token: 401", status == 401, status)
     status, _ = await jget("/agent/v1/info", {**INGRESS, **cookie("owner")})
@@ -304,152 +314,27 @@ async def main() -> None:
     r = await post("/agent/v1/fm-evidence?id=agentphoto2", headers=bearer(), data=b"not a jpeg")
     ck("  ...anything else: 400", r.status == 400, r.status)
 
-    # ── messages and choices (PLAN A4, A6) ───────────────────────────────
-    print("\n  messages and choices:")
-    r = await post("/agent/v1/messages", headers=bearer(), json={"title": ""})
-    ck("an invalid message: 400", r.status == 400, r.status)
-    r = await post("/agent/v1/messages", headers=bearer(), json={
-        "kind": "recommendation", "title": "Pool pump runs at night", "body": "**Why**: ...",
-        "severity": "warning", "entities": ["switch.pool_pump"],
-        "buttons": [{"id": "approve", "label": "Approve"}, {"id": "reject", "label": "Reject"}]})
-    body = await r.json()
-    ck("a message with buttons: 201 and its id", r.status == 201 and body["id"].startswith("msg_"), body)
-    mid = body["id"]
-    r = await post("/agent/v1/messages", headers=bearer(), json={
-        "title": "Owner only", "buttons": [{"id": "ok", "label": "OK"}], "allowed_profiles": ["owner"]})
-    owner_only = (await r.json())["id"]
-    r = await post("/agent/v1/messages", headers=bearer(), json={
-        "title": "Too late", "buttons": [{"id": "ok", "label": "OK"}], "expires_at": "2020-01-01T00:00:00Z"})
-    expired = (await r.json())["id"]
-
-    # ── "answerable now" is the proxy's alone, presence included (2.496.251) ──
-    # No heartbeat yet: the agent is offline, so nobody would act on an answer.
-    status, body = await jget("/agent-messages", cookie("ops"))
-    offline_view = {m["id"]: m for m in body["data"]["messages"]} if status == 200 else {}
-    ck("agent offline: an open message ops may answer is NOT answerable (the page no longer decides)",
-       offline_view.get(mid, {}).get("state") == "open" and offline_view[mid]["can_answer"] is False, offline_view.get(mid))
-    r = await put("/agent-choices", headers=cookie("ops"),
-                  json={"data": {"choices": [{"message_id": mid, "button_id": "approve"}]}})
-    refused = await r.json()
-    ck("  ...and a press from a tab opened earlier is refused, 409 'offline', nothing stored",
-       r.status == 409 and "offline" in refused.get("error", "") and not (await jget("/agent/v1/choices?since=0", bearer()))[1].get("choices"),
-       (r.status, refused))
-    r = await post("/agent/v1/heartbeat", headers=bearer(), json={"status": "here"})
-    ck("  ...a heartbeat brings it online for what follows", r.status == 200, r.status)
-
-    status, body = await jget("/agent-messages", cookie("ops"))
-    msgs = {m["id"]: m for m in body["data"]["messages"]} if status == 200 else {}
-    ck("a facility manager reads the messages, newest first",
-       status == 200 and body["data"]["messages"][0]["id"] == expired, (status, body))
-    ck("  ...open, answerable by ops", msgs.get(mid, {}).get("state") == "open" and msgs[mid]["can_answer"])
-    ck("  ...an owner-only message is not answerable by ops", msgs.get(owner_only, {}).get("can_answer") is False)
-    ck("  ...an expired one shows expired, buttons off",
-       msgs.get(expired, {}).get("state") == "expired" and not msgs[expired]["can_answer"])
-    # ── the agreement's samples, through the real proxy (2.496.234) ──────
-    # rootfs/usr/share/vesta/agent-contract.json holds what an agent posts
-    # and what the Kiosk app reads; the agent host's tests replay the same
-    # file. If the proxy changes either shape, this fails on the Kiosk side.
-    contract = json.loads((ROOT / "rootfs" / "usr" / "share" / "vesta" / "agent-contract.json").read_text())
-    ck("the proxy speaks the agreement's version", proxy.AGENT_CONTRACT == contract["version"] >= 1)
-    r = await post("/agent/v1/messages", headers=bearer(), json=contract["samples"]["postMessage"])
-    sample_id = (await r.json()).get("id") if r.status in (200, 201) else None
-    ck("the agreement's sample message is accepted", sample_id is not None, r.status)
-    status, body = await jget("/agent-messages", cookie("owner"))
-    got = next((m for m in body["data"]["messages"] if m["id"] == sample_id), {}) if status == 200 else {}
-    want = contract["samples"]["messagesView"]["messages"][0]
-    ck("  ...and the Kiosk reads it back in exactly the agreement's shape (every field, no other)",
-       set(got) == set(want), sorted(set(got) ^ set(want)))
-    ck("  ...with the agreement's values", all(got.get(k) == want[k] for k in
-       ("kind", "title", "body", "severity", "entities", "buttons", "allowed_profiles", "state", "answer", "can_answer")),
-       {k: (got.get(k), want[k]) for k in want if got.get(k) != want[k] and k not in ("id", "created_at")})
-    ck("who may answer is every profile holding the agreement's capability in roles.json (never a guest)",
-       list(proxy.AGENT_ANSWER_PROFILES) == [r for r, row in proxy.ROLES_TABLE["profiles"].items()
-                                             if contract["answeringCapability"] in row["capabilities"]]
-       and "guest" not in proxy.AGENT_ANSWER_PROFILES and proxy.AGENT_ANSWER_PROFILES)
-
-    status, _ = await jget("/agent-messages", cookie("guest"))
-    ck("a guest reads none of it: 403", status == 403, status)
-    status, _ = await jget("/agent-status", cookie("guest"))
-    ck("  ...nor the agent's status", status == 403, status)
-
-    async def press(role_headers, message_id, button):
-        r = await put("/agent-choices", headers=role_headers,
-                      json={"data": {"choices": [{"message_id": message_id, "button_id": button}]}})
-        return r.status, await r.json()
-
-    status, _ = await press(cookie("ops"), mid, "nope")
-    ck("a button the message does not have: 400", status == 400, status)
-    status, _ = await press(cookie("ops"), owner_only, "ok")
-    ck("a profile the message does not allow: 403", status == 403, status)
-    status, _ = await press(cookie("ops"), expired, "ok")
-    ck("an expired message: 409", status == 409, status)
-    status, _ = await press(cookie("guest"), mid, "approve")
-    ck("a guest cannot press: 403", status == 403, status)
-    status, _ = await press(cookie("ops"), mid, "approve")
-    ck("the first press is accepted", status == 200, status)
-    status, body = await press(INGRESS, mid, "reject")
-    ck("a second press: 409, naming who answered",
-       status == 409 and body.get("answer", {}).get("profile") == "ops"
-       and body["answer"]["button_id"] == "approve", (status, body))
-    status, body = await jget("/agent-messages", cookie("owner"))
-    answered = next(m for m in body["data"]["messages"] if m["id"] == mid)
-    ck("the message now reads answered, by ops", answered["state"] == "answered"
-       and answered["answer"]["profile"] == "ops" and not answered["can_answer"], answered)
-
-    status, body = await jget("/agent/v1/choices?since=0", bearer())
-    ck("the agent reads the press through its cursor",
-       status == 200 and len(body["choices"]) == 1 and body["choices"][0]["seq"] == 1
-       and body["choices"][0]["button_id"] == "approve" and body["choices"][0]["profile"] == "ops", body)
-    status, body = await jget("/agent/v1/choices?since=1", bearer())
-    ck("  ...and nothing after it", status == 200 and body["choices"] == [], body)
-    r = await put("/agent-choices", headers=cookie("owner"), json={"data": {"choices": [
-        {"seq": 1, "message_id": mid, "button_id": "reject", "profile": "owner", "at": "x"}]}})
-    stored_choices = json.loads((TMP / "data" / "agent-choices.json").read_text())["choices"]
-    ck("a client cannot rewrite an earlier answer", r.status == 400
-       and stored_choices[0]["button_id"] == "approve", (r.status, stored_choices))
-
-    # ── a person clears messages (2.496.239) ─────────────────────────────
-    print("\n  clearing messages:")
-
-    async def clear(headers, payload):
-        r = await post("/agent-messages/clear", headers=headers, json=payload)
-        return r.status, await r.json()
-
-    def stored_ids():
-        return [m["id"] for m in json.loads((TMP / "data" / "agent-messages.json").read_text())["messages"]]
-
-    before = stored_ids()
-    status, _ = await clear(cookie("guest"), {"ids": [mid]})
-    ck("a guest cannot clear: 403", status == 403, status)
-    status, _ = await clear({**cookie("ops"), "Sec-Fetch-Site": "cross-site"}, {"ids": [mid]})
-    ck("  ...nor another site riding a session: 403", status == 403, status)
-    status, _ = await clear({}, {"ids": [mid]})
-    ck("  ...nor no session at all: 401", status == 401, status)
-    for bad in ({"ids": ["../agent-choices"]}, {"ids": [7]}, {"ids": []}, {"ids": mid}, {},
-                {"ids": ["msg_" + "0" * 15]}, {"ids": ["msg_" + "0" * 16] * (proxy.AGENT_MAX_MESSAGES + 1)}):
-        status, _ = await clear(cookie("ops"), bad)
-        ck(f"  ...an id list that is not msg_ ids: 400 ({json.dumps(bad)[:40]})", status == 400, status)
-    ck("  ...and none of that removed anything", stored_ids() == before)
-    status, body = await clear(cookie("ops"), {"ids": [mid, "msg_ffffffffffffffff"]})
-    ck("ops clears an answered message; an unknown id is ignored, not refused",
-       status == 200 and body.get("cleared") == [mid], (status, body))
-    ck("  ...gone from the store, every other message kept",
-       stored_ids() == [i for i in before if i != mid], stored_ids())
-    status, body = await jget("/agent-messages", cookie("owner"))
-    ck("  ...and from what the Kiosk reads", mid not in {m["id"] for m in body["data"]["messages"]})
-    choices_now = json.loads((TMP / "data" / "agent-choices.json").read_text())["choices"]
-    ck("  ...while its ANSWER stays in the agent's cursor", any(c["message_id"] == mid for c in choices_now))
-    status, body = await jget("/agent/v1/choices?since=0", bearer())
-    ck("  ...which the agent still reads", status == 200 and any(c["message_id"] == mid for c in body["choices"]))
-    status, body = await clear(INGRESS, {"ids": [mid]})
-    ck("clearing it again (another device): 200, nothing cleared", status == 200 and body.get("cleared") == [], (status, body))
-    status, body = await clear(cookie("owner"), {"ids": [owner_only, expired]})
-    ck("the owner clears an open question and an expired one together",
-       status == 200 and sorted(body.get("cleared", [])) == sorted([owner_only, expired]), (status, body))
+    # ── the message channel is gone (2.496.445) ───────────────────────────
+    # The agent never posted a message (people talk to it on Telegram, decision D4) and the Kiosk's agent window was
+    # removed (2.496.443): every door of the channel answers 404, to the agent and to every profile alike.
+    print("\n  the message channel is gone:")
+    gone = []
+    for method, path, headers in (("POST", "/agent/v1/messages", bearer()), ("GET", "/agent/v1/choices?since=0", bearer()),
+                                  ("GET", "/agent-messages", cookie("owner")), ("GET", "/agent-messages", cookie("guest")),
+                                  ("GET", "/agent-messages", INGRESS),
+                                  ("POST", "/agent-messages/clear", cookie("owner")), ("GET", "/agent-choices", cookie("ops")),
+                                  ("PUT", "/agent-choices", cookie("owner"))):
+        r = await (client.request(method, path, headers=headers, json={}))
+        if r.status != 404:
+            gone.append(f"{method} {path}: {r.status}")
+    ck("every route of the message channel answers 404, whoever asks", not gone, gone)
+    ck("  ...and its stores, left on an install by an older version, were removed at start — once",
+       not (TMP / "data" / "agent-messages.json").exists() and not (TMP / "data" / "agent-choices.json").exists()
+       and proxy._remove_retired_data() == [])
 
     # ── presence (PLAN A7) ───────────────────────────────────────────────
     print("\n  presence:")
-    (TMP / "data" / "agent-presence.json").unlink(missing_ok=True)   # the messages section sent one
+    (TMP / "data" / "agent-presence.json").unlink(missing_ok=True)   # start from no heartbeat on record
     status, body = await jget("/agent-status", cookie("ops"))
     ck("no heartbeat on record: offline", body.get("state") == "offline", body)
     r = await post("/agent/v1/heartbeat", headers=bearer(), json={"status": "all quiet"})

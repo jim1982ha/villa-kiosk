@@ -1,5 +1,5 @@
 {
-  "_what": "The agreement between the VESTA Kiosk and the VESTA Agent (the /agent/v1 interface), declared ONCE. The Kiosk's proxy (rootfs/usr/bin/supervisor-proxy.py) checks against it, the app (src/agent/agentApi.ts) reads its lists, and the VESTA Agent host keeps a copy (agent-host/contract/agent-contract.json) that its CI compares with this file. tests/agent-interface.py replays the samples through the real proxy; tests/oracles/agent_view.mjs parses the sample view. A change a version-1 agent cannot survive is a new version, not an edit to this one.",
+  "_what": "The agreement between the VESTA Kiosk and the VESTA Agent (the /agent/v1 interface), declared ONCE. The Kiosk's proxy (rootfs/usr/bin/supervisor-proxy.py) checks against it, the app (src/agent/agentApi.ts) reads its lists, and the VESTA Agent host keeps a copy (agent-host/contract/agent-contract.json) that its CI compares with this file. A change a version-1 agent cannot survive is a new version, not an edit to this one.",
   "version": 1,
   "status": {
     "states": [
@@ -8,32 +8,8 @@
       "online"
     ]
   },
-  "message": {
-    "kinds": [
-      "message",
-      "report",
-      "recommendation"
-    ],
-    "severities": [
-      "info",
-      "warning",
-      "critical"
-    ],
-    "states": [
-      "open",
-      "answered",
-      "expired"
-    ],
-    "limits": {
-      "title": 200,
-      "body": 20000,
-      "entities": 100,
-      "buttons": 6,
-      "buttonLabel": 60
-    },
-    "buttonIdPattern": "^[A-Za-z0-9_-]{1,40}$",
-    "entityPattern": "^[a-z_]+\\.[a-z0-9_]+$"
-  },
+  "_entityPattern": "An entity id as the VESTA Agent may name one (kiosk-rooms, the villa model): the Kiosk's proxy checks every id against it before it reaches a template. (Until 2.496.445 this sat in `message`, with the message channel the agent never used: /agent/v1/messages and /choices were removed with the Kiosk's agent window.)",
+  "entityPattern": "^[a-z_]+\\.[a-z0-9_]+$",
   "_ticketUpdate": "One step in a Facility fault's history (FmTicketUpdate in src/fm/fmTypes.ts; the VESTA Agent writes them through /agent/v1/fm-data). `kind` says what the step is, so neither side reads a note's first words: none = a status step (raised, picked up, resolved; `by` the profile that recorded it, `who` the name typed for who does the work); reopened = a resolved fault open again (`by` who reopened it); retitled = the VESTA Agent changed the title (`title` the new one, `was` the one before); reading = what the VESTA Agent reads now on a fault whose title a person changed (`title`): the person's title stays; noted = a line of what happened about the fault on Telegram (a reminder or an escalation sent, a button pressed), `note` its words and `at` when — it changes neither the status nor the title, and a Kiosk lists it in /agent/v1/info `step_kinds` before the VESTA Agent writes one; cleared = resolved with no work done (the Kiosk's \"Close — no action needed\", the agent's own clearing of a problem gone) — never a repair in any figure. A step the VESTA Agent writes carries `title` when it gives the fault one, and `was` when it changes it. A completion the agent writes for a person's Done carries `who`, the person (its `by` is the agent's, stamped by the Kiosk).",
   "ticketUpdate": {
     "kinds": [
@@ -528,8 +504,6 @@
       ]
     }
   },
-  "_answering": "Who may press a message's buttons: every profile holding this capability in roles.json (never a guest).",
-  "answeringCapability": "viewAgent",
   "_duration": "How long something lasted, in the words BOTH apps write (architecture review round 2, 2026-10-16: the Kiosk's chartUtils.fmtDuration and the VESTA Agent's timeutil.lasting each had a rule, and the weekly report's \"Lasted\" column a third: 89 s read \"1 min\", \"89 s\" and \"89 s\"; 2 h 29 min \"2 h 29 min\", \"2 h 29 min\" and \"2.5 h\"). The rule: rounded to the nearest second; under a minute in seconds, never less than \"1 s\"; from a minute on rounded to the nearest minute; from an hour on \"1 h 20 min\"; from a day on days and WHOLE hours, the minutes dropped (\"1 d 9 h\" until it is 1 d 10 h). A half rounds up on both apps. Every case is checked by tests/oracles/duration_words.mjs (Kiosk) and by the VESTA Agent's test_duration_words.py.",
   "duration": {
     "cases": [
@@ -664,57 +638,8 @@
     ]
   },
   "_criticalDevices": "The villa's critical devices: ONE list, the one its \"critical devices offline\" rule watches (owner, 2026-10-18 — architecture review, offline devices #2: the Kiosk, the agent's night check and its reports each had their own idea). Every automation built from the blueprint whose file name (its path's last part, without .yaml) is `blueprint` names them in its input `input` (one id or a list); the list is the union. The Kiosk's proxy reads it (GET /critical-devices) and the VESTA Agent reads the same; a critical device offline is red (danger), any other offline device amber.",
-  "criticalDevices": {"blueprint": "critical_watchdog", "input": "critical_entities"},
-  "samples": {
-    "_postMessage": "What an agent POSTs to /agent/v1/messages.",
-    "postMessage": {
-      "kind": "recommendation",
-      "title": "Pool filter due for cleaning",
-      "body": "Pressure has risen for three days. Clean the filter this week?",
-      "severity": "warning",
-      "entities": [],
-      "buttons": [
-        {
-          "id": "yes",
-          "label": "Yes, schedule it"
-        },
-        {
-          "id": "later",
-          "label": "Later"
-        }
-      ]
-    },
-    "_messagesView": "What the Kiosk app reads from /agent-messages (one message per field the app uses).",
-    "messagesView": {
-      "messages": [
-        {
-          "id": "msg_0123456789abcdef",
-          "kind": "recommendation",
-          "title": "Pool filter due for cleaning",
-          "body": "Pressure has risen for three days. Clean the filter this week?",
-          "severity": "warning",
-          "entities": [],
-          "buttons": [
-            {
-              "id": "yes",
-              "label": "Yes, schedule it"
-            },
-            {
-              "id": "later",
-              "label": "Later"
-            }
-          ],
-          "allowed_profiles": [
-            "owner",
-            "ops"
-          ],
-          "expires_at": null,
-          "created_at": "2026-09-30T08:00:00Z",
-          "state": "open",
-          "answer": null,
-          "can_answer": true
-        }
-      ]
-    }
+  "criticalDevices": {
+    "blueprint": "critical_watchdog",
+    "input": "critical_entities"
   }
 }
