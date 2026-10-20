@@ -1,3 +1,10 @@
+## 0.12.311
+
+What you will see:
+- The red "Unknown section 'asleep_entities'" on the Rules page is gone. It was 0.12.308's own list, still written in
+  the Agent's file; it is now known as retired (ignored, never called a misspelling) and leaves the file at the next
+  save of the Rules page.
+
 ## 0.12.310
 
 What you will see:

@@ -14,7 +14,7 @@ import yaml
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 
-from ..policy import DEFAULT_BEHAVIOUR, DEFAULTS, ENTITY_LISTS, form_sections, legacy_rows
+from ..policy import DEFAULT_BEHAVIOUR, DEFAULTS, ENTITY_LISTS, RETIRED_SECTIONS, form_sections, legacy_rows
 from ..tool_access import CHOOSE, OWN, ROLE_GROUPS
 
 #: What the forms edit. Everything else (system_actions, notify_recipients...) is edited in the file itself and
@@ -215,10 +215,8 @@ def apply_form(text: str, form: dict) -> str:
         if key not in doc and form[key] == defaults[key]:
             continue                               # absent and still the default: the file stays as it was
         _set(doc, key, form[key])
-    if "asleep_entities" in doc:
-        # 0.12.308's own list, retired by 0.12.310: "unavailable by design" is the VESTA Kiosk's list (owner,
-        # 2026-10-21: one list, where the Kiosk keeps it; the agent reads it, vesta_shared.asleep)
-        del doc["asleep_entities"]
+    for gone in RETIRED_SECTIONS & set(doc):
+        del doc[gone]                              # written by an older agent, read by none (policy.RETIRED_SECTIONS)
     if "people" in form and "chats" in doc:
         kept = legacy_rows(yaml.safe_load(text) if (text or "").strip() else {})[1]
         if kept:

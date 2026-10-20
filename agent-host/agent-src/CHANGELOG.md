@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.301 (21 October 2026)
+
+- policy.RETIRED_SECTIONS (asleep_entities): never "Unknown section"; policy_doc.apply_form drops every one of them.
+
 ## 0.6.300 (21 October 2026)
 
 - The devices unavailable by design are the VESTA Kiosk's list (owner, 2026-10-21): the heartbeat answer's

@@ -128,3 +128,10 @@ def test_the_alert_desk_judges_a_sleeping_door_by_its_last_report_never_by_unava
         {"claim": "{{ is_state('binary_sensor.door', 'on') }}", "entities": ["binary_sensor.door"], "state": "on"})}
     assert desk.still_there(inc, cli("on")) == (True, ["Door still reads on"])
     assert desk.still_there(inc, cli("off")) == (False, [])
+
+
+def test_the_retired_own_list_is_no_misspelt_section():
+    # owner, 2026-10-21: "Unknown section 'asleep_entities': a misspelt name is ignored" in red on the Rules page
+    from vesta_agent.ui.changes import rules_problems
+    assert not [p for p in rules_problems("asleep_entities: [binary_sensor.door]\n") if "asleep_entities" in p]
+    assert [p for p in rules_problems("aslep_entities: []\n") if "aslep_entities" in p]          # a real slip still is

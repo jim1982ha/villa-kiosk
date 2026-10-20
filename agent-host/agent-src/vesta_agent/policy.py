@@ -529,6 +529,13 @@ FIELDS: dict[str, tuple[str, bool, str | None]] = {
     "system_actions": ("What the agent's own code may do", False, None),
 }
 SECTIONS = {k for k in FIELDS if "." not in k}
+#: sections an older agent wrote and this one no longer reads: never "misspelt" (they were the agent's own), dropped
+#: from the file at the Rules page's next save (policy_doc.apply_form)
+RETIRED_SECTIONS = {
+    # 0.12.308's own list, retired by 0.12.310: the devices asleep between reports are the VESTA Kiosk's list
+    # (owner, 2026-10-21) — the red "Unknown section 'asleep_entities'" on the Rules page was this
+    "asleep_entities",
+}
 WORDS = {k: v[0] for k, v in FIELDS.items()}
 
 
@@ -625,7 +632,7 @@ def read_policy(raw: dict) -> tuple[dict, list[str]]:
     out: list[str] = []
     v: dict[str, Any] = {}
     for k in raw:
-        if k not in SECTIONS:
+        if k not in SECTIONS and k not in RETIRED_SECTIONS:
             out.append(f"Unknown section {k!r}: a misspelt name is ignored by the agent.")
 
     # ---- settings
