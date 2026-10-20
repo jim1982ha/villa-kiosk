@@ -1,3 +1,13 @@
+## 2.496.451
+
+### Fixed
+- The overview's sun and moon are back, exactly as before 2.496.448: that release removed them by mistake, taking the
+  orange spot in the living room for the sun.
+- The orange spot in the living room overview, over the TV, is gone. It was a small flat piece of the upstairs orange
+  planter that the 3D model had attached to the big living-room curtain: it lies on the upstairs floor, so it was
+  hidden from inside the room but drawn in the ground floor's overview. Anything lying on an upper floor now belongs
+  to that floor, whatever object the model filed it under; ceiling lamps stay with the room they light.
+
 ## 2.496.450
 
 ### Removed
