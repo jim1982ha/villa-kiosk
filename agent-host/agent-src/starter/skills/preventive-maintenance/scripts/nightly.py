@@ -96,74 +96,10 @@ def run(args) -> dict:
     day_stats = cli.statistics(energy_entities, win_start, day_end, "day", ("change", "sum")) if energy_entities else {}
 
     for slug, asset in pack.assets.items():
-        p_eid = asset["entities"].get("power")
-        e_eid = asset["entities"].get("energy")
-        if not p_eid and not e_eid:
-            continue
-        # physics is for motors. Lighting circuits and meters are read by roi-energy, never chased here.
-        if asset.get("kind", "appliance") in ("lighting", "meter"):
-            continue
-        p_series, e_series = {}, {}
-        if p_eid:
-            rows = hour_stats.get(p_eid, [])
-            thr = daily.running_threshold(asset, rows, params)       # the one "running" (vesta_shared.daily)
-            p_series = F.power_daily_features(rows, zone, thr)
-            # raw runs for the closing day
-            if not args.skip_raw:
-                got = cli.history_read([p_eid], day_end - timedelta(days=RAW_POWER_DAYS), day_end, now=now_ref)
-                raw = got.rows.get(p_eid, [])
-                if raw:
-                    runs = F.runs_from_history(raw, thr, zone, MIN_RUN_MINUTES)
-                    if not got.whole(p_eid):
-                        # ⚠️ A RUN GOING WHERE THE READING STOPPED HAS NO KNOWN END (round 2, 2026-10-16): its minutes
-                        # and its sag were read as if it had ended there; the runs after it were never read
-                        runs = F.ended_runs(runs, raw, thr, zone)
-                        notes.append(f"{asset['name']}: "
-                                     + unread("its power for the day", day_time_label(got.reach(p_eid).astimezone(Z)))
-                                     + " — its runs after that are not counted.")
-                    p_series.setdefault(today, {}).update({"runs": runs})
-            if today in p_series:
-                f = p_series[today]
-                for k in ("run_hours", "full_hours", "running_power", "peak_w", "gap_hours"):
-                    store.put_feature(today.isoformat(), p_eid, "power", k, f.get(k))
-                    features_written += 1
-        if e_eid:
-            e_series = F.energy_daily_features(day_stats.get(e_eid, []), zone)
-            if p_eid:
-                # ⚠️ A DAY THE METER WAS OFFLINE IS NOT A DAY OF LOW USE (villa, 2026-10-04): the plug was
-                # off Wi-Fi for 10 h and its day's kWh read as an 80 % collapse. Offline is PM-UNAVAILABLE's.
-                # A day with NO power row counts as offline only from the plug's first data to the day judged:
-                # before its first day the plug's history simply was not there (a newer sensor), and
-                # dropping those days starved the baseline (villa replay: a real collapse found 16 days late).
-                gap_limit = params.behaviour("energy_gap_hours")
-                covered = (min(p_series), today) if p_series else None
-
-                def offline(d):
-                    if d in p_series:
-                        return (p_series[d].get("gap_hours") or 0) >= gap_limit
-                    return covered is not None and covered[0] <= d <= covered[1]
-                e_series = {d: v for d, v in e_series.items() if not offline(d)}
-            if today in e_series:
-                store.put_feature(today.isoformat(), e_eid, "energy", "kwh", e_series[today]["kwh"])
-                features_written += 1
-        expected = None
-        if asset.get("schedule"):
-            sch = params.schedule(asset["schedule"].split(".", 1)[1])
-            if sch:
-                expected = schedule_hours_per_day(sch)
-                if not any(expected.values()):
-                    notes.append(f"{asset['name']}: schedule {asset['schedule']} has no time blocks, run-hours rule off.")
-                    expected = None
-        prior = {}
-        for eid in (p_eid, e_eid):
-            for rid in ("PM-POWER-CHANGE", "PM-ENERGY-CHANGE"):
-                o = store.open_finding(rid, eid) if eid else None
-                if o:
-                    prior[rid] = json.loads(o["detail"] or "{}")
-        if p_eid:
-            findings += R.power_rules(asset, p_eid, p_series, today, params, expected, e_series or None, prior)
-        elif e_eid and expected:
-            findings += R.power_rules(asset, e_eid, {}, today, params, expected, e_series, prior)
+        found, written = asset_findings(cli, store, params, asset, today, day_end, hour_stats, day_stats, now_ref,
+                                        zone, Z, notes, skip_raw=args.skip_raw)
+        findings += found
+        features_written += written
 
     # ---- batteries, availability, silence, levels (current states) -----------
     states = cli.states()
@@ -184,10 +120,7 @@ def run(args) -> dict:
                   if params.has(f"{r['asset']}_max_c") or params.has(f"{r['asset']}_max_humidity_pct")]
     level_entities = [r["entity_id"] for r in level_rows]
     lvl_stats = cli.statistics(level_entities, day_end - timedelta(days=LEVEL_READ_DAYS), day_end, "hour", ("mean", "min", "max")) if level_entities else {}
-    for row in level_rows:
-        asset = pack.assets.get(row["asset"], {"slug": row["asset"], "name": row["name"]})
-        series = F.level_daily_features(lvl_stats.get(row["entity_id"], []), zone)
-        findings += R.level_rules(asset, row["entity_id"], row.get("device_class"), series, today, params)
+    findings += level_findings(pack, params, level_rows, lvl_stats, today, zone)
 
     # ---- forensics: reconnect loops from the logbook -------------------------
     found, said = reconnect_findings(cli, pack, states, day_end, today, params, zone, Z, now_ref)
@@ -224,6 +157,97 @@ def run(args) -> dict:
     return result
 
 
+def asset_findings(cli, store, params, asset: dict, today: date, day_end: datetime, hour_stats: dict, day_stats: dict,
+                   now_ref: datetime, zone: str, Z, notes: list[str], skip_raw: bool = False,
+                   write_features: bool = True) -> tuple[list, int]:
+    """One asset's day rules (rules.power_rules) over the day `today` ending at `day_end` — the night's reading, and the
+    5-minute recheck's of an open finding judged on a finished day (owner, 2026-10-20: one reading of each rule).
+    `hour_stats` / `day_stats`: the statistics read for its power / energy entities; `notes` gets what a cut read says.
+    Returns (its findings, the features written — none when `write_features` is off)."""
+    findings: list = []
+    features_written = 0
+    p_eid = asset["entities"].get("power")
+    e_eid = asset["entities"].get("energy")
+    if not p_eid and not e_eid:
+        return findings, 0
+    # physics is for motors. Lighting circuits and meters are read by roi-energy, never chased here.
+    if asset.get("kind", "appliance") in ("lighting", "meter"):
+        return findings, 0
+    p_series, e_series = {}, {}
+    if p_eid:
+        rows = hour_stats.get(p_eid, [])
+        thr = daily.running_threshold(asset, rows, params)       # the one "running" (vesta_shared.daily)
+        p_series = F.power_daily_features(rows, zone, thr)
+        # raw runs for the closing day
+        if not skip_raw:
+            got = cli.history_read([p_eid], day_end - timedelta(days=RAW_POWER_DAYS), day_end, now=now_ref)
+            raw = got.rows.get(p_eid, [])
+            if raw:
+                runs = F.runs_from_history(raw, thr, zone, MIN_RUN_MINUTES)
+                if not got.whole(p_eid):
+                    # ⚠️ A RUN GOING WHERE THE READING STOPPED HAS NO KNOWN END (round 2, 2026-10-16): its minutes
+                    # and its sag were read as if it had ended there; the runs after it were never read
+                    runs = F.ended_runs(runs, raw, thr, zone)
+                    notes.append(f"{asset['name']}: "
+                                 + unread("its power for the day", day_time_label(got.reach(p_eid).astimezone(Z)))
+                                 + " — its runs after that are not counted.")
+                p_series.setdefault(today, {}).update({"runs": runs})
+        if today in p_series:
+            f = p_series[today]
+            for k in ("run_hours", "full_hours", "running_power", "peak_w", "gap_hours") if write_features else ():
+                store.put_feature(today.isoformat(), p_eid, "power", k, f.get(k))
+                features_written += 1
+    if e_eid:
+        e_series = F.energy_daily_features(day_stats.get(e_eid, []), zone)
+        if p_eid:
+            # ⚠️ A DAY THE METER WAS OFFLINE IS NOT A DAY OF LOW USE (villa, 2026-10-04): the plug was
+            # off Wi-Fi for 10 h and its day's kWh read as an 80 % collapse. Offline is PM-UNAVAILABLE's.
+            # A day with NO power row counts as offline only from the plug's first data to the day judged:
+            # before its first day the plug's history simply was not there (a newer sensor), and
+            # dropping those days starved the baseline (villa replay: a real collapse found 16 days late).
+            gap_limit = params.behaviour("energy_gap_hours")
+            covered = (min(p_series), today) if p_series else None
+
+            def offline(d):
+                if d in p_series:
+                    return (p_series[d].get("gap_hours") or 0) >= gap_limit
+                return covered is not None and covered[0] <= d <= covered[1]
+            e_series = {d: v for d, v in e_series.items() if not offline(d)}
+        if today in e_series and write_features:
+            store.put_feature(today.isoformat(), e_eid, "energy", "kwh", e_series[today]["kwh"])
+            features_written += 1
+    expected = None
+    if asset.get("schedule"):
+        sch = params.schedule(asset["schedule"].split(".", 1)[1])
+        if sch:
+            expected = schedule_hours_per_day(sch)
+            if not any(expected.values()):
+                notes.append(f"{asset['name']}: schedule {asset['schedule']} has no time blocks, run-hours rule off.")
+                expected = None
+    prior = {}
+    for eid in (p_eid, e_eid):
+        for rid in ("PM-POWER-CHANGE", "PM-ENERGY-CHANGE"):
+            o = store.open_finding(rid, eid) if eid else None
+            if o:
+                prior[rid] = json.loads(o["detail"] or "{}")
+    if p_eid:
+        findings += R.power_rules(asset, p_eid, p_series, today, params, expected, e_series or None, prior)
+    elif e_eid and expected:
+        findings += R.power_rules(asset, e_eid, {}, today, params, expected, e_series, prior)
+    return findings, features_written
+
+
+def level_findings(pack, params, rows: list[dict], lvl_stats: dict, today: date, zone: str) -> list:
+    """PM-LEVEL-HIGH (rules.level_rules) over the level `rows`, each from its hourly statistics, for the day `today` —
+    the night's reading and the 5-minute recheck's (one reading of the rule)."""
+    out = []
+    for row in rows:
+        asset = pack.assets.get(row["asset"], {"slug": row["asset"], "name": row["name"]})
+        series = F.level_daily_features(lvl_stats.get(row["entity_id"], []), zone)
+        out += R.level_rules(asset, row["entity_id"], row.get("device_class"), series, today, params)
+    return out
+
+
 def hidden_in_rule_findings(cli, pack, states: dict, store) -> tuple[list, list[str]]:
     """PM-HIDDEN-IN-RULE (rules.hidden_in_rule_rules) over the villa's rules naming a hidden entity (pack.hidden). A
     reading that fails keeps the open ones as they are — the night saw nothing, it must not say they are cleared."""
@@ -256,29 +280,30 @@ def still_there_minutes(settings: dict) -> float | None:
     return None
 
 
-#: What a fault closed because a check no longer sees its problem says — the night's and the day recheck's, one
-#: wording (owner, 2026-10-19: "refresh the open ones every 4 hours during the days"): {check} is "nightly check", or
-#: "check at 12:00" for a day recheck (cleared_note).
+#: What a fault closed because a check no longer sees its problem says — the night's and the 5-minute recheck's, one
+#: wording (owner, 2026-10-19: "refresh the open ones"): {check} is "nightly check", or "check at 12:05" for the
+#: recheck (cleared_note).
 CLEARED = "Cleared: the {check} no longer sees it."
 
 
 def cleared_note(at: datetime | None = None, zone: str | None = None) -> str:
-    """CLEARED for the night (`at` None), or for a day recheck at `at`, its villa time said ("… the check at 12:00 …")."""
+    """CLEARED for the night (`at` None), or for the recheck at `at`, its villa time said ("… the check at 12:05 …")."""
     return CLEARED.format(check="nightly check" if at is None else f"check at {clock(at, zone or 'UTC', days=False)}")
 
 
-# ⚠️ ONE RULE, READ AT NIGHT OR FOR ONE FINDING IN THE DAY (owner, 2026-10-19: "just re-check the identified ones to
-# update their status"): the night's battery and silence readings were inline in run(); recheck.py's day recheck now
-# runs the very same functions over the rows of the findings still open (`rows`), never a second copy of a rule.
+# ⚠️ ONE RULE, READ AT NIGHT OR FOR ONE FINDING EVERY 5 MINUTES (owner, 2026-10-19: "just re-check the identified ones
+# to update their status"; 2026-10-20: every fault every 5 minutes): recheck.py runs the very same functions over the
+# rows of the findings still open (`rows`, `book`, asset_findings, level_findings), never a second copy of a rule.
 def reconnect_findings(cli, pack, states: dict, end: datetime, today: date, params, zone: str, Z, now_ref: datetime,
-                       only: set[str] | None = None) -> tuple[list, list[str]]:
+                       book=None) -> tuple[list, list[str]]:
     """The reconnect loops over the `reconnect_days` ending at `end` (one finding per device), and the notes a read cut
-    short adds — the night's (end: the day judged's end) and the day recheck's (end: now; `only`: the entities of the
-    findings it reads again). ONE reading for both (owner, 2026-10-20: a loop is read again every 4 hours too)."""
+    short adds — the night's (end: the day judged's end) and the 5-minute recheck's (end: now; `book`: the logbook it
+    keeps between ticks, recheck.loopbook — the same rows a whole read brings back). ONE reading for both."""
     findings: list = []
     notes: list[str] = []
     try:
-        book = cli.logbook_read(end - timedelta(days=int(params.behaviour("reconnect_days"))), end, now=now_ref)
+        if book is None:
+            book = cli.logbook_read(end - timedelta(days=int(params.behaviour("reconnect_days"))), end, now=now_ref)
         lb = book.rows
     except Exception:  # logbook is optional
         book, lb = None, []
@@ -313,8 +338,6 @@ def reconnect_findings(cli, pack, states: dict, end: datetime, today: date, para
     for g in by_device.values():
         asset = dict(pack.assets.get(g["slug"], {"slug": g["slug"] or g["eid"]}))
         asset["name"] = asset.get("name") or g["name"] or _plain_name(g["eid"])
-        if only is not None and g["eid"] not in only and not (set(g.get("members") or ()) & only):
-            continue
         findings += R.flap_rules(_device_named(pack, asset, g["eid"]), g["eid"], g["per_day"], today, params,
                                  restarted=_restarted(pack, states, g["eid"], window_start))
 

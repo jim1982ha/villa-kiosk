@@ -710,7 +710,28 @@ Owner: "proceed with the recommended implementation", four cards.
   `offline_after_minutes`, floor `BEAT_FLOOR_S` (30), `BEAT_BEFORE_ANSWER_S` (120) until the first answer; a
   `"cadence": "refused: …"` answer is logged once (the beat counted).
 
-## The night's open faults read again in the day (owner, 2026-10-19, 0.12.268)
+## Every open fault read again every 5 minutes (owner, 2026-10-20, 0.12.293)
+
+Owner: "simplify: remove the split, check every 5 min for all the reported issues — keep it as simple as possible, no
+useless exceptions"; "I am worried how I will judge what is a daily-check fault versus what is not". Supersedes the day
+recheck below (its times, `day_rechecks`, `kiosk: day_check`, `dayChecksAt`, the card's "day" are gone).
+- **One reading per rule, every rule**: `recheck.READS` maps every rule of `nightly.STATE_RULES | EVENT_RULES` but
+  PM-UNAVAILABLE (back_online's) to the night's own function over one finding's rows — battery_findings,
+  silent_findings, reconnect_findings, hidden_in_rule_findings, and `nightly.asset_findings` / `level_findings`
+  (extracted from run(), so the night and the tick share them). `unreadable()` non-empty stops the tick (Overview says
+  which). skill.yaml `rechecks: all` → `Skill.rechecks == ["*"]` → `Problems.card` says "minutes" for every finding.
+- **A rule judged on a finished day is read over the last finished day**, settled `recheck.day_settle_minutes` (15)
+  after midnight — never "today so far". Its verdict is cached per finding and day (`pm-dayread:<id>:<day>`), worked
+  out again only when that day changes: a pump fault cannot close mid-day, and closes on the first tick after a clean
+  day.
+- **The reconnect loops' logbook is kept between ticks** (`recheck.loopbook`, cache `pm-loopbook`): the villa's 72-hour
+  read was 9 s / 14,838 rows (2026-10-20). Kept: the restarts and every row of an entity that went offline (all a count
+  reads); each tick reads [kept end, now) only; a cut read is kept as far as it reached. Same count as a whole read
+  (test_recheck_all).
+- The agreement still lists "day" and `dayChecksAt` (the Kiosk's file, copied — never edited on one side); this agent
+  writes neither.
+
+## The night's open faults read again in the day (owner, 2026-10-19, 0.12.268) — superseded 0.12.293
 
 Owner: "refresh the open ones every 4 hours during the days … just re-check the identified ones".
 - **A partial reading records; the night OR a day recheck of the very findings it read may close them.** Amends

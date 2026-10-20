@@ -34,11 +34,9 @@ class Tickets:
     def __init__(self, *, kiosk, state, store_path: str, settle_alert: Callable[[int, str], Awaitable[int]],
                  timezone: str = "UTC", story: Callable[[int], list[dict]] | None = None,
                  restate_alert: Callable[[int, str], Awaitable[int]] | None = None,
-                 rechecked: Callable[[], set[str]] | None = None,
-                 day_rechecked: Callable[[], set[str]] | None = None):
+                 rechecked: Callable[[], set[str]] | None = None):
         self.kiosk = kiosk
-        self.rechecked = rechecked or set     # the rules the skills read again every few minutes (Skill.rechecks)
-        self.day_rechecked = day_rechecked or set   # … and at their day recheck's times (Skill.day_checked)
+        self.rechecked = rechecked or set     # the rules the skills read again every few minutes (Skill.rechecks; "*": all)
         self.timezone = timezone              # the villa's: the note's time (notice.when)
         self.state = state
         self.store_path = store_path
@@ -93,7 +91,7 @@ class Tickets:
 
     def _card(self, problems: Problems, task: dict) -> dict:
         """Problems.card for `task`, with the skills' reading cadences and the check words this Kiosk shows."""
-        return problems.card(task, self.rechecked(), self.day_rechecked(), self.kiosk.checks())
+        return problems.card(task, self.rechecked())
 
     def _pattern(self, want: dict, card: dict | None = None) -> dict | None:
         """{"titlePattern", "since"} for a fault the agent titles (a Kiosk that does not read them never gets them: its

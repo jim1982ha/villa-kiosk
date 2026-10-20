@@ -230,10 +230,10 @@ class Problems:
         return {**out, "closed": closed, "handed_over": handed, "resolved": resolve,
                 "resolve_actions": [result.resolved(tid, (self.store.task(tid) or {}).get("close_note")) for tid in resolve]}
 
-    # ⚠️ A DAY RECHECK OF THE VERY FINDINGS IT READ MAY CLOSE THEM (owner, 2026-10-19: "refresh the open ones every 4
-    # hours during the days … by closing the ones that are not active anymore"). "A partial reading records, only the
-    # whole night may close" stays for a reading that does not say WHICH findings it judged (the 5-minute recheck's new
-    # findings: record). The day recheck names them: each finding it read again is a complete reading of that finding.
+    # ⚠️ A RECHECK OF THE VERY FINDINGS IT READ MAY CLOSE THEM (owner, 2026-10-19: "refresh the open ones … by closing
+    # the ones that are not active anymore"; 2026-10-20: every 5 minutes). "A partial reading records, only the whole
+    # night may close" stays for a reading that does not say WHICH findings it judged (the 5-minute recheck's new
+    # findings: record). The recheck names them: each finding it read again is a complete reading of that finding.
     def record_rechecked(self, rechecked, seen, day: str, at: str, *, note: str = "",
                          settle_minutes: float | None = None) -> dict:
         """Open findings `rechecked` (ids) read again at `at` by their own rule; `seen`: those of them still found. Each
@@ -552,14 +552,11 @@ class Problems:
     # it failed (the Kiosk down a minute), the repair later guessed with what it had left — a Done pressed by Fabien became
     # "Closed by VESTA Agent — Closed: the problem is over.", and no repair in Recent work. Every fact a fault's card
     # shows is here, from the task and its problem, and tickets.repair makes the Kiosk say it.
-    def card(self, task: dict, rechecked: frozenset[str] | set[str] = frozenset(),
-             day_rechecked: frozenset[str] | set[str] = frozenset(), checks=None) -> dict:
+    def card(self, task: dict, rechecked: frozenset[str] | set[str] = frozenset()) -> dict:
         """What task `task`'s Kiosk fault must say: {open, title (what is wrong now), number (its alert's "#N", or None),
         origin ("alert" | "night", or None), check (how it is read again to close it: "minutes" — an alert, at the desk's
-        every look, or a finding of a rule in `rechecked` (the skills' `rechecks`) — "day" — a finding of a rule in
-        `day_rechecked` (the skills' `day_rechecks`, read at the day recheck's times) when the Kiosk reads that word
-        (`checks`: its /agent/v1/info `ticket_checks`; None or without it: "nightly", which is also true — the night
-        reads it too) — "nightly" — any other finding — or None),
+        every look, or a finding of a rule in `rechecked` (the skills' `rechecks`; "*": every rule) — "nightly" — any
+        other finding — or None),
         note and who (its close: what it says, the person who closed it — None: the agent's own clearing),
         reopen_note (what its reopening says — None: it was never reopened by its problem),
         todo (what to do on site, as its problem's source says it NOW: check_of — the fault's note follows it; "" when
@@ -582,7 +579,7 @@ class Problems:
                 # where it came from, the Kiosk card's source icon (owner, 2026-10-14): an alert or the night check
                 "origin": agreed("origins", {"incident": "alert", "finding": "night"}.get(kind or "", "")),
                 # how it is read again, the card's "Next check" (owner, 2026-10-15)
-                "check": agreed("checks", _check_word(kind, task.get("rule_id"), rechecked, day_rechecked, checks))
+                "check": agreed("checks", _check_word(kind, task.get("rule_id"), rechecked))
                 if kind in ("incident", "finding") else None,
                 "note": task.get("close_note") or "Closed: the problem is over.", "who": task.get("closed_who") or None,
                 "reopen_note": task.get("reopen_note") or None,
@@ -700,14 +697,11 @@ class Problems:
         return (kind, int(sid)) if sid.isdigit() else (None, None)
 
 
-def _check_word(kind, rule_id, rechecked, day_rechecked, checks) -> str:
+def _check_word(kind, rule_id, rechecked) -> str:
     """The soonest reading of a fault's problem, as the agreement's `ticket.checks` names it: "minutes" (an alert, or a
-    rule read every few minutes), "day" (a rule the day recheck reads — only to a Kiosk that lists the word: an older
-    one is told "nightly", true as well), else "nightly"."""
-    if kind == "incident" or rule_id in rechecked:
+    rule read every few minutes — "*" in `rechecked`: every rule, owner 2026-10-20), else "nightly"."""
+    if kind == "incident" or rule_id in rechecked or "*" in rechecked:
         return "minutes"
-    if rule_id in day_rechecked and "day" in (checks or ()):
-        return "day"
     return "nightly"
 
 

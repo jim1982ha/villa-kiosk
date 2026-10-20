@@ -23,12 +23,9 @@ and skill.yaml (what the engine needs):
         run: "nightly.py --out nightly.json"   a code job (no model, no token)
         timeout: 1800
         kiosk: nightly_check         optional: this job is the nightly check the Kiosk names (its (i) says its time)
-      - when: "08:00"
-        run: "recheck.py day"
-        kiosk: day_check             optional: a day recheck — its times are the heartbeat's dayChecksAt
     every_5_min: "desk.py tick"      a code job every 5 minutes
-    rechecks: [PM-UNAVAILABLE]       the night's findings that job reads again (their Kiosk card: "Next check: within 5 min")
-    day_rechecks: [PM-SILENT]        the night's findings the day_check jobs read again (their card: the next of those times)
+    rechecks: all                    the night's findings that job reads again — `all`, or a list of rule ids (their
+                                     Kiosk card: "Next check: within 5 min"; the others: the nightly time)
     on_event:
       critical_event: "desk.py intake --event {event}"
       voice_message: "voice.py prepare --audio {audio} --language {language}"   # prints {"stt": {...}}
@@ -172,7 +169,7 @@ class SkillError(ValueError):
 VILLA_CHOICES = "villa.skill.yaml"
 # A schedule entry's `kiosk`: what the Kiosk calls that job, so it can say its time (the heartbeat's cadence,
 # agent-contract.json `heartbeat`) — the skill names it, the engine never guesses which job is "the nightly check".
-KIOSK_JOBS = {"nightly_check", "day_check"}
+KIOSK_JOBS = {"nightly_check"}
 TRASH = ".trash"              # skills deleted or replaced: kept to undo, trimmed by housekeeping (settings.keep.files_days)
 TOOL = re.compile(r"^[a-z][a-z0-9_]{1,60}$")
 BUTTON_OPTION = re.compile(r"^[a-z][a-z_]{0,15}$")
@@ -240,12 +237,9 @@ class Skill:
     jobs_default: dict | None = None
     every_5_min: str | None = None
     # the rules whose findings every_5_min reads again — the rest wait for the nightly check: the Kiosk card's "Next check"
-    # (owner, 2026-10-15). The skill says it, the engine only carries it to the card.
+    # (owner, 2026-10-15). The skill says it, the engine only carries it to the card. ["*"]: `rechecks: all`, every
+    # finding (owner, 2026-10-20: "check every 5 min for all the reported issues").
     rechecks: list[str] = field(default_factory=list)
-    # the rules whose open findings the jobs marked `kiosk: day_check` read again (owner, 2026-10-19: "refresh the open
-    # ones every 4 hours during the days"): their card's "Next check" is the next of those times. Without such a job
-    # they mean nothing (day_checked): a villa that removes the times switches the day recheck off, nothing else.
-    day_rechecks: list[str] = field(default_factory=list)
     on_event: dict[str, str] = field(default_factory=dict)
     on_reply: str | None = None
     # ⚠️ THE SKILL'S BUTTONS, NOT THE ENGINE'S (architecture review, 2026-10-13): the engine drew "Done" / "Need help" and
@@ -277,16 +271,6 @@ class Skill:
     # what the message says once pressed}. Only a skill that can run on the person's question as written declares it
     # (proposals needs a number: none). The engine places and runs it (command_offers.py), the skill says whether and how.
     offer: dict[str, str] | None = None
-
-    @property
-    def day_checks_at(self) -> list[str]:
-        """The times of its day rechecks (the schedule entries marked `kiosk: day_check`), in order."""
-        return sorted({j["when"] for j in self.schedule if j.get("kiosk") == "day_check"})
-
-    @property
-    def day_checked(self) -> list[str]:
-        """`day_rechecks` when a day recheck runs (day_checks_at), else none."""
-        return list(self.day_rechecks) if self.day_checks_at else []
 
     @property
     def skill_md(self) -> str:
@@ -433,13 +417,10 @@ def parse_skill(name: str, path: str) -> Skill:
     if raw.get("every_5_min"):
         sk.every_5_min = _check_command(path, str(raw["every_5_min"]), "every_5_min")
     if raw.get("rechecks") is not None:
-        if not sk.every_5_min or not isinstance(raw["rechecks"], list) or not all(isinstance(r, str) for r in raw["rechecks"]):
-            raise SkillError("rechecks: a list of rule ids, beside the every_5_min job that reads them again")
-        sk.rechecks = list(raw["rechecks"])
-    if raw.get("day_rechecks") is not None:
-        if not isinstance(raw["day_rechecks"], list) or not all(isinstance(r, str) for r in raw["day_rechecks"]):
-            raise SkillError("day_rechecks: a list of rule ids, read again by the schedule entries marked kiosk: day_check")
-        sk.day_rechecks = list(raw["day_rechecks"])
+        r = raw["rechecks"]
+        if not sk.every_5_min or not (r == "all" or isinstance(r, list) and all(isinstance(x, str) for x in r)):
+            raise SkillError("rechecks: all, or a list of rule ids, beside the every_5_min job that reads them again")
+        sk.rechecks = ["*"] if r == "all" else list(r)
     for ev, cmd in (raw.get("on_event") or {}).items():
         if ev not in HOOK_EVENTS:
             raise SkillError(f"on_event: unknown event {ev} (known: {', '.join(sorted(HOOK_EVENTS))})")

@@ -112,13 +112,13 @@ def test_a_message_telegram_no_longer_takes_is_left_and_nothing_is_sent(tmp_path
     assert any(c["kind"] == "rewrite_skipped" for c in out.state.calls())
 
 
-def test_the_night_and_the_day_rechecks_carry_the_rewrites():
+def test_the_night_and_the_5_minute_recheck_carry_the_rewrites():
     import inspect
     import recheck
     src = inspect.getsource(nightly.run) + inspect.getsource(nightly.main) + inspect.getsource(recheck.main)
     assert 'told_cleared(store, [o["id"] for o in closed], now_ref, zone, ctx.settings)' in src
     assert 'out["edits"] = res.get("edits") or []' in src
-    assert src.count("N.told_cleared(ctx.store,") == 2
+    assert src.count("N.told_cleared(ctx.store,") == 1                 # one tick: every close of the 5 minutes
     assert "store=store, at=now)" in inspect.getsource(recheck.gone_offline)
 
 

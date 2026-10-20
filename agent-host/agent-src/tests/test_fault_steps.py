@@ -387,28 +387,26 @@ def test_each_fault_says_how_the_agent_reads_it_again_for_its_cards_next_check(t
     pb.open_task("finding", low, "PM-BATTERY-LOW", "sensor.door_b", "Door B battery at 12%")
     iid = st.new_incident("rule_x|lock.front", "rule_x", "lock.front", "P2", {"summary": "Front door unlocked"})
     pb.open_task("incident", iid, "rule_x", "lock.front", "Front door unlocked")
-    # owner, 2026-10-19: a battery is read again at the day recheck's times (skill.yaml day_rechecks), and one device
-    # with an alert AND a night fault has two faults, each saying its own clock — the card shows the soonest
+    # owner, 2026-10-20: every night fault is read again every 5 minutes (skill.yaml `rechecks: all`), and one device
+    # with an alert AND a night fault has two faults, each saying its own clock
     both, _ = st.raise_finding("PM-BATTERY-LOW", "lock.front", "front", "2026-10-15", "P3", "Front door battery at 15%", {})
     pb.open_task("finding", both, "PM-BATTERY-LOW", "lock.front", "Front door battery at 15%")
     run(v.tickets.repair())
     by_entity = {(t.get("entityId"), t.get("origin")): t.get("check") for t in k._all()}
-    assert by_entity == {("sensor.room_a", "night"): "minutes", ("sensor.door_b", "night"): "day",
-                         ("lock.front", "alert"): "minutes", ("lock.front", "night"): "day"}, by_entity
+    assert by_entity == {("sensor.room_a", "night"): "minutes", ("sensor.door_b", "night"): "minutes",
+                         ("lock.front", "alert"): "minutes", ("lock.front", "night"): "minutes"}, by_entity
     chat = run(v.tickets.create("Pool light flickers"))                                # a chat's: no clock
     assert "check" not in k.ticket(chat)
     for t in k._all():                                                                  # a fault made before 0.12.212
         t.pop("check", None)
     run(v.tickets.repair())
     assert {(t.get("entityId"), t.get("origin")): t.get("check") for t in k._all() if t["id"] != chat} == by_entity
-    # a Kiosk from before the day recheck (its info lists no ticket_checks) is told "nightly" — true too, the night
-    # reads it as well — never a word it cannot show
+    # a Kiosk whose info lists no ticket_checks (before 2.496.429) reads "minutes" too: the same words
     k.info.pop("ticket_checks")
     for t in k._all():
         t.pop("check", None)
     run(v.tickets.repair())
-    assert {(t.get("entityId"), t.get("origin")): t.get("check") for t in k._all() if t["id"] != chat} == {
-        **by_entity, ("sensor.door_b", "night"): "nightly", ("lock.front", "night"): "nightly"}
+    assert {(t.get("entityId"), t.get("origin")): t.get("check") for t in k._all() if t["id"] != chat} == by_entity
 
 
 def test_a_kiosk_that_shows_no_day_check_never_gets_the_word(tmp_path):
@@ -423,20 +421,6 @@ def test_a_kiosk_that_shows_no_day_check_never_gets_the_word(tmp_path):
     k.info["ticket_checks"] = ["minutes", "day", "nightly"]
     run(k.amend("va-1", tagged(None, "night", "day")))
     assert k.ticket("va-1")["check"] == "day"
-
-
-def test_the_rules_the_skill_says_it_reads_again_are_the_ones_recheck_reads():
-    # one list (architecture review, 2026-10-15): the card's "within 5 min" is true only for what recheck.py really
-    # reads again — it reads the skill's own `rechecks`, which the engine also hands the Kiosk (Skill.rechecks)
-    import importlib.util
-    from vesta_agent.skills import parse_skill
-    sk = parse_skill("preventive-maintenance", os.path.join(STARTER_SKILLS, "preventive-maintenance"))
-    spec = importlib.util.spec_from_file_location("recheck_for_tests", os.path.join(
-        STARTER_SKILLS, "preventive-maintenance", "scripts", "recheck.py"))
-    recheck = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(recheck)
-    assert recheck.rechecked() == set(sk.rechecks) == {"PM-UNAVAILABLE"} and "recheck.py" in sk.every_5_min
-    assert not hasattr(recheck, "OFFLINE_RULE")                       # no second copy of the list
 
 
 def test_a_duration_in_a_faults_title_is_worded_by_the_kiosk_when_it_shows_it(tmp_path):

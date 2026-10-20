@@ -361,7 +361,7 @@ class Kiosk:
         return True
 
     async def heartbeat(self, status: str | None = None, cadence: dict | None = None) -> dict:
-        """`cadence`: this agent's own timing (agent-contract.json `heartbeat`: checkMinutes, nightlyAt, dayChecksAt) — the Kiosk's
+        """`cadence`: this agent's own timing (agent-contract.json `heartbeat`: checkMinutes, nightlyAt) — the Kiosk's
         Overview (i) says it instead of a copy of the defaults (architecture review, 2026-10-15). Returns the Kiosk's
         answer; its window (`offline_after_minutes`) sets the next interval (`every`, beat_every). A cadence the Kiosk
         did not take ("cadence": "refused: …", with a 200) is said once in the log — the beat itself counted."""

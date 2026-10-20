@@ -113,7 +113,7 @@ def flips_per_day(logbook: list[dict], zone: str, settle_minutes: float = 0,
 
     ⚠️ `end`: THE DAYS ARE THE 24-HOUR PERIODS ENDING AT IT (architecture review, 2026-10-20). A drop is filed under the
     day of `end` minus its whole days before `end` — at the night's end (midnight) the calendar days, as before; at the
-    12:00 day recheck the last 72 hours, never two and a half days counted against a three-day threshold (a real loop
+    5-minute recheck the last 72 hours, never two and a half days counted against a three-day threshold (a real loop
     closed at noon and opened again at night). None: calendar days in `zone`."""
     drops = RestartDrops(logbook, settle_minutes)        # the one answer (vesta_shared.device_state)
     out: dict[str, dict[date, int]] = defaultdict(lambda: defaultdict(int))

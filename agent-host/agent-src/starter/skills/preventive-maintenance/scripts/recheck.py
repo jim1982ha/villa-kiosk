@@ -1,10 +1,19 @@
 #!/usr/bin/env python3
-"""Every 5 minutes: a device gone offline gets its fault now; one found offline that is back closes it now; so does
-any fault about a device deleted from Home Assistant. With `day` (at the times of the schedule entries marked
-`kiosk: day_check`): the night's open findings of the rules skill.yaml `day_rechecks` names, read again — and only those.
+"""Every 5 minutes: every open finding of the night check is read again, each by the rule that found it (READS: the
+night's own reading, never a copy) — one still found stays, one no longer found closes now; a device gone offline gets
+its fault now; any fault about a device deleted from Home Assistant closes. The 02:00 night check stays where NEW
+findings are found.
 
   python recheck.py --store vesta_store.sqlite [--pack pack.json] [--fixture-dir DIR] [--now 2026-10-10T14:00:00+00:00]
-  python recheck.py day --store vesta_store.sqlite [--pack pack.json] …
+
+⚠️ ONE CADENCE FOR EVERY FAULT (owner, 2026-10-20: "simplify: remove the split, check every 5 min for all the reported
+issues — keep it as simple as possible, no useless exceptions"; "I am worried how I will judge what is a daily-check
+fault versus what is not"). The day recheck at 08:00/12:00/16:00/20:00 and its list of rules are gone: every card says
+"Next check: within 5 min". A rule about a state (a battery, a quiet sensor, a reconnect loop, a rule naming a hidden
+device) is read as it stands now. A rule judged on a FINISHED day (a pump's draw, use and run hours, a room's highest
+temperature) is read over the last finished day — never "today so far", which would close a pump fault before the pump
+has run today — so its verdict can only change once a new day has finished: it is kept per finding and per day
+(store cache), and worked out again only when the last finished day changes.
 
 ⚠️ FOUND AT ONCE, NOT AT 02:00 (owner, 2026-10-18 — architecture review, offline devices #1): Timmerflotte_5969 dropped
 at 21:46 and stood "Unavailable" in the Cockpit for 4 h 14 min before the night check opened its fault. Here the
@@ -39,7 +48,7 @@ import json
 import os
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, time, timedelta, timezone
 from typing import Callable, NamedTuple
 from zoneinfo import ZoneInfo
 
@@ -53,23 +62,11 @@ from vesta_shared.timeutil import day_time_label  # noqa: E402
 import nightly as N  # noqa: E402  (what is offline: the night's one reading of it)
 from vesta_shared.problems import STILL_THERE  # noqa: E402
 from vesta_shared import battery  # noqa: E402  (the battery rules' ids: one owner)
-from vesta_shared.device_state import has_value  # noqa: E402
+from vesta_shared.device_state import has_value, is_offline  # noqa: E402
+from vesta_shared.limits import limit  # noqa: E402
+from vesta_shared.past import Logbook  # noqa: E402
+import rules as R  # noqa: E402
 
-
-
-def rechecked(skill_dir: str = os.path.dirname(HERE)) -> set[str]:
-    """The rules whose findings are read again here: the skill's own `rechecks` (skill.yaml) — what the Kiosk's card
-    says "Next check: within 5 min" of (architecture review, 2026-10-15: this script kept its own copy of that list)."""
-    import yaml
-    with open(os.path.join(skill_dir, "skill.yaml"), encoding="utf-8") as f:
-        return set((yaml.safe_load(f) or {}).get("rechecks") or [])
-def day_rechecked(skill_dir: str = os.path.dirname(HERE)) -> set[str]:
-    """The rules whose open findings the day recheck reads again (`recheck.py day`, at the times of the schedule entries
-    marked `kiosk: day_check`): the skill's own `day_rechecks` (skill.yaml) — what the Kiosk's card says "Next check: at
-    12:00" of. Each must have its reading here (DAY_READS); one that has none stops the run (Unreadable)."""
-    import yaml
-    with open(os.path.join(skill_dir, "skill.yaml"), encoding="utf-8") as f:
-        return set((yaml.safe_load(f) or {}).get("day_rechecks") or [])
 
 
 GONE_NOTE = "Closed: this device no longer exists in the villa's system."
@@ -88,13 +85,13 @@ def back_online(store, client, now: datetime, minutes: float, zone: str) -> dict
     # only what has no state is asked about: "not found" is Home Assistant's answer, a missing row is not
     gone = client().not_found([e for e in ids if e not in states]) if len(states) < len(ids) else set()
     day = now.astimezone(ZoneInfo(zone)).date().isoformat()
-    closed, deleted, moved, rules = [], [], [], rechecked()
+    closed, deleted, moved = [], [], []
     for f in rows:
         es = ents[f["id"]]
         if es and all(e in gone for e in es):
             moved += Problems(store).close_finding(f, day, GONE_NOTE)
             closed.append(f["id"]); deleted.append(f["id"])
-        elif f["rule_id"] in rules and out_for(client(), [e for e in es if e not in gone], states, OFFLINE, now,
+        elif f["rule_id"] == OFFLINE_RULE and out_for(client(), [e for e in es if e not in gone], states, OFFLINE, now,
                                                       minutes, unknown_tells=True):
             moved += Problems(store).close_finding(f, day, "Cleared: back online.")
             closed.append(f["id"])
@@ -133,6 +130,20 @@ def gone_offline(store, pack, client, now: datetime, params, zone: str, settle_m
     return {"actions": actions, "send": send, "found": [d["id"] for d in rec["new"] + rec["again"]]}
 
 
+OFFLINE_RULE = "PM-UNAVAILABLE"     # read by back_online (a device back for `back_online_minutes`), not in READS
+#: How long after midnight a finished day's statistics are taken as complete before its day rules are read over it:
+#: the villa's system writes an hour's figures a few minutes after the hour.
+DAY_SETTLE_MINUTES = limit("recheck.day_settle_minutes", 15, unit="minutes", group="read", lo=0, hi=180,
+                           says="Minutes after midnight before a finished day's figures are read again for its faults.",
+                           reached="Until then a fault judged on a finished day keeps the verdict of the day before.",
+                           told="")
+#: The logbook rows kept between two readings of the reconnect loops (store cache): one villa-wide read of
+#: `reconnect_days` takes about 9 s for ~15,000 rows (villa, 2026-10-20) — every 5 minutes that would be 288 such reads
+#: a day. The rows a count needs are kept (the restarts, and every row of an entity that went offline), and each tick
+#: reads only the minutes since the last one: the same count as a whole read (test_recheck_all).
+LOOPBOOK = "pm-loopbook"
+
+
 def _battery_rows(pack, f: dict) -> list[dict]:
     """The battery row of finding `f` (its own entity), [] when the pack no longer lists it."""
     return [r for r in pack.entities("battery") if r["entity_id"] == f["entity_id"]]
@@ -149,113 +160,189 @@ def _silence_rows(pack, f: dict) -> list[dict]:
     return [r for r in rows if pack.device_key(r["entity_id"], r) == key]
 
 
-class RecheckRule(NamedTuple):
-    """How the day recheck reads one open finding of a rule again: `rows` (finding → its pack rows, [] when the pack no
-    longer lists it), `entities` (finding, rows → the entities whose state is read), `found` (client, pack, states, now,
-    params, zone, rows → what the night's own function finds over them)."""
+def _asset_of(pack, f: dict) -> list[dict]:
+    """The asset whose power or energy entity finding `f` is about, as a one-row list ([] when the pack no longer has it)."""
+    for slug, a in pack.assets.items():
+        if f["entity_id"] in (a.get("entities") or {}).values():
+            return [{**a, "slug": a.get("slug") or slug}]
+    return []
+
+
+def _level_rows(pack, f: dict) -> list[dict]:
+    return [r for r in pack.entities("level") if r["entity_id"] == f["entity_id"]]
+
+
+class Tick:
+    """One 5-minute reading: what every rule's reading needs, read at most once per tick (the states, the last finished
+    day, the logbook of the reconnect loops, the villa's rules naming a hidden device)."""
+
+    def __init__(self, store, pack, client, now: datetime, params, zone: str):
+        self.store, self.pack, self.client, self.now, self.params = store, pack, client, now, params
+        self.zone, self.Z = zone, ZoneInfo(zone)
+        self.at = now.astimezone(self.Z)
+        settled = (self.at - timedelta(minutes=DAY_SETTLE_MINUTES)).date()
+        self.day = settled - timedelta(days=1)                                  # the last finished day, settled
+        self.day_end = datetime.combine(self.day + timedelta(days=1), time(0, 0), tzinfo=self.Z)
+        self.states: dict = {}
+        self._loops = self._hidden = None
+
+    # the reconnect loops: the days ending now, from the logbook kept between ticks
+    def loops(self) -> list:
+        if self._loops is None:
+            book = loopbook(self.store, self.client(), self.now, int(self.params.behaviour("reconnect_days")))
+            self._loops = N.reconnect_findings(self.client(), self.pack, self.states, self.now, self.now.date(),
+                                               self.params, self.zone, self.Z, self.now, book=book)[0]
+        return self._loops
+
+    def hidden(self) -> list:
+        if self._hidden is None:
+            self._hidden = N.hidden_in_rule_findings(self.client(), self.pack, self.states, self.store)[0]
+        return self._hidden
+
+    def battery(self, rows) -> list:
+        ids = [r["entity_id"] for r in rows]
+        stats = self.client().statistics(ids, self.day_end - timedelta(days=N.BATTERY_READ_DAYS), self.day_end, "day",
+                                         ("mean",))
+        return N.battery_findings(self.pack, self.states, self.params, self.day, stats, rows=rows)
+
+    def asset_day(self, rows) -> list:
+        asset = rows[0]
+        p_eid, e_eid = asset["entities"].get("power"), asset["entities"].get("energy")
+        days = int(self.params.behaviour("baseline_days")) + int(self.params.behaviour("confirm_days")) + N.WINDOW_MARGIN_DAYS
+        start = self.day_end - timedelta(days=days)
+        c = self.client()
+        hour = c.statistics([p_eid], start, self.day_end, "hour", ("mean", "min", "max")) if p_eid else {}
+        day = c.statistics([e_eid], start, self.day_end, "day", ("change", "sum")) if e_eid else {}
+        return N.asset_findings(c, self.store, self.params, asset, self.day, self.day_end, hour, day, self.now,
+                                self.zone, self.Z, [], write_features=False)[0]
+
+    def level_day(self, rows) -> list:
+        ids = [r["entity_id"] for r in rows]
+        stats = self.client().statistics(ids, self.day_end - timedelta(days=N.LEVEL_READ_DAYS), self.day_end, "hour",
+                                         ("mean", "min", "max"))
+        return N.level_findings(self.pack, self.params, rows, stats, self.day, self.zone)
+
+
+class Reading(NamedTuple):
+    """How one open finding of a rule is read again: `rows` (finding → its pack rows, [] when the pack no longer lists
+    it), `entities` (finding, rows → the entities whose state must have been read), `found` (tick, rows → what the
+    rule's own reading finds now), `per_day` (judged on a finished day: kept per finding and day, worked out again only
+    when the last finished day changes)."""
     rows: Callable
     entities: Callable
     found: Callable
+    per_day: bool = False
 
 
-#: How the day recheck reads one open finding again, per rule (RecheckRule). WHICH rules are read in the day is the
-#: skill's one list (skill.yaml `day_rechecks`, what the Kiosk card's "Next check: at 12:00" says); this is only HOW.
-#: A rule the skill names that has no reading here is REFUSED (unreadable): the run stops and Overview says which
-#: (architecture review 2026-10-20, #6: it was a line on stderr while the card kept promising the check).
-#: ⚠️ ONLY WHAT A SHORT READ CAN SAY (owner, 2026-10-19): a battery's level and a quiet sensor are read now, as the night
-#: reads them. A pump's draw and use (PM-POWER-CHANGE, PM-ENERGY-CHANGE, PM-RUNHOURS) and a temperature's day
-#: (PM-LEVEL-HIGH) are judged on a FINISHED day — at 12:00 the day is half there and would close what the next night
-#: opens again. An offline device is recheck.py's every 5 minutes (`rechecks`).
-#: ⚠️ A RECONNECT LOOP TOO (owner, 2026-10-20: 17 false loops waited for the night to close): the villa-wide logbook of
-#: the last `reconnect_days`, the night's own reading (nightly.reconnect_findings), read ONCE per day recheck whatever
-#: the number of loops open (_loops).
-DAY_READS: dict[str, RecheckRule] = {
-    "PM-BATTERY-CRIT": RecheckRule(_battery_rows, lambda pack, f, rows: [r["entity_id"] for r in rows],
-                                   lambda c, pack, states, now, params, Z, rows: N.battery_findings(
-                                       pack, states, params, now.date(), rows=rows)),
-    "PM-SILENT": RecheckRule(_silence_rows,
-                             lambda pack, f, rows: [r["entity_id"] for r in rows]
-                             + sorted(pack.entities_of_device(pack.device_id_of(f["entity_id"]))),
-                             lambda c, pack, states, now, params, Z, rows: N.silent_findings(c, pack, states, now,
-                                                                                             params, Z, rows=rows)),
+_own = lambda pack, f, rows: [r["entity_id"] for r in rows]                 # noqa: E731
+_battery = Reading(_battery_rows, _own, lambda t, rows: t.battery(rows))
+_none = lambda pack, f, rows: []                                            # noqa: E731
+_asset = Reading(_asset_of, _none, lambda t, rows: t.asset_day(rows), per_day=True)
+#: Every rule of the night check (nightly.STATE_RULES | EVENT_RULES) but the offline one, and how it is read again
+#: (owner, 2026-10-20: one cadence, no exception). A rule the night finds with no reading here stops the tick and
+#: Overview says which (Unreadable) — a fault never promises a check that does not run.
+READS: dict[str, Reading] = {
+    battery.CRIT: _battery, battery.LOW: _battery, battery.TREND: _battery, result.PARAM_MISSING: _battery,
+    "PM-SILENT": Reading(_silence_rows, lambda pack, f, rows: [r["entity_id"] for r in rows]
+                         + sorted(pack.entities_of_device(pack.device_id_of(f["entity_id"]))),
+                         lambda t, rows: N.silent_findings(t.client(), t.pack, t.states, t.at, t.params, t.Z, rows=rows)),
+    "PM-RECONNECT-LOOP": Reading(lambda pack, f: [{"entity_id": f["entity_id"]}], lambda pack, f, rows: [f["entity_id"]],
+                                 lambda t, rows: t.loops()),
+    R.HIDDEN_IN_RULE: Reading(lambda pack, f: [{"entity_id": f["entity_id"]}], _none,
+                              lambda t, rows: t.hidden()),
+    "PM-POWER-CHANGE": _asset, "PM-ENERGY-CHANGE": _asset, "PM-RUNHOURS": _asset, "PM-RUN-SAG": _asset,
+    "PM-EXPECTED-SILENT": _asset, result.COUNTER_RESET: _asset,
+    "PM-LEVEL-HIGH": Reading(_level_rows, _none, lambda t, rows: t.level_day(rows), per_day=True),
 }
-DAY_READS["PM-BATTERY-LOW"] = DAY_READS["PM-BATTERY-CRIT"]
-
-_LOOPS: dict = {}
-
-
-def _loops(c, pack, states, now, params, Z, rows) -> list:
-    """The reconnect loops of the days ending now — read once per day recheck (one logbook read for every loop open)."""
-    key = (id(c), now.isoformat())
-    if key not in _LOOPS:
-        _LOOPS.clear()
-        _LOOPS[key] = N.reconnect_findings(c, pack, states, now, now.date(), params, str(Z), Z, now)[0]
-    return _LOOPS[key]
-
-
-DAY_READS["PM-RECONNECT-LOOP"] = RecheckRule(lambda pack, f: [{"entity_id": f["entity_id"]}],
-                                             lambda pack, f, rows: [f["entity_id"]], _loops)
 
 
 class Unreadable(Exception):
-    """The skill names rules for the day recheck that have no day reading here (DAY_READS)."""
+    """Rules of the night check with no reading here (READS)."""
 
 
-def unreadable(rules: set[str]) -> list[str]:
-    """The rules of `rules` the day recheck cannot read (no RecheckRule), sorted."""
-    return sorted(set(rules) - set(DAY_READS))
+def unreadable() -> list[str]:
+    """The night check's rules this recheck cannot read again, sorted — none, or the tick stops."""
+    return sorted((N.STATE_RULES | N.EVENT_RULES) - set(READS) - {OFFLINE_RULE})
 
 
-def day_recheck(store, pack, client, now: datetime, params, zone: str, settle_minutes: float | None = None,
-                rules: set[str] | None = None) -> dict:
-    """The night's open findings of `rules` (skill.yaml `day_rechecks`) read again now, each by its own rule over its
-    own device (DAY_READS, the night's functions): one still found is recorded as seen — a person's close that long ago
-    or more no longer holds (Problems.wants_open) —, one no longer found closes, saying so with the time
-    (nightly.cleared_note). Nothing else is touched: no other finding, no new one (the night opens those). Returns
-    {actions, closed, seen}; Home Assistant is asked for nothing when no such finding is open.
+def loopbook(store, client, now: datetime, days: int):
+    """The logbook of the `days` ending `now` for the reconnect loops, kept between ticks (LOOPBOOK): the rows since
+    the last tick read and added, the ones older than the window dropped; only the rows a count needs are kept — the
+    villa system's restarts and every row of an entity that went offline (a count reads no other). A read cut short
+    is kept as far as it reached, and the next tick reads on from there."""
+    start = now - timedelta(days=days)
+    kept = store.cache_get(LOOPBOOK) or {}
+    since = kept.get("end")
+    since_at = datetime.fromisoformat(since) if since else None
+    if since_at is None or since_at <= start or since_at > now:
+        book = client.logbook_read(start, now, now=now)
+        rows = book.rows
+    else:
+        book = client.logbook_read(since_at, now, now=now)
+        rows = list(kept.get("rows") or []) + list(book.rows)
+    rows = [r for r in rows if _at(r) is not None and _at(r) >= start]
+    went = {r.get("entity_id") for r in rows if is_offline(r.get("state"))}
+    rows = [r for r in rows if r.get("domain") == "homeassistant" or r.get("entity_id") in went]
+    store.cache_put(LOOPBOOK, {"end": book.reach.isoformat(), "rows": rows})
+    return Logbook(rows, start, now, None if book.whole else book.reach)
 
-    ⚠️ NOT THE NEXT NIGHT (owner, 2026-10-19: "instead of waiting 24h to recheck the faults found during the nightly
-    check, refresh the open ones every 4 hours during the days"): a battery changed at 09:00 stayed an open fault in the
-    Cockpit until 02:00 the next night. A reading that fails, or an entity whose state was not read, closes nothing."""
+
+def _at(row: dict) -> datetime | None:
+    try:
+        return datetime.fromisoformat(str(row.get("when")))
+    except ValueError:
+        return None
+
+
+def recheck_open(store, pack, client, now: datetime, params, zone: str, settle_minutes: float | None = None) -> dict:
+    """Every open finding (the offline ones are back_online's) read again now, each by its rule's reading (READS): one
+    still found is recorded as seen — a person's close that long ago or more no longer holds (Problems.wants_open) —,
+    one no longer found closes, saying so with the time (nightly.cleared_note). Nothing else is touched: no new finding
+    (the night opens those). Returns {actions, closed, seen}; Home Assistant is asked for nothing when nothing is open.
+
+    ⚠️ NOT READ IS NOT GONE: a state the read did not bring back, a battery with no value now, or a reading that failed
+    closes nothing — its close would say the problem is over when nothing was seen."""
     none = {"actions": [], "closed": [], "seen": []}
-    rules = day_rechecked() if rules is None else rules
-    if unreadable(rules):
-        # ⚠️ REFUSED, NOT SKIPPED (architecture review 2026-10-20, #6): the card of such a fault says "Next check: at
-        # 12:00" (the skill's list) — a check that never ran would be a promise nobody keeps
-        raise Unreadable(", ".join(unreadable(rules)))
-    open_ = [f for f in store.findings(status="open") if f["rule_id"] in rules]
+    if unreadable():
+        raise Unreadable(", ".join(unreadable()))
+    open_ = [f for f in store.findings(status="open") if f["rule_id"] != OFFLINE_RULE]
     if not open_ or pack is None or client() is None:
         return none
-    Z = ZoneInfo(zone)
-    at = now.astimezone(Z)
+    t = Tick(store, pack, client, now, params, zone)
     plan = []
     for f in open_:
-        rule = DAY_READS[f["rule_id"]]
+        rule = READS[f["rule_id"]]
         rows = rule.rows(pack, f)
         if rows:
-            plan.append((f, rows, rule.entities(pack, f, rows)))
-    states = client().states(sorted({e for _, _, ids in plan for e in ids})) if plan else {}
-    rechecked, seen = [], []
-    for f, rows, _ in plan:
-        st = states.get(f["entity_id"]) or {}
-        # ⚠️ NOT READ IS NOT GONE: a state the read did not bring back (a timeout), or a battery with no value now,
-        # leaves the finding to the night — its close would say the problem is over when nothing was seen
-        if not st or (f["rule_id"] in (battery.CRIT, battery.LOW) and not has_value(st.get("state"))):
+            plan.append((f, rule, rows, rule.entities(pack, f, rows)))
+    ids = sorted({e for *_, es in plan for e in es})
+    t.states = client().states(ids) if ids else {}
+    read, seen = [], []
+    for f, rule, rows, es in plan:
+        st = t.states.get(f["entity_id"]) or {}
+        if es and (not st or (f["rule_id"] in (battery.CRIT, battery.LOW) and not has_value(st.get("state")))):
             continue
-        try:
-            found = DAY_READS[f["rule_id"]].found(client(), pack, states, at, params, Z, rows)
-        except Exception as e:  # noqa: BLE001 — a read that failed closes nothing; the night reads it again
-            print(f"preventive-maintenance: {f['rule_id']} of {f['entity_id']} could not be read again "
-                  f"({type(e).__name__})", file=sys.stderr)
-            continue
-        rechecked.append(f["id"])
-        if any(x.rule_id == f["rule_id"] and x.entity_id == f["entity_id"] for x in found):
+        key = f"pm-dayread:{int(f['id'])}:{t.day.isoformat()}"
+        was = store.cache_get(key) if rule.per_day else None
+        if was is None:
+            try:
+                found = rule.found(t, rows)
+            except Exception as e:  # noqa: BLE001 — a read that failed closes nothing; the next tick reads it again
+                print(f"preventive-maintenance: {f['rule_id']} of {f['entity_id']} could not be read again "
+                      f"({type(e).__name__})", file=sys.stderr)
+                continue
+            was = {"seen": any(x.rule_id == f["rule_id"] and x.entity_id == f["entity_id"] for x in found)}
+            if rule.per_day:
+                store.cache_put(key, was)
+        read.append(f["id"])
+        if was["seen"]:
             seen.append(f["id"])
-    if not rechecked:
+    if not read:
         return none
-    rec = Problems(store).record_rechecked(rechecked, seen, at.date().isoformat(), now.isoformat(),
+    rec = Problems(store).record_rechecked(read, seen, t.at.date().isoformat(), now.isoformat(),
                                            note=N.cleared_note(now, zone), settle_minutes=settle_minutes)
-    store.audit("preventive-maintenance", "day_recheck", {"read": rechecked, "closed": rec["closed"]})
+    if rec["closed"]:
+        store.audit("preventive-maintenance", "recheck", {"read": read, "closed": rec["closed"]})
     return {"actions": result.moved(rec["task_ids"]), "closed": rec["closed"], "seen": rec["seen"]}
 
 
@@ -307,34 +394,25 @@ def still_there_untold(store, zone: str, settings: dict) -> list[dict]:
 def main(argv=None):
     ap = argparse.ArgumentParser()
     script.arguments(ap, pack=True)
-    ap.add_argument("what", nargs="?", choices=["day"],
-                    help="day: the day recheck of the night's open findings (skill.yaml `day_rechecks`), at the times "
-                         "of the schedule entries marked `kiosk: day_check` — nothing else")
     a = ap.parse_args(argv)
     ctx = script.Context(a, skill=os.path.dirname(HERE))
     now = datetime.fromisoformat(a.now) if getattr(a, "now", None) else datetime.now(timezone.utc)
-    if a.what == "day":
-        try:
-            day = day_recheck(ctx.store, ctx.pack, lambda: ctx.live_client, now, ctx.params, ctx.zone,
-                              N.still_there_minutes(ctx.settings))
-        except Unreadable as e:
-            # the last stderr line is what Overview › Scheduled jobs run says of a stopped run
-            print(f"day_rechecks names {e}, which cannot be read in the day: remove it from the skill's day_rechecks "
-                  "(its faults then say the nightly time)", file=sys.stderr)
-            return 1
-        # a close sends nothing new: a P2 told earlier says it on its own message (told_cleared, owner 2026-10-20);
-        # the Kiosk's faults follow through the engine's repair
-        print(json.dumps({"actions": day["actions"], "send": [],
-                          "edits": N.told_cleared(ctx.store, day["closed"], now, ctx.zone, ctx.settings),
-                          result.FAULTS_CHANGED: bool(day["actions"])}, default=str))
-        return 0
+    settle = N.still_there_minutes(ctx.settings)
     res = back_online(ctx.store, lambda: ctx.live_client, now, ctx.params.behaviour("back_online_minutes"), ctx.zone)
-    found = gone_offline(ctx.store, ctx.pack, lambda: ctx.live_client, now, ctx.params, ctx.zone,
-                         N.still_there_minutes(ctx.settings))
+    try:
+        again = recheck_open(ctx.store, ctx.pack, lambda: ctx.live_client, now, ctx.params, ctx.zone, settle)
+    except Unreadable as e:
+        # the last stderr line is what Overview › Scheduled jobs run says of a stopped run
+        print(f"preventive-maintenance cannot read these rules again: {e}", file=sys.stderr)
+        return 1
+    found = gone_offline(ctx.store, ctx.pack, lambda: ctx.live_client, now, ctx.params, ctx.zone, settle)
     told = reopened_untold(ctx.store, ctx.zone, ctx.settings) + still_there_untold(ctx.store, ctx.zone, ctx.settings)
-    print(json.dumps({"actions": result.moved(res["actions"] + found["actions"]), "send": found["send"] + told,
-                      "edits": N.told_cleared(ctx.store, res["closed"], now, ctx.zone, ctx.settings),
-                      result.FAULTS_CHANGED: bool(res["closed"] or found["actions"])}, default=str))
+    closed = res["closed"] + again["closed"]
+    # a close sends nothing new: a P2 told earlier says it on its own message (told_cleared, owner 2026-10-20)
+    print(json.dumps({"actions": result.moved(res["actions"] + again["actions"] + found["actions"]),
+                      "send": found["send"] + told,
+                      "edits": N.told_cleared(ctx.store, closed, now, ctx.zone, ctx.settings),
+                      result.FAULTS_CHANGED: bool(closed or again["actions"] or found["actions"])}, default=str))
     return 0
 
 

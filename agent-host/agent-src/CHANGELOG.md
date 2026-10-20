@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.283 (20 October 2026)
+
+- Every open finding of the night is read again every 5 minutes (owner: "remove the split, check every 5 min for all
+  the reported issues"): recheck.READS maps every STATE/EVENT rule but PM-UNAVAILABLE to the night's own reading
+  (nightly.asset_findings / level_findings extracted from run(); reconnect_findings takes a kept `book=`, its unused
+  `only=` gone). Rules judged on a finished day read the last finished day, settled `recheck.day_settle_minutes` (15)
+  after midnight, their verdict cached per finding and day. The reconnect loops' logbook is kept between ticks
+  (`recheck.loopbook`): each tick reads only the minutes since the last.
+- skill.yaml `rechecks: all` (→ Skill.rechecks ["*"]); `day_rechecks`, `kiosk: day_check`, Skill.day_checks_at /
+  day_checked, the heartbeat's `dayChecksAt`, `recheck.py day` and the card's "day" are gone. Problems.card(task,
+  rechecked) no longer takes the Kiosk's check words.
+- test_day_recheck.py → test_recheck_all.py: a day-total fault that stays open mid-day and closes on the first tick
+  after a clean day (and stays open after a bad one); the kept logbook counts as a whole read.
+
 ## 0.6.282 (20 October 2026)
 
 - Skills › About's runs table: one width for the When column on every skill (`table.data.skill-runs`, 18em, nowrap,
