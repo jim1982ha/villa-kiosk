@@ -104,7 +104,7 @@ export default function AskDialog({
     <div className="modal-backdrop panel-modal-backdrop" onClick={onCancel} style={{ zIndex: 90 }}>
       <div
         ref={dialogRef}
-        className="modal panel-modal"
+        className="modal panel-modal ask-dialog"
         style={{ maxWidth: 420 }}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
