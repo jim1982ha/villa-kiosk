@@ -1,3 +1,14 @@
+## 0.12.290
+
+What you will see:
+- A P2 of the night check (a critical device offline, a battery at 10 %) told to the facility manager on Telegram
+  now says when it clears, on that SAME message: the item gets "✅ Back to normal at 12:30", and once every item has
+  cleared the title says "All back to normal." No new message is sent; a message Telegram no longer lets be changed
+  is left as it was. The words, and the switch to turn it off, are the preventive-maintenance skill's settings.
+- Overview › Copy the setup: "instructions.md — your standing rules for the agent" is ticked at first.
+- A skill switched off that no longer exists leaves the rules at the page's next save, and deleting a switched-off
+  skill takes it off the list (your "thfdsdsjfsf" goes at your next save on the page).
+
 ## 0.12.289
 
 What you will see:
