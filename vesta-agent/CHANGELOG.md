@@ -1,3 +1,9 @@
+## 0.12.302
+
+What you will see:
+- Asked about "this afternoon" (or "last night", "today"), the Agent reads the whole of that period. At 21:25 it read
+  only the last 6 hours and missed the 13:28 burst of starts.
+
 ## 0.12.301
 
 What you will see:

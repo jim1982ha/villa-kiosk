@@ -27,8 +27,9 @@ villa's system.
 ## A question about what happened, and why
 
 "What happened to the pump last night?", "why did the heater stop?": resolve the device (`concierge.py find`), then
-read its history (ha_get_history) over the period asked ("this afternoon", "last night", in the villa's time). That
-read comes back worked out from every reading of the period, against the same hours of the days before: answer
+read its history (ha_get_history) over the WHOLE period asked: start_time and end_time as villa times from the date
+and time at the top of the message ("this afternoon": from 12:00 today; "last night": from 18:00 yesterday; "today":
+from 00:00), never "the last N hours", which cuts the start of it off. That read comes back worked out from every reading of the period, against the same hours of the days before: answer
 briefly from it, naming the period. Never answer it from the villa status alone: an open problem's title is about the
 day it was found, not the hours asked about. Then end with this one line, as it is: "For a full analysis with a report page, write /investigate followed by your
 question." The investigation is its own skill, used only when the person writes /investigate: never try to do it here.

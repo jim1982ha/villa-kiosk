@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.292 (20 October 2026)
+
+- villa-concierge "A question about what happened": start_time/end_time as villa times covering the whole period named
+  (this afternoon from 12:00, last night from 18:00 the day before, today from 00:00), never "the last N hours": the
+  21:25 turn read "last 6 h" for "this afternoon" and missed 12:00-15:25.
+
 ## 0.6.291 (20 October 2026)
 
 - Instructions rule 6: "The reader's language" becomes "the language the message is written in; the saved one only
