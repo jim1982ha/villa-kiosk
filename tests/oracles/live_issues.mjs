@@ -280,9 +280,6 @@ const ticketsTab = readFileSync(new URL("../../src/components/fm/TicketsTab.tsx"
 ck("lists that only grow are ONE folded, paged list (owner, 2026-10-14): Tickets' Closed and Schedule's Recent work",
    /<FoldedList title="Closed" rows=\{closed\}/.test(ticketsTab) && /<FoldedList title="Recent work" rows=\{rows\}/.test(recent)
    && !/usePaged|<Pager|\.slice\(0, limit\)/.test(recent + ticketsTab));
-const overviewSrc = readFileSync(new URL("../../src/components/cockpit/CockpitOverview.tsx", import.meta.url), "utf8");
-ck("  ...the Overview's Recent activity too, folded by default (owner, 2026-10-18): the same FoldedList, no fold of its own",
-   /<FoldedList title="Recent activity" rows=\{villaActivity\}/.test(overviewSrc) && !/cockpit-activity-list/.test(overviewSrc));
 
 // a ticket's card AS DRAWN (pill on the title line, buttons inside on the right): tests/oracles/cockpit_cards.mjs; its
 // buttons as drawn: "the buttons, drawn" below. WIRING the Tickets tab alone holds (it needs the Facility data to render):

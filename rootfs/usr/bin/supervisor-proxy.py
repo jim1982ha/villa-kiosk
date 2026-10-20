@@ -73,7 +73,7 @@ Access control (why this proxy authenticates at all):
   proxy from a non-owner session is either a bug or someone driving the raw
   API from devtools, and is rejected before it reaches Core.
   What a non-owner session can READ is narrowed by DOMAIN (2.496.208):
-  get_states, state_changed events, the entity registry, the logbook and
+  get_states, state_changed events, the entity registry and
   REST history are filtered to ha-commands.json's `readDomains` — the
   domains the kiosk draws or scans — by _read_allowed / _relay_to_client /
   _rest_query_allowed. A person, a tracker, an alarm panel or a calendar
@@ -511,12 +511,6 @@ def _call_targets(obj: dict) -> list[str] | None:
 # "What a non-owner session can READ". FAIL CLOSED like the rest of the table.
 READ_DOMAINS = frozenset(HA_COMMANDS.get("readDomains", ()))
 
-# Websocket commands whose result is a list of ENTITIES: the relay narrows
-# those lists, and a logbook entry that names no entity is dropped rather than
-# passed (it can still carry a name and a message).
-_ENTITY_LIST_COMMANDS = frozenset({"get_states", "config/entity_registry/list", "logbook/get_events"})
-
-
 def _read_allowed(role: str, entity_id: str) -> bool:
     """Whether this role may see this entity at all. Owner is exempt; everyone
     else is held to READ_DOMAINS, and to `viewCameras` for a camera."""
@@ -530,16 +524,14 @@ def _read_allowed(role: str, entity_id: str) -> bool:
     return domain != "camera" or _may(role, "viewCameras")
 
 
-def _relay_to_client(role: str, text: str, pending: dict) -> str | None:
+def _relay_to_client(role: str, text: str) -> str | None:
     """The one place a Core→browser websocket frame is judged for a non-owner
     session: the text to forward — narrowed when it lists entities — or None
-    to drop it. `pending` maps a request id to its command type, recorded by
-    the upstream side, so a logbook result is known to be one.
+    to drop it.
 
     A state_changed event (or any event naming an entity) for an entity the
     role may not read is dropped whole. A result that is a list of entities
-    keeps only what the role may read; a logbook result also drops entries
-    that name no entity. Anything unreadable as JSON is dropped: Core speaks
+    keeps only what the role may read. Anything unreadable as JSON is dropped: Core speaks
     JSON, and a frame this process cannot judge must not pass on its say-so."""
     if _may(role, "administer"):
         return text
@@ -557,15 +549,11 @@ def _relay_to_client(role: str, text: str, pending: dict) -> str | None:
             return None
         return text
     if kind == "result":
-        command = pending.pop(obj.get("id"), None)
         res = obj.get("result")
         if isinstance(res, list) and any(isinstance(e, dict) and "entity_id" in e for e in res):
-            logbook = command == "logbook/get_events"
             obj["result"] = [
                 e for e in res
-                if not isinstance(e, dict)
-                or ("entity_id" in e and _read_allowed(role, str(e["entity_id"])))
-                or ("entity_id" not in e and not logbook)
+                if not isinstance(e, dict) or "entity_id" not in e or _read_allowed(role, str(e["entity_id"]))
             ]
             return json.dumps(obj, separators=(",", ":"))
         return text
@@ -689,7 +677,6 @@ async def ws_handler(request: web.Request):
     if (refused := _refuse(request)) is not None:
         return refused
     role = _role_for(request)
-    pending: dict = {}  # request id -> command type, for _relay_to_client
     # ⚠️ THE SESSION IS RE-RESOLVED FOR THE LIFE OF THE SOCKET, AND IT USED NOT
     # TO BE. `role` was decided here, at the handshake, and captured into the
     # relay loop below — which never looked at the cookie again. So
@@ -764,8 +751,6 @@ async def ws_handler(request: web.Request):
                                 "error": {"code": "unauthorized", "message": refusal},
                             })
                             continue
-                        elif obj.get("type") in _ENTITY_LIST_COMMANDS:
-                            pending[obj.get("id")] = obj["type"]
                     except (ValueError, TypeError):
                         pass
                     await upstream.send_str(data)
@@ -778,7 +763,7 @@ async def ws_handler(request: web.Request):
         async def to_client() -> None:
             async for msg in upstream:
                 if msg.type == WSMsgType.TEXT:
-                    if (out := _relay_to_client(role, msg.data, pending)) is not None:
+                    if (out := _relay_to_client(role, msg.data)) is not None:
                         await client.send_str(out)
                 elif msg.type == WSMsgType.BINARY:
                     await client.send_bytes(msg.data)
@@ -805,12 +790,7 @@ _SERVICES_PATH_RE = re.compile(r"^services/([^/]+)/([^/]+)/?$")
 _SAFE_TAIL_RE = re.compile(r"^[A-Za-z0-9_\-./:+]+$")
 # The ONLY non-service REST paths the kiosk itself requests (see
 # src/ha/HAHistoryAPI.ts and HACameraProxy.ts). Everything else a non-owner
-# might ask for is denied by default. The Cockpit page's recent-activity
-# feed (src/ha/HALogbookAPI.ts) reads Home Assistant's own Logbook over the
-# WEBSOCKET (logbook/get_events, see ALLOWED_WS_TYPES below), not this REST
-# path — verified against a live instance that the classic REST
-# `/api/logbook/<timestamp>` endpoint used here originally did not return
-# usable data, so there is nothing to allowlist here for it.
+# might ask for is denied by default.
 _NON_OWNER_REST_PREFIXES = ("history/period/", "camera_proxy/", "camera_proxy_stream/")
 # Guests unlock doors — deliberately. A guest is the person staying in the
 # villa, and permissions.ts puts access_control in their categories for exactly
@@ -854,13 +834,6 @@ _NON_OWNER_REST_PREFIXES = ("history/period/", "camera_proxy/", "camera_proxy_st
 # longer resolves — e.g. after an unrelated entity rename — so the client
 # cross-checks before trusting one), and recorder/statistics_during_period
 # reads the pre-aggregated "change" for a real statistic over a period.
-#
-# logbook/get_events, same category once more, is how the Cockpit page's
-# recent-activity feed reads Home Assistant's own Logbook — verified against
-# a live instance to be the reliable path (matches what HA's own frontend
-# logbook uses); the classic REST /api/logbook/<timestamp> endpoint tried
-# first did not return usable data in the same test, which is why this is a
-# websocket entry and there is no matching REST prefix for it.
 #
 # config/floor_registry/list, same category as the other three registry list
 # calls: HA's own Floors feature (an Area's optional parent grouping), read

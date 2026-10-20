@@ -987,29 +987,25 @@ states = _json.dumps({"id": 3, "type": "result", "success": True, "result": [
     {"entity_id": "device_tracker.phone", "state": "home"}, {"entity_id": "alarm_control_panel.villa", "state": "armed"}]})
 ids = lambda text: [e["entity_id"] for e in _json.loads(text)["result"]]
 ck("a guest's get_states keeps the drawn domains and loses persons, trackers, alarms AND cameras",
-   ids(relay("guest", states, {})) == ["light.pool", "sun.sun"])
-ck("  ...ops (may view cameras) keeps the camera", ids(relay("ops", states, {})) == ["light.pool", "camera.gate", "sun.sun"])
-ck("  ...the owner's frame is passed through untouched", relay("owner", states, {}) is states)
+   ids(relay("guest", states)) == ["light.pool", "sun.sun"])
+ck("  ...ops (may view cameras) keeps the camera", ids(relay("ops", states)) == ["light.pool", "camera.gate", "sun.sun"])
+ck("  ...the owner's frame is passed through untouched", relay("owner", states) is states)
 ev = lambda eid: _json.dumps({"type": "event", "event": {"event_type": "state_changed", "data": {"entity_id": eid, "new_state": {}}}})
 ck("a state_changed for a person is dropped, for a light forwarded",
-   relay("guest", ev("person.owner"), {}) is None and relay("guest", ev("light.pool"), {}) is not None)
+   relay("guest", ev("person.owner")) is None and relay("guest", ev("light.pool")) is not None)
 reg = _json.dumps({"type": "event", "event": {"event_type": "entity_registry_updated", "data": {"action": "update", "entity_id": "device_tracker.phone"}}})
-ck("  ...and so is a registry event naming one", relay("guest", reg, {}) is None)
+ck("  ...and so is a registry event naming one", relay("guest", reg) is None)
 registry = _json.dumps({"id": 4, "type": "result", "result": [{"entity_id": "person.owner", "name": "Owner"}, {"entity_id": "climate.ac", "name": "AC"}]})
-ck("the entity registry listing is narrowed the same way", ids(relay("guest", registry, {})) == ["climate.ac"])
-log = _json.dumps({"id": 5, "type": "result", "result": [
-    {"when": 1, "entity_id": "lock.gate", "name": "Gate"}, {"when": 2, "entity_id": "person.owner", "name": "Owner arrived"},
-    {"when": 3, "name": "Automation ran", "message": "triggered"}]})
-pend = {5: "logbook/get_events"}
-ck("a logbook result loses the person AND the entity-less entry (a name and a message)",
-   [e["when"] for e in _json.loads(relay("guest", log, pend))["result"]] == [1] and pend == {})
+ck("the entity registry listing is narrowed the same way", ids(relay("guest", registry)) == ["climate.ac"])
+# the logbook was read for the Cockpit's Recent activity alone; removed with it (owner, 2026-10-20) — no profile but the
+# owner may ask for it any more
+ck("the logbook is not read by any profile but the owner (Recent activity is gone)",
+   "logbook/get_events" not in proxy.ALLOWED_WS_TYPES
+   and refuse("guest", "logbook/get_events") is not None and refuse("ops", "logbook/get_events") is not None)
 devices = _json.dumps({"id": 6, "type": "result", "result": [{"id": "d1", "name": "Hub"}, {"id": "d2"}]})
-ck("a list that names no entity (device registry) passes whole", relay("guest", devices, {}) is devices)
+ck("a list that names no entity (device registry) passes whole", relay("guest", devices) is devices)
 ck("a frame Core did not write as JSON is dropped, not passed on trust",
-   relay("guest", "not json", {}) is None and relay("guest", "[1,2]", {}) is None)
-ck("the relay records which requests are logbook ones",
-   'elif obj.get("type") in _ENTITY_LIST_COMMANDS:\n                            pending[obj.get("id")] = obj["type"]' in PROXY.read_text()
-   and "if (out := _relay_to_client(role, msg.data, pending)) is not None:" in PROXY.read_text())
+   relay("guest", "not json") is None and relay("guest", "[1,2]") is None)
 q = proxy._rest_query_allowed
 ck("REST history: a non-owner must name entities, and only readable ones",
    not q("guest", "history/period/2026-01-01T00:00:00Z", {}) and not q("guest", "history/period/x", {"filter_entity_id": "light.a,person.b"})

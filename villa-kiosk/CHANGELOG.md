@@ -1,3 +1,13 @@
+## 2.496.442
+
+### Changed
+- Every device list (a category held in the top bar, a bottom-bar tile, a room on the map) has a Per Room / Per Floor
+  toggle when it spans more than one room. It opens Per Room. Each room or floor heading has its own "Turn all on" /
+  "Turn all off" button, which asks first, when that heading holds at least two devices that can be switched.
+- The Cockpit no longer shows the villa by Room / Floor / Category: those lists are the device lists above.
+- The Cockpit's Recent activity section is removed, and the villa's logbook is no longer read for a guest's or a
+  facility manager's screen.
+
 ## 2.496.441
 
 ### Fixed

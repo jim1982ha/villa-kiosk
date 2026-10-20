@@ -19,9 +19,9 @@ ck("  ...each category its own colour (not one accent for all)",
    new Set(CATEGORY_ORDER.map((c) => categoryChipStyle(c, true).color)).size === CATEGORY_ORDER.length);
 const rd = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
 const hud = rd("components/hud/HUD.tsx"), cockpit = (rd("components/cockpit/CockpitModal.tsx") + rd("components/cockpit/CockpitOverview.tsx"));
-ck("the Cockpit's category tiles and the top bar's category buttons both ask categoryChipStyle",
-   /categoryChipStyle\(t\.category, t\.stats\.onCount > 0\)/.test(cockpit) && /style=\{categoryChipStyle\(cat, !hidden\)\}/.test(hud)
-   && !/categorySurface\(t\.category/.test(cockpit));
+// the Cockpit's category tiles were removed (2.496.442): the top bar's buttons are the chip's one user
+ck("the top bar's category buttons ask categoryChipStyle, and the Cockpit colours no chip of its own",
+   /style=\{categoryChipStyle\(cat, !hidden\)\}/.test(hud) && !/categoryChipStyle|categorySurface/.test(cockpit));
 ck("  ...and the top bar's buttons no longer take the accent `.active` fill",
    /className=\{`icon-btn hud-cat-btn\$\{hidden \? " is-hidden" : ""\}`\}/.test(hud) && /useResolvedTheme\(\);/.test(hud));
-done("✅ a category's chip is coloured one way, in the Cockpit and the top bar");
+done("✅ a category's chip is coloured one way");

@@ -26,15 +26,13 @@ import { domainOf } from "@/utils/entityDomain";
 // switch, and counts POWER, by name.
 
 
-export interface CategoryMembers { category: Category; entityIds: string[] }
+interface CategoryMembers { category: Category; entityIds: string[] }
 
 /** Per category: which of these devices are in it. Devices without a mapping
  *  are left out (a category comes from the mapping).
  *
- *  ⚠️ IT ALSO COUNTED "ON" (until 2.496.268), with isSwitchedOn — and nothing
- *  read it: the Cockpit tile recounts its devices through tileStats
- *  (groupLook's POWER count, the same rule), so one rule ran twice and only
- *  one answer was ever shown. Counting is the tile's. */
+ *  It counts nothing: "on" is groupLook's POWER count, asked by whoever draws
+ *  the devices (until 2.496.268 it also counted, a second copy of that rule). */
 export function categoryMembers(
   ids: readonly string[], entities: Record<string, HassEntity>, entityMap: Record<string, EntityMapping>,
 ): CategoryMembers[] {

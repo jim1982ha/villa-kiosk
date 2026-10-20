@@ -4,7 +4,8 @@ import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
-const { summaryRows, bucketByRoom, bucketByFloor, floorSections, byRoomOrder } = await import("@/config/summaryRows");
+const { summaryRows, bucketByRoom, bucketByFloor, listSections, offersGrouping, byRoomOrder } = await import("@/config/summaryRows");
+import { elements, guardsOf, parseTsx, propText } from "../consistency/jsx.mjs";
 const { NO_ROOM_LABEL } = await import("@/config/roomKey");
 
 const E = (id, state = "on") => ({ entity_id: id, state, attributes: {} });
@@ -26,29 +27,42 @@ const rooms = { "light.a": "Kitchen", "light.b": "", "sensor.c": "Bath " };
 const b = bucketByRoom(r.rows, (e) => e.entity_id, (id) => rooms[id] ?? "");
 ck("by room, alphabetical, the no-room bucket last", b.map(([k]) => k).join() === `Bath,Kitchen,${NO_ROOM_LABEL}`, b.map(([k]) => k));
 ck("one order for every by-room list — \"Other\" last even after a room alphabetically past it", [NO_ROOM_LABEL, "Pool", "Zebra house", "Bar"].sort(byRoomOrder).join() === `Bar,Pool,Zebra house,${NO_ROOM_LABEL}`);
-// owner, 2026-10-12: a category's list grouped by floor, each floor with its own "Turn all on/off"
+// owner, 2026-10-20: every device list splits Per Room (when it opens) or Per Floor — the Cockpit's Room / Floor /
+// Category tiles moved here — each heading with its own "Turn all on/off"
 {
   const rooms = [["Bath", [1]], ["Kitchen", [2]], ["Pool", [3]], [NO_ROOM_LABEL, [4]]];
   const fl = { Bath: 2, Kitchen: 1, Pool: 1 };
   const f = bucketByFloor(rooms, (r) => fl[r] ?? null);
   ck("by floor, ascending, the no-floor rooms last", f.map(([k]) => String(k)).join() === "1,2,null", f.map(([k]) => k));
   ck("  ...each floor keeps its rooms in by-room order", f[0][1].map(([r]) => r).join() === "Kitchen,Pool");
+  const roomOf = { a: "Pool", b: "Kitchen", c: "Bath", d: "", e: "Kitchen" };
+  const ids = Object.keys(roomOf);
+  const sec = (g) => listSections(ids, (id) => id, (id) => roomOf[id], (r) => fl[r] ?? null, g);
+  ck("Per Room: one heading per room, by-room order, each with its devices",
+     JSON.stringify(sec("room").map((x) => [x.title, x.items])) === JSON.stringify([["Bath", ["c"]], ["Kitchen", ["b", "e"]], ["Pool", ["a"]], [NO_ROOM_LABEL, ["d"]]]), sec("room"));
+  ck("Per Floor: one heading per floor (\"1F\", \"2F\", the no-floor ones last), its devices in their rooms' order",
+     JSON.stringify(sec("floor").map((x) => [x.title, x.items])) === JSON.stringify([["1F", ["b", "e", "a"]], ["2F", ["c"]], [NO_ROOM_LABEL, ["d"]]]), sec("floor"));
+  ck("  ...every device once, whichever split", ["room", "floor"].every((g) => sec(g).flatMap((x) => x.items).sort().join() === "a,b,c,d,e"));
+  ck("the split is offered only for a list spanning rooms (a room's own list has one heading either way)",
+     offersGrouping(ids, (id) => id, (id) => roomOf[id]) && !offersGrouping(["b", "e"], (id) => id, (id) => roomOf[id]));
   const read = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
   const panel = read("components/panels/SummaryGroupPanel.tsx");
-  ck("ONE 'Turn all on/off' control, for the header and each floor (BulkToggle)",
+  const toggles = elements(parseTsx("components/panels/SummaryGroupPanel.tsx"), "BulkToggle").map((el) => propText(el, "devices"));
+  ck("ONE 'Turn all on/off' control, for the header and each heading (BulkToggle)",
      (panel.match(/title=\{anyOn \? "Turn all off" : "Turn all on"\}/g) ?? []).length === 1
-     && /headerActions=\{bulk && <BulkToggle devices=\{toggleables\}/.test(panel)
-     && /\{bulk && <BulkToggle devices=\{toggleables\.filter\(\(e\) => onFloor\.has\(e\.entity_id\)\)\}/.test(panel));
+     && toggles.length === 2 && toggles.includes("toggleables") && toggles.includes("toggleables.filter((e) => inSection.has(e.entity_id))"), toggles);
   ck("  ...a floor is the villa's one answer (devicePlace, through useRoomFloors), not a second rule", /useRoomFloors\(\)/.test(panel) && /floorOfRoom\(roomFloors, room\)/.test(panel));
-  // owner, 2026-10-12: the bottom bar's "Lights" and the top bar's "Lights" were two windows — each
-  // opener had to switch the grouping on. The LIST decides: under floors whenever it spans them.
-  ck("a list spanning floors is shown under them", floorSections(rooms, (r) => fl[r] ?? null)?.length === 3);
-  ck("  ...a list on ONE floor (a room, a floor) stays a list of rooms", floorSections([["Kitchen", [1]], ["Pool", [2]]], (r) => fl[r]) === null
-     && floorSections([["Bath", [1]]], (r) => fl[r]) === null);
-  ck("  ...the window asks the list, and no opener passes a switch",
-     /const floors = floorSections\(rooms,/.test(panel) && !/byFloor/.test(panel)
-     && !/byFloor/.test(read("pages/Dashboard.tsx")) && !/byFloor|byCategory/.test(read("components/cockpit/CockpitOverview.tsx"))
-     && !/byFloor/.test(read("components/hud/SummaryBar.tsx")) && !/byFloor/.test(read("components/fm/FacilitySections.tsx")));
+  const seg = elements(parseTsx("components/panels/SummaryGroupPanel.tsx"), "SegmentedGroup");
+  ck("  ...the window opens Per Room, and offers the toggle when the list asks for it",
+     /useState<Grouping>\("room"\)/.test(panel) && /const splits = offersGrouping\(rows,/.test(panel)
+     && seg.length === 1 && propText(seg[0], "active") === "grouping" && guardsOf(seg[0]).join() === "splits");
+  const openers = ["pages/Dashboard.tsx", "components/hud/SummaryBar.tsx", "components/fm/FacilitySections.tsx", "components/hud/HUD.tsx"]
+    .flatMap((f) => elements(parseTsx(f), "SummaryGroupPanel").map((el) => [f, propText(el, "grouping")]));
+  ck("  ...the same from every opener: none passes a grouping", openers.length > 0 && openers.every(([, g]) => g === null), openers);
+  const overview = parseTsx("components/cockpit/CockpitOverview.tsx");
+  ck("the Cockpit has no Room / Floor / Category tiles and no Recent activity any more",
+     ["SummaryGroupPanel", "SegmentedGroup", "FoldedList"].every((t) => elements(overview, t).length === 0)
+     && !/^import .*(logbook|Logbook|cockpitData)/m.test(read("components/cockpit/CockpitOverview.tsx")));
 }
 
 done("✅ a device list's rows are config/summaryRows'");

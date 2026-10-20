@@ -25,7 +25,7 @@
 //
 // THE floor of a room, for every device list (2026-10-12):
 //
-// ⚠️ A ROOM'S FLOOR DEPENDED ON THE LIST IT WAS IN. cockpitData.buildRoomGroups took the HA floor of
+// ⚠️ A ROOM'S FLOOR DEPENDED ON THE LIST IT WAS IN. The Cockpit's room tiles (removed 2.496.442) took the HA floor of
 // the FIRST device of the room that had one — among the devices of the list being drawn — so the
 // Cockpit (every device) and a category's list (2.496.336: Lights, grouped by floor) could file the
 // same room on different floors. Each room's floor is now decided once, over EVERY device the Kiosk
@@ -121,7 +121,7 @@ export function cleanRoom(room: string | null | undefined): string {
 }
 
 /** THE label of a room on screen: the room, or the no-room bucket ("Other"). The one place no room
- *  becomes that word — the map's grouping, the Cockpit's room list, the device lists, the Overview. */
+ *  becomes that word — the map's grouping, the device lists, the Overview. */
 export function roomLabel(room: string | null | undefined): string {
   return cleanRoom(room) || NO_ROOM_LABEL;
 }

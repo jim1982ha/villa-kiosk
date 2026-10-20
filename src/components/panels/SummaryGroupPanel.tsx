@@ -11,7 +11,7 @@
 import { roleCan } from "@/auth/permissions";
 import { useState } from "react";
 import { rowText } from "@/config/reading";
-import { Sparkles, Power, PowerOff } from "lucide-react";
+import { Sparkles, Power, PowerOff, MapPin, Building2 } from "lucide-react";
 import BasePanel from "./BasePanel";
 import EntityRowToggle from "./EntityRowToggle";
 import SummaryEntityRow from "./SummaryEntityRow";
@@ -30,10 +30,10 @@ import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { TOGGLEABLE_DOMAINS } from "@/utils/quickAction";
 import type { HassEntity } from "@/types/ha.types";
 import type { Category } from "@/types/scene.types";
-import { bucketByRoom, floorSections, summaryRows } from "@/config/summaryRows";
+import { listSections, offersGrouping, summaryRows, type Grouping } from "@/config/summaryRows";
+import SegmentedGroup from "@/components/common/SegmentedGroup";
 import { useRoomFloors } from "@/config/useRoomFloors";
 import { deviceRoom, floorOfRoom } from "@/config/devicePlace";
-import { NO_ROOM_LABEL } from "@/config/roomKey";
 
 // The group's shape is config/summaryGroups' (this screen only draws one).
 export type { SummaryGroup } from "@/config/summaryGroups";
@@ -79,7 +79,7 @@ interface Props {
 
 /**
  * "Turn all on/off" for a set of devices, behind the same second tap — the
- * header's (the whole group) and each floor's (floorSections) are this one control.
+ * header's (the whole group) and each room's or floor's heading (listSections) are this one control.
  * Bulk-toggling many devices from one tap is easy to trigger by accident, so it
  * asks first, the LockPanel unlock pattern. Icon-only: the text cost too much
  * width, on a phone above all; the icon carries the direction (Power = will
@@ -156,8 +156,13 @@ export default function SummaryGroupPanel({
     mayListUnmapped: roleCan(role, "listUnmappedDevices"),
   });
   const Icon = group.icon;
-  // Who may switch a whole set at once — the header's and every floor's BulkToggle.
+  // Who may switch a whole set at once — the header's and every heading's BulkToggle.
   const bulk = !hideBulkToggle && canControl;
+  // ⚠️ PER ROOM OR PER FLOOR, IN THE LIST ITSELF (owner, 2026-10-20): the Cockpit's Room / Floor / Category tiles were
+  // a second way to the same lists, removed; every list spanning rooms offers the split, Per Room when it opens —
+  // the same from every opener (a top-bar category, the bottom bar, the map).
+  const [grouping, setGrouping] = useState<Grouping>("room");
+  const splits = offersGrouping(rows, (e) => e.entity_id, roomOf);
 
   return (
     <BasePanel
@@ -171,9 +176,15 @@ export default function SummaryGroupPanel({
       headerActions={bulk && <BulkToggle devices={toggleables} looks={looks} />}
     >
       {rows.length === 0 && <div className="muted body-text">No devices in this group.</div>}
+      {splits && (
+        <SegmentedGroup ariaLabel="Group by" className="summary-grouping" active={grouping} onChange={setGrouping} options={[
+          { key: "room", label: <><MapPin size={16} /> Per Room</> },
+          { key: "floor", label: <><Building2 size={16} /> Per Floor</> },
+        ]} />
+      )}
 
-      {/* On-map devices first, ROOM-grouped, then (if any, and not Guest) the
-          HA-only ones under their own heading, ALSO room-grouped — one
+      {/* On-map devices first, under their headings, then (if any, and not Guest) the
+          HA-only ones under their own heading, split the same way — one
           renderer for both, so the two lists can't drift. */}
       {onMap.length > 0 && renderRooms(onMap)}
       {offMap.length > 0 && (
@@ -224,35 +235,21 @@ export default function SummaryGroupPanel({
     </BasePanel>
   );
 
-  /** One list, ROOM-grouped — the renderer the on-map, off-map and not-in-HA
-   *  sections share (each had the same block written out until 2.496.263). */
+  /** One list under its headings (summaryRows.listSections: each room, or each floor), each heading with its own
+   *  "Turn all on/off" — the renderer the on-map, off-map and not-in-HA sections share. */
   function renderRooms(list: typeof rows) {
-    const rooms = bucketByRoom(list, (e) => e.entity_id, roomOf);
-    // Under "1F", "2F" whenever the list spans floors — whoever opened it (summaryRows.floorSections);
-    // each room's floor is the villa's one answer (config/devicePlace), the Cockpit's too.
-    const floors = floorSections(rooms, (room) => floorOfRoom(roomFloors, room));
-    if (!floors) return rooms.map(renderRoom);
-    return floors.map(([floor, floorRooms]) => {
-      const onFloor = new Set(floorRooms.flatMap(([, members]) => members.map((e) => e.entity_id)));
+    return listSections(list, (e) => e.entity_id, roomOf, (room) => floorOfRoom(roomFloors, room), grouping).map((sec) => {
+      const inSection = new Set(sec.items.map((e) => e.entity_id));
       return (
-        <div key={String(floor)} className="summary-floor">
-          <div className="summary-floor-heading">
-            <span>{floor != null ? `${floor}F` : NO_ROOM_LABEL}</span>
-            {bulk && <BulkToggle devices={toggleables.filter((e) => onFloor.has(e.entity_id))} looks={looks} />}
+        <div key={sec.key} className="summary-section">
+          <div className="summary-section-heading">
+            <span>{sec.title}</span>
+            {bulk && <BulkToggle devices={toggleables.filter((e) => inSection.has(e.entity_id))} looks={looks} />}
           </div>
-          {floorRooms.map(renderRoom)}
+          <div className="summary-entity-grid">{sec.items.map(renderRow)}</div>
         </div>
       );
     });
-  }
-
-  function renderRoom([room, members]: [string, HassEntity[]]) {
-    return (
-      <div key={room}>
-        <div className="summary-room-heading">{room}</div>
-        <div className="summary-entity-grid">{members.map(renderRow)}</div>
-      </div>
-    );
   }
 
   function renderRow(e: HassEntity) {

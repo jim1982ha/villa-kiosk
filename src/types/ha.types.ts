@@ -104,8 +104,8 @@ export interface HassDeviceRegistryEntry {
  *  plus `floor_id` (HA's own Floors feature — an Area optionally belongs to
  *  one) so a device's storey can be resolved from HA the same way its room
  *  already is, rather than only from the floor-plan's own per-room `floor`
- *  value (see HAStateStore's entityFloorNumbers / cockpitData.ts's
- *  buildRoomGroups). Null for an area with no Floor assigned. */
+ *  value (see HAStateStore's entityFloorNumbers / config/devicePlace).
+ *  Null for an area with no Floor assigned. */
 export interface HassAreaRegistryEntry {
   area_id: string;
   name: string;
@@ -123,24 +123,6 @@ export interface HassFloorRegistryEntry {
   floor_id: string;
   name: string;
   level: number | null;
-}
-
-/** One row of `logbook/get_events` — verified directly against a live
- *  instance rather than assumed: `when` is epoch SECONDS (not ms, not ISO),
- *  and only automation/script-triggered entries carry a real `message` (the
- *  computed trigger cause) — a plain state change (a motion sensor, a lock)
- *  arrives with just `state`/`entity_id`, no sentence, because HA's own
- *  frontend builds that text client-side rather than the API supplying it.
- *  See cockpitData.ts's describeLogbookEntry for how this app fills that gap
- *  using its OWN existing state vocabulary, not a re-implementation of HA's
- *  logbook describers. */
-export interface RawLogbookEntry {
-  when: number;
-  state?: string;
-  message?: string;
-  name?: string;
-  entity_id?: string;
-  domain?: string;
 }
 
 /** Subset of `energy/get_prefs`'s response — only the statistic IDs the

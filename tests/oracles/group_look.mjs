@@ -12,7 +12,6 @@ import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { deviceLook, groupLook, storeLookSource } = await import("@/utils/deviceActivity");
-const { tileStats } = await import("@/components/cockpit/cockpitData");
 
 const ent = (id, state, attributes = {}) => ({ entity_id: id, state, attributes });
 const ENTITIES = {
@@ -68,12 +67,12 @@ console.log("\n  a card SHOWING its devices:");
   ck("  ...an empty card is not red", !groupLook([], { showingDevices: true }).ringRed);
 }
 
-console.log("\n  the Cockpit's tile counts ask it (POWER, and offline):");
+console.log("\n  a group's counts (POWER, and offline):");
 {
-  const s = tileStats(["light.on", "lock.open", "lock.shut", "camera.idle", "binary_sensor.pir", "light.lost", "light.never"], src);
+  const s = count(["light.on", "lock.open", "lock.shut", "camera.idle", "binary_sensor.pir", "light.lost", "light.never"]);
   ck("\"N on\" is POWER: the light and the unlocked lock — not the camera, not the PIR",
      s.onCount === 2, s);
-  ck("offline counts the lost AND the never-reported", s.offline === 2 && s.total === 7, s);
+  ck("offline counts the lost AND the never-reported", s.offline === 2, s);
 }
 
 done("✅ a group looks like its members, and says which \"on\" it counts");

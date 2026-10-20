@@ -2,7 +2,7 @@
 // said before (architecture review 2026-10-16, step 1).
 //
 // The device lists (SummaryGroupPanel), "Also on this device" (readingRows),
-// the Cockpit's alarm line (attention) and Recent activity (cockpitData) each
+// the Cockpit's alarm line (attention) and Recent activity (removed 2.496.442) each
 // reached past config/reading into entityValue.deviceRowText and
 // BinarySensorClasses.stateLabelFor. They now ask reading's rowText,
 // alarmText and stateWords. NOTHING VISIBLE WAS TO CHANGE, so this drives a
@@ -19,7 +19,6 @@ import { devicesOf } from "../consistency/devices.mjs";
 const { rowText, alarmText, stateWords, lockPill, coverPill, readableState, chartColours } = await import("@/config/reading");
 const { readingRows } = await import("@/config/readingRows");
 const { buildAttentionItems } = await import("@/config/attention");
-const { describeLogbookEntry } = await import("@/components/cockpit/cockpitData");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
 const { BINARY_WORDS } = await import("@/config/binarySensorWords");
 // THE OLD PATH — what each surface called until this release.
@@ -35,7 +34,6 @@ const oldRow = (id, e) => deviceRowText(e, domainOf(id));
 const oldAlarm = (id, e) => domainOf(id) === "binary_sensor"
   ? stateLabelFor(id, e.attributes.device_class)(e.state)
   : deviceRowText(e, domainOf(id));
-const oldActivity = (id, e, state) => stateLabelFor(id, e?.attributes.device_class)(state);
 
 // ── the fixtures ──────────────────────────────────────────────────────────
 const E = {};
@@ -100,21 +98,6 @@ console.log("\n  the Cockpit's alarm line");
   ck("  (a reading past the owner's limit is not listed, as before)", !listed.has("sensor.cellar_temp") && !listed.has("sensor.cellar_cold"));
 }
 
-console.log("\n  Recent activity");
-{
-  const STATES = ["on", "off", "unavailable", "unknown", "", "locked", "unlocked", "jammed", "open", "closed", "heat",
-    "not_home", "home", "21.5", "6570.989", "connected", "_odd_start", "armed_away"];
-  const bad = [];
-  for (const id of ids) for (const s of STATES) {
-    const said = describeLogbookEntry({ when: 1_790_000_000, entity_id: id, state: s }, E, {})?.message;
-    if (said !== oldActivity(id, E[id], s) || stateWords(id, E[id].attributes.device_class)(s) !== said) bad.push(`${id} ${s}: ${said}`);
-  }
-  // An entity the villa no longer has still has its history line.
-  const gone = describeLogbookEntry({ when: 1_790_000_000, entity_id: "binary_sensor.removed", state: "on" }, E, {})?.message;
-  if (gone !== oldActivity("binary_sensor.removed", undefined, "on")) bad.push(`removed: ${gone}`);
-  ck(`every (entity, state) pair (${ids.length * STATES.length + 1}) is worded as before`, bad.length === 0, bad.slice(0, 5));
-}
-
 // ── step 2: the control windows' pills and the history bar ────────────────
 console.log("\n  the lock window's pill");
 {
@@ -177,7 +160,6 @@ console.log("\n  each surface asks config/reading, and nothing lower");
     ["the device lists", "components/panels/SummaryGroupPanel.tsx", /\browText\(id, e\)/],
     ["\"Also on this device\"", "config/readingRows.ts", /\browText\(id, e\)/],
     ["the alarm line", "config/attention.ts", /detail: alarmText\(id, entity\)/],
-    ["Recent activity", "components/cockpit/cockpitData.ts", /message: stateWords\(raw\.entity_id,/],
     // the prop the bar is drawn with, read from the tree (consistency/jsx), whatever its layout
     ["a history bar's tooltip", "components/panels/LastDayTimeline.tsx", { test: () => elements(parseTsx("components/panels/LastDayTimeline.tsx"), "StateTimeline")
       .some((el) => /^words \?\? stateWords\(entityId,/.test(String(propText(el, "labelFor")))) }],

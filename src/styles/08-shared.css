@@ -142,54 +142,6 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
   overflow-wrap: anywhere;
 }
 
-/* Room/Floor/Category selector header: wraps onto its own line below the
-   "By ___" label on a narrow phone rather than clipping or overflowing —
-   a 3-button segmented control (Category was folded in from its own
-   always-visible section, see CockpitModal) is wider than the 2-button one
-   this row used to hold. */
-.cockpit-pivot-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; row-gap: 6px; }
-.cockpit-pivot { flex: 0 0 auto; }
-
-.cockpit-category-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-top: 4px; }
-/* ONE tile for rooms, floors and categories (2.496.235 — rooms and floors
-   were health bars). A real <button>: each opens that group's device list. */
-.cockpit-category-tile {
-  display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 12px;
-  background: var(--bg-input); border: none; width: 100%; min-width: 0;
-  color: inherit; font: inherit; text-align: left; cursor: pointer;
-}
-.cockpit-category-tile:focus-visible {
-  background: color-mix(in srgb, var(--accent) 12%, var(--bg-input));
-}
-@media (hover: hover) {
-  .cockpit-category-tile:hover {
-  background: color-mix(in srgb, var(--accent) 12%, var(--bg-input));
-}
-}
-.cockpit-category-icon {
-  flex: 0 0 auto; width: 34px; height: 34px; border-radius: 10px;
-  display: flex; align-items: center; justify-content: center; color: #fff;
-}
-/* A room or floor has no category colour: neutral, amber while one of its
-   devices is offline (the signal the bars used to carry). */
-.cockpit-category-icon.is-neutral { background: var(--bg-card); color: var(--text-secondary); }
-.cockpit-category-icon.is-warn {
-  background: color-mix(in srgb, var(--status-warning) 22%, var(--bg-card)); color: var(--status-warning);
-}
-.cockpit-tile-text { min-width: 0; }
-.cockpit-category-label {
-  font-size: var(--text-sm); font-weight: 500; color: var(--text-primary);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.cockpit-tile-line { font-size: var(--text-xs); }
-.cockpit-tile-line.is-warn { color: var(--status-warning); }
-
-/* Recent activity: folded and paged like Tickets' Closed (FoldedList, owner 2026-10-18) — one row per event. */
-.cockpit-activity-row { display: flex; align-items: baseline; gap: 10px; font-size: var(--text-xs); }
-.cockpit-activity-time { flex: 0 0 50px; font-variant-numeric: tabular-nums; color: var(--text-dim); }
-.cockpit-activity-text { color: var(--text-secondary); }
-.cockpit-activity-text strong { color: var(--text-primary); font-weight: 600; }
-
 /* The Cockpit header's updates count: a header button's look, nothing to press. */
 .header-icon-badge { cursor: default; position: relative; }
 /* its count at the bottom-right corner (owner, 2026-10-14) — the top bar's counts stay where they are */

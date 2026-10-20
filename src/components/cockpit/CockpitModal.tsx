@@ -7,17 +7,7 @@
 // so there is no separate drill-down any more — one that only ever showed
 // the exact same rows already on screen was pure ceremony.
 //
-// Every section here is read-only reporting on its own face — the one
-// exception is the room/floor pivot below, whose rows drill into
-// SummaryGroupPanel (the same device-list-with-inline-controls modal every
-// other "all the devices in X" view in the app already opens), rather than
-// only being able to jump to one device's own panel. Everything here routes
-// through selectableDeviceIds/entityMap/resolvedRooms, never a raw HA domain
-// query (see cockpitData.ts's own docstring for why that matters concretely,
-// not just in principle). See the villa-kiosk memory's Cockpit plan for the
-// full design history and what was deliberately left out (Zigbee/Z-Wave
-// radio health, HA's own Area registry for grouping, presence tracking) and
-// why.
+// Every section here is read-only reporting on its own face; a device opens its own window (onOpenEntity).
 
 import { useMemo } from "react";
 import { Bot, LayoutDashboard, RefreshCw } from "lucide-react";
