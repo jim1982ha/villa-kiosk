@@ -60,7 +60,7 @@ ck("  ...and a row of the model has no bin", /onRemove=\{sceneEntityIds\.has\(ke
 ck("the device's window says it is not in Home Assistant, and what to do",
    /missingFromHa\(entities, entityId\)/.test(notice) && /NOT_IN_HA/.test(notice) && /Rename or remove its object in the 3D model/.test(notice));
 ck("  ...and waits for no history it will never have",
-   /!missingFromHa\(entities, entityId\) && <LastDayTimeline/.test(src("components/panels/BasePanel.tsx")));
+   /!missingFromHa\(entities, entityId\)\s*&& \(history \?\? <LastDayTimeline/.test(src("components/panels/BasePanel.tsx")));
 ck("the three windows that show the notice give it their entity",
    /UnavailableNotice device=\{device\} entityId=\{mapping\.entityId\}/.test(src("components/panels/ControlFrame.tsx"))
    && /UnavailableNotice entityId=\{mapping\.entityId\}/.test(src("components/panels/GenericPanel.tsx"))

@@ -10,7 +10,8 @@ import UnavailableNotice from "./UnavailableNotice";
 
 export default function GenericPanel({ entity, mapping, onClose }: PanelProps) {
   return (
-    <BasePanel title={mapping.label} entityId={mapping.entityId} icon={<Info size={22} />} history={false} onClose={onClose}>
+    <BasePanel title={mapping.label} entityId={mapping.entityId} icon={<Info size={22} />} onClose={onClose}
+      history={<LastDayTimeline entityId={mapping.entityId} legend />}>
       {/* the lost-contact notice only for LOST contact (stateColors.isOffline); "unknown" is a state, shown as one */}
       {isOffline(entity) ? <UnavailableNotice entityId={mapping.entityId} /> : (
         <div className="center" style={{ margin: "8px 0 16px" }}>
@@ -21,7 +22,6 @@ export default function GenericPanel({ entity, mapping, onClose }: PanelProps) {
         <label className="entity-label">Entity</label>
         <div className="body-text muted">{mapping.entityId}</div>
       </div>
-      <LastDayTimeline entityId={mapping.entityId} legend />
     </BasePanel>
   );
 }

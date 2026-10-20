@@ -109,7 +109,7 @@ import time
 from collections import defaultdict
 from datetime import datetime, timezone
 
-from aiohttp import ClientSession, ClientTimeout, WSMsgType, web
+from aiohttp import ClientError, ClientSession, ClientTimeout, WSMsgType, web
 
 SUPERVISOR = "supervisor"
 TOKEN = os.environ.get("SUPERVISOR_TOKEN", "")
@@ -432,11 +432,58 @@ except re.error:
 SCENE_SELECT_SERVICES = frozenset(_SCENE.get("services") or ())
 
 
-def _scene_select(entity_id: str) -> bool:
-    """Whether this entity is a light's scene choice (ha-commands.json `sceneSelect`)."""
+# ⚠️ ...AND ON A LIGHT'S DEVICE (architecture review #5, 2026-10-20): the name alone let any select called "…_scene"
+# through, a boiler's or a camera's too; the screen offers only one on a light's device (panelRules.sceneSelectOf).
+# Core says which selects sit on a device with a light (one template, every LIGHT_SCENES_REFRESH_S); until it has
+# answered, none does — FAIL CLOSED.
+_LIGHT_SCENE_SELECTS: frozenset[str] = frozenset()
+LIGHT_SCENES_REFRESH_S = 300
+LIGHT_SCENES_TEMPLATE = (
+    "{% set ns = namespace(out=[]) %}{% for s in states.select %}{% set d = device_id(s.entity_id) %}"
+    "{% if d and device_entities(d) | select('match', 'light\\.') | list | count > 0 %}"
+    "{% set ns.out = ns.out + [s.entity_id] %}{% endif %}{% endfor %}{{ ns.out | tojson }}"
+)
+
+
+def _scene_named(entity_id: str) -> bool:
+    """Whether this entity is NAMED as a scene choice (ha-commands.json `sceneSelect`)."""
     domain, _, obj = str(entity_id).partition(".")
     return bool(SCENE_SELECT_RE and SCENE_SELECT_DOMAIN and domain == SCENE_SELECT_DOMAIN and obj
                 and SCENE_SELECT_RE.fullmatch(obj))
+
+
+def _scene_select(entity_id: str) -> bool:
+    """Whether this entity is a light's scene choice: so named, and on a device that has a light."""
+    return _scene_named(entity_id) and str(entity_id) in _LIGHT_SCENE_SELECTS
+
+
+def _light_scenes_from(answer: object) -> frozenset[str] | None:
+    """The scene choices in Core's answer to LIGHT_SCENES_TEMPLATE (a list of select ids), or None when it is not one
+    — an unreadable answer keeps the last good set rather than opening or closing anything on its say-so."""
+    if isinstance(answer, str):
+        try:
+            answer = json.loads(answer)
+        except ValueError:
+            return None
+    if not isinstance(answer, list) or not all(isinstance(e, str) for e in answer):
+        return None
+    return frozenset(e for e in answer if _scene_named(e))
+
+
+async def _learn_light_scenes(session: ClientSession) -> None:
+    """Ask Core which scene choices sit on a light's device, every LIGHT_SCENES_REFRESH_S. Best-effort: a failed
+    ask keeps the last answer (none before the first)."""
+    global _LIGHT_SCENE_SELECTS
+    while True:
+        try:
+            async with session.post(f"http://{SUPERVISOR}/core/api/template", headers=AUTH,
+                                    json={"template": LIGHT_SCENES_TEMPLATE},
+                                    timeout=ClientTimeout(total=20)) as resp:
+                if resp.status == 200 and (found := _light_scenes_from(await resp.text())) is not None:
+                    _LIGHT_SCENE_SELECTS = found
+        except (ClientError, OSError, asyncio.TimeoutError, ValueError) as e:
+            print(f"[supervisor-proxy] light scenes: {type(e).__name__}", flush=True)
+        await asyncio.sleep(LIGHT_SCENES_REFRESH_S)
 
 
 def _call_targets(obj: dict) -> list[str] | None:
@@ -4124,10 +4171,12 @@ def build_app(data_dir: str | None = None) -> web.Application:
         _session_secret()  # create the signing key on first boot
         await _cleanup_stale_options(a["session"])
         await _learn_own_version(a["session"])
+        a["light_scenes"] = asyncio.create_task(_learn_light_scenes(a["session"]))
         if (warning := _agent_config_warning()) is not None:
             print(f"[supervisor-proxy] {warning}", flush=True)
 
     async def on_cleanup(a: web.Application) -> None:
+        a["light_scenes"].cancel()
         await a["session"].close()
 
     app.on_startup.append(on_start)

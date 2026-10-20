@@ -34,7 +34,10 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
   const icon = isBinary ? <BinaryIcon size={22} /> : <SensorIcon size={22} />;
 
   return (
-    <BasePanel title={mapping.label} entityId={mapping.entityId} icon={icon} history={false} onClose={onClose}>
+    // ONE history, by what the sensor reports — config/reading's historyOf, drawn by ReadingHistory (the
+    // presence window draws a sensor's the same way), in BasePanel's history slot.
+    <BasePanel title={mapping.label} entityId={mapping.entityId} icon={icon} onClose={onClose}
+      history={<ReadingHistory entityId={mapping.entityId} mappingType={mapping.type} />}>
       <div className="center" style={{ padding: "12px 0 6px", margin: isBinary ? undefined : "6px 0 12px" }}>
         {r.pill ? (
           <ReadingPill r={r} icon={BinaryIcon} size={22} style={{ fontSize: "var(--text-xl)", padding: "14px 24px" }} />
@@ -48,9 +51,6 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
           </>
         )}
       </div>
-      {/* ONE history, by what the sensor reports — config/reading's historyOf, drawn by ReadingHistory (the
-          presence window draws a sensor's the same way). */}
-      <ReadingHistory entityId={mapping.entityId} mappingType={mapping.type} />
     </BasePanel>
   );
 }
