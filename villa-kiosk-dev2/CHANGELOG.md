@@ -1,3 +1,16 @@
+## 2.496.441
+
+### Fixed
+- A scheduled task "every 7 days" falls due at the same clock time, also across a summer-time change. It moved by an
+  hour.
+- The Energy window's "so far today" share counts the day's own length: 23 or 25 hours on a clock-change day.
+
+### Behind the scenes
+- A check refuses any new place that builds a day or a week from a fixed 24 hours; a day comes from midnight to
+  midnight, a week from Monday to Sunday.
+- Three checks read the screens' structure instead of their exact wording, so a correct change no longer stops a
+  release.
+
 ## 2.496.440
 
 ### Fixed
