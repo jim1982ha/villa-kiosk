@@ -198,6 +198,8 @@ class Policy:
         self.destinations: list[tuple[int, str]] = v["destinations"]
         self.owner_only: set[str] = v["owner_only"]
         self.excluded: set[str] = v["excluded"]
+        # unavailable by design (owner, 2026-10-21): a device asleep between its reports — vesta_shared.asleep
+        self.asleep: set[str] = v["asleep"]
         self.allowed_services: dict[str, str] = v["allowed_services"]
         self.lists: dict[str, set[str]] = v["lists"]
         self.notify_recipients: set[str] = v["notify_recipients"]
@@ -479,7 +481,7 @@ RULE_WORDS = {
     "direct": "no approval when a registered person asks",
 }
 RULES = tuple(RULE_WORDS)
-ENTITY_LISTS = {"owner_only_entities": None, "excluded_entities": None, "switch_entities": "switch",
+ENTITY_LISTS = {"owner_only_entities": None, "excluded_entities": None, "asleep_entities": None, "switch_entities": "switch",
                 "scene_allowlist": "scene", "script_allowlist": "script", "button_allowlist": "button"}
 #: The siren: turned on and off with its OWN domain's service (switch.turn_on, siren.turn_on), checked like
 #: any other action against allowed_services / system_actions.
@@ -518,6 +520,7 @@ FIELDS: dict[str, tuple[str, bool, str | None]] = {
     "allowed_services": (title("actions"), True, "actions"),
     "owner_only_entities": ("Only the owner may approve", True, None),
     "excluded_entities": ("Left alone", True, None),
+    "asleep_entities": ("Unavailable by design", True, None),
     "siren_entity": ("Siren", True, None),
     "siren_auto_off_min": ("Siren stops after (minutes)", True, None),
     **{k: (_LIST_WORDS[k][0], True, None) for k in _LIST_WORDS},
@@ -813,6 +816,7 @@ def read_policy(raw: dict) -> tuple[dict, list[str]]:
                 out.append(f"{key}: {e} is not a {domain} entity.")
     v["owner_only"] = set(_as_list(raw.get("owner_only_entities")))
     v["excluded"] = set(_as_list(raw.get("excluded_entities")))
+    v["asleep"] = set(_as_list(raw.get("asleep_entities")))
     v["lists"] = {d: set(_as_list(raw.get(k))) for k, d in ENTITY_LISTS.items() if d}
 
     # ---- the siren: an entity id of its domains, in lower case as every id the checks compare

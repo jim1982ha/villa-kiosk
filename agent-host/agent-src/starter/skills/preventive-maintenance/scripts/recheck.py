@@ -70,10 +70,11 @@ import rules as R  # noqa: E402
 
 
 GONE_NOTE = "Closed: this device no longer exists in the villa's system."
+ASLEEP_NOTE = "Closed: this device is unavailable by design (Rules › Protected devices): it sleeps between its reports."
 ENTITY_ID = re.compile(r"^[a-z0-9_]+\.[a-z0-9_]+$")     # only a real entity id can be "not found"
 
 
-def back_online(store, client, now: datetime, minutes: float, zone: str) -> dict:
+def back_online(store, client, now: datetime, minutes: float, zone: str, pack=None) -> dict:
     """{closed: [finding ids], gone: [the ones whose devices no longer exist], actions: [the Kiosk faults to resolve]}.
     `client()`: Home Assistant, asked for only when a finding is open."""
     rows = store.findings(status="open")
@@ -91,6 +92,10 @@ def back_online(store, client, now: datetime, minutes: float, zone: str) -> dict
         if es and all(e in gone for e in es):
             moved += Problems(store).close_finding(f, day, GONE_NOTE)
             closed.append(f["id"]); deleted.append(f["id"])
+        elif f["rule_id"] == OFFLINE_RULE and pack is not None and es and all(pack.is_asleep(e) for e in es):
+            # listed as unavailable by design since it was found (vesta_shared.asleep): never a fault
+            moved += Problems(store).close_finding(f, day, ASLEEP_NOTE)
+            closed.append(f["id"])
         elif f["rule_id"] == OFFLINE_RULE and out_for(client(), [e for e in es if e not in gone], states, OFFLINE, now,
                                                       minutes, unknown_tells=True):
             moved += Problems(store).close_finding(f, day, "Cleared: back online.")
@@ -399,7 +404,8 @@ def main(argv=None):
     ctx = script.Context(a, skill=os.path.dirname(HERE))
     now = datetime.fromisoformat(a.now) if getattr(a, "now", None) else datetime.now(timezone.utc)
     settle = N.still_there_minutes(ctx.settings)
-    res = back_online(ctx.store, lambda: ctx.live_client, now, ctx.params.behaviour("back_online_minutes"), ctx.zone)
+    res = back_online(ctx.store, lambda: ctx.live_client, now, ctx.params.behaviour("back_online_minutes"), ctx.zone,
+                      ctx.pack)
     try:
         again = recheck_open(ctx.store, ctx.pack, lambda: ctx.live_client, now, ctx.params, ctx.zone, settle)
     except Unreadable as e:

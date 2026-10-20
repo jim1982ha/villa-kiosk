@@ -136,6 +136,35 @@ done by the code, not by you. Ignore the parts of the text below that tell you t
 
 
 
+ASLEEP_NOTE = ("Unavailable by design (Rules › Protected devices): it sleeps between its reports, so \"unavailable\" is "
+               "not a fault. What it reads is its last state before \"unavailable\" (its history).")
+
+
+def with_asleep(text: str, is_asleep) -> str:
+    """A read tool's answer with every record of a device unavailable by design marked so (ASLEEP_NOTE) — the AI never
+    tells a person that a sleeping door contact is lost (vesta_shared.asleep, owner 2026-10-21)."""
+    if not text or '"entity_id"' not in text:
+        return text
+    try:
+        body = json.loads(text)
+    except ValueError:
+        return text
+    hit = []
+
+    def mark(x):
+        if isinstance(x, list):
+            return [mark(v) for v in x]
+        if isinstance(x, dict):
+            out = {k: mark(v) for k, v in x.items()}
+            if isinstance(x.get("entity_id"), str) and is_asleep(x["entity_id"]):
+                out["unavailable_by_design"] = ASLEEP_NOTE
+                hit.append(1)
+            return out
+        return x
+    marked = mark(body)
+    return json.dumps(marked, ensure_ascii=False) if hit else text
+
+
 def without_hidden(text: str, hidden: set[str]) -> str:
     """A read tool's answer without the entities hidden in the villa's system: every record naming one, and every bare
     id of one in a list, dropped wherever it sits; an answer that IS one hidden entity's record says it is hidden.
@@ -353,6 +382,7 @@ class Toolbox:
                     self.photos.append(photo)
             text = scrub("".join(b.get("text", "") for b in blocks if b.get("type") == "text"), self._secrets())
             text = without_hidden(text, self._hidden())       # every read tool, never the search alone
+            text = with_asleep(text, self._asleep())
             facts = await asyncio.to_thread(self._history_facts, args, text) \
                 if name == "ha_get_history" and not res.get("isError") else None
             if facts is not None:
@@ -422,6 +452,18 @@ class Toolbox:
             pack = KnowledgePack.read(self.s.pack_path)
             self.__dict__["_days"] = pack.detailed_days if pack else None
         return self.__dict__["_days"]
+
+    def _asleep(self):
+        """Is an entity unavailable by design (the policy's list, each listed one's whole device: the pack)? Read
+        once per run."""
+        if "_asleep_of" not in self.__dict__:
+            from vesta_shared.knowledge_pack import KnowledgePack
+            listed = set(getattr(self.policy, "asleep", None) or ())
+            pack = KnowledgePack.read(self.s.pack_path) if listed else None
+            if pack is not None:
+                pack.asleep_are(listed)
+            self.__dict__["_asleep_of"] = pack.is_asleep if pack is not None else listed.__contains__
+        return self.__dict__["_asleep_of"]
 
     def _hidden(self) -> set[str]:
         """The entities hidden in the villa's system (the knowledge pack's), read once per run."""

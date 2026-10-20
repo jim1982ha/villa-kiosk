@@ -225,6 +225,25 @@ class KnowledgePack:
             return False
         return entity_id in idx[0] or (self.physical_device_of(entity_id) or "") in idx[1]
 
+    def is_asleep(self, entity_id: str | None) -> bool:
+        """`entity_id` is unavailable by design (vesta_shared.asleep: the Rules page's list, read once per pack): listed,
+        or an entity of a device listed — a sensor's battery or signal entity sleeps with it. Like is_critical."""
+        idx = self.__dict__.get("_asleep")
+        if idx is None:
+            from .asleep import listed
+            idx = self.asleep_are(listed())
+        if not entity_id:
+            return False
+        return entity_id in idx[0] or (self.physical_device_of(entity_id) or "") in idx[1]
+
+    def asleep_are(self, ids) -> tuple[set, set]:
+        """Use `ids` as the list of devices unavailable by design (the agent's own process passes its policy's; a
+        script reads VESTA_POLICY's, `is_asleep`)."""
+        ids = set(ids)
+        idx = (ids, {d for d in (self.physical_device_of(e) for e in ids) if d})
+        self.__dict__["_asleep"] = idx
+        return idx
+
     def entities(self, family: str) -> list[dict]:
         return self.families.get(family, [])
 

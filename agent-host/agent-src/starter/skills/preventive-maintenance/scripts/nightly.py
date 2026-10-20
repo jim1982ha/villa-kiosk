@@ -263,7 +263,8 @@ def hidden_in_rule_findings(cli, pack, states: dict, store) -> tuple[list, list[
         # detection, each live and rightly watched by its rule. The case this rule is for (2026-10-20) is a rule still
         # watching a device replaced by its copy: that one is offline or gone.
         now = cli.states(hidden)
-        hidden = [e for e in hidden if (now.get(e) or {}).get("state") is None or is_offline(now[e].get("state"))]
+        hidden = [e for e in hidden if (now.get(e) or {}).get("state") is None
+                  or (is_offline(now[e].get("state")) and not pack.is_asleep(e))]
         if not hidden:
             return [], []
         rules = cli.rules_mentioning(hidden)
@@ -329,7 +330,7 @@ def reconnect_findings(cli, pack, states: dict, end: datetime, today: date, para
     # pack's own rule (knowledge_pack: hidden entities left out of every family, `pack.hidden`)
     hidden = set(pack.hidden)
     for eid, per_day in flips.items():
-        if eid in hidden:
+        if eid in hidden or pack.is_asleep(eid):      # asleep between its reports drops by design (vesta_shared.asleep)
             continue
         row = rows_by_eid.get(eid, {})
         slug = row.get("asset") or next((s for s, a in pack.assets.items() if eid in a["entities"].values()), None)
@@ -382,7 +383,7 @@ def silent_findings(cli, pack, states: dict, now_ref: datetime, params, Z, rows:
     quiet_rows: list[tuple[dict, dict, datetime]] = []
     for row in pack.entities("level") if rows is None else rows:   # silence: a level sensor online and quiet
         st = states.get(row["entity_id"])
-        if not st:
+        if not st or pack.is_asleep(row["entity_id"]):     # quiet between its reports by design (vesta_shared.asleep)
             continue
         asset = pack.assets.get(row["asset"], {"slug": row["asset"], "name": row["name"], "critical": False})
         lc = st.get("last_changed")

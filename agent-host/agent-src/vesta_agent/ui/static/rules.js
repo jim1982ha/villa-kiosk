@@ -251,6 +251,7 @@ export function rulesForms(doc, jobs = [], tools = null) {
     h("div", { class: "grid" },
       field(W("owner_only_entities"), many("owner_only_entities", SCHEMA.actionable), "An action on these waits for the owner's Approve, whoever asks (locks, the gate, the siren)."),
       field(W("excluded_entities"), many("excluded_entities", null), "Never acted on, never reported (a test device)."),
+      field(W("asleep_entities"), many("asleep_entities", null), "Asleep between their reports (a battery door sensor): their \"unavailable\" is never reported, their last real state is used."),
       field(W("siren_entity"), picker(() => (f.siren_entity ? [f.siren_entity] : []), (v) => (f.siren_entity = v[0] || null), SCHEMA.siren_domains, true),
             "The siren the alert desk may ask the owner to sound."),
       field(W("siren_auto_off_min"), h("input", { type: "number", min: 1, max: 60, value: f.siren_auto_off_min, oninput: on((t) => (f.siren_auto_off_min = num(t.value))) }))),

@@ -68,6 +68,8 @@ def devices_offline(pack, states: dict, now: datetime, families, *, min_minutes:
             # ⚠️ "unknown" IS NOT OFFLINE (villa, 2026-10-04): a sensor with no value to give while its device reports
             if not eid or not is_offline(st.get("state")):
                 continue
+            if pack.is_asleep(eid):
+                continue            # unavailable by design: asleep between its reports, not lost (vesta_shared.asleep)
             label = pack.device_label(pack.physical_device_of(eid))
             if label == "":
                 continue            # a device the villa's system knows nothing about (a phone on the Wi-Fi): not the villa's

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.298 (21 October 2026)
+
+- policy.yaml `asleep_entities` (Rules › Protected devices › "Unavailable by design"), read by vesta_shared.asleep
+  (`listed`, `without_sleep`, `last_real`, `awake_states`) and KnowledgePack.is_asleep (a listed entity's whole
+  physical device; `asleep_are` for the agent's own process). Applied in offline.devices_offline (PM-UNAVAILABLE,
+  reports, concierge), reconnect_findings, silent_findings, hidden_in_rule_findings, recheck.back_online (closes an
+  open PM-UNAVAILABLE, ASLEEP_NOTE), investigate timeline (rows without "unavailable") and around, alert-desk
+  still_there (last real state; a claim is not judged on a sleeping device), and tools.with_asleep (the AI's reads).
+
 ## 0.6.297 (21 October 2026)
 
 - PM-HIDDEN-IN-RULE: only hidden entities that no longer answer (offline, or no state) are looked for in the villa's

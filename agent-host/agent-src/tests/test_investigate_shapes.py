@@ -114,6 +114,9 @@ class _Pack:
     def asset(self, slug):
         return {"schedule": "schedule.x_hours"} if slug == "x" else None
 
+    def is_asleep(self, eid):
+        return False
+
 
 def _schedule():
     out, d = [], S

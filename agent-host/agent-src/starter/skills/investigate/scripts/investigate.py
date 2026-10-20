@@ -44,6 +44,7 @@ from vesta_shared import past  # noqa: E402  (a read of the past with how far it
 from vesta_shared import retention  # noqa: E402  (where the villa's detail ends, and the figures that take over)
 from vesta_shared.store import Notes, notes_of  # noqa: E402  (an alert's notes: one reader)
 
+from vesta_shared.asleep import without_sleep  # noqa: E402  (unavailable by design: one list, vesta_shared.asleep)
 from vesta_shared.device_state import NO_VALUE, OFFLINE, RestartDrops  # noqa: E402  (the one "does this device answer")
 from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the VESTA Agent page's Limits tab)
 # ⚠️ WHAT A CONTROL CAN PROVE (architecture review 32 follow-up, 2026-10-11): an on/off control that stayed OFF the whole
@@ -681,6 +682,10 @@ def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_da
     for eid in ids:
         # where the history could not be read further (vesta_shared.ha_client: its cap) — never stretched past it
         rows, reach, cut = read(client, eid, start, end, now)
+        asleep = pack is not None and pack.is_asleep(eid)
+        if asleep:
+            # unavailable by design (vesta_shared.asleep): its "unavailable" between reports is sleep, never a period
+            rows = without_sleep(rows)
         before = _older_lines(eid, older, kept, start, zone, span_days, client.detailed_days) if older else []
         # the older part drawn from the figures too (each one's highest, as the readings' slices are): the page's chart
         # covers the whole period, that part marked as figures (page.py)
@@ -705,6 +710,10 @@ def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_da
             continue
         base_rows, base_reach, _ = read(client, eid, start - timedelta(days=baseline_days), start, now) \
             if baseline_days > 0 else ([], start, None)
+        if asleep:
+            base_rows = without_sleep(base_rows)
+            before = before + ["  unavailable by design (it sleeps between its reports): its \"unavailable\" moments are "
+                               "left out, each state holds until its next report"]
         on = threshold(base_rows + rows, params)
         zero_rest = rests_at_zero(base_rows or rows, on)
         ps = periods(rows, reach, on, zero_rest)
@@ -937,11 +946,13 @@ def _notable(ps: list[dict], ref: dict, on: float | None) -> list[dict]:
 
 # ------------------------------------------------------------------ around
 def around(client, store, start: datetime, end: datetime, focus: list[str], zone: ZoneInfo,
-           now: datetime | None = None) -> dict:
+           now: datetime | None = None, pack=None) -> dict:
     span_days = (end - start).total_seconds() > 86400
     hours = max((end - start).total_seconds() / 3600, 1)
     book = client.logbook_read(start, end, now=now)
-    rows = book.rows
+    # a device unavailable by design (vesta_shared.asleep): its "unavailable" rows are sleep, not a device that went
+    rows = [r for r in book.rows if not (pack is not None and str(r.get("state")) in OFFLINE
+                                         and pack.is_asleep(r.get("entity_id")))]
     gone = book.older_than_kept
     count: dict[str, int] = {}
     for r in rows:
@@ -1303,7 +1314,7 @@ def main(argv=None):
                                   ensure_ascii=False, default=str)
                     res = {"lines": res["lines"], "saved": a.out}
             else:
-                res = around(ctx.client, ctx.store, start, end, ids, zone, now=ctx.now)
+                res = around(ctx.client, ctx.store, start, end, ids, zone, now=ctx.now, pack=ctx.pack)
                 if a.out:
                     with open(a.out, "w", encoding="utf-8") as f:
                         json.dump({"start": start.isoformat(), "end": end.isoformat(), "zone": str(zone), **res["data"]},

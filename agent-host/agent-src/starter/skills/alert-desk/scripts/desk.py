@@ -47,6 +47,8 @@ from vesta_shared.message_format import PRESSED, ROLE_SHORT, acted, closing  # n
 from vesta_shared import kiosk_words  # noqa: E402
 from vesta_shared.timeutil import lasting  # noqa: E402
 from vesta_shared.device_state import has_value, out_for  # noqa: E402  ("is it back": one answer)
+from vesta_shared.asleep import awake_states  # noqa: E402  (unavailable by design: its last real state)
+from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
 from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the Limits tab)
 
 FATIGUE_WINDOW_DAYS = limit("alerts.fatigue_window_days", 30, unit="days", group="detect", lo=1, hi=365,
@@ -603,6 +605,17 @@ def judged(inc: dict) -> bool:
     return bool(notes_of(inc).get("claim")) or rule_states(inc) is not None
 
 
+def _pack():
+    """The knowledge pack the engine gives every job (VESTA_PACK), once; None when there is none."""
+    if "pack" not in _PACK:
+        path = os.environ.get("VESTA_PACK")
+        _PACK["pack"] = KnowledgePack.read(path) if path else None
+    return _PACK["pack"]
+
+
+_PACK: dict = {}
+
+
 def still_there(inc: dict, client) -> tuple[bool | None, list[str]]:
     """Does what the incident's alert claims still hold, read from Home Assistant now? (True, what still says so) ·
     (False, []) · (None, what each device reads) when the desk cannot tell — no claim, or a device does not answer.
@@ -619,6 +632,10 @@ def still_there(inc: dict, client) -> tuple[bool | None, list[str]]:
     rs = rule_states(inc)
     ents = rs[0] if rs else [e for e in (p.get("entities") or [inc["entity_id"]]) if e and "." in e]
     states = client.states(ents) if ents else {}
+    # ⚠️ ASLEEP IS NOT GONE (owner, 2026-10-21): a device unavailable by design reads its last real state here; the
+    # rule's claim, rendered by the villa's system on "unavailable", cannot judge it, so its own states do instead
+    states = awake_states(client, _pack(), states, datetime.now(timezone.utc))
+    asleep = [e for e in ents if (states.get(e) or {}).get("asleep")]
 
     def name(e):
         return ((states.get(e) or {}).get("attributes") or {}).get("friendly_name") or e
@@ -627,8 +644,9 @@ def still_there(inc: dict, client) -> tuple[bool | None, list[str]]:
         return not has_value((states.get(e) or {}).get("state"))
 
     def readings():
-        return [f"{name(e)} reads {states[e]['state']}" if not silent(e) else f"{name(e)} does not answer" for e in ents]
-    if p.get("claim"):
+        return [f"{name(e)} reads {states[e]['state']}" + (" (its last report)" if e in asleep else "")
+                if not silent(e) else f"{name(e)} does not answer" for e in ents]
+    if p.get("claim") and not asleep:
         said = str(client.template(str(p["claim"]))).strip().lower()
         if said == "true":
             return True, ["it is still reported"]

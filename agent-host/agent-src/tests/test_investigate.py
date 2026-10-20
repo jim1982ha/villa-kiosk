@@ -1149,3 +1149,15 @@ def test_a_rule_that_only_sends_a_chat_message_switches_nothing():
             return {"config": {"actions": [{"action": "telegram_bot.send_message", "data": {"message": "x"}}]}}
     t = datetime(2026, 10, 14, tzinfo=ZoneInfo("UTC"))
     assert investigate.automation_able(Sends(), "automation.x", t, t)["can"] == "nothing"
+
+
+def test_a_device_unavailable_by_design_never_stops_reporting_in_an_investigation():
+    # owner, 2026-10-21: a door contact asleep between its reports — its "unavailable" is not a device that went
+    import investigate
+    from test_offline import _pack
+    pack = _pack()
+    got = investigate.around(_Around(), None, T(9, 2), T(9, 15), ["sensor.heater_power"], Z, pack=pack)["data"]
+    assert "Next Relay" in str(got.get("offline"))
+    pack.asleep_are(["switch.next_relay"])
+    got = investigate.around(_Around(), None, T(9, 2), T(9, 15), ["sensor.heater_power"], Z, pack=pack)["data"]
+    assert "Next Relay" not in str(got.get("offline")) and "Next Relay" not in str(got.get("back"))
