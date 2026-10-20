@@ -1,3 +1,9 @@
+## 2.496.444
+
+### Fixed
+- 2.496.443 was never offered: one of its files was left out of the release. This is that release, complete (the
+  Agent window removed; the updates count names its updates).
+
 ## 2.496.443
 
 ### Changed
