@@ -415,3 +415,22 @@ def test_the_margin_never_opens_a_fault(tmp_path):
     assert R.battery_rules(a, BAT_LOW, "%", 22, [], p, day) == []
     assert [f.rule_id for f in R.battery_rules(a, BAT_LOW, "%", 22, [], p, day, frozenset({"PM-BATTERY-LOW"}))] == ["PM-BATTERY-LOW"]
     assert [f.rule_id for f in R.battery_rules(a, BAT_LOW, "%", 12, [], p, day, frozenset({"PM-BATTERY-CRIT"}))] == ["PM-BATTERY-CRIT"]
+
+
+@pytest.mark.parametrize("best,stays", [(49.0, False), (12.0, True), (None, True)])
+def test_a_battery_is_judged_on_its_best_reading_of_the_day(tmp_path, best, stays):
+    """Owner, 2026-10-21: a motion sensor read 1 % between two readings near 50 % — a coin cell dipping under load. A
+    battery is judged on its highest reading of the last 24 h (settings.yaml battery_level_window_hours): an open
+    "replace now" whose battery read 49 % an hour ago closes on a 1 % dip; one whose best was 12 % stays; with no
+    statistics, its reading now decides, as before."""
+    _pack(tmp_path)
+    store = Store(str(tmp_path / "s.sqlite"))
+    fid, _ = _found(store, "PM-BATTERY-CRIT", BAT_CRIT, "battery low.")
+    _villa(tmp_path, {BAT_CRIT: _st("1", 5)})
+    if best is not None:
+        t = int((NOW - timedelta(hours=2)).timestamp() * 1000)
+        old = int((NOW - timedelta(hours=30)).timestamp() * 1000)          # outside the window: never counts
+        (tmp_path / "fx" / "stats_hour_bat.json").write_text(json.dumps({"period_type": "hour", "entities": [
+            {"entity_id": BAT_CRIT, "statistics": [{"start": old, "max": 90.0}, {"start": t, "max": best}]}]}))
+    _tick(tmp_path)
+    assert Store(str(tmp_path / "s.sqlite")).finding(fid)["status"] == ("open" if stays else "closed")

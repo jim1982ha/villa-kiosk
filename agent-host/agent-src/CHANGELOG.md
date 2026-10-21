@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.304 (22 October 2026)
+
+- Owner 2026-10-21 (a motion sensor read 1 % between two readings near 50 %: a coin cell dipping under load): the
+  night check and its 5-minute recheck judge a battery on its HIGHEST reading of the last
+  `battery_level_window_hours` (preventive-maintenance settings.yaml, 24): nightly.battery_best reads the hourly
+  maxima; battery_findings takes the higher of it and the reading now. A dip no longer opens "replace now", nor closes
+  a fault a resting battery still deserves. The villa's critical_battery blueprint judges the same way.
+
 ## 0.6.303 (21 October 2026)
 
 - Owner 2026-10-21 (#65: a door locked at 14:38:50 still a fault at 14:45): alert-desk seen_again records

@@ -1,3 +1,11 @@
+## 0.12.314
+
+What you will see:
+- A battery is judged on its best reading of the last 24 hours, not its latest one. A sensor whose battery dips for
+  a moment under load (a motion sensor reading 1 % between two readings near 50 %) no longer gets a "replace now"
+  fault that closes again minutes later. A battery that is really low still gets one, at most a day later. The
+  villa's own low-battery rule (Telegram) now judges the same way.
+
 ## 0.12.313
 
 What you will see (with VESTA Kiosk 2.496.463 or newer):

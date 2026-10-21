@@ -217,7 +217,7 @@ class Tick:
         stats = self.client().statistics(ids, self.day_end - timedelta(days=N.BATTERY_READ_DAYS), self.day_end, "day",
                                          ("mean",))
         return N.battery_findings(self.pack, self.states, self.params, self.day, stats, rows=rows,
-                                  store=self.store)
+                                  store=self.store, best=N.battery_best(self.client(), ids, self.now, self.params))
 
     def asset_day(self, rows) -> list:
         asset = rows[0]

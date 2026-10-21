@@ -107,7 +107,8 @@ def run(args) -> dict:
     states = read_states(cli, pack, now_ref)
     battery_entities = [r["entity_id"] for r in pack.entities("battery")]
     bat_stats = cli.statistics(battery_entities, day_end - timedelta(days=BATTERY_READ_DAYS), day_end, "day", ("mean",)) if battery_entities else {}
-    findings += battery_findings(pack, states, params, today, bat_stats, store=store)
+    findings += battery_findings(pack, states, params, today, bat_stats, store=store,
+                                 best=battery_best(cli, battery_entities, now_ref, params))
 
     alerted = alerted_offline(store, pack)
     findings += offline_findings(pack, states, now_ref, params, set(alerted))
@@ -353,11 +354,29 @@ def reconnect_findings(cli, pack, states: dict, end: datetime, today: date, para
     return findings, notes
 
 
+def battery_best(cli, entity_ids: list[str], now_ref: datetime, params) -> dict[str, float]:
+    """Each battery's HIGHEST reading over the last `battery_level_window_hours` (settings.yaml): its rested level.
+    ⚠️ A BATTERY ONLY EVER READS LOW BY MISTAKE (owner, 2026-10-21): a coin cell's voltage dips under load and comes
+    back at rest, and a motion sensor read 1 % between two readings near 50 % — its latest reading opened "replace now"
+    and the next closed it. Its best reading of the day is the truth; a real fall shows within the window."""
+    if not entity_ids:
+        return {}
+    hours = params.behaviour("battery_level_window_hours")
+    stats = cli.statistics(entity_ids, now_ref - timedelta(hours=hours), now_ref, "hour", ("max",))
+    best = {}
+    for eid, rows in (stats or {}).items():
+        highs = [r["max"] for r in rows if r.get("max") is not None]
+        if highs:
+            best[eid] = max(highs)
+    return best
+
+
 def battery_findings(pack, states: dict, params, today: date, stats: dict | None = None,
-                     rows: list[dict] | None = None, store=None) -> list:
+                     rows: list[dict] | None = None, store=None, best: dict | None = None) -> list:
     """The battery rules (rules.battery_rules) over `rows` (every battery of the pack when None), each read from
     `states`; `stats`: {entity: daily means} for the trend (none: no trend is judged); `store`: its open findings keep
-    their margin (rules.battery_rules `held`)."""
+    their margin (rules.battery_rules `held`); `best`: {entity: its highest reading of the window} (battery_best) — a
+    battery is judged on the higher of it and its reading now."""
     out = []
     held: dict[str, set] = {}
     for o in store.findings(status="open") if store is not None else []:
@@ -370,6 +389,8 @@ def battery_findings(pack, states: dict, params, today: date, stats: dict | None
             level = float(st.get("state")) if has_value(st.get("state")) else None
         except ValueError:
             level = None
+        if level is not None and (best or {}).get(row["entity_id"]) is not None:
+            level = max(level, best[row["entity_id"]])
         series = [(str(r["start"]), r["mean"]) for r in (stats or {}).get(row["entity_id"], []) if r.get("mean") is not None]
         out += R.battery_rules(asset, row["entity_id"], row.get("unit"), level, series, params, today,
                               frozenset(held.get(row["entity_id"], ())))
