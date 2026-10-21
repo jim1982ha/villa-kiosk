@@ -149,5 +149,19 @@ console.log("\n  the order is data:");
 }
 eq("no tiers at all is simply failed", createCameraPlayer([]).getState().mode, "failed");
 
+// owner, 2026-10-21: "is there a way to also hear it in the Kiosk?" — the feed carries its sound; a speaker button
+// on the video turns it on (a tap: what lets a browser play sound), only on a video feed, starting silent
+{
+  const { parseTsx, elements, guardsOf, propText } = await import("../consistency/jsx.mjs");
+  const { readFileSync } = await import("node:fs");
+  const t = parseTsx("components/panels/CameraPanel.tsx");
+  const src = readFileSync(new URL("../../src/components/panels/CameraPanel.tsx", import.meta.url), "utf8");
+  const sound = elements(t, "button").filter((b) => /camera-sound-btn/.test(propText(b, "className") ?? ""));
+  eq("the camera's sound: a speaker button on a video feed only, which unmutes the feed inside the tap",
+     sound.length === 1 && /mode === "webrtc" \|\| mode === "hls"/.test(guardsOf(sound[0]).join())
+     && propText(sound[0], "onClick") === "toggleSound"
+     && /v\.muted = !on;\s*\/\/[^\n]*\n\s*if \(on && v\.paused\) void v\.play\(\)/.test(src)
+     && /<video ref=\{attachFeed\} autoPlay muted playsInline \/>/.test(src), true);
+}
 console.log(fail ? `\n❌ ${fail} failed` : "\n✅ the fallback chain holds, tier by tier");
 process.exit(fail ? 1 : 0);
