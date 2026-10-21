@@ -1,3 +1,10 @@
+## 2.496.474
+
+### Changed
+- **On an upright phone, a camera's own buttons have their own line.** Its move arrows, its siren and its sound sit
+  on one line above the usual buttons, which stay where every camera has them (previous, next, fullscreen, close).
+  On a tablet, a computer or a phone held sideways, nothing moves.
+
 ## 2.496.473
 
 ### Added
