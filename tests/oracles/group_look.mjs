@@ -33,15 +33,16 @@ console.log("  the two meanings of \"on\", one module, named:");
      L("camera.idle").active && L("camera.idle").power === "none" && count(["camera.idle"]).onCount === 0 && count(["camera.idle"]).activeCount === 1);
   ck("a paused TV is switched ON (its power button) but not ACTIVE (its badge rests until it plays)",
      L("media_player.paused").power === "on" && !L("media_player.paused").active);
-  ck("a motion sensor detecting is ACTIVE, never ON (owner, 2.496.238: it is someone passing)",
-     L("binary_sensor.pir").active && L("binary_sensor.pir").power === "none");
+  // a detection is red since 2026-10-21 (owner, 2026-10-21: "the entity badge to follow the state of the entity … everywhere"); still never switched ON
+  ck("a motion sensor detecting is red, never ON (owner, 2.496.238: it is someone passing)",
+     L("binary_sensor.pir").alert && L("binary_sensor.pir").power === "none");
   ck("an unlocked lock is ON (POWER) and red (needs attention), not 'active'",
      L("lock.open").power === "on" && L("lock.open").alert && !L("lock.open").active);
   ck("a power sensor whose linked pump runs is ACTIVE (ringed), never ON",
      L("sensor.power").active && L("sensor.power").power === "none");
   const g = count(["light.on", "light.off", "lock.open", "lock.shut", "camera.idle", "media_player.paused", "binary_sensor.pir", "sensor.t"]);
-  ck("a mixed group: onCount 3 (light, unlocked lock, paused TV), activeCount 3 (light, camera, PIR)",
-     g.onCount === 3 && g.activeCount === 3, g);
+  ck("a mixed group: onCount 3 (light, unlocked lock, paused TV), activeCount 2 (light, camera)",
+     g.onCount === 3 && g.activeCount === 2, g);
 }
 
 console.log("\n  a COUNT summary's ring (room chip, count card):");

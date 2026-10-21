@@ -1,3 +1,13 @@
+## 2.496.461
+
+### Changed
+- **A device's badge follows its state, the same as its window.** One rule now colours a sensor everywhere: its badge
+  on the map, its room chip, its row in the lists, its window's pill, its history bar and "Needs attention".
+  - A door, window or garage door that is **Open** (and a lock sensor that is **Unlocked**) is red everywhere, and
+    listed in "Needs attention" until it closes. Closed stays green.
+  - A motion or occupancy sensor that **detects someone** is red everywhere too, and listed while it detects.
+  - Before, these were red in their own window only (2.496.460), with a plain badge on the map.
+
 ## 2.496.460
 
 ### Changed

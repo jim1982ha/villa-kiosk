@@ -10,10 +10,10 @@
 // which never copied it, showed a smoke detector's "Smoke detected" as plain
 // grey text with no history. Every window now asks here.
 //
-// The MAP keeps its own reading (deviceActivity): a detection is red in a
-// sensor's window only — on the map motion stays information (owner, 2026-10-05).
+// The MAP reads the same problem state (deviceActivity, alertStateFor): a
+// detection, an open door is red on both (owner, 2026-10-21).
 
-import { alertStateFor, secureStateFor, colourAlertStateFor } from "./BinarySensorClasses";
+import { alertStateFor } from "./BinarySensorClasses";
 import { binaryWord } from "./binarySensorWords";
 import { binaryStatus, STATUS_COLOR, STATUS_PILL_CLASS, type StatusKey } from "@/utils/stateColors";
 import { prettyState } from "@/utils/entityValue";
@@ -35,10 +35,9 @@ export interface BinaryLook {
 }
 
 export function binaryLook(entityId: string, deviceClass: string | undefined): BinaryLook {
+  // the badge's own rule (alertStateFor): a window is never redder or calmer than its badge (owner, 2026-10-21)
   const problem = alertStateFor(deviceClass);
-  const colourAlert = colourAlertStateFor(deviceClass);
-  const secure = secureStateFor(deviceClass);
-  const status = (s: string) => binaryStatus(s, colourAlert, secure);
+  const status = (s: string) => binaryStatus(s, problem);
   const danger = (s: string) => problem !== undefined && s === problem;
   return {
     problem, status, danger,

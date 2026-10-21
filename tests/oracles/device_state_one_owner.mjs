@@ -38,7 +38,9 @@ const ck = (n, ok) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}`); if (!o
 /* ── 1. one motion sensor, three surfaces, one answer ─────────────────── */
 const motion = ent("binary_sensor.hall", "on", "motion");
 const motionBadge = badgeFaceAndRing(read("binary_sensor", motion));
-const motionHistory = statusKeyFor("on", "binary_sensor");
+// its history bar, as its window paints it (config/binaryLook — the same alertStateFor)
+const { binaryLook } = await import("@/config/binaryLook");
+const motionHistory = binaryLook("binary_sensor.hall", "motion").status("on");
 const motionIsFault = alertStateFor("motion") === "on";
 
 console.log("  a motion sensor reading `on`:");
@@ -153,9 +155,10 @@ if (strayPairs.length) console.log(`      pair spelled out again in: ${strayPair
 
 console.log("\n  assertions:");
 ck("the scan reached the source tree", FILES.length > 100);
-ck("a motion sensor does not ring as a fault", motionBadge.face === "active");
-ck("  ...and its history bar agrees", STATUS_COLOR[motionHistory] === STATUS_COLOR.active);
-ck("  ...and the panel does not flag it", motionIsFault === false);
+// owner, 2026-10-21: "the entity badge to follow the state of the entity … everywhere": a detection is red on its badge, its bar and its panel alike
+ck("a motion sensor detecting rings red", motionBadge.face === "alert");
+ck("  ...and its history bar agrees", STATUS_COLOR[motionHistory] === STATUS_COLOR.alert);
+ck("  ...and the panel flags it", motionIsFault === true);
 ck("a leak sensor still alerts", leakKind === "alert");
 ck("connectivity alerts when DOWN, not when up", connDown === "alert" && connUp !== "alert");
 ck("a locked door reads off, an unlocked one on",
