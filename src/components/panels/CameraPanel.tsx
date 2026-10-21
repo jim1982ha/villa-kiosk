@@ -7,7 +7,7 @@
 // camera picker and the status bar.
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { ArrowLeft, X, VideoOff, Maximize2, Minimize2, ZoomOut, ChevronLeft, ChevronRight, Power, Check, Video } from "lucide-react";
+import { ArrowLeft, X, VideoOff, Maximize2, Minimize2, ZoomOut, ChevronLeft, ChevronRight, Power, Check, Video, Volume2, VolumeX } from "lucide-react";
 import type { PanelProps } from "@/types/panel.types";
 import { useRailLayout } from "@/utils/railLayout";
 import { linkedSwitchProps, usePanelActions } from "./PanelActionsContext";
@@ -93,10 +93,32 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   const { mode, frameReady } = useSyncExternalStore(subscribeFeed, feedState);
   // The element for the current mode, handed to the player as React mounts
   // it — keyed on camera AND mode below, so every attempt gets a fresh one.
+  // ⚠️ THE SOUND, ON A TAP (owner, 2026-10-21: "I can hear the sound when I open the camera in the integration … is
+  // there a way to also hear it in the Kiosk?"). The feed always carried it (HACameraWebRTC asks for audio, HLS holds
+  // it) and the <video> was muted for good. It still STARTS muted — a browser plays a feed by itself only silent — and
+  // the speaker button turns it on: a person's tap is what lets the browser play sound. Per opening, never remembered.
+  const [soundOn, setSoundOn] = useState(false);
+  const soundRef = useRef(false);
+  soundRef.current = soundOn;
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const attachFeed = useCallback((el: HTMLVideoElement | HTMLImageElement | null) => {
+    videoRef.current = el instanceof HTMLVideoElement ? el : null;
+    // a new element (another tier, another camera) starts silent: unmuted without a tap, the browser may not play it
+    if (videoRef.current && soundRef.current) { soundRef.current = false; setSoundOn(false); }
     if (!player) return;
     if (el) player.attach(el); else player.detach();
   }, [player]);
+  const toggleSound = () => {
+    const on = !soundOn;
+    setSoundOn(on);
+    const v = videoRef.current;
+    if (v) {
+      v.muted = !on;
+      // inside the tap: the browser lets an unmuted feed play now
+      if (on && v.paused) void v.play().catch(() => {});
+    }
+  };
+
   // ── Escape, and the focus contract that comes with it ────────────────────
   // This surface is a dialog like any other and now says so through the shared
   // hook rather than a keydown listener of its own — Escape closes it, focus
@@ -717,6 +739,19 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
                 <ChevronRight />
               </button>
             </>
+          )}
+          {/* its sound, off until tapped (soundOn) — only a video feed carries one */}
+          {(mode === "webrtc" || mode === "hls") && (
+            <button
+              className={`icon-btn camera-sound-btn${soundOn ? " on" : ""}`}
+              onClick={toggleSound}
+              title={soundOn ? "Mute" : "Sound on"}
+              aria-label={soundOn ? "Mute" : "Sound on"}
+              aria-pressed={soundOn}
+              style={vOrder(11)}
+            >
+              {soundOn ? <Volume2 /> : <VolumeX />}
+            </button>
           )}
           {fullscreenSupported && (
             <button
