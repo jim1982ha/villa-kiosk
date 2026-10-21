@@ -1,3 +1,12 @@
+## 2.496.479
+
+### Fixed
+- **A sensor found in the 3D model lights its room.** A motion or door sensor whose 3D object is named after it, but
+  that was never edited in Advanced Settings, turned its badge red and left its room dark. The room glow only knew the
+  sensors saved in Advanced Settings; it now knows every sensor on the map, as the badge does.
+- **A room lights up for a sensor that was already on when the map opened.** It only lit up when the sensor changed
+  afterwards.
+
 ## 2.496.478
 
 ### Fixed

@@ -1910,6 +1910,7 @@ export class EntityVisuals {
    *  handed on as-is to the room highlight and the bulbs' pools. */
   setPlan(plan: Storeys<{ name: string; pts: { x: number; z: number }[]; floorY: number; storey?: number; conform?: { positions: number[]; indices: number[] } }>): void {
     this.roomHighlight.setRooms(plan);
+    this.reapplyRoomGlows();
     // Each room's ground WIDTH used to be cached here too, as the "is there
     // space here?" denominator for laying a pile of badges out across a room.
     // Nothing lays badges out any more (2.159.0 — badges sit on their anchors
@@ -1941,6 +1942,8 @@ export class EntityVisuals {
     // Assistant's reconnect or registry change. The mark now asks for the frame
     // itself (layoutGate.ts): one frame per recompute, a few a minute at most.
     this.resolvedRooms = rooms;
+    // a sensor already "on" lights its room now that the room is known (reapplyRoomGlows)
+    this.reapplyRoomGlows();
     // MUST mark dirty (regression from 2.113.0's frame-skip). roomOf() reads
     // this map, and it is what every grouping/clustering decision keys on —
     // but room resolution only lands AFTER the reveal (calibrateRooms runs in
@@ -2149,6 +2152,19 @@ export class EntityVisuals {
    *  shouldn't need a model reload to start glowing). */
   setRoomPoints(points: { name: string; x: number; z: number; floorY: number }[]): void {
     this.roomHighlight.setPointRooms(points);
+    this.reapplyRoomGlows();
+  }
+
+  /** Every room glow from the sensors AS THEY STAND NOW (lastState), after the rooms, or the glows they light, change.
+   *  ⚠️ THE GLOW WAS EVENT-DRIVEN ONLY (owner, 2026-10-22: "why doesn't motion6 highlight the Side Back area"): a
+   *  sensor already "on" when the map loaded was applied while no room was resolved yet — rooms land after the reveal
+   *  — and nothing lit its room until it changed again; a new motion sensor read "Occupied" for three hours with its
+   *  room dark. Off first, then each sensor "on" through the one routing (applyMotionRouting). */
+  private reapplyRoomGlows(): void {
+    this.roomHighlight.clearActive();
+    for (const entity of this.lastState.values()) {
+      if (entity.state === "on") this.applyMotionRouting(entity);
+    }
   }
 
   /** Replace camera facing directions (world-space unit vectors, may include
@@ -2505,10 +2521,14 @@ export class EntityVisuals {
       }
       return;
     }
-    const map = this.config.entityMap[entity.entity_id];
+    // ⚠️ THE MAP'S OWN MAPPING, AS ITS BADGE (owner, 2026-10-22: "I switch the sensor on in the villa's system, the
+    // badge turns red, but not the area"): this read the SAVED entity map only, and a sensor the model names by its
+    // object (auto-detected, never edited in Advanced Settings) is not in it — its badge red, its room dark. A sensor
+    // not drawn at all keeps its saved type.
+    const type = this.mapping.get(entity.entity_id)?.type ?? this.config.entityMap[entity.entity_id]?.type;
     const room = deviceRoom(this.resolvedRooms, entity.entity_id);
     // someone there, or a door open — never an "on" that is good news (glowsRoom, owner 2026-10-21)
-    if (map?.type === "binary_sensor" && room && glowsRoom(entity.entity_id, entity.attributes.device_class as string | undefined)) {
+    if (type === "binary_sensor" && room && glowsRoom(entity.entity_id, entity.attributes.device_class as string | undefined)) {
       this.roomHighlight.setActive(room, on);
     }
   }

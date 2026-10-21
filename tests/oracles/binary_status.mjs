@@ -103,7 +103,16 @@ ck("the list paints the tone, the page builds its rows here, and the tones have 
      && !detectsPresence("binary_sensor.garden_pir", "door"));
   const ev = readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8");
   ck("  ...the map's room glow asks exactly that (EntityVisuals.applyMotionRouting)",
-     /if \(map\?\.type === "binary_sensor" && room && glowsRoom\(entity\.entity_id, entity\.attributes\.device_class as string \| undefined\)\) \{\s*this\.roomHighlight\.setActive\(room, on\);/.test(ev));
+     /if \(type === "binary_sensor" && room && glowsRoom\(entity\.entity_id, entity\.attributes\.device_class as string \| undefined\)\) \{\s*this\.roomHighlight\.setActive\(room, on\);/.test(ev)
+     // owner, 2026-10-22: an auto-detected sensor (its 3D object named after it, never saved) — its badge red, its room dark
+     && /const type = this\.mapping\.get\(entity\.entity_id\)\?\.type \?\? this\.config\.entityMap\[entity\.entity_id\]\?\.type;/.test(ev));
+  // owner, 2026-10-22: a motion sensor already "on" when the map loaded never lit its room (rooms land after the
+  // reveal; the glow only followed a CHANGE). Each time the rooms or their glows change, every glow is lit again from
+  // the sensors as they stand now.
+  const body = (name) => ev.slice(ev.indexOf(name), ev.indexOf("\n  }\n", ev.indexOf(name)));
+  ck("  ...and lit again whenever the rooms are known or rebuilt, from the sensors as they stand now",
+     /private reapplyRoomGlows\(\): void \{\s*this\.roomHighlight\.clearActive\(\);\s*for \(const entity of this\.lastState\.values\(\)\) \{\s*if \(entity\.state === "on"\) this\.applyMotionRouting\(entity\);/.test(ev)
+     && ["setResolvedRooms(rooms", "setRoomPoints(points", "setPlan(plan"].every((m) => /this\.reapplyRoomGlows\(\);/.test(body(m))));
 }
 
 done("✅ a detector finding nothing wrong reads green, on its pill and its history");

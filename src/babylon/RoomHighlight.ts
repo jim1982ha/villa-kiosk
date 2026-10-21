@@ -322,6 +322,16 @@ export class RoomHighlight {
     this.requestRender();
   }
 
+  /** Every glow off — before EntityVisuals.reapplyRoomGlows lights again the ones its sensors read "on" now. */
+  clearActive(): void {
+    for (const key of this.active) {
+      const entry = this.polyRooms.get(key) ?? this.pointRooms.get(key);
+      if (entry) entry.material.alpha = 0;
+    }
+    this.active.clear();
+    this.requestRender();
+  }
+
   /** Whether a name matches a calibrated room or named viewpoint (lets
    *  callers skip work for sensors whose room doesn't correspond to either). */
   hasRoom(roomName: string): boolean {
