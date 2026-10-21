@@ -196,25 +196,6 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
               </div>
             </div>
           )}
-          {/* The camera's motion sensor, if one is configured (Advanced
-              Settings' "Motion sensor" field) — read-only, unlike the linked-
-              entity switch above: this reports HA's own state, it isn't
-              something this panel can flip. Reuses the same plain status dot
-              the connection indicator uses (.conn-dot) rather than the
-              toggle control, so it doesn't read as tappable when it isn't. */}
-          {motion && (
-            <div className="panel-linked-row">
-              <span className={`conn-dot${motion.isOn ? " online" : ""}`} style={{ marginRight: 10 }}>
-                <span className="dot" />
-              </span>
-              <div style={{ minWidth: 0 }}>
-                <div className="panel-linked-label" title={motion.label}>{motion.label}</div>
-                <div className="muted" style={{ fontSize: "var(--text-2xs)" }}>
-                  {motion.isOn ? "Motion detected" : "Clear"} · motion sensor
-                </div>
-              </div>
-            </div>
-          )}
           {children}
           {/* The "last N hours" history section — rendered HERE, in the shared
               chrome, for the same reason the linked-entity switch above is:
@@ -235,7 +216,10 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
             && (history ?? <LastDayTimeline entityId={entityId} />)}
           {/* A linked SENSOR has nothing to switch: its band, under the device's own, at its width and over its range
               (owner, 2026-10-21) — LinkedSensorRow */}
-          {linkedSensor && <LinkedSensorRow entityId={linkedSensor.entityId} label={linkedSensor.label} />}
+          {linkedSensor && <LinkedSensorRow entityId={linkedSensor.entityId} label={linkedSensor.label} role="linked entity" />}
+          {/* a camera's motion sensor: the same band, the same place (owner, 2026-10-21: "apply consistently the same
+              layout for motion sensor linked to camera") — it was a dot and "Clear · motion sensor" at the top */}
+          {motion && <LinkedSensorRow entityId={motion.entityId} label={motion.label} role="motion sensor" />}
           {/* The device's other readings — the same physical device, one place
               (2.496.260), always UNDER the history. A grouped lock kept only a
               read-only summary, and a pump plug's energy meter had no panel of

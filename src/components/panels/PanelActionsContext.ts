@@ -96,14 +96,13 @@ export interface PanelActions {
    *  Advanced Settings. Undefined = no motion sensor configured for this
    *  camera, or the open panel isn't a camera. */
   motion?: {
+    entityId: string;
     /** Resolved display name of the motion sensor entity. */
     label: string;
-    /** Live state — "Motion detected" vs "Clear". */
-    isOn: boolean;
   };
-  /** The open device's linked entity when it is a SENSOR (a binary_sensor): nothing to switch, so no toggle — a thin
-   *  band of its last 24 h (LinkedSensorRow) in the switch's row (owner, 2026-10-21: a lock's door sensor drawn as a
-   *  switch). Read-only, so shown whatever the profile, as `motion`. `linked` is then undefined. */
+  /** The open device's linked entity when it is a SENSOR (a binary_sensor): nothing to switch, so no toggle — its
+   *  band under the device's own (LinkedSensorRow, owner 2026-10-21: a lock's door sensor drawn as a switch).
+   *  Read-only, so shown whatever the profile, as `motion`. `linked` is then undefined. */
   linkedSensor?: { entityId: string; label: string };
 }
 
