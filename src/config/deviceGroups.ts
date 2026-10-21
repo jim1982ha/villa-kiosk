@@ -395,16 +395,20 @@ export function deviceOf(folding: ReadonlyMap<string, string>, id: string): stri
  *  ⚠️ EVERY DEVICE PLACED ON THE SAME BOX (owner, 2026-10-21: "these devices are the same Shelly … why is the
  *  reporting not consistent"): a relay box is three devices in the villa's system — its relay, each pump's meter
  *  hanging under it (deviceUnits) — listed by its relay, and its mark went to ONE pump only, the one whose name sorts
- *  first (deviceFolding's representative of the box): one pump red when the box dropped, the other amber. Every entity
- *  of the critical entity's whole device, folded, is critical. */
+ *  first (deviceFolding's representative of the box): one pump red when the box dropped, the other amber. A critical
+ *  entity ON THE BOX ITSELF (its device is the whole: nothing above it) marks every entity of the box, folded.
+ *  ⚠️ DOWNWARD ONLY (2.496.477 went upward too): a leak sensor hangs under its Zigbee bridge the same way, and a
+ *  critical leak sensor made every Zigbee device of the villa critical — red whenever any of them dropped. A critical
+ *  part marks only itself and its device's stand-in, as before. */
 export function criticalDevices(
   critical: ReadonlySet<string> | undefined, folding: ReadonlyMap<string, string>,
   entityDeviceIds: Readonly<Record<string, string>> = {}, deviceUnits: Readonly<Record<string, string>> = {},
 ): ReadonlySet<string> {
   const crit = [...(critical ?? [])];
   const unitOf = (id: string) => { const d = entityDeviceIds[id]; return d ? deviceUnits[d] ?? d : undefined; };
-  const boxes = new Set(crit.map(unitOf).filter(Boolean));
-  const sharing = Object.keys(entityDeviceIds).filter((id) => boxes.has(unitOf(id)));
+  // a box is a critical entity's device when nothing is above it (no unit of its own: deviceUnits lists parts only)
+  const boxes = new Set(crit.map((e) => entityDeviceIds[e]).filter((d): d is string => !!d && !(d in deviceUnits)));
+  const sharing = Object.keys(entityDeviceIds).filter((id) => { const u = unitOf(id); return !!u && boxes.has(u); });
   return new Set([...crit, ...sharing].flatMap((e) => [e, deviceOf(folding, e)]));
 }
 

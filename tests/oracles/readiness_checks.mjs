@@ -85,6 +85,11 @@ console.log("\n  how bad, as the top bar says it (review \"One answer per questi
     const entityMap = { "sensor.a_pump_power": { entityId: "sensor.a_pump_power", type: "sensor" }, "sensor.b_pump_power": { entityId: "sensor.b_pump_power", type: "sensor" } };
     const v = villaDevices({ entityMap, deviceGroups: [], dismissed: new Set(), hidden: new Set(), mappedEntityIds: new Set(Object.keys(entityMap)),
       entities: Object.fromEntries(Object.keys(reg).map((id) => [id, ent(id)])), entityDeviceIds: reg, critical: new Set(["switch.box_relay"]), deviceUnits: units });
+    // 2.496.477 marked upward too: a critical leak sensor hangs under its Zigbee bridge, as every Zigbee device does
+    const zreg = { "binary_sensor.leak": "leak", "sensor.motion": "pir", "switch.bridge_permit": "bridge" };
+    const z = criticalDevices(new Set(["binary_sensor.leak"]), new Map(), zreg, { leak: "bridge", pir: "bridge" });
+    ck("  ...but a critical PART marks only itself: a leak sensor never makes its bridge's other devices critical",
+       z.has("binary_sensor.leak") && !z.has("sensor.motion") && !z.has("switch.bridge_permit"), [...z]);
     ck("  ...as the villa's devices answer it (VillaDevices.isCritical): both pumps",
        v.isCritical("sensor.a_pump_power") && v.isCritical("sensor.b_pump_power") && !v.isCritical("sensor.other"));
   }
