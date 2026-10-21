@@ -30,6 +30,8 @@ import CameraDeviceButtons from "./CameraDeviceButtons";
 import { cameraChoices } from "@/utils/panelRules";
 import { useVillaModel } from "@/config/VillaModel";
 import { useConfig } from "@/config/ConfigContext";
+import { readingOf, stateWords } from "@/config/reading";
+import { historyStateColor } from "@/utils/stateColors";
 
 interface Props extends PanelProps {
   /** Lets the camera pin continuous rendering while the stream is open. */
@@ -42,7 +44,9 @@ interface Props extends PanelProps {
 // pointer/touch/key activity before fading back out. Long enough to read the
 // status bar and reach a control without racing it; short enough that the
 // feed is unobstructed whenever nobody is actually interacting.
-const CHROME_IDLE_MS = 2000;
+// ⚠️ 10 s (owner, 2026-10-21: "keep the buttons visible for 10 sec instead of 3 sec"): 2 s left no time to find a
+// camera's moves, siren and sound before they faded.
+const CHROME_IDLE_MS = 10_000;
 // A touch counts as a TAP (and so toggles the chrome) only if the finger
 // neither travelled nor lingered — otherwise a pan/pinch of a zoomed feed
 // would flip the chrome on every gesture. Slop is generous because a finger
@@ -54,6 +58,10 @@ const TAP_SLOP_PX = TAP_MOVE_TOL_PX;
 const TAP_MAX_MS = LONG_PRESS_MS;
 /** The feed before its player exists: the first tier, nothing painted. */
 const FEED_STARTING: CameraPlayerState = { mode: "webrtc", frameReady: false };
+
+/** The linked sensor's strip under the camera bar (px), and the bar above it: together the controls' 56 px. */
+const CAMERA_LINKED_STRIP_PX = 16;
+const CAMERA_BAR_WITH_LINKED_PX = 36;
 
 /** The camera bar's synthesized states, as the tooltip says them. */
 const CAMERA_BAR_LABEL: Record<string, string> = {
@@ -69,7 +77,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   // chrome — this panel is the one that doesn't use BasePanel (it's a
   // fullscreen feed, not a modal card), so it reads the identical context and
   // renders the control in its own bottom bar instead of re-deriving anything.
-  const { linked, back } = usePanelActions();
+  const { linked, linkedSensor, back } = usePanelActions();
   // ── The feed ─────────────────────────────────────────────────────────────
   // One player per camera, made in an EFFECT rather than a memo: StrictMode
   // runs effect cleanups once on mount, and a memoised player would be
@@ -375,8 +383,11 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   // this band answers "did it detect anything", which is the sensor's job —
   // linkedEntityId only says whether detection was armed.
   const motionId = mapping.motionEntityId;
+  // ⚠️ AND ITS LINKED SENSOR, A STRIP UNDER IT (architecture review, 2026-10-21): a linked binary_sensor lost its
+  // switch in 2.496.465 and got its band in every other window (BasePanel, LinkedSensorRow) — this one showed nothing.
+  const linkedId = linkedSensor?.entityId;
   const { data: barStates, status: statusFetch } = useHistorySource({ s: {
-    kind: "states", ids: motionId ? [mapping.entityId, motionId] : [mapping.entityId], hours: 24 } });
+    kind: "states", ids: [mapping.entityId, ...(motionId ? [motionId] : []), ...(linkedId ? [linkedId] : [])], hours: 24 } });
   const statusHistory = useMemo(() => barStates
     ? cameraBarHistory(barStates.s[mapping.entityId] ?? [], motionId ? barStates.s[motionId] ?? [] : undefined)
     : [], [barStates, mapping.entityId, motionId]);
@@ -642,11 +653,12 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
         onPointerEnter={(e) => { if (e.pointerType === "mouse") setHoveringControls(true); }}
         onPointerLeave={(e) => { if (e.pointerType === "mouse") setHoveringControls(false); }}
       >
-        <div className="camera-status-bar">
+        <div className={`camera-status-bar${linkedSensor ? " has-linked" : ""}`}>
           <StateTimeline
             data={statusHistory}
             status={statusFetch}
-            height={56}
+            // with a linked sensor's strip under it, the two together keep the buttons' 56 px
+            height={linkedSensor ? CAMERA_BAR_WITH_LINKED_PX : 56}
             vertical={railVertical}
             // Five-minute intervals, as every timeline (utils/trendInterval):
             // this bar answers "was there presence / was the camera down in
@@ -684,6 +696,22 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
                   : STATUS_COLOR.active
             )}
           />
+          {/* the linked sensor (a noise or door sensor): its state over the same day, named on hover — the strip the
+              other windows draw as a band under the device's own (LinkedSensorRow) */}
+          {linkedSensor && linkedId && (
+            <div className="camera-linked-strip" title={`${linkedSensor.label} (linked entity)`}>
+              <StateTimeline
+                data={barStates?.s[linkedId] ?? []}
+                status={statusFetch}
+                height={CAMERA_LINKED_STRIP_PX}
+                vertical={railVertical}
+                hours={24}
+                legend={false}
+                colorFor={readingOf(linkedId, entities[linkedId], "binary_sensor").stateColor ?? historyStateColor(linkedId)}
+                labelFor={stateWords(linkedId, entities[linkedId]?.attributes.device_class as string | undefined)}
+              />
+            </div>
+          )}
         </div>
         <div className="camera-controls">
           {/* ⚠️ THE CAMERA'S OWN BUTTONS, ONE LINE OF THEIR OWN ON A PHONE (owner, 2026-10-21: "show the control, alert

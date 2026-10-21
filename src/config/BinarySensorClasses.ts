@@ -130,24 +130,27 @@ export function alertStateFor(deviceClass: string | undefined): string | undefin
   return alarm === "none" ? undefined : alarm;
 }
 
-/** Whether this class's problem state (alertStateFor) is a FAULT, a line in "Needs attention": every class but a
+/** Whether this sensor's problem state (alertStateFor) is a FAULT, a line in "Needs attention": every sensor but a
  *  detection (motion, occupancy), which is red on its badge and its window and listed nowhere (owner, 2026-10-21). */
-export function alertIsFault(deviceClass: string | undefined): boolean {
-  return !detectsPresence(deviceClass);
+export function alertIsFault(entityId: string, deviceClass: string | undefined): boolean {
+  return !detectsPresence(entityId, deviceClass);
 }
 
 /** Whether this class is a DETECTION — motion, moving, occupancy, presence: its "on" glows its room on the map
  *  (EntityVisuals' room glow, beside a problem state "on": an open door glows its room too, owner 2026-10-21), and it
  *  is no fault (alertIsFault). */
-export function detectsPresence(deviceClass: string | undefined): boolean {
-  return binarySensorClassInfo(deviceClass).detects === true;
+export function detectsPresence(entityId: string, deviceClass: string | undefined): boolean {
+  // ⚠️ ONE ANSWER, BY ITS CLASS OR — WITH NONE — ITS ID (isMotionSensor). This read the class only, so a sensor the
+  // villa's system gives no class but names "…_pir" was a "Motion detected" toast AND a fault in "Needs attention"
+  // each time someone walked past (architecture review, 2026-10-21).
+  return isMotionSensor(entityId, deviceClass);
 }
 
 /** Whether this class's "on" glows its room on the map: a detection (someone there), or its problem state "on" — a
  *  door or window open, a leak. ⚠️ ANY "ON" GLOWED (owner, 2026-10-21: the laundry room red while its door sensor read
  *  Open — "keep it that way, it makes sense"), a connected access point or a plugged-in charger too: never good news. */
-export function glowsRoom(deviceClass: string | undefined): boolean {
-  return detectsPresence(deviceClass) || alertStateFor(deviceClass) === "on";
+export function glowsRoom(entityId: string, deviceClass: string | undefined): boolean {
+  return detectsPresence(entityId, deviceClass) || alertStateFor(deviceClass) === "on";
 }
 
 /** Device classes whose on/off state is a physical opening's POSITION
@@ -169,9 +172,10 @@ export const OPENING_DEVICE_CLASSES: ReadonlySet<string> = new Set([
  *  ⚠️ ONE LIST. Dashboard's motion toast and EntityCategories' access bucket
  *  each carried their own copy, and the toast's comment claimed its id hints
  *  were "the same id hints categoryForEntity uses" — they were not. */
-export const MOTION_DEVICE_CLASSES: ReadonlySet<string> = new Set([
-  "motion", "presence", "occupancy", "moving",
-]);
+export const MOTION_DEVICE_CLASSES: ReadonlySet<string> = new Set(
+  // the table's own `detects` flags: it was a second hand-written list beside them
+  Object.keys(BINARY_SENSOR_CLASSES).filter((c) => BINARY_SENSOR_CLASSES[c].detects),
+);
 /** The id words that name a motion detector when HA reports no device_class.
  *  Anchored on "." / "_" / the ends ("_" is a word character, so `\b` would
  *  match "motion" inside "promotion_x"). */

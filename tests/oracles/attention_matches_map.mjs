@@ -21,7 +21,7 @@ const ent = (id, state, attributes = {}) => ({ entity_id: id, state, attributes 
 const STATES = [
   ["lock.front", "unlocked"], ["lock.back", "locked"], ["lock.side", "locking"], ["lock.shed", "jammed"],
   ["binary_sensor.leak", "on", "moisture"], ["binary_sensor.dry", "off", "moisture"],
-  ["binary_sensor.pir", "on", "motion"],
+  ["binary_sensor.pir", "on", "motion"], ["binary_sensor.garden_pir", "on"],
   ["binary_sensor.ap", "off", "connectivity"], ["binary_sensor.ap_up", "on", "connectivity"],
   ["binary_sensor.bare", "on"],
   ["sensor.pump_status", "fault"], ["sensor.temp", "24"], ["sensor.weather", "sunny"],
@@ -42,8 +42,9 @@ const villa = devicesOf({ ids: selectableIds, unavailable: unavailableIds });
 const items = buildAttentionItems({ devices: villa, entities, entityMap, resolvedRooms, fmData: EMPTY_FM_DATA });
 const listed = items.filter((i) => i.kind === "alarm").map((i) => i.entityId).sort();
 // A DETECTION is red and no fault (owner, 2026-10-21: "don't create a fault in cockpit when Motion sensor are
-// triggered"): the one red badge not listed.
-const DETECTIONS = ["binary_sensor.pir"];
+// triggered"): the one red badge not listed — by its class, or with none by its id, as the motion toast reads it
+// (architecture review, 2026-10-21: a "…_pir" with no class was a fault each time someone walked past).
+const DETECTIONS = ["binary_sensor.garden_pir", "binary_sensor.pir"];
 
 console.log(`  red on the map: ${redOnMap.join(", ")}`);
 console.log(`  listed alarms : ${listed.join(", ")}`);

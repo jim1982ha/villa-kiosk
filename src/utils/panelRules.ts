@@ -179,7 +179,8 @@ export function cameraControlsOf(
  *  2026-10-21: "why do I see Tapo Storage Room HD Stream (Direct) … since the one configured in the villa is Tapo
  *  Storage Room HD Stream?" — every `camera.*` the villa's system had was listed, and a Tapo camera gives two streams
  *  of one device). Per device: the stream placed in the villa (the entity map), else the device's own entity when it is
- *  a camera, else the first; never one hidden or not a villa device (`devices`, VillaDevices). The open camera is
+ *  a camera, else the first; never one hidden or not a villa device (`devices`, VillaDevices) — unless placed on the
+ *  map, which lists it whatever the villa's system says (its badge stands there). The open camera is
  *  always in it (stepping on from where it stands). Unsorted: the window sorts by name. */
 export function cameraChoices(
   ids: readonly string[], current: string,
@@ -188,9 +189,12 @@ export function cameraChoices(
 ): string[] {
   const byDevice = new Map<string, string[]>();
   for (const id of [...ids].sort()) {
-    if (!id.startsWith("camera.") || devices.isHidden(id)) continue;
+    if (!id.startsWith("camera.")) continue;
     const dev = devices.deviceOf(id);
-    if (!devices.has(dev)) continue;
+    // ⚠️ A CAMERA PLACED ON THE MAP IS LISTED, HIDDEN OR NOT (owner, 2026-10-21: "why don't I see the Tapo Server Room
+    // camera … while it's well defined in the Kiosk configuration"): its placed stream was hidden in the villa's
+    // system, which made its whole device "no device" — gone from the list while its badge stood on the map.
+    if (!placed(id) && (devices.isHidden(id) || !devices.has(dev))) continue;
     byDevice.set(dev, [...(byDevice.get(dev) ?? []), id]);
   }
   const out = [...byDevice].map(([dev, cams]) => cams.find(placed) ?? (cams.includes(dev) ? dev : cams[0]));

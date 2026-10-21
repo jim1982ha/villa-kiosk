@@ -70,4 +70,15 @@ ck("  ...the band is the windows' own StateTimeline (LINKED_BAND_PX), coloured b
      && /const range = useSharedRange\(\);/.test(rowSrc) && propText(tl[0], "hours") === "range.hours"
      && /"History range", className, useContext\(SharedRange\)\)/.test(readFileSync(new URL("../../src/components/panels/historyRange.tsx", import.meta.url), "utf8")));
 }
+// architecture review, 2026-10-21: the camera's video window (its own frame, not BasePanel) showed nothing for a
+// linked sensor — the switch gone in 2.496.465, the band only in the other windows
+{
+  const cam = parseTsx("components/panels/CameraPanel.tsx");
+  const strip = elements(cam, "StateTimeline").filter((t) => propText(t, "height") === "CAMERA_LINKED_STRIP_PX");
+  const box = elements(cam, "div").filter((d) => propText(d, "className") === '"camera-linked-strip"');
+  ck("the camera's video window draws the linked sensor's strip under its bar, under `linkedSensor`, coloured by the reading",
+     strip.length === 1 && box.length === 1 && guardsOf(box[0]).join().includes("linkedSensor")
+     && childTags(box[0]).includes("StateTimeline")
+     && /reading|readingOf/.test(propText(strip[0], "colorFor") ?? ""), box.map(guardsOf));
+}
 done("✅ the panel's header, derived once");

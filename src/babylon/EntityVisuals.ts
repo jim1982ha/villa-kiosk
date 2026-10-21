@@ -1965,7 +1965,9 @@ export class EntityVisuals {
    *  resolvedRooms) — HA's own Area assignment wins whenever a device has
    *  one; this is only ever consulted for the entities it doesn't cover. */
   roomForEntity(entityId: string): string | null {
-    const anchor = this.labels.get(entityId)?.anchor;
+    // ⚠️ WHERE IT IS DRAWN, BADGE OR NOT (roomAnchor): this read its badge, and since 2.496.469 a device drawn only by
+    // its poses or "__nobadge" has none — "Other" in every list, and no room glow (architecture review, 2026-10-21).
+    const anchor = this.roomAnchor(entityId);
     if (!anchor) return null;
     const p = anchor.getAbsolutePosition();
     // Its own storey, then any room containing it (never "Other" for a
@@ -2506,7 +2508,7 @@ export class EntityVisuals {
     const map = this.config.entityMap[entity.entity_id];
     const room = deviceRoom(this.resolvedRooms, entity.entity_id);
     // someone there, or a door open — never an "on" that is good news (glowsRoom, owner 2026-10-21)
-    if (map?.type === "binary_sensor" && room && glowsRoom(entity.attributes.device_class as string | undefined)) {
+    if (map?.type === "binary_sensor" && room && glowsRoom(entity.entity_id, entity.attributes.device_class as string | undefined)) {
       this.roomHighlight.setActive(room, on);
     }
   }
@@ -3926,10 +3928,15 @@ export class EntityVisuals {
       (id) => (this.planRoomOf(id) as { name?: string } | null)?.name ?? null, (id) => roomKey(this.roomOf(id)));
   }
 
-  /** A badge's PLAN room (Storeys.deviceRoomAt at its anchor), kept: anchors do not move between loads. */
+  /** Where a device stands in the model: its anchor (buildLabelAnchors), which every drawn device has — badge or not. */
+  private roomAnchor(id: string): TransformNode | undefined {
+    return this.labelAnchors.get(id) ?? this.labels.get(id)?.anchor;
+  }
+
+  /** A device's PLAN room (Storeys.deviceRoomAt at its anchor), kept: anchors do not move between loads. */
   private planRoomOf(id: string): unknown {
     if (this.planRoomCache.has(id)) return this.planRoomCache.get(id);
-    const a = this.labels.get(id)?.anchor;
+    const a = this.roomAnchor(id);
     const p = a?.getAbsolutePosition();
     const r = p ? this.plan.deviceRoomAt(p.x, p.y, p.z) : null;
     this.planRoomCache.set(id, r);
