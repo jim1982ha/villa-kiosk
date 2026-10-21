@@ -1,3 +1,12 @@
+## 2.496.484
+
+### Changed
+- **Two unfinished pieces removed.** A guest's "narrower A/C range" was in the code but nothing could ever set it, so
+  guests always had the A/C's full range (and still do). An unused "reset settings" that could have erased the villa's
+  device setup on every tablet, had anything ever called it, is gone too.
+- **The add-on's address lists agree again.** Two addresses retired on 20 October were still listed for the offline
+  cache and the developer server; the check that compares the four lists now also catches a stale one.
+
 ## 2.496.483
 
 ### Fixed
