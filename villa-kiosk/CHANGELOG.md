@@ -1,3 +1,12 @@
+## 2.496.472
+
+### Changed
+- **The badge comes from the device's own object, and stands over it.** A device's badge comes only from the 3D object
+  named exactly after it (binary_sensor.main_entrance_door_sensor); objects with an ending (…__on, …__off,
+  …__nobadge) never make one. When the model holds the plain object AND a `__nobadge` one, the badge shows, from the
+  plain one. The badge now stands over the plain object only, no longer over the middle of all of the device's
+  objects (a lock drawn as its keypad and its door poses: over the keypad).
+
 ## 2.496.471
 
 ### Changed

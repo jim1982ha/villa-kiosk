@@ -146,7 +146,7 @@ import { COSMETIC_MAPPING_FIELDS, type EntityMapDelta } from "./entityMapDiff";
 // — pure logic, extracted to keep this file to the things that actually touch
 // the scene. See meshVariants.ts for the vocabulary rules themselves.
 import {
-  pickNearestVariant, desiredVariantWord, orderVariantWords, badgeFromMeshes, NO_BADGE_WORD,
+  pickNearestVariant, desiredVariantWord, orderVariantWords, badgeMeshes, NO_BADGE_WORD,
 } from "./meshVariants";
 // Pure label/chip overlap geometry — see labelLayout.ts.
 import { type ChipTextMetrics } from "./labelLayout";
@@ -1845,8 +1845,11 @@ export class EntityVisuals {
    *  naturally sits close to each asset regardless of how tall it is or how
    *  high up it's mounted — no per-object hand-tuning. */
   private buildLabelAnchors(): void {
-    for (const [entityId, meshes] of this.byEntity) {
-      if (!meshes.length) continue;
+    for (const [entityId, all] of this.byEntity) {
+      if (!all.length) continue;
+      // over the objects its badge comes from (badgeMeshes), never over its poses or a "__nobadge" one
+      const own = badgeMeshes(all);
+      const meshes = own.length ? own : all;
       const bounds = this.mergedWorldBounds(meshes);
       if (!bounds) continue;
       const { min, max } = bounds;
@@ -2805,8 +2808,8 @@ export class EntityVisuals {
     for (const [entityId, meshes] of this.byEntity) {
       if (!meshes.length) continue;
       if (hiddenMembers.has(entityId)) continue;
-      // an object of it named "<entity>__nobadge": no badge, whatever its family (badgeFromMeshes, owner 2026-10-21)
-      if (!badgeFromMeshes(meshes.map((m) => m.name))) continue;
+      // a badge only from an object named after the entity itself — never its poses nor "__nobadge" (badgeMeshes)
+      if (!badgeMeshes(meshes).length) continue;
       const map = this.mapping.get(entityId);
       if (!map) continue;
       const anchor = this.labelAnchors.get(entityId) ?? meshes[0];
