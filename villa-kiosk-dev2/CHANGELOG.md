@@ -1,3 +1,11 @@
+## 2.496.471
+
+### Changed
+- **A badge only from an object named exactly after the device.** A device gets a badge on the map only when the 3D
+  model holds an object named `<entity_id>` with no ending. Objects with an ending never make one: its poses
+  (…__on, …__off) and `…__nobadge` (no badge even beside the plain object). A device drawn only by its poses shows
+  its state through them and floats no badge.
+
 ## 2.496.470
 
 ### Changed
