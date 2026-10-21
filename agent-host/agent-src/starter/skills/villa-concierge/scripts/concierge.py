@@ -27,6 +27,7 @@ from vesta_shared.problems import Problems  # noqa: E402  (what is still open: o
 from vesta_shared.store import Store  # noqa: E402
 from vesta_shared.messaging import incident_tag  # noqa: E402  ("Incident #N", the same everywhere)
 from vesta_shared.offline import devices_offline  # noqa: E402  (the one reading of "offline now")
+from vesta_shared.asleep import read_states  # noqa: E402  (a sleeping device reads its last real state)
 from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the Limits tab)
 
 
@@ -164,7 +165,8 @@ def main(argv=None):
     s = script.Context(a)
     pack, store, cli = s.pack, s.store, s.live_client
     if a.cmd == "status":
-        res = status(pack, cli.states() if cli else {}, store)
+        # a device asleep between its reports reads its last real state (vesta_shared.asleep), never "unavailable"
+        res = status(pack, read_states(cli, pack, datetime.now(timezone.utc)) if cli else {}, store)
     else:
         areas = place(pack, a.where)
         res = {"targets": find(pack, a.what, a.where),

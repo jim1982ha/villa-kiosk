@@ -21,7 +21,11 @@ closure, and never raise the same thing twice.
   the FM's message — never at the next night; its fault closes once it has been
   back `back_online_minutes` (10).
   The same read closes any fault about a device deleted from the villa's system
-  ("Closed: this device no longer exists in the villa's system.").
+  ("Closed: this device no longer exists in the villa's system."), hidden in it
+  ("Closed: this device is hidden in the villa's system, …") or listed as asleep
+  between its reports ("Closed: this device sleeps between its reports …").
+  A device asleep between its reports is judged on its last real reading (its
+  battery included), never on "unavailable".
   Every open finding of the night is read again every 5 minutes too, each by its
   own rule over its own device — never a full batch, never a new finding. One no
   longer found closes ("Cleared: the check at 12:05 no longer sees it."); one
@@ -83,7 +87,7 @@ closure, and never raise the same thing twice.
 | PM-EXPECTED-SILENT | power | An intermittent, usage-driven asset was scheduled and did not run. Report only, never a task. | schedule helper |
 | PM-COUNTER-RESET | energy | An energy counter went backwards: the day's kWh is unreliable. | none |
 | PM-BATTERY-LOW / -CRIT / -TREND | battery | Level under `battery_warn_pct` (task), under `battery_crit_pct` (task now, P2 if the device is critical), or falling fast enough to be empty within `battery_trend_warn_days` (report). An open LOW or CRIT closes only once the level is above its line plus `battery_clear_margin_points` (5: LOW above 25 %, CRIT above 15 %). A battery that reports volts needs `<asset>_battery_nominal_v`. | `vesta_battery_warn_pct`, `vesta_battery_crit_pct`, `vesta_battery_clear_margin_points` |
-| PM-UNAVAILABLE | availability | (Never a device the Rules page lists as "Unavailable by design": asleep between its reports — nor its reconnects, nor its silence; an open fault of one closes at the next recheck.) A device offline for more than `unavailable_minutes` (read every 5 minutes, and at batch time) — none for a device an open offline alert already follows, one finding per physical device; three or more devices of one integration offline together become one "integration down" finding. P2 when the device is critical. | `vesta_unavailable_minutes` |
+| PM-UNAVAILABLE | availability | (Never a device the VESTA Kiosk lists as "Asleep between reports" (Advanced Settings) — nor its reconnects, nor its silence; an open fault of one closes at the next recheck.) A device offline for more than `unavailable_minutes` (read every 5 minutes, and at batch time) — none for a device an open offline alert already follows, one finding per physical device; three or more devices of one integration offline together become one "integration down" finding. P2 when the device is critical. | `vesta_unavailable_minutes` |
 | PM-SILENT | level | A sensor online but not reporting for 24 h. | `vesta_silence_hours` |
 | PM-LEVEL-HIGH | level | A temperature or humidity above `<asset>_max_c` / `<asset>_max_humidity_pct` when such a helper exists. | asset helper |
 | PM-RECONNECT-LOOP | network | Ten or more drop/reconnect events in three days for one device (logbook). | `vesta_reconnect_events`, `vesta_reconnect_days` |

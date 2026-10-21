@@ -1,3 +1,17 @@
+## 0.12.312
+
+What you will see:
+- A door sensor on the VESTA Kiosk's "Asleep between reports" list now gets battery warnings. Every check reads it
+  through the last value it reported, never "unavailable": the night check, the 5-minute recheck, the weekly report's
+  battery table and the chat's villa status.
+- A device you hide while it has an "Offline" fault: the fault closes within 5 minutes, saying the device is hidden —
+  no longer left until 02:00 and then marked "Cleared" while the device is still off.
+- An investigation no longer says a sensor "stopped reporting" when it simply had no value to give (a wind chill on a
+  still afternoon); it is shown as "reported no value", and is no unusual moment.
+- The note of a fault closed for a sleeping device now points to the VESTA Kiosk's menu (Advanced Settings › Asleep
+  between reports), no longer to the Rules page.
+- In the minute after you hide, rename or add a device, no check can read the Agent's device list half rewritten.
+
 ## 0.12.311
 
 What you will see:

@@ -226,23 +226,39 @@ class KnowledgePack:
         return entity_id in idx[0] or (self.physical_device_of(entity_id) or "") in idx[1]
 
     def is_asleep(self, entity_id: str | None) -> bool:
-        """`entity_id` is unavailable by design (vesta_shared.asleep: the VESTA Kiosk's list, read once per pack): listed,
-        or an entity of a device listed — a sensor's battery or signal entity sleeps with it. Like is_critical."""
-        idx = self.__dict__.get("_asleep")
-        if idx is None:
-            from .asleep import listed
-            idx = self.asleep_are(listed())
+        """`entity_id` is unavailable by design (vesta_shared.asleep: the VESTA Kiosk's list, read with the pack — `load`):
+        listed, or an entity of a device listed — a sensor's battery or signal entity sleeps with it. Like is_critical."""
+        idx = self.__dict__.get("_asleep") or (set(), set())
         if not entity_id:
             return False
         return entity_id in idx[0] or (self.physical_device_of(entity_id) or "") in idx[1]
 
     def asleep_are(self, ids) -> tuple[set, set]:
-        """Use `ids` as the list of devices unavailable by design (the agent's own process passes the Kiosk's; a script
-        reads it beside VESTA_PACK, `is_asleep`)."""
+        """Use `ids` as the list of devices unavailable by design (`load` passes the Kiosk's, kept beside the pack)."""
         ids = set(ids)
         idx = (ids, {d for d in (self.physical_device_of(e) for e in ids) if d})
         self.__dict__["_asleep"] = idx
         return idx
+
+    def is_watched(self, entity_id: str | None) -> bool:
+        """Does the agent watch `entity_id` at all? Not when it is hidden in the villa's system (left out of every family:
+        the Rules page says hidden devices are ignored) — by entity, as the VESTA Kiosk hides it."""
+        idx = self.__dict__.get("_hidden")
+        if idx is None:
+            idx = self.__dict__["_hidden"] = set(self.hidden)
+        return bool(entity_id) and entity_id not in idx
+
+    def standing(self, entity_id: str | None, state) -> str:
+        """Where `entity_id` stands, reading `state` (None: the villa's system has no such entity) — ONE answer for every
+        check (device_state: ANSWERS, NO_VALUE_NOW, OFFLINE_NOW, ABSENT; ASLEEP_NOW: "unavailable" from a device
+        unavailable by design, which is never a fault, never a drop).
+
+        ⚠️ FOUR MEANINGS OF "NOT ANSWERING" (architecture review, 2026-10-21): the night's silent check, the hidden-device
+        check, the 5-minute recheck and the alert desk each combined "offline", "unknown", "asleep" and "absent" their
+        own way, and each list added since (asleep, 2026-10-21) had to be taught to every one of them by hand."""
+        from .device_state import ASLEEP_NOW, OFFLINE_NOW, reading
+        r = reading(state)
+        return ASLEEP_NOW if r == OFFLINE_NOW and self.is_asleep(entity_id) else r
 
     def entities(self, family: str) -> list[dict]:
         return self.families.get(family, [])
@@ -407,8 +423,15 @@ class KnowledgePack:
 
     @classmethod
     def load(cls, path: str) -> "KnowledgePack":
-        d = json.load(open(path, encoding="utf-8"))
-        return cls(**d)
+        """The pack at `path`, with the VESTA Kiosk's devices unavailable by design kept beside it (vesta_shared.asleep):
+        ⚠️ READ WITH THE PACK, ONE WAY (architecture review, 2026-10-21): the checks read the list through an environment
+        variable, the agent's tools set it by hand and the Rules page read the file — a fourth reader forgetting it
+        would call a sleeping door sensor offline again."""
+        from .asleep import listed
+        with open(path, encoding="utf-8") as f:
+            pack = cls(**json.load(f))
+        pack.asleep_are(listed(path))
+        return pack
 
     @classmethod
     def read(cls, path: str) -> "KnowledgePack | None":

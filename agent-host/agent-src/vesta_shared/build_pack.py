@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from datetime import datetime, timezone
 
@@ -61,8 +62,13 @@ def main(argv=None):
     pack = build_pack(registry, helpers, states, bom, people, channels,
                       generated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"), villa=args.villa,
                       critical=_critical(cli, args.out), detailed_days=_detailed_days(cli))
-    with open(args.out, "w", encoding="utf-8") as f:
+    # ⚠️ WRITTEN BESIDE, THEN SWAPPED IN (architecture review, 2026-10-21): since 0.12.309 a pack is rebuilt in the day,
+    # a minute after the villa's devices change, while the 5-minute checks read it — a pack half written read as none,
+    # and for that tick a sleeping door's alert could read "over" and its device "offline"
+    tmp = args.out + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
         f.write(pack.to_json())
+    os.replace(tmp, args.out)
     summary = {"villa": pack.villa, "families": {k: len(v) for k, v in pack.families.items()},
                "assets": len(pack.assets), "unknown_area": pack.unknown_area, "unclassified": len(pack.unclassified)}
     if args.store:

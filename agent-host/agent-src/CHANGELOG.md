@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.302 (21 October 2026)
+
+- Architecture review 2026-10-21 (ARCHITECTURE.md "Where a device stands"): KnowledgePack.standing (device_state
+  ASLEEP_NOW) and is_watched; asleep.read_states read by nightly, recheck_open, reports Ctx.states, concierge status and
+  the alert desk; KnowledgePack.load attaches the Kiosk's list (is_asleep's VESTA_PACK fallback removed; tools read the
+  pack once per run; app.pack() reloads on the list file too); recheck.back_online HIDDEN_NOTE; ASLEEP_NOTE points to
+  the Kiosk; build_pack writes through os.replace; investigate: NO_VALUE never notable, its band "reported no value".
+
 ## 0.6.301 (21 October 2026)
 
 - policy.RETIRED_SECTIONS (asleep_entities): never "Unknown section"; policy_doc.apply_form drops every one of them.

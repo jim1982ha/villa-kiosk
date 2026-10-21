@@ -59,6 +59,7 @@ from vesta_shared import agent_records  # noqa: E402  (the agent's records: one 
 from vesta_shared.problems import Problems  # noqa: E402  (what is still open: one owner)
 
 from vesta_shared.offline import devices_offline  # noqa: E402  (the one reading of "offline now")
+from vesta_shared.asleep import read_states  # noqa: E402  (a sleeping device reads its last real state)
 from vesta_shared.retention import days_words  # noqa: E402  (how long the villa's system keeps detail, in words)
 from vesta_shared.past import automation_run, unread  # noqa: E402  (one reading of "a rule ran"; the one "could not be read whole")
 from vesta_shared.critical import run_when  # noqa: E402  (a rule's "When this rule runs": one reading)
@@ -144,7 +145,8 @@ class Ctx:
         if self._states is None:
             ids = [r["entity_id"] for fam in self.cfg.get("offline_families") or [] for r in self.pack.families.get(fam, [])]
             ids += [r["entity_id"] for r in self.pack.families.get("battery", [])]
-            self._states = self.cli.states(sorted(set(ids))) if ids else {}
+            # a device asleep between its reports reads its last real state (vesta_shared.asleep): its battery has a line
+            self._states = read_states(self.cli, self.pack, self.now, sorted(set(ids))) if ids else {}
         return self._states
 
     def name(self, entity_id: str) -> str:

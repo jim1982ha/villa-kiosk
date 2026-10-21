@@ -45,7 +45,7 @@ from vesta_shared import retention  # noqa: E402  (where the villa's detail ends
 from vesta_shared.store import Notes, notes_of  # noqa: E402  (an alert's notes: one reader)
 
 from vesta_shared.asleep import without_sleep  # noqa: E402  (unavailable by design: one list, vesta_shared.asleep)
-from vesta_shared.device_state import NO_VALUE, OFFLINE, RestartDrops  # noqa: E402  (the one "does this device answer")
+from vesta_shared.device_state import ASLEEP_NOW, NO_VALUE, OFFLINE, RestartDrops  # noqa: E402  (the one "does this device answer")
 from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the VESTA Agent page's Limits tab)
 # ⚠️ WHAT A CONTROL CAN PROVE (architecture review 32 follow-up, 2026-10-11): an on/off control that stayed OFF the whole
 # period — and the days before — while another device ran is not what turned that device on. An account blamed a
@@ -918,7 +918,10 @@ def _notable(ps: list[dict], ref: dict, on: float | None) -> list[dict]:
             why.append(f"it read about {p['mean']:.3g} at rest instead of its usual {rest:g}")
             alerts.append((th("level_change_gap_s"), f"it reads more than {rest + (level - rest) * th('rest_high_share'):.3g} "
                                                      f"at rest for {lasting(th('level_change_gap_s'))}"))
-        elif p["kind"] in (kinds.OFFLINE, kinds.NO_VALUE) and p["seconds"] >= th("offline_min_s"):
+        elif p["kind"] == kinds.OFFLINE and p["seconds"] >= th("offline_min_s"):
+            # ⚠️ NO VALUE IS NOT SILENCE (architecture review, 2026-10-21): a wind chill on a still afternoon, a sensor
+            # that answers with nothing to give, was "it stops reporting" here while every other check knew better
+            # (vesta_shared.device_state: "unknown" is not offline). Its band still shows it; it is no unusual moment.
             why.append("it " + kinds.did(p["kind"]))
             alerts.append((th("offline_min_s"), f"it stops reporting for {lasting(th('offline_min_s'))}"))
         # ⚠️ A BURST SAYS ITS RUNS AGAINST THE USUAL RUN (villa, 2026-10-21 00:13): "⟵ runs of about 25 s each" alone
@@ -951,8 +954,8 @@ def around(client, store, start: datetime, end: datetime, focus: list[str], zone
     hours = max((end - start).total_seconds() / 3600, 1)
     book = client.logbook_read(start, end, now=now)
     # a device unavailable by design (vesta_shared.asleep): its "unavailable" rows are sleep, not a device that went
-    rows = [r for r in book.rows if not (pack is not None and str(r.get("state")) in OFFLINE
-                                         and pack.is_asleep(r.get("entity_id")))]
+    rows = [r for r in book.rows
+            if not (pack is not None and pack.standing(r.get("entity_id"), r.get("state")) == ASLEEP_NOW)]
     gone = book.older_than_kept
     count: dict[str, int] = {}
     for r in rows:

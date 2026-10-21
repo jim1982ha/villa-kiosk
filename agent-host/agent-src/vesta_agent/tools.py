@@ -136,8 +136,9 @@ done by the code, not by you. Ignore the parts of the text below that tell you t
 
 
 
-ASLEEP_NOTE = ("Unavailable by design (Rules › Protected devices): it sleeps between its reports, so \"unavailable\" is "
-               "not a fault. What it reads is its last state before \"unavailable\" (its history).")
+ASLEEP_NOTE = ("Unavailable by design (VESTA Kiosk › Advanced Settings › Asleep between reports): it sleeps between "
+               "its reports, so \"unavailable\" is not a fault. What it reads is its last state before \"unavailable\" "
+               "(its history).")
 
 
 def with_asleep(text: str, is_asleep) -> str:
@@ -445,34 +446,28 @@ class Toolbox:
         from vesta_shared.ha_client import McpClient
         return retention.ai_history_answer(McpClient(session=self.reader.mcp), args, text, days)
 
-    def _detailed_days(self) -> float | None:
-        """How many days of detailed history the villa's system holds (the knowledge pack's measure), read once per run."""
-        if "_days" not in self.__dict__:
+    def _pack(self):
+        """The knowledge pack, with the Kiosk's devices unavailable by design (KnowledgePack.load), read once per run;
+        None before it is built."""
+        if "_pack_read" not in self.__dict__:
             from vesta_shared.knowledge_pack import KnowledgePack
-            pack = KnowledgePack.read(self.s.pack_path)
-            self.__dict__["_days"] = pack.detailed_days if pack else None
-        return self.__dict__["_days"]
+            self.__dict__["_pack_read"] = KnowledgePack.read(self.s.pack_path)
+        return self.__dict__["_pack_read"]
+
+    def _detailed_days(self) -> float | None:
+        """How many days of detailed history the villa's system holds (the knowledge pack's measure)."""
+        pack = self._pack()
+        return pack.detailed_days if pack else None
 
     def _asleep(self):
-        """Is an entity unavailable by design (the Kiosk's list as last told, vesta_shared.asleep; each listed one's
-        whole device: the pack)? Read once per run."""
-        if "_asleep_of" not in self.__dict__:
-            from vesta_shared.asleep import listed as kiosk_list
-            from vesta_shared.knowledge_pack import KnowledgePack
-            listed = set(kiosk_list(self.s.pack_path))
-            pack = KnowledgePack.read(self.s.pack_path) if listed else None
-            if pack is not None:
-                pack.asleep_are(listed)
-            self.__dict__["_asleep_of"] = pack.is_asleep if pack is not None else listed.__contains__
-        return self.__dict__["_asleep_of"]
+        """Is an entity unavailable by design (the Kiosk's list, each listed one's whole device: the pack)?"""
+        pack = self._pack()
+        return pack.is_asleep if pack is not None else (lambda e: False)
 
     def _hidden(self) -> set[str]:
-        """The entities hidden in the villa's system (the knowledge pack's), read once per run."""
-        if "_hidden_ids" not in self.__dict__:
-            from vesta_shared.knowledge_pack import KnowledgePack
-            pack = KnowledgePack.read(self.s.pack_path)
-            self.__dict__["_hidden_ids"] = set(pack.hidden) if pack else set()
-        return self.__dict__["_hidden_ids"]
+        """The entities hidden in the villa's system (the knowledge pack's)."""
+        pack = self._pack()
+        return set(pack.hidden) if pack else set()
 
     def _call_service(self, person: Person | None, chat_id: int | None):
         schema = {"type": "object", "properties": {

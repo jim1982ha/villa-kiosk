@@ -9,11 +9,15 @@ KIOSK'S LIST, NOT THE AGENT'S (owner, the same night: "the KIOSK will be always 
 configured … a list at a unique place, and all of the consumers can see it"): 0.12.308 kept it in policy.yaml; the
 Kiosk keeps it now, and hands it over in its answer to every heartbeat (agent-contract.json `unavailableByDesign`).
 The agent writes what it was last told beside its knowledge pack (`save`, FILE) — kept while the Kiosk does not
-answer — and every check reads that (`listed`). An entity listed stands for its whole physical device (KnowledgePack.is_asleep: a sensor's battery or signal entity sleeps with it). Every reading of
-"offline" asks the pack: vesta_shared.offline.devices_offline (the night check's offline faults, the reports, the chat
-status), the reconnect count and the hidden-device check (preventive-maintenance), the 5-minute recheck that closes
-an offline fault, the investigation (its timeline and its "stopped reporting"), the alert desk's "is it still there"
-and the AI's own reads (vesta_agent.tools.with_asleep).
+answer — and the pack carries it from there: KnowledgePack.load reads it with the pack, so whoever has the pack has the
+list. An entity listed stands for its whole physical device (KnowledgePack.is_asleep: a sensor's battery or signal
+entity sleeps with it).
+
+⚠️ TWO QUESTIONS, ONE PLACE EACH (architecture review, 2026-10-21 — each check had been taught "asleep" by hand, and
+the battery checks were missed: a sleeping door sensor's battery was read as "unavailable", never as a charge):
+  - what a state says of its device: KnowledgePack.standing (asleep is never offline, never "not answering");
+  - what a sleeping device reads: `read_states`, the villa's states with each one asleep given its LAST REAL state —
+    how the night check, its 5-minute recheck, the reports, the concierge and the alert desk read the villa.
 """
 from __future__ import annotations
 
@@ -104,3 +108,10 @@ def awake_states(client, pack, states: dict, now: datetime) -> dict:
     for eid, real in last_real(client, sleeping, now).items():
         out[eid] = {**(states.get(eid) or {}), **real, "asleep": True}
     return out
+
+
+def read_states(client, pack, now: datetime, entity_ids=None) -> dict:
+    """The villa's states (`entity_ids`: those; None: every one) as every check reads them: each device unavailable by
+    design that says "unavailable" now given its last real state instead (`awake_states`)."""
+    states = client.states(entity_ids) if entity_ids is not None else client.states()
+    return awake_states(client, pack, states, now)

@@ -805,3 +805,26 @@ question about the pool pump history…" — he wanted a button that starts it.
   dropped", or to always; the claim not checked (press) and its used/chat check, its write; the answer kept instead of
   the question; every button removed on the press; the rows replacing the others (turn_reply); the press routed to the
   fault handler; another question run; the skill.yaml checks (no command, unknown key, no label); the page's row.
+
+## Where a device stands, and what a sleeping one reads (architecture review, 2026-10-21, 0.12.312)
+
+Six releases in a row taught "asleep" and "hidden" to each check by hand; some were missed (owner-visible: a sleeping
+door sensor's battery never judged; a device hidden with an open offline fault closed at 02:00 as "Cleared" while
+still off; an investigation calling a sensor with no value "stopped reporting").
+- **One answer to "what does this state say of its device"**: `KnowledgePack.standing(entity_id, state)` →
+  device_state ANSWERS / NO_VALUE_NOW / OFFLINE_NOW / ABSENT, or ASLEEP_NOW ("unavailable" from a device the Kiosk
+  lists). Read by offline.devices_offline, nightly hidden_in_rule / silent / _device_still_talks, investigate.around.
+  Whether the agent watches an entity at all is `KnowledgePack.is_watched` (not hidden — by entity, as the Kiosk hides).
+- **One way the villa's states are read by a check**: `asleep.read_states(client, pack, now, ids)` — each sleeping
+  device given its last real state (`awake_states`). The night check, recheck_open, the reports' Ctx.states, the
+  concierge's status and the alert desk read through it.
+- **One way the Kiosk's list arrives**: `KnowledgePack.load` attaches `asleep.listed(path)`; the VESTA_PACK fallback
+  inside is_asleep and the tools' second read are gone (tools read the pack once per run; app.pack() reloads when the
+  list file changes too).
+- recheck.back_online closes by reason: gone (GONE_NOTE), hidden (HIDDEN_NOTE), asleep (ASLEEP_NOTE), back.
+- build_pack writes beside and swaps in (os.replace): a pack rebuilt in the day is never read half written.
+- investigate: a NO_VALUE period is shown (its band "reported no value") but is never an unusual moment nor an alert.
+- Mutations red (tests/test_asleep.py): nightly reading raw states (battery), the hidden close removed, standing
+  without ASLEEP, load without the list, the reports' raw states, NO_VALUE back in the alert line.
+- Not done: rules.availability_rules still repeats the offline minutes test (its callers pass devices_offline's
+  groups; harmless); the three family lists stay as ARCHITECTURE.md left them.

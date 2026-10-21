@@ -35,7 +35,8 @@ from vesta_shared.messaging import incident_tag, no_code as _no_code  # noqa: E4
 from vesta_shared.timeutil import clock, day_label, day_time_label, villa_day  # noqa: E402
 from vesta_shared.past import unread  # noqa: E402  (the one "could not be read whole: nothing is known after")
 from vesta_shared.message_format import document, split_title  # noqa: E402  (the one shape of a message)
-from vesta_shared.device_state import has_value, is_offline  # noqa: E402
+from vesta_shared.device_state import ABSENT, ANSWERS, OFFLINE_NOW, has_value  # noqa: E402  (pack.standing says which)
+from vesta_shared.asleep import read_states  # noqa: E402  (a sleeping device reads its last real state)
 from vesta_shared.offline import devices_offline  # noqa: E402  (the one reading of "offline now")
 from vesta_shared.store import alerted_states  # noqa: E402  (which states an alert is about: the desk's reading)
 from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the Limits tab)
@@ -102,7 +103,8 @@ def run(args) -> dict:
         features_written += written
 
     # ---- batteries, availability, silence, levels (current states) -----------
-    states = cli.states()
+    # a device asleep between its reports reads its last real state (vesta_shared.asleep): its battery is judged too
+    states = read_states(cli, pack, now_ref)
     battery_entities = [r["entity_id"] for r in pack.entities("battery")]
     bat_stats = cli.statistics(battery_entities, day_end - timedelta(days=BATTERY_READ_DAYS), day_end, "day", ("mean",)) if battery_entities else {}
     findings += battery_findings(pack, states, params, today, bat_stats, store=store)
@@ -263,8 +265,7 @@ def hidden_in_rule_findings(cli, pack, states: dict, store) -> tuple[list, list[
         # detection, each live and rightly watched by its rule. The case this rule is for (2026-10-20) is a rule still
         # watching a device replaced by its copy: that one is offline or gone.
         now = cli.states(hidden)
-        hidden = [e for e in hidden if (now.get(e) or {}).get("state") is None
-                  or (is_offline(now[e].get("state")) and not pack.is_asleep(e))]
+        hidden = [e for e in hidden if pack.standing(e, (now.get(e) or {}).get("state")) in (ABSENT, OFFLINE_NOW)]
         if not hidden:
             return [], []
         rules = cli.rules_mentioning(hidden)
@@ -327,10 +328,9 @@ def reconnect_findings(cli, pack, states: dict, end: datetime, today: date, para
     by_device: dict[str, dict] = {}
     # ⚠️ A HIDDEN ENTITY IS NOT CHECKED (owner, 2026-10-19: the LG TV, hidden in the villa's system, was a "dropped and
     # reconnected 10 times" fault): the logbook lists every entity, and this was the one check that read past the
-    # pack's own rule (knowledge_pack: hidden entities left out of every family, `pack.hidden`)
-    hidden = set(pack.hidden)
+    # pack's own rule (knowledge_pack: hidden entities left out of every family, KnowledgePack.is_watched)
     for eid, per_day in flips.items():
-        if eid in hidden or pack.is_asleep(eid):      # asleep between its reports drops by design (vesta_shared.asleep)
+        if not pack.is_watched(eid) or pack.is_asleep(eid):   # asleep between its reports drops by design (asleep)
             continue
         row = rows_by_eid.get(eid, {})
         slug = row.get("asset") or next((s for s, a in pack.assets.items() if eid in a["entities"].values()), None)
@@ -387,7 +387,7 @@ def silent_findings(cli, pack, states: dict, now_ref: datetime, params, Z, rows:
             continue
         asset = pack.assets.get(row["asset"], {"slug": row["asset"], "name": row["name"], "critical": False})
         lc = st.get("last_changed")
-        if not is_offline(st.get("state")) and st.get("state") != "unknown":
+        if pack.standing(row["entity_id"], st.get("state")) == ANSWERS:
             # ⚠️ SILENT MEANS NOT REPORTING, NOT UNCHANGED (villa, 2026-10-01): last_reported moves at
             # each report (HA 2024.3+). But many integrations write only on a CHANGE, and every
             # restart stamps all of them (villa, 2026-10-04) — so quiet alone proves nothing; the
@@ -577,7 +577,7 @@ def _device_still_talks(pack, states: dict, entity_id: str, now: datetime, hours
     read "has not reported for 1 d 9 h although it is online" while its disk-free reading went on reporting."""
     for e in pack.entities_of_device(pack.device_id_of(entity_id)) - {entity_id}:
         st = states.get(e) or {}
-        if is_offline(st.get("state")) or st.get("state") == "unknown":
+        if pack.standing(e, st.get("state")) not in (ANSWERS, ABSENT):
             continue
         at = st.get("last_reported") or st.get("last_changed")
         try:

@@ -17,6 +17,9 @@ OFFLINE = frozenset({"unavailable"})          # lost; "unknown" is not offline
 NO_VALUE = frozenset({"unknown", ""})         # it answers, without a value
 #: What a state says, one of four. ABSENT is an entity Home Assistant does not have (no state at all).
 ANSWERS, NO_VALUE_NOW, OFFLINE_NOW, ABSENT = "answers", "no value", "offline", "absent"
+#: …and a fifth, which only the knowledge pack can tell (KnowledgePack.standing): "unavailable" from a device the VESTA
+#: Kiosk lists as unavailable by design — asleep between its reports, not lost (vesta_shared.asleep)
+ASLEEP_NOW = "asleep"
 
 
 def reading(state) -> str:

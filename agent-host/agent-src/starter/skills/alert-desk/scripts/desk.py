@@ -47,7 +47,7 @@ from vesta_shared.message_format import PRESSED, ROLE_SHORT, acted, closing  # n
 from vesta_shared import kiosk_words  # noqa: E402
 from vesta_shared.timeutil import lasting  # noqa: E402
 from vesta_shared.device_state import has_value, out_for  # noqa: E402  ("is it back": one answer)
-from vesta_shared.asleep import awake_states  # noqa: E402  (unavailable by design: its last real state)
+from vesta_shared.asleep import read_states  # noqa: E402  (unavailable by design: its last real state)
 from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
 from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the Limits tab)
 
@@ -631,10 +631,9 @@ def still_there(inc: dict, client) -> tuple[bool | None, list[str]]:
     p = notes_of(inc)
     rs = rule_states(inc)
     ents = rs[0] if rs else [e for e in (p.get("entities") or [inc["entity_id"]]) if e and "." in e]
-    states = client.states(ents) if ents else {}
     # ⚠️ ASLEEP IS NOT GONE (owner, 2026-10-21): a device unavailable by design reads its last real state here; the
     # rule's claim, rendered by the villa's system on "unavailable", cannot judge it, so its own states do instead
-    states = awake_states(client, _pack(), states, datetime.now(timezone.utc))
+    states = read_states(client, _pack(), datetime.now(timezone.utc), ents) if ents else {}
     asleep = [e for e in ents if (states.get(e) or {}).get("asleep")]
 
     def name(e):

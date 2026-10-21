@@ -224,12 +224,17 @@ class Vesta:
         return pol
 
     def pack(self):
-        """The knowledge pack, read again when the nightly rebuild changes it (None until it is built)."""
+        """The knowledge pack, read again when a rebuild changes it or the Kiosk's list beside it changes (None until it
+        is built)."""
+        from vesta_shared.asleep import path_beside
         from vesta_shared.knowledge_pack import KnowledgePack
-        try:
-            m = os.path.getmtime(self.s.pack_path)
-        except OSError:
-            m = None
+
+        def mtime(path):
+            try:
+                return os.path.getmtime(path)
+            except (OSError, TypeError):
+                return None
+        m = (mtime(self.s.pack_path), mtime(path_beside(self.s.pack_path)))
         if m != self._pack_mtime:
             self._pack, self._pack_mtime = KnowledgePack.read(self.s.pack_path), m
         return self._pack

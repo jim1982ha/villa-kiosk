@@ -63,6 +63,7 @@ import nightly as N  # noqa: E402  (what is offline: the night's one reading of 
 from vesta_shared.problems import STILL_THERE  # noqa: E402
 from vesta_shared import battery  # noqa: E402  (the battery rules' ids: one owner)
 from vesta_shared.device_state import has_value, is_offline  # noqa: E402
+from vesta_shared.asleep import read_states  # noqa: E402  (a sleeping device reads its last real state)
 from vesta_shared.limits import limit  # noqa: E402
 from vesta_shared.past import Logbook  # noqa: E402
 import rules as R  # noqa: E402
@@ -70,7 +71,9 @@ import rules as R  # noqa: E402
 
 
 GONE_NOTE = "Closed: this device no longer exists in the villa's system."
-ASLEEP_NOTE = "Closed: this device is unavailable by design (Rules › Protected devices): it sleeps between its reports."
+HIDDEN_NOTE = "Closed: this device is hidden in the villa's system, and hidden devices are not watched."
+ASLEEP_NOTE = ("Closed: this device sleeps between its reports "
+               "(VESTA Kiosk › Advanced Settings › Asleep between reports).")
 ENTITY_ID = re.compile(r"^[a-z0-9_]+\.[a-z0-9_]+$")     # only a real entity id can be "not found"
 
 
@@ -92,6 +95,11 @@ def back_online(store, client, now: datetime, minutes: float, zone: str, pack=No
         if es and all(e in gone for e in es):
             moved += Problems(store).close_finding(f, day, GONE_NOTE)
             closed.append(f["id"]); deleted.append(f["id"])
+        elif f["rule_id"] == OFFLINE_RULE and pack is not None and es and not any(pack.is_watched(e) for e in es):
+            # ⚠️ HIDDEN SINCE IT WAS FOUND (architecture review, 2026-10-21): the night check no longer saw it and closed
+            # it at 02:00 as "Cleared" — said of a device still off. It is closed now, saying why.
+            moved += Problems(store).close_finding(f, day, HIDDEN_NOTE)
+            closed.append(f["id"])
         elif f["rule_id"] == OFFLINE_RULE and pack is not None and es and all(pack.is_asleep(e) for e in es):
             # listed as unavailable by design since it was found (vesta_shared.asleep): never a fault
             moved += Problems(store).close_finding(f, day, ASLEEP_NOTE)
@@ -322,7 +330,9 @@ def recheck_open(store, pack, client, now: datetime, params, zone: str, settle_m
         if rows:
             plan.append((f, rule, rows, rule.entities(pack, f, rows)))
     ids = sorted({e for *_, es in plan for e in es})
-    t.states = client().states(ids) if ids else {}
+    # a device asleep between its reports reads its last real state (vesta_shared.asleep): its battery fault is judged
+    # on its charge, never left open on "unavailable"
+    t.states = read_states(client(), pack, now, ids) if ids else {}
     read, seen = [], []
     for f, rule, rows, es in plan:
         st = t.states.get(f["entity_id"]) or {}

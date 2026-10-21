@@ -17,7 +17,7 @@ RESTARTS = "stops and restarts"
 WORDS = {
     NO_POWER: ("had no power", "read 0: no power reached it"),
     OFFLINE: ("stopped reporting", "stopped reporting"),
-    NO_VALUE: ("reported no value", "stopped reporting"),
+    NO_VALUE: ("reported no value", "reported no value"),      # it answers, with nothing to give: never "stopped"
     RESTARTS: ("stopped and restarted", "kept stopping and restarting"),
     RUNNING: ("ran", "ran longer or harder than usual"),
     IDLE: ("drew more than usual at rest", "drew more than usual at rest"),       # flagged only so (investigate)
