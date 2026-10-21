@@ -1,3 +1,11 @@
+## 2.496.469
+
+### Changed
+- **A device modelled only by its poses has no badge.** A device gets a badge on the map only when the 3D model holds
+  an object named exactly after it (binary_sensor.main_entrance_door_sensor). One drawn only as its states
+  (…door_sensor__on an open door, …__off a closed one) shows its state through those objects and no longer floats a
+  badge over them. It still counts in its room, its lists and "Needs attention".
+
 ## 2.496.468
 
 ### Fixed
