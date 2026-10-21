@@ -12,6 +12,7 @@
 
 import type { HassEntity } from "@/types/ha.types";
 import { TRANSITIONAL_STATES } from "@/utils/stateColors";
+import { extractVariantSuffix } from "@/config/EntityMap";
 
 // ── Multi-mesh visual variants (e.g. a curtain's closed/half/open poses) ────
 // See EntityMap.extractVariantSuffix's docstring for the "__<variant>" mesh-
@@ -151,4 +152,12 @@ export function orderVariantWords(words: Iterable<string>): string[] {
     const rb = WORD_RANK[b] ?? UNRANKED_WORD;
     return ra !== rb ? ra - rb : a.localeCompare(b);
   });
+}
+
+/** ⚠️ A BADGE NEEDS THE DEVICE ITSELF IN THE MODEL (owner, 2026-10-21): a door sensor modelled only as its two poses
+ *  ("…door_sensor__on" an open door, "…__off" a closed one) still had a badge floating over the door — the poses
+ *  show its state already. A badge is drawn only when the model holds an object named after the entity itself (no
+ *  "__<word>" pose suffix: EntityMap.extractVariantSuffix); poses alone are the device's look, never its badge. */
+export function badgeFromMeshes(meshNames: readonly string[]): boolean {
+  return meshNames.some((n) => extractVariantSuffix(n) === null);
 }

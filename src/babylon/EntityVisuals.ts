@@ -146,7 +146,7 @@ import { COSMETIC_MAPPING_FIELDS, type EntityMapDelta } from "./entityMapDiff";
 // — pure logic, extracted to keep this file to the things that actually touch
 // the scene. See meshVariants.ts for the vocabulary rules themselves.
 import {
-  pickNearestVariant, desiredVariantWord, orderVariantWords,
+  pickNearestVariant, desiredVariantWord, orderVariantWords, badgeFromMeshes,
 } from "./meshVariants";
 // Pure label/chip overlap geometry — see labelLayout.ts.
 import { type ChipTextMetrics } from "./labelLayout";
@@ -2804,6 +2804,8 @@ export class EntityVisuals {
     for (const [entityId, meshes] of this.byEntity) {
       if (!meshes.length) continue;
       if (hiddenMembers.has(entityId)) continue;
+      // only its poses in the model (…__on / …__off): their look IS its state, no badge (badgeFromMeshes)
+      if (!badgeFromMeshes(meshes.map((m) => m.name))) continue;
       const map = this.mapping.get(entityId);
       if (!map) continue;
       const anchor = this.labelAnchors.get(entityId) ?? meshes[0];
