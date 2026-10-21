@@ -96,8 +96,11 @@ export interface HassEntityRegistryEntry {
 export interface HassDeviceRegistryEntry {
   id: string;
   area_id: string | null;
-  /** The device it is a part of — a meter's phase, a relay's channel (deviceUnits). */
+  /** The device it hangs under — a meter's phase, a relay's channel, or a sensor behind its radio bridge (deviceUnits
+   *  tells a part from a device of its own by these two). */
   via_device_id?: string | null;
+  manufacturer?: string | null;
+  model?: string | null;
 }
 
 /** Subset of `config/area_registry/list`'s rows — id → human-readable name,

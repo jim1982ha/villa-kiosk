@@ -1,3 +1,12 @@
+## 2.496.480
+
+### Fixed
+- **A device's window lists only its own readings.** Every wireless (Zigbee) sensor is filed under the same radio
+  bridge in the villa's system, and the Kiosk read them all as parts of one device: a motion sensor's window showed a
+  leak sensor's battery and tamper and another motion sensor's battery under "Also on this device". A device is now
+  part of another only when both are the same product, as the VESTA Agent has judged since 19 October: a relay box's
+  channels still belong together, a sensor behind its bridge stands alone.
+
 ## 2.496.479
 
 ### Fixed
