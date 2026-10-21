@@ -1,3 +1,12 @@
+## 0.12.313
+
+What you will see (with VESTA Kiosk 2.496.463 or newer):
+- A fault the VESTA Agent is about to close says so in the Cockpit: "Locked since 14:38 · closes at about 14:49 if it
+  stays locked". The Agent closes an alert's fault once what it reported has stayed right for 10 minutes (the alert
+  desk's "clear" wait); before, nothing said why a door you had just locked was still a fault.
+- Hovering "Next check: within 5 min" shows the moment of the Agent's next look, counted from its last one. It no
+  longer moves forward every minute.
+
 ## 0.12.312
 
 What you will see:
