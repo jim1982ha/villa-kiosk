@@ -72,6 +72,7 @@ import { Image } from "@babylonjs/gui/2D/controls/image";
 import { Control } from "@babylonjs/gui/2D/controls/control";
 import type { AppConfig } from "@/config/AppConfig";
 import { roomKey } from "@/config/roomKey";
+import { glowsRoom } from "@/config/BinarySensorClasses";
 import {
   badgeMetricsFor, detectPointerClass, observePointerClass, type BadgeMetrics, type PointerClass,
   CHIP_MAX_VIEWPORT_FRACTION, CARD_MAX_VIEWPORT_FRACTION,
@@ -2500,7 +2501,8 @@ export class EntityVisuals {
     }
     const map = this.config.entityMap[entity.entity_id];
     const room = deviceRoom(this.resolvedRooms, entity.entity_id);
-    if (map?.type === "binary_sensor" && room) {
+    // someone there, or a door open — never an "on" that is good news (glowsRoom, owner 2026-10-21)
+    if (map?.type === "binary_sensor" && room && glowsRoom(entity.attributes.device_class as string | undefined)) {
       this.roomHighlight.setActive(room, on);
     }
   }

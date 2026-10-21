@@ -25,8 +25,9 @@ export interface AgentStatus {
   cadence: AgentCadence | null;
 }
 
-/** How often the Agent looks at its alerts and faults (minutes), and the villa time of its nightly check ("HH:MM"). */
-export interface AgentCadence { checkMinutes: number; nightlyAt: string }
+/** How often the Agent looks at its alerts and faults (minutes), the villa time of its nightly check ("HH:MM"), and
+ *  when its look last started (an ISO moment; absent from an older Agent): the card's Next check counts from it. */
+export interface AgentCadence { checkMinutes: number; nightlyAt: string; lastLookAt?: string }
 
 // The lists are the agreement's (rootfs/usr/share/vesta/agent-contract.json),
 // the ones the proxy checks against — they were typed here a second time.
@@ -48,7 +49,8 @@ export function parseAgentStatus(raw: unknown): AgentStatus {
 function parseCadence(raw: unknown): AgentCadence | null {
   const c = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
   if (!(c && typeof c.checkMinutes === "number" && typeof c.nightlyAt === "string")) return null;
-  return { checkMinutes: c.checkMinutes, nightlyAt: c.nightlyAt };
+  return { checkMinutes: c.checkMinutes, nightlyAt: c.nightlyAt,
+    ...(typeof c.lastLookAt === "string" && !Number.isNaN(Date.parse(c.lastLookAt)) ? { lastLookAt: c.lastLookAt } : {}) };
 }
 
 /** null = could not reach the add-on (never shown as "not configured"). */

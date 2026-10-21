@@ -11,7 +11,7 @@
 // per profile. It is grouped once now, after the profile's filter.
 
 import { deviceLook, storeLookSource } from "@/utils/deviceActivity";
-import { alarmText } from "@/config/reading";
+import { alarmText, rowText } from "@/config/reading";
 import { alertIsFault } from "@/config/BinarySensorClasses";
 import { labelOf } from "@/config/EntityMap";
 import { deviceRoom, deviceRoomOrRecord, firstRoom, roomLabel } from "@/config/devicePlace";
@@ -62,11 +62,23 @@ export interface AttentionItem {
   critical?: boolean;
   /** Set on a fault: how the VESTA Agent reads it again to close it (FmTicket.check) — the card's "Next check". */
   check?: FmTicketCheck;
+  /** Set on a fault the VESTA Agent will close if it stays as it is now (FmTicket.closesAt): when, and what its device
+   *  reads now and since when — "Locked since 14:38 · closes at about 14:49 if it stays locked" (cockpitCard). */
+  closing?: { at: string; word?: string; since?: string };
   /** Set on a fault: what last happened about it on Telegram (faultNotes.lastNoted — "Escalation sent to Owner"). */
   latest?: { note: string; at: string };
   /** Set on a fault: the other open records that say exactly the same thing on the same card (foldTwins) — one line,
    *  "(N times)", and the card's buttons act on every one of them. */
   twins?: string[];
+}
+
+/** A fault's `closing` (FmTicket.closesAt): its moment, and what its device reads now and since when; undefined when the
+ *  Agent did not say, or said something that is not a moment. */
+function closingOf(closesAt: string | undefined, entity: HassEntity | undefined, entityId: string | undefined):
+  AttentionItem["closing"] {
+  if (!closesAt || Number.isNaN(Date.parse(closesAt))) return undefined;
+  if (!entity || !entityId || isOffline(entity)) return { at: closesAt };
+  return { at: closesAt, word: rowText(entityId, entity), since: entity.last_changed };
 }
 
 /**
@@ -258,6 +270,7 @@ export function buildAttentionItems(opts: {
       latest: lastNoted(t),
       source: faultSource(t),
       check: t.check,
+      closing: closingOf(t.closesAt, entityId ? entities[entityId] : undefined, entityId),
       // lost contact — isOffline, or an entity the villa's system no longer has (Missing), as devices.unavailable
       // reads it: the device's offline line takes it. ⚠️ A MISSING ENTITY TOO (architecture review, 2026-10-21): only
       // one the villa's system still had counted, so a ticket on a sibling deleted with its device stood as a second

@@ -1,3 +1,17 @@
+## 2.496.463
+
+### Changed
+- **A fault about to close says so.** In the Cockpit, a fault the VESTA Agent will close once it stays right reads,
+  under its line: "Locked since 14:38 · closes at about 14:49 if it stays locked" (needs VESTA Agent 0.12.313).
+- **"Next check" shows a fixed time.** Hovering "Next check: within 5 min" shows the moment of the VESTA Agent's next
+  look, counted from its last one. It no longer moves forward every minute.
+- **A sensor linked to a device is a thin band, not a switch.** When a device's linked entity is a sensor (a lock's
+  door sensor), its row in the device's window shows the sensor's state and a thin band of its last 24 hours, in the
+  sensor's own colours, where the switch was. A sensor cannot be switched. A linked switch keeps its switch.
+- **A room glows red on the map for someone there, or a door open.** A room's floor glows when a motion or presence
+  sensor in it detects someone, or when a door, window or leak sensor in it reads its problem state. It no longer
+  glows for a sensor whose "on" is good news (connected, plugged in, charging).
+
 ## 2.496.462
 
 ### Changed

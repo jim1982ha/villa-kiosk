@@ -23,6 +23,7 @@ import { categorySurface } from "@/config/EntityCategories";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import BadgeColorModal from "./BadgeColorModal";
 import LastDayTimeline from "./LastDayTimeline";
+import LinkedSensorRow from "./LinkedSensorRow";
 import ModalFooter from "@/components/common/ModalFooter";
 import { useHA } from "@/ha/HAStateStore";
 import { missingFromHa } from "@/utils/stateColors";
@@ -67,7 +68,7 @@ interface Props {
 }
 
 export default function BasePanel({ title, entityId, icon, className, headerActions, footerLeading, history, deviceReadings, onClose, children }: Props) {
-  const { may, onEdit, onReportFault, badge, onSetBadgeColor, linked, motion, back } = usePanelActions();
+  const { may, onEdit, onReportFault, badge, onSetBadgeColor, linked, linkedSensor, motion, back } = usePanelActions();
   const { resolvedRooms } = useConfig();
   const { entities } = useHA();
   const room = entityId ? deviceRoom(resolvedRooms, entityId) : "";
@@ -192,6 +193,8 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
               </div>
             </div>
           )}
+          {/* A linked SENSOR has nothing to switch: the same row, its band instead of a toggle (owner, 2026-10-21). */}
+          {linkedSensor && <LinkedSensorRow entityId={linkedSensor.entityId} label={linkedSensor.label} />}
           {/* The camera's motion sensor, if one is configured (Advanced
               Settings' "Motion sensor" field) — read-only, unlike the linked-
               entity switch above: this reports HA's own state, it isn't

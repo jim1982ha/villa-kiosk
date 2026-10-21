@@ -136,10 +136,21 @@ function nextAt(hhmm: string, now: Date): Date | null {
   return at;
 }
 
+/** The Agent's next look after `now`: its last look plus whole steps of `checkMinutes` (owner, 2026-10-21: hovering
+ *  "within 5 min" said "now + 5 min", so its time moved every minute while the Agent looks at fixed moments). An
+ *  Agent that does not say its last look: `now` plus one step, as before. */
+function nextLook(c: AgentCadence, now: Date): Date {
+  const step = c.checkMinutes * 60_000;
+  const last = c.lastLookAt ? Date.parse(c.lastLookAt) : NaN;
+  if (!Number.isFinite(last) || step <= 0) return new Date(now.getTime() + step);
+  const steps = Math.max(1, Math.floor((now.getTime() - last) / step) + 1);
+  return new Date(last + steps * step);
+}
+
 /** When the VESTA Agent next reads a fault of `clock`, and the card's words for it: its next look ("within 5 min"),
  *  its nightly check ("02:00"). */
 function nextOf(clock: FmTicketCheck, c: AgentCadence, now: Date): { at: Date; words: string } | null {
-  if (clock === "minutes") return { at: new Date(now.getTime() + c.checkMinutes * 60_000), words: `within ${c.checkMinutes} min` };
+  if (clock === "minutes") return { at: nextLook(c, now), words: `within ${c.checkMinutes} min` };
   const at = nextAt(c.nightlyAt, now);
   return at && { at, words: c.nightlyAt };
 }

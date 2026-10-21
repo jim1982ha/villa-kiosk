@@ -54,8 +54,9 @@ console.log("\n  who charts states, and how:");
   const DIR = new URL("../../src/components/panels/", import.meta.url);
   const src = (f) => readFileSync(new URL(f, DIR), "utf8");
   const importers = readdirSync(DIR).filter((f) => /\.tsx?$/.test(f) && f !== "StateTimeline.tsx" && /from "\.\/StateTimeline"/.test(src(f)));
-  ck("only the history section and the camera's two-series rail draw a StateTimeline themselves",
-     importers.sort().join() === "CameraPanel.tsx,LastDayTimeline.tsx", importers);
+  // + a linked sensor's thin band in the linked-entity row (owner, 2026-10-21): no range picker there, the last day only
+  ck("only the history section, the camera's two-series rail and a linked sensor's band draw a StateTimeline themselves",
+     importers.sort().join() === "CameraPanel.tsx,LastDayTimeline.tsx,LinkedSensorRow.tsx", importers);
   const day = src("LastDayTimeline.tsx");
   ck("the section charts the moved window where it ENDS and titles it", /end=\{lastSeen\}/.test(day) && /title=\{historyTitle\(range\.title, lastSeen\)\}/.test(day));
   ck("  ...and hands the chart the fetch's status whole", /status=\{status\}/.test(day));

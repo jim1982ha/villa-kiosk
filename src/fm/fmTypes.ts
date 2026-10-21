@@ -209,6 +209,9 @@ export interface FmTicket extends FmProvenance {
    *  evening (architecture review, 2026-10-15). Absent when the title holds no duration or a person retitled it. */
   titlePattern?: string;
   since?: string;
+  /** When the VESTA Agent closes it if what it reported stays over (its alert desk's clear wait, owner 2026-10-21: a
+   *  door locked at 14:38:50 still a fault at 14:45, nothing said why) — an ISO moment; absent while it still holds. */
+  closesAt?: string;
   /** Every status change, in order. Optional because faults raised before
    *  this existed have none — read it as "no steps recorded", never as an
    *  error. */
