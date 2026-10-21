@@ -146,7 +146,7 @@ import { COSMETIC_MAPPING_FIELDS, type EntityMapDelta } from "./entityMapDiff";
 // — pure logic, extracted to keep this file to the things that actually touch
 // the scene. See meshVariants.ts for the vocabulary rules themselves.
 import {
-  pickNearestVariant, desiredVariantWord, orderVariantWords,
+  pickNearestVariant, desiredVariantWord, orderVariantWords, badgeMeshes, NO_BADGE_WORD,
 } from "./meshVariants";
 // Pure label/chip overlap geometry — see labelLayout.ts.
 import { type ChipTextMetrics } from "./labelLayout";
@@ -1461,8 +1461,9 @@ export class EntityVisuals {
       // disappeared with it. Leaving it out of meshVariants keeps it
       // permanently visible AND still state-tinted (applyToMesh tints any
       // unsuffixed lock; the pose meshes are the ones that skip the tint).
+      // "__nobadge" is no pose: the device's own object, always shown (meshVariants.NO_BADGE_WORD)
       const suffix = extractVariantSuffix(m.name);
-      if (suffix) {
+      if (suffix && suffix !== NO_BADGE_WORD) {
         let byWord = this.meshVariants.get(map.entityId);
         if (!byWord) { byWord = new Map(); this.meshVariants.set(map.entityId, byWord); }
         const wordList = byWord.get(suffix) ?? [];
@@ -1844,8 +1845,11 @@ export class EntityVisuals {
    *  naturally sits close to each asset regardless of how tall it is or how
    *  high up it's mounted — no per-object hand-tuning. */
   private buildLabelAnchors(): void {
-    for (const [entityId, meshes] of this.byEntity) {
-      if (!meshes.length) continue;
+    for (const [entityId, all] of this.byEntity) {
+      if (!all.length) continue;
+      // over the objects its badge comes from (badgeMeshes), never over its poses or a "__nobadge" one
+      const own = badgeMeshes(all);
+      const meshes = own.length ? own : all;
       const bounds = this.mergedWorldBounds(meshes);
       if (!bounds) continue;
       const { min, max } = bounds;
@@ -2804,6 +2808,8 @@ export class EntityVisuals {
     for (const [entityId, meshes] of this.byEntity) {
       if (!meshes.length) continue;
       if (hiddenMembers.has(entityId)) continue;
+      // a badge only from an object named after the entity itself — never its poses nor "__nobadge" (badgeMeshes)
+      if (!badgeMeshes(meshes).length) continue;
       const map = this.mapping.get(entityId);
       if (!map) continue;
       const anchor = this.labelAnchors.get(entityId) ?? meshes[0];

@@ -1,3 +1,43 @@
+## 2.496.472
+
+### Changed
+- **The badge comes from the device's own object, and stands over it.** A device's badge comes only from the 3D object
+  named exactly after it (binary_sensor.main_entrance_door_sensor); objects with an ending (…__on, …__off,
+  …__nobadge) never make one. When the model holds the plain object AND a `__nobadge` one, the badge shows, from the
+  plain one. The badge now stands over the plain object only, no longer over the middle of all of the device's
+  objects (a lock drawn as its keypad and its door poses: over the keypad).
+
+## 2.496.471
+
+### Changed
+- **A badge only from an object named exactly after the device.** A device gets a badge on the map only when the 3D
+  model holds an object named `<entity_id>` with no ending. Objects with an ending never make one: its poses
+  (…__on, …__off) and `…__nobadge` (no badge even beside the plain object). A device drawn only by its poses shows
+  its state through them and floats no badge.
+
+## 2.496.470
+
+### Changed
+- **"__nobadge" removes a device's badge.** Name a device's 3D object `<entity_id>__nobadge` (for example
+  binary_sensor.main_entrance_door_sensor__nobadge) and the device shows no badge on the map, whatever kind of
+  device it is; the object itself is always shown and coloured by its state. Without that ending the badge is drawn,
+  as before 2.496.469: a device drawn only by its poses (…__on, …__off) has its badge back.
+
+## 2.496.469
+
+### Changed
+- **A device modelled only by its poses has no badge.** A device gets a badge on the map only when the 3D model holds
+  an object named exactly after it (binary_sensor.main_entrance_door_sensor). One drawn only as its states
+  (…door_sensor__on an open door, …__off a closed one) shows its state through those objects and no longer floats a
+  badge over them. It still counts in its room, its lists and "Needs attention".
+
+## 2.496.468
+
+### Fixed
+- **The camera list shows each camera once.** A camera that gives two video streams (a Tapo camera's "HD Stream" and
+  "HD Stream (Direct)") was listed twice in the camera picker and stepped through twice. The list now has one entry
+  per camera, the stream you placed in the villa, and leaves out a camera hidden in the villa's system.
+
 ## 2.496.467
 
 ### Changed

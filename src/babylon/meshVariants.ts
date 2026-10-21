@@ -12,6 +12,7 @@
 
 import type { HassEntity } from "@/types/ha.types";
 import { TRANSITIONAL_STATES } from "@/utils/stateColors";
+import { extractVariantSuffix } from "@/config/EntityMap";
 
 // ── Multi-mesh visual variants (e.g. a curtain's closed/half/open poses) ────
 // See EntityMap.extractVariantSuffix's docstring for the "__<variant>" mesh-
@@ -151,4 +152,16 @@ export function orderVariantWords(words: Iterable<string>): string[] {
     const rb = WORD_RANK[b] ?? UNRANKED_WORD;
     return ra !== rb ? ra - rb : a.localeCompare(b);
   });
+}
+
+/** The suffix that says "no badge" (owner, 2026-10-21): an object named `<entity_id>__nobadge` is drawn and
+ *  state-tinted like the device's own, NEVER a pose, and never makes a badge (badgeMeshes). */
+export const NO_BADGE_WORD = "nobadge";
+
+/** The objects a device's badge comes from: those named after the entity ITSELF, no "__<word>" ending (owner,
+ *  2026-10-21: "only show a badge for binary_sensor.main_entrance_door_sensor and no badge for
+ *  …door_sensor__nobadge"). Its poses (…__on) and "__nobadge" never make one; empty: the device floats no badge. The
+ *  badge stands over these objects, never over its poses. */
+export function badgeMeshes<T extends { name: string }>(meshes: readonly T[]): T[] {
+  return meshes.filter((m) => extractVariantSuffix(m.name) === null);
 }

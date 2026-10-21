@@ -138,4 +138,22 @@ console.log("\n  the callers ask it (pin the caller):");
      ![ev, sg, db, ph].some((s) => /badgeFaceAndRing\(|linkedOn:|alertStateFor\(|linkActiveIds/.test(s)));
 }
 
+// owner, 2026-10-21: "a suffix that will make no badge … `__nobadge` being the key suffix": an object named
+// <entity>__nobadge — no badge, whatever the family; never a pose (always shown)
+{
+  const { badgeMeshes } = await import("@/babylon/meshVariants");
+  const { readFileSync } = await import("node:fs");
+  const from = (...names) => badgeMeshes(names.map((name) => ({ name }))).map((m) => m.name).join();
+  const D = "binary_sensor.main_entrance_door_sensor";
+  ck("a badge only from the object named after the entity: never its poses, never __nobadge",
+     from(D) === D && from(`${D}__on`, `${D}__off`) === "" && from(`${D}__nobadge`) === ""
+     && from(D, `${D}__nobadge`) === D && from("lock.door", "lock.door__locked", "lock.door__unlocked") === "lock.door");
+  const ev = readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8");
+  ck("  ...the map's badge pipeline asks it, and stands the badge over those objects only",
+     /if \(!badgeMeshes\(meshes\)\.length\) continue;/.test(ev)
+     && /const own = badgeMeshes\(all\);\s*const meshes = own\.length \? own : all;\s*const bounds = this\.mergedWorldBounds\(meshes\);/.test(ev));
+  ck("  ...and __nobadge is never grouped as a pose (it would be hidden whenever the state asks another word)",
+     /if \(suffix && suffix !== NO_BADGE_WORD\) \{/.test(readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8")));
+}
+
 done("✅ one device, one look, whichever side holds its state");
