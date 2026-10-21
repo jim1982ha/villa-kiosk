@@ -143,11 +143,12 @@ console.log("\n  the callers ask it (pin the caller):");
 {
   const { badgeFromMeshes } = await import("@/babylon/meshVariants");
   const { readFileSync } = await import("node:fs");
-  ck("__nobadge: no badge; the bare id, or poses alone: a badge",
+  ck("a badge only from the bare id; poses alone or __nobadge: none",
      !badgeFromMeshes(["binary_sensor.main_entrance_door_sensor__nobadge", "binary_sensor.main_entrance_door_sensor__on"])
      && !badgeFromMeshes(["light.hall__nobadge"])
      && badgeFromMeshes(["binary_sensor.main_entrance_door_sensor"])
-     && badgeFromMeshes(["binary_sensor.main_entrance_door_sensor__on", "binary_sensor.main_entrance_door_sensor__off"])
+     && !badgeFromMeshes(["binary_sensor.main_entrance_door_sensor__on", "binary_sensor.main_entrance_door_sensor__off"])
+     && !badgeFromMeshes(["lock.door", "lock.door__nobadge"])
      && badgeFromMeshes(["lock.door", "lock.door__locked", "lock.door__unlocked"]));
   ck("  ...and __nobadge is never grouped as a pose (it would be hidden whenever the state asks another word)",
      /if \(suffix && suffix !== NO_BADGE_WORD\) \{/.test(readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8")));

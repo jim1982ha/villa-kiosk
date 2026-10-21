@@ -159,9 +159,10 @@ export function orderVariantWords(words: Iterable<string>): string[] {
  *  its family. "binary_sensor.main_entrance_door_sensor__nobadge": no badge; "…door_sensor": a badge. */
 export const NO_BADGE_WORD = "nobadge";
 
-/** Does this device float a badge: no object of it ends in `__nobadge` (NO_BADGE_WORD). ⚠️ 2.496.469 asked the
- *  opposite way (a badge only when an object carries the bare id, so a device drawn by its poses alone had none):
- *  the owner chose an explicit word instead, the same day. */
+/** Does this device float a badge: only from an object named after the entity ITSELF (no "__<word>" suffix), and
+ *  never when one of its objects says `__nobadge` (owner, 2026-10-21: "any entity with a suffix (like
+ *  …door_sensor__on) will also NOT create a badge"). Poses alone, or "__nobadge": the device's look, no badge. */
 export function badgeFromMeshes(meshNames: readonly string[]): boolean {
-  return !meshNames.some((n) => extractVariantSuffix(n) === NO_BADGE_WORD);
+  const words = meshNames.map(extractVariantSuffix);
+  return words.includes(null) && !words.includes(NO_BADGE_WORD);
 }
