@@ -6,6 +6,12 @@
 // ⚠️ ONE COPY. It was written four times (the Energy window, the Weather
 // window twice, the energy adapter). PURE; tests/oracles run it.
 
+// The fixed lengths, once (they were defined or written out at some fifteen sites). A DURATION, never a calendar
+// step: a day's EDGES are localMidnight / addLocalDays below, as a summer-time day is 23 or 25 hours.
+export const MINUTE_MS = 60_000;
+export const HOUR_MS = 60 * MINUTE_MS;
+export const DAY_MS = 24 * HOUR_MS;
+
 /** Local midnight of the day `now` falls in, moved by `offsetDays`. */
 export function localMidnight(now: number, offsetDays = 0): number {
   const d = new Date(now);

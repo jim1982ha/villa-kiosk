@@ -22,6 +22,8 @@ import { AirVent, Cctv, WifiOff } from "lucide-react";
 import type { FmData } from "./fmTypes";
 import type { VillaAttention } from "@/config/attention";
 import type { Tone } from "./tone";
+import { countOf } from "@/utils/countOf";
+import { isDomain } from "@/utils/entityDomain";
 
 export type CheckState = "pass" | "warn" | "fail";
 
@@ -125,7 +127,7 @@ export function buildReadiness(
   const sounding = alarms.filter((a) => a.kind === "alarm");
   checks.push({
     id: "alarms",
-    label: sounding.length === 0 ? "No alarm" : `${sounding.length} alarm${sounding.length === 1 ? "" : "s"}`,
+    label: sounding.length === 0 ? "No alarm" : countOf(sounding.length, "alarm"),
     state: sounding.length === 0 ? "pass" : "fail",
     detail: sounding.length === 0 ? "Nothing is in alarm." : sounding.map((a) => `${a.title}: ${a.detail}`).join(" · "),
     entityIds: sounding.flatMap((a) => (a.entityId ? [a.entityId] : [])),
@@ -155,11 +157,11 @@ export function buildReadiness(
     const e = entities[id] ?? (missingFromHa(entities, id) ? lostDevice(id) : undefined);
     if (e) own[id] = e;
   }
-  const byDomain = (d: string) => Object.values(own).filter((e) => e.entity_id.startsWith(`${d}.`));
+  const byDomain = (d: string) => Object.values(own).filter((e) => isDomain(e.entity_id, d));
   /** "2 offline, 1 missing": the devices not answering, the ones the villa's system no longer has named apart. */
   const notAnswering = (ids: readonly string[], word: string, noun = "") => {
     const gone = ids.filter((id) => missingFromHa(entities, id)).length, off = ids.length - gone;
-    const n = (k: number) => `${k}${noun ? ` ${noun}${k === 1 ? "" : "s"}` : ""}`;
+    const n = (k: number) => (noun ? countOf(k, noun) : `${k}`);
     return [off ? `${n(off)} ${word}` : "", gone ? `${n(gone)} ${NOT_IN_HA.toLowerCase()}` : ""].filter(Boolean).join(", ");
   };
 
@@ -211,7 +213,7 @@ export function buildReadiness(
       label: "Doors locked",
       state: notLocked.length === 0 ? "pass" : "warn",
       detail: notLocked.length === 0
-        ? `All ${answering} lock${answering === 1 ? "" : "s"} secured.`
+        ? `All ${countOf(answering, "lock")} secured.`
         : `${parts.join(", ")}.`,
       entityIds: notLocked,
       // every lock, as the summary tile opens them (summaryGroups) — not only the failing ones
@@ -242,7 +244,7 @@ export function buildReadiness(
       label: "Air conditioning reachable",
       state: offlineState(broken),
       detail: broken.length === 0
-        ? `${climate.ids.length} unit${climate.ids.length === 1 ? "" : "s"} responding.`
+        ? `${countOf(climate.ids.length, "unit")} responding.`
         : `${notAnswering(broken, "not responding")} — cannot pre-cool.`,
       entityIds: broken,
       opens: target("View air conditioning", { title: "Air conditioning", icon: AirVent, entityIds: climate.ids.slice() }),
@@ -259,7 +261,7 @@ export function buildReadiness(
       label: "Cameras online",
       state: offlineState(down.map((c) => c.entity_id)),
       detail: down.length === 0
-        ? `${cameras.length} camera${cameras.length === 1 ? "" : "s"} online.`
+        ? `${countOf(cameras.length, "camera")} online.`
         : `${notAnswering(down.map((c) => c.entity_id), "offline")}.`,
       entityIds: down.map((c) => c.entity_id),
       opens: target("View cameras", { title: "Cameras", icon: Cctv, entityIds: cameras.map((c) => c.entity_id) }),
@@ -276,7 +278,6 @@ export function buildReadiness(
   const records = fm.tickets.filter((t) => shown.has(t.id));
   const open = openCounts(records, devices.deviceOfRecord);
   const faults = records.filter((t) => isTicketOpen(t) && stageOf(t) === "fault");
-  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
   const where = [open.faults ? "the faults in \"Overview\"" : "", open.tickets ? "the open tickets in \"Tickets\"" : ""].filter(Boolean);
   const found = new Set(faults.map(faultSource));
   checks.push({
@@ -284,7 +285,7 @@ export function buildReadiness(
     // a fault and the ticket it became are both unresolved (owner, 2026-10-14: faults become tickets)
     label: open.total === 0
       ? "No open faults or tickets"
-      : `${plural(open.faults, "detected fault")} (${plural(open.tickets, "open ticket")})`,
+      : `${countOf(open.faults, "detected fault")} (${countOf(open.tickets, "open ticket")})`,
     state: open.total === 0 ? "pass" : "warn",   // a fault is a warning, however many (owner, 2026-10-18)
     detail: open.total === 0 ? "Nothing to deal with." : `Check ${where.join(", or ")}.`,
     sources: ISSUE_SOURCES.filter((s) => found.has(s)),

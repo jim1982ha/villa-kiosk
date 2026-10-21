@@ -30,7 +30,7 @@ export default function UnavailableByDesign() {
           <EntityPicker onChange={(id) => set(id, true)} placeholder="Add a device…" hideCurrentLabel compact />
         </div>
       </div>
-      <p className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-xs)" }}>
+      <p className="muted body-text field-hint">
         Devices that sleep between reports, such as a battery door sensor: their "unavailable" is normal. VESTA shows
         what each one last reported, never "Unavailable", and raises no fault for it; the VESTA Agent skips its
         offline checks for them too.

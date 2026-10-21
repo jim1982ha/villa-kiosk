@@ -32,6 +32,7 @@ import { useVillaModel } from "@/config/VillaModel";
 import { useConfig } from "@/config/ConfigContext";
 import { readingOf, stateWords } from "@/config/reading";
 import { historyStateColor } from "@/utils/stateColors";
+import { useArrowStep } from "@/hooks/useArrowStep";
 
 interface Props extends PanelProps {
   /** Lets the camera pin continuous rendering while the stream is open. */
@@ -290,24 +291,8 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   // Not registered while the picker is open — the arrows belong to whatever is
   // on top, and stepping the feed behind an open list would change the thing
   // the list is offering to change.
-  useEffect(() => {
-    if (!canCycle || pickerOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-      // A modifier means the browser's own navigation, and a caret in a field
-      // means the user is editing text, not driving the panel.
-      if (e.altKey || e.ctrlKey || e.metaKey || e.defaultPrevented) return;
-      const el = document.activeElement;
-      if (el instanceof HTMLElement && (el.isContentEditable
-        || el instanceof HTMLInputElement
-        || el instanceof HTMLTextAreaElement
-        || el instanceof HTMLSelectElement)) return;
-      e.preventDefault();
-      stepCameraRef.current(e.key === "ArrowRight" ? 1 : -1);
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [canCycle, pickerOpen]);
+  // (Modifier keys and a focused text field are left alone — useArrowStep.)
+  useArrowStep((delta) => stepCameraRef.current(delta), canCycle && !pickerOpen);
 
   // Swipe left/right on the feed itself cycles cameras — the touch
   // equivalent of the prev/next buttons. Gated on NOT zoomed: a single-finger

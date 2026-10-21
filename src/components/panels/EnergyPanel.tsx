@@ -38,7 +38,7 @@ import { useHistory } from "@/hooks/useHistory";
 import { fetchEnergySetup, energyRequest, energyChanges, type EnergyWindowSetup } from "@/ha/HAEnergyAPI";
 import { useHistorySource } from "@/hooks/useHistorySource";
 import { PERIOD_MS } from "@/utils/statisticsSeries";
-import { localMidnight } from "@/utils/localDay";
+import { HOUR_MS, localMidnight } from "@/utils/localDay";
 import {
   energyPeriod, periodStarts, costUnitOf, fmtKwh, powerKw,
   type EnergyBucket, type EnergySplit,
@@ -337,7 +337,7 @@ function HistoryView({ setup, costUnit, range: rangeKey, colourOf }: { setup: En
             t: b.t,
             segs: segsOf(b, () => seriesSegs(series, b.split!)),
           }))}
-          stamp={(t) => fmtStepStamp(t, PERIOD_MS[range.period], (now - starts[0]) / 3_600_000)} ticks={tickIdx.map((i) => ({ i, label: label(starts[i]) }))} />
+          stamp={(t) => fmtStepStamp(t, PERIOD_MS[range.period], (now - starts[0]) / HOUR_MS)} ticks={tickIdx.map((i) => ({ i, label: label(starts[i]) }))} />
       </div>
 
       <div className="weather-tile chart energy-wide">

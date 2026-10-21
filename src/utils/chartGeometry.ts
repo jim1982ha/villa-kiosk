@@ -20,6 +20,7 @@ import { lineRuns, timeScale, type TimeWindow } from "./lineChart";
 import { gapBand } from "./historyGaps";
 import type { Reading } from "./stepSeries";
 import type { HistoryGap } from "@/types/ha.types";
+import { HOUR_MS } from "./localDay";
 
 export interface PlotRect { left: number; right: number; top: number; bottom: number }
 
@@ -230,7 +231,7 @@ export function chartGeometry(
     return { t: at, x: sx(at), readings, outages };
   };
   return {
-    window, spanHours: span / 3_600_000, sx, tAt, series,
+    window, spanHours: span / HOUR_MS, sx, tAt, series,
     ticks: [window.from, (window.from + window.to) / 2, window.to],
     hover,
   };

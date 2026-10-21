@@ -29,6 +29,7 @@ import { inferTypeFromEntityId } from "@/config/EntityMap";
 import { unshownEntities } from "@/config/deviceGroups";
 import { useDeviceIdentity } from "@/config/VillaModel";
 import { ShowAll, useTruncated } from "@/components/common/TruncatedList";
+import { countOf } from "@/utils/countOf";
 
 export default function BindingsTable() {
   // THE name a device is shown by (useEntityLabel) — this list printed HA's raw friendly_name.
@@ -115,7 +116,7 @@ export default function BindingsTable() {
               placeholder="Search or type entity_id…"
             />
             {newId && (
-              <div className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-xs)" }}>
+              <div className="muted body-text field-hint">
                 Selected: <strong style={{ color: "var(--accent)" }}>{newId}</strong>
                 {config.entityMap[newId] && (
                   <span style={{ marginLeft: 8, color: "var(--status-danger)" }}>
@@ -149,19 +150,19 @@ export default function BindingsTable() {
         {bound.length > 0 && (
           <button className="btn ghost" onClick={() => setShowBound((s) => !s)}>
             {showBound ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-            {bound.length} bound object{bound.length === 1 ? "" : "s"}
+            {countOf(bound.length, "bound object")}
           </button>
         )}
         {catalog.length > 0 && (
           <button className="btn ghost" onClick={() => setShowUnbound((s) => !s)}>
             {showUnbound ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-            {unbound.length} unbound object{unbound.length === 1 ? "" : "s"}
+            {countOf(unbound.length, "unbound object")}
           </button>
         )}
         {unmappedHaEntities.length > 0 && (
           <button className="btn ghost" onClick={() => setShowUnmappedHa((s) => !s)}>
             {showUnmappedHa ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-            {unmappedHaEntities.length} entit{unmappedHaEntities.length === 1 ? "y" : "ies"} not shown
+            {countOf(unmappedHaEntities.length, "entity", "entities")} not shown
           </button>
         )}
       </div>

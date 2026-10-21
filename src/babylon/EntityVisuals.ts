@@ -156,6 +156,7 @@ import { lightingModeFor, type LightingMode } from "./lightingMode";
 import "./babylonSideEffects";
 import { onActiveFloor, stampedFloor } from "./floorOf";
 import { deviceRoom } from "@/config/devicePlace";
+import { isDomain } from "@/utils/entityDomain";
 
 // Baseline emissive for an UNWIRED light marker (no HA state yet). SweetHome
 // ceiling spots / LED strips export as small placeholder spheres; at the old
@@ -2343,14 +2344,14 @@ export class EntityVisuals {
     const meshes = this.byEntity.get(entity.entity_id);
     const map = this.mapping.get(entity.entity_id);
     if (!meshes || !map) {
-      if (entity.entity_id.startsWith("cover.") || entity.entity_id.startsWith("lock.")) {
+      if (isDomain(entity.entity_id, "cover") || isDomain(entity.entity_id, "lock")) {
         tapDebug(`apply(${entity.entity_id}): NO MESH/MAPPING — meshes=${!!meshes} map=${!!map}. This entity's live state changed but nothing in the model resolves to it, so no variant could ever be shown for it.`, "mesh");
       }
       return;
     }
     if (
-      (entity.entity_id.startsWith("cover.") && map.type !== "cover") ||
-      (entity.entity_id.startsWith("lock.") && map.type !== "lock")
+      (isDomain(entity.entity_id, "cover") && map.type !== "cover") ||
+      (isDomain(entity.entity_id, "lock") && map.type !== "lock")
     ) {
       tapDebug(`apply(${entity.entity_id}): resolved mesh(es) but map.type="${map.type}" — a variant pose will NEVER be applied while the type mismatch stands (check Advanced Settings' Type field for this entity).`, "mesh");
     }

@@ -12,10 +12,11 @@
 // already downscaled on upload (fmApi.downscaleToJpeg), so "full size" here
 // is a phone-sized JPEG, not something that needs a pan-and-zoom surface.
 
-import { useCallback, useEffect } from "react";
+import { useCallback } from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { evidenceUrl } from "@/fm/fmApi";
 import { useModalA11y } from "@/hooks/useModalA11y";
+import { useArrowStep } from "@/hooks/useArrowStep";
 
 export default function PhotoLightbox({
   photoIds, index, onIndexChange, onClose,
@@ -25,9 +26,9 @@ export default function PhotoLightbox({
   onIndexChange: (next: number) => void;
   onClose: () => void;
 }) {
-  // Escape + Back + focus trap + focus restore. Only the ARROW keys stay in
-  // this file's own listener below: they are this surface's navigation, not a
-  // dismissal, and the shared hook has no opinion about them.
+  // Escape + Back + focus trap + focus restore. The ARROW keys are useArrowStep's
+  // below: they are this surface's navigation, not a dismissal, and the modal
+  // hook has no opinion about them.
   const dialogRef = useModalA11y(onClose);
   const count = photoIds.length;
   // Wraps, so holding the arrow key never dead-ends on a set of two or three.
@@ -35,14 +36,7 @@ export default function PhotoLightbox({
     if (count > 0) onIndexChange((index + delta + count) % count);
   }, [count, index, onIndexChange]);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "ArrowLeft") step(-1);
-      else if (e.key === "ArrowRight") step(1);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [step]);
+  useArrowStep(step);
 
   if (count === 0) return null;
   const id = photoIds[Math.min(index, count - 1)];

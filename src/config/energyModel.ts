@@ -14,7 +14,7 @@
 // device that leads, and whether the devices add up. PURE —
 // tests/oracles/energy_model.mjs drives it with the villa's measured week.
 
-import { localMidnight, localMonthStart } from "@/utils/localDay";
+import { HOUR_MS, localMidnight, localMonthStart } from "@/utils/localDay";
 import { COMPILE_GRACE_MS } from "@/utils/statisticsSeries";
 import { toBaseUnit } from "./SensorClasses";
 import { formatUnitValue, kwhNumber } from "@/utils/entityValue";
@@ -314,11 +314,11 @@ export function periodStarts(kind: EnergyPeriodKind, now: number): number[] {
   switch (kind) {
     case "hoursToday": {
       const m = localMidnight(now);
-      return Array.from({ length: 24 }, (_, h) => m + h * 3_600_000);
+      return Array.from({ length: 24 }, (_, h) => m + h * HOUR_MS);
     }
     case "last24Hours": {
-      const h = Math.floor(now / 3_600_000) * 3_600_000;
-      return Array.from({ length: 24 }, (_, i) => h + (i - 23) * 3_600_000);
+      const h = Math.floor(now / HOUR_MS) * HOUR_MS;
+      return Array.from({ length: 24 }, (_, i) => h + (i - 23) * HOUR_MS);
     }
     case "last7Complete": return Array.from({ length: 7 }, (_, i) => localMidnight(now, i - 7));
     case "last7": return Array.from({ length: 7 }, (_, i) => localMidnight(now, i - 6));

@@ -31,6 +31,7 @@ import type { VillaDevices } from "@/config/deviceGroups";
 import { isOffline } from "@/utils/stateColors";
 import { deviceRoom } from "@/config/devicePlace";
 import type { HassEntity } from "@/types/ha.types";
+import { matchesQuery } from "@/config/deviceRecord";
 
 export interface DeviceOption {
   entityId: string;
@@ -105,16 +106,16 @@ export default function DeviceSearchPicker({
     const starts: DeviceOption[] = [];
     const contains: DeviceOption[] = [];
     for (const o of options) {
-      const hay = `${o.label} ${o.room ?? ""} ${o.entityId}`.toLowerCase();
-      if (!hay.includes(q)) continue;
+      // one text, as before: a search may run across the label and the room ("kitchen tap")
+      if (!matchesQuery(q, `${o.label} ${o.room ?? ""} ${o.entityId}`)) continue;
       (o.label.toLowerCase().startsWith(q) ? starts : contains).push(o);
     }
     return [...starts, ...contains].slice(0, MAX_RESULTS);
   }, [value, options]);
 
   return (
-    <div ref={containerRef} style={{ position: "relative" }}>
-      <div className="config-search" style={{ marginBottom: 0 }}>
+    <div ref={containerRef} className="picker">
+      <div className="config-search">
         <Search size={16} />
         <input
           value={value}
@@ -131,12 +132,12 @@ export default function DeviceSearchPicker({
       </div>
 
       {matchedEntityId && !open && (
-        <div className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-xs)" }}>
+        <div className="muted body-text field-hint">
           Linked to <strong>{matchedEntityId}</strong>
         </div>
       )}
       {!matchedEntityId && value.trim() && !open && (
-        <div className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-xs)" }}>
+        <div className="muted body-text field-hint">
           No matching device — this will be saved as free text.
         </div>
       )}
@@ -152,8 +153,7 @@ export default function DeviceSearchPicker({
             <button
               key={o.entityId}
               type="button"
-              className="row"
-              style={{ width: "100%", padding: "10px 12px", justifyContent: "flex-start", gap: 10, borderBottom: "1px solid var(--hairline)" }}
+              className="row picker-option"
               // Fires before the input's onBlur, so the click registers
               // instead of the dropdown closing out from under it first.
               onMouseDown={(e) => e.preventDefault()}

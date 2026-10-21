@@ -83,8 +83,8 @@ export default function EntityPicker({
   const selectedLabel = value && !open ? (selected?.attributes.friendly_name ?? value) : undefined;
 
   return (
-    <div ref={containerRef} style={{ position: "relative" }}>
-      <div className={`config-search${compact ? " config-search-compact" : ""}`} style={{ marginBottom: 0 }}>
+    <div ref={containerRef} className="picker">
+      <div className={`config-search${compact ? " config-search-compact" : ""}`}>
         <Search size={compact ? 13 : 16} />
         <input
           placeholder={selectedLabel ?? placeholder ?? "Search entities…"}
@@ -118,8 +118,7 @@ export default function EntityPicker({
         <div className="picker-dropdown">
           {allowCustom && ENTITY_ID_RE.test(query.trim()) && !entities[query.trim()] && (
             <button
-              className="row"
-              style={{ width: "100%", padding: "10px 12px", justifyContent: "flex-start", gap: 10, borderBottom: "1px solid var(--hairline-strong)" }}
+              className="row picker-option strong"
               onClick={() => { onChange(query.trim()); setOpen(false); setQuery(""); }}
             >
               <span style={{ flex: 1, textAlign: "left" }}>
@@ -137,8 +136,7 @@ export default function EntityPicker({
           {list.map((e) => (
             <button
               key={e.entity_id}
-              className="row"
-              style={{ width: "100%", padding: "10px 12px", justifyContent: "flex-start", gap: 10, borderBottom: "1px solid var(--hairline)" }}
+              className="row picker-option"
               onClick={() => { onChange(e.entity_id); setOpen(false); setQuery(""); }}
             >
               <span style={{ flex: 1, textAlign: "left" }}>

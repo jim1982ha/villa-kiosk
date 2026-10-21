@@ -21,7 +21,7 @@ import { ShowAll, useTruncated } from "@/components/common/TruncatedList";
 import { Search } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { forgetMappings, patchMapping, repointDevice } from "@/config/mappingEdits";
-import { rowMatches } from "@/config/deviceRecord";
+import { matchesQuery, rowMatches } from "@/config/deviceRecord";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useHA } from "@/ha/HAStateStore";
 import { useVillaModel } from "@/config/VillaModel";
@@ -29,6 +29,7 @@ import EntityMapRow from "./EntityMapRow";
 import EntityPicker from "./EntityPicker";
 import type { EntityMapping } from "@/types/scene.types";
 import { deviceRoom } from "@/config/devicePlace";
+import { countOf } from "@/utils/countOf";
 
 export default function ConfigEditor({ initialSearch }: { initialSearch?: string } = {}) {
   const { update, resolvedRooms } = useConfig();
@@ -131,10 +132,7 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
   // only entities HA has): one card each, with the one thing to do here — point it at another entity
   // (dismissedEntities.orphanObjects). It used to appear only when its exact id was typed in the search (owner,
   // 2026-10-14). The search narrows the cards like the rows. Only while HA's list is loaded.
-  const orphans = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return orphanIds.filter((id) => !q || id.toLowerCase().includes(q));
-  }, [orphanIds, search]);
+  const orphans = useMemo(() => orphanIds.filter((id) => matchesQuery(search, id)), [orphanIds, search]);
   const [repointTo, setRepointTo] = useState<Record<string, string | undefined>>({});
   const repoint = useCallback((id: string) => {
     const to = repointTo[id];
@@ -161,7 +159,7 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
       {staleIds.length > 0 && (
         <div className="config-stale-notice">
           <div>
-            <strong>{staleIds.length} entit{staleIds.length === 1 ? "y" : "ies"} no longer exist{staleIds.length === 1 ? "s" : ""}.</strong>
+            <strong>{countOf(staleIds.length, "entity", "entities")} no longer exist{staleIds.length === 1 ? "s" : ""}.</strong>
             <div className="muted body-text" style={{ marginTop: 2 }}>
               These entities no longer exist and the 3D model no longer
               names them (they came from an earlier model, or were added by hand).

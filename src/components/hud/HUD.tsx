@@ -23,8 +23,8 @@
 import PresenceTile from "./PresenceTile";
 import { useBackToClose } from "@/hooks/useBackToClose";
 import { useOutsideClose } from "@/hooks/useOutsideClose";
-import { useInterval } from "@/hooks/useInterval";
-import { fmtChartTime } from "@/components/panels/chartUtils";
+import { useNow } from "@/hooks/useInterval";
+import { clockTime } from "@/utils/dateText";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   // MapIcon, not Map: the bare name shadows the global Map constructor,
@@ -106,9 +106,7 @@ interface Props {
 }
 
 function useClock(): string {
-  const [now, setNow] = useState(() => Date.now());
-  useInterval(() => setNow(Date.now()), 1000 * 20);
-  return fmtChartTime(now);
+  return clockTime(useNow(20_000));
 }
 
 /** A HUD dropdown's open state: closed by an outside tap, Escape and Back (it

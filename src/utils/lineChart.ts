@@ -19,6 +19,7 @@
 import { stepped, type Reading } from "./stepSeries";
 import { splitAtGaps } from "./historyGaps";
 import type { HistoryGap, StateHistoryPoint } from "@/types/ha.types";
+import { HOUR_MS } from "./localDay";
 
 export interface TimeWindow { from: number; to: number }
 
@@ -94,7 +95,7 @@ export function lineRuns(data: readonly Reading[], gaps: readonly HistoryGap[], 
  *  change inside it, plus the last one BEFORE it — the state the window opens
  *  in. */
 export function windowEndingAt(deep: readonly StateHistoryPoint[], end: number, hours: number): StateHistoryPoint[] {
-  const from = end - hours * 3600 * 1000;
+  const from = end - hours * HOUR_MS;
   let anchor = -1;
   for (let i = 0; i < deep.length && deep[i].t < from; i++) anchor = i;
   return deep.filter((pt, i) => i === anchor || (pt.t >= from && pt.t <= end));

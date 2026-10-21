@@ -646,6 +646,26 @@ def _refuse(request: web.Request, capability: str | None = None,
     return None
 
 
+async def _json_body(request: web.Request) -> object:
+    """The request's JSON, or the 400 to answer when it is not JSON — the caller returns a web.Response it is given.
+
+    ⚠️ PARSED FIVE TIMES BEFORE (2026-10-22), with two except-tuples and two wordings ("invalid JSON", "invalid JSON
+    body"); one now. ValueError covers both a decode error and bytes that are not UTF-8 (each is a subclass)."""
+    try:
+        return await request.json()
+    except ValueError:
+        return web.json_response({"error": "invalid JSON body"}, status=400)
+
+
+async def _json_object(request: web.Request) -> dict | web.Response:
+    """_json_body that must be an object. ⚠️ AN ARRAY WAS A 500 at the login and the superadmin code: both called
+    body.get on whatever came; it is the same 400 as a body that is not JSON."""
+    body = await _json_body(request)
+    if isinstance(body, web.Response) or isinstance(body, dict):
+        return body
+    return web.json_response({"error": "invalid JSON body"}, status=400)
+
+
 def _cross_site(request: web.Request) -> bool:
     """A write the browser itself says came from another site. Defence in
     depth behind the cookie's SameSite=Lax: that attribute is what stops a
@@ -1661,10 +1681,9 @@ async def auth_elevate_handler(request: web.Request) -> web.Response:
     if wait > 0:
         return web.json_response({"error": "too many attempts", "retryAfter": wait},
                                  status=429)
-    try:
-        body = await request.json()
-    except (ValueError, UnicodeDecodeError):
-        return web.json_response({"error": "invalid JSON body"}, status=400)
+    body = await _json_object(request)
+    if isinstance(body, web.Response):
+        return body
     submitted = str(body.get("pin", "") or "")
     if not hmac.compare_digest(submitted, configured):
         # ⚠️ SUPERADMIN, NOT THE SESSION'S ROLE. This handler is reached by an
@@ -2263,10 +2282,9 @@ async def auth_verify_handler(request: web.Request) -> web.Response:
     cookie is set — that cookie, not the client-side profile UI, is what
     actually authorizes /core, /model and uploads on the directly-exposed port.
     """
-    try:
-        body = await request.json()
-    except (ValueError, UnicodeDecodeError):
-        return web.json_response({"error": "invalid JSON body"}, status=400)
+    body = await _json_object(request)
+    if isinstance(body, web.Response):
+        return body
     role = body.get("role")
     pin = body.get("pin")
     # Whitelist validation: role must be one of the three known profiles.
@@ -2942,10 +2960,10 @@ def _store_put_handler(store: JsonStore, key: str, what: str, *,
     async def put_handler(request: web.Request) -> web.Response:
         if (refused := gate(request, capability, refusal)) is not None:
             return refused
-        try:
-            body = await request.json()
-        except (json.JSONDecodeError, ValueError):
-            return web.json_response({"error": "invalid JSON"}, status=400)
+        # any JSON: a store takes its bare value as well as {key: value, rev}
+        body = await _json_body(request)
+        if isinstance(body, web.Response):
+            return body
         sent = body.get(key) if isinstance(body, dict) else body
         if not isinstance(sent, type(store.empty)):
             return web.json_response(
@@ -3051,12 +3069,9 @@ async def telemetry_post_handler(request: web.Request) -> web.Response:
     config stores. Silently bounded so a looping client can't fill /data."""
     if (refused := _refuse(request)) is not None:
         return refused
-    try:
-        body = await request.json()
-    except (json.JSONDecodeError, ValueError):
-        return web.json_response({"error": "invalid JSON"}, status=400)
-    if not isinstance(body, dict):
-        return web.json_response({"error": "event must be an object"}, status=400)
+    body = await _json_object(request)
+    if isinstance(body, web.Response):
+        return body
     if isinstance(body.get("csp-report"), dict):
         body = _csp_event(body["csp-report"])
     if len(json.dumps(body).encode("utf-8")) > TELEMETRY_MAX_BODY:
@@ -3511,10 +3526,10 @@ async def agent_heartbeat_handler(request: web.Request) -> web.Response:
         return refused
     status = cadence = None
     if request.can_read_body:
-        try:
-            body = await request.json()
-        except (ValueError, UnicodeDecodeError):
-            return web.json_response({"error": "invalid JSON body"}, status=400)
+        # any JSON: a beat whose body is not an object still counts (no status, no cadence)
+        body = await _json_body(request)
+        if isinstance(body, web.Response):
+            return body
         status = body.get("status") if isinstance(body, dict) else None
         if status is not None and (not isinstance(status, str) or len(status) > 200):
             return web.json_response({"error": "status must be a string of at most 200 characters"},

@@ -64,6 +64,7 @@ import { cameraFrame } from "./cameraFrame";
 import { roomShot } from "./roomShot";
 // Babylon prototype patches this module depends on — see babylonSideEffects.
 import "./babylonSideEffects";
+import { isDomain } from "@/utils/entityDomain";
 
 // Cosmetic-vs-structural entityMap diffing lives in its own pure module (no
 // Babylon, no scene state) — see entityMapDiff.ts for the full reasoning about
@@ -2144,7 +2145,7 @@ export class SceneManager {
         // because it depended on whether a device had happened to be edited in
         // Advanced Settings (which is what creates the entry).
         const map = this.config.entityMap[e.entityId];
-        const isCamera = map ? map.type === "camera" : e.entityId.startsWith("camera.");
+        const isCamera = map ? map.type === "camera" : isDomain(e.entityId, "camera");
         if (!isCamera) continue;
         // what a SweetHome camera piece means, turned into a world direction: roomCalibration.cameraBeamDir
         const dir = cameraBeamDir(e, planToWorld, beamOffsetRad, defaultPitchRad);

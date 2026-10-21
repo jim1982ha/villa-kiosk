@@ -5,7 +5,8 @@
 import type { StateHistoryPoint } from "@/types/ha.types";
 import { clockTime, dayMonth, dayTime, monthShort } from "@/utils/dateText";
 import { NOT_KEPT_WORDS } from "@/utils/stateColors";
-import { DAY_MS, nextEdge } from "@/utils/timelineCells";
+import { nextEdge } from "@/utils/timelineCells";
+import { DAY_MS, HOUR_MS, MINUTE_MS } from "@/utils/localDay";
 
 export function fmtChartValue(v: number): string {
   if (!Number.isFinite(v)) return "";
@@ -59,8 +60,8 @@ export function stepWords(stepMs: number): string {
   if (stepMs >= 28 * DAY_MS) return "monthly";
   if (stepMs >= 7 * DAY_MS) return "weekly";
   if (stepMs >= DAY_MS) return "daily";
-  if (stepMs >= 3_600_000) return "hourly";
-  return `${Math.round(stepMs / 60_000)}-min`;
+  if (stepMs >= HOUR_MS) return "hourly";
+  return `${Math.round(stepMs / MINUTE_MS)}-min`;
 }
 export function aggregationWords(stepMs: number, aggregation: Aggregation): string {
   return aggregation ? `${stepWords(stepMs)} ${aggregation}` : stepWords(stepMs);

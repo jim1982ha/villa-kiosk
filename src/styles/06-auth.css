@@ -73,7 +73,9 @@
 .profile-card:disabled { opacity: 0.55; cursor: default; transform: none; }
 .profile-card svg { color: var(--accent); }
 .profile-card-name { font-size: var(--text-xl); font-weight: 600; }
-.profile-card-desc { font-size: var(--text-sm); color: var(--text-secondary); line-height: 1.45; }
+/* The small grey paragraph — a profile's line, a weather advice's detail, an Energy note: one body, here as the
+   later file (03-panels.css held the other two). */
+.profile-card-desc, .weather-advice-detail, .energy-note { font-size: var(--text-sm); color: var(--text-secondary); line-height: 1.45; }
 
 /* Passcode pad */
 .pinpad {

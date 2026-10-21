@@ -28,6 +28,7 @@ import { useFmTerms } from "@/fm/useFmTerms";
 import { formatMoney } from "@/utils/money";
 import { cleanRoom } from "@/config/devicePlace";
 import Tip from "@/components/common/Tip";
+import { DAY_MS } from "@/utils/localDay";
 
 export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, onEditOpened }: {
   onOpenEntity: (id: string) => void;
@@ -164,7 +165,7 @@ export function TicketFigures({ tickets, inProgress, retention, now = Date.now()
   now?: number;
 }) {
   const days = retention ? keptDays(retention) : null;
-  const stats = ticketStats(tickets, days === null ? undefined : { start: now - days * 86_400_000, end: now + 1 });
+  const stats = ticketStats(tickets, days === null ? undefined : { start: now - days * DAY_MS, end: now + 1 });
   return (
     <div className="fm-stack">
       <div className="fm-summary">

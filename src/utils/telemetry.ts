@@ -21,6 +21,14 @@
 
 import { ingressPath } from "@/ha/ingress";
 
+/** Running as an installed app (a home-screen PWA, or fullscreen) rather than in a browser tab or the system's
+ *  sidebar. Here and not beside diagnostics' isIOS: diagnostics imports this module, so it would be a cycle; the
+ *  event context and the diagnostics report both read it. */
+export function isStandalone(): boolean {
+  return window.matchMedia?.("(display-mode: standalone), (display-mode: fullscreen)").matches === true
+    || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+}
+
 export type TelemetryKind =
   | "load"            // model load finished — phase timings
   | "error"           // uncaught JS error / unhandled rejection
@@ -139,8 +147,7 @@ export function report(kind: TelemetryKind, data: TelemetryData = {}): void {
       return r ? Math.round(r.height) : undefined;
     })(),
     dpr: Math.round((window.devicePixelRatio || 1) * 100) / 100,
-    standalone: window.matchMedia?.("(display-mode: standalone), (display-mode: fullscreen)").matches === true
-      || (navigator as Navigator & { standalone?: boolean }).standalone === true,
+    standalone: isStandalone(),
     mem: (performance as Performance & { memory?: { usedJSHeapSize: number } })
       .memory?.usedJSHeapSize,
     ...data,

@@ -7,7 +7,7 @@
 // inside StateTimeline's render (round 12, 2.496.193).
 
 import type { StateHistoryPoint } from "@/types/ha.types";
-import { localMidnight, localMonthStart } from "@/utils/localDay";
+import { DAY_MS, HOUR_MS, localMidnight, localMonthStart } from "@/utils/localDay";
 
 /** One drawn cell — a time bucket. */
 export interface Cell {
@@ -29,8 +29,6 @@ export interface Cell {
   spent: Record<string, number>;
   entered: Record<string, number>;
 }
-
-export const DAY_MS = 24 * 3600 * 1000;
 
 /** Where a band drawn "until now" ends: the next edge of its step — but never more than five minutes ahead. A day's or a
  *  week's next edge counted from 1970 is days away, and the last state was drawn into the future (2026-10-20). */
@@ -88,7 +86,7 @@ export function timelineCells(
   baselineStates: readonly string[] = [],
 ): Cell[] {
   if (data.length === 0) return [];
-  const start = now - hours * 3600 * 1000;
+  const start = now - hours * HOUR_MS;
   const span = now - start;
   const edges = cellEdges(start, now, bucketMs);
   const count = edges.length - 1;

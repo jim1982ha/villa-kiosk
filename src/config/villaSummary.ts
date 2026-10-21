@@ -25,7 +25,7 @@ import type { HassEntity } from "@/types/ha.types";
 import { isSwitchedOn } from "@/utils/deviceActivity";
 import { contactOf, isOffline, lockBolt, type LockBolt } from "@/utils/stateColors";
 import { effectiveSensorClass, toBaseUnit } from "./SensorClasses";
-import { domainOf } from "@/utils/entityDomain";
+import { domainOf, isDomain } from "@/utils/entityDomain";
 
 /** Only `.has` is called — villaDevices(...) satisfies it, and so does a Set. */
 export type Allowed = { has(entityId: string): boolean };
@@ -90,7 +90,7 @@ export function domainIndex(entities: Record<string, HassEntity>): DomainIndex {
   return out;
 }
 const ofDomain = (entities: Record<string, HassEntity>, d: string, allowed?: Allowed, index?: DomainIndex) => {
-  const all = index ? (index.get(d) ?? []) : Object.values(entities).filter((e) => e.entity_id.startsWith(`${d}.`));
+  const all = index ? (index.get(d) ?? []) : Object.values(entities).filter((e) => isDomain(e.entity_id, d));
   return allowed ? all.filter((e) => allowed.has(e.entity_id)) : [...all];
 };
 const idsOf = (es: readonly HassEntity[]) => es.map((e) => e.entity_id);

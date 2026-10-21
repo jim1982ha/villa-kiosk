@@ -76,7 +76,8 @@ const undrawn = ENTITY_DOMAINS.filter((d) => !readable.has(d));
 ck("every drawn domain is readable by a non-owner", undrawn.length === 0, undrawn);
 const scanned = new Map();
 for (const { f, src } of files) {
-  for (const m of src.matchAll(/entities\["([a-z_]+)\.[a-z_]+"\]|entity_id === "([a-z_]+)\.[a-z_]+"|startsWith\("([a-z_]+)\."\)/g)) scanned.set(m[1] ?? m[2] ?? m[3], f);
+  // isDomain(id, "x") is the prefix scan written once (entityDomain.ts) — read like startsWith("x.")
+  for (const m of src.matchAll(/entities\["([a-z_]+)\.[a-z_]+"\]|entity_id === "([a-z_]+)\.[a-z_]+"|startsWith\("([a-z_]+)\."\)|\bisDomain\([^,()]+(?:\([^()]*\))?, "([a-z_]+)"\)/g)) scanned.set(m[1] ?? m[2] ?? m[3] ?? m[4], f);
 }
 // `update.*` is an owner-only scan (Cockpit's updates count sits behind seeUpdates), and so is `person.*`: a
 // person's whereabouts never leave the add-on for a guest or ops session (readDomains' own note), and the presence

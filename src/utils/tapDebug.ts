@@ -15,6 +15,7 @@
 import { clamp } from "./geometry";
 import { readJson, writeJson } from "./storedJson";
 import { debugFlagEnabled } from "@/utils/devLog";
+import { copyText } from "./clipboard";
 
 // Full history for this page load, independent of the rolling on-screen
 // window below — this is what "Copy all" grabs. Bounded generously (not to
@@ -154,23 +155,6 @@ function makeDraggable(el: HTMLDivElement, handle: HTMLElement): void {
   handle.addEventListener("pointercancel", end);
 }
 
-function fallbackCopy(text: string): boolean {
-  try {
-    const ta = document.createElement("textarea");
-    ta.value = text;
-    ta.style.position = "fixed";
-    ta.style.left = "-9999px";
-    document.body.appendChild(ta);
-    ta.focus();
-    ta.select();
-    const ok = document.execCommand("copy");
-    document.body.removeChild(ta);
-    return ok;
-  } catch {
-    return false;
-  }
-}
-
 /** Drop the whole page-load history so the next lines logged are the only
  *  ones "Copy all" will hand over. The reader's tool for isolating one
  *  interaction out of a session's worth of noise. */
@@ -188,14 +172,7 @@ function copyAll(): void {
       if (copyBtn) copyBtn.textContent = "Copy all";
     }, 1500);
   };
-  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-    navigator.clipboard.writeText(text).then(
-      () => flash("Copied!"),
-      () => flash(fallbackCopy(text) ? "Copied!" : "Copy failed"),
-    );
-  } else {
-    flash(fallbackCopy(text) ? "Copied!" : "Copy failed");
-  }
+  void copyText(text).then((ok) => flash(ok ? "Copied!" : "Copy failed"));
 }
 
 function ensureBox(): HTMLDivElement {

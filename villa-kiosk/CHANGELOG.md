@@ -1,3 +1,16 @@
+## 2.496.482
+
+### Changed
+- **The Kiosk's code shares more of itself.** No change you should see. Counts ("3 devices"), time spans, device-type
+  checks, hint lines under fields, picker rows, copying to the clipboard, the search box filter and a dozen repeated
+  styles are each written once now, instead of two to twenty times.
+- **The photo viewer's arrow keys behave like the camera window's.** They no longer step photos while you type in a
+  field or hold Ctrl, Alt or Cmd.
+
+### Fixed
+- **A malformed login request is refused politely.** A sign-in or superadmin code sent in the wrong shape answered
+  with a server error instead of "bad request".
+
 ## 2.496.481
 
 ### Changed

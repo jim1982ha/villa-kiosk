@@ -140,7 +140,7 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
                   />
                   <span>
                     <strong>{b.label}</strong>
-                    <span className="muted" style={{ display: "block", fontSize: "var(--text-xs)" }}>{b.note}</span>
+                    <span className="muted legend-note">{b.note}</span>
                   </span>
                 </div>
               );
@@ -163,7 +163,7 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
                 }} />
                 <span>
                   <strong>{r.label}</strong>
-                  <span className="muted" style={{ display: "block", fontSize: "var(--text-xs)" }}>{r.note}</span>
+                  <span className="muted legend-note">{r.note}</span>
                 </span>
               </div>
             ))}
@@ -174,7 +174,7 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
                 }}>3</span>
                 <span>
                   <strong>{n.label}</strong>
-                  <span className="muted" style={{ display: "block", fontSize: "var(--text-xs)" }}>{n.note}</span>
+                  <span className="muted legend-note">{n.note}</span>
                 </span>
               </div>
             ))}
@@ -205,7 +205,7 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
                 <span className="legend-swatch legend-swatch-round" style={{ background: s.swatch }} />
                 <span>
                   <strong>{s.label}</strong>
-                  <span className="muted" style={{ display: "block", fontSize: "var(--text-xs)" }}>{s.note}</span>
+                  <span className="muted legend-note">{s.note}</span>
                 </span>
               </div>
             ))}

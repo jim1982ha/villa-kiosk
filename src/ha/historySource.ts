@@ -30,6 +30,7 @@ import { windowEndingAt } from "@/utils/lineChart";
 import { NOT_KEPT, UNKNOWN_STATES } from "@/utils/stateColors";
 import type { HistorySeries, StateHistoryPoint, StatisticPeriod } from "@/types/ha.types";
 import { dayTime } from "@/utils/dateText";
+import { HOUR_MS } from "@/utils/localDay";
 
 /** One row of Home Assistant's state history, as the REST endpoint sends it. */
 export interface StateRow {
@@ -98,8 +99,6 @@ export type HistoryAnswers<Q extends HistoryRequests> = { [K in keyof Q]: Histor
  *  enough that the query stays cheap; beyond it, "not enough history" is the
  *  honest answer. */
 export const LAST_SEEN_LOOKBACK_HOURS = 24 * 60;
-
-const HOUR_MS = 3600 * 1000;
 
 /** The window a request covers at `now`. */
 export function requestWindow(r: HistoryRequest, now: number): { from: number; to: number } {

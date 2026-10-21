@@ -19,6 +19,7 @@
 import type { HassEntity } from "@/types/ha.types";
 import { contactOf } from "@/utils/stateColors";
 import type { StateRow } from "./historySource";
+import { DAY_MS } from "@/utils/localDay";
 
 /** One recorded state, as the history read returns it (minimal_response: a state and when it changed). */
 export type RecordedState = StateRow;
@@ -29,7 +30,7 @@ export const RECALL_DAYS = 10;
 
 /** Where that look starts, at `now` (epoch ms): a duration back, never a calendar edge. */
 export function recallFrom(now: number): number {
-  return now - RECALL_DAYS * 86_400_000;
+  return now - RECALL_DAYS * DAY_MS;
 }
 
 /**
