@@ -106,7 +106,7 @@ console.log("\n  which history goes under it (architecture review 11)");
   const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
   const g = src("components/panels/DeviceGroupPanel.tsx");
   ck("both windows choose by historyOf, and the group draws a words member's timeline (the caller)",
-     /historyOf\(r\)/.test(src("components/panels/ReadingHistory.tsx")) && /<ReadingHistory /.test(src("components/panels/SensorPanel.tsx")) && /historyOf\(r\.reading\) !== "numbers"/.test(g) && /LastDayTimeline entityId=\{r\.id\} legend/.test(g)
+     /historyOf\(r\)/.test(src("components/panels/ReadingHistory.tsx")) && /<ReadingHistory /.test(src("components/panels/SensorPanel.tsx")) && /historyOf\(r\.reading\) !== "numbers"/.test(g) && /LastDayTimeline entityId=\{r\.id\} palette/.test(g)
      && !/stateColor\)\.map/.test(g));
   ck("both windows draw a pill through ReadingPill", ["SensorPanel", "DeviceGroupPanel"].every((f) => /<ReadingPill /.test(src(`components/panels/${f}.tsx`)) && !/className=\{`status-pill/.test(src(`components/panels/${f}.tsx`))));
 }

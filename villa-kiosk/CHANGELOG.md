@@ -1,3 +1,11 @@
+## 2.496.464
+
+### Changed
+- **Every history band says what its colours mean.** Under the band of a device's last hours (a motion sensor, a
+  lock, a camera, a sensor in words), a legend lists each state the band shows, in its colour and its own words
+  ("● Clear ● Detected"). Before, only some windows had one. Two bands keep none: a linked sensor's thin band (its
+  state is written beside it) and the band over a camera's video (it sits beside the video's buttons).
+
 ## 2.496.463
 
 ### Changed

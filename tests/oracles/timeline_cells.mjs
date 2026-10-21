@@ -69,5 +69,33 @@ ck("StateTimeline draws exactly these", /timelineCells\(data, end \?\? timeKey, 
      /bucketMs >= DAY_MS\s*\? cellSummary\(hover\.cell\.spent, hover\.cell\.entered, wordsFor\)/.test(stt));
 }
 
+// owner, 2026-10-21: "how come I see a legend in some bar chart and not in other … consistent everywhere": a band
+// lists what it paints — every state, its colour, its words — and the band itself decides, never its caller
+{
+  const { timelineLegend } = await import("@/utils/timelineCells");
+  const H = 3600_000, now = Date.UTC(2026, 9, 21, 12);
+  const data = [{ state: "off", t: now - 20 * H }, { state: "on", t: now - 10 * H }, { state: "off", t: now - 9 * H },
+    { state: "unavailable", t: now - 2 * H }, { state: "off", t: now - H }];
+  const cells = timelineCells(data, now, 24, 5 * 60_000, []);
+  const colour = (st) => ({ off: "green", on: "red", unavailable: "amber" })[st] ?? "grey";
+  const words = (st) => ({ off: "Clear", on: "Detected", unavailable: "Unavailable" })[st] ?? st;
+  const key = timelineLegend(cells, colour, words);
+  ck("a band's legend: every state it paints, first seen first, in its colour and its words",
+     JSON.stringify(key) === JSON.stringify([{ state: "off", color: "green", label: "Clear" },
+       { state: "on", color: "red", label: "Detected" }, { state: "unavailable", color: "amber", label: "Unavailable" }]), key);
+  const quiet = timelineCells([{ state: "online", t: now - 30 * H }], now, 24, 5 * 60_000, ["online"]);
+  ck("  ...a resting state it paints is listed too", timelineLegend(quiet, () => "g", (x) => x).map((l) => l.state).join() === "online");
+
+  const { React, h, draw } = await import("../consistency/screen.mjs");
+  const { default: StateTimeline } = await import("@/components/panels/StateTimeline");
+  const live = [{ state: "off", t: Date.now() - 20 * H }, { state: "on", t: Date.now() - 10 * H }, { state: "off", t: Date.now() - 9 * H }];
+  const band = (extra = {}) => draw(h(StateTimeline, { data: live, hours: 24, status: "ok", colorFor: colour, labelFor: words, ...extra }));
+  ck("  ...drawn under EVERY band, whatever its caller passes (an occupancy sensor as a camera)",
+     /state-timeline-legend[\s\S]*Clear[\s\S]*Detected/.test(band()), band().slice(-400));
+  ck("  ...except a band that says no (legend={false}: a linked sensor's thin row, the camera's overlay)",
+     !/state-timeline-legend/.test(band({ legend: false })));
+  void React;
+}
+
 done("✅ the timeline's cells, by value");
 

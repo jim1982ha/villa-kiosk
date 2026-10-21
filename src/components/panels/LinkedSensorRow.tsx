@@ -36,6 +36,8 @@ export default function LinkedSensorRow({ entityId, label }: { entityId: string;
           hours={BAND_HOURS}
           end={lastSeen}
           height={LINKED_BAND_PX}
+          // too thin to carry its legend: its state is said beside it, its colours in its own window
+          legend={false}
           colorFor={reading.stateColor ?? historyStateColor(entityId)}
           labelFor={stateWords(entityId, entity?.attributes.device_class as string | undefined)}
         />

@@ -18,10 +18,10 @@ import { useStateHistory } from "@/hooks/useStateHistory";
 import { historyTitle } from "@/ha/historySource";
 import { useHistoryRange, HistoryHeader } from "./historyRange";
 import { aggregationWords } from "./chartUtils";
-import { historyStateColor, NOT_KEPT, NOT_KEPT_COLOR, NOT_KEPT_WORDS, paletteColorFor } from "@/utils/stateColors";
+import { historyStateColor, NOT_KEPT, paletteColorFor } from "@/utils/stateColors";
 
 export default function LastDayTimeline({
-  entityId, colorFor, legend = false, words,
+  entityId, colorFor, palette = false, words,
 }: {
   entityId: string;
   /** Optional — the entity's own domain rules are used by default, which is
@@ -32,9 +32,10 @@ export default function LastDayTimeline({
    *  binary_sensor's configurable alert state is the one real case. */
   colorFor?: (state: string) => string;
   /** States with no colour rule of their own (a text sensor, an unknown
-   *  domain): a palette over the states the window actually holds, with a
-   *  legend saying which is which. Ignored when `colorFor` is given. */
-  legend?: boolean;
+   *  domain): a palette over the states the window actually holds. Ignored
+   *  when `colorFor` is given. Every band lists its colours below it, palette
+   *  or not (StateTimeline, timelineLegend). */
+  palette?: boolean;
   /** How a state is said, when the entity's own words are not the ones (the villa's presence: "Empty"/"Occupied",
    *  never its sensor's "Detected"/"Clear"). */
   words?: (state: string) => string;
@@ -44,8 +45,7 @@ export default function LastDayTimeline({
   const { entities } = useHA();
   // the "no longer kept" stretch is not one of the device's states: never in its palette (historySource.keptFrom)
   const held = data.map((p) => p.state).filter((s) => s !== NOT_KEPT);
-  const palette = !colorFor && legend ? paletteColorFor(held) : undefined;
-  const paint = colorFor ?? palette ?? historyStateColor(entityId);
+  const paint = colorFor ?? (palette ? paletteColorFor(held) : historyStateColor(entityId));
   return (
     <div className="field">
       <HistoryHeader title={historyTitle(range.title, lastSeen)} picker={picker} step={aggregationWords(range.grainMs, null)} />
@@ -57,8 +57,6 @@ export default function LastDayTimeline({
         grainMs={range.grainMs}
         end={lastSeen}
         labelFor={words ?? stateWords(entityId, entities[entityId]?.attributes.device_class as string | undefined)}
-        legend={palette && [...[...new Set(held)].map((s) => ({ state: s, color: palette(s) })),
-          ...(held.length < data.length ? [{ state: NOT_KEPT, color: NOT_KEPT_COLOR, label: NOT_KEPT_WORDS }] : [])]}
       />
     </div>
   );

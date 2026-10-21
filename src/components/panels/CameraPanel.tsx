@@ -628,6 +628,8 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
             // news, so it is neither painted nor listed. What remains is a
             // bare track marked only where something actually happened.
             baselineStates={["online"]}
+            // an overlay on the video, aligned with its buttons: no legend row under it (its colours are the map's)
+            legend={false}
             // The bar's own words: these states are synthesized here.
             labelFor={(s) => CAMERA_BAR_LABEL[s] ?? s}
             // Straight from the shared vocabulary the "Map colours" legend

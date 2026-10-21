@@ -168,3 +168,19 @@ export function timelineRuns(
   }
   return out;
 }
+
+/** THE LEGEND OF A BAND: every state it paints, in the order it first appears, its colour and its words (owner,
+ *  2026-10-21: "how come I see a legend in some bar chart and not in other … centrally defined and consistent
+ *  everywhere"). It was a prop only a sensor in words passed: an occupancy sensor striped red and green said neither,
+ *  a camera beside it said both. Now every band says its own, from what it draws. */
+export function timelineLegend(
+  cells: readonly Cell[], colorFor: (s: string) => string, wordsFor: (s: string) => string,
+): { state: string; color: string; label: string }[] {
+  const seen: string[] = [];
+  for (const c of cells) {
+    for (const st of c.states.length ? c.states : c.baseline !== undefined ? [c.baseline] : []) {
+      if (!seen.includes(st)) seen.push(st);
+    }
+  }
+  return seen.map((st) => ({ state: st, color: colorFor(st), label: wordsFor(st) }));
+}
