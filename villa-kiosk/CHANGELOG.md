@@ -1,3 +1,11 @@
+## 2.496.460
+
+### Changed
+- **An open door is red in its window.** A door, window or garage-door sensor that reads "Open" (and a lock sensor
+  that reads "Unlocked") now shows its pill in the alarm style, red, as its open stretches on its history bar and its
+  line under "Also on this device". Closed stays green. The map and the Cockpit still treat an open door as
+  information: it is not listed in "Needs attention".
+
 ## 2.496.459
 
 ### Fixed

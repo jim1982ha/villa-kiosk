@@ -27,7 +27,13 @@ ck("a leak sensor: no leak = green pill 'No leak', a leak = danger pill 'Leak de
    leak.tone("off") === "on" && leak.word("off") === "No leak" && leak.tone("on") === "danger" && leak.word("on") === "Leak detected"
    && leak.color("on") === STATUS_COLOR.alert && leak.problem === "on");
 const door = binaryLook("binary_sensor.door", "door");
-ck("a door: closed green, open grey — and no problem state", door.tone("off") === "on" && door.tone("on") === "off" && door.problem === undefined);
+// owner, 2026-10-21: "make sure the 'open' pill appears with the alarming style" — in its window only, never a problem
+ck("a door: closed green, open red in its window — and still no problem state (the map and the Cockpit list nothing)",
+   door.tone("off") === "on" && door.tone("on") === "danger" && door.status("on") === "alert" && door.problem === undefined
+   && !door.danger("on"));
+ck("  ...a window, a garage door, an opening and a binary lock alike; a motion sensor's quiet state stays green",
+   ["window", "garage_door", "opening", "lock"].every((c) => binaryLook("binary_sensor.x", c).tone("on") === "danger")
+   && binaryLook("binary_sensor.x", "motion").tone("off") === "on");
 const pir = binaryLook("binary_sensor.hall", "motion");
 ck("a motion sensor: quiet green, detection red in its window — yet not a problem (the map keeps it as information)",
    pir.color("off") === STATUS_COLOR.active && pir.color("on") === STATUS_COLOR.alert && pir.problem === undefined && !pir.danger("on")
@@ -55,9 +61,9 @@ const E = {
 const rows = Object.fromEntries(readingRows(Object.keys(E), E, {}, {}).map((r) => [r.id, r]));
 ck("a grouped smoke detector's 'Smoke detected' is red in the list, as in its window",
    rows["binary_sensor.det_smoke"].text === "Smoke detected" && rows["binary_sensor.det_smoke"].tone === "danger");
-ck("  ...'Clear' and a quiet motion sensor green, an offline battery amber, an open door plain grey",
+ck("  ...'Clear' and a quiet motion sensor green, an offline battery amber, an open door red (as in its window)",
    rows["binary_sensor.det_smoke_clear"].tone === "on" && rows["binary_sensor.hall"].tone === "on"
-   && rows["binary_sensor.det_battery"].tone === "unavailable" && rows["binary_sensor.gate"].tone === "off");
+   && rows["binary_sensor.det_battery"].tone === "unavailable" && rows["binary_sensor.gate"].tone === "danger");
 ck("  ...a measurement inside its limits takes no tone (plain secondary text)", rows["sensor.det_temperature"].tone === undefined);
 const list = readFileSync(new URL("../../src/components/panels/DeviceReadings.tsx", import.meta.url), "utf8");
 const dash = readFileSync(new URL("../../src/pages/Dashboard.tsx", import.meta.url), "utf8");
