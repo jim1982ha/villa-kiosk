@@ -18,7 +18,13 @@ export const LINKED_BAND_PX = 28;
 /** ⚠️ UNDER THE DEVICE'S OWN BAND, AT ITS WIDTH AND OVER ITS RANGE (owner, 2026-10-21: "taking the same width as the
  *  bigger bar … so that it's easy to compare states of both devices over the same scale"): it sat at the top in the
  *  switch's row, a short bar of a fixed day beside the name. Its name above it; its state in its legend. */
-export default function LinkedSensorRow({ entityId, label }: { entityId: string; label: string }) {
+export default function LinkedSensorRow({ entityId, label, role }: {
+  entityId: string;
+  label: string;
+  /** What it is to the device, after its name (owner, 2026-10-21): "Door sensor (linked entity)",
+   *  "Staircase motion (motion sensor)". */
+  role: "linked entity" | "motion sensor";
+}) {
   const { entities } = useHA();
   const entity = entities[entityId];
   const range = useSharedRange();
@@ -26,7 +32,7 @@ export default function LinkedSensorRow({ entityId, label }: { entityId: string;
   const reading = readingOf(entityId, entity, "binary_sensor");
   return (
     <div className="field panel-linked-history">
-      <div className="panel-linked-label" title={label}>{label}</div>
+      <div className="panel-linked-label" title={`${label} (${role})`}>{label} <span className="muted">({role})</span></div>
       <StateTimeline
         data={data}
         status={status}

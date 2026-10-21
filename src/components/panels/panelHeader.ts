@@ -36,8 +36,8 @@ export interface PanelHeader {
   /** The linked entity when it is a binary_sensor: a reading, never a switch — drawn as its band (LinkedSensorRow),
    *  whatever the profile (owner, 2026-10-21). */
   linkedSensor: { entityId: string; label: string } | null;
-  /** A camera's motion sensor (read-only): detecting or not. */
-  motion: { label: string; isOn: boolean } | null;
+  /** A camera's motion sensor (read-only): its band under the camera's (LinkedSensorRow). */
+  motion: { entityId: string; label: string } | null;
 }
 
 export interface HeaderInput {
@@ -105,7 +105,7 @@ export function panelHeader({ panel, entities, config, canControl, linkedSwitch 
     // detection wired up is not a control action). "on" is the sensor's own
     // report of motion — what this line says — not an alert judgement.
     motion: motionId
-      ? { label: labelOf(motionId, config.entityMap, entities), isOn: entities[motionId]?.state === "on" }
+      ? { entityId: motionId, label: labelOf(motionId, config.entityMap, entities) }
       : null,
   };
 }

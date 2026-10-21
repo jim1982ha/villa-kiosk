@@ -29,7 +29,7 @@ ck("the linked switch: named, its position, and whether HA knows it", JSON.strin
    && h({ linkedSwitch: { isOn: false, known: false } }).linked.known === false);
 ck("  ...not offered to a profile that may not control it", h({ canControl: false }).linked === null);
 const cam = panelHeader({ panel: { entityId: "camera.gate", mapping: { entityId: "camera.gate", type: "camera", label: "Gate" } }, entities, config: live, canControl: false, linkedSwitch: null });
-ck("a camera's motion line: its sensor named and detecting — shown to any profile", cam.motion && cam.motion.isOn === true && /Motion/.test(cam.motion.label));
+ck("a camera's motion sensor: named, its id for its band — shown to any profile", cam.motion && cam.motion.entityId === "binary_sensor.cam_motion" && /Motion/.test(cam.motion.label));
 ck("  ...and a light has none", h().motion === null);
 
 // ⚠️ A LINKED SENSOR IS NOT A SWITCH (owner, 2026-10-21): a lock's door sensor was drawn as a toggle that cannot move it
@@ -47,8 +47,8 @@ const { readFileSync } = await import("node:fs");
 const { parseTsx, elements, guardsOf, propText, childTags } = await import("../consistency/jsx.mjs");
 const base = parseTsx("components/panels/BasePanel.tsx");
 const band = elements(base, "LinkedSensorRow");
-ck("the window draws the band under `linkedSensor`, the toggle only under `linked`",
-   band.length === 1 && guardsOf(band[0]).join() === "linkedSensor"
+ck("the window draws a band under `linkedSensor` and under `motion`, the toggle only under `linked`",
+   band.length === 2 && band.map((b) => guardsOf(b).join()).join() === "linkedSensor,motion"
    && elements(base, "div").filter((d) => childTags(d).includes("button") && /panel-linked-row/.test(propText(d, "className") ?? ""))
      .map((d) => guardsOf(d).join()).join() === "linked",
    band.map(guardsOf));
@@ -62,9 +62,11 @@ ck("  ...the band is the windows' own StateTimeline (LINKED_BAND_PX), coloured b
 {
   const src = readFileSync(new URL("../../src/components/panels/BasePanel.tsx", import.meta.url), "utf8");
   const rowSrc = readFileSync(new URL("../../src/components/panels/LinkedSensorRow.tsx", import.meta.url), "utf8");
-  ck("  ...drawn right under the device's own history, inside the window's one range",
+  ck("  ...drawn right under the device's own history, inside the window's one range — a camera's motion sensor too, each named with what it is",
      /\(history \?\? <LastDayTimeline entityId=\{entityId\} \/>\)\}[\s\S]{0,300}\{linkedSensor && <LinkedSensorRow /.test(src)
      && /<HistoryRangeShare>[\s\S]*<LinkedSensorRow[\s\S]*<\/HistoryRangeShare>/.test(src)
+     && /\{motion && <LinkedSensorRow entityId=\{motion\.entityId\} label=\{motion\.label\} role="motion sensor" \/>\}/.test(src)
+     && !/conn-dot/.test(src) && /\{label\} <span className="muted">\(\{role\}\)<\/span>/.test(rowSrc)
      && /const range = useSharedRange\(\);/.test(rowSrc) && propText(tl[0], "hours") === "range.hours"
      && /"History range", className, useContext\(SharedRange\)\)/.test(readFileSync(new URL("../../src/components/panels/historyRange.tsx", import.meta.url), "utf8")));
 }
