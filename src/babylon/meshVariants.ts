@@ -154,10 +154,14 @@ export function orderVariantWords(words: Iterable<string>): string[] {
   });
 }
 
-/** ⚠️ A BADGE NEEDS THE DEVICE ITSELF IN THE MODEL (owner, 2026-10-21): a door sensor modelled only as its two poses
- *  ("…door_sensor__on" an open door, "…__off" a closed one) still had a badge floating over the door — the poses
- *  show its state already. A badge is drawn only when the model holds an object named after the entity itself (no
- *  "__<word>" pose suffix: EntityMap.extractVariantSuffix); poses alone are the device's look, never its badge. */
+/** The suffix that says "no badge" (owner, 2026-10-21): an object named `<entity_id>__nobadge` is the device in
+ *  the model, drawn and state-tinted like an unsuffixed one, NEVER a pose — and its device floats no badge, whatever
+ *  its family. "binary_sensor.main_entrance_door_sensor__nobadge": no badge; "…door_sensor": a badge. */
+export const NO_BADGE_WORD = "nobadge";
+
+/** Does this device float a badge: no object of it ends in `__nobadge` (NO_BADGE_WORD). ⚠️ 2.496.469 asked the
+ *  opposite way (a badge only when an object carries the bare id, so a device drawn by its poses alone had none):
+ *  the owner chose an explicit word instead, the same day. */
 export function badgeFromMeshes(meshNames: readonly string[]): boolean {
-  return meshNames.some((n) => extractVariantSuffix(n) === null);
+  return !meshNames.some((n) => extractVariantSuffix(n) === NO_BADGE_WORD);
 }

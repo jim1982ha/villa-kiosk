@@ -146,7 +146,7 @@ import { COSMETIC_MAPPING_FIELDS, type EntityMapDelta } from "./entityMapDiff";
 // — pure logic, extracted to keep this file to the things that actually touch
 // the scene. See meshVariants.ts for the vocabulary rules themselves.
 import {
-  pickNearestVariant, desiredVariantWord, orderVariantWords, badgeFromMeshes,
+  pickNearestVariant, desiredVariantWord, orderVariantWords, badgeFromMeshes, NO_BADGE_WORD,
 } from "./meshVariants";
 // Pure label/chip overlap geometry — see labelLayout.ts.
 import { type ChipTextMetrics } from "./labelLayout";
@@ -1461,8 +1461,9 @@ export class EntityVisuals {
       // disappeared with it. Leaving it out of meshVariants keeps it
       // permanently visible AND still state-tinted (applyToMesh tints any
       // unsuffixed lock; the pose meshes are the ones that skip the tint).
+      // "__nobadge" is no pose: the device's own object, always shown (meshVariants.NO_BADGE_WORD)
       const suffix = extractVariantSuffix(m.name);
-      if (suffix) {
+      if (suffix && suffix !== NO_BADGE_WORD) {
         let byWord = this.meshVariants.get(map.entityId);
         if (!byWord) { byWord = new Map(); this.meshVariants.set(map.entityId, byWord); }
         const wordList = byWord.get(suffix) ?? [];
@@ -2804,7 +2805,7 @@ export class EntityVisuals {
     for (const [entityId, meshes] of this.byEntity) {
       if (!meshes.length) continue;
       if (hiddenMembers.has(entityId)) continue;
-      // only its poses in the model (…__on / …__off): their look IS its state, no badge (badgeFromMeshes)
+      // an object of it named "<entity>__nobadge": no badge, whatever its family (badgeFromMeshes, owner 2026-10-21)
       if (!badgeFromMeshes(meshes.map((m) => m.name))) continue;
       const map = this.mapping.get(entityId);
       if (!map) continue;

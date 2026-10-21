@@ -138,16 +138,19 @@ console.log("\n  the callers ask it (pin the caller):");
      ![ev, sg, db, ph].some((s) => /badgeFaceAndRing\(|linkedOn:|alertStateFor\(|linkActiveIds/.test(s)));
 }
 
-// owner, 2026-10-21: a door sensor modelled only as its poses (…__on an open door, …__off a closed one) still had a
-// badge — a badge only when the model holds the entity itself
+// owner, 2026-10-21: "a suffix that will make no badge … `__nobadge` being the key suffix": an object named
+// <entity>__nobadge — no badge, whatever the family; never a pose (always shown)
 {
   const { badgeFromMeshes } = await import("@/babylon/meshVariants");
   const { readFileSync } = await import("node:fs");
-  ck("a badge needs the entity's own object: its poses alone draw none; the device beside its poses keeps one",
-     !badgeFromMeshes(["binary_sensor.main_entrance_door_sensor__on", "binary_sensor.main_entrance_door_sensor__off"])
+  ck("__nobadge: no badge; the bare id, or poses alone: a badge",
+     !badgeFromMeshes(["binary_sensor.main_entrance_door_sensor__nobadge", "binary_sensor.main_entrance_door_sensor__on"])
+     && !badgeFromMeshes(["light.hall__nobadge"])
      && badgeFromMeshes(["binary_sensor.main_entrance_door_sensor"])
-     && badgeFromMeshes(["lock.door", "lock.door__locked", "lock.door__unlocked"])
-     && badgeFromMeshes(["Door_Sensor_Mesh_12"]));
+     && badgeFromMeshes(["binary_sensor.main_entrance_door_sensor__on", "binary_sensor.main_entrance_door_sensor__off"])
+     && badgeFromMeshes(["lock.door", "lock.door__locked", "lock.door__unlocked"]));
+  ck("  ...and __nobadge is never grouped as a pose (it would be hidden whenever the state asks another word)",
+     /if \(suffix && suffix !== NO_BADGE_WORD\) \{/.test(readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8")));
   ck("  ...the map's badge pipeline asks it",
      /if \(!badgeFromMeshes\(meshes\.map\(\(m\) => m\.name\)\)\) continue;/.test(readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8")));
 }

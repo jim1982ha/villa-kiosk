@@ -1,3 +1,11 @@
+## 2.496.470
+
+### Changed
+- **"__nobadge" removes a device's badge.** Name a device's 3D object `<entity_id>__nobadge` (for example
+  binary_sensor.main_entrance_door_sensor__nobadge) and the device shows no badge on the map, whatever kind of
+  device it is; the object itself is always shown and coloured by its state. Without that ending the badge is drawn,
+  as before 2.496.469: a device drawn only by its poses (…__on, …__off) has its badge back.
+
 ## 2.496.469
 
 ### Changed
