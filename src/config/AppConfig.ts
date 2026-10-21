@@ -7,7 +7,7 @@ import { ENTITY_MAP } from "./EntityMap";
 import { TELEPORT_POINTS } from "./TeleportPoints";
 import { DEFAULT_EYE_HEIGHT } from "@/babylon/walkerSpawn";
 import { EMPTY_FM_CONTRACT, type FmContract } from "@/fm/fmTypes";
-import { readJson, writeJson, removeStored } from "@/utils/storedJson";
+import { readJson, writeJson } from "@/utils/storedJson";
 import { isDomain } from "@/utils/entityDomain";
 
 const CONFIG_KEY = "villa-kiosk:config:v2";
@@ -574,10 +574,6 @@ export function overrides(config: AppConfig): Partial<AppConfig> {
 export function saveConfig(config: AppConfig): void {
   // Said, not swallowed: a full quota here loses this device's own settings.
   if (!writeJson(CONFIG_KEY, overrides(config))) console.error("[AppConfig] failed to save (storage full or disabled)");
-}
-
-export function resetConfig(): void {
-  removeStored(CONFIG_KEY);
 }
 
 /** Fallback title when neither a configured title nor the HA instance name exist. */

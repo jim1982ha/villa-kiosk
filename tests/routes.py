@@ -130,6 +130,18 @@ missing_dev = sorted(asked - dev - {"/model"})
 ck("the dev server forwards everything the app requests", not missing_dev,
    f"`npm run dev` would 404: {', '.join(missing_dev)}")
 
+# ⚠️ AND BACKWARDS (architecture review B, 2026-10-22): `/agent-messages` and `/agent-choices` left the proxy and nginx
+# in 2.496.445 and stayed in Vite's list and the service worker's never-cache list, with every check above green —
+# none walked dev -> proxy nor never-cache -> proxy.
+stale_dev = sorted(dev - routes - {"/model"})
+ck("every path the dev server forwards is answered", not stale_dev,
+   f"forwarded to nothing: {', '.join(stale_dev)}")
+_nc = re.search(r"const NEVER_CACHE = \[([\s\S]*?)\];", SW.read_text())
+never_cache = {first_segment(x) for x in re.findall(r'"(/[^"]+)"', _nc.group(1))} if _nc else set()
+stale_nc = sorted(never_cache - routes - {"/model"})
+ck("every path the service worker keeps out of its cache is answered", bool(never_cache) and not stale_nc,
+   f"kept out of the cache, answered by nothing: {', '.join(stale_nc)}")
+
 # ── the owner credential every forwarded request carries ─────────────────
 # `_is_ingress` trusts `X-VK-Ingress: 1` as the owner, which is only safe
 # because nginx OVERWRITES the client's value — per location, since a location

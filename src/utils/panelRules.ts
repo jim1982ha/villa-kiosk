@@ -47,16 +47,11 @@ export function coverStateLabel(state: string | undefined, position: number | un
   return state ?? "Unknown";
 }
 
-/** A thermostat's adjustable range: the device's own, narrowed to the
- *  profile's climate band (a guest's), with HA's defaults when unreported. */
-export function climateRange(
-  attrs: { min_temp?: number; max_temp?: number } | undefined,
-  band: { climateMin?: number; climateMax?: number } | null,
-): { min: number; max: number } {
-  return {
-    min: Math.max(attrs?.min_temp ?? 16, band?.climateMin ?? -Infinity),
-    max: Math.min(attrs?.max_temp ?? 30, band?.climateMax ?? Infinity),
-  };
+/** A thermostat's adjustable range: the device's own, with the villa's system's defaults when unreported.
+ *  ⚠️ NO PROFILE BAND (architecture review B, 2026-10-22): a guest's narrower range was declared, read here, and set
+ *  by nothing — no profile carried one and no screen could; removed with its code ("no half features"). */
+export function climateRange(attrs: { min_temp?: number; max_temp?: number } | undefined): { min: number; max: number } {
+  return { min: attrs?.min_temp ?? 16, max: attrs?.max_temp ?? 30 };
 }
 
 /** One step of a thermostat's target: clamped to its range and ROUNDED to

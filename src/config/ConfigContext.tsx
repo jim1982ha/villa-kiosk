@@ -4,7 +4,7 @@
 import {
   createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode,
 } from "react";
-import { type AppConfig, loadConfig, saveConfig, resetConfig, normaliseConfig } from "./AppConfig";
+import { type AppConfig, loadConfig, saveConfig, normaliseConfig } from "./AppConfig";
 import type { ConfigEdit } from "./mappingEdits";
 import { resolveEffectiveTheme } from "@/utils/themeTime";
 import { beginSpan } from "@/utils/perfSpans";
@@ -16,8 +16,6 @@ interface ConfigContextType {
    *  the same moment both land. An edit that changes nothing re-renders
    *  nothing. */
   update: (patch: Partial<AppConfig> | ConfigEdit) => void;
-  replace: (next: AppConfig) => void;
-  reset: () => void;
   /** entity_id -> room name, live-computed (HA's own Area assignment, falling
    *  back to GLB geometric detection — see Dashboard.tsx's resolution effect
    *  and config/devicePlace.ts's resolveEntityRoom) rather than stored/edited
@@ -52,14 +50,9 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const replace = useCallback((next: AppConfig) => {
-    setConfig(normaliseConfig(next));
-  }, []);
-
-  const reset = useCallback(() => {
-    resetConfig();
-    setConfig(loadConfig());
-  }, []);
+  // ⚠️ NO "replace" NOR "reset" (architecture review B, 2026-10-22): nothing called them, and a reset wired later on the
+  // owner's device would have emptied its copy of the shared device setup — DeviceConfigSync would push every device
+  // as deleted to every tablet.
 
   // Persist to localStorage in an effect, AFTER React commits + the browser
   // paints — not inside the state updater above. JSON.stringify + a
@@ -110,8 +103,8 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   }, [config.theme, config.latitude, config.longitude]);
 
   const value = useMemo(
-    () => ({ config, update, replace, reset, resolvedRooms, setResolvedRooms }),
-    [config, update, replace, reset, resolvedRooms],
+    () => ({ config, update, resolvedRooms, setResolvedRooms }),
+    [config, update, resolvedRooms],
   );
   return <ConfigContext.Provider value={value}>{children}</ConfigContext.Provider>;
 }
