@@ -55,8 +55,9 @@ const oldRule = selectableIds.filter((id) => {
   return info.alarmState !== "none" && entities[id].state === info.alarmState;
 }).sort();
 ck("  ...(the old rule disagreed with the map on this set)", oldRule.join() !== redOnMap.join(), oldRule);
-ck("a device merely on, active, linked or in motion is never an alarm",
-   ["light.hall", "switch.pump", "camera.gate", "cover.blind", "lock.side", "binary_sensor.pir", "sensor.linked_power"].every((id) => !listed.includes(id)));
+// a motion sensor that sees someone IS an alarm since 2026-10-21 (owner, 2026-10-21: "the entity badge to follow the state of the entity … everywhere")
+ck("a device merely on, active or linked is never an alarm",
+   ["light.hall", "switch.pump", "camera.gate", "cover.blind", "lock.side", "sensor.linked_power"].every((id) => !listed.includes(id)));
 ck("an unavailable device is listed ONCE, as unavailable — never also as an alarm",
    unavailableIds.every((id) => items.filter((i) => i.entityId === id).map((i) => i.kind).join() === "unavailable"));
 ck("only selectable devices are listed (never a raw domain scan)",

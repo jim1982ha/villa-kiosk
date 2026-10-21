@@ -302,22 +302,19 @@ export const STATUS_PILL_CLASS: Record<StatusKey, string> = {
  * ⚠️ "NO LEAK" WAS GREY (owner, 2026-10-05): a leak sensor reporting no leak
  * read "Off / idle" on its pill and its history bar, as if it were switched
  * off, when it is watching and finding nothing — the state an owner wants to
- * see. Only a sensor with no problem state (motion, a door nobody watches)
+ * see. Only a sensor with no problem state (presence, a plug, a running pump)
  * keeps on = active, off = idle. Unavailable/unknown keep their own meaning.
  *
  * ⚠️ AND A CLOSED DOOR IS GREEN (owner, 2026-10-05, a server door reading
- * grey while closed). A sensor with a SECURE state (`secureState`:
- * BinarySensorClasses.secureStateFor — an opening closed, a lock locked) and
- * no problem state reads that state as active; the other is idle, NOT an
- * alert: an open window is not a fault, and the map and the Cockpit do not
- * flag it. An owner who wants it flagged sets an alert state on it — the
- * problem state then wins.
+ * grey while closed): an opening's and a lock sensor's problem state is "on"
+ * (open, unlocked) since 2026-10-21, so its closed "off" is the device doing
+ * its job — active, green, through the rule above. Its own "secure state"
+ * branch, for a door that was not a problem, went with that decision.
  */
-export function binaryStatus(state: string, alertState?: string, secureState?: "on" | "off"): StatusKey {
+export function binaryStatus(state: string, alertState?: string): StatusKey {
   const plain = statusKeyFor(state, "binary_sensor");
   if (state !== "on" && state !== "off") return plain;
   if (alertState === "on" || alertState === "off") return state === alertState ? "alert" : "active";
-  if (secureState) return state === secureState ? "active" : "idle";
   return plain;
 }
 

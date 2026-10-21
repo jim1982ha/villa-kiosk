@@ -24,7 +24,8 @@ console.log("  on/off sensors");
   const gone = readingOf("binary_sensor.leak", ent("binary_sensor.leak", "unavailable", { device_class: "moisture" }), "binary_sensor");
   ck("offline wins: 'UNAVAILABLE' in an amber pill — never 'No leak', a reading never taken", gone.pill === "unavailable" && gone.value === "UNAVAILABLE" && gone.alarm);
   const pir = readingOf("binary_sensor.hall", ent("binary_sensor.hall", "on", { device_class: "motion" }), "binary_sensor");
-  ck("a motion sensor seeing someone is not an alarm (its class colours it, it raises nothing)", pir.level === "normal" && !pir.alarm && pir.value === "Motion detected");
+  // owner, 2026-10-21: "the entity badge to follow the state of the entity … everywhere"
+  ck("a motion sensor seeing someone is red, as its badge", pir.level === "danger" && pir.pill === "danger");
   // ⚠️ UNKNOWN IS NOT LOST CONTACT (owner, 2026-10-18; architecture review 2026-10-19): the window shouted UNAVAILABLE,
   // amber, with the warning icon, for a sensor whose device was answering with nothing to say
   const blank = readingOf("binary_sensor.leak", ent("binary_sensor.leak", "unknown", { device_class: "moisture" }), "binary_sensor");

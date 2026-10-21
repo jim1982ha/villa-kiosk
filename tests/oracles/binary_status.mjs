@@ -9,17 +9,16 @@ const { binaryStatus, STATUS_COLOR } = await import("@/utils/stateColors");
 
 ck("a leak/smoke/gas sensor (problem state on): off = active (green), on = alert", binaryStatus("off", "on") === "active" && binaryStatus("on", "on") === "alert");
 ck("a connectivity sensor (problem state off): on = active, off = alert", binaryStatus("on", "off") === "active" && binaryStatus("off", "off") === "alert");
-ck("a sensor with no problem state (motion, a door nobody watches): on = active, off = idle", binaryStatus("on") === "active" && binaryStatus("off") === "idle");
-// owner, 2026-10-05: a server door read grey while closed
-ck("a door/window/lock with no alert state: closed (secure) = active, open = idle — not an alert",
-   binaryStatus("off", undefined, "off") === "active" && binaryStatus("on", undefined, "off") === "idle");
-ck("  ...and an alert state set on it wins: open = alert, closed still active",
-   binaryStatus("on", "on", "off") === "alert" && binaryStatus("off", "on", "off") === "active");
+ck("a sensor with no problem state (presence, a plug): on = active, off = idle", binaryStatus("on") === "active" && binaryStatus("off") === "idle");
 ck("unavailable stays unavailable, never green", binaryStatus("unavailable", "on") === "unavailable" && binaryStatus("unknown", "on") !== "active");
 const panel = readFileSync(new URL("../../src/components/panels/SensorPanel.tsx", import.meta.url), "utf8");
 const group = readFileSync(new URL("../../src/components/panels/DeviceGroupPanel.tsx", import.meta.url), "utf8");
 const { binaryLook } = await import("@/config/binaryLook");
-const { detectionStateFor, alertStateFor, secureStateFor } = await import("@/config/BinarySensorClasses");
+const { alertStateFor } = await import("@/config/BinarySensorClasses");
+const { deviceLook, storeLookSource } = await import("@/utils/deviceActivity");
+// the badge (deviceLook), for the window's own state: one rule, never redder or calmer (owner, 2026-10-21: "the entity badge to follow the state of the entity … everywhere")
+const badge = (dc, state) => deviceLook("binary_sensor.x", storeLookSource(
+  { "binary_sensor.x": { entity_id: "binary_sensor.x", state, attributes: { device_class: dc } } }, { entityMap: {}, isHidden: () => false }));
 
 console.log("\n  config/binaryLook, by value (2.496.285):");
 const leak = binaryLook("binary_sensor.kitchen_leak", "moisture");
@@ -27,21 +26,28 @@ ck("a leak sensor: no leak = green pill 'No leak', a leak = danger pill 'Leak de
    leak.tone("off") === "on" && leak.word("off") === "No leak" && leak.tone("on") === "danger" && leak.word("on") === "Leak detected"
    && leak.color("on") === STATUS_COLOR.alert && leak.problem === "on");
 const door = binaryLook("binary_sensor.door", "door");
-// owner, 2026-10-21: "make sure the 'open' pill appears with the alarming style" — in its window only, never a problem
-ck("a door: closed green, open red in its window — and still no problem state (the map and the Cockpit list nothing)",
-   door.tone("off") === "on" && door.tone("on") === "danger" && door.status("on") === "alert" && door.problem === undefined
-   && !door.danger("on"));
-ck("  ...a window, a garage door, an opening and a binary lock alike; a motion sensor's quiet state stays green",
-   ["window", "garage_door", "opening", "lock"].every((c) => binaryLook("binary_sensor.x", c).tone("on") === "danger")
-   && binaryLook("binary_sensor.x", "motion").tone("off") === "on");
+// owner, 2026-10-05: a server door read grey while closed; 2026-10-21: "make sure the 'open' pill appears with the
+// alarming style", then "the entity badge to follow the state of the entity"
+ck("a door: closed green, open red — its problem state, on its pill, its bar and its badge alike",
+   door.tone("off") === "on" && door.tone("on") === "danger" && door.problem === "on" && door.danger("on")
+   && badge("door", "on").alert && !badge("door", "off").alert);
+ck("  ...a window, a garage door, an opening and a binary lock alike",
+   ["window", "garage_door", "opening", "lock"].every((c) => binaryLook("binary_sensor.x", c).tone("on") === "danger"
+     && badge(c, "on").alert && alertStateFor(c) === "on"));
 const pir = binaryLook("binary_sensor.hall", "motion");
-ck("a motion sensor: quiet green, detection red in its window — yet not a problem (the map keeps it as information)",
-   pir.color("off") === STATUS_COLOR.active && pir.color("on") === STATUS_COLOR.alert && pir.problem === undefined && !pir.danger("on")
-   && ["motion", "occupancy"].every((c) => detectionStateFor(c) === "on") && alertStateFor("motion") === undefined);
-ck("  ...only motion and occupancy are detectors; openings and locks have a secure state",
-   ["door", "moisture", "presence", undefined].every((c) => detectionStateFor(c) === undefined)
-   && ["door", "garage_door", "window", "opening", "lock"].every((c) => secureStateFor(c) === "off")
-   && ["motion", "moisture", undefined].every((c) => secureStateFor(c) === undefined));
+ck("a motion or occupancy sensor: quiet green, a detection red — in its window and on its badge",
+   pir.color("off") === STATUS_COLOR.active && pir.color("on") === STATUS_COLOR.alert && pir.problem === "on"
+   && ["motion", "occupancy"].every((c) => alertStateFor(c) === "on" && badge(c, "on").alert && !badge(c, "off").alert));
+// the one rule: for EVERY class, the window's red state is the badge's red state
+{
+  const { binarySensorClassInfo } = await import("@/config/BinarySensorClasses");
+  const classes = ["moisture", "smoke", "connectivity", "motion", "occupancy", "presence", "door", "window", "lock", "plug",
+    "running", "update", undefined];
+  const split = classes.flatMap((c) => ["on", "off"].filter((s) =>
+    (binaryLook("binary_sensor.x", c).status(s) === "alert") !== badge(c, s).alert).map((s) => `${c}:${s}`));
+  ck("for every class, a state is red in the window exactly when its badge is red", split.length === 0
+     && binarySensorClassInfo("door").alarmState === "on", split);
+}
 ck("unavailable stays unavailable, never green", leak.status("unavailable") === "unavailable" && leak.word("unavailable") === "Unavailable");
 
 // Which windows ask binaryLook — and that none assembles a reading of its own —

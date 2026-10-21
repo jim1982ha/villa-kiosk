@@ -50,19 +50,26 @@ const BINARY_SENSOR_CLASSES: Record<string, BinarySensorClassInfo> = {
   // Concerning when OFF, not on.
   connectivity: { icon: Wifi, alarmState: "off" },
 
-  // Informational — presence/state, not a fault, so never auto-alerts.
-  motion: { icon: Activity, alarmState: "none" },
+  // ⚠️ A DETECTION IS RED, ON EVERY SURFACE (owner, 2026-10-21: "the entity badge to follow the state of the entity …
+  // everywhere"): a motion or occupancy sensor's "on" was red in its window only (2026-10-05) and plain on the map.
+  // The badge, its room chip and "Needs attention" read this table too now.
+  motion: { icon: Activity, alarmState: "on" },
   moving: { icon: Activity, alarmState: "none" },
-  occupancy: { icon: Eye, alarmState: "none" },
+  occupancy: { icon: Eye, alarmState: "on" },
+  // ⚠️ AN OPEN DOOR IS RED, ON EVERY SURFACE (owner, 2026-10-21: "make sure the 'open' pill appears with the alarming
+  // style", then "the entity badge to follow the state of the entity"): an opening open, a lock sensor unlocked — its
+  // badge, its window and "Needs attention" until it closes. It was information (2026-10-05: "an open window is not a
+  // fault"), plain grey, then red in its window only (2.496.460) while its badge stayed plain.
+  door: { icon: DoorOpen, alarmState: "on" },
+  garage_door: { icon: DoorOpen, alarmState: "on" },
+  window: { icon: DoorOpen, alarmState: "on" },
+  opening: { icon: DoorOpen, alarmState: "on" },
+  lock: { icon: Unlock, alarmState: "on" },
+  // Informational — presence/state, not a fault, so never auto-alerts.
   presence: { icon: Home, alarmState: "none" },
   sound: { icon: Volume2, alarmState: "none" },
   vibration: { icon: Vibrate, alarmState: "none" },
   light: { icon: Lightbulb, alarmState: "none" },
-  door: { icon: DoorOpen, alarmState: "none" },
-  garage_door: { icon: DoorOpen, alarmState: "none" },
-  window: { icon: DoorOpen, alarmState: "none" },
-  opening: { icon: DoorOpen, alarmState: "none" },
-  lock: { icon: Unlock, alarmState: "none" },
   plug: { icon: Plug, alarmState: "none" },
   running: { icon: Activity, alarmState: "none" },
   battery_charging: { icon: BatteryCharging, alarmState: "none" },
@@ -108,6 +115,11 @@ export function stateLabelFor(entityId: string, deviceClass?: string): (state: s
  * state is `off`, so the badge alerted while the device was CONNECTED and
  * went quiet when it dropped.
  *
+ * ⚠️ AND THEN THE WINDOW HAD A SECOND RULE (2026-10-05 to 2.496.460): a
+ * detection, and an open door, were red in a sensor's window through
+ * `colourAlertStateFor` while its badge read this one — the owner's open
+ * laundry door: a red "Open" pill over a plain badge. One rule again, read by
+ * the badge, the window, the history bar, the readings and "Needs attention".
  */
 export function alertStateFor(deviceClass: string | undefined): string | undefined {
   const alarm = binarySensorClassInfo(deviceClass).alarmState;
@@ -128,38 +140,6 @@ export function alertStateFor(deviceClass: string | undefined): string | undefin
 export const OPENING_DEVICE_CLASSES: ReadonlySet<string> = new Set([
   "door", "garage_door", "window", "opening",
 ]);
-
-/** The state a binary_sensor is SECURE in, when its kind has one: an opening
- *  (OPENING_DEVICE_CLASSES) closed, a lock locked — both "off". Undefined for
- *  every other kind (stateColors.binaryStatus). */
-export function secureStateFor(deviceClass: string | undefined): "off" | undefined {
-  return deviceClass !== undefined && (OPENING_DEVICE_CLASSES.has(deviceClass) || deviceClass === "lock") ? "off" : undefined;
-}
-
-/** The state in which a DETECTOR reports something, for its window's colours
- *  (stateColors.binaryStatus): a motion or occupancy sensor's "on". Shown red
- *  there, as the camera's motion bar shows a detection, and its quiet "off"
- *  green — the sensor watching. Colours only: it is not a problem state, so the
- *  map and the alerts still treat motion as information (alertStateFor). */
-export function detectionStateFor(deviceClass: string | undefined): "on" | undefined {
-  return deviceClass === "motion" || deviceClass === "occupancy" ? "on" : undefined;
-}
-
-/** The state a sensor's WINDOW colours red: its problem state (alertStateFor),
- *  else, for a detector, its detection (detectionStateFor), else, for an
- *  opening or a lock, the state that is not its secure one (secureStateFor):
- *  a door OPEN, a lock UNLOCKED.
- *
- *  ⚠️ AN OPEN DOOR LOOKS ALARMING IN ITS WINDOW (owner, 2026-10-21: "make sure
- *  the 'open' pill appears with the alarming style"): it read plain grey since
- *  2026-10-05 ("an open window is not a fault"). Colours only, as a detection:
- *  its pill, its history bar and its "Also on this device" line. The map, the
- *  Cockpit and the alerts still read it as information (alertStateFor) — an
- *  open door is not a problem to list. */
-export function colourAlertStateFor(deviceClass: string | undefined): string | undefined {
-  return alertStateFor(deviceClass) ?? detectionStateFor(deviceClass)
-    ?? (secureStateFor(deviceClass) === "off" ? "on" : undefined);
-}
 
 /** binary_sensor device_classes whose "on" means someone or something MOVED.
  *  ⚠️ ONE LIST. Dashboard's motion toast and EntityCategories' access bucket

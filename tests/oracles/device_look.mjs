@@ -30,7 +30,8 @@ console.log("  the cases the old mesh rule got wrong:");
   const oldPulse = (s) => s === "on";
   const motion = read("binary_sensor", "on", { device_class: "motion" });
   ck("the OLD sensor rule pulses a motion PIR that sees someone", oldPulse("on"));
-  ck("a motion PIR on: no pulse — informational, like its badge", meshLookFor(motion).on === false && badgeKindFor(motion) !== "alert");
+  // owner, 2026-10-21: "the entity badge to follow the state of the entity … everywhere"
+  ck("a motion PIR on: pulses, as its badge is red", meshLookFor(motion).on === true && badgeKindFor(motion) === "alert");
   const leak = read("binary_sensor", "on", { device_class: "moisture" });
   ck("a leak sensor on: pulses", meshLookFor(leak).on === true && badgeKindFor(leak) === "alert");
   const net = read("binary_sensor", "off", { device_class: "connectivity" });
