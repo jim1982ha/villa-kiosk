@@ -69,5 +69,26 @@ for (const f of ["GenericPanel.tsx", "ControlFrame.tsx"])
      && JSON.stringify(R.cameraControlsOf("camera.ptz2", reg)) === JSON.stringify({ moves: { left: "button.ptz2_pan_left", up: "button.ptz2_tilt_up" }, siren: null }));
 }
 
+// owner, 2026-10-21: "why do I see Tapo Storage Room HD Stream (Direct) in the list … since the one configured in the
+// villa is HD Stream?" — a Tapo camera gives two streams of ONE device; the picker lists one per device, the placed one
+{
+  const dev = { "camera.tapo_hd": "d1", "camera.tapo_hd_direct": "d1", "button.tapo_move_up": "d1",
+    "camera.hik": "camera.hik", "camera.hidden_cam": "camera.hidden_cam", "camera.dismissed": "camera.dismissed",
+    "camera.solo_direct": "d2" };
+  const devices = { deviceOf: (id) => dev[id] ?? id, has: (d) => ["d1", "camera.hik", "camera.hidden_cam", "d2"].includes(d),
+    isHidden: (id) => id === "camera.hidden_cam" };
+  const all = Object.keys(dev);
+  const placed = (id) => ["camera.tapo_hd", "camera.hik"].includes(id);
+  const got = (cur) => R.cameraChoices(all, cur, devices, placed).sort();
+  ck("one camera per device — the stream placed in the villa; never a hidden one or a device the villa does not have",
+     got("camera.hik").join() === "camera.hik,camera.solo_direct,camera.tapo_hd", got("camera.hik"));
+  ck("  ...the open camera is always in it, to step on from",
+     got("camera.tapo_hd_direct").join() === "camera.hik,camera.solo_direct,camera.tapo_hd,camera.tapo_hd_direct");
+  const { readFileSync } = await import("node:fs");
+  ck("  ...and the camera window steps through and lists exactly that",
+     /const cameraIds = cameraChoices\(Object\.keys\(entities\), mapping\.entityId, devices, \(id\) => id in config\.entityMap\)/
+       .test(readFileSync(new URL("../../src/components/panels/CameraPanel.tsx", import.meta.url), "utf8")));
+}
+
 done("✅ panel rules hold");
 

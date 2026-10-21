@@ -27,6 +27,9 @@ import { useHistorySource } from "@/hooks/useHistorySource";
 import { cameraBarHistory } from "./cameraStatusBar";
 import StateTimeline from "./StateTimeline";
 import CameraDeviceButtons from "./CameraDeviceButtons";
+import { cameraChoices } from "@/utils/panelRules";
+import { useVillaModel } from "@/config/VillaModel";
+import { useConfig } from "@/config/ConfigContext";
 
 interface Props extends PanelProps {
   /** Lets the camera pin continuous rendering while the stream is open. */
@@ -59,6 +62,8 @@ const CAMERA_BAR_LABEL: Record<string, string> = {
 
 export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEntity }: Props) {
   const { connected, ws, entities } = useHA();
+  const { devices } = useVillaModel();
+  const { config } = useConfig();
   const entityLabel = useEntityLabel();
   // Same linked-entity switch every OTHER panel gets from the shared BasePanel
   // chrome — this panel is the one that doesn't use BasePanel (it's a
@@ -152,8 +157,8 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   // reading as "M" in the picker/prev-next order) — so prev/next cycling and
   // the picker list both match the order a user would actually expect from
   // what's on screen. Wraps around at both ends.
-  const cameraIds = Object.keys(entities)
-    .filter((id) => id.startsWith("camera."))
+  // One per camera device of the villa, the stream placed in it (panelRules.cameraChoices, owner 2026-10-21).
+  const cameraIds = cameraChoices(Object.keys(entities), mapping.entityId, devices, (id) => id in config.entityMap)
     .sort((a, b) => {
       const labelA = entityLabel(a);
       const labelB = entityLabel(b);

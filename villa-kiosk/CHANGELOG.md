@@ -1,3 +1,10 @@
+## 2.496.468
+
+### Fixed
+- **The camera list shows each camera once.** A camera that gives two video streams (a Tapo camera's "HD Stream" and
+  "HD Stream (Direct)") was listed twice in the camera picker and stepped through twice. The list now has one entry
+  per camera, the stream you placed in the villa, and leaves out a camera hidden in the villa's system.
+
 ## 2.496.467
 
 ### Changed

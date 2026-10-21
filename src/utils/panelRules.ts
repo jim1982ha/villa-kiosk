@@ -175,6 +175,28 @@ export function cameraControlsOf(
   return Object.keys(moves).length || siren ? { moves, siren } : null;
 }
 
+/** The cameras a camera's window steps through and its picker lists: ONE per camera device of the villa (owner,
+ *  2026-10-21: "why do I see Tapo Storage Room HD Stream (Direct) … since the one configured in the villa is Tapo
+ *  Storage Room HD Stream?" — every `camera.*` the villa's system had was listed, and a Tapo camera gives two streams
+ *  of one device). Per device: the stream placed in the villa (the entity map), else the device's own entity when it is
+ *  a camera, else the first; never one hidden or not a villa device (`devices`, VillaDevices). The open camera is
+ *  always in it (stepping on from where it stands). Unsorted: the window sorts by name. */
+export function cameraChoices(
+  ids: readonly string[], current: string,
+  devices: { has(id: string): boolean; deviceOf(id: string): string; isHidden(id: string): boolean },
+  placed: (id: string) => boolean,
+): string[] {
+  const byDevice = new Map<string, string[]>();
+  for (const id of [...ids].sort()) {
+    if (!id.startsWith("camera.") || devices.isHidden(id)) continue;
+    const dev = devices.deviceOf(id);
+    if (!devices.has(dev)) continue;
+    byDevice.set(dev, [...(byDevice.get(dev) ?? []), id]);
+  }
+  const out = [...byDevice].map(([dev, cams]) => cams.find(placed) ?? (cams.includes(dev) ? dev : cams[0]));
+  return out.includes(current) || !ids.includes(current) ? out : [...out, current];
+}
+
 /** A scene select's options (its `options` attribute, names only). */
 export function sceneOptions(attrs: Record<string, unknown> | undefined): string[] {
   return Array.isArray(attrs?.options) ? (attrs.options as unknown[]).filter((o): o is string => typeof o === "string" && o !== "") : [];
