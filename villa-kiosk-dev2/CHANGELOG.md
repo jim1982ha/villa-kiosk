@@ -1,3 +1,11 @@
+## 2.496.466
+
+### Changed
+- **A linked sensor's band sits under the device's own, at the same width and over the same period.** In a lock's
+  window, its door sensor's band is now under the lock's band, its name above it, as wide as the lock's band and
+  following the same 1h / 24h / 1w / 1m / 1y choice, so the two compare at a glance. The row at the top with "Open ·
+  linked entity" is gone; the band is thicker and its legend says the states.
+
 ## 2.496.465
 
 ### Changed
