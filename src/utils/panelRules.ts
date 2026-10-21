@@ -9,6 +9,7 @@
 // tests/oracles/panel_rules.mjs.
 
 import { hsToRgb } from "./colorUtils";
+import { isDomain } from "@/utils/entityDomain";
 
 /** Labels for a fan with N discrete speeds (HA's percentage_step). */
 const SPEED_LABELS: Record<number, string[]> = {
@@ -46,16 +47,11 @@ export function coverStateLabel(state: string | undefined, position: number | un
   return state ?? "Unknown";
 }
 
-/** A thermostat's adjustable range: the device's own, narrowed to the
- *  profile's climate band (a guest's), with HA's defaults when unreported. */
-export function climateRange(
-  attrs: { min_temp?: number; max_temp?: number } | undefined,
-  band: { climateMin?: number; climateMax?: number } | null,
-): { min: number; max: number } {
-  return {
-    min: Math.max(attrs?.min_temp ?? 16, band?.climateMin ?? -Infinity),
-    max: Math.min(attrs?.max_temp ?? 30, band?.climateMax ?? Infinity),
-  };
+/** A thermostat's adjustable range: the device's own, with the villa's system's defaults when unreported.
+ *  ⚠️ NO PROFILE BAND (architecture review B, 2026-10-22): a guest's narrower range was declared, read here, and set
+ *  by nothing — no profile carried one and no screen could; removed with its code ("no half features"). */
+export function climateRange(attrs: { min_temp?: number; max_temp?: number } | undefined): { min: number; max: number } {
+  return { min: attrs?.min_temp ?? 16, max: attrs?.max_temp ?? 30 };
 }
 
 /** One step of a thermostat's target: clamped to its range and ROUNDED to
@@ -144,7 +140,7 @@ export function sceneSelectOf(
   if (!dev) return null;
   const named = (id: string) => /^(?:.+_)?scene$/.test(id.slice(id.indexOf(".") + 1));
   const found = Object.keys(entityDeviceIds)
-    .filter((id) => entityDeviceIds[id] === dev && id.startsWith("select.") && named(id)
+    .filter((id) => entityDeviceIds[id] === dev && isDomain(id, "select") && named(id)
       && sceneOptions(entities[id]?.attributes).length > 0)
     .sort();
   return found[0] ?? null;
@@ -168,10 +164,10 @@ export function cameraControlsOf(
   const mine = Object.keys(entityDeviceIds).filter((id) => entityDeviceIds[id] === dev).sort();
   const moves: CameraControls["moves"] = {};
   for (const id of mine) {
-    const m = id.startsWith("button.") ? /(?:^|_)(?:move|pan|tilt)_(up|down|left|right)$/.exec(id.slice(7)) : null;
+    const m = isDomain(id, "button") ? /(?:^|_)(?:move|pan|tilt)_(up|down|left|right)$/.exec(id.slice(7)) : null;
     if (m && !moves[m[1] as keyof CameraControls["moves"]]) moves[m[1] as keyof CameraControls["moves"]] = id;
   }
-  const siren = mine.find((id) => id.startsWith("siren.")) ?? null;
+  const siren = mine.find((id) => isDomain(id, "siren")) ?? null;
   return Object.keys(moves).length || siren ? { moves, siren } : null;
 }
 
@@ -189,7 +185,7 @@ export function cameraChoices(
 ): string[] {
   const byDevice = new Map<string, string[]>();
   for (const id of [...ids].sort()) {
-    if (!id.startsWith("camera.")) continue;
+    if (!isDomain(id, "camera")) continue;
     const dev = devices.deviceOf(id);
     // ⚠️ A CAMERA PLACED ON THE MAP IS LISTED, HIDDEN OR NOT (owner, 2026-10-21: "why don't I see the Tapo Server Room
     // camera … while it's well defined in the Kiosk configuration"): its placed stream was hidden in the villa's

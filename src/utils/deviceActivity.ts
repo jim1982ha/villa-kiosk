@@ -19,7 +19,7 @@ import type { HassEntity } from "@/types/ha.types";
 import type { EntityMapping, EntityType } from "@/types/scene.types";
 import type { DeviceSurfaceState } from "@/config/EntityCategories";
 import { alertStateFor } from "@/config/BinarySensorClasses";
-import { inferTypeFromEntityId } from "@/config/EntityMap";
+import { deviceTypeOf } from "@/config/EntityMap";
 import { TRANSITIONAL_STATES, contactOf, statusKeyFor } from "@/utils/stateColors";
 import { devicePower } from "@/utils/devicePower";
 import type { SwitchPosition } from "@/utils/entityState";
@@ -451,8 +451,7 @@ export function storeLookSource(
   const { drawnAs, pendingPower } = opts;
   return {
     state: (id) => entities[id],
-    typeOf: (id) => (drawnAs?.entityId === id ? drawnAs.type : undefined)
-      ?? config.entityMap[id]?.type ?? inferTypeFromEntityId(id) ?? "sensor",
+    typeOf: (id) => deviceTypeOf(id, drawnAs?.entityId === id ? drawnAs : null, config.entityMap[id]),
     config,
     pendingPower,
   };
@@ -469,7 +468,7 @@ export function mapLookSource(
 ): LookSource {
   return {
     state: (id) => cache.get(id),
-    typeOf: (id) => mapping.get(id)?.type ?? config().entityMap[id]?.type ?? inferTypeFromEntityId(id) ?? "sensor",
+    typeOf: (id) => deviceTypeOf(id, mapping.get(id), config().entityMap[id]),
     get config() { return config(); },
   };
 }

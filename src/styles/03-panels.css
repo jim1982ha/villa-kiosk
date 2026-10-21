@@ -321,7 +321,8 @@ input[type="range"]::-moz-range-thumb {
 .camera-controls .icon-btn svg { width: 55%; height: 55%; }
 /* Linked-entity toggle in the camera's control cluster — green while on, so
    it reads as a live switch rather than another navigation button. */
-.camera-controls .camera-linked-btn.on {
+.camera-controls .camera-linked-btn.on,
+.camera-controls .camera-sound-btn.on {   /* the camera's sound on (CameraPanel soundOn): lit the same */
   background: var(--status-on); color: #fff; border-color: transparent;
 }
 /* The camera's own buttons — moves, siren, sound (CameraPanel): among the others, except on an upright phone, where
@@ -335,11 +336,10 @@ input[type="range"]::-moz-range-thumb {
   /* six on one line at any phone width: each gives way below 56px rather than wrapping */
   .camera-device-controls .icon-btn { flex: 0 1 56px; min-width: 0; height: auto; aspect-ratio: 1; }
 }
-/* The camera's sound on (CameraPanel soundOn): lit like a switch that is on */
-.camera-controls .camera-sound-btn.on { background: var(--status-on); color: #fff; border-color: transparent; }
 /* A siren sounding: the alarm red, not the switch's green (CameraDeviceButtons) */
 .camera-controls .camera-siren-btn.on.alarm { background: var(--status-danger); }
-.camera-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+/* The spinner layer, and the live stream's frame (.camera-hls-wrap): both centred over the whole view, untappable. */
+.camera-loading, .camera-hls-wrap { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
 /* Status strip (online/offline/motion — see CameraPanel's statusHistory).
    The outer .camera-status-bar claims the full flex:1 space left of the
    controls, and the StateTimeline fills ALL of it (width: 100% — previously
@@ -532,8 +532,6 @@ input[type="range"]::-moz-range-thumb {
   outline-offset: -6px;
 }
 
-.camera-hls-wrap { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
-
 /* ── Weather (WeatherPanel.tsx) ─────────────────────────────────────────
    Two views, from the owner-approved canvas (2026-09-26): "now" (how it
    feels, advice, six instruments) and "history and trends" (four figures,
@@ -590,7 +588,7 @@ input[type="range"]::-moz-range-thumb {
 .tone-caution .weather-advice-mark { background: color-mix(in srgb, var(--status-warning) 22%, transparent); color: var(--status-warning); }
 .tone-bad .weather-advice-mark { background: color-mix(in srgb, var(--status-danger) 22%, transparent); color: var(--status-danger); }
 .tone-neutral .weather-advice-mark { background: var(--bg-card); color: var(--text-secondary); }
-.weather-advice-detail { font-size: var(--text-sm); color: var(--text-secondary); line-height: 1.45; }
+/* .weather-advice-detail: the small grey paragraph, with .energy-note and .profile-card-desc (06-auth.css). */
 
 .weather-instruments { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .weather-tile { background: var(--bg-input); border-radius: 20px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between; gap: 10px; min-width: 0; min-height: 280px; }
@@ -695,7 +693,7 @@ input[type="range"]::-moz-range-thumb {
 .weather-figure-v { font-size: var(--text-lg); font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 2px; }
 .weather-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .weather-tile.chart { min-height: 220px; justify-content: flex-start; }
-.weather-chart-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+/* .weather-chart-head: a title with its controls at the far end (07-facility.css, with .cockpit-issues-head). */
 .weather-legend { display: flex; gap: 12px; font-size: var(--text-xs); color: var(--text-secondary); }
 .weather-legend .key { display: inline-block; width: 14px; height: 3px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
 .weather-legend .key.area { height: 8px; opacity: 0.45; }
@@ -883,7 +881,7 @@ input[type="range"]::-moz-range-thumb {
 .energy-flow-name { font: 600 13px var(--font-ui); fill: var(--text-primary); paint-order: stroke; stroke: color-mix(in srgb, var(--bg-card) 70%, transparent); stroke-width: 3px; stroke-linejoin: round; }
 /* The flow as rows (a phone only): the "Every device" row, in reading order. */
 .energy-flow-list { display: none; }
-.energy-note { font-size: var(--text-sm); color: var(--text-secondary); line-height: 1.45; }
+/* .energy-note: the small grey paragraph (06-auth.css, with .weather-advice-detail and .profile-card-desc). */
 /* Every device as a list: one grid row a device — name, bar (in the device's
    colour class), kWh, share. A phone moves the bar under the name. */
 .energy-rank { display: flex; flex-direction: column; gap: 8px; font-size: var(--text-sm); }

@@ -17,6 +17,8 @@ import { displayLabelFor } from "./EntityMap";
 import { roomKey } from "@/config/roomKey";
 import { deviceRoom } from "@/config/devicePlace";
 import type { HassEntity } from "@/types/ha.types";
+import { countOf } from "@/utils/countOf";
+import { isDomain } from "@/utils/entityDomain";
 
 export interface HaSceneInfo {
   entityId: string;
@@ -42,7 +44,7 @@ export function deriveHaScenes(
 ): HaSceneInfo[] {
   const out: HaSceneInfo[] = [];
   for (const [entityId, e] of Object.entries(entities)) {
-    if (!entityId.startsWith("scene.") || suppressedEntityIds.has(entityId)) continue;
+    if (!isDomain(entityId, "scene") || suppressedEntityIds.has(entityId)) continue;
     const raw = e.attributes.entity_id;
     const memberEntityIds = Array.isArray(raw) ? raw.filter((id): id is string => typeof id === "string") : [];
     const rooms: string[] = [];
@@ -92,7 +94,7 @@ export function scenesForRoom(scenes: HaSceneInfo[], room: string): HaSceneInfo[
  *  count alone rather than inventing a place. */
 export function sceneMessage(info: HaSceneInfo): string {
   const n = info.memberEntityIds.length;
-  const devices = `${n} device${n === 1 ? "" : "s"}`;
+  const devices = countOf(n, "device");
   const rooms = info.rooms;
   if (n === 0) return "This scene sets nothing. Running it changes nothing.";
   if (rooms.length === 0) return `This sets ${devices} at once. It cannot be undone.`;

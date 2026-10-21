@@ -334,7 +334,10 @@
 /* Between 1F/2F and the view switch under them: the floor section's own
    hairline, horizontal (.hud-cat-sep is the category row's, vertical). */
 .hud-stack-sep { flex: 0 0 auto; height: 1px; margin: 0 4px; background: var(--hairline-strong); }
-.hud-floor-btn::before {
+/* The invisible 44px touch target of the floor buttons and the app-icon tile, one body (the phone tier's
+   category buttons use the same overlay on ::after, 05-layout.css). */
+.hud-floor-btn::before,
+.hud-home-btn::before {
   content: ""; position: absolute; top: 50%; left: 50%;
   width: var(--touch-min); height: var(--touch-min);
   transform: translate(-50%, -50%);
@@ -467,14 +470,8 @@
   .hud-home-btn:hover { background: var(--bg-input); }
 }
 .hud-home-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-/* Invisible 44px hit area (see the phone touch-target overlay further down
-   for the same technique) — on ::before, not ::after, because ::after is
-   already spoken for by .has-hold-action's "hold does more" dot below. */
-.hud-home-btn::before {
-  content: ""; position: absolute; top: 50%; left: 50%;
-  width: var(--touch-min); height: var(--touch-min);
-  transform: translate(-50%, -50%);
-}
+/* Invisible 44px hit area: .hud-home-btn::before, grouped with the floor buttons' above — on ::before, not ::after,
+   because ::after is already spoken for by .has-hold-action's "hold does more" dot below. */
 /* The confirmation flash (applied/saved/etc.) renders as a TOPBAR-level
    sibling of .hud-brand, not a child of it — .hud-brand clips overflow to
    stop a long villa name from wrapping (see its own comment), which would

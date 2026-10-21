@@ -43,7 +43,14 @@ export function deviceRows(
  * its linked objects. Case-insensitive; an empty search finds everything.
  */
 export function rowMatches(row: DeviceRow, query: string, shownName: string, room: string): boolean {
+  return matchesQuery(query, row.id, shownName, room, ...row.objects);
+}
+
+/** Does a typed search find any of these texts — trimmed, case-insensitive, a part of one is enough; an empty search
+ *  finds everything, a missing text nothing. The rule of every search box over a list (Advanced Settings' rows and
+ *  lost objects, the device groups, the fault form's device picker), written out at each until 2026-10-22. */
+export function matchesQuery(query: string, ...texts: (string | undefined | null)[]): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
-  return [row.id, shownName, room, ...row.objects].some((s) => s.toLowerCase().includes(q));
+  return texts.some((s) => s != null && s.toLowerCase().includes(q));
 }

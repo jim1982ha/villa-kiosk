@@ -118,7 +118,9 @@
 /* A field's name on the same line as its control (Recap's Period). */
 .fm-inline-label { color: var(--text-secondary); font-size: var(--field-label-size); }
 /* The Overview's Live issues title, with its (i) and "Open a ticket" on the right of the same line (owner, 2026-10-14). */
-.cockpit-issues-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+/* A title with its controls at the far end — the Overview's issues and the Weather / Energy charts
+   (.weather-chart-head, 03-panels.css until grouped here, the later file). */
+.cockpit-issues-head, .weather-chart-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .cockpit-issues-head .settings-section-title { margin-bottom: 0; }
 .cockpit-issues-actions { display: flex; align-items: center; gap: 10px; margin-left: auto; }
 .fm-summary { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 10px; }

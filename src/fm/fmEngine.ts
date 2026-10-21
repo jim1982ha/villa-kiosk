@@ -13,11 +13,10 @@ import {
   type FmCompletion, type FmCost, type FmData, type FmSchedule, type FmTicket, type FmTicketUpdate,
 } from "./fmTypes";
 import { fullDate, monthYear } from "@/utils/dateText";
-import { addLocalDays, localMonthStart } from "@/utils/localDay";
+import { addLocalDays, DAY_MS, HOUR_MS, localMonthStart } from "@/utils/localDay";
 import { fmtDuration } from "@/components/panels/chartUtils";
 import type { Tone } from "./tone";
-
-const DAY_MS = 86_400_000;
+import { countOf } from "@/utils/countOf";
 
 export type DueState = "never" | "overdue" | "due-soon" | "ok";
 /** Where the month's minor spending stands against its cap. */
@@ -115,9 +114,9 @@ export const DUE_WORDS: Record<DueState, { word: string; tone: Tone }> = {
 export function dueLine(st: Pick<ScheduleStatus, "state" | "daysUntilDue">): string {
   if (st.state === "never") return "No completion recorded yet";
   const d = Math.round(st.daysUntilDue ?? 0);
-  if (d < 0) return `${Math.abs(d)} day${Math.abs(d) === 1 ? "" : "s"} overdue`;
+  if (d < 0) return `${countOf(Math.abs(d), "day")} overdue`;
   if (d === 0) return "Due today";
-  return `Due in ${d} day${d === 1 ? "" : "s"}`;
+  return `Due in ${countOf(d, "day")}`;
 }
 
 /** Every enabled schedule's status, worst first — what the FM home screen shows.
@@ -459,7 +458,7 @@ export function ticketStats(tickets: readonly FmTicket[], window?: TicketWindow)
   }
   return {
     resolved, closedWithoutAction: cleared,
-    meanResolutionHours: timed ? totalMs / timed / 3_600_000 : null,
+    meanResolutionHours: timed ? totalMs / timed / HOUR_MS : null,
     // ⚠️ HOW MANY TICKETS THE MEAN ACTUALLY COVERS. `resolved` and `timed` are
     // independent counters: a ticket resolved with no resolvedAt, or with a
     // resolvedAt before its openedAt, counts as resolved and is skipped by the

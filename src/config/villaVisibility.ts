@@ -83,11 +83,21 @@ export function categoryMembers(
   ctx: {
     entityMap: Record<string, EntityMapping>; entities: Record<string, HassEntity>;
     dismissed: IdSet; suppressed: IdSet; mapped: IdSet;
+    /** Hidden in the villa's system (VillaDevices.isHidden): never listed, placed on the map or not. */
+    isHidden?: (id: string) => boolean;
+    /** The device `id` belongs to (deviceGroups.deviceOf): a member of another device is that device's row. */
+    deviceOf?: (id: string) => string;
   },
 ): string[] {
   if (role === null) return [];
   return Object.entries(ctx.entityMap)
     .filter(([id, mapping]) => {
+      // ⚠️ THE VILLA'S DEVICES, AS THE COUNTS AND THE COCKPIT HAVE THEM (architecture review A, 2026-10-22): this list
+      // had filters of its own — a device switched off in Advanced Settings, one hidden in the villa's system but
+      // placed on the map, and each member of a device group were listed here and nowhere else.
+      if (mapping.disabled) return false;
+      if (ctx.isHidden?.(id)) return false;
+      if (ctx.deviceOf && ctx.deviceOf(id) !== id) return false;
       if (ctx.dismissed.has(id)) return false;
       if (!isMappingAllowed(role, id, mapping, ctx.entities[id])) return false;
       if (effectiveCategory(subjectOf(id, mapping, ctx.entities[id])) !== category) return false;

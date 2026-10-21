@@ -23,6 +23,7 @@ import { useFacilityLiveView } from "@/fm/FmDataContext";
 import CockpitOverview from "./CockpitOverview";
 import DialogLayer from "@/components/common/DialogLayer";
 import Tip from "@/components/common/Tip";
+import { countOf } from "@/utils/countOf";
 
 export interface CockpitModalProps {
   onClose: () => void;
@@ -89,7 +90,7 @@ export default function CockpitModal({
           {updatesAvailable > 0 && (
             <Tip text={updatesTip(updates)}>
               <span className="icon-btn header-icon-btn header-icon-badge" role="status"
-                aria-label={`${updatesAvailable} update${updatesAvailable === 1 ? "" : "s"} available`}>
+                aria-label={`${countOf(updatesAvailable, "update")} available`}>
                 <RefreshCw size={18} />
                 <span className="icon-btn-count" aria-hidden="true">{formatCountBadge(updatesAvailable)}</span>
               </span>

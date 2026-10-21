@@ -7,7 +7,8 @@ import { ENTITY_MAP } from "./EntityMap";
 import { TELEPORT_POINTS } from "./TeleportPoints";
 import { DEFAULT_EYE_HEIGHT } from "@/babylon/walkerSpawn";
 import { EMPTY_FM_CONTRACT, type FmContract } from "@/fm/fmTypes";
-import { readJson, writeJson, removeStored } from "@/utils/storedJson";
+import { readJson, writeJson } from "@/utils/storedJson";
+import { isDomain } from "@/utils/entityDomain";
 
 const CONFIG_KEY = "villa-kiosk:config:v2";
 
@@ -419,7 +420,7 @@ function migrateMotionEntityId(config: AppConfig): AppConfig {
       const misplaced = map.linkedEntityId;
       if (
         map.type !== "camera" || map.motionEntityId
-        || !misplaced?.startsWith("binary_sensor.")
+        || !misplaced || !isDomain(misplaced, "binary_sensor")
       ) return [id, map];
       changed = true;
       return [id, { ...map, motionEntityId: misplaced, linkedEntityId: undefined }];
@@ -461,7 +462,7 @@ export function normaliseConfig(config: AppConfig, opts: { maps?: boolean } = {}
 export function upgradeStaleTypes(config: AppConfig): AppConfig {
   let entityMap: Record<string, EntityMapping> | null = null;
   for (const [id, m] of Object.entries(config.entityMap)) {
-    if (m.type !== "sensor" || id.startsWith("sensor.") || id.startsWith("binary_sensor.")) continue;
+    if (m.type !== "sensor" || isDomain(id, "sensor") || isDomain(id, "binary_sensor")) continue;
     const upgraded = inferTypeFromEntityId(id);
     if (!upgraded) continue;
     entityMap ??= { ...config.entityMap };
@@ -573,10 +574,6 @@ export function overrides(config: AppConfig): Partial<AppConfig> {
 export function saveConfig(config: AppConfig): void {
   // Said, not swallowed: a full quota here loses this device's own settings.
   if (!writeJson(CONFIG_KEY, overrides(config))) console.error("[AppConfig] failed to save (storage full or disabled)");
-}
-
-export function resetConfig(): void {
-  removeStored(CONFIG_KEY);
 }
 
 /** Fallback title when neither a configured title nor the HA instance name exist. */

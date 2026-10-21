@@ -20,7 +20,8 @@
 //      paste back for troubleshooting.
 
 import { getLoadedModelInfo } from "./modelInfo";
-import { report } from "./telemetry";
+import { isStandalone, report } from "./telemetry";
+import { detectPointerClass } from "@/babylon/badgeMetrics";
 import { readJson, writeJson } from "@/utils/storedJson";
 
 const DIAG_KEY = "villa-kiosk:diag";
@@ -263,8 +264,7 @@ export function buildReport(primary: CapturedError | null): string {
   push("User agent", navigator.userAgent);
   push("Platform", navigator.platform);
   push("iOS", isIOS());
-  const standalone = window.matchMedia?.("(display-mode: standalone), (display-mode: fullscreen)").matches
-    || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  const standalone = isStandalone();
   push("PWA standalone", standalone);
   push("CPU cores", navigator.hardwareConcurrency ?? "n/a");
   push("Device memory (GB)", nav.deviceMemory ?? "n/a (not exposed on this browser)");
@@ -292,7 +292,7 @@ export function buildReport(primary: CapturedError | null): string {
   // ⚠️ ONLY WHERE THE PAGE SHOULD FILL THE SCREEN (2026-10-14): a laptop's browser window is smaller than its screen
   // by design, and the report flagged "dead space OUTSIDE the page" on every desk. The question is a tablet's, a
   // phone's or an installed app's.
-  const fills = standalone || isIOS() || window.matchMedia?.("(pointer: coarse)").matches === true;
+  const fills = standalone || isIOS() || detectPointerClass() === "coarse";
   const gap = shortBy > 2 || shortByW > 2;
   push("Screen not used by page", `${shortByW}px wide, ${shortBy}px tall${
     gap ? (fills ? "  <-- dead space OUTSIDE the page" : " (a desktop window: normal)") : ""}`);

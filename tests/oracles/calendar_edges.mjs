@@ -53,6 +53,7 @@ const { join } = await import("node:path");
 const DAY_LENGTH = /\b(DAY_MS|WEEK_MS)\b|86_?400_?000|864e5|24 \* 3_?600 \* 1_?000|24 \* 60 \* 60 \* 1_?000|1_?000 \* 60 \* 60 \* 24|3_?600_?000 \* 24/;
 const DAY_FLOOR = /Math\.(floor|ceil|round)\([^;\n]*\/\s*\(?\s*(\d+ \* )?(DAY_MS|WEEK_MS|86_?400_?000)|%\s*\(?\s*(\d+ \* )?(DAY_MS|WEEK_MS|86_?400_?000)/;
 const CLASSIFIED = {
+  "utils/localDay.ts": "THE one definition of DAY_MS, a duration; its own calendar edges are localMidnight / addLocalDays",
   "utils/timelineCells.ts": "THE owner of a chart's step edges (cellEdges): compares a step against a day, steps on the calendar",
   "utils/statisticsSeries.ts": "the recorder periods' nominal lengths (PERIOD_MS) — sizes and comparisons, edges come from cellEdges",
   "utils/sunCalc.ts": "astronomy: Julian days are fixed 86 400 s days by definition",

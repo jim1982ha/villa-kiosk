@@ -37,6 +37,7 @@ import { useBackToClose } from "@/hooks/useBackToClose";
 import { useSceneConfirm } from "@/hooks/useSceneConfirm";
 import { useVillaModel } from "@/config/VillaModel";
 import { deriveTiles, type SummaryTile } from "@/config/summaryTiles";
+import { countOf } from "@/utils/countOf";
 
 interface Props {
   /** Open an entity's full control panel (wired to Dashboard's setActivePanel). */
@@ -150,7 +151,7 @@ function SceneMenu({ scenes, canRun, apply }: {
         // opens IS the list, so printing its length beside it said the same
         // thing twice, which is what was reported as clutter.
         aria-label={`Scenes (${scenes.length})`}
-        title={`${scenes.length} scene${scenes.length === 1 ? "" : "s"} — tap to run one`}
+        title={`${countOf(scenes.length, "scene")} — tap to run one`}
         onClick={toggle}
       >
         <span className="summary-tile-icon"><Sparkles size={20} /></span>

@@ -341,6 +341,20 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
   max-height: 260px; overflow-y: auto; background: var(--bg-overlay);
   border: 1px solid var(--hairline-strong); border-radius: 10px;
 }
+/* The picker itself (the dropdown hangs off it) and its search field, flush with what follows. */
+.picker { position: relative; }
+.picker > .config-search { margin-bottom: 0; }
+/* One result row — after .row (05-layout.css), whose gap and alignment it keeps. `.strong`: the "Use …" row above
+   the matches (EntityPicker's allowCustom), set apart by a stronger rule. */
+.picker-option {
+  width: 100%; padding: 10px 12px; justify-content: flex-start; gap: 10px;
+  border-bottom: 1px solid var(--hairline);
+}
+.picker-option.strong { border-bottom-color: var(--hairline-strong); }
+
+/* The small grey line under a field — what it is linked to, what will happen, what the setting does. Same
+   specificity as .body-text (01-base.css) and later, so its size wins. */
+.field-hint { margin-top: 6px; font-size: var(--text-xs); }
 
 /* ── THE DROPDOWN (common/Dropdown.tsx) ──────────────────────────────────
    The app's own list in place of the platform's picker (2.496.275). The

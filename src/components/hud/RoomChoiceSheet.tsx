@@ -40,6 +40,7 @@ import BasePanel from "@/components/panels/BasePanel";
 import { categorySurface } from "@/config/EntityCategories";
 import type { RoomChipModel } from "@/babylon/summaryLook";
 import { healthPill } from "@/babylon/colors";
+import { countOf } from "@/utils/countOf";
 
 /** One room a merged chip stands for. `frame` and `health` are what that
  *  room's own chip wears on the map (summaryLook.roomLook): the row repeats
@@ -82,7 +83,7 @@ export default function RoomChoiceSheet({
             onClick={() => onPick(c.room)}
             // The count is the point of the row: it is what tells you which
             // of two similarly-named rooms is the one you were looking at.
-            title={`Go to ${c.room} — ${c.count} device${c.count === 1 ? "" : "s"}`}
+            title={`Go to ${c.room} — ${countOf(c.count, "device")}`}
           >
             <MapPin size={16} className="room-choice-icon" />
             <span className="room-choice-name">{c.room}</span>

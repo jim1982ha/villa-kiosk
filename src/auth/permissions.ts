@@ -78,33 +78,13 @@ export interface RolePermissions {
   /** Device types hidden even inside an allowed category. */
   deniedTypes: EntityType[];
   capabilities: Capability[];
-  /**
-   * A narrower A/C range to offer this profile, when one is configured.
-   *
-   * ⚠️ THIS IS A UI AFFORDANCE, NOT AN ENFORCED CONTROL, AND ITS OLD NAME SAID
-   * OTHERWISE. It was `controlLimits`, inside a record this file's own header
-   * calls "THE role-based access control matrix" — vocabulary that reads as
-   * enforced. It is not: the add-on permits `climate` service calls for any
-   * signed-in role and places no bound on the temperature payload
-   * (supervisor-proxy's _service_call_allowed), so this only narrows the
-   * stepper a guest is shown. Every other denial in this file has a server
-   * mirror, and the proxy says so where it mirrors one; this one never had.
-   *
-   * ⚠️ AND THE VALUES WERE ONE VILLA'S. It shipped `{ climateMin: 22,
-   * climateMax: 28 }` — a tropical comfort band applied to every install, in a
-   * redistributable add-on. Empty now, the same posture as the maintenance cap:
-   * unset means the device's own min_temp/max_temp govern, which is the honest
-   * default. Wiring it to per-install config is the follow-up; a "helpful" seed
-   * here would be the hardcoding again in a friendlier shape.
-   */
-  comfortRange?: { climateMin: number; climateMax: number };
 }
 
 /**
  * Who sees what:
  *  - guest  — comfort, lights, wifi, doors. Never energy, monitoring or
  *             security devices (cameras / motion sensors share the "network"
- *             and "others" buckets, hence the type denials). A/C is clamped.
+ *             and "others" buckets, hence the type denials).
  *             May open Settings for the visual/UI options (theme, render
  *             quality, icons, movement feel) — never connection, calibration,
  *             model or config administration.
@@ -185,11 +165,6 @@ function deniedCategories(role: Role): Category[] {
 /** Full per-entity check: category allowed AND type not denied. */
 function isEntityAllowed(role: Role, type: EntityType, category: Category): boolean {
   return isCategoryAllowed(role, category) && isTypeAllowed(role, type);
-}
-
-/** The guest-style bounded climate range, when the role has one. */
-export function climateLimits(role: Role): { climateMin: number; climateMax: number } | null {
-  return PERMISSION_MATRIX[role].comfortRange ?? null;
 }
 
 /**

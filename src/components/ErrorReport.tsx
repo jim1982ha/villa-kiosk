@@ -6,6 +6,7 @@
 
 import { useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, Copy, Check } from "lucide-react";
+import { copyText } from "@/utils/clipboard";
 
 interface Props {
   title: string;
@@ -30,20 +31,8 @@ export default function ErrorReport({ title, hint, detail, actions }: Props) {
   const [detailsOpen, setDetailsOpen] = useState(false);
 
   const copy = async () => {
-    let ok = false;
-    try {
-      await navigator.clipboard.writeText(detail);
-      ok = true;
-    } catch {
-      // Clipboard API blocked (insecure context, kiosk lockdown, iOS quirks):
-      // fall back to selecting the textarea + execCommand so copy still works.
-      const ta = taRef.current;
-      if (ta) {
-        ta.focus();
-        ta.select();
-        try { ok = document.execCommand("copy"); } catch { ok = false; }
-      }
-    }
+    // The app's one copy (utils/clipboard: the Clipboard API, then execCommand when it is blocked).
+    const ok = await copyText(detail);
     if (ok) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);

@@ -14,6 +14,7 @@
 // temperature), a camera, a weather station is never "on".
 
 import { domainOf } from "@/utils/entityDomain";
+import { countOf } from "@/utils/countOf";
 
 // ⚠️ POWER IS deviceActivity's (2.496.245). `hasOnOff` / `isActive` lived
 // here while the badge's ACTIVITY lived there — two meanings of "on" in two
@@ -63,7 +64,7 @@ export function bulkWords(ids: readonly string[], turnOn: boolean): string {
   const said = (one: string) => {
     const n = counts.get(one)!;
     const many = Object.values(KIND).find(([o]) => o === one)![1];
-    return `${n} ${n === 1 ? one : many}`;
+    return countOf(n, one, many);
   };
   const and = (parts: string[]) => (parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}` : parts[0]);
   const switched = [...counts.keys()].filter((k) => k !== "lock").map(said);

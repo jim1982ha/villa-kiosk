@@ -19,6 +19,7 @@ import {
   Eye, Flame, Home, Lightbulb, Plug, RefreshCw, ShieldAlert, Snowflake,
   Thermometer, Unlock, Vibrate, Volume2, Wifi, Wind, type LucideIcon,
 } from "lucide-react";
+import { isDomain } from "@/utils/entityDomain";
 
 /** A class's icon and default problem state. Its WORDS are not here: they
  *  live once in config/binarySensorWords (binaryWord), which every surface reads. */
@@ -186,7 +187,7 @@ export const OPENING_ID_HINT = /(^|[._])(door|window|gate)([._]|$)/;
 /** Is this binary_sensor a motion/presence detector: by its device_class,
  *  or — only when HA reports none — by its id. */
 export function isMotionSensor(entityId: string, deviceClass: string | undefined): boolean {
-  if (!entityId.startsWith("binary_sensor.")) return false;
+  if (!isDomain(entityId, "binary_sensor")) return false;
   if (deviceClass) return MOTION_DEVICE_CLASSES.has(deviceClass);
   return MOTION_ID_HINT.test(entityId);
 }

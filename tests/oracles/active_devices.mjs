@@ -72,6 +72,19 @@ console.log("\n  a category's members:");
   const owner = V.categoryMembers("owner", "network", ctx), guest = V.categoryMembers("guest", "network", ctx);
   ck("a diagnostic sensor ON THE MAP stays; an orphan one does not", owner.includes("sensor.ap_state") && !owner.includes("sensor.rssi"), owner.join());
   ck("a dismissed device is out", !owner.includes("sensor.gone"));
+  // architecture review A, 2026-10-22: the list had filters of its own — the counts and the Cockpit never listed these
+  {
+    const map2 = { ...entityMap, "sensor.off": { type: "sensor", category: "network", disabled: true },
+      "sensor.hidden": { type: "sensor", category: "network" }, "sensor.combo_h": { type: "sensor", category: "network" } };
+    const ctx2 = { ...ctx, entityMap: map2, mapped: new Set([...ctx.mapped, "sensor.hidden"]),
+      isHidden: (id) => id === "sensor.hidden", deviceOf: (id) => (id === "sensor.combo_h" ? "camera.gate" : id) };
+    const got = V.categoryMembers("owner", "network", ctx2);
+    ck("  ...a device switched off, one hidden in the villa's system (even on the map), a group's member: never listed",
+       !got.includes("sensor.off") && !got.includes("sensor.hidden") && !got.includes("sensor.combo_h") && got.includes("sensor.ap_state"), got.join());
+    const { readFileSync } = await import("node:fs");
+    ck("  ...and the category list the top bar opens is given them (Dashboard)",
+       /isHidden, deviceOf: \(id\) => deviceOf\(identity\.folding, id\),/.test(readFileSync(new URL("../../src/pages/Dashboard.tsx", import.meta.url), "utf8")));
+  }
   // A camera is an Access Control device, which a guest's category list
   // covers — but a guest may not see the camera TYPE.
   const ownerAccess = V.categoryMembers("owner", "access_control", ctx), guestAccess = V.categoryMembers("guest", "access_control", ctx);

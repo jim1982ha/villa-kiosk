@@ -24,6 +24,8 @@ import type { FmData, FmTicketCheck } from "@/fm/fmTypes";
 import type { HassEntity } from "@/types/ha.types";
 import type { EntityMapping } from "@/types/scene.types";
 import { isOffline, missingFromHa, NOT_IN_HA } from "@/utils/stateColors";
+import { countOf } from "@/utils/countOf";
+import { isDomain } from "@/utils/entityDomain";
 
 export type AttentionKind = "unavailable" | "fault" | "schedule" | "alarm";
 
@@ -305,7 +307,7 @@ export function buildAttentionItems(opts: {
   for (const id of devices.ids) {
     const entity = entities[id];
     if (!entity || !deviceLook(id, looks).alert) continue;
-    if (id.startsWith("binary_sensor.") && !alertIsFault(id, entity.attributes.device_class as string | undefined)) continue;
+    if (isDomain(id, "binary_sensor") && !alertIsFault(id, entity.attributes.device_class as string | undefined)) continue;
     items.push({
       id: `alarm:${id}`,
       kind: "alarm",
@@ -395,7 +397,7 @@ export function villaHealthFrom(groups: readonly AttentionGroup[]): VillaHealth 
   const n = groups.length;
   return {
     level: hasDanger ? "danger" : "warn",
-    summary: `${n} thing${n === 1 ? "" : "s"} need${n === 1 ? "s" : ""} attention.`,
+    summary: `${countOf(n, "thing")} need${n === 1 ? "s" : ""} attention.`,
   };
 }
 

@@ -52,7 +52,7 @@ import type { SceneManager } from "@/babylon/SceneManager";
 import type { ActivePanel } from "@/types/panel.types";
 import type { TeleportPoint } from "@/types/scene.types";
 import { VillaModelProvider, useVillaSets, useDeviceIdentity } from "@/config/VillaModel";
-import { criticalDevices, hiddenIn } from "@/config/deviceGroups";
+import { criticalDevices, deviceOf, hiddenIn } from "@/config/deviceGroups";
 import { useCriticalDevices } from "@/ha/criticalDevices";
 import { categoryMembers } from "@/config/villaVisibility";
 import AskDialog from "@/components/common/AskDialog";
@@ -172,12 +172,7 @@ export default function Dashboard() {
   // denied TYPE within it (a role that allows cameras but denies locks,
   // say) — connected-profile-aware from the start, not left to the shared
   // SummaryGroupPanel to somehow guess.
-  const categoryGroupEntityIds = useMemo(
-    () => (categoryGroup ? categoryMembers(role, categoryGroup, {
-      entityMap: config.entityMap, entities, dismissed: dismissedIds,
-      suppressed: suppressedEntityIds, mapped: mappedEntityIds,
-    }) : []),
-    [categoryGroup, role, config.entityMap, entities, suppressedEntityIds, mappedEntityIds, dismissedIds]);
+  // (the category's members: computed below, once the villa's hidden devices and its fold are known)
   const [modelKey, setModelKey] = useState(0); // bump to force canvas remount
   // Starts "overview" to match the actual landing view (see the one-shot
   // effect below): the HUD reads this to decide joystick vs. overview-help
@@ -420,6 +415,13 @@ export default function Dashboard() {
   // Hidden in the villa's system, as the villa model reads it (deviceGroups.hiddenIn — VillaDevices.isHidden): never
   // red or amber on the map, its room chip, the open window or the room chooser, as it is in no Cockpit list.
   const isHidden = useMemo(() => hiddenIn(hiddenInHaEntityIds, identity.folding), [hiddenInHaEntityIds, identity.folding]);
+  const categoryGroupEntityIds = useMemo(
+    () => (categoryGroup ? categoryMembers(role, categoryGroup, {
+      entityMap: config.entityMap, entities, dismissed: dismissedIds,
+      suppressed: suppressedEntityIds, mapped: mappedEntityIds,
+      isHidden, deviceOf: (id) => deviceOf(identity.folding, id),
+    }) : []),
+    [categoryGroup, role, config.entityMap, entities, suppressedEntityIds, mappedEntityIds, dismissedIds, isHidden, identity.folding]);
   useEffect(() => { manager?.setHiddenDevices(isHidden); }, [manager, isHidden]);
   const openPanel = useOpenPanelActions({ screen, go, panelFor, readingsOf: identity.readingsOf, doors, isCritical, isHidden });
   const linkedAsk = openPanel.linkedAsk;

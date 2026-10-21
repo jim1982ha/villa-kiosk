@@ -13,9 +13,9 @@ const band = { min: 16, max: 30 };
 ck("a 0.1 step from 22.8 is 22.9 — not 22.900000000000002", R.climateStep(22.8, 1, 0.1, band) === 22.9, R.climateStep(22.8, 1, 0.1, band));
 ck("a 0.5 step: 21.5 → 21", R.climateStep(21.5, -1, 0.5, band) === 21, R.climateStep(21.5, -1, 0.5, band));
 ck("a step is clamped to the range", R.climateStep(30, 1, 1, band) === 30 && R.climateStep(16, -1, 1, band) === 16);
-const r = R.climateRange({ min_temp: 7, max_temp: 35 }, { climateMin: 20, climateMax: 26 });
-ck("the range is the device's, narrowed to the profile's band", r.min === 20 && r.max === 26, r);
-const d = R.climateRange(undefined, null);
+const r = R.climateRange({ min_temp: 7, max_temp: 35 });
+ck("the range is the device's own", r.min === 7 && r.max === 35, r);
+const d = R.climateRange(undefined);
 ck("  ...HA's 16–30 when the device reports none", d.min === 16 && d.max === 30, d);
 ck("a temperature in HA's unit — °F stays °F", R.fmtTemp(72, "°F") === "72°F" && R.fmtTemp(null, "°C") === "--°C", R.fmtTemp(72, "°F"));
 

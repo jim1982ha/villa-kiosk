@@ -93,5 +93,21 @@ console.log("\n  the caller:");
   ck("  ...an unlocked lock stays red, door open or not", look("on", { lock: "unlocked" }).face === "alert" && look("off", { lock: "unlocked" }).ring === "alert");
 }
 
+// architecture review A, 2026-10-22: "what kind of device is this" written out at four places, one skipping the map's
+// own mapping (a sensor found in the 3D model: its room stayed dark) — one answer now
+{
+  const { deviceTypeOf } = await import("@/config/EntityMap");
+  const { readFileSync, readdirSync } = await import("node:fs");
+  ck("a device's type: as the map drew it, else as saved, else from its id, else a sensor",
+     deviceTypeOf("sensor.x", { type: "binary_sensor" }, { type: "light" }) === "binary_sensor"
+     && deviceTypeOf("sensor.x", null, { type: "light" }) === "light" && deviceTypeOf("lock.door") === "lock"
+     && deviceTypeOf("weird.thing") === "sensor");
+  const walk = (d) => readdirSync(new URL(`../../src/${d}/`, import.meta.url), { withFileTypes: true })
+    .flatMap((f) => (f.isDirectory() ? walk(`${d}/${f.name}`) : /\.tsx?$/.test(f.name) ? [`${d}/${f.name}`] : []));
+  const copies = ["utils", "babylon", "config", "components", "pages"].flatMap(walk)
+    .filter((f) => f !== "config/EntityMap.ts")   // its one home
+    .filter((f) => /\?\? inferTypeFromEntityId\([^)]*\) \?\? "sensor"/.test(readFileSync(new URL(`../../src/${f}`, import.meta.url), "utf8")));
+  ck("  ...and nothing writes that rule out again", copies.length === 0, copies);
+}
 done("✅ one reading, one look");
 

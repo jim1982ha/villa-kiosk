@@ -7,3 +7,9 @@ export function domainOf(entityId: string): string {
   const dot = entityId.indexOf(".");
   return dot < 0 ? entityId : entityId.slice(0, dot);
 }
+
+/** Is `entityId` in `domain` — "binary_sensor.door" is in "binary_sensor", never in "sensor". The literal
+ *  startsWith(domain + ".") was written at some twenty sites; the dot is what keeps "sensor" off "sensor_hub.x". */
+export function isDomain(entityId: string, domain: string): boolean {
+  return entityId.startsWith(domain + ".");
+}

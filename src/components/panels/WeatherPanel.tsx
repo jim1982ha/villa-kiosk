@@ -15,14 +15,14 @@
 // Width: the same as every other window the bottom bar opens
 // (`summary-group-modal`, 780 px) — the owner asked for them to match.
 
-import { useState, type ReactNode } from "react";
-import { useInterval } from "@/hooks/useInterval";
+import type { ReactNode } from "react";
+import { useNow } from "@/hooks/useInterval";
 import { CloudSun } from "lucide-react";
 import { aggregationWords, fmtChartValue, fmtChartTick, fmtChartTime, fmtDuration, fmtStepStamp } from "./chartUtils";
 import { formatUnitValue } from "@/utils/entityValue";
 import BarChart from "./BarChart";
 import { DataWindow, Figure, LiveNote, ObservationCards } from "./WindowPieces";
-import { localMidnight } from "@/utils/localDay";
+import { HOUR_MS, localMidnight } from "@/utils/localDay";
 import { barNote, seriesBuckets } from "@/utils/barChart";
 import LineChart, { ChartEmpty } from "./LineChart";
 import { useHA } from "@/ha/HAStateStore";
@@ -67,8 +67,7 @@ function useReadings(station: WeatherStation) {
 type Readings = ReturnType<typeof useReadings>;
 
 export default function WeatherPanel({ station, onClose }: { station: WeatherStation; onClose: () => void }) {
-  const [now, setNow] = useState(() => Date.now());
-  useInterval(() => setNow(Date.now()), 10_000);
+  const now = useNow(10_000);
   const r = useReadings(station);
   const { range, picker } = useHistoryRange("weather-ranges");
   return (
@@ -453,7 +452,7 @@ function RainTile({ s, win, status, stepMs, unit }: {
   const buckets = s && (s.points.length > 0 || status === "ready")
     ? seriesBuckets({ points: s.points, window: win }, slot, { key: "rain", label: "Rain", cls: "water" })
     : [];
-  const spanH = (win.to - win.from) / 3600_000;
+  const spanH = (win.to - win.from) / HOUR_MS;
   const span = spanH > 48 ? `${Math.round(spanH / 24)} days` : `${Math.round(spanH)} h`;
   // "No rain" only when the gauge REPORTED zero; an empty record is not a dry
   // day — it is no record (the bands say so).

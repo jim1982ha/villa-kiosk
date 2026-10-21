@@ -18,6 +18,8 @@ import {
 import type { DeviceGroup } from "@/config/AppConfig";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import RemovablePill from "@/components/common/RemovablePill";
+import { countOf } from "@/utils/countOf";
+import { matchesQuery } from "@/config/deviceRecord";
 
 export default function GroupedDevices() {
   const { config, update } = useConfig();
@@ -32,12 +34,11 @@ export default function GroupedDevices() {
 
   // ⚠️ MATCH THE ENTITY ID *AND* THE LABEL, both roles. An owner looking for a
   // group knows it by the name on screen; the id is what the row prints.
-  const needle = search.trim().toLowerCase();
-  const matches = useMemo(() => config.deviceGroups.filter((g) => !needle || [
+  const matches = useMemo(() => config.deviceGroups.filter((g) => matchesQuery(search,
     g.primaryEntityId, entityLabel(g.primaryEntityId),
     ...g.memberEntityIds, ...g.memberEntityIds.map(entityLabel),
-  ].some((text) => text.toLowerCase().includes(needle))),
-  [config.deviceGroups, needle, entityLabel]);
+  )),
+  [config.deviceGroups, search, entityLabel]);
   const shown = useTruncated(matches);
 
   const suggestions = useMemo(
@@ -86,7 +87,7 @@ export default function GroupedDevices() {
         member's value and 24h history appear in that badge's detail view instead.
       </p>
 
-      <Fold summary={`${config.deviceGroups.length} group${config.deviceGroups.length === 1 ? "" : "s"}`
+      <Fold summary={countOf(config.deviceGroups.length, "group")
         + (suggestions.length ? ` · ${suggestions.length} suggested` : "")}>
 
       {/* New group — first, since creating one is the primary action here;
@@ -186,7 +187,7 @@ export default function GroupedDevices() {
           onClick={() => setShowSuggestions((s) => !s)}
         >
           {showSuggestions ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-          <Sparkles size={16} /> {suggestions.length} suggested group{suggestions.length === 1 ? "" : "s"}
+          <Sparkles size={16} /> {countOf(suggestions.length, "suggested group")}
         </button>
       )}
 

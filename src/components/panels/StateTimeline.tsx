@@ -21,7 +21,8 @@ import { useChartPointer } from "./useChartPointer";
 // offline colour come from config/reading, like every other surface's.
 import { readableState, chartColours, NOT_KEPT, NOT_KEPT_WORDS } from "@/config/reading";
 import { TREND_INTERVAL_MS } from "@/utils/trendInterval";
-import { bandEnd, DAY_MS, timelineCells, timelineLegend, timelineRuns } from "@/utils/timelineCells";
+import { bandEnd, timelineCells, timelineLegend, timelineRuns } from "@/utils/timelineCells";
+import { DAY_MS } from "@/utils/localDay";
 import type { HistoryStatus } from "@/utils/statisticsSeries";
 import { ChartEmpty } from "./LineChart";
 

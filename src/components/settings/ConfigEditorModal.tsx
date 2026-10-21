@@ -133,7 +133,7 @@ function NorthOffset({ viewHeadingDeg }: { viewHeadingDeg?: () => number | null 
           Set North
         </button>
       </div>
-      <p className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-xs)" }}>
+      <p className="muted body-text field-hint">
         Face the villa's real north side and press Set North, or drag the slider
         until the shadows match. Only fixes which wall the light comes from —
         sunrise and sunset times are already right.
@@ -152,7 +152,7 @@ function PresenceSensor() {
       <label>"Villa empty" sensor</label>
       <EntityPicker value={config.presenceSensor} domains={["binary_sensor"]} placeholder="Pick the villa's empty / occupied sensor"
         onChange={(id) => update({ presenceSensor: id })} onClear={() => update({ presenceSensor: "" })} />
-      <p className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-xs)" }}>
+      <p className="muted body-text field-hint">
         The on/off sensor that is on when the villa is empty. Shown on every screen as the presence tile under the
         floors — Occupied, Empty or Unknown — and tapping it tells why.
       </p>
@@ -179,7 +179,7 @@ function RecordsKept() {
         onBlur={() => field.flush("recordsKeptDays")}
         onKeyDown={(e) => e.key === "Enter" && field.flush("recordsKeptDays")}
       />
-      <p className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-xs)" }}>
+      <p className="muted body-text field-hint">
         Photos, repaired faults, work done and money spent older than this are deleted. 0 keeps them for ever. A
         task's latest completion is always kept. Up to {RECORDS_KEPT_DAYS_MAX} days.
       </p>
@@ -315,7 +315,7 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
             <>
               <div className="settings-section-title">Villa location</div>
               <VillaCoordinates />
-              <p className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-xs)" }}>
+              <p className="muted body-text field-hint">
                 Drives sun position and day/night for this villa.
               </p>
               <NorthOffset viewHeadingDeg={viewHeadingDeg} />

@@ -40,7 +40,8 @@ ck("StateTimeline draws exactly these", /timelineCells\(data, end \?\? timeKey, 
 
 // ── a day's and a week's slice (owner, 2026-10-20: the tooltip follows the chart's step) ──
 {
-  const { firstCellStart, DAY_MS, bandEnd } = await import("@/utils/timelineCells");
+  const { firstCellStart, bandEnd } = await import("@/utils/timelineCells");
+  const { DAY_MS } = await import("@/utils/localDay");
   const { cellSummary, fmtCellSpan } = await import("@/components/panels/chartUtils");
   const t = new Date(2026, 9, 15, 14, 30).getTime();             // a Thursday afternoon, the machine's own time zone
   ck("a week's band ends within five minutes of now, never days ahead", bandEnd(t, 7 * DAY_MS) - t <= B && bandEnd(t, 7 * DAY_MS) > t);

@@ -31,6 +31,7 @@
 
 import type { HassEntity } from "@/types/ha.types";
 import type { Observation } from "./observation";
+import { isDomain } from "@/utils/entityDomain";
 
 export type WeatherRole =
   | "temperature" | "feelsLike" | "dewPoint" | "humidity"
@@ -75,7 +76,7 @@ const UV = /\buv\b/;
 
 /** File one sensor of the station. First match wins; the order is the rule. */
 function roleOf(e: HassEntity): WeatherRole | null {
-  if (!e.entity_id.startsWith("sensor.")) return null;
+  if (!isDomain(e.entity_id, "sensor")) return null;
   const c = classOf(e), w = wordsOf(e);
   if (c === "temperature") {
     if (has(w, INDOOR)) return has(w, DEW) ? "indoorDewPoint" : "indoorTemperature";
@@ -141,7 +142,7 @@ export function findWeatherStation(
   entityDeviceIds: Record<string, string>,
 ): WeatherStation | null {
   const anchors = Object.values(entities)
-    .filter((e) => e.entity_id.startsWith("sensor.") && ANCHOR_CLASSES.has(classOf(e)));
+    .filter((e) => isDomain(e.entity_id, "sensor") && ANCHOR_CLASSES.has(classOf(e)));
   if (anchors.length === 0) return null;
   const devices = new Set(anchors.map((e) => entityDeviceIds[e.entity_id]).filter((d): d is string => !!d));
   if (devices.size === 0) return stationFrom(null, anchors);

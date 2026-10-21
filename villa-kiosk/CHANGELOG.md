@@ -1,3 +1,35 @@
+## 2.496.484
+
+### Changed
+- **Two unfinished pieces removed.** A guest's "narrower A/C range" was in the code but nothing could ever set it, so
+  guests always had the A/C's full range (and still do). An unused "reset settings" that could have erased the villa's
+  device setup on every tablet, had anything ever called it, is gone too.
+- **The add-on's address lists agree again.** Two addresses retired on 20 October were still listed for the offline
+  cache and the developer server; the check that compares the four lists now also catches a stale one.
+
+## 2.496.483
+
+### Fixed
+- **A category's long-press list shows the same devices as everywhere else.** Holding a category in the top bar listed
+  devices no other screen lists: one switched off in Advanced Settings, one hidden in the villa's system but placed on
+  the map, and each part of a device group as a row of its own. It now lists the villa's devices, as the counts and the
+  Cockpit do.
+- **A device group's reading follows the type the map drew.** One more place worked out "what kind of device is this"
+  on its own; all now ask one rule.
+
+## 2.496.482
+
+### Changed
+- **The Kiosk's code shares more of itself.** No change you should see. Counts ("3 devices"), time spans, device-type
+  checks, hint lines under fields, picker rows, copying to the clipboard, the search box filter and a dozen repeated
+  styles are each written once now, instead of two to twenty times.
+- **The photo viewer's arrow keys behave like the camera window's.** They no longer step photos while you type in a
+  field or hold Ctrl, Alt or Cmd.
+
+### Fixed
+- **A malformed login request is refused politely.** A sign-in or superadmin code sent in the wrong shape answered
+  with a server error instead of "bad request".
+
 ## 2.496.481
 
 ### Changed

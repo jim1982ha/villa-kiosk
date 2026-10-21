@@ -20,6 +20,7 @@ import type { HassEntity } from "@/types/ha.types";
 import type { EntityType } from "@/types/scene.types";
 import { contactOf, isUnavailable } from "./stateColors.ts";
 import { binaryWord } from "@/config/binarySensorWords";
+import { brightnessToPct } from "./colorUtils";
 
 /** Status/enum SENSOR states meaning "all good, nothing to report".
  *
@@ -204,7 +205,7 @@ export function compactValue(type: EntityType, s: HassEntity): string {
   switch (type) {
     case "light": {
       const b = s.attributes.brightness as number | undefined;
-      return s.state === "on" && b ? `${Math.round((b / 255) * 100)}%` : "";
+      return s.state === "on" && b ? `${brightnessToPct(b)}%` : "";
     }
     case "fan": {
       const p = s.attributes.percentage as number | undefined;

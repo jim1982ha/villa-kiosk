@@ -88,11 +88,12 @@ eq("AppConfig exports the normalisation", /export function normaliseConfig\(/.te
 eq("loadConfig uses it", /return normaliseConfig\(\{/.test(AC), true);
 // The window must STOP at the next declaration. Unbounded, it ran on into
 // replace() and found that call instead, so deleting update()'s stayed green.
-const updateBody = /const update = useCallback([\s\S]*?)(?=const replace = useCallback)/.exec(CC)?.[1] ?? "";
+// (replace() and reset() were removed, review B 2026-10-22: update() is the one way a config arrives)
+const updateBody = /const update = useCallback([\s\S]*?)\}, \[\]\);/.exec(CC)?.[1] ?? "";
 eq("...the update() the server pull arrives through wraps its setConfig",
    /normaliseConfig\(\{ \.\.\.prev, \.\.\.patch \}, \{ maps \}\)/.test(updateBody), true);
-eq("...and replace() does too",
-   /const replace = useCallback[\s\S]{0,300}?setConfig\(normaliseConfig\(/.test(CC), true);
+eq("...and no other way in: no replace(), no reset()",
+   !/const (replace|reset) = useCallback/.test(CC) && (CC.match(/setConfig\(/g) ?? []).length === (CC.match(/setConfig\(\(prev\)/g) ?? []).length, true);
 eq("the migrations have no other caller",
    (AC.match(/migrateMotionEntityId\(|stripStaleVariantEntities\(/g) ?? []).length, 4);
 // entityMap and meshBindings arrive from the shared store too, and that path
