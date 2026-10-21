@@ -52,7 +52,10 @@ ck("  ...its Next check on the room's line, right under the chevron",
    /fm-record-side[^>]*><svg[^>]*lucide-chevron-right[\s\S]*?<\/svg><span class="fm-record-aside muted"[^>]*>Next check: within 5 min<\/span>/.test(inside(issue, "fm-record-head")),
    inside(issue, "fm-record-head"));
 const { nextCheck } = await import("@/fm/faultTiming");
-const said = (problems, cadence = CADENCE) => nextCheck(problems, cadence);
+// at a fixed noon: the soonest of the 02:00 night and the 5-minute look is the night's from 01:55 to 02:00, and this
+// check failed those five minutes every night (2026-10-22, 01:58)
+const NOON = new Date(2026, 9, 21, 12, 0, 0);
+const said = (problems, cadence = CADENCE) => nextCheck(problems, cadence, NOON);
 ck("  ...each card says when its problems are read again, the Agent's numbers its own",
    said([{ source: "live" }]) === "Next check: live"
    && said([{ source: "night", check: "nightly" }]) === "Next check: 02:00"

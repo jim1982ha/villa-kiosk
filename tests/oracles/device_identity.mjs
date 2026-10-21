@@ -43,6 +43,20 @@ ck("  ...a placed entity, and one with no device, is its own", deviceOf(fold, "s
   const f = deviceFolding(map, [], reg, units);
   ck("  ...a reading on a meter's phase, never placed, is the meter: one card",
      deviceOf(f, "sensor.phase_a_power") === "sensor.meter_power", [...f]);
+  // owner, 2026-10-22: a motion sensor's window listed a leak sensor's and another motion sensor's batteries — every
+  // Zigbee sensor hangs under the bridge, and was read as a part of one device. A part is the same product (partOf).
+  const z = deviceUnits([{ id: "bridge", area_id: null, manufacturer: "Zigbee2MQTT", model: "Bridge" },
+    { id: "motion6", area_id: null, via_device_id: "bridge", manufacturer: "SONOFF", model: "Motion sensor" },
+    { id: "leak2", area_id: null, via_device_id: "bridge", manufacturer: "Aqara", model: "Water leak sensor T1" },
+    { id: "relay", area_id: null, manufacturer: "Shelly", model: "Shelly Pro EM" },
+    { id: "pump", area_id: null, via_device_id: "relay", manufacturer: "Shelly", model: "Shelly Pro EM" }]);
+  ck("  ...a sensor behind its radio bridge is a device of its own (another model); a relay's channel is a part",
+     !("motion6" in z) && !("leak2" in z) && z.pump === "relay", z);
+  const zf = deviceFolding({ "binary_sensor.motion6_occupancy": { entityId: "binary_sensor.motion6_occupancy", type: "binary_sensor" } }, [],
+    { "binary_sensor.motion6_occupancy": "motion6", "sensor.kitchen_leak2_battery": "leak2", "sensor.motion6_battery": "motion6" }, z);
+  ck("  ...so another sensor's battery is never \"also on\" a motion sensor; its own is",
+     deviceOf(zf, "sensor.kitchen_leak2_battery") === "sensor.kitchen_leak2_battery"
+     && deviceOf(zf, "sensor.motion6_battery") === "binary_sensor.motion6_occupancy", [...zf]);
   ck("  ...two pumps the owner placed on one relay box stay two devices; the box's own reading joins one of them",
      deviceOf(f, "sensor.pump_1_power") !== deviceOf(f, "sensor.pump_2_power")
      && ["sensor.pump_1_power", "sensor.pump_2_power"].includes(deviceOf(f, "sensor.relay_temperature")), [...f]);

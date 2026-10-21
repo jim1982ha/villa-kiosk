@@ -75,9 +75,17 @@ export function entityPlaces(
  * ⚠️ ONE METER, TWO CARDS (owner, 2026-10-18 — architecture review "One problem, one card" #3): the VESTA Agent counts a
  * meter and its phases as one device (KnowledgePack.physical_device_of); the Cockpit put a fault on a phase's reading
  * on a card of its own beside the meter's alert. The same rule, from the same registry, on both sides.
+ *
+ * ⚠️ A BRIDGE IS NOT ITS SENSORS (owner, 2026-10-22: "that's really bad to see other devices' sensors in this window"):
+ * every Zigbee sensor hangs under the Zigbee bridge the same way, and read as parts of ONE device, a motion sensor's
+ * window listed a leak sensor's battery and tamper and another motion sensor's battery under "Also on this device".
+ * The VESTA Agent tells them apart since 2026-10-19 (KnowledgePack.part_of) and the Kiosk never did: a part is the
+ * same product as the device above it (partOf).
  */
 export function deviceUnits(devices: readonly HassDeviceRegistryEntry[]): Record<string, string> {
-  const up = new Map(devices.filter((d) => d.via_device_id).map((d) => [d.id, d.via_device_id as string]));
+  const byId = new Map(devices.map((d) => [d.id, d]));
+  const up = new Map(devices.filter((d) => d.via_device_id && partOf(d, byId.get(d.via_device_id)))
+    .map((d) => [d.id, d.via_device_id as string]));
   const known = new Set(devices.map((d) => d.id));
   const out: Record<string, string> = {};
   for (const id of up.keys()) {
@@ -90,6 +98,16 @@ export function deviceUnits(devices: readonly HassDeviceRegistryEntry[]): Record
     if (cur !== id) out[id] = cur;
   }
   return out;
+}
+
+/** Is `child` a PART of `parent` (a meter's phase, a relay's channel) rather than a device of its own that talks
+ *  through it (a sensor behind its radio bridge)? A part is the same product: a device of its own has a model of its own
+ *  (both given, and they differ). The VESTA Agent's rule, word for word (KnowledgePack.part_of): read from the
+ *  registry, never a list of makes; a registry that gives no model is not judged (a part, as before). */
+export function partOf(child: HassDeviceRegistryEntry, parent: HassDeviceRegistryEntry | undefined): boolean {
+  if (!parent) return false;
+  if (child.model && parent.model) return child.manufacturer === parent.manufacturer && child.model === parent.model;
+  return true;
 }
 
 /** The three registries a refresh asks for — `null` for one whose request
