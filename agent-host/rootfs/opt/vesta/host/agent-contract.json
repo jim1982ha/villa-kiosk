@@ -406,7 +406,7 @@
   "heartbeat": {
     "fields": {
       "status": "string, at most 200 characters",
-      "cadence": "{checkMinutes, nightlyAt}, optional"
+      "cadence": "{checkMinutes, nightlyAt, lastLookAt}, optional; lastLookAt (optional) the ISO moment its every-checkMinutes look last started: the card's Next check counts from it"
     },
     "answer": {
       "ok": "true",
@@ -443,7 +443,8 @@
       "since": "ISO moment that duration counts from (when the device went offline, its last report)",
       "documentIds": "the reports kept with it (/agent/v1/fm-document)",
       "entityId": "the device's entity",
-      "note": "what to do on site"
+      "note": "what to do on site",
+      "closesAt": "ISO moment the VESTA Agent closes it if what it reported stays over (its alert desk's clear wait); absent while it still holds"
     },
     "_fieldsBeforeList": "The fields of `fields` a Kiosk read before /agent/v1/info listed them (`ticket_fields`, 2.496.382): what the VESTA Agent writes to a Kiosk whose info lists none. Another declared field is not written.",
     "fieldsBeforeList": [

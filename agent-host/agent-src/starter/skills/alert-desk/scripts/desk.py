@@ -717,23 +717,32 @@ def seen_again(store: Store, now: datetime, client, clear_minutes: float, out: d
             if not p.get("silent_told"):
                 out["send"] += tell(inc["severity"], "update", incident=inc["id"],
                                     **about(inc, f"{'; '.join(words)}: VESTA cannot tell if it is right. Still open."))
-            store.note(inc["id"], {"silent_told": True}, drop=("clear_since",))
+            store.note(inc["id"], {"silent_told": True}, drop=("clear_since", Notes.CLOSES_AT))
+            _closes_at_changed(p, None, out)
             continue
         if there:
             # still holds: whatever was seen clearing is not over
-            store.note(inc["id"], drop=("clear_since", "silent_told"))
+            store.note(inc["id"], drop=("clear_since", "silent_told", Notes.CLOSES_AT))
+            _closes_at_changed(p, None, out)
             continue
         if p.get("claim"):
             # out of it `clear_minutes` on end, as the desk saw it (a claim is a verdict, not a state with its time)
             since = p.get("clear_since") or now.isoformat()
-            store.note(inc["id"], {"clear_since": since}, drop=("silent_told",))
+            closes = (datetime.fromisoformat(since) + timedelta(minutes=clear_minutes)).isoformat()
+            store.note(inc["id"], {"clear_since": since, Notes.CLOSES_AT: closes}, drop=("silent_told",))
+            _closes_at_changed(p, closes, out)
             if now - datetime.fromisoformat(since) < timedelta(minutes=clear_minutes):
                 continue
             said = "it is no longer reported"
         else:
-            store.note(inc["id"], drop=("silent_told",))
             ents, bad = rule_states(inc)
             now_states = client.states(ents)
+            # out of its bad states since the youngest of their changes: closed `clear_minutes` after it (out_for)
+            left = [_moment((now_states.get(e) or {}).get("last_changed")) for e in ents]
+            closes = (max(left) + timedelta(minutes=clear_minutes)).isoformat() if left and all(left) else None
+            store.note(inc["id"], {Notes.CLOSES_AT: closes} if closes else None,
+                       drop=("silent_told",) if closes else ("silent_told", Notes.CLOSES_AT))
+            _closes_at_changed(p, closes, out)
             if not out_for(client, ents, now_states, bad, now, clear_minutes):
                 continue
             said = "; ".join(f"{(now_states[e].get('attributes') or {}).get('friendly_name') or e} is "
@@ -743,6 +752,20 @@ def seen_again(store: Store, now: datetime, client, clear_minutes: float, out: d
         store.audit("alert-desk", "seen_again", {"incident": inc["id"], "now": said})
         closed.append(inc["id"])
     return closed
+
+
+def _moment(iso) -> datetime | None:
+    try:
+        return datetime.fromisoformat(str(iso)) if iso else None
+    except ValueError:
+        return None
+
+
+def _closes_at_changed(p: dict, closes: str | None, out: dict) -> None:
+    """When the incident would close changed (Notes.CLOSES_AT): its Kiosk fault is brought up to date — "closes at about
+    14:49 if it stays locked" (owner, 2026-10-21), or that line taken away when it holds again."""
+    if p.get(Notes.CLOSES_AT) != closes and R.faults_changed() not in out["actions"]:
+        out["actions"].append(R.faults_changed())
 
 
 def rule_gone(store: Store, now: datetime, client, clear_minutes: float, out: dict) -> list[int]:

@@ -16,7 +16,7 @@ from typing import Awaitable, Callable
 from vesta_shared import kiosk_words, result
 from vesta_shared.problems import Problems
 
-from .kiosk import MINE, KioskError, noted, retitled, tagged, todo
+from .kiosk import MINE, KioskError, closing, noted, retitled, tagged, todo
 from .kiosk import fault_title_chars
 from .outcome_words import ticket_title
 
@@ -283,6 +283,9 @@ class Tickets:
                             or (want["check"] and card.get("check") != want["check"]) \
                             or (pattern and (card.get("title_pattern"), card.get("since")) != (pattern["titlePattern"], pattern["since"])):
                         amends.append(tagged(want["number"], want["origin"], want["check"], pattern))
+                    # when the agent closes it if it stays over (owner, 2026-10-21), or that line gone when it holds again
+                    if card.get("closes_at") != want["closes_at"]:
+                        amends.append(closing(want["closes_at"]))
                     # what to do on site, as its problem says it NOW (Problems.card todo): the route's check edited, a
                     # finding's check rewritten by the night — written at the fault's making only until 0.12.263
                     said = result.fault_note(want["todo"])

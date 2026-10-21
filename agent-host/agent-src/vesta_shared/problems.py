@@ -560,7 +560,8 @@ class Problems:
         note and who (its close: what it says, the person who closed it — None: the agent's own clearing),
         reopen_note (what its reopening says — None: it was never reopened by its problem),
         todo (what to do on site, as its problem's source says it NOW: check_of — the fault's note follows it; "" when
-        nothing says; not `check`, which is the recheck cadence)}.
+        nothing says; not `check`, which is the recheck cadence), closes_at (when the alert desk closes it if what it
+        reported stays over — an ISO moment, or None)}.
 
         ⚠️ A REOPENING SAYS WHY, LIKE A CLOSE (architecture review, 2026-10-18): the desk wrote "Still there after the close."
         on an action nothing read, and the Kiosk wrote its own "Back again" — a door never locked after a Done read as if
@@ -573,7 +574,9 @@ class Problems:
         d = json.loads((row or {}).get("detail") or "{}") if row and row.get("status") == "open" else {}
         words = d.get("since_words")
         pattern = title.replace(words, "{since}", 1) if d.get("since") and words and words in title else None
-        return {"open": task.get("status") == "open", "title": title,
+        # when the desk closes it if it stays over (Notes.CLOSES_AT, owner 2026-10-21): the card's "closes at about"
+        closes = notes_of(self.store.incident(sid)).get(Notes.CLOSES_AT) if kind == "incident" else None
+        return {"open": task.get("status") == "open", "title": title, "closes_at": closes or None,
                 "pattern": pattern, "since": d.get("since") if pattern else None,
                 "number": sid if kind == "incident" else None,
                 # where it came from, the Kiosk card's source icon (owner, 2026-10-14): an alert or the night check

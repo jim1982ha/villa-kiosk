@@ -159,6 +159,12 @@ class Scheduler:
         while any(not t.done() for t in self._running.values()):
             await asyncio.gather(*[t for t in self._running.values() if not t.done()], return_exceptions=True)
 
+    @property
+    def last_look(self) -> datetime | None:
+        """When the every-5-minutes jobs last started (None before the first tick): the Kiosk's "Next check" counts
+        from it (heartbeat cadence `lastLookAt`, owner 2026-10-21: its time moved every minute, "now + 5 min")."""
+        return self._last_every
+
     def _claim(self, job: str, slot: datetime) -> bool:
         if self._cut.get(job) == slot.isoformat():
             del self._cut[job]

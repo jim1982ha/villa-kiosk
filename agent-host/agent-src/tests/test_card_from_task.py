@@ -82,7 +82,7 @@ def test_the_card_says_what_the_task_says():
     tid, _ = pb.open_task("incident", iid, "r", "lock.example_door", "Door unlocked")
     assert pb.card(st.task(tid)) == {"open": True, "title": "Door unlocked", "number": iid, "origin": "alert",
                                      "check": "minutes", "pattern": None, "since": None, "note": "Closed: the problem is over.", "who": None,
-                                     "reopen_note": None, "todo": ""}
+                                     "reopen_note": None, "todo": "", "closes_at": None}
     # what to do on site is the incident's, as the alert desk carries it (store.Notes.CHECK): the fault's note follows
     st.note(iid, {"check": "Lock it."})
     assert pb.card(st.task(tid))["todo"] == "Lock it."

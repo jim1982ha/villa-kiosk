@@ -441,6 +441,26 @@ def test_a_duration_in_a_faults_title_is_worded_by_the_kiosk_when_it_shows_it(tm
     assert [x.get("titlePattern") for x in older._all()] == [None]            # it never sees "{since}"
 
 
+def test_a_fault_waiting_to_close_tells_the_kiosk_when_and_stops_when_it_holds_again(tmp_path):
+    # owner, 2026-10-21: a door locked at 14:38:50 was still a fault at 14:45 and nothing said the desk waits 10 minutes
+    # clear — the desk's moment (Notes.CLOSES_AT) is the fault's closesAt; gone from the fault when it holds again
+    from vesta_shared.store import Notes
+    k = FakeKiosk()
+    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)
+    st, pb = Store(v.s.store_path), Problems(Store(v.s.store_path))
+    iid = st.new_incident("rule_x|lock.front", "rule_x", "lock.front", "P2", {"summary": "Front door unlocked"})
+    pb.open_task("incident", iid, "rule_x", "lock.front", "Front door unlocked")
+    run(v.tickets.repair())
+    (t,) = k._all()
+    assert "closesAt" not in t
+    st.note(iid, {Notes.CLOSES_AT: "2026-10-21T06:48:50+00:00"})
+    run(v.tickets.repair())
+    assert k.ticket(t["id"])["closesAt"] == "2026-10-21T06:48:50+00:00"
+    st.note(iid, drop=(Notes.CLOSES_AT,))
+    run(v.tickets.repair())
+    assert "closesAt" not in k.ticket(t["id"])
+
+
 def test_a_fault_brought_up_to_date_is_written_once_whatever_it_needs():
     # architecture review scan 2, 2026-10-19: a new title, its tags and its Telegram lines were three reads and three
     # writes of the whole Facility record — three revisions, each one more chance a person's save is refused
@@ -516,13 +536,14 @@ def test_a_faults_note_follows_what_to_do_unless_a_person_wrote_it():
 def _every_write(k: Kiosk) -> dict:
     """Every write the agent makes to a fault, on Kiosk `k`: a new fault with every field, then each amend, a resolve
     (the agent's clearing, then a person's Done) and a reopening. Returns the fault as the Kiosk holds it."""
-    from vesta_agent.kiosk import noted, retitled, tagged, todo
+    from vesta_agent.kiosk import closing, noted, retitled, tagged, todo
     tid = run(k.add_ticket("Pump offline for 2 h", entity_id="switch.pump", note="What to do: power", document_ids=["d1"],
                            number=5, origin="alert", check="minutes",
                            pattern={"titlePattern": "Pump offline for {since}", "since": "2026-10-19T00:00:00Z"}))
     run(k.amend(tid, retitled("Pump offline for 3 h"), tagged(6, "night", "nightly", {"titlePattern": "P {since}",
                                                                                          "since": "2026-10-19T01:00:00Z"}),
-                noted([{"at": "2026-10-19T00:05:00Z", "note": "Reminder sent (to: FM)"}]), todo("What to do: the plug")))
+                noted([{"at": "2026-10-19T00:05:00Z", "note": "Reminder sent (to: FM)"}]), todo("What to do: the plug"),
+                closing("2026-10-19T00:20:00Z")))
     k.person_renames(tid, "Pump — Wayan on it")
     run(k.amend(tid, retitled("Pump offline for 4 h")))                       # under a person's title: a reading step
     run(k.resolve_ticket(tid, note="Cleared: back online."))

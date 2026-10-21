@@ -247,6 +247,7 @@ def fault_of(t: dict) -> dict:
                    else last("who") or last("by")),
             "alert_number": t.get("alertNumber"), "origin": t.get("origin"),
             "check": t.get("check"), "title_pattern": t.get("titlePattern"), "since": t.get("since"),
+            "closes_at": t.get("closesAt"),
             "note": str(t.get("note") or ""),                     # what to do on site (the agreement's ticket.fields)
             "person_titled": person_titled(t), "cleared": cleared_step(close) if close else None,
             "noted": [(str(u.get("at") or ""), str(u.get("note") or "")) for u in ups if u.get("kind") == NOTED],
@@ -321,6 +322,16 @@ def tagged(number: int | None = None, origin: str | None = None, check: str | No
         if all(t.get(k) == v for k, v in tags.items()):
             return None
         return {k: v for k, v in dict(t, **tags).items() if not (k in tags and v is None)}
+    return amend
+
+
+def closing(at: str | None) -> Amend:
+    """An open fault says when the VESTA Agent closes it if what it reported stays over (`closesAt`, owner 2026-10-21:
+    "Locked since 14:38 · closes at about 14:49 if it stays locked"), or no longer says it (`at` None: it holds again)."""
+    def amend(t: dict) -> dict | None:
+        if t.get("status") == "resolved" or t.get("closesAt") == at:
+            return None
+        return {k: v for k, v in dict(t, closesAt=at).items() if not (k == "closesAt" and v is None)}
     return amend
 
 

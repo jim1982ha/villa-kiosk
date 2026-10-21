@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.303 (21 October 2026)
+
+- Owner 2026-10-21 (#65: a door locked at 14:38:50 still a fault at 14:45): alert-desk seen_again records
+  Notes.CLOSES_AT while what an incident claims reads over — a claim: clear_since + clear_minutes; bad states: the
+  youngest last_changed + clear_minutes — and drops it when it holds again or cannot be told, asking the repair
+  (faults_changed) when it changes. Problems.card `closes_at`; tickets._converge writes it as the fault's `closesAt`
+  (kiosk.closing, agreement ticket.fields, gated by the Kiosk's ticket_fields).
+- Heartbeat cadence `lastLookAt`: Scheduler.last_look (the last every-5-minutes start) — the Kiosk's Next check counts
+  from it. An older Kiosk drops the key (never refuses it). Agreement copied from the Kiosk.
+
 ## 0.6.302 (21 October 2026)
 
 - Architecture review 2026-10-21 (ARCHITECTURE.md "Where a device stands"): KnowledgePack.standing (device_state

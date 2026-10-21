@@ -106,6 +106,10 @@ class Notes:
     # POSTS IN (owner, 2026-10-17): a P3's own message in the owner's group read "To: Owner". Absent on an incident of
     # an older desk: the heading then says the roles the incident went to.
     TO = "to"
+    # when the desk closes it if it stays over (owner, 2026-10-21: a door locked at 14:38:50 still a fault at 14:45, and
+    # nothing said it waits 10 minutes clear): set by the desk while what it claims reads over (seen_again), gone when it
+    # holds again; read by Problems.card for the Kiosk fault's `closesAt`
+    CLOSES_AT = "closes_at"
     KIOSK_REOPENED = "kiosk_reopened"                            # mail: who reopened its fault in the Kiosk, and when
     UNREACHED = "unreached"                                      # mail: Telegram refused every chat of the FM's
 

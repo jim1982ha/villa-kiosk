@@ -13,6 +13,7 @@ from helpers import PYTHONPATH, STARTER_SKILLS
 from villa_timeline import TimelineVilla
 from vesta_shared.store import Store
 from vesta_shared.problems import Problems
+from vesta_shared import result as R
 
 spec = importlib.util.spec_from_file_location("desk", os.path.join(STARTER_SKILLS, "alert-desk", "scripts", "desk.py"))
 desk = importlib.util.module_from_spec(spec)
@@ -907,3 +908,41 @@ def test_the_desks_durations_are_worded_as_both_apps_word_one(store, monkeypatch
     assert silent["send"] and "Villa silent since" in silent["send"][0]["status"]
     inc = store.find_open_incident("critical_internet---villa_silent|agent")
     assert "for 2 h 30 min:" in json.loads(inc["payload"])["message"]
+
+
+# ------------------------------------------------------------- when it closes, told to the Kiosk (owner, 2026-10-21)
+def _closes(store, iid):
+    from vesta_shared.store import Notes, notes_of
+    return notes_of(store.incident(iid)).get(Notes.CLOSES_AT)
+
+
+def _card_closes(store, iid):
+    (task,) = [t for t in store.tasks(None) if t.get("source") == f"incident:{iid}"]
+    return Problems(store).card(task)["closes_at"]
+
+
+def test_a_door_locked_says_when_its_fault_closes_and_stops_saying_it_when_unlocked_again(store):
+    # the villa's #65: locked at 14:38:50, still a fault at 14:45 under "Next check: within 5 min" — nothing said the
+    # desk waits 10 minutes clear. It now says when: the lock's change + clear_minutes, carried to the Kiosk fault
+    clear = desk._params(None).behaviour("clear_minutes")
+    villa = Villa(**{"lock.front_door": [(T0 - timedelta(minutes=10), "unlocked"), (T0 + timedelta(minutes=90), "locked"),
+                                         (T0 + timedelta(minutes=97), "unlocked")]})
+    iid = _left_unlocked(store)
+    assert _closes(store, iid) is None
+    out = _tick(store, villa, 95)
+    want = (T0 + timedelta(minutes=90 + clear)).isoformat()
+    assert not out.get("cleared") and _closes(store, iid) == want == _card_closes(store, iid)
+    assert R.faults_changed() in out["actions"], out["actions"]                     # its Kiosk fault brought up to date
+    assert R.faults_changed() not in _tick(store, villa, 96)["actions"]              # unchanged: no repair asked
+    assert _closes(store, iid) == want
+    out = _tick(store, villa, 98)                                                     # unlocked again: no longer closing
+    assert _closes(store, iid) is None and _card_closes(store, iid) is None and R.faults_changed() in out["actions"]
+
+
+def test_a_claim_says_when_it_closes_from_when_the_desk_first_saw_it_over(store):
+    clear = desk._params(None).behaviour("clear_minutes")
+    iid = _overdue(store, claim=CLAIM)["incident_id"]
+    ha = Claims([(T0, "true"), (T0 + timedelta(minutes=2), "false")])
+    assert not _tick(store, ha, 5).get("cleared")
+    assert _closes(store, iid) == (T0 + timedelta(minutes=5 + clear)).isoformat()
+    assert _tick(store, ha, 5 + clear)["cleared"] == [iid]

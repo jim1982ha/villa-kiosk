@@ -878,13 +878,16 @@ class Vesta:
     def kiosk_cadence(self) -> dict | None:
         """This agent's timing for the Kiosk's heartbeat (agent-contract.json `heartbeat.cadence`): how often its code
         jobs look (the scheduler's tick) and when the job a skill marks `kiosk: nightly_check` runs — read at each beat,
-        so a changed schedule or a skill switched off shows at the next one. None without a nightly job: the Kiosk then says no number rather
+        so a changed schedule or a skill switched off shows at the next one; `lastLookAt`, when that tick last started
+        (the card's Next check counts from it). None without a nightly job: the Kiosk then says no number rather
         than a wrong one."""
         skills = self.skills.all().values()
         nightly = next((j["when"] for sk in skills for j in sk.schedule if j.get("kiosk") == "nightly_check"), None)
         if not nightly:
             return None
-        return {"checkMinutes": int(SCHEDULER_EVERY.total_seconds() // 60), "nightlyAt": nightly}
+        look = getattr(getattr(self, "scheduler", None), "last_look", None)
+        return {"checkMinutes": int(SCHEDULER_EVERY.total_seconds() // 60), "nightlyAt": nightly,
+                **({"lastLookAt": look.astimezone(timezone.utc).isoformat(timespec="seconds")} if look else {})}
 
     async def _safe(self, coro):
         try:
@@ -896,8 +899,9 @@ class Vesta:
     async def main(self, stop: asyncio.Event):
         await self.start()
         await self._safe(self.tidy())
-        tasks = [asyncio.create_task(Scheduler(self.s, self.skills, self.state, self.run_code_job, self.jobs.run,
-                                               self.rebuild_pack, self.housekeeping, self.work).run(stop))]
+        self.scheduler = Scheduler(self.s, self.skills, self.state, self.run_code_job, self.jobs.run,
+                                   self.rebuild_pack, self.housekeeping, self.work)
+        tasks = [asyncio.create_task(self.scheduler.run(stop))]
         if self.s.ha_url and self.s.ha_token:
             events = HaEvents(self.s.ha_url, self.s.ha_token, self.on_ha_event, self.beat, headers=self.cf_headers)
             tasks.append(asyncio.create_task(events.run(stop)))

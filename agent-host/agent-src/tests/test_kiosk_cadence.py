@@ -129,3 +129,13 @@ def test_the_loop_waits_the_interval_the_answer_set(monkeypatch):
         await k.heartbeats(stop)
     asyncio.run(run())
     assert waited == [30.0]
+
+
+def test_the_beat_says_when_the_agent_last_looked(tmp_path):
+    # owner, 2026-10-21: hovering "Next check: within 5 min" said now + 5 min, moving every minute — the Kiosk counts
+    # from the scheduler's last every-5-minutes start, told in the beat (an older Kiosk drops the key, never refuses it)
+    from datetime import datetime, timezone
+    v = make_agent(tmp_path, {}, skills=("preventive-maintenance",))
+    assert "lastLookAt" not in v.kiosk_cadence()                       # before the first tick: not said
+    v.scheduler = type("S", (), {"last_look": datetime(2026, 10, 21, 14, 40, 12, tzinfo=timezone.utc)})()
+    assert v.kiosk_cadence() == {**SAID, "lastLookAt": "2026-10-21T14:40:12+00:00"}
