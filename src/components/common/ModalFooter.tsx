@@ -30,6 +30,7 @@ import type { ReactNode } from "react";
 import { Save as SaveIcon, X } from "lucide-react";
 
 import { useAppNotice } from "@/components/hud/AppNotice";
+import Tip from "./Tip";
 
 /** An editable draft a dialog can commit. ⚠️ THE DIALOG OWNS IT, NOT THIS
  *  COMPONENT: a draft that lives in the footer would be lost the moment a tab
@@ -109,35 +110,37 @@ export default function ModalFooter({
     <div className="modal-footer">
       {left}
 
-      {/* ⚠️ TITLE AND ARIA-LABEL ON BOTH, INDEPENDENTLY OF THE VISIBLE LABEL.
+      {/* ⚠️ A TOOLTIP AND ARIA-LABEL ON BOTH, INDEPENDENTLY OF THE VISIBLE LABEL.
           The text is hidden at the phone tier, so a name that came from the
           text would vanish exactly where the control is hardest to identify —
-          and `title` is the tooltip that explains the CONSEQUENCE, which the
-          one-word label deliberately does not. */}
+          and the tooltip (common/Tip, the Kiosk's own card) explains the
+          CONSEQUENCE, which the one-word label deliberately does not. */}
       <div className="modal-footer-actions">
-        <button
-          className="btn primary"
-          disabled={busy || saving || !dirty}
-          aria-label={dirty ? "Save" : "Nothing to save"}
-          title={commit
-            ? (dirty ? "Save — stores your changes, applies them and closes"
-                     : "Nothing has been changed yet")
-            : "Everything in this dialog applies as you change it — there is "
-              + "nothing waiting to be saved"}
-          onClick={save}
-        >
-          <SaveIcon size={18} aria-hidden />
-          <span className="btn-label">Save</span>
-        </button>
-        <button
-          className="btn"
-          aria-label="Cancel"
-          title={dirty ? "Cancel — undoes every change made here, on every tab, and closes" : "Cancel — closes"}
-          onClick={cancel}
-        >
-          <X size={18} aria-hidden />
-          <span className="btn-label">Cancel</span>
-        </button>
+        <Tip text={commit
+          ? (dirty ? "Save — stores your changes, applies them and closes"
+                   : "Nothing has been changed yet")
+          : "Everything in this dialog applies as you change it — there is "
+            + "nothing waiting to be saved"}>
+          <button
+            className="btn primary"
+            disabled={busy || saving || !dirty}
+            aria-label={dirty ? "Save" : "Nothing to save"}
+            onClick={save}
+          >
+            <SaveIcon size={18} aria-hidden />
+            <span className="btn-label">Save</span>
+          </button>
+        </Tip>
+        <Tip text={dirty ? "Cancel — undoes every change made here, on every tab, and closes" : "Cancel — closes"}>
+          <button
+            className="btn"
+            aria-label="Cancel"
+            onClick={cancel}
+          >
+            <X size={18} aria-hidden />
+            <span className="btn-label">Cancel</span>
+          </button>
+        </Tip>
       </div>
     </div>
   );

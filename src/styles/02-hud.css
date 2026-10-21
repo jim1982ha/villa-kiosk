@@ -858,8 +858,7 @@
 .panel-linked-row {
   display: flex; align-items: center; gap: 4px;
   padding: 10px 12px; margin-bottom: 14px;
-  border-radius: 12px; background: var(--bg-card);
-  border: 1px solid var(--hairline);
+  border-radius: var(--card-radius); background: var(--bg-card); border: var(--card-border);
 }
 .panel-linked-label {
   font-size: var(--text-base); font-weight: 600;

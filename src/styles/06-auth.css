@@ -62,7 +62,7 @@
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
   padding: var(--panel-padding); border-radius: var(--panel-radius);
   background: var(--bg-card); color: var(--text-primary);
-  border: 1px solid var(--hairline); box-shadow: 0 10px 30px var(--shadow);
+  border: var(--card-border); box-shadow: 0 10px 30px var(--shadow);
   cursor: pointer; transition: transform 0.15s ease, border-color 0.15s ease;
 }
 .profile-card:focus-visible { transform: translateY(-3px); border-color: var(--accent); }
@@ -79,7 +79,7 @@
 .pinpad {
   width: min(360px, 100%); text-align: center; position: relative;
   padding: var(--panel-padding); border-radius: var(--panel-radius);
-  background: var(--bg-card); border: 1px solid var(--hairline);
+  background: var(--bg-card); border: var(--card-border);
   box-shadow: 0 10px 30px var(--shadow);
 }
 .pinpad-back {

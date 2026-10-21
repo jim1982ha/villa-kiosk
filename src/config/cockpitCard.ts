@@ -14,7 +14,7 @@
 // problems; how a card SAYS them lives here only, and a check reads what cockpitCard returns.
 
 import type { AgentCadence } from "@/agent/agentApi";
-import { nextCheck, nextCheckAt } from "@/fm/faultTiming";
+import { nextCheck, nextCheckAt, nextCheckWhen } from "@/fm/faultTiming";
 import { lineActions, overviewActions, type WorkAction, type WorkRecord } from "@/fm/deviceWork";
 import { STAGE_WORDS } from "@/fm/fmEngine";
 import type { IssueSource } from "@/fm/issueSource";
@@ -157,11 +157,18 @@ export interface CardView {
   entityId?: string;
   /** The icons before its name: where its first problem comes from. */
   lead: LineSources | null;
-  /** "Next check: 02:00", and its moment ("20/10/2026 02:00") — null when it has none (live, by hand). */
-  nextCheck: { text: string; at: string | null };
+  /** "Next check: 02:00", and its moment ("20/10/2026 02:00") — null when it has none (live, by hand). `when`: the
+   *  pill's words beside its refresh icon ("02:00"); `tip`: what hovering the pill says (the text, then the moment). */
+  nextCheck: { text: string; at: string | null; when: string; tip: string };
   /** Open Ticket / Edit Ticket / Close / Close all — on its records; [] for a card only the villa's system reports. */
   actions: WorkAction[];
   lines: CardLine[];
+}
+
+function nextCheckView(group: AttentionGroup, cadence: AgentCadence | null, now: Date, at: Date | null): CardView["nextCheck"] {
+  const text = nextCheck(group.items, cadence, now);
+  const moment = at ? momentText(at) : null;
+  return { text, at: moment, when: nextCheckWhen(group.items, cadence, now), tip: moment ? `${text} (${moment})` : text };
 }
 
 /** The card of `group`, as drawn. `cadence`: the VESTA Agent's own timing (null: it did not say). */
@@ -178,7 +185,7 @@ export function cockpitCard(group: AttentionGroup, cadence: AgentCadence | null,
   return {
     key: group.key, title: group.title, room: group.room, entityId: group.entityId,
     lead: group.items[0] ? lineSources(group.items[0]) : null,
-    nextCheck: { text: nextCheck(group.items, cadence, now), at: at ? momentText(at) : null },
+    nextCheck: nextCheckView(group, cadence, now, at),
     actions: cardActions(group),
     lines: group.items.map(line),
   };

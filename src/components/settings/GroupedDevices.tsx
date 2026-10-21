@@ -6,7 +6,7 @@
 
 import { useMemo, useState } from "react";
 import AskDialog from "@/components/common/AskDialog";
-import { ChevronDown, ChevronRight, Plus, Search, Trash2, X, Sparkles } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Search, Trash2, Sparkles } from "lucide-react";
 import { ShowAll, useTruncated } from "@/components/common/TruncatedList";
 import EntityPicker from "./EntityPicker";
 import Fold from "./Fold";
@@ -17,6 +17,7 @@ import {
 } from "@/config/deviceGroups";
 import type { DeviceGroup } from "@/config/AppConfig";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
+import RemovablePill from "@/components/common/RemovablePill";
 
 export default function GroupedDevices() {
   const { config, update } = useConfig();
@@ -161,23 +162,8 @@ export default function GroupedDevices() {
               on its own line below. */}
           <div className="row" style={{ flexWrap: "wrap", gap: 6, marginTop: 10, alignItems: "center" }}>
             {group.memberEntityIds.map((id) => (
-              <span
-                key={id}
-                className="body-text"
-                style={{
-                  display: "inline-flex", alignItems: "center", gap: 6, fontSize: "var(--text-xs)",
-                  padding: "4px 8px", borderRadius: 999, background: "var(--bg-input)",
-                  maxWidth: "100%", overflowWrap: "anywhere",
-                }}
-              >
-                {entityLabel(id)}
-                <button
-                  className="icon-btn" style={{ width: 20, height: 20, borderRadius: 999, flexShrink: 0 }}
-                  title="Remove from group" onClick={() => removeMember(group, id)}
-                >
-                  <X size={16} />
-                </button>
-              </span>
+              <RemovablePill key={id} label={entityLabel(id)} tip={id} removeLabel="Remove from group"
+                onRemove={() => removeMember(group, id)} />
             ))}
             <div style={{ flex: "1 1 180px", minWidth: 140 }}>
               <EntityPicker

@@ -48,15 +48,14 @@
    cost and buttons on the right of it (a phone puts them under). A ticket taken on for several faults of a device
    holds them all, divided by a hairline (.fm-ticket-records). */
 .fm-record-card {
-  display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 12px 14px; border-radius: 12px;
-  background: var(--bg-card); border: 1px solid var(--hairline);
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px;
+  padding: var(--card-pad); border-radius: var(--card-radius); background: var(--bg-card); border: var(--card-border);
 }
 /* its text right under the room (owner, 2026-10-15: "don't skip a line"): 4 px between head and text, not the row's 12 */
 .fm-record-card .fm-record { border: none; background: none; padding: 0; border-radius: 0; row-gap: 4px; }
 /* what stands before its title (an issue's source icons), the line under the title (its room); its text then starts
    under the title, not under the icons */
 .fm-record-lead { flex: 0 0 18px; display: inline-flex; justify-content: center; margin-top: 2px; }
-.fm-record-subtitle { flex-basis: 100%; font-size: var(--text-2xs); }
 .fm-record-head:has(> .fm-record-lead) + .fm-record-body { padding-left: 30px; }
 /* a line's own icon hangs in that column, under the card's, so every line's text starts at the same place, with or
    without an icon (owner, 2026-10-18: "#55" sat further right than "#41" above it) */
@@ -81,8 +80,8 @@
    (owner, 2026-10-15: "don't skip a line between the device name and the next section") */
 .fm-record-body { flex: 1 1 100%; min-width: 0; display: flex; align-items: flex-start; flex-wrap: wrap; gap: 8px 12px; }
 /* the chevron and, under it on the room's line, a short word ("Next check: 02:00") */
-.fm-record-side { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
-.fm-record-aside { font-size: var(--text-2xs); white-space: nowrap; }
+/* the next check: a pill at the right of the title's line, its refresh icon before when (RecordCard `check`) */
+.fm-record-check { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; margin-top: 2px; }
 /* ⚠️ THE CARD'S WIDTH, NEVER ITS LONGEST LINE (owner, 2026-10-14: a "VESTA reads: …" note ran past a Closed card's
    right edge): a line of its own that may shrink wraps every note inside the card. */
 .fm-record-body > .fm-row-main { flex: 1 1 260px; min-width: 0; }
@@ -125,8 +124,7 @@
 .fm-summary { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 10px; }
 .fm-stat {
   display: flex; flex-direction: column; gap: 2px; min-width: 0;
-  padding: 12px 14px; border-radius: 12px;
-  background: var(--bg-card); border: 1px solid var(--hairline);
+  padding: var(--card-pad); border-radius: var(--card-radius); background: var(--bg-card); border: var(--card-border);
 }
 @media (max-width: 640px) {
   .fm-summary { gap: 6px; }
@@ -151,8 +149,7 @@
 .fm-kept-note { margin: 8px 2px 0; font-size: var(--text-xs); }
 .fm-row {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-  padding: 12px 14px; border-radius: 12px;
-  background: var(--bg-card); border: 1px solid var(--hairline);
+  padding: var(--card-pad); border-radius: var(--card-radius); background: var(--bg-card); border: var(--card-border);
 }
 .fm-row-main { flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .fm-row-title { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
@@ -172,7 +169,8 @@
    as wide as its whole text, so a long one dropped below the pills as a block. A zero basis keeps it on their line
    (when 14em fit there) and its words wrap inside it. */
 .fm-meta-when { font-size: var(--text-xs); flex: 1 1 0; min-width: 14em; }
-.fm-meta .fm-entity-chip { font-size: var(--text-2xs); padding: 1px 9px; line-height: 1.6; }
+/* a card's pills, the same size on its title's line (its room, a spend's device, its next check) and the meta line */
+:is(.fm-meta, .fm-record-head) .fm-entity-chip { font-size: var(--text-2xs); padding: 1px 9px; line-height: 1.6; }
 .fm-fault-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 /* one problem's own Close on a card holding several: small, at the end of its line (owner, 2026-10-18) */
 .cockpit-line-actions { display: flex; gap: 6px; flex: 0 0 auto; }
@@ -402,8 +400,7 @@
    tint, no accent bar. */
 .fm-headline {
   display: flex; align-items: center; gap: 12px;
-  padding: 14px 16px; border-radius: 12px; border: 1px solid var(--hairline);
-  background: var(--bg-card);
+  padding: var(--card-pad); border-radius: var(--card-radius); background: var(--bg-card); border: var(--card-border);
 }
 .fm-headline-icon { flex: 0 0 auto; display: flex; color: var(--status-on); }
 /* The verdict is the checks' fold (owner, 2026-10-14): icon, words and chevron as one button, Save snapshot beside it. */
@@ -429,6 +426,16 @@
   .fm-entity-chip:hover { border-color: var(--accent); }
 }
 .fm-entity-chip.on { background: var(--accent); color: var(--text-on-accent); border-color: transparent; }
+/* the same pill with its own ✕ (common/RemovablePill): a member of a list, taken off by its ✕ */
+.fm-chip-removable { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; overflow-wrap: anywhere; padding-right: 4px; }
+.fm-chip-remove {
+  flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px;
+  border: none; border-radius: 999px; background: none; color: var(--text-secondary); cursor: pointer; padding: 0;
+}
+@media (hover: hover) { .fm-chip-remove:hover { background: var(--bg-card); color: var(--text-primary); } }
+/* the same pill when it only says something (a room, a next check): no hand, no hover ring */
+.fm-entity-chip.fm-chip-static { cursor: default; }
+@media (hover: hover) { .fm-entity-chip.fm-chip-static:hover { border-color: var(--hairline); } }
 
 .fm-form {
   display: flex; flex-direction: column; gap: 12px;
@@ -485,8 +492,7 @@
    is actually a concern, not a permanent coloured accent bar. */
 .fm-cap {
   display: flex; flex-direction: column; gap: 8px;
-  padding: 14px 16px; border-radius: 12px;
-  background: var(--bg-card); border: 1px solid var(--hairline);
+  padding: var(--card-pad); border-radius: var(--card-radius); background: var(--bg-card); border: var(--card-border);
 }
 .fm-cap-bar { height: 8px; border-radius: 999px; background: var(--bg-input); overflow: hidden; }
 .fm-cap-bar > span { display: block; height: 100%; background: var(--status-on); }
@@ -520,12 +526,8 @@
   .fm-thumb-add:hover { border-color: var(--accent); color: var(--accent); }
 }
 
-.fm-empty {
-  display: flex; flex-direction: column; align-items: center; gap: 10px;
-  padding: 32px 20px; text-align: center; color: var(--text-dim);
-}
-.fm-empty h3 { margin: 0; font-size: var(--text-lg); color: var(--text-primary); }
-.fm-empty p { max-width: 46ch; }
+/* a card's words of its own, as a paragraph (an empty list's card): no margin of their own, the card's gap is enough */
+.fm-card-text { margin: 0; }
 
 /* A generated recap or statement, rendered as a document (MarkdownPreview) rather than a
    monospace dump of raw Markdown — the underlying string is unchanged and is

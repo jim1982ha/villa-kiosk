@@ -8,14 +8,17 @@
 import type { FmProvenance } from "@/fm/fmTypes";
 import { agentOwned } from "@/fm/issueSource";
 import { stampText } from "@/utils/dateText";
+import Tip from "@/components/common/Tip";
 
 export default function AgentMark({ record }: { record: FmProvenance }) {
   if (!agentOwned(record)) return null;
   return (
-    <span className="fm-clause agent" title={record.updatedAt
+    <Tip text={record.updatedAt
       ? `Created or last changed by the VESTA Agent, ${stampText(record.updatedAt)}`
       : "Created or last changed by the VESTA Agent"}>
-      by VESTA Agent
-    </span>
+      <span className="fm-clause agent">
+        by VESTA Agent
+      </span>
+    </Tip>
   );
 }

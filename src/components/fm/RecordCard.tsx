@@ -11,10 +11,17 @@
 //
 // `framed`: a card of its own (the default) — or a record inside a card holding several (a ticket taken on for several
 // faults of one device: TicketsTab draws the frame). `lead`: what stands before the title (the Overview's source
-// icons); `trailing`: after the pill (its chevron), `aside` under it; `tone`: the card's own tint (a task overdue).
+// icons); `titlePills`: pills right after the title, on its line (the Overview's room, a spend's device); `check`: a
+// pill at the right of that line, a refresh icon and when (the Overview's next check); `tone`: the card's own tint.
+//
+// ⚠️ ONE LINE FOR THE NAME, ITS PLACE AND ITS NEXT CHECK (owner, 2026-10-22: "show the area right after the device name
+// … as the pills in the Spend tab … to save one line"; "instead of `Next check:` a refresh icon, as a pill, on the same
+// first line, on the right"; "remove the chevron, it's redundant"): the room had a line of its own, the next check sat
+// under a chevron on it.
 
 import type { ReactNode } from "react";
-import { FileText } from "lucide-react";
+import { FileText, RefreshCw } from "lucide-react";
+import Tip from "@/components/common/Tip";
 import ErasableRow from "./ErasableRow";
 import EvidenceRow from "./EvidenceRow";
 import RecordMeta, { RecordNotes } from "./RecordMeta";
@@ -24,13 +31,11 @@ export interface RecordCardProps {
   title: ReactNode;
   /** Its status pill: `tone` is the badge's colour class (ok, due-soon, overdue, never…). */
   status?: { text: string; tone: string };
-  subtitle?: ReactNode;
   lead?: ReactNode;
-  trailing?: ReactNode;
-  /** A short line at the right, under `trailing` — on the room's line (the Overview's "Next check", owner 2026-10-15). */
-  aside?: ReactNode;
-  /** What hovering `aside` says (the Overview's "Next check": its date and time). */
-  asideTip?: string;
+  /** Pills right after the title, on its line (the Overview's room, a spend's device). */
+  titlePills?: ReactNode;
+  /** The pill at the right of the title's line: a refresh icon, `when` beside it, `tip` on hover (the next check). */
+  check?: { when: string; tip: string };
   /** The pills before `when` (room, device chip, "by VESTA Agent"…). */
   pills?: ReactNode;
   when?: ReactNode;
@@ -49,7 +54,7 @@ export interface RecordCardProps {
   tone?: string;
 }
 
-export default function RecordCard({ title, status, subtitle, lead, trailing, aside, asideTip, pills, when, notes, body, photoIds,
+export default function RecordCard({ title, status, lead, titlePills, check, pills, when, notes, body, photoIds,
   documentIds, amount, actions, erase, onOpen, framed = true, tone }: RecordCardProps) {
   const inside = (
     <>
@@ -57,12 +62,16 @@ export default function RecordCard({ title, status, subtitle, lead, trailing, as
         {lead && <span className="fm-record-lead">{lead}</span>}
         <div className="fm-row-title">
           <strong>{title}</strong>
-          {subtitle && <span className="fm-record-subtitle muted">{subtitle}</span>}
+          {titlePills}
         </div>
         {status && <span className={`fm-badge ${status.tone}`}>{status.text}</span>}
-        {aside ? (
-          <span className="fm-record-side">{trailing}<span className="fm-record-aside muted" title={asideTip}>{aside}</span></span>
-        ) : trailing}
+        {check && (
+          <Tip text={check.tip}>
+            <span className="fm-entity-chip fm-chip-static fm-record-check" aria-label={check.tip}>
+              <RefreshCw size={12} aria-hidden="true" />{check.when}
+            </span>
+          </Tip>
+        )}
       </div>
       {/* its text on the left, its cost and buttons on the right of it, inside the card (owner, 2026-10-14) */}
       <div className="fm-record-body">

@@ -3,10 +3,10 @@
 // (AppConfig.unavailableByDesign, shared). Picked, never typed: the same pills and picker as a device group's members.
 // What picking one does is the entity store's (ha/unavailableByDesign); this only edits the list.
 
-import { X } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
 import EntityPicker from "./EntityPicker";
+import RemovablePill from "@/components/common/RemovablePill";
 
 /** The list with `id` added (once) or removed — the one edit this section makes. */
 export function withDevice(list: readonly string[], id: string, on: boolean): string[] {
@@ -23,18 +23,8 @@ export default function UnavailableByDesign() {
     <>
       <div className="row" style={{ flexWrap: "wrap", gap: 6, alignItems: "center" }}>
         {ids.map((id) => (
-          <span key={id} className="body-text" title={id}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 6, fontSize: "var(--text-xs)",
-              padding: "4px 8px", borderRadius: 999, background: "var(--bg-input)",
-              maxWidth: "100%", overflowWrap: "anywhere",
-            }}>
-            {name(id)}
-            <button className="icon-btn" style={{ width: 20, height: 20, borderRadius: 999, flexShrink: 0 }}
-              title="Take it off this list" aria-label={`Take ${name(id)} off this list`} onClick={() => set(id, false)}>
-              <X size={16} />
-            </button>
-          </span>
+          <RemovablePill key={id} label={name(id)} tip={id} removeLabel={`Take ${name(id)} off this list`}
+            onRemove={() => set(id, false)} />
         ))}
         <div style={{ flex: "1 1 180px", minWidth: 140 }}>
           <EntityPicker onChange={(id) => set(id, true)} placeholder="Add a device…" hideCurrentLabel compact />

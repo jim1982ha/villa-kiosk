@@ -751,6 +751,8 @@ input[type="range"]::-moz-range-thumb {
    modals (z-index 200), and never part of the chart's layout. The anchor is
    the zero-size point the chart positions, which ChartTip measures. */
 .chart-tip { z-index: 300; }
+/* The same card for anything that is not a chart (common/Tip): above every window, a line or two of words. */
+.ui-tip { z-index: 300; white-space: normal; max-width: min(320px, calc(100vw - 24px)); animation: fadeIn 0.12s ease-out; }
 .chart-tip-anchor { position: absolute; width: 0; height: 0; pointer-events: none; }
 .chart-tip strong { display: flex; align-items: center; gap: 6px; font-weight: 600; }
 .chart-tip .key { display: inline-block; width: 8px; height: 8px; border-radius: 4px; flex: 0 0 auto; }

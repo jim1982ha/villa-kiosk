@@ -188,9 +188,15 @@ export function nextCheckAt(problems: readonly CheckedProblem[], cadence: AgentC
  *  "live". The Agent's numbers are the ones it says (its heartbeat's `cadence`) — never a copy: one that does not say
  *  gets none. */
 export function nextCheck(problems: readonly CheckedProblem[], cadence: AgentCadence | null, now: Date = new Date()): string {
+  return `Next check: ${nextCheckWhen(problems, cadence, now)}`;
+}
+
+/** nextCheck's answer alone, without its "Next check:" — what the card's pill says beside its refresh icon (owner,
+ *  2026-10-22: "instead of `Next check:` show a refresh icon"): "within 5 min", "02:00", "live", "by hand". */
+export function nextCheckWhen(problems: readonly CheckedProblem[], cadence: AgentCadence | null, now: Date = new Date()): string {
   const next = soonest(problems, cadence, now);
-  if (next === undefined) return "Next check: live";
-  if (next === "hand") return "Next check: by hand";
-  if (next === "agent") return "Next check: by the VESTA Agent";
-  return `Next check: ${next.words}`;
+  if (next === undefined) return "live";
+  if (next === "hand") return "by hand";
+  if (next === "agent") return "by the VESTA Agent";
+  return next.words;
 }

@@ -16,6 +16,7 @@ import MarkdownPreview from "./MarkdownPreview";
 import { SourceIconRow } from "./sourceIcons";
 import { CHECK_WORDS, VERDICT_WORDS, type CheckState, type CheckTarget, type ReadinessCheck, type ReadinessResult } from "@/fm/readiness";
 import { toneClass } from "@/fm/tone";
+import RecordCard from "./RecordCard";
 
 const ICON: Record<CheckState, typeof CheckCircle2> = {
   pass: CheckCircle2, warn: AlertTriangle, fail: XCircle,
@@ -108,21 +109,17 @@ export function ReadinessChecks({ readiness, label, onOpenEntity, onOpenCheck, s
           // unlocked device or on lights are shown as pills"); past 8, "+N more" — the button opens the whole list.
           const chips = !!c.entityIds?.length;
           return (
-            <div key={c.id} className={`fm-row ${toneClass(CHECK_WORDS[c.state].tone)}`}>
-              <span className={`fm-check-icon ${c.state}`}><Icon size={18} /></span>
-              <div className="fm-row-main">
-                <div className="fm-row-title">
-                  <strong>{c.label}</strong>
-                  {/* Same line as the title, not stacked below the detail —
-                      stacking it made ONE row taller than every other
-                      readiness row next to it (they're read as a grid of
-                      cards, and an outlier height there reads as a bug). */}
-                  {opens && (
-                    <button className="btn ghost fm-row-title-action" onClick={() => onOpenCheck(opens)}>
-                      {opens.label} <ChevronRight size={16} />
-                    </button>
-                  )}
-                </div>
+            // THE Cockpit card (RecordCard), as every list (owner, 2026-10-22: "wherever there is a card, the same style")
+            <RecordCard key={c.id} tone={toneClass(CHECK_WORDS[c.state].tone)}
+              lead={<span className={`fm-check-icon ${c.state}`}><Icon size={16} /></span>}
+              title={c.label}
+              // on the title's line, not stacked below the detail: one card taller than its neighbours reads as a bug
+              titlePills={opens ? (
+                <button className="btn ghost fm-row-title-action" onClick={() => onOpenCheck(opens)}>
+                  {opens.label} <ChevronRight size={16} />
+                </button>
+              ) : undefined}
+              body={<>
                 <div className="fm-row-sub muted"><CheckDetail check={c} /></div>
                 {chips && c.entityIds && (
                   <div className="fm-chiprow">
@@ -138,8 +135,7 @@ export function ReadinessChecks({ readiness, label, onOpenEntity, onOpenCheck, s
                     )}
                   </div>
                 )}
-              </div>
-            </div>
+              </>} />
           );
         })}
       </div>}

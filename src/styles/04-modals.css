@@ -14,7 +14,7 @@
 .tp-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 16px; max-width: 900px; margin: 0 auto; }
 .tp-card {
   height: 120px; border-radius: 16px; background: var(--bg-card);
-  border: 1px solid var(--hairline); overflow: hidden; position: relative;
+  border: var(--card-border); overflow: hidden; position: relative;
   display: flex; align-items: flex-end; padding: 14px; text-align: left;
   background-size: cover; background-position: center;
 }

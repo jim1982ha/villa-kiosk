@@ -22,6 +22,7 @@ import FacilitySections, { FACILITY_TABS, type FacilityTab } from "@/components/
 import { useFacilityLiveView } from "@/fm/FmDataContext";
 import CockpitOverview from "./CockpitOverview";
 import DialogLayer from "@/components/common/DialogLayer";
+import Tip from "@/components/common/Tip";
 
 export interface CockpitModalProps {
   onClose: () => void;
@@ -86,12 +87,13 @@ export default function CockpitModal({
               Advanced Settings' header buttons, for the profiles holding `doors.updates` (owner, 2026-10-14). It only
               SAYS so — nothing to press; it used to be a line at the bottom of the Overview. */}
           {updatesAvailable > 0 && (
-            <span className="icon-btn header-icon-btn header-icon-badge" role="status"
-              title={updatesTip(updates)}
-              aria-label={`${updatesAvailable} update${updatesAvailable === 1 ? "" : "s"} available`}>
-              <RefreshCw size={18} />
-              <span className="icon-btn-count" aria-hidden="true">{formatCountBadge(updatesAvailable)}</span>
-            </span>
+            <Tip text={updatesTip(updates)}>
+              <span className="icon-btn header-icon-btn header-icon-badge" role="status"
+                aria-label={`${updatesAvailable} update${updatesAvailable === 1 ? "" : "s"} available`}>
+                <RefreshCw size={18} />
+                <span className="icon-btn-count" aria-hidden="true">{formatCountBadge(updatesAvailable)}</span>
+              </span>
+            </Tip>
           )}
         </div>
         {tabs.length > 1 && <ModalTabs tabs={tabs} active={shownTab} onSelect={onTab} label="Cockpit sections" />}

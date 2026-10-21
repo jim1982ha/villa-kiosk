@@ -11,7 +11,8 @@ import { localStamp } from "@/fm/fmEngine";
 import { DOCUMENT_KINDS } from "@/fm/monthlyDocument";
 import type { FmSavedDocument } from "@/fm/fmTypes";
 import AgentMark from "./AgentMark";
-import RecordMeta from "./RecordMeta";
+import Tip from "@/components/common/Tip";
+import RecordCard from "./RecordCard";
 
 export default function SavedDocumentsList({
   kind, onOpen,
@@ -48,27 +49,19 @@ export function SavedDocumentRows({ kind, docs: all, onOpen, onRemove }: {
       </div>
       <div className="fm-list">
         {docs.map((doc) => (
-          <div key={doc.id} className="fm-row">
-            <div className="fm-row-main">
-              <div className="fm-row-title">
-                <strong>{title(doc)}</strong>
-              </div>
-              <RecordMeta when={`Saved ${localStamp(doc.generatedAt)}`}>
-                <AgentMark record={doc} />
-              </RecordMeta>
-            </div>
-            <button className="btn ghost" onClick={() => onOpen(doc)}>
-              <Eye size={16} /> Reopen
-            </button>
-            <button
-              className="icon-btn"
-              onClick={() => onRemove(doc.id)}
-              aria-label={`Delete saved ${noun} for ${title(doc)}`}
-              title={`Delete this saved ${noun}`}
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
+          // THE Cockpit card (RecordCard), as every list (owner, 2026-10-22)
+          <RecordCard key={doc.id} title={title(doc)} when={`Saved ${localStamp(doc.generatedAt)}`}
+            pills={<AgentMark record={doc} />}
+            actions={<>
+              <button className="btn ghost" onClick={() => onOpen(doc)}>
+                <Eye size={16} /> Reopen
+              </button>
+              <Tip text={`Delete this saved ${noun}`}>
+                <button className="icon-btn" onClick={() => onRemove(doc.id)} aria-label={`Delete saved ${noun} for ${title(doc)}`}>
+                  <Trash2 size={16} />
+                </button>
+              </Tip>
+            </>} />
         ))}
       </div>
     </div>

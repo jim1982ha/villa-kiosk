@@ -5,7 +5,8 @@
 // list (SummaryGroupPanel), and the activity feed told nothing used.
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ChevronRight, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
+import Tip from "@/components/common/Tip";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useFmData } from "@/fm/FmDataContext";
@@ -158,14 +159,13 @@ export function AttentionCard({ card, onOpenEntity, actions, lineActions }: {
   return (
     <RecordCard
       title={card.title}
-      subtitle={card.room}
+      // its room as a pill right after its name, on one line (owner, 2026-10-22) — the Spend tab's device pill
+      titlePills={card.room ? <span className="fm-entity-chip fm-chip-static">{card.room}</span> : undefined}
       // where its (first) problem comes from, in place of a warning sign (owner, 2026-10-14) — legend: the (i)
       lead={card.lead ? <SourceIcons {...card.lead} /> : undefined}
-      trailing={open ? <ChevronRight size={16} className="muted" aria-hidden /> : undefined}
-      // when its problems are read again, on the room's line under the chevron (owner, 2026-10-15); hovering it says
-      // when, as a date and time (owner, 2026-10-19)
-      aside={card.nextCheck.text}
-      asideTip={card.nextCheck.at ?? undefined}
+      // when its problems are read again: a refresh icon and when, a pill at the right of its name (owner, 2026-10-22);
+      // hovering it says it in words, with its date and time (owner, 2026-10-19). No chevron: the card is the button.
+      check={{ when: card.nextCheck.when, tip: card.nextCheck.tip }}
       onOpen={open ? () => onOpenEntity(open) : undefined}
       body={(
         <ul className="cockpit-attention-subs">
@@ -184,7 +184,7 @@ function CockpitAttentionSub({ line, actions }: { line: CardLine; actions?: Reac
         {/* in the card's icon column (RecordCard's gutter), not before the text: every line's text lines up */}
         {line.icons && <span className="fm-record-gutter-icon"><SourceIcons {...line.icons} size={14} /></span>}
         <span className="cockpit-attention-sub-text">
-          <span className="cockpit-attention-sub-title" title={line.text}>{line.text}</span>
+          <Tip text={line.text}><span className="cockpit-attention-sub-title">{line.text}</span></Tip>
           {/* what last happened about it on Telegram — a reminder, an escalation, a button pressed (owner, 2026-10-14) */}
           {line.latest && <span className="cockpit-attention-latest">{line.latest.note} · {localStamp(line.latest.at)}</span>}
           {/* when the VESTA Agent closes it if it stays right (owner, 2026-10-21) */}
