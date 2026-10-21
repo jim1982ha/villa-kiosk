@@ -65,6 +65,10 @@ export const CAPABILITIES = [
   /** Who is home and since when (the presence window's People). The owner's only: the add-on never relays a person
    *  to a guest or ops session either (ha-commands.json readDomains), so this only matches what they can read. */
   "seePeople",
+  /** Turn a camera that moves and sound its siren, from its video (panelRules.cameraControlsOf). The owner's only:
+   *  the add-on refuses a button or a siren to every other profile (ha-commands.json serviceDomains), so this only
+   *  matches what they can do. */
+  "controlCameras",
 ] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 

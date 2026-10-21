@@ -74,5 +74,24 @@ console.log("\n  the caller:");
   ck("  ...nor a literal colour", !/new Color3\(0\.2, 0\.75, 0\.3\)|new Color3\(0\.9, 0\.2, 0\.2\)|new Color3\(0\.1, 0\.35, 0\.4\)/.test(ev));
 }
 
+// owner, 2026-10-21: "if the associated device is turning ON (the Laundry Door sensor), would the entity badge turn red
+// as well? … so that I can remove the dedicated door sensor badge" — a linked entity needing attention rings the badge
+// red; its face stays its own state, and the sensor lists itself in Needs attention (the lock is not listed twice)
+{
+  const { deviceLook, storeLookSource } = await import("@/utils/deviceActivity");
+  const look = (door, { hidden = false, lock = "locked" } = {}) => deviceLook("lock.l", storeLookSource({
+    "lock.l": { entity_id: "lock.l", state: lock, attributes: {} },
+    "binary_sensor.d": { entity_id: "binary_sensor.d", state: door, attributes: { device_class: "door" } },
+  }, { entityMap: { "lock.l": { entityId: "lock.l", type: "lock", linkedEntityId: "binary_sensor.d" } },
+       isHidden: (id) => hidden && id === "binary_sensor.d" }));
+  const open = look("on"), shut = look("off");
+  ck("a lock whose linked door sensor reads Open: its badge rings red, its face still says Locked",
+     open.ring === "alert" && open.kind === "alert" && open.face !== "alert" && !open.alert, open);
+  ck("  ...door closed: no red ring", shut.ring !== "alert" && shut.kind !== "alert", shut);
+  ck("  ...a hidden or lost sensor rings nothing red",
+     look("on", { hidden: true }).ring !== "alert" && look("unavailable").ring !== "alert");
+  ck("  ...an unlocked lock stays red, door open or not", look("on", { lock: "unlocked" }).face === "alert" && look("off", { lock: "unlocked" }).ring === "alert");
+}
+
 done("✅ one reading, one look");
 

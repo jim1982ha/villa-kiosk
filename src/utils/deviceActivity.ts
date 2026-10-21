@@ -50,6 +50,11 @@ export interface DeviceReading {
    *  pump-power sensor. Held differently by each caller (the map keeps a live
    *  set, a panel reads the store), so the RULE is shared and not the plumbing. */
   linkedOn: boolean;
+  /** Does the entity this one is LINKED to need attention — its own badge red (a lock's door sensor reading Open):
+   *  this badge's ring is red too, and its kind "alert" (owner, 2026-10-21: "if the associated device is turning ON …
+   *  would the entity badge turn red as well?"). Its face stays its own state; the linked entity lists itself in
+   *  "Needs attention". */
+  linkedAlert: boolean;
   /** The state that is a fault for this reading's device_class (alertStateFor). `undefined` means "this reading is
    *  never a fault". */
   alertState: string | undefined;
@@ -112,6 +117,7 @@ export function badgeKindFor(r: DeviceReading): BadgeKind {
   // runs is a device ON. As "alert" it rang every room chip and count card that
   // holds it red — the Map-colours legend's "Needs attention" — while nothing
   // was wrong (the Swimming Pool chip, its jet pump running).
+  if (r.linkedAlert) return "alert";
   if (r.linkedOn) return "on";
   return classifyDeviceActivity(r);
 }
@@ -153,10 +159,12 @@ export function badgeKindFor(r: DeviceReading): BadgeKind {
 export function badgeFaceAndRing(
   r: DeviceReading,
 ): { face: DeviceSurfaceState; ring: DeviceSurfaceState } {
-  const own = badgeKindFor({ ...r, linkedOn: false });
+  const own = badgeKindFor({ ...r, linkedOn: false, linkedAlert: false });
   if (own === "unavailable") return { face: "unavailable", ring: r.critical ? "alert" : "unavailable" };
   const face = SURFACE_STATE[own];
-  // A face already alerting keeps its red ring: that IS needs-attention.
+  // A face already alerting keeps its red ring: that IS needs-attention. So does a linked entity needing it (a lock's
+  // door sensor reading Open, owner 2026-10-21): the badge rings red over its own face.
+  if (r.linkedAlert) return { face, ring: "alert" };
   return { face, ring: r.linkedOn && face !== "alert" ? "active" : face };
 }
 
@@ -248,7 +256,7 @@ export type MeshLook =
   | { kind: "tint"; tone: "secure" | "alert" | "unavailable" };
 
 export function meshLookFor(r: DeviceReading): MeshLook {
-  const kind = badgeKindFor({ ...r, linkedOn: false });
+  const kind = badgeKindFor({ ...r, linkedOn: false, linkedAlert: false });
   switch (r.type) {
     case "light":
     case "cover":
@@ -385,16 +393,25 @@ export function readingOf(entityId: string, source: LookSource): DeviceReading {
   const entity = source.state(entityId) ?? phantomEntity(entityId);
   const linkedId = source.config.entityMap[entityId]?.linkedEntityId;
   let linkedOn = false;
+  let linkedAlert = false;
   if (linkedId) {
     const pending = source.pendingPower?.(linkedId);
     linkedOn = pending !== undefined
       ? pending
       : devicePower(source.state(linkedId), linkedId).position === "on";
+    // the linked entity's OWN badge, by the one rule (its own links not followed: one step, never a loop)
+    const linked = source.state(linkedId);
+    linkedAlert = !!linked && badgeKindFor({
+      type: source.typeOf(linkedId), entity: linked, linkedOn: false, linkedAlert: false,
+      alertState: alertStateFor(linked.attributes.device_class as string | undefined),
+      critical: false, hidden: source.config.isHidden(linkedId),
+    }) === "alert";
   }
   return {
     type: source.typeOf(entityId),
     entity,
     linkedOn,
+    linkedAlert,
     alertState: alertStateFor(entity.attributes.device_class as string | undefined),
     critical: source.config.isCritical?.(entityId) ?? false,
     hidden: source.config.isHidden(entityId),
@@ -406,7 +423,7 @@ export function deviceLook(entityId: string, source: LookSource): DeviceLook {
   const r = readingOf(entityId, source);
   const { face, ring } = badgeFaceAndRing(r);
   const kind = badgeKindFor(r);
-  const own = badgeKindFor({ ...r, linkedOn: false });
+  const own = badgeKindFor({ ...r, linkedOn: false, linkedAlert: false });
   const switchable = hasOnOff(entityId);
   return {
     type: r.type, face, ring, kind, own,

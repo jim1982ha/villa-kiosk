@@ -26,6 +26,7 @@ import { TAP_MOVE_TOL_PX, LONG_PRESS_MS } from "@/utils/tapThresholds";
 import { useHistorySource } from "@/hooks/useHistorySource";
 import { cameraBarHistory } from "./cameraStatusBar";
 import StateTimeline from "./StateTimeline";
+import CameraDeviceButtons from "./CameraDeviceButtons";
 
 interface Props extends PanelProps {
   /** Lets the camera pin continuous rendering while the stream is open. */
@@ -670,6 +671,8 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
               .icon-btn svg (styles.css) sizes every icon in this cluster to
               a consistent 55% of its button uniformly, at every breakpoint,
               instead of a hand-picked pixel value per icon. */}
+          {/* the camera's own moves and siren, the owner's (CameraDeviceButtons) */}
+          <CameraDeviceButtons cameraId={mapping.entityId} order={vOrder} />
           {linked && (
             <button
               className={`icon-btn camera-linked-btn${linked.isOn ? " on" : ""}`}

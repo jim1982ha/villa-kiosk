@@ -1,3 +1,15 @@
+## 2.496.465
+
+### Changed
+- **A device's badge rings red when its linked sensor needs attention.** A lock whose linked door sensor reads Open
+  wears a red ring on the map, its room chip counts it red, and its face still says Locked or Unlocked. The door
+  sensor's own line in "Needs attention" says what is wrong, so the lock is not listed a second time.
+
+### Added
+- **A camera that turns, and its siren, from its video.** When a camera's device has move buttons and a siren, its
+  video shows them among its buttons: turn left, up, down and right, and the siren (red while it sounds; tap again to
+  stop it). For the owner only.
+
 ## 2.496.464
 
 ### Changed

@@ -16,7 +16,8 @@
       "deniedTypes": [],
       "capabilities": [
         "administer", "controlEntities", "openSettings", "customizeAppearance", "editConfig", "manageModel",
-        "manageFacility", "reportFault", "listUnmappedDevices", "seeUpdates", "viewAgent", "seePeople"
+        "manageFacility", "reportFault", "listUnmappedDevices", "seeUpdates", "viewAgent", "seePeople",
+        "controlCameras"
       ]
     },
     "ops": {
