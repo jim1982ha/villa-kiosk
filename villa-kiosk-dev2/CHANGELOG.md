@@ -1,3 +1,11 @@
+## 2.496.467
+
+### Changed
+- **A camera's motion sensor is drawn like a linked sensor.** In a camera's window, its motion sensor's band sits
+  under the camera's own band, at the same width and over the same period, instead of a dot and "Clear · motion
+  sensor" at the top.
+- **Each of these bands says what it is.** Its name is followed by "(linked entity)" or "(motion sensor)".
+
 ## 2.496.466
 
 ### Changed
