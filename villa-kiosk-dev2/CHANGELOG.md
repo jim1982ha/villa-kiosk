@@ -1,3 +1,21 @@
+## 2.496.476
+
+### Changed
+- **A camera's buttons stay on the video for 10 seconds.** They faded after 2 seconds, too soon to find its moves,
+  its siren or its sound.
+- **A camera's video window shows its linked sensor.** A thin strip under the camera's bar shows the sensor's day
+  (a noise or door sensor), named when you point at it. The other windows already drew it as a band.
+
+### Fixed
+- **A camera placed on the map is in the camera list, even when the villa's system hides it.** Hiding its stream
+  removed the whole camera from the list and from previous/next, while its badge stayed on the map.
+- **A motion sensor that the villa's system gives no type is never a fault.** One whose name says "motion", "pir",
+  "presence" or "occupancy" was a "Motion detected" pop-up and, at the same time, a fault in "Needs attention" each
+  time someone walked past.
+- **A device with no badge keeps its room.** A device drawn only by its open/closed shapes, or marked "nobadge",
+  fell into "Other" when the villa's system gave it no room, and its room no longer glowed. Its room now comes from
+  where it is drawn.
+
 ## 2.496.475
 
 ### Changed
