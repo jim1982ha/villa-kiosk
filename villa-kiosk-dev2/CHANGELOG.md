@@ -1,3 +1,20 @@
+## 2.496.481
+
+### Changed
+- **A Cockpit card is one line shorter.** Its room is a pill right after the device's name ("LED Strip [Living
+  Room]"), no longer a line of its own. Its next check is a pill at the right of that line: a refresh icon and when
+  ("⟳ within 5 min"); hovering it says it in words, with the date and time. The chevron is gone: the card itself opens
+  the device.
+- **Spend cards look like the Overview's.** The device a spend is for is a pill right after its name, as a room is
+  on the Overview; its category and when stay on the line below.
+- **Every Cockpit tooltip is the Kiosk's own.** Hovering anything in the Cockpit (a card's next check, a problem's
+  words, a device pill, "by VESTA Agent", the updates count, a delete button) and the Save / Cancel of every window
+  shows the same tooltip as the charts and the map, not the browser's grey box.
+- **One card everywhere.** The maintenance tasks, the saved recaps and snapshots, the readiness checks, and the empty
+  "No maintenance schedule yet" / "No ticket in progress" messages are now the same card as the Overview's. The
+  empty messages were a large centred block of their own. Every card's frame is set in one place, and the device
+  pills of Settings' device groups and "Unavailable by design" list are the Cockpit's pill.
+
 ## 2.496.480
 
 ### Fixed
