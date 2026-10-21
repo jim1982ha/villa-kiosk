@@ -17,7 +17,7 @@ const entities = Object.fromEntries([
   E("sensor.door_battery", "unavailable"),
 ].map((e) => [e.entity_id, e]));
 const villa = new Set(Object.keys(entities));
-const devices = { ids: [...villa], unavailable: ["climate.bed", "camera.pool", "sensor.door_battery"], has: (id) => villa.has(id), deviceOf: (id) => id, deviceOfRecord: (id) => id, isCritical: () => false };
+const devices = { ids: [...villa], unavailable: ["climate.bed", "camera.pool", "sensor.door_battery"], has: (id) => villa.has(id), deviceOf: (id) => id, deviceOfRecord: (id) => id, isCritical: () => false, isHidden: () => false };
 const r = buildReadiness(entities, EMPTY_FM_DATA, { devices: devices, attentionItems: [] }, {});
 const opens = (c) => c.opens ? `${c.opens.label} → ${c.opens.group.title} [${c.opens.group.entityIds.join(",")}]${c.opens.health ? " (health)" : ""}` : "-";
 

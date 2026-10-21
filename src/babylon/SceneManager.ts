@@ -2632,6 +2632,11 @@ export class SceneManager {
     this.visuals.setCriticalDevices(ids);
   }
 
+  /** Hidden in the villa's system (deviceGroups.hiddenIn): never red or amber on the map, as nowhere else. */
+  setHiddenDevices(isHidden: (entityId: string) => boolean): void {
+    this.visuals.setHiddenDevices(isHidden);
+  }
+
   private disposed = false;
   /** One-shot guard so handlePageShow's reload can never loop. */
   private reloadedAfterDispose = false;

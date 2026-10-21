@@ -17,7 +17,7 @@ const entities = {
   "sensor.critical_ok": ent("sensor.critical_ok", "3"),
 };
 const critical = new Set(["sensor.critical", "sensor.critical_ok"]);
-const looks = storeLookSource(entities, { entityMap: {}, isCritical: (id) => critical.has(id) });
+const looks = storeLookSource(entities, { entityMap: {}, isCritical: (id) => critical.has(id), isHidden: () => false });
 
 const tile = (id) => draw(h(SummaryEntityRow, {
   label: id, stateText: "x", look: deviceLook(id, looks), badgeSrc: "data:,", notInHa: false, offMap: false,
@@ -54,6 +54,6 @@ ck("  ...its reading in red", /color:\s*var\(--status-danger\)/.test(rule(".summ
 const panel = readFileSync(new URL("../../src/components/panels/SummaryGroupPanel.tsx", import.meta.url), "utf8");
 ck("the device lists draw this tile, with the row's own look", /const look = deviceLook\(id, looks\);/.test(panel)
    && /const badge = look;/.test(panel) && /<SummaryEntityRow[\s\S]*?look=\{badge\}/.test(panel)
-   && /storeLookSource\(entities, \{ \.\.\.config, isCritical: villaDevices\.isCritical \}\)/.test(panel));
+   && /storeLookSource\(entities, \{ \.\.\.config, isCritical: villaDevices\.isCritical, isHidden: villaDevices\.isHidden \}\)/.test(panel));
 
 done("✅ a device that lost contact wears the whole tile, a critical one its red ring");

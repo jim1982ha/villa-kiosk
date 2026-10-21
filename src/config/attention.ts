@@ -257,8 +257,11 @@ export function buildAttentionItems(opts: {
       latest: lastNoted(t),
       source: faultSource(t),
       check: t.check,
-      // lost contact (isOffline) with an entity the villa's system has: the device's offline line takes it
-      offline: !!entityId && !!entities[entityId] && isOffline(entities[entityId]),
+      // lost contact — isOffline, or an entity the villa's system no longer has (Missing), as devices.unavailable
+      // reads it: the device's offline line takes it. ⚠️ A MISSING ENTITY TOO (architecture review, 2026-10-21): only
+      // one the villa's system still had counted, so a ticket on a sibling deleted with its device stood as a second
+      // line under the device's "Missing".
+      offline: !!entityId && (entities[entityId] ? isOffline(entities[entityId]) : missingFromHa(entities, entityId)),
     });
   }
 
@@ -283,7 +286,7 @@ export function buildAttentionItems(opts: {
   // too, and was never meant to be villa-facing. An unavailable device is
   // never `alert` (its face is the amber "unavailable"), so it is listed once,
   // above, as that.
-  const looks = storeLookSource(entities, { entityMap });
+  const looks = storeLookSource(entities, { entityMap, isCritical: devices.isCritical, isHidden: devices.isHidden });
   for (const id of devices.ids) {
     const entity = entities[id];
     if (!entity || !deviceLook(id, looks).alert) continue;

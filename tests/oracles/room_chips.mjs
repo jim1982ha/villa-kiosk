@@ -19,7 +19,7 @@ const STATE_OF = { on: ["light.x", "on"], off: ["light.x", "off"], alert: ["lock
 const lookOf = (kind) => {
   if (!kind) return undefined;
   const [id, state] = STATE_OF[kind];
-  return deviceLook(id, storeLookSource({ [id]: { entity_id: id, state, attributes: {} } }, { entityMap: {} }));
+  return deviceLook(id, storeLookSource({ [id]: { entity_id: id, state, attributes: {} } }, { entityMap: {}, isHidden: () => false }));
 };
 const M = (id, room, x, kind) => ({ id, room, pos: { x, y: 1, z: 0 }, look: lookOf(kind) });
 const members = [

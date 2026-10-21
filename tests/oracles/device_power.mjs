@@ -44,7 +44,7 @@ ck("the quick tap and the linked switch throw through it; the linked switch know
 {
   const { readingOf, storeLookSource } = await import("@/utils/deviceActivity");
   const cfg = { entityMap: { "sensor.p": { entityId: "sensor.p", type: "sensor", linkedEntityId: "lock.l" },
-                             "sensor.q": { entityId: "sensor.q", type: "sensor", linkedEntityId: "cover.c" } } };
+                             "sensor.q": { entityId: "sensor.q", type: "sensor", linkedEntityId: "cover.c" } }, isHidden: () => false };
   const linked = (lock, cover) => {
     const src = storeLookSource({ "sensor.p": e("sensor.p", "5"), "sensor.q": e("sensor.q", "5"), "lock.l": e("lock.l", lock), "cover.c": e("cover.c", cover) }, cfg);
     return [readingOf("sensor.p", src).linkedOn, readingOf("sensor.q", src).linkedOn];

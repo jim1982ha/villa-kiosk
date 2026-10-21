@@ -88,7 +88,7 @@ console.log("  a critical device that lost contact is red everywhere, not only o
   const crit = villaDevices({ entityMap, deviceGroups: [], hidden: new Set(), dismissed: new Set(), mappedEntityIds: new Set(ids),
     entities, entityDeviceIds: { "lock.door": "dev-door", "sensor.door_battery": "dev-door" }, folding,
     critical: new Set(["sensor.door_battery"]) });
-  const config = { entityMap, isCritical: crit.isCritical };
+  const config = { entityMap, isCritical: crit.isCritical, isHidden: () => false };
   const store = storeLookSource(entities, config);
   const map = mapLookSource(new Map(Object.entries(entities)), new Map(), () => config);
   const door = deviceLook("lock.door", store), th = deviceLook("sensor.th_humidity", store);
@@ -115,7 +115,7 @@ console.log("  a critical device that lost contact is red everywhere, not only o
      ["components/panels/ReadingPill.tsx", "components/panels/UnavailableNotice.tsx", "components/panels/LockPanel.tsx"]
        .every((f) => /lostPillTone\(/.test(src(f)) && /usePanelActions\(\)\.badge\?\.critical/.test(src(f)))
      && !/status-pill unavailable" title/.test(src("components/panels/UnavailableNotice.tsx")));
-  ck("nothing is red before the list is read", !deviceLook("lock.door", storeLookSource(entities, { entityMap })).critical);
+  ck("nothing is red before the list is read", !deviceLook("lock.door", storeLookSource(entities, { entityMap, isHidden: () => false })).critical);
 }
 
 console.log("  the proxy's answer:");
