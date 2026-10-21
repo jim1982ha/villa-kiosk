@@ -181,6 +181,18 @@ const pillTone = (id: string, state: string | undefined): string =>
 /** Where a lock's bolt is (stateColors.lockBolt): the one reading a panel asks here, with its pill. */
 export { lockBolt, type LockBolt } from "@/utils/stateColors";
 
+/** The lock window's buttons, the first drawn large (owner, 2026-10-21: "why do we see the button to unlock the door
+ *  as the door is already …" and "the unlock button shall look the same as this Lock button"): the ONE action its
+ *  bolt calls for — locked: Unlock; unlocked or open: Lock — and, while the lock cannot say where its bolt is (jammed,
+ *  on its way, no word), both, Lock first. It showed "Lock door" AND "Unlock door…" on an unlocked door, and an
+ *  "Already locked — re-lock" button on a locked one. */
+export function lockButtons(bolt: "thrown" | "open" | "jammed" | "moving" | "unknown"): ("lock" | "unlock")[] {
+  if (bolt === "thrown") return ["unlock"];
+  if (bolt === "open") return ["lock"];
+  return ["lock", "unlock"];
+}
+
+
 /** The tone of a window's pill once its device is known to be CRITICAL and lost (`critical`: the header's
  *  deviceLook.critical — PanelActions.badge.critical): its lost ("unavailable") pill takes the danger red, as the
  *  Cockpit paints that device; every other tone stays. ⚠️ ONE RULE FOR THE THREE LOST PILLS (2.496.428): the

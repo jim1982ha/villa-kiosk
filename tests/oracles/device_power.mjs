@@ -81,7 +81,16 @@ ck("the power button: its ask comes from deviceSwitch, through the one hook",
    /deviceSwitch\(entity, mapping\.entityId, mapping\)/.test(cf) && /ask=\{sw\.ask\}/.test(cf) && /useAskFirst\(ask,/.test(pt) && /onClick=\{request\}/.test(pt));
 ck("the lock panel: lock and unlock both through switchAsk and the hook; nothing unlocks outside it",
    /useAskFirst\(switchAsk\(\{ domain: "lock", service: "unlock" \}, mapping\)/.test(lp)
-   && (lp.match(/unlockDoor/g) ?? []).length === 1 && /onClick=\{unlock\.request\}/.test(lp));
+   && (lp.match(/unlockDoor/g) ?? []).length === 1 && /const ask = b === "lock" \? lock : unlock;/.test(lp)
+   && (lp.match(/onClick=\{ask\.request\}/g) ?? []).length === 2 && !/onClick=\{(?!ask\.request)/.test(lp));
+// owner, 2026-10-21: one button, the action the bolt calls for; both only while the lock cannot say
+{
+  const { lockButtons } = await import("@/config/reading");
+  ck("the lock window: locked → Unlock only, unlocked → Lock only; jammed, moving or unknown → both, Lock first",
+     lockButtons("thrown").join() === "unlock" && lockButtons("open").join() === "lock"
+     && ["jammed", "moving", "unknown"].every((b) => lockButtons(b).join() === "lock,unlock")
+     && /const buttons = lockButtons\(bolt\);/.test(lp) && /\{buttons\.map\(\(b, n\) =>/.test(lp));
+}
 ck("the linked switch: deviceSwitch with the linked device's own flag, asked by a dialog the panels cannot skip",
    /deviceSwitch\(entities\[linkedEntityId\], linkedEntityId,/.test(op) && /useAskFirst\(linkedPower\?\.ask \?\? null, linkedToggle\.toggle\)/.test(op)
    && /toggle: linkedAsk\.request \}/.test(op) && /linkedAsk\.asking && \(\s*<AskDialog/.test(d));

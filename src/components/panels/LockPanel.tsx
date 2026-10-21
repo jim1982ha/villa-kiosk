@@ -5,7 +5,7 @@ import type { PanelProps } from "@/types/panel.types";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { usePendingAck } from "@/hooks/usePendingAck";
-import { lockBolt, lockPill, lostPillTone } from "@/config/reading";
+import { lockBolt, lockButtons, lockPill, lostPillTone } from "@/config/reading";
 import { usePanelActions } from "./PanelActionsContext";
 import { tapFeedback, successFeedback } from "@/utils/haptics";
 import ControlFrame from "./ControlFrame";
@@ -17,7 +17,7 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
   const { ws } = useHA();
   // where its bolt is — the one reading (stateColors.lockBolt): the header's icon, the pill's and the button agree
   const bolt = lockBolt(entity?.state);
-  const locked = bolt === "thrown";
+  const buttons = lockButtons(bolt);
   const PadIcon = bolt === "open" ? Unlock : Lock;
   // The pill reads the lock's ACTUAL state rather than `locked ? … : …`.
   // The old ternary had only two answers for a domain with five real ones, so
@@ -74,42 +74,31 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
           {pill.text}
         </span>
       </div>
-      {lock.asking ? (
-        <InlineConfirm flush={false} question={lock.asking.question}
-          confirmLabel={lock.asking.confirmLabel} onConfirm={lock.confirm} onCancel={lock.cancel} />
-      ) : locked ? (
-        <button
-          className={`big-toggle${pending ? " pending" : ""}`}
-          onClick={lock.request}
-          aria-busy={pending}
-        >
-          <Lock size={22} /> Already locked — re-lock
-        </button>
-      ) : (
-        <button
-          // `cta`, not `on`: this button appears precisely when the lock is
-          // NOT locked, and it borrowed `on` purely for emphasis. Now that
-          // `on` carries the device's category colour and means "this device
-          // is active", that borrowing would have read as a state report of
-          // the opposite of the truth.
-          className={`big-toggle cta${pending ? " pending" : ""}`}
-          onClick={lock.request}
-          aria-busy={pending}
-        >
-          <Lock size={22} /> Lock door
-        </button>
-      )}
-
-        <div className="mt">
-          {!unlock.asking ? (
-            <button className="btn ghost" style={{ width: "100%" }} onClick={unlock.request}>
-              <Unlock size={18} /> Unlock door…
+      {/* the action its bolt calls for, large; both only while the lock cannot say (panelRules.lockButtons) */}
+      {buttons.map((b, n) => {
+        const ask = b === "lock" ? lock : unlock;
+        if (ask.asking) {
+          return <div key={b} className={n ? "mt" : undefined}><InlineConfirm flush={false} question={ask.asking.question}
+            confirmLabel={ask.asking.confirmLabel} onConfirm={ask.confirm} onCancel={ask.cancel} /></div>;
+        }
+        const Icon = b === "lock" ? Lock : Unlock;
+        return n === 0 ? (
+          <button key={b}
+            // `cta`, not `on`: emphasis for the action to take, never a report of the device's state
+            className={`big-toggle cta${pending ? " pending" : ""}`}
+            onClick={ask.request}
+            aria-busy={pending}
+          >
+            <Icon size={22} /> {b === "lock" ? "Lock door" : "Unlock door…"}
+          </button>
+        ) : (
+          <div key={b} className="mt">
+            <button className="btn ghost" style={{ width: "100%" }} onClick={ask.request}>
+              <Icon size={18} /> {b === "lock" ? "Lock door" : "Unlock door…"}
             </button>
-          ) : (
-            <InlineConfirm flush={false} question={unlock.asking.question}
-              confirmLabel={unlock.asking.confirmLabel} onConfirm={unlock.confirm} onCancel={unlock.cancel} />
-          )}
-        </div>
+          </div>
+        );
+      })}
 
       </ControlFrame>
     </BasePanel>
