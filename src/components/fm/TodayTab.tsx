@@ -24,6 +24,7 @@ import RecordCard from "./RecordCard";
 import { formatMoney } from "@/utils/money";
 import CostFields from "./CostFields";
 import FormActions from "./FormActions";
+import Tip from "@/components/common/Tip";
 
 /** The engine's sentence (fmEngine.dueLine — the recap's too) with the date in the reader's locale. Same wording
  *  either side of "never": a target date is shown regardless — see fmEngine.scheduleStatus for why "never" now
@@ -49,17 +50,16 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
     // never inside it (it took the message's grey, centred text)
     return (
       <div className="fm-stack">
-      <div className="fm-empty">
-        <CalendarClock size={28} />
-        <h3>No maintenance schedule yet</h3>
-        <p className="muted body-text">
-          Add your property's own recurring maintenance tasks with
-          <strong> Add a task</strong> below — air conditioning service, pest
-          control, pool and landscaping, whatever your own schedule or
-          agreement calls for. Each task then tracks its own interval, due date
-          and the work done.
-        </p>
-      </div>
+      {/* THE Cockpit card, as every other (owner, 2026-10-22: "make it consistent with the rest of the UI") — it was
+          a centred block of its own, in larger grey type */}
+      <RecordCard lead={<CalendarClock size={16} className="muted" aria-hidden="true" />} title="No maintenance schedule yet"
+        body={(
+          <p className="muted body-text fm-card-text">
+            Add your property's own recurring maintenance tasks with <strong>Add a task</strong> below — air
+            conditioning service, pest control, pool and landscaping, whatever your own schedule or agreement calls
+            for. Each task then tracks its own interval, due date and the work done.
+          </p>
+        )} />
       <RecentWorkList />
       </div>
     );
@@ -130,11 +130,12 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
               <button className="btn ghost" onClick={() => setOpenId(openId === s.schedule.id ? null : s.schedule.id)}>
                 <Check size={16} /> Log
               </button>
-              <button className="icon-btn" onClick={() => void removeSchedule(s.schedule.id)}
-                aria-label={`Remove ${s.schedule.title}`}
-                title="Remove this task. Completions already logged against it are kept.">
-                <Trash2 size={16} />
-              </button>
+              <Tip text="Remove this task. Completions already logged against it are kept.">
+                <button className="icon-btn" onClick={() => void removeSchedule(s.schedule.id)}
+                  aria-label={`Remove ${s.schedule.title}`}>
+                  <Trash2 size={16} />
+                </button>
+              </Tip>
             </>} />
         ))}
       </div>

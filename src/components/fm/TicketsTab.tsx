@@ -27,6 +27,7 @@ import FoldedList from "@/components/common/FoldedList";
 import { useFmTerms } from "@/fm/useFmTerms";
 import { formatMoney } from "@/utils/money";
 import { cleanRoom } from "@/config/devicePlace";
+import Tip from "@/components/common/Tip";
 
 export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, onEditOpened }: {
   onOpenEntity: (id: string) => void;
@@ -86,10 +87,12 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
           {t.reportedBy === "guest" && <span className="fm-clause guest">guest report</span>}
           <AgentMark record={t} />
           {t.entityId ? (
-            <button className="fm-entity-chip" title={t.entityId}
-              onClick={(e) => { e.stopPropagation(); onOpenEntity(t.entityId!); }}>
-              {t.deviceLabel ?? label(t.entityId)}
-            </button>
+            <Tip text={t.entityId}>
+              <button className="fm-entity-chip"
+                onClick={(e) => { e.stopPropagation(); onOpenEntity(t.entityId!); }}>
+                {t.deviceLabel ?? label(t.entityId)}
+              </button>
+            </Tip>
           ) : t.deviceLabel ? <span className="fm-entity-chip" style={{ cursor: "default" }}>{t.deviceLabel}</span> : null}
         </>} />
     );
@@ -125,11 +128,9 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
       {editing && <FaultForm key={editing.id} editing={editing} deviceOptions={deviceOptions} onDone={() => setEditingId(null)} />}
 
       {tickets.length === 0 && !editing && (
-        <div className="fm-empty">
-          <Wrench size={28} />
-          <h3>No ticket in progress</h3>
-          <p className="muted body-text">A fault on the Overview becomes a ticket when you press Open Ticket on its card.</p>
-        </div>
+        // THE Cockpit card, as every other (owner, 2026-10-22)
+        <RecordCard lead={<Wrench size={16} className="muted" aria-hidden="true" />} title="No ticket in progress"
+          body={<p className="muted body-text fm-card-text">A fault on the Overview becomes a ticket when you press Open Ticket on its card.</p>} />
       )}
       {tickets.length > 0 && <div className="fm-list">{tickets.map(ticket)}</div>}
 

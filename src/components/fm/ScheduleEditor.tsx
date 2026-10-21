@@ -15,9 +15,10 @@ import { useFmData } from "@/fm/FmDataContext";
 import { scheduleStatus, shortDate } from "@/fm/fmEngine";
 import type { FmSchedule } from "@/fm/fmTypes";
 import AgentMark from "./AgentMark";
-import RecordMeta from "./RecordMeta";
 import { EMPTY_SCHEDULE_DRAFT as EMPTY, scheduleToDraft as toDraft, draftDays, scheduleWrite, type ScheduleDraft as Draft } from "@/fm/scheduleDraft";
 import FormActions from "./FormActions";
+import Tip from "@/components/common/Tip";
+import RecordCard from "./RecordCard";
 
 /** How the obligation is usually WRITTEN, mapped to days. Anything that isn't a
  *  whole number of days rounds DOWN (twice a week -> 3, not 4) so a genuinely
@@ -135,34 +136,28 @@ export default function ScheduleEditor() {
           // never done) from when it was created. See fmEngine.scheduleStatus.
           const due = scheduleStatus(s, data.completions);
           return (
-            <div key={s.id} className={`fm-row state-${s.enabled ? "ok" : ""}`}>
-              <div className="fm-row-main">
-                <div className="fm-row-title">
-                  <strong>{s.title}</strong>
-                </div>
-                <RecordMeta when={`Every ${s.everyDays} days · due by ${due.dueAt ? shortDate(due.dueAt) : "—"}`}>
-                  {s.clause && <span className="fm-clause">Cl. {s.clause}</span>}
-                  {s.room && <span className="fm-clause">{s.room}</span>}
-                  {!s.enabled && <span className="fm-clause">Paused</span>}
-                  <AgentMark record={s} />
-                </RecordMeta>
-              </div>
-              <button
-                className="btn ghost"
-                onClick={() => void updateSchedule(s.id, { enabled: !s.enabled })}
-              >{s.enabled ? "Pause" : "Resume"}</button>
-              <button className="icon-btn" onClick={() => startEdit(s)} aria-label={`Edit ${s.title}`}>
-                <Pencil size={16} />
-              </button>
-              <button
-                className="icon-btn"
-                onClick={() => void removeSchedule(s.id)}
-                aria-label={`Remove ${s.title}`}
-                title="Remove this task. Completions already logged against it are kept."
-              >
-                <Trash2 size={16} />
-              </button>
-            </div>
+            // THE Cockpit card (RecordCard), as every list (owner, 2026-10-22: "wherever there is a card, the same style")
+            <RecordCard key={s.id} title={s.title}
+              when={`Every ${s.everyDays} days · due by ${due.dueAt ? shortDate(due.dueAt) : "—"}`}
+              pills={<>
+                {s.clause && <span className="fm-clause">Cl. {s.clause}</span>}
+                {s.room && <span className="fm-clause">{s.room}</span>}
+                {!s.enabled && <span className="fm-clause">Paused</span>}
+                <AgentMark record={s} />
+              </>}
+              actions={<>
+                <button className="btn ghost" onClick={() => void updateSchedule(s.id, { enabled: !s.enabled })}>
+                  {s.enabled ? "Pause" : "Resume"}
+                </button>
+                <button className="icon-btn" onClick={() => startEdit(s)} aria-label={`Edit ${s.title}`}>
+                  <Pencil size={16} />
+                </button>
+                <Tip text="Remove this task. Completions already logged against it are kept.">
+                  <button className="icon-btn" onClick={() => void removeSchedule(s.id)} aria-label={`Remove ${s.title}`}>
+                    <Trash2 size={16} />
+                  </button>
+                </Tip>
+              </>} />
           );
         })}
       </div>

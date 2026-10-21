@@ -4,6 +4,7 @@
 // reopen, download", and readiness snapshots were listed as "Saved statements" (architecture review round two,
 // 2026-10-17). By value, then the saved list as it is drawn.
 import { h, draw, text } from "../consistency/screen.mjs";
+import { readFileSync } from "node:fs";
 import { ck, done } from "../consistency/check.mjs";
 const D = await import("@/fm/monthlyDocument");
 const { localStamp } = await import("@/fm/fmEngine");
@@ -38,7 +39,8 @@ ck("the readiness list reads \"Saved snapshots\", newest first, each titled by i
    && !text(list("readiness")).includes("October 2026") && (text(list("readiness")).match(/Reopen/g) ?? []).length === 2,
    text(list("readiness")));
 ck("  ...the moment in the fixed form, never a locale's", /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(at17), at17);
-ck("  ...and its delete button says snapshot, and which", new RegExp(`aria-label="Delete saved snapshot for ${at17}" title="Delete this saved snapshot"`).test(list("readiness")),
+ck("  ...and its delete button says snapshot, and which", new RegExp(`aria-label="Delete saved snapshot for ${at17}"`).test(list("readiness"))
+   && /<Tip text=\{`Delete this saved \$\{noun\}`\}>/.test(readFileSync(new URL("../../src/components/fm/SavedDocumentsList.tsx", import.meta.url), "utf8")),
    (list("readiness").match(/aria-label="[^"]*"/g) ?? []));
 ck("what a kind is about: the recap and the statement a month, the snapshot a moment",
    ["recap", "spend", "readiness"].map((k) => D.DOCUMENT_KINDS[k].about).join() === "month,month,moment");

@@ -3,6 +3,7 @@
 // SHOWS. The checks they replace matched the code's text and were rewritten nine times in two days for moves that
 // changed nothing on screen; a check here fails only when what the owner sees changes.
 import { React, h, draw, inside, btn } from "../consistency/screen.mjs";
+import { readFileSync } from "node:fs";
 import { ck, done } from "../consistency/check.mjs";
 const { default: RecordCard } = await import("@/components/fm/RecordCard");
 const { AttentionCard } = await import("@/components/cockpit/CockpitOverview");
@@ -40,16 +41,19 @@ const [group] = groupAttention([
 const CADENCE = { checkMinutes: 5, nightlyAt: "02:00" };
 const issue = draw(h(AttentionCard, { card: cockpitCard(group, CADENCE), onOpenEntity: () => {},
   actions: h(React.Fragment, null, btn("Open Ticket"), btn("Close")) }));
-ck("it IS the Cockpit card: title, the room under it, its source icons before it, a chevron",
+// owner, 2026-10-22: "show the area right after the device name, as the Spend tab's pills … to save one line"; "remove
+// the chevron, it's redundant"
+ck("it IS the Cockpit card: its source icons, then its name and its room as a pill on ONE line — no chevron",
    /class="fm-record-card"/.test(issue) && /fm-record-lead[\s\S]*<svg/.test(inside(issue, "fm-record-head"))
-   && /<strong>Test lock<\/strong>[\s\S]*fm-record-subtitle[^>]*>Hall/.test(issue) && /lucide-chevron-right/.test(issue), issue.slice(0, 400));
+   && /<strong>Test lock<\/strong><span class="fm-entity-chip fm-chip-static">Hall<\/span>/.test(issue)
+   && !/lucide-chevron-right/.test(issue) && !/fm-record-subtitle/.test(issue), issue.slice(0, 400));
 ck("  ...its problem's line on the left, Open Ticket and Close inside on the right of it",
    /fm-row-main[\s\S]*#33 · Test lock unavailable[\s\S]*fm-record-actions[\s\S]*Open Ticket[\s\S]*Close/.test(inside(issue, "fm-record-body")));
 ck("  ...it opens the device when tapped (a button), and its buttons stop their own presses",
    /role="button"/.test(issue) && /class="fm-record-actions"/.test(issue));
-// owner, 2026-10-15: "add a small text on the same line as the room, right below the chevron: Next check"
-ck("  ...its Next check on the room's line, right under the chevron",
-   /fm-record-side[^>]*><svg[^>]*lucide-chevron-right[\s\S]*?<\/svg><span class="fm-record-aside muted"[^>]*>Next check: within 5 min<\/span>/.test(inside(issue, "fm-record-head")),
+// owner, 2026-10-22: "instead of `Next check:` show a refresh icon, as a pill, on this same first line, on the right"
+ck("  ...its next check a pill at the right of that line: a refresh icon, then when",
+   /<\/div><span class="fm-entity-chip fm-chip-static fm-record-check" aria-label="Next check: within 5 min \([^"]+\)"><svg[^>]*lucide-refresh-cw[\s\S]*?<\/svg>within 5 min<\/span><\/div>$/.test(inside(issue, "fm-record-head")),
    inside(issue, "fm-record-head"));
 const { nextCheck } = await import("@/fm/faultTiming");
 // at a fixed noon: the soonest of the 02:00 night and the 5-minute look is the night's from 01:55 to 02:00, and this
@@ -138,12 +142,14 @@ ck("  ...and hovering it says when: the nightly check's next run, the Agent's ne
   ck("  ...from the fault's closesAt and its device as it reads now",
      c?.at === closes.toISOString() && c?.word === "Locked" && c?.since === locked.toISOString(), c);
 }
-ck("  ...drawn as the hover text of the card's Next check", /<span class="fm-record-aside muted" title="\d\d\/\d\d\/\d{4} \d\d:\d\d">Next check/.test(issue));
+ck("  ...said whole, with its moment, by the pill's tooltip (the Kiosk's own: common/Tip)",
+   /aria-label="Next check: within 5 min \(\d\d\/\d\d\/\d{4} \d\d:\d\d\)"/.test(issue)
+   && /<Tip text=\{check\.tip\}>/.test(readFileSync(new URL("../../src/components/fm/RecordCard.tsx", import.meta.url), "utf8")));
 // owner, 2026-10-15: "there should always be the room line, to respect a consistent layout"
 const [roomless] = groupAttention([{ id: "fault:f9", kind: "fault", title: "Relay dropped", detail: "Fault", entityId: "sensor.relay_t",
   ticketId: "f9", stage: "fault", source: "night", device: { key: "sensor.relay_t", label: "Relay" } }]);
-ck("  ...a device no room holds still has its room line: Other, as By Room files it",
-   /fm-record-subtitle[^>]*>Other</.test(draw(h(AttentionCard, { card: cockpitCard(roomless, CADENCE), onOpenEntity: () => {} }))));
+ck("  ...a device no room holds still has its room pill: Other, as By Room files it",
+   /<span class="fm-entity-chip fm-chip-static">Other</.test(draw(h(AttentionCard, { card: cockpitCard(roomless, CADENCE), onOpenEntity: () => {} }))));
 const lone = draw(h(AttentionCard, { card: cockpitCard({ ...group, entityId: undefined }, CADENCE), onOpenEntity: () => {} }));
 ck("  ...a problem with no device: no chevron, nothing to tap, no buttons", !/chevron-right/.test(lone) && !/role="button"/.test(lone) && !/fm-record-actions/.test(lone));
 
@@ -214,7 +220,8 @@ ck("  ...nothing to erase by holding it (its bin removes it): no hold-to-erase o
     { id: "fault:y", kind: "fault", title: "Another", detail: "Fault", entityId: "lock.door4", ticketId: "y", stage: "fault", source: "alert", device: dev }]);
   const card = draw(h(AttentionCard, { card: cockpitCard(two, CADENCE), onOpenEntity: () => {}, lineActions: () => btn("Close") }));
   ck("  ...a problem's words sit in one cut line, whole on hover; its own Close in its own slot beside them",
-     card.includes(`<span class="cockpit-attention-sub-title" title="${words}">${words}</span>`)
+     card.includes(`<span class="cockpit-attention-sub-title">${words}</span>`)
+     && /<Tip text=\{line\.text\}><span className="cockpit-attention-sub-title">/.test(readFileSync(new URL("../../src/components/cockpit/CockpitOverview.tsx", import.meta.url), "utf8"))
      && (card.match(/<span class="cockpit-line-act">/g) ?? []).length === 2, card.slice(0, 600));
   const shared = css("08-shared.css"), fac = css("07-facility.css"), base = css("01-base.css");
   ck("  ...cut with \"…\", and the cut words never push a line's Close off its line",
@@ -228,4 +235,35 @@ ck("  ...nothing to erase by holding it (its bin removes it): no hold-to-erase o
      && /\.fm-record-card:has\(> \.fm-openable\):hover:not\(:has\(\.fm-record-actions:hover\)\):not\(:has\(button:hover\)\)/.test(fac));
 }
 
+// owner, 2026-10-22: "check the tooltips in the whole Cockpit are consistently styled with other tooltips in the
+// Kiosk": no element of the Cockpit, nor the windows' shared footer, asks the browser for its own grey `title` box —
+// every hover text is common/Tip, the charts' card (.spark-tip)
+{
+  const { readdirSync } = await import("node:fs");
+  const dir = (d) => readdirSync(new URL(`../../src/components/${d}/`, import.meta.url)).filter((f) => f.endsWith(".tsx")).map((f) => `${d}/${f}`);
+  const files = [...dir("cockpit"), ...dir("fm"), "common/ModalFooter.tsx"];
+  const native = files.filter((f) => /<[a-z][a-z0-9]*\b[^<>]*\stitle=/.test(readFileSync(new URL(`../../src/components/${f}`, import.meta.url), "utf8")));
+  const tip = readFileSync(new URL("../../src/components/common/Tip.tsx", import.meta.url), "utf8");
+  ck("no Cockpit element shows the browser's own tooltip: every hover text is the Kiosk's card (common/Tip)",
+     native.length === 0 && /className="spark-tip ui-tip"/.test(tip) && /placeTip\(/.test(tip), native);
+}
+// owner, 2026-10-22: "wherever there is a card to show, the same style, centrally applied — scan the whole Kiosk UI".
+// The frame is said once (01-base.css --card-*); every Cockpit list draws RecordCard; a pill is the Kiosk's pill.
+{
+  const { readdirSync } = await import("node:fs");
+  const css = readdirSync(new URL("../../src/styles/", import.meta.url)).filter((f) => f.endsWith(".css"))
+    .map((f) => [f, readFileSync(new URL(`../../src/styles/${f}`, import.meta.url), "utf8")]);
+  const rules = css.flatMap(([f, t]) => [...t.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ f, sel: m[1].trim().split("\n").pop(), body: m[2] })));
+  const ownFrame = rules.filter((r) => /background: var\(--bg-card\)/.test(r.body) && /border: 1px solid var\(--hairline\)/.test(r.body));
+  ck("a card's frame is said once: no rule repeats --bg-card with its own 1 px hairline border",
+     ownFrame.length === 0 && /--card-radius: 12px;/.test(css.find(([f]) => f === "01-base.css")[1]), ownFrame.map((r) => `${r.f} ${r.sel}`));
+  const tsx = (d) => readdirSync(new URL(`../../src/components/${d}/`, import.meta.url)).filter((f) => f.endsWith(".tsx"))
+    .map((f) => [`${d}/${f}`, readFileSync(new URL(`../../src/components/${d}/${f}`, import.meta.url), "utf8")]);
+  const handRows = tsx("fm").filter(([f, t]) => !/RecordCard|ErasableRow/.test(f) && /className=\{?[`"]fm-row[ `"$]/.test(t)).map(([f]) => f);
+  ck("  ...every Cockpit list draws THE card (RecordCard), none a card of its own", handRows.length === 0, handRows);
+  const inlinePills = [...tsx("settings"), ...tsx("fm"), ...tsx("cockpit"), ...tsx("common")]
+    .filter(([, t]) => /borderRadius: 999/.test(t)).map(([f]) => f);
+  ck("  ...and a pill is the Kiosk's pill (.fm-entity-chip, common/RemovablePill), never one drawn in inline styles",
+     inlinePills.length === 0, inlinePills);
+}
 done("✅ every Cockpit list is one card, checked as it is drawn");

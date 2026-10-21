@@ -67,6 +67,6 @@ ck("the top bar draws Settings and the agent's robot from doors — and no Facil
    && !/\{onOpenFacility && \(|\{canOpenSettings && \(/.test(hud));
 ck("the Cockpit's updates count reads doors, not roleCan — and names them in its tooltip (config/updatesWaiting)",
    /doors\.updates \? updatesWaiting\(entities, hiddenInHaEntityIds\) : \[\]/.test(cockpit) && !/roleCan\(role, "seeUpdates"\)/.test(cockpit)
-   && /title=\{updatesTip\(updates\)\}/.test(cockpit));
+   && /<Tip text=\{updatesTip\(updates\)\}>/.test(cockpit));
 
 done("✅ which doors a profile has is said once");

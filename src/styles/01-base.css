@@ -223,6 +223,12 @@
   --bg-base: #F7F4EE;
   --bg-panel: rgba(255, 253, 248, 0.86);
   --bg-overlay: rgba(255, 253, 248, 0.96);
+  /* ⚠️ THE CARD'S FRAME, ONCE (owner, 2026-10-22: "wherever there is a card, the same style, centrally applied"): every
+     card of the Kiosk — a Cockpit record (RecordCard), a figure, a headline, the spending cap, a window's linked row —
+     reads these; each card says only its own layout. Its colours are --bg-card and --hairline, per theme. */
+  --card-radius: 12px;
+  --card-pad: 12px 14px;
+  --card-border: 1px solid var(--hairline);
   /* Solid surface for every floating DIALOG (device panels, Settings, Config
      Editor, the badge legend…) — deliberately opaque, unlike the HUD's own
      "glass" chrome (.icon-btn/.hud-group/.hud-stack/.hud-menu etc., see

@@ -103,7 +103,7 @@ console.log("\n  one tinted card (fm/tone): each state says its tone, the styles
   const drawnRow = (state) => draw(h(ReadinessChecks, { readiness: { ...r, checks: [{ ...r.checks[0], state }] }, label: (id) => id,
     onOpenEntity: () => {}, onOpenCheck: () => {}, startOpen: true }));
   ck("a Recap check drawn amber or red by its tone, never by the Schedule's words",
-     /class="fm-row tone-warn"/.test(drawnRow("warn")) && /class="fm-row tone-danger"/.test(drawnRow("fail")) && !/state-/.test(drawnRow("fail")));
+     /class="fm-record-card tone-warn"/.test(drawnRow("warn")) && /class="fm-record-card tone-danger"/.test(drawnRow("fail")) && !/state-/.test(drawnRow("fail")));
   ck("  ...the same three tones for a task, a check and the spending cap",
      [DUE_WORDS["due-soon"].tone, CHECK_WORDS.warn.tone, TONE_OF.cap.approaching].every((t) => toneClass(t) === "tone-warn")
      && [CHECK_WORDS.fail.tone, TONE_OF.cap.exceeded].every((t) => toneClass(t) === "tone-danger") && toneClass(CHECK_WORDS.pass.tone) === "");

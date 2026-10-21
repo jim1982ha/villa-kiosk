@@ -30,6 +30,7 @@ import { useModalA11y } from "@/hooks/useModalA11y";
 import ModalFooter from "@/components/common/ModalFooter";
 import { useRecordPlace } from "./useRecordPlace";
 import DialogLayer from "@/components/common/DialogLayer";
+import Tip from "@/components/common/Tip";
 
 export default function GuestReportModal({
   entityId, onClose,
@@ -128,9 +129,9 @@ export default function GuestReportModal({
                 <div className="fm-field">
                   <span>Device</span>
                   <div className="fm-chiprow">
-                    <span className="fm-entity-chip" style={{ cursor: "default" }} title={entityId}>
-                      {deviceLabel}
-                    </span>
+                    <Tip text={entityId}>
+                      <span className="fm-entity-chip fm-chip-static">{deviceLabel}</span>
+                    </Tip>
                   </div>
                 </div>
               )}

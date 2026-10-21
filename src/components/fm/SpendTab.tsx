@@ -27,6 +27,7 @@ import MarkdownPreview from "./MarkdownPreview";
 import SavedDocumentsList from "./SavedDocumentsList";
 import AgentMark from "./AgentMark";
 import RecordCard from "./RecordCard";
+import Tip from "@/components/common/Tip";
 import { formatMoney } from "@/utils/money";
 import CostFields from "./CostFields";
 import { useDeviceChoice } from "./useDeviceChoice";
@@ -208,17 +209,20 @@ export default function SpendTab(
             amount={money(c.amountIdr)} onOpen={() => openEditor(c)}
             erase={{ title: "Erase this spend entry", detail: `${c.label} — ${money(c.amountIdr)}`,
               run: (token) => removeCost(c.id, token) }}
+            // its device right after its name, as an Overview card's room (owner, 2026-10-22: "align the Spend cards
+            // with the Overview's")
+            titlePills={c.entityId ? (
+              <Tip text={c.entityId}>
+                <button className="fm-entity-chip" onClick={(e) => { e.stopPropagation(); onOpenEntity?.(c.entityId!); }}>
+                  {c.deviceLabel ?? c.entityId}
+                </button>
+              </Tip>
+            ) : c.deviceLabel ? (
+              <span className="fm-entity-chip fm-chip-static">{c.deviceLabel}</span>
+            ) : undefined}
             pills={<>
               <span className="fm-clause">{COST_CATEGORY_NAMES[c.category]}</span>
               <AgentMark record={c} />
-              {c.entityId ? (
-                <button className="fm-entity-chip" title={c.entityId}
-                  onClick={(e) => { e.stopPropagation(); onOpenEntity?.(c.entityId!); }}>
-                  {c.deviceLabel ?? c.entityId}
-                </button>
-              ) : c.deviceLabel ? (
-                <span className="fm-entity-chip" style={{ cursor: "default" }}>{c.deviceLabel}</span>
-              ) : null}
             </>} />
         ))}
       </div>
