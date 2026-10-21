@@ -71,6 +71,23 @@ console.log("\n  how bad, as the top bar says it (review \"One answer per questi
      && five.overall === "warn", five.checks.find((c) => c.id === "tickets"));
   ck("  ...and the critical rule is the Overview's: a critical entity stands for its device",
      (await import("@/config/deviceGroups")).criticalDevices(new Set(["sensor.lock_battery"]), new Map([["sensor.lock_battery", "lock.door"]])).has("lock.door"));
+  // owner, 2026-10-21: two pumps placed on one relay box, the box listed by its relay — one pump red, the other amber.
+  // As the villa's system files it: three devices, each pump's meter hanging under the relay's (via_device, deviceUnits).
+  {
+    const { criticalDevices, villaDevices } = await import("@/config/deviceGroups");
+    const reg = { "switch.box_relay": "relay", "sensor.a_pump_power": "meter_a", "sensor.b_pump_power": "meter_b", "sensor.other": "o" };
+    const units = { meter_a: "relay", meter_b: "relay" };
+    const fold = new Map([["switch.box_relay", "sensor.a_pump_power"]]);
+    const c = criticalDevices(new Set(["switch.box_relay"]), fold, reg, units);
+    ck("  ...every device placed on the critical entity's box is critical, not only the first by name",
+       c.has("sensor.a_pump_power") && c.has("sensor.b_pump_power") && !c.has("sensor.other"), [...c]);
+    const ent = (id) => ({ entity_id: id, state: "unavailable", attributes: {} });
+    const entityMap = { "sensor.a_pump_power": { entityId: "sensor.a_pump_power", type: "sensor" }, "sensor.b_pump_power": { entityId: "sensor.b_pump_power", type: "sensor" } };
+    const v = villaDevices({ entityMap, deviceGroups: [], dismissed: new Set(), hidden: new Set(), mappedEntityIds: new Set(Object.keys(entityMap)),
+      entities: Object.fromEntries(Object.keys(reg).map((id) => [id, ent(id)])), entityDeviceIds: reg, critical: new Set(["switch.box_relay"]), deviceUnits: units });
+    ck("  ...as the villa's devices answer it (VillaDevices.isCritical): both pumps",
+       v.isCritical("sensor.a_pump_power") && v.isCritical("sensor.b_pump_power") && !v.isCritical("sensor.other"));
+  }
 }
 
 console.log("\n  one tinted card (fm/tone): each state says its tone, the stylesheet draws a tone once:");

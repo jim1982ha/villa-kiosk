@@ -62,7 +62,8 @@ import { readSceneMirror } from "./sceneMirror";
 export default function Dashboard() {
   const { config, update, resolvedRooms, setResolvedRooms } = useConfig();
   const { role } = useProfile();
-  const { connect, entities, suppressedEntityIds, hiddenInHaEntityIds, ws, haConfig, subscribeAll, entityAreaNames } = useHA();
+  const { connect, entities, suppressedEntityIds, hiddenInHaEntityIds, ws, haConfig, subscribeAll, entityAreaNames, entityDeviceIds,
+    deviceUnits } = useHA();
   // ⚠️ A ROOM FOR EVERY DEVICE, NOT FOR A LIST (architecture review, 2026-10-15): rooms were worked out for the ids on
   // the map and the stored mappings, and each new place that showed a device had to join that list — a fault on a sensor
   // the model does not draw had no room line (owner, 2026-10-15). Every entity Home Assistant has now gets its room by
@@ -412,7 +413,8 @@ export default function Dashboard() {
   // shared read, ha/criticalDevices): a critical device that lost contact is red on the map, its room chip, the open
   // window and the room chooser, as on the Cockpit (2.496.428). This page sits outside the villa model, so it folds here.
   const criticalIds = useCriticalDevices();
-  const critical = useMemo(() => criticalDevices(criticalIds, identity.folding), [criticalIds, identity.folding]);
+  const critical = useMemo(() => criticalDevices(criticalIds, identity.folding, entityDeviceIds, deviceUnits),
+    [criticalIds, identity.folding, entityDeviceIds, deviceUnits]);
   const isCritical = useCallback((id: string) => critical.has(id), [critical]);
   useEffect(() => { manager?.setCriticalDevices(critical); }, [manager, critical]);
   // Hidden in the villa's system, as the villa model reads it (deviceGroups.hiddenIn — VillaDevices.isHidden): never

@@ -80,7 +80,7 @@ const Ctx = createContext<VillaModel | null>(null);
 
 export function VillaModelProvider({ sets, children }: { sets: VillaSets; children: ReactNode }) {
   const { mappedEntityIds, visibleEntities, sceneEntityIds, dismissedIds } = sets;
-  const { entities, entityDeviceIds, connected, hiddenInHaEntityIds: hidden } = useHA();
+  const { entities, entityDeviceIds, deviceUnits, connected, hiddenInHaEntityIds: hidden } = useHA();
   const { config, resolvedRooms } = useConfig();
   const { data: fmData } = useFmData();
   const critical = useCriticalDevices();
@@ -91,13 +91,13 @@ export function VillaModelProvider({ sets, children }: { sets: VillaSets; childr
   const { folding } = useDeviceIdentity();
   const devices = useMemo(
     () => villaDevices({ entityMap, deviceGroups, dismissed: dismissedIds, hidden, mappedEntityIds, entities,
-      entityDeviceIds, folding, critical }),
-    [entityMap, deviceGroups, dismissedIds, hidden, mappedEntityIds, entities, entityDeviceIds, folding, critical],
+      entityDeviceIds, folding, critical, deviceUnits }),
+    [entityMap, deviceGroups, dismissedIds, hidden, mappedEntityIds, entities, entityDeviceIds, folding, critical, deviceUnits],
   );
   const visibleDevices = useMemo(
     () => villaDevices({ entityMap, deviceGroups, dismissed: dismissedIds, hidden, mappedEntityIds, entities: visibleEntities,
-      entityDeviceIds, folding, critical }),
-    [entityMap, deviceGroups, dismissedIds, hidden, mappedEntityIds, visibleEntities, entityDeviceIds, folding, critical],
+      entityDeviceIds, folding, critical, deviceUnits }),
+    [entityMap, deviceGroups, dismissedIds, hidden, mappedEntityIds, visibleEntities, entityDeviceIds, folding, critical, deviceUnits],
   );
   const attention = useMemo((): VillaProblems => {
     const attentionItems = buildAttentionItems({
