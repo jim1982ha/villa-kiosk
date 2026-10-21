@@ -1,3 +1,12 @@
+## 2.496.477
+
+### Fixed
+- **Every device on a critical box turns red when the box drops.** A Shelly box that carries two pumps is on the
+  critical list through its relay. Only one of its pumps (the first by name) was treated as critical, so when the box
+  lost Wi-Fi, House Pump was red and Pool Pump orange, Jacuzzi Pump red and Massage Jet Pump orange. Both pumps of a
+  box are now red together: badge, window, room and "Needs attention". Faults and alerts are unchanged (the rule
+  still waits 10 minutes).
+
 ## 2.496.476
 
 ### Changed
