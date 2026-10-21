@@ -320,6 +320,9 @@ export interface VillaDeviceInput {
   folding?: ReadonlyMap<string, string>;
   /** The villa's critical entities (useCriticalDevices). Absent: none is (the list not read yet, or no such rule). */
   critical?: ReadonlySet<string>;
+  /** device_id → the whole device it is a part of (registryResolve.deviceUnits): a critical part makes the whole's
+   *  placed devices critical (criticalDevices). Absent: each device is its own whole. */
+  deviceUnits?: Readonly<Record<string, string>>;
 }
 
 export interface VillaDevices {
@@ -358,7 +361,8 @@ export function villaDevices(input: VillaDeviceInput): VillaDevices {
     has: (id) => set.has(id),
     deviceOf: (id) => deviceOf(folding, id),
     deviceOfRecord: recordDeviceOf(folding, (id) => id in input.entities),
-    isCritical: ((crit) => (id: string) => crit.has(id))(criticalDevices(input.critical, folding)),
+    isCritical: ((crit) => (id: string) => crit.has(id))(criticalDevices(input.critical, folding, input.entityDeviceIds,
+      input.deviceUnits)),
     isHidden: hiddenIn(input.hidden, folding),
   };
 }
@@ -387,9 +391,25 @@ export function deviceOf(folding: ReadonlyMap<string, string>, id: string): stri
 }
 
 /** The devices that are critical: every critical entity, and the entity standing for its device — the rule may name
- *  a lock's battery sensor, the model the lock. The Overview's red and the Recap's both read this. */
-export function criticalDevices(critical: ReadonlySet<string> | undefined, folding: ReadonlyMap<string, string>): ReadonlySet<string> {
-  return new Set([...(critical ?? [])].flatMap((e) => [e, deviceOf(folding, e)]));
+ *  a lock's battery sensor, the model the lock. The Overview's red and the Recap's both read this.
+ *  ⚠️ EVERY DEVICE PLACED ON THE SAME BOX (owner, 2026-10-21: "these devices are the same Shelly … why is the
+ *  reporting not consistent"): a relay box is three devices in the villa's system — its relay, each pump's meter
+ *  hanging under it (deviceUnits) — listed by its relay, and its mark went to ONE pump only, the one whose name sorts
+ *  first (deviceFolding's representative of the box): one pump red when the box dropped, the other amber. A critical
+ *  entity ON THE BOX ITSELF (its device is the whole: nothing above it) marks every entity of the box, folded.
+ *  ⚠️ DOWNWARD ONLY (2.496.477 went upward too): a leak sensor hangs under its Zigbee bridge the same way, and a
+ *  critical leak sensor made every Zigbee device of the villa critical — red whenever any of them dropped. A critical
+ *  part marks only itself and its device's stand-in, as before. */
+export function criticalDevices(
+  critical: ReadonlySet<string> | undefined, folding: ReadonlyMap<string, string>,
+  entityDeviceIds: Readonly<Record<string, string>> = {}, deviceUnits: Readonly<Record<string, string>> = {},
+): ReadonlySet<string> {
+  const crit = [...(critical ?? [])];
+  const unitOf = (id: string) => { const d = entityDeviceIds[id]; return d ? deviceUnits[d] ?? d : undefined; };
+  // a box is a critical entity's device when nothing is above it (no unit of its own: deviceUnits lists parts only)
+  const boxes = new Set(crit.map((e) => entityDeviceIds[e]).filter((d): d is string => !!d && !(d in deviceUnits)));
+  const sharing = Object.keys(entityDeviceIds).filter((id) => { const u = unitOf(id); return !!u && boxes.has(u); });
+  return new Set([...crit, ...sharing].flatMap((e) => [e, deviceOf(folding, e)]));
 }
 
 /** The entity a fault or ticket names: its entity — or, for a record naming several at once ("sensor.a,sensor.b", a

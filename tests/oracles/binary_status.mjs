@@ -83,20 +83,27 @@ ck("the list paints the tone, the page builds its rows here, and the tones have 
 // makes sense". The room glows for a detection and for a problem state "on" (an open door); never for an "on" that is
 // good news (connected, plugged in). A detection is no fault (no line in Needs attention).
 {
-  const { detectsPresence, alertIsFault, glowsRoom: glows } = await import("@/config/BinarySensorClasses");
+  const { detectsPresence, alertIsFault, glowsRoom } = await import("@/config/BinarySensorClasses");
   const { readFileSync } = await import("node:fs");
   const DETECT = ["motion", "moving", "occupancy", "presence"];
   const NOT = ["door", "window", "garage_door", "opening", "lock", "moisture", "smoke", "connectivity", "problem", undefined, "made_up"];
+  const X = "binary_sensor.x";
+  const det = (c) => detectsPresence(X, c), fault = (c) => alertIsFault(X, c), glows = (c) => glowsRoom(X, c);
   ck("a detection is a detection; a door, a window, a hazard or a bare sensor is not",
-     DETECT.every(detectsPresence) && !NOT.some(detectsPresence), NOT.filter(detectsPresence));
+     DETECT.every(det) && !NOT.some(det), NOT.filter(det));
   ck("  ...and a detection is never a fault; everything else is",
-     DETECT.every((c) => !alertIsFault(c)) && NOT.every(alertIsFault));
+     DETECT.every((c) => !fault(c)) && NOT.every(fault));
   ck("  ...its \"on\" glows its room: a detection, an open door or window, a leak — never connected, plugged, charging",
      [...DETECT, "door", "window", "opening", "moisture", undefined].every(glows)
      && !["connectivity", "plug", "battery_charging", "running"].some(glows));
+  // architecture review, 2026-10-21: a sensor with no class named "…_pir" was the toast's motion AND a Cockpit fault
+  ck("  ...with no class, its id names a detection — the same answer as the motion toast (isMotionSensor)",
+     detectsPresence("binary_sensor.garden_pir", undefined) && !alertIsFault("binary_sensor.garden_pir", undefined)
+     && glowsRoom("binary_sensor.garden_pir", undefined) && alertIsFault("binary_sensor.garden_door_x", undefined)
+     && !detectsPresence("binary_sensor.garden_pir", "door"));
   const ev = readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8");
   ck("  ...the map's room glow asks exactly that (EntityVisuals.applyMotionRouting)",
-     /if \(map\?\.type === "binary_sensor" && room && glowsRoom\(entity\.attributes\.device_class as string \| undefined\)\) \{\s*this\.roomHighlight\.setActive\(room, on\);/.test(ev));
+     /if \(map\?\.type === "binary_sensor" && room && glowsRoom\(entity\.entity_id, entity\.attributes\.device_class as string \| undefined\)\) \{\s*this\.roomHighlight\.setActive\(room, on\);/.test(ev));
 }
 
 done("✅ a detector finding nothing wrong reads green, on its pill and its history");

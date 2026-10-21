@@ -365,6 +365,11 @@ input[type="range"]::-moz-range-thumb {
 .camera-status-bar .state-timeline-skeleton {
   width: 100%; border-radius: 14px; background: rgba(255,255,255,0.12);
 }
+/* A linked sensor's strip under the camera bar (CameraPanel): a plain block like the bar, 4px below it — the two
+   together are the controls' 56px. Slimmer, so less rounded. */
+.camera-status-bar .camera-linked-strip { margin-top: 4px; }
+.camera-status-bar .camera-linked-strip .state-timeline,
+.camera-status-bar .camera-linked-strip .state-timeline-skeleton { border-radius: 6px; }
 @media (max-width: 720px) {
   /* On a phone the row layout leaves too little width for the bar to read
      gracefully next to 3-4 56px buttons. Stack instead: status bar on its
@@ -471,6 +476,11 @@ input[type="range"]::-moz-range-thumb {
   .camera-status-bar .state-timeline-skeleton {
     width: var(--cam-rail); height: auto; flex: 1 1 auto; min-height: 0;
   }
+  /* the linked sensor's strip: a slim second rail beside the bar, the bar keeping its own width */
+  .camera-status-bar.has-linked { gap: 4px; width: calc(var(--cam-rail) + 18px); }
+  .camera-status-bar .camera-linked-strip { margin-top: 0; display: flex; flex: 0 0 auto; }
+  .camera-status-bar .camera-linked-strip .state-timeline,
+  .camera-status-bar .camera-linked-strip .state-timeline-skeleton { width: 14px; }
 
   /* Both rails OVERLAY the feed rather than flanking it, for the same reason
      the portrait bottom row does: the picture gets the whole screen and the

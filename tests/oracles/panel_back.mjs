@@ -19,7 +19,7 @@ ck("the panel frame draws Back at the header's right, from the panel actions' `b
 ck("  ...and Escape / the phone's back gesture go back (one step), not close",
    /useModalA11y\(back \? back\.go : onClose\)/.test(base));
 ck("the camera panel (its own frame) does the same",
-   /const \{ linked, back \} = usePanelActions\(\);/.test(cam) && /useModalA11y\(back \? back\.go : onClose\)/.test(cam)
+   /const \{ linked, linkedSensor, back \} = usePanelActions\(\);/.test(cam) && /useModalA11y\(back \? back\.go : onClose\)/.test(cam)
    && /\{back && \(\s*<button className="icon-btn" onClick=\{back\.go\}/.test(cam));
 
 console.log("\n  where Back goes is panelNav's, driven by value:");

@@ -305,7 +305,7 @@ export function buildAttentionItems(opts: {
   for (const id of devices.ids) {
     const entity = entities[id];
     if (!entity || !deviceLook(id, looks).alert) continue;
-    if (id.startsWith("binary_sensor.") && !alertIsFault(entity.attributes.device_class as string | undefined)) continue;
+    if (id.startsWith("binary_sensor.") && !alertIsFault(id, entity.attributes.device_class as string | undefined)) continue;
     items.push({
       id: `alarm:${id}`,
       kind: "alarm",

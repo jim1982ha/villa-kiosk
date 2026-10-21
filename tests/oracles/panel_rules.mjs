@@ -84,6 +84,11 @@ for (const f of ["GenericPanel.tsx", "ControlFrame.tsx"])
      got("camera.hik").join() === "camera.hik,camera.solo_direct,camera.tapo_hd", got("camera.hik"));
   ck("  ...the open camera is always in it, to step on from",
      got("camera.tapo_hd_direct").join() === "camera.hik,camera.solo_direct,camera.tapo_hd,camera.tapo_hd_direct");
+  // owner, 2026-10-21: the Server Room camera's placed stream was hidden in the villa's system — gone from the list
+  const hid = { ...devices, has: (d) => d !== "d1" && devices.has(d), isHidden: (id) => dev[id] === "d1" || devices.isHidden(id) };
+  ck("  ...a camera placed on the map is listed even when the villa's system hides it — never its other stream",
+     R.cameraChoices(all, "camera.hik", hid, placed).sort().join() === "camera.hik,camera.solo_direct,camera.tapo_hd",
+     R.cameraChoices(all, "camera.hik", hid, placed));
   const { readFileSync } = await import("node:fs");
   ck("  ...and the camera window steps through and lists exactly that",
      /const cameraIds = cameraChoices\(Object\.keys\(entities\), mapping\.entityId, devices, \(id\) => id in config\.entityMap\)/

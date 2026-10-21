@@ -133,6 +133,12 @@ console.log("\n  a device in a wall (2.496.201):");
   ck("the tolerance is a wall, not a garden", WALL_TOLERANCE_M >= 0.3 && WALL_TOLERANCE_M <= 1);
   const ev = readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8");
   ck("roomForEntity asks the plan's device ladder", /return this\.plan\.deviceRoomAt\(p\.x, p\.y, p\.z\)\?\.name \?\? null;/.test(ev));
+  // architecture review, 2026-10-21: a device drawn only by its poses or "__nobadge" has no badge — its room was "Other"
+  ck("  ...at where the device is DRAWN (its anchor), badge or not — the room list and the plan room both",
+     /private roomAnchor\(id: string\): TransformNode \| undefined \{\s*return this\.labelAnchors\.get\(id\) \?\? this\.labels\.get\(id\)\?\.anchor;/.test(ev)
+     && /roomForEntity\(entityId: string\): string \| null \{[\s\S]{0,400}const anchor = this\.roomAnchor\(entityId\);/.test(ev)
+     && /private planRoomOf\(id: string\): unknown \{[\s\S]{0,200}const a = this\.roomAnchor\(id\);/.test(ev)
+     && (ev.match(/this\.labels\.get\([^)]*\)\?\.anchor/g) ?? []).length === 1);
 }
 
 console.log("\n  a device's room, the whole ladder by value (Storeys.deviceRoomAt, 2.496.287):");

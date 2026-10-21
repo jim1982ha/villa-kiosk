@@ -1,3 +1,38 @@
+## 2.496.478
+
+### Fixed
+- **A critical leak or smoke sensor no longer makes every other wireless sensor critical.** 2.496.477 counted every
+  device under the same parent as one box. Wireless sensors all hang under the same radio bridge, so a critical leak
+  sensor made every sensor on that bridge red when it dropped, instead of orange. Now only a box's own parts are
+  marked: the relay box's pumps stay red together, and a critical sensor marks only itself.
+
+## 2.496.477
+
+### Fixed
+- **Every device on a critical box turns red when the box drops.** A Shelly box that carries two pumps is on the
+  critical list through its relay. Only one of its pumps (the first by name) was treated as critical, so when the box
+  lost Wi-Fi, House Pump was red and Pool Pump orange, Jacuzzi Pump red and Massage Jet Pump orange. Both pumps of a
+  box are now red together: badge, window, room and "Needs attention". Faults and alerts are unchanged (the rule
+  still waits 10 minutes).
+
+## 2.496.476
+
+### Changed
+- **A camera's buttons stay on the video for 10 seconds.** They faded after 2 seconds, too soon to find its moves,
+  its siren or its sound.
+- **A camera's video window shows its linked sensor.** A thin strip under the camera's bar shows the sensor's day
+  (a noise or door sensor), named when you point at it. The other windows already drew it as a band.
+
+### Fixed
+- **A camera placed on the map is in the camera list, even when the villa's system hides it.** Hiding its stream
+  removed the whole camera from the list and from previous/next, while its badge stayed on the map.
+- **A motion sensor that the villa's system gives no type is never a fault.** One whose name says "motion", "pir",
+  "presence" or "occupancy" was a "Motion detected" pop-up and, at the same time, a fault in "Needs attention" each
+  time someone walked past.
+- **A device with no badge keeps its room.** A device drawn only by its open/closed shapes, or marked "nobadge",
+  fell into "Other" when the villa's system gave it no room, and its room no longer glowed. Its room now comes from
+  where it is drawn.
+
 ## 2.496.475
 
 ### Changed
