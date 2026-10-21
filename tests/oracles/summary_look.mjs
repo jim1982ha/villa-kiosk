@@ -20,7 +20,7 @@ const ENTITIES = {
   "sensor.power": ent("sensor.power", "80"), "switch.pump": ent("switch.pump", "on"),
 };
 const src = storeLookSource(ENTITIES, {
-  entityMap: { "sensor.power": { entityId: "sensor.power", type: "sensor", linkedEntityId: "switch.pump" } } });
+  entityMap: { "sensor.power": { entityId: "sensor.power", type: "sensor", linkedEntityId: "switch.pump" } }, isHidden: () => false });
 const member = (id, extra = {}) => ({ id, look: deviceLook(id, src), reported: id in ENTITIES, occluded: false, ...extra });
 
 console.log("  a group card:");

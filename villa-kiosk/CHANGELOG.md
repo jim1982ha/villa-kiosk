@@ -1,3 +1,13 @@
+## 2.496.459
+
+### Fixed
+- **A device you hide in the villa's system is quiet on every screen.** The Cockpit already left it out; its badge
+  on the 3D map, its room's chip, its row in the room's list and its own window could still show it red ("Unlocked")
+  or amber ("Unavailable") — a red badge with nothing in "Needs attention" to explain it. It now stays where it is
+  placed, with its "hidden" mark in the lists, but never red and never amber.
+- **A device the villa's system no longer has is one line in "Needs attention".** A ticket about one of its readings,
+  deleted with it, stood as a second line under its "Missing" line; it now rides on that line, with its Close.
+
 ## 2.496.458
 
 ### New

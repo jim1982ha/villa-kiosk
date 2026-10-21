@@ -42,11 +42,13 @@ export interface OpenPanelInput {
   /** Is this device on the villa's critical list, folded (deviceGroups.criticalDevices) — the header's look reads it,
    *  and through it the window's lost pill. */
   isCritical: (entityId: string) => boolean;
+  /** Hidden in the villa's system (deviceGroups.hiddenIn): the header's look is quiet, as on the map. */
+  isHidden: (entityId: string) => boolean;
 }
 
 /** The open panel's actions (null when no panel is open), and the linked
  *  switch's "ask first" question, which the page draws as a dialog. */
-export function useOpenPanelActions({ screen, go, panelFor, readingsOf, doors, isCritical }: OpenPanelInput): {
+export function useOpenPanelActions({ screen, go, panelFor, readingsOf, doors, isCritical, isHidden }: OpenPanelInput): {
   actions: PanelActions | null;
   linkedAsk: AskFirst;
 } {
@@ -93,7 +95,7 @@ export function useOpenPanelActions({ screen, go, panelFor, readingsOf, doors, i
   // The device's exact map badge, its linked switch and its motion line —
   // components/panels/panelHeader, from the open panel and live data; the
   // switch's state is the optimistic hook's.
-  const header = panelHeader({ panel: activePanel, entities, config: { ...config, isCritical }, canControl,
+  const header = panelHeader({ panel: activePanel, entities, config: { ...config, isCritical, isHidden }, canControl,
     linkedSwitch: linkedPower && linkedEntityId
       ? { isOn: linkedToggle.isOn, known: linkedPower.position !== "unknown", contact: contactOf(entities[linkedEntityId]?.state) }
       : null });

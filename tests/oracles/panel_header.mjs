@@ -16,7 +16,7 @@ const entities = {
 const live = { entityMap: {
   "light.desk": { entityId: "light.desk", type: "light", label: "Desk", linkedEntityId: "switch.plug", badgeColor: "#ff0000" },
   "camera.gate": { entityId: "camera.gate", type: "camera", label: "Gate", motionEntityId: "binary_sensor.cam_motion" },
-}, deviceGroups: [] };
+}, deviceGroups: [], isHidden: () => false };
 // The panel's mapping as it was when the panel OPENED — no colour yet, no link.
 const desk = { entityId: "light.desk", mapping: { entityId: "light.desk", type: "light", label: "Desk" } };
 const h = (o) => panelHeader({ panel: desk, entities, config: live, canControl: true, linkedSwitch: { isOn: false, known: true }, ...o });

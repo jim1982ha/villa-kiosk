@@ -181,6 +181,13 @@ export function suggestDeviceGroups(
  *   • group members fold into their primary, so one physical device with
  *     three entities is one row.
  */
+/** Hidden in the villa's system: the entity, or the entity its device stands under (the fold) — ONE predicate for the
+ *  device list (selectableDeviceIds) and every look (VillaDevices.isHidden → deviceActivity's LookSource), so the map
+ *  can never paint red a device the Cockpit no longer lists (architecture review, 2026-10-21). */
+export function hiddenIn(hidden: ReadonlySet<string>, repOf: ReadonlyMap<string, string>): (entityId: string) => boolean {
+  return (id) => hidden.has(id) || hidden.has(repOf.get(id) ?? id);
+}
+
 function selectableDeviceIds(
   entityMap: Record<string, EntityMapping>,
   mappedEntityIds: ReadonlySet<string>,
@@ -190,6 +197,7 @@ function selectableDeviceIds(
   hidden: ReadonlySet<string>,
 ): string[] {
   const reps = new Set<string>();
+  const isHidden = hiddenIn(hidden, repOf);
   for (const id of new Set([...mappedEntityIds, ...Object.keys(entityMap)])) {
     if (entityMap[id]?.disabled) continue;
     if (!mappedEntityIds.has(id) && !entities[id]) continue;
@@ -199,7 +207,7 @@ function selectableDeviceIds(
     // hid there still made a live "Unlocked" card in the Cockpit — kept in the Kiosk's device config, it was never
     // asked whether the villa's system still shows it. Hidden by anyone (registryResolve.hiddenInHa), it or the
     // entity its device stands under.
-    if (hidden.has(id) || hidden.has(rep)) continue;
+    if (isHidden(id)) continue;
     reps.add(rep);
   }
   return [...reps];
@@ -318,8 +326,8 @@ export interface VillaDevices {
   /** Every device the villa actually has — real, not hidden, not dismissed,
    *  folded so a multi-entity device appears once. */
   readonly ids: readonly string[];
-  /** The subset Home Assistant currently reports as unavailable/unknown or
-   *  has never heard report. */
+  /** The subset that has lost contact (isOffline: "unavailable", or an entity the villa's system does not have —
+   *  "Missing"); never "unknown" (2026-10-18). */
   readonly unavailable: readonly string[];
   /** Is this entity one of the villa's devices? Provided so callers stop
    *  building their own `Set` from `ids` — five of them did. */
@@ -330,6 +338,8 @@ export interface VillaDevices {
   deviceOfRecord(field: string): string;
   /** Is this device critical — it, or an entity folded onto it, is on the villa's critical list (criticalDevices). */
   isCritical(entityId: string): boolean;
+  /** Hidden in the villa's system (hiddenIn): never one of `ids`, and never red or amber anywhere (its look). */
+  isHidden(entityId: string): boolean;
 }
 
 export function villaDevices(input: VillaDeviceInput): VillaDevices {
@@ -349,6 +359,7 @@ export function villaDevices(input: VillaDeviceInput): VillaDevices {
     deviceOf: (id) => deviceOf(folding, id),
     deviceOfRecord: recordDeviceOf(folding, (id) => id in input.entities),
     isCritical: ((crit) => (id: string) => crit.has(id))(criticalDevices(input.critical, folding)),
+    isHidden: hiddenIn(input.hidden, folding),
   };
 }
 

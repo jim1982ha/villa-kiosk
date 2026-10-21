@@ -145,7 +145,8 @@ export default function SummaryGroupPanel({
    *  lives elsewhere), so this reads the whole store, not the group's list. */
   // ...and the villa's critical list as the villa model folds it (devices.isCritical): a critical device that lost
   // contact is red here, as on the map and the Cockpit (2.496.428).
-  const looks = storeLookSource(entities, { ...config, isCritical: villaDevices.isCritical });
+  // ...and hidden as the villa model reads it (devices.isHidden): a hidden row keeps its "hidden" mark, never red or amber
+  const looks = storeLookSource(entities, { ...config, isCritical: villaDevices.isCritical, isHidden: villaDevices.isHidden });
   const { role } = useProfile();
   const entityLabel = useEntityLabel();
   const { ask: askScene, dialog: sceneDialog } = useSceneConfirm();

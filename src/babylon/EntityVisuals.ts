@@ -804,15 +804,21 @@ export class EntityVisuals {
   /** The villa's critical devices, folded onto their devices (deviceGroups.criticalDevices) — pushed by the page
    *  (setCriticalDevices). A critical device that lost contact rings red here as on the Cockpit (2.496.428). */
   private critical: ReadonlySet<string> = new Set();
-  private lookCfg: { from: AppConfig; crit: ReadonlySet<string>; cfg: LookSource["config"] } | null = null;
+  /** Hidden in the villa's system (deviceGroups.hiddenIn over the store's registry facts) — pushed by the page
+   *  (setHiddenDevices). Nothing is, until the villa's registry has been read. */
+  private hidden: (entityId: string) => boolean = () => false;
+  private lookCfg: {
+    from: AppConfig; crit: ReadonlySet<string>; hidden: (entityId: string) => boolean; cfg: LookSource["config"];
+  } | null = null;
   /** What `lookSource` reads as its config: the live config's two slices and the critical list — rebuilt only when
    *  either object is replaced, never per badge. */
   private lookConfig(): LookSource["config"] {
     const c = this.lookCfg;
-    if (c && c.from === this.config && c.crit === this.critical) return c.cfg;
+    if (c && c.from === this.config && c.crit === this.critical && c.hidden === this.hidden) return c.cfg;
     const crit = this.critical;
-    const cfg = { entityMap: this.config.entityMap, isCritical: (id: string) => crit.has(id) };
-    this.lookCfg = { from: this.config, crit, cfg };
+    const hidden = this.hidden;
+    const cfg = { entityMap: this.config.entityMap, isCritical: (id: string) => crit.has(id), isHidden: hidden };
+    this.lookCfg = { from: this.config, crit, hidden, cfg };
     return cfg;
   }
   /** User size multiplier (Settings slider) and live bird's-eye zoom factor;
@@ -1068,6 +1074,15 @@ export class EntityVisuals {
     if (ids.size === this.critical.size && [...ids].every((id) => this.critical.has(id))) return;
     this.critical = ids;
     // a room chip's number takes its colour in the layout pass (summaryLook.roomHealth): redo it
+    this.markLayoutDirty();
+    this.repaintBadges();
+  }
+
+  /** Which entities are hidden in the villa's system (deviceGroups.hiddenIn): their badges, meshes and room chips
+   *  repaint quiet — never red, never amber (deviceActivity.badgeKindFor). */
+  setHiddenDevices(isHidden: (entityId: string) => boolean): void {
+    if (isHidden === this.hidden) return;
+    this.hidden = isHidden;
     this.markLayoutDirty();
     this.repaintBadges();
   }

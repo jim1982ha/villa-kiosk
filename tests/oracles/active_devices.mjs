@@ -45,7 +45,7 @@ console.log("\n  how many are on, per category:");
   // "On" per category is groupLook's POWER count over the category's members — the one rule
   // (which devices a category holds is villaVisibility.categoryMembers, driven below).
   const { storeLookSource, deviceLook, groupLook } = await import("@/utils/deviceActivity");
-  const src = storeLookSource(entities, { entityMap });
+  const src = storeLookSource(entities, { entityMap, isHidden: () => false });
   const members = { access_control: ["lock.front", "lock.back"], comfort: ["sensor.t"] };
   const on = (ids) => groupLook(ids.map((id) => deviceLook(id, src)), { showingDevices: false }).onCount;
   ck("two locks, one unlocked: 1 on (was 2 on)", members.access_control.length === 2 && on(members.access_control) === 1);

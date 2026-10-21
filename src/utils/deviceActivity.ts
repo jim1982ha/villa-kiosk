@@ -56,6 +56,9 @@ export interface DeviceReading {
   /** On the villa's critical list (LookSource.config.isCritical — the list its "critical devices offline" rule
    *  watches, folded onto the device). Only matters once contact is lost: the ring turns red. */
   critical: boolean;
+  /** Hidden in the villa's system (LookSource.config.isHidden — VillaDevices.isHidden): no device, so never red, never
+   *  amber (badgeKindFor). Required, like alertState: "not hidden" is said, never forgotten. */
+  hidden: boolean;
 }
 
 /** The five-way live-state reading a badge is painted from: this module's own
@@ -91,6 +94,15 @@ export const SURFACE_STATE: Record<BadgeKind, DeviceSurfaceState> = {
  * resolved it three different ways (2.496.245).
  */
 export function badgeKindFor(r: DeviceReading): BadgeKind {
+  // ⚠️ HIDDEN IS NO DEVICE, ON EVERY SURFACE (architecture review, 2026-10-21): since 2.496.457 the Cockpit, its counts
+  // and the update pill left a hidden device out, while its map badge, its room chip and its room-list row still
+  // painted it red ("Unlocked") or amber — a red badge with no line in "Needs attention" (attention.ts: "a red badge
+  // is always here"). It stays drawn where it is placed (a 3D object that glows and names nothing was the 2.254.0
+  // dead end), quiet: what it does, never an alarm, never "contact lost".
+  if (r.hidden) {
+    const k = badgeKindFor({ ...r, hidden: false });
+    return k === "alert" || k === "unavailable" ? "off" : k;
+  }
   const contact = contactOf(r.entity.state);
   if (contact === "lost") return "unavailable";
   // nothing to say (unknown): quiet, as a device at rest — never "contact lost" amber, never a lock's red
@@ -327,6 +339,9 @@ export interface LookSource {
   config: {
     entityMap: Record<string, EntityMapping>;
     isCritical?: (entityId: string) => boolean;
+    /** Hidden in the villa's system (VillaDevices.isHidden, deviceGroups.hiddenIn). REQUIRED: a caller that forgot it
+     *  painted a hidden device red where every other surface had dropped it. */
+    isHidden: (entityId: string) => boolean;
   };
   /** A linked switch the person has just thrown and Home Assistant has not yet
    *  confirmed: true/false while it is pending, undefined otherwise. Only the
@@ -382,6 +397,7 @@ export function readingOf(entityId: string, source: LookSource): DeviceReading {
     linkedOn,
     alertState: alertStateFor(entity.attributes.device_class as string | undefined),
     critical: source.config.isCritical?.(entityId) ?? false,
+    hidden: source.config.isHidden(entityId),
   };
 }
 

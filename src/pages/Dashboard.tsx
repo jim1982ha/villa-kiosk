@@ -52,7 +52,7 @@ import type { SceneManager } from "@/babylon/SceneManager";
 import type { ActivePanel } from "@/types/panel.types";
 import type { TeleportPoint } from "@/types/scene.types";
 import { VillaModelProvider, useVillaSets, useDeviceIdentity } from "@/config/VillaModel";
-import { criticalDevices } from "@/config/deviceGroups";
+import { criticalDevices, hiddenIn } from "@/config/deviceGroups";
 import { useCriticalDevices } from "@/ha/criticalDevices";
 import { categoryMembers } from "@/config/villaVisibility";
 import AskDialog from "@/components/common/AskDialog";
@@ -62,7 +62,7 @@ import { readSceneMirror } from "./sceneMirror";
 export default function Dashboard() {
   const { config, update, resolvedRooms, setResolvedRooms } = useConfig();
   const { role } = useProfile();
-  const { connect, entities, suppressedEntityIds, ws, haConfig, subscribeAll, entityAreaNames } = useHA();
+  const { connect, entities, suppressedEntityIds, hiddenInHaEntityIds, ws, haConfig, subscribeAll, entityAreaNames } = useHA();
   // ⚠️ A ROOM FOR EVERY DEVICE, NOT FOR A LIST (architecture review, 2026-10-15): rooms were worked out for the ids on
   // the map and the stored mappings, and each new place that showed a device had to join that list — a fault on a sensor
   // the model does not draw had no room line (owner, 2026-10-15). Every entity Home Assistant has now gets its room by
@@ -415,7 +415,11 @@ export default function Dashboard() {
   const critical = useMemo(() => criticalDevices(criticalIds, identity.folding), [criticalIds, identity.folding]);
   const isCritical = useCallback((id: string) => critical.has(id), [critical]);
   useEffect(() => { manager?.setCriticalDevices(critical); }, [manager, critical]);
-  const openPanel = useOpenPanelActions({ screen, go, panelFor, readingsOf: identity.readingsOf, doors, isCritical });
+  // Hidden in the villa's system, as the villa model reads it (deviceGroups.hiddenIn — VillaDevices.isHidden): never
+  // red or amber on the map, its room chip, the open window or the room chooser, as it is in no Cockpit list.
+  const isHidden = useMemo(() => hiddenIn(hiddenInHaEntityIds, identity.folding), [hiddenInHaEntityIds, identity.folding]);
+  useEffect(() => { manager?.setHiddenDevices(isHidden); }, [manager, isHidden]);
+  const openPanel = useOpenPanelActions({ screen, go, panelFor, readingsOf: identity.readingsOf, doors, isCritical, isHidden });
   const linkedAsk = openPanel.linkedAsk;
 
   // Everything React shows of the scene's own state, read from EACH new scene
@@ -607,14 +611,14 @@ export default function Dashboard() {
     (room: string, entityIds: string[], roomNames: string[]) => {
       const merged = chipRooms(roomNames, room);
       if (merged.length > 1) {
-        const looks = storeLookSource(entities, { ...config, isCritical });
+        const looks = storeLookSource(entities, { ...config, isCritical, isHidden });
         setRoomChoices(roomChoicesFor(merged, entityIds, (id) => deviceRoom(resolvedRooms, id),
           (id) => (entities[id] ? deviceLook(id, looks) : undefined)));
         return;
       }
       go({ type: "openList", list: { kind: "room", room, entityIds } });
     },
-    [resolvedRooms, entities, config, isCritical, go],
+    [resolvedRooms, entities, config, isCritical, isHidden, go],
   );
 
   const handleClusterTapped = useCallback(

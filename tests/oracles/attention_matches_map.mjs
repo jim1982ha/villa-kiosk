@@ -36,7 +36,7 @@ const selectableIds = STATES.map(([id]) => id);
 const unavailableIds = ["light.lost", "lock.lost"];
 const resolvedRooms = {};
 
-const map = mapLookSource(new Map(Object.entries(entities)), new Map(Object.entries(entityMap)), () => ({ entityMap }));
+const map = mapLookSource(new Map(Object.entries(entities)), new Map(Object.entries(entityMap)), () => ({ entityMap, isHidden: () => false }));
 const redOnMap = selectableIds.filter((id) => deviceLook(id, map).face === "alert").sort();
 const villa = devicesOf({ ids: selectableIds, unavailable: unavailableIds });
 const items = buildAttentionItems({ devices: villa, entities, entityMap, resolvedRooms, fmData: EMPTY_FM_DATA });
