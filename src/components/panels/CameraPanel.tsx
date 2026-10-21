@@ -686,6 +686,27 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
           />
         </div>
         <div className="camera-controls">
+          {/* ⚠️ THE CAMERA'S OWN BUTTONS, ONE LINE OF THEIR OWN ON A PHONE (owner, 2026-10-21: "show the control, alert
+              and sound button in 1 line, and all other buttons at the same place as for other cameras"): its moves,
+              its siren and its sound, in one group (.camera-device-controls) — a line above the usual ones on an
+              upright phone, among them everywhere else (display: contents). */}
+          <div className="camera-device-controls">
+            {/* the camera's own moves and siren, the owner's (CameraDeviceButtons) */}
+            <CameraDeviceButtons cameraId={mapping.entityId} order={vOrder} />
+            {/* its sound, off until tapped (soundOn) — only a video feed carries one */}
+            {(mode === "webrtc" || mode === "hls") && (
+              <button
+                className={`icon-btn camera-sound-btn${soundOn ? " on" : ""}`}
+                onClick={toggleSound}
+                title={soundOn ? "Mute" : "Sound on"}
+                aria-label={soundOn ? "Mute" : "Sound on"}
+                aria-pressed={soundOn}
+                style={vOrder(11)}
+              >
+                {soundOn ? <Volume2 /> : <VolumeX />}
+              </button>
+            )}
+          </div>
           {/* Linked entity on/off — the camera's stand-in for the switch
               BasePanel shows at the top of every other panel. Styled as an
               icon-btn so it sits in this cluster naturally; .on marks the
@@ -698,8 +719,6 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
               .icon-btn svg (styles.css) sizes every icon in this cluster to
               a consistent 55% of its button uniformly, at every breakpoint,
               instead of a hand-picked pixel value per icon. */}
-          {/* the camera's own moves and siren, the owner's (CameraDeviceButtons) */}
-          <CameraDeviceButtons cameraId={mapping.entityId} order={vOrder} />
           {linked && (
             <button
               className={`icon-btn camera-linked-btn${linked.isOn ? " on" : ""}`}
@@ -739,19 +758,6 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
                 <ChevronRight />
               </button>
             </>
-          )}
-          {/* its sound, off until tapped (soundOn) — only a video feed carries one */}
-          {(mode === "webrtc" || mode === "hls") && (
-            <button
-              className={`icon-btn camera-sound-btn${soundOn ? " on" : ""}`}
-              onClick={toggleSound}
-              title={soundOn ? "Mute" : "Sound on"}
-              aria-label={soundOn ? "Mute" : "Sound on"}
-              aria-pressed={soundOn}
-              style={vOrder(11)}
-            >
-              {soundOn ? <Volume2 /> : <VolumeX />}
-            </button>
           )}
           {fullscreenSupported && (
             <button
