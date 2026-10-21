@@ -146,9 +146,19 @@ export function detectionStateFor(deviceClass: string | undefined): "on" | undef
 }
 
 /** The state a sensor's WINDOW colours red: its problem state (alertStateFor),
- *  else, for a detector, its detection (detectionStateFor). */
+ *  else, for a detector, its detection (detectionStateFor), else, for an
+ *  opening or a lock, the state that is not its secure one (secureStateFor):
+ *  a door OPEN, a lock UNLOCKED.
+ *
+ *  ⚠️ AN OPEN DOOR LOOKS ALARMING IN ITS WINDOW (owner, 2026-10-21: "make sure
+ *  the 'open' pill appears with the alarming style"): it read plain grey since
+ *  2026-10-05 ("an open window is not a fault"). Colours only, as a detection:
+ *  its pill, its history bar and its "Also on this device" line. The map, the
+ *  Cockpit and the alerts still read it as information (alertStateFor) — an
+ *  open door is not a problem to list. */
 export function colourAlertStateFor(deviceClass: string | undefined): string | undefined {
-  return alertStateFor(deviceClass) ?? detectionStateFor(deviceClass);
+  return alertStateFor(deviceClass) ?? detectionStateFor(deviceClass)
+    ?? (secureStateFor(deviceClass) === "off" ? "on" : undefined);
 }
 
 /** binary_sensor device_classes whose "on" means someone or something MOVED.
