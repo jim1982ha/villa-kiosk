@@ -12,6 +12,7 @@
 
 import { deviceLook, storeLookSource } from "@/utils/deviceActivity";
 import { alarmText } from "@/config/reading";
+import { alertIsFault } from "@/config/BinarySensorClasses";
 import { labelOf } from "@/config/EntityMap";
 import { deviceRoom, deviceRoomOrRecord, firstRoom, roomLabel } from "@/config/devicePlace";
 import { devicesFor, recordEntity, type VillaDevices } from "@/config/deviceGroups";
@@ -285,11 +286,13 @@ export function buildAttentionItems(opts: {
   // Zigbee2MQTT relay-lock/config sub-entity is technically a binary_sensor
   // too, and was never meant to be villa-facing. An unavailable device is
   // never `alert` (its face is the amber "unavailable"), so it is listed once,
-  // above, as that.
+  // above, as that. A detection (a motion sensor that sees someone) is red and
+  // NO fault (alertIsFault, owner 2026-10-21): the one red badge not listed.
   const looks = storeLookSource(entities, { entityMap, isCritical: devices.isCritical, isHidden: devices.isHidden });
   for (const id of devices.ids) {
     const entity = entities[id];
     if (!entity || !deviceLook(id, looks).alert) continue;
+    if (id.startsWith("binary_sensor.") && !alertIsFault(entity.attributes.device_class as string | undefined)) continue;
     items.push({
       id: `alarm:${id}`,
       kind: "alarm",

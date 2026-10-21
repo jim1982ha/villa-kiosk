@@ -27,6 +27,9 @@ export interface BinarySensorClassInfo {
   /** Which state (if any) counts as this class's default "problem" state.
    *  "none" = purely informational, never auto-flagged as an alert. */
   alarmState: "on" | "off" | "none";
+  /** false = its problem state is red on every surface but is no fault: never a line in "Needs attention"
+   *  (alertIsFault). Absent = listed. */
+  listed?: false;
 }
 
 /** Fallback for a missing/unrecognised device_class — preserves the
@@ -52,10 +55,11 @@ const BINARY_SENSOR_CLASSES: Record<string, BinarySensorClassInfo> = {
 
   // ⚠️ A DETECTION IS RED, ON EVERY SURFACE (owner, 2026-10-21: "the entity badge to follow the state of the entity …
   // everywhere"): a motion or occupancy sensor's "on" was red in its window only (2026-10-05) and plain on the map.
-  // The badge, its room chip and "Needs attention" read this table too now.
-  motion: { icon: Activity, alarmState: "on" },
+  // The badge and its room chip read this table too now. ⚠️ BUT A DETECTION IS NO FAULT (owner, 2026-10-21, the same
+  // day: "don't create a fault in cockpit when Motion sensor are triggered"): red, never a line in "Needs attention".
+  motion: { icon: Activity, alarmState: "on", listed: false },
   moving: { icon: Activity, alarmState: "none" },
-  occupancy: { icon: Eye, alarmState: "on" },
+  occupancy: { icon: Eye, alarmState: "on", listed: false },
   // ⚠️ AN OPEN DOOR IS RED, ON EVERY SURFACE (owner, 2026-10-21: "make sure the 'open' pill appears with the alarming
   // style", then "the entity badge to follow the state of the entity"): an opening open, a lock sensor unlocked — its
   // badge, its window and "Needs attention" until it closes. It was information (2026-10-05: "an open window is not a
@@ -124,6 +128,12 @@ export function stateLabelFor(entityId: string, deviceClass?: string): (state: s
 export function alertStateFor(deviceClass: string | undefined): string | undefined {
   const alarm = binarySensorClassInfo(deviceClass).alarmState;
   return alarm === "none" ? undefined : alarm;
+}
+
+/** Whether this class's problem state (alertStateFor) is a FAULT, a line in "Needs attention": every class but a
+ *  detection (motion, occupancy), which is red on its badge and its window and listed nowhere (owner, 2026-10-21). */
+export function alertIsFault(deviceClass: string | undefined): boolean {
+  return binarySensorClassInfo(deviceClass).listed !== false;
 }
 
 /** Device classes whose on/off state is a physical opening's POSITION

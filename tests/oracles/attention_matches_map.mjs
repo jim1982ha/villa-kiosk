@@ -41,10 +41,16 @@ const redOnMap = selectableIds.filter((id) => deviceLook(id, map).face === "aler
 const villa = devicesOf({ ids: selectableIds, unavailable: unavailableIds });
 const items = buildAttentionItems({ devices: villa, entities, entityMap, resolvedRooms, fmData: EMPTY_FM_DATA });
 const listed = items.filter((i) => i.kind === "alarm").map((i) => i.entityId).sort();
+// A DETECTION is red and no fault (owner, 2026-10-21: "don't create a fault in cockpit when Motion sensor are
+// triggered"): the one red badge not listed.
+const DETECTIONS = ["binary_sensor.pir"];
 
 console.log(`  red on the map: ${redOnMap.join(", ")}`);
 console.log(`  listed alarms : ${listed.join(", ")}`);
-ck("red on the map ⇔ an alarm in Needs attention", redOnMap.join() === listed.join(), { redOnMap, listed });
+ck("red on the map ⇔ an alarm in Needs attention, a detection apart",
+   redOnMap.filter((id) => !DETECTIONS.includes(id)).join() === listed.join(), { redOnMap, listed });
+ck("a motion sensor that sees someone is red on the map and NOT in Needs attention",
+   DETECTIONS.every((id) => redOnMap.includes(id) && !listed.includes(id)), { redOnMap, listed });
 ck("  ...including the cases the old rule missed: an unlocked door, a jammed lock, a fault-word sensor",
    ["lock.front", "lock.shed", "sensor.pump_status"].every((id) => listed.includes(id)), listed);
 // What the OLD rule (binary_sensor + its class's alarmState only) listed — to show the test discriminates.
@@ -55,7 +61,6 @@ const oldRule = selectableIds.filter((id) => {
   return info.alarmState !== "none" && entities[id].state === info.alarmState;
 }).sort();
 ck("  ...(the old rule disagreed with the map on this set)", oldRule.join() !== redOnMap.join(), oldRule);
-// a motion sensor that sees someone IS an alarm since 2026-10-21 (owner, 2026-10-21: "the entity badge to follow the state of the entity … everywhere")
 ck("a device merely on, active or linked is never an alarm",
    ["light.hall", "switch.pump", "camera.gate", "cover.blind", "lock.side", "sensor.linked_power"].every((id) => !listed.includes(id)));
 ck("an unavailable device is listed ONCE, as unavailable — never also as an alarm",

@@ -81,9 +81,10 @@ console.log("\n  the Cockpit's alarm line");
   const badItems = items.filter((i) => i.detail !== oldAlarm(i.entityId, E[i.entityId])).map((i) => `${i.entityId}: ${i.detail}`);
   ck(`every alarm Needs attention lists (${items.length}) is worded as before`, badItems.length === 0, badItems.slice(0, 5));
   const listed = new Set(items.map((i) => i.entityId));
-  // a detection and an open door are listed since 2026-10-21 (owner, 2026-10-21: "the entity badge to follow the state of the entity … everywhere")
-  ck("  (the alarms include a hazard, a lost connection, a lock, a fault word, a detection and an open door)",
-     ["binary_sensor.motion_on", "binary_sensor.door_on", "binary_sensor.smoke_on", "binary_sensor.connectivity_off", "lock.l_unlocked", "lock.l_jammed", "sensor.words_fault"]
+  // an open door is listed since 2026-10-21; a detection is red and NO fault (owner, 2026-10-21: "don't create a
+  // fault in cockpit when Motion sensor are triggered")
+  ck("  (the alarms include a hazard, a lost connection, a lock, a fault word and an open door; never a detection)",
+     !listed.has("binary_sensor.motion_on") && !listed.has("binary_sensor.occupancy_on") && ["binary_sensor.door_on", "binary_sensor.smoke_on", "binary_sensor.connectivity_off", "lock.l_unlocked", "lock.l_jammed", "sensor.words_fault"]
        .every((id) => listed.has(id)), [...listed]);
 }
 

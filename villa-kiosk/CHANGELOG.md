@@ -1,3 +1,10 @@
+## 2.496.462
+
+### Changed
+- **A motion sensor that detects someone is no longer a fault.** Its badge and its window stay red while it detects,
+  but it is no longer listed in the Cockpit's "Needs attention", and it no longer counts on the top bar's badge. The
+  same goes for occupancy sensors. An open door, window or garage door is still listed until it closes.
+
 ## 2.496.461
 
 ### Changed
