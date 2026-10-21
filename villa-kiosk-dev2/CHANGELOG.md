@@ -1,3 +1,10 @@
+## 2.496.473
+
+### Added
+- **A camera's sound.** A camera's video has a speaker button among its buttons: tap it to hear the camera's
+  microphone, tap again to mute. Each camera opens silent (a browser only starts a video by itself when it is
+  silent). Shown on a live video feed; a camera shown as still pictures has no sound to give.
+
 ## 2.496.472
 
 ### Changed
