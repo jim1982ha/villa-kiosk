@@ -53,6 +53,14 @@ export const ENTITY_MAP: Record<string, EntityMapping> = {};
 const MESH_ALIASES: Record<string, string> = {};
 
 /** Infer a panel/entity type from an entity_id domain prefix. */
+/** What kind of device `entityId` is: as the map drew it (`drawn`, its mesh's mapping), else as saved in Advanced
+ *  Settings (`saved`), else from its id, else a sensor. ⚠️ ONE ANSWER (architecture review A, 2026-10-22): written out
+ *  at four places, one of which skipped the map's own mapping — the room of a sensor found in the 3D model stayed
+ *  dark (2.496.479), a device group's member read as its saved type only. */
+export function deviceTypeOf(entityId: string, drawn?: { type: EntityType } | null, saved?: { type?: EntityType } | null): EntityType {
+  return drawn?.type ?? saved?.type ?? inferTypeFromEntityId(entityId) ?? "sensor";
+}
+
 export function inferTypeFromEntityId(entityId: string): EntityType | null {
   const domain = domainOf(entityId);
   return (ENTITY_DOMAINS as readonly string[]).includes(domain) ? (domain as EntityType) : null;

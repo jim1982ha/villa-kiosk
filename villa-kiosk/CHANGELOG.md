@@ -1,3 +1,13 @@
+## 2.496.483
+
+### Fixed
+- **A category's long-press list shows the same devices as everywhere else.** Holding a category in the top bar listed
+  devices no other screen lists: one switched off in Advanced Settings, one hidden in the villa's system but placed on
+  the map, and each part of a device group as a row of its own. It now lists the villa's devices, as the counts and the
+  Cockpit do.
+- **A device group's reading follows the type the map drew.** One more place worked out "what kind of device is this"
+  on its own; all now ask one rule.
+
 ## 2.496.482
 
 ### Changed

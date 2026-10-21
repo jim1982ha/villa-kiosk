@@ -91,7 +91,7 @@ import {
 import { clampIconScale } from "@/config/AppConfig";
 import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
-import { resolveMeshToMapping, extractVariantSuffix, hasVariantSuffix, inferTypeFromEntityId } from "@/config/EntityMap";
+import { resolveMeshToMapping, extractVariantSuffix, hasVariantSuffix, deviceTypeOf } from "@/config/EntityMap";
 import { groupMemberIds, groupForPrimary } from "@/config/deviceGroups";
 import { effectiveCategory, subjectOf, categorySurface, categorySurfaceRinged } from "@/config/EntityCategories";
 import { deviceLook, mapLookSource, meshLookFor, readingOf, type LookSource } from "@/utils/deviceActivity";
@@ -5462,7 +5462,7 @@ export class EntityVisuals {
     for (const member of group.memberEntityIds) {
       const st = this.lastState.get(member);
       if (!st) continue;
-      const t = this.config.entityMap[member]?.type ?? inferTypeFromEntityId(member) ?? "sensor";
+      const t = deviceTypeOf(member, this.mapping.get(member), this.config.entityMap[member]);
       const v = compactValue(t, st);
       if (v) parts.push(v);
     }
