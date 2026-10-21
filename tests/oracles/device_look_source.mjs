@@ -76,8 +76,10 @@ const look = (type, state, link) => {
 };
 // The confirmed divergence: SummaryGroupPanel read `entities[linked].state === "on"`.
 const rawRule = (link) => link[1] === "on";
-ck("a device linked to an UNLOCKED lock is ringed (the list's raw `=== \"on\"` said no)",
-   look("sensor", "5", ["lock.gate", "unlocked"]).ring === "active" && !rawRule(["lock.gate", "unlocked"]));
+// red since 2026-10-21: a linked entity needing attention (an unlocked lock) rings the badge red (owner: a lock's
+// door sensor reading Open turns the lock's badge red)
+ck("a device linked to an UNLOCKED lock is ringed — red, the lock needs attention (the list's raw `=== \"on\"` said no)",
+   look("sensor", "5", ["lock.gate", "unlocked"]).ring === "alert" && !rawRule(["lock.gate", "unlocked"]));
 ck("  ...linked to an OPEN cover: ringed", look("sensor", "5", ["cover.blind", "open"]).ring === "active");
 ck("  ...linked to a LOCKED lock, a CLOSED cover, an OFF or lost switch: not",
    ["lock.gate:locked", "cover.blind:closed", "switch.pump:off", "switch.pump:unavailable"]

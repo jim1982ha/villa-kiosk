@@ -90,7 +90,7 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
             <div className="muted body-text" style={{ margin: "12px 0 4px" }}>{r.label}</div>
             {historyOf(r.reading) === "states"
               ? <LastDayTimeline entityId={r.id} colorFor={r.reading.stateColor ?? undefined} />
-              : <LastDayTimeline entityId={r.id} legend />}
+              : <LastDayTimeline entityId={r.id} palette />}
           </div>
         ))}
       </>}

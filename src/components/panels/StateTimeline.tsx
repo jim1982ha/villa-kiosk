@@ -21,15 +21,9 @@ import { useChartPointer } from "./useChartPointer";
 // offline colour come from config/reading, like every other surface's.
 import { readableState, chartColours, NOT_KEPT, NOT_KEPT_WORDS } from "@/config/reading";
 import { TREND_INTERVAL_MS } from "@/utils/trendInterval";
-import { bandEnd, DAY_MS, timelineCells, timelineRuns } from "@/utils/timelineCells";
+import { bandEnd, DAY_MS, timelineCells, timelineLegend, timelineRuns } from "@/utils/timelineCells";
 import type { HistoryStatus } from "@/utils/statisticsSeries";
 import { ChartEmpty } from "./LineChart";
-
-export interface TimelineLegendEntry {
-  state: string;
-  color: string;
-  label?: string;
-}
 
 interface Props {
   /** Ascending by time. The state at data[0] is assumed to hold from before
@@ -54,11 +48,10 @@ interface Props {
    *  "Off"). Defaults to the readable raw state. */
   labelFor?: (state: string) => string;
   height?: number;
-  /** Optional legend row below the bar — pass this for states whose colour
-   *  isn't already self-evident (e.g. a generic text sensor); skip it for a
-   *  plain on/off device, whose current-state pill above already says which
-   *  colour means what. */
-  legend?: TimelineLegendEntry[];
+  /** false: no legend row (a band too thin to carry one: a linked sensor's row, which names its state beside it).
+   *  Otherwise the band lists every state it paints, its colour and its words (timelineLegend) — never a caller's
+   *  choice (owner, 2026-10-21). */
+  legend?: false;
   /** Where the fetch stands (useHistory's own status) — "still loading",
    *  "HA has no history" and "the request failed" are three different facts,
    *  and this used to take a `loading` flag that could say only the first. */
@@ -130,6 +123,7 @@ export default function StateTimeline({
     [data, hours, end, bucketMs, timeKey, baselineKey]);
 
   const runs = useMemo(() => timelineRuns(cells, colorFor), [cells, colorFor]);
+  const key = legend === false ? [] : timelineLegend(cells, colorFor, wordsFor);
 
   if (data.length === 0 || cells.length === 0) return <ChartEmpty status={status} height={height} bar />;
 
@@ -196,11 +190,11 @@ export default function StateTimeline({
                   ]} />
         )}
       </div>
-      {legend && legend.length > 1 && (
-        <div className="row" style={{ gap: 16, marginTop: 8, fontSize: "var(--text-xs)", flexWrap: "wrap" }}>
-          {legend.map((l) => (
+      {key.length > 0 && (
+        <div className="row state-timeline-legend" style={{ gap: 16, marginTop: 8, fontSize: "var(--text-xs)", flexWrap: "wrap" }}>
+          {key.map((l) => (
             <span className="muted" key={l.state}>
-              <span style={{ color: l.color }}>●</span> {l.label ?? l.state}
+              <span style={{ color: l.color }}>●</span> {l.label}
             </span>
           ))}
         </div>

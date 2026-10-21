@@ -20,6 +20,6 @@ export default function ReadingHistory({ entityId, mappingType }: {
   const r = readingOf(entityId, entity, mappingType ?? domainOf(entityId));
   const unit = entity?.attributes.unit_of_measurement ?? "";
   return historyOf(r) === "states" ? <LastDayTimeline entityId={entityId} colorFor={r.stateColor ?? undefined} />
-    : historyOf(r) === "words" ? <LastDayTimeline entityId={entityId} legend />
+    : historyOf(r) === "words" ? <LastDayTimeline entityId={entityId} palette />
     : <NumericHistory series={[{ id: entityId, label: "Reading", unit, color: r.seriesColor }]} />;
 }

@@ -187,6 +187,8 @@ function CockpitAttentionSub({ line, actions }: { line: CardLine; actions?: Reac
           <span className="cockpit-attention-sub-title" title={line.text}>{line.text}</span>
           {/* what last happened about it on Telegram — a reminder, an escalation, a button pressed (owner, 2026-10-14) */}
           {line.latest && <span className="cockpit-attention-latest">{line.latest.note} · {localStamp(line.latest.at)}</span>}
+          {/* when the VESTA Agent closes it if it stays right (owner, 2026-10-21) */}
+          {line.closing && <span className="cockpit-attention-latest">{line.closing}</span>}
         </span>
         {/* a press on it is its own: never the card's tap-to-open */}
         {actions && <span className="cockpit-line-act" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>{actions}</span>}

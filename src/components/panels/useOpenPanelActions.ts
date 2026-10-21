@@ -117,6 +117,7 @@ export function useOpenPanelActions({ screen, go, panelFor, readingsOf, doors, i
       onSetBadgeColor: (hex) => update(patchMapping(activePanel.entityId, { badgeColor: hex ?? undefined }, activePanel.mapping)),
       linked: header.linked ? { ...header.linked, toggle: linkedAsk.request } : undefined,
       motion: header.motion ?? undefined,
+      linkedSensor: header.linkedSensor ?? undefined,
     },
   };
 }

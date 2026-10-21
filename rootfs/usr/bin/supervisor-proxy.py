@@ -3573,11 +3573,15 @@ _HHMM = re.compile(r"(?:[01]\d|2[0-3]):[0-5]\d")
 def _agent_cadence(value) -> dict | None:
     """The agent's own timing as its heartbeat says it (agent-contract.json `heartbeat.cadence`), or None when it is
     not that shape. ⚠️ THE AGENT'S CLOCK, TOLD — NOT COPIED (architecture review, 2026-10-15): the Overview's (i) said
-    "checks every 5 minutes, nightly check at 02:00" whatever the villa had set. Only these two are kept: anything else
+    "checks every 5 minutes, nightly check at 02:00" whatever the villa had set. Only these three are kept: anything else
     an older Agent sends is dropped, never refused."""
     if _agent_cadence_problem(value) is not None:
         return None
-    return {"checkMinutes": value["checkMinutes"], "nightlyAt": value["nightlyAt"]}
+    # when its look last started (owner, 2026-10-21: the Next check's time moved every minute, "now + 5 min"): kept
+    # only as a moment that parses; anything else is dropped like any other key
+    look = value.get("lastLookAt")
+    return {"checkMinutes": value["checkMinutes"], "nightlyAt": value["nightlyAt"],
+            **({"lastLookAt": look} if isinstance(look, str) and len(look) <= 40 and _iso_epoch(look) is not None else {})}
 
 
 def _agent_presence() -> dict:

@@ -27,6 +27,9 @@ export interface BinarySensorClassInfo {
   /** Which state (if any) counts as this class's default "problem" state.
    *  "none" = purely informational, never auto-flagged as an alert. */
   alarmState: "on" | "off" | "none";
+  /** true = a DETECTION (someone or something is there): its "on" glows its room on the map (detectsPresence), and it
+   *  is never a fault — no line in "Needs attention" (alertIsFault). Absent = not one. */
+  detects?: true;
 }
 
 /** Fallback for a missing/unrecognised device_class — preserves the
@@ -52,10 +55,11 @@ const BINARY_SENSOR_CLASSES: Record<string, BinarySensorClassInfo> = {
 
   // ⚠️ A DETECTION IS RED, ON EVERY SURFACE (owner, 2026-10-21: "the entity badge to follow the state of the entity …
   // everywhere"): a motion or occupancy sensor's "on" was red in its window only (2026-10-05) and plain on the map.
-  // The badge, its room chip and "Needs attention" read this table too now.
-  motion: { icon: Activity, alarmState: "on" },
-  moving: { icon: Activity, alarmState: "none" },
-  occupancy: { icon: Eye, alarmState: "on" },
+  // The badge and its room chip read this table too now. ⚠️ BUT A DETECTION IS NO FAULT (owner, 2026-10-21, the same
+  // day: "don't create a fault in cockpit when Motion sensor are triggered"): red, never a line in "Needs attention".
+  motion: { icon: Activity, alarmState: "on", detects: true },
+  moving: { icon: Activity, alarmState: "none", detects: true },
+  occupancy: { icon: Eye, alarmState: "on", detects: true },
   // ⚠️ AN OPEN DOOR IS RED, ON EVERY SURFACE (owner, 2026-10-21: "make sure the 'open' pill appears with the alarming
   // style", then "the entity badge to follow the state of the entity"): an opening open, a lock sensor unlocked — its
   // badge, its window and "Needs attention" until it closes. It was information (2026-10-05: "an open window is not a
@@ -66,7 +70,7 @@ const BINARY_SENSOR_CLASSES: Record<string, BinarySensorClassInfo> = {
   opening: { icon: DoorOpen, alarmState: "on" },
   lock: { icon: Unlock, alarmState: "on" },
   // Informational — presence/state, not a fault, so never auto-alerts.
-  presence: { icon: Home, alarmState: "none" },
+  presence: { icon: Home, alarmState: "none", detects: true },
   sound: { icon: Volume2, alarmState: "none" },
   vibration: { icon: Vibrate, alarmState: "none" },
   light: { icon: Lightbulb, alarmState: "none" },
@@ -124,6 +128,26 @@ export function stateLabelFor(entityId: string, deviceClass?: string): (state: s
 export function alertStateFor(deviceClass: string | undefined): string | undefined {
   const alarm = binarySensorClassInfo(deviceClass).alarmState;
   return alarm === "none" ? undefined : alarm;
+}
+
+/** Whether this class's problem state (alertStateFor) is a FAULT, a line in "Needs attention": every class but a
+ *  detection (motion, occupancy), which is red on its badge and its window and listed nowhere (owner, 2026-10-21). */
+export function alertIsFault(deviceClass: string | undefined): boolean {
+  return !detectsPresence(deviceClass);
+}
+
+/** Whether this class is a DETECTION — motion, moving, occupancy, presence: its "on" glows its room on the map
+ *  (EntityVisuals' room glow, beside a problem state "on": an open door glows its room too, owner 2026-10-21), and it
+ *  is no fault (alertIsFault). */
+export function detectsPresence(deviceClass: string | undefined): boolean {
+  return binarySensorClassInfo(deviceClass).detects === true;
+}
+
+/** Whether this class's "on" glows its room on the map: a detection (someone there), or its problem state "on" — a
+ *  door or window open, a leak. ⚠️ ANY "ON" GLOWED (owner, 2026-10-21: the laundry room red while its door sensor read
+ *  Open — "keep it that way, it makes sense"), a connected access point or a plugged-in charger too: never good news. */
+export function glowsRoom(deviceClass: string | undefined): boolean {
+  return detectsPresence(deviceClass) || alertStateFor(deviceClass) === "on";
 }
 
 /** Device classes whose on/off state is a physical opening's POSITION

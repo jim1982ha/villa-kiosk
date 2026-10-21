@@ -26,6 +26,7 @@ import { TAP_MOVE_TOL_PX, LONG_PRESS_MS } from "@/utils/tapThresholds";
 import { useHistorySource } from "@/hooks/useHistorySource";
 import { cameraBarHistory } from "./cameraStatusBar";
 import StateTimeline from "./StateTimeline";
+import CameraDeviceButtons from "./CameraDeviceButtons";
 
 interface Props extends PanelProps {
   /** Lets the camera pin continuous rendering while the stream is open. */
@@ -628,6 +629,8 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
             // news, so it is neither painted nor listed. What remains is a
             // bare track marked only where something actually happened.
             baselineStates={["online"]}
+            // an overlay on the video, aligned with its buttons: no legend row under it (its colours are the map's)
+            legend={false}
             // The bar's own words: these states are synthesized here.
             labelFor={(s) => CAMERA_BAR_LABEL[s] ?? s}
             // Straight from the shared vocabulary the "Map colours" legend
@@ -668,6 +671,8 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
               .icon-btn svg (styles.css) sizes every icon in this cluster to
               a consistent 55% of its button uniformly, at every breakpoint,
               instead of a hand-picked pixel value per icon. */}
+          {/* the camera's own moves and siren, the owner's (CameraDeviceButtons) */}
+          <CameraDeviceButtons cameraId={mapping.entityId} order={vOrder} />
           {linked && (
             <button
               className={`icon-btn camera-linked-btn${linked.isOn ? " on" : ""}`}

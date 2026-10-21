@@ -52,5 +52,22 @@ ck("the light's sliders and the cover's follow the device (useLiveDraft, one set
 for (const f of ["GenericPanel.tsx", "ControlFrame.tsx"])
   ck(`${f} shows the shared UnavailableNotice`, /<UnavailableNotice\b/.test(src(f)));
 
+// owner, 2026-10-21: a camera that turns and has a siren shows them on its video — found on the camera's DEVICE
+{
+  const reg = {
+    "camera.cam_hd": "d1", "camera.cam_direct": "d1", "button.cam_move_up": "d1", "button.cam_move_down": "d1",
+    "button.cam_move_left": "d1", "button.cam_move_right": "d1", "button.cam_reboot": "d1", "button.cam_format_sd_card": "d1",
+    "siren.cam_siren": "d1", "button.cam_backup": "d1", "button.other_move_up": "d2", "siren.other_siren": "d2", "camera.plain": "d3",
+    "camera.ptz2": "d4", "button.ptz2_pan_left": "d4", "button.ptz2_tilt_up": "d4",
+  };
+  const c = R.cameraControlsOf("camera.cam_hd", reg);
+  ck("a camera's moves and siren are its own device's: the four moves, the siren — never reboot nor format",
+     JSON.stringify(c) === JSON.stringify({ moves: { down: "button.cam_move_down", left: "button.cam_move_left",
+       right: "button.cam_move_right", up: "button.cam_move_up" }, siren: "siren.cam_siren" }), c);
+  ck("  ...another device's are never its own; a camera with neither has none; pan/tilt names count too",
+     R.cameraControlsOf("camera.plain", reg) === null && R.cameraControlsOf("camera.unknown", reg) === null
+     && JSON.stringify(R.cameraControlsOf("camera.ptz2", reg)) === JSON.stringify({ moves: { left: "button.ptz2_pan_left", up: "button.ptz2_tilt_up" }, siren: null }));
+}
+
 done("✅ panel rules hold");
 

@@ -18,7 +18,7 @@ import { nextCheck, nextCheckAt } from "@/fm/faultTiming";
 import { lineActions, overviewActions, type WorkAction, type WorkRecord } from "@/fm/deviceWork";
 import { STAGE_WORDS } from "@/fm/fmEngine";
 import type { IssueSource } from "@/fm/issueSource";
-import { momentText } from "@/utils/dateText";
+import { clockTime, momentText } from "@/utils/dateText";
 import { attentionSeverity, type AttentionGroup, type AttentionItem, type AttentionSeverity } from "./attention";
 
 /** What a card's buttons do (owner, 2026-10-14) — on its records only (its own fault lines and those folded onto a
@@ -121,6 +121,18 @@ function attentionLine(item: AttentionItem): string {
   return item.kind === "schedule" ? `${item.detail}: ${item.title}` : item.detail ?? "";
 }
 
+/** ⚠️ A FAULT WAITING TO CLOSE SAYS SO (owner, 2026-10-21): a door locked at 14:38:50 was still a fault at 14:45 under
+ *  "Next check: within 5 min" — the VESTA Agent closes it once it has stayed right for its clear wait, and nothing said
+ *  it. "Locked since 14:38 · closes at about 14:49 if it stays locked"; its moment past: "at the next check". */
+function closingText(c: AttentionItem["closing"], now: Date): string | null {
+  if (!c) return null;
+  const at = Date.parse(c.at);
+  const when = at > now.getTime() ? `closes at about ${clockTime(at)}` : "closes at the next check";
+  if (!c.word) return `Back to normal · ${when} if it stays so`;
+  const since = c.since && !Number.isNaN(Date.parse(c.since)) ? ` since ${clockTime(c.since)}` : "";
+  return `${c.word}${since} · ${when} if it stays ${c.word.toLowerCase()}`;
+}
+
 /** One problem's line inside the card. */
 export interface CardLine {
   key: string;
@@ -130,6 +142,9 @@ export interface CardLine {
   icons: LineSources | null;
   /** What last happened about it on Telegram — a reminder, an escalation, a button pressed. */
   latest: { note: string; at: string } | null;
+  /** When the VESTA Agent closes it if it stays as it is now — "Locked since 14:38 · closes at about 14:49 if it stays
+   *  locked" (closingText); null when it is not waiting to close. */
+  closing: string | null;
   /** Its own Close, on a card holding several problems; [] otherwise. */
   actions: WorkAction[];
 }
@@ -157,6 +172,7 @@ export function cockpitCard(group: AttentionGroup, cadence: AgentCadence | null,
     text: attentionLineIn(group, item),
     icons: lineIcon(group, item),
     latest: item.latest ?? item.fault?.latest ?? null,
+    closing: closingText(item.closing ?? item.fault?.closing, now),
     actions: itemActions(group, item),
   });
   return {

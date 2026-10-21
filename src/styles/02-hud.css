@@ -865,6 +865,8 @@
   font-size: var(--text-base); font-weight: 600;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+/* A linked SENSOR's band (LinkedSensorRow), under the device's own: its name above it */
+.panel-linked-history .panel-linked-label { margin-bottom: 6px; }
 
 @media (max-width: 720px) {
   /* THE BAR HUGS ITS TILES. It is a floating surface like every other one in

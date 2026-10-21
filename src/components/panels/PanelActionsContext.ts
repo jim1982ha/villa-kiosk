@@ -101,6 +101,10 @@ export interface PanelActions {
     /** Live state — "Motion detected" vs "Clear". */
     isOn: boolean;
   };
+  /** The open device's linked entity when it is a SENSOR (a binary_sensor): nothing to switch, so no toggle — a thin
+   *  band of its last 24 h (LinkedSensorRow) in the switch's row (owner, 2026-10-21: a lock's door sensor drawn as a
+   *  switch). Read-only, so shown whatever the profile, as `motion`. `linked` is then undefined. */
+  linkedSensor?: { entityId: string; label: string };
 }
 
 /** No panel open, or a panel outside the provider: nothing allowed, nothing to call. */

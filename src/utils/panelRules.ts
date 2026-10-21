@@ -150,6 +150,31 @@ export function sceneSelectOf(
   return found[0] ?? null;
 }
 
+/** The controls a camera's own DEVICE offers, shown as buttons on its video (owner, 2026-10-21: "when there is PTZ
+ *  control and siren entity available for a camera … show them as clickable icons"): its move buttons — a `button`
+ *  whose object id ends in `move_`/`pan_`/`tilt_` + up, down, left or right, as the camera integrations name them —
+ *  and its siren (the first `siren` of the device). Found through the villa's device registry, never by a camera's
+ *  name; null when its device has neither. */
+export interface CameraControls {
+  moves: Partial<Record<"up" | "down" | "left" | "right", string>>;
+  siren: string | null;
+}
+
+export function cameraControlsOf(
+  cameraId: string, entityDeviceIds: Readonly<Record<string, string>>,
+): CameraControls | null {
+  const dev = entityDeviceIds[cameraId];
+  if (!dev) return null;
+  const mine = Object.keys(entityDeviceIds).filter((id) => entityDeviceIds[id] === dev).sort();
+  const moves: CameraControls["moves"] = {};
+  for (const id of mine) {
+    const m = id.startsWith("button.") ? /(?:^|_)(?:move|pan|tilt)_(up|down|left|right)$/.exec(id.slice(7)) : null;
+    if (m && !moves[m[1] as keyof CameraControls["moves"]]) moves[m[1] as keyof CameraControls["moves"]] = id;
+  }
+  const siren = mine.find((id) => id.startsWith("siren.")) ?? null;
+  return Object.keys(moves).length || siren ? { moves, siren } : null;
+}
+
 /** A scene select's options (its `options` attribute, names only). */
 export function sceneOptions(attrs: Record<string, unknown> | undefined): string[] {
   return Array.isArray(attrs?.options) ? (attrs.options as unknown[]).filter((o): o is string => typeof o === "string" && o !== "") : [];

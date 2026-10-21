@@ -71,7 +71,7 @@ const STATUS_ITEMS: { label: string; swatch: string; note: string }[] = [
   { label: "Unavailable", swatch: STATUS_COLOR.unavailable, note: "Contact lost" },
   // "unknown": the device answers with nothing to say (stateColors.contactOf "no-value") — grey, never amber
   { label: "No value reported", swatch: STATUS_COLOR.idle, note: "The device is answering but has no value to give right now" },
-  { label: "Alert", swatch: STATUS_COLOR.alert, note: "Needs attention (e.g. unlocked door, jammed lock, leak) — or, in a sensor's history, a detection (motion, occupancy)" },
+  { label: "Alert", swatch: STATUS_COLOR.alert, note: "Needs attention (e.g. unlocked door, jammed lock, leak) — or a detection (motion, occupancy), which is not a fault" },
 ];
 
 export default function LegendModal({ onClose }: { onClose: () => void }) {

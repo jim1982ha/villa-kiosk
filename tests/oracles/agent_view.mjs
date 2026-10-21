@@ -188,6 +188,11 @@ console.log("\n  the Agent's clock, only while it is online:");
   const old = parseAgentStatus({ state: "online", cadence: { checkMinutes: 5, nightlyAt: "02:00", dayChecksAt: ["08:00", "16:00"] } });
   ck("  ...an older Agent's day times are dropped: its timing is the two numbers",
      JSON.stringify(old.cadence) === '{"checkMinutes":5,"nightlyAt":"02:00"}', old.cadence);
+  // owner, 2026-10-21: the Agent says when its look last started — the card's Next check counts from it
+  const looked = parseAgentStatus({ state: "online", cadence: { checkMinutes: 5, nightlyAt: "02:00", lastLookAt: "2026-10-21T06:40:12+00:00" } });
+  const garbled = parseAgentStatus({ state: "online", cadence: { checkMinutes: 5, nightlyAt: "02:00", lastLookAt: "soon" } });
+  ck("  ...its last look is read when it is a moment, dropped otherwise",
+     looked.cadence?.lastLookAt === "2026-10-21T06:40:12+00:00" && garbled.cadence && !("lastLookAt" in garbled.cadence), [looked.cadence, garbled.cadence]);
 }
 
 done("✅ the agent is shown to the right people, with its presence and its clock");

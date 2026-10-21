@@ -11,7 +11,7 @@ import UnavailableNotice from "./UnavailableNotice";
 export default function GenericPanel({ entity, mapping, onClose }: PanelProps) {
   return (
     <BasePanel title={mapping.label} entityId={mapping.entityId} icon={<Info size={22} />} onClose={onClose}
-      history={<LastDayTimeline entityId={mapping.entityId} legend />}>
+      history={<LastDayTimeline entityId={mapping.entityId} palette />}>
       {/* the lost-contact notice only for LOST contact (stateColors.isOffline); "unknown" is a state, shown as one */}
       {isOffline(entity) ? <UnavailableNotice entityId={mapping.entityId} /> : (
         <div className="center" style={{ margin: "8px 0 16px" }}>

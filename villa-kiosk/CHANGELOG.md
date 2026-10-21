@@ -1,3 +1,52 @@
+## 2.496.466
+
+### Changed
+- **A linked sensor's band sits under the device's own, at the same width and over the same period.** In a lock's
+  window, its door sensor's band is now under the lock's band, its name above it, as wide as the lock's band and
+  following the same 1h / 24h / 1w / 1m / 1y choice, so the two compare at a glance. The row at the top with "Open ·
+  linked entity" is gone; the band is thicker and its legend says the states.
+
+## 2.496.465
+
+### Changed
+- **A device's badge rings red when its linked sensor needs attention.** A lock whose linked door sensor reads Open
+  wears a red ring on the map, its room chip counts it red, and its face still says Locked or Unlocked. The door
+  sensor's own line in "Needs attention" says what is wrong, so the lock is not listed a second time.
+
+### Added
+- **A camera that turns, and its siren, from its video.** When a camera's device has move buttons and a siren, its
+  video shows them among its buttons: turn left, up, down and right, and the siren (red while it sounds; tap again to
+  stop it). For the owner only.
+
+## 2.496.464
+
+### Changed
+- **Every history band says what its colours mean.** Under the band of a device's last hours (a motion sensor, a
+  lock, a camera, a sensor in words), a legend lists each state the band shows, in its colour and its own words
+  ("● Clear ● Detected"). Before, only some windows had one. Two bands keep none: a linked sensor's thin band (its
+  state is written beside it) and the band over a camera's video (it sits beside the video's buttons).
+
+## 2.496.463
+
+### Changed
+- **A fault about to close says so.** In the Cockpit, a fault the VESTA Agent will close once it stays right reads,
+  under its line: "Locked since 14:38 · closes at about 14:49 if it stays locked" (needs VESTA Agent 0.12.313).
+- **"Next check" shows a fixed time.** Hovering "Next check: within 5 min" shows the moment of the VESTA Agent's next
+  look, counted from its last one. It no longer moves forward every minute.
+- **A sensor linked to a device is a thin band, not a switch.** When a device's linked entity is a sensor (a lock's
+  door sensor), its row in the device's window shows the sensor's state and a thin band of its last 24 hours, in the
+  sensor's own colours, where the switch was. A sensor cannot be switched. A linked switch keeps its switch.
+- **A room glows red on the map for someone there, or a door open.** A room's floor glows when a motion or presence
+  sensor in it detects someone, or when a door, window or leak sensor in it reads its problem state. It no longer
+  glows for a sensor whose "on" is good news (connected, plugged in, charging).
+
+## 2.496.462
+
+### Changed
+- **A motion sensor that detects someone is no longer a fault.** Its badge and its window stay red while it detects,
+  but it is no longer listed in the Cockpit's "Needs attention", and it no longer counts on the top bar's badge. The
+  same goes for occupancy sensors. An open door, window or garage door is still listed until it closes.
+
 ## 2.496.461
 
 ### Changed

@@ -380,6 +380,17 @@ async def main() -> None:
     ck("/agent/v1/info lists the checks this Kiosk reads, from the agreement — no \"day\" any more",
        status == 200 and body.get("ticket_checks") == json.loads((ROOT / "rootfs" / "usr" / "share" / "vesta"
        / "agent-contract.json").read_text())["ticket"]["checks"] and "day" not in body["ticket_checks"], body)
+    # owner, 2026-10-21: the Agent says when its look last started (the card's Next check counts from it): kept when it
+    # is a moment, dropped otherwise — never a refusal
+    looks = []
+    for look, want in (("2026-10-21T06:40:12+00:00", True), ("soon", False), (12, False), ("x" * 60, False)):
+        r = await post("/agent/v1/heartbeat", headers=bearer(),
+                       json={"status": "x", "cadence": {"checkMinutes": 5, "nightlyAt": "02:00", "lastLookAt": look}})
+        answer = await r.json()
+        status, body = await jget("/agent-status", cookie("ops"))
+        looks.append((look, want, r.status, answer.get("cadence"), (body.get("cadence") or {}).get("lastLookAt")))
+    ck("the Agent's last look is kept when it is a moment, dropped otherwise, the beat and its timing kept",
+       all(st == 200 and why is None and (got == look if want else got is None) for look, want, st, why, got in looks), looks)
     r = await post("/agent/v1/heartbeat", headers=bearer(), json=beat)
     ck("  ...a well-formed beat's answer names no refusal", r.status == 200 and "cadence" not in await r.json())
     # ⚠️ THE KIOSK OWNS THE DEVICES ASLEEP BY DESIGN (owner, 2026-10-21): the Agent reads them in every beat's answer

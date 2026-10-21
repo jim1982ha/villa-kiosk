@@ -94,6 +94,47 @@ ck("  ...and hovering it says when: the nightly check's next run, the Agent's ne
      && nextCheck([{ source: "live" }], CADENCE, t1310) === "Next check: live"
      && nextCheck([{ source: "night", check: "day" }], null, t1310) === "Next check: by the VESTA Agent");
 }
+// owner, 2026-10-21: "the tooltip is updating every minute, whereas I expect it to reflect the 5 min check period" —
+// it said now + 5 min. The Agent says when its look last started (cadence lastLookAt): the next one is a fixed moment.
+{
+  const LOOKED = { ...CADENCE, lastLookAt: new Date(2026, 9, 19, 2, 8, 30).toISOString() };
+  const when = (now) => { const d = nextCheckAt([{ source: "alert", check: "minutes" }], LOOKED, now); return d ? d.getTime() : null; };
+  const fixed = new Date(2026, 9, 19, 2, 13, 30).getTime();
+  ck("  ...the Agent's next look is its last look + 5 min, the same moment a minute later; a missed look rolls on",
+     when(NOW) === fixed && when(new Date(2026, 9, 19, 2, 11)) === fixed && when(new Date(2026, 9, 19, 2, 13)) === fixed
+     && when(new Date(2026, 9, 19, 2, 14)) === new Date(2026, 9, 19, 2, 18, 30).getTime()
+     && nextCheck([{ source: "alert", check: "minutes" }], LOOKED, NOW) === "Next check: within 5 min",
+     [when(NOW), fixed]);
+}
+// owner, 2026-10-21: a door locked at 14:38:50 still a fault at 14:45 — the Agent closes it once it has stayed right for
+// its clear wait, and the card now says so (FmTicket.closesAt → attention `closing` → the line under its problem)
+{
+  const { clockTime } = await import("@/utils/dateText");
+  const t1445 = new Date(2026, 9, 21, 14, 45), closes = new Date(2026, 9, 21, 14, 49), locked = new Date(2026, 9, 21, 14, 38, 50);
+  const fault = (closing) => groupAttention([{ id: "fault:c1", kind: "fault", title: "#65 · Door unlocked", detail: "Fault",
+    entityId: "lock.example", ticketId: "c1", stage: "fault", source: "alert", device: { key: "lock.example", label: "Door", room: "Hall" },
+    ...(closing ? { closing } : {}) }])[0];
+  const line = (closing, now = t1445) => cockpitCard(fault(closing), CADENCE, now).lines[0].closing;
+  const waiting = { at: closes.toISOString(), word: "Locked", since: locked.toISOString() };
+  ck("  ...a fault waiting to close says what it reads, since when, and when it closes if it stays so",
+     line(waiting) === `Locked since ${clockTime(locked)} · closes at about ${clockTime(closes)} if it stays locked`
+     && line(waiting, new Date(2026, 9, 21, 14, 50)) === `Locked since ${clockTime(locked)} · closes at the next check if it stays locked`
+     && line({ at: closes.toISOString() }) === `Back to normal · closes at about ${clockTime(closes)} if it stays so`
+     && line(undefined) === null, [line(waiting)]);
+  const drawn = draw(h(AttentionCard, { card: cockpitCard(fault(waiting), CADENCE, t1445), onOpenEntity: () => {} }));
+  ck("  ...drawn under its problem's line", drawn.includes(`if it stays locked</span>`), drawn.slice(0, 500));
+  const { buildAttentionItems } = await import("@/config/attention");
+  const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
+  const { devicesOf } = await import("../consistency/devices.mjs");
+  const ticket = { id: "c1", title: "Door unlocked", status: "open", openedAt: "2026-10-21T06:00:00Z", entityId: "lock.example",
+    photoIds: [], closesAt: closes.toISOString() };
+  const entities = { "lock.example": { entity_id: "lock.example", state: "locked", attributes: {}, last_changed: locked.toISOString() } };
+  const items = buildAttentionItems({ devices: devicesOf({ ids: ["lock.example"] }), entities, entityMap: {}, resolvedRooms: {},
+    fmData: { ...EMPTY_FM_DATA, tickets: [ticket] } });
+  const c = items.find((i) => i.ticketId === "c1")?.closing;
+  ck("  ...from the fault's closesAt and its device as it reads now",
+     c?.at === closes.toISOString() && c?.word === "Locked" && c?.since === locked.toISOString(), c);
+}
 ck("  ...drawn as the hover text of the card's Next check", /<span class="fm-record-aside muted" title="\d\d\/\d\d\/\d{4} \d\d:\d\d">Next check/.test(issue));
 // owner, 2026-10-15: "there should always be the room line, to respect a consistent layout"
 const [roomless] = groupAttention([{ id: "fault:f9", kind: "fault", title: "Relay dropped", detail: "Fault", entityId: "sensor.relay_t",
