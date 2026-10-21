@@ -1,3 +1,11 @@
+## 2.496.478
+
+### Fixed
+- **A critical leak or smoke sensor no longer makes every other wireless sensor critical.** 2.496.477 counted every
+  device under the same parent as one box. Wireless sensors all hang under the same radio bridge, so a critical leak
+  sensor made every sensor on that bridge red when it dropped, instead of orange. Now only a box's own parts are
+  marked: the relay box's pumps stay red together, and a critical sensor marks only itself.
+
 ## 2.496.477
 
 ### Fixed
