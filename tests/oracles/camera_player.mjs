@@ -162,6 +162,15 @@ eq("no tiers at all is simply failed", createCameraPlayer([]).getState().mode, "
      && propText(sound[0], "onClick") === "toggleSound"
      && /v\.muted = !on;\s*\/\/[^\n]*\n\s*if \(on && v\.paused\) void v\.play\(\)/.test(src)
      && /<video ref=\{attachFeed\} autoPlay muted playsInline \/>/.test(src), true);
+  // owner, 2026-10-21: on an upright phone, the moves, the siren and the sound on one line of their own; the usual
+  // buttons where every camera has them
+  const css = readFileSync(new URL("../../src/styles/03-panels.css", import.meta.url), "utf8");
+  const group = elements(t, "div").filter((d) => propText(d, "className") === '"camera-device-controls"');
+  eq("  ...the camera's own buttons are one group: its line on an upright phone, among the others elsewhere",
+     group.length === 1 && /<div className="camera-device-controls">\s*\{[^}]*\}\s*<CameraDeviceButtons [\s\S]*?camera-sound-btn[\s\S]*?<\/div>/.test(src)
+     && /\.camera-device-controls \{ display: contents; \}/.test(css)
+     && /@media \(max-width: 720px\) and \(orientation: portrait\) \{\s*\.camera-device-controls \{\s*display: flex; flex: 0 0 100%; order: -1;/.test(css)
+     && /\.camera-device-controls \.icon-btn \{ flex: 0 1 56px;/.test(css), true);
 }
 console.log(fail ? `\n❌ ${fail} failed` : "\n✅ the fallback chain holds, tier by tier");
 process.exit(fail ? 1 : 0);

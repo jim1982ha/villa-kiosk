@@ -324,6 +324,17 @@ input[type="range"]::-moz-range-thumb {
 .camera-controls .camera-linked-btn.on {
   background: var(--status-on); color: #fff; border-color: transparent;
 }
+/* The camera's own buttons — moves, siren, sound (CameraPanel): among the others, except on an upright phone, where
+   they take a line of their own above them (below) and the usual buttons stay where every camera has them. */
+.camera-device-controls { display: contents; }
+.camera-device-controls:empty { display: none; }
+@media (max-width: 720px) and (orientation: portrait) {
+  .camera-device-controls {
+    display: flex; flex: 0 0 100%; order: -1; justify-content: flex-end; gap: 8px; min-width: 0;
+  }
+  /* six on one line at any phone width: each gives way below 56px rather than wrapping */
+  .camera-device-controls .icon-btn { flex: 0 1 56px; min-width: 0; height: auto; aspect-ratio: 1; }
+}
 /* The camera's sound on (CameraPanel soundOn): lit like a switch that is on */
 .camera-controls .camera-sound-btn.on { background: var(--status-on); color: #fff; border-color: transparent; }
 /* A siren sounding: the alarm red, not the switch's green (CameraDeviceButtons) */
