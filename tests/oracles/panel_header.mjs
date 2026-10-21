@@ -43,6 +43,7 @@ ck("a linked binary_sensor is no switch: no toggle, its band instead — named",
    door().linked === null && door().linkedSensor?.entityId === "binary_sensor.door_contact" && typeof door().linkedSensor.label === "string");
 ck("  ...shown to any profile (a reading, not a control)", door({ canControl: false }).linkedSensor?.entityId === "binary_sensor.door_contact");
 ck("  ...and a linked switch keeps its toggle, with no band", h().linked !== null && h().linkedSensor === null);
+const { readFileSync } = await import("node:fs");
 const { parseTsx, elements, guardsOf, propText, childTags } = await import("../consistency/jsx.mjs");
 const base = parseTsx("components/panels/BasePanel.tsx");
 const band = elements(base, "LinkedSensorRow");
@@ -53,7 +54,18 @@ ck("the window draws the band under `linkedSensor`, the toggle only under `linke
    band.map(guardsOf));
 const row = parseTsx("components/panels/LinkedSensorRow.tsx");
 const tl = elements(row, "StateTimeline");
-ck("  ...the band is the windows' own StateTimeline, thin (LINKED_BAND_PX), coloured by the reading's one binary rule",
+ck("  ...the band is the windows' own StateTimeline (LINKED_BAND_PX), coloured by the reading's one binary rule",
    tl.length === 1 && propText(tl[0], "height") === "LINKED_BAND_PX" && /reading\.stateColor/.test(propText(tl[0], "colorFor") ?? "")
    && elements(row, "button").length === 0);
+// owner, 2026-10-21: "the thinner status bar … taking the same width as the bigger bar … the same scale" — under the
+// device's history, over the window's one range
+{
+  const src = readFileSync(new URL("../../src/components/panels/BasePanel.tsx", import.meta.url), "utf8");
+  const rowSrc = readFileSync(new URL("../../src/components/panels/LinkedSensorRow.tsx", import.meta.url), "utf8");
+  ck("  ...drawn right under the device's own history, inside the window's one range",
+     /\(history \?\? <LastDayTimeline entityId=\{entityId\} \/>\)\}[\s\S]{0,300}\{linkedSensor && <LinkedSensorRow /.test(src)
+     && /<HistoryRangeShare>[\s\S]*<LinkedSensorRow[\s\S]*<\/HistoryRangeShare>/.test(src)
+     && /const range = useSharedRange\(\);/.test(rowSrc) && propText(tl[0], "hours") === "range.hours"
+     && /"History range", className, useContext\(SharedRange\)\)/.test(readFileSync(new URL("../../src/components/panels/historyRange.tsx", import.meta.url), "utf8")));
+}
 done("✅ the panel's header, derived once");

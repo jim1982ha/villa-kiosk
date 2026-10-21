@@ -24,6 +24,7 @@ import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import BadgeColorModal from "./BadgeColorModal";
 import LastDayTimeline from "./LastDayTimeline";
 import LinkedSensorRow from "./LinkedSensorRow";
+import { HistoryRangeShare } from "./historyRange";
 import ModalFooter from "@/components/common/ModalFooter";
 import { useHA } from "@/ha/HAStateStore";
 import { missingFromHa } from "@/utils/stateColors";
@@ -170,6 +171,8 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
           )}
         </div>
         <div className="modal-body">
+          {/* one range for the window's bands: the device's and its linked sensor's (HistoryRangeShare) */}
+          <HistoryRangeShare>
           {/* The device's linked entity, if one is configured (Advanced
               Settings). Rendered HERE, in the shared chrome, so every panel
               type gets it identically the moment that field is set — this is
@@ -193,8 +196,6 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
               </div>
             </div>
           )}
-          {/* A linked SENSOR has nothing to switch: the same row, its band instead of a toggle (owner, 2026-10-21). */}
-          {linkedSensor && <LinkedSensorRow entityId={linkedSensor.entityId} label={linkedSensor.label} />}
           {/* The camera's motion sensor, if one is configured (Advanced
               Settings' "Motion sensor" field) — read-only, unlike the linked-
               entity switch above: this reports HA's own state, it isn't
@@ -232,11 +233,15 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
           {/* Not for an entity Home Assistant does not have: it has no history to wait for (its notice says why). */}
           {history !== false && entityId && !missingFromHa(entities, entityId)
             && (history ?? <LastDayTimeline entityId={entityId} />)}
+          {/* A linked SENSOR has nothing to switch: its band, under the device's own, at its width and over its range
+              (owner, 2026-10-21) — LinkedSensorRow */}
+          {linkedSensor && <LinkedSensorRow entityId={linkedSensor.entityId} label={linkedSensor.label} />}
           {/* The device's other readings — the same physical device, one place
               (2.496.260), always UNDER the history. A grouped lock kept only a
               read-only summary, and a pump plug's energy meter had no panel of
               its own to be found in. */}
           {deviceReadings !== false && <DeviceReadings />}
+          </HistoryRangeShare>
         </div>
         {/* The shared footer (ModalFooter): the left group is always there,
             empty or not, so Close sits right as in every dialog. */}

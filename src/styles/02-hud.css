@@ -865,13 +865,8 @@
   font-size: var(--text-base); font-weight: 600;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-/* A linked SENSOR (LinkedSensorRow): its name on the left, a thin band of its last day filling the rest — no
-   switch, the row's height unchanged (the band is thinner than the text beside it). On a phone the name gives way
-   first (ellipsis), the band keeps a readable width. */
-.panel-linked-sensor { gap: 14px; }
-.panel-linked-text { flex: 0 1 auto; min-width: 0; max-width: 55%; }
-.panel-linked-band { flex: 1 1 auto; min-width: 72px; }
-.panel-linked-band .body-text { font-size: var(--text-2xs); text-align: right; }
+/* A linked SENSOR's band (LinkedSensorRow), under the device's own: its name above it */
+.panel-linked-history .panel-linked-label { margin-bottom: 6px; }
 
 @media (max-width: 720px) {
   /* THE BAR HUGS ITS TILES. It is a floating surface like every other one in

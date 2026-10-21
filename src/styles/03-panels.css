@@ -704,8 +704,6 @@ input[type="range"]::-moz-range-thumb {
   color: var(--text-primary); font-size: var(--text-xs);
 }
 .state-timeline { position: relative; width: 100%; height: 78px; border-radius: 8px; overflow: hidden; background: var(--bg-input); }
-/* A linked sensor's thin band (LinkedSensorRow, its row in 02-hud.css): a pill, not a card */
-.panel-linked-band .state-timeline, .panel-linked-band .state-timeline-skeleton { border-radius: 999px; }
 .state-timeline-seg { position: absolute; top: 0; bottom: 0; }
 .state-timeline-cursor { position: absolute; top: 0; bottom: 0; width: 2px; background: rgba(255,255,255,0.85); box-shadow: 0 0 3px rgba(0,0,0,0.5); pointer-events: none; }
 /* Vertical variant: segments span the full WIDTH and are positioned/sized on
