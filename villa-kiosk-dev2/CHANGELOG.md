@@ -1,3 +1,11 @@
+## 2.496.475
+
+### Changed
+- **A lock's window shows one button: the one the door needs.** Unlocked: a large "Lock door". Locked: a large
+  "Unlock door…", in the same style, which asks first as before. The "Unlock door…" under "Lock door", and the
+  "Already locked — re-lock" button, are gone. While the lock cannot say where its bolt is (jammed, moving, no
+  answer), both stay, "Lock door" first.
+
 ## 2.496.474
 
 ### Changed
