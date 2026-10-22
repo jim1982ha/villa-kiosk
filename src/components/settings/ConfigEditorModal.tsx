@@ -27,6 +27,7 @@ import UnavailableByDesign from "./UnavailableByDesign";
 import EntityPicker from "./EntityPicker";
 import InlineConfirm from "@/components/common/InlineConfirm";
 import ModalFooter, { footerExits } from "@/components/common/ModalFooter";
+import RemoteReplacedNote from "./RemoteReplacedNote";
 import { useAppNotice } from "@/components/hud/AppNotice";
 import { useDraftedSlice } from "@/hooks/useDraftedSlice";
 import { ADVANCED_SETTINGS_KEYS } from "@/config/configSlice";
@@ -415,6 +416,7 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
 
         {/* Every tab applies LIVE through `ConfigContext`, so a tab switch loses nothing. Over Settings: Close, back to
             Settings, whose Save / Cancel own these changes; on its own: this dialog's Save / Cancel (`commit`). */}
+        <RemoteReplacedNote replaced={own.replaced} onDismiss={own.dismissReplaced} />
         <ModalFooter onClose={onBack} commit={commit} leading={roleCan(role, "editConfig") ? <LogoutAll /> : undefined} />
       </div>
     </DialogLayer>

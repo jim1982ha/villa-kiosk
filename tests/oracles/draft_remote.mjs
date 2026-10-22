@@ -35,7 +35,7 @@ const synced = D.baselineFromServer(D.pickSharedConfig(opened));
 // The pull: another tablet's copy arrives — the merge DeviceConfigSync applies, and the change it hands the drafts.
 const pull = (config, baseline, server) => {
   const change = D.remoteChange(synced, server);
-  return { config: update(config, D.mergeSharedConfig(config, server)), baseline: rebaseOnRemote(baseline, KEYS, config, change) };
+  return { config: update(config, D.applyRemoteChange(config, change)), baseline: rebaseOnRemote(baseline, KEYS, config, change) };
 };
 
 console.log("  another tablet's change while the dialog is open:");
@@ -69,7 +69,7 @@ console.log("\n  this dialog's change first, then another tablet's on a DIFFEREN
   const ownSynced = D.pickSharedConfig(mine);    // pushed: the server has it
   const theirs = { ...ownSynced, entityMap: { ...ownSynced.entityMap, "binary_sensor.door": { ...ownSynced.entityMap["binary_sensor.door"], label: "Front door" } } };
   const change = D.remoteChange(ownSynced, theirs);
-  const config = update(mine, D.mergeSharedConfig(mine, theirs));
+  const config = update(mine, D.applyRemoteChange(mine, change));
   const b = rebaseOnRemote(baseline, KEYS, mine, change);
   ck("Save stays lit for this dialog's change only", dirty(config, b) && JSON.stringify(Object.keys(D.diffSharedConfig(D.pickSharedConfig(normaliseConfig({ ...config, ...b })), D.pickSharedConfig(config)).entityMap.set)) === '["light.hall"]');
   const cancelled = update(config, b);
@@ -89,7 +89,7 @@ console.log("\n  both change the SAME device (the push replays this tablet's cha
   ck("the push hands back the copy it replayed onto (theirs, without this tablet's change)",
      outcome.ok && outcome.base.entityMap["light.hall"].label === "Theirs" && outcome.next.entityMap["light.hall"].label === "Mine");
   const change = D.remoteChange(synced, outcome.base);
-  const config = update(mine, D.mergeSharedConfig(mine, outcome.next));
+  const config = update(mine, D.applyRemoteChange(mine, change));
   const b = rebaseOnRemote(baseline, KEYS, mine, change);
   ck("this dialog's value stays on screen and Save stays lit (Save keeps it)", label(config, "light.hall") === "Mine" && dirty(config, b));
   ck("Cancel puts THEIR value back, not the copy from before it", label(update(config, b), "light.hall") === "Theirs", label(update(config, b), "light.hall"));
@@ -113,13 +113,21 @@ console.log("\n  the wiring:");
   const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
   const src = (p) => strip(readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8"));
   const sync = src("config/DeviceConfigSync.tsx"), ctx = src("config/ConfigContext.tsx"), hook = src("hooks/useDraftedSlice.ts");
-  ck("both merges of the shared store (push and pull) tell the drafts what the others changed",
-     /mergeRemote\(mergeSharedConfig\(configRef\.current, outcome\.next\), remoteChange\(baseline \?\? outcome\.base, outcome\.base\)\)/.test(sync)
-     && /mergeRemote\(mergeSharedConfig\(configRef\.current, r\.fetched\.config\), remoteChange\(synced, r\.fetched\.config\)\)/.test(sync)
-     && !/\bupdate\(/.test(sync));
-  ck("the drafts hear it before the write", /for \(const listener of remoteListeners\.current\) listener\(change\);\s*update\(patch\);/.test(ctx));
+  ck("both merges of the shared store (push and pull) hand on what the others changed, never a copy of the store",
+     /mergeRemote\(remoteChange\(baseline \?\? outcome\.base, outcome\.base\)\)/.test(sync)
+     && /mergeRemote\(remoteChange\(synced, r\.fetched\.config\)\)/.test(sync)
+     && (sync.match(/mergeRemote\(/g) ?? []).length === 2 && !/\bupdate\(/.test(sync));
+  ck("the drafts hear it before the write, and the write applies it to the config as it is then",
+     /for \(const listener of remoteListeners\.current\) listener\(change\);\s*update\(\(prev\) => applyRemoteChange\(prev, change\)\);/.test(ctx));
+  ck("the draft says which of its own changes the same change replaced, measured before its baseline moves",
+     /const found = replacedByRemote\(b, k, now, change\);\s*if \(found\.length > 0\) setReplaced\(\(said\) => withReplaced\(said, found\)\);\s*setBaseline/.test(hook)
+     && /replaced,\s*dismissReplaced: \(\) => setReplaced\(\[\]\)/.test(hook));
+  const settings = src("components/settings/SettingsModal.tsx"), advanced = src("components/settings/ConfigEditorModal.tsx");
+  ck("Settings and Advanced Settings show it, each from its own draft, just above the footer",
+     /<RemoteReplacedNote replaced=\{slice\.replaced\} onDismiss=\{slice\.dismissReplaced\} \/>\s*<ModalFooter/.test(settings)
+     && /<RemoteReplacedNote replaced=\{own\.replaced\} onDismiss=\{own\.dismissReplaced\} \/>\s*<ModalFooter/.test(advanced));
   ck("the draft moves its baseline by it",
-     /onRemoteChange\(\(change\) => \{\s*setBaseline\(\(b\) => rebaseOnRemote\(b, latest\.current\.keys, latest\.current\.config, change\)\);/.test(hook));
+     /setBaseline\(\(prev\) => rebaseOnRemote\(prev, k, now, change\)\);/.test(hook));
 }
 
 done("✅ Cancel undoes only this dialog's changes; another tablet's survive it");

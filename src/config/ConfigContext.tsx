@@ -6,7 +6,7 @@ import {
 } from "react";
 import { type AppConfig, loadConfig, saveConfig, normaliseConfig } from "./AppConfig";
 import type { ConfigEdit } from "./mappingEdits";
-import type { SharedConfigDiff } from "./deviceConfig";
+import { applyRemoteChange, type RemoteChange } from "./deviceConfig";
 import { resolveEffectiveTheme } from "@/utils/themeTime";
 import { beginSpan } from "@/utils/perfSpans";
 
@@ -17,12 +17,13 @@ interface ConfigContextType {
    *  the same moment both land. An edit that changes nothing re-renders
    *  nothing. */
   update: (patch: Partial<AppConfig> | ConfigEdit) => void;
-  /** A change ANOTHER tablet made, arriving through the shared store (DeviceConfigSync): written like `update`, and
-   *  told first, item by item (`change`), to every open dialog's draft (hooks/useDraftedSlice), so what Cancel goes
-   *  back to moves with it. */
-  mergeRemote: (patch: Partial<AppConfig>, change: SharedConfigDiff) => void;
+  /** A change ANOTHER tablet made, arriving through the shared store (DeviceConfigSync, on a pull and after a push):
+   *  told first to every open dialog's draft (hooks/useDraftedSlice), so what Cancel goes back to moves with it, then
+   *  applied item by item to the config as it is when the write lands (deviceConfig applyRemoteChange), so an edit
+   *  made while the push was out survives. ONE value for both: what the others changed, never a copy of the store. */
+  mergeRemote: (change: RemoteChange) => void;
   /** Hear every such change; returns the unsubscribe. */
-  onRemoteChange: (listener: (change: SharedConfigDiff) => void) => () => void;
+  onRemoteChange: (listener: (change: RemoteChange) => void) => () => void;
   /** entity_id -> room name, live-computed (HA's own Area assignment, falling
    *  back to GLB geometric detection — see Dashboard.tsx's resolution effect
    *  and config/devicePlace.ts's resolveEntityRoom) rather than stored/edited
@@ -57,15 +58,16 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const remoteListeners = useRef(new Set<(change: SharedConfigDiff) => void>());
-  const onRemoteChange = useCallback((listener: (change: SharedConfigDiff) => void) => {
+  const remoteListeners = useRef(new Set<(change: RemoteChange) => void>());
+  const onRemoteChange = useCallback((listener: (change: RemoteChange) => void) => {
     remoteListeners.current.add(listener);
     return () => { remoteListeners.current.delete(listener); };
   }, []);
   // The drafts hear it BEFORE the write is queued: both land in the same render, so Save never lights for a moment.
-  const mergeRemote = useCallback((patch: Partial<AppConfig>, change: SharedConfigDiff) => {
+  // The config side is an EDIT, computed from the config React holds when it lands: one queued a moment before stays.
+  const mergeRemote = useCallback((change: RemoteChange) => {
     for (const listener of remoteListeners.current) listener(change);
-    update(patch);
+    update((prev) => applyRemoteChange(prev, change));
   }, [update]);
 
   // ⚠️ NO "replace" NOR "reset" (architecture review B, 2026-10-22): nothing called them, and a reset wired later on the

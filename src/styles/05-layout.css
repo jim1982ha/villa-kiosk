@@ -407,6 +407,9 @@
     flex-wrap: nowrap;
   }
   .modal-footer .btn { padding-left: 12px; padding-right: 12px; }
+  .modal-remote-note {
+    padding: 12px calc(18px + env(safe-area-inset-right, 0px)) 0 calc(18px + env(safe-area-inset-left, 0px));
+  }
   /* Facility's tab row sits between .modal-header and .modal-body but
      used to keep its flat desktop 22px padding on mobile instead of picking
      up the same safe-area-aware inset those two get here — the one thing on

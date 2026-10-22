@@ -5,7 +5,9 @@
 // settings_baseline.mjs can drive them by value in plain Node.
 
 import { normaliseConfig, type AppConfig } from "./AppConfig";
-import { fromSharedItems, sharedItems, type SharedConfigDiff, type SharedConfigKey } from "./deviceConfig";
+import {
+  applyRemoteChange, fromSharedItems, sharedItems, type RemoteChange, type SharedConfigKey,
+} from "./deviceConfig";
 import { applyKeyed, type KeyedDiff } from "@/utils/keyedSync";
 
 export type Slice<K extends keyof AppConfig> = Pick<AppConfig, K>;
@@ -27,10 +29,10 @@ export function draftedView<K extends keyof AppConfig>(
 
 /** The slice as text that two equal slices share whatever their order: a shared key by its items (an entity map
  *  rebuilt by a merge lists its devices in another order, and a list of ids is a set), every object's keys sorted. */
+const sorted = (_k: string, v: unknown) => (v && typeof v === "object" && !Array.isArray(v)
+  ? Object.fromEntries(Object.entries(v as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+  : v);
 function contentOf<K extends keyof AppConfig>(slice: Slice<K>, keys: readonly K[]): string {
-  const sorted = (_k: string, v: unknown) => (v && typeof v === "object" && !Array.isArray(v)
-    ? Object.fromEntries(Object.entries(v as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
-    : v);
   return JSON.stringify(keys.map((k) => sharedItems(k, slice[k]) ?? slice[k]), sorted);
 }
 
@@ -56,11 +58,11 @@ export function sliceChanged<K extends keyof AppConfig>(
  * tests/oracles/draft_remote.mjs.
  */
 export function rebaseOnRemote<K extends keyof AppConfig>(
-  baseline: Slice<K>, keys: readonly K[], context: AppConfig, change: SharedConfigDiff,
+  baseline: Slice<K>, keys: readonly K[], context: AppConfig, change: RemoteChange,
 ): Slice<K> {
   const moved: Record<string, unknown> = {};
   for (const k of keys) {
-    const diff = (change as Partial<Record<string, KeyedDiff<unknown>>>)[k];
+    const diff = (change.diff as Partial<Record<string, KeyedDiff<unknown>>>)[k];
     const items = sharedItems(k, baseline[k]);
     if (!diff || !items || (Object.keys(diff.set).length === 0 && diff.del.length === 0)) continue;
     moved[k] = fromSharedItems(k as SharedConfigKey, applyKeyed(items, diff));
@@ -84,3 +86,65 @@ export const ADVANCED_SETTINGS_KEYS = [
   "entityMap", "meshBindings", "deviceGroups", "dismissedEntityIds", "unavailableByDesign",
   "recordsKeptDays",
 ] as const satisfies readonly (keyof AppConfig)[];
+
+/** Whose change another tablet replaced: a device (by entity id) or one of the villa's settings. */
+export type ReplacedSubject = { device: string } | { setting: string };
+
+/** The villa's single-value settings, by the name their control shows (Settings, Advanced Settings). */
+const SETTING_NAMES: Partial<Record<SharedConfigKey, string>> = {
+  latitude: "The villa's location", longitude: "The villa's location", northOffsetDeg: "Model north offset",
+  presenceSensor: "Villa presence", recordsKeptDays: "Ticket attachment days", roomGlowAndCones: "Room glow",
+};
+
+/** The device an item of a shared key is about (its id, or the entity a mesh or group stands for). */
+function subjectOf(key: string, id: string, item: unknown): ReplacedSubject {
+  const setting = SETTING_NAMES[key as SharedConfigKey];
+  if (setting) return { setting };
+  if (key === "meshBindings" && typeof item === "string") return { device: item };
+  if (key === "deviceGroups" && item && typeof item === "object" && "primaryEntityId" in item) {
+    return { device: String((item as { primaryEntityId: unknown }).primaryEntityId) };
+  }
+  return { device: id };
+}
+
+/**
+ * What another tablet's change REPLACED of this dialog's own: every item this dialog changed since it opened
+ * (`baseline` against `current`) that the change touches AND takes over (deviceConfig applyRemoteChange: this tablet's
+ * edit already sent, the other tablet's wrote after it). One subject per device or setting.
+ *
+ * ⚠️ BEFORE (to 2.496.497) the field flipped to the other tablet's value without a word, and Save went grey: the
+ * owner's change was gone with nothing saying so. The dialog now says it (components/settings/RemoteReplacedNote).
+ * An item this tablet has not sent yet is not replaced: its push replays it last. Pure: tests/oracles/sync_inflight.mjs.
+ */
+export function replacedByRemote<K extends keyof AppConfig>(
+  baseline: Slice<K>, keys: readonly K[], current: AppConfig, change: RemoteChange,
+): ReplacedSubject[] {
+  const patch = applyRemoteChange(current, change);
+  if (Object.keys(patch).length === 0) return [];
+  const after = normaliseConfig({ ...current, ...patch } as AppConfig, { maps: true });
+  const same = (a: unknown, b: unknown) => JSON.stringify(a, sorted) === JSON.stringify(b, sorted);
+  const out = new Map<string, ReplacedSubject>();
+  for (const k of keys) {
+    const diff = (change.diff as Partial<Record<string, KeyedDiff<unknown>>>)[k];
+    const was = sharedItems(k, baseline[k]), now = sharedItems(k, current[k]), then = sharedItems(k, after[k]);
+    if (!diff || !was || !now || !then) continue;
+    for (const id of [...Object.keys(diff.set), ...diff.del]) {
+      if (same(was[id], now[id]) || same(now[id], then[id])) continue;
+      const subject = subjectOf(k, id, now[id] ?? then[id] ?? was[id]);
+      out.set(JSON.stringify(subject), subject);
+    }
+  }
+  return [...out.values()];
+}
+
+/** Subjects already said, plus new ones, each once. */
+export function withReplaced(said: readonly ReplacedSubject[], found: readonly ReplacedSubject[]): ReplacedSubject[] {
+  const seen = new Set(said.map((s) => JSON.stringify(s)));
+  return [...said, ...found.filter((s) => !seen.has(JSON.stringify(s)))];
+}
+
+/** The line the dialog shows for one subject, the device named as every screen names it (`labelOf`). */
+export function replacedLine(subject: ReplacedSubject, labelOf: (entityId: string) => string): string {
+  const name = "device" in subject ? labelOf(subject.device) : subject.setting;
+  return `${name} was changed on another tablet; your change was replaced.`;
+}

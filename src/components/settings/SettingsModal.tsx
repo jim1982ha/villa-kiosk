@@ -9,6 +9,7 @@
 
 import { eyeHeightOf } from "@/babylon/walkerSpawn";
 import ModalFooter, { footerExits } from "@/components/common/ModalFooter";
+import RemoteReplacedNote from "./RemoteReplacedNote";
 import { useAppNotice } from "@/components/hud/AppNotice";
 import SegmentedGroup from "@/components/common/SegmentedGroup";
 import { useModalA11y } from "@/hooks/useModalA11y";
@@ -364,6 +365,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
         </div>{/* end modal-body */}
 
         {/* Save and Cancel are the footer's (footerExits); Escape and the backdrop run the same Cancel. */}
+        <RemoteReplacedNote replaced={slice.replaced} onDismiss={slice.dismissReplaced} />
         <ModalFooter
           leading={can("editConfig") ? (
             // the footer's own button: the same pill, size, icon and word as Save and Cancel (owner, 2026-10-22)

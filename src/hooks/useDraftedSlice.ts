@@ -19,7 +19,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { AppConfig } from "@/config/AppConfig";
 import { useConfig } from "@/config/ConfigContext";
 import { useDraftCommit } from "./useDraftCommit";
-import { draftedView, rebaseOnRemote, sliceChanged, sliceOf, type Slice } from "@/config/configSlice";
+import {
+  draftedView, rebaseOnRemote, replacedByRemote, sliceChanged, sliceOf, withReplaced,
+  type ReplacedSubject, type Slice,
+} from "@/config/configSlice";
 
 export interface DraftedSlice<K extends keyof AppConfig> {
   /** What every control renders from. */
@@ -38,6 +41,10 @@ export interface DraftedSlice<K extends keyof AppConfig> {
   discard: () => Slice<K>;
   /** Write what is waiting now (before closing). */
   flush: () => void;
+  /** This dialog's changes another tablet has since replaced (configSlice replacedByRemote), for the dialog to say
+   *  (components/settings/RemoteReplacedNote); gone when dismissed or when the dialog closes. */
+  replaced: ReplacedSubject[];
+  dismissReplaced: () => void;
 }
 
 const DRAFT = "slice";
@@ -53,10 +60,16 @@ export function useDraftedSlice<K extends keyof AppConfig>(keys: readonly K[], d
   // ⚠️ ONLY THIS DIALOG'S OWN CHANGES. A change from another tablet (DeviceConfigSync, every few minutes and on
   // focus) moves the baseline by the same items (configSlice rebaseOnRemote): it lit Save by itself, and Cancel wrote
   // it away for every tablet (2.496.493 to 2.496.496).
-  const latest = useRef({ config, keys });
-  latest.current = { config, keys };
+  // The same change says which of THIS dialog's changes it replaced (owner sees one line per device, not a field
+  // flipping by itself with Save going grey), measured against the baseline before it moves.
+  const [replaced, setReplaced] = useState<ReplacedSubject[]>([]);
+  const latest = useRef({ config, keys, baseline });
+  latest.current = { config, keys, baseline };
   useEffect(() => onRemoteChange((change) => {
-    setBaseline((b) => rebaseOnRemote(b, latest.current.keys, latest.current.config, change));
+    const { config: now, keys: k, baseline: b } = latest.current;
+    const found = replacedByRemote(b, k, now, change);
+    if (found.length > 0) setReplaced((said) => withReplaced(said, found));
+    setBaseline((prev) => rebaseOnRemote(prev, k, now, change));
   }), [onRemoteChange]);
   const waiting = pending.drafts[DRAFT];
   // compared by content once per config (the slice can hold the villa's whole entity map since Advanced Settings joined
@@ -95,5 +108,7 @@ export function useDraftedSlice<K extends keyof AppConfig>(keys: readonly K[], d
       return baseline;
     },
     flush: () => pending.flush(DRAFT),
+    replaced,
+    dismissReplaced: () => setReplaced([]),
   };
 }

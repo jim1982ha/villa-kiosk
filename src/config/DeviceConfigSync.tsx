@@ -177,13 +177,12 @@ export default function DeviceConfigSync() {
         dismissed: outcome.next.dismissedEntityIds.length,
         entities: Object.keys(outcome.next.entityMap).length,
       });
-      // Fold in whatever another device contributed, through mergeSharedConfig:
-      // `outcome.next` is the SHARED slice, which carries no derived items, and
-      // handing it straight to update() would empty the fitted rooms out of
-      // config on every successful push.
-      // What the others changed is the copy this device's diff went onto (`base`) against the one it had synced:
-      // an open dialog's Cancel keeps it (mergeRemote → hooks/useDraftedSlice).
-      mergeRemote(mergeSharedConfig(configRef.current, outcome.next), remoteChange(baseline ?? outcome.base, outcome.base));
+      // Fold in whatever another device contributed: the copy this device's diff went onto (`base`) against the one
+      // it had synced, item by item, onto the config as it is NOW (mergeRemote → deviceConfig applyRemoteChange).
+      // ⚠️ NEVER `outcome.next` WRITTEN OVER THE CONFIG (to 2.496.497): it is the copy taken when the push began, so
+      // a device edited while the push was out went back, and the next diff (against that same copy) was empty: the
+      // edit was lost. The baseline is `next` (the server's), so that edit is what the next push sends.
+      mergeRemote(remoteChange(baseline ?? outcome.base, outcome.base));
       return;
     }
     if (outcome.reason === "nothing-to-push" || outcome.reason === "not-allowed" || outcome.reason === "not-pulled") return;
@@ -241,7 +240,7 @@ export default function DeviceConfigSync() {
     // compared by reference there — an unconditional update forced a full mesh
     // re-index (and its freeze) on every focus regain.
     if (r.action === "noop") return;
-    mergeRemote(mergeSharedConfig(configRef.current, r.fetched.config), remoteChange(synced, r.fetched.config));
+    mergeRemote(remoteChange(synced, r.fetched.config));
   }, [doc, mergeRemote, pushOwnDiff, reportSync]);
 
   // Mount + focus/visibility + a slow visible-only heartbeat, via the shared

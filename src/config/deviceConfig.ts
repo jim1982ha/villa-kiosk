@@ -338,13 +338,46 @@ export function applySharedConfigDiff(target: SharedDeviceConfig, diff: SharedCo
 }
 
 /**
- * What the OTHER devices changed, per item: the server's copy against the one this device last synced with. Keys the
- * server omits are not changes (the pull keeps the local value for them). DeviceConfigSync hands it, with the merge it
- * describes, to every open dialog's draft (config/configSlice rebaseOnRemote), so a change from another tablet moves
- * what Cancel goes back to instead of reading as this dialog's own.
+ * What the OTHER devices changed, per item (`diff`): the server's copy against the one this device last synced with
+ * (`synced`). Keys the server omits are not changes. It is the ONE description of a change from another tablet: the
+ * config takes it (applyRemoteChange) and every open dialog's draft hears it (config/configSlice rebaseOnRemote,
+ * replacedByRemote), on a pull and after a push alike (DeviceConfigSync, ConfigContext mergeRemote).
  */
-export function remoteChange(synced: SharedDeviceConfig, server: Partial<SharedDeviceConfig>): SharedConfigDiff {
-  return diffSharedConfig(synced, { ...synced, ...server });
+export interface RemoteChange {
+  synced: SharedDeviceConfig;
+  diff: SharedConfigDiff;
+}
+
+export function remoteChange(synced: SharedDeviceConfig, server: Partial<SharedDeviceConfig>): RemoteChange {
+  return { synced, diff: diffSharedConfig(synced, { ...synced, ...server }) };
+}
+
+/**
+ * What the config becomes when another tablet's change arrives: the change applied, item by item, to the config as it
+ * is NOW, and only to the items this tablet has not changed since `synced` (this tablet's own edit wins: its push
+ * replays it last, as the store does). Every other item, and this device's derived rooms (mergeSharedConfig), stay as
+ * they are. Empty when nothing moves.
+ *
+ * ⚠️ BEFORE (to 2.496.497) a push wrote the server's whole copy over the config when it landed, whole key by whole key:
+ * a device edited WHILE the push was out was put back, and since the new baseline was that same copy, nothing was left
+ * to push either. The edit was lost without a word. Pure: tests/oracles/sync_inflight.mjs.
+ */
+export function applyRemoteChange(current: AppConfig, change: RemoteChange): Partial<AppConfig> {
+  const local = pickSharedConfig(current);
+  const out: Record<string, unknown> = {};
+  for (const key of SHARED_CONFIG_KEYS) {
+    const d = change.diff[key] as KeyedDiff<unknown>;
+    if (keyedDiffIsEmpty(d)) continue;
+    const r = row(key) as SharedKeyRow<unknown, unknown>;
+    const mine = r.index(local[key]);
+    const synced = r.index(change.synced[key]);
+    const theirs = (id: string) => JSON.stringify(mine[id]) === JSON.stringify(synced[id]);
+    const set = Object.fromEntries(Object.entries(d.set).filter(([id]) => theirs(id)));
+    const del = d.del.filter(theirs);
+    if (Object.keys(set).length === 0 && del.length === 0) continue;
+    out[key] = r.fromIndex(applyKeyed(mine, { set, del }));
+  }
+  return Object.keys(out).length === 0 ? {} : mergeSharedConfig(current, out as Partial<SharedDeviceConfig>);
 }
 
 /** A shared key's value as {itemId: item}, by its row — undefined for a key that is not shared. */

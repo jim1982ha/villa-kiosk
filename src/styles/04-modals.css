@@ -164,6 +164,11 @@
    leaves or a hint — or an empty <span /> spacer) and the right one (the
    answer). Several buttons in one slot sit in a group. */
 .modal-footer-group { display: flex; align-items: center; gap: 8px; }
+/* Another tablet replaced a change of this dialog's own (components/settings/RemoteReplacedNote): one plain line per
+   device, just above the footer, on the footer's own background. */
+.modal-remote-note { flex: 0 0 auto; display: flex; align-items: flex-start; gap: 8px; padding: 12px 28px 0; background: var(--bg-overlay); }
+.modal-remote-note-lines { flex: 1 1 auto; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.modal-remote-note-close { width: 30px; height: 30px; flex: 0 0 auto; }
 /* Every footer button is a soft pill — the look the Energy/Weather footer had
    and the owner chose for all of them (Settings' "Advanced Settings" was an
    outlined box). The primary action keeps the accent. */
