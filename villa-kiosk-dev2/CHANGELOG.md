@@ -1,3 +1,14 @@
+## 2.496.498
+
+What you will see:
+- Settings and Advanced Settings: a change you make while this tablet is still sending your previous change is no
+  longer lost. Before, relabelling a second device a moment after the first could put the second one back a second
+  later, and it never reached the other tablets. Now both stay on screen and both reach every tablet.
+- When another tablet changes a device you had already changed in this window, the window now says so in one line
+  above Save and Cancel, for example "Hall light was changed on another tablet; your change was replaced." One line
+  per device; the X hides it, and closing the window clears it. Before, the field just flipped to the other tablet's
+  value and Save went grey with nothing saying why.
+
 ## 2.496.497
 
 What you will see:
