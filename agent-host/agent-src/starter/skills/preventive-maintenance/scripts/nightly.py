@@ -43,6 +43,7 @@ from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the Li
 from vesta_shared.problems import Problems, again_title  # noqa: E402  (a problem's lifecycle: one owner)
 from vesta_shared import result  # noqa: E402  (what the engine is asked to do: its shape; R is rules.py)
 from vesta_shared import daily  # noqa: E402  (a device's day: the one running threshold)
+from vesta_shared import battery  # noqa: E402  (a battery's ids and its rested level: one owner)
 from vesta_shared.timeutil import schedule_hours_per_day  # noqa: E402
 import features as F  # noqa: E402
 import rules as R  # noqa: E402
@@ -107,8 +108,9 @@ def run(args) -> dict:
     states = read_states(cli, pack, now_ref)
     battery_entities = [r["entity_id"] for r in pack.entities("battery")]
     bat_stats = cli.statistics(battery_entities, day_end - timedelta(days=BATTERY_READ_DAYS), day_end, "day", ("mean",)) if battery_entities else {}
-    findings += battery_findings(pack, states, params, today, bat_stats, store=store,
-                                 best=battery_best(cli, battery_entities, now_ref, params))
+    best = battery_best(cli, battery_entities, now_ref, params)
+    battery.keep_rested(store, best)              # the level every page shows is the one judged here
+    findings += battery_findings(pack, states, params, today, bat_stats, store=store, best=best)
 
     alerted = alerted_offline(store, pack)
     findings += offline_findings(pack, states, now_ref, params, set(alerted))
@@ -134,6 +136,9 @@ def run(args) -> dict:
     found, said = hidden_in_rule_findings(cli, pack, states, store)
     findings += found
     notes += said
+
+    # a battery that moved a step ("within the week" → "replace now", or back) is handed to its new fault, never cleared
+    handed_over.update(battery_moved(store.findings(status="open"), findings))
 
     # ---- persist findings, dedup, close ---------------------------------------
     # the night's ledger is Problems' (vesta_shared/problems.py); what is a state, an event, worse, a task: here
@@ -369,6 +374,18 @@ def battery_best(cli, entity_ids: list[str], now_ref: datetime, params) -> dict[
         if highs:
             best[eid] = max(highs)
     return best
+
+
+def battery_moved(open_rows, findings) -> dict[tuple[str, str], str]:
+    """(rule, entity) → the close note of each open battery "replace" fault whose battery is now found at the other
+    step: "Now: <the new fault's words>".
+    ⚠️ A STEP IS NOT A CLEAR (architecture review, 2026-10-22): the two steps are two rules, so a battery at 18 % that
+    fell to 9 % closed "Cleared: the check at 14:05 no longer sees it" — and a P2 back at 16 % was marked ✅ cleared on
+    Telegram while still under its line. The old step is handed over (Problems.record_night, record_rechecked)."""
+    now = {f.entity_id: f for f in findings if f.rule_id in battery.REPLACE}
+    return {(o["rule_id"], o["entity_id"]): f"Now: {now[o['entity_id']].summary}"
+            for o in open_rows if o["rule_id"] in battery.REPLACE and o["entity_id"] in now
+            and now[o["entity_id"]].rule_id != o["rule_id"]}
 
 
 def battery_findings(pack, states: dict, params, today: date, stats: dict | None = None,

@@ -235,15 +235,15 @@ class Problems:
     # night may close" stays for a reading that does not say WHICH findings it judged (the 5-minute recheck's new
     # findings: record). The recheck names them: each finding it read again is a complete reading of that finding.
     def record_rechecked(self, rechecked, seen, day: str, at: str, *, note: str = "",
-                         settle_minutes: float | None = None) -> dict:
+                         settle_minutes: float | None = None, handed: dict[int, str] | None = None) -> dict:
         """Open findings `rechecked` (ids) read again at `at` by their own rule; `seen`: those of them still found. Each
         seen is recorded as seen (Problems.seen: a person's close `settle_minutes` or more before opens its task again,
         STILL_THERE); each not seen closes on `day`, its task closing saying `note` — as record_night closes what the
         night did not see, and only among the findings read: {seen, closed (finding ids), task_ids (the tasks that
         moved)}. A finding no longer open is left as it is; an id in `seen` not read is ignored. What decides each
         task is settle()'s: a task a person reopened stays theirs, a person's close holds while it is not read again."""
-        found = {int(i) for i in seen}
-        out_seen, closed, moved = [], [], []
+        found, handed = {int(i) for i in seen}, {int(k): v for k, v in (handed or {}).items()}
+        out_seen, closed, gone, moved = [], [], [], []
         for fid in sorted({int(i) for i in rechecked}):
             row = self.store.finding(fid)
             if not row or row["status"] != "open":
@@ -252,10 +252,12 @@ class Problems:
                 moved += self.seen(fid, at, settle_minutes)
                 out_seen.append(fid)
             else:
+                # `handed`: finding id → its note, one followed now by another fault (as record_night's handed_over):
+                # closed with that note, never counted cleared
                 self.store.close_finding(row["rule_id"], row["entity_id"], day)
-                moved += self.settle(f"finding:{fid}", note=note)
-                closed.append(fid)
-        return {"seen": out_seen, "closed": closed, "task_ids": moved}
+                moved += self.settle(f"finding:{fid}", note=handed.get(fid) or note)
+                (gone if fid in handed else closed).append(fid)
+        return {"seen": out_seen, "closed": closed, "handed": gone, "task_ids": moved}
 
     def record(self, findings, day: str, *, state_rules, event_rules, worsened_step: float, at: str | None = None,
                settle_minutes: float | None = None) -> dict:

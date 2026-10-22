@@ -946,3 +946,29 @@ def test_a_claim_says_when_it_closes_from_when_the_desk_first_saw_it_over(store)
     assert not _tick(store, ha, 5).get("cleared")
     assert _closes(store, iid) == (T0 + timedelta(minutes=5 + clear)).isoformat()
     assert _tick(store, ha, 5 + clear)["cleared"] == [iid]
+
+
+def test_the_time_a_fault_says_it_closes_is_the_time_it_closes(store, monkeypatch):
+    """Architecture review, 2026-10-22: the time came from the state's last change, the close from its history. A lock
+    re-reported "locked" every 2 minutes moved its time on each report; a lock asleep between its reports ("unavailable")
+    showed a time when nothing closed. Both read one answer now (device_state.out_since, through read_states)."""
+    from test_offline import _pack
+    clear = desk._params(None).behaviour("clear_minutes")
+    chatty = TimelineVilla(**{"lock.front_door": [(T0 - timedelta(minutes=10), "unlocked"),
+                                                  (T0 + timedelta(minutes=90), "locked"),
+                                                  (T0 + timedelta(minutes=92), "locked"),
+                                                  (T0 + timedelta(minutes=94), "locked")]})
+    iid = _left_unlocked(store)
+    _tick(store, chatty, 95)
+    assert _closes(store, iid) == (T0 + timedelta(minutes=90 + clear)).isoformat()
+    assert _tick(store, chatty, 90 + clear)["cleared"] == [iid]
+    pack = _pack()
+    pack.asleep_are(["lock.back_door"])
+    monkeypatch.setitem(desk._PACK, "pack", pack)
+    asleep = TimelineVilla(**{"lock.back_door": [(T0 - timedelta(minutes=10), "unlocked"),
+                                                 (T0 + timedelta(minutes=90), "locked"),
+                                                 (T0 + timedelta(minutes=91), "unavailable")]})
+    iid = _left_unlocked(store, entities=("lock.back_door",))
+    _tick(store, asleep, 95)
+    assert _closes(store, iid) == (T0 + timedelta(minutes=90 + clear)).isoformat()
+    assert _tick(store, asleep, 90 + clear)["cleared"] == [iid]

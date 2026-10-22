@@ -536,7 +536,8 @@ def s_batteries(c: Ctx) -> dict:
     says = night_battery_says(c)
     rows = []
     for r in c.pack.families.get("battery", []):
-        v = _num((c.states().get(r["entity_id"]) or {}).get("state"))
+        # its rested level, as the night check judged it (battery.rested), never a dip of the moment
+        v = battery.rested(c.store, r["entity_id"], _num((c.states().get(r["entity_id"]) or {}).get("state")))
         unit = (r.get("unit") or "%").strip()
         pct = battery_pct(c, r, v)
         if pct is None:

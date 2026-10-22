@@ -39,3 +39,25 @@ def projection(points: list[tuple[float, float]], floor_pct: float, level: float
         return None
     now = points[-1][1] if level is None else level
     return {"per_day": per_day, "days_left": (now - floor_pct) / -per_day if per_day < 0 else None}
+
+
+#: The store's record of each battery's rested level as the night check last judged it (preventive-maintenance
+#: nightly.battery_best: its highest reading of the window) — {entity: value in its own unit}.
+#: ⚠️ ONE LEVEL ON EVERY PAGE (architecture review, 2026-10-22): the weekly page printed a battery's reading of the
+#: moment, so a coin cell's 1 % dip between two readings near 50 % headed the list while the night check judged it 50 %.
+RESTED = "battery-rested"
+
+
+def keep_rested(store, best: dict[str, float]) -> None:
+    """Record these rested levels (merged over the ones kept: a 5-minute look reads only its open faults' batteries)."""
+    if store is None or not best:
+        return
+    store.cache_put(RESTED, {**(store.cache_get(RESTED) or {}), **{k: float(v) for k, v in best.items()}})
+
+
+def rested(store, entity_id: str, now: float | None) -> float | None:
+    """A battery's level as the night check judges it: its reading `now`, raised to the rested level it last kept
+    (a battery changed since reads higher now, and that reading stands). None when `now` is None."""
+    get = getattr(store, "cache_get", None)              # a page drawn without the night's record: its reading
+    kept = (get(RESTED) or {}).get(entity_id) if get is not None else None
+    return now if now is None or kept is None else max(now, float(kept))

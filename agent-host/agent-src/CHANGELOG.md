@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.305 (22 October 2026)
+
+- Architecture review 2026-10-22 (the Agent): a battery that moves a step ("within the week" ↔ "replace now") is handed
+  to its new fault, never cleared — nightly.battery_moved feeds record_night's handed_over, and recheck_open hands it
+  over (Problems.record_rechecked `handed`) and opens the new step at once (told_now for a new P2); no told_cleared edit.
+- alert-desk seen_again (no claim): the time shown and the close are one reading — device_state.out_since (out_for its
+  boolean), over read_states, so a device asleep between reports is judged on its last report; still_there reads at the
+  tick's `now`.
+- reports s_batteries shows a battery's rested level (vesta_shared.battery.RESTED, kept by the night and the recheck
+  from battery_best), raised to its reading now.
+- test: the night's still_there_after_close.minutes equals the alert desk's clear_minutes.
+
 ## 0.6.304 (22 October 2026)
 
 - Owner 2026-10-21 (a motion sensor read 1 % between two readings near 50 %: a coin cell dipping under load): the

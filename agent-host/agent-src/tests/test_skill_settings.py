@@ -105,3 +105,14 @@ def test_the_proposals_thresholds_are_the_skills():
     assert any(p["kind"] == "measurement" for p in proposals.build(period, None, [], th))
     th["unmetered_min_pct"] = 60
     assert not proposals.build(period, None, [], th)
+
+
+def test_a_close_in_the_cockpit_holds_as_long_for_a_night_fault_as_for_an_alert():
+    """Owner, architecture review 2026-10-19: one rule with the alert desk's — a person's close of a fault still there
+    reopens after the same minutes whichever skill found it. Tied by a comment only until the review of 2026-10-22."""
+    def read(skill, name):
+        with open(os.path.join(STARTER_SKILLS, skill, name), encoding="utf-8") as f:
+            return yaml.safe_load(f)
+    desk = read("alert-desk", "rules.yaml")
+    night = read("preventive-maintenance", "settings.yaml")
+    assert night["still_there_after_close"]["minutes"] == desk["behaviour"]["clear_minutes"]

@@ -71,26 +71,51 @@ def out_for(client, entity_ids, states: dict, bad, now, minutes: float, unknown_
     check: the state's age measured its last reading, not its return. The alert desk's clear had the same flaw for any
     alert on a reading that keeps changing (a temperature)."""
     from datetime import timedelta
-    young = []
+    since = out_since(client, entity_ids, states, bad, now, minutes, unknown_tells, offline_ok)
+    return since is not None and now - since >= timedelta(minutes=minutes)
+
+
+def out_since(client, entity_ids, states: dict, bad, now, minutes: float, unknown_tells: bool = False,
+              offline_ok: bool = False):
+    """Since when ALL these entities have been out of the `bad` states (a datetime), None when one is in them now or
+    it cannot be told yet: out_for's answer with its moment — a state older than `minutes` since its last change, a
+    younger one since the first row after its last bad one within the `minutes` read (their start when none).
+    A row marked "asleep" (vesta_shared.asleep.awake_states) reads its history without its "unavailable" rows.
+
+    ⚠️ ONE READING FOR THE TIME AND THE CLOSE (architecture review, 2026-10-22): the alert desk showed "closes at
+    about" from the last change of the state read now, and closed from the history — a sensor reporting every 5
+    minutes moved its time on each report and closed before it, and a door asleep between reports showed a time when
+    nothing closed."""
+    from datetime import datetime, timedelta, timezone
+    since, young = [], []
     for e in entity_ids:
         row = states.get(e) or {}
         if not _out(str(row.get("state") or ""), bad, unknown_tells, offline_ok):
-            return False
-        if not out_of(row, bad, now, minutes, unknown_tells, offline_ok):
+            return None
+        if out_of(row, bad, now, minutes, unknown_tells, offline_ok):
+            since.append(datetime.fromisoformat(row["last_changed"]).astimezone(timezone.utc))
+        else:
             young.append(e)
-    if not young:
-        return True
-    start = now - timedelta(minutes=minutes)
-    # ⚠️ ONLY WHAT WAS READ (round 2, 2026-10-16): a reading that stopped short of now says nothing of the minutes after
-    # it — a bad state there would have passed for "back" (vesta_shared.past)
-    past = client.history_read(young, start, now, now=now)
-    for e in young:
-        # nothing from before the minutes: it cannot be told yet (a second's grace: the stamp may come back rounded)
-        if not past.whole(e) or past.state_at(e, start + timedelta(seconds=1)) is None:
-            return False
-        if not all(_out(s, bad, unknown_tells, offline_ok) for _, s in past.changes(e)):
-            return False
-    return True
+    if young:
+        start = now - timedelta(minutes=minutes)
+        # ⚠️ ONLY WHAT WAS READ (round 2, 2026-10-16): a reading that stopped short of now says nothing of the minutes
+        # after it — a bad state there would have passed for "back" (vesta_shared.past)
+        past = client.history_read(young, start, now, now=now)
+        for e in young:
+            # nothing from before the minutes: it cannot be told yet (a second's grace: the stamp may come back rounded)
+            if not past.whole(e) or past.state_at(e, start + timedelta(seconds=1)) is None:
+                return None
+            rows = past.changes(e)
+            if (states.get(e) or {}).get("asleep"):
+                rows = [(t, s) for t, s in rows if not is_offline(s)]
+            at = start
+            for k, (_, s) in enumerate(rows):
+                if not _out(s, bad, unknown_tells, offline_ok):
+                    at = rows[k + 1][0] if k + 1 < len(rows) else None
+            if at is None:
+                return None
+            since.append(max(at, start))
+    return max(since) if since else None
 
 
 # A battery's charge lives in vesta_shared.battery (its one owner, 2026-10-19). The name stays here for a starter skill

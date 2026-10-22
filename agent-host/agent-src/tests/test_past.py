@@ -225,3 +225,24 @@ def test_an_automations_run_is_read_off_a_logbook_row_one_way():
     assert past.automation_run({"when": at, "message": "triggered by Home Assistant starting"}).is_system
     assert past.system_run("event 'homeassistant_started'") == "started"
     assert past.system_run("Home Assistant starting") == "started" and past.system_run("time") is None
+
+
+def test_out_since_gives_the_moment_the_close_is_judged_from():
+    """Architecture review, 2026-10-22: the alert desk showed "closes at about" from the state's last change and closed
+    from the history. A sensor back at NOW-4 min and reporting every minute since is out since its return, not since
+    its last report; one asleep reads its history without "unavailable"."""
+    from vesta_shared.device_state import out_since
+    back = [(NOW - timedelta(minutes=30), "unavailable"), (NOW - timedelta(minutes=4), "20.1"),
+            (NOW - timedelta(minutes=2), "20.2"), (NOW - timedelta(minutes=1), "20.3")]
+    states = {"sensor.meter": {"state": "20.3", "last_changed": (NOW - timedelta(minutes=1)).isoformat()}}
+    villa = TimelineVilla(now=NOW, **{"sensor.meter": back})
+    assert out_since(villa, ["sensor.meter"], states, OFFLINE, NOW, 10) == NOW - timedelta(minutes=4)
+    # in its bad state now: no moment
+    assert out_since(villa, ["sensor.meter"], {"sensor.meter": {"state": "unavailable"}}, OFFLINE, NOW, 10) is None
+    # asleep: a door closed at NOW-6 min, "unavailable" between its reports, given its last real state
+    door = [(NOW - timedelta(minutes=30), "on"), (NOW - timedelta(minutes=6), "off"),
+            (NOW - timedelta(minutes=5), "unavailable")]
+    asleep = {"binary_sensor.door": {"state": "off", "last_changed": (NOW - timedelta(minutes=6)).isoformat(),
+                                     "asleep": True}}
+    v2 = TimelineVilla(now=NOW, **{"binary_sensor.door": door})
+    assert out_since(v2, ["binary_sensor.door"], asleep, {"on"}, NOW, 10) == NOW - timedelta(minutes=6)

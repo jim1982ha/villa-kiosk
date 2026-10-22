@@ -557,3 +557,25 @@ def test_the_night_keeps_an_open_low_battery_until_five_points_above_its_line(tm
     (fx / "states.json").write_text(json.dumps({"states": {"sensor.example_bat": {"state": "22", "attributes": {}}}}))
     _night(tmp_path, "--as-of", AS_OF)
     assert len(_open(tmp_path, "PM-BATTERY-LOW")) == 1
+
+
+def test_a_battery_that_moves_a_step_overnight_is_handed_over_never_cleared(tmp_path):
+    """Architecture review, 2026-10-22: the night closed "within the week" as "Cleared: the nightly check no longer
+    sees it" while opening "replace now" for the same battery (nightly.battery_moved)."""
+    from vesta_shared.problems import Problems
+    from vesta_shared.store import Store
+    fx = tmp_path / "fx"
+    fx.mkdir()
+    eid = "sensor.example_lock_battery"
+    _pack(tmp_path, {"battery": [{**_row(eid, "Example lock battery", "battery", "example_lock"), "unit": "%"}]})
+    st = Store(str(tmp_path / "s.sqlite"))
+    fid, _ = st.raise_finding("PM-BATTERY-LOW", eid, "battery", "2026-10-02", "P3", "Example lock battery at 18%.", {})
+    (tid,) = Problems(st).settle(f"finding:{fid}")
+    t = (NOW - timedelta(hours=1)).isoformat()
+    (fx / "states.json").write_text(json.dumps({"states": {
+        eid: {"state": "6", "attributes": {}, "last_changed": t, "last_reported": t}}}))
+    res = _night(tmp_path, "--as-of", AS_OF)
+    st = Store(str(tmp_path / "s.sqlite"))
+    assert st.finding(fid)["status"] == "closed" and res["closed"] == [] and res["edits"] == []
+    assert st.task(tid)["close_note"].startswith("Now: ") and "replace now" in st.task(tid)["close_note"]
+    assert [f["rule_id"] for f in _open(tmp_path, "PM-BATTERY-CRIT")] == ["PM-BATTERY-CRIT"]

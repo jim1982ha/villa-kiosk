@@ -46,7 +46,7 @@ from vesta_shared.messaging import incident_tag  # noqa: E402
 from vesta_shared.message_format import PRESSED, ROLE_SHORT, acted, closing  # noqa: E402  ("<what> on <time> (<who>)", "Cleared on <time>.": one wording each)
 from vesta_shared import kiosk_words  # noqa: E402
 from vesta_shared.timeutil import lasting  # noqa: E402
-from vesta_shared.device_state import has_value, out_for  # noqa: E402  ("is it back": one answer)
+from vesta_shared.device_state import has_value, out_since  # noqa: E402  ("is it back": one answer)
 from vesta_shared.asleep import read_states  # noqa: E402  (unavailable by design: its last real state)
 from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
 from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the Limits tab)
@@ -616,7 +616,7 @@ def _pack():
 _PACK: dict = {}
 
 
-def still_there(inc: dict, client) -> tuple[bool | None, list[str]]:
+def still_there(inc: dict, client, now: datetime | None = None) -> tuple[bool | None, list[str]]:
     """Does what the incident's alert claims still hold, read from Home Assistant now? (True, what still says so) ·
     (False, []) · (None, what each device reads) when the desk cannot tell — no claim, or a device does not answer.
 
@@ -633,7 +633,8 @@ def still_there(inc: dict, client) -> tuple[bool | None, list[str]]:
     ents = rs[0] if rs else [e for e in (p.get("entities") or [inc["entity_id"]]) if e and "." in e]
     # ⚠️ ASLEEP IS NOT GONE (owner, 2026-10-21): a device unavailable by design reads its last real state here; the
     # rule's claim, rendered by the villa's system on "unavailable", cannot judge it, so its own states do instead
-    states = read_states(client, _pack(), datetime.now(timezone.utc), ents) if ents else {}
+    # `now`: the tick's moment (the clock when not given), the same one seen_again reads the close at
+    states = read_states(client, _pack(), now or datetime.now(timezone.utc), ents) if ents else {}
     asleep = [e for e in ents if (states.get(e) or {}).get("asleep")]
 
     def name(e):
@@ -675,7 +676,7 @@ def quiet_after_done(store: Store, now: datetime, client, clear_minutes: float, 
                 now - datetime.fromisoformat(inc["closed_at"]) < timedelta(minutes=clear_minutes):
             continue
         try:
-            there, words = still_there(inc, client)
+            there, words = still_there(inc, client, now)
         except Exception:  # noqa: BLE001 — Home Assistant not readable now: the next tick
             return reopened
         # checked once, whatever it reads — taken from the record as it stands now: a fault reopened in the Kiosk
@@ -707,7 +708,7 @@ def seen_again(store: Store, now: datetime, client, clear_minutes: float, out: d
         if not judged(inc):
             continue
         try:
-            there, words = still_there(inc, client)
+            there, words = still_there(inc, client, now)
         except Exception:  # noqa: BLE001 — Home Assistant not readable now, or the claim not renderable: the next tick
             continue
         p = notes_of(inc)
@@ -736,14 +737,15 @@ def seen_again(store: Store, now: datetime, client, clear_minutes: float, out: d
             said = "it is no longer reported"
         else:
             ents, bad = rule_states(inc)
-            now_states = client.states(ents)
-            # out of its bad states since the youngest of their changes: closed `clear_minutes` after it (out_for)
-            left = [_moment((now_states.get(e) or {}).get("last_changed")) for e in ents]
-            closes = (max(left) + timedelta(minutes=clear_minutes)).isoformat() if left and all(left) else None
+            # a device asleep between its reports reads its last real state, as still_there read it
+            now_states = read_states(client, _pack(), now, ents)
+            # out of its bad states since one moment (out_since): the time shown and the close are the same reading
+            since = out_since(client, ents, now_states, bad, now, clear_minutes)
+            closes = (since + timedelta(minutes=clear_minutes)).isoformat() if since else None
             store.note(inc["id"], {Notes.CLOSES_AT: closes} if closes else None,
                        drop=("silent_told",) if closes else ("silent_told", Notes.CLOSES_AT))
             _closes_at_changed(p, closes, out)
-            if not out_for(client, ents, now_states, bad, now, clear_minutes):
+            if since is None or now - since < timedelta(minutes=clear_minutes):
                 continue
             said = "; ".join(f"{(now_states[e].get('attributes') or {}).get('friendly_name') or e} is "
                              f"{now_states[e]['state']}" for e in ents)
@@ -752,13 +754,6 @@ def seen_again(store: Store, now: datetime, client, clear_minutes: float, out: d
         store.audit("alert-desk", "seen_again", {"incident": inc["id"], "now": said})
         closed.append(inc["id"])
     return closed
-
-
-def _moment(iso) -> datetime | None:
-    try:
-        return datetime.fromisoformat(str(iso)) if iso else None
-    except ValueError:
-        return None
 
 
 def _closes_at_changed(p: dict, closes: str | None, out: dict) -> None:

@@ -1122,3 +1122,34 @@ def test_a_quiet_line_says_when_its_rules_watch(tmp_path):
     facts, c, _ = _ctx(tmp_path / "b")                                  # the rules are read once a day: another villa
     c.cli = _ScopedBook("always")
     assert facts.s_quiet(c)["did_not_happen"] == ["no door left unlocked and no supply left open"]
+
+
+def test_the_report_shows_a_battery_at_the_level_the_night_judged():
+    """Architecture review, 2026-10-22: a coin cell read 1 % between two readings near 50 %; the night judged its best
+    reading (battery.RESTED), the weekly page printed "1 %". A battery changed since reads higher now, and that stands."""
+    import sys as _s
+    _s.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
+    import facts
+    from datetime import date
+    from types import SimpleNamespace
+    from zoneinfo import ZoneInfo
+    from vesta_shared import battery
+    from vesta_shared.knowledge_pack import KnowledgePack
+    from vesta_shared.params import VillaParams
+    pack = KnowledgePack(villa="V", time_zone="UTC", generated_at="x", ha_version=None,
+                         families={"battery": [{"entity_id": e, "name": n, "unit": "%", "asset": a, "family": "battery"}
+                                               for e, n, a in (("sensor.motion_battery", "Motion", "motion"),
+                                                               ("sensor.lock_battery", "Lock", "lock"),
+                                                               ("sensor.other_battery", "Other", "other"))]},
+                         assets={}, areas=[], people=[], channels={}, unknown_area=[], unclassified=[], retention={})
+    kept = {battery.RESTED: {"sensor.motion_battery": 52.0, "sensor.lock_battery": 30.0}}
+    c = facts.Ctx.__new__(facts.Ctx)
+    c.pack, c.Z, c.end = pack, ZoneInfo("UTC"), date(2026, 10, 4)
+    c.need = lambda *p: 8
+    c.store = SimpleNamespace(cache_get=kept.get, findings=lambda status=None: [])
+    c.tasks = lambda: []
+    c._states = {"sensor.motion_battery": {"state": "1"}, "sensor.lock_battery": {"state": "100"},
+                 "sensor.other_battery": {"state": "7"}}
+    c.params = lambda: VillaParams()
+    pct = {r["name"]: r["pct"] for r in facts.s_batteries(c)["rows"]}
+    assert pct == {"Motion": 52, "Lock": 100, "Other": 7}     # judged level; changed since: now; never judged: now

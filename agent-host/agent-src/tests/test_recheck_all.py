@@ -159,13 +159,13 @@ def test_record_rechecked_closes_only_among_what_it_read(tmp_path):
     c, tc = _found(store, "PM-X", "sensor.c", "C")
     out = Problems(store).record_rechecked([a, b], [b, c], "2026-10-19", NOW.isoformat(), note="Cleared: gone.",
                                            settle_minutes=10)
-    assert out == {"seen": [b], "closed": [a], "task_ids": [ta]}
+    assert out == {"seen": [b], "closed": [a], "handed": [], "task_ids": [ta]}
     assert [store.finding(x)["status"] for x in (a, b, c)] == ["closed", "open", "open"]
     assert store.finding(a)["closed_day"] == "2026-10-19" and store.task(ta)["close_note"] == "Cleared: gone."
     assert store.finding(b)["seen_at"] == NOW.isoformat() and store.finding(c)["seen_at"] != NOW.isoformat()
     assert store.task(tb)["status"] == store.task(tc)["status"] == "open"
     # a finding no longer open is left as it is
-    assert Problems(store).record_rechecked([a], [], "2026-10-19", NOW.isoformat()) == {"seen": [], "closed": [],
+    assert Problems(store).record_rechecked([a], [], "2026-10-19", NOW.isoformat()) == {"seen": [], "closed": [], "handed": [],
                                                                                          "task_ids": []}
 
 
@@ -434,3 +434,34 @@ def test_a_battery_is_judged_on_its_best_reading_of_the_day(tmp_path, best, stay
             {"entity_id": BAT_CRIT, "statistics": [{"start": old, "max": 90.0}, {"start": t, "max": best}]}]}))
     _tick(tmp_path)
     assert Store(str(tmp_path / "s.sqlite")).finding(fid)["status"] == ("open" if stays else "closed")
+
+
+@pytest.mark.parametrize("was,sev,reads,now_rule", [("PM-BATTERY-LOW", "P3", "8", "PM-BATTERY-CRIT"),
+                                                     ("PM-BATTERY-CRIT", "P2", "17", "PM-BATTERY-LOW")])
+def test_a_battery_that_moves_a_step_is_handed_over_never_cleared(tmp_path, was, sev, reads, now_rule):
+    """Architecture review, 2026-10-22: "within the week" and "replace now" are two rules, so a battery at 18 % that
+    fell to 8 % closed "Cleared: the check at 14:05 no longer sees it" and nothing showed until 02:00 — and a P2 back
+    at 17 % (still under its 20 % line) was marked cleared. The old step closes saying the new one, which opens now."""
+    _pack(tmp_path)
+    store = Store(str(tmp_path / "s.sqlite"))
+    fid, tid = _found(store, was, BAT_LOW, "Door A battery: was.", sev)
+    _villa(tmp_path, {BAT_LOW: _st(reads, 5)})
+    out = _tick(tmp_path)
+    st = Store(str(tmp_path / "s.sqlite"))
+    assert st.finding(fid)["status"] == "closed"
+    note = st.task(tid)["close_note"]
+    assert note.startswith("Now: Door A battery") and "Cleared" not in note
+    (now,) = [f for f in st.findings(status="open") if f["entity_id"] == BAT_LOW]
+    assert now["rule_id"] == now_rule
+    assert out["edits"] == []                                     # no P2 message rewritten as cleared
+
+
+def test_a_battery_that_moves_a_step_at_night_is_handed_over(tmp_path):
+    """The night's reading of the same fact (nightly.battery_moved)."""
+    sys.path.insert(0, os.path.join(SKILL, "scripts"))
+    import nightly as N
+    from types import SimpleNamespace as F
+    opened = [{"rule_id": "PM-BATTERY-LOW", "entity_id": BAT_LOW}, {"rule_id": "PM-BATTERY-LOW", "entity_id": BAT_CRIT}]
+    found = [F(rule_id="PM-BATTERY-CRIT", entity_id=BAT_LOW, summary="Door A battery at 8%: replace now."),
+             F(rule_id="PM-BATTERY-LOW", entity_id=BAT_CRIT, summary="Lock B battery at 15%: replace within the week.")]
+    assert N.battery_moved(opened, found) == {("PM-BATTERY-LOW", BAT_LOW): "Now: Door A battery at 8%: replace now."}

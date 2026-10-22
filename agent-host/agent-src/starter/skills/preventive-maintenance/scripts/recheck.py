@@ -216,8 +216,10 @@ class Tick:
         ids = [r["entity_id"] for r in rows]
         stats = self.client().statistics(ids, self.day_end - timedelta(days=N.BATTERY_READ_DAYS), self.day_end, "day",
                                          ("mean",))
+        best = N.battery_best(self.client(), ids, self.now, self.params)
+        battery.keep_rested(self.store, best)
         return N.battery_findings(self.pack, self.states, self.params, self.day, stats, rows=rows,
-                                  store=self.store, best=N.battery_best(self.client(), ids, self.now, self.params))
+                                  store=self.store, best=best)
 
     def asset_day(self, rows) -> list:
         asset = rows[0]
@@ -316,7 +318,7 @@ def recheck_open(store, pack, client, now: datetime, params, zone: str, settle_m
 
     ⚠️ NOT READ IS NOT GONE: a state the read did not bring back, a battery with no value now, or a reading that failed
     closes nothing — its close would say the problem is over when nothing was seen."""
-    none = {"actions": [], "closed": [], "seen": []}
+    none = {"actions": [], "closed": [], "seen": [], "send": []}
     if unreadable():
         raise Unreadable(", ".join(unreadable()))
     open_ = [f for f in store.findings(status="open") if f["rule_id"] != OFFLINE_RULE]
@@ -333,7 +335,7 @@ def recheck_open(store, pack, client, now: datetime, params, zone: str, settle_m
     # a device asleep between its reports reads its last real state (vesta_shared.asleep): its battery fault is judged
     # on its charge, never left open on "unavailable"
     t.states = read_states(client(), pack, now, ids) if ids else {}
-    read, seen = [], []
+    read, seen, steps, handed = [], [], [], {}
     for f, rule, rows, es in plan:
         st = t.states.get(f["entity_id"]) or {}
         if es and (not st or (f["rule_id"] in (battery.CRIT, battery.LOW) and not has_value(st.get("state")))):
@@ -348,6 +350,11 @@ def recheck_open(store, pack, client, now: datetime, params, zone: str, settle_m
                       f"({type(e).__name__})", file=sys.stderr)
                 continue
             was = {"seen": any(x.rule_id == f["rule_id"] and x.entity_id == f["entity_id"] for x in found)}
+            # a battery now at its other step: handed to that step's fault, opened now (nightly.battery_moved)
+            moved = N.battery_moved([f], found)
+            if moved:
+                steps += [x for x in found if x.entity_id == f["entity_id"] and x.rule_id in battery.REPLACE]
+                handed[int(f["id"])] = next(iter(moved.values()))
             if rule.per_day:
                 store.cache_put(key, was)
         read.append(f["id"])
@@ -355,11 +362,20 @@ def recheck_open(store, pack, client, now: datetime, params, zone: str, settle_m
             seen.append(f["id"])
     if not read:
         return none
-    rec = Problems(store).record_rechecked(read, seen, t.at.date().isoformat(), now.isoformat(),
-                                           note=N.cleared_note(now, zone), settle_minutes=settle_minutes)
-    if rec["closed"]:
-        store.audit("preventive-maintenance", "recheck", {"read": read, "closed": rec["closed"]})
-    return {"actions": result.moved(rec["task_ids"]), "closed": rec["closed"], "seen": rec["seen"]}
+    day = t.at.date().isoformat()
+    rec = Problems(store).record_rechecked(read, seen, day, now.isoformat(), note=N.cleared_note(now, zone),
+                                           settle_minutes=settle_minutes, handed=handed)
+    if rec["closed"] or rec["handed"]:
+        store.audit("preventive-maintenance", "recheck", {"read": read, "closed": rec["closed"], "handed": rec["handed"]})
+    send, task_ids = [], rec["task_ids"]
+    if steps:
+        new = Problems(store).record(steps, day, state_rules=N.STATE_RULES, event_rules=N.EVENT_RULES,
+                                     worsened_step=params.behaviour("worsened_step_pct"), at=now.isoformat(),
+                                     settle_minutes=settle_minutes)
+        task_ids += new["task_ids"]
+        send = N.told_now({"villa": pack.villa, "as_of": day, "new_findings": new["new"], "again": new["again"]},
+                          title=f"{pack.villa or 'The villa'}, batteries on {day_time_label(t.at)}.", store=store, at=now)
+    return {"actions": result.moved(task_ids), "closed": rec["closed"], "seen": rec["seen"], "send": send}
 
 
 def reopened_untold(store, zone: str, settings: dict) -> list[dict]:
@@ -423,7 +439,8 @@ def main(argv=None):
         print(f"preventive-maintenance cannot read these rules again: {e}", file=sys.stderr)
         return 1
     found = gone_offline(ctx.store, ctx.pack, lambda: ctx.live_client, now, ctx.params, ctx.zone, settle)
-    told = reopened_untold(ctx.store, ctx.zone, ctx.settings) + still_there_untold(ctx.store, ctx.zone, ctx.settings)
+    told = again["send"] + reopened_untold(ctx.store, ctx.zone, ctx.settings) + still_there_untold(ctx.store, ctx.zone,
+                                                                                                      ctx.settings)
     closed = res["closed"] + again["closed"]
     # a close sends nothing new: a P2 told earlier says it on its own message (told_cleared, owner 2026-10-20)
     print(json.dumps({"actions": result.moved(res["actions"] + again["actions"] + found["actions"]),
