@@ -149,14 +149,13 @@ function PresenceSensor() {
   const { config, update } = useConfig();
   return (
     <>
-      <div className="settings-section-title">Villa presence</div>
-      <label className="with-tip">"Villa empty" sensor
-        <InfoTip label="About the villa empty sensor">
-          The on/off sensor that is on when the villa is empty. Shown on every screen as the presence tile under the
-          floors (Occupied, Empty or Unknown); tapping it tells why.
-        </InfoTip>
-      </label>
-      <EntityPicker value={config.presenceSensor} domains={["binary_sensor"]} placeholder="Pick the villa's empty / occupied sensor"
+      {/* one (i) on the section title, the chosen sensor shown in its field like every linked entity (owner,
+          2026-10-22: no "Villa empty" sensor label, no "Bound to" line under the field) */}
+      <TipTitle title="Villa presence" tip={<>
+        The on/off sensor that is on when the villa is empty. Shown on every screen as the presence tile under the
+        floors (Occupied, Empty or Unknown); tapping it tells why.
+      </>} />
+      <EntityPicker value={config.presenceSensor} domains={["binary_sensor"]} placeholder="Pick the villa's empty / occupied sensor" hideCurrentLabel
         onChange={(id) => update({ presenceSensor: id })} onClear={() => update({ presenceSensor: "" })} />
     </>
   );
@@ -197,17 +196,17 @@ const COORD_COMMIT_MS = 1500;
 /** Immediately signs every device out — a lost tablet, a PIN someone saw.
  *  Two-tap confirm, same idiom as Facility's "Delete all" buttons: this
  *  signs the person clicking it out too, so it's worth pausing on. */
-function LogoutAllSection() {
+/** "Log out all devices", in the footer of every tab with its (i) on its right (owner, 2026-10-22), styled as Settings'
+ *  "Advanced Settings" opener: the footer's left control, never in the Save/Close group. */
+function LogoutAll() {
   const { logoutAll } = useProfile();
   const [confirming, setConfirming] = useState(false);
   const [failed, setFailed] = useState(false);
 
   return (
-    <>
+    <div className="with-tip">
       {failed && (
-        <div className="test-result fail" style={{ marginBottom: 10 }}>
-          Could not reach the server, no session was signed out.
-        </div>
+        <span className="body-text sev-warning" role="alert">Could not reach the server, no session was signed out.</span>
       )}
       {confirming ? (
         <InlineConfirm confirmLabel="Log out every device?"
@@ -218,11 +217,15 @@ function LogoutAllSection() {
           }}
           onCancel={() => setConfirming(false)} />
       ) : (
-        <button className="btn ghost" onClick={() => setConfirming(true)}>
-          <LogOut size={16} /> Log out all devices
+        <button className="btn" onClick={() => setConfirming(true)} aria-label="Log out all devices">
+          <LogOut size={18} aria-hidden /><span className="btn-label">Log out all devices</span>
         </button>
       )}
-    </>
+      <InfoTip label="About logging out all devices">
+        Signs every device out immediately, this one included, whatever the add-on's "Session length" option says a
+        sign-in should last. Use it if a tablet went missing or a passcode was seen by someone who shouldn't have it.
+      </InfoTip>
+    </div>
   );
 }
 
@@ -267,7 +270,7 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
               heading is the conventional dialog-open focus target anyway;
               tabIndex={-1} makes it programmatically focusable without
               joining the normal Tab order. */}
-          <h2 tabIndex={-1} data-autofocus>Advanced Settings</h2>
+          <h2 tabIndex={-1} data-autofocus>Advanced Settings <span className="modal-title-version">v{__APP_VERSION__}</span></h2>
           {canUploadModel && (
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               {glbUpload.addonCfg?.model_path && (
@@ -388,12 +391,6 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
               <div className="settings-section-title">Maintenance records</div>
               <RecordsKept />
 
-              <TipTitle title="Session" tip={<>
-                Log out all devices signs every device out immediately, this one included, whatever the add-on's
-                "Session length" option says a sign-in should last. Use it if a tablet went missing or a passcode was
-                seen by someone who shouldn't have it.
-              </>} />
-              <LogoutAllSection />
             </>
           )}
         </div>
@@ -401,7 +398,7 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
         {/* No Save: every tab here applies LIVE to the 3D scene through
             `ConfigContext`, which is why the strip above is passed no `commit`
             and a tab switch can lose nothing. */}
-        <ModalFooter onClose={onBack} note={`v${__APP_VERSION__}`} />
+        <ModalFooter onClose={onBack} leading={roleCan(role, "editConfig") ? <LogoutAll /> : undefined} />
       </div>
     </DialogLayer>
   );

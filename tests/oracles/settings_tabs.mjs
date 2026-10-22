@@ -44,8 +44,8 @@ const SECTIONS = [
   ["Auto-detected entity settings", "devices"],
   ["Grouped devices", "devices"],
   ["Device telemetry", "system"],
-  ["Session", "system"],
 ];
+// "Log out all devices" left the System tab for the footer, on every tab (owner, 2026-10-22).
 
 // Split the render body into one chunk per tab, by the `{tab === "x" && (`
 // guards. Anything before the first guard is chrome shared by every tab.
@@ -88,7 +88,9 @@ ck("the scan reached the source tree", FILES.length > 100);
 ck("exactly one hand-written tab strip, and it is ModalTabs",
    strips.length === 1 && strips[0] === "components/common/ModalTabs.tsx");
 ck("Advanced Settings renders three tabs", Object.keys(chunks).sort().join(",") === "devices,system,villa");
-ck("all six sections survive, each in exactly one tab", misplaced.length === 0);
+ck("all five sections survive, each in exactly one tab", misplaced.length === 0);
+ck("Log out all devices is the footer's own control, on every tab, never inside one",
+   /<ModalFooter[^>]*leading=\{[^}]*<LogoutAll \/>/.test(modal) && (modal.match(/<LogoutAll \/>/g) ?? []).length === 1);
 ck("no section is behind a collapse any more", collapseRefs.length === 0);
 ck("the owner-only tab is filtered out of the strip", filtersOwner);
 ck("the opening tab is chosen from the FILTERED strip", startsInStrip);

@@ -1,3 +1,12 @@
+## 2.496.491
+
+What you will see in Advanced Settings:
+- "Log out all devices" is in the footer of every tab, on the left, with its (i) on its right, styled like
+  Settings' "Advanced Settings" button. The System tab's Session section is gone.
+- The version number is small, beside the "Advanced Settings" title.
+- Villa presence: the (i) sits on the section's title, the "Villa empty" sensor label is gone, and the chosen sensor
+  shows in its field like a linked entity, without a "Bound to …" line under it.
+
 ## 2.496.490
 
 What you will see:
