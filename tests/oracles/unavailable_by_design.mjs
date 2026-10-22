@@ -142,14 +142,36 @@ ck("  ...picked in Advanced Settings: added once, removed",
 const recordedRows = [{ entity_id: DOOR, state: "unavailable", last_changed: "2026-10-20T00:00:00Z" },
   { state: "off", last_changed: "2026-10-20T01:00:00Z" }, { state: "unavailable", last_changed: "2026-10-20T01:03:00Z" },
   { state: "on", last_changed: "2026-10-20T02:00:00Z" }];
+// what came before the window: the report it holds ("on" the day before, then asleep)
+const FROM = Date.parse("2026-10-20T00:00:00Z"), TO = FROM + 24 * 3600e3;
+let beforeRows = [{ entity_id: DOOR, state: "unavailable", last_changed: "2026-10-11T00:00:00Z" },
+  { state: "on", last_changed: "2026-10-19T14:57:00Z" }, { state: "unavailable", last_changed: "2026-10-19T15:01:00Z" }];
+let windowRows = recordedRows;
 const urls = [];
-globalThis.fetch = async (url) => { urls.push(String(url)); return { ok: true, status: 200, json: async () => [recordedRows] }; };
+globalThis.fetch = async (url) => {
+  urls.push(String(url));
+  const before = String(url).includes(`end_time=${encodeURIComponent(new Date(FROM).toISOString())}`);
+  return { ok: true, status: 200, json: async () => [before ? beforeRows : windowRows] };
+};
 const { haHistoryPort } = await import("@/ha/HAHistoryAPI");
-const asleepChart = await haHistoryPort({}, new Set([DOOR])).stateRows(DOOR, 0, 1);
-const plainChart = await haHistoryPort({}, new Set()).stateRows(DOOR, 0, 1);
-ck("a chart of a device asleep by design: its sleep is no change (off, then on — no outage drawn)",
-   asleepChart.map((r) => r.state).join() === "off,on" && plainChart.map((r) => r.state).join() === "unavailable,off,unavailable,on",
+const { loadOne } = await import("@/ha/historySource");
+const asleepPort = haHistoryPort({}, new Set([DOOR]));
+const asleepChart = await asleepPort.stateRows(DOOR, FROM, TO);
+const plainChart = await haHistoryPort({}, new Set()).stateRows(DOOR, FROM, TO);
+ck("a chart of a device asleep by design: its sleep is no change (on as it opened, off, then on — no outage drawn)",
+   asleepChart.map((r) => r.state).join() === "on,off,on" && Date.parse(asleepChart[0].last_changed) === FROM
+   && plainChart.map((r) => r.state).join() === "unavailable,off,unavailable,on",
    { asleepChart, plainChart });
+// the owner's lock (2026-10-22): its door contact asleep the whole window, since a report the day before
+windowRows = [{ entity_id: DOOR, state: "unavailable", last_changed: new Date(FROM).toISOString() }];
+const sleptThrough = await loadOne(asleepPort, { kind: "stateWindow", id: DOOR, hours: 24 }, TO);
+ck("  ...asleep the whole window: it holds the last report over the SAME window as the device above it, never moved back",
+   sleptThrough.lastSeen === undefined && sleptThrough.data.map((p) => p.state).join() === "on" && sleptThrough.data[0].t === FROM,
+   sleptThrough);
+beforeRows = [{ entity_id: DOOR, state: "unavailable", last_changed: "2026-10-11T00:00:00Z" }];
+windowRows = recordedRows;
+ck("  ...no report before it: the band starts at its first report",
+   (await asleepPort.stateRows(DOOR, FROM, TO)).map((r) => r.state).join() === "off,on");
 const hook = parseTsx("hooks/useHistorySource.ts");
 ck("  ...with the store's own list, not a copy",
    /haHistoryPort\(ws, unavailableByDesign\)/.test(hook.getText()) && /\{ ws, unavailableByDesign \} = useHA\(\)/.test(hook.getText()));
