@@ -50,7 +50,7 @@ export default function RecentWorkList() {
           when={`${localStamp(c.at)}${workedBy(c) !== "—" ? ` · ${workedBy(c)}` : ""}`}
           pills={<AgentMark record={c} />} notes={[c.note]} photoIds={c.photoIds}
           amount={cost ? formatMoney(cost.amountIdr, terms.currency) : undefined}
-          erase={{ title: "Erase this completion", detail: `${title} — ${localStamp(c.at)}`,
+          erase={{ title: "Erase this completion", detail: `${title}, ${localStamp(c.at)}`,
             run: (token) => removeCompletion(c.id, token) }} />
       )}
     </FoldedList>

@@ -90,7 +90,7 @@ export function energyToday(
     cards.push({
       tone: "neutral",
       title: `${leader.node.name} leads`,
-      detail: `${fmtKwh(leader.kwh)} kWh today — ${share(leader.kwh, split.used)}% of the villa`
+      detail: `${fmtKwh(leader.kwh)} kWh today, ${share(leader.kwh, split.used)}% of the villa`
         + (typ ? ` (about ${fmtKwh(typ)} kWh on a typical day).` : "."),
     });
   }

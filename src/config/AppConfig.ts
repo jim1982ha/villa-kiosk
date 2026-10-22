@@ -163,6 +163,13 @@ export interface AppConfig {
    * option `evidence_retention_days` until 2.496.454). The server applies it (supervisor-proxy _evidence_retention_days).
    */
   recordsKeptDays: number;
+  /**
+   * What the map LIGHTS when presence is detected or a sensor triggers: the red floor glow of a room and a camera's
+   * detection cone (babylon/motionRouting). The villa's, set in Advanced Settings › Villa (owner, 2026-10-22: one
+   * switch for every tablet). On by default — today's map; off, neither is drawn. The devices' own 3D objects keep
+   * their glow either way, and badges, pills and lists are untouched.
+   */
+  roomGlowAndCones: boolean;
   theme: "dark" | "light" | "auto" | "night";
   /** The storey being shown. 1-based; see TeleportPoint.floor for why this
    *  is not a two-value union. */
@@ -347,6 +354,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   northOffsetDeg: 0,
   presenceSensor: "",
   recordsKeptDays: RECORDS_KEPT_DAYS_DEFAULT,
+  roomGlowAndCones: true,
   theme: "auto",
   currentFloor: 1,
   entityMap: ENTITY_MAP,

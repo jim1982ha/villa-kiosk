@@ -51,9 +51,8 @@ const { cameraMotionId } = await import("@/config/BinarySensorClasses");
   const cp = strip(readFileSync(new URL("../../src/components/panels/CameraPanel.tsx", import.meta.url), "utf8"));
   ck("the beam and its room-glow fallback: the ONE link index, filtered by that rule — no second index (pin the callers)",
      /\.filter\(\(cam\) => cameraMotionId\(this\.config\.entityMap\[cam\], \(\) => deviceClass\) === sensorId\)/.test(ev)
-     && /const cameraIds = this\.camerasWatchedBy\(entity\.entity_id,/.test(ev) && /this\.camerasWatchedBy\(sensorId,/.test(ev)
-     && !/motionToCamera|buildMotionToCameraIndex/.test(ev)
-     && /if \(this\.config\.deniedTypes\?\.includes\("binary_sensor"\)\) return;\s+const on = entity\.state === "on";\s+const cameraIds = this\.camerasWatchedBy/.test(ev));
+     && /cameras: this\.camerasWatchedBy\(entity\.entity_id, deviceClass\),/.test(ev)
+     && !/motionToCamera|buildMotionToCameraIndex/.test(ev));
   ck("the camera window's motion status, band and live dot: the header's motion, by the same rule",
      /const motionId = cameraMotionId\(\{ type: mapping\.type, linkedEntityId: linkedId \}/.test(ph)
      && /const motionActive = motion \? entities\[motion\.entityId\]\?\.state === "on" : false;/.test(cp) && /const motionId = motion\?\.entityId;/.test(cp));

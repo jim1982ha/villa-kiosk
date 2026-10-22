@@ -31,6 +31,9 @@
 //                    picked once, the presence tile on every screen follows
 //     recordsKeptDays how long the Facility record is kept (0 = for ever): the
 //                    server applies it, so it can only be the villa's
+//     roomGlowAndCones whether the map lights a room red and draws a camera's
+//                    cone on a detection: one switch for every tablet (owner,
+//                    2026-10-22)
 //
 //   PER-DEVICE — describes THIS CLIENT's look/feel, where different answers on
 //   different hardware are correct, not a drift to be reconciled: render
@@ -81,6 +84,7 @@ interface SharedItems {
   northOffsetDeg: number;
   presenceSensor: string;
   recordsKeptDays: number;
+  roomGlowAndCones: boolean;
 }
 
 export type SharedConfigKey = keyof SharedItems;
@@ -148,6 +152,16 @@ const idList: SharedKeyRow<string[], true> = {
   empty: [],
 };
 
+/** One on/off of the villa's, on by default: one value, indexed as a single item; its empty is ON — what the villa
+ *  had before the switch existed — so a device on the default proposes nothing, and a stored config without the key
+ *  reads ON. */
+const villaSwitchOn: SharedKeyRow<boolean, boolean> = {
+  index: (v) => ({ value: v }),
+  fromIndex: (items) => items.value ?? true,
+  parse: (raw) => (typeof raw === "boolean" ? raw : undefined),
+  empty: true,
+};
+
 const SHARED_KEYS: { [K in SharedConfigKey]: SharedKeyRow<AppConfig[K], SharedItems[K]> } = {
   entityMap: { index: sameRecord, fromIndex: sameRecord, parse: asRecord, empty: {} },
   meshBindings: { index: sameRecord, fromIndex: sameRecord, parse: asRecord, empty: {} },
@@ -174,6 +188,7 @@ const SHARED_KEYS: { [K in SharedConfigKey]: SharedKeyRow<AppConfig[K], SharedIt
   northOffsetDeg: villaNumber,
   presenceSensor: villaText,
   recordsKeptDays: recordsKept,
+  roomGlowAndCones: villaSwitchOn,
 };
 
 /** The AppConfig fields stored centrally, in the one order every document is

@@ -151,7 +151,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             <SegmentedGroup ariaLabel="Interface theme" className="segmented-icons" active={v.theme} onChange={(theme) => slice.set({ theme }, { now: true })} options={[
               { key: "light", title: "Light interface theme", label: <Sun size={17} /> },
               { key: "dark", title: "Dark interface theme", label: <Moon size={17} /> },
-              { key: "auto", title: "Auto — follows the system, and dims to the night theme after dark", label: <Monitor size={17} /> },
+              { key: "auto", title: "Auto, follows the system, and dims to the night theme after dark", label: <Monitor size={17} /> },
             ]} />
             </div>
           )}
@@ -255,14 +255,14 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
               active={v.render.dayNightPreview ?? "auto"} onChange={(dayNightPreview) => applyRender({ dayNightPreview })} options={[
               { key: "day", title: "Light the villa as daytime", label: <Sunrise size={17} /> },
               { key: "night", title: "Light the villa as night", label: <Moon size={17} /> },
-              { key: "auto", title: "Automatic — the villa follows the real day/night cycle", label: <SunMoon size={17} /> },
+              { key: "auto", title: "Automatic, the villa follows the real day/night cycle", label: <SunMoon size={17} /> },
             ]} />
             </div>
           )}
         </div>
         <p className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-2xs)" }}>
-          Overall scene exposure, and how much extra dimming applies at night — both update live.
-          {(manager?.lightingMode().structureUnlit ?? false) && " Villa lighting forces this villa's baked day or night look, or follows the real cycle on Auto — it relights the 3D model, unlike the Interface theme in the header, which only recolours the panels."}
+          Overall scene exposure, and how much extra dimming applies at night, both update live.
+          {(manager?.lightingMode().structureUnlit ?? false) && " Villa lighting forces this villa's baked day or night look, or follows the real cycle on Auto, it relights the 3D model, unlike the Interface theme in the header, which only recolours the panels."}
         </p>
 
         {/* Light effect strength scales a lit fixture's room illumination in
@@ -289,8 +289,8 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             empty; both groups instead grow to fill the row, weighted 2:1. */}
         <div className="row badge-style-row" style={{ gap: 10, marginTop: 6 }}>
           <SegmentedGroup ariaLabel="Floating badge style" className="settings-row-half" active={v.badgeStyle} onChange={(badgeStyle) => slice.set({ badgeStyle }, { now: true })} options={[
-            { key: "classic", title: "Icon badge style — the reading sits on a small pill under the icon", label: <><Circle size={16} /> <span className="badge-btn-label">Icon</span></> },
-            { key: "card", title: "Card badge style — the reading sits inline beside the icon (default)", label: <><CreditCard size={16} /> <span className="badge-btn-label">Card</span></> },
+            { key: "classic", title: "Icon badge style, the reading sits on a small pill under the icon", label: <><Circle size={16} /> <span className="badge-btn-label">Icon</span></> },
+            { key: "card", title: "Card badge style, the reading sits inline beside the icon (default)", label: <><CreditCard size={16} /> <span className="badge-btn-label">Card</span></> },
           ]} />
           {/* Single active/inactive button, its own one-item segmented group —
               reuses the exact same pill styling as the badge-style pair above
@@ -307,7 +307,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
           Classic: icon badge with a value pill. Card: coloured card with icon &amp; value inline —
           both show the same information, purely a look preference.
           {/* one block under the buttons, not a paragraph of its own above them (owner, 2026-10-14) */}
-          {" "}Badge size — {config.entityIconScale.toFixed(2)}× — is set with the +/- buttons next to the category
+          {" "}Badge size, {config.entityIconScale.toFixed(2)}×, is set with the +/- buttons next to the category
           filters in the top bar.
         </p>
 

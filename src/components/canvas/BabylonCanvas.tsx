@@ -238,7 +238,7 @@ export default function BabylonCanvas({
       if (cancelled) return;
       if (!result.ok && "status" in result) {
         setSh3dSyncMsg(
-          `Central room data (${roomsPath}) not found (HTTP ${result.status}) — room names ` +
+          `Central room data (${roomsPath}) not found (HTTP ${result.status}), room names ` +
           "weren't refreshed. Re-run the Blender pipeline and upload the .rooms.json in Settings.",
         );
         return;
@@ -863,7 +863,7 @@ export default function BabylonCanvas({
               it. Progress is announced politely, so it never interrupts. */}
           <div className="muted" role="status" aria-live="polite" aria-busy="true">
             {reconnecting
-              ? "Connection to the villa is unstable — reconnecting…"
+              ? "Connection to the villa is unstable, reconnecting…"
               : `Loading the villa…${progress > 0 && progress < 1 ? ` ${Math.round(progress * 100)}%` : ""}`}
           </div>
         </div>
@@ -926,7 +926,7 @@ export default function BabylonCanvas({
             <>
               The 3D view failed to load several times in a row, so it was stopped
               to avoid an endless reload loop. This almost always means the device
-              (typically an iPhone) ran out of memory for this model — a heavier
+              (typically an iPhone) ran out of memory for this model, a heavier
               GLB (more geometry/textures) can exceed iOS Safari's per-tab limit
               even when the same file works fine on a computer or Android phone.
               {canManageModel && " An Owner can upload a lighter model from Advanced Settings."}

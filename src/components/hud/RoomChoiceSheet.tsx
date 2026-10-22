@@ -83,7 +83,7 @@ export default function RoomChoiceSheet({
             onClick={() => onPick(c.room)}
             // The count is the point of the row: it is what tells you which
             // of two similarly-named rooms is the one you were looking at.
-            title={`Go to ${c.room} — ${countOf(c.count, "device")}`}
+            title={`Go to ${c.room}, ${countOf(c.count, "device")}`}
           >
             <MapPin size={16} className="room-choice-icon" />
             <span className="room-choice-name">{c.room}</span>

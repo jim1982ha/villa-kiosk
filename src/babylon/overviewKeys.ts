@@ -85,10 +85,10 @@ export function overviewKeyStep(
 /** The keys as a person reads them, for the current Natural Scroll setting. */
 export function overviewKeyHelp(natural: boolean): { keys: string; does: string }[] {
   return [
-    { keys: "← →  or  A D", does: natural ? "Pan — the villa moves the way the arrow points" : "Pan — the view moves the way the arrow points" },
-    { keys: "↑ ↓  or  W S", does: natural ? "Pan — ↑ moves the view forward, ↓ back" : "Pan — ↑ moves the view back, ↓ forward" },
+    { keys: "← →  or  A D", does: natural ? "Pan, the villa moves the way the arrow points" : "Pan, the view moves the way the arrow points" },
+    { keys: "↑ ↓  or  W S", does: natural ? "Pan, ↑ moves the view forward, ↓ back" : "Pan, ↑ moves the view back, ↓ forward" },
     { keys: "Shift + ← →  or  Q / E", does: "Rotate" },
-    { keys: "Shift + ↑ ↓", does: natural ? "Tilt — ↑ tips the far side away, towards the horizon" : "Tilt — ↑ looks more straight down" },
+    { keys: "Shift + ↑ ↓", does: natural ? "Tilt, ↑ tips the far side away, towards the horizon" : "Tilt, ↑ looks more straight down" },
     { keys: "+ / −  (or Page Up / Page Down)", does: "Zoom in / out" },
   ];
 }

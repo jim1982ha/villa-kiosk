@@ -74,7 +74,7 @@ function Tile({ t, onOpen }: { t: SummaryTile; onOpen: (t: SummaryTile) => void 
         ...(surface.ring ? { ["--tile-ring" as string]: surface.ring } : {}),
       }}
       onClick={() => onOpen(t)}
-      title={`${t.label}: ${t.value} — tap to see & control everything it includes`}
+      title={`${t.label}: ${t.value}, tap to see & control everything it includes`}
     >
       <span className="summary-tile-icon"><Icon size={20} /></span>
       <span className="summary-tile-text">
@@ -151,7 +151,7 @@ function SceneMenu({ scenes, canRun, apply }: {
         // opens IS the list, so printing its length beside it said the same
         // thing twice, which is what was reported as clutter.
         aria-label={`Scenes (${scenes.length})`}
-        title={`${countOf(scenes.length, "scene")} — tap to run one`}
+        title={`${countOf(scenes.length, "scene")}, tap to run one`}
         onClick={toggle}
       >
         <span className="summary-tile-icon"><Sparkles size={20} /></span>

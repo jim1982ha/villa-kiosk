@@ -128,7 +128,7 @@ async function postUploadOnce(
   } catch (e) {
     throw new TransientUploadError(
       (e as Error)?.name === "AbortError"
-        ? `Upload stalled — no response from the add-on within ${timeoutMs / 1000}s.`
+        ? `Upload stalled, no response from the add-on within ${timeoutMs / 1000}s.`
         : `Upload failed: ${(e as Error)?.message || "network error"}`,
     );
   } finally {

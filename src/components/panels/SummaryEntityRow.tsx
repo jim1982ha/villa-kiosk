@@ -47,8 +47,8 @@ export default function SummaryEntityRow({
         className="summary-entity-main"
         onClick={onOpen}
         title={notInHa
-          ? `${label} — no device has this id`
-          : offMap ? `${label} — not on the 3D map` : `Open ${label}`}
+          ? `${label}, no device has this id`
+          : offMap ? `${label}, not on the 3D map` : `Open ${label}`}
       >
         <img className="summary-entity-badge" src={badgeSrc} key={badgeKey} alt="" draggable={false} />
         <span className="summary-entity-text">

@@ -54,7 +54,7 @@ export function useGlbUpload(enabled: boolean, onModelChanged: () => void) {
           },
           (attempt, of) => {
             setUploadRetry({ attempt, of });
-            setUploadMsg({ text: `Upload stalled — retrying (${attempt} of ${of})…`, ok: true });
+            setUploadMsg({ text: `Upload stalled, retrying (${attempt} of ${of})…`, ok: true });
           },
         );
       } finally {

@@ -333,13 +333,13 @@ export function windowAdvice(r: {
   const dewDiff = r.outDewC !== undefined && r.inDewC !== undefined ? r.outDewC - r.inDewC : undefined;
   if (dewDiff !== undefined && dewDiff >= DEW_TOO_HUMID_C) {
     return { tone: "bad", title: "Keep the windows closed",
-      detail: `Outside is more humid (dew ${f1(r.outDewC!)}° against ${f1(r.inDewC!)}°) — opening up would bring the damp in.` };
+      detail: `Outside is more humid (dew ${f1(r.outDewC!)}° against ${f1(r.inDewC!)}°), opening up would bring the damp in.` };
   }
   const cooler = r.inC - r.outC;
   if (cooler >= COOLER_OUTSIDE_C && (dewDiff === undefined || dewDiff <= DEW_TOLERANCE_C)) {
     const drier = dewDiff !== undefined && dewDiff < 0 ? " and a little drier" : "";
     return { tone: "good", title: "Open the windows",
-      detail: `${f1(cooler)}° cooler outside${drier} — the house cools without getting damper.` };
+      detail: `${f1(cooler)}° cooler outside${drier}, the house cools without getting damper.` };
   }
   if (-cooler >= COOLER_OUTSIDE_C) {
     return { tone: "caution", title: "Keep the windows closed",
@@ -369,17 +369,17 @@ export function outdoorsAdvice(r: { raining?: boolean; gustKmh?: number; windKmh
   if (r.raining === undefined && r.gustKmh === undefined && r.uv === undefined) return null;
   if (r.raining) return { tone: "bad", title: "Outdoors: wet", detail: "It is raining." };
   if (r.gustKmh !== undefined && r.gustKmh >= STRONG_GUST_KMH) {
-    return { tone: "caution", title: "Outdoors: windy", detail: `Gusts of ${Math.round(r.gustKmh)} km/h — ${beaufort(r.gustKmh).toLowerCase()}.` };
+    return { tone: "caution", title: "Outdoors: windy", detail: `Gusts of ${Math.round(r.gustKmh)} km/h, ${beaufort(r.gustKmh).toLowerCase()}.` };
   }
   if (r.uv !== undefined && r.uv >= 3) {
     const b = uvBand(r.uv);
-    return { tone: "caution", title: "Outdoors: sun protection", detail: `UV ${Math.round(r.uv)}, ${b.band.toLowerCase()} — ${b.advice}.` };
+    return { tone: "caution", title: "Outdoors: sun protection", detail: `UV ${Math.round(r.uv)}, ${b.band.toLowerCase()}, ${b.advice}.` };
   }
   const bits = [r.raining === false ? "Dry" : null,
     r.windKmh !== undefined ? beaufort(r.windKmh).toLowerCase() : null,
     r.gustKmh !== undefined ? `gusts under ${Math.max(5, Math.ceil(r.gustKmh / 5) * 5)} km/h` : null]
     .filter(Boolean).join(", ");
-  const uvText = r.uv !== undefined ? ` UV ${Math.round(r.uv)} — no sun protection.` : "";
+  const uvText = r.uv !== undefined ? ` UV ${Math.round(r.uv)}, no sun protection.` : "";
   return { tone: "good", title: "Outdoors: fine", detail: `${bits ? bits.charAt(0).toUpperCase() + bits.slice(1) + "." : ""}${uvText}`.trim() };
 }
 

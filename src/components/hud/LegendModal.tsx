@@ -28,16 +28,16 @@ import DialogLayer from "@/components/common/DialogLayer";
  *  (deviceActivity.MARK_ORDER). ONE CORNER PER DEVICE (owner, 2026-10-22): the top-right pill is the device itself,
  *  the bottom-right one the device linked to it — its own problem with the same marks, else filled on / hollow off. */
 const BADGE_ITEMS: { label: string; state: DeviceSurfaceState; mark?: BadgeMark; linkPill?: LinkPill; note: string }[] = [
-  { label: "Off", state: "off", note: "Plain square, icon in the device's colour — resting" },
-  { label: "On", state: "active", note: "Tinted in the device's colour — on, or working" },
+  { label: "Off", state: "off", note: "Plain square, icon in the device's colour, resting" },
+  { label: "On", state: "active", note: "Tinted in the device's colour, on, or working" },
   { label: "Bottom-right pill", state: "off", linkPill: "on",
-    note: "The device linked to it — filled when on, hollow when off, or its own problem with the same marks" },
-  { label: "Red \"?\"", state: "unavailable", mark: "critical", note: "A critical device has gone silent — act now" },
-  { label: "Red \"!\"", state: "active", mark: "alarm", note: "Alarm — an unlocked door, a leak, a low battery" },
-  { label: "Amber \"!\"", state: "off", mark: "fault", note: "An open fault — check soon" },
-  { label: "Grey \"?\"", state: "unavailable", mark: "lost", note: "No contact — the square is faded" },
-  { label: "Grey \"z\"", state: "off", mark: "asleep", note: "Asleep by design — its last report is shown" },
-  { label: "Teal \"…\"", state: "off", mark: "moving", note: "Moving — locking, opening, closing" },
+    note: "The device linked to it, filled when on, hollow when off, or its own problem with the same marks" },
+  { label: "Red \"?\"", state: "unavailable", mark: "critical", note: "A critical device has gone silent, act now" },
+  { label: "Red \"!\"", state: "active", mark: "alarm", note: "Alarm, an unlocked door, a leak, a low battery" },
+  { label: "Amber \"!\"", state: "off", mark: "fault", note: "An open fault, check soon" },
+  { label: "Grey \"?\"", state: "unavailable", mark: "lost", note: "No contact, the square is faded" },
+  { label: "Grey \"z\"", state: "off", mark: "asleep", note: "Asleep by design, its last report is shown" },
+  { label: "Teal \"…\"", state: "off", mark: "moving", note: "Moving, locking, opening, closing" },
 ];
 
 /** A room chip: its border says whether something is on; its number's colour
@@ -47,10 +47,10 @@ const CHIP_RINGS: { label: string; frame: "active" | "rest"; note: string }[] = 
   { label: "No border", frame: "rest", note: "Everything in the room is off or resting" },
 ];
 const CHIP_COUNTS: { label: string; health: RoomHealth; note: string }[] = [
-  { label: "Green number", health: "ok", note: "All right — every device is reporting and nothing needs attention" },
+  { label: "Green number", health: "ok", note: "All right, every device is reporting and nothing needs attention" },
   { label: "Grey number", health: "unavailable", note: "No contact with a device in the room" },
-  { label: "Amber number", health: "fault", note: "A device in the room has an open fault — shown before grey" },
-  { label: "Red number", health: "alert", note: "Act now: an alarm, or a critical device gone silent — shown first" },
+  { label: "Amber number", health: "fault", note: "A device in the room has an open fault, shown before grey" },
+  { label: "Red number", health: "alert", note: "Act now: an alarm, or a critical device gone silent, shown first" },
 ];
 
 /** The coloured status pill each device PANEL shows, and the colours of the
@@ -58,14 +58,14 @@ const CHIP_COUNTS: { label: string; health: RoomHealth; note: string }[] = [
  *  finer vocabulary than the map badge above, because a panel has room for
  *  the distinction and a history bar genuinely needs it). */
 const STATUS_ITEMS: { label: string; swatch: string; note: string }[] = [
-  { label: "On / active", swatch: STATUS_COLOR.active, note: "Device is on, locked-secure, or open — or a detector finding nothing wrong (no leak, no smoke, no motion), a door or window closed" },
-  { label: "Off / idle", swatch: STATUS_COLOR.idle, note: "Device is off or in its resting state — or a door or window standing open" },
+  { label: "On / active", swatch: STATUS_COLOR.active, note: "Device is on, locked-secure, or open, or a detector finding nothing wrong (no leak, no smoke, no motion), a door or window closed" },
+  { label: "Off / idle", swatch: STATUS_COLOR.idle, note: "Device is off or in its resting state, or a door or window standing open" },
   { label: "In progress", swatch: STATUS_COLOR.transitional,
-    note: "Moving between the two — opening, closing, locking, arming" },
+    note: "Moving between the two: opening, closing, locking, arming" },
   { label: "Unavailable", swatch: STATUS_COLOR.unavailable, note: "No contact" },
   // "unknown": the device answers with nothing to say (stateColors.contactOf "no-value") — idle, never "no contact"
   { label: "No value reported", swatch: STATUS_COLOR.idle, note: "The device is answering but has no value to give right now" },
-  { label: "Alert", swatch: STATUS_COLOR.alert, note: "Needs attention (e.g. unlocked door, jammed lock, leak) — or a detection (motion, occupancy), which is not a fault" },
+  { label: "Alert", swatch: STATUS_COLOR.alert, note: "Needs attention (e.g. unlocked door, jammed lock, leak), or a detection (motion, occupancy), which is not a fault" },
 ];
 
 export default function LegendModal({ onClose }: { onClose: () => void }) {
@@ -99,7 +99,7 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
           <div className="settings-section-title">Device category (badge colour when on)</div>
           <p className="muted body-text" style={{ marginTop: 4 }}>
             A device's badge is plain at rest, its icon in its category
-            colour — the whole square takes the colour once it is on.
+            colour, the whole square takes the colour once it is on.
           </p>
           <div className="legend-grid">
             {CATEGORY_ORDER.map((c) => (
@@ -176,7 +176,7 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
               (overviewKeys.overviewKeyHelp) — nowhere else says it. */}
           <div className="settings-section-title">Moving around with a keyboard</div>
           <p className="muted body-text" style={{ marginTop: 4 }}>
-            Bird's-eye view — hold a key to keep moving{config.naturalScrolling ? " (Natural Scroll is on)" : " (Natural Scroll is off)"}:
+            Bird's-eye view, hold a key to keep moving{config.naturalScrolling ? " (Natural Scroll is on)" : " (Natural Scroll is off)"}:
           </p>
           <div className="legend-keys">
             {overviewKeyHelp(config.naturalScrolling).map((k) => (

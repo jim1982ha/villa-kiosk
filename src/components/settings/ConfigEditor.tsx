@@ -152,7 +152,7 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
         <code style={{ fontSize: "var(--text-2xs)" }}>camera.driveway</code>). Edit the
         display name, room or panel type without reloading the model.{" "}
         <strong>Changes here apply to every device</strong> that opens the
-        kiosk — this configuration is stored centrally by the add-on, like the
+        kiosk, this configuration is stored centrally by the add-on, like the
         3D model itself, not per browser.
       </p>
 

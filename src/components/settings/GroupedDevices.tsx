@@ -100,7 +100,7 @@ export default function GroupedDevices() {
           New group
         </label>
         <p className="muted body-text" style={{ fontSize: "var(--text-2xs)", marginBottom: 10 }}>
-          Pick the entity that should keep the map badge (e.g. temperature) — add
+          Pick the entity that should keep the map badge (e.g. temperature), add
           the rest as members once the group is created.
         </p>
         <div className="row" style={{ gap: 8, alignItems: "flex-start" }}>

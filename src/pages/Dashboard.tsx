@@ -485,7 +485,7 @@ export default function Dashboard() {
         setCurrentFloor(floor);
       } else {
         // Floor not modelled yet.
-        setNotice({ text: `Floor ${floor} isn't modelled yet — coming soon.`, tone: "info" });
+        setNotice({ text: `Floor ${floor} isn't modelled yet, coming soon.`, tone: "info" });
       }
     },
     [manager],

@@ -291,6 +291,11 @@ export class CameraBeams {
     }
   }
 
+  /** Every cone off — Advanced Settings' "Room glow and camera cones" switched (EntityVisuals.updateConfig). */
+  clearActive(): void {
+    for (const id of [...this.active]) this.setActive(id, false);
+  }
+
   hasActive(): boolean {
     return this.active.size > 0;
   }

@@ -148,7 +148,7 @@ export default function SpendTab(
         <div className="fm-form">
           <h3>{editingId ? "Edit spend entry" : "Record maintenance spend"}</h3>
           <div className="fm-field">
-            <span>Device (search, or type one not listed — leave blank for a whole-villa expense)</span>
+            <span>Device (search, or type one not listed, leave blank for a whole-villa expense)</span>
             <DeviceSearchPicker
               {...device.pickerProps}
               options={deviceOptions}
@@ -166,7 +166,7 @@ export default function SpendTab(
             label="Notes (optional)"
             value={note}
             onChange={setNote}
-            placeholder="e.g. Second refill this quarter — check for a leak"
+            placeholder="e.g. Second refill this quarter, check for a leak"
           />
           <CostFields amount={amount} onAmount={setAmount} category={category} onCategory={setCategory}
             replacing={editingId ?? undefined} />
@@ -207,7 +207,7 @@ export default function SpendTab(
           // the whole point of attaching one is that somebody can later check it
           <RecordCard key={c.id} title={c.label} when={localStamp(c.at)} notes={[c.note]} photoIds={c.photoIds}
             amount={money(c.amountIdr)} onOpen={() => openEditor(c)}
-            erase={{ title: "Erase this spend entry", detail: `${c.label} — ${money(c.amountIdr)}`,
+            erase={{ title: "Erase this spend entry", detail: `${c.label}, ${money(c.amountIdr)}`,
               run: (token) => removeCost(c.id, token) }}
             // its device right after its name, as an Overview card's room (owner, 2026-10-22: "align the Spend cards
             // with the Overview's")

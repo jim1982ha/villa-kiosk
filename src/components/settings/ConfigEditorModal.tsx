@@ -11,7 +11,8 @@ import { useState } from "react";
 import { useDraftCommit } from "@/hooks/useDraftCommit";
 import { RECORDS_KEPT_DAYS_MAX, type AppConfig } from "@/config/AppConfig";
 import { useModalA11y } from "@/hooks/useModalA11y";
-import { Boxes, Home, LogOut, Upload, Wrench } from "lucide-react";
+import { Boxes, Home, LogOut, Radar, Upload, Wrench } from "lucide-react";
+import SegmentedGroup from "@/components/common/SegmentedGroup";
 import ModalTabs, { type ModalTab } from "@/components/common/ModalTabs";
 import { useConfig } from "@/config/ConfigContext";
 import { northOffsetFacing } from "@/babylon/skyMoment";
@@ -154,7 +155,25 @@ function PresenceSensor() {
         onChange={(id) => update({ presenceSensor: id })} onClear={() => update({ presenceSensor: "" })} />
       <p className="muted body-text field-hint">
         The on/off sensor that is on when the villa is empty. Shown on every screen as the presence tile under the
-        floors — Occupied, Empty or Unknown — and tapping it tells why.
+        floors, Occupied, Empty or Unknown, and tapping it tells why.
+      </p>
+    </>
+  );
+}
+
+/** One switch for what the map LIGHTS on a detection — a room's red floor glow and a camera's cone (owner, 2026-10-22;
+ *  babylon/motionRouting). A shared setting, like the location: it applies to every tablet, live. */
+function RoomGlowAndCones() {
+  const { config, update } = useConfig();
+  return (
+    <>
+      <div className="settings-section-title">On the map</div>
+      <SegmentedGroup ariaLabel="Room glow and camera cones"
+        active={config.roomGlowAndCones ? "on" : null} onChange={() => update({ roomGlowAndCones: !config.roomGlowAndCones })}
+        options={[{ key: "on", title: "Room glow and camera cones", label: <><Radar size={16} /> Room glow and camera cones</> }]} />
+      <p className="muted body-text field-hint">
+        Light up the room in red and draw the camera's cone when presence is detected or a sensor triggers. The devices
+        themselves still glow.
       </p>
     </>
   );
@@ -201,14 +220,14 @@ function LogoutAllSection() {
   return (
     <>
       <p className="muted body-text" style={{ marginTop: 0, marginBottom: 10 }}>
-        Signs every device out immediately — this one included — regardless of
+        Signs every device out immediately, this one included, regardless of
         how long the "Session length" add-on option says a sign-in should
         last. Use it if a tablet went missing or a PIN was seen by someone who
         shouldn't have it.
       </p>
       {failed && (
         <div className="test-result fail" style={{ marginBottom: 10 }}>
-          Could not reach the server — no session was signed out.
+          Could not reach the server, no session was signed out.
         </div>
       )}
       {confirming ? (
@@ -321,6 +340,8 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
               <NorthOffset viewHeadingDeg={viewHeadingDeg} />
 
               <PresenceSensor />
+
+              <RoomGlowAndCones />
 
               {/* No collapse: `BindingsTable` already opens on its three counts
                   with the lists themselves behind their own toggles, so this

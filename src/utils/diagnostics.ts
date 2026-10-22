@@ -230,7 +230,7 @@ export function buildReport(primary: CapturedError | null): string {
   const L: string[] = [];
   const push = (k: string, v: unknown) => L.push(`${k}: ${v}`);
 
-  L.push(primary ? "VESTA — error report" : "VESTA — device report");
+  L.push(primary ? "VESTA error report" : "VESTA device report");
   L.push("==========================");
   push("When", new Date().toISOString());
   push("App version", typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "?");
@@ -256,7 +256,7 @@ export function buildReport(primary: CapturedError | null): string {
     push("Meshes", model.meshCount);
     push("Load timing", `fetch ${model.fetchMs}ms · parse ${model.parseMs}ms (import ${model.importMs}ms)`);
   } else {
-    L.push("(never finished loading — no mesh/timing stats)");
+    L.push("(never finished loading, no mesh/timing stats)");
   }
 
   L.push("");
@@ -305,7 +305,7 @@ export function buildReport(primary: CapturedError | null): string {
     push("Total", mb(perf.memory.totalJSHeapSize));
     push("Limit", mb(perf.memory.jsHeapSizeLimit));
   } else {
-    L.push("(not exposed on this browser — normal on iOS Safari)");
+    L.push("(not exposed on this browser, normal on iOS Safari)");
   }
 
   L.push("");

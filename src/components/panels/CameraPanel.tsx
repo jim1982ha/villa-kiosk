@@ -577,7 +577,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
             close) while they're mid-gesture on the feed. */}
         {zoom.zoomed && (
           <button className="camera-zoom-pill" onClick={zoom.reset} title="Reset zoom" aria-label="Reset zoom">
-            <ZoomOut size={16} /> Zoomed in — tap to reset
+            <ZoomOut size={16} /> Zoomed in, tap to reset
           </button>
         )}
       </div>
@@ -734,7 +734,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
             <button
               className={`icon-btn camera-linked-btn${linked.isOn ? " on" : ""}`}
               {...linkedSwitchProps(linked)}
-              title={`${linked.label} — ${linked.isOn ? "turn off" : "turn on"}`}
+              title={`${linked.label}, ${linked.isOn ? "turn off" : "turn on"}`}
               style={vOrder(5)}
             >
               <Power />
@@ -762,8 +762,8 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
                 {...pickerHold}
                 onContextMenu={(e) => e.preventDefault()}
                 onClick={() => onCycleBtnClick(1)}
-                title="Next camera — hold to pick a camera"
-                aria-label="Next camera — hold to pick a camera"
+                title="Next camera, hold to pick a camera"
+                aria-label="Next camera, hold to pick a camera"
                 style={vOrder(3)}
               >
                 <ChevronRight />

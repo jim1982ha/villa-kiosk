@@ -102,10 +102,13 @@ ck("the list paints the tone, the page builds its rows here, and the tones have 
      && glowsRoom("binary_sensor.garden_pir", undefined) && alertIsFault("binary_sensor.garden_door_x", undefined)
      && !detectsPresence("binary_sensor.garden_pir", "door"));
   const ev = readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8");
-  ck("  ...the map's room glow asks exactly that (EntityVisuals.applyMotionRouting)",
-     /if \(type === "binary_sensor" && room && glowsRoom\(entity\.entity_id, entity\.attributes\.device_class as string \| undefined\)\) \{\s*this\.roomHighlight\.setActive\(room, on\);/.test(ev)
+  // the routing is babylon/motionRouting since 2026-10-22 (Advanced Settings' "Room glow and camera cones"), painted
+  // by EntityVisuals.applyMotionRouting — room_glow_switch.mjs drives it by value
+  const mr = readFileSync(new URL("../../src/babylon/motionRouting.ts", import.meta.url), "utf8");
+  ck("  ...the map's room glow asks exactly that (motionRouting, painted by EntityVisuals.applyMotionRouting)",
+     /if \(i\.type === "binary_sensor" && i\.room && glowsRoom\(i\.entityId, i\.deviceClass\)\) \{\s*return \{ beams: \[\], rooms: \[\{ room: i\.room, on: i\.on \}\] \};/.test(mr)
      // owner, 2026-10-22: an auto-detected sensor (its 3D object named after it, never saved) — its badge red, its room dark
-     && /const type = this\.mapping\.get\(entity\.entity_id\)\?\.type \?\? this\.config\.entityMap\[entity\.entity_id\]\?\.type;/.test(ev));
+     && /type: this\.mapping\.get\(entity\.entity_id\)\?\.type \?\? this\.config\.entityMap\[entity\.entity_id\]\?\.type,/.test(ev));
   // owner, 2026-10-22: a motion sensor already "on" when the map loaded never lit its room (rooms land after the
   // reveal; the glow only followed a CHANGE). Each time the rooms or their glows change, every glow is lit again from
   // the sensors as they stand now.

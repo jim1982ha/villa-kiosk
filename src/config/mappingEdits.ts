@@ -135,7 +135,7 @@ export function addRoom(point: TeleportPoint): { edit: ConfigEdit; clash: (confi
   const key = roomKey(point.name);
   const clash = (config: AppConfig) => {
     const c = config.teleportPoints.find((p) => roomKey(p.name) === key);
-    return c ? `"${c.name}" already exists — remove or rename it first.` : null;
+    return c ? `"${c.name}" already exists, remove or rename it first.` : null;
   };
   return { clash, edit: (config) => (clash(config) ? {} : { teleportPoints: [...config.teleportPoints, point] }) };
 }

@@ -113,7 +113,7 @@ export default function GuestReportModal({
           <>
             <div className="modal-body guest-report-done">
               <Check size={28} />
-              <h3>Thank you — that&apos;s been reported.</h3>
+              <h3>Thank you, that&apos;s been reported.</h3>
               <p className="muted body-text">
                 {queued
                   ? "This tablet will send it on its own as soon as it reaches the villa's system. You don't need to do anything else."
@@ -169,7 +169,7 @@ export default function GuestReportModal({
                   </label>
                   {photoIds.length > 0 && (
                     <button className="btn ghost" onClick={() => setPhotoIds([])}>
-                      {photoIds.length} attached — remove
+                      {photoIds.length} attached, remove
                     </button>
                   )}
                 </div>

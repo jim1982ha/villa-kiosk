@@ -130,13 +130,13 @@ export function readinessTable(readiness: Pick<ReadinessResult, "checks">): stri
  *  financial-reporting disclaimer can't drift between them. */
 export function documentHeader(titleSuffix: string, villaName: string, month: string, scopeDescription: string): string[] {
   return [
-    `# ${villaName} — ${titleSuffix}`,
+    `# ${villaName}: ${titleSuffix}`,
     `**Period:** ${monthLabel(month)}  `,
     // localStamp: a fixed, unambiguous YYYY-MM-DD HH:MM in the reader's own
     // time — an archived document should not change shape with a browser.
     `**Generated:** ${localStamp()}  `,
     `**Scope:** ${scopeDescription} `
-      + `Financial reporting — revenue, commissions and payout — is out of scope and provided separately.`,
+      + `Financial reporting (revenue, commissions and payout) is out of scope and provided separately.`,
     "",
   ];
 }
@@ -148,7 +148,7 @@ export function buildMonthlyRecap(input: RecapInput): string {
 
   L.push(...documentHeader(
     "operations recap", villaName, month,
-    "operational status only — maintenance, spend, faults and device uptime.",
+    "operational status only: maintenance, spend, faults and device uptime.",
   ));
 
   // ── 1. Preventive maintenance ─────────────────────────────────────────────
@@ -230,7 +230,7 @@ export function buildMonthlyRecap(input: RecapInput): string {
     // Named when it covers fewer tickets than "Resolved" reports, so the two
     // figures cannot be read as describing the same set when they do not.
     const covers = stats.meanCoversTickets === stats.resolved
-      ? "" : ` (from ${stats.meanCoversTickets} of ${stats.resolved} — the rest `
+      ? "" : ` (from ${stats.meanCoversTickets} of ${stats.resolved}, the rest `
         + `carry no usable resolution time)`;
     L.push(`- Mean time to resolution this month: **${stats.meanResolutionHours.toFixed(1)} hours**${covers}`);
   }
@@ -262,7 +262,7 @@ export function buildMonthlyRecap(input: RecapInput): string {
       + `(${pct.toFixed(1)}%)`);
     // ⚠️ "SEE THE FAULTS SECTION ABOVE" POINTED AT NOTHING (architecture review, 2026-10-19): a device not answering is
     // not a fault record; it is a row of the Overview's Open issues, and the readiness check names it below.
-    if (off > 0) L.push(`- ${off} device(s) currently offline — listed under "Open issues" on the Overview, `
+    if (off > 0) L.push(`- ${off} device(s) currently offline, listed under "Open issues" on the Overview, `
       + `and under "${AVAILABILITY_CHECK_LABEL}" below.`);
     L.push("");
   }
@@ -332,7 +332,7 @@ export function buildReadinessSnapshot(readiness: ReadinessResult, villaName: st
   const lines = [
     ...documentHeader("readiness snapshot", villaName, month,
       "the guest-readiness checks as they stood when generated, from live device state."),
-    `**${VERDICT_WORDS[readiness.overall]}** — ${readiness.passed} of ${readiness.total} checks passing.`,
+    `**${VERDICT_WORDS[readiness.overall]}**, ${readiness.passed} of ${readiness.total} checks passing.`,
     "",
     ...readinessTable(readiness),
     "",

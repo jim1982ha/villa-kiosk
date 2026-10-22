@@ -117,9 +117,9 @@ export default function ModalFooter({
           CONSEQUENCE, which the one-word label deliberately does not. */}
       <div className="modal-footer-actions">
         <Tip text={commit
-          ? (dirty ? "Save — stores your changes, applies them and closes"
+          ? (dirty ? "Save, stores your changes, applies them and closes"
                    : "Nothing has been changed yet")
-          : "Everything in this dialog applies as you change it — there is "
+          : "Everything in this dialog applies as you change it, there is "
             + "nothing waiting to be saved"}>
           <button
             className="btn primary"
@@ -131,7 +131,7 @@ export default function ModalFooter({
             <span className="btn-label">Save</span>
           </button>
         </Tip>
-        <Tip text={dirty ? "Cancel — undoes every change made here, on every tab, and closes" : "Cancel — closes"}>
+        <Tip text={dirty ? "Cancel, undoes every change made here, on every tab, and closes" : "Cancel, closes"}>
           <button
             className="btn"
             aria-label="Cancel"
@@ -169,4 +169,4 @@ export function footerExits(commit: ModalCommit | null, onClose: () => void,
 }
 
 export const SAVED_NOTICE = "All changes saved and applied.";
-export const CANCELLED_NOTICE = "All changes cancelled — nothing was kept.";
+export const CANCELLED_NOTICE = "All changes cancelled, nothing was kept.";

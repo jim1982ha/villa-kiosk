@@ -1,3 +1,11 @@
+## 2.496.488
+
+What you will see:
+- Advanced Settings › Villa › On the map: a new switch, "Room glow and camera cones" (on by default, for every
+  tablet). Off: no red glow on a room's floor and no camera cone when presence is detected or a sensor triggers. The
+  devices' own 3D objects still glow red either way.
+- Texts across the Kiosk use a comma, or a colon before a list, where they had a long dash (" — ").
+
 ## 2.496.487
 
 What you will see — a camera's motion sensor is its "Linked entity":

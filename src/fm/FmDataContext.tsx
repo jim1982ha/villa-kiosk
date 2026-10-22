@@ -237,17 +237,17 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
     // store (and, before 2.496.184, re-pushed on every refresh for good).
     if (outcome.reason === "refused") {
       setData(before);
-      setSaveError(outcome.message ? `The add-on refused this change: ${outcome.message}` : "The add-on refused this change — nothing was saved.");
+      setSaveError(outcome.message ? `The add-on refused this change: ${outcome.message}` : "The add-on refused this change, nothing was saved.");
       return "refused";
     }
     if (elevation) {
       setData(before);
-      setSaveError("The delete was refused by the add-on — nothing was removed.");
+      setSaveError("The delete was refused by the add-on, nothing was removed.");
       return "refused";
     }
     // Local is now ahead of the server; the document has flagged it, so the
     // next refresh RETRIES this write instead of skipping forever (reload).
-    setSaveError("Couldn't save to the add-on — the change is only on this device.");
+    setSaveError("Couldn't save to the add-on, the change is only on this device.");
     return "offline";
   }, [doc, reportSync]);
 

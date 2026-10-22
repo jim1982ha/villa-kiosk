@@ -55,7 +55,7 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
       <RecordCard lead={<CalendarClock size={16} className="muted" aria-hidden="true" />} title="No maintenance schedule yet"
         body={(
           <p className="muted body-text fm-card-text">
-            Add your property's own recurring maintenance tasks with <strong>Add a task</strong> below — air
+            Add your property's own recurring maintenance tasks with <strong>Add a task</strong> below, air
             conditioning service, pest control, pool and landscaping, whatever your own schedule or agreement calls
             for. Each task then tracks its own interval, due date and the work done.
           </p>

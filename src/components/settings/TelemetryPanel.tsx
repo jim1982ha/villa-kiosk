@@ -156,7 +156,7 @@ function summarise(e: TelemetryEvent): string {
       // passcode screens, and that is the whole question being asked of it.
       const where = e.preLogin ? "BEFORE login (profile/PIN screen)" : "after login";
       if (e.phase === "registry") {
-        return `entity registry: ${e.rows} rows in ${ms(e.ms)} — ${where}`;
+        return `entity registry: ${e.rows} rows in ${ms(e.ms)}, ${where}`;
       }
       // A socket that died. `up` is the figure to read first: a consistent age
       // across many rows means something is timing the connection out, a wild
@@ -171,7 +171,7 @@ function summarise(e: TelemetryEvent): string {
       // reconnect into an unchanged villa it should be near zero.
       const pushed = typeof e.pushed === "number" ? `, ${e.pushed} changed` : "";
       return `hydrate: ${e.states} states${pushed}, fetch ${ms(e.fetchMs)} + apply `
-        + `${ms(e.applyMs)} — ${where}`;
+        + `${ms(e.applyMs)}, ${where}`;
     }
     case "sync": {
       // `sync` rows rendered blank before — the one kind with no summariser, in
@@ -183,11 +183,11 @@ function summarise(e: TelemetryEvent): string {
               .map(([k, n]) => `${k} ×${n}`).join(", ")
           : "";
         return e.ok
-          ? `${which} pushed${changed ? ` — ${changed}` : ""}`
+          ? `${which} pushed${changed ? `, ${changed}` : ""}`
             + `${typeof e.attempts === "number" && e.attempts > 1 ? ` (${e.attempts} attempts)` : ""}`
           : `${which} push FAILED: ${e.reason ?? "unknown"}`;
       }
-      if (e.aborted) return `${which} pull skipped — ${e.aborted}`;
+      if (e.aborted) return `${which} pull skipped, ${e.aborted}`;
       const held = typeof e.entities === "number" ? ` · ${e.entities} entities` : "";
       return `${which} pulled${e.changed === false ? " (unchanged)" : ""}${held}`;
     }
@@ -236,7 +236,7 @@ function summarise(e: TelemetryEvent): string {
         ? ` · ${e.aaSamples > 1 ? `${e.aaSamples}× MSAA` : "no MSAA"}`
         : "";
       return `frame-cost probe (${e.mode ?? "?"}${mpx}${aa} · ${tier} · ${e.gpu ?? "?"})`
-        + ` — baseline ${base.renderMs.toFixed(1)}ms · costs: ${rest}`;
+        + `, baseline ${base.renderMs.toFixed(1)}ms · costs: ${rest}`;
     }
     case "frames": {
       // p95 is the number a person actually feels: a median of 16ms with a p95
@@ -267,14 +267,14 @@ function summarise(e: TelemetryEvent): string {
       const stale = e.nowSeq !== undefined && e.nowSeq !== e.seq
         ? ` · ⚠ load ${e.seq} → ${e.nowSeq}, counters belong to the later one` : "";
       if (!e.census || e.census === "(empty)") {
-        return `${ms(e.atMs)} into load — counters were EMPTY (reset under us)${stale}`;
+        return `${ms(e.atMs)} into load, counters were EMPTY (reset under us)${stale}`;
       }
       const rows = String(e.census).split(",").filter(Boolean).map((part) => {
         const [name, runs, totalMs] = part.split(":");
         const n = Number(runs);
         return `${name} ${ms(Number(totalMs))}${n > 1 ? ` over ${n} RUNS` : ""}`;
       });
-      return `${ms(e.atMs)} into load — ${rows.join(" · ")}${stale}`;
+      return `${ms(e.atMs)} into load, ${rows.join(" · ")}${stale}`;
     }
     case "context-lost":
       return `WebGL context lost (${e.total ?? "?"} this session)`;
@@ -282,7 +282,7 @@ function summarise(e: TelemetryEvent): string {
       // Two rows per restore: the loss window, then the rebuild cost once the
       // first frame is actually back on screen.
       return e.phase === "repainted"
-        ? `repainted — rebuild blocked ${ms(e.blockedMs)}`
+        ? `repainted, rebuild blocked ${ms(e.blockedMs)}`
         : `context restored after ${ms(e.deadMs)} dead`
           + ` · ${e.meshes ?? "?"} meshes, ${e.textures ?? "?"} textures to re-upload`;
     default:
@@ -352,7 +352,7 @@ export default function TelemetryPanel() {
   const asJson = useCallback(() => JSON.stringify(events ?? [], null, 2), [events]);
 
   const copyAll = useCallback(async () => {
-    if (!(await copyText(asJson()))) { setNotice("Could not copy — use Download instead."); return; }
+    if (!(await copyText(asJson()))) { setNotice("Could not copy, use Download instead."); return; }
     setCopied(true);
     setTimeout(() => setCopied(false), 1800);
   }, [asJson]);
@@ -367,7 +367,7 @@ export default function TelemetryPanel() {
   /** Copy a diagnostic's result where it was asked for, and say whether it landed. */
   const copyResult = useCallback(async (text: string, what: string) => {
     setNotice(await copyText(text) ? `${what} copied to the clipboard.`
-      : `${what} is ready — the browser refused to copy it automatically, use its Copy button.`);
+      : `${what} is ready, the browser refused to copy it automatically, use its Copy button.`);
   }, []);
   /** "Diagnose ▾": ONE button for this device's report and the frame-cost probe (owner, 2026-10-14). */
   const [diagOpen, setDiagOpen] = useState(false);
@@ -418,7 +418,7 @@ export default function TelemetryPanel() {
   return (
     <div>
       <p className="muted body-text" style={{ marginBottom: 12 }}>
-        What every device that opens this kiosk has reported — load timings, JS
+        What every device that opens this kiosk has reported, load timings, JS
         errors, WebGL context losses and page-lifecycle transitions. This is how
         a problem on someone else&rsquo;s phone becomes diagnosable. Newest first;
         the add-on keeps the last 500 events. <strong>Copy</strong> and
@@ -461,7 +461,7 @@ export default function TelemetryPanel() {
           {diagOpen && (
             <div className="hud-menu telemetry-diag-menu" role="menu">
               <button role="menuitem" className="hud-menu-item" onClick={runDevice}
-                title="This device right now — screen, viewport, WebGL caps, loaded model">
+                title="This device right now, screen, viewport, WebGL caps, loaded model">
                 <Stethoscope size={18} /> <span>This device</span>
               </button>
               <button role="menuitem" className="hud-menu-item" onClick={() => void runProbe()}
@@ -477,7 +477,7 @@ export default function TelemetryPanel() {
       {probeText && (
         <div className="field">
           <label className="entity-label row spread">
-            Frame cost on this device — what each thing was costing
+            Frame cost on this device, what each thing was costing
             <button className="btn ghost" onClick={() => void copyResult(probeText, "Frame-cost probe")}><Copy size={14} /> Copy</button>
           </label>
           <pre className="diag-report">{probeText}</pre>
@@ -487,7 +487,7 @@ export default function TelemetryPanel() {
       {selfReport && (
         <div className="field">
           <label className="entity-label row spread">
-            This device — screen, viewport, WebGL, model
+            This device, screen, viewport, WebGL, model
             <span className="row" style={{ gap: 6 }}>
               <button className="btn ghost" onClick={() => void copyResult(selfReport, "Device report")}><Copy size={14} /> Copy</button>
               <button className="btn ghost" onClick={() => setSelfReport(null)}>Hide</button>

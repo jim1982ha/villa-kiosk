@@ -39,7 +39,7 @@ ck("the label commits one way: half a second after typing, or at once on leaving
      (mf.match(/<EntityPicker /g) ?? []).length === 1 && /cell\("linked", "Linked entity"/.test(mf)
      && !/Motion sensor|draftField\(\{ motion/.test(code(mf)) && !/Motion sensor/.test(ce));
   ck("  ...described truthfully: a camera's may be its motion sensor or a switch; nothing says long-press or arms",
-     /placeholder=\{m\.type === "camera" \? "Linked entity — its motion sensor or a switch…" : "Linked entity — a switch or a sensor…"\}/.test(mf)
+     /placeholder=\{m\.type === "camera" \? "Linked entity, its motion sensor or a switch…" : "Linked entity, a switch or a sensor…"\}/.test(mf)
      && ![mf, br, er].some((x) => /long-press|arms detection|ring only/.test(code(x))));
 }
 
@@ -49,10 +49,10 @@ ck("the label commits one way: half a second after typing, or at once on leaving
   const id = "light.hall_lamp_left";
   const auto = labelField(id, "Hall Lamp Left", "Reading lamp");
   ck("the label made from the entity id shows as an EMPTY field…", auto.value === "", auto);
-  ck("  …with the name actually shown in grey, and where it comes from", auto.placeholder === "Reading lamp — from its device name", auto.placeholder);
+  ck("  …with the name actually shown in grey, and where it comes from", auto.placeholder === "Reading lamp, from its device name", auto.placeholder);
   ck("  …the underscore form of the fallback too", labelField(id, "hall_lamp_left", "Reading lamp").value === "");
   ck("a name the owner typed shows as it is", labelField(id, "Desk light", "Reading lamp").value === "Desk light");
-  ck("no Home Assistant name yet: the id's own name, said so", /— from its entity id$/.test(labelField(id, undefined).placeholder));
+  ck("no Home Assistant name yet: the id's own name, said so", /, from its entity id$/.test(labelField(id, undefined).placeholder));
   ck("the field uses it (value and placeholder)", /labelField\(entityId, m\.label,/.test(mf) && /value=\{label\.drafts\.v \?\? named\.value\}/.test(mf)
      && /placeholder=\{named\.placeholder\}/.test(mf));
 }

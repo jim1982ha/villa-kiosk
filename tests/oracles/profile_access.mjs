@@ -27,7 +27,7 @@ console.log("\n  the picker:");
 const gate = readFileSync(new URL("../../src/components/auth/ProfileGate.tsx", import.meta.url), "utf8");
 ck("a closed profile's tile is disabled and says why",
    /const closed = !!access && !access\[r\]\.enabled;/.test(gate) && /disabled=\{!access \|\| closed\}/.test(gate)
-   && /closed \? "No passcode set — not available from here\." : ROLE_DESCRIPTIONS\[r\]/.test(gate));
+   && /closed \? "No passcode set, not available from here\." : ROLE_DESCRIPTIONS\[r\]/.test(gate));
 ck("a passcode-less OPEN profile still signs in with one tap", /if \(access && !access\[r\]\.pin\) \{/.test(gate));
 ck("when the add-on cannot be asked, every profile is gated (never silently open)",
    /const gated = \{ pin: true, enabled: true \};\s*setAccess\(\{ guest: gated, owner: gated, ops: gated \}\)/.test(gate));

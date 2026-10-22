@@ -42,7 +42,7 @@ const todayP = E.energyPeriod(setup, {
 const T = O.energyToday(setup, todayP, weekP, now, "13:00", "IDR", "en-US");
 
 console.log("  today:");
-ck("the headline: a quiet day, measured against the typical one", /^A quiet day — 39% of a typical one by 13:00\.$/.test(T.headline), T.headline);
+ck("the headline: a quiet day, measured against the typical one", /^A quiet day, 39% of a typical one by 13:00\.$/.test(T.headline), T.headline);
 ck("the week's total and its typical day (the median, Friday does not move it)", Math.abs(T.weekTotal - 250.05) < 0.01 && T.typical === 29.89, [T.weekTotal, T.typical]);
 
 console.log("\n  the cards, in order, at most three:");

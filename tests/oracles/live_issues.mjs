@@ -30,7 +30,7 @@ console.log("  a card's buttons are its faults' only (fm/deviceWork, architectur
 const item = (id, kind, entityId, extra = {}) => ({ id, kind, title: id, detail: "", entityId, device: { key: deviceOf(entityId), label: "dev" }, ...extra });
 // a card's buttons as the owner reads them: "label → the records it acts on [what it asks first]"
 const said = (acts) => acts.map((a) => `${a.label} → ${[...a.ids].sort().join(",")}${a.step.kind === "close" ? ` [${a.step.question} / ${a.step.confirmLabel}]` : ""}${a.step.kind === "stage" ? ` (${a.step.to})` : ""}`);
-const OV_CLOSE = "[Close this? No action needed. / Close]", OV_ALL = "[Close all of them? No action needed. / Close all]", TK_CLOSE = "[Close this ticket? Nothing was done — no cost is recorded. / Close ticket]";
+const OV_CLOSE = "[Close this? No action needed. / Close]", OV_ALL = "[Close all of them? No action needed. / Close all]", TK_CLOSE = "[Close this ticket? Nothing was done, no cost is recorded. / Close ticket]";
 const [pump] = groupAttention([
   item("unavailable:sensor.pump_power", "unavailable", "sensor.pump_power"),
   item("fault:a", "fault", "sensor.pump_energy", { ticketId: "a", stage: "fault" }),
@@ -183,11 +183,11 @@ ck("  ...\"Unavailable — \" is not said before it (the fault says offline); a 
    attentionLine({ id: "u", kind: "unavailable", title: "", detail: "Unavailable", fault: f }) === "Pump has been offline for 9 h."
    && attentionLine({ id: "u", kind: "unavailable", title: "", detail: "Unavailable", fault: { ...f, stage: "ticket" } }) === "In progress: Pump has been offline for 9 h.");
 ck("  ...what the fault does not say stays: Not in Home Assistant, a live reading",
-   attentionLine({ id: "u", kind: "unavailable", title: "", detail: "Not in Home Assistant", fault: f }) === "Not in Home Assistant — Pump has been offline for 9 h."
-   && attentionLine({ id: "a", kind: "alarm", title: "", detail: "92 %", fault: { ...f, title: "Humidity high" } }) === "92 % — Humidity high");
+   attentionLine({ id: "u", kind: "unavailable", title: "", detail: "Not in Home Assistant", fault: f }) === "Not in Home Assistant, Pump has been offline for 9 h."
+   && attentionLine({ id: "a", kind: "alarm", title: "", detail: "92 %", fault: { ...f, title: "Humidity high" } }) === "92 %, Humidity high");
 ck("  ...a state word the fault's title already says is not said before it (owner, 2026-10-18, #41); a word only inside another stays",
    attentionLine({ id: "a", kind: "alarm", title: "", detail: "Unlocked", fault: { ...f, title: "Laundry Room door unlocked" } }) === "Laundry Room door unlocked"
-   && attentionLine({ id: "a", kind: "alarm", title: "", detail: "Open", fault: { ...f, title: "Door opened twice" } }) === "Open — Door opened twice");
+   && attentionLine({ id: "a", kind: "alarm", title: "", detail: "Open", fault: { ...f, title: "Door opened twice" } }) === "Open, Door opened twice");
 const [two] = offlineDevice("42");
 ck("  ...a fault on an entity that still reports (a battery reading 42 %) stays its own line", two.items.length === 2, two.items.map((i) => i.id));
 const [unknownValue] = offlineDevice("unknown");
@@ -411,7 +411,7 @@ console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
      text(drawButtons(tkActs)) === "|Mark resolved|Close|" && text(drawButtons(W.closedActions({ id: "r", stage: "closed" }))) === "|Reopen|", text(drawButtons(tkActs)));
   ck("  ...its Close asks ITS question in place of the buttons — the Overview's for the device, the ticket's for the ticket",
      text(drawButtons(ovActs, "device:x")) === "|Close all of them? No action needed.|Cancel|Close all|"
-     && text(drawButtons(tkActs, "device:x")) === "|Close this ticket? Nothing was done — no cost is recorded.|Cancel|Close ticket|",
+     && text(drawButtons(tkActs, "device:x")) === "|Close this ticket? Nothing was done, no cost is recorded.|Cancel|Close ticket|",
      [text(drawButtons(ovActs, "device:x")), text(drawButtons(tkActs, "device:x"))]);
   ck("  ...another card's question leaves this one's buttons; a card with nothing to act on draws nothing",
      text(drawButtons(tkActs, "device:y")) === "|Mark resolved|Close|" && drawButtons([]) === "");

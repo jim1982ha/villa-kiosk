@@ -48,7 +48,7 @@ export function PresenceButton({ presence: p, when, onClick }: { presence: Prese
   return (
     <button type="button" className="icon-btn hud-presence-btn" data-presence={p.state}
       style={{ "--tone": STATUS_COLOR[p.tone] } as React.CSSProperties}
-      title={`${said} — tap to see why`} aria-label={`${said}. Tap to see why.`} onClick={onClick}>
+      title={`${said}, tap to see why`} aria-label={`${said}. Tap to see why.`} onClick={onClick}>
       <Icon size={18} aria-hidden />
       <span className="hud-presence-word">{SHORT[p.state]}</span>
     </button>

@@ -151,7 +151,7 @@ export class HAWebSocket {
       let settled = false;
       // Guarantee the connect() promise always settles, so callers never hang
       // if HA is unreachable or the socket closes before authentication.
-      const timeout = setTimeout(() => finish(() => reject(new Error("Connection timed out — check the server address and that the device is reachable."))), 10000);
+      const timeout = setTimeout(() => finish(() => reject(new Error("Connection timed out, check the server address and that the device is reachable."))), 10000);
       const finish = (action: () => void) => {
         if (settled) return;
         settled = true;

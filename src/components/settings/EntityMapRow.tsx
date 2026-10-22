@@ -126,7 +126,7 @@ function EntityMapRow({
             role="button"
             tabIndex={0}
             aria-expanded={expanded}
-            title="Click to expand — use the pencil to redirect this mesh to a different entity ID"
+            title="Click to expand, use the pencil to redirect this mesh to a different entity ID"
             onClick={() => onToggleExpanded(entryKey)}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggleExpanded(entryKey); }
@@ -166,7 +166,7 @@ function EntityMapRow({
       {editing && (
         <td data-label="">
           <span style={{ fontSize: "var(--text-2xs)", color: "var(--text-secondary)" }}>
-            Mesh stays, entity ID changes — no model rebuild needed.
+            Mesh stays, entity ID changes, no model rebuild needed.
           </span>
         </td>
       )}

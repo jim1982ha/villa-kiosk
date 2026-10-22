@@ -62,7 +62,7 @@ export function ShowAll<T>({ list, noun, plural = `${noun}s` }: { list: Truncate
                    style={{ transform: list.expanded ? "rotate(180deg)" : undefined }} />
       {list.expanded
         ? "Show fewer"
-        : `Show all — ${list.hidden} more ${list.hidden === 1 ? noun : plural}`}
+        : `Show all, ${list.hidden} more ${list.hidden === 1 ? noun : plural}`}
     </button>
   );
 }
