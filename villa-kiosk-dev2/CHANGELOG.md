@@ -1,3 +1,15 @@
+## 2.496.494
+
+What you will see:
+- Advanced Settings › Villa location: on a computer, Latitude, Longitude and the north offset (with Set North) sit
+  on one line; on a phone the north offset goes under the two coordinates, as before.
+- Every number field (coordinates, days, amounts, the spend cap, "every N days") uses the same text size as the
+  other fields: one 14 px size for every field in the Kiosk's windows.
+- System › Maintenance records: the (i) is on the section title; the field reads "How many days Ticket attachment
+  must be saved (in days)".
+- Cockpit › Recap: "Villa occupied since…" sits above the Ready / Not ready card. Recap and Spend show their Save
+  and Download buttons only once something has been generated.
+
 ## 2.496.493
 
 What you will see:
