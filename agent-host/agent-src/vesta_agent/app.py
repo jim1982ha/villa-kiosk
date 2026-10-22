@@ -58,6 +58,7 @@ from .kiosk import Kiosk, KioskError
 from .alert_buttons import AlertButtons
 from .outcome import Outcome
 from .voice import Voice
+from .transcriber import villa_entity_ids
 from .tickets import Tickets
 from .places import tab, where
 from .policy import NOT_REGISTERED, Person, Policy, problems as policy_problems
@@ -180,7 +181,8 @@ class Vesta:
         self.fault_offers = FaultOffers(self.state, self.delivery, self.tickets,
                                         lambda chat: self.s.in_folder(f"chats/{chat}").out_dir)
         # a voice message's words (voice.py): the skill prepares the audio and the plan, transcriber.py runs it
-        self.voice = Voice(self.s, self.tg, self.skills, self.code_command, self.delivery.send, self.state, self.cf_headers)
+        self.voice = Voice(self.s, self.tg, self.skills, self.code_command, self.delivery.send, self.state, self.cf_headers,
+                           entity_ids=lambda: villa_entity_ids(self.reader))
         # the heading of every message the agent sends on its own (notice.py): who it is for, the incident, its history
         incidents = Incidents(settings.store_path)        # the alert desk's incidents, as the engine reads them
         self.notices = Notices(self.state, self.policy, settings.timezone, severity=incidents.severity,

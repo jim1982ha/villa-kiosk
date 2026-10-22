@@ -14,7 +14,16 @@ Now the skill answers a PLAN (the villa's choices: which Whisper, whether at all
      "attempts": [{"whisper": "core-whisper:10300"},
                   {"stt": "stt.x", "language": "auto"},
                   {"stt": "stt.x", "language": "fr"}],
-     "otherwise": "words for the person when no attempt gives words"}          (optional)
+     "otherwise": "words for the person when no attempt gives words",          (optional)
+     "no_stt": {"none": "…", "several": "…"}}   (optional: the person's words when "the only one" is not one)
+
+An attempt may name the villa's speech-to-text without an entity, `{"stt": null, "language": …}`: "the villa's
+only one". ⚠️ FOUND LATE, BY THE ENGINE (review, 2026-10-23): the skill asked the villa's system for its whole device
+list BEFORE Whisper was tried; when that read failed the script stopped and the person read "This voice message
+could not be prepared", Whisper never asked. Now `VillaSpeech.only` looks it up when such an attempt is reached
+(once per message, the answer kept for its next attempts), within what is left of the clock; a failed, empty or
+ambiguous lookup is that attempt's why, and when nothing gives words the person reads the plan's `no_stt` words
+for "none" or "several".
 
 and `Transcriber` runs the attempts in order through two adapters with one interface (`attempt(step, audio,
 seconds) -> Heard | why`): `WhisperDirect` (wyoming.py) and `VillaSpeech` (POST /api/stt/<entity>, the agent's
@@ -82,10 +91,22 @@ class Heard(NamedTuple):
     language: str | None = None
 
 
+class Unheard(NamedTuple):
+    """No words: what the person reads instead."""
+    say: str
+
+
+class Unfound(NamedTuple):
+    """The villa's only speech-to-text, not found: `kind` "none", "several" or "failed"; `why` for the record."""
+    kind: str
+    why: str
+
+
 class Step(NamedTuple):
-    """One attempt of a plan: via "whisper" (target host:port) or "villa" (target an stt.* entity)."""
+    """One attempt of a plan: via "whisper" (target host:port) or "villa" (target an stt.* entity; None: the villa's
+    only one, looked up when the attempt is reached)."""
     via: str
-    target: str
+    target: str | None
     language: str | None        # None: Whisper's own setting decides
 
 
@@ -118,11 +139,12 @@ def step_of(raw) -> Step | str:
             return "not host:port"
         return Step("whisper", str(raw["whisper"]), None if lang in (None, "auto") else str(lang))
     if "stt" in raw:
-        if not STT_ENTITY.match(str(raw["stt"] or "")):
+        # null: the villa's only one (looked up later); anything else reaches a URL path, so its shape is checked
+        if raw["stt"] is not None and not STT_ENTITY.match(str(raw["stt"])):
             return "no stt.* entity"
         if lang is None:
             return "no language code"
-        return Step("villa", str(raw["stt"]), str(lang))
+        return Step("villa", None if raw["stt"] is None else str(raw["stt"]), str(lang))
     return "neither whisper nor stt"
 
 
@@ -144,12 +166,34 @@ class WhisperDirect:
         return Heard(got["text"], said if LANGUAGE.match(said) and said != "auto" else None)
 
 
+def villa_entity_ids(reader) -> list[str]:
+    """Every entity id the villa's system has NOW (the reader keeps its list for the app's life otherwise: a
+    speech-to-text added since would not be seen)."""
+    return reader.all_entity_ids(fresh=True)
+
+
 class VillaSpeech:
     """Home Assistant's speech-to-text, POST /api/stt/<entity>, with the agent's token."""
 
-    def __init__(self, settings, headers: dict | None = None):
+    def __init__(self, settings, headers: dict | None = None, entity_ids=None):
         self.s = settings
         self.headers = headers or {}      # Cloudflare Access, when Home Assistant is reached through it
+        self.entity_ids = entity_ids      # () -> the villa's entity ids (villa_entity_ids over the app's reader)
+
+    async def only(self, seconds: float) -> str | Unfound:
+        """The villa's one speech-to-text entity, or why there is none to use. Several and none named: not guessed."""
+        if self.entity_ids is None:
+            return Unfound("failed", "no way to list the villa's devices")
+        try:
+            ids = await asyncio.wait_for(asyncio.to_thread(self.entity_ids), seconds)
+        except Exception as e:  # noqa: BLE001 — what kind of failure only, never an address
+            return Unfound("failed", f"the villa's devices not listed ({type(e).__name__})")
+        found = sorted(str(e) for e in ids if STT_ENTITY.match(str(e)))
+        if len(found) == 1:
+            return found[0]
+        if not found:
+            return Unfound("none", "no speech-to-text in the villa's system")
+        return Unfound("several", f"{len(found)} speech-to-text services, none named")
 
     async def attempt(self, step: Step, audio: Audio, seconds: float) -> Heard | str:
         if not (self.s.ha_url and self.s.ha_token):
@@ -192,19 +236,20 @@ REFUSED_BEFORE = "refused before"
 
 
 class Transcriber:
-    def __init__(self, settings, state, headers: dict | None = None, adapters: dict | None = None):
+    def __init__(self, settings, state, headers: dict | None = None, adapters: dict | None = None, entity_ids=None):
         self.state = state
         self.adapters: dict[str, Adapter] = adapters or {"whisper": WhisperDirect(),
-                                                         "villa": VillaSpeech(settings, headers)}
+                                                         "villa": VillaSpeech(settings, headers, entity_ids)}
         # (stt entity, language) the villa's system refused while this app runs: never asked again (module doc)
         self.refused: set[tuple[str, str]] = set()
 
-    async def run(self, cid: int, plan: dict, deadline: float, started: float) -> Heard | None:
+    async def run(self, cid: int, plan: dict, deadline: float, started: float) -> Heard | Unheard:
         """The first words of the plan's attempts, each given what is left before `deadline` (time.monotonic());
-        None when none gives words. Writes the one "voice" record and the one log line."""
+        when none gives words, what the person reads instead. Writes the one "voice" record and the one log line."""
         tried: list[dict] = []
         heard: Heard | None = None
         done: Step | None = None
+        only: str | Unfound | None = None       # the villa's only speech-to-text, looked up once for this message
         try:
             audio = Audio.read(str(plan.get("wav") or ""))
         except (OSError, EOFError, wave.Error):
@@ -217,10 +262,19 @@ class Transcriber:
                 tried.append({"via": None, "stt": None, "language": None, "why": step})
                 why = step
                 continue
+            left = deadline - time.monotonic()
+            if step.via == "villa" and step.target is None and left > 0:
+                if only is None:
+                    finder = getattr(self.adapters["villa"], "only", None)
+                    only = await finder(left) if finder else Unfound("failed", "no way to list the villa's devices")
+                if isinstance(only, str):
+                    step = step._replace(target=only)
+                left = deadline - time.monotonic()
             row = {"via": step.via, "stt": step.target if step.via == "villa" else None,
                    "language": step.language or "auto"}
-            left = deadline - time.monotonic()
-            if step.via == "villa" and (step.target, step.language) in self.refused:
+            if step.via == "villa" and step.target is None:
+                got = only.why if isinstance(only, Unfound) else "no time left"
+            elif step.via == "villa" and (step.target, step.language) in self.refused:
                 got = REFUSED_BEFORE
             elif left <= 0:
                 got = "no time left"
@@ -248,7 +302,11 @@ class Transcriber:
                  f"words from {_name(done)}" + (f", detected {heard.language}" if heard and heard.language else "")
                  if done else "no words", took,
                  "; ".join(f"{_name(t)}: {t['why'] or 'words'}" for t in tried) or why)
-        return heard
+        if heard:
+            return heard
+        words = plan.get("no_stt") if isinstance(plan.get("no_stt"), dict) else {}
+        said = words.get(only.kind) if isinstance(only, Unfound) else None
+        return Unheard(str(said or plan.get("otherwise") or UNHEARD))
 
 
 def _name(step) -> str:
@@ -259,7 +317,9 @@ def _name(step) -> str:
         via, stt, lang = step["via"], step["stt"], step["language"]
     if via == "whisper":
         return "Whisper directly" + (f" in {lang}" if lang != "auto" else "")
-    return f"{stt} in {lang}" if via else "an attempt not understood"
+    if not via:
+        return "an attempt not understood"
+    return f"{stt or 'the only speech-to-text'} in {lang}"
 
 
 def script_seconds(deadline: float) -> int:
@@ -267,4 +327,5 @@ def script_seconds(deadline: float) -> int:
     return max(1, math.floor(deadline - time.monotonic()))
 
 
-__all__ = ["Transcriber", "Heard", "Step", "Audio", "step_of", "timeout_s", "script_seconds", "UNHEARD"]
+__all__ = ["Transcriber", "Heard", "Unheard", "Step", "villa_entity_ids", "Audio", "step_of", "timeout_s",
+           "script_seconds", "UNHEARD"]

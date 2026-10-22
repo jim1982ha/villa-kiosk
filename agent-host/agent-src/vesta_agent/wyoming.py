@@ -95,10 +95,20 @@ def _resolve(host: str, port: int, timeout: float) -> list[tuple]:
     return [(i[0], i[4]) for i in infos]
 
 
-def _connect(host: str, port: int, timeout: float) -> socket.socket:
-    """The first of the name's addresses that accepts; the last refusal when none does."""
+def _connect(host: str, port: int, deadline: float, connect_s: float) -> socket.socket:
+    """The first of the name's addresses that accepts; the last refusal when none does.
+
+    ⚠️ EACH WAIT FROM WHAT IS LEFT (review, 2026-10-23: two silent addresses waited the whole time each, so the
+    message's one clock was overrun twice over). The name's lookup and each address get min(connect_s, what is left
+    before `deadline`), recomputed every time; TimeoutError as soon as nothing is left."""
+    def wait() -> float:
+        rest = deadline - time.monotonic()
+        if rest <= 0:
+            raise TimeoutError("Whisper was not reached in time")
+        return min(connect_s, rest)
     last: OSError | None = None
-    for family, addr in _resolve(host, port, timeout):
+    for family, addr in _resolve(host, port, wait()):
+        timeout = wait()
         sock = socket.socket(family, socket.SOCK_STREAM)
         sock.settimeout(timeout)
         try:
@@ -124,7 +134,7 @@ def transcribe(where: tuple[str, int], pcm: bytes, fmt: dict, deadline: float, c
             raise TimeoutError("Whisper did not answer in time")
         return rest
     host, port = where
-    sock = _connect(host, port, min(connect_s, left()))
+    sock = _connect(host, port, deadline, connect_s)
     try:
         sock.settimeout(left())
         step = fmt["rate"] * fmt["width"] * fmt["channels"] * CHUNK_SECONDS

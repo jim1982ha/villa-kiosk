@@ -41,6 +41,9 @@ class FakeHA:
     def states(self, entity_ids=None) -> dict[str, dict]:
         return {e: s for e, s in self._states.items() if entity_ids is None or e in entity_ids}
 
+    def all_entity_ids(self, fresh: bool = False) -> list[str]:
+        return sorted(self._states)
+
     def tool_content(self, name: str, args: dict) -> list[dict]:
         return self.mcp.call_raw(name, args).get("content", [])
 

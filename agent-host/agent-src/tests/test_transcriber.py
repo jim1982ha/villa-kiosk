@@ -9,6 +9,7 @@ recording adapter. Ids and addresses invented."""
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import time
 import wave
@@ -18,7 +19,7 @@ import pytest
 from helpers import voice_agent, voice_event, voice_record
 from stt_fake import FakeSTT
 from vesta_agent import transcriber, voice as voice_module
-from vesta_agent.transcriber import Heard, Transcriber
+from vesta_agent.transcriber import Heard, Transcriber, Unheard
 from vesta_shared import limits
 from wyoming_fake import FakeWhisper
 
@@ -150,7 +151,7 @@ def test_a_plan_the_engine_cannot_run_is_recorded_not_guessed(tmp_path):
     # no WAV: nothing is asked
     p = plan(tmp_path, [{"stt": "stt.a", "language": "fr"}])
     os.remove(p["wav"])
-    assert run(t, p) is None and len(rec.calls) == 1 and state.rows[-1][1]["why"] == "the skill wrote no WAV"
+    assert run(t, p) == Unheard(transcriber.UNHEARD) and len(rec.calls) == 1 and state.rows[-1][1]["why"] == "the skill wrote no WAV"
 
 
 @pytest.mark.parametrize("bad", [{}, {"error": "This voice message is empty."}, {"wav": "x", "attempts": "w"}])
@@ -185,3 +186,61 @@ def test_the_otherwise_words_are_said_when_nothing_is_heard(tmp_path, monkeypatc
     asyncio.run(v.on_ha_event("telegram_attachment", voice_event()))
     assert v.tg.sent[-1][1] == "Name the speech-to-text for voice messages."
     assert not os.listdir(os.path.join(v.s.out_dir, "voice"))         # the WAV is removed too
+
+
+# ------------------------------------------------------------------ "the villa's only speech-to-text", found late
+class Villa:
+    """The villa's system as the engine's reader reaches it (the real McpClient over a stand-in session): its device
+    list is these ids, or the read fails (`ids` None). `asked`: how many times the list was read."""
+
+    def __init__(self, ids):
+        self.ids, self.asked = ids, 0
+
+    def call_raw(self, name, args):
+        assert name == "ha_get_overview"
+        self.asked += 1
+        if self.ids is None:
+            return {"isError": True, "content": [{"type": "text", "text": "timeout"}]}
+        body = {"domain_stats": {d: {"entities": [{"entity_id": e} for e in self.ids if e.startswith(d + ".")]}
+                                 for d in {e.split(".")[0] for e in self.ids}}}
+        return {"content": [{"type": "text", "text": json.dumps(body)}]}
+
+
+def unnamed(tmp_path, monkeypatch, ids, whisper_answer, stt_answers=(200,)):
+    """One voice message, villa.voice.yaml naming NO speech-to-text (as shipped), Whisper first: (words the AI got,
+    the record, the agent, the villa, the speech-to-text stand-in)."""
+    from vesta_shared.ha_client import McpClient
+    monkeypatch.setattr(voice_module, "timeout_s", lambda: BUDGET)
+    villa = Villa(ids)
+    with FakeWhisper(whisper_answer) as w, FakeSTT(stt_answers) as stt:
+        v = voice_agent(tmp_path, {"whisper": w.address}, stt=None, reader=McpClient(session=villa))
+        v.s.ha_url = stt.url
+        asyncio.run(v.on_ha_event("telegram_attachment", voice_event()))
+    return [c["text"] for c in v.conversed], voice_record(v), v, villa, stt
+
+
+def test_whisper_answers_although_the_villas_device_list_cannot_be_read(tmp_path, monkeypatch):
+    """Review, 2026-10-23: the skill read the villa's device list BEFORE Whisper was tried; that read failing ended
+    the message ("This voice message could not be prepared."), Whisper never asked."""
+    said, rec, v, villa, stt = unnamed(tmp_path, monkeypatch, None, None)
+    assert said == ["allume la lumière de la cuisine"] and rec["via"] == "whisper"
+    assert villa.asked == 0 and stt.asked == []         # Whisper gave words: the villa's system is not asked anything
+
+
+def test_whisper_silent_and_the_villa_has_one_speech_to_text_it_is_used(tmp_path, monkeypatch):
+    said, rec, v, villa, stt = unnamed(tmp_path, monkeypatch, ["light.x", "stt.only_one"], "close", (415, 200))
+    assert said == ["words in fr"] and stt.asked == [("stt.only_one", "auto"), ("stt.only_one", "fr")]
+    assert villa.asked == 1                             # looked up once for the message, kept for its next attempt
+    assert rec["via"] == "villa" and rec["stt"] == "stt.only_one" and rec["used"] == "fr"
+    assert [(a["stt"], a["why"]) for a in rec["attempts"]] == [
+        (None, "WyomingError"), ("stt.only_one", "refused (415)"), ("stt.only_one", None)]
+
+
+@pytest.mark.parametrize("ids, says, why", [
+    (None, "I could not make out this voice message", "the villa's devices not listed (HAError)"),
+    ([], "Voice messages need a speech-to-text service in the villa's system", "no speech-to-text in the villa's system"),
+    (["stt.a", "stt.b"], "The villa's system has several speech-to-text services", "2 speech-to-text services, none named")])
+def test_whisper_silent_and_no_one_speech_to_text_the_person_is_told_why(tmp_path, monkeypatch, ids, says, why):
+    said, rec, v, villa, stt = unnamed(tmp_path, monkeypatch, ids, "close")
+    assert said == [] and stt.asked == [] and villa.asked == 1 and v.tg.sent[-1][1].startswith(says)
+    assert [a["why"] for a in rec["attempts"]] == ["WyomingError", why, why] and rec["why"] == why

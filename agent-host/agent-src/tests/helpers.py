@@ -215,18 +215,20 @@ def voice_event(chat: int = VOICE_OWNER, user: int = VOICE_OWNER, mime: str = "a
     return e
 
 
-def voice_agent(tmp_path, voice_yaml: dict | None = None, language: str = "fr", converse: bool = False):
+def voice_agent(tmp_path, voice_yaml: dict | None = None, language: str = "fr", converse: bool = False,
+                stt: str | None = "stt.test_whisper", reader=None):
     """The test villa with villa-concierge and the tone as the voice Telegram holds. villa.voice.yaml names the
-    speech-to-text and turns Whisper off unless `voice_yaml` says otherwise. Unless `converse`, the AI is not run:
-    each turn is kept in `v.conversed` ({"chat", "text", "voice", "spoken"})."""
+    speech-to-text `stt` (None: names none, as shipped) and turns Whisper off unless `voice_yaml` says otherwise.
+    `reader`: the villa's system as the engine reads it. Unless `converse`, the AI is not run: each turn is kept in
+    `v.conversed` ({"chat", "text", "voice", "spoken"})."""
     import yaml
     from telegram_fake import FakeTelegram
     v = make_agent(tmp_path, {"people": [{"telegram_id": VOICE_OWNER, "name": "Owner", "role": "owner",
                                           "language": language}],
                               "chats": {"owner": VOICE_GROUP, "fm": VOICE_GROUP}}, skills=["villa-concierge"],
-                   telegram=FakeTelegram(audio=open(TONE, "rb").read()))
+                   telegram=FakeTelegram(audio=open(TONE, "rb").read()), reader=reader)
     with open(os.path.join(v.s.skills_dir, "villa-concierge", "villa.voice.yaml"), "w") as f:
-        yaml.safe_dump({"stt": "stt.test_whisper", "whisper": "off", **(voice_yaml or {})}, f)
+        yaml.safe_dump({**({"stt": stt} if stt else {}), "whisper": "off", **(voice_yaml or {})}, f)
     v.bot_username = "Villa_Test_bot"
     v.conversed = []
     if not converse:

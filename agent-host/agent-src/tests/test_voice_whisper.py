@@ -123,6 +123,31 @@ def test_a_silent_whisper_times_out_at_the_deadline():
     assert isinstance(e.value, TimeoutError) and time.monotonic() - t < 2
 
 
+def test_two_silent_addresses_share_the_time_left(monkeypatch):
+    """Review, 2026-10-23: each of a name's addresses was given min(connect_s, left) worked out ONCE, so two that
+    never answer (packets dropped) waited twice the time left and overran the message's one clock."""
+    class Silent:                     # an address that never answers: connect waits its whole timeout
+        def __init__(self, *a):
+            self.t = None
+
+        def settimeout(self, t):
+            self.t = t
+
+        def connect(self, addr):
+            time.sleep(self.t)
+            raise TimeoutError("timed out")
+
+        def close(self):
+            pass
+    monkeypatch.setattr(wyoming, "_resolve", lambda h, p, t: [(socket.AF_INET, ("192.0.2.1", p)),
+                                                              (socket.AF_INET6, ("2001:db8::1", p, 0, 0))])
+    monkeypatch.setattr(wyoming.socket, "socket", Silent)
+    t = time.monotonic()
+    with pytest.raises(TimeoutError):
+        wyoming.transcribe(("core-whisper", 10300), sound(), FMT, t + 1.0, 3)
+    assert time.monotonic() - t < 1.0 + 0.2
+
+
 def test_the_address_shape():
     assert wyoming.address("core-whisper:10300") == ("core-whisper", 10300)
     assert wyoming.address("[::1]:10300") == ("::1", 10300)

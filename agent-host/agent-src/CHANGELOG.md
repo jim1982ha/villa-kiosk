@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.6.314 (23 October 2026)
+
+- Whisper is tried even when the villa's device list cannot be read. villa-concierge `voice.py` no longer reads the
+  villa's system: when villa.voice.yaml names no `stt:` (as shipped), the plan says `{"stt": null, "language": …}`
+  ("the villa's only one") and gives `no_stt: {"none", "several"}`, the person's words. `VillaSpeech.only` looks it up
+  when such an attempt is reached (`villa_entity_ids` over the app's reader, read afresh; within what is left of the
+  clock), once per message; a failed, empty or ambiguous lookup is that attempt's `why`. Before, the script read the
+  whole device list first, and a failed read ended the message ("This voice message could not be prepared."),
+  Whisper never asked. `Transcriber.run` returns `Heard` or `Unheard(say)`; a named entity is still shape-checked.
+  `McpClient.all_entity_ids(fresh=True)` reads the list again.
+- Whisper's connection keeps to the time left: the name's lookup and each address get min(`voice.whisper_connect_s`,
+  what is left), worked out each time, TimeoutError when nothing is left (`wyoming._connect` takes the deadline).
+  Before, two silent addresses each waited the whole time left and overran the one clock.
+- Tests: `helpers.voice_agent(stt=None, reader=…)`; test_transcriber through the agent with no `stt:` (the device
+  list failing while Whisper answers; one speech-to-text found when Whisper is silent; none, several, failed: what
+  the person reads); test_voice_whisper two silent addresses within the deadline.
+
 ## 0.6.313 (23 October 2026)
 
 - A voice message becomes words in ONE engine module, `transcriber.py` (architecture review, 2026-10-23). The skill

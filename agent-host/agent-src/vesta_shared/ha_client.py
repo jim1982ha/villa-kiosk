@@ -375,8 +375,9 @@ class McpClient(HABase):
         return res.get("content", [])
 
     # ------------------------------------------------------------------ reads
-    def all_entity_ids(self) -> list[str]:
-        if self._all_ids is None:
+    def all_entity_ids(self, fresh: bool = False) -> list[str]:
+        """Every entity id, read once per client; `fresh`: read again now (a long-lived client, the agent's)."""
+        if self._all_ids is None or fresh:
             ov = self.tool("ha_get_overview", {"detail_level": "minimal", "include_entity_id": True,
                                                "include_state": False,
                                                "max_entities_per_domain": limit(

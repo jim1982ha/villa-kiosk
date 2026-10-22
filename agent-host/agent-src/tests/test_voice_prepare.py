@@ -18,14 +18,6 @@ import voice  # noqa: E402
 TONE = os.path.join(ROOT, "tests", "fixtures", "voice_440hz.ogg")
 
 
-class Ids:
-    def __init__(self, ids):
-        self.ids = ids
-
-    def all_entity_ids(self):
-        return self.ids
-
-
 def audio(tmp_path):
     a = tmp_path / "v.ogg"
     shutil.copy(TONE, a)
@@ -43,11 +35,11 @@ def test_the_tone_decodes_to_one_second_of_16khz_mono_at_440hz():
 
 
 def test_prepare_writes_a_wav_and_the_plan(tmp_path):
-    res = voice.prepare(audio(tmp_path), "fr", Ids(["light.x", "stt.whisper"]), whisper_at="whisper.lan:10301")
+    res = voice.prepare(audio(tmp_path), "fr", "stt.whisper", whisper_at="whisper.lan:10301")
     # Whisper first (it finds the language), then the villa's speech-to-text in "auto", then the person's language
     assert res["attempts"] == [{"whisper": "whisper.lan:10301"}, {"stt": "stt.whisper", "language": "auto"},
                                {"stt": "stt.whisper", "language": "fr"}]
-    assert abs(res["seconds"] - 1.0) < 0.1 and "otherwise" not in res
+    assert abs(res["seconds"] - 1.0) < 0.1 and "otherwise" not in res and "no_stt" not in res
     head = open(res["wav"], "rb").read(44)
     assert head[:4] == b"RIFF" and head[8:16] == b"WAVEfmt "
     _, fmt, ch, rate, _, _, bits = struct.unpack_from("<IHHIIHH", head, 16)
@@ -60,8 +52,10 @@ def test_the_plan_follows_the_villas_choices():
     assert voice.attempts("auto", None, None, "stt.a") == [{"stt": "stt.a", "language": "auto"},
                                                            {"stt": "stt.a", "language": "en"}]   # Whisper off
     assert voice.attempts("de", "fr", "w:1", "stt.a") == [{"stt": "stt.a", "language": "de"}]   # fixed: that only
-    assert voice.attempts(None, "fr", "w:1", None) == [{"whisper": "w:1"}]      # no speech-to-text chosen
-    assert voice.attempts("de", "fr", "w:1", None) == []
+    # none named: the villa's only one (the engine finds it, when that attempt is reached)
+    assert voice.attempts(None, "fr", "w:1", None) == [{"whisper": "w:1"}, {"stt": None, "language": "auto"},
+                                                       {"stt": None, "language": "fr"}]
+    assert voice.attempts("de", "fr", "w:1", None) == [{"stt": None, "language": "de"}]
     assert voice.attempts(None, "auto", None, "stt.a") == [{"stt": "stt.a", "language": "auto"}]   # never twice
 
 
@@ -74,23 +68,23 @@ def test_the_whisper_setting():
 
 def test_a_fixed_language_never_names_whisper(tmp_path, monkeypatch):
     monkeypatch.setattr(voice, "villa_settings", lambda: {"language": "de"})
-    res = voice.prepare(audio(tmp_path), "fr", Ids(["stt.a"]), whisper_at="w:1")
+    res = voice.prepare(audio(tmp_path), "fr", "stt.a", whisper_at="w:1")
     assert res["attempts"] == [{"stt": "stt.a", "language": "de"}]
 
 
-def test_the_speech_to_text_is_never_guessed(tmp_path):
-    assert voice.speech_to_text(Ids(["stt.a"]), None) == ("stt.a", None)
-    assert voice.speech_to_text(Ids(["stt.a", "stt.b"]), None)[0] is None
-    assert voice.speech_to_text(Ids([]), None)[0] is None
-    assert voice.speech_to_text(Ids(["stt.a", "stt.b"]), "stt.b") == ("stt.b", None)
-    # several and none named: Whisper alone, and the person told why if it gives no words; Whisper off too: refused
-    res = voice.prepare(audio(tmp_path), "fr", Ids(["stt.a", "stt.b"]), whisper_at="w:1")
-    assert res["attempts"] == [{"whisper": "w:1"}] and "several speech-to-text" in res["otherwise"]
-    res = voice.prepare(audio(tmp_path), "fr", Ids(["stt.a", "stt.b"]), whisper_at="off")
-    assert "several speech-to-text" in res["error"] and "attempts" not in res
+def test_none_named_asks_the_villa_nothing_and_gives_the_words_for_none_and_several(tmp_path, monkeypatch):
+    """Review, 2026-10-23: the script read the villa's device list before Whisper was tried, and a failed read ended
+    the message. It asks the villa's system nothing now: the plan says "the only one", the engine finds it."""
+    monkeypatch.setattr(voice, "villa_settings", lambda: {})
+    res = voice.prepare(audio(tmp_path), "fr", whisper_at="off")
+    assert res["attempts"] == [{"stt": None, "language": "auto"}, {"stt": None, "language": "fr"}]
+    assert "need a speech-to-text" in res["no_stt"]["none"] and "several speech-to-text" in res["no_stt"]["several"]
+    monkeypatch.setattr(voice, "villa_settings", lambda: {"stt": "stt.b"})
+    res = voice.prepare(audio(tmp_path), "fr", whisper_at="off")
+    assert res["attempts"][0] == {"stt": "stt.b", "language": "auto"} and "no_stt" not in res
 
 
 def test_not_audio_is_said_plainly(tmp_path):
     bad = tmp_path / "v.ogg"
     bad.write_bytes(b"not an ogg file at all, just text")
-    assert "could not be read" in voice.prepare(str(bad), "en", Ids(["stt.a"]), whisper_at="off")["error"]
+    assert "could not be read" in voice.prepare(str(bad), "en", "stt.a", whisper_at="off")["error"]

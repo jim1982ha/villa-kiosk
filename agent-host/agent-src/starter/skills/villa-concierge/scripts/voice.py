@@ -15,8 +15,14 @@ time a voice message has (voice.timeout_s):
    "attempts": [{"whisper": "core-whisper:10300"},
                 {"stt": "stt.…", "language": "auto"},
                 {"stt": "stt.…", "language": "fr"}],
-   "otherwise": "words for the person"}       (only when no speech-to-text could be chosen)
+   "no_stt": {"none": "…", "several": "…"}}   (only when villa.voice.yaml names no speech-to-text)
   {"error": "plain words for the person"}
+
+`"stt": null` (villa.voice.yaml names none): the villa's ONLY speech-to-text, which the engine looks up when that
+attempt is reached. ⚠️ NOT LOOKED UP HERE (review, 2026-10-23): this script read the villa's whole device list
+before Whisper was tried, and when that read failed the voice message ended unread although Whisper, which needs no
+device list, would have answered. `no_stt` is what the person reads when the villa has none, or several and none
+named, and nothing else gave words.
 
 ⚠️ WHISPER FIRST (owner, 2026-10-22, "the Agent asks Whisper directly"): the
 villa system's speech-to-text refuses "auto" (415: it takes only the languages
@@ -123,38 +129,31 @@ def whisper_address(setting) -> str | None:
     return str(setting or WHISPER).strip()
 
 
-def speech_to_text(cli, wanted: str | None) -> tuple[str | None, str | None]:
-    """(entity, None) or (None, why not). Several in Home Assistant and none named: not guessed."""
-    if wanted:
-        return wanted, None
-    ids = cli.all_entity_ids() if hasattr(cli, "all_entity_ids") else list(cli.states())
-    found = sorted(e for e in ids if e.startswith("stt."))
-    if len(found) == 1:
-        return found[0], None
-    if not found:
-        return None, "Voice messages need a speech-to-text service in the villa's system (Whisper, for example)."
-    return None, ("The villa's system has several speech-to-text services: name the one for voice messages "
-                  "(stt: in the villa-concierge skill's villa.voice.yaml).")
+# what the person reads when villa.voice.yaml names no speech-to-text, nothing gave words, and the villa's system has
+# none / several (the engine says which)
+NO_STT = {"none": "Voice messages need a speech-to-text service in the villa's system (Whisper, for example).",
+          "several": "The villa's system has several speech-to-text services: name the one for voice messages "
+                     "(stt: in the villa-concierge skill's villa.voice.yaml)."}
 
 
 def attempts(fixed: str | None, saved: str | None, whisper_at: str | None, entity: str | None) -> list[dict]:
-    """The ways to write the message out, in order (the engine stops at the first words).
+    """The ways to write the message out, in order (the engine stops at the first words). `entity` None: the
+    villa's only speech-to-text (the engine finds it).
 
     A fixed language: the villa's speech-to-text in it, only. Otherwise ("auto", the default): Whisper directly
     (it finds the language spoken), then the villa's speech-to-text in "auto" (the engine skips it once the villa's
     system has refused it), then in the person's saved language."""
     chosen = str(fixed or "auto")
     if chosen != "auto":
-        return [{"stt": entity, "language": chosen}] if entity else []
+        return [{"stt": entity, "language": chosen}]
     out: list[dict] = [{"whisper": whisper_at}] if whisper_at else []
-    if entity:
-        out.append({"stt": entity, "language": "auto"})
-        if str(saved or "en") != "auto":
-            out.append({"stt": entity, "language": str(saved or "en")})
+    out.append({"stt": entity, "language": "auto"})
+    if str(saved or "en") != "auto":
+        out.append({"stt": entity, "language": str(saved or "en")})
     return out
 
 
-def prepare(audio: str, language: str | None, cli, stt: str | None = None, whisper_at=None) -> dict:
+def prepare(audio: str, language: str | None, stt: str | None = None, whisper_at=None) -> dict:
     """`whisper_at`: host:port or "off", over villa.voice.yaml's `whisper:`."""
     cfg = villa_settings()
     try:
@@ -167,15 +166,12 @@ def prepare(audio: str, language: str | None, cli, stt: str | None = None, whisp
     # only "auto" goes directly: a fixed language is what the villa's speech-to-text already takes
     direct = whisper_address(whisper_at if whisper_at is not None else cfg.get("whisper", WHISPER)) \
         if str(fixed or "auto") == "auto" else None
-    entity, why = speech_to_text(cli, stt or cfg.get("stt"))
-    steps = attempts(fixed, language, direct, entity)
-    if not steps:
-        return {"error": why}
+    entity = str(stt or cfg.get("stt") or "").strip() or None
     out = os.path.splitext(audio)[0] + ".wav"
     with open(out, "wb") as f:
         f.write(wav(pcm))
-    return {"wav": out, "seconds": round(len(pcm) / 2 / RATE, 1), "attempts": steps,
-            **({"otherwise": why} if why else {})}
+    return {"wav": out, "seconds": round(len(pcm) / 2 / RATE, 1),
+            "attempts": attempts(fixed, language, direct, entity), **({} if entity else {"no_stt": NO_STT})}
 
 
 def main(argv=None):
@@ -188,7 +184,7 @@ def main(argv=None):
     from vesta_shared import script
     script.arguments(ap, store="optional")   # the engine gives every hook the store; this one does not need it
     a = ap.parse_args(argv)
-    res = prepare(a.audio, a.language, script.Context(a).client, a.stt, a.whisper)
+    res = prepare(a.audio, a.language, a.stt, a.whisper)
     print(json.dumps(res))
     return 0 if "attempts" in res else 2
 

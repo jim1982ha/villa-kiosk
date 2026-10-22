@@ -1,3 +1,13 @@
+## 0.12.324
+
+What you will see:
+- A voice message is written out by Whisper even when the villa's system is slow or not answering. Before, the
+  Agent first asked the villa's system for its list of devices, and if that failed you read "This voice message
+  could not be prepared." without Whisper ever being asked.
+- When the villa has no speech-to-text, or several and none chosen, you still read the same sentence saying so,
+  only once Whisper has given nothing.
+- When Whisper cannot be reached, a voice message no longer waits longer than its two minutes.
+
 ## 0.12.323
 
 What you will see:

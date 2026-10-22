@@ -15,20 +15,22 @@ from datetime import datetime, timezone
 
 from .policy import Person
 from .telegram import TelegramError
-from .transcriber import UNHEARD, Heard, Transcriber, script_seconds, timeout_s
+from .transcriber import Heard, Transcriber, script_seconds, timeout_s
 
 log = logging.getLogger("vesta")
 
 
 class Voice:
-    def __init__(self, settings, tg, skills, code_command, send, state, cf_headers: dict | None = None):
+    def __init__(self, settings, tg, skills, code_command, send, state, cf_headers: dict | None = None,
+                 entity_ids=None):
         self.s = settings
         self.tg = tg                      # telegram.Telegram, or None (takeover off)
         self.skills = skills
         self.code_command = code_command  # app.Vesta.code_command: the skill's hook, run as a code job
         self.send = send                  # delivery.Delivery.send
-        # one per app: it remembers what the villa's speech-to-text refused while the app runs
-        self.transcriber = Transcriber(settings, state, cf_headers)
+        # one per app: it remembers what the villa's speech-to-text refused while the app runs. `entity_ids`: the
+        # villa's devices, read only when an attempt names "the villa's only speech-to-text" (transcriber.py)
+        self.transcriber = Transcriber(settings, state, cf_headers, entity_ids=entity_ids)
 
     async def transcribe(self, cid: int, person: Person, file_id: str) -> Heard | None:
         """A voice message's words, or None (the person is told why).
@@ -69,9 +71,10 @@ class Voice:
                 await self.send(cid, str(plan.get("error") or "This voice message could not be prepared."))
                 return None
             heard = await self.transcriber.run(cid, plan, deadline, started)
-            if heard is None:
-                await self.send(cid, str(plan.get("otherwise") or UNHEARD))
-            return heard
+            if isinstance(heard, Heard):
+                return heard
+            await self.send(cid, heard.say)
+            return None
         finally:
             for f in (path, plan.get("wav")):   # a voice is the person's: kept no longer than it takes to read it
                 if f and os.path.dirname(os.path.abspath(str(f))) == os.path.abspath(folder):

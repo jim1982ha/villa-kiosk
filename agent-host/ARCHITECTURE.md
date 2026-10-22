@@ -912,3 +912,11 @@ still off; an investigation calling a sensor with no value "stopped reporting").
   `wyoming_fake.FRENCH` behaves like the villa; `FRENCH_SAID` is the other case.
 - Tests: `stt_fake.FakeSTT` (the one /api/stt stand-in), `wyoming_fake.FakeWhisper(answer, delay)`,
   `helpers.voice_agent`/`voice_event`/`voice_record`; test_transcriber (order, clock, skip, record), test_voice_*.
+- **"The villa's only speech-to-text", found late** (review, 2026-10-23, 0.12.324): the skill no longer reads the
+  villa's system. With no `stt:` named, its plan's villa attempts say `"stt": null` and it adds `no_stt: {"none",
+  "several"}` (the person's words). `VillaSpeech.only(seconds)` lists the villa's devices (`villa_entity_ids`: the
+  app's reader, `all_entity_ids(fresh=True)`) only when such an attempt is reached, once per message, within what is
+  left; failed/none/several is that attempt's why. `Transcriber.run` returns `Heard` or `Unheard(say)`: the `no_stt`
+  words for none/several, else `otherwise`, else UNHEARD. Before, the script's read failing ended the message before
+  Whisper was tried. `wyoming._connect(host, port, deadline, connect_s)`: the lookup and each address get
+  min(connect_s, what is left), recomputed (two silent addresses overran the clock).
