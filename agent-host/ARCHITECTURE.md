@@ -828,3 +828,23 @@ still off; an investigation calling a sensor with no value "stopped reporting").
   without ASLEEP, load without the list, the reports' raw states, NO_VALUE back in the alert line.
 - Not done: rules.availability_rules still repeats the offline minutes test (its callers pass devices_offline's
   groups; harmless); the three family lists stay as ARCHITECTURE.md left them.
+
+## A sleeping device over a window, and one list of wording rules (architecture review, 2026-10-22, 0.12.319)
+
+- **One rule for a past window**: `asleep.held_window(client, pack, ids, start, end, now)`, the History every reader
+  of a window takes for a device the Kiosk lists: sleep rows dropped, the carried-over "unavailable" replaced by the
+  last real state before the window (`asleep.last_real_days` back), none known: no state at the start. Read by
+  device_state.out_since (pack passed by the alert desk) and investigate.read; `without_sleep` and the inline filter
+  are gone (test_asleep deletion test).
+- **Nothing real within the days read is an answer**: last_real → `nothing_since` + `last_known` (within the history
+  kept); awake_states marks it asleep with the raw state; `unheard` is the one wording, `last_value` the battery's
+  value. A cut read (history_read) is left out.
+- **One list of wording rules**: tests/wording.py BANNED, one line per rule; test_wording reads the shipped
+  person-read texts (SPOKEN files' strings, the page's JS strings and HTML text, skill templates, every skill YAML
+  value, SKILL.md descriptions, Limits says/reached); conftest reads every Telegram fake message, button and toast.
+  Exemptions by name in test_wording.FOR_THE_AI. test_no_platform_name reads its pattern from the list.
+- Mutations red: held_window without the held row, without the sleep drop; out_since without held_window, the desk
+  without the pack; investigate without held_window, find without read_states; last_real without nothing_since,
+  without last_known, without the cut check; last_value without last_known; facts dropping the row; nightly on raw
+  states; desk's unheard words; a " — " in a Telegram message (app.py), "Home Assistant" in desk's close note, a
+  "rule" in rules.js and report.html; a pattern removed from the list.

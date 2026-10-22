@@ -43,7 +43,7 @@ schedule:
       run_skill_script, and send its `message` to the fm chat with send_message: title= its "title" as it is,
       text= its "text" written in {fm_language}, keeping every number exactly as the script gave it and its
       layout (each section label on its own line, an empty line between items). Send it even when it says
-      nothing is new, so the facility manager knows the VESTA Agent is alive. No rule codes, no entity ids.
+      nothing is new, so the facility manager knows the VESTA Agent is alive. No check codes, no entity ids.
   - when: "Mon 08:00"
     name: fm-weekly
     to: fm

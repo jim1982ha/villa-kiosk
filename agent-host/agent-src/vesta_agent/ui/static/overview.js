@@ -80,7 +80,7 @@ export function exportCard(offer) {
 // Overview › Copy the setup: Download and Import, two tabs of one card (owner, 2026-10-06: a cleaner overview)
 export function setupCard(offer) {
   const t = tabbed("setup", [["out", place("setup_out"), null, () => exportCard(offer)], ["in", place("setup_in"), null, importCard]]);
-  return card(place("setup"), "The skills and the shareable part of the rules, in one file, and that file read on another villa. People, chats, devices, keys and records never leave a villa.", t.bar, t.body);
+  return card(place("setup"), "The skills and the shareable part of the agent rules, in one file, and that file read on another villa. People, chats, devices, keys and records never leave a villa.", t.bar, t.body);
 }
 
 export function importCard() {

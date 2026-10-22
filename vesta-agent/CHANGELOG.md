@@ -1,3 +1,15 @@
+## 0.12.319
+
+What you will see:
+- A door sensor that sleeps between its reports: an alert about it now closes only once it has really reported
+  the good state for the waiting time, never minutes early. An investigation of a period it slept through shows what
+  it last reported, instead of "nothing recorded".
+- When such a device has sent nothing for over a week, the VESTA Agent says so ("no report for 9 d, it sleeps
+  between its reports") in the weekly report's batteries, in alert updates and in investigations, never "offline".
+  Its battery keeps its last known charge, or says "no reading".
+- The Agent page says "agent rules" where it means its own rules; the setup preview calls instructions.md your
+  "standing instructions".
+
 ## 0.12.318
 
 What you will see:

@@ -972,3 +972,23 @@ def test_the_time_a_fault_says_it_closes_is_the_time_it_closes(store, monkeypatc
     _tick(store, asleep, 95)
     assert _closes(store, iid) == (T0 + timedelta(minutes=90 + clear)).isoformat()
     assert _tick(store, asleep, 90 + clear)["cleared"] == [iid]
+
+
+def test_a_lock_asleep_before_the_minutes_read_closes_from_its_report_never_from_their_start(store, monkeypatch):
+    """Architecture review, 2026-10-22: "last report holds" was applied to now only. A lock asleep since before the
+    clear minutes opened them with "unavailable"; the desk dropped that row and counted the lock out of its bad states
+    since their start, so its fault closed at the first tick after locking. Its report before them now holds
+    (asleep.held_window): unlocked until it reported "locked"."""
+    from test_offline import _pack
+    clear = desk._params(None).behaviour("clear_minutes")
+    pack = _pack()
+    pack.asleep_are(["lock.back_door"])
+    monkeypatch.setitem(desk._PACK, "pack", pack)
+    asleep = TimelineVilla(**{"lock.back_door": [(T0 - timedelta(minutes=10), "unlocked"),
+                                                 (T0 - timedelta(minutes=9), "unavailable"),
+                                                 (T0 + timedelta(minutes=90), "locked"),
+                                                 (T0 + timedelta(minutes=91), "unavailable")]})
+    iid = _left_unlocked(store, entities=("lock.back_door",))
+    assert not _tick(store, asleep, 90 + clear / 2).get("cleared")
+    assert _closes(store, iid) == (T0 + timedelta(minutes=90 + clear)).isoformat()
+    assert _tick(store, asleep, 90 + clear)["cleared"] == [iid]

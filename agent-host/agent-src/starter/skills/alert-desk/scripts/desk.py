@@ -47,7 +47,7 @@ from vesta_shared.message_format import PRESSED, ROLE_SHORT, acted, closing  # n
 from vesta_shared import kiosk_words  # noqa: E402
 from vesta_shared.timeutil import lasting  # noqa: E402
 from vesta_shared.device_state import has_value, out_since  # noqa: E402  ("is it back": one answer)
-from vesta_shared.asleep import read_states  # noqa: E402  (unavailable by design: its last real state)
+from vesta_shared.asleep import read_states, unheard  # noqa: E402  (unavailable by design: its last real state)
 from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
 from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the Limits tab)
 
@@ -643,9 +643,13 @@ def still_there(inc: dict, client, now: datetime | None = None) -> tuple[bool | 
     def silent(e):        # an alert's device that cannot be told right: absent, offline, or without a value
         return not has_value((states.get(e) or {}).get("state"))
 
+    def mute(e):          # asleep with no report in days says so (vesta_shared.asleep.unheard), never "does not answer"
+        words = unheard(states.get(e) or {}, now or datetime.now(timezone.utc))
+        return f"{name(e)}: {words}" if words else f"{name(e)} does not answer"
+
     def readings():
         return [f"{name(e)} reads {states[e]['state']}" + (" (its last report)" if e in asleep else "")
-                if not silent(e) else f"{name(e)} does not answer" for e in ents]
+                if not silent(e) else mute(e) for e in ents]
     if p.get("claim") and not asleep:
         said = str(client.template(str(p["claim"]))).strip().lower()
         if said == "true":
@@ -657,8 +661,8 @@ def still_there(inc: dict, client, now: datetime | None = None) -> tuple[bool | 
             return True, bad
         # ⚠️ A DEVICE THAT DOES NOT ANSWER IS NOT FIXED (architecture review 26): an offline lock after Done counted as
         # "not in a bad state" — closed without a word. Unless its rule calls that state bad, the desk cannot tell.
-        mute = [f"{name(e)} does not answer" for e in ents if silent(e)]
-        return (None, mute) if mute else (False, [])
+        quiet = [mute(e) for e in ents if silent(e)]
+        return (None, quiet) if quiet else (False, [])
     return None, readings()
 
 
@@ -740,7 +744,7 @@ def seen_again(store: Store, now: datetime, client, clear_minutes: float, out: d
             # a device asleep between its reports reads its last real state, as still_there read it
             now_states = read_states(client, _pack(), now, ents)
             # out of its bad states since one moment (out_since): the time shown and the close are the same reading
-            since = out_since(client, ents, now_states, bad, now, clear_minutes)
+            since = out_since(client, ents, now_states, bad, now, clear_minutes, pack=_pack())
             closes = (since + timedelta(minutes=clear_minutes)).isoformat() if since else None
             store.note(inc["id"], {Notes.CLOSES_AT: closes} if closes else None,
                        drop=("silent_told",) if closes else ("silent_told", Notes.CLOSES_AT))

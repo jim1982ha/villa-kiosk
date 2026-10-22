@@ -44,7 +44,7 @@ from vesta_shared import past  # noqa: E402  (a read of the past with how far it
 from vesta_shared import retention  # noqa: E402  (where the villa's detail ends, and the figures that take over)
 from vesta_shared.store import Notes, notes_of  # noqa: E402  (an alert's notes: one reader)
 
-from vesta_shared.asleep import without_sleep  # noqa: E402  (unavailable by design: one list, vesta_shared.asleep)
+from vesta_shared import asleep  # noqa: E402  (unavailable by design: its last report holds, now and over a window)
 from vesta_shared.device_state import ASLEEP_NOW, NO_VALUE, OFFLINE, RestartDrops  # noqa: E402  (the one "does this device answer")
 from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the VESTA Agent page's Limits tab)
 # ⚠️ WHAT A CONTROL CAN PROVE (architecture review 32 follow-up, 2026-10-11): an on/off control that stayed OFF the whole
@@ -137,20 +137,22 @@ def number(state) -> float | None:
 
 
 def read(client, eid: str, start: datetime, end: datetime,
-         now: datetime | None) -> tuple[list[tuple[datetime, str]], datetime, datetime | None]:
+         now: datetime | None, pack=None) -> tuple[list[tuple[datetime, str]], datetime, datetime | None]:
     """(time, state) of every recorded change of `eid` in [start, end), oldest first, the state before `start`
     included as the first row (Home Assistant gives it); how far the reading reached (`end`, now, or where it stopped);
     where it stopped short (None: read whole).
 
-    ⚠️ NEVER PAST THE REACH (vesta_shared.past): a period, a chart and a normal end where the reading stopped."""
-    got = client.history_read([eid], start, end, now)
+    ⚠️ NEVER PAST THE REACH (vesta_shared.past): a period, a chart and a normal end where the reading stopped.
+    A device unavailable by design (`pack`) is read as asleep.held_window reads it: its last report holds."""
+    got = asleep.held_window(client, pack, [eid], start, end, now)
     return got.changes(eid), got.reach(eid), (None if got.whole(eid) else got.reach(eid))
 
 
 # ------------------------------------------------------------------ find
-def find(client, what: str, where: str | None, pack=None) -> dict:
+def find(client, what: str, where: str | None, pack=None, now: datetime | None = None) -> dict:
     """The entities `what` (and `where`) mean, with their neighbours. Universal: Home Assistant's own search, devices
-    and areas — no list of devices anywhere."""
+    and areas — no list of devices anywhere. `now`: the time it is (the clock when not given)."""
+    now = now or datetime.now(timezone.utc)
     args = {"query": what, "exact_match": False, "limit": FIND_MATCHES,
             "result_fields": ["entity_id", "friendly_name", "state", "area"]}
     if where:
@@ -161,7 +163,8 @@ def find(client, what: str, where: str | None, pack=None) -> dict:
         return {"lines": [f"Nothing in the villa's records matches \"{what}\"" + (f" in {where}" if where else "") + "."],
                 "entities": []}
     reg = {e["entity_id"]: e for e in (client.tool("ha_get_entity", {"entity_id": ids}) or {}).get("entity_entries") or []}
-    states = client.states(ids)
+    # a device unavailable by design reads its last report, said as such (vesta_shared.asleep.read_states: every check's)
+    states = asleep.read_states(client, pack, now, ids)
     # ⚠️ ONE LOOKUP PER DEVICE, NOT PER ENTITY (villa, 2026-10-15: find took 50 s): twenty entities of two sensors asked
     # Home Assistant for the same device and the same serial twenty times each
     asked: dict[tuple[str, str], object] = {}
@@ -171,6 +174,7 @@ def find(client, what: str, where: str | None, pack=None) -> dict:
         attrs = st.get("attributes") or {}
         item = {"entity_id": eid, "name": attrs.get("friendly_name") or e.get("original_name") or eid,
                 "area": e.get("area"), "state": st.get("state"), "unit": attrs.get("unit_of_measurement"),
+                "asleep": bool(st.get("asleep")), "unheard": asleep.unheard(st, now),
                 "device_class": e.get("device_class") or e.get("original_device_class") or attrs.get("device_class"),
                 "device_id": e.get("device_id"), "platform": e.get("platform"),
                 "same_box": _same_box(client, e, ids, asked, pack), "same_room": []}
@@ -178,7 +182,9 @@ def find(client, what: str, where: str | None, pack=None) -> dict:
     _same_room(client, out)
     for it in out:
         unit = f" {it['unit']}" if it["unit"] else ""
-        lines.append(f"{it['name']} ({it['entity_id']}) — {it['area'] or 'no room'} — now {it['state']}{unit}")
+        now_is = (it["unheard"] if it["unheard"] else f"{it['state']}{unit}"
+                  + (" (its last report: it sleeps between its reports)" if it["asleep"] else ""))
+        lines.append(f"{it['name']} ({it['entity_id']}), {it['area'] or 'no room'}, now {now_is}")
         if it["same_box"]:
             lines.append("  same physical device: " + ", ".join(f"{n} ({x})" for x, n in it["same_box"][:NEIGHBOURS_SHOWN]))
         if it["same_room"]:
@@ -681,11 +687,8 @@ def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_da
             older = (retention.figure_period(start, min(end, kept)), {})
     for eid in ids:
         # where the history could not be read further (vesta_shared.ha_client: its cap) — never stretched past it
-        rows, reach, cut = read(client, eid, start, end, now)
-        asleep = pack is not None and pack.is_asleep(eid)
-        if asleep:
-            # unavailable by design (vesta_shared.asleep): its "unavailable" between reports is sleep, never a period
-            rows = without_sleep(rows)
+        rows, reach, cut = read(client, eid, start, end, now, pack)
+        sleeps = pack is not None and pack.is_asleep(eid)
         before = _older_lines(eid, older, kept, start, zone, span_days, client.detailed_days) if older else []
         # the older part drawn from the figures too (each one's highest, as the readings' slices are): the page's chart
         # covers the whole period, that part marked as figures (page.py)
@@ -708,10 +711,9 @@ def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_da
                             series=chart_series(figs, start, end, min(end, kept)), figures_until=kept.isoformat())
             parts.append(part)
             continue
-        base_rows, base_reach, _ = read(client, eid, start - timedelta(days=baseline_days), start, now) \
+        base_rows, base_reach, _ = read(client, eid, start - timedelta(days=baseline_days), start, now, pack) \
             if baseline_days > 0 else ([], start, None)
-        if asleep:
-            base_rows = without_sleep(base_rows)
+        if sleeps:
             before = before + ["  unavailable by design (it sleeps between its reports): its \"unavailable\" moments are "
                                "left out, each state holds until its next report"]
         on = threshold(base_rows + rows, params)

@@ -91,7 +91,7 @@ def test_the_report_draws_a_volt_battery_against_its_nominal_and_skips_one_it_ca
             assets={}, areas=[], people=[], channels={}, unknown_area=[], unclassified=[], retention={}),
         states=lambda: {"sensor.station_battery": {"state": "2.97"}, "sensor.other_battery": {"state": "3.1"},
                         "sensor.door_battery": {"state": "55"}},
-        params=lambda: params)
+        params=lambda: params, now=None)
     rows = {r["name"]: r for r in facts.s_batteries(c)["rows"]}
     assert rows["Station"]["pct"] == 99 and rows["Station"]["volts"] == 2.97 and rows["Station"]["level"] == "watch"
     assert rows["Station"]["night"].startswith("Station battery is falling")             # the finding's own sentence

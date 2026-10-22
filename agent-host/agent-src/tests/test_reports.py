@@ -834,6 +834,7 @@ def test_a_volt_battery_is_read_by_its_charge_not_its_reading():
     # still reads a volt cell by its charge
     c = facts.Ctx.__new__(facts.Ctx)
     c.pack, c.Z, c.end = pack, ZoneInfo("UTC"), date(2026, 10, 4)
+    c.now = datetime(2026, 10, 4, tzinfo=timezone.utc)
     c.need = lambda *p: 8
     c.store = None
     c._states = {"sensor.station_battery": {"state": "1.0"}}
@@ -1145,6 +1146,7 @@ def test_the_report_shows_a_battery_at_the_level_the_night_judged():
     kept = {battery.RESTED: {"sensor.motion_battery": 52.0, "sensor.lock_battery": 30.0}}
     c = facts.Ctx.__new__(facts.Ctx)
     c.pack, c.Z, c.end = pack, ZoneInfo("UTC"), date(2026, 10, 4)
+    c.now = datetime(2026, 10, 4, tzinfo=timezone.utc)
     c.need = lambda *p: 8
     c.store = SimpleNamespace(cache_get=kept.get, findings=lambda status=None: [])
     c.tasks = lambda: []

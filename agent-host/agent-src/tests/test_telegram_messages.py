@@ -78,9 +78,9 @@ def test_an_edit_keeps_its_note_and_shows_as_a_send_does(tmp_path):
     long_alert = "Incident #9 · **leak**\n" + "\n".join("detail " + "w" * 80 for _ in range(60))
     from vesta_agent import layout
     asyncio.run(thread.post(9, GROUP, 77, layout.parts(body=long_alert), buttons=True))
-    asyncio.run(thread.close(9, "Done — Marie, {time}"))
+    asyncio.run(thread.close(9, "Done, Marie, {time}"))
     (_, _, text), = tg.edits
-    assert "Done — Marie" in text and tg_len(text) <= TELEGRAM_LIMIT and "**" not in text
+    assert "Done, Marie" in text and tg_len(text) <= TELEGRAM_LIMIT and "**" not in text
 
 
 def test_a_double_tap_on_done_answers_once(tmp_path):

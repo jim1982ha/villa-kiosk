@@ -62,7 +62,7 @@ def part_chars() -> int:
     """One part of a long tool answer: about 15,000 tokens, under the SDK's 25,000-token cut of a tool answer."""
     return limit("ai.tool_answer_chars", 60000, unit="characters", group="ai", lo=5000, hi=90000,
                  says="How much of one tool's answer the AI receives at once (the AI's own tools cut near 100,000).",
-                 reached="The rest is served as part 2, 3… — only if the AI asks for it.", told="ai")
+                 reached="The rest is served as part 2, 3…, only if the AI asks for it.", told="ai")
 
 
 def ai_read_defaults(name: str, args: dict, known: set) -> dict:
@@ -87,7 +87,7 @@ def ai_read_defaults(name: str, args: dict, known: set) -> dict:
                                 says="Readings of a device the AI receives in one history read when it does not ask "
                                      "for a number.",
                                 reached="The AI gets the NEWEST readings and is told more exist; it is not made to "
-                                        "read on — a week can be answered from its last hours.", told="ai"))
+                                        "read on: a week can be answered from its last hours.", told="ai"))
         if "limit" in known and a.get("limit") is not None:
             least = limit("ai.history_min_rows", 1, unit="rows", group="ai", lo=1, hi=1000,
                           says="The fewest readings or figures the AI may ask for in one read.",

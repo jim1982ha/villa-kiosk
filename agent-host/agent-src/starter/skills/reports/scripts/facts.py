@@ -59,7 +59,7 @@ from vesta_shared import agent_records  # noqa: E402  (the agent's records: one 
 from vesta_shared.problems import Problems  # noqa: E402  (what is still open: one owner)
 
 from vesta_shared.offline import devices_offline  # noqa: E402  (the one reading of "offline now")
-from vesta_shared.asleep import read_states  # noqa: E402  (a sleeping device reads its last real state)
+from vesta_shared.asleep import last_value, read_states, unheard  # noqa: E402  (a sleeping device reads its last real state)
 from vesta_shared.retention import days_words  # noqa: E402  (how long the villa's system keeps detail, in words)
 from vesta_shared.past import automation_run, unread  # noqa: E402  (one reading of "a rule ran"; the one "could not be read whole")
 from vesta_shared.critical import run_when  # noqa: E402  (a rule's "When this rule runs": one reading)
@@ -536,17 +536,23 @@ def s_batteries(c: Ctx) -> dict:
     says = night_battery_says(c)
     rows = []
     for r in c.pack.families.get("battery", []):
+        st = c.states().get(r["entity_id"]) or {}
+        # a device asleep with no report in days (vesta_shared.asleep): said, with its last known charge if one was read
+        quiet = unheard(st, c.now)
         # its rested level, as the night check judged it (battery.rested), never a dip of the moment
-        v = battery.rested(c.store, r["entity_id"], _num((c.states().get(r["entity_id"]) or {}).get("state")))
+        v = battery.rested(c.store, r["entity_id"], _num(last_value(st)))
         unit = (r.get("unit") or "%").strip()
         pct = battery_pct(c, r, v)
-        if pct is None:
+        if pct is None and not quiet:
             continue                      # volts with no nominal: the night check asks for it, never a guess
         lvl, said = says.get(c.pack.reading_key(r["entity_id"]), ("ok", None))
         # named as the device it powers (knowledge_pack.reading_name: its own device, never its radio bridge)
-        rows.append({"name": c.pack.reading_name(r["entity_id"], r.get("name") or r["entity_id"]), "pct": round(pct), "level": lvl,
-                     "volts": round(v, 2) if unit == "V" else None, **({"night": said} if said else {})})
-    rows.sort(key=lambda x: x["pct"])
+        rows.append({"name": c.pack.reading_name(r["entity_id"], r.get("name") or r["entity_id"]),
+                     "pct": round(pct) if pct is not None else None, "level": "watch" if quiet and lvl == "ok" else lvl,
+                     "volts": round(v, 2) if unit == "V" and v is not None else None,
+                     **({"night": said} if said else {}), **({"unheard": quiet} if quiet else {})})
+    # one with no reading first (it is said why), then the lowest
+    rows.sort(key=lambda x: (x["pct"] is not None, x["pct"] or 0))
     return {"count": len(rows), "rows": rows[: int(show)],
             "status": "Watch" if any(x["level"] != "ok" for x in rows) else "OK"}
 

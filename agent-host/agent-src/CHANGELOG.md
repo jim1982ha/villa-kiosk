@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.6.309 (22 October 2026)
+
+- Architecture review 2026-10-22, one rule for a device asleep by design over a past window: `asleep.held_window`
+  (its "unavailable" rows dropped, the "unavailable" carried into the window replaced by its last real state before
+  it, read back `asleep.last_real_days`). Read by device_state.out_since (the alert desk's "closes at" and close, now
+  given the pack) and investigate's timeline and baseline; `without_sleep` and out_since's inline filter removed.
+  investigate find reads `read_states` (a sleeping device's last report, said as such) and uses commas.
+- A device asleep with no real report within `asleep.last_real_days`: `last_real` answers `nothing_since` and
+  `last_known` (its last real state within the history kept) instead of leaving it out; it stays asleep, never
+  offline. `asleep.unheard` words it ("no report for 9 d (it sleeps between its reports)"): the weekly report's
+  battery line (last known charge, else "no reading"), the alert desk's lines, the night check's notes; the night
+  check judges its battery on `asleep.last_value`. last_real reads through history_read (a cut read cannot tell).
+- tests/wording.py: ONE list of wording rules (platform name, " — ", "rule" for an automation), read by
+  tests/test_wording.py over every shipped person-read text and by tests/conftest.py over every message, button and
+  toast the Telegram fake shows; AI-only text exempt by name. Fixed what it caught: setup preview and Rules page
+  ("agent rules", "standing instructions"), two Limits notes, two report prompts.
+
 ## 0.6.308 (22 October 2026)
 
 - Owner 2026-10-22 (standing vocabulary): the villa's automations and blueprints are "automations", never "rules",

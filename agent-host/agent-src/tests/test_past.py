@@ -245,4 +245,7 @@ def test_out_since_gives_the_moment_the_close_is_judged_from():
     asleep = {"binary_sensor.door": {"state": "off", "last_changed": (NOW - timedelta(minutes=6)).isoformat(),
                                      "asleep": True}}
     v2 = TimelineVilla(now=NOW, **{"binary_sensor.door": door})
-    assert out_since(v2, ["binary_sensor.door"], asleep, {"on"}, NOW, 10) == NOW - timedelta(minutes=6)
+    from test_offline import _pack
+    pack = _pack()
+    pack.asleep_are(["binary_sensor.door"])
+    assert out_since(v2, ["binary_sensor.door"], asleep, {"on"}, NOW, 10, pack=pack) == NOW - timedelta(minutes=6)

@@ -146,9 +146,9 @@ def test_a_press_in_a_private_chat_is_answered_there_and_its_buttons_go(agent):
 
 
 def test_telegram_gets_plain_text_not_markdown(agent):
-    run(agent.delivery.send(PRIVATE, "## Pool\n**Pump**: `on`, see [the log](https://example.invalid/x) — 2**3 stays"))
+    run(agent.delivery.send(PRIVATE, "## Pool\n**Pump**: `on`, see [the log](https://example.invalid/x), 2**3 stays"))
     (_, text, _), = agent.tg.sent
-    assert text == "Pool\nPump: on, see the log (https://example.invalid/x) — 2**3 stays"
+    assert text == "Pool\nPump: on, see the log (https://example.invalid/x), 2**3 stays"
 
 
 def test_a_kiosk_ticket_title_has_no_leading_emoji_or_rule_code():
@@ -256,9 +256,9 @@ def test_an_incident_home_assistant_clears_settles_its_alerts(agent):
     iid = Store(agent.s.store_path).new_incident("k", "automation.x", "lock.front_door", "P2", {"message": "m"})
     run(agent.outcome.carry_out({"send": alert_desk().tell("P2", "new", incident=iid, text="m"), "incident_id": iid},
                                 "alert-desk"))
-    run(agent.outcome.carry_out({"settle": [{"incident_id": iid, "note": "Cleared in Home Assistant, {time}. No reply needed."}]}, "alert-desk"))
+    run(agent.outcome.carry_out({"settle": [{"incident_id": iid, "note": "Cleared in the villa's system, {time}. No reply needed."}]}, "alert-desk"))
     assert sorted(c for c, _, _ in agent.tg.edits) == sorted([FM, GROUP])     # every chat of the role: each settled
-    assert all(re.search(r"(?:\n-------\n|\n\n|Status:\n|\(to: [A-Za-z &]+\)\n)(?:(?:✅|⚠️|⚠️ ⚙️) )?Cleared in Home Assistant, \d\d/\d\d/\d{4} \d\d:\d\d\. No reply needed\.$", text)
+    assert all(re.search(r"(?:\n-------\n|\n\n|Status:\n|\(to: [A-Za-z &]+\)\n)(?:(?:✅|⚠️|⚠️ ⚙️) )?Cleared in the villa's system, \d\d/\d\d/\d{4} \d\d:\d\d\. No reply needed\.$", text)
                for _, _, text in agent.tg.edits)
 
 

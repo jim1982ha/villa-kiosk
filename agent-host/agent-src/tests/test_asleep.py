@@ -13,6 +13,7 @@ from vesta_agent.app import Vesta
 from vesta_agent.policy import FIELDS
 from vesta_agent.tools import with_asleep
 from vesta_shared import asleep
+from vesta_shared.ha_client import HABase
 from vesta_shared.knowledge_pack import KnowledgePack
 from vesta_shared.offline import devices_offline
 
@@ -80,7 +81,7 @@ def test_where_a_device_stands_is_one_answer():
 
 
 def test_the_last_real_state_stands_in_for_unavailable():
-    class Cli:
+    class Cli(HABase):
         def history(self, ids, start, end):
             return {"binary_sensor.door": [{"state": "on", "last_changed": "2026-10-09T10:00:00+00:00"},
                                            {"state": "off", "last_changed": "2026-10-09T10:01:00+00:00"},
@@ -91,9 +92,6 @@ def test_the_last_real_state_stands_in_for_unavailable():
                                             "sensor.tank": {"state": "unavailable"}}, NOW)
     assert got["binary_sensor.door"] == {"state": "off", "last_changed": "2026-10-09T10:01:00+00:00", "asleep": True}
     assert got["sensor.tank"] == {"state": "unavailable"}                       # not listed: as it reads
-    t = datetime(2026, 10, 9, tzinfo=timezone.utc)
-    assert asleep.without_sleep([(t, "on"), (t + timedelta(minutes=3), "unavailable"), (t + timedelta(hours=1), "off")]) \
-        == [(t, "on"), (t + timedelta(hours=1), "off")]
 
 
 def test_the_ai_reads_a_sleeping_device_marked_so():
@@ -133,7 +131,7 @@ def test_the_alert_desk_judges_a_sleeping_door_by_its_last_report_never_by_unava
     monkeypatch.setitem(desk._PACK, "pack", pack)
 
     def cli(last):
-        class Cli:
+        class Cli(HABase):
             def states(self, ids):
                 return {"binary_sensor.door": {"state": "unavailable", "attributes": {"friendly_name": "Door"}}}
 
@@ -232,7 +230,7 @@ def test_the_weekly_report_reads_a_sleeping_device_s_last_real_charge(monkeypatc
     pack = _pack()
     pack.asleep_are(["sensor.lone_battery"])
 
-    class Cli:
+    class Cli(HABase):
         def states(self, ids):
             return {"sensor.lone_battery": {"state": "unavailable", "last_changed": NOW.isoformat()}}
 
@@ -253,3 +251,143 @@ def test_an_investigation_never_calls_a_sensor_with_no_value_silent(monkeypatch)
     assert "why" not in got and "alert" not in got
     (got,) = investigate._notable([{**p, "kind": "offline"}], {}, None)
     assert "stopped reporting" in got["why"]
+
+
+# --- one rule over a past window: its last report holds (asleep.held_window, architecture review 2026-10-22) ---------
+DOOR_NOW = datetime(2026, 10, 9, 15, 0, tzinfo=timezone.utc)
+
+
+def _door_villa(**kw):
+    """A door contact asleep between its reports: opened at 13:00, asleep a minute later, nothing since."""
+    from villa_timeline import TimelineVilla
+
+    class Villa(TimelineVilla):
+        def tool(self, name, args):
+            if name == "ha_search":
+                return {"entities": [{"entity_id": "binary_sensor.door"}]}
+            if name == "ha_get_entity":
+                return {"entity_entries": [{"entity_id": "binary_sensor.door", "area": "Hall"}]}
+            return {}
+    return Villa(now=DOOR_NOW, names={"binary_sensor.door": "Door"},
+                 **{"binary_sensor.door": [(DOOR_NOW - timedelta(hours=2), "on"),
+                                           (DOOR_NOW - timedelta(hours=2) + timedelta(minutes=1), "unavailable")]}, **kw)
+
+
+def _investigate(monkeypatch):
+    monkeypatch.syspath_prepend(os.path.join(STARTER_SKILLS, "investigate", "scripts"))
+    import investigate
+    pack = _pack()
+    pack.asleep_are(["binary_sensor.door"])
+    return investigate, pack
+
+
+def test_an_investigation_of_an_hour_a_door_slept_through_reads_its_last_report(monkeypatch):
+    # it said "binary_sensor.door: nothing recorded in this period": the hour opened "unavailable", and that row dropped
+    investigate, pack = _investigate(monkeypatch)
+    lines = investigate.timeline(_door_villa(), ["binary_sensor.door"], DOOR_NOW - timedelta(hours=1), DOOR_NOW, 0,
+                                 timezone.utc, now=DOOR_NOW, pack=pack)["lines"]
+    said = "\n".join(lines)
+    assert "nothing recorded" not in said and said.startswith("binary_sensor.door: 1 readings"), said
+    assert "on" in said.split("\n", 1)[1], said
+
+
+def test_find_says_what_a_sleeping_door_last_reported_never_unavailable(monkeypatch):
+    investigate, pack = _investigate(monkeypatch)
+    (line,) = investigate.find(_door_villa(), "door", None, pack, now=DOOR_NOW)["lines"]
+    assert line == "Door (binary_sensor.door), Hall, now on (its last report: it sleeps between its reports)", line
+    (line,) = investigate.find(_door_villa(), "door", None, None, now=DOOR_NOW)["lines"]         # not listed: what it reads
+    assert line.endswith("now unavailable"), line
+
+
+def test_the_held_window_is_the_one_rule_and_no_reader_drops_sleep_rows_itself():
+    # the deletion test: the alert desk and the investigation each filtered "unavailable" rows by hand (without_sleep,
+    # an inline filter in out_since); both read asleep.held_window now, and the hand-made filters are gone
+    import inspect
+    from vesta_shared import device_state
+    assert not hasattr(asleep, "without_sleep")
+    src = inspect.getsource(device_state.out_since)
+    assert "held_window(" in src and '.get("asleep")' not in src
+    inv = open(os.path.join(STARTER_SKILLS, "investigate", "scripts", "investigate.py"), encoding="utf-8").read()
+    assert "without_sleep" not in inv and inv.count("asleep.held_window(") == 1
+
+
+# --- nothing real within the days read: said, never "unavailable" again (architecture review 2026-10-22) -------------
+def _quiet_battery(detailed_days=None, charge="6"):
+    """A door sensor's battery asleep: its last real charge 9 days ago, "unavailable" since."""
+    from villa_timeline import TimelineVilla
+    v = TimelineVilla(now=DOOR_NOW, **{"sensor.lone_battery": [(DOOR_NOW - timedelta(days=9), charge),
+                                                               (DOOR_NOW - timedelta(days=9, minutes=-1), "unavailable")]})
+    v.detailed_days = detailed_days
+    return v
+
+
+def test_a_device_asleep_with_no_report_in_the_days_read_stays_asleep_and_says_so():
+    pack = _pack()
+    pack.asleep_are(["sensor.lone_battery"])
+    row = asleep.read_states(_quiet_battery(detailed_days=10), pack, DOOR_NOW, ["sensor.lone_battery"])["sensor.lone_battery"]
+    assert row["asleep"] is True and row["state"] == "unavailable"                  # never its 9-day-old state now
+    assert row["last_known"]["state"] == "6" and asleep.last_value(row) == "6"     # read within the history kept
+    assert asleep.unheard(row, DOOR_NOW) == "no report for 9 d (it sleeps between its reports)"
+    assert pack.standing("sensor.lone_battery", row["state"]) == "asleep"         # never counted offline
+    # the history kept ends before it: no known charge, and still said
+    row = asleep.read_states(_quiet_battery(), pack, DOOR_NOW, ["sensor.lone_battery"])["sensor.lone_battery"]
+    assert row["asleep"] is True and row["last_known"] is None and asleep.last_value(row) is None
+    assert asleep.unheard(row, DOOR_NOW) == "no report for more than 7 d (it sleeps between its reports)"
+
+
+def test_the_weekly_report_and_the_night_check_say_a_battery_with_no_report_in_days(monkeypatch, tmp_path):
+    import importlib.util
+    from types import SimpleNamespace
+    monkeypatch.syspath_prepend(os.path.join(STARTER_SKILLS, "reports", "scripts"))
+    spec = importlib.util.spec_from_file_location("facts", os.path.join(STARTER_SKILLS, "reports", "scripts", "facts.py"))
+    facts = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(facts)
+    from vesta_shared.params import VillaParams
+    pack = _pack()
+    pack.asleep_are(["sensor.lone_battery"])
+
+    def page(cli):
+        c = SimpleNamespace(_states=None, cfg={"offline_families": []}, pack=pack, cli=cli, now=DOOR_NOW,
+                            store=SimpleNamespace(cache_get=lambda k: None, findings=lambda status=None: []),
+                            need=lambda *p: 8, tasks=lambda: [], params=lambda: VillaParams())
+        c.states = lambda: facts.Ctx.states(c)
+        return facts.s_batteries(c)
+    (row,) = page(_quiet_battery(detailed_days=10))["rows"]
+    assert row["pct"] == 6 and row["unheard"] == "no report for 9 d (it sleeps between its reports)"
+    got = page(_quiet_battery())
+    assert got["rows"][0]["pct"] is None and got["rows"][0]["unheard"].startswith("no report for more than 7 d")
+    assert got["status"] == "Watch"
+    # the night check: judged on its last known charge, and a note says it
+    monkeypatch.syspath_prepend(os.path.join(STARTER_SKILLS, "preventive-maintenance", "scripts"))
+    import nightly
+    states = asleep.read_states(_quiet_battery(detailed_days=10), pack, DOOR_NOW, ["sensor.lone_battery"])
+    from vesta_shared.skill_settings import load
+    params = VillaParams(defaults=load(os.path.join(STARTER_SKILLS, "preventive-maintenance"), "settings.yaml")["behaviour"])
+    found = nightly.battery_findings(pack, states, params, DOOR_NOW.date(), rows=[{**r, "unit": "%"} for r in pack.entities("battery")])
+    assert [f.rule_id for f in found] == ["PM-BATTERY-CRIT"]
+    assert nightly.unheard_notes(pack, states, DOOR_NOW) == [
+        "Lone Battery: no report for 9 d (it sleeps between its reports)."]
+
+
+def test_a_read_stopped_short_cannot_tell_what_a_sleeping_device_last_said():
+    # read through history_read (vesta_shared.past): a reading cut before now may have missed its last report
+    v = _quiet_battery(detailed_days=10)
+    v.timeline["sensor.lone_battery"] += [(DOOR_NOW - timedelta(days=2), "40"), (DOOR_NOW - timedelta(days=1), "39")]
+    assert asleep.last_real(v, ["sensor.lone_battery"], DOOR_NOW)["sensor.lone_battery"]["state"] == "39"
+    v.cut = {"sensor.lone_battery": DOOR_NOW - timedelta(days=1, hours=12)}
+    assert asleep.last_real(v, ["sensor.lone_battery"], DOOR_NOW) == {}
+
+
+def test_the_alert_desk_says_a_door_with_no_report_in_days_never_that_it_does_not_answer(monkeypatch):
+    monkeypatch.syspath_prepend(os.path.join(STARTER_SKILLS, "alert-desk", "scripts"))
+    import desk
+    from villa_timeline import TimelineVilla
+    pack = _pack()
+    pack.asleep_are(["binary_sensor.door"])
+    monkeypatch.setitem(desk._PACK, "pack", pack)
+    v = TimelineVilla(now=DOOR_NOW, names={"binary_sensor.door": "Door"},
+                      **{"binary_sensor.door": [(DOOR_NOW - timedelta(days=9), "on"),
+                                                (DOOR_NOW - timedelta(days=9, minutes=-1), "unavailable")]})
+    inc = {"entity_id": "binary_sensor.door", "payload": json.dumps({"entities": ["binary_sensor.door"], "state": "on"})}
+    assert desk.still_there(inc, v, DOOR_NOW) == (
+        None, ["Door: no report for more than 7 d (it sleeps between its reports)"])

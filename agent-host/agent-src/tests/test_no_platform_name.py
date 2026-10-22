@@ -26,7 +26,8 @@ SPOKEN = [
 ]
 #: The report page's own template, read without its Jinja comments.
 REPORT_PAGE = "starter/skills/reports/templates/report.html"
-NAMED = re.compile(r"Home\s+Assistant|\bHA\b")
+from wording import BANNED  # noqa: E402  (the one list of wording rules)
+NAMED = BANNED["the platform's name (say \"the villa's system\")"]
 LOGS = {"log", "logger", "debug", "info", "warning", "error", "exception", "critical"}
 
 

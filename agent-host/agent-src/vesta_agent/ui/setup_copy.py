@@ -54,9 +54,9 @@ PART_WORDS = {
     "tools": (f"{title('tools')}: tool switches, per role, skills switched off", None, True),
     "keep": (WORDS["settings.keep"], None, True),
     "limits": ("The Limits tab's values", "the limits written in the agent's code; those inside the skills and the "
-               "rules go with them", True),
+               "agent rules go with them", True),
     # ticked at first (owner, 2026-10-20): "copy this villa as it is" includes its standing rules
-    "instructions": ("instructions.md", "your standing rules for the agent", True),
+    "instructions": ("instructions.md", "your standing instructions for the agent", True),
 }
 PARTS = tuple(PART_WORDS)
 #: what never leaves a villa: (words, note)
@@ -270,7 +270,7 @@ def preview(settings, skills, setup: dict, server_tools: list[dict] | None) -> d
             before, after = yaml.safe_dump(pick(current)), yaml.safe_dump(pick(merged))
             rows.append({"what": label, "kind": "rules", "change": "same" if before == after else "changed",
                          "detail": "identical" if before == after else policy_change(before, after)})
-        misfits += [f"The rules: {p}" for p in policy_problems(merged)]
+        misfits += [f"The agent rules: {p}" for p in policy_problems(merged)]
         pol = Policy(merged)
         for svc, rule in (merged.get("allowed_services") or {}).items():
             dom = svc.split(".")[0]
@@ -284,7 +284,7 @@ def preview(settings, skills, setup: dict, server_tools: list[dict] | None) -> d
         except OSError:
             mine = ""
         rows.append({"what": "instructions.md", "kind": "instructions", "change": "same" if mine == setup["instructions"] else "changed",
-                     "detail": "your standing rules for the agent"})
+                     "detail": "your standing instructions for the agent"})
     pol = Policy(merged)
     listed = tool_access.listing(server_tools)
     jobs = pol.job_settings(job_owners(parsed), job_starters(parsed))   # its skill's one brain and limit per run

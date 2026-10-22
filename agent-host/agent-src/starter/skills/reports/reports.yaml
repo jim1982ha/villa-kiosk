@@ -212,7 +212,7 @@ reports:
       - id: headline
         write: >-
           One or two sentences for the facility manager: what needs them this week and why, from the list
-          and the alerts — the conclusion, not a list. The coloured light above your sentence is computed
+          and the alerts, the conclusion, not a list. The coloured light above your sentence is computed
           from what is open: agree with it, never call the week quiet or green when it is not. Say that
           everything else ran normally only if it did.
       - id: kpis
@@ -244,7 +244,7 @@ reports:
       - id: hero
         write: >-
           Two or three sentences for the owner: what the month cost, how many incidents and whether they were
-          handled, and the one thing that needs a look — a judgement, as a property manager would write it.
+          handled, and the one thing that needs a look: a judgement, as a property manager would write it.
       - id: kpis_month
       - id: happened
       - id: quiet

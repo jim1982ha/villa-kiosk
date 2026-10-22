@@ -35,8 +35,8 @@ from vesta_shared.messaging import incident_tag, no_code as _no_code  # noqa: E4
 from vesta_shared.timeutil import clock, day_label, day_time_label, villa_day  # noqa: E402
 from vesta_shared.past import unread  # noqa: E402  (the one "could not be read whole: nothing is known after")
 from vesta_shared.message_format import document, split_title  # noqa: E402  (the one shape of a message)
-from vesta_shared.device_state import ABSENT, ANSWERS, OFFLINE_NOW, has_value  # noqa: E402  (pack.standing says which)
-from vesta_shared.asleep import read_states  # noqa: E402  (a sleeping device reads its last real state)
+from vesta_shared.device_state import ABSENT, ANSWERS, OFFLINE_NOW  # noqa: E402  (pack.standing says which)
+from vesta_shared.asleep import last_value, read_states, unheard  # noqa: E402  (a sleeping device reads its last real state)
 from vesta_shared.offline import devices_offline  # noqa: E402  (the one reading of "offline now")
 from vesta_shared.store import alerted_states  # noqa: E402  (which states an alert is about: the desk's reading)
 from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the Limits tab)
@@ -106,6 +106,7 @@ def run(args) -> dict:
     # ---- batteries, availability, silence, levels (current states) -----------
     # a device asleep between its reports reads its last real state (vesta_shared.asleep): its battery is judged too
     states = read_states(cli, pack, now_ref)
+    notes += unheard_notes(pack, states, now_ref)
     battery_entities = [r["entity_id"] for r in pack.entities("battery")]
     bat_stats = cli.statistics(battery_entities, day_end - timedelta(days=BATTERY_READ_DAYS), day_end, "day", ("mean",)) if battery_entities else {}
     best = battery_best(cli, battery_entities, now_ref, params)
@@ -376,6 +377,18 @@ def battery_best(cli, entity_ids: list[str], now_ref: datetime, params) -> dict[
     return best
 
 
+def unheard_notes(pack, states: dict, now_ref: datetime) -> list[str]:
+    """One note per physical device asleep by design that sent no real report in days (vesta_shared.asleep.unheard):
+    "Guest Door: no report for 8 d (it sleeps between its reports)". Never an offline fault: it is asleep."""
+    out: dict[str, str] = {}
+    for eid, st in sorted(states.items()):
+        words = unheard(st, now_ref)
+        dev = pack.physical_device_of(eid) or eid
+        if words and dev not in out:
+            out[dev] = f"{pack.device_name(eid, _plain_name(eid))}: {words}."
+    return list(out.values())
+
+
 def battery_moved(open_rows, findings) -> dict[tuple[str, str], str]:
     """(rule, entity) → the close note of each open battery "replace" fault whose battery is now found at the other
     step: "Now: <the new fault's words>".
@@ -403,7 +416,8 @@ def battery_findings(pack, states: dict, params, today: date, stats: dict | None
                                                                    "critical": False}), row["entity_id"])
         st = states.get(row["entity_id"], {})
         try:
-            level = float(st.get("state")) if has_value(st.get("state")) else None
+            # a device asleep with no report in days: its last known charge (vesta_shared.asleep.last_value)
+            level = float(v) if (v := last_value(st)) is not None else None
         except ValueError:
             level = None
         if level is not None and (best or {}).get(row["entity_id"]) is not None:

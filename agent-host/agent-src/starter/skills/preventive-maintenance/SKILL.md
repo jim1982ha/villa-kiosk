@@ -73,7 +73,10 @@ closure, and never raise the same thing twice.
      (`vesta_shared.problems`): a problem that came back within 7 days is listed
      as new, "(again: N times in 7 days)", and so is its Kiosk fault.
    - `notes`: configuration gaps (a schedule with no time blocks, a missing
-     nominal voltage). They go to the weekly report section "what would help".
+     nominal voltage), and each device asleep by design with no report in days
+     ("no report for 8 d (it sleeps between its reports)"; never an offline
+     fault, its battery judged on its last known charge). They go to the weekly
+     report section "what would help".
 3. The night costs no token. The 07:00 digest carries the words.
 
 ## The checks, in plain words (ids are what the ticket carries)

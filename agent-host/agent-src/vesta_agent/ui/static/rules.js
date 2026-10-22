@@ -57,7 +57,7 @@ export function rulesForms(doc, jobs = [], tools = null) {
   // switch came first, and a line repeated what the (i) says); how long an Approve button works sits with the
   // services that ask for one (Allowed actions)
   const acting = h("section", { class: "card" }, h("div", { class: "card-title" },
-    h("h2", {}, place("acting"), infoButton(place("acting"), `Off: the agent informs only, and never offers to do anything. On: it may act, within the rules below; every action still goes through "${place("actions")}".`),
+    h("h2", {}, place("acting"), infoButton(place("acting"), `Off: the agent informs only, and never offers to do anything. On: it may act, within the agent rules below; every action still goes through "${place("actions")}".`),
       h("label", { class: "switch title-switch" }, h("input", { type: "checkbox", checked: f.act_enabled, "aria-label": W("act_enabled"),
         onchange: on((t) => { f.act_enabled = t.checked; }) })))),
     // what the owner must watch in the villa's critical automations (owner, 2026-10-17, after the 14:41 alert storm: a
@@ -247,7 +247,7 @@ export function rulesForms(doc, jobs = [], tools = null) {
       ][k](),
     }));
 
-  const devices = card(place("protected"), "Devices that need more care than the rules above give them.",
+  const devices = card(place("protected"), "Devices that need more care than the agent rules above give them.",
     h("div", { class: "grid" },
       field(W("owner_only_entities"), many("owner_only_entities", SCHEMA.actionable), "An action on these waits for the owner's Approve, whoever asks (locks, the gate, the siren)."),
       field(W("excluded_entities"), many("excluded_entities", null), "Never acted on, never reported (a test device)."),
@@ -266,7 +266,7 @@ export function rulesForms(doc, jobs = [], tools = null) {
 
   const save = async () => {
     const res = await saveWith(probs, () => api("PUT", "api/policy/form", { form: f, rev: doc.rev }),
-                               "Saved. The agent uses the new rules within seconds.");
+                               "Saved. The agent uses the new agent rules within seconds.");
     if (res) doc = { ...doc, ...res, problems: [] };
   };
   acting.id = "rules-acting"; services.id = "rules-services";
