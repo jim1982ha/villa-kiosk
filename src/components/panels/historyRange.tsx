@@ -15,6 +15,7 @@
 
 import { createContext, useContext, useState, type ReactNode } from "react";
 import SegmentedGroup from "@/components/common/SegmentedGroup";
+import { useStateHistory, type StateHistoryResult } from "@/hooks/useStateHistory";
 
 // The table itself is pure (utils/historyRanges): an oracle reads it by value.
 export { historyRange, RANGE_KEYS, type HistoryRange, type RangeKey } from "@/utils/historyRanges";
@@ -53,9 +54,42 @@ export function useHistoryRange(
  *  that follows the window's range (useSharedRange) read the one choice its picker makes. */
 const SharedRange = createContext<[RangeKey, (k: RangeKey) => void] | null>(null);
 
-export function HistoryRangeShare({ children }: { children: ReactNode }) {
+/** THE DEVICE'S BAND AND THE BANDS UNDER IT, ONE WINDOW (owner, 2026-10-21: "easy to compare states of both devices
+ *  over the same scale"): one request reads the device and the entities that follow it (a linked sensor, a camera's
+ *  motion sensor) over the device band's window — moved back with it when the device is silent (historySource
+ *  stateWindow `follow`). ⚠️ Each band asked for its own and moved on its own: a dead door sensor showed the day
+ *  before it died under a lock band showing today. */
+interface DeviceBand { device: string; follow: readonly string[]; answer: StateHistoryResult }
+const SharedBand = createContext<DeviceBand | null>(null);
+
+export function HistoryRangeShare({ device, follow = [], children }: {
+  /** The window's device, whose band the `follow` bands sit under. */
+  device?: string;
+  follow?: readonly string[];
+  children: ReactNode;
+}) {
   const pair = useState<RangeKey>(DEFAULT_KEY);
-  return <SharedRange.Provider value={pair}>{children}</SharedRange.Provider>;
+  const lead = device !== undefined && follow.length > 0;
+  const answer = useStateHistory(lead ? device : null, historyRange(pair[0]).hours, follow);
+  return (
+    <SharedRange.Provider value={pair}>
+      <SharedBand.Provider value={lead ? { device, follow, answer } : null}>{children}</SharedBand.Provider>
+    </SharedRange.Provider>
+  );
+}
+
+/** The window's one answer for `entityId`'s own band, when it is the window's device with bands under it; null: the
+ *  band asks for itself (nothing follows it). */
+export function useDeviceBand(entityId: string): StateHistoryResult | null {
+  const band = useContext(SharedBand);
+  return band && band.device === entityId ? band.answer : null;
+}
+
+/** A following band: its states over the device band's window, and where that window ends. Never its own window. */
+export function useFollowerBand(entityId: string): Pick<StateHistoryResult, "data" | "status" | "end"> {
+  const band = useContext(SharedBand);
+  if (!band || !band.follow.includes(entityId)) return { data: [], status: "ready" };
+  return { data: band.answer.followers?.[entityId] ?? [], status: band.answer.status, end: band.answer.end };
 }
 
 /** The window's range as its picker chose it (HistoryRangeShare); the default range outside one. */

@@ -337,6 +337,27 @@ export function applySharedConfigDiff(target: SharedDeviceConfig, diff: SharedCo
   return out as SharedDeviceConfig;
 }
 
+/**
+ * What the OTHER devices changed, per item: the server's copy against the one this device last synced with. Keys the
+ * server omits are not changes (the pull keeps the local value for them). DeviceConfigSync hands it, with the merge it
+ * describes, to every open dialog's draft (config/configSlice rebaseOnRemote), so a change from another tablet moves
+ * what Cancel goes back to instead of reading as this dialog's own.
+ */
+export function remoteChange(synced: SharedDeviceConfig, server: Partial<SharedDeviceConfig>): SharedConfigDiff {
+  return diffSharedConfig(synced, { ...synced, ...server });
+}
+
+/** A shared key's value as {itemId: item}, by its row — undefined for a key that is not shared. */
+export function sharedItems(key: string, value: unknown): Keyed<unknown> | undefined {
+  if (!(key in SHARED_KEYS)) return undefined;
+  return (row(key as SharedConfigKey) as SharedKeyRow<unknown, unknown>).index(value);
+}
+
+/** A shared key's value rebuilt from its items (the inverse of sharedItems). */
+export function fromSharedItems(key: SharedConfigKey, items: Keyed<unknown>): unknown {
+  return (row(key) as SharedKeyRow<unknown, unknown>).fromIndex(items);
+}
+
 // The sync baseline (what the server was last known to hold) is PERSISTED,
 // not just held in memory for the lifetime of the page.
 //

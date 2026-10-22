@@ -7,10 +7,9 @@
 
 import { useHA } from "@/ha/HAStateStore";
 import { readingOf, stateWords } from "@/config/reading";
-import { useStateHistory } from "@/hooks/useStateHistory";
 import { historyStateColor } from "@/utils/stateColors";
 import StateTimeline from "./StateTimeline";
-import { useSharedRange } from "./historyRange";
+import { useFollowerBand, useSharedRange } from "./historyRange";
 
 /** The band's height (px): thinner than the device's own band above it, thick enough to read. */
 export const LINKED_BAND_PX = 28;
@@ -28,7 +27,9 @@ export default function LinkedSensorRow({ entityId, label, role }: {
   const { entities } = useHA();
   const entity = entities[entityId];
   const range = useSharedRange();
-  const { data, status, lastSeen } = useStateHistory(entityId, range.hours);
+  // ⚠️ THE DEVICE BAND'S WINDOW, NEVER ITS OWN (useFollowerBand): it moved back on its own when this sensor was
+  // silent, and stayed on today when the device's band had moved
+  const { data, status, end } = useFollowerBand(entityId);
   const reading = readingOf(entityId, entity, "binary_sensor");
   return (
     <div className="field panel-linked-history">
@@ -38,7 +39,7 @@ export default function LinkedSensorRow({ entityId, label, role }: {
         status={status}
         hours={range.hours}
         grainMs={range.grainMs}
-        end={lastSeen}
+        end={end}
         height={LINKED_BAND_PX}
         colorFor={reading.stateColor ?? historyStateColor(entityId)}
         labelFor={stateWords(entityId, entity?.attributes.device_class as string | undefined)}

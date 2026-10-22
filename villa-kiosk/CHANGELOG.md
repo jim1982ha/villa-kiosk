@@ -1,3 +1,17 @@
+## 2.496.497
+
+What you will see:
+- Settings: a change made on another tablet while Settings (or Advanced Settings) is open no longer lights up Save by
+  itself, and Cancel no longer undoes it. Cancel now undoes only what you changed in this window. If you and another
+  tablet changed the same device, Save keeps yours and Cancel gives back the other tablet's.
+- A device window with a linked sensor (a lock's door sensor, a camera's motion sensor): the sensor's thin band under
+  the device's band always covers exactly the same period. When the device has been silent and its band shows the
+  time of its last report, the sensor's band moves back with it; a sensor that has been silent shows "Unavailable"
+  over the device's period instead of a different day.
+- A band moved back to a silent device's last report now shows the state that report set (it ended on the state
+  before it, so "Closed" showed under an "Open" pill). Its title reads "Last hour, last report 21 Oct, 14:57"
+  instead of "Last hour before 21 Oct, 14:57".
+
 ## 2.496.496
 
 What you will see:

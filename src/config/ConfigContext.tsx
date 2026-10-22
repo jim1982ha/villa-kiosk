@@ -2,10 +2,11 @@
 // App-wide config state, persisted to localStorage on every change.
 
 import {
-  createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode,
+  createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode,
 } from "react";
 import { type AppConfig, loadConfig, saveConfig, normaliseConfig } from "./AppConfig";
 import type { ConfigEdit } from "./mappingEdits";
+import type { SharedConfigDiff } from "./deviceConfig";
 import { resolveEffectiveTheme } from "@/utils/themeTime";
 import { beginSpan } from "@/utils/perfSpans";
 
@@ -16,6 +17,12 @@ interface ConfigContextType {
    *  the same moment both land. An edit that changes nothing re-renders
    *  nothing. */
   update: (patch: Partial<AppConfig> | ConfigEdit) => void;
+  /** A change ANOTHER tablet made, arriving through the shared store (DeviceConfigSync): written like `update`, and
+   *  told first, item by item (`change`), to every open dialog's draft (hooks/useDraftedSlice), so what Cancel goes
+   *  back to moves with it. */
+  mergeRemote: (patch: Partial<AppConfig>, change: SharedConfigDiff) => void;
+  /** Hear every such change; returns the unsubscribe. */
+  onRemoteChange: (listener: (change: SharedConfigDiff) => void) => () => void;
   /** entity_id -> room name, live-computed (HA's own Area assignment, falling
    *  back to GLB geometric detection — see Dashboard.tsx's resolution effect
    *  and config/devicePlace.ts's resolveEntityRoom) rather than stored/edited
@@ -49,6 +56,17 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
       return normaliseConfig({ ...prev, ...patch }, { maps });
     });
   }, []);
+
+  const remoteListeners = useRef(new Set<(change: SharedConfigDiff) => void>());
+  const onRemoteChange = useCallback((listener: (change: SharedConfigDiff) => void) => {
+    remoteListeners.current.add(listener);
+    return () => { remoteListeners.current.delete(listener); };
+  }, []);
+  // The drafts hear it BEFORE the write is queued: both land in the same render, so Save never lights for a moment.
+  const mergeRemote = useCallback((patch: Partial<AppConfig>, change: SharedConfigDiff) => {
+    for (const listener of remoteListeners.current) listener(change);
+    update(patch);
+  }, [update]);
 
   // ⚠️ NO "replace" NOR "reset" (architecture review B, 2026-10-22): nothing called them, and a reset wired later on the
   // owner's device would have emptied its copy of the shared device setup — DeviceConfigSync would push every device
@@ -103,8 +121,8 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   }, [config.theme, config.latitude, config.longitude]);
 
   const value = useMemo(
-    () => ({ config, update, resolvedRooms, setResolvedRooms }),
-    [config, update, resolvedRooms],
+    () => ({ config, update, mergeRemote, onRemoteChange, resolvedRooms, setResolvedRooms }),
+    [config, update, mergeRemote, onRemoteChange, resolvedRooms],
   );
   return <ConfigContext.Provider value={value}>{children}</ConfigContext.Provider>;
 }

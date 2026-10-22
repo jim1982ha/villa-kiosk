@@ -172,7 +172,8 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
         </div>
         <div className="modal-body">
           {/* one range for the window's bands: the device's and its linked sensor's (HistoryRangeShare) */}
-          <HistoryRangeShare>
+          <HistoryRangeShare device={entityId}
+            follow={[linkedSensor?.entityId, motion?.entityId].filter((id): id is string => !!id)}>
           {/* The device's linked entity, if one is configured (Advanced
               Settings). Rendered HERE, in the shared chrome, so every panel
               type gets it identically the moment that field is set — this is
