@@ -164,12 +164,13 @@ export default function DeviceConfigSync() {
   // RULE 4: this device's own diff, replayed onto the server's freshest copy
   // under optimistic concurrency (utils/syncedDocument → keyedSync).
   const pushOwnDiff = useCallback(async () => {
-    const baseline = doc.baseline;
-    // WHICH keys are being sent, by item count. See describeSharedConfigDiff:
+    const local = localRef.current;
+    const outcome = await doc.push(local);
+    // WHICH keys were sent, by item count. See describeSharedConfigDiff:
     // without this a push driven by a key that churns on its own is
     // indistinguishable in a dump from a push driven by a real edit.
-    const changed = baseline ? describeSharedConfigDiff(diffSharedConfig(baseline, localRef.current)) : undefined;
-    const outcome = await doc.push(localRef.current);
+    const from = outcome.ok ? outcome.synced : doc.baseline;
+    const changed = from ? describeSharedConfigDiff(diffSharedConfig(from, local)) : undefined;
     if (outcome.ok) {
       reportSync({
         op: "push", ok: true, attempts: outcome.attempts, rev: outcome.rev,
@@ -182,7 +183,9 @@ export default function DeviceConfigSync() {
       // ⚠️ NEVER `outcome.next` WRITTEN OVER THE CONFIG (to 2.496.497): it is the copy taken when the push began, so
       // a device edited while the push was out went back, and the next diff (against that same copy) was empty: the
       // edit was lost. The baseline is `next` (the server's), so that edit is what the next push sends.
-      mergeRemote(remoteChange(baseline ?? outcome.base, outcome.base));
+      // ⚠️ AGAINST THE BASELINE THIS PUSH ACTUALLY SENT FROM (`synced`, utils/syncedDocument), never one read before it
+      // waited its turn: that one lacked the push before it, whose edit then came back as another tablet's (to 2.496.498).
+      mergeRemote(remoteChange(outcome.synced, outcome.base));
       return;
     }
     if (outcome.reason === "nothing-to-push" || outcome.reason === "not-allowed" || outcome.reason === "not-pulled") return;

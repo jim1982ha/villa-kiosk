@@ -98,10 +98,14 @@ console.log("\n  the shared reader picks the source by the step:");
   const noProbe = { stateRows: async () => rows, getStatisticsDuringPeriod: async () => ({}) };
   const plain = await loadOne(noProbe, { kind: "stateWindow", id: "switch.pump", hours: 720 }, now);
   ck("  ...not known (a port with no probe): nothing greyed, as before", plain.data[0].state !== NOT_KEPT);
-  const dead = { stateRows: async (id, from) => from < now - 40 * DAY ? [{ state: "on", last_changed: new Date(now - 39 * DAY).toISOString() }]
-    : [{ state: "unavailable", last_changed: new Date(kept).toISOString() }], getStatisticsDuringPeriod: async () => ({}), keptFrom: async () => kept };
+  // the look-back reads back to what is kept (historySource.readBackFrom, 2.496.499): as a real recorder, nothing older
+  // than `kept` comes back, so what is checked is that it is ASKED (a not-kept window counted as alive asked nothing)
+  const looked = [];
+  const dead = { stateRows: async (id, from) => { looked.push(from); return [{ state: "unavailable", last_changed: new Date(kept).toISOString() }]; },
+    getStatisticsDuringPeriod: async () => ({}), keptFrom: async () => kept };
   const gone = await loadOne(dead, { kind: "stateWindow", id: "switch.pump", hours: 720 }, now);
-  ck("  ...'no longer kept' is not a sighting: a window with nothing else alive still looks back", gone.lastSeen !== undefined, gone.lastSeen);
+  ck("  ...'no longer kept' is not a sighting: a window with nothing else alive still looks back, to what is kept",
+     looked.length === 2 && looked[1] === kept && gone.lastSeen === undefined, { looked, lastSeen: gone.lastSeen });
 }
 
 console.log("\n  a greyed choice:");

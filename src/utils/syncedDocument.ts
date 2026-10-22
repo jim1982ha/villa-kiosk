@@ -47,7 +47,12 @@ export type PullResult<F> =
   | { action: "wait" | "unreachable" | "repush"; fetched?: undefined }
   | { action: "seed" | "noop" | "apply"; fetched: F };
 
-export type PushResult<D> = PushOutcome<D> | { ok: false; reason: "not-allowed" | "not-pulled" };
+/** `synced`, on success: the baseline this push's diff was computed against — so `base` against it is what the OTHER
+ *  devices changed, and nothing of this device's own earlier push (config/deviceConfig remoteChange). */
+export type PushResult<D> =
+  | (Extract<PushOutcome<D>, { ok: true }> & { synced: D })
+  | Extract<PushOutcome<D>, { ok: false }>
+  | { ok: false; reason: "not-allowed" | "not-pulled" };
 
 export class SyncedDocument<D, Diff, F extends StoreFetch<D> = StoreFetch<D>> {
   /** What the server is known to hold; null until the first pull when the
@@ -56,6 +61,8 @@ export class SyncedDocument<D, Diff, F extends StoreFetch<D> = StoreFetch<D>> {
   rev = "0";
   private inFlight = 0;
   private writes = 0;
+  /** The push running now, which the next one waits for (push). */
+  private queue: Promise<unknown> = Promise.resolve();
   private unsaved = false;
   private readonly spec: SyncedDocumentSpec<D, Diff, F>;
 
@@ -110,6 +117,13 @@ export class SyncedDocument<D, Diff, F extends StoreFetch<D> = StoreFetch<D>> {
    * Send what this device changed since the baseline — replayed onto the
    * server's freshest copy, under optimistic concurrency, retried on a
    * conflict (utils/keyedSync). On success the baseline is the merged result.
+   *
+   * ⚠️ ONE AT A TIME (2.496.499). A push started while another is out waits for it, then sends its change against the
+   * baseline that one committed. Two at once both diffed against the same old baseline: the second re-sent the first's
+   * change and read it back as ANOTHER tablet's (its `base` held it, its baseline did not), so an open dialog took the
+   * first edit for a remote one, and Cancel after two quick edits undid only the second. A pull waits for both.
+   * What a waiting push sends is ITS OWN change (`local` against the baseline when it was called), laid on the
+   * committed baseline: a `local` read before the first push's edit reached it never sends that edit back undone.
    */
   async push(
     local: D,
@@ -117,33 +131,42 @@ export class SyncedDocument<D, Diff, F extends StoreFetch<D> = StoreFetch<D>> {
      *  single-use elevation token. Default: the spec's. */
     save: SyncedDocumentSpec<D, Diff, F>["save"] = this.spec.save,
   ): Promise<PushResult<D>> {
-    if (this.spec.canWrite && !this.spec.canWrite()) return { ok: false, reason: "not-allowed" };
-    const baseline = this.baseline;
-    if (baseline === null) return { ok: false, reason: "not-pulled" };
+    const from = this.baseline;
+    if (from === null) return { ok: false, reason: "not-pulled" };
     this.inFlight += 1;
-    this.writes += 1;
-    let outcome: PushOutcome<D>;
+    const run = this.queue.then(() => this.pushNow(from, local, save));
+    this.queue = run.catch(() => undefined);
     try {
-      outcome = await pushWithRebase({
-        diff: this.spec.diff(baseline, local),
-        isEmpty: this.spec.isEmpty,
-        baseline,
-        fetchFresh: async () => {
-          const f = await this.spec.fetch();
-          return f === null ? null : { doc: f.doc, rev: f.rev, raw: f.raw };
-        },
-        rebase: this.spec.rebase,
-        apply: this.spec.apply,
-        save,
-        maxAttempts: this.spec.maxAttempts,
-      });
+      return await run;
     } finally {
       this.inFlight -= 1;
     }
+  }
+
+  private async pushNow(from: D, local: D, save: SyncedDocumentSpec<D, Diff, F>["save"]): Promise<PushResult<D>> {
+    if (this.spec.canWrite && !this.spec.canWrite()) return { ok: false, reason: "not-allowed" };
+    const baseline = this.baseline ?? from;
+    const own = baseline === from ? local : this.spec.apply(baseline, this.spec.diff(from, local));
+    this.writes += 1;
+    const outcome = await pushWithRebase({
+      diff: this.spec.diff(baseline, own),
+      isEmpty: this.spec.isEmpty,
+      baseline,
+      fetchFresh: async () => {
+        const f = await this.spec.fetch();
+        return f === null ? null : { doc: f.doc, rev: f.rev, raw: f.raw };
+      },
+      rebase: this.spec.rebase,
+      apply: this.spec.apply,
+      save,
+      maxAttempts: this.spec.maxAttempts,
+    });
     if (outcome.ok) {
       this.unsaved = false;
       this.commit(outcome.next, outcome.rev);
-    } else if (outcome.reason === "nothing-to-push" || outcome.reason === "refused") {
+      return { ...outcome, synced: baseline };
+    }
+    if (outcome.reason === "nothing-to-push" || outcome.reason === "refused") {
       // A refusal is FINAL: re-pushing it on every pull would loop for good
       // and keep this device from ever accepting a newer copy (2.496.184).
       // The caller undoes its local change.

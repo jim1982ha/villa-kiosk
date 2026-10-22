@@ -2,7 +2,7 @@
 // The plain line a dialog shows above its footer when another tablet replaced one of ITS OWN changes (already sent):
 // "Hall light was changed on another tablet; your change was replaced." One line per device or setting, the device
 // named as every screen names it; X dismisses, and closing the dialog clears it. What to say is the draft's
-// (hooks/useDraftedSlice `replaced`, configSlice replacedByRemote); this only shows it, the same in every dialog.
+// (hooks/useDraftedSlice `replaced`, configSlice ledgerOnRemote); this only shows it, the same in every dialog.
 
 import { X } from "lucide-react";
 import { replacedLine, type ReplacedSubject } from "@/config/configSlice";

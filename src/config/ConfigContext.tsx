@@ -4,7 +4,8 @@
 import {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode,
 } from "react";
-import { type AppConfig, loadConfig, saveConfig, normaliseConfig } from "./AppConfig";
+import { type AppConfig, loadConfig, saveConfig } from "./AppConfig";
+import { applyConfigChange } from "./configSlice";
 import type { ConfigEdit } from "./mappingEdits";
 import { applyRemoteChange, type RemoteChange } from "./deviceConfig";
 import { resolveEffectiveTheme } from "@/utils/themeTime";
@@ -17,6 +18,12 @@ interface ConfigContextType {
    *  the same moment both land. An edit that changes nothing re-renders
    *  nothing. */
   update: (patch: Partial<AppConfig> | ConfigEdit) => void;
+  /** The same write, made by a dialog's own control (inside DialogEdits, where it IS `update`): told to every open
+   *  dialog's draft with the config before and after it — what that dialog's Save keeps and Cancel takes back
+   *  (configSlice recordEdit). A write through `update` (the 3D model's devices found on load, the sync) never is. */
+  editByDialog: (patch: Partial<AppConfig> | ConfigEdit) => void;
+  /** Hear every dialog write (before, after); returns the unsubscribe. */
+  onDialogEdit: (listener: (prev: AppConfig, next: AppConfig) => void) => () => void;
   /** A change ANOTHER tablet made, arriving through the shared store (DeviceConfigSync, on a pull and after a push):
    *  told first to every open dialog's draft (hooks/useDraftedSlice), so what Cancel goes back to moves with it, then
    *  applied item by item to the config as it is when the write lands (deviceConfig applyRemoteChange), so an edit
@@ -50,11 +57,25 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     // the patch carries one of the two maps they clean — the seam
     // DeviceConfigSync's pull arrives through: update() fires on every
     // keystroke in Advanced Settings, and they walk the whole entityMap.
+    // (configSlice applyConfigChange)
+    setConfig((prev) => applyConfigChange(prev, change) ?? prev);
+  }, []);
+
+  // ⚠️ A DIALOG'S OWN WRITES ARE TOLD APART FROM EVERY OTHER WRITE (2.496.499): the drafts recorded nothing and compared
+  // the config with a copy taken on open, so the devices a newly loaded 3D model adds (written through `update` while
+  // Advanced Settings was open) lit Save, and Cancel deleted them on every tablet. Told inside the write, with the
+  // config it lands on, so two writes in the same moment are each recorded against the right one.
+  const dialogListeners = useRef(new Set<(prev: AppConfig, next: AppConfig) => void>());
+  const onDialogEdit = useCallback((listener: (prev: AppConfig, next: AppConfig) => void) => {
+    dialogListeners.current.add(listener);
+    return () => { dialogListeners.current.delete(listener); };
+  }, []);
+  const editByDialog = useCallback((change: Partial<AppConfig> | ConfigEdit) => {
     setConfig((prev) => {
-      const patch = typeof change === "function" ? change(prev) : change;
-      if (typeof change === "function" && Object.keys(patch).length === 0) return prev;
-      const maps = patch.entityMap !== undefined || patch.meshBindings !== undefined;
-      return normaliseConfig({ ...prev, ...patch }, { maps });
+      const next = applyConfigChange(prev, change);
+      if (!next) return prev;
+      for (const listener of dialogListeners.current) listener(prev, next);
+      return next;
     });
   }, []);
 
@@ -123,9 +144,18 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   }, [config.theme, config.latitude, config.longitude]);
 
   const value = useMemo(
-    () => ({ config, update, mergeRemote, onRemoteChange, resolvedRooms, setResolvedRooms }),
-    [config, update, mergeRemote, onRemoteChange, resolvedRooms],
+    () => ({ config, update, editByDialog, onDialogEdit, mergeRemote, onRemoteChange, resolvedRooms, setResolvedRooms }),
+    [config, update, editByDialog, onDialogEdit, mergeRemote, onRemoteChange, resolvedRooms],
   );
+  return <ConfigContext.Provider value={value}>{children}</ConfigContext.Provider>;
+}
+
+/** A dialog's controls: inside, every `useConfig().update` is the dialog's own write (editByDialog), recorded by the
+ *  open drafts. Settings' and Advanced Settings' bodies sit in one; the 3D view, the sync and the model upload's rooms
+ *  write from outside it. */
+export function DialogEdits({ children }: { children: ReactNode }) {
+  const ctx = useConfig();
+  const value = useMemo(() => ({ ...ctx, update: ctx.editByDialog }), [ctx]);
   return <ConfigContext.Provider value={value}>{children}</ConfigContext.Provider>;
 }
 

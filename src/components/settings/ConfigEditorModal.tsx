@@ -14,7 +14,7 @@ import { useModalA11y } from "@/hooks/useModalA11y";
 import { Boxes, Home, LogOut, Upload, Wrench } from "lucide-react";
 import InfoTip, { TipTitle } from "@/components/common/InfoTip";
 import ModalTabs, { type ModalTab } from "@/components/common/ModalTabs";
-import { useConfig } from "@/config/ConfigContext";
+import { DialogEdits, useConfig } from "@/config/ConfigContext";
 import { northOffsetFacing } from "@/babylon/skyMoment";
 import { useProfile } from "@/auth/ProfileContext";
 import CentralModelInfo from "./CentralModelInfo";
@@ -235,9 +235,9 @@ function LogoutAll() {
 
 export default function ConfigEditorModal({ onBack, withinSettings, focusEntityId, onModelChanged, viewHeadingDeg }: Props) {
   // ⚠️ ONE DRAFT FOR WHAT THIS DIALOG EDITS (configSlice.ADVANCED_SETTINGS_KEYS). Every edit below applies live through
-  // ConfigContext.update and reaches every tablet; the draft only remembers how the setup was when it opened. Over
-  // Settings, Settings' draft holds these keys and this dialog just closes back to it; on its own, it is this one's:
-  // Save keeps, Cancel (and Escape, and the backdrop) writes them back — the passing notices of every other dialog.
+  // ConfigContext.update and reaches every tablet; the draft records what this dialog itself changed, item by item. Over
+  // Settings, Settings' draft records the same changes and this dialog just closes back to it; on its own, it is this
+  // one's: Save keeps, Cancel (and Escape, and the backdrop) puts them back — the passing notices of every other dialog.
   const own = useDraftedSlice(ADVANCED_SETTINGS_KEYS);
   const notice = useAppNotice();
   const commit = withinSettings ? undefined : { dirty: own.dirty, save: own.save, discard: () => { own.discard(); } };
@@ -262,7 +262,11 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
   // bar — it's an administration action scoped to Advanced Settings.
   const glbUpload = useGlbUpload(canUploadModel, onModelChanged);
 
+  // ⚠️ EVERY CONTROL BELOW WRITES AS THE DIALOG (DialogEdits): what the open drafts' Cancel takes back. The model
+  // upload above writes its rooms from here (not as the dialog), and the devices the reloaded model finds are written
+  // by the 3D view: neither is a change to cancel (2.496.499).
   return (
+    <DialogEdits>
     <DialogLayer className="modal-backdrop" onClick={exit}>
       <div
         ref={dialogRef}
@@ -420,5 +424,6 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
         <ModalFooter onClose={onBack} commit={commit} leading={roleCan(role, "editConfig") ? <LogoutAll /> : undefined} />
       </div>
     </DialogLayer>
+    </DialogEdits>
   );
 }

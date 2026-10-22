@@ -19,8 +19,9 @@ import { hasBootMark } from "@/utils/bootTimeline";
 import { placesAfterRefresh, entityRegistryFacts, deviceUnits } from "./registryResolve";
 import type { HassEntity, HassServiceTarget } from "@/types/ha.types";
 import type { ServiceOutcome } from "./serviceOutcome";
-import { recallFrom, UnavailableByDesign, lastReport, type RecordedState } from "./unavailableByDesign";
-import { recordedStates } from "./HAHistoryAPI";
+import { UnavailableByDesign, lastReport, type RecordedState } from "./unavailableByDesign";
+import { recordedStates, villaKeptFrom } from "./HAHistoryAPI";
+import { readBackFrom } from "./historySource";
 
 /** Subset of HA's `get_config` we use to auto-fill onboarding (location + name). */
 export interface HAConfig {
@@ -114,6 +115,9 @@ export interface EntityStoreOptions {
    *  between reports finds its last one on a fresh load (ha/unavailableByDesign). Default: the history/period read a
    *  panel's chart already makes. */
   history?: (ids: readonly string[], from: number, to: number) => Promise<Record<string, RecordedState[]>>;
+  /** Where the villa's system's detail begins at `now` — how far back that read looks (historySource.readBackFrom,
+   *  the depth a chart of the same device reads to). Default: the villa's own (HAHistoryAPI.villaKeptFrom). */
+  keptFrom?: (now: number) => Promise<number | undefined>;
 }
 
 
@@ -134,6 +138,7 @@ export class EntityStore {
   /** The devices that sleep between reports: what the app is given of them (ha/unavailableByDesign). */
   private readonly byDesign = new UnavailableByDesign();
   private readonly history: NonNullable<EntityStoreOptions["history"]>;
+  private readonly keptFrom: NonNullable<EntityStoreOptions["keptFrom"]>;
   /** The devices whose history this session already read (once each, per joining the list). */
   private readonly recalled = new Set<string>();
   private registryTimer: ReturnType<typeof setTimeout> | undefined;
@@ -146,6 +151,7 @@ export class EntityStore {
     this.ws = ws;
     this.registryDebounceMs = opts.registryDebounceMs ?? 750;
     this.history = opts.history ?? recordedStates;
+    this.keptFrom = opts.keptFrom ?? villaKeptFrom;
     // Live events reach React in ONE batch per window — utils/pushBatch.
     this.batch = new PushBatch<HassEntity>(opts.pushWindowMs ?? 250, (drained) => {
       const next = { ...this.state.entities };
@@ -215,7 +221,10 @@ export class EntityStore {
     ids.forEach((id) => this.recalled.add(id));
     const to = Date.now();
     try {
-      const rows = await this.history(ids, recallFrom(to), to);
+      // ⚠️ AS FAR BACK AS THE VILLA KEEPS, the depth its chart reads to: a fixed 10 days read "Unknown" on the pill of a
+      // contact whose last report was 10.5 days old while its week's chart read "Closed" (to 2.496.498)
+      const kept = await this.keptFrom(to).catch(() => undefined);
+      const rows = await this.history(ids, readBackFrom(kept, to), to);
       this.show(ids.flatMap((id) => {
         const row = lastReport(rows[id] ?? []);
         const view = row ? this.byDesign.recall(id, row) : null;

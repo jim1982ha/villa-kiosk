@@ -13,25 +13,16 @@
 //   * its last real report, as it was — its state, and its own last_changed, so "since …" says when it last reported;
 //   * on a fresh load, while the villa's system still says "unavailable", that report is read from the villa's
 //     history (the store's `recall`, through the same history/period read a panel's chart already makes — no new
-//     access); found nothing (it has not reported within the history kept): "unknown" — "it reports, with no value to
-//     give yet", never lost, never a guessed state.
+//     access), as far back as the villa keeps (historySource.readBackFrom: the same depth its chart reads to); found
+//     nothing (it has not reported within the history kept): "unknown" — "it reports, with no value to give yet",
+//     never lost, never a guessed state.
 
 import type { HassEntity } from "@/types/ha.types";
 import { contactOf } from "@/utils/stateColors";
 import type { StateRow } from "./historySource";
-import { DAY_MS } from "@/utils/localDay";
 
 /** One recorded state, as the history read returns it (minimal_response: a state and when it changed). */
 export type RecordedState = StateRow;
-
-/** How far back a fresh load looks for a sleeping device's last report: the villa system's default history (its
- *  recorder keeps 10 days unless told otherwise). Older than that, it is "unknown" until it next reports. */
-export const RECALL_DAYS = 10;
-
-/** Where that look starts, at `now` (epoch ms): a duration back, never a calendar edge. */
-export function recallFrom(now: number): number {
-  return now - RECALL_DAYS * DAY_MS;
-}
 
 /**
  * A device's recorded states as its charts draw them: asleep is no change. Each "unavailable" row holds the state

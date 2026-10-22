@@ -45,12 +45,12 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
   // Every setting here applies AND persists live: the scene previews on every
   // tick (load-bearing — a walk-speed slider that only took effect on Save
   // would be untunable), the config write is debounced (the WHOLE config
-  // blob goes to localStorage on each write), and there is a BASELINE to go
-  // back to:
+  // blob goes to localStorage on each write), and the draft records what THIS
+  // dialog changed, item by item (its ledger):
   //
-  //   dirty   = the live config differs from the baseline taken at open
-  //   Save    = keep it, and make THIS the new baseline
-  //   Discard = write the baseline back, which reverts the scene AND the store
+  //   dirty   = something it changed is not back to what it was
+  //   Save    = keep it, and forget the ledger
+  //   Discard = put exactly those items back, which reverts the scene AND the store
   //
   // All of that is useDraftedSlice. ⚠️ THE SLICE IS EVERY KEY THIS DIALOG
   // WRITES, listed once — and it is the ONLY way this dialog writes: `set`
@@ -62,12 +62,12 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
     "walkSpeed",
     // ⚠️ THE VILLA'S, NOT THIS DEVICE'S (owner, 2026-10-22: moved here from Advanced Settings): a shared key
     // (deviceConfig), so writing it reaches every tablet — through the same draft as every other option here, Save
-    // keeping it and Cancel writing the baseline back.
+    // keeping it and Cancel putting it back.
     "roomGlowAndCones",
     // ⚠️ AND EVERYTHING ADVANCED SETTINGS EDITS (owner, 2026-10-22: it joins this dialog's Save / Cancel). Advanced
     // Settings opens OVER this dialog, writes live through ConfigContext.update, and closes back here: these keys are
-    // in this ONE draft, so its changes make Save live, Save keeps them, and Cancel writes them back as they were when
-    // Settings opened — to every tablet, through the same update.
+    // in this ONE draft, so its changes make Save live, Save keeps them, and Cancel puts them back as they were before
+    // this dialog changed them — to every tablet, through the same update.
     ...ADVANCED_SETTINGS_KEYS,
   ] as const;
   const slice = useDraftedSlice(SETTINGS_KEYS);
@@ -81,8 +81,8 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
     // reverted config with nothing to re-seed; only what this dialog drives
     // on the scene directly is re-applied.
     discard: () => {
-      const baseline = slice.discard();
-      manager?.setRenderConfig(baseline.render);
+      const reverted = slice.discard();
+      manager?.setRenderConfig(reverted.render);
     },
   };
 

@@ -1,3 +1,17 @@
+## 2.496.499
+
+What you will see:
+- Advanced Settings: uploading a new 3D model no longer lights Save by itself. Before, the devices the new model
+  found were counted as your change, and Cancel then deleted them, on every tablet. Now Save and Cancel only follow
+  what you changed in the window yourself; Cancel puts exactly those things back and leaves everything else.
+- Settings and Advanced Settings: two quick changes in a row (relabelling one device, then another a second later)
+  are both undone by Cancel. Before, Cancel could undo only the second one and keep the first.
+- A device window for a device silent for days: when its chart moves back to its last report and part of that
+  period is older than the villa's system keeps, the device's band now shows it grey, "No longer kept", like the
+  sensor's band under it. Before, the device's band was blank there.
+- A sensor on the asleep list whose last report is older than ten days but still kept: its status now shows that
+  report, the same as its chart. Before, the status could read "Unknown" while the week's chart showed "Closed".
+
 ## 2.496.498
 
 What you will see:

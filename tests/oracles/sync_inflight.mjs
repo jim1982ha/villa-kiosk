@@ -6,7 +6,8 @@
 // config/ConfigContext mergeRemote, config/DeviceConfigSync).
 //
 // And the dialog says it when another tablet replaced one of ITS OWN changes already sent (configSlice
-// replacedByRemote): "Hall was changed on another tablet; your change was replaced."
+// ledgerOnRemote, the dialog's ledger of its own edits since 2.496.499): "Hall was changed on another tablet; your
+// change was replaced."
 //
 // Driven by value: the real sync machine (utils/syncedDocument, with the shared store's own diff, apply and rebase)
 // against a fake store, the real config normalisation, the real edits, the real draft rules.
@@ -18,7 +19,7 @@ const D = await import("@/config/deviceConfig");
 const { DEFAULT_CONFIG, normaliseConfig } = await import("@/config/AppConfig");
 const E = await import("@/config/mappingEdits");
 const { labelOf } = await import("@/config/EntityMap");
-const { ADVANCED_SETTINGS_KEYS: ADV, sliceOf, rebaseOnRemote, replacedByRemote, replacedLine, withReplaced } =
+const { ADVANCED_SETTINGS_KEYS: ADV, EMPTY_LEDGER, recordEdit, ledgerOnRemote, ledgerDirty, replacedLine, withReplaced } =
   await import("@/config/configSlice");
 
 const update = (c, change) => normaliseConfig({ ...c, ...(typeof change === "function" ? change(c) : change) }, { maps: true });
@@ -60,9 +61,8 @@ function tablet(srv, config) {
   t.local = () => D.pickSharedConfig(t.config);
   t.merge = (change) => { t.heard = change; t.config = update(t.config, (c) => D.applyRemoteChange(c, change)); };
   t.push = async () => {
-    const baseline = t.doc.baseline;
     const outcome = await t.doc.push(t.local());
-    if (outcome.ok) t.merge(D.remoteChange(baseline ?? outcome.base, outcome.base));
+    if (outcome.ok) t.merge(D.remoteChange(outcome.synced, outcome.base));   // DeviceConfigSync pushOwnDiff
     return outcome;
   };
   t.pull = async () => {
@@ -149,8 +149,10 @@ console.log("\n  the dialog says when another tablet replaced one of ITS OWN cha
   const KEYS = ["walkSpeed", ...ADV];
   const srv = server(D.pickSharedConfig(opened));
   const me = tablet(srv, opened);
-  const dialog = sliceOf(me.config, KEYS);        // Settings opens
+  // Settings opens; its ledger records the dialog's own edit (ConfigContext editByDialog)
+  const opening = me.config;
   me.config = update(me.config, relabel("light.hall", "Hall lamp"));
+  const dialog = recordEdit(EMPTY_LEDGER, KEYS, opening, me.config);
   await me.push();                                // the dialog's change is sent
   const labels = (c) => (id) => labelOf(id, c.entityMap, {});
 
@@ -159,7 +161,7 @@ console.log("\n  the dialog says when another tablet replaced one of ITS OWN cha
   await other.push();
   const before = me.config;
   await me.pull();
-  const said = replacedByRemote(dialog, KEYS, before, me.heard);
+  const said = ledgerOnRemote(dialog, before, me.heard).replaced;
   ck("the other tablet's value is on screen", label(me.config, "light.hall") === "Lobby");
   ck("the same device: one line, naming it as the screen does",
      said.length === 1 && replacedLine(said[0], labels(me.config)) === "Lobby was changed on another tablet; your change was replaced.",
@@ -169,34 +171,36 @@ console.log("\n  the dialog says when another tablet replaced one of ITS OWN cha
   // another tablet changes a DIFFERENT device
   const srv2 = server(D.pickSharedConfig(opened));
   const me2 = tablet(srv2, opened);
-  const dialog2 = sliceOf(me2.config, KEYS);
+  const opening2 = me2.config;
   me2.config = update(me2.config, relabel("light.hall", "Hall lamp"));
+  const dialog2 = recordEdit(EMPTY_LEDGER, KEYS, opening2, me2.config);
   await me2.push();
   srv2.config = { ...srv2.config, entityMap: { ...srv2.config.entityMap,
     "light.pool": { ...srv2.config.entityMap["light.pool"], label: "Pool 2" } } };
   srv2.rev++;
   const before2 = me2.config;
   await me2.pull();
-  ck("a change to another device says nothing", replacedByRemote(dialog2, KEYS, before2, me2.heard).length === 0,
-     replacedByRemote(dialog2, KEYS, before2, me2.heard));
+  ck("a change to another device says nothing", ledgerOnRemote(dialog2, before2, me2.heard).replaced.length === 0,
+     ledgerOnRemote(dialog2, before2, me2.heard).replaced);
 
   // this dialog's change not sent yet, the other tablet's on the same device: this tablet's stays, nothing to say
   const synced = D.baselineFromServer(D.pickSharedConfig(opened));
-  const dialog3 = sliceOf(opened, KEYS);
   const unsent = update(opened, relabel("light.hall", "Hall lamp"));
+  const dialog3 = recordEdit(EMPTY_LEDGER, KEYS, opened, unsent);
   const theirs = { ...synced, entityMap: { ...synced.entityMap, "light.hall": { ...synced.entityMap["light.hall"], label: "Lobby" },
     "light.pool": { ...synced.entityMap["light.pool"], label: "Pool 2" } } };
   ck("a change not sent yet is not replaced (its push replays it last): nothing to say",
-     replacedByRemote(dialog3, KEYS, unsent, D.remoteChange(synced, theirs)).length === 0,
-     replacedByRemote(dialog3, KEYS, unsent, D.remoteChange(synced, theirs)));
+     ledgerOnRemote(dialog3, unsent, D.remoteChange(synced, theirs)).replaced.length === 0,
+     ledgerOnRemote(dialog3, unsent, D.remoteChange(synced, theirs)).replaced);
 
   // a device only the other tablet touched while this dialog changed nothing: nothing to say
   ck("nothing of this dialog's changed: nothing to say",
-     replacedByRemote(dialog3, KEYS, opened, D.remoteChange(synced, theirs)).length === 0);
+     ledgerOnRemote(EMPTY_LEDGER, opened, D.remoteChange(synced, theirs)).replaced.length === 0);
 
-  // the draft's baseline moves by the same change: Save goes grey with the line explaining why
-  const moved = rebaseOnRemote(dialog, KEYS, before, me.heard);
-  ck("the draft's baseline takes the other tablet's value (Save grey, the line says why)", moved.entityMap["light.hall"].label === "Lobby");
+  // the ledger moves by the same change: Save goes grey with the line explaining why
+  const moved = ledgerOnRemote(dialog, before, me.heard).ledger;
+  ck("the ledger takes the other tablet's value as what Cancel goes back to (Save grey, the line says why)",
+     moved.entityMap["light.hall"].before.label === "Lobby" && !ledgerDirty(moved, me.config), moved.entityMap);
 }
 
 done("✅ an edit made while a push or pull is out survives and is sent; a replaced change of the dialog's is said");

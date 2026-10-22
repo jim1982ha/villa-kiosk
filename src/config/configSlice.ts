@@ -1,14 +1,15 @@
 // src/config/configSlice.ts
 // The pure rules of a dialog that edits a slice of the config live — what its
-// controls show and whether anything changed. The React half is
-// hooks/useDraftedSlice.ts; these are apart so tests/oracles/
-// settings_baseline.mjs can drive them by value in plain Node.
+// controls show, what it changed (its ledger) and what Cancel puts back. The
+// React half is hooks/useDraftedSlice.ts; these are apart so the oracles
+// (settings_baseline, draft_ledger, draft_remote) drive them by value in plain Node.
 
 import { normaliseConfig, type AppConfig } from "./AppConfig";
 import {
-  applyRemoteChange, fromSharedItems, sharedItems, type RemoteChange, type SharedConfigKey,
+  applyRemoteChange, fromSharedItems, sharedItems, SHARED_CONFIG_KEYS, type RemoteChange, type SharedConfigKey,
 } from "./deviceConfig";
-import { applyKeyed, type KeyedDiff } from "@/utils/keyedSync";
+import type { ConfigEdit } from "./mappingEdits";
+import { applyKeyed, diffKeyed, type Keyed, type KeyedDiff } from "@/utils/keyedSync";
 
 export type Slice<K extends keyof AppConfig> = Pick<AppConfig, K>;
 
@@ -27,48 +28,90 @@ export function draftedView<K extends keyof AppConfig>(
   return { ...sliceOf(config, keys), ...typing };
 }
 
-/** The slice as text that two equal slices share whatever their order: a shared key by its items (an entity map
- *  rebuilt by a merge lists its devices in another order, and a list of ids is a set), every object's keys sorted. */
+/** Two items equal by content, whatever the order of their keys (a merge rebuilds an item with its keys reordered). */
 const sorted = (_k: string, v: unknown) => (v && typeof v === "object" && !Array.isArray(v)
   ? Object.fromEntries(Object.entries(v as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
   : v);
-function contentOf<K extends keyof AppConfig>(slice: Slice<K>, keys: readonly K[]): string {
-  return JSON.stringify(keys.map((k) => sharedItems(k, slice[k]) ?? slice[k]), sorted);
+const same = (a: unknown, b: unknown) => JSON.stringify(a, sorted) === JSON.stringify(b, sorted);
+
+/** What the config becomes under a patch or an edit (config/mappingEdits): laid over it and completed (defaults,
+ *  bounds), the map migrations only when it carries one of the two maps they clean. ConfigContext's one rule for
+ *  every write, a dialog's or not; null when an edit changes nothing (nothing re-renders). */
+export function applyConfigChange(prev: AppConfig, change: Partial<AppConfig> | ConfigEdit): AppConfig | null {
+  const patch = typeof change === "function" ? change(prev) : change;
+  if (typeof change === "function" && Object.keys(patch).length === 0) return null;
+  const maps = patch.entityMap !== undefined || patch.meshBindings !== undefined;
+  return normaliseConfig({ ...prev, ...patch }, { maps });
 }
 
-/** Whether the slice differs from its baseline — by CONTENT: an object value
- *  (`render`) is rebuilt by every one of its controls, so `!==` would report
- *  changed forever. A write still waiting to be committed counts as changed. */
-export function sliceChanged<K extends keyof AppConfig>(
-  config: AppConfig, keys: readonly K[], baseline: Slice<K>, waiting: boolean,
-): boolean {
-  return waiting || contentOf(sliceOf(config, keys), keys) !== contentOf(baseline, keys);
+// ── THE DIALOG'S OWN EDITS, ITEM BY ITEM ──────────────────────────────────
+/** One item a dialog changed: what it held before the dialog's first change of it (`had` false: it did not exist). */
+export interface LedgerEntry { had: boolean; before?: unknown }
+/** What a dialog changed since it opened (or was saved), and nothing else: key → item id → its value before. */
+export type DraftLedger = Readonly<Record<string, Readonly<Record<string, LedgerEntry>>>>;
+export const EMPTY_LEDGER: DraftLedger = {};
+
+const isShared = (key: string) => (SHARED_CONFIG_KEYS as readonly string[]).includes(key);
+/** A key's value as items: a shared key by its row (the per-item diff the store syncs by, deviceConfig sharedItems),
+ *  any other (a walk speed, the render look) as one item. */
+function itemsOf(key: string, value: unknown): Keyed<unknown> {
+  return sharedItems(key, value) ?? (value === undefined ? {} : { value });
+}
+function fromItems(key: string, items: Keyed<unknown>): unknown {
+  return isShared(key) ? fromSharedItems(key as SharedConfigKey, items) : items.value;
 }
 
 /**
- * What Cancel goes back to, once a change from ANOTHER tablet has arrived while the dialog is open: the baseline with
- * that change applied to it, item by item — the same per-item diff the shared store replays (config/deviceConfig
- * remoteChange). So the other tablet's change never reads as this dialog's (Save stays dark) and survives Cancel,
- * while every item this dialog changed still goes back. An item BOTH changed: this dialog's value stays on screen
- * (the store replays it last: Save keeps it), and Cancel puts the other tablet's back, never the copy from before it.
+ * The ledger after a write a dialog's own control made (ConfigContext DialogEdits): every item of the slice it changed
+ * (`prev` to `next`, per item) is added with the value it had before, unless already there (its first value stays).
  *
- * ⚠️ BEFORE (2.496.493 to 2.496.496) the baseline was the copy taken on open, so Cancel wrote the other tablet's
- * edit away, and the sync pushed that undo to every tablet. `context` is the config the merge lands on: the result is
- * normalised as the store normalises it, so an item the merge brought reads equal to the config's. Pure —
- * tests/oracles/draft_remote.mjs.
+ * ⚠️ ONLY WHAT THE DIALOG ITSELF SET (2.496.499). The draft was a copy of the slice taken on open, so ANY write while
+ * it was open read as the dialog's: a 3D model uploaded from Advanced Settings reloads the view, the new devices it
+ * finds are written to the device list, Save lit by itself, and Cancel deleted those devices on every tablet. A write
+ * from anywhere else on this tablet, or from another tablet, never enters the ledger. Pure: tests/oracles/draft_ledger.mjs.
  */
-export function rebaseOnRemote<K extends keyof AppConfig>(
-  baseline: Slice<K>, keys: readonly K[], context: AppConfig, change: RemoteChange,
-): Slice<K> {
-  const moved: Record<string, unknown> = {};
+export function recordEdit<K extends keyof AppConfig>(
+  ledger: DraftLedger, keys: readonly K[], prev: AppConfig, next: AppConfig,
+): DraftLedger {
+  let out = ledger;
   for (const k of keys) {
-    const diff = (change.diff as Partial<Record<string, KeyedDiff<unknown>>>)[k];
-    const items = sharedItems(k, baseline[k]);
-    if (!diff || !items || (Object.keys(diff.set).length === 0 && diff.del.length === 0)) continue;
-    moved[k] = fromSharedItems(k as SharedConfigKey, applyKeyed(items, diff));
+    if (prev[k] === next[k]) continue;
+    const was = itemsOf(k, prev[k]);
+    const d = diffKeyed(was, itemsOf(k, next[k]));
+    for (const id of [...Object.keys(d.set), ...d.del]) {
+      if (out[k]?.[id]) continue;
+      const entry: LedgerEntry = id in was ? { had: true, before: was[id] } : { had: false };
+      out = { ...out, [k]: { ...out[k], [id]: entry } };
+    }
   }
-  if (Object.keys(moved).length === 0) return baseline;
-  return sliceOf(normaliseConfig({ ...context, ...baseline, ...moved } as AppConfig, { maps: true }), keys);
+  return out;
+}
+
+/** Whether the dialog has a change to keep or cancel: an item of its ledger that is not back to its value before.
+ *  By CONTENT: an object value (`render`) is rebuilt by every one of its controls. */
+export function ledgerDirty(ledger: DraftLedger, config: AppConfig): boolean {
+  for (const [k, entries] of Object.entries(ledger)) {
+    const now = itemsOf(k, config[k as keyof AppConfig]);
+    for (const [id, e] of Object.entries(entries)) {
+      if (e.had ? !(id in now) || !same(now[id], e.before) : id in now) return true;
+    }
+  }
+  return false;
+}
+
+/** Cancel: exactly the ledger's items put back as they were before the dialog changed them, on the config as it is
+ *  NOW — every other item (a device found by the model just loaded, another tablet's change) left as it is. */
+export function revertLedger(ledger: DraftLedger, config: AppConfig): Partial<AppConfig> {
+  const out: Record<string, unknown> = {};
+  for (const [k, entries] of Object.entries(ledger)) {
+    const items = { ...itemsOf(k, config[k as keyof AppConfig]) };
+    for (const [id, e] of Object.entries(entries)) {
+      if (e.had) items[id] = e.before;
+      else delete items[id];
+    }
+    out[k] = fromItems(k, items);
+  }
+  return out as Partial<AppConfig>;
 }
 
 /**
@@ -108,33 +151,51 @@ function subjectOf(key: string, id: string, item: unknown): ReplacedSubject {
 }
 
 /**
- * What another tablet's change REPLACED of this dialog's own: every item this dialog changed since it opened
- * (`baseline` against `current`) that the change touches AND takes over (deviceConfig applyRemoteChange: this tablet's
- * edit already sent, the other tablet's wrote after it). One subject per device or setting.
+ * A change from ANOTHER tablet, heard by the dialog's ledger (`current`: the config it lands on): every ledger item it
+ * touches now goes back to the other tablet's value on Cancel, never to the copy from before it (Cancel would write
+ * their change away, and the sync would push that undo to every tablet); an item it does not touch is not the ledger's
+ * business. An item BOTH changed: this dialog's value stays on screen while its push replays it last (Save keeps it).
  *
- * ⚠️ BEFORE (to 2.496.497) the field flipped to the other tablet's value without a word, and Save went grey: the
- * owner's change was gone with nothing saying so. The dialog now says it (components/settings/RemoteReplacedNote).
- * An item this tablet has not sent yet is not replaced: its push replays it last. Pure: tests/oracles/sync_inflight.mjs.
+ * And `replaced`: the ledger's items the change TAKES OVER (deviceConfig applyRemoteChange: this tablet's edit already
+ * sent, the other tablet's wrote after it), one subject per device or setting, for the dialog to say
+ * (components/settings/RemoteReplacedNote). An item this tablet has not sent yet is not replaced.
+ *
+ * ⚠️ BEFORE (to 2.496.498) the draft was the slice copied on open, moved by each such change: it could not tell this
+ * dialog's edit from any other write on this tablet. Pure: tests/oracles/draft_remote.mjs, sync_inflight.mjs.
  */
-export function replacedByRemote<K extends keyof AppConfig>(
-  baseline: Slice<K>, keys: readonly K[], current: AppConfig, change: RemoteChange,
-): ReplacedSubject[] {
-  const patch = applyRemoteChange(current, change);
-  if (Object.keys(patch).length === 0) return [];
-  const after = normaliseConfig({ ...current, ...patch } as AppConfig, { maps: true });
-  const same = (a: unknown, b: unknown) => JSON.stringify(a, sorted) === JSON.stringify(b, sorted);
-  const out = new Map<string, ReplacedSubject>();
+export function ledgerOnRemote(
+  ledger: DraftLedger, current: AppConfig, change: RemoteChange,
+): { ledger: DraftLedger; replaced: ReplacedSubject[] } {
+  const diffOf = (k: string) => (change.diff as Partial<Record<string, KeyedDiff<unknown>>>)[k];
+  const touched = (k: string) => {
+    const d = diffOf(k);
+    return d ? [...Object.keys(d.set), ...d.del] : [];
+  };
+  const keys = Object.keys(ledger).filter((k) => touched(k).some((id) => ledger[k][id]));
+  if (keys.length === 0) return { ledger, replaced: [] };
+  // the config with the other tablet's change on every item (theirs everywhere), and as it will show (mine kept)
+  const theirs = normaliseConfig({ ...current, ...Object.fromEntries(keys.map((k) =>
+    [k, fromItems(k, applyKeyed(itemsOf(k, current[k as keyof AppConfig]), diffOf(k)!))])) } as AppConfig, { maps: true });
+  const after = normaliseConfig({ ...current, ...applyRemoteChange(current, change) } as AppConfig, { maps: true });
+  const out: Record<string, Readonly<Record<string, LedgerEntry>>> = { ...ledger };
+  const replaced = new Map<string, ReplacedSubject>();
   for (const k of keys) {
-    const diff = (change.diff as Partial<Record<string, KeyedDiff<unknown>>>)[k];
-    const was = sharedItems(k, baseline[k]), now = sharedItems(k, current[k]), then = sharedItems(k, after[k]);
-    if (!diff || !was || !now || !then) continue;
-    for (const id of [...Object.keys(diff.set), ...diff.del]) {
-      if (same(was[id], now[id]) || same(now[id], then[id])) continue;
-      const subject = subjectOf(k, id, now[id] ?? then[id] ?? was[id]);
-      out.set(JSON.stringify(subject), subject);
+    const now = itemsOf(k, current[k as keyof AppConfig]), them = itemsOf(k, theirs[k as keyof AppConfig]);
+    const then = itemsOf(k, after[k as keyof AppConfig]);
+    const entries: Record<string, LedgerEntry> = { ...ledger[k] };
+    for (const id of touched(k)) {
+      const e = entries[id];
+      if (!e) continue;
+      const untouched = e.had ? id in now && same(now[id], e.before) : !(id in now);
+      if (!untouched && !same(now[id], then[id])) {
+        const subject = subjectOf(k, id, now[id] ?? then[id] ?? e.before);
+        replaced.set(JSON.stringify(subject), subject);
+      }
+      entries[id] = id in them ? { had: true, before: them[id] } : { had: false };
     }
+    out[k] = entries;
   }
-  return [...out.values()];
+  return { ledger: out, replaced: [...replaced.values()] };
 }
 
 /** Subjects already said, plus new ones, each once. */

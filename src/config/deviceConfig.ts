@@ -340,8 +340,8 @@ export function applySharedConfigDiff(target: SharedDeviceConfig, diff: SharedCo
 /**
  * What the OTHER devices changed, per item (`diff`): the server's copy against the one this device last synced with
  * (`synced`). Keys the server omits are not changes. It is the ONE description of a change from another tablet: the
- * config takes it (applyRemoteChange) and every open dialog's draft hears it (config/configSlice rebaseOnRemote,
- * replacedByRemote), on a pull and after a push alike (DeviceConfigSync, ConfigContext mergeRemote).
+ * config takes it (applyRemoteChange) and every open dialog's draft hears it (config/configSlice ledgerOnRemote),
+ * on a pull and after a push alike (DeviceConfigSync, ConfigContext mergeRemote).
  */
 export interface RemoteChange {
   synced: SharedDeviceConfig;
