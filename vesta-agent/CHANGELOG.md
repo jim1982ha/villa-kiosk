@@ -1,3 +1,9 @@
+## 0.12.316
+
+What you will see:
+- On the VESTA Agent's pages, the long dashes inside sentences (" — ") are now commas. Telegram messages and the
+  skills' own texts are unchanged.
+
 ## 0.12.315
 
 What you will see:

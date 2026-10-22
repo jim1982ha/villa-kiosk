@@ -506,9 +506,9 @@ class UI:
             when = day_time_label(datetime.fromtimestamp(at, zone), weekday=True)
             if value.startswith("runs/"):
                 run = value.split("/")[1].rsplit("-", 1)[0]          # ai_jobs.run_folder: <job>-<time>
-                rows.append({"value": value, "label": f"{value.rsplit('/', 1)[1]} — {run} report, {when}"})
+                rows.append({"value": value, "label": f"{value.rsplit('/', 1)[1]}, {run} report, {when}"})
             else:
-                rows.append({"value": value, "label": f"{value} — Offline Test, {when}"})
+                rows.append({"value": value, "label": f"{value}, Offline Test, {when}"})
         return rows
 
     async def skill_on(self, request):

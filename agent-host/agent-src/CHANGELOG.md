@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.306 (22 October 2026)
+
+- Owner 2026-10-22: " — " replaced by ", " in the text the Agent's own pages show (rules.js, limits.js, overview.js,
+  core.js, ui/server.py, skills.py); Telegram texts, skill folders and comments untouched.
+
 ## 0.6.305 (22 October 2026)
 
 - Architecture review 2026-10-22 (the Agent): a battery that moves a step ("within the week" ↔ "replace now") is handed

@@ -86,7 +86,7 @@ export function rulesForms(doc, jobs = [], tools = null) {
   // the month's ceiling: computed when the (i) of "Limit (US$)" opens, from the limits as they are on the page
   const limitNote = () => {
     const n = jobs.reduce((s, j) => s + ((pairOf(j.skill) || {}).limit_usd || 0) * j.runs_per_month, 0);
-    return `The most ONE reply or ONE run may cost: one chat reply, or one run of a job — not a monthly budget. At their limits, `
+    return `The most ONE reply or ONE run may cost: one chat reply, or one run of a job, not a monthly budget. At their limits, `
       + `the scheduled runs cost at most about US$ ${n.toFixed(2)} a month. Chat replies, and reports asked for in a chat, come on top: `
       + "see the Costs tab for what was really spent.";
   };
@@ -130,7 +130,7 @@ export function rulesForms(doc, jobs = [], tools = null) {
         drawAi(); markDirty(); } }, "×") }]);
   }
   drawAi();
-  const ai = card(place("ai"), "Which brain answers the chats and runs each skill's AI jobs, and the most ONE reply or ONE run may cost (one chat reply, or one run of any AI job of a skill — not a monthly budget; one brain and one limit for all the AI jobs of a skill), and which tools a report gets: what the person who asks may use (on schedule, everything switched on). A reply that reaches its limit stops and offers Continue; a report that reaches it is still sent with what is done. A skill that is not set does not run its AI jobs.",
+  const ai = card(place("ai"), "Which brain answers the chats and runs each skill's AI jobs, and the most ONE reply or ONE run may cost (one chat reply, or one run of any AI job of a skill, not a monthly budget; one brain and one limit for all the AI jobs of a skill), and which tools a report gets: what the person who asks may use (on schedule, everything switched on). A reply that reaches its limit stops and offers Continue; a report that reaches it is still sent with what is done. A skill that is not set does not run its AI jobs.",
     table(["Chat or skill", "Brain", withInfo("Limit (US$)", limitNote),
       withInfo(place("tools"), `Every answer and every report gets the tools switched on in ${where("tools")}, by the role of the person who asks: the owner everything, the facility manager (and anyone in a group listed for the facility manager) less what ${where("tools")} refuses them. A report on schedule gets everything switched on. A skill's own list limits nothing: the AI works without what a run lacks.`),
       ""], aiBody, { cls: "ai", widths: ["30%", "22%", "15%", null, "44"] }));
@@ -138,7 +138,7 @@ export function rulesForms(doc, jobs = [], tools = null) {
 
   // people
   const languages = (p) => ({ ...doc.languages, ...(p.language && !(p.language in doc.languages) ? { [p.language]: p.language } : {}) });
-  const people = card(W("people"), "Who the agent answers, and where it posts: every message for a role goes to each chat listed with that role — a person's private chat (a positive id) or a group (a negative id). Everyone in a listed group acts there with the group's role, whatever their own row says; a person's row is their private chat and their role in it. A person listed in both roles is two rows with the same id. /whoami, sent to the bot in a chat, shows that chat's id; a person must have sent /start to the bot once before it can write to them.",
+  const people = card(W("people"), "Who the agent answers, and where it posts: every message for a role goes to each chat listed with that role, a person's private chat (a positive id) or a group (a negative id). Everyone in a listed group acts there with the group's role, whatever their own row says; a person's row is their private chat and their role in it. A person listed in both roles is two rows with the same id. /whoami, sent to the bot in a chat, shows that chat's id; a person must have sent /start to the bot once before it can write to them.",
     ...editTable(f.people, {
       cls: "people", add: "Add a person", blank: () => ({ telegram_id: "", name: "", role: "fm", language: "en" }),
       columns: [{ title: "Name", width: "26%", phone: "a" }, { title: "Telegram id (person or group)", width: "22%", phone: "b" },
@@ -167,7 +167,7 @@ export function rulesForms(doc, jobs = [], tools = null) {
       const cur = get();
       shown.replaceChildren(cur.length
         ? h("span", { class: "picker-chosen" }, cur.map((id) => h("span", { class: "tag" + (ENT.byId[id] ? "" : " unknown"), title: id }, label(id))))
-        : h("span", { class: "muted" }, one ? "None — choose one…" : "None — choose…"),
+        : h("span", { class: "muted" }, one ? "None, choose one…" : "None, choose…"),
         h("span", { class: "caret" }, "▾"));
     };
     const drawList = () => {
@@ -309,7 +309,7 @@ export function toolsCard(f, t, reload) {
     } }, "Read the list again");
     // how many are on, and where the list comes from: the (i) of the tab (haInfo), not a line here (owner, 2026-10-08)
     const head = h("div", { class: "tools-head" }, h("div"),
-      t.new_off ? h("span", { class: "chip warn" }, `${plural(t.new_off, "new tool", "new tools")} since an update — off`) : null, refresh);
+      t.new_off ? h("span", { class: "chip warn" }, `${plural(t.new_off, "new tool", "new tools")} since an update, off`) : null, refresh);
     // every tool in its group's order, 16 cards a page (four rows of four); a group's heading where its cards start
     const lines = t.groups.flatMap((g) => g.tools.map((x) => ({ g, x })));
     const list = h("div");
@@ -331,14 +331,14 @@ export function toolsCard(f, t, reload) {
     const groups = [list, pages.nav];
     const unknown = t.unknown.length ? problemsBox(t.unknown.map((n) => `${n}: named in the file, but the villa's system has no such tool.`), "Not in the villa's system:") : null;
     const never = t.never.length ? h("details", { class: "tool-group never" },
-      h("summary", {}, h("b", {}, "Never available"), h("span", { class: "muted" }, ` ${plural(t.never.length, "tool", "tools")} that change the villa's system — locked by the agent, whatever is chosen here`)),
+      h("summary", {}, h("b", {}, "Never available"), h("span", { class: "muted" }, ` ${plural(t.never.length, "tool", "tools")} that change the villa's system, locked by the agent, whatever is chosen here`)),
       h("div", { class: "chips" }, t.never.map((x) => h("span", { class: "chip off", title: x.description }, x.title)))) : null;
     return [head, unknown, ...groups, never];
   };
   const own = () => {
     const kinds = [["choose", "You choose", null], ["elsewhere", "Set elsewhere", null], ["always", "Always on", "the agent cannot work without them"]];
     return kinds.map(([kind, title, sub]) => h("div", { class: "tool-group" },
-      h("div", { class: "tool-group-head" }, h("b", {}, title), sub ? h("span", { class: "muted" }, ` — ${sub}`) : null),
+      h("div", { class: "tool-group-head" }, h("b", {}, title), sub ? h("span", { class: "muted" }, `, ${sub}`) : null),
       h("div", { class: "tool-grid" }, t.own.filter((x) => x.kind === kind).map((x) => {
         // the form says on/off for each (policy_doc.to_form): where the file keeps it is the agent's business
         const on = kind !== "choose" ? true : f.agent_tools[x.key];

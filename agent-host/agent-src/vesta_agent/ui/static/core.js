@@ -500,7 +500,7 @@ export function jobsBanner(names, after) {
   } }, "Add them");
   return h("div", { class: "banner" },
     h("div", {}, h("b", {}, `${names.length} AI job${names.length > 1 ? "s are" : " is"} not set: ${names.length > 1 ? "they don't" : "it doesn't"} run.`),
-      h("div", { class: "muted" }, names.join(", "), " — their skill needs a brain and a spending limit per run.")), btn);
+      h("div", { class: "muted" }, names.join(", "), ": their skill needs a brain and a spending limit per run.")), btn);
 }
 
 export function go(tab) {

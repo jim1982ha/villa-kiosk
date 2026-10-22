@@ -16,7 +16,7 @@ export async function overview() {
   const kids = [
     jobsBanner(o.jobs_not_set, () => go("overview")),
     // the Rules and Skills tabs are one click away: only what is wrong with them is shown here
-    o.policy_problems.length ? problemsBox(o.policy_problems, "Rules — to fix:") : null,
+    o.policy_problems.length ? problemsBox(o.policy_problems, "Rules to fix:") : null,
     // a chat of People that Telegram refused the last message to (status.unreachable: the words are the agent's)
     o.unreachable.length ? problemsBox(o.unreachable, `${plural(o.unreachable.length, "chat", "chats")} of ${where("people")} not reached:`) : null,
     off.length ? problemsBox(off.map((s) => `${s.name}: ${s.problem}`), `${plural(off.length, "skill", "skills")} not working:`) : null,
@@ -96,7 +96,7 @@ export function importCard() {
   function show(name, p) {
     const CH = { added: "", replaced: "", changed: "", same: "gray" };
     fill(out,
-      h("p", { class: "muted" }, `${name}${p.made_with ? ` — made with agent ${p.made_with}` : ""}. Nothing is written until you press Apply.`),
+      h("p", { class: "muted" }, `${name}${p.made_with ? `, made with agent ${p.made_with}` : ""}. Nothing is written until you press Apply.`),
       // the shared table: 10 rows a page, each row a labelled card on a phone (a setup can carry many skills)
       paged(["What", "Change", "Detail"], p.rows.map((r) => [r.what,
         h("span", { class: "chip " + (CH[r.change] || "") }, r.change[0].toUpperCase() + r.change.slice(1)),

@@ -318,7 +318,7 @@ def when_it_runs(sk: Skill) -> list[dict]:
     # and its button (`offer`), which is the command typed for the person: the same row, said (0.12.271)
     pressed = (f" (or presses “{sk.offer['label']}” under a reply that suggests it"
                + (" or that looked into what happened" if sk.offer_after else "") + ")") if sk.offer else ""
-    acts.append(row("in a chat", note=(f"only when a person writes /{sk.command}{pressed} — for example: {sk.usage}"
+    acts.append(row("in a chat", note=(f"only when a person writes /{sk.command}{pressed}, for example: {sk.usage}"
                                        if sk.usage else f"only when a person writes /{sk.command}{pressed}") if sk.command
                     else "when a person asks about it"))
     return acts

@@ -321,8 +321,8 @@ def test_try_a_command_offers_the_files_earlier_steps_left(ui):
     assert st == 200
     assert [f["value"] for f in body["out_files"]] == ["runs/fm-weekly-20261010T080301000000/facts.json", "facts.json",
                                                        "notes.json"]                # newest first, files only
-    assert body["out_files"][0]["label"].startswith("facts.json — fm-weekly report, ")
-    assert body["out_files"][1]["label"].startswith("facts.json — Offline Test, ")
+    assert body["out_files"][0]["label"].startswith("facts.json, fm-weekly report, ")
+    assert body["out_files"][1]["label"].startswith("facts.json, Offline Test, ")
     compose = next(sc for sc in body["scripts"] if sc["script"] == "compose.py")
     assert compose["flags"]["--facts"] == "infile"
 
@@ -593,7 +593,7 @@ def test_a_command_skill_says_how_it_is_used_and_a_skill_without_tools_has_no_to
     sk = S.Skill(name="proposals", path="", description="", command="proposal",
                  usage="the monthly report lists Proposal 3; the owner answers /proposal accept 3")
     chat = [r for r in S.when_it_runs(sk) if r["when"] == "in a chat"][0]
-    assert chat["note"] == ("only when a person writes /proposal — for example: "
+    assert chat["note"] == ("only when a person writes /proposal, for example: "
                             "the monthly report lists Proposal 3; the owner answers /proposal accept 3")
     assert [r for r in S.when_it_runs(S.Skill(name="x", path="", description="", command="x"))
             if r["when"] == "in a chat"][0]["note"] == "only when a person writes /x"

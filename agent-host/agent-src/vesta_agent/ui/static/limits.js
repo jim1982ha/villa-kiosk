@@ -43,7 +43,7 @@ function row(r, probs, again) {
   // and the value's unit, bounds and Save sit on the value's own line
   return [
     h("div", { class: "limit-what" },
-      h("b", {}, r.label), " ", infoButton(r.name, `${r.name} — written at ${(r.where || []).join(", ")}`),
+      h("b", {}, r.label), " ", infoButton(r.name, `${r.name}, written at ${(r.where || []).join(", ")}`),
       r.reached || r.told ? h("div", { class: "limit-reached" }, r.reached ? `Reached: ${r.reached} ` : "",
         r.told ? h("span", { class: "chip tiny" + (r.told.startsWith("Nobody") ? " off" : "") }, r.told) : null) : null,
       h("div", { class: "muted small" }, r.also,
@@ -72,7 +72,7 @@ export async function limits() {
   const search = h("input", { type: "search", placeholder: "Search the limits", value: FILTER, "aria-label": "Search the limits",
     oninput: (e) => { FILTER = e.target.value.trim().toLowerCase(); tabs.redraw(); } });
   fill($view, card("Limits",
-    `Every limit on what the agent reads, tells and keeps, in one place: ${data.rows.length} in all. Each value is saved where the agent reads it — a limit of the agent's code in ${data.file}, a skill's setting in that skill's files, a rule in policy.yaml — so the Rules and Skills tabs show the same value. A change counts from the next answer or the next run.`,
+    `Every limit on what the agent reads, tells and keeps, in one place: ${data.rows.length} in all. Each value is saved where the agent reads it, a limit of the agent's code in ${data.file}, a skill's setting in that skill's files, a rule in policy.yaml, so the Rules and Skills tabs show the same value. A change counts from the next answer or the next run.`,
     data.problems.length ? problemsBox(data.problems, "Limits the page could not read:") : null,
     h("div", { class: "limits-search" }, search), probs, tabs.bar, tabs.body));
 }
