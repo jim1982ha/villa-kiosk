@@ -1,6 +1,6 @@
 # proposals — the owner's answer to what VESTA suggests (the monthly report's proposals), by its number.
 # Run ONLY on its command (below): the AI is never offered it otherwise, so the line below is what the Agent page shows.
-description: Records the owner's answer to a proposal of the monthly report — accept, later or ignore — by its number.
+description: Records the owner's answer to a proposal of the monthly report (accept, later or ignore), by its number.
 
 # ⚠️ ONLY BY ITS COMMAND (owner, 2026-10-13): "accept 3" typed in a chat could mean anything; "/proposal ignore 3" cannot.
 command: proposal

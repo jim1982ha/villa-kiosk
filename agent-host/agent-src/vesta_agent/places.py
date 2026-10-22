@@ -24,7 +24,6 @@ TABS = {"overview": "Overview", "rules": "Rules", "skills": "Skills", "costs": "
 PLACES: dict[str, tuple[str, str]] = {
     # Overview
     "last_day": ("The last 24 hours", "Overview"),
-    "jobs_run": ("Scheduled jobs run", "Overview › The last 24 hours"),
     "changes": ("Page changes", "Overview"),
     "setup": ("Copy the setup", "Overview"),
     "setup_out": ("Download this villa's setup", "Overview › Copy the setup"),

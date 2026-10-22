@@ -128,7 +128,7 @@ def test_a_script_stopped_with_the_agent_is_not_a_failure_and_a_cut_run_is_no_re
     script_run._answer(s, st, sk, "investigate.py", ["find"], 1, "", "boom", 3.0, "ai")      # a real failure
     st.log(agent_records.RUN_CUT, {"who": "Owner@1", "cost_usd": None, "tokens": {"input_tokens": 10}})
     figures = dict(status.figures(st.calls_since("2000-01-01"), 0.0))
-    assert figures["failures"] == 1 and figures["replies written"] == 0 and figures["reports made"] == 0
+    assert figures["Failures"] == 1 and figures["Replies written"] == 0 and figures["Reports made"] == 0
     assert [r["interrupted"] for r in status.costs(st)["runs"]] == [True]
 
 
@@ -226,3 +226,16 @@ def test_a_run_records_the_skills_it_used_in_order_once_each(monkeypatch, tmp_pa
     asyncio.run(runner.run(s, "sys", "p", run_kit(), job, st))
     got = {r["job"]: r["skills"] for r in status.costs(st)["runs"]}
     assert got == {"Chat replies": ["reports", "investigate"], "fm-weekly": ["maintenance", "reports", "investigate"]}
+
+
+def test_the_costs_tab_counts_what_the_agent_did_over_its_own_period(tmp_path):
+    # owner, 2026-10-22: the counters left Overview's fixed 24 hours for the Costs tab's line of figures, over the
+    # period chosen there; its AI cost is said once, by the tab's own first figure
+    st = State(str(tmp_path / "s.db"))
+    st.log("critical_event", {"rule": "r"})
+    st.log("send_failed", {"chat": 1})
+    later = datetime.now(timezone.utc) + timedelta(days=10)
+    week, month = (dict(status.costs(st, d, now=later)["activity"]) for d in (7, 30))
+    assert week["Alerts followed"] == 0 and week["Failures"] == 0
+    assert month["Alerts followed"] == 1 and month["Failures"] == 1
+    assert "AI cost (USD)" not in month

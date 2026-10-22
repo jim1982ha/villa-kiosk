@@ -46,7 +46,7 @@ from . import layout
 
 
 #: Between a step's line and the desk's words on the bottom line.
-STEP_SEP = " — "
+STEP_SEP = ", "
 EXISTING = "existing"
 def history_kept() -> int:
     """An incident's history kept: its first notice, a line counting those dropped, and the latest ones (review 28:

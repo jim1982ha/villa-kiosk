@@ -4,7 +4,7 @@ tools: [ha_get_state, ha_get_history, ha_search, ha_get_entity, ha_list_floors_a
 scripts:
   concierge.py:
     commands:
-      status: '"is everything OK?" — the colour and the reasons'
+      status: '"is everything OK?": the colour and the reasons'
       find: which devices a place or a name means
     flags: {--what: text, --where: text}
     inject: [pack, store, zone]

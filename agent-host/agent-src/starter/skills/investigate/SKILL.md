@@ -1,12 +1,12 @@
 ---
 name: investigate
-description: Investigates what happened and why, from the villa's records — a short message with the whole account as an HTML page (what the records establish and rule out, timeline, charts, causes ranked by likelihood, what cannot be known, what would have warned earlier). Used when the person writes /investigate.
+description: Investigates what happened and why, from the villa's records: a short message with the whole account as an HTML page (what the records establish and rule out, timeline, charts, causes ranked by likelihood, what cannot be known, what would have warned earlier). Used when the person writes /investigate.
 ---
 
 # investigate
 
 The person wrote /investigate with a question: what happened, why, since when, for how long, what caused it or what
-turned it on or off — about any device, room or event, now or in the past (a flood, a power cut, a pump or a heater that
+turned it on or off, about any device, room or event, now or in the past (a flood, a power cut, a pump or a heater that
 ran too long, a door, an alarm, a strange bill, a device that stopped). They want the whole, true story: read
 everything the steps below ask for, then answer once, completely.
 
@@ -57,7 +57,7 @@ what happened, and why".
    its times to the timeline: a device dropping off 79 seconds after another stops, an automation running at the moment
    a device turned on, a person arriving.
 
-5. **Check what can act on it — by what each thing is able to do, not by its running at the time.**
+5. **Check what can act on it, by what each thing is able to do, not by its running at the time.**
    - A control the timeline marks "stayed off for the whole period" turned nothing on: it belongs to what the records
      rule out, and the page already says so.
    - Under each automation that ran, `around` says what it is able to do:
@@ -75,7 +75,7 @@ what happened, and why".
    did not read, ha_get_logs (logbook) for the hours around a moment that matters (the whole villa's logbook is read 6
    hours at a time at most; `around` reads a whole period), ha_get_state for how things are now.
 
-   **Search the web (web_search) — always**, once the timeline and `around` are read, as a source of leads:
+   **Search the web (web_search), always**, once the timeline and `around` are read, as a source of leads:
    - Search for the pattern in general words (the kind of device and what it did, e.g. "a pump that runs without
      stopping, then its circuit's protection trips"): its known causes and what usually goes with it; the make and
      model's known failures (ha_get_device) or its manual; what an error code means; an outside event at that time (a
@@ -120,7 +120,7 @@ with the facts; if one seems misleading, say why in "cannot_tell".
      than theirs, rather than give them again.
    - `timeline`: only what a person saw or did that the records do not show (the page draws the recorded one); leave it
      out when there is none. Its `time` as the rules below say: "07:30", or "9 Oct, 07:30" when the account spans
-     several days — the page lists it beside the recorded moments, worded the same way.
+     several days: the page lists it beside the recorded moments, worded the same way.
    - `causes`: most likely first. A cause that came from a lead also has `"source"`, written `"[2]"` for a web page (its
      place in `sources`) or `"the records"`, and `"verdict"`: `"consistent"` (the records fit it), `"not supported"`
      (they contradict it: the page then lists it under ruled out) or `"cannot tell"` (no record can judge it; say what

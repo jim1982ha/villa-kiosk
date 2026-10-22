@@ -250,13 +250,13 @@ class Ctx:
             if book.older_than_kept is not None:
                 # ⚠️ A MONTH OLDER THAN THE LOGBOOK KEPT (owner, 2026-10-20): counted from where it begins, and said
                 self.problems.append(f"{self.alert_words(rinfo)}: counted from "
-                                     f"{day_time_label(book.older_than_kept.astimezone(self.Z), weekday=True)} — the "
+                                     f"{day_time_label(book.older_than_kept.astimezone(self.Z), weekday=True)}, the "
                                      f"villa's system keeps its logbook {days_words(self.cli.detailed_days)} only.")
             if not book.whole:
                 # ⚠️ A COUNT FROM A READ STOPPED SHORT IS A FLOOR (round 2, 2026-10-16): said, never given as the week's
                 self.problems.append(f"{self.alert_words(rinfo)}: "
                                      + unread("its runs", day_time_label(book.reach.astimezone(self.Z), weekday=True))
-                                     + " — its alerts after that are not counted.")
+                                     + ", its alerts after that are not counted.")
             for r in book.rows:
                 run = automation_run(r)              # one reading of "a rule ran" (vesta_shared.past): switched on or
                 if run is None:                      # off is not a run

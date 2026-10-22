@@ -21,7 +21,7 @@ decides alone to act on the villa.
    `{blueprint, rule_id, incident_id, phase, label, entities, summary, timestamp, priority?, claim?}`.
    - `opened`: a new incident. `resolved`: the villa's system says it cleared (the chase stops).
      `abandoned`: the rule stopped watching while it was still true (the owner hears it).
-     `restated`: the rule was saved, reloaded or the villa's system started — it sends what it claims now, and its
+     `restated`: the rule was saved, reloaded or the villa's system started: it sends what it claims now, and its
      open alert is judged by that from now on (no message to anyone).
    - `priority` (P1–P4, the rule's "VESTA priority" input) decides who hears it (`people_roles`);
      without one, the rule's route in `rules.yaml`. The villa system's own `severity` word is not a priority.
@@ -86,14 +86,14 @@ message then says who pressed what, and when. Typing the word works too.
 
 | Button | Effect |
 |---|---|
-| Done | incident closed, its Kiosk ticket resolved; the device is read once `clear_minutes` (10) later. Still bad (its rule names its bad states): the incident opens again, "still there" — "Done (…), but … still reads …: still open. VESTA keeps watching it." — and the desk closes it when it is right. Not knowable (an older alert, a number): the people asked are told what it reads. The same for a fault closed in the Kiosk ("Closed in the Kiosk, but …"); a fault a person REOPENS in the Kiosk asks the facility manager again at once |
+| Done | incident closed, its Kiosk ticket resolved; the device is read once `clear_minutes` (10) later. Still bad (its rule names its bad states): the incident opens again, "still there" ("Done (…), but … still reads …: still open. VESTA keeps watching it."), and the desk closes it when it is right. Not knowable (an older alert, a number): the people asked are told what it reads. The same for a fault closed in the Kiosk ("Closed in the Kiosk, but …"); a fault a person REOPENS in the Kiosk asks the facility manager again at once |
 | Need help | escalated to the owner with the detail |
 
 ## When a critical rule runs
 
 Each critical rule has a "When this rule runs" choice (2026-10-20): Always (the default), Only while the villa is
 empty, or Only while someone is in, read from the same "Villa empty" helper. A rule set to one of the last two raises
-nothing outside those hours — so "no alert" then means "not watched", never "nothing happened" — and it looks again
+nothing outside those hours, so "no alert" then means "not watched", never "nothing happened", and it looks again
 when the villa becomes empty (or someone comes in), alerting then on a problem already there. If the helper has no
 answer (after a restart), the rule alerts anyway.
 

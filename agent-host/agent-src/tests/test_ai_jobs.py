@@ -117,7 +117,7 @@ def test_a_run_that_sent_nothing_is_recorded_counted_and_told_once(jobs, monkeyp
     records = jobs.j.state.calls_since("2000-01-01")
     assert [agent_records.detail(c) for c in records if c["kind"] == agent_records.JOB_NO_RESULT] == [{"job": "rep-weekly", "why": why}]
     fig = dict(status.figures(records, 0.0))
-    assert fig["failures"] == 1 and fig["reports made"] == 0 and fig["replies written"] == 0
+    assert fig["Failures"] == 1 and fig["Reports made"] == 0 and fig["Replies written"] == 0
     # on schedule: the one sentence goes to the job's own chat
     jobs.d.sent.clear()
     asyncio.run(jobs.j.run(sk, job))

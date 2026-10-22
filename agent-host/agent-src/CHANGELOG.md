@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.307 (22 October 2026)
+
+- Owner 2026-10-22: the day's counters (alerts followed, buttons pressed, actions done, replies written, reports
+  made, failures) leave Overview's "The last 24 hours" and join the Costs tab's figures, counted over its chosen
+  period (status: one counting function for both); Overview's "Scheduled jobs run" heading removed.
+- " — " → ", " (or ": " before a list) in every text a person reads: SKILL.md, skill settings, report and
+  investigation page texts, the Telegram alert status line; shipped-skills.json regenerated. AI-only texts, logs and
+  comments untouched.
+
 ## 0.6.306 (22 October 2026)
 
 - Owner 2026-10-22: " — " replaced by ", " in the text the Agent's own pages show (rules.js, limits.js, overview.js,

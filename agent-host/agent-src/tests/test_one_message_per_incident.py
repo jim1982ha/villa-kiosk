@@ -83,12 +83,12 @@ def test_each_chat_keeps_only_the_latest_message_and_it_recalls_the_alert(agent)
     tick(agent, 20)                            # the reminder replaces the alert in the FM's chat
     (fm,) = shown(agent, FM_CHAT)
     # the step says itself — what, when, to whom — before the desk's words (owner, 2026-10-16, #43)
-    assert re.fullmatch(r"Reminder sent \d\d/\d\d/\d{4} \d\d:\d\d — No answer after 15 min \(to: FM\)", status(fm)) \
+    assert re.fullmatch(r"Reminder sent \d\d/\d\d/\d{4} \d\d:\d\d, No answer after 15 min \(to: FM\)", status(fm)) \
         and SUMMARY in fm and "What to do:" in fm
     assert agent.tg.sent[-1][2], "the reminder carries the buttons"
     tick(agent, 50)                            # the escalation replaces Home Assistant's alert in the owner's chat
     (grp,) = shown(agent, GROUP)
-    assert re.fullmatch(r"Escalation sent \d\d/\d\d/\d{4} \d\d:\d\d — No answer from FM after 45 min \(to: Owner\)",
+    assert re.fullmatch(r"Escalation sent \d\d/\d\d/\d{4} \d\d:\d\d, No answer from FM after 45 min \(to: Owner\)",
                         status(grp)) and SUMMARY in grp
     assert (GROUP, 500) in agent.tg.deleted
     assert len(shown(agent, FM_CHAT)) == 1     # the FM's reminder is untouched by the owner's message
@@ -150,12 +150,12 @@ def test_need_help_reaches_the_owner_with_the_buttons_to_answer(agent):
     owner = agent.thread.shown(int(iid))[GROUP]
     assert owner["buttons"] and not owner["settled"], owner
     # the escalation's step to the owner only — never the presser's chat, which got the answer (owner, 2026-10-16)
-    assert re.fullmatch(r"Escalation sent .+ — Need help on .+ \(Wayan\): Owner is asked to act\. \(to: Owner\)",
+    assert re.fullmatch(r"Escalation sent .+, Need help on .+ \(Wayan\): Owner is asked to act\. \(to: Owner\)",
                         status(owner["text"])) and SUMMARY in owner["text"]
     assert all(mid != owner["mid"] for _, mid, _ in agent.tg.edits)     # never edited: its buttons are still there
     (fm,) = shown(agent, FM_CHAT)
     # the same sentence in every chat (2026-10-11); the owner's copy, the escalation, says its step first (2026-10-16)
-    assert status(owner["text"]).endswith(" — " + status(fm) + " (to: Owner)")
+    assert status(owner["text"]).endswith(", " + status(fm) + " (to: Owner)")
     # the Kiosk's card tells the same story, through the wiring the app gives its tickets (owner, 2026-10-14) — and
     # Telegram's Status the same events in the same words: the press, then the escalation; never an "Update sent"
     # (architecture review, 2026-10-15)

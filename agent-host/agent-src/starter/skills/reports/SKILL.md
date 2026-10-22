@@ -29,7 +29,7 @@ figures; compose.py lays the page out and checks your sentences.
 | On demand | either | the period asked for (`--end` for a past one) | the steps below |
 
 The FM reads the digest on a phone in the morning: new items first, then the
-alerts still open with their numbers ("#9"), so the right alert is found — it is
+alerts still open with their numbers ("#9"), so the right alert is found: it is
 closed with Done under its own message, never by a typed reply. The
 owner reads the monthly as proof that the villa was looked after: what was
 found, what was done, what it cost, what VESTA suggests, and how much of the
@@ -49,15 +49,15 @@ the conclusions are yours.
    `filtration_optimiser.py --out optimiser.json` and `proposals.py --period-json month.json
    --optimiser-json optimiser.json` (it records the proposals the page shows).
 2. `reports` `facts.py fm-weekly --energy week.json --out facts.json` (or `owner-monthly --energy
-   month.json`). It prints `to_do`: THE ONE LIST of what needs doing — the playbook's clues and the
+   month.json`). It prints `to_do`: THE ONE LIST of what needs doing, the playbook's clues and the
    open tasks, merged by device and grouped by kind (one line per device; "4 monitoring devices
-   offline" rather than four lines) — each with its playbook guidance (what to look at, what it means,
+   offline" rather than four lines), each with its playbook guidance (what to look at, what it means,
    what to check, what to ask), and `to_write`: every sentence the page needs, with its instruction.
 3. For each line of `to_do`, before you write: look at what its `look_at` says, in the villa's system
    (ha_get_history for statistics or history, ha_get_logs for the logbook, ha_get_automation_traces,
    ha_get_state). Confirm it, date it, explain it; tie lines together (a pump drawing less power AND
    running as long as before means less water moved, not less running; many devices stopping in the
-   same minute is one cause, not many faults). Drop what the data does not support — say so in the
+   same minute is one cause, not many faults). Drop what the data does not support: say so in the
    reading rather than inventing a cause. Say each thing ONCE: the page repeats nothing.
    For every line whose check asks to repair, replace or adjust something (a part, a battery,
    a pump, a relay, a filter, a Wi-Fi link), run web_search once before you write it: look up
@@ -65,13 +65,13 @@ the conclusions are yours.
    manual, the usual cause, a typical price). These searches are part of the report, not extra
    spending. Use the web to back what the villa's system shows, never instead of it. If no reliable
    source comes up, write "no reliable source found".
-4. Write every sentence of `to_write` in the reader's language: conclusions, not descriptions —
+4. Write every sentence of `to_write` in the reader's language: conclusions, not descriptions:
    what it is, what it means, what to do, when, and the question to ask. Your numbers may be your
    own (what you read in the villa's system); write them as you would to the owner, rounded and dated.
    Save them with `save_file` as `notes.json`: `{"<id>": "<sentence>", ...}`.
 5. `reports` `compose.py fm-weekly --facts facts.json --notes notes.json --out fm_weekly.html` (or
    `owner-monthly ... --out owner_monthly.html`). Your readings show as "VESTA's reading"; a slot
-   reports.yaml marks `checked: true` is refused if one of its numbers is not in its figures — fix
+   reports.yaml marks `checked: true` is refused if one of its numbers is not in its figures: fix
    it and compose again (once).
 6. `send_message` with `attachment` the page's file name, `title` the `message`'s "title" as it is and
    `text` its "text" (your headline). The agent writes the title and who it is for at the top. Started from

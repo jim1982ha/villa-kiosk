@@ -135,13 +135,13 @@ def facts(data: dict | None, around: dict | None, notes: dict | None = None) -> 
             rows.append({"at": fs[0]["start"], "pill": "unusual",
                          "text": f"{name}: {len(fs)} times “{periods.band(kind) or did(kind)}”, from {clock(fs[0]['start'])} "
                                  f"to {clock(fs[-1]['end'])}, the longest {lasting(top['seconds'])} at "
-                                 f"{clock(top['start'])} — {top['why']}"})
+                                 f"{clock(top['start'])}, {top['why']}"})
             continue
         for f in fs:
             rows.append({"at": f["start"], "pill": "unusual",
                          "text": f"{f['name']} {did(f['kind'])} "
                                  f"{'in' if periods.base(f['kind']) == periods.RESTARTS else 'for'} "
-                                 f"{lasting(f['seconds'])}, until {clock(f['end'])} — {f['why']}"})
+                                 f"{lasting(f['seconds'])}, until {clock(f['end'])}, {f['why']}"})
     for f in flagged:
         al = f.get("alert") or {}
         fired = _t(al.get("at"))
@@ -199,13 +199,13 @@ def facts(data: dict | None, around: dict | None, notes: dict | None = None) -> 
             unproven.append((a, close))
             what = "what it can do could not be read"
         for t in close[:AUTOMATION_RUNS_SHOWN]:
-            rows.append({"at": t, "pill": "usual", "text": f"Automation “{a.get('name')}” runs — {what}"})
+            rows.append({"at": t, "pill": "usual", "text": f"Automation “{a.get('name')}” runs, {what}"})
     for a, close in acted:
         mine = {t.get("id") for t in a.get("targets") or []} & read
         if mine or not a.get("targets"):
             check.append(f"Automation “{a.get('name')}” ran at {clock(close[0])} and can act on {_on(a)}"
-                         + (" — one of the devices read here: check whether it did." if mine else
-                            " — its targets could not be read: check whether it acted on the device."))
+                         + (", one of the devices read here: check whether it did." if mine else
+                            ", its targets could not be read: check whether it acted on the device."))
     for a, close in unproven:
         check.append(f"Automation “{a.get('name')}” ran at {clock(close[0])}, but what it can do could not be read: "
                      "it is neither proven nor ruled out.")
@@ -213,7 +213,7 @@ def facts(data: dict | None, around: dict | None, notes: dict | None = None) -> 
     # ------------------------------------------------------------------ the AI's account: only what it adds
     for c in notes.get("causes") or []:
         if isinstance(c, dict) and c.get("verdict") == "not supported":
-            contradicted.append(f"{c.get('cause')}" + (f" — {c['evidence']}" if c.get("evidence") else ""))
+            contradicted.append(f"{c.get('cause')}" + (f": {c['evidence']}" if c.get("evidence") else ""))
     cannot += [str(x) for x in notes.get("cannot_tell") or [] if str(x).strip()]
     told = [r for r in notes.get("timeline") or [] if isinstance(r, dict) and r.get("text")]
 

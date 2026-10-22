@@ -83,7 +83,7 @@ def test_the_heading_names_the_incident_first_and_what_was_sent_to_whom(tmp_path
     # owner, 2026-10-18, #55 "each chat its own steps" (reversing part of 2026-10-11 "one incident, one picture"): the
     # owner's escalation lists none of the FM's steps — its own step, what, when, to whom (owner, 2026-10-16)
     status_block = text.split("\n\nStatus:\n")[1]
-    assert re.fullmatch(r"⚠️ ⚙️ Escalation sent \d\d/\d\d/\d{4} \d\d:\d\d — x \(to: Owner\)", status_block), text
+    assert re.fullmatch(r"⚠️ ⚙️ Escalation sent \d\d/\d\d/\d{4} \d\d:\d\d, x \(to: Owner\)", status_block), text
     # the FM's chat holds them, a dash per line
     history = [ln for ln in head_text(v.notices.heading(FM, 21)).split("\n")[2:] if ln.startswith("- ")]
     assert re.fullmatch(r"- Alert sent \d\d/\d\d/\d{4} \d\d:\d\d \(to: FM\)", history[0])
@@ -249,7 +249,7 @@ def test_one_incident_one_picture_in_every_chat_of_the_same_people(tmp_path):
     text = shown[FM]
     # every role it went to, never a name (owner, 2026-10-13)
     assert text.startswith("#5 (existing)\nTo: Owner & FM\n") and \
-        re.search(r"\n⚠️ ⚙️ Reminder sent \d\d/\d\d/\d{4} \d\d:\d\d — No answer after 15 min \(to: FM\)$", text), text
+        re.search(r"\n⚠️ ⚙️ Reminder sent \d\d/\d\d/\d{4} \d\d:\d\d, No answer after 15 min \(to: FM\)$", text), text
     # the group: not sent the reminder, no FM line, its own status kept, its buttons kept — only the title word and
     # "To:" follow the incident (architecture review, 2026-10-19: they are the incident's, the same in every copy; the
     # Status lines are each chat's own, #55 unchanged): "(new)" became "(existing)" with the facility manager's

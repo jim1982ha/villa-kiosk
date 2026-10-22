@@ -127,7 +127,7 @@ def test_a_day_past_the_reach_is_never_counted_empty_or_occupied():
     (clue,) = playbook.clue_use_while_empty(c, when)
     assert (clue["empty_days"], clue["kwh_per_empty_day"], clue["kwh_per_other_day"]) == (1, 5.0, 10.0)
     assert c.problems == ["Electricity while the villa is empty: its mode could not be read whole: nothing is known "
-                          "after 6 Oct, 13:00 — the days after that are not counted."]
+                          "after 6 Oct, 13:00, the days after that are not counted."]
     c = ctx(None)
     (clue,) = playbook.clue_use_while_empty(c, when)
     assert clue["empty_days"] == 3 and c.problems == []
@@ -143,8 +143,8 @@ def test_a_rule_whose_runs_were_read_short_says_its_count_is_not_the_weeks(tmp_p
     book = Short(["2026-09-28T07:41:00+00:00", "2026-09-30T07:41:00+00:00"], [])
     facts, c, _ = _ctx(tmp_path, book)
     assert [r["when"] for r in c.ha_alerts()] == ["2026-09-28T07:41:00+00:00"]
-    assert c.problems == ["Entrance unlocked: its runs could not be read whole: nothing is known after Tue 29 Sep, 08:00 "
-                          "— its alerts after that are not counted."]
+    assert c.problems == ["Entrance unlocked: its runs could not be read whole: nothing is known after Tue 29 Sep, 08:00, "
+                          "its alerts after that are not counted."]
     facts, c, _ = _ctx(tmp_path, _Book(["2026-09-28T07:41:00+00:00"], []))
     c.ha_alerts()
     assert c.problems == []

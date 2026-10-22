@@ -47,11 +47,14 @@ export async function costs(days = 7) {
   PROFILES = c.profiles || {};
   if (c.none) return fill($view, card("Costs", "The agent has not recorded anything yet (it has not run in agent mode)."));
   const period = dropdown([[7, "Last 7 days"], [30, "Last 30 days"], [90, "Last 90 days"]], days, (v) => costs(Number(v)), "Period");
-  // the four figures as the agent adds them up (status.costs: period, runs_count, per_run, busiest), never here
+  // the figures as the agent adds them up (status.costs: period, runs_count, per_run, busiest, activity), never here
   const busiest = c.busiest || { day: null, cost: 0 };
   const kpis = figures([[`Last ${days} days`, usd(c.period)], ["Runs", String(c.runs_count)],
     ["Per run", usd(c.per_run || 0)],
-    [busiest.day ? `Busiest day (${new Date(busiest.day + "T12:00:00").toLocaleDateString([], { day: "numeric", month: "short" })})` : "Busiest day", usd(busiest.cost)]]);
+    [busiest.day ? `Busiest day (${new Date(busiest.day + "T12:00:00").toLocaleDateString([], { day: "numeric", month: "short" })})` : "Busiest day", usd(busiest.cost)],
+    // then what the agent did in the same period (owner, 2026-10-22: moved here from Overview's fixed 24 hours),
+    // counted by the agent (status.figures, its AI cost left out: the first figure says it), never here
+    ...(c.activity || [])]);
   // the cost of each day: bars drawn in SVG, with a Y axis (US$) and its grid lines (owner, 2026-10-01: "always
   // the Y axis and grid lines"), and a date under every bar for a week, every few days for longer
   // ⚠️ DRAWN AT THE CARD'S OWN WIDTH (owner, 2026-10-08: "taking way too much vertical space"). It was 640 units wide

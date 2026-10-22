@@ -112,12 +112,12 @@ def clue_use_while_empty(c, when):
     if got.older_than_kept is not None:
         # days before the villa's detail are not known (vesta_shared.retention): said, never counted as either
         c.problems.append("Electricity while the villa is empty: counted from "
-                          f"{day_time_label(got.older_than_kept.astimezone(c.Z))} — the villa's system keeps its "
+                          f"{day_time_label(got.older_than_kept.astimezone(c.Z))}, the villa's system keeps its "
                           f"history {days_words(c.cli.detailed_days)} only.")
     if not got.whole(ent):
         c.problems.append("Electricity while the villa is empty: "
                           + unread("its mode", day_time_label(got.reach(ent).astimezone(c.Z)))
-                          + " — the days after that are not counted.")
+                          + ", the days after that are not counted.")
     empty = {str(x).lower() for x in when.get("empty") or []}
     per = c.daily_total(start, c.end)
     empty_days, other_days = [], []

@@ -2,7 +2,7 @@
 # A villa helper input_number.vesta_<name> overrides a behaviour value; a villa's own villa.settings.yaml may
 # change any of them (kept by updates). Moved out of the code (architecture review 7, 2026-10-07).
 behaviour:
-  on_threshold_fraction: 0.2    # fraction of running power that counts as "on" — the villa's one rule, held equal in every skill: change it with the helper vesta_on_threshold_fraction
+  on_threshold_fraction: 0.2    # fraction of running power that counts as "on", the villa's one rule, held equal in every skill: change it with the helper vesta_on_threshold_fraction
   blocks_per_day: 2             # filtration blocks a day (a pool's own <slug>_blocks_per_day helper first)
 proposals:
   unmetered_min_pct: 50         # this much of the electricity on no meter: propose metering the largest circuits

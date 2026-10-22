@@ -198,7 +198,7 @@ def asset_findings(cli, store, params, asset: dict, today: date, day_end: dateti
                     runs = F.ended_runs(runs, raw, thr, zone)
                     notes.append(f"{asset['name']}: "
                                  + unread("its power for the day", day_time_label(got.reach(p_eid).astimezone(Z)))
-                                 + " — its runs after that are not counted.")
+                                 + ", its runs after that are not counted.")
                 p_series.setdefault(today, {}).update({"runs": runs})
         if today in p_series:
             f = p_series[today]
@@ -325,7 +325,7 @@ def reconnect_findings(cli, pack, states: dict, end: datetime, today: date, para
         book, lb = None, []
     if book is not None and not book.whole:
         # a count from a read cut short is a floor, said where the night's notes are read
-        notes.append(unread("The logbook", day_time_label(book.reach.astimezone(Z))) + " — reconnect counts may be low.")
+        notes.append(unread("The logbook", day_time_label(book.reach.astimezone(Z))) + ", reconnect counts may be low.")
     flips = F.flips_per_day(lb, zone, params.behaviour("restart_settle_minutes"),
                             params.behaviour("reconnect_min_drop_seconds"), end=end)
     # ONE finding per DEVICE, named as a person reads it (villa, 2026-10-04: a relay, its firmware

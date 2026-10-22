@@ -1,5 +1,5 @@
 // VESTA Agent page — the Overview tab: the agent's state, the changes made on these pages, copying the setup.
-import { api, ask, card, figures, fill, go, h, jobsBanner, paged, place, plural, problemsBox, reasons, tabbed, tell, toast, $view, where } from "./core.js";
+import { api, ask, card, fill, go, h, jobsBanner, paged, place, plural, problemsBox, reasons, tabbed, tell, toast, $view, where } from "./core.js";
 
 // ---------------------------------------------------------------- overview
 export async function overview() {
@@ -22,11 +22,13 @@ export async function overview() {
     off.length ? problemsBox(off.map((s) => `${s.name}: ${s.problem}`), `${plural(off.length, "skill", "skills")} not working:`) : null,
   ];
   if (r) {
-    kids.push(card(place("last_day"), "From the agent's own records.",
-      figures(r.figures),                 // added up by the agent (status.figures), never here
-      // each run's outcome in the agent's words (status.jobs_run `words`: done / not prepared (why) / stopped by a restart)
-      r.scheduled_jobs.length ? h("div", { class: "divided" }, h("h2", {}, place("jobs_run")),
-        paged(["Job", "Ran at", "Outcome"], [...r.scheduled_jobs].reverse().map((j) => [j.label || j.job, new Date(j.at).toLocaleString(), j.words]))) : null));
+    // ⚠️ THE SCHEDULED JOBS ONLY (owner, 2026-10-22): the counters moved to the Costs tab, over its period, and the
+    // card's sub-title "Scheduled jobs run" went with them: it was the only thing left under the card's own title.
+    // Each run's outcome in the agent's words (status.jobs_run `words`: done / not prepared (why) / stopped by a restart)
+    kids.push(card(place("last_day"), "The scheduled jobs the agent ran in the last 24 hours, from its own records.",
+      r.scheduled_jobs.length
+        ? paged(["Job", "Ran at", "Outcome"], [...r.scheduled_jobs].reverse().map((j) => [j.label || j.job, new Date(j.at).toLocaleString(), j.words]))
+        : h("p", { class: "muted" }, "No scheduled job ran in the last 24 hours.")));
   } else {
     kids.push(card(place("last_day"), "The agent has not recorded anything yet."));
   }

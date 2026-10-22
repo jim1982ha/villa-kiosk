@@ -325,7 +325,7 @@ def test_the_investigation_lists_web_search_among_its_tools():
     cards = {c["tool"]: c for c in tool_access.needs(Policy({}), None, sk)}
     assert cards["web_search"]["label"] == "Web search"
     text = open(os.path.join(STARTER_SKILLS, "investigate", "SKILL.md"), encoding="utf-8").read()
-    assert "**Search the web (web_search) — always**" in text            # owner, 2026-10-12: every investigation
+    assert "**Search the web (web_search), always**" in text            # owner, 2026-10-12: every investigation
     import yaml
     assert "modes" not in yaml.safe_load(open(os.path.join(STARTER_SKILLS, "investigate", "skill.yaml")))  # no keyword
 
@@ -461,7 +461,7 @@ def _facts(client=None, ids=("sensor.heater_power", "switch.a")):
 def test_the_page_states_what_the_records_establish_and_rule_out():
     mod, f = _facts()
     log = [(r["time"], r["pill"], r["text"]) for r in f["log"]]
-    assert ("03:09", "unusual", "Heater Power ran for 1 h 45 min, until 04:55 — longer than its longest usual run (8 s)") \
+    assert ("03:09", "unusual", "Heater Power ran for 1 h 45 min, until 04:55, longer than its longest usual run (8 s)") \
         in log
     assert any(p == "unusual" and t.startswith("Heater Power stopped and restarted 7 times in 15 min, until 05:10")
                for _, p, t in log)
@@ -495,13 +495,13 @@ def test_an_automation_that_can_switch_and_ran_then_is_named_with_what_it_acts_o
         logged = next(r["text"] for r in f["log"] if "heater watch" in r["text"])
         return checks, logged
     checks, logged = acting({"target": {"entity_id": "switch.a"}})
-    assert checks == ["Automation “heater watch” ran at 03:14 and can act on Heater Relay — one of the devices read "
+    assert checks == ["Automation “heater watch” ran at 03:14 and can act on Heater Relay, one of the devices read "
                       "here: check whether it did."]
-    assert logged == "Automation “heater watch” runs — it can act on Heater Relay"
+    assert logged == "Automation “heater watch” runs, it can act on Heater Relay"
     checks, logged = acting({"target": {"entity_id": ["switch.spa"]}})
-    assert checks == [] and logged == "Automation “heater watch” runs — it can act on Spa Relay"
+    assert checks == [] and logged == "Automation “heater watch” runs, it can act on Spa Relay"
     checks, _ = acting({"target": {"entity_id": "{{ states('input_text.x') }}"}})
-    assert checks and "(switch.turn_on) — its targets could not be read" in checks[0]
+    assert checks and "(switch.turn_on), its targets could not be read" in checks[0]
 
 
 def test_each_unusual_period_says_when_an_alert_on_the_same_limit_would_have_warned():
@@ -530,7 +530,7 @@ def test_the_facts_are_any_devices_a_door_that_stopped_answering():
             return {ids[0]: [{"state": v, "last_changed": max(t, start).isoformat()} for t, v in rows]}
     _, f = _facts(Door(), ("binary_sensor.back_door",))
     assert {"time": "08:00", "pill": "unusual",
-            "text": "Back Door stopped reporting for 40 min, until 08:40 — it stopped reporting"} in f["log"]
+            "text": "Back Door stopped reporting for 40 min, until 08:40, it stopped reporting"} in f["log"]
     (door,) = f["alerts"]
     assert door["items"][0]["rule"] == "it stops reporting for 1 min" and door["items"][0]["at"] == "08:01"
 
@@ -562,7 +562,7 @@ def test_a_web_lead_the_records_contradict_is_listed_as_ruled_out():
                                            "source": "[1]", "verdict": "not supported"},
                                           {"cause": "A stuck valve", "verdict": "consistent", "source": "x"}]})
     assert f["findings"] == [{"title": "Ruled out", "groups": [
-        {"lead": "Leads the records contradict:", "items": ["A grid outage — the neighbours kept power"]}]}]
+        {"lead": "Leads the records contradict:", "items": ["A grid outage: the neighbours kept power"]}]}]
 
 
 def test_the_page_is_laid_out_as_the_owner_asked(tmp_path):
@@ -1126,7 +1126,7 @@ def test_a_repeated_problem_is_one_row_and_the_finding_after_it_stays_on_the_pag
     f = mod.facts(_periods_data(drops + bursts), {})
     log = [r["text"] for r in f["log"]]
     assert log[0] == ("Pump Power: 100 times “stopped reporting”, from 14 Oct, 00:00 to 14 Oct, 16:31, the longest "
-                      "2 min at 14 Oct, 01:10 — it stopped reporting")
+                      "2 min at 14 Oct, 01:10, it stopped reporting")
     assert [x for x in log if x.startswith("Pump Power stopped and restarted 8 times in 10 min")] == log[1:]
     assert f["established"] == log                                    # what the AI reads back is what the page says
 

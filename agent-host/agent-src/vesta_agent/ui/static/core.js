@@ -281,8 +281,8 @@ export function infoTip(btn, text, kind = "") {
   btn.addEventListener("click", (e) => { e.preventDefault(); if (pinned) close(); else { open(); pinned = true; } });
 }
 
-// A set of figures, each a number over its label: THE one way the page shows them (Overview's last
-// 24 hours, the Costs). They sit side by side, as many to a row as the width allows — two on a
+// A set of figures, each a number over its label: THE one way the page shows them (the Costs; Overview's
+// 24-hour counters moved there, owner 2026-10-22). They sit side by side, as many to a row as the width allows — two on a
 // phone, never one per line (owner, 2026-10-02: six figures stacked down a phone screen). The
 // form fields keep .grid, one per line on a phone, which is right for inputs.
 export function figures(pairs) {

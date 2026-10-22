@@ -47,7 +47,7 @@ retired_kinds:
   battery_trend: "a falling battery is the night check's finding (preventive-maintenance battery_trend_*)"
 
 # Families whose devices count for "devices offline". Which are critical is the villa's one list: its "critical
-# devices offline" rule (owner, 2026-10-18; the knowledge pack's is_critical) — no family makes a device critical.
+# devices offline" rule (owner, 2026-10-18; the knowledge pack's is_critical), no family makes a device critical.
 offline_families: [power, energy, battery, security, level, network, runtime]
 
 # "What would help": a gap is shown when its condition holds for this villa.
@@ -70,9 +70,9 @@ cards: []
 
 # Sections that need a calculation not agreed yet: shown as "not measured yet".
 not_measured_yet:
-  money: "Money left on the table — the avoidable energy (an AC on in an empty room, lights left on) is not measured yet."
-  standby: "Night standby of the whole villa — not measured yet."
-  uptime: "Monitoring uptime — not measured yet."
+  money: "Money left on the table: the avoidable energy (an AC on in an empty room, lights left on) is not measured yet."
+  standby: "Night standby of the whole villa, not measured yet."
+  uptime: "Monitoring uptime, not measured yet."
 
 # ---------------------------------------------------------------- the playbook
 # The situations the agent can recognise in the villa's data. `when` is checked by facts.py: each match

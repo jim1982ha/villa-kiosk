@@ -76,9 +76,11 @@ def test_the_overview_counts_every_failure_and_only_failures():
                + rows("without_ai", 1, {"job": "fm-weekly", "sent": 1, "failed": None})
                + rows("job_no_result", 1, {"job": "fm-weekly", "why": "x"}))
     got = dict(figures(records, 0.256))
-    assert got["failures"] == 17 and got["actions done"] == 13 and got["replies written"] == 5 and got["reports made"] == 3
+    assert got["Failures"] == 17 and got["Actions done"] == 13 and got["Replies written"] == 5 and got["Reports made"] == 3
     assert got["AI cost (USD)"] == "0.26"
-    assert "figures(r.figures)" in page_js() and "count(" not in page_js().split("export async function overview")[1].split("export ")[0]
+    assert "AI cost (USD)" not in dict(figures(records))      # the Costs tab's: its own first figure says the cost
+    js = page_js()
+    assert "...(c.activity || [])" in js and "count(" not in js.split("export async function costs")[1].split("export ")[0]
 
 
 def test_a_script_gets_the_pack_the_store_and_the_zone_its_skill_yaml_asks_for(tmp_path):

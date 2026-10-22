@@ -11,5 +11,5 @@ The owner answers one with `/proposal accept 3`, `/proposal later 3` or `/propos
 - ignore: it leaves the report and is never suggested again.
 
 Answering the same number again changes the answer. Only the owner answers: the script refuses anyone else and says
-so — repeat what it says, never record an answer another way. Never guess a number or an answer the person did not
+so: repeat what it says, never record an answer another way. Never guess a number or an answer the person did not
 write: ask for it, as `/proposal accept 3`, `/proposal later 3` or `/proposal ignore 3`.

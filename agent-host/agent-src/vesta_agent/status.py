@@ -30,8 +30,8 @@ STATUS_FIELDS = ("rule", "phase", "handled", "incident", "by", "reply", "tool", 
 FAILURE_KINDS = ("failed", "action_failed", "send_failed", "script_failed", "code_script_failed", agent_records.JOB_NO_RESULT)
 ACTION_KINDS = ("executed", "direct")
 
-#: The Overview's "Scheduled jobs run": how a run ended, in the agent's words (in_progress.py's outcomes); RUNNING is a
-#: run claimed and still recorded as running; None an older row that has only the claim
+#: The Overview's scheduled jobs (The last 24 hours): how a run ended, in the agent's words (in_progress.py's
+#: outcomes); RUNNING is a run claimed and still recorded as running; None an older row that has only the claim
 RUNNING = "running"
 OUTCOME_WORDS = {ENDED: "done", FAILED: "not prepared", CUT: "stopped by a restart", RUNNING: "running", None: "run"}
 
@@ -51,9 +51,10 @@ def unreachable(state, policy) -> list[str]:
     return out
 
 
-def figures(records, cost: float) -> list[list]:
-    """The period's figures from its records (rows with "kind" and "detail"), [label, value] in the order the Overview
-    shows them.
+def figures(records, cost: float | None = None) -> list[list]:
+    """The period's figures from its records (rows with "kind" and "detail"), [label, value] in the order the page
+    shows them. `cost` None leaves out the AI cost: the Costs tab, whose own figures already say it (owner, 2026-10-22:
+    these counters moved from Overview's fixed 24 hours to the Costs tab, over the period chosen there).
 
     ⚠️ EACH FIGURE MEANS WHAT ITS LABEL SAYS (architecture review scan 4, 2026-10-19): "replies written" counted every
     run row — the AI jobs and the runs that failed included — while "failures" counted only the failure kinds, so a
@@ -79,14 +80,15 @@ def figures(records, cost: float) -> list[list]:
         elif kind in FAILURE_KINDS:
             failures += 1
     n = lambda *kinds: sum(counts.get(k, 0) for k in kinds)  # noqa: E731
-    return [["alerts followed", n("critical_event")], ["buttons pressed", n("ladder")],
-            ["actions done", n(*ACTION_KINDS)], ["replies written", replies], ["reports made", reports],
-            ["AI cost (USD)", f"{cost:.2f}"], ["failures", failures]]
+    # capitalised as the Costs tab's own figures, on whose line they sit (owner, 2026-10-22)
+    return [["Alerts followed", n("critical_event")], ["Buttons pressed", n("ladder")],
+            ["Actions done", n(*ACTION_KINDS)], ["Replies written", replies], ["Reports made", reports],
+            *([["AI cost (USD)", f"{cost:.2f}"]] if cost is not None else []), ["Failures", failures]]
 
 
 def jobs_run(state, since: datetime, label=None) -> list[dict]:
-    """The Overview's "Scheduled jobs run": each scheduled job claimed since `since`, with how its run ended — from
-    the end row in_progress.kept writes (outcome, when, why), RUNNING while its run is still recorded, and the claim
+    """The Overview's scheduled jobs (The last 24 hours): each scheduled job claimed since `since`, with how its run
+    ended — from the end row in_progress.kept writes (outcome, when, why), RUNNING while its run is still recorded, and the claim
     alone (`job:`, written before the run) for a row an older engine left. `words` is what the page draws."""
     ends, running = run_ends(state), state.runs_kept()
     out = []
@@ -167,7 +169,8 @@ def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_la
     since = now - timedelta(days=days)
     local = (lambda t: t.astimezone(zone)) if zone else (lambda t: t)
     runs, made = [], []
-    for c in state.calls_since(since.isoformat()):
+    records = state.calls_since(since.isoformat())
+    for c in records:
         if c["kind"] not in agent_records.COSTS_KINDS:
             continue
         d = agent_records.detail(c)
@@ -249,7 +252,10 @@ def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_la
                 says="The latest runs the Costs tab lists one by one.",
                 reached="Older runs are not listed (the totals still count them).", told="")],
             # the Costs tab's "Tools in this period": each tool, how many runs used it and how many times
-            "tools": _tool_counts(runs)}
+            "tools": _tool_counts(runs),
+            # what the agent did in the period, on the line of the figures above (owner, 2026-10-22: moved from
+            # Overview's "The last 24 hours", which counted a fixed day); the AI cost left out, `period` says it
+            "activity": figures(records)}
 
 
 # ---------------------------------------------------------------- a run's steps, each in a line
