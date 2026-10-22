@@ -8,7 +8,7 @@
 
 import { CATEGORY_ORDER, CATEGORY_LABELS, categorySurface, type DeviceSurfaceState } from "@/config/EntityCategories";
 import { badgeImage } from "@/babylon/badgeIcons";
-import type { BadgeMark, LinkDot } from "@/utils/deviceActivity";
+import type { BadgeMark, LinkPill } from "@/utils/deviceActivity";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { STATUS_COLOR } from "@/utils/stateColors";
@@ -25,12 +25,13 @@ import DialogLayer from "@/components/common/DialogLayer";
  *
  *  ⚠️ THE SQUARE SAYS WHAT THE DEVICE DOES, THE CORNER MARK WHAT IS WRONG (owner, 2026-10-22: badge proposal 2,
  *  "Corner dot"): the face is off or on, never a problem colour; one mark at most, top-right, in the order below
- *  (deviceActivity.MARK_ORDER); a linked switch is a dot at the bottom-left. */
-const BADGE_ITEMS: { label: string; state: DeviceSurfaceState; mark?: BadgeMark; linkDot?: LinkDot; note: string }[] = [
+ *  (deviceActivity.MARK_ORDER). ONE CORNER PER DEVICE (owner, 2026-10-22): the top-right pill is the device itself,
+ *  the bottom-right one the device linked to it — its own problem with the same marks, else filled on / hollow off. */
+const BADGE_ITEMS: { label: string; state: DeviceSurfaceState; mark?: BadgeMark; linkPill?: LinkPill; note: string }[] = [
   { label: "Off", state: "off", note: "Plain square, icon in the device's colour — resting" },
   { label: "On", state: "active", note: "Tinted in the device's colour — on, or working" },
-  { label: "Switch linked to it", state: "off", linkDot: "on",
-    note: "Dot at the bottom-left: filled when the switch is on, hollow when off (a pump's relay, a camera's detection)" },
+  { label: "Bottom-right pill", state: "off", linkPill: "on",
+    note: "The device linked to it — filled when on, hollow when off, or its own problem with the same marks" },
   { label: "Red \"?\"", state: "unavailable", mark: "critical", note: "A critical device has gone silent — act now" },
   { label: "Red \"!\"", state: "active", mark: "alarm", note: "Alarm — an unlocked door, a leak, a low battery" },
   { label: "Amber \"!\"", state: "off", mark: "fault", note: "An open fault — check soon" },
@@ -114,15 +115,15 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
 
           <div className="settings-section-title">On the map (badge state)</div>
           <p className="muted body-text" style={{ marginTop: 4 }}>
-            The square says what a device does. A mark in its corner says
-            what is wrong — one at a time, the most urgent first.
+            The square says what a device does. The top-right pill is the
+            device itself: what is wrong with it, the most urgent first.
           </p>
           <div className="legend-grid">
             {BADGE_ITEMS.map((b) => (
               <div className="legend-row" key={b.label}>
                 <img
                   className="legend-badge"
-                  src={badgeImage({ category: "light", iconKey: "lightbulb", state: b.state, mark: b.mark, linkDot: b.linkDot, bakePx: 64 })}
+                  src={badgeImage({ category: "light", iconKey: "lightbulb", state: b.state, mark: b.mark, linkPill: b.linkPill, bakePx: 64 })}
                   alt=""
                   draggable={false}
                 />

@@ -233,7 +233,7 @@ export function categorySurface(category: Category, state: DeviceSurfaceState, o
 }
 
 /* ⚠️ `categorySurfaceRinged` IS GONE (owner, 2026-10-22: badge proposal 2). A badge's ring reported a second fact
-   (a linked switch on, a critical device lost) in another state's colour. Those facts are the badge's linked DOT and
+   (a linked switch on, a critical device lost) in another state's colour. Those facts are the badge's bottom-right pill and
    corner MARK now (markSurface, below); a ring is only ever its face's own. */
 
 /** A badge's corner mark, as painted: its fill and its white symbol (deviceActivity.BadgeMark — the same red, amber,

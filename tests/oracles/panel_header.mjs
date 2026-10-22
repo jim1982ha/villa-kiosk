@@ -25,7 +25,7 @@ ck("the badge reads the LIVE colour, not the snapshot taken when the panel opene
 ck("  ...its category and glyph, as on the map", h().badge.category === "light" && h().badge.iconKey === "lightbulb");
 // the linked DOT since 2026-10-22 (owner: badge proposal 2) — it was the ring
 ck("the linked dot follows the linked switch AS JUST PRESSED (the optimistic state), not the confirmed one",
-   h({ linkedSwitch: { isOn: true, known: true } }).badge.linkDot === "on" && h().badge.linkDot === "off" && entities["switch.plug"].state === "off");
+   h({ linkedSwitch: { isOn: true, known: true } }).badge.linkPill === "on" && h().badge.linkPill === "off" && entities["switch.plug"].state === "off");
 ck("the linked switch: named, its position, and whether HA knows it", JSON.stringify(h().linked) === JSON.stringify({ label: "Plug", isOn: false, known: true })
    && h({ linkedSwitch: { isOn: false, known: false } }).linked.known === false);
 ck("  ...not offered to a profile that may not control it", h({ canControl: false }).linked === null);

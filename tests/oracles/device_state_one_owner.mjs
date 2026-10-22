@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
 
 register("../consistency/alias-hook.mjs", import.meta.url);
 
-const { classifyDeviceActivity, badgeFace, badgeMarkOf, linkDotOf } = await import("@/utils/deviceActivity");
+const { classifyDeviceActivity, badgeFace, badgeMarkOf, linkPillOf } = await import("@/utils/deviceActivity");
 /** The badge's face and corner mark (owner, 2026-10-22: badge proposal 2 — a problem is the mark, never the face). */
 const badgeOf = (r) => ({ face: badgeFace(r), mark: badgeMarkOf(r) });
 const { alertStateFor, binarySensorClassInfo } = await import("@/config/BinarySensorClasses");
@@ -182,8 +182,8 @@ ck("the device_class table is still consulted", binarySensorClassInfo("moisture"
   const on = { ...read("sensor", power), linked: true, linkedOn: true };
   const off = { ...read("sensor", power), linked: true, linkedOn: false };
   ck("a linked entity on fills the badge's dot, off leaves it hollow, the face unchanged",
-     linkDotOf(on) === "on" && linkDotOf(off) === "off" && badgeFace(on) === badgeFace(off) && badgeFace(on) === "off");
-  ck("  ...no linked entity, no dot", linkDotOf(read("sensor", power)) === null);
+     linkPillOf(on) === "on" && linkPillOf(off) === "off" && badgeFace(on) === badgeFace(off) && badgeFace(on) === "off");
+  ck("  ...no linked entity, no dot", linkPillOf(read("sensor", power)) === null);
   ck("  ...and no mark for it: a switch on is not a problem", badgeMarkOf(on) === null);
   const leakLinked = { ...read("binary_sensor", ent("binary_sensor.tank", "on", "moisture")), linked: true, linkedOn: true };
   ck("  ...while a device that IS alerting keeps its red \"!\"", badgeMarkOf(leakLinked) === "alarm");

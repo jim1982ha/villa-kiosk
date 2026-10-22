@@ -27,7 +27,9 @@
 .modal-header .room { font-size: var(--text-xs); color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.08em; }
 .panel-icon { width: 44px; height: 44px; border-radius: 12px; background: var(--bg-card); display: flex; align-items: center; justify-content: center; color: var(--accent); flex-shrink: 0; }
 /* Real map badge shown in the panel header. As a button it's a colour editor. */
-.panel-icon .panel-badge-img, .panel-badge-btn .panel-badge-img { width: 44px; height: 44px; display: block; border-radius: 12px; }
+.panel-icon .panel-badge-img, .panel-badge-btn .panel-badge-img {
+  width: 44px; height: 44px; display: block; transform: scale(var(--badge-picture-scale));
+}
 .panel-badge-btn { position: relative; padding: 0; border: none; background: none; cursor: pointer; flex-shrink: 0; border-radius: 12px; line-height: 0; }
 /* Keyboard focus in VESTA's accent, never the platform's own ring (Android colours it with the phone's
    theme: an amber border round a badge reads as a device state). */

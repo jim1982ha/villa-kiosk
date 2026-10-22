@@ -17,7 +17,7 @@ import type { Category } from "@/types/scene.types";
 import type { DeviceSurfaceState } from "@/config/EntityCategories";
 import { effectiveCategory, subjectOf, categoryColor } from "@/config/EntityCategories";
 import { labelOf } from "@/config/EntityMap";
-import { badgeOwnerOf, deviceLook, storeLookSource, type BadgeMark, type LinkDot } from "@/utils/deviceActivity";
+import { badgeOwnerOf, deviceLook, storeLookSource, type BadgeMark, type LinkPill } from "@/utils/deviceActivity";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
 import { domainOf } from "@/utils/entityDomain";
 
@@ -26,7 +26,7 @@ type LookConfig = Parameters<typeof storeLookSource>[1];
 export interface PanelHeader {
   badge: {
     category: Category; iconKey: string; color?: string; categoryColor: string;
-    state: DeviceSurfaceState; mark: BadgeMark | null; linkDot: LinkDot;
+    state: DeviceSurfaceState; mark: BadgeMark | null; linkPill: LinkPill;
     /** A critical device that lost contact (deviceLook.critical): the window's lost pill is red (reading.lostPillTone). */
     critical: boolean;
   };
@@ -100,7 +100,7 @@ export function panelHeader({ panel, entities, config, canControl, linkedSwitch 
       categoryColor: categoryColor(category),
       state: look.face,
       mark: look.mark,
-      linkDot: look.linkDot,
+      linkPill: look.linkPill,
       critical: look.critical,
     },
     linked: linkedId && !linkedIsSensor && canControl && linkedSwitch

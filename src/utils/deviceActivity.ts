@@ -1,7 +1,7 @@
 // src/utils/deviceActivity.ts
 // THE module that owns how a device, and a group of devices, looks: the rule
 // below (classifyDeviceActivity / badgeKindFor / badgeFace / badgeMarkOf /
-// linkDotOf / meshLookFor), and since 2.496.245 its inputs too — `deviceLook(id, source)`
+// linkPillOf / meshLookFor), and since 2.496.245 its inputs too — `deviceLook(id, source)`
 // and `groupLook(looks)` at the end of this file, which every badge, list row,
 // room chip, group card and the "Needs attention" list ask.
 //
@@ -47,19 +47,20 @@ export type DeviceActivity = "on" | "off" | "alert" | "info";
 export interface DeviceReading {
   type: EntityType;
   entity: HassEntity;
-  /** Does this device have a LINKED entity at all (EntityMapping.linkedEntityId) — its badge then carries the linked
-   *  dot, filled or hollow (linkDotOf). */
+  /** Does this device have a LINKED entity at all (EntityMapping.linkedEntityId) — its badge then carries the
+   *  bottom-right pill (linkPillOf). */
   linked: boolean;
   /** Is the entity this one is LINKED to switched on — the pump behind a
    *  pump-power sensor. Held differently by each caller (the map keeps a live
    *  set, a panel reads the store), so the RULE is shared and not the plumbing.
-   *  The DOT says it (owner, 2026-10-22: badge proposal 2) — never the face. */
+   *  The bottom-right pill says it (owner, 2026-10-22) — never the face. */
   linkedOn: boolean;
-  /** Does the entity this one is LINKED to need attention — its own badge red (a lock's door sensor reading Open):
-   *  this badge takes the red "!" too, and its kind "alert" (owner, 2026-10-21: "if the associated device is turning
-   *  ON … would the entity badge turn red as well?"). Its face stays its own state; the linked entity lists itself in
-   *  "Needs attention". */
-  linkedAlert: boolean;
+  /** The LINKED entity's own reading (its own link never followed: one step, never a loop), or null — no linked
+   *  entity, or one never reported. Its problem is the badge's BOTTOM-RIGHT pill, judged by the same badgeMarkOf
+   *  (owner, 2026-10-22: "one corner per device" — a lock's door sensor reading Open put a red "!" in the lock's own
+   *  top-right corner, and made the lock "alert"; it is the sensor's, and the sensor lists itself in "Needs
+   *  attention"). */
+  link: DeviceReading | null;
   /** The state that is a fault for this reading's device_class (alertStateFor). `undefined` means "this reading is
    *  never a fault". */
   alertState: string | undefined;
@@ -108,8 +109,10 @@ export function badgeMarkFor(f: MarkFacts): BadgeMark | null {
   return null;
 }
 
-/** The linked dot (bottom-left): "on" filled in the badge's colour, "off" hollow, null — no linked entity. */
-export type LinkDot = "on" | "off" | null;
+/** The BOTTOM-RIGHT pill — everything about the linked entity in one place: its own problem (a BadgeMark, the same
+ *  symbols and order as the top-right), else "on" (filled in the badge's colour) or "off" (hollow); null — no linked
+ *  entity. */
+export type LinkPill = BadgeMark | "on" | "off" | null;
 
 /**
  * What a badge for this entity should be painted as — the ONE definition, for
@@ -123,9 +126,10 @@ export type LinkDot = "on" | "off" | null;
  * pixels earlier — reported with exactly that pair of screenshots.
  *
  * ⚠️ A LINKED SWITCH ON NO LONGER MAKES THE DEVICE "ON" (owner, 2026-10-22: badge proposal 2). It did since
- * 2.496.240, so a pump-power sensor read "on" — face, room chip and all — whenever its relay ran. The badge's DOT says
- * that now (linkDotOf); the face and the kind are the device's own. A linked entity needing attention still makes it
- * "alert" (its red "!").
+ * 2.496.240, so a pump-power sensor read "on" — face, room chip and all — whenever its relay ran. The badge's
+ * bottom-right pill says that now (linkPillOf); the face and the kind are the device's own.
+ * ⚠️ NOR DOES A LINKED ENTITY'S ALARM MAKE IT "ALERT" (owner, 2026-10-22: "one corner per device"): the kind is the
+ * device's OWN reading; the linked entity's alarm is the bottom-right pill, and its own line in "Needs attention".
  */
 export function badgeKindFor(r: DeviceReading): BadgeKind {
   // ⚠️ HIDDEN IS NO DEVICE, ON EVERY SURFACE (architecture review, 2026-10-21): the Cockpit, its counts and the update
@@ -140,7 +144,6 @@ export function badgeKindFor(r: DeviceReading): BadgeKind {
   if (contact === "lost") return "unavailable";
   // nothing to say (unknown): quiet, as a device at rest — never "contact lost", never a lock's red
   if (contact === "no-value") return "off";
-  if (r.linkedAlert) return "alert";
   return classifyDeviceActivity(r);
 }
 
@@ -155,7 +158,7 @@ export function badgeKindFor(r: DeviceReading): BadgeKind {
  * a leak sensor reading wet is on, a low battery reading is a reading (resting).
  */
 export function badgeFace(r: DeviceReading): DeviceSurfaceState {
-  const own = badgeKindFor({ ...r, linkedOn: false, linkedAlert: false });
+  const own = badgeKindFor(r);
   if (own === "unavailable") return "unavailable";
   if (own === "on") return "active";
   if (own !== "alert") return "off";
@@ -164,10 +167,12 @@ export function badgeFace(r: DeviceReading): DeviceSurfaceState {
   return r.entity.state === "on" ? "active" : "off";
 }
 
-/** The badge's corner mark (badgeMarkFor over this reading's facts). A hidden device has none: it is no device. */
+/** The mark of ONE reading — its own facts only (badgeMarkFor over them). The badge's top-right pill is this applied to
+ *  the device's reading; its bottom-right pill is this applied to its LINKED entity's (linkPillOf) — one precedence for
+ *  both corners. A hidden device has none: it is no device. */
 export function badgeMarkOf(r: DeviceReading): BadgeMark | null {
   if (r.hidden) return null;
-  const lost = badgeKindFor({ ...r, linkedOn: false, linkedAlert: false }) === "unavailable";
+  const lost = badgeKindFor(r) === "unavailable";
   return badgeMarkFor({
     critical: lost && r.critical,
     alarm: badgeKindFor(r) === "alert",
@@ -178,9 +183,11 @@ export function badgeMarkOf(r: DeviceReading): BadgeMark | null {
   });
 }
 
-/** The badge's linked dot: filled when its linked entity is on, hollow when off, none without one. */
-export function linkDotOf(r: DeviceReading): LinkDot {
-  return r.linked ? (r.linkedOn ? "on" : "off") : null;
+/** The badge's BOTTOM-RIGHT pill: its linked entity's own problem (badgeMarkOf over the linked reading — the same
+ *  function as the top-right), else filled when it is on, hollow when off; none without a linked entity. */
+export function linkPillOf(r: DeviceReading): LinkPill {
+  if (!r.linked) return null;
+  return (r.link ? badgeMarkOf(r.link) : null) ?? (r.linkedOn ? "on" : "off");
 }
 
 /* ⚠️ `badgeSurfaceFor` IS GONE (had zero callers). It resolved `badgeKindFor`
@@ -271,7 +278,7 @@ export type MeshLook =
   | { kind: "tint"; tone: "secure" | "alert" | "unavailable" };
 
 export function meshLookFor(r: DeviceReading): MeshLook {
-  const kind = badgeKindFor({ ...r, linkedOn: false, linkedAlert: false });
+  const kind = badgeKindFor(r);
   switch (r.type) {
     case "light":
     case "cover":
@@ -385,12 +392,12 @@ export interface DeviceLook {
   face: DeviceSurfaceState;
   /** The badge's corner mark: what is wrong, one at most (badgeMarkOf). */
   mark: BadgeMark | null;
-  /** The badge's linked dot, bottom-left (linkDotOf). */
-  linkDot: LinkDot;
-  /** badgeKindFor — the one five-way reading a COUNT summary rings from
-   *  (a linked entity's alarm folded in). */
+  /** The badge's bottom-right pill: its linked entity — its problem, else on/off (linkPillOf). */
+  linkPill: LinkPill;
+  /** badgeKindFor — the device's own five-way reading (a linked entity is never folded in since 2026-10-22: its
+   *  problem reaches a summary through `linkPill`, see groupLook). */
   kind: BadgeKind;
-  /** The device's own reading, without its linked entity — what its mesh shows. */
+  /** The device's own reading — what its mesh shows (the same as `kind` since 2026-10-22). */
   own: BadgeKind;
   /** ACTIVITY: doing something (kind "on"). An idle camera is active. */
   active: boolean;
@@ -416,30 +423,31 @@ export interface DeviceLook {
 /** The one DeviceReading for this device, its linked entity
  *  resolved from the source — what the mesh rule (meshLookFor) reads too. */
 export function readingOf(entityId: string, source: LookSource): DeviceReading {
-  const own = source.state(entityId);
-  const entity = own ?? phantomEntity(entityId);
   const linkedId = source.config.entityMap[entityId]?.linkedEntityId;
   let linkedOn = false;
-  let linkedAlert = false;
+  let link: DeviceReading | null = null;
   if (linkedId) {
     const pending = source.pendingPower?.(linkedId);
     linkedOn = pending !== undefined
       ? pending
       : devicePower(source.state(linkedId), linkedId).position === "on";
-    // the linked entity's OWN badge, by the one rule (its own links not followed: one step, never a loop)
-    const linked = source.state(linkedId);
-    linkedAlert = !!linked && badgeKindFor({
-      type: source.typeOf(linkedId), entity: linked, linkedOn: false, linkedAlert: false,
-      alertState: alertStateFor(linked.attributes.device_class as string | undefined),
-      critical: false, hidden: source.config.isHidden(linkedId), linked: false, fault: false, asleep: false,
-    }) === "alert";
+    // the linked entity's OWN reading, by the one rule — its own link not followed (one step, never a loop). Never
+    // reported: no reading, so its pill is a plain hollow one, not a "?" for an entity the map has not heard from yet.
+    if (source.state(linkedId)) link = ownReadingOf(linkedId, source);
   }
+  return { ...ownReadingOf(entityId, source), linked: !!linkedId, linkedOn, link };
+}
+
+/** One entity's reading on its own facts, its link not followed. */
+function ownReadingOf(entityId: string, source: LookSource): DeviceReading {
+  const own = source.state(entityId);
+  const entity = own ?? phantomEntity(entityId);
   return {
     type: source.typeOf(entityId),
     entity,
-    linked: !!linkedId,
-    linkedOn,
-    linkedAlert,
+    linked: false,
+    linkedOn: false,
+    link: null,
     alertState: alertStateFor(entity.attributes.device_class as string | undefined),
     critical: source.config.isCritical?.(entityId) ?? false,
     hidden: source.config.isHidden(entityId),
@@ -448,14 +456,14 @@ export function readingOf(entityId: string, source: LookSource): DeviceReading {
   };
 }
 
-/** How this device looks — face, mark, linked dot, kind, ACTIVITY and POWER. */
+/** How this device looks — face, top-right mark, bottom-right pill, kind, ACTIVITY and POWER. */
 export function deviceLook(entityId: string, source: LookSource): DeviceLook {
   const r = readingOf(entityId, source);
   const kind = badgeKindFor(r);
-  const own = badgeKindFor({ ...r, linkedOn: false, linkedAlert: false });
+  const own = kind;
   const switchable = hasOnOff(entityId);
   return {
-    type: r.type, face: badgeFace(r), mark: badgeMarkOf(r), linkDot: linkDotOf(r), kind, own,
+    type: r.type, face: badgeFace(r), mark: badgeMarkOf(r), linkPill: linkPillOf(r), kind, own,
     active: kind === "on",
     alert: own === "alert",
     unavailable: own === "unavailable",
@@ -572,13 +580,18 @@ export function groupLook(
   let onCount = 0, activeCount = 0, offline = 0;
   for (const m of members) {
     if (!m) { everyRingAlert = false; continue; }
+    // ⚠️ THE WORST OF BOTH CORNERS (owner, 2026-10-22: "one corner per device"): a linked entity's problem is the
+    // badge's bottom-right pill, no longer folded into the device's own kind — but the room it sits in still says it
+    // (a pump's relay lost: the room's number grey), as it did when the linked alarm rang the device itself.
+    const link = m.linkPill;
+    const linkRed = link === "alarm" || link === "critical";
     // a critical device that lost contact needs attention, as the Cockpit says (owner, 2026-10-19)
-    if (m.kind === "alert" || m.critical) anyAlert = true;
+    if (m.kind === "alert" || m.critical || linkRed) anyAlert = true;
     if (m.kind === "on") anyActive = true;
-    // a cell "rings red" when its own mark is red: an alarm, or a critical device silent
-    if (m.mark !== "alarm" && m.mark !== "critical") everyRingAlert = false;
-    if (m.kind === "unavailable") unavailable = true;
-    if (m.fault) fault = true;
+    // a cell "rings red" when one of its pills is red: an alarm, or a critical device silent
+    if (m.mark !== "alarm" && m.mark !== "critical" && !linkRed) everyRingAlert = false;
+    if (m.kind === "unavailable" || link === "lost") unavailable = true;
+    if (m.fault || link === "fault") fault = true;
     if (m.power === "on") onCount++;
     if (m.active) activeCount++;
     if (m.unavailable) offline++;

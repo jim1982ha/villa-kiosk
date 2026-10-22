@@ -33,7 +33,7 @@ console.log("  a group card:");
   ck("  ...red when EVERY cell alerts", groupCardModel([member("lock.open"), member("lock.open2")], 2, false).frame === "alert");
   ck("  ...never the 'on' frame while showing devices", groupCardModel([member("light.on"), member("light.on")], 2, false).frame === "rest");
   const pumpCell = groupCardModel([member("sensor.power"), member("light.off")], 2, false).cells[0];
-  ck("  ...a linked cell: its dot filled, its face its own state", pumpCell.face === "off" && pumpCell.linkDot === "on");
+  ck("  ...a linked cell: its dot filled, its face its own state", pumpCell.face === "off" && pumpCell.linkPill === "on");
   const cnt = groupCardModel([member("light.on"), member("light.off"), member("lock.open"), member("camera.idle")], 1, false);
   ck("a count (one cell drawn): no grid, no cells", cnt.gridN === 0 && cnt.cells.length === 0, cnt);
   ck("  ...red when ANY member alerts", cnt.frame === "alert");
@@ -99,6 +99,21 @@ console.log("\n  a room chip:");
     combineChips(a, b2);
     ck("  ...merged, the fault survives", roomChipModel(a, false, () => false).health === "fault");
     ck("  ...and the room chooser's row says the same", roomLook([deviceLook("light.off", fsrc)]).health === "fault");
+  }
+  // one corner per device (owner, 2026-10-22): a linked entity's problem is its device's bottom-right pill, no longer
+  // its device's own kind — the room still says it, the worst of both corners
+  {
+    const lsrc = (relay, cfg = {}) => storeLookSource(
+      { "sensor.p": ent("sensor.p", "80"), "binary_sensor.d": ent("binary_sensor.d", relay, { device_class: "door" }) },
+      { entityMap: { "sensor.p": { entityId: "sensor.p", type: "sensor", linkedEntityId: "binary_sensor.d" } }, isHidden: () => false, ...cfg });
+    const room = (relay, cfg) => roomLook([deviceLook("sensor.p", lsrc(relay, cfg))]).health;
+    ck("  ...a device whose LINKED entity alarms / has a fault / is lost: its room red / amber / grey; nothing wrong: green",
+       room("on") === "alert" && room("off", { hasFault: (id) => id === "binary_sensor.d" }) === "fault"
+       && room("unavailable") === "unavailable" && room("off") === "ok");
+    const card = (relay) => groupCardModel([{ id: "sensor.p", look: deviceLook("sensor.p", lsrc(relay)), reported: true, occluded: false },
+      { id: "lock.open", look: deviceLook("lock.open", src), reported: true, occluded: false }], 2, false);
+    ck("  ...and a card showing its devices is red when every cell has a red pill, either corner",
+       card("on").frame === "alert" && card("off").frame === "rest");
   }
   ck("hidden while walking only when EVERY device is behind a wall",
      roomChipModel(k, true, () => true).hidden && !roomChipModel(k, true, (id) => id !== "light.on").hidden && !roomChipModel(k, false, () => true).hidden);

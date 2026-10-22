@@ -7,7 +7,7 @@
 
 import type { Category } from "@/types/scene.types";
 import { categorySurface, markSurface, badgeGround, FADED_ALPHA, type DeviceSurfaceState } from "@/config/EntityCategories";
-import type { BadgeMark, LinkDot } from "@/utils/deviceActivity";
+import type { BadgeMark, LinkPill } from "@/utils/deviceActivity";
 import { chipProportions } from "@/config/chipProportions";
 import { ICON_NODES, type IconPrimitive } from "./badgeIconNodes";
 
@@ -109,15 +109,9 @@ import { BADGE_CORNER_FRACTION } from "./badgeLook";
 const RING_FRACTION = 0.035;
 const HAIRLINE_FRACTION = 0.023;
 
-/**
- * THE CORNER MARK AND THE LINKED DOT, as fractions of the squircle (owner, 2026-10-22: badge proposal 2, "Corner
- * dot"). The mark — what is wrong — is a round pill at the top-right corner, its symbol white; the dot — a linked
- * switch, filled on, hollow off — sits at the bottom-left. Both are ringed in the badge's own ground so they stand
- * clear of the face they overlap. At the 44 px badge: a 17 px mark, a 9 px dot.
- */
-export const MARK_FRACTION = 0.19;      // the mark's radius
-export const LINK_DOT_FRACTION = 0.10;  // the dot's radius
-const SEPARATOR_FRACTION = 0.045;       // the ground-coloured ring round each
+// The two pills' geometry is badgeLook's (pure, for the oracles and badgeControls): pillGeometry, PILL_MARGIN.
+export { PICTURE_SCALE, PILL_MARGIN, pillGeometry } from "./badgeLook";
+import { PICTURE_SCALE, PILL_MARGIN, pillGeometry } from "./badgeLook";
 
 
 function roundRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
@@ -294,8 +288,8 @@ export interface BakeSpec {
   state: DeviceSurfaceState;
   /** The corner mark — what is wrong (deviceActivity.badgeMarkOf); none when absent. */
   mark?: BadgeMark | null;
-  /** The linked dot (deviceActivity.linkDotOf); none when absent. */
-  linkDot?: LinkDot;
+  /** The bottom-right pill — the linked entity (deviceActivity.linkPillOf); none when absent. */
+  linkPill?: LinkPill;
   /** A per-entity badge colour (#rrggbb) for the category's hue. */
   color?: string;
   /** A transparent margin, as a fraction of the picture (BADGE_INSET_CARD). */
@@ -313,7 +307,7 @@ export interface BakeSpec {
 /** The badge picture a BakeSpec describes, as a data URL (cached). */
 export function badgeImage(s: BakeSpec): string {
   return badgeImageDataUrl(
-    s.category, s.iconKey, s.state, s.color, s.inset ?? 0, s.mark ?? null, s.linkDot ?? null,
+    s.category, s.iconKey, s.state, s.color, s.inset ?? 0, s.mark ?? null, s.linkPill ?? null,
     s.ring === "none", s.bakePx ?? 0, s.bold ?? false, typeof s.ring === "number" ? s.ring : undefined);
 }
 
@@ -330,8 +324,8 @@ function badgeImageDataUrl(
   category: Category, iconKey: string, state: DeviceSurfaceState, colorOverride: string | undefined, inset: number,
   /** The corner mark (BakeSpec.mark). */
   mark: BadgeMark | null,
-  /** The linked dot (BakeSpec.linkDot). */
-  linkDot: LinkDot,
+  /** The bottom-right pill (BakeSpec.linkPill). */
+  linkPill: LinkPill,
   /**
    * Bake NO ring at all — the caller is drawing it itself.
    *
@@ -369,17 +363,18 @@ function badgeImageDataUrl(
   ringOfSize?: number,
 ): string {
   const theme = typeof document !== "undefined" ? document.documentElement.getAttribute("data-theme") ?? "" : "";
-  // The mark and the dot are part of the key: two badges alike in every other
+  // The two pills are part of the key: two badges alike in every other
   // respect but marked differently are different pictures, and a cache that
   // conflated them would serve whichever was baked first.
   // Size is part of the key: the same badge baked for a 48px control and a
   // 128px one are different pictures, and serving the small one to the large
   // control is the blur this whole mechanism exists to remove.
-  const px = bakeSizeFor(pxHint);
+  // the picture is drawn PICTURE_SCALE larger than its control (its pills' margin): baked at that size
+  const px = bakeSizeFor(pxHint * PICTURE_SCALE);
   // Weight is part of the key for the same reason size is: the two weights are
   // two different pictures, and a cache that conflated them would serve
   // whichever style happened to bake first to both of them.
-  const cacheKey = `${category}:${iconKey}:${state}:${mark ?? ""}:${linkDot ?? ""}:${colorOverride ?? ""}:${inset}:${suppressRing}:${theme}:${px}:${boldGlyph}:${ringOfSize ?? ""}`;
+  const cacheKey = `${category}:${iconKey}:${state}:${mark ?? ""}:${linkPill ?? ""}:${colorOverride ?? ""}:${inset}:${suppressRing}:${theme}:${px}:${boldGlyph}:${ringOfSize ?? ""}`;
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
@@ -390,11 +385,14 @@ function badgeImageDataUrl(
   let url = "";
   if (ctx) {
     const surface = categorySurface(category, state, colorOverride);
-    const m = px * inset;                   // transparent margin
-    const size = px - 2 * m;                // the squircle itself
+    // the pills' margin (PILL_MARGIN) outside, then the caller's own inset inside it
+    const outer = px * PILL_MARGIN;
+    const inner = px - 2 * outer;
+    const m = outer + inner * inset;        // transparent margin
+    const size = inner - 2 * inner * inset; // the squircle itself
     const corner = size * BADGE_CORNER_FRACTION;
 
-    // A face with no trustworthy state is drawn faded (categorySurface's `faded`); the mark and the dot drawn after it
+    // A face with no trustworthy state is drawn faded (categorySurface's `faded`); the pills drawn after it
     // are not — they are what the badge has to say.
     ctx.save();
     if (surface.faded) ctx.globalAlpha = FADED_ALPHA;
@@ -437,8 +435,9 @@ function badgeImageDataUrl(
       boldGlyph, size > 0 ? px / size : 1, opticalNudge(iconKey));
     ctx.restore();
 
-    if (linkDot) drawLinkDot(ctx, linkDot, categorySurface(category, "active", colorOverride).glyph, m, size);
-    if (mark) drawMark(ctx, mark, m, size, px);
+    const pills = pillGeometry(m, size);
+    if (mark) drawPill(ctx, pills, pills.top, mark, "");
+    if (linkPill) drawPill(ctx, pills, pills.bottom, linkPill, categorySurface(category, "active", colorOverride).glyph);
 
     url = canvas.toDataURL("image/png");
   }
@@ -448,65 +447,41 @@ function badgeImageDataUrl(
 }
 
 
-/** A filled circle, ringed in the badge's ground so it stands clear of whatever it overlaps. */
-function groundedDisc(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, sep: number): void {
+/**
+ * One pill: ringed in the badge's ground, then a mark (its colour, its white symbol — EntityCategories.markSurface),
+ * or "on" (filled in the badge's colour `hue`) or "off" (hollow: a ring of `hue` round the ground).
+ */
+function drawPill(
+  ctx: CanvasRenderingContext2D, g: ReturnType<typeof pillGeometry>, at: { cx: number; cy: number },
+  pill: BadgeMark | "on" | "off", hue: string,
+): void {
+  const { cx, cy } = at;
   ctx.beginPath();
-  ctx.arc(cx, cy, r + sep, 0, Math.PI * 2);
+  ctx.arc(cx, cy, g.r + g.ring, 0, Math.PI * 2);
   ctx.fillStyle = badgeGround();
   ctx.fill();
-}
-
-/**
- * Where a disc of radius `r` (+ its separator) sits in a corner of the squircle: its centre `r` × 0.8 in from the
- * squircle's edges — so it overlaps the corner, as a mark on a corner does — pulled in only as far as the picture's
- * own edge needs (a classic badge's squircle IS the picture; inset 0).
- */
-function cornerCentre(edge: number, inward: 1 | -1, r: number, sep: number, px: number): number {
-  const want = edge + inward * r * 0.8;
-  return Math.min(px - r - sep, Math.max(r + sep, want));
-}
-
-/** The corner mark: a round pill at the top-right, its symbol white (EntityCategories.markSurface). */
-function drawMark(ctx: CanvasRenderingContext2D, mark: BadgeMark, m: number, size: number, px: number): void {
-  const r = size * MARK_FRACTION;
-  const sep = Math.max(1, size * SEPARATOR_FRACTION);
-  const cx = cornerCentre(m + size, -1, r, sep, px);
-  const cy = cornerCentre(m, 1, r, sep, px);
-  const look = markSurface(mark);
-  groundedDisc(ctx, cx, cy, r, sep);
+  if (pill === "off") {
+    const w = Math.max(1, g.hollowRing);
+    ctx.beginPath();
+    ctx.arc(cx, cy, g.r - w / 2, 0, Math.PI * 2);
+    ctx.lineWidth = w;
+    ctx.strokeStyle = hue;
+    ctx.stroke();
+    return;
+  }
   ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.fillStyle = look.fill;
+  ctx.arc(cx, cy, g.r, 0, Math.PI * 2);
+  ctx.fillStyle = pill === "on" ? hue : markSurface(pill).fill;
   ctx.fill();
+  if (pill === "on") return;
+  const symbol = markSurface(pill).symbol;
   ctx.fillStyle = "#ffffff";
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
-  ctx.font = `700 ${Math.round(r * 1.45)}px system-ui, -apple-system, "Segoe UI", sans-serif`;
-  const t = ctx.measureText(look.symbol);
-  const ascent = t.actualBoundingBoxAscent || r * 1.0;
+  ctx.font = `700 ${Math.round(g.symbolPx)}px system-ui, -apple-system, "Segoe UI", sans-serif`;
+  const t = ctx.measureText(symbol);
+  const ascent = t.actualBoundingBoxAscent || g.symbolPx * 0.7;
   const descent = t.actualBoundingBoxDescent || 0;
   // centred by its INK, not its em box: "!" "?" "z" and "…" have very different boxes
-  ctx.fillText(look.symbol, cx, cy + (ascent - descent) / 2);
-}
-
-/** The linked dot at the bottom-left: filled in the badge's colour when its linked entity is on, hollow when off. */
-function drawLinkDot(ctx: CanvasRenderingContext2D, dot: "on" | "off", hue: string, m: number, size: number): void {
-  const r = size * LINK_DOT_FRACTION;
-  const sep = Math.max(1, size * SEPARATOR_FRACTION);
-  const px = ctx.canvas.width;
-  const cx = cornerCentre(m, 1, r, sep, px);
-  const cy = cornerCentre(m + size, -1, r, sep, px);
-  groundedDisc(ctx, cx, cy, r, sep);
-  ctx.beginPath();
-  if (dot === "on") {
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.fillStyle = hue;
-    ctx.fill();
-    return;
-  }
-  const w = Math.max(1, r * 0.4);
-  ctx.arc(cx, cy, r - w / 2, 0, Math.PI * 2);
-  ctx.lineWidth = w;
-  ctx.strokeStyle = hue;
-  ctx.stroke();
+  ctx.fillText(symbol, cx, cy + (ascent - descent) / 2);
 }

@@ -20,7 +20,7 @@
 //
 // Pure: tests/oracles/summary_look.mjs.
 
-import type { BadgeMark, DeviceLook, LinkDot } from "@/utils/deviceActivity";
+import type { BadgeMark, DeviceLook, LinkPill } from "@/utils/deviceActivity";
 import { groupLook } from "@/utils/deviceActivity";
 import type { DeviceSurfaceState } from "@/config/EntityCategories";
 import { formatCountBadge } from "@/utils/countBadge";
@@ -56,8 +56,8 @@ export interface GroupCardModel {
   drawn: number;
   /** The grid the card's chips are laid out on — 0 for a count badge. */
   gridN: number;
-  /** One per drawn cell, in member order: what that cell's badge shows — its face, its corner mark, its linked dot. */
-  cells: { id: string; face: DeviceSurfaceState; mark: BadgeMark | null; linkDot: LinkDot }[];
+  /** One per drawn cell, in member order: what that cell's badge shows — its face, its top-right mark, its bottom-right (linked) pill. */
+  cells: { id: string; face: DeviceSurfaceState; mark: BadgeMark | null; linkPill: LinkPill }[];
   frame: SummaryFrame;
 }
 
@@ -79,7 +79,7 @@ export function groupCardModel(members: readonly CardMember[], drawn: number, wa
     drawn,
     gridN: showingDevices ? drawn : 0,
     cells: showingDevices
-      ? members.slice(0, drawn).map((m) => ({ id: m.id, face: m.look.face, mark: m.look.mark, linkDot: m.look.linkDot }))
+      ? members.slice(0, drawn).map((m) => ({ id: m.id, face: m.look.face, mark: m.look.mark, linkPill: m.look.linkPill }))
       : [],
     frame: summaryFrame(ring),
   };
