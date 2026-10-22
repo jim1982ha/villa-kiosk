@@ -1,6 +1,6 @@
 ---
 name: alert-desk
-description: Receives every critical alert of the VESTA rules (the villa system's vesta_critical_event), removes duplicates, routes by severity to the owner and facility-manager chats, runs the Done / Need help chase with the 15 and 45 minute ladder, gates the siren behind two signals and one human approval, and watches the villa from outside (villa silent). The engine runs it on every alert, every ladder button and every 5 minutes; you only read its status.
+description: Receives every critical alert of the VESTA automations (the villa system's vesta_critical_event), removes duplicates, routes by severity to the owner and facility-manager chats, runs the Done / Need help chase with the 15 and 45 minute ladder, gates the siren behind two signals and one human approval, and watches the villa from outside (villa silent). The engine runs it on every alert, every ladder button and every 5 minutes; you only read its status.
 ---
 
 # alert-desk
@@ -17,21 +17,21 @@ decides alone to act on the villa.
 
 ## Inputs (all run by the engine, never by you)
 
-1. `vesta_critical_event` from the villa's system, fired by the VESTA rules AFTER their own message:
+1. `vesta_critical_event` from the villa's system, fired by the VESTA automations AFTER their own message:
    `{blueprint, rule_id, incident_id, phase, label, entities, summary, timestamp, priority?, claim?}`.
    - `opened`: a new incident. `resolved`: the villa's system says it cleared (the chase stops).
-     `abandoned`: the rule stopped watching while it was still true (the owner hears it).
-     `restated`: the rule was saved, reloaded or the villa's system started: it sends what it claims now, and its
+     `abandoned`: the automation stopped watching while it was still true (the owner hears it).
+     `restated`: the automation was saved, reloaded or the villa's system started: it sends what it claims now, and its
      open alert is judged by that from now on (no message to anyone).
-   - `priority` (P1–P4, the rule's "VESTA priority" input) decides who hears it (`people_roles`);
-     without one, the rule's route in `rules.yaml`. The villa system's own `severity` word is not a priority.
-   - `claim`: a template of the villa's system the rule wrote with its own entities and limits, true while
+   - `priority` (P1–P4, the automation's "VESTA priority" input) decides who hears it (`people_roles`);
+     without one, the automation's route in `rules.yaml`. The villa system's own `severity` word is not a priority.
+   - `claim`: a template of the villa's system the automation wrote with its own entities and limits, true while
      what the alert reports still holds. Every 5 minutes (`tick`) the desk renders it for every open
      incident: false for `clear_minutes` (10) closes it, with its Kiosk fault; a device that does not
-     answer keeps it open, said once. An alert from a rule that sends no claim but its `bad_states`
+     answer keeps it open, said once. An alert from an automation that sends no claim but its `bad_states`
      is read by those states (no watched entity in any of them); with neither, it waits for a person.
-     The desk knows no rule by name: whatever a rule claims is the rule's.
-   - `abandoned` with `still_true: false` (back to normal just as the rule gave up) closes the
+     The desk knows no automation by name: whatever an automation claims is the automation's.
+   - `abandoned` with `still_true: false` (back to normal just as the automation gave up) closes the
      incident; still true, the owner hears it.
    - An alert back within `reopen_hours` (4) of its incident closing reopens it: "Back again: N
      times since …", under its own number, the villa system's latest words, its ladder started again
@@ -47,7 +47,7 @@ decides alone to act on the villa.
 
 The decision is one of:
 - `maintenance_mode`: `input_boolean.maintenance_mode` is on, nothing sent unless P1.
-- `counted`: the same rule on the same entity is already open and inside its cooldown. Nothing sent.
+- `counted`: the same automation on the same entity is already open and inside its cooldown. Nothing sent.
 - `repeat`: open and past the cooldown: one "still there, N times since" message to the roles its
   priority reaches (as the first alert), with the villa system's latest words and claim.
 - `new`: the roles its priority reaches (rules.yaml `people_roles`) get the message, the asked role's
@@ -76,7 +76,7 @@ person asks, read the value in force, never quote a number from here.
   events (they never carry `task_text`).
 - Villa silent: no contact with the villa's system for `villa_silent_minutes` opens one P1 incident to both chats;
   the next contact closes it with a "back online" line.
-- Alert fatigue: a rule that fired more than `alert_fatigue_per_month` times in 30 days becomes a "retune" proposal in the
+- Alert fatigue: an automation that fired more than `alert_fatigue_per_month` times in 30 days becomes a "retune" proposal in the
   weekly report. Nothing is changed automatically.
 
 ## Answers
@@ -86,23 +86,23 @@ message then says who pressed what, and when. Typing the word works too.
 
 | Button | Effect |
 |---|---|
-| Done | incident closed, its Kiosk ticket resolved; the device is read once `clear_minutes` (10) later. Still bad (its rule names its bad states): the incident opens again, "still there" ("Done (…), but … still reads …: still open. VESTA keeps watching it."), and the desk closes it when it is right. Not knowable (an older alert, a number): the people asked are told what it reads. The same for a fault closed in the Kiosk ("Closed in the Kiosk, but …"); a fault a person REOPENS in the Kiosk asks the facility manager again at once |
+| Done | incident closed, its Kiosk ticket resolved; the device is read once `clear_minutes` (10) later. Still bad (its automation names its bad states): the incident opens again, "still there" ("Done (…), but … still reads …: still open. VESTA keeps watching it."), and the desk closes it when it is right. Not knowable (an older alert, a number): the people asked are told what it reads. The same for a fault closed in the Kiosk ("Closed in the Kiosk, but …"); a fault a person REOPENS in the Kiosk asks the facility manager again at once |
 | Need help | escalated to the owner with the detail |
 
-## When a critical rule runs
+## When a critical automation runs
 
-Each critical rule has a "When this rule runs" choice (2026-10-20): Always (the default), Only while the villa is
-empty, or Only while someone is in, read from the same "Villa empty" helper. A rule set to one of the last two raises
+Each critical automation has a "When this rule runs" choice (2026-10-20): Always (the default), Only while the villa is
+empty, or Only while someone is in, read from the same "Villa empty" helper. An automation set to one of the last two raises
 nothing outside those hours, so "no alert" then means "not watched", never "nothing happened", and it looks again
 when the villa becomes empty (or someone comes in), alerting then on a problem already there. If the helper has no
-answer (after a restart), the rule alerts anyway.
+answer (after a restart), the automation alerts anyway.
 
 ## The siren: strict human validation
 
 `rules.yaml` section `siren`. The gate arms only when all three hold:
 1. At least 2 independent intrusion signals (different entities) inside 5 minutes.
 2. The villa is empty: its "Villa empty" helper reads on (`rules.yaml` `siren.villa_empty`, the same one its
-   presence rules read). Missing or unreadable: not empty, the siren is not offered.
+   presence automations read). Missing or unreadable: not empty, the siren is not offered.
 3. The owner approves the siren request with the Approve button (it expires after policy.yaml's
    `approval_ttl_minutes`). It sounds for policy.yaml's `siren_auto_off_min`, then stops.
 

@@ -115,18 +115,18 @@ def test_a_reload_of_the_rules_is_one_line_never_a_run_per_rule():
     # check whether it did" lines; "turned on/off" rows counted as runs too. One reading (vesta_shared.past.automation_run)
     import investigate
     out = investigate.around(_Client(), None, T(9, 2), T(9, 15), ["sensor.heater_power"], Z)
-    reload_lines = [x for x in out["lines"] if x.startswith("The rules were reloaded: ")]
-    assert reload_lines == ["The rules were reloaded: every rule ran once to re-check itself, none of them acted (06:02; 2 rule run(s))"]
+    reload_lines = [x for x in out["lines"] if x.startswith("The automations were reloaded: ")]
+    assert reload_lines == ["The automations were reloaded: every automation ran once to re-check itself, none of them acted (06:02; 2 automation run(s))"]
     (watch,) = [x for x in out["lines"] if x.strip().startswith("heater watch (")]
     assert "1× from 03:14:46 to 03:14:46" in watch                          # its own run only
-    assert not any("morning" in x for x in out["lines"] if not x.startswith("The rules were reloaded"))
+    assert not any("morning" in x for x in out["lines"] if not x.startswith("The automations were reloaded"))
     assert [a["id"] for a in out["data"]["automations"]] == ["automation.heater_watch"]
     (reran,) = out["data"]["system_runs"]
     assert (reran["kind"], reran["runs"], reran["times"]) == ("reloaded", 2, [T(9, 6, 2).isoformat()])
     # …and the page: one "usual" line at 06:02, no "can act on" for the rule the reload re-ran next to the 06:00 moment
     _, f = _facts()
     log = [(r["time"], r["pill"], r["text"]) for r in f["log"]]
-    assert ("06:02", "usual", "The rules were reloaded: every rule ran once to re-check itself, none of them acted") in log
+    assert ("06:02", "usual", "The automations were reloaded: every automation ran once to re-check itself, none of them acted") in log
     checks = [i for g in f["findings"] if g["title"] == "To check" for x in g["groups"] for i in x["items"]]
     assert not [c for c in checks if "06:02" in c or "morning" in c], checks
     assert not any("06:02" in t and "Automation" in x for t, _, x in log), log

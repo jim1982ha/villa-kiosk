@@ -91,7 +91,7 @@
 <section class="card">
   {% set r = reading("quiet") %}
   {% if r %}<p>{{ r }}</p>
-  {% else %}<p class="note">{% if s.did_not_happen %}{{ (s.did_not_happen|join(", "))|capitalize }}.{% endif %}{% if s.rules_total %} {{ s.rules_on }} of {{ s.rules_total }} safety rules on.{% endif %}</p>{% endif %}
+  {% else %}<p class="note">{% if s.did_not_happen %}{{ (s.did_not_happen|join(", "))|capitalize }}.{% endif %}{% if s.rules_total %} {{ s.rules_on }} of {{ s.rules_total }} safety automations on.{% endif %}</p>{% endif %}
 </section>
 {% elif sid == "equipment" %}
 <section>
@@ -155,7 +155,7 @@
      figure; this section says whether the monitoring itself worked #}
   <tr><td>The VESTA Agent</td>{% if s.listening_since %}<td>{{ pill("watch", "Listening since " ~ when(s.listening_since)) }}</td><td>Alerts before then come from the villa's system only</td>{% else %}<td>{{ pill("ok", "Listening") }}</td><td>The whole period</td>{% endif %}</tr>
   {% for r in s.counter_resets %}<tr><td>{{ r.item }}</td><td>{{ pill("watch", "counter stepped back") }}</td><td>{{ day(r.day) }} excluded from totals</td></tr>{% endfor %}
-  {% if s.rules_total %}<tr><td>Safety rules</td><td>{{ pill('ok' if s.rules_on == s.rules_total else 'watch', s.rules_on ~ ' of ' ~ s.rules_total ~ ' on') }}</td><td></td></tr>{% endif %}
+  {% if s.rules_total %}<tr><td>Safety automations</td><td>{{ pill('ok' if s.rules_on == s.rules_total else 'watch', s.rules_on ~ ' of ' ~ s.rules_total ~ ' on') }}</td><td></td></tr>{% endif %}
   {% if s.ai_cost_usd is not none %}<tr><td>VESTA cost this period</td><td>{{ pill("ok", "US$ " ~ "%.2f"|format(s.ai_cost_usd)) }}</td><td>the AI's replies and reports</td></tr>{% endif %}
   </table></div>
 </section>

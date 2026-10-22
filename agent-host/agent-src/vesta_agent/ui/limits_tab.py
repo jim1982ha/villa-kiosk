@@ -28,7 +28,10 @@ from .policy_doc import _yaml
 
 PLACE = "Limits"
 SKILL_GROUP, POLICY_GROUP = "skills", "rules"
-GROUP_TITLES = {**limits.GROUPS, SKILL_GROUP: "Skill settings", POLICY_GROUP: "Rules"}
+# "Agent rules", never "Rules" alone (owner, 2026-10-22): a "rule" read as one of the villa's automations; these are
+# policy.yaml's values, the Rules tab's, and the group's (i) says so
+GROUP_TITLES = {**limits.GROUPS, SKILL_GROUP: "Skill settings", POLICY_GROUP: "Agent rules"}
+GROUP_INFO = {POLICY_GROUP: "The agent's own rules (policy.yaml), the same values the Rules tab shows: never one of the villa's automations."}
 TOLD = {"person": "The person is told", "ai": "Only the AI is told", "": "Nobody is told"}
 
 
@@ -149,7 +152,7 @@ class LimitsTab:
             out += self._skill_rows(skill)
         out += self._policy_rows()
         out += self._measured_rows()
-        return {"groups": GROUP_TITLES, "rows": out, "problems": problems, "file": self.path}
+        return {"groups": GROUP_TITLES, "group_info": GROUP_INFO, "rows": out, "problems": problems, "file": self.path}
 
     # ------------------------------------------------------------------ a setup's limits (setup_copy)
     def fitting(self, values: dict) -> tuple[dict, list[str]]:

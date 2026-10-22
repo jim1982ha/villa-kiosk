@@ -230,7 +230,7 @@ def asset_findings(cli, store, params, asset: dict, today: date, day_end: dateti
         if sch:
             expected = schedule_hours_per_day(sch)
             if not any(expected.values()):
-                notes.append(f"{asset['name']}: schedule {asset['schedule']} has no time blocks, run-hours rule off.")
+                notes.append(f"{asset['name']}: schedule {asset['schedule']} has no time blocks, run-hours check off.")
                 expected = None
     prior = {}
     for eid in (p_eid, e_eid):
@@ -280,7 +280,7 @@ def hidden_in_rule_findings(cli, pack, states: dict, store) -> tuple[list, list[
                           {k: v for k, v in json.loads(o["detail"] or "{}").items() if k != "check"},
                           json.loads(o["detail"] or "{}").get("check", ""))
                 for o in store.findings(status="open") if o["rule_id"] == R.HIDDEN_IN_RULE]
-        return kept, [f"The villa's rules could not be read for hidden devices ({type(e).__name__}): nothing changed."]
+        return kept, [f"The villa's automations could not be read for hidden devices ({type(e).__name__}): nothing changed."]
     return R.hidden_in_rule_rules(rules, hidden, name_of), []
 
 

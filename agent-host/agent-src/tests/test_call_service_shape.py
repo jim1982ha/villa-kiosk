@@ -218,7 +218,7 @@ def test_a_refusal_by_the_villas_rules_is_in_the_log(villa, caplog):
     actions, session = villa
     with caplog.at_level("INFO", logger="vesta.actions"):
         answer, msg = actions.request("media_player", "turn_off", "media_player.example_tv", {}, JM, 111)
-    assert msg is None and answer.startswith("Refused by the villa's rules") and session.calls == []
+    assert msg is None and answer.startswith("Refused by the agent's rules") and session.calls == []
     line = [r.getMessage() for r in caplog.records if r.getMessage().startswith("Refused ")]
     assert line == ["Refused media_player.turn_off on media_player.example_tv, asked by Registered: "
                     "media_player.turn_off is not in the allowed services of this villa."], line

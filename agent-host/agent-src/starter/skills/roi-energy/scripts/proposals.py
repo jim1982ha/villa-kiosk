@@ -68,7 +68,7 @@ def build(period: dict, optimiser: dict | None, findings_open: list[dict] | None
             # stays one per device, since a proposal is stored once by title
             name = result.finding_name(f)
             out.append({"kind": "configuration", "title": f"Create the missing setting for {name or f['entity_id']}",
-                        "detail": f["summary"], "benefit": "Enables one rule"})
+                        "detail": f["summary"], "benefit": "Enables one check"})
     return out
 
 

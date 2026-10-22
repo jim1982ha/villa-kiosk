@@ -1029,7 +1029,7 @@ def around(client, store, start: datetime, end: datetime, focus: list[str], zone
         # moments to the minute (every rule fires within the same seconds)
         minutes = sorted({t.replace(second=0, microsecond=0) for t in ts})
         said = WORDS.get(SYSTEM_WORDS[kind]) or f"(investigate's settings.yaml has no words.{SYSTEM_WORDS[kind]})"
-        lines.append(f"{said} ({', '.join(at(t, zone, span_days)[:-3] for t in minutes)}; {len(ts)} rule run(s))")
+        lines.append(f"{said} ({', '.join(at(t, zone, span_days)[:-3] for t in minutes)}; {len(ts)} automation run(s))")
         reran.append({"kind": kind, "at": min(ts).isoformat(), "times": [t.isoformat() for t in minutes],
                       "runs": len(ts), "text": said})
     ran = []

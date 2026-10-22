@@ -474,7 +474,7 @@ class Vesta:
                 handled = True
                 res = await self.run_code_job(sk, cmd, limit(
                     "alerts.hook_timeout_s", 300, unit="seconds", group="run", lo=30, hi=3600,
-                    says="How long a skill may take to handle one alert of the villa's own rules.",
+                    says="How long a skill may take to handle one alert of the villa's own VESTA automations.",
                     reached="That handling stops and counts as failed; the villa's own alert was already sent.",
                     told="person"), {"event": path})
                 log.info("Alert handled by %s: %s%s", sk.name, res.get("decision") or "no decision",

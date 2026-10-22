@@ -52,7 +52,7 @@ from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
 from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the Limits tab)
 
 FATIGUE_WINDOW_DAYS = limit("alerts.fatigue_window_days", 30, unit="days", group="detect", lo=1, hi=365,
-                            says="Days over which a rule's alerts are counted to propose retuning it.",
+                            says="Days over which an automation's alerts are counted to propose retuning it.",
                             reached="Older alerts do not count.", told="person")
 LATE_CLOSE_DAYS = limit("alerts.late_close_days", 1, unit="days", group="detect", lo=0, hi=30,
                         says="How recently an alert must have closed for the villa's own all-clear to be matched to it.",
@@ -1050,7 +1050,7 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
             # one proposal per rule: its count lives in the detail (architecture review 24: the count in the title made a
             # new open proposal at every new count — "fired 21 times", "fired 22 times"…)
             store.add_proposal("retune", f"Retune {r}: it fires too often",
-                               f"The rule {r} fired {n} times in {FATIGUE_WINDOW_DAYS} days. Either the threshold is too tight or the device needs attention. "
+                               f"The automation {r} fired {n} times in {FATIGUE_WINDOW_DAYS} days. Either the threshold is too tight or the device needs attention. "
                                "The VESTA Agent proposes a new threshold in the weekly report and applies nothing.", "Fewer useless messages")
     store.beat("agent_tick", now.isoformat())
     return out

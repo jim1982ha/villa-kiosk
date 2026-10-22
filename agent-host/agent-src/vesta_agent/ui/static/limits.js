@@ -39,15 +39,16 @@ function row(r, probs, again) {
   const field = input(r, (v) => { value = v; save.disabled = same(v, r.value) || v === null; });
   if (r.kind === "measured") save.hidden = true;
   const bounds = [r.lo !== null && r.lo !== undefined ? `from ${r.lo}` : "", r.hi !== null && r.hi !== undefined ? `to ${r.hi}` : ""].filter(Boolean).join(" ");
-  // ⚠️ TWO COLUMNS, LOW ROWS (owner, 2026-10-20): what happens when it is reached is part of the limit's description,
-  // and the value's unit, bounds and Save sit on the value's own line
+  // ⚠️ LOW ROWS (owner, 2026-10-20): what happens when it is reached is part of the limit's description, and the
+  // value's unit, bounds and Save sit on the value's own line. Who is told has its own column (owner, 2026-10-22: the
+  // pill sat at the end of the "Reached:" sentence), still a pill, grey when nobody is
   return [
     h("div", { class: "limit-what" },
       h("b", {}, r.label), " ", infoButton(r.name, `${r.name}, written at ${(r.where || []).join(", ")}`),
-      r.reached || r.told ? h("div", { class: "limit-reached" }, r.reached ? `Reached: ${r.reached} ` : "",
-        r.told ? h("span", { class: "chip tiny" + (r.told.startsWith("Nobody") ? " off" : "") }, r.told) : null) : null,
+      r.reached ? h("div", { class: "limit-reached" }, `Reached: ${r.reached}`) : null,
       h("div", { class: "muted small" }, r.also,
         same(r.value, r.default) ? "" : ` Changed from its usual ${shown(r.default)}.`)),
+    r.told ? h("span", { class: "chip tiny" + (r.told.startsWith("Nobody") ? " off" : "") }, r.told) : h("span", { class: "muted" }, "—"),
     h("div", { class: "limit-value" }, field, r.unit ? h("span", { class: "muted" }, r.unit) : null,
       bounds ? h("span", { class: "muted small" }, bounds) : null, save),
   ];
@@ -61,18 +62,18 @@ export async function limits() {
   const match = (r) => !FILTER || `${r.label} ${r.name} ${r.section} ${r.also}`.toLowerCase().includes(FILTER);
   const groups = Object.entries(data.groups).map(([key, title]) => {
     const rows = data.rows.filter((r) => r.group === key);
-    return rows.length ? [key, `${title} (${rows.length})`, null, () => {
+    return rows.length ? [key, `${title} (${rows.length})`, (data.group_info || {})[key] || null, () => {
       const list = rows.filter(match);
       if (!list.length) return h("p", { class: "muted" }, "No limit here matches the search.");
-      return paged(["Limit", "Value"],
-        list.map((r) => row(r, probs, again)), 10, { cls: "limits", widths: ["62%", "38%"] });
+      return paged(["Limit", "Who is told", "Value"],
+        list.map((r) => row(r, probs, again)), 10, { cls: "limits", widths: ["50%", "14%", "36%"] });
     }] : null;
   });
   const tabs = tabbed("limits", groups);
   const search = h("input", { type: "search", placeholder: "Search the limits", value: FILTER, "aria-label": "Search the limits",
     oninput: (e) => { FILTER = e.target.value.trim().toLowerCase(); tabs.redraw(); } });
   fill($view, card("Limits",
-    `Every limit on what the agent reads, tells and keeps, in one place: ${data.rows.length} in all. Each value is saved where the agent reads it, a limit of the agent's code in ${data.file}, a skill's setting in that skill's files, a rule in policy.yaml, so the Rules and Skills tabs show the same value. A change counts from the next answer or the next run.`,
+    `Every limit on what the agent reads, tells and keeps, in one place: ${data.rows.length} in all. Each value is saved where the agent reads it, a limit of the agent's code in ${data.file}, a skill's setting in that skill's files, an agent rule in policy.yaml, so the Rules and Skills tabs show the same value. A change counts from the next answer or the next run.`,
     data.problems.length ? problemsBox(data.problems, "Limits the page could not read:") : null,
     h("div", { class: "limits-search" }, search), probs, tabs.bar, tabs.body));
 }

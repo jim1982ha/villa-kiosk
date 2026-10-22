@@ -60,7 +60,7 @@ STATES: dict[str, tuple[str, str, str]] = {
     "moving": ("approved; the device was still on its way", "Already approved: on its way.", _APPROVED),
     "done": ("approved, and done", "Already approved and done.", _APPROVED),
     "failed": ("approved, but it did not happen", "Already approved; it did not happen.", _APPROVED),
-    "blocked": ("pressed, but the villa's rules no longer allowed it: nothing was tried", "No longer allowed.",
+    "blocked": ("pressed, but the agent's rules no longer allowed it: nothing was tried", "No longer allowed.",
                 "No longer allowed: {why}."),
     "refused": ("refused", "Already refused.", acted("Refused", "{time}", "{by}") + ". Nothing was done."),
     "expired": ("expired: nobody answered in time", "Expired. Ask again.", acted("Expired", "{time}") + ": nothing was done."),
@@ -74,7 +74,7 @@ def note(state: str, by: str = "", why: str = "", time: str = "{time}", who: str
     """What every copy of a request says under its line once it is in `state` ("{time}": now, filled when shown);
     `who` and `minutes`: a pending request's — who may approve it, how long it waits (the request's own words were
     written in actions.py beside this table until architecture review round 3, 2026-10-19)."""
-    return STATES[state][2].format(by=by or "someone", why=why or "the villa's rules changed", time=time,
+    return STATES[state][2].format(by=by or "someone", why=why or "the agent's rules changed", time=time,
                                    who=who or "someone", minutes=minutes)
 
 

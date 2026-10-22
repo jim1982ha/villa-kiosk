@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.308 (22 October 2026)
+
+- Owner 2026-10-22 (standing vocabulary): the villa's automations and blueprints are "automations", never "rules",
+  in every text a person reads (SKILL.md, skill settings, reports, Telegram, Kiosk fault texts, Limits notes); a
+  skill's own detection rules are "checks"; the Agent's policy is "the agent's rules" (Limits group "Agent rules").
+- Limits: a "Who is told" column (limits_tab), the pill out of the Reached sentence. Costs: no line under the AI
+  cost card's title.
+
 ## 0.6.307 (22 October 2026)
 
 - Owner 2026-10-22: the day's counters (alerts followed, buttons pressed, actions done, replies written, reports

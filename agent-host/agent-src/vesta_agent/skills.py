@@ -153,7 +153,7 @@ VILLA_PREFIX = "villa."
 #: the files a skill is made of: never deleted from the page (the page hid the button, the server allowed it, review 9)
 REQUIRED_FILES = ("SKILL.md", "skill.yaml")
 #: The events a skill's on_event answers, and how the page names each (when_it_runs).
-HOOK_EVENTS = {"critical_event": "a critical alert from a VESTA rule", "voice_message": "a voice message"}
+HOOK_EVENTS = {"critical_event": "a VESTA automation's critical alert", "voice_message": "a voice message"}
 JOB_NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,40}$")
 JOB_TARGETS = ROLES
 

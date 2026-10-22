@@ -391,9 +391,11 @@ def hidden_in_rule_rules(rules: list[dict], hidden, name_of) -> list[Finding]:
         rule = str((r.get("config") or {}).get("alias") or name_of(r["entity_id"]))
         n = len(named)
         names = ", ".join(name_of(e) for e in named)
+        # "automation" or "script", never "rule" in what a person reads (owner, 2026-10-22)
+        kind = "script" if str(r.get("kind") or "") == "script" else "automation"
         out.append(Finding(HIDDEN_IN_RULE, r["entity_id"], r["entity_id"], "configuration", P3,
-                           f"The rule {rule} watches {n} device{'s' if n > 1 else ''} hidden in the villa's system: {names}.",
+                           f"The {kind} {rule} watches {n} device{'s' if n > 1 else ''} hidden in the villa's system: {names}.",
                            {"name": rule, "kind": r.get("kind"), "hidden": named, "count": n},
-                           "Point the rule at the device you see instead (a hidden device is left out of every check), "
-                           "or take the hidden one out of the rule."))
+                           f"Point the {kind} at the device you see instead (a hidden device is left out of every check), "
+                           f"or take the hidden one out of the {kind}."))
     return out

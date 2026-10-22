@@ -1,3 +1,12 @@
+## 0.12.318
+
+What you will see:
+- Your automations are called "automations" everywhere the VESTA Agent writes: its pages, Telegram, reports, the
+  skills' texts and the faults it puts in the Kiosk. "Rules" now only means the Agent's own Rules tab (the Limits
+  tab's group is "Agent rules"). A skill's own checks are called "checks".
+- Limits: who is told when a limit is reached has its own column.
+- Costs: no line under the "AI cost" title.
+
 ## 0.12.317
 
 What you will see:

@@ -76,9 +76,9 @@ schedule is in place.
 ## Waste events
 
 The `roi_` automations in the villa's system (currently off) fire `vesta_roi_event`
-in the logbook when they run. When they do, count them per rule and per week
+in the logbook when they run. When they do, count them per automation and per week
 from the logbook and add them to the period result under `waste_events`. Until
-they are enabled, the section says "no waste rules active".
+they are enabled, the section says "no waste automations active".
 
 ## What not to do
 

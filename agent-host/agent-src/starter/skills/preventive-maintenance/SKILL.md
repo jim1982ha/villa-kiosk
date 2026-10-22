@@ -27,10 +27,10 @@ closure, and never raise the same thing twice.
   A device asleep between its reports is judged on its last real reading (its
   battery included), never on "unavailable".
   Every open finding of the night is read again every 5 minutes too, each by its
-  own rule over its own device, never a full batch, never a new finding. One no
+  own check over its own device, never a full batch, never a new finding. One no
   longer found closes ("Cleared: the check at 12:05 no longer sees it."); one
-  still found stays. A rule about a state (a battery, a quiet sensor, a reconnect
-  loop) is read as it is now; a rule judged on a finished day (a pump's draw, use
+  still found stays. A check about a state (a battery, a quiet sensor, a reconnect
+  loop) is read as it is now; a check judged on a finished day (a pump's draw, use
   and run hours, a room's highest temperature) over the last finished day, never
   "today so far", so it clears only once a clean day has finished.
 - Never invent a physical number. A missing helper means "cannot compute" and a
@@ -43,9 +43,9 @@ closure, and never raise the same thing twice.
 ## Files
 
 - `scripts/nightly.py`   the batch (one call, one JSON result)
-- `scripts/recheck.py`   every 5 minutes: every open finding read again by its rule; devices gone offline get their
+- `scripts/recheck.py`   every 5 minutes: every open finding read again by its check; devices gone offline get their
                          fault, those back close it; deleted ones closed.
-- `scripts/rules.py`     the rules per family with their ids (PM-xxx)
+- `scripts/rules.py`     the checks per family with their ids (PM-xxx)
 - `scripts/features.py`  feature extraction from statistics and raw history
 - `scripts/replay.py`    replays N nights and prints the findings timeline
 - Shared code: `vesta_shared`, part of the engine (the villa's system's client, store, params, pack)
@@ -76,9 +76,9 @@ closure, and never raise the same thing twice.
      nominal voltage). They go to the weekly report section "what would help".
 3. The night costs no token. The 07:00 digest carries the words.
 
-## The rules, in plain words (ids are what the ticket carries)
+## The checks, in plain words (ids are what the ticket carries)
 
-| Rule | Family | What it catches | Threshold source |
+| Check | Family | What it catches | Threshold source |
 |---|---|---|---|
 | PM-POWER-CHANGE | power | The steady running draw of a continuously running pump moved versus its 30-day median at equal run hours. A sudden change gets a date (change point), a slow one is called a drift. Lower draw at equal hours means less water moved. | `<asset>_drift_pct` helper, else behaviour default 8% |
 | PM-RUNHOURS | power | A scheduled asset ran 25% shorter or longer than its `schedule.<asset>_expected_runtime`, with the hours of missing data stated. | `vesta_schedule_dev_pct` |
@@ -91,21 +91,21 @@ closure, and never raise the same thing twice.
 | PM-SILENT | level | A sensor online but not reporting for 24 h. | `vesta_silence_hours` |
 | PM-LEVEL-HIGH | level | A temperature or humidity above `<asset>_max_c` / `<asset>_max_humidity_pct` when such a helper exists. | asset helper |
 | PM-RECONNECT-LOOP | network | Ten or more drop/reconnect events in three days for one device (logbook). | `vesta_reconnect_events`, `vesta_reconnect_days` |
-| PM-HIDDEN-IN-RULE | configuration | A villa rule (automation or script) still names a device hidden in the villa's system that no longer answers (offline, or no longer in the system): one finding per rule, naming those devices, most likely one replaced by a copy. A hidden device that answers is only tidied off the screens, and its rule is right to watch it. Nightly only. | none |
-| PM-PARAM-MISSING | any | A rule could not run for lack of a helper. Says which one. | none |
+| PM-HIDDEN-IN-RULE | configuration | A villa automation or script still names a device hidden in the villa's system that no longer answers (offline, or no longer in the system): one finding per automation or script, naming those devices, most likely one replaced by a copy. A hidden device that answers is only tidied off the screens, and it is right to watch it. Nightly only. | none |
+| PM-PARAM-MISSING | any | A check could not run for lack of a helper. Says which one. | none |
 
 What an asset is, decided by the knowledge pack: "motor" (a schedule, a runtime
 counter or a power baseline helper, or a name with pump, fan, compressor, jet),
 "lighting" (light, LED, VMC circuits), "meter" (the main meter, its phases,
-template averages), "appliance" (the rest). Only motors get the physics rules
+template averages), "appliance" (the rest). Only motors get the physics checks
 below; lighting and meters are read by roi-energy and never chased here. To
 force a kind: `input_text.vesta_asset_kinds` = {"slug": "motor"}.
 
 How a motor is classified, automatically, from its own last 30 days:
 "continuous" (runs in whole-hour blocks: filtration, circulation), "cycling"
 (bursts, never a full hour: pressure pump) or "intermittent" (runs on fewer
-than half the days: jacuzzi, jets). Continuous assets get the power rules,
-cycling assets the energy rules, intermittent assets only report lines.
+than half the days: jacuzzi, jets). Continuous assets get the power checks,
+cycling assets the energy checks, intermittent assets only report lines.
 
 Baselines freeze while a finding is open: the anomaly cannot become the new
 normal and close itself. A finding closes when the values return within the
@@ -123,6 +123,6 @@ alert-desk skill; this skill only opens and closes. Replies:
 ## Acceptance test (run before any change to rules.py)
 
 `python tests/replay.py --pack pack.json --fixture-dir <fixtures> --from <day> --to <day>` (the agent's tests) replays a
-saved month of the villa's statistics through the rules. The villa's own fixtures and the expected
+saved month of the villa's statistics through the checks. The villa's own fixtures and the expected
 findings live with the agent's local tests (never in the app, never in the repository): run them
 before changing a threshold.

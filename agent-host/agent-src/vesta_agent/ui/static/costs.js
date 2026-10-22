@@ -97,10 +97,11 @@ export async function costs(days = 7) {
       : r.stopped ? h("span", { class: "chip off" }, "stopped at its limit") : r.error ? alertButton("This run failed", () => h("div", {}, h("b", {}, r.cause ? `This run failed: ${r.cause}.` : "This run failed."),
       r.what_to_do ? h("div", {}, r.what_to_do) : null, h("div", { class: "tooltip-detail" }, r.error))) : ""] }));
   fill($view,
-    // the period's selector on the title's line, on the right (owner, 2026-10-06); the figures below a separator
+    // the period's selector on the title's line, on the right (owner, 2026-10-06); the figures straight under it, no
+    // line between (owner, 2026-10-22: the separator under the title row went); the chart below its own separator
     h("section", { class: "card" },
       titleWithInfo(place("cost"), "As the Anthropic API reported it for each run: a chat reply, or a run of an AI job. Tokens in count what the agent re-read from its cache too. Everything on this tab follows the period chosen here.", "h2", period),
-      h("div", { class: "divided" }, kpis), h("div", { class: "divided" }, h("h2", {}, place("cost_day")), chart)),
+      kpis, h("div", { class: "divided" }, h("h2", {}, place("cost_day")), chart)),
     // ⚠️ TWO CARDS OF TWO TABS (owner, 2026-10-08): "By job" and "By model" are one question asked two ways, and so
     // are "Every run" and the tools those runs used — each pair is one card, its tab kept when the period changes
     tabbedCard(`${place("cost_split")} · last ${days} days`, "spend", [

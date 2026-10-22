@@ -395,14 +395,14 @@ def test_the_title_line_holds_the_short_version_and_the_theme_toggle_on_the_righ
     assert "ver.textContent = `v${" in js and "ver.title = " in js   # short on screen, the full line on hover
 
 
-def test_the_costs_period_sits_on_the_titles_line_and_a_separator_comes_before_the_figures():
+def test_the_costs_period_sits_on_the_titles_line_and_the_figures_follow_with_no_separator():
     # Owner, 2026-10-03: not a full-width selector with the figures straight under it; 2026-10-06: on the title's
-    # line, on the right
+    # line, on the right; 2026-10-22: no line between the title row and the figures
     from vesta_agent.ui.server import STATIC
     js = page_js()
     css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
     assert 'titleWithInfo(place("cost")' in js and '"h2", period)' in js
-    assert 'h("div", { class: "divided" }, kpis)' in js
+    assert '"h2", period),\n      kpis, h("div", { class: "divided" }' in js
     assert ".card-title-right { margin-left: auto; }" in css
 
 

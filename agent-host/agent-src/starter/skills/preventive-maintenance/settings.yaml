@@ -17,7 +17,7 @@ behaviour:
   silence_hours: 24                     # a sensor that has not reported for this long
   unavailable_minutes: 10              # offline this long: its fault opens (the night check, and recheck.py every 5 minutes)
   back_online_minutes: 10               # a device found offline, back this long: its fault closes (recheck.py)
-  on_threshold_fraction: 0.2            # fraction of running power that counts as "on", the villa's one rule, held equal in every skill: change it with the helper vesta_on_threshold_fraction
+  on_threshold_fraction: 0.2            # fraction of running power that counts as "on", the villa's one definition, held equal in every skill: change it with the helper vesta_on_threshold_fraction
   on_threshold_floor_w: 1.0             # an asset with no data to judge from: "on" above this
   energy_gap_hours: 3                   # a meter's day with more hours missing is not judged
   silence_history_hours: 72             # how far back a quiet sensor's reporting is looked at
@@ -32,7 +32,7 @@ behaviour:
   battery_low_fraction_of_nominal: 0.8  # a voltage battery below this share of its nominal is low
   worsened_step_pct: 15                 # an open finding worse by this many points is told again
   # (architecture review 4, 2026-10-13: these were typed in rules.py / nightly.py, out of a villa's reach)
-  reconnect_days: 3                     # the logbook read for reconnect loops, and the window the rule counts in
+  reconnect_days: 3                     # the logbook read for reconnect loops, and the window the check counts in
   reconnect_events: 10                  # this many drops in that window: a reconnect loop
   reconnect_min_drop_seconds: 10        # a drop back within this is the villa's system reloading its virtual devices, not a reconnect
   ran_min_hours: 0.1                    # a day an asset ran at least this long counts as a day it ran

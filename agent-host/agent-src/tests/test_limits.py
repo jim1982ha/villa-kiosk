@@ -317,3 +317,13 @@ def test_the_tab_lists_no_value_that_changes_nothing_and_says_what_a_save_to_a_s
     assert "makes this skill your own copy" in inv["also"]
     villa = next(r for r in rows if r["id"].get("path") == ["behaviour", "baseline_days"])
     assert "your own copy" not in villa["also"]                    # saved in the villa's own file: updates go on
+
+
+def test_who_is_told_is_a_column_of_its_own_never_the_end_of_the_reached_sentence():
+    # owner, 2026-10-22: the pill ("Nobody is told", "Only the AI is told"…) sat after "Reached: …"; now its own column,
+    # between the limit and its value, still a pill (grey when nobody is told)
+    from helpers import page_js
+    js = page_js().split("function row(")[1].split("export async function limits")[0]
+    assert 'h("div", { class: "limit-reached" }, `Reached: ${r.reached}`)' in js
+    assert js.index('class: "limit-what"') < js.index('r.told ? h("span", { class: "chip tiny"') < js.index('class: "limit-value"')
+    assert '["Limit", "Who is told", "Value"]' in page_js()

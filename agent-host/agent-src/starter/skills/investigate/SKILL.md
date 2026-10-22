@@ -92,7 +92,7 @@ what happened, and why".
    day") is read hour by hour first (the "starts in each hour" line, or ha_get_history source=statistics period=hour
    over those hours): what it does in the hours nobody uses it tells a fault that acts on its own (a leak) from one
    that follows use. Then: what would have warned earlier or limited the
-   damage (a missing sensor, an alert on how long something runs, a rule that only watches the opposite case, a switch
+   damage (a missing sensor, an alert on how long something runs, an automation that only watches the opposite case, a switch
    that does not actually control the device).
 
 ## The answer: a short message, and the whole account as a page
@@ -112,7 +112,7 @@ with the facts; if one seems misleading, say why in "cannot_tell".
         "timeline": [{"time": "07:30", "text": "what a person saw or did", "unusual": true}],
         "causes": [{"cause": "…", "evidence": "what in the records points to it", "confirm": "how to confirm on site"}],
         "cannot_tell": ["what no sensor saw, a gap in the records, what only a person on site can check"],
-        "warned_earlier": ["a sensor, rule or change that would have warned"],
+        "warned_earlier": ["a sensor, automation or change that would have warned"],
         "checked": "what you read: the devices, the period, the logbook, the automations",
         "sources": [{"title": "the page's title", "url": "https://…"}]}
 

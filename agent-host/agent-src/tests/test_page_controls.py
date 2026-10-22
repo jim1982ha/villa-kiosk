@@ -532,7 +532,7 @@ def test_a_skills_when_rows_name_every_way_the_engine_starts_it(ui):
                on_event={"critical_event": "b.py c", "voice_message": "v.py p"}, on_reply="d.py r",
                before_answer="e.py s", command="x")
     assert [a["when"] for a in when_it_runs(sk)] == [
-        "every day at 07:00", "every 5 minutes", "a critical alert from a VESTA rule", "a voice message",
+        "every day at 07:00", "every 5 minutes", "a VESTA automation's critical alert", "a voice message",
         "an answer to one of its alerts", "before every answer in a chat", "in a chat"]
     # a command offered as a button says so on the same row (the command, typed for the person)
     offered = when_it_runs(dataclasses.replace(sk, offer={"label": "Look into it"}))[-1]["note"]

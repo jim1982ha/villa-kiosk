@@ -436,7 +436,7 @@ def main(argv=None):
         again = recheck_open(ctx.store, ctx.pack, lambda: ctx.live_client, now, ctx.params, ctx.zone, settle)
     except Unreadable as e:
         # the last stderr line is what Overview › Scheduled jobs run says of a stopped run
-        print(f"preventive-maintenance cannot read these rules again: {e}", file=sys.stderr)
+        print(f"preventive-maintenance cannot read these checks again: {e}", file=sys.stderr)
         return 1
     found = gone_offline(ctx.store, ctx.pack, lambda: ctx.live_client, now, ctx.params, ctx.zone, settle)
     told = again["send"] + reopened_untold(ctx.store, ctx.zone, ctx.settings) + still_there_untold(ctx.store, ctx.zone,

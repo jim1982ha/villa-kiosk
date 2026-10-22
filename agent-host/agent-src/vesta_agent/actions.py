@@ -220,7 +220,7 @@ class Actions:
             # the TV itself had been asked first and refused by the villa's rules
             log.info("Refused %s.%s on %s, asked by %s: %s", domain, service, _ids(entity_id),
                      requester.name if requester else "a job", d.reason)
-            return f"Refused by the villa's rules: {d.reason}", None
+            return f"Refused by the agent's rules: {d.reason}", None
         # ⚠️ `direct` SKIPS THE BUTTON ONLY FOR A PERSON'S OWN REQUEST: a registered
         # person, writing in a chat. A scheduled job, an alert, a skill (no requester)
         # still asks; so does anything an owner-only device hides behind (_wrap_check
@@ -234,7 +234,7 @@ class Actions:
             # what happened, as an approved request says it (done_words, outcome): "Opening Bedroom3 Curtain…" for a
             # curtain on its way, never "Not confirmed: … I will not retry by myself"
             said = done_words(d, self.names, result, settled=outcome(d, result) != "moving")
-            return f"Executed without approval (this villa's rule for {d.domain}.{d.service} is direct). Result: {said}", None
+            return f"Executed without approval (the agent's rule for {d.domain}.{d.service} is direct). Result: {said}", None
         targets = Routing(policy).approver_chats(d.required_role, origin_chat)
         if d.required_role == "owner" and not targets:
             self.state.log("refused", dict(base, reason="no chat where the owner can approve"))
@@ -302,7 +302,7 @@ class Actions:
             # "blocked", never "failed" (architecture review 20): nothing was tried — the AI is told so
             self.state.claim_approval(aid, "blocked", person.telegram_id, now, name=person.name)
             self.state.log("press_refused", {"approval": aid, "by": presser_id, "reason": d.reason or "action changed"})
-            return {"toast": "Refused by the villa's rules.", "state": "blocked", "why": d.reason or "the action changed",
+            return {"toast": "Refused by the agent's rules.", "state": "blocked", "why": d.reason or "the action changed",
                     "executed": False}
         if not policy.role_can_approve(person.role, d.required_role):
             return {"toast": "Only the owner can approve this.", "state": None, "executed": False}

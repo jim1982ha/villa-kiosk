@@ -61,7 +61,7 @@ def test_a_rule_watching_a_hidden_device_is_one_fault_naming_it(tmp_path):
     got = _open(tmp_path)
     # the watchdog only: the corrected copy's rule names a LONGER id, the script names it only in its prose
     assert [f["entity_id"] for f in got] == ["automation.critical_watchdog_devices"]
-    assert got[0]["summary"] == ("The rule critical_watchdog---devices watches 1 device hidden in the villa's system: "
+    assert got[0]["summary"] == ("The automation critical_watchdog---devices watches 1 device hidden in the villa's system: "
                                  "Front Door Raw.")
     assert json.loads(got[0]["detail"])["hidden"] == [RAW]
     assert "Home Assistant" not in got[0]["summary"]
@@ -123,3 +123,15 @@ def test_the_client_reads_every_page_and_each_rule_once():
     assert got[0]["config"] == WATCHDOG["config"]
     assert [n for n, _ in s.asked].count("ha_search") == 2        # one text (asked twice), two pages
     assert ("ha_config_get_script", {"script_id": SCRIPT["entity_id"]}) in s.asked
+
+
+def test_a_script_is_called_a_script_and_never_a_rule():
+    # owner, 2026-10-22: what a person reads never calls the villa's automations or scripts "rules"
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("pm_rules", os.path.join(os.path.dirname(NIGHTLY), "rules.py"))
+    R = importlib.util.module_from_spec(spec)
+    sys.modules["pm_rules"] = R                       # its dataclasses look themselves up there
+    spec.loader.exec_module(R)
+    script = {**SCRIPT, "config": {**SCRIPT["config"], "sequence": [{"action": "lock.lock", "target": {"entity_id": RAW}}]}}
+    (f,) = R.hidden_in_rule_rules([script], [RAW], lambda e: "Front Door Raw")
+    assert f.summary.startswith("The script Alert photo watches 1 device") and "rule" not in (f.summary + f.check).lower()

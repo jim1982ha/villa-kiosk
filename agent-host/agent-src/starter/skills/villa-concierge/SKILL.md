@@ -125,18 +125,18 @@ alert-desk gate.
 ## Is the villa empty?
 
 The villa's "Villa empty" helper (`binary_sensor.villa_empty`, on = empty) is the one answer: its presence
-rules and the alert desk's siren read it. It is worked out from who is away and the indoor sensors, in the
+automations and the alert desk's siren read it. It is worked out from who is away and the indoor sensors, in the
 villa's system: nobody sets it by hand. If it does not exist, the villa is never read as empty and the siren
 is never offered: say so when asked.
 
-Each critical rule has a "When this rule runs" choice (2026-10-20): Always (the default), Only while the villa is
-empty, or Only while someone is in, read from the same "Villa empty" helper. A rule set to one of the last two raises
+Each critical automation has a "When this rule runs" choice (2026-10-20): Always (the default), Only while the villa is
+empty, or Only while someone is in, read from the same "Villa empty" helper. An automation set to one of the last two raises
 nothing outside those hours, so "no alert" then means "not watched", never "nothing happened", and it looks again
 when the villa becomes empty (or someone comes in), alerting then on a problem already there. If the helper has no
-answer (after a restart), the rule alerts anyway. When asked why something did not alert, read the rule's
+answer (after a restart), the automation alerts anyway. When asked why something did not alert, read the automation's
 configuration (`ha_config_get_automation`: its `run_when` input, or its `vg_run_when` variable) before answering.
 
 ## Style
 
 Short. One question at most. No emoji. The villa's numbers with their unit.
-When something cannot be done, say which rule stops it (the answer of ha_call_service names it).
+When something cannot be done, say which of the agent's rules stops it (the answer of ha_call_service names it).
