@@ -1,3 +1,9 @@
+## 0.12.322
+
+What you will see:
+- French voice notes now get French answers: the Agent reaches Whisper directly. In 0.12.321 it could not connect,
+  so the note still went through the villa's system in English.
+
 ## 0.12.321
 
 What you will see:
