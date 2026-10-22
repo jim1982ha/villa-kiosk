@@ -909,6 +909,8 @@ export default function Dashboard() {
           // was the way in, and was never opened if a device panel was — so
           // there is nothing to restore and nothing to decide.
           onBack={() => closeSurface("configEditor")}
+          // Over Settings, Settings' Save / Cancel own its changes; on its own (a device window's "edit"), its own do
+          withinSettings={shown("settings")}
           onModelChanged={() => setModelKey((k) => k + 1)}
           viewHeadingDeg={manager ? () => manager.viewHeadingDeg() : undefined}
         />

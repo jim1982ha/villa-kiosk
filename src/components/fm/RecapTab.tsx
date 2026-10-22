@@ -20,8 +20,8 @@
 
 import InfoTip from "@/components/common/InfoTip";
 import Dropdown from "@/components/common/Dropdown";
-import SaveButton from "@/components/common/SaveButton";
-import { Sparkles, Download, Save } from "lucide-react";
+import { DocumentButtons } from "@/components/common/SaveButton";
+import { Sparkles } from "lucide-react";
 import { useMonthlyDocument } from "@/fm/useMonthlyDocument";
 import type { DocumentInputs } from "@/fm/monthlyDocument";
 import MarkdownPreview from "./MarkdownPreview";
@@ -56,10 +56,8 @@ export default function RecapTab({ inputs }: {
         <button className="btn primary" onClick={doc.generate}>
           <Sparkles size={16} /> {markdown ? "Regenerate recap" : "Generate recap"}
         </button>
-        <SaveButton saved={doc.saved} label="Save recap" icon={<Save size={16} />} onClick={() => void doc.save()} disabled={!markdown} />
-        <button className="btn ghost" onClick={doc.download} disabled={!markdown}>
-          <Download size={16} /> Download .md
-        </button>
+        {/* only with a recap to save or download (owner, 2026-10-22: never greyed out beside nothing) */}
+        <DocumentButtons markdown={markdown} saved={doc.saved} saveLabel="Save recap" onSave={() => void doc.save()} onDownload={doc.download} />
       </div>
 
       {/* min-height keeps this tab's OWN footprint roughly stable across the

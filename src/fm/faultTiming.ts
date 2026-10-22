@@ -32,7 +32,7 @@ export interface SourceRow {
 const ROWS: Record<IssueSource, Omit<SourceRow, "source">> = {
   live: { what: "What the map shows right now: unavailable, missing, unlocked, too hot… Nobody is told", opens: "At once",
     goes: "As soon as the device is back to normal" },
-  alert: { what: "A VESTA alert from one of the villa's rules, numbered as on Telegram (#5)",
+  alert: { what: "A VESTA alert from one of the villa's VESTA automations, numbered as on Telegram (#5)",
     opens: "As soon as the alert is raised",
     goes: "Within minutes of it being back to normal" },
   night: { what: "The VESTA Agent's maintenance check: a device offline or deleted, a battery, a silent sensor, energy "

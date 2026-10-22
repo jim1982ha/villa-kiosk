@@ -1,3 +1,60 @@
+## 2.496.495
+
+What you will see:
+- The Kiosk calls the villa's automations "automations", never "rules": the Cockpit's Faults (i) now says "A VESTA
+  alert from one of the villa's VESTA automations". A check keeps the word "rule" out of the Kiosk's texts.
+
+## 2.496.494
+
+What you will see:
+- Advanced Settings › Villa location: on a computer, Latitude, Longitude and the north offset (with Set North) sit
+  on one line; on a phone the north offset goes under the two coordinates, as before.
+- Every number field (coordinates, days, amounts, the spend cap, "every N days") uses the same text size as the
+  other fields: one 14 px size for every field in the Kiosk's windows.
+- System › Maintenance records: the (i) is on the section title; the field reads "How many days Ticket attachment
+  must be saved (in days)".
+- Cockpit › Recap: "Villa occupied since…" sits above the Ready / Not ready card. Recap and Spend show their Save
+  and Download buttons only once something has been generated.
+
+## 2.496.493
+
+What you will see:
+- Advanced Settings is part of Settings' Save and Cancel. Change something in Advanced Settings, press Close, and
+  Settings' Save is active: Save keeps the change ("saved" message), Cancel undoes it on every tablet ("cancelled"
+  message). Changes still show at once on the 3D view while you edit. Opened on its own (a device window's edit),
+  Advanced Settings has its own Save and Cancel.
+- A device window's icon: the small edit pill sits at the top-left corner, so the top-right mark and the
+  bottom-right linked-device pill stay fully visible.
+
+## 2.496.492
+
+What you will see in Advanced Settings:
+- Devices › "Asleep between reports" folds under its title like "Grouped devices": a chevron and "4 devices" on
+  the title's line, the pills and the picker inside.
+- A device's card is as tall as before when folded: its button now reads "Confirm before toggling" and is no taller
+  than the pencil beside it.
+- A device's "Linked entity" field takes the card's whole width.
+- System: "Maintenance records" comes before "Device telemetry".
+
+## 2.496.491
+
+What you will see in Advanced Settings:
+- "Log out all devices" is in the footer of every tab, on the left, with its (i) on its right, styled like
+  Settings' "Advanced Settings" button. The System tab's Session section is gone.
+- The version number is small, beside the "Advanced Settings" title.
+- Villa presence: the (i) sits on the section's title, the "Villa empty" sensor label is gone, and the chosen sensor
+  shows in its field like a linked entity, without a "Bound to …" line under it.
+
+## 2.496.490
+
+What you will see:
+- The profile button (top right) stays a circle when its menu is open: a ring round it shows it is open.
+- Advanced Settings › System: "Keep maintenance records for (days)" has its field on the same line, on the right.
+- Advanced Settings › Devices, a device's card: "Confirm before toggling" is no longer a checkbox among the fields;
+  it is a "Confirm" button on the device's own line, at the right, highlighted while it is on. "Linked entity" takes
+  the card's whole width, like the other fields.
+- "Grouped devices" and "Bound 3D objects": the folded line ("9 groups · 15 suggested") sits on the title's line.
+
 ## 2.496.489
 
 What you will see:

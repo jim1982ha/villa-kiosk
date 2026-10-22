@@ -15,7 +15,7 @@
 // a key not in the list is a type error — the key would otherwise be
 // silently un-revertable (Discard restores its siblings and leaves it).
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { AppConfig } from "@/config/AppConfig";
 import { useConfig } from "@/config/ConfigContext";
 import { useDraftCommit } from "./useDraftCommit";
@@ -51,6 +51,11 @@ export function useDraftedSlice<K extends keyof AppConfig>(keys: readonly K[], d
   const [baseline, setBaseline] = useState<Slice<K>>(() => sliceOf(config, keys));
   const [typing, setTyping] = useState<Partial<Slice<K>>>({});
   const waiting = pending.drafts[DRAFT];
+  // compared by content once per config (the slice can hold the villa's whole entity map since Advanced Settings joined
+  // Settings' draft, 2026-10-22): never per render
+  const keyList = keys.join();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `keys` is read through keyList (a fresh array each render)
+  const dirty = useMemo(() => sliceChanged(config, keys, baseline, waiting !== undefined), [config, keyList, baseline, waiting]);
 
   return {
     view: draftedView(config, keys, typing),
@@ -70,7 +75,7 @@ export function useDraftedSlice<K extends keyof AppConfig>(keys: readonly K[], d
       setTyping((t) => ({ ...t, ...shown }));
       pending.draft(DRAFT, { ...waiting, ...stored });
     },
-    dirty: sliceChanged(config, keys, baseline, waiting !== undefined),
+    dirty,
     save: () => {
       pending.flush(DRAFT);
       setBaseline(sliceOf({ ...config, ...waiting } as AppConfig, keys));

@@ -87,4 +87,14 @@ ck("  ...the band is the windows' own StateTimeline (LINKED_BAND_PX), coloured b
      && childTags(box[0]).includes("StateTimeline")
      && /reading|readingOf/.test(propText(strip[0], "colorFor") ?? ""), box.map(guardsOf));
 }
+// owner, 2026-10-22: the header icon's "edit" pill sat at its bottom-right, over the linked entity's pill — it is at
+// the TOP-LEFT now, the one corner neither of the badge's pills uses (top-right the mark, bottom-right the link)
+{
+  const { readFileSync } = await import("node:fs");
+  const css = readFileSync(new URL("../../src/styles/03-panels.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const edit = /\.panel-badge-btn::after \{([^}]*)\}/.exec(css)?.[1] ?? "";
+  ck("the header icon's edit pill: top-left, clear of both right-hand pills",
+     /left: -3px;/.test(edit) && /top: -3px;/.test(edit) && !/right:|bottom:/.test(edit), edit);
+}
+
 done("✅ the panel's header, derived once");

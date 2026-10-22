@@ -21,6 +21,7 @@ import { roleCan, type Capability } from "@/auth/permissions";
 import { useHA } from "@/ha/HAStateStore";
 import { useDraftedSlice } from "@/hooks/useDraftedSlice";
 import { DEFAULT_SITE_TITLE, type RenderConfig } from "@/config/AppConfig";
+import { ADVANCED_SETTINGS_KEYS } from "@/config/configSlice";
 import type { SceneManager } from "@/babylon/SceneManager";
 import DialogLayer from "@/components/common/DialogLayer";
 import InfoTip from "@/components/common/InfoTip";
@@ -62,6 +63,11 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
     // (deviceConfig), so writing it reaches every tablet — through the same draft as every other option here, Save
     // keeping it and Cancel writing the baseline back.
     "roomGlowAndCones",
+    // ⚠️ AND EVERYTHING ADVANCED SETTINGS EDITS (owner, 2026-10-22: it joins this dialog's Save / Cancel). Advanced
+    // Settings opens OVER this dialog, writes live through ConfigContext.update, and closes back here: these keys are
+    // in this ONE draft, so its changes make Save live, Save keeps them, and Cancel writes them back as they were when
+    // Settings opened — to every tablet, through the same update.
+    ...ADVANCED_SETTINGS_KEYS,
   ] as const;
   const slice = useDraftedSlice(SETTINGS_KEYS);
   const v = slice.view;

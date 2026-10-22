@@ -24,7 +24,7 @@ import { Pencil, Trash2, Check, X, ChevronDown, ChevronRight } from "lucide-reac
 import EntityPicker from "./EntityPicker";
 import type { EntityMapping } from "@/types/scene.types";
 import type { HassEntity } from "@/types/ha.types";
-import MappingFields, { useMappingDraft } from "./MappingFields";
+import MappingFields, { ConfirmToggle, useMappingDraft } from "./MappingFields";
 
 
 interface Props {
@@ -142,6 +142,9 @@ function EntityMapRow({
               )}
             </span>
             <span className="entity-id-actions">
+              <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+                <ConfirmToggle m={m} draftField={draftField} />
+              </span>
               <button
                 className="icon-btn"
                 title="Redirect this 3D mesh to a different entity ID"

@@ -15,6 +15,7 @@
 // through a ref rather than closing over it) so React.memo's default shallow
 // prop comparison actually has stable props to compare against.
 
+import type { ReactNode } from "react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Plus } from "lucide-react";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
@@ -31,7 +32,7 @@ import { useDeviceIdentity } from "@/config/VillaModel";
 import { ShowAll, useTruncated } from "@/components/common/TruncatedList";
 import { countOf } from "@/utils/countOf";
 
-export default function BindingsTable() {
+export default function BindingsTable({ heading }: { heading?: ReactNode } = {}) {
   // THE name a device is shown by (useEntityLabel) — this list printed HA's raw friendly_name.
   const entityLabel = useEntityLabel();
   const { config, update } = useConfig();
@@ -97,7 +98,7 @@ export default function BindingsTable() {
           were another section — it is this section's way to add an entity. */}
       {/* what this section does is its title's (i) (ConfigEditorModal, owner 2026-10-22: no visible description) */}
 
-      <Fold summary={`${bound.length} bound · ${unbound.length} unbound · ${unmappedHaEntities.length} not shown`}>
+      <Fold heading={heading} summary={`${bound.length} bound · ${unbound.length} unbound · ${unmappedHaEntities.length} not shown`}>
 
       <div style={{ marginBottom: 20 }}>
         <div className="row" style={{ gap: 8, alignItems: "flex-start" }}>

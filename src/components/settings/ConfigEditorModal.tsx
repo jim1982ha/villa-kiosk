@@ -26,7 +26,10 @@ import GroupedDevices from "./GroupedDevices";
 import UnavailableByDesign from "./UnavailableByDesign";
 import EntityPicker from "./EntityPicker";
 import InlineConfirm from "@/components/common/InlineConfirm";
-import ModalFooter from "@/components/common/ModalFooter";
+import ModalFooter, { footerExits } from "@/components/common/ModalFooter";
+import { useAppNotice } from "@/components/hud/AppNotice";
+import { useDraftedSlice } from "@/hooks/useDraftedSlice";
+import { ADVANCED_SETTINGS_KEYS } from "@/config/configSlice";
 import DialogLayer from "@/components/common/DialogLayer";
 
 /** ⚠️ EVERY TAB CARRIES TWO PANELS, AND THAT IS A RULE RATHER THAN AN
@@ -54,6 +57,10 @@ const TABS: (ModalTab<SettingsTab> & { owner?: true })[] = [
 interface Props {
   /** Return to the Settings modal this was opened from. */
   onBack: () => void;
+  /** Settings is open underneath (the way in from its footer): ITS draft owns every change made here — Close returns
+   *  to it, and its Save / Cancel keep or undo them. Opened on its own (a device window's "edit"), this dialog owns
+   *  the same draft itself, with its own Save / Cancel (owner, 2026-10-22: Advanced Settings joins Save / Cancel). */
+  withinSettings: boolean;
   /** When opened from a device panel's edit shortcut, pre-filter the entity
    *  table to this entity_id so its row is right there. */
   focusEntityId?: string;
@@ -80,7 +87,7 @@ function VillaCoordinates() {
     if (Number.isFinite(n) && text.trim() !== "") update({ [key]: n } as Partial<AppConfig>);
   }, COORD_COMMIT_MS);
   const coord = (key: "latitude" | "longitude", id: string, label: string) => (
-    <div>
+    <div className="villa-location-coord">
       <label htmlFor={id}>{label}</label>
       <input
         id={id} inputMode="decimal" value={field.drafts[key] ?? String(config[key])}
@@ -91,10 +98,10 @@ function VillaCoordinates() {
     </div>
   );
   return (
-    <div className="coord-grid">
+    <>
       {coord("latitude", "villa-lat", "Latitude")}
       {coord("longitude", "villa-lng", "Longitude")}
-    </div>
+    </>
   );
 }
 /** Which way the model faces (owner, 2026-10-12: moved here from Settings, below
@@ -110,8 +117,8 @@ function NorthOffset({ viewHeadingDeg }: { viewHeadingDeg?: () => number | null 
   const { config, update } = useConfig();
   const deg = config.northOffsetDeg;
   return (
-    <>
-      <label className="with-tip" style={{ marginTop: 14 }}>Model north offset · {deg}°
+    <div className="villa-location-north">
+      <label className="with-tip">Model north offset · {deg}°
         <InfoTip label="About the model north offset">
           Face the villa's real north side and press Set North, or drag the slider until the shadows match. Only fixes
           which wall the light comes from: sunrise and sunset times are already right.
@@ -139,7 +146,7 @@ function NorthOffset({ viewHeadingDeg }: { viewHeadingDeg?: () => number | null 
           Set North
         </button>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -149,14 +156,13 @@ function PresenceSensor() {
   const { config, update } = useConfig();
   return (
     <>
-      <div className="settings-section-title">Villa presence</div>
-      <label className="with-tip">"Villa empty" sensor
-        <InfoTip label="About the villa empty sensor">
-          The on/off sensor that is on when the villa is empty. Shown on every screen as the presence tile under the
-          floors (Occupied, Empty or Unknown); tapping it tells why.
-        </InfoTip>
-      </label>
-      <EntityPicker value={config.presenceSensor} domains={["binary_sensor"]} placeholder="Pick the villa's empty / occupied sensor"
+      {/* one (i) on the section title, the chosen sensor shown in its field like every linked entity (owner,
+          2026-10-22: no "Villa empty" sensor label, no "Bound to" line under the field) */}
+      <TipTitle title="Villa presence" tip={<>
+        The on/off sensor that is on when the villa is empty. Shown on every screen as the presence tile under the
+        floors (Occupied, Empty or Unknown); tapping it tells why.
+      </>} />
+      <EntityPicker value={config.presenceSensor} domains={["binary_sensor"]} placeholder="Pick the villa's empty / occupied sensor" hideCurrentLabel
         onChange={(id) => update({ presenceSensor: id })} onClear={() => update({ presenceSensor: "" })} />
     </>
   );
@@ -171,22 +177,19 @@ function RecordsKept() {
     const n = Number(text);
     if (text.trim() !== "" && Number.isInteger(n) && n >= 0 && n <= RECORDS_KEPT_DAYS_MAX) update({ recordsKeptDays: n });
   }, COORD_COMMIT_MS);
+  // label and field on one line, the field on the right (owner, 2026-10-22)
   return (
-    <>
-      <label htmlFor="records-kept" className="with-tip">Keep maintenance records for (days)
-        <InfoTip label="About keeping maintenance records">
-          Photos, repaired faults, work done and money spent older than this are deleted. 0 keeps them for ever. A
-          task's latest completion is always kept. Up to {RECORDS_KEPT_DAYS_MAX} days.
-        </InfoTip>
-      </label>
+    <div className="settings-field-row">
+      {/* the owner's words (2026-10-22); its (i) is the section title's */}
+      <label htmlFor="records-kept">How many days Ticket attachment must be saved (in days)</label>
       <input
-        id="records-kept" inputMode="numeric" style={{ maxWidth: 140 }}
+        id="records-kept" inputMode="numeric" className="field-narrow"
         value={field.drafts.recordsKeptDays ?? String(config.recordsKeptDays)}
         onChange={(e) => field.draft("recordsKeptDays", e.target.value)}
         onBlur={() => field.flush("recordsKeptDays")}
         onKeyDown={(e) => e.key === "Enter" && field.flush("recordsKeptDays")}
       />
-    </>
+    </div>
   );
 }
 
@@ -196,17 +199,17 @@ const COORD_COMMIT_MS = 1500;
 /** Immediately signs every device out — a lost tablet, a PIN someone saw.
  *  Two-tap confirm, same idiom as Facility's "Delete all" buttons: this
  *  signs the person clicking it out too, so it's worth pausing on. */
-function LogoutAllSection() {
+/** "Log out all devices", in the footer of every tab with its (i) on its right (owner, 2026-10-22), styled as Settings'
+ *  "Advanced Settings" opener: the footer's left control, never in the Save/Close group. */
+function LogoutAll() {
   const { logoutAll } = useProfile();
   const [confirming, setConfirming] = useState(false);
   const [failed, setFailed] = useState(false);
 
   return (
-    <>
+    <div className="with-tip">
       {failed && (
-        <div className="test-result fail" style={{ marginBottom: 10 }}>
-          Could not reach the server, no session was signed out.
-        </div>
+        <span className="body-text sev-warning" role="alert">Could not reach the server, no session was signed out.</span>
       )}
       {confirming ? (
         <InlineConfirm confirmLabel="Log out every device?"
@@ -217,17 +220,29 @@ function LogoutAllSection() {
           }}
           onCancel={() => setConfirming(false)} />
       ) : (
-        <button className="btn ghost" onClick={() => setConfirming(true)}>
-          <LogOut size={16} /> Log out all devices
+        <button className="btn" onClick={() => setConfirming(true)} aria-label="Log out all devices">
+          <LogOut size={18} aria-hidden /><span className="btn-label">Log out all devices</span>
         </button>
       )}
-    </>
+      <InfoTip label="About logging out all devices">
+        Signs every device out immediately, this one included, whatever the add-on's "Session length" option says a
+        sign-in should last. Use it if a tablet went missing or a passcode was seen by someone who shouldn't have it.
+      </InfoTip>
+    </div>
   );
 }
 
-export default function ConfigEditorModal({ onBack, focusEntityId, onModelChanged, viewHeadingDeg }: Props) {
+export default function ConfigEditorModal({ onBack, withinSettings, focusEntityId, onModelChanged, viewHeadingDeg }: Props) {
+  // ⚠️ ONE DRAFT FOR WHAT THIS DIALOG EDITS (configSlice.ADVANCED_SETTINGS_KEYS). Every edit below applies live through
+  // ConfigContext.update and reaches every tablet; the draft only remembers how the setup was when it opened. Over
+  // Settings, Settings' draft holds these keys and this dialog just closes back to it; on its own, it is this one's:
+  // Save keeps, Cancel (and Escape, and the backdrop) writes them back — the passing notices of every other dialog.
+  const own = useDraftedSlice(ADVANCED_SETTINGS_KEYS);
+  const notice = useAppNotice();
+  const commit = withinSettings ? undefined : { dirty: own.dirty, save: own.save, discard: () => { own.discard(); } };
+  const exit = commit ? footerExits(commit, onBack, notice).cancel : onBack;
   // Focus trap + Escape + focus restore (see useModalA11y).
-  const dialogRef = useModalA11y(onBack);
+  const dialogRef = useModalA11y(exit);
   const { role } = useProfile();
   // ⚠️ FILTERED BEFORE THE INITIAL VALUE IS CHOSEN, so a non-owner can never
   // start on a tab that is not in their strip — which would render an empty
@@ -247,7 +262,7 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
   const glbUpload = useGlbUpload(canUploadModel, onModelChanged);
 
   return (
-    <DialogLayer className="modal-backdrop" onClick={onBack}>
+    <DialogLayer className="modal-backdrop" onClick={exit}>
       <div
         ref={dialogRef}
         className="modal settings-modal config-editor-modal"
@@ -266,7 +281,7 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
               heading is the conventional dialog-open focus target anyway;
               tabIndex={-1} makes it programmatically focusable without
               joining the normal Tab order. */}
-          <h2 tabIndex={-1} data-autofocus>Advanced Settings</h2>
+          <h2 tabIndex={-1} data-autofocus>Advanced Settings <span className="modal-title-version">v{__APP_VERSION__}</span></h2>
           {canUploadModel && (
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               {glbUpload.addonCfg?.model_path && (
@@ -311,23 +326,26 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
           {tab === "villa" && (
             <>
               <TipTitle title="Villa location" tip="Drives the sun's position, and day and night, for this villa." />
-              <VillaCoordinates />
-              <NorthOffset viewHeadingDeg={viewHeadingDeg} />
+              {/* Latitude, Longitude and the north offset on ONE line where there is room; on a phone the two
+                  coordinates share a line and the offset takes the next (owner, 2026-10-22) */}
+              <div className="villa-location-row">
+                <VillaCoordinates />
+                <NorthOffset viewHeadingDeg={viewHeadingDeg} />
+              </div>
 
               <PresenceSensor />
 
               {/* No collapse: `BindingsTable` already opens on its three counts
                   with the lists themselves behind their own toggles, so this
                   tab states how much is bound without a click. */}
-              <TipTitle title="Bound 3D objects" tip={<>
+              <BindingsTable heading={<TipTitle title="Bound 3D objects" tip={<>
                 Each bound 3D object controls a device's entity when tapped in the villa: change which entity here,
                 without reloading the model; its name and display settings are with the device, in Devices. To prepare
                 an entity whose 3D object is not in the model yet, add it here: its settings apply as soon as a model
                 with an object named after its entity ID is uploaded. To bind one, expand the unbound objects and pick
                 an entity for it. The entities not shown on the map have no 3D object: add one in the 3D model, or bind
                 an unbound object to one, to control it from the villa.
-              </>} />
-              <BindingsTable />
+              </>} />} />
             </>
           )}
 
@@ -350,21 +368,19 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
               </>} />
               <ConfigEditor initialSearch={focusEntityId} />
 
-              <TipTitle title="Grouped devices" tip={<>
+              <GroupedDevices heading={<TipTitle title="Grouped devices" tip={<>
                 Fold several entities that are really one physical device (e.g. a combo sensor with separate
                 temperature and humidity entities) into a single map badge. Only the primary entity keeps a badge on the
                 map; every other member's value and 24-hour history appear in that badge's detail view instead. To make
                 one, pick the entity that should keep the map badge (e.g. temperature) under New group, then add the rest
                 as members.
-              </>} />
-              <GroupedDevices />
+              </>} />} />
 
-              <TipTitle title="Asleep between reports" tip={<>
+              <UnavailableByDesign heading={<TipTitle title="Asleep between reports" tip={<>
                 Devices that sleep between reports, such as a battery door sensor: their "unavailable" is normal. VESTA
                 shows what each one last reported, never "Unavailable", and raises no fault for it; the VESTA Agent skips
                 its offline checks for them too.
-              </>} />
-              <UnavailableByDesign />
+              </>} />} />
             </>
           )}
 
@@ -374,6 +390,12 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
               other roles rather than rendered-and-403 — see the TABS filter. */}
           {tab === "system" && roleCan(role, "editConfig") && (
             <>
+              <TipTitle title="Maintenance records" tip={<>
+                Photos, repaired faults, work done and money spent older than this are deleted. 0 keeps them for ever. A
+                task's latest completion is always kept. Up to {RECORDS_KEPT_DAYS_MAX} days.
+              </>} />
+              <RecordsKept />
+
               {/* `TelemetryPanel` pages its own log, so there is nothing here
                   for an outer collapse to save — and hiding the section also
                   hid the Refresh/Copy/Download/Probe buttons, which are the
@@ -386,23 +408,14 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
               </>} />
               <TelemetryPanel />
 
-              <div className="settings-section-title">Maintenance records</div>
-              <RecordsKept />
 
-              <TipTitle title="Session" tip={<>
-                Log out all devices signs every device out immediately, this one included, whatever the add-on's
-                "Session length" option says a sign-in should last. Use it if a tablet went missing or a passcode was
-                seen by someone who shouldn't have it.
-              </>} />
-              <LogoutAllSection />
             </>
           )}
         </div>
 
-        {/* No Save: every tab here applies LIVE to the 3D scene through
-            `ConfigContext`, which is why the strip above is passed no `commit`
-            and a tab switch can lose nothing. */}
-        <ModalFooter onClose={onBack} note={`v${__APP_VERSION__}`} />
+        {/* Every tab applies LIVE through `ConfigContext`, so a tab switch loses nothing. Over Settings: Close, back to
+            Settings, whose Save / Cancel own these changes; on its own: this dialog's Save / Cancel (`commit`). */}
+        <ModalFooter onClose={onBack} commit={commit} leading={roleCan(role, "editConfig") ? <LogoutAll /> : undefined} />
       </div>
     </DialogLayer>
   );

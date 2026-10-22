@@ -15,7 +15,8 @@ ck("5 tabs: Overview, then Tickets, Schedule (today's board + the schedule), Rec
    && ids.join() === "Tickets,Schedule,Recap,Spend", ids);
 ck("  ...the merged tabs show both their parts",
    /tab === "schedule" && \([\s\S]{0,40}<TodayTab[\s\S]{0,160}<ScheduleEditor \/>/.test(fm)
-   && /tab === "recap" && \([\s\S]{0,40}<ReadinessTab[\s\S]{0,400}<RecapTab /.test(fm));
+   // the presence line ABOVE the readiness card since 2026-10-22 (owner)
+   && /tab === "recap" && \([\s\S]{0,200}recap-presence[\s\S]{0,80}<ReadinessTab[\s\S]{0,400}<RecapTab /.test(fm));
 ck("  ...a profile without the Facility door sees the Cockpit's own view, with no strip",
    /doors\.facility \? \[OVERVIEW_TAB, \.\.\.FACILITY_TABS\] : \[OVERVIEW_TAB\]/.test(cockpit)
    && /\{tabs\.length > 1 && <ModalTabs/.test(cockpit) && /const shownTab: CockpitTab = doors\.facility \? tab : "overview";/.test(cockpit));

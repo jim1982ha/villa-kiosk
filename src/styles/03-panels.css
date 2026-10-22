@@ -40,8 +40,10 @@ h2[data-autofocus]:focus { outline: none; }
 @media (hover: hover) {
   .panel-badge-btn:hover { filter: brightness(1.05); }
 }
+/* The "edit the icon" pill: at the icon's TOP-LEFT (owner, 2026-10-22) — the badge's two pills hold the right-hand
+   corners (top-right: the device's mark; bottom-right: its linked entity), and at the bottom-right this hid the second. */
 .panel-badge-btn::after {
-  content: ""; position: absolute; right: -3px; bottom: -3px; width: 15px; height: 15px;
+  content: ""; position: absolute; left: -3px; top: -3px; z-index: 1; width: 15px; height: 15px;
   border-radius: 50%; background: var(--bg-card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='9' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 20h9'/%3E%3Cpath d='M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z'/%3E%3C/svg%3E") center / 9px no-repeat;
   box-shadow: 0 1px 3px rgba(0,0,0,0.4);
 }

@@ -13,6 +13,8 @@
 // each table supplies only its layout — a cell per field (`cell`).
 
 import type { ReactNode } from "react";
+import { ShieldCheck } from "lucide-react";
+import SegmentedGroup from "@/components/common/SegmentedGroup";
 import Dropdown from "@/components/common/Dropdown";
 import EntityPicker from "./EntityPicker";
 import { useDraftCommit } from "@/hooks/useDraftCommit";
@@ -80,14 +82,6 @@ export default function MappingFields({ entityId, mapping, entity, onPatch, cell
           onChange={(e) => label.draft("v", e.target.value)}
           onBlur={() => label.flush("v")} />
       ), { wide: true })}
-      {CONFIRM_GATE_TYPES.has(m.type) && cell("confirm", "Confirm before toggling", (
-        <label className="row" style={{ gap: 6, fontSize: "var(--text-xs)", color: "var(--text-secondary)", cursor: "pointer", flex: "0 0 auto" }}>
-          <input type="checkbox" checked={!!m.requireConfirm}
-            onChange={(e) => draftField({ requireConfirm: e.target.checked })}
-            title="Ask before toggling, a tap on this device's map badge opens its panel instead of acting instantly, and its panel's own on/off button asks 'Turn on/off?' first. For a device where an accidental toggle has a real physical consequence, e.g. a door release or gate motor modelled as a plain switch." />
-          Confirm before toggling
-        </label>
-      ))}
       {m.type === "light" && cell("intensity", "Intensity", (
         <div className="row" style={{ gap: 8, width: "100%", flex: "1 1 220px", minWidth: 180 }}>
           <input type="range" min={-100} max={100} step={5} value={pct} style={{ flex: 1 }}
@@ -110,7 +104,21 @@ export default function MappingFields({ entityId, mapping, entity, onPatch, cell
           onClear={() => draftField({ linkedEntityId: undefined })}
           allowCustom hideCurrentLabel
           placeholder={m.type === "camera" ? "Linked entity, its motion sensor or a switch…" : "Linked entity, a switch or a sensor…"} />
-      ))}
+      ), { wide: true })}
     </>
+  );
+}
+
+/**
+ * "Confirm before toggling", on the device card's own line, at its right (owner, 2026-10-22: no checkbox among the
+ * fields; one button, pressed while it is on). Only for the types where a tap can act at once (CONFIRM_GATE_TYPES).
+ */
+export function ConfirmToggle({ m, draftField }: { m: EntityMapping; draftField: (change: Partial<EntityMapping>) => void }) {
+  if (!CONFIRM_GATE_TYPES.has(m.type)) return null;
+  return (
+    <SegmentedGroup ariaLabel="Confirm before toggling" className="config-confirm"
+      active={m.requireConfirm ? "on" : null} onChange={() => draftField({ requireConfirm: !m.requireConfirm })}
+      options={[{ key: "on", title: "Confirm before toggling: a tap on its badge opens its window, and its on/off asks first",
+        label: <><ShieldCheck size={16} /> Confirm before toggling</> }]} />
   );
 }

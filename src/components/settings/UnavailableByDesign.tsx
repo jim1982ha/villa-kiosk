@@ -3,24 +3,28 @@
 // (AppConfig.unavailableByDesign, shared). Picked, never typed: the same pills and picker as a device group's members.
 // What picking one does is the entity store's (ha/unavailableByDesign); this only edits the list.
 
+import type { ReactNode } from "react";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
 import EntityPicker from "./EntityPicker";
 import RemovablePill from "@/components/common/RemovablePill";
+import Fold from "./Fold";
+import { countOf } from "@/utils/countOf";
 
 /** The list with `id` added (once) or removed — the one edit this section makes. */
 export function withDevice(list: readonly string[], id: string, on: boolean): string[] {
   return on ? (list.includes(id) ? [...list] : [...list, id]) : list.filter((x) => x !== id);
 }
 
-export default function UnavailableByDesign() {
+export default function UnavailableByDesign({ heading }: { heading?: ReactNode } = {}) {
   const { config, update } = useConfig();
   const { entities } = useHA();
   const ids = config.unavailableByDesign;
   const name = (id: string) => String(entities[id]?.attributes?.friendly_name ?? id);
   const set = (id: string, on: boolean) => update({ unavailableByDesign: withDevice(ids, id, on) });
+  // folded under its title like Grouped devices (owner, 2026-10-22: the same chevron and closed line)
   return (
-    <>
+    <Fold heading={heading} summary={countOf(ids.length, "device")}>
       <div className="row" style={{ flexWrap: "wrap", gap: 6, alignItems: "center" }}>
         {ids.map((id) => (
           <RemovablePill key={id} label={name(id)} tip={id} removeLabel={`Take ${name(id)} off this list`}
@@ -30,6 +34,6 @@ export default function UnavailableByDesign() {
           <EntityPicker onChange={(id) => set(id, true)} placeholder="Add a device…" hideCurrentLabel compact />
         </div>
       </div>
-    </>
+    </Fold>
   );
 }

@@ -71,7 +71,7 @@
 .modal h2 { font-family: var(--font-display); font-weight: 500; font-size: var(--text-xl); margin: 0; letter-spacing: var(--tracking-tight); }
 .modal .sub { color: var(--text-secondary); margin: 0 0 22px; }
 .modal label { display: block; font-size: var(--text-sm); color: var(--text-secondary); margin: 14px 0 6px; }
-.modal input, .modal select { width: 100%; padding: 12px 14px; border-radius: 10px; background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--hairline); font-size: var(--text-md); }
+.modal input, .modal select { width: 100%; padding: 12px 14px; border-radius: 10px; background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--hairline); font-size: var(--field-text); font-weight: 400; }
 .modal input:focus, .modal select:focus { border-color: var(--accent); outline: none; }
 .modal-actions { display: flex; gap: 12px; margin-top: 24px; justify-content: flex-end; }
 
@@ -376,8 +376,15 @@
 
 /* Villa Latitude/Longitude pair in the Config Editor — full modal width,
    left-aligned like every other field. */
-.coord-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-.coord-grid label { margin-top: 0; }
+/* Advanced Settings › Villa location: Latitude, Longitude and the model north offset (its slider and Set North) on ONE
+   line where the dialog is wide enough; on a phone the two coordinates share a line and the offset wraps onto the
+   next (owner, 2026-10-22). Each field keeps its label above it; the fields line up on their bottom edge. */
+.villa-location-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; }
+.villa-location-coord { flex: 1 1 120px; min-width: 0; }
+.villa-location-north { flex: 2 1 320px; min-width: 0; }
+/* A short number field (days, a percentage): its own width, never a stretched bar. */
+.field-narrow { max-width: 140px; }
+.villa-location-row label { margin-top: 0; }
 
 /* Inline (i) info button + hover/focus tooltip (replaces the model info block). */
 .info-tip { position: relative; display: inline-flex; }
@@ -547,7 +554,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .config-search svg { flex: 0 0 auto; color: var(--text-dim); }
 .config-search input {
   flex: 1 1 auto; min-width: 0; border: none; background: transparent;
-  padding: 10px 0; color: var(--text-primary); font-size: var(--text-base);
+  padding: 10px 0; color: var(--text-primary); font-size: var(--field-text);
 }
 .config-search input:focus { outline: none; }
 /* Compact variant — sized to sit inline at pill height (GroupedDevices'
@@ -682,3 +689,21 @@ label.toggle span { user-select: none; line-height: 1.4; }
 /* A chart's step and aggregation beside its title ("LAST MONTH · daily avg", historyRange ChartStep, owner
    2026-10-20): smaller, muted, never upper-cased with the title. */
 .chart-step { font-size: var(--text-xs); font-weight: 500; color: var(--text-secondary); text-transform: none; letter-spacing: 0; }
+
+/* A label and its one short field on the same line, the field on the right (owner, 2026-10-22). */
+.settings-field-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.settings-field-row > label { margin: 0; }
+
+/* "Confirm" on a device card's own line, beside the pencil: the Settings toggle buttons' look, at the icon buttons'
+   height (owner, 2026-10-22). */
+.segmented.config-confirm { padding: 2px; flex: 0 0 auto; }
+.segmented.config-confirm button { min-height: 26px; height: 26px; padding: 0 10px; font-size: var(--text-xs); gap: 6px; }
+/* a picker in a device card takes the card's width, like the fields above it (owner, 2026-10-22) */
+.config-table td > .picker { flex: 1 1 auto; min-width: 0; }
+
+/* A folded section's title and its closed line on one line (Fold heading, owner 2026-10-22). */
+.fold-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 14px; margin: 24px 0 12px; }
+.fold-heading > .settings-section-title { margin: 0; }
+
+/* The version beside a modal's title, small (owner, 2026-10-22: it left the footer for "Log out all devices"). */
+.modal-title-version { font-size: var(--text-xs); font-weight: 500; color: var(--text-secondary); margin-left: 8px; letter-spacing: 0; }
