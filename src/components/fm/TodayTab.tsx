@@ -6,6 +6,7 @@
 // 3D map. Overdue work is exactly the kind of gap a management contract's
 // maintenance-standard clause exists to prevent, whatever that clause is.
 
+import InfoTip from "@/components/common/InfoTip";
 import { useState } from "react";
 import { Check, CalendarClock, Trash2 } from "lucide-react";
 import { useFmData } from "@/fm/FmDataContext";
@@ -52,14 +53,13 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
       <div className="fm-stack">
       {/* THE Cockpit card, as every other (owner, 2026-10-22: "make it consistent with the rest of the UI") — it was
           a centred block of its own, in larger grey type */}
-      <RecordCard lead={<CalendarClock size={16} className="muted" aria-hidden="true" />} title="No maintenance schedule yet"
-        body={(
-          <p className="muted body-text fm-card-text">
-            Add your property's own recurring maintenance tasks with <strong>Add a task</strong> below, air
-            conditioning service, pest control, pool and landscaping, whatever your own schedule or agreement calls
-            for. Each task then tracks its own interval, due date and the work done.
-          </p>
-        )} />
+      <RecordCard lead={<CalendarClock size={16} className="muted" aria-hidden="true" />} title={<span className="with-tip">
+        No maintenance schedule yet
+        <InfoTip label="About the maintenance schedule">
+          Add your property's own recurring maintenance tasks with Add a task below: air conditioning service, pest
+          control, pool and landscaping, whatever your own schedule or agreement calls for. Each task then tracks its
+          own interval, due date and the work done.
+        </InfoTip></span>} />
       <RecentWorkList />
       </div>
     );

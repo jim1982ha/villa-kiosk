@@ -113,7 +113,7 @@
 @media (max-width: 640px) { .fm-statement-buttons { flex-wrap: wrap; } }
 /* A description with its action at the right of the same line (Schedule's "Add a task"); wraps on a phone. */
 .fm-desc-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.fm-desc-row > p { flex: 1 1 280px; margin: 0; }
+.fm-desc-row > .info-tip { flex: none; }
 .fm-desc-row > .btn { flex: none; }
 /* A field's name on the same line as its control (Recap's Period). */
 .fm-inline-label { color: var(--text-secondary); font-size: var(--field-label-size); }
@@ -148,7 +148,6 @@
    deliberate, occasional signal, not decoration applied uniformly. */
 .fm-list { display: flex; flex-direction: column; gap: 8px; }
 /* How long work done or money spent is kept (fmEngine.recordsKeptNote), under its list. */
-.fm-kept-note { margin: 8px 2px 0; font-size: var(--text-xs); }
 .fm-row {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
   padding: var(--card-pad); border-radius: var(--card-radius); background: var(--bg-card); border: var(--card-border);
@@ -446,8 +445,6 @@
 }
 .fm-form h3 { margin: 0; font-size: var(--text-md); }
 /* a form's opening words sit close to its fields: the form's own gap is the only space (owner, 2026-10-14) */
-.fm-form .fm-form-intro { margin: 0; }
-.fm-form .fm-form-intro + .slider-pair label, .fm-form .fm-form-intro + .slider-pair .fm-field { margin-top: 0; }
 .fm-field { display: flex; flex-direction: column; gap: var(--field-label-gap); }
 .fm-field > span { font-size: var(--field-label-size); color: var(--text-secondary); }
 /* DIRECT children only. A descendant selector here reached into every nested
@@ -529,7 +526,6 @@
 }
 
 /* a card's words of its own, as a paragraph (an empty list's card): no margin of their own, the card's gap is enough */
-.fm-card-text { margin: 0; }
 
 /* A generated recap or statement, rendered as a document (MarkdownPreview) rather than a
    monospace dump of raw Markdown — the underlying string is unchanged and is

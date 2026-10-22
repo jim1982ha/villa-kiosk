@@ -18,6 +18,7 @@
 // remain necessary for the HEAVY commit itself, but neither one touches this
 // separate, purely-React cost.
 
+import InfoTip from "@/components/common/InfoTip";
 import { memo, type RefObject } from "react";
 import { Pencil, Trash2, Check, X, ChevronDown, ChevronRight } from "lucide-react";
 import EntityPicker from "./EntityPicker";
@@ -165,9 +166,8 @@ function EntityMapRow({
 
       {editing && (
         <td data-label="">
-          <span style={{ fontSize: "var(--text-2xs)", color: "var(--text-secondary)" }}>
-            Mesh stays, entity ID changes, no model rebuild needed.
-          </span>
+          {/* an explanation is an (i), never a visible line (owner, 2026-10-22) */}
+          <InfoTip label="About redirecting this object">The 3D object stays and its entity ID changes: no model rebuild is needed.</InfoTip>
         </td>
       )}
 

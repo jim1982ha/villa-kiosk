@@ -63,4 +63,17 @@ ck("shared with every tablet: a key of the central store, on when the store has 
    dc.SHARED_CONFIG_KEYS.includes("roomGlowAndCones") && dc.baselineFromServer({}).roomGlowAndCones === true
    && dc.parseSharedConfig({ roomGlowAndCones: false }).roomGlowAndCones === false);
 
+console.log("\n  where it is set (owner, 2026-10-22: in Settings, on the Map look row — no longer in Advanced Settings):");
+{
+  const st = readFileSync(new URL("../../src/components/settings/SettingsModal.tsx", import.meta.url), "utf8");
+  const adv = readFileSync(new URL("../../src/components/settings/ConfigEditorModal.tsx", import.meta.url), "utf8");
+  const row = /<div className="row badge-style-row"[\s\S]*?\n {8}<\/div>/.exec(st)?.[0] ?? "";
+  ck("one more toggle on the Map look row, through Settings' one draft (Save keeps it, Cancel writes it back)",
+     /"roomGlowAndCones",\s*\] as const;/.test(st) && /ariaLabel="Room glow and camera cones"/.test(row)
+     && /slice\.set\(\{ roomGlowAndCones: !v\.roomGlowAndCones \}, \{ now: true \}\)/.test(row)
+     && /\{can\("editConfig"\) && \(\s*<SegmentedGroup ariaLabel="Room glow and camera cones"/.test(row));
+  ck("  ...its (i) says it applies to every tablet; Advanced Settings no longer has it",
+     /It applies to every tablet\./.test(st) && !/roomGlowAndCones|Room glow/.test(adv));
+}
+
 done("✅ one switch for the room glow and the camera cones; the devices keep their own glow");

@@ -7,6 +7,7 @@
 //
 // Time-to-resolution is what evidences supervision, so the app stamps the resolution time itself.
 
+import InfoTip from "@/components/common/InfoTip";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Wrench } from "lucide-react";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
@@ -130,8 +131,10 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
 
       {tickets.length === 0 && !editing && (
         // THE Cockpit card, as every other (owner, 2026-10-22)
-        <RecordCard lead={<Wrench size={16} className="muted" aria-hidden="true" />} title="No ticket in progress"
-          body={<p className="muted body-text fm-card-text">A fault on the Overview becomes a ticket when you press Open Ticket on its card.</p>} />
+        <RecordCard lead={<Wrench size={16} className="muted" aria-hidden="true" />} title={<span className="with-tip">
+          No ticket in progress
+          <InfoTip label="About tickets">A fault on the Overview becomes a ticket when you press Open Ticket on its card.</InfoTip>
+        </span>} />
       )}
       {tickets.length > 0 && <div className="fm-list">{tickets.map(ticket)}</div>}
 
@@ -179,9 +182,8 @@ export function TicketFigures({ tickets, inProgress, retention, now = Date.now()
           <div className="fm-stat"><span className="n">{stats.closedWithoutAction}</span><span className="l">closed, no action</span></div>
         )}
       </div>
-      <p className="muted fm-row-sub">
-        Mean resolution and closes within the kept record{days === null ? "" : ` (${days} days)`}.
-      </p>
+      {/* the figures' period, said as data in a few words (owner, 2026-10-22: no visible description text) */}
+      <p className="muted fm-row-sub">Over the kept record{days === null ? "" : ` (${days} days)`}.</p>
     </div>
   );
 }

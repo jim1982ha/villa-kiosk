@@ -437,7 +437,7 @@
   }
 
   /* ...and every other window the full screen, like Settings; a question box and the colour picker keep their size */
-  .modal:not(.panel-modal):not(.ask-dialog):not(.badge-color-modal) { height: 100dvh; }
+  .modal:not(.panel-modal):not(.ask-dialog):not(.badge-color-modal):not(.device-details) { height: 100dvh; }
   .modal.panel-modal.ask-dialog, .modal.panel-modal.badge-color-modal, .modal.panel-modal.device-details { height: auto; }
 
   /* (Config table is card-styled at all widths now — see the base rules.) */

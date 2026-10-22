@@ -53,8 +53,10 @@ const chunks = {};
 const parts = modal.split(/\{tab === "(\w+)" &&/);
 for (let i = 1; i < parts.length; i += 2) chunks[parts[i]] = (chunks[parts[i]] ?? "") + parts[i + 1];
 
+// a section's title is a heading, or (owner, 2026-10-22) a TipTitle — the heading with its (i)
 const titleIn = (chunk, title) =>
-  new RegExp(`<div className="settings-section-title">\\s*${title}\\s*</div>`).test(chunk);
+  new RegExp(`<div className="settings-section-title">\\s*${title}\\s*</div>`).test(chunk)
+  || new RegExp(`<TipTitle title="${title}"`).test(chunk);
 
 const misplaced = [];
 for (const [title, want] of SECTIONS) {

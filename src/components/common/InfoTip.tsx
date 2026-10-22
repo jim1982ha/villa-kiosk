@@ -83,3 +83,22 @@ export default function InfoTip({ label, children, className, width = INFO_TIP_W
     </span>
   );
 }
+
+/**
+ * A section's title with its ONE (i) beside it (owner, 2026-10-22: no visible description text in Settings, Advanced
+ * Settings or the Cockpit — what a section or an option is for is read in its (i), never in a paragraph under it).
+ * `tip` absent: the title alone.
+ */
+export function TipTitle({ title, tip, className = "settings-section-title", style }: {
+  title: ReactNode;
+  tip?: ReactNode;
+  className?: string;
+  style?: CSSProperties;
+}) {
+  return (
+    <div className={`${className}${tip ? " with-tip" : ""}`} style={style}>
+      {title}
+      {tip && <InfoTip label={`About ${typeof title === "string" ? title : "this section"}`}>{tip}</InfoTip>}
+    </div>
+  );
+}

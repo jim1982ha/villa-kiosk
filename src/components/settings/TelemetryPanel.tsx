@@ -417,14 +417,6 @@ export default function TelemetryPanel() {
 
   return (
     <div>
-      <p className="muted body-text" style={{ marginBottom: 12 }}>
-        What every device that opens this kiosk has reported, load timings, JS
-        errors, WebGL context losses and page-lifecycle transitions. This is how
-        a problem on someone else&rsquo;s phone becomes diagnosable. Newest first;
-        the add-on keeps the last 500 events. <strong>Copy</strong> and
-        <strong> Download</strong> give you the raw events (every field, not just
-        the summary shown here); <strong>Clear</strong> empties the store.
-      </p>
 
       {/* ⚠️ ICONS ONLY ON A PHONE (owner, 2026-10-14): six labelled buttons overflowed their pills there
           (.telemetry-actions .btn-label); each keeps its name as aria-label and title. */}
@@ -500,7 +492,7 @@ export default function TelemetryPanel() {
       {error && <div className="muted body-text">{error}</div>}
       {!error && events?.length === 0 && (
         <div className="muted body-text">
-          Nothing reported yet. Events appear as devices load the villa (or hit an error).
+          Nothing reported yet.
         </div>
       )}
 

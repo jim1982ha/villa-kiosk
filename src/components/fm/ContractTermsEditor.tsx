@@ -6,6 +6,7 @@
 // (`fmContract`), so every device follows. The currency is not set here: it
 // is Home Assistant's own (Settings → System → General).
 
+import InfoTip from "@/components/common/InfoTip";
 import { useState } from "react";
 import { Settings2, Trash2 } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
@@ -53,15 +54,16 @@ export default function ContractTermsEditor() {
   }
   return (
     <div className="fm-form">
-      <h3>Spend settings</h3>
-      {/* ONE paragraph, its sentences run on (owner, 2026-10-14: no blank line between them) */}
-      <p className="muted body-text fm-form-intro">
-        Shared by every device. {terms.currency
-          ? <>Amounts are in {terms.currency}, the villa's currency.</>
-          : <>No currency is set for the villa, so amounts show as plain numbers.</>}
-        {" "}Spend is recorded as <b>Minor</b> (routine work, counted against the cap) or <b>Major</b> (larger work,
-        always outside the cap).
-      </p>
+      {/* its explanation is its (i), never a paragraph (owner, 2026-10-22) */}
+      <h3 className="with-tip">Spend settings
+        <InfoTip label="About the spend settings">
+          Shared by every device. {terms.currency
+            ? <>Amounts are in {terms.currency}, the villa's currency.</>
+            : <>No currency is set for the villa, so amounts show as plain numbers.</>}
+          {" "}Spend is recorded as Minor (routine work, counted against the cap) or Major (larger work, always outside
+          the cap).
+        </InfoTip>
+      </h3>
       <div className="slider-pair">
         <label className="fm-field">
           <span>Monthly cap on minor spend{terms.currency ? ` (${terms.currency})` : ""}</span>

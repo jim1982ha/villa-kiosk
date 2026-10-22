@@ -23,8 +23,10 @@ ck("  ...with its slider and its Set North button", /function NorthOffset[\s\S]*
 ck("  ...and the Dashboard hands it the view's heading", /viewHeadingDeg=\{manager \? \(\) => manager\.viewHeadingDeg\(\) : undefined\}/.test(src("pages/Dashboard.tsx")));
 
 ck("Bound 3D objects has no second heading of its own", !/Pre-configure a new entity/.test(bindings));
-ck("  ...and one paragraph in the section's own style says both what it does and how to prepare an entity",
-   (bindings.match(/<p className="muted body-text">/g) ?? []).length >= 1 && /To prepare an entity whose 3D object is not in the model yet/.test(bindings));
+// its explanation is its title's (i) since 2026-10-22 (owner: no visible description text)
+ck("  ...and its title's ONE (i) says both what it does and how to prepare an entity — no paragraph of its own",
+   /<TipTitle title="Bound 3D objects" tip=\{<>[\s\S]*?To prepare\s+an entity whose 3D object is not in the model yet/.test(advanced)
+   && !/To prepare an entity/.test(bindings));
 
 const rule = css.match(/\.telemetry-row > \.telemetry-summary \{([^}]*)\}/)?.[1] ?? "";
 ck("a telemetry row is one line: the summary does not wrap and ends in …",

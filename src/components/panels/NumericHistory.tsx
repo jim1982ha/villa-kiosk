@@ -73,7 +73,7 @@ export default function NumericHistory({ series, named = false }: {
         <div className="field" key={s.id}>
           {i === 0
             ? <HistoryHeader title={`${s.label}, ${range.title.toLowerCase()}`} picker={picker} step={step} />
-            : <label className="entity-label">{s.label} — {range.title.toLowerCase()}<ChartStep words={step} /></label>}
+            : <label className="entity-label">{s.label}, {range.title.toLowerCase()}<ChartStep words={step} /></label>}
           <LineChart stepMs={range.grainMs} label={`${s.label} history`} height={110} window={history[s.id]?.window} status={status}
             lines={[line(s)]} />
         </div>

@@ -3,13 +3,16 @@
 // (owner, 2026-10-14: "the list risks to increase indefinitely: re-use exactly the layout of the Tickets tab"). ONE
 // piece for every such list: Tickets' "Closed", Schedule's "Recent work".
 
+import InfoTip from "@/components/common/InfoTip";
 import { useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Pager, usePaged, PAGE_CARDS } from "./Paged";
 
-export default function FoldedList<T>({ title, rows, unit, children }: {
+export default function FoldedList<T>({ title, rows, unit, children, tip }: {
   /** Its name, before the count: "Closed", "Recent work". */
   title: string;
+  /** Its (i): what it keeps, and for how long (owner, 2026-10-22: never a visible line under it). */
+  tip?: ReactNode;
   /** Every row, in the order shown. */
   rows: T[];
   /** What a row is, singular, for the pager ("closed record"). */
@@ -22,10 +25,13 @@ export default function FoldedList<T>({ title, rows, unit, children }: {
   if (rows.length === 0) return null;
   return (
     <div className="fm-field">
-      <button type="button" className="fm-disclosure" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
-        {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-        {title} ({rows.length})
-      </button>
+      <div className="with-tip">
+        <button type="button" className="fm-disclosure" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+          {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          {title} ({rows.length})
+        </button>
+        {tip && <InfoTip label={`About ${title}`}>{tip}</InfoTip>}
+      </div>
       {open && (
         <>
           <div className="fm-list">{paged.page.map(children)}</div>

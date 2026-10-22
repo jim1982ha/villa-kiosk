@@ -44,7 +44,8 @@ export default function RecentWorkList() {
   const kept = recordsKeptNote(retention, "Work");
   return (
     <>
-    <FoldedList title="Recent work" rows={rows} unit="completion">
+    <FoldedList title="Recent work" rows={rows} unit="completion"
+      tip={kept ? `${kept} A task's latest completion is always kept.` : undefined}>
       {({ completion: c, title, cost }) => (
         <RecordCard key={c.id} title={title}
           when={`${localStamp(c.at)}${workedBy(c) !== "—" ? ` · ${workedBy(c)}` : ""}`}
@@ -54,7 +55,6 @@ export default function RecentWorkList() {
             run: (token) => removeCompletion(c.id, token) }} />
       )}
     </FoldedList>
-    {kept && <p className="muted body-text fm-kept-note">{kept} A task's latest completion is always kept.</p>}
     </>
   );
 }

@@ -21,7 +21,9 @@ ck("Generate, Save and Download .md are ONE group", !!group && /Generate stateme
 ck("  ...that does not wrap apart (a phone excepted)", /\.fm-statement-buttons \{ display: flex; flex-wrap: nowrap;/.test(css));
 
 console.log("\n  Spend settings:");
-ck("its words are ONE paragraph, close to the fields", (terms.match(/<p className/g) || []).length === 1 && /\.fm-form \.fm-form-intro \{ margin: 0; \}/.test(css));
+// owner, 2026-10-22: no visible description text — the words are the title's ONE (i)
+ck("its words are ONE (i) on its title, no paragraph", (terms.match(/<p className/g) || []).length === 0
+   && /<h3 className="with-tip">Spend settings\s*<InfoTip /.test(terms));
 ck("Remove cap is drawn by the form's actions, on the left of Cancel",
    /extra=\{cap\.trim\(\) !== "" && \(\s*<button type="button" className="btn ghost"[^>]*>[\s\S]*?Remove cap<\/button>/.test(terms)
    && /\{extra\}\s*<button className="btn ghost" onClick=\{onCancel\}>/.test(actions)

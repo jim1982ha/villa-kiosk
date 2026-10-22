@@ -120,7 +120,8 @@
      height. A question box (AskDialog, `.ask-dialog`) and the colour picker are not windows of content: they keep
      their own size. */
   /* ⚠️ BUT NOT A DEVICE'S OWN WINDOW (owner, same day: "wrongly applied to the Entity details ones … keep an adjusted
-     height"): a window about one device (`.device-details`, BasePanel with an entityId) is as tall as what it shows. */
+     height"): a window about one device (`.device-details`: BasePanel with an entityId, and the "Open a ticket" window,
+     FaultStageModal) is as tall as what it shows. */
   .modal:not(.ask-dialog):not(.badge-color-modal):not(.device-details) { height: 90vh; }
 }
 /* Header is a row: title left, the icon-only theme selector right. */
@@ -166,8 +167,11 @@
 /* Every footer button is a soft pill — the look the Energy/Weather footer had
    and the owner chose for all of them (Settings' "Advanced Settings" was an
    outlined box). The primary action keeps the accent. */
+/* ONE size for every footer button — Close, Save, Cancel and Settings' Advanced Settings alike (owner, 2026-10-22:
+   Settings' footer "differs from the other modals"). */
 .modal-footer .btn {
   border: none; background: var(--bg-input); border-radius: 999px;
+  min-height: var(--touch-min); display: inline-flex; align-items: center; justify-content: center;
   padding: 10px 20px; font-weight: 500; color: var(--text-secondary);
   transition: background 0.15s ease, color 0.15s ease;
 }
@@ -342,7 +346,7 @@
 .badge-style-row { flex-wrap: nowrap; }
 .badge-style-row .settings-row-half { min-width: 0; }
 .badge-style-row .settings-row-half:first-of-type { flex: 2 1 0; }
-.badge-style-row .settings-row-half:last-of-type { flex: 1 1 0; }
+.badge-style-row .settings-row-half:not(:first-of-type) { flex: 1 1 0; }
 /* Safety net, not the primary fix above: on an extremely narrow screen or a
    long translated label, the buttons can still run out of room even while
    growing to fill the row. The ellipsis has to land on the TEXT
@@ -386,6 +390,13 @@
 @media (hover: hover) {
   .info-tip > .info-btn:hover { color: var(--accent); }
 }
+/* A title or a label with its (i) beside it — the ONE place an option's explanation lives in Settings, Advanced
+   Settings and the Cockpit (owner, 2026-10-22: no visible description text). The (i) sits inline after the words, a
+   size that suits a title rather than the 30 px stand-alone button. */
+.with-tip { display: flex; align-items: center; gap: 6px; }
+.with-tip > .info-tip > .info-btn { width: 24px; height: 24px; }
+.modal-body label.with-tip { display: flex; }
+
 /* The (i)'s card: portalled to <body>, `fixed`, placed by InfoTip (infoTipPlacement: below the (i), or above when
    that has more room; never past the screen's edge). Opaque, above every window (a Dropdown's layer): the old
    translucent card, absolute inside the (i) and capped at 420 px, let the cards under it show through and cut its

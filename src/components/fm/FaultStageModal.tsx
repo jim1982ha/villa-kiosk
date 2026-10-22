@@ -100,7 +100,9 @@ export default function FaultStageModal({
     <DialogLayer className="modal-backdrop" onClick={onClose}>
       <div
         ref={dialogRef}
-        className="modal"
+        // a window about ONE device's faults fits its content, as the device's own window does (`device-details`, the one
+        // rule of 04-modals/05-layout — owner, 2026-10-22: "Open a ticket" was the full window height)
+        className="modal device-details"
         onClick={(e) => e.stopPropagation()}
         style={{ maxWidth: 520 }}
         role="dialog"

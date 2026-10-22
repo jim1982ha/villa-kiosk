@@ -8,6 +8,7 @@
 // sentences, and a placeholder of one villa's typical amount in its own
 // currency. One component; the cap arithmetic is fmEngine.projectedSpend's.
 
+import InfoTip from "@/components/common/InfoTip";
 import { useFmData } from "@/fm/FmDataContext";
 import Dropdown from "@/components/common/Dropdown";
 import { useFmTerms } from "@/fm/useFmTerms";
@@ -39,7 +40,8 @@ export default function CostFields({ amount, onAmount, category = "minor", onCat
   return (
     <>
       <label className="fm-field">
-        <span>Cost{terms.currency ? ` (${terms.currency})` : ""}{optional ? ", optional, leave blank if nothing was spent" : ""}</span>
+        <span className="with-tip">Cost{terms.currency ? ` (${terms.currency})` : ""}{optional ? ", optional" : ""}
+          {optional && <InfoTip label="About the cost">Leave it blank if nothing was spent.</InfoTip>}</span>
         <input value={amount} inputMode="decimal" onChange={(e) => onAmount(e.target.value)} placeholder="0" />
       </label>
       {onCategory && (!optional || value > 0) && (
