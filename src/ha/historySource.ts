@@ -43,8 +43,10 @@ export interface StateRow {
 /** What the history source needs from Home Assistant — the seam. */
 export interface HistoryPort {
   /** Every state `entityId` reported between `from` and `to` (epoch ms),
-   *  led by the state it was already in at `from`. Rejects on failure. */
-  stateRows(entityId: string, from: number, to: number): Promise<StateRow[]>;
+   *  led by the state it was already in at `from`. Rejects on failure.
+   *  `back`: how far back the report a window opening asleep holds may be looked for (a device asleep by design,
+   *  unavailableByDesign.heldWindow) — readBackFrom, the depth every read shares. */
+  stateRows(entityId: string, from: number, to: number, back?: number): Promise<StateRow[]>;
   /** The recorder's statistics for `ids` from `start` (ISO), one bucket per
    *  `period`, with the fields asked for. Rejects on failure. */
   getStatisticsDuringPeriod(
@@ -105,12 +107,6 @@ export type HistoryAnswer<R extends HistoryRequest> =
 /** Several requests answered together, over ONE `now`. */
 export type HistoryRequests = Record<string, HistoryRequest>;
 export type HistoryAnswers<Q extends HistoryRequests> = { [K in keyof Q]: HistoryAnswer<Q[K]> };
-
-/** How far back to look for a device's last sighting when the requested window
- *  is entirely dead. Long enough to cover a device that failed weeks ago, short
- *  enough that the query stays cheap; beyond it, "not enough history" is the
- *  honest answer. */
-export const LAST_SEEN_LOOKBACK_HOURS = 24 * 60;
 
 /** The window a request covers at `now`. */
 export function requestWindow(r: HistoryRequest, now: number): { from: number; to: number } {
@@ -183,15 +179,26 @@ async function readings(port: HistoryPort, id: string, window: { from: number; t
  * business (stateColors.paintState: unavailable amber, unknown idle).
  */
 async function states(port: HistoryPort, id: string, window: { from: number; to: number },
-  kept?: number): Promise<StateHistoryPoint[]> {
-  const points = (await port.stateRows(id, window.from, window.to))
+  kept: number | undefined, now: number): Promise<StateHistoryPoint[]> {
+  const points = (await port.stateRows(id, window.from, window.to, readBackFrom(kept, now)))
     // ⚠️ COERCED AT THE DOOR: Home Assistant sends a null `state` on a freshly
     // added entity's early rows, and every consumer believed the declared type.
     .map((s) => ({ t: new Date(s.last_changed).getTime(), state: String(s.state ?? "") }))
     .filter((p) => Number.isFinite(p.t));
-  // Consecutive equal states (only attributes changed) are one segment.
-  // ⚠️ OLDER THAN THE VILLA KEEPS (owner, 2026-10-20): the window opens on NOT_KEPT until its first change kept —
-  // grey "No longer kept", never a blank, an "unknown" or an outage
+  return keptBand(points, window, kept);
+}
+
+/**
+ * A window's states as a band draws them: consecutive equal states (only attributes changed) are one segment, and
+ * the part of the window older than the villa keeps opens on NOT_KEPT until its first change kept.
+ *
+ * ⚠️ OLDER THAN THE VILLA KEEPS (owner, 2026-10-20): grey "No longer kept", never a blank, an "unknown" or an outage.
+ * ONE rule for every band: the asked window, a follower's, and a window moved back to a silent device's last report
+ * (until 2.496.499 the moved one skipped it: a lock dead for 8 days, on a week's chart, drew its band blank where the
+ * door sensor's band under it read "No longer kept").
+ */
+export function keptBand(points: readonly StateHistoryPoint[], window: { from: number; to: number },
+  kept: number | undefined): StateHistoryPoint[] {
   const out: StateHistoryPoint[] = kept !== undefined && kept > window.from && !(points.length && points[0].t <= window.from)
     ? [{ t: window.from, state: NOT_KEPT }] : [];
   for (const p of points) {
@@ -211,12 +218,13 @@ async function stateWindow(port: HistoryPort, id: string, hours: number, now: nu
   follow: readonly string[] = []): Promise<StateWindow> {
   const kept = await keptFrom(port, now);
   const followers = async (to: number) => follow.length === 0 ? undefined : Object.fromEntries(await Promise.all(
-    follow.map(async (f) => [f, await states(port, f, { from: to - hours * HOUR_MS, to }, kept)] as const)));
+    follow.map(async (f) => [f, await states(port, f, { from: to - hours * HOUR_MS, to }, kept, now)] as const)));
   const alive = (h: StateHistoryPoint[]) => h.some((pt) => !UNKNOWN_STATES.has(pt.state) && pt.state !== NOT_KEPT);
-  const h = await states(port, id, { from: now - hours * HOUR_MS, to: now }, kept);
+  const h = await states(port, id, { from: now - hours * HOUR_MS, to: now }, kept, now);
   const asked = async (): Promise<StateWindow> => ({ data: h, ...(follow.length ? { followers: await followers(now) } : {}) });
   if (alive(h)) return asked();
-  const deep = await states(port, id, { from: now - LAST_SEEN_LOOKBACK_HOURS * HOUR_MS, to: now });
+  // as far back as the villa keeps: the ONE depth (readBackFrom), the same the entity store's recall reads to
+  const deep = await states(port, id, { from: readBackFrom(kept, now), to: now }, kept, now);
   let seen = 0;
   for (const pt of deep) {
     if (!UNKNOWN_STATES.has(pt.state) && pt.state !== NOT_KEPT && pt.t > seen) seen = pt.t;
@@ -226,7 +234,8 @@ async function stateWindow(port: HistoryPort, id: string, hours: number, now: nu
   // after the sighting, so its state has width — with the row BEFORE it that
   // says what state the window opened in.
   const end = Math.min(now, bandEnd(seen, TREND_INTERVAL_MS));
-  return { data: windowEndingAt(deep, end, hours), lastSeen: seen, end,
+  const from = end - hours * HOUR_MS;
+  return { data: keptBand(windowEndingAt(deep, end, hours), { from, to: end }, kept), lastSeen: seen, end,
     ...(follow.length ? { followers: await followers(end) } : {}) };
 }
 
@@ -301,13 +310,9 @@ export function stateSinceNow(h: StateSince | null | undefined, live: { state: s
   return h;
 }
 
-/** How far back a "since" looks when the villa does not say how much it keeps. */
-export const SINCE_LOOKBACK_HOURS = LAST_SEEN_LOOKBACK_HOURS;
-
 async function since(port: HistoryPort, id: string, now: number): Promise<StateSince | null> {
-  const kept = await keptFrom(port, now);
-  const from = kept ?? now - SINCE_LOOKBACK_HOURS * HOUR_MS;
-  return stateSince(await port.stateRows(id, from, now), from);
+  const from = readBackFrom(await keptFrom(port, now), now);
+  return stateSince(await port.stateRows(id, from, now, from), from);
 }
 
 // ── How far back the villa's system keeps every change ────────────────────
@@ -321,6 +326,21 @@ const keptCache = new WeakMap<HistoryPort, { at: number; value: number | undefin
 /** How far back the probe looks, from `now`. */
 export function keptLookFrom(now: number): number {
   return now - KEPT_LOOKBACK_DAYS * 24 * HOUR_MS;
+}
+
+/**
+ * How far back a read looks at `now` for what came before a window — a silent device's last report (the moved band),
+ * when a state began ("since"), the report a device asleep by design holds (the entity store's recall and its chart):
+ * to where the villa's system's detail begins (`kept`, keptFrom). Not known (no probe, or it reaches the probe's own
+ * look-back, past which everything is taken as kept): the probe's look-back.
+ *
+ * ⚠️ ONE DEPTH (2.496.499). There were three: the detail kept (measured, about 10.9 days on the owner's villa), a
+ * fixed 10 days for the store's recall and 60 days for the last sighting. A sleeping door contact whose last report
+ * was 10.5 days old read "Unknown" on its pill (10 days back: nothing) and "Closed" on its week's chart (read from
+ * further back).
+ */
+export function readBackFrom(kept: number | undefined, now: number): number {
+  return kept ?? keptLookFrom(now);
 }
 
 /** Where the detail begins, from the probe's rows: its oldest change — undefined when it has none (no probe on this
@@ -348,7 +368,7 @@ export async function keptFrom(port: HistoryPort, now: number): Promise<number |
   try {
     value = port.keptFrom ? await port.keptFrom(now) : undefined;
   } catch {
-    value = undefined;                      // not known: nothing greyed, as before
+    return undefined;                       // not known: nothing greyed, and asked again next time (never cached)
   }
   keptCache.set(port, { at: now, value });
   return value;
@@ -390,7 +410,7 @@ export async function loadOne<R extends HistoryRequest>(port: HistoryPort, r: R,
       return await readings(port, r.id, window) as HistoryAnswer<R>;
     case "states": {
       const kept = await keptFrom(port, now);
-      return await each(r.ids, (id) => states(port, id, window, kept)) as HistoryAnswer<R>;
+      return await each(r.ids, (id) => states(port, id, window, kept, now)) as HistoryAnswer<R>;
     }
     case "stateWindow":
       return await stateWindow(port, r.id, r.hours, now, r.follow) as HistoryAnswer<R>;

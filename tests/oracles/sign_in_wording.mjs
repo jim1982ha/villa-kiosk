@@ -32,7 +32,7 @@ ck("the profile screen shows the same reason, and parses no error text",
 ck("the superadmin gate passes the outcome straight on (no second shape)", /return result;/.test(src("auth/SuperadminGate.tsx")) && !/throw new Error\("elevation/.test(src("auth/SuperadminGate.tsx")));
 const cem = src("components/settings/ConfigEditorModal.tsx").replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
 ck("villa coordinates are a drafted field showing the LIVE value when no draft exists",
-   /value=\{field\.drafts\[key\] \?\? String\(config\[key\]\)\}/.test(cem.replace(/\s+/g, " ")) && !/useState\(String\(config\.latitude\)\)/.test(cem));
+   /value=\{field\.shown \?\? String\(config\[key\]\)\}/.test(cem.replace(/\s+/g, " ")) && !/useState\(String\(config\.latitude\)\)/.test(cem));
 
 done("✅ one sign-in wording rule; coordinates follow the live config");
 

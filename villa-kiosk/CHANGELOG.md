@@ -1,3 +1,45 @@
+## 2.496.500
+
+What you will see:
+- Settings and Advanced Settings: pressing Cancel right after a change, while this tablet is still sending it, now
+  reaches every tablet. Before, the other tablets kept the cancelled value (a device label, for example) while this
+  one showed the old one. The same in Facility: a cost or record saved and then removed a moment later is now
+  removed everywhere, and no longer comes back on the screen.
+- When the villa's Wi-Fi drops in the middle of a save, the next saves and refreshes are no longer stuck behind it.
+  After 15 seconds that save counts as not sent: the change stays on this tablet and is sent again on the next
+  refresh, and every later change saves as usual.
+- Settings: dragging Eye height or Walk speed and pressing Cancel straight away now puts the view back too. Before,
+  the view stayed at the cancelled height while Settings showed the old one.
+- Advanced Settings: a value you are typing (the villa's latitude or longitude, how many days records are kept, a
+  device's label or light intensity) now lights Save straight away, and is kept when you close the window before
+  it is saved: going back to Settings keeps it, under Settings' Save and Cancel. Before, Save stayed grey while you
+  typed, and closing the window quickly lost what you had just typed.
+
+## 2.496.499
+
+What you will see:
+- Advanced Settings: uploading a new 3D model no longer lights Save by itself. Before, the devices the new model
+  found were counted as your change, and Cancel then deleted them, on every tablet. Now Save and Cancel only follow
+  what you changed in the window yourself; Cancel puts exactly those things back and leaves everything else.
+- Settings and Advanced Settings: two quick changes in a row (relabelling one device, then another a second later)
+  are both undone by Cancel. Before, Cancel could undo only the second one and keep the first.
+- A device window for a device silent for days: when its chart moves back to its last report and part of that
+  period is older than the villa's system keeps, the device's band now shows it grey, "No longer kept", like the
+  sensor's band under it. Before, the device's band was blank there.
+- A sensor on the asleep list whose last report is older than ten days but still kept: its status now shows that
+  report, the same as its chart. Before, the status could read "Unknown" while the week's chart showed "Closed".
+
+## 2.496.498
+
+What you will see:
+- Settings and Advanced Settings: a change you make while this tablet is still sending your previous change is no
+  longer lost. Before, relabelling a second device a moment after the first could put the second one back a second
+  later, and it never reached the other tablets. Now both stay on screen and both reach every tablet.
+- When another tablet changes a device you had already changed in this window, the window now says so in one line
+  above Save and Cancel, for example "Hall light was changed on another tablet; your change was replaced." One line
+  per device; the X hides it, and closing the window clears it. Before, the field just flipped to the other tablet's
+  value and Save went grey with nothing saying why.
+
 ## 2.496.497
 
 What you will see:

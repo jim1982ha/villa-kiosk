@@ -4,10 +4,12 @@
 // chart asks for, and every rule about windows, gaps and outages, is the
 // source's; this only fetches.
 
-import { KEPT_PROBE, keptFromRows, keptLookFrom, type HistoryPort, type StateRow } from "./historySource";
+import {
+  KEPT_PROBE, keptFrom, keptFromRows, keptLookFrom, readBackFrom, type HistoryPort, type StateRow,
+} from "./historySource";
 import { ingressApiBase } from "./ingress";
 import { backendFetch } from "@/auth/sessionLost";
-import { heldWindow, opensAsleep, recallFrom } from "./unavailableByDesign";
+import { heldWindow, opensAsleep } from "./unavailableByDesign";
 
 /** Anything that can read the recorder's statistics — the HA websocket. */
 export type StatisticsPort = Pick<HistoryPort, "getStatisticsDuringPeriod">;
@@ -16,20 +18,35 @@ export type StatisticsPort = Pick<HistoryPort, "getStatisticsDuringPeriod">;
  *  (unavailableByDesign.heldWindow). */
 export function haHistoryPort(ws: StatisticsPort, asleep: ReadonlySet<string> = new Set()): HistoryPort {
   return {
-    async stateRows(entityId, from, to) {
+    async stateRows(entityId, from, to, back = readBackFrom(undefined, from)) {
       const rows = (await recordedStates([entityId], from, to))[entityId] ?? [];
       if (!asleep.has(entityId)) return rows;
-      // a window that opens asleep holds the report before it: read back as far as the store's recall does
-      const before = opensAsleep(rows) ? (await recordedStates([entityId], recallFrom(from), from))[entityId] ?? [] : [];
+      // a window that opens asleep holds the report before it: read back as far as the villa keeps (`back`,
+      // historySource.readBackFrom), the depth the entity store's recall reads to, so its pill and its chart find the
+      // same report
+      const before = opensAsleep(rows) && back < from ? (await recordedStates([entityId], back, from))[entityId] ?? [] : [];
       return heldWindow(rows, before, from);
     },
     getStatisticsDuringPeriod: (...args) => ws.getStatisticsDuringPeriod(...args),
-    // where the villa's system's detail begins: the oldest change of the probe it still keeps (historySource.keptFrom)
-    async keptFrom(now) {
-      const from = keptLookFrom(now);
-      return keptFromRows(await this.stateRows(KEPT_PROBE, from, now), from);
-    },
+    keptFrom: villaKeptFrom,
   };
+}
+
+/** The villa's recorder, as far as "how much does it keep" needs it: the probe's states, read as recorded. */
+const recorder: HistoryPort = {
+  stateRows: async (id, from, to) => (await recordedStates([id], from, to))[id] ?? [],
+  getStatisticsDuringPeriod: () => Promise.reject(new Error("not read here")),
+  // where the villa's system's detail begins: the oldest change of the probe it still keeps (historySource.keptFrom)
+  async keptFrom(now) {
+    const from = keptLookFrom(now);
+    return keptFromRows(await this.stateRows(KEPT_PROBE, from, now), from);
+  },
+};
+
+/** Where the villa's system's detail begins at `now` — ONE reading, cached, shared by every chart's port and the
+ *  entity store's recall of a device asleep by design (historySource.readBackFrom). */
+export function villaKeptFrom(now: number): Promise<number | undefined> {
+  return keptFrom(recorder, now);
 }
 
 /** Every state each of `ids` reported between `from` and `to` (epoch ms), as the villa's system recorded it, led

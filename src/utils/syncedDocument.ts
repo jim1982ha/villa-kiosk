@@ -22,10 +22,16 @@
 import { decidePull, type PullAction } from "./pullDecision";
 import { pushWithRebase, type PushOutcome, type StoreFetch, type StoreSaveResult } from "./keyedSync";
 
+/** How long ONE push may take, all its attempts, before it ends as a transport failure (2.496.500): its work stays
+ *  marked unsaved, so the next refresh sends it again, and the pushes and pulls waiting behind it go on. Before, a
+ *  request that never answered (Wi-Fi gone half-way) held every later save and refresh of this store for good. */
+export const PUSH_DEADLINE_MS = 15_000;
+
 export interface SyncedDocumentSpec<D, Diff, F extends StoreFetch<D> = StoreFetch<D>> {
-  /** The server's copy, in baseline form; null when it cannot be reached. */
-  fetch: () => Promise<F | null>;
-  save: (next: D, rev: string, carryOver: Record<string, unknown>) => Promise<StoreSaveResult>;
+  /** The server's copy, in baseline form; null when it cannot be reached. `signal`: a push that ran out of time
+   *  aborts the request it was waiting on. */
+  fetch: (signal?: AbortSignal) => Promise<F | null>;
+  save: (next: D, rev: string, carryOver: Record<string, unknown>, signal?: AbortSignal) => Promise<StoreSaveResult>;
   diff: (base: D, local: D) => Diff;
   isEmpty: (diff: Diff) => boolean;
   apply: (target: D, diff: Diff) => D;
@@ -41,13 +47,20 @@ export interface SyncedDocumentSpec<D, Diff, F extends StoreFetch<D> = StoreFetc
   /** Called every time the baseline moves — the config store persists it. */
   onBaseline?: (baseline: D) => void;
   maxAttempts?: number;
+  /** The push deadline. The stores never set it (PUSH_DEADLINE_MS); an oracle shortens it. */
+  deadlineMs?: number;
 }
 
 export type PullResult<F> =
   | { action: "wait" | "unreachable" | "repush"; fetched?: undefined }
   | { action: "seed" | "noop" | "apply"; fetched: F };
 
-export type PushResult<D> = PushOutcome<D> | { ok: false; reason: "not-allowed" | "not-pulled" };
+/** `synced`, on success: the baseline this push's diff was computed against — so `base` against it is what the OTHER
+ *  devices changed, and nothing of this device's own earlier push (config/deviceConfig remoteChange). */
+export type PushResult<D> =
+  | (Extract<PushOutcome<D>, { ok: true }> & { synced: D })
+  | Extract<PushOutcome<D>, { ok: false }>
+  | { ok: false; reason: "not-allowed" | "not-pulled" };
 
 export class SyncedDocument<D, Diff, F extends StoreFetch<D> = StoreFetch<D>> {
   /** What the server is known to hold; null until the first pull when the
@@ -56,7 +69,11 @@ export class SyncedDocument<D, Diff, F extends StoreFetch<D> = StoreFetch<D>> {
   rev = "0";
   private inFlight = 0;
   private writes = 0;
+  /** The push running now, which the next one waits for (push). */
+  private queue: Promise<unknown> = Promise.resolve();
   private unsaved = false;
+  /** The local document the latest push was handed (what `promised` is while pushes are out). */
+  private lastPushed: D | null = null;
   private readonly spec: SyncedDocumentSpec<D, Diff, F>;
 
   constructor(spec: SyncedDocumentSpec<D, Diff, F>, initial: D | null) {
@@ -66,6 +83,17 @@ export class SyncedDocument<D, Diff, F extends StoreFetch<D> = StoreFetch<D>> {
 
   /** A write from this device failed and its work is only here. */
   get hasUnsaved(): boolean { return this.unsaved; }
+
+  /**
+   * What the server WILL hold once the pushes out and waiting land: the confirmed baseline with each of them laid on
+   * it, i.e. the local document the latest push was handed (2.496.500). Nothing out: the baseline. A push sends what
+   * the local document changed against THIS, and the config store's push gate compares with it. Against the
+   * confirmed baseline, a value put back while the push carrying it was out (Cancel, a toggle undone) read as no
+   * change at all: the undo was never sent, and every other tablet kept the cancelled value.
+   */
+  get promised(): D | null {
+    return this.inFlight > 0 ? this.lastPushed : this.baseline;
+  }
 
   /** This device holds work the server has not got: a failed write, or a
    *  local document that differs from the confirmed baseline. */
@@ -107,9 +135,20 @@ export class SyncedDocument<D, Diff, F extends StoreFetch<D> = StoreFetch<D>> {
   }
 
   /**
-   * Send what this device changed since the baseline — replayed onto the
-   * server's freshest copy, under optimistic concurrency, retried on a
-   * conflict (utils/keyedSync). On success the baseline is the merged result.
+   * Send what this device changed — replayed onto the server's freshest copy, under optimistic concurrency, retried
+   * on a conflict (utils/keyedSync). On success the baseline is the merged result.
+   *
+   * ⚠️ ONE AT A TIME (2.496.499). A push started while another is out waits for it, then sends its change against the
+   * baseline that one committed. Two at once both diffed against the same old baseline: the second re-sent the first's
+   * change and read it back as ANOTHER tablet's, so an open dialog took the first edit for a remote one, and Cancel
+   * after two quick edits undid only the second. A pull waits for both.
+   *
+   * ⚠️ ITS CHANGE IS `local` AGAINST WHAT IS PROMISED (2.496.500), the pushes ahead of it included: so an edit put
+   * back while the push carrying it is out is a change, and it is sent. Against the confirmed baseline it was none.
+   * That holds only if `local` is this device's TRUE document when the push is called: a caller that builds it from a
+   * copy older than its last push would send that push's change back undone (the Facility store moves its copy at
+   * once, FmDataContext mutate). After a push ahead of it FAILED, that push's work is only here: the whole of `local`
+   * against the confirmed baseline is sent.
    */
   async push(
     local: D,
@@ -117,33 +156,73 @@ export class SyncedDocument<D, Diff, F extends StoreFetch<D> = StoreFetch<D>> {
      *  single-use elevation token. Default: the spec's. */
     save: SyncedDocumentSpec<D, Diff, F>["save"] = this.spec.save,
   ): Promise<PushResult<D>> {
-    if (this.spec.canWrite && !this.spec.canWrite()) return { ok: false, reason: "not-allowed" };
-    const baseline = this.baseline;
-    if (baseline === null) return { ok: false, reason: "not-pulled" };
+    const from = this.promised;
+    if (from === null) return { ok: false, reason: "not-pulled" };
+    this.lastPushed = local;
     this.inFlight += 1;
-    this.writes += 1;
-    let outcome: PushOutcome<D>;
+    const run = this.queue.then(() => this.pushNow(from, local, save));
+    this.queue = run.catch(() => undefined);
     try {
-      outcome = await pushWithRebase({
-        diff: this.spec.diff(baseline, local),
-        isEmpty: this.spec.isEmpty,
-        baseline,
-        fetchFresh: async () => {
-          const f = await this.spec.fetch();
-          return f === null ? null : { doc: f.doc, rev: f.rev, raw: f.raw };
-        },
-        rebase: this.spec.rebase,
-        apply: this.spec.apply,
-        save,
-        maxAttempts: this.spec.maxAttempts,
-      });
+      return await run;
     } finally {
       this.inFlight -= 1;
+    }
+  }
+
+  private async pushNow(from: D, local: D, save: SyncedDocumentSpec<D, Diff, F>["save"]): Promise<PushResult<D>> {
+    if (this.spec.canWrite && !this.spec.canWrite()) return { ok: false, reason: "not-allowed" };
+    const baseline = this.baseline ?? from;
+    const own = this.unsaved || baseline === from ? local : this.spec.apply(baseline, this.spec.diff(from, local));
+    this.writes += 1;
+    // ⚠️ ONE DEADLINE FOR THE WHOLE PUSH, HERE AND NOWHERE ELSE (2.496.500). Past it, the request is aborted and every
+    // later step of this push refuses to run, so a late answer can neither commit a baseline nor send a stale retry
+    // after the next push has gone.
+    const abort = new AbortController();
+    const live = () => { if (abort.signal.aborted) throw new Error("push past its deadline"); };
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<"late">((resolve) => {
+      timer = setTimeout(() => resolve("late"), this.spec.deadlineMs ?? PUSH_DEADLINE_MS);
+    });
+    const work = pushWithRebase({
+      diff: this.spec.diff(baseline, own),
+      isEmpty: this.spec.isEmpty,
+      baseline,
+      fetchFresh: async () => {
+        live();
+        const f = await this.spec.fetch(abort.signal);
+        live();
+        return f === null ? null : { doc: f.doc, rev: f.rev, raw: f.raw };
+      },
+      rebase: this.spec.rebase,
+      apply: this.spec.apply,
+      save: async (next, rev, carryOver) => {
+        live();
+        const r = await save(next, rev, carryOver, abort.signal);
+        live();
+        return r;
+      },
+      maxAttempts: this.spec.maxAttempts,
+    });
+    let outcome: PushOutcome<D> | "late";
+    try {
+      outcome = await Promise.race([work, deadline]);
+    } catch {
+      // a store call that threw is a transport failure like any other: its work is only here
+      outcome = { ok: false, reason: "transport" };
+    } finally {
+      clearTimeout(timer);
+    }
+    if (outcome === "late") {
+      abort.abort();
+      work.catch(() => undefined);
+      outcome = { ok: false, reason: "transport" };
     }
     if (outcome.ok) {
       this.unsaved = false;
       this.commit(outcome.next, outcome.rev);
-    } else if (outcome.reason === "nothing-to-push" || outcome.reason === "refused") {
+      return { ...outcome, synced: baseline };
+    }
+    if (outcome.reason === "nothing-to-push" || outcome.reason === "refused") {
       // A refusal is FINAL: re-pushing it on every pull would loop for good
       // and keep this device from ever accepting a newer copy (2.496.184).
       // The caller undoes its local change.

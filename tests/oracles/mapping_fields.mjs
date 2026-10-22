@@ -29,7 +29,8 @@ ck("a device's fields are edited in ONE table (Devices), the bound-objects row h
 const own = [br, er].map((s) => [/effectiveCategory\(/, /lightIntensityRatio/, /linkedEntityId/, /requireConfirm/].filter((r) => r.test(s)).length);
 ck("  ...and neither renders type, category, intensity, the confirm box or the linked entity itself", own.every((n) => n === 0), own);
 ck("the label commits one way: half a second after typing, or at once on leaving the field",
-   /useDraftCommit<string>\(\(_k, value\) => onPatch\(\{ label: value \}\), 500\)/.test(mf) && /onBlur=\{\(\) => label\.flush\("v"\)\}/.test(mf));
+   /usePendingField<string>\(`device:\$\{entryKey\}:label`, TYPED_COMMIT_MS\)/.test(mf) && /const TYPED_COMMIT_MS = 500;/.test(mf)
+   && /onBlur=\{label\.flush\}/.test(mf));
 // owner, 2026-10-22: a camera's "Motion sensor" field merged into "Linked entity" — ONE picker for every type, its
 // camera placeholder neutral (it said "arms detection, long-press", which no longer happens)
 {
@@ -53,7 +54,7 @@ ck("the label commits one way: half a second after typing, or at once on leaving
   ck("  …the underscore form of the fallback too", labelField(id, "hall_lamp_left", "Reading lamp").value === "");
   ck("a name the owner typed shows as it is", labelField(id, "Desk light", "Reading lamp").value === "Desk light");
   ck("no Home Assistant name yet: the id's own name, said so", /, from its entity id$/.test(labelField(id, undefined).placeholder));
-  ck("the field uses it (value and placeholder)", /labelField\(entityId, m\.label,/.test(mf) && /value=\{label\.drafts\.v \?\? named\.value\}/.test(mf)
+  ck("the field uses it (value and placeholder)", /labelField\(entityId, m\.label,/.test(mf) && /value=\{label\.shown \?\? named\.value\}/.test(mf)
      && /placeholder=\{named\.placeholder\}/.test(mf));
 }
 

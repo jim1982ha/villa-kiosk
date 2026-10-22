@@ -122,6 +122,48 @@ ck("listed before the states arrive: their read recalls the last report as well"
    early.snapshot()[DOOR]);
 early.dispose();
 
+// ONE DEPTH (2.496.499): the pill and the chart read back as far as the villa keeps (historySource.readBackFrom). The
+// store's recall read a fixed 10 days, the chart further: a contact whose last report was 10.5 days old (the villa
+// keeping about 10.9) read "Unknown" on its pill and "Closed" on its week's chart. Here the villa's recorder is played
+// by the one REST read both make (HAHistoryAPI.recordedStates), keeping nothing older than `keptAt`; the store and the
+// chart run with their own defaults.
+{
+  const t = Date.now(), DAY = 86400e3, keptAt = t - 10.85 * DAY;
+  const recorded = {
+    "sun.sun": [{ t: keptAt, state: "above_horizon" }, { t: t - DAY, state: "below_horizon" }],
+    [DOOR]: [{ t: t - 10.5 * DAY, state: "off" }, { t: t - 10.5 * DAY + 180e3, state: "unavailable" }],
+  };
+  const asked = [];
+  globalThis.fetch = async (url) => {
+    const u = new URL(String(url), "http://localhost");
+    const from = Date.parse(decodeURIComponent(u.pathname.split("/history/period/")[1]));
+    const to = Date.parse(u.searchParams.get("end_time"));
+    asked.push({ id: u.searchParams.get("filter_entity_id"), from });
+    const out = u.searchParams.get("filter_entity_id").split(",").map((id) => {
+      const pts = (recorded[id] ?? []).filter((p) => p.t >= keptAt);
+      const lead = pts.filter((p) => p.t < from).pop();
+      const rows = [...(lead ? [{ ...lead, t: from }] : []), ...pts.filter((p) => p.t >= from && p.t <= to)];
+      return rows.map((p, i) => ({ ...(i === 0 ? { entity_id: id } : {}), state: p.state, last_changed: new Date(p.t).toISOString() }));
+    }).filter((rows) => rows.length);
+    return { ok: true, status: 200, json: async () => out };
+  };
+  const villa = new EntityStore(new HAWebSocket(), { pushWindowMs: 5 });
+  villa.attach();
+  await villa.connect();
+  await until(() => villa.getState().entities[DOOR]);
+  villa.setUnavailableByDesign(new Set([DOOR]));
+  await until(() => villa.snapshot()[DOOR].state === "off", 1000);
+  const pill = villa.snapshot()[DOOR].state;
+  const { haHistoryPort } = await import("@/ha/HAHistoryAPI");
+  const { loadOne } = await import("@/ha/historySource");
+  const week = await loadOne(haHistoryPort({}, new Set([DOOR])), { kind: "stateWindow", id: DOOR, hours: 168 }, t);
+  ck("a contact last heard 10.5 days ago, the villa keeping 10.9: its pill shows that report (it read \"Unknown\")", pill === "off", pill);
+  ck("  ...and its week's chart the same one", week.data[0]?.state === pill && week.data.length === 1, week.data);
+  villa.dispose();
+  ck("  ...both read back to where the villa's detail begins (the probe's oldest change kept), the one depth",
+     asked.some((a) => a.id === "sun.sun") && asked.filter((a) => a.id === DOOR).every((a) => a.from >= keptAt - 1), asked);
+}
+
 // the list: shared, empty by default (nothing villa-specific ships), and handed to the store from inside the gate
 const A = await import("@/config/AppConfig");
 const D = await import("@/config/deviceConfig");

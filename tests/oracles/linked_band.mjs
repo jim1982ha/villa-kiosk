@@ -15,18 +15,21 @@ register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { loadOne, historyTitle } = await import("@/ha/historySource");
 const { timelineCells } = await import("@/utils/timelineCells");
+const { NOT_KEPT } = await import("@/utils/stateColors");
 
 const M = 60_000, H = 60 * M, FIVE = 5 * M;
 const now = Date.UTC(2026, 9, 22, 12, 0, 0);
-const port = (rows) => ({
+// `kept`: where the villa's system's detail begins (historySource.keptFrom) — nothing older comes back, as on the villa
+const port = (rows, kept) => ({
   stateRows: async (id, from, to) => {
-    const pts = (rows[id] ?? []).slice().sort((a, b) => a.t - b.t);
+    const pts = (rows[id] ?? []).filter((p) => kept === undefined || p.t >= kept).sort((a, b) => a.t - b.t);
     // as the villa's system answers: the state in force at `from`, then every change up to `to`
     const before = pts.filter((p) => p.t < from).pop();
     return [...(before ? [{ ...before, t: from }] : []), ...pts.filter((p) => p.t >= from && p.t <= to)]
       .map((p) => ({ state: p.state, last_changed: new Date(p.t).toISOString() }));
   },
   getStatisticsDuringPeriod: async () => ({}),
+  ...(kept === undefined ? {} : { keptFrom: async () => kept }),
 });
 const LOCK = "lock.front", DOOR = "binary_sensor.front_door";
 const band = (rows, hours = 24) => loadOne(port(rows), { kind: "stateWindow", id: LOCK, hours, follow: [DOOR] }, now);
@@ -77,6 +80,26 @@ console.log("\n  a moved window shows the state its last report set:");
      lastCell(w.data, w.end, 1).states.includes("on"), lastCell(w.data, w.end, 1));
   ck("the door's band ends at the same edge", lastCell(w.followers[DOOR], w.end, 1).to === lastCell(w.data, w.end, 1).to);
   ck("the title says the last report, not \"before\" it", historyTitle("Last hour", w.lastSeen).startsWith("Last hour, last report "));
+}
+
+console.log("\n  a device dead for days, on a week's chart, where the villa keeps less than its moved window:");
+{
+  // the owner's villa keeps about 10.9 days; a lock that last reported 9 days ago, then went silent 8 days ago
+  const D = 24 * H, kept = now - 10.85 * D;
+  const rows = {
+    [LOCK]: [{ t: now - 9 * D, state: "locked" }, { t: now - 8 * D, state: "unavailable" }],
+    [DOOR]: [{ t: now - 10 * D, state: "off" }, { t: now - 8.5 * D, state: "on" }, { t: now - 8.4 * D, state: "off" }],
+  };
+  const w = await loadOne(port(rows, kept), { kind: "stateWindow", id: LOCK, hours: 168, follow: [DOOR] }, now);
+  const from = w.end - 168 * H;
+  const first = (data) => timelineCells(data, w.end, 168, H)[0]?.states ?? [];
+  ck("the window moved back to the lock's last report (it reaches past what the villa keeps)",
+     w.lastSeen === now - 9 * D && from < kept, { lastSeen: w.lastSeen, from, kept });
+  ck("the lock's band opens 'No longer kept' over the part older than the villa keeps, never blank (it was blank)",
+     w.data[0]?.state === NOT_KEPT && w.data[0].t === from && first(w.data).includes(NOT_KEPT), w.data);
+  ck("  ...exactly as the door sensor's band under it", w.followers[DOOR][0]?.state === NOT_KEPT && w.followers[DOOR][0].t === from
+     && JSON.stringify(first(w.data)) === JSON.stringify(first(w.followers[DOOR])), { lock: first(w.data), door: first(w.followers[DOOR]) });
+  ck("  ...and then its last report", w.data.at(-1)?.state === "locked" && lastCell(w.data, w.end, 168).states.includes("locked"));
 }
 
 console.log("\n  the wiring:");

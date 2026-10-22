@@ -17,7 +17,8 @@ import { ShieldCheck } from "lucide-react";
 import SegmentedGroup from "@/components/common/SegmentedGroup";
 import Dropdown from "@/components/common/Dropdown";
 import EntityPicker from "./EntityPicker";
-import { useDraftCommit } from "@/hooks/useDraftCommit";
+import { usePendingField } from "@/hooks/usePendingField";
+import { patchMapping } from "@/config/mappingEdits";
 import { CATEGORY_ORDER, CATEGORY_LABELS, effectiveCategory, subjectOf } from "@/config/EntityCategories";
 import { CONFIRM_GATE_TYPES } from "@/utils/quickAction";
 import { labelField } from "@/config/EntityMap";
@@ -27,36 +28,48 @@ import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 /** One field's place in the row's layout. */
 export type FieldCell = (key: string, label: string, field: ReactNode, opts?: { wide?: boolean }) => ReactNode;
 
+/** How long a click on a device's field waits before it is written (a run of clicks is one write). */
+const FIELD_COMMIT_MS = 350;
+/** How long a device's label or intensity waits after the last key or drag step. */
+const TYPED_COMMIT_MS = 500;
+
 /**
- * A mapping row's pending edits: `draftField` stages a change (committed after
- * the draft delay) and `m` is the mapping WITH those edits, so a control
- * reflects a click at once while the commit is pending. Shared by this table
- * and the entity map's own row (written out in both until 2.496.263).
+ * A mapping row's pending edits: `draftField` stages a change (written after
+ * the pause) and `m` is the mapping WITH those edits, so a control
+ * reflects a click at once while the write is pending. Shared by this table
+ * and the entity map's own row (written out in both until 2.496.263). The
+ * changes wait in the dialog's one pending store (usePendingField, 2.496.500),
+ * under the device's entity id: Save lights while they wait, and closing the
+ * dialog writes them rather than dropping them.
  */
-export function useMappingDraft(mapping: EntityMapping, onPatch: (change: Partial<EntityMapping>) => void) {
-  const field = useDraftCommit<Partial<EntityMapping>>((_k, change) => onPatch(change));
-  const draftField = (change: Partial<EntityMapping>) => field.draft("v", { ...field.drafts.v, ...change });
-  const m = field.drafts.v ? { ...mapping, ...field.drafts.v } : mapping;
-  return { field, draftField, m };
+export function useMappingDraft(entryKey: string, mapping: EntityMapping) {
+  const field = usePendingField<Partial<EntityMapping>>(`device:${entryKey}:fields`, FIELD_COMMIT_MS);
+  const draftField = (change: Partial<EntityMapping>) => {
+    const merged = { ...field.shown, ...change };
+    field.draft(merged, patchMapping(entryKey, merged));
+  };
+  const m = field.shown ? { ...mapping, ...field.shown } : mapping;
+  return { draftField, m };
 }
 
-export default function MappingFields({ entityId, mapping, entity, onPatch, cell, selectStyle }: {
+export default function MappingFields({ entryKey, entityId, mapping, entity, cell, selectStyle }: {
+  /** The device's key in the map: what its changes are written to. */
+  entryKey: string;
   entityId: string;
   mapping: EntityMapping;
   /** This row's own live entity (its device_class decides the category). */
   entity: HassEntity | undefined;
-  onPatch: (change: Partial<EntityMapping>) => void;
   cell: FieldCell;
   /** The compact row's own control look (BindingRow's inline selects). */
   selectStyle?: React.CSSProperties;
 }) {
-  const label = useDraftCommit<string>((_k, value) => onPatch({ label: value }), 500);
-  const intensity = useDraftCommit<number>((_k, ratio) => onPatch({ lightIntensityRatio: ratio }), 500);
-  const { draftField, m } = useMappingDraft(mapping, onPatch);
+  const label = usePendingField<string>(`device:${entryKey}:label`, TYPED_COMMIT_MS);
+  const intensity = usePendingField<number>(`device:${entryKey}:intensity`, TYPED_COMMIT_MS);
+  const { draftField, m } = useMappingDraft(entryKey, mapping);
 
   // The owner's own name, or empty with the name actually shown in grey (EntityMap.labelField)
   const named = labelField(entityId, m.label, entity?.attributes.friendly_name as string | undefined);
-  const ratio = intensity.drafts.v ?? m.lightIntensityRatio ?? 0;
+  const ratio = intensity.shown ?? m.lightIntensityRatio ?? 0;
   const pct = Math.round(ratio * 100);
   return (
     <>
@@ -78,16 +91,19 @@ export default function MappingFields({ entityId, mapping, entity, onPatch, cell
         // Saved half a second after typing stops, or at once on leaving the field.
         <input style={selectStyle ? { ...selectStyle, cursor: "text", flex: 1, minWidth: 80 } : undefined}
           placeholder={named.placeholder} title="Display name, leave empty to use the device's own name"
-          value={label.drafts.v ?? named.value}
-          onChange={(e) => label.draft("v", e.target.value)}
-          onBlur={() => label.flush("v")} />
+          value={label.shown ?? named.value}
+          onChange={(e) => label.draft(e.target.value, patchMapping(entryKey, { label: e.target.value }))}
+          onBlur={label.flush} />
       ), { wide: true })}
       {m.type === "light" && cell("intensity", "Intensity", (
         <div className="row" style={{ gap: 8, width: "100%", flex: "1 1 220px", minWidth: 180 }}>
           <input type="range" min={-100} max={100} step={5} value={pct} style={{ flex: 1 }}
-            onChange={(e) => intensity.draft("v", Number(e.target.value) / 100)}
-            onMouseUp={() => intensity.flush("v")}
-            onTouchEnd={() => intensity.flush("v")}
+            onChange={(e) => {
+              const r = Number(e.target.value) / 100;
+              intensity.draft(r, patchMapping(entryKey, { lightIntensityRatio: r }));
+            }}
+            onMouseUp={intensity.flush}
+            onTouchEnd={intensity.flush}
             title="Per-light brightness override on top of this light's live brightness and the global Light effect strength setting. 0% = no change."
             aria-label={`Intensity override for ${entityId}`} />
           <span className="muted" style={{ fontSize: "var(--text-xs)", minWidth: 40, textAlign: "right" }}>

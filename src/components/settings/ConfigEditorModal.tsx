@@ -8,13 +8,13 @@
 
 import { roleCan } from "@/auth/permissions";
 import { useState } from "react";
-import { useDraftCommit } from "@/hooks/useDraftCommit";
+import { PendingFields, usePendingField, type PendingField } from "@/hooks/usePendingField";
 import { RECORDS_KEPT_DAYS_MAX, type AppConfig } from "@/config/AppConfig";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import { Boxes, Home, LogOut, Upload, Wrench } from "lucide-react";
 import InfoTip, { TipTitle } from "@/components/common/InfoTip";
 import ModalTabs, { type ModalTab } from "@/components/common/ModalTabs";
-import { useConfig } from "@/config/ConfigContext";
+import { DialogEdits, useConfig } from "@/config/ConfigContext";
 import { northOffsetFacing } from "@/babylon/skyMoment";
 import { useProfile } from "@/auth/ProfileContext";
 import CentralModelInfo from "./CentralModelInfo";
@@ -27,6 +27,7 @@ import UnavailableByDesign from "./UnavailableByDesign";
 import EntityPicker from "./EntityPicker";
 import InlineConfirm from "@/components/common/InlineConfirm";
 import ModalFooter, { footerExits } from "@/components/common/ModalFooter";
+import RemoteReplacedNote from "./RemoteReplacedNote";
 import { useAppNotice } from "@/components/hud/AppNotice";
 import { useDraftedSlice } from "@/hooks/useDraftedSlice";
 import { ADVANCED_SETTINGS_KEYS } from "@/config/configSlice";
@@ -74,35 +75,41 @@ interface Props {
  *  needing a Save button — guards against a half-typed number (e.g. "-8.")
  *  briefly producing NaN mid-edit. */
 function VillaCoordinates() {
-  const { config, update } = useConfig();
+  const { config } = useConfig();
   // The SAME drafted-field seam every other Settings field uses (2.496.194):
   // the input shows the draft while one exists and the LIVE value otherwise.
   // This held its own `useState(String(config.latitude))`, never resynced —
   // Dashboard adopts Home Assistant's location once, asynchronously, and when
   // that landed with this dialog open the field kept the old number and a
-  // blur wrote it back over the adopted one. A half-typed number ("-8.")
-  // commits nothing; the draft simply lapses to the stored value.
-  const field = useDraftCommit<string>((key, text) => {
-    const n = Number(text);
-    if (Number.isFinite(n) && text.trim() !== "") update({ [key]: n } as Partial<AppConfig>);
-  }, COORD_COMMIT_MS);
-  const coord = (key: "latitude" | "longitude", id: string, label: string) => (
+  // blur wrote it back over the adopted one. A half-typed number ("-")
+  // writes nothing; the field simply lapses to the stored value.
+  // ⚠️ THE TYPED TEXT WAITS IN THE DIALOG'S ONE PENDING STORE (usePendingField, 2.496.500): Save lights while it is
+  // typed, and closing before the pause no longer drops it.
+  const coord = (key: "latitude" | "longitude", id: string, label: string, field: PendingField<string>) => (
     <div className="villa-location-coord">
       <label htmlFor={id}>{label}</label>
       <input
-        id={id} inputMode="decimal" value={field.drafts[key] ?? String(config[key])}
-        onChange={(e) => field.draft(key, e.target.value)}
-        onBlur={() => field.flush(key)}
-        onKeyDown={(e) => e.key === "Enter" && field.flush(key)}
+        id={id} inputMode="decimal" value={field.shown ?? String(config[key])}
+        onChange={(e) => field.draft(e.target.value, coordinateWrite(key, e.target.value))}
+        onBlur={field.flush}
+        onKeyDown={(e) => e.key === "Enter" && field.flush()}
       />
     </div>
   );
+  const lat = usePendingField<string>("latitude", COORD_COMMIT_MS);
+  const lng = usePendingField<string>("longitude", COORD_COMMIT_MS);
   return (
     <>
-      {coord("latitude", "villa-lat", "Latitude")}
-      {coord("longitude", "villa-lng", "Longitude")}
+      {coord("latitude", "villa-lat", "Latitude", lat)}
+      {coord("longitude", "villa-lng", "Longitude", lng)}
     </>
   );
+}
+
+/** What a coordinate typed writes: the number, or nothing while it is not one yet. */
+function coordinateWrite(key: "latitude" | "longitude", text: string): Partial<AppConfig> | null {
+  const n = Number(text);
+  return Number.isFinite(n) && text.trim() !== "" ? { [key]: n } : null;
 }
 /** Which way the model faces (owner, 2026-10-12: moved here from Settings, below
  *  the villa's coordinates — both place the villa on the real Earth, and the sun
@@ -172,11 +179,12 @@ function PresenceSensor() {
  *  blur/Enter or after a pause, like the coordinates; a value that is not a whole number of days in range commits
  *  nothing and the field falls back to the stored one. */
 function RecordsKept() {
-  const { config, update } = useConfig();
-  const field = useDraftCommit<string>((_key, text) => {
+  const { config } = useConfig();
+  const field = usePendingField<string>("recordsKeptDays", COORD_COMMIT_MS);
+  const write = (text: string) => {
     const n = Number(text);
-    if (text.trim() !== "" && Number.isInteger(n) && n >= 0 && n <= RECORDS_KEPT_DAYS_MAX) update({ recordsKeptDays: n });
-  }, COORD_COMMIT_MS);
+    return text.trim() !== "" && Number.isInteger(n) && n >= 0 && n <= RECORDS_KEPT_DAYS_MAX ? { recordsKeptDays: n } : null;
+  };
   // label and field on one line, the field on the right (owner, 2026-10-22)
   return (
     <div className="settings-field-row">
@@ -184,10 +192,10 @@ function RecordsKept() {
       <label htmlFor="records-kept">How many days Ticket attachment must be saved (in days)</label>
       <input
         id="records-kept" inputMode="numeric" className="field-narrow"
-        value={field.drafts.recordsKeptDays ?? String(config.recordsKeptDays)}
-        onChange={(e) => field.draft("recordsKeptDays", e.target.value)}
-        onBlur={() => field.flush("recordsKeptDays")}
-        onKeyDown={(e) => e.key === "Enter" && field.flush("recordsKeptDays")}
+        value={field.shown ?? String(config.recordsKeptDays)}
+        onChange={(e) => field.draft(e.target.value, write(e.target.value))}
+        onBlur={field.flush}
+        onKeyDown={(e) => e.key === "Enter" && field.flush()}
       />
     </div>
   );
@@ -234,13 +242,16 @@ function LogoutAll() {
 
 export default function ConfigEditorModal({ onBack, withinSettings, focusEntityId, onModelChanged, viewHeadingDeg }: Props) {
   // ⚠️ ONE DRAFT FOR WHAT THIS DIALOG EDITS (configSlice.ADVANCED_SETTINGS_KEYS). Every edit below applies live through
-  // ConfigContext.update and reaches every tablet; the draft only remembers how the setup was when it opened. Over
-  // Settings, Settings' draft holds these keys and this dialog just closes back to it; on its own, it is this one's:
-  // Save keeps, Cancel (and Escape, and the backdrop) writes them back — the passing notices of every other dialog.
+  // ConfigContext.update and reaches every tablet; the draft records what this dialog itself changed, item by item. Over
+  // Settings, Settings' draft records the same changes and this dialog just closes back to it; on its own, it is this
+  // one's: Save keeps, Cancel (and Escape, and the backdrop) puts them back — the passing notices of every other dialog.
   const own = useDraftedSlice(ADVANCED_SETTINGS_KEYS);
   const notice = useAppNotice();
   const commit = withinSettings ? undefined : { dirty: own.dirty, save: own.save, discard: () => { own.discard(); } };
-  const exit = commit ? footerExits(commit, onBack, notice).cancel : onBack;
+  // Over Settings, closing back writes what is still being typed here (as this dialog's): Settings' Save / Cancel then
+  // own it like every other change made here.
+  const back = () => { own.flush(); onBack(); };
+  const exit = commit ? footerExits(commit, onBack, notice).cancel : back;
   // Focus trap + Escape + focus restore (see useModalA11y).
   const dialogRef = useModalA11y(exit);
   const { role } = useProfile();
@@ -261,7 +272,12 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
   // bar — it's an administration action scoped to Advanced Settings.
   const glbUpload = useGlbUpload(canUploadModel, onModelChanged);
 
+  // ⚠️ EVERY CONTROL BELOW WRITES AS THE DIALOG (DialogEdits): what the open drafts' Cancel takes back. The model
+  // upload above writes its rooms from here (not as the dialog), and the devices the reloaded model finds are written
+  // by the 3D view: neither is a change to cancel (2.496.499).
   return (
+    <DialogEdits>
+    <PendingFields pending={own.pending}>
     <DialogLayer className="modal-backdrop" onClick={exit}>
       <div
         ref={dialogRef}
@@ -415,8 +431,11 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
 
         {/* Every tab applies LIVE through `ConfigContext`, so a tab switch loses nothing. Over Settings: Close, back to
             Settings, whose Save / Cancel own these changes; on its own: this dialog's Save / Cancel (`commit`). */}
-        <ModalFooter onClose={onBack} commit={commit} leading={roleCan(role, "editConfig") ? <LogoutAll /> : undefined} />
+        <RemoteReplacedNote replaced={own.replaced} onDismiss={own.dismissReplaced} />
+        <ModalFooter onClose={back} commit={commit} leading={roleCan(role, "editConfig") ? <LogoutAll /> : undefined} />
       </div>
     </DialogLayer>
+    </PendingFields>
+    </DialogEdits>
   );
 }

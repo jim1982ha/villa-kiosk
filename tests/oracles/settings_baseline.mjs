@@ -11,7 +11,7 @@ import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 import { readFileSync } from "node:fs";
-const { sliceOf, draftedView, sliceChanged } = await import("@/config/configSlice");
+const { sliceOf, draftedView, EMPTY_LEDGER, recordEdit, ledgerDirty } = await import("@/config/configSlice");
 
 const KEYS = ["siteTitle", "render", "walkSpeed"];
 const config = { siteTitle: "Home", render: { exposure: 1 }, walkSpeed: 1, theme: "dark", entityMap: { x: 1 } };
@@ -24,14 +24,16 @@ ck("the view is the live config with what is being typed laid over it",
 ck("nothing typed: the view IS the config (a reverted config shows at once)",
    J(draftedView(config, KEYS, {})) === J(sliceOf(config, KEYS)));
 
-console.log("\n  changed since it opened:");
-const baseline = sliceOf(config, KEYS);
-ck("the same config: unchanged", !sliceChanged(config, KEYS, baseline, false));
-ck("an object value rebuilt with the same content: unchanged (compared by content)",
-   !sliceChanged({ ...config, render: { exposure: 1 } }, KEYS, baseline, false));
-ck("a key of the slice changed: changed", sliceChanged({ ...config, walkSpeed: 2 }, KEYS, baseline, false));
-ck("a write still waiting: changed", sliceChanged(config, KEYS, baseline, true));
-ck("a key OUTSIDE the slice changed: not this dialog's change", !sliceChanged({ ...config, theme: "light" }, KEYS, baseline, false));
+console.log("\n  changed since it opened (what the dialog's own writes recorded, configSlice recordEdit):");
+const after = (next) => ledgerDirty(recordEdit(EMPTY_LEDGER, KEYS, config, next), next);
+ck("nothing written: unchanged", !ledgerDirty(EMPTY_LEDGER, config));
+ck("an object value rebuilt with the same content: unchanged (compared by content)", !after({ ...config, render: { exposure: 1 } }));
+ck("a key of the slice changed: changed", after({ ...config, walkSpeed: 2 }));
+ck("a key OUTSIDE the slice changed: not this dialog's change", !after({ ...config, theme: "light" }));
+const hook = readFileSync(new URL("../../src/hooks/useDraftedSlice.ts", import.meta.url), "utf8");
+// a value still waiting, the slice's or a field's, in the dialog's one store (config/pendingEdits; driven in dialog_pending.mjs)
+ck("a write still waiting: changed", /waitingCount > 0 \|\| ledgerDirty\(ledger\.current, config\)/.test(hook)
+   && /useSyncExternalStore\(pending\.subscribe, \(\) => pending\.size\)/.test(hook));
 
 console.log("\n  the Settings window writes only through its slice:");
 const src = readFileSync(new URL("../../src/components/settings/SettingsModal.tsx", import.meta.url), "utf8");

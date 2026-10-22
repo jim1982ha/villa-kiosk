@@ -54,9 +54,14 @@ ck("  ...and are skipped for a patch that carries no map ({ maps: false }) — c
 
 const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
 // update() takes a patch or an edit (config/mappingEdits.ts, 2.496.224); both
-// reach the same completion, inside the state updater.
+// reach the same completion, inside the state updater — and since 2.496.499 a
+// dialog's own write (editByDialog) too: one rule, configSlice applyConfigChange.
+const ctxSrc = src("config/ConfigContext.tsx");
 ck("EVERY patch is completed, maps migrated only when carried",
-   /setConfig\(\(prev\) => \{[\s\S]*?const patch = typeof change === "function" \? change\(prev\) : change;[\s\S]*?return normaliseConfig\(\{ \.\.\.prev, \.\.\.patch \}, \{ maps \}\);/.test(src("config/ConfigContext.tsx")));
+   /const patch = typeof change === "function" \? change\(prev\) : change;[\s\S]*?return normaliseConfig\(\{ \.\.\.prev, \.\.\.patch \}, \{ maps \}\);/.test(src("config/configSlice.ts"))
+   && /setConfig\(\(prev\) => applyConfigChange\(prev, change\) \?\? prev\);/.test(ctxSrc)
+   && /setConfig\(\(prev\) => \{\s*const next = applyConfigChange\(prev, change\);/.test(ctxSrc)
+   && !/normaliseConfig/.test(ctxSrc));
 const SRC = new URL("../../src/", import.meta.url).pathname;
 const walk = tsFiles;
 const keys = Object.keys(A.DEFAULT_CONFIG).join("|");

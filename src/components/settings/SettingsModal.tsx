@@ -9,6 +9,7 @@
 
 import { eyeHeightOf } from "@/babylon/walkerSpawn";
 import ModalFooter, { footerExits } from "@/components/common/ModalFooter";
+import RemoteReplacedNote from "./RemoteReplacedNote";
 import { useAppNotice } from "@/components/hud/AppNotice";
 import SegmentedGroup from "@/components/common/SegmentedGroup";
 import { useModalA11y } from "@/hooks/useModalA11y";
@@ -20,6 +21,7 @@ import { useProfile } from "@/auth/ProfileContext";
 import { roleCan, type Capability } from "@/auth/permissions";
 import { useHA } from "@/ha/HAStateStore";
 import { useDraftedSlice } from "@/hooks/useDraftedSlice";
+import { useScenePreview } from "@/hooks/useScenePreview";
 import { DEFAULT_SITE_TITLE, type RenderConfig } from "@/config/AppConfig";
 import { ADVANCED_SETTINGS_KEYS } from "@/config/configSlice";
 import type { SceneManager } from "@/babylon/SceneManager";
@@ -44,12 +46,12 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
   // Every setting here applies AND persists live: the scene previews on every
   // tick (load-bearing — a walk-speed slider that only took effect on Save
   // would be untunable), the config write is debounced (the WHOLE config
-  // blob goes to localStorage on each write), and there is a BASELINE to go
-  // back to:
+  // blob goes to localStorage on each write), and the draft records what THIS
+  // dialog changed, item by item (its ledger):
   //
-  //   dirty   = the live config differs from the baseline taken at open
-  //   Save    = keep it, and make THIS the new baseline
-  //   Discard = write the baseline back, which reverts the scene AND the store
+  //   dirty   = something it changed is not back to what it was
+  //   Save    = keep it, and forget the ledger
+  //   Discard = put exactly those items back, which reverts the scene AND the store
   //
   // All of that is useDraftedSlice. ⚠️ THE SLICE IS EVERY KEY THIS DIALOG
   // WRITES, listed once — and it is the ONLY way this dialog writes: `set`
@@ -61,28 +63,27 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
     "walkSpeed",
     // ⚠️ THE VILLA'S, NOT THIS DEVICE'S (owner, 2026-10-22: moved here from Advanced Settings): a shared key
     // (deviceConfig), so writing it reaches every tablet — through the same draft as every other option here, Save
-    // keeping it and Cancel writing the baseline back.
+    // keeping it and Cancel putting it back.
     "roomGlowAndCones",
     // ⚠️ AND EVERYTHING ADVANCED SETTINGS EDITS (owner, 2026-10-22: it joins this dialog's Save / Cancel). Advanced
     // Settings opens OVER this dialog, writes live through ConfigContext.update, and closes back here: these keys are
-    // in this ONE draft, so its changes make Save live, Save keeps them, and Cancel writes them back as they were when
-    // Settings opened — to every tablet, through the same update.
+    // in this ONE draft, so its changes make Save live, Save keeps them, and Cancel puts them back as they were before
+    // this dialog changed them — to every tablet, through the same update.
     ...ADVANCED_SETTINGS_KEYS,
   ] as const;
   const slice = useDraftedSlice(SETTINGS_KEYS);
   const v = slice.view;
-
+  // The 3D view follows what this dialog shows (hooks/useScenePreview): a slider is felt while it is dragged, and
+  // Cancel puts the view back by the same path. ⚠️ NO SLIDER MOVES THE SCENE ITSELF (to 2.496.499, Cancel within the
+  // half-second the write waits left the camera at the cancelled eye height).
+  useScenePreview(manager, v);
 
   const commit = {
     dirty: slice.dirty,
     save: slice.save,
-    // The sliders and fields read the slice's view, so they follow the
-    // reverted config with nothing to re-seed; only what this dialog drives
-    // on the scene directly is re-applied.
-    discard: () => {
-      const baseline = slice.discard();
-      manager?.setRenderConfig(baseline.render);
-    },
+    // The sliders, the fields and the scene's preview read the slice's view,
+    // so they all follow the reverted config with nothing to re-apply.
+    discard: () => { slice.discard(); },
   };
 
   // Escape and the backdrop are Cancel (ModalFooter's footerExits, the footer's own): every change undone, said in a
@@ -94,23 +95,11 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
   // Shown as typed, stored trimmed.
   const applySiteTitle = (text: string) => slice.set({ siteTitle: text }, { stored: { siteTitle: text.trim() } });
 
-  // Live-apply render tuning straight to the scene while dragging, so the user
-  // can iterate on look/perf without saving + reloading.
-  const applyRender = (patch: Partial<RenderConfig>) => {
-    const next = { ...v.render, ...patch };
-    manager?.setRenderConfig(next);
-    slice.set({ render: next });
-  };
-
-  // Live-apply so you can feel/see the change while dragging the sliders.
-  const applyEyeHeight = (h: number) => {
-    manager?.camera.setEyeHeight(h);
-    slice.set({ eyeHeight: h });
-  };
-  const applyWalkSpeed = (speed: number) => {
-    manager?.camera.setWalkSpeed(speed);
-    slice.set({ walkSpeed: speed });
-  };
+  // Render tuning, previewed on the scene while dragging (useScenePreview), so the user can iterate on look/perf
+  // without saving + reloading.
+  const applyRender = (patch: Partial<RenderConfig>) => slice.set({ render: { ...v.render, ...patch } });
+  const applyEyeHeight = (h: number) => slice.set({ eyeHeight: h });
+  const applyWalkSpeed = (speed: number) => slice.set({ walkSpeed: speed });
   const eyeHeight = eyeHeightOf(v.eyeHeight);
 
   return (
@@ -364,6 +353,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
         </div>{/* end modal-body */}
 
         {/* Save and Cancel are the footer's (footerExits); Escape and the backdrop run the same Cancel. */}
+        <RemoteReplacedNote replaced={slice.replaced} onDismiss={slice.dismissReplaced} />
         <ModalFooter
           leading={can("editConfig") ? (
             // the footer's own button: the same pill, size, icon and word as Save and Cancel (owner, 2026-10-22)

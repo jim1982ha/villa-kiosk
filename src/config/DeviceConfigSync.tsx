@@ -74,7 +74,7 @@ import {
 
 /** Debounce for outbound writes. Advanced Settings edits arrive in bursts (a
  *  label typed character by character already debounces at 500ms upstream via
- *  useDraftCommit, but a room/type change is immediate) — coalesce them into
+ *  the dialog's pending store, config/pendingEdits, but a room/type change is immediate) — coalesce them into
  *  one PUT rather than one per keystroke. */
 const PUSH_DEBOUNCE_MS = 900;
 
@@ -117,9 +117,11 @@ export default function DeviceConfigSync() {
   const configRef = useRef(config);
   configRef.current = config;
 
-  /** The serialised confirmed baseline — the push effect's cheap gate for
-   *  rules 1 and 2. Moves with the document's baseline (onBaseline). */
-  const serverJsonRef = useRef<string | null>(null);
+  /** The serialised document this device has PROMISED the store (utils/syncedDocument `promised`: the confirmed
+   *  baseline with the pushes out laid on it), cached by identity — the push effect's cheap gate for rules 1 and 2.
+   *  ⚠️ NOT THE CONFIRMED BASELINE (to 2.496.499): an edit put back (Cancel) while the push carrying it was out equals
+   *  the confirmed baseline, so no push was even scheduled and every other tablet kept the cancelled value. */
+  const promisedJson = useRef<{ doc: SharedDeviceConfig | null; json: string | null }>({ doc: null, json: null });
 
   // Reports this store's pulls/pushes, deduped, tagged `store:"config"` so a
   // dump can never be mistaken for the Facility store's. See syncTelemetry.
@@ -134,10 +136,9 @@ export default function DeviceConfigSync() {
    *  as pending — and owner-only writes. */
   const doc = useMemo(() => {
     const initial = loadSyncBaseline();
-    serverJsonRef.current = initial === null ? null : JSON.stringify(initial);
     return new SyncedDocument({
-      fetch: async () => {
-        const f = await fetchSharedConfig();
+      fetch: async (signal) => {
+        const f = await fetchSharedConfig(signal);
         return f === null ? null : { doc: baselineFromServer(f.config), rev: f.rev, raw: f.raw, config: f.config };
       },
       save: saveSharedConfig,
@@ -156,7 +157,7 @@ export default function DeviceConfigSync() {
       // ⚠️ THE ROLE GATE LIVES IN THE ONE PLACE THAT WRITES, judged when the
       // push RUNS: a pull's re-push used to run for every role (67c32ccb).
       canWrite: () => roleCan(roleRef.current, "editConfig"),
-      onBaseline: (b) => { serverJsonRef.current = JSON.stringify(b); saveSyncBaseline(b); },
+      onBaseline: saveSyncBaseline,
       maxAttempts: MAX_PUSH_ATTEMPTS,
     }, initial);
   }, []);
@@ -164,12 +165,13 @@ export default function DeviceConfigSync() {
   // RULE 4: this device's own diff, replayed onto the server's freshest copy
   // under optimistic concurrency (utils/syncedDocument → keyedSync).
   const pushOwnDiff = useCallback(async () => {
-    const baseline = doc.baseline;
-    // WHICH keys are being sent, by item count. See describeSharedConfigDiff:
+    const local = localRef.current;
+    const outcome = await doc.push(local);
+    // WHICH keys were sent, by item count. See describeSharedConfigDiff:
     // without this a push driven by a key that churns on its own is
     // indistinguishable in a dump from a push driven by a real edit.
-    const changed = baseline ? describeSharedConfigDiff(diffSharedConfig(baseline, localRef.current)) : undefined;
-    const outcome = await doc.push(localRef.current);
+    const from = outcome.ok ? outcome.synced : doc.baseline;
+    const changed = from ? describeSharedConfigDiff(diffSharedConfig(from, local)) : undefined;
     if (outcome.ok) {
       reportSync({
         op: "push", ok: true, attempts: outcome.attempts, rev: outcome.rev,
@@ -177,13 +179,14 @@ export default function DeviceConfigSync() {
         dismissed: outcome.next.dismissedEntityIds.length,
         entities: Object.keys(outcome.next.entityMap).length,
       });
-      // Fold in whatever another device contributed, through mergeSharedConfig:
-      // `outcome.next` is the SHARED slice, which carries no derived items, and
-      // handing it straight to update() would empty the fitted rooms out of
-      // config on every successful push.
-      // What the others changed is the copy this device's diff went onto (`base`) against the one it had synced:
-      // an open dialog's Cancel keeps it (mergeRemote → hooks/useDraftedSlice).
-      mergeRemote(mergeSharedConfig(configRef.current, outcome.next), remoteChange(baseline ?? outcome.base, outcome.base));
+      // Fold in whatever another device contributed: the copy this device's diff went onto (`base`) against the one
+      // it had synced, item by item, onto the config as it is NOW (mergeRemote → deviceConfig applyRemoteChange).
+      // ⚠️ NEVER `outcome.next` WRITTEN OVER THE CONFIG (to 2.496.497): it is the copy taken when the push began, so
+      // a device edited while the push was out went back, and the next diff (against that same copy) was empty: the
+      // edit was lost. The baseline is `next` (the server's), so that edit is what the next push sends.
+      // ⚠️ AGAINST THE BASELINE THIS PUSH ACTUALLY SENT FROM (`synced`, utils/syncedDocument), never one read before it
+      // waited its turn: that one lacked the push before it, whose edit then came back as another tablet's (to 2.496.498).
+      mergeRemote(remoteChange(outcome.synced, outcome.base));
       return;
     }
     if (outcome.reason === "nothing-to-push" || outcome.reason === "not-allowed" || outcome.reason === "not-pulled") return;
@@ -241,7 +244,7 @@ export default function DeviceConfigSync() {
     // compared by reference there — an unconditional update forced a full mesh
     // re-index (and its freeze) on every focus regain.
     if (r.action === "noop") return;
-    mergeRemote(mergeSharedConfig(configRef.current, r.fetched.config), remoteChange(synced, r.fetched.config));
+    mergeRemote(remoteChange(synced, r.fetched.config));
   }, [doc, mergeRemote, pushOwnDiff, reportSync]);
 
   // Mount + focus/visibility + a slow visible-only heartbeat, via the shared
@@ -253,9 +256,10 @@ export default function DeviceConfigSync() {
   const pushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!roleCan(role, "editConfig")) return;     // only config editors write
-    const known = serverJsonRef.current;
-    if (known === null) return;                   // rule 1: no pull yet
-    if (localJson === known) return;               // rule 2: nothing changed
+    const promised = doc.promised;
+    if (promised === null) return;                 // rule 1: no pull yet
+    if (promisedJson.current.doc !== promised) promisedJson.current = { doc: promised, json: JSON.stringify(promised) };
+    if (localJson === promisedJson.current.json) return;   // rule 2: nothing changed
 
     if (pushTimer.current) clearTimeout(pushTimer.current);
     pushTimer.current = setTimeout(() => { void pushOwnDiff(); }, PUSH_DEBOUNCE_MS);
@@ -263,7 +267,7 @@ export default function DeviceConfigSync() {
     return () => {
       if (pushTimer.current) clearTimeout(pushTimer.current);
     };
-  }, [localJson, role, pushOwnDiff]);
+  }, [localJson, role, doc, pushOwnDiff]);
 
   return null;
 }

@@ -126,8 +126,9 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
    *  during a fetch, a failed write still only on this device. */
   const doc = useRef(new SyncedDocument({
     // the record's retention windows ride along with it (fmApi.fetchFmData), kept for the Tickets figures
-    fetch: async () => { const got = await fetchFmData(); if (got) setRetention(got.retention); return got; },
-    save: (next: FmData, rev: string, carryOver: Record<string, unknown>) => saveFmData(next, rev, carryOver),
+    fetch: async (signal?: AbortSignal) => { const got = await fetchFmData(signal); if (got) setRetention(got.retention); return got; },
+    save: (next: FmData, rev: string, carryOver: Record<string, unknown>, signal?: AbortSignal) =>
+      saveFmData(next, rev, carryOver, undefined, signal),
     diff: diffFmData,
     isEmpty: fmDiffIsEmpty,
     apply: applyFmDiff,
@@ -171,7 +172,7 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
         return;
     }
     const fresh = r.fetched;
-    if (r.action === "apply") setData(fresh.doc);
+    if (r.action === "apply") { ref.current = fresh.doc; setData(fresh.doc); }
     setReady(true);
     reportSync({
       op: "pull",
@@ -206,6 +207,10 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
   const mutate = useCallback(async (fn: (d: FmData) => FmData, elevation?: string): Promise<FmWriteResult> => {
     const before = ref.current;
     const next = fn(before);
+    // ⚠️ THE COPY MOVES AT ONCE, not at the next render (2.496.500): the push below sends what this changed against
+    // what the pushes still out will make the store (utils/syncedDocument `promised`), so a second action before the
+    // render must build on this one. Built on the copy before it, it would send this change back undone.
+    ref.current = next;
     setData(next);
     setSaveError(null);
     // Send ONLY what this action changed, replayed onto the server's freshest
@@ -213,11 +218,20 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
     // PUT the whole document with no revision, so two people working the villa
     // at once — the owner and the facility manager both hold manageFacility —
     // silently overwrote each other's records.
-    const outcome = await doc.push(next, (d, rev, carryOver) => saveFmData(d, rev, carryOver, elevation));
+    const outcome = await doc.push(next, (d, rev, carryOver, signal) => saveFmData(d, rev, carryOver, elevation, signal));
+    // Takes back THIS action only, on the screen as it is now: an action made since stays.
+    const undo = () => {
+      const undone = applyFmDiff(ref.current, diffFmData(next, before));
+      ref.current = undone;
+      setData(undone);
+    };
     if (outcome.ok) {
-      // Fold in whatever another device contributed in the meantime, so this
-      // screen reflects the merged truth rather than only its own edit.
-      setData(outcome.next);
+      // Fold in whatever another device contributed in the meantime (the store's copy this push went onto, against
+      // the one it sent from), onto this screen as it is NOW. ⚠️ NEVER `outcome.next` (to 2.496.499): that is the
+      // store when this push landed, so a record removed while it was out came back on the screen.
+      const merged = applyFmDiff(ref.current, diffFmData(outcome.synced, outcome.base));
+      ref.current = merged;
+      setData(merged);
       reportSync({
         op: "push", ok: true, elevated: Boolean(elevation),
         tickets: outcome.next.tickets.length,
@@ -236,12 +250,12 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
     // accepted, and keeping it would leave this screen disagreeing with the
     // store (and, before 2.496.184, re-pushed on every refresh for good).
     if (outcome.reason === "refused") {
-      setData(before);
+      undo();
       setSaveError(outcome.message ? `The add-on refused this change: ${outcome.message}` : "The add-on refused this change, nothing was saved.");
       return "refused";
     }
     if (elevation) {
-      setData(before);
+      undo();
       setSaveError("The delete was refused by the add-on, nothing was removed.");
       return "refused";
     }

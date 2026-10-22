@@ -1,7 +1,7 @@
 // src/components/settings/EntityMapRow.tsx
 // One row of ConfigEditor's auto-detected-entities table, split out and
 // React.memo'd — see ConfigEditor's own comment on WHY. In short: every field
-// here used to keep its "not-yet-committed" draft state (see useDraftCommit)
+// here used to keep its "not-yet-committed" draft state
 // in a flat Record<entityKey, T> living in ConfigEditor itself, so typing a
 // single character in ONE row's Label field re-rendered ConfigEditor, which
 // re-ran its ENTIRE entries.map() — recomputing every OTHER row's JSX (Type/
@@ -57,24 +57,18 @@ interface Props {
   onRemapCancel: () => void;
   /** Absent for an object the 3D model names: it is never removed here (dismissedEntities). */
   onRemove?: (key: string) => void;
-  /** Stable identity (reads the latest config via a ref internally) — see
-   *  ConfigEditor's patch(). Passing the SAME function to every row is what
-   *  lets React.memo's default shallow-prop comparison actually work. */
-  onPatch: (key: string, change: Partial<EntityMapping>) => void;
 }
 
 function EntityMapRow({
   entryKey, mapping, entity, stale, objects, expanded, editing, remapNewId, matchedRowRef,
-  onToggleExpanded, onStartRemap, onRemapChange, onRemapApply, onRemapCancel, onRemove, onPatch,
+  onToggleExpanded, onStartRemap, onRemapChange, onRemapApply, onRemapCancel, onRemove,
 }: Props) {
-  // Draft state is now scoped to THIS ROW's own component instance (one hook
-  // instance per mounted row, keyed internally by a constant since there's
-  // only ever one "self" to draft for) — see useDraftCommit's docstring for
-  // the general instant-echo/debounced-commit pattern this follows.
+  // A change waits in the dialog's one pending store under this row's entity
+  // id (MappingFields.useMappingDraft): only this row re-renders while it waits.
   // The show-in-3D toggle is this row's own field; every other field is
   // MappingFields', shared with the bound-objects table.
   // Not-yet-committed edits show at once (MappingFields.useMappingDraft).
-  const { draftField, m } = useMappingDraft(mapping, (change) => onPatch(entryKey, change));
+  const { draftField, m } = useMappingDraft(entryKey, mapping);
 
   return (
     <tr
@@ -175,8 +169,7 @@ function EntityMapRow({
       )}
 
       {expanded && !editing && (
-        <MappingFields entityId={m.entityId} mapping={m} entity={entity}
-          onPatch={(change) => onPatch(entryKey, change)}
+        <MappingFields entryKey={entryKey} entityId={m.entityId} mapping={m} entity={entity}
           cell={(key, label, field) => (
             <td key={key} data-label={label}>{field}</td>
           )} />
