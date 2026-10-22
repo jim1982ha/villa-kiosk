@@ -9,7 +9,7 @@
 // one flat draft Record per field living HERE, which meant a keystroke in any
 // one row's Label field (or literally any HA state_changed event anywhere in
 // the house, since `entities` below is read at this level) re-rendered the
-// WHOLE table. Every callback passed down to rows (patch/remove/toggleExpanded/
+// WHOLE table. Every callback passed down to rows (remove/toggleExpanded/
 // remap handlers) is given a STABLE identity — via useCallback reading the
 // latest config through a ref, never closing over `config` directly — because
 // React.memo's default shallow prop comparison only pays off if the props
@@ -20,14 +20,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ShowAll, useTruncated } from "@/components/common/TruncatedList";
 import { Search } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
-import { forgetMappings, patchMapping, repointDevice } from "@/config/mappingEdits";
+import { forgetMappings, repointDevice } from "@/config/mappingEdits";
 import { matchesQuery, rowMatches } from "@/config/deviceRecord";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useHA } from "@/ha/HAStateStore";
 import { useVillaModel } from "@/config/VillaModel";
 import EntityMapRow from "./EntityMapRow";
 import EntityPicker from "./EntityPicker";
-import type { EntityMapping } from "@/types/scene.types";
 import { deviceRoom } from "@/config/devicePlace";
 import { countOf } from "@/utils/countOf";
 
@@ -102,12 +101,11 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
 
   // Stable-identity commit path: every edit is computed from the LATEST
   // config inside update() (config/mappingEdits.ts), so these callbacks close
-  // over nothing that changes — every row receives the exact same `onPatch`
-  // reference on every ConfigEditor render, which is what lets React.memo
-  // skip re-rendering rows a given edit doesn't touch (the edit's shallow
-  // spread also keeps every OTHER entry's `mapping` prop reference-equal).
-  const patch = useCallback((key: string, change: Partial<EntityMapping>) =>
-    update(patchMapping(key, change)), [update]);
+  // over nothing that changes — every row receives the exact same callbacks
+  // on every ConfigEditor render, which is what lets React.memo skip
+  // re-rendering rows a given edit doesn't touch (the edit's shallow spread
+  // also keeps every OTHER entry's `mapping` prop reference-equal). A row's
+  // own field edits wait in the dialog's pending store (MappingFields).
 
   // ⚠️ THE SAME OPERATION AS THE BANNER ABOVE, AND IT USED NOT TO BE. This
   // deleted the row and recorded nothing, so it could not deliver the removal
@@ -238,7 +236,6 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
                 onRemapApply={remapEntity}
                 onRemapCancel={cancelRemap}
                 onRemove={sceneEntityIds.has(key) ? undefined : remove}
-                onPatch={patch}
               />
             ))}
           </tbody>

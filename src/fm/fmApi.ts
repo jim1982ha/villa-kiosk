@@ -50,9 +50,9 @@ export function parseRetention(raw: unknown): FmRetention | null {
   return { clearedDays, repairedDays, recordsDays: day(r.recordsDays) ?? 0 };
 }
 
-export async function fetchFmData(): Promise<(StoreFetch<FmData> & { retention: FmRetention | null }) | null> {
+export async function fetchFmData(signal?: AbortSignal): Promise<(StoreFetch<FmData> & { retention: FmRetention | null }) | null> {
   try {
-    const r = await backendFetch(ingressPath("fm-data"), { credentials: "same-origin" });
+    const r = await backendFetch(ingressPath("fm-data"), { credentials: "same-origin", signal });
     if (!r.ok) return null;
     const d = (await r.json()) as { data?: unknown; rev?: unknown; retention?: unknown };
     const raw = d.data && typeof d.data === "object"
@@ -88,11 +88,14 @@ export async function saveFmData(
    *  document, never inside it — it authorises this one request and is
    *  consumed by it, so it must not be stored. */
   elevation?: string,
+  /** Aborts the request: the push it belongs to ran out of time (utils/syncedDocument PUSH_DEADLINE_MS). */
+  signal?: AbortSignal,
 ): Promise<StoreSaveResult> {
   try {
     const merged = { ...carryOver, ...data };
     const r = await backendFetch(ingressPath("fm-data"), {
       method: "PUT",
+      signal,
       credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

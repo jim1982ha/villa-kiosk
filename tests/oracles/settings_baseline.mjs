@@ -31,7 +31,9 @@ ck("an object value rebuilt with the same content: unchanged (compared by conten
 ck("a key of the slice changed: changed", after({ ...config, walkSpeed: 2 }));
 ck("a key OUTSIDE the slice changed: not this dialog's change", !after({ ...config, theme: "light" }));
 const hook = readFileSync(new URL("../../src/hooks/useDraftedSlice.ts", import.meta.url), "utf8");
-ck("a write still waiting: changed", /waiting !== undefined \|\| ledgerDirty\(ledger\.current, config\)/.test(hook));
+// a value still waiting, the slice's or a field's, in the dialog's one store (config/pendingEdits; driven in dialog_pending.mjs)
+ck("a write still waiting: changed", /waitingCount > 0 \|\| ledgerDirty\(ledger\.current, config\)/.test(hook)
+   && /useSyncExternalStore\(pending\.subscribe, \(\) => pending\.size\)/.test(hook));
 
 console.log("\n  the Settings window writes only through its slice:");
 const src = readFileSync(new URL("../../src/components/settings/SettingsModal.tsx", import.meta.url), "utf8");

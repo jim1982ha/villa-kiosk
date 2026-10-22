@@ -504,9 +504,9 @@ export interface SharedConfigFetch {
 /** Fetch the shared device config. Returns null on a transport/parse failure so
  *  the caller can distinguish "server has nothing yet" ({}) from "couldn't
  *  reach it" (null) — the latter must NOT overwrite what this device has. */
-export async function fetchSharedConfig(): Promise<SharedConfigFetch | null> {
+export async function fetchSharedConfig(signal?: AbortSignal): Promise<SharedConfigFetch | null> {
   try {
-    const resp = await backendFetch(ingressPath("device-config"), { credentials: "same-origin" });
+    const resp = await backendFetch(ingressPath("device-config"), { credentials: "same-origin", signal });
     if (!resp.ok) return null;
     const data = (await resp.json()) as { config?: unknown; rev?: unknown };
     const raw = data.config && typeof data.config === "object"
@@ -539,11 +539,14 @@ export async function saveSharedConfig(
    *  SharedConfigFetch.raw) — its unknown keys are written back untouched so
    *  this client can't delete a field a newer version added. */
   carryOver: Record<string, unknown> = {},
+  /** Aborts the request: the push it belongs to ran out of time (utils/syncedDocument PUSH_DEADLINE_MS). */
+  signal?: AbortSignal,
 ): Promise<SaveSharedConfigResult> {
   try {
     const merged = { ...carryOver, ...config };
     const resp = await backendFetch(ingressPath("device-config"), {
       method: "PUT",
+      signal,
       credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(

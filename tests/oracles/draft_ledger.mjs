@@ -125,7 +125,12 @@ console.log("\n  two quick edits, the second push sent while the first is out:")
      { hall: label(me.config, "light.hall"), pool: label(me.config, "light.pool") });
 }
 
-console.log("\n  a waiting push sends its own change, never the first one's undone:");
+// ⚠️ THE CALLER HANDS ITS TRUE DOCUMENT (2.496.500). Until then this case pushed a `second` read before the first edit
+// reached it, and the machine sent only `second` against the baseline at call time. A push now sends `local` against
+// what is PROMISED (the pushes out included), so a value put back while its push is out is sent too
+// (push_promised.mjs); the Facility store moves its copy at once (FmDataContext mutate), so its second action builds on
+// the first.
+console.log("\n  a waiting push sends its own change on top of the first, never the first one's undone:");
 {
   const srv = store({ ...D.pickSharedConfig(opened) });
   const doc = new SyncedDocument({
@@ -134,8 +139,8 @@ console.log("\n  a waiting push sends its own change, never the first one's undo
   }, srv.doc);
   const base = D.pickSharedConfig(opened);
   const first = { ...base, entityMap: { ...base.entityMap, "light.hall": { ...base.entityMap["light.hall"], label: "Hall lamp" } } };
-  // the second was read before the first edit reached it (the Facility screen: two actions before a render)
-  const second = { ...base, entityMap: { ...base.entityMap, "light.pool": { ...base.entityMap["light.pool"], label: "Pool lights" } } };
+  // the second action, built on the first (the Facility screen: two actions before a render)
+  const second = { ...first, entityMap: { ...first.entityMap, "light.pool": { ...first.entityMap["light.pool"], label: "Pool lights" } } };
   await Promise.all([doc.push(first), doc.push(second)]);
   ck("both reach the store", srv.doc.entityMap["light.hall"].label === "Hall lamp" && srv.doc.entityMap["light.pool"].label === "Pool lights",
      srv.doc.entityMap);
@@ -150,7 +155,7 @@ console.log("\n  the wiring:");
      /const next = applyConfigChange\(prev, change\);\s*if \(!next\) return prev;\s*for \(const listener of dialogListeners\.current\) listener\(prev, next\);/.test(ctx)
      && /update: ctx\.editByDialog/.test(ctx));
   ck("the draft writes as the dialog, and Cancel puts back its ledger on the config as it is then",
-     /useDraftCommit<Partial<AppConfig>>\(\(_key, patch\) => editByDialog\(patch\)/.test(hook) && /editByDialog\(stored\);/.test(hook)
+     /new PendingEdits\(editByDialog\)/.test(hook) && /editByDialog\(stored\);/.test(hook)
      && /update\(\(now\) => revertLedger\(undo, now\)\);/.test(hook) && !/update\(baseline\)/.test(hook));
   ck("the 3D view's devices found on load are written as any write, never as the dialog's",
      /update\(adoptDetected\(/.test(canvas) && !/editByDialog|DialogEdits/.test(canvas));

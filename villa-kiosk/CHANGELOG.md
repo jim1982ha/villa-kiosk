@@ -1,3 +1,20 @@
+## 2.496.500
+
+What you will see:
+- Settings and Advanced Settings: pressing Cancel right after a change, while this tablet is still sending it, now
+  reaches every tablet. Before, the other tablets kept the cancelled value (a device label, for example) while this
+  one showed the old one. The same in Facility: a cost or record saved and then removed a moment later is now
+  removed everywhere, and no longer comes back on the screen.
+- When the villa's Wi-Fi drops in the middle of a save, the next saves and refreshes are no longer stuck behind it.
+  After 15 seconds that save counts as not sent: the change stays on this tablet and is sent again on the next
+  refresh, and every later change saves as usual.
+- Settings: dragging Eye height or Walk speed and pressing Cancel straight away now puts the view back too. Before,
+  the view stayed at the cancelled height while Settings showed the old one.
+- Advanced Settings: a value you are typing (the villa's latitude or longitude, how many days records are kept, a
+  device's label or light intensity) now lights Save straight away, and is kept when you close the window before
+  it is saved: going back to Settings keeps it, under Settings' Save and Cancel. Before, Save stayed grey while you
+  typed, and closing the window quickly lost what you had just typed.
+
 ## 2.496.499
 
 What you will see:

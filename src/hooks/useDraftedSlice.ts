@@ -15,14 +15,18 @@
 // ledger, item by item (configSlice recordEdit). A write from elsewhere on
 // this tablet or from another tablet never enters it.
 //
+// ⚠️ ONE PENDING STORE FOR THE WHOLE DIALOG (2.496.500, config/pendingEdits): the slice's own waiting write and every
+// field's typed value (Advanced Settings' coordinates, a device's label: usePendingField under PendingFields). Dirty,
+// Save, Cancel and closing see them all; a value still waiting when the dialog goes away is written, not dropped.
+//
 // ⚠️ THE SLICE'S KEYS ARE THE ONLY KEYS `set` ACCEPTS. A control that writes
 // a key not in the list is a type error — the key would otherwise be
 // silently un-revertable (Discard restores its siblings and leaves it).
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { AppConfig } from "@/config/AppConfig";
 import { useConfig } from "@/config/ConfigContext";
-import { useDraftCommit } from "./useDraftCommit";
+import { PendingEdits } from "@/config/pendingEdits";
 import {
   draftedView, EMPTY_LEDGER, ledgerDirty, ledgerOnRemote, recordEdit, revertLedger, sliceOf, withReplaced,
   type DraftLedger, type ReplacedSubject, type Slice,
@@ -45,6 +49,8 @@ export interface DraftedSlice<K extends keyof AppConfig> {
   discard: () => Slice<K>;
   /** Write what is waiting now (before closing). */
   flush: () => void;
+  /** The dialog's one pending store, for its fields (PendingFields / usePendingField). */
+  pending: PendingEdits;
   /** This dialog's changes another tablet has since replaced (configSlice ledgerOnRemote), for the dialog to say
    *  (components/settings/RemoteReplacedNote); gone when dismissed or when the dialog closes. */
   replaced: ReplacedSubject[];
@@ -56,7 +62,13 @@ const DRAFT = "slice";
 export function useDraftedSlice<K extends keyof AppConfig>(keys: readonly K[], delayMs = 500): DraftedSlice<K> {
   const { config, update, editByDialog, onDialogEdit, onRemoteChange } = useConfig();
   // the dialog's writes are its own: recorded in its ledger (and any other open draft's) as they land
-  const pending = useDraftCommit<Partial<AppConfig>>((_key, patch) => editByDialog(patch), delayMs);
+  const [pending] = useState(() => new PendingEdits(editByDialog));
+  pending.write = editByDialog;
+  const waitingCount = useSyncExternalStore(pending.subscribe, () => pending.size);
+  // ⚠️ A VALUE STILL WAITING WHEN THE DIALOG GOES AWAY IS WRITTEN (Back from Advanced Settings over Settings, a
+  // close that is not Cancel): directly, never from inside a state updater, which does not run once it is unmounted
+  // (useDraftCommit's net, to 2.496.499, never wrote anything).
+  useEffect(() => () => pending.flushAll(), [pending]);
   // ⚠️ THE LEDGER: WHAT THIS DIALOG ITSELF SET, ITEM BY ITEM, and its value before (configSlice recordEdit). Until
   // 2.496.498 the draft was a copy of the slice taken on open, so every write while the dialog was open read as its
   // own: the devices a 3D model just uploaded adds lit Save, and Cancel deleted them on every tablet. Written inside
@@ -79,11 +91,10 @@ export function useDraftedSlice<K extends keyof AppConfig>(keys: readonly K[], d
     if (r.replaced.length > 0) setReplaced((said) => withReplaced(said, r.replaced));
     setHeard((n) => n + 1);
   }), [onRemoteChange]);
-  const waiting = pending.drafts[DRAFT];
   // compared item by item once per config (the ledger can hold the villa's whole entity map since Advanced Settings
   // joined Settings' draft, 2026-10-22): never per render
   // eslint-disable-next-line react-hooks/exhaustive-deps -- the ledger is a ref, moved with `config` or `heard`
-  const dirty = useMemo(() => waiting !== undefined || ledgerDirty(ledger.current, config), [config, heard, waiting]);
+  const dirty = useMemo(() => waitingCount > 0 || ledgerDirty(ledger.current, config), [config, heard, waitingCount]);
 
   return {
     view: draftedView(config, keys, typing),
@@ -101,18 +112,17 @@ export function useDraftedSlice<K extends keyof AppConfig>(keys: readonly K[], d
         return;
       }
       setTyping((t) => ({ ...t, ...shown }));
-      pending.draft(DRAFT, { ...waiting, ...stored });
+      pending.stage(DRAFT, undefined, { ...(pending.writeOf(DRAFT) as Partial<AppConfig> | undefined), ...stored }, delayMs);
     },
     dirty,
     save: () => {
       // what is waiting is kept, so written as such: never recorded as a change still to cancel
-      pending.cancel(DRAFT);
-      if (waiting !== undefined) update(waiting);
+      for (const write of pending.take()) update(write);
       ledger.current = EMPTY_LEDGER;
       setHeard((n) => n + 1);
     },
     discard: () => {
-      pending.cancel(DRAFT);
+      pending.drop();
       setTyping({});
       const undo = ledger.current;
       ledger.current = EMPTY_LEDGER;
@@ -121,7 +131,8 @@ export function useDraftedSlice<K extends keyof AppConfig>(keys: readonly K[], d
       update((now) => revertLedger(undo, now));
       return sliceOf({ ...config, ...revertLedger(undo, config) } as AppConfig, keys);
     },
-    flush: () => pending.flush(DRAFT),
+    flush: () => pending.flushAll(),
+    pending,
     replaced,
     dismissReplaced: () => setReplaced([]),
   };

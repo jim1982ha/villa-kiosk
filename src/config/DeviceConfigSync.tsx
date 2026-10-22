@@ -74,7 +74,7 @@ import {
 
 /** Debounce for outbound writes. Advanced Settings edits arrive in bursts (a
  *  label typed character by character already debounces at 500ms upstream via
- *  useDraftCommit, but a room/type change is immediate) — coalesce them into
+ *  the dialog's pending store, config/pendingEdits, but a room/type change is immediate) — coalesce them into
  *  one PUT rather than one per keystroke. */
 const PUSH_DEBOUNCE_MS = 900;
 
@@ -117,9 +117,11 @@ export default function DeviceConfigSync() {
   const configRef = useRef(config);
   configRef.current = config;
 
-  /** The serialised confirmed baseline — the push effect's cheap gate for
-   *  rules 1 and 2. Moves with the document's baseline (onBaseline). */
-  const serverJsonRef = useRef<string | null>(null);
+  /** The serialised document this device has PROMISED the store (utils/syncedDocument `promised`: the confirmed
+   *  baseline with the pushes out laid on it), cached by identity — the push effect's cheap gate for rules 1 and 2.
+   *  ⚠️ NOT THE CONFIRMED BASELINE (to 2.496.499): an edit put back (Cancel) while the push carrying it was out equals
+   *  the confirmed baseline, so no push was even scheduled and every other tablet kept the cancelled value. */
+  const promisedJson = useRef<{ doc: SharedDeviceConfig | null; json: string | null }>({ doc: null, json: null });
 
   // Reports this store's pulls/pushes, deduped, tagged `store:"config"` so a
   // dump can never be mistaken for the Facility store's. See syncTelemetry.
@@ -134,10 +136,9 @@ export default function DeviceConfigSync() {
    *  as pending — and owner-only writes. */
   const doc = useMemo(() => {
     const initial = loadSyncBaseline();
-    serverJsonRef.current = initial === null ? null : JSON.stringify(initial);
     return new SyncedDocument({
-      fetch: async () => {
-        const f = await fetchSharedConfig();
+      fetch: async (signal) => {
+        const f = await fetchSharedConfig(signal);
         return f === null ? null : { doc: baselineFromServer(f.config), rev: f.rev, raw: f.raw, config: f.config };
       },
       save: saveSharedConfig,
@@ -156,7 +157,7 @@ export default function DeviceConfigSync() {
       // ⚠️ THE ROLE GATE LIVES IN THE ONE PLACE THAT WRITES, judged when the
       // push RUNS: a pull's re-push used to run for every role (67c32ccb).
       canWrite: () => roleCan(roleRef.current, "editConfig"),
-      onBaseline: (b) => { serverJsonRef.current = JSON.stringify(b); saveSyncBaseline(b); },
+      onBaseline: saveSyncBaseline,
       maxAttempts: MAX_PUSH_ATTEMPTS,
     }, initial);
   }, []);
@@ -255,9 +256,10 @@ export default function DeviceConfigSync() {
   const pushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!roleCan(role, "editConfig")) return;     // only config editors write
-    const known = serverJsonRef.current;
-    if (known === null) return;                   // rule 1: no pull yet
-    if (localJson === known) return;               // rule 2: nothing changed
+    const promised = doc.promised;
+    if (promised === null) return;                 // rule 1: no pull yet
+    if (promisedJson.current.doc !== promised) promisedJson.current = { doc: promised, json: JSON.stringify(promised) };
+    if (localJson === promisedJson.current.json) return;   // rule 2: nothing changed
 
     if (pushTimer.current) clearTimeout(pushTimer.current);
     pushTimer.current = setTimeout(() => { void pushOwnDiff(); }, PUSH_DEBOUNCE_MS);
@@ -265,7 +267,7 @@ export default function DeviceConfigSync() {
     return () => {
       if (pushTimer.current) clearTimeout(pushTimer.current);
     };
-  }, [localJson, role, pushOwnDiff]);
+  }, [localJson, role, doc, pushOwnDiff]);
 
   return null;
 }

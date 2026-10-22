@@ -64,7 +64,7 @@ ck("  ...a 502 is a blip (transport), not a refusal", r502.ok === false && !r502
 const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
 const ctx = src("fm/FmDataContext.tsx");
 ck("mutate returns saved / refused / offline / unchanged, and undoes a refusal",
-   /Promise<FmWriteResult>/.test(ctx) && /return "saved";/.test(ctx) && /if \(outcome\.reason === "refused"\) \{\s*setData\(before\);/.test(ctx) && /return "offline";/.test(ctx));
+   /Promise<FmWriteResult>/.test(ctx) && /return "saved";/.test(ctx) && /if \(outcome\.reason === "refused"\) \{\s*undo\(\);/.test(ctx) && /return "offline";/.test(ctx));
 // ── What a screen DOES with the result: fmSaveOutcome, one decision (2.496.252) ──
 // Offline is DONE (the write is queued on this device and re-sent on its own):
 // the old "nothing was sent… try again" made a guest file the same report twice.
