@@ -87,7 +87,7 @@ function VillaCoordinates() {
     if (Number.isFinite(n) && text.trim() !== "") update({ [key]: n } as Partial<AppConfig>);
   }, COORD_COMMIT_MS);
   const coord = (key: "latitude" | "longitude", id: string, label: string) => (
-    <div>
+    <div className="villa-location-coord">
       <label htmlFor={id}>{label}</label>
       <input
         id={id} inputMode="decimal" value={field.drafts[key] ?? String(config[key])}
@@ -98,10 +98,10 @@ function VillaCoordinates() {
     </div>
   );
   return (
-    <div className="coord-grid">
+    <>
       {coord("latitude", "villa-lat", "Latitude")}
       {coord("longitude", "villa-lng", "Longitude")}
-    </div>
+    </>
   );
 }
 /** Which way the model faces (owner, 2026-10-12: moved here from Settings, below
@@ -117,8 +117,8 @@ function NorthOffset({ viewHeadingDeg }: { viewHeadingDeg?: () => number | null 
   const { config, update } = useConfig();
   const deg = config.northOffsetDeg;
   return (
-    <>
-      <label className="with-tip" style={{ marginTop: 14 }}>Model north offset · {deg}°
+    <div className="villa-location-north">
+      <label className="with-tip">Model north offset · {deg}°
         <InfoTip label="About the model north offset">
           Face the villa's real north side and press Set North, or drag the slider until the shadows match. Only fixes
           which wall the light comes from: sunrise and sunset times are already right.
@@ -146,7 +146,7 @@ function NorthOffset({ viewHeadingDeg }: { viewHeadingDeg?: () => number | null 
           Set North
         </button>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -180,14 +180,10 @@ function RecordsKept() {
   // label and field on one line, the field on the right (owner, 2026-10-22)
   return (
     <div className="settings-field-row">
-      <label htmlFor="records-kept" className="with-tip">Keep maintenance records for (days)
-        <InfoTip label="About keeping maintenance records">
-          Photos, repaired faults, work done and money spent older than this are deleted. 0 keeps them for ever. A
-          task's latest completion is always kept. Up to {RECORDS_KEPT_DAYS_MAX} days.
-        </InfoTip>
-      </label>
+      {/* the owner's words (2026-10-22); its (i) is the section title's */}
+      <label htmlFor="records-kept">How many days Ticket attachment must be saved (in days)</label>
       <input
-        id="records-kept" inputMode="numeric" style={{ maxWidth: 140 }}
+        id="records-kept" inputMode="numeric" className="field-narrow"
         value={field.drafts.recordsKeptDays ?? String(config.recordsKeptDays)}
         onChange={(e) => field.draft("recordsKeptDays", e.target.value)}
         onBlur={() => field.flush("recordsKeptDays")}
@@ -330,8 +326,12 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
           {tab === "villa" && (
             <>
               <TipTitle title="Villa location" tip="Drives the sun's position, and day and night, for this villa." />
-              <VillaCoordinates />
-              <NorthOffset viewHeadingDeg={viewHeadingDeg} />
+              {/* Latitude, Longitude and the north offset on ONE line where there is room; on a phone the two
+                  coordinates share a line and the offset takes the next (owner, 2026-10-22) */}
+              <div className="villa-location-row">
+                <VillaCoordinates />
+                <NorthOffset viewHeadingDeg={viewHeadingDeg} />
+              </div>
 
               <PresenceSensor />
 
@@ -390,7 +390,10 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
               other roles rather than rendered-and-403 — see the TABS filter. */}
           {tab === "system" && roleCan(role, "editConfig") && (
             <>
-              <div className="settings-section-title">Maintenance records</div>
+              <TipTitle title="Maintenance records" tip={<>
+                Photos, repaired faults, work done and money spent older than this are deleted. 0 keeps them for ever. A
+                task's latest completion is always kept. Up to {RECORDS_KEPT_DAYS_MAX} days.
+              </>} />
               <RecordsKept />
 
               {/* `TelemetryPanel` pages its own log, so there is nothing here

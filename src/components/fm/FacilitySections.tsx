@@ -115,8 +115,9 @@ export default function FacilitySections({
       )}
       {ready && tab === "recap" && (
         <>
-          <ReadinessTab inputs={inputs} onOpenEntity={onOpenEntity} onOpenCheck={setCheckList} />
+          {/* "Villa occupied since …" above the readiness card it qualifies (owner, 2026-10-22) */}
           {presenceLine && <p className="body-text recap-presence">{presenceLine}</p>}
+          <ReadinessTab inputs={inputs} onOpenEntity={onOpenEntity} onOpenCheck={setCheckList} />
           <div className="settings-section-title">Monthly recap</div>
           <RecapTab inputs={inputs} />
         </>

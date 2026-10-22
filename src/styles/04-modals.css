@@ -71,7 +71,7 @@
 .modal h2 { font-family: var(--font-display); font-weight: 500; font-size: var(--text-xl); margin: 0; letter-spacing: var(--tracking-tight); }
 .modal .sub { color: var(--text-secondary); margin: 0 0 22px; }
 .modal label { display: block; font-size: var(--text-sm); color: var(--text-secondary); margin: 14px 0 6px; }
-.modal input, .modal select { width: 100%; padding: 12px 14px; border-radius: 10px; background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--hairline); font-size: var(--text-md); }
+.modal input, .modal select { width: 100%; padding: 12px 14px; border-radius: 10px; background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--hairline); font-size: var(--field-text); font-weight: 400; }
 .modal input:focus, .modal select:focus { border-color: var(--accent); outline: none; }
 .modal-actions { display: flex; gap: 12px; margin-top: 24px; justify-content: flex-end; }
 
@@ -376,8 +376,15 @@
 
 /* Villa Latitude/Longitude pair in the Config Editor — full modal width,
    left-aligned like every other field. */
-.coord-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-.coord-grid label { margin-top: 0; }
+/* Advanced Settings › Villa location: Latitude, Longitude and the model north offset (its slider and Set North) on ONE
+   line where the dialog is wide enough; on a phone the two coordinates share a line and the offset wraps onto the
+   next (owner, 2026-10-22). Each field keeps its label above it; the fields line up on their bottom edge. */
+.villa-location-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; }
+.villa-location-coord { flex: 1 1 120px; min-width: 0; }
+.villa-location-north { flex: 2 1 320px; min-width: 0; }
+/* A short number field (days, a percentage): its own width, never a stretched bar. */
+.field-narrow { max-width: 140px; }
+.villa-location-row label { margin-top: 0; }
 
 /* Inline (i) info button + hover/focus tooltip (replaces the model info block). */
 .info-tip { position: relative; display: inline-flex; }
@@ -547,7 +554,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .config-search svg { flex: 0 0 auto; color: var(--text-dim); }
 .config-search input {
   flex: 1 1 auto; min-width: 0; border: none; background: transparent;
-  padding: 10px 0; color: var(--text-primary); font-size: var(--text-base);
+  padding: 10px 0; color: var(--text-primary); font-size: var(--field-text);
 }
 .config-search input:focus { outline: none; }
 /* Compact variant — sized to sit inline at pill height (GroupedDevices'

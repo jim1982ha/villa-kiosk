@@ -17,7 +17,22 @@ ck("  ...sharing the width equally, Record spend at their right",
 
 console.log("\n  the statement's buttons:");
 const group = tab.match(/<div className="fm-statement-buttons">([\s\S]*?)\n        <\/div>/);
-ck("Generate, Save and Download .md are ONE group", !!group && /Generate statement/.test(group[1]) && /<SaveButton/.test(group[1]) && /Download \.md/.test(group[1]));
+// Save and Download .md are DocumentButtons since 2026-10-22: drawn only with a statement (document_buttons below)
+ck("Generate, Save and Download .md are ONE group", !!group && /Generate statement/.test(group[1]) && /<DocumentButtons markdown=\{statement\.markdown\}/.test(group[1]));
+
+console.log("\n  Save and Download .md only with something to save (owner, 2026-10-22):");
+{
+  const { h, draw } = await import("../consistency/screen.mjs");
+  const { DocumentButtons } = await import("@/components/common/SaveButton");
+  const props = { saved: false, saveLabel: "Save recap", onSave: () => {}, onDownload: () => {} };
+  const none = draw(h(DocumentButtons, { ...props, markdown: "" })), shown = draw(h(DocumentButtons, { ...props, markdown: "# Recap" }));
+  ck("nothing generated: neither button is drawn (never greyed out beside nothing)", !/<button/.test(none), none);
+  ck("  ...a recap generated: Save recap and Download .md, both live",
+     /Save recap/.test(shown) && /Download \.md/.test(shown) && !/disabled/.test(shown), shown);
+  ck("  ...the Recap and the Spend statement both draw them through it",
+     /<DocumentButtons markdown=\{markdown\} saved=\{doc\.saved\} saveLabel="Save recap"/.test(readFileSync(new URL("../../src/components/fm/RecapTab.tsx", import.meta.url), "utf8"))
+     && /<DocumentButtons markdown=\{statement\.markdown\}/.test(tab));
+}
 ck("  ...that does not wrap apart (a phone excepted)", /\.fm-statement-buttons \{ display: flex; flex-wrap: nowrap;/.test(css));
 
 console.log("\n  Spend settings:");

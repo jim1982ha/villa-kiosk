@@ -460,7 +460,7 @@
    actually has one. Grouping the three controls is also what stops the next
    textarea from needing its own rule. */
 .fm-field > input, .fm-field > select, .fm-field > textarea {
-  padding: 10px 12px; border-radius: 10px; font-size: var(--text-md);
+  padding: 10px 12px; border-radius: 10px; font-size: var(--field-text); font-weight: 400;
   background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--hairline);
   /* Width comes from the column, never from `cols`; the border box keeps the
      padding inside it so the field lines up with the inputs above and below. */

@@ -140,6 +140,9 @@
   --text-xs: 12px;    /* captions, secondary meta under a label */
   --text-sm: 13px;    /* form labels, table cells, muted body */
   --text-base: 14px;  /* default UI text */
+  /* The text typed in EVERY field — a search, a picker, a name, a number (owner, 2026-10-22: the coordinates and the
+     records-kept days looked bigger than the pickers beside them). One size, read by every field rule. */
+  --field-text: var(--text-base);
   --text-md: 15px;    /* emphasised rows, primary buttons */
   --text-lg: 18px;    /* card/section titles */
   --text-xl: 20px;    /* panel + modal headings */

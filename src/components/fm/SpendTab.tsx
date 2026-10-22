@@ -9,8 +9,8 @@
 import InfoTip from "@/components/common/InfoTip";
 import { useState } from "react";
 import Dropdown from "@/components/common/Dropdown";
-import SaveButton from "@/components/common/SaveButton";
-import { Plus, Sparkles, Save, Download } from "lucide-react";
+import { DocumentButtons } from "@/components/common/SaveButton";
+import { Plus, Sparkles } from "lucide-react";
 import { useFmData } from "@/fm/FmDataContext";
 import { budgetStatus, capNotes, localStamp, parseAmount, recordsKeptNote } from "@/fm/fmEngine";
 import { COST_CATEGORY_NAMES } from "@/fm/fmTypes";
@@ -116,10 +116,8 @@ export default function SpendTab(
           <button className="btn ghost" onClick={statement.generate}>
             <Sparkles size={16} /> {statement.markdown ? "Regenerate statement" : "Generate statement"}
           </button>
-          <SaveButton saved={statement.saved} label="Save" icon={<Save size={16} />} onClick={() => void statement.save()} disabled={!statement.markdown} />
-          <button className="btn ghost" onClick={statement.download} disabled={!statement.markdown}>
-            <Download size={16} /> Download .md
-          </button>
+          {/* only with a statement to save or download (owner, 2026-10-22: never greyed out beside nothing) */}
+          <DocumentButtons markdown={statement.markdown} saved={statement.saved} saveLabel="Save" onSave={() => void statement.save()} onDownload={statement.download} />
         </div>
       </div>
       {statement.markdown && <MarkdownPreview markdown={statement.markdown} />}
