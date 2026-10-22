@@ -57,7 +57,7 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
         if (!cancelled) {
           const gated = { pin: true, enabled: true };
           setAccess({ guest: gated, owner: gated, ops: gated });
-          setGateError("Couldn't load the passcode settings — a passcode will be asked for every profile.");
+          setGateError("Couldn't load the passcode settings, a passcode will be asked for every profile.");
         }
       });
     return () => { cancelled = true; };
@@ -90,8 +90,8 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
           // prefetch (auth/profileSession's signedIn).
           login(r);
         } else if (res.kind === "closed") setGateError(res.text);
-        else if (res.kind === "unavailable") setGateError("Couldn't reach the kiosk service — please try again.");
-        else setGateError("Couldn't start a session — please try again.");
+        else if (res.kind === "unavailable") setGateError("Couldn't reach the kiosk service, please try again.");
+        else setGateError("Couldn't start a session, please try again.");
       });
     } else {
       setPending(r);
@@ -174,7 +174,7 @@ export default function ProfileGate({ children }: { children: ReactNode }) {
                       <Icon size={34} aria-hidden="true" />
                       <span className="profile-card-name">{ROLE_LABELS[r]}</span>
                       <span className="profile-card-desc">
-                        {closed ? "No passcode set — not available from here." : ROLE_DESCRIPTIONS[r]}
+                        {closed ? "No passcode set, not available from here." : ROLE_DESCRIPTIONS[r]}
                       </span>
                     </button>
                   );

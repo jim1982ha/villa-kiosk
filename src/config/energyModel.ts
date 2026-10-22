@@ -165,7 +165,7 @@ export function todayHeadline(soFar: number, typical: number | undefined, dayFra
   const pct = Math.round((soFar / typical) * 100);
   const pace = soFar / (typical * Math.max(0.01, dayFraction));
   const word = pace < QUIET_BELOW ? "A quiet day" : pace > BUSY_ABOVE ? "A busy day" : "A usual day";
-  return `${word} — ${pct}% of a typical one by ${clock}.`;
+  return `${word}, ${pct}% of a typical one by ${clock}.`;
 }
 
 /** A day that stood out: at least this many times a typical one. */

@@ -152,7 +152,7 @@ console.log("\n  nothing builds a mapping patch by hand any more:");
      room.edit(later).teleportPoints.map((p) => p.name).join() === "Kitchen,Fitted,Pool,Rooftop");
   const dup = addRoom({ name: "  kitchen ", floor: 1 });
   ck("  ...a name that exists, whatever its case, is refused with its words and changes nothing",
-     dup.clash(base) === '"Kitchen" already exists — remove or rename it first.' && Object.keys(dup.edit(base)).length === 0);
+     dup.clash(base) === '"Kitchen" already exists, remove or rename it first.' && Object.keys(dup.edit(base)).length === 0);
   ck("  ...and removed by its name whatever the case, the other rooms (fitted ones too) untouched",
      removeRoom("KITCHEN")(later).teleportPoints.map((p) => p.name).join() === "Fitted,Pool");
 }

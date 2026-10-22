@@ -25,6 +25,7 @@ const sample = {
   northOffsetDeg: 117,
   presenceSensor: "binary_sensor.example_empty",
   recordsKeptDays: 180,
+  roomGlowAndCones: false,
 };
 const edit = {
   entityMap: (v, n) => ({ ...v, [`light.n${n}`]: { type: "light", label: `N${n}` } }),
@@ -39,10 +40,11 @@ const edit = {
   northOffsetDeg: (v, n) => v + n,
   presenceSensor: (v, n) => `${v}_${n}`,
   recordsKeptDays: (v, n) => v + n,
+  roomGlowAndCones: (v) => !v,
 };
 // Keys holding ONE value rather than a collection: a change replaces it whole,
 // so two devices' edits cannot both survive — the later one wins.
-const SINGLE = new Set(["fmContract", "latitude", "longitude", "northOffsetDeg", "presenceSensor", "recordsKeptDays"]);
+const SINGLE = new Set(["fmContract", "latitude", "longitude", "northOffsetDeg", "presenceSensor", "recordsKeptDays", "roomGlowAndCones"]);
 const base = Object.fromEntries(KEYS.map((k) => [k, sample[k]]));
 const J = JSON.stringify;
 
@@ -54,7 +56,7 @@ console.log("\n  reading what the server holds:");
   const parsed = dc.parseSharedConfig({ ...base, fromANewerVersion: 1 });
   ck("every shared key is read back as stored", KEYS.every((k) => J(parsed[k]) === J(base[k])));
   ck("a key this version does not know is dropped", !("fromANewerVersion" in parsed));
-  const wrong = dc.parseSharedConfig({ entityMap: [], meshBindings: "x", deviceGroups: {}, teleportPoints: 3, dismissedEntityIds: "a", unavailableByDesign: 4, fmContract: 5, latitude: "x", longitude: null, northOffsetDeg: NaN, presenceSensor: 3, recordsKeptDays: 1.5 });
+  const wrong = dc.parseSharedConfig({ entityMap: [], meshBindings: "x", deviceGroups: {}, teleportPoints: 3, dismissedEntityIds: "a", unavailableByDesign: 4, fmContract: 5, latitude: "x", longitude: null, northOffsetDeg: NaN, presenceSensor: 3, recordsKeptDays: 1.5, roomGlowAndCones: "off" });
   ck("a wrong-shaped value is left out, so the device keeps its own", Object.keys(wrong).length === 0, J(wrong));
   ck("a dismissed list keeps only its ids", J(dc.parseSharedConfig({ dismissedEntityIds: ["a", 3, null, "b"] }).dismissedEntityIds) === J(["a", "b"]));
   ck("nothing usable reads as nothing", J(dc.parseSharedConfig(null)) === "{}" && J(dc.parseSharedConfig([1])) === "{}");

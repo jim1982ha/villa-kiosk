@@ -149,7 +149,7 @@ console.log("\n  the window's words — fixed rules on the station's own reading
   ck("laundry: rain → not outside", lau({ raining: true }).tone === "bad");
   ck("laundry: kPa is converted (0.61 kPa = 6.1 hPa)", Math.abs(W.toHpa(0.61, "kPa") - 6.1) < 1e-9);
   const out = (o) => W.outdoorsAdvice({ raining: false, gustKmh: 5, windKmh: 4, uv: 0, ...o });
-  ck("outdoors: dry, light air, UV 0 → fine", out({}).tone === "good" && /UV 0 — no sun protection/.test(out({}).detail), out({}).detail);
+  ck("outdoors: dry, light air, UV 0 → fine", out({}).tone === "good" && /UV 0, no sun protection/.test(out({}).detail), out({}).detail);
   ck("outdoors: UV 3 → sun protection (WHO)", out({ uv: 3 }).title === "Outdoors: sun protection" && out({ uv: 2.9 }).tone === "good");
   ck("outdoors: gusts 39 → windy; rain → wet", out({ gustKmh: 39 }).title === "Outdoors: windy" && out({ raining: true }).title === "Outdoors: wet");
 }

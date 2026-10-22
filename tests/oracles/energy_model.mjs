@@ -56,7 +56,7 @@ const so = E.standoutDay(week, E.typicalDay(week));
 ck("Friday stands out at 2.5× a typical day", so?.index === 6 && Math.abs(so.ratio - 75.46 / 29.89) < 1e-9, so);
 ck("a week with no such day has none", E.standoutDay(week.slice(0, 6), E.typicalDay(week.slice(0, 6))) === null);
 ck("today at 13:00, 11.7 kWh against 29.9: 'A quiet day — 39% of a typical one by 13:00.'",
-   E.todayHeadline(11.7, 29.89, 13 / 24, "13:00") === "A quiet day — 39% of a typical one by 13:00.", E.todayHeadline(11.7, 29.89, 13 / 24, "13:00"));
+   E.todayHeadline(11.7, 29.89, 13 / 24, "13:00") === "A quiet day, 39% of a typical one by 13:00.", E.todayHeadline(11.7, 29.89, 13 / 24, "13:00"));
 ck("on pace: a usual day; well over: a busy one",
    /^A usual day/.test(E.todayHeadline(15, 30, 0.5, "12:00")) && /^A busy day/.test(E.todayHeadline(25, 30, 0.5, "12:00")));
 ck("no history yet: just the figure", E.todayHeadline(4.2, undefined, 0.5, "12:00") === "4.2 kWh so far today.");

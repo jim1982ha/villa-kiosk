@@ -63,7 +63,7 @@ export default function ConnectionBanner() {
   return (
     <NoticeView tone="unavailable" icon={<WifiOff size={16} />}>
       <span className="conn-banner-full">
-        Disconnected — reconnecting…
+        Disconnected, reconnecting…
         {" "}
         <span className="muted">Controls won&rsquo;t respond until this clears.</span>
       </span>

@@ -86,7 +86,7 @@ export const WORK_ACTIONS: Record<WorkActionKind, WorkActionSpec> = {
   // without #55 — architecture review "One problem, one card" #2)
   closeAll: { label: "Close all", step: { kind: "close", question: "Close all of them? No action needed.", confirmLabel: "Close all" } },
   closeOne: { label: "Close", step: { kind: "close", question: "Close this one? No action needed.", confirmLabel: "Close" } },
-  closeTicket: { label: "Close", step: { kind: "close", question: "Close this ticket? Nothing was done — no cost is recorded.", confirmLabel: "Close ticket" } },
+  closeTicket: { label: "Close", step: { kind: "close", question: "Close this ticket? Nothing was done, no cost is recorded.", confirmLabel: "Close ticket" } },
   reopen: { label: "Reopen", step: { kind: "stage", to: "open" } },
 };
 

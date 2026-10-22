@@ -154,13 +154,13 @@ console.log("\n  one word per check state and one verdict, on the tab, in the re
     const recap = R.buildMonthlyRecap({ fm: EMPTY_FM_DATA, month: "2026-09", villaName: "V", readiness: res, deviceOfRecord: (id) => id });
     const row = `| Check ${state} | ${wordOf(state)} | what was found |`;
     ck(`${state}: the tab's verdict is VERDICT_WORDS', the snapshot's the same sentence; the check's row is the same in the recap and the snapshot`,
-       tab.includes(`|${VERDICT_WORDS[state]}|${res.passed} of 1 checks passing|`) && snap.includes(`**${VERDICT_WORDS[state]}** — ${res.passed} of 1 checks passing.`)
+       tab.includes(`|${VERDICT_WORDS[state]}|${res.passed} of 1 checks passing|`) && snap.includes(`**${VERDICT_WORDS[state]}**, ${res.passed} of 1 checks passing.`)
        && snap.includes(row) && recap.includes(row) && snap.includes("| Check | Result | Finding |") && recap.includes("| Check | Result | Finding |"),
        { tab, snap: snap.split("\n").filter((l) => l.startsWith("|") || l.startsWith("**")), recap: recap.split("## 5.")[1] });
   }
   const snap = R.buildReadinessSnapshot(one("warn"), "V", "2026-09");
   ck("the snapshot opens with the documents' shared header (its Generated stamp is the moment taken), no \"Taken\" line, nothing shouted",
-     snap.startsWith("# V — readiness snapshot\n**Period:** ") && /^\*\*Generated:\*\* \d{4}-\d{2}-\d{2} \d{2}:\d{2}  $/m.test(snap) && /^\*\*Scope:\*\* /m.test(snap)
+     snap.startsWith("# V: readiness snapshot\n**Period:** ") && /^\*\*Generated:\*\* \d{4}-\d{2}-\d{2} \d{2}:\d{2}  $/m.test(snap) && /^\*\*Scope:\*\* /m.test(snap)
      && !/Taken |READY|Attention/.test(snap), snap.split("\n").slice(0, 5));
   const code = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, "");
   ck("  ...and neither the tab nor the documents spell a verdict or a check word themselves",
@@ -193,7 +193,7 @@ console.log("\n  the Recap counts what the profile is shown (architecture review
   const s4 = recap.split("## 4.")[1]?.split("##")[0] ?? "";
   ck("  ...and the recap's §4 is the readiness' devices, pointing where they are listed (no \"faults section\")",
      s4.includes(`**${villa.size - 4} of ${villa.size - 2}** devices reporting`)
-     && s4.includes('2 device(s) currently offline — listed under "Open issues" on the Overview, and under "All devices reporting" below.')
+     && s4.includes('2 device(s) currently offline, listed under "Open issues" on the Overview, and under "All devices reporting" below.')
      && !/faults section/.test(recap), s4);
 }
 
@@ -210,7 +210,7 @@ console.log("\n  a device the villa's system no longer has is in its own checks,
      c("cameras").entityIds.join() === "camera.pool,camera.ghost" && c("cameras").detail === `1 offline, 1 ${missing}.`
      && c("cameras").opens.group.entityIds.includes("camera.ghost"), c("cameras"));
   ck("  ...air conditioning too", c("climate").entityIds.join() === "climate.bed,climate.ghost"
-     && c("climate").detail === `1 not responding, 1 ${missing} — cannot pre-cool.`, c("climate"));
+     && c("climate").detail === `1 not responding, 1 ${missing}, cannot pre-cool.`, c("climate"));
   ck("  ...and the devices not reporting say how many are missing", c("devices-online").detail === `3 devices offline or not reporting, 2 devices ${missing}.`,
      c("devices-online").detail);
   const noHa = buildReadiness({}, EMPTY_FM_DATA, { devices: dev, attentionItems: [] }, {});

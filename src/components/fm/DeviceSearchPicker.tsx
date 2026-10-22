@@ -138,7 +138,7 @@ export default function DeviceSearchPicker({
       )}
       {!matchedEntityId && value.trim() && !open && (
         <div className="muted body-text field-hint">
-          No matching device — this will be saved as free text.
+          No matching device, this will be saved as free text.
         </div>
       )}
 
@@ -146,7 +146,7 @@ export default function DeviceSearchPicker({
         <div className="picker-dropdown">
           {results.length === 0 && (
             <div className="muted body-text" style={{ padding: 12, fontSize: "var(--text-sm)" }}>
-              No device matches "{value.trim()}" — it will be saved as free text.
+              No device matches "{value.trim()}", it will be saved as free text.
             </div>
           )}
           {results.map((o) => (

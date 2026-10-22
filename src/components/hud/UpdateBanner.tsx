@@ -16,7 +16,7 @@ export default function UpdateBanner() {
   if (!ready) return null;
   return (
     <NoticeView tone="info" icon={<RefreshCw size={16} />} onTap={applyUpdate}>
-      A new version of VESTA is ready — tap to reload
+      A new version of VESTA is ready, tap to reload
     </NoticeView>
   );
 }

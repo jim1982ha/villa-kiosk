@@ -47,7 +47,7 @@ function withStallTimeout<T>(p: Promise<T>, ms: number, onTimeout: () => void): 
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
       onTimeout();
-      reject(new Error(`model download stalled — no data for ${Math.round(ms / 1000)}s`));
+      reject(new Error(`model download stalled, no data for ${Math.round(ms / 1000)}s`));
     }, ms);
     p.then(
       (v) => { clearTimeout(timer); resolve(v); },

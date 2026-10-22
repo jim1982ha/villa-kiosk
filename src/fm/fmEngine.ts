@@ -210,7 +210,7 @@ export function capNotes(b: Pick<BudgetStatus, "state">): string[] {
       return [`Cap reached. Further spend this month belongs to ${COST_CATEGORY_NAMES.major}, on whatever terms your `
         + "own agreement sets for spend beyond it."];
     case "approaching":
-      return [`Approaching the cap — decide now whether upcoming work is ${COST_CATEGORY_NAMES.minor} or should be `
+      return [`Approaching the cap, decide now whether upcoming work is ${COST_CATEGORY_NAMES.minor} or should be `
         + `recorded as ${COST_CATEGORY_NAMES.major}.`];
     default:
       return [];

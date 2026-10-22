@@ -38,7 +38,7 @@ const dash = src("pages/Dashboard.tsx");
 ck("  ...the villa view's own sit in ONE column, the most lasting first",
    /<NoticeStack>\s*<ConnectionBanner \/>\s*<UpdateBanner \/>\s*<ServiceErrorToast \/>\s*<AppNotice /.test(dash));
 ck("  ...a motion notice is the map's \"active\", news is \"info\"",
-   /setNotice\(\{ text: room \? `Motion detected · \$\{room\}` : `Motion detected · \$\{label\}`, tone: "active" \}\)/.test(dash) && /isn't modelled yet — coming soon\.`, tone: "info" \}/.test(dash));
+   /setNotice\(\{ text: room \? `Motion detected · \$\{room\}` : `Motion detected · \$\{label\}`, tone: "active" \}\)/.test(dash) && /isn't modelled yet, coming soon\.`, tone: "info" \}/.test(dash));
 const css = ["styles/01-base.css", "styles/02-hud.css", "styles/05-layout.css", "styles/08-shared.css"].map(src).join("\n");
 ck("no notice keeps a look of its own", !/\.(service-toast|app-notice|connection-banner|update-banner|sh3d-sync-banner)\b/.test(css));
 

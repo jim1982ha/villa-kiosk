@@ -245,7 +245,7 @@ export function buildReadiness(
       state: offlineState(broken),
       detail: broken.length === 0
         ? `${countOf(climate.ids.length, "unit")} responding.`
-        : `${notAnswering(broken, "not responding")} — cannot pre-cool.`,
+        : `${notAnswering(broken, "not responding")}, cannot pre-cool.`,
       entityIds: broken,
       opens: target("View air conditioning", { title: "Air conditioning", icon: AirVent, entityIds: climate.ids.slice() }),
     });

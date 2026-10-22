@@ -166,7 +166,7 @@ export default function TeleportMenu({ manager, currentFloor, onClose, onTelepor
         </button>
       </div>
       <p className="muted center mt body-text">
-        <MapPin size={16} /> Tap a room to fly there — the view is framed to that room automatically.
+        <MapPin size={16} /> Tap a room to fly there, the view is framed to that room automatically.
       </p>
     </div>
     </>

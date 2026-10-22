@@ -150,7 +150,7 @@ export default function HUD({
   // The VESTA Agent: its presence dot.
   const { status: agentStatus } = useAgent();
   const agentOnline = agentStatus?.state === "online";
-  const agentTitle = `VESTA Agent — ${agentOnline ? "online" : "offline"}`;
+  const agentTitle = `VESTA Agent, ${agentOnline ? "online" : "offline"}`;
   // The agent's presence as the dot on its robot — the top bar's and the
   // phone menu's are this one element (.status-dot, 2.496.247).
   const agentDot = <span className={`status-dot ${agentOnline ? "on" : "warn"}`} aria-hidden="true" />;
@@ -334,7 +334,7 @@ export default function HUD({
           className="hud-menu-item"
           onClick={() => { close(); beginSwitch(); }}
           title={`Signed in as ${ROLE_LABELS[role]} · Connection: ${connection}`}
-          aria-label={`Signed in as ${ROLE_LABELS[role]}, connection ${connection} — log out`}
+          aria-label={`Signed in as ${ROLE_LABELS[role]}, connection ${connection}, log out`}
         >
           <span className="hud-menu-glyph" aria-hidden="true">
             <span className={`role-glyph${ROLE_INITIALS[role].length > 1 ? " two" : ""}`}>{ROLE_INITIALS[role]}</span>
@@ -456,10 +456,10 @@ export default function HUD({
             {homeFlash === "applied"
               ? "Jumped to this device's default view."
               : homeFlash === "saved"
-                ? "Default view updated for this device — it'll open here every reload."
+                ? "Default view updated for this device, it'll open here every reload."
                 : homeFlash === "unavailable"
                   ? "Switch to overview (bird's-eye) view first to set a default."
-                  : "No default view saved yet — long-press (or right-click) to set one."}
+                  : "No default view saved yet, long-press (or right-click) to set one."}
           </div>
         )}
 
@@ -495,7 +495,7 @@ export default function HUD({
                   onKeyDown={onCatKeyDown(cat)}
                   onContextMenu={(e) => e.preventDefault()}
                   onClick={onCatClick(cat)}
-                  title={`${hidden ? "Show" : "Hide"} ${CATEGORY_LABELS[cat]} devices on the map — hold to list them`}
+                  title={`${hidden ? "Show" : "Hide"} ${CATEGORY_LABELS[cat]} devices on the map, hold to list them`}
                   aria-label={`${CATEGORY_LABELS[cat]} devices on the map`}
                   aria-pressed={!hidden}
                 >
@@ -512,7 +512,7 @@ export default function HUD({
             <button
               className="icon-btn hud-cat-help"
               onClick={() => setLegendOpen(true)}
-              title="What do these colours mean — and the keyboard keys"
+              title="What do these colours mean, and the keyboard keys"
               aria-label="Map colours and keyboard keys"
             >
               <CircleHelp size={24} />
@@ -578,9 +578,9 @@ export default function HUD({
             <button
               className={`icon-btn${doors.agent ? " agent-btn" : ""}${HEALTH_CLASS[health.level]}`}
               onClick={onOpenCockpit}
-              title={(attentionGroups.length > 0 ? health.summary : "Cockpit — villa status at a glance")
+              title={(attentionGroups.length > 0 ? health.summary : "Cockpit, villa status at a glance")
                 + (doors.agent ? ` · ${agentTitle}` : "")}
-              aria-label={`Open Cockpit — villa status at a glance${doors.agent ? ` (${agentTitle})` : ""}`}
+              aria-label={`Open Cockpit, villa status at a glance${doors.agent ? ` (${agentTitle})` : ""}`}
             >
               {doors.agent ? <Bot size={24} /> : <TriangleAlert size={24} />}
               {doors.agent && agentDot}
@@ -603,8 +603,8 @@ export default function HUD({
                 <button
                   className={`icon-btn hud-role-badge${account.open ? " active" : ""}`}
                   onClick={() => account.setOpen((o) => !o)}
-                  title={`Signed in as ${ROLE_LABELS[role]} — settings and logout`}
-                  aria-label={`Signed in as ${ROLE_LABELS[role]} — settings and logout`}
+                  title={`Signed in as ${ROLE_LABELS[role]}, settings and logout`}
+                  aria-label={`Signed in as ${ROLE_LABELS[role]}, settings and logout`}
                   aria-haspopup="menu"
                   aria-expanded={account.open}
                 >
@@ -663,7 +663,7 @@ export default function HUD({
                   </span>
                   <span>
                     Cockpit{attentionGroups.length > 0 ? ` (${formatCountBadge(attentionGroups.length)})` : ""}
-                    {doors.agent && <span className="sr-only">{` — ${agentTitle}`}</span>}
+                    {doors.agent && <span className="sr-only">{`, ${agentTitle}`}</span>}
                   </span>
                 </button>
                 {/* Same control as the (hidden-on-mobile) inline Minus/Plus
@@ -683,7 +683,7 @@ export default function HUD({
                     role="menuitem"
                     className="hud-menu-help"
                     onClick={() => { setMenuOpen(false); setLegendOpen(true); }}
-                    aria-label="Label size — what the map colours mean"
+                    aria-label="Label size, what the map colours mean"
                   >
                     {/* the (?) where every other row has its icon, so the words line up (owner, 2026-10-14) */}
                     <CircleHelp size={18} aria-hidden="true" />
@@ -756,8 +756,8 @@ export default function HUD({
               key={f}
               ref={(el) => { if (el) floorBtnRefs.current.set(f, el); else floorBtnRefs.current.delete(f); }}
               className={`icon-btn hud-floor-btn has-hold-action${currentFloor === f || radial?.floor === f ? " active" : ""}`}
-              title={`Show floor ${f} — hold for its rooms`}
-              aria-label={`Show floor ${f} — hold for its rooms`}
+              title={`Show floor ${f}, hold for its rooms`}
+              aria-label={`Show floor ${f}, hold for its rooms`}
               aria-describedby="floor-btn-hint"
               aria-pressed={currentFloor === f}
               style={{ touchAction: "none" }}

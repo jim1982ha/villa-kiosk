@@ -54,11 +54,11 @@ export default function FirstRunTips({ onClose }: { onClose: () => void }) {
           <ul className="first-run-tip-list">
             <li>
               <Armchair size={18} />
-              <span>The colored icons in the top bar filter which devices show on the map — tap one to hide or show that category.</span>
+              <span>The colored icons in the top bar filter which devices show on the map, tap one to hide or show that category.</span>
             </li>
             <li>
               <Compass size={18} />
-              <span>A button with a small <span className="first-run-dot-demo" aria-hidden="true" /> dot also does something extra when you press and hold it — try holding the compass button to manage rooms.</span>
+              <span>A button with a small <span className="first-run-dot-demo" aria-hidden="true" /> dot also does something extra when you press and hold it, try holding the compass button to manage rooms.</span>
             </li>
             <li>
               <Info size={18} />

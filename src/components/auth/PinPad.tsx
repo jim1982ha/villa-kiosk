@@ -71,7 +71,7 @@ export default function PinPad({
     if (result.kind === "locked") {
       setLockedFor(result.retryAfter);
     } else if (result.kind === "wrong") {
-      setError("Incorrect code — try again.");
+      setError("Incorrect code, try again.");
       setFailCount((c) => c + 1);
     } else if (result.kind === "closed") {
       // The server's own reason — e.g. "set a passcode in the add-on's
@@ -113,7 +113,7 @@ export default function PinPad({
 
   return (
     <div className="pinpad" role="group" aria-label={`Passcode for ${roleLabel}`}>
-      <button className="pinpad-back" onClick={onBack} aria-label={`Back — ${backLabel}`}>
+      <button className="pinpad-back" onClick={onBack} aria-label={`Back, ${backLabel}`}>
         <ArrowLeft size={18} /> {backLabel}
       </button>
       <h2 className="pinpad-title">{roleLabel}</h2>
@@ -128,7 +128,7 @@ export default function PinPad({
       <div className="pinpad-status" role="alert" aria-live="polite">
         {locked ? (
           <span className="danger-text">
-            {`Too many attempts — locked for ${Math.floor(lockedFor / 60)}:${String(lockedFor % 60).padStart(2, "0")}`}
+            {`Too many attempts, locked for ${Math.floor(lockedFor / 60)}:${String(lockedFor % 60).padStart(2, "0")}`}
           </span>
         ) : error ? (
           <span className="danger-text">{error}</span>

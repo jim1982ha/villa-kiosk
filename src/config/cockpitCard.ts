@@ -115,7 +115,7 @@ function attentionLine(item: AttentionItem): string {
     // Assistant", a live reading ("92 %").
     const word = item.detail ?? "";
     const said = (item.kind === "unavailable" && word === "Unavailable") || saysWord(item.fault.title, word);
-    return said ? fault.charAt(0).toUpperCase() + fault.slice(1) : `${word} — ${fault}`;
+    return said ? fault.charAt(0).toUpperCase() + fault.slice(1) : `${word}, ${fault}`;
   }
   if (item.kind === "fault") return titled(item);
   return item.kind === "schedule" ? `${item.detail}: ${item.title}` : item.detail ?? "";

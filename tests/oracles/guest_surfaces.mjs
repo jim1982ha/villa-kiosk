@@ -48,7 +48,9 @@ ck("the Cockpit does not fetch energy at all (its 'Energy today' block is gone)"
      /if \(!profileView\(roleRef\.current\)\.motion\) return;/.test(src("pages/Dashboard.tsx"))
      && /const sees = profileView\(role\);[\s\S]*showPeople=\{sees\.people\} showMovement=\{sees\.motion\}/.test(src("components/hud/PresenceTile.tsx")));
 }
+// the routing is babylon/motionRouting since 2026-10-22 (room_glow_switch.mjs drives `denied` by value)
 ck("the 3D motion glow / beam is skipped under the role-filtered config",
-   /private applyMotionRouting\(entity: HassEntity\): void \{\s*if \(this\.config\.deniedTypes\?\.includes\("binary_sensor"\)\) return;/.test(src("babylon/EntityVisuals.ts")));
+   /denied: !!this\.config\.deniedTypes\?\.includes\("binary_sensor"\),/.test(src("babylon/EntityVisuals.ts"))
+   && /if \(i\.denied \|\| !i\.enabled\) return none;/.test(src("babylon/motionRouting.ts")));
 
 done("✅ a guest sees no energy and no motion, anywhere");

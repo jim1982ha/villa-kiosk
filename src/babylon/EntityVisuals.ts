@@ -72,7 +72,8 @@ import { Image } from "@babylonjs/gui/2D/controls/image";
 import { Control } from "@babylonjs/gui/2D/controls/control";
 import type { AppConfig } from "@/config/AppConfig";
 import { roomKey } from "@/config/roomKey";
-import { cameraMotionId, glowsRoom } from "@/config/BinarySensorClasses";
+import { cameraMotionId } from "@/config/BinarySensorClasses";
+import { motionRouting } from "./motionRouting";
 import {
   badgeMetricsFor, detectPointerClass, observePointerClass, type BadgeMetrics, type PointerClass,
   CHIP_MAX_VIEWPORT_FRACTION, CARD_MAX_VIEWPORT_FRACTION,
@@ -1158,7 +1159,14 @@ export class EntityVisuals {
   updateConfig(config: AppConfig, mapDelta: EntityMapDelta): void {
     const prevGroups = this.config.deviceGroups;
     const prevBadgeStyle = this.config.badgeStyle;
+    const prevGlows = this.config.roomGlowAndCones;
     this.config = config;
+    // Advanced Settings' "Room glow and camera cones" applies live (owner, 2026-10-22): every glow and cone off, then
+    // — switched on — lit again from the sensors as they stand (reapplyRoomGlows, through motionRouting).
+    if (config.roomGlowAndCones !== prevGlows) {
+      this.beams.clearActive();
+      this.reapplyRoomGlows();
+    }
     // hiddenCategories gates the layout pass's first cull and badgeStyle
     // switches labelBoxes to a different geometry entirely — neither is
     // observable through the view-projection matrix.
@@ -2297,12 +2305,10 @@ export class EntityVisuals {
     // exist yet (a logged no-op), and without this its beam would stay dark
     // until the sensor's NEXT state change. Replay from lastState so a beam
     // built while its sensor is on lights up immediately, not one toggle late.
+    // through the one routing, so the cone obeys Advanced Settings' switch as a live change does
     for (const sensorId of this.linkedEntityIndex.keys()) {
       const st = this.lastState.get(sensorId);
-      if (st?.state !== "on") continue;
-      for (const camId of this.camerasWatchedBy(sensorId, st.attributes.device_class as string | undefined)) {
-        this.setBeamActive(camId, true);
-      }
+      if (st?.state === "on") this.applyMotionRouting(st);
     }
   }
 
@@ -2517,36 +2523,25 @@ export class EntityVisuals {
    *  either). Still real, still opt-in (only fires when the camera's own
    *  Room is set), never a guess about WHERE the camera is aiming. */
   private applyMotionRouting(entity: HassEntity): void {
-    // The role-filtered config: a profile denied motion sensors (the guest's)
-    // sees no motion beam or room glow either (2.496.210).
-    if (this.config.deniedTypes?.includes("binary_sensor")) return;
-    const on = entity.state === "on";
-    const cameraIds = this.camerasWatchedBy(entity.entity_id, entity.attributes.device_class as string | undefined);
-    if (cameraIds.length) {
-      // The beam (or the room-glow fallback); the camera's badge shows the same detector as its bottom-right pill
-      // (applyLinkedEntityRouting repaints it) — filled while motion is on.
-      let anyBeam = false;
-      for (const camId of cameraIds) {
-        if (this.setBeamActive(camId, on)) anyBeam = true;
-      }
-      if (!anyBeam) {
-        for (const camId of cameraIds) {
-          const camRoom = deviceRoom(this.resolvedRooms, camId);
-          if (camRoom) this.roomHighlight.setActive(camRoom, on);
-        }
-      }
-      return;
-    }
-    // ⚠️ THE MAP'S OWN MAPPING, AS ITS BADGE (owner, 2026-10-22: "I switch the sensor on in the villa's system, the
-    // badge turns red, but not the area"): this read the SAVED entity map only, and a sensor the model names by its
-    // object (auto-detected, never edited in Advanced Settings) is not in it — its badge red, its room dark. A sensor
-    // not drawn at all keeps its saved type.
-    const type = this.mapping.get(entity.entity_id)?.type ?? this.config.entityMap[entity.entity_id]?.type;
-    const room = deviceRoom(this.resolvedRooms, entity.entity_id);
-    // someone there, or a door open — never an "on" that is good news (glowsRoom, owner 2026-10-21)
-    if (type === "binary_sensor" && room && glowsRoom(entity.entity_id, entity.attributes.device_class as string | undefined)) {
-      this.roomHighlight.setActive(room, on);
-    }
+    const deviceClass = entity.attributes.device_class as string | undefined;
+    // What lights is motionRouting's (pure, tests/oracles/room_glow_switch.mjs): the cone or the camera's room, or the
+    // sensor's own room — nothing for a profile denied motion sensors (the guest's, 2.496.210), nothing when Advanced
+    // Settings' "Room glow and camera cones" is off (owner, 2026-10-22). Only the painting is here.
+    const route = motionRouting({
+      entityId: entity.entity_id, deviceClass, on: entity.state === "on",
+      // ⚠️ THE MAP'S OWN MAPPING, AS ITS BADGE (owner, 2026-10-22: "I switch the sensor on in the villa's system, the
+      // badge turns red, but not the area"): this read the SAVED entity map only, and a sensor the model names by its
+      // object (auto-detected, never edited in Advanced Settings) is not in it. A sensor not drawn keeps its saved type.
+      type: this.mapping.get(entity.entity_id)?.type ?? this.config.entityMap[entity.entity_id]?.type,
+      room: deviceRoom(this.resolvedRooms, entity.entity_id),
+      cameras: this.camerasWatchedBy(entity.entity_id, deviceClass),
+      hasBeam: (cam) => this.beams.has(cam),
+      cameraRoom: (cam) => deviceRoom(this.resolvedRooms, cam),
+      denied: !!this.config.deniedTypes?.includes("binary_sensor"),
+      enabled: this.config.roomGlowAndCones,
+    });
+    for (const b of route.beams) this.setBeamActive(b.cameraId, b.on);
+    for (const r of route.rooms) this.roomHighlight.setActive(r.room, r.on);
   }
 
   /** Counterpart to applyMotionRouting for EntityMapping.linkedEntityId: when

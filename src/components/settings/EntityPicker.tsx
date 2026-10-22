@@ -123,7 +123,7 @@ export default function EntityPicker({
             >
               <span style={{ flex: 1, textAlign: "left" }}>
                 Use "{query.trim()}"
-                <div className="muted" style={{ fontSize: "var(--text-2xs)" }}>entity not there yet — will activate when it appears</div>
+                <div className="muted" style={{ fontSize: "var(--text-2xs)" }}>entity not there yet, will activate when it appears</div>
               </span>
             </button>
           )}

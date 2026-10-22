@@ -30,9 +30,9 @@ export const ROLE_INITIALS: Record<Role, string> = {
 
 /** One-line pitch under each profile button (mirrors the product spec). */
 export const ROLE_DESCRIPTIONS: Record<Role, string> = {
-  guest: "Enjoy the villa — comfort, lights, music and doors.",
-  owner: "Everything at a glance — protection, energy, water, internet.",
-  ops: "On-site view — device health, batteries, what needs attention.",
+  guest: "Enjoy the villa: comfort, lights, music and doors.",
+  owner: "Everything at a glance: protection, energy, water, internet.",
+  ops: "On-site view: device health, batteries, what needs attention.",
 };
 
 /** Runtime whitelist check for values read from storage or the network. */

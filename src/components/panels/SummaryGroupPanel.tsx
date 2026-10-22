@@ -207,7 +207,7 @@ export default function SummaryGroupPanel({
         <>
           <div
             className="summary-offmap-heading summary-notinha-heading"
-            title="This villa model has 3D geometry named after these devices, but no such device exists — most often its integration was removed, or it was renamed. Update the model, or add the device back."
+            title="This villa model has 3D geometry named after these devices, but no such device exists, most often its integration was removed, or it was renamed. Update the model, or add the device back."
           >
             {NOT_IN_HA}
           </div>

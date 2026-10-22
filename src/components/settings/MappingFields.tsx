@@ -75,7 +75,7 @@ export default function MappingFields({ entityId, mapping, entity, onPatch, cell
       {cell("label", "Label", (
         // Saved half a second after typing stops, or at once on leaving the field.
         <input style={selectStyle ? { ...selectStyle, cursor: "text", flex: 1, minWidth: 80 } : undefined}
-          placeholder={named.placeholder} title="Display name — leave empty to use the device's own name"
+          placeholder={named.placeholder} title="Display name, leave empty to use the device's own name"
           value={label.drafts.v ?? named.value}
           onChange={(e) => label.draft("v", e.target.value)}
           onBlur={() => label.flush("v")} />
@@ -84,7 +84,7 @@ export default function MappingFields({ entityId, mapping, entity, onPatch, cell
         <label className="row" style={{ gap: 6, fontSize: "var(--text-xs)", color: "var(--text-secondary)", cursor: "pointer", flex: "0 0 auto" }}>
           <input type="checkbox" checked={!!m.requireConfirm}
             onChange={(e) => draftField({ requireConfirm: e.target.checked })}
-            title="Ask before toggling — a tap on this device's map badge opens its panel instead of acting instantly, and its panel's own on/off button asks 'Turn on/off?' first. For a device where an accidental toggle has a real physical consequence, e.g. a door release or gate motor modelled as a plain switch." />
+            title="Ask before toggling, a tap on this device's map badge opens its panel instead of acting instantly, and its panel's own on/off button asks 'Turn on/off?' first. For a device where an accidental toggle has a real physical consequence, e.g. a door release or gate motor modelled as a plain switch." />
           Confirm before toggling
         </label>
       ))}
@@ -109,7 +109,7 @@ export default function MappingFields({ entityId, mapping, entity, onPatch, cell
           onChange={(id) => draftField({ linkedEntityId: id })}
           onClear={() => draftField({ linkedEntityId: undefined })}
           allowCustom hideCurrentLabel
-          placeholder={m.type === "camera" ? "Linked entity — its motion sensor or a switch…" : "Linked entity — a switch or a sensor…"} />
+          placeholder={m.type === "camera" ? "Linked entity, its motion sensor or a switch…" : "Linked entity, a switch or a sensor…"} />
       ))}
     </>
   );

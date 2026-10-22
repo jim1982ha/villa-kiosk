@@ -39,7 +39,7 @@ export default function CostFields({ amount, onAmount, category = "minor", onCat
   return (
     <>
       <label className="fm-field">
-        <span>Cost{terms.currency ? ` (${terms.currency})` : ""}{optional ? " — optional, leave blank if nothing was spent" : ""}</span>
+        <span>Cost{terms.currency ? ` (${terms.currency})` : ""}{optional ? ", optional, leave blank if nothing was spent" : ""}</span>
         <input value={amount} inputMode="decimal" onChange={(e) => onAmount(e.target.value)} placeholder="0" />
       </label>
       {onCategory && (!optional || value > 0) && (
@@ -48,8 +48,8 @@ export default function CostFields({ amount, onAmount, category = "minor", onCat
           {/* Neutral words: which contract clause or account a category maps
               to is one villa's arrangement (hard-rules.py, 3b). */}
           <Dropdown<Category> value={category} onChange={onCategory} ariaLabel="Category" options={[
-            { value: "minor", label: `${COST_CATEGORY_NAMES.minor}${terms.monthlyCap > 0 ? " — counts against the monthly cap" : ""}` },
-            { value: "major", label: `${COST_CATEGORY_NAMES.major}${terms.monthlyCap > 0 ? " — outside the cap" : ""}` },
+            { value: "minor", label: `${COST_CATEGORY_NAMES.minor}${terms.monthlyCap > 0 ? ", counts against the monthly cap" : ""}` },
+            { value: "major", label: `${COST_CATEGORY_NAMES.major}${terms.monthlyCap > 0 ? ", outside the cap" : ""}` },
           ]} />
         </label>
       )}

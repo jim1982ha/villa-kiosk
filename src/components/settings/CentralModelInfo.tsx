@@ -66,7 +66,7 @@ export default function CentralModelInfo({
             {editable ? (
               <>
                 Stored in the add-on's own <code>/data</code> volume (on disk as <code>villa.glb</code>)
-                and served to every client from there — an upload overwrites it, so re-uploading a new
+                and served to every client from there, an upload overwrites it, so re-uploading a new
                 file replaces the villa for everyone (the name above is the file it came from). The
                 room-data sidecar (<code>.rooms.json</code>, emitted next to the GLB by the Blender
                 pipeline) lives alongside it. Upload both via the GLB button in the top bar; there's no
@@ -74,7 +74,7 @@ export default function CentralModelInfo({
               </>
             ) : (
               <>
-                Loaded from the add-on's central store — every client (sidebar or direct hostname)
+                Loaded from the add-on's central store, every client (sidebar or direct hostname)
                 loads the same model. To replace it, upload a new GLB/room-data file from the top bar's
                 upload button on the Owner profile; other devices pick it up automatically on next open.
               </>

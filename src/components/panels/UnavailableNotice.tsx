@@ -44,7 +44,7 @@ export default function UnavailableNotice({ device = "device", entityId }: Props
   // it just restated the word above it and tripled the height of an otherwise
   // tiny panel, so it survives only as the title / accessible description.
   const detail =
-    `Contact with this ${device} is lost — its real state isn't `
+    `Contact with this ${device} is lost, its real state isn't `
     + "known, so controls are disabled until it reports in again.";
   return (
     <div className="center" style={{ margin: "8px 0 20px" }}>
