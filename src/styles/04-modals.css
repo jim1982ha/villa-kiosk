@@ -682,3 +682,15 @@ label.toggle span { user-select: none; line-height: 1.4; }
 /* A chart's step and aggregation beside its title ("LAST MONTH · daily avg", historyRange ChartStep, owner
    2026-10-20): smaller, muted, never upper-cased with the title. */
 .chart-step { font-size: var(--text-xs); font-weight: 500; color: var(--text-secondary); text-transform: none; letter-spacing: 0; }
+
+/* A label and its one short field on the same line, the field on the right (owner, 2026-10-22). */
+.settings-field-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.settings-field-row > label { margin: 0; }
+
+/* "Confirm" on a device card's own line, beside the pencil: the Settings toggle buttons' look, at the icon buttons'
+   height (owner, 2026-10-22). */
+.segmented.config-confirm button { min-height: 36px; padding: 0 12px; font-size: var(--text-xs); gap: 6px; }
+
+/* A folded section's title and its closed line on one line (Fold heading, owner 2026-10-22). */
+.fold-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 14px; margin: 24px 0 12px; }
+.fold-heading > .settings-section-title { margin: 0; }

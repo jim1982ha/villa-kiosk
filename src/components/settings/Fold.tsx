@@ -9,18 +9,24 @@
 import { useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
-export default function Fold({ summary, children }: {
+export default function Fold({ summary, heading, children }: {
   /** What is inside, said in the closed line ("9 groups · 15 suggested"). */
   summary: string;
+  /** The section's title (and its (i)): the closed line sits on the title's line, after it (owner, 2026-10-22: the
+   *  description is an (i) now, so the line under it had nothing left to sit under). */
+  heading?: ReactNode;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const toggle = (
+    <button type="button" className="fm-disclosure" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+      {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+      {summary}
+    </button>
+  );
   return (
     <>
-      <button type="button" className="fm-disclosure" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-        {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-        {summary}
-      </button>
+      {heading ? <div className="fold-heading">{heading}{toggle}</div> : toggle}
       {open && <div style={{ marginTop: 8 }}>{children}</div>}
     </>
   );

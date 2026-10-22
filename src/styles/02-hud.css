@@ -168,6 +168,11 @@
   line-height: 1; text-box: trim-both cap alphabetic;
 }
 .role-glyph.two { font-size: 9px; letter-spacing: 0; }
+/* Its menu open: the badge keeps its circle (owner, 2026-10-22: "it shouldn't change shape"). The shared
+   .icon-btn.active plate is a green rounded square, and green on green the circle vanished into it: the open state
+   is a ring round the circle instead. */
+.hud-account .icon-btn.hud-role-badge.active { background: transparent; }
+.hud-role-badge.active .role-glyph { box-shadow: 0 0 0 2px var(--bg-modal), 0 0 0 4px var(--accent); }
 /* The phone menu's "Log out" row wears the same badge, at its 18px icons'
    optical size (owner, 2.496.246). */
 .hud-menu-item .role-glyph { flex: 0 0 auto; width: 22px; height: 22px; font-size: 10px; }

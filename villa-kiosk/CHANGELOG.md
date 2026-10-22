@@ -1,3 +1,13 @@
+## 2.496.490
+
+What you will see:
+- The profile button (top right) stays a circle when its menu is open: a ring round it shows it is open.
+- Advanced Settings › System: "Keep maintenance records for (days)" has its field on the same line, on the right.
+- Advanced Settings › Devices, a device's card: "Confirm before toggling" is no longer a checkbox among the fields;
+  it is a "Confirm" button on the device's own line, at the right, highlighted while it is on. "Linked entity" takes
+  the card's whole width, like the other fields.
+- "Grouped devices" and "Bound 3D objects": the folded line ("9 groups · 15 suggested") sits on the title's line.
+
 ## 2.496.489
 
 What you will see:

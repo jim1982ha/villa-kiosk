@@ -171,8 +171,9 @@ function RecordsKept() {
     const n = Number(text);
     if (text.trim() !== "" && Number.isInteger(n) && n >= 0 && n <= RECORDS_KEPT_DAYS_MAX) update({ recordsKeptDays: n });
   }, COORD_COMMIT_MS);
+  // label and field on one line, the field on the right (owner, 2026-10-22)
   return (
-    <>
+    <div className="settings-field-row">
       <label htmlFor="records-kept" className="with-tip">Keep maintenance records for (days)
         <InfoTip label="About keeping maintenance records">
           Photos, repaired faults, work done and money spent older than this are deleted. 0 keeps them for ever. A
@@ -186,7 +187,7 @@ function RecordsKept() {
         onBlur={() => field.flush("recordsKeptDays")}
         onKeyDown={(e) => e.key === "Enter" && field.flush("recordsKeptDays")}
       />
-    </>
+    </div>
   );
 }
 
@@ -319,15 +320,14 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
               {/* No collapse: `BindingsTable` already opens on its three counts
                   with the lists themselves behind their own toggles, so this
                   tab states how much is bound without a click. */}
-              <TipTitle title="Bound 3D objects" tip={<>
+              <BindingsTable heading={<TipTitle title="Bound 3D objects" tip={<>
                 Each bound 3D object controls a device's entity when tapped in the villa: change which entity here,
                 without reloading the model; its name and display settings are with the device, in Devices. To prepare
                 an entity whose 3D object is not in the model yet, add it here: its settings apply as soon as a model
                 with an object named after its entity ID is uploaded. To bind one, expand the unbound objects and pick
                 an entity for it. The entities not shown on the map have no 3D object: add one in the 3D model, or bind
                 an unbound object to one, to control it from the villa.
-              </>} />
-              <BindingsTable />
+              </>} />} />
             </>
           )}
 
@@ -350,14 +350,13 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
               </>} />
               <ConfigEditor initialSearch={focusEntityId} />
 
-              <TipTitle title="Grouped devices" tip={<>
+              <GroupedDevices heading={<TipTitle title="Grouped devices" tip={<>
                 Fold several entities that are really one physical device (e.g. a combo sensor with separate
                 temperature and humidity entities) into a single map badge. Only the primary entity keeps a badge on the
                 map; every other member's value and 24-hour history appear in that badge's detail view instead. To make
                 one, pick the entity that should keep the map badge (e.g. temperature) under New group, then add the rest
                 as members.
-              </>} />
-              <GroupedDevices />
+              </>} />} />
 
               <TipTitle title="Asleep between reports" tip={<>
                 Devices that sleep between reports, such as a battery door sensor: their "unavailable" is normal. VESTA

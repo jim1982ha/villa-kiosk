@@ -4,6 +4,7 @@
 // humidity entities) into a single map badge — see config/deviceGroups.ts
 // and components/panels/DeviceGroupPanel for the combined detail view.
 
+import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import AskDialog from "@/components/common/AskDialog";
 import { ChevronDown, ChevronRight, Plus, Search, Trash2, Sparkles } from "lucide-react";
@@ -21,7 +22,7 @@ import RemovablePill from "@/components/common/RemovablePill";
 import { countOf } from "@/utils/countOf";
 import { matchesQuery } from "@/config/deviceRecord";
 
-export default function GroupedDevices() {
+export default function GroupedDevices({ heading }: { heading?: ReactNode } = {}) {
   const { config, update } = useConfig();
   const { entityDeviceIds } = useHA();
   const entityLabel = useEntityLabel();
@@ -82,7 +83,7 @@ export default function GroupedDevices() {
       )}
       {/* what this section does is its title's (i) (ConfigEditorModal, owner 2026-10-22: no visible description) */}
 
-      <Fold summary={countOf(config.deviceGroups.length, "group")
+      <Fold heading={heading} summary={countOf(config.deviceGroups.length, "group")
         + (suggestions.length ? ` · ${suggestions.length} suggested` : "")}>
 
       {/* New group — first, since creating one is the primary action here;
