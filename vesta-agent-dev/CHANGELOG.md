@@ -1,3 +1,14 @@
+## 0.12.315
+
+What you will see:
+- A battery that gets worse ("replace within the week" becoming "replace now") no longer shows "Cleared": its card
+  closes saying "Now: … replace now", and the new card opens at once, not at the next night check. A "replace now"
+  battery that comes back a little, still under its line, is no longer marked ✅ cleared on Telegram.
+- An alert's "closes at about …" is now the time it closes: a sensor that reports often no longer moves the time
+  forward, and a device that sleeps between reports now closes at the time shown.
+- The weekly report shows each battery at the level the night check judged (its best reading of the day), so a
+  momentary dip such as Motion1's "1 %" no longer heads the list.
+
 ## 0.12.314
 
 What you will see:
