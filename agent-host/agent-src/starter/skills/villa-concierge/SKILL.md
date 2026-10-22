@@ -12,7 +12,7 @@ what was asked, and, once done, what the villa now reports.
 ## Files
 
 - `scripts/concierge.py`    status, find
-- `scripts/voice.py`        a voice message's audio, written out by Whisper or made ready for the villa system's speech-to-text
+- `scripts/voice.py`        a voice message's audio made ready, and the order of the ways to write it out (Whisper, the villa system's speech-to-text)
 - Shared: `vesta_shared`, part of the engine (pack, store, the villa's system's client, params)
 
 ## Who is talking
@@ -66,13 +66,13 @@ message. Treat it as the same message typed. When the transcription makes no
 sense, say what you heard and ask once.
 
 `on_event.voice_message` runs `voice.py prepare`: it decodes the Telegram
-audio and, with the language `auto` (the default), asks the Whisper app
-directly (`whisper:` host:port, default `core-whisper:10300`; `whisper: off`
-never), which finds the language spoken; the message then says which. When
-Whisper cannot be reached, it writes the WAV the villa system's speech-to-text
-takes and the engine sends it there (`stt:` an `stt.*` entity when the villa
-has several), in `auto`, then once more in the person's saved language if the
-villa's system refuses `auto`. `language:` a code always uses that language,
+audio and answers the order in which the engine tries to write it out, all
+within the one time a voice message has. With the language `auto` (the
+default): the Whisper app asked directly (`whisper:` host:port, default
+`core-whisper:10300`; `whisper: off` never), which finds the language spoken;
+then the villa system's speech-to-text (`stt:` an `stt.*` entity when the villa
+has several) in `auto`, skipped once the villa's system has refused it; then
+in the person's saved language. `language:` a code always uses that language,
 through the villa's system only. All in `villa.voice.yaml`, optional.
 
 ## Reading (no confirmation)

@@ -12,7 +12,7 @@ scripts:
 # so a question about it is never answered from a quick look or from memory.
 before_answer: "concierge.py status"
 on_event:
-  # A Telegram voice message: written out by Whisper asked directly (language "auto"), else its audio
-  # made ready for Home Assistant's speech-to-text, which the engine sends (which Whisper, which
-  # speech-to-text, which language: villa.voice.yaml; the default "auto" falls back to {language}).
+  # A Telegram voice message: its audio made ready, and the plan the engine runs in order until it has
+  # words: Whisper asked directly (language "auto"), then the villa's speech-to-text in "auto", then in
+  # {language} (which Whisper, which speech-to-text, a fixed language: villa.voice.yaml).
   voice_message: "voice.py prepare --audio {audio} --language {language}"

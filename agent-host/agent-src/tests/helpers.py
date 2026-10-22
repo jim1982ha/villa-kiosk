@@ -198,3 +198,46 @@ def changed_since_commit(path: str) -> bool:
     except OSError:
         return False
     return r.returncode == 0 and bool(r.stdout.strip())
+
+
+# ------------------------------------------------------------------ a voice message (test_voice_*.py, test_transcriber)
+VOICE_OWNER, VOICE_GROUP = 111, -100123
+#: a 1 s, 440 Hz tone encoded as Telegram encodes a voice note (Ogg/Opus, 48 kHz mono)
+TONE = os.path.join(ROOT, "tests", "fixtures", "voice_440hz.ogg")
+
+
+def voice_event(chat: int = VOICE_OWNER, user: int = VOICE_OWNER, mime: str = "audio/ogg", reply_to=None) -> dict:
+    """Home Assistant's `telegram_attachment` for a voice message (ids invented)."""
+    e = {"chat_id": chat, "user_id": user, "from_first": "X", "file_id": "FILE-1", "file_mime_type": mime,
+         "file_size": 3856, "message_id": 7, "bot": {"username": "Villa_Test_bot"}}
+    if reply_to:
+        e["reply_to_message_id"] = reply_to
+    return e
+
+
+def voice_agent(tmp_path, voice_yaml: dict | None = None, language: str = "fr", converse: bool = False):
+    """The test villa with villa-concierge and the tone as the voice Telegram holds. villa.voice.yaml names the
+    speech-to-text and turns Whisper off unless `voice_yaml` says otherwise. Unless `converse`, the AI is not run:
+    each turn is kept in `v.conversed` ({"chat", "text", "voice", "spoken"})."""
+    import yaml
+    from telegram_fake import FakeTelegram
+    v = make_agent(tmp_path, {"people": [{"telegram_id": VOICE_OWNER, "name": "Owner", "role": "owner",
+                                          "language": language}],
+                              "chats": {"owner": VOICE_GROUP, "fm": VOICE_GROUP}}, skills=["villa-concierge"],
+                   telegram=FakeTelegram(audio=open(TONE, "rb").read()))
+    with open(os.path.join(v.s.skills_dir, "villa-concierge", "villa.voice.yaml"), "w") as f:
+        yaml.safe_dump({"stt": "stt.test_whisper", "whisper": "off", **(voice_yaml or {})}, f)
+    v.bot_username = "Villa_Test_bot"
+    v.conversed = []
+    if not converse:
+        async def fake_converse(cid, person, text, chat_role="private", **kw):
+            v.conversed.append({"chat": cid, "text": text, "voice": kw.get("voice"), "spoken": kw.get("spoken")})
+        v.converse = fake_converse
+    return v
+
+
+def voice_record(v) -> dict | None:
+    """The last "voice" record, its detail read."""
+    import json
+    recs = v.state.calls("voice")
+    return json.loads(recs[-1]["detail"]) if recs else None

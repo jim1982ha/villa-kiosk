@@ -1,3 +1,12 @@
+## 0.12.323
+
+What you will see:
+- A voice message never waits more than two minutes for its words. Before, when Whisper was slow and the villa's
+  system was then asked too, it could take about four minutes, or stop before the second try.
+- If Whisper cannot be reached, a voice message goes straight to the language saved for the person once the villa's
+  system has said it cannot find the language by itself: one try instead of two each time.
+- Voice notes in French keep getting French answers.
+
 ## 0.12.322
 
 What you will see:

@@ -5,13 +5,14 @@ What comes in (ha_events.py, one listen-only Home Assistant websocket):
   telegram_text / _command / _callback  what Home Assistant receives on the villa
                                         bot: messages and button presses for the agent
   telegram_attachment                   a voice message: the skill that handles
-                                        `voice_message` prepares its audio, Home
-                                        Assistant's speech-to-text turns it into text
+                                        `voice_message` prepares its audio and its
+                                        plan, transcriber.py writes it out (Whisper
+                                        directly, or Home Assistant's speech-to-text)
 What goes out: Telegram messages (telegram.py, send only), Kiosk heartbeat and
 Facility tickets (kiosk.py), and — only after a person presses Approve — a service
 call through the HA MCP sidecar (actions.py). And one read that HA MCP cannot do:
 a voice message's audio to Home Assistant's speech-to-text (/api/stt), which
-changes nothing in the villa.
+changes nothing in the villa, and the Whisper app asked directly (no token).
 
 Runs without the model (code only, zero tokens): alert intake, the 5-minute chase,
 the ladder buttons (Done / Need help), approvals, execution and
@@ -178,7 +179,7 @@ class Vesta:
         self.requests = Requests(self.state, self.skills)   # a command skill's request, its turns (command_request.py)
         self.fault_offers = FaultOffers(self.state, self.delivery, self.tickets,
                                         lambda chat: self.s.in_folder(f"chats/{chat}").out_dir)
-        # a voice message's words (voice.py): the skill prepares the audio, Home Assistant reads it
+        # a voice message's words (voice.py): the skill prepares the audio and the plan, transcriber.py runs it
         self.voice = Voice(self.s, self.tg, self.skills, self.code_command, self.delivery.send, self.state, self.cf_headers)
         # the heading of every message the agent sends on its own (notice.py): who it is for, the incident, its history
         incidents = Incidents(settings.store_path)        # the alert desk's incidents, as the engine reads them
@@ -603,7 +604,8 @@ class Vesta:
         """`image`: a photo the person sent (base64, mime), `text` its caption: the AI looks at it. `held`: the chat's
         "typing…" taken when the message arrived (handle_message), carried on until the answer goes. `invoked`: the
         command skill the person's "/command" called (a new request); `request`: the one a Continue continues.
-        `spoken`: the language Whisper heard a voice message in (voice.Heard), said beside it."""
+        `spoken`: the language Whisper said it heard a voice message in (transcriber.Heard), said beside it; None
+        when it did not say (the villa's Whisper never does: instructions.md rule 6 then reads the words)."""
         if request is None and not is_continue:
             request = self.requests.begin(invoked)
         # what they asked, kept until it is answered: a restart in between is said at the next start (chat_jobs)

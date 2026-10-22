@@ -882,3 +882,33 @@ still off; an investigation calling a sensor with no value "stopped reporting").
 - Tests: tests/test_voice_whisper.py against `wyoming_fake.FakeWhisper` (its own parser of the framing) and a
   stand-in `/api/stt`. Mutations red: no fallback on a failure, a language sent in "auto", the chunk framing
   (payload length), `whisper: off` ignored.
+
+## How a voice message becomes words: one module, one clock, one record (architecture review, 2026-10-23, 0.12.323)
+
+- **Supersedes the mechanism above** (the decision stands: Whisper directly first, the villa's path behind it). The
+  skill script decided direct-or-villa and made the Wyoming call; the engine branched on its answer and retried
+  `/api/stt`; each wrote half the record. Four clocks (3 + 60 + 90×2 + 120) reached about 243 s, the script's could be
+  set below Whisper's (killed before the fallback), and with Whisper unreachable the villa was asked "auto" (always
+  refused here) before the saved language on every message.
+- **The skill answers a plan** (villa choices stay in villa-concierge: which Whisper, `whisper: off`, a fixed
+  language, the order): `{"wav", "seconds", "attempts": [{"whisper": "host:port"}, {"stt": "stt.x", "language":
+  "auto"}, {"stt": "stt.x", "language": "<saved>"}], "otherwise"?}` or `{"error"}`. `otherwise`: what the person is
+  told when no attempt gives words (no speech-to-text could be chosen, Whisper alone planned).
+- **`transcriber.Transcriber`** runs the attempts in order through `WhisperDirect` (`wyoming.py`: framing, every
+  address IPv4 first) and `VillaSpeech` (POST /api/stt, the token), one interface `attempt(step, audio, seconds) ->
+  Heard | why`, and stops at the first words. A plan's attempt is shape-checked (`step_of`: host:port, `stt.*`,
+  LANGUAGE); one it cannot run is recorded with why, never guessed.
+- **One clock**: `voice.timeout_s` (120 s, lo 20, hi 600) starts when the audio is fetched: the skill's script gets
+  what is left (whole seconds), then each attempt. `voice.whisper_connect_s` only caps the connection wait, never
+  beyond what is left. No other voice clock exists (test_transcriber pins the `voice.*` limits).
+- **A refusal is remembered while the app runs**: `Transcriber.refused` holds (stt entity, language) the villa
+  answered 415/400 to; that attempt is skipped ("refused before"). A restart forgets (one refused request is the
+  cost). Any other failure moves on to the next attempt.
+- **One record** (kind "voice") and one log line: chat, seconds, took, via, stt, used, detected, auto_refused,
+  attempts [{via, stt, language, why}], ok, why. Never the words, the audio, an address or the token.
+- **The language Whisper says**: the villa's Whisper (app set to auto) detects the language but its `transcript`
+  carries none (measured 2026-10-23). A language it does send is passed on as "spoken in …" (harmless); otherwise
+  the AI gets no language claim and instructions.md rule 6 (the language the message is written in) applies.
+  `wyoming_fake.FRENCH` behaves like the villa; `FRENCH_SAID` is the other case.
+- Tests: `stt_fake.FakeSTT` (the one /api/stt stand-in), `wyoming_fake.FakeWhisper(answer, delay)`,
+  `helpers.voice_agent`/`voice_event`/`voice_record`; test_transcriber (order, clock, skip, record), test_voice_*.

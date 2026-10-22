@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.6.313 (23 October 2026)
+
+- A voice message becomes words in ONE engine module, `transcriber.py` (architecture review, 2026-10-23). The skill
+  answers a PLAN, `{"wav", "seconds", "attempts": [{"whisper": "host:port"}, {"stt": "stt.x", "language": "auto"},
+  {"stt": "stt.x", "language": "<saved>"}], "otherwise"?}` (a fixed language: `[{"stt", "language": "de"}]`);
+  `Transcriber` runs the attempts in order through two adapters with one interface (`WhisperDirect`, `VillaSpeech`:
+  `attempt(step, audio, seconds) -> Heard | why`) and stops at the first words. The skill script no longer calls
+  Whisper; the Wyoming client is `vesta_agent/wyoming.py` (every address, IPv4 first, kept). `speech.py` is gone.
+- ONE clock: `voice.timeout_s` (120 s) covers the skill's preparation and every attempt, each given what is left; a
+  slow Whisper leaves the villa's speech-to-text only the rest. `voice.whisper_timeout_s`, `voice.transcribe_timeout_s`
+  and `voice.script_timeout_s` are gone (worst case was about 243 s, and the script's could kill the fallback);
+  `voice.whisper_connect_s` stays, never beyond what is left.
+- What the villa's speech-to-text refused (415/400) is not asked again while the app runs (`Transcriber.refused`, by
+  entity and language): after one refusal of "auto", a voice message goes straight to the person's saved language.
+  Any other failure moves on to the next attempt (before, it ended the message).
+- ONE "voice" record: `via`, `stt`, `used`, `detected`, `auto_refused`, `attempts` (each with why it gave no words),
+  `took`, `ok`, `why`; one log line. Never the words, the audio, an address or the token.
+- The "spoken in" note to the AI stays for a Whisper that says the language; the villa's never does (measured): the
+  test fake now behaves like it, and a test pins that the prompt then claims no language.
+- Tests: `tests/stt_fake.py` the one /api/stt stand-in (the two copies removed), `helpers.voice_agent`/`voice_event`,
+  `tests/test_transcriber.py` (order, one clock, skip, record).
+
 ## 0.6.312 (23 October 2026)
 
 - Whisper asked directly tries every address of its name, IPv4 first (villa-concierge `voice.py` `_resolve` and

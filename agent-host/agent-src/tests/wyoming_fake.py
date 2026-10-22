@@ -6,12 +6,19 @@ client's own reader. `answer` decides what it says after `audio-stop`:
   {"text": …, "language"?: …}   transcript-start, an info event, then the transcript (its data after the header)
   "close"                       closes without a transcript
   "silent"                      never answers (the client's timeout)
+`delay`: seconds it thinks before answering (a slow Whisper).
+
+⚠️ LIKE THE VILLA'S WHISPER, ITS TRANSCRIPT CARRIES NO LANGUAGE unless a test gives one (measured 2026-10-23: the
+Whisper app's log said "Detected language 'fr'", its `transcript` event did not): FRENCH is that answer.
 """
 from __future__ import annotations
 
 import asyncio
 import json
 import threading
+
+FRENCH = {"text": "allume la lumière de la cuisine"}           # what the villa's Whisper answers: words, no language
+FRENCH_SAID = {**FRENCH, "language": "fr"}                    # a Whisper that says the language it heard
 
 
 def event(kind: str, data: dict | None = None, payload: bytes = b"", inline: bool = False) -> bytes:
@@ -29,8 +36,9 @@ def event(kind: str, data: dict | None = None, payload: bytes = b"", inline: boo
 
 
 class FakeWhisper:
-    def __init__(self, answer):
-        self.answer = answer
+    def __init__(self, answer=None, delay: float = 0):
+        self.answer = FRENCH if answer is None else answer
+        self.delay = delay
         self.received: list[dict] = []      # {"type", "data", "payload": bytes}
         self.connections = 0
         self.loop = asyncio.new_event_loop()
@@ -83,6 +91,8 @@ class FakeWhisper:
                 self.received.append({"type": head["type"], "data": data, "payload": payload})
                 if head["type"] != "audio-stop":
                     continue
+                if self.delay:
+                    await asyncio.sleep(self.delay)
                 if self.answer == "silent":
                     await asyncio.sleep(30)
                     return
