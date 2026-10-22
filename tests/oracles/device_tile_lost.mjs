@@ -27,7 +27,7 @@ const classOf = (html) => /^<div class="([^"]*)"/.exec(html)?.[1].split(/\s+/) ?
 
 const lost = classOf(tile("sensor.lost"));
 ck("a device that lost contact: the whole tile is marked lost", lost.includes("summary-entity-row") && lost.includes("is-lost"), lost);
-ck("  ...amber, not the critical red", !lost.includes("is-critical"), lost);
+ck("  ...grey, not the critical red", !lost.includes("is-critical"), lost);
 const none = classOf(tile("sensor.novalue"));
 ck("a device with no value to give (\"unknown\") is a plain tile — it is answering", !none.includes("is-lost") && !none.includes("is-critical"), none);
 const ok = classOf(tile("sensor.ok"));
@@ -37,16 +37,17 @@ ck("a CRITICAL device that lost contact: lost AND critical (its badge's red ring
 const critOk = classOf(tile("sensor.critical_ok"));
 ck("  ...a critical device that answers is a plain tile", critOk.join(" ") === "summary-entity-row", critOk);
 
-// What those classes paint: the badge's unavailable language on the tile — the dashed amber edge, its tint, the
-// reading in amber — and a critical one's solid red ring. Read from the stylesheet, rule by rule.
+// What those classes paint: "no contact" on the tile — a dashed GREY edge, its tint, the reading in grey (owner,
+// 2026-10-22: badge proposal 2 — it was amber, now a fault's colour) — and a critical one's solid red ring. Read from
+// the stylesheet, rule by rule.
 const css = readFileSync(new URL("../../src/styles/02-hud.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
 const rule = (sel) => { const m = new RegExp(`(?:^|\\})\\s*${sel.replace(/[.]/g, "\\.")}\\s*\\{([^}]*)\\}`).exec(css); return m?.[1] ?? ""; };
 const lostRule = rule(".summary-entity-row.is-lost");
-ck("the lost tile: a dashed amber edge on an amber tint", /border:\s*2px dashed var\(--status-warning\)/.test(lostRule)
-   && /background:\s*color-mix\(in srgb, var\(--status-warning\)/.test(lostRule), lostRule);
-ck("  ...its reading in amber", /color:\s*var\(--status-warning\)/.test(rule(".summary-entity-row.is-lost .summary-entity-state")));
+ck("the lost tile: a dashed grey edge on a grey tint", /border:\s*2px dashed var\(--status-lost\)/.test(lostRule)
+   && /background:\s*color-mix\(in srgb, var\(--status-lost\)/.test(lostRule), lostRule);
+ck("  ...its reading in grey", /color:\s*var\(--status-lost\)/.test(rule(".summary-entity-row.is-lost .summary-entity-state")));
 const critRule = rule(".summary-entity-row.is-lost.is-critical");
-ck("the critical lost tile: a red ring, never the amber dash", /border:\s*2px solid var\(--status-danger\)/.test(critRule), critRule);
+ck("the critical lost tile: a red ring, never the grey dash", /border:\s*2px solid var\(--status-danger\)/.test(critRule), critRule);
 ck("  ...its reading in red", /color:\s*var\(--status-danger\)/.test(rule(".summary-entity-row.is-lost.is-critical .summary-entity-state")));
 
 // The caller: every device list is SummaryGroupPanel (a room's window, the Cockpit's lists, Lights, Facility…), and it
@@ -54,6 +55,6 @@ ck("  ...its reading in red", /color:\s*var\(--status-danger\)/.test(rule(".summ
 const panel = readFileSync(new URL("../../src/components/panels/SummaryGroupPanel.tsx", import.meta.url), "utf8");
 ck("the device lists draw this tile, with the row's own look", /const look = deviceLook\(id, looks\);/.test(panel)
    && /const badge = look;/.test(panel) && /<SummaryEntityRow[\s\S]*?look=\{badge\}/.test(panel)
-   && /storeLookSource\(entities, \{ \.\.\.config, isCritical: villaDevices\.isCritical, isHidden: villaDevices\.isHidden \}\)/.test(panel));
+   && /storeLookSource\(entities, \{\s+\.\.\.config, isCritical: villaDevices\.isCritical, isHidden: villaDevices\.isHidden, hasFault,\s+\}\)/.test(panel));
 
 done("✅ a device that lost contact wears the whole tile, a critical one its red ring");

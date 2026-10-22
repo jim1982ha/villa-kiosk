@@ -1,3 +1,19 @@
+## 2.496.485
+
+What you will see — the map's badges, as you chose ("Corner dot", proposal 2):
+- A badge's square only says what the device is doing: plain at rest, tinted in its colour when on. It is never painted
+  red or amber any more.
+- Any problem adds ONE mark in the top-right corner: red "?" a critical device gone silent, red "!" an alarm (an
+  unlocked door, a leak, a low battery), amber "!" an open fault from the Cockpit (new on the map), grey "?" no
+  contact (the square fades), grey "z" asleep by design, teal "…" moving. No mark: all is fine.
+- A switch linked to a device (a pump's relay, a camera's detection) is a dot at the bottom-left of the device's own
+  badge: filled when on, hollow when off. Where the switch has its own place on the map, it wears the same badge as
+  its device, so you see what it controls.
+- A device hidden in the villa's system has no badge on the map.
+- "No contact" is grey everywhere — list rows, room counts, the Cockpit — so amber only ever means a fault. Room
+  counts: red first, then amber, then grey.
+- Map colours (legend) describes the new badges.
+
 ## 2.496.484
 
 ### Changed

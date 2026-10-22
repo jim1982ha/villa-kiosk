@@ -49,6 +49,25 @@ export function lastReport(rows: readonly RecordedState[]): RecordedState | null
 }
 
 /**
+ * The states this lens handed out IN PLACE of the villa's "unavailable" — a sleeping device shown with its last report
+ * (or "unknown" before one is known). Marked on the very object every reader is given (the store and the map's live
+ * cache hold the same one), so a badge can say "asleep by design" with its grey "z" without any reader learning the
+ * list (owner, 2026-10-22: badge proposal 2). A WeakSet: nothing is added to the state a person reads.
+ */
+const asleep = new WeakSet<HassEntity>();
+
+/** Is `e` a sleeping device shown with its last report (or "unknown") — not the villa's own live state? */
+export function shownAsleep(e: HassEntity | undefined): boolean {
+  return !!e && asleep.has(e);
+}
+
+function asleepCopy(e: HassEntity): HassEntity {
+  const copy = { ...e };
+  asleep.add(copy);
+  return copy;
+}
+
+/**
  * The lens: what the app is given for each state the villa's system sends. Holds, for the listed devices only, the
  * villa's own latest state (`raw`, given back whole when a device leaves the list) and its last real report (`last`).
  */
@@ -69,7 +88,8 @@ export class UnavailableByDesign {
       return e;
     }
     if (e.state !== "unavailable") return e;              // "unknown" is the villa's own word: not ours to change
-    return this.last.get(id) ?? { ...e, state: "unknown" };
+    const last = this.last.get(id);
+    return asleepCopy(last ?? { ...e, state: "unknown" });
   }
 
   /** A listed device the app has no real report of while its system says "unavailable": its history is worth a read. */

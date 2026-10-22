@@ -21,7 +21,7 @@ import { villaDevices, deviceFolding, deviceOf, deviceReadings, recordDeviceOf, 
 import { effectiveMapped, visibleEntitiesOf, visibleTo } from "./villaVisibility";
 import type { Role } from "@/auth/roles";
 import type { HassEntity } from "@/types/ha.types";
-import { buildAttentionItems, type VillaProblems } from "./attention";
+import { buildAttentionItems, faultDevices, type VillaProblems } from "./attention";
 import { deviceRows, type DeviceRow } from "./deviceRecord";
 import { dismissedEntitySet, inventoryGaps } from "./dismissedEntities";
 
@@ -74,6 +74,8 @@ export interface VillaModel extends VillaSets {
   visibleTo: (role: Role | null) => { has(id: string): boolean };
   /** Advanced Settings' devices: one row per stored device, and what is missing (dismissedEntities.inventoryGaps). */
   settings: { rows: DeviceRow[]; stale: string[]; orphans: string[] };
+  /** Does this device have an open Cockpit fault (attention.faultDevices, folded) — a badge's amber "!" in a list. */
+  hasFault: (entityId: string) => boolean;
 }
 
 const Ctx = createContext<VillaModel | null>(null);
@@ -107,6 +109,9 @@ export function VillaModelProvider({ sets, children }: { sets: VillaSets; childr
     return { devices, attentionItems };
   }, [devices, entities, entityMap, resolvedRooms, fmData]);
 
+  // the devices with an open fault, as the map's badges read them (attention.faultDevices; the page folds the same)
+  const faults = useMemo(() => faultDevices(fmData, (id) => id in entities, folding), [fmData, entities, folding]);
+
   // Advanced Settings' device list and what it must say is missing — the same dismissal as every set above.
   const settings = useMemo(() => {
     const rows = deviceRows(entityMap, config.meshBindings, dismissedIds);
@@ -121,8 +126,9 @@ export function VillaModelProvider({ sets, children }: { sets: VillaSets; childr
     (): VillaModel => ({
       ...sets, devices, visibleDevices, attention, settings,
       visibleTo: (role) => visibleTo(role, { mapped: mappedEntityIds, entityMap, entities }),
+      hasFault: (id) => faults.has(id),
     }),
-    [sets, mappedEntityIds, devices, visibleDevices, attention, settings, entityMap, entities],
+    [sets, mappedEntityIds, devices, visibleDevices, attention, settings, entityMap, entities, faults],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

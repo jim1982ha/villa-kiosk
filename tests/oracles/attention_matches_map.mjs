@@ -5,7 +5,7 @@
 // device_class only, blind to every other red the map paints: an UNLOCKED door,
 // a sensor reporting a fault word (statusKeyFor). Red on the map,
 // absent from the list the top-bar count opens. The items are now derived from
-// the map's own rule (deviceLook: `alert` = its face is red); this drives a set
+// the map's own rule (deviceLook: `alert` = its own red "!" mark, since 2026-10-22 — the face was red before); this drives a set
 // of states through the MAP's adapter and through buildAttentionItems and
 // asserts red ⇔ listed, then that every count of attention reads that list.
 import { register } from "node:module";
@@ -37,7 +37,7 @@ const unavailableIds = ["light.lost", "lock.lost"];
 const resolvedRooms = {};
 
 const map = mapLookSource(new Map(Object.entries(entities)), new Map(Object.entries(entityMap)), () => ({ entityMap, isHidden: () => false }));
-const redOnMap = selectableIds.filter((id) => deviceLook(id, map).face === "alert").sort();
+const redOnMap = selectableIds.filter((id) => deviceLook(id, map).mark === "alarm").sort();
 const villa = devicesOf({ ids: selectableIds, unavailable: unavailableIds });
 const items = buildAttentionItems({ devices: villa, entities, entityMap, resolvedRooms, fmData: EMPTY_FM_DATA });
 const listed = items.filter((i) => i.kind === "alarm").map((i) => i.entityId).sort();

@@ -17,7 +17,7 @@ import type { Category } from "@/types/scene.types";
 import type { DeviceSurfaceState } from "@/config/EntityCategories";
 import { effectiveCategory, subjectOf, categoryColor } from "@/config/EntityCategories";
 import { labelOf } from "@/config/EntityMap";
-import { deviceLook, storeLookSource } from "@/utils/deviceActivity";
+import { badgeOwnerOf, deviceLook, storeLookSource, type BadgeMark, type LinkDot } from "@/utils/deviceActivity";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
 import { domainOf } from "@/utils/entityDomain";
 
@@ -26,7 +26,7 @@ type LookConfig = Parameters<typeof storeLookSource>[1];
 export interface PanelHeader {
   badge: {
     category: Category; iconKey: string; color?: string; categoryColor: string;
-    state: DeviceSurfaceState; ringState?: DeviceSurfaceState;
+    state: DeviceSurfaceState; mark: BadgeMark | null; linkDot: LinkDot;
     /** A critical device that lost contact (deviceLook.critical): the window's lost pill is red (reading.lostPillTone). */
     critical: boolean;
   };
@@ -66,12 +66,17 @@ export function linkedStateWords(l: LinkedState): string {
 
 export function panelHeader({ panel, entities, config, canControl, linkedSwitch }: HeaderInput): PanelHeader {
   const { entityId, mapping } = panel;
-  const ent = entities[entityId];
   // ⚠️ LIVE config, not panel.mapping (a snapshot taken when the panel
   // opened): a just-picked badge colour shows at once, not on the next open.
   const live = config.entityMap[entityId] ?? mapping;
-  const category = effectiveCategory(subjectOf(entityId, { ...mapping, ...live }, ent, mapping.type));
   const linkedId = live.linkedEntityId;
+  // A device's LINKED entity wears that device's badge — pictogram, category, colour (deviceActivity.badgeOwnerOf,
+  // owner 2026-10-22: badge proposal 2), as on the map; its face stays its own.
+  const ownerId = badgeOwnerOf(entityId, config.entityMap);
+  const ownerMap = ownerId === entityId ? { ...mapping, ...live } : config.entityMap[ownerId];
+  const ownerType = ownerId === entityId ? mapping.type : ownerMap.type;
+  const ownerEnt = entities[ownerId];
+  const category = effectiveCategory(subjectOf(ownerId, ownerMap, ownerEnt, ownerType));
   // The ONE shared look (deviceActivity.deviceLook), as the map badge and the
   // device lists — but with the linked switch's OPTIMISTIC state: this header
   // sits right above the switch just pressed, and a ring lagging seconds
@@ -90,11 +95,12 @@ export function panelHeader({ panel, entities, config, canControl, linkedSwitch 
   return {
     badge: {
       category,
-      iconKey: iconKeyFor(mapping.type, ent),
-      color: live.badgeColor,
+      iconKey: iconKeyFor(ownerType, ownerEnt),
+      color: ownerMap.badgeColor ?? live.badgeColor,
       categoryColor: categoryColor(category),
       state: look.face,
-      ringState: look.ring,
+      mark: look.mark,
+      linkDot: look.linkDot,
       critical: look.critical,
     },
     linked: linkedId && !linkedIsSensor && canControl && linkedSwitch

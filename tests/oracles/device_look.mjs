@@ -75,8 +75,9 @@ console.log("\n  the caller:");
 }
 
 // owner, 2026-10-21: "if the associated device is turning ON (the Laundry Door sensor), would the entity badge turn red
-// as well? … so that I can remove the dedicated door sensor badge" — a linked entity needing attention rings the badge
-// red; its face stays its own state, and the sensor lists itself in Needs attention (the lock is not listed twice)
+// as well? … so that I can remove the dedicated door sensor badge" — a linked entity needing attention gives the badge
+// its red "!" (owner, 2026-10-22: badge proposal 2 — it was a red ring); its face stays its own state, and the sensor
+// lists itself in Needs attention (the lock is not listed twice)
 {
   const { deviceLook, storeLookSource } = await import("@/utils/deviceActivity");
   const look = (door, { hidden = false, lock = "locked" } = {}) => deviceLook("lock.l", storeLookSource({
@@ -85,12 +86,14 @@ console.log("\n  the caller:");
   }, { entityMap: { "lock.l": { entityId: "lock.l", type: "lock", linkedEntityId: "binary_sensor.d" } },
        isHidden: (id) => hidden && id === "binary_sensor.d" }));
   const open = look("on"), shut = look("off");
-  ck("a lock whose linked door sensor reads Open: its badge rings red, its face still says Locked",
-     open.ring === "alert" && open.kind === "alert" && open.face !== "alert" && !open.alert, open);
-  ck("  ...door closed: no red ring", shut.ring !== "alert" && shut.kind !== "alert", shut);
-  ck("  ...a hidden or lost sensor rings nothing red",
-     look("on", { hidden: true }).ring !== "alert" && look("unavailable").ring !== "alert");
-  ck("  ...an unlocked lock stays red, door open or not", look("on", { lock: "unlocked" }).face === "alert" && look("off", { lock: "unlocked" }).ring === "alert");
+  ck("a lock whose linked door sensor reads Open: its badge takes the red \"!\", its face still says Locked (resting)",
+     open.mark === "alarm" && open.kind === "alert" && open.face === "off" && !open.alert, open);
+  ck("  ...door closed: no mark", shut.mark === null && shut.kind !== "alert", shut);
+  ck("  ...a hidden or lost sensor marks nothing red",
+     look("on", { hidden: true }).mark !== "alarm" && look("unavailable").mark !== "alarm");
+  ck("  ...an unlocked lock: the red \"!\" over an OPEN (active) face, door open or not",
+     look("on", { lock: "unlocked" }).mark === "alarm" && look("on", { lock: "unlocked" }).face === "active"
+     && look("on", { lock: "unlocked" }).alert && look("off", { lock: "unlocked" }).mark === "alarm");
 }
 
 // architecture review A, 2026-10-22: "what kind of device is this" written out at four places, one skipping the map's

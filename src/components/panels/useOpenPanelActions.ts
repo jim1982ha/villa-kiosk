@@ -44,11 +44,13 @@ export interface OpenPanelInput {
   isCritical: (entityId: string) => boolean;
   /** Hidden in the villa's system (deviceGroups.hiddenIn): the header's look is quiet, as on the map. */
   isHidden: (entityId: string) => boolean;
+  /** An open Cockpit fault on this device (attention.faultDevices, folded): the header badge's amber "!", as on the map. */
+  hasFault: (entityId: string) => boolean;
 }
 
 /** The open panel's actions (null when no panel is open), and the linked
  *  switch's "ask first" question, which the page draws as a dialog. */
-export function useOpenPanelActions({ screen, go, panelFor, readingsOf, doors, isCritical, isHidden }: OpenPanelInput): {
+export function useOpenPanelActions({ screen, go, panelFor, readingsOf, doors, isCritical, isHidden, hasFault }: OpenPanelInput): {
   actions: PanelActions | null;
   linkedAsk: AskFirst;
 } {
@@ -95,7 +97,7 @@ export function useOpenPanelActions({ screen, go, panelFor, readingsOf, doors, i
   // The device's exact map badge, its linked switch and its motion line —
   // components/panels/panelHeader, from the open panel and live data; the
   // switch's state is the optimistic hook's.
-  const header = panelHeader({ panel: activePanel, entities, config: { ...config, isCritical, isHidden }, canControl,
+  const header = panelHeader({ panel: activePanel, entities, config: { ...config, isCritical, isHidden, hasFault }, canControl,
     linkedSwitch: linkedPower && linkedEntityId
       ? { isOn: linkedToggle.isOn, known: linkedPower.position !== "unknown", contact: contactOf(entities[linkedEntityId]?.state) }
       : null });

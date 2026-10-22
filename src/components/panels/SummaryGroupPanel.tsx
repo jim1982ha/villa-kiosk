@@ -24,7 +24,7 @@ import { badgeImage } from "@/babylon/badgeIcons";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
 import { effectiveCategory, subjectOf } from "@/config/EntityCategories";
-import { deviceLook, groupLook, storeLookSource, type LookSource } from "@/utils/deviceActivity";
+import { badgeOwnerOf, deviceLook, groupLook, storeLookSource, type LookSource } from "@/utils/deviceActivity";
 import { bulkSwitchPlan, bulkWords } from "@/config/activeDevices";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { ROW_SWITCH_DOMAINS } from "@/utils/quickAction";
@@ -132,7 +132,7 @@ export default function SummaryGroupPanel({
 }: Props) {
   // Entities on the 3D map; anything else exists only in Home Assistant and
   // is listed last and tinted (config/VillaModel).
-  const { mappedEntityIds, devices: villaDevices } = useVillaModel();
+  const { mappedEntityIds, devices: villaDevices, hasFault } = useVillaModel();
   const { entities, suppressedEntityIds, hiddenInHaEntityIds, callService } = useHA();
   const roomFloors = useRoomFloors();
   const { config, resolvedRooms } = useConfig();
@@ -146,7 +146,10 @@ export default function SummaryGroupPanel({
   // ...and the villa's critical list as the villa model folds it (devices.isCritical): a critical device that lost
   // contact is red here, as on the map and the Cockpit (2.496.428).
   // ...and hidden as the villa model reads it (devices.isHidden): a hidden row keeps its "hidden" mark, never red or amber
-  const looks = storeLookSource(entities, { ...config, isCritical: villaDevices.isCritical, isHidden: villaDevices.isHidden });
+  // ...and its open faults (VillaModel.hasFault): the amber "!" its map badge carries (owner, 2026-10-22: badge proposal 2)
+  const looks = storeLookSource(entities, {
+    ...config, isCritical: villaDevices.isCritical, isHidden: villaDevices.isHidden, hasFault,
+  });
   const { role } = useProfile();
   const entityLabel = useEntityLabel();
   const { ask: askScene, dialog: sceneDialog } = useSceneConfirm();
@@ -262,7 +265,11 @@ export default function SummaryGroupPanel({
     const domain = domainOf(id);
     const look = deviceLook(id, looks);
     const type = look.type;
-    const cat: Category = effectiveCategory(subjectOf(id, config.entityMap[id], e, type));
+    // A device's LINKED entity wears that device's badge, as on the map (deviceActivity.badgeOwnerOf); its face is its own
+    const owner = badgeOwnerOf(id, config.entityMap);
+    const ownerType = owner === id ? type : looks.typeOf(owner);
+    const ownerEnt = owner === id ? e : entities[owner];
+    const cat: Category = effectiveCategory(subjectOf(owner, config.entityMap[owner], ownerEnt, ownerType));
     const label = entityLabel(id);
     // ⚠️ ONE OWNER, AND THIS ROW USED NOT TO USE IT. This was written out here
     // as `pretty(state) + " " + unit` — no scaling — so the row printed
@@ -326,7 +333,10 @@ export default function SummaryGroupPanel({
         label={label}
         stateText={stateText}
         look={badge}
-        badgeSrc={badgeImage({ category: cat, iconKey: iconKeyFor(type, e), state: badge.face, color: config.entityMap[id]?.badgeColor, ringState: badge.ring })}
+        badgeSrc={badgeImage({
+          category: cat, iconKey: iconKeyFor(ownerType, ownerEnt), state: badge.face, mark: badge.mark, linkDot: badge.linkDot,
+          color: config.entityMap[owner]?.badgeColor ?? config.entityMap[id]?.badgeColor,
+        })}
         badgeKey={theme}
         notInHa={notInHaRow}
         offMap={offMapRow}

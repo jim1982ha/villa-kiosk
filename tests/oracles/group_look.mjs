@@ -38,8 +38,10 @@ console.log("  the two meanings of \"on\", one module, named:");
      L("binary_sensor.pir").alert && L("binary_sensor.pir").power === "none");
   ck("an unlocked lock is ON (POWER) and red (needs attention), not 'active'",
      L("lock.open").power === "on" && L("lock.open").alert && !L("lock.open").active);
-  ck("a power sensor whose linked pump runs is ACTIVE (ringed), never ON",
-     L("sensor.power").active && L("sensor.power").power === "none");
+  // owner, 2026-10-22 (badge proposal 2): its linked dot is filled, the sensor itself neither active nor on — the
+  // pump's running no longer lights the sensor's room chip (it was ACTIVE, ringed, since 2.496.240)
+  ck("a power sensor whose linked pump runs: its dot filled, never ACTIVE, never ON",
+     L("sensor.power").linkDot === "on" && !L("sensor.power").active && L("sensor.power").power === "none");
   const g = count(["light.on", "light.off", "lock.open", "lock.shut", "camera.idle", "media_player.paused", "binary_sensor.pir", "sensor.t"]);
   ck("a mixed group: onCount 3 (light, unlocked lock, paused TV), activeCount 2 (light, camera)",
      g.onCount === 3 && g.activeCount === 2, g);

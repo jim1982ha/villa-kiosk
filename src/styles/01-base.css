@@ -267,6 +267,9 @@
   --status-pending: #1F7F8C;
   --status-warning: #B8801F;
   --status-danger: #B24232;
+  /* No contact — the villa's system lost the device (utils/stateColors STATUS_COLOR.unavailable, the badge's grey
+     "?"). Grey, not the amber of a fault (owner, 2026-10-22: badge proposal 2); white on it is 5.1:1. */
+  --status-lost: #6B706B;
 
   --hairline: rgba(23, 25, 26, 0.10);
   --hairline-strong: rgba(23, 25, 26, 0.18);
@@ -329,6 +332,7 @@
   --status-pending: #48C2CE;
   --status-warning: #E0A93A;
   --status-danger: #E2685A;
+  --status-lost: #8E948C;
 
   --hairline: rgba(241, 239, 232, 0.12);
   --hairline-strong: rgba(241, 239, 232, 0.24);
@@ -387,6 +391,7 @@
   --status-pending: #2E7681;
   --status-warning: #A87C2A;
   --status-danger: #A4483C;
+  --status-lost: #6A6F68;
 
   --hairline: rgba(201, 196, 182, 0.10);
   --hairline-strong: rgba(201, 196, 182, 0.18);

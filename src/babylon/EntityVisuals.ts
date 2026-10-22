@@ -93,8 +93,10 @@ import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 import { resolveMeshToMapping, extractVariantSuffix, hasVariantSuffix, deviceTypeOf } from "@/config/EntityMap";
 import { groupMemberIds, groupForPrimary } from "@/config/deviceGroups";
-import { effectiveCategory, subjectOf, categorySurface, categorySurfaceRinged } from "@/config/EntityCategories";
-import { deviceLook, mapLookSource, meshLookFor, readingOf, type LookSource } from "@/utils/deviceActivity";
+import { effectiveCategory, subjectOf, categorySurface } from "@/config/EntityCategories";
+import {
+  badgeOwnerOf, deviceLook, drawsBadge, mapLookSource, meshLookFor, readingOf, type LookSource,
+} from "@/utils/deviceActivity";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
 import { compactValue } from "@/utils/entityValue";
 import { badgeBox, dropTouchingValues, valuesWithText } from "./badgeBox";
@@ -140,7 +142,7 @@ import {
   type CardArrangement,
 } from "./badgeCard";
 import { iconKeyFor } from "./badgeIconKeys";
-import { ALERT_RED, UNAVAILABLE_AMBER, healthPill, SECURE_GREEN, ACTIVE_GLOW } from "./colors";
+import { ALERT_RED, LOST_GREY, healthPill, SECURE_GREEN, ACTIVE_GLOW } from "./colors";
 import { COSMETIC_MAPPING_FIELDS, type EntityMapDelta } from "./entityMapDiff";
 // Pose-word resolution (which "__<word>" mesh variant a live state asks for)
 // — pure logic, extracted to keep this file to the things that actually touch
@@ -809,18 +811,28 @@ export class EntityVisuals {
   /** Hidden in the villa's system (deviceGroups.hiddenIn over the store's registry facts) — pushed by the page
    *  (setHiddenDevices). Nothing is, until the villa's registry has been read. */
   private hidden: (entityId: string) => boolean = () => false;
+  /** The devices with an open Cockpit fault, folded onto their devices (attention.faultDevices) — pushed by the page
+   *  (setFaultDevices): their badge's amber "!" (owner, 2026-10-22: badge proposal 2). */
+  private faults: ReadonlySet<string> = new Set();
   private lookCfg: {
-    from: AppConfig; crit: ReadonlySet<string>; hidden: (entityId: string) => boolean; cfg: LookSource["config"];
+    from: AppConfig; crit: ReadonlySet<string>; hidden: (entityId: string) => boolean; faults: ReadonlySet<string>;
+    cfg: LookSource["config"];
   } | null = null;
-  /** What `lookSource` reads as its config: the live config's two slices and the critical list — rebuilt only when
-   *  either object is replaced, never per badge. */
+  /** What `lookSource` reads as its config: the live config's two slices, the critical list and the faults — rebuilt
+   *  only when one of those objects is replaced, never per badge. */
   private lookConfig(): LookSource["config"] {
     const c = this.lookCfg;
-    if (c && c.from === this.config && c.crit === this.critical && c.hidden === this.hidden) return c.cfg;
+    if (c && c.from === this.config && c.crit === this.critical && c.hidden === this.hidden && c.faults === this.faults) {
+      return c.cfg;
+    }
     const crit = this.critical;
     const hidden = this.hidden;
-    const cfg = { entityMap: this.config.entityMap, isCritical: (id: string) => crit.has(id), isHidden: hidden };
-    this.lookCfg = { from: this.config, crit, hidden, cfg };
+    const faults = this.faults;
+    const cfg = {
+      entityMap: this.config.entityMap, isCritical: (id: string) => crit.has(id), isHidden: hidden,
+      hasFault: (id: string) => faults.has(id),
+    };
+    this.lookCfg = { from: this.config, crit, hidden, faults, cfg };
     return cfg;
   }
   /** User size multiplier (Settings slider) and live bird's-eye zoom factor;
@@ -1080,8 +1092,17 @@ export class EntityVisuals {
     this.repaintBadges();
   }
 
-  /** Which entities are hidden in the villa's system (deviceGroups.hiddenIn): their badges, meshes and room chips
-   *  repaint quiet — never red, never amber (deviceActivity.badgeKindFor). */
+  /** The devices with an open Cockpit fault (folded) — every badge, card and room chip repaints when the set changes. */
+  setFaultDevices(ids: ReadonlySet<string>): void {
+    if (ids.size === this.faults.size && [...ids].every((id) => this.faults.has(id))) return;
+    this.faults = ids;
+    // a room chip's number takes its colour in the layout pass (summaryLook.roomHealth): redo it
+    this.markLayoutDirty();
+    this.repaintBadges();
+  }
+
+  /** Which entities are hidden in the villa's system (deviceGroups.hiddenIn): their badges leave the map and its room
+   *  chips (deviceActivity.drawsBadge); their meshes repaint quiet — never red, never lost (badgeKindFor). */
   setHiddenDevices(isHidden: (entityId: string) => boolean): void {
     if (isHidden === this.hidden) return;
     this.hidden = isHidden;
@@ -2330,6 +2351,7 @@ export class EntityVisuals {
     // driving either effect typically isn't a modelled 3D object at all.
     this.applyMotionRouting(entity);
     this.applyLinkedEntityRouting(entity);
+    this.applyLinkOwnerRouting(entity);
     const owningGroup = this.config.deviceGroups.find((g) =>
       g.memberEntityIds.includes(entity.entity_id));
     if (owningGroup && this.labels.has(owningGroup.primaryEntityId)) {
@@ -2551,6 +2573,16 @@ export class EntityVisuals {
     }
   }
 
+  /** A device whose LINKED entity has a badge of its own: that badge wears this device's pictogram (badgeSubject), and
+   *  a pictogram can follow its device's state — repaint it when the device moves. */
+  private applyLinkOwnerRouting(entity: HassEntity): void {
+    const linked = this.config.entityMap[entity.entity_id]?.linkedEntityId;
+    if (!linked || !this.labels.has(linked)) return;
+    const st = this.lastState.get(linked);
+    const map = this.mapping.get(linked);
+    if (st && map) this.updateLabel(linked, map.type, st);
+  }
+
   // ---------------------------------------------------------------------------
   // State labels (BJS GUI fullscreen overlay)
   // ---------------------------------------------------------------------------
@@ -2565,9 +2597,28 @@ export class EntityVisuals {
    *  under Energy) since only THIS call site had the live device_class
    *  needed to resolve an enum sensor like a UniFi AP's "State" correctly. */
   categoryOf(entityId: string, type: EntityType): Category {
-    const dc = this.lastState.get(entityId)?.attributes?.device_class as string | undefined;
+    const sub = this.badgeSubject(entityId, type, this.lastState.get(entityId));
+    const dc = sub.entity?.attributes?.device_class as string | undefined;
     return effectiveCategory(subjectOf(
-      entityId, this.config.entityMap[entityId], dc ? { attributes: { device_class: dc } } : undefined, type));
+      sub.id, this.config.entityMap[sub.id], dc ? { attributes: { device_class: dc } } : undefined, sub.type));
+  }
+
+  /**
+   * Whose badge `entityId` wears: the device it is the LINKED entity of (deviceActivity.badgeOwnerOf — a pump's relay
+   * placed on the map on its own draws the pump's pictogram, category and colour), else itself (owner, 2026-10-22:
+   * badge proposal 2). Its id, how it is drawn, its live state and its badge colour — the face is always the badge's
+   * own entity's.
+   */
+  private badgeSubject(entityId: string, type: EntityType, entity: HassEntity | undefined): {
+    id: string; type: EntityType; entity: HassEntity | undefined; color: string | undefined;
+  } {
+    const own = this.config.entityMap[entityId]?.badgeColor;
+    const owner = badgeOwnerOf(entityId, this.config.entityMap);
+    if (owner === entityId) return { id: entityId, type, entity, color: own };
+    return {
+      id: owner, type: this.lookSource.typeOf(owner), entity: this.lastState.get(owner),
+      color: this.config.entityMap[owner]?.badgeColor ?? own,
+    };
   }
 
   /** Follow FloorManager's floor toggle — only the active floor's badges are
@@ -2841,6 +2892,7 @@ export class EntityVisuals {
 
     for (const { entityId, anchor, type } of sources) {
       const category = this.categoryOf(entityId, type);
+      const subject = this.badgeSubject(entityId, type, this.lastState.get(entityId));
       // A compact column: a category-coloured squircle icon badge (see
       // badgeIcons.ts) over an optional value pill. The device CATEGORY reads
       // from the badge's fixed background colour, the device TYPE from its
@@ -2957,8 +3009,8 @@ export class EntityVisuals {
         // was always measured against has the chip, and without it the art had
         // no padding of its own and sat flush on the border.
         badgeImage({
-          category, iconKey: iconKeyFor(type, this.lastState.get(entityId)), state: "off",
-          color: this.config.entityMap[entityId]?.badgeColor, inset: card ? BADGE_INSET_CARD : 0,
+          category, iconKey: iconKeyFor(subject.type, subject.entity), state: "off",
+          color: subject.color, inset: card ? BADGE_INSET_CARD : 0,
           // Card: the Rectangle above strokes the edge, so the chip bakes no
           // ring of its own — see updateLabel for the doubled outline this
           // stops. Classic: the image IS the badge and carries its own.
@@ -3146,22 +3198,19 @@ export class EntityVisuals {
     const prevVisible = lbl.valueWrap.isVisible;
     // Re-resolve the filter category now that this state may carry the
     // device_class (e.g. an enum sensor → Network) — cullLabels reads it live.
+    // A linked entity placed on its own wears its device's badge (badgeSubject); its face is its own.
+    const subject = this.badgeSubject(entityId, type, entity);
     lbl.category = effectiveCategory(
-      subjectOf(entityId, this.config.entityMap[entityId], entity, type));
-    // FACE from this device's own state, RING from its linked entity — two
-    // independent facts, two independent sets of pixels. See badgeFaceAndRing.
-    // (deviceLook's `kind` still folds the linked signal into ONE value for
-    // what a COUNT summary reads — a room chip's ring, a count card's — see
-    // deviceActivity.groupLook.)
-    const { face: state, ring: ringState } = deviceLook(entityId, this.lookSource);
-    const iconKey = iconKeyFor(type, entity);
-    const override = this.config.entityMap[entityId]?.badgeColor;
+      subjectOf(subject.id, this.config.entityMap[subject.id], subject.entity, subject.type));
+    // THREE independent facts, three independent sets of pixels (owner, 2026-10-22: badge proposal 2): the FACE is
+    // what the device does, the corner MARK what is wrong, the bottom-left DOT its linked switch. (deviceLook's `kind`
+    // still folds a linked alarm into ONE value for what a COUNT summary reads — see deviceActivity.groupLook.)
+    const { face: state, mark, linkDot } = deviceLook(entityId, this.lookSource);
+    const iconKey = iconKeyFor(subject.type, subject.entity);
+    const override = subject.color;
 
-    // Neutral-by-default state (fill/glyph/ring) now IS the unavailable
-    // signal (a muted glyph + dashed amber ring, see categorySurface) — no
-    // extra whole-badge alpha wash needed, unlike the old always-on-gradient
-    // design which had to dim the fixed category colour to show "not
-    // reporting" some other way.
+    // The face's own surface says "no trustworthy state" (faded, grey glyph — categorySurface's `faded`, baked into
+    // the picture so the mark beside it stays whole) — no whole-badge alpha wash here.
     lbl.glyph.alpha = 1; // never set elsewhere now — no cascading ambiguity
 
     if (this.isCardStyle()) {
@@ -3181,7 +3230,7 @@ export class EntityVisuals {
       // So: the card is always the RESTING surface, and the chip below carries
       // the state. The card's ring still shows state, because that is the
       // attention signal and a neutral card must not swallow it.
-      const surface = categorySurfaceRinged(lbl.category, state, ringState, override);
+      const surface = categorySurface(lbl.category, state, override);
       lbl.badge.background = categorySurface(lbl.category, "off", override).fill;
       // ── EXACTLY ONE RING, AT THE WEIGHT THE STATE ASKS FOR ─────────────
       // Two independent things were drawing it: this Rectangle's border, and
@@ -3217,7 +3266,7 @@ export class EntityVisuals {
       // Every state's chip is baked the same way: inset, with no ring of its
       // own, at the card style's heavier glyph weight.
       lbl.glyph.source = badgeImage({
-        category: lbl.category, iconKey, state, ringState, color: override,
+        category: lbl.category, iconKey, state, mark, linkDot, color: override,
         inset: BADGE_INSET_CARD, ring: "none", bakePx: this.glyphBakePx(true), bold: true,
       });
       // Neutral ink, on a now-neutral card — the bottom bar's value is
@@ -3231,7 +3280,7 @@ export class EntityVisuals {
       lbl.badge.background = "transparent";
       applyBadgeFrame(lbl.badge, NO_RING, this.metrics.badgeDiameterPx);
       lbl.glyph.source = badgeImage({
-        category: lbl.category, iconKey, state, ringState, color: override, ring: "baked", bakePx: this.glyphBakePx(false),
+        category: lbl.category, iconKey, state, mark, linkDot, color: override, ring: "baked", bakePx: this.glyphBakePx(false),
       });
     }
     lbl.badge.alpha = 1;
@@ -3280,6 +3329,9 @@ export class EntityVisuals {
    */
   private badgeEligible(id: string, lbl: LabelControls, hidden: readonly Category[]): boolean {
     if (hidden.includes(lbl.category)) return false;
+    // ⚠️ HIDDEN IN THE VILLA'S SYSTEM: NO BADGE (owner, 2026-10-22: badge proposal 2). It was drawn quiet; it is no
+    // device on any other surface, so the map names nothing for it — and, not shown, it is in no room chip's count.
+    if (!drawsBadge(id, this.lookSource)) return false;
     // ── DISMISSAL DOES NOT HIDE A BADGE (2.254.0) ────────────────────────
     // It used to: `if (dismissedEntityIds.has(id)) return false`, added so the
     // map would stop disagreeing with the room's own modal about a device
@@ -3291,8 +3343,8 @@ export class EntityVisuals {
     // was geometry that glowed and led to a dead end.
     //
     // A device the model carries and Home Assistant does not is a FACT worth
-    // reporting, not noise to suppress. It draws as unavailable — the dashed
-    // amber ring, from the phantom state rebuildLabels already paints it with
+    // reporting, not noise to suppress. It draws as unavailable — the faded
+    // face and grey "?", from the phantom state rebuildLabels already paints it with
     // — and every list files it under "Not in Home Assistant", its own
     // heading beside "Not on the map" (SummaryGroupPanel).
     //
@@ -4782,10 +4834,12 @@ export class EntityVisuals {
           for (let k = 0; k < drawn; k++) {
             const s2 = shown[g.members[k]];
             const st = this.lastState.get(s2.id) ?? phantomEntity(s2.id);
-            const { face, ring } = model.cells[k];
-            const color = this.config.entityMap[s2.id]?.badgeColor;
+            const { face, mark, linkDot } = model.cells[k];
+            const subject = this.badgeSubject(s2.id, s2.lbl.type, st);
+            const color = subject.color;
             c.chips[k].source = badgeImage({
-              category: s2.lbl.category, iconKey: iconKeyFor(s2.lbl.type, st), state: face, ringState: ring, color,
+              category: s2.lbl.category, iconKey: iconKeyFor(subject.type, subject.entity),
+              state: face, mark, linkDot, color,
               // Inset 0: this chip IS the badge here, as the classic style's is;
               // the card behind it is the group's surface, not a second frame.
               // Baked at the PAINTED size: `lay.chip` is unscaled and the group
@@ -4798,7 +4852,7 @@ export class EntityVisuals {
               // Gated on the setting so the Icon style stays a clean control.
               bold: this.isCardStyle(),
               ring: this.isCardStyle()
-                ? badgeRing(categorySurfaceRinged(s2.lbl.category, face, ring, color), lay.chip, this.metrics).px / Math.max(1e-6, lay.chip)
+                ? badgeRing(categorySurface(s2.lbl.category, face, color), lay.chip, this.metrics).px / Math.max(1e-6, lay.chip)
                 : "baked",
             });
           }
@@ -5597,9 +5651,9 @@ export class EntityVisuals {
 
       case "tint": {
         if (isPose) break;
-        // Unavailable is amber, never red: a lock HA has lost contact with
+        // Unavailable is grey, never red: a lock that has lost contact
         // asserts no "unlocked" reading (see colors.ts).
-        const c = look.tone === "unavailable" ? UNAVAILABLE_AMBER : look.tone === "alert" ? ALERT_RED : SECURE_GREEN;
+        const c = look.tone === "unavailable" ? LOST_GREY : look.tone === "alert" ? ALERT_RED : SECURE_GREEN;
         setDiffuse?.(c);
         setEmissive?.(c.scale(look.tone === "unavailable" ? 0.25 : 0.2));
         break;
@@ -5611,7 +5665,7 @@ export class EntityVisuals {
           // An offline leak/smoke sensor must not look like a safe, monitored
           // one — flag it instead of going quiet.
           this.pulsing.delete(mesh);
-          setEmissive?.(UNAVAILABLE_AMBER.scale(0.4));
+          setEmissive?.(LOST_GREY.scale(0.4));
         } else if (look.on) {
           this.pulsing.add(mesh);
         } else {

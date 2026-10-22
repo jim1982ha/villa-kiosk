@@ -17,7 +17,7 @@ export interface ReadingRow {
   id: string;
   label: string;
   text: string;
-  /** A `.status-pill` tone ("on", "danger", "unavailable", "warning"…) for a
+  /** A `.status-pill` tone ("on", "danger", "unavailable", "transitional"…) for a
    *  sensor (config/reading.rowTone); a normal number keeps the row's quiet
    *  colour, and other domains have none. */
   tone?: string;

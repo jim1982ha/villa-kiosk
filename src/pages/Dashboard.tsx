@@ -53,6 +53,8 @@ import type { ActivePanel } from "@/types/panel.types";
 import type { TeleportPoint } from "@/types/scene.types";
 import { VillaModelProvider, useVillaSets, useDeviceIdentity } from "@/config/VillaModel";
 import { criticalDevices, deviceOf, hiddenIn } from "@/config/deviceGroups";
+import { faultDevices } from "@/config/attention";
+import { useFmData } from "@/fm/FmDataContext";
 import { useCriticalDevices } from "@/ha/criticalDevices";
 import { categoryMembers } from "@/config/villaVisibility";
 import AskDialog from "@/components/common/AskDialog";
@@ -423,7 +425,17 @@ export default function Dashboard() {
     }) : []),
     [categoryGroup, role, config.entityMap, entities, suppressedEntityIds, mappedEntityIds, dismissedIds, isHidden, identity.folding]);
   useEffect(() => { manager?.setHiddenDevices(isHidden); }, [manager, isHidden]);
-  const openPanel = useOpenPanelActions({ screen, go, panelFor, readingsOf: identity.readingsOf, doors, isCritical, isHidden });
+  // The devices with an open Cockpit fault, folded as the critical list is (attention.faultDevices — the villa model
+  // reads the same for the lists): the amber "!" on the map, the open window and the room chooser (owner, 2026-10-22:
+  // badge proposal 2). This page sits outside the villa model, so it folds here, as above.
+  const { data: fmData } = useFmData();
+  const faults = useMemo(() => faultDevices(fmData, (id) => id in entities, identity.folding),
+    [fmData, entities, identity.folding]);
+  const hasFault = useCallback((id: string) => faults.has(id), [faults]);
+  useEffect(() => { manager?.setFaultDevices(faults); }, [manager, faults]);
+  const openPanel = useOpenPanelActions({
+    screen, go, panelFor, readingsOf: identity.readingsOf, doors, isCritical, isHidden, hasFault,
+  });
   const linkedAsk = openPanel.linkedAsk;
 
   // Everything React shows of the scene's own state, read from EACH new scene
@@ -615,14 +627,14 @@ export default function Dashboard() {
     (room: string, entityIds: string[], roomNames: string[]) => {
       const merged = chipRooms(roomNames, room);
       if (merged.length > 1) {
-        const looks = storeLookSource(entities, { ...config, isCritical, isHidden });
+        const looks = storeLookSource(entities, { ...config, isCritical, isHidden, hasFault });
         setRoomChoices(roomChoicesFor(merged, entityIds, (id) => deviceRoom(resolvedRooms, id),
           (id) => (entities[id] ? deviceLook(id, looks) : undefined)));
         return;
       }
       go({ type: "openList", list: { kind: "room", room, entityIds } });
     },
-    [resolvedRooms, entities, config, isCritical, isHidden, go],
+    [resolvedRooms, entities, config, isCritical, isHidden, hasFault, go],
   );
 
   const handleClusterTapped = useCallback(

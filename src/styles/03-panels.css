@@ -185,8 +185,9 @@ input[type="range"]::-moz-range-thumb {
    danger. Danger ("UNLOCKED"/"OPEN") asserts a known, confirmed state; showing
    that same tone when HA has actually LOST CONTACT with the device is a real
    misrepresentation (a lock reporting "unavailable" is NOT confirmed unlocked
-   — its true state just isn't known), so this needs its own look. */
-.status-pill.unavailable { background: color-mix(in srgb, var(--status-warning) 20%, transparent); color: var(--status-warning); }
+   — its true state just isn't known), so this needs its own look. Grey, "no contact", as the badge's grey "?"
+   (owner, 2026-10-22: badge proposal 2 — amber is a fault's). */
+.status-pill.unavailable { background: color-mix(in srgb, var(--status-lost) 20%, transparent); color: var(--status-lost); }
 
 /* --- Temperature control --- */
 .temp-display { text-align: center; margin: 12px 0 20px; }

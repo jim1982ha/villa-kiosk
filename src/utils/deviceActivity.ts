@@ -1,7 +1,7 @@
 // src/utils/deviceActivity.ts
 // THE module that owns how a device, and a group of devices, looks: the rule
-// below (classifyDeviceActivity / badgeKindFor / badgeFaceAndRing /
-// meshLookFor), and since 2.496.245 its inputs too — `deviceLook(id, source)`
+// below (classifyDeviceActivity / badgeKindFor / badgeFace / badgeMarkOf /
+// linkDotOf / meshLookFor), and since 2.496.245 its inputs too — `deviceLook(id, source)`
 // and `groupLook(looks)` at the end of this file, which every badge, list row,
 // room chip, group card and the "Needs attention" list ask.
 //
@@ -25,6 +25,7 @@ import { devicePower } from "@/utils/devicePower";
 import type { SwitchPosition } from "@/utils/entityState";
 import { phantomEntity } from "@/utils/phantomEntity";
 import { domainOf } from "./entityDomain";
+import { shownAsleep } from "@/ha/unavailableByDesign";
 
 export type DeviceActivity = "on" | "off" | "alert" | "info";
 
@@ -46,38 +47,69 @@ export type DeviceActivity = "on" | "off" | "alert" | "info";
 export interface DeviceReading {
   type: EntityType;
   entity: HassEntity;
+  /** Does this device have a LINKED entity at all (EntityMapping.linkedEntityId) — its badge then carries the linked
+   *  dot, filled or hollow (linkDotOf). */
+  linked: boolean;
   /** Is the entity this one is LINKED to switched on — the pump behind a
    *  pump-power sensor. Held differently by each caller (the map keeps a live
-   *  set, a panel reads the store), so the RULE is shared and not the plumbing. */
+   *  set, a panel reads the store), so the RULE is shared and not the plumbing.
+   *  The DOT says it (owner, 2026-10-22: badge proposal 2) — never the face. */
   linkedOn: boolean;
   /** Does the entity this one is LINKED to need attention — its own badge red (a lock's door sensor reading Open):
-   *  this badge's ring is red too, and its kind "alert" (owner, 2026-10-21: "if the associated device is turning ON …
-   *  would the entity badge turn red as well?"). Its face stays its own state; the linked entity lists itself in
+   *  this badge takes the red "!" too, and its kind "alert" (owner, 2026-10-21: "if the associated device is turning
+   *  ON … would the entity badge turn red as well?"). Its face stays its own state; the linked entity lists itself in
    *  "Needs attention". */
   linkedAlert: boolean;
   /** The state that is a fault for this reading's device_class (alertStateFor). `undefined` means "this reading is
    *  never a fault". */
   alertState: string | undefined;
   /** On the villa's critical list (LookSource.config.isCritical — the list its "critical devices offline" rule
-   *  watches, folded onto the device). Only matters once contact is lost: the ring turns red. */
+   *  watches, folded onto the device). Only matters once contact is lost: the mark turns red. */
   critical: boolean;
   /** Hidden in the villa's system (LookSource.config.isHidden — VillaDevices.isHidden): no device, so never red, never
-   *  amber (badgeKindFor). Required, like alertState: "not hidden" is said, never forgotten. */
+   *  lost (badgeKindFor), and no badge on the map at all (drawsBadge). Required, like alertState: "not hidden" is
+   *  said, never forgotten. */
   hidden: boolean;
+  /** The device has an open Cockpit fault (LookSource.config.hasFault — attention kind "fault", folded onto the
+   *  device): the amber "!" (owner, 2026-10-22: badge proposal 2 — the map showed nothing for it). */
+  fault: boolean;
+  /** Asleep by design and shown with its last report (ha/unavailableByDesign.shownAsleep): the grey "z". */
+  asleep: boolean;
 }
 
 /** The five-way live-state reading a badge is painted from: this module's own
  *  four, plus "unavailable", which outranks all of them. */
 export type BadgeKind = DeviceActivity | "unavailable";
 
-// Maps that 5-way classification onto the 4-row surface table VESTA-DESIGN.md
-// §0 defines (config/EntityCategories.categorySurface, consumed by
-// badgeIcons.ts's baked squircle): "on" is that table's "active"; "info" (a
-// plain reading with no on/off concept — e.g. a temperature sensor) reads as
-// "off", neutral, since nothing is actively happening.
-export const SURFACE_STATE: Record<BadgeKind, DeviceSurfaceState> = {
-  on: "active", alert: "alert", info: "off", off: "off", unavailable: "unavailable",
-};
+/**
+ * What is wrong with a device, as the badge's CORNER MARK says it — one at most, the first that is true, in this
+ * order (owner, 2026-10-22: badge proposal 2, "Corner dot": the square says what the device does, the dot says what is
+ * wrong):
+ *
+ *   critical  a critical device has lost contact   red "?"
+ *   alarm     an alarm (an unlocked door, a leak, a low battery, a linked entity alerting)   red "!"
+ *   fault     an open Cockpit fault                 amber "!"
+ *   lost      contact lost                          grey "?"
+ *   asleep    asleep by design, its last report shown   grey "z"
+ *   moving    on its way between two rest states (TRANSITIONAL_STATES)   teal "…"
+ *
+ * No mark: all fine. The colours are one vocabulary with every other surface: red act now, amber check soon, grey no
+ * contact, teal moving (EntityCategories.markSurface paints them).
+ */
+export type BadgeMark = "critical" | "alarm" | "fault" | "lost" | "asleep" | "moving";
+export const MARK_ORDER: readonly BadgeMark[] = ["critical", "alarm", "fault", "lost", "asleep", "moving"];
+
+/** The facts a mark is chosen from — each one independent, the ORDER decides (badgeMarkFor). */
+export type MarkFacts = Record<BadgeMark, boolean>;
+
+/** The one corner mark: the first true fact in MARK_ORDER, or null. Pure — tests/oracles/badge_mark.mjs. */
+export function badgeMarkFor(f: MarkFacts): BadgeMark | null {
+  for (const m of MARK_ORDER) if (f[m]) return m;
+  return null;
+}
+
+/** The linked dot (bottom-left): "on" filled in the badge's colour, "off" hollow, null — no linked entity. */
+export type LinkDot = "on" | "off" | null;
 
 /**
  * What a badge for this entity should be painted as — the ONE definition, for
@@ -86,86 +118,69 @@ export const SURFACE_STATE: Record<BadgeKind, DeviceSurfaceState> = {
  * ── Why this is shared (2.206.0) ─────────────────────────────────────────
  * The map and the device-list panels drew the same badge from two different
  * rules. Both called classifyDeviceActivity, but only the map then applied
- * the LINKED-ENTITY override: an entity whose `linkedEntityId` is on counts as
- * "on" (2.496.240; it was "alert"), which is how a pump's power sensor shows that
- * its pump is running.
- * The panel had no equivalent, so tapping a group of four pump-power sensors
- * showed four identical grey rows for badges that were red on the map two
+ * the LINKED-ENTITY override, so tapping a group of four pump-power sensors
+ * showed four identical grey rows for badges that were coloured on the map two
  * pixels earlier — reported with exactly that pair of screenshots.
  *
- * `linkedOn` is resolved ONCE, by readingOf (below), through devicePower and
- * whichever LookSource the caller holds — the map's live cache or the store.
- * It was "passed in because the callers hold it differently", and they then
- * resolved it three different ways (2.496.245).
+ * ⚠️ A LINKED SWITCH ON NO LONGER MAKES THE DEVICE "ON" (owner, 2026-10-22: badge proposal 2). It did since
+ * 2.496.240, so a pump-power sensor read "on" — face, room chip and all — whenever its relay ran. The badge's DOT says
+ * that now (linkDotOf); the face and the kind are the device's own. A linked entity needing attention still makes it
+ * "alert" (its red "!").
  */
 export function badgeKindFor(r: DeviceReading): BadgeKind {
-  // ⚠️ HIDDEN IS NO DEVICE, ON EVERY SURFACE (architecture review, 2026-10-21): since 2.496.457 the Cockpit, its counts
-  // and the update pill left a hidden device out, while its map badge, its room chip and its room-list row still
-  // painted it red ("Unlocked") or amber — a red badge with no line in "Needs attention" (attention.ts: "a red badge
-  // is always here"). It stays drawn where it is placed (a 3D object that glows and names nothing was the 2.254.0
-  // dead end), quiet: what it does, never an alarm, never "contact lost".
+  // ⚠️ HIDDEN IS NO DEVICE, ON EVERY SURFACE (architecture review, 2026-10-21): the Cockpit, its counts and the update
+  // pill leave a hidden device out, so nothing may paint it red or lost. The map now draws no badge for it
+  // at all (drawsBadge, owner 2026-10-22: badge proposal 2); this quiet kind is what its 3D object (meshLookFor) and a
+  // list that still names it read: what it does, never an alarm, never "contact lost".
   if (r.hidden) {
     const k = badgeKindFor({ ...r, hidden: false });
     return k === "alert" || k === "unavailable" ? "off" : k;
   }
   const contact = contactOf(r.entity.state);
   if (contact === "lost") return "unavailable";
-  // nothing to say (unknown): quiet, as a device at rest — never "contact lost" amber, never a lock's red
+  // nothing to say (unknown): quiet, as a device at rest — never "contact lost", never a lock's red
   if (contact === "no-value") return "off";
-  // Outranks the entity's own state vocabulary on purpose — see linkedEntityId.
-  // ⚠️ "ON", NEVER "ALERT" (owner, 2026-10-01): a pump's power sensor whose relay
-  // runs is a device ON. As "alert" it rang every room chip and count card that
-  // holds it red — the Map-colours legend's "Needs attention" — while nothing
-  // was wrong (the Swimming Pool chip, its jet pump running).
   if (r.linkedAlert) return "alert";
-  if (r.linkedOn) return "on";
   return classifyDeviceActivity(r);
 }
 
 /**
- * The badge's two independent readings: what its FACE says, and what its RING
- * says.
+ * The badge's FACE: what the device DOES, and nothing else — "off" (resting: neutral fill, glyph in its colour),
+ * "active" (working: its colour's tint and ring) or "unavailable" (no trustworthy state: the resting look, faded, its
+ * glyph grey — EntityCategories.categorySurface).
  *
- * ── Why they were one, and why that was wrong (2.214.0) ───────────────────
- * `linkedEntityId` has always been documented as driving a device's RING, but
- * it was applied by forcing the whole badge to "alert" — so an armed camera
- * went red edge to edge and its purple camera pictogram went with it. Two
- * unrelated facts ("this camera is recording" and "its detection is armed")
- * were competing for one set of pixels, and the glyph — the thing that says
- * what the device even is — lost.
- *
- * They are separate now. The FACE is the device's own state and nothing else,
- * so a camera stays its category colour whether armed or not. The RING carries
- * the linked signal, which is what a ring is for.
- *
- * `unavailable` is the exception and stays whole-badge: a device Home
- * Assistant has lost contact with has no trustworthy state to paint a face
- * from, so claiming one — in any colour — would assert something never
- * observed. It takes the amber dashed ring AND the muted face together.
- *
- * ── The linked ring is the badge's OWN colour, never red (2.496.239) ───────
- * It was "alert" — the --status-danger red the Map colours legend reserves for
- * "Needs attention" (an unlocked door, a leak). A linked switch being on is
- * not a problem, so a power badge whose relay was on wore the alarm colour.
- * Owner: the ring takes the badge's category colour (or its own badge colour)
- * — categorySurface's "active" ring, the same hue as its pictogram.
- *
- * ── A CRITICAL device that lost contact rings RED (owner, 2026-10-19) ──────
- * The Cockpit painted it red ("critical devices offline") while the map, its
- * room chip, its list row and its window all showed the amber of any lost
- * device. Its face stays the muted "unavailable" one — nothing is known of its
- * state — and its ring takes the "Needs attention" red.
+ * ⚠️ A PROBLEM IS NEVER THE FACE (owner, 2026-10-22: badge proposal 2). An alarm painted the whole square red and lost
+ * contact a dashed amber ring, so the face said "problem" and no longer what the device was doing; the corner mark
+ * (badgeMarkOf) says the problem now. An alarming device keeps its activity look: an unlocked lock is open ("active"),
+ * a leak sensor reading wet is on, a low battery reading is a reading (resting).
  */
-export function badgeFaceAndRing(
-  r: DeviceReading,
-): { face: DeviceSurfaceState; ring: DeviceSurfaceState } {
+export function badgeFace(r: DeviceReading): DeviceSurfaceState {
   const own = badgeKindFor({ ...r, linkedOn: false, linkedAlert: false });
-  if (own === "unavailable") return { face: "unavailable", ring: r.critical ? "alert" : "unavailable" };
-  const face = SURFACE_STATE[own];
-  // A face already alerting keeps its red ring: that IS needs-attention. So does a linked entity needing it (a lock's
-  // door sensor reading Open, owner 2026-10-21): the badge rings red over its own face.
-  if (r.linkedAlert) return { face, ring: "alert" };
-  return { face, ring: r.linkedOn && face !== "alert" ? "active" : face };
+  if (own === "unavailable") return "unavailable";
+  if (own === "on") return "active";
+  if (own !== "alert") return "off";
+  // what an alarming device is DOING: a lock not locked is open; a binary_sensor reports on or off
+  if (r.type === "lock") return "active";
+  return r.entity.state === "on" ? "active" : "off";
+}
+
+/** The badge's corner mark (badgeMarkFor over this reading's facts). A hidden device has none: it is no device. */
+export function badgeMarkOf(r: DeviceReading): BadgeMark | null {
+  if (r.hidden) return null;
+  const lost = badgeKindFor({ ...r, linkedOn: false, linkedAlert: false }) === "unavailable";
+  return badgeMarkFor({
+    critical: lost && r.critical,
+    alarm: badgeKindFor(r) === "alert",
+    fault: r.fault,
+    lost,
+    asleep: r.asleep,
+    moving: TRANSITIONAL_STATES.has(r.entity.state),
+  });
+}
+
+/** The badge's linked dot: filled when its linked entity is on, hollow when off, none without one. */
+export function linkDotOf(r: DeviceReading): LinkDot {
+  return r.linked ? (r.linkedOn ? "on" : "off") : null;
 }
 
 /* ⚠️ `badgeSurfaceFor` IS GONE (had zero callers). It resolved `badgeKindFor`
@@ -350,6 +365,10 @@ export interface LookSource {
     /** Hidden in the villa's system (VillaDevices.isHidden, deviceGroups.hiddenIn). REQUIRED: a caller that forgot it
      *  painted a hidden device red where every other surface had dropped it. */
     isHidden: (entityId: string) => boolean;
+    /** The device has an open Cockpit fault (attention.faultDevices, folded onto the device as the critical list is):
+     *  its amber "!" (owner, 2026-10-22: badge proposal 2). Absent: no fault is drawn (the Cockpit's own counts, which
+     *  list the faults themselves). */
+    hasFault?: (entityId: string) => boolean;
   };
   /** A linked switch the person has just thrown and Home Assistant has not yet
    *  confirmed: true/false while it is pending, undefined otherwise. Only the
@@ -362,24 +381,31 @@ export interface LookSource {
 /** Everything a device looks like, from one place. */
 export interface DeviceLook {
   type: EntityType;
-  /** The badge FACE: the device's own state (badgeFaceAndRing). */
+  /** The badge FACE: what the device does (badgeFace) — never a problem colour. */
   face: DeviceSurfaceState;
-  /** The badge RING: its linked entity's signal, else the face. */
-  ring: DeviceSurfaceState;
+  /** The badge's corner mark: what is wrong, one at most (badgeMarkOf). */
+  mark: BadgeMark | null;
+  /** The badge's linked dot, bottom-left (linkDotOf). */
+  linkDot: LinkDot;
   /** badgeKindFor — the one five-way reading a COUNT summary rings from
-   *  (the linked signal folded in). */
+   *  (a linked entity's alarm folded in). */
   kind: BadgeKind;
   /** The device's own reading, without its linked entity — what its mesh shows. */
   own: BadgeKind;
   /** ACTIVITY: doing something (kind "on"). An idle camera is active. */
   active: boolean;
-  /** Red on the map: its face needs attention. */
+  /** Its OWN reading is an alarm (the red "!" — a linked entity's alarm is the linked entity's line): what "Needs
+   *  attention" lists. */
   alert: boolean;
   /** Home Assistant has lost it (or never reported it). */
   unavailable: boolean;
-  /** A CRITICAL device that has lost contact (on the villa's critical list AND `unavailable`): red, never amber — its
-   *  badge ring, its room chip's number, its list row and its window's pill. */
+  /** A CRITICAL device that has lost contact (on the villa's critical list AND `unavailable`): red, never grey — its
+   *  badge's mark, its room chip's number, its list row and its window's pill. */
   critical: boolean;
+  /** It has an open Cockpit fault (LookSource.config.hasFault) — its room chip's number is amber for it. */
+  fault: boolean;
+  /** Hidden in the villa's system: the map draws no badge for it (drawsBadge). */
+  hidden: boolean;
   /** POWER: its switch's position, "none" when it has no switch. */
   power: PowerState;
   /** Whether the entity it is LINKED to is on (devicePower: an unlocked lock,
@@ -390,7 +416,8 @@ export interface DeviceLook {
 /** The one DeviceReading for this device, its linked entity
  *  resolved from the source — what the mesh rule (meshLookFor) reads too. */
 export function readingOf(entityId: string, source: LookSource): DeviceReading {
-  const entity = source.state(entityId) ?? phantomEntity(entityId);
+  const own = source.state(entityId);
+  const entity = own ?? phantomEntity(entityId);
   const linkedId = source.config.entityMap[entityId]?.linkedEntityId;
   let linkedOn = false;
   let linkedAlert = false;
@@ -404,36 +431,62 @@ export function readingOf(entityId: string, source: LookSource): DeviceReading {
     linkedAlert = !!linked && badgeKindFor({
       type: source.typeOf(linkedId), entity: linked, linkedOn: false, linkedAlert: false,
       alertState: alertStateFor(linked.attributes.device_class as string | undefined),
-      critical: false, hidden: source.config.isHidden(linkedId),
+      critical: false, hidden: source.config.isHidden(linkedId), linked: false, fault: false, asleep: false,
     }) === "alert";
   }
   return {
     type: source.typeOf(entityId),
     entity,
+    linked: !!linkedId,
     linkedOn,
     linkedAlert,
     alertState: alertStateFor(entity.attributes.device_class as string | undefined),
     critical: source.config.isCritical?.(entityId) ?? false,
     hidden: source.config.isHidden(entityId),
+    fault: source.config.hasFault?.(entityId) ?? false,
+    asleep: shownAsleep(own),
   };
 }
 
-/** How this device looks — face, ring, kind, ACTIVITY and POWER. */
+/** How this device looks — face, mark, linked dot, kind, ACTIVITY and POWER. */
 export function deviceLook(entityId: string, source: LookSource): DeviceLook {
   const r = readingOf(entityId, source);
-  const { face, ring } = badgeFaceAndRing(r);
   const kind = badgeKindFor(r);
   const own = badgeKindFor({ ...r, linkedOn: false, linkedAlert: false });
   const switchable = hasOnOff(entityId);
   return {
-    type: r.type, face, ring, kind, own,
+    type: r.type, face: badgeFace(r), mark: badgeMarkOf(r), linkDot: linkDotOf(r), kind, own,
     active: kind === "on",
-    alert: face === "alert",
+    alert: own === "alert",
     unavailable: own === "unavailable",
     critical: r.critical && own === "unavailable",
+    fault: r.fault && !r.hidden,
+    hidden: r.hidden,
     power: switchable ? devicePower(source.state(entityId), entityId).position : "none",
     linkedOn: r.linkedOn,
   };
+}
+
+/**
+ * Does the MAP draw a badge for this device at all? Not for one hidden in the villa's system (owner, 2026-10-22:
+ * badge proposal 2 — it was drawn quiet): it is no device anywhere else, so its badge named something
+ * no list had. Its 3D object stays as it is. And with no badge it is in no room chip's count either, as it is in no
+ * list's (EntityVisuals.badgeEligible asks this).
+ */
+export function drawsBadge(entityId: string, source: LookSource): boolean {
+  return !source.config.isHidden(entityId);
+}
+
+/**
+ * The device whose badge `entityId` wears: the device it is the LINKED entity of (EntityMapping.linkedEntityId — a
+ * pump's relay, a camera's detection switch), else itself. A linked entity placed on the map on its own draws the SAME
+ * badge as its device — its pictogram, category and badge colour — its face from its own on/off, so the owner sees
+ * what it controls (owner, 2026-10-22: badge proposal 2). The first device in the entity map that names it, when
+ * several do (the order every link index here reads).
+ */
+export function badgeOwnerOf(entityId: string, entityMap: Readonly<Record<string, EntityMapping>>): string {
+  for (const [id, m] of Object.entries(entityMap)) if (m.linkedEntityId === entityId && id !== entityId) return id;
+  return entityId;
 }
 
 /** The React store's adapter: `entities` is HAStateStore's, `config` the
@@ -488,6 +541,8 @@ export interface GroupLook {
   anyOn: boolean;
   /** A member is unavailable — dimming is its own signal, never a ring. */
   unavailable: boolean;
+  /** A member has an open Cockpit fault (DeviceLook.fault): a room's number is amber for it (summaryLook.roomHealth). */
+  fault: boolean;
   /** POWER: how many are switched on ("N on"). */
   onCount: number;
   /** ACTIVITY: how many are doing something. */
@@ -502,9 +557,9 @@ export interface GroupLook {
  * rings nothing and counts nothing.
  *
  * The ring means two things, by what the summary draws:
- *   SHOWING ITS DEVICES  each cell carries its own ring, so the summary's may
- *     say only what is true of the WHOLE set: red iff every member's own ring
- *     is "alert" (a card that went red because ONE of two cameras was armed
+ *   SHOWING ITS DEVICES  each cell carries its own mark, so the summary's may
+ *     say only what is true of the WHOLE set: red iff every member's own mark
+ *     is red (a card that went red because ONE of two cameras was armed
  *     claimed the pair was), and no "on" ring at all.
  *   DRAWING A COUNT      nothing inside says anything, so: red if ANY member's
  *     kind alerts; else the neutral "on" ring if any member is active.
@@ -513,15 +568,17 @@ export function groupLook(
   members: readonly (DeviceLook | null | undefined)[],
   opts: { showingDevices: boolean },
 ): GroupLook {
-  let anyAlert = false, everyRingAlert = members.length > 0, anyActive = false, unavailable = false;
+  let anyAlert = false, everyRingAlert = members.length > 0, anyActive = false, unavailable = false, fault = false;
   let onCount = 0, activeCount = 0, offline = 0;
   for (const m of members) {
     if (!m) { everyRingAlert = false; continue; }
     // a critical device that lost contact needs attention, as the Cockpit says (owner, 2026-10-19)
     if (m.kind === "alert" || m.critical) anyAlert = true;
     if (m.kind === "on") anyActive = true;
-    if (m.ring !== "alert") everyRingAlert = false;
+    // a cell "rings red" when its own mark is red: an alarm, or a critical device silent
+    if (m.mark !== "alarm" && m.mark !== "critical") everyRingAlert = false;
     if (m.kind === "unavailable") unavailable = true;
+    if (m.fault) fault = true;
     if (m.power === "on") onCount++;
     if (m.active) activeCount++;
     if (m.unavailable) offline++;
@@ -531,6 +588,6 @@ export function groupLook(
     ringRed,
     ringOn: !opts.showingDevices && !ringRed && anyActive,
     anyOn: anyActive,
-    unavailable, onCount, activeCount, offline,
+    unavailable, fault, onCount, activeCount, offline,
   };
 }

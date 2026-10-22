@@ -20,7 +20,7 @@
 //
 // Pure: tests/oracles/summary_look.mjs.
 
-import type { DeviceLook } from "@/utils/deviceActivity";
+import type { BadgeMark, DeviceLook, LinkDot } from "@/utils/deviceActivity";
 import { groupLook } from "@/utils/deviceActivity";
 import type { DeviceSurfaceState } from "@/config/EntityCategories";
 import { formatCountBadge } from "@/utils/countBadge";
@@ -56,8 +56,8 @@ export interface GroupCardModel {
   drawn: number;
   /** The grid the card's chips are laid out on — 0 for a count badge. */
   gridN: number;
-  /** One per drawn cell, in member order: what that cell's badge shows. */
-  cells: { id: string; face: DeviceSurfaceState; ring: DeviceSurfaceState }[];
+  /** One per drawn cell, in member order: what that cell's badge shows — its face, its corner mark, its linked dot. */
+  cells: { id: string; face: DeviceSurfaceState; mark: BadgeMark | null; linkDot: LinkDot }[];
   frame: SummaryFrame;
 }
 
@@ -79,7 +79,7 @@ export function groupCardModel(members: readonly CardMember[], drawn: number, wa
     drawn,
     gridN: showingDevices ? drawn : 0,
     cells: showingDevices
-      ? members.slice(0, drawn).map((m) => ({ id: m.id, face: m.look.face, ring: m.look.ring }))
+      ? members.slice(0, drawn).map((m) => ({ id: m.id, face: m.look.face, mark: m.look.mark, linkDot: m.look.linkDot }))
       : [],
     frame: summaryFrame(ring),
   };
@@ -104,8 +104,9 @@ export interface RoomChipModel {
 }
 
 /** A room's health, worst first: "alert" — something needs attention (an
- *  unlocked door, a leak); "unavailable" — Home Assistant has lost contact with
- *  a device; "ok" — neither.
+ *  unlocked door, a leak, a critical device silent); "fault" — a device has an
+ *  open Cockpit fault, check soon; "unavailable" — contact with a device is
+ *  lost; "ok" — none of these.
  *
  *  ⚠️ IT WAS TWO SIGNALS ON ONE CHIP. "Needs attention" was the chip's red
  *  BORDER and "lost contact" its count's colour, so a red border sat beside a
@@ -113,10 +114,12 @@ export interface RoomChipModel {
  *  room all right?" now — the number — and the border only says something is
  *  on. Attention outranks lost contact: an unlocked door is the thing to act
  *  on first, and a room with both still reads "not all right". */
-export type RoomHealth = "alert" | "unavailable" | "ok";
+export type RoomHealth = "alert" | "fault" | "unavailable" | "ok";
 
-export function roomHealth(ring: { ringRed: boolean; unavailable: boolean }): RoomHealth {
-  return ring.ringRed ? "alert" : ring.unavailable ? "unavailable" : "ok";
+/** ⚠️ A FAULT OUTRANKS LOST CONTACT, AS ON THE BADGE (owner, 2026-10-22: badge proposal 2): red act now, amber check
+ *  soon, grey no contact — the order of the badges' own corner marks (deviceActivity.MARK_ORDER). */
+export function roomHealth(ring: { ringRed: boolean; fault: boolean; unavailable: boolean }): RoomHealth {
+  return ring.ringRed ? "alert" : ring.fault ? "fault" : ring.unavailable ? "unavailable" : "ok";
 }
 
 /** A room chip's border: on, or resting — "needs attention" is roomHealth's. */

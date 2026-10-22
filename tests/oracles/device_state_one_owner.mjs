@@ -17,7 +17,9 @@ import { fileURLToPath } from "node:url";
 
 register("../consistency/alias-hook.mjs", import.meta.url);
 
-const { classifyDeviceActivity, badgeFaceAndRing } = await import("@/utils/deviceActivity");
+const { classifyDeviceActivity, badgeFace, badgeMarkOf, linkDotOf } = await import("@/utils/deviceActivity");
+/** The badge's face and corner mark (owner, 2026-10-22: badge proposal 2 — a problem is the mark, never the face). */
+const badgeOf = (r) => ({ face: badgeFace(r), mark: badgeMarkOf(r) });
 const { alertStateFor, binarySensorClassInfo } = await import("@/config/BinarySensorClasses");
 const { switchPosition, OFF_STATES } = await import("@/utils/entityState");
 const { statusKeyFor, STATUS_COLOR, UNKNOWN_STATES, isUnavailable } =
@@ -37,14 +39,14 @@ const ck = (n, ok) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}`); if (!o
 
 /* ── 1. one motion sensor, three surfaces, one answer ─────────────────── */
 const motion = ent("binary_sensor.hall", "on", "motion");
-const motionBadge = badgeFaceAndRing(read("binary_sensor", motion));
+const motionBadge = badgeOf(read("binary_sensor", motion));
 // its history bar, as its window paints it (config/binaryLook — the same alertStateFor)
 const { binaryLook } = await import("@/config/binaryLook");
 const motionHistory = binaryLook("binary_sensor.hall", "motion").status("on");
 const motionIsFault = alertStateFor("motion") === "on";
 
 console.log("  a motion sensor reading `on`:");
-console.log(`      badge face   : ${motionBadge.face}`);
+console.log(`      badge        : ${motionBadge.face}, mark ${motionBadge.mark}`);
 console.log(`      history bar  : ${motionHistory}`);
 console.log(`      panel alerts : ${motionIsFault}`);
 
@@ -112,7 +114,7 @@ if (overrideCombos.length) console.log(`      override re-combined in: ${overrid
 // diverging. So the scan below is the real assertion and the calls above it
 // only prove the set is the one actually in use.
 const unknownReaders = [
-  ["badgeKindFor (map badge)", badgeFaceAndRing(read("lock", ent("lock.a", "unavailable"))).face],
+  ["badgeFace (map badge)", badgeFace(read("lock", ent("lock.a", "unavailable")))],
   ["statusKeyFor (history bar)", statusKeyFor("unavailable", "lock")],
   ["isUnavailable (panels)", isUnavailable(ent("lock.a", "unknown"))],
 ];
@@ -126,11 +128,11 @@ const bothMembersAgree = ["unavailable", "unknown"].every((st) =>
   UNKNOWN_STATES.has(st) && isUnavailable(ent("lock.a", st)) === true)
   && statusKeyFor("unavailable", "lock") === "unavailable" && statusKeyFor("unknown", "lock") === "idle"
   && statusKeyFor("", "sensor") === "unavailable" && statusKeyFor("none", "sensor") === "unavailable"
-  && badgeFaceAndRing(read("lock", ent("lock.a", "unavailable"))).face === "unavailable"
+  && badgeFace(read("lock", ent("lock.a", "unavailable"))) === "unavailable" && badgeMarkOf(read("lock", ent("lock.a", "unavailable"))) === "lost"
   && contactOf("unavailable") === "lost" && contactOf(undefined) === "lost" && contactOf("unknown") === "no-value"
   && contactOf("locked") === "ok";
-const unknownIsQuiet = !["unavailable", "alert"].includes(badgeFaceAndRing(read("lock", ent("lock.a", "unknown"))).face)
-  && !["unavailable", "alert"].includes(badgeFaceAndRing(read("sensor", ent("sensor.x", "unknown", "temperature"))).face);
+const unknownIsQuiet = [read("lock", ent("lock.a", "unknown")), read("sensor", ent("sensor.x", "unknown", "temperature"))]
+  .every((r) => badgeFace(r) === "off" && badgeMarkOf(r) === null);
 
 // A line of CODE (not a comment) naming both members, anywhere but the owner.
 const OWNER = "utils/stateColors.ts";
@@ -156,7 +158,7 @@ if (strayPairs.length) console.log(`      pair spelled out again in: ${strayPair
 console.log("\n  assertions:");
 ck("the scan reached the source tree", FILES.length > 100);
 // owner, 2026-10-21: "the entity badge to follow the state of the entity … everywhere": a detection is red on its badge, its bar and its panel alike
-ck("a motion sensor detecting rings red", motionBadge.face === "alert");
+ck("a motion sensor detecting takes the red \"!\" over its own (on) face", motionBadge.mark === "alarm" && motionBadge.face === "active");
 ck("  ...and its history bar agrees", STATUS_COLOR[motionHistory] === STATUS_COLOR.alert);
 ck("  ...and the panel flags it", motionIsFault === true);
 ck("a leak sensor still alerts", leakKind === "alert");
@@ -173,22 +175,22 @@ ck("the status table's alert words now reach the badge", nowAlerts);
 ck("no second alert word-list in the tree", privateLists.length === 0);
 ck("the device_class override is combined in exactly one module", overrideCombos.length === 0);
 ck("the device_class table is still consulted", binarySensorClassInfo("moisture").alarmState === "on");
-// The LINKED ring (2.496.239): the badge's own colour, never the
-// "Needs attention" red the legend reserves for alarms.
+// The LINKED switch (2.496.239 a ring in the badge's own colour; owner, 2026-10-22: badge proposal 2, a DOT at the
+// bottom-left): filled on, hollow off — never the face, never the kind.
 {
-  const { categorySurfaceRinged } = await import("@/config/EntityCategories");
   const power = ent("sensor.x", "12", "power");
-  const linked = badgeFaceAndRing({ ...read("sensor", power), linkedOn: true });
-  const rest = badgeFaceAndRing(read("sensor", power));
-  ck("a linked entity on rings the badge, the face unchanged", linked.face === rest.face && linked.ring !== rest.ring);
-  ck("  ...in the badge's category colour (the 'active' ring), not the alarm red", linked.ring === "active");
-  const leakLinked = badgeFaceAndRing({ ...read("binary_sensor", ent("binary_sensor.tank", "on", "moisture")), linkedOn: true });
-  ck("  ...while a face that IS alerting keeps its red ring", leakLinked.ring === "alert");
-  const s = categorySurfaceRinged("energy", linked.face, linked.ring, "#123456");
-  ck("  ...and a per-badge colour is the ring's colour", s.ring === "#123456");
-  // 2.496.240: the KIND a room chip or a count card reads — linked on is "on", never "alert"
+  const on = { ...read("sensor", power), linked: true, linkedOn: true };
+  const off = { ...read("sensor", power), linked: true, linkedOn: false };
+  ck("a linked entity on fills the badge's dot, off leaves it hollow, the face unchanged",
+     linkDotOf(on) === "on" && linkDotOf(off) === "off" && badgeFace(on) === badgeFace(off) && badgeFace(on) === "off");
+  ck("  ...no linked entity, no dot", linkDotOf(read("sensor", power)) === null);
+  ck("  ...and no mark for it: a switch on is not a problem", badgeMarkOf(on) === null);
+  const leakLinked = { ...read("binary_sensor", ent("binary_sensor.tank", "on", "moisture")), linked: true, linkedOn: true };
+  ck("  ...while a device that IS alerting keeps its red \"!\"", badgeMarkOf(leakLinked) === "alarm");
+  // 2.496.240 counted a linked switch on as ON for a room chip; since 2026-10-22 the dot says it and the kind is the
+  // device's own (a pump-power sensor's chip no longer lights up for its relay)
   const { badgeKindFor } = await import("@/utils/deviceActivity");
-  ck("a linked entity on counts as ON for a room chip, never as needs-attention", badgeKindFor({ ...read("sensor", power), linkedOn: true }) === "on");
+  ck("a linked entity on is NOT the device on: its kind is its own reading", badgeKindFor(on) === "info");
 }
 ck("both members of UNKNOWN_STATES show no value; only \"unavailable\" is lost contact (contactOf) — on the history bar too", bothMembersAgree);
 ck("  ...an \"unknown\" device is quiet on the map — never the amber of lost contact, never a lock's red", unknownIsQuiet);

@@ -13,14 +13,15 @@ export const ALERT_RED = new Color3(0.7, 0.26, 0.2);
 // Same colour as ALERT_RED, for the badge ring's Babylon GUI hex string API.
 export const ALERT_RED_HEX = "#B24232";
 
-// "HA has lost contact with this device — its state isn't known." Distinct
+// "The villa's system has lost contact with this device — its state isn't known." Distinct
 // from ALERT_RED (a confirmed, actionable alarm) on purpose: tinting an
 // unavailable lock/sensor mesh red would falsely assert a specific confirmed
 // state (e.g. "unlocked") that was never actually observed — see
 // EntityVisuals.applyToMesh's lock/binary_sensor cases, the bug this fixed
-// (a lock HA had lost contact with rendered as a confident red "unlocked").
-// Matches --status-warning's amber across the 2D panels for the same signal.
-export const UNAVAILABLE_AMBER = new Color3(0.72, 0.5, 0.12);
+// (a lock that had lost contact rendered as a confident red "unlocked").
+// ⚠️ GREY, NO LONGER AMBER (owner, 2026-10-22: badge proposal 2): amber is a fault — check soon — and grey "no
+// contact", on every surface. Matches --status-lost (light theme) across the 2D panels for the same signal.
+export const LOST_GREY = new Color3(0.42, 0.44, 0.42);
 
 // Same green as --status-on across the 2D panels ("this is reporting fine" /
 // "available") — for the one place on the Babylon GUI side that needs it
@@ -28,26 +29,29 @@ export const UNAVAILABLE_AMBER = new Color3(0.72, 0.5, 0.12);
 // A Babylon GUI control can't consume a CSS custom property, so this is a
 // static match to the light-theme value rather than a live read.
 export const AVAILABLE_GREEN_HEX = "#34845A";
-// The same amber as UNAVAILABLE_AMBER (--status-warning, light theme), as a
-// hex for the pill below.
-export const UNAVAILABLE_AMBER_HEX = "#B8801F";
+// --status-warning (light theme): a FAULT, check soon — as a hex for the pill below.
+export const FAULT_AMBER_HEX = "#B8801F";
+// --status-lost (light theme): no contact — the same grey as LOST_GREY, as a hex for the pill below.
+export const LOST_GREY_HEX = "#6B706B";
 
 /** A room's count pill, by the room's HEALTH (summaryLook.roomHealth): red —
- *  something needs attention; amber — Home Assistant lost a device; green —
- *  all right. ONE answer for the map chip (EntityVisuals.renderChips), the
- *  "Which room?" list (RoomChoiceSheet) and the legend.
+ *  something needs attention; amber — a device has an open fault; grey —
+ *  contact with a device is lost; green — all right. ONE answer for the map
+ *  chip (EntityVisuals.renderChips), the "Which room?" list (RoomChoiceSheet)
+ *  and the legend.
  *
- *  The vocabulary's own colours: red is "Needs attention" and amber "lost
- *  contact" everywhere else (badge rings, panel status, legend). 2.496.265
- *  briefly had red for the BORDER and amber/green here — two signals on one
- *  chip, which read as contradicting each other (owner, 2026-10-04).
+ *  The vocabulary's own colours, as the badges' corner marks (owner,
+ *  2026-10-22: badge proposal 2): red act now, amber a fault, grey no contact.
+ *  2.496.265 briefly had red for the BORDER and amber/green here — two signals
+ *  on one chip, which read as contradicting each other (owner, 2026-10-04).
  *
- *  Dark ink on the amber: white on it is 3.4:1 against the green's 4.6:1, too
- *  faint for a digit this small; dark is 5.2:1, and dark-on-amber is the usual
- *  look of a warning. */
-export function healthPill(health: "alert" | "unavailable" | "ok"): { fill: string; ink: string } {
+ *  Static light-theme values, like every colour in this file: the map chip's
+ *  pill is a baked picture. Dark ink on the amber: white on it is 3.4:1, too
+ *  faint for a digit this small; dark is 5.2:1. White on the grey is 5.1:1. */
+export function healthPill(health: "alert" | "fault" | "unavailable" | "ok"): { fill: string; ink: string } {
   return health === "alert" ? { fill: ALERT_RED_HEX, ink: "#ffffff" }
-    : health === "unavailable" ? { fill: UNAVAILABLE_AMBER_HEX, ink: "#17191A" }
+    : health === "fault" ? { fill: FAULT_AMBER_HEX, ink: "#17191A" }
+    : health === "unavailable" ? { fill: LOST_GREY_HEX, ink: "#ffffff" }
     : { fill: AVAILABLE_GREEN_HEX, ink: "#ffffff" };
 }
 
