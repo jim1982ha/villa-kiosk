@@ -110,8 +110,8 @@ def run(args) -> dict:
     battery_entities = [r["entity_id"] for r in pack.entities("battery")]
     bat_stats = cli.statistics(battery_entities, day_end - timedelta(days=BATTERY_READ_DAYS), day_end, "day", ("mean",)) if battery_entities else {}
     best = battery_best(cli, battery_entities, now_ref, params)
-    battery.keep_rested(store, best)              # the level every page shows is the one judged here
-    findings += battery_findings(pack, states, params, today, bat_stats, store=store, best=best)
+    # the level every page shows is the one judged here, kept with its time (battery.keep_judged)
+    findings += battery_findings(pack, states, params, today, bat_stats, store=store, best=best, at=now_ref)
 
     alerted = alerted_offline(store, pack)
     findings += offline_findings(pack, states, now_ref, params, set(alerted))
@@ -402,12 +402,16 @@ def battery_moved(open_rows, findings) -> dict[tuple[str, str], str]:
 
 
 def battery_findings(pack, states: dict, params, today: date, stats: dict | None = None,
-                     rows: list[dict] | None = None, store=None, best: dict | None = None) -> list:
+                     rows: list[dict] | None = None, store=None, best: dict | None = None,
+                     at: datetime | None = None) -> list:
     """The battery rules (rules.battery_rules) over `rows` (every battery of the pack when None), each read from
     `states`; `stats`: {entity: daily means} for the trend (none: no trend is judged); `store`: its open findings keep
     their margin (rules.battery_rules `held`); `best`: {entity: its highest reading of the window} (battery_best) — a
-    battery is judged on the higher of it and its reading now."""
+    battery is judged on the higher of it and its reading now. `at`: when it is judged — with a store, the level each
+    battery was judged with is kept (battery.keep_judged; None when it had no reading): the one writer of the level
+    every page shows, for the night and the recheck alike."""
     out = []
+    judged: dict[str, float | None] = {}
     held: dict[str, set] = {}
     for o in store.findings(status="open") if store is not None else []:
         held.setdefault(o["entity_id"], set()).add(o["rule_id"])
@@ -422,9 +426,12 @@ def battery_findings(pack, states: dict, params, today: date, stats: dict | None
             level = None
         if level is not None and (best or {}).get(row["entity_id"]) is not None:
             level = max(level, best[row["entity_id"]])
+        judged[row["entity_id"]] = level
         series = [(str(r["start"]), r["mean"]) for r in (stats or {}).get(row["entity_id"], []) if r.get("mean") is not None]
         out += R.battery_rules(asset, row["entity_id"], row.get("unit"), level, series, params, today,
                               frozenset(held.get(row["entity_id"], ())))
+    if at is not None:
+        battery.keep_judged(store, judged, at)
     return out
 
 

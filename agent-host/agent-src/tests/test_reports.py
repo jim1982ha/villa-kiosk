@@ -1143,7 +1143,9 @@ def test_the_report_shows_a_battery_at_the_level_the_night_judged():
                                                                ("sensor.lock_battery", "Lock", "lock"),
                                                                ("sensor.other_battery", "Other", "other"))]},
                          assets={}, areas=[], people=[], channels={}, unknown_area=[], unclassified=[], retention={})
-    kept = {battery.RESTED: {"sensor.motion_battery": 52.0, "sensor.lock_battery": 30.0}}
+    night = "2026-10-03T02:00:00+00:00"
+    kept = {battery.RESTED: {"sensor.motion_battery": {"level": 52.0, "at": night},
+                             "sensor.lock_battery": {"level": 30.0, "at": night}}}
     c = facts.Ctx.__new__(facts.Ctx)
     c.pack, c.Z, c.end = pack, ZoneInfo("UTC"), date(2026, 10, 4)
     c.now = datetime(2026, 10, 4, tzinfo=timezone.utc)
@@ -1155,3 +1157,128 @@ def test_the_report_shows_a_battery_at_the_level_the_night_judged():
     c.params = lambda: VillaParams()
     pct = {r["name"]: r["pct"] for r in facts.s_batteries(c)["rows"]}
     assert pct == {"Motion": 52, "Lock": 100, "Other": 7}     # judged level; changed since: now; never judged: now
+
+
+def _battery_night(tmp, as_of: str, reading: str, hourly_max: list[tuple[str, float]]):
+    """The night check (nightly.py, as the engine runs it) for --as-of `as_of` over one door's battery reading
+    `reading` now, with these hourly maxima in its statistics; one store across nights (tmp/s.sqlite)."""
+    from vesta_shared.knowledge_pack import KnowledgePack
+    fx = tmp / f"fx-{as_of}"
+    fx.mkdir(parents=True, exist_ok=True)
+    (fx / "states.json").write_text(json.dumps({"states": {"sensor.door_battery": {
+        "state": reading, "attributes": {"friendly_name": "Door Battery", "unit_of_measurement": "%"},
+        "last_changed": f"{as_of}T20:00:00+00:00"}}}))
+    (fx / "stats_hour_door.json").write_text(json.dumps({"period_type": "hour", "entities": [
+        {"entity_id": "sensor.door_battery", "statistics": [
+            {"start": int(datetime.fromisoformat(t).timestamp() * 1000), "max": v} for t, v in hourly_max]}]}))
+    pack = KnowledgePack(villa="V", time_zone="UTC", generated_at="", ha_version=None, families={"battery": [
+        {"entity_id": "sensor.door_battery", "name": "Door Battery", "device_id": "door", "asset": "door",
+         "family": "battery", "platform": "zigbee", "unit": "%"}]},
+        assets={}, areas=[], people=[], channels={}, unknown_area=[], unclassified=[], retention={},
+        devices={"door": {"name": "Guest Door"}}, entity_devices={"sensor.door_battery": "door"})
+    path = str(tmp / "pack.json")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(pack.to_json())
+    r = subprocess.run([sys.executable, os.path.join(STARTER_SKILLS, "preventive-maintenance", "scripts", "nightly.py"),
+                        "--pack", path, "--store", str(tmp / "s.sqlite"), "--fixture-dir", str(fx), "--skip-raw",
+                        "--as-of", as_of, "--out", str(tmp / "res.json")],
+                       capture_output=True, text=True, env={**os.environ, "PYTHONPATH": PYTHONPATH})
+    assert r.returncode == 0, r.stderr
+    return pack
+
+
+def _page_battery(tmp, pack, now: datetime) -> tuple[int | None, str | None]:
+    """The weekly page's battery cell (facts.s_batteries) over the night's store, its reading now as the store's
+    night left it."""
+    import facts
+    from zoneinfo import ZoneInfo
+    from vesta_shared.params import VillaParams
+    from vesta_shared.store import Store
+    st = Store(str(tmp / "s.sqlite"))
+    c = facts.Ctx.__new__(facts.Ctx)
+    c.pack, c.Z, c.end, c.now = pack, ZoneInfo("UTC"), now.date(), now
+    c.need = lambda *p: 8
+    c.store = st
+    c.tasks = lambda: [{"rule_id": f["rule_id"], "entity_id": f["entity_id"], "title": f["summary"]}
+                       for f in st.findings("open")]
+    c._states = {"sensor.door_battery": {"state": "8"}}
+    c.params = lambda: VillaParams()
+    (row,) = facts.s_batteries(c)["rows"]
+    return row["pct"], row.get("night")
+
+
+def test_the_report_shows_the_level_the_last_night_judged_not_one_kept_from_weeks_before(tmp_path):
+    """Review, 2026-10-23: the record of rested levels was merged and never dated. A night that read no hourly
+    statistics for a battery left the 50 % of weeks before; the night judged its last report, 8 %, "replace now",
+    and the weekly page showed 50 % beside it. The page shows what the last night judged."""
+    from vesta_shared import battery
+    from vesta_shared.store import Store
+    pack = _battery_night(tmp_path, "2026-10-01", "48", [("2026-10-01T12:00:00+00:00", 50.0)])
+    assert _page_battery(tmp_path, pack, datetime(2026, 10, 2, 8, tzinfo=timezone.utc))[0] == 50   # its rested level
+    _battery_night(tmp_path, "2026-10-20", "8", [("2026-10-01T12:00:00+00:00", 50.0)])            # no rows in its window
+    assert battery.CRIT in {f["rule_id"] for f in Store(str(tmp_path / "s.sqlite")).findings("open")}
+    pct, night = _page_battery(tmp_path, pack, datetime(2026, 10, 21, 8, tzinfo=timezone.utc))
+    assert pct == 8 and night                                            # 8 %, beside the night's "replace"
+
+
+def test_the_five_minute_recheck_keeps_the_level_it_judged_too(tmp_path):
+    """The recheck judges its open faults' batteries the night's way (nightly.battery_findings): the level it judged
+    (the higher of its best and its reading) is the one the page shows, dated as the recheck's."""
+    from vesta_shared import battery
+    from vesta_shared.store import Store
+    _battery_night(tmp_path, "2026-10-20", "12", [])
+    st = Store(str(tmp_path / "s.sqlite"))
+    assert battery.LOW in {f["rule_id"] for f in st.findings("open")}
+    fx = tmp_path / "fx-recheck"
+    fx.mkdir()
+    now = datetime(2026, 10, 21, 9, tzinfo=timezone.utc)
+    (fx / "states.json").write_text(json.dumps({"states": {"sensor.door_battery": {
+        "state": "8", "attributes": {"unit_of_measurement": "%"}, "last_changed": now.isoformat()}}}))
+    # its hourly best lower than its reading now (changed since): judged on the reading, and that is what is kept
+    (fx / "stats_hour_door.json").write_text(json.dumps({"period_type": "hour", "entities": [
+        {"entity_id": "sensor.door_battery", "statistics": [
+            {"start": int((now - timedelta(hours=2)).timestamp() * 1000), "max": 5.0}]}]}))
+    r = subprocess.run([sys.executable, os.path.join(STARTER_SKILLS, "preventive-maintenance", "scripts", "recheck.py"),
+                        "--pack", str(tmp_path / "pack.json"), "--store", str(tmp_path / "s.sqlite"),
+                        "--fixture-dir", str(fx), "--now", now.isoformat()],
+                       capture_output=True, text=True, env={**os.environ, "PYTHONPATH": PYTHONPATH}, timeout=60)
+    assert r.returncode == 0, r.stderr
+    assert Store(str(tmp_path / "s.sqlite")).cache_get(battery.RESTED)["sensor.door_battery"] == {
+        "level": 8.0, "at": now.isoformat()}
+
+
+def test_a_judged_level_stands_only_while_it_is_the_last_nights():
+    from datetime import datetime as dt
+    from vesta_shared import battery
+
+    class St(dict):
+        cache_get = dict.get
+
+        def cache_put(self, k, v):
+            self[k] = v
+    night = dt(2026, 10, 3, 2, tzinfo=timezone.utc)
+    s = St()
+    battery.keep_judged(s, {"sensor.a": 50.0, "sensor.b": None}, night)
+    assert battery.rested(s, "sensor.a", 1.0, night + timedelta(hours=20)) == 50.0
+    assert battery.rested(s, "sensor.a", 1.0, night + timedelta(hours=battery.JUDGED_HOURS + 1)) == 1.0   # a night missed
+    assert battery.rested(s, "sensor.b", 7.0, night + timedelta(hours=1)) == 7.0          # judged with no reading
+    assert battery.rested(s, "sensor.a", None, night) is None
+
+
+def test_an_undated_record_from_before_neither_crashes_nor_comes_back():
+    """The villa's store holds the old record ({entity: value}, no date): never read as the night's, dropped on the
+    next write."""
+    from datetime import datetime as dt
+    from vesta_shared import battery
+
+    class St(dict):
+        cache_get = dict.get
+
+        def cache_put(self, k, v):
+            self[k] = v
+    s = St({battery.RESTED: {"sensor.a": 50.0, "sensor.b": 60.0, "sensor.c": "x"}})
+    now = dt(2026, 10, 3, 2, tzinfo=timezone.utc)
+    assert battery.rested(s, "sensor.a", 8.0, now) == 8.0
+    battery.keep_judged(s, {"sensor.b": 9.0}, now)
+    assert s[battery.RESTED] == {"sensor.b": {"level": 9.0, "at": now.isoformat()}}
+    assert battery.rested(s, "sensor.a", 8.0, now) == 8.0 and battery.rested(s, "sensor.b", 8.0, now) == 9.0

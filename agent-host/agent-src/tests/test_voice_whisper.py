@@ -179,13 +179,14 @@ def test_whispers_french_words_reach_the_ai_and_the_villa_is_not_asked(tmp_path)
     assert not os.listdir(os.path.join(v.s.out_dir, "voice"))          # the voice is not kept
 
 
-@pytest.mark.parametrize("answer", ["close", {"text": ""}])
-def test_whisper_saying_nothing_takes_the_villas_path(tmp_path, answer):
+@pytest.mark.parametrize("answer, why", [("close", "WyomingError"), ({"text": ""}, "no words")])
+def test_whisper_saying_nothing_takes_the_villas_path(tmp_path, answer, why):
     conversed, asked, rec, v, _ = through_agent(tmp_path, {}, answer, (415, 200))
     assert asked == ["auto", "fr"] and [t["text"] for t in conversed] == ["words in fr"] and conversed[0]["spoken"] is None
     assert rec["via"] == "villa" and rec["auto_refused"] and rec["used"] == "fr"
+    # closed before its transcript (a broken answer) and an empty transcript (heard, no words) are told apart
     assert [(a["via"], a["language"], a["why"]) for a in rec["attempts"]] == [
-        ("whisper", "auto", "WyomingError"), ("villa", "auto", "refused (415)"), ("villa", "fr", None)]
+        ("whisper", "auto", why), ("villa", "auto", "refused (415)"), ("villa", "fr", None)]
 
 
 def test_whisper_unreachable_takes_the_villas_path(tmp_path):

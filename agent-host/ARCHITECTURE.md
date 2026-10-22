@@ -654,6 +654,13 @@ then fixed with the probe's scenarios as the tests. Decided:
 - **`vesta_shared/battery.py`** owns a battery's charge (`charge`; device_state.battery_charge is a re-export for a
   villa-edited skill), its projection (`projection(points, floor_pct, level)`, the floor the caller's setting) and the
   rule ids the reports read (CRIT, LOW, TREND, REPLACE) — kept out of result.py on purpose (one owner per subject).
+- **The level the night judged, dated** (review, 2026-10-23, 0.12.325): `battery.RESTED` holds {entity: {"level",
+  "at"}}, written ONLY by `nightly.battery_findings(..., at=)` (the night and the recheck): the level each battery was
+  judged with (the higher of its window's best and its reading; None with no reading). `battery.rested(store, eid,
+  now, at)` uses it while within `JUDGED_HOURS` (36 h: the night's daily cadence plus one run late), the higher of it
+  and the reading now, else the reading now. Before, the window's best was merged and never dated: a night with no
+  hourly statistics kept weeks-old 50 % on the page beside the night's 8 % "replace now". The old undated entries are
+  never read and are dropped at the next write.
 - **A retired setting is named**: a skill file's `retired: {dotted.path: what decides it now}`;
   `skill_settings.retired` gives one sentence per key a villa.<file> still sets. Callers: facts (the report's problems),
   investigate main (`settings_not_used` + stderr). reports.yaml `retired_kinds` does the same for a playbook `when` kind.
@@ -896,7 +903,7 @@ still off; an investigation calling a sensor with no value "stopped reporting").
   told when no attempt gives words (no speech-to-text could be chosen, Whisper alone planned).
 - **`transcriber.Transcriber`** runs the attempts in order through `WhisperDirect` (`wyoming.py`: framing, every
   address IPv4 first) and `VillaSpeech` (POST /api/stt, the token), one interface `attempt(step, audio, seconds) ->
-  Heard | why`, and stops at the first words. A plan's attempt is shape-checked (`step_of`: host:port, `stt.*`,
+  Heard | Missed(kind, why)` (0.12.325), and stops at the first words. A plan's attempt is shape-checked (`step_of`: host:port, `stt.*`,
   LANGUAGE); one it cannot run is recorded with why, never guessed.
 - **One clock**: `voice.timeout_s` (120 s, lo 20, hi 600) starts when the audio is fetched: the skill's script gets
   what is left (whole seconds), then each attempt. `voice.whisper_connect_s` only caps the connection wait, never
@@ -920,3 +927,9 @@ still off; an investigation calling a sensor with no value "stopped reporting").
   words for none/several, else `otherwise`, else UNHEARD. Before, the script's read failing ended the message before
   Whisper was tried. `wyoming._connect(host, port, deadline, connect_s)`: the lookup and each address get
   min(connect_s, what is left), recomputed (two silent addresses overran the clock).
+- **What the person reads follows each attempt's kind** (review, 2026-10-23, 0.12.325): an attempt answers
+  `Missed(kind, why)`, kind `NOTHING` (a transcriber answered with no words: `wyoming.NoWords`, /api/stt "success" with
+  an empty text), `FAILED`, `REFUSED`, `UNFOUND`. If any attempt is NOTHING the person reads `otherwise` or UNHEARD,
+  never the `no_stt` setup words; those only when nothing could have written the message out. The refusal memory and
+  `auto_refused` read the kind (the string matching `refused()`/`REFUSED_BEFORE` is gone). The record is unchanged
+  in shape; Whisper's empty transcript is now why "no words" (was "WyomingError", like a broken answer).

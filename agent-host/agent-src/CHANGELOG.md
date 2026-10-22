@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.6.315 (23 October 2026)
+
+- A voice note Whisper heard but found no words in is "could not make out", never the speech-to-text setup sentence.
+  Each attempt now answers `Missed(kind, why)` (kinds `NOTHING`, `FAILED`, `REFUSED`, `UNFOUND`) instead of a bare
+  string; `wyoming.NoWords` (a `WyomingError`) is an empty transcript, told apart from a broken or closed answer, and
+  /api/stt answering "success" with an empty text is `NOTHING` too. `Transcriber.run` gives the plan's `no_stt` words
+  only when no attempt reached a transcriber that heard nothing. Before, every Whisper failure was its exception's
+  name and the sentence followed the villa's lookup alone: a silent note, with two (or no) speech-to-text services,
+  told the person to name one in villa.voice.yaml. The refusal memory and `auto_refused` read the kind:
+  `refused()`, `refusal()` and `REFUSED_BEFORE` are gone; the 400/415 statuses are `REFUSED_STATUS`. The record keeps
+  its fields; Whisper's empty transcript is now why "no words" (was "WyomingError").
+- The weekly report shows a battery at the level the last night judged. `battery.RESTED` now holds {entity:
+  {"level", "at"}}, written only by `nightly.battery_findings(..., at=)` for the night and the recheck: the level each
+  battery was judged with (None when it had no reading). `battery.rested(store, eid, now, at)` uses it while it is no
+  older than `JUDGED_HOURS` (36 h), else the reading now. `keep_rested` is gone. Before, each window's best reading
+  was merged and never dated: a night with no hourly statistics for a battery kept the 50 % of weeks before, and the
+  page showed it beside the night's 8 % "replace now". An undated record from before is never read and is dropped
+  at the next write.
+- Tests: test_transcriber (heard nothing with two or no speech-to-text: "could not make out"; Whisper unreachable
+  and none: the setup words; the kind decides across the plan; /api/stt empty text; `all_entity_ids(fresh=True)` on
+  the real client); test_reports (two real nights then the page, the recheck's kept level, a judged level ageing out,
+  the undated record); `stt_fake.FakeSTT` answers `("json", body)`. Changed where they pinned the old collapse:
+  test_voice_whisper's empty transcript why, test_transcriber's recording adapters answer `Missed`, test_reports'
+  kept record is dated.
+
 ## 0.6.314 (23 October 2026)
 
 - Whisper is tried even when the villa's device list cannot be read. villa-concierge `voice.py` no longer reads the

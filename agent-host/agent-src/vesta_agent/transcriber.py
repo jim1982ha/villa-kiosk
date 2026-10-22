@@ -26,7 +26,7 @@ ambiguous lookup is that attempt's why, and when nothing gives words the person 
 for "none" or "several".
 
 and `Transcriber` runs the attempts in order through two adapters with one interface (`attempt(step, audio,
-seconds) -> Heard | why`): `WhisperDirect` (wyoming.py) and `VillaSpeech` (POST /api/stt/<entity>, the agent's
+seconds) -> Heard | Missed`): `WhisperDirect` (wyoming.py) and `VillaSpeech` (POST /api/stt/<entity>, the agent's
 token, the one Home Assistant call HA MCP cannot make; it changes nothing in the villa). It stops at the first words.
 ONE limit, `voice.timeout_s`, covers the whole message (the skill preparing the audio, then every attempt): each
 attempt gets what is left, so a slow Whisper leaves the villa's system only the rest and the total never exceeds it.
@@ -36,6 +36,14 @@ What the villa's system REFUSED (415/400: this speech-to-text does not take that
 while the app runs: `Transcriber.refused` holds (entity, language), and that attempt is skipped ("refused before"),
 so after one refusal of "auto" the fallback goes straight to the saved language. A restart forgets it (the villa
 may have changed its speech-to-text meanwhile); one refused request is all it costs.
+
+⚠️ WHAT THE PERSON READS FOLLOWS WHAT HAPPENED, NOT A STRING (review, 2026-10-23). Every failure of Whisper was
+collapsed to its exception's name, so "Whisper reached, heard no words" read like "Whisper out of reach", and the
+person's sentence was chosen only from the villa's lookup: a silent note Whisper had heard, in a villa with two
+speech-to-text services, told the person to name one in villa.voice.yaml. Now each attempt answers a `Missed` with
+its kind (heard nothing / failed / refused / unfound) and its words for the record; when ANY attempt reached a
+transcriber that heard nothing, the person reads "could not make out" (or the plan's `otherwise`), and the plan's
+`no_stt` words only when nothing could have written the message out. A refusal is remembered from its kind too.
 
 ONE record per message, kind "voice": via, used, detected, auto_refused, every attempt with why it gave no words,
 the seconds taken. Never the words, the audio, an address or the token.
@@ -65,7 +73,7 @@ STT_ENTITY = re.compile(r"^stt\.[a-z0-9_]+$")
 LANGUAGE = re.compile(r"^(auto|[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})?)$")
 # What Home Assistant answers when the speech-to-text does not take this language or format: 415 when the
 # speech-to-text refuses the metadata (check_metadata), 400 when the header itself is not accepted.
-REFUSED = (400, 415)
+REFUSED_STATUS = (400, 415)
 CONTENT = "format=wav; codec=pcm; sample_rate={rate}; bit_rate={bits}; channel={channels}; language={language}"
 UNHEARD = "I could not make out this voice message. Try again, or write it."
 
@@ -94,6 +102,20 @@ class Heard(NamedTuple):
 class Unheard(NamedTuple):
     """No words: what the person reads instead."""
     say: str
+
+
+#: Why an attempt gave no words, its `Missed.kind`:
+NOTHING = "heard nothing"   # a transcriber was reached and answered, with no words (a silent or mumbled note)
+FAILED = "failed"           # not reached, no answer in time, a broken answer, an error, a plan the engine cannot run
+REFUSED = "refused"         # the villa's system refused this language or format (now, or before while the app runs)
+UNFOUND = "unfound"         # no speech-to-text to ask: the villa's only one is none, several or not listed
+
+
+class Missed(NamedTuple):
+    """An attempt that gave no words: its kind (above) and why, in a few words for the record (never an address or
+    the words)."""
+    kind: str
+    why: str
 
 
 class Unfound(NamedTuple):
@@ -149,19 +171,21 @@ def step_of(raw) -> Step | str:
 
 
 class Adapter(Protocol):
-    async def attempt(self, step: Step, audio: Audio, seconds: float) -> Heard | str: ...
+    async def attempt(self, step: Step, audio: Audio, seconds: float) -> Heard | Missed: ...
 
 
 class WhisperDirect:
     """The Whisper app over Wyoming (no token)."""
 
-    async def attempt(self, step: Step, audio: Audio, seconds: float) -> Heard | str:
+    async def attempt(self, step: Step, audio: Audio, seconds: float) -> Heard | Missed:
         fmt = {"rate": audio.rate, "width": audio.width, "channels": audio.channels}
         try:
             got = await asyncio.to_thread(wyoming.transcribe, wyoming.address(step.target), audio.pcm, fmt,
                                           time.monotonic() + seconds, connect_s(), step.language)
+        except wyoming.NoWords:
+            return Missed(NOTHING, "no words")
         except (OSError, wyoming.WyomingError, ValueError) as e:
-            return type(e).__name__           # a kind of failure, never an address or the words
+            return Missed(FAILED, type(e).__name__)       # a kind of failure, never an address or the words
         said = str(got.get("language") or "")
         return Heard(got["text"], said if LANGUAGE.match(said) and said != "auto" else None)
 
@@ -195,14 +219,14 @@ class VillaSpeech:
             return Unfound("none", "no speech-to-text in the villa's system")
         return Unfound("several", f"{len(found)} speech-to-text services, none named")
 
-    async def attempt(self, step: Step, audio: Audio, seconds: float) -> Heard | str:
+    async def attempt(self, step: Step, audio: Audio, seconds: float) -> Heard | Missed:
         if not (self.s.ha_url and self.s.ha_token):
-            return "no address or token for the villa's system"
+            return Missed(FAILED, "no address or token for the villa's system")
         try:
             with open(audio.path, "rb") as f:
                 body = f.read()
         except OSError:
-            return "the skill wrote no WAV"
+            return Missed(FAILED, "the skill wrote no WAV")
         h = {**self.headers, "Authorization": f"Bearer {self.s.ha_token}", "Content-Type": "audio/wav",
              "X-Speech-Content": CONTENT.format(rate=audio.rate, bits=audio.width * 8, channels=audio.channels,
                                                 language=step.language)}
@@ -210,29 +234,20 @@ class VillaSpeech:
             async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=seconds)) as http:
                 async with http.post(f"{self.s.ha_url.rstrip('/')}/api/stt/{step.target}", data=body,
                                      headers=h) as r:
-                    if r.status in REFUSED:
-                        return refusal(r.status)
+                    if r.status in REFUSED_STATUS:
+                        return Missed(REFUSED, f"refused ({r.status})")
                     if r.status != 200:
-                        return f"answered {r.status}"
+                        return Missed(FAILED, f"answered {r.status}")
                     data = await r.json(content_type=None)
         except Exception as e:  # noqa: BLE001 — never the URL or the token: only what kind of failure
-            return type(e).__name__
+            return Missed(FAILED, type(e).__name__)
         text = str((data or {}).get("text") or "").strip()
-        if (data or {}).get("result") != "success" or not text:
-            return f"no words ({(data or {}).get('result') or 'no result'})"
+        result = (data or {}).get("result")
+        if result == "success" and not text:        # its speech-to-text answered: it heard no words
+            return Missed(NOTHING, "no words (success)")
+        if result != "success":
+            return Missed(FAILED, f"no words ({result or 'no result'})")
         return Heard(text)
-
-
-def refusal(status: int) -> str:
-    return f"refused ({status})"
-
-
-def refused(why) -> bool:
-    """Whether an attempt's why-not is the villa's system refusing the language or format."""
-    return why in {refusal(s) for s in REFUSED}
-
-
-REFUSED_BEFORE = "refused before"
 
 
 class Transcriber:
@@ -247,6 +262,7 @@ class Transcriber:
         """The first words of the plan's attempts, each given what is left before `deadline` (time.monotonic());
         when none gives words, what the person reads instead. Writes the one "voice" record and the one log line."""
         tried: list[dict] = []
+        missed: list[tuple[Step | None, Missed]] = []     # beside `tried`: each attempt's kind, which the record omits
         heard: Heard | None = None
         done: Step | None = None
         only: str | Unfound | None = None       # the villa's only speech-to-text, looked up once for this message
@@ -260,6 +276,7 @@ class Transcriber:
             step = step_of(raw)
             if isinstance(step, str):
                 tried.append({"via": None, "stt": None, "language": None, "why": step})
+                missed.append((None, Missed(FAILED, step)))
                 why = step
                 continue
             left = deadline - time.monotonic()
@@ -273,24 +290,24 @@ class Transcriber:
             row = {"via": step.via, "stt": step.target if step.via == "villa" else None,
                    "language": step.language or "auto"}
             if step.via == "villa" and step.target is None:
-                got = only.why if isinstance(only, Unfound) else "no time left"
+                got = Missed(UNFOUND, only.why) if isinstance(only, Unfound) else Missed(FAILED, "no time left")
             elif step.via == "villa" and (step.target, step.language) in self.refused:
-                got = REFUSED_BEFORE
+                got = Missed(REFUSED, "refused before")
             elif left <= 0:
-                got = "no time left"
+                got = Missed(FAILED, "no time left")
             else:
                 got = await self.adapters[step.via].attempt(step, audio, left)
             if isinstance(got, Heard):
                 tried.append({**row, "why": None})
                 heard, done = got, step
                 break
-            if step.via == "villa" and refused(got):
+            if step.via == "villa" and got.kind == REFUSED:
                 self.refused.add((step.target, step.language))
-            tried.append({**row, "why": got})
-            why = got
-        auto_refused = any(t["via"] == "villa" and t["language"] == "auto" and (refused(t["why"]) or
-                                                                                 t["why"] == REFUSED_BEFORE)
-                           for t in tried)
+            tried.append({**row, "why": got.why})
+            missed.append((step, got))
+            why = got.why
+        auto_refused = any(s is not None and s.via == "villa" and s.language == "auto" and m.kind == REFUSED
+                           for s, m in missed)
         took = round(time.monotonic() - started, 1)
         rec = {"chat": cid, "seconds": plan.get("seconds"), "took": took,
                "via": done.via if done else None, "stt": done.target if done and done.via == "villa" else None,
@@ -304,8 +321,11 @@ class Transcriber:
                  "; ".join(f"{_name(t)}: {t['why'] or 'words'}" for t in tried) or why)
         if heard:
             return heard
+        # A transcriber that heard the message and found no words: the person's note, not the villa's setup. The
+        # setup words only when nothing could have written it out.
         words = plan.get("no_stt") if isinstance(plan.get("no_stt"), dict) else {}
-        said = words.get(only.kind) if isinstance(only, Unfound) else None
+        heard_nothing = any(m.kind == NOTHING for _, m in missed)
+        said = words.get(only.kind) if isinstance(only, Unfound) and not heard_nothing else None
         return Unheard(str(said or plan.get("otherwise") or UNHEARD))
 
 
@@ -327,5 +347,5 @@ def script_seconds(deadline: float) -> int:
     return max(1, math.floor(deadline - time.monotonic()))
 
 
-__all__ = ["Transcriber", "Heard", "Unheard", "Step", "villa_entity_ids", "Audio", "step_of", "timeout_s",
-           "script_seconds", "UNHEARD"]
+__all__ = ["Transcriber", "Heard", "Unheard", "Missed", "NOTHING", "FAILED", "REFUSED", "UNFOUND", "Step",
+           "villa_entity_ids", "Audio", "step_of", "timeout_s", "script_seconds", "UNHEARD"]

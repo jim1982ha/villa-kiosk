@@ -5,7 +5,8 @@ port, in its own thread, so the header the villa's system reads is the one check
 
     with FakeSTT([415, 200]) as stt:      # answers in turn; the last one repeats
         v.s.ha_url = stt.url
-`answers`: a status (200: "words in <language>"), or ("slow", seconds) — 200 after that wait.
+`answers`: a status (200: "words in <language>"), ("slow", seconds) — 200 after that wait, or ("json", body) — 200
+with that body (an empty text, an error result).
 `asked`: (entity, language) of each request, in order; `contents`: each X-Speech-Content header.
 """
 from __future__ import annotations
@@ -76,6 +77,8 @@ class FakeSTT:
         self.asked.append((request.match_info["entity"], lang))
         await request.read()
         answer = self.answers[min(len(self.asked), len(self.answers)) - 1]
+        if isinstance(answer, tuple) and answer[0] == "json":
+            return web.json_response(answer[1])
         if isinstance(answer, tuple) and answer[0] == "slow":
             await asyncio.sleep(answer[1])
             answer = 200

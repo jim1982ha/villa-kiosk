@@ -540,7 +540,7 @@ def s_batteries(c: Ctx) -> dict:
         # a device asleep with no report in days (vesta_shared.asleep): said, with its last known charge if one was read
         quiet = unheard(st, c.now)
         # its rested level, as the night check judged it (battery.rested), never a dip of the moment
-        v = battery.rested(c.store, r["entity_id"], _num(last_value(st)))
+        v = battery.rested(c.store, r["entity_id"], _num(last_value(st)), c.now)
         unit = (r.get("unit") or "%").strip()
         pct = battery_pct(c, r, v)
         if pct is None and not quiet:

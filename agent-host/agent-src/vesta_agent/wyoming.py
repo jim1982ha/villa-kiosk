@@ -26,6 +26,12 @@ class WyomingError(Exception):
     """Whisper answered something that is not a Wyoming event, or closed before its transcript."""
 
 
+class NoWords(WyomingError):
+    """Whisper was reached and answered its transcript, with no words in it (a silent or mumbled note): unlike every
+    other WyomingError, a transcriber that heard the message (transcriber.py tells the person "could not make out",
+    never "set up a speech-to-text")."""
+
+
 def address(text) -> tuple[str, int]:
     """(host, port) of "host:port"; ValueError for anything else."""
     m = ADDRESS.match(str(text or ""))
@@ -124,7 +130,8 @@ def transcribe(where: tuple[str, int], pcm: bytes, fmt: dict, deadline: float, c
                language: str | None = None) -> dict:
     """{"text": …, "language"?: …} from Whisper over Wyoming, before `deadline` (time.monotonic()). `fmt`: the
     audio's {"rate", "width", "channels"}. No language sent: Whisper's own setting applies (configured "auto": it
-    finds the one spoken). Raises OSError (no route, refused, timeout) or WyomingError (not Wyoming, no words).
+    finds the one spoken). Raises OSError (no route, refused, timeout), NoWords (its transcript is empty) or
+    WyomingError (not Wyoming, closed before its transcript).
 
     The `transcript` event of the villa's Whisper carries NO language (measured 2026-10-23: its log said "Detected
     language 'fr'", its answer did not); one that does is passed on."""
@@ -151,7 +158,7 @@ def transcribe(where: tuple[str, int], pcm: bytes, fmt: dict, deadline: float, c
             if ev["type"] == "transcript":      # transcript-start, -chunk, info…: not the answer
                 text = str(ev["data"].get("text") or "").strip()
                 if not text:
-                    raise WyomingError("Whisper heard no words")
+                    raise NoWords("Whisper heard no words")
                 said = ev["data"].get("language")
                 return {"text": text, **({"language": str(said)} if said else {})}
     finally:

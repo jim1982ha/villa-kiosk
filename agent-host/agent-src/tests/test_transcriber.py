@@ -19,7 +19,7 @@ import pytest
 from helpers import voice_agent, voice_event, voice_record
 from stt_fake import FakeSTT
 from vesta_agent import transcriber, voice as voice_module
-from vesta_agent.transcriber import Heard, Transcriber, Unheard
+from vesta_agent.transcriber import Heard, Missed, Transcriber, Unheard
 from vesta_shared import limits
 from wyoming_fake import FakeWhisper
 
@@ -91,7 +91,7 @@ class Recording:
     async def attempt(self, step, audio, seconds):
         self.calls.append((step.via, step.target, step.language, seconds))
         got = self.answers.get((step.via, step.language), "!no words")     # "!why": no words, and why
-        return got[1:] if got.startswith("!") else Heard(got)
+        return Missed(transcriber.FAILED, got[1:]) if got.startswith("!") else Heard(got)
 
 
 class Records:
@@ -131,7 +131,7 @@ def test_each_attempt_gets_what_is_left(tmp_path):
         async def attempt(self, step, audio, seconds):
             await super().attempt(step, audio, seconds)
             await asyncio.sleep(0.5)
-            return "no words"
+            return Missed(transcriber.FAILED, "no words")
     rec = Slow({})
     t = Transcriber(None, Records(), adapters={"whisper": rec, "villa": rec})
     run(t, plan(tmp_path, [{"whisper": "w:1"}, {"stt": "stt.a", "language": "fr"}]), seconds=3)
@@ -244,3 +244,79 @@ def test_whisper_silent_and_no_one_speech_to_text_the_person_is_told_why(tmp_pat
     said, rec, v, villa, stt = unnamed(tmp_path, monkeypatch, ids, "close")
     assert said == [] and stt.asked == [] and villa.asked == 1 and v.tg.sent[-1][1].startswith(says)
     assert [a["why"] for a in rec["attempts"]] == ["WyomingError", why, why] and rec["why"] == why
+
+
+# ------------------------------------------------------------------ heard nothing is not "set up a speech-to-text"
+SETUP = ("The villa's system has several speech-to-text services", "Voice messages need a speech-to-text service")
+
+
+@pytest.mark.parametrize("ids", [["stt.a", "stt.b"], []])
+def test_a_note_whisper_heard_with_no_words_is_not_told_to_set_up_a_speech_to_text(tmp_path, monkeypatch, ids):
+    """Review, 2026-10-23: every failure of Whisper was its exception's name, and the person's sentence followed the
+    villa's lookup alone: a silent note Whisper HEARD, in a villa with two (or no) speech-to-text services, told the
+    person to name one in villa.voice.yaml. Whisper answered: the person could not be made out, nothing to set up."""
+    said, rec, v, villa, stt = unnamed(tmp_path, monkeypatch, ids, {"text": ""})
+    assert said == [] and stt.asked == [] and v.tg.sent[-1][1] == transcriber.UNHEARD
+    assert not v.tg.sent[-1][1].startswith(SETUP)
+    # the record still says why each attempt gave no words, its shape unchanged
+    assert [a["why"] for a in rec["attempts"]][0] == "no words" and set(rec["attempts"][0]) == {
+        "via", "stt", "language", "why"}
+
+
+def test_whisper_out_of_reach_and_no_speech_to_text_the_person_is_still_told_to_set_one_up(tmp_path, monkeypatch):
+    from vesta_shared.ha_client import McpClient
+    monkeypatch.setattr(voice_module, "timeout_s", lambda: BUDGET)
+    villa = Villa([])
+    v = voice_agent(tmp_path, {"whisper": "127.0.0.1:9"}, stt=None, reader=McpClient(session=villa))
+    asyncio.run(v.on_ha_event("telegram_attachment", voice_event()))
+    rec = voice_record(v)
+    assert v.tg.sent[-1][1].startswith(SETUP[1]) and rec["attempts"][0]["why"] == "ConnectionRefusedError"
+
+
+def test_a_transcriber_that_heard_nothing_anywhere_in_the_plan_decides_the_words(tmp_path):
+    """The kind, not a string: Whisper unreachable, then a named speech-to-text that answered with no words, then the
+    villa's only one not found: the person reads "could not make out" (or the plan's otherwise)."""
+    class Answers:
+        def __init__(self, got):
+            self.got = got
+
+        async def attempt(self, step, audio, seconds):
+            return self.got
+
+        async def only(self, seconds):
+            return transcriber.Unfound("several", "2 speech-to-text services, none named")
+    p = {**plan(tmp_path, [{"whisper": "w:1"}, {"stt": "stt.a", "language": "fr"}, {"stt": None, "language": "fr"}]),
+         "no_stt": {"several": "set one up"}}
+    for villa_says, person in ((Missed(transcriber.NOTHING, "no words (success)"), transcriber.UNHEARD),
+                               (Missed(transcriber.FAILED, "answered 500"), "set one up")):
+        t = Transcriber(None, Records(), adapters={"whisper": Answers(Missed(transcriber.FAILED, "OSError")),
+                                                   "villa": Answers(villa_says)})
+        assert run(t, p) == Unheard(person)
+        assert run(t, {**p, "otherwise": "say it again"}) == Unheard("say it again" if villa_says.kind ==
+                                                                     transcriber.NOTHING else "set one up")
+
+
+def test_the_villas_speech_to_text_answering_no_words_is_heard_nothing(tmp_path):
+    """POST /api/stt answering success with an empty text: its speech-to-text heard the message; an error result is a
+    failure (the record keeps both whys as before)."""
+    import types
+    from vesta_agent.transcriber import Audio, Step, VillaSpeech
+    w = plan(tmp_path, [])["wav"]
+    for body, kind, why in (({"result": "success", "text": " "}, transcriber.NOTHING, "no words (success)"),
+                            ({"result": "error"}, transcriber.FAILED, "no words (error)")):
+        with FakeSTT([("json", body)]) as stt:
+            s = types.SimpleNamespace(ha_url=stt.url, ha_token="t")
+            got = asyncio.run(VillaSpeech(s).attempt(Step("villa", "stt.a", "fr"), Audio.read(w), 5))
+        assert got == Missed(kind, why)
+
+
+def test_a_fresh_read_of_the_villas_devices_sees_one_added_since(monkeypatch):
+    """The real client: the agent's reader keeps its device list for the app's life; the voice path asks it with
+    fresh=True (villa_entity_ids) so a speech-to-text added since the agent started is found."""
+    from vesta_shared.ha_client import McpClient
+    villa = Villa(["light.x"])
+    reader = McpClient(session=villa)
+    assert reader.all_entity_ids() == ["light.x"]
+    villa.ids = ["light.x", "stt.added"]
+    assert reader.all_entity_ids() == ["light.x"]                      # kept, not read again
+    assert transcriber.villa_entity_ids(reader) == ["light.x", "stt.added"] and villa.asked == 2

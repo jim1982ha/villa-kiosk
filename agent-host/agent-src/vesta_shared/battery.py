@@ -9,6 +9,8 @@ caller's setting, passed in: none is defaulted here.
 """
 from __future__ import annotations
 
+from datetime import datetime, timedelta
+
 from .stats import slope_per_hour
 
 #: The night check's battery findings, which the reports read back (the page's "replace" / "watch").
@@ -41,23 +43,54 @@ def projection(points: list[tuple[float, float]], floor_pct: float, level: float
     return {"per_day": per_day, "days_left": (now - floor_pct) / -per_day if per_day < 0 else None}
 
 
-#: The store's record of each battery's rested level as the night check last judged it (preventive-maintenance
-#: nightly.battery_best: its highest reading of the window) — {entity: value in its own unit}.
+#: The store's record of each battery's level as the night check last JUDGED it, with when — {entity: {"level": value
+#: in its own unit, or None when it was judged with no reading, "at": ISO time}}. Written ONLY by the judging itself
+#: (preventive-maintenance nightly.battery_findings, for the night and the 5-minute recheck alike).
 #: ⚠️ ONE LEVEL ON EVERY PAGE (architecture review, 2026-10-22): the weekly page printed a battery's reading of the
 #: moment, so a coin cell's 1 % dip between two readings near 50 % headed the list while the night check judged it 50 %.
+#: ⚠️ THE LEVEL JUDGED, DATED (review, 2026-10-23): the record kept each window's best reading, merged and never
+#: dated. A night with no hourly statistics for a battery (asleep, unavailable) left the weeks-old 50 % in place; the
+#: night judged its last report, 8 %, "replace now", and the weekly page printed 50 % beside it. Now the night stores
+#: the level it judged (the best or the reading, whichever it used), every battery it judged, with the time; a page
+#: uses it only while it is the last night's (JUDGED_HOURS), else the reading now.
 RESTED = "battery-rested"
+#: How long a judged level stands: the night check runs once a day; half a day more for one run late. A night missed
+#: (the agent off): the reading now. Not a villa setting, the night's own cadence.
+JUDGED_HOURS = 36
 
 
-def keep_rested(store, best: dict[str, float]) -> None:
-    """Record these rested levels (merged over the ones kept: a 5-minute look reads only its open faults' batteries)."""
-    if store is None or not best:
+def keep_judged(store, levels: dict[str, float | None], at: datetime) -> None:
+    """Record the level each of these batteries was judged with, at `at` (merged over the others: a 5-minute look
+    judges only its open faults' batteries). An entry of the old undated format ({entity: value}) is dropped: it can
+    never be told whether it is the last night's."""
+    if store is None or not levels or not hasattr(store, "cache_put"):
         return
-    store.cache_put(RESTED, {**(store.cache_get(RESTED) or {}), **{k: float(v) for k, v in best.items()}})
+    kept = {k: v for k, v in (store.cache_get(RESTED) or {}).items() if _dated(v)}
+    when = at.isoformat()
+    store.cache_put(RESTED, {**kept, **{k: {"level": None if v is None else float(v), "at": when}
+                                        for k, v in levels.items()}})
 
 
-def rested(store, entity_id: str, now: float | None) -> float | None:
-    """A battery's level as the night check judges it: its reading `now`, raised to the rested level it last kept
-    (a battery changed since reads higher now, and that reading stands). None when `now` is None."""
+def _dated(v) -> bool:
+    return isinstance(v, dict) and isinstance(v.get("at"), str)
+
+
+def rested(store, entity_id: str, now: float | None, at: datetime) -> float | None:
+    """A battery's level as the night check judged it: the level the last night judged (no older than JUDGED_HOURS
+    before `at`), its reading `now` when that is higher (a battery changed since) or when the night's is missing,
+    old, or was judged with no reading. None when `now` is None."""
+    if now is None:
+        return None
     get = getattr(store, "cache_get", None)              # a page drawn without the night's record: its reading
     kept = (get(RESTED) or {}).get(entity_id) if get is not None else None
-    return now if now is None or kept is None else max(now, float(kept))
+    if not _dated(kept) or kept.get("level") is None:
+        return now
+    try:
+        when = datetime.fromisoformat(kept["at"])
+        if when.tzinfo is None or at.tzinfo is None:
+            return now
+        fresh = timedelta(0) <= at - when <= timedelta(hours=JUDGED_HOURS)
+        level = float(kept["level"])
+    except (ValueError, TypeError):
+        return now
+    return max(now, level) if fresh else now
