@@ -82,6 +82,21 @@ def test_auto_sends_no_language_and_the_audio_in_framed_chunks():
     assert len(chunks) == -(-len(sound) // script.CHUNK)
 
 
+def test_a_name_with_a_refusing_address_first_reaches_the_one_that_listens(monkeypatch):
+    """The owner's villa, 2026-10-23: "Whisper directly: ConnectionRefusedError". The apps' network gives the Whisper
+    app's name an IPv6 address too, listed first, where Whisper does not listen; the villa's system, trying each
+    address, reached it. The script tries each too, IPv4 first."""
+    refusing = closed_port().rpartition(":")
+    with FakeWhisper(FRENCH) as w:
+        host, _, port = w.address.rpartition(":")
+        monkeypatch.setattr(script.socket, "getaddrinfo", lambda *a, **k: [
+            (socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("::1", int(refusing[2]), 0, 0)),
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", (refusing[0], int(refusing[2]))),
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", (host, int(port)))])
+        got = script.whisper(("core-whisper", 10300), pcm())
+    assert got == FRENCH
+
+
 def test_a_fixed_language_is_sent_when_asked():
     with FakeWhisper({"text": "guten Tag"}) as w:
         got = script.whisper(script.whisper_address(w.address), pcm(), language="de")

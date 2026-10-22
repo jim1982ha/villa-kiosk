@@ -169,14 +169,18 @@ def whisper_address(setting) -> tuple[str, int] | None:
     return host, int(port)
 
 
-def _resolve(host: str, port: int, timeout: float):
-    """The address, looked up within `timeout`: a name that no server answers for must not hold the message."""
+def _resolve(host: str, port: int, timeout: float) -> list[tuple]:
+    """Every address of the name, IPv4 first, looked up within `timeout`: a name that no server answers for must not
+    hold the message.
+
+    ⚠️ EVERY ADDRESS, NOT THE FIRST (owner's villa, 2026-10-23: "Whisper directly: ConnectionRefusedError"). The
+    apps' internal network gives a name an IPv6 address too, and Whisper listens on IPv4 only: the first address
+    found was refused while the villa's system, trying each in turn, reached it."""
     found: list = []
 
     def look():
         try:
-            addr = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)[0][4]
-            found.append((addr[0], addr[1]))      # an IPv6 sockaddr has four fields; a connection takes two
+            found.append(socket.getaddrinfo(host, port, type=socket.SOCK_STREAM))
         except OSError as e:
             found.append(e)
     t = threading.Thread(target=look, daemon=True)
@@ -186,7 +190,23 @@ def _resolve(host: str, port: int, timeout: float):
         raise TimeoutError("the name was not resolved in time")
     if isinstance(found[0], Exception):
         raise found[0]
-    return found[0]
+    infos = sorted(found[0], key=lambda i: i[0] != socket.AF_INET)
+    return [(i[0], i[4]) for i in infos]
+
+
+def _connect(host: str, port: int, timeout: float) -> socket.socket:
+    """The first of the name's addresses that accepts; the last refusal when none does."""
+    last: OSError | None = None
+    for family, addr in _resolve(host, port, timeout):
+        sock = socket.socket(family, socket.SOCK_STREAM)
+        sock.settimeout(timeout)
+        try:
+            sock.connect(addr)
+            return sock
+        except OSError as e:
+            sock.close()
+            last = e
+    raise last or OSError("the name has no address")
 
 
 def whisper(address: tuple[str, int], pcm: bytes, language: str | None = None,
@@ -205,7 +225,7 @@ def whisper(address: tuple[str, int], pcm: bytes, language: str | None = None,
         reached="The voice message goes through the villa's speech-to-text instead.", told="")
     deadline = time.monotonic() + total_s
     host, port = address
-    sock = socket.create_connection(_resolve(host, port, connect_s), timeout=connect_s)
+    sock = _connect(host, port, connect_s)
     try:
         sock.settimeout(max(0.1, deadline - time.monotonic()))
         fmt = {"rate": RATE, "width": 2, "channels": 1}

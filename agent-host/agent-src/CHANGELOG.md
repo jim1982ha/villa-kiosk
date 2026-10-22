@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.312 (23 October 2026)
+
+- Whisper asked directly tries every address of its name, IPv4 first (villa-concierge `voice.py` `_resolve` and
+  `_connect`). Measured on the owner's villa: "Whisper directly: ConnectionRefusedError". The apps' network also gives
+  the name an IPv6 address, listed first, where Whisper does not listen; only the first address was tried, while the
+  villa's system, trying each, reached it. Test: a refusing address listed first, then the one that listens.
+
 ## 0.6.311 (23 October 2026)
 
 - A voice message reaches Whisper directly (owner, 2026-10-22, "the Agent asks Whisper directly"): villa-concierge's
