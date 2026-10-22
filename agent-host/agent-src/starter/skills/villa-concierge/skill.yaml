@@ -13,5 +13,6 @@ scripts:
 before_answer: "concierge.py status"
 on_event:
   # A Telegram voice message: its audio made ready for Home Assistant's speech-to-text
-  # (which speech-to-text, which language: villa.voice.yaml). The engine sends it.
+  # (which speech-to-text, which language: villa.voice.yaml; the default "auto" falls back to {language}).
+  # The engine sends it.
   voice_message: "voice.py prepare --audio {audio} --language {language}"

@@ -68,9 +68,11 @@ sense, say what you heard and ask once.
 `on_event.voice_message` runs `voice.py prepare`: it turns the Telegram audio
 into the WAV the villa system's speech-to-text takes, and chooses the
 speech-to-text and the language (`villa.voice.yaml`, optional: `stt:` an
-`stt.*` entity when the villa has several, `language:` a code to always use
-instead of the person's saved one). The engine sends that WAV to Home
-Assistant and brings the text back here.
+`stt.*` entity when the villa has several, `language:` a code to always use,
+or `auto`, the default). With `auto` the speech-to-text finds the language
+spoken; when the villa's system refuses `auto`, the engine tries once more in
+the person's saved language. The engine sends that WAV to Home Assistant and
+brings the text back here.
 
 ## Reading (no confirmation)
 

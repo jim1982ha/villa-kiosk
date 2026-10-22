@@ -41,11 +41,20 @@ def test_prepare_writes_a_wav_home_assistant_takes(tmp_path):
     shutil.copy(TONE, audio)
     res = voice.prepare(str(audio), "fr", Ids(["light.x", "stt.whisper"]))
     st = res["stt"]
-    assert st["entity"] == "stt.whisper" and st["language"] == "fr" and abs(st["seconds"] - 1.0) < 0.1
+    # the language spoken by default, the person's saved one behind it
+    assert st["entity"] == "stt.whisper" and st["language"] == "auto" and st["fallback"] == "fr"
+    assert abs(st["seconds"] - 1.0) < 0.1
     head = open(st["wav"], "rb").read(44)
     assert head[:4] == b"RIFF" and head[8:16] == b"WAVEfmt "
     _, fmt, ch, rate, _, _, bits = struct.unpack_from("<IHHIIHH", head, 16)
     assert (fmt, ch, rate, bits) == (1, 1, 16000, 16)
+
+
+def test_the_language_is_auto_unless_the_villa_fixes_one():
+    assert voice.which_language(None, "fr") == {"language": "auto", "fallback": "fr"}
+    assert voice.which_language("auto", "fr") == {"language": "auto", "fallback": "fr"}
+    assert voice.which_language(None, None) == {"language": "auto", "fallback": "en"}
+    assert voice.which_language("de", "fr") == {"language": "de"}       # fixed: no auto, no fallback
 
 
 def test_the_speech_to_text_is_never_guessed():

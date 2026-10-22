@@ -18,9 +18,14 @@ from vesta_shared.limits import limit
 
 log = logging.getLogger("vesta.speech")
 
-# What a skill script may name: the shape only — it reaches a URL path and a header.
+# What a skill script may name: the shape only — it reaches a URL path and a header. "auto" asks the
+# speech-to-text to find the language itself (a skill's choice; the villa's system may refuse it).
 STT_ENTITY = re.compile(r"^stt\.[a-z0-9_]+$")
-LANGUAGE = re.compile(r"^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})?$")
+LANGUAGE = re.compile(r"^(auto|[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})?)$")
+# What Home Assistant answers when the speech-to-text does not take this language or format: 415 when
+# the speech-to-text refuses the metadata (check_metadata), 400 when the header itself is not accepted.
+# A refusal is the one failure worth a second try in another language; a timeout or a network error is not.
+REFUSED = (400, 415)
 # The WAV voice.py writes: 16 kHz, 16-bit, mono — what Home Assistant's Wyoming speech-to-text takes.
 CONTENT = "format=wav; codec=pcm; sample_rate=16000; bit_rate=16; channel=1; language={language}"
 
@@ -48,8 +53,9 @@ async def speech_to_text(ha_url: str, token: str, stt: dict, headers: dict | Non
             says="How long the villa's speech-to-text may take to write a voice message out.",
             reached="The voice message is not understood; the person is told.", told="person"))) as http:
             async with http.post(f"{ha_url.rstrip('/')}/api/stt/{entity}", data=body, headers=h) as r:
+                if r.status in REFUSED:
+                    return None, _refusal(r.status)
                 if r.status != 200:
-                    # 415: this speech-to-text does not take this language or format
                     return None, f"Home Assistant answered {r.status}"
                 data = await r.json(content_type=None)
     except Exception as e:  # noqa: BLE001 — never the URL or the token: only what kind of failure
@@ -60,4 +66,13 @@ async def speech_to_text(ha_url: str, token: str, stt: dict, headers: dict | Non
     return text, None
 
 
-__all__ = ["speech_to_text"]
+def _refusal(status: int) -> str:
+    return f"Home Assistant refused this language or format ({status})"
+
+
+def refused(why: str | None) -> bool:
+    """Whether speech_to_text's why-not is the villa's system refusing the language or format."""
+    return why in {_refusal(s) for s in REFUSED}
+
+
+__all__ = ["speech_to_text", "refused"]

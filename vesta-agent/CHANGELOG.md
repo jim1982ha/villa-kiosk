@@ -1,3 +1,10 @@
+## 0.12.320
+
+What you will see:
+- A voice message is now written out in the language it was spoken in, and the VESTA Agent answers in that
+  language. If the villa's speech-to-text cannot find the language by itself, it uses the person's saved language,
+  as before.
+
 ## 0.12.319
 
 What you will see:

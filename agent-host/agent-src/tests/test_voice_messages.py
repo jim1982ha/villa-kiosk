@@ -63,8 +63,9 @@ def test_a_private_voice_message_becomes_the_message(agent):
     run(agent.on_ha_event("telegram_attachment", voice_event(OWNER, OWNER)))
     assert agent.tg.fetched == ["FILE-1"]
     call = agent.stt_calls[0]
-    # the skill chose: the villa's stt, the person's saved language; the engine carried a real WAV
-    assert call["entity"] == "stt.test_whisper" and call["language"] == "fr"
+    # the skill chose: the villa's stt, the language spoken ("auto") with the person's saved one behind it;
+    # the engine carried a real WAV
+    assert call["entity"] == "stt.test_whisper" and call["language"] == "auto" and call["fallback"] == "fr"
     assert call["wav_existed"] and call["wav_head"] == b"RIFF" and abs(call["seconds"] - 1.0) < 0.1
     assert agent.conversed == [(OWNER, "allume la cuisine", True)]
     # the person's voice is not kept

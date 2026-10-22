@@ -3,20 +3,25 @@
 
   voice.py prepare --audio voice.ogg --language fr [--stt stt.x] [--fixture-dir DIR]
 
+(--language: the person's saved language.)
+
 Telegram sends a voice message as Ogg/Opus; Home Assistant's speech-to-text
 (Whisper over Wyoming, and the others) takes 16 kHz, 16-bit mono WAV. This
 script decodes the audio (libopus, the system library), writes the WAV beside
 it, and says which speech-to-text and which language to use:
 
-  {"stt": {"entity": "stt.…", "language": "fr", "wav": "/…/voice.wav", "seconds": 3.2}}
+  {"stt": {"entity": "stt.…", "language": "auto", "fallback": "fr", "wav": "/…/voice.wav", "seconds": 3.2}}
   {"error": "plain words for the person"}
 
 The engine then sends the WAV to Home Assistant (it holds the token; a script
-never does) and treats the text as the message.
+never does) and treats the text as the message. "auto": the speech-to-text
+finds the language spoken (the AI answers in the language of the words); when
+the villa's system refuses "auto", the engine tries once more in `fallback`.
 
 Every choice is the villa's, in ../villa.voice.yaml (optional, kept by updates):
   stt: stt.faster_whisper      the speech-to-text, when Home Assistant has several
-  language: fr                 always this language, instead of the person's saved one
+  language: fr                 always this language: no "auto", no fallback
+  language: auto               the default: the language spoken, else the person's saved one
 """
 
 from __future__ import annotations
@@ -113,6 +118,12 @@ def speech_to_text(cli, wanted: str | None) -> tuple[str | None, str | None]:
                   "(stt: in the villa-concierge skill's villa.voice.yaml).")
 
 
+def which_language(fixed: str | None, saved: str | None) -> dict:
+    """The language to ask for: the villa's fixed one, or "auto" with the person's saved one behind it."""
+    chosen = str(fixed or "auto")
+    return {"language": chosen, "fallback": str(saved or "en")} if chosen == "auto" else {"language": chosen}
+
+
 def prepare(audio: str, language: str | None, cli, stt: str | None = None) -> dict:
     cfg = villa_settings()
     entity, why = speech_to_text(cli, stt or cfg.get("stt"))
@@ -127,7 +138,7 @@ def prepare(audio: str, language: str | None, cli, stt: str | None = None) -> di
     out = os.path.splitext(audio)[0] + ".wav"
     with open(out, "wb") as f:
         f.write(wav(pcm))
-    return {"stt": {"entity": entity, "language": str(cfg.get("language") or language or "en"), "wav": out,
+    return {"stt": {**which_language(cfg.get("language"), language), "entity": entity, "wav": out,
                     "seconds": round(len(pcm) / 2 / RATE, 1)}}
 
 

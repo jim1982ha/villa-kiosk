@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from vesta_shared.limits import limit
 
 from .policy import Person
-from .speech import speech_to_text
+from .speech import refused, speech_to_text
 from .telegram import TelegramError
 
 log = logging.getLogger("vesta")
@@ -71,11 +71,24 @@ class Voice:
                 await self.send(cid, str(res.get("error") or "This voice message could not be prepared."))
                 return None
             wav = st.get("wav")
+            # The skill's language first ("auto": the speech-to-text finds it); when the villa's system
+            # REFUSES it (415/400: this speech-to-text does not take it), once more in the skill's
+            # `fallback` (the person's saved language). A timeout or a network error is not retried.
+            asked, fallback = st.get("language"), st.get("fallback")
+            used = asked
             text, why = await speech_to_text(self.s.ha_url, self.s.ha_token, st, self.cf_headers)
-            log.info("Voice message in chat %s: %s s, %s (%s)%s", cid, st.get("seconds"), st.get("entity"),
-                     st.get("language"), f": {why}" if why else "")
+            was_refused = refused(why)
+            if was_refused and fallback and str(fallback) != str(asked):
+                used = fallback
+                text, why = await speech_to_text(self.s.ha_url, self.s.ha_token, {**st, "language": fallback},
+                                                  self.cf_headers)
+            auto_refused = asked == "auto" and was_refused
+            log.info("Voice message in chat %s: %s s, %s (asked %s, used %s%s)%s", cid, st.get("seconds"),
+                     st.get("entity"), asked, used, ", auto refused" if auto_refused else "",
+                     f": {why}" if why else "")
             self.state.log("voice", {"chat": cid, "seconds": st.get("seconds"), "stt": st.get("entity"),
-                                     "language": st.get("language"), "ok": bool(text), "why": why})
+                                     "language": asked, "used": used, "auto_refused": auto_refused,
+                                     "ok": bool(text), "why": why})
             if not text:
                 await self.send(cid, "I could not make out this voice message. Try again, or write it.")
             return text

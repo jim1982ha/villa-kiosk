@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.310 (22 October 2026)
+
+- A voice message's language: villa-concierge's `voice.py prepare` asks for `"language": "auto"` (the speech-to-text
+  finds the language spoken) with `"fallback"`: the person's saved language. `villa.voice.yaml` `language: xx` still
+  fixes one (no auto, no fallback); `language: auto` names the default. `speech.LANGUAGE` accepts "auto".
+- `voice.Voice.transcribe` asks in `language`; when the villa's system refuses it (415 or 400, `speech.refused`), it
+  asks once more in `fallback`. A timeout, a network error or any other answer is not retried. The log line and the
+  "voice" record say the language asked, the one used and `auto_refused`; never the words, the audio or the token.
+
 ## 0.6.309 (22 October 2026)
 
 - Architecture review 2026-10-22, one rule for a device asleep by design over a past window: `asleep.held_window`
