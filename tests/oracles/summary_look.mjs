@@ -26,13 +26,14 @@ const member = (id, extra = {}) => ({ id, look: deviceLook(id, src), reported: i
 console.log("  a group card:");
 {
   const two = groupCardModel([member("light.on"), member("lock.open")], 2, false);
-  ck("two cells: it SHOWS its devices — a grid of 2, one cell per member with that member's own face and ring",
-     two.gridN === 2 && two.cells.map((c) => `${c.id}:${c.face}/${c.ring}`).join() === "light.on:active/active,lock.open:alert/alert", two.cells);
+  // owner, 2026-10-22 (badge proposal 2): a cell's face is what it does (an unlocked lock is open), its mark what is wrong
+  ck("two cells: it SHOWS its devices — a grid of 2, one cell per member with that member's own face and mark",
+     two.gridN === 2 && two.cells.map((c) => `${c.id}:${c.face}/${c.mark}`).join() === "light.on:active/null,lock.open:active/alarm", two.cells);
   ck("  ...its frame is not red for one alerting cell of two (each cell already says so)", two.frame === "rest");
   ck("  ...red when EVERY cell alerts", groupCardModel([member("lock.open"), member("lock.open2")], 2, false).frame === "alert");
   ck("  ...never the 'on' frame while showing devices", groupCardModel([member("light.on"), member("light.on")], 2, false).frame === "rest");
   const pumpCell = groupCardModel([member("sensor.power"), member("light.off")], 2, false).cells[0];
-  ck("  ...a linked cell rings in its own colour, its face its own state", pumpCell.face === "off" && pumpCell.ring === "active");
+  ck("  ...a linked cell: its dot filled, its face its own state", pumpCell.face === "off" && pumpCell.linkDot === "on");
   const cnt = groupCardModel([member("light.on"), member("light.off"), member("lock.open"), member("camera.idle")], 1, false);
   ck("a count (one cell drawn): no grid, no cells", cnt.gridN === 0 && cnt.cells.length === 0, cnt);
   ck("  ...red when ANY member alerts", cnt.frame === "alert");
@@ -64,7 +65,7 @@ console.log("\n  a room chip:");
   {
     const [lost] = bucketRoomChips([M("light.lost", "x", 0), M("light.off", "x", 1)], () => true, (r) => r);
     const [onAndAlert] = bucketRoomChips([M("light.on", "y", 0), M("lock.open", "y", 1)], () => true, (r) => r);
-    ck("  ...a room with only a lost device: an AMBER count", roomChipModel(lost, false, () => false).health === "unavailable");
+    ck("  ...a room with only a lost device: a GREY count", roomChipModel(lost, false, () => false).health === "unavailable");
     const oa = roomChipModel(onAndAlert, false, () => false);
     ck("  ...a light on beside an unlocked door keeps its 'on' border (red no longer hides it) and counts red",
        oa.frame === "active" && oa.health === "alert", oa);
@@ -85,6 +86,20 @@ console.log("\n  a room chip:");
     combineChips(rest, lit);
     ck("  ...merging a resting room with a lit one: the merged chip shows 'on'", roomChipModel(rest, false, () => false).frame === "active");
   }
+  // an open fault (owner, 2026-10-22: badge proposal 2): amber, between red and grey — the badges' own order
+  {
+    const fsrc = storeLookSource(ENTITIES, { entityMap: {}, isHidden: () => false, hasFault: (id) => id === "light.off" || id === "lock.open" });
+    const F = (id, room) => ({ id, room, pos: { x: 0, y: 1, z: 0 }, look: deviceLook(id, fsrc) });
+    const health = (...ms) => roomChipModel(bucketRoomChips(ms, () => true, (r) => r)[0], false, () => false).health;
+    ck("  ...a device with an open fault: an AMBER count, over a lost device's grey, under an alarm's red",
+       health(F("light.off", "f")) === "fault" && health(F("light.off", "f"), F("light.lost", "f")) === "fault"
+       && health(F("lock.open", "f"), F("light.off", "f")) === "alert" && health(F("light.on", "f")) === "ok");
+    const [a] = bucketRoomChips([F("light.on", "a")], () => true, (r) => r);
+    const [b2] = bucketRoomChips([F("light.off", "b")], () => true, (r) => r);
+    combineChips(a, b2);
+    ck("  ...merged, the fault survives", roomChipModel(a, false, () => false).health === "fault");
+    ck("  ...and the room chooser's row says the same", roomLook([deviceLook("light.off", fsrc)]).health === "fault");
+  }
   ck("hidden while walking only when EVERY device is behind a wall",
      roomChipModel(k, true, () => true).hidden && !roomChipModel(k, true, (id) => id !== "light.on").hidden && !roomChipModel(k, false, () => true).hidden);
   const many = bucketRoomChips(Array.from({ length: 120 }, (_, i) => M(`light.off`, "hall", i)), () => true, (r) => r)[0];
@@ -100,15 +115,18 @@ console.log("\n  the count's colour (colors.healthPill):");
   const { healthPill, ALERT_RED_HEX } = await import("@/babylon/colors");
   const { categorySurface } = await import("@/config/EntityCategories");
   const up = (h) => String(h).toUpperCase();
-  const red = healthPill("alert"), lost = healthPill("unavailable"), ok = healthPill("ok");
-  ck("red = the legend's 'Needs attention' red; amber = the badge's own lost-contact amber; green otherwise — three different colours",
+  const { markSurface } = await import("@/config/EntityCategories");
+  const red = healthPill("alert"), fault = healthPill("fault"), lost = healthPill("unavailable"), ok = healthPill("ok");
+  // one vocabulary with the badges' corner marks (owner, 2026-10-22: badge proposal 2)
+  ck("red = the badge's red \"!\"; amber = its amber fault \"!\"; grey = its grey \"?\"; green otherwise — four different colours",
      up(red.fill) === up(ALERT_RED_HEX) && up(red.fill) === up(categorySurface("others", "alert").ring)
-     && up(lost.fill) === up(categorySurface("others", "unavailable").ring)
-     && new Set([red.fill, lost.fill, ok.fill].map(up)).size === 3, { red, lost, ok });
+     && up(red.fill) === up(markSurface("alarm").fill) && up(fault.fill) === up(markSurface("fault").fill)
+     && up(lost.fill) === up(markSurface("lost").fill)
+     && new Set([red.fill, fault.fill, lost.fill, ok.fill].map(up)).size === 4, { red, fault, lost, ok });
   const lum = (h) => { const c = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((v) => v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
   const contrast = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
-  ck("  ...its number readable on all three (4.5:1 or better)",
-     [red, lost, ok].every((p) => contrast(p.fill, p.ink) >= 4.5), [red, lost, ok].map((p) => contrast(p.fill, p.ink).toFixed(2)));
+  ck("  ...its number readable on all four (4.5:1 or better)",
+     [red, fault, lost, ok].every((p) => contrast(p.fill, p.ink) >= 4.5), [red, fault, lost, ok].map((p) => contrast(p.fill, p.ink).toFixed(2)));
   const { readFileSync } = await import("node:fs");
   const rd = (f) => readFileSync(new URL(`../../src/${f}`, import.meta.url), "utf8");
   const ev = rd("babylon/EntityVisuals.ts"), sheet = rd("components/hud/RoomChoiceSheet.tsx"), legend = rd("components/hud/LegendModal.tsx");

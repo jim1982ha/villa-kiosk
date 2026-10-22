@@ -2633,7 +2633,12 @@ export class SceneManager {
     this.visuals.setCriticalDevices(ids);
   }
 
-  /** Hidden in the villa's system (deviceGroups.hiddenIn): never red or amber on the map, as nowhere else. */
+  /** The devices with an open Cockpit fault (attention.faultDevices, folded): their badges' amber "!". */
+  setFaultDevices(ids: ReadonlySet<string>): void {
+    this.visuals.setFaultDevices(ids);
+  }
+
+  /** Hidden in the villa's system (deviceGroups.hiddenIn): no badge on the map, its 3D object never red or grey. */
   setHiddenDevices(isHidden: (entityId: string) => boolean): void {
     this.visuals.setHiddenDevices(isHidden);
   }

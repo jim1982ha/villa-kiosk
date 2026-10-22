@@ -138,7 +138,7 @@ console.log("\n  the history bar (StateTimeline)");
   for (const [name, f] of fns) { const a = chartColours(f), b = paintState(f); for (const st of STATES) if (a(st) !== b(st)) bad.push(`${name} ${st}: ${a(st)}`); }
   ck(`chartColours paints every state as paintState did, for each colouring (${fns.length} × ${STATES.length})`, bad.length === 0, bad.slice(0, 5));
   ck("  (an offline stretch takes the legend's colour over a colouring that says otherwise)",
-     chartColours(() => "green")("unavailable") === "var(--status-warning)" && chartColours(() => "green")("connected") === "green");
+     chartColours(() => "green")("unavailable") === "var(--status-lost)" && chartColours(() => "green")("connected") === "green");
 }
 
 console.log("\n  each surface asks config/reading, and nothing lower");

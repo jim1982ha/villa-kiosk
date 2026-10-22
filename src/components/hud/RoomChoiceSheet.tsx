@@ -45,7 +45,7 @@ import { countOf } from "@/utils/countOf";
 /** One room a merged chip stands for. `frame` and `health` are what that
  *  room's own chip wears on the map (summaryLook.roomLook): the row repeats
  *  its border — the "on" ring = something is on — and its count's colour —
- *  red / amber / green, the room's health — so choosing a room does not mean
+ *  red / amber / grey / green, the room's health — so choosing a room does not mean
  *  losing what the chip was telling you. */
 export interface RoomChoice extends Pick<RoomChipModel, "frame" | "health"> {
   room: string;

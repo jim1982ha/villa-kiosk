@@ -6,45 +6,37 @@
 // place. A first-time user has to tap around and learn it by trial. This is
 // that reference, one tap away, not shown by default.
 
-import { CATEGORY_ORDER, CATEGORY_LABELS, categorySurface, categorySurfaceRinged, type DeviceSurfaceState } from "@/config/EntityCategories";
+import { CATEGORY_ORDER, CATEGORY_LABELS, categorySurface, type DeviceSurfaceState } from "@/config/EntityCategories";
+import { badgeImage } from "@/babylon/badgeIcons";
+import type { BadgeMark, LinkDot } from "@/utils/deviceActivity";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { STATUS_COLOR } from "@/utils/stateColors";
 import { useConfig } from "@/config/ConfigContext";
 import { overviewKeyHelp } from "@/babylon/overviewKeys";
 import { healthPill } from "@/babylon/colors";
+import type { RoomHealth } from "@/babylon/summaryLook";
 import ModalFooter from "@/components/common/ModalFooter";
 import DialogLayer from "@/components/common/DialogLayer";
 
-/** What the MAP badge actually does per state — mirrors config/
- *  EntityCategories.categorySurface exactly (VESTA-DESIGN.md §0): neutral by
- *  default, coloured only when active or alerting, a dashed amber ring for
- *  unavailable. A representative category ("light") stands in for "whichever
- *  category this device belongs to" — the row is illustrating the STATE
- *  vocabulary, not any one category.
+/** What the MAP badge says — drawn by the badge renderer itself (babylon/badgeIcons.badgeImage), so this legend
+ *  cannot describe a badge the app no longer draws. A representative category ("light") stands in for "whichever
+ *  category this device belongs to".
  *
- *  "Neutral by default" is a rule about the SURFACE, and since 2.251.0 the
- *  wording here has to say so: the fill and the ring still go quiet at rest,
- *  but the PICTOGRAM always carries its category's hue, because what kind of
- *  device something is stays true whether or not it is switched on. Keep this
- *  copy in step with that function — a legend that describes a badge the app
- *  no longer draws is worse than no legend. */
-const BADGE_ITEMS: { label: string; state: DeviceSurfaceState; ringState?: DeviceSurfaceState; note: string }[] = [
-  { label: "Active / alerting", state: "active",
-    note: "Filled with the device's own category colour — the device is on, or doing something" },
-  { label: "Off / idle", state: "off",
-    note: "Neutral square, category-coloured icon — the device is off or resting (the default look for most of the map)" },
-  // The ring a LINKED entity draws (deviceActivity.badgeFaceAndRing): the
-  // badge's own colour since 2.496.239 — it was the "Needs attention" red.
-  { label: "Linked device on", state: "off", ringState: "active",
-    note: "A ring in the device's own colour — the switch linked to it is on (a pump's relay, a camera's detection)" },
-  { label: "Needs attention", state: "alert",
-    note: "Filled red — the device needs attention (an unlocked door, a leak, low battery…)" },
-  { label: "Unavailable", state: "unavailable",
-    note: "Neutral square, dashed amber ring — contact with this device is lost" },
-  // deviceActivity.badgeFaceAndRing: a CRITICAL device that lost contact keeps the muted face, its ring turns red
-  { label: "Red ring", state: "unavailable", ringState: "alert",
-    note: "A critical device has lost contact" },
+ *  ⚠️ THE SQUARE SAYS WHAT THE DEVICE DOES, THE CORNER MARK WHAT IS WRONG (owner, 2026-10-22: badge proposal 2,
+ *  "Corner dot"): the face is off or on, never a problem colour; one mark at most, top-right, in the order below
+ *  (deviceActivity.MARK_ORDER); a linked switch is a dot at the bottom-left. */
+const BADGE_ITEMS: { label: string; state: DeviceSurfaceState; mark?: BadgeMark; linkDot?: LinkDot; note: string }[] = [
+  { label: "Off", state: "off", note: "Plain square, icon in the device's colour — resting" },
+  { label: "On", state: "active", note: "Tinted in the device's colour — on, or working" },
+  { label: "Switch linked to it", state: "off", linkDot: "on",
+    note: "Dot at the bottom-left: filled when the switch is on, hollow when off (a pump's relay, a camera's detection)" },
+  { label: "Red \"?\"", state: "unavailable", mark: "critical", note: "A critical device has gone silent — act now" },
+  { label: "Red \"!\"", state: "active", mark: "alarm", note: "Alarm — an unlocked door, a leak, a low battery" },
+  { label: "Amber \"!\"", state: "off", mark: "fault", note: "An open fault — check soon" },
+  { label: "Grey \"?\"", state: "unavailable", mark: "lost", note: "No contact — the square is faded" },
+  { label: "Grey \"z\"", state: "off", mark: "asleep", note: "Asleep by design — its last report is shown" },
+  { label: "Teal \"…\"", state: "off", mark: "moving", note: "Moving — locking, opening, closing" },
 ];
 
 /** A room chip: its border says whether something is on; its number's colour
@@ -53,10 +45,11 @@ const CHIP_RINGS: { label: string; frame: "active" | "rest"; note: string }[] = 
   { label: "Light border", frame: "active", note: "Something in the room is on" },
   { label: "No border", frame: "rest", note: "Everything in the room is off or resting" },
 ];
-const CHIP_COUNTS: { label: string; health: "alert" | "unavailable" | "ok"; note: string }[] = [
+const CHIP_COUNTS: { label: string; health: RoomHealth; note: string }[] = [
   { label: "Green number", health: "ok", note: "All right — every device is reporting and nothing needs attention" },
-  { label: "Amber number", health: "unavailable", note: "Contact is lost with a device in the room" },
-  { label: "Red number", health: "alert", note: "Something in the room needs attention (an unlocked door, a leak, a critical device that lost contact…) — shown before amber" },
+  { label: "Grey number", health: "unavailable", note: "No contact with a device in the room" },
+  { label: "Amber number", health: "fault", note: "A device in the room has an open fault — shown before grey" },
+  { label: "Red number", health: "alert", note: "Act now: an alarm, or a critical device gone silent — shown first" },
 ];
 
 /** The coloured status pill each device PANEL shows, and the colours of the
@@ -68,8 +61,8 @@ const STATUS_ITEMS: { label: string; swatch: string; note: string }[] = [
   { label: "Off / idle", swatch: STATUS_COLOR.idle, note: "Device is off or in its resting state — or a door or window standing open" },
   { label: "In progress", swatch: STATUS_COLOR.transitional,
     note: "Moving between the two — opening, closing, locking, arming" },
-  { label: "Unavailable", swatch: STATUS_COLOR.unavailable, note: "Contact lost" },
-  // "unknown": the device answers with nothing to say (stateColors.contactOf "no-value") — grey, never amber
+  { label: "Unavailable", swatch: STATUS_COLOR.unavailable, note: "No contact" },
+  // "unknown": the device answers with nothing to say (stateColors.contactOf "no-value") — idle, never "no contact"
   { label: "No value reported", swatch: STATUS_COLOR.idle, note: "The device is answering but has no value to give right now" },
   { label: "Alert", swatch: STATUS_COLOR.alert, note: "Needs attention (e.g. unlocked door, jammed lock, leak) — or a detection (motion, occupancy), which is not a fault" },
 ];
@@ -102,10 +95,10 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
           <h2>Map colours &amp; keys</h2>
         </div>
         <div className="modal-body">
-          <div className="settings-section-title">Device category (badge colour when active)</div>
+          <div className="settings-section-title">Device category (badge colour when on)</div>
           <p className="muted body-text" style={{ marginTop: 4 }}>
-            A device's badge is plain and neutral at rest — its category
-            colour only appears once it's active or alerting (see below).
+            A device's badge is plain at rest, its icon in its category
+            colour — the whole square takes the colour once it is on.
           </p>
           <div className="legend-grid">
             {CATEGORY_ORDER.map((c) => (
@@ -121,30 +114,28 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
 
           <div className="settings-section-title">On the map (badge state)</div>
           <p className="muted body-text" style={{ marginTop: 4 }}>
-            How a device's own badge shows its state in the 3D view — neutral
-            by default, colour only when something's actually happening.
+            The square says what a device does. A mark in its corner says
+            what is wrong — one at a time, the most urgent first.
           </p>
           <div className="legend-grid">
-            {BADGE_ITEMS.map((b) => {
-              const surface = categorySurfaceRinged("light", b.state, b.ringState ?? b.state);
-              return (
-                <div className="legend-row" key={b.label}>
-                  <span
-                    className="legend-swatch"
-                    style={{
-                      background: surface.fill,
-                      border: surface.ring
-                        ? `1.5px ${surface.ringDashed ? "dashed" : "solid"} ${surface.ring}`
-                        : undefined,
-                    }}
-                  />
-                  <span>
-                    <strong>{b.label}</strong>
-                    <span className="muted legend-note">{b.note}</span>
-                  </span>
-                </div>
-              );
-            })}
+            {BADGE_ITEMS.map((b) => (
+              <div className="legend-row" key={b.label}>
+                <img
+                  className="legend-badge"
+                  src={badgeImage({ category: "light", iconKey: "lightbulb", state: b.state, mark: b.mark, linkDot: b.linkDot, bakePx: 64 })}
+                  alt=""
+                  draggable={false}
+                />
+                <span>
+                  <strong>{b.label}</strong>
+                  <span className="muted legend-note">{b.note}</span>
+                </span>
+              </div>
+            ))}
+            <div className="legend-row">
+              <span className="legend-badge" aria-hidden />
+              <span className="muted legend-note">A device hidden in the villa's system has no badge.</span>
+            </div>
           </div>
 
           {/* Drawn from the same owners as the chip: categorySurface("others", …)

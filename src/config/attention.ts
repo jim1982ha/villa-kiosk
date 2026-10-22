@@ -15,7 +15,7 @@ import { alarmText, rowText } from "@/config/reading";
 import { alertIsFault } from "@/config/BinarySensorClasses";
 import { labelOf } from "@/config/EntityMap";
 import { deviceRoom, deviceRoomOrRecord, firstRoom, roomLabel } from "@/config/devicePlace";
-import { devicesFor, recordEntity, type VillaDevices } from "@/config/deviceGroups";
+import { deviceOf, devicesFor, recordEntity, type VillaDevices } from "@/config/deviceGroups";
 import { DUE_WORDS, faultTitle, fmAttention, stageOf, type FmStage } from "@/fm/fmEngine";
 import { lastNoted } from "@/fm/faultNotes";
 import { deviceWorkKey, groupByDevice } from "@/fm/deviceWork";
@@ -151,6 +151,26 @@ export function groupAttention(items: readonly AttentionItem[]): AttentionGroup[
     || a.title.localeCompare(b.title) || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
 }
 
+/**
+ * The devices with an open Cockpit fault — every record not closed (fmAttention.unresolved, the Cockpit's own "fault"
+ * lines), each on its entity as buildAttentionItems files it (recordEntity) and folded onto its device as the critical
+ * list is (deviceGroups.criticalDevices): the entity AND its device, so the device's map badge carries it whichever of
+ * its entities the record names. What a badge's amber "!" and a room's amber number read (owner, 2026-10-22: badge
+ * proposal 2 — the map showed nothing for an open fault).
+ */
+export function faultDevices(
+  fmData: FmData, has: (entityId: string) => boolean, folding: ReadonlyMap<string, string>,
+): ReadonlySet<string> {
+  const out = new Set<string>();
+  for (const t of fmAttention(fmData).unresolved) {
+    const id = recordEntity(t.entityId, has);
+    if (!id) continue;
+    out.add(id);
+    out.add(deviceOf(folding, id));
+  }
+  return out;
+}
+
 /** What a problem IS: its kind — and a CRITICAL offline device its own, where any other offline device is just
  *  offline (owner, 2026-10-18: "critical" = red and told at once). */
 export type AttentionTone = AttentionKind | "critical";
@@ -162,11 +182,14 @@ export function attentionTone(item: AttentionItem): AttentionTone {
  *  .cockpit-attention-<severity> class): red (danger) only for an alarm or a critical device offline; a fault, any
  *  other offline device and a late task are a warning, amber (owner, 2026-10-18). ⚠️ ONE OWNER (architecture review,
  *  2026-10-19): the button read this rule while the card's icon still painted every fault red from a stylesheet
- *  written before the decision. */
-export type AttentionSeverity = "danger" | "warn";
+ *  written before the decision.
+ *  ⚠️ ANY OTHER OFFLINE DEVICE IS GREY, "lost" (owner, 2026-10-22: badge proposal 2): one vocabulary with the map —
+ *  red act now, amber a fault (check soon), grey no contact. The villa's health level still counts it a warning
+ *  (villaHealthFrom: only danger is red there). */
+export type AttentionSeverity = "danger" | "warn" | "lost";
 export function attentionSeverity(item: AttentionItem): AttentionSeverity {
   const tone = attentionTone(item);
-  return tone === "alarm" || tone === "critical" ? "danger" : "warn";
+  return tone === "alarm" || tone === "critical" ? "danger" : tone === "unavailable" ? "lost" : "warn";
 }
 
 /**

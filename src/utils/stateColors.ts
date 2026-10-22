@@ -99,8 +99,11 @@ export const STATUS_COLOR = {
    *  separate. See TRANSITIONAL_STATES. */
   transitional: "var(--status-pending)",
   /** Home Assistant has lost contact ("unavailable") — never "unknown", which
-   *  is a device answering with no value (contactOf "no-value": idle). */
-  unavailable: "var(--status-warning)",
+   *  is a device answering with no value (contactOf "no-value": idle).
+   *  ⚠️ GREY, NO LONGER AMBER (owner, 2026-10-22: badge proposal 2): amber is a
+   *  fault, check soon; no contact is grey — the badge's grey "?", one
+   *  vocabulary on every surface. */
+  unavailable: "var(--status-lost)",
   /** Needs attention. */
   alert: "var(--status-danger)",
 } as const;
@@ -108,7 +111,8 @@ export const STATUS_COLOR = {
 export type StatusKey = keyof typeof STATUS_COLOR;
 
 const ON_COLOR = STATUS_COLOR.active;
-const WARN_COLOR = STATUS_COLOR.unavailable;
+// A text sensor's third series colour — never a status meaning (paletteColorFor), so not STATUS_COLOR's.
+const WARN_COLOR = "var(--status-warning)";
 const DANGER_COLOR = STATUS_COLOR.alert;
 
 // ── The state → meaning map ───────────────────────────────────────────────

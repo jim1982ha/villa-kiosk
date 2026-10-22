@@ -57,7 +57,7 @@ const world = (c) => {
   return { did, entities, config, mapping };
 };
 
-const FIELDS = ["type", "face", "ring", "kind", "own", "active", "alert", "unavailable", "power", "linkedOn"];
+const FIELDS = ["type", "face", "mark", "linkDot", "kind", "own", "active", "alert", "unavailable", "power", "linkedOn"];
 const differ = [];
 for (const c of cases) {
   const w = world(c);
@@ -76,27 +76,32 @@ const look = (type, state, link) => {
 };
 // The confirmed divergence: SummaryGroupPanel read `entities[linked].state === "on"`.
 const rawRule = (link) => link[1] === "on";
-// red since 2026-10-21: a linked entity needing attention (an unlocked lock) rings the badge red (owner: a lock's
-// door sensor reading Open turns the lock's badge red)
-ck("a device linked to an UNLOCKED lock is ringed — red, the lock needs attention (the list's raw `=== \"on\"` said no)",
-   look("sensor", "5", ["lock.gate", "unlocked"]).ring === "alert" && !rawRule(["lock.gate", "unlocked"]));
-ck("  ...linked to an OPEN cover: ringed", look("sensor", "5", ["cover.blind", "open"]).ring === "active");
-ck("  ...linked to a LOCKED lock, a CLOSED cover, an OFF or lost switch: not",
+// red since 2026-10-21: a linked entity needing attention (an unlocked lock) gives the badge the red "!" (owner: a
+// lock's door sensor reading Open turns the lock's badge red); the linked DOT says on/off (owner, 2026-10-22: badge
+// proposal 2 — it was a ring)
+ck("a device linked to an UNLOCKED lock: its dot filled, and the red \"!\" — the lock needs attention (the list's raw `=== \"on\"` said no)",
+   look("sensor", "5", ["lock.gate", "unlocked"]).linkDot === "on" && look("sensor", "5", ["lock.gate", "unlocked"]).mark === "alarm"
+   && !rawRule(["lock.gate", "unlocked"]));
+ck("  ...linked to an OPEN cover: its dot filled", look("sensor", "5", ["cover.blind", "open"]).linkDot === "on");
+ck("  ...linked to a LOCKED lock, a CLOSED cover, an OFF or lost switch: hollow",
    ["lock.gate:locked", "cover.blind:closed", "switch.pump:off", "switch.pump:unavailable"]
-     .every((s) => look("sensor", "5", s.split(":")).ring === "off"));
-ck("  ...linked to an entity HA never reported: not", look("sensor", "5", ["switch.pump", null]).linkedOn === false);
-ck("the ring is the badge's own colour, never red; the face stays its own state",
-   look("camera", "idle", ["switch.pump", "on"]).face === "active" && look("sensor", "5", ["switch.pump", "on"]).face === "off");
+     .every((s) => look("sensor", "5", s.split(":")).linkDot === "off"));
+ck("  ...linked to an entity HA never reported: hollow", look("sensor", "5", ["switch.pump", null]).linkedOn === false
+   && look("sensor", "5", ["switch.pump", null]).linkDot === "off");
+ck("  ...no linked entity: no dot", look("sensor", "5", null).linkDot === null);
+ck("the face stays its own state: a linked switch on never makes the device ON (owner, 2026-10-22)",
+   look("camera", "idle", ["switch.pump", "on"]).face === "active" && look("sensor", "5", ["switch.pump", "on"]).face === "off"
+   && look("sensor", "5", ["switch.pump", "on"]).kind !== "on" && !look("sensor", "5", ["switch.pump", "on"]).active);
 
 
 console.log("\n  the panel header's optimistic switch, and its drawn type:");
 {
   const w = world({ type: "sensor", state: "5", link: ["switch.pump", "off"] });
   const pending = (v) => storeLookSource(w.entities, w.config, { pendingPower: (i) => (i === "switch.pump" ? v : undefined) });
-  ck("a switch thrown on but not yet confirmed rings the header now", deviceLook(w.did, pending(true)).ring === "active");
-  ck("  ...thrown off: the ring goes with it", deviceLook(w.did, pending(false)).ring === "off"
-     && deviceLook(w.did, storeLookSource({ ...w.entities, "switch.pump": ent("switch.pump", "on") }, w.config, { pendingPower: () => false })).ring === "off");
-  ck("  ...nothing pending: the confirmed state, as the map", deviceLook(w.did, pending(undefined)).ring === "off");
+  ck("a switch thrown on but not yet confirmed fills the header's dot now", deviceLook(w.did, pending(true)).linkDot === "on");
+  ck("  ...thrown off: the dot goes hollow with it", deviceLook(w.did, pending(false)).linkDot === "off"
+     && deviceLook(w.did, storeLookSource({ ...w.entities, "switch.pump": ent("switch.pump", "on") }, w.config, { pendingPower: () => false })).linkDot === "off");
+  ck("  ...nothing pending: the confirmed state, as the map", deviceLook(w.did, pending(undefined)).linkDot === "off");
   const asLock = storeLookSource({ "switch.x": ent("switch.x", "unlocked") }, { entityMap: {}, isHidden: () => false }, { drawnAs: { entityId: "switch.x", type: "lock" } });
   ck("a device drawn as a lock by its mesh binding is read as a lock", deviceLook("switch.x", asLock).type === "lock" && deviceLook("switch.x", asLock).alert);
   // The map's own counterpart: the mapping its mesh resolved to wins over the
@@ -111,7 +116,7 @@ console.log("\n  never reported:");
 {
   const none = deviceLook("light.ghost", storeLookSource({}, { entityMap: {}, isHidden: () => false }));
   ck("a device HA never reported looks unavailable (the phantom), power unknown",
-     none.face === "unavailable" && none.ring === "unavailable" && none.unavailable && none.power === "unknown");
+     none.face === "unavailable" && none.mark === "lost" && none.unavailable && none.power === "unknown");
 }
 
 console.log("\n  the callers ask it (pin the caller):");
@@ -125,15 +130,22 @@ console.log("\n  the callers ask it (pin the caller):");
      (ev.match(/deviceLook\([^)]*this\.lookSource\)/g) ?? []).length >= 4 && /mapLookSource\(this\.lastState, this\.mapping/.test(ev));
   ck("the device-list rows and the panel header ask deviceLook through the store",
      // the header since 2.496.305 in components/panels/panelHeader (driven by value in panel_header.mjs)
-     /deviceLook\(id, looks\)/.test(sg) && /storeLookSource\(entities, \{ \.\.\.config, isCritical: villaDevices\.isCritical, isHidden: villaDevices\.isHidden \}\)/.test(sg) && /deviceLook\(entityId, storeLookSource\(/.test(ph)
+     /deviceLook\(id, looks\)/.test(sg) && /storeLookSource\(entities, \{\s+\.\.\.config, isCritical: villaDevices\.isCritical, isHidden: villaDevices\.isHidden, hasFault,\s+\}\)/.test(sg) && /deviceLook\(entityId, storeLookSource\(/.test(ph)
      && /panelHeader\(\{/.test(db));
   // A CRITICAL device that lost contact is red on every one of them (2.496.428): each hands deviceLook the villa's
   // folded critical list — the map through the page's push, the header through the page, the list through the model.
   ck("the map, the open window's header, the room chooser and the list rows all read the critical list",
      /isCritical: \(id: string\) => crit\.has\(id\), isHidden: hidden/.test(ev) && /manager\?\.setCriticalDevices\(critical\)/.test(db)
-     && /config: \{ \.\.\.config, isCritical, isHidden \}/.test(db) && /storeLookSource\(entities, \{ \.\.\.config, isCritical, isHidden \}\)/.test(db)
+     && /config: \{ \.\.\.config, isCritical, isHidden, hasFault \}/.test(db) && /storeLookSource\(entities, \{ \.\.\.config, isCritical, isHidden, hasFault \}\)/.test(db)
      && /manager\?\.setHiddenDevices\(isHidden\)/.test(db)
      && /isCritical: villaDevices\.isCritical/.test(sg));
+  // ...and the open faults the same way (owner, 2026-10-22: badge proposal 2): the map through the page's push, the
+  // header and the room chooser through the page, the list rows through the villa model
+  ck("the map, the open window's header, the room chooser and the list rows all read the open faults",
+     /hasFault: \(id: string\) => faults\.has\(id\)/.test(ev) && /manager\?\.setFaultDevices\(faults\)/.test(db)
+     && /faultDevices\(fmData, \(id\) => id in entities, identity\.folding\)/.test(db)
+     && /hasFault: \(id\) => faults\.has\(id\)/.test(src("config/VillaModel.tsx"))
+     && /faultDevices\(fmData, \(id\) => id in entities, folding\)/.test(src("config/VillaModel.tsx")));
   ck("no caller builds a reading by hand any more (badgeFaceAndRing / linkedOn / alertStateFor)",
      ![ev, sg, db, ph].some((s) => /badgeFaceAndRing\(|linkedOn:|alertStateFor\(|linkActiveIds/.test(s)));
 }

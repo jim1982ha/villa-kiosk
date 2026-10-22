@@ -53,8 +53,8 @@ const door = items.find((i) => i.entityId === "lock.door" || i.entityId === "sen
 const th = items.find((i) => i.entityId === "sensor.th_humidity");
 ck("a device on the rule's list offline is critical, whichever of its entities the rule names", door?.critical === true, items);
 ck("  ...one not on it is not", th?.critical === false, th);
-ck("  ...red for the critical one, amber for the other (their icons' severity)",
-   attentionTone(door) === "critical" && lineSources(th).severities[0] === "warn" && lineSources(door).severities[0] === "danger");
+ck("  ...red for the critical one, grey for the other (their icons' severity — owner, 2026-10-22: it was amber)",
+   attentionTone(door) === "critical" && lineSources(th).severities[0] === "lost" && lineSources(door).severities[0] === "danger");
 // ONE severity rule on every surface (architecture review, 2026-10-19): the Cockpit button already read it while the
 // card's icon still painted every fault red — a fault is a warning (owner, 2026-10-18)
 {
@@ -62,9 +62,9 @@ ck("  ...red for the critical one, amber for the other (their icons' severity)",
   const fault = { kind: "fault", entityId: "sensor.x", title: "Pump offline", detail: "", source: "night" };
   const alarm = { kind: "alarm", entityId: "sensor.x", title: "Leak", detail: "" };
   const late = { kind: "schedule", title: "Pool filter", detail: "" };
-  ck("a fault is a warning (amber), an alarm and a critical device offline danger (red), a late task a warning",
+  ck("a fault is a warning (amber), an alarm and a critical device offline danger (red), any other device offline grey, a late task a warning",
      attentionSeverity(fault) === "warn" && attentionSeverity(alarm) === "danger" && attentionSeverity(door) === "danger"
-     && attentionSeverity(th) === "warn" && attentionSeverity(late) === "warn");
+     && attentionSeverity(th) === "lost" && attentionSeverity(late) === "warn");
   const health = (i) => villaHealthFrom(groupAttention([i])).level;
   ck("  ...and the villa's health agrees, item by item: a fault alone is warn, an alarm alone danger",
      health(fault) === "warn" && health(alarm) === "danger" && health(door) === "danger" && health(th) === "warn", [health(fault), health(alarm)]);
@@ -84,7 +84,7 @@ console.log("  a critical device that lost contact is red everywhere, not only o
   const { roomLook } = await import("@/babylon/summaryLook");
   const { panelHeader } = await import("@/components/panels/panelHeader");
   const { lostPillTone } = await import("@/config/reading");
-  const { categorySurfaceRinged, categorySurface } = await import("@/config/EntityCategories");
+  const { markSurface, categorySurface } = await import("@/config/EntityCategories");
   const crit = villaDevices({ entityMap, deviceGroups: [], hidden: new Set(), dismissed: new Set(), mappedEntityIds: new Set(ids),
     entities, entityDeviceIds: { "lock.door": "dev-door", "sensor.door_battery": "dev-door" }, folding,
     critical: new Set(["sensor.door_battery"]) });
@@ -92,23 +92,24 @@ console.log("  a critical device that lost contact is red everywhere, not only o
   const store = storeLookSource(entities, config);
   const map = mapLookSource(new Map(Object.entries(entities)), new Map(), () => config);
   const door = deviceLook("lock.door", store), th = deviceLook("sensor.th_humidity", store);
-  ck("the badge: a muted face and a RED ring for the critical lost device",
-     door.critical && door.face === "unavailable" && door.ring === "alert", door);
-  ck("  ...an ordinary lost device stays amber (dashed amber ring)", !th.critical && th.ring === "unavailable", th);
+  // owner, 2026-10-22 (badge proposal 2): the problem is the corner mark — red "?" critical, grey "?" any other
+  ck("the badge: a faded face and a RED \"?\" for the critical lost device",
+     door.critical && door.face === "unavailable" && door.mark === "critical", door);
+  ck("  ...an ordinary lost device: the grey \"?\"", !th.critical && th.mark === "lost", th);
   ck("  ...the map's source paints it the same", JSON.stringify(deviceLook("lock.door", map)) === JSON.stringify(door));
-  const s = categorySurfaceRinged("access_control", door.face, door.ring);
-  ck("  ...drawn as a red ring around the muted amber face (no new picture to fetch: the same baked squircle)",
-     s.ring === categorySurface("access_control", "alert").ring && s.glyph === categorySurface("access_control", "unavailable").glyph);
-  ck("the room chip: its number red for a critical lost device, amber for an ordinary one",
+  ck("  ...drawn as the danger red's \"?\" over the faded face (no new picture to fetch: the same baked squircle)",
+     markSurface(door.mark).fill === markSurface("alarm").fill && markSurface(door.mark).symbol === "?"
+     && categorySurface("access_control", door.face).faded === true);
+  ck("the room chip: its number red for a critical lost device, grey for an ordinary one",
      roomLook([door]).health === "alert" && roomLook([th]).health === "unavailable" && roomLook([door, th]).health === "alert");
   // the list rows read deviceLook over this same store (SummaryGroupPanel, pinned in device_look_source.mjs)
   const win = (id) => panelHeader({ panel: { entityId: id, mapping: entityMap[id] }, entities, config, canControl: false, linkedSwitch: null });
-  ck("the window: its lost pill is the danger red for the critical device, amber for the other",
+  ck("the window: its lost pill is the danger red for the critical device, grey for the other",
      lostPillTone("unavailable", win("lock.door").badge.critical) === "danger"
      && lostPillTone("unavailable", win("sensor.th_humidity").badge.critical) === "unavailable");
   ck("  ...and only the LOST pill: a critical device's other tones are its own", lostPillTone("on", true) === "on");
   const back = deviceLook("lock.door", storeLookSource({ ...entities, "lock.door": e("lock.door", "locked") }, config));
-  ck("a critical device that answers is not red (critical needs lost contact)", !back.critical && back.ring !== "alert", back);
+  ck("a critical device that answers is not red (critical needs lost contact)", !back.critical && back.mark !== "critical", back);
   const { readFileSync } = await import("node:fs");
   const src = (f) => readFileSync(new URL(`../../src/${f}`, import.meta.url), "utf8");
   ck("  ...the three lost pills of a window ask it, with the header's fact (pin the caller)",

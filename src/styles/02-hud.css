@@ -768,29 +768,29 @@
 .summary-entity-row.is-offmap .summary-entity-state { color: var(--accent); }
 /* Devices Home Assistant has no entity for at all — the villa model still
    carries geometry named after them. A DIFFERENT fact from "not on the map"
-   and so a different colour: --status-warning is the app's one token for
-   "Home Assistant has lost contact with this", the same amber the map badge's
-   dashed ring uses (see categorySurface's `unavailable` row and the Map
-   colours legend). Reusing the off-map accent here would have said "exists in
-   HA, just not modelled", which is the opposite of what this section means. */
-.summary-notinha-heading { color: var(--status-warning); }
+   and so a different colour: --status-lost is the app's one token for
+   "no contact with this", the same grey as the map badge's "?" (the Map
+   colours legend; amber until 2026-10-22, now a fault's colour). Reusing the
+   off-map accent here would have said "exists in HA, just not modelled",
+   which is the opposite of what this section means. */
+.summary-notinha-heading { color: var(--status-lost); }
 .summary-entity-row.is-notinha .summary-entity-name,
-.summary-entity-row.is-notinha .summary-entity-state { color: var(--status-warning); }
+.summary-entity-row.is-notinha .summary-entity-state { color: var(--status-lost); }
 .summary-entity-row {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   border-radius: 14px; background: var(--bg-input);
 }
-/* A device the villa's system has lost contact with wears the WHOLE tile in its badge's unavailable language
-   (owner, 2026-10-19: only the icon square was dashed): the dashed amber edge, an amber tint, its reading in amber
-   (categorySurface's `unavailable` row, the .status-pill.unavailable tint). A critical one wears its badge's red ring
-   instead (deviceLook.critical). The 2px edge comes out of the button's padding, so the tile keeps its size.
-   SummaryEntityRow.rowLookClass decides which. */
+/* A device the villa's system has lost contact with wears the WHOLE tile in "no contact" (owner, 2026-10-19: only
+   the icon square said so): a dashed edge, a tint, its reading — GREY, the badge's grey "?" (owner, 2026-10-22: badge
+   proposal 2; it was amber, now a fault's colour), as .status-pill.unavailable. A critical one is red instead
+   (deviceLook.critical, the badge's red "?"). The 2px edge comes out of the button's padding, so the tile keeps its
+   size. SummaryEntityRow.rowLookClass decides which. */
 .summary-entity-row.is-lost {
-  border: 2px dashed var(--status-warning);
-  background: color-mix(in srgb, var(--status-warning) 12%, var(--bg-input));
+  border: 2px dashed var(--status-lost);
+  background: color-mix(in srgb, var(--status-lost) 12%, var(--bg-input));
 }
 .summary-entity-row.is-lost .summary-entity-main { padding: 8px 10px; }
-.summary-entity-row.is-lost .summary-entity-state { color: var(--status-warning); }
+.summary-entity-row.is-lost .summary-entity-state { color: var(--status-lost); }
 .summary-entity-row.is-lost.is-critical {
   border: 2px solid var(--status-danger);
   background: color-mix(in srgb, var(--status-danger) 12%, var(--bg-input));

@@ -7,6 +7,7 @@
 import { createContext, useContext } from "react";
 import type { Category } from "@/types/scene.types";
 import type { DeviceSurfaceState } from "@/config/EntityCategories";
+import type { BadgeMark, LinkDot } from "@/utils/deviceActivity";
 import type { ReadingRow } from "@/config/readingRows";
 
 export interface PanelActions {
@@ -38,15 +39,13 @@ export interface PanelActions {
     categoryColor: string;
     /** Drives the header icon's FILL and GLYPH exactly like its map badge
      *  (config/EntityCategories.categorySurface + babylon/badgeIcons.ts bake
-     *  the same image both places use). This device's OWN state only —
-     *  "unavailable" is the same isUnavailable() every status pill reads, and
-     *  a binary_sensor's "on" is its own alert. A LINKED entity no longer
-     *  lands here: it rings the badge instead, see ringState. */
+     *  the same image both places use): what this device DOES
+     *  (deviceActivity.badgeFace), never a problem colour. */
     state: DeviceSurfaceState;
-    /** The RING's state, when it differs from the face's — a linked entity
-     *  being on rings the badge without recolouring the device's own glyph.
-     *  See deviceActivity.badgeFaceAndRing. */
-    ringState?: DeviceSurfaceState;
+    /** Its corner mark — what is wrong (deviceActivity.badgeMarkOf). */
+    mark: BadgeMark | null;
+    /** Its linked dot — its linked switch on or off (deviceActivity.linkDotOf). */
+    linkDot: LinkDot;
     /** A CRITICAL device that lost contact (deviceLook.critical, 2.496.428): every lost pill of this window — the
      *  reading's, the "UNAVAILABLE" notice's, the lock's — takes the danger red (config/reading.lostPillTone). */
     critical: boolean;

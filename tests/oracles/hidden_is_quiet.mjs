@@ -7,13 +7,16 @@
 // predicate (deviceGroups.hiddenIn → VillaDevices.isHidden → LookSource.config.isHidden); this drives values through
 // the store's look, the map's look, the villa's device list and "Needs attention" together.
 //
+// ⚠️ AND SINCE 2026-10-22 (owner: badge proposal 2) THE MAP DRAWS NO BADGE FOR IT AT ALL (deviceActivity.drawsBadge) —
+// it was drawn quiet. Its look stays quiet for what still reads it (its 3D object, a list that names it as hidden).
+//
 // And a device the villa's system no longer has ("Missing"): a ticket on one of its entities deleted with it stood
 // as a second line under the device's own "Missing" line — only a ticket on an entity the system still had counted
 // as offline. One device, one line.
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
-const { deviceLook, storeLookSource, mapLookSource } = await import("@/utils/deviceActivity");
+const { deviceLook, drawsBadge, storeLookSource, mapLookSource } = await import("@/utils/deviceActivity");
 const { villaDevices, hiddenIn } = await import("@/config/deviceGroups");
 const { buildAttentionItems, groupAttention } = await import("@/config/attention");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
@@ -39,12 +42,14 @@ ck("it is no device: never in the villa's list, never counted unavailable",
    !devices.has("lock.old") && !devices.unavailable.includes("light.gone") && devices.has("lock.door"), devices.ids);
 for (const [name, src] of [["the room list (store)", store], ["the map", map]]) {
   const old = deviceLook("lock.old", src), gone = deviceLook("light.gone", src);
-  ck(`${name}: a hidden unlocked lock is never red, a hidden lost lamp never amber nor critical`,
-     !old.alert && old.face !== "alert" && old.ring !== "alert"
-     && !gone.unavailable && gone.face !== "unavailable" && !gone.critical, { old, gone });
+  ck(`${name}: no badge for either; a hidden unlocked lock is never red, a hidden lost lamp never grey nor critical`,
+     !drawsBadge("lock.old", src) && !drawsBadge("light.gone", src)
+     && !old.alert && old.mark === null && old.kind !== "alert"
+     && !gone.unavailable && gone.face !== "unavailable" && gone.mark === null && !gone.critical, { old, gone });
 }
-ck("a device that is not hidden still alarms and still reads lost",
-   deviceLook("lock.door", map).alert && deviceLook("light.hall", map).unavailable);
+ck("a device that is not hidden draws its badge, still alarms and still reads lost",
+   drawsBadge("lock.door", map) && deviceLook("lock.door", map).alert && deviceLook("light.hall", map).unavailable
+   && deviceLook("light.hall", map).mark === "lost");
 ck("the predicate stands for the whole device: an entity whose device's entity is hidden is hidden",
    hiddenIn(new Set(["switch.relay"]), new Map([["sensor.relay_power", "switch.relay"]]))("sensor.relay_power"));
 
@@ -54,8 +59,8 @@ const listed = new Set(items.map((i) => i.entityId));
 const redOnMap = Object.keys(entities).filter((id) => deviceLook(id, map).alert);
 ck("every red badge on the map has its line in Needs attention", redOnMap.every((id) => listed.has(id)),
    { redOnMap, listed: [...listed] });
-const amberOnMap = Object.keys(entities).filter((id) => deviceLook(id, map).unavailable);
-ck("every amber badge on the map has its line too", amberOnMap.every((id) => listed.has(id)), { amberOnMap });
+const greyOnMap = Object.keys(entities).filter((id) => drawsBadge(id, map) && deviceLook(id, map).unavailable);
+ck("every grey \"?\" badge on the map has its line too", greyOnMap.every((id) => listed.has(id)), { greyOnMap });
 
 console.log("  a device the villa's system no longer has:");
 {

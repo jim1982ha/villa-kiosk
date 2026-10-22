@@ -3,9 +3,9 @@
 // the badge, the name, the reading, the chevron, and the row's switch beside it.
 //
 // ⚠️ THE WHOLE TILE SAYS "CONTACT LOST", NOT ONLY ITS ICON (owner, 2026-10-19: in a room's window only the icon square
-// of "… Temperature — Unavailable" was dashed amber). The tile wears the badge's unavailable language — the dashed
-// amber edge, an amber tint, its reading in amber — and a CRITICAL device that lost contact the red ring its badge
-// wears (deviceLook.critical). Both read the device's look (utils/deviceActivity.deviceLook), the map badge's own
+// of "… Temperature — Unavailable" was dashed amber). The tile says "no contact" — a dashed grey edge, a grey tint, its
+// reading in grey (the badge's grey "?", owner 2026-10-22: badge proposal 2) — and a CRITICAL device that lost contact
+// is red, as its badge's red "?" (deviceLook.critical). Both read the device's look (utils/deviceActivity.deviceLook), the map badge's own
 // rule: a device with no value to give ("unknown") is not out of contact, and stays a plain tile.
 
 import type { ReactNode } from "react";

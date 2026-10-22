@@ -58,7 +58,7 @@ ck("the lone card", /applyBadgeFrame\(lbl\.badge, badgeRing\(surface, this\.metr
 ck("a group's sub-cards", /const frame = badgeRing\(frames\[model\.frame\], this\.metrics\.cardHeightPx, this\.metrics\);/.test(ev));
 ck("a room chip", /const frame = badgeRing\(chipFrames\[model\.frame\], this\.metrics\.cardHeightPx, this\.metrics\);/.test(ev));
 ck("a group's chips: the same ring (in proportion) and the one bake size",
-   /badgeRing\(categorySurfaceRinged\(s2\.lbl\.category, face, ring,/.test(ev) && /badgeBakePx\(lay\.chip, this\.iconUserScale, this\.bestCssToGui\(\)\)/.test(ev));
+   /badgeRing\(categorySurface\(s2\.lbl\.category, face, color\)/.test(ev) && /badgeBakePx\(lay\.chip, this\.iconUserScale, this\.bestCssToGui\(\)\)/.test(ev));
 ck("every path APPLIES its frame through applyBadgeFrame — no ring field written by hand",
    (ev.match(/applyBadgeFrame\(/g) ?? []).length === 4 && !/\.thickness = (ring|frame)\.px|\.dash = ring\.dash|sub\.cornerRadius =/.test(ev));
 ck("no path writes its own ring weight or corner any more",

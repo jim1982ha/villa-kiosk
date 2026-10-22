@@ -14,6 +14,7 @@ import type { ComponentType } from "react";
 import { Armchair, Lightbulb, Wifi, Zap, ShieldCheck, Puzzle } from "lucide-react";
 import type { Category, EntityType } from "@/types/scene.types";
 import { OPENING_DEVICE_CLASSES, MOTION_DEVICE_CLASSES, MOTION_ID_HINT, OPENING_ID_HINT } from "./BinarySensorClasses";
+import type { BadgeMark } from "@/utils/deviceActivity";
 
 /** Fixed display order for the HUD filter buttons and Config Editor dropdown. */
 export const CATEGORY_ORDER: Category[] = [
@@ -71,6 +72,8 @@ const FALLBACK_CATEGORY_COLOR: Record<Category, string> = {
 };
 const FALLBACK_DANGER = "#B24232";
 const FALLBACK_WARNING = "#B8801F";
+const FALLBACK_LOST = "#6B706B";
+const FALLBACK_PENDING = "#1F7F8C";
 const FALLBACK_NEUTRAL_GLYPH = "#5A5F5B";
 const FALLBACK_HAIRLINE = "rgba(23, 25, 26, 0.10)";
 // --bg-modal's light-theme value: the app's one OPAQUE floating surface (see
@@ -137,7 +140,7 @@ export interface CategorySurface {
    *
    * Always the device's own hue (its category colour, or its per-entity
    * `badgeColor` override) except where a STATUS colour outranks it: red for
-   * alert, amber for unavailable. It does not go neutral when the device is
+   * alert, grey for unavailable. It does not go neutral when the device is
    * resting — see the `off` row for why.
    */
   glyph: string;
@@ -154,14 +157,14 @@ export interface CategorySurface {
    */
   ink: string;
   ring: string | null;
-  /** Unavailable only — the guidelines call for a DASHED ring there. */
-  ringDashed?: boolean;
-  /** Draw the ring heavier than usual — the unavailable state, which has to
-   *  read as "something is wrong here" at a glance across a room. */
-  ringBold?: boolean;
-  /** Idle only — a 1px hairline rather than the 1.5px state ring. */
+  /** Idle (and unavailable) — a 1px hairline rather than the 1.5px state ring. */
   ringHairline?: boolean;
+  /** Unavailable only: the whole face drawn at FADED_ALPHA — a resting look with nothing trustworthy behind it. */
+  faded?: boolean;
 }
+
+/** How faded a face with no trustworthy state is drawn (owner, 2026-10-22: badge proposal 2, "about 60%"). */
+export const FADED_ALPHA = 0.6;
 
 /** The ONE place that turns a category + live device state into a fill/glyph/
  *  ring triple — the 2D chips, the legend, the bottom bar and the baked 3D
@@ -186,13 +189,15 @@ export function categorySurface(category: Category, state: DeviceSurfaceState, o
       return { fill: tintOver(danger, TINT_ALPHA, base), glyph: danger, ink: danger, ring: danger };
     }
     case "unavailable": {
-      const warning = cssVar("--status-warning") || FALLBACK_WARNING;
-      // ONE dashed ring, drawn heavy, in the unavailable amber — the colour
-      // the Map colours legend documents for "Home Assistant has lost contact"
-      // (utils/stateColors STATUS_COLOR). It was briefly the danger red, which
-      // made a device that is merely unreachable look like a confirmed alarm
-      // and put a second answer next to the legend's.
-      return { fill: base, glyph: warning, ink: warning, ring: warning, ringDashed: true, ringBold: true };
+      // ⚠️ NO LONGER A DASHED AMBER RING (owner, 2026-10-22: badge proposal 2). A problem is the badge's corner mark
+      // now (deviceActivity.badgeMarkOf: the grey "?"), never its face. With no trustworthy state there is nothing to
+      // claim, so the face is the resting look, faded, its glyph grey — not the category hue, which says "this is what
+      // it is, and it is fine".
+      const lost = cssVar("--status-lost") || FALLBACK_LOST;
+      return {
+        fill: base, glyph: lost, ink: cssVar("--text-secondary") || FALLBACK_NEUTRAL_GLYPH,
+        ring: cssVar("--hairline") || FALLBACK_HAIRLINE, ringHairline: true, faded: true,
+      };
     }
     case "off":
     default:
@@ -227,41 +232,27 @@ export function categorySurface(category: Category, state: DeviceSurfaceState, o
   }
 }
 
-/**
- * A badge whose RING reports a different fact from its face.
- *
- * ── Why the two can differ (2.214.0) ──────────────────────────────────────
- * `linkedEntityId` was always documented as driving a device's RING — "its
- * ring is resolved ONCE here", says badgeKind — but it was implemented by
- * swapping the whole surface state, so an armed camera turned red from edge to
- * edge: fill, ring AND the camera glyph itself. Two independent facts were
- * being drawn as one, and the more important of them (what KIND of device this
- * is, and whether it is working) lost, because the glyph is what carries it.
- *
- * Reported for exactly that: an armed camera should keep its purple camera
- * pictogram — the camera is fine, it is recording — while the RING says the
- * detection is armed. Face = this device's own state. Ring = the linked
- * signal. Neither has to borrow the other's colour any more.
- *
- * Composed from categorySurface() rather than adding a second table, so the
- * §0 colours stay defined exactly once and a ring drawn here is always a ring
- * that state would have drawn on its own.
- */
-export function categorySurfaceRinged(
-  category: Category, state: DeviceSurfaceState, ringState: DeviceSurfaceState, override?: string,
-): CategorySurface {
-  const face = categorySurface(category, state, override);
-  if (ringState === state) return face;
-  const ring = categorySurface(category, ringState, override);
-  return {
-    fill: face.fill,
-    glyph: face.glyph,
-    ink: face.ink,
-    ring: ring.ring,
-    ringDashed: ring.ringDashed,
-    ringBold: ring.ringBold,
-    ringHairline: ring.ringHairline,
-  };
+/* ⚠️ `categorySurfaceRinged` IS GONE (owner, 2026-10-22: badge proposal 2). A badge's ring reported a second fact
+   (a linked switch on, a critical device lost) in another state's colour. Those facts are the badge's linked DOT and
+   corner MARK now (markSurface, below); a ring is only ever its face's own. */
+
+/** A badge's corner mark, as painted: its fill and its white symbol (deviceActivity.BadgeMark — the same red, amber,
+ *  grey and teal every other surface paints those meanings in: utils/stateColors STATUS_COLOR, the Cockpit's
+ *  severities). Resolved to literal colours, like categorySurface, for the canvas bake. */
+export function markSurface(mark: BadgeMark): { fill: string; symbol: string } {
+  switch (mark) {
+    case "critical": return { fill: cssVar("--status-danger") || FALLBACK_DANGER, symbol: "?" };
+    case "alarm": return { fill: cssVar("--status-danger") || FALLBACK_DANGER, symbol: "!" };
+    case "fault": return { fill: cssVar("--status-warning") || FALLBACK_WARNING, symbol: "!" };
+    case "lost": return { fill: cssVar("--status-lost") || FALLBACK_LOST, symbol: "?" };
+    case "asleep": return { fill: cssVar("--status-lost") || FALLBACK_LOST, symbol: "z" };
+    case "moving": return { fill: cssVar("--status-pending") || FALLBACK_PENDING, symbol: "\u2026" };
+  }
+}
+
+/** The surface a badge's mark and dots are ringed in, to stand clear of the face: the badge's own opaque ground. */
+export function badgeGround(): string {
+  return surfaceBase();
 }
 
 /** Default category by device TYPE. Anything not listed here (and not caught by
