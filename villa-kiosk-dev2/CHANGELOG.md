@@ -1,3 +1,13 @@
+## 2.496.492
+
+What you will see in Advanced Settings:
+- Devices › "Asleep between reports" folds under its title like "Grouped devices": a chevron and "4 devices" on
+  the title's line, the pills and the picker inside.
+- A device's card is as tall as before when folded: its button now reads "Confirm before toggling" and is no taller
+  than the pencil beside it.
+- A device's "Linked entity" field takes the card's whole width.
+- System: "Maintenance records" comes before "Device telemetry".
+
 ## 2.496.491
 
 What you will see in Advanced Settings:
