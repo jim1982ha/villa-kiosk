@@ -1,3 +1,9 @@
+## 2.496.495
+
+What you will see:
+- The Kiosk calls the villa's automations "automations", never "rules": the Cockpit's Faults (i) now says "A VESTA
+  alert from one of the villa's VESTA automations". A check keeps the word "rule" out of the Kiosk's texts.
+
 ## 2.496.494
 
 What you will see:
