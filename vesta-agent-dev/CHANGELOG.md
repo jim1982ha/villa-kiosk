@@ -1,3 +1,12 @@
+## 0.12.317
+
+What you will see:
+- Costs: the counters (alerts followed, buttons pressed, actions done, replies written, reports made, failures)
+  are now with the big figures and follow the period you choose (7, 30 or 90 days). Overview's "The last 24 hours"
+  shows only the jobs that ran, without the repeated "Scheduled jobs run" title.
+- No more long dashes (" — ") in the skills' descriptions and texts, the reports and the Telegram alert lines.
+  Skills you edited yourself keep their text until you take the new version in Skills › Compare.
+
 ## 0.12.316
 
 What you will see:
