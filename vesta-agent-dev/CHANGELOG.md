@@ -1,3 +1,12 @@
+## 0.12.325
+
+What you will see:
+- A voice message with no words in it (silent, or too mumbled) now reads "I could not make out this voice message.
+  Try again, or write it." Before, when the villa had several speech-to-text services, or none, you could read a
+  sentence asking you to set one up, although Whisper had listened to the message.
+- The weekly report shows a battery at the charge the night check judged that night. Before, a battery could show
+  an old charge, such as 50 %, beside the night check's "replace now" at 8 %.
+
 ## 0.12.324
 
 What you will see:
