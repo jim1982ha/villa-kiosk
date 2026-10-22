@@ -1,3 +1,10 @@
+## 0.12.321
+
+What you will see:
+- A voice message is now written out in the language it was spoken in (Whisper recognises it), and the VESTA Agent
+  answers in that language: a French voice note gets a French answer, never an English translation.
+- If Whisper cannot be reached directly, voice messages work as before.
+
 ## 0.12.320
 
 What you will see:

@@ -177,6 +177,11 @@ Telegram button.
   answered, what, and at what time. The answer goes to the chat where the
   button was pressed.
 - Messages are plain text: Telegram shows exactly what is written.
+- A voice message is written out by the Whisper app, asked directly, which
+  finds the language spoken; the agent answers in that language. If Whisper
+  cannot be reached that way, the voice message goes through Home Assistant's
+  speech-to-text as before. `whisper: off` in the villa-concierge skill's
+  `villa.voice.yaml` turns the direct way off.
 - Ask it "what did you do last night?": it reads its own record (the jobs run,
   the alerts followed, the buttons pressed, the tickets, the cost).
 - `/new` starts a new conversation; a reply that reaches the cost limit stops
