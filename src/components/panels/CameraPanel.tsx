@@ -78,7 +78,8 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   // chrome — this panel is the one that doesn't use BasePanel (it's a
   // fullscreen feed, not a modal card), so it reads the identical context and
   // renders the control in its own bottom bar instead of re-deriving anything.
-  const { linked, linkedSensor, back } = usePanelActions();
+  // `motion`: its linked entity when that detects presence (panelHeader, BinarySensorClasses.cameraMotionId)
+  const { linked, linkedSensor, motion, back } = usePanelActions();
   // ── The feed ─────────────────────────────────────────────────────────────
   // One player per camera, made in an EFFECT rather than a memo: StrictMode
   // runs effect cleanups once on mount, and a memoised player would be
@@ -165,9 +166,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   // Live "is something moving right now" — the same sensor the status bar
   // summarises after the fact, read straight from the entity table so the feed
   // can signal a detection while it is happening.
-  const motionActive = mapping.motionEntityId
-    ? entities[mapping.motionEntityId]?.state === "on"
-    : false;
+  const motionActive = motion ? entities[motion.entityId]?.state === "on" : false;
   // ⚠️ ASKED, NOT RESTATED. This was a second copy of the stylesheet's media
   // query and it drifted: v2.81.1 changed the CSS to `(pointer: coarse)` and
   // left `(max-height: 560px)` here, so an iPad in landscape got rail layout
@@ -361,13 +360,12 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   }, []);
 
   // Bottom status bar: this camera's own online/offline history, layered with
-  // its MOTION sensor's (mapping.motionEntityId, set in Advanced Settings)
-  // on/off history into ONE composite timeline (cameraStatusBar) and rendered
+  // its MOTION sensor's (its linked entity when that detects presence) on/off
+  // history into ONE composite timeline (cameraStatusBar) and rendered
   // through the SAME StateTimeline every other panel's history uses, slim and
-  // pinned to the screen edge. Reads the motion sensor, NOT linkedEntityId:
-  // this band answers "did it detect anything", which is the sensor's job —
-  // linkedEntityId only says whether detection was armed.
-  const motionId = mapping.motionEntityId;
+  // pinned to the screen edge. A camera linked to anything else (a switch)
+  // shows its reachability only.
+  const motionId = motion?.entityId;
   // ⚠️ AND ITS LINKED SENSOR, A STRIP UNDER IT (architecture review, 2026-10-21): a linked binary_sensor lost its
   // switch in 2.496.465 and got its band in every other window (BasePanel, LinkedSensorRow) — this one showed nothing.
   const linkedId = linkedSensor?.entityId;

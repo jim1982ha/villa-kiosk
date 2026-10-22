@@ -26,12 +26,22 @@ const mf = read("MappingFields.tsx"), br = read("BindingRow.tsx"), er = read("En
 // The Villa tab's bound-objects row keeps the LINK only (it carried the same fields).
 ck("a device's fields are edited in ONE table (Devices), the bound-objects row holds the link only",
    /<MappingFields /.test(er) && !/<MappingFields|import MappingFields/.test(br));
-const own = [br, er].map((s) => [/effectiveCategory\(/, /lightIntensityRatio/, /motionEntityId/, /requireConfirm/].filter((r) => r.test(s)).length);
-ck("  ...and neither renders type, category, intensity, the confirm box or the motion sensor itself", own.every((n) => n === 0), own);
+const own = [br, er].map((s) => [/effectiveCategory\(/, /lightIntensityRatio/, /linkedEntityId/, /requireConfirm/].filter((r) => r.test(s)).length);
+ck("  ...and neither renders type, category, intensity, the confirm box or the linked entity itself", own.every((n) => n === 0), own);
 ck("the label commits one way: half a second after typing, or at once on leaving the field",
    /useDraftCommit<string>\(\(_k, value\) => onPatch\(\{ label: value \}\), 500\)/.test(mf) && /onBlur=\{\(\) => label\.flush\("v"\)\}/.test(mf));
-ck("the linked entity is described once, truthfully (ring AND an on/off switch — it was 'ring only' in one table)",
-   /placeholder=\{[^}]*ring and an on\/off switch/.test(mf) && ![mf, br, er].some((x) => /placeholder=[^>]*ring only/.test(x)));
+// owner, 2026-10-22: a camera's "Motion sensor" field merged into "Linked entity" — ONE picker for every type, its
+// camera placeholder neutral (it said "arms detection, long-press", which no longer happens)
+{
+  const code = (t) => t.replace(/\{\/\*[\s\S]*?\*\/\}/g, "").replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+  const ce = code(read("ConfigEditor.tsx"));
+  ck("ONE linked-entity picker for every type: no camera-only motion picker, no column of its own",
+     (mf.match(/<EntityPicker /g) ?? []).length === 1 && /cell\("linked", "Linked entity"/.test(mf)
+     && !/Motion sensor|draftField\(\{ motion/.test(code(mf)) && !/Motion sensor/.test(ce));
+  ck("  ...described truthfully: a camera's may be its motion sensor or a switch; nothing says long-press or arms",
+     /placeholder=\{m\.type === "camera" \? "Linked entity — its motion sensor or a switch…" : "Linked entity — a switch or a sensor…"\}/.test(mf)
+     && ![mf, br, er].some((x) => /long-press|arms detection|ring only/.test(code(x))));
+}
 
 // owner, 2026-10-12: the Label field printed the entity-id fallback as if typed, while the title above it
 // read Home Assistant's own name

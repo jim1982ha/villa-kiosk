@@ -1,7 +1,8 @@
 // src/components/panels/cameraStatusBar.ts
 // The camera window's bottom status bar, as one composite state history:
 // the camera's own reachability layered with its MOTION sensor's on/off
-// (mapping.motionEntityId) — offline / online / motion / motion-unavailable.
+// (its linked entity when that detects presence — BinarySensorClasses.cameraMotionId) — offline / online / motion /
+// motion-unavailable.
 // Rendered by the same StateTimeline every other panel uses.
 //
 // ⚠️ THIS BAR'S SUBJECT IS REACHABILITY, so an `unavailable` row is the

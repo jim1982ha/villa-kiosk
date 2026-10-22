@@ -16,8 +16,8 @@ interface IdSet { has(id: string): boolean }
 
 /**
  * The entities that are ON THE MAP: every entity a 3D object stands for,
- * plus every mapping's linked and motion entity (they have map presence
- * through the device they belong to) — dismissed ones left out.
+ * plus every mapping's linked entity (it has map presence
+ * through the device it belongs to) — dismissed ones left out.
  *
  * Dismissed entities (AppConfig.dismissedEntityIds) are removed HERE rather
  * than at each list: this set is what every "is it on the map / does it
@@ -32,7 +32,6 @@ export function effectiveMapped(
   for (const id of sceneEntityIds) if (!dismissed.has(id)) out.add(id);
   for (const m of Object.values(entityMap)) {
     if (m.linkedEntityId && !dismissed.has(m.linkedEntityId)) out.add(m.linkedEntityId);
-    if (m.motionEntityId && !dismissed.has(m.motionEntityId)) out.add(m.motionEntityId);
   }
   return out;
 }

@@ -174,9 +174,8 @@ function EntityMapRow({
       {expanded && !editing && (
         <MappingFields entityId={m.entityId} mapping={m} entity={entity}
           onPatch={(change) => onPatch(entryKey, change)}
-          cell={(key, label, field, opts) => (
-            <td key={key} data-label={label} className={opts?.pair ? "config-cell-pair" : undefined}
-              style={opts?.pair ? { minWidth: 180 } : undefined}>{field}</td>
+          cell={(key, label, field) => (
+            <td key={key} data-label={label}>{field}</td>
           )} />
       )}
     </tr>

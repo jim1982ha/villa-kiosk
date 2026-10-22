@@ -5,7 +5,7 @@
 // A simulated "diffused red light beam" pointing the way a camera prop was
 // rotated AND tilted in SweetHome 3D (see sh3dParser's `angle` for yaw and
 // `pitch` for tilt), toggled by that camera's linked motion binary_sensor
-// (EntityMapping.motionEntityId). It is a translucent unlit cone, not a real
+// (its linkedEntityId when that detects presence — BinarySensorClasses.cameraMotionId). It is a translucent unlit cone, not a real
 // light — no shadow map, no surface interaction.
 
 import { Color3 } from "@babylonjs/core/Maths/math.color";

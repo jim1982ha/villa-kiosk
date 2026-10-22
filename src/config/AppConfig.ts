@@ -398,35 +398,30 @@ function stripStaleVariantEntities(config: AppConfig): AppConfig {
   return { ...config, entityMap, meshBindings };
 }
 
-/** Undo v2.35.56's motionEntityId -> linkedEntityId merge for cameras.
+/**
+ * A camera's "Motion sensor" is its LINKED entity (owner, 2026-10-22: the field merged into "Linked entity"). A stored
+ * mapping still carrying the old `motionEntityId` key gets it moved: a camera's motion sensor becomes its
+ * linkedEntityId, and the key is dropped from every mapping, camera or not.
  *
- *  That release briefly collapsed the two fields into one, moving every
- *  camera's configured motion sensor into linkedEntityId. The fields are
- *  separate again (they drive different visuals — ring vs beam — and one is
- *  user-writable while the other is a read-only sensor), so a camera
- *  upgraded through that release has its motion sensor sitting in the wrong
- *  slot: it would ring the badge permanently while motion is detected and
- *  drive no beam at all, plus offer a long-press "toggle" of a binary_sensor
- *  that HA has no service to toggle.
+ * ⚠️ BOTH SET: THE MOTION SENSOR WINS (owner, 2026-10-22). A camera linked to a switch AND given a motion sensor keeps
+ * the motion sensor — what drives its beam, its motion status and its pill — and the switch link is dropped.
  *
- *  Narrow on purpose — only cameras, only when motionEntityId is still
- *  empty, and only when the value actually looks like a sensor
- *  (binary_sensor domain). A camera deliberately linked to a real switch
- *  keeps it, since that's exactly what linkedEntityId is now for. */
-function migrateMotionEntityId(config: AppConfig): AppConfig {
-  let changed = false;
-  const entityMap = Object.fromEntries(
-    Object.entries(config.entityMap).map(([id, map]) => {
-      const misplaced = map.linkedEntityId;
-      if (
-        map.type !== "camera" || map.motionEntityId
-        || !misplaced || !isDomain(misplaced, "binary_sensor")
-      ) return [id, map];
-      changed = true;
-      return [id, { ...map, motionEntityId: misplaced, linkedEntityId: undefined }];
-    }),
-  );
-  return changed ? { ...config, entityMap } : config;
+ * ⚠️ IT REPLACES `migrateMotionEntityId`, WHICH DID THE OPPOSITE: it moved a camera's binary_sensor OUT of
+ * linkedEntityId into motionEntityId, and would have undone this on every load. Idempotent: a mapping without the key
+ * is returned as it is. Persisted like every migration here: normaliseConfig runs on every config entering memory,
+ * the store's pull included, so the migrated maps differ from the store's copy and DeviceConfigSync pushes them back
+ * (from a profile that may edit the setup).
+ */
+type StoredMapping = EntityMapping & { motionEntityId?: string };
+export function mergeMotionIntoLinked(config: AppConfig): AppConfig {
+  let entityMap: Record<string, EntityMapping> | null = null;
+  for (const [id, map] of Object.entries(config.entityMap) as [string, StoredMapping][]) {
+    if (!("motionEntityId" in map)) continue;
+    const { motionEntityId, ...rest } = map;
+    entityMap ??= { ...config.entityMap };
+    entityMap[id] = rest.type === "camera" && motionEntityId ? { ...rest, linkedEntityId: motionEntityId } : rest;
+  }
+  return entityMap ? { ...config, entityMap } : config;
 }
 
 /**
@@ -448,7 +443,7 @@ function migrateMotionEntityId(config: AppConfig): AppConfig {
  */
 export function normaliseConfig(config: AppConfig, opts: { maps?: boolean } = {}): AppConfig {
   const complete = completeConfig(config);
-  return opts.maps === false ? complete : migrateMotionEntityId(stripStaleVariantEntities(upgradeStaleTypes(complete)));
+  return opts.maps === false ? complete : mergeMotionIntoLinked(stripStaleVariantEntities(upgradeStaleTypes(complete)));
 }
 
 /**

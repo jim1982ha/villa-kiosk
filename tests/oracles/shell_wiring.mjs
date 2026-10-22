@@ -95,7 +95,7 @@ eq("...the update() the server pull arrives through wraps its setConfig",
 eq("...and no other way in: no replace(), no reset()",
    !/const (replace|reset) = useCallback/.test(CC) && (CC.match(/setConfig\(/g) ?? []).length === (CC.match(/setConfig\(\(prev\)/g) ?? []).length, true);
 eq("the migrations have no other caller",
-   (AC.match(/migrateMotionEntityId\(|stripStaleVariantEntities\(/g) ?? []).length, 4);
+   (AC.match(/mergeMotionIntoLinked\(|stripStaleVariantEntities\(/g) ?? []).length, 4);
 // entityMap and meshBindings arrive from the shared store too, and that path
 // touched neither migration: one device pushed stale `__variant` keys, every
 // other pulled them in, the local read stripped them, the next pull restored

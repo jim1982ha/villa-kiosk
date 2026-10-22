@@ -18,7 +18,7 @@
 import type { HassEntity } from "@/types/ha.types";
 import type { EntityMapping, EntityType } from "@/types/scene.types";
 import type { DeviceSurfaceState } from "@/config/EntityCategories";
-import { alertStateFor } from "@/config/BinarySensorClasses";
+import { alertIsFault, alertStateFor } from "@/config/BinarySensorClasses";
 import { deviceTypeOf } from "@/config/EntityMap";
 import { TRANSITIONAL_STATES, contactOf, statusKeyFor } from "@/utils/stateColors";
 import { devicePower } from "@/utils/devicePower";
@@ -433,7 +433,15 @@ export function readingOf(entityId: string, source: LookSource): DeviceReading {
       : devicePower(source.state(linkedId), linkedId).position === "on";
     // the linked entity's OWN reading, by the one rule — its own link not followed (one step, never a loop). Never
     // reported: no reading, so its pill is a plain hollow one, not a "?" for an entity the map has not heard from yet.
-    if (source.state(linkedId)) link = ownReadingOf(linkedId, source);
+    if (source.state(linkedId)) {
+      const own = ownReadingOf(linkedId, source);
+      // ⚠️ A DETECTION IS NO ALARM OF THE DEVICE IT IS LINKED TO (owner, 2026-10-22: a camera's motion sensor became
+      // its linked entity). Its own badge reads someone passing as red (2026-10-21); on the camera's bottom-right pill
+      // it is the camera doing its job — filled while motion is on, its other problems (lost, a fault…) kept. The same
+      // line "Needs attention" draws (alertIsFault).
+      link = alertIsFault(linkedId, own.entity.attributes.device_class as string | undefined)
+        ? own : { ...own, alertState: undefined };
+    }
   }
   return { ...ownReadingOf(entityId, source), linked: !!linkedId, linkedOn, link };
 }

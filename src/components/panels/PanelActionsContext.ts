@@ -86,13 +86,14 @@ export interface PanelActions {
    *  closes everything (owner, 2026-10-04: "no way to come back to the main
    *  device"). Undefined: opened from the map, nothing to go back to. */
   back?: { label: string; go: () => void };
-  /** The open camera's MOTION sensor (EntityMapping.motionEntityId), when one
-   *  is configured — camera-only, unlike linkedEntityId above. Read-only: it
+  /** The open camera's MOTION sensor (its linked entity when that detects presence —
+   *  BinarySensorClasses.cameraMotionId, panelHeader), when one
+   *  is linked — a camera's only. Read-only: it
    *  reports what HA already knows (and drives the map's detection beam), not
    *  something this panel can flip, so there is no toggle — just the current
    *  reading, so a camera's own panel can finally show that a motion sensor
    *  is wired up to it at all instead of that being invisible outside
-   *  Advanced Settings. Undefined = no motion sensor configured for this
+   *  Advanced Settings. Undefined = no motion sensor linked to this
    *  camera, or the open panel isn't a camera. */
   motion?: {
     entityId: string;

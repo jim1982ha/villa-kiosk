@@ -59,7 +59,7 @@ export function entityIdsKey(entities: Readonly<Record<string, unknown>>): strin
 /**
  * THE ids that get a room: every entity Home Assistant has (`haIdsKey`, entityIdsKey's string), the
  * model's own (`mapped` — a mesh bound to an entity needs no stored mapping to draw a badge), the
- * stored mappings, and every linked/motion target (only ever a VALUE on another mapping).
+ * stored mappings, and every linked target (only ever a VALUE on another mapping).
  *
  * ⚠️ THE SET USED TO BE THE STORED MAPPINGS (2.496.202): a device the model carries through a mesh
  * binding got no room — "Other", the one bucket the placement pass will not fold into a chip; the
@@ -76,7 +76,6 @@ export function roomIdSet(
   const ids = new Set<string>([...mapped, ...Object.keys(entityMap), ...(haIdsKey ? haIdsKey.split("\n") : [])]);
   for (const mapping of Object.values(entityMap)) {
     if (mapping.linkedEntityId) ids.add(mapping.linkedEntityId);
-    if (mapping.motionEntityId) ids.add(mapping.motionEntityId);
   }
   return ids;
 }
