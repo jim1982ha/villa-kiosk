@@ -39,7 +39,7 @@ def test_the_tone_decodes_to_one_second_of_16khz_mono_at_440hz():
 def test_prepare_writes_a_wav_home_assistant_takes(tmp_path):
     audio = tmp_path / "v.ogg"
     shutil.copy(TONE, audio)
-    res = voice.prepare(str(audio), "fr", Ids(["light.x", "stt.whisper"]))
+    res = voice.prepare(str(audio), "fr", Ids(["light.x", "stt.whisper"]), whisper_at="off")
     st = res["stt"]
     # the language spoken by default, the person's saved one behind it
     assert st["entity"] == "stt.whisper" and st["language"] == "auto" and st["fallback"] == "fr"
@@ -67,4 +67,4 @@ def test_the_speech_to_text_is_never_guessed():
 def test_not_audio_is_said_plainly(tmp_path):
     bad = tmp_path / "v.ogg"
     bad.write_bytes(b"not an ogg file at all, just text")
-    assert "could not be read" in voice.prepare(str(bad), "en", Ids(["stt.a"]))["error"]
+    assert "could not be read" in voice.prepare(str(bad), "en", Ids(["stt.a"]), whisper_at="off")["error"]

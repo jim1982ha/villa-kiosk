@@ -530,10 +530,11 @@ class Vesta:
         # answered, until the answer goes (delivery.Delivery.hold — the one "typing…" of every wait)
         held = self.delivery.hold(got.chat)
         try:
-            text = got.text
+            text, spoken = got.text, None
             if got.voice_file is not None:
-                text = intake.without_mention(await self.voice.transcribe(got.chat, got.person, got.voice_file),
-                                              self.bot_username)
+                heard = await self.voice.transcribe(got.chat, got.person, got.voice_file)
+                text = intake.without_mention(heard.text if heard else None, self.bot_username)
+                spoken = heard.language if heard else None
             image = None
             if got.photo_file is not None:
                 image = await self._photo(got.chat, got.photo_file, str(m.get("file_mime_type") or "image/jpeg"))
@@ -549,7 +550,7 @@ class Vesta:
             if not text and image is None:
                 return
             await self.converse(got.chat, got.person, text, voice=got.voice_file is not None, image=image, held=held,
-                                invoked=got.invoked)
+                                invoked=got.invoked, spoken=spoken)
         finally:
             held()
 
@@ -598,19 +599,20 @@ class Vesta:
     async def converse(self, cid: int, person: Person | None, text: str,
                        resume: str | None = "auto", is_continue: bool = False, voice: bool = False,
                        image: tuple[str, str] | None = None, held=None, invoked: str | None = None,
-                       request: Request | None = None):
+                       request: Request | None = None, spoken: str | None = None):
         """`image`: a photo the person sent (base64, mime), `text` its caption: the AI looks at it. `held`: the chat's
         "typing…" taken when the message arrived (handle_message), carried on until the answer goes. `invoked`: the
-        command skill the person's "/command" called (a new request); `request`: the one a Continue continues."""
+        command skill the person's "/command" called (a new request); `request`: the one a Continue continues.
+        `spoken`: the language Whisper heard a voice message in (voice.Heard), said beside it."""
         if request is None and not is_continue:
             request = self.requests.begin(invoked)
         # what they asked, kept until it is answered: a restart in between is said at the next start (chat_jobs)
         asked = ("Continue" if is_continue else text or ("a photo" if image else "a voice message" if voice else "…"))
         async with self.delivery.typing(cid, held=held) as answered, self.chat_jobs.answering(cid, asked):
-            await self._converse(cid, person, text, resume, is_continue, voice, answered, image, request)
+            await self._converse(cid, person, text, resume, is_continue, voice, answered, image, request, spoken)
 
     async def _converse(self, cid, person, text, resume, is_continue, voice, answered, image=None,
-                        request: Request | None = None):
+                        request: Request | None = None, spoken: str | None = None):
         async with self.lock(cid):
             self.chat_jobs.turn(cid)                         # a job started now belongs to this turn (chat_jobs.py)
             if resume == "auto":
@@ -626,7 +628,8 @@ class Vesta:
                 # engine says which language is saved for the person, never "answer in it".
                 said = ("a photo (attached: look at it) with this message" if image and text else
                         "a photo (attached: look at it), with no message" if image else
-                        "a voice message, as transcribed" if voice else "a message")
+                        (f"a voice message, as transcribed (spoken in {LANG.get(spoken, spoken)})" if spoken else
+                         "a voice message, as transcribed") if voice else "a message")
                 prompt = (f"{said[0].upper() + said[1:]} from {person.name if person else 'someone'} (role "
                           f"{person.role if person else '?'}; language saved for them: {lang}) in the {self.policy().chat_label(cid)}:\n"
                           f"\"\"\"{text}\"\"\"")

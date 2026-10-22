@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.311 (23 October 2026)
+
+- A voice message reaches Whisper directly (owner, 2026-10-22, "the Agent asks Whisper directly"): villa-concierge's
+  `voice.py prepare`, with the language "auto", asks the Whisper app over Wyoming (`whisper:` in `villa.voice.yaml`,
+  default `core-whisper:10300`, `off` never) with no language, so Whisper finds the one spoken, and answers
+  `{"text", "language", "via": "whisper"}`. Unreachable, refused, silent past `voice.whisper_timeout_s`, empty or not
+  Wyoming: the 0.6.310 `stt` spec, with `whisper` saying why. A fixed `language:` keeps the villa's path only.
+- `voice.Voice.transcribe` takes a skill's ready words and runs the villa's speech-to-text only for an `stt` spec; it
+  returns `voice.Heard(text, language)`, and the AI reads "a voice message, as transcribed (spoken in French)". The
+  log line and the "voice" record add `via`, `detected` and `whisper`; never the words, the audio or an address.
+
 ## 0.6.310 (22 October 2026)
 
 - A voice message's language: villa-concierge's `voice.py prepare` asks for `"language": "auto"` (the speech-to-text

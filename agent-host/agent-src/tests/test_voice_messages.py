@@ -39,7 +39,8 @@ def agent(tmp_path, monkeypatch):
                               "chats": {"owner": GROUP, "fm": GROUP}}, skills=["villa-concierge"],
                    telegram=FakeTelegram(audio=open(TONE, "rb").read()))
     with open(os.path.join(v.s.skills_dir, "villa-concierge", "villa.voice.yaml"), "w") as f:
-        yaml.safe_dump({"stt": "stt.test_whisper"}, f)       # the villa names its speech-to-text: no lookup
+        # the villa names its speech-to-text: no lookup; Whisper never asked directly (test_voice_whisper.py)
+        yaml.safe_dump({"stt": "stt.test_whisper", "whisper": "off"}, f)
     v.bot_username = "Villa_Test_bot"
     v.conversed, v.stt_calls = [], []
 

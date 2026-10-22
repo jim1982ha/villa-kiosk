@@ -38,6 +38,14 @@ Checked on 2026-09-28 against the running system and upstream sources.
 6. **Time zone.** The Supervisor sets `TZ` in every app container
    (`docker/app.py`); the host passes it to the agent unchanged. Confirmed on
    the HA Yellow: the app logged Home Assistant's own time zone.
+7. **The Whisper app** (`core_whisper`) is reached at `core-whisper:10300`
+   (fact 2's rule: slug `_` → `-`; Wyoming's port), on the Supervisor's
+   internal network this app shares, so no `hassio_api`/`homeassistant_api`
+   change. Measured on the villa 2026-10-22: with its language set to "auto"
+   and asked over Wyoming WITHOUT a language, it detects the one spoken; Home
+   Assistant's `/api/stt` refuses "auto" (415). Reached from this app: read the
+   first voice message's log line ("Whisper directly", or "Whisper directly:
+   <failure>").
 
 ## The agreement with the VESTA Kiosk (0.8.0)
 
@@ -848,3 +856,29 @@ still off; an investigation calling a sensor with no value "stopped reporting").
   without last_known, without the cut check; last_value without last_known; facts dropping the row; nightly on raw
   states; desk's unheard words; a " — " in a Telegram message (app.py), "Home Assistant" in desk's close note, a
   "rule" in rules.js and report.html; a pattern removed from the list.
+
+## A voice message reaches Whisper directly (owner, 2026-10-22, 0.12.321)
+
+- **Decision** ("the Agent asks Whisper directly"): Home Assistant's speech-to-text cannot ask Whisper to find the
+  language (`/api/stt` refuses "auto": its Wyoming integration takes only the languages Whisper lists), and Whisper
+  forced to English TRANSLATED a French voice note. So a voice message may go to the Whisper app itself, over
+  Wyoming, at its own hostname (fact 7). This is the ONE exception to "everything through the villa's system":
+  optional (`whisper: off`), with the villa's path behind it, and no token involved.
+- **Skills before code**: the Wyoming client is villa-concierge's `scripts/voice.py` (`whisper()`, socket only, no
+  new dependency): with the language "auto" it sends `transcribe` with no language, `audio-start`, one-second
+  `audio-chunk`s, `audio-stop`, and reads events until `transcript` (data inline or after the header, payloads
+  skipped). Limits `voice.whisper_connect_s` (3 s, the name looked up and the connection) and
+  `voice.whisper_timeout_s` (60 s). `villa.voice.yaml` `whisper:` host:port (default `core-whisper:10300`) or `off`;
+  a fixed `language:` keeps the 0.12.320 path exactly (the villa's system, that language, no direct Whisper).
+- **The skill answers either** `{"text", "language"?, "via": "whisper", "seconds"}` (no WAV written) or, when
+  Whisper is off, unreachable, refused, silent past its limit, empty or not speaking Wyoming, the 0.12.320
+  `{"stt": {…, "whisper": "<kind of failure>"}}`. `voice.Voice.transcribe` takes ready words as they are and runs
+  `speech_to_text` only for an "stt" spec; it returns `voice.Heard(text, language)`. The language Whisper detected
+  (shape-checked by `speech.LANGUAGE`) rides into the prompt as "a voice message, as transcribed (spoken in
+  French)" (`app.converse(spoken=)`); instructions.md rule 6 still decides the answer's language.
+- **Record and log**: `via` whisper/villa, language asked, `detected`, `used`, `auto_refused`, `whisper` (why not
+  direct: an exception's name or "off"); never the words, the audio, an address or the token.
+- Standalone containers have no `core-whisper`: the name does not resolve, the villa's path runs.
+- Tests: tests/test_voice_whisper.py against `wyoming_fake.FakeWhisper` (its own parser of the framing) and a
+  stand-in `/api/stt`. Mutations red: no fallback on a failure, a language sent in "auto", the chunk framing
+  (payload length), `whisper: off` ignored.

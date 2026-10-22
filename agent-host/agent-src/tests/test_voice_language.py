@@ -34,12 +34,14 @@ def make(tmp_path, voice_yaml: dict | None = None):
                               "chats": {"owner": GROUP, "fm": GROUP}}, skills=["villa-concierge"],
                    telegram=FakeTelegram(audio=open(TONE, "rb").read()))
     with open(os.path.join(v.s.skills_dir, "villa-concierge", "villa.voice.yaml"), "w") as f:
-        yaml.safe_dump({"stt": "stt.test_whisper", **(voice_yaml or {})}, f)
+        # Whisper is not asked directly here unless a test names it (test_voice_whisper.py)
+        yaml.safe_dump({"stt": "stt.test_whisper", "whisper": "off", **(voice_yaml or {})}, f)
     v.bot_username = "Villa_Test_bot"
-    v.conversed = []
+    v.conversed, v.spoken = [], []
 
     async def converse(cid, person, text, chat_role="private", **kw):
         v.conversed.append(text)
+        v.spoken.append(kw.get("spoken"))
     v.converse = converse
     return v
 
@@ -106,7 +108,7 @@ def test_any_other_failure_is_not_retried(tmp_path, monkeypatch):
 
 
 def test_a_villa_fixed_language_is_never_auto(tmp_path):
-    asked, said, rec = transcribe_with(tmp_path, [415, 200], {"language": "de"})
+    asked, said, rec = transcribe_with(tmp_path, [415, 200], {"language": "de", "whisper": "127.0.0.1:9"})
     assert asked == ["de"] and said == [] and rec["used"] == "de" and rec["auto_refused"] is False
 
 

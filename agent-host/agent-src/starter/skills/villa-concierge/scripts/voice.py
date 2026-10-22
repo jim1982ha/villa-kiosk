@@ -1,26 +1,35 @@
 #!/usr/bin/env python3
-"""villa-concierge: a voice message, made ready for Home Assistant's speech-to-text.
+"""villa-concierge: a voice message, written out by Whisper, or made ready for Home Assistant's speech-to-text.
 
-  voice.py prepare --audio voice.ogg --language fr [--stt stt.x] [--fixture-dir DIR]
+  voice.py prepare --audio voice.ogg --language fr [--stt stt.x] [--whisper host:port|off] [--fixture-dir DIR]
 
 (--language: the person's saved language.)
 
-Telegram sends a voice message as Ogg/Opus; Home Assistant's speech-to-text
-(Whisper over Wyoming, and the others) takes 16 kHz, 16-bit mono WAV. This
-script decodes the audio (libopus, the system library), writes the WAV beside
-it, and says which speech-to-text and which language to use:
+Telegram sends a voice message as Ogg/Opus; Whisper and Home Assistant's
+speech-to-text take 16 kHz, 16-bit mono audio. This script decodes the audio
+(libopus, the system library), then:
 
-  {"stt": {"entity": "stt.…", "language": "auto", "fallback": "fr", "wav": "/…/voice.wav", "seconds": 3.2}}
+1. With the language "auto" (the default), it asks the Whisper app ITSELF, over
+   Wyoming (no token involved), with no language: Whisper finds the one spoken.
+   ⚠️ WHY DIRECT (owner, 2026-10-22, "the Agent asks Whisper directly"): Home
+   Assistant's speech-to-text refuses "auto" (415: it takes only the languages
+   Whisper lists), so through it a French voice note was forced to English and
+   Whisper TRANSLATED it. The answer:
+     {"text": "…", "language": "fr", "via": "whisper", "seconds": 3.2}
+2. When Whisper cannot be reached or answers nothing (or `whisper: off`, or a
+   fixed language), it writes the WAV beside the audio and says which
+   speech-to-text and which language the engine asks Home Assistant for:
+     {"stt": {"entity": "stt.…", "language": "auto", "fallback": "fr", "wav": "/…/voice.wav", "seconds": 3.2,
+              "whisper": "ConnectionRefusedError"}}     (why Whisper was not used: a kind, never the words)
+   The engine sends that WAV (it holds the token; a script never does); when the
+   villa's system refuses "auto", it tries once more in `fallback`.
   {"error": "plain words for the person"}
 
-The engine then sends the WAV to Home Assistant (it holds the token; a script
-never does) and treats the text as the message. "auto": the speech-to-text
-finds the language spoken (the AI answers in the language of the words); when
-the villa's system refuses "auto", the engine tries once more in `fallback`.
-
 Every choice is the villa's, in ../villa.voice.yaml (optional, kept by updates):
+  whisper: core-whisper:10300  the default: the Whisper app's own hostname on Home Assistant OS
+  whisper: off                 never directly: Home Assistant's speech-to-text only
   stt: stt.faster_whisper      the speech-to-text, when Home Assistant has several
-  language: fr                 always this language: no "auto", no fallback
+  language: fr                 always this language, through Home Assistant: no "auto", no fallback, no direct Whisper
   language: auto               the default: the language spoken, else the person's saved one
 """
 
@@ -31,13 +40,18 @@ import ctypes
 import ctypes.util
 import json
 import os
+import socket
 import struct
 import sys
+import threading
+import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 RATE = 16000                    # what Home Assistant's Wyoming speech-to-text takes
 MAX_FRAME = 5760                # 120 ms at 48 kHz: Opus's longest frame, a safe buffer at any rate
+WHISPER = "core-whisper:10300"  # the Whisper app's hostname and Wyoming port on every Home Assistant OS: a default
+CHUNK = RATE * 2                # one second of 16-bit mono per audio-chunk
 
 
 def villa_settings() -> dict:
@@ -103,6 +117,121 @@ def wav(pcm: bytes) -> bytes:
             struct.pack("<IHHIIHH", 16, 1, 1, RATE, RATE * 2, 2, 16) + b"data" + struct.pack("<I", len(pcm)) + pcm)
 
 
+# ------------------------------------------------------------------ Whisper, asked directly (Wyoming)
+class WyomingError(Exception):
+    """Whisper answered something that is not a Wyoming event, or closed before its transcript."""
+
+
+def wyoming_event(kind: str, data: dict | None = None, payload: bytes = b"") -> bytes:
+    """One Wyoming event as wyoming 1.x writes it: a JSON header line, then its data (data_length bytes of JSON),
+    then its payload (payload_length bytes)."""
+    body = json.dumps(data).encode() if data else b""
+    head = {"type": kind, "version": "1.0.0"}
+    if body:
+        head["data_length"] = len(body)
+    if payload:
+        head["payload_length"] = len(payload)
+    return json.dumps(head).encode() + b"\n" + body + payload
+
+
+def read_event(f) -> dict | None:
+    """The next event from a Wyoming stream (a binary file), its data merged in; None at the end of the stream."""
+    line = f.readline()
+    if not line:
+        return None
+    try:
+        head = json.loads(line)
+        data = dict(head.get("data") or {})
+        n, m = int(head.get("data_length") or 0), int(head.get("payload_length") or 0)
+    except (ValueError, TypeError, AttributeError) as e:
+        raise WyomingError(f"not a Wyoming event ({type(e).__name__})") from None
+    if n:
+        extra = f.read(n)
+        if len(extra) != n:
+            raise WyomingError("the stream ended inside an event")
+        try:
+            data.update(json.loads(extra))
+        except (ValueError, TypeError) as e:
+            raise WyomingError(f"not a Wyoming event ({type(e).__name__})") from None
+    if m and len(f.read(m)) != m:
+        raise WyomingError("the stream ended inside an event")
+    return {"type": head.get("type"), "data": data}
+
+
+def whisper_address(setting) -> tuple[str, int] | None:
+    """villa.voice.yaml's `whisper:` as (host, port), the default when it names none; None when it is off (YAML
+    reads a bare `off` as false)."""
+    if setting is False or str(setting).strip().lower() in ("off", "false", "no"):
+        return None
+    host, _, port = str(setting or WHISPER).strip().rpartition(":")
+    if not host or not port.isdigit():
+        raise ValueError(f"whisper: {setting!r} is not host:port")
+    return host, int(port)
+
+
+def _resolve(host: str, port: int, timeout: float):
+    """The address, looked up within `timeout`: a name that no server answers for must not hold the message."""
+    found: list = []
+
+    def look():
+        try:
+            addr = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)[0][4]
+            found.append((addr[0], addr[1]))      # an IPv6 sockaddr has four fields; a connection takes two
+        except OSError as e:
+            found.append(e)
+    t = threading.Thread(target=look, daemon=True)
+    t.start()
+    t.join(timeout)
+    if not found:
+        raise TimeoutError("the name was not resolved in time")
+    if isinstance(found[0], Exception):
+        raise found[0]
+    return found[0]
+
+
+def whisper(address: tuple[str, int], pcm: bytes, language: str | None = None,
+            connect_s: float | None = None, total_s: float | None = None) -> dict:
+    """{"text": …, "language"?: …} from Whisper over Wyoming. No language sent: Whisper's own setting applies
+    (configured "auto": it finds the one spoken). Raises on anything else (no route, refused, timeout, no words)."""
+    from vesta_shared.limits import limit
+    connect_s = connect_s or limit(
+        "voice.whisper_connect_s", 3, unit="seconds", group="run", lo=1, hi=30,
+        says="How long the Agent waits to reach Whisper directly with a voice message.",
+        reached="The voice message goes through the villa's speech-to-text instead.", told="")
+    total_s = total_s or limit(
+        "voice.whisper_timeout_s", 60, unit="seconds", group="run", lo=5, hi=110,
+        says="How long Whisper, asked directly, may take to write a voice message out (keep it under the time a "
+             "skill may take to prepare one).",
+        reached="The voice message goes through the villa's speech-to-text instead.", told="")
+    deadline = time.monotonic() + total_s
+    host, port = address
+    sock = socket.create_connection(_resolve(host, port, connect_s), timeout=connect_s)
+    try:
+        sock.settimeout(max(0.1, deadline - time.monotonic()))
+        fmt = {"rate": RATE, "width": 2, "channels": 1}
+        out = [wyoming_event("transcribe", {"language": language} if language else None),
+               wyoming_event("audio-start", fmt)]
+        out += [wyoming_event("audio-chunk", fmt, pcm[i:i + CHUNK]) for i in range(0, len(pcm), CHUNK)]
+        out.append(wyoming_event("audio-stop"))
+        sock.sendall(b"".join(out))
+        f = sock.makefile("rb")
+        while True:
+            sock.settimeout(max(0.1, deadline - time.monotonic()))
+            ev = read_event(f)
+            if ev is None:
+                raise WyomingError("Whisper closed before its transcript")
+            if ev["type"] == "transcript":      # transcript-start, -chunk, info…: not the answer
+                text = str(ev["data"].get("text") or "").strip()
+                if not text:
+                    raise WyomingError("Whisper heard no words")
+                said = ev["data"].get("language")
+                return {"text": text, **({"language": str(said)} if said else {})}
+            if time.monotonic() > deadline:
+                raise TimeoutError("Whisper did not answer in time")
+    finally:
+        sock.close()
+
+
 # ------------------------------------------------------------------ which speech-to-text
 def speech_to_text(cli, wanted: str | None) -> tuple[str | None, str | None]:
     """(entity, None) or (None, why not). Several in Home Assistant and none named: not guessed."""
@@ -124,22 +253,35 @@ def which_language(fixed: str | None, saved: str | None) -> dict:
     return {"language": chosen, "fallback": str(saved or "en")} if chosen == "auto" else {"language": chosen}
 
 
-def prepare(audio: str, language: str | None, cli, stt: str | None = None) -> dict:
+def prepare(audio: str, language: str | None, cli, stt: str | None = None, whisper_at=None) -> dict:
+    """`whisper_at`: host:port or "off", over villa.voice.yaml's `whisper:`."""
     cfg = villa_settings()
-    entity, why = speech_to_text(cli, stt or cfg.get("stt"))
-    if not entity:
-        return {"error": why}
     try:
         pcm = decode_opus(open(audio, "rb").read())
     except (ValueError, RuntimeError, OSError) as e:
         return {"error": f"This voice message could not be read ({e})."}
     if not pcm:
         return {"error": "This voice message is empty."}
+    seconds = round(len(pcm) / 2 / RATE, 1)
+    chosen = which_language(cfg.get("language"), language)
+    direct = None
+    if chosen["language"] == "auto":
+        # only "auto" goes directly: a fixed language is what the villa's speech-to-text already takes
+        try:
+            address = whisper_address(whisper_at if whisper_at is not None else cfg.get("whisper", WHISPER))
+            if address:
+                return {**whisper(address, pcm), "via": "whisper", "seconds": seconds}
+            direct = "off"
+        except (OSError, WyomingError, ValueError) as e:
+            direct = type(e).__name__       # a kind of failure, never an address or the words
+    entity, why = speech_to_text(cli, stt or cfg.get("stt"))
+    if not entity:
+        return {"error": why}
     out = os.path.splitext(audio)[0] + ".wav"
     with open(out, "wb") as f:
         f.write(wav(pcm))
-    return {"stt": {**which_language(cfg.get("language"), language), "entity": entity, "wav": out,
-                    "seconds": round(len(pcm) / 2 / RATE, 1)}}
+    return {"stt": {**chosen, "entity": entity, "wav": out, "seconds": seconds,
+                    **({"whisper": direct} if direct else {})}}
 
 
 def main(argv=None):
@@ -148,12 +290,13 @@ def main(argv=None):
     ap.add_argument("--audio", required=True)
     ap.add_argument("--language")
     ap.add_argument("--stt")
+    ap.add_argument("--whisper", help="host:port, or off (over villa.voice.yaml's whisper:)")
     from vesta_shared import script
     script.arguments(ap, store="optional")   # the engine gives every hook the store; this one does not need it
     a = ap.parse_args(argv)
-    res = prepare(a.audio, a.language, script.Context(a).client, a.stt)
+    res = prepare(a.audio, a.language, script.Context(a).client, a.stt, a.whisper)
     print(json.dumps(res))
-    return 0 if "stt" in res else 2
+    return 0 if "stt" in res or "text" in res else 2
 
 
 if __name__ == "__main__":

@@ -1,4 +1,5 @@
-"""A voice message's words: fetched from Telegram, prepared by the skill that handles voice, read by Home Assistant.
+"""A voice message's words: fetched from Telegram, written out by the skill that handles voice (Whisper asked
+directly), or read by Home Assistant from the WAV that skill prepared.
 
 Taken out of app.py (architecture review, 2026-10-07): its own external steps (Telegram's file, a skill's script,
 Home Assistant's speech-to-text) and its own clean-up, testable without the rest of the agent.
@@ -8,15 +9,27 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 from datetime import datetime, timezone
+from typing import NamedTuple
 
 from vesta_shared.limits import limit
 
 from .policy import Person
-from .speech import refused, speech_to_text
+from .speech import LANGUAGE, refused, speech_to_text
 from .telegram import TelegramError
 
 log = logging.getLogger("vesta")
+
+# why the skill did not use Whisper directly, as its script says it: a kind of failure ("ConnectionRefusedError",
+# "off"), never an address or words; anything else is logged as "failed"
+WHY_NOT_DIRECT = re.compile(r"^[A-Za-z]{1,40}$")
+
+
+class Heard(NamedTuple):
+    """A voice message's words, and the language Whisper heard them in (None when it was not said)."""
+    text: str
+    language: str | None = None
 
 
 class Voice:
@@ -29,14 +42,19 @@ class Voice:
         self.send = send                  # delivery.Delivery.send
         self.state = state
 
-    async def transcribe(self, cid: int, person: Person, file_id: str) -> str | None:
+    async def transcribe(self, cid: int, person: Person, file_id: str) -> Heard | None:
         """A voice message's words, or None (the person is told why).
 
         ⚠️ THE SKILL DECIDES, THE ENGINE ONLY CARRIES (owner, 2026-10-05: everything tuned
         per villa lives in the skills, so a villa's skills copied to another work the same).
         The skill whose `on_event.voice_message` hook runs decodes the audio and chooses the
         speech-to-text and the language; the engine fetches the file and sends the skill's
-        WAV to Home Assistant, because it holds the token and a skill script never does."""
+        WAV to Home Assistant, because it holds the token and a skill script never does.
+
+        ⚠️ OR THE SKILL WRITES IT OUT ITSELF (owner, 2026-10-22, "the Agent asks Whisper directly"): Home
+        Assistant cannot ask Whisper to find the language spoken, so the skill may ask Whisper over Wyoming
+        (no token) and answer {"text", "language", "via": "whisper"}; the engine takes those words as they are
+        and runs speech_to_text only when the skill answers an "stt" spec."""
         hook = next(((sk, sk.on_event["voice_message"]) for sk in self.skills.all().values()
                      if "voice_message" in sk.on_event), None)
         if not self.tg:
@@ -66,6 +84,16 @@ class Voice:
                                                     "written out.",
                                                reached="The voice message is not understood; the person is told.",
                                                told="person"))
+            heard = res.get("text")
+            if isinstance(heard, str) and heard.strip():
+                spoken = str(res.get("language") or "")
+                spoken = spoken if LANGUAGE.match(spoken) and spoken != "auto" else None
+                log.info("Voice message in chat %s: %s s, Whisper directly (asked auto, detected %s)", cid,
+                         res.get("seconds"), spoken or "not said")
+                self.state.log("voice", {"chat": cid, "seconds": res.get("seconds"), "via": "whisper", "stt": None,
+                                         "language": "auto", "detected": spoken, "used": spoken,
+                                         "auto_refused": False, "ok": True, "why": None})
+                return Heard(heard.strip(), spoken)
             st = res.get("stt") if isinstance(res.get("stt"), dict) else None
             if not st:
                 await self.send(cid, str(res.get("error") or "This voice message could not be prepared."))
@@ -83,15 +111,18 @@ class Voice:
                 text, why = await speech_to_text(self.s.ha_url, self.s.ha_token, {**st, "language": fallback},
                                                   self.cf_headers)
             auto_refused = asked == "auto" and was_refused
-            log.info("Voice message in chat %s: %s s, %s (asked %s, used %s%s)%s", cid, st.get("seconds"),
+            direct = st.get("whisper")
+            direct = (str(direct) if WHY_NOT_DIRECT.match(str(direct)) else "failed") if direct else None
+            log.info("Voice message in chat %s: %s s, %s (asked %s, used %s%s%s)%s", cid, st.get("seconds"),
                      st.get("entity"), asked, used, ", auto refused" if auto_refused else "",
-                     f": {why}" if why else "")
-            self.state.log("voice", {"chat": cid, "seconds": st.get("seconds"), "stt": st.get("entity"),
-                                     "language": asked, "used": used, "auto_refused": auto_refused,
-                                     "ok": bool(text), "why": why})
+                     f", Whisper directly: {direct}" if direct else "", f": {why}" if why else "")
+            self.state.log("voice", {"chat": cid, "seconds": st.get("seconds"), "via": "villa",
+                                     "stt": st.get("entity"), "language": asked, "detected": None, "used": used,
+                                     "auto_refused": auto_refused, "whisper": direct, "ok": bool(text), "why": why})
             if not text:
                 await self.send(cid, "I could not make out this voice message. Try again, or write it.")
-            return text
+                return None
+            return Heard(text)
         finally:
             for f in (path, wav):        # a voice is the person's: kept no longer than it takes to read it
                 if f and os.path.dirname(os.path.abspath(f)) == os.path.abspath(folder):
