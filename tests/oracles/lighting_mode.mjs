@@ -48,7 +48,8 @@ console.log("\n  the callers read the table, and nothing else decides");
      && (sm.match(/ssao: this\.renderFx\.ssaoOn\(render\)/g) ?? []).length === 2);
   ck("the sun's night branch and Settings' day/night control read structureUnlit",
      /this\.structureUnlit = mode\.structureUnlit/.test(sun) && /if \(this\.structureUnlit\)/.test(sun)
-     && (settings.match(/lightingMode\(\)\.structureUnlit/g) ?? []).length === 2);
+     // one read since 2026-10-22: the control's own explanation is its (i), not a second sentence under it
+     && (settings.match(/lightingMode\(\)\.structureUnlit/g) ?? []).length === 1);
 }
 
 if (fail) { console.log(`  ${fail} FAILED`); process.exit(1); }

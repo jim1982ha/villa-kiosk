@@ -6,6 +6,7 @@
 // for. The warning therefore has to arrive BEFORE the money is committed,
 // which is why the entry form projects the new total as you type.
 
+import InfoTip from "@/components/common/InfoTip";
 import { useState } from "react";
 import Dropdown from "@/components/common/Dropdown";
 import SaveButton from "@/components/common/SaveButton";
@@ -105,7 +106,8 @@ export default function SpendTab(
           line): they never part; on a narrow screen the group goes under the Month as a whole. "Save", not "Save
           statement": beside "Generate statement" it says the same, and the three fit one line on the iPad. */}
       <div className="fm-statement-row">
-        <span className="fm-inline-label">Month</span>
+        <span className="fm-inline-label with-tip">Month
+          {kept && <InfoTip label="How long spend is kept">{kept}</InfoTip>}</span>
         <div style={{ minWidth: 130 }}>
           <Dropdown value={month} ariaLabel="Month" onChange={statement.setMonth}
             options={statement.months.map((m) => ({ value: m, label: m }))} />
@@ -148,7 +150,8 @@ export default function SpendTab(
         <div className="fm-form">
           <h3>{editingId ? "Edit spend entry" : "Record maintenance spend"}</h3>
           <div className="fm-field">
-            <span>Device (search, or type one not listed, leave blank for a whole-villa expense)</span>
+            <span className="with-tip">Device
+              <InfoTip label="About the device">Search, or type one not listed; leave it blank for a whole-villa expense.</InfoTip></span>
             <DeviceSearchPicker
               {...device.pickerProps}
               options={deviceOptions}
@@ -227,7 +230,6 @@ export default function SpendTab(
         ))}
       </div>
 
-      {kept && <p className="muted body-text fm-kept-note">{kept}</p>}
 
       {/* The month's statement (its buttons sit with the Month, above): the same explicit Generate -> Save shape as
           the recap (fmDocuments.buildSpendStatement), for handing this month's spend over on its own, and keeping a

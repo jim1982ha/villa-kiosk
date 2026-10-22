@@ -98,10 +98,13 @@ export default function ModalFooter({
       : <span />;
 
   if (commit === undefined) {
+    // the one exit in the same group, at the same size, as Settings' Save and Cancel (owner, 2026-10-22: one footer)
     return (
       <div className="modal-footer">
         {left}
-        <button className="btn primary" onClick={onClose}>{closeLabel ?? "Close"}</button>
+        <div className="modal-footer-actions">
+          <button className="btn primary" onClick={onClose}>{closeLabel ?? "Close"}</button>
+        </div>
       </div>
     );
   }
@@ -116,6 +119,18 @@ export default function ModalFooter({
           and the tooltip (common/Tip, the Kiosk's own card) explains the
           CONSEQUENCE, which the one-word label deliberately does not. */}
       <div className="modal-footer-actions">
+        {/* ⚠️ THE PRIMARY ANSWER ON THE RIGHT, WHERE EVERY OTHER WINDOW'S Close IS (owner, 2026-10-22: Settings' footer
+            "differs from the other modals"): Cancel, then Save. */}
+        <Tip text={dirty ? "Cancel, undoes every change made here, on every tab, and closes" : "Cancel, closes"}>
+          <button
+            className="btn"
+            aria-label="Cancel"
+            onClick={cancel}
+          >
+            <X size={18} aria-hidden />
+            <span className="btn-label">Cancel</span>
+          </button>
+        </Tip>
         <Tip text={commit
           ? (dirty ? "Save, stores your changes, applies them and closes"
                    : "Nothing has been changed yet")
@@ -129,16 +144,6 @@ export default function ModalFooter({
           >
             <SaveIcon size={18} aria-hidden />
             <span className="btn-label">Save</span>
-          </button>
-        </Tip>
-        <Tip text={dirty ? "Cancel, undoes every change made here, on every tab, and closes" : "Cancel, closes"}>
-          <button
-            className="btn"
-            aria-label="Cancel"
-            onClick={cancel}
-          >
-            <X size={18} aria-hidden />
-            <span className="btn-label">Cancel</span>
           </button>
         </Tip>
       </div>

@@ -95,13 +95,7 @@ export default function BindingsTable() {
       {/* ONE section, one voice (owner, 2026-10-12): "Pre-configure a new
           entity" sat under its own smaller heading and finer print, as if it
           were another section — it is this section's way to add an entity. */}
-      <p className="muted body-text">
-        Each bound 3D object controls a device's entity when tapped in the
-        villa: change which entity here, without reloading the model, its name
-        and display settings are with the device, in Devices. To prepare an entity whose 3D object is not in the model yet,
-        add it below, its settings apply as soon as a model with an object
-        named after its entity ID is uploaded.
-      </p>
+      {/* what this section does is its title's (i) (ConfigEditorModal, owner 2026-10-22: no visible description) */}
 
       <Fold summary={`${bound.length} bound · ${unbound.length} unbound · ${unmappedHaEntities.length} not shown`}>
 
@@ -138,10 +132,7 @@ export default function BindingsTable() {
       </div>
 
       {bound.length === 0 && (
-        <p className="muted body-text mt">
-          No objects bound yet. Expand <strong>unbound objects</strong> below
-          and pick an entity for any 3D object you want to control.
-        </p>
+        <p className="muted body-text mt">No objects bound yet.</p>
       )}
 
       {/* ⚠️ THE THREE LISTS' BUTTONS ON ONE LINE (owner, 2026-10-14), each list opening under them; the unmapped
@@ -210,19 +201,12 @@ export default function BindingsTable() {
         ))}
 
       {catalog.length === 0 && (
-        <p className="muted body-text mt">
-          Load a 3D model first, its object list will appear here for binding.
-        </p>
+        <p className="muted body-text mt">No 3D model loaded yet.</p>
       )}
 
       {showUnmappedHa && (
         <>
-          <p className="muted body-text mt">
-            These entities exist but no 3D object resolves to them, so
-            they have no badge, panel or place on the map, add an object for
-            one in the 3D model (or bind an existing unbound object above) to
-            make it controllable from the villa.
-          </p>
+          <p className="muted body-text mt">Not on the map:</p>
           {unmappedShown.visible.map((id) => (
             <div
               key={id}

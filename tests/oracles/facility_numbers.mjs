@@ -143,9 +143,9 @@ console.log("\n  a figure names its period (architecture review, 2026-10-19: \"R
   eq("  ...with no window, every record given (the old figures)", [ticketStats(tickets).closedWithoutAction, ticketStats(tickets).resolved], [2, 2]);
   const tab = text(draw(h(TicketFigures, { tickets, inProgress: 0, retention: { clearedDays: 90, repairedDays: 365 }, now: NOW })));
   eq("the Tickets tab draws those figures, and names their window",
-     tab, "|0|in progress|6h|mean resolution|1|closed, no action|Mean resolution and closes within the kept record (90 days).|");
+     tab, "|0|in progress|6h|mean resolution|1|closed, no action|Over the kept record (90 days).|");
   const unsaid = text(draw(h(TicketFigures, { tickets, inProgress: 0, retention: null, now: NOW })));
-  eq("  ...a server that did not say: what is held, and no number of days claimed", unsaid.endsWith("|Mean resolution and closes within the kept record.|"), true);
+  eq("  ...a server that did not say: what is held, and no number of days claimed", unsaid.endsWith("|Over the kept record.|"), true);
   // the month as it stood at its end: fixed in November, reopened and cleared in December — November's repair
   const twice = { ...closed("twice", 5, 1, true), openedAt: "2026-11-10T00:00:00Z",
     updates: [{ at: "2026-11-10T04:00:00Z", status: "resolved", photoIds: [] }, { at: "2026-12-20T00:00:00Z", status: "open", photoIds: [], kind: "reopened" },

@@ -11,8 +11,8 @@ import { useState } from "react";
 import { useDraftCommit } from "@/hooks/useDraftCommit";
 import { RECORDS_KEPT_DAYS_MAX, type AppConfig } from "@/config/AppConfig";
 import { useModalA11y } from "@/hooks/useModalA11y";
-import { Boxes, Home, LogOut, Radar, Upload, Wrench } from "lucide-react";
-import SegmentedGroup from "@/components/common/SegmentedGroup";
+import { Boxes, Home, LogOut, Upload, Wrench } from "lucide-react";
+import InfoTip, { TipTitle } from "@/components/common/InfoTip";
 import ModalTabs, { type ModalTab } from "@/components/common/ModalTabs";
 import { useConfig } from "@/config/ConfigContext";
 import { northOffsetFacing } from "@/babylon/skyMoment";
@@ -111,7 +111,12 @@ function NorthOffset({ viewHeadingDeg }: { viewHeadingDeg?: () => number | null 
   const deg = config.northOffsetDeg;
   return (
     <>
-      <label style={{ marginTop: 14 }}>Model north offset · {deg}°</label>
+      <label className="with-tip" style={{ marginTop: 14 }}>Model north offset · {deg}°
+        <InfoTip label="About the model north offset">
+          Face the villa's real north side and press Set North, or drag the slider until the shadows match. Only fixes
+          which wall the light comes from: sunrise and sunset times are already right.
+        </InfoTip>
+      </label>
       {/* One control in two forms on one row: the slider sets the offset by
           hand, the button measures it from the view. */}
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -134,11 +139,6 @@ function NorthOffset({ viewHeadingDeg }: { viewHeadingDeg?: () => number | null 
           Set North
         </button>
       </div>
-      <p className="muted body-text field-hint">
-        Face the villa's real north side and press Set North, or drag the slider
-        until the shadows match. Only fixes which wall the light comes from —
-        sunrise and sunset times are already right.
-      </p>
     </>
   );
 }
@@ -150,31 +150,14 @@ function PresenceSensor() {
   return (
     <>
       <div className="settings-section-title">Villa presence</div>
-      <label>"Villa empty" sensor</label>
+      <label className="with-tip">"Villa empty" sensor
+        <InfoTip label="About the villa empty sensor">
+          The on/off sensor that is on when the villa is empty. Shown on every screen as the presence tile under the
+          floors (Occupied, Empty or Unknown); tapping it tells why.
+        </InfoTip>
+      </label>
       <EntityPicker value={config.presenceSensor} domains={["binary_sensor"]} placeholder="Pick the villa's empty / occupied sensor"
         onChange={(id) => update({ presenceSensor: id })} onClear={() => update({ presenceSensor: "" })} />
-      <p className="muted body-text field-hint">
-        The on/off sensor that is on when the villa is empty. Shown on every screen as the presence tile under the
-        floors, Occupied, Empty or Unknown, and tapping it tells why.
-      </p>
-    </>
-  );
-}
-
-/** One switch for what the map LIGHTS on a detection — a room's red floor glow and a camera's cone (owner, 2026-10-22;
- *  babylon/motionRouting). A shared setting, like the location: it applies to every tablet, live. */
-function RoomGlowAndCones() {
-  const { config, update } = useConfig();
-  return (
-    <>
-      <div className="settings-section-title">On the map</div>
-      <SegmentedGroup ariaLabel="Room glow and camera cones"
-        active={config.roomGlowAndCones ? "on" : null} onChange={() => update({ roomGlowAndCones: !config.roomGlowAndCones })}
-        options={[{ key: "on", title: "Room glow and camera cones", label: <><Radar size={16} /> Room glow and camera cones</> }]} />
-      <p className="muted body-text field-hint">
-        Light up the room in red and draw the camera's cone when presence is detected or a sensor triggers. The devices
-        themselves still glow.
-      </p>
     </>
   );
 }
@@ -190,7 +173,12 @@ function RecordsKept() {
   }, COORD_COMMIT_MS);
   return (
     <>
-      <label htmlFor="records-kept">Keep maintenance records for (days)</label>
+      <label htmlFor="records-kept" className="with-tip">Keep maintenance records for (days)
+        <InfoTip label="About keeping maintenance records">
+          Photos, repaired faults, work done and money spent older than this are deleted. 0 keeps them for ever. A
+          task's latest completion is always kept. Up to {RECORDS_KEPT_DAYS_MAX} days.
+        </InfoTip>
+      </label>
       <input
         id="records-kept" inputMode="numeric" style={{ maxWidth: 140 }}
         value={field.drafts.recordsKeptDays ?? String(config.recordsKeptDays)}
@@ -198,10 +186,6 @@ function RecordsKept() {
         onBlur={() => field.flush("recordsKeptDays")}
         onKeyDown={(e) => e.key === "Enter" && field.flush("recordsKeptDays")}
       />
-      <p className="muted body-text field-hint">
-        Photos, repaired faults, work done and money spent older than this are deleted. 0 keeps them for ever. A
-        task's latest completion is always kept. Up to {RECORDS_KEPT_DAYS_MAX} days.
-      </p>
     </>
   );
 }
@@ -219,12 +203,6 @@ function LogoutAllSection() {
 
   return (
     <>
-      <p className="muted body-text" style={{ marginTop: 0, marginBottom: 10 }}>
-        Signs every device out immediately, this one included, regardless of
-        how long the "Session length" add-on option says a sign-in should
-        last. Use it if a tablet went missing or a PIN was seen by someone who
-        shouldn't have it.
-      </p>
       {failed && (
         <div className="test-result fail" style={{ marginBottom: 10 }}>
           Could not reach the server, no session was signed out.
@@ -332,21 +310,23 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
 
           {tab === "villa" && (
             <>
-              <div className="settings-section-title">Villa location</div>
+              <TipTitle title="Villa location" tip="Drives the sun's position, and day and night, for this villa." />
               <VillaCoordinates />
-              <p className="muted body-text field-hint">
-                Drives sun position and day/night for this villa.
-              </p>
               <NorthOffset viewHeadingDeg={viewHeadingDeg} />
 
               <PresenceSensor />
 
-              <RoomGlowAndCones />
-
               {/* No collapse: `BindingsTable` already opens on its three counts
                   with the lists themselves behind their own toggles, so this
                   tab states how much is bound without a click. */}
-              <div className="settings-section-title">Bound 3D objects</div>
+              <TipTitle title="Bound 3D objects" tip={<>
+                Each bound 3D object controls a device's entity when tapped in the villa: change which entity here,
+                without reloading the model; its name and display settings are with the device, in Devices. To prepare
+                an entity whose 3D object is not in the model yet, add it here: its settings apply as soon as a model
+                with an object named after its entity ID is uploaded. To bind one, expand the unbound objects and pick
+                an entity for it. The entities not shown on the map have no 3D object: add one in the 3D model, or bind
+                an unbound object to one, to control it from the villa.
+              </>} />
               <BindingsTable />
             </>
           )}
@@ -361,13 +341,29 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
                   rather than by clicking. Arriving from a device panel's "edit"
                   pre-fills the filter, so the row that was come for is one of
                   the few on screen. */}
-              <div className="settings-section-title">Auto-detected entity settings</div>
+              <TipTitle title="Auto-detected entity settings" tip={<>
+                Entities listed here are auto-detected because their 3D object in the model is already named with the
+                entity ID (e.g. camera.driveway). Edit the display name, room or panel type without reloading the model.
+                Changes here apply to every device that opens the kiosk: this configuration is stored centrally by the
+                add-on, like the 3D model itself, not per browser. With none yet, upload a model whose objects are named
+                after entity IDs, or prepare one in Villa › Bound 3D objects.
+              </>} />
               <ConfigEditor initialSearch={focusEntityId} />
 
-              <div className="settings-section-title">Grouped devices</div>
+              <TipTitle title="Grouped devices" tip={<>
+                Fold several entities that are really one physical device (e.g. a combo sensor with separate
+                temperature and humidity entities) into a single map badge. Only the primary entity keeps a badge on the
+                map; every other member's value and 24-hour history appear in that badge's detail view instead. To make
+                one, pick the entity that should keep the map badge (e.g. temperature) under New group, then add the rest
+                as members.
+              </>} />
               <GroupedDevices />
 
-              <div className="settings-section-title">Asleep between reports</div>
+              <TipTitle title="Asleep between reports" tip={<>
+                Devices that sleep between reports, such as a battery door sensor: their "unavailable" is normal. VESTA
+                shows what each one last reported, never "Unavailable", and raises no fault for it; the VESTA Agent skips
+                its offline checks for them too.
+              </>} />
               <UnavailableByDesign />
             </>
           )}
@@ -382,13 +378,22 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
                   for an outer collapse to save — and hiding the section also
                   hid the Refresh/Copy/Download/Probe buttons, which are the
                   reason somebody opens this tab. */}
-              <div className="settings-section-title">Device telemetry</div>
+              <TipTitle title="Device telemetry" tip={<>
+                What every device that opens this kiosk has reported: load timings, script errors, graphics context
+                losses and page-lifecycle transitions. This is how a problem on someone else's phone becomes
+                diagnosable. Newest first; the add-on keeps the last 500 events. Copy and Download give the raw events
+                (every field, not just the summary shown here); Clear empties the store.
+              </>} />
               <TelemetryPanel />
 
               <div className="settings-section-title">Maintenance records</div>
               <RecordsKept />
 
-              <div className="settings-section-title">Session</div>
+              <TipTitle title="Session" tip={<>
+                Log out all devices signs every device out immediately, this one included, whatever the add-on's
+                "Session length" option says a sign-in should last. Use it if a tablet went missing or a passcode was
+                seen by someone who shouldn't have it.
+              </>} />
               <LogoutAllSection />
             </>
           )}

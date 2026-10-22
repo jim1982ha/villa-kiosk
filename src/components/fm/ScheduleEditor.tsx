@@ -7,6 +7,7 @@
 // A task can bind to a room, which is what lets the villa map highlight where
 // overdue work actually is.
 
+import InfoTip from "@/components/common/InfoTip";
 import { useState } from "react";
 import Dropdown from "@/components/common/Dropdown";
 import { Plus, Pencil, Trash2 } from "lucide-react";
@@ -116,13 +117,13 @@ export default function ScheduleEditor() {
     <div className="fm-stack">
       {/* the description and "Add a task" on one line (owner, 2026-10-14) */}
       <div className="fm-desc-row">
-        <p className="muted body-text">
-          Each task repeats at the interval you set. It becomes overdue when its interval has passed since it was last
-          done, and the board above shows what is due.
-        </p>
         {!adding && !editingId && (
           <button className="btn ghost" onClick={startAdd}><Plus size={16} /> Add a task</button>
         )}
+        <InfoTip label="About the tasks">
+          Each task repeats at the interval you set. It becomes overdue when its interval has passed since it was last
+          done, and the board above shows what is due.
+        </InfoTip>
       </div>
 
       {(adding || editingId) && form}

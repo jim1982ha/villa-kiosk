@@ -146,15 +146,7 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
 
   return (
     <div>
-      <p className="muted body-text" style={{ marginBottom: 12 }}>
-        Entities listed here are auto-detected because their 3D object in the
-        model is already named with the entity ID (e.g.{" "}
-        <code style={{ fontSize: "var(--text-2xs)" }}>camera.driveway</code>). Edit the
-        display name, room or panel type without reloading the model.{" "}
-        <strong>Changes here apply to every device</strong> that opens the
-        kiosk, this configuration is stored centrally by the add-on, like the
-        3D model itself, not per browser.
-      </p>
+      {/* what this section does is its title's (i) (ConfigEditorModal, owner 2026-10-22: no visible description) */}
 
       {staleIds.length > 0 && (
         <div className="config-stale-notice">
@@ -186,11 +178,7 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
       )}
 
       {allRows.length === 0 && (
-        <p className="muted body-text mt">
-          No auto-detected entities yet. Upload a GLB whose objects are named
-          after entity IDs, or pre-configure one in the
-          <strong> Bound 3D objects</strong> section below.
-        </p>
+        <p className="muted body-text mt">No auto-detected entities yet.</p>
       )}
 
       {orphans.map((id) => (

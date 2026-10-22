@@ -68,13 +68,27 @@ ck("every window has ONE fixed height on a tablet; a question box and the colour
    && !tsx.some(([, s]) => /modal-fixed-height/.test(s)) && !/\.modal-fixed-height/.test(allCss));
 ck("  ...and on a phone: the device windows one height, every other window the full screen",
    /max-height: 80dvh;[\s\S]{0,120}height: 80dvh;/.test(allCss)
-   && /\.modal:not\(\.panel-modal\):not\(\.ask-dialog\):not\(\.badge-color-modal\) \{ height: 100dvh; \}/.test(allCss));
+   && /\.modal:not\(\.panel-modal\):not\(\.ask-dialog\):not\(\.badge-color-modal\):not\(\.device-details\) \{ height: 100dvh; \}/.test(allCss));
 
 // a device's own window fits its content (owner, 2026-10-20: "keep an adjusted height" for the Entity details), on a
 // tablet and a phone; it is named by being about one device (BasePanel's entityId), never by a list of panels
 ck("a window about one device fits its content, on a tablet and a phone",
    /\.modal\.panel-modal\.device-details \{ height: auto; \}|\.modal\.panel-modal\.device-details\s*\{ height: auto; \}|, \.modal\.panel-modal\.device-details \{ height: auto; \}/.test(allCss)
    && /\$\{entityId \? " device-details" : ""\}/.test(readFileSync(new URL("../../src/components/panels/BasePanel.tsx", import.meta.url), "utf8")));
+
+// owner, 2026-10-22: the "Open a ticket" window fits its content by the SAME rule as a device's own window
+ck("the Open a ticket window (one device's faults) fits its content, by the device window's own rule",
+   /className="modal device-details"/.test(readFileSync(new URL("../../src/components/fm/FaultStageModal.tsx", import.meta.url), "utf8")));
+
+// owner, 2026-10-22: Settings' footer "differs from the other modals" — one footer: every button one size, the one
+// exit in the same group as Save and Cancel, the primary answer on the right
+{
+  const mf = readFileSync(new URL("../../src/components/common/ModalFooter.tsx", import.meta.url), "utf8");
+  ck("ONE footer: every footer button one size, the Close in the same group as Save and Cancel, the primary on the right",
+     /\.modal-footer \.btn \{[^}]*min-height: var\(--touch-min\)/.test(top)
+     && /<div className="modal-footer-actions">\s*<button className="btn primary" onClick=\{onClose\}>/.test(mf)
+     && mf.indexOf('aria-label="Cancel"') < mf.indexOf('className="btn primary"\n            disabled'));
+}
 
 if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
 console.log("\n✅ one modal shell");

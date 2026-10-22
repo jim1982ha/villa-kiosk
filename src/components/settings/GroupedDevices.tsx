@@ -80,12 +80,7 @@ export default function GroupedDevices() {
           onCancel={() => setNotice(null)}
         />
       )}
-      <p className="muted body-text" style={{ marginTop: 0, marginBottom: 12 }}>
-        Fold several HA entities that are really one physical device (e.g. a combo
-        sensor exposing separate temperature and humidity entities) into a single
-        map badge. Only the primary entity keeps a badge on the map; every other
-        member's value and 24h history appear in that badge's detail view instead.
-      </p>
+      {/* what this section does is its title's (i) (ConfigEditorModal, owner 2026-10-22: no visible description) */}
 
       <Fold summary={countOf(config.deviceGroups.length, "group")
         + (suggestions.length ? ` · ${suggestions.length} suggested` : "")}>
@@ -99,10 +94,6 @@ export default function GroupedDevices() {
         <label style={{ display: "block", marginBottom: 6, fontSize: "var(--text-sm)", fontWeight: 500 }}>
           New group
         </label>
-        <p className="muted body-text" style={{ fontSize: "var(--text-2xs)", marginBottom: 10 }}>
-          Pick the entity that should keep the map badge (e.g. temperature), add
-          the rest as members once the group is created.
-        </p>
         <div className="row" style={{ gap: 8, alignItems: "flex-start" }}>
           <div style={{ flex: 1 }}>
             <EntityPicker
@@ -149,7 +140,7 @@ export default function GroupedDevices() {
             <div style={{ fontSize: "var(--text-sm)", fontWeight: 500, flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>
               {entityLabel(group.primaryEntityId)}
               <div className="muted body-text" style={{ fontSize: "var(--text-2xs)", marginTop: 2, overflowWrap: "anywhere" }}>
-                {group.primaryEntityId} — primary (keeps the map badge)
+                {group.primaryEntityId}, primary (keeps the map badge)
               </div>
             </div>
             <button className="icon-btn icon-btn-danger" style={{ flexShrink: 0 }} title="Delete group" onClick={() => deleteGroup(group.id)}>

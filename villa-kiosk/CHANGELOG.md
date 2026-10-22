@@ -1,3 +1,15 @@
+## 2.496.489
+
+What you will see:
+- Settings, Advanced Settings and every Cockpit screen show no explanation text any more: each option or section
+  has one (i) beside its title; tap it (or point at it) to read the explanation.
+- Settings › "Map look" (was "Badge & bottom bar style"): Icon / Card, Summary bar and "Room glow and camera cones"
+  on one line. The room-glow switch moved there from Advanced Settings; it still applies to every tablet.
+- Every window's buttons at the bottom right look the same: the same size, Cancel then Save, Close in the same
+  place. "Advanced Settings" in Settings matches them.
+- "Open a ticket" is only as tall as what it shows, like a device's details window.
+- The last long dashes (" — ") in the Kiosk's texts are gone.
+
 ## 2.496.488
 
 What you will see:

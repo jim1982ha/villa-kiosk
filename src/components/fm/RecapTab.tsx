@@ -18,6 +18,7 @@
 // Schedule status, and its own "Generated:" timestamp should mean the moment
 // someone asked for it, not "whenever this component happened to re-render".
 
+import InfoTip from "@/components/common/InfoTip";
 import Dropdown from "@/components/common/Dropdown";
 import SaveButton from "@/components/common/SaveButton";
 import { Sparkles, Download, Save } from "lucide-react";
@@ -37,16 +38,17 @@ export default function RecapTab({ inputs }: {
 
   return (
     <div className="fm-stack">
-      <p className="muted body-text">
-        The month's operations recap, to attach to the owner's monthly statement —
-        maintenance performed against the configured schedule, spend against the
-        monthly cap, faults and response times. Revenue, commissions and payout
-        are out of scope and stay with whoever already handles them.
-      </p>
 
       {/* The period on the same line as what it is for (owner, 2026-10-14) */}
       <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-        <span className="fm-inline-label">Period</span>
+        <span className="fm-inline-label with-tip">Period
+          <InfoTip label="About the recap">
+            The month's operations recap, to attach to the owner's monthly statement: maintenance performed against the
+            configured schedule, spend against the monthly cap, faults and response times. Revenue, commissions and
+            payout are out of scope and stay with whoever already handles them. Generate recap builds it from the
+            villa's current Readiness, Tickets, Spend and Schedule status.
+          </InfoTip>
+        </span>
         <div style={{ minWidth: 130 }}>
           <Dropdown value={month} ariaLabel="Period" onChange={doc.setMonth}
             options={doc.months.map((m) => ({ value: m, label: m }))} />
@@ -73,10 +75,7 @@ export default function RecapTab({ inputs }: {
         {markdown ? (
           <MarkdownPreview markdown={markdown} />
         ) : (
-          <p className="muted body-text">
-            Nothing generated yet for {month} — press "Generate recap" to build it from
-            the villa's current Readiness, Tickets, Spend and Schedule status.
-          </p>
+          <p className="muted body-text">Nothing generated yet for {month}.</p>
         )}
       </div>
 

@@ -13,7 +13,7 @@ import { useAppNotice } from "@/components/hud/AppNotice";
 import SegmentedGroup from "@/components/common/SegmentedGroup";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import {
-  Sliders, Sun, Sunrise, Moon, Monitor, SunMoon, MousePointerClick, Move, Circle, CreditCard, PanelBottom,
+  Sliders, Sun, Sunrise, Moon, Monitor, SunMoon, MousePointerClick, Move, Circle, CreditCard, PanelBottom, Radar,
 } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
@@ -23,6 +23,7 @@ import { useDraftedSlice } from "@/hooks/useDraftedSlice";
 import { DEFAULT_SITE_TITLE, type RenderConfig } from "@/config/AppConfig";
 import type { SceneManager } from "@/babylon/SceneManager";
 import DialogLayer from "@/components/common/DialogLayer";
+import InfoTip from "@/components/common/InfoTip";
 
 interface Props {
   manager: SceneManager | null;
@@ -57,6 +58,10 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
     "badgeStyle", "eyeHeight", "highlightInteractive", "naturalScrolling",
     "render", "showSummaryBar", "siteTitle", "theme",
     "walkSpeed",
+    // ⚠️ THE VILLA'S, NOT THIS DEVICE'S (owner, 2026-10-22: moved here from Advanced Settings): a shared key
+    // (deviceConfig), so writing it reaches every tablet — through the same draft as every other option here, Save
+    // keeping it and Cancel writing the baseline back.
+    "roomGlowAndCones",
   ] as const;
   const slice = useDraftedSlice(SETTINGS_KEYS);
   const v = slice.view;
@@ -217,14 +222,16 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             Glow/Natural Scroll row above. */}
         <div className="row" style={{ gap: 12, marginTop: 14, flexWrap: "wrap", alignItems: "flex-start" }}>
           <div style={{ flex: "1 1 200px", minWidth: 0 }}>
-            <label>Brightness · {v.render.exposure.toFixed(2)}×</label>
+            <label className="with-tip">Brightness · {v.render.exposure.toFixed(2)}×
+              <InfoTip label="About Brightness">The overall exposure of the 3D view. Updates live.</InfoTip></label>
             <input
               type="range" min={0.6} max={2} step={0.05} value={v.render.exposure}
               onChange={(e) => applyRender({ exposure: Number(e.target.value) })}
             />
           </div>
           <div style={{ flex: "1 1 200px", minWidth: 0 }}>
-            <label>Night dimming · {v.render.nightDimming.toFixed(1)}×</label>
+            <label className="with-tip">Night dimming · {v.render.nightDimming.toFixed(1)}×
+              <InfoTip label="About Night dimming">How much extra dimming applies at night. Updates live.</InfoTip></label>
             <input
               type="range" min={0} max={1} step={0.1} value={v.render.nightDimming}
               onChange={(e) => applyRender({ nightDimming: Number(e.target.value) })}
@@ -250,7 +257,11 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             // states what it does instead of relying on the reader decoding a
             // sun/moon glyph that the header control also uses.
             <div style={{ flex: "0 0 auto", minWidth: 0 }}>
-            <label>Villa lighting</label>
+            <label className="with-tip">Villa lighting
+              <InfoTip label="About Villa lighting">
+                Forces this villa's baked day or night look, or follows the real cycle on Auto. It relights the 3D
+                model, unlike the Interface theme in the header, which only recolours the panels.
+              </InfoTip></label>
             <SegmentedGroup ariaLabel="Villa lighting" className="segmented-icons daynight-segmented"
               active={v.render.dayNightPreview ?? "auto"} onChange={(dayNightPreview) => applyRender({ dayNightPreview })} options={[
               { key: "day", title: "Light the villa as daytime", label: <Sunrise size={17} /> },
@@ -260,10 +271,6 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             </div>
           )}
         </div>
-        <p className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-2xs)" }}>
-          Overall scene exposure, and how much extra dimming applies at night, both update live.
-          {(manager?.lightingMode().structureUnlit ?? false) && " Villa lighting forces this villa's baked day or night look, or follows the real cycle on Auto, it relights the 3D model, unlike the Interface theme in the header, which only recolours the panels."}
-        </p>
 
         {/* Light effect strength scales a lit fixture's room illumination in
             BOTH villa flavours (2.31.0): the floor "light pool" decal in
@@ -277,7 +284,16 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
           onChange={(e) => applyRender({ lightPoolIntensity: Number(e.target.value) })}
         />
 
-        <label style={{ marginTop: 16, display: "block" }}>Badge &amp; bottom bar style</label>
+        {/* ⚠️ NO PARAGRAPH UNDER AN OPTION (owner, 2026-10-22): its explanation is ONE (i) on its title (common/InfoTip). */}
+        <label className="with-tip" style={{ marginTop: 16 }}>Map look
+          <InfoTip label="About the map look">
+            Icon: a badge with a value pill. Card: a coloured card with icon and value inline. Both show the same
+            information, purely a look preference. Badge size, {config.entityIconScale.toFixed(2)}×, is set with the
+            +/- buttons next to the category filters in the top bar. Summary bar: the row of tiles at the bottom of the
+            screen.
+            {can("editConfig") && " Room glow: light up the room in red and draw the camera's cone when presence is "
+              + "detected or a sensor triggers (the devices themselves still glow). It applies to every tablet."}
+          </InfoTip></label>
         {/* "Floating badge style" only ever named the first of these two
             controls (Default/Card, the on-map entity badge look) — the
             second is a completely different feature (whether the bottom
@@ -302,14 +318,14 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
           <SegmentedGroup ariaLabel="Summary bar" className="settings-row-half"
             active={v.showSummaryBar ? "on" : null} onChange={() => slice.set({ showSummaryBar: !v.showSummaryBar }, { now: true })}
             options={[{ key: "on", label: <><PanelBottom size={16} /><span className="settings-label-full">Summary bar</span><span className="settings-label-short">Dock</span></> }]} />
+          {/* The villa's room glow and camera cones (AppConfig.roomGlowAndCones — every tablet's, so only for a
+              profile that may edit the villa's setup), on this row since 2026-10-22 (owner). */}
+          {can("editConfig") && (
+            <SegmentedGroup ariaLabel="Room glow and camera cones" className="settings-row-half"
+              active={v.roomGlowAndCones ? "on" : null} onChange={() => slice.set({ roomGlowAndCones: !v.roomGlowAndCones }, { now: true })}
+              options={[{ key: "on", title: "Room glow and camera cones, on every tablet", label: <><Radar size={16} /><span className="settings-label-full">Room glow</span><span className="settings-label-short">Glow</span></> }]} />
+          )}
         </div>
-        <p className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-2xs)" }}>
-          Classic: icon badge with a value pill. Card: coloured card with icon &amp; value inline —
-          both show the same information, purely a look preference.
-          {/* one block under the buttons, not a paragraph of its own above them (owner, 2026-10-14) */}
-          {" "}Badge size, {config.entityIconScale.toFixed(2)}×, is set with the +/- buttons next to the category
-          filters in the top bar.
-        </p>
 
         {/* ── Camera & movement ─────────────────────────────────────────────
             First-person walk-through comfort. Bird's-eye's own "Natural
@@ -344,8 +360,9 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
         {/* Save and Cancel are the footer's (footerExits); Escape and the backdrop run the same Cancel. */}
         <ModalFooter
           leading={can("editConfig") ? (
-            <button className="btn ghost" onClick={onOpenConfigEditor}>
-              <Sliders size={18} /> Advanced Settings
+            // the footer's own button: the same pill, size, icon and word as Save and Cancel (owner, 2026-10-22)
+            <button className="btn" onClick={onOpenConfigEditor} aria-label="Advanced Settings">
+              <Sliders size={18} aria-hidden /><span className="btn-label">Advanced Settings</span>
             </button>
           ) : undefined}
           commit={commit}
