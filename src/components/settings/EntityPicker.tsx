@@ -37,7 +37,7 @@ interface Props {
    *  sense (a mesh's own primary binding already has its own "Unbind"
    *  button; a picker with no `value` at all, e.g. "add another member", has
    *  nothing to clear) — only pass this for genuinely OPTIONAL links
-   *  (linkedEntityId, motionEntityId), which previously had no way at all to
+   *  (linkedEntityId), which previously had no way at all to
    *  go back to "unset" once something had been picked. */
   onClear?: () => void;
   /** Shrinks the search box to sit inline at the height of a small pill (e.g.

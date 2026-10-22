@@ -41,15 +41,16 @@ console.log("\n  the set:");
   ck("the id key does not move on a state push that changes no id",
      key === P.entityIdsKey({ "media_player.tv": { state: "on" }, "light.a": { state: "off" }, "sensor.relay_temp": { state: "22" } }));
   ck("  ...and moves when an id appears", key !== P.entityIdsKey({ ...entities, "fan.new": {} }));
-  const map = { "light.a": { linkedEntityId: "switch.pump", motionEntityId: "binary_sensor.m" }, "cover.stored": {} };
+  // a camera's motion sensor is its linked entity since 2026-10-22 (owner: the "Motion sensor" field merged into it)
+  const map = { "light.a": { linkedEntityId: "switch.pump" }, "camera.c": { type: "camera", linkedEntityId: "binary_sensor.m" }, "cover.stored": {} };
   const ids = P.roomIdSet(key, new Set(["camera.mesh_bound"]), map);
   // owner, 2026-10-15: a fault on a sensor the model does not draw had no room line — EVERY entity Home Assistant has
   ck("every entity Home Assistant has (one the model does not draw included)",
      Object.keys(entities).every((id) => ids.has(id)), [...ids]);
   ck("  ...the model's own (mesh-bound, no stored mapping)", ids.has("camera.mesh_bound"));
   ck("  ...the stored mappings", ids.has("cover.stored"));
-  ck("  ...and every linked/motion target", ids.has("switch.pump") && ids.has("binary_sensor.m"));
-  ck("  ...each once", ids.size === 7, [...ids]);
+  ck("  ...and every linked target, a camera's motion sensor included", ids.has("switch.pump") && ids.has("binary_sensor.m"));
+  ck("  ...each once", ids.size === 8, [...ids]);
   ck("no entity at all: no empty id", !P.roomIdSet("", [], {}).has(""));
 }
 

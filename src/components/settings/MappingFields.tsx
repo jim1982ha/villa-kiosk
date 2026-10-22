@@ -23,7 +23,7 @@ import { ENTITY_DOMAINS, type HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 
 /** One field's place in the row's layout. */
-export type FieldCell = (key: string, label: string, field: ReactNode, opts?: { wide?: boolean; pair?: boolean }) => ReactNode;
+export type FieldCell = (key: string, label: string, field: ReactNode, opts?: { wide?: boolean }) => ReactNode;
 
 /**
  * A mapping row's pending edits: `draftField` stages a change (committed after
@@ -101,25 +101,16 @@ export default function MappingFields({ entityId, mapping, entity, onPatch, cell
           </span>
         </div>
       ))}
-      {/* Two DISTINCT links — see EntityMapping. The linked entity is what the
-          user toggles: it drives the red badge ring and gets an on/off switch in
-          the device's panel (on a camera it is also the long-press target). The
-          motion sensor is what HA reports — the detection beam — and exists only
-          for a camera, so it is not offered for anything else. */}
+      {/* ONE link for every type (owner, 2026-10-22: a camera's "Motion sensor" merged into it) — see
+          EntityMapping.linkedEntityId. What it drives follows what it is: a switch gets an on/off in the device's
+          window, a motion sensor linked to a camera drives its beam; every one is the badge's bottom-right pill. */}
       {cell("linked", "Linked entity", (
         <EntityPicker value={m.linkedEntityId}
           onChange={(id) => draftField({ linkedEntityId: id })}
           onClear={() => draftField({ linkedEntityId: undefined })}
           allowCustom hideCurrentLabel
-          placeholder={m.type === "camera" ? "Linked entity — arms detection, long-press…" : "Linked entity — ring and an on/off switch…"} />
-      ), { pair: true })}
-      {m.type === "camera" && cell("motion", "Motion sensor", (
-        <EntityPicker value={m.motionEntityId}
-          onChange={(id) => draftField({ motionEntityId: id })}
-          onClear={() => draftField({ motionEntityId: undefined })}
-          domains={["binary_sensor"]} allowCustom hideCurrentLabel
-          placeholder="Motion sensor — detection beam on the map…" />
-      ), { pair: true })}
+          placeholder={m.type === "camera" ? "Linked entity — its motion sensor or a switch…" : "Linked entity — a switch or a sensor…"} />
+      ))}
     </>
   );
 }

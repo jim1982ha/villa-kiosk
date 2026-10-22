@@ -516,18 +516,6 @@ label.toggle span { user-select: none; line-height: 1.4; }
   flex: 0 0 108px; color: var(--text-secondary);
   font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.04em; text-align: left;
 }
-/* Paired narrow fields (Linked entity + Motion sensor) share one line from
-   tablet width up — each is a short picker, so a full row each wasted
-   vertical space and pushed the card taller than it needed to be. They stay
-   stacked full-width on a phone, where 50% is too narrow for the picker.
-   Works because the table is card-styled at ALL widths (tr/td are display
-   :block, thead hidden), so these are just two inline-flex blocks in a
-   column — there are no real table columns to keep aligned. */
-@media (min-width: 721px) {
-  .config-table td.config-cell-pair {
-    display: inline-flex; width: 49.5%; vertical-align: top;
-  }
-}
 .config-table td[data-label=""]::before { content: none; }
 .config-table td[data-label=""] { justify-content: flex-end; }
 .config-table td.center { justify-content: flex-start; }

@@ -17,6 +17,7 @@ import type { Category } from "@/types/scene.types";
 import type { DeviceSurfaceState } from "@/config/EntityCategories";
 import { effectiveCategory, subjectOf, categoryColor } from "@/config/EntityCategories";
 import { labelOf } from "@/config/EntityMap";
+import { cameraMotionId } from "@/config/BinarySensorClasses";
 import { badgeOwnerOf, deviceLook, storeLookSource, type BadgeMark, type LinkPill } from "@/utils/deviceActivity";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
 import { domainOf } from "@/utils/entityDomain";
@@ -82,13 +83,14 @@ export function panelHeader({ panel, entities, config, canControl, linkedSwitch 
   // sits right above the switch just pressed, and a ring lagging seconds
   // behind its own switch looks broken. The MAP badge stays on confirmed
   // state only (predicting scene appearance was rightly reverted before).
-  // A motion sensor is deliberately NOT an alert source here — it drives the
-  // map's detection beam, never a ring.
   const look = deviceLook(entityId, storeLookSource(entities, config, {
     drawnAs: { entityId, type: mapping.type },
     pendingPower: (id) => (linkedId && id === linkedId && linkedSwitch ? linkedSwitch.isOn : undefined),
   }));
-  const motionId = mapping.type === "camera" ? live.motionEntityId : undefined;
+  // a camera's motion: its linked entity when that detects presence (BinarySensorClasses.cameraMotionId — owner,
+  // 2026-10-22: the "Motion sensor" field merged into "Linked entity"); linked to a switch, it has none
+  const motionId = cameraMotionId({ type: mapping.type, linkedEntityId: linkedId },
+    (id) => entities[id]?.attributes.device_class as string | undefined);
   // ⚠️ A SENSOR IS NOT A SWITCH (owner, 2026-10-21): a lock's linked door sensor was drawn as a toggle that could not
   // move it — its state is read, as a band (LinkedSensorRow)
   const linkedIsSensor = !!linkedId && domainOf(linkedId) === "binary_sensor";
@@ -106,7 +108,9 @@ export function panelHeader({ panel, entities, config, canControl, linkedSwitch 
     linked: linkedId && !linkedIsSensor && canControl && linkedSwitch
       ? { label: labelOf(linkedId, config.entityMap, entities), ...linkedSwitch }
       : null,
-    linkedSensor: linkedId && linkedIsSensor ? { entityId: linkedId, label: labelOf(linkedId, config.entityMap, entities) } : null,
+    // a camera's motion sensor is its motion band (below), never a second band beside it
+    linkedSensor: linkedId && linkedIsSensor && linkedId !== motionId
+      ? { entityId: linkedId, label: labelOf(linkedId, config.entityMap, entities) } : null,
     // Read-only, shown whatever the profile (knowing a camera has motion
     // detection wired up is not a control action). "on" is the sensor's own
     // report of motion — what this line says — not an alert judgement.

@@ -1,3 +1,15 @@
+## 2.496.487
+
+What you will see — a camera's motion sensor is its "Linked entity":
+- Advanced Settings › Devices: a camera has one "Linked entity" field, like every other device. The separate
+  "Motion sensor" field is gone. Your cameras' motion sensors move into "Linked entity" by themselves the first time
+  the Kiosk starts (a camera that had both keeps its motion sensor).
+- A camera linked to a motion sensor works as before: the detection beam on the map (or its room's glow), and
+  "motion" in the camera window. Its bottom-right pill fills while motion is detected, is hollow when quiet, and
+  shows the sensor's own problem (grey "?" when it stops answering).
+- Short press on a camera opens its live picture; a long press opens its details. A long press never switches
+  anything.
+
 ## 2.496.486
 
 What you will see — one corner per device, on every badge:

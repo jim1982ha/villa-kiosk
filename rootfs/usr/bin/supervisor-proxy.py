@@ -2598,7 +2598,7 @@ async def model_upload_handler(request: web.Request) -> web.Response:
 # attribute already lists every entity a scene touches) instead of storing
 # anything of its own — see src/config/haScenes.ts.
 # The villa's DEVICE configuration: entity<->mesh bindings, per-device metadata
-# (label, room, type, category, linked/motion entity, badge colour…), room
+# (label, room, type, category, linked entity, badge colour…), room
 # definitions and device groups. Bigger than scenes (one entry per entity, plus
 # room polygons), hence the roomier cap — still bounded so a bad body can't
 # fill /data. See the frontend's config/deviceConfig.ts for exactly which

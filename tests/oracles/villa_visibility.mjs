@@ -11,10 +11,10 @@ import { readFileSync } from "node:fs";
 const V = await import("@/config/villaVisibility");
 
 const entityMap = {
-  "camera.gate": { type: "camera", motionEntityId: "binary_sensor.gate_motion" },
+  "camera.gate": { type: "camera", linkedEntityId: "binary_sensor.gate_motion" },
   "light.lamp": { type: "light", linkedEntityId: "switch.lamp_relay" },
   "light.gone": { type: "light", linkedEntityId: "switch.gone_relay" },
-  "camera.old": { type: "camera", motionEntityId: "binary_sensor.old_motion" },
+  "camera.old": { type: "camera", linkedEntityId: "binary_sensor.old_motion" },
 };
 const scene = new Set(["camera.gate", "light.lamp", "light.gone"]);
 const dismissed = new Set(["light.gone", "switch.gone_relay", "binary_sensor.old_motion"]);
@@ -22,9 +22,9 @@ const dismissed = new Set(["light.gone", "switch.gone_relay", "binary_sensor.old
 console.log("  on the map:");
 {
   const m = V.effectiveMapped(scene, entityMap, dismissed);
-  ck("the model's objects, plus each mapping's linked and motion entity",
+  ck("the model's objects, plus each mapping's linked entity (a camera's motion sensor is one, since 2026-10-22)",
      m.has("camera.gate") && m.has("light.lamp") && m.has("switch.lamp_relay") && m.has("binary_sensor.gate_motion"));
-  ck("  ...a dismissed one is out — object, linked or motion entity alike",
+  ck("  ...a dismissed one is out — object or linked entity alike",
      !m.has("light.gone") && !m.has("switch.gone_relay") && !m.has("binary_sensor.old_motion"));
 }
 

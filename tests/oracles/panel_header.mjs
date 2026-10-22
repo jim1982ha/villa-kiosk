@@ -15,7 +15,8 @@ const entities = {
 };
 const live = { entityMap: {
   "light.desk": { entityId: "light.desk", type: "light", label: "Desk", linkedEntityId: "switch.plug", badgeColor: "#ff0000" },
-  "camera.gate": { entityId: "camera.gate", type: "camera", label: "Gate", motionEntityId: "binary_sensor.cam_motion" },
+  "camera.gate": { entityId: "camera.gate", type: "camera", label: "Gate", linkedEntityId: "binary_sensor.cam_motion" },
+  "camera.yard": { entityId: "camera.yard", type: "camera", label: "Yard", linkedEntityId: "switch.plug" },
 }, deviceGroups: [], isHidden: () => false };
 // The panel's mapping as it was when the panel OPENED — no colour yet, no link.
 const desk = { entityId: "light.desk", mapping: { entityId: "light.desk", type: "light", label: "Desk" } };
@@ -30,7 +31,11 @@ ck("the linked switch: named, its position, and whether HA knows it", JSON.strin
    && h({ linkedSwitch: { isOn: false, known: false } }).linked.known === false);
 ck("  ...not offered to a profile that may not control it", h({ canControl: false }).linked === null);
 const cam = panelHeader({ panel: { entityId: "camera.gate", mapping: { entityId: "camera.gate", type: "camera", label: "Gate" } }, entities, config: live, canControl: false, linkedSwitch: null });
-ck("a camera's motion sensor: named, its id for its band — shown to any profile", cam.motion && cam.motion.entityId === "binary_sensor.cam_motion" && /Motion/.test(cam.motion.label));
+// owner, 2026-10-22: a camera's motion sensor is its LINKED entity when that detects presence (cameraMotionId)
+ck("a camera linked to a motion sensor: named, its id for its band — shown to any profile, and no second band for it",
+   cam.motion && cam.motion.entityId === "binary_sensor.cam_motion" && /Motion/.test(cam.motion.label) && cam.linkedSensor === null);
+const yard = panelHeader({ panel: { entityId: "camera.yard", mapping: { entityId: "camera.yard", type: "camera", label: "Yard" } }, entities, config: live, canControl: true, linkedSwitch: { isOn: false, known: true } });
+ck("  ...a camera linked to a switch: no motion, its switch offered as any device's", yard.motion === null && yard.linked?.label === "Plug");
 ck("  ...and a light has none", h().motion === null);
 
 // ⚠️ A LINKED SENSOR IS NOT A SWITCH (owner, 2026-10-21): a lock's door sensor was drawn as a toggle that cannot move it

@@ -147,6 +147,20 @@ export function detectsPresence(entityId: string, deviceClass: string | undefine
   return isMotionSensor(entityId, deviceClass);
 }
 
+/**
+ * The motion sensor a CAMERA watches with: its linked entity (EntityMapping.linkedEntityId), when that entity detects
+ * presence (detectsPresence) — what drives its beam on the map, its window's motion status and its motion band. A
+ * camera linked to anything else (a switch) has none: behaviour follows WHAT is linked, never a camera-only field
+ * (owner, 2026-10-22: the camera's "Motion sensor" field merged into "Linked entity"). `deviceClassOf` reads the
+ * linked entity's device_class from wherever the caller keeps state.
+ */
+export function cameraMotionId(
+  m: { type?: string; linkedEntityId?: string } | undefined, deviceClassOf: (entityId: string) => string | undefined,
+): string | undefined {
+  const id = m?.type === "camera" ? m.linkedEntityId : undefined;
+  return id && detectsPresence(id, deviceClassOf(id)) ? id : undefined;
+}
+
 /** Whether this class's "on" glows its room on the map: a detection (someone there), or its problem state "on" — a
  *  door or window open, a leak. ⚠️ ANY "ON" GLOWED (owner, 2026-10-21: the laundry room red while its door sensor read
  *  Open — "keep it that way, it makes sense"), a connected access point or a plugged-in charger too: never good news. */

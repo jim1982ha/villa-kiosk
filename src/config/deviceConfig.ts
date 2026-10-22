@@ -10,7 +10,7 @@
 //   whole installation, so configuring it on a phone must configure it for the
 //   wall tablet too (the same expectation the uploaded GLB already sets):
 //     entityMap      per-device metadata: label, room, type, category, the
-//                    linked/motion entities, badge colour, disabled flag…
+//                    linked entities, badge colour, disabled flag…
 //     meshBindings   which 3D mesh is which entity
 //     deviceGroups   which entities are really one physical device
 //     teleportPoints room definitions (incl. each room's saved overview pose)

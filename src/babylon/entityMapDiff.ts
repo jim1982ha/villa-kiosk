@@ -26,13 +26,13 @@ import type { EntityMapping } from "@/types/scene.types";
  *  field on EntityMapping at all, see the type's own comment.)
  *
  *  Adding a field here is a promise that NOTHING in the structural pass reads
- *  it. linkedEntityId/motionEntityId only qualify because EntityVisuals
- *  .updateConfig rebuilds their lookup indexes itself on any entityMap change
+ *  it. linkedEntityId only qualifies because EntityVisuals
+ *  .updateConfig rebuilds its lookup index itself on any entityMap change
  *  (they were previously built only by indexMeshes) — if you add a field whose
  *  consumer lives in the structural pass, give it the same treatment first. */
 export const COSMETIC_MAPPING_FIELDS = [
   "label", "category", "badgeColor",
-  "linkedEntityId", "motionEntityId", "lightIntensityRatio",
+  "linkedEntityId", "lightIntensityRatio",
   // requireConfirm is read only by utils/quickAction.ts's isQuickToggle
   // (plain JS against config.entityMap, outside the Babylon scene entirely)
   // and PowerToggle's own React props — it never reaches indexMeshes/

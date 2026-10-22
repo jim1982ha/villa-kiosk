@@ -129,12 +129,11 @@ export default function Dashboard() {
   const [floorsAvailable, setFloorsAvailable] = useState<number[]>([1]);
   /** The entities the loaded model's objects are named after (manager.mappedEntityIds) — the RAW scene set. What the
    *  rest of the page calls "on the map" is the villa model's `mappedEntityIds` below (these, plus every mapping's
-   *  linked and motion entity, dismissed ones out): two sets, two names (architecture review, 2026-10-14). */
+   *  linked entity, dismissed ones out): two sets, two names (architecture review, 2026-10-14). */
   const [sceneEntityIds, setSceneEntityIds] = useState<Set<string>>(new Set());
   // A device with no badge/mesh of its own can still be represented ON the
-  // map INDIRECTLY: it's some other mapped device's linkedEntityId (its ring
-  // toggle) or motionEntityId (a camera's detection sensor, driving its
-  // beam). Every "not on the map" / "devices offline" surface (HUD, the
+  // map INDIRECTLY: it's some other mapped device's linkedEntityId (a switch,
+  // or a camera's motion sensor driving its beam). Every "not on the map" / "devices offline" surface (HUD, the
   // SummaryBar group modals, Facility readiness) reads THIS augmented set
   // rather than the raw one, so a device like "AP Living Room LED" — no
   // geometry of its own, but the linkedEntityId of a mapped light switch —
