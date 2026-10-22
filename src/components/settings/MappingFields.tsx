@@ -119,6 +119,6 @@ export function ConfirmToggle({ m, draftField }: { m: EntityMapping; draftField:
     <SegmentedGroup ariaLabel="Confirm before toggling" className="config-confirm"
       active={m.requireConfirm ? "on" : null} onChange={() => draftField({ requireConfirm: !m.requireConfirm })}
       options={[{ key: "on", title: "Confirm before toggling: a tap on its badge opens its window, and its on/off asks first",
-        label: <><ShieldCheck size={16} /> Confirm</> }]} />
+        label: <><ShieldCheck size={16} /> Confirm before toggling</> }]} />
   );
 }

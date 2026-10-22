@@ -361,12 +361,11 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
                 as members.
               </>} />} />
 
-              <TipTitle title="Asleep between reports" tip={<>
+              <UnavailableByDesign heading={<TipTitle title="Asleep between reports" tip={<>
                 Devices that sleep between reports, such as a battery door sensor: their "unavailable" is normal. VESTA
                 shows what each one last reported, never "Unavailable", and raises no fault for it; the VESTA Agent skips
                 its offline checks for them too.
-              </>} />
-              <UnavailableByDesign />
+              </>} />} />
             </>
           )}
 
@@ -376,6 +375,9 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
               other roles rather than rendered-and-403 — see the TABS filter. */}
           {tab === "system" && roleCan(role, "editConfig") && (
             <>
+              <div className="settings-section-title">Maintenance records</div>
+              <RecordsKept />
+
               {/* `TelemetryPanel` pages its own log, so there is nothing here
                   for an outer collapse to save — and hiding the section also
                   hid the Refresh/Copy/Download/Probe buttons, which are the
@@ -388,8 +390,6 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
               </>} />
               <TelemetryPanel />
 
-              <div className="settings-section-title">Maintenance records</div>
-              <RecordsKept />
 
             </>
           )}

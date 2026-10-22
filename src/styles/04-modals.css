@@ -689,7 +689,10 @@ label.toggle span { user-select: none; line-height: 1.4; }
 
 /* "Confirm" on a device card's own line, beside the pencil: the Settings toggle buttons' look, at the icon buttons'
    height (owner, 2026-10-22). */
-.segmented.config-confirm button { min-height: 36px; padding: 0 12px; font-size: var(--text-xs); gap: 6px; }
+.segmented.config-confirm { padding: 2px; flex: 0 0 auto; }
+.segmented.config-confirm button { min-height: 26px; height: 26px; padding: 0 10px; font-size: var(--text-xs); gap: 6px; }
+/* a picker in a device card takes the card's width, like the fields above it (owner, 2026-10-22) */
+.config-table td > .picker { flex: 1 1 auto; min-width: 0; }
 
 /* A folded section's title and its closed line on one line (Fold heading, owner 2026-10-22). */
 .fold-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 14px; margin: 24px 0 12px; }
