@@ -334,7 +334,7 @@ export default function SummaryGroupPanel({
         stateText={stateText}
         look={badge}
         badgeSrc={badgeImage({
-          category: cat, iconKey: iconKeyFor(ownerType, ownerEnt), state: badge.face, mark: badge.mark, linkDot: badge.linkDot,
+          category: cat, iconKey: iconKeyFor(ownerType, ownerEnt), state: badge.face, mark: badge.mark, linkPill: badge.linkPill,
           color: config.entityMap[owner]?.badgeColor ?? config.entityMap[id]?.badgeColor,
         })}
         badgeKey={theme}

@@ -93,7 +93,7 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
   const badgeImg = badge && (
     <img
       className="panel-badge-img"
-      src={badgeImage({ category: badge.category, iconKey: badge.iconKey, state: badge.state, color: badge.color, mark: badge.mark, linkDot: badge.linkDot })}
+      src={badgeImage({ category: badge.category, iconKey: badge.iconKey, state: badge.state, color: badge.color, mark: badge.mark, linkPill: badge.linkPill })}
       key={theme}
       alt=""
       draggable={false}

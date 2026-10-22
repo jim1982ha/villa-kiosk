@@ -270,6 +270,11 @@
   /* No contact — the villa's system lost the device (utils/stateColors STATUS_COLOR.unavailable, the badge's grey
      "?"). Grey, not the amber of a fault (owner, 2026-10-22: badge proposal 2); white on it is 5.1:1. */
   --status-lost: #6B706B;
+  /* A badge picture keeps a margin round its square for its pills (babylon/badgeLook PILL_MARGIN) and is drawn this
+     much larger than its box, so the square keeps the box's size and the pills stand outside it, unclipped — the
+     map's render scale, PICTURE_SCALE (9/7; tests/oracles/badge_mark.mjs holds the two equal). No border-radius on
+     such an image: it would clip the pills. Not a colour: the same in every theme. */
+  --badge-picture-scale: 1.2857;
 
   --hairline: rgba(23, 25, 26, 0.10);
   --hairline-strong: rgba(23, 25, 26, 0.18);

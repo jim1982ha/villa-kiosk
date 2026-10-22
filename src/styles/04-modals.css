@@ -220,7 +220,7 @@
 .legend-swatch { width: 20px; height: 20px; border-radius: 7px; flex-shrink: 0; border: 1px solid var(--hairline); }
 .legend-swatch-round { border-radius: 50%; }
 /* a map badge, drawn by the badge renderer itself (LegendModal BADGE_ITEMS): large enough to read its corner mark */
-.legend-badge { width: 32px; height: 32px; flex-shrink: 0; display: block; }
+.legend-badge { width: 32px; height: 32px; flex-shrink: 0; display: block; transform: scale(var(--badge-picture-scale)); }
 /* The room chip's count, drawn as the chip draws it (colors.reportingPill). */
 /* The line under each row's name. */
 .legend-note { display: block; font-size: var(--text-xs); }

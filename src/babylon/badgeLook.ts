@@ -93,3 +93,41 @@ export function applyBadgeFrame(c: FrameTarget, ring: BadgeRing, sizePx: number)
 export function badgeBakePx(drawnPx: number, userScale: number, cssToGui: number): number {
   return drawnPx * userScale * cssToGui;
 }
+
+/**
+ * THE TWO PILLS, as fractions of the squircle (owner, 2026-10-22: "one corner per device", from the approved mock — a
+ * 56 px square, 28 px pills). TOP-RIGHT: the device itself — what is wrong with it. BOTTOM-RIGHT: its linked entity —
+ * its own problem with the same marks, else filled (on) or hollow (off). Equal size, half the square's side, their
+ * symbol white and bold, each ringed in the badge's own ground so it stands clear of the face, and centred so its edge
+ * stands 6 px (of 56) outside the square's corner.
+ */
+export const PILL_DIAMETER = 28 / 56;   // of the square's side
+const PILL_OUT = 6 / 56;                // how far the pill's edge stands outside the square
+const PILL_RING = 2 / 56;               // the ground-coloured ring round each pill
+const PILL_HOLLOW_RING = 3 / 56;        // a hollow pill's ring, in the badge's colour
+const PILL_SYMBOL = 16 / 56;            // the symbol's size
+/** How far a pill reaches past the square's edge, ring included (8 px of 56). */
+const PILL_REACH = PILL_OUT + PILL_RING;
+/**
+ * The transparent margin EVERY badge picture keeps round its square so a pill is never clipped, as a fraction of the
+ * picture: the reach over the picture (square + a reach each side) = 1/9. Kept whether or not a pill is drawn, so a
+ * square never changes size with its state; every renderer draws the picture PICTURE_SCALE larger than the square it
+ * shows (a render scale on the map, a CSS transform in the lists), so the square stays the size it was.
+ */
+export const PILL_MARGIN = PILL_REACH / (1 + 2 * PILL_REACH);
+export const PICTURE_SCALE = 1 / (1 - 2 * PILL_MARGIN);
+
+/** Where the two pills sit, for a square at `m` (its top-left, both axes) of side `size`: centres, radius, rings and
+ *  symbol size, in the picture's pixels. Pure — tests/oracles/badge_mark.mjs reads it; badgeIcons draws by it. */
+export function pillGeometry(m: number, size: number): {
+  r: number; ring: number; hollowRing: number; symbolPx: number;
+  top: { cx: number; cy: number }; bottom: { cx: number; cy: number };
+} {
+  const r = (size * PILL_DIAMETER) / 2;
+  const inset = r - size * PILL_OUT;        // the centre's distance inside the square's edge
+  const cx = m + size - inset;
+  return {
+    r, ring: size * PILL_RING, hollowRing: size * PILL_HOLLOW_RING, symbolPx: size * PILL_SYMBOL,
+    top: { cx, cy: m + inset }, bottom: { cx, cy: m + size - inset },
+  };
+}

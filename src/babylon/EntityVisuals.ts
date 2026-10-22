@@ -131,7 +131,7 @@ import {
 } from "./placementPass";
 import { glyphDrawPx, glyphBakePx, type GlassClearance } from "./badgeLayout";
 import type { FrameRequests } from "./frameScheduler";
-import { badgeImage } from "./badgeIcons";
+import { badgeImage, PICTURE_SCALE } from "./badgeIcons";
 import { applyBadgeFrame, badgeRing, badgeBakePx, BADGE_INSET_CARD, BADGE_CORNER_FRACTION, NO_RING } from "./badgeLook";
 import { DashableRectangle } from "./dashableRectangle";
 import { badgeText, countBadgeImage } from "./badgeText";
@@ -3083,6 +3083,13 @@ export class EntityVisuals {
         ? categorySurface(category, "off", this.config.entityMap[entityId]?.badgeColor).fill
         : "transparent";
       badgeShadow(badge);
+      // ⚠️ THE PILLS STAND OUTSIDE THE SQUARE (owner, 2026-10-22: "one corner per device"). The picture keeps a margin
+      // for them (badgeIcons.PILL_MARGIN) and is drawn PICTURE_SCALE larger than its control — a render scale, so the
+      // layout and the tap box stay the square's — and nothing on the way up may clip what overhangs.
+      glyph.scaleX = PICTURE_SCALE;
+      glyph.scaleY = PICTURE_SCALE;
+      badge.clipChildren = false;
+      container.clipChildren = false;
       container.addControl(badge);
       // Classic: the pill hangs below the badge, in the container's column.
       if (!card) container.addControl(valueWrap);
@@ -3203,9 +3210,9 @@ export class EntityVisuals {
     lbl.category = effectiveCategory(
       subjectOf(subject.id, this.config.entityMap[subject.id], subject.entity, subject.type));
     // THREE independent facts, three independent sets of pixels (owner, 2026-10-22: badge proposal 2): the FACE is
-    // what the device does, the corner MARK what is wrong, the bottom-left DOT its linked switch. (deviceLook's `kind`
-    // still folds a linked alarm into ONE value for what a COUNT summary reads — see deviceActivity.groupLook.)
-    const { face: state, mark, linkDot } = deviceLook(entityId, this.lookSource);
+    // what the device does, the top-right MARK what is wrong with it, the BOTTOM-RIGHT pill its linked entity (owner,
+    // 2026-10-22: "one corner per device"). A COUNT summary reads the worst of both — see deviceActivity.groupLook.
+    const { face: state, mark, linkPill } = deviceLook(entityId, this.lookSource);
     const iconKey = iconKeyFor(subject.type, subject.entity);
     const override = subject.color;
 
@@ -3266,7 +3273,7 @@ export class EntityVisuals {
       // Every state's chip is baked the same way: inset, with no ring of its
       // own, at the card style's heavier glyph weight.
       lbl.glyph.source = badgeImage({
-        category: lbl.category, iconKey, state, mark, linkDot, color: override,
+        category: lbl.category, iconKey, state, mark, linkPill, color: override,
         inset: BADGE_INSET_CARD, ring: "none", bakePx: this.glyphBakePx(true), bold: true,
       });
       // Neutral ink, on a now-neutral card — the bottom bar's value is
@@ -3280,7 +3287,7 @@ export class EntityVisuals {
       lbl.badge.background = "transparent";
       applyBadgeFrame(lbl.badge, NO_RING, this.metrics.badgeDiameterPx);
       lbl.glyph.source = badgeImage({
-        category: lbl.category, iconKey, state, mark, linkDot, color: override, ring: "baked", bakePx: this.glyphBakePx(false),
+        category: lbl.category, iconKey, state, mark, linkPill, color: override, ring: "baked", bakePx: this.glyphBakePx(false),
       });
     }
     lbl.badge.alpha = 1;
@@ -4834,12 +4841,12 @@ export class EntityVisuals {
           for (let k = 0; k < drawn; k++) {
             const s2 = shown[g.members[k]];
             const st = this.lastState.get(s2.id) ?? phantomEntity(s2.id);
-            const { face, mark, linkDot } = model.cells[k];
+            const { face, mark, linkPill } = model.cells[k];
             const subject = this.badgeSubject(s2.id, s2.lbl.type, st);
             const color = subject.color;
             c.chips[k].source = badgeImage({
               category: s2.lbl.category, iconKey: iconKeyFor(subject.type, subject.entity),
-              state: face, mark, linkDot, color,
+              state: face, mark, linkPill, color,
               // Inset 0: this chip IS the badge here, as the classic style's is;
               // the card behind it is the group's surface, not a second frame.
               // Baked at the PAINTED size: `lay.chip` is unscaled and the group

@@ -57,7 +57,7 @@ const world = (c) => {
   return { did, entities, config, mapping };
 };
 
-const FIELDS = ["type", "face", "mark", "linkDot", "kind", "own", "active", "alert", "unavailable", "power", "linkedOn"];
+const FIELDS = ["type", "face", "mark", "linkPill", "kind", "own", "active", "alert", "unavailable", "power", "linkedOn"];
 const differ = [];
 for (const c of cases) {
   const w = world(c);
@@ -79,16 +79,18 @@ const rawRule = (link) => link[1] === "on";
 // red since 2026-10-21: a linked entity needing attention (an unlocked lock) gives the badge the red "!" (owner: a
 // lock's door sensor reading Open turns the lock's badge red); the linked DOT says on/off (owner, 2026-10-22: badge
 // proposal 2 — it was a ring)
-ck("a device linked to an UNLOCKED lock: its dot filled, and the red \"!\" — the lock needs attention (the list's raw `=== \"on\"` said no)",
-   look("sensor", "5", ["lock.gate", "unlocked"]).linkDot === "on" && look("sensor", "5", ["lock.gate", "unlocked"]).mark === "alarm"
-   && !rawRule(["lock.gate", "unlocked"]));
-ck("  ...linked to an OPEN cover: its dot filled", look("sensor", "5", ["cover.blind", "open"]).linkDot === "on");
-ck("  ...linked to a LOCKED lock, a CLOSED cover, an OFF or lost switch: hollow",
-   ["lock.gate:locked", "cover.blind:closed", "switch.pump:off", "switch.pump:unavailable"]
-     .every((s) => look("sensor", "5", s.split(":")).linkDot === "off"));
+// since "one corner per device" (owner, 2026-10-22) the linked lock's alarm is the bottom-right pill, not the top
+ck("a device linked to an UNLOCKED lock: its bottom-right pill the lock's red \"!\" (on, and needing attention — the list's raw `=== \"on\"` said no); its own top-right clear",
+   look("sensor", "5", ["lock.gate", "unlocked"]).linkPill === "alarm" && look("sensor", "5", ["lock.gate", "unlocked"]).mark === null
+   && look("sensor", "5", ["lock.gate", "unlocked"]).linkedOn && !rawRule(["lock.gate", "unlocked"]));
+ck("  ...linked to an OPEN cover: its dot filled", look("sensor", "5", ["cover.blind", "open"]).linkPill === "on");
+ck("  ...linked to a LOCKED lock, a CLOSED cover, an OFF switch: hollow; a lost switch: its grey \"?\"",
+   ["lock.gate:locked", "cover.blind:closed", "switch.pump:off"]
+     .every((s) => look("sensor", "5", s.split(":")).linkPill === "off")
+   && look("sensor", "5", ["switch.pump", "unavailable"]).linkPill === "lost");
 ck("  ...linked to an entity HA never reported: hollow", look("sensor", "5", ["switch.pump", null]).linkedOn === false
-   && look("sensor", "5", ["switch.pump", null]).linkDot === "off");
-ck("  ...no linked entity: no dot", look("sensor", "5", null).linkDot === null);
+   && look("sensor", "5", ["switch.pump", null]).linkPill === "off");
+ck("  ...no linked entity: no dot", look("sensor", "5", null).linkPill === null);
 ck("the face stays its own state: a linked switch on never makes the device ON (owner, 2026-10-22)",
    look("camera", "idle", ["switch.pump", "on"]).face === "active" && look("sensor", "5", ["switch.pump", "on"]).face === "off"
    && look("sensor", "5", ["switch.pump", "on"]).kind !== "on" && !look("sensor", "5", ["switch.pump", "on"]).active);
@@ -98,10 +100,10 @@ console.log("\n  the panel header's optimistic switch, and its drawn type:");
 {
   const w = world({ type: "sensor", state: "5", link: ["switch.pump", "off"] });
   const pending = (v) => storeLookSource(w.entities, w.config, { pendingPower: (i) => (i === "switch.pump" ? v : undefined) });
-  ck("a switch thrown on but not yet confirmed fills the header's dot now", deviceLook(w.did, pending(true)).linkDot === "on");
-  ck("  ...thrown off: the dot goes hollow with it", deviceLook(w.did, pending(false)).linkDot === "off"
-     && deviceLook(w.did, storeLookSource({ ...w.entities, "switch.pump": ent("switch.pump", "on") }, w.config, { pendingPower: () => false })).linkDot === "off");
-  ck("  ...nothing pending: the confirmed state, as the map", deviceLook(w.did, pending(undefined)).linkDot === "off");
+  ck("a switch thrown on but not yet confirmed fills the header's dot now", deviceLook(w.did, pending(true)).linkPill === "on");
+  ck("  ...thrown off: the dot goes hollow with it", deviceLook(w.did, pending(false)).linkPill === "off"
+     && deviceLook(w.did, storeLookSource({ ...w.entities, "switch.pump": ent("switch.pump", "on") }, w.config, { pendingPower: () => false })).linkPill === "off");
+  ck("  ...nothing pending: the confirmed state, as the map", deviceLook(w.did, pending(undefined)).linkPill === "off");
   const asLock = storeLookSource({ "switch.x": ent("switch.x", "unlocked") }, { entityMap: {}, isHidden: () => false }, { drawnAs: { entityId: "switch.x", type: "lock" } });
   ck("a device drawn as a lock by its mesh binding is read as a lock", deviceLook("switch.x", asLock).type === "lock" && deviceLook("switch.x", asLock).alert);
   // The map's own counterpart: the mapping its mesh resolved to wins over the

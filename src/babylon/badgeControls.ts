@@ -15,7 +15,7 @@ import { Image } from "@babylonjs/gui/2D/controls/image";
 import { DashableRectangle } from "./dashableRectangle";
 import { cardStruts, type CardArrangement } from "./badgeCard";
 import type { BadgeMetrics } from "./badgeMetrics";
-import { BADGE_CORNER_FRACTION } from "./badgeLook";
+import { BADGE_CORNER_FRACTION, PICTURE_SCALE } from "./badgeLook";
 
 /** A card badge's controls. The caller paints them (background, frame,
  *  shadow), mounts the badge and puts the value's text in `valueWrap`. */
@@ -139,6 +139,8 @@ export function buildCardBadge(name: string, m: BadgeMetrics, glyphPx: number, g
   padL.isVisible = false;
   row.addControl(padL);
   row.addControl(glyph);
+  // the glyph's picture overhangs its box (its pills, badgeIcons.PICTURE_SCALE): never clipped by its row
+  row.clipChildren = false;
 
   const valueWrap = new Rectangle(`lbl_valwrap_${name}`);
   valueWrap.thickness = 0;
@@ -250,6 +252,10 @@ export function growGroupCard(c: GroupCardControls, cells: number, cards: number
     const img = new Image(`egroupChip${k}_${c.container.name}`);
     img.zIndex = 1;
     img.stretch = Image.STRETCH_UNIFORM;
+    // its picture keeps a margin for the pills and is drawn that much larger, so the cell's square stays its size
+    // (badgeIcons.PICTURE_SCALE — the host does not clip)
+    img.scaleX = PICTURE_SCALE;
+    img.scaleY = PICTURE_SCALE;
     img.isVisible = false;
     c.container.addControl(img);
     c.chips.push(img);

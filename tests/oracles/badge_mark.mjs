@@ -1,5 +1,6 @@
 // "Corner dot" — the square says what a device does, the corner mark says what is wrong (owner, 2026-10-22: badge
-// proposal 2; utils/deviceActivity badgeFace / badgeMarkOf / linkDotOf, drawn by babylon/badgeIcons).
+// proposal 2; utils/deviceActivity badgeFace / badgeMarkOf / linkPillOf, drawn by babylon/badgeIcons) — and "one corner
+// per device" (owner, 2026-10-22): top-right the device itself, bottom-right its linked entity, one precedence for both.
 //
 // Until then a problem WAS the face: an alarm painted the whole square red, lost contact a dashed amber ring, so the
 // badge stopped saying what the device was doing; a linked switch on forced the device "on" (a pump-power sensor lit
@@ -93,19 +94,84 @@ console.log("\n  asleep by design (the entity store's lens):");
      look(new UnavailableByDesign().see(ent("binary_sensor.door", "unavailable"))).mark === "lost");
 }
 
-console.log("\n  the linked switch — a dot at the bottom-left, never the face:");
+console.log("\n  one corner per device — the bottom-right pill is the linked entity, all of it (owner, 2026-10-22):");
 {
-  const E = { "sensor.pump_power": ent("sensor.pump_power", "80", { device_class: "power" }),
-              "switch.pump": ent("switch.pump", "on") };
-  const entityMap = { "sensor.pump_power": { entityId: "sensor.pump_power", type: "sensor", linkedEntityId: "switch.pump" } };
-  const at = (relay) => deviceLook("sensor.pump_power", storeLookSource({ ...E, "switch.pump": ent("switch.pump", relay) }, { entityMap, isHidden: () => false }));
-  ck("relay on: the dot filled; the sensor's face its own (resting), its kind its own (no forced \"on\")",
-     at("on").linkDot === "on" && at("on").face === "off" && at("on").kind === "info" && !at("on").active && at("on").mark === null);
-  ck("  ...relay off: the dot hollow, the rest unchanged", at("off").linkDot === "off" && at("off").face === at("on").face);
-  ck("  ...no linked entity: no dot", deviceLook("switch.pump", storeLookSource(E, { entityMap, isHidden: () => false })).linkDot === null);
-  ck("the bake draws the dot in the device's own colour and the mark after the face (pin the painter)",
-     /if \(linkDot\) drawLinkDot\(ctx, linkDot, categorySurface\(category, "active", colorOverride\)\.glyph, m, size\);/.test(src("babylon/badgeIcons.ts"))
-     && /if \(mark\) drawMark\(ctx, mark, m, size, px\);/.test(src("babylon/badgeIcons.ts")));
+  const P = "sensor.pump_power", R = "switch.pump";
+  const entityMap = { [P]: { entityId: P, type: "sensor", linkedEntityId: R } };
+  const world = (relay, cfg = {}) => {
+    const E = { [P]: ent(P, "80", { device_class: "power" }) };
+    if (relay !== null) E[R] = ent(R, relay);
+    return storeLookSource(E, { entityMap, isHidden: () => false, ...cfg });
+  };
+  const at = (relay, cfg) => deviceLook(P, world(relay, cfg));
+  ck("relay on: filled; off: hollow — the sensor's face, kind and top-right its own (no forced \"on\")",
+     at("on").linkPill === "on" && at("off").linkPill === "off" && at("on").face === "off" && at("on").kind === "info"
+     && !at("on").active && at("on").mark === null && at("off").face === at("on").face);
+  ck("  ...no linked entity: no bottom-right pill", deviceLook(R, world("on")).linkPill === null);
+  ck("  ...a linked entity never reported: a plain hollow pill, not a \"?\" for what the map has not heard from yet",
+     at(null).linkPill === "off");
+  // the linked entity's OWN problems, each in the bottom-right and never in the top-right
+  const lockMap = { "lock.l": { entityId: "lock.l", type: "lock", linkedEntityId: "binary_sensor.d" } };
+  const door = (state, cfg = {}) => deviceLook("lock.l", storeLookSource({
+    "lock.l": ent("lock.l", "locked"), "binary_sensor.d": ent("binary_sensor.d", state, { device_class: "door" }),
+  }, { entityMap: lockMap, isHidden: () => false, ...cfg }));
+  ck("a linked door sensor reading Open: red \"!\" bottom-right, NOT top-right; the lock is not alerting",
+     door("on").linkPill === "alarm" && door("on").mark === null && !door("on").alert && door("on").kind !== "alert");
+  ck("  ...its open fault: amber \"!\" bottom-right (the lock's own fault list says nothing of the lock)",
+     door("off", { hasFault: (id) => id === "binary_sensor.d" }).linkPill === "fault"
+     && door("off", { hasFault: (id) => id === "binary_sensor.d" }).mark === null);
+  ck("  ...lost: grey \"?\"; lost AND critical: red \"?\" — bottom-right",
+     door("unavailable").linkPill === "lost" && door("unavailable", { isCritical: (id) => id === "binary_sensor.d" }).linkPill === "critical"
+     && door("unavailable").mark === null);
+  ck("  ...a linked lock locking: teal \"…\" bottom-right", deviceLook(P, storeLookSource(
+    { [P]: ent(P, "80"), "lock.g": ent("lock.g", "locking") },
+    { entityMap: { [P]: { entityId: P, type: "sensor", linkedEntityId: "lock.g" } }, isHidden: () => false })).linkPill === "moving");
+  {
+    const lens = new UnavailableByDesign();
+    lens.setIds(new Set([R]), {});
+    lens.see(ent(R, "on"));
+    const asleepRelay = lens.see(ent(R, "unavailable"));
+    const s2 = storeLookSource({ [P]: ent(P, "80"), [R]: asleepRelay }, { entityMap, isHidden: () => false });
+    ck("  ...asleep by design: grey \"z\" bottom-right (a problem outranks its on/off)", deviceLook(P, s2).linkPill === "asleep");
+  }
+  // ONE precedence: the bottom pill is the very function the top pill is, applied to the linked entity's reading
+  const cases = [["on", {}], ["unavailable", { hasFault: () => true }], ["unavailable", { isCritical: () => true, hasFault: () => true }],
+                 ["off", { hasFault: () => true }], ["on", { hasFault: () => true }]];
+  const same = cases.every(([st, cfg]) => {
+    const src = storeLookSource({ "lock.l": ent("lock.l", "locked"), "binary_sensor.d": ent("binary_sensor.d", st, { device_class: "door" }) },
+      { entityMap: lockMap, isHidden: () => false, ...cfg });
+    const own = deviceLook("binary_sensor.d", src).mark;   // the sensor's own badge, its top-right
+    const pill = deviceLook("lock.l", src).linkPill;
+    return own === null ? pill === "on" || pill === "off" : pill === own;
+  });
+  ck("the bottom-right pill of the lock IS the door sensor's own top-right pill, whenever it has one (one precedence)", same);
+  ck("  ...and the source says so: linkPillOf applies badgeMarkOf to the linked reading",
+     /return \(r\.link \? badgeMarkOf\(r\.link\) : null\) \?\? \(r\.linkedOn \? "on" : "off"\);/.test(src("utils/deviceActivity.ts")));
+}
+
+console.log("\n  the two pills' size and place (the approved mock: a 56 px square, 28 px pills):");
+{
+  const { pillGeometry, PILL_MARGIN, PICTURE_SCALE } = await import("@/babylon/badgeLook");
+  const g = pillGeometry(0, 56);
+  const near = (a, b) => Math.abs(a - b) < 1e-9;
+  ck("each pill half the square's side, a 16 px symbol, a 2 px ground ring, a 3 px hollow ring",
+     near(g.r * 2, 28) && near(g.symbolPx, 16) && near(g.ring, 2) && near(g.hollowRing, 3), g);
+  ck("  ...equal, on the right: top-right and bottom-right, each 6 px outside its corner",
+     near(g.top.cx, 48) && near(g.top.cy, 8) && near(g.bottom.cx, 48) && near(g.bottom.cy, 48)
+     && near(g.top.cx + g.r, 56 + 6) && near(g.top.cy - g.r, -6) && near(g.bottom.cy + g.r, 56 + 6), g);
+  // the picture: a margin round the square wide enough for the pill and its ring, and no wider
+  const px = 72, m = px * PILL_MARGIN, side = px - 2 * m, gp = pillGeometry(m, side);
+  ck("the picture's margin holds the pills with their ring, never clipped (and is drawn PICTURE_SCALE larger)",
+     near(side, 56) && gp.top.cy - gp.r - gp.ring >= -1e-9 && gp.top.cx + gp.r + gp.ring <= px + 1e-9
+     && gp.bottom.cy + gp.r + gp.ring <= px + 1e-9 && near(PICTURE_SCALE * side, px), { m, side });
+  const css = readFileSync(new URL("../../src/styles/01-base.css", import.meta.url), "utf8");
+  const v = Number(/--badge-picture-scale:\s*([\d.]+);/.exec(css)?.[1]);
+  ck("  ...the lists' CSS scale is the map's (to 4 places)", Math.abs(v - PICTURE_SCALE) < 1e-4, v);
+  const bi = src("babylon/badgeIcons.ts");
+  ck("the bake paints the device's mark top-right and the linked pill bottom-right, through one painter (pin it)",
+     /if \(mark\) drawPill\(ctx, pills, pills\.top, mark, ""\);/.test(bi)
+     && /if \(linkPill\) drawPill\(ctx, pills, pills\.bottom, linkPill, categorySurface\(category, "active", colorOverride\)\.glyph\);/.test(bi)
+     && /const px = bakeSizeFor\(pxHint \* PICTURE_SCALE\);/.test(bi));
 }
 
 console.log("\n  a linked entity placed on its own wears its device's badge:");

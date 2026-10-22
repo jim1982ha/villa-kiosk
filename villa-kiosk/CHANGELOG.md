@@ -1,3 +1,15 @@
+## 2.496.486
+
+What you will see — one corner per device, on every badge:
+- The TOP-RIGHT pill is the device itself: what is wrong with it (red "?", red "!", amber "!", grey "?", grey "z",
+  teal "…"). A problem of the device linked to it no longer shows there.
+- The BOTTOM-RIGHT pill is the device linked to it (a lock's door sensor, a pump's relay, a camera's detection), and
+  everything about it in one place: filled when it is on, hollow when it is off, or its own problem with the same
+  marks — a door sensor reading Open shows its red "!" bottom-right only.
+- Both pills are bigger and the same size. A device with nothing linked has no bottom-right pill.
+- A room still shows the worst of both: a linked device's alarm keeps the room red. Map colours (legend) describes
+  the two corners.
+
 ## 2.496.485
 
 What you will see — the map's badges, as you chose ("Corner dot", proposal 2):

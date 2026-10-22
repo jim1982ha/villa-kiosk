@@ -812,7 +812,7 @@
 @media (hover: hover) {
   .summary-entity-main:hover { background: var(--bg-card); }
 }
-.summary-entity-badge { width: 38px; height: 38px; flex: 0 0 auto; border-radius: 11px; }
+.summary-entity-badge { width: 38px; height: 38px; flex: 0 0 auto; transform: scale(var(--badge-picture-scale)); }
 .summary-entity-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
 /* Row wrapper so the "hidden in HA" icon (if any) stays fixed-width and
    visible rather than being clipped along with the name's own truncation —

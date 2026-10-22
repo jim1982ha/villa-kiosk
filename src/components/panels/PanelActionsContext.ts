@@ -7,7 +7,7 @@
 import { createContext, useContext } from "react";
 import type { Category } from "@/types/scene.types";
 import type { DeviceSurfaceState } from "@/config/EntityCategories";
-import type { BadgeMark, LinkDot } from "@/utils/deviceActivity";
+import type { BadgeMark, LinkPill } from "@/utils/deviceActivity";
 import type { ReadingRow } from "@/config/readingRows";
 
 export interface PanelActions {
@@ -44,8 +44,8 @@ export interface PanelActions {
     state: DeviceSurfaceState;
     /** Its corner mark — what is wrong (deviceActivity.badgeMarkOf). */
     mark: BadgeMark | null;
-    /** Its linked dot — its linked switch on or off (deviceActivity.linkDotOf). */
-    linkDot: LinkDot;
+    /** Its bottom-right pill — its linked entity: its problem, else on or off (deviceActivity.linkPillOf). */
+    linkPill: LinkPill;
     /** A CRITICAL device that lost contact (deviceLook.critical, 2.496.428): every lost pill of this window — the
      *  reading's, the "UNAVAILABLE" notice's, the lock's — takes the danger red (config/reading.lostPillTone). */
     critical: boolean;
