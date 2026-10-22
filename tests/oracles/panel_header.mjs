@@ -70,7 +70,7 @@ ck("  ...the band is the windows' own StateTimeline (LINKED_BAND_PX), coloured b
   const rowSrc = readFileSync(new URL("../../src/components/panels/LinkedSensorRow.tsx", import.meta.url), "utf8");
   ck("  ...drawn right under the device's own history, inside the window's one range — a camera's motion sensor too, each named with what it is",
      /\(history \?\? <LastDayTimeline entityId=\{entityId\} \/>\)\}[\s\S]{0,300}\{linkedSensor && <LinkedSensorRow /.test(src)
-     && /<HistoryRangeShare>[\s\S]*<LinkedSensorRow[\s\S]*<\/HistoryRangeShare>/.test(src)
+     && /<HistoryRangeShare device=\{entityId\}[\s\S]*<LinkedSensorRow[\s\S]*<\/HistoryRangeShare>/.test(src)
      && /\{motion && <LinkedSensorRow entityId=\{motion\.entityId\} label=\{motion\.label\} role="motion sensor" \/>\}/.test(src)
      && !/conn-dot/.test(src) && /\{label\} <span className="muted">\(\{role\}\)<\/span>/.test(rowSrc)
      && /const range = useSharedRange\(\);/.test(rowSrc) && propText(tl[0], "hours") === "range.hours"

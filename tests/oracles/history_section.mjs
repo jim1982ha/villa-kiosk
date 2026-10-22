@@ -45,7 +45,7 @@ console.log("\n  the look-back:");
   const never = [{ t: now - 5 * H, state: "unavailable" }];
   const c = await loadStateWindow("x.y", 24, port(never));
   ck("a device never seen in the look-back: the asked-for window, no 'before'", c.lastSeen === undefined && c.data.length === 1, c);
-  ck("the header says when a moved window ends", historyTitle("Last 24 hours", b.lastSeen).startsWith("Last 24 hours before ")
+  ck("the header says the last report a moved window ends just after", historyTitle("Last 24 hours", b.lastSeen).startsWith("Last 24 hours, last report ")
      && historyTitle("Last 24 hours", undefined) === "Last 24 hours");
 }
 
@@ -58,7 +58,7 @@ console.log("\n  who charts states, and how:");
   ck("only the history section, the camera's two-series rail and a linked sensor's band draw a StateTimeline themselves",
      importers.sort().join() === "CameraPanel.tsx,LastDayTimeline.tsx,LinkedSensorRow.tsx", importers);
   const day = src("LastDayTimeline.tsx");
-  ck("the section charts the moved window where it ENDS and titles it", /end=\{lastSeen\}/.test(day) && /title=\{historyTitle\(range\.title, lastSeen\)\}/.test(day));
+  ck("the section charts the moved window where it ENDS and titles it", /end=\{end\}/.test(day) && /title=\{historyTitle\(range\.title, lastSeen\)\}/.test(day));
   ck("  ...and hands the chart the fetch's status whole", /status=\{status\}/.test(day));
   ck("Generic and Sensor (binary and text) use the section", /<LastDayTimeline entityId=\{mapping\.entityId\} palette \/>/.test(src("GenericPanel.tsx"))
      && /<ReadingHistory entityId=\{mapping\.entityId\}/.test(src("SensorPanel.tsx"))

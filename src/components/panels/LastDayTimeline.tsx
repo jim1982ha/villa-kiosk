@@ -16,7 +16,7 @@ import { stateWords } from "@/config/reading";
 import StateTimeline from "./StateTimeline";
 import { useStateHistory } from "@/hooks/useStateHistory";
 import { historyTitle } from "@/ha/historySource";
-import { useHistoryRange, HistoryHeader } from "./historyRange";
+import { useHistoryRange, useDeviceBand, HistoryHeader } from "./historyRange";
 import { aggregationWords } from "./chartUtils";
 import { historyStateColor, NOT_KEPT, paletteColorFor } from "@/utils/stateColors";
 
@@ -41,7 +41,10 @@ export default function LastDayTimeline({
   words?: (state: string) => string;
 }) {
   const { range, picker } = useHistoryRange();
-  const { data, status, lastSeen } = useStateHistory(entityId, range.hours);
+  // the window's device with bands under it: the window's one answer, theirs over the same window (useDeviceBand)
+  const band = useDeviceBand(entityId);
+  const own = useStateHistory(band ? null : entityId, range.hours);
+  const { data, status, lastSeen, end } = band ?? own;
   const { entities } = useHA();
   // the "no longer kept" stretch is not one of the device's states: never in its palette (historySource.keptFrom)
   const held = data.map((p) => p.state).filter((s) => s !== NOT_KEPT);
@@ -55,7 +58,7 @@ export default function LastDayTimeline({
         status={status}
         hours={range.hours}
         grainMs={range.grainMs}
-        end={lastSeen}
+        end={end}
         labelFor={words ?? stateWords(entityId, entities[entityId]?.attributes.device_class as string | undefined)}
       />
     </div>

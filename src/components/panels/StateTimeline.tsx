@@ -38,8 +38,8 @@ interface Props {
    *  track beside it. The data and the axis have to come from the same range. */
   hours: number;
   /** Where the window ENDS (epoch ms), when that is not now — a device that
-   *  has been down longer than the window is shown ending at its last
-   *  sighting (useStateHistory.lastSeen). The bar used to draw
+   *  has been down longer than the window is shown ending just after its last
+   *  sighting (historySource StateWindow.end), and so are the bands under it. The bar used to draw
    *  [now − hours, now] regardless, so the data it had been handed lay off
    *  its left edge while the header said "… before <date>". */
   end?: number;

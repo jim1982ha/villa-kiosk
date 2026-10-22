@@ -15,11 +15,11 @@
 // a key not in the list is a type error — the key would otherwise be
 // silently un-revertable (Discard restores its siblings and leaves it).
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AppConfig } from "@/config/AppConfig";
 import { useConfig } from "@/config/ConfigContext";
 import { useDraftCommit } from "./useDraftCommit";
-import { draftedView, sliceChanged, sliceOf, type Slice } from "@/config/configSlice";
+import { draftedView, rebaseOnRemote, sliceChanged, sliceOf, type Slice } from "@/config/configSlice";
 
 export interface DraftedSlice<K extends keyof AppConfig> {
   /** What every control renders from. */
@@ -29,7 +29,7 @@ export interface DraftedSlice<K extends keyof AppConfig> {
    *  `stored` is what to write when it differs from what to show (a title
    *  shown as typed, stored trimmed). */
   set: (shown: Partial<Slice<K>>, opts?: { now?: boolean; stored?: Partial<Slice<K>> }) => void;
-  /** Anything changed since the dialog opened (or was last saved). */
+  /** Anything THIS dialog changed since it opened (or was last saved); another tablet's change is not one. */
   dirty: boolean;
   /** Keep the changes: write what is waiting, and make this the baseline. */
   save: () => void;
@@ -43,13 +43,21 @@ export interface DraftedSlice<K extends keyof AppConfig> {
 const DRAFT = "slice";
 
 export function useDraftedSlice<K extends keyof AppConfig>(keys: readonly K[], delayMs = 500): DraftedSlice<K> {
-  const { config, update } = useConfig();
+  const { config, update, onRemoteChange } = useConfig();
   const pending = useDraftCommit<Partial<AppConfig>>((_key, patch) => update(patch), delayMs);
-  // Captured once, on open — `useState`'s initialiser, not a live read — so a
-  // change while the dialog is open moves `dirty` rather than the thing dirty
-  // is measured against.
+  // Captured on open — `useState`'s initialiser, not a live read — so this
+  // dialog's change moves `dirty` rather than the thing dirty is measured
+  // against; only another tablet's change moves it (below).
   const [baseline, setBaseline] = useState<Slice<K>>(() => sliceOf(config, keys));
   const [typing, setTyping] = useState<Partial<Slice<K>>>({});
+  // ⚠️ ONLY THIS DIALOG'S OWN CHANGES. A change from another tablet (DeviceConfigSync, every few minutes and on
+  // focus) moves the baseline by the same items (configSlice rebaseOnRemote): it lit Save by itself, and Cancel wrote
+  // it away for every tablet (2.496.493 to 2.496.496).
+  const latest = useRef({ config, keys });
+  latest.current = { config, keys };
+  useEffect(() => onRemoteChange((change) => {
+    setBaseline((b) => rebaseOnRemote(b, latest.current.keys, latest.current.config, change));
+  }), [onRemoteChange]);
   const waiting = pending.drafts[DRAFT];
   // compared by content once per config (the slice can hold the villa's whole entity map since Advanced Settings joined
   // Settings' draft, 2026-10-22): never per render

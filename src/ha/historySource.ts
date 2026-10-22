@@ -31,6 +31,8 @@ import { NOT_KEPT, UNKNOWN_STATES } from "@/utils/stateColors";
 import type { HistorySeries, StateHistoryPoint, StatisticPeriod } from "@/types/ha.types";
 import { dayTime } from "@/utils/dateText";
 import { HOUR_MS } from "@/utils/localDay";
+import { bandEnd } from "@/utils/timelineCells";
+import { TREND_INTERVAL_MS } from "@/utils/trendInterval";
 
 /** One row of Home Assistant's state history, as the REST endpoint sends it. */
 export interface StateRow {
@@ -65,8 +67,10 @@ export type HistoryRequest =
   /** Raw states — no numeric parse — for each id (the camera's status bar). */
   | { kind: "states"; ids: readonly string[]; hours: number }
   /** One entity's states, moved back to end at its last sighting when the
-   *  window is entirely dead (the device panels' timelines). */
-  | { kind: "stateWindow"; id: string; hours: number }
+   *  window is entirely dead (the device panels' timelines) — and, `follow`,
+   *  the states of the entities whose bands sit under it (a lock's door sensor,
+   *  a camera's motion sensor) over THAT window, moved or not. */
+  | { kind: "stateWindow"; id: string; hours: number; follow?: readonly string[] }
   /** The recorder's statistics, one series per id per field. */
   | { kind: "statistics"; ids: readonly string[]; period: StatisticsPeriod;
       fields: readonly StatisticField[]; hours?: number; since?: number }
@@ -78,6 +82,14 @@ export interface StateWindow {
   /** Set when the window had to move back to find any real data: the moment
    *  the device was last seen reporting. The UI says so. */
   lastSeen?: number;
+  /** Where a moved window ENDS: the step edge after `lastSeen` (timelineCells.bandEnd, the rule a band "until now"
+   *  ends by), so the state that last report set is drawn. Ending AT the report gave it no width: the band ended on
+   *  the state before it while the pill above said the new one (owner, 2026-10-22: "before 21 Oct, 14:57", Closed
+   *  under Open). Undefined: the window ends now. */
+  end?: number;
+  /** Each `follow` entity's states over the SAME window as `data` — never moved on its own: one silent over it
+   *  shows its outage there (owner, 2026-10-21: the linked band "taking the same width … over the same scale"). */
+  followers?: Record<string, StateHistoryPoint[]>;
 }
 
 /** What each kind of request answers with. */
@@ -112,7 +124,7 @@ export function requestWindow(r: HistoryRequest, now: number): { from: number; t
  *  cancelling itself, 2.496.86). */
 export function historyKey(q: HistoryRequest | HistoryRequests): string {
   const one = (r: HistoryRequest) => {
-    const ids = "ids" in r ? [...r.ids].join(",") : r.id;
+    const ids = "ids" in r ? [...r.ids].join(",") : r.kind === "stateWindow" && r.follow?.length ? `${r.id}>${r.follow.join(",")}` : r.id;
     const extra = r.kind === "statistics"
       ? `|${r.period}|${[...r.fields].join(",")}|${r.since ?? ""}`
       : r.kind === "trend" ? `|${r.period ?? "5minute"}` : "";
@@ -190,30 +202,41 @@ async function states(port: HistoryPort, id: string, window: { from: number; to:
 
 /**
  * The window to chart, and — when it is entirely dead — the same window moved
- * back to END at the device's last sighting, so the chart answers "when did
- * this stop" rather than showing an empty strip.
+ * back to END just after the device's last sighting, so the chart answers
+ * "when did this stop" rather than showing an empty strip. The `follow`
+ * entities are read over that ONE window: the bands under the device's
+ * compare with it over the same scale, and the move is decided once, here.
  */
-async function stateWindow(port: HistoryPort, id: string, hours: number, now: number): Promise<StateWindow> {
+async function stateWindow(port: HistoryPort, id: string, hours: number, now: number,
+  follow: readonly string[] = []): Promise<StateWindow> {
+  const kept = await keptFrom(port, now);
+  const followers = async (to: number) => follow.length === 0 ? undefined : Object.fromEntries(await Promise.all(
+    follow.map(async (f) => [f, await states(port, f, { from: to - hours * HOUR_MS, to }, kept)] as const)));
   const alive = (h: StateHistoryPoint[]) => h.some((pt) => !UNKNOWN_STATES.has(pt.state) && pt.state !== NOT_KEPT);
-  const h = await states(port, id, { from: now - hours * HOUR_MS, to: now }, await keptFrom(port, now));
-  if (alive(h)) return { data: h };
+  const h = await states(port, id, { from: now - hours * HOUR_MS, to: now }, kept);
+  const asked = async (): Promise<StateWindow> => ({ data: h, ...(follow.length ? { followers: await followers(now) } : {}) });
+  if (alive(h)) return asked();
   const deep = await states(port, id, { from: now - LAST_SEEN_LOOKBACK_HOURS * HOUR_MS, to: now });
   let seen = 0;
   for (const pt of deep) {
     if (!UNKNOWN_STATES.has(pt.state) && pt.state !== NOT_KEPT && pt.t > seen) seen = pt.t;
   }
-  if (seen === 0) return { data: h };
-  // Keep the window's own length; only move where it ENDS — at the sighting —
-  // with the row BEFORE it that says what state the window opened in.
-  return { data: windowEndingAt(deep, seen, hours), lastSeen: seen };
+  if (seen === 0) return asked();
+  // Keep the window's own length; only move where it ENDS — on the step edge
+  // after the sighting, so its state has width — with the row BEFORE it that
+  // says what state the window opened in.
+  const end = Math.min(now, bandEnd(seen, TREND_INTERVAL_MS));
+  return { data: windowEndingAt(deep, end, hours), lastSeen: seen, end,
+    ...(follow.length ? { followers: await followers(end) } : {}) };
 }
 
 /** The section header's title: the range, and — when the window had to be
- *  moved to find data — the moment it ends, because an unlabelled chart of a
- *  different period is worse than no chart. */
+ *  moved to find data — the device's last report, which it ends just after,
+ *  because an unlabelled chart of a different period is worse than no chart. */
 export function historyTitle(rangeTitle: string, lastSeen: number | undefined): string {
+  // ⚠️ "LAST REPORT", NOT "BEFORE": the band ends on the step after it, with its state drawn (StateWindow.end)
   return lastSeen
-    ? `${rangeTitle} before ${dayTime(lastSeen)}`
+    ? `${rangeTitle}, last report ${dayTime(lastSeen)}`
     : rangeTitle;
 }
 
@@ -370,7 +393,7 @@ export async function loadOne<R extends HistoryRequest>(port: HistoryPort, r: R,
       return await each(r.ids, (id) => states(port, id, window, kept)) as HistoryAnswer<R>;
     }
     case "stateWindow":
-      return await stateWindow(port, r.id, r.hours, now) as HistoryAnswer<R>;
+      return await stateWindow(port, r.id, r.hours, now, r.follow) as HistoryAnswer<R>;
     case "statistics":
       return await statistics(port, r.ids, r.period, r.fields, window) as HistoryAnswer<R>;
     case "since":

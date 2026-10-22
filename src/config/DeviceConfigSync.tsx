@@ -67,7 +67,7 @@ import { useStoreRefresh } from "@/hooks/useStoreRefresh";
 import {
   fetchSharedConfig, saveSharedConfig, pickSharedConfig, SHARED_CONFIG_KEYS,
   diffSharedConfig, applySharedConfigDiff, isSharedConfigDiffEmpty, describeSharedConfigDiff,
-  mergeSharedConfig,
+  mergeSharedConfig, remoteChange,
   loadSyncBaseline, saveSyncBaseline, baselineFromServer,
   type SharedDeviceConfig,
 } from "./deviceConfig";
@@ -85,7 +85,7 @@ const PUSH_DEBOUNCE_MS = 900;
 const MAX_PUSH_ATTEMPTS = 3;
 
 export default function DeviceConfigSync() {
-  const { config, update } = useConfig();
+  const { config, mergeRemote } = useConfig();
   const { role } = useProfile();
 
   // Recompute the slice ONLY when one of the shared fields actually changes
@@ -181,12 +181,14 @@ export default function DeviceConfigSync() {
       // `outcome.next` is the SHARED slice, which carries no derived items, and
       // handing it straight to update() would empty the fitted rooms out of
       // config on every successful push.
-      update(mergeSharedConfig(configRef.current, outcome.next));
+      // What the others changed is the copy this device's diff went onto (`base`) against the one it had synced:
+      // an open dialog's Cancel keeps it (mergeRemote → hooks/useDraftedSlice).
+      mergeRemote(mergeSharedConfig(configRef.current, outcome.next), remoteChange(baseline ?? outcome.base, outcome.base));
       return;
     }
     if (outcome.reason === "nothing-to-push" || outcome.reason === "not-allowed" || outcome.reason === "not-pulled") return;
     reportSync({ op: "push", ok: false, reason: outcome.reason, changed });
-  }, [doc, update, reportSync]);
+  }, [doc, mergeRemote, reportSync]);
 
   const pull = useCallback(async () => {
     // What applying the server's copy would make the local slice: server wins
@@ -194,6 +196,8 @@ export default function DeviceConfigSync() {
     // device's DERIVED rows survive (mergeSharedConfig).
     const mergedOf = (config: Partial<SharedDeviceConfig>) =>
       ({ ...localRef.current, ...mergeSharedConfig(configRef.current, config) }) as SharedDeviceConfig;
+    // What this device had synced with before the pull: the change the pull brings is the server's copy against it.
+    const synced = doc.baseline ?? pickSharedConfig(configRef.current);
     const r = await doc.pull(
       () => localRef.current,
       (f) => JSON.stringify(mergedOf(f.config)) !== JSON.stringify(localRef.current),
@@ -237,8 +241,8 @@ export default function DeviceConfigSync() {
     // compared by reference there — an unconditional update forced a full mesh
     // re-index (and its freeze) on every focus regain.
     if (r.action === "noop") return;
-    update(mergeSharedConfig(configRef.current, r.fetched.config));
-  }, [doc, update, pushOwnDiff, reportSync]);
+    mergeRemote(mergeSharedConfig(configRef.current, r.fetched.config), remoteChange(synced, r.fetched.config));
+  }, [doc, mergeRemote, pushOwnDiff, reportSync]);
 
   // Mount + focus/visibility + a slow visible-only heartbeat, via the shared
   // hook — the SAME triggers the Facility Manager store uses, so "how fresh is

@@ -88,7 +88,9 @@ export type StoreSaveResult =
   | { ok: false; conflict: false; refused: true; message?: string };
 
 export type PushOutcome<TDoc> =
-  | { ok: true; next: TDoc; rev: string; attempts: number }
+  /** `base`: the server's copy this device's diff was replayed onto, i.e. what the OTHER devices had changed since
+   *  this one last synced (config/deviceConfig remoteChange), before its own diff went on top. */
+  | { ok: true; next: TDoc; base: TDoc; rev: string; attempts: number }
   | { ok: false; reason: "nothing-to-push" | "transport" | "conflict-retries-exhausted" }
   | { ok: false; reason: "refused"; message?: string };
 
@@ -118,7 +120,7 @@ export async function pushWithRebase<TDoc, TDiff>(opts: {
     const base = fresh ? opts.rebase(opts.baseline, fresh.doc) : opts.baseline;
     const next = opts.apply(base, opts.diff);
     const result = await opts.save(next, fresh?.rev ?? "0", fresh?.raw ?? {});
-    if (result.ok) return { ok: true, next, rev: result.rev, attempts: attempt + 1 };
+    if (result.ok) return { ok: true, next, base, rev: result.rev, attempts: attempt + 1 };
     if ("refused" in result && result.refused) return { ok: false, reason: "refused", message: result.message };
     if (!result.conflict) return { ok: false, reason: "transport" };
     // Someone else's write landed between our read and our write — loop and
