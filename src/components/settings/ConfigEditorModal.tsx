@@ -26,7 +26,10 @@ import GroupedDevices from "./GroupedDevices";
 import UnavailableByDesign from "./UnavailableByDesign";
 import EntityPicker from "./EntityPicker";
 import InlineConfirm from "@/components/common/InlineConfirm";
-import ModalFooter from "@/components/common/ModalFooter";
+import ModalFooter, { footerExits } from "@/components/common/ModalFooter";
+import { useAppNotice } from "@/components/hud/AppNotice";
+import { useDraftedSlice } from "@/hooks/useDraftedSlice";
+import { ADVANCED_SETTINGS_KEYS } from "@/config/configSlice";
 import DialogLayer from "@/components/common/DialogLayer";
 
 /** ⚠️ EVERY TAB CARRIES TWO PANELS, AND THAT IS A RULE RATHER THAN AN
@@ -54,6 +57,10 @@ const TABS: (ModalTab<SettingsTab> & { owner?: true })[] = [
 interface Props {
   /** Return to the Settings modal this was opened from. */
   onBack: () => void;
+  /** Settings is open underneath (the way in from its footer): ITS draft owns every change made here — Close returns
+   *  to it, and its Save / Cancel keep or undo them. Opened on its own (a device window's "edit"), this dialog owns
+   *  the same draft itself, with its own Save / Cancel (owner, 2026-10-22: Advanced Settings joins Save / Cancel). */
+  withinSettings: boolean;
   /** When opened from a device panel's edit shortcut, pre-filter the entity
    *  table to this entity_id so its row is right there. */
   focusEntityId?: string;
@@ -229,9 +236,17 @@ function LogoutAll() {
   );
 }
 
-export default function ConfigEditorModal({ onBack, focusEntityId, onModelChanged, viewHeadingDeg }: Props) {
+export default function ConfigEditorModal({ onBack, withinSettings, focusEntityId, onModelChanged, viewHeadingDeg }: Props) {
+  // ⚠️ ONE DRAFT FOR WHAT THIS DIALOG EDITS (configSlice.ADVANCED_SETTINGS_KEYS). Every edit below applies live through
+  // ConfigContext.update and reaches every tablet; the draft only remembers how the setup was when it opened. Over
+  // Settings, Settings' draft holds these keys and this dialog just closes back to it; on its own, it is this one's:
+  // Save keeps, Cancel (and Escape, and the backdrop) writes them back — the passing notices of every other dialog.
+  const own = useDraftedSlice(ADVANCED_SETTINGS_KEYS);
+  const notice = useAppNotice();
+  const commit = withinSettings ? undefined : { dirty: own.dirty, save: own.save, discard: () => { own.discard(); } };
+  const exit = commit ? footerExits(commit, onBack, notice).cancel : onBack;
   // Focus trap + Escape + focus restore (see useModalA11y).
-  const dialogRef = useModalA11y(onBack);
+  const dialogRef = useModalA11y(exit);
   const { role } = useProfile();
   // ⚠️ FILTERED BEFORE THE INITIAL VALUE IS CHOSEN, so a non-owner can never
   // start on a tab that is not in their strip — which would render an empty
@@ -251,7 +266,7 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
   const glbUpload = useGlbUpload(canUploadModel, onModelChanged);
 
   return (
-    <DialogLayer className="modal-backdrop" onClick={onBack}>
+    <DialogLayer className="modal-backdrop" onClick={exit}>
       <div
         ref={dialogRef}
         className="modal settings-modal config-editor-modal"
@@ -395,10 +410,9 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
           )}
         </div>
 
-        {/* No Save: every tab here applies LIVE to the 3D scene through
-            `ConfigContext`, which is why the strip above is passed no `commit`
-            and a tab switch can lose nothing. */}
-        <ModalFooter onClose={onBack} leading={roleCan(role, "editConfig") ? <LogoutAll /> : undefined} />
+        {/* Every tab applies LIVE through `ConfigContext`, so a tab switch loses nothing. Over Settings: Close, back to
+            Settings, whose Save / Cancel own these changes; on its own: this dialog's Save / Cancel (`commit`). */}
+        <ModalFooter onClose={onBack} commit={commit} leading={roleCan(role, "editConfig") ? <LogoutAll /> : undefined} />
       </div>
     </DialogLayer>
   );

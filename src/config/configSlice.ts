@@ -32,3 +32,18 @@ export function sliceChanged<K extends keyof AppConfig>(
   return waiting || JSON.stringify(sliceOf(config, keys)) !== JSON.stringify(baseline);
 }
 
+/**
+ * What Advanced Settings edits — the villa's shared setup — as ONE slice, so the dialog that opens it owns it in its
+ * draft (owner, 2026-10-22: Advanced Settings joins Settings' Save / Cancel). Its edits still apply live (the 3D view
+ * follows a north-offset drag) and reach every tablet; Cancel writes these keys back as they were when the dialog
+ * opened — through the same update, so the store and every tablet get the old values — and Save keeps them.
+ *
+ * Every key a section of Advanced Settings writes, and nothing it merely triggers: the 3D model upload and "Log out
+ * all devices" are actions, never reverted; the rooms a model's room data writes (teleportPoints) arrive with that
+ * upload. Pure — tests/oracles/advanced_draft.mjs.
+ */
+export const ADVANCED_SETTINGS_KEYS = [
+  "latitude", "longitude", "northOffsetDeg", "presenceSensor",
+  "entityMap", "meshBindings", "deviceGroups", "dismissedEntityIds", "unavailableByDesign",
+  "recordsKeptDays",
+] as const satisfies readonly (keyof AppConfig)[];

@@ -1,3 +1,13 @@
+## 2.496.493
+
+What you will see:
+- Advanced Settings is part of Settings' Save and Cancel. Change something in Advanced Settings, press Close, and
+  Settings' Save is active: Save keeps the change ("saved" message), Cancel undoes it on every tablet ("cancelled"
+  message). Changes still show at once on the 3D view while you edit. Opened on its own (a device window's edit),
+  Advanced Settings has its own Save and Cancel.
+- A device window's icon: the small edit pill sits at the top-left corner, so the top-right mark and the
+  bottom-right linked-device pill stay fully visible.
+
 ## 2.496.492
 
 What you will see in Advanced Settings:
