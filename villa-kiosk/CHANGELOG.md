@@ -1,3 +1,11 @@
+## 2.496.496
+
+What you will see:
+- A device on the asleep list (Advanced Settings › Unavailable by design) that has slept since before the chart's
+  period now shows its last report across the whole band, over the same period as everything else. Example: a lock's
+  door sensor that last reported "Open" yesterday now shows "Open" for the whole 24 hours under the lock's own band.
+  Before, its band showed a different day, mostly grey "Unknown", ending at its last report.
+
 ## 2.496.495
 
 What you will see:

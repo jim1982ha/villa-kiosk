@@ -7,18 +7,21 @@
 import { KEPT_PROBE, keptFromRows, keptLookFrom, type HistoryPort, type StateRow } from "./historySource";
 import { ingressApiBase } from "./ingress";
 import { backendFetch } from "@/auth/sessionLost";
-import { heldRows } from "./unavailableByDesign";
+import { heldWindow, opensAsleep, recallFrom } from "./unavailableByDesign";
 
 /** Anything that can read the recorder's statistics — the HA websocket. */
 export type StatisticsPort = Pick<HistoryPort, "getStatisticsDuringPeriod">;
 
 /** `asleep`: the devices asleep by design (the entity store's list) — their sleep is no change on a chart
- *  (unavailableByDesign.heldRows). */
+ *  (unavailableByDesign.heldWindow). */
 export function haHistoryPort(ws: StatisticsPort, asleep: ReadonlySet<string> = new Set()): HistoryPort {
   return {
     async stateRows(entityId, from, to) {
       const rows = (await recordedStates([entityId], from, to))[entityId] ?? [];
-      return asleep.has(entityId) ? heldRows(rows) : rows;
+      if (!asleep.has(entityId)) return rows;
+      // a window that opens asleep holds the report before it: read back as far as the store's recall does
+      const before = opensAsleep(rows) ? (await recordedStates([entityId], recallFrom(from), from))[entityId] ?? [] : [];
+      return heldWindow(rows, before, from);
     },
     getStatisticsDuringPeriod: (...args) => ws.getStatisticsDuringPeriod(...args),
     // where the villa's system's detail begins: the oldest change of the probe it still keeps (historySource.keptFrom)

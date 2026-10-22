@@ -42,6 +42,28 @@ export function heldRows<R extends { state: string | null }>(rows: readonly R[])
   return rows.filter((r) => r.state !== "unavailable");
 }
 
+/**
+ * A window of a device asleep by design (`rows`, led by the state it was in at `from`), as its charts draw it: its
+ * sleep is no change (heldRows), and a window that OPENS asleep opens on the report it holds — the last one in
+ * `before`, the rows leading up to `from` — never on bare track.
+ *
+ * ⚠️ OPENING ASLEEP DREW THE WRONG DAY (owner, 2026-10-22: a lock's door contact, asleep since its last report the
+ * day before, read "Unknown" across its band): the leading "unavailable" row was dropped with the rest, the window held
+ * nothing, and the chart moved it back to end at the last report, so the door's band covered another day than the
+ * lock's band above it.
+ */
+export function heldWindow<R extends RecordedState>(rows: readonly R[], before: readonly R[], from: number): R[] {
+  const held = heldRows(rows);
+  if (!opensAsleep(rows)) return held;
+  const last = lastReport(before);
+  return last ? [{ ...(last as R), last_changed: new Date(from).toISOString() }, ...held] : held;
+}
+
+/** Does a window (led by the state at its start) open asleep — so its held report lies before it? */
+export function opensAsleep(rows: readonly RecordedState[]): boolean {
+  return rows.length === 0 || rows[0].state === "unavailable";
+}
+
 /** The last real report among `rows` (oldest first), or null — never "unavailable" or "unknown". */
 export function lastReport(rows: readonly RecordedState[]): RecordedState | null {
   for (let i = rows.length - 1; i >= 0; i--) if (contactOf(rows[i].state) === "ok") return rows[i];
