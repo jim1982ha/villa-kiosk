@@ -16,6 +16,8 @@ import {
   keyBy, diffKeyed, applyKeyed, applyKeyedMerging, keyedDiffIsEmpty, mergeItem, mineWins, names,
   type FieldMerge, type KeyedDiff, type StoreFetch, type StoreSaveResult,
 } from "@/utils/keyedSync";
+import type { UnsentCopy, UnsentKeeper } from "@/utils/syncedDocument";
+import { readString, removeStored, writeJson } from "@/utils/storedJson";
 
 /** Narrow an arbitrary parsed value to FmData, dropping anything unrecognised.
  *  A store written by a newer app version must not be able to inject unknown
@@ -185,6 +187,73 @@ export function foldOthers(screen: FmData, pushed: { synced: FmData; others: FmD
   const laid = applyFmDiff(screen, mineWins(pushed.others, mine));
   return { doc: { ...laid, tickets: laid.tickets.map((t) => merged[t.id] ?? t) }, changedOnBoth };
 }
+
+// ── This device's unsent Facility work, kept across a reload ────────────
+// ⚠️ "SAVED ON THIS DEVICE" WAS THE PAGE'S MEMORY (architecture review i_k3, 2026-10-23): a fault reported, or work
+// logged, while the add-on could not be reached was told "it will be sent automatically", and the 04:00 reload, iOS
+// dropping the tab or a pull to refresh lost it, nothing said. Kept here (utils/syncedDocument spec.keep) from the moment
+// it is handed to a push until the add-on has it; read back when the store starts, and sent by the first refresh onto the
+// store's fresh copy, item by item: a fault changed meanwhile on another device is merged field by field (mergeTicket),
+// so an older copy here never overwrites a newer value there.
+//
+// Only the change and the records it touches as the add-on last held them (`was` for a fault's merge, a removed record's
+// id): never the whole record, which is the add-on's. Photos and documents are not in it: a photo is uploaded on its own
+// before the fault or the work that names it (uploadEvidence; with the add-on out of reach it fails there, said by the
+// form), so what is kept names only photos the add-on already holds.
+//
+// ⚠️ FM_UNSENT_FORMAT goes up whenever the record's shape or the change's shape (FmDataDiff) changes: a copy written in
+// another format is dropped, never replayed blindly. Storage refused (private mode, full): nothing is kept, as before.
+
+export const FM_UNSENT_KEY = "villa-kiosk:fm-unsent";
+export const FM_UNSENT_FORMAT = 1;
+
+const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
+const isRecordMap = (v: unknown) => isObj(v) && Object.entries(v).every(([id, r]) => isObj(r) && r.id === id);
+
+/** A stored change, if it is one: every collection's set (records under their own id), removed ids and `was`. */
+function parseFmDiff(raw: unknown): FmDataDiff | null {
+  if (!isObj(raw)) return null;
+  const out = {} as FmDataDiff;
+  for (const k of FM_COLLECTIONS) {
+    const d = raw[k];
+    if (!isObj(d) || !isRecordMap(d.set) || !Array.isArray(d.del) || !d.del.every((id) => typeof id === "string")) return null;
+    if (d.was !== undefined && !isRecordMap(d.was)) return null;
+    out[k] = { set: d.set as Record<string, { id: string }>, del: d.del as string[],
+      ...(d.was !== undefined ? { was: d.was as Record<string, { id: string }> } : {}) };
+  }
+  return out;
+}
+
+/** The records of `baseline` the change touches (changed, removed, or merged against): what a replay needs of it. */
+function touchedBy(baseline: FmData, unsent: FmDataDiff): FmData {
+  const out = { ...EMPTY_FM_DATA } as Record<string, unknown>;
+  for (const k of FM_COLLECTIONS) {
+    const d = unsent[k];
+    const ids = new Set([...Object.keys(d.set), ...d.del, ...Object.keys(d.was ?? {})]);
+    out[k] = (baseline[k] as { id: string }[]).filter((r) => ids.has(r.id));
+  }
+  return out as unknown as FmData;
+}
+
+/** The Facility store's keeper (FmDataContext). */
+export const fmUnsentKeeper: UnsentKeeper<FmData, FmDataDiff> = {
+  load: (): UnsentCopy<FmData, FmDataDiff> | null => {
+    const text = readString(FM_UNSENT_KEY);
+    if (text === null) return null;
+    let raw: unknown = null;
+    try { raw = JSON.parse(text); } catch { /* not JSON: dropped below */ }
+    const unsent = isObj(raw) && raw.v === FM_UNSENT_FORMAT ? parseFmDiff(raw.unsent) : null;
+    if (!isObj(raw) || unsent === null || !isObj(raw.baseline)) {
+      removeStored(FM_UNSENT_KEY);   // another format, or not one at all: dropped, never replayed
+      return null;
+    }
+    return { baseline: parseFmData(raw.baseline), unsent };
+  },
+  save: (copy) => {
+    if (copy === null) removeStored(FM_UNSENT_KEY);
+    else writeJson(FM_UNSENT_KEY, { v: FM_UNSENT_FORMAT, baseline: touchedBy(copy.baseline, copy.unsent), unsent: copy.unsent });
+  },
+};
 
 /** Short, URL-safe, collision-resistant enough for one villa's records. */
 export function fmId(prefix = ""): string {

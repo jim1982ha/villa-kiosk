@@ -162,6 +162,8 @@ export default function DeviceConfigSync() {
       maxAttempts: MAX_PUSH_ATTEMPTS,
     }, initial);
   }, []);
+  // the daily reload waits while this store holds work the add-on has not got (utils/autoReload)
+  useEffect(() => doc.track(), [doc]);
 
   // RULE 4: this device's own diff, replayed onto the server's freshest copy
   // under optimistic concurrency (utils/syncedDocument → keyedSync).

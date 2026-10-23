@@ -135,4 +135,53 @@ ck("  ...still bad (reopened): an open fault again, counted, off the watched car
 ck("  ...the field left on a reopened fault (before the Agent's repair) never makes it a confirming one",
    !confirmingFaults({ ...data, tickets: [{ ...watched, status: "open" }] }, CADENCE, NOW).length);
 
+console.log("\n  a reopen in the Kiosk takes the watch away (architecture review i_k1, 2026-10-23: fmEngine withoutClose):");
+{
+  // ⚠️ The Kiosk's Reopen kept confirmsBy (every field but resolvedAt rode along): a Cockpit Close a minute later showed
+  // "Closed (Owner) · VESTA confirms it at its next look" with the EARLIER close's watch time, while the Agent watched
+  // nothing. Driven through the one way in for every change (fmCommands applyFmCommand), as the store runs it.
+  const { applyFmCommand } = await import("@/fm/fmCommands");
+  const { CLOSE_ONLY_FIELDS } = await import("@/fm/fmEngine");
+  let n = 0;
+  const k = (min) => ({ now: at(min), id: (p) => p + (++n), by: "Owner" });
+  const doneW1 = doneOn("w1", "lock.front_door", at(2));
+  const start = { ...EMPTY_FM_DATA, tickets: [doneW1] };
+  ck("before: the Done on Telegram is being confirmed", confirmingFaults(start, CADENCE, NOW).length === 1);
+  const reopenedHere = applyFmCommand(start, { type: "advanceTickets", ids: ["w1"], to: "open", step: { photoIds: [], note: "still dripping" } }, k(1));
+  const r = reopenedHere.tickets[0];
+  ck("Reopen: open, with neither the close's time nor its watch",
+     r.status === "open" && !("confirmsBy" in r) && !("resolvedAt" in r) && r.updates.at(-1).kind === "reopened",
+     { status: r.status, confirmsBy: r.confirmsBy, resolvedAt: r.resolvedAt });
+  ck("  ...every other field kept (its alert number, its device, its steps)",
+     r.alertNumber === 65 && r.entityId === "lock.front_door" && r.updates.length === 3 && r.check === "minutes");
+  const closedAgain = applyFmCommand(reopenedHere, { type: "closeTickets", ids: ["w1"] }, k(2));
+  ck("  ...a Cockpit Close a minute later: resolved, and NO confirming row until the Agent writes one",
+     closedAgain.tickets[0].status === "resolved" && confirmingFaults(closedAgain, CADENCE, NOW + 2 * 60_000).length === 0,
+     confirmingFaults(closedAgain, CADENCE, NOW + 2 * 60_000).map(confirmLine));
+  const agentWatches = { ...closedAgain, tickets: closedAgain.tickets.map((t) => ({ ...t, confirmsBy: at(9) })) };
+  ck("  ...the Agent writes its watch on THIS close: the row is back, with its time",
+     confirmingFaults(agentWatches, CADENCE, NOW + 2 * 60_000).map((c) => c.at).join() === String(Date.parse(at(9))));
+  const started = applyFmCommand(start, { type: "advanceTickets", ids: ["w1"], to: "in_progress", step: { photoIds: [] } }, k(1));
+  ck("Mark in progress on the closed fault: the watch goes too",
+     started.tickets[0].status === "in_progress" && !("confirmsBy" in started.tickets[0]) && !("resolvedAt" in started.tickets[0]));
+  const patched = applyFmCommand(start, { type: "updateTicket", id: "w1", patch: { status: "open" } }, k(1));
+  ck("a status patch that reopens it: the watch goes too",
+     patched.tickets[0].status === "open" && !("confirmsBy" in patched.tickets[0]) && !("resolvedAt" in patched.tickets[0]));
+  const retitled = applyFmCommand(start, { type: "updateTicket", id: "w1", patch: { title: "Front door unlocked" } }, k(1));
+  ck("  ...a rename of the closed fault leaves the close and its watch as they are",
+     retitled.tickets[0].confirmsBy === at(2) && retitled.tickets[0].resolvedAt === at(-2));
+  const legacy = { ...EMPTY_FM_DATA, tickets: [{ ...doneW1, status: "open", resolvedAt: undefined,
+    updates: [...doneW1.updates, { at: at(-1), status: "open", kind: "reopened", photoIds: [], by: "Owner" }] }] };
+  const legacyClosed = applyFmCommand(legacy, { type: "closeTickets", ids: ["w1"] }, k(1));
+  ck("a fault reopened by an older build (its watch left on it), closed now: no confirming row",
+     !("confirmsBy" in legacyClosed.tickets[0]) && confirmingFaults(legacyClosed, CADENCE, NOW + 60_000).length === 0);
+  const resolvedNow = applyFmCommand(legacy, { type: "advanceTickets", ids: ["w1"], to: "resolved", step: { photoIds: [] } }, k(1));
+  ck("  ...or marked resolved: none either, and its resolution time is this one",
+     !("confirmsBy" in resolvedNow.tickets[0]) && resolvedNow.tickets[0].resolvedAt === at(1));
+  ck("the fields a reopen takes away are the Agent's reopen's (kiosk.py reopen_ticket drops resolvedAt and confirmsBy)",
+     [...CLOSE_ONLY_FIELDS].sort().join() === "confirmsBy,resolvedAt", CLOSE_ONLY_FIELDS);
+  ck("the agreement says it: a reopen by either side removes the watch",
+     /A reopen by either side removes it\./.test(contract.ticket.fields.confirmsBy));
+}
+
 done("✅ a fault being confirmed is listed last among the open issues, marked, never counted, and goes as the Agent says");

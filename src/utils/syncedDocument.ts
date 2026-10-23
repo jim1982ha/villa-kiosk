@@ -30,6 +30,31 @@ import {
  *  request that never answered (Wi-Fi gone half-way) held every later save and refresh of this store for good. */
 export const PUSH_DEADLINE_MS = 15_000;
 
+/** This device's work the store has not confirmed, as kept across a reload: the confirmed baseline it was made against
+ *  (or the part of it the work touches: the keeper decides) and the change itself. */
+export interface UnsentCopy<D, Diff> {
+  baseline: D;
+  unsent: Diff;
+}
+
+/** Where a document keeps its unsent work across a reload (the Facility store: fm/fmApi fmUnsentKeeper). `load` returns
+ *  null for nothing kept, or a copy it cannot trust (another format, storage disabled); `save(null)` forgets it. Neither
+ *  may throw. */
+export interface UnsentKeeper<D, Diff> {
+  load: () => UnsentCopy<D, Diff> | null;
+  save: (copy: UnsentCopy<D, Diff> | null) => void;
+}
+
+/** The documents a page holds now (SyncedDocument.track): the daily reload asks them (unsentWorkHeld). */
+const tracked = new Set<{ readonly holdsUnsentWork: boolean }>();
+
+/** Some store of this page holds work the add-on has not confirmed: a write out, or one that failed. The daily reload
+ *  waits (utils/autoReload): a reload drops what only this page holds (architecture review i_k3, 2026-10-23). */
+export function unsentWorkHeld(): boolean {
+  for (const d of tracked) if (d.holdsUnsentWork) return true;
+  return false;
+}
+
 export interface SyncedDocumentSpec<D, Diff extends KeyedParts, F extends StoreFetch<D> = StoreFetch<D>> {
   /** The server's copy, in baseline form; null when it cannot be reached. `signal`: a push that ran out of time
    *  aborts the request it was waiting on. */
@@ -49,6 +74,12 @@ export interface SyncedDocumentSpec<D, Diff extends KeyedParts, F extends StoreF
   canWrite?: () => boolean;
   /** Called every time the baseline moves — the config store persists it. */
   onBaseline?: (baseline: D) => void;
+  /** Where the unsent work is kept across a reload, and read back from when this document starts. ⚠️ THE FACILITY
+   *  STORE'S WORK LIVED IN THE PAGE ALONE (architecture review i_k3, 2026-10-23): a fault reported while the add-on
+   *  could not be reached was told "Saved on this device, it will be sent automatically", and the 04:00 reload, iOS
+   *  dropping the tab or a pull to refresh lost it, nothing said. The config store keeps its own (its baseline here,
+   *  its document in ConfigContext). */
+  keep?: UnsentKeeper<D, Diff>;
   maxAttempts?: number;
   /** The push deadline. The stores never set it (PUSH_DEADLINE_MS); an oracle shortens it. */
   deadlineMs?: number;
@@ -96,13 +127,49 @@ export class SyncedDocument<D, Diff extends KeyedParts, F extends StoreFetch<D> 
   private read = false;
   private readonly spec: SyncedDocumentSpec<D, Diff, F>;
 
+  /** The local document the unsent work kept before a reload makes (spec.keep): the adapter starts from it. Null:
+   *  nothing was kept. */
+  readonly restored: D | null = null;
+
   constructor(spec: SyncedDocumentSpec<D, Diff, F>, initial: D | null) {
     this.spec = spec;
     this.baseline = initial;
+    const kept = spec.keep?.load() ?? null;
+    if (kept && !spec.isEmpty(kept.unsent)) {
+      // As a push that failed: it may have landed before the reload (it is then merged as this device's own write, never
+      // another's), and the first refresh sends it again (pull "repush"), onto the store's fresh copy, item by item.
+      this.baseline = kept.baseline;
+      this.restored = spec.apply(kept.baseline, kept.unsent);
+      this.unconfirmed.add({ sent: kept.unsent, failed: true });
+      this.failedVersion += 1;
+      this.unsaved = true;
+    }
+  }
+
+  /** Counted by unsentWorkHeld while the page holds it (its adapter's effect). Returns the untrack. */
+  track(): () => void {
+    tracked.add(this);
+    return () => { tracked.delete(this); };
   }
 
   /** A write from this device failed and its work is only here. */
   get hasUnsaved(): boolean { return this.unsaved; }
+
+  /** Work the store has not confirmed: a failed write, or one out. */
+  get holdsUnsentWork(): boolean { return this.unsaved || this.inFlight > 0; }
+
+  /**
+   * Keep `local` against the confirmed baseline as this device's unsent work (spec.keep), or forget it when there is
+   * none. A push calls it as it is handed its document, so a write out when the page reloads is kept too; the adapter
+   * calls it after it takes a change back. Against the CONFIRMED baseline, never a newer copy of the store: a newer one
+   * holds other devices' changes `local` lacks, which replayed would take them away.
+   */
+  keepUnsent(local: D): void {
+    const keep = this.spec.keep;
+    if (!keep || this.baseline === null) return;
+    const unsent = this.spec.diff(this.baseline, local);
+    keep.save(this.spec.isEmpty(unsent) ? null : { baseline: this.baseline, unsent });
+  }
 
   /** The store has been read (or written) at least once: until then the baseline is only the one this document was
    *  started with, and a screen must not show it as the store's (architecture review H, 2026-10-23: the Facility
@@ -195,6 +262,7 @@ export class SyncedDocument<D, Diff extends KeyedParts, F extends StoreFetch<D> 
   ): Promise<PushResult<D, Diff>> {
     const from = this.promised;
     if (from === null) return { ok: false, reason: "not-pulled" };
+    this.keepUnsent(local);
     this.lastPushed = local;
     this.inFlight += 1;
     const run = this.queue.then(() => this.pushNow(from, local, save));
@@ -287,6 +355,8 @@ export class SyncedDocument<D, Diff extends KeyedParts, F extends StoreFetch<D> 
       this.settle(mine);
       this.unsaved = false;
       this.commit(outcome.next, outcome.rev);
+      // the last push out landed: nothing of this device's is unsent (one still waiting kept its own copy)
+      if (this.inFlight <= 1) this.spec.keep?.save(null);
       return { ...landed, synced: baseline, others };
     }
     if (outcome.reason === "nothing-to-push" || outcome.reason === "refused") {
@@ -295,6 +365,7 @@ export class SyncedDocument<D, Diff extends KeyedParts, F extends StoreFetch<D> 
       // The caller undoes its local change.
       this.settle(mine);
       this.unsaved = false;
+      if (this.inFlight <= 1) this.spec.keep?.save(null);
     } else {
       mine.failed = true;
       this.failedVersion += 1;

@@ -19,7 +19,7 @@ import { applyFmCommand, type FmCommand } from "./fmCommands";
 /** The real clock and id maker the record changes are stamped with (fmEngine). */
 const stamp = (): FmStamp => ({ now: new Date().toISOString(), id: fmId });
 import {
-  fetchFmData, saveFmData, fmId, diffFmData, fmDiffIsEmpty, applyFmDiff, foldOthers,
+  fetchFmData, saveFmData, fmId, diffFmData, fmDiffIsEmpty, applyFmDiff, foldOthers, fmUnsentKeeper,
 } from "./fmApi";
 import { SyncedDocument } from "@/utils/syncedDocument";
 import { useProfile } from "@/auth/ProfileContext";
@@ -115,22 +115,17 @@ interface FmDataContextValue {
 const FmDataContext = createContext<FmDataContextValue | null>(null);
 
 export function FmDataProvider({ children }: { children: ReactNode }) {
-  const [data, setData] = useState<FmData>(EMPTY_FM_DATA);
-  const [ready, setReady] = useState(false);
-  const [unreachable, setUnreachable] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
   const [retention, setRetention] = useState<FmRetention | null>(null);
-  // Read the latest data inside a mutator without making every mutator depend
-  // on it (which would re-create them all on every keystroke elsewhere).
-  const ref = useRef(data);
-  ref.current = data;
 
   /** The sync state machine — utils/syncedDocument, the SAME one the device-
    *  config store runs (round 10, 2.496.154): the baseline the server is known
    *  to hold (EMPTY until the first read — the truth, so the first write
    *  pushes everything local), its revision, writes in flight, writes started
-   *  during a fetch, a failed write still only on this device. */
-  const doc = useRef(new SyncedDocument({
+   *  during a fetch, a failed write still only on this device — and that work
+   *  KEPT across a reload (fmApi fmUnsentKeeper, architecture review i_k3,
+   *  2026-10-23): it starts from what was kept, and the first refresh sends it.
+   *  Made ONCE (a lazy state): it reads the kept copy as it starts. */
+  const [doc] = useState(() => new SyncedDocument({
     // the record's retention windows ride along with it (fmApi.fetchFmData), kept for the Tickets figures
     fetch: async (signal?: AbortSignal) => { const got = await fetchFmData(signal); if (got) setRetention(got.retention); return got; },
     save: (next: FmData, rev: string, carryOver: Record<string, unknown>, signal?: AbortSignal) =>
@@ -140,7 +135,19 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
     apply: applyFmDiff,
     rebase: (_base: FmData, fresh: FmData) => fresh,
     empty: EMPTY_FM_DATA,
-  }, EMPTY_FM_DATA)).current;
+    keep: fmUnsentKeeper,
+  }, EMPTY_FM_DATA));
+  // the daily reload waits while this store holds work the add-on has not got (utils/autoReload)
+  useEffect(() => doc.track(), [doc]);
+
+  const [data, setData] = useState<FmData>(() => doc.restored ?? EMPTY_FM_DATA);
+  const [ready, setReady] = useState(false);
+  const [unreachable, setUnreachable] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  // Read the latest data inside a mutator without making every mutator depend
+  // on it (which would re-create them all on every keystroke elsewhere).
+  const ref = useRef(data);
+  ref.current = data;
   /** Retries a failed write. Assigned below, because `mutate` and `reload`
    *  refer to each other: a refresh that finds unsent work re-pushes it. */
   const retryRef = useRef<(() => Promise<unknown>) | null>(null);
@@ -171,6 +178,8 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
         // and returns the merged document.
         reportSync({ op: "pull", deferred: "retrying-unsaved-write" });
         await retryRef.current?.();
+        // work kept from before a reload, the add-on still out of reach: the record was never read, and the screens say so
+        if (!doc.hasRead) setUnreachable(true);
         return;
       case "unreachable":
         reportSync({ op: "pull", aborted: "unreachable" });
@@ -232,6 +241,9 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
       const undone = applyFmDiff(ref.current, diffFmData(next, before));
       ref.current = undone;
       setData(undone);
+      // what is kept for after a reload no longer holds it (a refused delete replayed there would be refused again,
+      // and take the rest of the unsent work with it)
+      doc.keepUnsent(undone);
     };
     if (outcome.ok) {
       // Fold in whatever another device contributed in the meantime (`others`), onto this screen as it is NOW, under
