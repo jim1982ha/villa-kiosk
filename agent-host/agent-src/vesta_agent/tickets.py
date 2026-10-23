@@ -16,7 +16,7 @@ from typing import Awaitable, Callable
 from vesta_shared import kiosk_words, result
 from vesta_shared.problems import Problems
 
-from .kiosk import MINE, KioskError, closing, noted, retitled, tagged, todo
+from .kiosk import MINE, KioskError, closing, confirming, noted, retitled, tagged, todo
 from .kiosk import fault_title_chars
 from .outcome_words import ticket_title
 
@@ -213,10 +213,13 @@ class Tickets:
             # its close's clearing land just after its return reopened the task, and the times said "a person closed it" —
             # "Closed in the Cockpit by VESTA Agent", the alert no longer chased. The Kiosk's step says who; times are
             # only the fallback for a record without one.
-            if card and card["status"] == "resolved" and not card.get("cleared") \
+            # ⚠️ A PERSON'S CLOSE IN THE COCKPIT IS "CLEARED" TOO (owner, 2026-10-23): its Close writes kind "cleared" ("no
+            # action needed", by the profile) — read as the agent's own clearing, it never closed its task, and the next
+            # step reopened the fault the person had just closed. Only the agent's OWN cleared close is skipped.
+            if card and card["status"] == "resolved" and not (card.get("cleared") and card.get("closed_mine")) \
                     and not _before(card.get("resolved_at"), t.get("reopened_at")):
                 iid = problems.closed_in_kiosk(t["id"], kiosk_words.closed(card.get("by") or "", card.get("resolved_at"),
-                                                                           self.timezone))
+                                                                           self.timezone), at=card.get("resolved_at"))
                 if iid:
                     # who and when, as a button's footer says it (owner, 2026-10-10): the Kiosk's own record of the close
                     await self.settle_alert(iid, kiosk_close_note(card, self.timezone))
@@ -286,6 +289,9 @@ class Tickets:
                     # when the agent closes it if it stays over (owner, 2026-10-21), or that line gone when it holds again
                     if card.get("closes_at") != want["closes_at"]:
                         amends.append(closing(want["closes_at"]))
+                    # an open fault is never being confirmed (a field left by a reopening that did not take it away)
+                    if card.get("confirms_by"):
+                        amends.append(confirming(None))
                     # what to do on site, as its problem says it NOW (Problems.card todo): the route's check edited, a
                     # finding's check rewritten by the night — written at the fault's making only until 0.12.263
                     said = result.fault_note(want["todo"])
@@ -303,8 +309,13 @@ class Tickets:
                             amends.append(noted(lines))
                     fixed += await self.kiosk.amend(uid, *amends)
                 elif card["status"] != "resolved" and (t.get("done_at") or "") >= recent:
-                    n = await self.kiosk.resolve_ticket(uid, note=want["note"], **({"who": want["who"]} if want["who"] else {}))
+                    n = await self.kiosk.resolve_ticket(uid, note=want["note"], **({"who": want["who"]} if want["who"] else {}),
+                                                        confirms_by=want["confirms_by"])
                     fixed += n; resolved += n
+                elif card["status"] == "resolved" and card.get("confirms_by") != want["confirms_by"]:
+                    # a person's close being confirmed (owner, 2026-10-23): "VESTA confirms by …" while the alert desk
+                    # watches it, taken away once it has read it again (Problems.card confirms_by)
+                    fixed += await self.kiosk.amend(uid, confirming(want["confirms_by"]))
             except KioskError as e:
                 # a refusal of this fault is this fault's: the next one is tried (see the repair's own loop above)
                 log.warning("Kiosk ticket %s could not be brought up to date: %s", uid, e)

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.321 (23 October 2026)
+
+- A fault a person closed (a Done on Telegram, a Close in the Cockpit) carries `confirmsBy` while the alert desk's
+  watch runs (agent-contract `ticket.fields.confirmsBy`, copied from the Kiosk's): `Problems.confirms_by` = the
+  incident's close + its `watch_minutes` (the desk's `clear_minutes`, carried as `Notes.WATCH_MINUTES`), only while
+  `check_quiet` waits; `kiosk.confirming(at)`, `resolve_ticket(confirms_by=)`, `reopen_ticket` drops it;
+  `tickets._converge` writes or clears it; the desk asks for a repair when a watch ends, whatever it read. An older
+  Kiosk that does not list the field never gets it (`Kiosk._gated`).
+- A Close pressed in the Cockpit was reopened: its step `{kind: "cleared", by: <profile>}` was taken for the agent's
+  own clearing (`tickets._take_in`), so the close was never taken in and `_converge` reopened the fault. Only the
+  agent's own cleared close is skipped now (`fault_of(...).closed_mine`); `closed_in_kiosk(at=)` counts the watch
+  from the person's close.
+
 ## 0.6.320 (23 October 2026)
 
 - What happened in a chat outside its conversation is told to the AI with every message (`chat_facts.ChatFacts`): the

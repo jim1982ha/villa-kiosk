@@ -110,6 +110,10 @@ class Notes:
     # nothing said it waits 10 minutes clear): set by the desk while what it claims reads over (seen_again), gone when it
     # holds again; read by Problems.card for the Kiosk fault's `closesAt`
     CLOSES_AT = "closes_at"
+    # how long the desk watches it after a person's close (its clear_minutes, owner 2026-10-23): carried by the desk as it
+    # carries the check, so the engine never reads the skill's settings; Problems.card reads closed_at + this as the
+    # Kiosk fault's `confirmsBy` while the desk's `check_quiet` waits
+    WATCH_MINUTES = "watch_minutes"
     KIOSK_REOPENED = "kiosk_reopened"                            # mail: who reopened its fault in the Kiosk, and when
     UNREACHED = "unreached"                                      # mail: Telegram refused every chat of the FM's
 

@@ -350,11 +350,13 @@ class Problems:
         self.store.reopen_finding(last["id"], f.severity, f.summary, f.detail, day, seen)
         return last["id"]
 
-    def closed_in_kiosk(self, task_id: int, said: str = "Closed in the Cockpit") -> int | None:
+    def closed_in_kiosk(self, task_id: int, said: str = "Closed in the Cockpit", at: str | None = None) -> int | None:
         """A person closed the task's fault in the VESTA Kiosk: the task closes, and so does the incident
         it came from (the alert desk stops chasing it). Returns that incident's id, for its messages. `said`: who and
         when, as kiosk_words.closed writes it — the desk's check after it says it again (review 29: "Closed in the
-        Kiosk, but …" had lost the person)."""
+        Kiosk, but …" had lost the person). `at`: when the Kiosk recorded the close (its resolvedAt) — the incident
+        closes then, so the desk's watch counts from the person's close, not from when the agent read it (up to a
+        Kiosk read later; owner 2026-10-23: the card says "VESTA confirms by …" counted from the close)."""
         task = self.store.task(task_id)
         self.close(task_id, CLOSED_IN_KIOSK)
         kind, sid = self._source(task)
@@ -364,8 +366,9 @@ class Problems:
                 # ⚠️ A DONE IS A DONE, WHEREVER IT IS GIVEN (architecture review 24): closed in the Kiosk, a door fault
                 # skipped the check a Done button gets — the door still unlocked, it stayed closed for good. The alert
                 # desk reads it again once (quiet_after_done), when its rule names its states
+                when = _moment(at)
                 self.store.note(sid, {"check_quiet": said}, state=Incident.DONE, reply="Closed in the Cockpit",
-                                closed_at=self.store.now())
+                                closed_at=when.isoformat() if when else self.store.now())
                 return sid
         return None
 
@@ -560,7 +563,8 @@ class Problems:
         every look, or a finding of a rule in `rechecked` (the skills' `rechecks`; "*": every rule) — "nightly" — any
         other finding — or None),
         note and who (its close: what it says, the person who closed it — None: the agent's own clearing),
-        reopen_note (what its reopening says — None: it was never reopened by its problem),
+        reopen_note (what its reopening says — None: it was never reopened by its problem), confirms_by (when the alert
+        desk reads again the problem a person closed it about — an ISO moment, or None: confirms_by),
         todo (what to do on site, as its problem's source says it NOW: check_of — the fault's note follows it; "" when
         nothing says; not `check`, which is the recheck cadence), closes_at (when the alert desk closes it if what it
         reported stays over — an ISO moment, or None)}.
@@ -579,6 +583,7 @@ class Problems:
         # when the desk closes it if it stays over (Notes.CLOSES_AT, owner 2026-10-21): the card's "closes at about"
         closes = notes_of(self.store.incident(sid)).get(Notes.CLOSES_AT) if kind == "incident" else None
         return {"open": task.get("status") == "open", "title": title, "closes_at": closes or None,
+                "confirms_by": self.confirms_by(task),
                 "pattern": pattern, "since": d.get("since") if pattern else None,
                 "number": sid if kind == "incident" else None,
                 # where it came from, the Kiosk card's source icon (owner, 2026-10-14): an alert or the night check
@@ -589,6 +594,30 @@ class Problems:
                 "note": task.get("close_note") or "Closed: the problem is over.", "who": task.get("closed_who") or None,
                 "reopen_note": task.get("reopen_note") or None,
                 "todo": self.check_of(task)}
+
+    # ⚠️ A PERSON'S CLOSE IS WATCHED, AND THE COCKPIT SAYS SO (owner, 2026-10-23: "keep the Fault card visible in the
+    # Cockpit when a fault is still being monitored … until VESTA finally closes it"): a Done, or a Close in the Cockpit,
+    # resolved the Kiosk fault at once while the alert desk still read it again after its wait (quiet_after_done).
+    def confirms_by(self, task: dict) -> str | None:
+        """When the alert desk reads again the problem a person closed `task` about — its incident's close plus the desk's
+        watch (Notes.WATCH_MINUTES, carried by the desk) while the desk's `check_quiet` waits: the Kiosk fault's
+        `confirmsBy`. None for anything else: a task open, the agent's own clearing, a finding, a watch over (the desk
+        took its check_quiet: right, can't tell, or reopened), an older task of the same problem, a desk that never
+        said how long."""
+        from datetime import timedelta
+        kind, sid = self._source(task)
+        if kind != "incident" or task.get("status") not in (DONE, CLOSED_IN_KIOSK):
+            return None
+        last = self.store.last_task(str(task.get("source")))
+        inc = self.store.incident(sid)
+        p = notes_of(inc)
+        closed, watch = _moment((inc or {}).get("closed_at")), p.get(Notes.WATCH_MINUTES)
+        if not (last and last["id"] == task.get("id") and closed and p.get("check_quiet") and watch is not None):
+            return None
+        try:
+            return (closed + timedelta(minutes=float(watch))).isoformat()
+        except (TypeError, ValueError):
+            return None
 
     def unseen(self) -> list[dict]:
         """Open findings that should be a fault and are not — wants_open with no open task. settle_all leaves none;

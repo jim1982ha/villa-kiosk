@@ -550,7 +550,7 @@ def _every_write(k: Kiosk) -> dict:
     run(k.amend(tid, retitled("Pump offline for 4 h")))                       # under a person's title: a reading step
     run(k.resolve_ticket(tid, note="Cleared: back online."))
     run(k.reopen_ticket(tid, "Pump offline again", "Back again."))
-    run(k.resolve_ticket(tid, note="Done", who="Wayan"))
+    run(k.resolve_ticket(tid, note="Done", who="Wayan", confirms_by="2026-10-19T02:10:00+00:00"))   # its watch (2026-10-23)
     return k.ticket(tid)
 
 

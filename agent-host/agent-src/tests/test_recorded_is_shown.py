@@ -362,7 +362,11 @@ def test_a_question_being_answered_when_the_agent_stops_is_said_at_the_start(tmp
 
     async def ask():
         asyncio.create_task(v.converse(JM, person, "/investigate What happened to the bathroom sensor yesterday?"))
-        await asyncio.sleep(0.05)
+        # until the question is recorded as being answered (a fixed sleep lost the race on a loaded runner)
+        for _ in range(500):
+            if v.state.chat_work_kept():
+                return
+            await asyncio.sleep(0.01)
     run(ask())                                                             # the run ends: the answer is cut, as by a stop
     v = restarted(v)
     said = [t for _, t, _ in v.tg.sent if "interrupted by a restart" in t]

@@ -247,9 +247,12 @@ def fault_of(t: dict) -> dict:
                    else last("who") or last("by")),
             "alert_number": t.get("alertNumber"), "origin": t.get("origin"),
             "check": t.get("check"), "title_pattern": t.get("titlePattern"), "since": t.get("since"),
-            "closes_at": t.get("closesAt"),
+            "closes_at": t.get("closesAt"), "confirms_by": t.get("confirmsBy"),
             "note": str(t.get("note") or ""),                     # what to do on site (the agreement's ticket.fields)
             "person_titled": person_titled(t), "cleared": cleared_step(close) if close else None,
+            # whose its last close was: the agent's own (stamped, or not yet), or a person's — a person's Close in the
+            # Cockpit is kind "cleared" too ("no action needed", by the profile)
+            "closed_mine": _mine(close) if close else None,
             "noted": [(str(u.get("at") or ""), str(u.get("note") or "")) for u in ups if u.get("kind") == NOTED],
             **({"reopened_at": str(reopens[-1].get("at") or ""),
                 "reopened_by": str(reopens[-1].get("who") or reopens[-1].get("by") or "")} if reopens else {}),
@@ -332,6 +335,17 @@ def closing(at: str | None) -> Amend:
         if t.get("status") == "resolved" or t.get("closesAt") == at:
             return None
         return {k: v for k, v in dict(t, closesAt=at).items() if not (k == "closesAt" and v is None)}
+    return amend
+
+
+def confirming(at: str | None) -> Amend:
+    """A fault a person closed says when the VESTA Agent reads it again to confirm the close (`confirmsBy`, owner
+    2026-10-23: the Cockpit keeps it, apart, until then), or no longer says it (`at` None: read, or never watched). Its
+    status and steps are left as they are."""
+    def amend(t: dict) -> dict | None:
+        if t.get("confirmsBy") == at:
+            return None
+        return {k: v for k, v in dict(t, confirmsBy=at).items() if not (k == "confirmsBy" and v is None)}
     return amend
 
 
@@ -588,7 +602,8 @@ class Kiosk:
                     mine = not person_titled(t)                 # a title a person wrote stays theirs (review 26)
                     if mine and str(t.get("title") or "") != title[:fault_title_chars()]:
                         upd["was"] = str(t.get("title") or "")  # the title it replaces: the card's "Was:" (review 31)
-                    was, t = t, {k: v for k, v in t.items() if k != "resolvedAt"}
+                    # open again: no longer resolved, nor being confirmed (a person's close watched, then still bad)
+                    was, t = t, {k: v for k, v in t.items() if k not in ("resolvedAt", "confirmsBy")}
                     tickets[i] = self._gated(was, dict(t, status="open", title=title[:fault_title_chars()] if mine else t.get("title"),
                                                        updates=list(t.get("updates") or []) + [upd]))
                     data["tickets"] = tickets
@@ -596,11 +611,13 @@ class Kiosk:
             return False
         return await self._edit(change)
 
-    async def resolve_ticket(self, tid: str, note: str | None = None, who: str | None = None) -> bool:
+    async def resolve_ticket(self, tid: str, note: str | None = None, who: str | None = None,
+                             confirms_by: str | None = None) -> bool:
         """Mark one of the agent's tickets resolved. By `who` — a person's Done: their name on the card, and the work
         recorded as the Kiosk's own "Mark resolved" records it (a completion, in Recent work; review 31: a Done on
         Telegram never appeared there). Without — the agent's own clearing of a problem gone: kind "cleared", never a
-        repair in any figure. False when it is gone or closed."""
+        repair in any figure. `confirms_by`: when the agent reads it again to confirm a person's close (`confirmsBy`, a
+        Kiosk that reads it only: _gated). False when it is gone or closed."""
         def change(data: dict) -> bool:
             tickets = list(data.get("tickets") or [])
             for i, t in enumerate(tickets):
@@ -620,6 +637,7 @@ class Kiosk:
                     else:
                         upd["kind"] = CLEARED
                     tickets[i] = self._gated(t, dict(t, status="resolved", resolvedAt=now,
+                                                     **({"confirmsBy": confirms_by} if confirms_by else {}),
                                                      updates=list(t.get("updates") or []) + [upd]))
                     data["tickets"] = tickets
                     return True

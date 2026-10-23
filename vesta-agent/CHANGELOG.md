@@ -1,3 +1,10 @@
+## 0.12.331
+
+What you will see:
+- With VESTA 2.496.503 or later: after a Done on Telegram or a Close in the Cockpit, the fault stays in the Cockpit's
+  Open issues as one compact row, "Done (JM) · VESTA confirms by 15:06", until the Agent has checked it again.
+- A fault closed with the Cockpit's Close button no longer comes back open about 5 minutes later.
+
 ## 0.12.330
 
 What you will see:

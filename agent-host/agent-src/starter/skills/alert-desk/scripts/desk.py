@@ -296,6 +296,16 @@ def carry_to(store: Store, iid: int, sev: str, p: dict | None = None) -> list[st
     return to
 
 
+def carry_watch(store: Store, iid: int, clear_minutes: float, p: dict | None = None) -> float:
+    """How long the desk watches incident `iid` after a person's close (its clear_minutes), written on it
+    (store.Notes.WATCH_MINUTES) for the engine: the Kiosk fault a person closed says when it is confirmed (Problems.card
+    `confirms_by`, owner 2026-10-23) — as the desk carries the check, so the engine never reads this skill's settings.
+    Written only when it changed; returns it. `p`: the notes as already read."""
+    if (p if p is not None else notes_of(store.incident(iid))).get(Notes.WATCH_MINUTES) != clear_minutes:
+        store.note(iid, {Notes.WATCH_MINUTES: clear_minutes})
+    return clear_minutes
+
+
 def about(inc: dict, status: str) -> dict:
     """A message about an incident, as its parts: the original alert as its text, where it stands — in the desk's own
     words — as its status; the engine lays them out (heading, alert, status at the bottom: vesta_agent/layout.py).
@@ -768,6 +778,11 @@ def quiet_after_done(store: Store, now: datetime, client, clear_minutes: float, 
         if '"check_quiet"' not in (inc.get("payload") or ""):
             continue                                                       # most are not waiting for it: not read
         p = notes_of(inc)
+        if inc.get("closed_at") and p.get("check_quiet") and p.get(Notes.WATCH_MINUTES) != clear_minutes:
+            # watched without its length (closed before a tick carried it, or the wait edited since): its Kiosk fault
+            # learns when it is confirmed (Problems.card confirms_by)
+            carry_watch(store, inc["id"], clear_minutes, p)
+            _faults_follow(out)
         if not (inc.get("closed_at") and p.get("check_quiet")) or \
                 now - datetime.fromisoformat(inc["closed_at"]) < timedelta(minutes=clear_minutes):
             continue
@@ -780,6 +795,9 @@ def quiet_after_done(store: Store, now: datetime, client, clear_minutes: float, 
         who = store.take_note(inc["id"], "check_quiet")
         if who is None:
             continue
+        # ⚠️ THE WATCH IS OVER, WHATEVER IT READ (owner, 2026-10-23): the Kiosk fault said "VESTA confirms by …" since the
+        # close (Problems.card confirms_by, while check_quiet waits) — the repair now takes that away, or reopens it
+        _faults_follow(out)
         if there:
             reopen(store, store.incident(inc["id"]), {}, now, inc["severity"], route_for(inc["rule_id"], p.get("blueprint")),
                    out, status=say("still_after_done", who=relabel(who), words=joined(words)))
@@ -858,6 +876,12 @@ def seen_again(store: Store, now: datetime, client, clear_minutes: float, out: d
         store.audit("alert-desk", "seen_again", {"incident": inc["id"], "now": str(said)})
         closed.append(inc["id"])
     return closed
+
+
+def _faults_follow(out: dict) -> None:
+    """The Kiosk faults are brought up to date after this tick (the engine's repair): once, however many asked."""
+    if R.faults_changed() not in out["actions"]:
+        out["actions"].append(R.faults_changed())
 
 
 def _closes_at_changed(p: dict, closes: str | None, out: dict) -> None:
@@ -1051,7 +1075,8 @@ def reply(store: Store, iid: int, option: str, sender_role: str, now: datetime, 
         # nothing ever checked — a Done on a door still unlocked closed it for good. The tick reads it again (quiet_after_done)
         # read again whatever the rule: still bad, it reopens; not knowable, the people asked are told (still_there)
         checks = judged(inc)
-        store.note(iid, {"check_quiet": f"{label} ({who})"})
+        # …and how long, for its Kiosk fault's "VESTA confirms by …" (carry_watch: the desk's wait, never the engine's)
+        store.note(iid, {"check_quiet": f"{label} ({who})", Notes.WATCH_MINUTES: _params(params).behaviour("clear_minutes")})
         # how long VESTA watches it is the desk's own setting (clear_minutes), said as every duration (owner, 2026-10-19:
         # "✅ Done on 19/10/2026 02:10 (JM), VESTA will monitor it for …")
         watched = say("will_monitor", pressed=act, watch=lasting_in(_params(params).behaviour("clear_minutes") * 60))
@@ -1093,6 +1118,7 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
         # the digest follow within a tick, as Telegram's next message does
         carry_check(store, inc["id"], route_for(inc["rule_id"], p.get(Notes.BLUEPRINT)), p)
         carry_to(store, inc["id"], inc["severity"], p)     # an incident of an older desk gets it at the next tick
+        carry_watch(store, inc["id"], params.behaviour("clear_minutes"), p)   # a close in the Cockpit knows it at once
         said = store.take_note(inc["id"], Notes.KIOSK_REOPENED, assignee=CHASE["asks"]) \
             if p.get(Notes.KIOSK_REOPENED) else None
         if said:
