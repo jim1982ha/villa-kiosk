@@ -1,3 +1,20 @@
+## 2.496.502
+
+What you will see:
+- Settings: a Cancel now undoes a change even when its save was slow. Before, on slow Wi-Fi, a rename you cancelled
+  came back at the next refresh, on every device.
+- Facility: when two devices change the same fault at nearly the same time, both changes are kept where they don't
+  overlap, and the fault's history keeps every step. When both changed the same thing (for example one closed it and
+  the other tapped Started), the first one stays and the second device says "This fault was just changed on another
+  device." Before, the second device silently overwrote the first: a closed fault could reopen and lose "Closed
+  without action" from its history.
+- Facility and Cockpit: when the maintenance record can't be read at start (the add-on restarting, a Wi-Fi blip), the
+  window says "Can't reach the add-on. Retrying." instead of showing no faults. Before, every screen showed an empty
+  record, with no warning, for up to 3 minutes.
+- Advanced Settings: a device-setup change that could not be saved is now said, with the same words as Facility; a
+  change the add-on refuses is undone and its reason shown. Before, nothing was said, and a refused change was sent
+  again on every refresh while this tablet stopped taking the other devices' changes.
+
 ## 2.496.501
 
 What you will see:
