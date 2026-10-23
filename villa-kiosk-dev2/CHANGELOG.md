@@ -1,3 +1,9 @@
+## 2.496.506
+
+What you will see:
+- Cockpit: once its time has passed, a fault VESTA is confirming reads the shorter "VESTA confirming now" in its pill
+  (it read "VESTA confirms it at its next check").
+
 ## 2.496.505
 
 What you will see:
