@@ -1,3 +1,18 @@
+## 2.496.511
+
+What you will see:
+- Advanced Settings › Device telemetry no longer says "the add-on keeps the last 500 events": how many is the add-on's
+  option, so it now says it keeps the latest events, as many as its options allow.
+- The passcode lockout, when the add-on does not say how long, now waits the add-on's own default (5 min), not 60 s.
+- The cost cap's "Warn when the month reaches" field shows VESTA's own default (80 %), taken from where it is set.
+
+## 2.496.510
+
+What you will see:
+- Cockpit: the (i) beside "Open a ticket" now explains the green check too: a "Being confirmed" row at the end of
+  "From the VESTA Agent" (a fault marked Done on Telegram or closed here, that the VESTA Agent checks again; last in
+  the list, not counted; it goes when the Agent confirms it is right, its pill showing the time, then "within 5 min").
+
 ## 2.496.509
 
 What you will see:

@@ -421,7 +421,7 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
               <TipTitle title="Device telemetry" tip={<>
                 What every device that opens this kiosk has reported: load timings, script errors, graphics context
                 losses and page-lifecycle transitions. This is how a problem on someone else's phone becomes
-                diagnosable. Newest first; the add-on keeps the last 500 events. Copy and Download give the raw events
+                diagnosable. Newest first; the add-on keeps the latest events, as many as its options allow. Copy and Download give the raw events
                 (every field, not just the summary shown here); Clear empties the store.
               </>} />
               <TelemetryPanel />

@@ -12,7 +12,7 @@ import { Settings2, Trash2 } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { parseAmount } from "@/fm/fmEngine";
 import { useFmTerms } from "@/fm/useFmTerms";
-import { validWarnPercent } from "@/fm/fmTypes";
+import { validWarnPercent, WARN_DEFAULT_PERCENT } from "@/fm/fmTypes";
 import { formatMoney } from "@/utils/money";
 import FormActions from "./FormActions";
 
@@ -71,7 +71,7 @@ export default function ContractTermsEditor() {
         </label>
         <label className="fm-field">
           <span>Warn when the month reaches (% of the cap)</span>
-          <input value={warnAt} inputMode="numeric" onChange={(e) => setWarnAt(e.target.value)} placeholder="80" />
+          <input value={warnAt} inputMode="numeric" onChange={(e) => setWarnAt(e.target.value)} placeholder={String(WARN_DEFAULT_PERCENT)} />
         </label>
       </div>
       {/* removing a cap is one tap, then Save (owner, 2026-10-14: "how to delete a previously set cap?"); the button
