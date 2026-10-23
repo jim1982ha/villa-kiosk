@@ -19,7 +19,7 @@ import { lineActions, overviewActions, type WorkAction, type WorkRecord } from "
 import { STAGE_WORDS } from "@/fm/fmEngine";
 import type { IssueSource } from "@/fm/issueSource";
 import { clockTime, momentText } from "@/utils/dateText";
-import { confirmLine, confirmParts, type ConfirmingFault } from "@/fm/faultConfirm";
+import { confirmParts, type ConfirmingFault } from "@/fm/faultConfirm";
 import { faultTitle } from "@/fm/fmEngine";
 import type { HassEntity } from "@/types/ha.types";
 import { labelOf } from "./EntityMap";
@@ -222,13 +222,17 @@ export function confirmingCards(confirming: readonly ConfirmingFault[], opts: {
     if (entityId && !may(entityId)) return [];
     const device = entityId ? devices.deviceOf(entityId) : undefined;
     const title = faultTitle(t);
+    const said = confirmParts(c);
     return [{
-      key: `watched:${t.id}`, look: "watched", watched: confirmParts(c),
+      key: `watched:${t.id}`, look: "watched", watched: said,
       title: device ? labelOf(device, entityMap, entities) : title,
       room: roomLabel(device ? deviceRoomOrRecord(resolvedRooms, device, entityId, t.room) : firstRoom(t.room)),
       entityId: device,
-      lead: null, nextCheck: null, actions: [],
-      lines: [{ key: `fault:${t.id}`, text: device ? title : "", icons: null, latest: null, closing: confirmLine(c), actions: [] }],
+      // ⚠️ THE SAME CARD AS AN OPEN ISSUE'S (owner, 2026-10-23: "the same piece of code … the same style and the same
+      // card layout; only the height of the card changes, and no Open Ticket / Close buttons"): its pill is the open
+      // issues' next-check pill (its time, then "within 5 min"), who closed it the line under its fault
+      lead: null, nextCheck: { text: said.tip, at: null, when: said.when, tip: said.tip }, actions: [],
+      lines: [{ key: `fault:${t.id}`, text: device ? title : "", icons: null, latest: null, closing: said.did, actions: [] }],
     }];
   });
 }

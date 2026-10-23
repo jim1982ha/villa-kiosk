@@ -11,7 +11,7 @@ import { readFileSync } from "node:fs";
 const { confirmingFaults, confirmLine, confirmParts, shownUntil } = await import("@/fm/faultConfirm");
 const { buildAttentionItems, attentionFor, faultDevices } = await import("@/config/attention");
 const { confirmingCards, cockpitCard } = await import("@/config/cockpitCard");
-const { AttentionCard, WatchedRow } = await import("@/components/cockpit/CockpitOverview");
+const { AttentionCard } = await import("@/components/cockpit/CockpitOverview");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
 const { fmAttention } = await import("@/fm/fmEngine");
 const { clockTime } = await import("@/utils/dateText");
@@ -86,21 +86,22 @@ ck("  ...and the map's fault marks (the amber \"!\") only its device",
 console.log("\n  in the Open issues list, last, uncounted, marked:");
 const cards = confirmingCards(conf, { devices, entities, entityMap: {}, resolvedRooms: { "lock.door": "Hall" }, may: () => true });
 ck("one card per fault, titled by its device, its fault's title its line, the confirm line under it, no buttons",
-   cards.length === 3 && cards.every((c) => c.look === "watched" && c.actions.length === 0 && c.nextCheck === null)
+   cards.length === 3 && cards.every((c) => c.look === "watched" && c.actions.length === 0 && c.nextCheck?.when)
    && cards[1].title === "door" && cards[1].room === "Hall" && cards[1].lines[0].text === "#65 · Door unlocked"
-   && cards[1].lines[0].closing === line("w1"), cards[1]);
+   && cards[1].lines[0].closing === "Done (JM)" && cards[1].nextCheck.tip === line("w1").split(" · ")[1], cards[1]);
 ck("  ...only the faults whose device the profile may open (as the open issues)",
    confirmingCards(conf, { devices, entities, entityMap: {}, resolvedRooms: {}, may: (id) => id !== "lock.door" })
      .map((c) => c.key).join() === "watched:w3,watched:w2");
-const drawn = draw(h(WatchedRow, { card: cards[1], onOpenEntity: () => {} }));
-// owner, 2026-10-23, option 4 "One compact row": a check, its device · its fault · who closed it, and a pill saying when
-ck("  ...drawn as ONE compact row marked `fault-watched`: a check, its device, its fault, who closed it, and when in a pill",
-   /^<button type="button" class="fault-watched">/.test(drawn) && /class="[^"]*fault-watched-icon/.test(drawn)
-   && /<span class="fault-watched-text"><span class="fault-watched-head"><b class="fault-watched-title">[^<·]+<\/b><span class="fm-entity-chip fm-chip-static">Hall<\/span><\/span><span class="fault-watched-detail">#65 · Door unlocked · Done \(JM\)<\/span><\/span>/.test(drawn)
-   // its pill is the open issues' next-check pill (owner, 2026-10-23): the same chip, a refresh icon and the time
-   && /<span class="fm-entity-chip fm-chip-static fm-record-check" aria-label="VESTA confirms by [^"]+">[\s\S]*?<\/svg>[^<]+<\/span>/.test(drawn), drawn.slice(-500));
-ck("  ...no card and no Close: it is closed; its one pill is the next-check pill",
-   !/fm-record-card|fm-record-actions/.test(drawn) && (drawn.match(/fm-record-check/g) || []).length === 1);
+const drawn = draw(h(AttentionCard, { card: cards[1], onOpenEntity: () => {} }));
+// ⚠️ THE SAME CARD AS AN OPEN ISSUE'S (owner, 2026-10-23: "the same piece of code … same style and same card layout"):
+// RecordCard's frame (marked), its title and room pill, the open issues' next-check pill, the check as its lead
+ck("  ...drawn by the open issues' own card: marked frame, a check, its device and room pill, its fault, who closed it",
+   /^<div class="fm-record-card fault-watched">/.test(drawn) && /class="[^"]*fault-watched-icon/.test(drawn)
+   && /<strong>door<\/strong><span class="fm-entity-chip fm-chip-static">Hall<\/span>/.test(drawn)
+   && /#65 · Door unlocked/.test(drawn) && /<span class="cockpit-attention-latest">Done \(JM\)<\/span>/.test(drawn), drawn.slice(0, 900));
+ck("  ...its pill is the open issues' next-check pill (CheckPill), saying when VESTA confirms",
+   /<span class="fm-entity-chip fm-chip-static fm-record-check" aria-label="VESTA confirms by [^"]+">/.test(drawn), drawn.slice(-600));
+ck("  ...no Close and no Open Ticket: it is closed", !/fm-record-actions/.test(drawn));
 const activeCard = draw(h(AttentionCard, { card: cockpitCard(att.attentionGroups[0], CADENCE, new Date(NOW)), onOpenEntity: () => {} }));
 ck("an active fault keeps its look: no marker", /^<div class="fm-record-card">/.test(activeCard) && !/fault-watched/.test(activeCard));
 {
@@ -109,7 +110,7 @@ ck("an active fault keeps its look: no marker", /^<div class="fm-record-card">/.
   const overview = tree.statements.find((s) => s.name?.getText() === "CockpitOverview");
   const listDiv = elements(overview, "div").find((d) => propText(d, "className") === '"cockpit-attention-list"');
   const [row] = elements(overview, "CockpitAttentionRow");
-  const watchedCard = elements(overview, "WatchedRow").find((e) => propText(e, "card") === "card");
+  const watchedCard = elements(overview, "AttentionCard").find((e) => propText(e, "card") === "card");
   const within = (n, outer) => !!n && !!outer && n.getStart() >= outer.getStart() && n.getEnd() <= outer.getEnd();
   ck("  ...the Overview draws them INSIDE the open issues' list, after every open issue",
      within(row, listDiv) && within(watchedCard, listDiv) && watchedCard.getStart() > row.getEnd(),

@@ -1,3 +1,10 @@
+## 2.496.509
+
+What you will see:
+- Cockpit: a fault VESTA is confirming is now drawn by the same card as the open issues: the same title, room pill and
+  "next check" pill, at the same height and place, with a green check in front and "Done (JM)" under its fault. Only
+  the buttons are missing (it is closed). Before, its own row drew its pills higher than the other cards'.
+
 ## 2.496.508
 
 What you will see:

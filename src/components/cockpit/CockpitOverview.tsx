@@ -16,7 +16,7 @@ import { useVillaAttention } from "./useVillaAttention";
 import type { AttentionGroup } from "@/config/attention";
 import { cockpitCard, type CardLine, type CardView } from "@/config/cockpitCard";
 import { SourceIcons } from "@/components/fm/sourceIcons";
-import RecordCard, { CheckPill } from "@/components/fm/RecordCard";
+import RecordCard from "@/components/fm/RecordCard";
 import { useVillaModel } from "@/config/VillaModel";
 import { buildDeviceOptions } from "@/components/fm/DeviceSearchPicker";
 import FaultForm from "@/components/fm/FaultForm";
@@ -108,41 +108,12 @@ export default function CockpitOverview({ onOpenEntity, doors, reportFaultFor, o
               canManage={canManage} onEditTicket={onEditTicket} />
           ))}
           {/* after every open issue, and not in its count: closed, the VESTA Agent confirming it (fm/faultConfirm) */}
-          {watched.map((card) => <WatchedRow key={card.key} card={card} onOpenEntity={onOpenEntity} />)}
+          {watched.map((card) => <AttentionCard key={card.key} card={card} onOpenEntity={onOpenEntity} />)}
         </div>
       )}
 
     </>
   );
-}
-
-/** ⚠️ A FAULT BEING CONFIRMED IS ONE COMPACT ROW (owner, 2026-10-23, option 4 of five looks: "One compact row"): no
- *  card fill, a check in the status green, its device, its fault and who closed it on one line, and when the VESTA
- *  Agent confirms it in a pill — told apart at a glance from the open issues above it, and the least room when several
- *  are confirming. Its frame keeps the `fault-watched` marker. A tap opens its device, as an open issue's card does. */
-export function WatchedRow({ card, onOpenEntity }: { card: CardView; onOpenEntity: (id: string) => void }) {
-  const open = card.entityId;
-  const fault = card.lines[0]?.text;
-  const said = card.watched ?? { did: card.lines[0]?.closing ?? "", when: "", tip: "" };
-  const inside = (
-    <>
-      <CheckCircle2 className="fault-watched-icon" size={18} aria-hidden="true" />
-      {/* its device alone on the first line, as an open issue's card is titled; its fault and who closed it under it
-          (owner, 2026-10-23: "show only the device name in the first line, to mirror the Open issues cards") */}
-      <span className="fault-watched-text">
-        {/* its room as the same pill right after its name as an open issue's card (AttentionCard's titlePills) */}
-        <span className="fault-watched-head">
-          <b className="fault-watched-title">{card.title}</b>
-          {card.room && <span className="fm-entity-chip fm-chip-static">{card.room}</span>}
-        </span>
-        <span className="fault-watched-detail">{[fault, said.did].filter(Boolean).join(" · ")}</span>
-      </span>
-      {said.when && <CheckPill when={said.when} tip={said.tip} />}
-    </>
-  );
-  return open
-    ? <button type="button" className="fault-watched" onClick={() => onOpenEntity(open)}>{inside}</button>
-    : <div className="fault-watched">{inside}</div>;
 }
 
 /** The faults a person closed that the VESTA Agent reads again (fm/faultConfirm), as THIS profile may see them — the
@@ -219,7 +190,9 @@ export function AttentionCard({ card, onOpenEntity, actions, lineActions }: {
       titlePills={card.room ? <span className="fm-entity-chip fm-chip-static">{card.room}</span> : undefined}
       // where its (first) problem comes from, in place of a warning sign (owner, 2026-10-14) — legend: the (i)
       // a fault being confirmed: a check in the status vocabulary's green, in place of its source (owner, 2026-10-23)
-      lead={card.lead ? <SourceIcons {...card.lead} /> : undefined}
+      lead={card.look === "watched"
+        ? <CheckCircle2 className="fault-watched-icon" size={18} aria-hidden="true" />
+        : card.lead ? <SourceIcons {...card.lead} /> : undefined}
       // when its problems are read again: a refresh icon and when, a pill at the right of its name (owner, 2026-10-22);
       // hovering it says it in words, with its date and time (owner, 2026-10-19). No chevron: the card is the button.
       check={card.nextCheck ? { when: card.nextCheck.when, tip: card.nextCheck.tip } : undefined}
@@ -230,6 +203,8 @@ export function AttentionCard({ card, onOpenEntity, actions, lineActions }: {
         </ul>
       )}
       actions={actions ?? undefined}
+      // a fault being confirmed: its frame marked, the one place its look differs (owner, 2026-10-23)
+      tone={card.look === "watched" ? "fault-watched" : undefined}
     />
   );
 }
