@@ -1,3 +1,9 @@
+## 0.12.340
+
+What you will see:
+- Limits: every value now shows its unit beside it (minutes, hours, days, %, US$, kWh, signals, devices…), the skill
+  settings and the agent rules included.
+
 ## 0.12.339
 
 What you will see:
