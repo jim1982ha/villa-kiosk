@@ -1,6 +1,6 @@
 ---
 name: reports
-description: The one composer of every VESTA document: the 07:00 FM daily digest (chat), the FM weekly page, the owner weekly three lines (with the FM weekly page attached), the owner monthly proof (page), on-demand reports from the cache. Carries the "VESTA suggests" proposals. Use on schedule and when someone asks for a report.
+description: The one composer of every VESTA document: the FM daily digest (chat), the FM weekly page, the owner weekly three lines (with the FM weekly page attached), the owner monthly proof (page), on-demand reports from the cache. Carries the "VESTA suggests" proposals. Use on schedule and when someone asks for a report.
 ---
 
 # reports
@@ -20,12 +20,14 @@ figures; compose.py lays the page out and checks your sentences.
 
 ## Cadence and readers
 
-| When (villa time) | Reader | Form | Command |
+Each time is a setting: the job's `when` in skill.yaml (villa time), never a number to quote from here.
+
+| When | Reader | Form | Command |
 |---|---|---|---|
-| Daily 07:00 | FM | chat, under 4,096 characters, split if longer | `compose.py fm-daily` |
-| Monday 08:00 | FM | page (HTML file attached) and its headline in chat | the steps below, weekly |
-| Monday 08:00 | Owner | three lines in chat, the FM weekly page attached | `compose.py owner-weekly --energy week.json --facts facts.json --page fm_weekly.html` |
-| 1st of the month 08:00 | Owner | page (HTML file attached), the monthly proof, and its headline in chat | the steps below, monthly |
+| Daily (`fm-daily`) | FM | chat, under the limit `telegram.message_chars`, split if longer | `compose.py fm-daily` |
+| Weekly (`fm-weekly`) | FM | page (HTML file attached) and its headline in chat | the steps below, weekly |
+| Weekly (`fm-weekly`, on schedule) | Owner | three lines in chat, the FM weekly page attached | `compose.py owner-weekly --energy week.json --facts facts.json --page fm_weekly.html` |
+| Monthly (`owner-monthly`) | Owner | page (HTML file attached), the monthly proof, and its headline in chat | the steps below, monthly |
 | On demand | either | the period asked for (`--end` for a past one) | the steps below |
 
 The FM reads the digest on a phone in the morning: new items first, then the

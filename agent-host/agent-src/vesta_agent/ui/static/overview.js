@@ -1,5 +1,5 @@
 // VESTA Agent page — the Overview tab: the agent's state, the changes made on these pages, copying the setup.
-import { api, ask, card, fill, go, h, jobsBanner, paged, place, plural, problemsBox, reasons, tabbed, tell, toast, $view, where } from "./core.js";
+import { api, ask, card, fill, go, h, jobsBanner, paged, place, plural, problemsBox, reasons, setting, tabbed, tell, toast, $view, where } from "./core.js";
 
 // ---------------------------------------------------------------- overview
 export async function overview() {
@@ -38,13 +38,16 @@ export async function overview() {
 
 // ---------------------------------------------------------------- overview › changes made on these pages (4C)
 export async function historyCard() {
-  const { changes } = await api("GET", "api/history");
+  const { changes, kept_days: kept } = await api("GET", "api/history");
   const undo = (c) => async () => {
     if (!(await ask({ title: "Undo this change?", text: c.what, ok: "Undo" }))) return;
     try { await api("POST", `api/history/${c.id}/undo`); toast("Undone."); go("overview"); }
     catch (e) { tell("Not undone", reasons(e)); }
   };
-  return card(place("changes"), "Every save on the Rules and Skills tabs, newest first. Kept as long as the agent's other records (Rules (file) › settings.keep.records_days, 90 days by default), and trimmed with them every night. Undo writes the previous version back through the same checks as a save, and is itself recorded here.",
+  // how long they are kept: the agent rule's value now, a link to its row (core.setting), never a default written here
+  const lead = h("span", {}, "Every save on the Rules and Skills tabs, newest first. Kept as long as the agent's other records (",
+    setting(`${kept.value} days`, kept.ref), "), and trimmed with them every night. Undo writes the previous version back through the same checks as a save, and is itself recorded here.");
+  return card(place("changes"), lead,
     changes.length ? paged(["When", "Where", "What changed", ""], changes.map((c) => [
       new Date(c.at).toLocaleString([], { dateStyle: "short", timeStyle: "short" }),
       h("span", { class: "chip " + c.chip }, c.place),                   // its colour: history.CHIPS

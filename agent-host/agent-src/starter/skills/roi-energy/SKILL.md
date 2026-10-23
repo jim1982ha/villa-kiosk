@@ -32,9 +32,9 @@ period, cached: a second question on the same period costs zero tokens.
   is never subtracted twice). When the top-level devices add up to more than the total,
   `overlap_kwh` says how much is counted twice (a device set up beside the meter it is part
   of): say so, never a negative remainder. It is shown, not hidden: it is the honest
-  coverage of the report and the first proposal when it is above 50%.
-- Comparisons: same length previous period, and the 30-day daily median before
-  the period. A load first seen less than 30 days ago is labelled "measured
+  coverage of the report and the first proposal when it is above `proposals.unmetered_min_pct` %.
+- Comparisons: same length previous period, and the daily median of the `energy.baseline_days` (a limit) days
+  before the period. A load first seen within those days is labelled "measured
   since N days, baseline building" (the pack diff records first sight).
 
 ## Filtration optimiser
@@ -55,7 +55,7 @@ prefix is the asset slug without `_pump`:
 | input_number.pool_pump_rated_power_w | from the pump plate |
 | input_text.pool_pump_curve | optional JSON [[W, m3/h], ...] |
 | input_text.pool_pump_model | optional, for the message |
-| input_number.pool_pump_blocks_per_day, input_text.pool_pump_window | optional, default 2 blocks in 07:00-18:00 |
+| input_number.pool_pump_blocks_per_day, input_text.pool_pump_window | optional, default `blocks_per_day` (settings.yaml) blocks in 07:00-18:00 |
 
 A missing required helper stops the computation with the exact helper name
 to create. Nothing is assumed. Changing `pool_volume_m3` changes the

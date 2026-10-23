@@ -62,12 +62,12 @@ def test_resolved_closes_the_incident_and_its_ticket(store):
     assert res["decision"] == "resolved" and res["incident_id"] == iid
     assert store.incident(iid)["state"] == "resolved"
     assert moved(res) and store.last_task(f"incident:{iid}")["status"] == "cleared"
-    assert res["send"][0]["status"] == "Cleared on {time}."   # its own part, the same words everywhere
-    assert english(res["settle"]) == [{"incident_id": iid, "note": "Cleared on {time}."}]
+    assert res["send"][0]["status"] == "Cleared on {time}. Watch 4 h."   # its own part, the same words everywhere
+    assert english(res["settle"]) == [{"incident_id": iid, "note": "Cleared on {time}. Watch 4 h."}]
     # ⚠️ ONE CLOSING WORDING (owner, 2026-10-19): the desk's end is the closed stage's own words — what the villa's
     # template writes under its all-clear (vesta_message.jinja, "{time}" its clock), never a second copy here
     from vesta_shared.message_format import STAGE_WORDS
-    assert res["settle"][0]["note"] == STAGE_WORDS["closed"] == res["ha_messages"][0]["status"]
+    assert res["settle"][0]["note"] == STAGE_WORDS["closed"] + " Watch 4 h." == res["ha_messages"][0]["status"]
     # the chase stops: no reminder for it any more
     assert desk.tick(store, T0 + timedelta(minutes=30))["reasked"] == []
 
@@ -247,9 +247,9 @@ def test_a_door_locked_after_its_rule_stopped_watching_closes_its_alert(store):
     assert not _tick(store, villa, 100).get("cleared")                  # locked 5 min ago: not yet
     res = _tick(store, villa, 106)
     assert res["cleared"] == [iid] and store.incident(iid)["state"] == "resolved"
-    assert english(res["settle"]) == [{"incident_id": iid, "note": "Cleared on {time}: front_door is locked."}]
+    assert english(res["settle"]) == [{"incident_id": iid, "note": "Cleared on {time}: front_door is locked. Watch 4 h."}]
     assert moved(res) and store.last_task(f"incident:{iid}")["status"] == "cleared"   # its Kiosk fault closes too
-    assert [s for s in res["send"] if s["to"] == "fm" and s["status"] == "Cleared on {time}: front_door is locked."
+    assert [s for s in res["send"] if s["to"] == "fm" and s["status"] == "Cleared on {time}: front_door is locked. Watch 4 h."
             and s["stage"] == "closed"], res["send"]
     assert not _tick(store, villa, 120).get("cleared")                  # closed once
 
@@ -322,7 +322,7 @@ def test_a_rule_that_stopped_watching_once_back_to_normal_never_tells_the_owner_
     assert not [s for s in res["send"] if s["to"] == "owner"]
     # architecture review 23: Home Assistant's own message, taken over, says the same end — never "🔶 no longer tracked"
     (ha,) = res["ha_messages"]
-    assert ha["status"] == "Cleared on {time}: back to normal when the alert stopped watching it."
+    assert ha["status"] == "Cleared on {time}: back to normal when the alert stopped watching it. Watch 4 h."
 
 
 def test_a_number_or_an_alert_from_before_the_bad_states_waits_for_a_person(store):
@@ -516,7 +516,41 @@ def test_an_alert_is_over_once_what_it_claims_no_longer_holds_whatever_rule_sent
     assert not _tick(store, ha, 185).get("cleared")                         # false, not yet for clear_minutes
     res = _tick(store, ha, 200)
     assert res["cleared"] == [iid] and store.incident(iid)["closed_at"]
-    assert res["settle"][0]["note"] == "Cleared on {time}: it is no longer reported."
+    assert res["settle"][0]["note"] == "Cleared on {time}: back to normal. Watch 4 h."
+
+
+@pytest.mark.parametrize("hours, says", [(1, " Watch 1 h."), (4, " Watch 4 h."), (0.5, " Watch 30 min."), (0, "")])
+def test_a_closed_alert_says_how_long_it_stays_on_watch_from_the_villas_reopen_hours(tmp_path, hours, says):
+    # owner, 2026-10-23: every closing end says, last, how long the alert reopens under its own number — the villa's
+    # reopen_hours as it is now (never a number written in the desk); none set (0): nothing about a watch
+    from vesta_shared.params import VillaParams
+    params = VillaParams(defaults={**desk.DEFAULTS, "reopen_hours": hours})
+    store = Store(str(tmp_path / f"w{hours}.sqlite"))
+    # the villa's own all-clear
+    desk.intake(store, event(), T0, params, occupancy_reader=lambda: "occupied")
+    res = desk.intake(store, event(phase="resolved"), T0 + timedelta(minutes=20), params)
+    assert res["settle"][0]["note"] == "Cleared on {time}." + says
+    assert res["settle"][0]["note_in"]["fr"] == "Résolu le {time}." + says.replace("Watch", "Surveillance")
+    # every language ends on one stop, never a unit's own dot doubled ("4 Std..")
+    assert not [t for t in res["settle"][0]["note_in"].values() if ".." in t or "。。" in t]
+    # a claim no longer holding, read again by the desk
+    store = Store(str(tmp_path / f"c{hours}.sqlite"))
+    _overdue(store, claim=CLAIM)
+    ha = Claims([(T0, "false")])
+    ha.now = T0 + timedelta(minutes=30)
+    desk.tick(store, ha.now, params, client=ha)
+    ha.now = T0 + timedelta(minutes=45)
+    closed = desk.tick(store, ha.now, params, client=ha)
+    assert closed["settle"][0]["note"] == "Cleared on {time}: back to normal." + says
+    # a Done that held: "Checked after …: right." then the watch
+    store = Store(str(tmp_path / f"d{hours}.sqlite"))
+    villa = Villa(**{"lock.front_door": [(T0 - timedelta(minutes=10), "unlocked"), (T0 + timedelta(minutes=3), "locked")]})
+    iid = desk.intake(store, event(entities=("lock.front_door",), bad_states=BAD), T0, params,
+                      occupancy_reader=lambda: "occupied")["incident_id"]
+    desk.reply(store, iid, "done", "fm", T0 + timedelta(minutes=5), params)
+    villa.now = T0 + timedelta(minutes=20)
+    done = [s for s in desk.tick(store, villa.now, params, client=villa)["send"] if s["stage"] == "closed"]
+    assert done and done[0]["status"] == "Done (FM). Checked after 10 min: right." + says
 
 
 def test_a_claim_that_cannot_be_told_keeps_the_alert_open_and_says_so_once(store):

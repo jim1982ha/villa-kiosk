@@ -3,13 +3,23 @@
 // files — sits in a textarea; this adds, for the kinds it can show, a Formatted view and the Formatted / Raw switch.
 // Markdown is drawn from markdown.js's blocks, YAML from yaml.js's pieces: plain data built with core.h, so a file
 // never puts markup in the page, and nothing is fetched. The choice is one for every file, kept while the page is open.
-import { fill, h, markDirty, page, saveWith, segmented, showBar, table } from "./core.js";
+import { fill, h, markDirty, page, saveWith, segmented, setting, showBar, table } from "./core.js";
 import { parse } from "./markdown.js";
 import { lines } from "./yaml.js";
 
 // A Markdown file as a reader sees it (markdown.js parses, this draws with h: no markup from the file reaches the page).
 // A link opens only when it is a web address; a table is core.table, like every table on the page.
-const inl = (list) => list.map((x) => x.t === "text" ? x.v : x.t === "code" ? h("code", {}, x.v) : x.t === "b" ? h("strong", {}, inl(x.c))
+// ⚠️ A SETTING NAMED IS SHOWN WITH ITS VALUE (owner, 2026-10-23: the alert desk's SKILL.md said "(4)" for reopen_hours
+// while the villa had set 1): a skill's document names its settings, never their numbers; a code span that is one of
+// them (`names`: the server's {name: {value, unit, ref}}, limits_tab.names) is drawn as core.setting, "reopen_hours: 1"
+let names = {};
+const named = (v) => {
+  const s = Object.prototype.hasOwnProperty.call(names, v) ? names[v] : null;
+  if (!s) return h("code", {}, v);
+  const value = Array.isArray(s.value) ? s.value.join(", ") : String(s.value);
+  return setting(`${v}: ${value}${s.unit ? ` ${s.unit}` : ""}`, s.ref);
+};
+const inl = (list) => list.map((x) => x.t === "text" ? x.v : x.t === "code" ? named(x.v) : x.t === "b" ? h("strong", {}, inl(x.c))
   : x.t === "i" ? h("em", {}, inl(x.c)) : /^https?:\/\//.test(x.href) ? h("a", { href: x.href, target: "_blank", rel: "noopener noreferrer" }, inl(x.c))
   : h("span", { title: x.href }, inl(x.c)));
 function listView(items) {
@@ -29,7 +39,8 @@ function listView(items) {
   }
   return [...root.el.childNodes];
 }
-export function markdownView(text) {
+export function markdownView(text, settings = {}) {
+  names = settings || {};
   // flatMap, never map: core.h and fill flatten ONE level, and a list is several nodes (an array inside lost them)
   return parse(text).flatMap((b) => b.t === "meta" ? h("dl", { class: "md-meta" }, b.rows.flatMap(([k, v]) => [h("dt", {}, k), h("dd", {}, v)]))
     : b.t === "h" ? h(`h${b.level}`, {}, inl(b.inl)) : b.t === "p" ? h("p", {}, inl(b.inl)) : b.t === "list" ? listView(b.items)
@@ -51,16 +62,17 @@ export const viewKind = (path) => (/\.md$/i.test(path || "") ? "md" : /\.ya?ml$/
 // the text as it is in the editor, saved or not; editing is in Raw.
 export function fileViewer(ta, path) {
   const kind = viewKind(path);
+  let settings = {};                       // the settings the file names, with their values (markdownView)
   const box = h("div", { class: `file-view ${kind === "md" ? "md-box" : "yaml-box"}`, hidden: true });
   const show = () => {
     const formatted = !!kind && page.fileView !== "raw";
     ta.hidden = formatted; box.hidden = !formatted;
-    if (formatted) fill(box, VIEWS[kind](ta.value));
+    if (formatted) fill(box, VIEWS[kind](ta.value, settings));
   };
   const toggle = kind ? segmented([["formatted", "View"], ["raw", "Edit"]], page.fileView || "formatted",
     (v) => { page.fileView = v; show(); }, "Show the file") : null;
   show();
-  return { toggle, box, show };
+  return { toggle, box, show, named: (s) => { settings = s || {}; } };
 }
 
 // ⚠️ THE ONE FILE EDITOR (architecture review 9): Rules (file) and a skill's Files each built "a textarea, its version,
@@ -78,7 +90,7 @@ export function fileEditor(path, send, probs) {
   let rev = null;
   return {
     ta, view,
-    set(text, r) { ta.value = text; rev = r; page.dirty = false; showBar(); fill(probs); view.show(); },
+    set(text, r, settings) { ta.value = text; rev = r; view.named(settings); page.dirty = false; showBar(); fill(probs); view.show(); },
     async save(okText) {
       const res = await saveWith(probs, () => send(ta.value, rev), okText);
       if (res && res.rev) rev = res.rev;

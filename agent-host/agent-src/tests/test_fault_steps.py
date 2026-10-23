@@ -218,7 +218,7 @@ def test_a_lock_offline_after_done_is_said_to_be_unchecked_never_taken_for_fixed
     iid = _door_done(store)
     out = desk.tick(store, T0 + timedelta(minutes=20), client=Villa(**{"lock.door": "unavailable"}))
     (fm,) = [s for s in out["send"] if s["to"] == "fm"]
-    assert fm["status"].endswith("Note: VESTA cannot check this one; Laundry lock does not answer.")
+    assert fm["status"].endswith("Note: VESTA cannot check this one; Laundry lock does not answer. Watch 4 h.")
     assert store.incident(iid)["closed_at"] and not out["not_quiet"]
 
 
@@ -227,7 +227,7 @@ def test_a_lock_gone_from_home_assistant_after_done_is_said_to_be_unchecked(tmp_
     _door_done(store)
     out = desk.tick(store, T0 + timedelta(minutes=20), client=Villa())
     (fm,) = [s for s in out["send"] if s["to"] == "fm"]
-    assert fm["status"].endswith("Note: VESTA cannot check this one; lock.door does not answer.")
+    assert fm["status"].endswith("Note: VESTA cannot check this one; lock.door does not answer. Watch 4 h.")
 
 
 def test_a_locked_door_after_done_closes_saying_it_was_checked(tmp_path):
@@ -236,7 +236,7 @@ def test_a_locked_door_after_done_closes_saying_it_was_checked(tmp_path):
     _door_done(store)
     out = desk.tick(store, T0 + timedelta(minutes=20), client=Villa(**{"lock.door": "locked"}))
     (fm,) = [s for s in out["send"] if s["to"] == "fm"]
-    assert fm["status"].endswith("Checked again after 10 min: it is right. Closed.") and not out["not_quiet"]
+    assert fm["status"].endswith("Checked after 10 min: right. Watch 4 h.") and not out["not_quiet"]
 
 
 def test_an_old_alert_whose_device_is_gone_after_done_still_says_it_cannot_check(tmp_path):
@@ -248,7 +248,7 @@ def test_an_old_alert_whose_device_is_gone_after_done_still_says_it_cannot_check
     desk.reply(store, iid, "done", "fm", T0 + timedelta(minutes=5))
     out = desk.tick(store, T0 + timedelta(minutes=20), client=Villa())
     (fm,) = [s for s in out["send"] if s["to"] == "fm"]
-    assert fm["status"].endswith("Note: VESTA cannot check this one; lock.door does not answer.")
+    assert fm["status"].endswith("Note: VESTA cannot check this one; lock.door does not answer. Watch 4 h.")
 
 
 # ---------------------------------------------------------------------- review 29

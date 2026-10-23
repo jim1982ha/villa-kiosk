@@ -1,5 +1,5 @@
 // VESTA Agent page — the Skills tab.
-import { api, ask, dropdown, field, fill, go, guard, h, infoButton, markDirty, page, paged, place, plural, popup, problemsBox, reasons, saveWith, setBar, showBar, subTabs, tabbed, tell, tileCard, titleWithInfo, toast, toggleCard, $view, where } from "./core.js";
+import { api, ask, dropdown, field, fill, go, guard, h, infoButton, markDirty, page, paged, place, plural, popup, problemsBox, reasons, saveWith, setBar, setting, showBar, subTabs, tabbed, tell, tileCard, titleWithInfo, toast, toggleCard, $view, where } from "./core.js";
 import { openTools } from "./rules.js";
 import { fileEditor } from "./viewer.js";
 
@@ -294,7 +294,7 @@ export async function openSkill(name, pane, info, path = ABOUT) {
   const { ta, view } = ed;
   const load = async (p) => {
     const f = await api("GET", `api/skills/${enc}/file?path=${encodeURIComponent(p)}`);
-    ed.set(f.content, f.rev);
+    ed.set(f.content, f.rev, f.settings);
   };
   // one line of files while collapsed; a button shows them all, and appears only when they do not fit on that line.
   // Open or closed is kept from skill to skill. ⚠️ THE FILES KEEP THEIR ORDER (owner, 2026-10-08: the open one moved
@@ -358,7 +358,8 @@ export function aboutSkill(name, d) {
   // When the skill runs: the schedule first, then events, then the chats — a table like every other (core.paged)
   // rows as the agent sends them, in their order (server.skill_detail): drawn, never parsed
   const KIND = { ai: "AI job", code: "code, no AI" };
-  const acts = () => paged(["When", "What runs"], d.acts.map((a) => [a.when,
+  // a scheduled job's time is a setting: its link to the Limits tab's row (`ref`; the other rows have none)
+  const acts = () => paged(["When", "What runs"], d.acts.map((a) => [setting(a.when, a.ref),
     [a.job ? h("b", {}, a.job) : a.script ? h("code", {}, a.script) : h("span", { class: "muted" }, a.note || ""),
      a.kind ? h("span", { class: "chip gray tiny" }, KIND[a.kind]) : null]]), 10, { cls: "skill-runs" });
   // Skill tools: the agent's one verdict (tool_access.health: its `line`, drawn as it is — the same line the skills

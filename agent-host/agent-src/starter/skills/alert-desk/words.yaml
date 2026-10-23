@@ -91,17 +91,33 @@ still_not_fixed:
   ko: "아직 해결되지 않음 (해결되면 자동으로 닫힘, 또는 '{done}' 누르기)"
 
 # what an end adds after "Cleared on …:" (the engine writes "Cleared on …" in each language)
-no_longer_reported:
-  en: "it is no longer reported"
-  fr: "elle n'est plus signalée"
-  id: "tidak lagi dilaporkan"
-  de: "es wird nicht mehr gemeldet"
-  es: "ya no se informa"
-  it: "non viene più segnalato"
-  nl: "het wordt niet meer gemeld"
-  zh: "已不再报告"
-  ja: "報告されなくなりました"
-  ko: "더 이상 보고되지 않음"
+back_to_normal:
+  en: "back to normal"
+  fr: "retour à la normale"
+  id: "kembali normal"
+  de: "wieder normal"
+  es: "vuelta a la normalidad"
+  it: "di nuovo normale"
+  nl: "weer normaal"
+  zh: "已恢复正常"
+  ja: "正常に戻りました"
+  ko: "정상으로 돌아옴"
+
+# ⚠️ ONE LINE ON A PHONE (owner, 2026-10-23): a closed alert stays on watch for rules.yaml `behaviour.reopen_hours`
+# (the villa's value first): back within it, it reopens under the same number. Every end that can reopen says so,
+# last ({watch}: that time, "1 h", "30 min"); a reopen_hours of 0 says nothing. "✅ Cleared on 22/10/2026 19:28: back
+# to normal. Watch 1 h." is the common line, 57 characters, what a phone's Telegram line holds
+watch:
+  en: "Watch {watch}."
+  fr: "Surveillance {watch}."
+  id: "Dipantau {watch}."
+  de: "{watch} Beobachtung."
+  es: "Vigilancia {watch}."
+  it: "Sorveglianza {watch}."
+  nl: "Bewaking {watch}."
+  zh: "继续观察{watch}。"
+  ja: "{watch}監視継続。"
+  ko: "{watch} 동안 감시."
 
 rule_gone:
   en: "the automation that sent it no longer exists (its entity ID changed, or it was deleted). Its next alert comes with a new number"
@@ -226,16 +242,16 @@ cannot_check:
   ko: "{who}. 참고: VESTA가 이 항목을 확인할 수 없습니다; {words}."
 
 confirmed_after_done:
-  en: "{who}. Checked again after {watch}: it is right. Closed."
-  fr: "{who}. Vérifié à nouveau après {watch}: c'est rétabli. Fermé."
-  id: "{who}. Diperiksa lagi setelah {watch}: sudah normal. Ditutup."
-  de: "{who}. Nach {watch} erneut geprüft: alles in Ordnung. Geschlossen."
-  es: "{who}. Comprobado de nuevo tras {watch}: está bien. Cerrada."
-  it: "{who}. Ricontrollato dopo {watch}: è a posto. Chiuso."
-  nl: "{who}. Na {watch} opnieuw gecontroleerd: het is in orde. Gesloten."
-  zh: "{who}。{watch} 后再次检查：已恢复正常。已关闭。"
-  ja: "{who}。{watch} 後に再確認：正常です。クローズしました。"
-  ko: "{who}. {watch} 후 다시 확인: 정상입니다. 닫혔습니다."
+  en: "{who}. Checked after {after}: right."
+  fr: "{who}. Vérifié après {after}: rétabli."
+  id: "{who}. Diperiksa setelah {after}: normal."
+  de: "{who}. Nach {after} geprüft: in Ordnung."
+  es: "{who}. Comprobado tras {after}: bien."
+  it: "{who}. Verificato dopo {after}: a posto."
+  nl: "{who}. Na {after} gecontroleerd: in orde."
+  zh: "{who}。{after} 后检查：正常。"
+  ja: "{who}。{after} 後に確認：正常。"
+  ko: "{who}. {after} 후 확인: 정상."
 
 cannot_tell:
   en: "{words}: VESTA cannot tell if it is right. Still open."

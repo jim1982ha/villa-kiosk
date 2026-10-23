@@ -64,7 +64,7 @@ def test_home_assistants_all_clear_is_said_in_the_desks_words(tmp_path):
     out = desk.intake(store, ev("resolved", summary="✅ Laundry door unlocked — resolved after 4 min"),
                       T0 + timedelta(minutes=5), occupancy_reader=lambda: "x")
     (ha,) = out["ha_messages"]
-    assert ha["status"] == "Cleared on {time}." and ha["text"].count("Laundry door unlocked") == 1
+    assert ha["status"] == "Cleared on {time}. Watch 4 h." and ha["text"].count("Laundry door unlocked") == 1
 
 
 def test_the_heading_names_the_incident_first_and_what_was_sent_to_whom(tmp_path):

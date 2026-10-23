@@ -308,8 +308,9 @@ def when_it_runs(sk: Skill) -> list[dict]:
     def row(when, job=None, script=None, ai=False, **more):
         return {"when": when, "job": job, "script": script.split()[0] if script else None,
                 "kind": "ai" if ai else "code" if script else None, **more}
-    acts = [row(describe(j["when"])[0], j.get("name"), j.get("run"), ai=bool(j.get("prompt")) and not j.get("run"))
-            for j in sk.schedule]
+    # `schedule`: the entry's place in skill.yaml — its time is a setting the page links to (the Limits tab's row)
+    acts = [row(describe(j["when"])[0], j.get("name"), j.get("run"), ai=bool(j.get("prompt")) and not j.get("run"),
+                schedule=i) for i, j in enumerate(sk.schedule)]
     if sk.every_5_min:
         acts.append(row("every 5 minutes", script=sk.every_5_min))
     acts += [row(HOOK_EVENTS.get(ev, ev), script=cmd) for ev, cmd in sk.on_event.items()]

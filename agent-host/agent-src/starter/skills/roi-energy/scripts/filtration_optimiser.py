@@ -54,6 +54,12 @@ MEASURED_DAYS = limit("filtration.measured_days", 7, unit="days", group="read", 
                       reached="Older days are not used for the filtration advice.", told="")
 
 
+def no_power(slug: str) -> str:
+    """What is missing when the pump has no measured running power: the days read are the limit's, as it is now
+    (owner, 2026-10-23: "the last 7 days" was written whatever filtration.measured_days said)."""
+    return f"a measured running power for {slug} (no statistics in the last {MEASURED_DAYS} days)"
+
+
 def interpolate(curve: list[list[float]], x: float) -> float | None:
     pts = sorted((float(a), float(b)) for a, b in curve)
     if not pts:
@@ -171,7 +177,7 @@ def run(args) -> dict:
     if flow is None:
         if not rated_flow: missing.append(f"input_number.{slug}_rated_flow_m3h (from the pump plate)")
         if not rated_power: missing.append(f"input_number.{slug}_rated_power_w (from the pump plate)")
-        if not measured_w: missing.append(f"a measured running power for {slug} (no statistics in the last 7 days)")
+        if not measured_w: missing.append(no_power(slug))
     try:
         tariff, currency = params.tariff()
     except MissingParameter as e:          # the tariff or its currency: said with the rest, never a crash

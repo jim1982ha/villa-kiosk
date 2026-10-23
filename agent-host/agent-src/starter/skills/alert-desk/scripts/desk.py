@@ -151,6 +151,26 @@ def ended(tail: Said | str = "") -> Said:
     return Said(closing(str(tail)), {lang: SW.closing(_in(tail, lang), lang) for lang in langs})
 
 
+def watched(said: Said, hours: float) -> Said:
+    """`said` with the watch that follows a close: "… Watch 1 h." — back within `hours` (reopen_hours), the alert reopens
+    under the same number. No watch (0, or none): `said` as it is.
+
+    ⚠️ THE WATCH IS SAID, FROM THE SETTING (owner, 2026-10-23): a closed card gave no hint that its alert comes back as
+    the same one for a while; the time is the villa's reopen_hours at this close (its helper, villa.rules.yaml, then
+    rules.yaml), never a number written here."""
+    if not hours or hours <= 0:
+        return said
+    w = say("watch", watch=lasting_in(hours * 3600))
+    gap = lambda text: "" if str(text).endswith(("。", "．")) else " "
+    langs = set(said.langs) | set(w.langs)
+    return Said(f"{said}{gap(said)}{w}", {lang: f"{said.lang(lang)}{gap(said.lang(lang))}{w.lang(lang)}" for lang in langs})
+
+
+def reopen_hours(params: VillaParams | None) -> float:
+    """How long a closed alert reopens under its own number (rules.yaml `behaviour.reopen_hours`, the villa's first)."""
+    return float(_params(params).behaviour("reopen_hours") or 0)
+
+
 def relabel(who: str) -> Said:
     """"Done (JM)" — a press as check_quiet kept it — with the button's label in each language."""
     for b in BUTTONS.values():
@@ -444,9 +464,9 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
         store.audit("alert-desk", "phase_unknown", {"rule": ev.get("rule_id"), "phase": ev["phase"]})
         return {"send": [], "actions": [], "incident_id": None, "decision": "phase_unknown"}
     if ev["phase"] == "resolved":
-        return resolved(store, ev, now)
+        return resolved(store, ev, now, params)
     if ev["phase"] == "abandoned":
-        return abandoned(store, ev, now)
+        return abandoned(store, ev, now, params)
     if ev["phase"] == "restated":
         return restated(store, ev, now)
     rule_id, eid = ev["rule_id"], ev.get("entity_id", "")
@@ -483,7 +503,7 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
         if route.get("intrusion"):
             out["siren_gate"] = siren_gate(store, ev, now)
         return out
-    back = back_alert(store, ev, now, _params(params).behaviour("reopen_hours"))
+    back = back_alert(store, ev, now, reopen_hours(params))
     if back:
         return reopen(store, back, ev, now, sev, route, out, zone=zone)
     iid = store.new_incident(key, rule_id, eid, sev, ev, now.isoformat())
@@ -643,7 +663,7 @@ def reopen(store: Store, inc: dict, ev: dict, now: datetime, sev: str, route: di
     return out
 
 
-def resolved(store: Store, ev: dict, now: datetime) -> dict:
+def resolved(store: Store, ev: dict, now: datetime, params: VillaParams | None = None) -> dict:
     """Home Assistant says the condition cleared. Close the incident; the chase stops.
 
     Home Assistant already sent its own all-clear to the group: the desk writes only
@@ -657,9 +677,10 @@ def resolved(store: Store, ev: dict, now: datetime) -> dict:
         if late:
             out["incident_id"], out["decision"] = late["id"], "resolved_late"
             out["ha_messages"] = [R.ha_message(late["id"], context=ev.get("_context_id"), stage="closed",
-                                               **about(late, ended()))]
+                                               **about(late, watched(ended(), reopen_hours(params))))]
         return out
-    _close(store, inc, now, out, ended())
+    over = watched(ended(), reopen_hours(params))
+    _close(store, inc, now, out, over)
     out["incident_id"], out["decision"] = inc["id"], "resolved"
     # Home Assistant's all-clear takes the incident's number and the original alert, and replaces its older ones
     # its status in the desk's words, as every other end says it (never "✅ <the alert's name> — resolved after …")
@@ -667,7 +688,7 @@ def resolved(store: Store, ev: dict, now: datetime) -> dict:
     # 15:40 to Owner" beside "Closing note sent 15:40 to FM" — one end, two lines. Now ONE: "Closing note sent … to
     # Owner & FM"
     out["ha_messages"] = [R.ha_message(inc["id"], context=ev.get("_context_id"), stage="closed",
-                                       **about(inc, ended()))]
+                                       **about(inc, over))]
     store.audit("alert-desk", "resolved", {"incident": inc["id"]})
     return out
 
@@ -768,7 +789,8 @@ def still_there(inc: dict, client, now: datetime | None = None) -> tuple[bool | 
     return None, readings()
 
 
-def quiet_after_done(store: Store, now: datetime, client, clear_minutes: float, out: dict) -> list[int]:
+def quiet_after_done(store: Store, now: datetime, client, clear_minutes: float, out: dict,
+                     watch_hours: float = 0) -> list[int]:
     """Every incident answered Done — or closed in the Kiosk — `clear_minutes` ago or more and not yet checked, read
     again once (still_there): still bad, it reopens — "…, but … still reads …: still open" — and the desk watches it
     until it is right; unknown (its rule names no states), the people asked are told what each device reads, that VESTA
@@ -806,19 +828,21 @@ def quiet_after_done(store: Store, now: datetime, client, clear_minutes: float, 
         elif there is None and words:
             inc = store.incident(inc["id"])
             out["send"] += tell(inc["severity"], "closed", incident=inc["id"], mark="unchecked",   # ☑️ closed, not checked
-                                **about(inc, say("cannot_check", who=relabel(who), words=joined(words))))
+                                **about(inc, watched(say("cannot_check", who=relabel(who), words=joined(words)),
+                                                     watch_hours)))
         elif there is False:
             # ⚠️ THE WATCH ENDS OUT LOUD (owner, 2026-10-23: "10 min later, i still see 'VESTA will monitor it for 10 min'
             # — I expected an update saying the test lock is confirmed OK"): a Done that held closed the check without a
             # word, and the card promised a watch nobody saw end
             inc = store.incident(inc["id"])
             out["send"] += tell(inc["severity"], "closed", incident=inc["id"],
-                                **about(inc, say("confirmed_after_done", who=relabel(who),
-                                                 watch=lasting_in(clear_minutes * 60))))
+                                **about(inc, watched(say("confirmed_after_done", who=relabel(who),
+                                                         after=lasting_in(clear_minutes * 60)), watch_hours)))
     return reopened
 
 
-def seen_again(store: Store, now: datetime, client, clear_minutes: float, out: dict) -> list[int]:
+def seen_again(store: Store, now: datetime, client, clear_minutes: float, out: dict,
+               watch_hours: float = 0) -> list[int]:
     """Every open incident whose alert says what it claims (judged), read again: one whose claim no longer holds —
     `clear_minutes` on end — is closed (`_close`). Returns their ids.
 
@@ -856,7 +880,7 @@ def seen_again(store: Store, now: datetime, client, clear_minutes: float, out: d
             _closes_at_changed(p, closes, out)
             if now - datetime.fromisoformat(since) < timedelta(minutes=clear_minutes):
                 continue
-            said = say("no_longer_reported")
+            said = say("back_to_normal")
         else:
             ents, bad = rule_states(inc)
             # a device asleep between its reports reads its last real state, as still_there read it
@@ -871,7 +895,7 @@ def seen_again(store: Store, now: datetime, client, clear_minutes: float, out: d
                 continue
             said = joined([say("is_now", name=(now_states[e].get("attributes") or {}).get("friendly_name") or e,
                                    state=now_states[e]["state"]) for e in ents])
-        _close(store, store.incident(inc["id"]), now, out, ended(said),
+        _close(store, store.incident(inc["id"]), now, out, watched(ended(said), watch_hours),
                note="Cleared: back to normal, read again by the VESTA Agent.")
         store.audit("alert-desk", "seen_again", {"incident": inc["id"], "now": str(said)})
         closed.append(inc["id"])
@@ -977,7 +1001,7 @@ def restated(store: Store, ev: dict, now: datetime) -> dict:
     return out
 
 
-def abandoned(store: Store, ev: dict, now: datetime) -> dict:
+def abandoned(store: Store, ev: dict, now: datetime, params: VillaParams | None = None) -> dict:
     """The rule stopped watching. Still true: the owner hears it, and the desk reads it again from now on (seen_again).
     Back to normal just as it gave up (its `still_true` false): the incident is over.
 
@@ -989,7 +1013,7 @@ def abandoned(store: Store, ev: dict, now: datetime) -> dict:
         return out
     out["incident_id"] = inc["id"]
     if str(ev.get("still_true")).lower() == "false":
-        cleared = ended(say("stopped_watching"))
+        cleared = watched(ended(say("stopped_watching")), reopen_hours(params))
         _close(store, inc, now, out, cleared)
         out["decision"] = "abandoned_cleared"
         # ⚠️ ITS OWN MESSAGE SAYS THE SAME END (architecture review 23): taken over with the rule's "🔶 no longer
@@ -1079,8 +1103,8 @@ def reply(store: Store, iid: int, option: str, sender_role: str, now: datetime, 
         store.note(iid, {"check_quiet": f"{label} ({who})", Notes.WATCH_MINUTES: _params(params).behaviour("clear_minutes")})
         # how long VESTA watches it is the desk's own setting (clear_minutes), said as every duration (owner, 2026-10-19:
         # "✅ Done on 19/10/2026 02:10 (JM), VESTA will monitor it for …")
-        watched = say("will_monitor", pressed=act, watch=lasting_in(_params(params).behaviour("clear_minutes") * 60))
-        out["send"].append(here(watched.only(act.langs) if checks else pressed, "closed"))
+        monitoring = say("will_monitor", pressed=act, watch=lasting_in(_params(params).behaviour("clear_minutes") * 60))
+        out["send"].append(here(monitoring.only(act.langs) if checks else pressed, "closed"))
     elif option == "need_help":
         store.update_incident(iid, state=Incident.ESCALATED, reply=label, escalated_at=now.isoformat(),
                               assignee=CHASE["escalates_to"])
@@ -1109,8 +1133,9 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
     silent_min = params.behaviour("villa_silent_minutes")
     out = {"send": [], "actions": [], "escalated": [], "reasked": []}
     if client is not None:
-        out["cleared"] = seen_again(store, now, client, params.behaviour("clear_minutes"), out)
-        out["not_quiet"] = quiet_after_done(store, now, client, params.behaviour("clear_minutes"), out)
+        out["cleared"] = seen_again(store, now, client, params.behaviour("clear_minutes"), out, reopen_hours(params))
+        out["not_quiet"] = quiet_after_done(store, now, client, params.behaviour("clear_minutes"), out,
+                                            reopen_hours(params))
         out["rule_gone"] = rule_gone(store, now, client, params.behaviour("clear_minutes"), out)
     for inc in store.incidents(open_only=True):
         p = notes_of(inc)

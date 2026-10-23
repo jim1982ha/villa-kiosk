@@ -1,6 +1,6 @@
 ---
 name: alert-desk
-description: Receives every critical alert of the VESTA automations (the villa system's vesta_critical_event), removes duplicates, routes by severity to the owner and facility-manager chats, runs the Done / Need help chase with the 15 and 45 minute ladder, gates the siren behind two signals and one human approval, and watches the villa from outside (villa silent). The engine runs it on every alert, every ladder button and every 5 minutes; you only read its status.
+description: Receives every critical alert of the VESTA automations (the villa system's vesta_critical_event), removes duplicates, routes by severity to the owner and facility-manager chats, runs the Done / Need help chase (its reminder and escalation times are rules.yaml settings), gates the siren behind two signals and one human approval, and watches the villa from outside (villa silent). The engine runs it on every alert, every ladder button and every 5 minutes; you only read its status.
 ---
 
 # alert-desk
@@ -29,17 +29,18 @@ decides alone to act on the villa.
      without one, the automation's route in `rules.yaml`. The villa system's own `severity` word is not a priority.
    - `claim`: a template of the villa's system the automation wrote with its own entities and limits, true while
      what the alert reports still holds. Every 5 minutes (`tick`) the desk renders it for every open
-     incident: false for `clear_minutes` (10) closes it, with its Kiosk fault; a device that does not
+     incident: false for `clear_minutes` (its setting) closes it, with its Kiosk fault; a device that does not
      answer keeps it open, said once. An alert from an automation that sends no claim but its `bad_states`
      is read by those states (no watched entity in any of them); with neither, it waits for a person.
      The desk knows no automation by name: whatever an automation claims is the automation's.
    - `abandoned` with `still_true: false` (back to normal just as the automation gave up) closes the
      incident; still true, the owner hears it.
-   - An alert back within `reopen_hours` hours of its incident closing (rules.yaml `behaviour:`, a villa's
-     villa.rules.yaml first; 4 as shipped) reopens it: "Back again: N
+   - An alert back within `reopen_hours` hours of its incident closing (its setting: rules.yaml `behaviour:`, a
+     villa's villa.rules.yaml first) reopens it: "Back again: N
      times since …", under its own number, the villa system's latest words, its ladder started again
-     and its OWN task and Kiosk fault open again, titled "(again: N times in 7 days)". Each run is
-     counted on its own by the digest, the reports and the retune proposal.
+     and its OWN task and Kiosk fault open again, titled "(again: N times in D days)", D the limit
+     `problems.again_days`. Each run is counted on its own by the digest, the reports and the retune proposal.
+     Every closing line that can reopen ends with that watch ("Watch 1 h."); a `reopen_hours` of 0 says none.
    - An alert that no chat of the facility manager's received (Telegram refused them all) is handed
      to the owner at the next tick.
 2. The engine's own connection to the villa's system: while it is up, a beat every minute. Its absence
@@ -57,7 +58,7 @@ The decision is one of:
   (`chase.asks`) with the ladder buttons;
   a P1 or P2 also becomes a Facility ticket in the VESTA Kiosk; a camera snapshot travels with
   the message when the event names one.
-- P3 goes to the store with state `digest`; the reports skill picks it up at 07:00. P4 is logged only.
+- P3 goes to the store with state `digest`; the reports skill picks it up for its daily digest (at that job's time in its skill.yaml). P4 is logged only.
 
 ## One message per incident per chat
 
@@ -79,7 +80,7 @@ person asks, read the value in force, never quote a number from here.
   events (they never carry `task_text`).
 - Villa silent: no contact with the villa's system for `villa_silent_minutes` opens one P1 incident to both chats;
   the next contact closes it with a "back online" line.
-- Alert fatigue: an automation that fired more than `alert_fatigue_per_month` times in 30 days becomes a "retune" proposal in the
+- Alert fatigue: an automation that fired more than `alert_fatigue_per_month` times in `alerts.fatigue_window_days` (a limit) days becomes a "retune" proposal in the
   weekly report. Nothing is changed automatically.
 
 ## Answers
@@ -89,7 +90,7 @@ message then says who pressed what, and when. Typing the word works too.
 
 | Button | Effect |
 |---|---|
-| Done | incident closed, its Kiosk ticket resolved; the device is read once `clear_minutes` (10) later. Still bad (its automation names its bad states): the incident opens again, "still there" ("Done (…), but … still reads …: still open. VESTA keeps watching it."), and the desk closes it when it is right. Not knowable (an older alert, a number): the people asked are told what it reads. The same for a fault closed in the Kiosk ("Closed in the Kiosk, but …"); a fault a person REOPENS in the Kiosk asks the facility manager again at once |
+| Done | incident closed, its Kiosk ticket resolved; the device is read once `clear_minutes` (its setting) later. Still bad (its automation names its bad states): the incident opens again, "still there" ("Done (…), but … still reads …: still open. VESTA keeps watching it."), and the desk closes it when it is right. Not knowable (an older alert, a number): the people asked are told what it reads. The same for a fault closed in the Kiosk ("Closed in the Kiosk, but …"); a fault a person REOPENS in the Kiosk asks the facility manager again at once |
 | Need help | escalated to the owner with the detail |
 
 ## When a critical automation runs
@@ -103,14 +104,14 @@ answer (after a restart), the automation alerts anyway.
 ## The siren: strict human validation
 
 `rules.yaml` section `siren`. The gate arms only when all three hold:
-1. At least 2 independent intrusion signals (different entities) inside 5 minutes.
+1. At least `siren.min_signals` independent intrusion signals (different entities) inside `siren.window_min` minutes.
 2. The villa is empty: its "Villa empty" helper reads on (`rules.yaml` `siren.villa_empty`, the same one its
    presence automations read). Missing or unreadable: not empty, the siren is not offered.
 3. The owner approves the siren request with the Approve button (it expires after policy.yaml's
    `approval_ttl_minutes`). It sounds for policy.yaml's `siren_auto_off_min`, then stops.
 
-The approval goes through the engine's policy like any action, with read-back and a 3-minute
-automatic stop. A single sensor, an occupied villa, a late press: nothing fires. The snapshot
+The approval goes through the engine's policy like any action, with read-back and its automatic stop
+(`siren_auto_off_min`). A single sensor, an occupied villa, a late press: nothing fires. The snapshot
 is always sent before the question so the human looks first.
 
 ## What you may do

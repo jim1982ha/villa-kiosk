@@ -35,6 +35,22 @@ GROUP_INFO = {POLICY_GROUP: "The agent's own rules (policy.yaml), the same value
 TOLD = {"person": "The person is told", "ai": "Only the AI is told", "": "Nobody is told"}
 
 
+def ref(rid: dict) -> str:
+    """One row's address, as text: what a value shown elsewhere on the page links to (core.setting), and what this
+    tab finds when it opens on it — "code:investigate.max_lines", "skill:alert-desk:rules.yaml:behaviour.reopen_hours",
+    "policy:settings.keep.records_days".
+
+    ⚠️ A VALUE A PERSON CAN CHANGE LINKS HERE (owner, 2026-10-23: "creating a link to the Limits dashboard focusing
+    directly on the specific contextual limit value"): built from the row's id, the one thing a row and its save share,
+    so a link can only name a row this tab draws."""
+    src = (rid or {}).get("src")
+    if src == "skill":
+        return f"skill:{rid['skill']}:{rid['file']}:{'.'.join(map(str, rid['path']))}"
+    if src == "policy":
+        return "policy:" + ".".join(map(str, rid["path"]))
+    return f"{src}:{rid.get('key')}"
+
+
 # ------------------------------------------------------------------ YAML in place, comments kept
 def _load(text: str):
     doc = _yaml().load(text) if text and text.strip() else None
@@ -152,6 +168,8 @@ class LimitsTab:
             out += self._skill_rows(skill)
         out += self._policy_rows()
         out += self._measured_rows()
+        for r in out:
+            r["ref"] = ref(r["id"])
         return {"groups": GROUP_TITLES, "group_info": GROUP_INFO, "rows": out, "problems": problems, "file": self.path}
 
     # ------------------------------------------------------------------ a setup's limits (setup_copy)
@@ -202,6 +220,8 @@ class LimitsTab:
             except Exception:  # noqa: BLE001 — a file the skill cannot read is the Skills tab's to show
                 continue
             lines = text.splitlines()
+            if fn == "skill.yaml":
+                rows += self._schedule_rows(skill, doc)
             for path, shipped, line in _leaves(doc):
                 if fn == "skill.yaml" and path[0] == "jobs_default":
                     # the AI jobs' starting brain and limit: what runs is Rules' settings.skill_ai (the rows below);
@@ -235,6 +255,53 @@ class LimitsTab:
                              "hi": None, "reached": "", "told": "", "also": also,
                              "where": [f"{skill}/{villa_fn if (over is not None or not own) else fn}"]})
         return rows
+
+    def _schedule_rows(self, skill: str, doc) -> list[dict]:
+        """When each scheduled job of the skill runs (skill.yaml `schedule`: "02:00", "Mon 08:00", "1 08:00").
+
+        ⚠️ A TIME IS A SETTING TOO (owner, 2026-10-23: "nightly 02:00" among the values a person changes): the Kiosk's
+        cadence and the skill's "When the skill runs" read it, so it is a row here, saved in skill.yaml like the job's
+        timeout beside it."""
+        rows = []
+        jobs = doc.get("schedule") if isinstance(doc, dict) else None
+        for i, job in enumerate(jobs if isinstance(jobs, list) else []):
+            if not isinstance(job, dict) or not isinstance(job.get("when"), str):
+                continue
+            what = job.get("name") or str(job.get("run") or "").split(" ")[0] or f"job {i + 1}"
+            rows.append({"id": {"src": "skill", "skill": skill, "file": "skill.yaml", "path": ["schedule", i, "when"]},
+                         "group": SKILL_GROUP, "section": skill, "name": f"skill.yaml › schedule.{i}.when",
+                         "label": f"When the {what} job runs, villa time: HH:MM every day, Mon HH:MM each week, "
+                                  "D HH:MM each month.",
+                         "value": job["when"], "default": job["when"], "kind": "time", "choices": None, "unit": "",
+                         "lo": None, "hi": None, "reached": "", "told": "",
+                         "also": (f"Also in Skills › {skill} › Files › skill.yaml. Saving it here makes this skill your "
+                                  f"own copy: its updates then wait for you in Skills › {skill} › Compare."),
+                         "where": [f"{skill}/skill.yaml"]})
+        return rows
+
+    def names(self, skill: str) -> dict[str, dict]:
+        """{a setting's name as a skill's SKILL.md writes it: {value, unit, ref}} — the skill's own settings by their
+        path ("siren.window_min") and their last key ("reopen_hours"), the code's limits by key, the agent rules by
+        path and last key. A name two rows answer to is left out: no link rather than one to the wrong row."""
+        seen: dict[str, dict[str, dict]] = {}
+        for r in self.rows()["rows"]:
+            rid = r["id"]
+            if rid["src"] == "code":
+                keys = [rid["key"]]
+            elif rid["src"] == "policy" or (rid["src"] == "skill" and rid["skill"] == skill):
+                path = [str(k) for k in rid["path"]]
+                keys = [] if any(k.isdigit() for k in path) else [".".join(path), path[-1]]
+            else:
+                continue
+            for k in keys:
+                seen.setdefault(k, {})[r["ref"]] = r
+        return {k: {"value": r["value"], "unit": r["unit"], "ref": r["ref"]}
+                for k, found in seen.items() if len(found) == 1 for r in found.values()}
+
+    def policy_setting(self, path: list) -> dict:
+        """{value, ref} of one agent rule (policy.yaml) as this tab shows it: what another tab's sentence quotes."""
+        row = next(r for r in self._policy_rows() if r["id"]["path"] == list(path))
+        return {"value": row["value"], "ref": ref(row["id"])}
 
     def _measured_rows(self) -> list[dict]:
         """What the villa's system keeps, as the agent measured it (vesta_shared.retention): shown, never set here —
@@ -345,6 +412,13 @@ class LimitsTab:
             raise Refused([f"{'.'.join(map(str, path))} is a list of words."])
         if path[-1] == "brain" and value not in PROFILES:
             raise Refused([f"The brain is one of: {', '.join(PROFILES)}."])
+        if path[0] == "schedule" and path[-1] == "when":
+            from ..skills import WHEN
+            if not (isinstance(value, str) and WHEN.match(value.strip())):
+                raise Refused(["A time is HH:MM (every day), Mon HH:MM (each week) or D HH:MM (each month)."])
+            value = value.strip()
+        elif isinstance(shipped, str) and path[-1] != "brain":
+            raise Refused([f"{'.'.join(map(str, path))} is not set on this tab."])
         own = fn == "skill.yaml" or any(isinstance(k, int) for k in path)
         target = fn if own else "villa." + fn
         text = _read(os.path.join(folder, target)).decode("utf-8")

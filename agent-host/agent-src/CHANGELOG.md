@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.329 (23 October 2026)
+
+- A closed alert's last line says how long it stays on watch, from `behaviour.reopen_hours` (live: the villa's helper,
+  villa.rules.yaml, rules.yaml; 0 says nothing), in every language (alert-desk words.yaml `watch`, desk `watched()`):
+  "✅ Cleared on 22/10/2026 19:28: back to normal. Watch 1 h.", "✅ Done (JM). Checked after 10 min: right. Watch 1 h."
+  (shortened to hold one phone line). Ends that cannot reopen (the automation gone, the villa back online) say none.
+- No setting written as a fixed number where a person or the AI reads it: the skills' SKILL.md files name their
+  settings (reask/escalate/clear/reopen times, siren signals, drift and battery thresholds, baseline days, …), the
+  reports' prompts no longer say "It is 07:00", filtration's "no statistics" follows `filtration.measured_days`.
+- The Agent page draws a value a person can change as a setting chip (core.setting): a press opens Limits on that
+  exact limit, its tab open, the row first, scrolled into view and lit. Used on Overview › Page changes (records kept),
+  Skills › When the skill runs (a job's time, now a Limits row of its own), and a SKILL.md's named settings in
+  Skills › Files.
+
 ## 0.6.328 (23 October 2026)
 
 - Limits: a search counts its matches in every tab's title ("Skill settings (1)"), and an open tab with none gives way

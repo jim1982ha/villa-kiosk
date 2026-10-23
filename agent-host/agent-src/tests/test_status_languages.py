@@ -144,9 +144,10 @@ def test_the_desks_end_carries_every_language(tmp_path):
           "timestamp": t0.isoformat()}
     desk.intake(store, ev, t0, occupancy_reader=lambda: "occupied")
     res = desk.intake(store, {**ev, "phase": "resolved"}, t0 + timedelta(minutes=20))
-    assert res["settle"][0]["note"] == "Cleared on {time}." and res["settle"][0]["note_in"]["fr"] == "Résolu le {time}."
-    assert res["send"][0]["status_in"]["ko"] == "{time} 해제됨."
-    assert desk.ended(desk.say("no_longer_reported")).langs["de"] == "Behoben am {time}: es wird nicht mehr gemeldet."
+    assert res["settle"][0]["note"] == "Cleared on {time}. Watch 4 h."
+    assert res["settle"][0]["note_in"]["fr"] == "Résolu le {time}. Surveillance 4 h."
+    assert res["send"][0]["status_in"]["ko"] == "{time} 해제됨. 4시간 동안 감시."
+    assert desk.ended(desk.say("back_to_normal")).langs["de"] == "Behoben am {time}: wieder normal."
 
 
 def test_an_english_chat_reads_english_as_before(agent):
@@ -180,8 +181,8 @@ def test_a_clearing_says_its_end_in_each_language(agent):
     rule(agent, "opened", 500)
     tick(agent, 20)
     rule(agent, "resolved", 501)
-    assert re.fullmatch(rf"✅ Résolu le {T}\.", status(card(agent, FM_FR), "Statut")[-1]), card(agent, FM_FR)
-    assert re.fullmatch(rf"✅ Behoben am {T}\.", status(card(agent, FM_DE), "Status")[-1]), card(agent, FM_DE)
+    assert re.fullmatch(rf"✅ Résolu le {T}\. Surveillance 4 h\.", status(card(agent, FM_FR), "Statut")[-1]), card(agent, FM_FR)
+    assert re.fullmatch(rf"✅ Behoben am {T}\. 4 Std\. Beobachtung\.", status(card(agent, FM_DE), "Status")[-1]), card(agent, FM_DE)
 
 
 def test_a_copy_recorded_before_keeps_its_english_lines(agent):

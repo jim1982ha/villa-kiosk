@@ -35,7 +35,7 @@ from ..skills import FILE_NAME, REQUIRED_FILES, SKILL_NAME, TRASH, VILLA_CHOICES
 from ..state import State
 from . import setup_copy
 from .changes import PageFiles, Refused, _read, _write, page_policy, rev, rules_problems, undoable
-from .limits_tab import LimitsTab
+from .limits_tab import LimitsTab, ref as limits_ref
 from .policy_doc import apply_form, to_form
 
 log = logging.getLogger("vesta.ui")
@@ -445,7 +445,10 @@ class UI:
             text = data.decode("utf-8")
         except UnicodeDecodeError:
             raise Refused(["Not a text file: it cannot be edited here."]) from None
-        return web.json_response({"content": text, "rev": rev(data)})
+        # a skill's document names its settings, never their numbers: the page shows each with its value now, a link
+        # to its row on the Limits tab (viewer.markdownView, core.setting)
+        names = self.limits.names(request.match_info["name"]) if rel.lower().endswith(".md") else {}
+        return web.json_response({"content": text, "rev": rev(data), "settings": names})
 
     async def file_put(self, request):
         name = request.match_info["name"]
@@ -524,7 +527,9 @@ class UI:
             return web.json_response({"name": name, "ok": False, "off": name in pol.skills_off, "release": rel,
                                       "problem": h["problem"]})
         # ⚠️ ROWS, NOT SENTENCES (architecture review 8), and the skill's own (review 5, 2026-10-13: skills.when_it_runs)
-        acts = when_it_runs(sk)
+        acts = [{**a, "ref": limits_ref({"src": "skill", "skill": name, "file": "skill.yaml",
+                                          "path": ["schedule", a["schedule"], "when"]})} if "schedule" in a else a
+                for a in when_it_runs(sk)]
         scripts = [spec.view() for _, spec in sorted(sk.scripts.items())]      # skills.Script: one reading
         return web.json_response({
             "name": name, "ok": h["ok"], "off": name in pol.skills_off, "description": sk.description,
@@ -646,7 +651,9 @@ class UI:
 
     # ------------------------------------------------------------------ changes made on these pages
     async def history_list(self, _request):
-        return web.json_response({"changes": [{**c, "undoable": undoable(c)} for c in self.history.rows(200)]})
+        # how long the list is kept: the agent rule's value now, linked to its row on the Limits tab
+        return web.json_response({"changes": [{**c, "undoable": undoable(c)} for c in self.history.rows(200)],
+                                  "kept_days": self.limits.policy_setting(["settings", "keep", "records_days"])})
 
     async def history_undo(self, request):
         try:

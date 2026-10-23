@@ -107,7 +107,7 @@ with the facts; if one seems misleading, say why in "cannot_tell".
 
 8. **Save the account** with save_file as `investigation.json`, in plain sentences (no Markdown):
 
-       {"title": "at most 90 characters",
+       {"title": "one short line (the page cuts a longer one at the limit investigate.title_chars)",
         "summary": "3 to 5 sentences, at most 640 characters: the most likely cause and what points to it, and what to check on site first",
         "timeline": [{"time": "07:30", "text": "what a person saw or did", "unusual": true}],
         "causes": [{"cause": "…", "evidence": "what in the records points to it", "confirm": "how to confirm on site"}],

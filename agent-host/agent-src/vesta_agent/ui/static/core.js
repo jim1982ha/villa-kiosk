@@ -16,6 +16,7 @@ export const page = {
   dirty: false,           // unsaved changes on the current screen
   current: "overview",
   tabs: {},                 // the tab each tabbed section shows, by its id (core.tabbed): kept while the page is open
+  focusLimit: null,         // the Limits row a press on a value (core.setting) asked for: read once by the Limits tab
   views: {},                // the tabs, by name: filled by app.js
 };
 
@@ -214,7 +215,9 @@ export function card(title, lead, ...kids) {
 // ⚠️ THE TEXT IS A TOOLTIP, NEVER INSERTED IN THE PAGE (owner, 2026-10-06): it floats over the page on hover or
 // keyboard focus, and on a tap (a phone has no hover); a second tap, a tap elsewhere, Escape or scrolling closes it.
 export function titleWithInfo(title, text, tag = "h2", right = null) {
-  const btn = h("button", { type: "button", class: "info", "aria-label": `About ${title}: ${text}`, "aria-expanded": "false" }, "i");
+  // a text, or a node when it shows a value a person can change (core.setting): read aloud as its words
+  const words = text instanceof Node ? text.textContent : text;
+  const btn = h("button", { type: "button", class: "info", "aria-label": `About ${title}: ${words}`, "aria-expanded": "false" }, "i");
   infoTip(btn, text);
   return h("div", { class: "card-title" }, h(tag, {}, title, btn), right ? h("div", { class: "card-title-right" }, right) : null);
 }
@@ -513,6 +516,22 @@ export function go(tab) {
     if (page.current === tab) fill($view, problemsBox(reasons(e), "This tab could not be shown:"));
   });
 }
+// ⚠️ A VALUE A PERSON CAN CHANGE LOOKS LIKE ONE (owner, 2026-10-23: "highlight all the limits and values that can be
+// changed with a specific visually identifiable style … a link to the Limits dashboard focusing directly on the
+// specific contextual limit value"): `text` drawn as a .setting chip; a press opens the Limits tab on that row, `ref`
+// (limits_tab.ref): its exact name searched, its tab open, the row scrolled to and lit (limits.js). No ref: the value as
+// plain text, never a link to the wrong row.
+export function setting(text, ref) {
+  if (!ref) return String(text);
+  return h("a", { href: "#limits", class: "setting", title: "Change it on the Limits tab", "data-limit": ref,
+    onclick: async (e) => {
+      e.preventDefault();
+      if (!(await guard())) return;
+      page.focusLimit = ref;
+      go("limits");
+    } }, String(text));
+}
+
 // a link to another card of the Rules page: scrolls to it and outlines it a moment
 export function jump(id, label) {
   return h("a", { href: `#${id}`, class: "jump", onclick: (e) => {

@@ -352,5 +352,5 @@ def test_a_search_counts_its_matches_in_every_tab_title_and_opens_a_tab_that_has
     assert "const list = rows.filter(match);" in groups and "`${title} (${list.length})`" in groups
     draw = js[js.index("const draw = () => {"):js.index("draw();\n  const search")]
     assert "if (FILTER && first && (!open || open[4] === 0)) page.tabs.limits = first[0];" in draw
-    assert "oninput: (e) => { FILTER = e.target.value.trim().toLowerCase(); draw(); }" in js
+    assert "oninput: (e) => { SEARCH = e.target.value; FILTER = SEARCH.trim().toLowerCase(); draw(); }" in js
     assert js.index("const table = (list)") < js.index("draw();\n  const search")      # tabbed draws at once

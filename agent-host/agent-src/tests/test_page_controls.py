@@ -454,7 +454,8 @@ def test_a_skills_when_rows_come_as_fields_in_the_order_shown(ui):
     async def fn(c):
         return (await (await c.get("/api/skills/reports", headers=HDR)).json())["acts"]
     acts = call(ui, fn)
-    assert acts[0] == {"when": "every day at 07:00", "job": "fm-daily", "script": None, "kind": "ai"}
+    assert acts[0] == {"when": "every day at 07:00", "job": "fm-daily", "script": None, "kind": "ai", "schedule": 0,
+                       "ref": "skill:reports:skill.yaml:schedule.0.when"}      # its time: a Limits row (core.setting)
     assert [a["job"] for a in acts[:3]] == ["fm-daily", "fm-weekly", "owner-monthly"]
     assert acts[-1]["when"] == "in a chat" and acts[-1]["note"] == "when a person asks about it" and acts[-1]["kind"] is None
 
