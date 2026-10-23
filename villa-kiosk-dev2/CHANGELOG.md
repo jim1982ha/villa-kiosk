@@ -1,3 +1,10 @@
+## 2.496.510
+
+What you will see:
+- Cockpit: the (i) beside "Open a ticket" now explains the green check too: a "Being confirmed" row at the end of
+  "From the VESTA Agent" (a fault marked Done on Telegram or closed here, that the VESTA Agent checks again; last in
+  the list, not counted; it goes when the Agent confirms it is right, its pill showing the time, then "within 5 min").
+
 ## 2.496.509
 
 What you will see:
