@@ -7,6 +7,7 @@ the siren's warning and a camera snapshot all go through here; both modules are 
 """
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import Awaitable, Callable
 
@@ -16,6 +17,20 @@ from vesta_shared.status_words import pick
 from . import layout
 from .routing import Origin
 from vesta_shared.messaging import telegram_caption_chars, telegram_message_chars
+
+log = logging.getLogger("vesta")
+
+
+def laid_out(make: Callable[[], object], plain):
+    """What `make` lays out, or `plain` — the same words, unstyled — when laying it out raised.
+
+    ⚠️ THE LAYOUT NEVER BLOCKS A MESSAGE (owner, 2026-10-23): a title, "To:" and sections are how a message looks, never
+    whether it goes; a fault in them must not leave a chat without its words."""
+    try:
+        return make()
+    except Exception:  # noqa: BLE001 — whatever the layout raised, the words still go
+        log.exception("A message's layout failed: it goes as plain text")
+        return plain
 
 
 class Poster:
@@ -78,7 +93,8 @@ class Poster:
         # ⚠️ A CAPTION IS 1,024 CHARACTERS (architecture review 20): laid out for 4,096, a long incident's snapshot went as a
         # photo and a separate text — only the text was recorded, so the next snapshot left the old photo behind
         limit = telegram_caption_chars() if (photo or document) else telegram_message_chars()
-        mid = await self.send(chat, layout.render(p, limit), keyboard=keyboard, document=document, photo=photo,
+        shown = laid_out(lambda: layout.render(p, limit), "\n\n".join(x for x in (lead, text, status) if x))
+        mid = await self.send(chat, shown, keyboard=keyboard, document=document, photo=photo,
                               origin=origin, **({"reply_to": reply_to} if reply_to else {}))
         if mid and thread is not None and self.thread is not None:
             await self.thread.post(thread, chat, mid, {**p, "limit": limit}, buttons=bool(keyboard), keyboard=keyboard)
@@ -93,7 +109,7 @@ class Poster:
         check that clears is said on its own message, never a new one). Only a message that was ONE page and still is;
         False when it cannot be (two pages, Telegram off or refusing: an old or deleted message) — the caller says
         nothing more here: Outcome.rewrite decides the backup."""
-        docs = pages(title, to, text, telegram_message_chars())
+        docs = laid_out(lambda: pages(title, to, text, telegram_message_chars()), [text])
         if self.edit is None or len(docs) != 1:
             return False
         return bool(await self.edit(int(chat), int(message_id), docs[0]))
@@ -102,7 +118,7 @@ class Poster:
         """A titled report, one message per page; its file, photo and buttons go with the last. The last id, or None
         when a page did not arrive."""
         limit = telegram_caption_chars() if (photo or document) else telegram_message_chars()
-        docs = pages(title, to, text, limit)
+        docs = laid_out(lambda: pages(title, to, text, limit), [text])
         mid = None
         for i, doc in enumerate(docs):
             last = i == len(docs) - 1

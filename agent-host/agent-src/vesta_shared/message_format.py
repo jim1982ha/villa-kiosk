@@ -312,8 +312,8 @@ def _pieces(item: str, cap: int) -> list[str]:
 
 def parts(text: str) -> list[tuple[str, int, int]]:
     """The parts of a message in the shape, as (kind, start, end) character spans of `text`: "title", "to", "label",
-    "item", "note" — a section's items are "note" under a NOTE_SECTIONS label. [] for any other text: its first line is
-    no title or its second no "To: " line.
+    "item", "note" — a section's items are "note" under a NOTE_SECTIONS label. A message without a heading is only its
+    Status section, when it ends in one as vesta_agent/layout.render writes it (_status_parts); [] for any other text.
 
     ⚠️ AN ALERT'S TEXT IS ONE ITEM, WHATEVER IT SAYS (review 28): Home Assistant's own words are free text — a line
     "Status:" or "Water leak detected in:" in them was read as a section of the agent's, drawn as a heading and its next
@@ -322,7 +322,7 @@ def parts(text: str) -> list[tuple[str, int, int]]:
     text = text or ""
     lines = text.split("\n")
     if len(lines) < 2 or not lines[0].strip() or not lines[1].startswith(TO.strip()):
-        return []
+        return _status_parts(text)
     if INCIDENT_TITLE.fullmatch(lines[0]):
         return _alert_parts(text, len(lines[0]), len(lines[0]) + 1 + len(lines[1]))
     found: list[tuple[str, int, int]] = []
@@ -353,6 +353,26 @@ def parts(text: str) -> list[tuple[str, int, int]]:
     if span:
         found.append(("note" if section in NOTE_SECTIONS else "item", *span))
     return found
+
+
+def _status_parts(text: str) -> list[tuple[str, int, int]]:
+    """The Status section of a message without a heading — the label and its lines, as every other message's — or [].
+
+    ⚠️ A PRESS ON A PLAIN MESSAGE IS SAID IN THE SAME STYLE (owner, 2026-10-23): a button pressed under an answer (no
+    title, no "To:") writes what it did under it as layout.render does — "<text>", an empty line, "Status:", then its
+    lines — and only a message with a heading was styled, so "Status:" arrived as bare text there. Keyed on that exact
+    shape: the LAST "Status:" line, after an empty line (or the whole message), with ONE block under it that ends the
+    message. A "Status:" inside a sentence, one with a paragraph after its block, or a label without lines is the
+    person's or the AI's own text and stays as it is."""
+    label = f"{STATUS}:\n"
+    at = text.rfind(f"\n\n{label}")
+    if at < 0 and not text.startswith(label):
+        return []
+    start = at + 2 if at >= 0 else 0                 # render without a body: the message is its Status section
+    lines = text[start + len(label):].rstrip()
+    if not lines.strip() or "\n\n" in lines or lines.startswith("\n"):
+        return []
+    return [("label", start, start + len(label) - 1), ("note", start + len(label), start + len(label) + len(lines))]
 
 
 def _alert_parts(text: str, title_end: int, to_end: int) -> list[tuple[str, int, int]]:

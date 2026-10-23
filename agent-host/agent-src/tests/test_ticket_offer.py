@@ -57,6 +57,23 @@ def test_a_fault_in_a_chat_is_a_button_and_only_a_press_creates_it_once(tmp_path
     assert len(k.tickets) == 1
 
 
+def test_a_press_under_a_plain_answer_says_what_it_did_in_the_status_style(tmp_path, monkeypatch):
+    # owner, 2026-10-23: the press wrote "Status:" and its line as bare text under the answer (no title, no "To:"),
+    # while every titled message draws that section as its label and its lines quoted in italics
+    from vesta_shared.message_format import STATUS, telegram_entities
+    from vesta_shared.messaging import tg_len
+    v, _, _ = _asked(tmp_path, monkeypatch, {"title": "Check the relay's own event log"})
+    (_, answer, _), = v.tg.sent
+    assert telegram_entities(answer) == []                                  # the answer itself: as the AI wrote it
+    _press(v)
+    (_, _, edited), = v.tg.edits
+    said = edited.rsplit(f"\n\n{STATUS}:\n", 1)[1]
+    assert edited.startswith(answer) and "Fault created for the facility manager by JM" in said
+    at = tg_len(edited) - tg_len(said)
+    assert telegram_entities(edited) == [{"type": "blockquote", "offset": at, "length": tg_len(said)},
+                                         {"type": "italic", "offset": at, "length": tg_len(said)}]
+
+
 def test_one_fault_per_answer(tmp_path, monkeypatch):
     v, k, said = _asked(tmp_path, monkeypatch, {"title": "One"}, {"title": "Two"})
     assert said[1].get("is_error") and "already offered" in said[1]["content"][0]["text"]

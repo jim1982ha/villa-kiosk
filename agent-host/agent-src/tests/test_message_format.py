@@ -121,6 +121,25 @@ def test_home_assistants_words_never_change_an_alerts_layout():
                    ("label", "Status:"), ("note", "⚠️ New alert")]
 
 
+def test_a_message_without_a_heading_has_its_status_styled_as_every_other():
+    # owner, 2026-10-23: a press under a plain answer wrote "Status:" and its line as bare text — only a message with a
+    # title and "To:" was styled. The shape layout.render writes without a heading is its Status section, styled alike
+    from vesta_agent import layout
+    for body in ("The pump ran for three hours.\n\nIt stopped at 04:00.", ""):
+        text = layout.render(layout.parts(body=body, status="Fault created for the facility manager by JM."))
+        got = [(k, text[a:b]) for k, a, b in F.parts(text)]
+        assert got == [("label", "Status:"), ("note", "Fault created for the facility manager by JM.")], text
+        assert [e["type"] for e in F.telegram_entities(text)] == ["blockquote", "italic"]
+    # a titled message's Status section is drawn the same way: one style for one section
+    titled = layout.render(layout.parts(body="b", status="s", head=layout.head("A title", "Owner")))
+    assert [k for k, _, _ in F.parts(titled)][-2:] == ["label", "note"]
+    # never a person's or the AI's own text that merely holds "Status:": inside a line, a section with a paragraph after
+    # it, a label with nothing under it, or an empty line under it
+    for plain in ("Status: all good.", "The pump\n\nStatus:\nrunning\n\nAsk me again tomorrow.", "Pump\n\nStatus:",
+                  "Pump\n\nStatus:\n\nrunning", "Pump\nStatus:\nrunning"):
+        assert F.parts(plain) == [] and F.telegram_entities(plain) == [], plain
+
+
 def test_a_long_report_goes_as_whole_messages_none_lost(tmp_path):
     # one long daily lost its whole "Still open" section, cut at Telegram's 4,096
     v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]})

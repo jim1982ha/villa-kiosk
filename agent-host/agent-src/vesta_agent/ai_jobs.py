@@ -18,7 +18,8 @@ from typing import Awaitable, Callable
 from vesta_shared import agent_records
 
 from . import job_steps
-from .api_errors import AI_DOWN, CHAT, NO_RESULT, NOT_COME, for_job, why_job, why_job_sentence
+from .api_errors import (AI_DOWN, CHAT, NO_RESULT, NOT_COME, NOT_PREPARED_TITLE, for_job, why_job,
+                         why_job_sentence)
 from .chat_jobs import JUST_STARTED, NEW, SCHEDULED, Started
 from .in_progress import ENDED, FAILED
 from .notice import when
@@ -133,7 +134,7 @@ class AiJobs:
             made = await self.run_without_ai(skill, job, problem, origin, folder)
             work.verdict(ENDED if made else FAILED, f"made without the AI: {why_job(problem)}" if made else why_job(problem))
             if to and not made:
-                await self.outcome.carry_out({"send": [{"to": job_to(job, origin), "title": "Report not prepared",
+                await self.outcome.carry_out({"send": [{"to": job_to(job, origin), "title": NOT_PREPARED_TITLE,
                                                         "text": for_job(name, problem, origin)}]},
                                              origin=origin)
             return
@@ -153,7 +154,7 @@ class AiJobs:
             log.warning("AI job %s sent nothing: %s", name, why)
             self.state.log(agent_records.JOB_NO_RESULT, agent_records.no_result(name, why))
             work.verdict(FAILED, why)
-            await self.outcome.carry_out({"send": [{"to": job_to(job, origin), "title": "Report not prepared",
+            await self.outcome.carry_out({"send": [{"to": job_to(job, origin), "title": NOT_PREPARED_TITLE,
                                                     "text": NOT_COME(name, why, NO_RESULT)}]}, origin=origin)
 
     async def on_limit(self, folder, skill, job: dict, origin: Origin | None, started: str, limit_usd: float) -> int:
@@ -240,8 +241,10 @@ class AiJobs:
         async def made(origin: Origin) -> None:
             if not await self.run_without_ai(sk, job, problem if problem in AI_DOWN else "unknown", origin):
                 self.chat_jobs.work.verdict(FAILED, "its figures could not be read without the AI either")
-                await self.delivery.send(chat, NOT_COME(name, "its figures could not be read without the AI either", CHAT),
-                                         origin=origin)
+                # titled, the one way run()'s own "could not be prepared" goes (NOT_PREPARED_TITLE; owner, 2026-10-23)
+                await self.outcome.carry_out({"send": [{
+                    "to": job_to(job, origin), "title": NOT_PREPARED_TITLE,
+                    "text": NOT_COME(name, "its figures could not be read without the AI either", CHAT)}]}, origin=origin)
         st = self.chat_jobs.start(chat, name, made, waiting_mid, by=by)
         # the same "just started" window as start (architecture review 12: this path had none)
         if st.kind in (NEW, JUST_STARTED):

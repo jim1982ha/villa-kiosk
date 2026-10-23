@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.323 (23 October 2026)
+
+- Every "could not be prepared" goes out titled ("Report not prepared"; a question cut by a restart "Question not
+  answered", `api_errors`): the job's error edit, a report made without the AI that failed too, and what the next start
+  says (`ChatJobs` takes the Poster: `_say` rewrites the waiting message with the title and "To:", else posts it).
+- A heading-less message's "Status:" section (a button pressed under a plain answer) is styled as every other
+  (`message_format._status_parts`, keyed on the exact shape `layout.render` writes).
+- A test that started a conversation without keeping its task lost the record to garbage collection under load (it
+  failed now and then in CI); it keeps the task.
+- The layout never keeps a message from its chat: `posting.laid_out` sends the same words plain when render or paging
+  raises; `telegram._italic` sends unstyled when the entities cannot be computed.
+
 ## 0.6.322 (23 October 2026)
 
 - `ChatJobs.idle` waits only on job tasks still running and drops the ended ones: a task that ended as its loop closed

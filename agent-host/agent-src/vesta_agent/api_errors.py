@@ -97,6 +97,12 @@ def why_job_sentence(problem: str) -> str:
 
 #: Who asked for a report, and so how "it did not come" ends: asked in a chat, run on schedule, cut by a restart
 CHAT, SCHEDULE, CUT, NO_RESULT = "chat", "schedule", "cut", "no_result"
+#: ⚠️ ONE TITLE FOR "IT DID NOT COME", ON EVERY PATH (owner, 2026-10-23): a report whose AI could not run arrived titled
+#: "Report not prepared" in the one layout, while the same sentence went as bare text when the job's task died, when
+#: its steps without the AI failed too, or when a restart cut it — and a question cut by a restart likewise. Each goes
+#: titled now (posting.Poster), a waiting message rewritten in place included.
+NOT_PREPARED_TITLE = "Report not prepared"
+NOT_ANSWERED_TITLE = "Question not answered"
 
 
 def NOT_COME(name: str, cause_: str, asked: str, when: str | None = None) -> str:  # noqa: N802 — a sentence's name

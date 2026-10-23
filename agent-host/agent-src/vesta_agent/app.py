@@ -164,8 +164,6 @@ class Vesta:
         self.delivery.on_unreachable = self._tell_unreachable
         # what is happening for a chat beyond its conversation, told to the AI with each message there (chat_facts.py)
         self.chat_facts = ChatFacts(self.state, self.work, settings.timezone, closed=Incidents(settings.store_path).closed)
-        self.chat_jobs = ChatJobs(self.delivery, self._safe, self.work,     # a job asked for in a chat, start to end
-                                  facts=self.chat_facts)
         self.actions = Actions(self.policy, self.state, self.writer_factory, names=self.name_of,
                                related=lambda ids: related_entities(self.pack(), self.reader, ids),
                                executed=lambda *a: self.siren.executed(*a))
@@ -198,6 +196,8 @@ class Vesta:
         # putting one message in one chat (posting.py): the alerts and the approval requests both use it
         self.poster = Poster(send=self.delivery.send, thread=self.thread, notices=self.notices,
                              timezone_name=settings.timezone, edit=self.delivery.edit)
+        # a job asked for in a chat, start to end (chat_jobs.py); what it tells a chat goes titled, through the poster
+        self.chat_jobs = ChatJobs(self.delivery, self._safe, self.work, facts=self.chat_facts, poster=self.poster)
         # an approval request from start to end (approvals.py); the siren's gate asks through it too
         self.approvals = Approvals(state=self.state, policy=self.policy, actions=self.actions, thread=self.thread,
                                    post=self.poster.post, timezone_name=settings.timezone, safe=self._safe)

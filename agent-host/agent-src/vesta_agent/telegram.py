@@ -270,8 +270,15 @@ class Telegram:
             return False
 
 def _italic(key: str, text: str) -> dict:
-    """{key: how Telegram shows this message} — the one style table, vesta_shared.message_format.TELEGRAM — else {}."""
-    found = telegram_entities(text)
+    """{key: how Telegram shows this message} — the one style table, vesta_shared.message_format.TELEGRAM — else {}.
+
+    ⚠️ A STYLE THAT FAILS LEAVES THE WORDS (owner, 2026-10-23: the layout must never block a message): reading the
+    message's parts raised, and the send raised with it — the chat got nothing. It goes unstyled."""
+    try:
+        found = telegram_entities(text)
+    except Exception:  # noqa: BLE001 — whatever the style table raised, the message still goes
+        log.exception("A message's style could not be worked out: it goes unstyled")
+        return {}
     return {key: found} if found else {}
 
 

@@ -91,6 +91,11 @@ class Item:
                     "send it again to have its answer.")
         return NOT_COME(self.name, "the agent was restarted meanwhile", CUT_ASKED, when=at)
 
+    def cut_title(self) -> str:
+        """The title `cut_text` goes under (api_errors.NOT_PREPARED_TITLE: one layout, owner, 2026-10-23)."""
+        from .api_errors import NOT_ANSWERED_TITLE, NOT_PREPARED_TITLE
+        return NOT_ANSWERED_TITLE if self.kind == ANSWER else NOT_PREPARED_TITLE
+
 
 class InProgress:
     def __init__(self, state=None, timezone_name: str = "UTC"):

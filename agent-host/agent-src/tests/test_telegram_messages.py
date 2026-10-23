@@ -116,3 +116,26 @@ def test_a_double_tap_on_done_answers_once(tmp_path):
     assert len(ran) == 1 and "Already answered." in toasts
     asyncio.run(b.press({}, GROUP, ["5", "need_help"], person, toast))              # later, on a settled incident
     assert len(ran) == 1
+
+
+def test_a_style_that_fails_never_keeps_a_message_from_its_chat(monkeypatch):
+    # owner, 2026-10-23: the layout must never block a message — reading a message's parts raised, and the send and the
+    # edit raised with it. The same words go, unstyled
+    from vesta_agent import telegram as T
+    text = "Report not prepared\nTo: Owner\nThe weekly report could not be prepared."
+    tg, calls = T.Telegram("42:T"), []
+
+    async def api(method, **data):
+        calls.append((method, data))
+        return {"message_id": 7}
+    tg.api = api
+    asyncio.run(tg.send(1, text))
+    assert "entities" in calls[-1][1]                                      # styled while the style works
+
+    def broken(_text):
+        raise ValueError("the style table broke")
+    monkeypatch.setattr(T, "telegram_entities", broken)
+    calls.clear()
+    assert asyncio.run(tg.send(1, text)) == [7] and asyncio.run(tg.edit(1, 7, text))
+    assert [(m, d["text"], "entities" in d) for m, d in calls] == [("sendMessage", text, False),
+                                                                  ("editMessageText", text, False)]

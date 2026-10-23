@@ -30,9 +30,10 @@ from typing import Awaitable, Callable
 from vesta_shared.limits import limit
 
 from . import chat_facts
-from .api_errors import CHAT, NOT_COME
+from .api_errors import CHAT, NOT_COME, NOT_PREPARED_TITLE
 from .in_progress import ANSWER, ANSWER_NAME, CHAT_JOB, FAILED, HELD, TELL, InProgress, Item
 from .job_notices import JobNotices
+from .posting import Poster
 from .routing import JOB, Origin
 
 log = logging.getLogger("vesta")
@@ -65,8 +66,11 @@ class Started:
 
 class ChatJobs:
     def __init__(self, delivery, safe: Callable[[Awaitable], Awaitable[None]], work: InProgress | None = None,
-                 facts: "chat_facts.ChatFacts | None" = None):
+                 facts: "chat_facts.ChatFacts | None" = None, poster: Poster | None = None):
         self.delivery = delivery
+        # what a chat is told of a job that did not come goes in the one layout, titled (posting.Poster; owner,
+        # 2026-10-23) — a new message, or its waiting message rewritten in place
+        self.poster = poster or Poster(send=delivery.send, edit=delivery.edit)
         self.facts = facts                                 # what the AI is told of this chat (chat_facts.py): each end
         # what runs, for whom, what it promised, whether its result arrived — kept across a stop (in_progress.py): the
         # same record Delivery.send tells of an arrival and the scheduler holds its chats in
@@ -166,9 +170,7 @@ class ChatJobs:
                 self.facts.job_ended(cut, chat_facts.CUT)
             if self.delivery.tg is None:
                 continue
-            text = cut.cut_text(self.work.tz)
-            if not (cut.mid and await self.delivery.edit(cut.chat, int(cut.mid), text)):
-                await self.delivery.send(cut.chat, text)
+            await self._say(cut.chat, cut.cut_title(), cut.cut_text(self.work.tz), over=cut.mid, new=True)
             n += 1
         return n
 
@@ -214,7 +216,18 @@ class ChatJobs:
         else:
             # only a job whose task died (an exception) ends this way: a job whose AI sent nothing sends its own
             # sentence as its result (ai_jobs.AiJobs.run), which deletes the waiting message like any result
-            await self.delivery.edit(chat, mid, NOT_COME(job, "its work stopped with an error", CHAT))
+            await self._say(chat, NOT_PREPARED_TITLE, NOT_COME(job, "its work stopped with an error", CHAT), over=mid)
+
+    async def _say(self, chat: int, title: str, text: str, *, over: int | None = None, new: bool = False) -> bool:
+        """`text` under `title` in `chat`, in the one layout: written over message `over` (the waiting message), else —
+        `new` — sent as a message of its own. False when nothing showed it.
+
+        ⚠️ TITLED LIKE ITS TWIN (owner, 2026-10-23): ai_jobs sent "could not be prepared" titled "Report not prepared"
+        while these went as bare sentences — a waiting message rewritten in place too (Poster.rewrite: the same
+        title and "To:" a new one gets)."""
+        if over and await self.poster.rewrite(chat, int(over), title, self.poster.to_line(chat), text):
+            return True
+        return bool(new and await self.poster.post(chat, text, title=title))
 
     def _typing_on(self, chat: int, name: str) -> None:
         """⚠️ "typing…" UNTIL THE RESULT IS THERE (owner, 2026-10-07): the job holds the chat's one "typing…"

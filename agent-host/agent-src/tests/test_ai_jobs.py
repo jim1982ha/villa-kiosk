@@ -23,12 +23,17 @@ ASKER = 77
 
 
 class Delivery:
+    tg = None                                       # no waiting message, no "typing…": what is sent is what is read
+
     def __init__(self):
         self.sent = []
 
     async def send(self, chat, text, origin=None, **k):
         self.sent.append((chat, text))
         return 1
+
+    async def edit(self, chat, mid, text, keyboard=None):
+        return False
 
     def job_started(self, chat, name):
         pass
@@ -101,6 +106,21 @@ def test_when_its_steps_fail_too_the_chat_reads_why(jobs, monkeypatch):
     asyncio.run(jobs.j.run(sk, job, Origin(ASKER, JOB)))
     assert jobs.d.sent == [(ASKER, f"Report not prepared\nTo: this chat\n{for_job('rep-weekly', 'busy', Origin(ASKER, JOB))}")]
     assert "Ask again" in jobs.d.sent[0][1] and "next time" not in jobs.d.sent[0][1]     # asked for here: no next time
+
+
+def test_made_without_the_ai_and_failed_too_is_titled_as_every_report_not_prepared(jobs):
+    # owner, 2026-10-23: the same sentence went as bare text on this path, titled "Report not prepared" on run()'s
+    from vesta_agent.api_errors import CHAT, NOT_COME
+    from vesta_shared.message_format import telegram_entities
+    jobs.steps_sent[0] = False
+
+    async def go():
+        jobs.j.start_without_ai("rep-weekly", "credit", ASKER)
+        await jobs.j.chat_jobs.idle()
+    asyncio.run(go())
+    said = NOT_COME("rep-weekly", "its figures could not be read without the AI either", CHAT)
+    assert jobs.d.sent == [(ASKER, f"Report not prepared\nTo: this chat\n{said}")]
+    assert telegram_entities(jobs.d.sent[0][1])[0] == {"type": "bold", "offset": 0, "length": len("Report not prepared")}
 
 
 def test_a_run_that_sent_nothing_is_recorded_counted_and_told_once(jobs, monkeypatch):

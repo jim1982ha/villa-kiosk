@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import re
 
-from helpers import make_agent, restarted
+from helpers import body, make_agent, restarted
 from vesta_shared.messaging import SIREN_TITLE
 from telegram_fake import BOT
 from vesta_agent import button_data
@@ -189,9 +189,13 @@ def test_a_report_asked_for_in_a_chat_and_cut_by_a_stop_says_so_at_the_start(tmp
     v = restarted(v)
     (chat, mid, text), = v.tg.edits
     assert (chat, mid) == (JM, 4242)
-    # the one sentence for a report that did not come, its cut variant (api_errors.NOT_COME, scan 4)
-    assert re.match(r"The weekly report you asked for at \d\d/\d\d/\d{4} \d\d:\d\d could not be prepared: the agent was "
-                    r"restarted meanwhile\. Ask again to have it\.", text)
+    # the one sentence for a report that did not come, its cut variant (api_errors.NOT_COME, scan 4), written over its
+    # waiting message in the one layout: titled as when its AI could not run, "To:" its readers (owner, 2026-10-23)
+    assert text.startswith("Report not prepared\nTo: Owner\n"), text
+    assert re.fullmatch(r"The weekly report you asked for at \d\d/\d\d/\d{4} \d\d:\d\d could not be prepared: the agent "
+                        r"was restarted meanwhile\. Ask again to have it\.", body(text))
+    from vesta_shared.message_format import telegram_entities
+    assert telegram_entities(text)[0] == {"type": "bold", "offset": 0, "length": len("Report not prepared")}
     v = restarted(v)
     assert len(v.tg.edits) == 1                                            # said once
 
@@ -361,7 +365,9 @@ def test_a_question_being_answered_when_the_agent_stops_is_said_at_the_start(tmp
     monkeypatch.setattr(v, "_converse", forever)
 
     async def ask():
-        asyncio.create_task(v.converse(JM, person, "/investigate What happened to the bathroom sensor yesterday?"))
+        # kept: an unreferenced task can be garbage-collected while pending ("Task was destroyed but it is pending!"),
+        # its clean-up then runs as a normal end and the record goes — not a stop. asyncio.run cancels a kept one
+        ask.task = asyncio.create_task(v.converse(JM, person, "/investigate What happened to the bathroom sensor yesterday?"))
         # until the question is recorded as being answered (a fixed sleep lost the race on a loaded runner)
         for _ in range(500):
             if v.state.chat_work_kept():
@@ -373,9 +379,13 @@ def test_a_question_being_answered_when_the_agent_stops_is_said_at_the_start(tmp
     # the question had time to show "still working" before the stop
     said = [t for _, t, _ in v.tg.sent if "interrupted by a restart" in t] + \
            [t for _, _, t in v.tg.edits if "interrupted by a restart" in t]
-    assert len(said) == 1 and re.match(r"Your question at \d\d/\d\d/\d{4} \d\d:\d\d \(“/investigate What happened to the "
-                                       r"bathroom sensor yesterday\?”\) was interrupted by a restart of the agent: send "
-                                       r"it again", said[0]), said
+    assert len(said) == 1 and re.fullmatch(r"Your question at \d\d/\d\d/\d{4} \d\d:\d\d \(“/investigate What happened to "
+                                           r"the bathroom sensor yesterday\?”\) was interrupted by a restart of the "
+                                           r"agent: send it again to have its answer\.", body(said[0])), said
+    # in the one layout, under its own title (owner, 2026-10-23), sent new or written over its waiting message alike
+    from vesta_shared.message_format import telegram_entities
+    assert said[0].startswith("Question not answered\nTo: Owner\n"), said
+    assert telegram_entities(said[0])[0] == {"type": "bold", "offset": 0, "length": len("Question not answered")}
     v = restarted(v)
     assert len([t for _, t, _ in v.tg.sent if "interrupted by a restart" in t] +
                [t for _, _, t in v.tg.edits if "interrupted by a restart" in t]) == 1    # said once

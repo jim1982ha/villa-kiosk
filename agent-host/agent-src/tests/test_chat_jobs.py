@@ -29,6 +29,9 @@ class _Delivery:
     async def edit(self, chat, mid, text):                 # delivery.Delivery's own (architecture review 15)
         return await self.tg.edit(chat, mid, text)
 
+    async def send(self, chat, text, **k):
+        return (await self.tg.send(chat, text))[-1]
+
     async def delete(self, chat, mid):
         return await self.tg.delete(chat, mid)
 
@@ -71,9 +74,12 @@ def test_a_chat_job_runs_once_its_waiting_message_first_and_always_ends():
     asyncio.run(go())
     assert seen == [Origin(7, JOB, job="fm-weekly")]                  # the job runs knowing its own name
     assert not jobs.running(7, "fm-weekly")
-    # its task died: its waiting message (the pressed one) says so, in the one sentence (api_errors.NOT_COME)
-    assert d.tg.edits == [(7, 42, "The fm-weekly report you asked for could not be prepared: its work stopped with an "
-                                  "error. Ask again in a moment.")]
+    # its task died: its waiting message (the pressed one) says so, in the one sentence (api_errors.NOT_COME) — titled
+    # in the one layout, as the same sentence is when the AI could not run (owner, 2026-10-23)
+    from vesta_shared.message_format import telegram_entities
+    assert d.tg.edits == [(7, 42, "Report not prepared\nTo: this chat\nThe fm-weekly report you asked for could not be "
+                                  "prepared: its work stopped with an error. Ask again in a moment.")]
+    assert telegram_entities(d.tg.edits[0][2])[0] == {"type": "bold", "offset": 0, "length": len("Report not prepared")}
 
 
 def test_a_scheduled_run_says_scheduled_not_asked_for_here(monkeypatch):
@@ -210,3 +216,30 @@ def test_a_step_of_a_skill_that_is_not_installed_stops_the_steps(monkeypatch):
     done = asyncio.run(job_steps.run(None, None, _Skills(), _Outcome(), _Skill("rep"),
                                      [{"run": "a.py", "skill": "gone"}, {"run": "b.py", "skill": None}], {}))
     assert ran == [] and done.failed == "a.py (gone: not installed)"
+
+
+def test_a_layout_that_fails_still_says_it_plain(monkeypatch):
+    # owner, 2026-10-23: the layout must never block a message — its title and "To:" failing, the waiting message is
+    # still rewritten with the same words, plain; a new message and one with a status go plain the same way
+    from vesta_agent import layout, posting
+
+    def broken(*a, **k):
+        raise ValueError("the layout broke")
+    monkeypatch.setattr(posting, "pages", broken)
+    d = _Delivery()
+    jobs = ChatJobs(d, _safe)
+
+    async def dies(origin):
+        raise RuntimeError("the job failed")
+
+    async def go():
+        jobs.start(7, "fm-weekly", dies, waiting_mid=42)
+        await jobs.idle()
+        await jobs.poster.post(8, "The question could not be answered.", title="Question not answered")
+        monkeypatch.setattr(layout, "render", broken)
+        await jobs.poster.post(9, "Turn on the siren?", status="Waiting for approval", plain=True)
+    asyncio.run(go())
+    assert d.tg.edits == [(7, 42, "The fm-weekly report you asked for could not be prepared: its work stopped with an "
+                                  "error. Ask again in a moment.")]
+    assert [(c, t) for c, t, _ in d.tg.sent] == [(8, "The question could not be answered."),
+                                                (9, "Turn on the siren?\n\nWaiting for approval")]
