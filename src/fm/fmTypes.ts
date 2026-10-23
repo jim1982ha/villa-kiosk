@@ -305,7 +305,8 @@ export interface FmTerms {
   warnAt: number;
 }
 
-const WARN_DEFAULT_PERCENT = 80;
+/** The warning's usual share of the cap, in % — also what its field shows when empty (ContractTermsEditor). */
+export const WARN_DEFAULT_PERCENT = 80;
 
 /** A usable "warn at" percentage (1–99), or null — so a blank or out-of-range
  *  value falls back to the default. One rule for the stored terms (fmTerms)

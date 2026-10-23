@@ -20,8 +20,9 @@ export type PinOutcome =
   /** No usable answer: offline, an error page, a body that is not ours. */
   | { kind: "unavailable" };
 
-/** Seconds a lockout lasts when the server did not say. */
-export const DEFAULT_LOCKOUT_SECONDS = 60;
+/** Seconds a lockout lasts when the server did not say: the add-on option pin_lockout_minutes' own default (5), so
+ *  the wait shown is never shorter than the one the add-on applies by default (2026-10-23: it said 60 s). */
+export const DEFAULT_LOCKOUT_SECONDS = 5 * 60;
 
 /** The server's answer (status + parsed body, or null) as an outcome. Pure. */
 export function readPinAnswer(status: number, body: unknown): PinOutcome {

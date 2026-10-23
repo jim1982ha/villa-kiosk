@@ -1,3 +1,11 @@
+## 2.496.511
+
+What you will see:
+- Advanced Settings › Device telemetry no longer says "the add-on keeps the last 500 events": how many is the add-on's
+  option, so it now says it keeps the latest events, as many as its options allow.
+- The passcode lockout, when the add-on does not say how long, now waits the add-on's own default (5 min), not 60 s.
+- The cost cap's "Warn when the month reaches" field shows VESTA's own default (80 %), taken from where it is set.
+
 ## 2.496.510
 
 What you will see:
