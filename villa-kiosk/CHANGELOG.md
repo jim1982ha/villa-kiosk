@@ -1,3 +1,13 @@
+## 2.496.508
+
+What you will see:
+- Facility: a fault reported, or work logged, while the add-on cannot be reached now survives a reload of the page and
+  is sent once the add-on answers. Before, "Saved on this device, it will be sent automatically…" was lost if the page
+  reloaded first (the 04:00 reload, iOS closing the tab). The tablet no longer reloads itself while something is still
+  waiting to be sent.
+- Cockpit: reopening a fault clears its "VESTA confirms by …" mark, as the Agent's own reopen does. Before, closing it
+  again showed the earlier close's time though nothing was being checked.
+
 ## 2.496.507
 
 What you will see:

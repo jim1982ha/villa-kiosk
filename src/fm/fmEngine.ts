@@ -563,15 +563,36 @@ export function withoutCompletion(d: FmData, id: string): FmData {
   };
 }
 
+/**
+ * ⚠️ WHAT A FAULT'S CLOSE LEAVES ON IT, AND A STAGE CHANGE TAKES AWAY, IN ONE PLACE (architecture review i_k1,
+ * 2026-10-23): when it was resolved, and when the VESTA Agent reads the close again (`confirmsBy`). Both belong to ONE
+ * close. The Kiosk's Reopen kept every field but `resolvedAt`, so a later Cockpit Close showed "Closed (Owner) · VESTA
+ * confirms it at its next look" with the earlier close's watch time, while the Agent watched nothing: a watch is the
+ * Agent's to write on THIS close (agent-contract.json ticket.fields.confirmsBy). The Agent's own reopen drops the same
+ * two (kiosk.py reopen_ticket). Not `closesAt`: an OPEN fault's field, set and taken away by the Agent at each look.
+ * Every stage move here starts from this (withTicketAdvanced, withTicketClosed, withTicketPatch): a close also drops a
+ * watch left by a Reopen made before this build. tests/oracles/fault_confirm.mjs.
+ */
+export const CLOSE_ONLY_FIELDS = ["resolvedAt", "confirmsBy"] as const satisfies readonly (keyof FmTicket)[];
+
+/** `t` without what its last close left on it (CLOSE_ONLY_FIELDS). */
+export function withoutClose(t: FmTicket): FmTicket {
+  const out = { ...t };
+  for (const k of CLOSE_ONLY_FIELDS) delete out[k];
+  return out;
+}
+
 /** Patch a fault. The resolution time is stamped when — and only when — the
  *  status becomes resolved (the operator marks it done, the app records WHEN:
- *  the mean-time-to-resolution evidence rests on it). */
+ *  the mean-time-to-resolution evidence rests on it). A status that moves takes the last close's fields away
+ *  (withoutClose). */
 export function withTicketPatch(d: FmData, id: string, patch: Partial<FmTicket>, k: Pick<FmStamp, "now">, by?: string): FmData {
   return {
     ...d,
     tickets: d.tickets.map((t) => {
       if (t.id !== id) return t;
-      const next = { ...t, ...patch };
+      const moves = patch.status !== undefined && patch.status !== t.status;
+      const next = { ...(moves ? withoutClose(t) : t), ...patch };
       if (isTicketResolved(patch) && !next.resolvedAt) next.resolvedAt = k.now;
       // ⚠️ A PERSON'S RENAME IS A STEP (review 29): it left no trace — the card's "Was: …" named the title two renames
       // back, and the VESTA Agent could only guess a person's title by comparing titles
@@ -619,9 +640,9 @@ export function withTicketAdvanced(
   return {
     ...d,
     tickets: d.tickets.map((t) => (t.id !== id ? t : {
-      ...t,
+      ...withoutClose(t),
       status: to,
-      resolvedAt: resolving ? at : undefined,
+      ...(resolving ? { resolvedAt: at } : {}),
       photoIds: [...t.photoIds, ...step.photoIds],
       costId: costId ?? t.costId,
       updates: [...(t.updates ?? []), {
@@ -673,7 +694,7 @@ export function withTicketClosed(d: FmData, id: string, k: Pick<FmStamp, "now">,
   return {
     ...d,
     tickets: d.tickets.map((x) => (x.id !== id ? x : {
-      ...x,
+      ...withoutClose(x),
       status: "resolved",
       resolvedAt: at,
       updates: [...(x.updates ?? []), { at, status: "resolved", kind: "cleared" as const, note: CLOSED_WITHOUT_ACTION, photoIds: [], ...(by ? { by } : {}) }],
