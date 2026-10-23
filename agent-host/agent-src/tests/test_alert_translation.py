@@ -350,9 +350,9 @@ def test_the_skills_page_says_it_uses_the_chat_answers_brain_never_an_ai_job(tmp
     sk = Skills(v.s.skills_dir).get("alert-desk")
     assert [x.name for x in translators({"alert-desk": sk})] == ["alert-desk"]
     assert sk.jobs_default is None and set(sk.translate) == {"instructions"}
-    row = next(r for r in when_it_runs(sk) if "another language" in r["when"])
-    assert row == {"when": "an alert card in another language", "job": None, "script": None, "kind": None,
-                   "note": f"its text translated by the AI with the Chat answers brain and limit ({where('ai')})"}
+    row = next(r for r in when_it_runs(sk) if "non-english" in r["when"])
+    assert row == {"when": "an alert card in non-english", "job": None, "script": None, "kind": None,
+                   "note": f"its text put in the chat's language by the AI, with the Chat answers brain and limit ({where('ai')}, where Forget Translations is)"}
     assert not [r for r in when_it_runs(sk) if r["kind"] == "ai"]
 
 
@@ -512,10 +512,11 @@ def test_forget_the_translations_on_the_page_one_language_then_all(tmp_path, mon
 def test_the_page_offers_forget_in_its_own_dialog():
     from helpers import body_of, page_js
     js = body_of(page_js(), "rulesForms")
-    js = js[js.index("function forgetRow"):]
+    js = js[js.index("function forgetButton"):]
     js = js[:js.index("\n  drawAi();")]
-    assert 'api("POST", "api/translations/forget"' in js and "await ask(" in js and "confirm(" not in js
-    assert "Forget the translations" in js
+    assert 'api("POST", "api/translations/forget", { lang: null })' in js and "await ask(" in js and "confirm(" not in js
+    # owner, 2026-10-23: "Forget Translations", every language but English, no language menu
+    assert '"Forget Translations"' in js and "dropdown(" not in js
 
 
 def test_the_chat_answers_row_says_it_also_translates_the_alert_cards_and_holds_forget():
@@ -523,11 +524,14 @@ def test_the_chat_answers_row_says_it_also_translates_the_alert_cards_and_holds_
     # never under a skill's row (there is no job row for it any more)
     from helpers import body_of, page_js
     js = body_of(page_js(), "rulesForms")
+    # owner, 2026-10-23: its line says only "replies in the chats"; "Forget Translations" on the line of the
+    # "Delete conversation context at" menu, right of it
     chat = js[js.index('h("b", {}, "Chat answers")'):js.index("sel(PROFILES, f.settings.profile")]
-    assert "also alert cards' text in each chat's language" in chat and "forgetRow()" in chat
-    assert "doc.translations ?" in chat
+    assert 'h("div", { class: "muted" }, "replies in the chats")]' in chat and "forget" not in chat.lower()
+    reset = js[js.index('{ cls: "with-caption", v: [h("div", { class: "forget-row" }'):js.index("...skillsOf().map(skillRow)")]
+    assert reset.index("SCHEMA.resets") < reset.index("doc.translations ? forgetButton() : null")
     skill_row = js[js.index("function skillRow"):js.index("// the alert translation's memory")]
-    assert "forgetRow" not in skill_row and "translations" not in skill_row
+    assert "forgetButton" not in skill_row and "translations" not in skill_row
 
 
 def test_the_costs_tab_counts_a_translation_with_the_chat_replies_on_its_own_row(tmp_path):

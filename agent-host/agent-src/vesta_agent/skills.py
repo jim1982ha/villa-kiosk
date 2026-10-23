@@ -321,8 +321,9 @@ def when_it_runs(sk: Skill) -> list[dict]:
         acts.append(row("when the AI reads a device's history", script=sk.reads_history))
     if sk.translate:
         # ⚠️ THE CHATS' BRAIN, NOT A JOB (owner, 2026-10-23): said as what it uses, never with the "AI job" chip
-        acts.append(row("an alert card in another language",
-                        note=f"its text translated by the AI with the Chat answers brain and limit ({where('ai')})"))
+        acts.append(row("an alert card in non-english",
+                        note=f"its text put in the chat's language by the AI, with the Chat answers brain and limit "
+                             f"({where('ai')}, where Forget Translations is)"))
     # a command skill's row says how it is used, in the skill's own words (`usage`, an example — owner, 2026-10-19:
     # "only when a person writes /proposal" said neither what to write nor when it applies)
     # and its button (`offer`), which is the command typed for the person: the same row, said (0.12.271)

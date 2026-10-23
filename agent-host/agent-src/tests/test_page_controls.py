@@ -529,7 +529,7 @@ def test_a_skills_when_rows_name_every_way_the_engine_starts_it(ui):
     assert {"when": "before every answer in a chat", "job": None, "script": "concierge.py", "kind": "code"} in acts
     # every field of a skill that starts it has its row; a new field must be placed here, shown or not
     starts = {"schedule", "every_5_min", "on_event", "on_reply", "before_answer", "command", "reads_history",
-              "translate"}     # its alert cards translated: "an alert card in another language"
+              "translate"}     # its alert cards translated: "an alert card in non-english"
     others = {"name", "path", "description", "tools", "scripts", "buttons", "also", "deliver", "usage", "brain",
               "limit_usd", "rechecks", "offer",     # offer: the command, typed by a button
               "offer_after",         # the readings after which that button comes: said in the "in a chat" row
@@ -546,8 +546,9 @@ def test_a_skills_when_rows_name_every_way_the_engine_starts_it(ui):
     assert offered.startswith("only when a person writes /x (or presses “Look into it” under a reply")
     # its alert cards translated for a chat in another language (owner, 2026-10-23): with the chats' brain, no job
     assert when_it_runs(dataclasses.replace(sk, translate={"instructions": "i"}))[-2] == \
-        {"when": "an alert card in another language", "job": None, "script": None, "kind": None,
-         "note": "its text translated by the AI with the Chat answers brain and limit (Rules › AI brains and limits)"}
+        {"when": "an alert card in non-english", "job": None, "script": None, "kind": None,
+         "note": "its text put in the chat's language by the AI, with the Chat answers brain and limit "
+                 "(Rules › AI brains and limits, where Forget Translations is)"}
 
 
 def test_a_skill_pages_tools_heading_is_the_agents_one_verdict(ui):

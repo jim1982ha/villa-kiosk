@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.327 (23 October 2026)
+
+- Rules › AI brains and limits (owner, 2026-10-23): the Chat answers line says only "replies in the chats"; "Forget
+  Translations" (no language menu: every language but English, the only ones kept) sits right of the "Delete
+  conversation context at" menu, on its line. Skills › alert-desk: "an alert card in non-english", its text put in the
+  chat's language with the Chat answers brain and limit, where Forget Translations is.
+
 ## 0.6.326 (23 October 2026)
 
 - The alert-card translation is no AI job (owner, 2026-10-23: "fully integrated in the existing alert-desk skill,

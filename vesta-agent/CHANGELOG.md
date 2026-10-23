@@ -1,3 +1,11 @@
+## 0.12.337
+
+What you will see:
+- Rules › AI brains and limits: "Chat answers" says only "replies in the chats", and a "Forget Translations" button sits
+  on the right of "Delete conversation context at" (it forgets every language's translations; no language menu).
+- Skills › alert-desk: "an alert card in non-english", its text put in the chat's language by the AI with the Chat
+  answers brain and limit.
+
 ## 0.12.336
 
 What you will see:

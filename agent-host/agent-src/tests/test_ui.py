@@ -576,7 +576,8 @@ def test_the_tools_are_cards_four_a_row_and_the_ai_notes_are_behind_an_info():
     assert 'withInfo("Limit (US$)", limitNote)' in js and "At their limits" not in js.split("const ai =")[1][:400]
     assert "Everything switched on, by role" not in js
     # the New conversation menu lines up with the brain and the limit: its name under it, not a label above it
-    assert '{ cls: "with-caption", v: [sel(SCHEMA.resets' in js
+    # "Forget Translations" on its line, right of the menu (owner, 2026-10-23)
+    assert re.search(r'\{ cls: "with-caption", v: \[h\("div", \{ class: "forget-row" \},\s*sel\(SCHEMA\.resets', js)
 
 
 def test_copying_a_setup_uses_only_the_pages_public_methods_and_each_exists():

@@ -93,17 +93,19 @@ export function rulesForms(doc, jobs = [], tools = null) {
   // a line of the table (core.table): its cells, each a node, nodes, or {v, cls, colspan}
   const drawAi = () => aiBody.replaceChildren(
     tableRow([
-      // ⚠️ ITS BRAIN ALSO PUTS THE ALERT CARDS IN EACH CHAT'S LANGUAGE (owner, 2026-10-23: "fully integrated … 'inside'
-      // the Chat answers setting", never a job of its own): said here, with what it keeps (doc.translations: null when
-      // no skill translates its alert cards)
-      [h("b", {}, "Chat answers"), h("div", { class: "muted" }, "replies in the chats; a reply at its limit offers Continue"),
-        ...(doc.translations ? [h("div", { class: "muted" }, "also alert cards' text in each chat's language"), forgetRow()] : [])],
+      // its brain also puts the alert cards in each chat's language (owner, 2026-10-23: "fully integrated … 'inside'
+      // the Chat answers", never a job of its own); its line says only "replies in the chats" (owner, 2026-10-23)
+      [h("b", {}, "Chat answers"), h("div", { class: "muted" }, "replies in the chats")],
       sel(PROFILES, f.settings.profile, (v) => (f.settings.profile = v), "Brain"),
       limitInput(f.settings.reply_limit_usd, (v) => (f.settings.reply_limit_usd = v), W("settings.reply_limit_usd"), "for each reply"),
       // the chats' own setting, on the chats' line (owner, 2026-10-06): their tools are "everything switched on, by
       // role" — said in the (i) of its "AI tools" column
       // the menu on the line of the brain and the limit, its name under it like theirs ("for each reply")
-      { cls: "with-caption", v: [sel(SCHEMA.resets, f.settings.conversation_reset, (v) => (f.settings.conversation_reset = v), W("settings.conversation_reset")),
+      // "Forget Translations" on the same line, right of the menu (owner, 2026-10-23); doc.translations: null when no
+      // skill translates its alert cards
+      { cls: "with-caption", v: [h("div", { class: "forget-row" },
+        sel(SCHEMA.resets, f.settings.conversation_reset, (v) => (f.settings.conversation_reset = v), W("settings.conversation_reset")),
+        doc.translations ? forgetButton() : null),
         h("div", { class: "muted" }, W("settings.conversation_reset"))] },
       { cls: "x", v: null }]),
     ...skillsOf().map(skillRow));
@@ -133,28 +135,21 @@ export function rulesForms(doc, jobs = [], tools = null) {
         its.forEach((j) => (j.skill_ai = null));
         drawAi(); markDirty(); } }, "×") }]);
   }
-  // the alert translation's memory (phrases.py): what is kept, per language, and "Forget the translations" — one
-  // language's or all of them — asked in the page's own dialog (core.ask: never the browser's confirm). Not a change
-  // of the file: done at once, nothing to save or undo; the next alert cards are translated again by the AI.
-  function forgetRow() {
-    const kept = Object.entries(doc.translations);
-    if (!kept.length) return h("div", { class: "muted small" }, "No translation kept yet.");
-    const langName = (code) => doc.languages[code] || code;
-    const all = kept.reduce((n, [, k]) => n + k, 0);
-    let pick = "";
-    const choices = [["", `Every language (${all})`], ...kept.map(([code, n]) => [code, `${langName(code)} (${n})`])];
-    return h("div", { class: "forget-row" },
-      dropdown(choices, pick, (v) => (pick = v), "Which translations to forget"),
-      h("button", { type: "button", class: "btn ghost", onclick: async () => {
-        const which = pick ? `the ${langName(pick)} translations` : "every translation";
-        if (!(await ask({ title: `Forget ${which}?`, ok: "Forget", danger: true,
+  // the alert translation's memory (phrases.py): "Forget Translations" forgets them all (every language but English:
+  // English is never translated; owner, 2026-10-23: no language menu), asked in the page's own dialog (core.ask:
+  // never the browser's confirm). Not a change of the file: done at once; the next alert cards are translated again.
+  function forgetButton() {
+    const all = Object.values(doc.translations).reduce((n, k) => n + k, 0);
+    return h("button", { type: "button", class: "btn ghost", title: plural(all, "translation kept", "translations kept"),
+      onclick: async () => {
+        if (!(await ask({ title: "Forget every translation?", ok: "Forget", danger: true,
           text: "The next alert cards are translated again by the AI, at the cost of each run." }))) return;
         try {
-          const res = await api("POST", "api/translations/forget", { lang: pick || null });
+          const res = await api("POST", "api/translations/forget", { lang: null });
           doc.translations = res.kept; drawAi();
           toast(`${plural(res.forgot, "translation", "translations")} forgotten.`);
         } catch (e) { tell("Not forgotten", reasons(e)); }
-      } }, "Forget the translations"));
+      } }, "Forget Translations");
   }
   drawAi();
   const ai = card(place("ai"), "Which brain answers the chats and runs each skill's AI jobs, and the most ONE reply or ONE run may cost (one chat reply, or one run of any AI job of a skill, not a monthly budget; one brain and one limit for all the AI jobs of a skill), and which tools a report gets: what the person who asks may use (on schedule, everything switched on). A reply that reaches its limit stops and offers Continue; a report that reaches it is still sent with what is done. A skill that is not set does not run its AI jobs.",
