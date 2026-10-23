@@ -1,3 +1,10 @@
+## 0.12.332
+
+What you will see:
+- Everything announced for 0.12.331 (its build never finished): with VESTA 2.496.503, a fault you mark Done or close
+  in the Cockpit stays as one row "Done (JM) · VESTA confirms by 15:06" until the Agent has checked it again, and a
+  fault closed with the Cockpit's Close no longer comes back open.
+
 ## 0.12.331
 
 What you will see:

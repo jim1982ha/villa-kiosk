@@ -194,8 +194,12 @@ class ChatJobs:
 
     async def idle(self) -> None:
         """Until every job started here has ended (its result sent, its waiting message dealt with)."""
-        while self._tasks:
-            await asyncio.gather(*list(self._tasks), return_exceptions=True)
+        # ⚠️ ONLY WHAT STILL RUNS (2026-10-23): a task is dropped by its done-callback, which runs on the loop's NEXT turn;
+        # one that ended as its loop closed stayed in the set for good, and awaiting finished tasks never yields — this
+        # wait spun for ever (0.12.331's CI hung 40 min in the tests)
+        while pending := [t for t in self._tasks if not t.done()]:
+            await asyncio.gather(*pending, return_exceptions=True)
+        self._tasks.difference_update([t for t in self._tasks if t.done()])
 
     # ------------------------------------------------------------------ the waiting message, "typing…"
     async def _carry(self, chat: int, step) -> None:

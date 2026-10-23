@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.322 (23 October 2026)
+
+- `ChatJobs.idle` waits only on job tasks still running and drops the ended ones: a task that ended as its loop closed
+  stayed in the set (its done-callback never ran) and the wait awaited it for ever without yielding — 0.12.331's CI
+  hung 40 min in the tests. Two tests that raced on a slow runner wait on what they check (a bounded wait for the
+  result in test_chat_facts; the restart notice counted sent or written over its waiting message). The CI's gates
+  step has a 20 min limit.
+
 ## 0.6.321 (23 October 2026)
 
 - A fault a person closed (a Done on Telegram, a Close in the Cockpit) carries `confirmsBy` while the alert desk's

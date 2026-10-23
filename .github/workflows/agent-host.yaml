@@ -53,6 +53,9 @@ jobs:
         # one log group each and an annotation per failure (what ci_run.sh did),
         # and is the same command `ship` and a developer run.
         # agent-host/tests/test_release.py fails if a gate reappears here.
+        # ⚠️ A TIME LIMIT (2026-10-23): a test that waited on itself hung 0.12.331's run in "The gates" for hours
+        # (GitHub's own limit is 6 h); about 6 min normally, so at 20 it fails and the release says "not published".
+        timeout-minutes: 20
         run: python3 agent-host/tools/release.py gates
 
   build:

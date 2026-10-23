@@ -369,12 +369,16 @@ def test_a_question_being_answered_when_the_agent_stops_is_said_at_the_start(tmp
             await asyncio.sleep(0.01)
     run(ask())                                                             # the run ends: the answer is cut, as by a stop
     v = restarted(v)
-    said = [t for _, t, _ in v.tg.sent if "interrupted by a restart" in t]
+    # sent, or written over its waiting message when one had gone out already (chat_jobs.recover): on a loaded runner
+    # the question had time to show "still working" before the stop
+    said = [t for _, t, _ in v.tg.sent if "interrupted by a restart" in t] + \
+           [t for _, _, t in v.tg.edits if "interrupted by a restart" in t]
     assert len(said) == 1 and re.match(r"Your question at \d\d/\d\d/\d{4} \d\d:\d\d \(“/investigate What happened to the "
                                        r"bathroom sensor yesterday\?”\) was interrupted by a restart of the agent: send "
                                        r"it again", said[0]), said
     v = restarted(v)
-    assert len([t for _, t, _ in v.tg.sent if "interrupted by a restart" in t]) == 1      # said once
+    assert len([t for _, t, _ in v.tg.sent if "interrupted by a restart" in t] +
+               [t for _, _, t in v.tg.edits if "interrupted by a restart" in t]) == 1    # said once
 
 
 def test_a_question_answered_leaves_nothing_for_the_next_start(tmp_path, monkeypatch):

@@ -208,8 +208,13 @@ def test_a_result_that_came_while_its_turn_was_still_answering_is_told_next(vill
             await call["call"]("send_message", {"to": "here", "text": "Daily digest: all quiet."})
         elif "daily digest" in call["prompt"].lower():
             await call["call"]("start_job", {"name": "fm-daily"})
-            while not any("all quiet" in t for _c, t, _k in villa.tg.sent):
-                await asyncio.sleep(0.005)                 # the job's result arrives before this answer is done
+            # the job's result arrives before this answer is done — when the loop lets it: on a slow runner (2 CPUs) the
+            # result waited for this very answer and the two waited on each other for ever (CI, 0.12.331). Bounded: either
+            # way the next message must be told it was sent
+            for _ in range(400):
+                if any("all quiet" in t for _c, t, _k in villa.tg.sent):
+                    break
+                await asyncio.sleep(0.005)
     villa.ai.act = act
     say(villa, "Daily digest")
     say(villa, "thanks")
@@ -257,3 +262,18 @@ def test_a_report_running_on_schedule_for_this_chat_is_named_as_scheduled(villa)
     run(go())
     assert re.search(rf"^{re.escape(HEAD)} Being prepared for this chat now: the fm-daily report, on schedule since {AT}\. ",
                      chat_prompts(villa)[-1], re.M)
+
+
+def test_waiting_for_the_jobs_never_waits_on_one_that_already_ended(villa):
+    # 0.12.331's CI hung 40 min: a job task that ended as its loop closed stayed in the set (its done-callback never ran)
+    # and idle() awaited it again and again without ever yielding
+    async def nothing():
+        return None
+
+    async def ended():
+        t = asyncio.ensure_future(nothing())
+        await t
+        return t
+    villa.chat_jobs._tasks.add(asyncio.run(ended()))
+    run(asyncio.wait_for(villa.chat_jobs.idle(), 5))
+    assert not villa.chat_jobs._tasks
