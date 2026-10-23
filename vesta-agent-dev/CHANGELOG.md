@@ -1,3 +1,10 @@
+## 0.12.333
+
+What you will see:
+- "Report not prepared" and "Question not answered" now come with their title, in the same layout as the other
+  messages, wherever they are said (an error, a report made without the AI that failed, a restart).
+- The "Status:" a button adds under a plain answer is styled like every other Status.
+
 ## 0.12.332
 
 What you will see:
