@@ -56,7 +56,7 @@ ck("  ...its line: \"Done (JM) · VESTA confirms by 15:06\" (the villa's clock)"
    line("w1"));
 ck("  ...a close in the Cockpit says Closed and the profile", line("w2") === `Closed (Owner) · VESTA confirms by ${clockTime(NOW + 9 * 60_000)}`,
    line("w2"));
-ck("  ...its moment past: at the Agent's next check, never a time gone by", line("w3") === "Done (JM) · VESTA confirms it at its next check",
+ck("  ...its moment past: at the Agent's next check, never a time gone by", line("w3") === "Done (JM) · VESTA confirming now",
    line("w3"));
 ck("  ...shown at most two of the Agent's looks past its moment; with the Agent offline (no cadence), not past it",
    shownUntil(0, CADENCE) === 10 * 60_000 && shownUntil(0, null) === 0
@@ -89,7 +89,7 @@ const drawn = draw(h(WatchedRow, { card: cards[1], onOpenEntity: () => {} }));
 // owner, 2026-10-23, option 4 "One compact row": a check, its device · its fault · who closed it, and a pill saying when
 ck("  ...drawn as ONE compact row marked `fault-watched`: a check, its device, its fault, who closed it, and when in a pill",
    /^<button type="button" class="fault-watched">/.test(drawn) && /class="[^"]*fault-watched-icon/.test(drawn)
-   && /<span class="fault-watched-text"><b>[^<]+<\/b> · #65 · Door unlocked · Done \(JM\)<\/span>/.test(drawn)
+   && /<span class="fault-watched-text"><span class="fault-watched-head"><b class="fault-watched-title">[^<·]+<\/b><span class="fm-entity-chip fm-chip-static">Hall<\/span><\/span><span class="fault-watched-detail">#65 · Door unlocked · Done \(JM\)<\/span><\/span>/.test(drawn)
    && /<span class="fault-watched-when">VESTA confirms by [^<]+<\/span>/.test(drawn), drawn.slice(0, 500));
 ck("  ...no card, no Close and no next-check pill: it is closed, its pill says when",
    !/fm-record-card|fm-record-actions|fm-record-check/.test(drawn));

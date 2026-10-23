@@ -59,8 +59,8 @@ export function confirmingFaults(d: FmData, cadence: AgentCadence | null, now: n
   return d.tickets.flatMap((t) => confirmingOf(t, cadence, now) ?? []).sort((a, b) => a.at - b.at || a.ticket.id.localeCompare(b.ticket.id));
 }
 
-/** Its line on the card: "Done (JM) · VESTA confirms by 15:06" — the moment past, "· VESTA confirms it at its next
- *  check". The time is the villa's clock (the tablet's, as every other time on the card: dateText.clockTime). */
+/** Its line on the card: "Done (JM) · VESTA confirms by 15:06" — the moment past, "· VESTA confirming now"
+ *  The time is the villa's clock (the tablet's, as every other time on the card: dateText.clockTime). */
 export function confirmLine(c: ConfirmingFault): string {
   const { did, when } = confirmParts(c);
   return `${did} · ${when}`;
@@ -71,6 +71,6 @@ export function confirmLine(c: ConfirmingFault): string {
 export function confirmParts(c: ConfirmingFault): { did: string; when: string } {
   return {
     did: c.who ? `${c.word} (${c.who})` : c.word,
-    when: c.due ? "VESTA confirms it at its next check" : `VESTA confirms by ${clockTime(c.at)}`,
+    when: c.due ? "VESTA confirming now" : `VESTA confirms by ${clockTime(c.at)}`,
   };
 }

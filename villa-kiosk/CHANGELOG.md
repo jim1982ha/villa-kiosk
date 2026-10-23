@@ -1,3 +1,22 @@
+## 2.496.506
+
+What you will see:
+- Cockpit: once its time has passed, a fault VESTA is confirming reads the shorter "VESTA confirming now" in its pill
+  (it read "VESTA confirms it at its next check").
+
+## 2.496.505
+
+What you will see:
+- Cockpit: a fault VESTA is confirming shows its room as the same pill as the Open issues cards, right after the
+  device's name.
+
+## 2.496.504
+
+What you will see:
+- Cockpit: a fault VESTA is confirming keeps its thin row, now on two lines like the Open issues cards: the device
+  alone on the first line with "VESTA confirms by 18:41" on its right, and the fault with who closed it ("#78 · … ·
+  Done (JM)") smaller underneath.
+
 ## 2.496.503
 
 What you will see:
