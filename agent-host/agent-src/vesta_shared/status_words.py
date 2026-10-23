@@ -38,15 +38,15 @@ def _ordinal_en(n: int) -> str:
 #: `units`: s, min, h, d as timeutil.lasting writes them, `tight` when a number takes its unit with no space.
 WORDS: dict[str, dict] = {
     "fr": {
-        "status": "Statut", "to": " (à : {who})", "roles": {"owner": "Propriétaire", "fm": "FM"}, "nobody": "personne",
+        "status": "Statut", "to": " (à: {who})", "roles": {"owner": "Propriétaire", "fm": "FM"}, "nobody": "personne",
         "sent": "Envoyé", "line": "{sent} le {at}{to}",
         "steps": {"new": "Alerte envoyée", "reminder": "Rappel envoyé", "escalated": "Escalade envoyée",
-                  "update": "Mise à jour envoyée", "back": "Retour : alerte envoyée",
+                  "update": "Mise à jour envoyée", "back": "Retour: alerte envoyée",
                   "still": "Alerte « toujours là » envoyée", "reopened": "Demande de réouverture envoyée",
                   "closed": "Note de clôture envoyée"},
         "lines": {"new": "Alerte envoyée le {at}{times}{to}", "back": "De retour le {at}{times}{to}"},
         "times": ", {n}e fois en {days} jours", "acted": "{what} le {when}", "cleared": "Résolu",
-        "colon": " : ", "stop": ".", "sep": ", ", "new_alert": "Nouvelle alerte", "still_open": "Toujours en cours",
+        "colon": ": ", "stop": ".", "sep": ", ", "new_alert": "Nouvelle alerte", "still_open": "Toujours en cours",
         "earlier": ("… {n} notification précédente", "… {n} notifications précédentes"),
         "units": ("s", "min", "h", "j"),
     },
@@ -190,7 +190,7 @@ def nobody(lang: str = "en") -> str:
 
 
 def to_tail(whom: str, lang: str = "en") -> str:
-    """The end of every Status line: " (to: FM)", " (à : FM)"."""
+    """The end of every Status line: " (to: FM)", " (à: FM)"."""
     w = _w(lang)
     return (w["to"] if w else " (to: {who})").format(who=whom)
 
@@ -244,7 +244,7 @@ def pressed(label_: str, name: str, time: str = "{time}", lang: str = "en") -> s
 
 
 def closing(tail: str = "", lang: str = "en") -> str:
-    """How an alert that is over says it (message_format.closing): "Cleared on {time}: <tail>.", "Résolu le {time} :
+    """How an alert that is over says it (message_format.closing): "Cleared on {time}: <tail>.", "Résolu le {time}:
     <tail>."; "{time}" filled when shown."""
     w = _w(lang)
     if not w:

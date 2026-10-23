@@ -34,9 +34,11 @@ DECLINE = "Don't create it"
 
 
 class FaultOffers:
-    def __init__(self, state, delivery, tickets, folder: Callable[[int], str]):
-        """`folder(chat)`: the chat's out folder, where its run saved the page and the account."""
+    def __init__(self, state, delivery, tickets, folder: Callable[[int], str], facts=None):
+        """`folder(chat)`: the chat's out folder, where its run saved the page and the account. `facts`:
+        chat_facts.ChatFacts — what a press decided is told to the AI with the chat's next message."""
         self.state, self.delivery, self.tickets, self.folder = state, delivery, tickets, folder
+        self.facts = facts
 
     # ------------------------------------------------------------------ made
     def ensure(self, chat: int, inv: str | None, account: str, asked: str, since: float) -> None:
@@ -102,8 +104,13 @@ class FaultOffers:
         offer = self.state.claim_ticket_offer(p.parts[0], p.chat)
         if not offer:
             return await p.toast("Already decided.")
+        # ⚠️ TOLD TO THE AI (owner, 2026-10-23): the AI offered it in the conversation, the press decided it outside —
+        # it could still say "press Create if you want one" of a fault already created, or declined
+        on = f"the fault offered here (“{offer['title']}”)"
         if p.parts[1] == "n":
             await p.toast("No fault created.")
+            if self.facts is not None:
+                self.facts.pressed(p.chat, DECLINE, on, p.person.name, "no fault was created")
             return await self._say(p, f"No fault created: declined by {p.person.name}.")
         try:
             await self.tickets.create(offer["title"], offer.get("entity_id"), offer.get("note"),
@@ -113,6 +120,8 @@ class FaultOffers:
             log.warning("The offered fault could not be created (%s)", type(e).__name__)
             return await p.toast("The VESTA Kiosk did not record it. Try again in a moment.")
         await p.toast("Fault created.")
+        if self.facts is not None:
+            self.facts.pressed(p.chat, CREATE, on, p.person.name, "the fault was created")
         await self._say(p, f"Fault created for the facility manager by {p.person.name}: {offer['title']}")
 
     async def _say(self, p, said: str) -> None:

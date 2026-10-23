@@ -789,6 +789,14 @@ def quiet_after_done(store: Store, now: datetime, client, clear_minutes: float, 
             inc = store.incident(inc["id"])
             out["send"] += tell(inc["severity"], "closed", incident=inc["id"], mark="unchecked",   # ☑️ closed, not checked
                                 **about(inc, say("cannot_check", who=relabel(who), words=joined(words))))
+        elif there is False:
+            # ⚠️ THE WATCH ENDS OUT LOUD (owner, 2026-10-23: "10 min later, i still see 'VESTA will monitor it for 10 min'
+            # — I expected an update saying the test lock is confirmed OK"): a Done that held closed the check without a
+            # word, and the card promised a watch nobody saw end
+            inc = store.incident(inc["id"])
+            out["send"] += tell(inc["severity"], "closed", incident=inc["id"],
+                                **about(inc, say("confirmed_after_done", who=relabel(who),
+                                                 watch=lasting_in(clear_minutes * 60))))
     return reopened
 
 

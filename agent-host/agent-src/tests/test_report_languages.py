@@ -57,11 +57,11 @@ def test_one_text_for_a_role_read_in_two_languages_is_refused_and_nothing_is_sen
 
 def test_each_reader_gets_the_version_in_their_own_language(agent):
     out = run(send_tool(agent).handler({"to": "fm", "title": "Daily report",
-                                        "text": {"German": "Noch offen: 2", "fr": "Encore ouvert : 2"}}))
+                                        "text": {"German": "Noch offen: 2", "fr": "Encore ouvert: 2"}}))
     assert not out.get("is_error")
     got = texts(agent)
     assert "Noch offen: 2" in got[FM_DE] and "Encore ouvert" not in got[FM_DE]
-    assert "Encore ouvert : 2" in got[FM_FR] and "Noch offen" not in got[FM_FR]
+    assert "Encore ouvert: 2" in got[FM_FR] and "Noch offen" not in got[FM_FR]
     assert set(got) == {FM_DE, FM_FR}
 
 
@@ -113,11 +113,11 @@ def test_a_job_asked_for_in_a_chat_is_written_in_the_askers_language_only(agent,
 def test_an_asker_who_reads_the_second_language_gets_their_version_through_the_job(agent, monkeypatch):
     async def act(call):
         await call["call"]("send_message", {"to": "here", "title": "Daily digest",
-                                            "text": {"German": "Noch offen: 2", "French": "Encore ouvert : 2"}})
+                                            "text": {"German": "Noch offen: 2", "French": "Encore ouvert: 2"}})
     FakeAI(lambda r: runner.RunResult("Sent.", None, False, 0.1, [], None), act=act).install(monkeypatch)
     sk, daily = agent.jobs.find("fm-daily")
     run(agent.jobs.run(sk, daily, Origin(FM_FR, JOB)))
-    assert [(c, "Encore ouvert : 2" in t, "Noch offen" in t) for c, t, *_ in agent.tg.sent] == [(FM_FR, True, False)]
+    assert [(c, "Encore ouvert: 2" in t, "Noch offen" in t) for c, t, *_ in agent.tg.sent] == [(FM_FR, True, False)]
 
 
 # ---------------------------------------------------------------- review H1: the page sent when the limit stops a job

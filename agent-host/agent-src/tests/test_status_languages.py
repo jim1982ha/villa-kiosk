@@ -83,9 +83,9 @@ def test_each_fm_chat_reads_its_status_in_its_own_language_the_alert_text_unchan
     assert re.fullmatch(rf"- Alarm gesendet am {T} \(an: FM\)", status(de, "Status")[0]), de
     assert re.fullmatch(rf"⚠️ ⚙️ Erinnerung gesendet am {T}, Keine Antwort nach 15 Min\. \(an: FM\)",
                         status(de, "Status")[-1]), de
-    assert re.fullmatch(rf"- Alerte envoyée le {T} \(à : FM\)", status(fr, "Statut")[0]), fr
+    assert re.fullmatch(rf"- Alerte envoyée le {T} \(à: FM\)", status(fr, "Statut")[0]), fr
     # the desk's own words ("No answer after 15 min") in the chat's language, from the skill's words.yaml
-    assert re.fullmatch(rf"⚠️ ⚙️ Rappel envoyé le {T}, Pas de réponse après 15 min \(à : FM\)",
+    assert re.fullmatch(rf"⚠️ ⚙️ Rappel envoyé le {T}, Pas de réponse après 15 min \(à: FM\)",
                         status(fr, "Statut")[-1]), fr
     for text in (de, fr):
         # the card's first line, "To:" and the villa's own words stay as they are
@@ -108,7 +108,7 @@ def test_the_villas_own_message_taken_over_in_a_french_chat_reads_french(agent):
     rule(agent, "opened", 600, chat=FM_FR)
     rule(agent, "opened", 601, chat=FM_FR)
     fr = card(agent, FM_FR)
-    assert re.fullmatch(rf"⚠️ ⚙️ Alerte « toujours là » envoyée le {T}, Toujours là : \d+ fois depuis .+ \(à : FM\)",
+    assert re.fullmatch(rf"⚠️ ⚙️ Alerte « toujours là » envoyée le {T}, Toujours là: \d+ fois depuis .+ \(à: FM\)",
                         status(fr, "Statut")[-1]), fr
 
 
@@ -117,7 +117,7 @@ def test_a_lowered_priority_is_told_in_each_language(agent):
     # of it later too (IncidentThread.sync)
     rule(agent, "opened", 500)
     rule(agent, "opened", 501, priority="P3")
-    assert re.fullmatch(rf"⚠️ ⚙️ Abaissée à P3 le {T} : gardée pour le prochain résumé quotidien\. Aucune réponse "
+    assert re.fullmatch(rf"⚠️ ⚙️ Abaissée à P3 le {T}: gardée pour le prochain résumé quotidien\. Aucune réponse "
                         r"nécessaire\.", status(card(agent, FM_FR), "Statut")[-1]), card(agent, FM_FR)
     assert status(card(agent, GROUP), "Status")[-1].startswith("⚠️ ⚙️ Lowered to P3 on "), card(agent, GROUP)
 
@@ -221,9 +221,9 @@ def test_the_fixed_words_in_a_language():
     assert sw.times(6, 7, "fr") == ", 6e fois en 7 jours" and sw.times(6, 7, "de") == ", 6. Mal in 7 Tagen"
     assert sw.times(6, 7, "en") == ", 6th time in 7 days" and sw.times(1, 7, "fr") == ""
     assert sw.step("new", "23/10/2026 09:48", sw.times(6, 7, "fr"), "FM", "fr") == \
-        "Alerte envoyée le 23/10/2026 09:48, 6e fois en 7 jours (à : FM)"
+        "Alerte envoyée le 23/10/2026 09:48, 6e fois en 7 jours (à: FM)"
     assert sw.who({"owner", "fm"}, "fr") == "Propriétaire & FM" and sw.who({"owner", "fm"}) == "Owner & FM"
     assert sw.duration(90 * 60, "de") == "1 Std. 30 Min." and sw.duration(15 * 60, "zh") == "15分钟"
-    assert sw.closing("elle n'est plus signalée", "fr") == "Résolu le {time} : elle n'est plus signalée."
+    assert sw.closing("elle n'est plus signalée", "fr") == "Résolu le {time}: elle n'est plus signalée."
     assert sw.stage_words("existing", lang="id") == "Masih terbuka" and sw.stage_words("closed", lang="fr") == "Résolu."
     assert sw.pick("No answer", {"fr": "Pas de réponse"}, "ko") == "No answer"

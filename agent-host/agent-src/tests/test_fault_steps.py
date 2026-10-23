@@ -230,11 +230,13 @@ def test_a_lock_gone_from_home_assistant_after_done_is_said_to_be_unchecked(tmp_
     assert fm["status"].endswith("Note: VESTA cannot check this one; lock.door does not answer.")
 
 
-def test_a_locked_door_after_done_closes_without_a_word(tmp_path):
+def test_a_locked_door_after_done_closes_saying_it_was_checked(tmp_path):
+    # owner, 2026-10-23: a Done that held closed its watch without a word; it now says the check came out right
     store = Store(str(tmp_path / "s.sqlite"))
     _door_done(store)
     out = desk.tick(store, T0 + timedelta(minutes=20), client=Villa(**{"lock.door": "locked"}))
-    assert not [s for s in out["send"] if s["to"] == "fm"] and not out["not_quiet"]
+    (fm,) = [s for s in out["send"] if s["to"] == "fm"]
+    assert fm["status"].endswith("Checked again after 10 min: it is right. Closed.") and not out["not_quiet"]
 
 
 def test_an_old_alert_whose_device_is_gone_after_done_still_says_it_cannot_check(tmp_path):

@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.6.320 (23 October 2026)
+
+- What happened in a chat outside its conversation is told to the AI with every message (`chat_facts.ChatFacts`): the
+  reports being prepared for that chat now (InProgress, who asked and when), or that none is, and since its last answer
+  there the reports that reached it or could not be prepared, alert steps sent there (from the incident history), Done
+  / Need help pressed there, fault offers answered there (capped: the last 5 and a count). Before, a conversation that
+  had said "on its way" for a report the job had since sent promised it again: "the daily digest will arrive in this
+  chat" with nothing running (villa, 2026-10-23 14:50). `InProgress.verdict` also marks the chat job; `start_job`
+  carries who asked.
+- No space before ":" ";" "!" "?" in anything sent (`messaging.tight_punctuation`, at `telegram.layout` and
+  `Telegram.edit`, and on a page's notes): "(à: FM)", "Toujours ouvert:". The French Status words and the desk's French
+  words are written so. Code, links and times are untouched.
+- alert-desk: a Done (or a Cockpit close) whose watch ends with the device right now says so on the card
+  ("Done (JM). Checked again after 10 min: it is right. Closed.", `confirmed_after_done` in every language); it closed
+  without a word.
+
 ## 0.6.319 (23 October 2026)
 
 - An alert card's "Status:" section in each chat's language (owner, 2026-10-23). `vesta_shared/status_words.py`: the

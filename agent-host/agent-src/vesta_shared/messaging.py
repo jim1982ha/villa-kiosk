@@ -86,11 +86,28 @@ def no_platform_name(text: str) -> str:
     return _PLATFORM.sub(said, text or "")
 
 
+#: A space (plain, no-break or narrow no-break) before : ; ! or ? that ends a word: French typography's, written by
+#: the AI and by the French words of a card's Status ("(à : FM)", "Toujours ouvert :").
+_SPACED = re.compile(f"(?P<kept>{_KEPT})|(?<=\\S)[   ]+(?=[:;!?](?:\\s|$|[\"'»)\\]]))", re.S)
+
+
+def tight_punctuation(text: str) -> str:
+    """`text` with no space before a colon, a semicolon, "!" or "?": "(à: FM)", "Toujours ouvert:", in every language.
+
+    ⚠️ ONE STYLE FOR EVERY CHAT (owner, 2026-10-23: "remove the redundant space character before the ':', so it
+    should look like 'à: JM' or 'To: JM'… fix it consistently everywhere"): French writes a space there, so the French
+    Status lines, the desk's French words and whatever the AI wrote in French had one, the English none. Applied where
+    every message reaches Telegram (telegram.layout, Telegram.edit), so the AI's words, a skill's and the engine's all
+    read the same. Code, links and a time like 14:38 stay as they are; "« » " quotes keep their spaces."""
+    return _SPACED.sub(lambda m: m["kept"] or "", text or "")
+
+
 def no_platform_name_in(notes, keep: tuple[str, ...] = ()):
     """`no_platform_name` on every text of the AI's notes for a page (a dict of texts, lists and dicts), the fields
-    `keep` left as written (an investigation's `sources`: a web page's own title is quoted, not said)."""
+    `keep` left as written (an investigation's `sources`: a web page's own title is quoted, not said). A page reads as a
+    message does: no space before ":" either (tight_punctuation; owner, 2026-10-23)."""
     if isinstance(notes, str):
-        return no_platform_name(notes)
+        return tight_punctuation(no_platform_name(notes))
     if isinstance(notes, list):
         return [no_platform_name_in(x) for x in notes]
     if isinstance(notes, dict):

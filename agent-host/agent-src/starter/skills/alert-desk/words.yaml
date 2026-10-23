@@ -8,7 +8,7 @@
 
 still_count:
   en: "Still there: {count} times since {since}"
-  fr: "Toujours là : {count} fois depuis {since}"
+  fr: "Toujours là: {count} fois depuis {since}"
   id: "Masih ada: {count} kali sejak {since}"
   de: "Noch da: {count} Mal seit {since}"
   es: "Sigue ahí: {count} veces desde {since}"
@@ -20,7 +20,7 @@ still_count:
 
 back_again:
   en: "Back again: {runs} times in {days} days"
-  fr: "De retour : {runs} fois en {days} jours"
+  fr: "De retour: {runs} fois en {days} jours"
   id: "Muncul lagi: {runs} kali dalam {days} hari"
   de: "Wieder da: {runs} Mal in {days} Tagen"
   es: "De nuevo: {runs} veces en {days} días"
@@ -56,7 +56,7 @@ no_answer_from:
 
 not_delivered:
   en: "Not delivered to {asked}: Telegram refused every chat of theirs. Over to {to}."
-  fr: "Non remis à {asked} : Telegram a refusé toutes ses conversations. Transmis à {to}."
+  fr: "Non remis à {asked}: Telegram a refusé toutes ses conversations. Transmis à {to}."
   id: "Tidak terkirim ke {asked}: Telegram menolak semua obrolannya. Diteruskan ke {to}."
   de: "Nicht zugestellt an {asked}: Telegram hat alle Chats abgelehnt. Weiter an {to}."
   es: "No entregado a {asked}: Telegram rechazó todos sus chats. Pasa a {to}."
@@ -166,7 +166,7 @@ will_monitor:
 
 asked_to_act:
   en: "{pressed}: {role} is asked to act."
-  fr: "{pressed} : demande d'action transmise à {role}."
+  fr: "{pressed}: demande d'action transmise à {role}."
   id: "{pressed}: {role} diminta bertindak."
   de: "{pressed}: {role} wird gebeten zu handeln."
   es: "{pressed}: se pide a {role} que actúe."
@@ -190,7 +190,7 @@ noted_word:
 
 noted:
   en: "{noted}: {label}"
-  fr: "{noted} : {label}"
+  fr: "{noted}: {label}"
   id: "{noted}: {label}"
   de: "{noted}: {label}"
   es: "{noted}: {label}"
@@ -203,7 +203,7 @@ noted:
 # read again after a Done ({who}: "Done (JM)"; {words}: what each device reads, joined by "; ")
 still_after_done:
   en: "{who}, but {words}: still open. VESTA keeps watching it."
-  fr: "{who}, mais {words} : toujours ouvert. VESTA continue de surveiller."
+  fr: "{who}, mais {words}: toujours ouvert. VESTA continue de surveiller."
   id: "{who}, tetapi {words}: masih terbuka. VESTA terus memantaunya."
   de: "{who}, aber {words}: weiterhin offen. VESTA überwacht es weiter."
   es: "{who}, pero {words}: sigue abierta. VESTA sigue vigilándola."
@@ -215,7 +215,7 @@ still_after_done:
 
 cannot_check:
   en: "{who}. Note: VESTA cannot check this one; {words}."
-  fr: "{who}. Remarque : VESTA ne peut pas vérifier celle-ci ; {words}."
+  fr: "{who}. Remarque: VESTA ne peut pas vérifier celle-ci; {words}."
   id: "{who}. Catatan: VESTA tidak dapat memeriksa yang ini; {words}."
   de: "{who}. Hinweis: VESTA kann dies nicht prüfen; {words}."
   es: "{who}. Nota: VESTA no puede comprobar esta; {words}."
@@ -225,9 +225,21 @@ cannot_check:
   ja: "{who}。注意：VESTA はこれを確認できません；{words}。"
   ko: "{who}. 참고: VESTA가 이 항목을 확인할 수 없습니다; {words}."
 
+confirmed_after_done:
+  en: "{who}. Checked again after {watch}: it is right. Closed."
+  fr: "{who}. Vérifié à nouveau après {watch}: c'est rétabli. Fermé."
+  id: "{who}. Diperiksa lagi setelah {watch}: sudah normal. Ditutup."
+  de: "{who}. Nach {watch} erneut geprüft: alles in Ordnung. Geschlossen."
+  es: "{who}. Comprobado de nuevo tras {watch}: está bien. Cerrada."
+  it: "{who}. Ricontrollato dopo {watch}: è a posto. Chiuso."
+  nl: "{who}. Na {watch} opnieuw gecontroleerd: het is in orde. Gesloten."
+  zh: "{who}。{watch} 后再次检查：已恢复正常。已关闭。"
+  ja: "{who}。{watch} 後に再確認：正常です。クローズしました。"
+  ko: "{who}. {watch} 후 다시 확인: 정상입니다. 닫혔습니다."
+
 cannot_tell:
   en: "{words}: VESTA cannot tell if it is right. Still open."
-  fr: "{words} : VESTA ne peut pas savoir si c'est rétabli. Toujours ouvert."
+  fr: "{words}: VESTA ne peut pas savoir si c'est rétabli. Toujours ouvert."
   id: "{words}: VESTA tidak dapat memastikan apakah sudah benar. Masih terbuka."
   de: "{words}: VESTA kann nicht feststellen, ob es stimmt. Weiterhin offen."
   es: "{words}: VESTA no puede saber si está bien. Sigue abierta."
@@ -314,7 +326,7 @@ still_reported:
 # a villa that rewords it there rewords these too)
 lowered:
   digest:
-    fr: "Abaissée à {priority} le {time} : gardée pour le prochain résumé quotidien. Aucune réponse nécessaire."
+    fr: "Abaissée à {priority} le {time}: gardée pour le prochain résumé quotidien. Aucune réponse nécessaire."
     id: "Diturunkan ke {priority} pada {time}: disimpan untuk ringkasan harian berikutnya. Tidak perlu dibalas."
     de: "Herabgestuft auf {priority} am {time}: für die nächste Tageszusammenfassung vorgemerkt. Keine Antwort nötig."
     es: "Bajada a {priority} el {time}: guardada para el próximo resumen diario. No hace falta responder."
@@ -324,7 +336,7 @@ lowered:
     ja: "{time} に {priority} に引き下げ：次の日次ダイジェストに回します。返信は不要です。"
     ko: "{time}에 {priority}(으)로 낮춤: 다음 일일 요약에 포함됩니다. 답장할 필요 없음."
   log:
-    fr: "Abaissée à {priority} le {time} : seulement enregistrée. Aucune réponse nécessaire."
+    fr: "Abaissée à {priority} le {time}: seulement enregistrée. Aucune réponse nécessaire."
     id: "Diturunkan ke {priority} pada {time}: hanya dicatat. Tidak perlu dibalas."
     de: "Herabgestuft auf {priority} am {time}: nur aufgezeichnet. Keine Antwort nötig."
     es: "Bajada a {priority} el {time}: solo registrada. No hace falta responder."

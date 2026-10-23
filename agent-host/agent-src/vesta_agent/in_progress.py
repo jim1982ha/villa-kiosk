@@ -55,6 +55,8 @@ ENDED, FAILED, CUT = "ended", "failed", "cut"
 
 #: the scheduled run this task works for (set by `kept`): what Delivery.send gets to a chat is its result
 _RUN: contextvars.ContextVar["Item | None"] = contextvars.ContextVar("scheduled_run", default=None)
+#: the job asked for in a chat this task works for (set by `kept`): `verdict` tells it too (chat_facts.py reads it)
+_JOB: contextvars.ContextVar["Item | None"] = contextvars.ContextVar("chat_job", default=None)
 
 
 @dataclass(eq=False)
@@ -67,9 +69,11 @@ class Item:
     mid: int | None = None        # the message that stands for it until its result: its promise
     asked: str | None = None      # a question: what was asked, as the chat will be reminded of it
     turn: tuple | None = None     # the conversation turn (or pressed message) a chat job belongs to: memory only
+    by: str | None = None         # a chat job: the name of the person who asked for it (chat_facts.py): memory only
+    facts_told: bool = False      # a chat job: its end was told to chat_facts.ChatFacts (once): memory only
     arrived: bool = False         # a message of it reached a chat
     begun: bool = False
-    outcome: str | None = None    # a scheduled run: what its body said of it (verdict), before "it raised" decides
+    outcome: str | None = None    # what its body said of it (verdict), before "it raised" decides
     why: str | None = None
 
     @property
@@ -126,6 +130,7 @@ class InProgress:
         the record: the next start decides (`left`)."""
         self.begin(item)
         token = _RUN.set(item) if item.kind == SCHEDULED else None
+        job_token = _JOB.set(item) if item.kind == CHAT_JOB else None
         cut, raised = False, None
         try:
             yield item
@@ -138,6 +143,8 @@ class InProgress:
         finally:
             if token is not None:
                 _RUN.reset(token)
+            if job_token is not None:
+                _JOB.reset(job_token)
             if self._now.get((item.chat, item.name)) is item:
                 del self._now[(item.chat, item.name)]
             if after:
@@ -152,14 +159,17 @@ class InProgress:
                     await ended()
 
     def verdict(self, outcome: str, why: str | None = None) -> bool:
-        """The scheduled run this task works for did not deliver as a clean end would say (FAILED: the report was not
-        prepared, `why` in the words its chat read) — its end row says so. False when no scheduled run works here (a
-        job asked for in a chat: its chat was told, nothing to record)."""
-        run = _RUN.get()
-        if run is None:
-            return False
-        run.outcome, run.why = outcome, why
-        return True
+        """The run this task works for did not deliver as a clean end would say (FAILED: the report was not prepared,
+        `why` in the words its chat read). A scheduled run: its end row says so. A job asked for in a chat: what the AI is
+        told of it says so (chat_facts.py) — its chat reads why. False when neither works here.
+
+        ⚠️ A REPORT THAT COULD NOT BE PREPARED IS NOT "SENT" (owner, 2026-10-23): its one sentence goes as the job's
+        result, so "a message of it arrived" alone told the AI the report had come."""
+        run, job = _RUN.get(), _JOB.get()
+        for it in (run, job):
+            if it is not None:
+                it.outcome, it.why = outcome, why
+        return run is not None or job is not None
 
     @contextlib.asynccontextmanager
     async def held(self, chats: list[int], name: str):

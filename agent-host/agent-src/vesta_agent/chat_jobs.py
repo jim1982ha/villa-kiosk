@@ -11,6 +11,11 @@ two turns shared one), "typing…" lived in Delivery too, and a result said only
 Now this module owns all of it: a job belongs to the TURN that asked for it (or the pressed message), its result is
 told by name (routing.Origin.job), and its "typing…" starts once the conversation's own has stopped with its reply.
 Delivery only sends. job_notices.JobNotices still decides what happens to the waiting message, keyed by turn.
+
+⚠️ HOW IT ENDED IS TOLD TO THE AI (villa, 2026-10-23): the job sends its result outside the conversation, and the AI —
+whose transcript held only its own "on its way" — promised twice a digest that had come ten minutes before. Each end, as
+its chat saw it (sent, could not be prepared, nothing, cut by a restart), is told to chat_facts.ChatFacts, which the AI
+reads with the next message there.
 """
 from __future__ import annotations
 
@@ -24,8 +29,9 @@ from typing import Awaitable, Callable
 
 from vesta_shared.limits import limit
 
+from . import chat_facts
 from .api_errors import CHAT, NOT_COME
-from .in_progress import ANSWER, ANSWER_NAME, CHAT_JOB, HELD, TELL, InProgress, Item
+from .in_progress import ANSWER, ANSWER_NAME, CHAT_JOB, FAILED, HELD, TELL, InProgress, Item
 from .job_notices import JobNotices
 from .routing import JOB, Origin
 
@@ -58,8 +64,10 @@ class Started:
 
 
 class ChatJobs:
-    def __init__(self, delivery, safe: Callable[[Awaitable], Awaitable[None]], work: InProgress | None = None):
+    def __init__(self, delivery, safe: Callable[[Awaitable], Awaitable[None]], work: InProgress | None = None,
+                 facts: "chat_facts.ChatFacts | None" = None):
         self.delivery = delivery
+        self.facts = facts                                 # what the AI is told of this chat (chat_facts.py): each end
         # what runs, for whom, what it promised, whether its result arrived — kept across a stop (in_progress.py): the
         # same record Delivery.send tells of an arrival and the scheduler holds its chats in
         self.work = work or InProgress()
@@ -96,10 +104,11 @@ class ChatJobs:
                 self._typing_on(chat, j.name)
 
     # ------------------------------------------------------------------ a job
-    def start(self, chat: int, name: str, work: Work, waiting_mid: int | None = None, role: str | None = None) -> Started:
+    def start(self, chat: int, name: str, work: Work, waiting_mid: int | None = None, role: str | None = None,
+              by: str | None = None) -> Started:
         """Start `work` as this chat's job `name` — or say since when it already runs here (never twice: Started).
         `waiting_mid`: the message that stands for it until its result (a pressed button's); without one, the turn's
-        reply does. `role`: who asked (routing.Origin.role): the run uses what they may."""
+        reply does. `role`: who asked (routing.Origin.role): the run uses what they may; `by`: their name."""
         chat = int(chat)
         have = self.work.get(chat, name)
         if have is not None:
@@ -108,13 +117,16 @@ class ChatJobs:
             kind = JUST_STARTED if by == ASKED and time.time() - at < JUST_STARTED_S else RUNNING_SINCE
             return Started(kind, datetime.fromtimestamp(at, timezone.utc), by)
         key = ("press", chat, int(waiting_mid)) if waiting_mid else ("turn", chat, self._turn.get(chat, 0))
-        job = self.work.begin(Item(CHAT_JOB, name, chat=chat, mid=waiting_mid, turn=key))
+        job = self.work.begin(Item(CHAT_JOB, name, chat=chat, mid=waiting_mid, turn=key, by=by))
         self.notices.started(key, name)
         log.info("Job %s asked for in chat %s: %s", name, chat, self.notices.describe(key))
 
         async def run() -> None:
-            async with self.work.kept(job, after=lambda: self._typing_off(chat, name),
-                                      ended=lambda: self._carry(chat, self.notices.ended(key, name))):
+            async def ended() -> None:
+                if not job.arrived and self.facts is not None:
+                    self.facts.job_ended(job, chat_facts.NOTHING)      # its waiting message says it was not prepared
+                await self._carry(chat, self.notices.ended(key, name))
+            async with self.work.kept(job, after=lambda: self._typing_off(chat, name), ended=ended):
                 if waiting_mid:
                     await self._carry(chat, self.notices.replied(key, int(waiting_mid)))
                     self._typing_on(chat, name)
@@ -150,6 +162,8 @@ class ChatJobs:
             if cut.then != TELL:
                 continue
             log.info("Job %s in chat %s was cut by the last stop: said so", cut.name, cut.chat)
+            if cut.kind == CHAT_JOB and self.facts is not None:
+                self.facts.job_ended(cut, chat_facts.CUT)
             if self.delivery.tg is None:
                 continue
             text = cut.cut_text(self.work.tz)
@@ -169,6 +183,11 @@ class ChatJobs:
         j = self.work.get(origin.chat, origin.job or "")
         if j is None or j.turn is None:
             return
+        if self.facts is not None and not j.facts_told:
+            # its first message: what the AI is told of it from now — a report that could not be prepared said so first
+            # (InProgress.verdict, before its one sentence went)
+            j.facts_told = True
+            self.facts.job_ended(j, chat_facts.NOT_PREPARED if j.outcome == FAILED else chat_facts.SENT, j.why)
         log.info("Job result in chat %s: waiting notice before it: %s", origin.chat, self.notices.describe(j.turn))
         await self._carry(int(origin.chat), self.notices.result(j.turn))
         self._typing_off(int(origin.chat), origin.job or "")

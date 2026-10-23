@@ -59,6 +59,22 @@ def test_a_close_on_a_door_still_unlocked_reopens_it_still_there_and_the_desk_wa
     assert desk.tick(store, T0 + timedelta(minutes=45), client=villa)["cleared"] == [iid]
 
 
+def test_a_done_that_held_says_so_when_the_watch_ends(tmp_path):
+    # owner, 2026-10-23: "10 min later, i still see 'VESTA will monitor it for 10 min' — I expected an update saying
+    # the test lock is confirmed OK": a Done that held closed its check without a word
+    store = Store(str(tmp_path / "s.sqlite"))
+    iid = door(store)
+    desk.reply(store, iid, "done", "fm", T0 + timedelta(minutes=5))
+    out = desk.tick(store, T0 + timedelta(minutes=20), client=Villa(**{"lock.door": ("locked", T0 + timedelta(minutes=4))}))
+    assert out["not_quiet"] == []
+    (fm,) = [s for s in out["send"] if s["to"] == "fm"]
+    assert fm["stage"] == "closed" and fm["status"] == "Done (FM). Checked again after 10 min: it is right. Closed."
+    assert fm["status_in"]["fr"] == "Terminé (FM). Vérifié à nouveau après 10 min: c'est rétabli. Fermé."
+    # said once: the next tick has nothing more to say about it
+    later = desk.tick(store, T0 + timedelta(minutes=30), client=Villa(**{"lock.door": ("locked", T0 + timedelta(minutes=4))}))
+    assert not [s for s in later["send"] if s.get("incident") == iid]
+
+
 def test_a_close_the_desk_cannot_check_says_so_with_what_the_device_reads(tmp_path):
     # the Laundry door: its alert predates the rules' bad states — the check was dropped without a word
     store = Store(str(tmp_path / "s.sqlite"))

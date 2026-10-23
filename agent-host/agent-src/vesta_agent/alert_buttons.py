@@ -10,6 +10,7 @@ import logging
 from typing import Awaitable, Callable
 
 from vesta_shared.message_format import PRESSED
+from vesta_shared.messaging import incident_tag
 from vesta_shared.limits import limit
 from vesta_shared.status_words import pressed
 
@@ -30,8 +31,10 @@ RETIRED = {"not_found", "mute"}
 
 
 class AlertButtons:
-    def __init__(self, *, state, skills, store_path: str, thread, run_job: Callable[..., Awaitable] | None = None):
+    def __init__(self, *, state, skills, store_path: str, thread, run_job: Callable[..., Awaitable] | None = None,
+                 facts=None):
         self.state = state
+        self.facts = facts              # chat_facts.ChatFacts: the press is told to the AI with the chat's next message
         self.skills = skills
         self.store_path = store_path
         self.thread = thread            # incident_thread.IncidentThread: what each chat shows of an incident
@@ -106,6 +109,10 @@ class AlertButtons:
                                 note_in={lang: pressed(word, name, "{time}", lang) for lang, word in labels.items()})
         # the press, for the fault's card in the Kiosk (notice.Notices.story; owner, 2026-10-14)
         note_press(self.state, int(iid), label, name, button["mark"], button["option"], labels)
+        # ⚠️ TOLD TO THE AI (owner, 2026-10-23): a press goes to the agent, never into the conversation — the AI could
+        # say an alert waits for an answer that was given here a minute before
+        if self.facts is not None:
+            self.facts.pressed(int(chat), label, f"alert {incident_tag(iid)}", name)
         if self.run_job:
             # `text`: the label, for a skill.yaml from before `buttons` (its on_reply reads `--text {text}`)
             await self.run_job(skill, skill.on_reply, limit(

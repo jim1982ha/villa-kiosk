@@ -1,3 +1,14 @@
+## 0.12.330
+
+What you will see:
+- The Agent no longer promises a report that is not coming. With every message it is told which reports are being
+  prepared for that chat, and what reached the chat since it last answered (a report sent, an alert's reminder, a
+  Done pressed). Before, after a daily report you asked for had arrived, it said again "the daily report will arrive
+  in this chat as soon as it is ready".
+- An alert you pressed Done on now says when VESTA's watch ends with the device right: "✅ Terminé (JM). Vérifié à
+  nouveau après 10 min: c'est rétabli. Fermé." Before, the card kept "VESTA will monitor it for 10 min" for good.
+- No space before ":" in any message: "(à: FM)", "Toujours ouvert:", in every language.
+
 ## 0.12.329
 
 What you will see:

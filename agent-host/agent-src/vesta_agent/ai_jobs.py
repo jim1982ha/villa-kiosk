@@ -198,9 +198,9 @@ class AiJobs:
                     f"stopped at {failed}" if failed else f"{sent} message(s) sent")
         return sent > 0
 
-    async def start(self, name: str, chat: int, role: str | None = None) -> str:
+    async def start(self, name: str, chat: int, role: str | None = None, by: str | None = None) -> str:
         """A job a skill marks on_request, started from a chat: its own model and limit, and what the person who asked
-        (`role`) may use there (turn.job_terms)."""
+        (`role`) may use there (turn.job_terms). `by`: their name (what the AI is told of the chat: chat_facts.py)."""
         found = self.find(name)
         if not found or not found[1].get("on_request"):
             return f"There is no {name} report that can be started from a chat."
@@ -212,7 +212,7 @@ class AiJobs:
         # the report was sent, the AI answered "already being generated" from the conversation and started nothing.
         # A second start while one runs would make the report twice (chat_jobs.ChatJobs.start: Started).
         cfg = jobs[name]
-        st = self.chat_jobs.start(chat, name, lambda origin: self.run(sk, job, origin), role=role)
+        st = self.chat_jobs.start(chat, name, lambda origin: self.run(sk, job, origin), role=role, by=by)
         # ⚠️ THE START TIME, SAID BY THE AGENT (owner, 2026-10-09: the waiting message read "Still in progress" for a
         # report that had just started). The model called start_job twice in one turn, the second answer said "still
         # running", and the model told the person that. A report started in the last minute IS just started
@@ -228,7 +228,8 @@ class AiJobs:
         jobs = self.settings()
         return [j for _, j in self.all() if j.get("on_request") and j.get("without_ai") and j["name"] in jobs]
 
-    def start_without_ai(self, name: str, problem: str, chat: int, waiting_mid: int | None = None) -> str:
+    def start_without_ai(self, name: str, problem: str, chat: int, waiting_mid: int | None = None,
+                         by: str | None = None) -> str:
         """A report made from its figures because the AI cannot answer (named in a message, or its button pressed:
         `waiting_mid`, the pressed message), sent here. What the person is told."""
         found = self.find(name)
@@ -238,9 +239,10 @@ class AiJobs:
 
         async def made(origin: Origin) -> None:
             if not await self.run_without_ai(sk, job, problem if problem in AI_DOWN else "unknown", origin):
+                self.chat_jobs.work.verdict(FAILED, "its figures could not be read without the AI either")
                 await self.delivery.send(chat, NOT_COME(name, "its figures could not be read without the AI either", CHAT),
                                          origin=origin)
-        st = self.chat_jobs.start(chat, name, made, waiting_mid)
+        st = self.chat_jobs.start(chat, name, made, waiting_mid, by=by)
         # the same "just started" window as start (architecture review 12: this path had none)
         if st.kind in (NEW, JUST_STARTED):
             return f"Making the {job['button']} without the AI, from its figures and charts: it will be sent here."

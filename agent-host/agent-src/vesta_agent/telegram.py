@@ -22,7 +22,7 @@ import aiohttp
 
 from vesta_shared.message_format import telegram_entities
 from vesta_shared.limits import limit
-from vesta_shared.messaging import TELEGRAM_CAPTION, split_message, telegram_caption_chars, telegram_message_chars
+from vesta_shared.messaging import TELEGRAM_CAPTION, split_message, telegram_caption_chars, tight_punctuation, telegram_message_chars
 
 
 log = logging.getLogger("vesta.telegram")
@@ -73,7 +73,7 @@ def layout(text: str, keyboard: dict | None = None, media: str | None = None, re
     ⚠️ ONE LAYOUT (architecture review 15, 2026-10-10): it was decided inside the HTTP calls and never tested — the
     buttons of a message with a file were dropped (the file's form never carried them), a long list went out before
     its introduction, and the fake kept rules of its own."""
-    text = text or ""
+    text = tight_punctuation(text or "")       # one style before ":" in every language (messaging.tight_punctuation)
     parts: list[Part] = []
     if media:
         head = split_message(text, telegram_caption_chars()) if text else [""]
@@ -245,6 +245,7 @@ class Telegram:
 
     async def edit(self, chat_id: int, message_id: int, text: str, keyboard: dict | None = None) -> bool:
         """Rewrite one of the bot's messages: its buttons go, or become `keyboard`. False when Telegram refuses."""
+        text = tight_punctuation(text)
         extra = {"reply_markup": keyboard} if keyboard else {}
         try:
             await self.api("editMessageText", chat_id=chat_id, message_id=message_id, text=text[:telegram_message_chars()], **extra,

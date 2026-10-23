@@ -334,7 +334,7 @@ class Toolbox:
                 tools.append(build())
         if origin and origin.is_conversation and person is not None and self.start_job and self._on("start_job"):
             # a person asking, in a chat: never a job (even one started from a chat), so no job starts another
-            tools.append(self._start_job(chat_id, person.role))
+            tools.append(self._start_job(chat_id, person.role, person.name))
         if self.ticket and self._on("create_ticket"):
             tools.append(self._ticket(origin.chat if origin and origin.is_conversation else None))
         return tools
@@ -696,7 +696,7 @@ class Toolbox:
             return _ok(text) if ans.ok else _err(text or f"The script failed (exit {ans.code}).")
         return handler
 
-    def _start_job(self, chat_id: int, role: str | None):
+    def _start_job(self, chat_id: int, role: str | None, name: str | None = None):
         from .skills import ai_jobs
         jobs = [(sk, j) for sk, j in ai_jobs(self.skills.all()) if j.get("on_request")]
         names = [j["name"] for _, j in jobs] or ["none"]
@@ -711,7 +711,7 @@ class Toolbox:
                            + listing,
               schema)
         async def handler(args: dict) -> dict:
-            answer = await self.start_job(str(args.get("name") or ""), chat_id, role)
+            answer = await self.start_job(str(args.get("name") or ""), chat_id, role, by=name)
             self.state.log("job_requested", {"job": args.get("name"), "answer": answer[:80]})
             return _ok(answer)
         return handler

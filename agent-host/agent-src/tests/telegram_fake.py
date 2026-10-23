@@ -23,6 +23,7 @@ leaveChat — raises: the agent must never call them.
 from __future__ import annotations
 
 from vesta_agent.telegram import TelegramError, layout
+from vesta_shared.messaging import tight_punctuation
 
 BOT = {"id": 8000, "username": "Villa_Test_bot"}
 
@@ -91,6 +92,7 @@ class FakeTelegram:
     async def edit(self, chat_id, message_id, text, keyboard=None):
         if "edit" in self.refuse:
             return False
+        text = tight_punctuation(text)        # as the real one (telegram.Telegram.edit)
         self.edits.append((chat_id, message_id, text))
         self.edit_keyboards.append(keyboard)             # the buttons an edit gave the message (None: they went)
         return True

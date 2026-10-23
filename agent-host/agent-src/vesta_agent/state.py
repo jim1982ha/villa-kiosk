@@ -98,6 +98,7 @@ KV_FAMILIES: dict[str, str] = {
     "owner_told:": RECORDS,         # when the owner was last told of a problem (a 12-hour pause)
     "request_searches:": RECORDS,   # a command skill's request's web searches, for its page (command_request.py)
     "command_offer:": RECORDS,      # a command skill a reply offered: its skill, the person's question (command_offers.py)
+    "chatfacts:": RECORDS,          # what reached a chat outside its conversation since the AI last answered (chat_facts.py)
     # retired (0.12.300: the Investigate button follows only the answer's own readings): the rows 0.12.297-299 wrote
     # are pruned with the records
     "session_read:": RECORDS,
@@ -326,6 +327,27 @@ class State:
 
     def set_incident_history(self, incident: int | str, history: list[dict]) -> None:
         self.put(f"inchist:{incident}", json.dumps(history))
+
+    def incident_histories_since(self, since_iso: str | None) -> dict[int, list[dict]]:
+        """{incident: its history} of every incident whose history was written at or after `since_iso` (every one when
+        None): a history last written before then has no line after it (chat_facts.ChatFacts reads this)."""
+        rows = self.db.execute("select k, v from kv where substr(k, 1, 8)='inchist:'" +
+                               (" and at >= ?" if since_iso else ""), (since_iso,) if since_iso else ())
+        out = {}
+        for r in rows:
+            iid = r["k"][len("inchist:"):]
+            if iid.isdigit():
+                out[int(iid)] = json.loads(r["v"])
+        return out
+
+    # What reached a chat outside its conversation since the AI last answered there (chat_facts.py): ONE row per chat,
+    # {"told": when the AI was last told, "items": [{"at", "said"}]}, replaced, its items capped.
+    def chat_facts(self, chat: int) -> dict:
+        v = self.get(f"chatfacts:{int(chat)}")
+        return json.loads(v) if v else {}
+
+    def set_chat_facts(self, chat: int, record: dict) -> None:
+        self.put(f"chatfacts:{int(chat)}", json.dumps(record))
 
     def incident_chats(self, incident: int | str) -> list[tuple[int, dict]]:
         """(chat, record) of every chat this incident's message is shown in."""

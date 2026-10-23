@@ -39,6 +39,7 @@ from zoneinfo import ZoneInfo
 
 from . import button_data, intake, requests_box, script_run, tool_access
 from .ai_jobs import AiJobs
+from .chat_facts import ChatFacts
 from .chat_jobs import ChatJobs
 from .in_progress import FAILED, InProgress
 from .incidents import Incidents
@@ -161,7 +162,10 @@ class Vesta:
         self.work = InProgress(self.state, settings.timezone)
         self.delivery = Delivery(self.tg, self.state, self.policy, self.work)
         self.delivery.on_unreachable = self._tell_unreachable
-        self.chat_jobs = ChatJobs(self.delivery, self._safe, self.work)     # a job asked for in a chat, start to end
+        # what is happening for a chat beyond its conversation, told to the AI with each message there (chat_facts.py)
+        self.chat_facts = ChatFacts(self.state, self.work, settings.timezone, closed=Incidents(settings.store_path).closed)
+        self.chat_jobs = ChatJobs(self.delivery, self._safe, self.work,     # a job asked for in a chat, start to end
+                                  facts=self.chat_facts)
         self.actions = Actions(self.policy, self.state, self.writer_factory, names=self.name_of,
                                related=lambda ids: related_entities(self.pack(), self.reader, ids),
                                executed=lambda *a: self.siren.executed(*a))
@@ -171,7 +175,7 @@ class Vesta:
         self.thread = IncidentThread(self.state, settings.timezone, edit=(self.delivery.edit if self.tg else None),
                                      delete=(self.delivery.delete if self.tg else None))
         self.buttons = AlertButtons(state=self.state, skills=self.skills, store_path=settings.store_path,
-                                    thread=self.thread, run_job=self.run_code_job)
+                                    thread=self.thread, run_job=self.run_code_job, facts=self.chat_facts)
         self.tickets = Tickets(kiosk=self.kiosk, state=self.state, store_path=settings.store_path,
                                settle_alert=self.thread.close, timezone=settings.timezone,
                                story=lambda iid: self.notices.story(iid), restate_alert=self._alert_taken,
@@ -179,7 +183,7 @@ class Vesta:
         # a fault offered in a chat, start to end (fault_offers.py, review 32)
         self.requests = Requests(self.state, self.skills)   # a command skill's request, its turns (command_request.py)
         self.fault_offers = FaultOffers(self.state, self.delivery, self.tickets,
-                                        lambda chat: self.s.in_folder(f"chats/{chat}").out_dir)
+                                        lambda chat: self.s.in_folder(f"chats/{chat}").out_dir, facts=self.chat_facts)
         # a voice message's words (voice.py): the skill prepares the audio and the plan, transcriber.py runs it
         self.voice = Voice(self.s, self.tg, self.skills, self.code_command, self.delivery.send, self.state, self.cf_headers,
                            entity_ids=lambda: villa_entity_ids(self.reader))
@@ -654,10 +658,16 @@ class Vesta:
                     # fresh conversation had only those words — what the answer it came from read is said with them
                     prompt += (f"\nThe question follows an answer that read these devices (and periods); it is about "
                                f"them unless it names others:\nabout: {about}")
+            told_at = None
             if not is_continue:
                 checked = await asyncio.to_thread(self.before_answer)
-                if checked:
-                    prompt = f"{checked}\n\n{prompt}"
+                # ⚠️ WHAT THIS CHAT HAS, AS FACTS, WITH EVERY MESSAGE (owner, 2026-10-23): the digest a job had sent at
+                # 14:40 was promised again at 14:50 as "on its way" — the AI read only its own transcript. What is being
+                # prepared here now (or that nothing is) and what reached this chat since the AI's last answer here
+                # (chat_facts.py: a report's end, an alert's step, a button pressed) head the message
+                told_at = datetime.now(timezone.utc)
+                here = self.chat_facts.now(cid)
+                prompt = "\n\n".join(p for p in (checked, here, prompt) if p)
             pol = self.policy()
             # what this person may make the AI use here, the chat's brain and limit, its folder: turn.py decides
             asked = None if is_continue else (f"[photo] {text}".strip() if image else text)
@@ -666,6 +676,8 @@ class Vesta:
             res = await self.turns.chat(person, cid, prompt, resume=resume, asked=asked, image=image, request=request)
             if res.session_id:
                 self.state.set_session(cid, res.session_id)
+                if told_at is not None:
+                    self.chat_facts.told(cid, told_at)       # what reached the chat until this message is behind it
             log.info("Answered %s in chat %s (%s, %.0f s)%s", person.name if person else "system", cid,
                      f"{res.cost_usd:.3f} USD" if isinstance(res.cost_usd, (int, float)) else "cost unknown",
                      time.monotonic() - began, f", error {res.error}" if res.error else "")
@@ -784,7 +796,8 @@ class Vesta:
             return await p.toast(tool_access.start_job_off())
         problem, name = p.parts
         # the pressed message stands for the report until it arrives (chat_jobs.py)
-        said = self.jobs.start_without_ai(name, problem, p.chat, waiting_mid=int(p.mid) if p.mid else None)
+        said = self.jobs.start_without_ai(name, problem, p.chat, waiting_mid=int(p.mid) if p.mid else None,
+                                          by=p.person.name)
         await p.toast(said)
         if p.mid:
             # the message itself says so, its buttons gone: a toast alone is easily missed ("nothing happened")
