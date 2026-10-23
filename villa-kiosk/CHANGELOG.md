@@ -1,3 +1,17 @@
+## 2.496.501
+
+What you will see:
+- Facility: a fault you mark Started (or any record you change) while someone else changes the same record on
+  another phone or tablet now stays as you set it, here and everywhere. Before, this tablet showed the other device's
+  copy a moment after saving (the fault back to Open), and its next refresh sent that copy to every device, so your
+  change was lost.
+- Settings and Advanced Settings: when the villa's Wi-Fi is slow and a save arrives after this tablet stopped
+  waiting for it, Cancel now still puts back what you changed (a device label, for example). Before, the next save
+  took your own change for another tablet's, and Cancel kept it. The same in Facility: a fault you logged and then
+  marked Started on a slow connection no longer goes back to Open on the screen.
+- The 3D map: a room now glows red while ANY of its sensors reads on. Before, the last sensor to report decided: a
+  door closing turned the room dark while the motion sensor in it still saw someone.
+
 ## 2.496.500
 
 What you will see:

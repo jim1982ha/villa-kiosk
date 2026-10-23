@@ -66,6 +66,55 @@ export function keyedDiffIsEmpty<T>(diff: KeyedDiff<T>): boolean {
   return Object.keys(diff.set).length === 0 && diff.del.length === 0;
 }
 
+/** A change to a document of several keyed parts (the config store's shared keys, the Facility store's collections). */
+export type KeyedParts = Record<string, KeyedDiff<unknown>>;
+
+const owns = (o: object, id: string) => Object.prototype.hasOwnProperty.call(o, id);
+
+/** `diff` with only the items `keep` accepts (`deleted`: the item is a removal, `item` undefined). */
+export function keepItems<P extends KeyedParts>(
+  diff: P,
+  keep: (part: string, id: string, item: unknown, deleted: boolean) => boolean,
+): P {
+  const out: Record<string, KeyedDiff<unknown>> = {};
+  for (const [part, d] of Object.entries(diff)) {
+    out[part] = {
+      set: Object.fromEntries(Object.entries(d.set).filter(([id, item]) => keep(part, id, item, false))),
+      del: d.del.filter((id) => keep(part, id, undefined, true)),
+    };
+  }
+  return out as P;
+}
+
+/** Whether `d` names the item, as a change or a removal. */
+function names(d: KeyedDiff<unknown> | undefined, id: string): boolean {
+  return !!d && (owns(d.set, id) || d.del.includes(id));
+}
+
+/**
+ * THIS DEVICE'S OWN EDIT WINS, the one rule for both stores: what the other devices changed (`others`) without the
+ * items this device has changed itself (`mine`: its document against the copy it synced with). The store already
+ * holds this device's version of them, or will once its push goes; laid on the screen, theirs would undo this
+ * device's edit there, and the next refresh would send that undo to every device (2.496.501).
+ */
+export function mineWins<P extends KeyedParts>(others: P, mine: P): P {
+  return keepItems(others, (part, id) => !names(mine[part], id));
+}
+
+/**
+ * The store's changes (`changed`) without this device's OWN writes coming back: an item whose new value is one this
+ * device itself sent (`sent`, its pushes not yet confirmed) is not another device's change. A push that landed but
+ * answered too late ends as a failure here, so the next push finds that write in the store as if someone else had made
+ * it (2.496.501).
+ */
+export function withoutOwnWrites<P extends KeyedParts>(changed: P, sent: readonly P[]): P {
+  return keepItems(changed, (part, id, item, deleted) => !sent.some((s) => {
+    const d = s[part];
+    if (!d) return false;
+    return deleted ? d.del.includes(id) : owns(d.set, id) && JSON.stringify(d.set[id]) === JSON.stringify(item);
+  }));
+}
+
 /** One fetch of a shared store: the parsed document, the revision it was read
  *  at, and the raw stored object (for rule 3's carry-over). */
 export interface StoreFetch<TDoc> {

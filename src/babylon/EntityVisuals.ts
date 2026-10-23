@@ -73,7 +73,7 @@ import { Control } from "@babylonjs/gui/2D/controls/control";
 import type { AppConfig } from "@/config/AppConfig";
 import { roomKey } from "@/config/roomKey";
 import { cameraMotionId } from "@/config/BinarySensorClasses";
-import { motionRouting } from "./motionRouting";
+import { motionPaint, motionRouting, type MotionRouting } from "./motionRouting";
 import {
   badgeMetricsFor, detectPointerClass, observePointerClass, type BadgeMetrics, type PointerClass,
   CHIP_MAX_VIEWPORT_FRACTION, CARD_MAX_VIEWPORT_FRACTION,
@@ -801,6 +801,9 @@ export class EntityVisuals {
   /** Last seen HA state per entity, so a label rebuild (toggle on / icon edit)
    *  can repaint badges immediately instead of waiting for the next push. */
   private lastState = new Map<string, HassEntity>();
+  /** Each sensor's latest routing (motionRouting), kept while it names a cone or a room: a room or a cone is lit while
+   *  ANY of them lights it (motionPaint), never by the last sensor to report alone. */
+  private readonly motionRoutes = new Map<string, MotionRouting>();
   /** The map's LookSource (utils/deviceActivity): every badge, card cell,
    *  room-chip member and mesh here is painted from deviceLook / readingOf
    *  through this — the live cache above, the mesh-resolved mappings, and the
@@ -1924,6 +1927,7 @@ export class EntityVisuals {
     this.labels.clear();
     this.labelsNewestFirst.length = 0;
     this.lastState.clear();
+    this.motionRoutes.clear();
     this.labelLayer?.dispose();
     this.labelLayer = null;
   }
@@ -2540,8 +2544,14 @@ export class EntityVisuals {
       denied: !!this.config.deniedTypes?.includes("binary_sensor"),
       enabled: this.config.roomGlowAndCones,
     });
-    for (const b of route.beams) this.setBeamActive(b.cameraId, b.on);
-    for (const r of route.rooms) this.roomHighlight.setActive(r.room, r.on);
+    // What is painted is every sensor's, not this one's alone (motionPaint): its room or cone stays lit while another
+    // of its sensors still reads "on".
+    const before = this.motionRoutes.get(entity.entity_id);
+    if (route.beams.length > 0 || route.rooms.length > 0) this.motionRoutes.set(entity.entity_id, route);
+    else this.motionRoutes.delete(entity.entity_id);
+    const paint = motionPaint(this.motionRoutes.values(), [before, route]);
+    for (const b of paint.beams) this.setBeamActive(b.cameraId, b.on);
+    for (const r of paint.rooms) this.roomHighlight.setActive(r.room, r.on);
   }
 
   /** Counterpart to applyMotionRouting for EntityMapping.linkedEntityId: when

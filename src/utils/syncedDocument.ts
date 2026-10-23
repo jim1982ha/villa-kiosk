@@ -20,14 +20,16 @@
 // fake store.
 
 import { decidePull, type PullAction } from "./pullDecision";
-import { pushWithRebase, type PushOutcome, type StoreFetch, type StoreSaveResult } from "./keyedSync";
+import {
+  pushWithRebase, withoutOwnWrites, type KeyedParts, type PushOutcome, type StoreFetch, type StoreSaveResult,
+} from "./keyedSync";
 
 /** How long ONE push may take, all its attempts, before it ends as a transport failure (2.496.500): its work stays
  *  marked unsaved, so the next refresh sends it again, and the pushes and pulls waiting behind it go on. Before, a
  *  request that never answered (Wi-Fi gone half-way) held every later save and refresh of this store for good. */
 export const PUSH_DEADLINE_MS = 15_000;
 
-export interface SyncedDocumentSpec<D, Diff, F extends StoreFetch<D> = StoreFetch<D>> {
+export interface SyncedDocumentSpec<D, Diff extends KeyedParts, F extends StoreFetch<D> = StoreFetch<D>> {
   /** The server's copy, in baseline form; null when it cannot be reached. `signal`: a push that ran out of time
    *  aborts the request it was waiting on. */
   fetch: (signal?: AbortSignal) => Promise<F | null>;
@@ -55,14 +57,24 @@ export type PullResult<F> =
   | { action: "wait" | "unreachable" | "repush"; fetched?: undefined }
   | { action: "seed" | "noop" | "apply"; fetched: F };
 
-/** `synced`, on success: the baseline this push's diff was computed against — so `base` against it is what the OTHER
- *  devices changed, and nothing of this device's own earlier push (config/deviceConfig remoteChange). */
-export type PushResult<D> =
-  | (Extract<PushOutcome<D>, { ok: true }> & { synced: D })
+/** On success: `synced`, the baseline this push's diff was computed against, and `others`, what the OTHER devices
+ *  changed in the store since then, item by item: the store's copy this push went onto against `synced`, without this
+ *  device's own writes coming back (keyedSync withoutOwnWrites). Each store lays `others` under its own edits
+ *  (keyedSync mineWins). ⚠️ NOT THE STORE'S COPY ITSELF (`base`, to 2.496.500): against `synced`, a write of this
+ *  device's that landed after its push gave up on it read as another device's change. */
+export type PushResult<D, Diff> =
+  | (Omit<Extract<PushOutcome<D>, { ok: true }>, "base"> & { synced: D; others: Diff })
   | Extract<PushOutcome<D>, { ok: false }>
   | { ok: false; reason: "not-allowed" | "not-pulled" };
 
-export class SyncedDocument<D, Diff, F extends StoreFetch<D> = StoreFetch<D>> {
+/** One push's own change, from the moment it is sent until the store is known to hold it. */
+interface Unconfirmed<Diff> {
+  sent: Diff;
+  /** It ended unsent as far as this device knows (a transport failure) — it may still have landed. */
+  failed: boolean;
+}
+
+export class SyncedDocument<D, Diff extends KeyedParts, F extends StoreFetch<D> = StoreFetch<D>> {
   /** What the server is known to hold; null until the first pull when the
    *  document starts unknown (a push waits for it: pull before push). */
   baseline: D | null;
@@ -74,6 +86,9 @@ export class SyncedDocument<D, Diff, F extends StoreFetch<D> = StoreFetch<D>> {
   private unsaved = false;
   /** The local document the latest push was handed (what `promised` is while pushes are out). */
   private lastPushed: D | null = null;
+  /** What this device has sent and not seen confirmed: the push out, and those that failed (they may have landed all
+   *  the same) until a push succeeds or the work is dropped (2.496.501). */
+  private readonly unconfirmed = new Set<Unconfirmed<Diff>>();
   private readonly spec: SyncedDocumentSpec<D, Diff, F>;
 
   constructor(spec: SyncedDocumentSpec<D, Diff, F>, initial: D | null) {
@@ -155,7 +170,7 @@ export class SyncedDocument<D, Diff, F extends StoreFetch<D> = StoreFetch<D>> {
     /** This write's own save — the Facility store's deletes carry a
      *  single-use elevation token. Default: the spec's. */
     save: SyncedDocumentSpec<D, Diff, F>["save"] = this.spec.save,
-  ): Promise<PushResult<D>> {
+  ): Promise<PushResult<D, Diff>> {
     const from = this.promised;
     if (from === null) return { ok: false, reason: "not-pulled" };
     this.lastPushed = local;
@@ -169,10 +184,21 @@ export class SyncedDocument<D, Diff, F extends StoreFetch<D> = StoreFetch<D>> {
     }
   }
 
-  private async pushNow(from: D, local: D, save: SyncedDocumentSpec<D, Diff, F>["save"]): Promise<PushResult<D>> {
+  /** The unsent work is settled (`unsaved` cleared): the failed pushes' writes are no longer awaited. */
+  private settle(mine: Unconfirmed<Diff>): void {
+    this.unconfirmed.delete(mine);
+    for (const u of this.unconfirmed) if (u.failed) this.unconfirmed.delete(u);
+  }
+
+  private async pushNow(
+    from: D, local: D, save: SyncedDocumentSpec<D, Diff, F>["save"],
+  ): Promise<PushResult<D, Diff>> {
     if (this.spec.canWrite && !this.spec.canWrite()) return { ok: false, reason: "not-allowed" };
     const baseline = this.baseline ?? from;
     const own = this.unsaved || baseline === from ? local : this.spec.apply(baseline, this.spec.diff(from, local));
+    const diff = this.spec.diff(baseline, own);
+    const mine: Unconfirmed<Diff> = { sent: diff, failed: false };
+    this.unconfirmed.add(mine);
     this.writes += 1;
     // ⚠️ ONE DEADLINE FOR THE WHOLE PUSH, HERE AND NOWHERE ELSE (2.496.500). Past it, the request is aborted and every
     // later step of this push refuses to run, so a late answer can neither commit a baseline nor send a stale retry
@@ -184,7 +210,7 @@ export class SyncedDocument<D, Diff, F extends StoreFetch<D> = StoreFetch<D>> {
       timer = setTimeout(() => resolve("late"), this.spec.deadlineMs ?? PUSH_DEADLINE_MS);
     });
     const work = pushWithRebase({
-      diff: this.spec.diff(baseline, own),
+      diff,
       isEmpty: this.spec.isEmpty,
       baseline,
       fetchFresh: async () => {
@@ -218,16 +244,24 @@ export class SyncedDocument<D, Diff, F extends StoreFetch<D> = StoreFetch<D>> {
       outcome = { ok: false, reason: "transport" };
     }
     if (outcome.ok) {
+      const { base, ...landed } = outcome;
+      // ⚠️ THIS DEVICE'S OWN WRITES ARE NEVER ANOTHER DEVICE'S CHANGE (2.496.501): a push that landed after it gave up
+      // (the deadline) left its write in the store, and against `baseline` it read as someone else's. The settings
+      // took it as the value to put back on Cancel; the Facility screen laid it over a later status change.
+      const others = withoutOwnWrites(this.spec.diff(baseline, base), [...this.unconfirmed].map((u) => u.sent));
+      this.settle(mine);
       this.unsaved = false;
       this.commit(outcome.next, outcome.rev);
-      return { ...outcome, synced: baseline };
+      return { ...landed, synced: baseline, others };
     }
     if (outcome.reason === "nothing-to-push" || outcome.reason === "refused") {
       // A refusal is FINAL: re-pushing it on every pull would loop for good
       // and keep this device from ever accepting a newer copy (2.496.184).
       // The caller undoes its local change.
+      this.settle(mine);
       this.unsaved = false;
     } else {
+      mine.failed = true;
       this.unsaved = true;
     }
     return outcome;

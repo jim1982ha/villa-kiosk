@@ -62,7 +62,7 @@ function tablet(srv, config) {
   t.merge = (change) => { t.heard = change; t.config = update(t.config, (c) => D.applyRemoteChange(c, change)); };
   t.push = async () => {
     const outcome = await t.doc.push(t.local());
-    if (outcome.ok) t.merge(D.remoteChange(outcome.synced, outcome.base));   // DeviceConfigSync pushOwnDiff
+    if (outcome.ok) t.merge(D.pushedChange(outcome));   // DeviceConfigSync pushOwnDiff
     return outcome;
   };
   t.pull = async () => {

@@ -121,7 +121,7 @@ console.log("\n  the wiring:");
   const src = (p) => strip(readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8"));
   const sync = src("config/DeviceConfigSync.tsx"), ctx = src("config/ConfigContext.tsx"), hook = src("hooks/useDraftedSlice.ts");
   ck("both merges of the shared store (push and pull) hand on what the others changed, never a copy of the store",
-     /mergeRemote\(remoteChange\(outcome\.synced, outcome\.base\)\)/.test(sync)
+     /mergeRemote\(pushedChange\(outcome\)\)/.test(sync)
      && /mergeRemote\(remoteChange\(synced, r\.fetched\.config\)\)/.test(sync)
      && (sync.match(/mergeRemote\(/g) ?? []).length === 2 && !/\bupdate\(/.test(sync));
   ck("the drafts hear it before the write, and the write applies it to the config as it is then",
