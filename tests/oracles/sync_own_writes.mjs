@@ -130,7 +130,7 @@ console.log("\n  Facility: a fault logged, its save landing after the deadline, 
   const mutate = async (fn) => {                   // FmDataContext mutate: the copy moves at once, then the push
     screen = fn(screen);
     const o = await doc.push(screen);
-    if (o.ok) { pushed.push(o); screen = F.foldOthers(screen, o); }
+    if (o.ok) { pushed.push(o); screen = F.foldOthers(screen, o).doc; }
     return o.ok ? "saved" : o.reason;
   };
   srv.late = 4 * DEADLINE;
@@ -157,7 +157,7 @@ console.log("\n  Facility: a value this tablet once sent, set again later by a p
   const mutate = async (fn) => {
     screen = fn(screen);
     const o = await doc.push(screen);
-    if (o.ok) screen = F.foldOthers(screen, o);
+    if (o.ok) screen = F.foldOthers(screen, o).doc;
     return o.ok ? "saved" : o.reason;
   };
   const add = (c) => (d) => ({ ...d, costs: [...d.costs, c] });
@@ -184,9 +184,9 @@ console.log("\n  Facility: a fault marked started here while a phone retitles it
   };
   screen = { ...screen, tickets: screen.tickets.map((t) => (t.id === "t1" ? { ...t, status: "in_progress" } : t)) };
   const o = await doc.push(screen);
-  if (o.ok) screen = F.foldOthers(screen, o);
+  if (o.ok) screen = F.foldOthers(screen, o).doc;
   ck("the phone's change reaches this screen where this tablet changed nothing", o.ok && screen.tickets.find((t) => t.id === "t2").title === "Gate stuck open");
-  ck("this tablet's own change stays on its screen (both changed the fault: this tablet's version wins, as in the store)",
+  ck("this tablet's own change stays on its screen (both changed the fault, different fields: each keeps its own, as in the store; fm_field_merge.mjs)",
      status(screen) === "in_progress" && status(srv.doc) === "in_progress", { screen: status(screen), store: status(srv.doc) });
   const before = doc.baseline;
   const r = await doc.pull(() => screen, (f) => JSON.stringify(f.doc) !== JSON.stringify(before));
@@ -240,10 +240,10 @@ console.log("\n  the wiring:");
   const src = (p) => strip(readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8"));
   const fm = src("fm/FmDataContext.tsx"), sync = src("config/DeviceConfigSync.tsx"), dc = src("config/deviceConfig.ts");
   ck("both stores lay the push's `others`, never the store's copy: the Facility store under its own records",
-     /const merged = foldOthers\(ref\.current, outcome\);/.test(fm) && /mergeRemote\(pushedChange\(outcome\)\)/.test(sync)
+     /const \{ doc: merged, changedOnBoth \} = foldOthers\(ref\.current, outcome\);/.test(fm) && /mergeRemote\(pushedChange\(outcome\)\)/.test(sync)
      && !/outcome\.base/.test(fm + sync));
   ck("one rule for 'this tablet's own edit wins', in both stores (keyedSync mineWins)",
-     /mineWins\(change\.diff, diffSharedConfig\(change\.synced, local\)\)/.test(dc) && /mineWins\(pushed\.others, diffFmData\(pushed\.synced, screen\)\)/.test(src("fm/fmApi.ts")));
+     /mineWins\(change\.diff, diffSharedConfig\(change\.synced, local\)\)/.test(dc) && /const mine = diffFmData\(pushed\.synced, screen\);[\s\S]*applyFmDiff\(screen, mineWins\(pushed\.others, mine\)\)/.test(src("fm/fmApi.ts")));
 }
 
 done("✅ this tablet's own writes are never another tablet's change; its own edit wins on its screen");

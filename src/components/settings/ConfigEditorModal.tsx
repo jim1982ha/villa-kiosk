@@ -27,7 +27,7 @@ import UnavailableByDesign from "./UnavailableByDesign";
 import EntityPicker from "./EntityPicker";
 import InlineConfirm from "@/components/common/InlineConfirm";
 import ModalFooter, { footerExits } from "@/components/common/ModalFooter";
-import RemoteReplacedNote from "./RemoteReplacedNote";
+import RemoteReplacedNote, { SaveProblemNote } from "./RemoteReplacedNote";
 import { useAppNotice } from "@/components/hud/AppNotice";
 import { useDraftedSlice } from "@/hooks/useDraftedSlice";
 import { ADVANCED_SETTINGS_KEYS } from "@/config/configSlice";
@@ -246,6 +246,8 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
   // Settings, Settings' draft records the same changes and this dialog just closes back to it; on its own, it is this
   // one's: Save keeps, Cancel (and Escape, and the backdrop) puts them back — the passing notices of every other dialog.
   const own = useDraftedSlice(ADVANCED_SETTINGS_KEYS);
+  // why the last device-setup save did not reach the other tablets (DeviceConfigSync), said above the footer
+  const { saveProblem, setSaveProblem } = useConfig();
   const notice = useAppNotice();
   const commit = withinSettings ? undefined : { dirty: own.dirty, save: own.save, discard: () => { own.discard(); } };
   // Over Settings, closing back writes what is still being typed here (as this dialog's): Settings' Save / Cancel then
@@ -432,6 +434,7 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
         {/* Every tab applies LIVE through `ConfigContext`, so a tab switch loses nothing. Over Settings: Close, back to
             Settings, whose Save / Cancel own these changes; on its own: this dialog's Save / Cancel (`commit`). */}
         <RemoteReplacedNote replaced={own.replaced} onDismiss={own.dismissReplaced} />
+        <SaveProblemNote line={saveProblem} onDismiss={() => setSaveProblem(null)} />
         <ModalFooter onClose={back} commit={commit} leading={roleCan(role, "editConfig") ? <LogoutAll /> : undefined} />
       </div>
     </DialogLayer>

@@ -123,7 +123,10 @@ console.log("\n  the wiring:");
   ck("both merges of the shared store (push and pull) hand on what the others changed, never a copy of the store",
      /mergeRemote\(pushedChange\(outcome\)\)/.test(sync)
      && /mergeRemote\(remoteChange\(synced, r\.fetched\.config\)\)/.test(sync)
-     && (sync.match(/mergeRemote\(/g) ?? []).length === 2 && !/\bupdate\(/.test(sync));
+     && (sync.match(/mergeRemote\(/g) ?? []).length === 2
+     // the one other write: a change the add-on refused, undone to the store's copy (no other tablet's: no draft hears it)
+     && (sync.match(/\bupdate\(/g) ?? []).length === 1
+     && /if \(!outcome\.ok && outcome\.reason === "refused" && doc\.baseline\) \{\s*const store = doc\.baseline;\s*update\(\(prev\) => applyRemoteChange\(prev, \{ synced: local, diff: diffSharedConfig\(local, store\) \}\)\);/.test(sync));
   ck("the drafts hear it before the write, and the write applies it to the config as it is then",
      /for \(const listener of remoteListeners\.current\) listener\(change\);\s*update\(\(prev\) => applyRemoteChange\(prev, change\)\);/.test(ctx));
   ck("the draft says which of its own changes the same change replaced, measured on the ledger before it moves",
@@ -132,7 +135,7 @@ console.log("\n  the wiring:");
   const settings = src("components/settings/SettingsModal.tsx"), advanced = src("components/settings/ConfigEditorModal.tsx");
   ck("Settings and Advanced Settings show it, each from its own draft, just above the footer",
      /<RemoteReplacedNote replaced=\{slice\.replaced\} onDismiss=\{slice\.dismissReplaced\} \/>\s*<ModalFooter/.test(settings)
-     && /<RemoteReplacedNote replaced=\{own\.replaced\} onDismiss=\{own\.dismissReplaced\} \/>\s*<ModalFooter/.test(advanced));
+     && /<RemoteReplacedNote replaced=\{own\.replaced\} onDismiss=\{own\.dismissReplaced\} \/>\s*(<SaveProblemNote line=\{saveProblem\} onDismiss=\{\(\) => setSaveProblem\(null\)\} \/>\s*)?<ModalFooter/.test(advanced));
   ck("the draft's ledger records only the dialog's own writes, heard inside them",
      /onDialogEdit\(\(prev, next\) => \{\s*ledger\.current = recordEdit\(ledger\.current, latest\.current\.keys, prev, next\);/.test(hook)
      && !/onRemoteChange\([^)]*\) => \{[^}]*recordEdit/.test(hook));
