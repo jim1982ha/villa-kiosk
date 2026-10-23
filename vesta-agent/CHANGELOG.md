@@ -1,3 +1,12 @@
+## 0.12.327
+
+What you will see:
+- Every report now reaches each person in the language set for them in People. Before, a report for the facility
+  managers was written in the language of the first facility manager listed and sent to all of them: a facility
+  manager who reads French received the daily report in German. Now each one gets it in their own language, with the
+  same figures. This holds for the daily report, the weekly report (its page too) and the owner's monthly report.
+  Each extra language adds one translation to the report's AI cost; the villa is looked into only once.
+
 ## 0.12.326
 
 What you will see:

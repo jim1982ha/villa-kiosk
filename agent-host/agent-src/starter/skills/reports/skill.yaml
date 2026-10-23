@@ -41,8 +41,8 @@ schedule:
     prompt: >-
       It is 07:00. Read the reports skill, compose the facility manager daily digest (fm-daily) with
       run_skill_script, and send its `message` to the fm chat with send_message: title= its "title" as it is,
-      text= its "text" written in {fm_language}, keeping every number exactly as the script gave it and its
-      layout (each section label on its own line, an empty line between items). Send it even when it says
+      text= its "text" written in {fm_language} (one version per language when it names several), keeping
+      every number exactly as the script gave it and its layout (each section label on its own line, an empty line between items). Send it even when it says
       nothing is new, so the facility manager knows the VESTA Agent is alive. No check codes, no entity ids.
   - when: "Mon 08:00"
     name: fm-weekly
@@ -60,9 +60,10 @@ schedule:
       It is Monday 08:00. Read the reports skill and make the facility manager's weekly report, following its
       steps "A weekly or monthly report": the week's energy, facts.py fm-weekly, your readings from the clues,
       the playbook and the villa's system, saved in notes.json (in {fm_language}), compose.py fm-weekly, then
-      send_message to fm with the page attached, title= and text= the `message` compose.py printed. On schedule
+      send_message to fm with the page attached, title= and text= the `message` compose.py printed. When
+      {fm_language} names several languages, follow the skill's "Several languages". On schedule
       only, then send the owner the owner-weekly `message` (compose.py owner-weekly --energy week.json --facts facts.json --page
-      fm_weekly.html) with the same page attached (attachment= the `attachment` it printed): title= as it is, text= in {owner_language}, its layout kept (section labels, an empty line between items);
+      fm_weekly.html, or the page made in {owner_language} when there is one) with that page attached (attachment= the `attachment` it printed): title= as it is, text= in {owner_language}, its layout kept (section labels, an empty line between items);
       when the report was asked for in a chat, the page is the whole answer: send nothing else.
   - when: "1 08:00"
     name: owner-monthly
@@ -83,3 +84,4 @@ schedule:
       first, so the page carries them): the month's energy, facts.py owner-monthly, your readings from the
       clues, the playbook and the villa's system, saved in notes.json (in {owner_language}), compose.py
       owner-monthly, then send_message to owner with the page attached, title= and text= the `message` compose.py printed.
+      When {owner_language} names several languages, follow the skill's "Several languages".

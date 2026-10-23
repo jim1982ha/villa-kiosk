@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.317 (23 October 2026)
+
+- A role's report reaches each of its people in their own language. `Policy.languages_for(role)` (every language its
+  chats read, in the list's order), `chats_for(role, language)`, `language_of(chat, role)`. `send_message` takes `text`
+  (and `attachment`) as one value or one per language (`{"German": "…", "French": "…"}`, a code works too);
+  `Routing.versions` refuses a single text for a role read in several languages (nothing sent, the languages named),
+  and each version goes to the chats of its language (a send item's `language`, `Routing.target`). `{fm_language}`
+  and `{owner_language}` name every language ("German and French"). Before, `AiJobs._language_of` took the role's
+  first row: the facility manager's daily report came in German to a facility manager who reads French.
+- reports skill: the daily digest, the weekly and the monthly write one version per language; a page is composed once
+  per language (`notes_<Language>.json`, `fm_weekly_<Language>.html`; SKILL.md "Several languages"), the
+  investigation done once. The owner's weekly lines attach the page in the owner's language when there is one.
+
 ## 0.6.316 (23 October 2026)
 
 - "Investigate this" under a follow-up question now carries what the answer read. `Toolbox.about` keeps, per read of

@@ -77,6 +77,20 @@ the conclusions are yours.
    `text` its "text" (your headline). The agent writes the title and who it is for at the top. Started from
    a chat: `to: here`. On schedule: `to: fm` (weekly) or `to: owner` (monthly).
 
+### Several languages
+
+On schedule, a reader may be several people who read different languages (the job's prompt names
+them all: "German and French"). Each one gets the report in their own language, with the same
+figures:
+
+- Investigate once. Write the sentences once per language: the first language's in `notes.json`,
+  each other's in `notes_<Language>.json` (`notes_French.json`).
+- Compose the page once per language: `--notes notes.json --out fm_weekly.html` for the first,
+  `--notes notes_French.json --out fm_weekly_French.html` for each other.
+- One `send_message`, with `text` and `attachment` one per language:
+  `{"German": "…", "French": "…"}` and `{"German": "fm_weekly.html", "French": "fm_weekly_French.html"}`.
+  The agent sends each version to the people who read it.
+
 Spend with care: the job has a spending limit (VESTA Agent page → Rules → AI jobs). Read what the
 clues point to, not the whole villa. If the limit stops you, the page is still sent with what is done.
 

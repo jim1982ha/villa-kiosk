@@ -21,9 +21,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from vesta_shared.message_format import ROLES
+from vesta_shared.message_format import ROLE_WORDS, ROLES
 
-from .policy import Policy
+from .policy import LANGUAGES, Policy
 
 TARGETS = ("here", *ROLES)
 
@@ -70,16 +70,53 @@ class Routing:
             return list(ROLES)
         return ["here"] if origin.holds else list(TARGETS)
 
-    def target(self, to: str | None, origin: Origin | None = None) -> list[int]:
+    def target(self, to: str | None, origin: Origin | None = None, language: str | None = None) -> list[int]:
         """Rules 1 and 2: every chat it goes to. [] when there is nowhere to send it (no origin for `here`, nobody of
-        that role in the People list)."""
+        that role in the People list). `language` (a code): a role's chats that read it only — one version of a
+        report per language (policy.languages_for); a person asking reads theirs, so it never narrows `here`."""
         if origin and origin.holds and to in TARGETS:
             return [origin.chat]
         if to == "here":
             return [origin.chat] if origin else []
         if to in ROLES:
-            return self.policy.chats_for(to)
+            return self.policy.chats_for(to, language)
         return []
+
+    def versions(self, to: str | None, origin: Origin | None, text, attachment=None) -> list[tuple] | str:
+        """The copies of one message to send, as (language code or None, text, attachment): one per language its
+        readers read, or what is missing (a sentence for the AI). `text` and `attachment` are one value, or one per
+        language ({"German": …, "French": …}; a code works too).
+
+        ⚠️ EACH READER IN THEIR OWN LANGUAGE (owner, 2026-10-23: the facility manager's daily report came in German
+        to a facility manager who reads French, because the role's first row read German): a role read in several
+        languages takes one version per language, and a single text is refused there rather than sent to everyone
+        in one of them. A person asking (`here`) reads one language: the first version is theirs."""
+        def by_language(value) -> dict[str, str] | None:
+            if not isinstance(value, dict):
+                return None
+            out = {}
+            for k, v in value.items():
+                code = next((c for c, n in LANGUAGES.items() if str(k).strip().lower() in (c, n.lower())),
+                            str(k).strip().lower())
+                out[code] = str(v)
+            return out
+        texts, atts = by_language(text), by_language(attachment)
+        langs = self.policy.languages_for(to) if to in ROLES and not (origin and origin.holds) else []
+        if len(langs) <= 1:
+            pick = (lambda d, v: (d.get(langs[0]) if langs and langs[0] in d else next(iter(d.values()), None))
+                    if d is not None else v)
+            return [(None, pick(texts, text) or "", pick(atts, attachment) or None)]
+        names = ", ".join(LANGUAGES.get(c, c) for c in langs)
+        missing = [c for c in langs if not (texts or {}).get(c)]
+        if missing:
+            return (f"The {ROLE_WORDS[to].lower()}'s people read {names}: give text one version per language, as "
+                    f"{{\"{LANGUAGES.get(langs[0], langs[0])}\": \"…\", …}}"
+                    + (f" (missing: {', '.join(LANGUAGES.get(c, c) for c in missing)})" if texts else "")
+                    + ". Nothing was sent.")
+        if atts is not None and any(not atts.get(c) for c in langs):
+            return (f"The {ROLE_WORDS[to].lower()}'s people read {names}: give attachment one page per language, "
+                    f"as text, or one file name for all. Nothing was sent.")
+        return [(c, texts[c], atts[c] if atts is not None else attachment or None) for c in langs]
 
     def deliveries(self, items: list, origin: Origin | None = None) -> tuple[list[tuple[int, dict, frozenset]], list[dict]]:
         """Each message in every chat it goes to, as (chat, message, the roles it goes there for), and the messages that
@@ -94,7 +131,7 @@ class Routing:
         unrouted: list[dict] = []
         for it in items:
             it = it or {}
-            chats = self.target(it.get("to"), origin)
+            chats = self.target(it.get("to"), origin, it.get("language"))
             if not chats:
                 unrouted.append(it)
             pairs += [(int(c), it) for c in chats]

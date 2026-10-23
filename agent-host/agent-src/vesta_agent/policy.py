@@ -311,9 +311,23 @@ class Policy:
         """Is this a chat of the People list: a listed group, or the private chat of a listed person?"""
         return bool(self.roles_in(chat_id)) or int(chat_id) in self.people
 
-    def chats_for(self, role: str) -> list[int]:
-        """Every chat a message for `role` goes to: each id listed with that role, once, in the list's order."""
-        return list(dict.fromkeys(c for c, r in self.destinations if r == role))
+    def chats_for(self, role: str, language: str | None = None) -> list[int]:
+        """Every chat a message for `role` goes to: each id listed with that role, once, in the list's order — only
+        those whose row reads `language` (a code) when one is given."""
+        return list(dict.fromkeys(c for c, r in self.destinations
+                                  if r == role and (language is None or self.language_of(c, role) == language)))
+
+    def language_of(self, chat_id: int, role: str) -> str:
+        """The language a chat reads its `role`'s messages in: its row's (an older file's `chats:` has none: en)."""
+        return next((e.language for e in self.entries if e.telegram_id == int(chat_id) and e.role == role), "en")
+
+    def languages_for(self, role: str) -> list[str]:
+        """Every language (a code) the chats of `role` read, once, in the list's order.
+
+        ⚠️ ONE REPORT, EVERY READER'S LANGUAGE (owner, 2026-10-23: "I received the daily report in German, whereas I
+        set my language to French"): a role's report was written in its FIRST row's language and that one text went
+        to every chat of the role. A role read in two languages gets one version per language (tools send_message)."""
+        return list(dict.fromkeys(self.language_of(c, role) for c in self.chats_for(role)))
 
     def roles_in(self, chat_id: int) -> set[str]:
         """The roles a chat is listed with ({} for a chat the People list does not name)."""

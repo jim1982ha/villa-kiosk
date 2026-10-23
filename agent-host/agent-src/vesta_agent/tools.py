@@ -38,7 +38,7 @@ from vesta_shared.limits import limit
 from vesta_shared.messaging import no_platform_name
 
 from . import __version__, script_run, status, tool_access
-from .policy import Person, Policy
+from .policy import LANGUAGES, ROLE_WORDS, Person, Policy
 from .kiosk import KioskError, fault_note_chars, fault_title_chars
 from .redact import scrub  # noqa: F401 — callers import it from here too
 from .routing import Origin, Routing
@@ -757,43 +757,60 @@ class Toolbox:
         # fm chat (a private chat on the villa) and the group got only "report sent" (2026-09-30). Which
         # destinations are offered, and where each lands, is routing's answer (Routing.offered / target).
         targets = Routing.offered(origin)
+        per_language = {"type": "object", "additionalProperties": {"type": "string"}}
         schema = {"type": "object", "properties": {
-            "to": {"type": "string", "enum": targets}, "text": {"type": "string"},
+            "to": {"type": "string", "enum": targets},
+            "text": {"anyOf": [{"type": "string"}, per_language], "description": "The message; for a role whose people "
+                     "read several languages, one version per language: {\"German\": \"…\", \"French\": \"…\"}."},
             "title": {"type": "string", "description": "A report's title, exactly as its script printed it (its "
                       "\"title\"): the agent writes it at the top, and who the message is for under it."},
-            "attachment": {"type": "string", "description": "A file name in the out folder (an HTML report page), optional."}},
+            "attachment": {"anyOf": [{"type": "string"}, per_language], "description": "A file name in the out folder "
+                           "(an HTML report page), optional; one per language like text when each language has its page."}},
             "required": ["to", "text"]}
         if origin and origin.holds:
             desc = ("Send a message, with a file attached if needed (an HTML report page), to=here: the chat of the "
                     "person you are answering, or the chat this job was asked for in. Nothing goes to another chat. "
                     "A plain answer needs no tool: your reply is sent for you.")
         else:
+            langs = {r: [LANGUAGES.get(c, c) for c in self.policy.languages_for(r)] for r in ROLE_WORDS}
             desc = ("Send a message, with a file attached if needed. to=owner / to=fm: every chat of the owner or of "
-                    "the facility manager (the People list), for scheduled reports and digests.")
+                    "the facility manager (the People list), for scheduled reports and digests. "
+                    + " ".join(f"The {ROLE_WORDS[r].lower()}'s people read {' and '.join(ls)}"
+                               + (": text is then one version per language, each sent to the people who read it."
+                                  if len(ls) > 1 else ".") for r, ls in langs.items() if ls))
         @tool("send_message", desc, schema)
         async def handler(args: dict) -> dict:
             to = args.get("to")
+            route = Routing(self.policy)
             # a model that writes a destination it was not offered is held to the asker's chat by routing
-            if not Routing(self.policy).target(to, origin):
+            if not route.target(to, origin):
                 return _err(f"Nobody is listed as {to} in People: nothing was sent.")
-            att = args.get("attachment")
-            if att and (not FILE_NAME.match(att) or not os.path.exists(os.path.join(self.s.out_dir, att))):
-                return _err(f"{att} is not a file in the out folder.")
+            copies = route.versions(to, origin, args.get("text", ""), args.get("attachment"))
+            if isinstance(copies, str):
+                return _err(copies)
+            for _lang, _text, att in copies:
+                if att and (not FILE_NAME.match(att) or not os.path.exists(os.path.join(self.s.out_dir, att))):
+                    return _err(f"{att} is not a file in the out folder.")
             if self.carry_out is None:
                 return _err("Messages cannot be sent from here.")
-            # every chat of its role, with the heading of a message sent on its own: the one way out (outcome.py). The
-            # AI's words never name the platform (TurnReply's rule 9, for what it sends itself)
-            item = {"to": to, "text": no_platform_name(args.get("text", "")), **({"attachment": att} if att else {}),
-                    **({"title": str(args["title"])} if args.get("title") else {})}
-            done = await self.carry_out({"send": [item]}, None, origin, self.s.out_dir)
+            # every chat of its role (of its language), with the heading of a message sent on its own: the one way out
+            # (outcome.py). The AI's words never name the platform (TurnReply's rule 9, for what it sends itself)
+            items = [{"to": to, "text": no_platform_name(text), **({"language": lang} if lang else {}),
+                      **({"attachment": att} if att else {}),
+                      **({"title": str(args["title"])} if args.get("title") else {})} for lang, text, att in copies]
+            done = await self.carry_out({"send": items}, None, origin, self.s.out_dir)
             mid = done.get("sent")
-            self.state.log("sent" if mid else "send_refused", {"to": to, "chars": len(args.get("text", "")), "attachment": att})
+            atts = [att for _l, _t, att in copies if att]
+            self.state.log("sent" if mid else "send_refused", {"to": to, "chars": sum(len(t) for _l, t, _a in copies),
+                                                               "attachment": atts[0] if len(atts) == 1 else atts or None,
+                                                               **({"languages": [lg for lg, _t, _a in copies]}
+                                                                  if len(copies) > 1 else {})})
             if not mid:
                 # ⚠️ NEVER "Sent." FOR WHAT DID NOT ARRIVE (architecture review, 2026-10-06): the AI then told the
                 # person "the report is in your chat"
                 return _err("Telegram did not take this message: nothing was sent. Say so plainly; do not retry in a loop.")
             self.sent += 1
-            if att:
+            for att in dict.fromkeys(atts):
                 self.attached.append(att)
                 here = (done.get("messages") or {}).get(origin.chat) if origin else None
                 if isinstance(here, int) and not isinstance(here, bool):

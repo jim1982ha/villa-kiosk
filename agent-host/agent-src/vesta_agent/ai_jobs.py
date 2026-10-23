@@ -79,10 +79,11 @@ class AiJobs:
         return next(((sk, j) for sk, j in self.all() if j["name"] == name), None)
 
     def _language_of(self, role: str) -> str:
-        for p in self.policy().entries:                # every entry: one person may be both owner and fm
-            if p.role == role:
-                return LANG.get(p.language, p.language)
-        return "English"
+        """Every language the role's people read ("German and French"): the first row's alone sent the facility
+        manager's daily report in German to a facility manager who reads French (owner, 2026-10-23). With several,
+        send_message takes one version per language (routing.Routing.versions)."""
+        names = [LANG.get(c, c) for c in self.policy().languages_for(role)]
+        return " and ".join(names) if names else "English"
 
     async def run(self, skill, job: dict, origin: Origin | None = None) -> None:
         """An AI job of a skill: its brain and its spending limit per run are its skill's one pair, policy.yaml
