@@ -1,3 +1,9 @@
+## 0.12.338
+
+What you will see:
+- Limits: searching shows in each tab's title how many limits match, and opens a tab that has matches when the open
+  one has none. Before, "reopen" showed nothing while its limit sat in Skill settings.
+
 ## 0.12.337
 
 What you will see:

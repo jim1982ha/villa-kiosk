@@ -341,3 +341,16 @@ def test_the_alert_cards_translation_is_the_chat_answers_line_never_a_skills_pai
     said = {r["id"]["path"][-1]: r["label"] for r in rows if r["id"].get("path", [None])[0] == "settings"}
     assert "an alert card's text in a chat's language" in said["profile"]
     assert "one translation of an alert card's text" in said["reply_limit_usd"]
+
+
+def test_a_search_counts_its_matches_in_every_tab_title_and_opens_a_tab_that_has_some():
+    # owner, 2026-10-23: "reopen" found nothing — its limit sat in Skill settings while another tab was open; "the
+    # numbers between brackets shall update in each tab title"
+    from pathlib import Path
+    js = (Path(__file__).resolve().parents[1] / "vesta_agent" / "ui" / "static" / "limits.js").read_text()
+    groups = js[js.index("const groupsNow = () =>"):js.index("const bar = h(")]
+    assert "const list = rows.filter(match);" in groups and "`${title} (${list.length})`" in groups
+    draw = js[js.index("const draw = () => {"):js.index("draw();\n  const search")]
+    assert "if (FILTER && first && (!open || open[4] === 0)) page.tabs.limits = first[0];" in draw
+    assert "oninput: (e) => { FILTER = e.target.value.trim().toLowerCase(); draw(); }" in js
+    assert js.index("const table = (list)") < js.index("draw();\n  const search")      # tabbed draws at once

@@ -35,7 +35,8 @@ decides alone to act on the villa.
      The desk knows no automation by name: whatever an automation claims is the automation's.
    - `abandoned` with `still_true: false` (back to normal just as the automation gave up) closes the
      incident; still true, the owner hears it.
-   - An alert back within `reopen_hours` (4) of its incident closing reopens it: "Back again: N
+   - An alert back within `reopen_hours` hours of its incident closing (rules.yaml `behaviour:`, a villa's
+     villa.rules.yaml first; 4 as shipped) reopens it: "Back again: N
      times since …", under its own number, the villa system's latest words, its ladder started again
      and its OWN task and Kiosk fault open again, titled "(again: N times in 7 days)". Each run is
      counted on its own by the digest, the reports and the retune proposal.

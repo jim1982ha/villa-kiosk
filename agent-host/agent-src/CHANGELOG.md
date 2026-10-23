@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.328 (23 October 2026)
+
+- Limits: a search counts its matches in every tab's title ("Skill settings (1)"), and an open tab with none gives way
+  to the first that has some (owner, 2026-10-23: "reopen" found nothing while another tab was open).
+- alert-desk SKILL.md: `reopen_hours` read from rules.yaml `behaviour:` (a villa's villa.rules.yaml first), not "(4)".
+
 ## 0.6.327 (23 October 2026)
 
 - Rules › AI brains and limits (owner, 2026-10-23): the Chat answers line says only "replies in the chats"; "Forget
