@@ -162,7 +162,7 @@ export interface CardView {
   look?: "watched";
   /** A watched card's two halves (fm/faultConfirm.confirmParts): its compact row says "Done (JM)" in its text and
    *  "VESTA confirms by 15:06" in its pill. */
-  watched?: { did: string; when: string };
+  watched?: { did: string; when: string; tip: string };
   title: string;
   room?: string;
   /** What a tap on the card opens; undefined: the card is the problem itself (no device). */

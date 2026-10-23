@@ -16,7 +16,7 @@ import { useVillaAttention } from "./useVillaAttention";
 import type { AttentionGroup } from "@/config/attention";
 import { cockpitCard, type CardLine, type CardView } from "@/config/cockpitCard";
 import { SourceIcons } from "@/components/fm/sourceIcons";
-import RecordCard from "@/components/fm/RecordCard";
+import RecordCard, { CheckPill } from "@/components/fm/RecordCard";
 import { useVillaModel } from "@/config/VillaModel";
 import { buildDeviceOptions } from "@/components/fm/DeviceSearchPicker";
 import FaultForm from "@/components/fm/FaultForm";
@@ -123,7 +123,7 @@ export default function CockpitOverview({ onOpenEntity, doors, reportFaultFor, o
 export function WatchedRow({ card, onOpenEntity }: { card: CardView; onOpenEntity: (id: string) => void }) {
   const open = card.entityId;
   const fault = card.lines[0]?.text;
-  const said = card.watched ?? { did: card.lines[0]?.closing ?? "", when: "" };
+  const said = card.watched ?? { did: card.lines[0]?.closing ?? "", when: "", tip: "" };
   const inside = (
     <>
       <CheckCircle2 className="fault-watched-icon" size={18} aria-hidden="true" />
@@ -137,7 +137,7 @@ export function WatchedRow({ card, onOpenEntity }: { card: CardView; onOpenEntit
         </span>
         <span className="fault-watched-detail">{[fault, said.did].filter(Boolean).join(" · ")}</span>
       </span>
-      {said.when && <span className="fault-watched-when">{said.when}</span>}
+      {said.when && <CheckPill when={said.when} tip={said.tip} />}
     </>
   );
   return open

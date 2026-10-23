@@ -1,3 +1,9 @@
+## 2.496.507
+
+What you will see:
+- Cockpit: a fault VESTA is confirming now has the same pill as the open issues (a refresh icon and when): the time
+  it confirms by ("18:41"), then "within 5 min" once that time has passed. Hovering it says "VESTA confirms by 18:41".
+
 ## 2.496.506
 
 What you will see:

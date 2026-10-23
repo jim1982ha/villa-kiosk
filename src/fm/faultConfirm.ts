@@ -30,6 +30,8 @@ export interface ConfirmingFault {
   at: number;
   /** That moment is past: its verdict is due at the Agent's next look. */
   due: boolean;
+  /** The Agent's look, in minutes (its cadence), null offline: "within 5 min" once the moment is past. */
+  lookMinutes: number | null;
 }
 
 /** The last moment a fault confirmed by `at` is still shown: two of the Agent's looks after it while the Agent says its
@@ -51,6 +53,7 @@ export function confirmingOf(t: FmTicket, cadence: AgentCadence | null, now: num
     who: close?.who || close?.by || "",
     at,
     due: now >= at,
+    lookMinutes: cadence && cadence.checkMinutes > 0 ? cadence.checkMinutes : null,
   };
 }
 
@@ -59,18 +62,21 @@ export function confirmingFaults(d: FmData, cadence: AgentCadence | null, now: n
   return d.tickets.flatMap((t) => confirmingOf(t, cadence, now) ?? []).sort((a, b) => a.at - b.at || a.ticket.id.localeCompare(b.ticket.id));
 }
 
-/** Its line on the card: "Done (JM) · VESTA confirms by 15:06" — the moment past, "· VESTA confirming now"
- *  The time is the villa's clock (the tablet's, as every other time on the card: dateText.clockTime). */
+/** Its line on the card: "Done (JM) · VESTA confirms by 15:06" — the moment past, "· VESTA confirms it at its next
+ *  look". The time is the villa's clock (the tablet's, as every other time on the card: dateText.clockTime). */
 export function confirmLine(c: ConfirmingFault): string {
-  const { did, when } = confirmParts(c);
-  return `${did} · ${when}`;
+  const { did, tip } = confirmParts(c);
+  return `${did} · ${tip}`;
 }
 
-/** The line's two halves: what the person did ("Done (JM)") and when the VESTA Agent confirms it ("VESTA confirms by
- *  15:06") — the compact row says them apart, its pill holding the second (owner, 2026-10-23: option 4). */
-export function confirmParts(c: ConfirmingFault): { did: string; when: string } {
+/** The row's parts: what the person did ("Done (JM)"), and its pill — ⚠️ THE OPEN ISSUES' NEXT-CHECK PILL (owner,
+ *  2026-10-23: "consistent with other pills, like `within 5 min`"): `when` its words ("15:06", once past "within
+ *  5 min", the Agent's next look, as faultTiming says it), `tip` what hovering it says. */
+export function confirmParts(c: ConfirmingFault): { did: string; when: string; tip: string } {
+  const by = clockTime(c.at);
   return {
     did: c.who ? `${c.word} (${c.who})` : c.word,
-    when: c.due ? "VESTA confirming now" : `VESTA confirms by ${clockTime(c.at)}`,
+    when: c.due ? (c.lookMinutes ? `within ${c.lookMinutes} min` : by) : by,
+    tip: c.due ? "VESTA confirms it at its next look" : `VESTA confirms by ${by}`,
   };
 }
