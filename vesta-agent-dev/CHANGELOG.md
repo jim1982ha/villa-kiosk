@@ -1,3 +1,12 @@
+## 0.12.336
+
+What you will see:
+- Alert translation is part of the Chat answers: it uses their brain and limit, so it is on as soon as this is
+  installed, for every chat whose language is not English. No "alert-translation" job any more (not in AI brains and
+  limits, not in "Add them", not in Limits). Rules › AI brains and limits: the Chat answers row says it also puts alert
+  cards in each chat's language, with "Forget the translations" under it. Skills › alert-desk says it the same way.
+  Costs: "Chat replies › alert translation".
+
 ## 0.12.335
 
 What you will see:
