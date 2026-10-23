@@ -1,3 +1,13 @@
+## 0.12.334
+
+What you will see:
+- An alert's own text (written in English by the villa's automations) now reaches each chat in that chat's language
+  from People: the card arrives in English and is updated with the translation a moment later; the next alerts with
+  the same wording arrive already translated, whatever their device, number or time. Device names, states and values
+  are kept as written. If the translation cannot be made, the English stays.
+- It runs only once its AI brain and spending limit are set: VESTA Agent page → Rules (alert-desk, "alert-translation";
+  "Add them" offers the economy brain with 0.05 US$ per run). Until then, alerts stay in English.
+
 ## 0.12.333
 
 What you will see:
