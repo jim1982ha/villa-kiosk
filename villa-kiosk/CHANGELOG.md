@@ -1,3 +1,9 @@
+## 2.496.505
+
+What you will see:
+- Cockpit: a fault VESTA is confirming shows its room as the same pill as the Open issues cards, right after the
+  device's name.
+
 ## 2.496.504
 
 What you will see:

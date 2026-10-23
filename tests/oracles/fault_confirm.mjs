@@ -89,7 +89,7 @@ const drawn = draw(h(WatchedRow, { card: cards[1], onOpenEntity: () => {} }));
 // owner, 2026-10-23, option 4 "One compact row": a check, its device · its fault · who closed it, and a pill saying when
 ck("  ...drawn as ONE compact row marked `fault-watched`: a check, its device, its fault, who closed it, and when in a pill",
    /^<button type="button" class="fault-watched">/.test(drawn) && /class="[^"]*fault-watched-icon/.test(drawn)
-   && /<span class="fault-watched-text"><b class="fault-watched-title">[^<·]+<\/b><span class="fault-watched-detail">#65 · Door unlocked · Done \(JM\)<\/span><\/span>/.test(drawn)
+   && /<span class="fault-watched-text"><span class="fault-watched-head"><b class="fault-watched-title">[^<·]+<\/b><span class="fm-entity-chip fm-chip-static">Hall<\/span><\/span><span class="fault-watched-detail">#65 · Door unlocked · Done \(JM\)<\/span><\/span>/.test(drawn)
    && /<span class="fault-watched-when">VESTA confirms by [^<]+<\/span>/.test(drawn), drawn.slice(0, 500));
 ck("  ...no card, no Close and no next-check pill: it is closed, its pill says when",
    !/fm-record-card|fm-record-actions|fm-record-check/.test(drawn));
