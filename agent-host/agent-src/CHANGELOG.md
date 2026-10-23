@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.325 (23 October 2026)
+
+- Architecture review I, the translation (#2, #3): `vesta_agent/phrases.py` owns what is kept, asked again and
+  forgotten. An answer line is kept only if it keeps every slot once and is not the English skeleton echoed; a failed
+  (skeleton, language) waits `alerts.translate_retry_hours` (24) before it is asked again, said once in the log, a
+  success clears it; kept rows are filed under a fingerprint of the skill's instructions and the slot rules (another
+  fingerprint's rows are deleted at first use: 0.12.334's rows go); POST /api/translations/forget (all or one
+  language) and a "Forget the translations" button under alert-translation on the Rules page (its own dialog).
+- Names at the event seam: the alert's devices' names are read live when it arrives (`alerts.names_read_seconds`, 1 s,
+  never fatal; kept in State for redraws), first, then the knowledge pack's; matched as whole words, a name of two or
+  more words in any capitals, a one-word name as written.
+- The agreement copy follows the Kiosk's 2.496.508: a reopen by either side removes `confirmsBy`.
+
 ## 0.6.324 (23 October 2026)
 
 - An alert's own text in each chat's language (owner, 2026-10-23), `vesta_agent/translation.py`. The card goes out

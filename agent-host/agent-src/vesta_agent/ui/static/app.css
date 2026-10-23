@@ -352,6 +352,9 @@ dialog.ask .actions { justify-content: flex-end; margin-top: 0; }
 
 /* ---- 0.6.42: what the AI can use, a fuller Skills tab, copying a setup, the changes (owner's design, 2026-10-06) */
 .small { font-size: var(--text-xs); }
+/* the alert translation's memory, under its line in Rules › AI brains and limits (rules.js forgetRow) */
+.forget-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.forget-row .picker-box { width: auto; flex: 1 1 160px; }
 .block { display: block; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chips.one-line { flex-wrap: nowrap; white-space: nowrap; align-items: center; }

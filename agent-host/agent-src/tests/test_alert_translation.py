@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import re
 from datetime import datetime, timedelta, timezone
 
@@ -20,11 +21,16 @@ from telegram_fake import BOT
 from vesta_agent import translation
 from vesta_agent.ha_events import CONTEXT_KEY
 from vesta_agent.state import State
-from vesta_agent.translation import answer, fill, fits, mask, wordy
+from vesta_agent.phrases import acceptable, fits, wordy
+from vesta_agent.translation import answer, fill, mask
 
 GROUP, FM_DE, FM_FR = -100123, 222, 333
 AGREED = {"alert-desk": {"brain": "economy", "limit_usd": 0.05}}
 LANGS = {"French": "fr", "German": "de"}
+STATES = {"lock.test_lock": {"entity_id": "lock.test_lock", "state": "unavailable",
+                             "attributes": {"friendly_name": "Test lock"}},
+          "lock.front_gate": {"entity_id": "lock.front_gate", "state": "unavailable",
+                              "attributes": {"friendly_name": "Front Gate Lock"}}}
 
 
 def villa(tmp_path, group_language="en", agreed=True):
@@ -34,7 +40,8 @@ def villa(tmp_path, group_language="en", agreed=True):
         {"telegram_id": FM_FR, "name": "Luc", "role": "fm", "language": "fr"}]}
     if agreed:
         pol["settings"] = {"skill_ai": AGREED}
-    v = make_agent(tmp_path, pol, skills=["alert-desk"], reader=FakeHA(tools=[tool("ha_get_state")]))
+    # the villa's system names its devices as the alert arrives (app.Vesta._alert_names)
+    v = make_agent(tmp_path, pol, skills=["alert-desk"], reader=FakeHA(tools=[tool("ha_get_state")], states=STATES))
     v.bot_username = BOT["username"]
     # the villa's devices as the night's build names them: a name in an alert is a value, never words to translate
     from vesta_shared.knowledge_pack import build_pack
@@ -292,8 +299,9 @@ def test_a_translation_must_keep_every_slot_once():
     assert not fits("{1} est {2} depuis {3} min. {4}", s)            # one invented
     assert not fits("{1} est {2}\ndepuis {3} min.", s) and not fits("", s) and not fits(None, s)
     assert answer('Sure: ["{1} est {2} depuis plus de {3} min.", "x"]', [s, "Held {1} min"]) == \
-        {s: "{1} est {2} depuis plus de {3} min."}                    # the line that fits is kept, the other is not
-    assert answer('["a"]', [s, "Held {1} min"]) == {} and answer("no list", [s]) == {}
+        {s: "{1} est {2} depuis plus de {3} min.", "Held {1} min": "x"}  # read; phrases.Phrases.take judges each line
+    assert answer('["a"]', [s, "Held {1} min"]) is None and answer("no list", [s]) is None
+    assert acceptable("{1} est {2} depuis plus de {3} min.", s) and not acceptable("x", "Held {1} min")
     assert not wordy("⚡ {1}") and wordy("Held {1} min")
 
 
@@ -318,6 +326,211 @@ def test_the_page_offers_the_translation_like_an_ai_job(tmp_path):
     assert [x.name for x in translators({"alert-desk": sk})] == ["alert-desk"]
     assert sk.jobs_default == {"brain": "economy", "limit_usd": 0.05}
     assert any(r["job"] == "alert-translation" and r["kind"] == "ai" for r in when_it_runs(sk))
+
+
+# ------------------------------------------------------------------ (g) what is kept, asked again, forgotten (phrases.py)
+SKEL = "{1} has been {2} for over {3} s."
+
+
+def lines_of(r) -> list[str]:
+    return json.loads(r["prompt"].rsplit("\n", 1)[1])
+
+
+def lang_of(r) -> str:
+    return LANGS[re.search(r"into (\w+)\.", r["prompt"]).group(1)]
+
+
+def clocked(v):
+    """The phrase store's clock, moved by the test (never a sleep): [now]."""
+    at = [datetime.now(timezone.utc)]
+    v.translations.phrases.now = lambda: at[0]
+    return at
+
+
+@pytest.mark.parametrize("how", ["the English given back", "a slot dropped", "an error"])
+def test_a_failed_line_rests_then_is_asked_again_and_a_success_clears_it(tmp_path, monkeypatch, caplog, how):
+    # review, 2026-10-23: an echo was kept for good (the French chat read English on every later card, never asked
+    # again); a dropped slot was asked again for every card, reminder and redraw — a paid run per language each time
+    v = villa(tmp_path)
+    at = clocked(v)
+    good = [False]
+
+    def answer_(r):
+        if good[0]:
+            return translator(r)
+        if how == "an error":
+            raise RuntimeError("the SDK broke")
+        return json.dumps(lines_of(r) if how == "the English given back"
+                          else [x.replace("{1}", "") for x in lines_of(r)])
+    ai = FakeAI(answer_).install(monkeypatch)
+    caplog.set_level(logging.INFO, logger="vesta.translation")
+
+    async def go():
+        await alert(v, 1, "lock.test_lock", "Test lock", 10, "23/10/2026 18:30")
+        await v.translations.idle()
+        first = len(ai.runs)
+        at[0] += timedelta(hours=23)                                  # within the rest: not asked, English
+        await alert(v, 2, "lock.front_gate", "Front Gate Lock", 25, "24/10/2026 07:15")
+        await v.translations.idle()
+        rested = len(ai.runs)
+        good[0] = True
+        at[0] += timedelta(hours=2)                                   # past alerts.translate_retry_hours (24)
+        await alert(v, 3, "lock.test_lock", "Test lock", 30, "25/10/2026 09:00")
+        await v.translations.idle()
+        return first, rested
+    first, rested = run(go())
+    assert first == 2 and rested == 2, ai.runs                        # one run per language, then none in the rest
+    fp = v.translations.fingerprint(v.skills.get("alert-desk"))
+    assert v.state.translation("fr", SKEL, fp) == f"(fr) {SKEL}"
+    assert 'Front Gate Lock has been "unavailable" for over 25 s.' in card(v, 2, FM_FR)            # English, delivered
+    assert '(fr) Test lock has been "unavailable" for over 30 s.' in card(v, 3, FM_FR)            # asked again: kept
+    assert v.state.untranslated("fr", SKEL, fp) is None and v.state.untranslated("de", SKEL, fp) is None   # cleared
+    said = [r.getMessage() for r in caplog.records if "stay in English for" in r.getMessage()]
+    assert sorted(m.split(" for ")[1] for m in said) == ["de", "fr"], said       # once per language, not per card
+    assert all(SKEL in m for m in said)
+
+
+def test_one_line_that_failed_stays_english_and_the_others_are_shown_translated(tmp_path, monkeypatch):
+    v = villa(tmp_path)
+    ai = FakeAI(lambda r: json.dumps([f"({lang_of(r)}) {x}" if x == SKEL else x for x in lines_of(r)])).install(monkeypatch)
+
+    async def go():
+        await alert(v, 1, "lock.test_lock", "Test lock", 10, "23/10/2026 18:30")
+        await v.translations.idle()
+        await alert(v, 2, "lock.front_gate", "Front Gate Lock", 25, "24/10/2026 07:15")
+        await v.translations.idle()
+    run(go())
+    assert len(ai.runs) == 2                                          # the echoed lines rest: no more runs
+    for i, name, secs, at in ((1, "Test lock", 10, "23/10/2026 18:30"), (2, "Front Gate Lock", 25, "24/10/2026 07:15")):
+        assert f'(fr) {name} has been "unavailable" for over {secs} s.\nSince {at}' in card(v, i, FM_FR), card(v, i, FM_FR)
+
+
+def test_new_translate_instructions_start_afresh_and_the_older_translations_go(tmp_path, monkeypatch):
+    v = villa(tmp_path)
+    ai = FakeAI(translator).install(monkeypatch)
+
+    async def go():
+        await alert(v, 1, "lock.test_lock", "Test lock", 10, "23/10/2026 18:30")
+        await v.translations.idle()
+        path = f"{v.s.skills_dir}/alert-desk/skill.yaml"
+        text = open(path, encoding="utf-8").read()
+        assert "You translate the lines" in text
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text.replace("You translate the lines", "You translate, formally, the lines"))
+        await alert(v, 2, "lock.front_gate", "Front Gate Lock", 25, "24/10/2026 07:15")
+        await v.translations.idle()
+    run(go())
+    assert len(ai.runs) == 4                                          # asked again under the new instructions
+    assert "formally" in ai.runs[-1]["system_prompt"]
+    assert v.state.translations_kept() == {"fr": 3, "de": 3}          # the card's 3 lines: the earlier ones deleted
+    assert '(fr) Front Gate Lock has been "unavailable" for over 25 s.' in card(v, 2, FM_FR)
+
+
+def test_forget_the_translations_on_the_page_one_language_then_all(tmp_path, monkeypatch):
+    from aiohttp.test_utils import TestClient, TestServer
+    from vesta_agent.ui.server import UI
+    v = villa(tmp_path)
+    ai = FakeAI(translator).install(monkeypatch)
+    hdr = {"X-Vesta-UI": "1"}
+
+    async def page(steps):
+        async with TestClient(TestServer(UI(v.s, "standalone").app())) as c:
+            out = []
+            for body in steps:
+                if body == "jobs":
+                    jobs = (await (await c.get("/api/jobs")).json())["jobs"]
+                    out.append(next(j["translations"] for j in jobs if j["name"] == "alert-translation"))
+                else:
+                    r = await c.post("/api/translations/forget", json=body, headers=hdr)
+                    out.append((r.status, await r.json()))
+            return out
+
+    async def go():
+        await alert(v, 1, "lock.test_lock", "Test lock", 10, "23/10/2026 18:30")
+        await v.translations.idle()
+        shown, bad, fr = await page(["jobs", {"lang": "pt-xx"}, {"lang": "fr"}])
+        await alert(v, 2, "lock.front_gate", "Front Gate Lock", 25, "24/10/2026 07:15")
+        await v.translations.idle()
+        asked = sorted(lang_of(r) for r in ai.runs[2:])
+        every, after = await page([{"lang": None}, "jobs"])
+        return shown, bad, fr, asked, every, after
+    shown, bad, fr, asked, every, after = run(go())
+    assert shown == {"fr": 3, "de": 3}                                # the card's 3 lines kept, per language
+    assert bad[0] == 400
+    assert fr == (200, {"forgot": 3, "kept": {"de": 3}})
+    assert asked == ["fr"]                                            # only the forgotten language asked again
+    assert every[0] == 200 and every[1]["forgot"] == 6 and every[1]["kept"] == {}
+    assert after == {} and v.state.translations_kept() == {}
+
+
+def test_the_page_offers_forget_in_its_own_dialog():
+    from helpers import body_of, page_js
+    js = body_of(page_js(), "rulesForms")
+    js = js[js.index("function forgetRow"):]
+    js = js[:js.index("\n  drawAi();")]
+    assert 'api("POST", "api/translations/forget"' in js and "await ask(" in js and "confirm(" not in js
+    assert "Forget the translations" in js
+
+
+# ------------------------------------------------------------------ (h) the alert's own names (review, 2026-10-23)
+def literal(run_: dict) -> str:
+    """A real model translates every word it is given: this stand-in does it for "lock" and "Gate"."""
+    lang = lang_of(run_)
+    w = {"fr": {"lock": "serrure", "Gate": "Portail"}, "de": {"lock": "Schloss", "Gate": "Tor"}}[lang]
+    out = []
+    for x in lines_of(run_):
+        for a, b in w.items():
+            x = re.sub(rf"\b{a}\b", b, x)
+        out.append(f"({lang}) {x}")
+    return json.dumps(out, ensure_ascii=False)
+
+
+@pytest.mark.parametrize("case", ["no pack yet", "a name written with other capitals"])
+def test_a_devices_name_never_reaches_the_ai_and_two_devices_share_one_translation(tmp_path, monkeypatch, case):
+    v = villa(tmp_path)
+    if case == "no pack yet":
+        os.remove(v.s.pack_path)                                      # before the first nightly build
+        n1, n2 = "Test lock", "Front Gate Lock"
+    else:
+        n1, n2 = "Test Lock", "Front gate lock"                       # the automation's own capitals
+    ai = FakeAI(literal).install(monkeypatch)
+
+    async def go():
+        await alert(v, 1, "lock.test_lock", n1, 10, "23/10/2026 18:30")
+        await v.translations.idle()
+        await alert(v, 2, "lock.front_gate", n2, 25, "24/10/2026 07:15")
+        await v.translations.idle()
+    run(go())
+    assert sorted(lang_of(r) for r in ai.runs) == ["de", "fr"]        # one run per language for both devices
+    for r in ai.runs:
+        assert lines_of(r)[0] == SKEL and "lock" not in json.dumps(lines_of(r)).lower()
+    assert f'(fr) {n1} has been "unavailable" for over 10 s.' in card(v, 1, FM_FR)
+    assert f'(fr) {n2} has been "unavailable" for over 25 s.' in card(v, 2, FM_FR)       # the name as written
+
+
+def test_a_one_word_name_is_matched_as_written_and_never_takes_an_everyday_word():
+    names = ["Pool", "Front Gate Lock"]
+    assert mask("Pool: front gate lock is open", names) == ("{1}: {2} is open", ["Pool", "front gate lock"])
+    assert mask("Water the pool before 18:00", names) == ("Water the pool before {1}", ["18:00"])
+    assert mask("Front Gate Lock open", names)[0] == "{1} open"       # the name's spaces as the text writes them
+
+
+def test_the_alerts_names_come_from_the_villa_and_a_failed_read_never_stops_the_alert(tmp_path, monkeypatch):
+    from vesta_agent import app as app_mod
+    v = villa(tmp_path)
+    os.remove(v.s.pack_path)
+    FakeAI(translator).install(monkeypatch)
+
+    async def go(v):
+        await alert(v, 1, "lock.test_lock", "Test lock", 10, "23/10/2026 18:30")
+        await v.translations.idle()
+    run(go(v))
+    assert v.translations.names(1) == ["Test lock"]                   # read from the villa's system as it arrived
+    # the villa's system not answering: the alert goes on, with the names the pack has
+    v2 = villa(tmp_path / "b")
+    monkeypatch.setattr(app_mod, "alert_names", lambda reader, ents: (_ for _ in ()).throw(TimeoutError()))
+    run(go(v2))
+    assert v2.thread.shown(1)[FM_FR] and v2.translations.names(1)[0] == "Test lock"
 
 
 def run(coro):

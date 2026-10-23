@@ -1,3 +1,13 @@
+## 0.12.335
+
+What you will see:
+- Alert translations: an answer that is still English is no longer kept, so a wording is never stuck in English; a
+  wording the AI could not translate is not asked again (and not paid for) for 24 h; device names are never translated,
+  even before the villa's device list is built or when an automation writes a name with other capitals.
+- VESTA Agent page → Rules: under alert-translation, how many translations are kept per language, and a "Forget the
+  translations" button (all, or one language).
+- The translations kept by 0.12.334 are dropped once, at the first alert, and translated again.
+
 ## 0.12.334
 
 What you will see:

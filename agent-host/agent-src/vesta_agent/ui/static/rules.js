@@ -1,5 +1,5 @@
 // VESTA Agent page — the Rules tab (policy.yaml): the forms, the file, and AI tools.
-import { api, card, dropdown, editTable, field, fill, floating, go, h, infoButton, inOrder, jobsBanner, jump, markDirty, page, pagedBlock, place, plural, problemsBox, reasons, saveWith, setBar, tabbed, table, tableRow, tell, titleWithInfo, toast, toggleCard, $view, where, withInfo } from "./core.js";
+import { api, ask, card, dropdown, editTable, field, fill, floating, go, h, infoButton, inOrder, jobsBanner, jump, markDirty, page, pagedBlock, place, plural, problemsBox, reasons, saveWith, setBar, tabbed, table, tableRow, tell, titleWithInfo, toast, toggleCard, $view, where, withInfo } from "./core.js";
 import { fileEditor } from "./viewer.js";
 
 // ---------------------------------------------------------------- rules (policy.yaml)
@@ -108,7 +108,8 @@ export function rulesForms(doc, jobs = [], tools = null) {
     const its = jobs.filter((j) => j.skill === skill);
     const pair = pairOf(skill);
     const what = [h("b", {}, `${skill} skill`),
-      ...its.map((j) => h("div", { class: "muted small" }, `${j.name} · ${j.when_words}${j.on_request ? ", or when asked in a chat" : ""}`))];
+      ...its.flatMap((j) => [h("div", { class: "muted small" }, `${j.name} · ${j.when_words}${j.on_request ? ", or when asked in a chat" : ""}`),
+        j.translations ? forgetRow(j) : null])];
     // ⚠️ WHO ASKS DECIDES, NEVER THE SKILL (owner, 2026-10-10): on schedule everything switched on; asked for in a
     // chat, what that person may use there. Its skill's list is shown on the skill's page, as what it uses.
     const got = { cls: "tools-got", v: h("span", { class: "muted" }, "By who asks") };
@@ -128,6 +129,29 @@ export function rulesForms(doc, jobs = [], tools = null) {
         if (f.settings.skill_brains) delete f.settings.skill_brains[skill];
         its.forEach((j) => (j.skill_ai = null));
         drawAi(); markDirty(); } }, "×") }]);
+  }
+  // the alert translation's memory (phrases.py): what is kept, per language, and "Forget the translations" — one
+  // language's or all of them — asked in the page's own dialog (core.ask: never the browser's confirm). Not a change
+  // of the file: done at once, nothing to save or undo; the next alert cards are translated again by the AI.
+  function forgetRow(j) {
+    const kept = Object.entries(j.translations);
+    if (!kept.length) return h("div", { class: "muted small" }, "No translation kept yet.");
+    const langName = (code) => doc.languages[code] || code;
+    const all = kept.reduce((n, [, k]) => n + k, 0);
+    let pick = "";
+    const choices = [["", `Every language (${all})`], ...kept.map(([code, n]) => [code, `${langName(code)} (${n})`])];
+    return h("div", { class: "forget-row" },
+      dropdown(choices, pick, (v) => (pick = v), "Which translations to forget"),
+      h("button", { type: "button", class: "btn ghost", onclick: async () => {
+        const which = pick ? `the ${langName(pick)} translations` : "every translation";
+        if (!(await ask({ title: `Forget ${which}?`, ok: "Forget", danger: true,
+          text: "The next alert cards are translated again by the AI, at the cost of each run." }))) return;
+        try {
+          const res = await api("POST", "api/translations/forget", { lang: pick || null });
+          j.translations = res.kept; drawAi();
+          toast(`${plural(res.forgot, "translation", "translations")} forgotten.`);
+        } catch (e) { tell("Not forgotten", reasons(e)); }
+      } }, "Forget the translations"));
   }
   drawAi();
   const ai = card(place("ai"), "Which brain answers the chats and runs each skill's AI jobs, and the most ONE reply or ONE run may cost (one chat reply, or one run of any AI job of a skill, not a monthly budget; one brain and one limit for all the AI jobs of a skill), and which tools a report gets: what the person who asks may use (on schedule, everything switched on). A reply that reaches its limit stops and offers Continue; a report that reaches it is still sent with what is done. A skill that is not set does not run its AI jobs.",

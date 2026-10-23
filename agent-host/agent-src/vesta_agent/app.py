@@ -52,7 +52,7 @@ from .ha_events import CONTEXT_KEY, REGISTRY_EVENTS, HaEvents
 from . import layout
 from .approvals import Approvals
 from .posting import Poster
-from .translation import Translations, incident_names
+from .translation import Translations, alert_names, incident_names, names_seconds
 from .incident_thread import IncidentThread
 
 from .housekeeping import tidy
@@ -197,7 +197,8 @@ class Vesta:
         # putting one message in one chat (posting.py): the alerts and the approval requests both use it
         # an alert card's own words in each chat's language, learnt once per sentence pattern (translation.py)
         self.translations = Translations(self.state, policy=self.policy, skills=self.skills, settings=settings,
-                                         names=lambda iid: incident_names(self.pack(), incidents.entities(iid)),
+                                         names=lambda iid: incident_names(
+                                             self.pack(), ents := incidents.entities(iid), self.state.entity_names(ents)),
                                          thread=self.thread)
         self.thread.translate = self.translations.draw
         self.poster = Poster(send=self.delivery.send, thread=self.thread, notices=self.notices,
@@ -482,6 +483,7 @@ class Vesta:
             json.dump(event, f)
         log.info("Alert received: %s — %s (%s)", event.get("phase") or "?", event.get("label") or event.get("rule_id"),
                  event.get("blueprint") or "no blueprint")
+        await self._alert_names(event)
         handled = False
         for sk in self.skills.all().values():
             cmd = sk.on_event.get("critical_event")
@@ -497,6 +499,22 @@ class Vesta:
         if not handled:
             log.warning("Alert received but no skill handles critical events (alert-desk deleted?)")
         self.state.log("critical_event", {"rule": event.get("rule_id"), "phase": event.get("phase"), "handled": handled})
+
+    async def _alert_names(self, event: dict) -> None:
+        """The alert's devices as the villa's system names them now, kept for its card's translation (translation.py:
+        a name is a value, never words to translate). ⚠️ BOUNDED (names_seconds), NEVER FATAL: the card goes on with
+        the names kept before and the knowledge pack's."""
+        ents = event.get("entities")
+        ents = str(ents).split(",") if isinstance(ents, str) else ents if isinstance(ents, list) else []
+        ents = [e.strip() for e in ents if isinstance(e, str) and "." in e]
+        if not ents:
+            return
+        try:
+            names = await asyncio.wait_for(asyncio.to_thread(alert_names, self.reader, ents), timeout=names_seconds())
+            self.state.note_entity_names(names)
+        except Exception as e:  # noqa: BLE001 — a timeout too: the names already known are used
+            log.info("The alert's device names could not be read from the villa's system (%s): the names already "
+                     "known are used", type(e).__name__)
 
     def beat(self) -> None:
         from vesta_shared.store import Store

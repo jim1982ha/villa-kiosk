@@ -110,6 +110,7 @@ class UI:
         r.add_put("/api/policy/text", self.policy_text)
         r.add_get("/api/jobs", self.jobs)
         r.add_post("/api/jobs/missing", self.jobs_add_missing)
+        r.add_post("/api/translations/forget", self.translations_forget)
         r.add_get("/api/entities", self.entities)
         r.add_get("/api/costs", self.costs)
         r.add_get("/api/limits", self.limits_get)
@@ -207,6 +208,7 @@ class UI:
         every = self.skills.all()
         owners, starters = job_owners(every), job_starters(every)
         listed = {t["name"]: t for t in (tool_access.read_list(self.s.data_dir) or {}).get("tools") or []}
+        kept = self._translations_kept() if translators(every) else {}
         return [{"name": j["name"], "skill": sk.name, "when": j["when"], "to": j.get("to"),
                  "when_words": describe(j["when"])[0], "runs_per_month": describe(j["when"])[1],
                  "on_request": j.get("on_request", False), "description": j.get("description") or "",
@@ -221,8 +223,35 @@ class UI:
              "when_words": "when an alert card goes to a chat that reads another language", "runs_per_month": 0,
              "on_request": False, "description": sk.translate["description"],
              "skill_ai": pol.skill_setting(sk.name, owners, starters),
-             "skill_default": starters.get(sk.name) or {"brain": "economy", "limit_usd": 0.05}, "tools": []}
+             "skill_default": starters.get(sk.name) or {"brain": "economy", "limit_usd": 0.05}, "tools": [],
+             # how many sentence patterns are kept translated, per language: what "Forget the translations" forgets
+             "translations": kept}
             for sk in translators(every)]
+
+    def _translations_kept(self) -> dict[str, int]:
+        if not os.path.exists(self.s.state_path):
+            return {}
+        try:
+            return State(self.s.state_path).translations_kept()
+        except Exception as e:  # noqa: BLE001 — the row shows without its count
+            log.warning("UI: the alert translations kept could not be read (%s)", type(e).__name__)
+            return {}
+
+    async def translations_forget(self, request):
+        """"Forget the translations" (Rules › AI brains and limits, under the alert translation): every sentence pattern
+        kept translated — and every failure remembered — of one language, or of all; the next cards ask the AI again
+        (phrases.Phrases.forget). Not a file: nothing to undo, the AI translates them again."""
+        from ..phrases import Phrases
+        from ..policy import LANGUAGES
+        lang = (await request.json()).get("lang")
+        if lang is not None and lang not in LANGUAGES:
+            raise Refused(["No such language."])
+        if not os.path.exists(self.s.state_path):
+            return web.json_response({"forgot": 0, "kept": {}})
+        st = State(self.s.state_path)
+        n = Phrases(st).forget(lang)
+        log.info("UI: %d alert card translations forgotten (%s)", n, lang or "every language")
+        return web.json_response({"forgot": n, "kept": st.translations_kept()})
 
     async def jobs(self, _request):
         return web.json_response({"jobs": self._jobs()})

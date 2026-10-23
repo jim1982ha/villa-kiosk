@@ -976,3 +976,22 @@ still off; an investigation calling a sensor with no value "stopped reporting").
   alert desk's `jobs_default` (economy, 0.05 US$) its offer; it runs with the skill's settings.skill_ai pair. Not set:
   English, said once in the log; the page lists `alert-translation` with the AI jobs (server._jobs, Limits, setup
   copy), so "Add them" writes it. Its Costs row is `job:alert-translation`.
+- **What is kept, asked again, forgotten: `phrases.Phrases`** (review, 2026-10-23, 0.12.335). The one owner of the
+  rule; `Translations` asks it. KEPT: an answer that keeps every slot once (`fits`) and is not the English given back
+  (`refused`: equal ignoring case, spaces and punctuation, for a line with words). A FAILURE RESTS: an echo, a slot
+  dropped, an answer that is not the list, the AI's error or time limit — that (skeleton, language) is not asked for
+  `alerts.translate_retry_hours` (24) — State `untranslated:`, RECORDS — its line stays English while the card's other
+  lines show translated (before, one such line kept the whole card English and was asked at every redraw), said once
+  in the log; a later success clears it. Clock: `Phrases.now` (tests move it). FINGERPRINT: kept under
+  `phrases.fingerprint(the skill's translate instructions, translation.rules())` (the patterns and the prompt's
+  contract); another fingerprint is never read and its rows are deleted the first time the new one is used — so the
+  0.12.334 rows (no fingerprint, possibly echoes) go at the first card. FORGET: Rules › AI brains and limits, under
+  the alert translation's line, shows what is kept per language (server `_jobs` `translations`) and "Forget the
+  translations" (one language or all; core.ask) → POST `/api/translations/forget` {lang|null} → `Phrases.forget`
+  (translations and failures). The UI process writes State directly: nothing in it needs the villa's system.
+- **The alert's own names first** (same review). `incident_names(pack, entities, live)`: the friendly names the villa's
+  system gives the event's entities when it arrives (`app.Vesta._alert_names` → `translation.alert_names` through the
+  app's reader, in a thread, within `alerts.names_read_seconds` (5); kept in State `entname:`, RECORDS, so a redraw
+  after a restart masks the same), then the pack's. `translation._named`: longest first, whole words; a name of two
+  words or more in any capitals ("Test Lock" = the pack's "Test lock"); a ONE-word name only with its own capitals
+  ("Pool" never takes "the pool"). The events carry no name of their own (the critical_* blueprints send ids).

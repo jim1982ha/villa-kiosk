@@ -17,8 +17,9 @@ buttons or the Kiosk waits on this.
 skeleton, cached"): 'Main Power Device Power has been "unavailable" for over 10 min.' and '… for over 20 min.' share
 one cached translation; after the first time a card arrives already translated, with no AI call. The slots are
 universal — numbers with their units, a duration's numbers (its unit stays in the skeleton, translated once), times,
-dates, quoted values, bracketed codes, incident tags — plus the friendly names of the incident's own devices and
-rooms (the knowledge pack's), longest first. Values are never translated.
+dates, quoted values, bracketed codes, incident tags — plus the names of the incident's own devices and rooms
+(`incident_names`), longest first. Values are never translated. What is kept, asked again or forgotten is
+phrases.Phrases' rule (an echo is not kept, a failure rests, the instructions' fingerprint).
 
 ⚠️ COST AGREED (owner, 2026-10-01: NOT SET, NOT RUN): the brain and the limit per run are the translating skill's
 policy.yaml settings.skill_ai (its skill.yaml `translate:` declares the work and `jobs_default` the offer the VESTA
@@ -32,6 +33,7 @@ never comes back on a translated chat's copy.
 from __future__ import annotations
 
 import asyncio
+import functools
 import json
 import logging
 import re
@@ -41,12 +43,10 @@ from vesta_shared import agent_records
 from vesta_shared.limits import limit
 
 from . import layout, runner
+from .phrases import SLOT, Phrases, fingerprint, wordy
 from .places import where
 
 log = logging.getLogger("vesta.translation")
-
-#: A slot in a skeleton: {1}, {2}… numbered left to right, so one pattern is one skeleton whatever its values.
-SLOT = re.compile(r"\{(\d+)\}")
 #: What a masked span is replaced with while the next patterns look (the same length: positions stay; no pattern
 #: matches it — a private-use character is neither a word character nor a digit).
 _HIDDEN = ""
@@ -61,16 +61,36 @@ _UNIT = (r"(?:%|‰|°[CF]?|[kMG]?Wh?|[kM]?VA|[kM]?var|mV|V|mA|A|k?Hz|lux|lx|ppm
          r"|kg|g|m?bar|hPa|kPa|Pa|psi|µg/m³|ug/m3|rpm|[lL]/min|m³/h|kWh/d)")
 
 
+def _named(names) -> list[re.Pattern]:
+    """The incident's device and room names as patterns, longest first ("Living Room AC" before "Living Room"), each a
+    whole word or words.
+
+    ⚠️ ANY CAPITALS, BUT A ONE-WORD NAME AS WRITTEN (review, 2026-10-23): matched as written, "Test Lock" in the
+    automation's text missed the pack's "Test lock" and went to the AI as words — translated on the card ("Test
+    serrure"), and a pattern of its own per device. A name of two words or more is matched in any capitals. A one-word
+    name ("Office", "Pool", "Garage") is also an everyday word: in any capitals it would take "the pool" out of a
+    sentence and leave it English on a French card, so it is matched with its own capitals only."""
+    seen: dict[str, str] = {}
+    for n in names or ():
+        n = " ".join(n.split()) if isinstance(n, str) else ""
+        if len(n) >= 3:
+            seen.setdefault(n.casefold() if " " in n else n, n)
+    out = []
+    for n in sorted(seen.values(), key=len, reverse=True):
+        words = r"\s+".join(re.escape(w) for w in n.split(" "))
+        out.append(re.compile(rf"(?<!\w){words}(?!\w)", re.IGNORECASE if " " in n else 0))
+    return out
+
+
 def _patterns(names) -> list[tuple[re.Pattern, int]]:
     """The variable parts of a line, in the order they are looked for (an earlier one's span is not looked at again):
     (pattern, the group that is the slot)."""
-    named = sorted({n.strip() for n in names or () if isinstance(n, str) and len(n.strip()) >= 3}, key=len, reverse=True)
     return [
         (re.compile(r"\{[^{}\n]*\}"), 0),                                     # a brace in the text itself
         (re.compile(r"(?<![\w#])#\d+(?:-P\d+)?(?!\w)"), 0),                   # an incident: #78, #78-P2
         (re.compile(r"\[[^\[\]\n]{1,40}\]"), 0),                              # a code: [PM-01], [ROI-03]
         (re.compile(r'"[^"\n]{1,80}"|“[^”\n]{1,80}”|«[^»\n]{1,80}»'), 0),     # a quoted value: "unavailable"
-        *[(re.compile(rf"(?<!\w){re.escape(n)}(?!\w)"), 0) for n in named],   # the incident's devices and rooms
+        *[(pat, 0) for pat in _named(names)],                                # the incident's devices and rooms
         (re.compile(rf"(?<!\w)(?:{_DAYS},?\s+)?\d{{1,2}}\s+{_MONTHS}(?:\s+\d{{4}})?(?!\w)"), 0),   # Fri 23 Oct
         (re.compile(rf"(?<!\w)(?:{_DAYS},?\s+)?{_MONTHS}\s+\d{{1,2}}(?:,?\s+\d{{4}})?(?!\w)"), 0),  # Oct 23, 2026
         (re.compile(r"(?<![\w/.-])(?:\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2})?)?|\d{1,2}[/.]\d{1,2}[/.]\d{2,4})"
@@ -108,44 +128,67 @@ def mask(line: str, names=()) -> tuple[str, list[str]]:
     return "".join(out), values
 
 
-def wordy(skeleton: str) -> bool:
-    """Whether a skeleton has words to translate: one that is only slots, signs and icons ("⚡ {1}") reads the same in
-    every language."""
-    return bool(re.search(r"[^\W\d_]", SLOT.sub("", skeleton)))
-
-
-def fits(translated, skeleton: str) -> bool:
-    """A translation of `skeleton` keeps every one of its slots exactly once and invents none (else: English)."""
-    if not isinstance(translated, str) or not translated.strip() or "\n" in translated.strip():
-        return False
-    want = sorted(SLOT.findall(skeleton), key=int)
-    return sorted(SLOT.findall(translated), key=int) == want
-
-
 def fill(skeleton: str, values: list[str]) -> str:
     """A skeleton with its slots given back their values, as written."""
     return SLOT.sub(lambda m: values[int(m.group(1)) - 1] if 0 < int(m.group(1)) <= len(values) else m.group(0),
                     skeleton)
 
 
-def incident_names(pack, entities) -> list[str]:
-    """The names an incident's text may say of its own devices: each entity's name, its device's, its reading's and
-    its room's, as the knowledge pack has them (none without a pack)."""
-    if pack is None:
-        return []
+def incident_names(pack, entities, live: dict[str, str] | None = None) -> list[str]:
+    """The names an incident's text may say of its own devices: first each entity's name as the villa's system gave it
+    when the alert arrived (`live`: its friendly name, app.Vesta.on_critical), then its name, its device's, its
+    reading's and its room's as the knowledge pack has them.
+
+    ⚠️ THE ALERT'S OWN NAMES FIRST (review, 2026-10-23): from the pack alone, an alert before the first nightly build —
+    or of a device added since — had no names: "Test lock" went to the AI as words, and each device made its own
+    pattern and its own run."""
     out: list[str] = []
     for e in entities or ():
-        row = pack.row(e) or {}
-        for n in (pack.name_of(e), pack.device_name(e, None), pack.reading_name(e, None), row.get("area")):
+        names = [(live or {}).get(e)]
+        if pack is not None:
+            row = pack.row(e) or {}
+            names += [pack.name_of(e), pack.device_name(e, None), pack.reading_name(e, None), row.get("area")]
+        for n in names:
             if isinstance(n, str) and n.strip() and n not in out:
                 out.append(n)
     return out
 
 
+def alert_names(reader, entities) -> dict[str, str]:
+    """The friendly names the villa's system gives `entities` now ({entity: name}), read through the app's reader (a
+    blocking read: app.Vesta.on_critical runs it in a thread, within names_seconds())."""
+    ids = [e for e in entities if isinstance(e, str) and "." in e]
+    if not ids:
+        return {}
+    out = {}
+    for eid, st in (reader.states(ids) or {}).items():
+        name = ((st or {}).get("attributes") or {}).get("friendly_name")
+        if isinstance(name, str) and name.strip():
+            out[eid] = name.strip()
+    return out
+
+
+def names_seconds() -> int:
+    # ⚠️ 1 s (owner, 2026-10-23: "make sure none of this is blocking"): the read sits before the alert desk; a slow
+    # villa leaves the names already known, never a later alert
+    return limit("alerts.names_read_seconds", 1, unit="seconds", group="read", lo=1, hi=60,
+                 says="How long the agent waits, when an alert arrives, for the villa's system to name its devices.",
+                 reached="The names the knowledge pack has are used: a device it does not know may be translated as "
+                         "words on that card.", told="")
+
+
 def translate_seconds() -> int:
     return limit("alerts.translate_seconds", 90, unit="seconds", group="ai", lo=10, hi=600,
                  says="How long the AI may take to put an alert card's own words in a chat's language.",
-                 reached="The card stays in English; the next card with the same words asks again.", told="")
+                 reached="The card stays in English; the AI is asked those words again once the wait after a "
+                         "failed translation has passed.", told="")
+
+
+@functools.cache
+def rules() -> str:
+    """The engine's slot rules as text — the patterns that make a skeleton and the contract the prompt states — for the
+    kept translations' fingerprint (phrases.fingerprint): a release that changes either starts afresh."""
+    return "\n".join([*(p.pattern for p, _ in _patterns(())), prompt("{language}", [])])
 
 
 def prompt(language: str, skeletons: list[str]) -> str:
@@ -158,9 +201,9 @@ def prompt(language: str, skeletons: list[str]) -> str:
             + json.dumps(skeletons, ensure_ascii=False))
 
 
-def answer(text: str, skeletons: list[str]) -> dict[str, str]:
-    """The run's answer read: {skeleton: its translation} for each line whose translation fits (`fits`); {} for an
-    answer that is not a JSON list of as many strings."""
+def answer(text: str, skeletons: list[str]) -> dict | None:
+    """The run's answer read: {skeleton: what the AI wrote for it} (judged by phrases.Phrases.take); None for an answer
+    that is not a JSON list of as many strings."""
     t = (text or "").strip()
     a, b = t.find("["), t.rfind("]")
     try:
@@ -168,8 +211,8 @@ def answer(text: str, skeletons: list[str]) -> dict[str, str]:
     except ValueError:
         got = None
     if not isinstance(got, list) or len(got) != len(skeletons):
-        return {}
-    return {s: g.strip() for s, g in zip(skeletons, got) if fits(g, s)}
+        return None
+    return dict(zip(skeletons, got))
 
 
 class Translations:
@@ -183,6 +226,8 @@ class Translations:
         self._running: dict[tuple, asyncio.Task] = {}
         self._waiting: dict[tuple, set[tuple[int, int]]] = {}
         self._said_off = False
+        # what is kept, what is asked again and when, what is forgotten: ONE rule (phrases.py)
+        self.phrases = Phrases(state)
 
     # ------------------------------------------------------------------ what is agreed
     def terms(self):
@@ -205,11 +250,17 @@ class Translations:
         return sk, Terms(frozenset(), pair["brain"], float(pair["limit_usd"]),
                          agent_records.for_job(sk.translate["name"]), sk.name)
 
+    @staticmethod
+    def fingerprint(sk) -> str:
+        """What the translations are kept under: the skill's translate instructions and the engine's slot rules."""
+        return fingerprint(str(sk.translate.get("instructions") or ""), rules())
+
     # ------------------------------------------------------------------ at render time
     def apply(self, iid: int, chat: int, p: dict) -> tuple[dict, tuple | None]:
         """A copy's parts with its body as its chat reads it (`tr`, drawn by layout.render) when every line of it has a
-        translation kept; otherwise the parts as English and what is still wanted — (language, skeletons), for `later`
-        once the copy is recorded. Never raises: whatever fails, the copy is English."""
+        translation kept — a line resting after a failure (phrases.Phrases.resting) as written; otherwise the parts as
+        English and what is still wanted — (language, skeletons), for `later` once the copy is recorded. Never raises:
+        whatever fails, the copy is English."""
         p = {k: v for k, v in p.items() if k != "tr"}
         h = layout.head_of(p.get("head"))
         lang = (h or {}).get("lang") or "en"
@@ -217,23 +268,27 @@ class Translations:
         if lang == "en" or not body.strip():
             return p, None
         try:
-            if self.terms() is None:
+            agreed = self.terms()
+            if agreed is None:
                 return p, None
+            fp = self.fingerprint(agreed[0])
             names = self.names(int(iid)) if self.names else []
-            shown, wanted = [], []
+            shown, wanted, translated = [], [], False
             for line in body.split("\n"):
                 skel, values = mask(line, names)
-                if not wordy(skel):
-                    shown.append(line)
-                    continue
-                tr = self.state.translation(lang, skel)
-                if tr is None:
-                    wanted.append(skel)
-                else:
+                tr = self.phrases.kept(lang, skel, fp) if wordy(skel) else None
+                if tr is not None:
                     shown.append(fill(tr, values))
+                    translated = True
+                    continue
+                # ⚠️ A LINE THAT FAILED STAYS ENGLISH, THE OTHERS ARE SHOWN TRANSLATED (review, 2026-10-23): resting
+                # (phrases.Phrases.resting) it is not asked, and one such line no longer keeps the whole card English
+                if wordy(skel) and not self.phrases.resting(lang, skel, fp):
+                    wanted.append(skel)
+                shown.append(line)
             if wanted:
                 return p, (lang, tuple(dict.fromkeys(wanted)))
-            return {**p, "tr": {"lang": lang, "body": "\n".join(shown)}}, None
+            return ({**p, "tr": {"lang": lang, "body": "\n".join(shown)}} if translated else p), None
         except Exception:  # noqa: BLE001 — the card is English, never not at all
             log.exception("Incident #%s in chat %s: its words could not be drawn in the chat's language", iid, chat)
             return p, None
@@ -266,20 +321,26 @@ class Translations:
     async def _translate(self, want: tuple) -> None:
         lang, skeletons = want
         try:
-            missing = [s for s in skeletons if self.state.translation(lang, s) is None]
+            agreed = self.terms()
+            if agreed is None:
+                return
+            fp = self.fingerprint(agreed[0])
+            missing = self.phrases.to_ask(lang, skeletons, fp)
             if missing:
-                got = await asyncio.wait_for(self._ask(lang, missing), timeout=translate_seconds())
-                for skel, tr in got.items():
-                    self.state.keep_translation(lang, skel, tr)
-                if len(got) < len(missing):
-                    log.info("%d of %d lines of an alert card had no usable %s translation: the card stays English",
-                             len(missing) - len(got), len(missing), lang)
+                # every way a run fails is remembered (phrases.Phrases.take): those lines are not asked again for a while
+                try:
+                    text, why = await asyncio.wait_for(self._ask(agreed, lang, missing), timeout=translate_seconds())
+                except asyncio.TimeoutError:
+                    text, why = None, f"took longer than {translate_seconds()} s"
+                except Exception as e:  # noqa: BLE001 — the card stays English
+                    log.exception("An alert card's %s translation failed: it stays English", lang)
+                    text, why = None, f"failed: {type(e).__name__}"
+                got = answer(text, missing) if text is not None else None
+                self.phrases.take(lang, fp, missing, got, why if text is None else "not the list of lines asked for")
             # every copy waiting for these lines, those added while this ran included
             while waiting := self._waiting.pop(want, None):
                 for iid, chat in sorted(waiting):
                     await self.thread.translated(iid, chat, lambda i, c, p: self.apply(i, c, p)[0])
-        except asyncio.TimeoutError:
-            log.info("An alert card's %s translation took longer than %s s: it stays English", lang, translate_seconds())
         except Exception:  # noqa: BLE001 — the card stays English
             log.exception("An alert card's %s translation failed: it stays English", lang)
         finally:
@@ -288,11 +349,9 @@ class Translations:
                 self._running.pop(want, None)
                 self._waiting.pop(want, None)
 
-    async def _ask(self, lang: str, skeletons: list[str]) -> dict[str, str]:
-        """The AI's translation of `skeletons` into `lang`: one tiny run, no tool, the skill's own brain and limit."""
-        agreed = self.terms()
-        if agreed is None:
-            return {}
+    async def _ask(self, agreed, lang: str, skeletons: list[str]) -> tuple[str | None, str | None]:
+        """The AI's answer for `skeletons` into `lang` — one tiny run, no tool, the skill's own brain and limit: (its
+        text, None), or (None, why it could not answer)."""
         sk, terms = agreed
         from claude_agent_sdk import create_sdk_mcp_server
         from . import __version__
@@ -304,9 +363,8 @@ class Translations:
         res = await runner.run(self.s.in_folder("translations"), instructions, prompt(name, skeletons),
                                kit, terms, self.state, asked=f"Alert card in {name}: {len(skeletons)} line(s)")
         if res.problem or (res.error and not res.text):
-            log.info("An alert card's %s translation: the AI could not answer (%s)", lang, res.problem or "error")
-            return {}
-        return answer(res.text, skeletons)
+            return None, f"the AI could not answer ({res.problem or 'error'})"
+        return res.text, None
 
     async def idle(self) -> None:
         """Every translation of this loop finished (tests wait on it, never on a fixed time)."""

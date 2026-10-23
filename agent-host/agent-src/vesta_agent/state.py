@@ -112,6 +112,10 @@ KV_FAMILIES: dict[str, str] = {
     "unreachable:": CURRENT,        # a chat Telegram refused the last message to (the Overview names it)
     # an alert's sentence pattern in a chat's language (translation.py): learnt once, used for every later card
     "phrase:": BOUNDED,
+    # a sentence pattern the AI could not translate into a language (phrases.py): not asked again for a while
+    "untranslated:": RECORDS,
+    # an alert's device as the villa's system names it now, read when its alert arrives (translation.incident_names)
+    "entname:": RECORDS,
 }
 
 
@@ -120,6 +124,15 @@ def phrases_kept() -> int:
     return limit("alerts.translations_kept", 5000, unit="translations", group="keep", lo=100, hi=100000,
                  says="How many translated sentence patterns of the alert cards are kept, every language together.",
                  reached="The oldest ones go: a card that needs one again has it translated again.", told="")
+
+
+def _fp_of(v: str) -> str | None:
+    """The instructions a kept translation (or a failure) was made under: "" for one kept before they were recorded."""
+    try:
+        rec = json.loads(v)
+    except ValueError:
+        return None
+    return str(rec.get("fp", "")) if isinstance(rec, dict) else None
 
 
 def utcnow() -> datetime:
@@ -233,28 +246,89 @@ class State:
 
     # An alert card's sentence pattern in a chat's language (translation.py, owner 2026-10-23): {1}, {2}… are its
     # values. ⚠️ KEPT WHATEVER ITS AGE (the owner's "forever"), BOUNDED: the oldest go once phrases_kept() are held.
+    # What is kept, asked again or forgotten is phrases.Phrases' rule; these only store it. `fp`: the instructions it
+    # was translated under (phrases.fingerprint) — a row of other instructions is not this one.
     @staticmethod
-    def _phrase_key(lang: str, skeleton: str) -> str:
+    def _phrase_hash(skeleton: str, fp: str) -> str:
         import hashlib
-        return f"phrase:{lang}:{hashlib.sha256(skeleton.encode()).hexdigest()}"
+        return hashlib.sha256(f"{fp}\n{skeleton}".encode()).hexdigest()
 
-    def translation(self, lang: str, skeleton: str) -> str | None:
-        """The translation kept of `skeleton` into `lang`; None when there is none."""
+    def translation(self, lang: str, skeleton: str, fp: str = "") -> str | None:
+        """The translation kept of `skeleton` into `lang` under instructions `fp`; None when there is none."""
         try:
-            rec = json.loads(self.get(self._phrase_key(lang, skeleton)) or "null")
+            rec = json.loads(self.get(f"phrase:{lang}:{self._phrase_hash(skeleton, fp)}") or "null")
         except ValueError:
             return None
-        return rec["to"] if isinstance(rec, dict) and rec.get("en") == skeleton and isinstance(rec.get("to"), str) \
-            else None
+        return rec["to"] if isinstance(rec, dict) and rec.get("en") == skeleton and rec.get("fp", "") == fp \
+            and isinstance(rec.get("to"), str) else None
 
-    def keep_translation(self, lang: str, skeleton: str, text: str) -> None:
-        self.put(self._phrase_key(lang, skeleton), json.dumps({"en": skeleton, "to": text}, ensure_ascii=False))
+    def keep_translation(self, lang: str, skeleton: str, text: str, fp: str = "") -> None:
+        self.put(f"phrase:{lang}:{self._phrase_hash(skeleton, fp)}",
+                 json.dumps({"en": skeleton, "to": text, "fp": fp}, ensure_ascii=False))
         with self._lock:
             over = self.db.execute("select count(*) from kv where substr(k, 1, 7) = 'phrase:'").fetchone()[0] - phrases_kept()
             if over > 0:
                 self.db.execute("delete from kv where k in (select k from kv where substr(k, 1, 7) = 'phrase:' "
                                 "order by at, rowid limit ?)", (over,))
                 self.db.commit()
+
+    def untranslated(self, lang: str, skeleton: str, fp: str = "") -> dict | None:
+        """When and why `skeleton` could not be translated into `lang` last ({at, why}); None when it never failed."""
+        try:
+            rec = json.loads(self.get(f"untranslated:{lang}:{self._phrase_hash(skeleton, fp)}") or "null")
+        except ValueError:
+            return None
+        return rec if isinstance(rec, dict) and rec.get("en") == skeleton and rec.get("fp", "") == fp else None
+
+    def note_untranslated(self, lang: str, skeleton: str, fp: str, at: str, why: str) -> None:
+        self.put(f"untranslated:{lang}:{self._phrase_hash(skeleton, fp)}",
+                 json.dumps({"en": skeleton, "fp": fp, "at": at, "why": why}, ensure_ascii=False))
+
+    def clear_untranslated(self, lang: str, skeleton: str, fp: str = "") -> None:
+        self.drop(f"untranslated:{lang}:{self._phrase_hash(skeleton, fp)}")
+
+    def translations_kept(self) -> dict[str, int]:
+        """How many sentence patterns are kept translated, per language (the VESTA Agent page's count)."""
+        out: dict[str, int] = {}
+        for (k,) in self.db.execute("select k from kv where substr(k, 1, 7) = 'phrase:'"):
+            lang = k.split(":")[1]
+            out[lang] = out.get(lang, 0) + 1
+        return out
+
+    def forget_translations(self, lang: str | None = None) -> int:
+        """Every translation kept, and every failure remembered, of `lang` (None: of every language) deleted: the next
+        card asks the AI again. How many translations went."""
+        tail = f"{lang}:" if lang else ""
+        with self._lock:
+            n = self.db.execute("delete from kv where substr(k, 1, ?) = ?", (7 + len(tail), f"phrase:{tail}")).rowcount
+            self.db.execute("delete from kv where substr(k, 1, ?) = ?", (13 + len(tail), f"untranslated:{tail}"))
+            self.db.commit()
+        return n
+
+    def keep_only_translations_of(self, fp: str) -> int:
+        """The translations and failures of other instructions than `fp` deleted (phrases.Phrases: they are never
+        read again). How many rows went."""
+        with self._lock:
+            gone = [k for k, v in self.db.execute("select k, v from kv where substr(k, 1, 7) = 'phrase:' "
+                                                  "or substr(k, 1, 13) = 'untranslated:'")
+                    if _fp_of(v) != fp]
+            self.db.executemany("delete from kv where k=?", [(k,) for k in gone])
+            self.db.commit()
+        return len(gone)
+
+    # An alert's device as the villa's system names it now (its friendly name), read when its alert arrives: a name
+    # in the alert's text is a value, never words to translate (translation.incident_names). One row per entity.
+    def note_entity_names(self, names: dict[str, str]) -> None:
+        for eid, name in names.items():
+            self.put(f"entname:{eid}", name)
+
+    def entity_names(self, entity_ids: Iterable[str]) -> dict[str, str]:
+        out = {}
+        for eid in entity_ids:
+            v = self.get(f"entname:{eid}")
+            if v:
+                out[eid] = v
+        return out
 
     # A chat Telegram refused the last message to: a person who never opened a private chat with the bot, a group the
     # bot left or whose id changed. One row per chat, gone at the next message that arrives (delivery.py).
