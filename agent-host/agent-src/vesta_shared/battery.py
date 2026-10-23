@@ -61,14 +61,28 @@ JUDGED_HOURS = 36
 
 def keep_judged(store, levels: dict[str, float | None], at: datetime) -> None:
     """Record the level each of these batteries was judged with, at `at` (merged over the others: a 5-minute look
-    judges only its open faults' batteries). An entry of the old undated format ({entity: value}) is dropped: it can
-    never be told whether it is the last night's."""
+    judges only its open faults' batteries). Per battery, the record judged LATER stands: a replayed past night
+    (nightly --as-of) judges at its own day's end and never overwrites a newer judgement. An entry of the old undated
+    format ({entity: value}) is dropped: it can never be told whether it is the last night's."""
     if store is None or not levels or not hasattr(store, "cache_put"):
         return
     kept = {k: v for k, v in (store.cache_get(RESTED) or {}).items() if _dated(v)}
     when = at.isoformat()
-    store.cache_put(RESTED, {**kept, **{k: {"level": None if v is None else float(v), "at": when}
-                                        for k, v in levels.items()}})
+    for k, v in levels.items():
+        if not _later(kept.get(k), at):
+            kept[k] = {"level": None if v is None else float(v), "at": when}
+    store.cache_put(RESTED, kept)
+
+
+def _later(record, at: datetime) -> bool:
+    """Whether a kept record was judged after `at` (an unreadable or undated time is never later)."""
+    if not _dated(record):
+        return False
+    try:
+        when = datetime.fromisoformat(record["at"])
+        return when > at if (when.tzinfo is None) == (at.tzinfo is None) else False
+    except (ValueError, TypeError):
+        return False
 
 
 def _dated(v) -> bool:

@@ -295,15 +295,14 @@ def step_summary(tool: str, args: dict, name_of=None) -> str:
     period; ha_search → "lights matching “dining”"; ha_call_service → "light.turn_off · 2 lights: …"; web_search →
     the query; save_file → the file; send_message → "to here · page.html"; any other → key=value, cut."""
     a = args or {}
-    names = lambda v: _named(_ids(v), name_of)  # noqa: E731
     if tool == "read_skill":
         said = " · ".join(str(a[k]) for k in ("skill", "file") if a.get(k))
     elif tool == "run_skill_script":
         said = command_line(a.get("script"), a.get("args"))
     elif tool in ("ha_get_history", "ha_get_state", "ha_get_logs"):
-        who = names(a.get("entity_ids") if tool == "ha_get_history" else a.get("entity_id"))
-        parts = [str(a["source"]) if tool == "ha_get_logs" and a.get("source") else None, who,
-                 f"“{a['search']}”" if tool == "ha_get_logs" and a.get("search") else None, _period(a)]
+        ids, period = read_subject(tool, a)
+        parts = [str(a["source"]) if tool == "ha_get_logs" and a.get("source") else None, _named(ids, name_of),
+                 f"“{a['search']}”" if tool == "ha_get_logs" and a.get("search") else None, period]
         said = " · ".join(p for p in parts if p)
     elif tool == "ha_search":
         what = _plural(str(a["domain_filter"])) if a.get("domain_filter") else "anything"
@@ -349,6 +348,13 @@ def command_line(script, args) -> str:
     """A script and its arguments as one would type them: "energy_period.py --period week --out week.json"."""
     import shlex
     return " ".join([str(script or "?"), *map(shlex.quote, script_args(args))])
+
+
+def read_subject(tool: str, args: dict) -> tuple[list[str], str | None]:
+    """What a read of the villa is about: (the entity ids it names, its period in words, None when it names none) — one
+    reading for a step's line here and for the subject a command offer keeps (tools.Toolbox.about)."""
+    a = args or {}
+    return _ids(a.get("entity_ids") if tool == "ha_get_history" or "entity_ids" in a else a.get("entity_id")), _period(a)
 
 
 def _ids(v) -> list[str]:

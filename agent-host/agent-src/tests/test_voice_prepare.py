@@ -40,6 +40,7 @@ def test_prepare_writes_a_wav_and_the_plan(tmp_path):
     assert res["attempts"] == [{"whisper": "whisper.lan:10301"}, {"stt": "stt.whisper", "language": "auto"},
                                {"stt": "stt.whisper", "language": "fr"}]
     assert abs(res["seconds"] - 1.0) < 0.1 and "otherwise" not in res and "no_stt" not in res
+    assert res["down"] == voice.DOWN                    # every way failed: the service, not the note (transcriber)
     head = open(res["wav"], "rb").read(44)
     assert head[:4] == b"RIFF" and head[8:16] == b"WAVEfmt "
     _, fmt, ch, rate, _, _, bits = struct.unpack_from("<IHHIIHH", head, 16)

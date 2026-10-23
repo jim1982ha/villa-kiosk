@@ -14,7 +14,8 @@ Now the skill answers a PLAN (the villa's choices: which Whisper, whether at all
      "attempts": [{"whisper": "core-whisper:10300"},
                   {"stt": "stt.x", "language": "auto"},
                   {"stt": "stt.x", "language": "fr"}],
-     "otherwise": "words for the person when no attempt gives words",          (optional)
+     "otherwise": "words for the person when no attempt gives words",         (optional; `down` first)
+     "down": "words for the person when every attempt failed",               (optional)
      "no_stt": {"none": "…", "several": "…"}}   (optional: the person's words when "the only one" is not one)
 
 An attempt may name the villa's speech-to-text without an entity, `{"stt": null, "language": …}`: "the villa's
@@ -44,6 +45,11 @@ speech-to-text services, told the person to name one in villa.voice.yaml. Now ea
 its kind (heard nothing / failed / refused / unfound) and its words for the record; when ANY attempt reached a
 transcriber that heard nothing, the person reads "could not make out" (or the plan's `otherwise`), and the plan's
 `no_stt` words only when nothing could have written the message out. A refusal is remembered from its kind too.
+
+⚠️ A SERVICE DOWN IS NOT AN UNCLEAR NOTE (review, 2026-10-23): with Whisper out of reach and the villa's
+speech-to-text answering errors, every voice note was told "I could not make out this voice message. Try again":
+the person tried again, and again. Every attempt that failed or was refused (none heard nothing, no setup words
+apply) now reads the plan's `down` words (DOWN when it has none): write it instead.
 
 ONE record per message, kind "voice": via, used, detected, auto_refused, every attempt with why it gave no words,
 the seconds taken. Never the words, the audio, an address or the token.
@@ -76,6 +82,9 @@ LANGUAGE = re.compile(r"^(auto|[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})?)$")
 REFUSED_STATUS = (400, 415)
 CONTENT = "format=wav; codec=pcm; sample_rate={rate}; bit_rate={bits}; channel={channels}; language={language}"
 UNHEARD = "I could not make out this voice message. Try again, or write it."
+#: The engine's words when no way of writing a voice message out works (every attempt failed or was refused) and the
+#: plan carries none (its `down`): the person's note was never heard, so "try again" would not help.
+DOWN = "Voice messages can't be written out right now. Please write it."
 
 
 def timeout_s() -> int:
@@ -321,12 +330,20 @@ class Transcriber:
                  "; ".join(f"{_name(t)}: {t['why'] or 'words'}" for t in tried) or why)
         if heard:
             return heard
-        # A transcriber that heard the message and found no words: the person's note, not the villa's setup. The
-        # setup words only when nothing could have written it out.
-        words = plan.get("no_stt") if isinstance(plan.get("no_stt"), dict) else {}
-        heard_nothing = any(m.kind == NOTHING for _, m in missed)
-        said = words.get(only.kind) if isinstance(only, Unfound) and not heard_nothing else None
-        return Unheard(str(said or plan.get("otherwise") or UNHEARD))
+        return Unheard(unheard_words(plan, missed, only))
+
+
+def unheard_words(plan: dict, missed: list, only) -> str:
+    """What the person reads when no attempt gave words, from every attempt's kind: a transcriber that heard the
+    message and found no words — the person's note ("could not make out", or the plan's `otherwise`); else the
+    villa's setup (the plan's `no_stt` words for the villa's only speech-to-text not found: none or several); else
+    every way failed or was refused — the service, not the note (the plan's `down`; its `otherwise` from a skill
+    edited before `down`; else DOWN)."""
+    if any(m.kind == NOTHING for _, m in missed):
+        return str(plan.get("otherwise") or UNHEARD)
+    words = plan.get("no_stt") if isinstance(plan.get("no_stt"), dict) else {}
+    said = words.get(only.kind) if isinstance(only, Unfound) else None
+    return str(said or plan.get("down") or plan.get("otherwise") or DOWN)
 
 
 def _name(step) -> str:
@@ -348,4 +365,4 @@ def script_seconds(deadline: float) -> int:
 
 
 __all__ = ["Transcriber", "Heard", "Unheard", "Missed", "NOTHING", "FAILED", "REFUSED", "UNFOUND", "Step",
-           "villa_entity_ids", "Audio", "step_of", "timeout_s", "script_seconds", "UNHEARD"]
+           "villa_entity_ids", "Audio", "step_of", "timeout_s", "script_seconds", "UNHEARD", "DOWN", "unheard_words"]

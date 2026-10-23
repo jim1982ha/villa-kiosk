@@ -661,6 +661,12 @@ then fixed with the probe's scenarios as the tests. Decided:
   and the reading now, else the reading now. Before, the window's best was merged and never dated: a night with no
   hourly statistics kept weeks-old 50 % on the page beside the night's 8 % "replace now". The old undated entries are
   never read and are dropped at the next write.
+- **Later judged stands; level and title together** (review, 2026-10-23, 0.12.326): `keep_judged` keeps, per
+  battery, the record with the later `at` (a replayed past night, `nightly --as-of`, never overwrites a newer one).
+  The recheck re-raises a battery fault still at its step whose level moved by a WHOLE point
+  (`recheck.battery_restated`, then `Problems.record` → `store.raise_finding`, as the night does) and names its open
+  task moved, so the summary every reader shows (Problems.current_title) and the Kiosk's fault (tickets.repair's
+  `retitled`) say the level the page shows. Before, the page said 15 % beside "battery at 18%" until the night.
 - **A retired setting is named**: a skill file's `retired: {dotted.path: what decides it now}`;
   `skill_settings.retired` gives one sentence per key a villa.<file> still sets. Callers: facts (the report's problems),
   investigate main (`settings_not_used` + stderr). reports.yaml `retired_kinds` does the same for a playbook `when` kind.
@@ -814,6 +820,13 @@ question about the pool pump history…" — he wanted a button that starts it.
   claim), said under the message (`Delivery.settle`, shared with FaultOffers; the pressed button goes, the others stay
   from the message's reply_markup), then `handle_message` runs the typed command — so the request, its brain, limit,
   page and fault offer are the typed one's (test: the run's skill, tools, limit, brain and prompt equal typing it).
+- **The subject goes with the question** (review, 2026-10-23, 0.12.326): `Toolbox.about` keeps what each read of the
+  villa was about ({tool, entities: "Name (entity id)" where the pack names it, else the id; period in words via
+  `status.read_subject`}, entity-id shapes only); `TurnResult.about` carries it; `command_offers.subject` keeps the
+  reads of the skill's `after_reading` tools beside the question (`command_offer:` `about`), and the press passes it
+  to `handle_message(about=)` → `_converse`, which adds "about: …" under the request (only for a command; an event's
+  own fields never give it). A command still starts a fresh conversation. An offer no longer on record
+  (`State.command_offer_kept`) reads `TOO_OLD`, never "Already started.".
 - No button under the same skill's own request, nor without a question (a Continue, a photo with no words).
 - Mutations red (tests/test_command_offer.py, test_turn_reply.py, test_page_controls.py): no question allowed; `offer`
   ignored; the same-request skip removed; the gate skipped at the reply, and at the press; the gate loosened to "not
@@ -899,8 +912,8 @@ still off; an investigation calling a sensor with no value "stopped reporting").
   refused here) before the saved language on every message.
 - **The skill answers a plan** (villa choices stay in villa-concierge: which Whisper, `whisper: off`, a fixed
   language, the order): `{"wav", "seconds", "attempts": [{"whisper": "host:port"}, {"stt": "stt.x", "language":
-  "auto"}, {"stt": "stt.x", "language": "<saved>"}], "otherwise"?}` or `{"error"}`. `otherwise`: what the person is
-  told when no attempt gives words (no speech-to-text could be chosen, Whisper alone planned).
+  "auto"}, {"stt": "stt.x", "language": "<saved>"}], "down", "otherwise"?}` or `{"error"}`. `otherwise`: what the
+  person is told when a transcriber heard nothing; `down`: when every attempt failed or was refused (0.12.326).
 - **`transcriber.Transcriber`** runs the attempts in order through `WhisperDirect` (`wyoming.py`: framing, every
   address IPv4 first) and `VillaSpeech` (POST /api/stt, the token), one interface `attempt(step, audio, seconds) ->
   Heard | Missed(kind, why)` (0.12.325), and stops at the first words. A plan's attempt is shape-checked (`step_of`: host:port, `stt.*`,
@@ -933,3 +946,7 @@ still off; an investigation calling a sensor with no value "stopped reporting").
   never the `no_stt` setup words; those only when nothing could have written the message out. The refusal memory and
   `auto_refused` read the kind (the string matching `refused()`/`REFUSED_BEFORE` is gone). The record is unchanged
   in shape; Whisper's empty transcript is now why "no words" (was "WyomingError", like a broken answer).
+- **A service down is not an unclear note** (review, 2026-10-23, 0.12.326): `transcriber.unheard_words` — any
+  NOTHING: `otherwise` or UNHEARD; else the `no_stt` words for the villa's only one not found (none, several); else
+  (every attempt FAILED/REFUSED, a lookup that failed, no WAV) the plan's `down` (villa-concierge voice.DOWN), a
+  skill's older `otherwise`, else the engine's DOWN: "write it", never "try again".

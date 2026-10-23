@@ -334,7 +334,7 @@ def recheck_open(store, pack, client, now: datetime, params, zone: str, settle_m
     # a device asleep between its reports reads its last real state (vesta_shared.asleep): its battery fault is judged
     # on its charge, never left open on "unavailable"
     t.states = read_states(client(), pack, now, ids) if ids else {}
-    read, seen, steps, handed = [], [], [], {}
+    read, seen, steps, handed, restated = [], [], [], {}, []
     for f, rule, rows, es in plan:
         st = t.states.get(f["entity_id"]) or {}
         if es and (not st or (f["rule_id"] in (battery.CRIT, battery.LOW) and not has_value(st.get("state")))):
@@ -354,6 +354,10 @@ def recheck_open(store, pack, client, now: datetime, params, zone: str, settle_m
             if moved:
                 steps += [x for x in found if x.entity_id == f["entity_id"] and x.rule_id in battery.REPLACE]
                 handed[int(f["id"])] = next(iter(moved.values()))
+            elif f["rule_id"] in battery.REPLACE:
+                # the same step at another whole level: its words say the level judged now (battery_restated)
+                restated += [(int(f["id"]), x) for x in found
+                             if x.rule_id == f["rule_id"] and x.entity_id == f["entity_id"] and battery_restated(f, x)]
             if rule.per_day:
                 store.cache_put(key, was)
         read.append(f["id"])
@@ -367,6 +371,14 @@ def recheck_open(store, pack, client, now: datetime, params, zone: str, settle_m
     if rec["closed"] or rec["handed"]:
         store.audit("preventive-maintenance", "recheck", {"read": read, "closed": rec["closed"], "handed": rec["handed"]})
     send, task_ids = [], rec["task_ids"]
+    if restated:
+        # raised again as the night raises it (Problems.record → store.raise_finding): its summary is the one title
+        # every reader shows; its open task is named moved so the Kiosk's fault is retitled now (tickets.repair)
+        Problems(store).record([x for _, x in restated], day, state_rules=N.STATE_RULES, event_rules=N.EVENT_RULES,
+                               worsened_step=params.behaviour("worsened_step_pct"), at=now.isoformat(),
+                               settle_minutes=settle_minutes)
+        task_ids += [t["id"] for fid, _ in restated
+                     if (t := store.last_task(f"finding:{fid}")) and t["status"] == "open"]
     if steps:
         new = Problems(store).record(steps, day, state_rules=N.STATE_RULES, event_rules=N.EVENT_RULES,
                                      worsened_step=params.behaviour("worsened_step_pct"), at=now.isoformat(),
@@ -375,6 +387,20 @@ def recheck_open(store, pack, client, now: datetime, params, zone: str, settle_m
         send = N.told_now({"villa": pack.villa, "as_of": day, "new_findings": new["new"], "again": new["again"]},
                           title=f"{pack.villa or 'The villa'}, batteries on {day_time_label(t.at)}.", store=store, at=now)
     return {"actions": result.moved(task_ids), "closed": rec["closed"], "seen": rec["seen"], "send": send}
+
+
+def battery_restated(row: dict, finding) -> bool:
+    """Whether an open battery fault (`row`, as stored) read again at the same step (`finding`) is at another WHOLE
+    percent: its words say the level as a whole number, and only a change they would show re-raises it.
+    ⚠️ ONE LEVEL, ONE TITLE (review, 2026-10-23): the recheck kept the level it judged (battery.keep_judged) but only
+    marked a battery still at its step as seen; its title changed only at night or on a step change, so the weekly page
+    showed 15 % beside "battery at 18%", and the Kiosk's fault kept 18 %."""
+    try:
+        was = json.loads(row.get("detail") or "{}").get("level")
+        now = finding.detail.get("level")
+        return was is not None and now is not None and f"{float(was):.0f}" != f"{float(now):.0f}"
+    except (TypeError, ValueError, AttributeError):
+        return False
 
 
 def reopened_untold(store, zone: str, settings: dict) -> list[dict]:

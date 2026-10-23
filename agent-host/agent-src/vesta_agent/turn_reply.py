@@ -97,7 +97,7 @@ class TurnReply:
         # person who may write it here; nothing runs before the press
         # — and the one a skill offers after the readings it names (`offer: after_reading`, owner 2026-10-20: the reply
         # skipped the line, so no button came)
-        rows += self.command_offers.rows(cid, answer, asked, person_id, request, read=res.read)
+        rows += self.command_offers.rows(cid, answer, asked, person_id, request, read=res.read, about=res.about)
         keyboard = {"inline_keyboard": rows} if rows else None
         # 8. ⚠️ A REQUEST SHOWN HERE IS THE ANSWER (owner, 2026-10-10: "Approval request sent." under it, twice
         # "redundant"): told not to, the AI still wrote it — and pressed at once, the request was decided before that line

@@ -498,8 +498,10 @@ class Vesta:
         return intake.gate(event_type, m, self.policy(), self.bot_username, self.state.is_own_message, on,
                            {c: s for c, s in self.skills.commands(include_off=True).items() if c not in on})
 
-    async def handle_message(self, event_type: str, m: dict):
-        """A Telegram message, as Home Assistant fired it (fields checked live on 2026-09-30): intake.py decides."""
+    async def handle_message(self, event_type: str, m: dict, about: str | None = None):
+        """A Telegram message, as Home Assistant fired it (fields checked live on 2026-09-30): intake.py decides.
+        `about`: what the answer a command offer was under had read (command_offers.subject) — given by the press only,
+        never read from an event."""
         got = self.gate(event_type, m)
         from_id = m.get("user_id")
         if got.action != "drop":
@@ -553,7 +555,7 @@ class Vesta:
             if not text and image is None:
                 return
             await self.converse(got.chat, got.person, text, voice=got.voice_file is not None, image=image, held=held,
-                                invoked=got.invoked, spoken=spoken)
+                                invoked=got.invoked, spoken=spoken, about=about if got.invoked else None)
         finally:
             held()
 
@@ -602,8 +604,9 @@ class Vesta:
     async def converse(self, cid: int, person: Person | None, text: str,
                        resume: str | None = "auto", is_continue: bool = False, voice: bool = False,
                        image: tuple[str, str] | None = None, held=None, invoked: str | None = None,
-                       request: Request | None = None, spoken: str | None = None):
-        """`image`: a photo the person sent (base64, mime), `text` its caption: the AI looks at it. `held`: the chat's
+                       request: Request | None = None, spoken: str | None = None, about: str | None = None):
+        """`about`: what the answer whose button started this request had read (command_offers.subject), told to the AI
+        with the question: a command starts a fresh conversation. `image`: a photo the person sent (base64, mime), `text` its caption: the AI looks at it. `held`: the chat's
         "typing…" taken when the message arrived (handle_message), carried on until the answer goes. `invoked`: the
         command skill the person's "/command" called (a new request); `request`: the one a Continue continues.
         `spoken`: the language Whisper said it heard a voice message in (transcriber.Heard), said beside it; None
@@ -613,10 +616,11 @@ class Vesta:
         # what they asked, kept until it is answered: a restart in between is said at the next start (chat_jobs)
         asked = ("Continue" if is_continue else text or ("a photo" if image else "a voice message" if voice else "…"))
         async with self.delivery.typing(cid, held=held) as answered, self.chat_jobs.answering(cid, asked):
-            await self._converse(cid, person, text, resume, is_continue, voice, answered, image, request, spoken)
+            await self._converse(cid, person, text, resume, is_continue, voice, answered, image, request, spoken,
+                                 about)
 
     async def _converse(self, cid, person, text, resume, is_continue, voice, answered, image=None,
-                        request: Request | None = None, spoken: str | None = None):
+                        request: Request | None = None, spoken: str | None = None, about: str | None = None):
         async with self.lock(cid):
             self.chat_jobs.turn(cid)                         # a job started now belongs to this turn (chat_jobs.py)
             if resume == "auto":
@@ -643,6 +647,11 @@ class Vesta:
             if sk is not None and not is_continue:
                 prompt = (f"{person.name if person else 'The person'} wrote /{sk.command}: this is a request for the "
                           f"{sk.name} skill. Read it with read_skill and follow it.\n\n{prompt}")
+                if about:
+                    # ⚠️ A FOLLOW-UP'S SUBJECT (review, 2026-10-23): pressed under "and why did it keep starting?", the
+                    # fresh conversation had only those words — what the answer it came from read is said with them
+                    prompt += (f"\nThe question follows an answer that read these devices (and periods); it is about "
+                               f"them unless it names others:\nabout: {about}")
             if not is_continue:
                 checked = await asyncio.to_thread(self.before_answer)
                 if checked:

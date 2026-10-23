@@ -1247,6 +1247,68 @@ def test_the_five_minute_recheck_keeps_the_level_it_judged_too(tmp_path):
         "level": 8.0, "at": now.isoformat()}
 
 
+def test_replaying_a_past_night_never_overwrites_a_newer_judged_level(tmp_path):
+    """Review, 2026-10-23: a past night replayed (nightly --as-of) judges at its own day's end; it overwrote last
+    night's 50 % with a record dated ten days back, and the page fell to the reading of the moment (8 %). The record
+    judged later stands, per battery."""
+    from vesta_shared import battery
+    from vesta_shared.store import Store
+    pack = _battery_night(tmp_path, "2026-10-20", "48", [("2026-10-20T12:00:00+00:00", 50.0)])
+    _battery_night(tmp_path, "2026-10-10", "30", [("2026-10-10T12:00:00+00:00", 31.0)])    # an older night replayed
+    assert Store(str(tmp_path / "s.sqlite")).cache_get(battery.RESTED)["sensor.door_battery"] == {
+        "level": 50.0, "at": "2026-10-21T00:00:00+00:00"}
+    assert _page_battery(tmp_path, pack, datetime(2026, 10, 21, 8, tzinfo=timezone.utc))[0] == 50
+
+
+def _recheck_battery(tmp, now: datetime, reading: float, hourly_max: float) -> dict:
+    """The 5-minute recheck (recheck.py, as the engine runs it) over the door's battery reading `reading` at `now`,
+    its hourly best `hourly_max` over the hours before: its printed outcome."""
+    fx = tmp / f"fx-recheck-{now:%H%M}"
+    fx.mkdir()
+    (fx / "states.json").write_text(json.dumps({"states": {"sensor.door_battery": {
+        "state": str(reading), "attributes": {"unit_of_measurement": "%"}, "last_changed": now.isoformat()}}}))
+    (fx / "stats_hour_door.json").write_text(json.dumps({"period_type": "hour", "entities": [
+        {"entity_id": "sensor.door_battery", "statistics": [
+            {"start": int((now - timedelta(hours=h)).timestamp() * 1000), "max": hourly_max} for h in range(1, 20)]}]}))
+    r = subprocess.run([sys.executable, os.path.join(STARTER_SKILLS, "preventive-maintenance", "scripts", "recheck.py"),
+                        "--pack", str(tmp / "pack.json"), "--store", str(tmp / "s.sqlite"),
+                        "--fixture-dir", str(fx), "--now", now.isoformat()],
+                       capture_output=True, text=True, env={**os.environ, "PYTHONPATH": PYTHONPATH}, timeout=60)
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout.strip().splitlines()[-1])
+
+
+def test_the_recheck_retitles_a_battery_at_its_step_when_its_whole_level_changes(tmp_path):
+    """Review, 2026-10-23: the night opened "battery at 18%: replace within the week"; the recheck judged 15 % (still
+    within the week) and kept it, but only marked the fault seen: the weekly page showed 15 % beside "battery at 18%",
+    and the Kiosk's fault kept 18 %. The level and the title come from the same judgement; only a whole point moves it."""
+    import facts
+    from zoneinfo import ZoneInfo
+    from vesta_shared import battery
+    from vesta_shared.params import VillaParams
+    from vesta_shared.store import Store
+    pack = _battery_night(tmp_path, "2026-10-20", "18", [])
+    st = Store(str(tmp_path / "s.sqlite"))
+    (f,) = st.findings("open")
+    assert f["rule_id"] == battery.LOW and "at 18%" in f["summary"]
+    out = _recheck_battery(tmp_path, datetime(2026, 10, 21, 20, tzinfo=timezone.utc), 15, 15.0)
+    assert out["faults_changed"] and out["actions"]                      # the Kiosk's fault is retitled now
+    now = datetime(2026, 10, 21, 20, 2, tzinfo=timezone.utc)
+    st = Store(str(tmp_path / "s.sqlite"))
+    c = facts.Ctx.__new__(facts.Ctx)
+    c.pack, c.Z, c.end, c.now, c.store = pack, ZoneInfo("UTC"), now.date(), now, st
+    c.need = lambda *p: 8
+    c.tasks = lambda: facts.Ctx.tasks(c)                                 # the page's own reading of what is open
+    c._states = {"sensor.door_battery": {"state": "15"}}
+    c.params = lambda: VillaParams()
+    (row,) = facts.s_batteries(c)["rows"]
+    assert row["pct"] == 15 and "at 15%" in row["night"]
+    (f2,) = st.findings("open")
+    assert f2["id"] == f["id"] and "at 15%" in f2["summary"]             # the same fault, its words restated
+    out = _recheck_battery(tmp_path, datetime(2026, 10, 21, 20, 5, tzinfo=timezone.utc), 15.3, 15.3)
+    assert not out["faults_changed"] and "at 15%" in Store(str(tmp_path / "s.sqlite")).findings("open")[0]["summary"]
+
+
 def test_a_judged_level_stands_only_while_it_is_the_last_nights():
     from datetime import datetime as dt
     from vesta_shared import battery

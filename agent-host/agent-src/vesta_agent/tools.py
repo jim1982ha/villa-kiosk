@@ -47,6 +47,8 @@ from .runner import WEB_SEARCH, step
 from .skills import FILE_NAME, Skills, ToolError, validate_script_args
 
 SERVER = "vesta"
+#: An entity id's shape: what a read's subject may keep of the AI's arguments (Toolbox._read_about)
+ENTITY_ID = re.compile(r"^[a-z0-9_]+\.[a-z0-9_]+$")
 
 
 def save_max_bytes() -> int:
@@ -273,6 +275,9 @@ class Toolbox:
         self.pages: dict[str, int] = {}  # each of those files → the message it went with, in the asker's chat
         self.offered: list[str] = []   # the faults offered in this run (tools._ticket in a chat)
         self.read: list[str] = []      # the villa's reading tools this run used, each once (command_offers: after_reading)
+        # what those reads were about, each once: {tool, entities (named "House Pump (sensor.x)" where the pack names
+        # them, else the id), period (in words, or None)} — the subject a command offer keeps (command_offers.subject)
+        self.about: list[dict] = []
         # the approval requests this run sent: one shown in the asker's chat is the answer there (app._converse)
         self.approvals: list[str] = []
         # ⚠️ tool_access DECIDES, THIS CLASS BUILDS (architecture review, 2026-10-06): allowed_for's answer — through
@@ -395,8 +400,10 @@ class Toolbox:
             out = {"content": ([{"type": "text", "text": self.parts.serve(key, text, part)}] if text else []) + images}
             if res.get("isError"):
                 out["is_error"] = True
-            elif name not in self.read:
-                self.read.append(name)
+            else:
+                if name not in self.read:
+                    self.read.append(name)
+                self._read_about(name, args)
             return out
         return handler
 
@@ -438,6 +445,22 @@ class Toolbox:
         return (f"[Worked out by the {sk.name} skill from EVERY recorded change of {per['start']} to {per['end']}, "
                 "the whole period you asked for, compared with the days before: answer from these lines and name the "
                 "period. Lines flagged ⟵ are unusual against the device's own normal.]\n" + "\n".join(map(str, lines)))
+
+    def _read_about(self, name: str, args: dict) -> None:
+        """What a read of the villa was about, kept once (self.about): its devices and period only, never a value read
+        or anything else the AI sent."""
+        ids, period = status.read_subject(name, args)
+        ids = [e for e in ids if ENTITY_ID.match(e)]          # an entity id's shape only: nothing else the AI wrote
+        if not ids:
+            return
+        pack = self._pack()
+
+        def named(e: str) -> str:
+            n = pack.name_of(e) if pack is not None else None
+            return f"{n} ({e})" if n and n != e else e
+        row = {"tool": name, "entities": [named(e) for e in ids], "period": period}
+        if row not in self.about:
+            self.about.append(row)
 
     def _older_part(self, name: str, args: dict, text: str) -> str:
         days = self._detailed_days()

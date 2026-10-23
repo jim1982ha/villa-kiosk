@@ -65,7 +65,8 @@ def test_any_other_failure_goes_on_to_the_next_attempt_and_is_not_remembered(tmp
 def test_no_words_at_all_tells_the_person(tmp_path):
     asked, said, rec, v = transcribe_with(tmp_path, [500])
     assert asked == ["auto", "fr"] and said == [] and not rec["ok"] and rec["why"] == "answered 500"
-    assert "could not make out this voice message" in v.tg.sent[-1][1]
+    # every attempt failed: the service is down, not the note unclear (review, 2026-10-23: never "try again")
+    assert v.tg.sent[-1][1] == "Voice messages can't be written out right now. Please write it."
 
 
 def test_a_villa_fixed_language_is_never_auto(tmp_path):

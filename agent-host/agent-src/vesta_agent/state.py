@@ -415,11 +415,16 @@ class State:
 
     # A command skill a chat reply offered (command_offers.py): the button's data holds only its id — Telegram allows 64
     # bytes, the person's question is longer.
-    def new_command_offer(self, chat: int, skill: str, question: str, by: int | None) -> str:
+    def new_command_offer(self, chat: int, skill: str, question: str, by: int | None, about: str = "") -> str:
+        """`about`: what the turn it came under read (command_offers.about), passed to the request at the press."""
         oid = secrets.token_urlsafe(9)
         self.put(f"command_offer:{oid}", json.dumps({"chat": int(chat), "skill": skill, "question": question, "by": by,
-                                                     "used": False}))
+                                                     "about": about, "used": False}))
         return oid
+
+    def command_offer_kept(self, oid: str) -> bool:
+        """Whether offer `oid` is still on record (used or not): a press of one pruned with the records is told so."""
+        return self.get(f"command_offer:{oid}") is not None
 
     def command_offer(self, oid: str, chat: int) -> dict | None:
         """The offer pressed in `chat`, still unused; None when it is not this chat's, gone, or already pressed."""

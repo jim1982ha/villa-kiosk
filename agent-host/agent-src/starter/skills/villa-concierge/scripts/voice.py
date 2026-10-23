@@ -15,6 +15,7 @@ time a voice message has (voice.timeout_s):
    "attempts": [{"whisper": "core-whisper:10300"},
                 {"stt": "stt.…", "language": "auto"},
                 {"stt": "stt.…", "language": "fr"}],
+   "down": "…",                              (what the person reads when every way failed: a service down)
    "no_stt": {"none": "…", "several": "…"}}   (only when villa.voice.yaml names no speech-to-text)
   {"error": "plain words for the person"}
 
@@ -136,6 +137,12 @@ NO_STT = {"none": "Voice messages need a speech-to-text service in the villa's s
                      "(stt: in the villa-concierge skill's villa.voice.yaml)."}
 
 
+# what the person reads when every way of writing the message out failed or was refused (Whisper out of reach, the
+# villa's speech-to-text answering errors): the service is down, not the person unclear (review, 2026-10-23: each
+# note was told "could not make out, try again")
+DOWN = "Voice messages can't be written out right now. Please write it."
+
+
 def attempts(fixed: str | None, saved: str | None, whisper_at: str | None, entity: str | None) -> list[dict]:
     """The ways to write the message out, in order (the engine stops at the first words). `entity` None: the
     villa's only speech-to-text (the engine finds it).
@@ -171,7 +178,8 @@ def prepare(audio: str, language: str | None, stt: str | None = None, whisper_at
     with open(out, "wb") as f:
         f.write(wav(pcm))
     return {"wav": out, "seconds": round(len(pcm) / 2 / RATE, 1),
-            "attempts": attempts(fixed, language, direct, entity), **({} if entity else {"no_stt": NO_STT})}
+            "attempts": attempts(fixed, language, direct, entity), "down": DOWN,
+            **({} if entity else {"no_stt": NO_STT})}
 
 
 def main(argv=None):

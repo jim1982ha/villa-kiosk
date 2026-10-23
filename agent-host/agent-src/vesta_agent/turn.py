@@ -63,6 +63,7 @@ class TurnResult:
     pages: dict[str, int] = field(default_factory=dict)   # a file sent → its message (Toolbox.pages)
     earlier: str = ""              # RunResult.earlier
     read: list[str] = field(default_factory=list)   # the reading tools it used, each once (Toolbox.read)
+    about: list[dict] = field(default_factory=list)   # what those reads were about, each once (Toolbox.about)
 
     @property
     def failed(self) -> bool:
@@ -99,6 +100,7 @@ THEN = {
     "cost_usd": _summed_cost, "sent": lambda a, b: a + b, "offered": lambda a, b: a + b,
     "photos": lambda a, b: a + b, "approvals": lambda a, b: a + b, "attached": lambda a, b: a + b,
     "pages": lambda a, b: {**a, **b}, "read": lambda a, b: a + [t for t in b if t not in a],
+    "about": lambda a, b: a + [t for t in b if t not in a],
 }
 
 
@@ -159,7 +161,7 @@ class Turns:
                          list(tb.photos), terms.limit_usd, list(tb.approvals), sent=getattr(tb, "sent", 0),
                          earlier=getattr(res, "earlier", ""), attached=list(getattr(tb, "attached", [])),
                          offered=len(getattr(tb, "offered", [])), pages=dict(getattr(tb, "pages", {})),
-                         read=list(getattr(tb, "read", [])))
+                         read=list(getattr(tb, "read", [])), about=list(getattr(tb, "about", [])))
         if out.problem:
             # no credit, a refused key: every reply and report stops until the owner acts (app._tell_owner decides)
             await self._safe(self.tell_owner(out.problem, told))

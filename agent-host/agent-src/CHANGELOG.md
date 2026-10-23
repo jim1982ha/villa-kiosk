@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.6.316 (23 October 2026)
+
+- "Investigate this" under a follow-up question now carries what the answer read. `Toolbox.about` keeps, per read of
+  the villa, its tool, its entities (named "House Pump (sensor.x)" where the knowledge pack names them, else the id;
+  entity-id shapes only) and its period in words (`status.read_subject`, also the Costs tab's line);
+  `TurnResult.about` carries it (THEN: added once). `command_offers.subject` keeps the reads of the skill's
+  `after_reading` tools beside the question (`command_offer:` `about`), and the press runs
+  `handle_message(..., about=)`, which adds "about: ..." under the request's prompt (a command only; never read from
+  an event). A command still starts a fresh conversation. Before, the press gave the investigation the follow-up's
+  words alone ("and why did it keep starting?"): no device in it. An offer no longer on record
+  (`State.command_offer_kept`) toasts `TOO_OLD`, not "Already started." (nothing had run).
+- A voice note is no longer told "could not make out, try again" when the speech-to-text is down.
+  `transcriber.unheard_words`: any `NOTHING`, the plan's `otherwise` or UNHEARD; else the `no_stt` words for the
+  villa's only one not found (none, several); else (every attempt `FAILED`/`REFUSED`, the device lookup failed, no
+  WAV) the plan's new `down` (villa-concierge `voice.DOWN`: "Voice messages can't be written out right now. Please
+  write it."), an older skill's `otherwise`, else the engine's `DOWN`.
+- A battery's fault title follows the level the recheck judged. `recheck.battery_restated`: a CRIT/LOW fault still at
+  its step whose level moved by a whole point is raised again (`Problems.record`, as the night does) and its open task
+  named moved, so the summary (Problems.current_title) and the Kiosk's fault (`retitled`) say what the page shows.
+  Before, the page said 15 % beside "battery at 18%" until the next night.
+- `battery.keep_judged` keeps, per battery, the record with the later `at`: a past night replayed with `--as-of` no
+  longer overwrites last night's level (the page fell to the reading of the moment).
+- Tests: test_command_offer (the follow-up scenario's prompt names the pump and its period, by name with a pack;
+  `subject` keeps the earning reads; a typed command's event cannot give a subject; entity-id shapes only; an offer
+  pruned says TOO_OLD); test_transcriber (each kind's words, a service down, end to end with the skill's plan);
+  test_reports (the recheck retitles at a whole point only, through the real nightly.py, recheck.py and facts; a
+  replayed night). Changed where they pinned the old words: test_voice_language and test_transcriber (all failed:
+  DOWN), test_voice_prepare (the plan carries `down`), test_turn_reply's stand-in takes `about`.
+
 ## 0.6.315 (23 October 2026)
 
 - A voice note Whisper heard but found no words in is "could not make out", never the speech-to-text setup sentence.

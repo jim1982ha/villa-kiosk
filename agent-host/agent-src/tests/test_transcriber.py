@@ -151,7 +151,7 @@ def test_a_plan_the_engine_cannot_run_is_recorded_not_guessed(tmp_path):
     # no WAV: nothing is asked
     p = plan(tmp_path, [{"stt": "stt.a", "language": "fr"}])
     os.remove(p["wav"])
-    assert run(t, p) == Unheard(transcriber.UNHEARD) and len(rec.calls) == 1 and state.rows[-1][1]["why"] == "the skill wrote no WAV"
+    assert run(t, p) == Unheard(transcriber.DOWN) and len(rec.calls) == 1 and state.rows[-1][1]["why"] == "the skill wrote no WAV"
 
 
 @pytest.mark.parametrize("bad", [{}, {"error": "This voice message is empty."}, {"wav": "x", "attempts": "w"}])
@@ -179,8 +179,8 @@ def test_the_otherwise_words_are_said_when_nothing_is_heard(tmp_path, monkeypatc
     v = voice_agent(tmp_path)
     real = v.voice.code_command
 
-    def with_otherwise(*a):
-        p = real(*a)
+    def with_otherwise(*a):                         # a skill edited before `down`: its `otherwise` is said
+        p = {k: v for k, v in real(*a).items() if k != "down"}
         return {**p, "attempts": [], "otherwise": "Name the speech-to-text for voice messages."}
     monkeypatch.setattr(v.voice, "code_command", with_otherwise)
     asyncio.run(v.on_ha_event("telegram_attachment", voice_event()))
@@ -237,7 +237,7 @@ def test_whisper_silent_and_the_villa_has_one_speech_to_text_it_is_used(tmp_path
 
 
 @pytest.mark.parametrize("ids, says, why", [
-    (None, "I could not make out this voice message", "the villa's devices not listed (HAError)"),
+    (None, "Voice messages can't be written out right now", "the villa's devices not listed (HAError)"),
     ([], "Voice messages need a speech-to-text service in the villa's system", "no speech-to-text in the villa's system"),
     (["stt.a", "stt.b"], "The villa's system has several speech-to-text services", "2 speech-to-text services, none named")])
 def test_whisper_silent_and_no_one_speech_to_text_the_person_is_told_why(tmp_path, monkeypatch, ids, says, why):
@@ -294,6 +294,63 @@ def test_a_transcriber_that_heard_nothing_anywhere_in_the_plan_decides_the_words
         assert run(t, p) == Unheard(person)
         assert run(t, {**p, "otherwise": "say it again"}) == Unheard("say it again" if villa_says.kind ==
                                                                      transcriber.NOTHING else "set one up")
+
+
+class Says:
+    """An adapter answering one Missed (or Heard) every time; `only`: the villa's only speech-to-text, as found."""
+
+    def __init__(self, got, only=None):
+        self.got, self.found = got, only
+
+    async def attempt(self, step, audio, seconds):
+        return self.got
+
+    async def only(self, seconds):
+        return self.found
+
+
+def test_a_service_down_is_told_to_write_never_to_try_again(tmp_path):
+    """Review, 2026-10-23: Whisper out of reach and the villa's speech-to-text answering 500 — every voice note was
+    told "I could not make out this voice message. Try again": the person tried again, and again. Every way failed or
+    refused: the plan's `down` (the skill's words), the engine's DOWN when the plan has none."""
+    p = plan(tmp_path, [{"whisper": "w:1"}, {"stt": "stt.a", "language": "auto"}, {"stt": "stt.a", "language": "fr"}])
+    failed, refused = Missed(transcriber.FAILED, "answered 500"), Missed(transcriber.REFUSED, "refused (415)")
+    for villa in (failed, refused):
+        t = Transcriber(None, Records(), adapters={"whisper": Says(Missed(transcriber.FAILED, "ConnectionRefusedError")),
+                                                   "villa": Says(villa)})
+        assert run(t, p) == Unheard(transcriber.DOWN)
+        assert run(t, {**p, "down": "the skill's words", "otherwise": "older words"}) == Unheard("the skill's words")
+    assert "try again" not in transcriber.DOWN.lower()
+
+
+def test_the_words_follow_every_attempts_kind(tmp_path):
+    """Any transcriber that heard nothing: "could not make out"; else the villa's only one not found: the setup words;
+    else (failed, refused, or found with no words for it): the service is down."""
+    p = {**plan(tmp_path, [{"whisper": "w:1"}, {"stt": None, "language": "fr"}]),
+         "no_stt": {"none": "set one up", "several": "name one"}, "down": "write it"}
+    nothing, failed = Missed(transcriber.NOTHING, "no words"), Missed(transcriber.FAILED, "OSError")
+    unfound = transcriber.Unfound("none", "no speech-to-text in the villa's system")
+    for whisper, only, person in ((nothing, unfound, transcriber.UNHEARD),          # heard nothing beats the setup
+                                  (failed, unfound, "set one up"),                   # review F: the setup words
+                                  (failed, transcriber.Unfound("several", "2"), "name one"),
+                                  (failed, transcriber.Unfound("failed", "not listed (HAError)"), "write it"),
+                                  (failed, "stt.a", "write it")):                    # found, and it failed too
+        t = Transcriber(None, Records(), adapters={"whisper": Says(whisper), "villa": Says(failed, only)})
+        assert run(t, p) == Unheard(person), (whisper, only)
+
+
+def test_whisper_out_of_reach_and_the_villas_speech_to_text_broken_the_person_reads_the_skills_words(tmp_path,
+                                                                                                     monkeypatch):
+    """End to end through the real agent and the skill's real plan: Whisper closes the connection, the villa's
+    speech-to-text answers 500 every time. Skills before code: the words are the skill's plan's (`down`)."""
+    monkeypatch.setattr(voice_module, "timeout_s", lambda: BUDGET)
+    with FakeWhisper("close") as w, FakeSTT([500]) as stt:
+        v = voice_agent(tmp_path, {"whisper": w.address})
+        v.s.ha_url = stt.url
+        asyncio.run(v.on_ha_event("telegram_attachment", voice_event()))
+    assert v.conversed == []
+    assert v.tg.sent[-1][1] == "Voice messages can't be written out right now. Please write it."
+    assert all(a["why"] for a in voice_record(v)["attempts"])
 
 
 def test_the_villas_speech_to_text_answering_no_words_is_heard_nothing(tmp_path):
