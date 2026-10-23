@@ -1,3 +1,14 @@
+## 0.12.339
+
+What you will see:
+- A closed alert now says how long it stays on watch (your reopen setting): "✅ Cleared on 22/10/2026 19:28: back to
+  normal. Watch 1 h." or "✅ Done (JM). Checked after 10 min: right. Watch 1 h.", in each chat's language. Change the
+  setting and the cards follow; at 0 nothing is said.
+- On the VESTA Agent page, a value you can change shows as a highlighted chip: press it and Limits opens on that very
+  limit, lit for a moment. Seen on Overview (how long page changes are kept), Skills (a job's time) and in the skills'
+  guides. A job's time is now a setting in Limits too.
+- The skills' guides no longer write a setting as a fixed number, so the AI never quotes an old value.
+
 ## 0.12.338
 
 What you will see:
