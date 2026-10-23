@@ -212,6 +212,10 @@ export interface FmTicket extends FmProvenance {
   /** When the VESTA Agent closes it if what it reported stays over (its alert desk's clear wait, owner 2026-10-21: a
    *  door locked at 14:38:50 still a fault at 14:45, nothing said why) — an ISO moment; absent while it still holds. */
   closesAt?: string;
+  /** On a fault a PERSON closed (a Done on Telegram, a Close in the Cockpit): when the VESTA Agent reads it again to
+   *  confirm the close (its alert desk's wait, owner 2026-10-23) — an ISO moment; absent once read, or on a fault nobody
+   *  watches. The Overview lists it last among the open issues (fm/faultConfirm); it is resolved in every count. */
+  confirmsBy?: string;
   /** Every status change, in order. Optional because faults raised before
    *  this existed have none — read it as "no steps recorded", never as an
    *  error. */

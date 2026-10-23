@@ -5,7 +5,7 @@
 // list (SummaryGroupPanel), and the activity feed told nothing used.
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Plus } from "lucide-react";
+import { CheckCircle2, Plus } from "lucide-react";
 import Tip from "@/components/common/Tip";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
@@ -25,6 +25,10 @@ import { useAgent } from "@/agent/AgentContext";
 import FaultStageModal from "@/components/fm/FaultStageModal";
 import { localStamp } from "@/fm/fmEngine";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
+import { confirmingCards } from "@/config/cockpitCard";
+import { confirmingFaults } from "@/fm/faultConfirm";
+import { useProfile } from "@/auth/ProfileContext";
+import { useNow } from "@/hooks/useInterval";
 
 
 export default function CockpitOverview({ onOpenEntity, doors, reportFaultFor, onFaultFormOpened, onEditTicket, onReportProblem }: {
@@ -63,6 +67,8 @@ export default function CockpitOverview({ onOpenEntity, doors, reportFaultFor, o
   // useVillaAttention's own docstring for why that sharing is load-bearing,
   // not just tidiness (the two used to disagree).
   const { attentionGroups } = useVillaAttention();
+  // the faults a person closed that the VESTA Agent reads again: LAST in the same list, never counted (owner, 2026-10-23)
+  const watched = useWatchedCards();
 
   return (
     <>
@@ -75,7 +81,7 @@ export default function CockpitOverview({ onOpenEntity, doors, reportFaultFor, o
           "Needs attention" AND the Faults tab's open list, which showed the same faults twice. Raising a fault is
           here, beside what it is raised about. */}
       {/* The title, and on its right the (i) then "Open a ticket" (owner, 2026-10-14) — a guest's "Report a problem". */}
-      {(attentionGroups.length > 0 || canReport) && (
+      {(attentionGroups.length > 0 || watched.length > 0 || canReport) && (
         <div className="cockpit-issues-head">
           <div className="settings-section-title">Open issues{attentionGroups.length > 0 ? ` (${attentionGroups.length})` : ""}</div>
           {canManage && !raising && (
@@ -95,17 +101,60 @@ export default function CockpitOverview({ onOpenEntity, doors, reportFaultFor, o
         <FaultForm key={raising.entity ?? "new"} presetEntity={raising.entity} deviceOptions={deviceOptions}
           onDone={() => setRaising(null)} />
       )}
-      {attentionGroups.length > 0 && (
+      {(attentionGroups.length > 0 || watched.length > 0) && (
         <div className="cockpit-attention-list">
           {attentionGroups.map((group) => (
             <CockpitAttentionRow key={group.key} group={group} onOpenEntity={onOpenEntity}
               canManage={canManage} onEditTicket={onEditTicket} />
           ))}
+          {/* after every open issue, and not in its count: closed, the VESTA Agent confirming it (fm/faultConfirm) */}
+          {watched.map((card) => <WatchedRow key={card.key} card={card} onOpenEntity={onOpenEntity} />)}
         </div>
       )}
 
     </>
   );
+}
+
+/** ⚠️ A FAULT BEING CONFIRMED IS ONE COMPACT ROW (owner, 2026-10-23, option 4 of five looks: "One compact row"): no
+ *  card fill, a check in the status green, its device, its fault and who closed it on one line, and when the VESTA
+ *  Agent confirms it in a pill — told apart at a glance from the open issues above it, and the least room when several
+ *  are confirming. Its frame keeps the `fault-watched` marker. A tap opens its device, as an open issue's card does. */
+export function WatchedRow({ card, onOpenEntity }: { card: CardView; onOpenEntity: (id: string) => void }) {
+  const open = card.entityId;
+  const fault = card.lines[0]?.text;
+  const said = card.watched ?? { did: card.lines[0]?.closing ?? "", when: "" };
+  const inside = (
+    <>
+      <CheckCircle2 className="fault-watched-icon" size={18} aria-hidden="true" />
+      <span className="fault-watched-text">
+        <b>{card.title}</b>{fault ? ` · ${fault}` : ""}{said.did ? ` · ${said.did}` : ""}
+      </span>
+      {said.when && <span className="fault-watched-when">{said.when}</span>}
+    </>
+  );
+  return open
+    ? <button type="button" className="fault-watched" onClick={() => onOpenEntity(open)}>{inside}</button>
+    : <div className="fault-watched">{inside}</div>;
+}
+
+/** The faults a person closed that the VESTA Agent reads again (fm/faultConfirm), as THIS profile may see them — the
+ *  devices it may open, as useVillaAttention filters the open issues. Read again every minute: a card past its moment
+ *  goes even when nothing else changes. */
+function useWatchedCards(): CardView[] {
+  const { data } = useFmData();
+  const { status } = useAgent();
+  const { entities } = useHA();
+  const { config, resolvedRooms } = useConfig();
+  const { devices, visibleTo } = useVillaModel();
+  const { role } = useProfile();
+  const now = useNow(60_000);
+  const cadence = status?.cadence ?? null;
+  return useMemo(() => {
+    const sees = visibleTo(role);
+    return confirmingCards(confirmingFaults(data, cadence, now),
+      { devices, entities, entityMap: config.entityMap, resolvedRooms, may: (id) => sees.has(id) });
+  }, [data, cadence, now, devices, entities, config.entityMap, resolvedRooms, visibleTo, role]);
 }
 
 /** One card of the Live issues, ONE SHAPE whatever it holds (owner, 2026-10-10: "make sure each reported issue
@@ -162,10 +211,11 @@ export function AttentionCard({ card, onOpenEntity, actions, lineActions }: {
       // its room as a pill right after its name, on one line (owner, 2026-10-22) — the Spend tab's device pill
       titlePills={card.room ? <span className="fm-entity-chip fm-chip-static">{card.room}</span> : undefined}
       // where its (first) problem comes from, in place of a warning sign (owner, 2026-10-14) — legend: the (i)
+      // a fault being confirmed: a check in the status vocabulary's green, in place of its source (owner, 2026-10-23)
       lead={card.lead ? <SourceIcons {...card.lead} /> : undefined}
       // when its problems are read again: a refresh icon and when, a pill at the right of its name (owner, 2026-10-22);
       // hovering it says it in words, with its date and time (owner, 2026-10-19). No chevron: the card is the button.
-      check={{ when: card.nextCheck.when, tip: card.nextCheck.tip }}
+      check={card.nextCheck ? { when: card.nextCheck.when, tip: card.nextCheck.tip } : undefined}
       onOpen={open ? () => onOpenEntity(open) : undefined}
       body={(
         <ul className="cockpit-attention-subs">
@@ -188,6 +238,7 @@ function CockpitAttentionSub({ line, actions }: { line: CardLine; actions?: Reac
           {/* what last happened about it on Telegram — a reminder, an escalation, a button pressed (owner, 2026-10-14) */}
           {line.latest && <span className="cockpit-attention-latest">{line.latest.note} · {localStamp(line.latest.at)}</span>}
           {/* when the VESTA Agent closes it if it stays right (owner, 2026-10-21) */}
+          {/* ...or, on a fault being confirmed, who closed it and when the Agent confirms it (owner, 2026-10-23) */}
           {line.closing && <span className="cockpit-attention-latest">{line.closing}</span>}
         </span>
         {/* a press on it is its own: never the card's tap-to-open */}
