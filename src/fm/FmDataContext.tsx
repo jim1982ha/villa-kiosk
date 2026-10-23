@@ -35,13 +35,18 @@ import {
 // The write's result and what a screen does with it live in fm/fmSave.ts (pure,
 // so an oracle can drive them); re-exported here for the screens.
 import type { FmRetention } from "./fmEngine";
-import { fmSaveOutcome, type FmSaveOutcome, type FmWriteResult } from "./fmSave";
+import { CHANGED_ON_ANOTHER_DEVICE, fmSaveOutcome, type FmSaveOutcome, type FmWriteResult } from "./fmSave";
+import { saveProblemLine } from "@/utils/storeSave";
 
 interface FmDataContextValue {
   data: FmData;
-  /** False until the first load resolves — screens show a loading state rather
-   *  than an empty maintenance record, which would read as "nothing is due". */
+  /** False until the record has been READ — screens show a loading state rather
+   *  than an empty maintenance record, which would read as "nothing is due".
+   *  ⚠️ A FAILED FIRST READ IS NOT A READ (architecture review H, 2026-10-23): it
+   *  set this, and every screen showed the empty record as the villa's. */
   ready: boolean;
+  /** The record has never been read and the last try could not reach the add-on (the next refresh tries again). */
+  unreachable: boolean;
   /** Set when the last write failed, so the UI can say so instead of pretending. */
   saveError: string | null;
   /** How long the server keeps a closed fault, as it published it with the record (null until read, or not said). */
@@ -112,6 +117,7 @@ const FmDataContext = createContext<FmDataContextValue | null>(null);
 export function FmDataProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<FmData>(EMPTY_FM_DATA);
   const [ready, setReady] = useState(false);
+  const [unreachable, setUnreachable] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [retention, setRetention] = useState<FmRetention | null>(null);
   // Read the latest data inside a mutator without making every mutator depend
@@ -168,12 +174,14 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
         return;
       case "unreachable":
         reportSync({ op: "pull", aborted: "unreachable" });
-        setReady(true);
+        // a record read before stays on the screens as it was; never read, the screens say so (fm/fmSave fmRecordLine)
+        if (!doc.hasRead) setUnreachable(true);
         return;
     }
     const fresh = r.fetched;
     if (r.action === "apply") { ref.current = fresh.doc; setData(fresh.doc); }
     setReady(true);
+    setUnreachable(false);
     reportSync({
       op: "pull",
       rev: fresh.rev,
@@ -232,9 +240,16 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
       // was out came back on the screen. ⚠️ NEVER EVERY RECORD THE OTHERS TOUCHED (to 2.496.500): a fault this device
       // had just marked started and someone retitled meanwhile came back "open" here, and the next refresh sent that
       // to every device.
-      const merged = foldOthers(ref.current, outcome);
+      // ⚠️ A FAULT BOTH DEVICES CHANGED IS MERGED FIELD BY FIELD (architecture review H, 2026-10-23), as the push merged it
+      // in the store (fmApi mergeTicket): a "Started" tapped on a tablet whose copy predated a close on the phone
+      // reopened the fault, and "Closed without action" vanished from its history. A field both changed keeps the
+      // other device's value, and this device says so.
+      const { doc: merged, changedOnBoth } = foldOthers(ref.current, outcome);
       ref.current = merged;
       setData(merged);
+      setReady(true);
+      setUnreachable(false);
+      if (changedOnBoth.length > 0) setSaveError(CHANGED_ON_ANOTHER_DEVICE);
       reportSync({
         op: "push", ok: true, elevated: Boolean(elevation),
         tickets: outcome.next.tickets.length,
@@ -254,7 +269,7 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
     // store (and, before 2.496.184, re-pushed on every refresh for good).
     if (outcome.reason === "refused") {
       undo();
-      setSaveError(outcome.message ? `The add-on refused this change: ${outcome.message}` : "The add-on refused this change, nothing was saved.");
+      setSaveError(saveProblemLine(outcome));
       return "refused";
     }
     if (elevation) {
@@ -264,7 +279,7 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
     }
     // Local is now ahead of the server; the document has flagged it, so the
     // next refresh RETRIES this write instead of skipping forever (reload).
-    setSaveError("Couldn't save to the add-on, the change is only on this device.");
+    setSaveError(saveProblemLine(outcome));
     return "offline";
   }, [doc, reportSync]);
 
@@ -312,7 +327,7 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
 
   return (
     <FmDataContext.Provider value={{
-      data, ready, saveError, retention, reload,
+      data, ready, unreachable, saveError, retention, reload,
       addSchedule, updateSchedule, removeSchedule, removeAllSchedules,
       logCompletion, addCost, updateCost, addTicket, updateTicket,
       removeCost, removeTicket, removeCompletion, advanceTickets, closeTickets,

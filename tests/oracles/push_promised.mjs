@@ -8,6 +8,9 @@
 //      stayed in the store (and came back on the screen).
 //   2. One deadline for a push, in the shared piece: past it the push ends as a transport failure (its work stays
 //      unsaved, so a refresh re-sends it), the request is aborted, and a late answer changes nothing.
+//   3. A save that LANDED but answered after that deadline is held as possibly in the store (architecture review H,
+//      2026-10-23): what is promised includes it, and a push takes it back where this tablet no longer holds it. Its
+//      Cancel was "nothing to push", and the next refresh brought the cancelled label back to every tablet.
 //
 // Driven by value: the real sync machine, the real stores' diff / apply / rebase, against fake stores.
 import { register } from "node:module";
@@ -47,12 +50,12 @@ const opened = normaliseConfig({ ...DEFAULT_CONFIG, entityMap: {
   "light.pool": { entityId: "light.pool", type: "light", label: "Pool" },
 } }, { maps: true });
 
-function configTablet() {
+function configTablet(extra = {}) {
   const srv = store(D.baselineFromServer(D.pickSharedConfig(opened)),
     (d, rev) => ({ doc: structuredClone(d), rev, raw: {}, config: structuredClone(d) }));
   const doc = new SyncedDocument({
     fetch: (sig) => srv.fetch(sig), save: (...a) => srv.save(...a), diff: D.diffSharedConfig, isEmpty: D.isSharedConfigDiffEmpty,
-    apply: D.applySharedConfigDiff, rebase: (b, f) => ({ ...b, ...f }), empty: D.baselineFromServer({}),
+    apply: D.applySharedConfigDiff, rebase: (b, f) => ({ ...b, ...f }), empty: D.baselineFromServer({}), ...extra,
   }, srv.doc);
   const t = { srv, doc, config: opened, ledger: EMPTY_LEDGER };
   t.local = () => D.pickSharedConfig(t.config);
@@ -177,6 +180,99 @@ console.log("\n  a request that never answers:");
   ck("the late answer changes nothing: no retry is sent, the baseline stays",
      srv.signals.length === saves && srv.doc === held && doc.rev === rev && doc.baseline === baseline && !doc.hasUnsaved,
      { saves: srv.signals.length - saves, rev: doc.rev });
+}
+
+// ── a save that LANDED but answered after the deadline (architecture review H, 2026-10-23) ──────────────────────────
+// It ends here as a transport failure, yet the store holds it. Against the confirmed baseline its Cancel was no change:
+// the push gate never fired, the next push found nothing to send, and the next refresh brought the cancelled value back.
+const DEADLINE = 40;
+/** The next save LANDS, then answers `ms` later (slow Wi-Fi). */
+const late = (srv, ms = 4 * DEADLINE) => {
+  const save = srv.save;
+  srv.save = async (...a) => { srv.save = save; const r = await save(...a); await new Promise((ok) => setTimeout(ok, ms)); return r; };
+};
+/** DeviceConfigSync's refresh: pull; a repush pushes; an apply lays the store's copy on the config. */
+const refresh = async (t) => {
+  const r = await t.doc.pull(() => t.local(), (f) => JSON.stringify(f.doc) !== JSON.stringify(t.local()));
+  if (r.action === "repush") await t.push();
+  if (r.action === "apply") t.config = applyConfigChange(t.config, (c) => D.applyRemoteChange(c, D.remoteChange(D.pickSharedConfig(c), r.fetched.config))) ?? t.config;
+  return r.action;
+};
+
+console.log("\n  device settings: a relabel whose save lands after the deadline, then Cancel:");
+{
+  const t = configTablet({ deadlineMs: DEADLINE });
+  t.edit(E.patchMapping("light.hall", { label: "Hall lamp" }));
+  late(t.srv);
+  const o1 = await t.push();
+  ck("the relabel lands in the store but ends here as a failure", !o1.ok && o1.reason === "transport"
+     && label(t.srv.doc, "light.hall") === "Hall lamp" && t.doc.hasUnsaved, { o1, store: label(t.srv.doc, "light.hall") });
+  t.cancel();
+  ck("Cancel: the push gate opens (what is promised holds the relabel that may have landed)", t.gateOpen(),
+     { promised: label(t.doc.promised, "light.hall") });
+  const o2 = await t.push();
+  ck("  ...and the Cancel is sent, not 'nothing to push'", o2.ok, o2.reason);
+  ck("every tablet gets 'Hall' back", label(t.srv.doc, "light.hall") === "Hall", label(t.srv.doc, "light.hall"));
+  const a = await refresh(t);
+  ck("  ...and the next refresh leaves 'Hall' on this tablet", label(t.config, "light.hall") === "Hall" && !t.doc.hasUnsaved,
+     { action: a, shows: label(t.config, "light.hall") });
+}
+
+console.log("\n  device settings: the same, the Cancel left to the next refresh (no push of its own):");
+{
+  const t = configTablet({ deadlineMs: DEADLINE });
+  t.edit(E.patchMapping("light.hall", { label: "Hall lamp" }));
+  late(t.srv);
+  await t.push();
+  t.cancel();
+  ck("the refresh re-sends the unsaved work", await refresh(t) === "repush");
+  ck("  ...and that carries the Cancel: every tablet gets 'Hall' back", label(t.srv.doc, "light.hall") === "Hall",
+     label(t.srv.doc, "light.hall"));
+  await refresh(t);
+  ck("  ...and this tablet still shows it after the next one", label(t.config, "light.hall") === "Hall", label(t.config, "light.hall"));
+}
+
+console.log("\n  device settings: Cancel pressed WHILE the slow save is out:");
+{
+  const t = configTablet({ deadlineMs: DEADLINE });
+  t.edit(E.patchMapping("light.hall", { label: "Hall lamp" }));
+  late(t.srv);
+  const p1 = t.push();
+  await tick();
+  t.cancel();
+  ck("the push gate opens", t.gateOpen());
+  const [o1, o2] = await Promise.all([p1, t.push()]);
+  ck("the relabel ends as a failure; the Cancel's push is sent all the same", !o1.ok && o2.ok, { o1: o1.reason, o2: o2.reason });
+  ck("every tablet gets 'Hall' back", label(t.srv.doc, "light.hall") === "Hall", label(t.srv.doc, "light.hall"));
+  await refresh(t);
+  ck("  ...and the next refresh leaves 'Hall' here", label(t.config, "light.hall") === "Hall", label(t.config, "light.hall"));
+}
+
+console.log("\n  device settings: a failed save that did NOT land, then Cancel, another tablet's label meanwhile:");
+{
+  const t = configTablet({ deadlineMs: DEADLINE });
+  const save = t.srv.save;
+  t.srv.save = async () => { t.srv.save = save; await tick(); return { ok: false, conflict: false }; };
+  t.edit(E.patchMapping("light.hall", { label: "Hall lamp" }));
+  await t.push();
+  t.srv.doc = { ...t.srv.doc, entityMap: { ...t.srv.doc.entityMap, "light.hall": { ...t.srv.doc.entityMap["light.hall"], label: "Theirs" } } };
+  t.srv.rev++;
+  t.cancel();
+  const o = await t.doc.push(t.local());
+  ck("nothing is sent: the store does not hold this tablet's relabel", !o.ok && o.reason === "nothing-to-push" && !t.doc.hasUnsaved, o);
+  ck("  ...so the other tablet's label stays", label(t.srv.doc, "light.hall") === "Theirs", label(t.srv.doc, "light.hall"));
+}
+
+console.log("\n  Facility: a cost whose save lands after the deadline, then taken back:");
+{
+  const srv = store(EMPTY_FM_DATA), doc = fmDoc(srv, { deadlineMs: DEADLINE });
+  late(srv);
+  const o1 = await doc.push(withCost(EMPTY_FM_DATA, "c1"));
+  ck("the cost lands but ends here as a failure", !o1.ok && costIds(srv.doc) === "c1", { o1, store: costIds(srv.doc) });
+  const pull = await doc.pull(() => EMPTY_FM_DATA, () => true);
+  ck("the refresh re-sends", pull.action === "repush", pull.action);
+  const o2 = await doc.push(EMPTY_FM_DATA);
+  ck("  ...and the removal reaches the store", o2.ok && costIds(srv.doc) === "", { o2: o2.reason, store: costIds(srv.doc) });
 }
 
 console.log("\n  the deadline, once:");

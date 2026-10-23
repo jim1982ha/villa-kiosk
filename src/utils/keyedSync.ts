@@ -32,9 +32,16 @@
 
 export type Keyed<T> = Record<string, T>;
 
+const owns = (o: object, id: string) => Object.prototype.hasOwnProperty.call(o, id);
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
 export interface KeyedDiff<T> {
   set: Keyed<T>;
   del: string[];
+  /** Each changed item as the copy this change was made against held it (diffKeyed `keepWas`): a store that merges an
+   *  item field by field (applyKeyedMerging) tells from it whether the item it lands on moved since. Absent: the item
+   *  is replaced whole, as it always was (the device-setup store). */
+  was?: Keyed<T>;
 }
 
 /** Index a list of records by their own id. Both stores key everything this
@@ -43,15 +50,19 @@ export function keyBy<T>(items: readonly T[], id: (item: T) => string): Keyed<T>
   return Object.fromEntries(items.map((item) => [id(item), item]));
 }
 
-/** What did `next` actually change relative to `base`, per item? */
-export function diffKeyed<T>(base: Keyed<T>, next: Keyed<T>): KeyedDiff<T> {
+/** What did `next` actually change relative to `base`, per item? `keepWas`: with each changed item's `base` copy. */
+export function diffKeyed<T>(base: Keyed<T>, next: Keyed<T>, keepWas = false): KeyedDiff<T> {
   const set: Keyed<T> = {};
+  const was: Keyed<T> = {};
   for (const [id, item] of Object.entries(next)) {
-    if (JSON.stringify(base[id]) !== JSON.stringify(item)) set[id] = item;
+    if (JSON.stringify(base[id]) !== JSON.stringify(item)) {
+      set[id] = item;
+      if (keepWas && owns(base, id)) was[id] = base[id];
+    }
   }
   const del: string[] = [];
   for (const id of Object.keys(base)) if (!(id in next)) del.push(id);
-  return { set, del };
+  return keepWas ? { set, del, was } : { set, del };
 }
 
 /** Replay a diff onto some other snapshot (normally the server's freshest),
@@ -62,14 +73,67 @@ export function applyKeyed<T>(target: Keyed<T>, diff: KeyedDiff<T>): Keyed<T> {
   return out;
 }
 
+/** How the fields of one item merge when two devices changed it (mergeItem). */
+export interface FieldMerge {
+  /** Fields that only make sense together (a fault's status and when it was resolved): when one of them was changed on
+   *  both sides, the whole group keeps the other side's values. */
+  groups?: readonly (readonly string[])[];
+  /** List fields kept append-only (a fault's steps): changed on both sides, they hold both sides' entries, each once by
+   *  `id`, the other side's in its order, then this side's new ones. `dropMine`: a new entry of this side's left out
+   *  because a field it goes with kept the other side's value (`clashed`). */
+  lists?: Readonly<Record<string, { id: (entry: unknown) => string; dropMine?: (entry: unknown, clashed: ReadonlySet<string>) => boolean }>>;
+}
+
+/**
+ * ONE ITEM CHANGED ON TWO DEVICES, merged field by field against the copy both started from (`was`): a field only this
+ * side changed takes `mine`; one only the other side changed keeps `theirs`; one both changed to different values keeps
+ * `theirs` (it got there first) and is named in `clashed`, for the device to say. Lists and groups: `rules`.
+ *
+ * ⚠️ THE WHOLE ITEM WAS REPLAYED (to 2.496.501, architecture review H 2026-10-23): a fault closed on the phone, then
+ * marked "Started" on a tablet whose copy predated the close, came back open, and "Closed without action" vanished from
+ * its history on every device. Pure: tests/oracles/fm_field_merge.mjs.
+ */
+export function mergeItem<T>(was: T, mine: T, theirs: T, rules: FieldMerge = {}): { item: T; clashed: string[] } {
+  const w = (was ?? {}) as Record<string, unknown>, m = (mine ?? {}) as Record<string, unknown>;
+  const t = (theirs ?? {}) as Record<string, unknown>;
+  const lists = rules.lists ?? {};
+  const keys = [...new Set([...Object.keys(t), ...Object.keys(m), ...Object.keys(w)])];
+  const bothMoved = (k: string) => !same(m[k], w[k]) && !same(t[k], w[k]);
+  const clashed = new Set(keys.filter((k) => !owns(lists, k) && bothMoved(k) && !same(m[k], t[k])));
+  for (const group of rules.groups ?? []) if (group.some((k) => clashed.has(k))) for (const k of group) clashed.add(k);
+  const out: Record<string, unknown> = {};
+  for (const k of keys) {
+    const list = owns(lists, k) ? lists[k] : undefined;
+    let v: unknown;
+    if (list && bothMoved(k)) {
+      const entries = (x: unknown) => (Array.isArray(x) ? (x as unknown[]) : []);
+      const had = new Set(entries(w[k]).map(list.id)), theirIds = new Set(entries(t[k]).map(list.id));
+      v = [...entries(t[k]), ...entries(m[k]).filter((e) => !theirIds.has(list.id(e))
+        && !(!had.has(list.id(e)) && list.dropMine?.(e, clashed)))];
+    } else if (clashed.has(k)) v = t[k];
+    else v = same(m[k], w[k]) ? t[k] : m[k];
+    if (v !== undefined) out[k] = v;
+  }
+  return { item: out as T, clashed: [...clashed].filter((k) => bothMoved(k) && !same(m[k], t[k])) };
+}
+
+/** applyKeyed for a store that merges an item two devices changed (`merge`, normally mergeItem): an item the diff
+ *  carries its `was` for, and that `target` holds changed since, is merged; every other one is replayed as it is. */
+export function applyKeyedMerging<T>(target: Keyed<T>, diff: KeyedDiff<T>, merge: (was: T, mine: T, theirs: T) => T): Keyed<T> {
+  const set: Keyed<T> = {};
+  for (const [id, item] of Object.entries(diff.set)) {
+    const moved = diff.was && owns(diff.was, id) && owns(target, id) && !same(target[id], diff.was[id]);
+    set[id] = moved ? merge(diff.was![id], item, target[id]) : item;
+  }
+  return applyKeyed(target, { set, del: diff.del });
+}
+
 export function keyedDiffIsEmpty<T>(diff: KeyedDiff<T>): boolean {
   return Object.keys(diff.set).length === 0 && diff.del.length === 0;
 }
 
 /** A change to a document of several keyed parts (the config store's shared keys, the Facility store's collections). */
 export type KeyedParts = Record<string, KeyedDiff<unknown>>;
-
-const owns = (o: object, id: string) => Object.prototype.hasOwnProperty.call(o, id);
 
 /** `diff` with only the items `keep` accepts (`deleted`: the item is a removal, `item` undefined). */
 export function keepItems<P extends KeyedParts>(
@@ -78,16 +142,34 @@ export function keepItems<P extends KeyedParts>(
 ): P {
   const out: Record<string, KeyedDiff<unknown>> = {};
   for (const [part, d] of Object.entries(diff)) {
+    const set = Object.fromEntries(Object.entries(d.set).filter(([id, item]) => keep(part, id, item, false)));
     out[part] = {
-      set: Object.fromEntries(Object.entries(d.set).filter(([id, item]) => keep(part, id, item, false))),
+      set,
       del: d.del.filter((id) => keep(part, id, undefined, true)),
+      ...(d.was ? { was: Object.fromEntries(Object.entries(d.was).filter(([id]) => owns(set, id))) } : {}),
+    };
+  }
+  return out as P;
+}
+
+/** `diff` with every item of `more` added, each with its value and its `was` (an item in both takes `more`'s). */
+export function withItems<P extends KeyedParts>(diff: P, more: P): P {
+  const out: Record<string, KeyedDiff<unknown>> = {};
+  for (const [part, d] of Object.entries(diff)) {
+    const x = more[part];
+    if (!x || keyedDiffIsEmpty(x)) { out[part] = d; continue; }
+    const was = d.was || x.was ? { ...d.was, ...x.was } : undefined;
+    out[part] = {
+      set: { ...Object.fromEntries(Object.entries(d.set).filter(([id]) => !x.del.includes(id))), ...x.set },
+      del: [...new Set([...d.del.filter((id) => !owns(x.set, id)), ...x.del])],
+      ...(was ? { was } : {}),
     };
   }
   return out as P;
 }
 
 /** Whether `d` names the item, as a change or a removal. */
-function names(d: KeyedDiff<unknown> | undefined, id: string): boolean {
+export function names(d: KeyedDiff<unknown> | undefined, id: string): boolean {
   return !!d && (owns(d.set, id) || d.del.includes(id));
 }
 
@@ -108,11 +190,21 @@ export function mineWins<P extends KeyedParts>(others: P, mine: P): P {
  * it (2.496.501).
  */
 export function withoutOwnWrites<P extends KeyedParts>(changed: P, sent: readonly P[]): P {
-  return keepItems(changed, (part, id, item, deleted) => !sent.some((s) => {
+  return keepItems(changed, (part, id, item, deleted) => !sentIt(sent, part, id, item, deleted));
+}
+
+/** The other half: only the items whose new value is one this device sent (a push that ended as a failure may have
+ *  landed all the same: utils/syncedDocument looks for it in the store before taking it back). */
+export function ownWrites<P extends KeyedParts>(changed: P, sent: readonly P[]): P {
+  return keepItems(changed, (part, id, item, deleted) => sentIt(sent, part, id, item, deleted));
+}
+
+function sentIt(sent: readonly KeyedParts[], part: string, id: string, item: unknown, deleted: boolean): boolean {
+  return sent.some((s) => {
     const d = s[part];
     if (!d) return false;
-    return deleted ? d.del.includes(id) : owns(d.set, id) && JSON.stringify(d.set[id]) === JSON.stringify(item);
-  }));
+    return deleted ? d.del.includes(id) : owns(d.set, id) && same(d.set[id], item);
+  });
 }
 
 /** One fetch of a shared store: the parsed document, the revision it was read
@@ -160,14 +252,20 @@ export async function pushWithRebase<TDoc, TDiff>(opts: {
   apply: (target: TDoc, diff: TDiff) => TDoc;
   save: (next: TDoc, rev: string, carryOver: Record<string, unknown>) => Promise<StoreSaveResult>;
   maxAttempts?: number;
+  /** The diff as sent onto THIS copy of the store, when it depends on what the store holds (utils/syncedDocument: a
+   *  write of this device's that may have landed after its push gave up). Given, an empty `diff` still reads the store. */
+  atBase?: (base: TDoc, diff: TDiff) => TDiff;
 }): Promise<PushOutcome<TDoc>> {
-  if (opts.isEmpty(opts.diff)) return { ok: false, reason: "nothing-to-push" };
+  if (opts.isEmpty(opts.diff) && !opts.atBase) return { ok: false, reason: "nothing-to-push" };
   const maxAttempts = opts.maxAttempts ?? 3;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const fresh = await opts.fetchFresh();
     const base = fresh ? opts.rebase(opts.baseline, fresh.doc) : opts.baseline;
-    const next = opts.apply(base, opts.diff);
+    const diff = opts.atBase ? opts.atBase(base, opts.diff) : opts.diff;
+    // nothing to send onto the store as it is; unread, that is not known
+    if (opts.isEmpty(diff)) return fresh ? { ok: false, reason: "nothing-to-push" } : { ok: false, reason: "transport" };
+    const next = opts.apply(base, diff);
     const result = await opts.save(next, fresh?.rev ?? "0", fresh?.raw ?? {});
     if (result.ok) return { ok: true, next, base, rev: result.rev, attempts: attempt + 1 };
     if ("refused" in result && result.refused) return { ok: false, reason: "refused", message: result.message };

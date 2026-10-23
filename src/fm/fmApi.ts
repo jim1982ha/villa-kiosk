@@ -5,12 +5,16 @@
 // like the shared device configuration and scenes.
 
 import { ingressPath } from "@/ha/ingress";
-import { EMPTY_FM_DATA, FM_COLLECTIONS, type FmCollection, type FmData, type FmSavedDocument, recapKind } from "./fmTypes";
+import {
+  EMPTY_FM_DATA, FM_COLLECTIONS, NOT_STATUS_CHANGE_KINDS,
+  type FmCollection, type FmData, type FmSavedDocument, type FmTicket, type FmTicketUpdate, recapKind,
+} from "./fmTypes";
 import { backendFetch } from "@/auth/sessionLost";
+import { storeSaveResult } from "@/utils/storeSave";
 import type { FmRetention } from "./fmEngine";
 import {
-  keyBy, diffKeyed, applyKeyed, keyedDiffIsEmpty, mineWins,
-  type KeyedDiff, type StoreFetch, type StoreSaveResult,
+  keyBy, diffKeyed, applyKeyed, applyKeyedMerging, keyedDiffIsEmpty, mergeItem, mineWins, names,
+  type FieldMerge, type KeyedDiff, type StoreFetch, type StoreSaveResult,
 } from "@/utils/keyedSync";
 
 /** Narrow an arbitrary parsed value to FmData, dropping anything unrecognised.
@@ -104,17 +108,8 @@ export async function saveFmData(
         ...(elevation ? { elevation } : {}),
       }),
     });
-    if (r.status === 409) return { ok: false, conflict: true };
-    // The server's NO is an answer, with its reason — not a blip to retry.
-    // Not 401: an expired sign-in is re-established (sessionLost) and the
-    // change is worth sending again after it.
-    if (r.status === 400 || r.status === 403 || r.status === 413) {
-      const e = (await r.json().catch(() => ({}))) as { error?: unknown };
-      return { ok: false, conflict: false, refused: true, message: typeof e.error === "string" ? e.error : undefined };
-    }
-    if (!r.ok) return { ok: false, conflict: false };
-    const d = (await r.json().catch(() => ({}))) as { rev?: unknown };
-    return { ok: true, rev: typeof d.rev === "string" ? d.rev : "0" };
+    // The server's NO is an answer, with its reason, not a blip to retry: one reading for both stores (utils/storeSave).
+    return await storeSaveResult(r);
   } catch {
     return { ok: false, conflict: false };
   }
@@ -131,9 +126,26 @@ export type FmDataDiff = Record<FmCollection, KeyedDiff<{ id: string }>>;
 const keyFm = (d: FmData, k: FmCollection) =>
   keyBy(d[k] as { id: string }[], (r) => r.id);
 
+/** A fault changed on two devices merges field by field (keyedSync mergeItem): its status goes with when it was
+ *  resolved and the cost filed with it; its steps are append-only, by their whole content (a step has no id), and a
+ *  status step of this device's is left out when the status kept the other device's (the record must read as one fault:
+ *  fmEngine.ticketAt takes the status from the last status step). The VESTA Agent writes the same faults. */
+const NOT_A_STATUS_STEP: ReadonlySet<string> = new Set(NOT_STATUS_CHANGE_KINDS);
+const TICKET_FIELDS: FieldMerge = {
+  groups: [["status", "resolvedAt", "costId"]],
+  lists: {
+    updates: {
+      id: (u) => JSON.stringify(u),
+      dropMine: (u, clashed) => clashed.has("status") && !NOT_A_STATUS_STEP.has((u as FmTicketUpdate).kind ?? ""),
+    },
+  },
+};
+export const mergeTicket = (was: FmTicket, mine: FmTicket, theirs: FmTicket) => mergeItem(was, mine, theirs, TICKET_FIELDS);
+
+/** Only the faults merge (their `was` is kept): every other record is still replaced whole. */
 export function diffFmData(base: FmData, next: FmData): FmDataDiff {
   const out = {} as FmDataDiff;
-  for (const k of FM_COLLECTIONS) out[k] = diffKeyed(keyFm(base, k), keyFm(next, k));
+  for (const k of FM_COLLECTIONS) out[k] = diffKeyed(keyFm(base, k), keyFm(next, k), k === "tickets");
   return out;
 }
 
@@ -141,20 +153,37 @@ export function fmDiffIsEmpty(diff: FmDataDiff): boolean {
   return FM_COLLECTIONS.every((k) => keyedDiffIsEmpty(diff[k]));
 }
 
-/** Replay one device's changes onto the server's freshest copy. */
+/** Replay one device's changes onto the server's freshest copy. A fault `target` holds changed since the copy the
+ *  change was made against is merged field by field, `target`'s value kept on a field both changed (mergeTicket). */
 export function applyFmDiff(target: FmData, diff: FmDataDiff): FmData {
   const out = { ...target } as Record<string, unknown>;
   for (const k of FM_COLLECTIONS) {
-    out[k] = Object.values(applyKeyed(keyFm(target, k), diff[k]));
+    out[k] = Object.values(k === "tickets"
+      ? applyKeyedMerging(keyFm(target, k), diff[k], (was, mine, theirs) =>
+        mergeTicket(was as FmTicket, mine as FmTicket, theirs as FmTicket).item)
+      : applyKeyed(keyFm(target, k), diff[k]));
   }
   return out as unknown as FmData;
 }
 
 /** What a push that landed brings to the screen: the other devices' changes (`others`, utils/syncedDocument) laid on
  *  the screen as it is NOW, under every record this device has changed itself since `synced` (keyedSync mineWins, the
- *  config store's rule too). FmDataContext mutate. */
-export function foldOthers(screen: FmData, pushed: { synced: FmData; others: FmDataDiff }): FmData {
-  return applyFmDiff(screen, mineWins(pushed.others, diffFmData(pushed.synced, screen)));
+ *  config store's rule too), except a fault: changed on both sides it is merged field by field, as the push merged it
+ *  in the store (mergeTicket), and `changedOnBoth` names it when a field both changed kept the other device's value.
+ *  FmDataContext mutate says it. */
+export function foldOthers(screen: FmData, pushed: { synced: FmData; others: FmDataDiff }): { doc: FmData; changedOnBoth: string[] } {
+  const mine = diffFmData(pushed.synced, screen);
+  const was = keyFm(pushed.synced, "tickets"), now = keyFm(screen, "tickets");
+  const merged: Record<string, FmTicket> = {};
+  const changedOnBoth: string[] = [];
+  for (const [id, theirs] of Object.entries(pushed.others.tickets.set)) {
+    if (!names(mine.tickets, id) || !(id in was) || !(id in now)) continue;
+    const r = mergeTicket(was[id] as FmTicket, now[id] as FmTicket, theirs as FmTicket);
+    merged[id] = r.item;
+    if (r.clashed.length > 0) changedOnBoth.push(id);
+  }
+  const laid = applyFmDiff(screen, mineWins(pushed.others, mine));
+  return { doc: { ...laid, tickets: laid.tickets.map((t) => merged[t.id] ?? t) }, changedOnBoth };
 }
 
 /** Short, URL-safe, collision-resistant enough for one villa's records. */

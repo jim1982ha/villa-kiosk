@@ -79,7 +79,7 @@ export default function FacilitySections({
   // the villa's presence in the Recap, as the tile under the floors says it (owner, 2026-10-18)
   const presenceLine = usePresence()?.recap ?? null;
   const { role } = useProfile();
-  const { data, ready, saveError } = useFmData();
+  const { data, ready } = useFmData();
   // the villa's devices, role-blind — the pickers offer every device to the people who record work
   const { devices } = useVillaModel();
 
@@ -104,8 +104,7 @@ export default function FacilitySections({
 
   return (
     <>
-      {saveError && <div className="fm-banner warn">{saveError}</div>}
-      {!ready && <p className="muted body-text">Loading the maintenance record…</p>}
+      {/* the record's save line and "Loading…" / "Can't reach…" are the Cockpit window's, over every tab */}
       {ready && tab === "schedule" && (
         <>
           <TodayTab onOpenEntity={onOpenEntity} />

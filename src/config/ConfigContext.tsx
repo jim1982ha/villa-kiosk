@@ -31,6 +31,10 @@ interface ConfigContextType {
   mergeRemote: (change: RemoteChange) => void;
   /** Hear every such change; returns the unsubscribe. */
   onRemoteChange: (listener: (change: RemoteChange) => void) => () => void;
+  /** Why the device setup's last save did not reach the store (utils/storeSave saveProblemLine), or null: said where it
+   *  is edited (Advanced Settings), as the Facility screens say theirs. Set by DeviceConfigSync. */
+  saveProblem: string | null;
+  setSaveProblem: (line: string | null) => void;
   /** entity_id -> room name, live-computed (HA's own Area assignment, falling
    *  back to GLB geometric detection — see Dashboard.tsx's resolution effect
    *  and config/devicePlace.ts's resolveEntityRoom) rather than stored/edited
@@ -50,6 +54,7 @@ const ConfigContext = createContext<ConfigContextType | null>(null);
 export function ConfigProvider({ children }: { children: ReactNode }) {
   const [config, setConfig] = useState<AppConfig>(() => loadConfig());
   const [resolvedRooms, setResolvedRooms] = useState<Record<string, string>>({});
+  const [saveProblem, setSaveProblem] = useState<string | null>(null);
 
   const update = useCallback((change: Partial<AppConfig> | ConfigEdit) => {
     // EVERY patch is completed (defaults, bounds — cheap), so no reader ever
@@ -144,8 +149,11 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   }, [config.theme, config.latitude, config.longitude]);
 
   const value = useMemo(
-    () => ({ config, update, editByDialog, onDialogEdit, mergeRemote, onRemoteChange, resolvedRooms, setResolvedRooms }),
-    [config, update, editByDialog, onDialogEdit, mergeRemote, onRemoteChange, resolvedRooms],
+    () => ({
+      config, update, editByDialog, onDialogEdit, mergeRemote, onRemoteChange, saveProblem, setSaveProblem,
+      resolvedRooms, setResolvedRooms,
+    }),
+    [config, update, editByDialog, onDialogEdit, mergeRemote, onRemoteChange, saveProblem, resolvedRooms],
   );
   return <ConfigContext.Provider value={value}>{children}</ConfigContext.Provider>;
 }

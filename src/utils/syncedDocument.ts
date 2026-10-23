@@ -21,7 +21,8 @@
 
 import { decidePull, type PullAction } from "./pullDecision";
 import {
-  pushWithRebase, withoutOwnWrites, type KeyedParts, type PushOutcome, type StoreFetch, type StoreSaveResult,
+  keepItems, names, ownWrites, pushWithRebase, withItems, withoutOwnWrites,
+  type KeyedParts, type PushOutcome, type StoreFetch, type StoreSaveResult,
 } from "./keyedSync";
 
 /** How long ONE push may take, all its attempts, before it ends as a transport failure (2.496.500): its work stays
@@ -89,6 +90,10 @@ export class SyncedDocument<D, Diff extends KeyedParts, F extends StoreFetch<D> 
   /** What this device has sent and not seen confirmed: the push out, and those that failed (they may have landed all
    *  the same) until a push succeeds or the work is dropped (2.496.501). */
   private readonly unconfirmed = new Set<Unconfirmed<Diff>>();
+  /** `promised` while no push is out, kept for as long as the baseline and the failed pushes stay the same. */
+  private held: { baseline: D; failed: number; doc: D } | null = null;
+  private failedVersion = 0;
+  private read = false;
   private readonly spec: SyncedDocumentSpec<D, Diff, F>;
 
   constructor(spec: SyncedDocumentSpec<D, Diff, F>, initial: D | null) {
@@ -99,6 +104,11 @@ export class SyncedDocument<D, Diff extends KeyedParts, F extends StoreFetch<D> 
   /** A write from this device failed and its work is only here. */
   get hasUnsaved(): boolean { return this.unsaved; }
 
+  /** The store has been read (or written) at least once: until then the baseline is only the one this document was
+   *  started with, and a screen must not show it as the store's (architecture review H, 2026-10-23: the Facility
+   *  record unread on opening showed as an empty one, no fault anywhere and nothing said). */
+  get hasRead(): boolean { return this.read; }
+
   /**
    * What the server WILL hold once the pushes out and waiting land: the confirmed baseline with each of them laid on
    * it, i.e. the local document the latest push was handed (2.496.500). Nothing out: the baseline. A push sends what
@@ -107,7 +117,18 @@ export class SyncedDocument<D, Diff extends KeyedParts, F extends StoreFetch<D> 
    * change at all: the undo was never sent, and every other tablet kept the cancelled value.
    */
   get promised(): D | null {
-    return this.inFlight > 0 ? this.lastPushed : this.baseline;
+    if (this.inFlight > 0) return this.lastPushed;
+    // ⚠️ A PUSH THAT ENDED AS A FAILURE MAY HAVE LANDED (architecture review H, 2026-10-23): a save that answered after
+    // the deadline was in the store, and against the confirmed baseline a Cancel of it was no change: the push gate
+    // never fired, the next push found nothing to send, and the next refresh brought the cancelled value back here.
+    const baseline = this.baseline;
+    const failed = [...this.unconfirmed].filter((u) => u.failed);
+    if (baseline === null || failed.length === 0) return baseline;
+    if (this.held?.baseline !== baseline || this.held.failed !== this.failedVersion) {
+      this.held = { baseline, failed: this.failedVersion,
+        doc: failed.reduce<D>((doc, u) => this.spec.apply(doc, u.sent), baseline) };
+    }
+    return this.held.doc;
   }
 
   /** This device holds work the server has not got: a failed write, or a
@@ -117,6 +138,7 @@ export class SyncedDocument<D, Diff extends KeyedParts, F extends StoreFetch<D> 
   }
 
   private commit(next: D, rev: string): void {
+    this.read = true;
     this.baseline = next;
     this.rev = rev;
     this.spec.onBaseline?.(next);
@@ -188,6 +210,7 @@ export class SyncedDocument<D, Diff extends KeyedParts, F extends StoreFetch<D> 
   private settle(mine: Unconfirmed<Diff>): void {
     this.unconfirmed.delete(mine);
     for (const u of this.unconfirmed) if (u.failed) this.unconfirmed.delete(u);
+    this.failedVersion += 1;
   }
 
   private async pushNow(
@@ -198,6 +221,17 @@ export class SyncedDocument<D, Diff extends KeyedParts, F extends StoreFetch<D> 
     const own = this.unsaved || baseline === from ? local : this.spec.apply(baseline, this.spec.diff(from, local));
     const diff = this.spec.diff(baseline, own);
     const mine: Unconfirmed<Diff> = { sent: diff, failed: false };
+    // ⚠️ WHAT A FAILED PUSH MAY HAVE LEFT IN THE STORE IS TAKEN BACK WHERE THIS DEVICE NO LONGER HOLDS IT (architecture
+    // review H, 2026-10-23). Against the confirmed baseline, a rename whose save landed after the deadline and was then
+    // cancelled was no change at all ("nothing to push"): the store kept the rename, and the next refresh brought it
+    // back here and to every tablet. Read against the store's fresh copy: each item of those pushes the store holds
+    // as this device sent it, and this device's document no longer does, is sent again as this device has it.
+    const failed = [...this.unconfirmed].filter((u) => u.failed).map((u) => u.sent);
+    const atBase = failed.length === 0 ? undefined : (base: D, d: Diff): Diff => {
+      const landed = ownWrites(this.spec.diff(baseline, base), failed);
+      mine.sent = withItems(d, keepItems(this.spec.diff(base, own), (part, id) => names(landed[part], id)));
+      return mine.sent;
+    };
     this.unconfirmed.add(mine);
     this.writes += 1;
     // ⚠️ ONE DEADLINE FOR THE WHOLE PUSH, HERE AND NOWHERE ELSE (2.496.500). Past it, the request is aborted and every
@@ -228,6 +262,7 @@ export class SyncedDocument<D, Diff extends KeyedParts, F extends StoreFetch<D> 
         return r;
       },
       maxAttempts: this.spec.maxAttempts,
+      atBase,
     });
     let outcome: PushOutcome<D> | "late";
     try {
@@ -262,6 +297,7 @@ export class SyncedDocument<D, Diff extends KeyedParts, F extends StoreFetch<D> 
       this.unsaved = false;
     } else {
       mine.failed = true;
+      this.failedVersion += 1;
       this.unsaved = true;
     }
     return outcome;

@@ -64,10 +64,11 @@ import { useProfile } from "@/auth/ProfileContext";
 import { useSyncReporter } from "@/utils/syncTelemetry";
 import { SyncedDocument } from "@/utils/syncedDocument";
 import { useStoreRefresh } from "@/hooks/useStoreRefresh";
+import { saveProblemLine } from "@/utils/storeSave";
 import {
   fetchSharedConfig, saveSharedConfig, pickSharedConfig, SHARED_CONFIG_KEYS,
   diffSharedConfig, applySharedConfigDiff, isSharedConfigDiffEmpty, describeSharedConfigDiff,
-  mergeSharedConfig, pushedChange, remoteChange,
+  mergeSharedConfig, pushedChange, remoteChange, applyRemoteChange,
   loadSyncBaseline, saveSyncBaseline, baselineFromServer,
   type SharedDeviceConfig,
 } from "./deviceConfig";
@@ -85,7 +86,7 @@ const PUSH_DEBOUNCE_MS = 900;
 const MAX_PUSH_ATTEMPTS = 3;
 
 export default function DeviceConfigSync() {
-  const { config, mergeRemote } = useConfig();
+  const { config, update, mergeRemote, setSaveProblem } = useConfig();
   const { role } = useProfile();
 
   // Recompute the slice ONLY when one of the shared fields actually changes
@@ -189,11 +190,21 @@ export default function DeviceConfigSync() {
       // ⚠️ `others`, NOT THE STORE'S COPY AGAINST IT (to 2.496.500): a relabel whose push landed after its deadline was
       // in that copy, read as another tablet's, and an open dialog took it as the value Cancel puts back.
       mergeRemote(pushedChange(outcome));
-      return;
+    } else if (outcome.reason !== "nothing-to-push" && outcome.reason !== "not-allowed" && outcome.reason !== "not-pulled") {
+      reportSync({ op: "push", ok: false, reason: outcome.reason, changed });
     }
-    if (outcome.reason === "nothing-to-push" || outcome.reason === "not-allowed" || outcome.reason === "not-pulled") return;
-    reportSync({ op: "push", ok: false, reason: outcome.reason, changed });
-  }, [doc, mergeRemote, reportSync]);
+    // ⚠️ THE ADD-ON'S NO IS UNDONE AND SAID, A SAVE THAT DID NOT LAND IS SAID (architecture review H, 2026-10-23): both
+    // went to the telemetry alone, and a refused change (read as a Wi-Fi blip) was sent again on every refresh for good.
+    // Undone as the Facility store undoes one: the store's copy of every item this push carried, an edit made since kept
+    // (deviceConfig applyRemoteChange). NOT through mergeRemote: it is no other tablet's change, and an open dialog
+    // would say "changed on another tablet".
+    if (!outcome.ok && outcome.reason === "refused" && doc.baseline) {
+      const store = doc.baseline;
+      update((prev) => applyRemoteChange(prev, { synced: local, diff: diffSharedConfig(local, store) }));
+    }
+    const line = saveProblemLine(outcome);
+    if (line !== null || !doc.hasUnsaved) setSaveProblem(line);
+  }, [doc, update, mergeRemote, reportSync, setSaveProblem]);
 
   const pull = useCallback(async () => {
     // What applying the server's copy would make the local slice: server wins

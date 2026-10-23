@@ -27,3 +27,19 @@ export default function RemoteReplacedNote({ replaced, onDismiss }: {
     </div>
   );
 }
+
+/** The same line for the dialog's own save that did not reach the store (ConfigContext `saveProblem`): refused and
+ *  undone, or kept only on this device. X dismisses it; the next save that lands clears it. */
+export function SaveProblemNote({ line, onDismiss }: { line: string | null; onDismiss: () => void }) {
+  if (!line) return null;
+  return (
+    <div className="modal-remote-note" role="status">
+      <div className="modal-remote-note-lines">
+        <span className="body-text sev-warning">{line}</span>
+      </div>
+      <button className="icon-btn modal-remote-note-close" onClick={onDismiss} aria-label="Dismiss" title="Dismiss">
+        <X size={16} aria-hidden />
+      </button>
+    </div>
+  );
+}

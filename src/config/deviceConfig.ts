@@ -51,9 +51,10 @@ import { RECORDS_KEPT_DAYS_DEFAULT, RECORDS_KEPT_DAYS_MAX, type AppConfig, type 
 import { EMPTY_FM_CONTRACT, type FmContract } from "@/fm/fmTypes";
 import type { EntityMapping, TeleportPoint } from "@/types/scene.types";
 import { backendFetch } from "@/auth/sessionLost";
+import { storeSaveResult } from "@/utils/storeSave";
 import {
   keyBy, diffKeyed, applyKeyed, keyedDiffIsEmpty, mineWins,
-  type Keyed, type KeyedDiff,
+  type Keyed, type KeyedDiff, type StoreSaveResult,
 } from "@/utils/keyedSync";
 import { readJson, writeJson } from "@/utils/storedJson";
 
@@ -523,17 +524,12 @@ export async function fetchSharedConfig(signal?: AbortSignal): Promise<SharedCon
   }
 }
 
-export type SaveSharedConfigResult =
-  | { ok: true; rev: string }
-  | { ok: false; conflict: false }
-  | { ok: false; conflict: true; server: Partial<SharedDeviceConfig>; rev: string };
-
 /** Write the shared device config (owner only — the server 403s other roles).
  *  `expectedRev` is the revision this write was computed against; pass null
  *  to skip the check (unconditional overwrite). If the server's stored
  *  revision has since moved on, the write is rejected (409) rather than
- *  silently clobbering whatever the other write put there — the caller gets
- *  the fresher copy back so it can rebase its own diff and retry. */
+ *  silently clobbering whatever the other write put there — the push then
+ *  reads the fresher copy, rebases its own diff and retries. */
 export async function saveSharedConfig(
   config: SharedDeviceConfig,
   expectedRev: string | null,
@@ -543,7 +539,7 @@ export async function saveSharedConfig(
   carryOver: Record<string, unknown> = {},
   /** Aborts the request: the push it belongs to ran out of time (utils/syncedDocument PUSH_DEADLINE_MS). */
   signal?: AbortSignal,
-): Promise<SaveSharedConfigResult> {
+): Promise<StoreSaveResult> {
   try {
     const merged = { ...carryOver, ...config };
     const resp = await backendFetch(ingressPath("device-config"), {
@@ -554,18 +550,10 @@ export async function saveSharedConfig(
       body: JSON.stringify(
         expectedRev === null ? { config: merged } : { config: merged, rev: expectedRev }),
     });
-    if (resp.status === 409) {
-      const data = (await resp.json().catch(() => ({}))) as { config?: unknown; rev?: unknown };
-      return {
-        ok: false,
-        conflict: true,
-        server: parseSharedConfig(data.config),
-        rev: typeof data.rev === "string" ? data.rev : "0",
-      };
-    }
-    if (!resp.ok) return { ok: false, conflict: false };
-    const data = (await resp.json().catch(() => ({}))) as { rev?: unknown };
-    return { ok: true, rev: typeof data.rev === "string" ? data.rev : "0" };
+    // ⚠️ THE FACILITY STORE'S READING OF THE ANSWER, NOT ITS OWN (architecture review H, 2026-10-23): every failure here
+    // was a Wi-Fi blip, so a 403/413 was kept and sent again on every refresh for good, and nobody was told. A 409 is
+    // only "another write landed first": the push fetches the fresh copy itself (keyedSync pushWithRebase).
+    return await storeSaveResult(resp);
   } catch {
     return { ok: false, conflict: false };
   }
