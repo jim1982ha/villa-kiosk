@@ -1,3 +1,18 @@
+## 0.12.326
+
+What you will see:
+- "Investigate this" under a follow-up question now investigates the right device. Asked "how did the House Pump
+  run this afternoon?", then "and why did it keep starting?", the investigation was given only the second question
+  and did not know which device it was about. It is now told which devices and which period the answer looked at.
+- Pressing an "Investigate this" button that is too old now says so and asks you to ask again. Before, it said
+  "Already started." although nothing had started.
+- When the voice service is out of reach, a voice message now reads "Voice messages can't be written out right now.
+  Please write it." Before, every voice message read "I could not make out this voice message. Try again", and
+  trying again could not help.
+- A battery fault's title follows the battery's level during the day. Before, the weekly report could show 15 %
+  beside a fault still titled "battery at 18%", in the Cockpit too, until the next night.
+- Running an older night check again no longer resets the battery levels the weekly report shows.
+
 ## 0.12.325
 
 What you will see:
