@@ -56,7 +56,7 @@ ck("  ...its line: \"Done (JM) · VESTA confirms by 15:06\" (the villa's clock)"
    line("w1"));
 ck("  ...a close in the Cockpit says Closed and the profile", line("w2") === `Closed (Owner) · VESTA confirms by ${clockTime(NOW + 9 * 60_000)}`,
    line("w2"));
-ck("  ...its moment past: at the Agent's next check, never a time gone by", line("w3") === "Done (JM) · VESTA confirms it at its next check",
+ck("  ...its moment past: at the Agent's next check, never a time gone by", line("w3") === "Done (JM) · VESTA confirming now",
    line("w3"));
 ck("  ...shown at most two of the Agent's looks past its moment; with the Agent offline (no cadence), not past it",
    shownUntil(0, CADENCE) === 10 * 60_000 && shownUntil(0, null) === 0
