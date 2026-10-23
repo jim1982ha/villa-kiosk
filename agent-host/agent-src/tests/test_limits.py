@@ -354,3 +354,20 @@ def test_a_search_counts_its_matches_in_every_tab_title_and_opens_a_tab_that_has
     assert "if (FILTER && first && (!open || open[4] === 0)) page.tabs.limits = first[0];" in draw
     assert "oninput: (e) => { SEARCH = e.target.value; FILTER = SEARCH.trim().toLowerCase(); draw(); }" in js
     assert js.index("const table = (list)") < js.index("draw();\n  const search")      # tabbed draws at once
+
+
+def test_every_number_on_the_limits_tab_shows_its_unit(ui):
+    # owner, 2026-10-23: "always show the units in the value column" — the skills' and the rules' numbers had none
+    from vesta_agent.ui.limits_tab import unit_of
+    for n in os.listdir(os.path.join(SRC, "starter", "skills")):
+        if os.path.isdir(os.path.join(SRC, "starter", "skills", n)) and n not in ("preventive-maintenance", "alert-desk", "investigate"):
+            copy_skill(n, ui.skills_dir)
+    rows = _rows(ui)["rows"]
+    bare = [r["name"] for r in rows if r["kind"] == "number" and not r["unit"]]
+    assert bare == []
+    by = {r["name"]: r["unit"] for r in rows}
+    assert by["rules.yaml › behaviour.reopen_hours"] == "hours" and by["rules.yaml › siren.min_signals"] == "signals"
+    assert by["settings.keep.daily_figures_months"] == "months" and by["settings.reply_limit_usd"] == "US$"
+    assert [unit_of(k) for k in ("cooldown_min", "drift_pct", "offline_min_s", "zero_rest_share", "rise_ratio",
+                                 "waste_min_kwh", "on_threshold_floor_w", "nothing_here")] == \
+        ["minutes", "%", "seconds", "share (0 to 1)", "times", "kWh", "W", ""]

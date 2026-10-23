@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.330 (23 October 2026)
+
+- Limits: every number shows its unit (owner, 2026-10-23). `limits_tab.unit_of(key)`: one rule from the setting's own
+  name (_minutes/_min, _hours, _days, _months, _weeks, _s/_seconds, _pct, _points, _usd, _kwh, _w, _ratio, share/
+  fraction/margin/spread), the counts a name cannot tell named once (`COUNTS`); a job's time says "villa time".
+
 ## 0.6.329 (23 October 2026)
 
 - A closed alert's last line says how long it stays on watch, from `behaviour.reopen_hours` (live: the villa's helper,

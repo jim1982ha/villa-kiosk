@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import io
 import os
+import re
 
 import yaml
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
@@ -28,6 +29,29 @@ from .policy_doc import _yaml
 
 PLACE = "Limits"
 SKILL_GROUP, POLICY_GROUP = "skills", "rules"
+
+
+#: A setting's unit, read from its own name (owner, 2026-10-23: "always show the units in the value column"): ONE rule
+#: for every skill's and every rule's number, so a new setting shows its unit without anyone listing it. The counts a
+#: name cannot tell are named once below (the noun the setting counts).
+COUNTS = {"min_signals": "signals", "starts_min": "starts", "cycle_min_runs": "runs", "cycle_min_periods": "periods",
+          "ordinary_hide_over": "periods", "state_lane_max": "states", "integration_down_devices": "devices",
+          "reconnect_events": "drops", "battery_trend_min_points": "readings", "show": "batteries",
+          "circuits_show": "rows", "group_from": "items", "days_context_min": "days", "days_context": "days",
+          "min_days_for_baseline": "days", "alert_fatigue_per_month": "times a month", "noise_per_hour": "changes an hour",
+          "blocks_per_day": "blocks a day", "battery_trend_drop_per_day": "points a day", "timeout": "seconds"}
+_UNITS = ((r"(?:^|_)usd$", "US$"), (r"(?:^|_)kwh$", "kWh"), (r"_w$", "W"), (r"(?:^|_)pct(?:_above)?$", "%"),
+          (r"(?:^|_)points$", "points"), (r"(?:^|_)(?:s|seconds)$", "seconds"), (r"(?:^|_)(?:min|minutes)$", "minutes"),
+          (r"(?:^|_)hours$", "hours"), (r"(?:^|_)days$", "days"), (r"(?:^|_)weeks$", "weeks"),
+          (r"(?:^|_)months$", "months"), (r"(?:^|_)ratio$", "times"), (r"(?:^|_)(?:share|fraction|margin|spread)(?:_|$)", "share (0 to 1)"))
+
+
+def unit_of(key: str) -> str:
+    """The unit of a setting named `key` (its last part): "minutes" for reask_minutes or cooldown_min, "%" for
+    drift_pct, "US$" for limit_usd; "" when its name says none."""
+    if key in COUNTS:
+        return COUNTS[key]
+    return next((u for pat, u in _UNITS if re.search(pat, key)), "")
 # "Agent rules", never "Rules" alone (owner, 2026-10-22): a "rule" read as one of the villa's automations; these are
 # policy.yaml's values, the Rules tab's, and the group's (i) says so
 GROUP_TITLES = {**limits.GROUPS, SKILL_GROUP: "Skill settings", POLICY_GROUP: "Agent rules"}
@@ -251,7 +275,8 @@ class LimitsTab:
                 rows.append({"id": {"src": "skill", "skill": skill, "file": fn, "path": list(path)},
                              "group": SKILL_GROUP, "section": skill, "name": f"{fn} › {name}",
                              "label": said or name.replace("_", " "), "value": value, "default": shipped,
-                             "kind": kind, "choices": choices, "unit": "", "lo": 0 if _number(shipped) and shipped >= 0 else None,
+                             "kind": kind, "choices": choices, "unit": unit_of(str(path[-1])) if kind == "number" else "",
+                             "lo": 0 if _number(shipped) and shipped >= 0 else None,
                              "hi": None, "reached": "", "told": "", "also": also,
                              "where": [f"{skill}/{villa_fn if (over is not None or not own) else fn}"]})
         return rows
@@ -272,7 +297,7 @@ class LimitsTab:
                          "group": SKILL_GROUP, "section": skill, "name": f"skill.yaml › schedule.{i}.when",
                          "label": f"When the {what} job runs, villa time: HH:MM every day, Mon HH:MM each week, "
                                   "D HH:MM each month.",
-                         "value": job["when"], "default": job["when"], "kind": "time", "choices": None, "unit": "",
+                         "value": job["when"], "default": job["when"], "kind": "time", "choices": None, "unit": "villa time",
                          "lo": None, "hi": None, "reached": "", "told": "",
                          "also": (f"Also in Skills › {skill} › Files › skill.yaml. Saving it here makes this skill your "
                                   f"own copy: its updates then wait for you in Skills › {skill} › Compare."),
@@ -372,7 +397,8 @@ class LimitsTab:
                      WORDS["siren_auto_off_min"]))
         return [{"id": {"src": "policy", "path": p}, "group": POLICY_GROUP, "section": "policy.yaml",
                  "name": ".".join(p), "label": label, "value": v, "default": d, "kind": kind, "choices": ch,
-                 "unit": "", "lo": lo, "hi": hi, "reached": "", "told": "", "also": also, "where": ["policy.yaml"]}
+                 "unit": unit_of(p[-1]) if kind == "number" else "", "lo": lo, "hi": hi, "reached": "", "told": "",
+                 "also": also, "where": ["policy.yaml"]}
                 for p, v, d, kind, ch, lo, hi, also, label in rows]
 
     # ------------------------------------------------------------------ one change
