@@ -127,8 +127,11 @@ export function WatchedRow({ card, onOpenEntity }: { card: CardView; onOpenEntit
   const inside = (
     <>
       <CheckCircle2 className="fault-watched-icon" size={18} aria-hidden="true" />
+      {/* its device alone on the first line, as an open issue's card is titled; its fault and who closed it under it
+          (owner, 2026-10-23: "show only the device name in the first line, to mirror the Open issues cards") */}
       <span className="fault-watched-text">
-        <b>{card.title}</b>{fault ? ` · ${fault}` : ""}{said.did ? ` · ${said.did}` : ""}
+        <b className="fault-watched-title">{card.title}</b>
+        <span className="fault-watched-detail">{[fault, said.did].filter(Boolean).join(" · ")}</span>
       </span>
       {said.when && <span className="fault-watched-when">{said.when}</span>}
     </>
