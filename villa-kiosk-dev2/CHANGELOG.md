@@ -1,3 +1,10 @@
+## 2.496.504
+
+What you will see:
+- Cockpit: a fault VESTA is confirming keeps its thin row, now on two lines like the Open issues cards: the device
+  alone on the first line with "VESTA confirms by 18:41" on its right, and the fault with who closed it ("#78 · … ·
+  Done (JM)") smaller underneath.
+
 ## 2.496.503
 
 What you will see:
