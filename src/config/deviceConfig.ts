@@ -52,7 +52,7 @@ import { EMPTY_FM_CONTRACT, type FmContract } from "@/fm/fmTypes";
 import type { EntityMapping, TeleportPoint } from "@/types/scene.types";
 import { backendFetch } from "@/auth/sessionLost";
 import {
-  keyBy, diffKeyed, applyKeyed, keyedDiffIsEmpty,
+  keyBy, diffKeyed, applyKeyed, keyedDiffIsEmpty, mineWins,
   type Keyed, type KeyedDiff,
 } from "@/utils/keyedSync";
 import { readJson, writeJson } from "@/utils/storedJson";
@@ -341,7 +341,8 @@ export function applySharedConfigDiff(target: SharedDeviceConfig, diff: SharedCo
  * What the OTHER devices changed, per item (`diff`): the server's copy against the one this device last synced with
  * (`synced`). Keys the server omits are not changes. It is the ONE description of a change from another tablet: the
  * config takes it (applyRemoteChange) and every open dialog's draft hears it (config/configSlice ledgerOnRemote),
- * on a pull and after a push alike (DeviceConfigSync, ConfigContext mergeRemote).
+ * on a pull and after a push alike (DeviceConfigSync, ConfigContext mergeRemote). After a push, `diff` is the push's
+ * `others` (utils/syncedDocument): this tablet's own writes coming back are not in it.
  */
 export interface RemoteChange {
   synced: SharedDeviceConfig;
@@ -352,10 +353,16 @@ export function remoteChange(synced: SharedDeviceConfig, server: Partial<SharedD
   return { synced, diff: diffSharedConfig(synced, { ...synced, ...server }) };
 }
 
+/** What a push that landed brings from the other tablets: its `others` (utils/syncedDocument — this tablet's own writes
+ *  coming back are not in it) against the baseline it sent from. DeviceConfigSync hands it to mergeRemote. */
+export function pushedChange(outcome: { synced: SharedDeviceConfig; others: SharedConfigDiff }): RemoteChange {
+  return { synced: outcome.synced, diff: outcome.others };
+}
+
 /**
  * What the config becomes when another tablet's change arrives: the change applied, item by item, to the config as it
- * is NOW, and only to the items this tablet has not changed since `synced` (this tablet's own edit wins: its push
- * replays it last, as the store does). Every other item, and this device's derived rooms (mergeSharedConfig), stay as
+ * is NOW, and only to the items this tablet has not changed since `synced` (this tablet's own edit wins, keyedSync
+ * mineWins: the rule the Facility store follows too; its push replays it last, as the store does). Every other item, and this device's derived rooms (mergeSharedConfig), stay as
  * they are. Empty when nothing moves.
  *
  * ⚠️ BEFORE (to 2.496.497) a push wrote the server's whole copy over the config when it landed, whole key by whole key:
@@ -364,18 +371,13 @@ export function remoteChange(synced: SharedDeviceConfig, server: Partial<SharedD
  */
 export function applyRemoteChange(current: AppConfig, change: RemoteChange): Partial<AppConfig> {
   const local = pickSharedConfig(current);
+  const theirs = mineWins(change.diff, diffSharedConfig(change.synced, local));
   const out: Record<string, unknown> = {};
   for (const key of SHARED_CONFIG_KEYS) {
-    const d = change.diff[key] as KeyedDiff<unknown>;
+    const d = theirs[key] as KeyedDiff<unknown>;
     if (keyedDiffIsEmpty(d)) continue;
     const r = row(key) as SharedKeyRow<unknown, unknown>;
-    const mine = r.index(local[key]);
-    const synced = r.index(change.synced[key]);
-    const theirs = (id: string) => JSON.stringify(mine[id]) === JSON.stringify(synced[id]);
-    const set = Object.fromEntries(Object.entries(d.set).filter(([id]) => theirs(id)));
-    const del = d.del.filter(theirs);
-    if (Object.keys(set).length === 0 && del.length === 0) continue;
-    out[key] = r.fromIndex(applyKeyed(mine, { set, del }));
+    out[key] = r.fromIndex(applyKeyed(r.index(local[key]), d));
   }
   return Object.keys(out).length === 0 ? {} : mergeSharedConfig(current, out as Partial<SharedDeviceConfig>);
 }

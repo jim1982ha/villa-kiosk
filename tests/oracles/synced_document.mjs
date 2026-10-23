@@ -6,6 +6,7 @@ import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { SyncedDocument } = await import("@/utils/syncedDocument");
+const { diffKeyed, applyKeyed, keyedDiffIsEmpty } = await import("@/utils/keyedSync");
 
 
 /** A store of {key: value} with a revision, and hooks to hold a fetch open. */
@@ -29,9 +30,10 @@ function store(initial = {}) {
 }
 const spec = (s, extra = {}) => ({
   fetch: s.fetch, save: s.save,
-  diff: (base, local) => Object.fromEntries(Object.entries(local).filter(([k, v]) => base[k] !== v)),
-  isEmpty: (d) => Object.keys(d).length === 0,
-  apply: (t, d) => ({ ...t, ...d }),
+  // a document of one keyed part, as both stores' are of several (keyedSync KeyedParts)
+  diff: (base, local) => ({ doc: diffKeyed(base, local) }),
+  isEmpty: (d) => keyedDiffIsEmpty(d.doc),
+  apply: (t, d) => applyKeyed(t, d.doc),
   rebase: (_b, fresh) => fresh,
   empty: {},
   ...extra,

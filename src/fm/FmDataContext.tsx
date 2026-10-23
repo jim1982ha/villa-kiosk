@@ -19,7 +19,7 @@ import { applyFmCommand, type FmCommand } from "./fmCommands";
 /** The real clock and id maker the record changes are stamped with (fmEngine). */
 const stamp = (): FmStamp => ({ now: new Date().toISOString(), id: fmId });
 import {
-  fetchFmData, saveFmData, fmId, diffFmData, fmDiffIsEmpty, applyFmDiff,
+  fetchFmData, saveFmData, fmId, diffFmData, fmDiffIsEmpty, applyFmDiff, foldOthers,
 } from "./fmApi";
 import { SyncedDocument } from "@/utils/syncedDocument";
 import { useProfile } from "@/auth/ProfileContext";
@@ -226,10 +226,13 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
       setData(undone);
     };
     if (outcome.ok) {
-      // Fold in whatever another device contributed in the meantime (the store's copy this push went onto, against
-      // the one it sent from), onto this screen as it is NOW. ⚠️ NEVER `outcome.next` (to 2.496.499): that is the
-      // store when this push landed, so a record removed while it was out came back on the screen.
-      const merged = applyFmDiff(ref.current, diffFmData(outcome.synced, outcome.base));
+      // Fold in whatever another device contributed in the meantime (`others`), onto this screen as it is NOW, under
+      // every record this device has changed itself (keyedSync mineWins: the store holds this device's version of it).
+      // ⚠️ NEVER `outcome.next` (to 2.496.499): that is the store when this push landed, so a record removed while it
+      // was out came back on the screen. ⚠️ NEVER EVERY RECORD THE OTHERS TOUCHED (to 2.496.500): a fault this device
+      // had just marked started and someone retitled meanwhile came back "open" here, and the next refresh sent that
+      // to every device.
+      const merged = foldOthers(ref.current, outcome);
       ref.current = merged;
       setData(merged);
       reportSync({

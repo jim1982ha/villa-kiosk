@@ -104,7 +104,7 @@ console.log("\n  two quick edits, the second push sent while the first is out:")
   const pushOwnDiff = async () => {
     const outcome = await doc.push(D.pickSharedConfig(me.config));
     if (!outcome.ok) return outcome.reason;
-    const change = D.remoteChange(outcome.synced, outcome.base);
+    const change = D.pushedChange(outcome);
     heard.push(D.describeSharedConfigDiff(change.diff));
     me.mergeRemote(change);
     return outcome;

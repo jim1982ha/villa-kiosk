@@ -60,7 +60,7 @@ function configTablet() {
   t.gateOpen = () => doc.promised !== null && JSON.stringify(t.local()) !== JSON.stringify(doc.promised);
   t.push = async () => {                                        // DeviceConfigSync pushOwnDiff
     const o = await doc.push(t.local());
-    if (o.ok) t.config = applyConfigChange(t.config, (c) => D.applyRemoteChange(c, D.remoteChange(o.synced, o.base))) ?? t.config;
+    if (o.ok) t.config = applyConfigChange(t.config, (c) => D.applyRemoteChange(c, D.pushedChange(o))) ?? t.config;
     return o;
   };
   t.edit = (change) => { const next = applyConfigChange(t.config, change); t.ledger = recordEdit(t.ledger, KEYS, t.config, next); t.config = next; };

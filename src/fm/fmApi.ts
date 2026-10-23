@@ -9,7 +9,7 @@ import { EMPTY_FM_DATA, FM_COLLECTIONS, type FmCollection, type FmData, type FmS
 import { backendFetch } from "@/auth/sessionLost";
 import type { FmRetention } from "./fmEngine";
 import {
-  keyBy, diffKeyed, applyKeyed, keyedDiffIsEmpty,
+  keyBy, diffKeyed, applyKeyed, keyedDiffIsEmpty, mineWins,
   type KeyedDiff, type StoreFetch, type StoreSaveResult,
 } from "@/utils/keyedSync";
 
@@ -148,6 +148,13 @@ export function applyFmDiff(target: FmData, diff: FmDataDiff): FmData {
     out[k] = Object.values(applyKeyed(keyFm(target, k), diff[k]));
   }
   return out as unknown as FmData;
+}
+
+/** What a push that landed brings to the screen: the other devices' changes (`others`, utils/syncedDocument) laid on
+ *  the screen as it is NOW, under every record this device has changed itself since `synced` (keyedSync mineWins, the
+ *  config store's rule too). FmDataContext mutate. */
+export function foldOthers(screen: FmData, pushed: { synced: FmData; others: FmDataDiff }): FmData {
+  return applyFmDiff(screen, mineWins(pushed.others, diffFmData(pushed.synced, screen)));
 }
 
 /** Short, URL-safe, collision-resistant enough for one villa's records. */

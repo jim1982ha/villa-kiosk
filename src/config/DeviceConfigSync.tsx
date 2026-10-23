@@ -67,7 +67,7 @@ import { useStoreRefresh } from "@/hooks/useStoreRefresh";
 import {
   fetchSharedConfig, saveSharedConfig, pickSharedConfig, SHARED_CONFIG_KEYS,
   diffSharedConfig, applySharedConfigDiff, isSharedConfigDiffEmpty, describeSharedConfigDiff,
-  mergeSharedConfig, remoteChange,
+  mergeSharedConfig, pushedChange, remoteChange,
   loadSyncBaseline, saveSyncBaseline, baselineFromServer,
   type SharedDeviceConfig,
 } from "./deviceConfig";
@@ -186,7 +186,9 @@ export default function DeviceConfigSync() {
       // edit was lost. The baseline is `next` (the server's), so that edit is what the next push sends.
       // ⚠️ AGAINST THE BASELINE THIS PUSH ACTUALLY SENT FROM (`synced`, utils/syncedDocument), never one read before it
       // waited its turn: that one lacked the push before it, whose edit then came back as another tablet's (to 2.496.498).
-      mergeRemote(remoteChange(outcome.synced, outcome.base));
+      // ⚠️ `others`, NOT THE STORE'S COPY AGAINST IT (to 2.496.500): a relabel whose push landed after its deadline was
+      // in that copy, read as another tablet's, and an open dialog took it as the value Cancel puts back.
+      mergeRemote(pushedChange(outcome));
       return;
     }
     if (outcome.reason === "nothing-to-push" || outcome.reason === "not-allowed" || outcome.reason === "not-pulled") return;
