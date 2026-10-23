@@ -54,6 +54,18 @@ export interface RecordCardProps {
   tone?: string;
 }
 
+/** The next-check pill: a refresh icon and when, its words on hover — ONE pill for every card that says when the VESTA
+ *  Agent reads it next (an open issue's, a fault being confirmed's: owner, 2026-10-23). */
+export function CheckPill({ when, tip }: { when: string; tip: string }) {
+  return (
+    <Tip text={tip}>
+      <span className="fm-entity-chip fm-chip-static fm-record-check" aria-label={tip}>
+        <RefreshCw size={12} aria-hidden="true" />{when}
+      </span>
+    </Tip>
+  );
+}
+
 export default function RecordCard({ title, status, lead, titlePills, check, pills, when, notes, body, photoIds,
   documentIds, amount, actions, erase, onOpen, framed = true, tone }: RecordCardProps) {
   const inside = (
@@ -65,13 +77,7 @@ export default function RecordCard({ title, status, lead, titlePills, check, pil
           {titlePills}
         </div>
         {status && <span className={`fm-badge ${status.tone}`}>{status.text}</span>}
-        {check && (
-          <Tip text={check.tip}>
-            <span className="fm-entity-chip fm-chip-static fm-record-check" aria-label={check.tip}>
-              <RefreshCw size={12} aria-hidden="true" />{check.when}
-            </span>
-          </Tip>
-        )}
+        {check && <CheckPill when={check.when} tip={check.tip} />}
       </div>
       {/* its text on the left, its cost and buttons on the right of it, inside the card (owner, 2026-10-14) */}
       <div className="fm-record-body">
