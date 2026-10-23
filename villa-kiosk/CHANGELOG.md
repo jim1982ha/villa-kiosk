@@ -1,3 +1,13 @@
+## 2.496.503
+
+What you will see:
+- Cockpit: a fault someone marked Done (on Telegram) or closed in the Cockpit now stays in Open issues while the
+  VESTA Agent checks it again, as one compact row at the end of the list: a green check, the device, the fault, who
+  closed it ("Done (JM)") and a pill "VESTA confirms by 15:06". It is not counted in "Open issues (N)" and puts no
+  "!" on the map. It goes when the Agent confirms the device is right, and becomes a normal open fault again if the
+  problem is still there. With the Agent stopped, it goes on its own shortly after its time. Needs VESTA Agent
+  0.12.331 or later; with an older Agent, nothing changes.
+
 ## 2.496.502
 
 What you will see:

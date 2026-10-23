@@ -19,6 +19,12 @@ import { lineActions, overviewActions, type WorkAction, type WorkRecord } from "
 import { STAGE_WORDS } from "@/fm/fmEngine";
 import type { IssueSource } from "@/fm/issueSource";
 import { clockTime, momentText } from "@/utils/dateText";
+import { confirmLine, confirmParts, type ConfirmingFault } from "@/fm/faultConfirm";
+import { faultTitle } from "@/fm/fmEngine";
+import type { HassEntity } from "@/types/ha.types";
+import { labelOf } from "./EntityMap";
+import { deviceRoomOrRecord, firstRoom, roomLabel } from "./devicePlace";
+import { recordEntity, type VillaDevices } from "./deviceGroups";
 import { attentionSeverity, type AttentionGroup, type AttentionItem, type AttentionSeverity } from "./attention";
 
 /** What a card's buttons do (owner, 2026-10-14) — on its records only (its own fault lines and those folded onto a
@@ -151,6 +157,12 @@ export interface CardLine {
 
 export interface CardView {
   key: string;
+  /** "watched": a fault a person closed that the VESTA Agent reads again (fm/faultConfirm) — listed LAST among the open
+   *  issues, never counted, its frame marked `fault-watched`; absent on every open issue. */
+  look?: "watched";
+  /** A watched card's two halves (fm/faultConfirm.confirmParts): its compact row says "Done (JM)" in its text and
+   *  "VESTA confirms by 15:06" in its pill. */
+  watched?: { did: string; when: string };
   title: string;
   room?: string;
   /** What a tap on the card opens; undefined: the card is the problem itself (no device). */
@@ -159,7 +171,7 @@ export interface CardView {
   lead: LineSources | null;
   /** "Next check: 02:00", and its moment ("20/10/2026 02:00") — null when it has none (live, by hand). `when`: the
    *  pill's words beside its refresh icon ("02:00"); `tip`: what hovering the pill says (the text, then the moment). */
-  nextCheck: { text: string; at: string | null; when: string; tip: string };
+  nextCheck: { text: string; at: string | null; when: string; tip: string } | null;
   /** Open Ticket / Edit Ticket / Close / Close all — on its records; [] for a card only the villa's system reports. */
   actions: WorkAction[];
   lines: CardLine[];
@@ -189,4 +201,34 @@ export function cockpitCard(group: AttentionGroup, cadence: AgentCadence | null,
     actions: cardActions(group),
     lines: group.items.map(line),
   };
+}
+
+/** ⚠️ A FAULT BEING CONFIRMED IS NOT AN OPEN ISSUE (owner, 2026-10-23: kept in the Open issues list, LAST, and never
+ *  counted as a problem). Its card, one per fault: titled by its device and its
+ *  room as an open issue's is, its fault's title as its line and "Done (JM) · VESTA confirms by 15:06" under it — no
+ *  buttons (it is closed), no next-check pill (its line says when). Only the faults whose device `may` open (the
+ *  profile's, as attentionFor filters the open issues); `confirming` from fm/faultConfirm.confirmingFaults. */
+export function confirmingCards(confirming: readonly ConfirmingFault[], opts: {
+  devices: Pick<VillaDevices, "deviceOf">;
+  entities: Record<string, HassEntity>;
+  entityMap: Parameters<typeof labelOf>[1];
+  resolvedRooms: Record<string, string>;
+  may: (entityId: string) => boolean;
+}): CardView[] {
+  const { devices, entities, entityMap, resolvedRooms, may } = opts;
+  return confirming.flatMap((c): CardView[] => {
+    const t = c.ticket;
+    const entityId = recordEntity(t.entityId, (x) => x in entities);
+    if (entityId && !may(entityId)) return [];
+    const device = entityId ? devices.deviceOf(entityId) : undefined;
+    const title = faultTitle(t);
+    return [{
+      key: `watched:${t.id}`, look: "watched", watched: confirmParts(c),
+      title: device ? labelOf(device, entityMap, entities) : title,
+      room: roomLabel(device ? deviceRoomOrRecord(resolvedRooms, device, entityId, t.room) : firstRoom(t.room)),
+      entityId: device,
+      lead: null, nextCheck: null, actions: [],
+      lines: [{ key: `fault:${t.id}`, text: device ? title : "", icons: null, latest: null, closing: confirmLine(c), actions: [] }],
+    }];
+  });
 }
