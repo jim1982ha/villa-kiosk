@@ -86,10 +86,24 @@ function nightGoes(c: AgentCadence | null): string {
 /** The table's two groups (owner, 2026-10-15): what the Kiosk and its people produce, then what the VESTA Agent does. */
 export interface SourceGroup { title: string; rows: readonly SourceRow[] }
 
+/** ⚠️ THE CHECK ON A FAULT BEING CONFIRMED IS EXPLAINED TOO (owner, 2026-10-23: "include the new icon (validated ones)"):
+ *  the last row of the VESTA Agent's group — a closed fault the Agent reads again (fm/faultConfirm), no source of its
+ *  own; its pill's words in the Agent's own numbers when its heartbeat said them. */
+export interface ConfirmingRow { words: string; what: string; opens: string; goes: string }
+export function confirmingRow(c: AgentCadence | null): ConfirmingRow {
+  const look = c ? (c.checkMinutes === 1 ? "within 1 min" : `within ${c.checkMinutes} min`) : "at its next look";
+  return {
+    words: "Being confirmed",
+    what: "A fault someone marked Done on Telegram or closed here, that the VESTA Agent checks again. Last in the list, not counted",
+    opens: "When someone presses Done or Close on an alert's fault",
+    goes: `When the VESTA Agent confirms it is right: its pill shows the time, then ${look}. Still wrong: an open fault again`,
+  };
+}
+
 /** Every source's row — the VESTA Agent's only with an Agent — in its group, and the note under them; `cadence`: the
  *  Agent's own timing (null: it did not say). */
 export function faultTiming(agent: boolean, cadence: AgentCadence | null = null):
-  { rows: readonly SourceRow[]; groups: readonly SourceGroup[]; note: string } {
+  { rows: readonly SourceRow[]; groups: readonly SourceGroup[]; note: string; confirming: ConfirmingRow | null } {
   const rows = ISSUE_SOURCES.filter((s) => agent || !AGENT_SOURCES.has(s))
     .map((source) => ({ source, ...ROWS[source], ...(source === "night" ? { opens: nightOpens(cadence), goes: nightGoes(cadence) } : {}) }));
   const groups = [{ title: "From the Kiosk", rows: rows.filter((r) => !AGENT_SOURCES.has(r.source)) },
@@ -97,6 +111,7 @@ export function faultTiming(agent: boolean, cadence: AgentCadence | null = null)
   return {
     rows,
     groups,
+    confirming: agent ? confirmingRow(cadence) : null,
     note: agent
       ? `${TICKET} The VESTA Agent closes its own faults and tickets when the problem goes away; ${agentClock(cadence)}. `
         + REFRESH

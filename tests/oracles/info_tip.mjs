@@ -61,6 +61,17 @@ ck("  ...the Kiosk's sources first, then the Agent's, each group under its headi
    && withAgent.groups[0].rows.every((r) => !["alert", "night", "chat"].includes(r.source))
    && withAgent.groups[1].rows.map((r) => r.source).join() === "alert,night,chat"
    && alone.groups.length === 1, withAgent.groups.map((g) => [g.title, g.rows.map((r) => r.source)]));
+// owner, 2026-10-23: "include the new icon (validated ones)" — the check of a fault being confirmed, last of the Agent's
+{
+  const told15 = faultTiming(true, { checkMinutes: 15, nightlyAt: "04:30" }).confirming;
+  const src = readFileSync(new URL("../../src/components/fm/FaultTiming.tsx", import.meta.url), "utf8");
+  ck("  ...the Agent's group ends with \"Being confirmed\", its check icon explained; none without an Agent",
+     withAgent.confirming?.words === "Being confirmed" && withAgent.confirming.what && withAgent.confirming.opens
+     && /then at its next look/.test(withAgent.confirming.goes) && /then within 15 min/.test(told15.goes)
+     && alone.confirming === null
+     && /confirming && g === groups\[groups\.length - 1\]/.test(src) && /<CheckCircle2 size=\{15\} className="fault-watched-icon"/.test(src),
+     withAgent.confirming);
+}
 ck("  ...Live is what the Kiosk's map shows, and nobody is told",
    /What the map shows right now/.test(withAgent.rows[0].what) && /Nobody is told/.test(withAgent.rows[0].what)
    && withAgent.rows[0].source === "live");

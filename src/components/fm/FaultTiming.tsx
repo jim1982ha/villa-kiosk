@@ -9,6 +9,7 @@
 
 import InfoTip from "@/components/common/InfoTip";
 import { INFO_TIP_WIDTH } from "@/components/common/infoTipPlacement";
+import { CheckCircle2 } from "lucide-react";
 import { SOURCE_ICON, SOURCE_WORDS } from "@/components/fm/sourceIcons";
 import { faultTiming } from "@/fm/faultTiming";
 import { stageOf } from "@/fm/fmEngine";
@@ -21,7 +22,7 @@ export default function FaultTiming() {
   const { status } = useAgent();
   const { data } = useFmData();
   const agent = agentSourcesShown(status, data.tickets.some((t) => agentOwned(t) && stageOf(t) !== "closed"));
-  const { groups, note } = faultTiming(agent, status?.cadence ?? null);
+  const { groups, note, confirming } = faultTiming(agent, status?.cadence ?? null);
   return (
     // twice an (i)'s card: its four columns take fewer lines on a desktop (owner, 2026-10-14 / 2026-10-19); a phone
     // still gets the screen's width
@@ -48,6 +49,15 @@ export default function FaultTiming() {
                 </tr>
               );
             })}
+            {/* the VESTA Agent's group ends with the check a fault being confirmed wears (owner, 2026-10-23) */}
+            {confirming && g === groups[groups.length - 1] && (
+              <tr key="confirming">
+                <td><span className="info-pop-source"><CheckCircle2 size={15} className="fault-watched-icon" aria-hidden /> <b>{confirming.words}</b></span></td>
+                <td className="info-pop-what">{confirming.what}</td>
+                <td className="info-pop-when" data-label="Appears:">{confirming.opens}</td>
+                <td className="info-pop-when" data-label="Goes:">{confirming.goes}</td>
+              </tr>
+            )}
           </tbody>
         ))}
       </table>
