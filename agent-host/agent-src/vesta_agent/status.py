@@ -33,6 +33,10 @@ ACTION_KINDS = ("executed", "direct")
 #: The Overview's scheduled jobs (The last 24 hours): how a run ended, in the agent's words (in_progress.py's
 #: outcomes); RUNNING is a run claimed and still recorded as running; None an older row that has only the claim
 RUNNING = "running"
+#: The Costs tab's words for the chats' AI runs, and for the alert cards' translation that runs with their brain and
+#: limit — counted with them, on a row of its own (owner, 2026-10-23: no dedicated job; skills.job_title's form)
+CHAT_REPLIES = "Chat replies"
+ALERT_TRANSLATION = f"{CHAT_REPLIES} › alert translation"
 OUTCOME_WORDS = {ENDED: "done", FAILED: "not prepared", CUT: "stopped by a restart", RUNNING: "running", None: "run"}
 
 
@@ -70,6 +74,8 @@ def figures(records, cost: float | None = None) -> list[list]:
             d = agent_records.detail(c)
             if d.get("problem"):
                 failures += 1
+            elif agent_records.is_translation(str(d.get("who") or "")):
+                pass                    # an alert card's words in a chat's language: neither a reply nor a report
             elif agent_records.job_of(str(d.get("who") or "")) is not None:
                 reports += 1
             else:
@@ -189,11 +195,14 @@ def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_la
             made.append(row)
             continue
         who = str(d.get("who") or "")
-        if agent_records.job_of(who) is not None:
+        if agent_records.is_translation(who):
+            # the chat answers' own work, on its own row (turn.translation_terms) — 0.12.334–335's job runs included
+            kind, job, person, chat = "translation", ALERT_TRANSLATION, None, None
+        elif agent_records.job_of(who) is not None:
             kind, job, person, chat = "job", job_words(agent_records.job_of(who) or "?"), None, None
         else:
             name, cid = agent_records.person_of(who)
-            kind, job, person = "chat", "Chat replies", name or None
+            kind, job, person = "chat", CHAT_REPLIES, name or None
             chat = chat_label(cid) if chat_label and cid.lstrip("-").isdigit() else None
         tok = d.get("tokens") or {}
         cost = run_cost(d)

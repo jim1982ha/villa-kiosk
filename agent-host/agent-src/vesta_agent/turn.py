@@ -12,6 +12,7 @@ help (credit, key), whoever asked.
     Terms                              tools · profile (→ model, effort) · limit_usd · who (the record)
     chat_terms(settings, policy, …)    a person in a chat: their role, that chat, the villa's chat brain and limit
     job_terms(policy, …, cfg, origin)  a report: who asked it (origin.role), else SYSTEM; its own brain and limit
+    translation_terms(settings, skill) an alert card's words in a chat's language: no tool, the chat brain and limit
     Turns.chat(...) / Turns.job(...)   the run itself
 """
 from __future__ import annotations
@@ -104,13 +105,30 @@ THEN = {
 }
 
 
+def chat_brain(settings, brain: str | None = None, limit_usd: float | None = None) -> tuple[str, float]:
+    """The Chat answers' brain and limit per reply (policy.yaml settings.profile, settings.reply_limit_usd: Rules › AI
+    brains and limits, the "Chat answers" row) — or the brain and limit a command skill names for its own runs."""
+    return brain or settings.profile, float(limit_usd if limit_usd is not None else settings.reply_limit_usd)
+
+
 def chat_terms(settings, policy, server_tools: list[dict], person, chat: int, brain: str | None = None,
                limit_usd: float | None = None, skill: str | None = None) -> Terms:
     """A person answered in a chat: what THEY may use there, the villa's chat brain and reply limit — or the brain and
     limit the command skill it was called for names (skills.Skill.brain / limit_usd)."""
     return Terms(frozenset(tool_access.allowed_for(policy, server_tools, person.role if person else None, chat)),
-                 brain or settings.profile, float(limit_usd if limit_usd is not None else settings.reply_limit_usd),
+                 *chat_brain(settings, brain, limit_usd),
                  agent_records.for_person(person.name if person else None, chat), skill)
+
+
+def translation_terms(settings, skill: str) -> Terms:
+    """An alert card's words put in a chat's language (translation.py): no tool, the CHAT ANSWERS' brain and limit
+    per reply, recorded as the chat answers' alert translation (agent_records.TRANSLATION).
+
+    ⚠️ PART OF THE CHAT ANSWERS, NOT A JOB (owner, 2026-10-23: "I shall not see a dedicated Job for this, since it shall
+    be fully integrated in the existing alert-desk skill, 'inside' the `Chat answers` setting"). 0.12.334–335 ran it
+    with the alert desk's own settings.skill_ai pair, listed as an AI job ("alert-translation") and not run until
+    "Add them" set it. The chats' brain and limit are always set: a chat that reads another language gets it."""
+    return Terms(frozenset(), *chat_brain(settings), agent_records.TRANSLATION, skill)
 
 
 def job_terms(policy, server_tools: list[dict], name: str, cfg: dict, origin: Origin | None,

@@ -327,3 +327,17 @@ def test_who_is_told_is_a_column_of_its_own_never_the_end_of_the_reached_sentenc
     assert 'h("div", { class: "limit-reached" }, `Reached: ${r.reached}`)' in js
     assert js.index('class: "limit-what"') < js.index('r.told ? h("span", { class: "chip tiny"') < js.index('class: "limit-value"')
     assert '["Limit", "Who is told", "Value"]' in page_js()
+
+
+def test_the_alert_cards_translation_is_the_chat_answers_line_never_a_skills_pair(ui):
+    # owner, 2026-10-23: "I shall not see a dedicated Job for this". A pair "Add them" wrote for the alert desk on
+    # 0.12.334–335 is left in policy.yaml, never read: no line of its own here; the chats' two lines say they do it
+    raw = yaml.safe_load(open(ui.policy_path, encoding="utf-8")) or {}
+    raw.setdefault("settings", {})["skill_ai"] = {"alert-desk": {"brain": "economy", "limit_usd": 0.05}}
+    with open(ui.policy_path, "w", encoding="utf-8") as f:
+        yaml.safe_dump(raw, f)
+    rows = _rows(ui)["rows"]
+    assert not [r for r in rows if r["id"].get("path", [None, None])[:2] == ["settings", "skill_ai"]]
+    said = {r["id"]["path"][-1]: r["label"] for r in rows if r["id"].get("path", [None])[0] == "settings"}
+    assert "an alert card's text in a chat's language" in said["profile"]
+    assert "one translation of an alert card's text" in said["reply_limit_usd"]

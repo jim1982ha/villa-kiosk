@@ -958,7 +958,7 @@ still off; an investigation calling a sensor with no value "stopped reporting").
   language (its heading's `lang`, Notices.lang), the copy is recorded first and then `later` starts ONE referenced
   background run per (language, missing lines) — a second copy of the same lines waits on it — bounded by
   `alerts.translate_seconds`; the copy is then drawn again under the incident's lock (`IncidentThread.translated`,
-  buttons kept). Any failure (AI error, time limit, no credit, not set, a slot dropped, an edit refused) keeps the
+  buttons kept). Any failure (AI error, time limit, no credit, a slot dropped, an edit refused) keeps the
   English. Delivery, the chase, the buttons and the Kiosk never wait on it.
 - **One translation per sentence pattern.** `translation.mask` turns each body line into a skeleton with numbered
   slots, numbered left to right: a brace, an incident tag, a [CODE], a quoted value, the incident's own device / room
@@ -971,11 +971,22 @@ still off; an investigation calling a sensor with no value "stopped reporting").
   that language (a copy's parts handed to another chat by `sync` carry the first chat's); `IncidentThread.sync` redraws
   each chat's own (`thread.translate` = `Translations.draw`); `layout.changed(body=…)` drops it. A redraw (reminder,
   press, close) never brings the English back: the cache fills it with no AI call.
-- **Cost agreed like an AI job.** skill.yaml `translate: {name, description, instructions}` (the instructions are the
-  run's system prompt — skills before code; the engine adds only the slot contract and the JSON answer) makes the
-  alert desk's `jobs_default` (economy, 0.05 US$) its offer; it runs with the skill's settings.skill_ai pair. Not set:
-  English, said once in the log; the page lists `alert-translation` with the AI jobs (server._jobs, Limits, setup
-  copy), so "Add them" writes it. Its Costs row is `job:alert-translation`.
+- **Inside the Chat answers, never a job** (owner, 2026-10-23: "I shall not see a dedicated Job for this, since it
+  shall be fully integrated in the existing alert-desk skill, 'inside' the `Chat answers` setting"; 0.12.334–335 ran
+  it as the AI job `alert-translation` with the alert desk's settings.skill_ai pair, "Add them" and all). skill.yaml
+  `translate: {instructions}` (the run's system prompt — skills before code; the engine adds only the slot contract
+  and the JSON answer); no name, no `jobs_default`. A run's terms are `turn.translation_terms`: no tool, the Chat
+  answers' brain and limit per reply through `turn.chat_brain` — the one reading `chat_terms` uses too — so it is
+  always on for a chat that reads another language. Recorded as `agent_records.TRANSLATION`; the Costs tab counts it
+  with the chat replies on its own row, "Chat replies › alert translation" (`status.ALERT_TRANSLATION`; the
+  0.12.334–335 `job:alert-translation` runs are read the same, `agent_records.is_translation`), and neither as a reply
+  nor a report in its figures. Never in /api/jobs, the AI brains table's skill rows, "Add them", the Limits tab's
+  skill pairs or the setup copy's misfits; the Skills page's row says "its text translated by the AI with the Chat
+  answers brain and limit". AN OLDER VILLA: an alert desk edited on 0.12.334–335 (kept by updates) still parses — its
+  `translate.name`/`description` are read and ignored, and a `jobs_default` beside a translate with no AI job is
+  ignored (refused, it would switch the alert desk off); a settings.skill_ai["alert-desk"] that "Add them" wrote is
+  never read and LEFT AS WRITTEN, shown nowhere: dropping a pair of a skill with no AI job on save would also drop
+  the pair of a skill switched off for a while.
 - **What is kept, asked again, forgotten: `phrases.Phrases`** (review, 2026-10-23, 0.12.335). The one owner of the
   rule; `Translations` asks it. KEPT: an answer that keeps every slot once (`fits`) and is not the English given back
   (`refused`: equal ignoring case, spaces and punctuation, for a line with words). A FAILURE RESTS: an echo, a slot
@@ -986,8 +997,8 @@ still off; an investigation calling a sensor with no value "stopped reporting").
   `phrases.fingerprint(the skill's translate instructions, translation.rules())` (the patterns and the prompt's
   contract); another fingerprint is never read and its rows are deleted the first time the new one is used — so the
   0.12.334 rows (no fingerprint, possibly echoes) go at the first card. FORGET: Rules › AI brains and limits, under
-  the alert translation's line, shows what is kept per language (server `_jobs` `translations`) and "Forget the
-  translations" (one language or all; core.ask) → POST `/api/translations/forget` {lang|null} → `Phrases.forget`
+  the Chat answers row, shows what is kept per language (server `_translations`, /api/rules `translations`) and
+  "Forget the translations" (one language or all; core.ask) → POST `/api/translations/forget` {lang|null} → `Phrases.forget`
   (translations and failures). The UI process writes State directly: nothing in it needs the villa's system.
 - **The alert's own names first** (same review). `incident_names(pack, entities, live)`: the friendly names the villa's
   system gives the event's entities when it arrives (`app.Vesta._alert_names` → `translation.alert_names` through the

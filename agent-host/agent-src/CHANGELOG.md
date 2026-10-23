@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.326 (23 October 2026)
+
+- The alert-card translation is no AI job (owner, 2026-10-23: "fully integrated in the existing alert-desk skill,
+  inside the Chat answers"): it runs with the Chat answers' brain and per-reply limit (`turn.chat_brain`, one owner for
+  `chat_terms` and `translation_terms`), so it is on whenever a chat reads another language. Gone from /api/jobs, the AI
+  brains table's skill rows, "Add them", the Limits tab's skill pairs and the setup copy. The Chat answers row says it
+  also translates alert cards and holds "Forget the translations" (/api/rules `translations`); the Skills page's
+  alert-desk row says it uses the Chat answers brain; Costs: "Chat replies › alert translation" (0.12.334–335's
+  `job:alert-translation` records shown there too). alert-desk skill.yaml keeps `translate: {instructions}` only; an
+  older copy's name/description/jobs_default are read and ignored; a leftover settings.skill_ai["alert-desk"] is never
+  read.
+
 ## 0.6.325 (23 October 2026)
 
 - Architecture review I, the translation (#2, #3): `vesta_agent/phrases.py` owns what is kept, asked again and

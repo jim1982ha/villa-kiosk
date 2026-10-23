@@ -93,7 +93,11 @@ export function rulesForms(doc, jobs = [], tools = null) {
   // a line of the table (core.table): its cells, each a node, nodes, or {v, cls, colspan}
   const drawAi = () => aiBody.replaceChildren(
     tableRow([
-      [h("b", {}, "Chat answers"), h("div", { class: "muted" }, "replies in the chats; a reply at its limit offers Continue")],
+      // ⚠️ ITS BRAIN ALSO PUTS THE ALERT CARDS IN EACH CHAT'S LANGUAGE (owner, 2026-10-23: "fully integrated … 'inside'
+      // the Chat answers setting", never a job of its own): said here, with what it keeps (doc.translations: null when
+      // no skill translates its alert cards)
+      [h("b", {}, "Chat answers"), h("div", { class: "muted" }, "replies in the chats; a reply at its limit offers Continue"),
+        ...(doc.translations ? [h("div", { class: "muted" }, "also alert cards' text in each chat's language"), forgetRow()] : [])],
       sel(PROFILES, f.settings.profile, (v) => (f.settings.profile = v), "Brain"),
       limitInput(f.settings.reply_limit_usd, (v) => (f.settings.reply_limit_usd = v), W("settings.reply_limit_usd"), "for each reply"),
       // the chats' own setting, on the chats' line (owner, 2026-10-06): their tools are "everything switched on, by
@@ -108,8 +112,7 @@ export function rulesForms(doc, jobs = [], tools = null) {
     const its = jobs.filter((j) => j.skill === skill);
     const pair = pairOf(skill);
     const what = [h("b", {}, `${skill} skill`),
-      ...its.flatMap((j) => [h("div", { class: "muted small" }, `${j.name} · ${j.when_words}${j.on_request ? ", or when asked in a chat" : ""}`),
-        j.translations ? forgetRow(j) : null])];
+      ...its.map((j) => h("div", { class: "muted small" }, `${j.name} · ${j.when_words}${j.on_request ? ", or when asked in a chat" : ""}`))];
     // ⚠️ WHO ASKS DECIDES, NEVER THE SKILL (owner, 2026-10-10): on schedule everything switched on; asked for in a
     // chat, what that person may use there. Its skill's list is shown on the skill's page, as what it uses.
     const got = { cls: "tools-got", v: h("span", { class: "muted" }, "By who asks") };
@@ -133,8 +136,8 @@ export function rulesForms(doc, jobs = [], tools = null) {
   // the alert translation's memory (phrases.py): what is kept, per language, and "Forget the translations" — one
   // language's or all of them — asked in the page's own dialog (core.ask: never the browser's confirm). Not a change
   // of the file: done at once, nothing to save or undo; the next alert cards are translated again by the AI.
-  function forgetRow(j) {
-    const kept = Object.entries(j.translations);
+  function forgetRow() {
+    const kept = Object.entries(doc.translations);
     if (!kept.length) return h("div", { class: "muted small" }, "No translation kept yet.");
     const langName = (code) => doc.languages[code] || code;
     const all = kept.reduce((n, [, k]) => n + k, 0);
@@ -148,7 +151,7 @@ export function rulesForms(doc, jobs = [], tools = null) {
           text: "The next alert cards are translated again by the AI, at the cost of each run." }))) return;
         try {
           const res = await api("POST", "api/translations/forget", { lang: pick || null });
-          j.translations = res.kept; drawAi();
+          doc.translations = res.kept; drawAi();
           toast(`${plural(res.forgot, "translation", "translations")} forgotten.`);
         } catch (e) { tell("Not forgotten", reasons(e)); }
       } }, "Forget the translations"));

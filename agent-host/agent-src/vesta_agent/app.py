@@ -196,7 +196,7 @@ class Vesta:
         self.thread.restatus = self.notices.restatus
         # putting one message in one chat (posting.py): the alerts and the approval requests both use it
         # an alert card's own words in each chat's language, learnt once per sentence pattern (translation.py)
-        self.translations = Translations(self.state, policy=self.policy, skills=self.skills, settings=settings,
+        self.translations = Translations(self.state, skills=self.skills, settings=settings,
                                          names=lambda iid: incident_names(
                                              self.pack(), ents := incidents.entities(iid), self.state.entity_names(ents)),
                                          thread=self.thread)

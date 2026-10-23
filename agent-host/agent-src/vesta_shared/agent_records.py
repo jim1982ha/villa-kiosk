@@ -29,8 +29,21 @@ WITHOUT_AI = "without_ai"        # the record's kind (state.log): a job made by 
 JOB_NO_RESULT = "job_no_result"
 
 
+#: An alert card's words put in a chat's language (vesta_agent.translation, turn.translation_terms): AI work of the chat
+#: answers, with their brain and limit — the Costs tab counts it with the chat replies, on a row of its own.
+TRANSLATION = "translation"
+#: ⚠️ 0.12.334–335 recorded it as an AI job of that name (owner, 2026-10-23: "I shall not see a dedicated Job for
+#: this"): those runs are read as what they were, never shown as a job no skill declares any more.
+_TRANSLATION_BEFORE = JOB + "alert-translation"
+
+
 def for_job(name: str) -> str:
     return JOB + name
+
+
+def is_translation(who: str) -> bool:
+    """Whether a run was an alert card's translation (read before job_of / person_of: it is neither)."""
+    return who in (TRANSLATION, _TRANSLATION_BEFORE)
 
 
 def for_person(name: str | None, chat) -> str:

@@ -406,16 +406,14 @@ def test_add_them_sets_every_missing_ai_job_with_its_starter_values_in_one_recor
         return st, body, st2, again, hist, jobs
     st, body, st2, again, hist, jobs = call(ui, fn)
     s = yaml.safe_load(open(ui.policy_path))["settings"]
-    # the alert desk's translation is offered with them, at its own starter pair (skill.yaml jobs_default, owner
-    # 2026-10-23: the lightest brain is enough for a few lines)
-    assert st == 200 and body["added"] == ["fm-daily", "fm-weekly", "owner-monthly", "alert-translation"]
+    # the alert cards' translation is not offered: it runs with the Chat answers' brain and limit (owner, 2026-10-23:
+    # "I shall not see a dedicated Job for this")
+    assert st == 200 and body["added"] == ["fm-daily", "fm-weekly", "owner-monthly"]
     assert st2 == 200 and again["added"] == []
-    assert s["skill_ai"] == {"reports": {"brain": "auto", "limit_usd": 2.0},
-                             "alert-desk": {"brain": "economy", "limit_usd": 0.05}} and "jobs" not in s
-    assert all(j["skill_ai"] == ({"brain": "auto", "limit_usd": 2.0} if j["skill"] == "reports" else
-                                 {"brain": "economy", "limit_usd": 0.05}) for j in jobs)
+    assert s["skill_ai"] == {"reports": {"brain": "auto", "limit_usd": 2.0}} and "jobs" not in s
+    assert all(j["skill_ai"] == {"brain": "auto", "limit_usd": 2.0} for j in jobs)
     assert s["web_search"] is True and \
-        hist[0]["what"] == "AI jobs added: fm-daily, fm-weekly, owner-monthly, alert-translation"
+        hist[0]["what"] == "AI jobs added: fm-daily, fm-weekly, owner-monthly"
 
 
 def test_switch_on_turns_each_kind_of_tool_on_where_its_switch_is(ui):
@@ -485,7 +483,9 @@ def test_the_rules_tab_comes_in_one_answer(ui):
         return await (await c.get("/api/rules", headers=HDR)).json()
     v = call(ui, fn)
     assert {"text", "rev", "form", "problems", "profiles", "schema", "jobs", "entities", "tools"} <= set(v)
-    assert [j["name"] for j in v["jobs"]] == ["fm-daily", "fm-weekly", "owner-monthly", "alert-translation"]
+    # no job for the alert cards' translation (owner, 2026-10-23): its line is the Chat answers row's (`translations`)
+    assert [j["name"] for j in v["jobs"]] == ["fm-daily", "fm-weekly", "owner-monthly"]
+    assert v["translations"] == {}
 
 
 def test_a_skills_own_files_cannot_be_deleted_and_the_list_says_so(ui):
@@ -544,9 +544,10 @@ def test_a_skills_when_rows_name_every_way_the_engine_starts_it(ui):
     # a command offered as a button says so on the same row (the command, typed for the person)
     offered = when_it_runs(dataclasses.replace(sk, offer={"label": "Look into it"}))[-1]["note"]
     assert offered.startswith("only when a person writes /x (or presses “Look into it” under a reply")
-    # its alert cards translated for a chat in another language (owner, 2026-10-23): AI work, named by its Costs row
-    assert when_it_runs(dataclasses.replace(sk, translate={"name": "t", "description": "", "instructions": "i"}))[-2] == \
-        {"when": "an alert card in another language", "job": "t", "script": None, "kind": "ai"}
+    # its alert cards translated for a chat in another language (owner, 2026-10-23): with the chats' brain, no job
+    assert when_it_runs(dataclasses.replace(sk, translate={"instructions": "i"}))[-2] == \
+        {"when": "an alert card in another language", "job": None, "script": None, "kind": None,
+         "note": "its text translated by the AI with the Chat answers brain and limit (Rules › AI brains and limits)"}
 
 
 def test_a_skill_pages_tools_heading_is_the_agents_one_verdict(ui):
@@ -734,8 +735,8 @@ def test_an_older_files_ai_jobs_are_read_and_moved_to_their_skill_by_the_next_sa
         return before, r.status, doc2
     before, status, doc2 = call(ui, fn)
     assert all(j["skill_ai"] == {"brain": "auto", "limit_usd": 2.0} for j in before if j["skill"] == "reports")
-    # the alert desk's translation is not in the older file: not set, offered (owner, 2026-10-23)
-    assert [j["skill_ai"] for j in before if j["name"] == "alert-translation"] == [None]
+    # the alert desk's translation is no job: never listed, never "not set" (owner, 2026-10-23)
+    assert {j["skill"] for j in before} == {"reports"}
     assert status == 200
     written = open(ui.policy_path).read()
     s = yaml.safe_load(written)["settings"]

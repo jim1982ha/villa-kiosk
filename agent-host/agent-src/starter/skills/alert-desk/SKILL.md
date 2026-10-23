@@ -14,7 +14,7 @@ decides alone to act on the villa.
 - `skill.yaml`        what the engine runs, and when (intake on each alert, tick every 5 minutes, reply on a button)
 - `rules.yaml`        routing by blueprint and rule id, cooldowns, siren policy, which role gets which severity
 - `words.yaml`        what the desk says on a card's Status lines, in each language a chat can read (each chat's copy
-                      reads its own; the alert's own text is never translated)
+                      reads its own; the alert's own text is not in it: the engine has the AI translate that)
 - `scripts/desk.py`   intake, tick, reply, status (each prints JSON: `send` and `actions`)
 
 ## Inputs (all run by the engine, never by you)

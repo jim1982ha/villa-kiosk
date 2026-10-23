@@ -19,13 +19,15 @@ from ha_fake import FakeHA, tool
 from helpers import make_agent
 from telegram_fake import BOT
 from vesta_agent import translation
+from vesta_shared import agent_records
 from vesta_agent.ha_events import CONTEXT_KEY
 from vesta_agent.state import State
 from vesta_agent.phrases import acceptable, fits, wordy
 from vesta_agent.translation import answer, fill, mask
 
 GROUP, FM_DE, FM_FR = -100123, 222, 333
-AGREED = {"alert-desk": {"brain": "economy", "limit_usd": 0.05}}
+#: the Chat answers row of Rules › AI brains and limits: what a translation runs with (owner, 2026-10-23)
+CHAT_ANSWERS = {"profile": "economy", "reply_limit_usd": 0.3}
 LANGS = {"French": "fr", "German": "de"}
 STATES = {"lock.test_lock": {"entity_id": "lock.test_lock", "state": "unavailable",
                              "attributes": {"friendly_name": "Test lock"}},
@@ -33,13 +35,13 @@ STATES = {"lock.test_lock": {"entity_id": "lock.test_lock", "state": "unavailabl
                               "attributes": {"friendly_name": "Front Gate Lock"}}}
 
 
-def villa(tmp_path, group_language="en", agreed=True):
+def villa(tmp_path, group_language="en", settings=CHAT_ANSWERS):
     pol = {"people": [
         {"telegram_id": GROUP, "name": "Owner group", "role": "owner", "language": group_language},
         {"telegram_id": FM_DE, "name": "Anna", "role": "fm", "language": "de"},
         {"telegram_id": FM_FR, "name": "Luc", "role": "fm", "language": "fr"}]}
-    if agreed:
-        pol["settings"] = {"skill_ai": AGREED}
+    if settings is not None:
+        pol["settings"] = dict(settings)
     # the villa's system names its devices as the alert arrives (app.Vesta._alert_names)
     v = make_agent(tmp_path, pol, skills=["alert-desk"], reader=FakeHA(tools=[tool("ha_get_state")], states=STATES))
     v.bot_username = BOT["username"]
@@ -107,13 +109,14 @@ def test_the_first_alert_goes_english_at_once_then_each_chat_reads_its_language(
     assert card(v, 1, FM_FR).startswith("#1-P2 (") and "Statut:" in card(v, 1, FM_FR)
     # the buttons stayed on the edited copies
     assert v.thread.shown(1)[FM_FR]["buttons"] and v.thread.shown(1)[FM_FR].get("kb")
-    # one tiny run per language: the skeleton only — no name, number or time reached the AI — no tool, the skill's pair
+    # one tiny run per language: the skeleton only — no name, number or time reached the AI — no tool, the Chat
+    # answers' brain and limit (owner, 2026-10-23: inside that setting, never a job), recorded as their translation
     assert sorted(LANGS[re.search(r"into (\w+)\.", r["prompt"]).group(1)] for r in ai.runs) == ["de", "fr"]
     for r in ai.runs:
         assert "Test lock" not in r["prompt"] and "18:30" not in r["prompt"] and '"unavailable"' not in r["prompt"]
         assert "{1} has been {2} for over {3} s." in r["prompt"] and "Since {1} {2}" in r["prompt"]
-        assert r["allowed"] == set() and r["profile"] == "economy" and r["limit_usd"] == 0.05
-        assert r["skill"] == "alert-desk" and r["who"].endswith("alert-translation")
+        assert r["allowed"] == set() and r["profile"] == "economy" and r["limit_usd"] == 0.3
+        assert r["skill"] == "alert-desk" and r["who"] == agent_records.TRANSLATION
         assert "alert card" in r["system_prompt"]                     # the skill's own words (skills before code)
 
 
@@ -180,22 +183,42 @@ def test_an_edit_telegram_refuses_leaves_the_english_on_the_card(tmp_path, monke
     assert v.thread.shown(1)[FM_FR].get("owed")                       # tried again by housekeeping, as any edit
 
 
-# ------------------------------------------------------------------ (d) not agreed: not run, said once
-def test_with_no_agreed_cost_nothing_is_translated_and_the_log_says_so_once(tmp_path, monkeypatch, caplog):
-    v = villa(tmp_path, agreed=False)
+# ------------------------------------------------------------------ (d) the Chat answers' terms, always set
+@pytest.mark.parametrize("case", ["nothing set", "the chats' own pair, an older alert desk pair beside it"])
+def test_it_runs_with_the_chat_answers_brain_and_limit_and_never_a_skill_pair(tmp_path, monkeypatch, caplog, case):
+    # owner, 2026-10-23: "fully integrated … 'inside' the `Chat answers` setting". 0.12.334–335 ran it with the alert
+    # desk's settings.skill_ai pair and not at all until "Add them" set it: a villa with nothing set now gets it (the
+    # chats' defaults), and a pair "Add them" wrote then is never read — no error, no word in the log
+    settings = (None if case == "nothing set" else
+                {"profile": "performance", "reply_limit_usd": 0.4,
+                 "skill_ai": {"alert-desk": {"brain": "economy", "limit_usd": 0.05}}})
+    v = villa(tmp_path, settings=settings)
     ai = FakeAI(translator).install(monkeypatch)
-    caplog.set_level(logging.INFO, logger="vesta.translation")
+    caplog.set_level(logging.INFO)
 
     async def go():
         await alert(v, 1, "lock.test_lock", "Test lock", 10, "23/10/2026 18:30")
-        await alert(v, 2, "lock.front_gate", "Front Gate Lock", 25, "24/10/2026 07:15")
         await v.translations.idle()
     run(go())
-    assert ai.runs == []
-    assert 'Test lock has been "unavailable" for over 10 s.' in card(v, 1, FM_FR)
-    said = [r for r in caplog.records if "stay in English" in r.getMessage()]
-    assert len(said) == 1 and "alert-desk" in said[0].getMessage(), [r.getMessage() for r in caplog.records]
-    assert "Home Assistant" not in said[0].getMessage()
+    want = ("auto", 1.0) if case == "nothing set" else ("performance", 0.4)       # policy.DEFAULT_BEHAVIOUR, else set
+    assert sorted(lang_of(r) for r in ai.runs) == ["de", "fr"]
+    assert all((r["profile"], r["limit_usd"], r["who"], r["allowed"]) == (*want, agent_records.TRANSLATION, set())
+               for r in ai.runs), ai.runs
+    assert '(fr) Test lock has been "unavailable" for over 10 s.' in card(v, 1, FM_FR)
+    assert not [r for r in caplog.records if r.levelno >= logging.WARNING and "skill_ai" in r.getMessage()]
+    assert not [r for r in caplog.records if "not set" in r.getMessage() or "stay in English" in r.getMessage()]
+
+
+def test_the_chats_terms_have_one_owner_for_a_reply_and_a_translation():
+    # one reading of the Chat answers row (turn.chat_brain): a reply and a translation can never disagree on it
+    from types import SimpleNamespace
+    from vesta_agent.policy import Policy
+    from vesta_agent.turn import chat_terms, translation_terms
+    s = SimpleNamespace(profile="performance", reply_limit_usd=0.7)
+    reply = chat_terms(s, Policy({}), [], None, 1)
+    tr = translation_terms(s, "alert-desk")
+    assert (tr.profile, tr.limit_usd) == (reply.profile, reply.limit_usd) == ("performance", 0.7)
+    assert tr.tools == frozenset() and tr.who == agent_records.TRANSLATION and tr.skill == "alert-desk"
 
 
 # ------------------------------------------------------------------ (e) redraws keep the translation
@@ -319,13 +342,36 @@ def test_translations_are_kept_whatever_their_age_and_the_oldest_go_when_full(tm
     assert s.translation("fr", "Held {1} min 4") == "Maintenu {1} min 4"                 # not a record: kept
 
 
-def test_the_page_offers_the_translation_like_an_ai_job(tmp_path):
+def test_the_skills_page_says_it_uses_the_chat_answers_brain_never_an_ai_job(tmp_path):
+    # owner, 2026-10-23: "I shall not see a dedicated Job for this"
+    from vesta_agent.places import where
     from vesta_agent.skills import Skills, translators, when_it_runs
-    v = villa(tmp_path, agreed=False)
+    v = villa(tmp_path, settings=None)
     sk = Skills(v.s.skills_dir).get("alert-desk")
     assert [x.name for x in translators({"alert-desk": sk})] == ["alert-desk"]
-    assert sk.jobs_default == {"brain": "economy", "limit_usd": 0.05}
-    assert any(r["job"] == "alert-translation" and r["kind"] == "ai" for r in when_it_runs(sk))
+    assert sk.jobs_default is None and set(sk.translate) == {"instructions"}
+    row = next(r for r in when_it_runs(sk) if "another language" in r["when"])
+    assert row == {"when": "an alert card in another language", "job": None, "script": None, "kind": None,
+                   "note": f"its text translated by the AI with the Chat answers brain and limit ({where('ai')})"}
+    assert not [r for r in when_it_runs(sk) if r["kind"] == "ai"]
+
+
+def test_an_alert_desk_edited_on_0_12_334_still_runs_and_translates(tmp_path):
+    # an edited copy is kept by updates: its translate name and description, and the jobs_default it gave its
+    # translation alone, must never switch the alert desk off — read and ignored
+    import yaml
+    from vesta_agent.skills import Skills
+    v = villa(tmp_path)
+    path = f"{v.s.skills_dir}/alert-desk/skill.yaml"
+    raw = yaml.safe_load(open(path, encoding="utf-8"))
+    raw["jobs_default"] = {"brain": "economy", "limit_usd": 0.05}
+    raw["translate"] = {"name": "alert-translation", "description": "the alert's own words",
+                        "instructions": raw["translate"]["instructions"]}
+    with open(path, "w", encoding="utf-8") as f:
+        yaml.safe_dump(raw, f, allow_unicode=True)
+    sk = Skills(v.s.skills_dir).all()["alert-desk"]
+    assert sk.translate == {"instructions": raw["translate"]["instructions"]} and sk.jobs_default is None
+    assert sk.on_event and sk.every_5_min                              # the desk itself still runs
 
 
 # ------------------------------------------------------------------ (g) what is kept, asked again, forgotten (phrases.py)
@@ -438,8 +484,8 @@ def test_forget_the_translations_on_the_page_one_language_then_all(tmp_path, mon
             out = []
             for body in steps:
                 if body == "jobs":
-                    jobs = (await (await c.get("/api/jobs")).json())["jobs"]
-                    out.append(next(j["translations"] for j in jobs if j["name"] == "alert-translation"))
+                    # beside the Chat answers row (Rules' one answer), never on a job's line
+                    out.append((await (await c.get("/api/rules", headers=hdr)).json())["translations"])
                 else:
                     r = await c.post("/api/translations/forget", json=body, headers=hdr)
                     out.append((r.status, await r.json()))
@@ -470,6 +516,43 @@ def test_the_page_offers_forget_in_its_own_dialog():
     js = js[:js.index("\n  drawAi();")]
     assert 'api("POST", "api/translations/forget"' in js and "await ask(" in js and "confirm(" not in js
     assert "Forget the translations" in js
+
+
+def test_the_chat_answers_row_says_it_also_translates_the_alert_cards_and_holds_forget():
+    # owner, 2026-10-23: the Chat answers row shows what its brain also does; "Forget the translations" sits there,
+    # never under a skill's row (there is no job row for it any more)
+    from helpers import body_of, page_js
+    js = body_of(page_js(), "rulesForms")
+    chat = js[js.index('h("b", {}, "Chat answers")'):js.index("sel(PROFILES, f.settings.profile")]
+    assert "also alert cards' text in each chat's language" in chat and "forgetRow()" in chat
+    assert "doc.translations ?" in chat
+    skill_row = js[js.index("function skillRow"):js.index("// the alert translation's memory")]
+    assert "forgetRow" not in skill_row and "translations" not in skill_row
+
+
+def test_the_costs_tab_counts_a_translation_with_the_chat_replies_on_its_own_row(tmp_path):
+    # owner, 2026-10-23: no dedicated job — its runs are the chat answers', still told apart; 0.12.334–335's runs,
+    # recorded as the job "alert-translation", are read the same (never a job no skill declares)
+    from vesta_agent import status
+    from helpers import page_js
+    st = State(str(tmp_path / "s.db"))
+    now = datetime.now(timezone.utc)
+    for d in ({"who": agent_records.TRANSLATION, "cost_usd": 0.01}, {"who": "job:alert-translation", "cost_usd": 0.02},
+              {"who": "Ann@1", "cost_usd": 0.2}, {"who": "job:fm-daily", "cost_usd": 0.3}):
+        st.db.execute("insert into calls(at, kind, detail) values (?, 'run', ?)",
+                      ((now - timedelta(hours=1)).isoformat(), json.dumps(d)))
+    st.db.commit()
+    c = status.costs(st, 7, now=now, skill_of={"fm-daily": "reports"}.get)
+    by_job = {g["name"]: (g["runs"], g["cost"]) for g in c["by_job"]}
+    assert by_job == {"Chat replies › alert translation": (2, 0.03), "Chat replies": (1, 0.2),
+                      "reports › fm-daily": (1, 0.3)}
+    tr = [r for r in c["runs"] if r["job"] == "Chat replies › alert translation"]
+    assert len(tr) == 2 and all(r["kind"] == "translation" and r["person"] is None for r in tr)
+    # neither a reply written nor a report made
+    figures = dict(map(tuple, c["activity"]))
+    assert figures["Replies written"] == 1 and figures["Reports made"] == 1
+    # the page names it by its row's words, never "Reply to someone"
+    assert 'r.kind === "chat" ? `Reply to ${r.person || "someone"}` : r.job' in page_js()
 
 
 # ------------------------------------------------------------------ (h) the alert's own names (review, 2026-10-23)

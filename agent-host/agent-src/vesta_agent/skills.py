@@ -17,10 +17,8 @@ and skill.yaml (what the engine needs):
     jobs_default: {brain: auto, limit_usd: 2}   the starter brain and limit per run of ALL its AI jobs: what the
                                      VESTA Agent page offers for the skill (policy.yaml settings.skill_ai sets them)
     translate:                       its alert cards' own words in each chat's language, by the AI (translation.py)
-      name: alert-translation        its Costs row and its line on the page (an AI job's name rules)
-      description: one line          what the page says of it
-      instructions: "..."            what the AI is told (the engine adds the slots and the answer's shape)
-                                     — it runs with the skill's jobs_default / settings.skill_ai like an AI job
+      instructions: "..."            what the AI is told (the engine adds the slots and the answer's shape) — it
+                                     runs with the Chat answers' brain and limit per reply, never as an AI job
     schedule:                        what the scheduler starts
       - when: "07:00"                "HH:MM" daily, "Mon 08:00" weekly, "1 08:00" monthly
         prompt: "..."                a model job (costs tokens)
@@ -240,8 +238,8 @@ class Skill:
     # ⚠️ ONE BRAIN AND ONE LIMIT FOR A SKILL'S AI JOBS (owner, 2026-10-20): the starter values the page offers,
     # {"brain", "limit_usd"} — None for a skill with no AI job. policy.yaml settings.skill_ai is what they run with.
     jobs_default: dict | None = None
-    # its alert cards' own words in each chat's language (owner, 2026-10-23): {name, description, instructions} — AI
-    # work of the skill outside its schedule, with the same brain and limit per run (translation.py). None: as written
+    # its alert cards' own words in each chat's language (owner, 2026-10-23): {instructions} — AI work of the skill
+    # with the Chat answers' brain and limit (translation.py, turn.translation_terms), not a job. None: as written
     translate: dict | None = None
     every_5_min: str | None = None
     # the rules whose findings every_5_min reads again — the rest wait for the nightly check: the Kiosk card's "Next check"
@@ -322,8 +320,9 @@ def when_it_runs(sk: Skill) -> list[dict]:
     if sk.reads_history:
         acts.append(row("when the AI reads a device's history", script=sk.reads_history))
     if sk.translate:
-        acts.append({"when": "an alert card in another language",
-                     "job": sk.translate["name"], "script": None, "kind": "ai"})
+        # ⚠️ THE CHATS' BRAIN, NOT A JOB (owner, 2026-10-23): said as what it uses, never with the "AI job" chip
+        acts.append(row("an alert card in another language",
+                        note=f"its text translated by the AI with the Chat answers brain and limit ({where('ai')})"))
     # a command skill's row says how it is used, in the skill's own words (`usage`, an example — owner, 2026-10-19:
     # "only when a person writes /proposal" said neither what to write nor when it applies)
     # and its button (`offer`), which is the command typed for the person: the same row, said (0.12.271)
@@ -444,10 +443,12 @@ def parse_skill(name: str, path: str) -> Skill:
         if job.get("prompt"):
             entry.update(_ai_job(path, job, f"schedule[{i}]"))
         sk.schedule.append(entry)
-    sk.translate = _translate(raw.get("translate"), {j["name"] for j in sk.schedule if j.get("prompt")})
-    # the skill's AI work: its AI jobs, and its translation — one brain and one limit per run for all of it
-    sk.jobs_default = _jobs_default(raw.get("jobs_default"), [j for j in sk.schedule if j.get("prompt")]
-                                    + ([sk.translate] if sk.translate else []))
+    sk.translate = _translate(raw.get("translate"))
+    ai = [j for j in sk.schedule if j.get("prompt")]
+    # ⚠️ AN EDITED 0.12.334–335 COPY STILL WORKS (owner, 2026-10-23: the translation runs with the Chat answers' brain,
+    # not as a job): its alert desk gave `jobs_default` for its translation alone. Refused, it would switch the whole
+    # alert desk off on a villa that edited it (updates keep an edited copy); it is ignored, as the pair it seeded.
+    sk.jobs_default = _jobs_default(raw.get("jobs_default") if ai or not sk.translate else None, ai)
     if raw.get("every_5_min"):
         sk.every_5_min = _check_command(path, str(raw["every_5_min"]), "every_5_min")
     if raw.get("rechecks") is not None:
@@ -525,25 +526,28 @@ def switch_command(skill_path: str, script: Script, command: str | None, on: boo
             + yaml.safe_dump(keep, sort_keys=False)) if keep else None
 
 
-def _translate(given, jobs: set[str]) -> dict | None:
-    """skill.yaml `translate`: {name, description, instructions} — the skill's alert cards' own words in each chat's
-    language (translation.py). Its name follows an AI job's rules (its Costs row) and is not one of the skill's jobs."""
+#: what 0.12.334–335 also gave `translate` when it ran as a job (its name, its line on the page): read and ignored, so
+#: a villa's edited copy of the alert desk keeps working (see parse_skill)
+_TRANSLATE_BEFORE = {"name", "description"}
+
+
+def _translate(given) -> dict | None:
+    """skill.yaml `translate`: {instructions} — the skill's alert cards' own words in each chat's language
+    (translation.py), with the Chat answers' brain and limit. No name, no starter pair: it is not an AI job."""
     if given is None:
         return None
-    if not isinstance(given, dict) or set(given) - {"name", "description", "instructions"}:
-        raise SkillError("translate: give name, description and instructions")
-    name = str(given.get("name") or "")
-    if not JOB_NAME.match(name) or name in jobs:
-        raise SkillError("translate.name: lower case, digits, - and _, and not the name of one of its AI jobs")
+    if not isinstance(given, dict) or set(given) - {"instructions"} - _TRANSLATE_BEFORE:
+        raise SkillError("translate: give instructions")
     instructions = str(given.get("instructions") or "").strip()
     if not instructions:
         raise SkillError("translate.instructions: what the AI is told when it translates")
-    return {"name": name, "description": str(given.get("description") or "").strip(), "instructions": instructions}
+    return {"instructions": instructions}
 
 
 def translators(skills: dict) -> list["Skill"]:
-    """Every skill whose alert cards are translated (skill.yaml `translate`), in skill order — the page's line of AI
-    work beside the AI jobs, run with the same skill_ai pair."""
+    """Every skill whose alert cards are translated (skill.yaml `translate`), in skill order — the first one's
+    instructions are the translation's (translation.Translations.terms); Rules › AI brains and limits shows what is
+    kept, beside the Chat answers row."""
     return [sk for _, sk in sorted(skills.items()) if sk.translate]
 
 
@@ -552,8 +556,7 @@ def _jobs_default(given, jobs: list[dict]) -> dict | None:
     villa's own edit, kept by updates), the strongest brain and the largest limit its jobs' own `default` gave."""
     if not jobs:
         if given is not None:
-            raise SkillError("jobs_default: only a skill with AI jobs (a schedule entry with a prompt) or a translate "
-                             "has it")
+            raise SkillError("jobs_default: only a skill with AI jobs (a schedule entry with a prompt) has it")
         return None
     if given is not None:
         if not isinstance(given, dict) or set(given) - {"brain", "limit_usd"}:

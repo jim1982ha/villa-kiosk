@@ -202,13 +202,12 @@ class UI:
         """The AI jobs the skills declare, and whether policy.yaml sets their skill's one brain and one limit per run
         (owner, 2026-10-20; else they do not run). `skill_ai`: that pair as the jobs run with it, None when not set;
         `skill_default`: what "Add them" gives the skill (its skill.yaml jobs_default)."""
-        from ..skills import ai_jobs, job_owners, job_starters, translators
+        from ..skills import ai_jobs, job_owners, job_starters
         from ..scheduler import describe
         pol = page_policy(self.s.policy_path)
         every = self.skills.all()
         owners, starters = job_owners(every), job_starters(every)
         listed = {t["name"]: t for t in (tool_access.read_list(self.s.data_dir) or {}).get("tools") or []}
-        kept = self._translations_kept() if translators(every) else {}
         return [{"name": j["name"], "skill": sk.name, "when": j["when"], "to": j.get("to"),
                  "when_words": describe(j["when"])[0], "runs_per_month": describe(j["when"])[1],
                  "on_request": j.get("on_request", False), "description": j.get("description") or "",
@@ -216,17 +215,17 @@ class UI:
                  "skill_default": starters.get(sk.name) or {"brain": "auto", "limit_usd": 1.0},
                  # Rules › AI brains and limits › "AI tools": its skill's list (None: everything switched on)
                  "tools": None if sk.tools is None else [tool_access.label(t, listed) for t in sk.tools]}
-                for sk, j in ai_jobs(every)] + [
-            # ⚠️ AI WORK OUTSIDE THE SCHEDULE, THE SAME AGREEMENT (owner, 2026-10-23): a skill's alert cards translated
-            # for the chats that read another language run with the skill's pair — not set, offered here like a job
-            {"name": sk.translate["name"], "skill": sk.name, "when": None,
-             "when_words": "when an alert card goes to a chat that reads another language", "runs_per_month": 0,
-             "on_request": False, "description": sk.translate["description"],
-             "skill_ai": pol.skill_setting(sk.name, owners, starters),
-             "skill_default": starters.get(sk.name) or {"brain": "economy", "limit_usd": 0.05}, "tools": [],
-             # how many sentence patterns are kept translated, per language: what "Forget the translations" forgets
-             "translations": kept}
-            for sk in translators(every)]
+                # ⚠️ NOT THE ALERT CARDS' TRANSLATION (owner, 2026-10-23: "I shall not see a dedicated Job for this"):
+                # it runs with the Chat answers' brain and limit (turn.translation_terms), so it is never listed, set
+                # or added here — `_translations` is its line, beside the Chat answers row
+                for sk, j in ai_jobs(every)]
+
+    def _translations(self) -> dict[str, int] | None:
+        """How many sentence patterns of the alert cards are kept translated, per language — what "Forget the
+        translations" (Rules › AI brains and limits, under the Chat answers row) forgets; None when no skill translates
+        its alert cards (no line)."""
+        from ..skills import translators
+        return self._translations_kept() if translators(self.skills.all()) else None
 
     def _translations_kept(self) -> dict[str, int]:
         if not os.path.exists(self.s.state_path):
@@ -238,7 +237,7 @@ class UI:
             return {}
 
     async def translations_forget(self, request):
-        """"Forget the translations" (Rules › AI brains and limits, under the alert translation): every sentence pattern
+        """"Forget the translations" (Rules › AI brains and limits, under the Chat answers row): every sentence pattern
         kept translated — and every failure remembered — of one language, or of all; the next cards ask the AI again
         (phrases.Phrases.forget). Not a file: nothing to undo, the AI translates them again."""
         from ..phrases import Phrases
@@ -286,10 +285,10 @@ class UI:
         from ..policy import profile_labels
         from vesta_shared.knowledge_pack import KnowledgePack
         pack = KnowledgePack.read(self.s.pack_path)        # a step names a device as the pack does; none yet: its id
-        from ..skills import job_owners, translators
-        every = self.skills.all()
-        # an AI job's skill, for its words (skills.job_title) — a skill's translation runs too (alert-desk › …)
-        owners = {**job_owners(every), **{sk.translate["name"]: sk.name for sk in translators(every)}}
+        from ..skills import job_owners
+        # an AI job's skill, for its words (skills.job_title); an alert card's translation is the chat replies' own
+        # (status.ALERT_TRANSLATION)
+        owners = job_owners(self.skills.all())
         return web.json_response({**status.costs(State(self.s.state_path), days, zone=zone,
                                                  chat_label=lambda cid: route.label(int(cid)),
                                                  name_of=pack.name_of if pack else None,
@@ -320,6 +319,8 @@ class UI:
         broken file still answers, its problems named."""
         from vesta_shared.asleep import listed
         return web.json_response({**self._policy_doc(), "jobs": self._jobs(), **self._entities(), "tools": self._tools(),
+                                  # the alert cards' translations kept, per language (None: no skill translates)
+                                  "translations": self._translations(),
                                   # the VESTA Kiosk's list, as the agent was last told it (shown, never edited here)
                                   "unavailable_by_design": sorted(listed(self.s.pack_path))})
 

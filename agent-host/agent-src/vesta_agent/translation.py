@@ -9,9 +9,8 @@ from memory.
 ⚠️ NEVER BLOCK, ALWAYS FALL BACK (owner, 2026-10-23: "translated on the fly by the AI", with the card going out as
 today). A card goes out — or is taken over — in English at once; a chat whose language has no translation of one of
 its lines yet gets it later (a referenced background task, bounded by `translate_seconds`) and its copy is edited
-quietly. Any failure — the AI's error, its time limit, no credit, the skill's AI brain and limit not set, an answer
-that drops a slot, an edit Telegram refuses — leaves the English on the card. Nothing about delivery, the chase, the
-buttons or the Kiosk waits on this.
+quietly. Any failure — the AI's error, its time limit, no credit, an answer that drops a slot, an edit Telegram
+refuses — leaves the English on the card. Nothing about delivery, the chase, the buttons or the Kiosk waits on this.
 
 ⚠️ ONE TRANSLATION PER PATTERN (owner, 2026-10-23: "replace every variable part by slots and translate only the
 skeleton, cached"): 'Main Power Device Power has been "unavailable" for over 10 min.' and '… for over 20 min.' share
@@ -21,10 +20,14 @@ dates, quoted values, bracketed codes, incident tags — plus the names of the i
 (`incident_names`), longest first. Values are never translated. What is kept, asked again or forgotten is
 phrases.Phrases' rule (an echo is not kept, a failure rests, the instructions' fingerprint).
 
-⚠️ COST AGREED (owner, 2026-10-01: NOT SET, NOT RUN): the brain and the limit per run are the translating skill's
-policy.yaml settings.skill_ai (its skill.yaml `translate:` declares the work and `jobs_default` the offer the VESTA
-Agent page's "Add them" writes). Not set: no translation, said once in the log. One run is one prompt holding every
-missing line of a card for one language, a strict JSON answer, no tool.
+⚠️ INSIDE THE CHAT ANSWERS, NOT A JOB (owner, 2026-10-23: "I shall not see a dedicated Job for this, since it shall be
+fully integrated in the existing alert-desk skill, 'inside' the `Chat answers` setting"): a run has the Chat answers'
+brain and limit per reply (policy.yaml settings.profile, settings.reply_limit_usd — turn.translation_terms, the same
+reading as a chat's turn), always set, so a chat that reads another language always gets it; the skill's skill.yaml
+`translate:` gives only the instructions (skills before code). 0.12.334–335 ran it with the alert desk's own
+settings.skill_ai pair, listed with the AI jobs and not run until "Add them" set it: a villa's pair from then is never
+read (left in policy.yaml, harmless). One run is one prompt holding every missing line of a card for one language, a
+strict JSON answer, no tool; its Costs row is "Chat replies › alert translation" (agent_records.TRANSLATION).
 
 What each chat's copy shows is kept in its record as `tr` ({lang, body}: layout.render draws it on a copy headed in
 that language); a redraw (IncidentThread.sync, a reminder, a close) draws it again from the cache, so the English
@@ -39,12 +42,10 @@ import logging
 import re
 from typing import Callable
 
-from vesta_shared import agent_records
 from vesta_shared.limits import limit
 
 from . import layout, runner
 from .phrases import SLOT, Phrases, fingerprint, wordy
-from .places import where
 
 log = logging.getLogger("vesta.translation")
 #: What a masked span is replaced with while the next patterns look (the same length: positions stay; no pattern
@@ -218,37 +219,24 @@ def answer(text: str, skeletons: list[str]) -> dict | None:
 class Translations:
     """What each chat's copy of an alert card shows of the alert's own words, in its language (see the module)."""
 
-    def __init__(self, state, *, policy: Callable, skills, settings, names: Callable[[int], list[str]], thread):
-        self.state, self.policy, self.skills, self.s = state, policy, skills, settings
+    def __init__(self, state, *, skills, settings, names: Callable[[int], list[str]], thread):
+        self.state, self.skills, self.s = state, skills, settings
         self.names = names              # incident → the names of its devices and rooms (incident_names)
         self.thread = thread            # incident_thread.IncidentThread: a copy edited once its translation is known
         self._tasks: set[asyncio.Task] = set()      # every translation running: kept, so none is collected mid-way
         self._running: dict[tuple, asyncio.Task] = {}
         self._waiting: dict[tuple, set[tuple[int, int]]] = {}
-        self._said_off = False
         # what is kept, what is asked again and when, what is forgotten: ONE rule (phrases.py)
         self.phrases = Phrases(state)
 
     # ------------------------------------------------------------------ what is agreed
     def terms(self):
-        """(the skill that translates, its run's terms) — None when no skill declares it, or its AI brain and limit are
-        not set (NOT SET, NOT RUN: said once in the log)."""
-        from .skills import job_owners, job_starters
-        from .turn import Terms
-        every = self.skills.all()
-        sk = next((s for _, s in sorted(every.items()) if s.translate), None)
-        if sk is None:
-            return None
-        pair = self.policy().skill_setting(sk.name, job_owners(every), job_starters(every))
-        if not pair:
-            if not self._said_off:
-                self._said_off = True
-                log.info("Alert cards stay in English for chats that read another language: the %s skill's AI brain "
-                         "and limit are not set (%s)", sk.name, where("ai"))
-            return None
-        self._said_off = False
-        return sk, Terms(frozenset(), pair["brain"], float(pair["limit_usd"]),
-                         agent_records.for_job(sk.translate["name"]), sk.name)
+        """(the skill that translates, its run's terms: the Chat answers' brain and limit, turn.translation_terms) —
+        None when no skill declares it."""
+        from .skills import translators
+        from .turn import translation_terms
+        sk = next(iter(translators(self.skills.all())), None)
+        return None if sk is None else (sk, translation_terms(self.s, sk.name))
 
     @staticmethod
     def fingerprint(sk) -> str:
@@ -350,7 +338,7 @@ class Translations:
                 self._waiting.pop(want, None)
 
     async def _ask(self, agreed, lang: str, skeletons: list[str]) -> tuple[str | None, str | None]:
-        """The AI's answer for `skeletons` into `lang` — one tiny run, no tool, the skill's own brain and limit: (its
+        """The AI's answer for `skeletons` into `lang` — one tiny run, no tool, the Chat answers' brain and limit: (its
         text, None), or (None, why it could not answer)."""
         sk, terms = agreed
         from claude_agent_sdk import create_sdk_mcp_server

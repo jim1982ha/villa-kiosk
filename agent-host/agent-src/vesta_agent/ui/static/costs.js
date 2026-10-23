@@ -11,7 +11,8 @@ export const brain = (p, m) => [p ? (PROFILES[p] || p).replace(/ \(.*/, "") : nu
 // held to three lines here, all of it in its tooltip and on the run's line underneath (runMore). The steps open on
 // demand under the row, across every column: squeezed into this column they pushed the row tall.
 export function runWhat(r) {
-  const label = r.kind === "job" ? r.job : `Reply to ${r.person || "someone"}`;
+  // a reply names its person; a job, or an alert card's translation (kind "translation"), its row's words
+  const label = r.kind === "chat" ? `Reply to ${r.person || "someone"}` : r.job;
   const steps = r.steps || [];
   // the steps' pill on the title's line (owner, 2026-10-19: "show the pills X steps on the same line as Reply to…"),
   // after the chat it came from and at the line's right end (owner, 2026-10-20)
@@ -105,7 +106,7 @@ export async function costs(days = 7) {
     // ⚠️ TWO CARDS OF TWO TABS (owner, 2026-10-08): "By job" and "By model" are one question asked two ways, and so
     // are "Every run" and the tools those runs used — each pair is one card, its tab kept when the period changes
     tabbedCard(`${place("cost_split")} · last ${days} days`, "spend", [
-      ["job", place("by_job"), "Chat replies, and each AI job, named by its skill (reports › fm-daily).", () => groupTable(c.by_job, "Job")],
+      ["job", place("by_job"), "Chat replies (the alert cards put in a chat's language, which use their brain, apart: Chat replies › alert translation), and each AI job, named by its skill (reports › fm-daily).", () => groupTable(c.by_job, "Job")],
       ["model", place("by_model"), "Which model ran each reply and each job.", () => groupTable(c.by_model, "Model")]]),
     tabbedCard(`${place("runs")} · last ${days} days`, "runs", [
       ["runs", place("every_run"), `${c.runs_count} runs, newest first. Open a run's steps to see what was asked, whole, and each tool it used (recorded from agent 0.6.42 on).`,

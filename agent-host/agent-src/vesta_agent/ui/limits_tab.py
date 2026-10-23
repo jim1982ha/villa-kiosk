@@ -257,13 +257,13 @@ class LimitsTab:
 
     def _skill_pairs(self, raw: dict) -> dict[str, tuple[dict | None, dict]]:
         """{skill with AI jobs: (the brain and limit per run its jobs run with — None when not set, its starter pair)}."""
-        from ..skills import Skills, job_owners, job_starters, translators
+        from ..skills import Skills, job_owners, job_starters
         every = Skills(self.s.skills_dir).all()
         owners, starters = job_owners(every), job_starters(every)
         pol = Policy(raw)
-        # a skill whose alert cards are translated has the same pair (translation.py)
+        # ⚠️ AI JOBS ONLY (owner, 2026-10-23): the alert cards' translation runs with the chat answers' pair (above)
         return {skill: (pol.skill_setting(skill, owners, starters), starters.get(skill) or {})
-                for skill in sorted(set(owners.values()) | {sk.name for sk in translators(every)})}
+                for skill in sorted(set(owners.values()))}
 
     def _policy_rows(self) -> list[dict]:
         text, _ = self.files.policy_now()
@@ -275,10 +275,13 @@ class LimitsTab:
         ai = f"Also in {where('ai')}."
         rows = [
             (["settings", "profile"], st.get("profile", DEFAULT_BEHAVIOUR["profile"]), DEFAULT_BEHAVIOUR["profile"],
-             "choice", list(PROFILES), None, None, ai, "How deeply the AI thinks for a chat answer (its brain)."),
+             "choice", list(PROFILES), None, None, ai,
+             "How deeply the AI thinks for a chat answer (its brain), and when it puts an alert card's text in a "
+             "chat's language."),
             (["settings", "reply_limit_usd"], st.get("reply_limit_usd", DEFAULT_BEHAVIOUR["reply_limit_usd"]),
              DEFAULT_BEHAVIOUR["reply_limit_usd"], "number", None, 0.05, None, ai,
-             "The most one chat answer may cost (US$). Reached: the answer stops and offers Continue."),
+             "The most one chat answer may cost (US$), and one translation of an alert card's text. Reached: the "
+             "answer stops and offers Continue; the card stays in English."),
             (["settings", "conversation_reset"], st.get("conversation_reset", DEFAULT_BEHAVIOUR["conversation_reset"]),
              DEFAULT_BEHAVIOUR["conversation_reset"], "choice", list(RESET_WORDS), None, None, ai,
              "When a chat's earlier messages are forgotten by the AI."),
