@@ -23,7 +23,6 @@ from .chat_jobs import JUST_STARTED, NEW, SCHEDULED, Started
 from .in_progress import ENDED, FAILED
 from .notice import when
 from .places import where
-from .policy import LANGUAGES as LANG
 from .routing import Origin, Routing, job_to
 from .skills import ai_jobs, job_owners, job_starters
 
@@ -78,11 +77,13 @@ class AiJobs:
         """(skill, job) of the job with this name, or None."""
         return next(((sk, j) for sk, j in self.all() if j["name"] == name), None)
 
-    def _language_of(self, role: str) -> str:
-        """Every language the role's people read ("German and French"): the first row's alone sent the facility
-        manager's daily report in German to a facility manager who reads French (owner, 2026-10-23). With several,
-        send_message takes one version per language (routing.Routing.versions)."""
-        names = [LANG.get(c, c) for c in self.policy().languages_for(role)]
+    def _language_of(self, role: str, origin: Origin | None = None) -> str:
+        """The language(s) the job writes in for `role` ("German and French"), its readers' (routing.Routing.readers):
+        the first row's alone sent the facility manager's daily report in German to a facility manager who reads
+        French (owner, 2026-10-23). With several, send_message takes one version per language (Routing.versions).
+        Asked for in a chat, the asker's alone: told the role's two, the job wrote German first and the French asker
+        got it (architecture review H2, 2026-10-23)."""
+        names = [lang.name for lang, _chats in Routing(self.policy()).readers(role, origin)]
         return " and ".join(names) if names else "English"
 
     async def run(self, skill, job: dict, origin: Origin | None = None) -> None:
@@ -105,7 +106,8 @@ class AiJobs:
             return
         prompt = job["prompt"]
         try:
-            prompt = prompt.format(fm_language=self._language_of("fm"), owner_language=self._language_of("owner"))
+            prompt = prompt.format(fm_language=self._language_of("fm", origin),
+                                   owner_language=self._language_of("owner", origin))
         except (KeyError, IndexError, ValueError):
             pass                        # a prompt with other braces is used as written
         if origin:
@@ -139,9 +141,7 @@ class AiJobs:
                  ", stopped at its limit" if res.stopped_at_limit else "")
         delivered = res.sent
         if res.stopped_at_limit and job.get("on_limit"):
-            done = await job_steps.run(folder, self.state, self.skills, self.outcome, skill, job["on_limit"],
-                                       {"to": job_to(job, origin), "started": started, "limit": f"{cfg['limit_usd']:g}"}, origin)
-            delivered += done.sent
+            delivered += await self.on_limit(folder, skill, job, origin, started, cfg["limit_usd"])
         if delivered == 0:
             # ⚠️ A RUN THAT SENT NOTHING IS ITS OWN OUTCOME (architecture review scan 4, 2026-10-19): the AI wrote the
             # report (res.text) and never called send_message — the run was logged "done" with its cost, counted as a
@@ -155,6 +155,27 @@ class AiJobs:
             work.verdict(FAILED, why)
             await self.outcome.carry_out({"send": [{"to": job_to(job, origin), "title": "Report not prepared",
                                                     "text": NOT_COME(name, why, NO_RESULT)}]}, origin=origin)
+
+    async def on_limit(self, folder, skill, job: dict, origin: Origin | None, started: str, limit_usd: float) -> int:
+        """The job's `on_limit` steps (skill.yaml) when its spending limit stopped it: the messages they sent.
+
+        ⚠️ ONE PAGE PER LANGUAGE ITS READERS READ (architecture review H1, 2026-10-23): the steps ran once, on the first
+        language's notes.json, and that page went to every chat of the role — the facility manager who reads French got
+        the German readings although the AI had written the French ones. They now run once per language of the job's
+        readers (Routing.readers), `{suffix}` naming that language's files ("" for the first, "_French" for another:
+        the reports skill's "Several languages"), and what they send goes to that language's chats only. Read in one
+        language, they run once, as before."""
+        to = job_to(job, origin)
+        readers = Routing(self.policy()).readers(to, origin)
+        several = len(readers) > 1
+        sent = 0
+        for n, lang in enumerate([lang for lang, _chats in readers] or [None]):
+            done = await job_steps.run(folder, self.state, self.skills, self.outcome, skill, job["on_limit"],
+                                       {"to": to, "started": started, "limit": f"{limit_usd:g}",
+                                        "suffix": f"_{lang.name}" if n and lang else ""}, origin,
+                                       language=lang.code if several and lang else None)
+            sent += done.sent
+        return sent
 
     async def run_without_ai(self, skill, job: dict, problem: str, origin: Origin | None = None, folder=None) -> bool:
         """The job's `without_ai` steps (skill.yaml), when the AI could not run: True when they sent its work.

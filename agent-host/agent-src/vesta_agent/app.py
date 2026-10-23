@@ -79,7 +79,7 @@ from .notice import Notices, note_step
 
 log = logging.getLogger("vesta")
 
-from .policy import LANGUAGES as LANG  # noqa: E402 — one list, also the VESTA Agent page's menu
+from .policy import Language  # noqa: E402 — one list, also the VESTA Agent page's menu
 #: Commands the agent answers. Any other command belongs to Home Assistant's automations.
 def _now_local(tz: str) -> datetime:
     return datetime.now(ZoneInfo(tz))
@@ -628,7 +628,7 @@ class Vesta:
                 # that already held the morning's answer about the same pump was answered from it in 19 s — no reading
                 # at all, no page. With nothing earlier to lean on, the only way to answer is to do the skill's work.
                 resume = None if request and not is_continue else self._resume_for(cid)
-            lang = LANG.get(person.language, person.language) if person else "English"
+            lang = Language.of(person.language).name if person else "English"
             if is_continue:
                 prompt = "Continue exactly where you stopped. Do not repeat what you already wrote."
             else:
@@ -636,7 +636,7 @@ class Vesta:
                 # engine says which language is saved for the person, never "answer in it".
                 said = ("a photo (attached: look at it) with this message" if image and text else
                         "a photo (attached: look at it), with no message" if image else
-                        (f"a voice message, as transcribed (spoken in {LANG.get(spoken, spoken)})" if spoken else
+                        (f"a voice message, as transcribed (spoken in {Language.name_of(spoken)})" if spoken else
                          "a voice message, as transcribed") if voice else "a message")
                 prompt = (f"{said[0].upper() + said[1:]} from {person.name if person else 'someone'} (role "
                           f"{person.role if person else '?'}; language saved for them: {lang}) in the {self.policy().chat_label(cid)}:\n"

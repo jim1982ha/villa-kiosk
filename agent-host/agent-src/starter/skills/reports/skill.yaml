@@ -23,7 +23,9 @@ scripts:
 # AI jobs: all of them run with ONE brain and ONE spending limit per run, the skill's (policy.yaml settings.skill_ai:
 # VESTA Agent page → Rules → AI brains and limits; owner, 2026-10-20). Without it, none of them runs. `jobs_default`
 # is what the page offers when it adds them. `on_limit` is the code step that still sends the page, with what is
-# done, when the limit stops a job ({to}: here when asked in a chat, else the job's `to`).
+# done, when the limit stops a job ({to}: here when asked in a chat, else the job's `to`); it runs once per language
+# its readers read, {suffix} naming that language's files ("" for the first, "_French" for another: SKILL.md
+# "Several languages"), and each run's page goes to the readers of its language.
 # `without_ai` are the code steps that still make the report when the AI cannot run (no credit, a refused key,
 # Anthropic unreachable): the figures and charts, said to be made without the AI ({why}), in order, each one
 # needing the one before; `skill:` runs another skill's script, `on_schedule_only` skips it when a chat asked.
@@ -49,7 +51,7 @@ schedule:
     to: fm
     on_request: true
     description: the facility manager's weekly report (last week, or the week a person names)
-    on_limit: "compose.py fm-weekly --facts facts.json --notes notes.json --out fm_weekly.html --finish {to} --since {started} --limit {limit}"
+    on_limit: "compose.py fm-weekly --facts facts.json --notes notes{suffix}.json --out fm_weekly{suffix}.html --finish {to} --since {started} --limit {limit}"
     button: Weekly report
     without_ai:
       - {skill: roi-energy, run: "energy_period.py --period week --out week.json"}
@@ -70,7 +72,7 @@ schedule:
     to: owner
     on_request: true
     description: the owner's monthly report (last month, or the month a person names)
-    on_limit: "compose.py owner-monthly --facts facts.json --notes notes.json --out owner_monthly.html --finish {to} --since {started} --limit {limit}"
+    on_limit: "compose.py owner-monthly --facts facts.json --notes notes{suffix}.json --out owner_monthly{suffix}.html --finish {to} --since {started} --limit {limit}"
     button: Monthly report
     without_ai:
       - {skill: roi-energy, run: "energy_period.py --period month --out month.json"}

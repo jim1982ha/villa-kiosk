@@ -253,9 +253,8 @@ def test_the_rules_choose_devices_from_the_villas_own_by_name(ui):
     ents, doc = call(ui, fn)
     assert ents["entities"] == [{"id": "scene.example_evening", "name": "Evening", "area": ""},
                                 {"id": "lock.example_door", "name": "Front door", "area": "Entrance"}]
-    from vesta_agent.app import LANG
     from vesta_agent.policy import LANGUAGES
-    assert doc["languages"] == LANGUAGES and LANG is LANGUAGES                  # one list: the agent's and the menu's
+    assert doc["languages"] == LANGUAGES                  # one list: the agent's (policy.Language) and the menu's
 
 
 def test_the_costs_tab_reads_every_run_from_the_agents_records(ui):

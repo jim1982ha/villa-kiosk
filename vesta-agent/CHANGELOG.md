@@ -1,3 +1,14 @@
+## 0.12.328
+
+What you will see:
+- A report you ask for in your own chat now comes in your language. Before, with facility managers reading German
+  and French, a report you asked for came in German.
+- A report stopped at its spending limit now reaches each person in their own language, with the page of readings
+  written for them. Before, everyone got the first language's page.
+- People: a language that is not in the menu (typed into the file by hand) is now named as a problem on the VESTA
+  Agent page; until it is corrected, that person is written to in English. Before, it was accepted silently and could
+  stop a report from being sent.
+
 ## 0.12.327
 
 What you will see:

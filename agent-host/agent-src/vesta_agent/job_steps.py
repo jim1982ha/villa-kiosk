@@ -20,8 +20,11 @@ class Done:
     failed: str | None             # the script that stopped the steps, or why it could not run
 
 
-async def run(settings, state, skills, outcome, skill, steps: list[dict], values: dict, origin=None) -> Done:
-    """`settings`: the job run's own (config.Settings.in_folder) — its steps read the files its AI run wrote."""
+async def run(settings, state, skills, outcome, skill, steps: list[dict], values: dict, origin=None,
+              language: str | None = None) -> Done:
+    """`settings`: the job run's own (config.Settings.in_folder) — its steps read the files its AI run wrote.
+    `language` (a code): the steps made one language's version (ai_jobs.AiJobs.on_limit): what they send to the job's
+    destination (`values["to"]`) goes to the chats that read it (routing.Routing.deliveries)."""
     sent = 0
     for st in steps:
         if origin and st.get("on_schedule_only"):
@@ -34,6 +37,9 @@ async def run(settings, state, skills, outcome, skill, steps: list[dict], values
         if not ans.ok:
             return Done(sent, script)
         res = ans.result()
+        if res.get("send") and language:
+            mine = lambda it: isinstance(it, dict) and it.get("to") == values.get("to")  # noqa: E731
+            res = {**res, "send": [{**it, "language": language} if mine(it) else it for it in res["send"]]}
         if res.get("send"):
             sent += (await outcome.carry_out(res, sk.name, origin, settings.out_dir if settings else None))["sent"]
     return Done(sent, None)

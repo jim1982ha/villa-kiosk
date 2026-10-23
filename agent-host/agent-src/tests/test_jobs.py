@@ -44,7 +44,7 @@ def agent(tmp_path, monkeypatch):
         return {}
     v.run_code_job = fake_code
 
-    async def fake_steps(settings, state, skills, outcome, skill, steps, values, origin=None):
+    async def fake_steps(settings, state, skills, outcome, skill, steps, values, origin=None, language=None):
         # a job's code steps (job_steps.py): recorded, not run
         for st in steps:
             v.code.append((st["run"].split()[0], values, origin))

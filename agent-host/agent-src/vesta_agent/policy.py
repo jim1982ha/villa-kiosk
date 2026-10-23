@@ -31,12 +31,46 @@ import yaml
 from .places import title
 
 # ------------------------------------------------------------------ constants
-# Refused even with an approval record. Not configurable.
 # The languages a person can be answered in: the agent writes in them, and the VESTA Agent page offers
 # exactly these in its menu (owner, 2026-10-01: no free text).
 LANGUAGES = {"en": "English", "fr": "French", "id": "Indonesian", "de": "German", "es": "Spanish", "it": "Italian",
              "nl": "Dutch", "zh": "Chinese", "ja": "Japanese", "ko": "Korean"}
 
+
+@dataclass(frozen=True)
+class Language:
+    """A language of LANGUAGES: its code (what policy.yaml stores) and its name (what the AI reads and writes).
+
+    ⚠️ ONE MATCHING OF A CODE AND A NAME (architecture review H5, 2026-10-23): "fr" ↔ "French" was matched by hand in
+    four places (the job's prompt, the person's line in a conversation, send_message's versions, its description),
+    each with its own fallback, and the file check let any 2–3 letters through: a facility manager saved as "pt"
+    reached the AI as "German and pt", and its natural answer {"Portuguese": …} was refused. A code outside the list
+    is now a problem of the file (read_policy) and English for the agent, like any value the file check names."""
+    code: str
+
+    @property
+    def name(self) -> str:
+        return LANGUAGES[self.code]
+
+    @classmethod
+    def of(cls, code: str | None) -> "Language":
+        """A stored code's language; English for one outside the list (read_policy has named it)."""
+        return cls(code) if isinstance(code, str) and code in LANGUAGES else cls("en")
+
+    @classmethod
+    def parse(cls, value) -> "Language | None":
+        """A code or a name, in any case ("fr", "French", "FRENCH"); None when it is not one of the list."""
+        word = str(value).strip().lower()
+        return next((cls(c) for c, n in LANGUAGES.items() if word in (c, n.lower())), None)
+
+    @classmethod
+    def name_of(cls, value) -> str:
+        """A code's or a name's name in the list; one outside it as it was given (a language Whisper heard)."""
+        lang = cls.parse(value)
+        return lang.name if lang else str(value)
+
+
+# Refused even with an approval record. Not configurable.
 NEVER_DOMAINS = {
     "homeassistant", "hassio", "shell_command", "rest_command", "python_script",
     "pyscript", "command_line", "logger", "recorder", "system_log", "update",
@@ -317,9 +351,11 @@ class Policy:
         return list(dict.fromkeys(c for c, r in self.destinations
                                   if r == role and (language is None or self.language_of(c, role) == language)))
 
-    def language_of(self, chat_id: int, role: str) -> str:
-        """The language a chat reads its `role`'s messages in: its row's (an older file's `chats:` has none: en)."""
-        return next((e.language for e in self.entries if e.telegram_id == int(chat_id) and e.role == role), "en")
+    def language_of(self, chat_id: int, role: str | None) -> str:
+        """The language a chat reads its `role`'s messages in: its row's (an older file's `chats:` has none: en). No
+        role (someone asking whose role is not known): the chat's first row."""
+        return next((e.language for e in self.entries if e.telegram_id == int(chat_id)
+                     and (role is None or e.role == role)), "en")
 
     def languages_for(self, role: str) -> list[str]:
         """Every language (a code) the chats of `role` read, once, in the list's order.
@@ -782,8 +818,11 @@ def read_policy(raw: dict) -> tuple[dict, list[str]]:
         if not name:
             out.append(f"people, entry {i}: a name is needed.")
         lang = p.get("language")
-        if lang is not None and not re.match(r"^[a-z]{2,3}$", str(lang)):
-            out.append(f"people, {who}: language must be a code such as en, fr, id.")
+        # ⚠️ ONE OF THE MENU'S LANGUAGES (architecture review H5, 2026-10-23): any 2–3 letters passed here, though the
+        # page offers only LANGUAGES; "pt" then reached the AI as a bare code. Named, and English until it is changed.
+        if lang is not None and not _one_of(lang, LANGUAGES):
+            out.append(f"people, {who}: language must be one of {', '.join(LANGUAGES)} (the page's menu); until then "
+                       "the agent writes to them in English.")
             lang = None
         for extra in set(p) - {"telegram_id", "name", "role", "language"}:
             out.append(f"people, {who}: unknown field {extra!r}.")

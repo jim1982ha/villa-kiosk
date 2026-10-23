@@ -38,7 +38,7 @@ from vesta_shared.limits import limit
 from vesta_shared.messaging import no_platform_name
 
 from . import __version__, script_run, status, tool_access
-from .policy import LANGUAGES, ROLE_WORDS, Person, Policy
+from .policy import ROLE_WORDS, Person, Policy
 from .kiosk import KioskError, fault_note_chars, fault_title_chars
 from .redact import scrub  # noqa: F401 — callers import it from here too
 from .routing import Origin, Routing
@@ -772,7 +772,7 @@ class Toolbox:
                     "person you are answering, or the chat this job was asked for in. Nothing goes to another chat. "
                     "A plain answer needs no tool: your reply is sent for you.")
         else:
-            langs = {r: [LANGUAGES.get(c, c) for c in self.policy.languages_for(r)] for r in ROLE_WORDS}
+            langs = {r: [lang.name for lang, _chats in Routing(self.policy).readers(r)] for r in ROLE_WORDS}
             desc = ("Send a message, with a file attached if needed. to=owner / to=fm: every chat of the owner or of "
                     "the facility manager (the People list), for scheduled reports and digests. "
                     + " ".join(f"The {ROLE_WORDS[r].lower()}'s people read {' and '.join(ls)}"

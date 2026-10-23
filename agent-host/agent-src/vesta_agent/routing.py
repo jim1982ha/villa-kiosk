@@ -23,7 +23,7 @@ from dataclasses import dataclass
 
 from vesta_shared.message_format import ROLE_WORDS, ROLES
 
-from .policy import LANGUAGES, Policy
+from .policy import Language, Policy
 
 TARGETS = ("here", *ROLES)
 
@@ -82,36 +82,51 @@ class Routing:
             return self.policy.chats_for(to, language)
         return []
 
+    def readers(self, to: str | None, origin: Origin | None = None) -> list[tuple[Language, list[int]]]:
+        """Who reads a message for `to`, by language: [(language, its chats)], in the People list's order — one entry
+        for a person asking (their chat, in the language saved for them, or the group's row's), one per language its
+        chats read for a role on schedule, [] when it goes nowhere.
+
+        ⚠️ ONE ANSWER TO "WHO READS IT IN WHICH LANGUAGE" (architecture review H, 2026-10-23). The job's prompt was told
+        the ROLE's languages even when a person had asked ("German and French"), and send_message kept the first
+        version for the asker: a French facility manager asking for the daily digest got it in German. The limit's
+        page went in the first language to every chat of the role. The job's prompt (ai_jobs), send_message
+        (versions) and a job's steps after its limit (ai_jobs.on_limit) all read this."""
+        if to in ROLES and not (origin and origin.holds):
+            return [(Language.of(c), self.target(to, origin, c)) for c in self.policy.languages_for(to)]
+        chats = self.target(to, origin)
+        if not chats:
+            return []
+        return [(Language.of(self.policy.language_of(chats[0], origin.role if origin else None)), chats)]
+
     def versions(self, to: str | None, origin: Origin | None, text, attachment=None) -> list[tuple] | str:
         """The copies of one message to send, as (language code or None, text, attachment): one per language its
-        readers read, or what is missing (a sentence for the AI). `text` and `attachment` are one value, or one per
-        language ({"German": …, "French": …}; a code works too).
+        readers read (readers), or what is missing (a sentence for the AI). `text` and `attachment` are one value, or
+        one per language ({"German": …, "French": …}; a code works too).
 
         ⚠️ EACH READER IN THEIR OWN LANGUAGE (owner, 2026-10-23: the facility manager's daily report came in German
         to a facility manager who reads French, because the role's first row read German): a role read in several
         languages takes one version per language, and a single text is refused there rather than sent to everyone
-        in one of them. A person asking (`here`) reads one language: the first version is theirs."""
+        in one of them. Read in one language (a person asking, too), it is the version in that language — the first
+        one only when none is (the first version was the asker's even when they read the second: review H2)."""
         def by_language(value) -> dict[str, str] | None:
             if not isinstance(value, dict):
                 return None
-            out = {}
-            for k, v in value.items():
-                code = next((c for c, n in LANGUAGES.items() if str(k).strip().lower() in (c, n.lower())),
-                            str(k).strip().lower())
-                out[code] = str(v)
-            return out
+            # a key outside the list is kept as written: with one reader it is still a version to send
+            return {(lang.code if (lang := Language.parse(k)) else str(k).strip().lower()): str(v)
+                    for k, v in value.items()}
         texts, atts = by_language(text), by_language(attachment)
-        langs = self.policy.languages_for(to) if to in ROLES and not (origin and origin.holds) else []
+        langs = [lang.code for lang, _chats in self.readers(to, origin)]
         if len(langs) <= 1:
             pick = (lambda d, v: (d.get(langs[0]) if langs and langs[0] in d else next(iter(d.values()), None))
                     if d is not None else v)
             return [(None, pick(texts, text) or "", pick(atts, attachment) or None)]
-        names = ", ".join(LANGUAGES.get(c, c) for c in langs)
+        names = ", ".join(Language.of(c).name for c in langs)
         missing = [c for c in langs if not (texts or {}).get(c)]
         if missing:
             return (f"The {ROLE_WORDS[to].lower()}'s people read {names}: give text one version per language, as "
-                    f"{{\"{LANGUAGES.get(langs[0], langs[0])}\": \"…\", …}}"
-                    + (f" (missing: {', '.join(LANGUAGES.get(c, c) for c in missing)})" if texts else "")
+                    f"{{\"{Language.of(langs[0]).name}\": \"…\", …}}"
+                    + (f" (missing: {', '.join(Language.of(c).name for c in missing)})" if texts else "")
                     + ". Nothing was sent.")
         if atts is not None and any(not atts.get(c) for c in langs):
             return (f"The {ROLE_WORDS[to].lower()}'s people read {names}: give attachment one page per language, "

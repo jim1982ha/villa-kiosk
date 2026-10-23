@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.318 (23 October 2026)
+
+- One answer to "who reads this message, in which language": `Routing.readers(to, origin)` → [(Language, chats)]
+  (architecture review H). A job asked for in a chat is told its asker's language only (`AiJobs._language_of(role,
+  origin)`), and `Routing.versions` picks the version in the reader's language (before: the role's languages, and the
+  first version written, so a French facility manager asking got German). A job's `on_limit` steps run once per
+  language of its readers (`AiJobs.on_limit`; `{suffix}` "" for the first, "_French" for another; `job_steps.run(...,
+  language=)` tags what goes to the job's destination), so each reader gets the page of their own notes when the limit
+  stops a report. `without_ai` stays one English text for every chat.
+- `policy.Language`: one code↔name value (`of`, `parse`, `name_of`) for ai_jobs, app, routing and tools (four
+  hand-written matches before). The People check names a language outside the menu's list (it accepted any two or
+  three letters); that person is written to in English until it is corrected.
+- reports skill: `on_limit` reads `notes{suffix}.json` and writes `fm_weekly{suffix}.html` / `owner_monthly{suffix}.html`.
+
 ## 0.6.317 (23 October 2026)
 
 - A role's report reaches each of its people in their own language. `Policy.languages_for(role)` (every language its
