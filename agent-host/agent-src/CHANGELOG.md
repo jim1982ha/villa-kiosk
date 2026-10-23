@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.324 (23 October 2026)
+
+- An alert's own text in each chat's language (owner, 2026-10-23), `vesta_agent/translation.py`. The card goes out
+  (or is taken over) in English at once; a referenced background run, bounded by `alerts.translate_seconds`, then
+  translates its lines for each non-English chat and `IncidentThread.translated` redraws that copy. Only the SKELETON
+  is translated: numbers (with their unit), times, dates, quoted values, the incident's device and room names, "#N" and
+  [CODES] become numbered slots (`mask`); the answer must keep every slot once (`fits`), else English. Skeletons are
+  kept per language in State (`phrase:{lang}:{sha}`, a BOUNDED lifetime, `alerts.translations_kept`), so the same
+  pattern with other values is drawn translated at once, with no AI call. Any failure leaves the English. The run is
+  the alert-desk skill's `translate` (its instructions; `jobs_default` economy, 0.05 US$), with its brain and limit
+  from policy.yaml settings.skill_ai["alert-desk"]: not set, not run (logged once; the page offers "Add them").
+
 ## 0.6.323 (23 October 2026)
 
 - Every "could not be prepared" goes out titled ("Report not prepared"; a question cut by a restart "Question not

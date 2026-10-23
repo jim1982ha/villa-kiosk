@@ -201,7 +201,7 @@ class UI:
         """The AI jobs the skills declare, and whether policy.yaml sets their skill's one brain and one limit per run
         (owner, 2026-10-20; else they do not run). `skill_ai`: that pair as the jobs run with it, None when not set;
         `skill_default`: what "Add them" gives the skill (its skill.yaml jobs_default)."""
-        from ..skills import ai_jobs, job_owners, job_starters
+        from ..skills import ai_jobs, job_owners, job_starters, translators
         from ..scheduler import describe
         pol = page_policy(self.s.policy_path)
         every = self.skills.all()
@@ -214,7 +214,15 @@ class UI:
                  "skill_default": starters.get(sk.name) or {"brain": "auto", "limit_usd": 1.0},
                  # Rules › AI brains and limits › "AI tools": its skill's list (None: everything switched on)
                  "tools": None if sk.tools is None else [tool_access.label(t, listed) for t in sk.tools]}
-                for sk, j in ai_jobs(every)]
+                for sk, j in ai_jobs(every)] + [
+            # ⚠️ AI WORK OUTSIDE THE SCHEDULE, THE SAME AGREEMENT (owner, 2026-10-23): a skill's alert cards translated
+            # for the chats that read another language run with the skill's pair — not set, offered here like a job
+            {"name": sk.translate["name"], "skill": sk.name, "when": None,
+             "when_words": "when an alert card goes to a chat that reads another language", "runs_per_month": 0,
+             "on_request": False, "description": sk.translate["description"],
+             "skill_ai": pol.skill_setting(sk.name, owners, starters),
+             "skill_default": starters.get(sk.name) or {"brain": "economy", "limit_usd": 0.05}, "tools": []}
+            for sk in translators(every)]
 
     async def jobs(self, _request):
         return web.json_response({"jobs": self._jobs()})
@@ -249,8 +257,10 @@ class UI:
         from ..policy import profile_labels
         from vesta_shared.knowledge_pack import KnowledgePack
         pack = KnowledgePack.read(self.s.pack_path)        # a step names a device as the pack does; none yet: its id
-        from ..skills import job_owners
-        owners = job_owners(self.skills.all())              # an AI job's skill, for its words (skills.job_title)
+        from ..skills import job_owners, translators
+        every = self.skills.all()
+        # an AI job's skill, for its words (skills.job_title) — a skill's translation runs too (alert-desk › …)
+        owners = {**job_owners(every), **{sk.translate["name"]: sk.name for sk in translators(every)}}
         return web.json_response({**status.costs(State(self.s.state_path), days, zone=zone,
                                                  chat_label=lambda cid: route.label(int(cid)),
                                                  name_of=pack.name_of if pack else None,

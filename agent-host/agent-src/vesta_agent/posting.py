@@ -35,12 +35,14 @@ def laid_out(make: Callable[[], object], plain):
 
 class Poster:
     def __init__(self, *, send: Callable[..., Awaitable], thread=None, notices=None, timezone_name: str = "UTC",
-                 edit: Callable[..., Awaitable] | None = None):
+                 edit: Callable[..., Awaitable] | None = None, translations=None):
         self.send = send                # delivery.Delivery.send — the message id, or None when nothing arrived
         self.edit = edit                # delivery.Delivery.edit — a message already sent, rewritten (rewrite)
         self.thread = thread            # incident_thread.IncidentThread: what each chat shows of an incident or request
         self.notices = notices          # notice.Notices: the heading
         self.tz = timezone_name         # "{time}" in a message: the villa's time when it is sent
+        # translation.Translations: an alert card's own words in the chat's language (owner, 2026-10-23); None: as written
+        self.translations = translations
 
     async def post(self, chat: int, text: str, *, status: str = "", lead: str = "", roles=(), incident: int | None = None,
                    keyboard: dict | None = None, document: str | None = None, photo=None,
@@ -90,6 +92,12 @@ class Poster:
         p = layout.parts(body=text, status=status, head=head, lead=lead, mark=mark)
         if said:
             p["said"] = said
+        # the alert's own words in the chat's language: known, the card goes translated; not yet, it goes as written and
+        # is translated afterwards (`later`, once recorded) — never waited for (translation.py). The incident's own
+        # card only: a snapshot's caption is the agent's
+        want = None
+        if self.translations is not None and said and str(thread) == str(incident):
+            p, want = self.translations.apply(int(incident), chat, p)
         # ⚠️ A CAPTION IS 1,024 CHARACTERS (architecture review 20): laid out for 4,096, a long incident's snapshot went as a
         # photo and a separate text — only the text was recorded, so the next snapshot left the old photo behind
         limit = telegram_caption_chars() if (photo or document) else telegram_message_chars()
@@ -98,6 +106,8 @@ class Poster:
                               origin=origin, **({"reply_to": reply_to} if reply_to else {}))
         if mid and thread is not None and self.thread is not None:
             await self.thread.post(thread, chat, mid, {**p, "limit": limit}, buttons=bool(keyboard), keyboard=keyboard)
+            if want:
+                self.translations.later(int(incident), chat, want)
         return mid
 
     def to_line(self, chat: int, roles=(), also=None) -> str:

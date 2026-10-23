@@ -118,6 +118,17 @@ def middle_floor() -> int:
                          "with \"…\".", told="person")
 
 
+def body_shown(p: dict, h: dict | None) -> str:
+    """The body as this copy shows it: the alert's own words in the language its heading is drawn in, when the copy
+    holds them (`tr`: translation.Translations, owner 2026-10-23), else as written. ⚠️ ONLY IN ITS OWN LANGUAGE: a
+    copy's parts handed to another chat (IncidentThread.sync) carry the first chat's `tr` — a German copy never shows
+    the French words, whatever forgot to draw them again."""
+    tr = p.get("tr")
+    if isinstance(tr, dict) and isinstance(tr.get("body"), str) and h and tr.get("lang") == h.get("lang"):
+        return tr["body"]
+    return p.get("body") or ""
+
+
 def render(p: dict, limit: int | None = None) -> str:
     """The text Telegram shows, in ONE message of `limit` characters (4,096; a photo's or a file's caption 1,024 — the
     message's own `limit` when it recorded one): the title and "To: …", the lead and body, then "Status:" with the
@@ -130,7 +141,7 @@ def render(p: dict, limit: int | None = None) -> str:
     limit = int(limit or p.get("limit") or telegram_message_chars())
     h = head_of(p.get("head"))
     status = fit(stage_line(h, (p.get("status") or "").strip(), p.get("mark")), max(limit // 4, 40))
-    middle = "\n".join(x.strip() for x in (p.get("lead"), p.get("body")) if x and x.strip())
+    middle = "\n".join(x.strip() for x in (p.get("lead"), body_shown(p, h)) if x and x.strip())
     if not h:
         tail = f"\n\n{STATUS}:\n{status}" if status else ""
         return fit(middle, max(limit - tg_len(tail), 20)) + tail if middle else tail.lstrip("\n")
@@ -157,7 +168,8 @@ def changed(p: dict, *, status: str | None = None, body: str | None = None, mark
     (none: the stage's icon) — a "Need help" status replaced by "Done pressed …" is no longer 🆘."""
     # a new status is no longer the step it was drawn from (`said`: notice.Notices.restatus redraws a step's line in
     # each chat's language; a replaced one is the new words, as they are)
-    kept = {k: v for k, v in p.items() if not (status is not None and k == "said")}
+    # a new body is no longer the words translated (`tr`): it is shown as written until it is translated again
+    kept = {k: v for k, v in p.items() if not (status is not None and k == "said") and not (body is not None and k == "tr")}
     return {**parts(), **kept, **({"status": status, "mark": mark} if status is not None else {}),
             **({"body": body} if body is not None else {})}
 

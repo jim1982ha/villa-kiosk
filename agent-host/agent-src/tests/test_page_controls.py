@@ -406,10 +406,16 @@ def test_add_them_sets_every_missing_ai_job_with_its_starter_values_in_one_recor
         return st, body, st2, again, hist, jobs
     st, body, st2, again, hist, jobs = call(ui, fn)
     s = yaml.safe_load(open(ui.policy_path))["settings"]
-    assert st == 200 and body["added"] == ["fm-daily", "fm-weekly", "owner-monthly"] and st2 == 200 and again["added"] == []
-    assert s["skill_ai"] == {"reports": {"brain": "auto", "limit_usd": 2.0}} and "jobs" not in s
-    assert all(j["skill_ai"] == {"brain": "auto", "limit_usd": 2.0} for j in jobs)
-    assert s["web_search"] is True and hist[0]["what"] == "AI jobs added: fm-daily, fm-weekly, owner-monthly"
+    # the alert desk's translation is offered with them, at its own starter pair (skill.yaml jobs_default, owner
+    # 2026-10-23: the lightest brain is enough for a few lines)
+    assert st == 200 and body["added"] == ["fm-daily", "fm-weekly", "owner-monthly", "alert-translation"]
+    assert st2 == 200 and again["added"] == []
+    assert s["skill_ai"] == {"reports": {"brain": "auto", "limit_usd": 2.0},
+                             "alert-desk": {"brain": "economy", "limit_usd": 0.05}} and "jobs" not in s
+    assert all(j["skill_ai"] == ({"brain": "auto", "limit_usd": 2.0} if j["skill"] == "reports" else
+                                 {"brain": "economy", "limit_usd": 0.05}) for j in jobs)
+    assert s["web_search"] is True and \
+        hist[0]["what"] == "AI jobs added: fm-daily, fm-weekly, owner-monthly, alert-translation"
 
 
 def test_switch_on_turns_each_kind_of_tool_on_where_its_switch_is(ui):
@@ -479,7 +485,7 @@ def test_the_rules_tab_comes_in_one_answer(ui):
         return await (await c.get("/api/rules", headers=HDR)).json()
     v = call(ui, fn)
     assert {"text", "rev", "form", "problems", "profiles", "schema", "jobs", "entities", "tools"} <= set(v)
-    assert [j["name"] for j in v["jobs"]] == ["fm-daily", "fm-weekly", "owner-monthly"]
+    assert [j["name"] for j in v["jobs"]] == ["fm-daily", "fm-weekly", "owner-monthly", "alert-translation"]
 
 
 def test_a_skills_own_files_cannot_be_deleted_and_the_list_says_so(ui):
@@ -522,7 +528,8 @@ def test_a_skills_when_rows_name_every_way_the_engine_starts_it(ui):
     acts = call(ui, fn)
     assert {"when": "before every answer in a chat", "job": None, "script": "concierge.py", "kind": "code"} in acts
     # every field of a skill that starts it has its row; a new field must be placed here, shown or not
-    starts = {"schedule", "every_5_min", "on_event", "on_reply", "before_answer", "command", "reads_history"}
+    starts = {"schedule", "every_5_min", "on_event", "on_reply", "before_answer", "command", "reads_history",
+              "translate"}     # its alert cards translated: "an alert card in another language"
     others = {"name", "path", "description", "tools", "scripts", "buttons", "also", "deliver", "usage", "brain",
               "limit_usd", "rechecks", "offer",     # offer: the command, typed by a button
               "offer_after",         # the readings after which that button comes: said in the "in a chat" row
@@ -537,6 +544,9 @@ def test_a_skills_when_rows_name_every_way_the_engine_starts_it(ui):
     # a command offered as a button says so on the same row (the command, typed for the person)
     offered = when_it_runs(dataclasses.replace(sk, offer={"label": "Look into it"}))[-1]["note"]
     assert offered.startswith("only when a person writes /x (or presses “Look into it” under a reply")
+    # its alert cards translated for a chat in another language (owner, 2026-10-23): AI work, named by its Costs row
+    assert when_it_runs(dataclasses.replace(sk, translate={"name": "t", "description": "", "instructions": "i"}))[-2] == \
+        {"when": "an alert card in another language", "job": "t", "script": None, "kind": "ai"}
 
 
 def test_a_skill_pages_tools_heading_is_the_agents_one_verdict(ui):
@@ -723,7 +733,9 @@ def test_an_older_files_ai_jobs_are_read_and_moved_to_their_skill_by_the_next_sa
         doc2 = await (await c.get("/api/policy")).json()
         return before, r.status, doc2
     before, status, doc2 = call(ui, fn)
-    assert all(j["skill_ai"] == {"brain": "auto", "limit_usd": 2.0} for j in before)
+    assert all(j["skill_ai"] == {"brain": "auto", "limit_usd": 2.0} for j in before if j["skill"] == "reports")
+    # the alert desk's translation is not in the older file: not set, offered (owner, 2026-10-23)
+    assert [j["skill_ai"] for j in before if j["name"] == "alert-translation"] == [None]
     assert status == 200
     written = open(ui.policy_path).read()
     s = yaml.safe_load(written)["settings"]
@@ -739,7 +751,7 @@ def test_an_older_files_ai_jobs_are_read_and_moved_to_their_skill_by_the_next_sa
         return r.status, (await (await c.get("/api/jobs")).json())["jobs"]
     status, jobs = call(ui, change)
     assert status == 200
-    assert {j["name"]: (j["skill_ai"]["brain"], j["skill_ai"]["limit_usd"]) for j in jobs} == {
+    assert {j["name"]: (j["skill_ai"]["brain"], j["skill_ai"]["limit_usd"]) for j in jobs if j["skill"] == "reports"} == {
         "fm-daily": ("economy", 3.0), "fm-weekly": ("economy", 3.0), "owner-monthly": ("economy", 3.0)}
 
 

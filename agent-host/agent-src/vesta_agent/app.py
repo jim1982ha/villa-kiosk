@@ -52,6 +52,7 @@ from .ha_events import CONTEXT_KEY, REGISTRY_EVENTS, HaEvents
 from . import layout
 from .approvals import Approvals
 from .posting import Poster
+from .translation import Translations, incident_names
 from .incident_thread import IncidentThread
 
 from .housekeeping import tidy
@@ -194,8 +195,13 @@ class Vesta:
         self.thread.language = self.notices.lang             # each chat's Status in its own language (owner, 2026-10-23)
         self.thread.restatus = self.notices.restatus
         # putting one message in one chat (posting.py): the alerts and the approval requests both use it
+        # an alert card's own words in each chat's language, learnt once per sentence pattern (translation.py)
+        self.translations = Translations(self.state, policy=self.policy, skills=self.skills, settings=settings,
+                                         names=lambda iid: incident_names(self.pack(), incidents.entities(iid)),
+                                         thread=self.thread)
+        self.thread.translate = self.translations.draw
         self.poster = Poster(send=self.delivery.send, thread=self.thread, notices=self.notices,
-                             timezone_name=settings.timezone, edit=self.delivery.edit)
+                             timezone_name=settings.timezone, edit=self.delivery.edit, translations=self.translations)
         # a job asked for in a chat, start to end (chat_jobs.py); what it tells a chat goes titled, through the poster
         self.chat_jobs = ChatJobs(self.delivery, self._safe, self.work, facts=self.chat_facts, poster=self.poster)
         # an approval request from start to end (approvals.py); the siren's gate asks through it too

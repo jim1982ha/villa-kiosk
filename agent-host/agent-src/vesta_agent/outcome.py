@@ -393,7 +393,15 @@ class Outcome:
                              head=self.notices.heading(chat, int(iid), stage=h.get("stage"), also=also) if self.notices else "")
             if said:
                 p["said"] = said
+            # its own words in the chat's language, as any card of the incident (translation.py): known, it is taken over
+            # translated; not yet, as written, and translated once recorded — never waited for
+            tr = getattr(self.poster, "translations", None)
+            want = None
+            if tr is not None and said:
+                p, want = tr.apply(int(iid), chat, p)
             await self.thread.adopt(int(iid), chat, mid, p, keyboard=kb)
+            if want:
+                tr.later(int(iid), chat, want)
             # ⚠️ TAKEN OVER, IT IS THE AGENT'S (2026-10-17): a press is handled only on the agent's own messages, and this
             # one carries its Done / Need help — never remembered, a press on the rule's first copy was left unanswered
             self.state.remember_message(chat, mid)

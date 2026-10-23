@@ -64,6 +64,9 @@ class IncidentThread:
         # parts): a step's bottom line drawn again in that chat's language (owner, 2026-10-23). None: as given
         self.language = None
         self.restatus = None
+        # translation.Translations.draw (incident, chat, parts): the alert's own words in the chat's language when they
+        # are known, else asked for in the background (owner, 2026-10-23). None: as written
+        self.translate = None
         self._locks: dict[str, asyncio.Lock] = {}
 
     def _lock(self, iid: int | str) -> asyncio.Lock:
@@ -208,11 +211,29 @@ class IncidentThread:
                         p["head"] = self.retitle(iid, p.get("head") or "", chat)
                     if self.restatus:
                         p = self.restatus(chat, p)              # this step's bottom line in the chat's own language
+                    if self.translate:
+                        # ⚠️ ITS OWN WORDS, NEVER THE ENGLISH BACK (owner, 2026-10-23): `parts` are another chat's copy —
+                        # its translation, if any, is that chat's; this one draws its own
+                        p = self.translate(iid, chat, p)
                 if layout.render(p) == rec.get("text"):
                     continue
                 live = rec.get("buttons") and not rec.get("settled")
                 n += await self._show(iid, chat, rec, p, keyboard=(keyboard(chat) if live and keyboard else None))
             return n
+
+    async def translated(self, iid: int | str, chat: int, draw: Callable[[int | str, int, dict], dict]) -> bool:
+        """The copy of `iid` in `chat` drawn again now that its words are known in its language (`draw`: its parts as
+        the chat reads them — translation.Translations.apply), as it stands now, under the incident's lock: a copy
+        redrawn, replaced or closed meanwhile is drawn from what it is now. Its buttons stay (`_show`). True when
+        Telegram took the edit; a refused one keeps the English on the card (owed: tried again, catch_up)."""
+        async with self._lock(iid):
+            rec = self.state.incident_message(iid, chat)
+            if not rec or not rec.get("mid"):
+                return False
+            p = draw(iid, chat, layout.of(rec))
+            if layout.render(p) == rec.get("text"):
+                return False
+            return await self._show(iid, chat, rec, p)
 
     async def rewrite(self, iid: int | str, body: str) -> None:
         """Every copy of `iid` says `body` now in its middle part, its heading and status kept (an approved request whose

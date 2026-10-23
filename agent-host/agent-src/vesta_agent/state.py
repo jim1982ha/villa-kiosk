@@ -87,7 +87,8 @@ create table if not exists calls(
 #: by name. `prune` walks this table; a family written but not listed here fails tests/test_state_records.py.
 #:   RECORDS  deleted with the agent's other records (settings.keep records_days)
 #:   CURRENT  one row per thing that exists (a job, the siren, the agent itself): replaced, never piled up
-RECORDS, CURRENT = "records", "current"
+#:   BOUNDED  kept whatever their age, at most a set number: the oldest go as new ones are written
+RECORDS, CURRENT, BOUNDED = "records", "current", "bounded"
 
 KV_FAMILIES: dict[str, str] = {
     "inc:": RECORDS,                # which skill answers an alert's buttons in a chat
@@ -109,7 +110,16 @@ KV_FAMILIES: dict[str, str] = {
     "siren:": CURRENT,              # when the siren must stop
     "listening_since": CURRENT,     # when the agent's record started (agent_records.listening_since)
     "unreachable:": CURRENT,        # a chat Telegram refused the last message to (the Overview names it)
+    # an alert's sentence pattern in a chat's language (translation.py): learnt once, used for every later card
+    "phrase:": BOUNDED,
 }
+
+
+def phrases_kept() -> int:
+    """How many sentence patterns' translations are kept (State.keep_translation)."""
+    return limit("alerts.translations_kept", 5000, unit="translations", group="keep", lo=100, hi=100000,
+                 says="How many translated sentence patterns of the alert cards are kept, every language together.",
+                 reached="The oldest ones go: a card that needs one again has it translated again.", told="")
 
 
 def utcnow() -> datetime:
@@ -220,6 +230,31 @@ class State:
             except (ValueError, IndexError):
                 continue
         return out
+
+    # An alert card's sentence pattern in a chat's language (translation.py, owner 2026-10-23): {1}, {2}… are its
+    # values. ⚠️ KEPT WHATEVER ITS AGE (the owner's "forever"), BOUNDED: the oldest go once phrases_kept() are held.
+    @staticmethod
+    def _phrase_key(lang: str, skeleton: str) -> str:
+        import hashlib
+        return f"phrase:{lang}:{hashlib.sha256(skeleton.encode()).hexdigest()}"
+
+    def translation(self, lang: str, skeleton: str) -> str | None:
+        """The translation kept of `skeleton` into `lang`; None when there is none."""
+        try:
+            rec = json.loads(self.get(self._phrase_key(lang, skeleton)) or "null")
+        except ValueError:
+            return None
+        return rec["to"] if isinstance(rec, dict) and rec.get("en") == skeleton and isinstance(rec.get("to"), str) \
+            else None
+
+    def keep_translation(self, lang: str, skeleton: str, text: str) -> None:
+        self.put(self._phrase_key(lang, skeleton), json.dumps({"en": skeleton, "to": text}, ensure_ascii=False))
+        with self._lock:
+            over = self.db.execute("select count(*) from kv where substr(k, 1, 7) = 'phrase:'").fetchone()[0] - phrases_kept()
+            if over > 0:
+                self.db.execute("delete from kv where k in (select k from kv where substr(k, 1, 7) = 'phrase:' "
+                                "order by at, rowid limit ?)", (over,))
+                self.db.commit()
 
     # A chat Telegram refused the last message to: a person who never opened a private chat with the bot, a group the
     # bot left or whose id changed. One row per chat, gone at the next message that arrives (delivery.py).

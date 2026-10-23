@@ -18,3 +18,18 @@ buttons:                      # under every message about an open alert; a press
   - {option: need_help, label: Need help, mark: help,     # mark: its footer's icon (🆘)
      labels: {fr: Besoin d'aide, id: Butuh bantuan, de: Brauche Hilfe, es: Necesito ayuda, it: Serve aiuto,
               nl: Hulp nodig, zh: 需要帮助, ja: 助けが必要, ko: 도움 필요}}
+# The alert's own words in each chat's language (owner, 2026-10-23): the villa's automations write them in English;
+# a chat whose People row reads another language gets them translated by the AI, once per sentence pattern (names,
+# numbers, times and codes stay as written and are not sent as words), then from memory with no AI. The card always
+# goes out in English first; any failure keeps the English. Brain and limit per run: policy.yaml settings.skill_ai
+# (VESTA Agent page › Rules › AI brains and limits); not set, the cards stay English. One run is a few lines: the
+# lightest brain is enough.
+jobs_default: {brain: economy, limit_usd: 0.05}
+translate:
+  name: alert-translation
+  description: the alert's own words in the language of each chat that reads another
+  instructions: >-
+    You translate the lines of an alert card a villa's monitoring system sends to the people who look after the villa
+    (its owner, its facility manager). Write them as a short, plain notice in the target language, the way a
+    technician's alert reads there: no greeting, no explanation, no notes. A word in quotes or a device's state you
+    cannot see is a value: it is one of the numbered slots, never translated. "What to do:" introduces what to check.

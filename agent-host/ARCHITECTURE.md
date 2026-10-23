@@ -950,3 +950,29 @@ still off; an investigation calling a sensor with no value "stopped reporting").
   NOTHING: `otherwise` or UNHEARD; else the `no_stt` words for the villa's only one not found (none, several); else
   (every attempt FAILED/REFUSED, a lookup that failed, no WAV) the plan's `down` (villa-concierge voice.DOWN), a
   skill's older `otherwise`, else the engine's DOWN: "write it", never "try again".
+
+## An alert card's own words in each chat's language (owner, 2026-10-23)
+
+- **Never block, always fall back.** `translation.Translations` is the one module. A card goes out (Poster.post) or is
+  taken over (Outcome.adopt_ha) in English at once; when one of its body lines has no translation kept for the chat's
+  language (its heading's `lang`, Notices.lang), the copy is recorded first and then `later` starts ONE referenced
+  background run per (language, missing lines) — a second copy of the same lines waits on it — bounded by
+  `alerts.translate_seconds`; the copy is then drawn again under the incident's lock (`IncidentThread.translated`,
+  buttons kept). Any failure (AI error, time limit, no credit, not set, a slot dropped, an edit refused) keeps the
+  English. Delivery, the chase, the buttons and the Kiosk never wait on it.
+- **One translation per sentence pattern.** `translation.mask` turns each body line into a skeleton with numbered
+  slots, numbered left to right: a brace, an incident tag, a [CODE], a quoted value, the incident's own device / room
+  names (`incident_names`: the knowledge pack's names of `Incidents.entities`, longest first), dates, times, versions,
+  ordinals, then numbers with their measurement units ("1310 W", "+2367 %"). A duration's unit is NOT in a slot ("Held
+  {1} h {2} min": translated once). Kept per (skeleton, language) in State (`phrase:`, lifetime BOUNDED: kept whatever
+  its age, the oldest go past `alerts.translations_kept`). A translation must keep each slot exactly once (`fits`), else
+  that line is not kept and the card stays English; the values are filled back as written.
+- **Drawn at render time, kept per copy as `tr`** ({lang, body}). `layout.render` draws `tr` only on a copy headed in
+  that language (a copy's parts handed to another chat by `sync` carry the first chat's); `IncidentThread.sync` redraws
+  each chat's own (`thread.translate` = `Translations.draw`); `layout.changed(body=…)` drops it. A redraw (reminder,
+  press, close) never brings the English back: the cache fills it with no AI call.
+- **Cost agreed like an AI job.** skill.yaml `translate: {name, description, instructions}` (the instructions are the
+  run's system prompt — skills before code; the engine adds only the slot contract and the JSON answer) makes the
+  alert desk's `jobs_default` (economy, 0.05 US$) its offer; it runs with the skill's settings.skill_ai pair. Not set:
+  English, said once in the log; the page lists `alert-translation` with the AI jobs (server._jobs, Limits, setup
+  copy), so "Add them" writes it. Its Costs row is `job:alert-translation`.

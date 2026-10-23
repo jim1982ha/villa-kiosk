@@ -51,6 +51,18 @@ class Incidents:
         to = notes_of(self._get(iid)).get(Notes.TO)
         return [str(x) for x in to] if isinstance(to, list) else None
 
+    def entities(self, iid: int) -> list[str]:
+        """The entities its alert is about, as its event named them (its notes' `entities`, else its key's entity ids):
+        the names its text says of them are values, never words to translate (translation.py)."""
+        inc = self._get(iid)
+        if not inc:
+            return []
+        ents = notes_of(inc).get("entities")
+        ents = [ents] if isinstance(ents, str) else ents
+        if not isinstance(ents, list):
+            ents = str(inc.get("entity_id") or "").split(",")
+        return [str(e).strip() for e in ents if isinstance(e, str) and "." in e]
+
     def unreached(self, iid: int) -> None:
         """Telegram refused every chat of the people asked to answer it: the alert desk hands it on at its next tick."""
         Problems(self._store()).unreached(iid)

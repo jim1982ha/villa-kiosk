@@ -298,6 +298,9 @@ def preview(settings, skills, setup: dict, server_tools: list[dict] | None) -> d
         for _, job in ai_jobs({name: sk}):
             if job["name"] not in jobs:
                 misfits.append(f"{name}'s AI job {job['name']} is not set in {where('ai')}: it will not run until it is (Add them).")
+        if sk.translate and not pol.skill_setting(name, job_owners(parsed), job_starters(parsed)):
+            misfits.append(f"{name}'s {sk.translate['name']} is not set in {where('ai')}: its alert cards stay in "
+                           "English until it is (Add them).")
     try:
         with open(settings.policy_path, "rb") as f:
             policy_now = f.read()

@@ -257,12 +257,13 @@ class LimitsTab:
 
     def _skill_pairs(self, raw: dict) -> dict[str, tuple[dict | None, dict]]:
         """{skill with AI jobs: (the brain and limit per run its jobs run with — None when not set, its starter pair)}."""
-        from ..skills import Skills, job_owners, job_starters
+        from ..skills import Skills, job_owners, job_starters, translators
         every = Skills(self.s.skills_dir).all()
         owners, starters = job_owners(every), job_starters(every)
         pol = Policy(raw)
+        # a skill whose alert cards are translated has the same pair (translation.py)
         return {skill: (pol.skill_setting(skill, owners, starters), starters.get(skill) or {})
-                for skill in sorted(set(owners.values()))}
+                for skill in sorted(set(owners.values()) | {sk.name for sk in translators(every)})}
 
     def _policy_rows(self) -> list[dict]:
         text, _ = self.files.policy_now()
