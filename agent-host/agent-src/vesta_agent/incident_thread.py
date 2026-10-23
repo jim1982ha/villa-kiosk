@@ -28,6 +28,7 @@ import logging
 
 from vesta_shared.limits import limit
 from vesta_shared.messaging import incident_tag
+from vesta_shared.status_words import pick
 
 from . import layout
 
@@ -59,6 +60,10 @@ class IncidentThread:
         # when a copy's status is REPLACED (taken on in the Kiosk, closed): the status it showed becomes a line of its
         # history (owner, 2026-10-15: "Escalation sent … to Owner" vanished when "Ticket opened…" replaced it)
         self.reheading = None
+        # notice.Notices.lang (chat): the language a chat reads its cards' Status in; notice.Notices.restatus (chat,
+        # parts): a step's bottom line drawn again in that chat's language (owner, 2026-10-23). None: as given
+        self.language = None
+        self.restatus = None
         self._locks: dict[str, asyncio.Lock] = {}
 
     def _lock(self, iid: int | str) -> asyncio.Lock:
@@ -113,17 +118,21 @@ class IncidentThread:
                      "deleted" if gone else "now a pointer" if self.edit else "kept", rec.get("mid"))
             return True
 
-    async def close(self, iid: int | str, note: str, body: str | None = None, mark: str | None = None) -> int:
+    async def close(self, iid: int | str, note: str, body: str | None = None, mark: str | None = None,
+                    note_in: dict | None = None) -> int:
         """Every message of incident `iid`, in every chat, loses its buttons and shows `note` (who did what, when;
-        "{time}": the villa's time now) — a copy without buttons too (owner, 2026-10-11: one incident, one picture).
+        "{time}": the villa's time now) — a copy without buttons too (owner, 2026-10-11: one incident, one picture);
+        `note_in`: the same in other languages ({code: text}), each chat showing the one it reads (owner, 2026-10-23).
         Returns how many chats show it now. Settled once: a second close changes nothing but a heading now "(closed)".
 
         ⚠️ ALL OF THEM, NOT THE ONE PRESSED (owner, 2026-10-01): a P1 goes to the owner's chat and the facility
         manager's; pressed in one, the others kept buttons that only answered "already closed"."""
         async with self._lock(iid):
-            note = layout.fill_time(note, datetime.now(timezone.utc), self.tz)         # 10/10/2026 17:13, as every notice
+            now = datetime.now(timezone.utc)
             n = 0
             for chat, rec in self.state.incident_chats(iid):
+                said = pick(note, note_in, self._lang(chat))
+                said = layout.fill_time(said, now, self.tz) if said else said           # 10/10/2026 17:13, as every notice
                 if rec.get("settled") and self.retitle:
                     # ⚠️ SETTLED BEFORE ITS INCIDENT CLOSED (owner, 2026-10-11): a press settles every copy at once, the desk
                     # closes the incident just after — the group's copy kept "New" above "Done pressed by Fabien"
@@ -134,12 +143,16 @@ class IncidentThread:
                     continue
                 if rec.get("settled"):
                     continue
-                if not note:
+                if not said:
                     self.state.set_incident_message(iid, chat, {**rec, "settled": True})
                     continue
                 # where it stands is the note now, under the line at the bottom; a new body when one is given (an approved
                 # request: what happened) — the head and the lead kept (layout.py). Settled: decided, whatever Telegram said — a copy it did not take is owed and tried again (`catch_up`)
-                p = layout.changed(layout.of(rec), status=note, body=body, mark=mark)
+                p = layout.changed(layout.of(rec), status=said, body=body, mark=mark)
+                if note_in:
+                    # its other languages kept with it: a copy another chat later gets of this one says its own (sync)
+                    p["said"] = {"stage": None, "status": layout.fill_time(note, now, self.tz),
+                                 "status_in": {k: layout.fill_time(v, now, self.tz) for k, v in note_in.items()}}
                 p = {**p, "head": self._head_now(iid, chat, p.get("head") or "")}      # "Closed" once its incident is (notice.py)
                 n += await self._show(iid, chat, {**rec, "settled": True}, p)
             return n
@@ -157,6 +170,10 @@ class IncidentThread:
                 p = layout.changed(layout.of(rec), status=note)
                 n += await self._show(iid, chat, {**rec, "buttons": False}, {**p, "head": self._head_now(iid, chat, p.get("head") or "")})
             return n
+
+    def _lang(self, chat: int) -> str:
+        """The language chat `chat` reads (`language`); English without it."""
+        return self.language(chat) if self.language else "en"
 
     def _head_now(self, iid: int | str, chat: int, head: str) -> str:
         """A copy's heading when its status is replaced: every earlier step listed again (reheading), else its title
@@ -189,6 +206,8 @@ class IncidentThread:
                         p["head"] = head_for(chat)              # this chat's own heading (each chat its own steps)
                     elif self.retitle:
                         p["head"] = self.retitle(iid, p.get("head") or "", chat)
+                    if self.restatus:
+                        p = self.restatus(chat, p)              # this step's bottom line in the chat's own language
                 if layout.render(p) == rec.get("text"):
                     continue
                 live = rec.get("buttons") and not rec.get("settled")

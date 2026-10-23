@@ -47,6 +47,7 @@ from vesta_shared.ha_client import error_short_chars
 from . import layout
 from vesta_shared.message_format import PRESSED_STAGE, ROLES
 from vesta_shared.messaging import SIREN_TITLE
+from vesta_shared.status_words import pick
 from .incidents import Incidents
 from .posting import Poster
 from .routing import Origin, Routing
@@ -205,7 +206,8 @@ class Outcome:
         # owner a new message with the buttons; settled after it, that message lost them the moment it arrived
         for s in res.get("settle") or []:
             if isinstance(s, dict) and str(s.get("incident_id") or "").isdigit():
-                await self.thread.close(int(s["incident_id"]), str(s.get("note") or ""), mark=s.get("mark"))
+                await self.thread.close(int(s["incident_id"]), str(s.get("note") or ""), mark=s.get("mark"),
+                                        note_in=s.get("note_in") if isinstance(s.get("note_in"), dict) else None)
         for item in unrouted:
             done["unrouted"] += 1
             self.state.log("send_unrouted", {"to": item.get("to"), "skill": skill_name})
@@ -236,7 +238,8 @@ class Outcome:
                                    incident=int(iid) if iid else None, keyboard=kb, document=doc,
                                    thread=int(iid) if iid else None, origin=origin, stage=item.get("stage"),
                                    mark=item.get("mark"), also=going.get(int(iid)) if iid else sent_to.get(id(item)),
-                                   title=item.get("title"), told=told.get((int(iid), item.get("stage"))) if iid else None)
+                                   title=item.get("title"), told=told.get((int(iid), item.get("stage"))) if iid else None,
+                                   status_in=item.get("status_in") if isinstance(item.get("status_in"), dict) else None)
             # the people the skill asked to answer (result.message first_in_line) — the skill's, never a role named here
             if iid and kb and item.get("first_in_line"):
                 asked.setdefault(int(iid), []).append((chat, bool(mid)))
@@ -369,15 +372,27 @@ class Outcome:
             # Home Assistant's own alert, taken over: the incident's text, the earlier messages' times, its buttons
             kb = self.buttons.keyboard(int(iid), chat, skill_name) if skill_name and self.buttons.open(iid) else None
             # "{time}" in its status: the villa's time now, as every message of the agent's writes it (layout.fill_time)
-            status = layout.fill_time(h.get("status"), datetime.now(timezone.utc), self.poster.tz)
+            now = datetime.now(timezone.utc)
+            status = layout.fill_time(h.get("status"), now, self.poster.tz)
+            status_in = {k: layout.fill_time(v, now, self.poster.tz) for k, v in (h.get("status_in") or {}).items()
+                         if isinstance(v, str)} if isinstance(h.get("status_in"), dict) else {}
             # ⚠️ "TO:" FOLLOWS THE PRIORITY (owner, 2026-10-17, reversing 2026-10-16's #43 knowingly): the rule's own
             # message is about the roles this step goes to, else those its priority reaches — never the roles of the
             # chat the rule posts in (a P3's message in the owner's group read "To: Owner")
             roles = self.notices.went_to(int(iid), chat, told, also) if self.notices else set(told or ())
+            said = None
             if self.notices:
-                status = self.notices.bottom(h.get("stage"), roles, status, incident=int(iid))
+                # ⚠️ IN THE CHAT'S LANGUAGE (owner, 2026-10-23): the villa's own message is English (its template); taken
+                # over, its Status reads as the chat's other copies do, and the step is kept for the next redraw
+                lang = self.notices.lang(chat)
+                said = {"stage": h.get("stage"), "roles": sorted(roles), "at": now.isoformat(), "status": status,
+                        "incident": int(iid), **({"status_in": status_in} if status_in else {})}
+                status = self.notices.bottom(h.get("stage"), roles, pick(status, status_in, lang), now,
+                                             incident=int(iid), lang=lang)
             p = layout.parts(body=text, status=status,
                              head=self.notices.heading(chat, int(iid), stage=h.get("stage"), also=also) if self.notices else "")
+            if said:
+                p["said"] = said
             await self.thread.adopt(int(iid), chat, mid, p, keyboard=kb)
             # ⚠️ TAKEN OVER, IT IS THE AGENT'S (2026-10-17): a press is handled only on the agent's own messages, and this
             # one carries its Done / Need help — never remembered, a press on the rule's first copy was left unanswered

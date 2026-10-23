@@ -44,6 +44,7 @@ from vesta_shared import script  # noqa: E402  (client, store, settings, zone: o
 from vesta_shared import skill_settings  # noqa: E402  (rules.yaml, the villa's on top)
 from vesta_shared.messaging import incident_tag  # noqa: E402
 from vesta_shared.message_format import PRESSED, ROLE_SHORT, acted, closing  # noqa: E402  ("<what> on <time> (<who>)", "Cleared on <time>.": one wording each)
+from vesta_shared import status_words as SW  # noqa: E402  (the same frames in every language a chat reads)
 from vesta_shared import kiosk_words  # noqa: E402
 from vesta_shared.timeutil import lasting  # noqa: E402
 from vesta_shared.device_state import has_value, out_since  # noqa: E402  ("is it back": one answer)
@@ -81,6 +82,84 @@ def _params(params: VillaParams | None) -> VillaParams:
 # Owner, 2026-10-10: Not found and Mute removed, "too complex for now".
 with open(os.path.join(SKILL, "skill.yaml"), encoding="utf-8") as _fh:
     BUTTONS = {b["option"]: b for b in (yaml.safe_load(_fh) or {}).get("buttons") or []}
+# ⚠️ EACH CHAT'S STATUS IN ITS OWN LANGUAGE (owner, 2026-10-23): what the desk says on a card is ITS words, so their
+# translations are its own too — words.yaml, one entry per thing said, one line per language. The engine writes the
+# step, the moment and "(to: …)" around them in the chat's language and picks the desk's version for it.
+with open(os.path.join(SKILL, "words.yaml"), encoding="utf-8") as _fh:
+    WORDS = yaml.safe_load(_fh) or {}
+
+
+class Said(str):
+    """Words of the desk: the English they always were (a plain str to every reader before this), knowing their other
+    languages (`langs`: {code: text}) — about() hands those on as the message's `status_in`."""
+    langs: dict
+
+    def __new__(cls, en: str, langs: dict | None = None):
+        out = super().__new__(cls, en)
+        out.langs = {k: v for k, v in (langs or {}).items() if k != "en"}
+        return out
+
+    def lang(self, code: str) -> str:
+        """In language `code`; English when it has none."""
+        return self.langs.get(code, str(self))
+
+    def only(self, langs) -> "Said":
+        """The same words in `langs` alone (a press in a language its button has no label in reads English whole)."""
+        return Said(str(self), {k: v for k, v in self.langs.items() if k in langs})
+
+
+def _in(value, lang: str) -> str:
+    """A placeholder's value in `lang`: words of the desk (Said) in it, a function of the language, else as it is."""
+    if isinstance(value, Said):
+        return value.lang(lang)
+    return str(value(lang) if callable(value) else value)
+
+
+def say(key: str, **values) -> Said:
+    """Entry `key` of words.yaml with its {placeholders} filled, in every language it has (its "en": the English)."""
+    entry = WORDS[key]
+    fill = lambda tmpl, lang: str(tmpl).format(**{k: _in(v, lang) for k, v in values.items()})
+    return Said(fill(entry["en"], "en"), {lang: fill(t, lang) for lang, t in entry.items() if lang != "en" and lang in SW.LANGS})
+
+
+def joined(words, sep: str = "; ") -> Said:
+    """Several Said (or plain texts: a device's own words) as one, in every language: "Door reads on; Lock is open"."""
+    langs = {lang for w in words if isinstance(w, Said) for lang in w.langs}
+    return Said(sep.join(map(str, words)), {lang: sep.join(_in(w, lang) for w in words) for lang in langs})
+
+
+def role_in(role: str):
+    """A role as the card says it, in each language ("FM", "Propriétaire") — role_said in English."""
+    return lambda lang: (SW.who({role}, lang) if role in ROLE_SHORT else "") or role_said(role)
+
+
+def lasting_in(seconds: float):
+    """A duration in each language ("15 min", "15分钟") — timeutil.lasting in English."""
+    return lambda lang: SW.duration(seconds, lang)
+
+
+def label_in(option: str, fallback: str = ""):
+    """A button's label in each language (skill.yaml `labels`), its own label in English."""
+    b = BUTTONS.get(option) or {}
+    return lambda lang: (b.get("labels") or {}).get(lang) or b.get("label") or fallback or option
+
+
+def ended(tail: Said | str = "") -> Said:
+    """message_format.closing in every language: "Cleared on {time}: <tail>.", "Résolu le {time} : <tail>." — every
+    language for a plain end, those of `tail` for an end that says more."""
+    langs = SW.LANGS[1:] if not isinstance(tail, Said) or not tail else tuple(tail.langs)
+    return Said(closing(str(tail)), {lang: SW.closing(_in(tail, lang), lang) for lang in langs})
+
+
+def relabel(who: str) -> Said:
+    """"Done (JM)" — a press as check_quiet kept it — with the button's label in each language."""
+    for b in BUTTONS.values():
+        if str(who).startswith(f"{b['label']} ("):
+            rest = str(who)[len(b["label"]):]
+            return Said(who, {lang: f"{lab}{rest}" for lang, lab in (b.get("labels") or {}).items()})
+    return Said(who)
+
+
 #: What a person still being asked can answer: the last line of every message that carries the buttons.
 #: The beat the engine writes every minute while its Home Assistant connection is up.
 HA_BEAT = "ha_events"
@@ -226,7 +305,14 @@ def about(inc: dict, status: str) -> dict:
     alerts again.") went under the alert — its name a second time, the rule's jargon, and "no longer tracked" above the
     desk's "VESTA keeps watching it". What happened is the status's, said once."""
     inc = dict(inc)                                # a store row (find_open_incident) or a dict
-    return {"text": details(notes_of(inc), inc["rule_id"]), "status": status}
+    langs = status.langs if isinstance(status, Said) else {}
+    # `status_in`: the same words in each other language the desk has them in (words.yaml); English stays `status`
+    return {"text": details(notes_of(inc), inc["rule_id"]), "status": str(status), **({"status_in": langs} if langs else {})}
+
+
+def _status(status: Said) -> dict:
+    """A status of no alert's text (the villa-silent alert writes its own): {status, status_in}."""
+    return {"status": str(status), **({"status_in": status.langs} if status.langs else {})}
 
 
 def chased(inc: dict) -> bool:
@@ -372,7 +458,7 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
         cur = _restated(store, cur, ev, sev, now, route, out)
         # the villa's time, written as every message writes one ("Mon 5 Oct, 08:00"): it showed "2026-10-03T00:00", UTC
         since = day_time_label(villa_time(cur["opened_at"], zone or "UTC"), weekday=True)
-        status = f"Still there: {cur['count'] + 1} times since {since}"
+        status = say("still_count", count=cur["count"] + 1, since=since)
         # Home Assistant's own new message for it takes the incident's number, and replaces its older ones
         # ⚠️ THE RULE ALERTED AGAIN, NOT A REMINDER (owner, 2026-10-17, #45: "Reminder sent 11:38 to Owner & FM" — the
         # load had moved from phase C to phase B and the villa's rule alerted again; a reminder is the desk's own chase)
@@ -459,7 +545,9 @@ def _reprioritised(store: Store, cur: dict, p: dict, sev: str, now: datetime, ro
         if Problems(store).settle(f"incident:{cur['id']}", note=f"Lowered to {sev}."):
             out["actions"].append(R.faults_changed())          # its task closed: the engine's repair closes its fault
         words = (RULES.get("lowered_words") or {}).get(now_does) or "Lowered to {priority} on {time}."
-        out.setdefault("settle", []).append(R.settle(cur["id"], words.replace("{priority}", sev)))
+        others = ((WORDS.get("lowered") or {}).get(now_does) or {})
+        out.setdefault("settle", []).append(R.settle(cur["id"], words.replace("{priority}", sev), note_in={
+            lang: str(t).replace("{priority}", sev) for lang, t in others.items() if lang in SW.LANGS}))
 
 
 def _ladder(store: Store, iid: int, ev: dict, now: datetime, sev: str, route: dict, out: dict,
@@ -532,7 +620,7 @@ def reopen(store: Store, inc: dict, ev: dict, now: datetime, sev: str, route: di
     if came_back_now:
         # one counter, the Kiosk fault's and the digest's (architecture review 25: "N times since the 1st" and "again:
         # M times in 7 days" drifted apart)
-        status = f"Back again: {runs} times in {AGAIN_DAYS} days"
+        status = say("back_again", runs=runs, days=AGAIN_DAYS)
         out["ha_messages"] = [R.ha_message(inc["id"], context=ev.get("_context_id"), stage="back", **about(inc, status))]
         if ev.get("snapshot"):
             out["actions"].append(R.snapshot(ev["snapshot"], inc["id"]))
@@ -559,9 +647,9 @@ def resolved(store: Store, ev: dict, now: datetime) -> dict:
         if late:
             out["incident_id"], out["decision"] = late["id"], "resolved_late"
             out["ha_messages"] = [R.ha_message(late["id"], context=ev.get("_context_id"), stage="closed",
-                                               **about(late, closing()))]
+                                               **about(late, ended()))]
         return out
-    _close(store, inc, now, out, closing())
+    _close(store, inc, now, out, ended())
     out["incident_id"], out["decision"] = inc["id"], "resolved"
     # Home Assistant's all-clear takes the incident's number and the original alert, and replaces its older ones
     # its status in the desk's words, as every other end says it (never "✅ <the alert's name> — resolved after …")
@@ -569,7 +657,7 @@ def resolved(store: Store, ev: dict, now: datetime) -> dict:
     # 15:40 to Owner" beside "Closing note sent 15:40 to FM" — one end, two lines. Now ONE: "Closing note sent … to
     # Owner & FM"
     out["ha_messages"] = [R.ha_message(inc["id"], context=ev.get("_context_id"), stage="closed",
-                                       **about(inc, closing()))]
+                                       **about(inc, ended()))]
     store.audit("alert-desk", "resolved", {"incident": inc["id"]})
     return out
 
@@ -585,7 +673,8 @@ def _close(store: Store, inc: dict, now: datetime, out: dict, settled: str,
     villa's own all-clear says too (owner, 2026-10-19: one closing wording; "Closed on …" is no longer written)."""
     out["actions"] += Problems(store).close_incident(inc["id"], Incident.RESOLVED, now.isoformat(), note)
     # its alert and reminders, in every chat, lose their buttons: nobody presses for something already over
-    out.setdefault("settle", []).append(R.settle(inc["id"], settled))
+    out.setdefault("settle", []).append(R.settle(inc["id"], settled,
+                                                 note_in=settled.langs if isinstance(settled, Said) else None))
     if inc["state"] in Incident.CHASED:
         # the same words as every other copy (owner, 2026-10-11: one incident, one picture; ✅ already says no reply)
         out["send"] += tell(inc["severity"], "closed", incident=inc["id"], chased=True, **about(inc, settled))
@@ -645,18 +734,21 @@ def still_there(inc: dict, client, now: datetime | None = None) -> tuple[bool | 
 
     def mute(e):          # asleep with no report in days says so (vesta_shared.asleep.unheard), never "does not answer"
         words = unheard(states.get(e) or {}, now or datetime.now(timezone.utc))
-        return f"{name(e)}: {words}" if words else f"{name(e)} does not answer"
+        return f"{name(e)}: {words}" if words else say("not_answering", name=name(e))
 
     def readings():
-        return [f"{name(e)} reads {states[e]['state']}" + (" (its last report)" if e in asleep else "")
+        # each in every language the desk has (words.yaml); the device's name and state as the villa's system says them
+        return [joined([say("reads", name=name(e), state=states[e]["state"])] +
+                       ([say("last_report")] if e in asleep else []), "")
                 if not silent(e) else mute(e) for e in ents]
     if p.get("claim") and not asleep:
         said = str(client.template(str(p["claim"]))).strip().lower()
         if said == "true":
-            return True, ["it is still reported"]
+            return True, [say("still_reported")]
         return (False, []) if said == "false" else (None, readings())
     if rs:
-        bad = [f"{name(e)} still reads {states[e]['state']}" for e in ents if (states.get(e) or {}).get("state") in rs[1]]
+        bad = [say("still_reads", name=name(e), state=states[e]["state"])
+               for e in ents if (states.get(e) or {}).get("state") in rs[1]]
         if bad:
             return True, bad
         # ⚠️ A DEVICE THAT DOES NOT ANSWER IS NOT FIXED (architecture review 26): an offline lock after Done counted as
@@ -690,13 +782,13 @@ def quiet_after_done(store: Store, now: datetime, client, clear_minutes: float, 
             continue
         if there:
             reopen(store, store.incident(inc["id"]), {}, now, inc["severity"], route_for(inc["rule_id"], p.get("blueprint")),
-                   out, status=f"{who}, but {'; '.join(words)}: still open. VESTA keeps watching it.")
+                   out, status=say("still_after_done", who=relabel(who), words=joined(words)))
             store.audit("alert-desk", "not_quiet", {"incident": inc["id"], "still": words})
             reopened.append(inc["id"])
         elif there is None and words:
             inc = store.incident(inc["id"])
             out["send"] += tell(inc["severity"], "closed", incident=inc["id"], mark="unchecked",   # ☑️ closed, not checked
-                                **about(inc, f"{who}. Note: VESTA cannot check this one; {'; '.join(words)}."))
+                                **about(inc, say("cannot_check", who=relabel(who), words=joined(words))))
     return reopened
 
 
@@ -721,7 +813,7 @@ def seen_again(store: Store, now: datetime, client, clear_minutes: float, out: d
             # said once, until the device answers and is right. Cannot be told: whatever was seen clearing is not over
             if not p.get("silent_told"):
                 out["send"] += tell(inc["severity"], "update", incident=inc["id"],
-                                    **about(inc, f"{'; '.join(words)}: VESTA cannot tell if it is right. Still open."))
+                                    **about(inc, say("cannot_tell", words=joined(words))))
             store.note(inc["id"], {"silent_told": True}, drop=("clear_since", Notes.CLOSES_AT))
             _closes_at_changed(p, None, out)
             continue
@@ -738,7 +830,7 @@ def seen_again(store: Store, now: datetime, client, clear_minutes: float, out: d
             _closes_at_changed(p, closes, out)
             if now - datetime.fromisoformat(since) < timedelta(minutes=clear_minutes):
                 continue
-            said = "it is no longer reported"
+            said = say("no_longer_reported")
         else:
             ents, bad = rule_states(inc)
             # a device asleep between its reports reads its last real state, as still_there read it
@@ -751,11 +843,11 @@ def seen_again(store: Store, now: datetime, client, clear_minutes: float, out: d
             _closes_at_changed(p, closes, out)
             if since is None or now - since < timedelta(minutes=clear_minutes):
                 continue
-            said = "; ".join(f"{(now_states[e].get('attributes') or {}).get('friendly_name') or e} is "
-                             f"{now_states[e]['state']}" for e in ents)
-        _close(store, store.incident(inc["id"]), now, out, closing(said),
+            said = joined([say("is_now", name=(now_states[e].get("attributes") or {}).get("friendly_name") or e,
+                                   state=now_states[e]["state"]) for e in ents])
+        _close(store, store.incident(inc["id"]), now, out, ended(said),
                note="Cleared: back to normal, read again by the VESTA Agent.")
-        store.audit("alert-desk", "seen_again", {"incident": inc["id"], "now": said})
+        store.audit("alert-desk", "seen_again", {"incident": inc["id"], "now": str(said)})
         closed.append(inc["id"])
     return closed
 
@@ -808,8 +900,7 @@ def rule_gone(store: Store, now: datetime, client, clear_minutes: float, out: di
         if now - datetime.fromisoformat(since) < timedelta(minutes=clear_minutes):
             continue
         _close(store, store.incident(inc["id"]), now, out,
-               closing("the automation that sent it no longer exists (its entity ID changed, or it was deleted). "
-                       "Its next alert comes with a new number"),
+               ended(say("rule_gone")),
                note="Closed: the automation that sent it no longer exists (its entity ID changed, or it was deleted).")
         store.audit("alert-desk", "rule_gone", {"incident": inc["id"], "rule": inc["rule_id"]})
         closed.append(inc["id"])
@@ -866,7 +957,7 @@ def abandoned(store: Store, ev: dict, now: datetime) -> dict:
         return out
     out["incident_id"] = inc["id"]
     if str(ev.get("still_true")).lower() == "false":
-        cleared = closing("back to normal when the alert stopped watching it")
+        cleared = ended(say("stopped_watching"))
         _close(store, inc, now, out, cleared)
         out["decision"] = "abandoned_cleared"
         # ⚠️ ITS OWN MESSAGE SAYS THE SAME END (architecture review 23): taken over with the rule's "🔶 no longer
@@ -883,7 +974,7 @@ def abandoned(store: Store, ev: dict, now: datetime) -> dict:
     # ⚠️ NOT A SECOND ESCALATION (owner, 2026-10-17, #45: "Escalation sent 10:09 to Owner", then "Escalation sent 10:24
     # to Owner"): the rule giving up is a still-there notice, sent where an escalation goes. Its line says its own time
     # ("Still-there alert sent 17/10/2026 10:24 to Owner — Still not fixed …"), so the words no longer repeat it
-    said = about(inc, "Still not fixed (will close itself once fixed or press Done)")
+    said = about(inc, say("still_not_fixed", done=label_in("done", "Done")))
     out["ha_messages"] = [R.ha_message(inc["id"], context=ev.get("_context_id"), stage="still", **said)]
     out["send"] += tell(inc["severity"], "still", incident=inc["id"], escalate=True, **said)
     return out
@@ -930,15 +1021,21 @@ def reply(store: Store, iid: int, option: str, sender_role: str, now: datetime, 
         out["send"].append(R.message("here", f"There is no alert {incident_tag(iid)}.")); return out
     button = BUTTONS.get(option) or {"label": option, "mark": None}
     label = button["label"]
-    pressed = PRESSED.format(label=label, name="{who}", time="{time}")      # "{who}" filled below, "{time}" by the engine
     who = name or role_said(sender_role)
+    # "Done on {time} (JM)" — without its full stop, as the sentences below go on — in every language the button has a
+    # label in (skill.yaml `labels`): a language it has none for reads the whole line in English, never half
+    labels = button.get("labels") or {}
+    who_in = (lambda lang: SW.who({sender_role}, lang) or who) if not name and sender_role in ROLE_SHORT else who
+    act = Said(acted(label, "{time}", who), {lang: SW.acted(lab, "{time}", _in(who_in, lang), lang)
+                                             for lang, lab in labels.items() if lang in SW.LANGS})
+    pressed = Said(PRESSED.format(label=label, name=who, time="{time}"),
+                   {lang: text + SW.stop(lang) for lang, text in act.langs.items()})   # "{time}": the engine's
 
     def here(status: str, stage: str = "update", mark: str | None = None) -> dict:
         """The answer in the chat it came from: it replaces the incident's message there, so it says it all."""
         return R.message("here", **about(inc, status), incident=iid, stage=stage, mark=mark)
     if inc.get("closed_at"):
-        out["send"].append(here("Already closed", "closed")); return out
-    pressed = pressed.replace("{who}", who)
+        out["send"].append(here(say("already_closed"), "closed")); return out
     if option == "done":
         out["actions"] += Problems(store).close_incident(iid, Incident.DONE, now.isoformat(),
                                                          f"{label} on Telegram ({who}).", who=who, reply=label)
@@ -949,22 +1046,23 @@ def reply(store: Store, iid: int, option: str, sender_role: str, now: datetime, 
         store.note(iid, {"check_quiet": f"{label} ({who})"})
         # how long VESTA watches it is the desk's own setting (clear_minutes), said as every duration (owner, 2026-10-19:
         # "✅ Done on 19/10/2026 02:10 (JM), VESTA will monitor it for …")
-        watch = lasting(_params(params).behaviour("clear_minutes") * 60)
-        out["send"].append(here(pressed.rstrip(".") + f", VESTA will monitor it for {watch}." if checks else pressed, "closed"))
+        watched = say("will_monitor", pressed=act, watch=lasting_in(_params(params).behaviour("clear_minutes") * 60))
+        out["send"].append(here(watched.only(act.langs) if checks else pressed, "closed"))
     elif option == "need_help":
         store.update_incident(iid, state=Incident.ESCALATED, reply=label, escalated_at=now.isoformat(),
                               assignee=CHASE["escalates_to"])
         # ONE sentence in every chat (owner, 2026-10-11: one incident, one picture — "over to you" / "the owner has been
         # told" were two)
-        helped = pressed.rstrip(".") + f": {role_said(CHASE['escalates_to'])} is asked to act."
+        helped = say("asked_to_act", pressed=act, role=role_in(CHASE["escalates_to"])).only(act.langs)
         out["send"] += tell(inc["severity"], "escalated", incident=iid, mark=button.get("mark"), **about(inc, helped))
         out["send"].append(here(helped, "pressed", mark=button.get("mark")))
     else:
         store.update_incident(iid, reply=label)
-        out["send"].append(here(acted("Noted", "{time}", who) + f": {label}", "pressed"))
+        noted = lambda lang: SW.acted(_in(say("noted_word"), lang), "{time}", _in(who_in, lang), lang)
+        out["send"].append(here(say("noted", noted=noted, label=label_in(option, label)), "pressed"))
     # the answer, on the alert and its reminders in every chat (a button press has already done it, by name)
     if option in BUTTONS:
-        out["settle"] = [R.settle(iid, pressed, mark=button.get("mark"))]
+        out["settle"] = [R.settle(iid, pressed, mark=button.get("mark"), note_in=pressed.langs)]
     store.audit("alert-desk", "reply", {"incident": iid, "by": sender_role, "option": option})
     return out
 
@@ -1005,8 +1103,8 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
             # ⚠️ NOBODY OF THE FACILITY MANAGER'S RECEIVED IT (architecture review 25): Telegram refused every chat of
             # theirs, and the owner heard of it only at the 45-minute escalation — told now
             out["send"] += tell(inc["severity"], "escalated", incident=inc["id"],
-                                **about(inc, f"Not delivered to {role_said(CHASE['asks'])}: Telegram refused every "
-                                                  f"chat of theirs. Over to {role_said(CHASE['escalates_to'])}."))
+                                **about(inc, say("not_delivered", asked=role_in(CHASE["asks"]),
+                                                 to=role_in(CHASE["escalates_to"]))))
             out["escalated"].append(inc["id"])
             continue
         if inc["state"] not in (Incident.ASKED, Incident.REASKED):
@@ -1019,13 +1117,14 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
             out["send"] += tell(inc["severity"], "reminder", incident=inc["id"], chased=True,
                                 # the engine writes the step first: "Reminder sent … to FM — No answer after 15 min";
                                 # the duration as both apps word one (timeutil.lasting: "1 h 30 min", never "90 min")
-                                **about(inc, f"No answer after {lasting(reask * 60)}"))
+                                **about(inc, say("no_answer", after=lasting_in(reask * 60))))
             out["reasked"].append(inc["id"])
         elif inc["state"] == Incident.REASKED and age >= timedelta(minutes=escal) and \
                 store.move(inc["id"], (Incident.REASKED,), Incident.ESCALATED, escalated_at=now.isoformat(),
                            assignee=CHASE["escalates_to"]):
             out["send"] += tell(inc["severity"], "escalated", incident=inc["id"],
-                                **about(inc, f"No answer from {role_said(CHASE['asks'])} after {lasting(escal * 60)}"))
+                                **about(inc, say("no_answer_from", role=role_in(CHASE["asks"]),
+                                                 after=lasting_in(escal * 60))))
             out["escalated"].append(inc["id"])
     # villa silent: the engine's Home Assistant connection has been down too long
     last = store.last_beat(HA_BEAT)
@@ -1038,13 +1137,14 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
             store.update_incident(iid, state=Incident.ASKED, asked_at=now.isoformat(), assignee=CHASE["asks"])
             out["send"] += tell("P1", "new", incident=iid, ladder=False,   # the priority is the heading's; the villa's time
                                 text="No contact with the villa's system. Check power, the router and the internet link.",
-                                status=f"Villa silent since {day_time_label(villa_time(last, zone or 'UTC'), weekday=True)}")
+                                **_status(say("villa_silent",
+                                              since=day_time_label(villa_time(last, zone or "UTC"), weekday=True))))
     elif last:
         cur = store.find_open_incident("critical_internet---villa_silent|agent")
         if cur:
             out["actions"] += Problems(store).close_incident(cur["id"], Incident.RECOVERED, now.isoformat())
             out["send"] += tell("P1", "closed", incident=cur["id"], chased=True,
-                                **about(cur, closing("the villa is back online and answers again")))
+                                **about(cur, ended(say("back_online"))))
     # alert fatigue: a rule firing more than N times in 30 days without acknowledgement
     limit = params.behaviour("alert_fatigue_per_month")
     since = (now - timedelta(days=FATIGUE_WINDOW_DAYS)).isoformat()

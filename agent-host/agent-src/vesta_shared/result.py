@@ -76,16 +76,19 @@ def _mark(m: dict, mark: str | None) -> dict:
 
 def message(to: str, text: str, *, status: str | None = None, incident: int | None = None, buttons: bool = False,
             attachment: str | None = None, stage: str | None = None, mark: str | None = None,
-            title: str | None = None, first_in_line: bool = False, key: str | None = None) -> dict:
+            title: str | None = None, first_in_line: bool = False, key: str | None = None,
+            status_in: dict | None = None) -> dict:
     """A message for `to` (here · owner · fm). `buttons`: the alert's Done / Need help for `incident`; `stage`: what
     this notice about it is (STAGES) — the engine writes its heading and its history line. "{time}" in `text` is the
     villa's time when it is sent (10/10/2026 15:04), as in a settle note. `status`: where it stands, shown under a line
     at the bottom (vesta_agent/layout.py) — given apart, never written into `text`. `first_in_line`: the people asked
     to answer it (the alert desk's chase) — when Telegram refused every chat it went to, the engine says so
-    (Problems.unreached) and the desk hands the incident on."""
+    (Problems.unreached) and the desk hands the incident on. `status_in`: the status in other languages ({code: text},
+    the skill's own words): each chat's copy of an alert says the one it reads (vesta_shared.status_words.pick)."""
     m = {"to": to, "text": text}
     if status:
         m["status"] = status
+        m.update(_in("status_in", status_in))
     if stage is not None:
         if stage not in STAGES:
             raise ValueError(f"stage must be one of {', '.join(STAGES)}")
@@ -188,16 +191,25 @@ def snapshot(entity_id: str, incident: int) -> dict:
     return {"action": "snapshot.get", "entity_id": entity_id, "incident_id": int(incident)}
 
 
-def settle(incident: int, note: str, mark: str | None = None) -> dict:
+def _in(key: str, texts: dict | None) -> dict:
+    """{key: the words in other languages} — only real words, English left out (it is the plain field); {} for none."""
+    got = {k: v for k, v in (texts or {}).items() if isinstance(k, str) and k != "en" and isinstance(v, str) and v}
+    return {key: got} if got else {}
+
+
+def settle(incident: int, note: str, mark: str | None = None, note_in: dict | None = None) -> dict:
     """Every message carrying the incident's buttons loses them and shows `note` ("{time}": the villa's time); `mark`:
-    MARKS."""
-    return _mark({"incident_id": int(incident), "note": note}, mark)
+    MARKS; `note_in`: the note in other languages ({code: text}), each chat showing the one it reads."""
+    return _mark({"incident_id": int(incident), "note": note, **_in("note_in", note_in)}, mark)
 
 
-def ha_message(incident: int, text: str, context: str | None, stage: str | None = None, status: str | None = None) -> dict:
+def ha_message(incident: int, text: str, context: str | None, stage: str | None = None, status: str | None = None,
+               status_in: dict | None = None) -> dict:
     """Home Assistant's own messages of the automation run `context` (the event's context) become `incident`'s
-    messages, rewritten as `text` under the incident's heading, like every other notice about it (`stage`: STAGES)."""
-    m = {"incident_id": int(incident), "text": text, "context": context, **({"status": status} if status else {})}
+    messages, rewritten as `text` under the incident's heading, like every other notice about it (`stage`: STAGES;
+    `status_in`: as `message`'s)."""
+    m = {"incident_id": int(incident), "text": text, "context": context,
+         **({"status": status, **_in("status_in", status_in)} if status else {})}
     if stage is not None:
         if stage not in STAGES:
             raise ValueError(f"stage must be one of {', '.join(STAGES)}")

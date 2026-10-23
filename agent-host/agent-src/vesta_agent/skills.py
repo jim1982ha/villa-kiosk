@@ -594,8 +594,9 @@ def _without_ai(path: str, steps, where: str) -> list[dict]:
 
 
 def _buttons(raw) -> list[dict]:
-    """skill.yaml `buttons`: [{option, label, mark}] — an option is a short word (it travels in Telegram's 64 bytes of
-    button data, button_data.ALERT), a label what the button says, a mark one of message_format.MARK_ICONS."""
+    """skill.yaml `buttons`: [{option, label, mark, labels}] — an option is a short word (it travels in Telegram's 64
+    bytes of button data, button_data.ALERT), a label what the button says, a mark one of message_format.MARK_ICONS,
+    `labels` the label in other languages ({code: label}: how each chat's Status names a press, owner 2026-10-23)."""
     if raw is None:
         return []
     from vesta_shared.message_format import MARK_ICONS
@@ -613,7 +614,12 @@ def _buttons(raw) -> list[dict]:
             raise SkillError(f"buttons[{i}]: mark {mark!r} is not one of {', '.join(sorted(MARK_ICONS))}")
         if option in {x["option"] for x in out}:
             raise SkillError(f"buttons[{i}]: option {option} is given twice")
-        out.append({"option": option, "label": label, "mark": mark})
+        labels = b.get("labels")
+        if labels is not None and not (isinstance(labels, dict) and all(
+                isinstance(k, str) and isinstance(v, str) and 0 < len(v.strip()) <= 30 for k, v in labels.items())):
+            raise SkillError(f"buttons[{i}]: labels must be {{language code: label}}, each label 30 characters at most")
+        out.append({"option": option, "label": label, "mark": mark,
+                    **({"labels": {k: v.strip() for k, v in labels.items()}} if labels else {})})
     return out
 
 

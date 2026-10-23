@@ -24,7 +24,8 @@ from __future__ import annotations
 from datetime import datetime
 
 from vesta_shared.message_format import (INCIDENT_TITLE, MARK_ICONS, STAGE_ICONS, STATUS, TO, UNTITLED, document,
-                                         parts as shape_parts, stage_words)
+                                         parts as shape_parts)
+from vesta_shared import status_words
 from vesta_shared.limits import limit
 from vesta_shared.messaging import telegram_message_chars, tg_len
 from vesta_shared.timeutil import moment_label
@@ -44,23 +45,26 @@ def fill_time(text: str | None, now: datetime, zone: str) -> str:
     thread's close and restate, and a taken-over message each replaced it by hand."""
     return (text or "").replace("{time}", moment_label(now, zone))
 
-def head(title: str, to: str = "", history=(), word: str | None = None) -> dict:
+def head(title: str, to: str = "", history=(), word: str | None = None, lang: str | None = None) -> dict:
     """A message's heading as facts, never as text: its `title` ("#9-P2", "Approval request"), who it is for (`to`,
-    the "To:" line's words), an incident's `history` (its "- …" lines and dividers) and, for an incident, its title's
-    `word` ("new", "existing", "closed": the title reads "#9-P2 (existing)").
+    the "To:" line's words), an incident's `history` (its "- …" lines and dividers), for an incident, its title's
+    `word` ("new", "existing", "closed": the title reads "#9-P2 (existing)") and the language its chat reads (`lang`,
+    a code; none: English) — the Status section is drawn in it (status_words; owner, 2026-10-23).
 
     ⚠️ FACTS UNTIL DRAWN (architecture review, 2026-10-17): the heading was written as text, then read back — its stage
     word by a pattern, its title rewritten by another, its "To:" and history by splitting lines — so a wording change
     could quietly drop a card's ✅ or its "(closed)". Only a record stored before 0.12.230 is read from text (`head_of`)."""
-    return {"title": (title or "").strip(), "to": (to or "").strip(), "history": [x for x in history if x],
-            "word": word or None}
+    h = {"title": (title or "").strip(), "to": (to or "").strip(), "history": [x for x in history if x],
+         "word": word or None}
+    # English is said by no key: a heading recorded before (and every English one) stays exactly as it was
+    return {**h, "lang": lang} if lang and status_words.lang_of(lang) != "en" else h
 
 
 def head_of(h) -> dict | None:
     """A heading as facts: one written by `head`, or one recorded as text (before 0.12.230: "#9-P2 (existing)" / "To: …" /
     its history; before 0.12.175 "For: JM"). None for no heading."""
     if isinstance(h, dict):
-        return head(h.get("title") or "", h.get("to") or "", h.get("history") or (), h.get("word"))
+        return head(h.get("title") or "", h.get("to") or "", h.get("history") or (), h.get("word"), h.get("lang"))
     lines = [x for x in (h or "").strip().split("\n") if x]
     if not lines:
         return None
@@ -92,11 +96,12 @@ def stage_line(h, status: str, mark: str | None = None) -> str:
     """The bottom line with its icon, when the message is about an incident: "⚠️ New alert", "⚠️ ⚙️ Reminder sent … to FM — …",
     "🆘 Need help pressed by …", "✅ Cleared in Home Assistant on …", "☑️ Done pressed by …. Note: VESTA cannot check
     this one; …". Any other message's status as it is."""
-    word = (head_of(h) or {}).get("word")
+    h = head_of(h) or {}
+    word = h.get("word")
     if not word:
         return status
     icon = MARK_ICONS.get(mark or "") if not (mark == "unchecked" and word != "closed") else None
-    return f"{icon or STAGE_ICONS[word]} {status or stage_words(word)}"
+    return f"{icon or STAGE_ICONS[word]} {status or status_words.stage_words(word, lang=h.get('lang') or 'en')}"
 
 
 def parts(body: str = "", status: str = "", head=None, lead: str = "", mark: str | None = None) -> dict:
@@ -131,11 +136,13 @@ def render(p: dict, limit: int | None = None) -> str:
         return fit(middle, max(limit - tg_len(tail), 20)) + tail if middle else tail.lstrip("\n")
     title, to, history = title_line(h), h["to"], list(h["history"])
     floor, dropped, cap = min(middle_floor(), tg_len(middle)), 0, None
+    lang = h.get("lang") or "en"                       # the chat's language: its Status label and counted line
 
     def framed(mid: str) -> str:
-        more = [f"- … {dropped} earlier notice{'s' if dropped > 1 else ''}"] if dropped else []
+        more = [f"- {status_words.earlier(dropped, lang)}"] if dropped else []
         hist = "\n".join(history[:1] + more + history[1:])
-        return document(title, to, [(None, [mid]), (STATUS, [fit(hist, cap) if cap and hist else hist, status])])
+        return document(title, to, [(None, [mid]), (status_words.label(lang),
+                                                    [fit(hist, cap) if cap and hist else hist, status])])
     while len(history) > 1 and tg_len(framed("")) + floor > limit:
         history.pop(1)                                 # the oldest after the first notice, which always stays
         dropped += 1
@@ -148,7 +155,10 @@ def render(p: dict, limit: int | None = None) -> str:
 def changed(p: dict, *, status: str | None = None, body: str | None = None, mark: str | None = None) -> dict:
     """The same message with a new status and/or body; its head and lead kept. A new status brings its own `mark`
     (none: the stage's icon) — a "Need help" status replaced by "Done pressed …" is no longer 🆘."""
-    return {**parts(), **p, **({"status": status, "mark": mark} if status is not None else {}),
+    # a new status is no longer the step it was drawn from (`said`: notice.Notices.restatus redraws a step's line in
+    # each chat's language; a replaced one is the new words, as they are)
+    kept = {k: v for k, v in p.items() if not (status is not None and k == "said")}
+    return {**parts(), **kept, **({"status": status, "mark": mark} if status is not None else {}),
             **({"body": body} if body is not None else {})}
 
 

@@ -357,8 +357,10 @@ def parts(text: str) -> list[tuple[str, int, int]]:
 
 def _alert_parts(text: str, title_end: int, to_end: int) -> list[tuple[str, int, int]]:
     found = [("title", 0, title_end), ("to", title_end + 1, to_end)]
-    label = f"\n\n{STATUS}:\n"
-    at = text.rfind(label)
+    # ⚠️ THE STATUS LABEL IN THE CHAT'S LANGUAGE (owner, 2026-10-23): "Statut:", "状态:" — the last of any of them is the
+    # card's own (its section is the card's last), so its lines stay in italics in every language
+    from .status_words import LABELS
+    at, label = max((text.rfind(f"\n\n{w}:\n"), f"\n\n{w}:\n") for w in LABELS)
     if at < to_end:
         if to_end + 1 < len(text):
             found.append(("item", to_end + 1, len(text)))

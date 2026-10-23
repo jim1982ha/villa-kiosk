@@ -1,3 +1,12 @@
+## 0.12.329
+
+What you will see:
+- An alert's "Status:" section now follows each chat's language set in People: "Rappel envoyé le 23/10/2026 10:04,
+  Pas de réponse après 15 min (à : FM)" in a French chat, "Erinnerung gesendet am …, Keine Antwort nach 15 Min."
+  in a German one, "✅ Résolu le … : elle n'est plus signalée", "Fait le … (JM)". Names, dates and numbers are kept.
+  The alert's own text (written by the villa's automation, "What to do: …"), its first line and "To:" stay as they
+  are, and so do the buttons. A card sent before this update keeps its English lines.
+
 ## 0.12.328
 
 What you will see:

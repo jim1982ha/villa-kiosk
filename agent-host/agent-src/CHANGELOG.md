@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.319 (23 October 2026)
+
+- An alert card's "Status:" section in each chat's language (owner, 2026-10-23). `vesta_shared/status_words.py`: the
+  engine's fixed words (the label, every STEPS line, ordinals, "(to: …)", role words, acted, closing, stage words,
+  "N earlier notices") for every language of `policy.LANGUAGES`; English goes through `message_format` unchanged.
+  `Notices.lang(chat)` (the chat's first row) is kept in a copy's heading facts; `layout.render` draws in it;
+  `message_format._alert_parts` knows every language's label. The desk's reason words stay in the skill
+  (alert-desk `words.yaml`; `desk.py` sends `status_in` / `note_in`; buttons' `labels:`); the engine picks the chat's,
+  English when a language or an older skill lacks it. `parts["said"]` keeps the step so `IncidentThread.sync` redraws
+  each copy in its own language (`Notices.restatus`), where it copied the latest chat's English status to every chat.
+  Copies recorded before keep their English lines. The alert's own text, its first line and "To:" are unchanged.
+
 ## 0.6.318 (23 October 2026)
 
 - One answer to "who reads this message, in which language": `Routing.readers(to, origin)` → [(Language, chats)]

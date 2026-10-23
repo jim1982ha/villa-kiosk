@@ -11,6 +11,7 @@ from typing import Awaitable, Callable
 
 from vesta_shared.message_format import PRESSED
 from vesta_shared.limits import limit
+from vesta_shared.status_words import pressed
 
 from . import button_data
 from .incidents import Incidents
@@ -98,9 +99,13 @@ class AlertButtons:
         # and the chat itself shows the incident was handled
         # ⚠️ THE FOOTER (owner, 2026-10-10): "<button> pressed by <Name> on 09/10/2026 17:13", the name as the People list
         # names this person for the chat's role
-        await self.thread.close(int(iid), PRESSED.format(label=label, name=name, time="{time}"), mark=button["mark"])
+        # ⚠️ IN EACH CHAT'S LANGUAGE (owner, 2026-10-23): "Terminé le … (JM)." where the button has a label in it (the
+        # skill's `labels`); a language it has none for reads the whole line in English, never half
+        labels = button.get("labels") or {}
+        await self.thread.close(int(iid), PRESSED.format(label=label, name=name, time="{time}"), mark=button["mark"],
+                                note_in={lang: pressed(word, name, "{time}", lang) for lang, word in labels.items()})
         # the press, for the fault's card in the Kiosk (notice.Notices.story; owner, 2026-10-14)
-        note_press(self.state, int(iid), label, name, button["mark"], button["option"])
+        note_press(self.state, int(iid), label, name, button["mark"], button["option"], labels)
         if self.run_job:
             # `text`: the label, for a skill.yaml from before `buttons` (its on_reply reads `--text {text}`)
             await self.run_job(skill, skill.on_reply, limit(

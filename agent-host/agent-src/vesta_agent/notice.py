@@ -33,7 +33,8 @@ named who a message was for. The skill now writes only what happened; this write
 """
 from __future__ import annotations
 
-from vesta_shared.message_format import MARK_ICONS, acted, PRESSED_STAGE, ROLE_WORDS, STEPS, UNTITLED, audience
+from vesta_shared.message_format import MARK_ICONS, PRESSED_STAGE, ROLE_WORDS, STEPS, UNTITLED, audience
+from vesta_shared import status_words
 from vesta_shared.limits import limit
 from vesta_shared.messaging import incident_tag
 from vesta_shared.problems import again_days
@@ -56,14 +57,16 @@ def history_kept() -> int:
                  reached="The ones between are counted in a \"… N earlier notices\" line.", told="person")
 
 
-def note_press(state, incident: int, label: str, name: str, mark: str | None = None, option: str = "") -> None:
+def note_press(state, incident: int, label: str, name: str, mark: str | None = None, option: str = "",
+               labels: dict | None = None) -> None:
     """A button pressed on incident `incident`'s alert, kept in its history (the Kiosk's card says it: Notices.story).
-    Done is not kept: the fault's close says "Done on Telegram (…)." already."""
+    Done is not kept: the fault's close says "Done on Telegram (…)." already. `labels`: the button's label in other
+    languages (skill.yaml `labels`), so each chat's Status names the press in its own (owner, 2026-10-23)."""
     if option == "done":
         return
     history = state.incident_history(incident)
     history.append({"at": datetime.now(timezone.utc).isoformat(), "stage": PRESSED_STAGE, "label": label,
-                    "name": name, **({"mark": mark} if mark else {})})
+                    "name": name, **({"mark": mark} if mark else {}), **({"labels": dict(labels)} if labels else {})})
     state.set_incident_history(incident, _kept(history))
 
 
@@ -87,9 +90,8 @@ def _kept(history: list[dict]) -> list[dict]:
     return [first, {"dropped": dropped + cut}] + rest[cut:]
 
 
-def _ordinal(n: int) -> str:
-    """2nd, 3rd, 11th, 22nd."""
-    return f"{n}{'th' if 10 <= n % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')}"
+#: 2nd, 3rd, 11th: the English ordinal of "6th time in 7 days" (status_words writes every language's).
+_ordinal = status_words._ordinal_en
 
 
 def when(at: datetime, zone: str) -> str:
@@ -112,6 +114,20 @@ class Notices:
         # whom an incident's priority reaches, as its skill carried it (incidents.Incidents.reaches): roles, or the
         # word for a priority that reaches nobody ("digest", "log"); None when the skill did not say (an older desk)
         self.reaches = reaches or (lambda _iid: None)
+
+    def lang(self, chat: int) -> str:
+        """The language chat `chat` reads its alert cards' Status in (a code of status_words): its row's in the People
+        list — a chat listed for several roles, its first row's (one language per copy); English for no chat, a chat
+        the list does not name, or a list that cannot be read.
+
+        ⚠️ EACH CHAT ITS OWN LANGUAGE (owner, 2026-10-23): the facility manager reading French and the one reading
+        German each got "Reminder sent … (to: FM)" in English, under the villa's own words."""
+        if not chat:
+            return "en"
+        try:
+            return status_words.lang_of(self.policy().language_of(int(chat), None))
+        except Exception:  # noqa: BLE001 — the card is written in English, never not at all
+            return "en"
 
     @staticmethod
     def _wanted(to) -> set[str]:
@@ -216,7 +232,7 @@ class Notices:
             p = None
         word = self.word(int(incident), stage, bool(history))
         return layout.head(f"{incident_tag(incident)}{f'-{p}' if p else ''}", who,
-                           self.history_lines(int(incident), chat, before), word)
+                           self.history_lines(int(incident), chat, before), word, self.lang(chat))
 
     def to_line(self, incident: int, also=(), history: list[dict] | None = None) -> str | None:
         """The "To:" of every copy of `incident` — the SAME in every chat: every role the incident went to (its
@@ -239,6 +255,7 @@ class Notices:
         still-there to the FM, and the facility manager's chat the still-theres sent to the owner alone. "To:" still
         names everyone the alert involves; the lines are the ones sent to this chat's people."""
         mine = self._chat_roles(chat)
+        lang = self.lang(chat)                 # drawn from the stored steps in the chat's language at every redraw
         lines = []
         history = self.state.incident_history(incident)
         # `latest_excluded`: the last steps recorded, left out — a copy refreshed with the notice just sent, whose own
@@ -249,10 +266,12 @@ class Notices:
                 continue
             # ⚠️ ONE RUN, THEN THE NEXT (owner, 2026-10-16, #43): a second run starts at its "- Back at …" line, which
             # says how many times it came (message_format.STEPS: one line, the shape of every other step)
-            lines.append(f"- … {h['dropped']} earlier notice{'s' if h['dropped'] > 1 else ''}" if h.get("dropped") else
+            # a step is kept as facts (stage, moment, roles, count) and worded here; a `note` (taken on in the Kiosk) is
+            # the Kiosk's words, kept as written
+            lines.append(f"- {status_words.earlier(h['dropped'], lang)}" if h.get("dropped") else
                          f"- {h['note']}" if h.get("note") else
-                         f"- {self._pressed(h, when(datetime.fromisoformat(h['at']), self.tz))}" if h.get("stage") == PRESSED_STAGE else
-                         f"- {self.step(h.get('stage'), self._roles(h), datetime.fromisoformat(h['at']), h.get('run'), h.get('reach'))}")
+                         f"- {self._pressed(h, when(datetime.fromisoformat(h['at']), self.tz), lang)}" if h.get("stage") == PRESSED_STAGE else
+                         f"- {self.step(h.get('stage'), self._roles(h), datetime.fromisoformat(h['at']), h.get('run'), h.get('reach'), lang)}")
         return lines
 
     def concerns(self, chat: int, roles) -> bool:
@@ -271,43 +290,61 @@ class Notices:
         except Exception:  # noqa: BLE001
             return set()
 
-    def _who(self, roles, reach=None, incident: int | None = None) -> str:
+    def _who(self, roles, reach=None, incident: int | None = None, lang: str = "en") -> str:
         """Whom a step went to, as its line says it: its roles ("FM"), else what its incident's priority does instead
-        (`reach`, the line's own record of it; or read from `incident`: "digest"), else "nobody"."""
-        return audience(roles, short=True) or self._reach_words(reach if reach is not None else
-                                                                (self._reach(incident) if incident else None)) or "nobody"
+        (`reach`, the line's own record of it; or read from `incident`: "digest" — the desk's word, as it wrote it),
+        else "nobody" (in `lang`)."""
+        return status_words.who(roles, lang) or self._reach_words(
+            reach if reach is not None else (self._reach(incident) if incident else None)) or status_words.nobody(lang)
 
-    def step(self, stage: str | None, roles, at: datetime, run: int | None = None, reach=None) -> str:
-        """A step as a card's "Status:" says it — what was sent, when, to whom: "Reminder sent 16/10/2026 18:20 to FM",
-        "Back at 16/10/2026 18:03 (2nd time in 7 days), alert sent to FM" (`run`: the how-many-th time; an older record
-        has none; `reach`: the words for a step to no role, as recorded). The ONE wording of a step, in its history
-        line and on its own bottom line (`bottom`)."""
-        s = STEPS.get(stage or "")
-        times = f", {_ordinal(run)} time in {again_days()} days" if isinstance(run, int) and run > 1 else ""
-        return (s.line if s else "{sent} {at} (to: {who})").format(
-            sent=s.sent if s else "Sent", at=when(at, self.tz), times=times, who=self._who(roles, reach))
+    def step(self, stage: str | None, roles, at: datetime, run: int | None = None, reach=None, lang: str = "en") -> str:
+        """A step as a card's "Status:" says it — what was sent, when, to whom: "Reminder sent 16/10/2026 18:20 (to: FM)",
+        "Back at 16/10/2026 18:03, 2nd time in 7 days (to: FM)" (`run`: the how-many-th time; an older record has none;
+        `reach`: the words for a step to no role, as recorded), in the chat's language (`lang`: status_words). The ONE
+        wording of a step, in its history line and on its own bottom line (`bottom`)."""
+        return status_words.step(stage, when(at, self.tz), status_words.times(run, again_days(), lang),
+                                 self._who(roles, reach, lang=lang), lang)
 
     def bottom(self, stage: str | None, roles, status: str, at: datetime | None = None,
-               incident: int | None = None) -> str:
+               incident: int | None = None, lang: str = "en") -> str:
         """The bottom line of a notice of `stage` sent now to `roles`: a timed step (message_format.STEPS) says itself
-        first, then the skill's words (`status`); any other notice's status as it is. `incident`: whose — a step to no
-        role says what its priority does instead ("(to: digest)")."""
+        first, then the skill's words (`status`, already in `lang`); any other notice's status as it is. `incident`:
+        whose — a step to no role says what its priority does instead ("(to: digest)")."""
         if stage not in STEPS or not STEPS[stage].timed:
             return status
-        who = self._who(roles, incident=incident)
-        line = self.step(stage, roles, at or datetime.now(timezone.utc), reach=[who])
+        who = self._who(roles, incident=incident, lang=lang)
+        line = self.step(stage, roles, at or datetime.now(timezone.utc), reach=[who], lang=lang)
         if not status:
             return line
         # the skill's words go BEFORE whom, so this line ends "(to: …)" like every other (owner, 2026-10-18, #41)
-        to = f" (to: {who})"
-        return f"{line.removesuffix(to)}{STEP_SEP}{status}{to}" if line.endswith(to) else f"{line}{STEP_SEP}{status}"
+        to, sep = status_words.to_tail(who, lang), (STEP_SEP if lang == "en" else status_words.sep(lang))
+        return f"{line.removesuffix(to)}{sep}{status}{to}" if line.endswith(to) else f"{line}{sep}{status}"
+
+    def restatus(self, chat: int, p: dict) -> dict:
+        """A copy's parts with its bottom line drawn again for chat `chat`, in the chat's language, from the step it
+        was drawn from (`said`: Poster.post and Outcome.adopt_ha keep it; a close's note and its languages,
+        IncidentThread.close) — the copy another chat gets of it (IncidentThread.sync). A status kept without it
+        (recorded before, or replaced since) stays as it is."""
+        s = p.get("said")
+        if not isinstance(s, dict) or (s.get("stage") and not s.get("at")):
+            return p
+        lang = self.lang(chat)
+        try:
+            words = status_words.pick(s.get("status") or "", s.get("status_in"), lang)
+            at = datetime.fromisoformat(s["at"]) if s.get("at") else None     # a note (a close) has no step to time
+            return {**p, "status": self.bottom(s.get("stage"), s.get("roles") or (), words, at, s.get("incident"), lang)}
+        except (TypeError, ValueError):
+            return p
 
     @staticmethod
-    def _pressed(h: dict, at: str = "") -> str:
-        """A press as every reader tells it: Telegram's Status "🆘 Need help on 16/10/2026 18:20 (Fabien)" (`at`), the
-        Kiosk card, whose line has its own time, "🆘 Need help (Fabien)" — message_format.acted's order."""
-        what = f"{MARK_ICONS.get(h.get('mark') or '', '')} {h.get('label')}".strip()
-        return acted(what, at, h.get("name") or "") if at else f"{what} ({h.get('name')})"
+    def _pressed(h: dict, at: str = "", lang: str = "en") -> str:
+        """A press as every reader tells it: Telegram's Status "🆘 Need help on 16/10/2026 18:20 (Fabien)" (`at`), in
+        the chat's language when the button has a label in it (`labels`; else the whole line in English, never half),
+        the Kiosk card, whose line has its own time, "🆘 Need help (Fabien)" — message_format.acted's order."""
+        label = (h.get("labels") or {}).get(lang) if lang != "en" else None
+        lang = lang if label else "en"
+        what = f"{MARK_ICONS.get(h.get('mark') or '', '')} {label or h.get('label')}".strip()
+        return status_words.acted(what, at, h.get("name") or "", lang) if at else f"{what} ({h.get('name')})"
 
     def story(self, incident: int) -> list[dict]:
         """What a fault's card in the Kiosk tells of incident `incident`'s Telegram life, oldest first: [{at, note}] —

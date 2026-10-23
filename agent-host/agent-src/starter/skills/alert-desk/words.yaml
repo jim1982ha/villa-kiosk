@@ -1,0 +1,335 @@
+# What the desk says on an alert card's Status lines, in each language the People list offers (en fr id de es it nl
+# zh ja ko). Each chat's copy of a card reads its own language (owner, 2026-10-23); a language left out of an entry
+# reads that line in English. The engine writes the rest of the line (the step, the moment, "(to: …)", "Cleared on
+# …") in the chat's language itself.
+# {placeholders} are filled by desk.py: durations, roles and button labels in the same language; names, dates, times
+# and numbers as they are. "en" is the desk's own English: change it and every English card changes.
+# The alert's own text (the villa's words, "What to do: …") is never translated here.
+
+still_count:
+  en: "Still there: {count} times since {since}"
+  fr: "Toujours là : {count} fois depuis {since}"
+  id: "Masih ada: {count} kali sejak {since}"
+  de: "Noch da: {count} Mal seit {since}"
+  es: "Sigue ahí: {count} veces desde {since}"
+  it: "Ancora presente: {count} volte da {since}"
+  nl: "Nog steeds: {count} keer sinds {since}"
+  zh: "仍存在：自 {since} 起 {count} 次"
+  ja: "継続中：{since} 以降 {count} 回"
+  ko: "계속됨: {since} 이후 {count}회"
+
+back_again:
+  en: "Back again: {runs} times in {days} days"
+  fr: "De retour : {runs} fois en {days} jours"
+  id: "Muncul lagi: {runs} kali dalam {days} hari"
+  de: "Wieder da: {runs} Mal in {days} Tagen"
+  es: "De nuevo: {runs} veces en {days} días"
+  it: "Di nuovo: {runs} volte in {days} giorni"
+  nl: "Weer terug: {runs} keer in {days} dagen"
+  zh: "再次出现：{days} 天内 {runs} 次"
+  ja: "再発：{days}日間で{runs}回"
+  ko: "재발: {days}일 동안 {runs}회"
+
+no_answer:
+  en: "No answer after {after}"
+  fr: "Pas de réponse après {after}"
+  id: "Tidak ada jawaban setelah {after}"
+  de: "Keine Antwort nach {after}"
+  es: "Sin respuesta tras {after}"
+  it: "Nessuna risposta dopo {after}"
+  nl: "Geen antwoord na {after}"
+  zh: "{after}后仍无回复"
+  ja: "{after}経っても応答なし"
+  ko: "{after} 동안 응답 없음"
+
+no_answer_from:
+  en: "No answer from {role} after {after}"
+  fr: "Pas de réponse de {role} après {after}"
+  id: "Tidak ada jawaban dari {role} setelah {after}"
+  de: "Keine Antwort von {role} nach {after}"
+  es: "Sin respuesta de {role} tras {after}"
+  it: "Nessuna risposta da {role} dopo {after}"
+  nl: "Geen antwoord van {role} na {after}"
+  zh: "{role} {after}后仍无回复"
+  ja: "{role}から{after}経っても応答なし"
+  ko: "{after} 동안 {role} 응답 없음"
+
+not_delivered:
+  en: "Not delivered to {asked}: Telegram refused every chat of theirs. Over to {to}."
+  fr: "Non remis à {asked} : Telegram a refusé toutes ses conversations. Transmis à {to}."
+  id: "Tidak terkirim ke {asked}: Telegram menolak semua obrolannya. Diteruskan ke {to}."
+  de: "Nicht zugestellt an {asked}: Telegram hat alle Chats abgelehnt. Weiter an {to}."
+  es: "No entregado a {asked}: Telegram rechazó todos sus chats. Pasa a {to}."
+  it: "Non consegnato a {asked}: Telegram ha rifiutato tutte le sue chat. Passa a {to}."
+  nl: "Niet bezorgd bij {asked}: Telegram weigerde al hun chats. Over naar {to}."
+  zh: "未送达 {asked}：Telegram 拒绝了其所有聊天。转交 {to}。"
+  ja: "{asked} に届きませんでした：Telegram がすべてのチャットを拒否しました。{to} に引き継ぎます。"
+  ko: "{asked}에게 전달되지 않음: Telegram이 모든 채팅을 거부했습니다. {to}에게 넘깁니다."
+
+villa_silent:
+  en: "Villa silent since {since}"
+  fr: "Villa muette depuis {since}"
+  id: "Vila tidak merespons sejak {since}"
+  de: "Villa stumm seit {since}"
+  es: "Villa sin respuesta desde {since}"
+  it: "Villa silenziosa da {since}"
+  nl: "Villa stil sinds {since}"
+  zh: "自 {since} 起别墅无响应"
+  ja: "{since} からヴィラの応答なし"
+  ko: "{since}부터 빌라 응답 없음"
+
+still_not_fixed:
+  en: "Still not fixed (will close itself once fixed or press {done})"
+  fr: "Toujours pas réglé (se fermera une fois réglé, ou appuyez sur {done})"
+  id: "Belum diperbaiki (tertutup sendiri setelah diperbaiki, atau tekan {done})"
+  de: "Noch nicht behoben (schließt sich nach der Behebung selbst, oder {done} drücken)"
+  es: "Aún sin arreglar (se cerrará solo al arreglarse, o pulse {done})"
+  it: "Non ancora risolto (si chiuderà da solo una volta risolto, oppure premi {done})"
+  nl: "Nog niet verholpen (sluit vanzelf zodra het verholpen is, of druk op {done})"
+  zh: "仍未修复（修复后会自动关闭，或按“{done}”）"
+  ja: "まだ直っていません（直れば自動で閉じます。または「{done}」を押してください）"
+  ko: "아직 해결되지 않음 (해결되면 자동으로 닫힘, 또는 '{done}' 누르기)"
+
+# what an end adds after "Cleared on …:" (the engine writes "Cleared on …" in each language)
+no_longer_reported:
+  en: "it is no longer reported"
+  fr: "elle n'est plus signalée"
+  id: "tidak lagi dilaporkan"
+  de: "es wird nicht mehr gemeldet"
+  es: "ya no se informa"
+  it: "non viene più segnalato"
+  nl: "het wordt niet meer gemeld"
+  zh: "已不再报告"
+  ja: "報告されなくなりました"
+  ko: "더 이상 보고되지 않음"
+
+rule_gone:
+  en: "the automation that sent it no longer exists (its entity ID changed, or it was deleted). Its next alert comes with a new number"
+  fr: "l'automatisation qui l'a envoyée n'existe plus (son ID d'entité a changé, ou elle a été supprimée). Sa prochaine alerte aura un nouveau numéro"
+  id: "otomatisasi yang mengirimnya sudah tidak ada (ID entitasnya berubah, atau dihapus). Peringatan berikutnya datang dengan nomor baru"
+  de: "die Automatisierung, die ihn gesendet hat, existiert nicht mehr (ihre Entitäts-ID hat sich geändert, oder sie wurde gelöscht). Ihr nächster Alarm kommt mit einer neuen Nummer"
+  es: "la automatización que la envió ya no existe (cambió su ID de entidad, o se eliminó). Su próxima alerta llegará con un número nuevo"
+  it: "l'automazione che lo ha inviato non esiste più (il suo ID entità è cambiato, oppure è stata eliminata). Il suo prossimo avviso avrà un nuovo numero"
+  nl: "de automatisering die het stuurde bestaat niet meer (de entiteit-ID is gewijzigd, of ze is verwijderd). De volgende melding krijgt een nieuw nummer"
+  zh: "发送它的自动化已不存在（其实体 ID 已更改或已被删除）。它的下一条警报将使用新编号"
+  ja: "送信元のオートメーションはもう存在しません（エンティティ ID が変わったか、削除されました）。次のアラートは新しい番号で届きます"
+  ko: "이 알림을 보낸 자동화가 더 이상 없습니다 (엔티티 ID가 바뀌었거나 삭제됨). 다음 알림은 새 번호로 옵니다"
+
+stopped_watching:
+  en: "back to normal when the alert stopped watching it"
+  fr: "revenu à la normale quand l'alerte a cessé de le surveiller"
+  id: "kembali normal saat peringatan berhenti memantaunya"
+  de: "wieder normal, als der Alarm aufhörte, es zu überwachen"
+  es: "volvió a la normalidad cuando la alerta dejó de vigilarlo"
+  it: "tornato normale quando l'avviso ha smesso di sorvegliarlo"
+  nl: "weer normaal toen de melding stopte met bewaken"
+  zh: "警报停止监视时已恢复正常"
+  ja: "アラートが監視を止めた時点で正常に戻っていました"
+  ko: "알림이 감시를 멈췄을 때 정상으로 돌아옴"
+
+back_online:
+  en: "the villa is back online and answers again"
+  fr: "la villa est de nouveau en ligne et répond"
+  id: "vila kembali online dan merespons lagi"
+  de: "die Villa ist wieder online und antwortet"
+  es: "la villa vuelve a estar en línea y responde"
+  it: "la villa è di nuovo online e risponde"
+  nl: "de villa is weer online en antwoordt weer"
+  zh: "别墅已恢复在线并再次响应"
+  ja: "ヴィラがオンラインに戻り、再び応答しています"
+  ko: "빌라가 다시 온라인이며 응답합니다"
+
+# a button's answer ({pressed}: "Done on <time> (<who>)" in the same language, written by the engine's words)
+already_closed:
+  en: "Already closed"
+  fr: "Déjà fermée"
+  id: "Sudah ditutup"
+  de: "Bereits geschlossen"
+  es: "Ya cerrada"
+  it: "Già chiuso"
+  nl: "Al gesloten"
+  zh: "已关闭"
+  ja: "すでに終了済み"
+  ko: "이미 닫힘"
+
+will_monitor:
+  en: "{pressed}, VESTA will monitor it for {watch}."
+  fr: "{pressed}, VESTA la surveillera pendant {watch}."
+  id: "{pressed}, VESTA akan memantaunya selama {watch}."
+  de: "{pressed}, VESTA überwacht es {watch} lang."
+  es: "{pressed}, VESTA lo vigilará durante {watch}."
+  it: "{pressed}, VESTA lo sorveglierà per {watch}."
+  nl: "{pressed}, VESTA bewaakt het {watch} lang."
+  zh: "{pressed}，VESTA 将监视 {watch}。"
+  ja: "{pressed}、VESTA が {watch} 監視します。"
+  ko: "{pressed}, VESTA가 {watch} 동안 지켜봅니다."
+
+asked_to_act:
+  en: "{pressed}: {role} is asked to act."
+  fr: "{pressed} : demande d'action transmise à {role}."
+  id: "{pressed}: {role} diminta bertindak."
+  de: "{pressed}: {role} wird gebeten zu handeln."
+  es: "{pressed}: se pide a {role} que actúe."
+  it: "{pressed}: si chiede a {role} di intervenire."
+  nl: "{pressed}: {role} wordt gevraagd in actie te komen."
+  zh: "{pressed}：已请 {role} 处理。"
+  ja: "{pressed}：{role} に対応を依頼しました。"
+  ko: "{pressed}: {role}에게 조치를 요청했습니다."
+
+noted_word:
+  en: "Noted"
+  fr: "Noté"
+  id: "Dicatat"
+  de: "Notiert"
+  es: "Anotado"
+  it: "Annotato"
+  nl: "Genoteerd"
+  zh: "已记录"
+  ja: "記録済み"
+  ko: "기록됨"
+
+noted:
+  en: "{noted}: {label}"
+  fr: "{noted} : {label}"
+  id: "{noted}: {label}"
+  de: "{noted}: {label}"
+  es: "{noted}: {label}"
+  it: "{noted}: {label}"
+  nl: "{noted}: {label}"
+  zh: "{noted}：{label}"
+  ja: "{noted}：{label}"
+  ko: "{noted}: {label}"
+
+# read again after a Done ({who}: "Done (JM)"; {words}: what each device reads, joined by "; ")
+still_after_done:
+  en: "{who}, but {words}: still open. VESTA keeps watching it."
+  fr: "{who}, mais {words} : toujours ouvert. VESTA continue de surveiller."
+  id: "{who}, tetapi {words}: masih terbuka. VESTA terus memantaunya."
+  de: "{who}, aber {words}: weiterhin offen. VESTA überwacht es weiter."
+  es: "{who}, pero {words}: sigue abierta. VESTA sigue vigilándola."
+  it: "{who}, ma {words}: ancora aperto. VESTA continua a sorvegliarlo."
+  nl: "{who}, maar {words}: nog open. VESTA blijft het bewaken."
+  zh: "{who}，但 {words}：仍未解决。VESTA 继续监视。"
+  ja: "{who}、しかし {words}：未解決です。VESTA が監視を続けます。"
+  ko: "{who}, 하지만 {words}: 아직 열림. VESTA가 계속 지켜봅니다."
+
+cannot_check:
+  en: "{who}. Note: VESTA cannot check this one; {words}."
+  fr: "{who}. Remarque : VESTA ne peut pas vérifier celle-ci ; {words}."
+  id: "{who}. Catatan: VESTA tidak dapat memeriksa yang ini; {words}."
+  de: "{who}. Hinweis: VESTA kann dies nicht prüfen; {words}."
+  es: "{who}. Nota: VESTA no puede comprobar esta; {words}."
+  it: "{who}. Nota: VESTA non può verificare questo; {words}."
+  nl: "{who}. Let op: VESTA kan dit niet controleren; {words}."
+  zh: "{who}。注意：VESTA 无法检查此项；{words}。"
+  ja: "{who}。注意：VESTA はこれを確認できません；{words}。"
+  ko: "{who}. 참고: VESTA가 이 항목을 확인할 수 없습니다; {words}."
+
+cannot_tell:
+  en: "{words}: VESTA cannot tell if it is right. Still open."
+  fr: "{words} : VESTA ne peut pas savoir si c'est rétabli. Toujours ouvert."
+  id: "{words}: VESTA tidak dapat memastikan apakah sudah benar. Masih terbuka."
+  de: "{words}: VESTA kann nicht feststellen, ob es stimmt. Weiterhin offen."
+  es: "{words}: VESTA no puede saber si está bien. Sigue abierta."
+  it: "{words}: VESTA non può sapere se è a posto. Ancora aperto."
+  nl: "{words}: VESTA kan niet zien of het in orde is. Nog open."
+  zh: "{words}：VESTA 无法判断是否正常。仍未解决。"
+  ja: "{words}：VESTA は正常か判断できません。未解決です。"
+  ko: "{words}: VESTA가 정상인지 알 수 없습니다. 아직 열림."
+
+# what a device reads ({name}: the device's own name; {state}: its state, as the villa's system writes it)
+reads:
+  en: "{name} reads {state}"
+  fr: "{name} indique {state}"
+  id: "{name} menunjukkan {state}"
+  de: "{name} zeigt {state}"
+  es: "{name} indica {state}"
+  it: "{name} indica {state}"
+  nl: "{name} geeft {state}"
+  zh: "{name} 显示 {state}"
+  ja: "{name} は {state}"
+  ko: "{name}: {state}"
+
+last_report:
+  en: " (its last report)"
+  fr: " (son dernier relevé)"
+  id: " (laporan terakhirnya)"
+  de: " (letzte Meldung)"
+  es: " (su último informe)"
+  it: " (ultimo rilevamento)"
+  nl: " (laatste melding)"
+  zh: "（最后一次报告）"
+  ja: "（最後の報告）"
+  ko: " (마지막 보고)"
+
+still_reads:
+  en: "{name} still reads {state}"
+  fr: "{name} indique toujours {state}"
+  id: "{name} masih menunjukkan {state}"
+  de: "{name} zeigt weiterhin {state}"
+  es: "{name} sigue indicando {state}"
+  it: "{name} indica ancora {state}"
+  nl: "{name} geeft nog steeds {state}"
+  zh: "{name} 仍显示 {state}"
+  ja: "{name} はまだ {state}"
+  ko: "{name}: 여전히 {state}"
+
+is_now:
+  en: "{name} is {state}"
+  fr: "{name} est {state}"
+  id: "{name}: {state}"
+  de: "{name}: {state}"
+  es: "{name}: {state}"
+  it: "{name}: {state}"
+  nl: "{name}: {state}"
+  zh: "{name}：{state}"
+  ja: "{name}：{state}"
+  ko: "{name}: {state}"
+
+not_answering:
+  en: "{name} does not answer"
+  fr: "{name} ne répond pas"
+  id: "{name} tidak merespons"
+  de: "{name} antwortet nicht"
+  es: "{name} no responde"
+  it: "{name} non risponde"
+  nl: "{name} antwoordt niet"
+  zh: "{name} 无响应"
+  ja: "{name} が応答しません"
+  ko: "{name} 응답 없음"
+
+still_reported:
+  en: "it is still reported"
+  fr: "elle est toujours signalée"
+  id: "masih dilaporkan"
+  de: "es wird weiterhin gemeldet"
+  es: "se sigue informando"
+  it: "viene ancora segnalato"
+  nl: "het wordt nog steeds gemeld"
+  zh: "仍在报告"
+  ja: "まだ報告されています"
+  ko: "여전히 보고됨"
+
+# a priority lowered while its alert is open: the other languages of rules.yaml `lowered_words` (its English is there;
+# a villa that rewords it there rewords these too)
+lowered:
+  digest:
+    fr: "Abaissée à {priority} le {time} : gardée pour le prochain résumé quotidien. Aucune réponse nécessaire."
+    id: "Diturunkan ke {priority} pada {time}: disimpan untuk ringkasan harian berikutnya. Tidak perlu dibalas."
+    de: "Herabgestuft auf {priority} am {time}: für die nächste Tageszusammenfassung vorgemerkt. Keine Antwort nötig."
+    es: "Bajada a {priority} el {time}: guardada para el próximo resumen diario. No hace falta responder."
+    it: "Abbassato a {priority} il {time}: tenuto per il prossimo riepilogo giornaliero. Nessuna risposta necessaria."
+    nl: "Verlaagd naar {priority} op {time}: bewaard voor het volgende dagoverzicht. Geen antwoord nodig."
+    zh: "{time} 降为 {priority}：留待下一份每日摘要。无需回复。"
+    ja: "{time} に {priority} に引き下げ：次の日次ダイジェストに回します。返信は不要です。"
+    ko: "{time}에 {priority}(으)로 낮춤: 다음 일일 요약에 포함됩니다. 답장할 필요 없음."
+  log:
+    fr: "Abaissée à {priority} le {time} : seulement enregistrée. Aucune réponse nécessaire."
+    id: "Diturunkan ke {priority} pada {time}: hanya dicatat. Tidak perlu dibalas."
+    de: "Herabgestuft auf {priority} am {time}: nur aufgezeichnet. Keine Antwort nötig."
+    es: "Bajada a {priority} el {time}: solo registrada. No hace falta responder."
+    it: "Abbassato a {priority} il {time}: solo registrato. Nessuna risposta necessaria."
+    nl: "Verlaagd naar {priority} op {time}: alleen vastgelegd. Geen antwoord nodig."
+    zh: "{time} 降为 {priority}：仅作记录。无需回复。"
+    ja: "{time} に {priority} に引き下げ：記録のみ。返信は不要です。"
+    ko: "{time}에 {priority}(으)로 낮춤: 기록만 합니다. 답장할 필요 없음."

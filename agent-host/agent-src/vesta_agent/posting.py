@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from typing import Awaitable, Callable
 
 from vesta_shared.message_format import UNTITLED, audience, fill_to, pages
+from vesta_shared.status_words import pick
 
 from . import layout
 from .routing import Origin
@@ -30,15 +31,19 @@ class Poster:
                    keyboard: dict | None = None, document: str | None = None, photo=None,
                    thread: int | str | None = None, plain: bool = False, origin: Origin | None = None,
                    stage: str | None = None, mark: str | None = None, also=None,
-                   title: str | None = None, told=None, reply_to: int | None = None) -> int | None:
+                   title: str | None = None, told=None, reply_to: int | None = None,
+                   status_in: dict | None = None) -> int | None:
         """The message in `chat`: its heading — who it is for (`roles`), the incident and its history — unless it answers
         the person who asked, in their chat, or is `plain`; its parts laid out (layout.py) to fit ONE Telegram message —
         a photo's or a file's caption included, so the copy recorded is the message sent; then its `thread` (an incident,
         an approval, a snapshot): the earlier copy in this chat goes. `told`: the roles this step of the incident went to
-        (its bottom line says them: notice.Notices.bottom). The message id, or None when nothing arrived."""
+        (its bottom line says them: notice.Notices.bottom). `status_in`: the skill's `status` in other languages
+        ({code: text}) — an alert's copy says the one its chat reads. The message id, or None when nothing arrived."""
         # "{time}": the moment it says what happened, as every notice writes one (10/10/2026 15:04, the villa's time)
         now = datetime.now(timezone.utc)
         text, status, lead = (layout.fill_time(x, now, self.tz) for x in (text, status, lead))
+        status_in = {k: layout.fill_time(v, now, self.tz) for k, v in (status_in or {}).items() if isinstance(v, str)}
+        said = None
         # ⚠️ ONE LAYOUT (owner, 2026-10-12): every message sent on its own is headed by its title and "To:" — an alert's
         # "#9-P2 (new)", a report's, an approval's "Approval request"; the last resort UNTITLED (notice.heading) — and a
         # message given a title carries it in the asker's chat too. Only an answer to the person who asked, or a
@@ -59,8 +64,17 @@ class Poster:
         elif incident is not None and self.notices and not plain and not answering:
             head = self.notices.heading(chat, incident, roles, stage, also)
             # its own step, when and to whom, on its bottom line: a quiet copy elsewhere never reads as of its own time
-            status = self.notices.bottom(stage, told or self.notices.roles_for(chat, roles), status)
+            # ⚠️ IN THE CHAT'S LANGUAGE, KEPT AS THE STEP (owner, 2026-10-23): the step and the skill's words are kept
+            # (`said`), so the copy another chat gets of it (IncidentThread.sync) is drawn in that chat's language
+            stepped = sorted(told or self.notices.roles_for(chat, roles))
+            said = {"stage": stage, "roles": stepped, "at": now.isoformat(), "status": status,
+                    **({"status_in": status_in} if status_in else {})}
+            lang = self.notices.lang(chat) if hasattr(self.notices, "lang") else "en"
+            status = self.notices.bottom(stage, stepped, pick(status, status_in, lang), now,
+                                         **({"lang": lang} if lang != "en" else {}))
         p = layout.parts(body=text, status=status, head=head, lead=lead, mark=mark)
+        if said:
+            p["said"] = said
         # ⚠️ A CAPTION IS 1,024 CHARACTERS (architecture review 20): laid out for 4,096, a long incident's snapshot went as a
         # photo and a separate text — only the text was recorded, so the next snapshot left the old photo behind
         limit = telegram_caption_chars() if (photo or document) else telegram_message_chars()

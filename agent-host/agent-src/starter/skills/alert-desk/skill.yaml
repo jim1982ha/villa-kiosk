@@ -12,5 +12,9 @@ on_event:
   critical_event: "desk.py intake --event {event}"
 on_reply: "desk.py reply --incident {incident} --option {option} --from {role} --name {name}"
 buttons:                      # under every message about an open alert; a press runs on_reply with its option
-  - {option: done, label: Done}
-  - {option: need_help, label: Need help, mark: help}     # mark: its footer's icon (🆘)
+  # labels: the label in other languages — how each chat's Status names the press ("Terminé le … (JM)")
+  - {option: done, label: Done,
+     labels: {fr: Terminé, id: Selesai, de: Erledigt, es: Hecho, it: Fatto, nl: Klaar, zh: 已完成, ja: 完了, ko: 완료}}
+  - {option: need_help, label: Need help, mark: help,     # mark: its footer's icon (🆘)
+     labels: {fr: Besoin d'aide, id: Butuh bantuan, de: Brauche Hilfe, es: Necesito ayuda, it: Serve aiuto,
+              nl: Hulp nodig, zh: 需要帮助, ja: 助けが必要, ko: 도움 필요}}

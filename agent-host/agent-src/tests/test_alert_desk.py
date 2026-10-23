@@ -29,6 +29,11 @@ def event(blueprint="critical_condition", phase="opened", rule="automation.criti
             "summary": f"{label}\nFront door is unlocked", "timestamp": T0.isoformat(), **extra}
 
 
+def english(settle) -> list[dict]:
+    """A result's settle notes as English reads them: each chat's other languages (`note_in`, owner 2026-10-23) apart."""
+    return [{k: v for k, v in x.items() if k != "note_in"} for x in settle]
+
+
 def moved(res) -> bool:
     """The desk asked the engine to bring the Kiosk's faults up to date: a task's fault action carries only that
     (architecture review, 2026-10-19 — the title, note and who it used to carry were never read)."""
@@ -58,7 +63,7 @@ def test_resolved_closes_the_incident_and_its_ticket(store):
     assert store.incident(iid)["state"] == "resolved"
     assert moved(res) and store.last_task(f"incident:{iid}")["status"] == "cleared"
     assert res["send"][0]["status"] == "Cleared on {time}."   # its own part, the same words everywhere
-    assert res["settle"] == [{"incident_id": iid, "note": "Cleared on {time}."}]
+    assert english(res["settle"]) == [{"incident_id": iid, "note": "Cleared on {time}."}]
     # ⚠️ ONE CLOSING WORDING (owner, 2026-10-19): the desk's end is the closed stage's own words — what the villa's
     # template writes under its all-clear (vesta_message.jinja, "{time}" its clock), never a second copy here
     from vesta_shared.message_format import STAGE_WORDS
@@ -146,7 +151,7 @@ def test_a_press_settles_the_alerts_buttons_by_its_option_and_names_its_label(st
     # architecture review, 2026-10-13: the desk is given the option pressed, never the label to read back
     iid = desk.intake(store, event(), T0, occupancy_reader=lambda: "occupied")["incident_id"]
     res = desk.reply(store, iid, "done", "fm", T0 + timedelta(minutes=5), name="Fabien")
-    assert res["settle"] == [{"incident_id": iid, "note": "Done on {time} (Fabien)."}]
+    assert english(res["settle"]) == [{"incident_id": iid, "note": "Done on {time} (Fabien)."}]
     assert desk.BUTTONS["need_help"]["mark"] == "help"
     other = desk.intake(store, event(rule="automation.other", entities=("lock.other",)), T0,
                         occupancy_reader=lambda: "occupied")["incident_id"]
@@ -242,7 +247,7 @@ def test_a_door_locked_after_its_rule_stopped_watching_closes_its_alert(store):
     assert not _tick(store, villa, 100).get("cleared")                  # locked 5 min ago: not yet
     res = _tick(store, villa, 106)
     assert res["cleared"] == [iid] and store.incident(iid)["state"] == "resolved"
-    assert res["settle"] == [{"incident_id": iid, "note": "Cleared on {time}: front_door is locked."}]
+    assert english(res["settle"]) == [{"incident_id": iid, "note": "Cleared on {time}: front_door is locked."}]
     assert moved(res) and store.last_task(f"incident:{iid}")["status"] == "cleared"   # its Kiosk fault closes too
     assert [s for s in res["send"] if s["to"] == "fm" and s["status"] == "Cleared on {time}: front_door is locked."
             and s["stage"] == "closed"], res["send"]
@@ -842,7 +847,7 @@ def test_a_priority_lowered_while_its_alert_is_chased_stops_the_chase(store):
     assert inc["severity"] == "P3" and inc["state"] == "digest"
     assert store.last_task(f"incident:{iid}")["status"] != "open"                       # its task closed…
     assert moved(res)                                                                    # …and its Kiosk fault
-    assert res["settle"] == [{"incident_id": iid,                                         # every copy says why
+    assert english(res["settle"]) == [{"incident_id": iid,                                         # every copy says why
                               "note": "Lowered to P3 on {time}: kept for the next daily digest. No reply needed."}]
     later = desk.tick(store, T0 + timedelta(minutes=60))
     assert later["reasked"] == [] and not [s for s in later["send"] if s.get("incident_id") == iid]
