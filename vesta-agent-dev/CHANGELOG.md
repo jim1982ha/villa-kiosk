@@ -1,3 +1,14 @@
+## 0.12.352
+
+What you will see:
+- "Devices offline" messages, the daily report and the chat status say how long a device has REALLY been offline,
+  read from the villa's history: a restart of the villa's system no longer starts the count again ("Timmerflotte_2623
+  has been offline for 10h 2min" while it had been offline for days).
+- An "integration (N devices) offline" line now appears only when those devices went offline together (within
+  `integration_down_window_minutes`, 30min, a new setting of preventive-maintenance on the Limits tab). Three devices
+  offline for three unrelated reasons are three separate lines, each with its own time ("matter integration (3
+  devices)" last night, while the integration and its other devices worked).
+
 ## 0.12.351
 
 What you will see:
