@@ -1,3 +1,8 @@
+## 2.496.522
+
+- Nothing changes on screen. Four of the app's own checks now look at what the screen draws instead of the exact
+  wording of the code, and a quick check of only what changed runs in seconds before each release.
+
 ## 2.496.521
 
 What you will see:
