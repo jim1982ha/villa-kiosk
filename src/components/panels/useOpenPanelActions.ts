@@ -120,6 +120,8 @@ export function useOpenPanelActions({ screen, go, panelFor, readingsOf, doors, i
       linked: header.linked ? { ...header.linked, toggle: linkedAsk.request } : undefined,
       motion: header.motion ?? undefined,
       linkedSensor: header.linkedSensor ?? undefined,
+      faults: doors.facility && header.faults.length > 0
+        ? { open: () => go({ type: "openFaults", ids: header.faults }) } : undefined,
     },
   };
 }

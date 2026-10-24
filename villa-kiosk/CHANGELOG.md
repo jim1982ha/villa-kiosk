@@ -1,3 +1,11 @@
+## 2.496.523
+
+What you will see:
+- A device's window: while the device, or the entity linked to it, has an open fault, an amber warning sign sits at
+  the top left of its window, before its icon. Tap it: the Cockpit opens on its Overview, with that device's card
+  framed in amber and brought into view; closing the Cockpit brings you back to the device. The sign goes by itself
+  once the faults are closed. It is shown to the profiles that manage faults (owner, facility manager).
+
 ## 2.496.522
 
 - Nothing changes on screen. Four of the app's own checks now look at what the screen draws instead of the exact

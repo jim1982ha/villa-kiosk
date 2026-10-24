@@ -12,7 +12,7 @@
 // for room.
 
 import { useState, type ReactNode } from "react";
-import { Wrench } from "lucide-react";
+import { TriangleAlert, Wrench } from "lucide-react";
 import { linkedSwitchProps, usePanelActions } from "./PanelActionsContext";
 import { linkedStateWords } from "./panelHeader";
 import { badgeImage } from "@/babylon/badgeIcons";
@@ -69,8 +69,19 @@ interface Props {
   children: ReactNode;
 }
 
+/** The device window's warning (header, top left): the Cockpit's own sign in a fault's amber (attention severity
+ *  "warn", .cockpit-attention-warn), an icon button of the footer's size. Pure: a check draws it. */
+export function FaultsButton({ onOpen }: { onOpen: () => void }) {
+  return (
+    <button type="button" className="btn ghost icon-only panel-faults-btn cockpit-attention-warn" onClick={onOpen}
+      title="Open this device's faults in the Cockpit" aria-label="Open this device's faults in the Cockpit">
+      <TriangleAlert size={18} aria-hidden="true" />
+    </button>
+  );
+}
+
 export default function BasePanel({ title, entityId, icon, className, headerActions, footerLeading, history, deviceReadings, onClose, children }: Props) {
-  const { may, onEdit, onReportFault, badge, onSetBadgeColor, linked, linkedSensor, motion, back } = usePanelActions();
+  const { may, onEdit, onReportFault, badge, onSetBadgeColor, linked, linkedSensor, motion, faults, back } = usePanelActions();
   const { resolvedRooms } = useConfig();
   const { entities } = useHA();
   const room = entityId ? deviceRoom(resolvedRooms, entityId) : "";
@@ -148,6 +159,10 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
       >
         <div className="modal-header">
           <div className="title">
+            {/* ⚠️ ITS OPEN FAULTS, ONE TAP AWAY (owner, 2026-10-24): while the device or its linked entity has an open
+                Cockpit fault (panelHeader.faults: the badge's amber "!"), the Cockpit's own warning sign, in a fault's
+                amber (attention severity "warn"), opens the Overview with that card marked. Gone once they are closed. */}
+            {faults && <FaultsButton onOpen={faults.open} />}
             {headerIcon}
             <div style={{ minWidth: 0 }}>
               {/* The window's first focus (useModalA11y's data-autofocus), not the

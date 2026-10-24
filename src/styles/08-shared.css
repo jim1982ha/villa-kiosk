@@ -130,6 +130,11 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 .cockpit-attention-warn { color: var(--status-warning); }
 /* any other device offline: grey, "no contact" — the map badge's grey "?" (owner, 2026-10-22: badge proposal 2) */
 .cockpit-attention-lost { color: var(--status-lost); }
+/* The card a device window's warning opened the Cockpit for (owner, 2026-10-24): framed in a fault's amber, and lit
+   a moment as it comes into view. */
+.fm-record-card.cockpit-focus { outline: 2px solid var(--status-warning); outline-offset: 2px; animation: cockpit-focus-flash 1.2s ease-out 2; }
+@keyframes cockpit-focus-flash { 0%, 100% { box-shadow: none; } 40% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--status-warning) 35%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .fm-record-card.cockpit-focus { animation: none; } }
 /* An issue's problems, one or several (config/attention.groupAttention): one line each, inside the card's text. */
 .cockpit-attention-subs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .cockpit-attention-sub { display: flex; flex-direction: column; gap: 4px; }

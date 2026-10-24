@@ -46,6 +46,8 @@ export interface CockpitModalProps {
   onTicketEditOpened?: () => void;
   /** A guest's "Report a problem" (the Overview). */
   onReportProblem: () => void;
+  /** The devices whose open faults the Overview marks and scrolls to (a device window's warning). */
+  focusFaults?: readonly string[];
 }
 
 /** The Cockpit's own view, then the Facility tabs (2.496.273: the Facility
@@ -55,7 +57,7 @@ const OVERVIEW_TAB: ModalTab<CockpitTab> = { id: "overview", label: "Overview", 
 
 export default function CockpitModal({
   onClose, onOpenEntity, doors, tab, onTab, reportFaultFor, onFaultFormOpened,
-  editTicket, onEditTicket, onTicketEditOpened, onReportProblem,
+  editTicket, onEditTicket, onTicketEditOpened, onReportProblem, focusFaults,
 }: CockpitModalProps) {
   // A profile without the Facility door sees the Cockpit's view alone, no strip.
   const tabs: ModalTab<CockpitTab>[] = doors.facility ? [OVERVIEW_TAB, ...FACILITY_TABS] : [OVERVIEW_TAB];
@@ -115,7 +117,8 @@ export default function CockpitModal({
               onTicketEditOpened={onTicketEditOpened} />
           ) : (
             <CockpitOverview onOpenEntity={onOpenEntity} doors={doors} reportFaultFor={reportFaultFor}
-              onFaultFormOpened={onFaultFormOpened} onEditTicket={onEditTicket} onReportProblem={onReportProblem} />
+              onFaultFormOpened={onFaultFormOpened} onEditTicket={onEditTicket} onReportProblem={onReportProblem}
+              focusFaults={focusFaults} />
           )}
         </div>
 
