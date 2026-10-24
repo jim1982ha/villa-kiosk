@@ -1,3 +1,9 @@
+## 2.496.519
+
+What you will see:
+- Advanced Settings: "Model details" in the footer is now the same small (i) as every other (i), not a worded button.
+  Tap it to see the model's details as before.
+
 ## 2.496.518
 
 - Nothing changes on screen. One of the release checks could fail on a slow build machine, which stopped 2.496.517
