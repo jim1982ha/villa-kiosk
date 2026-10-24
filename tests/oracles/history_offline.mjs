@@ -39,7 +39,9 @@ const ROWS = [
 const { loadOne } = await import("@/ha/historySource");
 const portOf = (rows) => ({ stateRows: async () => rows, getStatisticsDuringPeriod: async () => ({}) });
 const NOW = Date.UTC(2026, 8, 14, 12, 0);
-const statesOf = async (rows, id) => (await loadOne(portOf(rows), { kind: "states", ids: [id], hours: 24 }, NOW))[id];
+// 12h: the window opens at T(0), where Home Assistant puts the anchor row (the state at the window's start, stamped
+// with that start — read on the villa 2026-10-24). A first row later than the start is a device's first record ever.
+const statesOf = async (rows, id) => (await loadOne(portOf(rows), { kind: "states", ids: [id], hours: 12 }, NOW))[id];
 const points = await statesOf(ROWS, "lock.fixture");
 const states = points.map((p) => p.state);
 console.log(`  ${ROWS.length} recorded rows → ${points.length} points\n`);

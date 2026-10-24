@@ -27,7 +27,7 @@ import { gapsFrom } from "@/utils/historyGaps";
 import { PERIOD_MS, statisticsSeries, type StatisticField, type StatisticsPeriod } from "@/utils/statisticsSeries";
 import { fiveMinuteSeries, intervalSeries } from "@/utils/trendInterval";
 import { windowEndingAt } from "@/utils/lineChart";
-import { NOT_KEPT, UNKNOWN_STATES } from "@/utils/stateColors";
+import { isNoHistory, NO_RECORD, NOT_KEPT, UNKNOWN_STATES } from "@/utils/stateColors";
 import type { HistorySeries, StateHistoryPoint, StatisticPeriod } from "@/types/ha.types";
 import { dayTime } from "@/utils/dateText";
 import { HOUR_MS } from "@/utils/localDay";
@@ -196,11 +196,16 @@ async function states(port: HistoryPort, id: string, window: { from: number; to:
  * ONE rule for every band: the asked window, a follower's, and a window moved back to a silent device's last report
  * (until 2.496.499 the moved one skipped it: a lock dead for 8 days, on a week's chart, drew its band blank where the
  * door sensor's band under it read "No longer kept").
+ * ⚠️ BEFORE ITS FIRST RECORD (owner, 2026-10-24): the read carries the state at the window's start for anything that
+ * existed then, so a first record later than that start is the device's first ever: the window opens on NO_RECORD
+ * ("No record yet") until it — never blank, which a band paints in the grey of its resting state.
  */
 export function keptBand(points: readonly StateHistoryPoint[], window: { from: number; to: number },
   kept: number | undefined): StateHistoryPoint[] {
-  const out: StateHistoryPoint[] = kept !== undefined && kept > window.from && !(points.length && points[0].t <= window.from)
-    ? [{ t: window.from, state: NOT_KEPT }] : [];
+  const covered = points.length > 0 && points[0].t <= window.from + 1000;      // the start state, to the second
+  const out: StateHistoryPoint[] = covered ? []
+    : kept !== undefined && kept > window.from ? [{ t: window.from, state: NOT_KEPT }]
+    : points.length ? [{ t: window.from, state: NO_RECORD }] : [];
   for (const p of points) {
     if (out.length === 0 || out[out.length - 1].state !== p.state) out.push(p);
   }
@@ -219,7 +224,7 @@ async function stateWindow(port: HistoryPort, id: string, hours: number, now: nu
   const kept = await keptFrom(port, now);
   const followers = async (to: number) => follow.length === 0 ? undefined : Object.fromEntries(await Promise.all(
     follow.map(async (f) => [f, await states(port, f, { from: to - hours * HOUR_MS, to }, kept, now)] as const)));
-  const alive = (h: StateHistoryPoint[]) => h.some((pt) => !UNKNOWN_STATES.has(pt.state) && pt.state !== NOT_KEPT);
+  const alive = (h: StateHistoryPoint[]) => h.some((pt) => !UNKNOWN_STATES.has(pt.state) && !isNoHistory(pt.state));
   const h = await states(port, id, { from: now - hours * HOUR_MS, to: now }, kept, now);
   const asked = async (): Promise<StateWindow> => ({ data: h, ...(follow.length ? { followers: await followers(now) } : {}) });
   if (alive(h)) return asked();
@@ -227,7 +232,7 @@ async function stateWindow(port: HistoryPort, id: string, hours: number, now: nu
   const deep = await states(port, id, { from: readBackFrom(kept, now), to: now }, kept, now);
   let seen = 0;
   for (const pt of deep) {
-    if (!UNKNOWN_STATES.has(pt.state) && pt.state !== NOT_KEPT && pt.t > seen) seen = pt.t;
+    if (!UNKNOWN_STATES.has(pt.state) && !isNoHistory(pt.state) && pt.t > seen) seen = pt.t;
   }
   if (seen === 0) return asked();
   // Keep the window's own length; only move where it ENDS — on the step edge

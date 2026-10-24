@@ -19,7 +19,7 @@ import { useChartPointer } from "./useChartPointer";
 // every panel's history bar and the camera's status rail, so the drift would
 // have shown as one word spelled two ways on one screen. Its words and its
 // offline colour come from config/reading, like every other surface's.
-import { readableState, chartColours, NOT_KEPT, NOT_KEPT_WORDS } from "@/config/reading";
+import { readableState, chartColours, NOT_KEPT, NOT_KEPT_WORDS, NO_RECORD, NO_RECORD_WORDS } from "@/config/reading";
 import { TREND_INTERVAL_MS } from "@/utils/trendInterval";
 import { bandEnd, timelineCells, timelineLegend, timelineRuns } from "@/utils/timelineCells";
 import { DAY_MS } from "@/utils/localDay";
@@ -103,7 +103,7 @@ export default function StateTimeline({
   // the panel's mapping (config/reading.chartColours).
   const colorFor = useMemo(() => chartColours(ownColour), [ownColour]);
   // the part older than the villa's system keeps: its own words, whatever the device's (historySource.keptFrom)
-  const wordsFor = (s: string) => (s === NOT_KEPT ? NOT_KEPT_WORDS : labelFor(s));
+  const wordsFor = (s: string) => (s === NOT_KEPT ? NOT_KEPT_WORDS : s === NO_RECORD ? NO_RECORD_WORDS : labelFor(s));
   // Where the pointer is along the bar, as a fraction (the app's one rule:
   // useChartPointer) — along whichever axis the bar runs.
   const { frac, handlers } = useChartPointer<HTMLDivElement>(vertical ? "y" : "x");
