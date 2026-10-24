@@ -254,3 +254,39 @@ def test_the_villas_device_list_refresh_says_done_like_every_job(tmp_path):
     rows = {r["job"]: r for r in status.jobs_run(state, at(0, 0) - timedelta(days=1),
                                                   lambda j: job_label(j, Skills(s.skills_dir)))}
     assert rows["engine:pack"]["words"] == "done" and rows["engine:pack"]["label"] == "Villa's device list (refreshed)"
+
+
+def test_a_job_time_moved_on_the_limits_tab_after_it_ran_does_not_run_it_again_that_day(tmp_path):
+    """review J, 0.12.341: the morning report ran at 07:00; moved to 07:15 at 07:20, it ran a second time at 07:21 —
+    "already ran today" was filed under the old time. It runs once that day, and at its new time the next."""
+    from aiohttp.test_utils import TestClient, TestServer
+    from vesta_agent.ui.server import UI
+    s = settings(str(tmp_path))
+    copy_skill("reports", s.skills_dir)
+    model = []
+
+    async def run_code(skill, command, timeout):
+        pass
+
+    async def run_model(skill, job):
+        model.append(job["when"])
+
+    async def nothing():
+        pass
+
+    sch = Scheduler(s, Skills(s.skills_dir), State(s.state_path), run_code, run_model, nothing)
+
+    async def go():
+        await sch.tick(at(7, 1))
+        await sch.idle()
+        async with TestClient(TestServer(UI(s, "standalone").app())) as c:
+            r = await c.put("/api/limits", json={"id": {"src": "skill", "skill": "reports", "file": "skill.yaml",
+                                                         "path": ["schedule", 0, "when"]}, "value": "07:15"},
+                            headers={"X-Vesta-UI": "1"})
+            assert r.status == 200, await r.text()
+        await sch.tick(at(7, 21))
+        await sch.idle()
+        await sch.tick(at(7, 16, day=2))
+        await sch.idle()
+    asyncio.run(go())
+    assert model == ["07:00", "07:15"]

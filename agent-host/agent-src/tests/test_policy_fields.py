@@ -44,3 +44,27 @@ def test_a_new_villa_turns_a_tv_on_and_off_at_once_for_a_registered_person():
     for service in ("turn_on", "turn_off"):
         d = pol.check_service("media_player", service, "media_player.example_tv", {})
         assert d.allowed and d.direct, (service, d)
+
+
+def test_page_changes_say_what_changed_in_a_person_never_a_count():
+    # owner, 2026-10-24: "People: 3 items → 3 items" said nothing of what changed
+    before = ("people:\n  - {telegram_id: 1, name: Luc, role: fm, language: fr}\n"
+              "  - {telegram_id: 2, name: Ana, role: owner, language: en}\n")
+    after = ("people:\n  - {telegram_id: 1, name: Luc, role: fm, language: en}\n"
+             "  - {telegram_id: 2, name: Ana, role: owner, language: en}\n"
+             "  - {telegram_id: 3, name: Wayan, role: fm, language: id}\n")
+    people = policy.WORDS["people"]
+    assert history.policy_change(before, after) == f"{people} › Luc: language French → English; {people}: + Wayan"
+    assert history.policy_change(after, before) == f"{people} › Luc: language English → French; {people}: − Wayan"
+    swapped = "people:\n  - {telegram_id: 2, name: Ana, role: owner, language: en}\n" \
+              "  - {telegram_id: 1, name: Luc, role: fm, language: fr}\n"
+    assert history.policy_change(before, swapped) == f"{people}: order changed"
+
+
+def test_a_change_recorded_as_a_count_is_said_again_from_its_texts(tmp_path):
+    # the two 23:25 lines the owner saw were recorded before the fix: Page changes says them again from what was saved
+    h = history.History(str(tmp_path / "h.sqlite"))
+    before = "people:\n  - {telegram_id: 1, name: Luc, role: fm, language: fr}\n"
+    after = "people:\n  - {telegram_id: 1, name: Luc, role: fm, language: en}\n"
+    h.record("Rules", "People: 1 item → 1 item", {"kind": "policy"}, before, after)
+    assert h.rows()[0]["what"] == f"{policy.WORDS['people']} › Luc: language French → English"

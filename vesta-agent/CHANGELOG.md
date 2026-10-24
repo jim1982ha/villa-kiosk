@@ -1,3 +1,16 @@
+## 0.12.341
+
+What you will see:
+- Moving a report's time on the Limits tab just after it ran no longer sends it a second time that day: it comes at
+  the new time from the next day.
+- Pressing Done on an alert VESTA cannot check again now also ends with its watch: "✅ Done on … (JM). Watch 1 h."
+- Limits: "what counts as running" is now one row, "Running, for the whole villa", instead of four (one per skill).
+  Changing it changes every skill at once, so a pump runs or not the same way in the night check, the reports and the
+  energy figures. If the skills were set differently before, the row says so, and one save puts them back together.
+- Overview › Page changes: a change in People now says what changed and for whom ("People › Luc: language French →
+  English", "People: + Wayan"), instead of "People: 3 items → 3 items". The lines already listed are said again the
+  same way.
+
 ## 0.12.340
 
 What you will see:

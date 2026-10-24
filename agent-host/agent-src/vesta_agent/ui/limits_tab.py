@@ -21,6 +21,7 @@ import yaml
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 
 from vesta_shared import limits
+from vesta_shared.daily import VILLA_WIDE
 
 from ..places import where
 from ..policy import DEFAULT_BEHAVIOUR, DEFAULTS, KEEP, PROFILES, RESET_WORDS, WORDS, Policy
@@ -30,6 +31,11 @@ from .policy_doc import _yaml
 PLACE = "Limits"
 SKILL_GROUP, POLICY_GROUP = "skills", "rules"
 
+
+#: What a villa-wide setting (vesta_shared.daily.VILLA_WIDE) is, on its one row
+WIDE_WORDS = {"on_threshold_fraction": "Running, for the whole villa: the share of a device's typical peak above which "
+                                       "it counts as running. One value for every skill that reads it, so a device runs "
+                                       "or not the same way in every message and report."}
 
 #: A setting's unit, read from its own name (owner, 2026-10-23: "always show the units in the value column"): ONE rule
 #: for every skill's and every rule's number, so a new setting shows its unit without anyone listing it. The counts a
@@ -190,6 +196,7 @@ class LimitsTab:
                         "where": [s for s in d.sites]})
         for skill in self.skills():
             out += self._skill_rows(skill)
+        out = self._villa_wide(out)
         out += self._policy_rows()
         out += self._measured_rows()
         for r in out:
@@ -281,6 +288,33 @@ class LimitsTab:
                              "where": [f"{skill}/{villa_fn if (over is not None or not own) else fn}"]})
         return rows
 
+    def _villa_wide(self, rows: list[dict]) -> list[dict]:
+        """`rows` with each villa-wide setting (vesta_shared.daily.VILLA_WIDE) of every skill made ONE row: its value
+        the skills' own when they agree; its save writes every skill that has it (_save_shared)."""
+        out, found = [], {}
+        for r in rows:
+            rid = r["id"]
+            if rid["src"] == "skill" and list(rid["path"]) == ["behaviour", rid["path"][-1]] and rid["path"][-1] in VILLA_WIDE:
+                found.setdefault(rid["path"][-1], []).append(r)
+            else:
+                out.append(r)
+        for key, each in found.items():
+            values = {r["section"]: r["value"] for r in each}
+            first = each[0]
+            differ = len(set(values.values())) > 1
+            also = (f"Saved in every skill that reads it: {', '.join(sorted(values))} (each one's villa file, kept by "
+                    "updates).")
+            if differ:
+                also += " Today they differ: " + ", ".join(f"{s} {v}" for s, v in sorted(values.items())) + \
+                        ". Saving here sets them all."
+            also += (f" If the villa's system has a helper input_number.vesta_{key}, that helper's value wins over "
+                     "this one.")
+            out.append({**first, "id": {"src": "shared", "key": key}, "section": "every skill", "name": f"behaviour › {key}",
+                        "label": WIDE_WORDS.get(key, key.replace("_", " ")),
+                        "value": max(values.values(), key=list(values.values()).count) if differ else first["value"],
+                        "also": also, "where": sorted(w for r in each for w in r["where"])})
+        return out
+
     def _schedule_rows(self, skill: str, doc) -> list[dict]:
         """When each scheduled job of the skill runs (skill.yaml `schedule`: "02:00", "Mon 08:00", "1 08:00").
 
@@ -313,6 +347,8 @@ class LimitsTab:
             rid = r["id"]
             if rid["src"] == "code":
                 keys = [rid["key"]]
+            elif rid["src"] == "shared":
+                keys = [f"behaviour.{rid['key']}", rid["key"]]
             elif rid["src"] == "policy" or (rid["src"] == "skill" and rid["skill"] == skill):
                 path = [str(k) for k in rid["path"]]
                 keys = [] if any(k.isdigit() for k in path) else [".".join(path), path[-1]]
@@ -410,7 +446,22 @@ class LimitsTab:
             return self._save_skill(str(rid.get("skill") or ""), str(rid.get("file") or ""), list(rid.get("path") or []), value)
         if src == "policy":
             return self._save_policy(list(rid.get("path") or []), value)
+        if src == "shared":
+            return self._save_shared(str(rid.get("key") or ""), value)
         raise Refused(["Unknown limit."])
+
+    def _save_shared(self, key: str, value) -> dict:
+        """A villa-wide setting: written in every skill that has it, each through its own checked, recorded save."""
+        if key not in VILLA_WIDE:
+            raise Refused([f"No villa-wide setting {key}."])
+        skills = [(s, fn) for s in self.skills() for fn in self.setting_files(s)
+                  if _get(yaml.safe_load(_read(os.path.join(self.s.skills_dir, s, fn)).decode("utf-8") or "") or {},
+                          ["behaviour", key]) is not None]
+        if not skills:
+            raise Refused([f"No skill has the setting {key}."])
+        for s, fn in skills:
+            self._save_skill(s, fn, ["behaviour", key], value)
+        return {"ok": True}
 
     def _save_code(self, key: str, value) -> dict:
         declared, _ = limits.scan(self.roots())

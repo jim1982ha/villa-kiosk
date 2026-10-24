@@ -165,11 +165,11 @@ class Scheduler:
         from it (heartbeat cadence `lastLookAt`, owner 2026-10-21: its time moved every minute, "now + 5 min")."""
         return self._last_every
 
-    def _claim(self, job: str, slot: datetime) -> bool:
+    def _claim(self, job: str, slot: datetime, entry: str | None = None) -> bool:
         if self._cut.get(job) == slot.isoformat():
             del self._cut[job]
             return True
-        return self.state.claim_job_slot(job, slot.isoformat())
+        return self.state.claim_job_slot(job, slot.isoformat(), entry)
 
     async def tick(self, now: datetime | None = None) -> list[str]:
         """One pass. Returns what it started, for the log and the tests."""
@@ -202,7 +202,7 @@ class Scheduler:
                 # was claimed per entry (skill:i:when) and started per time (skill:when) — two jobs of a skill at the
                 # same time, and the second, claimed, was refused as "still running": lost for the day
                 key = job_key(sk.name, i, job["when"])
-                if not slot or not self._claim(key, slot):
+                if not slot or not self._claim(key, slot, job_key(sk.name, i, "")):
                     continue
                 name = f"{sk.name}:{job['when']}"
 

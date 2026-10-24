@@ -151,7 +151,7 @@ def test_a_press_settles_the_alerts_buttons_by_its_option_and_names_its_label(st
     # architecture review, 2026-10-13: the desk is given the option pressed, never the label to read back
     iid = desk.intake(store, event(), T0, occupancy_reader=lambda: "occupied")["incident_id"]
     res = desk.reply(store, iid, "done", "fm", T0 + timedelta(minutes=5), name="Fabien")
-    assert english(res["settle"]) == [{"incident_id": iid, "note": "Done on {time} (Fabien)."}]
+    assert english(res["settle"]) == [{"incident_id": iid, "note": "Done on {time} (Fabien). Watch 4 h."}]
     assert desk.BUTTONS["need_help"]["mark"] == "help"
     other = desk.intake(store, event(rule="automation.other", entities=("lock.other",)), T0,
                         occupancy_reader=lambda: "occupied")["incident_id"]
@@ -551,6 +551,15 @@ def test_a_closed_alert_says_how_long_it_stays_on_watch_from_the_villas_reopen_h
     villa.now = T0 + timedelta(minutes=20)
     done = [s for s in desk.tick(store, villa.now, params, client=villa)["send"] if s["stage"] == "closed"]
     assert done and done[0]["status"] == "Done (FM). Checked after 10 min: right." + says
+    # a Done on an alert the desk cannot read again: closed at once, its watch said there (review J, 0.12.341)
+    store = Store(str(tmp_path / f"n{hours}.sqlite"))
+    iid = desk.intake(store, event(blueprint="critical_schedule", rule="automation.pump_watchdog",
+                                   entities=("switch.pool_pump",)), T0, params,
+                      occupancy_reader=lambda: "occupied")["incident_id"]
+    assert not desk.judged(store.incident(iid))
+    now = [s for s in desk.reply(store, iid, "done", "fm", T0 + timedelta(minutes=5), params, name="JM")["send"]
+           if s["stage"] == "closed"]
+    assert now and now[0]["status"] == "Done on {time} (JM)." + says
 
 
 def test_a_claim_that_cannot_be_told_keeps_the_alert_open_and_says_so_once(store):

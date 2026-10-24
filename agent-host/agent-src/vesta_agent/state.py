@@ -359,14 +359,28 @@ class State:
             self.drop("siren:entity")
 
     # A scheduled job's last slot: claimed once per slot, by one tick.
-    def claim_job_slot(self, job: str, slot_iso: str) -> bool:
+    def claim_job_slot(self, job: str, slot_iso: str, entry: str | None = None) -> bool:
         """True if this tick claims `job` for `slot_iso`; False if it already ran in that slot.
-        Under the lock: a read then a write would let two ticks both claim it."""
+        Under the lock: a read then a write would let two ticks both claim it.
+
+        `entry`: the key prefix every time of one schedule entry shares (scheduler.job_key). ⚠️ A TIME MOVED AFTER IT
+        RAN IS THE SAME JOB (review J, 0.12.341): the key holds the time, so a report moved from 07:00 to 07:15 on the
+        Limits tab at 07:20 was a key never claimed and ran again; a slot of that entry claimed on the same day refuses."""
         with self._lock:
             k = f"job:{job}"
             r = self.db.execute("select v from kv where k=?", (k,)).fetchone()
             if r and r["v"] == slot_iso:
                 return False
+            if entry is not None:
+                pre = f"job:{entry}"
+                for o in self.db.execute("select k, v from kv where substr(k, 1, ?) = ? and k != ?",
+                                         (len(pre), pre, k)).fetchall():
+                    try:
+                        same_day = datetime.fromisoformat(str(o["v"])).date() == datetime.fromisoformat(slot_iso).date()
+                    except ValueError:
+                        same_day = False
+                    if same_day:
+                        return False
             self.db.execute("insert into kv(k, v, at) values(?,?,?) on conflict(k) do update set v=excluded.v, at=excluded.at",
                             (k, slot_iso, utcnow().isoformat()))
             self.db.commit()

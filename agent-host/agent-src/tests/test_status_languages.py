@@ -163,8 +163,8 @@ def test_a_press_is_told_in_each_chats_language(agent):
     rule(agent, "opened", 500)
     tick(agent, 20)
     press(agent, FM_FR)
-    assert re.fullmatch(rf"✅ Terminé le {T} \(Luc\)\.", status(card(agent, FM_FR), "Statut")[-1]), card(agent, FM_FR)
-    assert re.fullmatch(rf"✅ Erledigt am {T} \(Luc\)\.", status(card(agent, FM_DE), "Status")[-1]), card(agent, FM_DE)
+    assert re.fullmatch(rf"✅ Terminé le {T} \(Luc\)\. Surveillance 4 h\.", status(card(agent, FM_FR), "Statut")[-1]), card(agent, FM_FR)
+    assert re.fullmatch(rf"✅ Erledigt am {T} \(Luc\)\. 4 Std\. Beobachtung\.", status(card(agent, FM_DE), "Status")[-1]), card(agent, FM_DE)
     assert re.fullmatch(rf"✅ Done on {T} \(Luc\)\.", status(card(agent, GROUP), "Status")[-1]), card(agent, GROUP)
 
 

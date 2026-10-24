@@ -13,6 +13,11 @@ from .params import MissingParameter
 from .stats import med
 from .timeutil import local_day
 
+#: The settings every skill reads as ONE villa value, by name (running_threshold's share): written in each skill that
+#: asks it, shown and saved as one row on the agent page's Limits tab (review J, 0.12.341: four rows each said "the
+#: villa's one definition", and a save changed one skill — a pump "ran" in the night check and not in the reports)
+VILLA_WIDE = ("on_threshold_fraction",)
+
 
 def power_daily_features(hour_rows: list[dict], zone: str, on_threshold_w: float) -> dict[date, dict]:
     """From hourly mean/min/max of a power sensor.

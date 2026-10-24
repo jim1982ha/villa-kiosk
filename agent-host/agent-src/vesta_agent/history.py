@@ -13,6 +13,7 @@ Kept as long as the agent's other records (policy.yaml settings.keep.records_day
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import threading
 from datetime import datetime, timedelta, timezone
@@ -24,7 +25,7 @@ from vesta_shared.limits import limit
 # the rules' settings as the page names them: policy.FIELDS, the one table (a path it does not know is shown as
 # written). This file kept its own copy, and two labels had drifted from the page's.
 from .places import title
-from .policy import WORDS
+from .policy import WORDS, Language
 
 SCHEMA = """
 create table if not exists changes(
@@ -39,6 +40,13 @@ create table if not exists changes(
 );
 """
 FILE_NAME = "page_history.sqlite"
+
+
+COUNTED = re.compile(r"\d+ items? → \d+ items?")
+
+
+def _text(v) -> str:
+    return v.decode("utf-8", "replace") if isinstance(v, bytes) else (v or "")
 
 
 class History:
@@ -71,6 +79,10 @@ class History:
             d = dict(r)
             d["target"] = json.loads(d["target"])
             d["chip"] = self.CHIPS.get(d["place"], "")
+            if d["target"].get("kind") == "policy" and COUNTED.search(d["what"] or ""):
+                # a line recorded before 0.12.341 said only "People: 3 items → 3 items": said again from its texts
+                full = self.get(d["id"]) or {}
+                d["what"] = policy_change(_text(full.get("before")), _text(full.get("after")))
             out.append(d)
         return out
 
@@ -157,12 +169,48 @@ def _diff(path: str, a, b, out: list[str]) -> None:
     if isinstance(a, dict) and isinstance(b, dict):
         for k in list(a) + [k for k in b if k not in a]:
             _diff(f"{path}.{k}" if path else str(k), a.get(k), b.get(k), out)
+    elif isinstance(a, list) and isinstance(b, list) and a and b and all(isinstance(x, dict) for x in a + b):
+        _rows(path, a, b, out)
     elif isinstance(a, list) and isinstance(b, list) and all(isinstance(x, (str, int)) for x in a + b):
         added, gone = [x for x in b if x not in a], [x for x in a if x not in b]
         if added or gone:
             out.append(f"{_say(path)}: " + ", ".join([f"+ {x}" for x in added] + [f"− {x}" for x in gone]))
     elif a != b:
         out.append(f"{_say(path)}: {_word(a)} → {_word(b)}")
+
+
+def _named(row: dict, i: int) -> str:
+    return str(row.get("name") or row.get("entity_id") or row.get("telegram_id") or f"row {i + 1}")
+
+
+def _rows(path: str, a: list[dict], b: list[dict], out: list[str]) -> None:
+    """A list of rows (People): each row by its name, what changed in it said field by field — "People › Luc:
+    language fr → en", "People: + Wayan", "People: − Luc".
+
+    ⚠️ NEVER "3 items → 3 items" (owner, 2026-10-24: Page changes said only that for a person's language changed). Rows
+    are matched by their name when every name is told apart, else by their place."""
+    names_a, names_b = [_named(r, i) for i, r in enumerate(a)], [_named(r, i) for i, r in enumerate(b)]
+    if len(set(names_a)) == len(a) and len(set(names_b)) == len(b):
+        pairs = [(n, a[names_a.index(n)] if n in names_a else None, b[names_b.index(n)] if n in names_b else None)
+                 for n in names_a + [n for n in names_b if n not in names_a]]
+    else:
+        pairs = [(names_b[i] if i < len(b) else names_a[i], a[i] if i < len(a) else None, b[i] if i < len(b) else None)
+                 for i in range(max(len(a), len(b)))]
+    said = len(out)
+    for name, x, y in pairs:
+        if x is None:
+            out.append(f"{_say(path)}: + {name}")
+        elif y is None:
+            out.append(f"{_say(path)}: − {name}")
+        elif x != y:
+            inner: list[str] = []
+            for k in list(x) + [k for k in y if k not in x]:
+                if x.get(k) != y.get(k):
+                    shown = (lambda v: Language.name_of(v) if v else _word(v)) if k == "language" else _word
+                    inner.append(f"{k.replace('_', ' ')} {shown(x.get(k))} → {shown(y.get(k))}")
+            out.append(f"{_say(path)} › {name}: " + ", ".join(inner))
+    if len(out) == said and a != b:
+        out.append(f"{_say(path)}: order changed")
 
 
 def file_change(path: str, before: str | None, after: str | None) -> str:

@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.6.331 (24 October 2026)
+
+- Review J, 4: a job time moved on the Limits tab after it ran no longer runs it again that day. The slot key still
+  holds the time (`scheduler.job_key`, unchanged, so nothing claimed before is lost); `State.claim_job_slot(..., entry)`
+  also refuses when another time of the same entry (`skill:index:`) was claimed on the slot's day.
+- Review J, 6: Done on an alert the desk cannot read again (`judged` false) closes at once and now says its watch
+  (`watched(pressed, reopen_hours)`), as every other close does.
+- Review J, 5: a villa-wide setting (`vesta_shared.daily.VILLA_WIDE`: `on_threshold_fraction`) is ONE Limits row
+  (`id {src: shared}`, `limits_tab._villa_wide`), its value the skills' when they agree, their differences said when
+  not; its save writes every skill's villa file (`_save_shared`, each through the checked, recorded skill save);
+  setting chips in any skill's guide link to it.
+- Page changes (owner, 2026-10-24): a change of a list of rows (People) says each row by name, field by field
+  (`history._rows`: "People › Luc: language French → English", "+ Wayan", "− Luc", "order changed"), never "3 items →
+  3 items"; a line recorded that way before is said again from its saved texts (`History.rows`, `COUNTED`). The Done
+  watch is also on the alert's other copies when settled by a typed answer (`settle` note).
+
 ## 0.6.330 (23 October 2026)
 
 - Limits: every number shows its unit (owner, 2026-10-23). `limits_tab.unit_of(key)`: one rule from the setting's own

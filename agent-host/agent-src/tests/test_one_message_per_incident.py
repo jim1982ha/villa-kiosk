@@ -105,7 +105,7 @@ def test_an_answer_replaces_the_alert_where_it_was_given(agent):
     # the alert first, then where it stands, with when (owner, 2026-10-10) — and no promise of a check this alert's rule
     # gives no states for (architecture review 23: "will check it stays quiet" was never kept)
     # who pressed it by name, as the button's own footer says it (owner, 2026-10-11)
-    assert re.fullmatch(r"Done on \d\d/\d\d/\d{4} \d\d:\d\d \(Wayan\)\.", status(fm)) \
+    assert re.fullmatch(r"Done on \d\d/\d\d/\d{4} \d\d:\d\d \(Wayan\)\. Watch 4 h\.", status(fm)) \
         and body(fm).index(SUMMARY) < fm.index("Done on ")
 
 
@@ -313,7 +313,7 @@ def test_a_button_the_skill_renames_still_answers_the_alert(agent):
                                                 "user_id": FM, "bot": BOT,
                                                 "message": {"message_id": 1000 + len(agent.tg.sent), "chat": {"id": FM_CHAT}}}))
     (fm,) = shown(agent, FM_CHAT)
-    assert re.fullmatch(r"Fait on \d\d/\d\d/\d{4} \d\d:\d\d \(Wayan\)\.", status(fm))
+    assert re.fullmatch(r"Fait on \d\d/\d\d/\d{4} \d\d:\d\d \(Wayan\)\. Watch 4 h\.", status(fm))
     from vesta_shared.store import Store
     assert Store(agent.s.store_path).incident(int(iid))["closed_at"]
 

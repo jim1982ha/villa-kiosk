@@ -79,7 +79,7 @@ def test_limit_reads_the_file_and_falls_back_on_a_bad_value(tmp_path, monkeypatc
 def test_the_tab_lists_the_code_the_skills_and_the_rules(ui):
     data = _rows(ui)
     src = {r["id"]["src"] for r in data["rows"]}
-    assert src == {"code", "skill", "policy", "measured"} and data["problems"] == []
+    assert src == {"code", "skill", "shared", "policy", "measured"} and data["problems"] == []
     kept = next(r for r in data["rows"] if r["id"]["src"] == "measured")
     assert kept["value"] == "not measured yet" and "purge_keep_days" in kept["also"]
     pm = next(r for r in data["rows"] if r["id"].get("skill") == "preventive-maintenance"
@@ -371,3 +371,30 @@ def test_every_number_on_the_limits_tab_shows_its_unit(ui):
     assert [unit_of(k) for k in ("cooldown_min", "drift_pct", "offline_min_s", "zero_rest_share", "rise_ratio",
                                  "waste_min_kwh", "on_threshold_floor_w", "nothing_here")] == \
         ["minutes", "%", "seconds", "share (0 to 1)", "times", "kWh", "W", ""]
+
+
+def test_what_counts_as_running_is_one_row_and_its_save_changes_every_skill(ui):
+    # review J, 0.12.341: on_threshold_fraction was four rows, each "the villa's one definition"; one saved at 0.5, the
+    # night check read 0.5 and the reports and energy figures 0.2 — a pump ran in one message and not in another
+    files = {"investigate": "settings.yaml", "preventive-maintenance": "settings.yaml", "reports": "reports.yaml",
+             "roi-energy": "settings.yaml"}
+    for n in files:
+        if not os.path.isdir(os.path.join(ui.skills_dir, n)):
+            copy_skill(n, ui.skills_dir)
+    rows = [r for r in _rows(ui)["rows"] if r["name"].endswith("on_threshold_fraction")]
+    assert len(rows) == 1 and rows[0]["id"] == {"src": "shared", "key": "on_threshold_fraction"}
+    assert rows[0]["value"] == 0.2 and rows[0]["unit"] == "share (0 to 1)"
+    assert _put(ui, rows[0]["id"], 0.5) == (200, {"ok": True})
+    got = {n: skill_settings.behaviour(skill_settings.load(os.path.join(ui.skills_dir, n), f))["on_threshold_fraction"]
+           for n, f in files.items()}
+    assert got == {n: 0.5 for n in files}
+    # each skill's villa file, never the skill's own (its updates keep coming)
+    for n, f in files.items():
+        assert yaml.safe_load(open(os.path.join(ui.skills_dir, n, f)))["behaviour"]["on_threshold_fraction"] == 0.2
+    # a chip naming it in any skill's guide links to the one row
+    assert UI(ui, "standalone").limits.names("reports")["on_threshold_fraction"]["ref"] == "shared:on_threshold_fraction"
+    # skills that disagree (a villa file set by hand) are said, and one save joins them
+    with open(os.path.join(ui.skills_dir, "reports", "villa.reports.yaml"), "w") as fh:
+        fh.write("behaviour:\n  on_threshold_fraction: 0.3\n")
+    row = next(r for r in _rows(ui)["rows"] if r["name"].endswith("on_threshold_fraction"))
+    assert row["value"] == 0.5 and "Today they differ" in row["also"] and "reports 0.3" in row["also"]

@@ -1104,6 +1104,10 @@ def reply(store: Store, iid: int, option: str, sender_role: str, now: datetime, 
         # how long VESTA watches it is the desk's own setting (clear_minutes), said as every duration (owner, 2026-10-19:
         # "✅ Done on 19/10/2026 02:10 (JM), VESTA will monitor it for …")
         monitoring = say("will_monitor", pressed=act, watch=lasting_in(_params(params).behaviour("clear_minutes") * 60))
+        # closed at once when it cannot be read again: its watch is said here, as at every close (review J, 0.12.341:
+        # "✅ Done on … (JM)." and nothing more, yet it reopened under the same number within reopen_hours)
+        if not checks:
+            pressed = watched(pressed, reopen_hours(params))     # and on the alert in every other chat (settle below)
         out["send"].append(here(monitoring.only(act.langs) if checks else pressed, "closed"))
     elif option == "need_help":
         store.update_incident(iid, state=Incident.ESCALATED, reply=label, escalated_at=now.isoformat(),
