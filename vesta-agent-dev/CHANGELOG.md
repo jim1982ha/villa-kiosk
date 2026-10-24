@@ -1,3 +1,9 @@
+## 0.12.346
+
+What you will see:
+- Rules › Devices: "Asleep between reports" no longer has a sentence under it. Where the list is set, and what the
+  agent does with it, is behind the (i) next to the title.
+
 ## 0.12.345
 
 What you will see:
