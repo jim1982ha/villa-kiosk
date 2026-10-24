@@ -157,6 +157,7 @@ class IncidentThread:
                     p["said"] = {"stage": None, "status": layout.fill_time(note, now, self.tz),
                                  "status_in": {k: layout.fill_time(v, now, self.tz) for k, v in note_in.items()}}
                 p = {**p, "head": self._head_now(iid, chat, p.get("head") or "")}      # "Closed" once its incident is (notice.py)
+                p = self._own_words(iid, chat, p)
                 n += await self._show(iid, chat, {**rec, "settled": True}, p)
             return n
 
@@ -171,8 +172,19 @@ class IncidentThread:
                 if rec.get("settled") or not rec.get("mid"):
                     continue
                 p = layout.changed(layout.of(rec), status=note)
-                n += await self._show(iid, chat, {**rec, "buttons": False}, {**p, "head": self._head_now(iid, chat, p.get("head") or "")})
+                p = self._own_words(iid, chat, {**p, "head": self._head_now(iid, chat, p.get("head") or "")})
+                n += await self._show(iid, chat, {**rec, "buttons": False}, p)
             return n
+
+    def _own_words(self, iid: int | str, chat: int, p: dict) -> dict:
+        """A redrawn copy's alert words in the language its heading now reads (translation.Translations.draw): kept,
+        drawn; not yet, English now and translated afterwards.
+
+        ⚠️ A CLOSE DRAWS THE WORDS TOO (owner, 2026-10-24: the group switched from Indonesian to Chinese; #80's close read
+        its Status in Chinese over the alert's words in English). The heading and Status were redrawn in the chat's
+        language now, the words kept the copy's old drawing — another language's, so shown in English — and nothing
+        asked for the new one. Only sync drew them."""
+        return self.translate(iid, chat, p) if self.translate else p
 
     def _lang(self, chat: int) -> str:
         """The language chat `chat` reads (`language`); English without it."""

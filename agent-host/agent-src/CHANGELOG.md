@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.332 (24 October 2026)
+
+- A close (`IncidentThread.close`) and a restate draw the alert's words in the language the copy's heading now reads
+  (`_own_words` → `Translations.draw`: kept, drawn; not yet, asked in the background), as `sync` already did. A chat
+  whose language changed while its alert was open read its Status in the new language over the words in English
+  (owner, 2026-10-24: group switched from Indonesian to Chinese, #80).
+
 ## 0.6.331 (24 October 2026)
 
 - Review J, 4: a job time moved on the Limits tab after it ran no longer runs it again that day. The slot key still

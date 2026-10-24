@@ -253,6 +253,35 @@ def test_a_reminder_and_a_press_keep_each_chats_translation(tmp_path, monkeypatc
         assert all("(fr)" in t or "(de)" in t for t in shown[first:] if "Test lock" in t), shown
 
 
+def test_a_chat_whose_language_changed_reads_the_alerts_words_in_its_new_one_when_it_closes(tmp_path, monkeypatch):
+    # owner, 2026-10-24: the group switched from Indonesian to Chinese; #80's close drew its Status in Chinese over the
+    # alert's words still in the old drawing — shown in English — and the new language was never asked for
+    import yaml
+    v = villa(tmp_path)
+    ai = FakeAI(translator).install(monkeypatch)
+
+    async def go():
+        await alert(v, 1, "lock.test_lock", "Test lock", 10, "23/10/2026 18:30")
+        await v.translations.idle()
+        english = card(v, 1, GROUP)
+        with open(v.s.policy_path) as f:
+            pol = yaml.safe_load(f)
+        pol["people"][0]["language"] = "fr"
+        with open(v.s.policy_path, "w") as f:
+            yaml.safe_dump(pol, f)
+        await v.on_ha_event("vesta_critical_event", {
+            "blueprint": "critical_condition", "rule_id": "automation.watch_1", "incident_id": "automation.watch_1-1",
+            "phase": "resolved", "severity": "critical", "label": "Test lock unavailable", "entities": ["lock.test_lock"],
+            "summary": "", "timestamp": datetime.now(timezone.utc).isoformat(), CONTEXT_KEY: "RUN-1b"})
+        await v.translations.idle()
+        return english
+    english = run(go())
+    assert "(fr)" not in english
+    closed = card(v, 1, GROUP)
+    assert "Statut:" in closed and "Résolu" in closed, closed
+    assert '(fr) Test lock has been "unavailable" for over 10 s.' in closed, closed
+
+
 def test_a_copy_handed_to_another_chat_never_shows_the_first_chats_language():
     # IncidentThread.sync hands a copy's parts to every other chat: the French words are the French chat's only
     from vesta_agent import layout
