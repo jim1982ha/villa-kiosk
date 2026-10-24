@@ -118,14 +118,26 @@ export function mergeItem<T>(was: T, mine: T, theirs: T, rules: FieldMerge = {})
 }
 
 /** applyKeyed for a store that merges an item two devices changed (`merge`, normally mergeItem): an item the diff
- *  carries its `was` for, and that `target` holds changed since, is merged; every other one is replayed as it is. */
+ *  carries its `was` for, and that `target` holds changed since, is merged; one `target` no longer holds was removed
+ *  elsewhere (removedElsewhere) and stays removed; every other one is replayed as it is. */
 export function applyKeyedMerging<T>(target: Keyed<T>, diff: KeyedDiff<T>, merge: (was: T, mine: T, theirs: T) => T): Keyed<T> {
   const set: Keyed<T> = {};
   for (const [id, item] of Object.entries(diff.set)) {
+    if (removedElsewhere(diff, target, id)) continue;
     const moved = diff.was && owns(diff.was, id) && owns(target, id) && !same(target[id], diff.was[id]);
     set[id] = moved ? merge(diff.was![id], item, target[id]) : item;
   }
   return applyKeyed(target, { set, del: diff.del });
+}
+
+/**
+ * A change to an item the copy it was made against held (`was`), landing on a copy that no longer holds it: another
+ * device removed it meanwhile, and in a store that merges items (applyKeyedMerging) the removal stands. ⚠️ IT WAS
+ * REPLAYED AS A NEW ITEM (to 2.496.511, architecture review J): a fault the owner erased on the phone came back "in
+ * progress" on every device when a tablet that had marked it Started offline caught up, its photos already gone.
+ */
+export function removedElsewhere<T>(diff: KeyedDiff<T>, target: Keyed<T>, id: string): boolean {
+  return !!diff.was && owns(diff.was, id) && owns(diff.set, id) && !owns(target, id);
 }
 
 export function keyedDiffIsEmpty<T>(diff: KeyedDiff<T>): boolean {
@@ -180,7 +192,10 @@ export function names(d: KeyedDiff<unknown> | undefined, id: string): boolean {
  * device's edit there, and the next refresh would send that undo to every device (2.496.501).
  */
 export function mineWins<P extends KeyedParts>(others: P, mine: P): P {
-  return keepItems(others, (part, id) => !names(mine[part], id));
+  // ...except a removal of an item this device changed from a copy that held it (`was`, a merging store): it stands
+  // in the store (applyKeyedMerging), so it stands on the screen too
+  return keepItems(others, (part, id, _item, deleted) => !names(mine[part], id)
+    || (deleted && !!mine[part]?.was && owns(mine[part]!.was!, id)));
 }
 
 /**

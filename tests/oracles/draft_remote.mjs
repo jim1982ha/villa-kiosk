@@ -126,7 +126,7 @@ console.log("\n  the wiring:");
      && (sync.match(/mergeRemote\(/g) ?? []).length === 2
      // the one other write: a change the add-on refused, undone to the store's copy (no other tablet's: no draft hears it)
      && (sync.match(/\bupdate\(/g) ?? []).length === 1
-     && /if \(!outcome\.ok && outcome\.reason === "refused" && doc\.baseline\) \{\s*const store = doc\.baseline;\s*update\(\(prev\) => applyRemoteChange\(prev, \{ synced: local, diff: diffSharedConfig\(local, store\) \}\)\);/.test(sync));
+     && /if \(!outcome\.ok && outcome\.reason === "refused"\) \{\s*update\(\(prev\) => applyRemoteChange\(prev, \{ synced: local, diff: outcome\.takeBack \}\)\);/.test(sync));
   ck("the drafts hear it before the write, and the write applies it to the config as it is then",
      /for \(const listener of remoteListeners\.current\) listener\(change\);\s*update\(\(prev\) => applyRemoteChange\(prev, change\)\);/.test(ctx));
   ck("the draft says which of its own changes the same change replaced, measured on the ledger before it moves",

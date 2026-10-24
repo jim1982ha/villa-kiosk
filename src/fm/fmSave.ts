@@ -49,6 +49,10 @@ export function fmSaveOutcome(r: FmWriteResult): FmSaveOutcome {
  *  the other device's value (fmApi foldOthers `changedOnBoth`). */
 export const CHANGED_ON_ANOTHER_DEVICE = "This fault was just changed on another device.";
 
+/** What this device says when a fault it changed had been removed on another device meanwhile: its step is not applied,
+ *  and the fault stays removed (fmApi foldOthers `removedElsewhere`). */
+export const REMOVED_ON_ANOTHER_DEVICE = "This fault was removed on another device, so this step was not saved.";
+
 /**
  * The line a screen of the maintenance record shows INSTEAD of it while the record has not been read (FmDataContext
  * `ready`, `unreachable`): never an empty record shown as the villa's (architecture review H, 2026-10-23: unread on

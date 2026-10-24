@@ -197,12 +197,11 @@ export default function DeviceConfigSync() {
     }
     // ⚠️ THE ADD-ON'S NO IS UNDONE AND SAID, A SAVE THAT DID NOT LAND IS SAID (architecture review H, 2026-10-23): both
     // went to the telemetry alone, and a refused change (read as a Wi-Fi blip) was sent again on every refresh for good.
-    // Undone as the Facility store undoes one: the store's copy of every item this push carried, an edit made since kept
-    // (deviceConfig applyRemoteChange). NOT through mergeRemote: it is no other tablet's change, and an open dialog
-    // would say "changed on another tablet".
-    if (!outcome.ok && outcome.reason === "refused" && doc.baseline) {
-      const store = doc.baseline;
-      update((prev) => applyRemoteChange(prev, { synced: local, diff: diffSharedConfig(local, store) }));
+    // Undone as the Facility store undoes one: the store's copy of every item this push SENT (utils/syncedDocument
+    // `takeBack`), an edit made since kept (deviceConfig applyRemoteChange). NOT through mergeRemote: it is no other
+    // tablet's change, and an open dialog would say "changed on another tablet".
+    if (!outcome.ok && outcome.reason === "refused") {
+      update((prev) => applyRemoteChange(prev, { synced: local, diff: outcome.takeBack }));
     }
     const line = saveProblemLine(outcome);
     if (line !== null || !doc.hasUnsaved) setSaveProblem(line);
