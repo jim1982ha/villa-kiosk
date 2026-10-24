@@ -1,3 +1,8 @@
+## 2.496.518
+
+- Nothing changes on screen. One of the release checks could fail on a slow build machine, which stopped 2.496.517
+  from being published on the main channel; it now waits for the page instead of racing it.
+
 ## 2.496.517
 
 What you will see:
