@@ -126,6 +126,33 @@ ck("the presence band says the villa's words, as its 'now' does: on Empty, off O
 }
 const tileSrc = readFileSync(new URL("../../src/components/hud/PresenceTile.tsx", import.meta.url), "utf8");
 ck("  ...drawn in the window, right under its 'now', from the sensor picked in Settings",
-   /presenceHistory=\{<LastDayTimeline entityId=\{p\.sensorId\} words=\{\(s\) => presenceStateWords\(s\)\.label\}/.test(tileSrc)
+   /: <LastDayTimeline entityId=\{p\.sensorId\} words=\{\(s\) => presenceStateWords\(s\)\.label\}/.test(tileSrc)
+   && /presenceHistory=\{history\}/.test(tileSrc)
    && /<\/div>\s*\{presenceHistory\}/.test(tileSrc));
+console.log("\n  each setting explained, each stage charted (owner, 2026-10-24):");
+ck("a setting's value in words: a time joined to its unit, a count bare, never \"5.0 min\"",
+   [["5.0", "min", "5min"], ["1.0", "h", "1h"], ["90", "min", "1h 30min"], ["3.0", "", "3"], ["2.5", "kW", "2.5 kW"], ["abc", "min", "abc min"]]
+     .every(([v, u, w]) => P.settingWords(v, u) === w), ["5.0", "1.0", "3.0"].map((v) => P.settingWords(v, v === "3.0" ? "" : "min")));
+const G = "input_number.example_empty_grace", ST = "sensor.example_empty_stage";
+const ORDER = [["home", "Someone home"], ["grace", "Away, grace"], ["wait", "Waiting"], ["empty", "Empty"]];
+const told = { ...ents, [S]: e(S, "off", { ...ents[S].attributes, stage_sensor: ST, explain: { [G]: "How long. Example: with 5min." } }),
+  [ST]: e(ST, "wait", { stages: ORDER }) };
+const w2 = P.presenceWhy(S, told, () => "loading");
+ck("  ...its explanation is the sensor's own (\"explain\"), and none when it gives none",
+   w2.settings[0].explain === "How long. Example: with 5min." && w2.settings[0].said === "5min" && why.settings[0].explain === "", w2.settings);
+ck("  ...the stages are the ones the named stage sensor states, in its order; none named, none",
+   w2.stages?.sensorId === ST && w2.stages.order.map(([s]) => s).join() === "home,grace,wait,empty" && why.stages === null, w2.stages);
+const c = (s) => P.stageColor(w2.stages, s);
+ck("  ...colours: someone home the occupied green, empty its grey, the steps between fading in order, another state no contact's",
+   c("home") === STATUS_COLOR.active && c("empty") === STATUS_COLOR.idle && /67%/.test(c("grace")) && /33%/.test(c("wait"))
+   && c("grace") !== c("wait") && c("unavailable") === STATUS_COLOR.unavailable, ORDER.map(([s]) => c(s)));
+{
+  const drawnTip = draw(h(PresencePanel, { presence: off, when: "x", why: w2, showPeople: true, canOpen: () => true, onOpenEntity: () => {},
+    onClose: () => {} }));
+  ck("  ...drawn: an (i) after the setting's name, its value in words, and the (i) never inside the row's button",
+     /About Grace/.test(drawnTip) && />5min</.test(drawnTip) && !/<button[^>]*>(?:(?!<\/button>).)*<button/s.test(drawnTip), drawnTip.slice(0, 400));
+  ck("  ...the band charts the stage sensor when there is one, in its words and colours (the window's caller)",
+     /const st = why\.stages;/.test(tileSrc) && /<LastDayTimeline entityId=\{st\.sensorId\}/.test(tileSrc) && /colorFor=\{\(s\) => stageColor\(st, s\)\}/.test(tileSrc));
+}
+
 done("✅ the villa's presence, always in sight");

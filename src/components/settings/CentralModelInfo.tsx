@@ -17,7 +17,7 @@ export default function CentralModelInfo({
   editable: boolean;
 }) {
   return (
-    <InfoTip label="Model details" button="Model details">
+    <InfoTip label="Model details">
           <div className="row">
             <span>Latest SH3D plan</span>
             <span>

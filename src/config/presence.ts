@@ -8,7 +8,8 @@
 
 import type { HassEntity } from "@/types/ha.types";
 import type { StateSince } from "@/ha/historySource";
-import { UNKNOWN_STATES, type StatusKey } from "@/utils/stateColors";
+import { STATUS_COLOR, UNKNOWN_STATES, type StatusKey } from "@/utils/stateColors";
+import { fmtDuration } from "@/components/panels/chartUtils";
 
 export type PresenceState = "occupied" | "empty" | "unknown";
 
@@ -69,7 +70,38 @@ export function presenceStateWords(state: string): { label: string; tone: Status
 
 export interface PresencePerson { entityId: string; name: string; home: boolean; place: string; since: Since }
 export interface PresenceActivity { entityId: string; name: string; moving: boolean; at: Since }
-export interface PresenceSetting { entityId: string; name: string; value: string; unit: string }
+export interface PresenceSetting {
+  entityId: string; name: string; value: string; unit: string;
+  /** Its value as the window says it: a time joined to its unit ("5min", "1h"), a count bare ("3"). */
+  said: string;
+  /** What it does, with an example, as the sensor explains it (its "explain" attribute); "" when it does not. */
+  explain: string;
+}
+
+/** The steps the sensor goes through, as a stage sensor it names states them (owner, 2026-10-24: "show each stage in
+ *  the mini trend chart"): its id, and its stages in order, from someone in to empty, each with its words. */
+export interface PresenceStages { sensorId: string; order: [string, string][] }
+
+const TIME_UNIT_MS: Record<string, number> = { s: 1000, min: 60_000, h: 3_600_000, d: 86_400_000 };
+/** A setting's value in words: "5.0" "min" → "5min", "1.0" "h" → "1h" (the app's one duration rule, fmtDuration),
+ *  "3.0" → "3", any other unit after its number. */
+export function settingWords(value: string, unit: string): string {
+  const n = Number(value);
+  if (value === "" || !Number.isFinite(n)) return `${value}${unit ? ` ${unit}` : ""}`;
+  if (TIME_UNIT_MS[unit]) return fmtDuration(n * TIME_UNIT_MS[unit]);
+  const said = String(Math.round(n * 1000) / 1000);
+  return unit ? `${said} ${unit}` : said;
+}
+
+/** A stage's colour: the first (someone in) the map's occupied green, the last (empty) its grey, each step between
+ *  them a mix that fades from one to the other in order; a state the sensor does not list: no contact's grey. */
+export function stageColor(stages: PresenceStages, state: string): string {
+  const i = stages.order.findIndex(([s]) => s === state), n = stages.order.length;
+  if (i < 0) return STATUS_COLOR.unavailable;
+  if (i === 0 || n < 2) return STATUS_COLOR.active;
+  if (i === n - 1) return STATUS_COLOR.idle;
+  return `color-mix(in srgb, ${STATUS_COLOR.active} ${Math.round(100 * (1 - i / (n - 1)))}%, ${STATUS_COLOR.idle})`;
+}
 
 export interface PresenceWhy {
   /** The people the sensor watches — those it lists in its own "people" attribute, home or away and since when;
@@ -83,6 +115,9 @@ export interface PresenceWhy {
   /** The numbers that decide it: the villa's number settings named after the sensor ("<its name>_…", one prefix per
    *  feature — the owner's rule for every helper), so the panel finds them without naming any. */
   settings: PresenceSetting[];
+  /** Its stages, when it names a sensor that states them ("stage_sensor"); null otherwise (the band then says
+   *  Occupied / Empty, as before). */
+  stages: PresenceStages | null;
 }
 
 const nameOf = (e: HassEntity) => String(e.attributes?.friendly_name ?? e.entity_id);
@@ -119,15 +154,26 @@ export function presenceWhy(sensorId: string, entities: Readonly<Record<string, 
   // the latest by when its state really began; while that is read, by what the villa's system says
   const began = (e: HassEntity) => { const s = sinceOf(e.entity_id); return s && s !== "loading" ? s.at : Date.parse(e.last_changed ?? ""); };
   const latest = (moving.length ? moving : watched).sort((a, b) => began(b) - began(a))[0];
+  const explained = (attrs.explain && typeof attrs.explain === "object" ? attrs.explain : {}) as Record<string, unknown>;
+  const stageId = typeof attrs.stage_sensor === "string" ? attrs.stage_sensor : "";
+  const order = (Array.isArray(entities[stageId]?.attributes?.stages) ? entities[stageId].attributes.stages as unknown[] : [])
+    .filter((x): x is [string, string] => Array.isArray(x) && typeof x[0] === "string" && typeof x[1] === "string")
+    .map(([s, w]) => [s, w] as [string, string]);
   const prefix = sensorId.includes(".") ? `input_number.${sensorId.split(".")[1]}_` : null;
   const settings = prefix ? all.filter((e) => e.entity_id.startsWith(prefix))
-    .map((e) => ({ entityId: e.entity_id, name: nameOf(e), value: e.state, unit: String(e.attributes?.unit_of_measurement ?? "") }))
+    .map((e) => {
+      const unit = String(e.attributes?.unit_of_measurement ?? "");
+      const text = explained[e.entity_id];
+      return { entityId: e.entity_id, name: nameOf(e), value: e.state, unit, said: settingWords(e.state, unit),
+        explain: typeof text === "string" ? text : "" };
+    })
     .sort((a, b) => a.name.localeCompare(b.name)) : [];
   return {
     people,
     lastActivity: latest ? { entityId: latest.entity_id, name: nameOf(latest), moving: latest.state === "on", at: sinceOf(latest.entity_id) } : null,
     listsSensors: sensorIds !== null,
     settings,
+    stages: order.length ? { sensorId: stageId, order } : null,
   };
 }
 
