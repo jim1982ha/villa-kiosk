@@ -1,3 +1,23 @@
+## 2.496.517
+
+What you will see:
+- Every (i) is now the icon alone, with no grey disc and no ring around it, like every other (i): beside the Advanced
+  Settings headings, "Model north offset" and "Log out all devices" too.
+- A save still going out when someone else signs in on the tablet is no longer lost: the fault stays "in progress"
+  and is not put back at the next refresh.
+- Work held on a tablet for someone else (no connection when it was done) is sent by the next person signed in who
+  may send it, the owner for anyone, and each step keeps the name of who did it. Until then the Cockpit says so,
+  for example "Work by the facility manager is waiting on this tablet".
+- A cost, a task, logged work or a document erased on one device stays erased when another device that changed it
+  offline catches up, as a fault already did; the message names what was removed ("This cost was removed on another
+  device, so this change was not saved."). Viewpoints and device settings in Advanced Settings follow the same rule.
+- Advanced Settings opened on its own (with Save and Cancel) no longer shows a Back as well: Cancel is the way out.
+  Opened from Settings, Back stays at the bottom left.
+- Uploading a model on a phone now shows its progress on the upload icon ("42%"); the words are the same on every
+  screen that uploads.
+- Durations everywhere use the same short words: the Agent's look ("within 15min"), how often the list is read again
+  ("every 15s", "every 3min"), and the mean resolution time on the Tickets tab and in the monthly report ("1h 30min").
+
 ## 2.496.516
 
 What you will see:
