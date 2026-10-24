@@ -12,7 +12,7 @@
 // for room.
 
 import { useState, type ReactNode } from "react";
-import { ChevronLeft, Wrench } from "lucide-react";
+import { Wrench } from "lucide-react";
 import { linkedSwitchProps, usePanelActions } from "./PanelActionsContext";
 import { linkedStateWords } from "./panelHeader";
 import { badgeImage } from "@/babylon/badgeIcons";
@@ -26,6 +26,7 @@ import LastDayTimeline from "./LastDayTimeline";
 import LinkedSensorRow from "./LinkedSensorRow";
 import { HistoryRangeShare } from "./historyRange";
 import ModalFooter from "@/components/common/ModalFooter";
+import BackButton from "@/components/common/BackButton";
 import { useHA } from "@/ha/HAStateStore";
 import { missingFromHa } from "@/utils/stateColors";
 import { deviceRoom } from "@/config/devicePlace";
@@ -161,12 +162,7 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
           {(headerActions || back) && (
             <div className="modal-header-actions">
               {headerActions}
-              {back && (
-                <button type="button" className="btn panel-back" onClick={back.go}
-                  title={`Back to ${back.label}`} aria-label={`Back to ${back.label}`}>
-                  <ChevronLeft size={18} aria-hidden /> Back
-                </button>
-              )}
+              {back && <BackButton onClick={back.go} label={back.label} />}
             </div>
           )}
         </div>
