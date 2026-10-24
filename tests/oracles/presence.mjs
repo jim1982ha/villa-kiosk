@@ -124,11 +124,17 @@ ck("the presence band says the villa's words, as its 'now' does: on Empty, off O
      && /<PresenceButton presence=\{p\.presence\} when=\{p\.since\}/.test(tl) && /<PresencePanel presence=\{p\.presence\} when=\{p\.since\} why=\{why\}/.test(tl)
      && !/\.last_changed/.test(up + tl));
 }
-const tileSrc = readFileSync(new URL("../../src/components/hud/PresenceTile.tsx", import.meta.url), "utf8");
-ck("  ...drawn in the window, right under its 'now', from the sensor picked in Settings",
-   /: <LastDayTimeline entityId=\{p\.sensorId\} words=\{\(s\) => presenceStateWords\(s\)\.label\}/.test(tileSrc)
-   && /presenceHistory=\{history\}/.test(tileSrc)
-   && /<\/div>\s*\{presenceHistory\}/.test(tileSrc));
+{
+  const { presenceBand } = await import("@/components/hud/PresenceTile");
+  const b = presenceBand(S, why);
+  ck("  ...charted from the sensor picked in Settings, in the presence's words and colours (no stages named)",
+     b.entityId === S && b.words("on") === "Empty" && b.words("off") === "Occupied"
+     && b.colorFor("off") === STATUS_COLOR.active && b.colorFor("on") === STATUS_COLOR.idle, b.entityId);
+  const placed = draw(h(PresencePanel, { presence: off, when: "x", why, showPeople: true, canOpen: () => false,
+    onOpenEntity: () => {}, onClose: () => {}, presenceHistory: h("i", { "data-band": "1" }) }));
+  ck("  ...drawn in the window right under its 'now'", /<div class="presence-now"[^>]*>(?:(?!<div)[\s\S])*?<\/div><i data-band="1">/.test(placed),
+     placed.slice(0, 400));
+}
 console.log("\n  each setting explained, each stage charted (owner, 2026-10-24):");
 ck("a setting's value in words: a time joined to its unit, a count bare, never \"5.0 min\"",
    [["5.0", "min", "5min"], ["1.0", "h", "1h"], ["90", "min", "1h 30min"], ["3.0", "", "3"], ["2.5", "kW", "2.5 kW"], ["abc", "min", "abc min"]]
@@ -151,8 +157,11 @@ ck("  ...colours: someone home the occupied green, empty its grey, the steps bet
     onClose: () => {} }));
   ck("  ...drawn: an (i) after the setting's name, its value in words, and the (i) never inside the row's button",
      /About Grace/.test(drawnTip) && />5min</.test(drawnTip) && !/<button[^>]*>(?:(?!<\/button>).)*<button/s.test(drawnTip), drawnTip.slice(0, 400));
-  ck("  ...the band charts the stage sensor when there is one, in its words and colours (the window's caller)",
-     /const st = why\.stages;/.test(tileSrc) && /<LastDayTimeline entityId=\{st\.sensorId\}/.test(tileSrc) && /colorFor=\{\(s\) => stageColor\(st, s\)\}/.test(tileSrc));
+  const { presenceBand } = await import("@/components/hud/PresenceTile");
+  const sb = presenceBand(S, w2);
+  ck("  ...the band charts the stage sensor when there is one, in its words and colours",
+     sb.entityId === ST && sb.words("grace") === "Away, grace" && sb.words("unavailable") === "Presence unknown"
+     && sb.colorFor("wait") === P.stageColor(w2.stages, "wait") && sb.colorFor("home") === STATUS_COLOR.active, sb.entityId);
 }
 
 console.log("\n  the heading, the words, the time before the first record (owner, 2026-10-24):");

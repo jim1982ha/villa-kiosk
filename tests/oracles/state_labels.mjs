@@ -25,12 +25,18 @@ eq("a light keeps its readable state", stateLabelFor("light.hall", undefined)("o
 console.log("\n  the bars:");
 const DIR = new URL("../../src/components/panels/", import.meta.url);
 const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
-const timeline = strip(readFileSync(new URL("StateTimeline.tsx", DIR), "utf8"));
-const body = timeline.slice(timeline.indexOf("export default function StateTimeline("));
 // the stretch no longer kept has its own words, every state of the device labelFor's (owner, 2026-10-20)
-eq("the tooltip words states with labelFor, not prettyState",
-   /const wordsFor = \(s: string\) => \(s === NOT_KEPT \? NOT_KEPT_WORDS : s === NO_RECORD \? NO_RECORD_WORDS : labelFor\(s\)\);/.test(body)
-   && /\{wordsFor\(/.test(body) && !/\{prettyState\(/.test(body), true);
+{
+  // drawn: the band's legend words a state with labelFor, and the two stretches with nothing to show with their own
+  const { h, draw, text } = await import("../consistency/screen.mjs");
+  const StateTimeline = (await import("@/components/panels/StateTimeline")).default;
+  const { NOT_KEPT, NO_RECORD } = await import("@/utils/stateColors");
+  const H = 3_600_000, end = Date.UTC(2026, 9, 24, 12);
+  const said = text(draw(h(StateTimeline, { data: [{ t: end - 24 * H, state: NOT_KEPT }, { t: end - 20 * H, state: NO_RECORD },
+    { t: end - 10 * H, state: "off" }], hours: 24, end, grainMs: H, status: "ok", colorFor: () => "red", labelFor: leak })));
+  eq("the band words states with labelFor, not prettyState; nothing kept and no record yet in their own words",
+     said.includes("No leak") && !said.includes("Off") && said.includes("No longer kept") && said.includes("No record yet"), true);
+}
 const sites = [];
 for (const f of readdirSync(DIR).filter((n) => n.endsWith(".tsx") && n !== "StateTimeline.tsx" && n !== "CameraPanel.tsx")) {
   for (const m of strip(readFileSync(new URL(f, DIR), "utf8")).matchAll(/<StateTimeline\b[\s\S]*?\/>/g)) sites.push({ f, ok: /labelFor=\{/.test(m[0]) });

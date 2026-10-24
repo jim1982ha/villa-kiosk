@@ -52,8 +52,13 @@ const advanced = readFileSync(ROOT + "components/settings/ConfigEditorModal.tsx"
 const settings = readFileSync(ROOT + "components/settings/SettingsModal.tsx", "utf8");
 ck("  ...each section's explanation is its title's (i) (TipTitle), and Settings' options carry theirs",
    (advanced.match(/<TipTitle title=/g) ?? []).length >= 7 && (settings.match(/<InfoTip label=/g) ?? []).length >= 4);
-const tip = readFileSync(ROOT + "components/common/InfoTip.tsx", "utf8");
-ck("the (i) is a real button with a name, opened by a tap", /<button type="button" className="info-btn" aria-label=\{label\}/.test(tip)
-   && /onClick=\{\(\) => setOpen/.test(tip));
+{
+  const { h, draw } = await import("../consistency/screen.mjs");
+  const InfoTip = (await import("@/components/common/InfoTip")).default;
+  const drawn = draw(h(InfoTip, { label: "About the north offset" }, "What it does."));
+  // that a tap opens it is info_tip.mjs's ("one (i), opened by a tap")
+  ck("the (i) is a real button with a name, closed until opened",
+     /<button type="button" class="info-btn" aria-label="About the north offset" aria-expanded="false">/.test(drawn), drawn.slice(0, 200));
+}
 
 done("✅ no visible description text: every explanation is one (i)");
