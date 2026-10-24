@@ -1010,3 +1010,17 @@ def test_asleep_between_reports_says_where_it_is_set_behind_its_titles_info_neve
     at = js.index('field(withInfo("Asleep between reports", "Set in the VESTA Kiosk')
     assert js.count("Set in the VESTA Kiosk") == 1
     assert '[h("span", { class: "muted" }, "None")])),' in js[at:at + 900]          # the field ends: no hint under it
+
+
+def test_a_numbered_step_keeps_its_own_number_when_its_points_split_the_list():
+    # owner, 2026-10-24: investigate's "## The procedure" read "1." for every step — each step, its points and a blank
+    # line made a list of its own, and every list started again at 1
+    guide = (Path(__file__).resolve().parents[1] / "starter" / "skills" / "investigate" / "SKILL.md").read_text()
+    blocks = _markdown(guide)
+    firsts = [b["items"][0]["n"] for b in blocks if b["t"] == "list" and b["items"][0]["ordered"]]
+    assert firsts[:3] == [1, 2, 3], firsts                                  # each split list starts at its own step
+    b = _markdown("1. one\n\n   - a point\n\n2. two\n3. three\n- bullet")
+    assert [(i["ordered"], i["n"]) for x in b for i in x["items"]] == [(True, 1), (False, None), (True, 2), (True, 3),
+                                                                       (False, None)]
+    js = (Path(__file__).resolve().parents[1] / "vesta_agent" / "ui" / "static" / "viewer.js").read_text()
+    assert 'it.ordered && it.n > 1 ? h(tag, { start: String(it.n) }) : h(tag)' in js           # drawn from there

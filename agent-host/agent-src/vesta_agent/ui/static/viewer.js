@@ -31,7 +31,9 @@ function listView(items) {
     let top = stack[stack.length - 1];
     if (top.depth === it.depth && top.el.tagName.toLowerCase() !== tag) { stack.pop(); top = stack[stack.length - 1]; }
     if (top.depth < it.depth) {
-      const list = h(tag);
+      // ⚠️ AN ORDERED LIST STARTS AT ITS OWN FIRST NUMBER (owner, 2026-10-24: investigate's steps 1, 2, 3, each split
+      // from the next by a blank line and its own points, all read "1."): the file's number, never a count restarted
+      const list = it.ordered && it.n > 1 ? h(tag, { start: String(it.n) }) : h(tag);
       (top.last || top.el).append(list);
       top = { depth: it.depth, el: list, last: null }; stack.push(top);
     }

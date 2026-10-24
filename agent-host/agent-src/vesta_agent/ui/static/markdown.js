@@ -5,7 +5,7 @@
 // italic, links, quotes, rules. An HTML comment is left out, as a reader of the Markdown would not see it.
 //
 // A block: {t: "meta", rows: [[key, value]]} · {t: "h", level, inl} · {t: "p", inl} · {t: "list", items: [{depth,
-// ordered, inl}]} · {t: "code", lang, text} · {t: "table", head: [inl], rows: [[inl]]} · {t: "quote", inl} · {t: "hr"}.
+// ordered, n (an ordered item's own number), inl}]} · {t: "code", lang, text} · {t: "table", head: [inl], rows: [[inl]]} · {t: "quote", inl} · {t: "hr"}.
 // An inline (inl) is a list of {t: "text", v} · {t: "code", v} · {t: "b", c: inl} · {t: "i", c: inl} · {t: "a", href, c: inl}.
 
 const INLINE = /(`+)([\s\S]*?[^`])\1(?!`)|\*\*([\s\S]+?)\*\*|__([\s\S]+?)__|\*(?!\s)([^*]+?)\*|(?<![\w])_(?!\s)([^_]+?)_(?![\w])|\[([^\]]+)\]\(([^)\s]+)\)/g;
@@ -72,7 +72,8 @@ export function parse(text) {
       const items = [];
       while (i < lines.length && lines[i].trim()) {
         const m = lines[i].match(ITEM);
-        if (m) items.push({ depth: Math.floor(m[1].replace(/\t/g, "  ").length / 2), ordered: /\d/.test(m[2]), text: m[3] });
+        if (m) items.push({ depth: Math.floor(m[1].replace(/\t/g, "  ").length / 2), ordered: /\d/.test(m[2]),
+          n: /\d/.test(m[2]) ? parseInt(m[2], 10) : null, text: m[3] });
         else if (/^\s+\S/.test(lines[i]) && items.length) items[items.length - 1].text += " " + lines[i].trim();   // its next line
         else break;
         i++;

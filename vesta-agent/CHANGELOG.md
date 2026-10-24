@@ -1,3 +1,9 @@
+## 0.12.348
+
+What you will see:
+- Skills, a guide's View mode: numbered steps keep their own numbers (1, 2, 3…) as written in the file, even when
+  each step has its own points under it. They all read "1." before.
+
 ## 0.12.347
 
 What you will see:

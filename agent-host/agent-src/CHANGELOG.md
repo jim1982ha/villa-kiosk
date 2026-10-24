@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.338 (24 October 2026)
+
+- markdown.js keeps an ordered item's own number (`n`); viewer.js starts an ordered list at it (`start`): a step split
+  from the next by its points and a blank line no longer restarts at 1 (owner, 2026-10-24, investigate's procedure).
+
 ## 0.6.337 (24 October 2026)
 
 - translation.answer reads a JSON list anywhere in the text (code block, words around), an object naming the lines,
