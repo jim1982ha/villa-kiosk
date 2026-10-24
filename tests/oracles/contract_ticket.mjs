@@ -28,8 +28,8 @@ ck("the proxy stamps the agreement's words, never its own copy",
      && JSON.stringify(T.checksBeforeList) === JSON.stringify(["minutes", "nightly"]) && T.checksBeforeList.every((c) => T.checks.includes(c)));
   const C = { checkMinutes: 5, nightlyAt: "02:00" }, NOW = new Date(2026, 9, 19, 13, 10);
   ck("  ...an undeclared check falls back to its source's clock",
-     nextCheck([{ source: "alert", check: "weekly" }], C, NOW) === "Next check: within 5 min"
-     && nextCheck([{ source: "night", check: "day" }], C, NOW) === "Next check: within 5 min");
+     nextCheck([{ source: "alert", check: "weekly" }], C, NOW) === "Next check: within 5min"
+     && nextCheck([{ source: "night", check: "day" }], C, NOW) === "Next check: within 5min");
   ck("  ...the proxy lists them to the Agent from the agreement (by value: tests/agent-interface.py)",
      /"ticket_checks": list\(\(AGENT_CONTRACT_TABLE\.get\("ticket"\) or \{\}\)\.get\("checks"\) or \[\]\)/.test(proxy));
 }

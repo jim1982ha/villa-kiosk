@@ -1,3 +1,10 @@
+## 2.496.513
+
+- Every duration now has its unit joined to the number: "1h 30min", "10min", "30s", "2d 3h". This covers the chart
+  tooltips ("Unavailable · 09:00–09:03 (3min)"), a fault's "offline for 6d 2h", the "within 5min" of Next check and
+  of a fault being confirmed, the (i) legend, the Weather "ago" and "over the last 3h". The VESTA Agent writes its
+  durations the same way.
+
 ## 2.496.512
 
 What you will see:

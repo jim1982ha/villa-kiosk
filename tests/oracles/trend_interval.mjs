@@ -28,8 +28,8 @@ ck("a reading HOLDS until the next one (the chart's step rule): 2 min at 0 then 
 const out = T.fiveMinuteSeries({ points: [{ t: t0, v: 10 }, { t: t0 + 8 * M, v: 20 }], gaps: [{ from: t0 + 7 * M, to: t0 + 8 * M }], window: { from: t0, to: t0 + 15 * M } });
 ck("an outage is shaded over the WHOLE five-minute interval it touched (10:07–10:08 → 10:05–10:10)",
    out.gaps.length === 1 && out.gaps[0].from === t0 + 5 * M && out.gaps[0].to === t0 + 10 * M, out.gaps);
-ck("  ...keeping its REAL times for the tooltip: 'Unavailable · 10:07–10:08 (1 min)'",
-   out.gaps[0].actual.from === t0 + 7 * M && /\(1 min\)$/.test(fmtOutage(out.gaps[0], t0 + 15 * M)), fmtOutage(out.gaps[0], t0 + 15 * M));
+ck("  ...keeping its REAL times for the tooltip: 'Unavailable · 10:07–10:08 (1min)'",
+   out.gaps[0].actual.from === t0 + 7 * M && /\(1min\)$/.test(fmtOutage(out.gaps[0], t0 + 15 * M)), fmtOutage(out.gaps[0], t0 + 15 * M));
 ck("  ...and the interval's value counts only its available minutes (10:05–10:07 at 10, 10:08–10:10 at 20 → 15, the outage minute not counted)",
    near(out.points[1].v, 15), out.points.map((p) => p.v));
 const two = T.widenGaps([{ from: t0 + 1 * M, to: t0 + 2 * M }, { from: t0 + 3 * M, to: t0 + 4 * M }], t0, t0 + 10 * M);

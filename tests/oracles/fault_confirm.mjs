@@ -59,10 +59,10 @@ ck("  ...a close in the Cockpit says Closed and the profile", line("w2") === `Cl
 ck("  ...its moment past: at the Agent's next check, never a time gone by", line("w3") === "Done (JM) · VESTA confirms it at its next look",
    line("w3"));
 {
-  // its pill, as the open issues' next-check pill says it (owner, 2026-10-23): the time, then "within 5 min" once past
+  // its pill, as the open issues' next-check pill says it (owner, 2026-10-23): the time, then "within 5min" once past
   const parts = (id) => confirmParts(confirmingFaults(data, CADENCE, NOW).find((c) => c.ticket.id === id));
-  ck("  ...its pill: the time it confirms by, then the Agent's next look once past ('within 5 min')",
-     parts("w1").when === clockTime(NOW + 8 * 60_000) && parts("w3").when === `within ${CADENCE.checkMinutes} min`,
+  ck("  ...its pill: the time it confirms by, then the Agent's next look once past ('within 5min')",
+     parts("w1").when === clockTime(NOW + 8 * 60_000) && parts("w3").when === `within ${CADENCE.checkMinutes}min`,
      [parts("w1").when, parts("w3").when]);
 }
 ck("  ...shown at most two of the Agent's looks past its moment; with the Agent offline (no cadence), not past it",
