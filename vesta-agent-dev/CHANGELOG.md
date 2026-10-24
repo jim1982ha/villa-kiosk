@@ -1,3 +1,10 @@
+## 0.12.342
+
+What you will see:
+- When a chat's language is changed while one of its alerts is still open, the alert's own words follow the new
+  language when it is next updated or closed, not only its Status (before: Status in Chinese, the alert itself still
+  in English).
+
 ## 0.12.341
 
 What you will see:
