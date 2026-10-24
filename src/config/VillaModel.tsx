@@ -159,6 +159,11 @@ export function useDeviceIdentity() {
   }), [folding, entities, suppressedEntityIds, deviceGroups, entityDeviceIds, hiddenInHaEntityIds]);
 }
 
+/** The villa model, or null outside its provider (a window drawn on its own: a check). */
+export function useVillaModelOrNull(): VillaModel | null {
+  return useContext(Ctx);
+}
+
 export function useVillaModel(): VillaModel {
   const m = useContext(Ctx);
   if (!m) throw new Error("useVillaModel must be used within a VillaModelProvider (Dashboard)");

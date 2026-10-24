@@ -8,25 +8,37 @@ import { ck, done } from "../consistency/check.mjs";
 import { parseTsx, elements, guardsOf } from "../consistency/jsx.mjs";
 const { panelHeader } = await import("@/components/panels/panelHeader");
 const { screenReducer, START } = await import("@/pages/screen");
-const { cardFocused, groupAttention } = await import("@/config/attention");
+const { attentionFor, cardFocused, groupAttention, issueSeverity } = await import("@/config/attention");
 const { cockpitCard } = await import("@/config/cockpitCard");
 const { AttentionCard } = await import("@/components/cockpit/CockpitOverview");
 const { FaultsButton } = await import("@/components/panels/BasePanel");
 
-console.log("  when it shows: the device's open fault, or its linked entity's — the badge's own rule:");
+console.log("  when it shows: any issue the Cockpit's Overview lists for the device or its linked entity:");
+// owner, 2026-10-24: Timmerflotte_5969's "Unavailable" card was in the Cockpit and its window showed no warning —
+// 2.496.523 read the badge's fault records only
 const ent = (id, state) => ({ entity_id: id, state, attributes: {}, last_changed: "", last_updated: "" });
 const entities = { "sensor.pump_power": ent("sensor.pump_power", "36"), "switch.pump_relay": ent("switch.pump_relay", "off") };
 const map = { "sensor.pump_power": { entityId: "sensor.pump_power", type: "sensor", label: "Pump", linkedEntityId: "switch.pump_relay" } };
 const pump = { entityId: "sensor.pump_power", mapping: map["sensor.pump_power"] };
-const faultsWith = (faulty) => panelHeader({ panel: pump, entities, canControl: true, linkedSwitch: null,
-  config: { entityMap: map, deviceGroups: [], isHidden: () => false, hasFault: (id) => faulty.includes(id) } }).faults;
-ck("a fault on the device: the device", faultsWith(["sensor.pump_power"]).join() === "sensor.pump_power");
-ck("  ...on its linked entity: the linked entity", faultsWith(["switch.pump_relay"]).join() === "switch.pump_relay");
-ck("  ...on both: both, the device first", faultsWith(["switch.pump_relay", "sensor.pump_power"]).join() === "sensor.pump_power,switch.pump_relay");
-ck("  ...none (closed, or never): nothing, so no button — it goes by itself", faultsWith([]).length === 0);
-ck("  ...and the badge's amber \"!\" reads the same predicate",
-   panelHeader({ panel: pump, entities, canControl: true, linkedSwitch: null,
-     config: { entityMap: map, deviceGroups: [], isHidden: () => false, hasFault: (id) => id === "sensor.pump_power" } }).badge.mark === "fault");
+const ids = panelHeader({ panel: pump, entities, canControl: true, linkedSwitch: null,
+  config: { entityMap: map, deviceGroups: [], isHidden: () => false, hasFault: () => false } }).issueIds;
+ck("the window asks about the device and its linked entity, the device first", ids.join() === "sensor.pump_power,switch.pump_relay", ids);
+const item = (kind, entityId, extra = {}) => ({ id: `${kind}:${entityId}`, kind, title: entityId, detail: kind, entityId,
+  device: { key: entityId, label: entityId, room: "Terrace" }, ...extra });
+const sev = (items) => issueSeverity(groupAttention(items), ids, (id) => id);
+ck("an offline device's card (no fault record): the warning, in the Overview's grey", sev([item("unavailable", "sensor.pump_power")]) === "lost");
+ck("  ...a fault: amber; on the linked entity too", sev([item("fault", "sensor.pump_power", { ticketId: "f1", stage: "fault", source: "alert" })]) === "warn"
+   && sev([item("fault", "switch.pump_relay", { ticketId: "f2", stage: "fault", source: "alert" })]) === "warn");
+ck("  ...the most serious of them: an alarm (red) over a fault and an offline one",
+   sev([item("unavailable", "switch.pump_relay"), item("alarm", "sensor.pump_power")]) === "danger");
+ck("  ...another device's issue, or none: no warning — it goes by itself", sev([item("unavailable", "lock.door")]) === null && sev([]) === null);
+{
+  const villa = { devices: { deviceOf: (id) => id, ids: ["sensor.pump_power"], unavailable: ["sensor.pump_power"] },
+    attentionItems: [item("unavailable", "sensor.pump_power")] };
+  const seen = attentionFor(villa, (id) => id !== "sensor.pump_power");
+  ck("  ...as THIS profile's Overview lists it: a card it does not see warns of nothing",
+     issueSeverity(seen.attentionGroups, ids, (id) => id) === null);
+}
 
 console.log("\n  a tap: the Cockpit's Overview, this device's card marked, the device back on close:");
 const OWNER = { facility: true }, GUEST = { facility: false };
@@ -63,15 +75,16 @@ ck("  ...drawn marked (cockpit-focus: amber frame, lit a moment), the others as 
    /class="fm-record-card[^"]*\bcockpit-focus\b/.test(marked) && !/cockpit-focus/.test(plain), marked.slice(0, 200));
 
 console.log("\n  the button:");
-const btnHtml = draw(h(FaultsButton, { onOpen: () => {} }));
-ck("a real button, named for a screen reader, the Cockpit's warning sign in a fault's amber, the icon buttons' size",
-   /^<button type="button" class="btn ghost icon-only panel-faults-btn cockpit-attention-warn"/.test(btnHtml)
-   && /aria-label="Open this device&#x27;s faults in the Cockpit"/.test(btnHtml) && /<svg[^>]*lucide-triangle-alert/.test(btnHtml), btnHtml);
+const btnHtml = draw(h(FaultsButton, { onOpen: () => {}, severity: "lost" }));
+ck("a real button, named for a screen reader, the Cockpit's warning sign in its issue's colour, the icon buttons' size",
+   /^<button type="button" class="btn ghost icon-only panel-faults-btn cockpit-attention-lost"/.test(btnHtml)
+   && /aria-label="Open this device&#x27;s issues in the Cockpit"/.test(btnHtml) && /<svg[^>]*lucide-triangle-alert/.test(btnHtml), btnHtml);
 const tree = parseTsx("components/panels/BasePanel.tsx");
 const [placed] = elements(tree, "FaultsButton");
-ck("  ...drawn by the device window only while it has faults to open, first of the header's actions (top right)",
-   !!placed && guardsOf(placed).join() === "faults" && inside(btnHtml, "btn") !== ""
-   && /<div className="modal-header-actions">\s*\{\/\*[\s\S]*?\*\/\}\s*\{faults && <FaultsButton/.test(tree.text)
-   && /\{\(headerActions \|\| back \|\| faults\) &&/.test(tree.text), guardsOf(placed ?? tree));
+ck("  ...drawn by the device window only while its Overview lists an issue, first of the header's actions (top right)",
+   !!placed && guardsOf(placed).join() === "warning" && inside(btnHtml, "btn") !== ""
+   && /const issue = useDeviceIssue\(faults\?\.ids \?\? \[\]\);/.test(tree.text)
+   && /<div className="modal-header-actions">\s*\{\/\*[\s\S]*?\*\/\}\s*\{warning && <FaultsButton/.test(tree.text)
+   && /\{\(headerActions \|\| back \|\| warning\) &&/.test(tree.text), guardsOf(placed ?? tree));
 
-done("✅ a device window's warning opens its faults in the Cockpit");
+done("✅ a device window's warning opens its issues in the Cockpit");

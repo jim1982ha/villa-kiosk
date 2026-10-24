@@ -104,9 +104,10 @@ export interface PanelActions {
    *  band under the device's own (LinkedSensorRow, owner 2026-10-21: a lock's door sensor drawn as a switch).
    *  Read-only, so shown whatever the profile, as `motion`. `linked` is then undefined. */
   linkedSensor?: { entityId: string; label: string };
-  /** The device (or its linked entity) has an open Cockpit fault and this profile manages faults: the header's
-   *  warning opens the Cockpit with these faults' card marked (screen "openFaults"). Undefined: no button. */
-  faults?: { open: () => void };
+  /** This profile manages faults: the device and its linked entity (`ids`), whose Cockpit issues the header's warning
+   *  shows while the Overview lists any (useDeviceIssue), and opens with their card marked (screen "openFaults").
+   *  Undefined: no button. */
+  faults?: { ids: string[]; open: () => void };
 }
 
 /** No panel open, or a panel outside the provider: nothing allowed, nothing to call. */

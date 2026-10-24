@@ -1,3 +1,12 @@
+## 2.496.525
+
+What you will see:
+- A device's window shows the warning sign whenever the Cockpit's Overview lists an issue for the device or its
+  linked entity: a fault, but also a device offline (a sensor "Unavailable"), an alarm or late maintenance. Before, a
+  device offline had a card in the Cockpit and no sign in its window.
+- The sign takes that issue's colour, as the Cockpit's card does: red for an alarm or a critical device offline,
+  amber for a fault or late maintenance, grey for a device offline. Its words: "Open this device's issues".
+
 ## 2.496.524
 
 What you will see:

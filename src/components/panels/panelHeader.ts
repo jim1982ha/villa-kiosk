@@ -39,10 +39,10 @@ export interface PanelHeader {
   linkedSensor: { entityId: string; label: string } | null;
   /** A camera's motion sensor (read-only): its band under the camera's (LinkedSensorRow). */
   motion: { entityId: string; label: string } | null;
-  /** The device and its linked entity, those with an open Cockpit fault — the same predicate as the badge's amber "!"
-   *  (config.hasFault: attention.faultDevices) and its linked pill's. Empty: no fault, no button (owner, 2026-10-24:
-   *  the window's warning that opens the Cockpit on these faults, gone by itself once they are closed). */
-  faults: string[];
+  /** The device and its linked entity: whose Cockpit issues the window's warning shows and opens (owner, 2026-10-24).
+   *  Whether there are any is the Overview's own list, read live by the window (cockpit/useVillaAttention
+   *  useDeviceIssue): every issue it lists, an offline device's included, never only the badge's fault records. */
+  issueIds: string[];
 }
 
 export interface HeaderInput {
@@ -121,6 +121,6 @@ export function panelHeader({ panel, entities, config, canControl, linkedSwitch 
     motion: motionId
       ? { entityId: motionId, label: labelOf(motionId, config.entityMap, entities) }
       : null,
-    faults: [entityId, linkedId].filter((id): id is string => !!id && !!config.hasFault?.(id)),
+    issueIds: [entityId, linkedId].filter((id): id is string => !!id),
   };
 }

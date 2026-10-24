@@ -171,6 +171,25 @@ export function faultDevices(
   return out;
 }
 
+const SEVERITY_RANK: Record<AttentionSeverity, number> = { danger: 0, warn: 1, lost: 2 };
+
+/** The most serious issue the Overview lists for the devices of `ids` (a device window: the device and its linked
+ *  entity) — the cards it would mark (cardFocused), as this profile sees them; null: no card, so no warning.
+ *  ⚠️ EVERY ISSUE, NOT ONLY A FAULT RECORD (owner, 2026-10-24: a temperature sensor's "Unavailable" card was in the
+ *  Cockpit and its window showed no warning — 2.496.523 read the badge's fault predicate only). */
+export function issueSeverity(groups: readonly AttentionGroup[], ids: readonly string[],
+  deviceOf: (id: string) => string): AttentionSeverity | null {
+  let best: AttentionSeverity | null = null;
+  for (const g of groups) {
+    if (!cardFocused(g.entityId, ids, deviceOf)) continue;
+    for (const item of g.items) {
+      const s = attentionSeverity(item);
+      if (best === null || SEVERITY_RANK[s] < SEVERITY_RANK[best]) best = s;
+    }
+  }
+  return best;
+}
+
 /** Is the Overview card of `cardEntityId` (its device) one of the devices `focus` names (a device window's warning:
  *  the device and its linked entity, each folded onto its device as the cards are)? */
 export function cardFocused(cardEntityId: string | undefined, focus: readonly string[] | undefined,
