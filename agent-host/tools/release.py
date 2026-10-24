@@ -62,6 +62,7 @@ PY = str(VENV_PY) if not IN_CI and VENV_PY.exists() else sys.executable
 # tests/test_release.py finds every gate whose test file uses the port and holds it to this lane).
 GATES: list[tuple[str, list[str], str, str]] = [
     ("The VESTA Kiosk is untouched", ["bash", "agent-host/tests/check_isolation.sh", "origin/main"], ".", "rest"),
+    ("The shared rules are dev2's", ["bash", "agent-host/tests/check_shared_rules.sh"], ".", "rest"),
     ("The app manifest agrees with what the Supervisor reads", [PY, "agent-host/tests/check_manifest.py"], ".", "rest"),
     # Home Assistant's own checks — the community example app's CI: the add-on
     # linter, hadolint, shellcheck (agent-host/tools/addon_lint.py; needs Docker).

@@ -2,6 +2,11 @@
 
 You are building the **VESTA Agent host**: a Home Assistant app that hosts the VESTA Agent. The agent itself (Fabien's, integrated 2026-09-30) is in `agent-src/`; its design and every decision behind it are in `docs/agent-host/INTEGRATION-PLAN.md` and `ZIP-CHANGES.md` (local).
 
+## The shared rules
+The repository's `CLAUDE.md` and `rules/` (loaded through `rules/INDEX.md`) apply here too: one set for every
+contributor's Claude (owner, 2026-10-25). They are written on `dev2`; this branch carries dev2's copy, and the release
+refuses to ship when they differ (`agent-host/tests/check_shared_rules.sh` prints the command that copies them).
+
 ## Read before any change
 1. `docs/agent-host/SPEC.md` — the specification you implement (source of truth).
 2. `docs/agent-integration/PLAN.md` — names, foundations F1–F10, and the systems this app talks to.

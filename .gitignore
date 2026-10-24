@@ -1,5 +1,4 @@
 .claude
-CLAUDE.md
 # ⚠️ `.scratch/` HOLDS THE VILLA'S OWN VOCABULARY AND MUST NEVER BE TRACKED.
 # `forbidden-tokens.txt` lists the property's name, hostname and model filename
 # so `tests/hard-rules.py` can check they are absent from everything shipped —
