@@ -1,3 +1,9 @@
+## 2.496.528
+
+What you will see:
+- A device hidden in the villa's system is hidden everywhere: besides having no badge on the map, its open faults and
+  late tasks no longer appear in the Cockpit's issues, its count or the Recap, and its window shows no warning sign.
+
 ## 2.496.527
 
 What you will see:
