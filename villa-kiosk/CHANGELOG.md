@@ -1,3 +1,8 @@
+## 2.496.526
+
+- Nothing changes on screen. The rules every contributor's Claude follows are now part of the repository (CLAUDE.md
+  and the rules folder), with the guards that keep work off main, so a collaborator works by the same rules.
+
 ## 2.496.525
 
 What you will see:
