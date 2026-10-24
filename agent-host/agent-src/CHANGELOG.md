@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.336 (24 October 2026)
+
+- rules.js: "Asleep between reports" takes its explanation behind the title's (i) (withInfo), no hint under the
+  field (owner, 2026-10-24).
+
 ## 0.6.335 (24 October 2026)
 
 - Review K (owner: "Proceed with all recommended ones"):

@@ -4,6 +4,7 @@ from __future__ import annotations
 from helpers import run_kit, run_terms
 import asyncio
 import os
+from pathlib import Path
 
 import pytest
 import yaml
@@ -1001,3 +1002,11 @@ def test_a_skills_frequent_checks_say_their_rhythm_and_link_to_its_setting(ui):
     for md in glob.glob(os.path.join(os.path.dirname(__file__), "..", "starter", "skills", "*", "SKILL.md")):
         text = open(md, encoding="utf-8").read()
         assert "(its setting" not in text and "every 5 min" not in text.lower(), md
+
+
+def test_asleep_between_reports_says_where_it_is_set_behind_its_titles_info_never_under_it():
+    # owner, 2026-10-24: "remove this text … and show it in a (i) icon next to the 'asleep between report' title"
+    js = (Path(__file__).resolve().parents[1] / "vesta_agent" / "ui" / "static" / "rules.js").read_text()
+    at = js.index('field(withInfo("Asleep between reports", "Set in the VESTA Kiosk')
+    assert js.count("Set in the VESTA Kiosk") == 1
+    assert '[h("span", { class: "muted" }, "None")])),' in js[at:at + 900]          # the field ends: no hint under it
