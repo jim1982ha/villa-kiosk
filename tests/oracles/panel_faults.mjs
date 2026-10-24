@@ -69,8 +69,9 @@ ck("a real button, named for a screen reader, the Cockpit's warning sign in a fa
    && /aria-label="Open this device&#x27;s faults in the Cockpit"/.test(btnHtml) && /<svg[^>]*lucide-triangle-alert/.test(btnHtml), btnHtml);
 const tree = parseTsx("components/panels/BasePanel.tsx");
 const [placed] = elements(tree, "FaultsButton");
-ck("  ...drawn by the device window only while it has faults to open, first on the title line (top left)",
+ck("  ...drawn by the device window only while it has faults to open, first of the header's actions (top right)",
    !!placed && guardsOf(placed).join() === "faults" && inside(btnHtml, "btn") !== ""
-   && /<div className="title">\s*\{\/\*[\s\S]*?\*\/\}\s*\{faults && <FaultsButton/.test(tree.text), guardsOf(placed ?? tree));
+   && /<div className="modal-header-actions">\s*\{\/\*[\s\S]*?\*\/\}\s*\{faults && <FaultsButton/.test(tree.text)
+   && /\{\(headerActions \|\| back \|\| faults\) &&/.test(tree.text), guardsOf(placed ?? tree));
 
 done("✅ a device window's warning opens its faults in the Cockpit");

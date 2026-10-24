@@ -69,7 +69,7 @@ interface Props {
   children: ReactNode;
 }
 
-/** The device window's warning (header, top left): the Cockpit's own sign in a fault's amber (attention severity
+/** The device window's warning (header, top right, owner 2026-10-24): the Cockpit's own sign in a fault's amber (attention severity
  *  "warn", .cockpit-attention-warn), an icon button of the footer's size. Pure: a check draws it. */
 export function FaultsButton({ onOpen }: { onOpen: () => void }) {
   return (
@@ -159,10 +159,6 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
       >
         <div className="modal-header">
           <div className="title">
-            {/* ⚠️ ITS OPEN FAULTS, ONE TAP AWAY (owner, 2026-10-24): while the device or its linked entity has an open
-                Cockpit fault (panelHeader.faults: the badge's amber "!"), the Cockpit's own warning sign, in a fault's
-                amber (attention severity "warn"), opens the Overview with that card marked. Gone once they are closed. */}
-            {faults && <FaultsButton onOpen={faults.open} />}
             {headerIcon}
             <div style={{ minWidth: 0 }}>
               {/* The window's first focus (useModalA11y's data-autofocus), not the
@@ -174,8 +170,13 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
               {room && <div className="room">{room}</div>}
             </div>
           </div>
-          {(headerActions || back) && (
+          {(headerActions || back || faults) && (
             <div className="modal-header-actions">
+              {/* ⚠️ ITS OPEN FAULTS, ONE TAP AWAY (owner, 2026-10-24, top right: "not top left"): while the device or
+                  its linked entity has an open Cockpit fault (panelHeader.faults: the badge's amber "!"), the Cockpit's
+                  own warning sign, in a fault's amber (attention severity "warn"), opens the Overview with that card
+                  marked. Gone once they are closed. */}
+              {faults && <FaultsButton onOpen={faults.open} />}
               {headerActions}
               {back && <BackButton onClick={back.go} label={back.label} />}
             </div>
