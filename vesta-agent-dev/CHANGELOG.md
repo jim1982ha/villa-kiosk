@@ -1,3 +1,16 @@
+## 0.12.351
+
+What you will see:
+- An alert card in another language shows only the translation. An AI reply with words around it ("Voici la
+  traduction : …") is no longer printed on the card: the AI is asked again at once.
+- The villa's own messages keep every device's name as written, like alert cards do ("House Pump" stays "House Pump"
+  in French), and one translation serves every device.
+- Overview › Scheduled jobs run: a job that ran keeps its own name after another job of the skill is deleted (it read
+  the next job's name).
+- Limits tab and Page changes: "Delete conversation context at" reads "After 12 hours of silence", never
+  "after_8h_silence", in the save message, in "Changed from its usual" and in Page changes; a skill's change says its
+  value before and after. A setting counted as a share (from 0 to 1) refuses a value above 1.
+
 ## 0.12.350
 
 What you will see:
