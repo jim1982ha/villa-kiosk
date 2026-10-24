@@ -101,9 +101,11 @@ ck("the Open a ticket window (one device's faults) fits its content, by the devi
      && /className="modal-header-actions">\s*<LogoutAll \/>/.test(ce)
      && /:\s*withinSettings \? <span \/> : undefined\} \/>/.test(ce));
   // owner, 2026-10-24 (2.496.519): the model's details are the same (i) as every other, never a worded button
-  ck("  ...the model's details are the plain (i), the upload a .btn with a word hidden on a phone",
-     /<InfoTip label="Model details">/.test(readFileSync(new URL("../../src/components/settings/CentralModelInfo.tsx", import.meta.url), "utf8"))
-     && /<button type="button" className="info-btn"/.test(readFileSync(new URL("../../src/components/common/InfoTip.tsx", import.meta.url), "utf8"))
+  const { h, draw } = await import("../consistency/screen.mjs");
+  const CentralModelInfo = (await import("@/components/settings/CentralModelInfo")).default;
+  const details = draw(h(CentralModelInfo, { addonCfg: {}, loadedModel: null, editable: false }));
+  ck("  ...the model's details are the plain (i) (drawn), the upload a .btn with a word hidden on a phone",
+     /<button type="button" class="info-btn" aria-label="Model details"/.test(details) && !/btn-label|class="(?:[^"]*\s)?btn(?:\s[^"]*)?"/.test(details)
      && /className="btn"\s*onClick=\{glbUpload\.openPicker\}[\s\S]{0,400}<span className="btn-label">/.test(ce)
      && !/header-icon-btn/.test(ce));
   ck("  ...the same Back component as a device window's", /<BackButton onClick=\{back\.go\} label=\{back\.label\} \/>/.test(bp)

@@ -36,17 +36,23 @@ export function PresenceWindow({ onClose, onOpenEntity, canOpen }: {
   const p = usePresence();
   const why = usePresenceWhy();
   if (!p) return null;
-  // ⚠️ EACH STEP IN THE BAND (owner, 2026-10-24: "show each stage … so user can see clearly when each step was
-  // triggered"): a sensor that names its stages is charted by them, in its own words and order; otherwise Occupied /
-  // Empty, as before
-  const st = why.stages;
-  const history = st
-    ? <LastDayTimeline entityId={st.sensorId} words={(s) => stageWords(st, s)}
-        colorFor={(s) => stageColor(st, s)} />
-    : <LastDayTimeline entityId={p.sensorId} words={(s) => presenceStateWords(s).label}
-        colorFor={(s) => STATUS_COLOR[presenceStateWords(s).tone]} />;
+  const band = presenceBand(p.sensorId, why);
+  const history = <LastDayTimeline entityId={band.entityId} words={band.words} colorFor={band.colorFor} />;
   return <PresencePanel presence={p.presence} when={p.since} why={why} showPeople={sees.people} showMovement={sees.motion}
     canOpen={canOpen} onOpenEntity={onOpenEntity} onClose={onClose} presenceHistory={history} />;
+}
+
+/** What the window's band charts — pure (a check reads it by value).
+ *  ⚠️ EACH STEP IN THE BAND (owner, 2026-10-24: "show each stage … so user can see clearly when each step was
+ *  triggered"): a sensor that names its stages is charted by them, in its own words and order; otherwise the presence
+ *  sensor picked in Settings, Occupied / Empty, as before. */
+export function presenceBand(sensorId: string, why: PresenceWhy): {
+  entityId: string; words: (s: string) => string; colorFor: (s: string) => string;
+} {
+  const st = why.stages;
+  return st
+    ? { entityId: st.sensorId, words: (s) => stageWords(st, s), colorFor: (s) => stageColor(st, s) }
+    : { entityId: sensorId, words: (s) => presenceStateWords(s).label, colorFor: (s) => STATUS_COLOR[presenceStateWords(s).tone] };
 }
 
 /** The tile, drawn — pure (a check draws it). `when`: since when, in words (usePresence). */
