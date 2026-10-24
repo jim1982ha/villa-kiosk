@@ -416,7 +416,10 @@ export function buildAttentionItems(opts: {
     };
   }
 
-  return items;
+  // ⚠️ HIDDEN MEANS HIDDEN EVERYWHERE (owner, 2026-10-25): a device hidden in the villa's system had no badge on the
+  // map, yet its fault or late task was listed and counted by the Cockpit and lit its window's sign. The ONE list every
+  // count, card, mark and sign reads leaves it out (devices.isHidden: the device or any of its folded entities).
+  return items.filter((i) => !i.entityId || !devices.isHidden(i.entityId));
 }
 
 /** The villa's problems, role-blind — what the villa model holds. Nothing

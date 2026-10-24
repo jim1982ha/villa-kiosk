@@ -60,4 +60,17 @@ ck("  ...a lamp offline and nothing else: grey everywhere, no amber",
 const E = seen("light.ok", { state: "on" });
 ck("  ...nothing wrong: no mark, no sign, no card", E.mark === null && E.sign === null && E.cardTone === null, E);
 
+{
+  // owner, 2026-10-25: "“hidden” should mean hidden everywhere" — a hidden lock with an open fault and a late
+  // task: no card, no count, no sign (the map already drew no badge)
+  const id = "lock.old", entities = { [id]: ent(id, "locked") }, entityMap = { [id]: { entityId: id, type: "lock" } };
+  const devices = devicesOf({ ids: [], hidden: new Set([id]) });
+  const fmData = { ...EMPTY_FM_DATA, tickets: [ticket("t9", id, "Old lock battery low")],
+    schedules: [{ id: "s1", title: "Service the old lock", entityId: id, everyDays: 30, lastDoneAt: old }] };
+  const att = attentionFor({ devices, attentionItems: buildAttentionItems({ devices, entities, entityMap, resolvedRooms: {}, fmData }) }, () => true);
+  ck("a hidden device: no Cockpit card, no count, no sign — hidden everywhere",
+     att.attentionGroups.length === 0 && att.health.level === "ok" && issueSeverity(att.attentionGroups, [id], (x) => x) === null,
+     att.attentionGroups.map((g) => g.title));
+}
+
 done("✅ one answer per device: the badge, the window's sign and the Cockpit's card agree");

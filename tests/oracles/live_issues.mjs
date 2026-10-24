@@ -225,7 +225,8 @@ ck("  ...every source has its icon and its words in the (i)'s legend",
 
 console.log("\n  the Recap's readiness says what is found, never the goal over a contradiction (owner, 2026-10-14):");
 const { buildReadiness } = await import("@/fm/readiness");
-const noDevices = { ids: [], unavailable: [], has: () => false, deviceOf: (id) => id, deviceOfRecord: (id) => id, isCritical: () => false };
+const noDevices = { ids: [], unavailable: [], has: () => false, deviceOf: (id) => id, deviceOfRecord: (id) => id, isCritical: () => false,
+  isHidden: () => false };
 // the Recap reads ONE profile view: its devices and the problems the Overview lists for it (attention items)
 const ready = (tickets, devs = noDevices) => {
   const data = fm(tickets);
