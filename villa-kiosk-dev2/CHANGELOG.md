@@ -1,3 +1,9 @@
+## 2.496.524
+
+What you will see:
+- A device's window: the amber warning sign that opens its faults in the Cockpit now sits at the top right of the
+  window's header, not the top left.
+
 ## 2.496.523
 
 What you will see:
