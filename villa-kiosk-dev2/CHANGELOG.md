@@ -1,3 +1,12 @@
+## 2.496.527
+
+What you will see:
+- A device now says the same thing everywhere: its badge on the map, the warning sign in its window and its card in
+  the Cockpit. An offline sensor with an open fault is amber in all three (its window's sign was grey). A device with
+  only late maintenance now carries the amber "!" on its badge, as its sign and card already did.
+- Advanced Settings, "Model details": its text now says to upload with "Upload model", beside the (i), instead of a
+  top-bar button that no longer exists.
+
 ## 2.496.526
 
 - Nothing changes on screen. The rules every contributor's Claude follows are now part of the repository (CLAUDE.md
