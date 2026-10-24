@@ -34,6 +34,10 @@ export interface Screen {
   /** The record whose ticket the Tickets tab should open for editing (an
    *  Overview card's "Edit ticket"); cleared once the form has it. */
   ticketFor: string | null;
+  /** The devices whose open faults the Overview marks and scrolls to (a device window's warning, "openFaults");
+   *  null otherwise. Kept while the Cockpit hands a device over and is reopened by Back; cleared when the Cockpit is
+   *  closed or opened anew. */
+  faultsFocus: string[] | null;
   /** A guest's problem report: the device it is about, "" for none (the
    *  Overview's "Report a problem"); null when no report is open. */
   guestReportFor: string | null;
@@ -47,7 +51,8 @@ export interface Screen {
 
 export const START: Screen = {
   nav: NO_PANEL, windows: NO_SURFACES, list: null,
-  cockpitTab: "overview", faultFor: null, ticketFor: null, guestReportFor: null, editorFocus: null, panelReturn: null,
+  cockpitTab: "overview", faultFor: null, ticketFor: null, faultsFocus: null, guestReportFor: null, editorFocus: null,
+  panelReturn: null,
 };
 
 export type ScreenAction =
@@ -79,6 +84,9 @@ export type ScreenAction =
    *  any other. */
   | { type: "reportFault" }
   | { type: "faultFormOpened" }
+  /** A device window's warning: the Cockpit's Overview with the open faults of `ids` (the device, its linked entity)
+   *  marked; closing it gives the device back. */
+  | { type: "openFaults"; ids: string[] }
   /** An Overview card's "Edit ticket": the Tickets tab, that record's form open. */
   | { type: "editTicket"; id: string }
   | { type: "ticketEditOpened" }
@@ -98,12 +106,14 @@ export function screenReducer(s: Screen, a: ScreenAction, doors: Doors): Screen 
     case "openWindow": {
       if (!mayOpen(a.window, doors)) return s;
       return { ...s, windows: win(s.windows, a.window, true), cockpitTab: a.tab ?? s.cockpitTab,
+        faultsFocus: a.window === "cockpit" ? null : s.faultsFocus,
         editorFocus: a.window === "configEditor" ? null : s.editorFocus };
     }
     case "closeWindow":
       return { ...s, windows: win(s.windows, a.window, false), ...returned(a.window),
         faultFor: a.window === "cockpit" ? null : s.faultFor,
         ticketFor: a.window === "cockpit" ? null : s.ticketFor,
+        faultsFocus: a.window === "cockpit" ? null : s.faultsFocus,
         editorFocus: a.window === "configEditor" ? null : s.editorFocus };
     case "cockpitTab": return { ...s, cockpitTab: a.tab };
     case "openDevice": return { ...s, nav: panel({ type: "open", panel: a.panel }), panelReturn: a.panel ? null : s.panelReturn };
@@ -150,6 +160,11 @@ export function screenReducer(s: Screen, a: ScreenAction, doors: Doors): Screen 
       return { ...s, nav: NO_PANEL, guestReportFor: id, panelReturn: { to: "guestReport", nav: s.nav } };
     }
     case "faultFormOpened": return s.faultFor === null ? s : { ...s, faultFor: null };
+    case "openFaults":
+      // the Overview, where a device's faults are its card (owner, 2026-10-24); the device comes back on close
+      if (!doors.facility || a.ids.length === 0) return s;
+      return { ...s, nav: NO_PANEL, faultsFocus: a.ids, cockpitTab: "overview", windows: win(s.windows, "cockpit", true),
+        panelReturn: { to: "cockpit", nav: s.nav } };
     case "editTicket": return doors.facility ? { ...s, ticketFor: a.id, cockpitTab: "tickets" } : s;
     case "ticketEditOpened": return s.ticketFor === null ? s : { ...s, ticketFor: null };
     case "reportProblem": return { ...s, guestReportFor: "" };

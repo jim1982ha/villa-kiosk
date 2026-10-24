@@ -13,7 +13,7 @@ import { useFmData } from "@/fm/FmDataContext";
 import WorkButtons, { useConfirmedClose, type ConfirmedClose } from "@/components/fm/WorkButtons";
 import type { Doors } from "@/auth/doors";
 import { useVillaAttention } from "./useVillaAttention";
-import type { AttentionGroup } from "@/config/attention";
+import { cardFocused, type AttentionGroup } from "@/config/attention";
 import { cockpitCard, type CardLine, type CardView } from "@/config/cockpitCard";
 import { SourceIcons } from "@/components/fm/sourceIcons";
 import RecordCard from "@/components/fm/RecordCard";
@@ -31,7 +31,8 @@ import { useProfile } from "@/auth/ProfileContext";
 import { useNow } from "@/hooks/useInterval";
 
 
-export default function CockpitOverview({ onOpenEntity, doors, reportFaultFor, onFaultFormOpened, onEditTicket, onReportProblem }: {
+export default function CockpitOverview({ onOpenEntity, doors, reportFaultFor, onFaultFormOpened, onEditTicket, onReportProblem,
+  focusFaults }: {
   onOpenEntity: (entityId: string) => void;
   /** What this profile may do (auth/doors): `facility` takes faults on and opens tickets, `reportFault` reports a
    *  problem. */
@@ -43,6 +44,8 @@ export default function CockpitOverview({ onOpenEntity, doors, reportFaultFor, o
   onEditTicket: (ticketId: string) => void;
   /** A guest's "Report a problem". */
   onReportProblem: () => void;
+  /** The devices whose cards are marked and scrolled to (a device window's warning, screen "openFaults"). */
+  focusFaults?: readonly string[];
 }) {
   const { entities } = useHA();
   const { config, resolvedRooms } = useConfig();
@@ -69,6 +72,14 @@ export default function CockpitOverview({ onOpenEntity, doors, reportFaultFor, o
   const { attentionGroups } = useVillaAttention();
   // the faults a person closed that the VESTA Agent reads again: LAST in the same list, never counted (owner, 2026-10-23)
   const watched = useWatchedCards();
+  // the marked card in sight, once per request (a device window's warning) — after it is drawn
+  const focusKey = (focusFaults ?? []).join("|");
+  useEffect(() => {
+    if (!focusKey) return;
+    const t = setTimeout(() => document.querySelector(".fm-record-card.cockpit-focus")
+      ?.scrollIntoView?.({ behavior: "smooth", block: "center" }), 0);
+    return () => clearTimeout(t);
+  }, [focusKey]);
 
   return (
     <>
@@ -105,7 +116,8 @@ export default function CockpitOverview({ onOpenEntity, doors, reportFaultFor, o
         <div className="cockpit-attention-list">
           {attentionGroups.map((group) => (
             <CockpitAttentionRow key={group.key} group={group} onOpenEntity={onOpenEntity}
-              canManage={canManage} onEditTicket={onEditTicket} />
+              canManage={canManage} onEditTicket={onEditTicket}
+              focused={cardFocused(group.entityId, focusFaults, devices.deviceOf)} />
           ))}
           {/* after every open issue, and not in its count: closed, the VESTA Agent confirming it (fm/faultConfirm) */}
           {watched.map((card) => <AttentionCard key={card.key} card={card} onOpenEntity={onOpenEntity} />)}
@@ -141,17 +153,19 @@ function useWatchedCards(): CardView[] {
  *  "Open Ticket" (was "Mark in progress"; the Tickets tab's wrench and Title Case, owner 2026-10-14) makes the device's faults ONE ticket (each still its own record, so the VESTA Agent can clear
  *  one alone), then "Edit ticket" opens it in the Tickets tab; "Close" closes them all ("no action needed"). A line
  *  that is only what Home Assistant reports has no button: it goes when the device is back. */
-function CockpitAttentionRow({ group, onOpenEntity, canManage, onEditTicket }: {
+function CockpitAttentionRow({ group, onOpenEntity, canManage, onEditTicket, focused }: {
   group: AttentionGroup;
   onOpenEntity: (id: string) => void;
   canManage: boolean;
   onEditTicket: (ticketId: string) => void;
+  /** The device a window's warning opened the Cockpit for: its card marked. */
+  focused?: boolean;
 }) {
   const { status } = useAgent();
   const card = cockpitCard(group, status?.cadence ?? null);
   // ONE close-question per card, its own Close and each line's: asking on one puts the others' buttons back
   const closer = useConfirmedClose();
-  return <AttentionCard card={card} onOpenEntity={onOpenEntity}
+  return <AttentionCard card={card} onOpenEntity={onOpenEntity} focused={focused}
     actions={useCardActions(card, canManage, onEditTicket, closer)}
     lineActions={canManage ? (line) => <LineClose card={card} line={line} closer={closer} /> : undefined} />;
 }
@@ -175,10 +189,12 @@ function LineClose({ card, line, closer }: { card: CardView; line: CardLine; clo
  *  source icons before the device's name, the room under it, its problems' lines, its buttons on the right of them.
  *  Tapping it opens the device; its buttons take their own presses. Draws `card` (config/cockpitCard) and nothing
  *  else: what it says is decided there, by value. Pure: a check draws it. */
-export function AttentionCard({ card, onOpenEntity, actions, lineActions }: {
+export function AttentionCard({ card, onOpenEntity, actions, lineActions, focused }: {
   card: CardView;
   onOpenEntity: (id: string) => void;
   actions?: ReactNode;
+  /** Marked, as the card a device window's warning asked for (owner, 2026-10-24). */
+  focused?: boolean;
   /** A line's own buttons (its Close, on a card holding several problems). */
   lineActions?: (line: CardLine) => ReactNode;
 }) {
@@ -204,7 +220,7 @@ export function AttentionCard({ card, onOpenEntity, actions, lineActions }: {
       )}
       actions={actions ?? undefined}
       // a fault being confirmed: its frame marked, the one place its look differs (owner, 2026-10-23)
-      tone={card.look === "watched" ? "fault-watched" : undefined}
+      tone={[card.look === "watched" ? "fault-watched" : "", focused ? "cockpit-focus" : ""].filter(Boolean).join(" ") || undefined}
     />
   );
 }

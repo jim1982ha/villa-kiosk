@@ -171,6 +171,15 @@ export function faultDevices(
   return out;
 }
 
+/** Is the Overview card of `cardEntityId` (its device) one of the devices `focus` names (a device window's warning:
+ *  the device and its linked entity, each folded onto its device as the cards are)? */
+export function cardFocused(cardEntityId: string | undefined, focus: readonly string[] | undefined,
+  deviceOf: (entityId: string) => string): boolean {
+  if (!cardEntityId || !focus?.length) return false;
+  const card = deviceOf(cardEntityId);
+  return focus.some((id) => deviceOf(id) === card);
+}
+
 /** What a problem IS: its kind — and a CRITICAL offline device its own, where any other offline device is just
  *  offline (owner, 2026-10-18: "critical" = red and told at once). */
 export type AttentionTone = AttentionKind | "critical";
