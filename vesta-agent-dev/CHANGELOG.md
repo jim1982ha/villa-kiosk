@@ -1,3 +1,9 @@
+## 0.12.349
+
+- Nothing changes in the app. The rules every contributor's Claude follows (CLAUDE.md and the rules folder) and the
+  guards that keep work off main are now part of this branch too, the same as the Kiosk's; a release stops when they
+  differ.
+
 ## 0.12.348
 
 What you will see:
