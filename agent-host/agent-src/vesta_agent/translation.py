@@ -218,10 +218,13 @@ def rules() -> str:
     return "\n".join([*(p.pattern for p, _ in _patterns(())), prompt("{language}", [])])
 
 
-def prompt(language: str, skeletons: list[str]) -> str:
+def prompt(language: str, skeletons: list[str], again: bool = False) -> str:
     """The one message of a translation run (the skill's own instructions are its system prompt): the engine's
-    contract — the slots and the strict answer its reader checks (`answer`) — and the lines."""
-    return (f"Translate each line of this JSON list from English into {language}. Every {{1}}, {{2}}… stands for a value "
+    contract — the slots and the strict answer its reader checks (`answer`) — and the lines. `again`: the first answer
+    could not be read, and the run asks once more."""
+    return (("Your previous answer could not be read. Answer with the JSON list alone: no words, no code block, "
+             "nothing before or after it.\n\n" if again else "")
+            + f"Translate each line of this JSON list from English into {language}. Every {{1}}, {{2}}… stands for a value "
             "(a name, a number, a time, a code) that is put back afterwards: keep each one exactly once, written the "
             "same, where it belongs in your sentence. Translate nothing else into it, add nothing, keep icons.\n"
             f"Answer with ONLY a JSON list of {len(skeletons)} strings, the translations in the same order.\n\n"
@@ -229,17 +232,38 @@ def prompt(language: str, skeletons: list[str]) -> str:
 
 
 def answer(text: str, skeletons: list[str]) -> dict | None:
-    """The run's answer read: {skeleton: what the AI wrote for it} (judged by phrases.Phrases.take); None for an answer
-    that is not a JSON list of as many strings."""
+    """The run's answer read: {skeleton: what the AI wrote for it} (judged by phrases.Phrases.take — a slot dropped, an
+    echo); None when nothing in it can be read as the lines asked for.
+
+    ⚠️ READ AS THE AI WRITES IT (owner, 2026-10-24: "Master Bedroom Aqara is unlocked for 10min" stayed English on a
+    French chat, the answer "not the list of lines asked for"; until 0.12.346 only the text from the first "[" to the
+    last "]" was read). Read, in order: a JSON list of as many strings anywhere in the text (inside a code block, with
+    words around it, the first that fits); a JSON object naming each line asked; for ONE line asked, a JSON string or
+    the answer's one line itself. Raise phrases.READER whenever this reads more."""
     t = (text or "").strip()
-    a, b = t.find("["), t.rfind("]")
-    try:
-        got = json.loads(t[a:b + 1]) if 0 <= a < b else None
-    except ValueError:
-        got = None
-    if not isinstance(got, list) or len(got) != len(skeletons):
+    if not t or not skeletons:
         return None
-    return dict(zip(skeletons, got))
+    found, dec = [], json.JSONDecoder()
+    for i, ch in enumerate(t):
+        if ch in "[{\"":
+            try:
+                found.append(dec.raw_decode(t, i)[0])
+            except ValueError:
+                continue
+    for v in found:
+        if isinstance(v, list) and len(v) == len(skeletons) and all(isinstance(x, str) for x in v):
+            return dict(zip(skeletons, v))
+    for v in found:
+        if isinstance(v, dict) and all(isinstance(v.get(s), str) for s in skeletons):
+            return {s: v[s] for s in skeletons}
+    if len(skeletons) == 1:
+        one = next((v for v in found if isinstance(v, str) and v.strip()), None)
+        if one is None:
+            lines = [ln for ln in (x.strip().strip("`").strip() for x in t.splitlines()) if ln]
+            one = lines[0].strip('"“”') if len(lines) == 1 else None
+        if one:
+            return {skeletons[0]: one}
+    return None
 
 
 class Translations:
@@ -382,7 +406,17 @@ class Translations:
                     log.exception("An alert card's %s translation failed: it stays English", lang)
                     text, why = None, f"failed: {type(e).__name__}"
                 got = answer(text, missing) if text is not None else None
-                self.phrases.take(lang, fp, missing, got, why if text is None else "not the list of lines asked for")
+                unread = text if text is not None and got is None else None
+                if unread is not None:
+                    # an answer that could not be read: asked once more, plainly, before the lines rest
+                    try:
+                        again, _ = await asyncio.wait_for(self._ask(agreed, lang, missing, again=True),
+                                                          timeout=translate_seconds())
+                    except Exception:  # noqa: BLE001 — a timeout or an error: the first answer's failure stands
+                        again = None
+                    got = answer(again, missing) if again is not None else None
+                    why = f"an answer that could not be read: {unread.strip()[:120]!r}"
+                self.phrases.take(lang, fp, missing, got, why, unreadable=unread is not None)
             # every copy waiting for these lines, those added while this ran included
             while waiting := self._waiting.pop(want, None):
                 for iid, chat in sorted(waiting):
@@ -402,7 +436,7 @@ class Translations:
                 self._waiting.pop(want, None)
                 self._then.pop(want, None)
 
-    async def _ask(self, agreed, lang: str, skeletons: list[str]) -> tuple[str | None, str | None]:
+    async def _ask(self, agreed, lang: str, skeletons: list[str], again: bool = False) -> tuple[str | None, str | None]:
         """The AI's answer for `skeletons` into `lang` — one tiny run, no tool, the Chat answers' brain and limit: (its
         text, None), or (None, why it could not answer)."""
         sk, terms = agreed
@@ -413,7 +447,7 @@ class Translations:
         kit = Kit(create_sdk_mcp_server(name=SERVER, version=__version__, tools=[]), set(), [], None)
         instructions = str(sk.translate.get("instructions") or "")
         name = Language.of(lang).name
-        res = await runner.run(self.s.in_folder("translations"), instructions, prompt(name, skeletons),
+        res = await runner.run(self.s.in_folder("translations"), instructions, prompt(name, skeletons, again),
                                kit, terms, self.state, asked=f"Alert card in {name}: {len(skeletons)} line(s)")
         if res.problem or (res.error and not res.text):
             return None, f"the AI could not answer ({res.problem or 'error'})"

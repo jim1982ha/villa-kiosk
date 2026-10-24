@@ -280,9 +280,10 @@ class State:
             return None
         return rec if isinstance(rec, dict) and rec.get("en") == skeleton and rec.get("fp", "") == fp else None
 
-    def note_untranslated(self, lang: str, skeleton: str, fp: str, at: str, why: str) -> None:
-        self.put(f"untranslated:{lang}:{self._phrase_hash(skeleton, fp)}",
-                 json.dumps({"en": skeleton, "fp": fp, "at": at, "why": why}, ensure_ascii=False))
+    def note_untranslated(self, lang: str, skeleton: str, fp: str, at: str, why: str, *, kind: str = "",
+                          reader: int | None = None) -> None:
+        rec = {"en": skeleton, "fp": fp, "at": at, "why": why, **({"kind": kind, "reader": reader} if kind else {})}
+        self.put(f"untranslated:{lang}:{self._phrase_hash(skeleton, fp)}", json.dumps(rec, ensure_ascii=False))
 
     def clear_untranslated(self, lang: str, skeleton: str, fp: str = "") -> None:
         self.drop(f"untranslated:{lang}:{self._phrase_hash(skeleton, fp)}")

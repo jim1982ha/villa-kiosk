@@ -352,7 +352,7 @@ def test_a_translation_must_keep_every_slot_once():
     assert not fits("{1} est {2}\ndepuis {3} min.", s) and not fits("", s) and not fits(None, s)
     assert answer('Sure: ["{1} est {2} depuis plus de {3} min.", "x"]', [s, "Held {1} min"]) == \
         {s: "{1} est {2} depuis plus de {3} min.", "Held {1} min": "x"}  # read; phrases.Phrases.take judges each line
-    assert answer('["a"]', [s, "Held {1} min"]) is None and answer("no list", [s]) is None
+    assert answer('["a"]', [s, "Held {1} min"]) is None and answer("no list\nat all", [s]) is None
     assert acceptable("{1} est {2} depuis plus de {3} min.", s) and not acceptable("x", "Held {1} min")
     assert not wordy("⚡ {1}") and wordy("Held {1} min")
 
@@ -651,3 +651,62 @@ def test_the_alerts_names_come_from_the_villa_and_a_failed_read_never_stops_the_
 
 def run(coro):
     return asyncio.run(coro)
+
+
+def test_the_reader_reads_the_answer_as_the_ai_writes_it():
+    # owner, 2026-10-24: "Master Bedroom Aqara is unlocked for 10min" stayed English on a French chat beside its
+    # translated title — the answer was "not the list of lines asked for", read only from the first "[" to the last "]"
+    one, two = ["{1} is unlocked for {2}min"], ["{1} is unlocked for {2}min", "Since {1}"]
+    fr = "{1} est déverrouillé depuis {2} min"
+    assert answer(f'```json\n["{fr}"]\n```', one) == {one[0]: fr}                          # in a code block
+    assert answer(f'Voici [la] traduction :\n["{fr}", "Depuis {{1}}"]', two) == \
+        {two[0]: fr, two[1]: "Depuis {1}"}                                                   # words and brackets around
+    assert answer(json.dumps({two[0]: fr, two[1]: "Depuis {1}"}, ensure_ascii=False), two)[two[1]] == "Depuis {1}"
+    assert answer(json.dumps(fr, ensure_ascii=False), one) == {one[0]: fr}                   # one line: a JSON string
+    assert answer(f"  {fr}  ", one) == {one[0]: fr} and answer(f'"{fr}"', one) == {one[0]: fr}   # ... or the line itself
+    assert answer("Here it is:\n" + fr, one) is None and answer("", one) is None           # two lines: not a line
+    assert answer(f'["{fr}"]', two) is None                                                 # as many lines, or nothing
+    assert not acceptable(answer("Je ne sais pas", one)[one[0]], one[0])     # read, then judged: no slot, not kept
+
+
+def test_an_answer_that_cannot_be_read_is_asked_once_more_and_then_kept(tmp_path, monkeypatch):
+    v = villa(tmp_path)
+    tries: dict[str, int] = {}
+
+    def answer_(r):
+        lang = re.search(r"from English into (\w+)\.", r["prompt"]).group(1)
+        tries[lang] = tries.get(lang, 0) + 1
+        return "Bien sûr, voici les lignes traduites." if tries[lang] == 1 else translator(r)
+    ai = FakeAI(answer_).install(monkeypatch)
+
+    async def go():
+        await alert(v, 1, "lock.test_lock", "Test lock", 10, "23/10/2026 18:30")
+        await v.translations.idle()
+    run(go())
+    assert len(ai.runs) == 4, ai.runs                                    # two languages, asked twice each
+    assert sum(r["prompt"].startswith("Your previous answer could not be read.") for r in ai.runs) == 2
+    fp = v.translations.fingerprint(v.skills.get("alert-desk"))
+    assert v.state.translation("fr", SKEL, fp) == f"(fr) {SKEL}" and v.state.untranslated("fr", SKEL, fp) is None
+    assert '(fr) Test lock has been "unavailable" for over 10 s.' in card(v, 1, FM_FR)
+
+
+def test_an_unreadable_answer_rests_with_its_reader_and_an_older_readers_is_asked_again_at_once(tmp_path, monkeypatch,
+                                                                                                caplog):
+    from vesta_agent.phrases import READER
+    v = villa(tmp_path)
+    clocked(v)
+    FakeAI(lambda r: "Sorry.\nNo.").install(monkeypatch)
+    caplog.set_level(logging.INFO, logger="vesta.translation")
+    run(alert(v, 1, "lock.test_lock", "Test lock", 10, "23/10/2026 18:30"))
+    run(v.translations.idle())
+    fp = v.translations.fingerprint(v.skills.get("alert-desk"))
+    rec = v.state.untranslated("fr", SKEL, fp)
+    assert rec["kind"] == "unreadable" and rec["reader"] == READER and "Sorry." in rec["why"], rec   # what it said
+    assert v.translations.phrases.resting("fr", SKEL, fp)                                  # this reader's: rests
+    at = rec["at"]
+    v.state.note_untranslated("fr", SKEL, fp, at, "not the list of lines asked for")   # 0.12.344–346 wrote this
+    assert not v.translations.phrases.resting("fr", SKEL, fp)                              # an older reader's: ask
+    v.state.note_untranslated("fr", SKEL, fp, at, "unreadable", kind="unreadable", reader=READER - 1)
+    assert not v.translations.phrases.resting("fr", SKEL, fp)
+    v.state.note_untranslated("fr", SKEL, fp, at, "the English given back")
+    assert v.translations.phrases.resting("fr", SKEL, fp)                                  # any other failure rests

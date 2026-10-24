@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.337 (24 October 2026)
+
+- translation.answer reads a JSON list anywhere in the text (code block, words around), an object naming the lines,
+  and for one line a JSON string or the line itself (owner, 2026-10-24: '{1} is unlocked for {2}min' rested 24 h as
+  "not the list of lines asked for"). phrases.READER = 2.
+- An unreadable answer is asked once more in the same run (prompt(..., again=True)); its failure is kept with
+  kind "unreadable", the reader's version and the answer's first 120 characters. Phrases.resting asks again at once
+  for an unreadable failure noted by an older reader, including 0.12.344–0.12.346's "not the list of lines asked for".
+
 ## 0.6.336 (24 October 2026)
 
 - rules.js: "Asleep between reports" takes its explanation behind the title's (i) (withInfo), no hint under the

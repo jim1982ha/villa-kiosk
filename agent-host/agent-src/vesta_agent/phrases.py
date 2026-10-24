@@ -18,6 +18,11 @@ instructions and of the engine's slot rules. Changing either starts afresh: the 
 are deleted the first time the new ones are used. The VESTA Agent page can also forget them all, or one language's
 (`forget`, Rules › AI brains and limits).
 
+⚠️ AN ANSWER THE READER COULD NOT READ IS THE READER'S TO JUDGE AGAIN (owner, 2026-10-24: a French chat read "Master
+Bedroom Aqara is unlocked for 10min" in English beside a translated title; the log said "not the list of lines asked
+for"). Such a failure is kept with the version of translation.answer that could not read it (`READER`); a newer reader
+asks again at once rather than after the rest, and every reader asks a second time within the run before it gives up.
+
 Stored in State (`phrase:` BOUNDED by alerts.translations_kept; `untranslated:` with the records).
 """
 from __future__ import annotations
@@ -36,6 +41,11 @@ log = logging.getLogger("vesta.translation")
 
 #: A slot in a skeleton: {1}, {2}… numbered left to right, so one pattern is one skeleton whatever its values.
 SLOT = re.compile(r"\{(\d+)\}")
+#: translation.answer's reading of an AI answer — raised whenever it reads more (2: a fenced list, words around it, an
+#: object, one line asked answered as a line). A failure to read noted under an older one is asked again at once.
+READER = 2
+#: The failure "the answer could not be read" as 0.12.344–0.12.346 wrote it (no reader noted): an older reader's.
+_UNREAD_BEFORE = "not the list of lines asked for"
 
 
 def wordy(skeleton: str) -> bool:
@@ -107,6 +117,9 @@ class Phrases:
     def resting(self, lang: str, skeleton: str, fp: str) -> bool:
         """Whether `skeleton` failed in `lang` less than retry_hours() ago: not asked, that line stays English."""
         rec = self.state.untranslated(lang, skeleton, fp)
+        unread = (rec or {}).get("kind") == "unreadable" or (rec or {}).get("why") == _UNREAD_BEFORE
+        if unread and (rec or {}).get("reader") != READER:
+            return False                    # read by an older reader: this one may read it, ask again
         try:
             at = datetime.fromisoformat(str((rec or {}).get("at")))
         except ValueError:
@@ -117,9 +130,11 @@ class Phrases:
         """The skeletons the AI is asked for: neither kept nor resting."""
         return [s for s in skeletons if self.kept(lang, s, fp) is None and not self.resting(lang, s, fp)]
 
-    def take(self, lang: str, fp: str, asked: list[str], answers: dict | None, why: str | None = None) -> dict[str, str]:
+    def take(self, lang: str, fp: str, asked: list[str], answers: dict | None, why: str | None = None,
+             unreadable: bool = False) -> dict[str, str]:
         """A run's outcome for `asked`: each acceptable answer kept (and its failure forgotten); every other line
-        remembered as failed — `answers` None: the run itself failed, for `why`. What was kept."""
+        remembered as failed — `answers` None: the run itself failed, for `why` (`unreadable`: it answered, and the
+        reader could not read it). What was kept."""
         got, failed = {}, {}
         for skel in asked:
             tr = (answers or {}).get(skel)
@@ -131,15 +146,15 @@ class Phrases:
             else:
                 failed[skel] = no
         if failed:
-            self.failed(lang, fp, failed)
+            self.failed(lang, fp, failed, "unreadable" if answers is None and unreadable else "")
         return got
 
-    def failed(self, lang: str, fp: str, failed: dict[str, str]) -> None:
+    def failed(self, lang: str, fp: str, failed: dict[str, str], kind: str = "") -> None:
         """Lines that could not be translated into `lang` ({skeleton: why}): not asked again for retry_hours(), said
         once in the log (a line is asked, so said, at most once per rest)."""
         at = self.now().isoformat()
         for skel, why in failed.items():
-            self.state.note_untranslated(lang, skel, fp, at, why)
+            self.state.note_untranslated(lang, skel, fp, at, why, kind=kind, reader=READER if kind else None)
         log.info("%d line(s) of an alert card stay in English for %s for %d h, then the AI is asked again: %s",
                  len(failed), lang, retry_hours(), "; ".join(f"{s!r} ({w})" for s, w in failed.items()))
 

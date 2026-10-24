@@ -1,3 +1,11 @@
+## 0.12.347
+
+What you will see:
+- An alert card's lines now reach every chat in its own language even when the AI answers in a slightly different
+  form than asked. "Master Bedroom Aqara is unlocked for 10min" stayed English on the French chat because the AI's
+  answer was not read; now it is read, and if it still cannot be read the AI is asked once more at once.
+- Lines that stayed English for that reason are translated again on the next card, without waiting a day.
+
 ## 0.12.346
 
 What you will see:

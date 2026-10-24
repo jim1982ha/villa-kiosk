@@ -164,6 +164,7 @@ NOT_LIMITS = {
     ("vesta_agent/status.py", "str(a['end_time'])[:16]"): "the date and time part of a timestamp",
     ("vesta_shared/problems.py", "str(iso)[:10]"): "the date part of a timestamp",
     ("vesta_agent/state.py", "slot_iso[:10]"): "the date part of a job's slot",
+    ("vesta_agent/translation.py", "unread.strip()[:120]"): "the start of an unreadable AI answer, for the log only",
     ("vesta_shared/timeutil.py", "s.split(\":\")[:2]"): "hours and minutes of a clock time",
     ("vesta_agent/ui/changes.py", "hashlib.sha256(data).hexdigest()[:16]"): "a file version's short hash",
     ("starter/skills/roi-energy/scripts/energy_period.py", "h.hexdigest()[:12]"): "the cache key's short hash",
