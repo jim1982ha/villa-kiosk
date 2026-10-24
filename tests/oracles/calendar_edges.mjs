@@ -61,6 +61,7 @@ const CLASSIFIED = {
   "components/panels/StateTimeline.tsx": "compares a step against a day to choose the tooltip's form",
   "fm/fmEngine.ts": "\"due in N days\" as a duration figure; the due date itself is addLocalDays",
   "components/fm/TicketsTab.tsx": "the server's retention, a duration in days",
+  "config/presence.ts": "a setting measured in days turned into a duration (settingWords), never a calendar step",
 };
 const srcRoot = new URL("../../src/", import.meta.url).pathname;
 const files = (d) => readdirSync(d).flatMap((f) => { const p = join(d, f); return statSync(p).isDirectory() ? files(p) : /\.tsx?$/.test(p) ? [p] : []; });

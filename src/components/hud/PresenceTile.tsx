@@ -4,7 +4,7 @@
 // config/presence's (by value, tested); this draws it. No sensor picked in Settings › Villa: no tile.
 
 import { CircleQuestionMark, House, Users } from "lucide-react";
-import { presenceStateWords, type Presence, type PresenceWhy } from "@/config/presence";
+import { presenceStateWords, stageColor, type Presence, type PresenceWhy } from "@/config/presence";
 import { sinceWords as since, usePresence, usePresenceWhy } from "@/config/usePresence";
 import { STATUS_COLOR } from "@/utils/stateColors";
 import { useModalA11y } from "@/hooks/useModalA11y";
@@ -13,6 +13,7 @@ import { useProfile } from "@/auth/ProfileContext";
 import { profileView } from "@/auth/permissions";
 import LastDayTimeline from "@/components/panels/LastDayTimeline";
 import DialogLayer from "@/components/common/DialogLayer";
+import InfoTip from "@/components/common/InfoTip";
 
 const ICON = { occupied: Users, empty: House, unknown: CircleQuestionMark };
 /** The tile's own short word (a 50 px rail): the panel's heading says it in full. */
@@ -35,10 +36,17 @@ export function PresenceWindow({ onClose, onOpenEntity, canOpen }: {
   const p = usePresence();
   const why = usePresenceWhy();
   if (!p) return null;
+  // ⚠️ EACH STEP IN THE BAND (owner, 2026-10-24: "show each stage … so user can see clearly when each step was
+  // triggered"): a sensor that names its stages is charted by them, in its own words and order; otherwise Occupied /
+  // Empty, as before
+  const st = why.stages;
+  const history = st
+    ? <LastDayTimeline entityId={st.sensorId} words={(s) => st.order.find(([k]) => k === s)?.[1] ?? s}
+        colorFor={(s) => stageColor(st, s)} />
+    : <LastDayTimeline entityId={p.sensorId} words={(s) => presenceStateWords(s).label}
+        colorFor={(s) => STATUS_COLOR[presenceStateWords(s).tone]} />;
   return <PresencePanel presence={p.presence} when={p.since} why={why} showPeople={sees.people} showMovement={sees.motion}
-    canOpen={canOpen} onOpenEntity={onOpenEntity} onClose={onClose}
-    presenceHistory={<LastDayTimeline entityId={p.sensorId} words={(s) => presenceStateWords(s).label}
-      colorFor={(s) => STATUS_COLOR[presenceStateWords(s).tone]} />} />;
+    canOpen={canOpen} onOpenEntity={onOpenEntity} onClose={onClose} presenceHistory={history} />;
 }
 
 /** The tile, drawn — pure (a check draws it). `when`: since when, in words (usePresence). */
@@ -57,7 +65,23 @@ export function PresenceButton({ presence: p, when, onClick }: { presence: Prese
 
 /** One row of the window: what it names, its state. A button only when it opens something (owner, 2026-10-18: a row
  *  that lit up under the mouse and did nothing) — otherwise plain text, no hover, no pointer. */
-function Row({ entityId, name, said, onOpen }: { entityId: string; name: string; said: string; onOpen?: (id: string) => void }) {
+function Row({ entityId, name, said, onOpen, tip }: {
+  entityId: string; name: string; said: string; onOpen?: (id: string) => void;
+  /** What it does, behind an (i) inline after its name (owner, 2026-10-24). A button never holds the (i)'s own
+   *  button: with one, the name alone opens the device. */
+  tip?: string;
+}) {
+  if (tip) {
+    return (
+      <li><div className="presence-row">
+        <span className="with-tip">
+          {onOpen ? <button type="button" className="presence-name opens" onClick={() => onOpen(entityId)}>{name}</button> : <span>{name}</span>}
+          <InfoTip label={`About ${name}`}>{tip}</InfoTip>
+        </span>
+        <span className="muted">{said}</span>
+      </div></li>
+    );
+  }
   const inner = <><span>{name}</span><span className="muted">{said}</span></>;
   return (
     <li>{onOpen
@@ -123,7 +147,7 @@ export function PresencePanel({ presence: p, when, why, showPeople, showMovement
               <div className="settings-section-title">What decides it</div>
               <ul className="presence-list">
                 {why.settings.map((x) => <Row key={x.entityId} entityId={x.entityId} name={x.name} onOpen={opener(x.entityId)}
-                  said={`${x.value}${x.unit ? ` ${x.unit}` : ""}`} />)}
+                  said={x.said} tip={x.explain || undefined} />)}
               </ul>
             </>
           )}

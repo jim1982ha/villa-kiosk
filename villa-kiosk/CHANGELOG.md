@@ -1,3 +1,14 @@
+## 2.496.520
+
+What you will see:
+- Villa presence, "What decides it": each setting has an (i) after its name, explaining what it does with an
+  example drawn from its current value. The values read "5min", "1h", "3" (no more "5.0 min").
+- Villa presence, the chart: when the villa's presence sensor names its stages, the band shows each step in its own
+  colour, from "Someone home" through "Everyone away, grace time" and "Waiting for indoor quiet" to "Empty", with
+  their names under the band, so you see when each step began. The stages start being recorded now: earlier hours
+  have no stage yet.
+- On a villa whose presence sensor gives no explanations or stages, the window is as before.
+
 ## 2.496.519
 
 What you will see:
