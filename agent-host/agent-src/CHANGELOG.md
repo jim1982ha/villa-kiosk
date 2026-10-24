@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.341 (25 October 2026)
+
+- vesta_shared.offline: offline_since reads each offline entity's history back from its last_changed to its last
+  real reading (limit offline.history_days, 7); devices_offline takes `history` (the night check, recheck.py, the
+  reports' table and the chat status pass their client's) and `together_minutes` (merged_integrations merges only the
+  devices gone within that window: _together). preventive-maintenance settings.yaml integration_down_window_minutes: 30.
+
 ## 0.6.340 (25 October 2026)
 
 - Review L (owner: "fix the recommended ones"):

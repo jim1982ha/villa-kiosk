@@ -114,7 +114,7 @@ def run(args) -> dict:
     findings += battery_findings(pack, states, params, today, bat_stats, store=store, best=best, at=now_ref)
 
     alerted = alerted_offline(store, pack)
-    findings += offline_findings(pack, states, now_ref, params, set(alerted))
+    findings += offline_findings(pack, states, now_ref, params, set(alerted), history=cli.history)
     # an offline fault open from before its alert: the alert follows the device now — closed as handed over, never
     # "cleared" while the device is still off (Problems.record_night)
     handed_over = {(o["rule_id"], o["entity_id"]): f"Followed by alert {incident_tag(alerted[dev])}, which says when it is back."
@@ -513,7 +513,7 @@ def alerted_offline(store, pack) -> dict[str, int]:
     return out
 
 
-def offline_findings(pack, states: dict, now: datetime, params, alerted: set[str] = frozenset()) -> list:
+def offline_findings(pack, states: dict, now: datetime, params, alerted: set[str] = frozenset(), history=None) -> list:
     """The devices offline now, as PM-UNAVAILABLE findings — for the night check and for recheck.py every 5 minutes,
     from the ONE reading of "offline now" (vesta_shared.offline.devices_offline, the reports' and the concierge's too)
     over this skill's WATCHED_FAMILIES, with its settings: `unavailable_minutes`, `integration_down_devices`. One
@@ -523,8 +523,11 @@ def offline_findings(pack, states: dict, now: datetime, params, alerted: set[str
     dropped at 21:46 and stood "Unavailable" in the Cockpit for 4 h 14 min before the night check opened its fault —
     the recheck read every 5 minutes whether a device was BACK, never whether one had gone."""
     out = []
+    # since when each is REALLY offline (`history`: the client's, read back past a restart), and an integration down
+    # only for its devices gone together (`integration_down_window_minutes`): villa, 2026-10-25
     for g in devices_offline(pack, states, now, WATCHED_FAMILIES, min_minutes=params.behaviour("unavailable_minutes"),
-                             alerted=frozenset(alerted), integration_min=params.behaviour("integration_down_devices")):
+                             alerted=frozenset(alerted), integration_min=params.behaviour("integration_down_devices"),
+                             together_minutes=params.behaviour("integration_down_window_minutes"), history=history):
         if g.integration:
             a = {"slug": f"integration_{g.integration}", "name": integration_name(g.integration, len(g.entity_ids)),
                  "critical": g.critical}

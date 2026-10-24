@@ -131,7 +131,8 @@ def test_the_three_callers_read_the_one_reading(tmp_path):
     assert s["colour"] == "red" and s["problems"] == ["Spa Plug offline"]
     assert s["offline"] == ["Lone Battery", "Tank", "Tank 2", "Tank 3"]      # its own families (level in, network out)
     from vesta_shared.params import VillaParams
-    params = VillaParams(helpers=[], states={}, defaults={"unavailable_minutes": 10, "integration_down_devices": 3})
+    params = VillaParams(helpers=[], states={}, defaults={"unavailable_minutes": 10, "integration_down_devices": 3,
+                                                                  "integration_down_window_minutes": 30})
     found = nightly.offline_findings(pack, STATES, NOW, params)
     assert [(f.rule_id, f.entity_id, f.summary) for f in found] == [
         ("PM-UNAVAILABLE", "sensor.spa_pump_power", "Spa Plug has been offline for 5h."),
@@ -139,3 +140,54 @@ def test_the_three_callers_read_the_one_reading(tmp_path):
     assert found[1].detail["entities"] == ["sensor.tank", "sensor.tank2", "sensor.tank3"]
     # the alert that follows the plug takes it; the integration still counts its three
     assert [f.entity_id for f in nightly.offline_findings(pack, STATES, NOW, params, {"plug"})] == ["sensor.tank"]
+
+
+def test_a_restart_is_not_a_new_outage_and_three_unrelated_drops_are_not_an_integration_down():
+    # villa, 2026-10-25: "matter integration (3 devices) has been offline for 11h 48min" — three devices of one
+    # integration offline for three unrelated reasons (one since 17 Oct, one since 22:45, a lock since 03:43), each
+    # with the last_changed a restart of the villa's system gave them at 15:58; the integration itself worked
+    from vesta_shared.offline import offline_since
+    restart = NOW - timedelta(hours=11, minutes=48)
+    states = {"sensor.tank": {"state": "unavailable", "last_changed": restart.isoformat()},
+              "sensor.tank2": {"state": "unavailable", "last_changed": restart.isoformat()},
+              "sensor.tank3": {"state": "unavailable", "last_changed": (NOW - timedelta(minutes=20)).isoformat()}}
+    week_ago, evening = NOW - timedelta(days=8), NOW - timedelta(hours=5, minutes=15)
+
+    def history(ids, start, end):
+        h = lambda *pts: [{"state": s, "last_changed": t.isoformat()} for t, s in pts]   # noqa: E731
+        return {"sensor.tank": h((start, "unavailable"), (restart, "unavailable")),               # offline all window
+                "sensor.tank2": h((start, "12.5"), (evening - timedelta(hours=7), "13"), (restart, "unknown"),
+                                  (restart + timedelta(seconds=40), "13.2"), (evening, "unavailable")),
+                "sensor.tank3": h((start, "4"), (NOW - timedelta(minutes=20), "unavailable"))}
+    states["sensor.tank2"]["last_changed"] = evening.isoformat()
+    real = offline_since(history, {e: datetime.fromisoformat(s["last_changed"]) for e, s in states.items()}, NOW)
+    assert real["sensor.tank"] < week_ago + timedelta(days=1)            # offline the whole read: since its start
+    assert real["sensor.tank2"] == evening                               # back after the restart, gone at 22:45
+    assert real["sensor.tank3"] == NOW - timedelta(minutes=20)           # a real drop keeps its own moment
+    groups = devices_offline(_pack(), states, NOW, ["level"], integration_min=3, together_minutes=30, history=history)
+    assert [g.integration for g in groups] == [None, None, None], groups               # three devices, never "zigbee"
+    assert [round(g.hours) for g in groups] == [24 * 7 + 12, 5, 0]
+    # gone together (a radio unplugged): the integration is down, from the moment they went
+    together = {e: {"state": "unavailable", "last_changed": (NOW - timedelta(minutes=m)).isoformat()}
+                for e, m in (("sensor.tank", 40), ("sensor.tank2", 38), ("sensor.tank3", 35))}
+    merged = devices_offline(_pack(), together, NOW, ["level"], integration_min=3, together_minutes=30)
+    assert [g.integration for g in merged] == ["zigbee"] and merged[0].since == NOW - timedelta(minutes=40)
+    # the LED strip's case: off the Wi-Fi on 21 Oct, then the restart's new last_changed while still offline
+    went = NOW - timedelta(days=3, hours=14)
+    strip = lambda ids, s, e: {"light.strip": [{"state": "on", "last_changed": (went - timedelta(hours=1)).isoformat()},   # noqa: E731
+                                               {"state": "unavailable", "last_changed": went.isoformat()},
+                                               {"state": "unavailable", "last_changed": restart.isoformat()}]}
+    assert offline_since(strip, {"light.strip": restart}, NOW) == {"light.strip": went}
+    # no history (a client that cannot read it, or a read that fails): last_changed, as before
+    assert offline_since(None, {"x": NOW}, NOW) == {"x": NOW}
+    assert offline_since(lambda *a: 1 / 0, {"x": NOW}, NOW) == {"x": NOW}
+
+
+def test_every_caller_reads_since_when_from_history():
+    # the night check, its recheck, the reports' table and the chat status: each hands its client's history over
+    files = {"preventive-maintenance/scripts/nightly.py": "history=cli.history)",
+             "preventive-maintenance/scripts/recheck.py": "history=client().history)",
+             "reports/scripts/facts.py": 'history=getattr(getattr(self, "cli", None), "history", None))',
+             "villa-concierge/scripts/concierge.py": "history=cli.history if cli else None)"}
+    for f, call in files.items():
+        assert call in open(os.path.join(STARTER_SKILLS, f), encoding="utf-8").read(), f

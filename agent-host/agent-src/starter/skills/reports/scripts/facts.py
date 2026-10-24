@@ -343,7 +343,8 @@ class Ctx:
         knows nothing about (no name, maker or model: a phone seen on the Wi-Fi) is not one of the villa's."""
         return [{"name": g.name, "since": _local(g.since.isoformat(), self.Z) if g.since else "", "critical": g.critical,
                  "family": g.family, "entity_id": g.entity_id}
-                for g in devices_offline(self.pack, self.states(), self.now, self.cfg.get("offline_families") or [])]
+                for g in devices_offline(self.pack, self.states(), self.now, self.cfg.get("offline_families") or [],
+                                         history=getattr(getattr(self, "cli", None), "history", None))]
 
 
 def _local(iso, zone) -> str:
