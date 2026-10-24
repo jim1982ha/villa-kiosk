@@ -27,6 +27,7 @@ import UnavailableByDesign from "./UnavailableByDesign";
 import EntityPicker from "./EntityPicker";
 import InlineConfirm from "@/components/common/InlineConfirm";
 import ModalFooter, { footerExits } from "@/components/common/ModalFooter";
+import BackButton from "@/components/common/BackButton";
 import RemoteReplacedNote, { SaveProblemNote } from "./RemoteReplacedNote";
 import { useAppNotice } from "@/components/hud/AppNotice";
 import { useDraftedSlice } from "@/hooks/useDraftedSlice";
@@ -300,28 +301,13 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
               tabIndex={-1} makes it programmatically focusable without
               joining the normal Tab order. */}
           <h2 tabIndex={-1} data-autofocus>Advanced Settings <span className="modal-title-version">v{__APP_VERSION__}</span></h2>
-          {canUploadModel && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              {glbUpload.addonCfg?.model_path && (
-                <CentralModelInfo addonCfg={glbUpload.addonCfg} loadedModel={glbUpload.loadedModel} editable />
-              )}
-              <ModelFileInput upload={glbUpload} />
-              <button
-                className="icon-btn header-icon-btn"
-                onClick={glbUpload.openPicker}
-                disabled={glbUpload.uploadBusy !== null}
-                title="Upload GLB Model"
-                aria-label="Upload GLB Model"
-              >
-                <Upload size={18} />
-                {glbUpload.uploadPct !== null && (
-                  <span className="icon-btn-count" aria-hidden="true">
-                    {glbUpload.uploadRetry ? `↻${glbUpload.uploadRetry.attempt}` : `${glbUpload.uploadPct}%`}
-                  </span>
-                )}
-              </button>
-            </div>
-          )}
+          {/* ⚠️ BACK IN THE HEADER, THE MODEL'S CONTROLS IN THE FOOTER (owner, 2026-10-24: "remove the Close button,
+              move the top right section to the bottom right, show the same Back button … consistent with other
+              modals"): the way out is the header's Back, as every window opened from another one; the model's (i) and
+              upload sit where Close was. */}
+          <div className="modal-header-actions">
+            <BackButton onClick={exit} label={withinSettings ? "Settings" : undefined} />
+          </div>
         </div>
 
         {/* ⚠️ OUTSIDE `.modal-body`, LIKE FACILITY'S. The strip is chrome and
@@ -435,7 +421,29 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
             Settings, whose Save / Cancel own these changes; on its own: this dialog's Save / Cancel (`commit`). */}
         <RemoteReplacedNote replaced={own.replaced} onDismiss={own.dismissReplaced} />
         <SaveProblemNote line={saveProblem} onDismiss={() => setSaveProblem(null)} />
-        <ModalFooter onClose={back} commit={commit} leading={roleCan(role, "editConfig") ? <LogoutAll /> : undefined} />
+        <ModalFooter onClose={back} commit={commit} leading={roleCan(role, "editConfig") ? <LogoutAll /> : undefined}
+          actions={canUploadModel ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {glbUpload.addonCfg?.model_path && (
+                <CentralModelInfo addonCfg={glbUpload.addonCfg} loadedModel={glbUpload.loadedModel} editable />
+              )}
+              <ModelFileInput upload={glbUpload} />
+              <button
+                className="icon-btn header-icon-btn"
+                onClick={glbUpload.openPicker}
+                disabled={glbUpload.uploadBusy !== null}
+                title="Upload GLB Model"
+                aria-label="Upload GLB Model"
+              >
+                <Upload size={18} />
+                {glbUpload.uploadPct !== null && (
+                  <span className="icon-btn-count" aria-hidden="true">
+                    {glbUpload.uploadRetry ? `↻${glbUpload.uploadRetry.attempt}` : `${glbUpload.uploadPct}%`}
+                  </span>
+                )}
+              </button>
+            </div>
+          ) : withinSettings ? <span /> : undefined} />
       </div>
     </DialogLayer>
     </PendingFields>

@@ -15,7 +15,8 @@ const dash = rd("pages/Dashboard.tsx"), base = rd("components/panels/BasePanel.t
 console.log("  the panels:");
 ck("the panel frame draws Back at the header's right, from the panel actions' `back`",
    /const \{[^}]*\bback \} = usePanelActions\(\);/.test(base)
-   && /\{back && \(\s*<button type="button" className="btn panel-back" onClick=\{back\.go\}/.test(base));
+   && /\{back && <BackButton onClick=\{back\.go\} label=\{back\.label\} \/>\}/.test(base)
+   && /className="btn panel-back" onClick=\{onClick\}/.test(rd("components/common/BackButton.tsx")));
 ck("  ...and Escape / the phone's back gesture go back (one step), not close",
    /useModalA11y\(back \? back\.go : onClose\)/.test(base));
 ck("the camera panel (its own frame) does the same",

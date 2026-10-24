@@ -59,7 +59,7 @@ export interface ModalCommit {
 }
 
 export default function ModalFooter({
-  note, leading, commit, onClose, busy = false, closeLabel,
+  note, leading, commit, onClose, busy = false, closeLabel, actions,
 }: {
   /** The left-hand hint. Yields its width to the buttons. */
   note?: ReactNode;
@@ -79,6 +79,9 @@ export default function ModalFooter({
   busy?: boolean;
   /** The one exit's word in a nothing-to-save footer ("Got it, thanks"). */
   closeLabel?: ReactNode;
+  /** Controls on the right, before Cancel and Save. ⚠️ IN A NOTHING-TO-SAVE FOOTER THEY REPLACE ITS Close: the
+   *  window's way out is then its header's Back (common/BackButton; owner, 2026-10-24, Advanced Settings). */
+  actions?: ReactNode;
 }) {
   const dirty = commit?.dirty === true;
   const saving = commit?.saving === true;
@@ -103,7 +106,7 @@ export default function ModalFooter({
       <div className="modal-footer">
         {left}
         <div className="modal-footer-actions">
-          <button className="btn primary" onClick={onClose}>{closeLabel ?? "Close"}</button>
+          {actions ?? <button className="btn primary" onClick={onClose}>{closeLabel ?? "Close"}</button>}
         </div>
       </div>
     );
@@ -119,6 +122,7 @@ export default function ModalFooter({
           and the tooltip (common/Tip, the Kiosk's own card) explains the
           CONSEQUENCE, which the one-word label deliberately does not. */}
       <div className="modal-footer-actions">
+        {actions}
         {/* ⚠️ THE PRIMARY ANSWER ON THE RIGHT, WHERE EVERY OTHER WINDOW'S Close IS (owner, 2026-10-22: Settings' footer
             "differs from the other modals"): Cancel, then Save. */}
         <Tip text={dirty ? "Cancel, undoes every change made here, on every tab, and closes" : "Cancel, closes"}>

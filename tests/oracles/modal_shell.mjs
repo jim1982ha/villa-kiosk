@@ -86,8 +86,22 @@ ck("the Open a ticket window (one device's faults) fits its content, by the devi
   const mf = readFileSync(new URL("../../src/components/common/ModalFooter.tsx", import.meta.url), "utf8");
   ck("ONE footer: every footer button one size, the Close in the same group as Save and Cancel, the primary on the right",
      /\.modal-footer \.btn \{[^}]*min-height: var\(--touch-min\)/.test(top)
-     && /<div className="modal-footer-actions">\s*<button className="btn primary" onClick=\{onClose\}>/.test(mf)
+     && /<div className="modal-footer-actions">\s*\{actions \?\? <button className="btn primary" onClick=\{onClose\}>/.test(mf)
      && mf.indexOf('aria-label="Cancel"') < mf.indexOf('className="btn primary"\n            disabled'));
+}
+
+// owner, 2026-10-24: Advanced Settings "remove the Close button … show the same Back button … consistent with other
+// modals" — its way out is the header's Back (the device windows' own, common/BackButton), the model's controls sit
+// where Close was
+{
+  const ce = readFileSync(new URL("../../src/components/settings/ConfigEditorModal.tsx", import.meta.url), "utf8");
+  const bp = readFileSync(new URL("../../src/components/panels/BasePanel.tsx", import.meta.url), "utf8");
+  ck("Advanced Settings: Back in its header, no Close in its footer, the model's controls there instead",
+     /className="modal-header-actions">\s*<BackButton onClick=\{exit\}/.test(ce)
+     && /<ModalFooter onClose=\{back\}[\s\S]{0,200}actions=\{canUploadModel \?/.test(ce)
+     && /:\s*withinSettings \? <span \/> : undefined\}/.test(ce));
+  ck("  ...the same Back as a device window's (one component)", /<BackButton onClick=\{back\.go\} label=\{back\.label\} \/>/.test(bp)
+     && !/className="btn panel-back"/.test(bp + ce));
 }
 
 if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }

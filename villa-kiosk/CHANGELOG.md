@@ -1,3 +1,10 @@
+## 2.496.515
+
+What you will see:
+- Advanced Settings has a Back button at the top right, the same one as a device window opened from another window,
+  and no Close button at the bottom any more. The model's (i) and upload buttons moved to the bottom right, where Close
+  was. Opened on its own (from a device window's edit), its Save and Cancel stay at the bottom.
+
 ## 2.496.514
 
 What you will see:
