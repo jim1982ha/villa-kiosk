@@ -16,6 +16,8 @@ import { TriangleAlert, Wrench } from "lucide-react";
 import { linkedSwitchProps, usePanelActions } from "./PanelActionsContext";
 import { linkedStateWords } from "./panelHeader";
 import { badgeImage } from "@/babylon/badgeIcons";
+import { useDeviceIssue } from "@/components/cockpit/useVillaAttention";
+import type { AttentionSeverity } from "@/config/attention";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import DeviceReadings from "./DeviceReadings";
 import { useConfig } from "@/config/ConfigContext";
@@ -69,12 +71,13 @@ interface Props {
   children: ReactNode;
 }
 
-/** The device window's warning (header, top right, owner 2026-10-24): the Cockpit's own sign in a fault's amber (attention severity
- *  "warn", .cockpit-attention-warn), an icon button of the footer's size. Pure: a check draws it. */
-export function FaultsButton({ onOpen }: { onOpen: () => void }) {
+/** The device window's warning (header, top right, owner 2026-10-24): the Cockpit's own sign in the colour of the
+ *  most serious issue its Overview lists for the device (attention severity: .cockpit-attention-danger red, -warn
+ *  amber, -lost grey, as the Overview's cards), an icon button of the footer's size. Pure: a check draws it. */
+export function FaultsButton({ onOpen, severity }: { onOpen: () => void; severity: AttentionSeverity }) {
   return (
-    <button type="button" className="btn ghost icon-only panel-faults-btn cockpit-attention-warn" onClick={onOpen}
-      title="Open this device's faults in the Cockpit" aria-label="Open this device's faults in the Cockpit">
+    <button type="button" className={`btn ghost icon-only panel-faults-btn cockpit-attention-${severity}`} onClick={onOpen}
+      title="Open this device's issues in the Cockpit" aria-label="Open this device's issues in the Cockpit">
       <TriangleAlert size={18} aria-hidden="true" />
     </button>
   );
@@ -82,6 +85,9 @@ export function FaultsButton({ onOpen }: { onOpen: () => void }) {
 
 export default function BasePanel({ title, entityId, icon, className, headerActions, footerLeading, history, deviceReadings, onClose, children }: Props) {
   const { may, onEdit, onReportFault, badge, onSetBadgeColor, linked, linkedSensor, motion, faults, back } = usePanelActions();
+  // the Overview's own list, live: the warning appears with the device's first issue and goes with its last
+  const issue = useDeviceIssue(faults?.ids ?? []);
+  const warning = faults && issue ? { open: faults.open, severity: issue } : null;
   const { resolvedRooms } = useConfig();
   const { entities } = useHA();
   const room = entityId ? deviceRoom(resolvedRooms, entityId) : "";
@@ -170,13 +176,13 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
               {room && <div className="room">{room}</div>}
             </div>
           </div>
-          {(headerActions || back || faults) && (
+          {(headerActions || back || warning) && (
             <div className="modal-header-actions">
-              {/* ⚠️ ITS OPEN FAULTS, ONE TAP AWAY (owner, 2026-10-24, top right: "not top left"): while the device or
-                  its linked entity has an open Cockpit fault (panelHeader.faults: the badge's amber "!"), the Cockpit's
-                  own warning sign, in a fault's amber (attention severity "warn"), opens the Overview with that card
-                  marked. Gone once they are closed. */}
-              {faults && <FaultsButton onOpen={faults.open} />}
+              {/* ⚠️ ITS OPEN ISSUES, ONE TAP AWAY (owner, 2026-10-24, top right: "not top left"): while the Cockpit's
+                  Overview lists an issue for the device or its linked entity (useDeviceIssue: a fault, an offline
+                  device, an alarm, late maintenance), the Cockpit's own warning sign, in that issue's colour, opens the
+                  Overview with that card marked. Gone once it leaves the Overview. */}
+              {warning && <FaultsButton onOpen={warning.open} severity={warning.severity} />}
               {headerActions}
               {back && <BackButton onClick={back.go} label={back.label} />}
             </div>

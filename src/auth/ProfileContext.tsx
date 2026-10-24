@@ -134,6 +134,11 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   return <ProfileContext.Provider value={value}>{children}</ProfileContext.Provider>;
 }
 
+/** The profile, or null outside its provider (a window drawn on its own: a check). */
+export function useProfileOrNull(): ProfileContextType | null {
+  return useContext(ProfileContext);
+}
+
 export function useProfile(): ProfileContextType {
   const ctx = useContext(ProfileContext);
   if (!ctx) throw new Error("useProfile must be used within ProfileProvider");

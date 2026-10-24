@@ -11,9 +11,9 @@
 // a guest's badge counted devices their list would not show (2.496.191).
 
 import { useMemo } from "react";
-import { useVillaModel } from "@/config/VillaModel";
-import { useProfile } from "@/auth/ProfileContext";
-import { attentionFor, type VillaAttention } from "@/config/attention";
+import { useVillaModel, useVillaModelOrNull } from "@/config/VillaModel";
+import { useProfile, useProfileOrNull } from "@/auth/ProfileContext";
+import { attentionFor, issueSeverity, type AttentionSeverity, type VillaAttention } from "@/config/attention";
 
 export type { VillaAttention };
 
@@ -26,4 +26,19 @@ export function useVillaAttention(): VillaAttention {
     const sees = visibleTo(role);
     return attentionFor(attention, (id) => sees.has(id));
   }, [attention, visibleTo, role]);
+}
+
+/** How serious the issues are that the Cockpit's Overview lists for these entities' devices (a device window: the
+ *  device and its linked entity), as this profile sees them; null when it lists none — or outside the villa model (a
+ *  window drawn on its own). The window's warning reads it: live, so it appears and goes by itself. */
+export function useDeviceIssue(ids: readonly string[]): AttentionSeverity | null {
+  const m = useVillaModelOrNull();
+  const role = useProfileOrNull()?.role ?? null;
+  const key = ids.join("|");
+  return useMemo(() => {
+    if (!m || !key) return null;
+    const sees = m.visibleTo(role);
+    const att = attentionFor(m.attention, (id) => sees.has(id));
+    return issueSeverity(att.attentionGroups, key.split("|"), m.devices.deviceOf);
+  }, [m, role, key]);
 }
