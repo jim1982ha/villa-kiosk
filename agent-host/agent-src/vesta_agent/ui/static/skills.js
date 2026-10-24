@@ -1,5 +1,5 @@
 // VESTA Agent page — the Skills tab.
-import { api, ask, dropdown, field, fill, go, guard, h, infoButton, markDirty, page, paged, place, plural, popup, problemsBox, reasons, saveWith, setBar, setting, showBar, subTabs, tabbed, tell, tileCard, titleWithInfo, toast, toggleCard, $view, where } from "./core.js";
+import { api, ask, dropdown, field, fileBase64, fill, go, guard, h, infoButton, markDirty, page, paged, place, plural, popup, problemsBox, reasons, saveWith, setBar, setting, showBar, subTabs, tabbed, tell, tileCard, titleWithInfo, toast, toggleCard, $view, where } from "./core.js";
 import { openTools } from "./rules.js";
 import { fileEditor } from "./viewer.js";
 
@@ -39,7 +39,7 @@ export async function skills(select = null, at = undefined) {
         // the agent's verdict on its tools under the description, when it has one (tool_access.health `line`)
         h("div", { class: "d" }, s.off ? "Off · kept, not used" : s.ok ? [s.description, s.line ? h("div", { class: "muted small" }, s.line) : null] : s.line)),
       skillSwitch(s.name, !s.off, select))) : h("p", { class: "muted" }, "No skill yet. The starter skills are copied at the agent's first start."),
-    h("div", { class: "actions" }, h("button", { class: "btn ghost", onclick: newSkill }, "New skill")));
+    h("div", { class: "actions" }, h("button", { class: "btn ghost", onclick: newSkill }, "New skill"), importSkillButton()));
   const pane = h("div");
   side.classList.add("skills-side");
   fill($view, h("div", { class: "skills" }, side, pane));
@@ -214,6 +214,22 @@ export async function newSkill() {
   if (!name || !(await guard())) return;
   try { await api("POST", "api/skills", { name }); toast(`Skill ${name} created.`); skills(name); }
   catch (e) { tell("Not created", reasons(e)); }
+}
+
+// ⚠️ A .skill FILE MADE OFFLINE (owner, 2026-10-25: "the same way Claude allows to import .skill file"): the zip of
+// one skill folder Claude makes; read and checked by the agent (setup_copy.read_skill), never replacing a skill here
+export function importSkillButton() {
+  const input = h("input", { type: "file", accept: ".skill,.zip,application/zip", hidden: true, onchange: async () => {
+    const file = input.files[0]; input.value = "";
+    if (!file || !(await guard())) return;
+    try {
+      const r = await api("POST", "api/skills/import", { data: await fileBase64(file) });
+      toast(`Skill ${r.name} imported.`);
+      if (r.notes.length) tell(`${r.name} imported`, r.notes);
+      skills(r.name);
+    } catch (e) { tell("Not imported", reasons(e)); }
+  } });
+  return [h("button", { class: "btn ghost", onclick: () => input.click() }, "Import skill"), input];
 }
 
 export let filesOpen = false;

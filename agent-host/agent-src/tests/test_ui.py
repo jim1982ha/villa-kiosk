@@ -1024,3 +1024,66 @@ def test_a_numbered_step_keeps_its_own_number_when_its_points_split_the_list():
                                                                        (False, None)]
     js = (Path(__file__).resolve().parents[1] / "vesta_agent" / "ui" / "static" / "viewer.js").read_text()
     assert 'it.ordered && it.n > 1 ? h(tag, { start: String(it.n) }) : h(tag)' in js           # drawn from there
+
+
+def _skill_file(entries: dict[str, str | bytes]) -> str:
+    """A .skill file as Claude's skill packager makes it: a zip of one folder, base64 for the page's JSON body."""
+    import base64, io, zipfile
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        for name, body in entries.items():
+            z.writestr(name, body)
+    return base64.b64encode(buf.getvalue()).decode()
+
+
+STANDARD_SKILL = {
+    "pool-care/SKILL.md": "---\nname: pool-care\ndescription: Keeps the pool clean: when to run the pump.\n---\n\n# Pool care\n",
+    "pool-care/scripts/check.py": "print('ok')\n",
+    "pool-care/references/chemistry.md": "# pH\n",
+    "__MACOSX/pool-care/._SKILL.md": b"\x00",
+}
+
+
+def test_a_skill_file_made_offline_is_imported_as_claude_imports_one(ui):
+    # owner, 2026-10-25: "an Import Skill button next to New Skill … import a .skill file generated offline, the same
+    # way Claude allows"
+    async def fn(c):
+        r = await c.post("/api/skills/import", json={"data": _skill_file(STANDARD_SKILL)}, headers=HDR)
+        got = (r.status, await r.json())
+        listed = {s["name"]: s for s in (await (await c.get("/api/skills")).json())["skills"]}
+        again = await c.post("/api/skills/import", json={"data": _skill_file(STANDARD_SKILL)}, headers=HDR)
+        return got, listed, again.status, (await again.json())["problems"][0]
+    (status, body), listed, again, why = call(ui, fn)
+    assert status == 200 and body["name"] == "pool-care"
+    assert body["notes"] == ["Kept, not run until skill.yaml declares them: check.py."]     # only declared scripts run
+    folder = os.path.join(ui.skills_dir, "pool-care")
+    assert sorted(os.listdir(folder)) == ["SKILL.md", "references", "scripts", "skill.yaml"]   # no Mac junk
+    assert yaml.safe_load(open(os.path.join(folder, "skill.yaml")))["description"].startswith("Keeps the pool clean")
+    assert listed["pool-care"]["ok"] and "Keeps the pool clean" in listed["pool-care"]["description"]
+    assert again == 409 and "already exists" in why                                     # never replaced
+    js = (Path(__file__).resolve().parents[1] / "vesta_agent" / "ui" / "static" / "skills.js").read_text()
+    assert '"New skill"), importSkillButton()' in js and '"Import skill")' in js           # beside New skill
+
+
+@pytest.mark.parametrize("entries, says", [
+    ({"x/SKILL.md": "# no front matter\n"}, "no description"),
+    ({"x/README.md": "hi"}, "SKILL.md is missing"),
+    ({"x/SKILL.md": "---\nname: Bad Name\ndescription: d\n---\n"}, "cannot be a skill here"),
+    ({"x/SKILL.md": "---\nname: x\ndescription: d\n---\n", "x/../evil.py": "1"}, "Unexpected file"),
+    ({"x/SKILL.md": "---\nname: x\ndescription: d\n---\n", "x/skill.yaml": "schedule:\n  - when: noon\n    prompt: p\n"},
+     "would switch this skill off"),
+])
+def test_a_skill_file_that_cannot_be_a_skill_here_is_refused_and_nothing_is_written(ui, entries, says):
+    async def fn(c):
+        r = await c.post("/api/skills/import", json={"data": _skill_file(entries)}, headers=HDR)
+        return r.status, (await r.json())["problems"][0]
+    status, why = call(ui, fn)
+    assert status in (400, 409) and says in why, why
+    assert sorted(n for n in os.listdir(ui.skills_dir) if not n.startswith(".")) == ["reports"]   # nothing left behind
+
+
+def test_a_skill_file_with_its_files_at_the_top_is_named_by_its_skill_md():
+    from vesta_agent.ui.setup_copy import read_skill
+    import base64
+    got = read_skill(base64.b64decode(_skill_file({"SKILL.md": "---\nname: tide\ndescription: d\n---\n"})))
+    assert got["name"] == "tide" and set(got["files"]) == {"SKILL.md", "skill.yaml"} and got["notes"] == []

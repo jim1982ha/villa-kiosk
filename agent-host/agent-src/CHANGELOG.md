@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.339 (25 October 2026)
+
+- POST /api/skills/import (skills.js importSkillButton): a .skill file (setup_copy.read_skill: one folder or its files at
+  the top; name from SKILL.md's front matter, read line by line when strict YAML refuses a colon; a skill.yaml made
+  from the description when absent; undeclared scripts named in `notes`). One zip reading (_entries) and one install
+  (install_skill) for a setup and a skill; core.fileBase64 for both pages.
+
 ## 0.6.338 (24 October 2026)
 
 - markdown.js keeps an ordered item's own number (`n`); viewer.js starts an ordered list at it (`start`): a step split

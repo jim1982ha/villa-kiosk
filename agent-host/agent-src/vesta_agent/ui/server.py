@@ -132,6 +132,7 @@ class UI:
         r.add_put("/api/limits", self.limits_put)
         r.add_get("/api/skills", self.skills_list)
         r.add_post("/api/skills", self.skill_create)
+        r.add_post("/api/skills/import", self.skill_import)
         r.add_delete("/api/skills/{name}", self.skill_delete)
         r.add_get("/api/skills/{name}/files", self.skill_files)
         r.add_get("/api/skills/{name}/file", self.file_get)
@@ -424,6 +425,30 @@ class UI:
         log.info("UI: skill %s created", name)
         self.files.folder_change("Skills", f"{name} created", name, None, "present")
         return web.json_response({"name": name})
+
+    async def skill_import(self, request):
+        """A .skill file made offline (owner, 2026-10-25: "the same way Claude allows to import .skill file"): one
+        skill folder, read and checked as a setup's skills are (setup_copy.read_skill, install_skill). A skill of that
+        name already here is refused, never replaced: delete it first, or rename the skill in its file."""
+        import base64
+        import binascii
+        body = await request.json()
+        try:
+            data = base64.b64decode(str(body.get("data") or ""), validate=True)
+        except (binascii.Error, ValueError):
+            raise Refused(["Not a skill file."]) from None
+        if len(data) > MAX_SETUP:
+            raise Refused(["This file is too large for a skill."])
+        try:
+            got = setup_copy.read_skill(data)
+        except setup_copy.NotASkill as e:
+            raise Refused([str(e)]) from None
+        name = got["name"]
+        if os.path.exists(self.files.skill_dir(name, must_exist=False)):
+            raise Refused([f"A skill {name} already exists. Delete it first, or rename the skill in its file."], 409)
+        setup_copy.install_skill(self.files, name, got["files"], f"{name} imported from a skill file", "Skills")
+        log.info("UI: skill %s imported (%d files)", name, len(got["files"]))
+        return web.json_response({"name": name, "notes": got["notes"]})
 
     async def skill_delete(self, request):
         name = request.match_info["name"]

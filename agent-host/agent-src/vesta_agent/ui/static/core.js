@@ -142,6 +142,14 @@ export function editTable(rows, { cls, columns, cell: draw, blank, add, changed 
 
 // `file`: the answer is a file to save ({blob, name}); its refusal still comes as reasons (the export used its own
 // fetch and its own error handling, architecture review 9)
+// A file the person picked, as base64 for a JSON body (an imported setup, a .skill file): read in slices, so a large
+// file never overflows String.fromCharCode's arguments.
+export async function fileBase64(file) {
+  const buf = new Uint8Array(await file.arrayBuffer());
+  let bin = ""; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
 export async function api(method, path, body, { file = false } = {}) {
   const opts = { method, headers: {} };
   if (body !== undefined) {

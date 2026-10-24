@@ -83,6 +83,122 @@ class NotASetup(ValueError):
     pass
 
 
+class NotASkill(ValueError):
+    pass
+
+
+#: what a zip made on a Mac or by hand carries and nobody wrote: never a file of the skill
+_JUNK = ("__MACOSX/", ".DS_Store")
+
+
+def _entries(data: bytes, refused, what: str) -> list[tuple[str, bytes]]:
+    """A zip's files as (path, bytes), the ONE reading of an imported zip (a setup, a .skill): not a zip, too many
+    files or too large raises `refused`; a folder entry and the junk a zip tool adds are left out."""
+    try:
+        z = zipfile.ZipFile(io.BytesIO(data))
+    except zipfile.BadZipFile:
+        raise refused(f"Not {what}.") from None
+    infos = [i for i in z.infolist() if not i.is_dir()
+             and not any(i.filename.startswith(j) or i.filename.endswith("/" + j) or i.filename == j for j in _JUNK)]
+    if len(infos) > MAX_FILES or sum(i.file_size for i in infos) > MAX_UNPACKED:
+        raise refused(f"This file is too large for {what}.")
+    return [(i.filename, z.read(i)) for i in infos]
+
+
+def _front(md: str) -> dict:
+    """SKILL.md's front matter (the `---` block a skill starts with), {} when it has none. ⚠️ A COLON IN A VALUE: a
+    description reads "Keeps the pool clean: when to run the pump", which strict YAML refuses; then each line is read
+    as `key: the rest`, as the page's Markdown view reads it (markdown.js meta)."""
+    if not md.startswith("---"):
+        return {}
+    end = md.find("\n---", 3)
+    if end < 0:
+        return {}
+    block = md[3:end]
+    try:
+        meta = yaml.safe_load(block)
+        if isinstance(meta, dict):
+            return meta
+    except yaml.YAMLError:
+        pass
+    return {k.strip(): v.strip() for k, sep, v in (ln.partition(":") for ln in block.splitlines()) if sep and k.strip()}
+
+
+def read_skill(data: bytes) -> dict:
+    """A .skill file, as Claude makes and imports one (owner, 2026-10-25: "import a .skill file generated offline, the
+    same way Claude allows"): a zip of ONE skill folder (`<name>/SKILL.md`, its scripts/, references/, assets/), or its
+    files at the top. Its name is SKILL.md's `name` (the standard), else the folder's; its description is SKILL.md's.
+    Each path a plain name, at most four folders deep, sizes bounded (`_entries`). A skill made for this agent keeps
+    its skill.yaml; a standard one gets one from its description, and its scripts are kept but not run until skill.yaml
+    declares them (the skills module: only declared scripts run). {name, files, notes}; raises NotASkill."""
+    what = "a skill file (a .skill or .zip made from one skill folder)"
+    entries = _entries(data, NotASkill, what)
+    tops = {p.split("/")[0] for p, _ in entries}
+    root = next(iter(tops)) + "/" if len(tops) == 1 and any(p.count("/") and p.split("/", 1)[1] == "SKILL.md"
+                                                           for p, _ in entries) else ""
+    files: dict[str, bytes] = {}
+    for path, body in entries:
+        rel = path[len(root):] if path.startswith(root) else None
+        parts = (rel or "").split("/")
+        if rel is None or not 1 <= len(parts) <= 4 or not all(FILE_NAME.match(x) for x in parts):
+            raise NotASkill(f"Unexpected file in the skill: {path}")
+        files[rel] = body
+    if "SKILL.md" not in files:
+        raise NotASkill(f"Not {what}: SKILL.md is missing.")
+    try:
+        meta = _front(files["SKILL.md"].decode("utf-8"))
+    except UnicodeDecodeError:
+        raise NotASkill("SKILL.md is not text.") from None
+    name = str(meta.get("name") or root.rstrip("/")).strip()
+    if not SKILL_NAME.match(name):
+        raise NotASkill(f"The skill's name \"{name}\" cannot be a skill here: lower-case letters, digits, - and _.")
+    description = " ".join(str(meta.get("description") or "").split())
+    if not description:
+        raise NotASkill("SKILL.md says no description (its front matter's `description`): the agent could not tell "
+                        "when to use it.")
+    notes = []
+    if "skill.yaml" not in files:
+        files["skill.yaml"] = yaml.safe_dump({"description": description}, allow_unicode=True, sort_keys=False).encode()
+        declared: set = set()
+    else:
+        try:
+            declared = set(((yaml.safe_load(files["skill.yaml"].decode("utf-8")) or {}).get("scripts") or {}))
+        except (yaml.YAMLError, UnicodeDecodeError, AttributeError):
+            declared = set()
+    idle = sorted(p.split("/", 1)[1] for p in files if p.startswith("scripts/") and p.count("/") == 1
+                  and p.split("/", 1)[1] not in declared)
+    if idle:
+        notes.append(f"Kept, not run until skill.yaml declares them: {', '.join(idle)}.")
+    return {"name": name, "files": files, "notes": notes}
+
+
+def install_skill(pf, name: str, files: dict[str, bytes], why: str, place: str = "Import") -> str | None:
+    """`files` written as skill `name`, the ONE way an imported skill lands: beside the skills first, checked as a
+    save would be (PageFiles.check_skill), then put in place — a skill it replaces moved to skills/.trash, this villa's
+    own villa.* files carried over — and one row of the page's history. The replaced folder's new place, or None."""
+    from ..skills import carry_villa_files, to_trash
+    from .changes import Refused
+    s = pf.s
+    path = os.path.join(s.skills_dir, name)
+    new = path + ".import"
+    shutil.rmtree(new, ignore_errors=True)
+    for rel, data in files.items():
+        os.makedirs(os.path.dirname(os.path.join(new, rel)), exist_ok=True)
+        with open(os.path.join(new, rel), "wb") as f:
+            f.write(data)
+    if os.path.isdir(path):
+        carry_villa_files(path, new)                           # this villa's own files go with it
+    try:
+        pf.check_skill(name, new)
+    except Refused:
+        shutil.rmtree(new, ignore_errors=True)
+        raise
+    old = to_trash(s.skills_dir, path, name) if os.path.isdir(path) else None
+    os.rename(new, path)
+    pf.folder_change(place, why, name, old, "present")
+    return old
+
+
 # ---------------------------------------------------------------------- out
 def export(settings, skills, parts: set[str]) -> bytes:
     have = skills.all(include_off=True)
@@ -159,35 +275,28 @@ def _policy_raw(path: str) -> dict:
 def read(data: bytes) -> dict:
     """The setup file, checked: only skill folders, rules.yaml, limits.yaml, instructions.md and setup.json; each path a plain
     name (no folder outside, no hidden file); sizes bounded. Raises NotASetup."""
-    try:
-        z = zipfile.ZipFile(io.BytesIO(data))
-    except zipfile.BadZipFile:
-        raise NotASetup("Not a setup file (a .zip made by \"Download the setup\").") from None
-    infos = [i for i in z.infolist() if not i.is_dir()]
-    if len(infos) > MAX_FILES or sum(i.file_size for i in infos) > MAX_UNPACKED:
-        raise NotASetup("This setup is too large.")
     out = {"meta": None, "rules": None, "instructions": None, "limits": None, "skills": {}}
-    for i in infos:
-        parts = i.filename.split("/")
-        if i.filename == "setup.json":
-            out["meta"] = json.loads(z.read(i).decode("utf-8"))
-        elif i.filename == "rules.yaml":
-            rules = yaml.safe_load(z.read(i).decode("utf-8")) or {}
+    for filename, body in _entries(data, NotASetup, "a setup file (a .zip made by \"Download the setup\")"):
+        parts = filename.split("/")
+        if filename == "setup.json":
+            out["meta"] = json.loads(body.decode("utf-8"))
+        elif filename == "rules.yaml":
+            rules = yaml.safe_load(body.decode("utf-8")) or {}
             if not isinstance(rules, dict):
                 raise NotASetup("rules.yaml is not a set of sections.")
             out["rules"] = rules
-        elif i.filename == "instructions.md":
-            out["instructions"] = z.read(i).decode("utf-8")
-        elif i.filename == code_limits.FILE:
-            lim = yaml.safe_load(z.read(i).decode("utf-8")) or {}
+        elif filename == "instructions.md":
+            out["instructions"] = body.decode("utf-8")
+        elif filename == code_limits.FILE:
+            lim = yaml.safe_load(body.decode("utf-8")) or {}
             if not isinstance(lim, dict):
                 raise NotASetup(f"{code_limits.FILE} is not a list of limits.")
             out["limits"] = lim
         elif len(parts) >= 3 and parts[0] == "skills" and SKILL_NAME.match(parts[1]) and len(parts) <= 6 \
                 and all(FILE_NAME.match(x) for x in parts[2:]):
-            out["skills"].setdefault(parts[1], {})["/".join(parts[2:])] = z.read(i)
+            out["skills"].setdefault(parts[1], {})["/".join(parts[2:])] = body
         else:
-            raise NotASetup(f"Unexpected file in the setup: {i.filename}")
+            raise NotASetup(f"Unexpected file in the setup: {filename}")
     if not isinstance(out["meta"], dict):
         raise NotASetup("Not a setup file: setup.json is missing.")
     return out
@@ -313,33 +422,15 @@ def preview(settings, skills, setup: dict, server_tools: list[dict] | None) -> d
 
 def apply(pf, setup: dict, prev: dict) -> None:
     """Write what the preview showed: skills first (each checked as a save would), then the rules, then instructions."""
-    from ..skills import TRASH, carry_villa_files, to_trash
-    from .changes import Refused
+    from ..skills import TRASH
     s = pf.s
     changed = {r["what"] for r in prev["rows"] if r["change"] != "same"}
     for name, files in sorted(setup["skills"].items()):
         if name not in changed:
             continue
-        path = os.path.join(s.skills_dir, name)
-        new = path + ".import"
-        shutil.rmtree(new, ignore_errors=True)
-        for rel, data in files.items():
-            os.makedirs(os.path.dirname(os.path.join(new, rel)), exist_ok=True)
-            with open(os.path.join(new, rel), "wb") as f:
-                f.write(data)
-        old = None
-        if os.path.isdir(path):
-            carry_villa_files(path, new)                       # this villa's own files go with it
-        try:
-            pf.check_skill(name, new)
-        except Refused:
-            shutil.rmtree(new, ignore_errors=True)
-            raise
-        if os.path.isdir(path):
-            old = to_trash(s.skills_dir, path, name)
-        os.rename(new, path)
-        pf.folder_change("Import", f"{name} {'replaced' if old else 'added'} from a setup"
-                                    + (f" (the previous one kept in skills/{TRASH})" if old else ""), name, old, "present")
+        replaced = os.path.isdir(os.path.join(s.skills_dir, name))
+        install_skill(pf, name, files, f"{name} {'replaced' if replaced else 'added'} from a setup"
+                      + (f" (the previous one kept in skills/{TRASH})" if replaced else ""))
     if setup["rules"] and any(r["kind"] == "rules" and r["change"] != "same" for r in prev["rows"]):
         from .policy_doc import apply_form, to_form
         text, r = pf.policy_now()

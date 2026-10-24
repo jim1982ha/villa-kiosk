@@ -1,5 +1,5 @@
 // VESTA Agent page — the Overview tab: the agent's state, the changes made on these pages, copying the setup.
-import { api, ask, card, fill, go, h, jobsBanner, paged, place, plural, problemsBox, reasons, setting, tabbed, tell, toast, $view, where } from "./core.js";
+import { api, ask, card, fileBase64, fill, go, h, jobsBanner, paged, place, plural, problemsBox, reasons, setting, tabbed, tell, toast, $view, where } from "./core.js";
 
 // ---------------------------------------------------------------- overview
 export async function overview() {
@@ -95,9 +95,7 @@ export function importCard() {
   let zip = null;
   async function look(file) {
     fill(out, h("p", { class: "muted" }, "Reading…"));
-    const buf = new Uint8Array(await file.arrayBuffer());
-    let bin = ""; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
-    zip = btoa(bin);
+    zip = await fileBase64(file);
     try { show(file.name, await api("POST", "api/setup/import", { zip })); }
     catch (e) { fill(out, problemsBox(reasons(e), "Not a setup this agent can read:")); }
   }

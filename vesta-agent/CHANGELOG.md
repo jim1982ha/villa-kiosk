@@ -1,3 +1,11 @@
+## 0.12.350
+
+What you will see:
+- Skills: an "Import skill" button beside "New skill" takes a .skill file made offline, the way Claude imports one (a
+  zip of one skill folder with its SKILL.md, scripts, references, assets). The skill is checked as a save is, then
+  appears in the list. A skill of the same name already here is refused, never replaced. Its scripts are kept but run
+  only once its skill.yaml declares them, as for every skill.
+
 ## 0.12.349
 
 - Nothing changes in the app. The rules every contributor's Claude follows (CLAUDE.md and the rules folder) and the
