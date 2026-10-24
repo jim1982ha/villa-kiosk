@@ -351,7 +351,7 @@ def hourchart(per_hour: dict, zone, *, bar: str = READINGS, usual: str = USUAL) 
                        f'height="{max(y(0) - y(m), .5):.1f}" fill="{bar}"/>')
         if isinstance(u, (int, float)):
             usual_at.append((x0, x0 + slot, y(u)))
-        said = f"{lab(t)} · ran {number(m)} min" + (f" (usually {number(float(u))} min)" if isinstance(u, (int, float))
+        said = f"{lab(t)} · ran {number(m)}min" + (f" (usually {number(float(u))}min)" if isinstance(u, (int, float))
                                                      else "")
         out.append(_tip(x0 + slot / 2, y(max(m, u or 0)), x0, x0 + slot, PAD_T, H - PAD_B, said))
     if usual_at:

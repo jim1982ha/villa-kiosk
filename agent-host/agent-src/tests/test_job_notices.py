@@ -89,6 +89,6 @@ def test_the_typing_timeline_names_every_one_and_the_longest_silence():
     from vesta_agent.delivery import typing_timeline
     t = datetime(2026, 10, 9, 16, 21, 52).timestamp()
     line = typing_timeline([(t, 0.2, True), (t + 4.3, 0.3, True), (t + 40, 6.5, True), (t + 44.3, 0.2, False)])
-    assert line.startswith("16:21:52, 16:21:56, 16:22:32 (Telegram took 6.5 s), 16:22:36 (refused)")
-    assert line.endswith("; longest gap 35.7 s after 16:21:56")
+    assert line.startswith("16:21:52, 16:21:56, 16:22:32 (Telegram took 6.5s), 16:22:36 (refused)")
+    assert line.endswith("; longest gap 35.7s after 16:21:56")
     assert typing_timeline([]) == "none sent"

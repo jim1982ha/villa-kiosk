@@ -1,3 +1,13 @@
+## 0.12.343
+
+What you will see:
+- The villa's own Telegram messages (the doorbell, the cameras, the curfew…) can now be put in each chat's language:
+  the villa sends its English message at once, then the Agent rewrites it in the chat's language a moment later. If
+  the Agent is down or the translation fails, the English stays. (The villa's automations are updated separately to
+  use it.)
+- Every duration now has its unit joined to the number, in every language: "Watch 1h", "1h 30min", "10min", "30s",
+  "1d 9h", as the VESTA app now writes them.
+
 ## 0.12.342
 
 What you will see:

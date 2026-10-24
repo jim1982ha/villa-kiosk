@@ -53,6 +53,7 @@ from . import layout
 from .approvals import Approvals
 from .posting import Poster
 from .translation import Translations, alert_names, incident_names, names_seconds
+from .villa_messages import VillaMessages
 from .incident_thread import IncidentThread
 
 from .housekeeping import tidy
@@ -201,6 +202,9 @@ class Vesta:
                                              self.pack(), ents := incidents.entities(iid), self.state.entity_names(ents)),
                                          thread=self.thread)
         self.thread.translate = self.translations.draw
+        self._villa_tasks: set[asyncio.Task] = set()
+        self.villa_messages = VillaMessages(self.state, self.translations, lambda chat: self.notices.lang(chat),
+                                            self.delivery.edit)
         self.poster = Poster(send=self.delivery.send, thread=self.thread, notices=self.notices,
                              timezone_name=settings.timezone, edit=self.delivery.edit, translations=self.translations)
         # a job asked for in a chat, start to end (chat_jobs.py); what it tells a chat goes titled, through the poster
@@ -463,6 +467,13 @@ class Vesta:
             return self.devices_changed()
         if event_type == "vesta_critical_event":
             return await self.on_critical(data)
+        if event_type == "vesta_message":
+            # the villa's own message, in each chat's language afterwards (owner, 2026-10-24); never awaited by the villa
+            # beside the socket, never inside it: its telegram_sent may still be on the way
+            task = asyncio.create_task(self._safe(self.villa_messages.on_message(data, data.get(CONTEXT_KEY))))
+            self._villa_tasks.add(task)
+            task.add_done_callback(self._villa_tasks.discard)
+            return None
         if event_type == "telegram_sent":
             # Home Assistant's own message: kept by its run's context, for the incident that run raises
             ctx, chat, mid = data.get(CONTEXT_KEY), data.get("chat_id"), data.get("message_id")

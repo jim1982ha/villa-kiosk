@@ -22,7 +22,7 @@ from vesta_shared import status_words
 
 GROUP, FM_DE, FM_FR = -100123, 222, 333
 RULE = "automation.critical_condition_phase"
-SUMMARY = "⚡ Phase C high\nPhase C 4580 W\nAbove 4000 W, Held 15 min"
+SUMMARY = "⚡ Phase C high\nPhase C 4580 W\nAbove 4000 W, Held 15min"
 T = r"\d\d/\d\d/\d{4} \d\d:\d\d"
 
 
@@ -81,11 +81,11 @@ def test_each_fm_chat_reads_its_status_in_its_own_language_the_alert_text_unchan
     tick(agent, 20)                                    # the reminder, to both facility manager chats
     de, fr = card(agent, FM_DE), card(agent, FM_FR)
     assert re.fullmatch(rf"- Alarm gesendet am {T} \(an: FM\)", status(de, "Status")[0]), de
-    assert re.fullmatch(rf"⚠️ ⚙️ Erinnerung gesendet am {T}, Keine Antwort nach 15 Min\. \(an: FM\)",
+    assert re.fullmatch(rf"⚠️ ⚙️ Erinnerung gesendet am {T}, Keine Antwort nach 15Min\. \(an: FM\)",
                         status(de, "Status")[-1]), de
     assert re.fullmatch(rf"- Alerte envoyée le {T} \(à: FM\)", status(fr, "Statut")[0]), fr
-    # the desk's own words ("No answer after 15 min") in the chat's language, from the skill's words.yaml
-    assert re.fullmatch(rf"⚠️ ⚙️ Rappel envoyé le {T}, Pas de réponse après 15 min \(à: FM\)",
+    # the desk's own words ("No answer after 15min") in the chat's language, from the skill's words.yaml
+    assert re.fullmatch(rf"⚠️ ⚙️ Rappel envoyé le {T}, Pas de réponse après 15min \(à: FM\)",
                         status(fr, "Statut")[-1]), fr
     for text in (de, fr):
         # the card's first line, "To:" and the villa's own words stay as they are
@@ -144,8 +144,8 @@ def test_the_desks_end_carries_every_language(tmp_path):
           "timestamp": t0.isoformat()}
     desk.intake(store, ev, t0, occupancy_reader=lambda: "occupied")
     res = desk.intake(store, {**ev, "phase": "resolved"}, t0 + timedelta(minutes=20))
-    assert res["settle"][0]["note"] == "Cleared on {time}. Watch 4 h."
-    assert res["settle"][0]["note_in"]["fr"] == "Résolu le {time}. Surveillance 4 h."
+    assert res["settle"][0]["note"] == "Cleared on {time}. Watch 4h."
+    assert res["settle"][0]["note_in"]["fr"] == "Résolu le {time}. Surveillance 4h."
     assert res["send"][0]["status_in"]["ko"] == "{time} 해제됨. 4시간 동안 감시."
     assert desk.ended(desk.say("back_to_normal")).langs["de"] == "Behoben am {time}: wieder normal."
 
@@ -155,7 +155,7 @@ def test_an_english_chat_reads_english_as_before(agent):
     tick(agent, 20)
     tick(agent, 50)                                    # the escalation: to the owner, in the group
     group = card(agent, GROUP)
-    assert re.fullmatch(rf"⚠️ ⚙️ Escalation sent {T}, No answer from FM after 45 min \(to: Owner\)",
+    assert re.fullmatch(rf"⚠️ ⚙️ Escalation sent {T}, No answer from FM after 45min \(to: Owner\)",
                         status(group, "Status")[-1]), group
 
 
@@ -163,8 +163,8 @@ def test_a_press_is_told_in_each_chats_language(agent):
     rule(agent, "opened", 500)
     tick(agent, 20)
     press(agent, FM_FR)
-    assert re.fullmatch(rf"✅ Terminé le {T} \(Luc\)\. Surveillance 4 h\.", status(card(agent, FM_FR), "Statut")[-1]), card(agent, FM_FR)
-    assert re.fullmatch(rf"✅ Erledigt am {T} \(Luc\)\. 4 Std\. Beobachtung\.", status(card(agent, FM_DE), "Status")[-1]), card(agent, FM_DE)
+    assert re.fullmatch(rf"✅ Terminé le {T} \(Luc\)\. Surveillance 4h\.", status(card(agent, FM_FR), "Statut")[-1]), card(agent, FM_FR)
+    assert re.fullmatch(rf"✅ Erledigt am {T} \(Luc\)\. 4Std\. Beobachtung\.", status(card(agent, FM_DE), "Status")[-1]), card(agent, FM_DE)
     assert re.fullmatch(rf"✅ Done on {T} \(Luc\)\.", status(card(agent, GROUP), "Status")[-1]), card(agent, GROUP)
 
 
@@ -181,8 +181,8 @@ def test_a_clearing_says_its_end_in_each_language(agent):
     rule(agent, "opened", 500)
     tick(agent, 20)
     rule(agent, "resolved", 501)
-    assert re.fullmatch(rf"✅ Résolu le {T}\. Surveillance 4 h\.", status(card(agent, FM_FR), "Statut")[-1]), card(agent, FM_FR)
-    assert re.fullmatch(rf"✅ Behoben am {T}\. 4 Std\. Beobachtung\.", status(card(agent, FM_DE), "Status")[-1]), card(agent, FM_DE)
+    assert re.fullmatch(rf"✅ Résolu le {T}\. Surveillance 4h\.", status(card(agent, FM_FR), "Statut")[-1]), card(agent, FM_FR)
+    assert re.fullmatch(rf"✅ Behoben am {T}\. 4Std\. Beobachtung\.", status(card(agent, FM_DE), "Status")[-1]), card(agent, FM_DE)
 
 
 def test_a_copy_recorded_before_keeps_its_english_lines(agent):
@@ -191,7 +191,7 @@ def test_a_copy_recorded_before_keeps_its_english_lines(agent):
     tick(agent, 20)
     rec = agent.thread.shown(1)[FM_FR]
     old = "#1-P2 (existing)\nTo: FM\n- Alert sent 23/10/2026 09:48 (to: FM)"
-    said = "Reminder sent 23/10/2026 10:04, No answer after 15 min (to: FM)"
+    said = "Reminder sent 23/10/2026 10:04, No answer after 15min (to: FM)"
     agent.state.set_incident_message(1, FM_FR, {**rec, "parts": {"head": old, "lead": "", "body": SUMMARY,
                                                                   "status": said, "mark": None}})
     tick(agent, 50)                                    # a step to the owner: the facility manager's copy only retitled
@@ -224,7 +224,7 @@ def test_the_fixed_words_in_a_language():
     assert sw.step("new", "23/10/2026 09:48", sw.times(6, 7, "fr"), "FM", "fr") == \
         "Alerte envoyée le 23/10/2026 09:48, 6e fois en 7 jours (à: FM)"
     assert sw.who({"owner", "fm"}, "fr") == "Propriétaire & FM" and sw.who({"owner", "fm"}) == "Owner & FM"
-    assert sw.duration(90 * 60, "de") == "1 Std. 30 Min." and sw.duration(15 * 60, "zh") == "15分钟"
+    assert sw.duration(90 * 60, "de") == "1Std. 30Min." and sw.duration(15 * 60, "zh") == "15分钟"
     assert sw.closing("elle n'est plus signalée", "fr") == "Résolu le {time}: elle n'est plus signalée."
     assert sw.stage_words("existing", lang="id") == "Masih terbuka" and sw.stage_words("closed", lang="fr") == "Résolu."
     assert sw.pick("No answer", {"fr": "Pas de réponse"}, "ko") == "No answer"

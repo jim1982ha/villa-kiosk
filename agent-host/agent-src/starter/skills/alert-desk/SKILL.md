@@ -40,7 +40,7 @@ decides alone to act on the villa.
      times since …", under its own number, the villa system's latest words, its ladder started again
      and its OWN task and Kiosk fault open again, titled "(again: N times in D days)", D the limit
      `problems.again_days`. Each run is counted on its own by the digest, the reports and the retune proposal.
-     Every closing line that can reopen ends with that watch ("Watch 1 h."); a `reopen_hours` of 0 says none.
+     Every closing line that can reopen ends with that watch ("Watch 1h."); a `reopen_hours` of 0 says none.
    - An alert that no chat of the facility manager's received (Telegram refused them all) is handed
      to the owner at the next tick.
 2. The engine's own connection to the villa's system: while it is up, a beat every minute. Its absence

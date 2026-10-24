@@ -40,7 +40,7 @@ import functools
 import json
 import logging
 import re
-from typing import Callable
+from typing import Awaitable, Callable
 
 from vesta_shared.limits import limit
 
@@ -57,7 +57,7 @@ _DAYS = r"(?:Mon|Tue|Tues|Wed|Thu|Thur|Thurs|Fri|Sat|Sun)[a-z]*\.?"
 #: A number as the automations write one: a sign or "about" mark, thousands separators, decimals.
 _NUM = r"[+\-−~≈±]?(?:\d{1,3}(?:[,  ]\d{3})+(?:\.\d+)?|\d+(?:[.,]\d+)?)"
 #: A measurement's units: part of the value's slot ("1310 W"), the same in every language. ⚠️ NEVER A DURATION'S
-#: (s, min, h, d): those stay in the skeleton ("Held {1} h {2} min"), translated once — "1 h 30 min" masks both numbers.
+#: (s, min, h, d): those stay in the skeleton ("Held {1}h {2}min"), translated once — "1h 30min" masks both numbers.
 _UNIT = (r"(?:%|‰|°[CF]?|[kMG]?Wh?|[kM]?VA|[kM]?var|mV|V|mA|A|k?Hz|lux|lx|ppm|ppb|dBm?|mm|cm|km|m²|m³|m3|m|ml|mL|L|l"
          r"|kg|g|m?bar|hPa|kPa|Pa|psi|µg/m³|ug/m3|rpm|[lL]/min|m³/h|kWh/d)")
 
@@ -226,6 +226,7 @@ class Translations:
         self._tasks: set[asyncio.Task] = set()      # every translation running: kept, so none is collected mid-way
         self._running: dict[tuple, asyncio.Task] = {}
         self._waiting: dict[tuple, set[tuple[int, int]]] = {}
+        self._then: dict[tuple, list[Callable[[], Awaitable[None]]]] = {}    # a villa message redrawn once known
         # what is kept, what is asked again and when, what is forgotten: ONE rule (phrases.py)
         self.phrases = Phrases(state)
 
@@ -281,6 +282,34 @@ class Translations:
             log.exception("Incident #%s in chat %s: its words could not be drawn in the chat's language", iid, chat)
             return p, None
 
+    def lines(self, lang: str, lines: list[str], names=()) -> tuple[list[str], tuple | None]:
+        """`lines` (a villa message's own words: villa_messages.py) as `lang` reads them from what is kept — a line
+        not known yet as written — and what is still wanted ((language, skeletons), for `then`). Never raises."""
+        try:
+            agreed = self.terms()
+            if lang == "en" or agreed is None:
+                return list(lines), None
+            fp = self.fingerprint(agreed[0])
+            shown, wanted = [], []
+            for line in lines:
+                skel, values = mask(line, list(names))
+                tr = self.phrases.kept(lang, skel, fp) if wordy(skel) else None
+                if tr is not None:
+                    shown.append(fill(tr, values))
+                    continue
+                if wordy(skel) and not self.phrases.resting(lang, skel, fp):
+                    wanted.append(skel)
+                shown.append(line)
+            return shown, ((lang, tuple(dict.fromkeys(wanted))) if wanted else None)
+        except Exception:  # noqa: BLE001 — the message stays as the villa wrote it
+            log.exception("A villa message's words could not be drawn in %s", lang)
+            return list(lines), None
+
+    def then(self, want: tuple, fn: Callable[[], Awaitable[None]]) -> None:
+        """`want` translated in the background (as `later`), then `fn()` awaited — whatever the run gave."""
+        self._then.setdefault(want, []).append(fn)
+        self._start(want)
+
     def draw(self, iid: int, chat: int, p: dict, later: bool = True) -> dict:
         """`apply`, and what is still wanted asked for (`later`) — IncidentThread.sync's redraw of another chat's copy:
         it holds the incident's lock, so the edit that follows waits until this copy is recorded."""
@@ -294,9 +323,12 @@ class Translations:
         """Copy `chat` of incident `iid` is recorded in English: its lines `want` ((language, skeletons)) are
         translated in the background — one run per card and language, a second copy waiting for the same — then the
         copy is drawn again. Called only once the copy is recorded (Poster.post, Outcome.adopt_ha, sync's lock)."""
+        self._waiting.setdefault(want, set()).add((int(iid), int(chat)))
+        self._start(want)
+
+    def _start(self, want: tuple) -> None:
         try:
             loop = asyncio.get_running_loop()
-            self._waiting.setdefault(want, set()).add((int(iid), int(chat)))
             task = self._running.get(want)
             if task is None or task.done() or task.get_loop() is not loop:
                 task = loop.create_task(self._translate(want))
@@ -304,7 +336,7 @@ class Translations:
                 self._tasks.add(task)
                 task.add_done_callback(self._tasks.discard)
         except Exception:  # noqa: BLE001 — the card stays English
-            log.exception("Incident #%s: its translation could not be started", iid)
+            log.exception("A translation into %s could not be started", want[0])
 
     async def _translate(self, want: tuple) -> None:
         lang, skeletons = want
@@ -329,6 +361,12 @@ class Translations:
             while waiting := self._waiting.pop(want, None):
                 for iid, chat in sorted(waiting):
                     await self.thread.translated(iid, chat, lambda i, c, p: self.apply(i, c, p)[0])
+            while after := self._then.pop(want, None):
+                for fn in after:
+                    try:
+                        await fn()
+                    except Exception:  # noqa: BLE001 — that message stays as it is
+                        log.exception("A villa message could not be drawn again in %s", lang)
         except Exception:  # noqa: BLE001 — the card stays English
             log.exception("An alert card's %s translation failed: it stays English", lang)
         finally:
@@ -336,6 +374,7 @@ class Translations:
             if self._running.get(want) is asyncio.current_task():
                 self._running.pop(want, None)
                 self._waiting.pop(want, None)
+                self._then.pop(want, None)
 
     async def _ask(self, agreed, lang: str, skeletons: list[str]) -> tuple[str | None, str | None]:
         """The AI's answer for `skeletons` into `lang` — one tiny run, no tool, the Chat answers' brain and limit: (its

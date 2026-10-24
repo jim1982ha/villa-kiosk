@@ -119,10 +119,10 @@ def test_the_repair_gives_an_open_problem_with_no_fault_its_fault(tmp_path, capl
     k = FakeKiosk()
     v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)
     st = Store(v.s.store_path)
-    st.raise_finding("PM-X", "sensor.example_room", "offline", "2026-10-09", "P3", "Example offline for 39 h", {})
+    st.raise_finding("PM-X", "sensor.example_room", "offline", "2026-10-09", "P3", "Example offline for 39h", {})
     with caplog.at_level("WARNING", logger="vesta.outcome"):
         run(v.tickets.repair())
-    assert k.tickets == [("Example offline for 39 h", "sensor.example_room")]
+    assert k.tickets == [("Example offline for 39h", "sensor.example_room")]
     assert "have no Kiosk fault" not in caplog.text
 
 
@@ -218,7 +218,7 @@ def test_a_lock_offline_after_done_is_said_to_be_unchecked_never_taken_for_fixed
     iid = _door_done(store)
     out = desk.tick(store, T0 + timedelta(minutes=20), client=Villa(**{"lock.door": "unavailable"}))
     (fm,) = [s for s in out["send"] if s["to"] == "fm"]
-    assert fm["status"].endswith("Note: VESTA cannot check this one; Laundry lock does not answer. Watch 4 h.")
+    assert fm["status"].endswith("Note: VESTA cannot check this one; Laundry lock does not answer. Watch 4h.")
     assert store.incident(iid)["closed_at"] and not out["not_quiet"]
 
 
@@ -227,7 +227,7 @@ def test_a_lock_gone_from_home_assistant_after_done_is_said_to_be_unchecked(tmp_
     _door_done(store)
     out = desk.tick(store, T0 + timedelta(minutes=20), client=Villa())
     (fm,) = [s for s in out["send"] if s["to"] == "fm"]
-    assert fm["status"].endswith("Note: VESTA cannot check this one; lock.door does not answer. Watch 4 h.")
+    assert fm["status"].endswith("Note: VESTA cannot check this one; lock.door does not answer. Watch 4h.")
 
 
 def test_a_locked_door_after_done_closes_saying_it_was_checked(tmp_path):
@@ -236,7 +236,7 @@ def test_a_locked_door_after_done_closes_saying_it_was_checked(tmp_path):
     _door_done(store)
     out = desk.tick(store, T0 + timedelta(minutes=20), client=Villa(**{"lock.door": "locked"}))
     (fm,) = [s for s in out["send"] if s["to"] == "fm"]
-    assert fm["status"].endswith("Checked after 10 min: right. Watch 4 h.") and not out["not_quiet"]
+    assert fm["status"].endswith("Checked after 10min: right. Watch 4h.") and not out["not_quiet"]
 
 
 def test_an_old_alert_whose_device_is_gone_after_done_still_says_it_cannot_check(tmp_path):
@@ -248,7 +248,7 @@ def test_an_old_alert_whose_device_is_gone_after_done_still_says_it_cannot_check
     desk.reply(store, iid, "done", "fm", T0 + timedelta(minutes=5))
     out = desk.tick(store, T0 + timedelta(minutes=20), client=Villa())
     (fm,) = [s for s in out["send"] if s["to"] == "fm"]
-    assert fm["status"].endswith("Note: VESTA cannot check this one; lock.door does not answer. Watch 4 h.")
+    assert fm["status"].endswith("Note: VESTA cannot check this one; lock.door does not answer. Watch 4h.")
 
 
 # ---------------------------------------------------------------------- review 29
@@ -337,11 +337,11 @@ def test_a_persons_done_records_the_work_and_the_agents_own_clear_is_no_repair()
 
 def test_a_reopening_under_a_new_title_says_the_title_it_replaced():
     k, doc = kiosk_holding()
-    tid = run(k.add_ticket("Pump plug offline for 9 h"))
+    tid = run(k.add_ticket("Pump plug offline for 9h"))
     ticket(doc, tid)["status"] = "resolved"
     assert run(k.reopen_ticket(tid, "Pump plug offline again", "Back again."))
     step = ticket(doc, tid)["updates"][-1]
-    assert step["kind"] == "reopened" and step["was"] == "Pump plug offline for 9 h"
+    assert step["kind"] == "reopened" and step["was"] == "Pump plug offline for 9h"
 
 
 def test_an_open_problem_whose_fault_the_agent_closed_gets_it_back_and_a_persons_close_stays(tmp_path, caplog):
@@ -350,9 +350,9 @@ def test_an_open_problem_whose_fault_the_agent_closed_gets_it_back_and_a_persons
     k = FakeKiosk()
     v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)
     st, pb = Store(v.s.store_path), Problems(Store(v.s.store_path))
-    dead, _ = st.raise_finding("PM-X", "sensor.room_a", "offline", "2026-10-09", "P3", "Room A offline for 6 d", {})
-    gone, _ = st.raise_finding("PM-X", "sensor.room_b", "offline", "2026-10-09", "P3", "Room B offline for 6 d", {})
-    mine, _ = st.raise_finding("PM-X", "sensor.room_c", "offline", "2026-10-09", "P3", "Room C offline for 6 d", {})
+    dead, _ = st.raise_finding("PM-X", "sensor.room_a", "offline", "2026-10-09", "P3", "Room A offline for 6d", {})
+    gone, _ = st.raise_finding("PM-X", "sensor.room_b", "offline", "2026-10-09", "P3", "Room B offline for 6d", {})
+    mine, _ = st.raise_finding("PM-X", "sensor.room_c", "offline", "2026-10-09", "P3", "Room C offline for 6d", {})
     tids = [pb.open_task("finding", f, "PM-X", e, s)[0] for f, e, s in
             ((dead, "sensor.room_a", "Room A offline"), (gone, "sensor.room_b", "Room B offline"),
              (mine, "sensor.room_c", "Room C offline"))]
@@ -380,9 +380,9 @@ def test_each_fault_says_how_the_agent_reads_it_again_for_its_cards_next_check(t
     v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k,
                    skills=("preventive-maintenance",))
     st, pb = Store(v.s.store_path), Problems(Store(v.s.store_path))
-    off, _ = st.raise_finding("PM-UNAVAILABLE", "sensor.room_a", "room_a", "2026-10-15", "P3", "Room A offline for 1 d", {})
+    off, _ = st.raise_finding("PM-UNAVAILABLE", "sensor.room_a", "room_a", "2026-10-15", "P3", "Room A offline for 1d", {})
     low, _ = st.raise_finding("PM-BATTERY-LOW", "sensor.door_b", "door_b", "2026-10-15", "P3", "Door B battery at 12%", {})
-    pb.open_task("finding", off, "PM-UNAVAILABLE", "sensor.room_a", "Room A offline for 1 d")
+    pb.open_task("finding", off, "PM-UNAVAILABLE", "sensor.room_a", "Room A offline for 1d")
     pb.open_task("finding", low, "PM-BATTERY-LOW", "sensor.door_b", "Door B battery at 12%")
     iid = st.new_incident("rule_x|lock.front", "rule_x", "lock.front", "P2", {"summary": "Front door unlocked"})
     pb.open_task("incident", iid, "rule_x", "lock.front", "Front door unlocked")
@@ -409,7 +409,7 @@ def test_each_fault_says_how_the_agent_reads_it_again_for_its_cards_next_check(t
 
 
 def test_a_duration_in_a_faults_title_is_worded_by_the_kiosk_when_it_shows_it(tmp_path):
-    # architecture review, 2026-10-15: "LG TV has been offline for 129 h", written at 02:00, was a day old by evening —
+    # architecture review, 2026-10-15: "LG TV has been offline for 129h", written at 02:00, was a day old by evening —
     # the card carries its title with {since} and the moment, and the Kiosk words it each time it shows it
     import sys
     sys.path.insert(0, os.path.join(STARTER_SKILLS, "preventive-maintenance", "scripts"))
@@ -419,8 +419,8 @@ def test_a_duration_in_a_faults_title_is_worded_by_the_kiosk_when_it_shows_it(tm
     params = VillaParams(defaults=load(os.path.join(STARTER_SKILLS, "preventive-maintenance"), "settings.yaml")["behaviour"])
     night = datetime(2026, 10, 15, 2, 0, tzinfo=timezone.utc)
     (f,) = rules.availability_rules({"slug": "tv", "name": "LG TV"}, "switch.tv", "unavailable", 129.0, params, now=night)
-    assert f.summary == "LG TV has been offline for 5 d 9 h."
-    assert (f.detail["since"], f.detail["since_words"]) == ((night - timedelta(hours=129)).isoformat(), "5 d 9 h")
+    assert f.summary == "LG TV has been offline for 5d 9h."
+    assert (f.detail["since"], f.detail["since_words"]) == ((night - timedelta(hours=129)).isoformat(), "5d 9h")
 
     k = FakeKiosk()
     v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)
@@ -539,15 +539,15 @@ def _every_write(k: Kiosk) -> dict:
     """Every write the agent makes to a fault, on Kiosk `k`: a new fault with every field, then each amend, a resolve
     (the agent's clearing, then a person's Done) and a reopening. Returns the fault as the Kiosk holds it."""
     from vesta_agent.kiosk import closing, noted, retitled, tagged, todo
-    tid = run(k.add_ticket("Pump offline for 2 h", entity_id="switch.pump", note="What to do: power", document_ids=["d1"],
+    tid = run(k.add_ticket("Pump offline for 2h", entity_id="switch.pump", note="What to do: power", document_ids=["d1"],
                            number=5, origin="alert", check="minutes",
                            pattern={"titlePattern": "Pump offline for {since}", "since": "2026-10-19T00:00:00Z"}))
-    run(k.amend(tid, retitled("Pump offline for 3 h"), tagged(6, "night", "nightly", {"titlePattern": "P {since}",
+    run(k.amend(tid, retitled("Pump offline for 3h"), tagged(6, "night", "nightly", {"titlePattern": "P {since}",
                                                                                          "since": "2026-10-19T01:00:00Z"}),
                 noted([{"at": "2026-10-19T00:05:00Z", "note": "Reminder sent (to: FM)"}]), todo("What to do: the plug"),
                 closing("2026-10-19T00:20:00Z")))
     k.person_renames(tid, "Pump — Wayan on it")
-    run(k.amend(tid, retitled("Pump offline for 4 h")))                       # under a person's title: a reading step
+    run(k.amend(tid, retitled("Pump offline for 4h")))                       # under a person's title: a reading step
     run(k.resolve_ticket(tid, note="Cleared: back online."))
     run(k.reopen_ticket(tid, "Pump offline again", "Back again."))
     run(k.resolve_ticket(tid, note="Done", who="Wayan", confirms_by="2026-10-19T02:10:00+00:00"))   # its watch (2026-10-23)

@@ -166,8 +166,8 @@ def power_rules(asset: dict, entity_id: str, series: dict[date, dict], today: da
                 if change is not None and abs(change) >= dev_pct:
                     what = "ran shorter" if change < 0 else "ran longer"
                     summary = (f"{asset['name']} {what} than expected on {day_label(d, weekday=True)}: "
-                               f"{f['run_hours']:.1f} h against {exp:.1f} h scheduled"
-                               + (f", and {f['gap_hours']} h without any data" if f.get("gap_hours") else "") + ".")
+                               f"{f['run_hours']:.1f}h against {exp:.1f}h scheduled"
+                               + (f", and {f['gap_hours']}h without any data" if f.get("gap_hours") else "") + ".")
                     check = ("Check the timer or switch, the power supply of the pump, and whether someone stopped it by hand."
                              if change < 0 else "Check the timer: it may have lost its programme and be running continuously.")
                     out.append(Finding("PM-RUNHOURS", entity_id, slug, "power", P3, summary,
@@ -212,7 +212,7 @@ def power_rules(asset: dict, entity_id: str, series: dict[date, dict], today: da
         r = sagging[0]
         out.append(Finding("PM-RUN-SAG", entity_id, slug, "power", INFO,
                            f"{asset['name']} lost {r['sag_pct']:.0f}% of its draw during one run today "
-                           f"({r['first_quarter_w']:.0f} W to {r['last_quarter_w']:.0f} W over {r['minutes']} min): a sign of air or a filling basket.",
+                           f"({r['first_quarter_w']:.0f} W to {r['last_quarter_w']:.0f} W over {r['minutes']}min): a sign of air or a filling basket.",
                            {"run": r}, "Watch the next days; if it repeats, check the water level and the skimmer basket."))
 
     # 5. expected today but silent (intermittent assets, report only)
@@ -221,7 +221,7 @@ def power_rules(asset: dict, entity_id: str, series: dict[date, dict], today: da
         exp = expected_hours_by_weekday.get(weekday_name(d), 0)
         if exp and series.get(d, {}).get("run_hours", 0) < EXPECTED_RAN_HOURS:
             out.append(Finding("PM-EXPECTED-SILENT", entity_id, slug, "power", INFO,
-                               f"{asset['name']} was scheduled {exp:.1f} h on {day_label(d, weekday=True)} and did not run.",
+                               f"{asset['name']} was scheduled {exp:.1f}h on {day_label(d, weekday=True)} and did not run.",
                                {"day": d.isoformat(), "expected_hours": exp}, "Report only: usage driven assets are not chased."))
     return out
 

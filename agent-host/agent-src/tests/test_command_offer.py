@@ -22,7 +22,7 @@ ANONYMOUS = 1087968824                   # a group's anonymous admin: Telegram's
 PEOPLE = [{"telegram_id": JM, "name": "JM", "role": "owner"}, {"telegram_id": FM, "name": "Ana", "role": "fm"},
           {"telegram_id": GROUP, "name": "Staff", "role": "fm"}]
 ASKED = "how long did the pool pump run this week?"
-SUGGESTS = ("It ran 21 h this week. For a week-by-week analysis, write /investigate followed by your question; "
+SUGGESTS = ("It ran 21h this week. For a week-by-week analysis, write /investigate followed by your question; "
             "a proposal is answered with /proposal accept 3.")
 LABEL = "🔎 Investigate this"
 
@@ -76,7 +76,7 @@ def test_a_reply_naming_investigate_carries_the_button_on_the_persons_question(t
 
 
 def test_no_button_without_the_mention_or_for_a_skill_switched_off(tmp_path, monkeypatch):
-    v, _ = _villa(tmp_path / "a", monkeypatch, answer="It ran 21 h this week.")
+    v, _ = _villa(tmp_path / "a", monkeypatch, answer="It ran 21h this week.")
     run(v.converse(JM, v.policy().person(JM), ASKED))
     assert _offered(v, JM)[0] == []
     # a villa that switched investigate off: typing /investigate would not run it, so no button offers it
@@ -207,7 +207,7 @@ def test_an_answer_that_read_the_past_carries_the_button_without_naming_the_comm
 
         async def reads(run_, tool=tool, args=args):
             await run_["call"](tool, args)
-        FakeAI("It ran 21 h this week.", act=reads).install(monkeypatch)
+        FakeAI("It ran 21h this week.", act=reads).install(monkeypatch)
         run(v.converse(JM, v.policy().person(JM), ASKED))
         assert [b["text"] for b in _offered(v, JM)[0]] == ([LABEL] if offered else []), tool
 
@@ -240,7 +240,7 @@ def test_a_later_answer_that_read_nothing_carries_no_button_in_the_same_conversa
         turns["n"] += 1
         if turns["n"] == 1:
             await run_["call"]("ha_get_history", {"entity_ids": "sensor.pump_power"})
-    ai = FakeAI(lambda call: runner.RunResult("It ran 21 h this week.", "s1", False, 0.01, [], None, None),
+    ai = FakeAI(lambda call: runner.RunResult("It ran 21h this week.", "s1", False, 0.01, [], None, None),
                 act=reads_first).install(monkeypatch)
     run(v.converse(JM, v.policy().person(JM), ASKED))
     assert [b["text"] for b in _offered(v, JM)[0]] == [LABEL]
@@ -287,7 +287,7 @@ def _follow_up(tmp_path, monkeypatch, pack: bool):
     def answer(call):
         if "wrote /investigate" in call["prompt"]:
             return runner.RunResult("The investigation.", "s9", False, 0.01, [], None, None)
-        return runner.RunResult("The House Pump ran 3 h." if n["turn"] == 1 else "It started 14 times after 13:28.",
+        return runner.RunResult("The House Pump ran 3h." if n["turn"] == 1 else "It started 14 times after 13:28.",
                                 "s1", False, 0.01, [], None, None)
     ai = FakeAI(answer, act=act).install(monkeypatch)
     run(v.converse(JM, v.policy().person(JM), "how did the House Pump run this afternoon?"))
@@ -305,7 +305,7 @@ def test_investigate_under_a_follow_up_is_told_what_the_answer_read(tmp_path, mo
     (inv,) = _investigations(ai)
     assert inv["resume"] is None                                         # still a fresh conversation
     assert '"""and why did it keep starting?"""' in inv["prompt"]
-    assert "about: sensor.house_pump_power (last 12 h)" in inv["prompt"]
+    assert "about: sensor.house_pump_power (last 12h)" in inv["prompt"]
     # never shown to the person: the toast and the line under the message say their question only
     assert all("sensor." not in t for _, t in v.tg.toasts)
 
@@ -313,17 +313,17 @@ def test_investigate_under_a_follow_up_is_told_what_the_answer_read(tmp_path, mo
 def test_the_subject_names_the_device_where_the_pack_names_it(tmp_path, monkeypatch):
     v, ai, button, message = _follow_up(tmp_path, monkeypatch, pack=True)
     _press(v, JM, button, message)
-    assert "about: House Pump (sensor.house_pump_power) (last 12 h)" in _investigations(ai)[0]["prompt"]
+    assert "about: House Pump (sensor.house_pump_power) (last 12h)" in _investigations(ai)[0]["prompt"]
 
 
 def test_the_subject_keeps_only_the_readings_that_earn_the_button_and_entity_ids():
     from vesta_agent.command_offers import subject
-    reads = [{"tool": "ha_get_history", "entities": ["House Pump (sensor.a)"], "period": "last 12 h"},
+    reads = [{"tool": "ha_get_history", "entities": ["House Pump (sensor.a)"], "period": "last 12h"},
              {"tool": "ha_get_state", "entities": ["sensor.b"], "period": None},
              {"tool": "ha_get_logs", "entities": ["sensor.c"], "period": None},
-             {"tool": "ha_get_history", "entities": ["House Pump (sensor.a)"], "period": "last 12 h"}]
-    assert subject(reads, ("ha_get_history", "ha_get_logs")) == "House Pump (sensor.a) (last 12 h); sensor.c"
-    assert subject(reads) == "House Pump (sensor.a) (last 12 h); sensor.b; sensor.c" and subject([]) == ""
+             {"tool": "ha_get_history", "entities": ["House Pump (sensor.a)"], "period": "last 12h"}]
+    assert subject(reads, ("ha_get_history", "ha_get_logs")) == "House Pump (sensor.a) (last 12h); sensor.c"
+    assert subject(reads) == "House Pump (sensor.a) (last 12h); sensor.b; sensor.c" and subject([]) == ""
 
 
 def test_a_typed_command_carries_no_subject(tmp_path, monkeypatch):

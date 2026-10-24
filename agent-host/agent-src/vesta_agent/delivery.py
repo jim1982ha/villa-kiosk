@@ -87,13 +87,13 @@ def typing_timeline(times: list[tuple[float, float, bool]]) -> str:
     for at, took, ok in times:
         p = datetime.fromtimestamp(at).strftime("%H:%M:%S")
         if took >= 1:
-            p += f" (Telegram took {took:.1f} s)"
+            p += f" (Telegram took {took:.1f}s)"
         if not ok:
             p += " (refused)"
         parts.append(p)
     gaps = [(b[0] - a[0], a[0]) for a, b in zip(times, times[1:])]
     longest = max(gaps) if gaps else (0.0, times[0][0])
-    return (", ".join(parts) + f"; longest gap {longest[0]:.1f} s after "
+    return (", ".join(parts) + f"; longest gap {longest[0]:.1f}s after "
             f"{datetime.fromtimestamp(longest[1]).strftime('%H:%M:%S')}")
 
 

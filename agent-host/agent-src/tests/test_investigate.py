@@ -22,7 +22,7 @@ def T(d, h, m=0, s=0):
 
 
 def _night():
-    """An invented heater: three quiet days of 8 s top-ups at 750 W, then a night of trouble."""
+    """An invented heater: three quiet days of 8s top-ups at 750 W, then a night of trouble."""
     pw = []
     t = T(6, 0)
     while t < T(9, 3):
@@ -30,7 +30,7 @@ def _night():
         t += timedelta(minutes=90)
     pw += [(T(9, 3, 9, 46), 780.0), (T(9, 3, 40), 730.0), (T(9, 4, 5), 1600.0), (T(9, 4, 30), 400.0),
            (T(9, 4, 31), 1400.0)]
-    for k in range(8):                                                   # stop-start, every 2 min
+    for k in range(8):                                                   # stop-start, every 2min
         pw += [(T(9, 4, 55) + timedelta(minutes=2 * k), 1.8), (T(9, 4, 56) + timedelta(minutes=2 * k), 2500.0)]
     pw += [(T(9, 5, 13, 33), 1650.0), (T(9, 6, 0, 6), 0.0), (T(9, 13, 5), 415.0), (T(9, 13, 16), 3.0)]
     return pw
@@ -91,9 +91,9 @@ def test_the_timeline_flags_every_moment_against_the_device_own_normal():
     import investigate
     lines = investigate.timeline(_Client(), ["sensor.heater_power"], T(9, 2), T(9, 15), 3, Z)["lines"]
     text = "\n".join(lines)
-    assert "longest 8 s" in text                                           # its normal, read from the days before
+    assert "longest 8s" in text                                           # its normal, read from the days before
     run = next(x for x in lines if x.strip().startswith("03:09:46"))
-    assert "1 h 45 min" in run and "longer than its longest usual run" in run
+    assert "1h 45min" in run and "longer than its longest usual run" in run
     assert any("runs of about" in x and "stops and restarts" in x for x in lines)
     assert any("about 2.3× its usual running level" in x for x in lines)
     off = next(x for x in lines if x.strip().startswith("06:00:06"))
@@ -187,7 +187,7 @@ def test_the_investigation_page_carries_the_account_and_its_charts(tmp_path):
     # owner, 2026-10-11: the investigate skill "uses the report skill to create all this in a HTML report file",
     # the chat message "much more synthetic and shorter"
     notes = {"title": "The heater on the night of 9 October",
-             "summary": "The heater ran without stopping from 03:09 for 1 h 45 min, then its supply went off at 06:00.",
+             "summary": "The heater ran without stopping from 03:09 for 1h 45min, then its supply went off at 06:00.",
              "timeline": [{"time": "07:30", "text": "The gardener found water on the floor.", "unusual": True}],
              "causes": [{"cause": "Water escaping downstream", "evidence": "a run far longer than any before",
                          "confirm": "look for a leak after the pump"},
@@ -203,7 +203,7 @@ def test_the_investigation_page_carries_the_account_and_its_charts(tmp_path):
         assert part in page, part
     assert out["charts"] == 3 and out["message"]["title"] == notes["title"]   # the chart, its hours, the strip
     key, said = out["message"]["text"].split("\n\n")                         # the recorded facts, then the summary
-    assert key.startswith("Recorded: Heater Power: ran 03:09–04:55 (1 h 45 min)")
+    assert key.startswith("Recorded: Heater Power: ran 03:09–04:55 (1h 45min)")
     assert said == notes["summary"] + " Details in the attached page."
     code, err, _, _ = _page(tmp_path, {**notes, "summary": "It ran. " * 120}, readings=False)
     assert code == 1 and "at most" in err                                  # the chat message stays one bubble
@@ -217,7 +217,7 @@ def test_a_surge_inside_one_slice_of_the_chart_is_still_drawn():
     t0 = T(9, 3)
     rows = [(t0, "10"), (t0 + timedelta(seconds=1), "3712"), (t0 + timedelta(seconds=2), "10"),
             (t0 + timedelta(seconds=30), "unavailable")]
-    pts = investigate.chart_series(rows, t0, t0 + timedelta(seconds=4000))   # slices of 10 s
+    pts = investigate.chart_series(rows, t0, t0 + timedelta(seconds=4000))   # slices of 10s
     assert pts[0][1] == 3712.0 and pts[1][1] == 10.0 and pts[4][1] is None   # offline from then: a gap, not a zero
 
 
@@ -362,7 +362,7 @@ def _page(tmp_path, notes, searches=None, readings=True, web_on=False):
 def test_after_a_web_search_the_page_names_and_cites_every_source(tmp_path):
     # owner, 2026-10-11: a page researched with 5 searches named no source; 2026-10-12: "I am expecting to see the text
     # section where you used any of these web page content … with reference numbers"
-    notes = {"title": "The heater on 9 October", "summary": "It ran 3 h, the pattern of a stuck valve [1].",
+    notes = {"title": "The heater on 9 October", "summary": "It ran 3h, the pattern of a stuck valve [1].",
              "causes": [{"cause": "A stuck valve", "evidence": "runs without stopping [1]", "confirm": "…",
                          "source": "[1]"}]}
     asked = ["pump runs without stopping causes"]
@@ -397,7 +397,7 @@ def test_after_a_web_search_the_page_names_and_cites_every_source(tmp_path):
 
 
 def test_a_device_that_runs_briefly_and_rarely_is_still_seen_running():
-    # 2026-10-11: a meter reporting its idle every 10 s and topping up 8 s every 90 min had 99% of its readings at idle;
+    # 2026-10-11: a meter reporting its idle every 10s and topping up 8s every 90min had 99% of its readings at idle;
     # "high" taken as its 95th percentile was its idle level, its runs were never counted ("normal: 0 runs a day"), and
     # neither "longer than any normal run" nor "its supply was off" could be said
     import investigate
@@ -422,7 +422,7 @@ def test_a_device_that_runs_briefly_and_rarely_is_still_seen_running():
 # query"): what the records establish and rule out is laid out by code, for any device — the AI explains it
 class _Around(_WithControl):
     """The heater's night with its control off, a neighbour that drops off at 06:01, and two automations: one that can
-    only notify (ran 5 min after the long run began), one that can switch (ran far from any unusual moment)."""
+    only notify (ran 5min after the long run began), one that can switch (ran far from any unusual moment)."""
 
     def __init__(self):
         super().__init__("off")
@@ -461,12 +461,12 @@ def _facts(client=None, ids=("sensor.heater_power", "switch.a")):
 def test_the_page_states_what_the_records_establish_and_rule_out():
     mod, f = _facts()
     log = [(r["time"], r["pill"], r["text"]) for r in f["log"]]
-    assert ("03:09", "unusual", "Heater Power ran for 1 h 45 min, until 04:55, longer than its longest usual run (8 s)") \
+    assert ("03:09", "unusual", "Heater Power ran for 1h 45min, until 04:55, longer than its longest usual run (8s)") \
         in log
-    assert any(p == "unusual" and t.startswith("Heater Power stopped and restarted 7 times in 15 min, until 05:10")
+    assert any(p == "unusual" and t.startswith("Heater Power stopped and restarted 7 times in 15min, until 05:10")
                for _, p, t in log)
-    # 06:00–13:05 rounded to the minute, as the Kiosk says it (round 2, 2026-10-16; was "7 h 4 min", cut)
-    assert any(p == "unusual" and t.startswith("Heater Power had no power for 7 h 5 min") for _, p, t in log)
+    # 06:00–13:05 rounded to the minute, as the Kiosk says it (round 2, 2026-10-16; was "7h 4min", cut)
+    assert any(p == "unusual" and t.startswith("Heater Power had no power for 7h 5min") for _, p, t in log)
     assert ("06:01", "unusual", "Next Relay stops reporting") in log            # not the device itself
     assert ("13:08", "usual", "Next Relay reports again") in log
     assert [t for t, _, _ in log] == sorted(t for t, _, _ in log)           # one list, in time order
@@ -505,20 +505,20 @@ def test_an_automation_that_can_switch_and_ran_then_is_named_with_what_it_acts_o
 
 
 def test_each_unusual_period_says_when_an_alert_on_the_same_limit_would_have_warned():
-    # the long run: its normal longest is 8 s, flagged past max(2 × 8 s, 8 s + 300 s) = 308 s → 03:09:46 + 308 s
+    # the long run: its normal longest is 8s, flagged past max(2 × 8s, 8s + 300s) = 308s → 03:09:46 + 308s
     _, f = _facts()
     (heater,) = f["alerts"]
     rules = {a["rule"]: a for a in heater["items"]}
     assert heater["name"] == "Heater Power"
-    long = rules["it runs for more than 5 min without stopping"]
-    assert (long["at"], long["ahead"], long["what"], long["span"]) == ("03:14", "1 h 40 min", "ran", "03:09–04:55")
-    assert rules["it reads 0 for 1 min"]["at"] == "06:01"  # was "60 s": the Kiosk's words (round 2)
-    assert rules["it starts 3 times in a row, each run shorter than 3 min"]["at"] == "05:00"     # its 3rd short run
-    assert rules["it stays above 1.5× its usual running level for 2 min"]["at"] == "05:12"      # the earliest rule
+    long = rules["it runs for more than 5min without stopping"]
+    assert (long["at"], long["ahead"], long["what"], long["span"]) == ("03:14", "1h 40min", "ran", "03:09–04:55")
+    assert rules["it reads 0 for 1min"]["at"] == "06:01"  # was "60s": the Kiosk's words (round 2)
+    assert rules["it starts 3 times in a row, each run shorter than 3min"]["at"] == "05:00"     # its 3rd short run
+    assert rules["it stays above 1.5× its usual running level for 2min"]["at"] == "05:12"      # the earliest rule
 
 
 def test_the_facts_are_any_devices_a_door_that_stopped_answering():
-    # universal: a sensor with no numbers at all, silent for 40 min — the same facts, the same alert rule
+    # universal: a sensor with no numbers at all, silent for 40min — the same facts, the same alert rule
     class Door(_Client):
         def states(self, ids):
             return {i: {"state": "off", "attributes": {"friendly_name": "Back Door"}} for i in ids}
@@ -530,21 +530,21 @@ def test_the_facts_are_any_devices_a_door_that_stopped_answering():
             return {ids[0]: [{"state": v, "last_changed": max(t, start).isoformat()} for t, v in rows]}
     _, f = _facts(Door(), ("binary_sensor.back_door",))
     assert {"time": "08:00", "pill": "unusual",
-            "text": "Back Door stopped reporting for 40 min, until 08:40, it stopped reporting"} in f["log"]
+            "text": "Back Door stopped reporting for 40min, until 08:40, it stopped reporting"} in f["log"]
     (door,) = f["alerts"]
-    assert door["items"][0]["rule"] == "it stops reporting for 1 min" and door["items"][0]["at"] == "08:01"
+    assert door["items"][0]["rule"] == "it stops reporting for 1min" and door["items"][0]["at"] == "08:01"
 
 
 def test_the_key_line_gives_the_longest_periods_per_device_and_says_how_many_more():
     mod, f = _facts()
-    assert f["key"] == ("Recorded: Heater Power: ran 03:09–04:55 (1 h 45 min), stopped and restarted 7 times "
-                        "04:55–05:10 (15 min), ran 05:10–06:00 (50 min), had no power 06:00–13:05 (7 h 5 min), ran "
-                        "13:05–13:16 (11 min).")                                # one device: named once
+    assert f["key"] == ("Recorded: Heater Power: ran 03:09–04:55 (1h 45min), stopped and restarted 7 times "
+                        "04:55–05:10 (15min), ran 05:10–06:00 (50min), had no power 06:00–13:05 (7h 5min), ran "
+                        "13:05–13:16 (11min).")                                # one device: named once
     hm = lambda t: f"{t:%H:%M}"                                              # noqa: E731
     blips = [{"name": "Gate", "kind": "offline", "start": T(9, h), "end": T(9, h, 2), "seconds": 120} for h in range(12)]
     long = {"name": "Boiler", "kind": "running", "start": T(9, 13), "end": T(9, 18), "seconds": 18000}
     key = mod.key_line(blips + [long], hm)
-    assert len(key) <= mod.KEY_MAX and "Boiler: ran 13:00–18:00 (5 h)" in key        # the longest, wherever
+    assert len(key) <= mod.KEY_MAX and "Boiler: ran 13:00–18:00 (5h)" in key        # the longest, wherever
     assert key.endswith("more.") and key.index("Gate") < key.index("Boiler")               # devices in time order
     assert len(mod.key_line([{**long, "name": "N" * 300}], hm)) <= mod.KEY_MAX
 
@@ -581,7 +581,7 @@ def test_the_page_is_laid_out_as_the_owner_asked(tmp_path):
     assert "<details open" not in page and page.count("<details") == 1
     # owner, 2026-10-12: "reported" in yellow, "usual" in green
     assert '<span class="st watch">reported</span> Water on the floor' in page
-    assert '<span class="st bad">unusual</span> Heater Power ran for 1 h 45 min' in page
+    assert '<span class="st bad">unusual</span> Heater Power ran for 1h 45min' in page
     assert '<span class="st ok">usual</span> Next Relay reports again' in page
     assert '<div class="themes" role="radiogroup"' in page and 'id="th-auto" checked' in page   # Light / Auto / Dark
     assert "<h3>What the records cannot tell</h3>" in page and "No leak sensor." in page
@@ -589,7 +589,7 @@ def test_the_page_is_laid_out_as_the_owner_asked(tmp_path):
 
 
 def test_a_period_is_judged_over_as_long_as_its_alert_would_need():
-    # a zero of 30 s, or a start-up surge of 8 s, is not flagged: no alert on the same limit could have fired. At the
+    # a zero of 30s, or a start-up surge of 8s, is not flagged: no alert on the same limit could have fired. At the
     # limit exactly the period is flagged, but no alert is claimed before it ended.
     import investigate
     ref = {"rest_median": 1.7, "level_median": 750.0, "run_longest_s": 600.0}
@@ -608,7 +608,7 @@ def test_a_period_is_judged_over_as_long_as_its_alert_would_need():
 
 
 def test_only_an_alert_in_time_to_matter_is_said_and_repeats_are_one_line():
-    # an alert after 60 s of silence, for a drop-out of 71 s, warned of nothing; the same rule firing on three outages
+    # an alert after 60s of silence, for a drop-out of 71s, warned of nothing; the same rule firing on three outages
     # of one device is one entry with its other times
     import investigation_facts as mod
 
@@ -616,12 +616,12 @@ def test_only_an_alert_in_time_to_matter_is_said_and_repeats_are_one_line():
         a = T(9, h, m)
         return {"kind": "offline", "start": a.isoformat(), "end": (a + timedelta(seconds=seconds)).isoformat(),
                 "seconds": seconds, "why": "it stopped reporting",
-                "alert": {"rule": "it stops reporting for 60 s", "at": (a + timedelta(seconds=60)).isoformat()}}
+                "alert": {"rule": "it stops reporting for 60s", "at": (a + timedelta(seconds=60)).isoformat()}}
     data = {"zone": "UTC", "start": T(9, 0).isoformat(), "end": T(9, 23).isoformat(),
             "entities": [{"entity_id": "sensor.gate", "label": "Gate", "periods": [off(1, 0, 71), off(2, 0, 600),
                                                                                    off(5, 0, 900), off(7, 0, 3600)]}]}
     assert mod.facts(data, None)["alerts"] == [{"name": "Gate", "items": [
-        {"rule": "it stops reporting for 60 s", "at": "02:01", "ahead": "9 min", "what": "stopped reporting",
+        {"rule": "it stops reporting for 60s", "at": "02:01", "ahead": "9min", "what": "stopped reporting",
          "span": "02:00–02:10", "again": ["05:01", "07:01"]}]}]
 
 
@@ -637,7 +637,7 @@ def test_what_drops_off_in_the_same_minute_is_one_row():
               "back": [{"at": T(9, 13).isoformat(), "name": "Spa Relay", "id": "switch.spa"}]}
     texts = [r["text"] for r in mod.facts(data, around)["log"]]
     assert "Spa Relay, Spa Relay Firmware stop reporting" in texts and "Spa Relay reports again" in texts
-    assert not any("Far Away" in t for t in texts)          # 5 min before the END, 3 h after the start: not a cause
+    assert not any("Far Away" in t for t in texts)          # 5min before the END, 3h after the start: not a cause
 
 
 def test_a_stop_start_burst_is_found_among_many_ordinary_runs():
@@ -650,9 +650,9 @@ def test_a_stop_start_burst_is_found_among_many_ordinary_runs():
         ps.append({"kind": kind, "start": t, "end": t + timedelta(seconds=seconds), "seconds": float(seconds),
                    "mean": mean, "min": mean, "max": mean})
         t += timedelta(seconds=seconds)
-    for _ in range(30):                                                    # 60 ordinary periods: 9 s runs, 10 min rests
+    for _ in range(30):                                                    # 60 ordinary periods: 9s runs, 10min rests
         add("running", 9, 800.0); add("idle", 600, 1.7)
-    for _ in range(8):                                                     # the burst: 60 s runs, 60 s rests
+    for _ in range(8):                                                     # the burst: 60s runs, 60s rests
         add("running", 60, 2400.0); add("idle", 60, 1.7)
     add("idle", 3000, 1.7)
     shown, hidden = investigate.worth_a_line(ps, {"run_longest_s": 540.0, "level_median": 800.0, "rest_median": 1.7}, 100.0)
@@ -741,13 +741,13 @@ def test_every_band_kind_has_its_own_word_and_colour():
 
 
 def test_a_period_is_said_the_same_by_the_lines_the_ai_reads_and_by_the_page():
-    # architecture review, 2026-10-13: the AI's reading quoted investigate.py's "offline for 1 h 15 min" while the
-    # page's facts said "stopped reporting … 75 min" for the same outage — three duration rules and two word tables
+    # architecture review, 2026-10-13: the AI's reading quoted investigate.py's "offline for 1h 15min" while the
+    # page's facts said "stopped reporting … 75min" for the same outage — three duration rules and two word tables
     import page as inv_page   # the investigate skill's page (it was reports' inv_page.py)
     import investigation_facts
     from vesta_shared import periods
     import investigate as lines
-    for seconds, said in ((45, "45 s"), (600, "10 min"), (4500, "1 h 15 min"), (7200, "2 h"), (9000, "2 h 30 min")):
+    for seconds, said in ((45, "45s"), (600, "10min"), (4500, "1h 15min"), (7200, "2h"), (9000, "2h 30min")):
         assert lines.lasting(seconds) == investigation_facts.lasting(seconds) == inv_page.lasting(seconds) == said
     for kind in (periods.NO_POWER, periods.OFFLINE, periods.NO_VALUE, periods.RUNNING, periods.restarts(8)):
         assert investigation_facts.did(kind) == periods.did(kind) and inv_page.band_of(kind)[0] == periods.band(kind)
@@ -787,7 +787,7 @@ def test_a_tooltip_is_page_text_over_its_column_never_covered():
     svg_end = chart.index("</svg>")
     tips = re.findall(r'<span class="pt" tabindex="0" aria-label="([^"]+)" style="left:([\d.]+)%;width:([\d.]+)%', chart)
     assert len(tips) == 4 and chart.index('class="pt"') > svg_end                # after the chart: nothing covers them
-    assert tips[0][0] == "02:00 · ran 0 min (usually 0.3 min)"
+    assert tips[0][0] == "02:00 · ran 0min (usually 0.3min)"
     assert all(0 <= float(left) and float(left) + float(w) <= 100.01 for _, left, w in tips)
     assert '<span class="tip l">' in chart and '<span class="tip r">' in chart   # at the edges, anchored inside
     head = open(__import__("vesta_shared.page", fromlist=["SHARED_TEMPLATES"]).SHARED_TEMPLATES + "/page_head.html", encoding="utf-8").read()
@@ -795,7 +795,7 @@ def test_a_tooltip_is_page_text_over_its_column_never_covered():
 
 
 def test_the_hours_chart_stops_at_an_hour_and_draws_its_usual_as_one_line():
-    # 2026-10-12: the scale went to 80 min in an hour, and a dash per hour at 0 read as a broken axis
+    # 2026-10-12: the scale went to 80min in an hour, and a dash per hour at 0 read as a broken axis
     import page as inv_page   # the investigate skill's page (it was reports' inv_page.py)
     chart = inv_page.hourchart({"unit": "hour", "bins": [
         {"at": T(9, h).isoformat(), "minutes": m, "usual": u} for h, m, u in ((2, 0, 0.3), (3, 58, 0.2), (4, 0, 8))]}, Z)
@@ -874,15 +874,15 @@ def test_a_reference_links_only_to_a_source_that_exists():
 
 
 def test_the_usual_is_said_in_plain_sentences():
-    # owner, 2026-10-12: "54.3 runs a day, usually 9 s, longest 9 min … doesn't seem proper English"
+    # owner, 2026-10-12: "54.3 runs a day, usually 9s, longest 9min … doesn't seem proper English"
     import page as inv_page   # the investigate skill's page (it was reports' inv_page.py)
     ref = {"days": 3.0, "runs_per_day": 54.3, "run_median_s": 9.0, "run_longest_s": 566.0, "level_median": 802.0,
            "rest_median": 1.76}
     assert inv_page.normal_words(ref, "W") == ("Usually (over the 3 days before) it started about 54 times a day; a run "
-                                              "usually lasted 9 s and never more than 9 min. While running it read "
+                                              "usually lasted 9s and never more than 9min. While running it read "
                                               "about 802 W; at rest about 1.76 W.")
     same = inv_page.normal_words({**ref, "run_longest_s": 9.0}, "W")
-    assert "usually lasted 9 s." in same and "never more than" not in same          # never "9 s and never more than 9 s"
+    assert "usually lasted 9s." in same and "never more than" not in same          # never "9s and never more than 9s"
 
 
 def test_what_an_automation_does_is_said_as_a_person_says_a_list():
@@ -896,7 +896,7 @@ def test_a_lead_names_its_web_page_and_links_its_number_or_says_the_records(tmp_
     # owner, 2026-10-12: "Where the lead came from: AGM Service, booster pump failure guide" — no number, no link
     notes = {"title": "t", "summary": "It ran [1].",
              "sources": [{"title": "Common Causes of Booster Pump Failure", "url": "https://example.org/agm"}],
-             "causes": [{"cause": "A leak", "evidence": "ran 3 h", "source": "AGM Service guide", "verdict": "consistent"}]}
+             "causes": [{"cause": "A leak", "evidence": "ran 3h", "source": "AGM Service guide", "verdict": "consistent"}]}
     code, err, _, _ = _page(tmp_path, notes, ["pump runs nonstop"], readings=False)
     assert code == 1 and "as [n]" in err and "AGM Service guide" in err
     notes["causes"][0]["source"] = "[1]"
@@ -1034,7 +1034,7 @@ def test_the_skills_own_example_of_a_cause_passes_the_pages_rules():
 
 
 def test_a_period_that_would_end_later_ends_now(tmp_path):
-    # villa, 2026-10-15: "--end 2026-10-15" read at 23:05 ran to midnight — a sensor offline 6 d 6 h read "6 d 7 h"
+    # villa, 2026-10-15: "--end 2026-10-15" read at 23:05 ran to midnight — a sensor offline 6d 6h read "6d 7h"
     import json
     code, said = _main(tmp_path, "timeline", "--entities", "sensor.a", "--start", "2026-10-09", "--end", "2026-10-15",
                        "--now", "2026-10-15T23:05:00+00:00", "--out", str(tmp_path / "timeline.json"))
@@ -1122,12 +1122,12 @@ def test_a_repeated_problem_is_one_row_and_the_finding_after_it_stays_on_the_pag
     # the finding, was cut off
     mod, _ = _facts()
     drops = [("offline", 10 * i, 1 + (i == 7), "it stopped reporting") for i in range(100)]
-    bursts = [("stops and restarts 8 times", 3 * 1440 + 60 * i, 10, "runs of about 30 s each") for i in range(2)]
+    bursts = [("stops and restarts 8 times", 3 * 1440 + 60 * i, 10, "runs of about 30s each") for i in range(2)]
     f = mod.facts(_periods_data(drops + bursts), {})
     log = [r["text"] for r in f["log"]]
     assert log[0] == ("Pump Power: 100 times “stopped reporting”, from 14 Oct, 00:00 to 14 Oct, 16:31, the longest "
-                      "2 min at 14 Oct, 01:10, it stopped reporting")
-    assert [x for x in log if x.startswith("Pump Power stopped and restarted 8 times in 10 min")] == log[1:]
+                      "2min at 14 Oct, 01:10, it stopped reporting")
+    assert [x for x in log if x.startswith("Pump Power stopped and restarted 8 times in 10min")] == log[1:]
     assert f["established"] == log                                    # what the AI reads back is what the page says
 
 

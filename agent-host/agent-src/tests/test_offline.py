@@ -88,7 +88,7 @@ def test_the_callers_minimum_the_alerted_devices_and_the_integration_are_the_cal
     assert [g.name for g in devices_offline(pack, STATES, NOW, fams, integration_min=4) if g.integration] == []
     # the minimum applies to the merged group: an integration down 12 minutes passes a 10-minute minimum
     assert [g.key for g in devices_offline(pack, STATES, NOW, ["level"], integration_min=3, min_minutes=10)] == ["zigbee"]
-    assert [g.name for g in devices_offline(pack, STATES, NOW, ["level"], min_minutes=10)] == ["Tank 2"]   # 12 min, alone
+    assert [g.name for g in devices_offline(pack, STATES, NOW, ["level"], min_minutes=10)] == ["Tank 2"]   # 12min, alone
 
 
 def test_the_three_callers_name_their_families_side_by_side():
@@ -134,8 +134,8 @@ def test_the_three_callers_read_the_one_reading(tmp_path):
     params = VillaParams(helpers=[], states={}, defaults={"unavailable_minutes": 10, "integration_down_devices": 3})
     found = nightly.offline_findings(pack, STATES, NOW, params)
     assert [(f.rule_id, f.entity_id, f.summary) for f in found] == [
-        ("PM-UNAVAILABLE", "sensor.spa_pump_power", "Spa Plug has been offline for 5 h."),
-        ("PM-UNAVAILABLE", "sensor.tank", "zigbee integration (3 devices) has been offline for 12 min.")]
+        ("PM-UNAVAILABLE", "sensor.spa_pump_power", "Spa Plug has been offline for 5h."),
+        ("PM-UNAVAILABLE", "sensor.tank", "zigbee integration (3 devices) has been offline for 12min.")]
     assert found[1].detail["entities"] == ["sensor.tank", "sensor.tank2", "sensor.tank3"]
     # the alert that follows the plug takes it; the integration still counts its three
     assert [f.entity_id for f in nightly.offline_findings(pack, STATES, NOW, params, {"plug"})] == ["sensor.tank"]

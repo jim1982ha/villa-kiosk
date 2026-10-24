@@ -228,7 +228,7 @@ def test_the_agents_own_approvals_and_warnings_carry_the_heading_in_every_chat(t
     # asked here, and still in the agent's layout (owner, 2026-10-10): heading, the action, then where it stands
     assert chat == JM and text.startswith("Approval request\nTo: ") and re.search(
         r"\n\nStatus:\nWaiting for approval by the owner or the facility manager \(asked on \d\d/\d\d/\d{4} \d\d:\d\d, "
-        r"expires in 15 min\)\.$", text)
+        r"expires in 15min\)\.$", text)
 
 
 def test_an_unreadable_rules_file_keeps_the_last_good_rules_and_the_siren_that_sounds_stops(tmp_path):
@@ -379,7 +379,7 @@ def test_a_request_shown_in_the_askers_chat_is_not_announced_again(tmp_path, mon
 
 def test_a_curtain_still_moving_is_said_to_be_and_the_request_says_opened_once_it_is(tmp_path, monkeypatch):
     # owner, 2026-10-10: "Bedroom3 Curtain did not open: it reads closed … but the curtain is actually well opened" —
-    # it read "closed" until it had finished moving, 40 s later
+    # it read "closed" until it had finished moving, 40s later
     from vesta_agent import approvals as appr_mod
     monkeypatch.setattr(appr_mod, "FOLLOW_EVERY_S", 0)
     v = make_agent(tmp_path, {"people": [{"telegram_id": JM, "name": "JM", "role": "owner"},
@@ -411,7 +411,7 @@ def test_a_curtain_still_moving_is_said_to_be_and_the_request_says_opened_once_i
 
 
 def test_the_ai_is_told_what_is_waiting_and_what_was_decided_never_left_to_its_memory(tmp_path):
-    # owner, 2026-10-10: asked again, the AI said "already sent 22 min ago, press the button" for a request approved at
+    # owner, 2026-10-10: asked again, the AI said "already sent 22min ago, press the button" for a request approved at
     # 17:37 — it remembered asking and never learnt the answer
     from datetime import datetime, timedelta, timezone
     v = make_agent(tmp_path, {"people": [{"telegram_id": JM, "name": "JM", "role": "owner"},
@@ -654,5 +654,5 @@ def test_the_villas_time_is_filled_into_a_message_in_one_place_and_a_pending_req
     assert layout.fill_time("Asked on {time}.", at, "Asia/Makassar") == "Asked on 10/10/2026 17:04."
     assert layout.fill_time(None, at, "UTC") == "" and layout.fill_time("no time", at, "UTC") == "no time"
     assert note("pending", who="the owner", minutes=15, time="10/10/2026 17:04") == \
-        "Waiting for approval by the owner (asked on 10/10/2026 17:04, expires in 15 min)."
+        "Waiting for approval by the owner (asked on 10/10/2026 17:04, expires in 15min)."
     assert "{who}" in STATES["pending"][2] and "{minutes}" in STATES["pending"][2]

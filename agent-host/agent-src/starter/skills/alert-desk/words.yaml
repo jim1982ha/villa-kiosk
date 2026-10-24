@@ -105,8 +105,8 @@ back_to_normal:
 
 # ⚠️ ONE LINE ON A PHONE (owner, 2026-10-23): a closed alert stays on watch for rules.yaml `behaviour.reopen_hours`
 # (the villa's value first): back within it, it reopens under the same number. Every end that can reopen says so,
-# last ({watch}: that time, "1 h", "30 min"); a reopen_hours of 0 says nothing. "✅ Cleared on 22/10/2026 19:28: back
-# to normal. Watch 1 h." is the common line, 57 characters, what a phone's Telegram line holds
+# last ({watch}: that time, "1h", "30min"); a reopen_hours of 0 says nothing. "✅ Cleared on 22/10/2026 19:28: back
+# to normal. Watch 1h." is the common line, 56 characters, what a phone's Telegram line holds
 watch:
   en: "Watch {watch}."
   fr: "Surveillance {watch}."

@@ -18,7 +18,7 @@ from vesta_agent.ha_events import CONTEXT_KEY
 
 OWNER, FM = 111, 222
 GROUP, FM_CHAT = -100123, 222
-SUMMARY = "🔓 Laundry door unlocked\nLaundry lock is unlocked\nHeld 1 min"
+SUMMARY = "🔓 Laundry door unlocked\nLaundry lock is unlocked\nHeld 1min"
 
 
 def run(coro):
@@ -83,12 +83,12 @@ def test_each_chat_keeps_only_the_latest_message_and_it_recalls_the_alert(agent)
     tick(agent, 20)                            # the reminder replaces the alert in the FM's chat
     (fm,) = shown(agent, FM_CHAT)
     # the step says itself — what, when, to whom — before the desk's words (owner, 2026-10-16, #43)
-    assert re.fullmatch(r"Reminder sent \d\d/\d\d/\d{4} \d\d:\d\d, No answer after 15 min \(to: FM\)", status(fm)) \
+    assert re.fullmatch(r"Reminder sent \d\d/\d\d/\d{4} \d\d:\d\d, No answer after 15min \(to: FM\)", status(fm)) \
         and SUMMARY in fm and "What to do:" in fm
     assert agent.tg.sent[-1][2], "the reminder carries the buttons"
     tick(agent, 50)                            # the escalation replaces Home Assistant's alert in the owner's chat
     (grp,) = shown(agent, GROUP)
-    assert re.fullmatch(r"Escalation sent \d\d/\d\d/\d{4} \d\d:\d\d, No answer from FM after 45 min \(to: Owner\)",
+    assert re.fullmatch(r"Escalation sent \d\d/\d\d/\d{4} \d\d:\d\d, No answer from FM after 45min \(to: Owner\)",
                         status(grp)) and SUMMARY in grp
     assert (GROUP, 500) in agent.tg.deleted
     assert len(shown(agent, FM_CHAT)) == 1     # the FM's reminder is untouched by the owner's message
@@ -105,7 +105,7 @@ def test_an_answer_replaces_the_alert_where_it_was_given(agent):
     # the alert first, then where it stands, with when (owner, 2026-10-10) — and no promise of a check this alert's rule
     # gives no states for (architecture review 23: "will check it stays quiet" was never kept)
     # who pressed it by name, as the button's own footer says it (owner, 2026-10-11)
-    assert re.fullmatch(r"Done on \d\d/\d\d/\d{4} \d\d:\d\d \(Wayan\)\. Watch 4 h\.", status(fm)) \
+    assert re.fullmatch(r"Done on \d\d/\d\d/\d{4} \d\d:\d\d \(Wayan\)\. Watch 4h\.", status(fm)) \
         and body(fm).index(SUMMARY) < fm.index("Done on ")
 
 
@@ -262,7 +262,7 @@ def test_a_press_puts_where_it_stands_last_in_place_of_the_old_status():
     # stacked under an older status; under "Status:" since 2026-10-12 (one layout, the "-------" line retired)
     from vesta_agent import layout
     reminder = layout.parts(head="Approval request\nTo: JM_FM", body="Door left open\nWhat to do: close it",
-                            status="Reminder: no answer after 15 min")
+                            status="Reminder: no answer after 15min")
     assert layout.render(layout.changed(reminder, status="Done pressed by JM_O on 10/10/2026 15:04")) == \
         "Approval request\nTo: JM_FM\nDoor left open\nWhat to do: close it\n\nStatus:\nDone pressed by JM_O on 10/10/2026 15:04"
     new = layout.parts(head="#14-P2 (closed)\nTo: JM_FM", body="Door left open")
@@ -286,11 +286,11 @@ def test_home_assistants_cleared_in_time_message_says_cleared_with_its_time(agen
         "blueprint": "critical_condition", "rule_id": "automation.critical_condition_laundry",
         "incident_id": "automation.critical_condition_laundry-1", "phase": "abandoned", "severity": "critical",
         "label": "Laundry door unlocked", "entities": ["lock.laundry"], "still_true": False,
-        "summary": "🔶 Laundry door unlocked — no longer tracked after 30 min", CONTEXT_KEY: "RUN-2",
+        "summary": "🔶 Laundry door unlocked — no longer tracked after 30min", CONTEXT_KEY: "RUN-2",
         "timestamp": datetime.now(timezone.utc).isoformat()}))
     adopted = [t for c, mid, t in agent.tg.edits if (c, mid) == (GROUP, 600)]
     assert adopted and re.fullmatch(r"Cleared on \d\d/\d\d/\d{4} \d\d:\d\d: back to normal when the alert stopped "
-                                    r"watching it\. Watch 4 h\.", status(adopted[-1]))
+                                    r"watching it\. Watch 4h\.", status(adopted[-1]))
 
 
 def test_a_button_the_skill_renames_still_answers_the_alert(agent):
@@ -313,7 +313,7 @@ def test_a_button_the_skill_renames_still_answers_the_alert(agent):
                                                 "user_id": FM, "bot": BOT,
                                                 "message": {"message_id": 1000 + len(agent.tg.sent), "chat": {"id": FM_CHAT}}}))
     (fm,) = shown(agent, FM_CHAT)
-    assert re.fullmatch(r"Fait on \d\d/\d\d/\d{4} \d\d:\d\d \(Wayan\)\. Watch 4 h\.", status(fm))
+    assert re.fullmatch(r"Fait on \d\d/\d\d/\d{4} \d\d:\d\d \(Wayan\)\. Watch 4h\.", status(fm))
     from vesta_shared.store import Store
     assert Store(agent.s.store_path).incident(int(iid))["closed_at"]
 

@@ -2,7 +2,7 @@
 different places, so it's hard to understand what the agent wants to say").
 
 The message read: "For: the Owner, P2 Incident: Follow Up #21" / "First time seen on …, to the Owner, JM" / the alert /
-"🔶 Laundry Room door unlocked — no longer tracked after 30 min ("Repeat after"); the next breach alerts again." /
+"🔶 Laundry Room door unlocked — no longer tracked after 30min ("Repeat after"); the next breach alerts again." /
 "Still not clear, and the rule has stopped watching it". Synthetic villa; ids invented."""
 from __future__ import annotations
 
@@ -22,8 +22,8 @@ spec.loader.exec_module(desk)
 
 T0 = datetime(2026, 10, 1, 9, 0, tzinfo=timezone.utc)
 OWNER, FM = 111, 222
-ALERT = "🔓 Laundry door unlocked\nLaundry lock is locked\nHeld 1 min"
-GAVE_UP = '🔶 Laundry door unlocked — no longer tracked after 30 min ("Repeat after"); the next breach alerts again.'
+ALERT = "🔓 Laundry door unlocked\nLaundry lock is locked\nHeld 1min"
+GAVE_UP = '🔶 Laundry door unlocked — no longer tracked after 30min ("Repeat after"); the next breach alerts again.'
 
 
 def ev(phase, **extra):
@@ -61,10 +61,10 @@ def test_a_rule_alerting_again_while_open_is_a_still_there_alert_never_a_reminde
 def test_home_assistants_all_clear_is_said_in_the_desks_words(tmp_path):
     store = Store(str(tmp_path / "s.sqlite"))
     desk.intake(store, ev("opened", summary=ALERT), T0, occupancy_reader=lambda: "x")
-    out = desk.intake(store, ev("resolved", summary="✅ Laundry door unlocked — resolved after 4 min"),
+    out = desk.intake(store, ev("resolved", summary="✅ Laundry door unlocked — resolved after 4min"),
                       T0 + timedelta(minutes=5), occupancy_reader=lambda: "x")
     (ha,) = out["ha_messages"]
-    assert ha["status"] == "Cleared on {time}. Watch 4 h." and ha["text"].count("Laundry door unlocked") == 1
+    assert ha["status"] == "Cleared on {time}. Watch 4h." and ha["text"].count("Laundry door unlocked") == 1
 
 
 def test_the_heading_names_the_incident_first_and_what_was_sent_to_whom(tmp_path):
@@ -134,7 +134,7 @@ def test_the_bottom_line_shows_the_stage_by_its_icon():
     def bottom(head, status="", mark=None):
         return layout.render(layout.parts(head=head, body="Door unlocked", status=status, mark=mark)).rsplit("\n", 1)[1]
     assert bottom("#3-P2 (new)\nTo: JM") == "⚠️ New alert"
-    assert bottom("#3-P2 (existing)\nTo: JM", "Reminder: no answer after 15 min") == "⚠️ ⚙️ Reminder: no answer after 15 min"
+    assert bottom("#3-P2 (existing)\nTo: JM", "Reminder: no answer after 15min") == "⚠️ ⚙️ Reminder: no answer after 15min"
     assert bottom("#3-P2 (existing)\nTo: JM", "Need help pressed by Fabien: over to you.", "help") == \
         "🆘 Need help pressed by Fabien: over to you."
     assert bottom("#3-P2 (closed)\nTo: JM", "Done pressed by Fabien. Note: VESTA cannot check this one.",
@@ -166,7 +166,7 @@ def test_need_help_and_an_unchecked_closure_carry_their_icon_end_to_end(tmp_path
                for _, t, _ in v.tg.sent[-2:])
     asyncio.run(v.outcome.carry_out(desk.reply(st, iid, "done", "owner", now, name="Jim"), "alert-desk"))
     assert v.tg.edits[-1][2].rsplit("\n", 1)[1].startswith("✅ Done on ")     # the owner's copy, settled
-    # 10 min later the lock does not answer: closed, not checked
+    # 10min later the lock does not answer: closed, not checked
     class Silent:
         def states(self, ids):
             return {}
@@ -243,13 +243,13 @@ def test_one_incident_one_picture_in_every_chat_of_the_same_people(tmp_path):
     run(v.outcome.carry_out({"send": [R.message("owner", ALERT, incident=5, buttons=True, stage="new"),
                                       R.message("fm", ALERT, incident=5, buttons=True, stage="new")]}, "alert-desk"))
     run(v.outcome.carry_out({"send": [R.message("fm", ALERT, incident=5, buttons=True, stage="reminder",
-                                                status="No answer after 15 min")]}, "alert-desk"))
+                                                status="No answer after 15min")]}, "alert-desk"))
     shown = {c: r["text"] for c, r in v.thread.shown(5).items()}
     assert set(shown) == {GROUP, FM, JM2} and shown[FM] == shown[JM2], shown     # the two FMs: one picture
     text = shown[FM]
     # every role it went to, never a name (owner, 2026-10-13)
     assert text.startswith("#5 (existing)\nTo: Owner & FM\n") and \
-        re.search(r"\n⚠️ ⚙️ Reminder sent \d\d/\d\d/\d{4} \d\d:\d\d, No answer after 15 min \(to: FM\)$", text), text
+        re.search(r"\n⚠️ ⚙️ Reminder sent \d\d/\d\d/\d{4} \d\d:\d\d, No answer after 15min \(to: FM\)$", text), text
     # the group: not sent the reminder, no FM line, its own status kept, its buttons kept — only the title word and
     # "To:" follow the incident (architecture review, 2026-10-19: they are the incident's, the same in every copy; the
     # Status lines are each chat's own, #55 unchanged): "(new)" became "(existing)" with the facility manager's

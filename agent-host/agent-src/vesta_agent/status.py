@@ -387,9 +387,9 @@ def _period(a: dict) -> str | None:
     start, rel = a.get("start_time"), None
     if isinstance(start, str) and start[:-1].isdigit() and start[-1:] in ("h", "d"):
         n = int(start[:-1])
-        rel = f"last {n} h" if start[-1] == "h" else f"last {n} day" + ("s" if n != 1 else "")
+        rel = f"last {n}h" if start[-1] == "h" else f"last {n} day" + ("s" if n != 1 else "")
     if a.get("hours_back") is not None:
-        rel = f"last {a['hours_back']} h"
+        rel = f"last {a['hours_back']}h"
     if rel:
         out.append(rel)
     elif start:

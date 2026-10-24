@@ -74,7 +74,7 @@ closure, and never raise the same thing twice.
      `problems.again_days`) is listed as new, "(again: N times in D days)", and so is its Kiosk fault.
    - `notes`: configuration gaps (a schedule with no time blocks, a missing
      nominal voltage), and each device asleep by design with no report in days
-     ("no report for 8 d (it sleeps between its reports)"; never an offline
+     ("no report for 8d (it sleeps between its reports)"; never an offline
      fault, its battery judged on its last known charge). They go to the weekly
      report section "what would help".
 3. The night costs no token. The morning digest carries the words.

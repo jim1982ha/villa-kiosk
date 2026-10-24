@@ -108,7 +108,7 @@ def test_an_open_offline_fault_of_a_device_listed_since_closes(tmp_path, monkeyp
     from vesta_shared.store import Store
     store = Store(str(tmp_path / "s.sqlite"))
     fid, _ = store.raise_finding("PM-UNAVAILABLE", "binary_sensor.door", "availability", "2026-10-09", "P3",
-                                 "Door has been offline for 2 h.", {"entities": ["binary_sensor.door"]})
+                                 "Door has been offline for 2h.", {"entities": ["binary_sensor.door"]})
     pack = _pack()
     pack.asleep_are(["binary_sensor.door"])
 
@@ -202,9 +202,9 @@ def test_an_open_offline_fault_of_a_device_hidden_since_closes_saying_so(tmp_pat
     from vesta_shared.store import Store
     store = Store(str(tmp_path / "s.sqlite"))
     fid, _ = store.raise_finding("PM-UNAVAILABLE", "switch.old_plug", "availability", "2026-10-09", "P3",
-                                 "Old Plug has been offline for 2 h.", {"entities": ["switch.old_plug"]})
+                                 "Old Plug has been offline for 2h.", {"entities": ["switch.old_plug"]})
     keep, _ = store.raise_finding("PM-UNAVAILABLE", "switch.spa_relay", "availability", "2026-10-09", "P3",
-                                  "Spa Relay has been offline for 2 h.", {"entities": ["switch.spa_relay"]})
+                                  "Spa Relay has been offline for 2h.", {"entities": ["switch.spa_relay"]})
     pack = _pack(hidden=["switch.old_plug"])
 
     class Cli:
@@ -327,12 +327,12 @@ def test_a_device_asleep_with_no_report_in_the_days_read_stays_asleep_and_says_s
     row = asleep.read_states(_quiet_battery(detailed_days=10), pack, DOOR_NOW, ["sensor.lone_battery"])["sensor.lone_battery"]
     assert row["asleep"] is True and row["state"] == "unavailable"                  # never its 9-day-old state now
     assert row["last_known"]["state"] == "6" and asleep.last_value(row) == "6"     # read within the history kept
-    assert asleep.unheard(row, DOOR_NOW) == "no report for 9 d (it sleeps between its reports)"
+    assert asleep.unheard(row, DOOR_NOW) == "no report for 9d (it sleeps between its reports)"
     assert pack.standing("sensor.lone_battery", row["state"]) == "asleep"         # never counted offline
     # the history kept ends before it: no known charge, and still said
     row = asleep.read_states(_quiet_battery(), pack, DOOR_NOW, ["sensor.lone_battery"])["sensor.lone_battery"]
     assert row["asleep"] is True and row["last_known"] is None and asleep.last_value(row) is None
-    assert asleep.unheard(row, DOOR_NOW) == "no report for more than 7 d (it sleeps between its reports)"
+    assert asleep.unheard(row, DOOR_NOW) == "no report for more than 7d (it sleeps between its reports)"
 
 
 def test_the_weekly_report_and_the_night_check_say_a_battery_with_no_report_in_days(monkeypatch, tmp_path):
@@ -353,9 +353,9 @@ def test_the_weekly_report_and_the_night_check_say_a_battery_with_no_report_in_d
         c.states = lambda: facts.Ctx.states(c)
         return facts.s_batteries(c)
     (row,) = page(_quiet_battery(detailed_days=10))["rows"]
-    assert row["pct"] == 6 and row["unheard"] == "no report for 9 d (it sleeps between its reports)"
+    assert row["pct"] == 6 and row["unheard"] == "no report for 9d (it sleeps between its reports)"
     got = page(_quiet_battery())
-    assert got["rows"][0]["pct"] is None and got["rows"][0]["unheard"].startswith("no report for more than 7 d")
+    assert got["rows"][0]["pct"] is None and got["rows"][0]["unheard"].startswith("no report for more than 7d")
     assert got["status"] == "Watch"
     # the night check: judged on its last known charge, and a note says it
     monkeypatch.syspath_prepend(os.path.join(STARTER_SKILLS, "preventive-maintenance", "scripts"))
@@ -366,7 +366,7 @@ def test_the_weekly_report_and_the_night_check_say_a_battery_with_no_report_in_d
     found = nightly.battery_findings(pack, states, params, DOOR_NOW.date(), rows=[{**r, "unit": "%"} for r in pack.entities("battery")])
     assert [f.rule_id for f in found] == ["PM-BATTERY-CRIT"]
     assert nightly.unheard_notes(pack, states, DOOR_NOW) == [
-        "Lone Battery: no report for 9 d (it sleeps between its reports)."]
+        "Lone Battery: no report for 9d (it sleeps between its reports)."]
 
 
 def test_a_read_stopped_short_cannot_tell_what_a_sleeping_device_last_said():
@@ -390,4 +390,4 @@ def test_the_alert_desk_says_a_door_with_no_report_in_days_never_that_it_does_no
                                                 (DOOR_NOW - timedelta(days=9, minutes=-1), "unavailable")]})
     inc = {"entity_id": "binary_sensor.door", "payload": json.dumps({"entities": ["binary_sensor.door"], "state": "on"})}
     assert desk.still_there(inc, v, DOOR_NOW) == (
-        None, ["Door: no report for more than 7 d (it sleeps between its reports)"])
+        None, ["Door: no report for more than 7d (it sleeps between its reports)"])

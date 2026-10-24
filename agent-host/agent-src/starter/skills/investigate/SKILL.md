@@ -47,7 +47,7 @@ what happened, and why".
    - Lines flagged "⟵" are unusual against the device's own normal (the days before): a run far longer than any before,
      a level well above or below normal, exactly 0 where it normally reads a little (its supply was off), no answer,
      stop-start cycling. Each says by how much (the limits are in settings.yaml). They are the backbone of the answer.
-   - The normal line gives how often and how long it usually runs: "longest normal run 10 s" against "ran 1 h 46 min" is
+   - The normal line gives how often and how long it usually runs: "longest normal run 10s" against "ran 1h 46min" is
      the contrast the person needs.
 
 4. **Read everything else recorded then.**
@@ -135,8 +135,8 @@ with the facts; if one seems misleading, say why in "cannot_tell".
        "summary": "The pool pump most likely kept running because water was escaping: the pool's level fell while it
                    ran, and a pump of this kind runs on its own pressure switch for as long as pressure stays low [1].
                    Check the pool's return pipes and the skimmer seal first."
-       {"cause": "A leak on the pool's return circuit", "evidence": "Level −11 cm from 02:10 while the pump ran 4 h 26
-        min, its longest normal run 2 h", "confirm": "Look for wet ground along the return pipe", "source": "[1]",
+       {"cause": "A leak on the pool's return circuit", "evidence": "Level −11 cm from 02:10 while the pump ran 4h 26min,
+        its longest normal run 2h", "confirm": "Look for wet ground along the return pipe", "source": "[1]",
         "verdict": "consistent"}
 
 9. **Make the page.** First make sure your last timeline run covers the whole period with `--out timeline.json` and

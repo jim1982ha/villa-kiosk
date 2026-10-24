@@ -305,7 +305,7 @@ def main(argv=None):
     for l in res["loads"][:LOADS_PRINTED]:
         print(f"  {l['name']:40} {l['kwh']:8.1f} kWh  share {l['share_pct'] or 0:5.1f}%  vs prev {l['vs_prev_pct'] if l['vs_prev_pct'] is None else round(l['vs_prev_pct'])}")
     for p in res["pumps"]:
-        print(f"  pump {p['name']:35} {p['run_hours_per_day']:.1f} h/day at {p['running_power_w']} W")
+        print(f"  pump {p['name']:35} {p['run_hours_per_day']:.1f}h/day at {p['running_power_w']} W")
     return 0
 
 

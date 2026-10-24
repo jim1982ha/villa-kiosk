@@ -60,7 +60,7 @@ def test_a_close_on_a_door_still_unlocked_reopens_it_still_there_and_the_desk_wa
 
 
 def test_a_done_that_held_says_so_when_the_watch_ends(tmp_path):
-    # owner, 2026-10-23: "10 min later, i still see 'VESTA will monitor it for 10 min' — I expected an update saying
+    # owner, 2026-10-23: "10min later, i still see 'VESTA will monitor it for 10min' — I expected an update saying
     # the test lock is confirmed OK": a Done that held closed its check without a word
     store = Store(str(tmp_path / "s.sqlite"))
     iid = door(store)
@@ -68,8 +68,8 @@ def test_a_done_that_held_says_so_when_the_watch_ends(tmp_path):
     out = desk.tick(store, T0 + timedelta(minutes=20), client=Villa(**{"lock.door": ("locked", T0 + timedelta(minutes=4))}))
     assert out["not_quiet"] == []
     (fm,) = [s for s in out["send"] if s["to"] == "fm"]
-    assert fm["stage"] == "closed" and fm["status"] == "Done (FM). Checked after 10 min: right. Watch 4 h."
-    assert fm["status_in"]["fr"] == "Terminé (FM). Vérifié après 10 min: rétabli. Surveillance 4 h."
+    assert fm["stage"] == "closed" and fm["status"] == "Done (FM). Checked after 10min: right. Watch 4h."
+    assert fm["status_in"]["fr"] == "Terminé (FM). Vérifié après 10min: rétabli. Surveillance 4h."
     # said once: the next tick has nothing more to say about it
     later = desk.tick(store, T0 + timedelta(minutes=30), client=Villa(**{"lock.door": ("locked", T0 + timedelta(minutes=4))}))
     assert not [s for s in later["send"] if s.get("incident") == iid]
@@ -84,7 +84,7 @@ def test_a_close_the_desk_cannot_check_says_so_with_what_the_device_reads(tmp_pa
     out = desk.tick(store, datetime.now(timezone.utc) + timedelta(minutes=11),
                     client=Villa(**{"lock.door": ("unlocked", T0)}))
     (fm,) = [s for s in out["send"] if s["to"] == "fm"]
-    assert fm["status"] == "Closed in the Cockpit. Note: VESTA cannot check this one; door reads unlocked. Watch 4 h."
+    assert fm["status"] == "Closed in the Cockpit. Note: VESTA cannot check this one; door reads unlocked. Watch 4h."
     assert fm["stage"] == "closed" and store.incident(iid)["closed_at"]
 
 

@@ -157,8 +157,11 @@ def weekday_name(d: date) -> str:
 
 
 def lasting(seconds: float) -> str:
-    """A duration in words a person reads: "8 s", "47 min", "1 h 15 min", "2 h", "1 d 9 h", "3 d" — the Kiosk's own
-    wording (chartUtils.fmtDuration): from a day on, days and hours.
+    """A duration in words a person reads: "8s", "47min", "1h 15min", "2h", "1d 9h", "3d" — the Kiosk's own wording
+    (chartUtils.fmtDuration): from a day on, days and hours.
+
+    ⚠️ EACH UNIT JOINED TO ITS NUMBER (owner, 2026-10-24: "Watch 1 h" should read "1h"; all units: "1h 30min", "10min",
+    "30s"), replacing 2026-10-23's spaced "1 h 30 min".
 
     ⚠️ ONE DURATION WORDING (architecture review, 2026-10-13): the investigation's lines said "1 h 15 min" and its page,
     just above the AI's reading of them, "75 min" for the same outage — three copies, two rules.
@@ -173,12 +176,12 @@ def lasting(seconds: float) -> str:
         return math.floor(x + 0.5)
     s = max(0, half_up(float(seconds)))
     if s < 60:
-        return f"{max(1, s)} s"
+        return f"{max(1, s)}s"
     m = half_up(s / 60)
     if m < 60:
-        return f"{m} min"
+        return f"{m}min"
     h, m = divmod(m, 60)
     if h < 24:
-        return f"{h} h {m} min" if m else f"{h} h"
+        return f"{h}h {m}min" if m else f"{h}h"
     d, h = divmod(h, 24)
-    return f"{d} d {h} h" if h else f"{d} d"
+    return f"{d}d {h}h" if h else f"{d}d"

@@ -41,9 +41,9 @@ def build(period: dict, optimiser: dict | None, findings_open: list[dict] | None
                     "benefit": "Report coverage from " + f"{100 - period['unmetered_pct']:.0f}% to about {th['coverage_target_pct']:g}%"})
     if optimiser and optimiser.get("ok") and optimiser.get("delta_hours") is not None and abs(optimiser["delta_hours"]) >= th["schedule_min_delta_hours"]:
         sign = "more" if optimiser["delta_hours"] > 0 else "less"
-        out.append({"kind": "schedule", "title": f"Set the {optimiser['pool'].replace('_', ' ')} filtration to {optimiser['hours_rounded']:g} h/day",
+        out.append({"kind": "schedule", "title": f"Set the {optimiser['pool'].replace('_', ' ')} filtration to {optimiser['hours_rounded']:g}h/day",
                     "detail": optimiser["message"],
-                    "benefit": f"{abs(optimiser['delta_hours']):.1f} h/day {sign}, {fmt_money(abs(optimiser['delta_cost_per_month']), cur)}/month "
+                    "benefit": f"{abs(optimiser['delta_hours']):.1f}h/day {sign}, {fmt_money(abs(optimiser['delta_cost_per_month']), cur)}/month "
                                + ("extra, for the water quality target" if optimiser["delta_hours"] > 0 else "saved")})
     if optimiser and optimiser.get("ok") and optimiser.get("flow_confidence") == "low":
         out.append({"kind": "measurement", "title": "Add a flow meter or a filter pressure gauge readable by the villa's system",

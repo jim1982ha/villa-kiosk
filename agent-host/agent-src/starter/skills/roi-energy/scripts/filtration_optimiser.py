@@ -207,11 +207,11 @@ def run(args) -> dict:
     lines = [f"Filtration for {pool.replace('_', ' ')}" + (f" ({model})" if model else "") + ":"]
     lines.append(f"Volume {volume:.0f} m3 x {turnovers:g} turnovers/day = {volume * turnovers:.0f} m3 to filter.")
     lines.append(f"Real flow {flow:.1f} m3/h ({method}, confidence {confidence}).")
-    lines.append(f"That is {hours:.1f} h/day, rounded to {hours_rounded:g} h in {len(blocks)} block(s): "
+    lines.append(f"That is {hours:.1f}h/day, rounded to {hours_rounded:g}h in {len(blocks)} block(s): "
                  + ", ".join(f"{a} to {b}" for a, b in blocks) + ".")
     if current_h is not None:
-        lines.append(f"Today the pump runs about {current_h:.1f} h/day"
-                     + (f" ({delta_h:+.1f} h/day, {fmt_money(delta_cost_month, currency)}/month)" if delta_h is not None else "") + ".")
+        lines.append(f"Today the pump runs about {current_h:.1f}h/day"
+                     + (f" ({delta_h:+.1f}h/day, {fmt_money(delta_cost_month, currency)}/month)" if delta_h is not None else "") + ".")
     lines.append(f"Cost at the proposed schedule: {kwh_day:.1f} kWh/day, {fmt_money(cost_month, currency)}/month"
                  + (f" ({cost_month / fx:,.0f} USD)" if fx else "") + ".")
     if confidence == "low":

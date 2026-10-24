@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.6.333 (24 October 2026)
+
+- The villa's own messages in each chat's language (owner, 2026-10-24): a villa automation fires `vesta_message`
+  (`message`: its text in the VESTA layout; `buttons`; `messages` for a rewrite) after its own Telegram send; the agent
+  (`villa_messages.VillaMessages`, a task beside the socket) draws each of those messages again in its chat's language
+  from the kept translations (`Translations.lines`), asking the AI for the missing lines once (`Translations.then`).
+  English chats, the agent's own messages (an incident's) and any failure are left as the villa wrote them; the
+  latest words of a message win over a translation still on its way; its buttons are kept. The socket listens to six
+  event types.
+- Every duration has its unit joined to its number (owner, 2026-10-24): `timeutil.lasting` "1h 30min", "10min",
+  "30s", "1d 9h"; `status_words.duration` the same in every language ("1Std. 30Min.", "1小时30分钟"); the agreement's
+  `duration.cases` copied from the Kiosk (2.496.513). Person-facing literals joined too (approval "expires in 15min",
+  the investigation's "ran 12min", the night check's "4.5h against 6.0h scheduled", the energy figures' "h/day", the
+  page's "last 6h", the skills' guides).
+- A villa message an incident takes over while its translation runs is left to the incident (checked again at draw).
+
 ## 0.6.332 (24 October 2026)
 
 - A close (`IncidentThread.close`) and a restate draw the alert's words in the language the copy's heading now reads

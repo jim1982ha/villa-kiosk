@@ -120,7 +120,7 @@ export function tryPanel(name, d, script, command = null) {
       if (!r.pending) return r;
       const s = Math.round((Date.now() - t0) / 1000);
       if (!r.started && s > 30) return { ok: false, error: "The agent did not start it: it is stopped, or waiting for a setting (see its log)." };
-      fill(out, h("p", { class: "muted" }, r.started ? `Running on the villa… ${s} s` : "Waiting for the agent…"));
+      fill(out, h("p", { class: "muted" }, r.started ? `Running on the villa… ${s}s` : "Waiting for the agent…"));
       await sleep(1000);
     }
   }
@@ -135,7 +135,7 @@ export function tryPanel(name, d, script, command = null) {
         // the verdict is the agent's (script_run.py), the same for every run: not worked out again here
         h("div", { class: "try-result" }, h("span", { class: "chip" + ({ done: "", nothing: " warn" }[r.verdict] ?? " off") },
           r.verdict_words || r.verdict),
-          h("span", { class: "muted small" }, `${r.seconds} s · the script's own answer · nothing was sent`)),
+          h("span", { class: "muted small" }, `${r.seconds}s · the script's own answer · nothing was sent`)),
         r.error ? problemsBox([r.error], "The script stopped:") : null,
         h("pre", { class: "out" }, pretty(r.output))]);
     } catch (e) { fill(out, problemsBox(reasons(e), "Not run:")); }

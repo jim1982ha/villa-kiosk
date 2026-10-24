@@ -18,6 +18,8 @@ those lines — the step, "Cleared on …", "(to: …)" — is written here, for
 """
 from __future__ import annotations
 
+import re
+
 from . import message_format as mf
 from .timeutil import lasting
 
@@ -35,7 +37,7 @@ def _ordinal_en(n: int) -> str:
 #: its own; `steps`: what each step sent is called ({sent}), and the lines of the steps that read differently (`new`,
 #: `back`); `times`: how many times this week, after the moment; `acted`: "<what> on <when>" (message_format.acted);
 #: `colon` / `stop`: what goes before a tail and at a sentence's end; `sep`: between a step and the desk's words;
-#: `units`: s, min, h, d as timeutil.lasting writes them, `tight` when a number takes its unit with no space.
+#: `units`: s, min, h, d as timeutil.lasting writes them (each joined to its number), `tight` when the parts go unspaced.
 WORDS: dict[str, dict] = {
     "fr": {
         "status": "Statut", "to": " (à: {who})", "roles": {"owner": "Propriétaire", "fm": "FM"}, "nobody": "personne",
@@ -272,14 +274,14 @@ def earlier(n: int, lang: str = "en") -> str:
 
 
 def duration(seconds: float, lang: str = "en") -> str:
-    """A duration as timeutil.lasting words it ("1 h 30 min"), its units in `lang` ("1 Std. 30 Min.", "1小时30分钟")."""
+    """A duration as timeutil.lasting words it ("1h 30min"), its units in `lang` ("1Std. 30Min.", "1小时30分钟"): each
+    unit joined to its number (owner, 2026-10-24), the parts apart by a space — none where `tight`."""
     words = lasting(seconds)
     w = _w(lang)
     if not w:
         return words
     unit = dict(zip(("s", "min", "h", "d"), w["units"]))
-    pieces = words.split(" ")
-    out = [f"{pieces[i]}{'' if w.get('tight') else ' '}{unit[pieces[i + 1]]}" for i in range(0, len(pieces) - 1, 2)]
+    out = [f"{n}{unit[u]}" for n, u in re.findall(r"(\d+)([a-z]+)", words)]
     return ("" if w.get("tight") else " ").join(out)
 
 

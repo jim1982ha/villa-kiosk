@@ -1,4 +1,4 @@
-"""The one Home Assistant websocket: LISTEN ONLY, to five event types.
+"""The one Home Assistant websocket: LISTEN ONLY, to six event types.
 
   vesta_critical_event   fired by the VESTA rules (the critical_* blueprints), AFTER
                          their own Telegram message: the alert desk's input
@@ -9,10 +9,12 @@
   telegram_sent          a message Home Assistant itself sent on the bot (its chat and message id). With the
                          automation run's context, which its vesta_critical_event shares, it tells which of
                          Home Assistant's messages belongs to which incident (one message per incident per chat)
+  vesta_message          fired by the villa's own automations AFTER their Telegram message (a doorbell, a camera):
+                         that message's words, drawn again in each chat's language (villa_messages.py)
 
 Decision D1 (owner, 2026-09-30): an exception to "Home Assistant only through HA
 MCP", because HA MCP has no event-listening tool. The socket subscribes to these
-five types and SENDS NOTHING ELSE: no service call, no event, no write of any kind
+six types and SENDS NOTHING ELSE: no service call, no event, no write of any kind
 travels on it. Everything Home Assistant does with Telegram (alerts, the gate
 button, any automation) keeps working whether this process runs or not.
 
@@ -36,7 +38,7 @@ log = logging.getLogger("vesta.ha_events")
 #: again (app.devices_changed) — owner, 2026-10-21: an entity unhidden at 02:00 stayed missing from the Rules pickers,
 #: and a deleted one kept its fault, until the 01:30 rebuild of the next night
 REGISTRY_EVENTS = ("entity_registry_updated", "device_registry_updated")
-EVENT_TYPES = ("vesta_critical_event", "telegram_text", "telegram_command", "telegram_callback",
+EVENT_TYPES = ("vesta_critical_event", "vesta_message", "telegram_text", "telegram_command", "telegram_callback",
                "telegram_attachment", "telegram_sent") + REGISTRY_EVENTS
 #: Where an event's data carries the context id of whatever fired it (an automation run: its message and its
 #: vesta_critical_event share it). Home Assistant puts the context beside the data; this copies it in.

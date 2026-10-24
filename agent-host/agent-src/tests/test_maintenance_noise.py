@@ -64,7 +64,7 @@ def _open(tmp, rule):
 def test_only_a_sensor_that_normally_reports_all_the_time_can_be_silent(tmp_path):
     fx = tmp_path / "fx"
     fx.mkdir()
-    restart = (NOW - timedelta(hours=34)).isoformat()      # every entity stamped by a restart 34 h ago
+    restart = (NOW - timedelta(hours=34)).isoformat()      # every entity stamped by a restart 34h ago
     ids = {"sensor.example_temperature": True, "sensor.example_curtain": False, "sensor.example_rain": False}
     (fx / "states.json").write_text(json.dumps({"states": {
         eid: {"state": "1", "attributes": {}, "last_changed": restart, "last_reported": restart} for eid in ids}}))
@@ -128,7 +128,7 @@ def test_one_silent_device_is_one_finding(tmp_path):
 
 def test_the_night_leaves_a_still_reading_of_a_talking_device_alone(tmp_path):
     # villa, 2026-10-19 (the caller, run for real): the disk use held at 2.4 % for days while the same monitor's
-    # processor use reported every minute — "System Monitor has not reported for 1 d 9 h although it is online"
+    # processor use reported every minute — "System Monitor has not reported for 1d 9h although it is online"
     fx = tmp_path / "fx"
     fx.mkdir()
     old, fresh = (NOW - timedelta(hours=40)).isoformat(), (NOW - timedelta(minutes=5)).isoformat()
@@ -193,7 +193,7 @@ def test_a_villa_widens_the_reconnect_window_for_the_read_the_count_and_the_word
     _night(tmp_path, "--as-of", AS_OF)
     assert _open(tmp_path, "PM-RECONNECT-LOOP") == []                       # the skill's 3 days: not seen
     (fx / "helpers.json").write_text(json.dumps({"helpers": [], "states": {"input_number.vesta_reconnect_days": "5"}}))
-    (tmp_path / "s.sqlite").unlink()                                        # the villa's parameters are kept 10 min
+    (tmp_path / "s.sqlite").unlink()                                        # the villa's parameters are kept 10min
     _night(tmp_path, "--as-of", AS_OF)
     (f,) = _open(tmp_path, "PM-RECONNECT-LOOP")
     assert f["summary"].startswith("Pool relay dropped and reconnected 12 times in 5 days"), f["summary"]
@@ -283,7 +283,7 @@ def test_the_morning_message_says_each_thing_once(tmp_path):
     store.raise_finding("PM-BATTERY-LOW", "sensor.example_bat", "battery", AS_OF, "P3",
                         "Motion battery at 11%: replace within the week.", {})
     store.raise_finding("PM-UNAVAILABLE", "lock.example_old", "availability", "2026-09-20", "P3",
-                        "Old lock has been offline for 300 h.", {})
+                        "Old lock has been offline for 300h.", {})
     r = _run(COMPOSE, "fm-daily", "--pack", str(tmp_path / "pack.json"), "--store", str(tmp_path / "s.sqlite"),
              "--as-of", "2026-10-04")
     assert r.returncode == 0, r.stderr
@@ -306,7 +306,7 @@ def test_the_same_night_run_again_is_not_a_crash_nor_news_again(tmp_path):
 
 
 def test_no_threshold_hides_in_the_night_check_s_code():
-    # architecture review, 2026-10-07: 3 h, 72 h, 0.5, 48 h, 3 devices, 20 entities, 14 days, 7 points, −0.5/day,
+    # architecture review, 2026-10-07: 3h, 72h, 0.5, 48h, 3 devices, 20 entities, 14 days, 7 points, −0.5/day,
     # 0.8 × nominal, 15 points were literals in the scripts; each is now a named default a villa can override
     import re
     for name in ("nightly.py", "rules.py", "features.py"):
@@ -446,7 +446,7 @@ def test_several_devices_losing_one_access_point_together_are_counted_not_taken_
 
 
 def test_a_duration_of_a_day_or_more_is_said_as_the_kiosk_says_it():
-    # owner, 2026-10-15: "Timmerflotte_5969 has been offline for 33 h." beside the Kiosk's "1 d 9 h" — and the silent
+    # owner, 2026-10-15: "Timmerflotte_5969 has been offline for 33h." beside the Kiosk's "1d 9h" — and the silent
     # check's "1.4 days" a third way. The night check's own lines, through its rules
     sys.path.insert(0, os.path.join(STARTER_SKILLS, "preventive-maintenance", "scripts"))
     import rules as R
@@ -456,10 +456,10 @@ def test_a_duration_of_a_day_or_more_is_said_as_the_kiosk_says_it():
     params = VillaParams(defaults=load(os.path.join(STARTER_SKILLS, "preventive-maintenance"), "settings.yaml")["behaviour"])
     asset = {"slug": "sensor_x", "name": "Sensor X"}
     off = R.availability_rules(asset, "sensor.sensor_x_humidity", "unavailable", 33.2, params)
-    assert [f.summary for f in off] == ["Sensor X has been offline for 1 d 9 h."]
+    assert [f.summary for f in off] == ["Sensor X has been offline for 1d 9h."]
     quiet = R.silence_rules(asset, "sensor.sensor_x_humidity", 34.0, params)
-    assert [f.summary for f in quiet] == ["Sensor X has not reported for 1 d 10 h although it is online."]
-    for seconds, said in ((4500, "1 h 15 min"), (23 * 3600 + 59 * 60, "23 h 59 min"), (86400, "1 d"), (49 * 3600, "2 d 1 h")):
+    assert [f.summary for f in quiet] == ["Sensor X has not reported for 1d 10h although it is online."]
+    for seconds, said in ((4500, "1h 15min"), (23 * 3600 + 59 * 60, "23h 59min"), (86400, "1d"), (49 * 3600, "2d 1h")):
         assert lasting(seconds) == said
 
 
@@ -503,7 +503,7 @@ def test_an_offline_fault_an_alert_took_over_is_handed_over_never_cleared(tmp_pa
 
 def test_a_reading_that_holds_still_while_its_device_reports_is_not_silent():
     # villa, 2026-10-19: the disk use stayed 2.4 % for days (it writes on a change only) while the same monitor's
-    # processor use reported every minute — "has not reported for 1 d 9 h although it is online"
+    # processor use reported every minute — "has not reported for 1d 9h although it is online"
     import importlib.util
     from datetime import datetime, timezone
     from vesta_shared.knowledge_pack import KnowledgePack

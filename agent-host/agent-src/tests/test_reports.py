@@ -257,7 +257,7 @@ def test_one_device_is_one_line_and_many_of_a_kind_are_one_line(tmp_path):
     # table) and 14 "has not reported" tasks filled the page — the mock-ups say each thing once
     facts, c, store = _ctx(tmp_path)
     store.raise_finding("PM-UNAVAILABLE", "lock.example_door", "availability", "2026-10-04", "P2",
-                        "Front door lock has been offline for 3 h.", {"hours": 3})
+                        "Front door lock has been offline for 3h.", {"hours": 3})
     c.pack.families["level"] = [{"entity_id": f"sensor.example_rain_{k}", "name": f"Rain {k}", "family": "level"}
                                 for k in range(4)]                 # a line names its device as the pack does
     for k in range(4):
@@ -1038,8 +1038,8 @@ def test_an_alert_that_came_back_counts_each_run_in_the_week(tmp_path):
 
 
 def test_an_alerts_lasted_column_is_said_as_both_apps_say_a_duration(tmp_path):
-    # architecture review round 2, 2026-10-16: the weekly page's "Lasted" had a rule of its own — "119 s", "119 min",
-    # "2.5 h" — beside the Kiosk's and the agent's "1 min", "2 h 29 min". The agreement's cases, through the page's rows
+    # architecture review round 2, 2026-10-16: the weekly page's "Lasted" had a rule of its own — "119s", "119min",
+    # "2.5h" — beside the Kiosk's and the agent's "1min", "2h 29min". The agreement's cases, through the page's rows
     contract = os.path.join(os.path.dirname(__file__), "..", "..", "rootfs", "opt", "vesta", "host", "agent-contract.json")
     cases = [c for c in json.load(open(contract))["duration"]["cases"] if c["seconds"] < 4 * 86400]
     sys.path.insert(0, os.path.dirname(FACTS))                     # facts.py imports its sibling playbook.py

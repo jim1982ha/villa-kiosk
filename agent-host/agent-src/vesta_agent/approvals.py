@@ -55,7 +55,7 @@ _APPROVED = acted("Approved", "{time}", "{by}") + "."
 #: this state; the note every copy shows under its line — `note()`).
 STATES: dict[str, tuple[str, str, str]] = {
     "pending": ("waiting for approval", "Still waiting.",
-                "Waiting for approval by {who} (asked on {time}, expires in {minutes} min)."),
+                "Waiting for approval by {who} (asked on {time}, expires in {minutes}min)."),
     "approved": ("approved, its result not recorded yet", "Already approved.", _APPROVED),
     "moving": ("approved; the device was still on its way", "Already approved: on its way.", _APPROVED),
     "done": ("approved, and done", "Already approved and done.", _APPROVED),

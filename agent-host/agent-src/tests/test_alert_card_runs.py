@@ -27,7 +27,7 @@ from vesta_agent.ha_events import CONTEXT_KEY
 OWNER, FM = 111, 222
 GROUP, FM_CHAT = -100123, 222
 RULE = "automation.critical_condition_phase"
-SUMMARY = "⚡ Phase C high\nPhase C 4580 W\nAbove 4000 W, Held 15 min"
+SUMMARY = "⚡ Phase C high\nPhase C 4580 W\nAbove 4000 W, Held 15min"
 T = r"\d\d/\d\d/\d{4} \d\d:\d\d"
 
 
@@ -126,8 +126,8 @@ def test_a_run_that_came_back_starts_at_a_back_at_line_and_a_reminder_carries_it
     # step to the FM leaves the owner's group copy as it was — no edit, no line
     assert card(agent, GROUP) == before
     group = card(agent, FM_CHAT)                        # the FM's copy tells it
-    # point 1: the bottom line says its own step — never "Reminder: no answer after 15 min" alone under 18:03
-    assert re.fullmatch(rf"⚠️ ⚙️ Reminder sent {T}, No answer after 15 min \(to: FM\)", status_lines(group)[-1]), group
+    # point 1: the bottom line says its own step — never "Reminder: no answer after 15min" alone under 18:03
+    assert re.fullmatch(rf"⚠️ ⚙️ Reminder sent {T}, No answer after 15min \(to: FM\)", status_lines(group)[-1]), group
     lines = status_lines(group)
     # ... and is told once: the history above it stops before it (drawn as it stood before this step)
     assert sum("Reminder sent" in ln for ln in lines) == 1, lines
@@ -142,7 +142,7 @@ def test_a_run_that_came_back_starts_at_a_back_at_line_and_a_reminder_carries_it
     tick(agent, 50)                                     # the escalation: to the owner — in the group, not the FM's chat
     esc = card(agent, GROUP)
     lines = status_lines(esc)
-    assert re.fullmatch(rf"⚠️ ⚙️ Escalation sent {T}, No answer from FM after 45 min \(to: Owner\)", lines[-1]), lines
+    assert re.fullmatch(rf"⚠️ ⚙️ Escalation sent {T}, No answer from FM after 45min \(to: Owner\)", lines[-1]), lines
     assert not any("(to: FM)" in ln for ln in lines), lines     # the FM's steps are the FM chat's
     # and the owner's step leaves the FM's copy's own lines alone — only "To:" follows the incident, which now involves
     # the owner (architecture review, 2026-10-19: the title word and "To:" are the incident's, the same in every copy)
@@ -167,8 +167,8 @@ def test_only_a_later_step_says_itself_on_the_bottom_line():
     from vesta_agent.notice import Notices
     n = Notices(None, lambda: None, "UTC")
     at = datetime(2026, 10, 16, 18, 20, tzinfo=timezone.utc)
-    assert n.bottom("reminder", {"fm"}, "No answer after 15 min", at) == \
-        "Reminder sent 16/10/2026 18:20, No answer after 15 min (to: FM)"
+    assert n.bottom("reminder", {"fm"}, "No answer after 15min", at) == \
+        "Reminder sent 16/10/2026 18:20, No answer after 15min (to: FM)"
     assert n.bottom("escalated", {"owner"}, "", at) == "Escalation sent 16/10/2026 18:20 (to: Owner)"
     for stage in ("new", "closed", "update", "pressed", None):
         assert n.bottom(stage, {"owner", "fm"}, "Cleared on 16/10/2026 18:20.", at) == "Cleared on 16/10/2026 18:20."

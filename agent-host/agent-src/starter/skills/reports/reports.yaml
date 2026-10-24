@@ -90,7 +90,7 @@ not_measured_yet:
 playbook:
   pumps:
     - name: running time changed
-      title: "{subject}: {hours_before} h a day before {change_date}, {hours_after} h since"
+      title: "{subject}: {hours_before}h a day before {change_date}, {hours_after}h since"
       when: {kind: run_change, change_pct: 30, min_days: 3, days: 30, min_hours: 2}
       look_at: "the pump's hours of running per day, its timer or schedule helper, the logbook for who changed it"
       means: "a timer changed, a float switch, or a pump stopping early (dry run, overheating)"

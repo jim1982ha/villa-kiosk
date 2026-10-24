@@ -686,7 +686,7 @@ def test_every_runs_steps_are_served_each_in_a_line_the_page_draws(ui):
         "energy_period.py --period week --out week.json",
         "energy_period.py --period week --out week.json",
         "Dining table, sensor.example_power · last 7 days, by day",
-        "logbook · Dining table · last 6 h",
+        "logbook · Dining table · last 6h",
         "lights matching “dining”",
         "light.turn_off · 2 lights: Dining table, light.example_hall",
         "“pool pump unstable consumption”",
