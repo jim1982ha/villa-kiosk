@@ -59,8 +59,8 @@ ck("StateTimeline draws exactly these", /timelineCells\(data, end \?\? timeKey, 
   ck("a day's slice adds up the time of each state", c && c.spent.unavailable === 900_000 && c.spent.off === DAY_MS - 900_000, c && c.spent);
   ck("  ...and how many times each began in it", c && c.entered.unavailable === 2 && c.entered.off === 2, c && c.entered);
   const rows = cellSummary(c.spent, c.entered, (s) => s);
-  ck("its tooltip: one line a state, the longest first, with its count", rows.length === 2 && rows[0].text === "off · 23 h 45 min · 2 times"
-     && rows[1].text === "unavailable · 15 min · 2 times", rows.map((r) => r.text));
+  ck("its tooltip: one line a state, the longest first, with its count", rows.length === 2 && rows[0].text === "off · 23h 45min · 2 times"
+     && rows[1].text === "unavailable · 15min · 2 times", rows.map((r) => r.text));
   ck("a five-minute slice still says its times", fmtCellSpan(t, t + B, B, 1).includes("–"));
   const wk = fmtCellSpan(w0.getTime(), w0.getTime() + 7 * DAY_MS, 7 * DAY_MS, 8760);
   ck("a week's slice says its first and last day, never a clock time", wk.includes(" – ") && !/\d\d:\d\d/.test(wk), wk);

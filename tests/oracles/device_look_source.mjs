@@ -162,10 +162,16 @@ console.log("\n  the callers ask it (pin the caller):");
   ck("a badge only from the object named after the entity: never its poses, never __nobadge",
      from(D) === D && from(`${D}__on`, `${D}__off`) === "" && from(`${D}__nobadge`) === ""
      && from(D, `${D}__nobadge`) === D && from("lock.door", "lock.door__locked", "lock.door__unlocked") === "lock.door");
+  // owner, 2026-10-24: a curtain modelled only as its poses is always on the map — its poses make its badge
+  const C = "cover.bedroom_curtain";
+  ck("a curtain with only its poses has its badge from them, unless one is __nobadge; a lock's poses alone do not",
+     from(`${C}__open`, `${C}__half`, `${C}__closed`) === `${C}__open,${C}__half,${C}__closed`
+     && from(C, `${C}__open`) === C && from(`${C}__open`, `${C}__nobadge`) === ""
+     && from("lock.door__locked", "lock.door__unlocked") === "");
   const ev = readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8");
   ck("  ...the map's badge pipeline asks it, and stands the badge over those objects only",
-     /if \(!badgeMeshes\(meshes\)\.length\) continue;/.test(ev)
-     && /const own = badgeMeshes\(all\);\s*const meshes = own\.length \? own : all;\s*const bounds = this\.mergedWorldBounds\(meshes\);/.test(ev));
+     /if \(!badgeMeshes\(meshes, entityId\)\.length\) \{/.test(ev)
+     && /const own = badgeMeshes\(all, entityId\);\s*const meshes = own\.length \? own : all;\s*const bounds = this\.mergedWorldBounds\(meshes\);/.test(ev));
   ck("  ...and __nobadge is never grouped as a pose (it would be hidden whenever the state asks another word)",
      /if \(suffix && suffix !== NO_BADGE_WORD\) \{/.test(readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8")));
 }

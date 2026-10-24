@@ -18,20 +18,21 @@ export function fmtChartTime(t: number): string {
   return clockTime(t);
 }
 
-/** A duration, as a person says it: "2 s", "3 min", "1 h 20 min", "2 d 3 h" — rounded to the minute from a minute
+/** A duration, as a person says it: "2s", "3min", "1h 20min", "2d 3h" (owner, 2026-10-24: the unit joined to its
+ *  number) — rounded to the minute from a minute
  *  on, whole hours from a day on (never an hour more than it has been).
  *  ⚠️ ONE RULE ON BOTH APPS (architecture review round 2, 2026-10-16): the VESTA Agent's timeutil.lasting writes the
- *  same words — 89 s was "1 min" here and "89 s" in its messages. The agreement's `duration.cases`
+ *  same words — 89s was "1min" here and "89s" in its messages. The agreement's `duration.cases`
  *  (agent-contract.json) are the words, checked on both sides (tests/oracles/duration_words.mjs here). */
 export function fmtDuration(ms: number): string {
   const s = Math.max(0, Math.round(ms / 1000));
-  if (s < 60) return `${Math.max(1, s)} s`;
+  if (s < 60) return `${Math.max(1, s)}s`;
   const m = Math.round(s / 60);
-  if (m < 60) return `${m} min`;
+  if (m < 60) return `${m}min`;
   const h = Math.floor(m / 60), rm = m % 60;
-  if (h < 24) return rm ? `${h} h ${rm} min` : `${h} h`;
+  if (h < 24) return rm ? `${h}h ${rm}min` : `${h}h`;
   const d = Math.floor(h / 24), rh = h % 24;
-  return rh ? `${d} d ${rh} h` : `${d} d`;
+  return rh ? `${d}d ${rh}h` : `${d}d`;
 }
 
 /** What a state band's slice covers, at the band's own step (owner, 2026-10-20: "adjust the tooltip to the time

@@ -37,12 +37,12 @@ export interface UnsentCopy<D, Diff> {
   unsent: Diff;
 }
 
-/** Where a document keeps its unsent work across a reload (the Facility store: fm/fmApi fmUnsentKeeper). `load` returns
- *  null for nothing kept, or a copy it cannot trust (another format, storage disabled); `save(null)` forgets it. Neither
- *  may throw. */
+/** Where a document keeps its unsent work across a reload (the Facility store: fm/fmApi fmUnsentKeeper), one copy per
+ *  author (spec.author). `load` returns null for nothing kept, or a copy it cannot trust (another format, storage
+ *  disabled); `save(author, null)` forgets it. Neither may throw. */
 export interface UnsentKeeper<D, Diff> {
-  load: () => UnsentCopy<D, Diff> | null;
-  save: (copy: UnsentCopy<D, Diff> | null) => void;
+  load: (author: string) => UnsentCopy<D, Diff> | null;
+  save: (author: string, copy: UnsentCopy<D, Diff> | null) => void;
 }
 
 /** The documents a page holds now (SyncedDocument.track): the daily reload asks them (unsentWorkHeld). */
@@ -70,8 +70,17 @@ export interface SyncedDocumentSpec<D, Diff extends KeyedParts, F extends StoreF
   serverEmpty?: (fetched: F) => boolean;
   /** The confirmed baseline to seed with when the store is empty. */
   empty: D;
-  /** Whether this device may write at all (checked when a push RUNS). */
+  /** Whether this device may write at all (checked when a push RUNS). ⚠️ "NOT ALLOWED" IS NOT "KEEP WAITING"
+   *  (architecture review J, 2026-10-23): an owner's setup change that could not be sent, then the tablet handed back
+   *  to the guest, re-pushed at every refresh and was refused before it went: the tablet stopped reading the store
+   *  (other tablets' changes never came) and the 04:00 reload waited for an owner, for weeks. Work this profile may
+   *  not send is PARKED: kept, never sent, not counted as held (unsentWorkHeld), and the refreshes read the store. */
   canWrite?: () => boolean;
+  /** Whose work this is: the profile signed in now. Unsent work is kept per author (spec.keep) and replayed only
+   *  under its author (switchAuthor). ⚠️ ONE COPY PER TABLET (to 2.496.511, architecture review J): a facility
+   *  manager's "Started" held offline was shown to the guest signed in after a reload, sent under the guest's
+   *  sign-in and refused, and the guest's own report, which carried it, was refused too. Default: one author. */
+  author?: () => string;
   /** Called every time the baseline moves — the config store persists it. */
   onBaseline?: (baseline: D) => void;
   /** Where the unsent work is kept across a reload, and read back from when this document starts. ⚠️ THE FACILITY
@@ -96,7 +105,13 @@ export type PullResult<F> =
  *  device's that landed after its push gave up on it read as another device's change. */
 export type PushResult<D, Diff> =
   | (Omit<Extract<PushOutcome<D>, { ok: true }>, "base"> & { synced: D; others: Diff })
-  | Extract<PushOutcome<D>, { ok: false }>
+  | Exclude<Extract<PushOutcome<D>, { ok: false }>, { reason: "refused" }>
+  /** `takeBack`: what puts every item this push SENT back as the store holds it, for the adapter to lay on its local
+   *  document (an edit made since on the same item stays). ⚠️ THE ADAPTER UNDID ITS OWN ACTION (to 2.496.511,
+   *  architecture review J): a refresh's retry of held work is an action that changes nothing, so a refused retry took
+   *  nothing back, the work was kept again, refused again at every refresh, and every later save carried it and was
+   *  refused too. */
+  | (Extract<PushOutcome<D>, { reason: "refused" }> & { takeBack: Diff })
   | { ok: false; reason: "not-allowed" | "not-pulled" };
 
 /** One push's own change, from the moment it is sent until the store is known to hold it. */
@@ -130,21 +145,54 @@ export class SyncedDocument<D, Diff extends KeyedParts, F extends StoreFetch<D> 
   /** The local document the unsent work kept before a reload makes (spec.keep): the adapter starts from it. Null:
    *  nothing was kept. */
   readonly restored: D | null = null;
+  /** Whose unsent work this document holds (spec.author). */
+  private author: string;
+  private readonly initial: D | null;
 
   constructor(spec: SyncedDocumentSpec<D, Diff, F>, initial: D | null) {
     this.spec = spec;
     this.baseline = initial;
-    const kept = spec.keep?.load() ?? null;
-    if (kept && !spec.isEmpty(kept.unsent)) {
-      // As a push that failed: it may have landed before the reload (it is then merged as this device's own write, never
-      // another's), and the first refresh sends it again (pull "repush"), onto the store's fresh copy, item by item.
-      this.baseline = kept.baseline;
-      this.restored = spec.apply(kept.baseline, kept.unsent);
-      this.unconfirmed.add({ sent: kept.unsent, failed: true });
-      this.failedVersion += 1;
-      this.unsaved = true;
-    }
+    this.initial = initial;
+    this.author = spec.author?.() ?? "";
+    this.restored = this.takeKept();
   }
+
+  /** The author's kept work, laid on this document as a push that failed: it may have landed before the reload (it is
+   *  then merged as this device's own write, never another's), and the next refresh sends it again (pull "repush"),
+   *  onto the store's fresh copy, item by item. Returns the local document it makes, or null when nothing is kept. */
+  private takeKept(): D | null {
+    const kept = this.spec.keep?.load(this.author) ?? null;
+    if (!kept || this.spec.isEmpty(kept.unsent)) return null;
+    // The records the work touches, as its author last saw them: all this device knows of the store for them. A copy
+    // read under another profile is not one (a guest reads an empty record): the next push reads the store afresh.
+    this.baseline = kept.baseline;
+    this.read = false;
+    this.unconfirmed.add({ sent: kept.unsent, failed: true });
+    this.failedVersion += 1;
+    this.unsaved = true;
+    return this.spec.apply(this.baseline, kept.unsent);
+  }
+
+  /**
+   * Another profile signed in on this page (spec.author): the unsent work of the one before is kept for them (spec.keep)
+   * and taken off this document, never shown to, nor sent as, the next one; the new author's kept work is laid on it.
+   * Returns the local document the adapter shows now, or null when the author is the same. The adapter then refreshes:
+   * the store as this profile may read it, and its kept work sent.
+   */
+  switchAuthor(local: D): D | null {
+    const author = this.spec.author?.() ?? "";
+    if (author === this.author) return null;
+    if (this.unsaved) this.keepUnsent(local);
+    this.author = author;
+    this.unconfirmed.clear();
+    this.failedVersion += 1;
+    this.unsaved = false;
+    if (!this.read) this.baseline = this.initial;
+    return this.takeKept() ?? this.baseline ?? this.spec.empty;
+  }
+
+  /** This profile may send (spec.canWrite). */
+  private get writable(): boolean { return !this.spec.canWrite || this.spec.canWrite(); }
 
   /** Counted by unsentWorkHeld while the page holds it (its adapter's effect). Returns the untrack. */
   track(): () => void {
@@ -155,8 +203,9 @@ export class SyncedDocument<D, Diff extends KeyedParts, F extends StoreFetch<D> 
   /** A write from this device failed and its work is only here. */
   get hasUnsaved(): boolean { return this.unsaved; }
 
-  /** Work the store has not confirmed: a failed write, or one out. */
-  get holdsUnsentWork(): boolean { return this.unsaved || this.inFlight > 0; }
+  /** Work the store has not confirmed: a failed write, or one out. Work this profile may not send is parked, not held
+   *  (spec.canWrite): kept as it is, a reload loses nothing of it. */
+  get holdsUnsentWork(): boolean { return (this.unsaved && this.writable) || this.inFlight > 0; }
 
   /**
    * Keep `local` against the confirmed baseline as this device's unsent work (spec.keep), or forget it when there is
@@ -168,7 +217,7 @@ export class SyncedDocument<D, Diff extends KeyedParts, F extends StoreFetch<D> 
     const keep = this.spec.keep;
     if (!keep || this.baseline === null) return;
     const unsent = this.spec.diff(this.baseline, local);
-    keep.save(this.spec.isEmpty(unsent) ? null : { baseline: this.baseline, unsent });
+    keep.save(this.author, this.spec.isEmpty(unsent) ? null : { baseline: this.baseline, unsent });
   }
 
   /** The store has been read (or written) at least once: until then the baseline is only the one this document was
@@ -220,7 +269,8 @@ export class SyncedDocument<D, Diff extends KeyedParts, F extends StoreFetch<D> 
    */
   async pull(local: () => D, wouldChange: (fetched: F) => boolean): Promise<PullResult<F>> {
     if (this.inFlight > 0) return { action: "wait" };
-    if (this.unsaved) return { action: "repush" };
+    const writable = this.writable;
+    if (this.unsaved && writable) return { action: "repush" };
     const writesBefore = this.writes;
     const fetched = await this.spec.fetch();
     const action: PullAction = decidePull({
@@ -229,7 +279,9 @@ export class SyncedDocument<D, Diff extends KeyedParts, F extends StoreFetch<D> 
       serverEmpty: fetched !== null && (this.spec.serverEmpty?.(fetched) ?? false),
       // A write STARTED during the fetch makes the fetched copy older than
       // this device — whether or not it has finished by now.
-      localAhead: this.writes !== writesBefore || this.isAhead(local()),
+      // Work this profile may not send is parked (spec.canWrite): the store's copy is read under it, never over it (the
+      // adapter lays another tablet's change only on what this one has not changed itself).
+      localAhead: this.writes !== writesBefore || (writable && this.isAhead(local())),
       wouldChange: fetched !== null && wouldChange(fetched),
     });
     if (action === "wait" || action === "unreachable" || action === "repush") return { action };
@@ -265,7 +317,8 @@ export class SyncedDocument<D, Diff extends KeyedParts, F extends StoreFetch<D> 
     this.keepUnsent(local);
     this.lastPushed = local;
     this.inFlight += 1;
-    const run = this.queue.then(() => this.pushNow(from, local, save));
+    const author = this.author;
+    const run = this.queue.then(() => this.pushNow(from, local, save, author));
     this.queue = run.catch(() => undefined);
     try {
       return await run;
@@ -282,7 +335,7 @@ export class SyncedDocument<D, Diff extends KeyedParts, F extends StoreFetch<D> 
   }
 
   private async pushNow(
-    from: D, local: D, save: SyncedDocumentSpec<D, Diff, F>["save"],
+    from: D, local: D, save: SyncedDocumentSpec<D, Diff, F>["save"], author: string,
   ): Promise<PushResult<D, Diff>> {
     if (this.spec.canWrite && !this.spec.canWrite()) return { ok: false, reason: "not-allowed" };
     const baseline = this.baseline ?? from;
@@ -356,16 +409,20 @@ export class SyncedDocument<D, Diff extends KeyedParts, F extends StoreFetch<D> 
       this.unsaved = false;
       this.commit(outcome.next, outcome.rev);
       // the last push out landed: nothing of this device's is unsent (one still waiting kept its own copy)
-      if (this.inFlight <= 1) this.spec.keep?.save(null);
+      if (this.inFlight <= 1) this.spec.keep?.save(author, null);
       return { ...landed, synced: baseline, others };
     }
     if (outcome.reason === "nothing-to-push" || outcome.reason === "refused") {
       // A refusal is FINAL: re-pushing it on every pull would loop for good
       // and keep this device from ever accepting a newer copy (2.496.184).
-      // The caller undoes its local change.
+      // The caller lays `takeBack` on its local document: what was SENT, taken back.
       this.settle(mine);
       this.unsaved = false;
-      if (this.inFlight <= 1) this.spec.keep?.save(null);
+      if (this.inFlight <= 1) this.spec.keep?.save(author, null);
+      if (outcome.reason === "refused") {
+        const takeBack = this.spec.diff(this.spec.apply(baseline, mine.sent), baseline);
+        return { ...outcome, takeBack };
+      }
     } else {
       mine.failed = true;
       this.failedVersion += 1;

@@ -173,8 +173,13 @@ export function applyFmDiff(target: FmData, diff: FmDataDiff): FmData {
  *  config store's rule too), except a fault: changed on both sides it is merged field by field, as the push merged it
  *  in the store (mergeTicket), and `changedOnBoth` names it when a field both changed kept the other device's value.
  *  FmDataContext mutate says it. */
-export function foldOthers(screen: FmData, pushed: { synced: FmData; others: FmDataDiff }): { doc: FmData; changedOnBoth: string[] } {
+export function foldOthers(screen: FmData, pushed: { synced: FmData; others: FmDataDiff }): {
+  doc: FmData; changedOnBoth: string[];
+  /** Faults this device changed that another device removed meanwhile: they stay removed (keyedSync removedElsewhere). */
+  removedElsewhere: string[];
+} {
   const mine = diffFmData(pushed.synced, screen);
+  const removedElsewhere = pushed.others.tickets.del.filter((id) => !!mine.tickets.was && id in mine.tickets.was);
   const was = keyFm(pushed.synced, "tickets"), now = keyFm(screen, "tickets");
   const merged: Record<string, FmTicket> = {};
   const changedOnBoth: string[] = [];
@@ -185,7 +190,7 @@ export function foldOthers(screen: FmData, pushed: { synced: FmData; others: FmD
     if (r.clashed.length > 0) changedOnBoth.push(id);
   }
   const laid = applyFmDiff(screen, mineWins(pushed.others, mine));
-  return { doc: { ...laid, tickets: laid.tickets.map((t) => merged[t.id] ?? t) }, changedOnBoth };
+  return { doc: { ...laid, tickets: laid.tickets.map((t) => merged[t.id] ?? t) }, changedOnBoth, removedElsewhere };
 }
 
 // ── This device's unsent Facility work, kept across a reload ────────────
@@ -204,8 +209,13 @@ export function foldOthers(screen: FmData, pushed: { synced: FmData; others: FmD
 // ⚠️ FM_UNSENT_FORMAT goes up whenever the record's shape or the change's shape (FmDataDiff) changes: a copy written in
 // another format is dropped, never replayed blindly. Storage refused (private mode, full): nothing is kept, as before.
 
+// ⚠️ ONE COPY PER PROFILE (architecture review J, 2026-10-23): one per tablet was shown to, and sent as, whoever signed
+// in next (utils/syncedDocument spec.author). The single copy written before (FM_UNSENT_KEY itself) cannot tell whose
+// it was: it is dropped, once, never replayed.
 export const FM_UNSENT_KEY = "villa-kiosk:fm-unsent";
 export const FM_UNSENT_FORMAT = 1;
+/** Where one profile's unsent Facility work is kept. */
+export const fmUnsentKey = (author: string) => `${FM_UNSENT_KEY}:${author}`;
 
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
 const isRecordMap = (v: unknown) => isObj(v) && Object.entries(v).every(([id, r]) => isObj(r) && r.id === id);
@@ -237,21 +247,23 @@ function touchedBy(baseline: FmData, unsent: FmDataDiff): FmData {
 
 /** The Facility store's keeper (FmDataContext). */
 export const fmUnsentKeeper: UnsentKeeper<FmData, FmDataDiff> = {
-  load: (): UnsentCopy<FmData, FmDataDiff> | null => {
-    const text = readString(FM_UNSENT_KEY);
+  load: (author): UnsentCopy<FmData, FmDataDiff> | null => {
+    removeStored(FM_UNSENT_KEY);   // the single copy of before: whose, unknown
+    const key = fmUnsentKey(author);
+    const text = readString(key);
     if (text === null) return null;
     let raw: unknown = null;
     try { raw = JSON.parse(text); } catch { /* not JSON: dropped below */ }
     const unsent = isObj(raw) && raw.v === FM_UNSENT_FORMAT ? parseFmDiff(raw.unsent) : null;
     if (!isObj(raw) || unsent === null || !isObj(raw.baseline)) {
-      removeStored(FM_UNSENT_KEY);   // another format, or not one at all: dropped, never replayed
+      removeStored(key);   // another format, or not one at all: dropped, never replayed
       return null;
     }
     return { baseline: parseFmData(raw.baseline), unsent };
   },
-  save: (copy) => {
-    if (copy === null) removeStored(FM_UNSENT_KEY);
-    else writeJson(FM_UNSENT_KEY, { v: FM_UNSENT_FORMAT, baseline: touchedBy(copy.baseline, copy.unsent), unsent: copy.unsent });
+  save: (author, copy) => {
+    if (copy === null) removeStored(fmUnsentKey(author));
+    else writeJson(fmUnsentKey(author), { v: FM_UNSENT_FORMAT, baseline: touchedBy(copy.baseline, copy.unsent), unsent: copy.unsent });
   },
 };
 

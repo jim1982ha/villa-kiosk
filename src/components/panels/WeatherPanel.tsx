@@ -131,7 +131,7 @@ function NowView({ station, r }: { station: WeatherStation; r: Readings }) {
         {r.pressure !== undefined && (
           <Tile title="Barometer" k="baro" center>
             <Barometer hpa={r.pressure} />
-            <div className="weather-tile-foot">{tendency ? `${tendency} over the last 3 h` : "…"}</div>
+            <div className="weather-tile-foot">{tendency ? `${tendency} over the last 3h` : "…"}</div>
           </Tile>
         )}
         {r.t !== undefined && (
@@ -453,7 +453,7 @@ function RainTile({ s, win, status, stepMs, unit }: {
     ? seriesBuckets({ points: s.points, window: win }, slot, { key: "rain", label: "Rain", cls: "water" })
     : [];
   const spanH = (win.to - win.from) / HOUR_MS;
-  const span = spanH > 48 ? `${Math.round(spanH / 24)} days` : `${Math.round(spanH)} h`;
+  const span = spanH > 48 ? `${Math.round(spanH / 24)} days` : `${Math.round(spanH)}h`;
   // "No rain" only when the gauge REPORTED zero; an empty record is not a dry
   // day — it is no record (the bands say so).
   const note = barNote(buckets, `No rain readings in the last ${span}`, `No rain in the last ${span}`);

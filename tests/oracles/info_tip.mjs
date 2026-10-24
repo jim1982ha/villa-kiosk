@@ -67,7 +67,7 @@ ck("  ...the Kiosk's sources first, then the Agent's, each group under its headi
   const src = readFileSync(new URL("../../src/components/fm/FaultTiming.tsx", import.meta.url), "utf8");
   ck("  ...the Agent's group ends with \"Being confirmed\", its check icon explained; none without an Agent",
      withAgent.confirming?.words === "Being confirmed" && withAgent.confirming.what && withAgent.confirming.opens
-     && /then at its next look/.test(withAgent.confirming.goes) && /then within 15 min/.test(told15.goes)
+     && /then at its next look/.test(withAgent.confirming.goes) && /then within 15min/.test(told15.goes)
      && alone.confirming === null
      && /confirming && g === groups\[groups\.length - 1\]/.test(src) && /<CheckCircle2 size=\{15\} className="fault-watched-icon"/.test(src),
      withAgent.confirming);
@@ -89,7 +89,7 @@ const { parseAgentStatus } = await import("@/agent/agentApi");
   const goes = (c) => faultTiming(true, c).rows.find((r) => r.source === "night")?.goes ?? "";
   const told = goes({ checkMinutes: 5, nightlyAt: "02:00" });
   ck("  ...a maintenance-check problem goes when the Agent no longer finds it, at its next look or its nightly check",
-     told === "When the VESTA Agent no longer finds it. Each card's Next check says when it looks again: within 5 min, or at the nightly check (02:00)", told);
+     told === "When the VESTA Agent no longer finds it. Each card's Next check says when it looks again: within 5min, or at the nightly check (02:00)", told);
   ck("  ...an older Agent still sending day times: the same words, no time of day",
      goes({ checkMinutes: 5, nightlyAt: "02:00", dayChecksAt: ["08:00", "16:00"] }) === told);
   const none = goes(null);

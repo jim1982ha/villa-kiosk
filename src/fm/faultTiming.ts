@@ -79,7 +79,7 @@ function nightOpens(c: AgentCadence | null): string {
  *  drift). */
 function nightGoes(c: AgentCadence | null): string {
   if (!c) return `${ROWS.night.goes}: every few minutes, or at its nightly check`;
-  const every = c.checkMinutes === 1 ? "within 1 min" : `within ${c.checkMinutes} min`;
+  const every = c.checkMinutes === 1 ? "within 1min" : `within ${c.checkMinutes}min`;
   return `${ROWS.night.goes}: ${every}, or at the nightly check (${c.nightlyAt})`;
 }
 
@@ -91,7 +91,7 @@ export interface SourceGroup { title: string; rows: readonly SourceRow[] }
  *  own; its pill's words in the Agent's own numbers when its heartbeat said them. */
 export interface ConfirmingRow { words: string; what: string; opens: string; goes: string }
 export function confirmingRow(c: AgentCadence | null): ConfirmingRow {
-  const look = c ? (c.checkMinutes === 1 ? "within 1 min" : `within ${c.checkMinutes} min`) : "at its next look";
+  const look = c ? (c.checkMinutes === 1 ? "within 1min" : `within ${c.checkMinutes}min`) : "at its next look";
   return {
     words: "Being confirmed",
     what: "A fault someone marked Done on Telegram or closed here, that the VESTA Agent checks again. Last in the list, not counted",
@@ -165,7 +165,7 @@ function nextLook(c: AgentCadence, now: Date): Date {
 /** When the VESTA Agent next reads a fault of `clock`, and the card's words for it: its next look ("within 5 min"),
  *  its nightly check ("02:00"). */
 function nextOf(clock: FmTicketCheck, c: AgentCadence, now: Date): { at: Date; words: string } | null {
-  if (clock === "minutes") return { at: nextLook(c, now), words: `within ${c.checkMinutes} min` };
+  if (clock === "minutes") return { at: nextLook(c, now), words: `within ${c.checkMinutes}min` };
   const at = nextAt(c.nightlyAt, now);
   return at && { at, words: c.nightlyAt };
 }

@@ -16,7 +16,9 @@ register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 import { mountRoot } from "../consistency/fakedom.mjs";
 const { EMPTY_FM_DATA, FM_COLLECTIONS } = await import("@/fm/fmTypes");
-const { FM_UNSENT_KEY, FM_UNSENT_FORMAT } = await import("@/fm/fmApi");
+const { fmUnsentKey, FM_UNSENT_FORMAT } = await import("@/fm/fmApi");
+/** The facility manager is signed in on every page here; the work is kept under that profile. */
+const FM_UNSENT_KEY = fmUnsentKey("ops");
 const { SyncedDocument, unsentWorkHeld } = await import("@/utils/syncedDocument");
 const { installDailyAutoReload } = await import("@/utils/autoReload");
 
@@ -25,7 +27,7 @@ const OFFLINE_NOTE = "Saved on this device, it will be sent automatically when t
 
 /** The browser's storage: it outlives the page. `broken`: every access throws (private mode, a full quota). */
 function browserStorage() {
-  const map = new Map();
+  const map = new Map([["villa-kiosk:profile:v1", JSON.stringify({ role: "ops", at: Date.now() })]]);
   const s = { broken: false, map };
   const guard = (fn) => (...a) => { if (s.broken) throw new DOMException("The quota has been exceeded.", "QuotaExceededError"); return fn(...a); };
   s.api = {
@@ -230,7 +232,7 @@ console.log("\n  the sync machine keeps a write from the moment it is sent:");
     fetch: async () => ({ doc: { a: 1 }, rev: "1", raw: {} }),
     save: () => new Promise((r) => { release = r; }),
     diff, isEmpty: (d) => Object.keys(d.doc.set).length === 0, apply: (t, d) => ({ ...t, ...d.doc.set }), rebase: (_b, f) => f,
-    empty: {}, keep: { load: () => null, save: (c) => saved.push(c) },
+    empty: {}, keep: { load: () => null, save: (_author, c) => saved.push(c) },
   };
   const doc = new SyncedDocument(spec, { a: 1 });
   const untrack = doc.track();

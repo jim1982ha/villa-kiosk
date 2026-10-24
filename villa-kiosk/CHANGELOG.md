@@ -1,3 +1,32 @@
+## 2.496.514
+
+What you will see:
+- Curtains have their icon on the map again. A curtain modelled only as its positions (open, half, closed) lost its
+  icon on 21/10, when an object with an ending stopped giving its device an icon; a curtain now takes its icon from
+  its positions. An object ending "__nobadge" still removes a device's icon, a curtain's too.
+
+## 2.496.513
+
+- Every duration now has its unit joined to the number: "1h 30min", "10min", "30s", "2d 3h". This covers the chart
+  tooltips ("Unavailable · 09:00–09:03 (3min)"), a fault's "offline for 6d 2h", the "within 5min" of Next check and
+  of a fault being confirmed, the (i) legend, the Weather "ago" and "over the last 3h". The VESTA Agent writes its
+  durations the same way.
+
+## 2.496.512
+
+What you will see:
+- A change the add-on refuses after it was held offline is now taken back once and said once ("The add-on refused this
+  change: …"). Before, it was sent again at every refresh, and every later save on that tablet, even a new fault, was
+  refused with it.
+- On a shared tablet, work held offline belongs to whoever did it. The guest signed in next no longer sees the facility
+  manager's "in progress" fault, and the guest's own "Report a problem" goes through. The manager's work is kept for
+  them and sent as soon as they sign in again on that tablet. Work held by an older version (whose, unknown) is dropped
+  once.
+- An owner's setup change that could not be sent, then the tablet handed to the guest: the tablet keeps showing what
+  other tablets add or rename, the owner's change waits on it until an owner signs in, and the 04:00 refresh runs again.
+- A fault erased on the phone stays erased when a tablet that had marked it Started offline catches up. That tablet
+  says "This fault was removed on another device, so this step was not saved."
+
 ## 2.496.511
 
 What you will see:

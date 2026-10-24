@@ -76,7 +76,7 @@ export function confirmParts(c: ConfirmingFault): { did: string; when: string; t
   const by = clockTime(c.at);
   return {
     did: c.who ? `${c.word} (${c.who})` : c.word,
-    when: c.due ? (c.lookMinutes ? `within ${c.lookMinutes} min` : by) : by,
+    when: c.due ? (c.lookMinutes ? `within ${c.lookMinutes}min` : by) : by,
     tip: c.due ? "VESTA confirms it at its next look" : `VESTA confirms by ${by}`,
   };
 }

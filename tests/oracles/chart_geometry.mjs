@@ -153,9 +153,9 @@ console.log("\n  an outage you can SEE and POINT AT (2.496.149 — a pump's 3-mi
      !!h1 && h1.outages[0] === drop && h1.readings[0] === null, h1 && { out: h1.outages[0], r: h1.readings[0] });
   ck("  ...even where no line has a reading at all (it returned no tooltip)", !!g.hover(drop.from + 60_000));
   ck("  ...and just clear of it, the reading again", g.hover(g.tAt(b[1].x + b[1].w + 2))?.outages[0] === null);
-  ck("the tooltip says what and how long: 'Unavailable · from–to (3 min)', a 2-s blip in seconds, a running one 'since'",
-     /^Unavailable · .+–.+ \(3 min\)$/.test(fmtOutage(drop, win.to)) && fmtDuration(2_000) === "2 s" && fmtDuration(80 * 60_000) === "1 h 20 min"
-     && /^Unavailable since .+ \(2 h\)$/.test(fmtOutage({ from: win.to - 2 * H, to: Infinity }, win.to)), fmtOutage(drop, win.to));
+  ck("the tooltip says what and how long: 'Unavailable · from–to (3min)', a 2-s blip in seconds, a running one 'since'",
+     /^Unavailable · .+–.+ \(3min\)$/.test(fmtOutage(drop, win.to)) && fmtDuration(2_000) === "2s" && fmtDuration(80 * 60_000) === "1h 20min"
+     && /^Unavailable since .+ \(2h\)$/.test(fmtOutage({ from: win.to - 2 * H, to: Infinity }, win.to)), fmtOutage(drop, win.to));
   // 2.496.150: the line is cut at the DRAWN band, not only at the outage's
   // own seconds — 2.496.149 drew the widened bands with the line straight
   // across them (owner: "this is not what we see in the picture").

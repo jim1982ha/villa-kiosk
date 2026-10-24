@@ -35,7 +35,7 @@ import {
 // The write's result and what a screen does with it live in fm/fmSave.ts (pure,
 // so an oracle can drive them); re-exported here for the screens.
 import type { FmRetention } from "./fmEngine";
-import { CHANGED_ON_ANOTHER_DEVICE, fmSaveOutcome, type FmSaveOutcome, type FmWriteResult } from "./fmSave";
+import { CHANGED_ON_ANOTHER_DEVICE, REMOVED_ON_ANOTHER_DEVICE, fmSaveOutcome, type FmSaveOutcome, type FmWriteResult } from "./fmSave";
 import { saveProblemLine } from "@/utils/storeSave";
 
 interface FmDataContextValue {
@@ -116,6 +116,10 @@ const FmDataContext = createContext<FmDataContextValue | null>(null);
 
 export function FmDataProvider({ children }: { children: ReactNode }) {
   const [retention, setRetention] = useState<FmRetention | null>(null);
+  // Who works now: stamped on every step (run), and the author of this page's unsent work (spec.author).
+  const { role } = useProfile();
+  const roleRef = useRef(role);
+  roleRef.current = role;
 
   /** The sync state machine — utils/syncedDocument, the SAME one the device-
    *  config store runs (round 10, 2.496.154): the baseline the server is known
@@ -136,6 +140,8 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
     rebase: (_base: FmData, fresh: FmData) => fresh,
     empty: EMPTY_FM_DATA,
     keep: fmUnsentKeeper,
+    // held work belongs to the profile that did it: kept for them, never shown to or sent as the next one
+    author: () => roleRef.current ?? "none",
   }, EMPTY_FM_DATA));
   // the daily reload waits while this store holds work the add-on has not got (utils/autoReload)
   useEffect(() => doc.track(), [doc]);
@@ -157,7 +163,7 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
   // maintenance store was invisible in a dump.
   const reportSync = useSyncReporter("fm");
 
-  const reload = useCallback(async () => {
+  const reload = useCallback(async (): Promise<void> => {
     // NEVER clobber a change this device hasn't got onto the server — a write
     // in flight, one that failed, or one started while this read was out (a
     // completion somebody just walked across the villa to log). The document
@@ -178,6 +184,8 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
         // and returns the merged document.
         reportSync({ op: "pull", deferred: "retrying-unsaved-write" });
         await retryRef.current?.();
+        // the add-on refused the work kept from before a reload (taken back): the record is read now, not called unreachable
+        if (!doc.hasRead && !doc.hasUnsaved) return reload();
         // work kept from before a reload, the add-on still out of reach: the record was never read, and the screens say so
         if (!doc.hasRead) setUnreachable(true);
         return;
@@ -256,12 +264,13 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
       // in the store (fmApi mergeTicket): a "Started" tapped on a tablet whose copy predated a close on the phone
       // reopened the fault, and "Closed without action" vanished from its history. A field both changed keeps the
       // other device's value, and this device says so.
-      const { doc: merged, changedOnBoth } = foldOthers(ref.current, outcome);
+      const { doc: merged, changedOnBoth, removedElsewhere } = foldOthers(ref.current, outcome);
       ref.current = merged;
       setData(merged);
       setReady(true);
       setUnreachable(false);
       if (changedOnBoth.length > 0) setSaveError(CHANGED_ON_ANOTHER_DEVICE);
+      if (removedElsewhere.length > 0) setSaveError(REMOVED_ON_ANOTHER_DEVICE);
       reportSync({
         op: "push", ok: true, elevated: Boolean(elevation),
         tickets: outcome.next.tickets.length,
@@ -280,7 +289,12 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
     // accepted, and keeping it would leave this screen disagreeing with the
     // store (and, before 2.496.184, re-pushed on every refresh for good).
     if (outcome.reason === "refused") {
-      undo();
+      // what the push SENT, taken back (utils/syncedDocument `takeBack`): a refresh's retry of held work is this same
+      // call with an action that changes nothing, so undoing the ACTION took nothing back (architecture review J)
+      const undone = applyFmDiff(ref.current, outcome.takeBack);
+      ref.current = undone;
+      setData(undone);
+      doc.keepUnsent(undone);
       setSaveError(saveProblemLine(outcome));
       return "refused";
     }
@@ -300,12 +314,23 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
   // failed — no separate retry path to keep in step with the real one.
   retryRef.current = useCallback(() => mutate((d) => d), [mutate]);
 
+  // Another profile signed in on this page: the work held for the one before is kept for them and leaves the screen;
+  // the new one's kept work comes on it and is sent now, and the record is read as this profile may read it
+  // (utils/syncedDocument switchAuthor).
+  useEffect(() => {
+    const next = doc.switchAuthor(ref.current);
+    if (next === null) return;
+    ref.current = next;
+    setData(next);
+    setSaveError(null);
+    void reload();
+  }, [doc, role, reload]);
+
   // ONE way in for every change (fmCommands.applyFmCommand): this says WHICH command; who did it — the signed-in
   // profile, on every step of a fault, for the card's "by …" and the VESTA Agent's notes — when, and the new ids are
   // stamped there, the same for every write. And ONE answer to "did it save?" (fmSave.fmSaveOutcome): every mutator
   // returns done / note / queued, so no screen decides it for itself — the 2.496.252 defect was a form that skipped
   // that line (architecture review, 2026-10-19).
-  const { role } = useProfile();
   const run = useCallback(async (cmd: FmCommand, elevation?: string): Promise<FmSaveOutcome> =>
     fmSaveOutcome(await mutate((d) => applyFmCommand(d, cmd, { ...stamp(), by: role ? ROLE_LABELS[role] : undefined }), elevation)),
   [mutate, role]);

@@ -53,7 +53,7 @@ ck("  ...it opens the device when tapped (a button), and its buttons stop their 
    /role="button"/.test(issue) && /class="fm-record-actions"/.test(issue));
 // owner, 2026-10-22: "instead of `Next check:` show a refresh icon, as a pill, on this same first line, on the right"
 ck("  ...its next check a pill at the right of that line: a refresh icon, then when",
-   /<\/div><span class="fm-entity-chip fm-chip-static fm-record-check" aria-label="Next check: within 5 min \([^"]+\)"><svg[^>]*lucide-refresh-cw[\s\S]*?<\/svg>within 5 min<\/span><\/div>$/.test(inside(issue, "fm-record-head")),
+   /<\/div><span class="fm-entity-chip fm-chip-static fm-record-check" aria-label="Next check: within 5min \([^"]+\)"><svg[^>]*lucide-refresh-cw[\s\S]*?<\/svg>within 5min<\/span><\/div>$/.test(inside(issue, "fm-record-head")),
    inside(issue, "fm-record-head"));
 const { nextCheck } = await import("@/fm/faultTiming");
 // at a fixed noon: the soonest of the 02:00 night and the 5-minute look is the night's from 01:55 to 02:00, and this
@@ -64,9 +64,9 @@ ck("  ...each card says when its problems are read again, the Agent's numbers it
    said([{ source: "live" }]) === "Next check: live"
    && said([{ source: "night", check: "nightly" }]) === "Next check: 02:00"
    && said([{ source: "night", check: "nightly" }], { checkMinutes: 15, nightlyAt: "04:30" }) === "Next check: 04:30"
-   && said([{ source: "live", fault: { source: "night", check: "minutes" } }]) === "Next check: within 5 min"   // offline: rechecked
-   && said([{ source: "night", check: "nightly" }, { source: "alert", check: "minutes" }]) === "Next check: within 5 min"
-   && said([{ source: "alert" }]) === "Next check: within 5 min" && said([{ source: "night" }]) === "Next check: within 5 min" // older: read at every look now
+   && said([{ source: "live", fault: { source: "night", check: "minutes" } }]) === "Next check: within 5min"   // offline: rechecked
+   && said([{ source: "night", check: "nightly" }, { source: "alert", check: "minutes" }]) === "Next check: within 5min"
+   && said([{ source: "alert" }]) === "Next check: within 5min" && said([{ source: "night" }]) === "Next check: within 5min" // older: read at every look now
    && said([{ source: "owner" }]) === "Next check: by hand" && said([{ source: "chat" }]) === "Next check: by hand"
    && said([{ source: "live" }, { source: "guest" }]) === "Next check: by hand"
    && said([{ source: "schedule" }]) === "Next check: by hand"
@@ -91,13 +91,13 @@ ck("  ...and hovering it says when: the nightly check's next run, the Agent's ne
   const when = (problems, cadence, now) => { const d = nextCheckAt(problems, cadence, now); return d ? momentText(d) : null; };
   ck("  ...every night fault: within the Agent's look — what it writes now, an older Agent's \"day\", or none",
      [{ source: "night", check: "minutes" }, { source: "night", check: "day" }, { source: "night" }]
-       .every((p) => nextCheck([p], CADENCE, t1310) === "Next check: within 5 min" && when([p], CADENCE, t1310) === "19/10/2026 13:15"));
+       .every((p) => nextCheck([p], CADENCE, t1310) === "Next check: within 5min" && when([p], CADENCE, t1310) === "19/10/2026 13:15"));
   ck("  ...a fault written \"nightly\" keeps its nightly time; beside an every-look fault, the sooner wins",
      nextCheck([{ source: "night", check: "nightly" }], CADENCE, t1310) === "Next check: 02:00"
-     && nextCheck([{ source: "night", check: "nightly" }, { source: "alert", check: "minutes" }], CADENCE, t1310) === "Next check: within 5 min"
-     && nextCheck([{ source: "live", fault: { source: "night", check: "day" } }], CADENCE, new Date(2026, 9, 19, 1, 58)) === "Next check: within 5 min");
+     && nextCheck([{ source: "night", check: "nightly" }, { source: "alert", check: "minutes" }], CADENCE, t1310) === "Next check: within 5min"
+     && nextCheck([{ source: "live", fault: { source: "night", check: "day" } }], CADENCE, new Date(2026, 9, 19, 1, 58)) === "Next check: within 5min");
   ck("  ...a live item beside them keeps its rule: the faults decide; live alone stays live; a person's alone: by hand",
-     nextCheck([{ source: "live" }, { source: "night", check: "minutes" }], CADENCE, t1310) === "Next check: within 5 min"
+     nextCheck([{ source: "live" }, { source: "night", check: "minutes" }], CADENCE, t1310) === "Next check: within 5min"
      && nextCheck([{ source: "live" }], CADENCE, t1310) === "Next check: live"
      && nextCheck([{ source: "night", check: "day" }], null, t1310) === "Next check: by the VESTA Agent");
 }
@@ -110,7 +110,7 @@ ck("  ...and hovering it says when: the nightly check's next run, the Agent's ne
   ck("  ...the Agent's next look is its last look + 5 min, the same moment a minute later; a missed look rolls on",
      when(NOW) === fixed && when(new Date(2026, 9, 19, 2, 11)) === fixed && when(new Date(2026, 9, 19, 2, 13)) === fixed
      && when(new Date(2026, 9, 19, 2, 14)) === new Date(2026, 9, 19, 2, 18, 30).getTime()
-     && nextCheck([{ source: "alert", check: "minutes" }], LOOKED, NOW) === "Next check: within 5 min",
+     && nextCheck([{ source: "alert", check: "minutes" }], LOOKED, NOW) === "Next check: within 5min",
      [when(NOW), fixed]);
 }
 // owner, 2026-10-21: a door locked at 14:38:50 still a fault at 14:45 — the Agent closes it once it has stayed right for
@@ -143,7 +143,7 @@ ck("  ...and hovering it says when: the nightly check's next run, the Agent's ne
      c?.at === closes.toISOString() && c?.word === "Locked" && c?.since === locked.toISOString(), c);
 }
 ck("  ...said whole, with its moment, by the pill's tooltip (the Kiosk's own: common/Tip)",
-   /aria-label="Next check: within 5 min \(\d\d\/\d\d\/\d{4} \d\d:\d\d\)"/.test(issue)
+   /aria-label="Next check: within 5min \(\d\d\/\d\d\/\d{4} \d\d:\d\d\)"/.test(issue)
    && /<Tip text=\{tip\}>/.test(readFileSync(new URL("../../src/components/fm/RecordCard.tsx", import.meta.url), "utf8"))
    && /<CheckPill when=\{check\.when\} tip=\{check\.tip\} \/>/.test(readFileSync(new URL("../../src/components/fm/RecordCard.tsx", import.meta.url), "utf8")));
 // owner, 2026-10-15: "there should always be the room line, to respect a consistent layout"
@@ -193,9 +193,9 @@ ck("  ...a problem with no device: no chevron, nothing to tap, no buttons", !/ch
   const since = "2026-10-09T09:00:00Z", at = (iso) => Date.parse(iso);
   const t = { title: "Sensor offline for 129 h.", titlePattern: "Sensor offline for {since}.", since };
   ck("  ...a duration in its title is today's: worded from its since each time it is shown",
-     faultTitle(t, at("2026-10-15T11:00:00Z")) === "Sensor offline for 6 d 2 h."
-     && faultTitle(t, at("2026-10-09T10:15:00Z")) === "Sensor offline for 1 h 15 min."
-     && faultTitle({ ...t, alertNumber: 5 }, at("2026-10-15T11:00:00Z")) === "#5 · Sensor offline for 6 d 2 h."
+     faultTitle(t, at("2026-10-15T11:00:00Z")) === "Sensor offline for 6d 2h."
+     && faultTitle(t, at("2026-10-09T10:15:00Z")) === "Sensor offline for 1h 15min."
+     && faultTitle({ ...t, alertNumber: 5 }, at("2026-10-15T11:00:00Z")) === "#5 · Sensor offline for 6d 2h."
      && faultTitle({ title: "Sensor offline for 129 h." }) === "Sensor offline for 129 h."               // an older fault
      && faultTitle({ ...t, since: undefined }) === "Sensor offline for 129 h.");                          // nothing to count from
 }
