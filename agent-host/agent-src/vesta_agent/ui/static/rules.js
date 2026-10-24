@@ -314,7 +314,8 @@ export function toolsCard(f, t, reload) {
   // core.toggleCard, the one card for a switch: saved with the form, then the tab drawn again
   const toolCard = (on, set, title, parts, disabled = false) =>
     toggleCard(on, (v) => { set(v); markDirty(); draw(); }, title, parts, disabled);
-  const used = (n) => (n ? h("span", { class: "badge" }, `used ${n}× this week`) : null);
+  // counted over a setting's days (page.tool_usage_days), said as they are now
+  const used = (n) => (n ? h("span", { class: "badge" }, `used ${n}× in ${t.usage_days || 7} days`) : null);
   // the Home Assistant tools tab's (i), worked out when it opens: the count follows the switches
   const haInfo = () => {
     const on = new Set(f.ha_read_tools);

@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.6.334 (24 October 2026)
+
+- Every number a person or the AI reads is a setting, named, never written (owner, 2026-10-24):
+  - new limits: `jobs.every_minutes` (scheduler.every; the Kiosk's cadence checkMinutes follows), `pack.rebuild_at`
+    (scheduler.pack_at), `villa.beat_seconds` (ha_events.beat_seconds), `chat.reset_at` / `chat.silence_reset_hours`
+    (policy.reset_words fills "Delete conversation context at"; intake reads them), `ai.status_default_hours`,
+    `page.last_day_hours` (Overview's title and lead), `page.tool_usage_days` (Rules › AI tools "used N× in D days");
+    skill settings `guide:` investigate `lookback_days`, `lead_hours`, `web_searches_max`; roi-energy `min_period_days`.
+  - a limit can be a time of day (`limits.is_time`: "HH:MM", a "time" row on the Limits tab).
+  - a guide names a setting by its name, a job's time by the job's name (`limits_tab.names`: schedule rows' `alias`);
+    the AI's read_skill gives each named setting its value now (`limits_tab.fill_named`), the page's chips the same.
+  - guides: "(its setting)" removed; "every 5 minutes", "01:30", "a beat every minute", "6 hours", "24 h", "whole-hour",
+    "Monday" / "1st", "last 7 days", "2 hours", "5 searches", "5 days", "640 characters" (drifted: 646) replaced by
+    their settings; the Limits texts that quoted their own default no longer do; the fatigue count's unit follows
+    `alerts.fatigue_window_days`.
+- The Limits tab opened from a value has Back on its title's line (core.goBack: the tab, the skill and file
+  (`page.here`), the scroll, as they were).
+
 ## 0.6.333 (24 October 2026)
 
 - The villa's own messages in each chat's language (owner, 2026-10-24): a villa automation fires `vesta_message`

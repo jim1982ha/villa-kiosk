@@ -125,3 +125,27 @@ def test_a_message_an_incident_takes_over_while_its_translation_runs_is_left_to_
         await settle(v)
     run(go())
     assert v.tg.edits == []
+
+
+def test_a_villa_message_already_translated_once_asks_the_ai_nothing_again(tmp_path, monkeypatch):
+    # owner, 2026-10-24: "using the AI only the first time, when it is not already in the agent's cache": the second
+    # ring, its gate opened at another time, is drawn from the kept translations, with no AI run
+    v = villa(tmp_path)
+    ai = FakeAI(translator).install(monkeypatch)
+    opened_later = OPENED.replace("09:03:27", "17:42:05")
+
+    async def go():
+        await ring(v)
+        await v.on_ha_event("vesta_message", {"message": OPENED, "messages": [{"chat_id": FM_FR, "message_id": 700}],
+                                              CONTEXT_KEY: "RING-1b"})
+        await settle(v)
+        first = len(ai.runs)
+        await ring(v, mid=701, ctx="RING-2")
+        await v.on_ha_event("vesta_message", {"message": opened_later,
+                                              "messages": [{"chat_id": FM_FR, "message_id": 701}], CONTEXT_KEY: "RING-2b"})
+        await settle(v)
+        return first
+    first = run(go())
+    assert first >= 1 and len(ai.runs) == first, ai.runs
+    last = [t for c, m, t in v.tg.edits if (c, m) == (FM_FR, 701)][-1]
+    assert "(fr) ✅ Opened at 17:42:05 at the gate" in last

@@ -24,7 +24,7 @@ what happened, and why".
 
 1. **Pin down the question.** Which device, room or event, and which day and hours: turn "yesterday", "on the 9th",
    "last night" into villa dates using the date and time at the top of the message. With no time given, start from the
-   last 7 days and find the moment in step 3. Ask one question, and stop, only when you cannot tell which device or
+   last `lookback_days` days and find the moment in step 3. Ask one question, and stop, only when you cannot tell which device or
    which day at all.
 
 2. **Find the devices and their neighbours.**
@@ -38,11 +38,11 @@ what happened, and why".
 
 3. **Read what they did against their own normal.**
    `run_skill_script investigate investigate.py timeline --entities <ids, comma-separated> --start <…> --end <…>`
-   - Read from at least 2 hours before the first sign of trouble to after things were normal again (or now). When the
+   - Read from at least `lead_hours` hours before the first sign of trouble to after things were normal again (or now). When the
      moment is unknown, read the whole day or days first, then narrow on what stands out. A device that has not
      answered for days: its timeline over those days shows when it stopped (an "offline" period from its first
      moment), with no logbook needed.
-   - About 5 ids per `--entities`, repeated for more; only ids that find returned. A date alone is the whole day:
+   - As many ids per `--entities` as fit in `skills.text_arg_chars` characters, repeated for more; only ids that find returned. A date alone is the whole day:
      `--start 2026-10-09 --end 2026-10-09` reads the 9th from 00:00 to midnight.
    - Lines flagged "⟵" are unusual against the device's own normal (the days before): a run far longer than any before,
      a level well above or below normal, exactly 0 where it normally reads a little (its supply was off), no answer,
@@ -72,15 +72,15 @@ what happened, and why".
      damage, or did the damage keep it running (water escaping keeps a pump running; an open window keeps cooling on)?
 
 6. **Fill the gaps, then search the web.** Use the raw tools only where needed: ha_get_history for an entity the script
-   did not read, ha_get_logs (logbook) for the hours around a moment that matters (the whole villa's logbook is read 6
-   hours at a time at most; `around` reads a whole period), ha_get_state for how things are now.
+   did not read, ha_get_logs (logbook) for the hours around a moment that matters (the whole villa's logbook is read
+   `logbook.villa_window_hours` at a time at most; `around` reads a whole period), ha_get_state for how things are now.
 
    **Search the web (web_search), always**, once the timeline and `around` are read, as a source of leads:
    - Search for the pattern in general words (the kind of device and what it did, e.g. "a pump that runs without
      stopping, then its circuit's protection trips"): its known causes and what usually goes with it; the make and
      model's known failures (ha_get_device) or its manual; what an error code means; an outside event at that time (a
      storm, a grid outage) when several devices stopped together.
-   - At most 5 searches. The words of a search are the pattern, the kind of device and its make and model, and for
+   - At most `web_searches_max` searches. The words of a search are the pattern, the kind of device and its make and model, and for
      weather or a grid outage at most the town. The villa, its address, its people and its devices' names stay out.
    - Each lead is a question for the records: say what they show for or against it. Times and numbers always come
      from the villa's records.
@@ -108,7 +108,7 @@ with the facts; if one seems misleading, say why in "cannot_tell".
 8. **Save the account** with save_file as `investigation.json`, in plain sentences (no Markdown):
 
        {"title": "one short line (the page cuts a longer one at the limit investigate.title_chars)",
-        "summary": "3 to 5 sentences, at most 640 characters: the most likely cause and what points to it, and what to check on site first",
+        "summary": "3 to 5 sentences, short enough for the chat message (page.py refuses a longer one and says its limit): the most likely cause and what points to it, and what to check on site first",
         "timeline": [{"time": "07:30", "text": "what a person saw or did", "unusual": true}],
         "causes": [{"cause": "…", "evidence": "what in the records points to it", "confirm": "how to confirm on site"}],
         "cannot_tell": ["what no sensor saw, a gap in the records, what only a person on site can check"],

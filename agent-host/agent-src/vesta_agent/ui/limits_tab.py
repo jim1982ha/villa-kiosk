@@ -24,7 +24,7 @@ from vesta_shared import limits
 from vesta_shared.daily import VILLA_WIDE
 
 from ..places import where
-from ..policy import DEFAULT_BEHAVIOUR, DEFAULTS, KEEP, PROFILES, RESET_WORDS, WORDS, Policy
+from ..policy import CONVERSATION_RESETS, DEFAULT_BEHAVIOUR, DEFAULTS, KEEP, PROFILES, WORDS, Policy
 from .changes import Refused, _read
 from .policy_doc import _yaml
 
@@ -44,8 +44,8 @@ COUNTS = {"min_signals": "signals", "starts_min": "starts", "cycle_min_runs": "r
           "ordinary_hide_over": "periods", "state_lane_max": "states", "integration_down_devices": "devices",
           "reconnect_events": "drops", "battery_trend_min_points": "readings", "show": "batteries",
           "circuits_show": "rows", "group_from": "items", "days_context_min": "days", "days_context": "days",
-          "min_days_for_baseline": "days", "alert_fatigue_per_month": "times a month", "noise_per_hour": "changes an hour",
-          "blocks_per_day": "blocks a day", "battery_trend_drop_per_day": "points a day", "timeout": "seconds"}
+          "min_days_for_baseline": "days", "alert_fatigue_per_month": lambda: f"times in {limits.values().get('alerts.fatigue_window_days', 30)} days", "noise_per_hour": "changes an hour",
+          "blocks_per_day": "blocks a day", "battery_trend_drop_per_day": "points a day", "timeout": "seconds", "web_searches_max": "searches"}
 _UNITS = ((r"(?:^|_)usd$", "US$"), (r"(?:^|_)kwh$", "kWh"), (r"_w$", "W"), (r"(?:^|_)pct(?:_above)?$", "%"),
           (r"(?:^|_)points$", "points"), (r"(?:^|_)(?:s|seconds)$", "seconds"), (r"(?:^|_)(?:min|minutes)$", "minutes"),
           (r"(?:^|_)hours$", "hours"), (r"(?:^|_)days$", "days"), (r"(?:^|_)weeks$", "weeks"),
@@ -56,13 +56,32 @@ def unit_of(key: str) -> str:
     """The unit of a setting named `key` (its last part): "minutes" for reask_minutes or cooldown_min, "%" for
     drift_pct, "US$" for limit_usd; "" when its name says none."""
     if key in COUNTS:
-        return COUNTS[key]
+        # a count over a window that is a setting itself says that window now (alerts.fatigue_window_days)
+        return COUNTS[key]() if callable(COUNTS[key]) else COUNTS[key]
     return next((u for pat, u in _UNITS if re.search(pat, key)), "")
 # "Agent rules", never "Rules" alone (owner, 2026-10-22): a "rule" read as one of the villa's automations; these are
 # policy.yaml's values, the Rules tab's, and the group's (i) says so
 GROUP_TITLES = {**limits.GROUPS, SKILL_GROUP: "Skill settings", POLICY_GROUP: "Agent rules"}
 GROUP_INFO = {POLICY_GROUP: "The agent's own rules (policy.yaml), the same values the Rules tab shows: never one of the villa's automations."}
 TOLD = {"person": "The person is told", "ai": "Only the AI is told", "": "Nobody is told"}
+
+
+_NAMED = re.compile(r"`([A-Za-z][\w.\-]*)`")
+
+
+def fill_named(text: str, names: dict[str, dict]) -> str:
+    """A skill's guide as the AI reads it: each setting it names in a code span followed by its value now —
+    "`unavailable_minutes` (10 minutes)", the value the page's chip shows (viewer.js `named`).
+
+    ⚠️ A NAME, NEVER A NUMBER, AND THE AI STILL KNOWS THE NUMBER (owner, 2026-10-24: "every number a setting"): a guide
+    writes no value, so a change on the Limits tab is the AI's too, at its next reading of the skill."""
+    def one(m: re.Match) -> str:
+        s = names.get(m.group(1))
+        if not s:
+            return m.group(0)
+        value = ", ".join(map(str, s["value"])) if isinstance(s["value"], list) else str(s["value"])
+        return f"{m.group(0)} ({value}{(' ' + s['unit']) if s.get('unit') else ''})"
+    return _NAMED.sub(one, text)
 
 
 def ref(rid: dict) -> str:
@@ -190,7 +209,8 @@ class LimitsTab:
                 value = d.default
             out.append({"id": {"src": "code", "key": key}, "group": d.group if d.group in limits.GROUPS else "read",
                         "section": key.split(".")[0], "name": key, "label": d.says or key, "value": value,
-                        "default": d.default, "kind": "list" if isinstance(d.default, list) else "number",
+                        "default": d.default,
+                        "kind": "list" if isinstance(d.default, list) else "time" if limits.is_time(d.default) else "number",
                         "unit": d.unit, "lo": d.lo, "hi": d.hi, "reached": d.reached, "told": TOLD.get(d.told, d.told),
                         "also": "Only here: this limit is written in the agent's code, and set on this tab.",
                         "where": [s for s in d.sites]})
@@ -327,7 +347,8 @@ class LimitsTab:
             if not isinstance(job, dict) or not isinstance(job.get("when"), str):
                 continue
             what = job.get("name") or str(job.get("run") or "").split(" ")[0] or f"job {i + 1}"
-            rows.append({"id": {"src": "skill", "skill": skill, "file": "skill.yaml", "path": ["schedule", i, "when"]},
+            rows.append({"alias": job.get("name"),
+                         "id": {"src": "skill", "skill": skill, "file": "skill.yaml", "path": ["schedule", i, "when"]},
                          "group": SKILL_GROUP, "section": skill, "name": f"skill.yaml › schedule.{i}.when",
                          "label": f"When the {what} job runs, villa time: HH:MM every day, Mon HH:MM each week, "
                                   "D HH:MM each month.",
@@ -345,7 +366,11 @@ class LimitsTab:
         seen: dict[str, dict[str, dict]] = {}
         for r in self.rows()["rows"]:
             rid = r["id"]
-            if rid["src"] == "code":
+            if r.get("alias"):
+                # a job's time by the job's name ("fm-weekly"), whichever skill's guide names it (owner, 2026-10-24:
+                # "Weekly (Monday)" in roi-energy's guide was the reports skill's job time, written out)
+                keys = [r["alias"]]
+            elif rid["src"] == "code":
                 keys = [rid["key"]]
             elif rid["src"] == "shared":
                 keys = [f"behaviour.{rid['key']}", rid["key"]]
@@ -394,7 +419,7 @@ class LimitsTab:
                 for skill in sorted(set(owners.values()))}
 
     def _policy_rows(self) -> list[dict]:
-        text, _ = self.files.policy_now()
+        text = self.files.policy_now()[0] if self.files else _read(self.s.policy_path).decode("utf-8")
         try:
             raw = yaml.safe_load(text or "") or {}
         except yaml.YAMLError:
@@ -411,7 +436,7 @@ class LimitsTab:
              "The most one chat answer may cost (US$), and one translation of an alert card's text. Reached: the "
              "answer stops and offers Continue; the card stays in English."),
             (["settings", "conversation_reset"], st.get("conversation_reset", DEFAULT_BEHAVIOUR["conversation_reset"]),
-             DEFAULT_BEHAVIOUR["conversation_reset"], "choice", list(RESET_WORDS), None, None, ai,
+             DEFAULT_BEHAVIOUR["conversation_reset"], "choice", list(CONVERSATION_RESETS), None, None, ai,
              "When a chat's earlier messages are forgotten by the AI."),
         ]
         # one brain and one limit per run for all the AI jobs of a skill (owner, 2026-10-20)

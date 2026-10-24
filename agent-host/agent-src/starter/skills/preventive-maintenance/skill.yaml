@@ -6,13 +6,13 @@ scripts:
     flags: {--as-of: date, --out: outfile, --skip-raw: switch}
     inject: [pack, store, zone]
 every_5_min: "recheck.py"     # every open fault read again by its own rule; a device gone offline gets its fault now
-# Every open finding of the night is read again every 5 minutes (owner, 2026-10-20: "check every 5 min for all the
-# reported issues"): its Kiosk card says "Next check: within 5 min". One no longer found closes ("Cleared: the check at
+# Every open finding of the night is read again every few minutes, jobs.every_minutes on the Limits tab (owner,
+# 2026-10-20: "check every 5 min for all the reported issues"): its Kiosk card says when, its "Next check". One no longer found closes ("Cleared: the check at
 # 12:05 no longer sees it."), one still found stays. A rule judged on a finished day (a pump's draw, a room's highest
 # temperature) is read over the last finished day, so it can only clear once a new day has finished.
 rechecks: all
 schedule:
-  - when: "02:00"             # code only: zero tokens; the 07:00 digest carries the words
+  - when: "02:00"             # code only: zero tokens; the reports skill's fm-daily digest carries the words
     run: "nightly.py --out nightly.json"
     timeout: 1800
     kiosk: nightly_check      # the Kiosk's (i) says this job's time (the heartbeat's cadence)

@@ -90,7 +90,7 @@ through the villa's system only. All in `villa.voice.yaml`, optional.
   - If it says the check could not run, say you could not check the villa now.
 - "What is on in the kitchen", "temperature in bedroom 1", "when did the pool
   pump run today": resolve with `concierge.py find --what --where`, then read
-  states (ha_get_state) or 24 h of history (ha_get_history) for those entities
+  states (ha_get_state) or `ai.history_default_hours` of history (ha_get_history) for those entities
   only. Numbers come from the tool result, never from memory.
 - "How much did X cost": hand over to the roi-energy skill.
 - "What did the FM do about the laundry door": read the incident and its

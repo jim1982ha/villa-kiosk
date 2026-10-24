@@ -28,6 +28,8 @@ from typing import Any
 
 import yaml
 
+from vesta_shared.limits import limit
+
 from .places import title
 
 # ------------------------------------------------------------------ constants
@@ -105,9 +107,30 @@ PROFILES = {
     "performance": ("opus", "high"),
 }
 #: When a chat's conversation context is deleted (settings.conversation_reset): value → what the page shows.
-RESET_WORDS = {"daily_04_00": "Every day at 04:00", "after_8h_silence": "After 8 hours of silence",
-               "never": "Never (/new only)"}
-CONVERSATION_RESETS = tuple(RESET_WORDS)
+CONVERSATION_RESETS = ("daily_04_00", "after_8h_silence", "never")
+
+
+def reset_at() -> str:
+    """The daily reset's time, villa time ("daily_04_00": the stored choice keeps its first name)."""
+    return limit("chat.reset_at", "04:00", unit="villa time", group="ai",
+                 says="When a chat's earlier messages are forgotten each day, with \"Delete conversation context at\" "
+                      "set to the daily reset.",
+                 reached="Messages before it are not given to the AI any more.", told="")
+
+
+def silence_reset_hours() -> int:
+    """The silence after which a chat starts afresh ("after_8h_silence")."""
+    return limit("chat.silence_reset_hours", 8, unit="hours", group="ai", lo=1, hi=168,
+                 says="After this long without a message, a chat's earlier messages are forgotten, with \"Delete "
+                      "conversation context at\" set to the silence.",
+                 reached="Messages before the silence are not given to the AI any more.", told="")
+
+
+def reset_words() -> dict[str, str]:
+    """The choices of "Delete conversation context at", as the page shows them: their times are settings now
+    (owner, 2026-10-24: "04:00" and "8 hours" were written in the words)."""
+    return {"daily_04_00": f"Every day at {reset_at()}", "after_8h_silence": f"After {silence_reset_hours()} hours of silence",
+            "never": "Never (/new only)"}
 #: The brains from the lightest to the strongest: an older file's jobs of one skill that named different brains give the
 #: skill the strongest of them (Policy.skill_brain)
 PROFILE_ORDER = ("economy", "auto", "performance")
@@ -607,7 +630,7 @@ def form_schema() -> dict:
     return {"rules": RULE_WORDS, "actionable": list(ACTIONABLE), "siren_domains": list(SIREN_DOMAINS),
             "lists": [{"key": k, "label": _LIST_WORDS[k][0], "hint": _LIST_WORDS[k][1], "domains": [d]}
                       for k, d in ENTITY_LISTS.items() if d],
-            "words": WORDS, "resets": RESET_WORDS, "roles": ROLE_WORDS}
+            "words": WORDS, "resets": reset_words(), "roles": ROLE_WORDS}
 
 def _id(v: Any) -> int | None:
     """An id as the agent reads it (int(...)): a number, or a number written as text."""

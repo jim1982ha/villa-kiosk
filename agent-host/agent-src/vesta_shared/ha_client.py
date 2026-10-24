@@ -423,7 +423,7 @@ class McpClient(HABase):
                      says="Hourly or daily figures a skill asks for in one page of a device's statistics.",
                      reached="The skill reads the next page.", told="")
         pages = limit("statistics.max_pages", 200, unit="pages", group="read", lo=1, hi=2000,
-                      says="Pages of statistics read for one device (200 pages are years of hourly figures).",
+                      says="Pages of statistics read for one device, each statistics.page_rows figures long.",
                       reached="The reading stops there, without saying so.", told="")
         for eid in entity_ids:
             def fetch(offset, eid=eid):
@@ -678,7 +678,7 @@ class McpClient(HABase):
         # 200 pages is 100,000 rows; a read stopped before the end says where (logbook_cut).
         rows, whole = paged(fetch, page, max_pages=limit(
             "logbook.max_pages", 200, unit="pages", group="read", lo=1, hi=2000,
-            says="Pages of logbook a skill reads for one stretch of time (200 pages are 100,000 lines).",
+            says="Pages of logbook a skill reads for one stretch of time, each of the villa's own page size (500 lines).",
             reached="The reading stops there and says how far it got.", told="person"))
         out, last = [], start
         for r in rows:

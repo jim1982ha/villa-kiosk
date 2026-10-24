@@ -1,5 +1,10 @@
 # What the investigation counts as unusual, against each device's own normal (the days before). A villa's own
 # villa.settings.yaml may change any of them (kept by updates). Moved out of the script (architecture review 32).
+# How the AI reads the records for an investigation (SKILL.md names them; the AI is given their values).
+guide:
+  lookback_days: 7            # with no date in the question, the investigation starts from this many days back
+  lead_hours: 2               # the reading starts at least this long before the first sign of trouble
+  web_searches_max: 5         # web searches at most for one investigation
 behaviour:
   # "Running" is the villa's one definition (the night check's, the energy figures', the weekly page's): an hour whose peak
   # passes this share of the device's typical peak ran. Keep it equal to the other skills' (a test holds them equal):

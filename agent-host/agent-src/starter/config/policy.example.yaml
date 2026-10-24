@@ -22,7 +22,7 @@ settings:
   # of any of its jobs (not a monthly budget). A skill not named here does not run its AI jobs (the VESTA Agent page
   # offers to add it).
   skill_ai:
-    reports: {brain: auto, limit_usd: 2}   # the 07:00 digest, the weekly and the monthly report
+    reports: {brain: auto, limit_usd: 2}   # the daily digest, the weekly and the monthly report
   # How long the agent keeps what it records; the oldest is deleted every night. Left out: these defaults.
   # keep:
   #   runs_days: 400              # each AI run (the Costs tab)

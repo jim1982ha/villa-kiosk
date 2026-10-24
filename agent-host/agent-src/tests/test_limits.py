@@ -398,3 +398,50 @@ def test_what_counts_as_running_is_one_row_and_its_save_changes_every_skill(ui):
         fh.write("behaviour:\n  on_threshold_fraction: 0.3\n")
     row = next(r for r in _rows(ui)["rows"] if r["name"].endswith("on_threshold_fraction"))
     assert row["value"] == 0.5 and "Today they differ" in row["also"] and "reports 0.3" in row["also"]
+
+
+def test_a_guide_names_its_settings_and_the_ai_reads_their_values_now(ui, tmp_path, monkeypatch):
+    # owner, 2026-10-24: "every number a setting" — a guide writes the name; the page shows it as a chip, and the AI is
+    # given the same value beside it (limits_tab.fill_named, used by read_skill)
+    from vesta_agent.ui.limits_tab import LimitsTab, fill_named
+    copy_skill("roi-energy", ui.skills_dir)
+    copy_skill("reports", ui.skills_dir)
+    p = os.path.join(ui.config_dir, "limits.yaml")             # the Limits tab's file, the agent's VESTA_LIMITS
+    open(p, "w").write("jobs.every_minutes: 7\npack.rebuild_at: '01:45'\n")
+    monkeypatch.setenv("VESTA_LIMITS", p)
+    tab = LimitsTab(ui, None)                                    # no page files: the AI's tool reads it so
+    pm = open(os.path.join(ui.skills_dir, "preventive-maintenance", "SKILL.md")).read()
+    got = fill_named(pm, tab.names("preventive-maintenance"))
+    assert "`unavailable_minutes` (10 minutes)" in got and "`jobs.every_minutes` (7 minutes)" in got
+    assert "`pack.rebuild_at` (01:45 villa time)" in got
+    # a job's time by the job's name, from another skill's guide (roi-energy names the reports skill's jobs)
+    roi = fill_named(open(os.path.join(ui.skills_dir, "roi-energy", "SKILL.md")).read(), tab.names("roi-energy"))
+    assert "`fm-weekly` (Mon 08:00 villa time)" in roi and "`min_period_days` (5 days)" in roi
+    assert "Monday" not in roi.split("## Procedure")[1].split("\n")[2]
+    # every guide of the starter skills names, never writes, the values this sweep found written
+    import glob
+    texts = {f: open(f, encoding="utf-8").read() for f in glob.glob(os.path.join(SRC, "starter", "skills", "*", "SKILL.md"))}
+    for phrase in ("640 characters", "a beat every minute", "at 01:30", "24 h of history", "read 6\n   hours",
+                   "last 7 days", "at least 2 hours", "At most 5 searches", "fewer than 5 days", "(its setting"):
+        assert not [f for f, t in texts.items() if phrase in t], phrase
+
+
+def test_a_time_of_day_is_a_limit_too(tmp_path, monkeypatch):
+    p = tmp_path / "limits.yaml"
+    monkeypatch.setenv("VESTA_LIMITS", str(p))
+    assert limits.limit("x.at", "01:30") == "01:30"
+    p.write_text("x.at: '02:15'\n")
+    assert limits.limit("x.at", "01:30") == "02:15"
+    p.write_text("x.at: '25:00'\n")
+    os.utime(p, (time.time() + 3, time.time() + 3))
+    assert limits.limit("x.at", "01:30") == "01:30"                    # not a time: the default
+    assert limits.check(limits.Declared("x.at", "01:30"), "7pm") == "x.at is a time of day, HH:MM."
+
+
+def test_the_ais_read_skill_tool_gives_each_named_setting_its_value(tmp_path):
+    # the AI reads the guide through read_skill: the values beside the names, as the page's chips show them
+    from helpers import make_agent
+    v = make_agent(str(tmp_path), {"people": []}, skills=["preventive-maintenance"])
+    res = asyncio.run(v.toolbox()._read_skill().handler({"skill": "preventive-maintenance"}))
+    text = res["content"][0]["text"]
+    assert "`unavailable_minutes` (10 minutes)" in text and "`pack.rebuild_at` (01:30 villa time)" in text

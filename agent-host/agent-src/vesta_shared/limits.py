@@ -18,6 +18,8 @@ script reads it when it starts.
 """
 from __future__ import annotations
 
+import re
+
 import ast
 import os
 from dataclasses import dataclass, field
@@ -66,7 +68,19 @@ def values(p: str | None = None) -> dict[str, Any]:
     return _cache["values"]
 
 
+#: A time of day a limit can be ("01:30"): its default written so, its value the same shape, villa time
+_TIME = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+
+
+def is_time(default) -> bool:
+    """A limit whose value is a time of day ("01:30", villa time; owner, 2026-10-24: "01:30" written in a skill's guide
+    could not be changed)."""
+    return isinstance(default, str) and bool(_TIME.match(default))
+
+
 def _fits(v, default, lo, hi) -> bool:
+    if is_time(default):
+        return isinstance(v, str) and bool(_TIME.match(v.strip()))
     if isinstance(default, list):
         return isinstance(v, list) and all(isinstance(x, str) for x in v)
     if isinstance(default, bool) or isinstance(v, bool) or not isinstance(v, (int, float)):
@@ -82,6 +96,8 @@ def limit(key: str, default, *, unit: str = "", group: str = "read", lo=None, hi
     v = values().get(key, default)
     if not _fits(v, default, lo, hi):
         return default
+    if is_time(default):
+        return v.strip()
     return int(v) if isinstance(default, int) and not isinstance(default, bool) and float(v).is_integer() else v
 
 
@@ -166,6 +182,8 @@ def check(d: Declared, v) -> str | None:
         return None
     if isinstance(d.default, list):
         return f"{d.key} is a list of words."
+    if is_time(d.default):
+        return f"{d.key} is a time of day, HH:MM."
     rng = " and ".join(x for x in (f"at least {d.lo}" if d.lo is not None else "",
                                    f"at most {d.hi}" if d.hi is not None else "") if x)
     return f"{d.key} must be a number" + (f", {rng}" if rng else "") + "."

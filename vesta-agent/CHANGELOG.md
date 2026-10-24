@@ -1,3 +1,18 @@
+## 0.12.344
+
+What you will see:
+- Limits: when you open it from a value elsewhere on the page, a Back button sits on the "Limits" title's line and
+  returns you to where you were (the same tab, the same skill and file, the same place on the page), saved or not.
+- No number is written as fixed text any more where it is really a setting. The skills' guides now show these as chips
+  with their value, linked to their Limits row, and the AI reads the same values:
+  - the frequent checks' rhythm ("every 5 minutes", now `jobs.every_minutes`; the VESTA app's Next check follows it);
+  - the nightly device-list time (01:30), the connection beat, the logbook and history windows;
+  - the report job times;
+  - the investigation's reading rules and the energy comparison's minimum days.
+  "(its setting)" is gone from the guides.
+- Also settings now: "Delete conversation context at" (its 04:00 and 8 hours), how far back Overview lists the jobs
+  ("The last 24 hours"), and how far back Rules › AI tools counts uses ("used N× in 7 days").
+
 ## 0.12.343
 
 What you will see:

@@ -21,6 +21,8 @@ from datetime import datetime, time, timedelta, timezone
 from typing import Callable
 from zoneinfo import ZoneInfo
 
+from .policy import reset_at, silence_reset_hours
+
 OWN_COMMANDS = {"/ask", "/new", "/whoami"}
 
 
@@ -140,9 +142,10 @@ def resume_for(session_id: str | None, last_iso: str | None, rule: str, zone: st
     if rule == "never":
         return session_id
     if rule == "after_8h_silence":
-        return session_id if now - last < timedelta(hours=8) else None
+        return session_id if now - last < timedelta(hours=silence_reset_hours()) else None
     local = now.astimezone(ZoneInfo(zone))
-    cut = datetime.combine(local.date(), time(4, 0), tzinfo=local.tzinfo)
+    hh, mm = map(int, reset_at().split(":"))
+    cut = datetime.combine(local.date(), time(hh, mm), tzinfo=local.tzinfo)
     if local < cut:
         cut -= timedelta(days=1)
     return session_id if last >= cut.astimezone(timezone.utc) else None

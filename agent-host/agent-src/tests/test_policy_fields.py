@@ -25,7 +25,7 @@ def test_the_page_writes_none_of_the_settings_names_itself():
                 "owner_only_entities", "excluded_entities", "siren_entity", "siren_auto_off_min")
     for path in rendered:
         assert f'"{policy.WORDS[path]}"' not in js, path
-    assert "Every day at 04:00" not in js and policy.form_schema()["resets"] == policy.RESET_WORDS
+    assert "Every day at 04:00" not in js and policy.form_schema()["resets"] == policy.reset_words()
 
 
 def test_the_history_and_the_setup_copy_read_the_same_table():

@@ -977,14 +977,15 @@ def test_a_device_that_reports_a_value_has_no_state_band():
 
 
 def test_the_skill_asks_for_a_summary_the_caption_can_hold():
-    # review 3 (2026-10-13): the room grew when "To:" became roles; the AI is told the limit in SKILL.md, so the two agree
+    # review 3 (2026-10-13): the room grew when "To:" became roles. ⚠️ NO NUMBER IN THE GUIDE (owner, 2026-10-24: every
+    # number a setting): its "640" had drifted from the room (646); the guide names page.py's refusal, which says it
     import page as inv_page   # the investigate skill's page (it was reports' inv_page.py)
-    told = re.search(r'"summary": "[^"]*?at most (\d+) characters', open(os.path.join(STARTER_SKILLS, "investigate",
-                                                                                      "SKILL.md")).read())
-    assert told and inv_page.SUMMARY_MAX - 10 <= int(told.group(1)) <= inv_page.SUMMARY_MAX
-    # architecture review 4: the same sentences too — the instructions said 3 to 5, the refusal 4 to 6
-    assert re.search(r'"summary": "' + inv_page.SUMMARY_SENTENCES + r", at most \d+ characters",
-                     open(os.path.join(STARTER_SKILLS, "investigate", "SKILL.md")).read())
+    md = open(os.path.join(STARTER_SKILLS, "investigate", "SKILL.md")).read()
+    assert re.search(r'"summary": "' + inv_page.SUMMARY_SENTENCES + r", short enough for the chat message \(page\.py "
+                     r"refuses a longer one and says its limit\)", md)
+    assert not re.search(r'"summary": "[^"]*?\d+ characters', md)
+    src = open(os.path.join(STARTER_SKILLS, "investigate", "scripts", "page.py")).read()
+    assert 'at most {SUMMARY_MAX}' in src
 
 
 def test_around_says_a_restart_once_and_keeps_a_device_that_did_not_come_back():

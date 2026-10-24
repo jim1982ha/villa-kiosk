@@ -66,7 +66,7 @@ from .tickets import Tickets
 from .places import tab, where
 from .policy import NOT_REGISTERED, Person, Policy, problems as policy_problems
 from .routing import Origin, Routing
-from .scheduler import EVERY as SCHEDULER_EVERY, Scheduler
+from .scheduler import Scheduler, every as scheduler_every
 from .command_offers import CommandOffers
 from .command_request import Request, Requests
 from vesta_shared.limits import limit
@@ -422,7 +422,7 @@ class Vesta:
             return {}
 
     async def rebuild_pack(self) -> None:
-        """The engine's nightly job (scheduler.PACK_AT): the knowledge pack, the tool list, any
+        """The engine's nightly job (scheduler.pack_at): the knowledge pack, the tool list, any
         open task still without its Kiosk ticket, and what the agent keeps (housekeeping.tidy)."""
         await asyncio.to_thread(self.build_pack)
         await self.refresh_server_tools()
@@ -952,7 +952,7 @@ class Vesta:
         if not nightly:
             return None
         look = getattr(getattr(self, "scheduler", None), "last_look", None)
-        return {"checkMinutes": int(SCHEDULER_EVERY.total_seconds() // 60), "nightlyAt": nightly,
+        return {"checkMinutes": int(scheduler_every().total_seconds() // 60), "nightlyAt": nightly,
                 **({"lastLookAt": look.astimezone(timezone.utc).isoformat(timespec="seconds")} if look else {})}
 
     async def _safe(self, coro):

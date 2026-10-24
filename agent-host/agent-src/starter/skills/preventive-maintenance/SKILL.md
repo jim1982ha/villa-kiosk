@@ -16,17 +16,17 @@ closure, and never raise the same thing twice.
   VESTA Kiosk, which the engine writes. No service call on a device.
 - Never look for new faults during the day. One batched read at the night check's
   time (skill.yaml `schedule`) finds them. The rest of the time the alert-desk skill handles events. One
-  exception: which devices are offline is read every 5 minutes (`recheck.py`, the batch's own reading of it): a
-  device offline `unavailable_minutes` (its setting) gets its fault then, and a critical one
+  exception: which devices are offline is read every few minutes (`jobs.every_minutes`) (`recheck.py`, the batch's own reading of it): a
+  device offline `unavailable_minutes` gets its fault then, and a critical one
   the FM's message, never at the next night; its fault closes once it has been
-  back `back_online_minutes` (its setting).
+  back `back_online_minutes`.
   The same read closes any fault about a device deleted from the villa's system
   ("Closed: this device no longer exists in the villa's system."), hidden in it
   ("Closed: this device is hidden in the villa's system, …") or listed as asleep
   between its reports ("Closed: this device sleeps between its reports …").
   A device asleep between its reports is judged on its last real reading (its
   battery included), never on "unavailable".
-  Every open finding of the night is read again every 5 minutes too, each by its
+  Every open finding of the night is read again at that same check too, each by its
   own check over its own device, never a full batch, never a new finding. One no
   longer found closes ("Cleared: the check at 12:05 no longer sees it."); one
   still found stays. A check about a state (a battery, a quiet sensor, a reconnect
@@ -43,7 +43,7 @@ closure, and never raise the same thing twice.
 ## Files
 
 - `scripts/nightly.py`   the batch (one call, one JSON result)
-- `scripts/recheck.py`   every 5 minutes: every open finding read again by its check; devices gone offline get their
+- `scripts/recheck.py`   every few minutes (`jobs.every_minutes`): every open finding read again by its check; devices gone offline get their
                          fault, those back close it; deleted ones closed.
 - `scripts/rules.py`     the checks per family with their ids (PM-xxx)
 - `scripts/features.py`  feature extraction from statistics and raw history
@@ -52,7 +52,7 @@ closure, and never raise the same thing twice.
 
 ## Nightly procedure (at its skill.yaml `schedule` time, villa time)
 
-1. The engine rebuilds the knowledge pack every night at 01:30, before the batch.
+1. The engine rebuilds the knowledge pack every night at `pack.rebuild_at`, before the batch.
    Its `onboarding` text: a new device with no room becomes one
    question in the owner chat ("New device seen: X, measuring power. Which room?").
    A device gone from the villa's system becomes a question too ("archive its history or keep?").
@@ -90,7 +90,7 @@ closure, and never raise the same thing twice.
 | PM-EXPECTED-SILENT | power | An intermittent, usage-driven asset was scheduled and did not run. Report only, never a task. | schedule helper |
 | PM-COUNTER-RESET | energy | An energy counter went backwards: the day's kWh is unreliable. | none |
 | PM-BATTERY-LOW / -CRIT / -TREND | battery | Level under `battery_warn_pct` (task), under `battery_crit_pct` (task now, P2 if the device is critical), or falling fast enough to be empty within `battery_trend_warn_days` (report). An open LOW or CRIT closes only once the level is above its line plus `battery_clear_margin_points` (LOW above `battery_warn_pct` plus it, CRIT above `battery_crit_pct` plus it). A battery that reports volts needs `<asset>_battery_nominal_v`. | `vesta_battery_warn_pct`, `vesta_battery_crit_pct`, `vesta_battery_clear_margin_points` |
-| PM-UNAVAILABLE | availability | (Never a device the VESTA Kiosk lists as "Asleep between reports" (Advanced Settings), nor its reconnects, nor its silence; an open fault of one closes at the next recheck.) A device offline for more than `unavailable_minutes` (read every 5 minutes, and at batch time), none for a device an open offline alert already follows, one finding per physical device; `integration_down_devices` or more devices of one integration offline together become one "integration down" finding. P2 when the device is critical. | `vesta_unavailable_minutes` |
+| PM-UNAVAILABLE | availability | (Never a device the VESTA Kiosk lists as "Asleep between reports" (Advanced Settings), nor its reconnects, nor its silence; an open fault of one closes at the next recheck.) A device offline for more than `unavailable_minutes` (read every few minutes, and at batch time), none for a device an open offline alert already follows, one finding per physical device; `integration_down_devices` or more devices of one integration offline together become one "integration down" finding. P2 when the device is critical. | `vesta_unavailable_minutes` |
 | PM-SILENT | level | A sensor online but not reporting for `silence_hours`. | `vesta_silence_hours` |
 | PM-LEVEL-HIGH | level | A temperature or humidity above `<asset>_max_c` / `<asset>_max_humidity_pct` when such a helper exists. | asset helper |
 | PM-RECONNECT-LOOP | network | `reconnect_events` or more drop/reconnect events in `reconnect_days` days for one device (logbook). | `vesta_reconnect_events`, `vesta_reconnect_days` |
@@ -105,8 +105,8 @@ below; lighting and meters are read by roi-energy and never chased here. To
 force a kind: `input_text.vesta_asset_kinds` = {"slug": "motor"}.
 
 How a motor is classified, automatically, from its own last `baseline_days` days:
-"continuous" (runs in whole-hour blocks: filtration, circulation), "cycling"
-(bursts, never a full hour: pressure pump) or "intermittent" (runs on fewer
+"continuous" (runs in blocks of `night.continuous_full_hours` or more: filtration, circulation), "cycling"
+(bursts, never that long: pressure pump) or "intermittent" (runs on fewer
 than `intermittent_share` of the days, or `intermittent_min_days`: jacuzzi, jets). Continuous assets get the power checks,
 cycling assets the energy checks, intermittent assets only report lines.
 

@@ -312,7 +312,10 @@ def when_it_runs(sk: Skill) -> list[dict]:
     acts = [row(describe(j["when"])[0], j.get("name"), j.get("run"), ai=bool(j.get("prompt")) and not j.get("run"),
                 schedule=i) for i, j in enumerate(sk.schedule)]
     if sk.every_5_min:
-        acts.append(row("every 5 minutes", script=sk.every_5_min))
+        # its rhythm is a setting (scheduler.every, jobs.every_minutes): the row says it as it is now, and links to it
+        from .scheduler import every
+        n = int(every().total_seconds() // 60)
+        acts.append(row(f"every {n} minute{'s' if n != 1 else ''}", script=sk.every_5_min, every=True))
     acts += [row(HOOK_EVENTS.get(ev, ev), script=cmd) for ev, cmd in sk.on_event.items()]
     if sk.on_reply:
         acts.append(row("an answer to one of its alerts", script=sk.on_reply))

@@ -290,3 +290,30 @@ def test_a_job_time_moved_on_the_limits_tab_after_it_ran_does_not_run_it_again_t
         await sch.idle()
     asyncio.run(go())
     assert model == ["07:00", "07:15"]
+
+
+def test_the_frequent_checks_run_at_the_rhythm_set_on_the_limits_tab(tmp_path, monkeypatch):
+    # owner, 2026-10-24: "every 5 minutes" could not be changed — it is jobs.every_minutes, read at every tick
+    p = tmp_path / "limits.yaml"
+    p.write_text("jobs.every_minutes: 10\n")
+    monkeypatch.setenv("VESTA_LIMITS", str(p))
+    s = settings(str(tmp_path))
+    copy_skill("alert-desk", s.skills_dir)
+    ran = []
+
+    async def run_code(skill, command, timeout):
+        ran.append(command)
+
+    async def nothing(*a):
+        pass
+
+    sch = Scheduler(s, Skills(s.skills_dir), State(s.state_path), run_code, nothing, nothing)
+
+    async def go():
+        for m in (0, 5, 10):
+            await sch.tick(at(9, m))
+            await sch.idle()
+    asyncio.run(go())
+    assert ran == ["desk.py tick", "desk.py tick"]                      # at 09:00 and 09:10, never at 09:05
+    from vesta_agent.scheduler import every
+    assert every() == timedelta(minutes=10)

@@ -83,6 +83,20 @@ NEW_SKILL_YAML = """description: What this skill is for, in one line.
 
 
 
+def last_day_hours() -> int:
+    """How far back Overview's scheduled jobs go (owner, 2026-10-24: "the last 24 hours" was written, not set)."""
+    return limit("page.last_day_hours", 24, unit="hours", group="text", lo=1, hi=168,
+                 says="How far back Overview lists the scheduled jobs the agent ran.",
+                 reached="Older runs are not listed there.", told="")
+
+
+def tool_usage_days() -> int:
+    """How far back Rules › AI tools counts each tool's uses ("used N× in D days")."""
+    return limit("page.tool_usage_days", 7, unit="days", group="text", lo=1, hi=90,
+                 says="How far back Rules › AI tools counts how often each tool was used.",
+                 reached="Older uses are not counted.", told="")
+
+
 class UI:
     def __init__(self, settings: Settings, deployment: str = "ha_app"):
         self.s = settings
@@ -187,12 +201,14 @@ class UI:
                 skills = self.skills.all()
                 st = State(self.s.state_path)
                 unreachable = status.unreachable(st, page_policy(self.s.policy_path))
-                report = status.report(st, self.s.store_path, 24, label=lambda k: job_label(k, skills))
+                report = status.report(st, self.s.store_path, last_day_hours(), label=lambda k: job_label(k, skills))
             except Exception as e:  # noqa: BLE001 — the overview shows what it can
                 log.warning("UI: the agent's records could not be read (%s)", type(e).__name__)
         return web.json_response({"version": __version__, "app_version": os.environ.get("VESTA_APP_VERSION", ""),
                                   "instance": self.s.instance,
                                   "policy_problems": pol, "skills": self._skill_rows(), "last_24h": report,
+                                  # how far back Overview's scheduled jobs go: a setting, its value said with its link
+                                  "last_hours": {"value": last_day_hours(), "ref": limits_ref({"src": "code", "key": "page.last_day_hours"})},
                                   "unreachable": unreachable,
                                   "jobs_not_set": [j["name"] for j in self._jobs() if not j["skill_ai"]],
                                   "setup": setup_copy.offer()})
@@ -483,7 +499,7 @@ class UI:
         if not os.path.exists(self.s.state_path):
             return {}
         try:
-            return status.tool_usage(State(self.s.state_path), 7)
+            return status.tool_usage(State(self.s.state_path), tool_usage_days())
         except Exception:  # noqa: BLE001 — the switches show without their counts
             return {}
 
@@ -493,7 +509,8 @@ class UI:
     def _tools(self) -> dict:
         """Rules › AI tools: Home Assistant's tools as the agent last read them, with this file's
         switches; the agent's own tools; the facility manager's groups."""
-        return tool_access.catalog(page_policy(self.s.policy_path), tool_access.read_list(self.s.data_dir), self._usage())
+        return {**tool_access.catalog(page_policy(self.s.policy_path), tool_access.read_list(self.s.data_dir), self._usage()),
+                "usage_days": tool_usage_days()}
 
     async def tools_refresh(self, _request):
         """"Read the list again": the agent asks HA MCP (the page itself never talks to Home Assistant)."""
@@ -528,7 +545,8 @@ class UI:
                                       "problem": h["problem"]})
         # ⚠️ ROWS, NOT SENTENCES (architecture review 8), and the skill's own (review 5, 2026-10-13: skills.when_it_runs)
         acts = [{**a, "ref": limits_ref({"src": "skill", "skill": name, "file": "skill.yaml",
-                                          "path": ["schedule", a["schedule"], "when"]})} if "schedule" in a else a
+                                          "path": ["schedule", a["schedule"], "when"]})} if "schedule" in a
+                else {**a, "ref": limits_ref({"src": "code", "key": "jobs.every_minutes"})} if a.get("every") else a
                 for a in when_it_runs(sk)]
         scripts = [spec.view() for _, spec in sorted(sk.scripts.items())]      # skills.Script: one reading
         return web.json_response({

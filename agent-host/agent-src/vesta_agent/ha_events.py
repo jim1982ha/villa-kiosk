@@ -32,6 +32,8 @@ from typing import Awaitable, Callable
 
 import aiohttp
 
+from vesta_shared.limits import limit
+
 log = logging.getLogger("vesta.ha_events")
 
 #: the villa's registries changed (a device hidden, unhidden, renamed, added or deleted): the agent reads its devices
@@ -45,7 +47,12 @@ EVENT_TYPES = ("vesta_critical_event", "vesta_message", "telegram_text", "telegr
 CONTEXT_KEY = "_context_id"
 BACKOFF_START = 5
 BACKOFF_MAX = 300
-BEAT_EVERY = 60
+def beat_seconds() -> int:
+    """How often the beat is written while the socket is up (the alert desk's "villa silent" reads its age)."""
+    return limit("villa.beat_seconds", 60, unit="seconds", group="read", lo=10, hi=300,
+                 says="How often the agent records that its connection to the villa's system is up; the alert desk "
+                      "calls the villa silent when that record is older than its villa_silent_minutes.",
+                 reached="Longer: a cut is noticed up to this much later.", told="")
 
 
 def websocket_url(ha_url: str) -> str:
@@ -170,7 +177,7 @@ class HaEvents:
 
     async def _beats(self, stop: asyncio.Event) -> None:
         while not stop.is_set():
-            await asyncio.sleep(BEAT_EVERY)
+            await asyncio.sleep(beat_seconds())
             try:
                 self.beat()
             except Exception:  # noqa: BLE001

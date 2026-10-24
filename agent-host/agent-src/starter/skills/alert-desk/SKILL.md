@@ -1,6 +1,6 @@
 ---
 name: alert-desk
-description: Receives every critical alert of the VESTA automations (the villa system's vesta_critical_event), removes duplicates, routes by severity to the owner and facility-manager chats, runs the Done / Need help chase (its reminder and escalation times are rules.yaml settings), gates the siren behind two signals and one human approval, and watches the villa from outside (villa silent). The engine runs it on every alert, every ladder button and every 5 minutes; you only read its status.
+description: Receives every critical alert of the VESTA automations (the villa system's vesta_critical_event), removes duplicates, routes by severity to the owner and facility-manager chats, runs the Done / Need help chase (its reminder and escalation times are rules.yaml settings), gates the siren behind several signals and one human approval, and watches the villa from outside (villa silent). The engine runs it on every alert, every ladder button and every few minutes; you only read its status.
 ---
 
 # alert-desk
@@ -11,7 +11,7 @@ decides alone to act on the villa.
 
 ## Files
 
-- `skill.yaml`        what the engine runs, and when (intake on each alert, tick every 5 minutes, reply on a button)
+- `skill.yaml`        what the engine runs, and when (intake on each alert, tick every few minutes (`jobs.every_minutes`), reply on a button)
 - `rules.yaml`        routing by blueprint and rule id, cooldowns, siren policy, which role gets which severity
 - `words.yaml`        what the desk says on a card's Status lines, in each language a chat can read (each chat's copy
                       reads its own; the alert's own text is not in it: the engine has the AI translate that)
@@ -28,22 +28,22 @@ decides alone to act on the villa.
    - `priority` (P1–P4, the automation's "VESTA priority" input) decides who hears it (`people_roles`);
      without one, the automation's route in `rules.yaml`. The villa system's own `severity` word is not a priority.
    - `claim`: a template of the villa's system the automation wrote with its own entities and limits, true while
-     what the alert reports still holds. Every 5 minutes (`tick`) the desk renders it for every open
-     incident: false for `clear_minutes` (its setting) closes it, with its Kiosk fault; a device that does not
+     what the alert reports still holds. At each tick, every few minutes (`jobs.every_minutes`), the desk renders it for every open
+     incident: false for `clear_minutes` closes it, with its Kiosk fault; a device that does not
      answer keeps it open, said once. An alert from an automation that sends no claim but its `bad_states`
      is read by those states (no watched entity in any of them); with neither, it waits for a person.
      The desk knows no automation by name: whatever an automation claims is the automation's.
    - `abandoned` with `still_true: false` (back to normal just as the automation gave up) closes the
      incident; still true, the owner hears it.
-   - An alert back within `reopen_hours` hours of its incident closing (its setting: rules.yaml `behaviour:`, a
+   - An alert back within `reopen_hours` of its incident closing (rules.yaml `behaviour:`, a
      villa's villa.rules.yaml first) reopens it: "Back again: N
      times since …", under its own number, the villa system's latest words, its ladder started again
      and its OWN task and Kiosk fault open again, titled "(again: N times in D days)", D the limit
      `problems.again_days`. Each run is counted on its own by the digest, the reports and the retune proposal.
-     Every closing line that can reopen ends with that watch ("Watch 1h."); a `reopen_hours` of 0 says none.
+     Every closing line that can reopen ends with that watch ("Watch" and `reopen_hours`); a `reopen_hours` of 0 says none.
    - An alert that no chat of the facility manager's received (Telegram refused them all) is handed
      to the owner at the next tick.
-2. The engine's own connection to the villa's system: while it is up, a beat every minute. Its absence
+2. The engine's own connection to the villa's system: while it is up, a beat every `villa.beat_seconds`. Its absence
    is how the desk knows the villa is cut off (internet, power, the villa's system down).
 3. Ladder button presses (Done / Need help) carrying the incident number.
 
@@ -68,7 +68,7 @@ writes the title, "To:" and "Status:" (the skill gives the text and the status a
 latest message: the engine deletes the earlier ones when a new one lands, the villa system's own alert
 included (it is rewritten with the incident's number as soon as the desk knows it).
 
-## The chase ladder (every 5 minutes: `desk.py tick`)
+## The chase ladder (every few minutes: `desk.py tick`)
 
 Every timing and role below is a setting (rules.yaml, or the villa's own `villa.rules.yaml` / its helpers): when a
 person asks, read the value in force, never quote a number from here.
@@ -90,7 +90,7 @@ message then says who pressed what, and when. Typing the word works too.
 
 | Button | Effect |
 |---|---|
-| Done | incident closed, its Kiosk ticket resolved; the device is read once `clear_minutes` (its setting) later. Still bad (its automation names its bad states): the incident opens again, "still there" ("Done (…), but … still reads …: still open. VESTA keeps watching it."), and the desk closes it when it is right. Not knowable (an older alert, a number): the people asked are told what it reads. The same for a fault closed in the Kiosk ("Closed in the Kiosk, but …"); a fault a person REOPENS in the Kiosk asks the facility manager again at once |
+| Done | incident closed, its Kiosk ticket resolved; the device is read once `clear_minutes` later. Still bad (its automation names its bad states): the incident opens again, "still there" ("Done (…), but … still reads …: still open. VESTA keeps watching it."), and the desk closes it when it is right. Not knowable (an older alert, a number): the people asked are told what it reads. The same for a fault closed in the Kiosk ("Closed in the Kiosk, but …"); a fault a person REOPENS in the Kiosk asks the facility manager again at once |
 | Need help | escalated to the owner with the detail |
 
 ## When a critical automation runs

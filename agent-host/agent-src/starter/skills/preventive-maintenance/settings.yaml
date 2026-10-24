@@ -15,7 +15,7 @@ behaviour:
   battery_clear_margin_points: 5        # an open battery fault closes only above its level plus this (owner, 2026-10-20: a battery hovering at 20/21 % opened and closed all day)
   battery_level_window_hours: 24        # a battery is judged on its HIGHEST reading over these hours, its rested level (owner, 2026-10-21: a coin cell dips under load, a motion sensor read 1 % between two readings near 50 %); the villa's low-battery rule reads the same
   silence_hours: 24                     # a sensor that has not reported for this long
-  unavailable_minutes: 10              # offline this long: its fault opens (the night check, and recheck.py every 5 minutes)
+  unavailable_minutes: 10              # offline this long: its fault opens (the night check, and recheck.py every few minutes)
   back_online_minutes: 10               # a device found offline, back this long: its fault closes (recheck.py)
   on_threshold_fraction: 0.2            # fraction of running power that counts as "on", the villa's one definition, held equal in every skill: change it with the helper vesta_on_threshold_fraction
   on_threshold_floor_w: 1.0             # an asset with no data to judge from: "on" above this

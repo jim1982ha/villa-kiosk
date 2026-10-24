@@ -25,12 +25,15 @@ export async function overview() {
     // ⚠️ THE SCHEDULED JOBS ONLY (owner, 2026-10-22): the counters moved to the Costs tab, over its period, and the
     // card's sub-title "Scheduled jobs run" went with them: it was the only thing left under the card's own title.
     // Each run's outcome in the agent's words (status.jobs_run `words`: done / not prepared (why) / stopped by a restart)
-    kids.push(card(place("last_day"), "The scheduled jobs the agent ran in the last 24 hours, from its own records.",
+    // how far back is a setting (page.last_day_hours): the title says it, the lead links to it (core.setting)
+    const lh = o.last_hours || { value: 24 };
+    kids.push(card(place("last_day", { hours: lh.value }), h("span", {}, "The scheduled jobs the agent ran in the last ",
+      setting(`${lh.value} hours`, lh.ref), ", from its own records."),
       r.scheduled_jobs.length
         ? paged(["Job", "Ran at", "Outcome"], [...r.scheduled_jobs].reverse().map((j) => [j.label || j.job, new Date(j.at).toLocaleString(), j.words]))
-        : h("p", { class: "muted" }, "No scheduled job ran in the last 24 hours.")));
+        : h("p", { class: "muted" }, `No scheduled job ran in the last ${lh.value} hours.`)));
   } else {
-    kids.push(card(place("last_day"), "The agent has not recorded anything yet."));
+    kids.push(card(place("last_day", { hours: (o.last_hours || { value: 24 }).value }), "The agent has not recorded anything yet."));
   }
   kids.push(await historyCard(), setupCard(o.setup));
   fill($view, ...kids);

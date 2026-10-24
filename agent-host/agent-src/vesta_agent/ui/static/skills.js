@@ -27,7 +27,7 @@ export function skillSwitch(name, on, select) {
     } }));
 }
 
-export async function skills(select = null) {
+export async function skills(select = null, at = undefined) {
   fill($view, h("p", { class: "muted" }, "Loading…"));
   const { skills: list } = await api("GET", "api/skills");
   const side = h("div", { class: "card" },
@@ -44,7 +44,7 @@ export async function skills(select = null) {
   side.classList.add("skills-side");
   fill($view, h("div", { class: "skills" }, side, pane));
   page.dirty = false; setBar(null);
-  if (select) openSkill(select, pane, list.find((s) => s.name === select));
+  if (select) await openSkill(select, pane, list.find((s) => s.name === select), at);
   // ⚠️ PICKING A SKILL REDRAWS ITS PANE, NOT THE LIST (owner, 2026-10-08: the list vanished and came back on every
   // click): the highlight moves and the pane opens; a change to the list itself (a switch, a release) still redraws it
   async function show(name) {
@@ -231,6 +231,8 @@ export async function openSkill(name, pane, info, path = ABOUT) {
   if (isFile && !files.some((x) => x.path === path)) path = files.length ? files[0].path : null;
   const rel = d.release || {};
   const goTo = async (p) => { if (p !== path && await guard()) openSkill(name, pane, info, p); };
+  // this skill and this file, drawn again as they are: where the Limits tab's Back returns (core.goBack)
+  page.here = () => skills(name, path);
   pane.closest(".skills")?.classList.add("has-open");
 
   // ---- the head (a phone only: the list is hidden there) and the state pill, which sits on the tabs' line

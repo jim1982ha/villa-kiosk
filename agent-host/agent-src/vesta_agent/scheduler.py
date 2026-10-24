@@ -5,7 +5,7 @@ counts at once) and starts:
   - each skill's `every_5_min` code job, every 5 minutes (the alert chase);
   - each `schedule` entry whose time has come: a code job (`run:`, no model, no
     token) or a model job (`prompt:`);
-  - the engine's own job: the knowledge pack rebuilt once a day at PACK_AT,
+  - the engine's own job: the knowledge pack rebuilt once a day at pack_at() (pack.rebuild_at),
     before the night's checks read it.
 
 A slot is run once: its time is written in the state database before it starts,
@@ -33,7 +33,16 @@ from .in_progress import AGAIN, SCHEDULED, InProgress, Item
 log = logging.getLogger("vesta.scheduler")
 
 TICK_SECONDS = 30
-EVERY = timedelta(minutes=5)
+def every() -> timedelta:
+    """How often the skills' frequent checks run (skill.yaml `every_5_min`: the alert chase, the faults read again,
+    which devices are offline). ⚠️ A SETTING, NEVER A NUMBER WRITTEN HERE (owner, 2026-10-24: "every 5 minutes" in the
+    skills' guides could not be changed): read at every tick, so a change counts from the next one; the VESTA Kiosk's
+    "Next check" follows it (the heartbeat's cadence, app.Vesta._cadence)."""
+    return timedelta(minutes=limit("jobs.every_minutes", 5, unit="minutes", group="run", lo=1, hi=60,
+                                   says="How often the skills' frequent checks run: the alert reminders, the open "
+                                        "faults read again, which devices are offline.",
+                                   reached="A longer time: those checks and the Kiosk's Next check come less often.",
+                                   told=""))
 
 
 def window() -> timedelta:
@@ -44,7 +53,12 @@ def window() -> timedelta:
                                    reached="Later than this, that day's run is skipped.", told=""))
 
 
-PACK_AT = "01:30"
+def pack_at() -> str:
+    """When the villa's device list (the knowledge pack) is rebuilt each night, villa time: before the night's checks
+    read it. A setting (owner, 2026-10-24: "01:30" written in a guide could not be changed)."""
+    return limit("pack.rebuild_at", "01:30", unit="villa time", group="read",
+                 says="When the villa's device list is rebuilt each night, before the night's checks read it.",
+                 reached="Set after a skill's nightly check, that check reads the previous night's list.", told="")
 
 
 def slot_for(spec: str, now: datetime) -> datetime | None:
@@ -176,17 +190,17 @@ class Scheduler:
         now = now or datetime.now(ZoneInfo(self.s.timezone))
         started = []
         skills = self.skills.all()
-        if self._last_every is None or now - self._last_every >= EVERY:
+        if self._last_every is None or now - self._last_every >= every():
             self._last_every = now
             for sk in skills.values():
                 if sk.every_5_min and self._start(f"{sk.name}:every_5_min",
                                                   lambda sk=sk: self.run_code(sk, sk.every_5_min, limit(
                                                       "jobs.five_minute_timeout_s", 300, unit="seconds", group="run",
                                                       lo=30, hi=3600,
-                                                      says="How long a skill's every-5-minutes check may run.",
+                                                      says="How long a skill's frequent check (jobs.every_minutes) may run.",
                                                       reached="It is stopped and counts as failed.", told="person"))):
                     started.append(f"{sk.name}:every_5_min")
-        slot = slot_for(PACK_AT, now)
+        slot = slot_for(pack_at(), now)
         if slot and self._claim("engine:pack", slot):
             async def pack(slot=slot):
                 # ⚠️ ITS END RECORDED LIKE EVERY SCHEDULED JOB'S (owner, 2026-10-20: Scheduled jobs run said "done" for

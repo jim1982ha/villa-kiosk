@@ -23,7 +23,7 @@ TABS = {"overview": "Overview", "rules": "Rules", "skills": "Skills", "costs": "
 #: key → (the title the page shows, the place it sits in: a top tab, or "Tab › Card")
 PLACES: dict[str, tuple[str, str]] = {
     # Overview
-    "last_day": ("The last 24 hours", "Overview"),
+    "last_day": ("The last {hours} hours", "Overview"),
     "changes": ("Page changes", "Overview"),
     "setup": ("Copy the setup", "Overview"),
     "setup_out": ("Download this villa's setup", "Overview › Copy the setup"),

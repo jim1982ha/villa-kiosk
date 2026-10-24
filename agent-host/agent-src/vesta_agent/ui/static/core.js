@@ -17,6 +17,8 @@ export const page = {
   current: "overview",
   tabs: {},                 // the tab each tabbed section shows, by its id (core.tabbed): kept while the page is open
   focusLimit: null,         // the Limits row a press on a value (core.setting) asked for: read once by the Limits tab
+  here: null,               // how to draw the current place again exactly (a tab sets it when it has more than its tab)
+  back: null,               // where a press on a value came from: {tab, here, y} — the Limits tab's Back (goBack)
   views: {},                // the tabs, by name: filled by app.js
 };
 
@@ -507,6 +509,8 @@ export function jobsBanner(names, after) {
 }
 
 export function go(tab) {
+  if (tab !== "limits") page.back = null;                 // left the Limits tab another way: nothing to go back to
+  page.here = null;
   page.current = tab; page.dirty = false; setBar(null);
   history.replaceState(null, "", "#" + tab);
   document.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab.replace("-file", "")));
@@ -528,8 +532,30 @@ export function setting(text, ref) {
       e.preventDefault();
       if (!(await guard())) return;
       page.focusLimit = ref;
+      page.back = { tab: page.current, here: page.here, y: window.scrollY };
       go("limits");
     } }, String(text));
+}
+
+// ⚠️ BACK WHERE THE VALUE WAS PRESSED (owner, 2026-10-24: "a back button, so that I can come back to the same page I
+// clicked from, after having edited or not the value"): the tab, its own place in it (a skill and its file: `here`) and
+// the scroll, as they were; null when the Limits tab was not opened from a value
+export async function goBack() {
+  const b = page.back;
+  if (!b || !(await guard())) return;
+  page.back = null;
+  go(b.tab);
+  if (b.here) { page.here = b.here; await b.here(); }
+  await new Promise((r) => setTimeout(r, 300));          // the place drawn (its reads answered), then its scroll
+  window.scrollTo({ top: b.y });
+}
+
+// the Back button itself: "‹ Back", named after the tab it returns to
+export function backButton() {
+  if (!page.back) return null;
+  const label = document.querySelector(`.tabs button[data-tab="${page.back.tab.replace("-file", "")}"]`)?.textContent?.trim();
+  return h("button", { type: "button", class: "btn ghost back-btn", title: label ? `Back to ${label}` : "Back",
+    "aria-label": label ? `Back to ${label}` : "Back", onclick: goBack }, "‹ Back");
 }
 
 // a link to another card of the Rules page: scrolls to it and outlines it a moment

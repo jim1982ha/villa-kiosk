@@ -38,10 +38,10 @@ _ORDER = result.PRIORITY_ORDER
 
 def again_days() -> int:
     """A state finding closed this many days ago or less that the night sees again is the SAME problem, back — not a
-    new one; and "again: N times in 7 days" counts this window."""
+    new one; and "again: N times in D days" counts this window."""
     return limit("problems.again_days", 7, unit="days", group="detect", lo=1, hi=90,
                  says="A problem that comes back within this many days of its close is the same problem, reopened, "
-                      "and \"again: N times in 7 days\" counts this many days.",
+                      "and its \"again: N times in D days\" counts these D days.",
                  reached="Back after longer, it is a new problem with a new number.", told="person")
 
 

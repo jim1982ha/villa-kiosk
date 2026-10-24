@@ -1,7 +1,7 @@
 // VESTA Agent page — the Limits tab: every limit on what the agent reads, says and keeps, on one page.
 // ⚠️ SAVED WHERE IT LIVES (owner, 2026-10-20): a limit of the code in limits.yaml, a skill's number in the skill's
 // settings, a rule in policy.yaml (ui/limits_tab.py) — so Rules and Skills show the same value, and this tab can go.
-import { api, card, dropdown, fill, h, infoButton, page, paged, problemsBox, reasons, tabbed, toast, $view } from "./core.js";
+import { api, backButton, dropdown, fill, h, infoButton, page, paged, problemsBox, reasons, tabbed, titleWithInfo, toast, $view } from "./core.js";
 
 let SEARCH = "", FILTER = "";       // the search as typed, and as matched
 
@@ -94,8 +94,9 @@ export async function limits() {
   draw();
   const search = h("input", { type: "search", placeholder: "Search the limits", value: SEARCH, "aria-label": "Search the limits",
     oninput: (e) => { SEARCH = e.target.value; FILTER = SEARCH.trim().toLowerCase(); draw(); } });
-  fill($view, card("Limits",
-    `Every limit on what the agent reads, tells and keeps, in one place: ${data.rows.length} in all. Each value is saved where the agent reads it, a limit of the agent's code in ${data.file}, a skill's setting in that skill's files, an agent rule in policy.yaml, so the Rules and Skills tabs show the same value. A change counts from the next answer or the next run.`,
+  // opened from a value elsewhere (core.setting): Back on the title's line, to that place as it was (core.goBack)
+  const lead = `Every limit on what the agent reads, tells and keeps, in one place: ${data.rows.length} in all. Each value is saved where the agent reads it, a limit of the agent's code in ${data.file}, a skill's setting in that skill's files, an agent rule in policy.yaml, so the Rules and Skills tabs show the same value. A change counts from the next answer or the next run.`;
+  fill($view, h("section", { class: "card" }, titleWithInfo("Limits", lead, "h2", backButton()),
     data.problems.length ? problemsBox(data.problems, "Limits the page could not read:") : null,
     h("div", { class: "limits-search" }, search), probs, bar, body));
   const lit = focus && [...$view.querySelectorAll("[data-ref]")].find((el) => el.dataset.ref === focus.ref)?.closest("tr");

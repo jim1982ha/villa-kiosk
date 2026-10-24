@@ -969,3 +969,35 @@ def test_the_skill_runs_when_column_is_one_width_on_every_skill():
     whens = {a["when"] for d in glob.glob(os.path.join(starter, "*"))
              for a in S.when_it_runs(S.parse_skill(os.path.basename(d), d))}
     assert "in a chat" in whens and max(map(len, whens)) <= 36, sorted(whens, key=len)[-3:]   # ~0.5em a character
+
+
+def test_the_limits_tab_opened_from_a_value_goes_back_to_where_it_was_pressed():
+    # owner, 2026-10-24: "a Back button, so that I can come back to the same page I clicked from … at the top right
+    # corner on the same line as the title Limits"
+    js = page_js()
+    setting = body_of(js, "setting")
+    assert "page.back = { tab: page.current, here: page.here, y: window.scrollY };" in setting
+    assert 'titleWithInfo("Limits", lead, "h2", backButton())' in body_of(js, "limits")
+    back = body_of(js, "goBack")
+    assert "go(b.tab);" in back and "await b.here();" in back and "window.scrollTo({ top: b.y });" in back
+    go = body_of(js, "go")
+    assert 'if (tab !== "limits") page.back = null;' in go and "page.here = null;" in go
+    # a skill and its file are drawn again as they were
+    assert "page.here = () => skills(name, path);" in body_of(js, "openSkill")
+    assert "await openSkill(select, pane, list.find((s) => s.name === select), at);" in body_of(js, "skills")
+
+
+def test_a_skills_frequent_checks_say_their_rhythm_and_link_to_its_setting(ui):
+    copy_skill("alert-desk", ui.skills_dir)
+
+    async def fn(c):
+        r = await c.get("/api/skills/alert-desk")
+        return (await r.json())["acts"]
+    acts = call(ui, fn)
+    row = next(a for a in acts if a.get("every"))
+    assert row["when"] == "every 5 minutes" and row["ref"] == "code:jobs.every_minutes"
+    # the guides name the setting, never the number, and never "(its setting)": the chip says it
+    import glob
+    for md in glob.glob(os.path.join(os.path.dirname(__file__), "..", "starter", "skills", "*", "SKILL.md")):
+        text = open(md, encoding="utf-8").read()
+        assert "(its setting" not in text and "every 5 min" not in text.lower(), md

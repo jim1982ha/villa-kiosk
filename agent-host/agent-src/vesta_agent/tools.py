@@ -577,15 +577,19 @@ class Toolbox:
         most = limit("ai.status_hours", 168, unit="hours", group="ai", lo=24, hi=8760,
                      says="How far back the AI may look at what the agent itself did (\"what did you do last night?\").",
                      reached="A longer look back is shortened to this; the AI's tool says the most.", told="ai")
+        default = min(most, limit("ai.status_default_hours", 24, unit="hours", group="ai", lo=1, hi=8760,
+                                  says="How far back the AI looks at what the agent itself did when the question says "
+                                       "no period.",
+                                  reached="Earlier records are read only when the question asks for them.", told=""))
         schema = {"type": "object", "properties": {
-            "hours": {"type": "integer", "description": f"How far back, in hours (default 24, at most {most})."}}}
+            "hours": {"type": "integer", "description": f"How far back, in hours (default {default}, at most {most})."}}}
 
         @tool("agent_status", "What YOU (the VESTA Agent) did recently: scheduled jobs run, alerts followed, "
                               "buttons pressed, tickets, actions asked or done, failures, AI cost. Read-only. "
                               "Use it for 'what did you do last night?'. Times are UTC.", schema)
         async def handler(args: dict) -> dict:
             try:
-                hours = max(1, min(most, int(args.get("hours") or 24)))
+                hours = max(1, min(most, int(args.get("hours") or default)))
             except (TypeError, ValueError):
                 return _err("hours must be a whole number.")
             return _ok(scrub(json.dumps(self.status_report(hours), default=str), self._secrets()))
@@ -623,6 +627,12 @@ class Toolbox:
                     body = f.read()
             except OSError:
                 return _err(f"The skill {sk} could not be read.")
+            # the settings it names, with their values now (limits_tab.fill_named): the guide writes no number
+            try:
+                from .ui.limits_tab import LimitsTab, fill_named
+                body = fill_named(body, LimitsTab(self.s, None).names(sk))
+            except Exception:  # noqa: BLE001 — the guide as written, never no guide
+                log.exception("The %s skill's settings could not be filled into its guide", sk)
             # ⚠️ IT WORKS WITHOUT THEM, AND KNOWS IT (owner, 2026-10-10): what this skill uses that THIS run lacks — by the
             # villa's switches or by who asked — is said, so the AI adapts and tells the person what is missing.
             # Until 0.6.112 it refused the whole skill, judged on the villa's switches and not on the run's own tools.
