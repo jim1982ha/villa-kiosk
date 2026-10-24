@@ -208,8 +208,8 @@ const COORD_COMMIT_MS = 1500;
 /** Immediately signs every device out — a lost tablet, a PIN someone saw.
  *  Two-tap confirm, same idiom as Facility's "Delete all" buttons: this
  *  signs the person clicking it out too, so it's worth pausing on. */
-/** "Log out all devices", in the footer of every tab with its (i) on its right (owner, 2026-10-22), styled as Settings'
- *  "Advanced Settings" opener: the footer's left control, never in the Save/Close group. */
+/** "Log out all devices", on every tab with its (i) on its right (owner, 2026-10-22), at the header's right since
+ *  2026-10-24 (owner: Back took its footer place, where Settings' "Advanced Settings" opener is). */
 function LogoutAll() {
   const { logoutAll } = useProfile();
   const [confirming, setConfirming] = useState(false);
@@ -269,10 +269,9 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
   const [tab, setTab] = useState<SettingsTab>(
     focusEntityId ? "devices" : (tabs[0]?.id ?? "villa"));
   const canUploadModel = roleCan(role, "manageModel");
-  // Central GLB/room-data upload — Owner only. Lives in this modal's OWN
-  // header (icon-only, same header-icon-btn treatment as the day/night
-  // invert toggle in the Settings modal's header), not the main app's top
-  // bar — it's an administration action scoped to Advanced Settings.
+  // Central GLB/room-data upload — Owner only. Lives in this modal's own footer, at its right, a footer button like
+  // every other (owner, 2026-10-24), not the main app's top bar — it's an administration action scoped to Advanced
+  // Settings.
   const glbUpload = useGlbUpload(canUploadModel, onModelChanged);
 
   // ⚠️ EVERY CONTROL BELOW WRITES AS THE DIALOG (DialogEdits): what the open drafts' Cancel takes back. The model
@@ -301,13 +300,15 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
               tabIndex={-1} makes it programmatically focusable without
               joining the normal Tab order. */}
           <h2 tabIndex={-1} data-autofocus>Advanced Settings <span className="modal-title-version">v{__APP_VERSION__}</span></h2>
-          {/* ⚠️ BACK IN THE HEADER, THE MODEL'S CONTROLS IN THE FOOTER (owner, 2026-10-24: "remove the Close button,
-              move the top right section to the bottom right, show the same Back button … consistent with other
-              modals"): the way out is the header's Back, as every window opened from another one; the model's (i) and
-              upload sit where Close was. */}
-          <div className="modal-header-actions">
-            <BackButton onClick={exit} label={withinSettings ? "Settings" : undefined} />
-          </div>
+          {/* ⚠️ BACK WHERE SETTINGS' OPENER IS, "LOG OUT ALL DEVICES" UP HERE (owner, 2026-10-24: "invert the position of
+              Log out all devices and the Back button, so that Back appears at the same position as where Advanced
+              Settings is in the previous menu"): Settings → Advanced Settings → Back is one spot under the finger; the
+              model's details and upload sit at the bottom right, labelled on a desktop, icons on a phone. */}
+          {roleCan(role, "editConfig") && (
+            <div className="modal-header-actions">
+              <LogoutAll />
+            </div>
+          )}
         </div>
 
         {/* ⚠️ OUTSIDE `.modal-body`, LIKE FACILITY'S. The strip is chrome and
@@ -421,28 +422,28 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
             Settings, whose Save / Cancel own these changes; on its own: this dialog's Save / Cancel (`commit`). */}
         <RemoteReplacedNote replaced={own.replaced} onDismiss={own.dismissReplaced} />
         <SaveProblemNote line={saveProblem} onDismiss={() => setSaveProblem(null)} />
-        <ModalFooter onClose={back} commit={commit} leading={roleCan(role, "editConfig") ? <LogoutAll /> : undefined}
+        <ModalFooter onClose={back} commit={commit} leading={<BackButton onClick={exit} label={withinSettings ? "Settings" : undefined} footer />}
           actions={canUploadModel ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <>
               {glbUpload.addonCfg?.model_path && (
                 <CentralModelInfo addonCfg={glbUpload.addonCfg} loadedModel={glbUpload.loadedModel} editable />
               )}
               <ModelFileInput upload={glbUpload} />
               <button
-                className="icon-btn header-icon-btn"
+                className="btn"
                 onClick={glbUpload.openPicker}
                 disabled={glbUpload.uploadBusy !== null}
-                title="Upload GLB Model"
-                aria-label="Upload GLB Model"
+                title="Upload a GLB model"
+                aria-label="Upload a GLB model"
               >
-                <Upload size={18} />
-                {glbUpload.uploadPct !== null && (
-                  <span className="icon-btn-count" aria-hidden="true">
-                    {glbUpload.uploadRetry ? `↻${glbUpload.uploadRetry.attempt}` : `${glbUpload.uploadPct}%`}
-                  </span>
-                )}
+                <Upload size={18} aria-hidden />
+                <span className="btn-label">
+                  {glbUpload.uploadPct !== null
+                    ? (glbUpload.uploadRetry ? `Retry ${glbUpload.uploadRetry.attempt}` : `Uploading ${glbUpload.uploadPct}%`)
+                    : "Upload model"}
+                </span>
               </button>
-            </div>
+            </>
           ) : withinSettings ? <span /> : undefined} />
       </div>
     </DialogLayer>

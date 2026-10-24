@@ -96,11 +96,16 @@ ck("the Open a ticket window (one device's faults) fits its content, by the devi
 {
   const ce = readFileSync(new URL("../../src/components/settings/ConfigEditorModal.tsx", import.meta.url), "utf8");
   const bp = readFileSync(new URL("../../src/components/panels/BasePanel.tsx", import.meta.url), "utf8");
-  ck("Advanced Settings: Back in its header, no Close in its footer, the model's controls there instead",
-     /className="modal-header-actions">\s*<BackButton onClick=\{exit\}/.test(ce)
-     && /<ModalFooter onClose=\{back\}[\s\S]{0,200}actions=\{canUploadModel \?/.test(ce)
-     && /:\s*withinSettings \? <span \/> : undefined\}/.test(ce));
-  ck("  ...the same Back as a device window's (one component)", /<BackButton onClick=\{back\.go\} label=\{back\.label\} \/>/.test(bp)
+  ck("Advanced Settings: Back at its footer's left, where Settings' opener is; Log out all devices at its header's right; no Close",
+     /<ModalFooter onClose=\{back\} commit=\{commit\} leading=\{<BackButton onClick=\{exit\} label=\{withinSettings \? "Settings" : undefined\} footer \/>\}/.test(ce)
+     && /className="modal-header-actions">\s*<LogoutAll \/>/.test(ce)
+     && /:\s*withinSettings \? <span \/> : undefined\} \/>/.test(ce));
+  ck("  ...its footer buttons one look: the model's details and upload are .btn with a word hidden on a phone",
+     /<InfoTip label="Model details" button="Model details">/.test(readFileSync(new URL("../../src/components/settings/CentralModelInfo.tsx", import.meta.url), "utf8"))
+     && /className=\{button \? "btn" : "info-btn"\}/.test(readFileSync(new URL("../../src/components/common/InfoTip.tsx", import.meta.url), "utf8"))
+     && /className="btn"\s*onClick=\{glbUpload\.openPicker\}[\s\S]{0,400}<span className="btn-label">/.test(ce)
+     && !/header-icon-btn/.test(ce));
+  ck("  ...the same Back component as a device window's", /<BackButton onClick=\{back\.go\} label=\{back\.label\} \/>/.test(bp)
      && !/className="btn panel-back"/.test(bp + ce));
 }
 
