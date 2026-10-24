@@ -80,7 +80,7 @@ person asks, read the value in force, never quote a number from here.
   events (they never carry `task_text`).
 - Villa silent: no contact with the villa's system for `villa_silent_minutes` opens one P1 incident to both chats;
   the next contact closes it with a "back online" line.
-- Alert fatigue: an automation that fired more than `alert_fatigue_per_month` times in `alerts.fatigue_window_days` (a limit) days becomes a "retune" proposal in the
+- Alert fatigue: an automation that fired more than `alert_fatigue_per_month` (its window: `alerts.fatigue_window_days`) becomes a "retune" proposal in the
   weekly report. Nothing is changed automatically.
 
 ## Answers
@@ -104,7 +104,7 @@ answer (after a restart), the automation alerts anyway.
 ## The siren: strict human validation
 
 `rules.yaml` section `siren`. The gate arms only when all three hold:
-1. At least `siren.min_signals` independent intrusion signals (different entities) inside `siren.window_min` minutes.
+1. At least `siren.min_signals` independent intrusion signals (different entities) inside `siren.window_min`.
 2. The villa is empty: its "Villa empty" helper reads on (`rules.yaml` `siren.villa_empty`, the same one its
    presence automations read). Missing or unreadable: not empty, the siren is not offered.
 3. The owner approves the siren request with the Approve button (it expires after policy.yaml's

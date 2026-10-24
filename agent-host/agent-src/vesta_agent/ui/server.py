@@ -18,6 +18,7 @@ must not be able to edit the rules that bind it. Standalone: loopback only.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -463,7 +464,8 @@ class UI:
             raise Refused(["Not a text file: it cannot be edited here."]) from None
         # a skill's document names its settings, never their numbers: the page shows each with its value now, a link
         # to its row on the Limits tab (viewer.markdownView, core.setting)
-        names = self.limits.names(request.match_info["name"]) if rel.lower().endswith(".md") else {}
+        names = (await asyncio.to_thread(self.limits.names, request.match_info["name"])
+                 if rel.lower().endswith(".md") else {})
         return web.json_response({"content": text, "rev": rev(data), "settings": names})
 
     async def file_put(self, request):

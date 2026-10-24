@@ -24,7 +24,7 @@ from vesta_shared import limits
 from vesta_shared.daily import VILLA_WIDE
 
 from ..places import where
-from ..policy import CONVERSATION_RESETS, DEFAULT_BEHAVIOUR, DEFAULTS, KEEP, PROFILES, WORDS, Policy
+from ..policy import DEFAULT_BEHAVIOUR, DEFAULTS, KEEP, PROFILES, WORDS, Policy, reset_words
 from .changes import Refused, _read
 from .policy_doc import _yaml
 
@@ -436,7 +436,7 @@ class LimitsTab:
              "The most one chat answer may cost (US$), and one translation of an alert card's text. Reached: the "
              "answer stops and offers Continue; the card stays in English."),
             (["settings", "conversation_reset"], st.get("conversation_reset", DEFAULT_BEHAVIOUR["conversation_reset"]),
-             DEFAULT_BEHAVIOUR["conversation_reset"], "choice", list(CONVERSATION_RESETS), None, None, ai,
+             DEFAULT_BEHAVIOUR["conversation_reset"], "choice", [[k, w] for k, w in reset_words().items()], None, None, ai,
              "When a chat's earlier messages are forgotten by the AI."),
         ]
         # one brain and one limit per run for all the AI jobs of a skill (owner, 2026-10-20)

@@ -15,7 +15,8 @@ function input(r, set) {
     return h("input", { type: "text", value: r.value, "aria-label": r.name, oninput: (e) => set(e.target.value.trim() || null) });
   }
   if (r.kind === "choice") {
-    return dropdown((r.choices || []).map((c) => [c, c]), r.value, (v) => set(v), r.name);
+    // a choice is its stored value, or [value, its words] when the agent words it (the chat reset: "Every day at 02:00")
+    return dropdown((r.choices || []).map((c) => (Array.isArray(c) ? c : [c, c])), r.value, (v) => set(v), r.name);
   }
   if (r.kind === "list") {
     const all = [...new Set([...(r.choices || []), ...(r.default || []), ...(r.value || [])])].sort();

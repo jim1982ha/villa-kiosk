@@ -630,7 +630,9 @@ class Toolbox:
             # the settings it names, with their values now (limits_tab.fill_named): the guide writes no number
             try:
                 from .ui.limits_tab import LimitsTab, fill_named
-                body = fill_named(body, LimitsTab(self.s, None).names(sk))
+                # beside the loop, never in it: the first reading parses the source (review K: a second of nothing)
+                names = await asyncio.to_thread(lambda: LimitsTab(self.s, None).names(sk))
+                body = fill_named(body, names)
             except Exception:  # noqa: BLE001 — the guide as written, never no guide
                 log.exception("The %s skill's settings could not be filled into its guide", sk)
             # ⚠️ IT WORKS WITHOUT THEM, AND KNOWS IT (owner, 2026-10-10): what this skill uses that THIS run lacks — by the

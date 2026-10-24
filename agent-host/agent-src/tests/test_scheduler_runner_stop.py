@@ -317,3 +317,39 @@ def test_the_frequent_checks_run_at_the_rhythm_set_on_the_limits_tab(tmp_path, m
     assert ran == ["desk.py tick", "desk.py tick"]                      # at 09:00 and 09:10, never at 09:05
     from vesta_agent.scheduler import every
     assert every() == timedelta(minutes=10)
+
+
+def test_deleting_a_job_never_takes_another_jobs_day_and_a_moved_entry_never_runs_twice(tmp_path):
+    # review K, 0.12.345: "ran today" went by the entry's place: the daily job deleted at 07:30, the weekly one, now
+    # first in the list, read the daily's day and did not run at 08:00
+    s = settings(str(tmp_path))
+    folder = os.path.join(s.skills_dir, "jobs")
+    os.makedirs(os.path.join(folder, "scripts"))
+    for n in ("daily.py", "weekly.py", "early.py"):
+        open(os.path.join(folder, "scripts", n), "w").write("print('{}')\n")
+    open(os.path.join(folder, "SKILL.md"), "w").write("---\nname: jobs\ndescription: two jobs\n---\nJobs.\n")
+
+    def write(entries):
+        with open(os.path.join(folder, "skill.yaml"), "w") as f:
+            yaml.safe_dump({"schedule": [{"when": w, "run": r} for w, r in entries]}, f)
+    write([("07:00", "daily.py"), ("Mon 08:00", "weekly.py")])
+    code = []
+
+    async def run_code(skill, command, timeout):
+        code.append(command)
+
+    async def nothing(*a):
+        pass
+    sch = Scheduler(s, Skills(s.skills_dir), State(s.state_path), run_code, nothing, nothing)
+
+    async def go():
+        await sch.tick(at(7, 1, day=5))                                # Monday 07:01: the daily job
+        await sch.idle()
+        write([("Mon 08:00", "weekly.py")])                            # the daily job deleted: the weekly is entry 0
+        await sch.tick(at(8, 1, day=5))
+        await sch.idle()
+        write([("06:45", "early.py"), ("Mon 08:00", "weekly.py")])     # one inserted above: the weekly is entry 1
+        await sch.tick(at(8, 5, day=5))
+        await sch.idle()
+    asyncio.run(go())
+    assert code == ["daily.py", "weekly.py"]

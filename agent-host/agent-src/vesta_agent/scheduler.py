@@ -105,6 +105,16 @@ def job_key(skill: str, index: int, when: str) -> str:
     return f"{skill}:{index}:{when}"
 
 
+def job_ident(skill: str, schedule: list, i: int) -> str:
+    """A scheduled job by itself, whatever its place or time: its skill and its name (an AI job's), or its script (a
+    code job's) — with its place only when two entries of the skill share both."""
+    def name(j):
+        return str(j.get("name") or str(j.get("run") or "").split(" ")[0] or "")
+    me = name(schedule[i])
+    same = [k for k, j in enumerate(schedule) if name(j) == me]
+    return f"{skill}:{me}" + (f"#{same.index(i)}" if len(same) > 1 or not me else "")
+
+
 def job_label(key: str, skills: dict) -> str:
     """What a person reads for a slot key (owner, 2026-10-08: "reports:0:07:00" repeated the time the Ran at column
     already shows): its skill and what ran (skills.job_title) — an AI job's name (reports › fm-daily, owner
@@ -179,11 +189,11 @@ class Scheduler:
         from it (heartbeat cadence `lastLookAt`, owner 2026-10-21: its time moved every minute, "now + 5 min")."""
         return self._last_every
 
-    def _claim(self, job: str, slot: datetime, entry: str | None = None) -> bool:
+    def _claim(self, job: str, slot: datetime, ident: str | None = None) -> bool:
         if self._cut.get(job) == slot.isoformat():
             del self._cut[job]
             return True
-        return self.state.claim_job_slot(job, slot.isoformat(), entry)
+        return self.state.claim_job_slot(job, slot.isoformat(), ident)
 
     async def tick(self, now: datetime | None = None) -> list[str]:
         """One pass. Returns what it started, for the log and the tests."""
@@ -216,7 +226,7 @@ class Scheduler:
                 # was claimed per entry (skill:i:when) and started per time (skill:when) — two jobs of a skill at the
                 # same time, and the second, claimed, was refused as "still running": lost for the day
                 key = job_key(sk.name, i, job["when"])
-                if not slot or not self._claim(key, slot, job_key(sk.name, i, "")):
+                if not slot or not self._claim(key, slot, job_ident(sk.name, sk.schedule, i)):
                     continue
                 name = f"{sk.name}:{job['when']}"
 

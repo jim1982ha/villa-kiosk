@@ -32,8 +32,8 @@ period, cached: a second question on the same period costs zero tokens.
   is never subtracted twice). When the top-level devices add up to more than the total,
   `overlap_kwh` says how much is counted twice (a device set up beside the meter it is part
   of): say so, never a negative remainder. It is shown, not hidden: it is the honest
-  coverage of the report and the first proposal when it is above `proposals.unmetered_min_pct` %.
-- Comparisons: same length previous period, and the daily median of the `energy.baseline_days` (a limit) days
+  coverage of the report and the first proposal when it is above `proposals.unmetered_min_pct`.
+- Comparisons: same length previous period, and the daily median of the `energy.baseline_days`
   before the period. A load first seen within those days is labelled "measured
   since N days, baseline building" (the pack diff records first sight).
 
@@ -82,6 +82,6 @@ they are enabled, the section says "no waste automations active".
 
 ## What not to do
 
-- Do not compare a period with fewer than `min_period_days` days of data; say the data is incomplete.
+- Do not compare a period with fewer than `min_period_days` of data; say the data is incomplete.
 - Do not present the unmetered remainder as "other appliances": it is unknown.
 - Do not turn a proposal into an action. Proposals are read by a human.

@@ -55,13 +55,24 @@ def keyboard(buttons) -> dict | None:
     return {"inline_keyboard": out} if out else None
 
 
+#: How many villa messages the agent remembers the latest words of (each kept until its last redraw is done)
+KEPT = 500
+
+
 class VillaMessages:
-    def __init__(self, state, translations, lang, edit):
+    """⚠️ ONE MESSAGE, ONE QUEUE (review K, 0.12.345): a redraw of the doorbell's first words that Telegram took slowly
+    landed after its "Opened at …" and put back "New alert" and the Unlock button. Each message's redraws now wait for
+    each other (one lock per message), and whether these are still its newest words is asked inside that lock, just
+    before the edit; the chat's language is read there too (a chat switched meanwhile gets its new one)."""
+
+    def __init__(self, state, translations, lang, edit, names=lambda: ()):
         self.state = state
         self.translations = translations      # translation.Translations: what is kept, what is asked
         self.lang = lang                      # chat → the language it reads (notice.Notices.lang)
         self.edit = edit                      # async (chat, message id, text, keyboard) → bool (delivery.Delivery.edit)
+        self.names = names                    # the villa's device and room names (translation.villa_names): values
         self._latest: dict[tuple[int, int], int] = {}
+        self._locks: dict[tuple[int, int], asyncio.Lock] = {}
         self._n = itertools.count(1)
 
     async def on_message(self, data: dict, context: str | None) -> int:
@@ -76,14 +87,15 @@ class VillaMessages:
                 found = self.state.ha_sent(context)
         n = 0
         for chat, mid in found:
-            if self.state.is_own_message(chat, mid):
-                continue                      # an incident's message now: its card says it, in its chat's language
-            lang = self.lang(chat)
-            if lang == "en":
-                continue
+            if self.state.is_own_message(chat, mid) or self.lang(chat) == "en":
+                continue                      # an incident's message (its card says it), or a chat reading English
             token = next(self._n)
             self._latest[(chat, mid)] = token
-            n += await self._draw(chat, mid, lang, data, token, ask=True)
+            while len(self._latest) > KEPT:   # the oldest messages go: theirs are long drawn
+                old = next(iter(self._latest))
+                self._latest.pop(old, None)
+                self._locks.pop(old, None)
+            n += await self._draw(chat, mid, data, token)
         return n
 
     @staticmethod
@@ -96,28 +108,34 @@ class VillaMessages:
                 continue
         return out
 
-    async def _draw(self, chat: int, mid: int, lang: str, data: dict, token: int, ask: bool) -> int:
-        if self._latest.get((chat, mid)) != token:
-            return 0                          # newer words came meanwhile: they are drawn, never these
-        if self.state.is_own_message(chat, mid):
-            return 0                          # taken over by an incident meanwhile: its card says it
-        title, to, body, status = shape(data.get("message"))
-        if not title:
-            return 0
-        lines = [title] + body + status
-        shown, want = self.translations.lines(lang, lines)
-        if want and ask:
-            self.translations.then(want, lambda: self._draw(chat, mid, lang, data, token, ask=False))
-        if shown == lines:
-            return 0                          # nothing in this language yet: the villa's English stays
-        mid_lines, said = shown[1:1 + len(body)], shown[1 + len(body):]
-        page = document(shown[0], to, [(None, ["\n".join(mid_lines)]), (status_words.label(lang), said)])
-        try:
-            ok = await self.edit(chat, mid, page, keyboard(data.get("buttons")))
-        except Exception:  # noqa: BLE001 — the villa's English stays
-            log.exception("The villa's message %s in chat %s could not be drawn in %s", mid, chat, lang)
-            return 0
-        return 1 if ok else 0
+    async def _draw(self, chat: int, mid: int, data: dict, token: int) -> int:
+        key = (chat, mid)
+        async with self._locks.setdefault(key, asyncio.Lock()):
+            if self._latest.get(key) != token:
+                return 0                      # newer words came meanwhile: they are drawn, never these
+            if self.state.is_own_message(chat, mid):
+                return 0                      # taken over by an incident meanwhile: its card says it
+            lang = self.lang(chat)            # read now: a chat switched meanwhile reads its new language
+            if lang == "en":
+                return 0
+            title, to, body, status = shape(data.get("message"))
+            if not title:
+                return 0
+            lines = [title] + body + status
+            shown, want = self.translations.lines(lang, lines, self.names())
+            if want:
+                # asked once (a line that failed rests, phrases.py): drawn again when known, in the language read then
+                self.translations.then(want, lambda: self._draw(chat, mid, data, token))
+            if shown == lines:
+                return 0                      # nothing in this language yet: the villa's English stays
+            mid_lines, said = shown[1:1 + len(body)], shown[1 + len(body):]
+            page = document(shown[0], to, [(None, ["\n".join(mid_lines)]), (status_words.label(lang), said)])
+            try:
+                ok = await self.edit(chat, mid, page, keyboard(data.get("buttons")))
+            except Exception:  # noqa: BLE001 — the villa's English stays
+                log.exception("The villa's message %s in chat %s could not be drawn in %s", mid, chat, lang)
+                return 0
+            return 1 if ok else 0
 
 
 def shape(message) -> tuple[str, str, list[str], list[str]]:

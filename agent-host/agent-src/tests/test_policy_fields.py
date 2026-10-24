@@ -68,3 +68,16 @@ def test_a_change_recorded_as_a_count_is_said_again_from_its_texts(tmp_path):
     after = "people:\n  - {telegram_id: 1, name: Luc, role: fm, language: en}\n"
     h.record("Rules", "People: 1 item → 1 item", {"kind": "policy"}, before, after)
     assert h.rows()[0]["what"] == f"{policy.WORDS['people']} › Luc: language French → English"
+
+
+def test_page_changes_name_the_person_added_removed_or_changed_whoever_shares_their_name():
+    # review K, 0.12.345: "People: 0 items → 1 item"; two groups named alike, the first removed, told "− Luc"
+    people = policy.WORDS["people"]
+    one = "people:\n  - {telegram_id: 1, name: Luc, role: fm, language: fr}\n"
+    assert history.policy_change("people: []\n", one) == f"{people}: + Luc"
+    assert history.policy_change(one, "people: []\n") == f"{people}: − Luc"
+    two = ("people:\n  - {telegram_id: -5, name: Villa, role: owner, language: en}\n"
+           "  - {telegram_id: -5, name: Villa, role: fm, language: en}\n  - {telegram_id: 2, name: Luc, role: fm, language: fr}\n")
+    later = ("people:\n  - {telegram_id: -5, name: Villa, role: fm, language: en}\n"
+             "  - {telegram_id: 2, name: Luc, role: fm, language: fr}\n")
+    assert history.policy_change(two, later) == f"{people}: − Villa"

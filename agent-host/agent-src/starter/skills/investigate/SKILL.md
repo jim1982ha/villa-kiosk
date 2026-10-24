@@ -24,7 +24,7 @@ what happened, and why".
 
 1. **Pin down the question.** Which device, room or event, and which day and hours: turn "yesterday", "on the 9th",
    "last night" into villa dates using the date and time at the top of the message. With no time given, start from the
-   last `lookback_days` days and find the moment in step 3. Ask one question, and stop, only when you cannot tell which device or
+   last `lookback_days` and find the moment in step 3. Ask one question, and stop, only when you cannot tell which device or
    which day at all.
 
 2. **Find the devices and their neighbours.**
@@ -38,11 +38,11 @@ what happened, and why".
 
 3. **Read what they did against their own normal.**
    `run_skill_script investigate investigate.py timeline --entities <ids, comma-separated> --start <…> --end <…>`
-   - Read from at least `lead_hours` hours before the first sign of trouble to after things were normal again (or now). When the
+   - Read from at least `lead_hours` before the first sign of trouble to after things were normal again (or now). When the
      moment is unknown, read the whole day or days first, then narrow on what stands out. A device that has not
      answered for days: its timeline over those days shows when it stopped (an "offline" period from its first
      moment), with no logbook needed.
-   - As many ids per `--entities` as fit in `skills.text_arg_chars` characters, repeated for more; only ids that find returned. A date alone is the whole day:
+   - As many ids per `--entities` as fit in `skills.text_arg_chars`, repeated for more; only ids that find returned. A date alone is the whole day:
      `--start 2026-10-09 --end 2026-10-09` reads the 9th from 00:00 to midnight.
    - Lines flagged "⟵" are unusual against the device's own normal (the days before): a run far longer than any before,
      a level well above or below normal, exactly 0 where it normally reads a little (its supply was off), no answer,
@@ -80,7 +80,7 @@ what happened, and why".
      stopping, then its circuit's protection trips"): its known causes and what usually goes with it; the make and
      model's known failures (ha_get_device) or its manual; what an error code means; an outside event at that time (a
      storm, a grid outage) when several devices stopped together.
-   - At most `web_searches_max` searches. The words of a search are the pattern, the kind of device and its make and model, and for
+   - At most `web_searches_max`. The words of a search are the pattern, the kind of device and its make and model, and for
      weather or a grid outage at most the town. The villa, its address, its people and its devices' names stay out.
    - Each lead is a question for the records: say what they show for or against it. Times and numbers always come
      from the villa's records.

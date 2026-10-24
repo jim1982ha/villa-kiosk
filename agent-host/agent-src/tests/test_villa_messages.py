@@ -149,3 +149,83 @@ def test_a_villa_message_already_translated_once_asks_the_ai_nothing_again(tmp_p
     assert first >= 1 and len(ai.runs) == first, ai.runs
     last = [t for c, m, t in v.tg.edits if (c, m) == (FM_FR, 701)][-1]
     assert "(fr) ✅ Opened at 17:42:05 at the gate" in last
+
+
+# ------------------------------------------------------------------ review K (0.12.345)
+def _with_doorbells(v):
+    from vesta_shared.knowledge_pack import build_pack
+    reg = {"areas": [{"area_id": "out", "name": "Outdoor"}],
+           "entities": [{"entity_id": "lock.parking_doorbell", "name": "Parking Doorbell", "area_id": "out"},
+                        {"entity_id": "lock.pool_doorbell", "name": "Pool Doorbell", "area_id": "out"}]}
+    with open(v.s.pack_path, "w", encoding="utf-8") as f:
+        f.write(build_pack(reg, []).to_json())
+    return v
+
+
+def test_a_slow_redraw_of_older_words_never_lands_over_the_newer_ones(tmp_path, monkeypatch):
+    # review K: the ring's French edit, slow at Telegram, landed after "Opened at …": "New alert" and Unlock came back
+    import asyncio as aio
+    v = villa(tmp_path)
+    FakeAI(translator).install(monkeypatch)
+    real = v.villa_messages.edit
+    n = {"calls": 0}
+
+    async def slow(chat, mid, text, kb):
+        n["calls"] += 1
+        if n["calls"] == 1:
+            await aio.sleep(0.3)
+        return await real(chat, mid, text, kb)
+    v.villa_messages.edit = slow
+
+    async def go():
+        await ring(v)
+        await aio.sleep(0.05)
+        await v.on_ha_event("vesta_message", {"message": OPENED, "messages": [{"chat_id": FM_FR, "message_id": 700}],
+                                              CONTEXT_KEY: "RING-1b"})
+        await settle(v)
+        await aio.sleep(0.4)
+    run(go())
+    assert "Opened at 09:03:27" in v.tg.edits[-1][2] and v.tg.edit_keyboards[-1] is None
+
+
+def test_a_chat_switched_to_english_meanwhile_is_not_redrawn_and_the_record_is_bounded(tmp_path, monkeypatch):
+    from vesta_agent import villa_messages as vm
+    v = villa(tmp_path)
+    FakeAI(translator).install(monkeypatch)
+    asked = v.translations.then
+
+    def then(want, fn):
+        v.villa_messages.lang = lambda chat: "en"           # People: the chat set to English while the AI translates
+        asked(want, fn)
+    monkeypatch.setattr(v.translations, "then", then)
+    async def first():
+        await ring(v)
+        await settle(v)
+    run(first())
+    assert v.tg.edits == [] and v.translations.phrases is not None
+    monkeypatch.setattr(vm, "KEPT", 20)
+    v.villa_messages.lang = lambda chat: "fr"
+
+    async def many():
+        for i in range(50):
+            await v.on_ha_event("vesta_message", {"message": RING, "messages": [{"chat_id": FM_FR, "message_id": 2000 + i}],
+                                                  CONTEXT_KEY: f"C{i}"})
+        await settle(v)
+    run(many())
+    assert len(v.villa_messages._latest) <= 20 and len(v.villa_messages._locks) <= 20
+
+
+def test_a_device_name_in_a_villa_message_is_a_value_and_two_doorbells_share_one_translation(tmp_path, monkeypatch):
+    v = _with_doorbells(villa(tmp_path))
+    ai = FakeAI(translator).install(monkeypatch)
+    pool = RING.replace("Parking Doorbell", "Pool Doorbell")
+
+    async def go():
+        await ring(v)
+        await settle(v)
+        await v.on_ha_event("vesta_message", {"message": pool, "messages": [{"chat_id": FM_FR, "message_id": 701}],
+                                              CONTEXT_KEY: "P"})
+        await settle(v)
+    run(go())
+    assert len(ai.runs) == 1 and "Parking Doorbell" not in ai.runs[0]["prompt"]
+    assert v.tg.edits[-1][2].startswith("(fr) 🔔 Visitor at Pool Doorbell")

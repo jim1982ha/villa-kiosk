@@ -169,7 +169,7 @@ def _diff(path: str, a, b, out: list[str]) -> None:
     if isinstance(a, dict) and isinstance(b, dict):
         for k in list(a) + [k for k in b if k not in a]:
             _diff(f"{path}.{k}" if path else str(k), a.get(k), b.get(k), out)
-    elif isinstance(a, list) and isinstance(b, list) and a and b and all(isinstance(x, dict) for x in a + b):
+    elif isinstance(a, list) and isinstance(b, list) and (a or b) and all(isinstance(x, dict) for x in a + b):
         _rows(path, a, b, out)
     elif isinstance(a, list) and isinstance(b, list) and all(isinstance(x, (str, int)) for x in a + b):
         added, gone = [x for x in b if x not in a], [x for x in a if x not in b]
@@ -183,6 +183,12 @@ def _named(row: dict, i: int) -> str:
     return str(row.get("name") or row.get("entity_id") or row.get("telegram_id") or f"row {i + 1}")
 
 
+def _identity(row: dict, i: int):
+    if row.get("telegram_id") is not None:
+        return ("person", str(row.get("telegram_id")), str(row.get("role") or ""))
+    return ("name", _named(row, i))
+
+
 def _rows(path: str, a: list[dict], b: list[dict], out: list[str]) -> None:
     """A list of rows (People): each row by its name, what changed in it said field by field — "People › Luc:
     language fr → en", "People: + Wayan", "People: − Luc".
@@ -190,9 +196,14 @@ def _rows(path: str, a: list[dict], b: list[dict], out: list[str]) -> None:
     ⚠️ NEVER "3 items → 3 items" (owner, 2026-10-24: Page changes said only that for a person's language changed). Rows
     are matched by their name when every name is told apart, else by their place."""
     names_a, names_b = [_named(r, i) for i, r in enumerate(a)], [_named(r, i) for i, r in enumerate(b)]
-    if len(set(names_a)) == len(a) and len(set(names_b)) == len(b):
-        pairs = [(n, a[names_a.index(n)] if n in names_a else None, b[names_b.index(n)] if n in names_b else None)
-                 for n in names_a + [n for n in names_b if n not in names_a]]
+    # ⚠️ A ROW IS WHO IT IS, NOT WHAT IT IS CALLED (review K, 0.12.345): two groups named alike, the first removed, read
+    # as three wrong changes ending "− Luc" while Luc stayed. A person is their Telegram id and role; a row without them,
+    # its name; only rows that repeat even that are matched by their place.
+    ids_a, ids_b = [_identity(r, i) for i, r in enumerate(a)], [_identity(r, i) for i, r in enumerate(b)]
+    if len(set(ids_a)) == len(a) and len(set(ids_b)) == len(b):
+        name_of = {**dict(zip(ids_a, names_a)), **dict(zip(ids_b, names_b))}
+        pairs = [(name_of[k], a[ids_a.index(k)] if k in ids_a else None, b[ids_b.index(k)] if k in ids_b else None)
+                 for k in ids_a + [k for k in ids_b if k not in ids_a]]
     else:
         pairs = [(names_b[i] if i < len(b) else names_a[i], a[i] if i < len(a) else None, b[i] if i < len(b) else None)
                  for i in range(max(len(a), len(b)))]

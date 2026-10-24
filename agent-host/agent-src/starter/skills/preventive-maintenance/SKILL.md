@@ -84,16 +84,16 @@ closure, and never raise the same thing twice.
 | Check | Family | What it catches | Threshold source |
 |---|---|---|---|
 | PM-POWER-CHANGE | power | The steady running draw of a continuously running pump moved versus its `baseline_days` median at equal run hours. A sudden change gets a date (change point), a slow one is called a drift. Lower draw at equal hours means less water moved. | `<asset>_drift_pct` helper, else behaviour `drift_pct` |
-| PM-RUNHOURS | power | A scheduled asset ran `schedule_dev_pct` % shorter or longer than its `schedule.<asset>_expected_runtime`, with the hours of missing data stated. | `vesta_schedule_dev_pct` |
+| PM-RUNHOURS | power | A scheduled asset ran `schedule_dev_pct` shorter or longer than its `schedule.<asset>_expected_runtime`, with the hours of missing data stated. | `vesta_schedule_dev_pct` |
 | PM-ENERGY-CHANGE | energy | Daily kWh of a scheduled or metered asset collapsed or jumped versus its `baseline_days` median. This is how a cycling pressure pump (never a full hour on) is watched. | `vesta_energy_drop_pct`, `vesta_energy_rise_pct` |
-| PM-RUN-SAG | power | Within one run the draw fell by `sag_pct` % or more from the first quarter to the last quarter of the run (air, basket filling). Report only. | `vesta_sag_pct` |
+| PM-RUN-SAG | power | Within one run the draw fell by `sag_pct` or more from the first quarter to the last quarter of the run (air, basket filling). Report only. | `vesta_sag_pct` |
 | PM-EXPECTED-SILENT | power | An intermittent, usage-driven asset was scheduled and did not run. Report only, never a task. | schedule helper |
 | PM-COUNTER-RESET | energy | An energy counter went backwards: the day's kWh is unreliable. | none |
 | PM-BATTERY-LOW / -CRIT / -TREND | battery | Level under `battery_warn_pct` (task), under `battery_crit_pct` (task now, P2 if the device is critical), or falling fast enough to be empty within `battery_trend_warn_days` (report). An open LOW or CRIT closes only once the level is above its line plus `battery_clear_margin_points` (LOW above `battery_warn_pct` plus it, CRIT above `battery_crit_pct` plus it). A battery that reports volts needs `<asset>_battery_nominal_v`. | `vesta_battery_warn_pct`, `vesta_battery_crit_pct`, `vesta_battery_clear_margin_points` |
 | PM-UNAVAILABLE | availability | (Never a device the VESTA Kiosk lists as "Asleep between reports" (Advanced Settings), nor its reconnects, nor its silence; an open fault of one closes at the next recheck.) A device offline for more than `unavailable_minutes` (read every few minutes, and at batch time), none for a device an open offline alert already follows, one finding per physical device; `integration_down_devices` or more devices of one integration offline together become one "integration down" finding. P2 when the device is critical. | `vesta_unavailable_minutes` |
 | PM-SILENT | level | A sensor online but not reporting for `silence_hours`. | `vesta_silence_hours` |
 | PM-LEVEL-HIGH | level | A temperature or humidity above `<asset>_max_c` / `<asset>_max_humidity_pct` when such a helper exists. | asset helper |
-| PM-RECONNECT-LOOP | network | `reconnect_events` or more drop/reconnect events in `reconnect_days` days for one device (logbook). | `vesta_reconnect_events`, `vesta_reconnect_days` |
+| PM-RECONNECT-LOOP | network | `reconnect_events` or more drop/reconnect events in `reconnect_days` for one device (logbook). | `vesta_reconnect_events`, `vesta_reconnect_days` |
 | PM-HIDDEN-IN-RULE | configuration | A villa automation or script still names a device hidden in the villa's system that no longer answers (offline, or no longer in the system): one finding per automation or script, naming those devices, most likely one replaced by a copy. A hidden device that answers is only tidied off the screens, and it is right to watch it. Nightly only. | none |
 | PM-PARAM-MISSING | any | A check could not run for lack of a helper. Says which one. | none |
 
@@ -104,7 +104,7 @@ template averages), "appliance" (the rest). Only motors get the physics checks
 below; lighting and meters are read by roi-energy and never chased here. To
 force a kind: `input_text.vesta_asset_kinds` = {"slug": "motor"}.
 
-How a motor is classified, automatically, from its own last `baseline_days` days:
+How a motor is classified, automatically, from its own last `baseline_days`:
 "continuous" (runs in blocks of `night.continuous_full_hours` or more: filtration, circulation), "cycling"
 (bursts, never that long: pressure pump) or "intermittent" (runs on fewer
 than `intermittent_share` of the days, or `intermittent_min_days`: jacuzzi, jets). Continuous assets get the power checks,

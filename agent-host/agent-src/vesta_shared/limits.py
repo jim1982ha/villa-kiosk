@@ -21,6 +21,7 @@ from __future__ import annotations
 import re
 
 import ast
+import functools
 import os
 from dataclasses import dataclass, field
 from typing import Any, Iterable
@@ -136,6 +137,30 @@ def calls(tree: ast.AST) -> Iterable[ast.Call]:
                 yield node
 
 
+@functools.lru_cache(maxsize=4096)
+def _declared_in(fp: str, _mtime_ns: int, _size: int) -> tuple:
+    """One file's limit() calls, (line, key, default, meta) — key None for one whose key or default is not written.
+    ⚠️ PARSED ONCE PER VERSION OF THE FILE (review K, 0.12.345): every reading of a skill's guide by the AI parsed the
+    whole source tree, about a second during which the agent did nothing else; the file's mtime and size key it."""
+    try:
+        with open(fp, encoding="utf-8") as f:
+            tree = ast.parse(f.read(), fp)
+    except (OSError, SyntaxError, ValueError):
+        return ()
+    out = []
+    for c in calls(tree):
+        if len(c.args) < 2:
+            continue                     # the definition's own recursion, or a call that is not ours
+        key, default = _literal(c.args[0]), _literal(c.args[1])
+        if not isinstance(key, str) or default is _Bad:
+            out.append((c.lineno, None, None, ()))
+            continue
+        meta = {k.arg: _literal(k.value) for k in c.keywords if k.arg}
+        meta = {k: v for k, v in meta.items() if v is not _Bad and k in Declared.__dataclass_fields__}
+        out.append((c.lineno, key, default, tuple(meta.items())))
+    return tuple(out)
+
+
 def scan(roots: Iterable[str]) -> tuple[dict[str, Declared], list[str]]:
     """Every limit() call in the .py files under `roots`: {key: Declared}, and the problems found (a key or default
     that is not a literal, one key declared with two defaults)."""
@@ -149,20 +174,15 @@ def scan(roots: Iterable[str]) -> tuple[dict[str, Declared], list[str]]:
                     continue
                 fp = os.path.join(dirpath, fn)
                 try:
-                    with open(fp, encoding="utf-8") as f:
-                        tree = ast.parse(f.read(), fp)
-                except (OSError, SyntaxError, ValueError):
+                    st = os.stat(fp)
+                except OSError:
                     continue
-                for c in calls(tree):
-                    site = f"{os.path.relpath(fp, root)}:{c.lineno}"
-                    if len(c.args) < 2:
-                        continue                     # the definition's own recursion, or a call that is not ours
-                    key, default = _literal(c.args[0]), _literal(c.args[1])
-                    if not isinstance(key, str) or default is _Bad:
+                for lineno, key, default, meta in _declared_in(fp, st.st_mtime_ns, st.st_size):
+                    site = f"{os.path.relpath(fp, root)}:{lineno}"
+                    if key is None:
                         problems.append(f"{site}: limit() needs a written key and default")
                         continue
-                    meta = {k.arg: _literal(k.value) for k in c.keywords if k.arg}
-                    meta = {k: v for k, v in meta.items() if v is not _Bad and k in Declared.__dataclass_fields__}
+                    meta = dict(meta)
                     d = found.get(key)
                     if d is None:
                         found[key] = Declared(key, default, sites=[site], **meta)

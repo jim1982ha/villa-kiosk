@@ -83,6 +83,11 @@ def _named(names) -> list[re.Pattern]:
     return out
 
 
+@functools.lru_cache(maxsize=32)
+def _patterns_of(names: tuple) -> list[tuple[re.Pattern, int]]:
+    return _patterns(names)
+
+
 def _patterns(names) -> list[tuple[re.Pattern, int]]:
     """The variable parts of a line, in the order they are looked for (an earlier one's span is not looked at again):
     (pattern, the group that is the slot)."""
@@ -109,7 +114,7 @@ def mask(line: str, names=()) -> tuple[str, list[str]]:
     >>> mask('Main Power Device Power has been "unavailable" for over 10 min.', ["Main Power Device Power"])
     ('{1} has been {2} for over {3} min.', ['Main Power Device Power', '"unavailable"', '10'])"""
     work, spans = line, []
-    for pat, group in _patterns(names):
+    for pat, group in _patterns_of(tuple(names or ())):
         for m in pat.finditer(work):
             s, e = m.span(group)
             value = line[s:e].rstrip()
@@ -153,6 +158,27 @@ def incident_names(pack, entities, live: dict[str, str] | None = None) -> list[s
             if isinstance(n, str) and n.strip() and n not in out:
                 out.append(n)
     return out
+
+
+def villa_names(pack) -> tuple[str, ...]:
+    """Every device, reading and room name the knowledge pack knows: what a villa message may say of its devices
+    (villa_messages.py — it names no entity). ⚠️ NAMES ARE VALUES THERE TOO (review K, 0.12.345): "Visitor at Parking
+    Doorbell" went to the AI as words, could come back renamed, and each doorbell was a sentence and a run of its own."""
+    if pack is None:
+        return ()
+    if _VILLA_NAMES[0] is pack:                       # read once per pack (a rebuild is a new pack)
+        return _VILLA_NAMES[1]
+    out: dict[str, None] = {}
+    for row in pack.rows():
+        e = row.get("entity_id")
+        for n in (pack.name_of(e) if e else None, pack.device_name(e, None) if e else None, row.get("area")):
+            if isinstance(n, str) and len(n.strip()) >= 3:
+                out.setdefault(n.strip(), None)
+    _VILLA_NAMES[:] = [pack, tuple(out)]
+    return _VILLA_NAMES[1]
+
+
+_VILLA_NAMES: list = [None, ()]
 
 
 def alert_names(reader, entities) -> dict[str, str]:

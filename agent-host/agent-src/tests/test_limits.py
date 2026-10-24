@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import os
 import time
+from pathlib import Path
 
 import pytest
 import yaml
@@ -162,6 +163,7 @@ NOT_LIMITS = {
     ("vesta_agent/status.py", "str(start)[:16]"): "the date and time part of a timestamp",
     ("vesta_agent/status.py", "str(a['end_time'])[:16]"): "the date and time part of a timestamp",
     ("vesta_shared/problems.py", "str(iso)[:10]"): "the date part of a timestamp",
+    ("vesta_agent/state.py", "slot_iso[:10]"): "the date part of a job's slot",
     ("vesta_shared/timeutil.py", "s.split(\":\")[:2]"): "hours and minutes of a clock time",
     ("vesta_agent/ui/changes.py", "hashlib.sha256(data).hexdigest()[:16]"): "a file version's short hash",
     ("starter/skills/roi-energy/scripts/energy_period.py", "h.hexdigest()[:12]"): "the cache key's short hash",
@@ -445,3 +447,62 @@ def test_the_ais_read_skill_tool_gives_each_named_setting_its_value(tmp_path):
     res = asyncio.run(v.toolbox()._read_skill().handler({"skill": "preventive-maintenance"}))
     text = res["content"][0]["text"]
     assert "`unavailable_minutes` (10 minutes)" in text and "`pack.rebuild_at` (01:30 villa time)" in text
+
+
+def test_the_code_is_parsed_once_per_version_of_a_file(tmp_path):
+    # review K: every reading of a guide by the AI parsed the whole source tree (about a second of a stalled agent)
+    from vesta_shared import limits as L
+    f = tmp_path / "m.py"
+    f.write_text('limit("x.a", 1, says="a", reached="b")\n')
+    L._declared_in.cache_clear()
+    L.scan([str(tmp_path)])
+    L.scan([str(tmp_path)])
+    assert L._declared_in.cache_info().misses == 1 and L._declared_in.cache_info().hits == 1
+    time.sleep(0.01)
+    f.write_text('limit("x.a", 2, says="a", reached="b")\n')
+    assert L.scan([str(tmp_path)])[0]["x.a"].default == 2              # a changed file is read again
+
+
+def test_no_guide_says_a_named_settings_unit_a_second_time(ui):
+    # review K, 0.12.345: the value comes with its unit ("`siren.window_min` (5 minutes)"); a guide writing "minutes"
+    # after it read "5 minutes minutes" to the AI and on the page's chip
+    import glob
+    import re
+    from vesta_agent.ui.limits_tab import LimitsTab
+    for d in os.listdir(os.path.join(SRC, "starter", "skills")):
+        if not os.path.isdir(os.path.join(ui.skills_dir, d)):
+            copy_skill(d, ui.skills_dir)
+    tab, twice = LimitsTab(ui, None), []
+    for d in sorted(os.listdir(ui.skills_dir)):
+        md = open(os.path.join(ui.skills_dir, d, "SKILL.md"), encoding="utf-8").read()
+        names = tab.names(d)
+        for m in re.finditer(r"`([A-Za-z][\w.\-]*)`(\s*\(a limit\))?\s*([^\s.,;:)]*)", md):
+            n = names.get(m.group(1))
+            unit = ((n or {}).get("unit") or "").split()
+            if n and (m.group(2) or (unit and m.group(3).lower() in (unit[0].lower(), unit[0].lower().rstrip("s")))):
+                twice.append(f"{d}: {m.group(0)}")
+    assert twice == []
+
+
+def test_the_chat_reset_reads_on_the_limits_tab_as_on_the_rules_tab(ui):
+    # review K, 0.12.345: Limits offered "daily_04_00" while Rules said "Every day at 02:00"
+    path = os.path.join(ui.config_dir, "limits.yaml")
+    open(path, "w").write("chat.reset_at: '02:00'\nchat.silence_reset_hours: 12\n")
+    os.environ["VESTA_LIMITS"] = path
+    try:
+        row = next(r for r in _rows(ui)["rows"] if r["name"] == "settings.conversation_reset")
+    finally:
+        os.environ.pop("VESTA_LIMITS", None)
+    assert row["choices"] == [["daily_04_00", "Every day at 02:00"], ["after_8h_silence", "After 12 hours of silence"],
+                              ["never", "Never (/new only)"]]
+    js = (Path(__file__).resolve().parents[1] / "vesta_agent" / "ui" / "static" / "limits.js").read_text()
+    assert "(Array.isArray(c) ? c : [c, c])" in js
+
+
+def test_a_guides_table_and_a_long_setting_name_stay_inside_a_phones_screen():
+    # owner, 2026-10-24 (phone): a SKILL.md table's column broke one letter per line, a setting's chip ran past the edge
+    css = (Path(__file__).resolve().parents[1] / "vesta_agent" / "ui" / "static" / "app.css").read_text()
+    rule = lambda sel: css.rsplit(sel + " {", 1)[1].split("}", 1)[0]          # the last rule: the phone fix
+    assert "overflow-x: auto" in rule(".md-box table.rows") and "display: block" in rule(".md-box table.rows")
+    assert "word-break: normal" in rule(".md-box table.rows td, .md-box table.rows th")
+    assert "overflow-wrap: anywhere" in rule("a.setting")

@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.6.335 (24 October 2026)
+
+- Review K (owner: "Proceed with all recommended ones"):
+  - villa_messages: one lock per (chat, message), newest words checked inside the lock, language read at draw time,
+    record bounded (KEPT), device names masked through translation.villa_names(pack).
+  - limits.scan cached per file version (_declared_in, keyed by mtime and size); read_skill and the file view read
+    named values off the event loop (asyncio.to_thread).
+  - State.claim_job_slot claims by job identity (scheduler.job_ident), never by position: a deleted job never takes
+    another job's day, and a moved job runs once.
+  - history._identity matches people by telegram id and role; an emptied list is a change.
+  - the guides do not repeat a named setting's unit (test_no_guide_says_a_named_settings_unit_a_second_time).
+  - the Limits row "Delete conversation context at" sends [value, words] pairs from policy.reset_words; limits.js
+    accepts pairs.
+- Skills page (owner, 2026-10-24, phone): .md-box tables scroll sideways with normal word breaks; a.setting wraps
+  (overflow-wrap: anywhere, box-decoration-break: clone).
+
 ## 0.6.334 (24 October 2026)
 
 - Every number a person or the AI reads is a setting, named, never written (owner, 2026-10-24):

@@ -52,7 +52,7 @@ from .ha_events import CONTEXT_KEY, REGISTRY_EVENTS, HaEvents
 from . import layout
 from .approvals import Approvals
 from .posting import Poster
-from .translation import Translations, alert_names, incident_names, names_seconds
+from .translation import Translations, alert_names, incident_names, names_seconds, villa_names
 from .villa_messages import VillaMessages
 from .incident_thread import IncidentThread
 
@@ -204,7 +204,7 @@ class Vesta:
         self.thread.translate = self.translations.draw
         self._villa_tasks: set[asyncio.Task] = set()
         self.villa_messages = VillaMessages(self.state, self.translations, lambda chat: self.notices.lang(chat),
-                                            self.delivery.edit)
+                                            self.delivery.edit, names=lambda: villa_names(self.pack()))
         self.poster = Poster(send=self.delivery.send, thread=self.thread, notices=self.notices,
                              timezone_name=settings.timezone, edit=self.delivery.edit, translations=self.translations)
         # a job asked for in a chat, start to end (chat_jobs.py); what it tells a chat goes titled, through the poster
