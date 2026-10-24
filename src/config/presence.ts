@@ -80,7 +80,11 @@ export interface PresenceSetting {
 
 /** The steps the sensor goes through, as a stage sensor it names states them (owner, 2026-10-24: "show each stage in
  *  the mini trend chart"): its id, and its stages in order, from someone in to empty, each with its words. */
-export interface PresenceStages { sensorId: string; order: [string, string][] }
+export interface PresenceStages {
+  sensorId: string; order: [string, string][];
+  /** Its stage now, and since when (the history's start of the run, like a person's). */
+  now: string; since: Since;
+}
 
 const TIME_UNIT_MS: Record<string, number> = { s: 1000, min: 60_000, h: 3_600_000, d: 86_400_000 };
 /** A setting's value in words: "5.0" "min" → "5min", "1.0" "h" → "1h" (the app's one duration rule, fmtDuration),
@@ -91,6 +95,22 @@ export function settingWords(value: string, unit: string): string {
   if (TIME_UNIT_MS[unit]) return fmtDuration(n * TIME_UNIT_MS[unit]);
   const said = String(Math.round(n * 1000) / 1000);
   return unit ? `${said} ${unit}` : said;
+}
+
+/** A stage in words: the sensor's own, else the presence's ("Presence unknown" for unavailable or unknown), never
+ *  a raw state (owner, 2026-10-24: the legend read "unavailable"). */
+export function stageWords(stages: PresenceStages, state: string): string {
+  return stages.order.find(([s]) => s === state)?.[1] ?? presenceStateWords(state).label;
+}
+
+/** What the window's heading says: the stage now, in its words and colour and since when, while the villa is on its
+ *  way to empty (owner, 2026-10-24: "Occupied since 18:11" while everyone was away and the band said "Waiting for
+ *  indoor quiet"); empty, or no stages, the presence itself ("Empty" keeps its exact "since", empty_since). */
+export function presenceHeading(p: Presence, when: string, stages: PresenceStages | null,
+  sinceWords: (s: Since) => string): { label: string; color: string; when: string } {
+  const i = stages ? stages.order.findIndex(([s]) => s === stages.now) : -1;
+  if (!stages || i < 0 || i === stages.order.length - 1) return { label: p.label, color: STATUS_COLOR[p.tone], when };
+  return { label: stages.order[i][1], color: stageColor(stages, stages.now), when: sinceWords(stages.since) };
 }
 
 /** A stage's colour: the first (someone in) the map's occupied green, the last (empty) its grey, each step between
@@ -127,7 +147,8 @@ const listed = (v: unknown): string[] | null => (Array.isArray(v) ? v.filter((x)
 /** The ids whose "since" the window shows: the people and the sensors the sensor lists. */
 export function presenceWatched(sensorId: string, entities: Readonly<Record<string, HassEntity>>): string[] {
   const attrs = entities[sensorId]?.attributes ?? {};
-  return [...(listed(attrs.people) ?? []), ...(listed(attrs.sensors) ?? [])];
+  return [...(listed(attrs.people) ?? []), ...(listed(attrs.sensors) ?? []),
+    ...(typeof attrs.stage_sensor === "string" ? [attrs.stage_sensor] : [])];
 }
 
 /**
@@ -173,7 +194,7 @@ export function presenceWhy(sensorId: string, entities: Readonly<Record<string, 
     lastActivity: latest ? { entityId: latest.entity_id, name: nameOf(latest), moving: latest.state === "on", at: sinceOf(latest.entity_id) } : null,
     listsSensors: sensorIds !== null,
     settings,
-    stages: order.length ? { sensorId: stageId, order } : null,
+    stages: order.length ? { sensorId: stageId, order, now: entities[stageId]?.state ?? "", since: sinceOf(stageId) } : null,
   };
 }
 

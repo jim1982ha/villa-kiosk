@@ -29,10 +29,10 @@ import { binaryLook } from "./binaryLook";
 import { stateLabelFor } from "./BinarySensorClasses";
 import { deviceRowText, formatSensorParts, prettyState } from "@/utils/entityValue";
 import { domainOf } from "@/utils/entityDomain";
-import { contactOf, isUnavailable, NOT_KEPT, NOT_KEPT_COLOR, NOT_KEPT_WORDS, paintState, statusKeyFor, STATUS_PILL_CLASS } from "@/utils/stateColors";
+import { contactOf, isNoHistory, isUnavailable, NO_RECORD, NO_RECORD_WORDS, NOT_KEPT, NOT_KEPT_COLOR, NOT_KEPT_WORDS, paintState, statusKeyFor, STATUS_PILL_CLASS } from "@/utils/stateColors";
 
 /** The stretch older than the villa's system keeps, as a history bar reads it (historySource.keptFrom). */
-export { NOT_KEPT, NOT_KEPT_WORDS };
+export { NOT_KEPT, NOT_KEPT_WORDS, NO_RECORD, NO_RECORD_WORDS };
 import { coverStateLabel } from "@/utils/panelRules";
 
 /** The colour a measurement's number (and its chart) takes at each level. */
@@ -227,5 +227,5 @@ export function readableState(state: string): string {
  *  idle colour (stateColors.paintState). */
 export function chartColours(colorFor: (state: string) => string): (state: string) => string {
   const paint = paintState(colorFor);
-  return (state: string) => (state === NOT_KEPT ? NOT_KEPT_COLOR : paint(state));
+  return (state: string) => (isNoHistory(state) ? NOT_KEPT_COLOR : paint(state));
 }

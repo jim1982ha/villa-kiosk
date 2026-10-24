@@ -155,4 +155,32 @@ ck("  ...colours: someone home the occupied green, empty its grey, the steps bet
      /const st = why\.stages;/.test(tileSrc) && /<LastDayTimeline entityId=\{st\.sensorId\}/.test(tileSrc) && /colorFor=\{\(s\) => stageColor\(st, s\)\}/.test(tileSrc));
 }
 
+console.log("\n  the heading, the words, the time before the first record (owner, 2026-10-24):");
+{
+  const { keptBand } = await import("@/ha/historySource");
+  const { NO_RECORD, NOT_KEPT, NOT_KEPT_COLOR } = await import("@/utils/stateColors");
+  const { chartColours } = await import("@/config/reading");
+  const win = { from: 1_000_000, to: 5_000_000 };
+  const later = keptBand([{ t: 3_000_000, state: "wait" }], win, undefined);
+  ck("a first record later than the window's start: the window opens on \"No record yet\" until it, never blank",
+     later[0]?.state === NO_RECORD && later[0].t === win.from && later[1]?.state === "wait", later);
+  ck("  ...a record at the start (the state then): nothing added; older than the villa keeps: still \"No longer kept\"",
+     keptBand([{ t: win.from, state: "wait" }], win, undefined).length === 1
+     && keptBand([{ t: 3_000_000, state: "wait" }], win, 2_000_000)[0].state === NOT_KEPT && keptBand([], win, undefined).length === 0);
+  ck("  ...painted as nothing to show, never the grey of a resting state", chartColours(() => "x")(NO_RECORD) === NOT_KEPT_COLOR);
+  const sts = { ...w2.stages, now: "wait", since: { at: 7, before: false } };
+  ck("a stage the sensor does not list is said in the presence's words, never raw",
+     P.stageWords(sts, "unavailable") === "Presence unknown" && P.stageWords(sts, "grace") === "Away, grace");
+  const sw = (s) => (s && s !== "loading" ? `T${s.at}` : "");
+  const hw = P.presenceHeading(off, "18:11", sts, sw);
+  ck("  ...the heading: the stage now, its colour and since when, while on the way to empty",
+     hw.label === "Waiting" && hw.color === P.stageColor(sts, "wait") && hw.when === "T7", hw);
+  ck("  ...empty, or no stages: the presence itself, with its own since",
+     P.presenceHeading(on, "17:12", { ...sts, now: "empty" }, sw).label === "Empty" && P.presenceHeading(on, "17:12", { ...sts, now: "empty" }, sw).when === "17:12"
+     && P.presenceHeading(off, "x", null, sw).label === off.label);
+  const drawnHead = draw(h(PresencePanel, { presence: off, when: "x", why: { ...w2, stages: sts }, showPeople: true, canOpen: () => false,
+    onOpenEntity: () => {}, onClose: () => {} }));
+  ck("  ...drawn: the heading says the stage", /<strong>Waiting<\/strong>/.test(drawnHead), drawnHead.slice(0, 300));
+}
+
 done("✅ the villa's presence, always in sight");

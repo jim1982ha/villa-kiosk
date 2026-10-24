@@ -18,7 +18,7 @@ import { useStateHistory } from "@/hooks/useStateHistory";
 import { historyTitle } from "@/ha/historySource";
 import { useHistoryRange, useDeviceBand, HistoryHeader } from "./historyRange";
 import { aggregationWords } from "./chartUtils";
-import { historyStateColor, NOT_KEPT, paletteColorFor } from "@/utils/stateColors";
+import { historyStateColor, isNoHistory, paletteColorFor } from "@/utils/stateColors";
 
 export default function LastDayTimeline({
   entityId, colorFor, palette = false, words,
@@ -47,7 +47,7 @@ export default function LastDayTimeline({
   const { data, status, lastSeen, end } = band ?? own;
   const { entities } = useHA();
   // the "no longer kept" stretch is not one of the device's states: never in its palette (historySource.keptFrom)
-  const held = data.map((p) => p.state).filter((s) => s !== NOT_KEPT);
+  const held = data.map((p) => p.state).filter((s) => !isNoHistory(s));
   const paint = colorFor ?? (palette ? paletteColorFor(held) : historyStateColor(entityId));
   return (
     <div className="field">

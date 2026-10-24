@@ -29,22 +29,26 @@ console.log("\n  the look-back:");
   const H = 3_600_000, now = 1_000 * H;
   // A fake Home Assistant behind the history source's port: the rows inside
   // the window asked for, as the REST endpoint sends them.
+  // As Home Assistant answers (read on the villa, 2026-10-24): the state at the window's start, stamped with that
+  // start, when the device had one; then the rows inside the window.
   const port = (pts) => ({
-    stateRows: async (_id, from, to) => pts.filter((p) => p.t >= from && p.t <= to)
+    stateRows: async (_id, from, to) => [...pts.filter((p) => p.t < from).slice(-1).map((p) => ({ ...p, t: from })),
+      ...pts.filter((p) => p.t >= from && p.t <= to)]
       .map((p) => ({ state: p.state, last_changed: new Date(p.t).toISOString() })),
     getStatisticsDuringPeriod: async () => ({}),
   });
   const loadStateWindow = (id, hours, p) => loadOne(p, { kind: "stateWindow", id, hours }, now);
-  const live = [{ t: now - 2 * H, state: "on" }, { t: now - H, state: "off" }];
+  const live = [{ t: now - 30 * H, state: "off" }, { t: now - 2 * H, state: "on" }, { t: now - H, state: "off" }];
   const a = await loadStateWindow("x.y", 24, port(live));
-  ck("a live window is charted as it is, no 'before'", a.lastSeen === undefined && a.data.length === 2, a);
+  ck("a live window is charted as it is, no 'before'", a.lastSeen === undefined && a.data.map((p) => p.state).join() === "off,on,off", a);
   const dead = [{ t: now - 50 * H, state: "on" }, { t: now - 40 * H, state: "unavailable" }];
   const b = await loadStateWindow("x.y", 24, port(dead));
   ck("a window dead from end to end moves back to END at the last real reading", b.lastSeen === now - 50 * H, b.lastSeen);
   ck("  ...and charts nothing after it", b.data.length > 0 && b.data.every((p) => p.t <= b.lastSeen), b.data);
   const never = [{ t: now - 5 * H, state: "unavailable" }];
   const c = await loadStateWindow("x.y", 24, port(never));
-  ck("a device never seen in the look-back: the asked-for window, no 'before'", c.lastSeen === undefined && c.data.length === 1, c);
+  ck("a device never seen in the look-back: the asked-for window, no 'before'", c.lastSeen === undefined
+     && c.data.map((p) => p.state).join() === "\u0000no_record,unavailable", c);
   ck("the header says the last report a moved window ends just after", historyTitle("Last 24 hours", b.lastSeen).startsWith("Last 24 hours, last report ")
      && historyTitle("Last 24 hours", undefined) === "Last 24 hours");
 }

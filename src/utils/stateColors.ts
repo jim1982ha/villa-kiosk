@@ -32,6 +32,13 @@ export const NOT_KEPT = "\u0000not_kept";
 export const NOT_KEPT_WORDS = "No longer kept";
 /** Its colour: a neutral grey beside the status colours — never one of them, it says nothing of the device. */
 export const NOT_KEPT_COLOR = "var(--not-kept)";   // its own colour, never Off's grey (owner, 2026-10-20)
+/** A history's stretch BEFORE the device's first record (a sensor added this afternoon): not a state either, worded
+ *  NO_RECORD_WORDS, painted NOT_KEPT_COLOR (owner, 2026-10-24: the presence chart's time before its stage sensor
+ *  existed was the grey of "Empty", and read as an empty villa). */
+export const NO_RECORD = "\u0000no_record";
+export const NO_RECORD_WORDS = "No record yet";
+/** Either stretch with nothing to show: never a state of the device, never in its palette or its "last seen". */
+export const isNoHistory = (state: string): boolean => state === NOT_KEPT || state === NO_RECORD;
 
 export function isUnavailable(entity: HassEntity | undefined): boolean {
   return entity == null || UNKNOWN_STATES.has(entity.state);

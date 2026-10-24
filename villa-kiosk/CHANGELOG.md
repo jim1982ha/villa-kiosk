@@ -1,3 +1,13 @@
+## 2.496.521
+
+What you will see:
+- Villa presence: the heading says the villa's step while it is on its way to empty, with its colour and since
+  when ("Waiting for indoor quiet · since 18:11"), instead of "Occupied" while everyone is away. When empty, it says
+  "Empty since …" as before.
+- Every history chart: the time before a device's first record now reads "No record yet" in its own colour, in the
+  legend too, instead of a grey that looked like "Empty" or "Off".
+- Villa presence chart: a moment without contact is named in the app's words ("Presence unknown"), not "unavailable".
+
 ## 2.496.520
 
 What you will see:

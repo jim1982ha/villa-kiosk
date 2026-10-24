@@ -4,7 +4,7 @@
 // config/presence's (by value, tested); this draws it. No sensor picked in Settings › Villa: no tile.
 
 import { CircleQuestionMark, House, Users } from "lucide-react";
-import { presenceStateWords, stageColor, type Presence, type PresenceWhy } from "@/config/presence";
+import { presenceHeading, presenceStateWords, stageColor, stageWords, type Presence, type PresenceWhy } from "@/config/presence";
 import { sinceWords as since, usePresence, usePresenceWhy } from "@/config/usePresence";
 import { STATUS_COLOR } from "@/utils/stateColors";
 import { useModalA11y } from "@/hooks/useModalA11y";
@@ -41,7 +41,7 @@ export function PresenceWindow({ onClose, onOpenEntity, canOpen }: {
   // Empty, as before
   const st = why.stages;
   const history = st
-    ? <LastDayTimeline entityId={st.sensorId} words={(s) => st.order.find(([k]) => k === s)?.[1] ?? s}
+    ? <LastDayTimeline entityId={st.sensorId} words={(s) => stageWords(st, s)}
         colorFor={(s) => stageColor(st, s)} />
     : <LastDayTimeline entityId={p.sensorId} words={(s) => presenceStateWords(s).label}
         colorFor={(s) => STATUS_COLOR[presenceStateWords(s).tone]} />;
@@ -104,6 +104,7 @@ export function PresencePanel({ presence: p, when, why, showPeople, showMovement
 }) {
   const dialogRef = useModalA11y(onClose);
   const act = why.lastActivity;
+  const head = presenceHeading(p, when, why.stages, since);
   const opener = (id: string) => (canOpen(id) ? onOpenEntity : undefined);
   return (
     <DialogLayer className="modal-backdrop" onClick={onClose}>
@@ -111,8 +112,8 @@ export function PresencePanel({ presence: p, when, why, showPeople, showMovement
         role="dialog" aria-modal="true" aria-label="Villa presence">
         <div className="modal-header"><h2>Villa presence</h2></div>
         <div className="modal-body">
-          <div className="presence-now" style={{ "--tone": STATUS_COLOR[p.tone] } as React.CSSProperties}>
-            <strong>{p.label}</strong>{when ? <span className="muted"> · since {when}</span> : null}
+          <div className="presence-now" style={{ "--tone": head.color } as React.CSSProperties}>
+            <strong>{head.label}</strong>{head.when ? <span className="muted"> · since {head.when}</span> : null}
           </div>
           {presenceHistory}
           {showPeople && (
