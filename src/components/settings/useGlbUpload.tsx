@@ -14,6 +14,16 @@ import { fetchAddonConfig, uploadCentralModel, clearAddonConfigCache, type Addon
 import { getLoadedModelInfo } from "@/utils/modelInfo";
 import { planModelUpload, runModelUpload, uploadReport, type UploadKind } from "@/utils/modelUpload";
 
+/** What an upload in flight says, ONCE for every screen that shows one (architecture review K, 2026-10-24: Advanced
+ *  Settings and the no-model screen each wrote their own): `words` beside the icon, `mark` the short form a phone keeps
+ *  on the icon when the words are hidden ("42%", "↻2"). Both null while nothing uploads. */
+export function uploadProgress(busy: boolean, pct: number | null, retry: { attempt: number; of: number } | null):
+  { words: string | null; mark: string | null } {
+  if (!busy) return { words: null, mark: null };
+  if (retry) return { words: `Retrying (${retry.attempt} of ${retry.of})…`, mark: `↻${retry.attempt}` };
+  return { words: `Uploading… ${pct ?? 0}%`, mark: `${pct ?? 0}%` };
+}
+
 export function useGlbUpload(enabled: boolean, onModelChanged: () => void) {
   const { config, update } = useConfig();
 
@@ -84,6 +94,7 @@ export function useGlbUpload(enabled: boolean, onModelChanged: () => void) {
     uploadBusy,
     uploadPct,
     uploadRetry,
+    progress: uploadProgress(uploadBusy !== null, uploadPct, uploadRetry),
     uploadMsg,
     glbUploadRef,
     uploadGlbAndRooms,

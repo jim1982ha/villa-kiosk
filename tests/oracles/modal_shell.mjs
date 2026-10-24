@@ -97,7 +97,7 @@ ck("the Open a ticket window (one device's faults) fits its content, by the devi
   const ce = readFileSync(new URL("../../src/components/settings/ConfigEditorModal.tsx", import.meta.url), "utf8");
   const bp = readFileSync(new URL("../../src/components/panels/BasePanel.tsx", import.meta.url), "utf8");
   ck("Advanced Settings: Back at its footer's left, where Settings' opener is; Log out all devices at its header's right; no Close",
-     /<ModalFooter onClose=\{back\} commit=\{commit\} leading=\{<BackButton onClick=\{exit\} label=\{withinSettings \? "Settings" : undefined\} footer \/>\}/.test(ce)
+     /<ModalFooter onClose=\{back\} commit=\{commit\} back=\{\{ go: exit, to: withinSettings \? "Settings" : undefined \}\}/.test(ce)
      && /className="modal-header-actions">\s*<LogoutAll \/>/.test(ce)
      && /:\s*withinSettings \? <span \/> : undefined\} \/>/.test(ce));
   ck("  ...its footer buttons one look: the model's details and upload are .btn with a word hidden on a phone",

@@ -13,6 +13,7 @@
 
 import type { AgentCadence } from "@/agent/agentApi";
 import { clockTime } from "@/utils/dateText";
+import { fmtDuration } from "@/components/panels/chartUtils";
 import { isClearedStep, isTicketResolved, lastResolution } from "./fmEngine";
 import type { FmData, FmTicket } from "./fmTypes";
 
@@ -76,7 +77,7 @@ export function confirmParts(c: ConfirmingFault): { did: string; when: string; t
   const by = clockTime(c.at);
   return {
     did: c.who ? `${c.word} (${c.who})` : c.word,
-    when: c.due ? (c.lookMinutes ? `within ${c.lookMinutes}min` : by) : by,
+    when: c.due ? (c.lookMinutes ? `within ${fmtDuration(c.lookMinutes * 60_000)}` : by) : by,
     tip: c.due ? "VESTA confirms it at its next look" : `VESTA confirms by ${by}`,
   };
 }

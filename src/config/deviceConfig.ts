@@ -53,7 +53,7 @@ import type { EntityMapping, TeleportPoint } from "@/types/scene.types";
 import { backendFetch } from "@/auth/sessionLost";
 import { storeSaveResult } from "@/utils/storeSave";
 import {
-  keyBy, diffKeyed, applyKeyed, keyedDiffIsEmpty, mineWins,
+  keyBy, diffKeyed, applyKeyed, applyKeyedMerging, keyedDiffIsEmpty, mineWins,
   type Keyed, type KeyedDiff, type StoreSaveResult,
 } from "@/utils/keyedSync";
 import { readJson, writeJson } from "@/utils/storedJson";
@@ -290,12 +290,15 @@ export function parseSharedConfig(raw: unknown): Partial<SharedDeviceConfig> {
 
 export type SharedConfigDiff = { [K in SharedConfigKey]: KeyedDiff<SharedItems[K]> };
 
-/** What did `next` actually change relative to `base`, per item? */
+/** What did `next` actually change relative to `base`, per item? Each changed item keeps its `was`, so an item another
+ *  tablet removed meanwhile stays removed (applySharedConfigDiff, keyedSync mineWins), as in the Facility store.
+ *  ⚠️ BEFORE (to 2.496.516, architecture review K) a tablet that had edited a setting offline put back the one another
+ *  tablet had removed, everywhere. */
 export function diffSharedConfig(base: SharedDeviceConfig, next: SharedDeviceConfig): SharedConfigDiff {
   const out = {} as Record<SharedConfigKey, unknown>;
   for (const key of SHARED_CONFIG_KEYS) {
     const r = row(key) as SharedKeyRow<unknown, unknown>;
-    out[key] = diffKeyed(r.index(base[key]), r.index(next[key]));
+    out[key] = diffKeyed(r.index(base[key]), r.index(next[key]), true);
   }
   return out as SharedConfigDiff;
 }
@@ -333,7 +336,7 @@ export function applySharedConfigDiff(target: SharedDeviceConfig, diff: SharedCo
   const out = {} as Record<SharedConfigKey, unknown>;
   for (const key of SHARED_CONFIG_KEYS) {
     const r = row(key) as SharedKeyRow<unknown, unknown>;
-    out[key] = r.fromIndex(applyKeyed(r.index(target[key]), diff[key] as KeyedDiff<unknown>));
+    out[key] = r.fromIndex(applyKeyedMerging(r.index(target[key]), diff[key] as KeyedDiff<unknown>, (_was, mine) => mine));
   }
   return out as SharedDeviceConfig;
 }

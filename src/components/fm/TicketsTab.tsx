@@ -30,6 +30,7 @@ import { formatMoney } from "@/utils/money";
 import { cleanRoom } from "@/config/devicePlace";
 import Tip from "@/components/common/Tip";
 import { DAY_MS } from "@/utils/localDay";
+import { fmtDuration } from "@/components/panels/chartUtils";
 
 export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, onEditOpened }: {
   onOpenEntity: (id: string) => void;
@@ -174,7 +175,7 @@ export function TicketFigures({ tickets, inProgress, retention, now = Date.now()
       <div className="fm-summary">
         <div className="fm-stat"><span className="n">{inProgress}</span><span className="l">in progress</span></div>
         <div className="fm-stat">
-          <span className="n">{stats.meanResolutionHours === null ? "—" : `${stats.meanResolutionHours.toFixed(0)}h`}</span>
+          <span className="n">{stats.meanResolutionHours === null ? "—" : fmtDuration(stats.meanResolutionHours * 3_600_000)}</span>
           <span className="l">mean resolution</span>
         </div>
         {/* closes with no work done, apart from the repairs (review 31: they made the mean say 4.5 h for a 48 h repair) */}

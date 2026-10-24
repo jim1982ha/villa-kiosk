@@ -7,6 +7,7 @@ register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { faultTiming } = await import("@/fm/faultTiming");
 const { STORE_ACTIVE_MS, STORE_HEARTBEAT_MS } = await import("@/hooks/useStoreRefresh");
+const { fmtDuration } = await import("@/components/panels/chartUtils");
 
 const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
 const tip = src("components/common/InfoTip.tsx"), css = src("styles/04-modals.css");
@@ -79,8 +80,8 @@ const told = faultTiming(true, { checkMinutes: 15, nightlyAt: "04:30" });
 ck("  ...the nightly check's say so; the Agent's timing is the one it TOLD, never a copy (architecture review, 2026-10-15)",
    /^Within minutes for a device that goes offline; at the nightly check for everything else$/.test(withAgent.rows.find((r) => r.source === "night")?.opens ?? "")
    && told.rows.find((r) => r.source === "night")?.opens === "Within minutes for a device that goes offline; at the nightly check (04:30) for everything else"
-   && /it checks every 15 minutes, and its nightly check runs at 04:30\./.test(told.note) && !/02:00|every 5 minutes/.test(told.note), told.note);
-ck("  ...an Agent that did not say: no number at all", !/\d\d:\d\d|every \d+ minutes,/.test(withAgent.note)
+   && /it checks every 15min, and its nightly check runs at 04:30\./.test(told.note) && !/02:00|every 5\s?min/.test(told.note), told.note);
+ck("  ...an Agent that did not say: no number at all", !/\d\d:\d\d|every \d+\s?min,/.test(withAgent.note)
    && /at the time set in the VESTA Agent/.test(withAgent.note), withAgent.note);
 const { parseAgentStatus } = await import("@/agent/agentApi");
 // owner, 2026-10-20: the Agent reads every open maintenance-check finding again at every look — the night row says when,
@@ -107,7 +108,7 @@ ck("  ...the Kiosk reads the timing the agreement's heartbeat carries, as the pr
   const said = faultTiming(true, gone.cadence).note;
   ck("  ...an Agent gone quiet: 'it checks regularly', never the last heartbeat's number",
      gone.cadence === null && /it checks regularly, and runs its nightly check at the time set in the VESTA Agent/.test(said)
-     && !/it checks every \d+ minutes|nightly check runs at \d\d:\d\d/.test(said), said);
+     && !/it checks every \d+\s?min|nightly check runs at \d\d:\d\d/.test(said), said);
 }
 ck("  ...Live does not name Home Assistant (owner, 2026-10-14)", !/Home Assistant/.test(withAgent.rows.find((r) => r.source === "live").what));
 ck("without an Agent: no row of the Agent's — nothing claims to open or close by itself",
@@ -115,8 +116,8 @@ ck("without an Agent: no row of the Agent's — nothing claims to open or close 
    && !/Agent|nightly/i.test(alone.note + alone.rows.map((r) => r.what + r.opens + r.goes).join(" ")), alone.rows.map((r) => r.source));
 ck("both say how a fault becomes a ticket", [withAgent, alone].every((t) => /becomes a ticket when someone presses Open Ticket on its card/.test(t.note)));
 ck(`  ...and the list's own refresh, from the app's own numbers (${STORE_ACTIVE_MS / 1000} s open, ${STORE_HEARTBEAT_MS / 60000} min else)`,
-   [withAgent, alone].every((t) => t.note.includes(`every ${STORE_ACTIVE_MS / 1000} seconds while it is open`)
-     && t.note.includes(`every ${STORE_HEARTBEAT_MS / 60000} minutes otherwise`)));
+   [withAgent, alone].every((t) => t.note.includes(`every ${fmtDuration(STORE_ACTIVE_MS)} while it is open`)
+     && t.note.includes(`every ${fmtDuration(STORE_HEARTBEAT_MS)} otherwise`)));
 const card = src("components/fm/FaultTiming.tsx");
 ck("the card shows the Agent's rows when an Agent is connected OR one of its faults is open (its icons are on the list)",
    /faultTiming\(agent, status\?\.cadence \?\? null\)/.test(card) && /groups\.map\(\(g\) =>/.test(card) && /const agent = agentSourcesShown\(status, data\.tickets\.some\(\(t\) => agentOwned\(t\) && stageOf\(t\) !== "closed"\)\);/.test(card)   // the rule by value: agent_view.mjs

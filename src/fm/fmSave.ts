@@ -45,6 +45,13 @@ export function fmSaveOutcome(r: FmWriteResult): FmSaveOutcome {
   return { result: r, done: true, note: null, queued: false };
 }
 
+/** What a screen says while work kept on this tablet waits for a profile that is not signed in and that the one signed in
+ *  does not send (utils/syncedDocument heldAuthors; architecture review K, 2026-10-24: it was never said). */
+export function heldLine(labels: string[]): string | null {
+  if (!labels.length) return null;
+  return `Work by the ${labels.map((l) => l.toLowerCase()).join(" and the ")} is waiting on this tablet: it is sent as soon as someone allowed to send it signs in here.`;
+}
+
 /** What this device says when a fault it changed had just been changed on another device, and a field both changed kept
  *  the other device's value (fmApi foldOthers `changedOnBoth`). */
 export const CHANGED_ON_ANOTHER_DEVICE = "This fault was just changed on another device.";
@@ -52,6 +59,19 @@ export const CHANGED_ON_ANOTHER_DEVICE = "This fault was just changed on another
 /** What this device says when a fault it changed had been removed on another device meanwhile: its step is not applied,
  *  and the fault stays removed (fmApi foldOthers `removedElsewhere`). */
 export const REMOVED_ON_ANOTHER_DEVICE = "This fault was removed on another device, so this step was not saved.";
+
+/** The same, for any kind of record (architecture review K, 2026-10-24: a cost or a schedule erased on the phone came
+ *  back): "This cost was removed on another device, so this change was not saved." */
+const RECORD_WORD: Record<string, string> = { tickets: "fault", costs: "cost", schedules: "task", completions: "logged work",
+  savedDocuments: "document" };
+export function removedOnAnotherDevice(kinds: string[]): string {
+  const ks = [...new Set(kinds)];
+  if (ks.length === 1 && ks[0] === "tickets") return REMOVED_ON_ANOTHER_DEVICE;
+  const words = ks.map((k) => RECORD_WORD[k] ?? "record");
+  return ks.length === 1
+    ? `This ${words[0]} was removed on another device, so this change was not saved.`
+    : `Some records (${words.join(", ")}) were removed on another device, so these changes were not saved.`;
+}
 
 /**
  * The line a screen of the maintenance record shows INSTEAD of it while the record has not been read (FmDataContext

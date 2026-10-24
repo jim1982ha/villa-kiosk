@@ -43,6 +43,8 @@ export interface UnsentCopy<D, Diff> {
 export interface UnsentKeeper<D, Diff> {
   load: (author: string) => UnsentCopy<D, Diff> | null;
   save: (author: string, copy: UnsentCopy<D, Diff> | null) => void;
+  /** Every author whose work is kept now (heldAuthors). Default: none listed. */
+  authors?: () => string[];
 }
 
 /** The documents a page holds now (SyncedDocument.track): the daily reload asks them (unsentWorkHeld). */
@@ -81,6 +83,11 @@ export interface SyncedDocumentSpec<D, Diff extends KeyedParts, F extends StoreF
    *  manager's "Started" held offline was shown to the guest signed in after a reload, sent under the guest's
    *  sign-in and refused, and the guest's own report, which carried it, was refused too. Default: one author. */
   author?: () => string;
+  /** Whether the author signed in now sends the work kept for `other` too (its steps keep their own author). ⚠️ HELD
+   *  WORK WAS NEVER SENT BY ANYONE ELSE (to 2.496.516, architecture review K): a facility manager's Started held
+   *  offline, then the owner signed in and the add-on came back: nothing was sent, nothing said, and it went only if
+   *  that same profile signed in again on that same tablet. Default: only its own. */
+  carries?: (other: string) => boolean;
   /** Called every time the baseline moves — the config store persists it. */
   onBaseline?: (baseline: D) => void;
   /** Where the unsent work is kept across a reload, and read back from when this document starts. ⚠️ THE FACILITY
@@ -157,20 +164,41 @@ export class SyncedDocument<D, Diff extends KeyedParts, F extends StoreFetch<D> 
     this.restored = this.takeKept();
   }
 
-  /** The author's kept work, laid on this document as a push that failed: it may have landed before the reload (it is
-   *  then merged as this device's own write, never another's), and the next refresh sends it again (pull "repush"),
-   *  onto the store's fresh copy, item by item. Returns the local document it makes, or null when nothing is kept. */
+  /** The author's kept work, and the kept work of every author it carries (spec.carries), laid on this document as
+   *  pushes that failed: they may have landed before the reload (then merged as this device's own write, never
+   *  another's), and the next refresh sends them again (pull "repush"), onto the store's fresh copy, item by item. A
+   *  carried author's copy becomes this author's (one copy, sent once). Returns the local document it makes, or null
+   *  when nothing is kept. */
   private takeKept(): D | null {
-    const kept = this.spec.keep?.load(this.author) ?? null;
-    if (!kept || this.spec.isEmpty(kept.unsent)) return null;
-    // The records the work touches, as its author last saw them: all this device knows of the store for them. A copy
+    const keep = this.spec.keep;
+    if (!keep) return null;
+    const others = (keep.authors?.() ?? []).filter((a) => a !== this.author && (this.spec.carries?.(a) ?? false));
+    const copies = [this.author, ...others]
+      .map((a) => ({ a, kept: keep.load(a) }))
+      .filter((c): c is { a: string; kept: UnsentCopy<D, Diff> } => !!c.kept && !this.spec.isEmpty(c.kept.unsent));
+    if (!copies.length) return null;
+    // The records the work touches, as its authors last saw them: all this device knows of the store for them. A copy
     // read under another profile is not one (a guest reads an empty record): the next push reads the store afresh.
-    this.baseline = kept.baseline;
+    let baseline = copies[0].kept.baseline;
+    for (const c of copies.slice(1)) baseline = this.spec.apply(baseline, this.spec.diff(this.spec.empty, c.kept.baseline));
+    let local = baseline;
+    for (const c of copies) local = this.spec.apply(local, c.kept.unsent);
+    this.baseline = baseline;
     this.read = false;
-    this.unconfirmed.add({ sent: kept.unsent, failed: true });
+    for (const c of copies) this.unconfirmed.add({ sent: c.kept.unsent, failed: true });
     this.failedVersion += 1;
     this.unsaved = true;
-    return this.spec.apply(this.baseline, kept.unsent);
+    if (copies.some((c) => c.a !== this.author)) {
+      keep.save(this.author, { baseline, unsent: this.spec.diff(baseline, local) });
+      for (const c of copies) if (c.a !== this.author) keep.save(c.a, null);
+    }
+    return local;
+  }
+
+  /** The authors whose work is kept on this device and that the author signed in now does not send: a screen says it
+   *  waits ("Work by the facility manager is waiting on this tablet"). */
+  heldAuthors(): string[] {
+    return (this.spec.keep?.authors?.() ?? []).filter((a) => a !== this.author && !(this.spec.carries?.(a) ?? false));
   }
 
   /**
@@ -183,12 +211,23 @@ export class SyncedDocument<D, Diff extends KeyedParts, F extends StoreFetch<D> 
     const author = this.spec.author?.() ?? "";
     if (author === this.author) return null;
     if (this.unsaved) this.keepUnsent(local);
+    // ⚠️ A SAVE STILL OUT IS NOT FORGOTTEN (architecture review K, 2026-10-24): a facility manager's Started on a slow
+    // connection, the owner signed in before it answered: the new profile got the confirmed copy from BEFORE that save,
+    // the save landed, and the owner's next refresh read the screen as unsent work and sent the old "open" back. The
+    // write out stays awaited (only the failed ones belong to the author before), and the screen shows what the store
+    // will hold once it lands.
+    const out = this.inFlight > 0 ? this.lastPushed : null;
     this.author = author;
-    this.unconfirmed.clear();
+    for (const u of this.unconfirmed) if (u.failed) this.unconfirmed.delete(u);
     this.failedVersion += 1;
     this.unsaved = false;
     if (!this.read) this.baseline = this.initial;
-    return this.takeKept() ?? this.baseline ?? this.spec.empty;
+    const kept = this.takeKept();
+    if (kept !== null && out !== null && this.baseline !== null) {
+      // the new author's kept work, laid on what the write out will leave in the store
+      return this.spec.apply(out, this.spec.diff(this.baseline, kept));
+    }
+    return kept ?? out ?? this.baseline ?? this.spec.empty;
   }
 
   /** This profile may send (spec.canWrite). */
@@ -287,6 +326,8 @@ export class SyncedDocument<D, Diff extends KeyedParts, F extends StoreFetch<D> 
     if (action === "wait" || action === "unreachable" || action === "repush") return { action };
     const f = fetched as F;
     this.commit(action === "seed" ? this.spec.empty : f.doc, f.rev);
+    // the store holds everything this device had: a copy kept for this author is stale, never to be sent again
+    if (!this.unsaved && this.inFlight === 0 && writable) this.spec.keep?.save(this.author, null);
     return { action, fetched: f };
   }
 

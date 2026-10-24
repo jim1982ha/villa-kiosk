@@ -136,7 +136,7 @@ console.log("\n  the store's fault unmoved since this device's copy: laid as it 
   ck("the store holds exactly the tablet's fault", JSON.stringify(t1(v.store.doc)) === JSON.stringify(t1(tablet.screen)) && tablet.said === null);
 }
 
-console.log("\n  the device-setup store does not merge (a device replaced whole, as before):");
+console.log("\n  the device-setup store does not merge (a device replaced whole; its `was` kept for a removal only, review K):");
 {
   const m = (label, room) => ({ entityId: "light.hall", type: "light", label, room });
   const base = D.baselineFromServer(D.pickSharedConfig(normaliseConfig({ ...DEFAULT_CONFIG, entityMap: { "light.hall": m("Hall", "Hall") } }, { maps: true })));
@@ -144,8 +144,8 @@ console.log("\n  the device-setup store does not merge (a device replaced whole,
   const theirs = { ...base, entityMap: { "light.hall": m("Hall", "Lobby") } };
   const diff = D.diffSharedConfig(base, mine);
   const next = D.applySharedConfigDiff(theirs, diff);
-  ck("its diff carries no copy to merge against, and this tablet's device lands whole",
-     diff.entityMap.was === undefined && next.entityMap["light.hall"].label === "Hall lamp" && next.entityMap["light.hall"].room === "Hall",
+  ck("its diff keeps what it changed from, yet this tablet's device lands whole",
+     !!diff.entityMap.was?.["light.hall"] && next.entityMap["light.hall"].label === "Hall lamp" && next.entityMap["light.hall"].room === "Hall",
      next.entityMap["light.hall"]);
 }
 

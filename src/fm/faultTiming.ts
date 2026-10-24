@@ -18,6 +18,11 @@ import { STORE_ACTIVE_MS, STORE_HEARTBEAT_MS } from "@/hooks/useStoreRefresh";
 import { AGENT_SOURCES, ISSUE_SOURCES, type IssueSource } from "./issueSource";
 import type { AgentCadence } from "@/agent/agentApi";
 import { AGENT_CHECKS, type FmTicketCheck } from "./fmTypes";
+import { fmtDuration } from "@/components/panels/chartUtils";
+
+/** "within 5min": the Agent's next look, in the one duration's words (fmtDuration; architecture review K, 2026-10-24:
+ *  written by hand at each place). */
+const withinLook = (c: AgentCadence): string => `within ${fmtDuration(c.checkMinutes * 60_000)}`;
 
 export interface SourceRow {
   source: IssueSource;
@@ -55,15 +60,14 @@ const ROWS: Record<IssueSource, Omit<SourceRow, "source">> = {
     goes: "When the work is recorded" },
 };
 
-const REFRESH = `This list is read again every ${STORE_ACTIVE_MS / 1000} seconds while it is open (every `
-  + `${STORE_HEARTBEAT_MS / 60_000} minutes otherwise), and as soon as you come back to the app.`;
+const REFRESH = `This list is read again every ${fmtDuration(STORE_ACTIVE_MS)} while it is open (every `
+  + `${fmtDuration(STORE_HEARTBEAT_MS)} otherwise), and as soon as you come back to the app.`;
 const TICKET = "A fault becomes a ticket when someone presses Open Ticket on its card (Tickets tab).";
 
 /** How often the Agent looks, in its own numbers when it said them. */
 function agentClock(c: AgentCadence | null): string {
   if (!c) return "it checks regularly, and runs its nightly check at the time set in the VESTA Agent";
-  const every = c.checkMinutes === 1 ? "every minute" : `every ${c.checkMinutes} minutes`;
-  return `it checks ${every}, and its nightly check runs at ${c.nightlyAt}`;
+  return `it checks every ${fmtDuration(c.checkMinutes * 60_000)}, and its nightly check runs at ${c.nightlyAt}`;
 }
 
 /** When a maintenance-check problem appears (owner, 2026-10-19: the (i) said "Nightly check" while a device that goes
@@ -79,8 +83,7 @@ function nightOpens(c: AgentCadence | null): string {
  *  drift). */
 function nightGoes(c: AgentCadence | null): string {
   if (!c) return `${ROWS.night.goes}: every few minutes, or at its nightly check`;
-  const every = c.checkMinutes === 1 ? "within 1min" : `within ${c.checkMinutes}min`;
-  return `${ROWS.night.goes}: ${every}, or at the nightly check (${c.nightlyAt})`;
+  return `${ROWS.night.goes}: ${withinLook(c)}, or at the nightly check (${c.nightlyAt})`;
 }
 
 /** The table's two groups (owner, 2026-10-15): what the Kiosk and its people produce, then what the VESTA Agent does. */
@@ -91,7 +94,7 @@ export interface SourceGroup { title: string; rows: readonly SourceRow[] }
  *  own; its pill's words in the Agent's own numbers when its heartbeat said them. */
 export interface ConfirmingRow { words: string; what: string; opens: string; goes: string }
 export function confirmingRow(c: AgentCadence | null): ConfirmingRow {
-  const look = c ? (c.checkMinutes === 1 ? "within 1min" : `within ${c.checkMinutes}min`) : "at its next look";
+  const look = c ? withinLook(c) : "at its next look";
   return {
     words: "Being confirmed",
     what: "A fault someone marked Done on Telegram or closed here, that the VESTA Agent checks again. Last in the list, not counted",
@@ -165,7 +168,7 @@ function nextLook(c: AgentCadence, now: Date): Date {
 /** When the VESTA Agent next reads a fault of `clock`, and the card's words for it: its next look ("within 5 min"),
  *  its nightly check ("02:00"). */
 function nextOf(clock: FmTicketCheck, c: AgentCadence, now: Date): { at: Date; words: string } | null {
-  if (clock === "minutes") return { at: nextLook(c, now), words: `within ${c.checkMinutes}min` };
+  if (clock === "minutes") return { at: nextLook(c, now), words: withinLook(c) };
   const at = nextAt(c.nightlyAt, now);
   return at && { at, words: c.nightlyAt };
 }

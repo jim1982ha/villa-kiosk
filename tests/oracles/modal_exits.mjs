@@ -52,4 +52,17 @@ ck("Settings' Escape and backdrop are the same Cancel, and no question is asked 
 ck("the notice is the villa view's own passing notice (AppNotice), provided by the page",
    /<AppNoticeContext\.Provider value=\{setNotice\}>/.test(src("pages/Dashboard.tsx")));
 
-done("✅ Save saves and closes; Cancel undoes and closes; the notice says which");
+// ⚠️ THE FOOTER OWNS ITS EXITS (architecture review K, 2026-10-24): a Back beside Save · Cancel was a third way out
+// that said nothing of the changes. Drawn: Back only where there is no Cancel.
+{
+  const { h, draw } = await import("../consistency/screen.mjs");
+  const ModalFooter = (await import("@/components/common/ModalFooter")).default;
+  const labels = (props) => [...draw(h(ModalFooter, { onClose: () => {}, back: { go: () => {}, to: "Settings" }, ...props }))
+    .matchAll(/<button[^>]*aria-label="([^"]+)"/g)].map((m) => m[1]);
+  const withCancel = labels({ commit: { dirty: true, save: () => {}, discard: () => {} } });
+  ck("with Save · Cancel: no Back (Cancel is the way out)", !withCancel.includes("Back to Settings") && withCancel.includes("Cancel"), withCancel);
+  const alone = labels({ actions: h("span") });
+  ck("with nothing to save: Back, named for where it returns", alone.includes("Back to Settings"), alone);
+}
+
+done("✅ Save saves and closes; Cancel undoes and closes; the notice says which; Back only where there is no Cancel");

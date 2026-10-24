@@ -31,6 +31,7 @@ import { Save as SaveIcon, X } from "lucide-react";
 
 import { useAppNotice } from "@/components/hud/AppNotice";
 import Tip from "./Tip";
+import BackButton from "./BackButton";
 
 /** An editable draft a dialog can commit. ⚠️ THE DIALOG OWNS IT, NOT THIS
  *  COMPONENT: a draft that lives in the footer would be lost the moment a tab
@@ -59,7 +60,7 @@ export interface ModalCommit {
 }
 
 export default function ModalFooter({
-  note, leading, commit, onClose, busy = false, closeLabel, actions,
+  note, leading, back, commit, onClose, busy = false, closeLabel, actions,
 }: {
   /** The left-hand hint. Yields its width to the buttons. */
   note?: ReactNode;
@@ -68,6 +69,10 @@ export default function ModalFooter({
    *  navigates somewhere else, and a button that leaves the dialog must not sit
    *  in the row where Save and Cancel are. Wins over `note`. */
   leading?: ReactNode;
+  /** A window opened from another one: its Back, at the left (`to`: where it returns). ⚠️ ONLY WHERE THERE IS NO
+   *  CANCEL (architecture review K, 2026-10-24): beside Save · Cancel a Back was a third way out that said nothing of
+   *  the changes, so with a `commit` it is not drawn and Cancel is the way out. Escape stays the footer's way out. */
+  back?: { go: () => void; to?: string };
   /** The dialog's draft. ⚠️ OMITTED (undefined) = a dialog with NOTHING TO
    *  SAVE — the legend, a colour picker, the Cockpit, a device panel: the
    *  footer is then the left slot and ONE primary exit (`closeLabel`, "Close"
@@ -94,6 +99,8 @@ export default function ModalFooter({
   // worked around by hand.
   const left = commit?.error
     ? <span className="body-text sev-warning" role="alert">{commit.error}</span>
+    : back && commit === undefined
+    ? <BackButton onClick={back.go} label={back.to} footer />
     : leading !== undefined && leading !== null && leading !== false
     ? leading
     : note
