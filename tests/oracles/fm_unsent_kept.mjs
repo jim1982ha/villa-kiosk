@@ -164,7 +164,11 @@ console.log("\n  storage refused (private mode, a full quota): as before, never 
   srv.down = true;
   await page.act(async () => { await fm.addTicket({ title: "Lights flicker", photoIds: [] }); });
   await openPage(storage);
+  // the reopened page may have read the add-on while it was still out of reach (a slow runner: CI, 2026-10-24); the
+  // back-online refresh is what the check is about, so it is awaited rather than raced
+  await settled();
   srv.down = false;
+  await refresh();
   await settled();
   ck("  ...reloaded first: it is lost, as it was before (no copy could be kept), and the page works",
      fm.ready && srv.data.tickets.length === 2 && fm.data.tickets.length === 2, srv.data.tickets.length);
