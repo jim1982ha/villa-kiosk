@@ -1,0 +1,29 @@
+#!/bin/sh
+# Refuse a push to origin/main. The pre-commit hook cannot catch this: a commit
+# made correctly on dev2 can still be pushed to the wrong ref, and CI treats a
+# push to main as a RELEASE (it moves the :latest tag).
+#
+# Deliberate escape hatch: VK_ALLOW_MAIN=1 git push ...
+[ "${VK_ALLOW_MAIN:-}" = "1" ] && exit 0
+while read -r _local_ref local_sha remote_ref remote_sha; do
+  case "$remote_ref" in
+    refs/heads/agent-dev)
+      # A push changing what the VESTA Agent app is built from needs a new version (retro 2026-10-15): the logic and its
+      # test live in agent-host/tools/release.py (check-push); this hook only asks it.
+      top=$(git rev-parse --show-toplevel)
+      py="$top/agent-host/.venv/bin/python"; [ -x "$py" ] || py=python3
+      "$py" "$top/agent-host/tools/release.py" check-push "$local_sha" "$remote_sha" || exit 1 ;;
+    refs/heads/main)
+      echo "" >&2
+      echo "  ✋ REFUSED: pushing to origin/main." >&2
+      echo "" >&2
+      echo "     main is frozen and CI treats a push here as a RELEASE" >&2
+      echo "     (it moves the :latest image tag)." >&2
+      echo "" >&2
+      echo "     Push dev2 instead:  git push origin dev2" >&2
+      echo "     If this IS the release:  VK_ALLOW_MAIN=1 git push origin main" >&2
+      echo "" >&2
+      exit 1 ;;
+  esac
+done
+exit 0

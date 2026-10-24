@@ -1,0 +1,19 @@
+#!/bin/sh
+# Refuse a commit on `main`. All work ships on `dev2`; main is
+# frozen at the known-good release and advances only by a merge the owner has
+# verified. This existed as prose in CLAUDE.md, the /ship skill and a memory
+# file — three places that all rely on someone reading them. This one does not.
+#
+# Deliberate escape hatch: VK_ALLOW_MAIN=1 git commit ...
+branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+if [ "$branch" = "main" ] && [ "${VK_ALLOW_MAIN:-}" != "1" ]; then
+  echo "" >&2
+  echo "  ✋ REFUSED: you are committing on 'main', which is frozen." >&2
+  echo "" >&2
+  echo "     All work goes on 'dev2'.  git switch dev2" >&2
+  echo "     main advances only by a merge at a verified release." >&2
+  echo "" >&2
+  echo "     If this really is that release:  VK_ALLOW_MAIN=1 git commit ..." >&2
+  echo "" >&2
+  exit 1
+fi
