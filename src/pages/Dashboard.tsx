@@ -51,10 +51,8 @@ import { installDailyAutoReload } from "@/utils/autoReload";
 import type { SceneManager } from "@/babylon/SceneManager";
 import type { ActivePanel } from "@/types/panel.types";
 import type { TeleportPoint } from "@/types/scene.types";
-import { VillaModelProvider, useVillaSets, useDeviceIdentity } from "@/config/VillaModel";
+import { VillaModelProvider, useVillaModelValue, useVillaSets, useDeviceIdentity } from "@/config/VillaModel";
 import { criticalDevices, deviceOf, hiddenIn } from "@/config/deviceGroups";
-import { faultDevices } from "@/config/attention";
-import { useFmData } from "@/fm/FmDataContext";
 import { useCriticalDevices } from "@/ha/criticalDevices";
 import { categoryMembers } from "@/config/villaVisibility";
 import AskDialog from "@/components/common/AskDialog";
@@ -146,6 +144,8 @@ export default function Dashboard() {
   // which a profile can see at all — decided once, by the villa model
   // (config/villaVisibility.ts), and read here as by every surface below.
   const villaSets = useVillaSets(sceneEntityIds);
+  // the villa model, built once here and handed down (VillaModelProvider below): this page reads the same value
+  const villa = useVillaModelValue(villaSets);
   const { dismissedIds, mappedEntityIds } = villaSets;
   // Mirrored into a ref for the motion-toast subscription below, which reads
   // it from inside a subscribeAll callback set up once ([subscribeAll] only)
@@ -424,14 +424,11 @@ export default function Dashboard() {
     }) : []),
     [categoryGroup, role, config.entityMap, entities, suppressedEntityIds, mappedEntityIds, dismissedIds, isHidden, identity.folding]);
   useEffect(() => { manager?.setHiddenDevices(isHidden); }, [manager, isHidden]);
-  // The devices with an open Cockpit fault, folded as the critical list is (attention.faultDevices — the villa model
-  // reads the same for the lists): the amber "!" on the map, the open window and the room chooser (owner, 2026-10-22:
-  // badge proposal 2). This page sits outside the villa model, so it folds here, as above.
-  const { data: fmData } = useFmData();
-  const faults = useMemo(() => faultDevices(fmData, (id) => id in entities, identity.folding),
-    [fmData, entities, identity.folding]);
-  const hasFault = useCallback((id: string) => faults.has(id), [faults]);
-  useEffect(() => { manager?.setFaultDevices(faults); }, [manager, faults]);
+  // What is wrong with each device, the villa model's ONE answer (attention.deviceIssues, from the Overview's cards):
+  // the amber "!" on the map, the open window and the room chooser — a fault or late maintenance (owner, 2026-10-22:
+  // badge proposal 2; review L, 2026-10-25: the same answer as the window's sign and the Cockpit's card).
+  const hasFault = villa.hasFault;
+  useEffect(() => { manager?.setFaultDevices(villa.issues.amber); }, [manager, villa.issues]);
   const openPanel = useOpenPanelActions({
     screen, go, panelFor, readingsOf: identity.readingsOf, doors, isCritical, isHidden, hasFault,
   });
@@ -705,7 +702,7 @@ export default function Dashboard() {
   }, [manager]);
 
   return (
-    <VillaModelProvider sets={villaSets}>
+    <VillaModelProvider value={villa}>
     <AppNoticeContext.Provider value={setNotice}>
       <BabylonCanvas
         key={modelKey}

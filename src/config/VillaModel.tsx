@@ -21,7 +21,7 @@ import { villaDevices, deviceFolding, deviceOf, deviceReadings, recordDeviceOf, 
 import { effectiveMapped, visibleEntitiesOf, visibleTo } from "./villaVisibility";
 import type { Role } from "@/auth/roles";
 import type { HassEntity } from "@/types/ha.types";
-import { buildAttentionItems, faultDevices, type VillaProblems } from "./attention";
+import { buildAttentionItems, deviceIssues, groupAttention, type DeviceIssues, type VillaProblems } from "./attention";
 import { deviceRows, type DeviceRow } from "./deviceRecord";
 import { dismissedEntitySet, inventoryGaps } from "./dismissedEntities";
 
@@ -74,13 +74,23 @@ export interface VillaModel extends VillaSets {
   visibleTo: (role: Role | null) => { has(id: string): boolean };
   /** Advanced Settings' devices: one row per stored device, and what is missing (dismissedEntities.inventoryGaps). */
   settings: { rows: DeviceRow[]; stale: string[]; orphans: string[] };
-  /** Does this device have an open Cockpit fault (attention.faultDevices, folded) — a badge's amber "!" in a list. */
+  /** What is wrong with each device, from the Overview's own cards (attention.deviceIssues): the ONE answer the map's
+   *  badges, the room chips, the open window and the lists read (review L, owner 2026-10-25). */
+  issues: DeviceIssues;
+  /** An amber issue in the Cockpit on this device — a fault or late maintenance (issues.amber): a badge's amber "!". */
   hasFault: (entityId: string) => boolean;
 }
 
 const Ctx = createContext<VillaModel | null>(null);
 
-export function VillaModelProvider({ sets, children }: { sets: VillaSets; children: ReactNode }) {
+/** The villa model, built ONCE by the Dashboard (useVillaModelValue) and handed to every reader below it: the
+ *  Dashboard opens panels and feeds the map, above the provider it renders, and reads the same value (review L: it
+ *  folded the faults a second time, from the records, while the lists read the cards). */
+export function VillaModelProvider({ value, children }: { value: VillaModel; children: ReactNode }) {
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
+export function useVillaModelValue(sets: VillaSets): VillaModel {
   const { mappedEntityIds, visibleEntities, sceneEntityIds, dismissedIds } = sets;
   const { entities, entityDeviceIds, deviceUnits, connected, hiddenInHaEntityIds: hidden } = useHA();
   const { config, resolvedRooms } = useConfig();
@@ -109,8 +119,9 @@ export function VillaModelProvider({ sets, children }: { sets: VillaSets; childr
     return { devices, attentionItems };
   }, [devices, entities, entityMap, resolvedRooms, fmData]);
 
-  // the devices with an open fault, as the map's badges read them (attention.faultDevices; the page folds the same)
-  const faults = useMemo(() => faultDevices(fmData, (id) => id in entities, folding), [fmData, entities, folding]);
+  // what is wrong with each device, from the cards themselves (role-blind: the map's badges; a profile's sign reads its
+  // own cards, useDeviceIssue)
+  const issues = useMemo(() => deviceIssues(groupAttention(attention.attentionItems)), [attention]);
 
   // Advanced Settings' device list and what it must say is missing — the same dismissal as every set above.
   const settings = useMemo(() => {
@@ -122,15 +133,14 @@ export function VillaModelProvider({ sets, children }: { sets: VillaSets; childr
     return { rows, ...gaps };
   }, [entityMap, config.meshBindings, dismissedIds, sceneEntityIds, entities, connected]);
 
-  const value = useMemo(
+  return useMemo(
     (): VillaModel => ({
-      ...sets, devices, visibleDevices, attention, settings,
+      ...sets, devices, visibleDevices, attention, settings, issues,
       visibleTo: (role) => visibleTo(role, { mapped: mappedEntityIds, entityMap, entities }),
-      hasFault: (id) => faults.has(id),
+      hasFault: (id) => issues.amber.has(id),
     }),
-    [sets, mappedEntityIds, devices, visibleDevices, attention, settings, entityMap, entities, faults],
+    [sets, mappedEntityIds, devices, visibleDevices, attention, settings, entityMap, entities, issues],
   );
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
 /**

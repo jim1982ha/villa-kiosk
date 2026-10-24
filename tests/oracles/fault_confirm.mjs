@@ -9,7 +9,7 @@ import { h, draw } from "../consistency/screen.mjs";
 import { ck, done } from "../consistency/check.mjs";
 import { readFileSync } from "node:fs";
 const { confirmingFaults, confirmLine, confirmParts, shownUntil } = await import("@/fm/faultConfirm");
-const { buildAttentionItems, attentionFor, faultDevices } = await import("@/config/attention");
+const { buildAttentionItems, attentionFor, deviceIssues } = await import("@/config/attention");
 const { confirmingCards, cockpitCard } = await import("@/config/cockpitCard");
 const { AttentionCard } = await import("@/components/cockpit/CockpitOverview");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
@@ -81,7 +81,7 @@ ck("the open issues, their count and the health line hold only the active fault"
    && fmAttention(data).unresolved.map((t) => t.id).join() === "a1" && att.health.summary === "1 thing needs attention.",
    att.attentionGroups.map((g) => g.key));
 ck("  ...and the map's fault marks (the amber \"!\") only its device",
-   [...faultDevices(data, (id) => id in entities, new Map())].join() === "binary_sensor.leak");
+   [...deviceIssues(att.attentionGroups).amber].join() === "binary_sensor.leak");
 
 console.log("\n  in the Open issues list, last, uncounted, marked:");
 const cards = confirmingCards(conf, { devices, entities, entityMap: {}, resolvedRooms: { "lock.door": "Hall" }, may: () => true });

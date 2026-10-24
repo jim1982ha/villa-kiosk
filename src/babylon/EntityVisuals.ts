@@ -815,7 +815,7 @@ export class EntityVisuals {
   /** Hidden in the villa's system (deviceGroups.hiddenIn over the store's registry facts) — pushed by the page
    *  (setHiddenDevices). Nothing is, until the villa's registry has been read. */
   private hidden: (entityId: string) => boolean = () => false;
-  /** The devices with an open Cockpit fault, folded onto their devices (attention.faultDevices) — pushed by the page
+  /** The devices with an open Cockpit fault, folded onto their devices (attention.deviceIssues: a fault or late maintenance) — pushed by the page
    *  (setFaultDevices): their badge's amber "!" (owner, 2026-10-22: badge proposal 2). */
   private faults: ReadonlySet<string> = new Set();
   private lookCfg: {

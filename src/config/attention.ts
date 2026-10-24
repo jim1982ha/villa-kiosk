@@ -15,7 +15,7 @@ import { alarmText, rowText } from "@/config/reading";
 import { alertIsFault } from "@/config/BinarySensorClasses";
 import { labelOf } from "@/config/EntityMap";
 import { deviceRoom, deviceRoomOrRecord, firstRoom, roomLabel } from "@/config/devicePlace";
-import { deviceOf, devicesFor, recordEntity, type VillaDevices } from "@/config/deviceGroups";
+import { devicesFor, recordEntity, type VillaDevices } from "@/config/deviceGroups";
 import { DUE_WORDS, faultTitle, fmAttention, stageOf, type FmStage } from "@/fm/fmEngine";
 import { lastNoted } from "@/fm/faultNotes";
 import { deviceWorkKey, groupByDevice } from "@/fm/deviceWork";
@@ -151,27 +151,55 @@ export function groupAttention(items: readonly AttentionItem[]): AttentionGroup[
     || a.title.localeCompare(b.title) || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
 }
 
-/**
- * The devices with an open Cockpit fault — every record not closed (fmAttention.unresolved, the Cockpit's own "fault"
- * lines), each on its entity as buildAttentionItems files it (recordEntity) and folded onto its device as the critical
- * list is (deviceGroups.criticalDevices): the entity AND its device, so the device's map badge carries it whichever of
- * its entities the record names. What a badge's amber "!" and a room's amber number read (owner, 2026-10-22: badge
- * proposal 2 — the map showed nothing for an open fault).
- */
-export function faultDevices(
-  fmData: FmData, has: (entityId: string) => boolean, folding: ReadonlyMap<string, string>,
-): ReadonlySet<string> {
-  const out = new Set<string>();
-  for (const t of fmAttention(fmData).unresolved) {
-    const id = recordEntity(t.entityId, has);
-    if (!id) continue;
-    out.add(id);
-    out.add(deviceOf(folding, id));
-  }
-  return out;
+const SEVERITY_RANK: Record<AttentionSeverity, number> = { danger: 0, warn: 1, lost: 2 };
+
+/** A line's severity WITH the fault it carries (mergeFaults: an offline sensor's "Unavailable" line holding the night
+ *  check's fault about it): the worse of the two — the card draws both icons, the line's grey and the fault's amber. */
+export function itemSeverity(item: AttentionItem): AttentionSeverity {
+  const own = attentionSeverity(item);
+  if (!item.fault) return own;
+  const carried = attentionSeverity(item.fault);
+  return SEVERITY_RANK[carried] < SEVERITY_RANK[own] ? carried : own;
 }
 
-const SEVERITY_RANK: Record<AttentionSeverity, number> = { danger: 0, warn: 1, lost: 2 };
+/** What is wrong with each device, read from the Overview's own cards (groupAttention). */
+export interface DeviceIssues {
+  /** Every entity a problem names and its device, with an AMBER issue (a fault, merged or not, or late maintenance):
+   *  what a badge's amber "!" and a room's amber number read. */
+  amber: ReadonlySet<string>;
+  /** The worst severity of each such entity and device. */
+  worst: ReadonlyMap<string, AttentionSeverity>;
+}
+
+/**
+ * ⚠️ ONE ANSWER PER DEVICE (owner, 2026-10-25, review L: "fix the recommended ones"). The map's badge read the fault
+ * RECORDS (faultDevices) while the window's sign and the Overview read the cards: an offline sensor with its fault was
+ * an amber "!" on the map and a grey sign in its window (the fault sat inside the "Unavailable" line), and a pump with
+ * only late maintenance had an amber sign and no mark. Now all read the cards, here: the badge's "!" means "an amber
+ * issue in the Cockpit" — a fault, OR late maintenance — and the sign's colour is the card's worst (itemSeverity).
+ * Each problem's own entity AND its device (the card's key) carry it, so a device's badge has it whichever of its
+ * entities the problem names. Role-blind for the map (the villa model's items); a profile's sign reads its own cards.
+ */
+export function deviceIssues(groups: readonly AttentionGroup[]): DeviceIssues {
+  const amber = new Set<string>();
+  const worst = new Map<string, AttentionSeverity>();
+  const note = (id: string | undefined, s: AttentionSeverity) => {
+    if (!id) return;
+    const was = worst.get(id);
+    if (was === undefined || SEVERITY_RANK[s] < SEVERITY_RANK[was]) worst.set(id, s);
+    if (s === "warn") amber.add(id);
+  };
+  for (const g of groups) {
+    for (const item of g.items) {
+      for (const one of item.fault ? [item, item.fault] : [item]) {
+        const s = attentionSeverity(one);
+        note(one.entityId, s);
+        note(g.entityId, s);
+      }
+    }
+  }
+  return { amber, worst };
+}
 
 /** The most serious issue the Overview lists for the devices of `ids` (a device window: the device and its linked
  *  entity) — the cards it would mark (cardFocused), as this profile sees them; null: no card, so no warning.
@@ -183,7 +211,7 @@ export function issueSeverity(groups: readonly AttentionGroup[], ids: readonly s
   for (const g of groups) {
     if (!cardFocused(g.entityId, ids, deviceOf)) continue;
     for (const item of g.items) {
-      const s = attentionSeverity(item);
+      const s = itemSeverity(item);
       if (best === null || SEVERITY_RANK[s] < SEVERITY_RANK[best]) best = s;
     }
   }

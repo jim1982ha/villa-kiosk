@@ -143,11 +143,13 @@ console.log("\n  the callers ask it (pin the caller):");
      && /isCritical: villaDevices\.isCritical/.test(sg));
   // ...and the open faults the same way (owner, 2026-10-22: badge proposal 2): the map through the page's push, the
   // header and the room chooser through the page, the list rows through the villa model
-  ck("the map, the open window's header, the room chooser and the list rows all read the open faults",
-     /hasFault: \(id: string\) => faults\.has\(id\)/.test(ev) && /manager\?\.setFaultDevices\(faults\)/.test(db)
-     && /faultDevices\(fmData, \(id\) => id in entities, identity\.folding\)/.test(db)
-     && /hasFault: \(id\) => faults\.has\(id\)/.test(src("config/VillaModel.tsx"))
-     && /faultDevices\(fmData, \(id\) => id in entities, folding\)/.test(src("config/VillaModel.tsx")));
+  // review L (2026-10-25): ONE answer, the villa model's (attention.deviceIssues, from the cards), built once by the page
+  ck("the map, the open window's header, the room chooser and the list rows all read the villa model's one answer",
+     /hasFault: \(id: string\) => faults\.has\(id\)/.test(ev) && /manager\?\.setFaultDevices\(villa\.issues\.amber\)/.test(db)
+     && /const hasFault = villa\.hasFault;/.test(db) && /const villa = useVillaModelValue\(villaSets\);/.test(db)
+     && /<VillaModelProvider value=\{villa\}>/.test(db) && !/faultDevices\(/.test(db)
+     && /hasFault: \(id\) => issues\.amber\.has\(id\)/.test(src("config/VillaModel.tsx"))
+     && /deviceIssues\(groupAttention\(attention\.attentionItems\)\)/.test(src("config/VillaModel.tsx")));
   ck("no caller builds a reading by hand any more (badgeFaceAndRing / linkedOn / alertStateFor)",
      ![ev, sg, db, ph].some((s) => /badgeFaceAndRing\(|linkedOn:|alertStateFor\(|linkActiveIds/.test(s)));
 }

@@ -103,11 +103,16 @@ ck("the Open a ticket window (one device's faults) fits its content, by the devi
   // owner, 2026-10-24 (2.496.519): the model's details are the same (i) as every other, never a worded button
   const { h, draw } = await import("../consistency/screen.mjs");
   const CentralModelInfo = (await import("@/components/settings/CentralModelInfo")).default;
-  const details = draw(h(CentralModelInfo, { addonCfg: {}, loadedModel: null, editable: false }));
+  const details = draw(h(CentralModelInfo, { addonCfg: {}, loadedModel: null }));
   ck("  ...the model's details are the plain (i) (drawn), the upload a .btn with a word hidden on a phone",
      /<button type="button" class="info-btn" aria-label="Model details"/.test(details) && !/btn-label|class="(?:[^"]*\s)?btn(?:\s[^"]*)?"/.test(details)
      && /className="btn"\s*onClick=\{glbUpload\.openPicker\}[\s\S]{0,400}<span className="btn-label">/.test(ce)
      && !/header-icon-btn/.test(ce));
+  // review L (owner, 2026-10-25): its words named "the GLB button in the top bar", gone since 2.496.516 — the tip's
+  // own content, drawn (InfoTip's child, as its card shows it)
+  const tip = draw(h("div", {}, CentralModelInfo({ addonCfg: {}, loadedModel: null }).props.children));
+  ck("  ...its words send to Upload model beside it, never to a top bar that has no such button",
+     /Upload model/.test(tip) && !/top bar/i.test(tip), tip.slice(-300));
   ck("  ...the same Back component as a device window's", /<BackButton onClick=\{back\.go\} label=\{back\.label\} \/>/.test(bp)
      && !/className="btn panel-back"/.test(bp + ce));
 }
