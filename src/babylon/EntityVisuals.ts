@@ -1874,7 +1874,7 @@ export class EntityVisuals {
     for (const [entityId, all] of this.byEntity) {
       if (!all.length) continue;
       // over the objects its badge comes from (badgeMeshes), never over its poses or a "__nobadge" one
-      const own = badgeMeshes(all);
+      const own = badgeMeshes(all, entityId);
       const meshes = own.length ? own : all;
       const bounds = this.mergedWorldBounds(meshes);
       if (!bounds) continue;
@@ -2880,8 +2880,12 @@ export class EntityVisuals {
     for (const [entityId, meshes] of this.byEntity) {
       if (!meshes.length) continue;
       if (hiddenMembers.has(entityId)) continue;
-      // a badge only from an object named after the entity itself — never its poses nor "__nobadge" (badgeMeshes)
-      if (!badgeMeshes(meshes).length) continue;
+      // a badge only from an object named after the entity itself — never its poses nor "__nobadge" (badgeMeshes),
+      // a curtain's poses excepted
+      if (!badgeMeshes(meshes, entityId).length) {
+        tapDebug(`${entityId}: no badge, the model has no object named after it (only ${meshes.map((m) => m.name).join(", ")})`, "mesh");
+        continue;
+      }
       const map = this.mapping.get(entityId);
       if (!map) continue;
       const anchor = this.labelAnchors.get(entityId) ?? meshes[0];

@@ -13,6 +13,7 @@
 import type { HassEntity } from "@/types/ha.types";
 import { TRANSITIONAL_STATES } from "@/utils/stateColors";
 import { extractVariantSuffix } from "@/config/EntityMap";
+import { domainOf } from "@/utils/entityDomain";
 
 // ── Multi-mesh visual variants (e.g. a curtain's closed/half/open poses) ────
 // See EntityMap.extractVariantSuffix's docstring for the "__<variant>" mesh-
@@ -161,7 +162,17 @@ export const NO_BADGE_WORD = "nobadge";
 /** The objects a device's badge comes from: those named after the entity ITSELF, no "__<word>" ending (owner,
  *  2026-10-21: "only show a badge for binary_sensor.main_entrance_door_sensor and no badge for
  *  …door_sensor__nobadge"). Its poses (…__on) and "__nobadge" never make one; empty: the device floats no badge. The
- *  badge stands over these objects, never over its poses. */
-export function badgeMeshes<T extends { name: string }>(meshes: readonly T[]): T[] {
-  return meshes.filter((m) => extractVariantSuffix(m.name) === null);
+ *  badge stands over these objects, never over its poses — but a cover (a curtain) with no such object takes its badge
+ *  from its poses (owner, 2026-10-24), unless one is "__nobadge". */
+export function badgeMeshes<T extends { name: string }>(meshes: readonly T[], entityId?: string): T[] {
+  const own = meshes.filter((m) => extractVariantSuffix(m.name) === null);
+  if (own.length) return own;
+  // ⚠️ A CURTAIN IS ALWAYS ON THE MAP (owner, 2026-10-24: "the rule should not apply to curtains since they should
+  // always be visible on the map"): a cover modelled only as its poses (…__open, …__half, …__closed) had no badge
+  // since 2.496.471, every curtain of the villa with it. Its poses make its badge, unless the model marks it
+  // "__nobadge".
+  const domain = domainOf(entityId ?? meshes[0]?.name ?? "");
+  const words = meshes.map((m) => extractVariantSuffix(m.name));
+  if (domain !== "cover" || words.includes(NO_BADGE_WORD)) return [];
+  return meshes.slice();
 }

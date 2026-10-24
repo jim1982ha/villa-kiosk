@@ -1,3 +1,10 @@
+## 2.496.514
+
+What you will see:
+- Curtains have their icon on the map again. A curtain modelled only as its positions (open, half, closed) lost its
+  icon on 21/10, when an object with an ending stopped giving its device an icon; a curtain now takes its icon from
+  its positions. An object ending "__nobadge" still removes a device's icon, a curtain's too.
+
 ## 2.496.513
 
 - Every duration now has its unit joined to the number: "1h 30min", "10min", "30s", "2d 3h". This covers the chart
