@@ -53,7 +53,7 @@ const settings = readFileSync(ROOT + "components/settings/SettingsModal.tsx", "u
 ck("  ...each section's explanation is its title's (i) (TipTitle), and Settings' options carry theirs",
    (advanced.match(/<TipTitle title=/g) ?? []).length >= 7 && (settings.match(/<InfoTip label=/g) ?? []).length >= 4);
 const tip = readFileSync(ROOT + "components/common/InfoTip.tsx", "utf8");
-ck("the (i) is a real button with a name, opened by a tap", /<button type="button" className=\{button \? "btn" : "info-btn"\} aria-label=\{label\}/.test(tip)
+ck("the (i) is a real button with a name, opened by a tap", /<button type="button" className="info-btn" aria-label=\{label\}/.test(tip)
    && /onClick=\{\(\) => setOpen/.test(tip));
 
 done("✅ no visible description text: every explanation is one (i)");

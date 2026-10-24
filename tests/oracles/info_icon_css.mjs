@@ -2,8 +2,8 @@
 // (I) icons": it sat in a grey disc with a ring beside the Advanced Settings headings and "Log out all devices").
 //
 // Read from every stylesheet in styles.css's @import order, media blocks included: every rule that reaches the (i)'s
-// button (`.info-btn`, at the end of a selector, with or without a state) and what it sets. InfoTip's `button`
-// variant is a .btn and is not this rule's.
+// button (`.info-btn`, at the end of a selector, with or without a state) and what it sets. InfoTip has no other look
+// (the worded "Model details" button of 2.496.516 is gone, owner 2026-10-24).
 import { readFileSync } from "node:fs";
 import { ck, done } from "../consistency/check.mjs";
 

@@ -100,9 +100,10 @@ ck("the Open a ticket window (one device's faults) fits its content, by the devi
      /<ModalFooter onClose=\{back\} commit=\{commit\} back=\{\{ go: exit, to: withinSettings \? "Settings" : undefined \}\}/.test(ce)
      && /className="modal-header-actions">\s*<LogoutAll \/>/.test(ce)
      && /:\s*withinSettings \? <span \/> : undefined\} \/>/.test(ce));
-  ck("  ...its footer buttons one look: the model's details and upload are .btn with a word hidden on a phone",
-     /<InfoTip label="Model details" button="Model details">/.test(readFileSync(new URL("../../src/components/settings/CentralModelInfo.tsx", import.meta.url), "utf8"))
-     && /className=\{button \? "btn" : "info-btn"\}/.test(readFileSync(new URL("../../src/components/common/InfoTip.tsx", import.meta.url), "utf8"))
+  // owner, 2026-10-24 (2.496.519): the model's details are the same (i) as every other, never a worded button
+  ck("  ...the model's details are the plain (i), the upload a .btn with a word hidden on a phone",
+     /<InfoTip label="Model details">/.test(readFileSync(new URL("../../src/components/settings/CentralModelInfo.tsx", import.meta.url), "utf8"))
+     && /<button type="button" className="info-btn"/.test(readFileSync(new URL("../../src/components/common/InfoTip.tsx", import.meta.url), "utf8"))
      && /className="btn"\s*onClick=\{glbUpload\.openPicker\}[\s\S]{0,400}<span className="btn-label">/.test(ce)
      && !/header-icon-btn/.test(ce));
   ck("  ...the same Back component as a device window's", /<BackButton onClick=\{back\.go\} label=\{back\.label\} \/>/.test(bp)
