@@ -99,10 +99,15 @@ def describe(spec: str) -> tuple[str, float]:
 ENGINE_JOBS = {"engine:pack": "Villa's device list (refreshed)", "engine:housekeeping": "Old records removed"}
 
 
-def job_key(skill: str, index: int, when: str) -> str:
-    """A scheduled entry's slot key — what the state records (claim_job_slot) and the Overview lists. ⚠️ Never change
-    it: a new key is a slot never claimed, and today's job would run again."""
-    return f"{skill}:{index}:{when}"
+def job_key(skill: str, schedule: list, i: int) -> str:
+    """A scheduled entry's slot key — what the state records (claim_job_slot, the run and end rows) and the Overview
+    lists: the job itself and its time, "reports:fm-daily@07:00".
+
+    ⚠️ THE JOB, NEVER ITS PLACE (review L, 2026-10-25): until 0.12.350 the key held the entry's place in the list
+    ("reports:0:07:00"), so deleting the daily report made the Overview name the weekly one for the daily's run. A run
+    already claimed today under the older key does not run again under this one: its day is kept by its ident too
+    (jobday:, claim_job_slot)."""
+    return f"{job_ident(skill, schedule, i)}@{schedule[i]['when']}"
 
 
 def job_ident(skill: str, schedule: list, i: int) -> str:
@@ -124,17 +129,10 @@ def job_label(key: str, skills: dict) -> str:
     if key in ENGINE_JOBS:
         return ENGINE_JOBS[key]
     skill, _, rest = key.partition(":")
-    index, _, _when = rest.partition(":")
-    sk = skills.get(skill)
-    try:
-        job = sk.schedule[int(index)] if sk is not None else None
-    except (ValueError, IndexError):
-        job = None
-    if job and job.get("name"):
-        return job_title(skill, job["name"])
-    if job and job.get("run"):
-        return job_title(skill, str(job["run"]).split()[0])
-    return skill
+    if "@" not in key:
+        return skill            # an older engine's key ("reports:0:07:00"): its place may name another job now
+    what = rest.rsplit("@", 1)[0].split("#", 1)[0]
+    return job_title(skill, what) if what else skill
 
 class Scheduler:
     def __init__(self, settings, skills, state, run_code, run_model, rebuild_pack, housekeeping=None, work=None):
@@ -225,7 +223,7 @@ class Scheduler:
                 # ⚠️ ONE KEY FOR CLAIMING THE SLOT AND FOR "STILL RUNNING" (architecture review, 2026-10-07): the slot
                 # was claimed per entry (skill:i:when) and started per time (skill:when) — two jobs of a skill at the
                 # same time, and the second, claimed, was refused as "still running": lost for the day
-                key = job_key(sk.name, i, job["when"])
+                key = job_key(sk.name, sk.schedule, i)
                 if not slot or not self._claim(key, slot, job_ident(sk.name, sk.schedule, i)):
                     continue
                 name = f"{sk.name}:{job['when']}"

@@ -124,7 +124,8 @@ def test_every_record_family_has_a_declared_lifetime(tmp_path):
     s.note_ha_sent("ctx", -100, 9)
     s.mark_saved_by_model("runs/fm-weekly-1/notes.json")
     s.mark_owner_told("credit", "2026-10-01T00:00:00+00:00")
-    s.claim_job_slot("reports:0:Mon 08:00", "2026-10-05T08:00:00+08:00")
+    # as the scheduler claims it: by the job itself, its day kept under its ident (review L: jobday: had no lifetime)
+    s.claim_job_slot("reports:fm-weekly@Mon 08:00", "2026-10-05T08:00:00+08:00", "reports:fm-weekly")
     s.set_siren_stop("2026-10-05T08:00:00+00:00")
     keys = [r[0] for r in s.db.execute("select k from kv")]
     undeclared = [k for k in keys if not any(k.startswith(p) for p in KV_FAMILIES)]

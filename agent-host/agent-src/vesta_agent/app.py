@@ -204,7 +204,7 @@ class Vesta:
         self.thread.translate = self.translations.draw
         self._villa_tasks: set[asyncio.Task] = set()
         self.villa_messages = VillaMessages(self.state, self.translations, lambda chat: self.notices.lang(chat),
-                                            self.delivery.edit, names=lambda: villa_names(self.pack()))
+                                            self.delivery.edit, names=lambda: villa_names(self.pack(), self.state.all_entity_names()))
         self.poster = Poster(send=self.delivery.send, thread=self.thread, notices=self.notices,
                              timezone_name=settings.timezone, edit=self.delivery.edit, translations=self.translations)
         # a job asked for in a chat, start to end (chat_jobs.py); what it tells a chat goes titled, through the poster

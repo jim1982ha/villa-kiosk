@@ -140,6 +140,13 @@ def fill(skeleton: str, values: list[str]) -> str:
                     skeleton)
 
 
+def _pack_names(pack, e: str) -> list:
+    """What the knowledge pack calls entity `e`: its name, its device's, its reading's and its room's — the ONE list
+    of a device's names every masked text uses (an alert card's, a villa message's: review L, 2026-10-25)."""
+    row = pack.row(e) or {}
+    return [pack.name_of(e), pack.device_name(e, None), pack.reading_name(e, None), row.get("area")]
+
+
 def incident_names(pack, entities, live: dict[str, str] | None = None) -> list[str]:
     """The names an incident's text may say of its own devices: first each entity's name as the villa's system gave it
     when the alert arrived (`live`: its friendly name, app.Vesta.on_critical), then its name, its device's, its
@@ -150,35 +157,33 @@ def incident_names(pack, entities, live: dict[str, str] | None = None) -> list[s
     pattern and its own run."""
     out: list[str] = []
     for e in entities or ():
-        names = [(live or {}).get(e)]
-        if pack is not None:
-            row = pack.row(e) or {}
-            names += [pack.name_of(e), pack.device_name(e, None), pack.reading_name(e, None), row.get("area")]
+        names = [(live or {}).get(e)] + (_pack_names(pack, e) if pack is not None else [])
         for n in names:
             if isinstance(n, str) and n.strip() and n not in out:
                 out.append(n)
     return out
 
 
-def villa_names(pack) -> tuple[str, ...]:
-    """Every device, reading and room name the knowledge pack knows: what a villa message may say of its devices
-    (villa_messages.py — it names no entity). ⚠️ NAMES ARE VALUES THERE TOO (review K, 0.12.345): "Visitor at Parking
-    Doorbell" went to the AI as words, could come back renamed, and each doorbell was a sentence and a run of its own."""
-    if pack is None:
-        return ()
-    if _VILLA_NAMES[0] is pack:                       # read once per pack (a rebuild is a new pack)
+def villa_names(pack, live=()) -> tuple[str, ...]:
+    """Every name the villa's devices go by: each one's as the knowledge pack has it (`_pack_names`, the SAME list as
+    an alert card's) and as the villa's system gave it when an alert arrived (`live`: State.all_entity_names) — what a
+    villa message may say of its devices (villa_messages.py — it names no entity). ⚠️ NAMES ARE VALUES THERE TOO
+    (review K, 0.12.345; review L, 2026-10-25: this list missed the readings' and the live names, so "House Pump has
+    been running…" went to the AI as words, could come back renamed, and each device was a run of its own)."""
+    live = tuple(n for n in live if isinstance(n, str))
+    key = (id(pack), live)
+    if _VILLA_NAMES[0] == key and _VILLA_NAMES[2] is pack:   # read once per pack and live names (a rebuild is new)
         return _VILLA_NAMES[1]
     out: dict[str, None] = {}
-    for row in pack.rows():
-        e = row.get("entity_id")
-        for n in (pack.name_of(e) if e else None, pack.device_name(e, None) if e else None, row.get("area")):
-            if isinstance(n, str) and len(n.strip()) >= 3:
-                out.setdefault(n.strip(), None)
-    _VILLA_NAMES[:] = [pack, tuple(out)]
+    for n in [*live, *(n for row in (pack.rows() if pack is not None else ()) if row.get("entity_id")
+                        for n in _pack_names(pack, row["entity_id"]))]:
+        if isinstance(n, str) and len(n.strip()) >= 3:
+            out.setdefault(n.strip(), None)
+    _VILLA_NAMES[:] = [key, tuple(out), pack]
     return _VILLA_NAMES[1]
 
 
-_VILLA_NAMES: list = [None, ()]
+_VILLA_NAMES: list = [None, (), None]
 
 
 def alert_names(reader, entities) -> dict[str, str]:
@@ -238,8 +243,13 @@ def answer(text: str, skeletons: list[str]) -> dict | None:
     ⚠️ READ AS THE AI WRITES IT (owner, 2026-10-24: "Master Bedroom Aqara is unlocked for 10min" stayed English on a
     French chat, the answer "not the list of lines asked for"; until 0.12.346 only the text from the first "[" to the
     last "]" was read). Read, in order: a JSON list of as many strings anywhere in the text (inside a code block, with
-    words around it, the first that fits); a JSON object naming each line asked; for ONE line asked, a JSON string or
-    the answer's one line itself. Raise phrases.READER whenever this reads more."""
+    words around it, the first that fits); a JSON object naming each line asked; for ONE line asked, a JSON string.
+    Raise phrases.READER whenever this reads differently.
+
+    ⚠️ NEVER A BARE LINE (review L, 2026-10-25): 0.12.347–0.12.350 took the answer's one line as the translation of
+    one line asked, and "Voici la traduction : « {1} est déverrouillé depuis {2}min »" was printed on the card, kept
+    for every later card; "Here is the French translation:" rested a day as "a value left out". A bare line is
+    unreadable: the run asks again at once, plainly."""
     t = (text or "").strip()
     if not t or not skeletons:
         return None
@@ -258,9 +268,6 @@ def answer(text: str, skeletons: list[str]) -> dict | None:
             return {s: v[s] for s in skeletons}
     if len(skeletons) == 1:
         one = next((v for v in found if isinstance(v, str) and v.strip()), None)
-        if one is None:
-            lines = [ln for ln in (x.strip().strip("`").strip() for x in t.splitlines()) if ln]
-            one = lines[0].strip('"“”') if len(lines) == 1 else None
         if one:
             return {skeletons[0]: one}
     return None
@@ -307,34 +314,23 @@ class Translations:
         if lang == "en" or not body.strip():
             return p, None
         try:
-            agreed = self.terms()
-            if agreed is None:
-                return p, None
-            fp = self.fingerprint(agreed[0])
-            names = self.names(int(iid)) if self.names else []
-            shown, wanted, translated = [], [], False
-            for line in body.split("\n"):
-                skel, values = mask(line, names)
-                tr = self.phrases.kept(lang, skel, fp) if wordy(skel) else None
-                if tr is not None:
-                    shown.append(fill(tr, values))
-                    translated = True
-                    continue
-                # ⚠️ A LINE THAT FAILED STAYS ENGLISH, THE OTHERS ARE SHOWN TRANSLATED (review, 2026-10-23): resting
-                # (phrases.Phrases.resting) it is not asked, and one such line no longer keeps the whole card English
-                if wordy(skel) and not self.phrases.resting(lang, skel, fp):
-                    wanted.append(skel)
-                shown.append(line)
-            if wanted:
-                return p, (lang, tuple(dict.fromkeys(wanted)))
-            return ({**p, "tr": {"lang": lang, "body": "\n".join(shown)}} if translated else p), None
+            written = body.split("\n")
+            # the one reading of a text in a chat's language (`lines`): an alert card's and a villa message's alike
+            shown, want = self.lines(lang, written, self.names(int(iid)) if self.names else ())
+            if want:
+                return p, want
+            return ({**p, "tr": {"lang": lang, "body": "\n".join(shown)}} if shown != written else p), None
         except Exception:  # noqa: BLE001 — the card is English, never not at all
             log.exception("Incident #%s in chat %s: its words could not be drawn in the chat's language", iid, chat)
             return p, None
 
     def lines(self, lang: str, lines: list[str], names=()) -> tuple[list[str], tuple | None]:
-        """`lines` (a villa message's own words: villa_messages.py) as `lang` reads them from what is kept — a line
-        not known yet as written — and what is still wanted ((language, skeletons), for `then`). Never raises."""
+        """`lines` (an alert card's body, `apply`; a villa message's own words, villa_messages.py) as `lang` reads
+        them from what is kept — a line not known yet as written — and what is still wanted ((language, skeletons), for
+        `later` or `then`). Never raises.
+
+        ⚠️ A LINE THAT FAILED STAYS ENGLISH, THE OTHERS ARE SHOWN TRANSLATED (review, 2026-10-23): resting
+        (phrases.Phrases.resting) it is not asked, and one such line no longer keeps the whole text English."""
         try:
             agreed = self.terms()
             if lang == "en" or agreed is None:

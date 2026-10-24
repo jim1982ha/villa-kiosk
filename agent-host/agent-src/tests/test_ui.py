@@ -651,11 +651,30 @@ def test_a_scheduled_job_is_named_not_its_slot_key():
     from vesta_agent.scheduler import job_key, job_label
     skills = {"reports": types.SimpleNamespace(schedule=[{"when": "07:00", "name": "fm-daily", "prompt": "x"}]),
               "preventive-maintenance": types.SimpleNamespace(schedule=[{"when": "02:00", "run": "nightly.py --x"}])}
-    assert job_label(job_key("reports", 0, "07:00"), skills) == "reports › fm-daily"
-    assert job_label(job_key("preventive-maintenance", 0, "02:00"), skills) == "preventive-maintenance › nightly.py"
+    assert job_label(job_key("reports", skills["reports"].schedule, 0), skills) == "reports › fm-daily"
+    assert job_label(job_key("preventive-maintenance", skills["preventive-maintenance"].schedule, 0), skills) == \
+        "preventive-maintenance › nightly.py"
     assert job_label("engine:pack", skills) == "Villa's device list (refreshed)"
-    assert job_label("gone:3:Mon 08:00", skills) == "gone" and job_label("reports:9:07:00", skills) == "reports"
-    assert job_key("reports", 0, "Mon 08:00") == "reports:0:Mon 08:00"          # the stored key never changes
+    # an older engine's key names its place, which may be another job's now (review L): its skill only
+    assert job_label("gone:3:Mon 08:00", skills) == "gone" and job_label("reports:0:07:00", skills) == "reports"
+    assert job_key("reports", skills["reports"].schedule, 0) == "reports:fm-daily@07:00"     # the job itself
+
+
+def test_deleting_a_job_never_lends_its_run_to_another_job_on_the_overview(tmp_path):
+    # review L (2026-10-25): the daily report ran at 07:00, the owner deleted it, and "Scheduled jobs run" read
+    # "reports › fm-weekly" — the run was kept under the entry's place in the list, and the weekly one took that place
+    from vesta_agent.scheduler import job_key, job_label
+    from vesta_agent.state import State
+    from vesta_agent import status
+    from datetime import datetime, timedelta, timezone
+    import types
+    st = State(str(tmp_path / "state.db"))
+    daily, weekly = {"when": "07:00", "name": "fm-daily", "prompt": "x"}, {"when": "Mon 08:00", "name": "fm-weekly", "prompt": "y"}
+    slot = datetime.now(timezone.utc).isoformat()
+    assert st.claim_job_slot(job_key("reports", [daily, weekly], 0), slot, "reports:fm-daily")
+    after = {"reports": types.SimpleNamespace(schedule=[weekly])}               # the daily job deleted
+    rows = status.jobs_run(st, datetime.now(timezone.utc) - timedelta(hours=1), label=lambda k: job_label(k, after))
+    assert [r["label"] for r in rows] == ["reports › fm-daily"], rows
     assert "j.label || j.job" in page_js()
 
 

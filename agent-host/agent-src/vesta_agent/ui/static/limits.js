@@ -7,6 +7,9 @@ let SEARCH = "", FILTER = "";       // the search as typed, and as matched
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const shown = (v) => (Array.isArray(v) ? v.join(", ") : v === null || v === undefined ? "—" : String(v));
+// a value as the row's drop-down words it ([value, words] choices: "After 12 hours of silence"), else as written
+// (review L, 2026-10-25: the save line and "Changed from its usual" said "after_8h_silence")
+const said = (r, v) => ((r.choices || []).find((c) => Array.isArray(c) && same(c[0], v)) || [null, shown(v)])[1];
 
 // the value's field: a number, a choice, or a list of words (ticked from the words it may hold)
 function input(r, set) {
@@ -34,7 +37,7 @@ function row(r, probs, again) {
     save.disabled = true;
     try {
       await api("PUT", "api/limits", { id: r.id, value });
-      fill(probs); toast(`Saved: ${r.name} = ${shown(value)}`); again();
+      fill(probs); toast(`Saved: ${r.name} = ${said(r, value)}`); again();
     } catch (e) {
       fill(probs, problemsBox(reasons(e), `${r.name} not saved:`)); save.disabled = false;
       probs.scrollIntoView?.({ behavior: "smooth", block: "center" });
@@ -51,7 +54,7 @@ function row(r, probs, again) {
       h("b", {}, r.label), " ", infoButton(r.name, `${r.name}, written at ${(r.where || []).join(", ")}`),
       r.reached ? h("div", { class: "limit-reached" }, `Reached: ${r.reached}`) : null,
       h("div", { class: "muted small" }, r.also,
-        same(r.value, r.default) ? "" : ` Changed from its usual ${shown(r.default)}.`)),
+        same(r.value, r.default) ? "" : ` Changed from its usual ${said(r, r.default)}.`)),
     r.told ? h("span", { class: "chip tiny" + (r.told.startsWith("Nobody") ? " off" : "") }, r.told) : h("span", { class: "muted" }, "—"),
     h("div", { class: "limit-value" }, field, r.unit ? h("span", { class: "muted" }, r.unit) : null,
       bounds ? h("span", { class: "muted small" }, bounds) : null, save),

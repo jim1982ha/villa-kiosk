@@ -227,12 +227,12 @@ def test_a_run_cut_by_a_stop_shows_cut_on_the_overview(tmp_path):
     async def go():
         await sch.tick(at(7, 1))
         await asyncio.sleep(0)
-        assert rows() == [("rep:0:07:00", "running", "running")]              # claimed, still running
+        assert rows() == [("rep:rep-daily@07:00", "running", "running")]              # claimed, still running
         for t in sch._running.values():
             t.cancel()
         await asyncio.gather(*sch._running.values(), return_exceptions=True)
     asyncio.run(go())
-    assert rows() == [("rep:0:07:00", "cut", "stopped by a restart")]
+    assert rows() == [("rep:rep-daily@07:00", "cut", "stopped by a restart")]
 
 
 def test_the_villas_device_list_refresh_says_done_like_every_job(tmp_path):

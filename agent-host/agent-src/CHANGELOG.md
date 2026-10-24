@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.340 (25 October 2026)
+
+- Review L (owner: "fix the recommended ones"):
+  - translation.answer never takes a bare line (phrases.READER 3): chatter around a one-line answer was printed on
+    the card; an older reader's failures are asked again.
+  - one names list (translation._pack_names, reading names included) for alert cards and villa messages, plus the
+    names the villa's system gave (State.all_entity_names); Translations.apply wraps lines (one loop).
+  - scheduler.job_key is the job itself and its time ("reports:fm-daily@07:00"); job_label reads it, an older key
+    names its skill only; jobday: declared CURRENT (pruned).
+  - policy.value_words: a choice in its words for the Limits save line, Page changes (history._diff) and limits.js
+    (said); skill and policy saves say before → after; a share (unit_of SHARE) has hi 1 and refuses above 1.
+
 ## 0.6.339 (25 October 2026)
 
 - POST /api/skills/import (skills.js importSkillButton): a .skill file (setup_copy.read_skill: one folder or its files at

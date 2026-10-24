@@ -248,7 +248,7 @@ def test_a_scheduled_run_cut_by_a_stop_runs_again_in_its_window(tmp_path):
         await sch.tick(at)
         await asyncio.sleep(0)
     run(tick(Scheduler(s, Skills(), st, forever, None, noop)))             # started, then cut by the stop
-    assert ran == ["x.py"] and st.kv_prefix("jobrun:") == {f"jobrun:{job_key('reports', 0, '07:00')}":
+    assert ran == ["x.py"] and st.kv_prefix("jobrun:") == {f"jobrun:{job_key('reports', Skill.schedule, 0)}":
                                                            at.replace(minute=0).isoformat()}
     again = Scheduler(s, Skills(), st, quick, None, noop)                  # the next start
     run(tick(again))

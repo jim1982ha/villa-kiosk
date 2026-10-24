@@ -25,7 +25,7 @@ from vesta_shared.limits import limit
 # the rules' settings as the page names them: policy.FIELDS, the one table (a path it does not know is shown as
 # written). This file kept its own copy, and two labels had drifted from the page's.
 from .places import title
-from .policy import WORDS, Language
+from .policy import WORDS, Language, value_words
 
 SCHEMA = """
 create table if not exists changes(
@@ -176,7 +176,7 @@ def _diff(path: str, a, b, out: list[str]) -> None:
         if added or gone:
             out.append(f"{_say(path)}: " + ", ".join([f"+ {x}" for x in added] + [f"− {x}" for x in gone]))
     elif a != b:
-        out.append(f"{_say(path)}: {_word(a)} → {_word(b)}")
+        out.append(f"{_say(path)}: {value_words(path, a) or _word(a)} → {value_words(path, b) or _word(b)}")
 
 
 def _named(row: dict, i: int) -> str:

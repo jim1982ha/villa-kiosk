@@ -41,9 +41,10 @@ log = logging.getLogger("vesta.translation")
 
 #: A slot in a skeleton: {1}, {2}… numbered left to right, so one pattern is one skeleton whatever its values.
 SLOT = re.compile(r"\{(\d+)\}")
-#: translation.answer's reading of an AI answer — raised whenever it reads more (2: a fenced list, words around it, an
-#: object, one line asked answered as a line). A failure to read noted under an older one is asked again at once.
-READER = 2
+#: translation.answer's reading of an AI answer — raised whenever it reads differently (2: a fenced list, words around
+#: it, an object, one line asked answered as a line; 3: never a bare line, review L). A failure to read noted under an
+#: older one is asked again at once.
+READER = 3
 #: The failure "the answer could not be read" as 0.12.344–0.12.346 wrote it (no reader noted): an older reader's.
 _UNREAD_BEFORE = "not the list of lines asked for"
 

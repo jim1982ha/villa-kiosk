@@ -663,10 +663,12 @@ def test_the_reader_reads_the_answer_as_the_ai_writes_it():
         {two[0]: fr, two[1]: "Depuis {1}"}                                                   # words and brackets around
     assert answer(json.dumps({two[0]: fr, two[1]: "Depuis {1}"}, ensure_ascii=False), two)[two[1]] == "Depuis {1}"
     assert answer(json.dumps(fr, ensure_ascii=False), one) == {one[0]: fr}                   # one line: a JSON string
-    assert answer(f"  {fr}  ", one) == {one[0]: fr} and answer(f'"{fr}"', one) == {one[0]: fr}   # ... or the line itself
-    assert answer("Here it is:\n" + fr, one) is None and answer("", one) is None           # two lines: not a line
+    assert answer(f'"{fr}"', one) == {one[0]: fr}                                            # ... a JSON string
+    # review L (2026-10-25): never a bare line — chatter around it was printed on the card
+    assert answer(f"  {fr}  ", one) is None and answer(f"Voici la traduction : « {fr} »", one) is None
+    assert answer("Here is the French translation:", one) is None and answer("", one) is None
     assert answer(f'["{fr}"]', two) is None                                                 # as many lines, or nothing
-    assert not acceptable(answer("Je ne sais pas", one)[one[0]], one[0])     # read, then judged: no slot, not kept
+    assert not acceptable(answer('"Je ne sais pas"', one)[one[0]], one[0])   # read, then judged: no slot, not kept
 
 
 def test_an_answer_that_cannot_be_read_is_asked_once_more_and_then_kept(tmp_path, monkeypatch):

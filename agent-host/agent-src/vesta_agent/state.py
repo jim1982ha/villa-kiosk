@@ -106,6 +106,7 @@ KV_FAMILIES: dict[str, str] = {
     "job:": CURRENT,                # a scheduled job's last slot: the Overview's "last run", one per job
     "jobrun:": CURRENT,             # a scheduled run in progress: one left at start was cut by a stop (in_progress.py)
     "jobend:": CURRENT,             # how a scheduled job's last run ended (ended / failed / cut, when, why): in_progress.py
+    "jobday:": CURRENT,             # the day a scheduled job last ran, by the job itself (claim_job_slot, review K/L)
     "chatjob:": CURRENT,            # a chat's job or question in progress: one left at start was cut (in_progress.py)
     "siren:": CURRENT,              # when the siren must stop
     "listening_since": CURRENT,     # when the agent's record started (agent_records.listening_since)
@@ -322,6 +323,10 @@ class State:
     def note_entity_names(self, names: dict[str, str]) -> None:
         for eid, name in names.items():
             self.put(f"entname:{eid}", name)
+
+    def all_entity_names(self) -> list[str]:
+        """Every name the villa's system gave an alert's device (translation.villa_names: a villa message's values)."""
+        return sorted(set(self.kv_prefix("entname:").values()))
 
     def entity_names(self, entity_ids: Iterable[str]) -> dict[str, str]:
         out = {}

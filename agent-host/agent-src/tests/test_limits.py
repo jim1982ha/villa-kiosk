@@ -298,7 +298,7 @@ def test_only_a_changed_value_says_it_was_changed():
     # owner's screenshot, 2026-10-20: every row read "Changed from its usual 5000" beside 5000 — the test was inverted
     from helpers import page_js
     js = page_js()
-    assert 'same(r.value, r.default) ? "" : ` Changed from its usual ${shown(r.default)}.`' in js
+    assert 'same(r.value, r.default) ? "" : ` Changed from its usual ${said(r, r.default)}.`' in js
 
 
 def test_delete_skill_is_on_about_and_on_files_under_one_name():
@@ -508,3 +508,31 @@ def test_a_guides_table_and_a_long_setting_name_stay_inside_a_phones_screen():
     assert "overflow-x: auto" in rule(".md-box table.rows") and "display: block" in rule(".md-box table.rows")
     assert "word-break: normal" in rule(".md-box table.rows td, .md-box table.rows th")
     assert "overflow-wrap: anywhere" in rule("a.setting")
+
+
+def test_a_choice_is_said_in_its_words_and_a_share_stays_within_0_and_1(ui):
+    # review L (2026-10-25): the save line, Page changes and "Changed from its usual" said "after_8h_silence"; a setting
+    # whose unit reads "share (0 to 1)" took 5, and every skill then read 5
+    st, _ = _put(ui, {"src": "policy", "path": ["settings", "conversation_reset"]}, "after_8h_silence")
+    assert st == 200, _
+    rows = _rows(ui)["rows"]
+    share = next(r for r in rows if r["unit"] == "share (0 to 1)" and r["id"]["src"] == "skill")
+    assert share["lo"] == 0 and share["hi"] == 1, share
+    st, body = _put(ui, share["id"], 5)
+    assert st == 400 and "a share, from 0 to 1" in body["problems"][0], body
+    assert _put(ui, share["id"], 0.5)[0] == 200
+
+    async def fn(c):
+        return (await (await c.get("/api/history")).json())["changes"]
+    whats = [r["what"] for r in call(ui, fn) if r["place"] == "Limits"]
+    assert any(w == "settings.conversation_reset: Every day at 04:00 → After 8 hours of silence" for w in whats), whats
+    assert any(" → 0.5" in w and ": → 0.5" not in w for w in whats), whats            # a skill's save says its value before
+    js = (Path(__file__).resolve().parents[1] / "vesta_agent" / "ui" / "static" / "limits.js").read_text()
+    assert "toast(`Saved: ${r.name} = ${said(r, value)}`)" in js
+
+
+def test_a_rules_save_says_the_choice_in_its_words_in_page_changes():
+    # review L (2026-10-25): a Rules-tab save read "Delete conversation context at: daily_04_00 → after_8h_silence"
+    from vesta_agent.history import policy_change
+    line = policy_change("settings:\n  conversation_reset: daily_04_00\n", "settings:\n  conversation_reset: after_8h_silence\n")
+    assert line.endswith(": Every day at 04:00 → After 8 hours of silence"), line

@@ -24,7 +24,7 @@ from vesta_shared import limits
 from vesta_shared.daily import VILLA_WIDE
 
 from ..places import where
-from ..policy import DEFAULT_BEHAVIOUR, DEFAULTS, KEEP, PROFILES, WORDS, Policy, reset_words
+from ..policy import DEFAULT_BEHAVIOUR, DEFAULTS, KEEP, PROFILES, WORDS, Policy, reset_words, value_words
 from .changes import Refused, _read
 from .policy_doc import _yaml
 
@@ -46,10 +46,12 @@ COUNTS = {"min_signals": "signals", "starts_min": "starts", "cycle_min_runs": "r
           "circuits_show": "rows", "group_from": "items", "days_context_min": "days", "days_context": "days",
           "min_days_for_baseline": "days", "alert_fatigue_per_month": lambda: f"times in {limits.values().get('alerts.fatigue_window_days', 30)} days", "noise_per_hour": "changes an hour",
           "blocks_per_day": "blocks a day", "battery_trend_drop_per_day": "points a day", "timeout": "seconds", "web_searches_max": "searches"}
+#: The unit of a share: a number from 0 to 1, its bounds the unit's own (review L, 2026-10-25: a share took 5)
+SHARE = "share (0 to 1)"
 _UNITS = ((r"(?:^|_)usd$", "US$"), (r"(?:^|_)kwh$", "kWh"), (r"_w$", "W"), (r"(?:^|_)pct(?:_above)?$", "%"),
           (r"(?:^|_)points$", "points"), (r"(?:^|_)(?:s|seconds)$", "seconds"), (r"(?:^|_)(?:min|minutes)$", "minutes"),
           (r"(?:^|_)hours$", "hours"), (r"(?:^|_)days$", "days"), (r"(?:^|_)weeks$", "weeks"),
-          (r"(?:^|_)months$", "months"), (r"(?:^|_)ratio$", "times"), (r"(?:^|_)(?:share|fraction|margin|spread)(?:_|$)", "share (0 to 1)"))
+          (r"(?:^|_)months$", "months"), (r"(?:^|_)ratio$", "times"), (r"(?:^|_)(?:share|fraction|margin|spread)(?:_|$)", SHARE))
 
 
 def unit_of(key: str) -> str:
@@ -304,7 +306,8 @@ class LimitsTab:
                              "label": said or name.replace("_", " "), "value": value, "default": shipped,
                              "kind": kind, "choices": choices, "unit": unit_of(str(path[-1])) if kind == "number" else "",
                              "lo": 0 if _number(shipped) and shipped >= 0 else None,
-                             "hi": None, "reached": "", "told": "", "also": also,
+                             "hi": 1 if kind == "number" and unit_of(str(path[-1])) == SHARE else None,
+                             "reached": "", "told": "", "also": also,
                              "where": [f"{skill}/{villa_fn if (over is not None or not own) else fn}"]})
         return rows
 
@@ -510,6 +513,8 @@ class LimitsTab:
             raise Refused([f"{skill} › {fn} has no setting {'.'.join(map(str, path))}."])
         if _number(shipped) and not (_number(value) and (shipped < 0 or value >= 0)):
             raise Refused([f"{'.'.join(map(str, path))} must be a number" + (" of at least 0." if shipped >= 0 else ".")])
+        if _number(shipped) and unit_of(str(path[-1])) == SHARE and value > 1:
+            raise Refused([f"{'.'.join(map(str, path))} is a share, from 0 to 1."])
         if isinstance(shipped, list) and not _words(value):
             raise Refused([f"{'.'.join(map(str, path))} is a list of words."])
         if path[-1] == "brain" and value not in PROFILES:
@@ -525,7 +530,9 @@ class LimitsTab:
         target = fn if own else "villa." + fn
         text = _read(os.path.join(folder, target)).decode("utf-8")
         new = set_in(text, path, value)
-        self.files.text_change(PLACE, f"{skill} › {target} › {'.'.join(map(str, path))}: → {value}",
+        was = _get(yaml.safe_load(text or "") or {}, path)
+        was = shipped if was is None else was
+        self.files.text_change(PLACE, f"{skill} › {target} › {'.'.join(map(str, path))}: {was} → {value}",
                                {"kind": "file", "skill": skill, "path": target}, new)
         return {"ok": True}
 
@@ -539,5 +546,10 @@ class LimitsTab:
                 raise Refused([f"The {path[2]} skill's AI jobs are not set: set them in {where('ai')} first."])
             path, value = [path[0], path[1], path[2]], {**pair, path[3]: value}
         new = self.files.form_policy(set_in(text, path, value))
-        self.files.save_policy(new, r, PLACE, f"{'.'.join(path)}: → {value}")    # checked by the agent's own rules
+        key = ".".join(map(str, path))
+        was = _get(yaml.safe_load(text or "") or {}, path)
+        if was is None and len(path) == 2 and path[0] == "settings":
+            was = DEFAULT_BEHAVIOUR.get(path[1])
+        said = lambda v: value_words(key, v) or v                      # noqa: E731 — a choice in its words
+        self.files.save_policy(new, r, PLACE, f"{key}: {said(was)} → {said(value)}")    # checked by the agent's own rules
         return {"ok": True}

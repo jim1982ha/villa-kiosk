@@ -229,3 +229,33 @@ def test_a_device_name_in_a_villa_message_is_a_value_and_two_doorbells_share_one
     run(go())
     assert len(ai.runs) == 1 and "Parking Doorbell" not in ai.runs[0]["prompt"]
     assert v.tg.edits[-1][2].startswith("(fr) 🔔 Visitor at Pool Doorbell")
+
+
+def test_a_villa_message_names_a_device_as_an_alert_card_does(tmp_path):
+    # review L (2026-10-25): a villa message's names missed the readings' names and the names the villa's system gave
+    # an alert's device ("House Pump has been running…" went to the AI as words, could come back renamed, one run per
+    # device); the alert card's list had them. One list now (translation._pack_names), read through the app's wiring.
+    from pathlib import Path
+    from vesta_agent.translation import incident_names, mask
+    v = villa(Path(tmp_path))
+    v.state.note_entity_names({"binary_sensor.garage_new": "Garage Door Sensor"})
+    names = v.villa_messages.names()                                    # what the app hands the villa messages
+    card = incident_names(v.pack(), ["binary_sensor.garage_new"], v.state.entity_names(["binary_sensor.garage_new"]))
+    line = 'Garage Door Sensor has been "open" for 12min.'
+    assert mask(line, names)[0] == mask(line, card)[0] == "{1} has been {2} for {3}min.", names
+
+
+def test_a_readings_own_name_is_a_value_in_a_villa_message_and_on_a_card():
+    # a relay channel's own name ("House Pump", the pack's reading_name) is what the villa's automations write
+    from vesta_agent.translation import incident_names, mask, villa_names
+
+    class Pack:
+        R = {"switch.relay_ch1": {"entity_id": "switch.relay_ch1", "name": "Relay Channel 1", "area": "Pump Room"}}
+        def rows(self): return list(self.R.values())
+        def row(self, e): return self.R.get(e)
+        def name_of(self, e, d=None): return (self.R.get(e) or {}).get("name") or d
+        def device_name(self, e, d): return "Two Channel Relay" if e in self.R else d
+        def reading_name(self, e, d): return "House Pump" if e in self.R else d
+    line = "House Pump has been running for 3h 20min."
+    want = "{1} has been running for {2}h {3}min."
+    assert mask(line, villa_names(Pack()))[0] == mask(line, incident_names(Pack(), ["switch.relay_ch1"]))[0] == want
