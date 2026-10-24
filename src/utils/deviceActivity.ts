@@ -372,7 +372,7 @@ export interface LookSource {
     /** Hidden in the villa's system (VillaDevices.isHidden, deviceGroups.hiddenIn). REQUIRED: a caller that forgot it
      *  painted a hidden device red where every other surface had dropped it. */
     isHidden: (entityId: string) => boolean;
-    /** The device has an open Cockpit fault (attention.faultDevices, folded onto the device as the critical list is):
+    /** The device has an amber Cockpit issue, a fault or late maintenance (attention.deviceIssues, onto the device too):
      *  its amber "!" (owner, 2026-10-22: badge proposal 2). Absent: no fault is drawn (the Cockpit's own counts, which
      *  list the faults themselves). */
     hasFault?: (entityId: string) => boolean;

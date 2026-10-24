@@ -17,7 +17,8 @@ const {
 } = await import("@/utils/deviceActivity");
 const { STATUS_COLOR } = await import("@/utils/stateColors");
 const { markSurface, categorySurface } = await import("@/config/EntityCategories");
-const { faultDevices } = await import("@/config/attention");
+const { buildAttentionItems, deviceIssues, groupAttention } = await import("@/config/attention");
+const { devicesOf } = await import("../consistency/devices.mjs");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
 const { UnavailableByDesign } = await import("@/ha/unavailableByDesign");
 const { panelHeader } = await import("@/components/panels/panelHeader");
@@ -211,11 +212,14 @@ console.log("\n  hidden in the villa's system — no badge at all:");
      /private badgeEligible\([^)]*\): boolean \{\s+if \(hidden\.includes\(lbl\.category\)\) return false;\s+if \(!drawsBadge\(id, this\.lookSource\)\) return false;/.test(src("babylon/EntityVisuals.ts")));
 }
 
-console.log("\n  the open faults, folded onto their devices:");
+console.log("\n  the open faults, folded onto their devices (attention.deviceIssues, from the Overview's cards):");
 {
   const t = (id, entityId, status = "open") => ({ id, title: "x", status, openedAt: "2026-10-20T10:00:00Z", photoIds: [], updates: [], entityId });
   const fm = { ...EMPTY_FM_DATA, tickets: [t("a", "sensor.pump_energy"), t("b", "light.hall", "resolved"), t("c", "sensor.gone,switch.y")] };
-  const set = faultDevices(fm, (id) => id !== "sensor.gone", new Map([["sensor.pump_energy", "switch.pump"]]));
+  const ids = ["sensor.pump_energy", "switch.pump", "light.hall", "switch.y"];
+  const entities = Object.fromEntries(ids.map((id) => [id, ent(id, "on")]));
+  const devices = devicesOf({ ids, folding: new Map([["sensor.pump_energy", "switch.pump"]]) });
+  const set = deviceIssues(groupAttention(buildAttentionItems({ devices, entities, entityMap: {}, resolvedRooms: {}, fmData: fm }))).amber;
   ck("an open fault marks its entity AND its device; a closed one marks nothing; a list names the first the system has",
      set.has("sensor.pump_energy") && set.has("switch.pump") && !set.has("light.hall") && set.has("switch.y") && !set.has("sensor.gone"),
      [...set]);

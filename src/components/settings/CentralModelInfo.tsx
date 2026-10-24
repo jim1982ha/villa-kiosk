@@ -1,8 +1,8 @@
 // src/components/settings/CentralModelInfo.tsx
 // The (i) hover/focus tooltip carrying the full central-model details (path,
-// size, mesh count, SHA-256, source, latest plan) — lives in the Advanced
-// Settings modal's header, next to the GLB upload button (see
-// ConfigEditorModal), Owner profile only.
+// size, mesh count, SHA-256, source, latest plan) — in Advanced Settings'
+// footer, beside "Upload model" (ConfigEditorModal, owner 2026-10-24), for the
+// profile that may upload a model only.
 
 import InfoTip from "@/components/common/InfoTip";
 import type { getLoadedModelInfo } from "@/utils/modelInfo";
@@ -10,11 +10,10 @@ import type { AddonConfig } from "@/utils/centralModel";
 import { stampText } from "@/utils/dateText";
 
 export default function CentralModelInfo({
-  addonCfg, loadedModel, editable,
+  addonCfg, loadedModel,
 }: {
   addonCfg: AddonConfig;
   loadedModel: ReturnType<typeof getLoadedModelInfo>;
-  editable: boolean;
 }) {
   return (
     <InfoTip label="Model details">
@@ -62,23 +61,16 @@ export default function CentralModelInfo({
               <div className="row"><span>From</span><span><code>{loadedModel.url}</code></span></div>
             </>
           )}
+          {/* ⚠️ NO PLACE THAT IS NOT THERE (review L, owner 2026-10-25): it said "the GLB button in the top bar", gone
+              since the upload moved to this footer (2.496.516); a second text for a profile that cannot upload was
+              never drawn (this tip is only beside "Upload model") */}
           <div style={{ marginTop: 8, color: "var(--text-dim)" }}>
-            {editable ? (
-              <>
-                Stored in the add-on's own <code>/data</code> volume (on disk as <code>villa.glb</code>)
-                and served to every client from there, an upload overwrites it, so re-uploading a new
-                file replaces the villa for everyone (the name above is the file it came from). The
-                room-data sidecar (<code>.rooms.json</code>, emitted next to the GLB by the Blender
-                pipeline) lives alongside it. Upload both via the GLB button in the top bar; there's no
-                path to configure.
-              </>
-            ) : (
-              <>
-                Loaded from the add-on's central store, every client (sidebar or direct hostname)
-                loads the same model. To replace it, upload a new GLB/room-data file from the top bar's
-                upload button on the Owner profile; other devices pick it up automatically on next open.
-              </>
-            )}
+            Stored in the add-on's own <code>/data</code> volume (on disk as <code>villa.glb</code>)
+            and served to every client from there, an upload overwrites it, so re-uploading a new
+            file replaces the villa for everyone (the name above is the file it came from). The
+            room-data sidecar (<code>.rooms.json</code>, emitted next to the GLB by the Blender
+            pipeline) lives alongside it. Upload both with Upload model, here beside this (i); there's no
+            path to configure.
           </div>
     </InfoTip>
   );

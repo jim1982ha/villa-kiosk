@@ -210,8 +210,11 @@ ck("every Cockpit count in the top bar and the phone menu is the number of ROWS"
 // 2.496.268: grouped ONCE, per profile — the villa model's role-blind
 // grouping had no reader and ran on every state push anyway.
 ck("the villa model hands buildAttentionItems its device list (the fold and the critical list inside), and leaves the grouping to the profile's view",
-   // never grouped there (a `//` once swallowed that half, review 2026-10-19); the list asked, never restated (review, 2026-10-19)
-   /buildAttentionItems\(\{\s*devices, entities,/.test(vm) && /return \{ devices, attentionItems \};/.test(vm) && !/groupAttention|villaHealthFrom/.test(vm)
+   // never grouped for a COUNT there (a `//` once swallowed that half, review 2026-10-19); the list asked, never restated
+   // (review, 2026-10-19). Grouped once, role-blind, for ONE reader only: what is wrong with each device, the map's
+   // badges (attention.deviceIssues — review L, 2026-10-25: the badges read the cards, as the window's sign does)
+   /buildAttentionItems\(\{\s*devices, entities,/.test(vm) && /return \{ devices, attentionItems \};/.test(vm) && !/villaHealthFrom/.test(vm)
+   && (vm.match(/groupAttention\(/g) ?? []).length === 1 && /deviceIssues\(groupAttention\(attention\.attentionItems\)\)/.test(vm)
    && /return attentionFor\(attention, \(id\) => sees\.has\(id\)\);/.test(src("components/cockpit/useVillaAttention.ts")));
 // HOW a card is drawn (its buttons inside, the click its own, the source icons) is checked on the drawn card:
 // tests/oracles/cockpit_cards.mjs (architecture review, 2026-10-15). Here: the WIRING a drawing cannot see.

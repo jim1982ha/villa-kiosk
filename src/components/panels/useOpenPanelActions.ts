@@ -44,7 +44,7 @@ export interface OpenPanelInput {
   isCritical: (entityId: string) => boolean;
   /** Hidden in the villa's system (deviceGroups.hiddenIn): the header's look is quiet, as on the map. */
   isHidden: (entityId: string) => boolean;
-  /** An open Cockpit fault on this device (attention.faultDevices, folded): the header badge's amber "!", as on the map. */
+  /** An amber Cockpit issue on this device (VillaModel.hasFault, attention.deviceIssues): the header badge's amber "!", as on the map. */
   hasFault: (entityId: string) => boolean;
 }
 

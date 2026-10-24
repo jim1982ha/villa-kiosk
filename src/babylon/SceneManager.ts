@@ -2633,7 +2633,7 @@ export class SceneManager {
     this.visuals.setCriticalDevices(ids);
   }
 
-  /** The devices with an open Cockpit fault (attention.faultDevices, folded): their badges' amber "!". */
+  /** The devices with an amber Cockpit issue (attention.deviceIssues: a fault or late maintenance): their badges' amber "!". */
   setFaultDevices(ids: ReadonlySet<string>): void {
     this.visuals.setFaultDevices(ids);
   }

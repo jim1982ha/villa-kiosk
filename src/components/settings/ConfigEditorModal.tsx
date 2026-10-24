@@ -290,14 +290,12 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
       >
         <div className="modal-header">
           {/* tabIndex={-1} + data-autofocus: useModalA11y's default (the
-              FIRST focusable descendant) would otherwise land here on the
-              (i) model-info button — the very next element — whose tooltip
-              is shown on `:focus-within` so keyboard Tab users can reach it
-              too, not just mouse hover. Landing focus there on open then
-              popped the tooltip immediately, with no hover at all. The
-              heading is the conventional dialog-open focus target anyway;
-              tabIndex={-1} makes it programmatically focusable without
-              joining the normal Tab order. */}
+              FIRST focusable descendant) would otherwise land on the header's
+              first button ("Log out all devices", or an (i)) and, for an (i),
+              pop its tooltip on open with no hover at all. The heading is the
+              conventional dialog-open focus target anyway; tabIndex={-1} makes
+              it programmatically focusable without joining the normal Tab
+              order. */}
           <h2 tabIndex={-1} data-autofocus>Advanced Settings <span className="modal-title-version">v{__APP_VERSION__}</span></h2>
           {/* ⚠️ BACK WHERE SETTINGS' OPENER IS, "LOG OUT ALL DEVICES" UP HERE (owner, 2026-10-24: "invert the position of
               Log out all devices and the Back button, so that Back appears at the same position as where Advanced
@@ -425,7 +423,7 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
           actions={canUploadModel ? (
             <>
               {glbUpload.addonCfg?.model_path && (
-                <CentralModelInfo addonCfg={glbUpload.addonCfg} loadedModel={glbUpload.loadedModel} editable />
+                <CentralModelInfo addonCfg={glbUpload.addonCfg} loadedModel={glbUpload.loadedModel} />
               )}
               <ModelFileInput upload={glbUpload} />
               <button
