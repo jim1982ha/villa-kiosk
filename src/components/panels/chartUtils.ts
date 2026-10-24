@@ -25,6 +25,8 @@ export function fmtChartTime(t: number): string {
  *  same words — 89s was "1min" here and "89s" in its messages. The agreement's `duration.cases`
  *  (agent-contract.json) are the words, checked on both sides (tests/oracles/duration_words.mjs here). */
 export function fmtDuration(ms: number): string {
+  // no number, no words (architecture review K: NaN read "NaNd", an endless one "Infinityd")
+  if (!Number.isFinite(ms)) return "";
   const s = Math.max(0, Math.round(ms / 1000));
   if (s < 60) return `${Math.max(1, s)}s`;
   const m = Math.round(s / 60);

@@ -24,6 +24,7 @@ import { AVAILABILITY_CHECK_LABEL, CHECK_WORDS, VERDICT_WORDS, type ReadinessRes
 import { openCounts } from "./deviceWork";
 import { docDate } from "@/utils/dateText";
 import { formatMoney } from "@/utils/money";
+import { fmtDuration } from "@/components/panels/chartUtils";
 
 // ⚠️ EVERY DATE IN A DOCUMENT IS dateText.docDate ("2026-09-05"), THE FORM "Generated:" ALREADY USED (owner's decision,
 // 2026-10-19): a saved recap or statement is read years later, on any device; its rows were written in the generating
@@ -232,7 +233,7 @@ export function buildMonthlyRecap(input: RecapInput): string {
     const covers = stats.meanCoversTickets === stats.resolved
       ? "" : ` (from ${stats.meanCoversTickets} of ${stats.resolved}, the rest `
         + `carry no usable resolution time)`;
-    L.push(`- Mean time to resolution this month: **${stats.meanResolutionHours.toFixed(1)} hours**${covers}`);
+    L.push(`- Mean time to resolution this month: **${fmtDuration(stats.meanResolutionHours * 3_600_000)}**${covers}`);
   }
   if (stats.closedWithoutAction) L.push(`- Closed without action this month (not counted as repairs): **${stats.closedWithoutAction}**`);
   L.push("");

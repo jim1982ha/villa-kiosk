@@ -23,7 +23,7 @@ import {
 } from "./fmApi";
 import { SyncedDocument } from "@/utils/syncedDocument";
 import { useProfile } from "@/auth/ProfileContext";
-import { ROLE_LABELS } from "@/auth/roles";
+import { ROLE_LABELS, type Role } from "@/auth/roles";
 import { useStoreRefresh, STORE_ACTIVE_MS, STORE_HEARTBEAT_MS } from "@/hooks/useStoreRefresh";
 import { useSyncReporter } from "@/utils/syncTelemetry";
 import {
@@ -35,8 +35,15 @@ import {
 // The write's result and what a screen does with it live in fm/fmSave.ts (pure,
 // so an oracle can drive them); re-exported here for the screens.
 import type { FmRetention } from "./fmEngine";
-import { CHANGED_ON_ANOTHER_DEVICE, REMOVED_ON_ANOTHER_DEVICE, fmSaveOutcome, type FmSaveOutcome, type FmWriteResult } from "./fmSave";
+import { CHANGED_ON_ANOTHER_DEVICE, removedOnAnotherDevice, fmSaveOutcome, type FmSaveOutcome, type FmWriteResult } from "./fmSave";
 import { saveProblemLine } from "@/utils/storeSave";
+
+/** Whether profile `role` may send the work kept for `other`: it may do all that `other` does (owner, then facility
+ *  manager, then guest). Signed out: nobody's. */
+export function carriesWorkOf(role: Role | null | undefined, other: string): boolean {
+  const rank: Record<string, number> = { guest: 0, ops: 1, owner: 2 };
+  return !!role && other in rank && rank[role] >= rank[other];
+}
 
 interface FmDataContextValue {
   data: FmData;
@@ -49,6 +56,8 @@ interface FmDataContextValue {
   unreachable: boolean;
   /** Set when the last write failed, so the UI can say so instead of pretending. */
   saveError: string | null;
+  /** Kept on this tablet for profiles not signed in, which the one signed in does not send (fmSave heldLine). */
+  heldFor: string[];
   /** How long the server keeps a closed fault, as it published it with the record (null until read, or not said). */
   retention: FmRetention | null;
   reload: () => Promise<void>;
@@ -140,8 +149,11 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
     rebase: (_base: FmData, fresh: FmData) => fresh,
     empty: EMPTY_FM_DATA,
     keep: fmUnsentKeeper,
-    // held work belongs to the profile that did it: kept for them, never shown to or sent as the next one
+    // held work belongs to the profile that did it: kept for them, never shown to or sent as the next one...
     author: () => roleRef.current ?? "none",
+    // ...unless the one signed in may do everything that profile does (owner ⊇ facility manager ⊇ guest): it sends it,
+    // each step still stamped by its own author (architecture review K, 2026-10-24: held work was sent by no one else)
+    carries: (other: string) => carriesWorkOf(roleRef.current, other),
   }, EMPTY_FM_DATA));
   // the daily reload waits while this store holds work the add-on has not got (utils/autoReload)
   useEffect(() => doc.track(), [doc]);
@@ -150,6 +162,8 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [unreachable, setUnreachable] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // work kept here for profiles not signed in that this one does not send: read at each render (a role change, a save)
+  const heldFor = doc.heldAuthors().map((a) => ROLE_LABELS[a as Role] ?? a);
   // Read the latest data inside a mutator without making every mutator depend
   // on it (which would re-create them all on every keystroke elsewhere).
   const ref = useRef(data);
@@ -270,7 +284,7 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
       setReady(true);
       setUnreachable(false);
       if (changedOnBoth.length > 0) setSaveError(CHANGED_ON_ANOTHER_DEVICE);
-      if (removedElsewhere.length > 0) setSaveError(REMOVED_ON_ANOTHER_DEVICE);
+      if (removedElsewhere.length > 0) setSaveError(removedOnAnotherDevice(removedElsewhere.map((r) => r.kind)));
       reportSync({
         op: "push", ok: true, elevated: Boolean(elevation),
         tickets: outcome.next.tickets.length,
@@ -364,7 +378,7 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
 
   return (
     <FmDataContext.Provider value={{
-      data, ready, unreachable, saveError, retention, reload,
+      data, ready, unreachable, saveError, heldFor, retention, reload,
       addSchedule, updateSchedule, removeSchedule, removeAllSchedules,
       logCompletion, addCost, updateCost, addTicket, updateTicket,
       removeCost, removeTicket, removeCompletion, advanceTickets, closeTickets,

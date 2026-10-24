@@ -19,10 +19,7 @@ export default function ModelUploader({ onUploaded }: { onUploaded: () => void }
       <ModelFileInput upload={up} />
       <button className="btn primary" style={{ width: "100%" }} disabled={up.uploadBusy !== null} onClick={up.openPicker}>
         <Upload size={18} />{" "}
-        {up.uploadBusy === null
-          ? "Upload .glb model"
-          : up.uploadRetry ? `Retrying (${up.uploadRetry.attempt} of ${up.uploadRetry.of})…`
-          : `Uploading… ${up.uploadPct ?? 0}%`}
+        {up.progress.words ?? "Upload .glb model"}
       </button>
       {up.uploadMsg && <div className={`test-result ${up.uploadMsg.ok ? "ok" : "fail"}`}>{up.uploadMsg.text}</div>}
     </div>

@@ -27,7 +27,6 @@ import UnavailableByDesign from "./UnavailableByDesign";
 import EntityPicker from "./EntityPicker";
 import InlineConfirm from "@/components/common/InlineConfirm";
 import ModalFooter, { footerExits } from "@/components/common/ModalFooter";
-import BackButton from "@/components/common/BackButton";
 import RemoteReplacedNote, { SaveProblemNote } from "./RemoteReplacedNote";
 import { useAppNotice } from "@/components/hud/AppNotice";
 import { useDraftedSlice } from "@/hooks/useDraftedSlice";
@@ -422,7 +421,7 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
             Settings, whose Save / Cancel own these changes; on its own: this dialog's Save / Cancel (`commit`). */}
         <RemoteReplacedNote replaced={own.replaced} onDismiss={own.dismissReplaced} />
         <SaveProblemNote line={saveProblem} onDismiss={() => setSaveProblem(null)} />
-        <ModalFooter onClose={back} commit={commit} leading={<BackButton onClick={exit} label={withinSettings ? "Settings" : undefined} footer />}
+        <ModalFooter onClose={back} commit={commit} back={{ go: exit, to: withinSettings ? "Settings" : undefined }}
           actions={canUploadModel ? (
             <>
               {glbUpload.addonCfg?.model_path && (
@@ -434,14 +433,12 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
                 onClick={glbUpload.openPicker}
                 disabled={glbUpload.uploadBusy !== null}
                 title="Upload a GLB model"
-                aria-label="Upload a GLB model"
+                aria-label={glbUpload.progress.words ?? "Upload a GLB model"}
               >
                 <Upload size={18} aria-hidden />
-                <span className="btn-label">
-                  {glbUpload.uploadPct !== null
-                    ? (glbUpload.uploadRetry ? `Retry ${glbUpload.uploadRetry.attempt}` : `Uploading ${glbUpload.uploadPct}%`)
-                    : "Upload model"}
-                </span>
+                <span className="btn-label">{glbUpload.progress.words ?? "Upload model"}</span>
+                {/* on a phone the words are hidden: the progress stays on the icon */}
+                {glbUpload.progress.mark && <span className="icon-btn-count btn-mark" aria-hidden>{glbUpload.progress.mark}</span>}
               </button>
             </>
           ) : withinSettings ? <span /> : undefined} />

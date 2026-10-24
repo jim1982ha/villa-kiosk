@@ -20,7 +20,7 @@ import ModalFooter from "@/components/common/ModalFooter";
 import ModalTabs, { type ModalTab } from "@/components/common/ModalTabs";
 import FacilitySections, { FACILITY_TABS, type FacilityTab } from "@/components/fm/FacilitySections";
 import { useFacilityLiveView, useFmData } from "@/fm/FmDataContext";
-import { fmRecordLine } from "@/fm/fmSave";
+import { fmRecordLine, heldLine } from "@/fm/fmSave";
 import CockpitOverview from "./CockpitOverview";
 import DialogLayer from "@/components/common/DialogLayer";
 import Tip from "@/components/common/Tip";
@@ -68,7 +68,8 @@ export default function CockpitModal({
   // ⚠️ THE RECORD'S STATE IS SAID OVER EVERY TAB, THE OVERVIEW'S TOO (architecture review H, 2026-10-23): unread, its
   // faults are missing from "Open issues" as much as from Tickets; and a save's problem ("This fault was just changed on
   // another device") follows a button pressed on an Overview card. They were the Facility tabs' alone.
-  const { ready, unreachable, saveError } = useFmData();
+  const { ready, unreachable, saveError, heldFor } = useFmData();
+  const held = heldLine(heldFor);
   const recordLine = fmRecordLine({ ready, unreachable });
   const dialogRef = useModalA11y(onClose);
   // Firmware / add-on updates waiting — Home Assistant's own `update` domain counts them, per device and per add-on.
@@ -108,6 +109,7 @@ export default function CockpitModal({
         <div className="modal-body">
           {saveError && <div className="fm-banner warn">{saveError}</div>}
           {recordLine && <p className="muted body-text">{recordLine}</p>}
+          {held && <p className="muted body-text">{held}</p>}
           {shownTab !== "overview" ? (
             <FacilitySections tab={shownTab} onOpenEntity={onOpenEntity} editTicket={editTicket}
               onTicketEditOpened={onTicketEditOpened} />

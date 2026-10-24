@@ -393,12 +393,16 @@
 
 /* Inline (i) info button + hover/focus tooltip (replaces the model info block). */
 .info-tip { position: relative; display: inline-flex; }
+/* ⚠️ THE ICON ALONE (owner, 2026-10-24: "It shall be a (I) icon only, consistently with any other (I) icons"): no
+   disc, no ring, in every place; the button keeps a tap area of 24 px at least, its hover colour and its focus ring.
+   The `button` variant (InfoTip `button`, a .btn) is not this rule's. tests/oracles/info_icon_css.mjs. */
 .info-tip > .info-btn {
   width: 30px; height: 30px; border-radius: 50%;
   display: inline-flex; align-items: center; justify-content: center;
-  background: var(--bg-input); color: var(--text-secondary);
-  border: 1px solid var(--hairline);
+  background: none; color: var(--text-secondary);
+  border: none;
 }
+.info-tip > .info-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (hover: hover) {
   .info-tip > .info-btn:hover { color: var(--accent); }
 }

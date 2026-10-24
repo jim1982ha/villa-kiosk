@@ -27,4 +27,36 @@ for (const c of cases ?? []) {
     outage.endsWith(`(${c.words})`) && title === `Pump offline for ${c.words}`, { outage, title });
 }
 
-done("✅ the Kiosk words every agreed duration as the agreement says");
+// ⚠️ THE OTHER PLACES (architecture review K, 2026-10-24): the Agent's look, the list's refresh, a confirming fault's
+// pill and the mean resolution were worded by hand ("every 90 minutes", "1.5 hours", "2h" for 1h 30min)
+console.log("\n  every other place a duration is said:");
+const { faultTiming, confirmingRow, nextCheckWhen } = await import("@/fm/faultTiming");
+const { confirmParts } = await import("@/fm/faultConfirm");
+const { buildMonthlyRecap } = await import("@/fm/fmDocuments");
+const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
+const { STORE_ACTIVE_MS, STORE_HEARTBEAT_MS } = await import("@/hooks/useStoreRefresh");
+for (const checkMinutes of [1, 15, 90]) {
+  const cadence = { checkMinutes, nightlyAt: "04:30" }, words = fmtDuration(checkMinutes * 60_000);
+  const note = faultTiming(true, cadence).note;
+  ck(`the Agent's look every ${checkMinutes} minutes: "${words}" in the (i), the confirming row and a card's pill`,
+    note.includes(`it checks every ${words},`) && confirmingRow(cadence).goes.includes(`then within ${words}.`)
+    && nextCheckWhen([{ source: "alert", check: "minutes" }], cadence, new Date(now)) === `within ${words}`,
+    { note, goes: confirmingRow(cadence).goes, pill: nextCheckWhen([{ source: "alert", check: "minutes" }], cadence, new Date(now)) });
+  const pill = confirmParts({ at: new Date(now).toISOString(), word: "Done", who: null, due: true, lookMinutes: checkMinutes });
+  ck("  ...and on a fault being confirmed", pill.when === `within ${words}`, pill);
+}
+ck("the list's refresh in the same words", faultTiming(false).note.includes(
+  `every ${fmtDuration(STORE_ACTIVE_MS)} while it is open (every ${fmtDuration(STORE_HEARTBEAT_MS)} otherwise)`), faultTiming(false).note);
+const fixed = { id: "t1", title: "Pump", status: "resolved", openedAt: "2026-09-10T08:00:00Z", resolvedAt: "2026-09-10T09:30:00Z",
+  photoIds: [], updates: [] };
+const recap = buildMonthlyRecap({ fm: { ...EMPTY_FM_DATA, tickets: [fixed] }, month: "2026-09", villaName: "V", readiness: null,
+  deviceOfRecord: (id) => id, now });
+ck("the monthly report's mean resolution: 1h 30min", recap.includes("Mean time to resolution this month: **1h 30min**"),
+  recap.split("\n").find((l) => /resolution/.test(l)));
+const tickets = readFileSync(new URL("../../src/components/fm/TicketsTab.tsx", import.meta.url), "utf8");
+ck("the Tickets tab's mean resolution in the same words",
+  /meanResolutionHours === null \? "—" : fmtDuration\(stats\.meanResolutionHours \* 3_600_000\)/.test(tickets));
+// no number, no words (architecture review K: "NaNd", "Infinityd")
+ck("no number: no words", [NaN, Infinity, -Infinity].every((v) => fmtDuration(v) === ""), [NaN, Infinity].map(fmtDuration));
+
+done("✅ the Kiosk words every agreed duration as the agreement says, in every place it says one");

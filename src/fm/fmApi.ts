@@ -13,11 +13,11 @@ import { backendFetch } from "@/auth/sessionLost";
 import { storeSaveResult } from "@/utils/storeSave";
 import type { FmRetention } from "./fmEngine";
 import {
-  keyBy, diffKeyed, applyKeyed, applyKeyedMerging, keyedDiffIsEmpty, mergeItem, mineWins, names,
+  keyBy, diffKeyed, applyKeyedMerging, keyedDiffIsEmpty, mergeItem, mineWins, names,
   type FieldMerge, type KeyedDiff, type StoreFetch, type StoreSaveResult,
 } from "@/utils/keyedSync";
 import type { UnsentCopy, UnsentKeeper } from "@/utils/syncedDocument";
-import { readString, removeStored, writeJson } from "@/utils/storedJson";
+import { readString, removeStored, storedKeys, writeJson } from "@/utils/storedJson";
 
 /** Narrow an arbitrary parsed value to FmData, dropping anything unrecognised.
  *  A store written by a newer app version must not be able to inject unknown
@@ -144,10 +144,13 @@ const TICKET_FIELDS: FieldMerge = {
 };
 export const mergeTicket = (was: FmTicket, mine: FmTicket, theirs: FmTicket) => mergeItem(was, mine, theirs, TICKET_FIELDS);
 
-/** Only the faults merge (their `was` is kept): every other record is still replaced whole. */
+/** Every record keeps its `was` (what this device changed it from): a record removed on another device meanwhile stays
+ *  removed, whatever its kind (keyedSync removedElsewhere). Only a fault merges field by field; every other record is
+ *  replaced whole. ⚠️ FAULTS ONLY TO 2.496.516 (architecture review K): a cost or a schedule erased on the phone came
+ *  back, everywhere, when a tablet that had edited it offline caught up. */
 export function diffFmData(base: FmData, next: FmData): FmDataDiff {
   const out = {} as FmDataDiff;
-  for (const k of FM_COLLECTIONS) out[k] = diffKeyed(keyFm(base, k), keyFm(next, k), k === "tickets");
+  for (const k of FM_COLLECTIONS) out[k] = diffKeyed(keyFm(base, k), keyFm(next, k), true);
   return out;
 }
 
@@ -163,7 +166,7 @@ export function applyFmDiff(target: FmData, diff: FmDataDiff): FmData {
     out[k] = Object.values(k === "tickets"
       ? applyKeyedMerging(keyFm(target, k), diff[k], (was, mine, theirs) =>
         mergeTicket(was as FmTicket, mine as FmTicket, theirs as FmTicket).item)
-      : applyKeyed(keyFm(target, k), diff[k]));
+      : applyKeyedMerging(keyFm(target, k), diff[k], (_was, mine) => mine));
   }
   return out as unknown as FmData;
 }
@@ -175,11 +178,13 @@ export function applyFmDiff(target: FmData, diff: FmDataDiff): FmData {
  *  FmDataContext mutate says it. */
 export function foldOthers(screen: FmData, pushed: { synced: FmData; others: FmDataDiff }): {
   doc: FmData; changedOnBoth: string[];
-  /** Faults this device changed that another device removed meanwhile: they stay removed (keyedSync removedElsewhere). */
-  removedElsewhere: string[];
+  /** Records this device changed that another device removed meanwhile, with their kind: they stay removed (keyedSync
+   *  removedElsewhere). */
+  removedElsewhere: { kind: FmCollection; id: string }[];
 } {
   const mine = diffFmData(pushed.synced, screen);
-  const removedElsewhere = pushed.others.tickets.del.filter((id) => !!mine.tickets.was && id in mine.tickets.was);
+  const removedElsewhere = FM_COLLECTIONS.flatMap((k) => pushed.others[k].del
+    .filter((id) => !!mine[k].was && id in mine[k].was!).map((id) => ({ kind: k, id })));
   const was = keyFm(pushed.synced, "tickets"), now = keyFm(screen, "tickets");
   const merged: Record<string, FmTicket> = {};
   const changedOnBoth: string[] = [];
@@ -265,6 +270,7 @@ export const fmUnsentKeeper: UnsentKeeper<FmData, FmDataDiff> = {
     if (copy === null) removeStored(fmUnsentKey(author));
     else writeJson(fmUnsentKey(author), { v: FM_UNSENT_FORMAT, baseline: touchedBy(copy.baseline, copy.unsent), unsent: copy.unsent });
   },
+  authors: () => storedKeys().filter((k) => k.startsWith(`${FM_UNSENT_KEY}:`)).map((k) => k.slice(FM_UNSENT_KEY.length + 1)),
 };
 
 /** Short, URL-safe, collision-resistant enough for one villa's records. */

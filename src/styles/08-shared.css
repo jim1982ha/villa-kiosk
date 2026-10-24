@@ -318,6 +318,9 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
    author has to be able to hide the word at the phone tier without leaving the
    control unnamed to a screen reader. */
 .btn-label { margin-left: 8px; }
+/* A footer button's progress on its icon (an upload's "42%"), only where its word is hidden: the phone tier below
+   (architecture review K, 2026-10-24: a phone saw a bare icon for the whole upload). */
+.btn-mark { display: none; }
 
 /* Used by the footer's error line, and by anything else that has to say
    "this is a warning" in text rather than in a badge. */
@@ -337,6 +340,8 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
   /* only a button that HAS a hideable word goes square (a plain "Close" keeps its word) */
   .modal-footer .btn:has(> .btn-label) { width: var(--touch-min); padding: 0; }
   .btn-label { display: none; }
+  .btn:has(> .btn-mark) { position: relative; }
+  .btn-mark { display: block; top: auto; bottom: 1px; right: 1px; background: var(--accent); }
 }
 
 /* The results list under a search picker (DeviceSearchPicker, EntityPicker) —

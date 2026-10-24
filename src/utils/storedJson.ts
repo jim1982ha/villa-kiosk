@@ -47,6 +47,15 @@ export function removeStored(key: string): void {
   try { localStorage.removeItem(key); } catch { /* nothing to forget */ }
 }
 
+/** Every stored key (none when storage is refused). */
+export function storedKeys(): string[] {
+  const out: string[] = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k) out.push(k); }
+  } catch { /* nothing kept */ }
+  return out;
+}
+
 /** Forget every stored key `drop` says yes to. */
 export function removeStoredWhere(drop: (key: string) => boolean): void {
   try {
