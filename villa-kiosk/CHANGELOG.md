@@ -1,3 +1,11 @@
+## 2.496.516
+
+What you will see:
+- Advanced Settings: Back is now at the bottom left, the same place as the "Advanced Settings" button in Settings, so
+  going in and coming out is one spot under the finger. "Log out all devices" moved to the top right.
+- Its bottom right buttons, "Model details" and "Upload model", are now normal buttons like the others in that row:
+  icon and word on a wider screen, icon only on a phone.
+
 ## 2.496.515
 
 What you will see:

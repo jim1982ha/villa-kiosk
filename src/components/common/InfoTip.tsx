@@ -20,7 +20,7 @@ import { infoTipPlacement, INFO_TIP_WIDTH } from "./infoTipPlacement";
 /** How long the pointer may be between the (i) and its card before a hover-opened card closes. */
 const HOVER_GRACE_MS = 150;
 
-export default function InfoTip({ label, children, className, width = INFO_TIP_WIDTH }: {
+export default function InfoTip({ label, children, className, width = INFO_TIP_WIDTH, button }: {
   /** What the button is for, read by a screen reader ("How this list is kept up to date"). */
   label: string;
   children: ReactNode;
@@ -28,6 +28,10 @@ export default function InfoTip({ label, children, className, width = INFO_TIP_W
   className?: string;
   /** Its card's width when the screen has room, in px (a table of several columns asks for more: FaultTiming). */
   width?: number;
+  /** Drawn as a footer button (".btn": its icon and `button`, the words hidden on a phone) instead of the round (i),
+   *  where it sits among other buttons (owner, 2026-10-24: Advanced Settings' footer "make sure the style of the
+   *  buttons are all consistent"). */
+  button?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<CSSProperties | null>(null);
@@ -69,9 +73,10 @@ export default function InfoTip({ label, children, className, width = INFO_TIP_W
   return (
     <span ref={ref} className={`info-tip${open ? " open" : ""}${className ? ` ${className}` : ""}`}
       onPointerEnter={hoverIn} onPointerLeave={hoverOut}>
-      <button type="button" className="info-btn" aria-label={label} aria-expanded={open}
+      <button type="button" className={button ? "btn" : "info-btn"} aria-label={label} aria-expanded={open}
         onClick={() => setOpen((v) => hovering.current || !v)}>
-        <Info size={16} />
+        <Info size={button ? 18 : 16} aria-hidden={button ? true : undefined} />
+        {button && <span className="btn-label">{button}</span>}
       </button>
       {open && createPortal(
         <div ref={pop} className="info-pop" role="tooltip" style={pos ?? { visibility: "hidden", width: `min(${width}px, calc(100vw - 24px))` }}
