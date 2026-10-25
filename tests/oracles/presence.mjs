@@ -67,7 +67,7 @@ ck("  ...a sensor that lists nothing: no people, no movement — said so, never 
      P.presenceWatched(S, ents).join() === "person.a,person.b,binary_sensor.hall_motion,binary_sensor.server_activity");
 }
 ck("  ...the settings named after the sensor (one prefix per feature), and no other",
-   why.settings.map((s) => `${s.name}=${s.value} ${s.unit}`).join() === "Grace=5 min", why.settings);
+   why.settings.map((s) => `${s.name}=${s.said}`).join() === "Grace=5min", why.settings);
 
 console.log("\n  in words:");
 const dt = (t) => `D${t}`, dm = (t) => `M${t}`;
@@ -103,7 +103,8 @@ ck("a row is a button only when it opens something; the others are plain text (n
 const all = draw(h(PresencePanel, { presence: off, when: "x", why, showPeople: true, canOpen: () => true, onOpenEntity: () => {},
   onClose: () => {}, presenceHistory: h("i", { "data-presence": "band" }) }));
 ck("the latest movement is never a button, and has no chart of its own: the villa's band replaces it (owner, 2026-10-20)",
-   !/<button type="button" class="presence-row opens"><span>Hall<\/span>/.test(all) && /<div class="presence-row"><span>Hall<\/span>/.test(all)
+   !/<button type="button" class="presence-row opens"><span>Hall<\/span>/.test(all)
+   && /<div class="presence-row"><span class="with-tip"><span>Hall<\/span>/.test(all)
    && !/data-history/.test(all) && /<\/div><i data-presence="band"><\/i>/.test(all), all);
 ck("  ...a profile that may not see people gets no People at all",
    !/People/.test(draw(h(PresencePanel, { presence: off, when: "x", why, showPeople: false, canOpen: () => false, onOpenEntity: () => {}, onClose: () => {} }))));
@@ -141,27 +142,50 @@ ck("a setting's value in words: a time joined to its unit, a count bare, never \
      .every(([v, u, w]) => P.settingWords(v, u) === w), ["5.0", "1.0", "3.0"].map((v) => P.settingWords(v, v === "3.0" ? "" : "min")));
 const G = "input_number.example_empty_grace", ST = "sensor.example_empty_stage";
 const ORDER = [["home", "Someone home"], ["grace", "Away, grace"], ["wait", "Waiting"], ["empty", "Empty"]];
-const told = { ...ents, [S]: e(S, "off", { ...ents[S].attributes, stage_sensor: ST, explain: { [G]: "How long. Example: with 5min." } }),
+const NW = "input_number.example_empty_noise_window", NP = "input_number.example_empty_noise_pulses";
+const told = { ...ents, [S]: e(S, "off", { ...ents[S].attributes, friendly_name: "Example empty", stage_sensor: ST, settings: [
+    { label: "Away grace", entities: [G], explain: "How long. Example: with 5min." },
+    { label: "Server room noise", value: "3 pulses in 5min", entities: [NP, NW], explain: "A burst of noise." }] }),
+  [NP]: e(NP, "3", { friendly_name: "Example empty - noise pulses needed" }),
+  [NW]: e(NW, "5", { friendly_name: "Example empty - noise window minutes", unit_of_measurement: "min" }),
   [ST]: e(ST, "wait", { stages: ORDER }) };
 const w2 = P.presenceWhy(S, told, () => "loading");
-ck("  ...its explanation is the sensor's own (\"explain\"), and none when it gives none",
-   w2.settings[0].explain === "How long. Example: with 5min." && w2.settings[0].said === "5min" && why.settings[0].explain === "", w2.settings);
+// owner, 2026-10-25: the two noise settings as one line; "Villa empty - " off the names; the full names in the (i)
+ck("  ...the lines the sensor lists (\"settings\"), in its order: its label, its value, its explanation, then the full names",
+   w2.settings.map((s) => `${s.name}=${s.said}`).join() === "Away grace=5min,Server room noise=3 pulses in 5min"
+   && w2.settings[0].explain === "How long. Example: with 5min.\n\nIn the villa's system: Grace."
+   && w2.settings[1].entityIds.join() === `${NP},${NW}`
+   && w2.settings[1].explain.endsWith("In the villa's system: Example empty - noise pulses needed, Example empty - noise window minutes."),
+   w2.settings);
+{
+  const moved = P.presenceWhy(S, { ...told, "binary_sensor.server_activity": e("binary_sensor.server_activity", "on",
+    { device_class: "occupancy", friendly_name: "Example empty - server activity" }) }, () => "loading").lastActivity;
+  ck("  ...the latest movement named without the sensor's name, its full name in its (i)",
+     moved?.name === "Server activity" && moved.full === "In the villa's system: Example empty - server activity.", moved);
+}
+ck("  ...none listed: its own settings by prefix, each named without the sensor's name, its full name in the (i)",
+   P.shortName("Villa empty - away grace minutes", "Villa empty") === "Away grace minutes"
+   && P.shortName("Villa empty - server room activity", "villa empty") === "Server room activity"
+   && P.shortName("Hall motion", "Villa empty") === "Hall motion" && why.settings[0].explain === "In the villa's system: Grace.",
+   why.settings);
 ck("  ...the stages are the ones the named stage sensor states, in its order; none named, none",
    w2.stages?.sensorId === ST && w2.stages.order.map(([s]) => s).join() === "home,grace,wait,empty" && why.stages === null, w2.stages);
 const c = (s) => P.stageColor(w2.stages, s);
-ck("  ...colours: someone home the occupied green, empty its grey, the steps between fading in order, another state no contact's",
-   c("home") === STATUS_COLOR.active && c("empty") === STATUS_COLOR.idle && /67%/.test(c("grace")) && /33%/.test(c("wait"))
-   && c("grace") !== c("wait") && c("unavailable") === STATUS_COLOR.unavailable, ORDER.map(([s]) => c(s)));
+// owner, 2026-10-25: "the different levels of green are not clear enough … when occupied, the red \"active\" colour"
+ck("  ...colours: someone home red, empty grey, each step between its own colour (amber, then teal), another state no contact's",
+   c("home") === STATUS_COLOR.alert && c("empty") === STATUS_COLOR.idle && c("grace") === "var(--status-warning)"
+   && c("wait") === STATUS_COLOR.transitional && new Set(ORDER.map(([s]) => c(s))).size === 4
+   && c("unavailable") === STATUS_COLOR.unavailable, ORDER.map(([s]) => c(s)));
 {
   const drawnTip = draw(h(PresencePanel, { presence: off, when: "x", why: w2, showPeople: true, canOpen: () => true, onOpenEntity: () => {},
     onClose: () => {} }));
   ck("  ...drawn: an (i) after the setting's name, its value in words, and the (i) never inside the row's button",
-     /About Grace/.test(drawnTip) && />5min</.test(drawnTip) && !/<button[^>]*>(?:(?!<\/button>).)*<button/s.test(drawnTip), drawnTip.slice(0, 400));
+     /About Away grace/.test(drawnTip) && />5min</.test(drawnTip) && />3 pulses in 5min</.test(drawnTip) && !/<button[^>]*>(?:(?!<\/button>).)*<button/s.test(drawnTip), drawnTip.slice(0, 400));
   const { presenceBand } = await import("@/components/hud/PresenceTile");
   const sb = presenceBand(S, w2);
   ck("  ...the band charts the stage sensor when there is one, in its words and colours",
      sb.entityId === ST && sb.words("grace") === "Away, grace" && sb.words("unavailable") === "Presence unknown"
-     && sb.colorFor("wait") === P.stageColor(w2.stages, "wait") && sb.colorFor("home") === STATUS_COLOR.active, sb.entityId);
+     && sb.colorFor("wait") === P.stageColor(w2.stages, "wait") && sb.colorFor("home") === STATUS_COLOR.alert, sb.entityId);
 }
 
 console.log("\n  the heading, the words, the time before the first record (owner, 2026-10-24):");

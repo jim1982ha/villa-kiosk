@@ -142,7 +142,7 @@ export function PresencePanel({ presence: p, when, why, showPeople, showMovement
                   {/* ⚠️ NOT A BUTTON, AND NO CHART OF ITS OWN (owner, 2026-10-20: its "Clear" band was read as the
                       villa's; the villa's Occupied / Empty band replaces it, under "now") */}
                   <ul className="presence-list">
-                    <Row entityId={act.entityId} name={act.name}
+                    <Row entityId={act.entityId} name={act.name} tip={act.full || undefined}
                       said={act.moving ? "moving now" : `quiet since ${since(act.at)}`} />
                   </ul>
                 </>
