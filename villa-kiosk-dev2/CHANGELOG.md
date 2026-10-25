@@ -1,3 +1,11 @@
+## 2.496.533
+
+What you will see:
+- Advanced Settings: "Upload Model" is back at the top right, beside "Log Out All" (renamed from "Log out all
+  devices"), in the same button style. It no longer moves left when Cancel and Save appear at the bottom.
+- One (i) at the top right now explains both buttons, with the model's details under "Upload Model".
+- On a phone, both buttons show their icon only.
+
 ## 2.496.532
 
 What you will see:
