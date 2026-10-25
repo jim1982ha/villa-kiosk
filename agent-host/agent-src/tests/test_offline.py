@@ -191,3 +191,41 @@ def test_every_caller_reads_since_when_from_history():
              "villa-concierge/scripts/concierge.py": "history=cli.history if cli else None)"}
     for f, call in files.items():
         assert call in open(os.path.join(STARTER_SKILLS, f), encoding="utf-8").read(), f
+
+
+def test_a_device_that_answers_is_not_offline_whatever_its_event_sensors_say():
+    # villa, 2026-10-25: a camera's stream and noise sensor reported while its three event sensors read "unavailable"
+    # (until the camera's next event) — "has been offline for 5d 13h"
+    pack = _pack()
+    states = {"sensor.spa_pump_power": _off(3), "sensor.jet_pump_power": _off(5),
+              "switch.spa_relay": {"state": "off", "last_changed": NOW.isoformat()}}          # the plug's relay answers
+    assert devices_offline(pack, states, NOW, ["power", "switch"]) == []
+    states["switch.spa_relay"] = _off(4)                                                    # nothing answers: offline
+    assert [g.name for g in devices_offline(pack, states, NOW, ["power", "switch"])] == ["Spa Plug"]
+    states["switch.spa_relay"] = {"state": "unknown", "last_changed": NOW.isoformat()}       # answering, with no value
+    assert devices_offline(pack, states, NOW, ["power", "switch"]) == []
+
+
+def test_an_open_offline_fault_closes_when_its_device_answers(tmp_path, monkeypatch):
+    # villa, 2026-10-25: two cameras' faults opened for their event sensors (unavailable until the next event) while
+    # their streams reported — the recheck read only the sensors it named, so they stayed open
+    monkeypatch.syspath_prepend(os.path.join(STARTER_SKILLS, "preventive-maintenance", "scripts"))
+    import recheck
+    from vesta_shared.store import Store
+    store = Store(str(tmp_path / "s.sqlite"))
+    ents = ["sensor.spa_pump_power", "sensor.jet_pump_power"]
+    fid, _ = store.raise_finding("PM-UNAVAILABLE", ents[0], "availability", "2026-10-09", "P3",
+                                 "Spa Plug has been offline for 5d 13h.", {"entities": ents})
+    relay = {"state": "unavailable"}
+
+    class Cli:
+        def states(self, ids):
+            return {e: (relay if e == "switch.spa_relay" else {"state": "unavailable", "last_changed": NOW.isoformat()})
+                    for e in ids}
+
+        def not_found(self, ids):
+            return set()
+    assert recheck.back_online(store, lambda: Cli(), NOW, 5, "UTC", _pack())["closed"] == []      # nothing answers
+    relay.update({"state": "off", "last_changed": NOW.isoformat()})                                  # its relay does
+    assert recheck.back_online(store, lambda: Cli(), NOW, 5, "UTC", _pack())["closed"] == [fid]
+    assert store.findings("open") == []

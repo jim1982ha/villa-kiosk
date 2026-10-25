@@ -25,6 +25,30 @@ from .timeutil import villa_time
 NO_READING = frozenset({"unavailable", "unknown"})
 
 
+def answers(pack, entity_id: str, state) -> bool:
+    """Whether `entity_id`, in `state` (its state string, None: not read), says its device is there: read, and not
+    offline by the pack's standing ("unknown" answers: a device with no value to give; a device asleep between its
+    reports answers too). THE one reading of "a device that answers is not offline" (devices_offline, and
+    device_answers for a fault already open)."""
+    return state is not None and pack.standing(entity_id, state) != OFFLINE_NOW
+
+
+def device_answers(pack, entity_ids, states_of) -> bool:
+    """Whether the physical devices of `entity_ids` answer through ANY of their entities the pack knows (`states_of`:
+    the client's states(ids)) — a fault opened for a device's dead event sensors closes once the device is seen
+    answering (villa, 2026-10-25). A read that fails answers nothing."""
+    keys = {pack.device_key(e) for e in entity_ids}
+    siblings = sorted({r["entity_id"] for r in pack.rows() if r.get("entity_id")
+                       and pack.device_key(r["entity_id"], r) in keys} - set(entity_ids))
+    if not siblings:
+        return False
+    try:
+        st = states_of(siblings) or {}
+    except Exception:  # noqa: BLE001 — not read is not answering
+        return False
+    return any(answers(pack, e, (st.get(e) or {}).get("state")) for e in siblings)
+
+
 def history_days() -> int:
     return limit("offline.history_days", 7, unit="days", group="read", lo=1, hi=60,
                  says="How far back a device offline is read in the villa's history, to say since when it really is "
@@ -105,6 +129,7 @@ def devices_offline(pack, states: dict, now: datetime, families, *, min_minutes:
     for since when each is really offline (offline_since; None: its last_changed)."""
     groups: dict[str, Group] = {}
     went: dict[str, datetime] = {}
+    answering: set[str] = set()
     for fam in families:
         for row in pack.entities(fam):
             eid = row.get("entity_id")
@@ -112,6 +137,8 @@ def devices_offline(pack, states: dict, now: datetime, families, *, min_minutes:
             # ⚠️ "unknown" IS NOT OFFLINE (villa, 2026-10-04): a sensor with no value to give while its device reports;
             # nor is "unavailable" from a device asleep between its reports (vesta_shared.asleep) — the pack's standing
             if not eid or pack.standing(eid, st.get("state")) != OFFLINE_NOW:
+                if eid and answers(pack, eid, st.get("state")):
+                    answering.add(pack.device_key(eid, row))
                 continue
             label = pack.device_label(pack.physical_device_of(eid))
             if label == "":
@@ -134,6 +161,10 @@ def devices_offline(pack, states: dict, now: datetime, families, *, min_minutes:
             g.critical = g.critical or crit
             if since is not None and (g.since is None or since < g.since):
                 g.since, g.hours = since, _hours(since, now)
+    # ⚠️ A DEVICE THAT ANSWERS IS NOT OFFLINE (villa, 2026-10-25: "Tapo Server Room has been offline for 5d 13h" while
+    # its stream, its Wi-Fi signal and its noise sensor all reported — only its event sensors, which read "unavailable"
+    # until the camera's next event, were): a device is offline only when none of its entities read answers
+    groups = {k: g for k, g in groups.items() if k not in answering}
     if history is not None and went:
         real = offline_since(history, went, now)
         for g in groups.values():

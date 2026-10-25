@@ -728,6 +728,7 @@ def test_the_monitoring_table_lists_devices_not_their_sensors():
     assert names == {"Spa Plug", "Porch Battery"}, names
     # a pack built before devices were kept groups nothing and hides nothing
     pack.devices = {}
+    c._states["sensor.plug_battery"] = off("2026-10-09T09:00:00+00:00")   # the plug answering would make it not offline
     assert {o["name"] for o in c.offline()} >= {"Spa Pump Power", "RX", "Lone Battery"}
 
 

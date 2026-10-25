@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.342 (25 October 2026)
+
+- vesta_shared.offline.answers / device_answers: devices_offline drops a device any of whose read entities answers;
+  recheck.back_online closes an open PM-UNAVAILABLE whose device answers through another entity (ANSWERS_NOTE).
+
 ## 0.6.341 (25 October 2026)
 
 - vesta_shared.offline: offline_since reads each offline entity's history back from its last_changed to its last

@@ -65,6 +65,7 @@ from vesta_shared import battery  # noqa: E402  (the battery rules' ids: one own
 from vesta_shared.device_state import has_value, is_offline  # noqa: E402
 from vesta_shared.asleep import read_states  # noqa: E402  (a sleeping device reads its last real state)
 from vesta_shared.limits import limit  # noqa: E402
+from vesta_shared.offline import device_answers  # noqa: E402  (a device that answers is not offline)
 from vesta_shared.past import Logbook  # noqa: E402
 import rules as R  # noqa: E402
 
@@ -72,6 +73,7 @@ import rules as R  # noqa: E402
 
 GONE_NOTE = "Closed: this device no longer exists in the villa's system."
 HIDDEN_NOTE = "Closed: this device is hidden in the villa's system, and hidden devices are not watched."
+ANSWERS_NOTE = "Closed: the device answers; only some of its sensors are waiting for their next report."
 ASLEEP_NOTE = ("Closed: this device sleeps between its reports "
                "(VESTA Kiosk › Advanced Settings › Asleep between reports).")
 ENTITY_ID = re.compile(r"^[a-z0-9_]+\.[a-z0-9_]+$")     # only a real entity id can be "not found"
@@ -107,6 +109,11 @@ def back_online(store, client, now: datetime, minutes: float, zone: str, pack=No
         elif f["rule_id"] == OFFLINE_RULE and out_for(client(), [e for e in es if e not in gone], states, OFFLINE, now,
                                                       minutes, unknown_tells=True):
             moved += Problems(store).close_finding(f, day, "Cleared: back online.")
+            closed.append(f["id"])
+        elif f["rule_id"] == OFFLINE_RULE and pack is not None and es and device_answers(pack, es, client().states):
+            # ⚠️ ITS DEVICE ANSWERS (villa, 2026-10-25): a camera's event sensors read "unavailable" until its next
+            # event while its stream and Wi-Fi report; opened under the older reading, it closes now, saying why
+            moved += Problems(store).close_finding(f, day, ANSWERS_NOTE)
             closed.append(f["id"])
     if closed:
         store.audit("preventive-maintenance", "back_online", {"findings": closed, "gone": deleted})
