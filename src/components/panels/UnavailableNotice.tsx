@@ -10,7 +10,8 @@
 
 import { AlertTriangle } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
-import { missingFromHa, NOT_IN_HA } from "@/utils/stateColors";
+import { missingAdvice, missingFromHa, NOT_IN_HA } from "@/utils/stateColors";
+import { useVillaModel } from "@/config/VillaModel";
 import { lostPillTone } from "@/config/reading";
 import { usePanelActions } from "./PanelActionsContext";
 
@@ -24,6 +25,7 @@ interface Props {
 
 export default function UnavailableNotice({ device = "device", entityId }: Props) {
   const { entities } = useHA();
+  const { mappedEntityIds } = useVillaModel();
   // a critical device that lost contact: red, as the Cockpit paints it (the header's look decides — reading.lostPillTone)
   const tone = lostPillTone("unavailable", usePanelActions().badge?.critical ?? false);
   // ⚠️ NOT THE SAME AS LOST CONTACT (owner, 2026-10-14): a 3D object named after an entity Home Assistant no longer
@@ -34,8 +36,7 @@ export default function UnavailableNotice({ device = "device", entityId }: Props
       <div className="center" style={{ margin: "8px 0 20px" }}>
         <span className="status-pill unavailable"><AlertTriangle size={16} />{NOT_IN_HA.toUpperCase()}</span>
         <p className="muted body-text" style={{ marginTop: 10 }}>
-          No device has the id <code>{entityId}</code>. Rename or remove its object in the 3D model, or point
-          it at another entity with Edit.
+          No device has the id <code>{entityId}</code>. {missingAdvice(mappedEntityIds.has(entityId))}
         </p>
       </div>
     );

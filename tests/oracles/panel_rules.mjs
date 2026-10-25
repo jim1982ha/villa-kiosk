@@ -95,5 +95,17 @@ for (const f of ["GenericPanel.tsx", "ControlFrame.tsx"])
        .test(readFileSync(new URL("../../src/components/panels/CameraPanel.tsx", import.meta.url), "utf8")));
 }
 
+// A Missing device's advice (owner, 2026-10-25: "i don't have any devices named light.gym_light in the GLB file"): the 3D
+// model is named only when it has the object; a deleted device opened from its Cockpit card says where it went
+{
+  const { missingAdvice } = await import("@/utils/stateColors");
+  ck("Missing: a 3D object is renamed, removed or re-pointed; anything else went away in the villa's system",
+     /3D model/.test(missingAdvice(true)) && !/3D model|Edit/.test(missingAdvice(false))
+     && /villa's system/.test(missingAdvice(false)), [missingAdvice(true), missingAdvice(false)]);
+  const notice = readFileSync(new URL("../../src/components/panels/UnavailableNotice.tsx", import.meta.url), "utf8");
+  ck("  ...the window asks the model's own objects (mappedEntityIds), never a fixed sentence",
+     /\{missingAdvice\(mappedEntityIds\.has\(entityId\)\)\}/.test(notice) && !/Rename or remove its object/.test(notice));
+}
+
 done("✅ panel rules hold");
 
