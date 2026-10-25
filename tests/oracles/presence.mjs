@@ -172,8 +172,8 @@ ck("  ...the stages are the ones the named stage sensor states, in its order; no
    w2.stages?.sensorId === ST && w2.stages.order.map(([s]) => s).join() === "home,grace,wait,empty" && why.stages === null, w2.stages);
 const c = (s) => P.stageColor(w2.stages, s);
 // owner, 2026-10-25: "the different levels of green are not clear enough … when occupied, the red \"active\" colour"
-ck("  ...colours: someone home red, empty grey, each step between its own colour (amber, then teal), another state no contact's",
-   c("home") === STATUS_COLOR.alert && c("empty") === STATUS_COLOR.idle && c("grace") === "var(--status-warning)"
+ck("  ...colours: someone home red, empty the other bands' green, each step between its own (amber, then teal), another state no contact's",
+   c("home") === STATUS_COLOR.alert && c("empty") === STATUS_COLOR.active && c("grace") === "var(--status-warning)"
    && c("wait") === STATUS_COLOR.transitional && new Set(ORDER.map(([s]) => c(s))).size === 4
    && c("unavailable") === STATUS_COLOR.unavailable, ORDER.map(([s]) => c(s)));
 {
@@ -210,6 +210,7 @@ console.log("\n  the heading, the words, the time before the first record (owner
      hw.label === "Waiting" && hw.color === P.stageColor(sts, "wait") && hw.when === "T7", hw);
   ck("  ...empty, or no stages: the presence itself, with its own since",
      P.presenceHeading(on, "17:12", { ...sts, now: "empty" }, sw).label === "Empty" && P.presenceHeading(on, "17:12", { ...sts, now: "empty" }, sw).when === "17:12"
+     && P.presenceHeading(on, "17:12", { ...sts, now: "empty" }, sw).color === STATUS_COLOR.active
      && P.presenceHeading(off, "x", null, sw).label === off.label);
   const drawnHead = draw(h(PresencePanel, { presence: off, when: "x", why: { ...w2, stages: sts }, showPeople: true, canOpen: () => false,
     onOpenEntity: () => {}, onClose: () => {} }));

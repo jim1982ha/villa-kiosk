@@ -1,3 +1,9 @@
+## 2.496.530
+
+What you will see:
+- Villa presence chart: Empty is drawn in the same green as the other charts' normal state (it was grey), and the
+  window's heading says "Empty" in that green too.
+
 ## 2.496.529
 
 What you will see:
