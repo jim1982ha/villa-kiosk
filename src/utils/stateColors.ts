@@ -71,6 +71,17 @@ export function contactOf(state: string | undefined | null): "lost" | "no-value"
  *  everywhere: Needs attention, the device's window, Advanced Settings). */
 export const NOT_IN_HA = "Missing";
 
+/** What to do about a Missing device, said after "No device has the id …": its 3D object (`inModel`) can be renamed,
+ *  removed or pointed elsewhere; anything else — a fault raised on a device since deleted, opened from its Cockpit card
+ *  — only went away in the villa's system. ⚠️ NOT ALWAYS A 3D OBJECT (owner, 2026-10-25: "i don't have any devices
+ *  named light.gym_light in the GLB file"): the window said "Rename or remove its object in the 3D model" for a deleted
+ *  light whose only trace was a cleared fault. */
+export function missingAdvice(inModel: boolean): string {
+  return inModel
+    ? "Rename or remove its object in the 3D model, or point it at another entity with Edit."
+    : "It was renamed or removed in the villa's system.";
+}
+
 /** Home Assistant does not have `id` — answered only once HA's list is loaded (an empty list is "not yet", never
  *  "every device is gone"). */
 export function missingFromHa(entities: Record<string, HassEntity>, id: string): boolean {

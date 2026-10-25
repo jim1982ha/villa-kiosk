@@ -59,7 +59,7 @@ const ed = src("components/settings/ConfigEditor.tsx"), notice = src("components
 }
 ck("  ...and a row of the model has no bin", /onRemove=\{sceneEntityIds\.has\(key\) \? undefined : remove\}/.test(ed));
 ck("the device's window says it is not in Home Assistant, and what to do",
-   /missingFromHa\(entities, entityId\)/.test(notice) && /NOT_IN_HA/.test(notice) && /Rename or remove its object in the 3D model/.test(notice));
+   /missingFromHa\(entities, entityId\)/.test(notice) && /NOT_IN_HA/.test(notice) && /missingAdvice\(/.test(notice));      // what to do: panel_rules drives its words
 ck("  ...and waits for no history it will never have",
    (() => { const bands = elements(parseTsx("components/panels/BasePanel.tsx"), "LastDayTimeline");
      return bands.length === 1 && guardsOf(bands[0]).includes("!missingFromHa(entities, entityId)"); })());
