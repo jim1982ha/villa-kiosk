@@ -1,3 +1,9 @@
+## 2.496.535
+
+What you will see:
+- Cockpit Overview: the closed faults VESTA still watches sit folded under the open issues as "Watched (6)", with an
+  (i). Tap it to see their cards, as Tickets' "Closed" list.
+
 ## 2.496.534
 
 What you will see:

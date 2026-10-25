@@ -121,15 +121,23 @@ ck("an active fault keeps its look: no marker", /^<div class="fm-record-card">/.
   const [row] = elements(overview, "CockpitAttentionRow");
   const watchedCard = elements(overview, "AttentionCard").find((e) => propText(e, "card") === "card");
   const within = (n, outer) => !!n && !!outer && n.getStart() >= outer.getStart() && n.getEnd() <= outer.getEnd();
-  ck("  ...the Overview draws them INSIDE the open issues' list, after every open issue",
-     within(row, listDiv) && within(watchedCard, listDiv) && watchedCard.getStart() > row.getEnd(),
-     [!!listDiv, !!row, !!watchedCard]);
+  // ⚠️ FOLDED BY DEFAULT (owner, 2026-10-25: "collapse all the cards in the watchlist … by default"): under the open
+  // issues, in the one folded list (FoldedList, Tickets' Closed), its rows the watched cards
+  const folded = elements(overview, "FoldedList").find((e) => propText(e, "rows") === "watched");
+  ck("  ...the Overview draws them in a folded list AFTER the open issues' list, never inside it",
+     !!folded && within(row, listDiv) && within(watchedCard, folded) && !within(watchedCard, listDiv)
+     && folded.getStart() > listDiv.getEnd() && propText(folded, "title") === '"Watched"',
+     [!!listDiv, !!row, !!watchedCard, !!folded]);
   const title = elements(overview, "div").find((d) => propText(d, "className") === '"settings-section-title"');
   const head = elements(overview, "div").find((d) => propText(d, "className") === '"cockpit-issues-head"');
-  ck("  ...the count stays the open issues' (attentionGroups), and the list and its head show when only watched faults are",
+  ck("  ...the count stays the open issues' (attentionGroups), and the head shows when only watched faults are",
      !!title && /attentionGroups\.length/.test(title.getText()) && !/watched/.test(title.getText())
-     && guardsOf(head).some((g) => /watched\.length > 0/.test(g)) && guardsOf(listDiv).some((g) => /watched\.length > 0/.test(g)),
-     [title?.getText(), guardsOf(head), guardsOf(listDiv)]);
+     && guardsOf(head).some((g) => /watched\.length > 0/.test(g)),
+     [title?.getText(), guardsOf(head)]);
+  const FoldedList = (await import("@/components/common/FoldedList")).default;
+  const shut = draw(h(FoldedList, { title: "Watched", rows: [1, 2], unit: "watched fault", children: (n) => h("p", { key: n }, `card ${n}`) }));
+  ck("  ...folded when the Cockpit opens: its name and count, no card", /Watched \(2\)/.test(shut) && !/card 1/.test(shut)
+     && /aria-expanded="false"/.test(shut), shut);
 }
 
 console.log("\n  gone or back as the Agent says:");
