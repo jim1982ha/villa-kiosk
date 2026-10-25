@@ -32,6 +32,8 @@ export interface AgentCadence { checkMinutes: number; nightlyAt: string; lastLoo
 // The lists are the agreement's (rootfs/usr/share/vesta/agent-contract.json),
 // the ones the proxy checks against — they were typed here a second time.
 const STATUS_STATES = CONTRACT.status.states as readonly AgentState[];
+/** The name every Facility step the VESTA Agent writes is stamped with (`by`, agent-contract.json ticket.agentStamp). */
+export const AGENT_STAMP: string = CONTRACT.ticket.agentStamp;
 
 const oneOf = <T extends string>(v: unknown, allowed: readonly T[], fallback: T): T =>
   (allowed as readonly unknown[]).includes(v) ? (v as T) : fallback;
