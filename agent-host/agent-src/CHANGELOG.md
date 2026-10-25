@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.346 (25 October 2026)
+
+- message_format._alert_parts: a "(closed)" alert's Status lines but the last are a "struck_lines" span (TELEGRAM:
+  strikethrough) over its note.
+
 ## 0.6.345 (25 October 2026)
 
 - store.watch_until (one answer: Problems.confirms_by, Incidents.watching, desk.watch_over). Title word "watch"

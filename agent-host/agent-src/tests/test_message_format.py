@@ -55,11 +55,11 @@ def test_to_is_a_role_never_a_name():
 def test_one_table_decides_every_style_and_a_new_channel_is_one_more_table():
     # every part kind has a rule in the table — a kind the reader finds and the table forgets fails here, never silently
     kinds = {k for text in (F.fill_to(DAILY, "Owner"), "#1 (new)\nTo: Owner\nx\nStatus:\n⚠️ New alert",
-                            "#1-P2 (closed)\nTo: Owner\nx\nStatus:\n✅ Closed on …")
+                            "#1-P2 (closed)\nTo: Owner\nx\nStatus:\n- y\n✅ Closed on …")
              for k, _, _ in F.parts(text)}
-    assert kinds <= set(F.TELEGRAM) and set(F.TELEGRAM) == {"title", "to", "label", "item", "struck", "note"}
-    # a WhatsApp-like table, the same six keys: the same reader, other marks — nothing else changes
-    other = {"title": ("bold",), "to": (), "label": ("bold",), "item": (), "struck": (), "note": ("italic",)}
+    assert kinds <= set(F.TELEGRAM) and set(F.TELEGRAM) == {"title", "to", "label", "item", "struck", "note", "struck_lines"}
+    # a WhatsApp-like table, the same seven keys: the same reader, other marks — nothing else changes
+    other = {"title": ("bold",), "to": (), "label": ("bold",), "item": (), "struck": (), "note": ("italic",), "struck_lines": ()}
     assert [e["type"] for e in F.entities(F.fill_to(DAILY, "Owner"), other)] == ["bold", "bold", "bold"]
     # owner, 2026-10-13: the title in bold (underlined, it read as a link), one quote per section
     assert [e["type"] for e in F.telegram_entities(F.fill_to(DAILY, "Owner"))] == ["bold"] + ["blockquote"] * 2
@@ -180,5 +180,11 @@ def test_an_alert_is_struck_once_its_watch_is_over_never_while_it_is_watched():
     body = "🔓 Laundry Room door unlocked\nWhat to do: check it."
     styles = lambda word: [e["type"] for e in F.telegram_entities(f"#86-P2 ({word})\nTo: Owner & FM\n{body}\nStatus:\n- x\n✅ y")]
     assert styles("watch") == ["bold", "blockquote", "blockquote", "italic"]
-    assert styles("closed") == ["bold", "blockquote", "strikethrough", "blockquote", "italic"]
+    assert styles("closed") == ["bold", "blockquote", "strikethrough", "blockquote", "italic", "strikethrough"]
+    # …its Status lines struck too, all but the last: where it ended (owner, 2026-10-25)
+    text = f"#86-P2 (closed)\nTo: Owner & FM\n{body}\nStatus:\n- Alert sent\n- Cleared on x. Watch 1h\n✅ Closed on y."
+    (struck,) = [e for e in F.telegram_entities(text)[4:] if e["type"] == "strikethrough"]
+    lines = text.split("\nStatus:\n")[1]
+    assert F.telegram_entities(text)[-1] == struck and struck["length"] == len("- Alert sent\n- Cleared on x. Watch 1h"), struck
+    assert lines.endswith("✅ Closed on y.")
     assert styles("existing") == styles("watch")

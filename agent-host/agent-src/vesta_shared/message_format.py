@@ -191,6 +191,9 @@ TELEGRAM: dict[str, tuple[str, ...]] = {
     # an alert whose watch is over: its text struck, fully cleared (owner, 2026-10-25; `_alert_parts`)
     "struck": ("blockquote", "strikethrough"),
     "note": ("blockquote", "italic"),
+    # …and its Status lines but the last, over the note's own styles (owner, 2026-10-25: "strike the messages in the
+    # status section, except the last one")
+    "struck_lines": ("strikethrough",),
 }
 
 
@@ -425,6 +428,9 @@ def _alert_parts(text: str, title_end: int, to_end: int) -> list[tuple[str, int,
     start, end = at + len(label), len(text.rstrip())
     if end > start:
         found.append(("note", start, end))           # its history and where it stands: ONE block (owner, 2026-10-13)
+        last = text.rfind("\n", start, end)
+        if last > start and _alert_text_kind(text[:title_end]) == "struck":
+            found.append(("struck_lines", start, last))   # watch over: its story struck, where it ended plain
     return found
 
 
