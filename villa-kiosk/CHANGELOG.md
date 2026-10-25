@@ -1,3 +1,9 @@
+## 2.496.537
+
+What you will see:
+- Cockpit, Watched: each card says when the fault closed, as Telegram says it: "Cleared on 25/10/2026 14:10",
+  "Done on 25/10/2026 14:10 (JM)", "Closed on 25/10/2026 14:10 (Owner)".
+
 ## 2.496.536
 
 What you will see:

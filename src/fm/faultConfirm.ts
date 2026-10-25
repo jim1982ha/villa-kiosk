@@ -17,7 +17,7 @@
 // its rule for that, only its word for the Agent's own clearing: "Cleared".
 
 import { AGENT_STAMP, type AgentCadence } from "@/agent/agentApi";
-import { clockTime } from "@/utils/dateText";
+import { clockTime, momentText } from "@/utils/dateText";
 import { fmtDuration } from "@/components/panels/chartUtils";
 import { isClearedStep, isTicketResolved, lastResolution } from "./fmEngine";
 import type { FmData, FmTicket } from "./fmTypes";
@@ -34,6 +34,8 @@ export interface ConfirmingFault {
   /** Who did it — the person named on its close (`who`), else the profile that recorded it (`by`); "" when unsaid or
    *  the Agent's own clearing. */
   who: string;
+  /** When it closed (its last resolution's moment), in ms; NaN when unrecorded. */
+  closedAt: number;
   /** When the VESTA Agent reads it again (confirmsBy), in ms. */
   at: number;
   /** That moment is past: its verdict is due at the Agent's next look. */
@@ -60,6 +62,7 @@ export function confirmingOf(t: FmTicket, cadence: AgentCadence | null, now: num
     ticket: t,
     word: agents ? "Cleared" : close && isClearedStep(close) ? "Closed" : "Done",
     who: agents ? "" : close?.who || close?.by || "",
+    closedAt: Date.parse(close?.at ?? t.resolvedAt ?? ""),
     at,
     due: now >= at,
     lookMinutes: cadence && cadence.checkMinutes > 0 ? cadence.checkMinutes : null,
@@ -71,20 +74,22 @@ export function confirmingFaults(d: FmData, cadence: AgentCadence | null, now: n
   return d.tickets.flatMap((t) => confirmingOf(t, cadence, now) ?? []).sort((a, b) => a.at - b.at || a.ticket.id.localeCompare(b.ticket.id));
 }
 
-/** Its line on the card: "Done (JM) · VESTA confirms by 15:06" — the moment past, "· VESTA confirms it at its next
+/** Its line on the card: "Done on 25/10/2026 14:10 (JM) · VESTA confirms by 15:06" — the moment past, "· VESTA confirms it at its next
  *  look". The time is the villa's clock (the tablet's, as every other time on the card: dateText.clockTime). */
 export function confirmLine(c: ConfirmingFault): string {
   const { did, tip } = confirmParts(c);
   return `${did} · ${tip}`;
 }
 
-/** The row's parts: what the person did ("Done (JM)"), and its pill — ⚠️ THE OPEN ISSUES' NEXT-CHECK PILL (owner,
+/** The row's parts: how it closed and when, as the Agent's Telegram lines say it ("Done on 25/10/2026 14:10 (JM)",
+ *  "Cleared on 25/10/2026 14:10": what, when, then who; owner 2026-10-25: "complete it to mention the clear time"),
+ *  and its pill — ⚠️ THE OPEN ISSUES' NEXT-CHECK PILL (owner,
  *  2026-10-23: "consistent with other pills, like `within 5 min`"): `when` its words ("15:06", once past "within
  *  5 min", the Agent's next look, as faultTiming says it), `tip` what hovering it says. */
 export function confirmParts(c: ConfirmingFault): { did: string; when: string; tip: string } {
   const by = clockTime(c.at);
   return {
-    did: c.who ? `${c.word} (${c.who})` : c.word,
+    did: `${c.word}${Number.isNaN(c.closedAt) ? "" : ` on ${momentText(c.closedAt)}`}${c.who ? ` (${c.who})` : ""}`,
     when: c.due ? (c.lookMinutes ? `within ${fmtDuration(c.lookMinutes * 60_000)}` : by) : by,
     tip: c.due ? "VESTA confirms it at its next look" : `VESTA confirms by ${by}`,
   };

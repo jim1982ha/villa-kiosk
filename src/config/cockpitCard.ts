@@ -160,7 +160,7 @@ export interface CardView {
   /** "watched": a fault a person closed that the VESTA Agent reads again (fm/faultConfirm) — listed LAST among the open
    *  issues, never counted, its frame marked `fault-watched`; absent on every open issue. */
   look?: "watched";
-  /** A watched card's two halves (fm/faultConfirm.confirmParts): its compact row says "Done (JM)" in its text and
+  /** A watched card's two halves (fm/faultConfirm.confirmParts): its compact row says "Done on 25/10/2026 14:10 (JM)" in its text and
    *  "VESTA confirms by 15:06" in its pill. */
   watched?: { did: string; when: string; tip: string };
   title: string;
@@ -205,7 +205,7 @@ export function cockpitCard(group: AttentionGroup, cadence: AgentCadence | null,
 
 /** ⚠️ A FAULT BEING CONFIRMED IS NOT AN OPEN ISSUE (owner, 2026-10-23: kept in the Open issues list, LAST, and never
  *  counted as a problem). Its card, one per fault: titled by its device and its
- *  room as an open issue's is, its fault's title as its line and "Done (JM) · VESTA confirms by 15:06" under it — no
+ *  room as an open issue's is, its fault's title as its line and "Done on 25/10/2026 14:10 (JM) · VESTA confirms by 15:06" under it — no
  *  buttons (it is closed), no next-check pill (its line says when). Only the faults whose device `may` open (the
  *  profile's, as attentionFor filters the open issues); `confirming` from fm/faultConfirm.confirmingFaults. */
 export function confirmingCards(confirming: readonly ConfirmingFault[], opts: {
