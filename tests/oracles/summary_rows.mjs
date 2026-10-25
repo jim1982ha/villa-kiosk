@@ -64,7 +64,9 @@ ck("one order for every by-room list — \"Other\" last even after a room alphab
   ck("  ...the same from every opener: none passes a grouping", openers.length > 0 && openers.every(([, g]) => g === null), openers);
   const overview = parseTsx("components/cockpit/CockpitOverview.tsx");
   ck("the Cockpit has no Room / Floor / Category tiles and no Recent activity any more",
-     ["SummaryGroupPanel", "SegmentedGroup", "FoldedList"].every((t) => elements(overview, t).length === 0)
+     ["SummaryGroupPanel", "SegmentedGroup"].every((t) => elements(overview, t).length === 0)
+     // its one folded list is the watched faults' (owner, 2026-10-25), never a Recent activity again
+     && elements(overview, "FoldedList").every((e) => propText(e, "rows") === "watched")
      && !/^import .*(logbook|Logbook|cockpitData)/m.test(read("components/cockpit/CockpitOverview.tsx")));
 }
 

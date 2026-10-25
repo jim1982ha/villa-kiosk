@@ -27,6 +27,7 @@ import { localStamp } from "@/fm/fmEngine";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
 import { confirmingCards } from "@/config/cockpitCard";
 import { confirmingFaults } from "@/fm/faultConfirm";
+import FoldedList from "@/components/common/FoldedList";
 import { useProfile } from "@/auth/ProfileContext";
 import { useNow } from "@/hooks/useInterval";
 
@@ -112,17 +113,22 @@ export default function CockpitOverview({ onOpenEntity, doors, reportFaultFor, o
         <FaultForm key={raising.entity ?? "new"} presetEntity={raising.entity} deviceOptions={deviceOptions}
           onDone={() => setRaising(null)} />
       )}
-      {(attentionGroups.length > 0 || watched.length > 0) && (
+      {attentionGroups.length > 0 && (
         <div className="cockpit-attention-list">
           {attentionGroups.map((group) => (
             <CockpitAttentionRow key={group.key} group={group} onOpenEntity={onOpenEntity}
               canManage={canManage} onEditTicket={onEditTicket}
               focused={cardFocused(group.entityId, focusFaults, devices.deviceOf)} />
           ))}
-          {/* after every open issue, and not in its count: closed, the VESTA Agent confirming it (fm/faultConfirm) */}
-          {watched.map((card) => <AttentionCard key={card.key} card={card} onOpenEntity={onOpenEntity} />)}
         </div>
       )}
+      {/* after every open issue, and not in its count: closed, the VESTA Agent confirming it (fm/faultConfirm).
+          ⚠️ FOLDED BY DEFAULT (owner, 2026-10-25: "collapse all the cards in the watchlist … by default"): every close
+          is watched now, so the list grew; the one folded list of the Facility windows (Tickets' Closed). */}
+      <FoldedList title="Watched" rows={watched} unit="watched fault"
+        tip="Closed faults VESTA still watches: back before the time on its card, a fault reopens as the same problem; after it, VESTA lets it go.">
+        {(card) => <AttentionCard key={card.key} card={card} onOpenEntity={onOpenEntity} />}
+      </FoldedList>
 
     </>
   );
