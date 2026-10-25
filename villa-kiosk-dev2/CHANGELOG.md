@@ -1,3 +1,11 @@
+## 2.496.532
+
+What you will see:
+- Camera window: tapping the siren asks "Sound the siren?" first, in the same box as running a scene. Stopping a
+  siren that sounds does not ask. The box also shows when the camera is in full screen.
+- Camera window: the sound button shows only for a camera whose feed really carries sound. A camera with no
+  microphone no longer shows a sound button that does nothing.
+
 ## 2.496.531
 
 What you will see:
