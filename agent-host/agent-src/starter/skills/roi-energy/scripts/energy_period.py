@@ -28,6 +28,7 @@ from datetime import date, datetime, time, timedelta
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 from vesta_shared import script  # noqa: E402  (client, pack, store, settings, zone: one set-up)
+from vesta_shared import occupancy  # noqa: E402  (like with like: a usual level of days in the same state)
 from vesta_shared.params import MissingParameter  # noqa: E402
 from vesta_shared.stats import med, pct_change  # noqa: E402
 from vesta_shared.messaging import fmt_money  # noqa: E402
@@ -84,7 +85,8 @@ def run(args) -> dict:
     n_days = (b - a).days + 1
     prev_a, prev_b = a - timedelta(days=n_days), a - timedelta(days=1)
     # v2: the total and the devices follow the villa's Energy settings — a period cached by the name guess is not reused
-    key = f"energy:v2:{args.period}:{a}:{b}:{calc_tag(pack)}"
+    # v3: a device's usual level follows the villa's occupancy (vesta_shared.occupancy) — a v2 period has none of it
+    key = f"energy:v3:{args.period}:{a}:{b}:{calc_tag(pack)}"
     store = ctx.store
     if store and not args.no_cache:
         cached = store.cache_get(key)
@@ -104,16 +106,25 @@ def run(args) -> dict:
     except MissingParameter:
         tariff, currency = None, None
 
+    # the villa's state per day (vesta_shared.occupancy): a device's usual level is that of days in the same state —
+    # guests in, the pumps and the water heater work more and it is no waste; None without the helper, as before
+    occupied = occupancy.days(cli, store, os.path.dirname(HERE), a - timedelta(days=BASELINE_DAYS), b, Z)
+
     def load(eid: str, name: str, area, family: str, series: dict) -> dict:
         cur, days = sum_days(series[eid], a, b)
         prev, _ = sum_days(series[eid], prev_a, prev_b)
-        base_vals = [series[eid][d]["kwh"] for d in series[eid] if a - timedelta(days=BASELINE_DAYS) <= d < a and series[eid][d].get("kwh") is not None]
-        base_daily = med(base_vals)
+        kwh = {d: v["kwh"] for d, v in series[eid].items() if v.get("kwh") is not None}
+        n = occupancy.normal(kwh, sorted(d for d in kwh if a <= d <= b),
+                             sorted(d for d in kwh if a - timedelta(days=BASELINE_DAYS) <= d < a), occupied)
+        base_daily = n.value
         return {"entity_id": eid, "asset": (pack.row(eid) or {}).get("asset"), "name": name,
                 "area": area, "family": family, "kwh": cur, "days_with_data": days, "prev_kwh": prev,
                 "vs_prev_pct": pct_change(cur, prev) if prev else None,
                 "baseline_kwh": round(base_daily * n_days, 2) if base_daily is not None else None,
                 "vs_baseline_pct": pct_change(cur, base_daily * n_days) if base_daily else None,
+                # the state its usual level is of ("occupied" / "empty"; None: every day), and whether a use above it
+                # may be called waste (not while occupied against quieter days: vesta_shared.occupancy.normal)
+                "baseline_occupancy": n.state, "baseline_rise_said": n.rise,
                 "cost": round(cur * tariff) if tariff else None,
                 "first_seen": store.first_seen(eid) if store else None}
 

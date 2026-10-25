@@ -295,6 +295,13 @@ class Store:
         self.db.execute("UPDATE findings SET detail=? WHERE id=?", (json.dumps(detail), fid))
         self.db.commit()
 
+    def features_of(self, entity_id: str, family: str, name: str, since_day: str = "") -> dict[str, float | None]:
+        """One daily figure of `entity_id` from `since_day` on: {day: value} (vesta_shared.occupancy keeps the villa's
+        state per day this way)."""
+        rows = self.db.execute("SELECT day, value FROM features WHERE entity_id=? AND family=? AND name=? AND day >= ?",
+                               (entity_id, family, name, since_day)).fetchall()
+        return {r[0]: r[1] for r in rows}
+
     def prune_features(self, before_day: str) -> int:
         """The daily figures per device older than `before_day` (housekeeping, settings.keep)."""
         n = self.db.execute("DELETE FROM features WHERE day < ?", (before_day,)).rowcount

@@ -159,10 +159,13 @@ Bundle related items into one release, measure only what a decision rests on, an
 ## One mechanism per job
 
 For every job (a channel, a store, a settings file, an input), keep ONE mechanism. When merging two designs, never
-keep "the best of both": list what is removed and why.
+keep "the best of both": list what is removed and why. Before designing a new field, flag, store or card, find the
+mechanism that already does that job for another case and widen it; say which one in the plan.
 
 **Why:** owner, 2026-09-30, on a merge that kept features from both sides: "don't try to keep features from both
-sources if it's redundant; simplify to the most efficient configuration".
+sources if it's redundant; simplify to the most efficient configuration". Owner, 2026-10-25, when a new field was
+being planned for faults that clear themselves while the "being confirmed" card already watched a person's close:
+"centrally define this by not adding new code for this, since the feature already exists".
 
 ## Defined once
 

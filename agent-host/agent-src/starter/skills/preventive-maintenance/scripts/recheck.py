@@ -236,8 +236,9 @@ class Tick:
         c = self.client()
         hour = c.statistics([p_eid], start, self.day_end, "hour", ("mean", "min", "max")) if p_eid else {}
         day = c.statistics([e_eid], start, self.day_end, "day", ("change", "sum")) if e_eid else {}
+        occupied = N.occupancy.days(c, self.store, os.path.dirname(N.HERE), start.date(), self.day, self.Z, keep=False)
         return N.asset_findings(c, self.store, self.params, asset, self.day, self.day_end, hour, day, self.now,
-                                self.zone, self.Z, [], write_features=False)[0]
+                                self.zone, self.Z, [], write_features=False, occupied=occupied)[0]
 
     def level_day(self, rows) -> list:
         ids = [r["entity_id"] for r in rows]

@@ -31,6 +31,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 from vesta_shared import script  # noqa: E402  (client, pack, store, settings, zone: one set-up)
+from vesta_shared import occupancy  # noqa: E402  (the villa's state per day: like with like)
 from vesta_shared.messaging import incident_tag, no_code as _no_code  # noqa: E402
 from vesta_shared.timeutil import clock, day_label, day_time_label, villa_day  # noqa: E402
 from vesta_shared.past import unread  # noqa: E402  (the one "could not be read whole: nothing is known after")
@@ -97,9 +98,11 @@ def run(args) -> dict:
     energy_entities = [r["entity_id"] for r in pack.entities("energy")] + [r["entity_id"] for r in pack.entities("water")]
     day_stats = cli.statistics(energy_entities, win_start, day_end, "day", ("change", "sum")) if energy_entities else {}
 
+    # the villa's state per day, kept night after night (vesta_shared.occupancy): None without its helper
+    occupied = occupancy.days(cli, store, os.path.dirname(HERE), win_start.date(), today, Z)
     for slug, asset in pack.assets.items():
         found, written = asset_findings(cli, store, params, asset, today, day_end, hour_stats, day_stats, now_ref,
-                                        zone, Z, notes, skip_raw=args.skip_raw)
+                                        zone, Z, notes, skip_raw=args.skip_raw, occupied=occupied)
         findings += found
         features_written += written
 
@@ -168,10 +171,11 @@ def run(args) -> dict:
 
 def asset_findings(cli, store, params, asset: dict, today: date, day_end: datetime, hour_stats: dict, day_stats: dict,
                    now_ref: datetime, zone: str, Z, notes: list[str], skip_raw: bool = False,
-                   write_features: bool = True) -> tuple[list, int]:
+                   write_features: bool = True, occupied: dict | None = None) -> tuple[list, int]:
     """One asset's day rules (rules.power_rules) over the day `today` ending at `day_end` — the night's reading, and the
     5-minute recheck's of an open finding judged on a finished day (owner, 2026-10-20: one reading of each rule).
     `hour_stats` / `day_stats`: the statistics read for its power / energy entities; `notes` gets what a cut read says.
+    `occupied`: the villa's state per day (vesta_shared.occupancy.days; None: not known — compared as before).
     Returns (its findings, the features written — none when `write_features` is off)."""
     findings: list = []
     features_written = 0
@@ -240,9 +244,9 @@ def asset_findings(cli, store, params, asset: dict, today: date, day_end: dateti
             if o:
                 prior[rid] = json.loads(o["detail"] or "{}")
     if p_eid:
-        findings += R.power_rules(asset, p_eid, p_series, today, params, expected, e_series or None, prior)
+        findings += R.power_rules(asset, p_eid, p_series, today, params, expected, e_series or None, prior, occupied)
     elif e_eid and expected:
-        findings += R.power_rules(asset, e_eid, {}, today, params, expected, e_series, prior)
+        findings += R.power_rules(asset, e_eid, {}, today, params, expected, e_series, prior, occupied)
     return findings, features_written
 
 

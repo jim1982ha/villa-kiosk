@@ -23,6 +23,7 @@ from typing import Any
 from vesta_shared.params import VillaParams
 from vesta_shared.result import COUNTER_RESET, PARAM_MISSING  # the ids other skills read: written once
 from vesta_shared.stats import med, pct_change, step_index
+from vesta_shared import occupancy  # like with like: a day's use against days in the same state
 from vesta_shared import battery  # a battery's charge, its projection and its rule ids: one owner
 from vesta_shared.device_state import is_offline
 from vesta_shared.timeutil import day_label, lasting, weekday_name
@@ -103,7 +104,7 @@ def _profile(series: list[dict], params: VillaParams) -> str:
 # ---------------------------------------------------------------- power family
 def power_rules(asset: dict, entity_id: str, series: dict[date, dict], today: date, params: VillaParams,
                 expected_hours_by_weekday: dict | None, energy_series: dict[date, dict] | None,
-                prior: dict[str, dict] | None = None) -> list[Finding]:
+                prior: dict[str, dict] | None = None, occupied: dict[date, str] | None = None) -> list[Finding]:
     """prior: {rule_id: detail} of findings still open for this asset. While a
     finding is open its baseline is frozen, so the anomaly cannot become the
     new normal and close itself after a few days."""
@@ -179,24 +180,35 @@ def power_rules(asset: dict, entity_id: str, series: dict[date, dict], today: da
     if energy_series and (expected_hours_by_weekday or asset.get("kind") == "motor" or asset.get("critical")):
         e_days = sorted(d for d in energy_series if today - timedelta(days=baseline_days) < d <= today and energy_series[d].get("kwh") is not None)
         if len(e_days) > confirm + min_days:
-            rec = [energy_series[d]["kwh"] for d in e_days[-confirm:]]
-            base = [energy_series[d]["kwh"] for d in e_days[:-confirm]]
-            base_med = med(base)
-            if "PM-ENERGY-CHANGE" in prior and prior["PM-ENERGY-CHANGE"].get("baseline_kwh"):
-                base_med = prior["PM-ENERGY-CHANGE"]["baseline_kwh"]
+            rec_days, base_days = e_days[-confirm:], e_days[:-confirm]
+            rec = [energy_series[d]["kwh"] for d in rec_days]
+            base = [energy_series[d]["kwh"] for d in base_days]
+            # like with like (vesta_shared.occupancy): each recent day against earlier days in its own state, occupied
+            # or empty; without the villa's state, every earlier day, as before
+            n = occupancy.normal({d: energy_series[d]["kwh"] for d in e_days}, rec_days, base_days, occupied, min_days)
+            base_med, normal_of = n.value, n.of
+            # a fault's normal is kept while it is open (the problem never becomes its own normal) — the normal of the
+            # same state only: guests arriving or leaving give it a new one
+            kept = prior.get("PM-ENERGY-CHANGE") or {}
+            if kept.get("baseline_kwh") and kept.get("occupancy") == n.state:
+                base_med = kept["baseline_kwh"]
+                normal_of = {d: base_med for d in rec_days}
             if len(base) >= min_days and base_med and base_med > params.behaviour("energy_baseline_min_kwh"):
                 change = pct_change(med(rec), base_med)
-                drop, rise = params.behaviour("energy_drop_pct"), params.behaviour("energy_rise_pct")
-                if change is not None and _held([pct_change(v, base_med) for v in rec], drop, rise):
+                drop = params.behaviour("energy_drop_pct") if n.drop else float("inf")
+                rise = params.behaviour("energy_rise_pct") if n.rise else float("inf")
+                if change is not None and _held([pct_change(energy_series[d]["kwh"], normal_of[d]) for d in rec_days],
+                                                drop, rise):
                     kind = "COLLAPSE" if change < 0 else "JUMP"
                     summary = (f"{asset['name']} used {med(rec):.2f} kWh/day over the last {confirm} days against a normal "
-                               f"{base_med:.2f} kWh/day ({change:+.0f}%).")
+                               f"{base_med:.2f} kWh/day{f' when the villa is {n.state}' if n.state else ''} "
+                               f"({change:+.0f}%).")
                     check = ("A pressure pump that stops drawing power either has no demand (villa empty, tank full) or has lost its supply. "
                              "Confirm which: open a tap and listen for the pump." if change < 0 else
                              "A pump that suddenly uses much more may be cycling on a leak or a stuck float. Check for running water and the tank level.")
                     out.append(Finding("PM-ENERGY-CHANGE", asset["entities"].get("energy", entity_id), slug, "energy", P3, summary,
                                        {"kind": kind, "recent_kwh": round(med(rec), 3), "baseline_kwh": round(base_med, 3), "change_pct": round(change, 1),
-                                        "profile": profile}, check))
+                                        "profile": profile, "occupancy": n.state}, check))
             resets = [d for d in e_days[-confirm:] if energy_series[d].get("counter_reset")]
             if resets:
                 out.append(Finding(COUNTER_RESET, asset["entities"].get("energy", entity_id), slug, "energy", INFO,

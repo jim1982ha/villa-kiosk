@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.347 (26 October 2026)
+
+- vesta_shared.occupancy: days() (the alert desk's siren.villa_empty, each day kept as a feature), day_states, normal()
+  (same-state normal; too few: every day, the unexplained direction only). PM-ENERGY-CHANGE (nightly, recheck) and
+  roi-energy's baseline (baseline_occupancy, baseline_rise_said; proposals' waste) read it. Store.features_of.
+
 ## 0.6.346 (25 October 2026)
 
 - message_format._alert_parts: a "(closed)" alert's Status lines but the last are a "struck_lines" span (TELEGRAM:

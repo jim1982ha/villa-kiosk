@@ -52,10 +52,13 @@ def build(period: dict, optimiser: dict | None, findings_open: list[dict] | None
                     "benefit": "Removes the main uncertainty of the filtration schedule"})
     for l in period.get("loads", []):
         # a jump is worth a line only when both the load and its baseline are material
+        # …and only a rise occupancy cannot explain (vesta_shared.occupancy: guests in, against quieter days, is no waste)
         if l.get("vs_baseline_pct") is not None and l["vs_baseline_pct"] >= th["waste_min_vs_baseline_pct"] \
-                and l["kwh"] >= th["waste_min_kwh"] and (l.get("baseline_kwh") or 0) >= th["waste_min_baseline_kwh"]:
+                and l["kwh"] >= th["waste_min_kwh"] and (l.get("baseline_kwh") or 0) >= th["waste_min_baseline_kwh"] \
+                and l.get("baseline_rise_said", True):
+            when = f" when the villa is {l['baseline_occupancy']}" if l.get("baseline_occupancy") else ""
             out.append({"kind": "waste", "title": f"{l['name']}: {l['vs_baseline_pct']:+.0f}% versus its usual level",
-                        "detail": f"{l['kwh']:.1f} kWh over the period against about {l['baseline_kwh']:.1f} kWh usually. "
+                        "detail": f"{l['kwh']:.1f} kWh over the period against about {l['baseline_kwh']:.1f} kWh usually{when}. "
                                   "Worth a look: a device left on, a changed schedule, or a new use.",
                         "benefit": f"Up to {fmt_money((l['kwh'] - l['baseline_kwh']) * (period.get('tariff') or 0), cur)} per period"})
     if period.get("generation"):
