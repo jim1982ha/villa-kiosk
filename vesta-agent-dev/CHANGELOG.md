@@ -1,3 +1,9 @@
+## 0.12.357
+
+What you will see:
+- Telegram: once an alert's watch is over, its Status lines are struck through too, all but the last ("✅ Closed on
+  …: it did not come back within 1h."), which stays as it is.
+
 ## 0.12.356
 
 What you will see:
