@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.343 (25 October 2026)
+
+- message_format.STATUS_BREAK / status_head: the one break before the Status label ("\n", no empty line), used by
+  layout.render and legacy, _body, parts (_alert_parts, _status_parts), villa_messages.shape, and the villa's template
+  (jinja_words writes vm_status_break; vesta_message.yaml's check expects it). A text with the old empty line still
+  reads.
+
 ## 0.6.342 (25 October 2026)
 
 - vesta_shared.offline.answers / device_answers: devices_offline drops a device any of whose read entities answers;

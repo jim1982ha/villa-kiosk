@@ -10,7 +10,6 @@
         <b>🔥 Mains phase overload</b>
         To: Owner
         <blockquote>Phase C 4450 W</blockquote>
-
         Status:
         <blockquote><i>⚠️ New alert</i></blockquote>
 
@@ -48,6 +47,7 @@
 {%- set vm_icons = {"new": "⚠️", "existing": "⚠️ ⚙️", "closed": "✅"} -%}
 {%- set vm_words = {"new": "New alert", "existing": "Still open", "closed": "Cleared on {time}."} -%}
 {%- set vm_time_format = "%d/%m/%Y %H:%M" -%}
+{%- set vm_status_break = "\n" -%}
 {#- END WORDS -#}
 {%- set vm_by = vm_priority_to.get(vm_priority | default('', true) | string | trim | upper) -%}
 {%- set vm_r = vm_to | default('', true) | string | trim -%}
@@ -75,8 +75,6 @@ To: {{ vm_escape(vm_r) }}
 {%- if vm_t %}
 <blockquote>{{ vm_escape(vm_t) }}</blockquote>
 {%- endif %}
-{%- if vm_s %}
-
-Status:
+{%- if vm_s %}{{ vm_status_break }}Status:
 <blockquote><i>{{ vm_escape(vm_s) }}</i></blockquote>
 {%- endif %}

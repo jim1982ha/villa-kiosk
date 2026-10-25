@@ -28,5 +28,5 @@ template:
           {%- set vm_title, vm_to, vm_text, vm_status = 'T <1>', 'Owner', 'A & B', 'S' -%}
           {%- set out -%}{% include 'vesta_message.jinja' ignore missing %}{%- endset -%}
           {%- set expected = '<b>T &lt;1&gt;</b>' ~ '\n' ~ 'To: Owner' ~ '\n' ~ '<blockquote>A &amp; B</blockquote>'
-                             ~ '\n\n' ~ 'Status:' ~ '\n' ~ '<blockquote><i>S</i></blockquote>' -%}
+                             ~ '\n' ~ 'Status:' ~ '\n' ~ '<blockquote><i>S</i></blockquote>' -%}
           {{ 'ok' if out == expected else ('missing' if out | trim == '' else 'changed') }}

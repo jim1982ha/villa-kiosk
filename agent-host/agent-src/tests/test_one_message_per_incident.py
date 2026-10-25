@@ -205,13 +205,13 @@ def test_every_notice_has_one_heading_with_the_incidents_history(agent):
     from vesta_shared import result as R
     run(agent.outcome.carry_out({"send": [R.message("fm", "Pump stopped", incident=7, buttons=True, stage="new")]}, "alert-desk"))
     first = agent.tg.sent[-1][1]
-    assert re.fullmatch(r"#7 \(new\)\nTo: .+\nPump stopped\n\nStatus:\n⚠️ New alert", first)
+    assert re.fullmatch(r"#7 \(new\)\nTo: .+\nPump stopped\nStatus:\n⚠️ New alert", first)
     run(agent.outcome.carry_out({"send": [R.message("owner", "Still stopped", incident=7, buttons=True,
                                                     stage="escalated")]}, "alert-desk"))
     later = agent.tg.sent[-1][1]
     # in the owner's chat: "To:" names everyone the alert involves; its "Status:" only the owner's own steps (owner,
     # 2026-10-18, #55 "each chat its own steps") — the FM's alert is the FM chat's line
-    assert re.fullmatch(r"#7 \(existing\)\nTo: Owner & FM\nStill stopped\n\nStatus:\n"
+    assert re.fullmatch(r"#7 \(existing\)\nTo: Owner & FM\nStill stopped\nStatus:\n"
                         r"⚠️ ⚙️ Escalation sent \d\d/\d\d/\d{4} \d\d:\d\d \(to: Owner\)", later), later
     fm_lines = head_text(agent.notices.heading(FM_CHAT, 7)).split("\n")[2:]
     assert [ln.split(" ")[1] for ln in fm_lines] == ["Alert"] and fm_lines[0].endswith("(to: FM)"), fm_lines
@@ -264,18 +264,18 @@ def test_a_press_puts_where_it_stands_last_in_place_of_the_old_status():
     reminder = layout.parts(head="Approval request\nTo: JM_FM", body="Door left open\nWhat to do: close it",
                             status="Reminder: no answer after 15min")
     assert layout.render(layout.changed(reminder, status="Done pressed by JM_O on 10/10/2026 15:04")) == \
-        "Approval request\nTo: JM_FM\nDoor left open\nWhat to do: close it\n\nStatus:\nDone pressed by JM_O on 10/10/2026 15:04"
+        "Approval request\nTo: JM_FM\nDoor left open\nWhat to do: close it\nStatus:\nDone pressed by JM_O on 10/10/2026 15:04"
     new = layout.parts(head="#14-P2 (closed)\nTo: JM_FM", body="Door left open")
     assert layout.render(layout.changed(new, status="Done pressed by JM_O on 10/10/2026 15:04")) == \
-        "#14-P2 (closed)\nTo: JM_FM\nDoor left open\n\nStatus:\n✅ Done pressed by JM_O on 10/10/2026 15:04"
+        "#14-P2 (closed)\nTo: JM_FM\nDoor left open\nStatus:\n✅ Done pressed by JM_O on 10/10/2026 15:04"
     # architecture review 19: the parts are kept, never cut out of the text — an alert holding its own "-------" line
     # keeps its end at a press, and a request's lead (why it is asked) stays when its body says what became of it
     odd = layout.parts(head="Siren request\nTo: JM_FM", body="Pump log:\n\nStatus:\nstopped at 03:00")
-    assert layout.render(layout.changed(odd, status="Done")).endswith("Pump log:\n\nStatus:\nstopped at 03:00\n\nStatus:\nDone")
+    assert layout.render(layout.changed(odd, status="Done")).endswith("Pump log:\n\nStatus:\nstopped at 03:00\nStatus:\nDone")
     siren = layout.parts(head="Approval request\nTo: the Owner", lead="Intrusion suspected: 2 sensors.", body="Turn on Siren?",
                          status="Waiting for approval")
     assert layout.render(layout.changed(siren, status="Approved by JM", body="Turned on Siren.")) == \
-        "Approval request\nTo: the Owner\nIntrusion suspected: 2 sensors.\nTurned on Siren.\n\nStatus:\nApproved by JM"
+        "Approval request\nTo: the Owner\nIntrusion suspected: 2 sensors.\nTurned on Siren.\nStatus:\nApproved by JM"
 
 
 def test_home_assistants_cleared_in_time_message_says_cleared_with_its_time(agent):

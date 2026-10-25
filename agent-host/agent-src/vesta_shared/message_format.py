@@ -70,6 +70,23 @@ UNTITLED = "Message from VESTA"
 INCIDENT_TITLE = re.compile(r"#\d+(?:-P\d)? \((new|existing|closed)\)")
 #: The label of an alert's where-it-stands section (vesta_agent/layout.py).
 STATUS = "Status"
+#: ⚠️ WHAT STANDS BEFORE "Status:" — ONE LINE BREAK, NO EMPTY LINE (owner, 2026-10-25: "remove the skipped line between
+#: the 1st quote section and the Status line … in all the Telegram notifications … as centralised as possible"). Every
+#: writer (layout.render, `_body`, the villa's own template through `jinja_words`) and every reader (`parts`,
+#: layout.legacy, villa_messages.shape) takes it from here; a message sent before still reads (its empty line is
+#: stripped from the text above it).
+STATUS_BREAK = "\n"
+
+
+def status_head(label: str = STATUS) -> str:
+    """The Status label as it follows a message's text: STATUS_BREAK, the label, then its lines on the next line."""
+    return f"{STATUS_BREAK}{label}:\n"
+
+
+def _status_labels() -> tuple[str, ...]:
+    """The Status label in every chat's language ("Status", "Statut", …)."""
+    from .status_words import LABELS
+    return LABELS
 #: An alert's bottom line starts with one of these (vesta_agent/layout.py; owner, 2026-10-11): its title's word — new,
 #: existing, closed — or what the skill marked (vesta_shared.result.MARKS).
 STAGE_ICONS = {"new": "⚠️", "existing": "⚠️ ⚙️", "closed": "✅"}
@@ -189,13 +206,16 @@ def _section(label: str | None, items: list[str]) -> str:
 
 
 def _body(sections: list[tuple[str | None, list[str]]]) -> str:
-    """The sections of a message under its "To:" line: an empty line before each labelled one and between sections."""
+    """The sections of a message under its "To:" line: an empty line before each labelled one and between sections —
+    the Status section's own break (STATUS_BREAK) before it."""
     out, first = [], True
     for label, items in sections:
         items = [i.strip() for i in items if i and i.strip()]
         if not items:
             continue                                 # a section with nothing in it is not said
-        if not first or label:
+        if label in _status_labels():
+            out.extend([""] * (STATUS_BREAK.count("\n") - 1))   # the lines joined by one "\n" already
+        elif not first or label:
             out.append("")
         first = False
         out.append(_section(label, items))
@@ -341,7 +361,7 @@ def parts(text: str) -> list[tuple[str, int, int]]:
         if not ln.strip():
             after = True
             continue
-        if after and _is_label(ln):
+        if (after or ln.rstrip()[:-1] in _status_labels()) and _is_label(ln):
             if span:
                 found.append(("note" if section in NOTE_SECTIONS else "item", *span))
                 span = None
@@ -365,10 +385,10 @@ def _status_parts(text: str) -> list[tuple[str, int, int]]:
     message. A "Status:" inside a sentence, one with a paragraph after its block, or a label without lines is the
     person's or the AI's own text and stays as it is."""
     label = f"{STATUS}:\n"
-    at = text.rfind(f"\n\n{label}")
+    at = text.rfind(status_head())
     if at < 0 and not text.startswith(label):
         return []
-    start = at + 2 if at >= 0 else 0                 # render without a body: the message is its Status section
+    start = at + len(STATUS_BREAK) if at >= 0 else 0  # render without a body: the message is its Status section
     lines = text[start + len(label):].rstrip()
     if not lines.strip() or "\n\n" in lines or lines.startswith("\n"):
         return []
@@ -379,15 +399,15 @@ def _alert_parts(text: str, title_end: int, to_end: int) -> list[tuple[str, int,
     found = [("title", 0, title_end), ("to", title_end + 1, to_end)]
     # ⚠️ THE STATUS LABEL IN THE CHAT'S LANGUAGE (owner, 2026-10-23): "Statut:", "状态:" — the last of any of them is the
     # card's own (its section is the card's last), so its lines stay in italics in every language
-    from .status_words import LABELS
-    at, label = max((text.rfind(f"\n\n{w}:\n"), f"\n\n{w}:\n") for w in LABELS)
+    at, label = max((text.rfind(status_head(w)), status_head(w)) for w in _status_labels())
     if at < to_end:
         if to_end + 1 < len(text):
             found.append(("item", to_end + 1, len(text)))
         return found
-    if at > to_end + 1:
-        found.append(("item", to_end + 1, at))
-    found.append(("label", at + 2, at + len(label) - 1))
+    text_end = len(text[:at].rstrip("\n"))           # a message sent before 0.12.354 had an empty line here
+    if text_end > to_end + 1:
+        found.append(("item", to_end + 1, text_end))
+    found.append(("label", at + len(STATUS_BREAK), at + len(label) - 1))
     start, end = at + len(label), len(text.rstrip())
     if end > start:
         found.append(("note", start, end))           # its history and where it stands: ONE block (owner, 2026-10-13)
@@ -462,6 +482,7 @@ def jinja_words() -> str:
         f"{{%- set vm_icons = {lit(STAGE_ICONS)} -%}}",
         f"{{%- set vm_words = {lit(STAGE_WORDS)} -%}}",
         f"{{%- set vm_time_format = {lit(MOMENT_FORMAT)} -%}}",
+        f"{{%- set vm_status_break = {lit(STATUS_BREAK)} -%}}",
         JINJA_END,
     ])
 

@@ -67,7 +67,7 @@ def test_a_press_under_a_plain_answer_says_what_it_did_in_the_status_style(tmp_p
     assert telegram_entities(answer) == []                                  # the answer itself: as the AI wrote it
     _press(v)
     (_, _, edited), = v.tg.edits
-    said = edited.rsplit(f"\n\n{STATUS}:\n", 1)[1]
+    said = edited.rsplit(f"\n{STATUS}:\n", 1)[1]
     assert edited.startswith(answer) and "Fault created for the facility manager by JM" in said
     at = tg_len(edited) - tg_len(said)
     assert telegram_entities(edited) == [{"type": "blockquote", "offset": at, "length": tg_len(said)},

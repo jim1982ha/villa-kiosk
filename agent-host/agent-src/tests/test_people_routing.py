@@ -64,7 +64,7 @@ def test_an_approval_for_the_owner_reaches_every_chat_where_the_owner_can_press_
     run(v.on_ha_event("telegram_callback", press))            # in his own private chat Fabien is the Owner he is listed as
     # every copy, in every chat, says who refused and when — its buttons gone (one mechanism: incident_thread.py)
     assert sorted(c for c, _, _ in v.tg.edits) == sorted([FABIEN, JM])
-    assert all(re.search(r"\n\nStatus:\nRefused on \d\d/\d\d/\d{4} \d\d:\d\d \(Fabien_O\)\. Nothing was done\.$", t)
+    assert all(re.search(r"\nStatus:\nRefused on \d\d/\d\d/\d{4} \d\d:\d\d \(Fabien_O\)\. Nothing was done\.$", t)
                for _, _, t in v.tg.edits)
 
 
@@ -227,7 +227,7 @@ def test_the_agents_own_approvals_and_warnings_carry_the_heading_in_every_chat(t
     (chat, text, _), = v.tg.sent
     # asked here, and still in the agent's layout (owner, 2026-10-10): heading, the action, then where it stands
     assert chat == JM and text.startswith("Approval request\nTo: ") and re.search(
-        r"\n\nStatus:\nWaiting for approval by the owner or the facility manager \(asked on \d\d/\d\d/\d{4} \d\d:\d\d, "
+        r"\nStatus:\nWaiting for approval by the owner or the facility manager \(asked on \d\d/\d\d/\d{4} \d\d:\d\d, "
         r"expires in 15min\)\.$", text)
 
 
@@ -266,7 +266,7 @@ def test_a_newer_snapshot_of_an_incident_replaces_the_older_one(tmp_path):
     first = v.tg.next_id                                                # the snapshot: the last message sent
     # under the heading every message of the agent's carries (owner, 2026-10-10: "all formatted the same way")
     assert v.tg.sent[-1][1].startswith("#9 (new)\nTo: Owner\n")
-    assert v.tg.sent[-1][1].endswith("\nCamera snapshot\n\nStatus:\n⚠️ New alert")
+    assert v.tg.sent[-1][1].endswith("\nCamera snapshot\nStatus:\n⚠️ New alert")
     run(v.outcome.carry_out(res))
     assert (JM, first) in v.tg.deleted
 
@@ -324,7 +324,7 @@ def test_a_request_answered_at_once_leaves_one_message_in_the_askers_chat(tmp_pa
              "message": {"message_id": req_n, "chat": {"id": JM}, "text": req}, "bot": BOT}
     run(v.on_ha_event("telegram_callback", press))
     (_, mid, settled), = v.tg.edits
-    assert len(v.tg.sent) == 1 and mid == req_n and re.search(r"\n\nStatus:\nRefused on .* \(JM\)\. Nothing was done\.$", settled)
+    assert len(v.tg.sent) == 1 and mid == req_n and re.search(r"\nStatus:\nRefused on .* \(JM\)\. Nothing was done\.$", settled)
 
 
 def test_the_siren_that_cannot_be_requested_says_so_in_the_agents_layout(tmp_path):
@@ -332,7 +332,7 @@ def test_the_siren_that_cannot_be_requested_says_so_in_the_agents_layout(tmp_pat
     v = make_agent(tmp_path, {"people": PEOPLE, "siren_entity": "switch.siren"})          # acting is off: refused
     run(v.outcome.carry_out({"siren_gate": R.siren(True, "Intrusion suspected.", ("owner", "fm"))}, "alert-desk"))
     texts = [t for _, t, _ in v.tg.sent]
-    assert texts and all(t.startswith(f"{SIREN_TITLE}\nTo: ") and "\nIntrusion suspected.\n\nStatus:\nThe siren cannot be "
+    assert texts and all(t.startswith(f"{SIREN_TITLE}\nTo: ") and "\nIntrusion suspected.\nStatus:\nThe siren cannot be "
                          "requested: " in t for t in texts)
 
 
@@ -349,7 +349,7 @@ def test_an_approved_request_says_what_happened_and_who_approved_it_never_the_re
     req = layout.parts(head="Approval request\nTo: JM", body="Open Bedroom3 Curtain (final state: open)?",
                        status="Waiting for approval by the owner")
     assert layout.render(layout.changed(req, status="Approved by JM on 10/10/2026 17:13.", body="Opened Bedroom3 Curtain.")) == \
-        "Approval request\nTo: JM\nOpened Bedroom3 Curtain.\n\nStatus:\nApproved by JM on 10/10/2026 17:13."
+        "Approval request\nTo: JM\nOpened Bedroom3 Curtain.\nStatus:\nApproved by JM on 10/10/2026 17:13."
     # what a decided request says under its line: "<what> on <when> (<who>)" — written by message_format.acted, the
     # ONE writer of a person's act (architecture review, 2026-10-19: a pressed button, an approval, the desk's "Noted"
     # and the Cockpit's steps each wrote the shape by hand), each state's tail its own
@@ -406,7 +406,7 @@ def test_a_curtain_still_moving_is_said_to_be_and_the_request_says_opened_once_i
         await v.approvals.idle()
     run(go())
     first, last = v.tg.edits[0][2], v.tg.edits[-1][2]
-    assert "\nOpening " in first and "\n\nStatus:\nApproved on " in first and "(JM)." in first     # on its way, right away
+    assert "\nOpening " in first and "\nStatus:\nApproved on " in first and "(JM)." in first     # on its way, right away
     assert "\nOpened " in last and "did not" not in last and status_of(last).startswith("Approved on ") and status_of(last).endswith("(JM).")
 
 
@@ -486,7 +486,7 @@ def test_an_expired_request_says_so_and_a_long_wait_is_still_seen_by_the_ai(tmp_
     assert run(v.approvals.expire(now=in3h)) == 0
     assert run(v.approvals.expire(now=in3h + timedelta(hours=3))) == 1
     (_, _, text), = v.tg.edits
-    assert re.search(r"\n\nStatus:\nExpired on \d\d/\d\d/\d{4} \d\d:\d\d: nothing was done\.$", text)
+    assert re.search(r"\nStatus:\nExpired on \d\d/\d\d/\d{4} \d\d:\d\d: nothing was done\.$", text)
     assert v.state.approval(msg.approval_id)["status"] == "expired"
 
 
@@ -636,7 +636,7 @@ def test_a_photo_with_a_long_heading_is_posted_as_one_message_and_recorded_as_se
             return status
     run(Poster(send=send, notices=Notices()).post(JM, "Camera snapshot", incident=9, photo=("SlBFRw==", "image/jpeg")))
     (text, photo), = sent
-    assert photo and len(text) <= 1000 and text.startswith("#9-P1 (existing)\nTo: JM\nCamera snapshot\n\nStatus:\n"
+    assert photo and len(text) <= 1000 and text.startswith("#9-P1 (existing)\nTo: JM\nCamera snapshot\nStatus:\n"
                                                          "- Reminder sent 10/10/2026 10:00 to JM\n- … ") \
         and text.endswith("to JM\n⚠️ ⚙️ Still open")                           # one caption: one message
     # the first notice always kept, the newest kept, those between counted (review 28)

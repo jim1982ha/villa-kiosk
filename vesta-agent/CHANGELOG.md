@@ -1,3 +1,12 @@
+## 0.12.354
+
+What you will see:
+- Every Telegram message (alerts, approvals, a doorbell's or a camera's photo, an answer with a button pressed): no
+  empty line before "Status:" any more; it follows the text directly. A message already sent keeps its look until it
+  next changes.
+- The villa's own alerts (sent when the Agent is down) need the new layout file: copy custom_templates/
+  vesta_message.jinja and packages/vesta_message.yaml to the villa, then reload custom templates.
+
 ## 0.12.353
 
 What you will see:

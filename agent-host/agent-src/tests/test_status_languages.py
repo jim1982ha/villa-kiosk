@@ -65,7 +65,7 @@ def card(v, chat) -> str:
 
 
 def status(text: str, label: str) -> list[str]:
-    head, sep, lines = text.partition(f"\n\n{label}:\n")
+    head, sep, lines = text.partition(f"\n{label}:\n")
     assert sep, text
     return lines.split("\n")
 

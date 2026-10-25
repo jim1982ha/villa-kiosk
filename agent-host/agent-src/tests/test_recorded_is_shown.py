@@ -56,7 +56,7 @@ def test_a_request_approved_seconds_before_a_restart_is_ended_at_the_start(tmp_p
     v = restarted(v)                                                       # …and is back 40 s later
     assert v.state.approval(msg.approval_id)["status"] == "done"            # the curtain reads open: done
     (_, _, text), = v.tg.edits
-    assert re.search(r"\nOpened .*\n\nStatus:\nApproved on \d\d/\d\d/\d{4} \d\d:\d\d \(JM\)\.$", text)
+    assert re.search(r"\nOpened .*\nStatus:\nApproved on \d\d/\d\d/\d{4} \d\d:\d\d \(JM\)\.$", text)
 
 
 def test_a_decision_whose_copies_never_said_so_says_it_at_the_start(tmp_path):
@@ -67,7 +67,7 @@ def test_a_decision_whose_copies_never_said_so_says_it_at_the_start(tmp_path):
     assert v.tg.edits == []
     v = restarted(v)
     (_, _, text), = v.tg.edits
-    assert re.search(r"\n\nStatus:\nRefused on .* \(JM\)\. Nothing was done\.$", text)
+    assert re.search(r"\nStatus:\nRefused on .* \(JM\)\. Nothing was done\.$", text)
     v = restarted(v)
     assert len(v.tg.edits) == 1                                            # settled once: a later start changes nothing
 
@@ -86,7 +86,7 @@ def test_a_copy_telegram_did_not_take_is_tried_again_until_it_shows(tmp_path):
     v.tg.refuse.discard("edit")
     run(v.housekeeping())
     (_, _, text), = v.tg.edits
-    assert re.search(r"\n\nStatus:\nApproved on .* \(JM\)\.", text)
+    assert re.search(r"\nStatus:\nApproved on .* \(JM\)\.", text)
     run(v.housekeeping())
     assert len(v.tg.edits) == 1                                            # shown: never sent again
 
@@ -155,7 +155,7 @@ def test_the_intrusion_is_said_when_no_owner_chat_takes_the_siren_request(tmp_pa
     (chat, text, kb), = v.tg.sent
     assert chat == FABIEN and kb is None
     assert text.startswith(f"{SIREN_TITLE}\nTo: ") and \
-        "\nIntrusion suspected.\n\nStatus:\nThe siren cannot be requested: no chat of the owner's" in text
+        "\nIntrusion suspected.\nStatus:\nThe siren cannot be requested: no chat of the owner's" in text
 
 
 # ---------------------------------------------------------------------- one name per person per chat
@@ -170,7 +170,7 @@ def test_a_person_listed_twice_is_named_one_way_in_a_chat(tmp_path):
     run(v.approvals.ask(msg))
     _press(v, msg, chat=GROUP)
     (_, _, text), = v.tg.edits
-    assert bool(re.search(r"\n\nStatus:\nApproved on .* \(JM_FM\)\.", text))                        # the name the group knows, as an alert press
+    assert bool(re.search(r"\nStatus:\nApproved on .* \(JM_FM\)\.", text))                        # the name the group knows, as an alert press
     assert "(by JM_FM on " in v.approvals.now()
     assert v.policy().member(JM, GROUP).name == v.policy().name_in(JM, GROUP) == "JM_FM"
 

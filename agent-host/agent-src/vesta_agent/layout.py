@@ -23,8 +23,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from vesta_shared.message_format import (INCIDENT_TITLE, MARK_ICONS, STAGE_ICONS, STATUS, TO, UNTITLED, document,
-                                         parts as shape_parts)
+from vesta_shared.message_format import (INCIDENT_TITLE, MARK_ICONS, STAGE_ICONS, TO, UNTITLED, document,
+                                         parts as shape_parts, status_head, STATUS_BREAK)
 from vesta_shared import status_words
 from vesta_shared.limits import limit
 from vesta_shared.messaging import telegram_message_chars, tg_len
@@ -143,7 +143,7 @@ def render(p: dict, limit: int | None = None) -> str:
     status = fit(stage_line(h, (p.get("status") or "").strip(), p.get("mark")), max(limit // 4, 40))
     middle = "\n".join(x.strip() for x in (p.get("lead"), body_shown(p, h)) if x and x.strip())
     if not h:
-        tail = f"\n\n{STATUS}:\n{status}" if status else ""
+        tail = f"{status_head()}{status}" if status else ""
         return fit(middle, max(limit - tg_len(tail), 20)) + tail if middle else tail.lstrip("\n")
     title, to, history = title_line(h), h["to"], list(h["history"])
     floor, dropped, cap = min(middle_floor(), tg_len(middle)), 0, None
@@ -182,9 +182,9 @@ def legacy(text: str) -> dict:
     if shape_parts(text):
         title, _, rest = text.partition("\n")
         to, _, rest = rest.partition("\n")
-        probe = "\n\n" + rest
-        at = probe.rfind(f"\n\n{STATUS}:\n")
-        body, notes = (probe[:at], probe[at + len(STATUS) + 4:]) if at >= 0 else (rest, "")
+        probe = STATUS_BREAK + rest
+        at = probe.rfind(status_head())
+        body, notes = (probe[:at], probe[at + len(status_head()):]) if at >= 0 else (rest, "")
         blocks = [x for x in notes.split("\n\n") if x.strip()]
         history = blocks[0] if blocks and blocks[0].startswith("- ") else ""
         status = blocks[-1] if blocks and blocks[-1] != history else ""

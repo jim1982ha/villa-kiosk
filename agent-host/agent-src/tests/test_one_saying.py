@@ -82,7 +82,7 @@ def test_the_heading_names_the_incident_first_and_what_was_sent_to_whom(tmp_path
     assert (title, to) == ("#21 (existing)", "To: Owner & FM")      # every role it went to ("FM": owner, 2026-10-16)
     # owner, 2026-10-18, #55 "each chat its own steps" (reversing part of 2026-10-11 "one incident, one picture"): the
     # owner's escalation lists none of the FM's steps — its own step, what, when, to whom (owner, 2026-10-16)
-    status_block = text.split("\n\nStatus:\n")[1]
+    status_block = text.split("\nStatus:\n")[1]
     assert re.fullmatch(r"⚠️ ⚙️ Escalation sent \d\d/\d\d/\d{4} \d\d:\d\d, x \(to: Owner\)", status_block), text
     # the FM's chat holds them, a dash per line
     history = [ln for ln in head_text(v.notices.heading(FM, 21)).split("\n")[2:] if ln.startswith("- ")]
@@ -148,7 +148,7 @@ def test_the_bottom_line_shows_the_stage_by_its_icon():
     # the new heading whole when it changes (Notices.retitle — test_an_old_copy_gets_the_new_heading_whole)
     # a "For: JM" heading recorded before 0.12.175 is laid out in the one layout, under UNTITLED (owner, 2026-10-12)
     assert layout.render(layout.parts(head="For: JM", body="Weekly report", status="Sent")) == \
-        "Message from VESTA\nTo: JM\nWeekly report\n\nStatus:\nSent"
+        "Message from VESTA\nTo: JM\nWeekly report\nStatus:\nSent"
     # a new status brings its own mark: "Need help" replaced by "Done pressed" is no longer 🆘
     helped = layout.parts(head="#3-P2 (closed)\nTo: JM", body="b", status="Need help pressed", mark="help")
     assert layout.render(layout.changed(helped, status="Done pressed by Jim.")).endswith("\n✅ Done pressed by Jim.")
@@ -192,7 +192,7 @@ def test_telegram_shows_the_title_in_bold_the_alert_quoted_and_the_status_quoted
     history = "- Alert sent 11/10/2026 05:23 to Owner & Facility Manager\n- Escalation sent 11/10/2026 05:23 to Owner"
     bottom = "⚠️ ⚙️ Still not right when the alert stopped watching it on 11/10/2026 05:23."
     status = f"{history}\n{bottom}"
-    text = f"#1-P2 (existing)\nTo: Owner\n{alert}\n\nStatus:\n{status}"
+    text = f"#1-P2 (existing)\nTo: Owner\n{alert}\nStatus:\n{status}"
     asyncio.run(tg.send(1, text))
     asyncio.run(tg.edit(1, 7, text))
     asyncio.run(tg.send(1, "The pool is fine: 27 °C."))                          # an answer to a person: no heading
@@ -210,11 +210,11 @@ def test_telegram_shows_the_title_in_bold_the_alert_quoted_and_the_status_quoted
     # every other message sent on its own is in the same layout, so styled the same (owner, 2026-10-12: one layout)
     request = layout.render(layout.parts(head="Approval request\nTo: JM", lead="Intrusion suspected.", body="Turn on Siren?",
                                          status="Waiting for approval by the owner"))
-    assert request == ("Approval request\nTo: JM\nIntrusion suspected.\nTurn on Siren?\n\nStatus:\n"
+    assert request == ("Approval request\nTo: JM\nIntrusion suspected.\nTurn on Siren?\nStatus:\n"
                        "Waiting for approval by the owner")
     assert [e["type"] for e in telegram_entities(request)] == ["bold", "blockquote", "blockquote", "italic"]
     # the first alert: no history yet, its status alone under "Status:"
-    first = "#1-P2 (new)\nTo: Jim\nDoor unlocked\n\nStatus:\n⚠️ New alert"
+    first = "#1-P2 (new)\nTo: Jim\nDoor unlocked\nStatus:\n⚠️ New alert"
     assert [e["type"] for e in telegram_entities(first)] == ["bold", "blockquote", "blockquote", "italic"]
 
 
@@ -224,7 +224,7 @@ def test_a_copy_turning_closed_turns_green(tmp_path):
     st = Store(v.s.store_path)
     iid = st.new_incident("k", "automation.r", "lock.a", "P2", {"message": "Door unlocked"})
     asyncio.run(v.outcome.carry_out({"send": [R.message("fm", "Door unlocked", incident=iid, buttons=True, stage="new")]}, "alert-desk"))
-    assert v.tg.sent[-1][1].endswith("\n\nStatus:\n⚠️ New alert")
+    assert v.tg.sent[-1][1].endswith("\nStatus:\n⚠️ New alert")
     st.update_incident(iid, closed_at=datetime.now(timezone.utc).isoformat(), state="resolved")
     asyncio.run(v.thread.close(iid, "Cleared on {time}."))
     assert v.tg.edits[-1][2].rsplit("\n", 1)[1].startswith("✅ Cleared on ")

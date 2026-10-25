@@ -16,7 +16,7 @@ import jinja2
 import yaml
 from jinja2.sandbox import ImmutableSandboxedEnvironment
 
-from vesta_shared.message_format import STATUS, TELEGRAM, document, parts
+from vesta_shared.message_format import STATUS, TELEGRAM, document, parts, status_head
 
 HA = os.path.join(os.path.dirname(__file__), "..", "homeassistant")
 #: Telegram's HTML tag for each MessageEntity type the style table names.
@@ -48,9 +48,8 @@ def _expected(title, to, text, status) -> str:
     lines = [_styled(title.strip(), "title"), html.escape(f"To: {to}".rstrip(), quote=False)]
     if text.strip():
         lines.append(_styled(text.strip(), "item"))
-    if status.strip():
-        lines += ["", f"{STATUS}:", _styled(status.strip(), "note")]
-    return "\n".join(lines)
+    tail = f"{status_head()}{_styled(status.strip(), 'note')}" if status.strip() else ""
+    return "\n".join(lines) + tail
 
 
 CASES = [

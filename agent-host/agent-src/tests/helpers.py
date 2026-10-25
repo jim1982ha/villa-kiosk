@@ -146,7 +146,7 @@ def status(text: str) -> str:
     request first, the history, where it stands last — one block since 2026-10-13; a press's note replaces it:
     vesta_agent/layout.py)."""
     from vesta_shared.message_format import MARK_ICONS, STAGE_ICONS, STATUS, stage_words
-    label = f"\n\n{STATUS}:\n"
+    label = f"\n{STATUS}:\n"
     probe = "\n\n" + text if text.startswith(f"{STATUS}:\n") else text
     lines = probe.rsplit(label, 1)[1].split("\n") if label in probe else []
     while lines and (lines[0].startswith("- ") or not lines[0].strip()):

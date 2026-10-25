@@ -33,7 +33,7 @@ def test_its_parts_are_read_back_from_the_text_as_sent():
     apart = text.replace("run.\n- P2", "run.\n\n- P2")
     assert [k for k, _, _ in F.parts(apart)] == [k for k, _ in got]
     # an alert: its history and where it stands under "Status:" are ONE note — an older text written apart too
-    alert = "#1-P2 (existing)\nTo: Owner\n🚪 Gate relay released\nWhat to do: check it.\n\nStatus:\n- Alert sent …\n\n⚠️ ⚙️ Still open"
+    alert = "#1-P2 (existing)\nTo: Owner\n🚪 Gate relay released\nWhat to do: check it.\nStatus:\n- Alert sent …\n\n⚠️ ⚙️ Still open"
     assert [(k, alert[a:b]) for k, a, b in F.parts(alert)][3:] == [("label", "Status:"),
                                                                    ("note", "- Alert sent …\n\n⚠️ ⚙️ Still open")]
     # any other text: no parts, no style
@@ -54,7 +54,7 @@ def test_to_is_a_role_never_a_name():
 
 def test_one_table_decides_every_style_and_a_new_channel_is_one_more_table():
     # every part kind has a rule in the table — a kind the reader finds and the table forgets fails here, never silently
-    kinds = {k for text in (F.fill_to(DAILY, "Owner"), "#1 (new)\nTo: Owner\nx\n\nStatus:\n⚠️ New alert")
+    kinds = {k for text in (F.fill_to(DAILY, "Owner"), "#1 (new)\nTo: Owner\nx\nStatus:\n⚠️ New alert")
              for k, _, _ in F.parts(text)}
     assert kinds <= set(F.TELEGRAM) and set(F.TELEGRAM) == {"title", "to", "label", "item", "note"}
     # a WhatsApp-like table, the same five keys: the same reader, other marks — nothing else changes
@@ -114,7 +114,7 @@ def test_a_report_titled_as_data_keeps_its_shape_whatever_the_ai_wrote(tmp_path)
 def test_home_assistants_words_never_change_an_alerts_layout():
     # an alert whose own text holds "Status:" or "Water leak detected in:" drew a second "Status:" and italics
     alert = ("#9-P2 (new)\nTo: JM\nInverter fault\nStatus:\nOffline since 09:00\n\nWater leak detected in:\nLaundry"
-             "\n\nStatus:\n⚠️ New alert")
+             "\nStatus:\n⚠️ New alert")
     got = [(k, alert[a:b]) for k, a, b in F.parts(alert)]
     assert got == [("title", "#9-P2 (new)"), ("to", "To: JM"),
                    ("item", "Inverter fault\nStatus:\nOffline since 09:00\n\nWater leak detected in:\nLaundry"),
@@ -135,9 +135,12 @@ def test_a_message_without_a_heading_has_its_status_styled_as_every_other():
     assert [k for k, _, _ in F.parts(titled)][-2:] == ["label", "note"]
     # never a person's or the AI's own text that merely holds "Status:": inside a line, a section with a paragraph after
     # it, a label with nothing under it, or an empty line under it
-    for plain in ("Status: all good.", "The pump\n\nStatus:\nrunning\n\nAsk me again tomorrow.", "Pump\n\nStatus:",
-                  "Pump\n\nStatus:\n\nrunning", "Pump\nStatus:\nrunning"):
+    for plain in ("Status: all good.", "The pump\nStatus:\nrunning\n\nAsk me again tomorrow.", "Pump\nStatus:",
+                  "Pump\nStatus:\n\nrunning"):
         assert F.parts(plain) == [] and F.telegram_entities(plain) == [], plain
+    # ⚠️ NO EMPTY LINE BEFORE "Status:" (owner, 2026-10-25), and a message sent before (with one) still reads
+    for text in ("Pump\nStatus:\nrunning", "Pump\n\nStatus:\nrunning"):
+        assert [e["type"] for e in F.telegram_entities(text)] == ["blockquote", "italic"], text
 
 
 def test_a_long_report_goes_as_whole_messages_none_lost(tmp_path):

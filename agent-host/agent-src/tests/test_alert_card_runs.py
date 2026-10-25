@@ -65,7 +65,7 @@ def card(v, chat) -> str:
 
 
 def status_lines(text: str) -> list[str]:
-    return text.split("\n\nStatus:\n", 1)[1].split("\n")
+    return text.split("\nStatus:\n", 1)[1].split("\n")
 
 
 def test_to_follows_the_priority_never_the_chat_the_rule_posts_in(agent):

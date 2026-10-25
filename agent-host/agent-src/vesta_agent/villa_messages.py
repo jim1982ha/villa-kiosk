@@ -3,7 +3,8 @@
     🔔 Visitor at Parking Doorbell            ← the villa's automation sends it at once, in English, in the VESTA layout
     To: Owner & FM                              (its own Telegram send: nothing waits on the agent)
     Someone is at the door.
-    Status: ⚠️ New alert
+    Status:
+    ⚠️ New alert
                                              ← then fires vesta_message with the same words, in the same run
     🔔 Pengunjung di Bel Pintu Parkir         ← the agent draws that message again in the chat's language (People),
     …                                           from the translations kept (translation.Translations.lines), or once the
@@ -33,7 +34,7 @@ import logging
 import re
 
 from vesta_shared import status_words
-from vesta_shared.message_format import STATUS, TO, document
+from vesta_shared.message_format import TO, document, status_head
 
 log = logging.getLogger("vesta.villa_messages")
 
@@ -147,6 +148,6 @@ def shape(message) -> tuple[str, str, list[str], list[str]]:
     if not to.startswith(TO.strip()):
         return "", "", [], []
     title, to = title.strip(), to[len(TO.strip()):].strip()
-    body, _, status = rest.partition(f"\n{STATUS}:\n") if f"\n{STATUS}:\n" in rest else (rest, "", "")
+    body, _, status = rest.partition(status_head()) if status_head() in rest else (rest, "", "")
     return (title, to, [x for x in body.strip("\n").split("\n") if x.strip()],
             [x for x in status.strip("\n").split("\n") if x.strip()])
