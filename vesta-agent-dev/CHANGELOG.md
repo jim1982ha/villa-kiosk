@@ -1,3 +1,13 @@
+## 0.12.358
+
+What you will see:
+- A pump's or a meter's use is compared with earlier days in the same state: days with guests with days with guests,
+  an empty villa with empty days. Guests arriving is no longer a fault ("House Pump used 2.73 kWh/day … against a
+  normal 0.14", a quiet month); a fault says which normal it used ("… against a normal 0.14 kWh/day when the villa is
+  empty"). Until there are a few such days, only what guests cannot explain is said: using less while occupied, more
+  while empty (a leak in an empty villa). The energy report's "versus its usual level" follows the same rule.
+- Without the villa's "empty" helper, or on a day it did not report, everything is compared as before.
+
 ## 0.12.357
 
 What you will see:
