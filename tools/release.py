@@ -71,6 +71,11 @@ GATES: list[tuple[str, list[str]]] = [
     ("A mutation run always gives the file back", ["npm", "run", "test:mutate"]),
 ]
 
+# ⚠️ THE QUICK CHECK FIRST (retro, 2026-10-25: three ships in one day each ran 5 to 8 min of gates, then stopped on an
+# oracle that still read the old wording; `oracles:changed` names it in seconds, and running it was left to memory).
+# `ship` runs it before anything is written; red, it stops there. The full gates still run after it.
+PRECHECK: tuple[str, list[str]] = ("The oracles naming what changed", ["npm", "run", "oracles:changed"])
+
 # Gates whose input is deliberately NOT in git: run where it exists, and SAID
 # when it does not — never a silent pass.
 LOCAL_GATES: list[tuple[str, list[str], str]] = [
@@ -85,6 +90,7 @@ class GateResult:
     status: str            # "pass" | "FAIL" | "not here"
     seconds: float = 0.0
     note: str = ""
+    lines: tuple[str, ...] = ()   # a red gate's own failing lines, said in the summary (_failure_lines)
 
 
 def run_gates(only_ci: bool = IN_CI, root: Path | None = None) -> list[GateResult]:
@@ -99,26 +105,37 @@ def run_gates(only_ci: bool = IN_CI, root: Path | None = None) -> list[GateResul
         if need and not (root / need).exists():
             results.append(GateResult(name, "not here", note=f"{need} is not on this machine"))
             continue
-        if IN_CI:
-            print(f"::group::{name}", flush=True)
-        else:
-            print(f"\n═══ {name} ═══", flush=True)
-        start = time.monotonic()
-        proc = subprocess.run(cmd, cwd=root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-        out = proc.stdout or ""
-        sys.stdout.write(out)
-        took = time.monotonic() - start
-        if IN_CI:
-            print("::endgroup::", flush=True)
-        if proc.returncode == 0:
-            results.append(GateResult(name, "pass", took))
-        else:
-            results.append(GateResult(name, "FAIL", took, f"exit {proc.returncode}"))
-            if IN_CI:
-                # The job log needs a signed-in account; an annotation does not.
-                for line in _failure_lines(out):
-                    print(f"::error title={name}::{line}", flush=True)
+        results.append(run_gate(name, cmd, root))
     return results
+
+
+def run_gate(name: str, cmd: list[str], root: Path | None = None) -> GateResult:
+    """One gate, run in `root`. ⚠️ ITS OUTPUT ONLY WHEN IT FAILS, OFF CI (retro, 2026-10-25): a ship's log was 17,000
+    lines, most of them the release module's own self-test, whose passing cases print "❌ FAIL stub" and "PUBLISHED:
+    main is 1.0.3"; the one red oracle took three searches to find. CI keeps every gate's output in its group."""
+    root = root or ROOT
+    print(f"::group::{name}" if IN_CI else f"\n═══ {name} ═══", flush=True)
+    start = time.monotonic()
+    proc = subprocess.run(cmd, cwd=root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    out = proc.stdout or ""
+    if IN_CI or proc.returncode != 0:
+        sys.stdout.write(out)
+    took = time.monotonic() - start
+    if IN_CI:
+        print("::endgroup::", flush=True)
+    if proc.returncode == 0:
+        return GateResult(name, "pass", took)
+    lines = tuple(_failure_lines(out))
+    if IN_CI:
+        # The job log needs a signed-in account; an annotation does not.
+        for line in lines:
+            print(f"::error title={name}::{line}", flush=True)
+    return GateResult(name, "FAIL", took, f"exit {proc.returncode}", lines)
+
+
+def run_precheck() -> GateResult:
+    """The quick check `ship` runs before anything (PRECHECK)."""
+    return run_gate(*PRECHECK)
 
 
 def _failure_lines(out: str) -> list[str]:
@@ -133,6 +150,8 @@ def print_summary(results: list[GateResult]) -> bool:
         mark = {"pass": "✅", "FAIL": "❌", "not here": "⚪"}[r.status]
         extra = f"  {r.note}" if r.note else ""
         print(f"  {mark} {r.status:<8} {r.name}{f'  ({r.seconds:.0f} s)' if r.seconds else ''}{extra}")
+        for line in r.lines:                     # which check, here, not 17,000 lines up (retro, 2026-10-25)
+            print(f"        {line}")
     failed = [r for r in results if r.status == "FAIL"]
     print(f"── {len(failed)} failed of {len(results)}" if failed else "── all gates pass")
     return not failed
@@ -259,7 +278,7 @@ def ci_failures(sha: str, fetch=None) -> list[str] | None:
     return None if state == "unknown" else failed
 
 def ship(message: str | None, dry_run: bool, wait_minutes: float, poll_seconds: float,
-         gates=run_gates) -> int:
+         gates=run_gates, precheck=run_precheck) -> int:
     git("fetch", "-q", "origin", BRANCH, "main")
     if git("rev-parse", "--abbrev-ref", "HEAD").strip() == "main":
         raise ReleaseError("on main: this app releases from dev2 (main advances only by the owner's backport)")
@@ -300,11 +319,19 @@ def ship(message: str | None, dry_run: bool, wait_minutes: float, poll_seconds: 
     if untracked:
         print("  ⚠️ NOT staged, so NOT shipped (and invisible to the hard-rules scan): " + ", ".join(untracked))
     if dry_run:
-        print(f"  dry run: would write {version} to {PACKAGE}, {CONFIG}, {LOCKFILE}; run {len(GATES)} gates; "
+        print(f"  dry run: would run {PRECHECK[0].lower()}; write {version} to {PACKAGE}, {CONFIG}, {LOCKFILE}; "
+              f"run {len(GATES)} gates; "
               f"commit; push HEAD:{BRANCH}; wait ≤ {wait_minutes:g} min for main")
         return 0
     if not message:
         raise ReleaseError("a commit message is needed (-m or -F)")
+
+    # 0. The quick check: red, nothing is written (PRECHECK).
+    pre = precheck()
+    if pre.status == "FAIL":
+        print_summary([pre])
+        raise ReleaseError("the oracles naming what changed failed: nothing written, nothing committed. Fix, stage, "
+                           "and run ship again")
 
     # 1. The version, everywhere it is written.
     (ROOT / PACKAGE).write_text(with_package_version((ROOT / PACKAGE).read_text(), version))

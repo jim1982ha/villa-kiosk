@@ -20,7 +20,7 @@ contributor and every agent follows in this repository; `CLAUDE.md` holds the co
 - [Decided means decided](owner-rules.md#decided-means-decided) — approval means build it; objections BEFORE the work, never in a footnote
 - [Ship, don't ask](owner-rules.md#ship-dont-ask) — cause found: implement and ship; ask only for a real decision
 - [Time matters](owner-rules.md#time-matters) — bundle a release; measure only what a decision needs; say what was skipped
-- [One mechanism per job](owner-rules.md#one-mechanism-per-job) — one store, channel or input per job; merging designs never keeps both
+- [One mechanism per job](owner-rules.md#one-mechanism-per-job) — one store, channel or input per job; widen the existing one before adding; merging designs never keeps both
 - [Defined once](owner-rules.md#defined-once) — every list, value or text in one place; YAML anchors, shared modules
 - [Fix the shared piece](owner-rules.md#fix-the-shared-piece) — fix the shared component, never the misbehaving caller (DRY)
 - [No per-caller switch](owner-rules.md#no-per-caller-switch) — a shared window behaves the same from every entry point
