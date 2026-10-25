@@ -183,7 +183,9 @@ async function states(port: HistoryPort, id: string, window: { from: number; to:
   const points = (await port.stateRows(id, window.from, window.to, readBackFrom(kept, now)))
     // ⚠️ COERCED AT THE DOOR: Home Assistant sends a null `state` on a freshly
     // added entity's early rows, and every consumer believed the declared type.
-    .map((s) => ({ t: new Date(s.last_changed).getTime(), state: String(s.state ?? "") }))
+    // a row with no state (null or empty: the villa's system had none for it then) is nothing to show, never a state
+    // of its own — a camera's week drew it as a second green with no word in its legend (owner, 2026-10-25)
+    .map((s) => ({ t: new Date(s.last_changed).getTime(), state: s.state == null || s.state === "" ? NO_RECORD : String(s.state) }))
     .filter((p) => Number.isFinite(p.t));
   return keptBand(points, window, kept);
 }

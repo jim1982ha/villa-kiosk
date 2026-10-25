@@ -1,3 +1,9 @@
+## 2.496.531
+
+What you will see:
+- Every history chart: a stretch where the villa's system recorded no state at all now reads "No record yet", in its
+  own colour. A camera's week showed it as a second green with no name in the legend.
+
 ## 2.496.530
 
 What you will see:
