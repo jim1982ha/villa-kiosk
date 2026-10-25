@@ -1,3 +1,11 @@
+## 0.12.353
+
+What you will see:
+- A device is reported offline only when none of its parts answers. A camera whose stream, Wi-Fi signal or noise
+  sensor still reports is not offline because its event sensors (motion, person detection) wait for their next event
+  ("Tapo Server Room has been offline for 5d 13h" while it worked). Such a card already open closes at the next
+  check, saying the device answers.
+
 ## 0.12.352
 
 What you will see:
