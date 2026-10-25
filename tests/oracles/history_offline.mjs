@@ -76,6 +76,9 @@ const withNull = await statesOf([
 ], "sensor.fresh");
 eq("HA's null on a fresh entity is coerced at the door",
    withNull.every((p) => typeof p.state === "string"), true);
+// owner, 2026-10-25: a camera's week opened on a null row, drawn as a second green with no word in the legend
+const { NO_RECORD } = await import("@/utils/stateColors");
+eq("  ...as \"No record yet\", never a nameless state of its own", withNull.map((p) => p.state), [NO_RECORD, "on"]);
 
 console.log("\n  and each stretch is painted for what it is (owner, 2026-10-19):");
 // ⚠️ AN UNKNOWN STRETCH WAS PAINTED "CONTACT LOST" (to 2.496.427). "unknown" also survives the fetch, and the bar
