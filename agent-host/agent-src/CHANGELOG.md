@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.344 (25 October 2026)
+
+- Problems.confirms_by: every closed fault's watch, whoever closed it — an incident: closed_at + Notes.WATCH_MINUTES
+  (and while check_quiet waits); a finding: the night check's next run (Tickets._next_night, scheduler.next_slot, the
+  app's nightly_at). desk.watch_minutes = max(clear_minutes, reopen_hours); carried at every watched close (_close
+  `watch`; none takes it away: rule_gone). agent-contract.json confirmsBy text: every close.
+
 ## 0.6.343 (25 October 2026)
 
 - message_format.STATUS_BREAK / status_head: the one break before the Status label ("\n", no empty line), used by

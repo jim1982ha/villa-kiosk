@@ -79,6 +79,22 @@ def slot_for(spec: str, now: datetime) -> datetime | None:
     return slot
 
 
+def next_slot(spec: str, after: datetime) -> datetime | None:
+    """The first slot `spec` names after `after` (a villa-time moment): "07:00" daily, "Mon 08:00", "1 08:00" — the
+    grammar slot_for reads. A fault the night check closed is watched until its next run (Problems.confirms_by)."""
+    parts = spec.split()
+    h, m = map(int, parts[-1].split(":"))
+    for d in range(32):
+        slot = (after + timedelta(days=d)).replace(hour=h, minute=m, second=0, microsecond=0)
+        if slot <= after:
+            continue
+        cond = parts[0] if len(parts) == 2 else None
+        if cond and (slot.day != int(cond) if cond.isdigit() else slot.strftime("%a") != cond):
+            continue
+        return slot
+    return None
+
+
 DAYS = {"Mon": "Monday", "Tue": "Tuesday", "Wed": "Wednesday", "Thu": "Thursday", "Fri": "Friday",
         "Sat": "Saturday", "Sun": "Sunday"}
 

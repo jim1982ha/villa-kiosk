@@ -21,6 +21,8 @@ as fields. (Tasks written before 0.6.16 had neither: the store rewrites them onc
 from __future__ import annotations
 
 import json
+from datetime import datetime
+from typing import Callable
 
 from . import agreement, result
 from .limits import limit
@@ -557,14 +559,16 @@ class Problems:
     # it failed (the Kiosk down a minute), the repair later guessed with what it had left — a Done pressed by Fabien became
     # "Closed by VESTA Agent — Closed: the problem is over.", and no repair in Recent work. Every fact a fault's card
     # shows is here, from the task and its problem, and tickets.repair makes the Kiosk say it.
-    def card(self, task: dict, rechecked: frozenset[str] | set[str] = frozenset()) -> dict:
+    def card(self, task: dict, rechecked: frozenset[str] | set[str] = frozenset(),
+             next_night: Callable[[datetime], datetime | None] | None = None) -> dict:
         """What task `task`'s Kiosk fault must say: {open, title (what is wrong now), number (its alert's "#N", or None),
         origin ("alert" | "night", or None), check (how it is read again to close it: "minutes" — an alert, at the desk's
         every look, or a finding of a rule in `rechecked` (the skills' `rechecks`; "*": every rule) — "nightly" — any
         other finding — or None),
         note and who (its close: what it says, the person who closed it — None: the agent's own clearing),
-        reopen_note (what its reopening says — None: it was never reopened by its problem), confirms_by (when the alert
-        desk reads again the problem a person closed it about — an ISO moment, or None: confirms_by),
+        reopen_note (what its reopening says — None: it was never reopened by its problem), confirms_by (until when its
+        closed fault is watched — an ISO moment, or None: confirms_by; `next_night`: the night check's next run after a
+        moment, the engine's schedule),
         todo (what to do on site, as its problem's source says it NOW: check_of — the fault's note follows it; "" when
         nothing says; not `check`, which is the recheck cadence), closes_at (when the alert desk closes it if what it
         reported stays over — an ISO moment, or None)}.
@@ -583,7 +587,7 @@ class Problems:
         # when the desk closes it if it stays over (Notes.CLOSES_AT, owner 2026-10-21): the card's "closes at about"
         closes = notes_of(self.store.incident(sid)).get(Notes.CLOSES_AT) if kind == "incident" else None
         return {"open": task.get("status") == "open", "title": title, "closes_at": closes or None,
-                "confirms_by": self.confirms_by(task),
+                "confirms_by": self.confirms_by(task, next_night),
                 "pattern": pattern, "since": d.get("since") if pattern else None,
                 "number": sid if kind == "incident" else None,
                 # where it came from, the Kiosk card's source icon (owner, 2026-10-14): an alert or the night check
@@ -598,26 +602,45 @@ class Problems:
     # ⚠️ A PERSON'S CLOSE IS WATCHED, AND THE COCKPIT SAYS SO (owner, 2026-10-23: "keep the Fault card visible in the
     # Cockpit when a fault is still being monitored … until VESTA finally closes it"): a Done, or a Close in the Cockpit,
     # resolved the Kiosk fault at once while the alert desk still read it again after its wait (quiet_after_done).
-    def confirms_by(self, task: dict) -> str | None:
-        """When the alert desk reads again the problem a person closed `task` about — its incident's close plus the desk's
-        watch (Notes.WATCH_MINUTES, carried by the desk) while the desk's `check_quiet` waits: the Kiosk fault's
-        `confirmsBy`. None for anything else: a task open, the agent's own clearing, a finding, a watch over (the desk
-        took its check_quiet: right, can't tell, or reopened), an older task of the same problem, a desk that never
-        said how long."""
-        from datetime import timedelta
+    # ⚠️ EVERY CLOSE ALIKE (owner, 2026-10-25: "it shall consistently exist for all cleared faults … all potential
+    # cases"): an alert the villa or the desk cleared, with "Watch 1h" on Telegram, left the Cockpit at once, and so did
+    # a night-check fault. The same field and the same card say each close's watch.
+    def confirms_by(self, task: dict, next_night: Callable[[datetime], datetime | None] | None = None,
+                    now: datetime | None = None) -> str | None:
+        """Until when the closed fault of `task` is watched — back within it, it reopens as the same problem: the Kiosk
+        fault's `confirmsBy`. An alert's: its close plus the desk's watch (Notes.WATCH_MINUTES, carried by the desk:
+        desk.watch_minutes), and while the desk's read-again after a person's close (`check_quiet`) waits, until it is
+        read. A night-check finding's: the night check's next run after its close (`next_night`), the read that would
+        see it back (owner, 2026-10-25). None for a task open, an older task of the same problem, a close nothing
+        watches (no watch carried, no night schedule), or a watch over."""
+        from datetime import timedelta, timezone
         kind, sid = self._source(task)
-        if kind != "incident" or task.get("status") not in (DONE, CLOSED_IN_KIOSK):
+        if task.get("status") not in STATUSES:
             return None
         last = self.store.last_task(str(task.get("source")))
-        inc = self.store.incident(sid)
-        p = notes_of(inc)
-        closed, watch = _moment((inc or {}).get("closed_at")), p.get(Notes.WATCH_MINUTES)
-        if not (last and last["id"] == task.get("id") and closed and p.get("check_quiet") and watch is not None):
+        if not (last and last["id"] == task.get("id")):
             return None
-        try:
-            return (closed + timedelta(minutes=float(watch))).isoformat()
-        except (TypeError, ValueError):
+        now = now or datetime.now(timezone.utc)
+        pending = False
+        if kind == "incident":
+            inc = self.store.incident(sid)
+            p = notes_of(inc)
+            closed, watch = _moment((inc or {}).get("closed_at")), p.get(Notes.WATCH_MINUTES)
+            if not closed or watch is None:
+                return None
+            try:
+                until = closed + timedelta(minutes=float(watch))
+            except (TypeError, ValueError):
+                return None
+            pending = bool(p.get("check_quiet"))
+        elif kind == "finding":
+            closed = _moment(task.get("done_at"))
+            until = next_night(closed) if closed and next_night else None
+            if until is None:
+                return None
+        else:
             return None
+        return until.isoformat() if now < until or pending else None
 
     def unseen(self) -> list[dict]:
         """Open findings that should be a fault and are not — wants_open with no open task. settle_all leaves none;

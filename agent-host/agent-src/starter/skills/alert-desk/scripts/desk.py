@@ -316,14 +316,25 @@ def carry_to(store: Store, iid: int, sev: str, p: dict | None = None) -> list[st
     return to
 
 
-def carry_watch(store: Store, iid: int, clear_minutes: float, p: dict | None = None) -> float:
-    """How long the desk watches incident `iid` after a person's close (its clear_minutes), written on it
-    (store.Notes.WATCH_MINUTES) for the engine: the Kiosk fault a person closed says when it is confirmed (Problems.card
-    `confirms_by`, owner 2026-10-23) — as the desk carries the check, so the engine never reads this skill's settings.
-    Written only when it changed; returns it. `p`: the notes as already read."""
-    if (p if p is not None else notes_of(store.incident(iid))).get(Notes.WATCH_MINUTES) != clear_minutes:
-        store.note(iid, {Notes.WATCH_MINUTES: clear_minutes})
-    return clear_minutes
+def watch_minutes(clear_minutes: float, hours: float) -> float:
+    """How long the desk watches an alert after its close, WHOEVER CLOSED IT: the longer of its read-again wait after a
+    person's close (clear_minutes) and the time it reopens under its own number (`hours`, reopen_hours) — the "Watch 1h"
+    its closing line says.
+
+    ⚠️ EVERY CLOSE IS WATCHED ALIKE (owner, 2026-10-25: "it shall consistently exist for all cleared faults"): only a
+    Done or a Cockpit Close kept its fault on the Cockpit as being confirmed; an alert the villa or the desk cleared went
+    at once, while its Telegram line said "Watch 1h"."""
+    return max(float(clear_minutes or 0), float(hours or 0) * 60)
+
+
+def carry_watch(store: Store, iid: int, minutes: float, p: dict | None = None) -> float:
+    """How long the desk watches incident `iid` after its close (watch_minutes), written on it (store.Notes.WATCH_MINUTES)
+    for the engine: its closed Kiosk fault says until when it is watched (Problems.card `confirms_by`, owner 2026-10-23,
+    every close 2026-10-25) — as the desk carries the check, so the engine never reads this skill's settings. Written
+    only when it changed; returns it. `p`: the notes as already read."""
+    if (p if p is not None else notes_of(store.incident(iid))).get(Notes.WATCH_MINUTES) != minutes:
+        store.note(iid, {Notes.WATCH_MINUTES: minutes})
+    return minutes
 
 
 def about(inc: dict, status: str) -> dict:
@@ -680,7 +691,7 @@ def resolved(store: Store, ev: dict, now: datetime, params: VillaParams | None =
                                                **about(late, watched(ended(), reopen_hours(params))))]
         return out
     over = watched(ended(), reopen_hours(params))
-    _close(store, inc, now, out, over)
+    _close(store, inc, now, out, over, watch=watch_minutes(_params(params).behaviour("clear_minutes"), reopen_hours(params)))
     out["incident_id"], out["decision"] = inc["id"], "resolved"
     # Home Assistant's all-clear takes the incident's number and the original alert, and replaces its older ones
     # its status in the desk's words, as every other end says it (never "✅ <the alert's name> — resolved after …")
@@ -694,14 +705,21 @@ def resolved(store: Store, ev: dict, now: datetime, params: VillaParams | None =
 
 
 def _close(store: Store, inc: dict, now: datetime, out: dict, settled: str,
-           note: str = "Cleared: back to normal.") -> None:
+           note: str = "Cleared: back to normal.", watch: float | None = None) -> None:
     """An incident that is over: closed with its task and its Kiosk fault (`note`: what the fault says), its messages in
     every chat lose their buttons and say `settled`; the facility manager, when still chased, is told the same — ONE
     wording per end (owner, 2026-10-11: the group read "Cleared in Home Assistant on …" and the
     facility manager "Closed: Home Assistant reports it cleared on … No reply needed." for the same end).
 
     `settled` is message_format.closing — "Cleared on {time}." with what the end adds after a colon — the words the
-    villa's own all-clear says too (owner, 2026-10-19: one closing wording; "Closed on …" is no longer written)."""
+    villa's own all-clear says too (owner, 2026-10-19: one closing wording; "Closed on …" is no longer written).
+
+    `watch`: how long it is watched after this close (watch_minutes), carried for its Kiosk fault; None — an end that
+    cannot come back (its automation gone) — takes any watch away."""
+    if watch:
+        carry_watch(store, inc["id"], watch)
+    else:
+        store.note(inc["id"], drop=(Notes.WATCH_MINUTES,))
     out["actions"] += Problems(store).close_incident(inc["id"], Incident.RESOLVED, now.isoformat(), note)
     # its alert and reminders, in every chat, lose their buttons: nobody presses for something already over
     out.setdefault("settle", []).append(R.settle(inc["id"], settled,
@@ -800,10 +818,10 @@ def quiet_after_done(store: Store, now: datetime, client, clear_minutes: float, 
         if '"check_quiet"' not in (inc.get("payload") or ""):
             continue                                                       # most are not waiting for it: not read
         p = notes_of(inc)
-        if inc.get("closed_at") and p.get("check_quiet") and p.get(Notes.WATCH_MINUTES) != clear_minutes:
+        if inc.get("closed_at") and p.get("check_quiet") and p.get(Notes.WATCH_MINUTES) != watch_minutes(clear_minutes, watch_hours):
             # watched without its length (closed before a tick carried it, or the wait edited since): its Kiosk fault
             # learns when it is confirmed (Problems.card confirms_by)
-            carry_watch(store, inc["id"], clear_minutes, p)
+            carry_watch(store, inc["id"], watch_minutes(clear_minutes, watch_hours), p)
             _faults_follow(out)
         if not (inc.get("closed_at") and p.get("check_quiet")) or \
                 now - datetime.fromisoformat(inc["closed_at"]) < timedelta(minutes=clear_minutes):
@@ -896,7 +914,8 @@ def seen_again(store: Store, now: datetime, client, clear_minutes: float, out: d
             said = joined([say("is_now", name=(now_states[e].get("attributes") or {}).get("friendly_name") or e,
                                    state=now_states[e]["state"]) for e in ents])
         _close(store, store.incident(inc["id"]), now, out, watched(ended(said), watch_hours),
-               note="Cleared: back to normal, read again by the VESTA Agent.")
+               note="Cleared: back to normal, read again by the VESTA Agent.",
+               watch=watch_minutes(clear_minutes, watch_hours))
         store.audit("alert-desk", "seen_again", {"incident": inc["id"], "now": str(said)})
         closed.append(inc["id"])
     return closed
@@ -1014,7 +1033,8 @@ def abandoned(store: Store, ev: dict, now: datetime, params: VillaParams | None 
     out["incident_id"] = inc["id"]
     if str(ev.get("still_true")).lower() == "false":
         cleared = watched(ended(say("stopped_watching")), reopen_hours(params))
-        _close(store, inc, now, out, cleared)
+        _close(store, inc, now, out, cleared,
+               watch=watch_minutes(_params(params).behaviour("clear_minutes"), reopen_hours(params)))
         out["decision"] = "abandoned_cleared"
         # ⚠️ ITS OWN MESSAGE SAYS THE SAME END (architecture review 23): taken over with the rule's "🔶 no longer
         # tracked" as its status, Home Assistant's "✅ cleared just inside the limit" became an orange warning
@@ -1100,7 +1120,8 @@ def reply(store: Store, iid: int, option: str, sender_role: str, now: datetime, 
         # read again whatever the rule: still bad, it reopens; not knowable, the people asked are told (still_there)
         checks = judged(inc)
         # …and how long, for its Kiosk fault's "VESTA confirms by …" (carry_watch: the desk's wait, never the engine's)
-        store.note(iid, {"check_quiet": f"{label} ({who})", Notes.WATCH_MINUTES: _params(params).behaviour("clear_minutes")})
+        store.note(iid, {"check_quiet": f"{label} ({who})",
+                         Notes.WATCH_MINUTES: watch_minutes(_params(params).behaviour("clear_minutes"), reopen_hours(params))})
         # how long VESTA watches it is the desk's own setting (clear_minutes), said as every duration (owner, 2026-10-19:
         # "✅ Done on 19/10/2026 02:10 (JM), VESTA will monitor it for …")
         monitoring = say("will_monitor", pressed=act, watch=lasting_in(_params(params).behaviour("clear_minutes") * 60))
@@ -1147,7 +1168,7 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
         # the digest follow within a tick, as Telegram's next message does
         carry_check(store, inc["id"], route_for(inc["rule_id"], p.get(Notes.BLUEPRINT)), p)
         carry_to(store, inc["id"], inc["severity"], p)     # an incident of an older desk gets it at the next tick
-        carry_watch(store, inc["id"], params.behaviour("clear_minutes"), p)   # a close in the Cockpit knows it at once
+        carry_watch(store, inc["id"], watch_minutes(params.behaviour("clear_minutes"), reopen_hours(params)), p)   # a close in the Cockpit knows it at once
         said = store.take_note(inc["id"], Notes.KIOSK_REOPENED, assignee=CHASE["asks"]) \
             if p.get(Notes.KIOSK_REOPENED) else None
         if said:

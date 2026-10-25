@@ -179,7 +179,8 @@ class Vesta:
         self.tickets = Tickets(kiosk=self.kiosk, state=self.state, store_path=settings.store_path,
                                settle_alert=self.thread.close, timezone=settings.timezone,
                                story=lambda iid: self.notices.story(iid), restate_alert=self._alert_taken,
-                               rechecked=lambda: {r for sk in self.skills.all().values() for r in sk.rechecks})
+                               rechecked=lambda: {r for sk in self.skills.all().values() for r in sk.rechecks},
+                               nightly_at=self.nightly_at)
         # a fault offered in a chat, start to end (fault_offers.py, review 32)
         self.requests = Requests(self.state, self.skills)   # a command skill's request, its turns (command_request.py)
         self.fault_offers = FaultOffers(self.state, self.delivery, self.tickets,
@@ -941,14 +942,19 @@ class Vesta:
                                             reached="The rest of the output is not shown on the page.")],
                 "error": ans.error}
 
+    def nightly_at(self) -> str | None:
+        """When the job a skill marks `kiosk: nightly_check` runs ("02:00"), None without one: the Kiosk's Next check
+        (kiosk_cadence) and how long a fault the night check closed is watched (Tickets._next_night)."""
+        return next((j["when"] for sk in self.skills.all().values() for j in sk.schedule
+                     if j.get("kiosk") == "nightly_check"), None)
+
     def kiosk_cadence(self) -> dict | None:
         """This agent's timing for the Kiosk's heartbeat (agent-contract.json `heartbeat.cadence`): how often its code
         jobs look (the scheduler's tick) and when the job a skill marks `kiosk: nightly_check` runs — read at each beat,
         so a changed schedule or a skill switched off shows at the next one; `lastLookAt`, when that tick last started
         (the card's Next check counts from it). None without a nightly job: the Kiosk then says no number rather
         than a wrong one."""
-        skills = self.skills.all().values()
-        nightly = next((j["when"] for sk in skills for j in sk.schedule if j.get("kiosk") == "nightly_check"), None)
+        nightly = self.nightly_at()
         if not nightly:
             return None
         look = getattr(getattr(self, "scheduler", None), "last_look", None)
