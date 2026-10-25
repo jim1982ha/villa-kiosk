@@ -18,6 +18,10 @@
 // (its clicks reach the same handlers), the Back/Escape stack is
 // useModalA11y's, and a dialog opened later is appended later, so it stands
 // over the one that opened it.
+//
+// ⚠️ EXCEPT IN FULL SCREEN, where only the full-screen box is drawn: a camera
+// in full screen asking "Sound the siren?" into the shell would ask where
+// nobody can see it, and wait. Then the dialog goes into that box.
 
 import type { CSSProperties, MouseEventHandler, ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -26,6 +30,11 @@ import { createPortal } from "react-dom";
  *  on iOS the page's own height can be stale, the shell's is corrected. */
 const HOST = ".app-root";
 
+function host(): Element | null {
+  if (typeof document === "undefined") return null;
+  return document.fullscreenElement ?? document.querySelector(HOST);
+}
+
 export default function DialogLayer({ className, onClick, style, children }: {
   className: string;
   onClick?: MouseEventHandler<HTMLDivElement>;
@@ -33,6 +42,6 @@ export default function DialogLayer({ className, onClick, style, children }: {
   children: ReactNode;
 }) {
   const backdrop = <div className={className} onClick={onClick} style={style}>{children}</div>;
-  const host = typeof document !== "undefined" ? document.querySelector(HOST) : null;
-  return host ? createPortal(backdrop, host) : backdrop;
+  const into = host();
+  return into ? createPortal(backdrop, into) : backdrop;
 }
