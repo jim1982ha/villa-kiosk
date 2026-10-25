@@ -1,3 +1,10 @@
+## 2.496.534
+
+What you will see:
+- Cockpit: every closed fault stays at the bottom of Open issues in the dimmed "being confirmed" style while VESTA still
+  watches it, whoever closed it. An alert that cleared by itself (its Telegram line ends "Watch 1h") reads "Cleared ·
+  VESTA confirms by 16:21"; a night-check fault stays until the next night check. Needs VESTA Agent 0.12.355.
+
 ## 2.496.533
 
 What you will see:
