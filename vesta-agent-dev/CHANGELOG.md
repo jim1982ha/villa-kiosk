@@ -1,3 +1,10 @@
+## 0.12.355
+
+What you will see:
+- Cockpit: every closed fault stays as "being confirmed" while VESTA still watches it, not only one a person closed.
+  An alert that clears by itself is watched for its "Watch 1h" (the time a return reopens it under the same number);
+  a night-check fault until the next night check. Shown by VESTA Kiosk 2.496.534.
+
 ## 0.12.354
 
 What you will see:
