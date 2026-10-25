@@ -1,3 +1,13 @@
+## 0.12.356
+
+What you will see:
+- Telegram: an alert that clears is titled "(watch)" while it can still come back as the same alert (its "Watch 1h").
+  When the watch ends, every copy is updated once more: the "Cleared on … Watch 1h." line moves up into the Status,
+  a last line says "✅ Closed on 25/10/2026 19:54: it did not come back within 1h.", the title reads "(closed)" and the
+  alert's text is struck through. The time is the moment the watch ended, the time its Cockpit card said "VESTA
+  confirms by", when the card leaves the Watched list.
+- An alert closed earlier today whose watch already ended gets its last update at the Agent's next look.
+
 ## 0.12.355
 
 What you will see:
