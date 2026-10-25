@@ -1,10 +1,9 @@
 // src/components/settings/CentralModelInfo.tsx
-// The (i) hover/focus tooltip carrying the full central-model details (path,
-// size, mesh count, SHA-256, source, latest plan) — in Advanced Settings'
-// footer, beside "Upload model" (ConfigEditorModal, owner 2026-10-24), for the
-// profile that may upload a model only.
+// The central model's details (path, size, mesh count, SHA-256, source, latest
+// plan), the "Upload Model" part of the one (i) in Advanced Settings' header
+// (ConfigEditorModal's HeaderActions, owner 2026-10-25), for the profile that
+// may upload a model only.
 
-import InfoTip from "@/components/common/InfoTip";
 import type { getLoadedModelInfo } from "@/utils/modelInfo";
 import type { AddonConfig } from "@/utils/centralModel";
 import { stampText } from "@/utils/dateText";
@@ -12,19 +11,24 @@ import { stampText } from "@/utils/dateText";
 export default function CentralModelInfo({
   addonCfg, loadedModel,
 }: {
-  addonCfg: AddonConfig;
+  addonCfg: AddonConfig | null;
   loadedModel: ReturnType<typeof getLoadedModelInfo>;
 }) {
+  // the details only once a model is set up; the words below always
+  const cfg = addonCfg?.model_path ? addonCfg : null;
   return (
-    <InfoTip label="Model details">
+    <>
+      <strong>Upload Model</strong>
+      {cfg && (
+        <>
           <div className="row">
             <span>Latest SH3D plan</span>
             <span>
-              {addonCfg.rooms_upload?.original_name ? (
+              {cfg.rooms_upload?.original_name ? (
                 <>
-                  <code>{addonCfg.rooms_upload.original_name}</code>
-                  {addonCfg.rooms_upload.uploaded_at &&
-                    ` · ${stampText(addonCfg.rooms_upload.uploaded_at)}`}
+                  <code>{cfg.rooms_upload.original_name}</code>
+                  {cfg.rooms_upload.uploaded_at &&
+                    ` · ${stampText(cfg.rooms_upload.uploaded_at)}`}
                 </>
               ) : "—"}
             </span>
@@ -38,9 +42,9 @@ export default function CentralModelInfo({
           <div className="row">
             <span>GLB</span>
             <span style={{ wordBreak: "break-word", textAlign: "right" }}>
-              <code>{addonCfg.model_upload?.original_name || addonCfg.model_path}</code>
-              {addonCfg.model_upload?.uploaded_at &&
-                ` · ${stampText(addonCfg.model_upload.uploaded_at)}`}
+              <code>{cfg.model_upload?.original_name || cfg.model_path}</code>
+              {cfg.model_upload?.uploaded_at &&
+                ` · ${stampText(cfg.model_upload.uploaded_at)}`}
             </span>
           </div>
           {loadedModel && (
@@ -61,17 +65,19 @@ export default function CentralModelInfo({
               <div className="row"><span>From</span><span><code>{loadedModel.url}</code></span></div>
             </>
           )}
+        </>
+      )}
           {/* ⚠️ NO PLACE THAT IS NOT THERE (review L, owner 2026-10-25): it said "the GLB button in the top bar", gone
-              since the upload moved to this footer (2.496.516); a second text for a profile that cannot upload was
-              never drawn (this tip is only beside "Upload model") */}
+              since the upload left the top bar (2.496.516); a second text for a profile that cannot upload was
+              never drawn (this part is only shown with "Upload Model") */}
           <div style={{ marginTop: 8, color: "var(--text-dim)" }}>
             Stored in the add-on's own <code>/data</code> volume (on disk as <code>villa.glb</code>)
             and served to every client from there, an upload overwrites it, so re-uploading a new
             file replaces the villa for everyone (the name above is the file it came from). The
             room-data sidecar (<code>.rooms.json</code>, emitted next to the GLB by the Blender
-            pipeline) lives alongside it. Upload both with Upload model, here beside this (i); there's no
+            pipeline) lives alongside it. Upload both with Upload Model, beside this (i); there's no
             path to configure.
           </div>
-    </InfoTip>
+    </>
   );
 }

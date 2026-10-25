@@ -915,7 +915,7 @@ export default function BabylonCanvas({
           hint={<span style={{ whiteSpace: "pre-line" }}>{errorMsg}</span>}
           detail={report}
           actions={!addonError && canManageModel
-            ? <button className="btn ghost" onClick={() => cbRef.current.onNeedModel()}>Upload model</button>
+            ? <button className="btn ghost" onClick={() => cbRef.current.onNeedModel()}>Upload Model</button>
             : undefined}
         />
       )}
