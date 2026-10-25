@@ -10,8 +10,13 @@
 // open fault again as ever). This app only displays it, and never for longer than that moment plus two of the Agent's
 // looks (its heartbeat cadence) — or that moment alone while the Agent is offline (no cadence): a watch nobody ends
 // never stays on the screen. A fault without the field (an older Agent, a fault nobody watches) is resolved as before.
+//
+// ⚠️ EVERY CLOSE ALIKE (owner, 2026-10-25: "it shall consistently exist for all cleared faults"): the Agent now writes
+// the field on every fault it watches after a close, whoever closed it: an alert the villa or the Agent cleared ("Watch
+// 1h" on Telegram, its reopen window) and a night-check fault (until the next night check). This file did not change
+// its rule for that, only its word for the Agent's own clearing: "Cleared".
 
-import type { AgentCadence } from "@/agent/agentApi";
+import { AGENT_STAMP, type AgentCadence } from "@/agent/agentApi";
 import { clockTime } from "@/utils/dateText";
 import { fmtDuration } from "@/components/panels/chartUtils";
 import { isClearedStep, isTicketResolved, lastResolution } from "./fmEngine";
@@ -23,9 +28,11 @@ export const CONFIRM_GRACE_LOOKS = 2;
 
 export interface ConfirmingFault {
   ticket: FmTicket;
-  /** What the person did: "Done" (a Done on Telegram, a repair recorded), "Closed" (the Cockpit's Close, nothing done). */
-  word: "Done" | "Closed";
-  /** Who did it — the person named on its close (`who`), else the profile that recorded it (`by`); "" when unsaid. */
+  /** How it closed: "Done" (a Done on Telegram, a repair recorded), "Closed" (the Cockpit's Close, nothing done),
+   *  "Cleared" (the VESTA Agent's own clearing: what it reported is over). */
+  word: "Done" | "Closed" | "Cleared";
+  /** Who did it — the person named on its close (`who`), else the profile that recorded it (`by`); "" when unsaid or
+   *  the Agent's own clearing. */
   who: string;
   /** When the VESTA Agent reads it again (confirmsBy), in ms. */
   at: number;
@@ -48,10 +55,11 @@ export function confirmingOf(t: FmTicket, cadence: AgentCadence | null, now: num
   const at = Date.parse(t.confirmsBy);
   if (Number.isNaN(at) || now > shownUntil(at, cadence)) return null;
   const close = lastResolution(t);
+  const agents = !!close && isClearedStep(close) && !close.who && close.by === AGENT_STAMP;
   return {
     ticket: t,
-    word: close && isClearedStep(close) ? "Closed" : "Done",
-    who: close?.who || close?.by || "",
+    word: agents ? "Cleared" : close && isClearedStep(close) ? "Closed" : "Done",
+    who: agents ? "" : close?.who || close?.by || "",
     at,
     due: now >= at,
     lookMinutes: cadence && cadence.checkMinutes > 0 ? cadence.checkMinutes : null,

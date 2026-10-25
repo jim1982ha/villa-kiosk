@@ -56,6 +56,15 @@ ck("  ...its line: \"Done (JM) · VESTA confirms by 15:06\" (the villa's clock)"
    line("w1"));
 ck("  ...a close in the Cockpit says Closed and the profile", line("w2") === `Closed (Owner) · VESTA confirms by ${clockTime(NOW + 9 * 60_000)}`,
    line("w2"));
+{
+  // ⚠️ EVERY CLOSE ALIKE (owner, 2026-10-25): an alert the VESTA Agent cleared itself is watched too, said "Cleared"
+  const { AGENT_STAMP } = await import("@/agent/agentApi");
+  const cleared = { ...closedIn("w6", "lock.porch", at(60)), updates: [opened,
+    { at: at(-1), status: "resolved", kind: "cleared", note: "Cleared: back to normal.", photoIds: [], by: AGENT_STAMP }] };
+  const c = confirmingFaults({ ...EMPTY_FM_DATA, tickets: [cleared] }, CADENCE, NOW);
+  ck("  ...an alert the VESTA Agent cleared itself says Cleared, no name", c.length === 1
+     && confirmLine(c[0]) === `Cleared · VESTA confirms by ${clockTime(NOW + 60 * 60_000)}`, c.map(confirmLine));
+}
 ck("  ...its moment past: at the Agent's next check, never a time gone by", line("w3") === "Done (JM) · VESTA confirms it at its next look",
    line("w3"));
 {
