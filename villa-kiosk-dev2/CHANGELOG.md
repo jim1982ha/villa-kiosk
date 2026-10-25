@@ -1,3 +1,12 @@
+## 2.496.529
+
+What you will see:
+- Villa presence chart: each step has its own clear colour, Someone home in red (as a detection on the map), Everyone
+  away in amber, Waiting for indoor quiet in teal, Empty in grey; no more shades of green.
+- Villa presence, "What decides it": the villa's presence sensor can list its own lines (two settings shown as one,
+  "Server room noise: 3 pulses in 5min"). Names drop the sensor's own name ("Away grace minutes", not "Villa empty -
+  away grace minutes"), in "Latest movement" too, and each (i) ends with the setting's full name in the villa's system.
+
 ## 2.496.528
 
 What you will see:
