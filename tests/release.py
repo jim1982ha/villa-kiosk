@@ -107,19 +107,36 @@ def fake_ci(origin_repo: Path, after: str, version: str, stop: threading.Event) 
         time.sleep(0.1)
 
 
-def run_ship(repo: Path, message="release", gates_ok=True, wait=0.2, dry=False):
+def run_ship(repo: Path, message="release", gates_ok=True, wait=0.2, dry=False, pre_ok=True):
     release.ROOT = repo
     calls = []
 
     def gates():
         calls.append(1)
         return [release.GateResult("stub", "pass" if gates_ok else "FAIL")]
+
+    def precheck():
+        calls.append("pre")
+        return release.GateResult("prestub", "pass" if pre_ok else "FAIL", lines=("FAIL  the stub's old wording",))
     try:
-        code = release.ship(message, dry, wait_minutes=wait, poll_seconds=0.05, gates=gates)
+        code = release.ship(message, dry, wait_minutes=wait, poll_seconds=0.05, gates=gates, precheck=precheck)
         return code, calls, ""
     except release.ReleaseError as e:
         return None, calls, str(e)
 
+
+print("\n  a gate's output, and its summary (retro, 2026-10-25):")
+import contextlib, io
+release.IN_CI = False
+with contextlib.redirect_stdout(io.StringIO()) as said:
+    ok = release.run_gate("quiet", [sys.executable, "-c", "print('passing noise')"], Path.cwd())
+    bad = release.run_gate("loud", [sys.executable, "-c", "print('    FAIL  the old wording'); raise SystemExit(1)"], Path.cwd())
+    release.print_summary([ok, bad])
+out = said.getvalue()
+ck("a passing gate's output is not printed off CI; a failing one's is", "passing noise" not in out
+   and out.count("FAIL  the old wording") == 2, out)
+ck("  ...and the summary names the failing check under its gate",
+   bad.lines == ("FAIL  the old wording",) and out.rstrip().splitlines()[-2].strip() == "FAIL  the old wording", out)
 
 print("\n  ship, in a throwaway repository:")
 with tempfile.TemporaryDirectory() as t:
@@ -151,6 +168,11 @@ with tempfile.TemporaryDirectory() as t:
     code, calls, err = run_ship(repo, dry=True)
     ck("a dry run changes nothing and runs no gate",
        code == 0 and not calls and json.loads((repo / "package.json").read_text())["version"] == "1.0.0", err)
+
+    code, calls, err = run_ship(repo, pre_ok=False)
+    ck("the quick check first (retro, 2026-10-25): red, it stops before any version is written or any gate runs",
+       code is None and "naming what changed" in err and calls == ["pre"]
+       and json.loads((repo / "package.json").read_text())["version"] == "1.0.0", (code, calls, err))
 
     code, calls, err = run_ship(repo, gates_ok=False)
     head = sh(repo, "git", "rev-parse", "HEAD")
@@ -187,7 +209,7 @@ with tempfile.TemporaryDirectory() as t:
     ci = threading.Thread(target=publish_when_pushed); ci.start()
     code, calls, err = run_ship(repo, message="second", wait=0.5)
     stop.set(); ci.join()
-    ck("published: exit 0 only once main's channel manifest names the version", code == 0 and calls, (code, err))
+    ck("published: exit 0 only once main's channel manifest names the version", code == 0 and 1 in calls, (code, err))
     code, calls, err = run_ship(repo)
     ck("run again after it published: \"already published\", exit 0, no gate run, nothing committed",
        code == 0 and not calls and sh(repo, "git", "log", "-1", "--format=%s").strip() == "second", (code, err))

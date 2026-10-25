@@ -1,3 +1,10 @@
+## 2.496.538
+
+What you will see:
+- Nothing on the tablet. For whoever releases: a release now runs the quick check of what changed first and stops in
+  seconds when it fails; a failed release names the failing check in its summary, and passing checks no longer fill
+  the log. The shared rules: before adding a new mechanism, widen the one that already does that job.
+
 ## 2.496.537
 
 What you will see:
