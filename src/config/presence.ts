@@ -69,13 +69,37 @@ export function presenceStateWords(state: string): { label: string; tone: Status
 }
 
 export interface PresencePerson { entityId: string; name: string; home: boolean; place: string; since: Since }
-export interface PresenceActivity { entityId: string; name: string; moving: boolean; at: Since }
+export interface PresenceActivity {
+  entityId: string; name: string; moving: boolean; at: Since;
+  /** Its name in full, as the villa's system gives it, for its (i) (fullNames). */
+  full: string;
+}
 export interface PresenceSetting {
-  entityId: string; name: string; value: string; unit: string;
-  /** Its value as the window says it: a time joined to its unit ("5min", "1h"), a count bare ("3"). */
+  /** The setting the row opens (its first). */
+  entityId: string;
+  /** Every setting the row stands for: one, or several the sensor shows as one line (its "settings" attribute). */
+  entityIds: string[];
+  name: string;
+  /** Its value as the window says it: a time joined to its unit ("5min", "1h"), a count bare ("3"), or the line the
+   *  sensor writes for several ("3 pulses in 5min"). */
   said: string;
-  /** What it does, with an example, as the sensor explains it (its "explain" attribute); "" when it does not. */
+  /** Its (i): what it does, with an example, as the sensor explains it, and the settings' names in full. */
   explain: string;
+}
+
+/** `full` without the name of what it belongs to (owner, 2026-10-25: "remove \"villa empty - \" from the labels"):
+ *  "Villa empty - away grace minutes" under the "Villa empty" sensor reads "Away grace minutes"; a name that does not
+ *  start with it, as it is. */
+export function shortName(full: string, owner: string): string {
+  const m = owner ? full.match(new RegExp(`^${owner.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*[-–:]\\s*`, "i")) : null;
+  const rest = m ? full.slice(m[0].length) : full;
+  return rest ? rest[0].toUpperCase() + rest.slice(1) : full;
+}
+
+/** The (i)'s last line: the names in full, as the villa's system gives them (owner, 2026-10-25: "mention the full name
+ *  of the used entity in the tooltip"). */
+export function fullNames(names: readonly string[]): string {
+  return names.length ? `In the villa's system: ${names.join(", ")}.` : "";
 }
 
 /** The steps the sensor goes through, as a stage sensor it names states them (owner, 2026-10-24: "show each stage in
@@ -113,14 +137,19 @@ export function presenceHeading(p: Presence, when: string, stages: PresenceStage
   return { label: stages.order[i][1], color: stageColor(stages, stages.now), when: sinceWords(stages.since) };
 }
 
-/** A stage's colour: the first (someone in) the map's occupied green, the last (empty) its grey, each step between
- *  them a mix that fades from one to the other in order; a state the sensor does not list: no contact's grey. */
+/** The colours of the steps between someone home and empty, in order: amber, then teal (the app's own). */
+const STAGE_STEPS = ["var(--status-warning)", STATUS_COLOR.transitional] as const;
+
+/** A stage's colour: the first (someone home) red, as a detection is on the map; the last (empty) grey; each step
+ *  between them one of STAGE_STEPS in order — never shades of one colour (owner, 2026-10-25: "the different levels of
+ *  green are not clear enough … when the villa is occupied, use the red \"active\" colour"); a state the sensor does
+ *  not list: no contact's grey. */
 export function stageColor(stages: PresenceStages, state: string): string {
   const i = stages.order.findIndex(([s]) => s === state), n = stages.order.length;
   if (i < 0) return STATUS_COLOR.unavailable;
-  if (i === 0 || n < 2) return STATUS_COLOR.active;
+  if (i === 0 || n < 2) return STATUS_COLOR.alert;
   if (i === n - 1) return STATUS_COLOR.idle;
-  return `color-mix(in srgb, ${STATUS_COLOR.active} ${Math.round(100 * (1 - i / (n - 1)))}%, ${STATUS_COLOR.idle})`;
+  return STAGE_STEPS[(i - 1) % STAGE_STEPS.length];
 }
 
 export interface PresenceWhy {
@@ -132,8 +161,9 @@ export interface PresenceWhy {
   lastActivity: PresenceActivity | null;
   /** It lists the sensors it watches. */
   listsSensors: boolean;
-  /** The numbers that decide it: the villa's number settings named after the sensor ("<its name>_…", one prefix per
-   *  feature — the owner's rule for every helper), so the panel finds them without naming any. */
+  /** The numbers that decide it: the lines the sensor lists (its "settings" attribute: a label, a value in words, an
+   *  explanation, the settings behind it — owner, 2026-10-25: two settings as one line), else the villa's number
+   *  settings named after the sensor ("<its name>_…", one prefix per feature), so the panel names none itself. */
   settings: PresenceSetting[];
   /** Its stages, when it names a sensor that states them ("stage_sensor"); null otherwise (the band then says
    *  Occupied / Empty, as before). */
@@ -175,23 +205,32 @@ export function presenceWhy(sensorId: string, entities: Readonly<Record<string, 
   // the latest by when its state really began; while that is read, by what the villa's system says
   const began = (e: HassEntity) => { const s = sinceOf(e.entity_id); return s && s !== "loading" ? s.at : Date.parse(e.last_changed ?? ""); };
   const latest = (moving.length ? moving : watched).sort((a, b) => began(b) - began(a))[0];
-  const explained = (attrs.explain && typeof attrs.explain === "object" ? attrs.explain : {}) as Record<string, unknown>;
+  const owner = nameOf(entities[sensorId] ?? ({ entity_id: sensorId, attributes: {} } as HassEntity));
+  const named = (id: string) => (entities[id] ? nameOf(entities[id]) : id);
   const stageId = typeof attrs.stage_sensor === "string" ? attrs.stage_sensor : "";
   const order = (Array.isArray(entities[stageId]?.attributes?.stages) ? entities[stageId].attributes.stages as unknown[] : [])
     .filter((x): x is [string, string] => Array.isArray(x) && typeof x[0] === "string" && typeof x[1] === "string")
     .map(([s, w]) => [s, w] as [string, string]);
   const prefix = sensorId.includes(".") ? `input_number.${sensorId.split(".")[1]}_` : null;
-  const settings = prefix ? all.filter((e) => e.entity_id.startsWith(prefix))
-    .map((e) => {
-      const unit = String(e.attributes?.unit_of_measurement ?? "");
-      const text = explained[e.entity_id];
-      return { entityId: e.entity_id, name: nameOf(e), value: e.state, unit, said: settingWords(e.state, unit),
-        explain: typeof text === "string" ? text : "" };
-    })
-    .sort((a, b) => a.name.localeCompare(b.name)) : [];
+  const said = (e: HassEntity) => settingWords(e.state, String(e.attributes?.unit_of_measurement ?? ""));
+  const stated = Array.isArray(attrs.settings) ? (attrs.settings as unknown[]) : null;
+  const settings: PresenceSetting[] = stated
+    ? stated.filter((r): r is Record<string, unknown> => !!r && typeof r === "object" && typeof (r as { label?: unknown }).label === "string")
+      .map((r) => {
+        const ids = listed(r.entities) ?? [];
+        const one = ids.length === 1 && entities[ids[0]];
+        return { entityId: ids[0] ?? "", entityIds: ids, name: String(r.label),
+          said: typeof r.value === "string" ? r.value : one ? said(one) : "",
+          explain: [typeof r.explain === "string" ? r.explain : "", fullNames(ids.map(named))].filter(Boolean).join("\n\n") };
+      })
+    : prefix ? all.filter((e) => e.entity_id.startsWith(prefix))
+      .map((e) => ({ entityId: e.entity_id, entityIds: [e.entity_id], name: shortName(nameOf(e), owner), said: said(e),
+        explain: fullNames([nameOf(e)]) }))
+      .sort((a, b) => a.name.localeCompare(b.name)) : [];
   return {
     people,
-    lastActivity: latest ? { entityId: latest.entity_id, name: nameOf(latest), moving: latest.state === "on", at: sinceOf(latest.entity_id) } : null,
+    lastActivity: latest ? { entityId: latest.entity_id, name: shortName(nameOf(latest), owner), full: fullNames([nameOf(latest)]),
+      moving: latest.state === "on", at: sinceOf(latest.entity_id) } : null,
     listsSensors: sensorIds !== null,
     settings,
     stages: order.length ? { sensorId: stageId, order, now: entities[stageId]?.state ?? "", since: sinceOf(stageId) } : null,
