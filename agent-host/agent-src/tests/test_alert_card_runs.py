@@ -86,7 +86,7 @@ def test_an_answer_in_the_group_never_widens_to(agent):
     run(agent.on_ha_event("telegram_callback", {"id": "cb", "data": "i:1:done", "chat_id": GROUP, "user_id": OWNER,
                                                 "message": {"message_id": 500, "chat": {"id": GROUP}}, "bot": BOT}))
     assert agent.tg.toasts, "a press on the rule's own copy, taken over, is the agent's to answer"
-    assert "(closed)" in card(agent, GROUP).split("\n")[0], card(agent, GROUP)
+    assert "(watch)" in card(agent, GROUP).split("\n")[0], card(agent, GROUP)     # closed, watched (owner, 2026-10-25)
     assert card(agent, GROUP).split("\n")[1] == "To: FM", card(agent, GROUP)
     # owner, 2026-10-18, #55 "each chat its own steps" (reversing part of 2026-10-11 "one incident, one picture"): the
     # steps to the FM are listed in the FM's chat, never in the owner's group

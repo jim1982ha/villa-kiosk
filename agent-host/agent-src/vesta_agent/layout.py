@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from vesta_shared.message_format import (INCIDENT_TITLE, MARK_ICONS, STAGE_ICONS, TO, UNTITLED, document,
+from vesta_shared.message_format import (CLOSED_STAGES, INCIDENT_TITLE, MARK_ICONS, STAGE_ICONS, TO, UNTITLED, document,
                                          parts as shape_parts, status_head, STATUS_BREAK)
 from vesta_shared import status_words
 from vesta_shared.limits import limit
@@ -100,7 +100,7 @@ def stage_line(h, status: str, mark: str | None = None) -> str:
     word = h.get("word")
     if not word:
         return status
-    icon = MARK_ICONS.get(mark or "") if not (mark == "unchecked" and word != "closed") else None
+    icon = MARK_ICONS.get(mark or "") if not (mark == "unchecked" and word not in CLOSED_STAGES) else None
     return f"{icon or STAGE_ICONS[word]} {status or status_words.stage_words(word, lang=h.get('lang') or 'en')}"
 
 

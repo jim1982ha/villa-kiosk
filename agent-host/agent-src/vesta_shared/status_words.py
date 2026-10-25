@@ -260,7 +260,7 @@ def stage_words(word: str, time: str = "", lang: str = "en") -> str:
     w = _w(lang)
     if not w:
         return mf.stage_words(word, time)
-    if word == "closed":
+    if word in mf.CLOSED_STAGES:
         return closing("", lang).replace("{time}", time) if time else w["cleared"] + w["stop"]
     return w["new_alert"] if word == "new" else w["still_open"]
 

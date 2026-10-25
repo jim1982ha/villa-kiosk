@@ -122,14 +122,20 @@ class IncidentThread:
             return True
 
     async def close(self, iid: int | str, note: str, body: str | None = None, mark: str | None = None,
-                    note_in: dict | None = None) -> int:
+                    note_in: dict | None = None, final: bool = False) -> int:
         """Every message of incident `iid`, in every chat, loses its buttons and shows `note` (who did what, when;
         "{time}": the villa's time now) — a copy without buttons too (owner, 2026-10-11: one incident, one picture);
         `note_in`: the same in other languages ({code: text}), each chat showing the one it reads (owner, 2026-10-23).
         Returns how many chats show it now. Settled once: a second close changes nothing but a heading now "(closed)".
 
         ⚠️ ALL OF THEM, NOT THE ONE PRESSED (owner, 2026-10-01): a P1 goes to the owner's chat and the facility
-        manager's; pressed in one, the others kept buttons that only answered "already closed"."""
+        manager's; pressed in one, the others kept buttons that only answered "already closed".
+
+        `final`: its watch is over (the desk's watch_over, owner 2026-10-25) — every copy, settled or not, once: where it
+        stood (its close, "Cleared on … Watch 1h.") becomes a line of its Status, in each chat's language, and `note`
+        ("Closed on …: it did not come back within 1h.") the line under it; its title "(closed)", its alert struck."""
+        if final:
+            return await self._finish(iid, note, note_in)
         async with self._lock(iid):
             now = datetime.now(timezone.utc)
             n = 0
@@ -159,6 +165,32 @@ class IncidentThread:
                 p = {**p, "head": self._head_now(iid, chat, p.get("head") or "")}      # "Closed" once its incident is (notice.py)
                 p = self._own_words(iid, chat, p)
                 n += await self._show(iid, chat, {**rec, "settled": True}, p)
+            return n
+
+    async def _finish(self, iid: int | str, note: str, note_in: dict | None) -> int:
+        """`close` with `final`: the incident's last word (see there). Returns how many chats show it now."""
+        from .notice import note_step
+        async with self._lock(iid):
+            now = datetime.now(timezone.utc)
+            copies = [(chat, rec) for chat, rec in self.state.incident_chats(iid) if not rec.get("finished")]
+            if not copies or not note:
+                return 0
+            # where it stood, kept in its story in every language its close was said in (`said`, the close's words)
+            said = next((layout.of(rec).get("said") for _c, rec in copies
+                         if isinstance(layout.of(rec).get("said"), dict) and not layout.of(rec)["said"].get("stage")), None)
+            stood = (said or {}).get("status") or (layout.of(copies[0][1]).get("status") or "")
+            if stood.strip() and str(iid).isdigit():
+                note_step(self.state, int(iid), "cleared", stood.strip(), (said or {}).get("status_in"))
+            n = 0
+            for chat, rec in copies:
+                words = layout.fill_time(pick(note, note_in, self._lang(chat)), now, self.tz)
+                p = layout.changed(layout.of(rec), status=words)
+                if note_in:
+                    p["said"] = {"stage": None, "status": layout.fill_time(note, now, self.tz),
+                                 "status_in": {k: layout.fill_time(v, now, self.tz) for k, v in note_in.items()}}
+                p = {**p, "head": self._head_now(iid, chat, p.get("head") or "")}      # "(closed)", its story listed
+                p = self._own_words(iid, chat, p)
+                n += await self._show(iid, chat, {**rec, "settled": True, "finished": True}, p)
             return n
 
     async def restate(self, iid: int | str, note: str) -> int:

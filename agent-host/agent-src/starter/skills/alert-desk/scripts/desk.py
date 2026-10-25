@@ -35,9 +35,9 @@ from datetime import datetime, timedelta, timezone
 import yaml
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-from vesta_shared.store import Incident, Notes, Store, alerted_states, notes_of  # noqa: E402  (PYTHONPATH is set by the engine)
+from vesta_shared.store import Incident, Notes, Store, alerted_states, notes_of, watch_until  # noqa: E402  (PYTHONPATH is set by the engine)
 from vesta_shared.params import VillaParams  # noqa: E402
-from vesta_shared.timeutil import day_time_label, villa_time  # noqa: E402
+from vesta_shared.timeutil import day_time_label, moment_label, villa_time  # noqa: E402
 from vesta_shared.problems import AGAIN_DAYS, Problems, again_title, incident_runs  # noqa: E402  (a problem's lifecycle: one owner)
 from vesta_shared import result as R  # noqa: E402  (what the engine is asked to do: its shape)
 from vesta_shared import script  # noqa: E402  (client, store, settings, zone: one set-up)
@@ -921,6 +921,36 @@ def seen_again(store: Store, now: datetime, client, clear_minutes: float, out: d
     return closed
 
 
+def watch_over(store: Store, now: datetime, out: dict, zone: str | None = None) -> list[int]:
+    """Every closed alert whose watch ended (watch_until — the moment its Kiosk fault leaves the Cockpit's Watched list)
+    and did not come back: every copy of it gets its last word, "Closed on {time}: it did not come back within 1h.", the
+    title "(closed)" and its alert's text struck (the engine's settle `final`). Once per close (Notes.WATCH_OVER: that
+    close's moment); not while a person's close waits to be read again (check_quiet); a watch that ended more than
+    LATE_CLOSE_DAYS ago is left as it is (an alert closed before this existed). "Closed on" says the moment its watch
+    ended, in the villa's time (`zone`) — the time its Cockpit card said "VESTA confirms by" — never the look that
+    noticed it, up to a tick later. Returns their ids.
+
+    ⚠️ "WATCH 1H." WAS THE LAST THING SAID (owner, 2026-10-25): the watch ended and nothing told it — the card read
+    "(closed)" from the moment it cleared, while it could still come back as the same alert."""
+    told = []
+    for inc in store.incidents(open_only=False):
+        if not inc.get("closed_at") or f'"{Notes.WATCH_MINUTES}"' not in (inc.get("payload") or ""):
+            continue                                                       # open, or never watched: not read
+        p = notes_of(inc)
+        until = watch_until(inc)
+        if until is None or p.get(Notes.WATCH_OVER) == inc["closed_at"] or p.get("check_quiet"):
+            continue
+        if now < until or now - until > timedelta(days=LATE_CLOSE_DAYS):
+            continue
+        store.note(inc["id"], {Notes.WATCH_OVER: inc["closed_at"]})
+        said = say("watch_over", time=moment_label(until, zone) if zone else "{time}",
+                   watch=lasting_in(float(p[Notes.WATCH_MINUTES]) * 60))
+        out.setdefault("settle", []).append(R.settle(inc["id"], str(said), note_in=said.langs, final=True))
+        store.audit("alert-desk", "watch_over", {"incident": inc["id"]})
+        told.append(inc["id"])
+    return told
+
+
 def _faults_follow(out: dict) -> None:
     """The Kiosk faults are brought up to date after this tick (the engine's repair): once, however many asked."""
     if R.faults_changed() not in out["actions"]:
@@ -1162,6 +1192,7 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
         out["not_quiet"] = quiet_after_done(store, now, client, params.behaviour("clear_minutes"), out,
                                             reopen_hours(params))
         out["rule_gone"] = rule_gone(store, now, client, params.behaviour("clear_minutes"), out)
+    out["watch_over"] = watch_over(store, now, out, zone)
     for inc in store.incidents(open_only=True):
         p = notes_of(inc)
         # the route's "what to do" edited while the alert is open (a villa's rules.yaml): the Kiosk fault's note and

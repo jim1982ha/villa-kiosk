@@ -119,6 +119,21 @@ watch:
   ja: "{watch}監視継続。"
   ko: "{watch} 동안 감시."
 
+# ⚠️ THE WATCH ENDS, AND EVERY COPY SAYS SO (owner, 2026-10-25: "mention when/if the fault is fully cleared (and at
+# what time)"): the closing line said "Watch 1h." and nothing came after it. {time}: the villa's time when shown;
+# {watch}: the watch it ran ("1h"). The title then reads "(closed)" and the alert's text is struck.
+watch_over:
+  en: "Closed on {time}: it did not come back within {watch}."
+  fr: "Clôturée le {time} : elle n'est pas revenue en {watch}."
+  id: "Ditutup pada {time}: tidak muncul lagi dalam {watch}."
+  de: "Geschlossen am {time}: innerhalb von {watch} nicht wiedergekommen."
+  es: "Cerrada el {time}: no volvió en {watch}."
+  it: "Chiusa il {time}: non è tornata entro {watch}."
+  nl: "Gesloten op {time}: niet teruggekomen binnen {watch}."
+  zh: "已于{time}关闭：{watch}内未再出现。"
+  ja: "{time}に終了：{watch}以内に再発なし。"
+  ko: "{time}에 종료: {watch} 안에 다시 발생하지 않음."
+
 rule_gone:
   en: "the automation that sent it no longer exists (its entity ID changed, or it was deleted). Its next alert comes with a new number"
   fr: "l'automatisation qui l'a envoyée n'existe plus (son ID d'entité a changé, ou elle a été supprimée). Sa prochaine alerte aura un nouveau numéro"

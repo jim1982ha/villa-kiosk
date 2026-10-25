@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.345 (25 October 2026)
+
+- store.watch_until (one answer: Problems.confirms_by, Incidents.watching, desk.watch_over). Title word "watch"
+  (message_format.CLOSED_STAGES, INCIDENT_TITLE, STAGE_ICONS/WORDS; notice.word, a closing step included) until
+  Notes.WATCH_OVER. desk.watch_over: words.yaml `watch_over`, its time the watch's end (moment_label), R.settle final
+  → IncidentThread._finish (the close's words a history line via notice.note_step note_in). A "(closed)" alert's text
+  is "struck" (TELEGRAM: blockquote + strikethrough).
+
 ## 0.6.344 (25 October 2026)
 
 - Problems.confirms_by: every closed fault's watch, whoever closed it — an incident: closed_at + Notes.WATCH_MINUTES

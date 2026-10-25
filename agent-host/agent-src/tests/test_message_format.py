@@ -54,11 +54,12 @@ def test_to_is_a_role_never_a_name():
 
 def test_one_table_decides_every_style_and_a_new_channel_is_one_more_table():
     # every part kind has a rule in the table — a kind the reader finds and the table forgets fails here, never silently
-    kinds = {k for text in (F.fill_to(DAILY, "Owner"), "#1 (new)\nTo: Owner\nx\nStatus:\n⚠️ New alert")
+    kinds = {k for text in (F.fill_to(DAILY, "Owner"), "#1 (new)\nTo: Owner\nx\nStatus:\n⚠️ New alert",
+                            "#1-P2 (closed)\nTo: Owner\nx\nStatus:\n✅ Closed on …")
              for k, _, _ in F.parts(text)}
-    assert kinds <= set(F.TELEGRAM) and set(F.TELEGRAM) == {"title", "to", "label", "item", "note"}
-    # a WhatsApp-like table, the same five keys: the same reader, other marks — nothing else changes
-    other = {"title": ("bold",), "to": (), "label": ("bold",), "item": (), "note": ("italic",)}
+    assert kinds <= set(F.TELEGRAM) and set(F.TELEGRAM) == {"title", "to", "label", "item", "struck", "note"}
+    # a WhatsApp-like table, the same six keys: the same reader, other marks — nothing else changes
+    other = {"title": ("bold",), "to": (), "label": ("bold",), "item": (), "struck": (), "note": ("italic",)}
     assert [e["type"] for e in F.entities(F.fill_to(DAILY, "Owner"), other)] == ["bold", "bold", "bold"]
     # owner, 2026-10-13: the title in bold (underlined, it read as a link), one quote per section
     assert [e["type"] for e in F.telegram_entities(F.fill_to(DAILY, "Owner"))] == ["bold"] + ["blockquote"] * 2
@@ -172,3 +173,12 @@ def test_a_long_report_in_paragraphs_loses_nothing(tmp_path):
     assert all(m.split("\n")[3] == "Findings:" for m in texts)            # the section goes on: its label again
     sent = "".join("".join(m.split("\n")[4:]) for m in texts).replace(" ", "")
     assert sent == "".join(body.split("\n")[1:]).replace(" ", "")        # every character, in order
+
+
+def test_an_alert_is_struck_once_its_watch_is_over_never_while_it_is_watched():
+    # owner, 2026-10-25: "(watch)" while it can come back; "(closed)" with its alert's text struck once it is fully over
+    body = "🔓 Laundry Room door unlocked\nWhat to do: check it."
+    styles = lambda word: [e["type"] for e in F.telegram_entities(f"#86-P2 ({word})\nTo: Owner & FM\n{body}\nStatus:\n- x\n✅ y")]
+    assert styles("watch") == ["bold", "blockquote", "blockquote", "italic"]
+    assert styles("closed") == ["bold", "blockquote", "strikethrough", "blockquote", "italic"]
+    assert styles("existing") == styles("watch")

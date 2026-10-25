@@ -67,7 +67,7 @@ TO_LONGEST = TO + audience(ROLE_WORDS)
 #: "For: …" recorded before 0.12.175). Every message the agent sends on its own has a title: this is the last resort.
 UNTITLED = "Message from VESTA"
 #: An alert's first line: "#9-P2 (existing)" (vesta_agent/notice.py).
-INCIDENT_TITLE = re.compile(r"#\d+(?:-P\d)? \((new|existing|closed)\)")
+INCIDENT_TITLE = re.compile(r"#\d+(?:-P\d)? \((new|existing|watch|closed)\)")
 #: The label of an alert's where-it-stands section (vesta_agent/layout.py).
 STATUS = "Status"
 #: ⚠️ WHAT STANDS BEFORE "Status:" — ONE LINE BREAK, NO EMPTY LINE (owner, 2026-10-25: "remove the skipped line between
@@ -89,7 +89,12 @@ def _status_labels() -> tuple[str, ...]:
     return LABELS
 #: An alert's bottom line starts with one of these (vesta_agent/layout.py; owner, 2026-10-11): its title's word — new,
 #: existing, closed — or what the skill marked (vesta_shared.result.MARKS).
-STAGE_ICONS = {"new": "⚠️", "existing": "⚠️ ⚙️", "closed": "✅"}
+STAGE_ICONS = {"new": "⚠️", "existing": "⚠️ ⚙️", "watch": "✅", "closed": "✅"}
+#: ⚠️ AN ALERT ENDS IN TWO STEPS (owner, 2026-10-25: "instead of updating the notification title with (closed), mention
+#: (Watch) … after the watch time expires, strike the content of the first quote … and then update the title with
+#: Closed"): cleared, it is watched — "(watch)", back within it, it reopens as the same alert; its watch over, it is
+#: "(closed)" and its alert's text is struck (`_alert_parts`). Both are ends: what an open alert is never says them.
+CLOSED_STAGES = ("watch", "closed")
 MARK_ICONS = {"help": "🆘", "unchecked": "☑️"}
 #: ⚠️ WHAT, WHEN, THEN WHO (owner, 2026-10-19: "✅ Done on 19/10/2026 02:10 (JM)"): every line saying a person's act —
 #: a press, an approval, a close or reopen in the Cockpit — reads "<what> on <when> (<who>)" (acted).
@@ -117,7 +122,7 @@ def closing(tail: str = "") -> str:
 
 #: The bottom line of a stage that has none of its own (the first alert says only what Home Assistant said). "{time}":
 #: the villa's time, filled by whoever shows it (`stage_words`).
-STAGE_WORDS = {"new": "New alert", "existing": "Still open", "closed": closing()}
+STAGE_WORDS = {"new": "New alert", "existing": "Still open", "watch": closing(), "closed": closing()}
 
 
 def stage_words(word: str, time: str = "") -> str:
@@ -183,6 +188,8 @@ TELEGRAM: dict[str, tuple[str, ...]] = {
     "to": (),
     "label": (),
     "item": ("blockquote",),
+    # an alert whose watch is over: its text struck, fully cleared (owner, 2026-10-25; `_alert_parts`)
+    "struck": ("blockquote", "strikethrough"),
     "note": ("blockquote", "italic"),
 }
 
@@ -395,6 +402,13 @@ def _status_parts(text: str) -> list[tuple[str, int, int]]:
     return [("label", start, start + len(label) - 1), ("note", start + len(label), start + len(label) + len(lines))]
 
 
+def _alert_text_kind(title: str) -> str:
+    """How an alert's own text is drawn: struck once its title says "(closed)" — its watch over, nothing more to come —
+    quoted as any item before."""
+    m = INCIDENT_TITLE.fullmatch(title)
+    return "struck" if m and m.group(1) == "closed" else "item"
+
+
 def _alert_parts(text: str, title_end: int, to_end: int) -> list[tuple[str, int, int]]:
     found = [("title", 0, title_end), ("to", title_end + 1, to_end)]
     # ⚠️ THE STATUS LABEL IN THE CHAT'S LANGUAGE (owner, 2026-10-23): "Statut:", "状态:" — the last of any of them is the
@@ -402,11 +416,11 @@ def _alert_parts(text: str, title_end: int, to_end: int) -> list[tuple[str, int,
     at, label = max((text.rfind(status_head(w)), status_head(w)) for w in _status_labels())
     if at < to_end:
         if to_end + 1 < len(text):
-            found.append(("item", to_end + 1, len(text)))
+            found.append((_alert_text_kind(text[:title_end]), to_end + 1, len(text)))
         return found
     text_end = len(text[:at].rstrip("\n"))           # a message sent before 0.12.354 had an empty line here
     if text_end > to_end + 1:
-        found.append(("item", to_end + 1, text_end))
+        found.append((_alert_text_kind(text[:title_end]), to_end + 1, text_end))
     found.append(("label", at + len(STATUS_BREAK), at + len(label) - 1))
     start, end = at + len(label), len(text.rstrip())
     if end > start:

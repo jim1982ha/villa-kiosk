@@ -191,7 +191,8 @@ class Vesta:
         # the heading of every message the agent sends on its own (notice.py): who it is for, the incident, its history
         incidents = Incidents(settings.store_path)        # the alert desk's incidents, as the engine reads them
         self.notices = Notices(self.state, self.policy, settings.timezone, severity=incidents.severity,
-                               closed=incidents.closed, runs=incidents.runs, reaches=incidents.reaches)
+                               closed=incidents.closed, runs=incidents.runs, reaches=incidents.reaches,
+                               watching=incidents.watching)
         self.thread.retitle = self.notices.retitle           # a settled copy of a closed incident is headed "Closed"
         self.thread.reheading = self.notices.heading         # a replaced status: every earlier step listed again
         self.thread.language = self.notices.lang             # each chat's Status in its own language (owner, 2026-10-23)

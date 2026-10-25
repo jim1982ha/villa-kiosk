@@ -207,7 +207,8 @@ class Outcome:
         for s in res.get("settle") or []:
             if isinstance(s, dict) and str(s.get("incident_id") or "").isdigit():
                 await self.thread.close(int(s["incident_id"]), str(s.get("note") or ""), mark=s.get("mark"),
-                                        note_in=s.get("note_in") if isinstance(s.get("note_in"), dict) else None)
+                                        note_in=s.get("note_in") if isinstance(s.get("note_in"), dict) else None,
+                                        final=s.get("final") is True)
         for item in unrouted:
             done["unrouted"] += 1
             self.state.log("send_unrouted", {"to": item.get("to"), "skill": skill_name})

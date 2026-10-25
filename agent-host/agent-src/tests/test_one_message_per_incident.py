@@ -421,7 +421,7 @@ def test_every_copy_carries_the_incidents_word_and_its_own_status_lines(agent):
     run(agent.on_ha_event("telegram_callback", {"id": "cb", "data": f"i:{iid}:done", "chat_id": FM_CHAT, "user_id": FM,
                                                 "message": {"message_id": fm_mid, "chat": {"id": FM_CHAT}}, "bot": BOT}))
     words = lambda: {c: r["text"].split("\n")[0] for c, r in agent.thread.shown(iid).items()}
-    assert words() == {GROUP: "#1-P2 (closed)", FM_CHAT: "#1-P2 (closed)"}, words()
+    assert words() == {GROUP: "#1-P2 (watch)", FM_CHAT: "#1-P2 (watch)"}, words()   # closed, watched alike (2026-10-25)
     from vesta_shared.store import Notes, Store
     st = Store(agent.s.store_path)
     st.note(iid, {Notes.KIOSK_REOPENED: "Reopened in the Cockpit on 19/10/2026 10:00 (JM)"})
@@ -433,3 +433,36 @@ def test_every_copy_carries_the_incidents_word_and_its_own_status_lines(agent):
     assert status(fm).startswith("Reopen request sent ") and "Reopened in the Cockpit" in status(fm), fm
     assert "Reopen" not in group and "Done on" not in fm.rsplit("\n", 1)[1]
     assert group.split("\n")[1] == fm.split("\n")[1] == "To: FM"
+
+
+def test_a_cleared_alert_is_watched_then_closed_struck_with_the_time_it_ended(agent):
+    # owner, 2026-10-25 (#86): "(watch)" while it can come back as the same alert; when the watch ends, every copy says
+    # so — "Closed on …: it did not come back within 1h." under its "Cleared on … Watch 1h." — "(closed)", its alert struck
+    from vesta_shared import message_format as F
+    from vesta_shared.store import Store, watch_until
+    from vesta_shared.timeutil import moment_label
+    ha_alert(agent)
+    run(agent.on_ha_event("vesta_critical_event", {
+        "blueprint": "critical_condition", "rule_id": "automation.critical_condition_laundry",
+        "incident_id": "automation.critical_condition_laundry-1", "phase": "resolved", "severity": "critical",
+        "label": "Laundry door unlocked", "entities": ["lock.laundry"], "timestamp": datetime.now(timezone.utc).isoformat(),
+        CONTEXT_KEY: "RUN-2"}))
+    cards = lambda: {c: r["text"] for c, r in agent.thread.shown(1).items()}
+    assert cards() and all(t.startswith("#1-P2 (watch)\n") for t in cards().values()), cards()
+    assert all("strikethrough" not in [e["type"] for e in F.telegram_entities(t)] for t in cards().values())
+    until = watch_until(Store(agent.s.store_path).incident(1))
+    edits = len(agent.tg.edits)
+    tick(agent, int((until - datetime.now(timezone.utc)).total_seconds() // 60) - 1)      # still watched: nothing
+    assert len(agent.tg.edits) == edits and all(t.startswith("#1-P2 (watch)\n") for t in cards().values())
+    tick(agent, int((until - datetime.now(timezone.utc)).total_seconds() // 60) + 2)      # its watch over
+    for text in cards().values():
+        status = text.split("\nStatus:\n")[1].split("\n")
+        assert text.startswith("#1-P2 (closed)\n"), text
+        assert status[-2].startswith("- Cleared on ") and "Watch" in status[-2], status
+        assert status[-1].startswith("✅ Closed on ") and "did not come back within" in status[-1], status
+        # the moment its watch ended (its Cockpit card's "VESTA confirms by"), never the look that noticed it
+        assert status[-1].startswith(f"✅ Closed on {moment_label(until, agent.s.timezone)}:"), (status, until)
+        assert "strikethrough" in [e["type"] for e in F.telegram_entities(text)], text
+    edits = len(agent.tg.edits)
+    tick(agent, int((until - datetime.now(timezone.utc)).total_seconds() // 60) + 7)      # said once
+    assert len(agent.tg.edits) == edits

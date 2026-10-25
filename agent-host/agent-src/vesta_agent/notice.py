@@ -70,11 +70,14 @@ def note_press(state, incident: int, label: str, name: str, mark: str | None = N
     state.set_incident_history(incident, _kept(history))
 
 
-def note_step(state, incident: int, stage: str, note: str) -> None:
-    """A step of incident `incident` that is not a notice sent — someone took it on in the Kiosk ("taken") — kept in its
-    history in its own words, so a later "Status:" still lists it (owner, 2026-10-15)."""
+def note_step(state, incident: int, stage: str, note: str, note_in: dict | None = None) -> None:
+    """A step of incident `incident` that is not a notice sent — someone took it on in the Kiosk ("taken"), its close
+    once its watch is over ("cleared") — kept in its history in its own words, so a later "Status:" still lists it
+    (owner, 2026-10-15). `note_in`: the same words in other languages ({code: text}), each chat's line in its own."""
     history = state.incident_history(incident)
-    history.append({"at": datetime.now(timezone.utc).isoformat(), "stage": stage, "note": note.rstrip(".")})
+    langs = {k: str(v).rstrip(".") for k, v in (note_in or {}).items() if isinstance(v, str) and v}
+    history.append({"at": datetime.now(timezone.utc).isoformat(), "stage": stage, "note": note.rstrip("."),
+                    **({"note_in": langs} if langs else {})})
     state.set_incident_history(incident, _kept(history))
 
 
@@ -102,8 +105,12 @@ def when(at: datetime, zone: str) -> str:
 class Notices:
     def __init__(self, state, policy: Callable, timezone_name: str, severity: Callable[[int], str | None] | None = None,
                  closed: Callable[[int], bool] | None = None, runs: Callable[[int], int | None] | None = None,
-                 reaches: Callable[[int], list[str] | None] | None = None):
+                 reaches: Callable[[int], list[str] | None] | None = None,
+                 watching: Callable[[int], bool] | None = None):
         self.state, self.policy, self.tz = state, policy, timezone_name
+        # whether a closed incident is still watched (incidents.Incidents.watching): its copies read "(watch)", then
+        # "(closed)" once the desk said its watch is over (owner, 2026-10-25)
+        self.watching = watching or (lambda _iid: False)
         # how many times an incident alerted in AGAIN_DAYS, as its skill stored it (problems.incident_runs): a "back"
         # step's line says it ("- Back at … (2nd time in 7 days), alert sent to …")
         self.runs = runs or (lambda _iid: None)
@@ -269,7 +276,7 @@ class Notices:
             # a step is kept as facts (stage, moment, roles, count) and worded here; a `note` (taken on in the Kiosk) is
             # the Kiosk's words, kept as written
             lines.append(f"- {status_words.earlier(h['dropped'], lang)}" if h.get("dropped") else
-                         f"- {h['note']}" if h.get("note") else
+                         f"- {(h.get('note_in') or {}).get(lang) or h['note']}" if h.get("note") else
                          f"- {self._pressed(h, when(datetime.fromisoformat(h['at']), self.tz), lang)}" if h.get("stage") == PRESSED_STAGE else
                          f"- {self.step(h.get('stage'), self._roles(h), datetime.fromisoformat(h['at']), h.get('run'), h.get('reach'), lang)}")
         return lines
@@ -362,12 +369,13 @@ class Notices:
 
     def word(self, incident: int, stage: str | None = None, history: bool = True) -> str:
         """The title's word for a notice about `incident`: what the notice is (`stage`) — else what the incident is
-        (closed: "closed") — else "existing" once anything was sent about it, "new" before."""
-        if stage:
+        (closed: "watch" while it is watched, then "closed") — else "existing" once anything was sent about it, "new" before."""
+        if stage and (STEPS[stage].title if stage in STEPS else EXISTING) != "closed":
             return STEPS[stage].title if stage in STEPS else EXISTING
         try:
-            if self.closed(int(incident)):
-                return "closed"
+            # a closing step says what every other copy says: "(watch)" while it is watched (owner, 2026-10-25)
+            if stage or self.closed(int(incident)):
+                return "watch" if self.watching(int(incident)) else "closed"
         except Exception:  # noqa: BLE001 — the heading is written without it, never not at all
             pass
         return EXISTING if history else "new"

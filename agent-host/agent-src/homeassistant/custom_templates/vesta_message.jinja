@@ -44,8 +44,8 @@
 {%- set vm_role_words = [["owner", "Owner"], ["fm", "FM"]] -%}
 {%- set vm_and = " & " -%}
 {%- set vm_priority_to = {"P1": "Owner & FM", "P2": "FM", "P3": "digest", "P4": "log"} -%}
-{%- set vm_icons = {"new": "⚠️", "existing": "⚠️ ⚙️", "closed": "✅"} -%}
-{%- set vm_words = {"new": "New alert", "existing": "Still open", "closed": "Cleared on {time}."} -%}
+{%- set vm_icons = {"new": "⚠️", "existing": "⚠️ ⚙️", "watch": "✅", "closed": "✅"} -%}
+{%- set vm_words = {"new": "New alert", "existing": "Still open", "watch": "Cleared on {time}.", "closed": "Cleared on {time}."} -%}
 {%- set vm_time_format = "%d/%m/%Y %H:%M" -%}
 {%- set vm_status_break = "\n" -%}
 {#- END WORDS -#}

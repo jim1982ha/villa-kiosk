@@ -114,8 +114,29 @@ class Notes:
     # carries the check, so the engine never reads the skill's settings; Problems.card reads closed_at + this as the
     # Kiosk fault's `confirmsBy` while the desk's `check_quiet` waits
     WATCH_MINUTES = "watch_minutes"
+    # the close whose watch the desk has ended (its closed_at): every copy said "Closed on …", its alert struck (owner,
+    # 2026-10-25); written by the desk's watch_over, read by Incidents.watching — a later close is watched again
+    WATCH_OVER = "watch_over"
     KIOSK_REOPENED = "kiosk_reopened"                            # mail: who reopened its fault in the Kiosk, and when
     UNREACHED = "unreached"                                      # mail: Telegram refused every chat of the FM's
+
+
+def watch_until(inc) -> datetime | None:
+    """Until when closed incident `inc` is watched — back within it, it reopens under its own number: its close plus the
+    desk's watch (Notes.WATCH_MINUTES, desk.watch_minutes). None for an incident open, or one no watch was carried for.
+    ⚠️ ONE ANSWER (owner, 2026-10-25: Telegram's last update "should match more or less with the time the Fault has
+    disappeared from the Watchlist"): the Kiosk fault's confirmsBy (Problems.confirms_by), the card's "(watch)" title
+    (Incidents.watching) and the desk's last word (watch_over) all read it here."""
+    inc = dict(inc) if inc is not None else {}
+    watch = notes_of(inc).get(Notes.WATCH_MINUTES)
+    try:
+        closed = datetime.fromisoformat(str(inc.get("closed_at")).replace("Z", "+00:00")) if inc.get("closed_at") else None
+        if closed is None or watch is None:
+            return None
+        closed = closed if closed.tzinfo else closed.replace(tzinfo=timezone.utc)
+        return closed + timedelta(minutes=float(watch))
+    except (TypeError, ValueError):
+        return None
 
 
 def notes_of(inc) -> dict:

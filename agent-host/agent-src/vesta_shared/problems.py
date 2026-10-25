@@ -27,7 +27,7 @@ from typing import Callable
 from . import agreement, result
 from .limits import limit
 from .messaging import no_code as _no_code
-from .store import Incident, Notes, Store, notes_of
+from .store import Incident, Notes, Store, notes_of, watch_until
 
 DONE = "done"                          # a person answered Done (a button, or "#N done")
 CLEARED = "cleared"                    # its source is gone: the night check no longer sees it, HA cleared it
@@ -613,7 +613,7 @@ class Problems:
         read. A night-check finding's: the night check's next run after its close (`next_night`), the read that would
         see it back (owner, 2026-10-25). None for a task open, an older task of the same problem, a close nothing
         watches (no watch carried, no night schedule), or a watch over."""
-        from datetime import timedelta, timezone
+        from datetime import timezone
         kind, sid = self._source(task)
         if task.get("status") not in STATUSES:
             return None
@@ -624,15 +624,10 @@ class Problems:
         pending = False
         if kind == "incident":
             inc = self.store.incident(sid)
-            p = notes_of(inc)
-            closed, watch = _moment((inc or {}).get("closed_at")), p.get(Notes.WATCH_MINUTES)
-            if not closed or watch is None:
+            until = watch_until(inc)
+            if until is None:
                 return None
-            try:
-                until = closed + timedelta(minutes=float(watch))
-            except (TypeError, ValueError):
-                return None
-            pending = bool(p.get("check_quiet"))
+            pending = bool(notes_of(inc).get("check_quiet"))
         elif kind == "finding":
             closed = _moment(task.get("done_at"))
             until = next_night(closed) if closed and next_night else None
