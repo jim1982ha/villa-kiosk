@@ -1,3 +1,19 @@
+## 2.496.533
+
+What you will see:
+- Advanced Settings: "Upload Model" is back at the top right, beside "Log Out All" (renamed from "Log out all
+  devices"), in the same button style. It no longer moves left when Cancel and Save appear at the bottom.
+- One (i) at the top right now explains both buttons, with the model's details under "Upload Model".
+- On a phone, both buttons show their icon only.
+
+## 2.496.532
+
+What you will see:
+- Camera window: tapping the siren asks "Sound the siren?" first, in the same box as running a scene. Stopping a
+  siren that sounds does not ask. The box also shows when the camera is in full screen.
+- Camera window: the sound button shows only for a camera whose feed really carries sound. A camera with no
+  microphone no longer shows a sound button that does nothing.
+
 ## 2.496.531
 
 What you will see:

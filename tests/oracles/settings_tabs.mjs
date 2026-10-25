@@ -90,8 +90,9 @@ ck("exactly one hand-written tab strip, and it is ModalTabs",
 ck("Advanced Settings renders three tabs", Object.keys(chunks).sort().join(",") === "devices,system,villa");
 ck("all five sections survive, each in exactly one tab", misplaced.length === 0);
 // owner, 2026-10-24: at the header's right, Back taking its footer place (where Settings' "Advanced Settings" is)
-ck("Log out all devices is the header's own control, on every tab, never inside one",
-   /className="modal-header-actions">\s*<LogoutAll \/>/.test(modal) && (modal.match(/<LogoutAll \/>/g) ?? []).length === 1);
+ck("Log Out All is the header's own control, on every tab, never inside one",
+   /logout=\{roleCan\(role, "editConfig"\) && <LogoutAll \/>\}/.test(modal) && (modal.match(/<LogoutAll \/>/g) ?? []).length === 1
+   && /<HeaderActions /.test(modal));
 ck("no section is behind a collapse any more", collapseRefs.length === 0);
 ck("the owner-only tab is filtered out of the strip", filtersOwner);
 ck("the opening tab is chosen from the FILTERED strip", startsInStrip);

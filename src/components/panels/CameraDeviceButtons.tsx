@@ -4,6 +4,8 @@
 // buttons (up, down, left, right) and its siren, an on/off like the linked switch beside them. Which entities those
 // are is panelRules.cameraControlsOf (the camera's device in the villa's registry); who may press them, the profile's
 // `controlCameras` (the owner's: the add-on refuses a button or a siren to every other profile).
+// ⚠️ SOUNDING THE SIREN ASKS FIRST (owner, 2026-10-25: "show a confirmation message, the same way there is a
+// confirmation message to act on Scene"), through the scenes' own useConfirmDialog. Stopping it never asks.
 
 import type { CSSProperties } from "react";
 import { MoveDown, MoveLeft, MoveRight, MoveUp, Siren } from "lucide-react";
@@ -11,6 +13,7 @@ import { useHA } from "@/ha/HAStateStore";
 import { useProfile } from "@/auth/ProfileContext";
 import { roleCan } from "@/auth/permissions";
 import { cameraControlsOf } from "@/utils/panelRules";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 
 /** The moves in the order drawn, each with its icon and words. */
 const MOVES = [
@@ -27,6 +30,7 @@ export default function CameraDeviceButtons({ cameraId, order }: {
 }) {
   const { entities, entityDeviceIds, callService } = useHA();
   const { role } = useProfile();
+  const { ask, dialog } = useConfirmDialog();
   const controls = roleCan(role, "controlCameras") ? cameraControlsOf(cameraId, entityDeviceIds) : null;
   if (!controls) return null;
   const siren = controls.siren;
@@ -46,10 +50,20 @@ export default function CameraDeviceButtons({ cameraId, order }: {
         <button type="button" className={`icon-btn camera-linked-btn camera-siren-btn${sounding ? " on alarm" : ""}`}
           title={sounding ? "Stop the siren" : "Sound the siren"} aria-label={sounding ? "Stop the siren" : "Sound the siren"}
           aria-pressed={sounding} style={order(10)}
-          onClick={() => void callService("siren", sounding ? "turn_off" : "turn_on", {}, { entity_id: siren })}>
+          onClick={() => {
+            if (sounding) { void callService("siren", "turn_off", {}, { entity_id: siren }); return; }
+            const name = String(entities[cameraId]?.attributes.friendly_name ?? "this camera");
+            ask({
+              title: "Sound the siren?",
+              message: `The siren of “${name}” sounds out loud where the camera is.`,
+              confirmLabel: "Sound siren",
+              run: () => void callService("siren", "turn_on", {}, { entity_id: siren }),
+            });
+          }}>
           <Siren />
         </button>
       )}
+      {dialog}
     </>
   );
 }

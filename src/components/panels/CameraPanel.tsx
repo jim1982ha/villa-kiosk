@@ -33,6 +33,7 @@ import { useConfig } from "@/config/ConfigContext";
 import { readingOf, stateWords } from "@/config/reading";
 import { historyStateColor } from "@/utils/stateColors";
 import { useArrowStep } from "@/hooks/useArrowStep";
+import { feedHasSound } from "./feedSound";
 
 interface Props extends PanelProps {
   /** Lets the camera pin continuous rendering while the stream is open. */
@@ -118,6 +119,22 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
     if (!player) return;
     if (el) player.attach(el); else player.detach();
   }, [player]);
+  // Only a feed that really carries sound gets the button (feedSound): asked again as it plays, since a camera's first
+  // sound packets can come after its first picture.
+  const [hasSound, setHasSound] = useState(false);
+  useEffect(() => {
+    const v = videoRef.current;
+    setHasSound(false);
+    if (!v || !frameReady) return;
+    const check = () => {
+      if (!feedHasSound(v)) return;
+      setHasSound(true);
+      v.removeEventListener("timeupdate", check);
+    };
+    check();
+    v.addEventListener("timeupdate", check);
+    return () => v.removeEventListener("timeupdate", check);
+  }, [frameReady, mode, mapping.entityId]);
   const toggleSound = () => {
     const on = !soundOn;
     setSoundOn(on);
@@ -704,8 +721,8 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
           <div className="camera-device-controls">
             {/* the camera's own moves and siren, the owner's (CameraDeviceButtons) */}
             <CameraDeviceButtons cameraId={mapping.entityId} order={vOrder} />
-            {/* its sound, off until tapped (soundOn) — only a video feed carries one */}
-            {(mode === "webrtc" || mode === "hls") && (
+            {/* its sound, off until tapped (soundOn) — only a video feed that carries one (hasSound) */}
+            {(mode === "webrtc" || mode === "hls") && hasSound && (
               <button
                 className={`icon-btn camera-sound-btn${soundOn ? " on" : ""}`}
                 onClick={toggleSound}

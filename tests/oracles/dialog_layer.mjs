@@ -33,7 +33,10 @@ const layer = readFileSync(SRC + "components/common/DialogLayer.tsx", "utf8");
 const host = layer.match(/const HOST = "\.([\w-]+)";/)?.[1];
 const app = elements(parseTsx("App.tsx"), "div").map((d) => propText(d, "className"));
 ck("DialogLayer draws into the app's shell", host === "app-root" && app.includes('"app-root"') &&
-   /createPortal\(backdrop, host\)/.test(layer), { host, app });
+   /createPortal\(backdrop, into\)/.test(layer) && /const into = host\(\)/.test(layer), { host, app });
+// …except in full screen (a camera's "Sound the siren?"), where only the full-screen box is drawn
+ck("…or into the full-screen box while one is shown",
+   /return document\.fullscreenElement \?\? document\.querySelector\(HOST\);/.test(layer));
 const base = readFileSync(SRC + "styles/01-base.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
 ck("…the shell is pinned to the screen", /\.app-root\s*\{[^}]*position:\s*fixed/.test(base));
 

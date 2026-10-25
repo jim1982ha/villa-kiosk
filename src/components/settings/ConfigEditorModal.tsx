@@ -7,7 +7,7 @@
 // nothing to reload on the way out.
 
 import { roleCan } from "@/auth/permissions";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { PendingFields, usePendingField, type PendingField } from "@/hooks/usePendingField";
 import { RECORDS_KEPT_DAYS_MAX, type AppConfig } from "@/config/AppConfig";
 import { useModalA11y } from "@/hooks/useModalA11y";
@@ -204,18 +204,16 @@ function RecordsKept() {
 /** Long enough to finish typing a coordinate; blur/Enter commit at once. */
 const COORD_COMMIT_MS = 1500;
 
-/** Immediately signs every device out — a lost tablet, a PIN someone saw.
- *  Two-tap confirm, same idiom as Facility's "Delete all" buttons: this
- *  signs the person clicking it out too, so it's worth pausing on. */
-/** "Log out all devices", on every tab with its (i) on its right (owner, 2026-10-22), at the header's right since
- *  2026-10-24 (owner: Back took its footer place, where Settings' "Advanced Settings" opener is). */
+/** "Log Out All": immediately signs every device out — a lost tablet, a PIN someone saw. Two-tap confirm, same idiom
+ *  as Facility's "Delete all" buttons: this signs the person clicking it out too, so it's worth pausing on. At the
+ *  header's right since 2026-10-24 (owner: Back took its footer place, where Settings' "Advanced Settings" opener is). */
 function LogoutAll() {
   const { logoutAll } = useProfile();
   const [confirming, setConfirming] = useState(false);
   const [failed, setFailed] = useState(false);
 
   return (
-    <div className="with-tip">
+    <>
       {failed && (
         <span className="body-text sev-warning" role="alert">Could not reach the server, no session was signed out.</span>
       )}
@@ -228,13 +226,52 @@ function LogoutAll() {
           }}
           onCancel={() => setConfirming(false)} />
       ) : (
-        <button className="btn" onClick={() => setConfirming(true)} aria-label="Log out all devices">
-          <LogOut size={18} aria-hidden /><span className="btn-label">Log out all devices</span>
+        <button className="btn" onClick={() => setConfirming(true)} aria-label="Log Out All">
+          <LogOut size={18} aria-hidden /><span className="btn-label">Log Out All</span>
         </button>
       )}
-      <InfoTip label="About logging out all devices">
-        Signs every device out immediately, this one included, whatever the add-on's "Session length" option says a
-        sign-in should last. Use it if a tablet went missing or a passcode was seen by someone who shouldn't have it.
+    </>
+  );
+}
+
+/** ⚠️ THE HEADER'S BUTTONS AND ONE (i) FOR THEM ALL (owner, 2026-10-25: "Move the Upload Model button and its (i)
+ *  icon back to the top right … there should only be 1 (i) icon for both"). In the footer, "Upload model" moved left
+ *  whenever Cancel / Save appeared; up here nothing comes and goes beside it. Each button is a `.btn` whose word hides
+ *  on a phone (08-shared.css). */
+export function HeaderActions({ glbUpload, logout }: {
+  glbUpload: ReturnType<typeof useGlbUpload> | null;
+  /** The Log Out All button, for a profile that may use it; its words in the (i) come with it. */
+  logout: ReactNode;
+}) {
+  return (
+    <div className="modal-header-actions">
+      {glbUpload && (
+        <>
+          <ModelFileInput upload={glbUpload} />
+          <button
+            className="btn"
+            onClick={glbUpload.openPicker}
+            disabled={glbUpload.uploadBusy !== null}
+            title="Upload a GLB model"
+            aria-label={glbUpload.progress.words ?? "Upload Model"}
+          >
+            <Upload size={18} aria-hidden />
+            <span className="btn-label">{glbUpload.progress.words ?? "Upload Model"}</span>
+            {/* on a phone the words are hidden: the progress stays on the icon */}
+            {glbUpload.progress.mark && <span className="icon-btn-count btn-mark" aria-hidden>{glbUpload.progress.mark}</span>}
+          </button>
+        </>
+      )}
+      {logout}
+      <InfoTip label="About these buttons">
+        {glbUpload && <CentralModelInfo addonCfg={glbUpload.addonCfg} loadedModel={glbUpload.loadedModel} />}
+        {logout && (
+          <div style={glbUpload ? { marginTop: 12 } : undefined}>
+            <strong>Log Out All</strong> signs every device out immediately, this one included, whatever the add-on's
+            "Session length" option says a sign-in should last. Use it if a tablet went missing or a passcode was seen by
+            someone who shouldn't have it.
+          </div>
+        )}
       </InfoTip>
     </div>
   );
@@ -268,9 +305,8 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
   const [tab, setTab] = useState<SettingsTab>(
     focusEntityId ? "devices" : (tabs[0]?.id ?? "villa"));
   const canUploadModel = roleCan(role, "manageModel");
-  // Central GLB/room-data upload — Owner only. Lives in this modal's own footer, at its right, a footer button like
-  // every other (owner, 2026-10-24), not the main app's top bar — it's an administration action scoped to Advanced
-  // Settings.
+  // Central GLB/room-data upload — Owner only. In this modal's header, beside Log Out All (HeaderActions), not the main
+  // app's top bar: it's an administration action scoped to Advanced Settings.
   const glbUpload = useGlbUpload(canUploadModel, onModelChanged);
 
   // ⚠️ EVERY CONTROL BELOW WRITES AS THE DIALOG (DialogEdits): what the open drafts' Cancel takes back. The model
@@ -291,7 +327,7 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
         <div className="modal-header">
           {/* tabIndex={-1} + data-autofocus: useModalA11y's default (the
               FIRST focusable descendant) would otherwise land on the header's
-              first button ("Log out all devices", or an (i)) and, for an (i),
+              first button ("Upload Model", "Log Out All", or the (i)) and, for an (i),
               pop its tooltip on open with no hover at all. The heading is the
               conventional dialog-open focus target anyway; tabIndex={-1} makes
               it programmatically focusable without joining the normal Tab
@@ -299,12 +335,10 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
           <h2 tabIndex={-1} data-autofocus>Advanced Settings <span className="modal-title-version">v{__APP_VERSION__}</span></h2>
           {/* ⚠️ BACK WHERE SETTINGS' OPENER IS, "LOG OUT ALL DEVICES" UP HERE (owner, 2026-10-24: "invert the position of
               Log out all devices and the Back button, so that Back appears at the same position as where Advanced
-              Settings is in the previous menu"): Settings → Advanced Settings → Back is one spot under the finger; the
-              model's details and upload sit at the bottom right, labelled on a desktop, icons on a phone. */}
-          {roleCan(role, "editConfig") && (
-            <div className="modal-header-actions">
-              <LogoutAll />
-            </div>
+              Settings is in the previous menu"): Settings → Advanced Settings → Back is one spot under the finger. The
+              model's upload joined them here (owner, 2026-10-25), with one (i) for both. */}
+          {(canUploadModel || roleCan(role, "editConfig")) && (
+            <HeaderActions glbUpload={canUploadModel ? glbUpload : null} logout={roleCan(role, "editConfig") && <LogoutAll />} />
           )}
         </div>
 
@@ -420,26 +454,7 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
         <RemoteReplacedNote replaced={own.replaced} onDismiss={own.dismissReplaced} />
         <SaveProblemNote line={saveProblem} onDismiss={() => setSaveProblem(null)} />
         <ModalFooter onClose={back} commit={commit} back={{ go: exit, to: withinSettings ? "Settings" : undefined }}
-          actions={canUploadModel ? (
-            <>
-              {glbUpload.addonCfg?.model_path && (
-                <CentralModelInfo addonCfg={glbUpload.addonCfg} loadedModel={glbUpload.loadedModel} />
-              )}
-              <ModelFileInput upload={glbUpload} />
-              <button
-                className="btn"
-                onClick={glbUpload.openPicker}
-                disabled={glbUpload.uploadBusy !== null}
-                title="Upload a GLB model"
-                aria-label={glbUpload.progress.words ?? "Upload a GLB model"}
-              >
-                <Upload size={18} aria-hidden />
-                <span className="btn-label">{glbUpload.progress.words ?? "Upload model"}</span>
-                {/* on a phone the words are hidden: the progress stays on the icon */}
-                {glbUpload.progress.mark && <span className="icon-btn-count btn-mark" aria-hidden>{glbUpload.progress.mark}</span>}
-              </button>
-            </>
-          ) : withinSettings ? <span /> : undefined} />
+          actions={withinSettings ? <span /> : undefined} />
       </div>
     </DialogLayer>
     </PendingFields>

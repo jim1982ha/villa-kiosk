@@ -96,23 +96,32 @@ ck("the Open a ticket window (one device's faults) fits its content, by the devi
 {
   const ce = readFileSync(new URL("../../src/components/settings/ConfigEditorModal.tsx", import.meta.url), "utf8");
   const bp = readFileSync(new URL("../../src/components/panels/BasePanel.tsx", import.meta.url), "utf8");
-  ck("Advanced Settings: Back at its footer's left, where Settings' opener is; Log out all devices at its header's right; no Close",
-     /<ModalFooter onClose=\{back\} commit=\{commit\} back=\{\{ go: exit, to: withinSettings \? "Settings" : undefined \}\}/.test(ce)
-     && /className="modal-header-actions">\s*<LogoutAll \/>/.test(ce)
-     && /:\s*withinSettings \? <span \/> : undefined\} \/>/.test(ce));
-  // owner, 2026-10-24 (2.496.519): the model's details are the same (i) as every other, never a worded button
+  ck("Advanced Settings: Back at its footer's left, where Settings' opener is; Upload Model and Log Out All at its header's right; no Close",
+     /<ModalFooter onClose=\{back\} commit=\{commit\} back=\{\{ go: exit, to: withinSettings \? "Settings" : undefined \}\}\s*actions=\{withinSettings \? <span \/> : undefined\} \/>/.test(ce)
+     && /<HeaderActions glbUpload=\{canUploadModel \? glbUpload : null\} logout=\{roleCan\(role, "editConfig"\) && <LogoutAll \/>\} \/>/.test(ce));
+  // owner, 2026-10-25: ONE (i) at the header's right for both buttons, each a .btn whose word hides on a phone; the
+  // upload no longer in the footer, where Cancel / Save pushed it left. Drawn (screen.mjs), not read from the source.
   const { h, draw } = await import("../consistency/screen.mjs");
+  const header = (await import("@/components/settings/ConfigEditorModal")).HeaderActions;
+  const up = { addonCfg: { model_path: "x.glb" }, loadedModel: null, openPicker() {}, uploadBusy: null, progress: {} };
+  const logout = h("button", { className: "btn" }, h("span", { className: "btn-label" }, "Log Out All"));
+  const both = draw(h(header, { glbUpload: up, logout }));
+  const tipText = draw(h("div", {}, header({ glbUpload: up, logout }).props.children.at(-1).props.children));
+  const tips = both.match(/class="info-btn"/g) ?? [];
+  ck("  ...one (i) for Upload Model and Log Out All, after both buttons",
+     tips.length === 1 && /Upload Model[\s\S]*Log Out All[\s\S]*class="info-btn"/.test(both), both.slice(0, 600));
+  ck("  ...its words cover both", /<strong>Upload Model<\/strong>/.test(tipText) && /<strong>Log Out All<\/strong> signs every device out/.test(tipText));
+  ck("  ...Upload Model is a .btn with a .btn-label word (hidden on a phone), like Log Out All",
+     /<button class="btn"[^>]*>[\s\S]*?<span class="btn-label">Upload Model<\/span>/.test(both)
+     && /<button className="btn" onClick=\{\(\) => setConfirming\(true\)\} aria-label="Log Out All">\s*<LogOut size=\{18\} aria-hidden \/><span className="btn-label">Log Out All<\/span>/.test(ce));
+  ck("  ...the upload has left the footer", !/actions=\{canUploadModel/.test(ce) && !/header-icon-btn/.test(ce));
   const CentralModelInfo = (await import("@/components/settings/CentralModelInfo")).default;
-  const details = draw(h(CentralModelInfo, { addonCfg: {}, loadedModel: null }));
-  ck("  ...the model's details are the plain (i) (drawn), the upload a .btn with a word hidden on a phone",
-     /<button type="button" class="info-btn" aria-label="Model details"/.test(details) && !/btn-label|class="(?:[^"]*\s)?btn(?:\s[^"]*)?"/.test(details)
-     && /className="btn"\s*onClick=\{glbUpload\.openPicker\}[\s\S]{0,400}<span className="btn-label">/.test(ce)
-     && !/header-icon-btn/.test(ce));
-  // review L (owner, 2026-10-25): its words named "the GLB button in the top bar", gone since 2.496.516 — the tip's
-  // own content, drawn (InfoTip's child, as its card shows it)
-  const tip = draw(h("div", {}, CentralModelInfo({ addonCfg: {}, loadedModel: null }).props.children));
-  ck("  ...its words send to Upload model beside it, never to a top bar that has no such button",
-     /Upload model/.test(tip) && !/top bar/i.test(tip), tip.slice(-300));
+  const tip = draw(h("div", {}, h(CentralModelInfo, { addonCfg: { model_path: "x.glb" }, loadedModel: null })));
+  ck("  ...its words send to Upload Model beside it, never to a top bar that has no such button",
+     /Upload Model, beside this \(i\)/.test(tip) && !/top bar/i.test(tip), tip.slice(-300));
+  const css = readFileSync(new URL("../../src/styles/08-shared.css", import.meta.url), "utf8");
+  ck("  ...on a phone the header's worded buttons go square, like the footer's",
+     /\.modal-footer \.btn:has\(> \.btn-label\),\s*\.modal-header-actions \.btn:has\(> \.btn-label\) \{ width: var\(--touch-min\); padding: 0; \}/.test(css));
   ck("  ...the same Back component as a device window's", /<BackButton onClick=\{back\.go\} label=\{back\.label\} \/>/.test(bp)
      && !/className="btn panel-back"/.test(bp + ce));
 }

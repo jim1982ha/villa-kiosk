@@ -342,8 +342,10 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
      `.modal-footer-actions > button`, so its side padding would stay in a
      44px button and squeeze the icon to a 4px speck wherever nothing else
      trims it — which is what the 641-720px screens showed. */
-  /* only a button that HAS a hideable word goes square (a plain "Close" keeps its word) */
-  .modal-footer .btn:has(> .btn-label) { width: var(--touch-min); padding: 0; }
+  /* only a button that HAS a hideable word goes square (a plain "Close" keeps its word); the header's too (Advanced
+     Settings' "Upload Model" and "Log Out All", owner 2026-10-25: no words where there is no room) */
+  .modal-footer .btn:has(> .btn-label),
+  .modal-header-actions .btn:has(> .btn-label) { width: var(--touch-min); padding: 0; }
   .btn-label { display: none; }
   .btn:has(> .btn-mark) { position: relative; }
   .btn-mark { display: block; top: auto; bottom: 1px; right: 1px; background: var(--accent); }
