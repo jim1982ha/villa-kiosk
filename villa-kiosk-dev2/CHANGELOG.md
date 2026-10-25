@@ -1,3 +1,10 @@
+## 2.496.536
+
+What you will see:
+- A device's window marked MISSING tells you to rename or remove its 3D object only when the model has one. A device
+  deleted in the villa's system, opened from its Cockpit card, now reads "It was renamed or removed in the villa's
+  system." (Gym Light said to change a 3D object that does not exist.)
+
 ## 2.496.535
 
 What you will see:
