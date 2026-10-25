@@ -133,14 +133,17 @@ export function stageWords(stages: PresenceStages, state: string): string {
 export function presenceHeading(p: Presence, when: string, stages: PresenceStages | null,
   sinceWords: (s: Since) => string): { label: string; color: string; when: string } {
   const i = stages ? stages.order.findIndex(([s]) => s === stages.now) : -1;
-  if (!stages || i < 0 || i === stages.order.length - 1) return { label: p.label, color: STATUS_COLOR[p.tone], when };
+  if (!stages || i < 0) return { label: p.label, color: STATUS_COLOR[p.tone], when };
+  // empty: the presence's own words and exact "since", in the band's colour for it
+  if (i === stages.order.length - 1) return { label: p.label, color: stageColor(stages, stages.now), when };
   return { label: stages.order[i][1], color: stageColor(stages, stages.now), when: sinceWords(stages.since) };
 }
 
 /** The colours of the steps between someone home and empty, in order: amber, then teal (the app's own). */
 const STAGE_STEPS = ["var(--status-warning)", STATUS_COLOR.transitional] as const;
 
-/** A stage's colour: the first (someone home) red, as a detection is on the map; the last (empty) grey; each step
+/** A stage's colour: the first (someone home) red, as a detection is on the map; the last (empty) the green the other
+ *  bands use (owner, 2026-10-25: "the 'empty' color must be the green colour as used in other mini chart"); each step
  *  between them one of STAGE_STEPS in order — never shades of one colour (owner, 2026-10-25: "the different levels of
  *  green are not clear enough … when the villa is occupied, use the red \"active\" colour"); a state the sensor does
  *  not list: no contact's grey. */
@@ -148,7 +151,7 @@ export function stageColor(stages: PresenceStages, state: string): string {
   const i = stages.order.findIndex(([s]) => s === state), n = stages.order.length;
   if (i < 0) return STATUS_COLOR.unavailable;
   if (i === 0 || n < 2) return STATUS_COLOR.alert;
-  if (i === n - 1) return STATUS_COLOR.idle;
+  if (i === n - 1) return STATUS_COLOR.active;
   return STAGE_STEPS[(i - 1) % STAGE_STEPS.length];
 }
 
