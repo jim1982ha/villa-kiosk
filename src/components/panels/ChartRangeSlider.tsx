@@ -21,7 +21,7 @@ export function fmtLimit(v: number, step: number): string {
   return fmtAxis(v, handleGrain(step));
 }
 
-export default function ChartRangeSlider({ axis, top, bottom, height, shown, unit, onChange }: {
+export default function ChartRangeSlider({ axis, top, bottom, height, shown, ends, unit, onChange }: {
   /** The chart's left axis (chartGeometry series[0]). */
   axis: { lo: number; hi: number; step: number; sy: (v: number) => number };
   /** The plot's top and bottom, in the drawing's px (the SVG's own). */
@@ -30,6 +30,8 @@ export default function ChartRangeSlider({ axis, top, bottom, height, shown, uni
   height: number;
   /** The handles' values. */
   shown: ValueRange;
+  /** The lowest and highest value the chart shows unfiltered: each handle reaches its end exactly, never past it. */
+  ends: ValueRange | null;
   /** The reading's unit, for a screen reader. */
   unit: string;
   onChange: (r: ValueRange) => void;
@@ -48,19 +50,19 @@ export default function ChartRangeSlider({ axis, top, bottom, height, shown, uni
     drag.current = on === "lo" || on === "hi" ? on : nearerHandle(shown, v);
     e.currentTarget.setPointerCapture?.(e.pointerId);
     e.preventDefault();
-    onChange(moveHandle(shown, drag.current, v, axis));
+    onChange(moveHandle(shown, drag.current, v, axis, ends));
   };
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (drag.current) onChange(moveHandle(shown, drag.current, valueAt(e.clientY), axis));
+    if (drag.current) onChange(moveHandle(shown, drag.current, valueAt(e.clientY), axis, ends));
   };
   const end = () => { drag.current = null; };
   const thumb = (k: "lo" | "hi", y: number) => (
     <div className="chart-range-thumb" data-k={k} style={{ top: y }} role="slider" tabIndex={0}
       aria-label={k === "hi" ? "Highest value kept" : "Lowest value kept"} aria-orientation="vertical"
-      aria-valuemin={k === "hi" ? shown.lo : axis.lo} aria-valuemax={k === "hi" ? axis.hi : shown.hi} aria-valuenow={shown[k]}
+      aria-valuemin={k === "hi" ? shown.lo : ends?.lo ?? axis.lo} aria-valuemax={k === "hi" ? ends?.hi ?? axis.hi : shown.hi} aria-valuenow={shown[k]}
       aria-valuetext={`${fmtLimit(shown[k], axis.step)}${unit}`}
       onKeyDown={(e) => {
-        const r = keyMove(shown, k, e.key, axis);
+        const r = keyMove(shown, k, e.key, axis, ends);
         if (r) { e.preventDefault(); onChange(r); }
       }} />
   );

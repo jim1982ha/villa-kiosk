@@ -24,7 +24,7 @@ import { useHistoryRange, HistoryHeader, ChartStep } from "./historyRange";
 import { aggregationWords } from "./chartUtils";
 import { useHistorySource } from "@/hooks/useHistorySource";
 import {
-  activeRange, filterOf, filterScope, filterSeries, NO_FILTERS, withFilter, type FilterState,
+  activeRange, filterOf, filterScope, filterSeries, NO_FILTERS, openEnds, withFilter, type FilterState,
 } from "@/utils/rangeFilter";
 
 export interface NumericSeries {
@@ -68,7 +68,7 @@ export default function NumericHistory({ series, named = false }: {
     const on = base ? activeRange(kept, base.points) : null;
     const f = finer?.finer?.[s.id];
     const ready = on && f && f.of === range.period && finerStatus === "ready" && status === "ready";
-    const done = ready ? filterSeries(base!, f, range.grainMs, on) : null;
+    const done = ready ? filterSeries(base!, f, range.grainMs, openEnds(on, base!.points)) : null;
     const l = line(s);
     return {
       lines: [done ? { ...l, pts: done.series.points } : l],

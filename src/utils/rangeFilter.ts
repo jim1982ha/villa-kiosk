@@ -125,6 +125,17 @@ export function activeRange(range: ValueRange | null | undefined, points: readon
   return range.lo > d.lo || range.hi < d.hi ? range : null;
 }
 
+/** The range the values are filtered with: a limit at the chart's own end (the highest or lowest value it shows) is no
+ *  limit on that side.
+ *  ⚠️ A HANDLE AT ITS END CUTS NOTHING (owner, 2026-10-26: a battery at 91 %, the top handle at 90 cut every 91 out and the
+ *  line fell to 0; a pump's daily averages top at 446 W while it runs at 900 W, so a top handle left at 446 cut every
+ *  running hour out): the finer values reach past the averages the chart shows. */
+export function openEnds(range: ValueRange, points: readonly HistoryPoint[]): ValueRange {
+  const d = defaultRange(points);
+  if (!d) return range;
+  return { lo: range.lo > d.lo ? range.lo : -Infinity, hi: range.hi < d.hi ? range.hi : Infinity };
+}
+
 /** The handles' values on an axis from `bounds.lo` to `bounds.hi`: the range (or the defaults), held on the axis. */
 export function shownRange(range: ValueRange | null | undefined, points: readonly HistoryPoint[],
   bounds: ValueRange): ValueRange {
@@ -163,23 +174,31 @@ export function nearerHandle(r: ValueRange, v: number): "lo" | "hi" {
 
 /** One handle moved to `v`: on the axis, and never past the other. */
 export function moveHandle(r: ValueRange, which: "lo" | "hi", v: number,
-  axis: { lo: number; hi: number; step: number }): ValueRange {
-  const at = holdOn(axis, v);
+  axis: { lo: number; hi: number; step: number }, ends?: ValueRange | null): ValueRange {
+  // ⚠️ THE ENDS ARE EXACT (owner, 2026-10-26: "i can't slide back up to the max value of 91% (i can only show 90%)"): a drag
+  // lands on the grain, and a battery's 91 is on no grain of 2.5; within half a grain of an end, or past it, the handle
+  // is the end itself — the chart's highest or lowest value — and it never goes past it
+  const g = handleGrain(axis.step);
+  let at = holdOn(axis, v);
+  if (ends) {
+    if (v >= ends.hi - g / 2 || at > ends.hi) at = ends.hi;
+    if (v <= ends.lo + g / 2 || at < ends.lo) at = ends.lo;
+  }
   return which === "lo" ? { lo: Math.min(at, r.hi), hi: r.hi } : { lo: r.lo, hi: Math.max(at, r.lo) };
 }
 
 /** A key on a handle: the arrows a grain, Page Up/Down a tick step, Home/End the axis' end. null: not a slider key. */
 export function keyMove(r: ValueRange, which: "lo" | "hi", key: string,
-  axis: { lo: number; hi: number; step: number }): ValueRange | null {
+  axis: { lo: number; hi: number; step: number }, ends?: ValueRange | null): ValueRange | null {
   const v = r[which], g = handleGrain(axis.step);
   const to = key === "ArrowUp" || key === "ArrowRight" ? v + g
     : key === "ArrowDown" || key === "ArrowLeft" ? v - g
     : key === "PageUp" ? v + axis.step
     : key === "PageDown" ? v - axis.step
-    : key === "Home" ? axis.lo
-    : key === "End" ? axis.hi
+    : key === "Home" ? ends?.lo ?? axis.lo
+    : key === "End" ? ends?.hi ?? axis.hi
     : null;
-  return to === null ? null : moveHandle(r, which, to, axis);
+  return to === null ? null : moveHandle(r, which, to, axis, ends);
 }
 
 /** The two value pills' centres: beside their handles, pushed apart to `gap` px when the handles are closer. */

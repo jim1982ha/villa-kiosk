@@ -1,3 +1,12 @@
+## 2.496.545
+
+What you will see:
+- A chart's range slider reaches the chart's highest and lowest values exactly: a battery at 91% can be set back to
+  91, not stopped at 90 (and the same for the lowest value).
+- A handle left at its end no longer cuts anything out on that side: the battery's readings at 91% stay on the line,
+  and a pump running above its highest daily average is no longer removed when only the lower handle is moved. The
+  stripes show only on a side the range really limits.
+
 ## 2.496.544
 
 What you will see:

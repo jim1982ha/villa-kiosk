@@ -137,7 +137,7 @@ export default function LineChart({ lines, window, height = 150, status, label, 
     <>
       {on && slid && <RangeLine range={on} step={ax.step} unit={unit} result={slid.result} onReset={() => slid.onChange(null)} />}
       <div className="chart-with-axis has-unit">
-        {slid && shown && <ChartRangeSlider axis={ax} top={TOP} bottom={BOT} height={H} shown={shown} unit={unit}
+        {slid && shown && <ChartRangeSlider axis={ax} top={TOP} bottom={BOT} height={H} shown={shown} ends={defaultRange(slid.base)} unit={unit}
           onChange={(r) => slid.onChange(activeRange(r, slid.base))} />}
         <YAxis zoomable height={H} frame={H} unit={lines[0].unit?.trim()} ticks={leftAxis} cls={lines[0].cls?.split(" ")[0]} color={lines[0].color} />
         <div className="spark-wrap weather-chart-wrap">
@@ -176,8 +176,10 @@ export default function LineChart({ lines, window, height = 150, status, label, 
                     <line x1="0" y1="0" x2="0" y2="6" className="chart-range-hatch" />
                   </pattern>
                 </defs>
-                {[[TOP, ax.sy(on.hi)], [ax.sy(on.lo), BOT]].filter(([a, b]) => b > a).map(([a, b]) => (
-                  <rect key={a} x="0" y={a} width={W} height={b - a} fill={`url(#${hatch})`} />
+                {/* only a side the range limits: a handle at its end leaves nothing out there (rangeFilter.openEnds) */}
+                {[[TOP, ax.sy(on.hi), on.hi < all!.hi], [ax.sy(on.lo), BOT, on.lo > all!.lo]]
+                  .filter(([a, b, limits]) => limits && (b as number) > (a as number)).map(([a, b]) => (
+                  <rect key={a as number} x="0" y={a as number} width={W} height={(b as number) - (a as number)} fill={`url(#${hatch})`} />
                 ))}
               </g>
             )}

@@ -238,4 +238,27 @@ console.log("\n  the finer values come from the one history source, only while a
        && /const filtering = slidable\.filter\(\(s\) => activeRange\(/.test(tree.text));
 }
 
+console.log("\n  the ends are exact, and an end limits nothing (owner, 2026-10-26: a battery at 91 % could only be set back to 90):");
+{
+  const axis = { lo: 0, hi: 100, step: 25 }, ends = { lo: 41, hi: 91 }, start = { lo: 50, hi: 80 };
+  ck("dragged to the top (or past it), the upper handle is exactly the chart's highest value, 91, never 90 or 92.5",
+     [91, 90.6, 95, 100].every((v) => R.moveHandle(start, "hi", v, axis, ends).hi === 91),
+     [91, 90.6, 95, 100].map((v) => R.moveHandle(start, "hi", v, axis, ends).hi));
+  ck("  ...and the lower handle exactly the lowest, 41, never 40 or 42.5",
+     [41, 41.4, 30, 0].every((v) => R.moveHandle(start, "lo", v, axis, ends).lo === 41),
+     [41, 41.4, 30, 0].map((v) => R.moveHandle(start, "lo", v, axis, ends).lo));
+  ck("  ...End and Home reach them too; between, a drag still lands on the grain (75)",
+     R.keyMove(start, "hi", "End", axis, ends).hi === 91 && R.keyMove(start, "lo", "Home", axis, ends).lo === 41
+     && R.moveHandle(start, "hi", 74.9, axis, ends).hi === 75);
+  const pts = [{ t: 0, v: 41 }, { t: 1, v: 91 }];
+  const open = R.openEnds({ lo: 50, hi: 91 }, pts);
+  ck("a handle at its end is no limit on that side: 50 to 91 keeps everything from 50 up", open.lo === 50 && open.hi === Infinity, open);
+  const H0 = localMidnight(Date.UTC(2026, 9, 20)), edges = [H0, H0 + HOUR_MS];
+  const finer = { stepMs: 5 * 60_000, series: { window: { from: H0, to: H0 + HOUR_MS }, gaps: [],
+    points: Array.from({ length: 12 }, (_, k) => ({ t: H0 + k * 5 * 60_000, v: k < 6 ? 91.4 : 60 })) } };
+  const capped = R.stepsInRange(finer, edges, { lo: 50, hi: 91 })[0].v, openv = R.stepsInRange(finer, edges, open)[0].v;
+  ck("  ...so a reading above the chart's highest average (91.4 in a step whose average is 91) is kept, not cut out",
+     Math.abs(openv - (91.4 * 6 + 60 * 6) / 12) < 1e-9 && Math.abs(capped - 60) < 1e-9, { capped, openv });
+}
+
 done("✅ a trend chart's range filter: the owner's rule, on the chart's own axis");
