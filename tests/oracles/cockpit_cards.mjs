@@ -122,11 +122,14 @@ ck("  ...and hovering it says when: the nightly check's next run, the Agent's ne
     entityId: "lock.example", ticketId: "c1", stage: "fault", source: "alert", device: { key: "lock.example", label: "Door", room: "Hall" },
     ...(closing ? { closing } : {}) }])[0];
   const line = (closing, now = t1445) => cockpitCard(fault(closing), CADENCE, now).lines[0].closing;
-  const waiting = { at: closes.toISOString(), word: "Locked", since: locked.toISOString() };
+  const waiting = { at: closes.toISOString(), word: "Locked", since: { at: locked.getTime(), before: false } };
   ck("  ...a fault waiting to close says what it reads, since when, and when it closes if it stays so",
      line(waiting) === `Locked since ${clockTime(locked)} · closes at about ${clockTime(closes)} if it stays locked`
      && line(waiting, new Date(2026, 9, 21, 14, 50)) === `Locked since ${clockTime(locked)} · closes at the next check if it stays locked`
      && line({ at: closes.toISOString() }) === `Back to normal · closes at about ${clockTime(closes)} if it stays so`
+     // the history not read yet: "…", never a time; not said: no time at all
+     && line({ ...waiting, since: "loading" }) === `Locked since … · closes at about ${clockTime(closes)} if it stays locked`
+     && line({ ...waiting, since: null }) === `Locked · closes at about ${clockTime(closes)} if it stays locked`
      && line(undefined) === null, [line(waiting)]);
   const drawn = draw(h(AttentionCard, { card: cockpitCard(fault(waiting), CADENCE, t1445), onOpenEntity: () => {} }));
   ck("  ...drawn under its problem's line", drawn.includes(`if it stays locked</span>`), drawn.slice(0, 500));
@@ -135,12 +138,21 @@ ck("  ...and hovering it says when: the nightly check's next run, the Agent's ne
   const { devicesOf } = await import("../consistency/devices.mjs");
   const ticket = { id: "c1", title: "Door unlocked", status: "open", openedAt: "2026-10-21T06:00:00Z", entityId: "lock.example",
     photoIds: [], closesAt: closes.toISOString() };
-  const entities = { "lock.example": { entity_id: "lock.example", state: "locked", attributes: {}, last_changed: locked.toISOString() } };
+  // villa, 2026-10-26: last_changed is the restart of the villa's system — the time is the history's (sinceOf), never it
+  const restart = new Date(2026, 9, 21, 14, 44);
+  const entities = { "lock.example": { entity_id: "lock.example", state: "locked", attributes: {}, last_changed: restart.toISOString() } };
+  const { closingEntities } = await import("@/config/attention");
+  const fmData = { ...EMPTY_FM_DATA, tickets: [ticket] };
+  const asked = [];
   const items = buildAttentionItems({ devices: devicesOf({ ids: ["lock.example"] }), entities, entityMap: {}, resolvedRooms: {},
-    fmData: { ...EMPTY_FM_DATA, tickets: [ticket] } });
+    fmData, sinceOf: (id) => (asked.push(id), { at: locked.getTime(), before: false }) });
   const c = items.find((i) => i.ticketId === "c1")?.closing;
-  ck("  ...from the fault's closesAt and its device as it reads now",
-     c?.at === closes.toISOString() && c?.word === "Locked" && c?.since === locked.toISOString(), c);
+  ck("  ...from the fault's closesAt and its device as it reads now, since when from its history (never the restart)",
+     c?.at === closes.toISOString() && c?.word === "Locked" && c?.since?.at === locked.getTime()
+     && asked.join() === "lock.example" && closingEntities(fmData, entities).join() === "lock.example", c);
+  const unread = buildAttentionItems({ devices: devicesOf({ ids: ["lock.example"] }), entities, entityMap: {}, resolvedRooms: {},
+    fmData }).find((i) => i.ticketId === "c1")?.closing;
+  ck("  ...no history to ask: no time said, never last_changed", unread?.since === null, unread);
 }
 ck("  ...said whole, with its moment, by the pill's tooltip (the Kiosk's own: common/Tip)",
    /aria-label="Next check: within 5min \(\d\d\/\d\d\/\d{4} \d\d:\d\d\)"/.test(issue)
