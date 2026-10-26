@@ -1,3 +1,10 @@
+## 0.12.359
+
+What you will see:
+- A device offline since before the villa's history the Agent reads says "offline for over 7d 22h", never "7d 22h"
+  counted from the start of that read (Timmerflotte_2623 is offline since 17 Oct or earlier). How far back it reads
+  is a setting on the Limits page (7 days).
+
 ## 0.12.358
 
 What you will see:
