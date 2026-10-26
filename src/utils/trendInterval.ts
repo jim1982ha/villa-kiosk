@@ -46,17 +46,8 @@ export function intervalSeries(s: HistorySeries, B: number): HistorySeries {
   // on a Monday), as the recorder's figures and the state band do (timelineCells.firstCellStart) — this line cut its
   // weeks on the 1970 Thursday and its days on UTC's midnight, so two charts of one panel showed different weeks
   const edges = cellEdges(from, to, B);
-  const pts = [...s.points].sort((a, b) => a.t - b.t);
   const gaps = [...s.gaps].sort((a, b) => a.from - b.from);
-  // Where the signal is KNOWN: from each reading until the next reading, an
-  // outage's start, or the window's end — whichever is first.
-  const spans: { a: number; b: number; v: number }[] = [];
-  for (let i = 0; i < pts.length; i++) {
-    const a = Math.max(pts[i].t, from);
-    let b = i + 1 < pts.length ? pts[i + 1].t : to;
-    for (const g of gaps) if (g.from >= pts[i].t && g.from < b) { b = g.from; break; }
-    if (b > a) spans.push({ a, b: Math.min(b, to), v: pts[i].v });
-  }
+  const spans = knownSpans(s);
   const points: { t: number; v: number }[] = [];
   for (let k = 0; k + 1 < edges.length && edges[k] < to; k++) {
     const t0 = edges[k], t1 = edges[k + 1];
@@ -68,6 +59,25 @@ export function intervalSeries(s: HistorySeries, B: number): HistorySeries {
     if (w > 0) points.push({ t: Math.max(t0, from), v: sum / w });
   }
   return { points, gaps: widenGaps(gaps, from, to, B), window: s.window };
+}
+
+/**
+ * Where a numeric history's signal is KNOWN, each reading held: from the reading until the next reading, an outage's
+ * start, or the window's end, whichever is first (clipped to the window). The time weights of `intervalSeries`, and of
+ * a chart's range filter (rangeFilter: only the spans whose value is inside the range count), one rule for both.
+ */
+export function knownSpans(s: HistorySeries): { a: number; b: number; v: number }[] {
+  const { from, to } = s.window;
+  const pts = [...s.points].sort((a, b) => a.t - b.t);
+  const gaps = [...s.gaps].sort((a, b) => a.from - b.from);
+  const spans: { a: number; b: number; v: number }[] = [];
+  for (let i = 0; i < pts.length; i++) {
+    const a = Math.max(pts[i].t, from);
+    let b = i + 1 < pts.length ? pts[i + 1].t : to;
+    for (const g of gaps) if (g.from >= pts[i].t && g.from < b) { b = g.from; break; }
+    if (b > a) spans.push({ a, b: Math.min(b, to), v: pts[i].v });
+  }
+  return spans;
 }
 
 /** Outages widened to whole five-minute intervals (merged where they then

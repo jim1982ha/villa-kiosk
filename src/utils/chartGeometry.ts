@@ -35,6 +35,9 @@ export interface ChartSeriesInput {
   /** Its unit: a "%" reading keeps its axis within 0–100 while its values do
    *  (naturalBounds). */
   unit?: string;
+  /** Values its scale holds besides its points: a range-filtered line keeps the axis of its values unfiltered (their
+   *  lowest and highest), so the axis, and the slider standing on it, do not move as the filter changes. */
+  holds?: readonly number[];
 }
 
 /**
@@ -89,6 +92,8 @@ export interface SeriesGeometry {
    *  y. ONE tick rule for every line chart (2.496.115) — the sparklines drew
    *  hi/mid/lo, the dual one hi/lo, the Weather charts these. */
   ticks: { v: number; y: number }[];
+  /** The ticks' step (niceTicks): what a value on this axis is read to (fmtAxis). */
+  step: number;
   /** The line in pixels: stepped, held, split at this series' outages. */
   runs: { x: number; y: number }[][];
   /** This series' outages, each in the series' own horizontal slice of the
@@ -185,11 +190,12 @@ export function chartGeometry(
     return [lo, hi];
   };
   const sharedInput = input.filter((s) => (s.scale ?? "shared") === "shared");
-  const shared = range(sharedInput.flatMap((s) => s.pts.map((p) => p.v)), zero, sharedInput.map((s) => s.unit));
+  const values = (s: ChartSeriesInput) => [...s.pts.map((p) => p.v), ...(s.holds ?? [])];
+  const shared = range(sharedInput.flatMap(values), zero, sharedInput.map((s) => s.unit));
   const slice = (plot.bottom - plot.top) / Math.max(1, input.length);
   const series = input.map((s, i): SeriesGeometry => {
     const kind = s.scale ?? "shared";
-    const [lo, hi] = kind === "shared" ? shared : range(s.pts.map((p) => p.v), kind === "fromZero" || zero, [s.unit]);
+    const [lo, hi] = kind === "shared" ? shared : range(values(s), kind === "fromZero" || zero, [s.unit]);
     const sy = (v: number) => plot.bottom - ((v - lo) / (hi - lo)) * (plot.bottom - plot.top);
     const minW = (plot.right - plot.left) * MIN_BAND_OF_PLOT;
     const bands = s.gaps.flatMap((gap) => {
@@ -213,10 +219,11 @@ export function chartGeometry(
     // About four steps: a line keeps its own range (a bar chart rounds its
     // top up instead), so only the ticks INSIDE it are drawn — three steps
     // left a 0–900 W/m² line with two labels.
-    const ticks = niceTicks(lo, hi, 4).ticks
+    const nice = niceTicks(lo, hi, 4);
+    const ticks = nice.ticks
       .filter((v) => v >= lo - 1e-9 && v <= hi + 1e-9)
       .map((v) => ({ v, y: sy(v) }));
-    return { lo, hi, sy, ticks, runs, bands };
+    return { lo, hi, sy, ticks, step: nice.step, runs, bands };
   });
   const hover = (t: number): ChartHover | null => {
     const px = sx(t);
