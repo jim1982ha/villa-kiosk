@@ -21,6 +21,7 @@ import { gapBand } from "./historyGaps";
 import type { Reading } from "./stepSeries";
 import type { HistoryGap } from "@/types/ha.types";
 import { HOUR_MS } from "./localDay";
+import type { ChartFit } from "./viewPrefs";
 
 export interface PlotRect { left: number; right: number; top: number; bottom: number }
 
@@ -35,10 +36,15 @@ export interface ChartSeriesInput {
   /** Its unit: a "%" reading keeps its axis within 0–100 while its values do
    *  (naturalBounds). */
   unit?: string;
-  /** Values its scale holds besides its points: a range-filtered line keeps the axis of its values unfiltered (their
-   *  lowest and highest), so the axis, and the slider standing on it, do not move as the filter changes. */
+  /** Values its scale holds besides its points: a range-filtered line's values unfiltered. */
   holds?: readonly number[];
+  /** A range filter's limits (rangeFilter.ValueRange, ±Infinity: no limit on that side): every finite limit sits
+   *  INSIDE its axis, a margin from its end, since a handle at an end means "no limit". */
+  limits?: { lo: number; hi: number };
 }
+
+/** The margin a finite limit keeps from its axis' end, as a fraction of the axis (a chart drawn with no pad). */
+export const LIMIT_MARGIN = 0.08;
 
 /**
  * The range a unit's readings normally live in: a percentage between 0 and
@@ -166,14 +172,28 @@ export function readingAt(pts: readonly Reading[], gaps: readonly HistoryGap[], 
  */
 export function chartGeometry(
   window: TimeWindow, input: readonly ChartSeriesInput[], plot: PlotRect, pad = 0,
-  /** Every scale includes 0 (the tablet's "charts from 0", viewPrefs.chartsFromZero): shared and own as "fromZero". */
-  zero = false,
+  /** The tablet's axis fit (viewPrefs.chartFit): "zero", every scale holds 0 (shared and own as "fromZero");
+   *  "fitted", each fits its values, or a range filter's limits when it has one. */
+  fit: ChartFit = "fitted",
 ): ChartGeometry {
   const sx = timeScale(window, plot.left, plot.right);
   const span = window.to - window.from || 1;
   const tAt = (x: number) =>
     window.from + Math.max(0, Math.min(1, (x - plot.left) / ((plot.right - plot.left) || 1))) * span;
-  const range = (vs: number[], fromZero: boolean, units: readonly (string | undefined)[]): [number, number] => {
+  const range = (vs: number[], fromZero: boolean, units: readonly (string | undefined)[],
+    limits?: { lo: number; hi: number }): [number, number] => {
+    const L = limits ?? { lo: -Infinity, hi: Infinity };
+    const finite = [L.lo, L.hi].filter(Number.isFinite);
+    const margin = pad > 0 ? pad : LIMIT_MARGIN;
+    // ⚠️ FITTED TO A RANGE (owner, 2026-10-26): to its finite limits (an open side: the values on that side), with a
+    // margin, so each handle sits inside the axis and never on an end; values outside are drawn on its edge (sy)
+    if (!fromZero && finite.length > 0) {
+      let lo = Number.isFinite(L.lo) ? L.lo : Math.min(L.hi, ...vs), hi = Number.isFinite(L.hi) ? L.hi : Math.max(L.lo, ...vs);
+      if (isFlat(lo, hi)) hi = lo + 1;
+      const p = (hi - lo) * margin;
+      return [lo - p, hi + p];
+    }
+    vs = [...vs, ...finite];
     if (vs.length === 0) return [0, 1];
     // from 0: the axis holds 0 whichever side the values are (a temperature below 0 keeps its own floor)
     let lo = fromZero ? Math.min(0, ...vs) : Math.min(...vs), hi = fromZero ? Math.max(0, ...vs) : Math.max(...vs);
@@ -187,16 +207,24 @@ export function chartGeometry(
     if (isFlat(lo, hi)) { if (held && hi >= b!.max) lo = hi - 1; else hi = lo + 1; }
     if (!fromZero && pad > 0) { const p = (hi - lo) * pad; lo -= p; hi += p; }
     if (held) { lo = Math.max(lo, b!.min); hi = Math.min(hi, b!.max); }
+    // from 0, a finite limit keeps the margin from its end too (the axis already holds it)
+    const m = (hi - lo) * margin;
+    if (Number.isFinite(L.hi) && L.hi > hi - m) hi = L.hi + m;
+    if (Number.isFinite(L.lo) && L.lo < lo + m) lo = L.lo - m;
     return [lo, hi];
   };
   const sharedInput = input.filter((s) => (s.scale ?? "shared") === "shared");
   const values = (s: ChartSeriesInput) => [...s.pts.map((p) => p.v), ...(s.holds ?? [])];
-  const shared = range(sharedInput.flatMap(values), zero, sharedInput.map((s) => s.unit));
+  const zero = fit === "zero";
+  // a range filter's limits shape a scale only when its series is the scale's only one (a one-line chart's slider)
+  const limitsOf = (ss: readonly ChartSeriesInput[]) => (ss.length === 1 ? ss[0].limits : undefined);
+  const shared = range(sharedInput.flatMap(values), zero, sharedInput.map((s) => s.unit), limitsOf(sharedInput));
   const slice = (plot.bottom - plot.top) / Math.max(1, input.length);
   const series = input.map((s, i): SeriesGeometry => {
     const kind = s.scale ?? "shared";
-    const [lo, hi] = kind === "shared" ? shared : range(values(s), kind === "fromZero" || zero, [s.unit]);
-    const sy = (v: number) => plot.bottom - ((v - lo) / (hi - lo)) * (plot.bottom - plot.top);
+    const [lo, hi] = kind === "shared" ? shared : range(values(s), kind === "fromZero" || zero, [s.unit], s.limits);
+    // a value outside the axis (one fitted to a range) is drawn on its edge
+    const sy = (v: number) => plot.bottom - ((Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo)) * (plot.bottom - plot.top);
     const minW = (plot.right - plot.left) * MIN_BAND_OF_PLOT;
     const bands = s.gaps.flatMap((gap) => {
       if (!gapBand(gap, sx, plot.left, plot.right)) return [];   // outside the plot

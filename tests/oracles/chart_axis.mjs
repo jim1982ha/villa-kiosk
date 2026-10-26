@@ -78,35 +78,65 @@ ck("Sun & UV: the two lines have DIFFERENT colours (owner, 2026-09-26: tell sunl
 ck("  ...the legend says the same, and UV's colour has a line, a key and an axis tint",
    /\["UV", "uv"\]/.test(weather) && /\)\.uv \{ --series: var\(--status-danger\); \}/.test(css)
      && /\.chart-line:is\([^)]*\.uv[^)]*\) \{ stroke: var\(--series\); \}/.test(css) && /\.key:is\([^)]*\.uv[^)]*\) \{ background: var\(--series\); \}/.test(css)
-     && /\.chart-yaxis\.tint-uv \{/.test(css));
+     && /\.chart-yaxis\.tint-uv, \.chart-unit\.tint-uv \{/.test(css));
 ck("  ...and the right axis wears its line's colour (its class, or its CSS colour)",
    /ticks=\{g\.series\[ownAt\]\.ticks\}\s*cls=\{right\.cls\?\.split\(" "\)\[0\]\} color=\{right\.color\} \/>/.test(lc));
 
-console.log("\n  a trend reads from 0, one tap on any y-axis zooms every chart (owner, 2026-10-26):");
+console.log("\n  the axis fit, one setting per tablet (owner, 2026-10-26): from 0, or fitted; a tap on any y-axis or its fit mark swaps it:");
 {
   const w = { from: 0, to: 10 }, plot = { left: 0, right: 100, top: 0, bottom: 100 };
   const battery = [{ t: 0, v: 40 }, { t: 6, v: 91 }];                          // the owner's picture: 40 to 91 %
-  const z = G.chartGeometry(w, [{ pts: battery, gaps: [], unit: "%" }], plot, 0.08, true).series[0];
-  const zoomed = G.chartGeometry(w, [{ pts: battery, gaps: [], unit: "%" }], plot, 0.08, false).series[0];
+  const z = G.chartGeometry(w, [{ pts: battery, gaps: [], unit: "%" }], plot, 0.08, "zero").series[0];
+  const fitted = G.chartGeometry(w, [{ pts: battery, gaps: [], unit: "%" }], plot, 0.08, "fitted").series[0];
   ck("from 0: a battery from 40 to 91 % is drawn on 0 to its top, its ticks from 0", z.lo === 0 && z.hi >= 91 && z.ticks[0].v === 0, z.ticks);
-  ck("  ...zoomed: its values fill the plot (the old look), no 0", zoomed.lo > 30 && zoomed.ticks.every((t) => t.v > 0), zoomed.ticks);
-  const cold = G.chartGeometry(w, [{ pts: [{ t: 0, v: -4 }, { t: 5, v: 6 }], gaps: [] }], plot, 0.08, true).series[0];
+  ck("  ...fitted: its values fill the plot (the old zoomed look), no 0", fitted.lo > 30 && fitted.ticks.every((t) => t.v > 0), fitted.ticks);
+  const cold = G.chartGeometry(w, [{ pts: [{ t: 0, v: -4 }, { t: 5, v: 6 }], gaps: [] }], plot, 0.08, "zero").series[0];
   ck("  ...a temperature below 0 keeps its floor (the axis holds 0 and every value)", cold.lo <= -4 && cold.hi >= 6, [cold.lo, cold.hi]);
-  const two = G.chartGeometry(w, [{ pts: [{ t: 0, v: 20 }, { t: 5, v: 22 }], gaps: [] }, { pts: [{ t: 0, v: 300 }, { t: 5, v: 900 }], gaps: [], scale: "own" }], plot, 0.08, true);
+  const wifi = G.chartGeometry(w, [{ pts: [{ t: 0, v: -86 }, { t: 5, v: -48 }], gaps: [] }], plot, 0.08, "zero").series[0];
+  ck("  ...a signal always negative (dBm): from 0 puts 0 at the TOP", wifi.hi === 0 && wifi.lo <= -86 && wifi.ticks.at(-1).v === 0, [wifi.lo, wifi.hi]);
+  const two = G.chartGeometry(w, [{ pts: [{ t: 0, v: 20 }, { t: 5, v: 22 }], gaps: [] }, { pts: [{ t: 0, v: 300 }, { t: 5, v: 900 }], gaps: [], scale: "own" }], plot, 0.08, "zero");
   ck("  ...a line on its own scale too (the right axis)", two.series[0].lo === 0 && two.series[1].lo === 0, [two.series[0].lo, two.series[1].lo]);
+  const pump = G.chartGeometry(w, [{ pts: [{ t: 0, v: 190 }, { t: 5, v: 610 }], gaps: [] }], plot, 0.08, "fitted").series[0];
+  ck("fitted, no range: 190 to 610 W starts near its lowest value (about 150), never rounded down to 0, its ticks inside",
+     pump.lo > 140 && pump.lo < 190 && pump.hi > 610 && pump.hi < 660 && pump.ticks.every((t) => t.v >= pump.lo && t.v <= pump.hi) && pump.ticks[0].v > 0,
+     { lo: pump.lo, hi: pump.hi, ticks: pump.ticks.map((t) => t.v) });
   const P = await import("@/utils/viewPrefs");
   let told = 0;
-  const off = P.onChartsFromZero(() => told++);
-  const was = P.chartsFromZero();
-  P.setChartsFromZero(!was);
-  const flipped = P.chartsFromZero();
-  P.setChartsFromZero(was);
+  const off = P.onChartFit(() => told++);
+  const was = P.chartFit();
+  P.toggleChartFit();
+  const flipped = P.chartFit();
+  P.setChartFit(was);
   off();
-  ck("the setting opens from 0, one call flips it for every chart and tells each one shown", was === true && flipped === false && told === 2, { was, flipped, told });
+  ck("the setting opens from 0, one call swaps it for every chart and tells each one shown", was === "zero" && flipped === "fitted" && told === 2, { was, flipped, told });
+  const { h, draw } = await import("../consistency/screen.mjs");
+  const { parseTsx, elements, propText } = await import("../consistency/jsx.mjs");
+  const { FitMark } = await import("@/components/panels/ChartAxis");
+  P.setChartFit("zero");
+  const asZero = draw(h(FitMark));
+  P.setChartFit("fitted");
+  const asFitted = draw(h(FitMark));
+  ck("the fit mark shows the fit now: from 0 an arrow down to a line with a 0, fitted two arrows closing in",
+     /chart-fit-mark zero/.test(asZero) && /lucide-arrow-down-to-line/.test(asZero) && />0</.test(asZero) && /Axis from 0: tap to fit/.test(asZero)
+       && /chart-fit-mark fitted/.test(asFitted) && /lucide-fold-vertical/.test(asFitted) && /Axis fitted: tap to show from 0/.test(asFitted), [asZero, asFitted]);
+  // a tap: the mark's own onClick, taken from it as React draws it (its hooks run inside a component)
+  const tap = () => { let on = null; draw(h(() => { on = FitMark().props.onClick; return null; })); on(); };
+  P.setChartFit("zero");
+  tap();
+  const afterOne = P.chartFit();
+  tap();
+  ck("  ...a tap on it swaps the one setting (from 0 → fitted → from 0)", afterOne === "fitted" && P.chartFit() === "zero", { afterOne, now: P.chartFit() });
+  const lineTree = parseTsx("components/panels/LineChart.tsx");
+  const axes = elements(lineTree, "YAxis");
+  ck("  ...a line chart's axes are the tap too (both sides); a bar chart's axis is not",
+     axes.length === 2 && axes.every((a) => propText(a, "zoomable") === true) && !/zoomable/.test(barComp));
   const ax = read("../../src/components/panels/ChartAxis.tsx");
-  ck("  ...a line chart's axes are the tap (both sides), the chart draws with it; a bar chart's axis is not",
-     /<YAxis zoomable side="right"/.test(lc) && /const zero = useChartsFromZero\(\);/.test(lc) && /plot, 0\.08, zero\)/.test(lc)
-     && /onClick: \(\) => setChartsFromZero\(!fromZero\)/.test(ax) && !/zoomable/.test(barComp), null);
+  ck("  ...the chart draws with the setting", /const fit = useChartFit\(\);/.test(lc) && /plot, 0\.08, fit\)/.test(lc)
+     && /onClick: toggleChartFit,/.test(ax) && /onClick=\{toggleChartFit\}/.test(ax), null);
+  // stored before: "1" from 0, "0" zoomed (= fitted); the key keeps its meaning
+  ck("a tablet's old choice reads the same: \"1\" from 0, \"0\" fitted, nothing from 0; and each fit writes back what it reads",
+     P.fitOfStored("1") === "zero" && P.fitOfStored("0") === "fitted" && P.fitOfStored(null) === "zero"
+       && /writeString\(CHART_FIT_KEY, fit === "zero" \? "1" : "0"\)/.test(read("../../src/utils/viewPrefs.ts")));
 }
 
 done("✅ every chart says what its values are");

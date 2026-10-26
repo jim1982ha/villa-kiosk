@@ -18,13 +18,13 @@ import { drawableWindow, type TimeWindow } from "@/utils/lineChart";
 import { chartGeometry, type ChartGeometry } from "@/utils/chartGeometry";
 import { emptyHistoryText, type HistoryStatus } from "@/utils/statisticsSeries";
 import { NOT_KEPT_COLOR, STATUS_COLOR } from "@/utils/stateColors";
-import { fmtChartValue, fmtChartTick, fmtStepStamp, fmtOutage, fmtDuration } from "./chartUtils";
-import { activeRange, defaultRange, shownRange, type ValueRange } from "@/utils/rangeFilter";
-import ChartRangeSlider, { fmtLimit } from "./ChartRangeSlider";
+import { fmtChartValue, fmtChartTick, fmtStepStamp, fmtOutage } from "./chartUtils";
+import { activeRange, type ValueRange } from "@/utils/rangeFilter";
+import ChartRangeSlider, { RangeChip } from "./ChartRangeSlider";
 import { formatUnitValue } from "@/utils/entityValue";
 import { useChartPointer } from "./useChartPointer";
 import ChartTip from "./ChartTip";
-import YAxis, { useChartsFromZero, type AxisTick } from "./ChartAxis";
+import YAxis, { ChartUnitLine, FitMark, useChartFit, type AxisTick } from "./ChartAxis";
 
 export interface LineSpec {
   pts: readonly HistoryPoint[];
@@ -44,19 +44,19 @@ export interface LineSpec {
   scale?: "shared" | "own" | "fromZero";
 }
 
-/** A range filter on a one-line chart (owner, 2026-10-26): the slider beside its left axis, the left-out values
- *  hatched over the plot, and the line above the chart. NumericHistory filters the line (utils/rangeFilter) and passes
- *  it as `lines[0]`; the chart keeps the axis of `base`. */
+/** A range filter on a one-line chart (owner, 2026-10-26): the slider beside its left axis, the left-out sides
+ *  hatched over the plot, and the chip on the unit line. NumericHistory filters the line (utils/rangeFilter) and passes
+ *  it as `lines[0]`; the axis holds `base` too. */
 export interface ChartFilter {
-  /** The chart's values unfiltered: the slider's defaults (their lowest and highest) and the axis it stands on. */
+  /** The chart's values unfiltered: its axis holds them. */
   base: readonly HistoryPoint[];
-  /** The range chosen, or null: all. */
+  /** The range chosen (±Infinity: no limit on that side), or null: all. */
   range: ValueRange | null;
-  /** A range, or null for all (a range at its defaults or wider is all). */
+  /** A range, or null for all (no limit on either side is all). */
   onChange: (r: ValueRange | null) => void;
-  /** The filtered line's average and its time in range; "loading" while the finer values come (the line is drawn
-   *  unfiltered meanwhile), "failed" when they could not be read. */
-  result: { avg: number; inRangeMs: number } | "loading" | "failed";
+  /** "loading" while the finer values come (the line is drawn unfiltered meanwhile), "failed" when they could not be
+   *  read. */
+  state: "ready" | "loading" | "failed";
 }
 
 /** The drawing's own units: the SVG stretches to the tile's width. */
@@ -72,14 +72,16 @@ export function ChartEmpty({ status, height, bar }: { status: HistoryStatus; hei
   return <div className={bar ? "muted body-text" : "muted body-text weather-chart-empty"}>{text}</div>;
 }
 
-/** The x labels, under the PLOT: start, middle and the end — "now" when the
- *  window ends within five minutes of it. */
+/** The x labels, under the PLOT: start, middle and the end — "now" when the window ends within five minutes of it. In
+ *  the row's empty left corner, by the axis' foot, the axis fit (ChartAxis.FitMark): under the slider when the chart
+ *  has one, else under the axis numbers. */
 export function TimeAxis({ g, right, slider }: { g: ChartGeometry | null; right?: boolean; slider?: boolean }) {
   if (!g) return <div className="weather-axis"><span>&nbsp;</span></div>;
   const [a, b, c] = g.ticks;
   const endsNow = Math.abs(c - Date.now()) < 5 * 60_000;
   return (
     <div className={`weather-axis under-yaxis${right ? " right" : ""}${slider ? " beside-range" : ""}`}>
+      <span className="chart-fit-corner"><FitMark /></span>
       <span>{fmtChartTick(a, g.spanHours)}</span><span>{fmtChartTick(b, g.spanHours)}</span>
       <span>{endsNow ? "now" : fmtChartTick(c, g.spanHours)}</span>
     </div>
@@ -113,13 +115,14 @@ export default function LineChart({ lines, window, height = 150, status, label, 
   // A line with no readings still has its outage, and its band says so
   // (every line is kept); whether there is anything to draw is lineChart's.
   const w = drawableWindow(window, ...lines.map((l) => l.pts));
-  // from 0 unless this tablet zoomed its charts (a tap on any y-axis, owner 2026-10-26)
-  const zero = useChartsFromZero();
-  // filtered, the line keeps the axis of its values unfiltered: the slider on it does not move under the finger
-  const on = filter && lines.length === 1 ? activeRange(filter.range, filter.base) : null;
-  const all = on ? defaultRange(filter!.base) : null;
-  const holds = all ? [all.lo, all.hi] : undefined;
-  const g = w ? chartGeometry(w, lines.map((l, i) => ({ pts: l.pts, gaps: l.gaps ?? [], scale: l.scale ?? "shared", unit: l.unit, holds: i === 0 ? holds : undefined })), plot, 0.08, zero) : null;
+  // from 0 unless this tablet fitted its charts (a tap on any y-axis or its fit mark, owner 2026-10-26)
+  const fit = useChartFit();
+  // one slider stands on one axis: never on a chart of two lines
+  const slid = filter && lines.length === 1 ? filter : null;
+  // filtered, the axis holds the values unfiltered and filtered, and the range's limits (chartGeometry)
+  const on = slid ? activeRange(slid.range) : null;
+  const g = w ? chartGeometry(w, lines.map((l, i) => ({ pts: l.pts, gaps: l.gaps ?? [], scale: l.scale ?? "shared", unit: l.unit,
+    ...(i === 0 && on ? { holds: slid!.base.map((p) => p.v), limits: on } : {}) })), plot, 0.08, fit) : null;
   const { frac, handlers } = useChartPointer<SVGSVGElement>();
   const hatch = `range-hatch-${useId().replace(/[^\w-]/g, "")}`;
   if (!g) return <><ChartEmpty status={status} height={height} /><TimeAxis g={null} /></>;
@@ -129,17 +132,18 @@ export default function LineChart({ lines, window, height = 150, status, label, 
   const right = ownAt > 0 ? lines[ownAt] : null;
   const hover = frac !== null ? g.hover(g.tAt(frac * W)) : null;
   const style = (l: LineSpec) => (l.color ? { stroke: l.color } : undefined);
-  const slid = filter && lines.length === 1 ? filter : null;
   const ax = g.series[0];
-  const shown = slid ? shownRange(slid.range, slid.base, ax) : null;
   const unit = lines[0].unit ?? "";
   return (
     <>
-      {on && slid && <RangeLine range={on} step={ax.step} unit={unit} result={slid.result} onReset={() => slid.onChange(null)} />}
-      <div className="chart-with-axis has-unit">
-        {slid && shown && <ChartRangeSlider axis={ax} top={TOP} bottom={BOT} height={H} shown={shown} ends={defaultRange(slid.base)} unit={unit}
-          onChange={(r) => slid.onChange(activeRange(r, slid.base))} />}
-        <YAxis zoomable height={H} frame={H} unit={lines[0].unit?.trim()} ticks={leftAxis} cls={lines[0].cls?.split(" ")[0]} color={lines[0].color} />
+      <ChartUnitLine slider={!!slid} left={{ unit: unit.trim(), cls: lines[0].cls?.split(" ")[0], color: lines[0].color }}
+        right={right ? { unit: right.unit?.trim() || right.label, cls: right.cls?.split(" ")[0], color: right.color } : null}>
+        {on && slid && <RangeChip range={on} step={ax.step} unit={unit} state={slid.state} onClear={() => slid.onChange(null)} />}
+      </ChartUnitLine>
+      <div className="chart-with-axis">
+        {slid && <ChartRangeSlider axis={ax} top={TOP} bottom={BOT} height={H} range={on} unit={unit}
+          onChange={(r) => slid.onChange(activeRange(r))} />}
+        <YAxis zoomable height={H} frame={H} ticks={leftAxis} cls={lines[0].cls?.split(" ")[0]} color={lines[0].color} />
         <div className="spark-wrap weather-chart-wrap">
           <svg className="weather-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={label}
             style={{ height: H, touchAction: "none" }} {...handlers}>
@@ -176,10 +180,9 @@ export default function LineChart({ lines, window, height = 150, status, label, 
                     <line x1="0" y1="0" x2="0" y2="6" className="chart-range-hatch" />
                   </pattern>
                 </defs>
-                {/* only a side the range limits: a handle at its end leaves nothing out there (rangeFilter.openEnds) */}
-                {[[TOP, ax.sy(on.hi), on.hi < all!.hi], [ax.sy(on.lo), BOT, on.lo > all!.lo]]
-                  .filter(([a, b, limits]) => limits && (b as number) > (a as number)).map(([a, b]) => (
-                  <rect key={a as number} x="0" y={a as number} width={W} height={(b as number) - (a as number)} fill={`url(#${hatch})`} />
+                {/* only a side the range limits: no limit (±Infinity) is drawn at the axis' end, an empty band */}
+                {[[TOP, ax.sy(on.hi)], [ax.sy(on.lo), BOT]].filter(([a, b]) => b > a).map(([a, b]) => (
+                  <rect key={a} x="0" y={a} width={W} height={b - a} fill={`url(#${hatch})`} />
                 ))}
               </g>
             )}
@@ -201,32 +204,10 @@ export default function LineChart({ lines, window, height = 150, status, label, 
           )}
         </div>
         {/* The right axis is the colour of the line it measures. */}
-        {right && <YAxis zoomable side="right" height={H} frame={H} unit={right.unit?.trim() || right.label} ticks={g.series[ownAt].ticks}
+        {right && <YAxis zoomable side="right" height={H} frame={H} ticks={g.series[ownAt].ticks}
           cls={right.cls?.split(" ")[0]} color={right.color} />}
       </div>
       <TimeAxis g={g} right={!!right} slider={!!slid} />
     </>
   );
-}
-
-/** The line above a filtered chart: what is kept, its average and time in range, and the way back to all. */
-function RangeLine({ range, step, unit, result, onReset }: {
-  range: ValueRange; step: number; unit: string; result: ChartFilter["result"]; onReset: () => void;
-}) {
-  return (
-    <div className="chart-range-line">
-      <span>{rangeWords(range, step, unit, result)}</span>
-      <button type="button" className="chart-range-reset" onClick={onReset}>Show all</button>
-    </div>
-  );
-}
-
-/** "Only 300 to 900 W: average 412 W, 6h 30min in range" (owner, 2026-10-26); while the finer values come, the chart
- *  is unfiltered and the line says so. */
-export function rangeWords(range: ValueRange, step: number, unit: string, result: ChartFilter["result"]): string {
-  const kept = `Only ${fmtLimit(range.lo, step)} to ${fmtLimit(range.hi, step)}${unit}`;
-  if (result === "loading") return `${kept}: loading the detail, shown in full meanwhile`;
-  if (result === "failed") return `${kept}: couldn't load the detail, shown in full`;
-  const time = result.inRangeMs > 0 ? `${fmtDuration(result.inRangeMs)} in range` : "nothing in range";
-  return `${kept}: average ${fmtLimit(result.avg, step)}${unit}, ${time}`;
 }
