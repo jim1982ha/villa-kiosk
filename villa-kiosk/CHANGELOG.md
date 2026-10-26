@@ -1,3 +1,10 @@
+## 2.496.539
+
+What you will see:
+- Cockpit → Overview: a fault waiting to close says since when its device reads as it does from its recorded
+  history ("Locked since 14:38 · closes at about 14:49 …"), never the time the villa's system last restarted. While
+  the history is read it shows "since …".
+
 ## 2.496.538
 
 What you will see:

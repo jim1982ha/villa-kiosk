@@ -14,6 +14,7 @@
 
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { useHA } from "@/ha/HAStateStore";
+import { useStateSince } from "@/hooks/useStateSince";
 import { useConfig } from "./ConfigContext";
 import { useFmData } from "@/fm/FmDataContext";
 import { useCriticalDevices } from "@/ha/criticalDevices";
@@ -21,7 +22,7 @@ import { villaDevices, deviceFolding, deviceOf, deviceReadings, recordDeviceOf, 
 import { effectiveMapped, visibleEntitiesOf, visibleTo } from "./villaVisibility";
 import type { Role } from "@/auth/roles";
 import type { HassEntity } from "@/types/ha.types";
-import { buildAttentionItems, deviceIssues, groupAttention, type DeviceIssues, type VillaProblems } from "./attention";
+import { buildAttentionItems, closingEntities, deviceIssues, groupAttention, type DeviceIssues, type VillaProblems } from "./attention";
 import { deviceRows, type DeviceRow } from "./deviceRecord";
 import { dismissedEntitySet, inventoryGaps } from "./dismissedEntities";
 
@@ -111,13 +112,16 @@ export function useVillaModelValue(sets: VillaSets): VillaModel {
       entityDeviceIds, folding, critical, deviceUnits }),
     [entityMap, deviceGroups, dismissedIds, hidden, mappedEntityIds, visibleEntities, entityDeviceIds, folding, critical, deviceUnits],
   );
+  // since when a device waiting to close reads as it does: its history, never its last_changed (useStateSince)
+  const closingIds = useMemo(() => closingEntities(fmData, entities), [fmData, entities]);
+  const sinceOf = useStateSince(closingIds);
   const attention = useMemo((): VillaProblems => {
     const attentionItems = buildAttentionItems({
-      devices, entities, entityMap, resolvedRooms, fmData });
+      devices, entities, entityMap, resolvedRooms, fmData, sinceOf });
     // NOT grouped here: grouping is per profile (attentionFor), and a
     // role-blind grouping had no reader (until 2.496.268 it ran anyway).
     return { devices, attentionItems };
-  }, [devices, entities, entityMap, resolvedRooms, fmData]);
+  }, [devices, entities, entityMap, resolvedRooms, fmData, sinceOf]);
 
   // what is wrong with each device, from the cards themselves (role-blind: the map's badges; a profile's sign reads its
   // own cards, useDeviceIssue)

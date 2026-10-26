@@ -25,6 +25,7 @@ import type { HassEntity } from "@/types/ha.types";
 import type { EntityMapping } from "@/types/scene.types";
 import { isOffline, missingFromHa, NOT_IN_HA } from "@/utils/stateColors";
 import { countOf } from "@/utils/countOf";
+import type { Since } from "@/config/presence";
 import { isDomain } from "@/utils/entityDomain";
 
 export type AttentionKind = "unavailable" | "fault" | "schedule" | "alarm";
@@ -65,8 +66,9 @@ export interface AttentionItem {
   /** Set on a fault: how the VESTA Agent reads it again to close it (FmTicket.check) — the card's "Next check". */
   check?: FmTicketCheck;
   /** Set on a fault the VESTA Agent will close if it stays as it is now (FmTicket.closesAt): when, and what its device
-   *  reads now and since when — "Locked since 14:38 · closes at about 14:49 if it stays locked" (cockpitCard). */
-  closing?: { at: string; word?: string; since?: string };
+   *  reads now and since when — "Locked since 14:38 · closes at about 14:49 if it stays locked" (cockpitCard). `since`:
+   *  read from its history (useStateSince), never its last_changed. */
+  closing?: { at: string; word?: string; since?: Since };
   /** Set on a fault: what last happened about it on Telegram (faultNotes.lastNoted — "Escalation sent to Owner"). */
   latest?: { note: string; at: string };
   /** Set on a fault: the other open records that say exactly the same thing on the same card (foldTwins) — one line,
@@ -75,12 +77,22 @@ export interface AttentionItem {
 }
 
 /** A fault's `closing` (FmTicket.closesAt): its moment, and what its device reads now and since when; undefined when the
- *  Agent did not say, or said something that is not a moment. */
-function closingOf(closesAt: string | undefined, entity: HassEntity | undefined, entityId: string | undefined):
-  AttentionItem["closing"] {
+ *  Agent did not say, or said something that is not a moment.
+ *
+ *  ⚠️ A RESTART IS NOT WHEN IT WAS LOCKED (villa, 2026-10-26): "since" was the entity's last_changed, which every restart
+ *  of the villa's system rewrites — `sinceOf` reads it from the history, as the presence tile does. */
+function closingOf(closesAt: string | undefined, entity: HassEntity | undefined, entityId: string | undefined,
+  sinceOf: (id: string) => Since): AttentionItem["closing"] {
   if (!closesAt || Number.isNaN(Date.parse(closesAt))) return undefined;
   if (!entity || !entityId || isOffline(entity)) return { at: closesAt };
-  return { at: closesAt, word: rowText(entityId, entity), since: entity.last_changed };
+  return { at: closesAt, word: rowText(entityId, entity), since: sinceOf(entityId) };
+}
+
+/** The entities whose state a fault waiting to close says "since" of (closingOf): the ones useStateSince reads. */
+export function closingEntities(fmData: FmData, entities: Record<string, HassEntity>): string[] {
+  const ids = fmAttention(fmData).unresolved.filter((t) => t.closesAt)
+    .map((t) => recordEntity(t.entityId, (x) => x in entities)).filter((id): id is string => !!id);
+  return [...new Set(ids)].sort();
 }
 
 /**
@@ -318,8 +330,11 @@ export function buildAttentionItems(opts: {
   entityMap: Record<string, EntityMapping>;
   resolvedRooms: Record<string, string>;
   fmData: FmData;
+  /** Since when an entity is in its state, from its history (useStateSince over closingEntities); absent: not said. */
+  sinceOf?: (id: string) => Since;
 }): AttentionItem[] {
   const { devices, entities, entityMap, resolvedRooms, fmData } = opts;
+  const sinceOf = opts.sinceOf ?? (() => null);
   const items: AttentionItem[] = [];
 
   for (const id of devices.unavailable) {
@@ -351,7 +366,7 @@ export function buildAttentionItems(opts: {
       latest: lastNoted(t),
       source: faultSource(t),
       check: t.check,
-      closing: closingOf(t.closesAt, entityId ? entities[entityId] : undefined, entityId),
+      closing: closingOf(t.closesAt, entityId ? entities[entityId] : undefined, entityId, sinceOf),
       // lost contact — isOffline, or an entity the villa's system no longer has (Missing), as devices.unavailable
       // reads it: the device's offline line takes it. ⚠️ A MISSING ENTITY TOO (architecture review, 2026-10-21): only
       // one the villa's system still had counted, so a ticket on a sibling deleted with its device stood as a second

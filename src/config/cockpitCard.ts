@@ -18,7 +18,8 @@ import { nextCheck, nextCheckAt, nextCheckWhen } from "@/fm/faultTiming";
 import { lineActions, overviewActions, type WorkAction, type WorkRecord } from "@/fm/deviceWork";
 import { STAGE_WORDS } from "@/fm/fmEngine";
 import type { IssueSource } from "@/fm/issueSource";
-import { clockTime, momentText } from "@/utils/dateText";
+import { clockTime, dayMonth, momentText } from "@/utils/dateText";
+import { sinceText } from "./presence";
 import { confirmParts, type ConfirmingFault } from "@/fm/faultConfirm";
 import { faultTitle } from "@/fm/fmEngine";
 import type { HassEntity } from "@/types/ha.types";
@@ -135,7 +136,8 @@ function closingText(c: AttentionItem["closing"], now: Date): string | null {
   const at = Date.parse(c.at);
   const when = at > now.getTime() ? `closes at about ${clockTime(at)}` : "closes at the next check";
   if (!c.word) return `Back to normal · ${when} if it stays so`;
-  const since = c.since && !Number.isNaN(Date.parse(c.since)) ? ` since ${clockTime(c.since)}` : "";
+  const said = sinceText(c.since ?? null, clockTime, dayMonth);
+  const since = said ? ` since ${said}` : "";
   return `${c.word}${since} · ${when} if it stays ${c.word.toLowerCase()}`;
 }
 
