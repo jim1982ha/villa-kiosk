@@ -5662,7 +5662,9 @@ export class EntityVisuals {
         if (isPose) break;
         // Unavailable is grey, never red: a lock that has lost contact
         // asserts no "unlocked" reading (see colors.ts).
-        const c = look.tone === "unavailable" ? LOST_GREY : look.tone === "alert" ? ALERT_RED : SECURE_GREEN;
+        // unlocked is in use, not an alarm (owner, 2026-10-26): the "on" glow, red only for a jammed bolt
+        const c = look.tone === "unavailable" ? LOST_GREY : look.tone === "alert" ? ALERT_RED
+          : look.tone === "open" ? ACTIVE_GLOW : SECURE_GREEN;
         setDiffuse?.(c);
         setEmissive?.(c.scale(look.tone === "unavailable" ? 0.25 : 0.2));
         break;

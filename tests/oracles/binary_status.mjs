@@ -16,7 +16,8 @@ const group = readFileSync(new URL("../../src/components/panels/DeviceGroupPanel
 const { binaryLook } = await import("@/config/binaryLook");
 const { alertStateFor } = await import("@/config/BinarySensorClasses");
 const { deviceLook, storeLookSource } = await import("@/utils/deviceActivity");
-// the badge (deviceLook), for the window's own state: one rule, never redder or calmer (owner, 2026-10-21: "the entity badge to follow the state of the entity … everywhere")
+// the badge (deviceLook), for the window's own state: the same red for what is wrong; in use (owner, 2026-10-26: a door
+// open, someone seen) is red in the window ("keep red there") and the plain dot on the badge
 const badge = (dc, state) => deviceLook("binary_sensor.x", storeLookSource(
   { "binary_sensor.x": { entity_id: "binary_sensor.x", state, attributes: { device_class: dc } } }, { entityMap: {}, isHidden: () => false }));
 
@@ -28,25 +29,31 @@ ck("a leak sensor: no leak = green pill 'No leak', a leak = danger pill 'Leak de
 const door = binaryLook("binary_sensor.door", "door");
 // owner, 2026-10-05: a server door read grey while closed; 2026-10-21: "make sure the 'open' pill appears with the
 // alarming style", then "the entity badge to follow the state of the entity"
-ck("a door: closed green, open red — its problem state, on its pill, its bar and its badge alike",
+ck("a door: closed green, open red in its window; on its badge open is the plain dot, never an alarm",
    door.tone("off") === "on" && door.tone("on") === "danger" && door.problem === "on" && door.danger("on")
-   && badge("door", "on").alert && !badge("door", "off").alert);
+   && badge("door", "on").mark === "active" && !badge("door", "on").alert && badge("door", "off").mark === null);
 ck("  ...a window, a garage door, an opening and a binary lock alike",
    ["window", "garage_door", "opening", "lock"].every((c) => binaryLook("binary_sensor.x", c).tone("on") === "danger"
-     && badge(c, "on").alert && alertStateFor(c) === "on"));
+     && badge(c, "on").mark === "active" && !badge(c, "on").alert && alertStateFor(c) === "on"));
 const pir = binaryLook("binary_sensor.hall", "motion");
-ck("a motion or occupancy sensor: quiet green, a detection red — in its window and on its badge",
+ck("a motion or occupancy sensor: quiet green, a detection red in its window; the plain dot on its badge",
    pir.color("off") === STATUS_COLOR.active && pir.color("on") === STATUS_COLOR.alert && pir.problem === "on"
-   && ["motion", "occupancy"].every((c) => alertStateFor(c) === "on" && badge(c, "on").alert && !badge(c, "off").alert));
+   && ["motion", "occupancy"].every((c) => alertStateFor(c) === "on" && badge(c, "on").mark === "active"
+     && !badge(c, "on").alert && badge(c, "off").mark === null));
 // the one rule: for EVERY class, the window's red state is the badge's red state
 {
   const { binarySensorClassInfo } = await import("@/config/BinarySensorClasses");
   const classes = ["moisture", "smoke", "connectivity", "motion", "occupancy", "presence", "door", "window", "lock", "plug",
     "running", "update", undefined];
-  const split = classes.flatMap((c) => ["on", "off"].filter((s) =>
-    (binaryLook("binary_sensor.x", c).status(s) === "alert") !== badge(c, s).alert).map((s) => `${c}:${s}`));
-  ck("for every class, a state is red in the window exactly when its badge is red", split.length === 0
+  // red in the window ⇔ red on the badge, or in use (the badge's plain dot) — the one exception, owner 2026-10-26
+  const split = classes.flatMap((c) => ["on", "off"].filter((s) => {
+    const red = binaryLook("binary_sensor.x", c).status(s) === "alert", b = badge(c, s);
+    return b.alert ? !red : red && b.mark !== "active";   // a red badge is red here; red here is a red badge or in use
+  }).map((s) => `${c}:${s}`));
+  ck("for every class, a state is red in the window exactly when its badge is red or in use", split.length === 0
      && binarySensorClassInfo("door").alarmState === "on", split);
+  ck("  ...in use is only a detection, a door, a window or a lock sensor: a leak, smoke, a lost link stay red on the badge",
+     ["moisture", "smoke"].every((c) => badge(c, "on").mark === "alarm") && badge("connectivity", "off").mark === "alarm");
 }
 ck("unavailable stays unavailable, never green", leak.status("unavailable") === "unavailable" && leak.word("unavailable") === "Unavailable");
 
@@ -91,8 +98,10 @@ ck("the list paints the tone, the page builds its rows here, and the tones have 
   const det = (c) => detectsPresence(X, c), fault = (c) => alertIsFault(X, c), glows = (c) => glowsRoom(X, c);
   ck("a detection is a detection; a door, a window, a hazard or a bare sensor is not",
      DETECT.every(det) && !NOT.some(det), NOT.filter(det));
-  ck("  ...and a detection is never a fault; everything else is",
-     DETECT.every((c) => !fault(c)) && NOT.every(fault));
+  // owner, 2026-10-26: in use is no fault either — a door, a window, a lock sensor open
+  const USE = ["door", "window", "garage_door", "opening", "lock"];
+  ck("  ...and a detection or a device in use is never a fault; everything else is",
+     DETECT.every((c) => !fault(c)) && USE.every((c) => !fault(c)) && NOT.filter((c) => !USE.includes(c)).every(fault));
   ck("  ...its \"on\" glows its room: a detection, an open door or window, a leak — never connected, plugged, charging",
      [...DETECT, "door", "window", "opening", "moisture", undefined].every(glows)
      && !["connectivity", "plug", "battery_charging", "running"].some(glows));

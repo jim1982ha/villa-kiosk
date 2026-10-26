@@ -1,3 +1,14 @@
+## 2.496.540
+
+What you will see:
+- Map: a device in use (motion seen, a door or window open, a lock unlocked) wears a plain dot in its top-right
+  corner, like the linked device's dot, instead of the red "!". At rest it has no dot at all. The "!" is kept for
+  what is really wrong: red for a leak, smoke, a low battery or a jammed lock, amber for an open problem.
+- The room's count and the Cockpit stay calm for a device in use: an unlocked door no longer gets its own red
+  "Unlocked" line in Open issues. An alert the villa raises on it is still a card, with the amber "!".
+- The device's own window is unchanged: "Open", "Unlocked" and "Motion detected" stay red there.
+- Map legend: "Top-right dot" added; the red "!" now reads "a leak, smoke, a low battery, a jammed lock".
+
 ## 2.496.539
 
 What you will see:

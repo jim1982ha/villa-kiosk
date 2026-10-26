@@ -471,9 +471,10 @@ function drawPill(
   }
   ctx.beginPath();
   ctx.arc(cx, cy, g.r, 0, Math.PI * 2);
-  ctx.fillStyle = pill === "on" ? hue : markSurface(pill).fill;
+  const plain = pill === "on" || pill === "active";      // in use: the same filled dot as a linked entity on
+  ctx.fillStyle = plain ? hue : markSurface(pill).fill;
   ctx.fill();
-  if (pill === "on") return;
+  if (plain) return;
   const symbol = markSurface(pill).symbol;
   ctx.fillStyle = "#ffffff";
   ctx.textAlign = "center";

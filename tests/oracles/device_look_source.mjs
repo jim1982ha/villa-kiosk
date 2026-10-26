@@ -80,8 +80,10 @@ const rawRule = (link) => link[1] === "on";
 // lock's door sensor reading Open turns the lock's badge red); the linked DOT says on/off (owner, 2026-10-22: badge
 // proposal 2 — it was a ring)
 // since "one corner per device" (owner, 2026-10-22) the linked lock's alarm is the bottom-right pill, not the top
-ck("a device linked to an UNLOCKED lock: its bottom-right pill the lock's red \"!\" (on, and needing attention — the list's raw `=== \"on\"` said no); its own top-right clear",
-   look("sensor", "5", ["lock.gate", "unlocked"]).linkPill === "alarm" && look("sensor", "5", ["lock.gate", "unlocked"]).mark === null
+// owner, 2026-10-26: an unlocked lock is in use — its pill filled (on), the red "!" only for a jammed one
+ck("a device linked to an UNLOCKED lock: its bottom-right pill filled (on — the list's raw `=== \"on\"` said no); its own top-right clear; jammed: red \"!\"",
+   look("sensor", "5", ["lock.gate", "unlocked"]).linkPill === "on" && look("sensor", "5", ["lock.gate", "jammed"]).linkPill === "alarm"
+   && look("sensor", "5", ["lock.gate", "unlocked"]).mark === null
    && look("sensor", "5", ["lock.gate", "unlocked"]).linkedOn && !rawRule(["lock.gate", "unlocked"]));
 ck("  ...linked to an OPEN cover: its dot filled", look("sensor", "5", ["cover.blind", "open"]).linkPill === "on");
 ck("  ...linked to a LOCKED lock, a CLOSED cover, an OFF switch: hollow; a lost switch: its grey \"?\"",
@@ -105,7 +107,7 @@ console.log("\n  the panel header's optimistic switch, and its drawn type:");
      && deviceLook(w.did, storeLookSource({ ...w.entities, "switch.pump": ent("switch.pump", "on") }, w.config, { pendingPower: () => false })).linkPill === "off");
   ck("  ...nothing pending: the confirmed state, as the map", deviceLook(w.did, pending(undefined)).linkPill === "off");
   const asLock = storeLookSource({ "switch.x": ent("switch.x", "unlocked") }, { entityMap: {}, isHidden: () => false }, { drawnAs: { entityId: "switch.x", type: "lock" } });
-  ck("a device drawn as a lock by its mesh binding is read as a lock", deviceLook("switch.x", asLock).type === "lock" && deviceLook("switch.x", asLock).alert);
+  ck("a device drawn as a lock by its mesh binding is read as a lock", deviceLook("switch.x", asLock).type === "lock" && deviceLook("switch.x", asLock).mark === "active");
   // The map's own counterpart: the mapping its mesh resolved to wins over the
   // entity map (a mesh binding can draw a device as another type).
   const onMap = mapLookSource(new Map([["switch.x", ent("switch.x", "unlocked")]]), new Map([["switch.x", { type: "lock" }]]),

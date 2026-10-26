@@ -15,7 +15,8 @@ const { deviceLook, storeLookSource } = await import("@/utils/deviceActivity");
 const ent = (id, state, attributes = {}) => ({ entity_id: id, state, attributes });
 const ENTITIES = {
   "light.on": ent("light.on", "on"), "light.off": ent("light.off", "off"),
-  "lock.open": ent("lock.open", "unlocked"), "lock.open2": ent("lock.open2", "unlocked"),
+  // a jammed lock alerts; an unlocked one is in use, not an alert (owner, 2026-10-26)
+  "lock.open": ent("lock.open", "jammed"), "lock.open2": ent("lock.open2", "jammed"),
   "camera.idle": ent("camera.idle", "idle"), "light.lost": ent("light.lost", "unavailable"),
   "sensor.power": ent("sensor.power", "80"), "switch.pump": ent("switch.pump", "on"),
 };
@@ -60,14 +61,14 @@ console.log("\n  a room chip:");
   const bm = roomChipModel(b, false, () => false);
   // The owner's screenshot (2026-10-04): a red border beside a green count.
   // "Is this room all right?" is the NUMBER's answer alone; the border only says on.
-  ck("  ...an unlocked lock and a lost light: a RED count — attention outranks lost contact — and NO red border",
+  ck("  ...a jammed lock and a lost light: a RED count — attention outranks lost contact — and NO red border",
      bm.health === "alert" && bm.frame === "rest", bm);
   {
     const [lost] = bucketRoomChips([M("light.lost", "x", 0), M("light.off", "x", 1)], () => true, (r) => r);
     const [onAndAlert] = bucketRoomChips([M("light.on", "y", 0), M("lock.open", "y", 1)], () => true, (r) => r);
     ck("  ...a room with only a lost device: a GREY count", roomChipModel(lost, false, () => false).health === "unavailable");
     const oa = roomChipModel(onAndAlert, false, () => false);
-    ck("  ...a light on beside an unlocked door keeps its 'on' border (red no longer hides it) and counts red",
+    ck("  ...a light on beside a jammed door keeps its 'on' border (red no longer hides it) and counts red",
        oa.frame === "active" && oa.health === "alert", oa);
   }
   const lookOf = (ids) => roomLook(ids.map((id) => (id in ENTITIES ? deviceLook(id, src) : undefined)));
@@ -103,13 +104,15 @@ console.log("\n  a room chip:");
   // one corner per device (owner, 2026-10-22): a linked entity's problem is its device's bottom-right pill, no longer
   // its device's own kind — the room still says it, the worst of both corners
   {
-    const lsrc = (relay, cfg = {}) => storeLookSource(
-      { "sensor.p": ent("sensor.p", "80"), "binary_sensor.d": ent("binary_sensor.d", relay, { device_class: "door" }) },
+    // a linked LEAK sensor: its "on" is an alarm (a linked door open is in use, owner 2026-10-26 — checked below)
+    const lsrc = (relay, cfg = {}, dc = "moisture") => storeLookSource(
+      { "sensor.p": ent("sensor.p", "80"), "binary_sensor.d": ent("binary_sensor.d", relay, { device_class: dc }) },
       { entityMap: { "sensor.p": { entityId: "sensor.p", type: "sensor", linkedEntityId: "binary_sensor.d" } }, isHidden: () => false, ...cfg });
     const room = (relay, cfg) => roomLook([deviceLook("sensor.p", lsrc(relay, cfg))]).health;
     ck("  ...a device whose LINKED entity alarms / has a fault / is lost: its room red / amber / grey; nothing wrong: green",
        room("on") === "alert" && room("off", { hasFault: (id) => id === "binary_sensor.d" }) === "fault"
-       && room("unavailable") === "unavailable" && room("off") === "ok");
+       && room("unavailable") === "unavailable" && room("off") === "ok"
+       && roomLook([deviceLook("sensor.p", lsrc("on", {}, "door"))]).health === "ok");
     const card = (relay) => groupCardModel([{ id: "sensor.p", look: deviceLook("sensor.p", lsrc(relay)), reported: true, occluded: false },
       { id: "lock.open", look: deviceLook("lock.open", src), reported: true, occluded: false }], 2, false);
     ck("  ...and a card showing its devices is red when every cell has a red pill, either corner",

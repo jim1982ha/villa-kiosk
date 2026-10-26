@@ -35,7 +35,8 @@ export interface BinaryLook {
 }
 
 export function binaryLook(entityId: string, deviceClass: string | undefined): BinaryLook {
-  // the badge's own rule (alertStateFor): a window is never redder or calmer than its badge (owner, 2026-10-21)
+  // the class's problem state (alertStateFor): an open door, a detection stay red HERE, while the map and the Cockpit
+  // read them as in use (problemStateOf — owner, 2026-10-26: "keep red there")
   const problem = alertStateFor(deviceClass);
   const status = (s: string) => binaryStatus(s, problem);
   const danger = (s: string) => problem !== undefined && s === problem;

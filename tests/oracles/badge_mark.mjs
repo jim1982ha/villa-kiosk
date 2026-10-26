@@ -30,8 +30,8 @@ const src = (f) => readFileSync(new URL(`../../src/${f}`, import.meta.url), "utf
 console.log("  the corner mark — one at most, the most urgent:");
 {
   // the order, written out HERE (never read from the module under test): red "?" critical silent, red "!" alarm, amber
-  // "!" fault, grey "?" no contact, grey "z" asleep, teal "…" moving
-  const ORDER = ["critical", "alarm", "fault", "lost", "asleep", "moving"];
+  // "!" fault, grey "?" no contact, grey "z" asleep, teal "…" moving, then in use: the plain dot (owner, 2026-10-26)
+  const ORDER = ["critical", "alarm", "fault", "lost", "asleep", "moving", "active"];
   const wrong = [];
   for (let bits = 0; bits < 1 << ORDER.length; bits++) {
     const facts = Object.fromEntries(ORDER.map((m, i) => [m, !!(bits & (1 << i))]));
@@ -39,11 +39,12 @@ console.log("  the corner mark — one at most, the most urgent:");
     const got = badgeMarkFor(facts);
     if (got !== want) wrong.push({ facts, want, got });
   }
-  ck("every one of the 64 combinations of facts takes the first in the owner's order", wrong.length === 0, wrong.slice(0, 3));
+  ck("every one of the 128 combinations of facts takes the first in the owner's order", wrong.length === 0, wrong.slice(0, 3));
   const only = (...ms) => badgeMarkFor(Object.fromEntries(ORDER.map((m) => [m, ms.includes(m)])));
   ck("  ...critical-lost beats alarm, alarm beats fault, fault beats lost, lost beats asleep, asleep beats moving; none: no mark",
      only("critical", "alarm") === "critical" && only("alarm", "fault") === "alarm" && only("fault", "lost") === "fault"
-     && only("lost", "asleep") === "lost" && only("asleep", "moving") === "asleep" && only() === null);
+     && only("lost", "asleep") === "lost" && only("asleep", "moving") === "asleep" && only("moving", "active") === "moving"
+     && only("fault", "active") === "fault" && only() === null);
 }
 
 console.log("\n  through the real look (deviceLook), every surface's:");
@@ -57,8 +58,8 @@ console.log("\n  through the real look (deviceLook), every surface's:");
   const config = { entityMap: {}, isHidden: () => false, isCritical: (id) => id === "light.crit" || id === "light.ok", hasFault: (id) => faults.has(id) };
   const L = (id) => deviceLook(id, storeLookSource(E, config));
   ck("a critical device silent: red \"?\" even with an open fault", L("light.crit").mark === "critical");
-  ck("an unlocked door with an open fault: red \"!\" — its face OPEN (active), never red",
-     L("lock.front").mark === "alarm" && L("lock.front").face === "active");
+  ck("an unlocked door with an open fault: amber \"!\" — its face OPEN (active), never red; in use is no alarm",
+     L("lock.front").mark === "fault" && L("lock.front").face === "active");
   ck("a lost lamp with an open fault: amber \"!\" (a fault outranks no contact); without one, grey \"?\"",
      L("light.hall").mark === "fault"
      && deviceLook("light.hall", storeLookSource(E, { ...config, hasFault: () => false })).mark === "lost");
@@ -74,6 +75,29 @@ console.log("\n  through the real look (deviceLook), every surface's:");
      deviceLook("light.ok", storeLookSource(E, { entityMap: {}, isHidden: () => false })).mark === null);
   ck("the room's count reads the fault too (DeviceLook.fault)",
      L("light.ok").fault && !deviceLook("light.ok", storeLookSource(E, { ...config, hasFault: () => false })).fault);
+}
+
+console.log("\n  in use is a plain dot, never the red \"!\" (owner, 2026-10-26: \"reserve the ! for devices that are really in error\"):");
+{
+  const E = {
+    "lock.front": ent("lock.front", "unlocked"), "lock.jam": ent("lock.jam", "jammed"), "lock.shut": ent("lock.shut", "locked"),
+    "binary_sensor.pir": ent("binary_sensor.pir", "on", { device_class: "motion" }),
+    "binary_sensor.pir_off": ent("binary_sensor.pir_off", "off", { device_class: "motion" }),
+    "binary_sensor.door": ent("binary_sensor.door", "on", { device_class: "door" }),
+    "binary_sensor.leak": ent("binary_sensor.leak", "on", { device_class: "moisture" }),
+    "binary_sensor.batt": ent("binary_sensor.batt", "on", { device_class: "battery" }),
+  };
+  const L = (id) => deviceLook(id, storeLookSource(E, { entityMap: {}, isHidden: () => false }));
+  ck("an unlocked lock, motion seen, a door open: the plain \"active\" dot", ["lock.front", "binary_sensor.pir", "binary_sensor.door"]
+     .every((id) => L(id).mark === "active"), ["lock.front", "binary_sensor.pir", "binary_sensor.door"].map((id) => L(id).mark));
+  ck("  ...at rest (locked, no motion): no dot at all, never a hollow one", L("lock.shut").mark === null && L("binary_sensor.pir_off").mark === null);
+  ck("a leak, a low battery, a jammed lock: still the red \"!\"",
+     L("binary_sensor.leak").mark === "alarm" && L("binary_sensor.batt").mark === "alarm" && L("lock.jam").mark === "alarm");
+  ck("  ...the dot has no colour or symbol of its own: drawn filled in the badge's colour, as a linked entity on",
+     markSurface("active").symbol === "" && /const plain = pill === "on" \|\| pill === "active";/.test(src("babylon/badgeIcons.ts")));
+  const lockMap = { "lock.l": { entityId: "lock.l", type: "lock", linkedEntityId: "binary_sensor.door" } };
+  const linked = deviceLook("lock.l", storeLookSource({ ...E, "lock.l": ent("lock.l", "locked") }, { entityMap: lockMap, isHidden: () => false }));
+  ck("  ...a linked door open: the bottom-right pill filled (\"on\"), the one dot of both corners", linked.linkPill === "on", linked.linkPill);
 }
 
 console.log("\n  asleep by design (the entity store's lens):");
@@ -116,8 +140,8 @@ console.log("\n  one corner per device — the bottom-right pill is the linked e
   const door = (state, cfg = {}) => deviceLook("lock.l", storeLookSource({
     "lock.l": ent("lock.l", "locked"), "binary_sensor.d": ent("binary_sensor.d", state, { device_class: "door" }),
   }, { entityMap: lockMap, isHidden: () => false, ...cfg }));
-  ck("a linked door sensor reading Open: red \"!\" bottom-right, NOT top-right; the lock is not alerting",
-     door("on").linkPill === "alarm" && door("on").mark === null && !door("on").alert && door("on").kind !== "alert");
+  ck("a linked door sensor reading Open: the filled dot bottom-right (in use), NOT top-right; the lock is not alerting",
+     door("on").linkPill === "on" && door("on").mark === null && !door("on").alert && door("on").kind !== "alert");
   ck("  ...its open fault: amber \"!\" bottom-right (the lock's own fault list says nothing of the lock)",
      door("off", { hasFault: (id) => id === "binary_sensor.d" }).linkPill === "fault"
      && door("off", { hasFault: (id) => id === "binary_sensor.d" }).mark === null);
@@ -143,11 +167,12 @@ console.log("\n  one corner per device — the bottom-right pill is the linked e
       { entityMap: lockMap, isHidden: () => false, ...cfg });
     const own = deviceLook("binary_sensor.d", src).mark;   // the sensor's own badge, its top-right
     const pill = deviceLook("lock.l", src).linkPill;
-    return own === null ? pill === "on" || pill === "off" : pill === own;
+    return own === null ? pill === "on" || pill === "off" : own === "active" ? pill === "on" : pill === own;
   });
-  ck("the bottom-right pill of the lock IS the door sensor's own top-right pill, whenever it has one (one precedence)", same);
+  ck("the bottom-right pill of the lock IS the door sensor's own top-right pill, whenever it has one (one precedence; in use: \"on\")", same);
   ck("  ...and the source says so: linkPillOf applies badgeMarkOf to the linked reading",
-     /return \(r\.link \? badgeMarkOf\(r\.link\) : null\) \?\? \(r\.linkedOn \? "on" : "off"\);/.test(src("utils/deviceActivity.ts")));
+     /const mark = r\.link \? badgeMarkOf\(r\.link\) : null;/.test(src("utils/deviceActivity.ts"))
+     && /return mark \?\? \(r\.linkedOn \? "on" : "off"\);/.test(src("utils/deviceActivity.ts")));
 }
 
 console.log("\n  the two pills' size and place (the approved mock: a 56 px square, 28 px pills):");

@@ -47,8 +47,9 @@ for (const [name, src] of [["the room list (store)", store], ["the map", map]]) 
      && !old.alert && old.mark === null && old.kind !== "alert"
      && !gone.unavailable && gone.face !== "unavailable" && gone.mark === null && !gone.critical, { old, gone });
 }
-ck("a device that is not hidden draws its badge, still alarms and still reads lost",
-   drawsBadge("lock.door", map) && deviceLook("lock.door", map).alert && deviceLook("light.hall", map).unavailable
+// owner, 2026-10-26: an unlocked door is in use — its plain dot, no alarm (the hidden one has none at all)
+ck("a device that is not hidden draws its badge, still marks its state and still reads lost",
+   drawsBadge("lock.door", map) && deviceLook("lock.door", map).mark === "active" && deviceLook("light.hall", map).unavailable
    && deviceLook("light.hall", map).mark === "lost");
 ck("the predicate stands for the whole device: an entity whose device's entity is hidden is hidden",
    hiddenIn(new Set(["switch.relay"]), new Map([["sensor.relay_power", "switch.relay"]]))("sensor.relay_power"));
