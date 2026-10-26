@@ -1,3 +1,9 @@
+## 2.496.541
+
+What you will see:
+- Map: a device in use now shows its top-right dot filled in the badge's own colour, like the linked device's dot
+  (2.496.540 drew it white, so it looked empty).
+
 ## 2.496.540
 
 What you will see:

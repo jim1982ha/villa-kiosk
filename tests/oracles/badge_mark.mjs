@@ -195,9 +195,30 @@ console.log("\n  the two pills' size and place (the approved mock: a 56 px squar
   ck("  ...the lists' CSS scale is the map's (to 4 places)", Math.abs(v - PICTURE_SCALE) < 1e-4, v);
   const bi = src("babylon/badgeIcons.ts");
   ck("the bake paints the device's mark top-right and the linked pill bottom-right, through one painter (pin it)",
-     /if \(mark\) drawPill\(ctx, pills, pills\.top, mark, ""\);/.test(bi)
-     && /if \(linkPill\) drawPill\(ctx, pills, pills\.bottom, linkPill, categorySurface\(category, "active", colorOverride\)\.glyph\);/.test(bi)
+     /if \(mark\) drawPill\(ctx, pills, pills\.top, mark, hue\);/.test(bi)
+     && /if \(linkPill\) drawPill\(ctx, pills, pills\.bottom, linkPill, hue\);/.test(bi)
      && /const px = bakeSizeFor\(pxHint \* PICTURE_SCALE\);/.test(bi));
+  // owner, 2026-10-26 (picture: an eye badge with a WHITE top-right dot): the in-use dot is filled in the badge's colour,
+  // the very fill of a linked entity "on" — baked for real on a recording canvas, each disc's fill read back
+  const fills = [];
+  const prevDoc = globalThis.document;
+  globalThis.Path2D ??= class { addPath() {} };            // the glyph's paths: no pixels needed
+  globalThis.document = { documentElement: { getAttribute: () => null, dataset: {} }, createElement: () => ({ width: 0, height: 0, toDataURL: () => "data:x",
+    getContext: () => new Proxy({ fillStyle: "" }, { get: (o, k) => k in o ? o[k]
+      : k === "arc" ? (x, y) => { o._at = [x, y]; } : k === "fill" ? () => fills.push([o._at, o.fillStyle])
+      : k === "measureText" ? () => ({ width: 1 })
+      : k === "getImageData" ? (_x, _y, w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }) : () => {},
+      set: (o, k, v) => { o[k] = v; return true; } }) }) };
+  try {
+    const { badgeImage } = await import("@/babylon/badgeIcons");
+    badgeImage({ category: "access_control", iconKey: "eye", state: "active", mark: "active", linkPill: "on", bakePx: 40 });
+  } finally { globalThis.document = prevDoc; }
+  const discs = fills.filter(([at]) => at);            // the pills' discs (the squircle is a path, no arc)
+  // each pill: its ground ring first, then its dot — the dot is the LAST fill at that place
+  const ys = discs.map(([at]) => at[1]), mid = (Math.min(...ys) + Math.max(...ys)) / 2;
+  const top = discs.findLast(([at]) => at[1] < mid), bottom = discs.findLast(([at]) => at[1] > mid);
+  ck("  ...the in-use dot is filled in the badge's colour, the same fill as the linked entity's \"on\" — never empty",
+     !!top && !!bottom && top[1] !== "" && top[1] === bottom[1], { top, bottom, discs: discs.length });
 }
 
 console.log("\n  a linked entity placed on its own wears its device's badge:");
