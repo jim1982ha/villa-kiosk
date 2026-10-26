@@ -473,10 +473,10 @@ def build_pack(registry: dict, helpers: list[dict], states: dict | None = None,
     """`critical`: the entities the villa's own "critical devices offline" rule watches (vesta_shared.critical).
     `detailed_days`: how many days of every change the villa's system holds, measured (vesta_shared.retention)."""
     cfg = registry.get("config", {})
-    # ⚠️ HIDDEN IS LEFT OUT TOO (owner, 2026-10-15): a lock fitted the wrong way round is corrected AT THE SOURCE — a
-    # template lock reads the real one inverted, and the real one is hidden in the villa's system (never disabled: the
-    # template reads it). Hidden but listed, the villa status said "Laundry Room unlocked" of a locked door. Same rule
-    # as the Kiosk (registryResolve: hidden_by set, by anyone). Its device stays known, for an alert that still names it.
+    # ⚠️ HIDDEN IS LEFT OUT TOO (owner, 2026-10-15): an entity the owner hides in the villa's system (never disabled:
+    # a template may still read it) is one no person is meant to see; listed, the villa status spoke of a device that
+    # was not the one on the screens. Same rule as the Kiosk (registryResolve: hidden_by set, by anyone). Its device
+    # stays known, for an alert that still names it.
     live = [e for e in _norm_entities(registry, states) if not e["disabled"]]
     ents = [e for e in live if not e["hidden"]]
     area_names = {a.get("area_id"): a.get("name") for a in registry.get("areas", [])}

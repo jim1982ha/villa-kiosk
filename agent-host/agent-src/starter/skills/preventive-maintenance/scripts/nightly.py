@@ -543,7 +543,7 @@ def offline_findings(pack, states: dict, now: datetime, params, alerted: set[str
             if g.label:                      # named as the villa's system names the device, never one of its entities
                 a["name"] = g.label
         out += R.availability_rules(a, g.entity_id, g.state, g.hours, params, g.entity_ids if g.integration else None,
-                                    now=now)
+                                    now=now, over=g.over)
     return out
 
 

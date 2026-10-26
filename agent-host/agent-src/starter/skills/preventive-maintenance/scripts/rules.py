@@ -282,17 +282,20 @@ def battery_rules(asset: dict, entity_id: str, unit: str | None, level: float | 
 
 # --------------------------------------------------------- availability family
 def availability_rules(asset: dict, entity_id: str, state: str | None, last_changed_hours: float | None,
-                       params: VillaParams, entities: list[str] | None = None, now=None) -> list[Finding]:
+                       params: VillaParams, entities: list[str] | None = None, now=None,
+                       over: bool = False) -> list[Finding]:
     """`entities`: every device's entity the finding stands for (an integration down: one per device) — recheck.py
     closes it once they are all back. `now`: the night's moment — the finding keeps when the device went offline
-    (since_of), so the Kiosk's card words the duration when it is shown."""
+    (since_of), so the Kiosk's card words the duration when it is shown. `over`: offline since before the history
+    read (vesta_shared.offline.Group.over) — "offline for over", the duration at least."""
     out = []
     slug = asset["slug"]
     if is_offline(state) and last_changed_hours is not None:
         if last_changed_hours * 60 >= params.behaviour("unavailable_minutes"):
             sev = P2 if asset.get("critical") else P3
             out.append(Finding("PM-UNAVAILABLE", entity_id, slug, "availability", sev,
-                               f"{asset['name']} has been offline for {lasting(last_changed_hours * 3600)}.",
+                               f"{asset['name']} has been offline for {'over ' if over else ''}"
+                               f"{lasting(last_changed_hours * 3600)}.",
                                {"hours": round(last_changed_hours, 1), "critical": asset.get("critical", False),
                                 "entities": list(entities or [entity_id]), **since_of(last_changed_hours, now)},
                                "Check power and radio range; for a battery device, change the battery and press its reset."))
@@ -371,7 +374,7 @@ _PROSE_KEYS = frozenset({"alias", "description", "note", "notes", "name"})
 
 def ids_named(config, ids) -> set[str]:
     """The ids of `ids` a rule's configuration names WHOLE — in an input, a target, a template — and never inside a
-    longer id ("lock.door" is not named by "lock.door_inverted") nor in its prose (_PROSE_KEYS)."""
+    longer id ("sensor.tank" is not named by "sensor.tank_copy") nor in its prose (_PROSE_KEYS)."""
     texts: list[str] = []
 
     def walk(v, key=None):
@@ -393,7 +396,7 @@ def ids_named(config, ids) -> set[str]:
 def hidden_in_rule_rules(rules: list[dict], hidden, name_of) -> list[Finding]:
     """PM-HIDDEN-IN-RULE: one finding per villa rule (automation or script) that names a device hidden in the villa's
     system. A hidden device is left out of every VESTA check (the pack), but a rule naming it still alerts on it — the
-    owner had a false "offline" alert from a rule still watching a lock he had replaced by its corrected copy (owner,
+    owner had a false "offline" alert from a rule still watching a device replaced by a copy and hidden (owner,
     2026-10-20). `rules`: [{"entity_id", "kind", "config"}]; `name_of(entity_id)`: a device's name."""
     out = []
     for r in rules:

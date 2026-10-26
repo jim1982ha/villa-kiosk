@@ -167,6 +167,17 @@ def test_a_restart_is_not_a_new_outage_and_three_unrelated_drops_are_not_an_inte
     groups = devices_offline(_pack(), states, NOW, ["level"], integration_min=3, together_minutes=30, history=history)
     assert [g.integration for g in groups] == [None, None, None], groups               # three devices, never "zigbee"
     assert [round(g.hours) for g in groups] == [24 * 7 + 12, 5, 0]
+    # villa, 2026-10-26: "Timmerflotte_2623 has been offline for 7d 22h", offline since 17 Oct — no reading in the
+    # whole read is offline since before it: "over", for the device only
+    assert [g.over for g in groups] == [True, False, False]
+    sys.path.insert(0, os.path.join(STARTER_SKILLS, "preventive-maintenance", "scripts"))
+    import nightly
+    from vesta_shared.params import VillaParams
+    params = VillaParams(helpers=[], states={}, defaults={"unavailable_minutes": 10, "integration_down_devices": 3,
+                                                          "integration_down_window_minutes": 30})
+    said = {f.entity_id: f.summary for f in nightly.offline_findings(_pack(), states, NOW, params, history=history)}
+    assert " has been offline for over 7d 11h." in said["sensor.tank"], said
+    assert " has been offline for 5h" in said["sensor.tank2"] and "over" not in said["sensor.tank2"], said
     # gone together (a radio unplugged): the integration is down, from the moment they went
     together = {e: {"state": "unavailable", "last_changed": (NOW - timedelta(minutes=m)).isoformat()}
                 for e, m in (("sensor.tank", 40), ("sensor.tank2", 38), ("sensor.tank3", 35))}

@@ -1,8 +1,7 @@
 """An entity hidden in the villa's system is left out of what the Agent lists (owner, 2026-10-15).
 
-A lock fitted the wrong way round is corrected at the source: a template lock reads the real one inverted, and the
-real one is HIDDEN (not disabled — the template reads it). Still listed, the villa status said "Laundry Room unlocked"
-of a door that was locked. Driven from ha-mcp's own answer, through the client and the pack, to the status the AI is
+A device the owner replaces by a template copy keeps the real one HIDDEN (not disabled: the copy reads it). Still
+listed, the villa status spoke of the hidden one, which said something other than the screens. Driven from ha-mcp's own answer, through the client and the pack, to the status the AI is
 given — the client dropping `hidden_by` would leave every helper below green (pin the caller)."""
 from __future__ import annotations
 
@@ -18,7 +17,7 @@ RAW, FIXED = "lock.front_door_raw", "lock.front_door"
 
 
 class _Session:
-    """ha-mcp as the villa answers, two locks: the real one (hidden, reads backwards) and its corrected template."""
+    """ha-mcp as the villa answers, two locks: the real one (hidden) and the template copy shown instead."""
 
     def call_raw(self, name, args):
         body = {

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.348 (26 October 2026)
+
+- vesta_shared.offline.offline_since(over=): an entity with no real reading in the whole read is added to it;
+  Group.over (merged_integrations: the earliest device's); rules.availability_rules(over=) words "offline for over".
+  The setting's promised "over" (offline.history_days) was never said.
+- Comments and test texts no longer cite the withdrawn lock copies (hidden entities and whole-id matching unchanged).
+
 ## 0.6.347 (26 October 2026)
 
 - vesta_shared.occupancy: days() (the alert desk's siren.villa_empty, each day kept as a feature), day_states, normal()

@@ -1,7 +1,6 @@
 """A villa rule still naming a device hidden in the villa's system: one fault per rule (owner, 2026-10-20).
 
-The owner replaced two locks fitted the wrong way round by corrected copies and hid the real ones; the agent left the
-hidden ones out of every check, but the villa's "critical devices offline" rule still watched them and alerted on one.
+A device replaced by a template copy, the real one hidden: the agent left the hidden one out of every check, but the villa's "critical devices offline" rule still watched it and alerted on it.
 The night check now says so. Shapes as the villa answers them (a blueprint rule's input list, a script whose
 description and notes mention ids in prose); the ids are synthetic.
 """
@@ -16,11 +15,11 @@ from helpers import PYTHONPATH, STARTER_SKILLS
 
 NIGHTLY = os.path.join(STARTER_SKILLS, "preventive-maintenance", "scripts", "nightly.py")
 RULE = "PM-HIDDEN-IN-RULE"
-RAW, FIXED = "lock.front_door", "lock.front_door_inverted"
+RAW, FIXED = "lock.front_door", "lock.front_door_copy"
 
 WATCHDOG = {"entity_id": "automation.critical_watchdog_devices", "kind": "automation", "config": {
     "id": "1", "alias": "critical_watchdog---devices",
-    "description": f"Watches the critical devices. {RAW} was replaced by its corrected copy.",
+    "description": f"Watches the critical devices. {RAW} was replaced by its copy.",
     "use_blueprint": {"path": "critical_watchdog.yaml", "input": {
         "critical_entities": ["sensor.ap_state", RAW, "switch.pool_pump"],
         "grace_period": {"hours": 0, "minutes": 10, "seconds": 0}}}}}
@@ -59,7 +58,7 @@ def _open(tmp):
 def test_a_rule_watching_a_hidden_device_is_one_fault_naming_it(tmp_path):
     _night(tmp_path, [WATCHDOG, FIXED_RULE, SCRIPT])
     got = _open(tmp_path)
-    # the watchdog only: the corrected copy's rule names a LONGER id, the script names it only in its prose
+    # the watchdog only: the copy's rule names a LONGER id, the script names it only in its prose
     assert [f["entity_id"] for f in got] == ["automation.critical_watchdog_devices"]
     assert got[0]["summary"] == ("The automation critical_watchdog---devices watches 1 device hidden in the villa's system: "
                                  "Front Door Raw.")

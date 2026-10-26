@@ -56,10 +56,15 @@ def history_days() -> int:
                  reached="One offline for longer reads \"offline for over\" this long.", told="")
 
 
-def offline_since(history, since: dict[str, datetime], now: datetime) -> dict[str, datetime]:
+def offline_since(history, since: dict[str, datetime], now: datetime, over: set | None = None) -> dict[str, datetime]:
     """When each entity of `since` ({entity: its last_changed}) REALLY went offline: its history read back from that
     moment to its last real reading (never "unavailable" or "unknown"); the start of the window read when it gave none
-    in it. `history`: the client's history(entity_ids, start, end).
+    in it — and then it is added to `over`: offline longer than was read. `history`: the client's history(entity_ids,
+    start, end).
+
+    ⚠️ THE START OF THE READ IS NOT WHEN IT WENT (villa, 2026-10-26: "Timmerflotte_2623 has been offline for 7d 22h",
+    offline since 17 Oct, 8d 22h: the read began seven days before its restart clock and found no reading), so the
+    words say "over" (Group.over).
 
     ⚠️ A RESTART IS NOT A NEW OUTAGE (villa, 2026-10-25: "matter integration (3 devices) has been offline for 11h
     48min" — a sensor offline since 17 Oct and an LED strip since 21 Oct read "10h" in the daily report): a restart of
@@ -82,6 +87,8 @@ def offline_since(history, since: dict[str, datetime], now: datetime) -> dict[st
             out[eid] = min([last, *went[:1]])
         elif pts:
             out[eid] = min(last, pts[0][0])
+            if over is not None and out[eid] <= start + timedelta(minutes=1):   # the read's own first row
+                over.add(eid)
     return out
 
 
@@ -101,6 +108,7 @@ class Group:
     names: list[str] = field(default_factory=list)       # the entities' names, in the families' order
     entity_ids: list[str] = field(default_factory=list)  # the entities, the same order (an integration: one per device)
     integration: str | None = None    # an integration down: its platform; its devices' first entities in entity_ids
+    over: bool = False                # offline since before the history read (offline_since): `since` is its start
 
     @property
     def entity_id(self) -> str:
@@ -166,12 +174,14 @@ def devices_offline(pack, states: dict, now: datetime, families, *, min_minutes:
     # until the camera's next event, were): a device is offline only when none of its entities read answers
     groups = {k: g for k, g in groups.items() if k not in answering}
     if history is not None and went:
-        real = offline_since(history, went, now)
+        longer: set[str] = set()
+        real = offline_since(history, went, now, longer)
         for g in groups.values():
             known = [real[e] for e in g.entity_ids if e in real]
             if known:
                 g.since = min(known)
                 g.hours = _hours(g.since, now)
+                g.over = any(real[e] == g.since for e in g.entity_ids if e in longer)
     # a device an open alert already follows is that alert's: left out before the integration is counted, so the
     # others of its integration stay what they are
     if alerted:
@@ -207,12 +217,13 @@ def merged_integrations(groups: dict[str, Group], min_devices: float, now: datet
                 continue
         devs = [groups[k] for k in keys]
         since = min((g.since for g in devs if g.since is not None), default=None)
+        over = any(g.over and g.since == since for g in devs)
         for k in keys:
             out.pop(k)
         out[plat] = Group(key=plat, label=None, asset=f"integration_{plat}", asset_name=plat, family=devs[0].family,
                           platform=plat, state=devs[0].state, since=since, hours=_hours(since, now),
                           critical=any(g.critical for g in devs), names=[g.names[0] for g in devs],
-                          entity_ids=[g.entity_id for g in devs], integration=plat)
+                          entity_ids=[g.entity_id for g in devs], integration=plat, over=over)
     return list(out.values())
 
 
