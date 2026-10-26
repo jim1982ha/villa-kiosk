@@ -76,8 +76,10 @@ console.log("\n  the camera's bottom-right pill — someone passing is the camer
   ck("  ...its other problems kept: lost, grey \"?\"; an open fault, amber \"!\" even while it sees someone",
      deviceLook("camera.gate", at("unavailable")).linkPill === "lost"
      && deviceLook("camera.gate", at("on", "motion", { hasFault: (id) => id === "binary_sensor.gate" })).linkPill === "fault");
-  ck("  ...the sensor's own badge still reads someone passing as red (owner, 2026-10-21), a door's alarm still alarms the device",
-     deviceLook("binary_sensor.gate", at("on")).mark === "alarm" && deviceLook("camera.gate", at("on", "door")).linkPill === "alarm");
+  // owner, 2026-10-26: someone passing, a door open are in use — the plain dot, never the red "!"; a leak still alarms
+  ck("  ...the sensor's own badge reads someone passing as the plain dot (in use), a linked leak still alarms the device",
+     deviceLook("binary_sensor.gate", at("on")).mark === "active" && deviceLook("camera.gate", at("on", "door")).linkPill === "on"
+     && deviceLook("camera.gate", at("on", "moisture")).linkPill === "alarm");
 }
 
 console.log("\n  the saved setup's motion sensor moves into the linked entity (AppConfig.mergeMotionIntoLinked):");

@@ -14,8 +14,8 @@ const { deviceLook, storeLookSource } = await import("@/utils/deviceActivity");
 
 // A member's look is the REAL deviceLook of a device in that state (2.496.245 —
 // it was a bare `kind` string the test made up): on = a light on, off = a light
-// off, alert = an unlocked lock, unavailable = a light HA has lost.
-const STATE_OF = { on: ["light.x", "on"], off: ["light.x", "off"], alert: ["lock.x", "unlocked"], unavailable: ["light.x", "unavailable"] };
+// off, alert = a jammed lock (an unlocked one is in use, not an alert: owner, 2026-10-26), unavailable = a light HA has lost.
+const STATE_OF = { on: ["light.x", "on"], off: ["light.x", "off"], alert: ["lock.x", "jammed"], unavailable: ["light.x", "unavailable"] };
 const lookOf = (kind) => {
   if (!kind) return undefined;
   const [id, state] = STATE_OF[kind];

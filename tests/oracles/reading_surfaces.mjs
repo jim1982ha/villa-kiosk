@@ -83,8 +83,10 @@ console.log("\n  the Cockpit's alarm line");
   const listed = new Set(items.map((i) => i.entityId));
   // an open door is listed since 2026-10-21; a detection is red and NO fault (owner, 2026-10-21: "don't create a
   // fault in cockpit when Motion sensor are triggered")
-  ck("  (the alarms include a hazard, a lost connection, a lock, a fault word and an open door; never a detection)",
-     !listed.has("binary_sensor.motion_on") && !listed.has("binary_sensor.occupancy_on") && ["binary_sensor.door_on", "binary_sensor.smoke_on", "binary_sensor.connectivity_off", "lock.l_unlocked", "lock.l_jammed", "sensor.words_fault"]
+  // owner, 2026-10-26: in use is no alarm — an open door, an unlocked lock, a detection are never listed
+  ck("  (the alarms include a hazard, a lost connection, a jammed lock and a fault word; never a detection, an open door or an unlocked lock)",
+     ["binary_sensor.motion_on", "binary_sensor.occupancy_on", "binary_sensor.door_on", "lock.l_unlocked"].every((id) => !listed.has(id))
+     && ["binary_sensor.smoke_on", "binary_sensor.connectivity_off", "lock.l_jammed", "sensor.words_fault"]
        .every((id) => listed.has(id)), [...listed]);
 }
 

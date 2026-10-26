@@ -31,6 +31,9 @@ export interface BinarySensorClassInfo {
   /** true = a DETECTION (someone or something is there): its "on" glows its room on the map (detectsPresence), and it
    *  is never a fault — no line in "Needs attention" (alertIsFault). Absent = not one. */
   detects?: true;
+  /** true = its problem state is the device IN USE (a door or window open, a lock sensor unlocked): its badge's corner
+   *  says it with the plain "active" dot, never the red "!" of a fault (inUse). Absent = not one. */
+  use?: true;
 }
 
 /** Fallback for a missing/unrecognised device_class — preserves the
@@ -58,6 +61,10 @@ const BINARY_SENSOR_CLASSES: Record<string, BinarySensorClassInfo> = {
   // everywhere"): a motion or occupancy sensor's "on" was red in its window only (2026-10-05) and plain on the map.
   // The badge and its room chip read this table too now. ⚠️ BUT A DETECTION IS NO FAULT (owner, 2026-10-21, the same
   // day: "don't create a fault in cockpit when Motion sensor are triggered"): red, never a line in "Needs attention".
+  // ⚠️ IN USE IS NO ERROR ON THE MAP OR IN THE COCKPIT (owner, 2026-10-26: "reserve the ! for devices that are really
+  // in error"): a detection, a door or window open, a lock sensor unlocked keeps its red in its WINDOW and history bar
+  // (owner, the same day: "keep red there"), but its badge wears the plain dot and it is no line in "Needs attention"
+  // (problemStateOf: no problem state for the map and the Cockpit).
   motion: { icon: Activity, alarmState: "on", detects: true },
   moving: { icon: Activity, alarmState: "none", detects: true },
   occupancy: { icon: Eye, alarmState: "on", detects: true },
@@ -65,11 +72,11 @@ const BINARY_SENSOR_CLASSES: Record<string, BinarySensorClassInfo> = {
   // style", then "the entity badge to follow the state of the entity"): an opening open, a lock sensor unlocked — its
   // badge, its window and "Needs attention" until it closes. It was information (2026-10-05: "an open window is not a
   // fault"), plain grey, then red in its window only (2.496.460) while its badge stayed plain.
-  door: { icon: DoorOpen, alarmState: "on" },
-  garage_door: { icon: DoorOpen, alarmState: "on" },
-  window: { icon: DoorOpen, alarmState: "on" },
-  opening: { icon: DoorOpen, alarmState: "on" },
-  lock: { icon: Unlock, alarmState: "on" },
+  door: { icon: DoorOpen, alarmState: "on", use: true },
+  garage_door: { icon: DoorOpen, alarmState: "on", use: true },
+  window: { icon: DoorOpen, alarmState: "on", use: true },
+  opening: { icon: DoorOpen, alarmState: "on", use: true },
+  lock: { icon: Unlock, alarmState: "on", use: true },
   // Informational — presence/state, not a fault, so never auto-alerts.
   presence: { icon: Home, alarmState: "none", detects: true },
   sound: { icon: Volume2, alarmState: "none" },
@@ -131,10 +138,17 @@ export function alertStateFor(deviceClass: string | undefined): string | undefin
   return alarm === "none" ? undefined : alarm;
 }
 
-/** Whether this sensor's problem state (alertStateFor) is a FAULT, a line in "Needs attention": every sensor but a
- *  detection (motion, occupancy), which is red on its badge and its window and listed nowhere (owner, 2026-10-21). */
+/** Whether this sensor's problem state (alertStateFor) is a FAULT, a line in "Needs attention": every sensor but one in
+ *  use — a detection (owner, 2026-10-21), a door or window open (owner, 2026-10-26: calm everywhere, inUse). */
 export function alertIsFault(entityId: string, deviceClass: string | undefined): boolean {
-  return !detectsPresence(entityId, deviceClass);
+  return !inUse(entityId, deviceClass);
+}
+
+/** Whether this sensor's problem state is the device IN USE — a detection, or a door, window or lock open — rather
+ *  than something wrong (a leak, smoke, a low battery): its badge's corner is the plain "active" dot, never the red "!"
+ *  (owner, 2026-10-26: "reserve the ! for devices that are really in error"). */
+export function inUse(entityId: string, deviceClass: string | undefined): boolean {
+  return detectsPresence(entityId, deviceClass) || !!binarySensorClassInfo(deviceClass).use;
 }
 
 /** Whether this class is a DETECTION — motion, moving, occupancy, presence: its "on" glows its room on the map
@@ -165,7 +179,13 @@ export function cameraMotionId(
  *  door or window open, a leak. ⚠️ ANY "ON" GLOWED (owner, 2026-10-21: the laundry room red while its door sensor read
  *  Open — "keep it that way, it makes sense"), a connected access point or a plugged-in charger too: never good news. */
 export function glowsRoom(entityId: string, deviceClass: string | undefined): boolean {
-  return detectsPresence(entityId, deviceClass) || alertStateFor(deviceClass) === "on";
+  return inUse(entityId, deviceClass) || alertStateFor(deviceClass) === "on";
+}
+
+/** This sensor's problem state for the MAP and the COCKPIT, by its class and — a detection with no class (a "…_pir") —
+ *  its id: none for one in use (inUse). Its window and history bar keep the class's own (alertStateFor, binaryLook). */
+export function problemStateOf(entityId: string, deviceClass: string | undefined): string | undefined {
+  return inUse(entityId, deviceClass) ? undefined : alertStateFor(deviceClass);
 }
 
 /** Device classes whose on/off state is a physical opening's POSITION

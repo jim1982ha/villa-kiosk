@@ -50,8 +50,12 @@ ck("  ...a pump with only late maintenance: its badge carries the amber \"!\" to
    B.mark === "fault" && B.sign === "warn" && B.cardTone === "warn", B);
 
 const C = seen("lock.front", { state: "unlocked", tickets: [ticket("t2", "lock.front", "Front door unlocked")] });
-ck("  ...an unlocked door with its alert's fault: red everywhere (the alarm outranks the fault)",
-   C.mark === "alarm" && C.markTone === "danger" && C.sign === "danger" && C.cardTone === "danger", C);
+// owner, 2026-10-26: an unlocked door is in use, not an alarm — its alert is the one problem, amber everywhere
+ck("  ...an unlocked door with its alert's fault: amber everywhere (in use is no alarm; the alert is the fault)",
+   C.mark === "fault" && C.markTone === "warn" && C.sign === "warn" && C.cardTone === "warn", C);
+const J = seen("lock.front", { state: "jammed", tickets: [ticket("t3", "lock.front", "Front door jammed")] });
+ck("  ...a jammed lock with its fault: red everywhere (the alarm outranks the fault)",
+   J.mark === "alarm" && J.markTone === "danger" && J.sign === "danger" && J.cardTone === "danger", J);
 
 const D = seen("light.hall", { state: "unavailable", unavailable: ["light.hall"] });
 ck("  ...a lamp offline and nothing else: grey everywhere, no amber",

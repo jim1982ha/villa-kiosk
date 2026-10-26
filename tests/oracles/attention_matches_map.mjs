@@ -37,7 +37,10 @@ const unavailableIds = ["light.lost", "lock.lost"];
 const resolvedRooms = {};
 
 const map = mapLookSource(new Map(Object.entries(entities)), new Map(Object.entries(entityMap)), () => ({ entityMap, isHidden: () => false }));
-const redOnMap = selectableIds.filter((id) => deviceLook(id, map).mark === "alarm").sort();
+// red on the map: its own red "!" (deviceLook `alert`); in use (owner, 2026-10-26: a lock unlocked, a door open,
+// someone seen) is the plain "active" dot, no alarm and never listed
+const redOnMap = selectableIds.filter((id) => deviceLook(id, map).alert).sort();
+const inUseDot = selectableIds.filter((id) => deviceLook(id, map).mark === "active").sort();
 const villa = devicesOf({ ids: selectableIds, unavailable: unavailableIds });
 const items = buildAttentionItems({ devices: villa, entities, entityMap, resolvedRooms, fmData: EMPTY_FM_DATA });
 const listed = items.filter((i) => i.kind === "alarm").map((i) => i.entityId).sort();
@@ -48,12 +51,16 @@ const DETECTIONS = ["binary_sensor.garden_pir", "binary_sensor.pir"];
 
 console.log(`  red on the map: ${redOnMap.join(", ")}`);
 console.log(`  listed alarms : ${listed.join(", ")}`);
-ck("red on the map ⇔ an alarm in Needs attention, a detection apart",
-   redOnMap.filter((id) => !DETECTIONS.includes(id)).join() === listed.join(), { redOnMap, listed });
-ck("a motion sensor that sees someone is red on the map and NOT in Needs attention",
-   DETECTIONS.every((id) => redOnMap.includes(id) && !listed.includes(id)), { redOnMap, listed });
-ck("  ...including the cases the old rule missed: an unlocked door, a jammed lock, a fault-word sensor",
-   ["lock.front", "lock.shed", "sensor.pump_status"].every((id) => listed.includes(id)), listed);
+ck("red on the map ⇔ an alarm in Needs attention",
+   redOnMap.join() === listed.join(), { redOnMap, listed });
+ck("a motion sensor that sees someone, an unlocked door: the plain dot on the map and NOT in Needs attention",
+   [...DETECTIONS, "lock.front"].every((id) => inUseDot.includes(id) && !redOnMap.includes(id) && !listed.includes(id)),
+   { redOnMap, listed });
+ck("in use (an unlocked lock, someone seen) wears the plain dot, the red \"!\" only what is wrong (a leak, a jammed lock)",
+   inUseDot.join() === ["binary_sensor.garden_pir", "binary_sensor.pir", "lock.front"].join()
+   && ["binary_sensor.leak", "lock.shed"].every((id) => deviceLook(id, map).mark === "alarm"), inUseDot);
+ck("  ...including the cases the old rule missed: a jammed lock, a fault-word sensor",
+   ["lock.shed", "sensor.pump_status"].every((id) => listed.includes(id)), listed);
 // What the OLD rule (binary_sensor + its class's alarmState only) listed — to show the test discriminates.
 const { binarySensorClassInfo } = await import("@/config/BinarySensorClasses");
 const oldRule = selectableIds.filter((id) => {
@@ -69,18 +76,18 @@ ck("an unavailable device is listed ONCE, as unavailable — never also as an al
 ck("only selectable devices are listed (never a raw domain scan)",
    buildAttentionItems({ devices: devicesOf({ ids: ["lock.back"] }), entities, entityMap, resolvedRooms, fmData: EMPTY_FM_DATA }).length === 0);
 const word = (id) => items.find((i) => i.entityId === id)?.detail;
-ck("the detail reads as the device says it: a leak \"Leak detected\", a lost link \"Disconnected\", a door \"Unlocked\"",
-   word("binary_sensor.leak") === "Leak detected" && word("binary_sensor.ap") === "Disconnected" && word("lock.front") === "Unlocked", items.map((i) => [i.entityId, i.detail]));
+ck("the detail reads as the device says it: a leak \"Leak detected\", a lost link \"Disconnected\", a lock \"Jammed\"",
+   word("binary_sensor.leak") === "Leak detected" && word("binary_sensor.ap") === "Disconnected" && word("lock.shed") === "Jammed", items.map((i) => [i.entityId, i.detail]));
 
 console.log("\n  every count of attention reads this one list:");
 const att = { devices: villa, attentionItems: items };
 const all = attentionFor(att, () => true);
 ck("a profile that may open everything sees every item; the health line says so",
    all.attentionItems.length === items.length && all.health.level === "danger" && all.health.summary.startsWith(`${all.attentionGroups.length} things`));
-const some = attentionFor(att, (id) => id !== "lock.front");
-ck("  ...a profile that may not open a device does not count it", some.attentionItems.length === items.length - 1 && !some.attentionItems.some((i) => i.entityId === "lock.front"));
-ck("an unlocked door alone is 'danger' (red on the map, red here)",
-   villaHealthFrom(groupAttention(items.filter((i) => i.entityId === "lock.front"))).level === "danger");
+const some = attentionFor(att, (id) => id !== "lock.shed");
+ck("  ...a profile that may not open a device does not count it", some.attentionItems.length === items.length - 1 && !some.attentionItems.some((i) => i.entityId === "lock.shed"));
+ck("a jammed lock alone is 'danger' (red on the map, red here)",
+   villaHealthFrom(groupAttention(items.filter((i) => i.entityId === "lock.shed"))).level === "danger");
 const src = (f) => readFileSync(new URL(`../../src/${f}`, import.meta.url), "utf8");
 const hud = src("components/hud/HUD.tsx"), cockpit = (src("components/cockpit/CockpitModal.tsx") + src("components/cockpit/CockpitOverview.tsx"));
 ck("the top-bar badge, the phone menu's \"Cockpit (N)\" and the Cockpit list all read useVillaAttention's attentionGroups (one row per device, 2.496.246)",

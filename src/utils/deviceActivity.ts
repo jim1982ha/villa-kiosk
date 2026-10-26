@@ -18,7 +18,7 @@
 import type { HassEntity } from "@/types/ha.types";
 import type { EntityMapping, EntityType } from "@/types/scene.types";
 import type { DeviceSurfaceState } from "@/config/EntityCategories";
-import { alertIsFault, alertStateFor } from "@/config/BinarySensorClasses";
+import { inUse, problemStateOf } from "@/config/BinarySensorClasses";
 import { deviceTypeOf } from "@/config/EntityMap";
 import { TRANSITIONAL_STATES, contactOf, statusKeyFor } from "@/utils/stateColors";
 import { devicePower } from "@/utils/devicePower";
@@ -93,12 +93,16 @@ export type BadgeKind = DeviceActivity | "unavailable";
  *   lost      contact lost                          grey "?"
  *   asleep    asleep by design, its last report shown   grey "z"
  *   moving    on its way between two rest states (TRANSITIONAL_STATES)   teal "…"
+ *   active    in use: a detection, a door or window open, a lock unlocked   a plain dot in the badge's colour
  *
+ * ⚠️ IN USE IS NOT AN ERROR (owner, 2026-10-26: "reserve the ! for devices that are really in error"): a motion sensor
+ * that saw someone, a lock unlocked, wore the red "!" of a leak. They take the plain dot the linked entity's "on" pill
+ * is (linkPillOf), last in the order, and no dot when at rest.
  * No mark: all fine. The colours are one vocabulary with every other surface: red act now, amber check soon, grey no
  * contact, teal moving (EntityCategories.markSurface paints them).
  */
-export type BadgeMark = "critical" | "alarm" | "fault" | "lost" | "asleep" | "moving";
-export const MARK_ORDER: readonly BadgeMark[] = ["critical", "alarm", "fault", "lost", "asleep", "moving"];
+export type BadgeMark = "critical" | "alarm" | "fault" | "lost" | "asleep" | "moving" | "active";
+export const MARK_ORDER: readonly BadgeMark[] = ["critical", "alarm", "fault", "lost", "asleep", "moving", "active"];
 
 /** The facts a mark is chosen from — each one independent, the ORDER decides (badgeMarkFor). */
 export type MarkFacts = Record<BadgeMark, boolean>;
@@ -172,22 +176,37 @@ export function badgeFace(r: DeviceReading): DeviceSurfaceState {
  *  both corners. A hidden device has none: it is no device. */
 export function badgeMarkOf(r: DeviceReading): BadgeMark | null {
   if (r.hidden) return null;
-  const lost = badgeKindFor(r) === "unavailable";
+  const kind = badgeKindFor(r);
+  const lost = kind === "unavailable";
   return badgeMarkFor({
     critical: lost && r.critical,
-    alarm: badgeKindFor(r) === "alert",
+    alarm: kind === "alert",
     fault: r.fault,
     lost,
     asleep: r.asleep,
     moving: TRANSITIONAL_STATES.has(r.entity.state),
+    active: kind === "on" && inUseNow(r),
   });
+}
+
+/** A reading that is the device IN USE (the "active" dot): a lock unlocked or open, a binary sensor of a class in use
+ *  (BinarySensorClasses.inUse: a detection, a door or window) reading on. */
+function inUseNow(r: DeviceReading): boolean {
+  if (r.type === "lock") return r.entity.state === "unlocked" || r.entity.state === "open";
+  if (r.type === "binary_sensor") {
+    return r.entity.state === "on" && inUse(r.entity.entity_id, r.entity.attributes?.device_class as string | undefined);
+  }
+  return false;
 }
 
 /** The badge's BOTTOM-RIGHT pill: its linked entity's own problem (badgeMarkOf over the linked reading — the same
  *  function as the top-right), else filled when it is on, hollow when off; none without a linked entity. */
 export function linkPillOf(r: DeviceReading): LinkPill {
   if (!r.linked) return null;
-  return (r.link ? badgeMarkOf(r.link) : null) ?? (r.linkedOn ? "on" : "off");
+  const mark = r.link ? badgeMarkOf(r.link) : null;
+  // in use is the linked entity "on": the one filled dot, both corners
+  if (mark === "active") return "on";
+  return mark ?? (r.linkedOn ? "on" : "off");
 }
 
 /* ⚠️ `badgeSurfaceFor` IS GONE (had zero callers). It resolved `badgeKindFor`
@@ -215,9 +234,11 @@ export function classifyDeviceActivity({ type, entity: s, alertState }: DeviceRe
     // rest state and the map already shows the movement through its pose
     // variant (see meshVariants, which shares TRANSITIONAL_STATES with the
     // status palette). "jammed" still alerts — it is a real fault.
+    // ⚠️ AN UNLOCKED DOOR IS IN USE, NOT AN ALARM (owner, 2026-10-26: calm everywhere): "on", its plain dot; only a
+    // jammed lock — the bolt failed — is a fault.
     case "lock":
-      if (s.state === "locked") return "off";
-      return TRANSITIONAL_STATES.has(s.state) ? "off" : "alert";
+      if (s.state === "locked" || TRANSITIONAL_STATES.has(s.state)) return "off";
+      return s.state === "jammed" ? "alert" : "on";
     // Resolved through the device_class, NOT through a bare `state === "on"`.
     // See alertStateFor: a motion PIR is informational and reads as plain
     // "on", a leak sensor alerts, and `connectivity` alerts when it goes OFF.
@@ -275,7 +296,7 @@ export type MeshLook =
   | { kind: "dark" }
   | { kind: "glow"; on: boolean }
   | { kind: "pulse"; on: boolean; unavailable: boolean }
-  | { kind: "tint"; tone: "secure" | "alert" | "unavailable" };
+  | { kind: "tint"; tone: "secure" | "open" | "alert" | "unavailable" };
 
 export function meshLookFor(r: DeviceReading): MeshLook {
   const kind = badgeKindFor(r);
@@ -284,7 +305,7 @@ export function meshLookFor(r: DeviceReading): MeshLook {
     case "cover":
       return { kind: "none" };
     case "lock":
-      return { kind: "tint", tone: kind === "unavailable" ? "unavailable" : kind === "alert" ? "alert" : "secure" };
+      return { kind: "tint", tone: kind === "unavailable" ? "unavailable" : kind === "alert" ? "alert" : kind === "on" ? "open" : "secure" };
     case "binary_sensor":
       return { kind: "pulse", on: kind === "alert", unavailable: kind === "unavailable" };
     case "switch":
@@ -434,13 +455,9 @@ export function readingOf(entityId: string, source: LookSource): DeviceReading {
     // the linked entity's OWN reading, by the one rule — its own link not followed (one step, never a loop). Never
     // reported: no reading, so its pill is a plain hollow one, not a "?" for an entity the map has not heard from yet.
     if (source.state(linkedId)) {
-      const own = ownReadingOf(linkedId, source);
-      // ⚠️ A DETECTION IS NO ALARM OF THE DEVICE IT IS LINKED TO (owner, 2026-10-22: a camera's motion sensor became
-      // its linked entity). Its own badge reads someone passing as red (2026-10-21); on the camera's bottom-right pill
-      // it is the camera doing its job — filled while motion is on, its other problems (lost, a fault…) kept. The same
-      // line "Needs attention" draws (alertIsFault).
-      link = alertIsFault(linkedId, own.entity.attributes.device_class as string | undefined)
-        ? own : { ...own, alertState: undefined };
+      // a detection on a camera's bottom-right pill is the camera doing its job (owner, 2026-10-22): filled while motion
+      // is on, its other problems (lost, a fault…) kept — in use has no problem state (problemStateOf), so it is "on"
+      link = ownReadingOf(linkedId, source);
     }
   }
   return { ...ownReadingOf(entityId, source), linked: !!linkedId, linkedOn, link };
@@ -456,7 +473,7 @@ function ownReadingOf(entityId: string, source: LookSource): DeviceReading {
     linked: false,
     linkedOn: false,
     link: null,
-    alertState: alertStateFor(entity.attributes.device_class as string | undefined),
+    alertState: problemStateOf(entityId, entity.attributes.device_class as string | undefined),
     critical: source.config.isCritical?.(entityId) ?? false,
     hidden: source.config.isHidden(entityId),
     fault: source.config.hasFault?.(entityId) ?? false,

@@ -31,7 +31,7 @@ console.log("\n  a chip's rooms and its chooser:");
 ck("a chip's rooms: distinct, no blanks; none named → its own room",
    S.chipRooms(["Bed", "", "Bed", "Bath"], "Bed").join() === "Bed,Bath" && S.chipRooms([], "Hall").join() === "Hall");
 const { deviceLook, storeLookSource } = await import("@/utils/deviceActivity");
-const ents = { "light.a": { entity_id: "light.a", state: "on", attributes: {} }, "lock.b": { entity_id: "lock.b", state: "unlocked", attributes: {} },
+const ents = { "light.a": { entity_id: "light.a", state: "on", attributes: {} }, "lock.b": { entity_id: "lock.b", state: "jammed", attributes: {} },
                "light.c": { entity_id: "light.c", state: "unavailable", attributes: {} } };
 const src = storeLookSource(ents, { entityMap: {}, isHidden: () => false });
 const where = { "light.a": "Bed", "lock.b": "bath ", "light.c": "Bath" };

@@ -25,7 +25,9 @@ console.log("  the cases the old mesh rule got wrong:");
   const oldLockRed = (s) => s !== "locked";
   ck("the OLD lock rule paints `locking` red", oldLockRed("locking"));
   ck("a lock that is locking: secure, like its badge", meshLookFor(read("lock", "locking")).tone === "secure" && badgeKindFor(read("lock", "locking")) === "off");
-  ck("  ...unlocked: alert; jammed: alert", meshLookFor(read("lock", "unlocked")).tone === "alert" && meshLookFor(read("lock", "jammed")).tone === "alert");
+  // owner, 2026-10-26: an unlocked door is in use — the "on" glow, red only for a jammed bolt
+  ck("  ...unlocked: open (in use); jammed: alert", meshLookFor(read("lock", "unlocked")).tone === "open"
+     && badgeKindFor(read("lock", "unlocked")) === "on" && meshLookFor(read("lock", "jammed")).tone === "alert");
   ck("  ...unavailable: amber, never an 'unlocked' red", meshLookFor(read("lock", "unavailable")).tone === "unavailable");
   const oldPulse = (s) => s === "on";
   const motion = read("binary_sensor", "on", { device_class: "motion" });
@@ -87,15 +89,16 @@ console.log("\n  the caller:");
   }, { entityMap: { "lock.l": { entityId: "lock.l", type: "lock", linkedEntityId: "binary_sensor.d" } },
        isHidden: (id) => hidden && id === "binary_sensor.d" }));
   const open = look("on"), shut = look("off");
-  ck("a lock whose linked door sensor reads Open: the red \"!\" bottom-right, NOT top-right; its face Locked, its kind its own",
-     open.linkPill === "alarm" && open.mark === null && open.kind === "off" && open.face === "off" && !open.alert, open);
+  ck("a lock whose linked door sensor reads Open: the filled dot bottom-right (in use), NOT top-right; its face Locked, its kind its own",
+     open.linkPill === "on" && open.mark === null && open.kind === "off" && open.face === "off" && !open.alert, open);
   ck("  ...door closed: no mark either side, the bottom pill hollow", shut.mark === null && shut.linkPill === "off" && shut.kind !== "alert", shut);
   ck("  ...a hidden sensor raises no alarm (just on, filled); a lost one its grey \"?\" bottom-right; neither touches the top",
      look("on", { hidden: true }).linkPill === "on" && look("unavailable").linkPill === "lost"
      && look("on", { hidden: true }).mark === null && look("unavailable").mark === null);
-  ck("  ...an unlocked lock: the red \"!\" over an OPEN (active) face, door open or not",
-     look("on", { lock: "unlocked" }).mark === "alarm" && look("on", { lock: "unlocked" }).face === "active"
-     && look("on", { lock: "unlocked" }).alert && look("off", { lock: "unlocked" }).mark === "alarm");
+  ck("  ...an unlocked lock: the plain dot over an OPEN (active) face, no alarm, door open or not",
+     look("on", { lock: "unlocked" }).mark === "active" && look("on", { lock: "unlocked" }).face === "active"
+     && !look("on", { lock: "unlocked" }).alert && look("off", { lock: "unlocked" }).mark === "active"
+     && look("off", { lock: "jammed" }).mark === "alarm");
 }
 
 // architecture review A, 2026-10-22: "what kind of device is this" written out at four places, one skipping the map's

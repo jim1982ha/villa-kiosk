@@ -16,7 +16,7 @@ const { deviceLook, groupLook, storeLookSource } = await import("@/utils/deviceA
 const ent = (id, state, attributes = {}) => ({ entity_id: id, state, attributes });
 const ENTITIES = {
   "light.on": ent("light.on", "on"), "light.off": ent("light.off", "off"),
-  "lock.open": ent("lock.open", "unlocked"), "lock.shut": ent("lock.shut", "locked"),
+  "lock.open": ent("lock.open", "unlocked"), "lock.shut": ent("lock.shut", "locked"), "lock.jam": ent("lock.jam", "jammed"),
   "camera.idle": ent("camera.idle", "idle"), "media_player.paused": ent("media_player.paused", "paused"),
   "binary_sensor.pir": ent("binary_sensor.pir", "on", { device_class: "motion" }),
   "light.lost": ent("light.lost", "unavailable"), "sensor.t": ent("sensor.t", "24"),
@@ -33,24 +33,26 @@ console.log("  the two meanings of \"on\", one module, named:");
      L("camera.idle").active && L("camera.idle").power === "none" && count(["camera.idle"]).onCount === 0 && count(["camera.idle"]).activeCount === 1);
   ck("a paused TV is switched ON (its power button) but not ACTIVE (its badge rests until it plays)",
      L("media_player.paused").power === "on" && !L("media_player.paused").active);
-  // a detection is red since 2026-10-21 (owner, 2026-10-21: "the entity badge to follow the state of the entity … everywhere"); still never switched ON
-  ck("a motion sensor detecting is red, never ON (owner, 2.496.238: it is someone passing)",
-     L("binary_sensor.pir").alert && L("binary_sensor.pir").power === "none");
-  ck("an unlocked lock is ON (POWER) and red (needs attention), not 'active'",
-     L("lock.open").power === "on" && L("lock.open").alert && !L("lock.open").active);
+  // owner, 2026-10-26: in use is no alarm — someone seen, a door unlocked are ACTIVE (doing something), never red
+  ck("a motion sensor detecting is ACTIVE (in use), never red, never ON (owner, 2.496.238: it is someone passing)",
+     !L("binary_sensor.pir").alert && L("binary_sensor.pir").active && L("binary_sensor.pir").power === "none");
+  ck("an unlocked lock is ON (POWER) and ACTIVE (in use), never red; a jammed one is red",
+     L("lock.open").power === "on" && !L("lock.open").alert && L("lock.open").active && L("lock.jam").alert);
   // owner, 2026-10-22 (badge proposal 2): its linked dot is filled, the sensor itself neither active nor on — the
   // pump's running no longer lights the sensor's room chip (it was ACTIVE, ringed, since 2.496.240)
   ck("a power sensor whose linked pump runs: its dot filled, never ACTIVE, never ON",
      L("sensor.power").linkPill === "on" && !L("sensor.power").active && L("sensor.power").power === "none");
   const g = count(["light.on", "light.off", "lock.open", "lock.shut", "camera.idle", "media_player.paused", "binary_sensor.pir", "sensor.t"]);
-  ck("a mixed group: onCount 3 (light, unlocked lock, paused TV), activeCount 2 (light, camera)",
-     g.onCount === 3 && g.activeCount === 2, g);
+  ck("a mixed group: onCount 3 (light, unlocked lock, paused TV), activeCount 4 (light, camera, unlocked lock, motion seen)",
+     g.onCount === 3 && g.activeCount === 4, g);
 }
 
 console.log("\n  a COUNT summary's ring (room chip, count card):");
 {
-  ck("red when ANY member needs attention", count(["light.off", "lock.open"]).ringRed);
-  ck("  ...and red wins over 'on' (no neutral ring beside a red one)", !count(["light.on", "lock.open"]).ringOn);
+  ck("red when ANY member needs attention", count(["light.off", "lock.jam"]).ringRed);
+  ck("  ...and red wins over 'on' (no neutral ring beside a red one)", !count(["light.on", "lock.jam"]).ringOn);
+  ck("  ...a door unlocked, someone seen: the neutral 'on' ring, never red (in use)",
+     count(["light.off", "lock.open", "binary_sensor.pir"]).ringOn && !count(["light.off", "lock.open", "binary_sensor.pir"]).ringRed);
   ck("the neutral 'on' ring when a member is active and none alerts", count(["light.off", "light.on"]).ringOn && !count(["light.off", "light.on"]).ringRed);
   ck("  ...never red for 'on' (owner, 2026-10-01: red is \"Needs attention\")", !count(["light.on", "sensor.power"]).ringRed);
   ck("unavailable dims, never rings", count(["light.lost"]).unavailable && !count(["light.lost"]).ringRed && !count(["light.lost"]).ringOn);
@@ -61,7 +63,7 @@ console.log("\n  a COUNT summary's ring (room chip, count card):");
 
 console.log("\n  a card SHOWING its devices:");
 {
-  const lockA = L("lock.open");
+  const lockA = L("lock.jam");
   ck("red only when EVERY member's own ring is red", groupLook([lockA, lockA], { showingDevices: true }).ringRed
      && !groupLook([lockA, L("light.off")], { showingDevices: true }).ringRed);
   ck("  ...a member not reported is not alerting", !groupLook([lockA, null], { showingDevices: true }).ringRed);

@@ -1,6 +1,7 @@
 // "Needs attention" is one row per DEVICE (2.496.246).
 //
 // An unlocked entrance door was red on the map — one row, "Unlocked" — and
+// (since 2026-10-26 an unlocked door is in use, no alarm: the case is driven with a JAMMED lock, still red)
 // ten minutes later the VESTA rule's alert became the agent's Kiosk ticket on
 // that same lock: a second row, and the count went up for a door already
 // listed. An offline device and its watchdog ticket did the same.
@@ -26,7 +27,7 @@ const lineIcon = (g, n = 0) => card(g).lines[n]?.icons;
 
 const ent = (id, state, name) => ({ entity_id: id, state, attributes: { friendly_name: name } });
 const entities = {
-  "lock.door": ent("lock.door", "unlocked", "Front door"),
+  "lock.door": ent("lock.door", "jammed", "Front door"),
   "sensor.door_battery": ent("sensor.door_battery", "40", "Front door battery"),
   "light.lamp": ent("light.lamp", "unavailable", "Hall lamp"),
   "lock.back": ent("lock.back", "locked", "Back door"),
@@ -52,10 +53,10 @@ const build = (tickets, more = {}) => buildAttentionItems({
 
 console.log("  the entrance door:");
 const before = build([]);
-const after = build([ticket("va-1", "Entrance door unlocked", "lock.door")]);
+const after = build([ticket("va-1", "Entrance door jammed", "lock.door")]);
 const gBefore = groupAttention(before), gAfter = groupAttention(after);
 const door = gAfter.find((g) => g.entityId === "lock.door");
-ck("the agent's ticket on an unlocked door joins the door's row: still ONE row, the count does not move",
+ck("the agent's ticket on a jammed door joins the door's row: still ONE row, the count does not move",
    gBefore.length === gAfter.length && door?.items.map((i) => i.kind).join() === "alarm" && door.items[0].fault?.ticketId === "va-1",
    gAfter.map((g) => [g.title, g.items.map((i) => i.id)]));
 ck("  ...the row is named after the device, opens the lock, and leads with the red state",
@@ -64,7 +65,7 @@ ck("  ...the row is named after the device, opens the lock, and leads with the r
 // very lock whose state is listed — it was a second line, "Open fault: Entrance door unlocked", under "Unlocked"
 // (owner, 2026-10-18: "Unlocked — #41 · Laundry Room door unlocked" — the state's word is not said when the fault says it)
 ck("  ...ONE line: its fault naming itself, the state's word not said again (the fault keeps its ticket, so its Close)",
-   door && card(door).lines.map((l) => l.text).join(" | ") === "Entrance door unlocked", door && card(door).lines);
+   door && card(door).lines.map((l) => l.text).join(" | ") === "Entrance door jammed", door && card(door).lines);
 ck("  ...and the villa's own items are never written on: the ticket gone, the state line has no fault",
    !before.concat(after).some((i) => i.fault) && !groupAttention(before).some((g) => g.items.some((i) => i.fault)));
 ck("  ...and the row keeps its place when the ticket lands (ordered by worst problem and name, not arrival)",

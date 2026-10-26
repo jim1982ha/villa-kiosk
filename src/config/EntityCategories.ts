@@ -247,6 +247,8 @@ export function markSurface(mark: BadgeMark): { fill: string; symbol: string } {
     case "lost": return { fill: cssVar("--status-lost") || FALLBACK_LOST, symbol: "?" };
     case "asleep": return { fill: cssVar("--status-lost") || FALLBACK_LOST, symbol: "z" };
     case "moving": return { fill: cssVar("--status-pending") || FALLBACK_PENDING, symbol: "\u2026" };
+    // in use: no colour of its own — drawn filled in the badge's colour, no symbol (badgeIcons.drawPill)
+    case "active": return { fill: "", symbol: "" };
   }
 }
 
