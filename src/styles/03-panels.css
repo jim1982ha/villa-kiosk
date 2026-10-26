@@ -818,6 +818,11 @@ input[type="range"]::-moz-range-thumb {
 .chart-fit-zero { font-size: 9.5px; font-weight: 700; margin-left: -2px; line-height: 1; }
 .chart-range-chip { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 2px 0 7px; border: none; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: inherit; font-weight: 700; font-variant-numeric: tabular-nums; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .chart-range-chip.loading { opacity: 0.6; }
+.chart-range-chip-kept { font-weight: 600; opacity: 0.8; }
+/* the ribbon: in the strip under the plot the chart already has, so it adds no height and shifts nothing */
+.chart-range-ribbon { position: absolute; left: 0; right: 0; height: 4px; border-radius: 999px; background: var(--bg-input); overflow: hidden; pointer-events: none; }
+.chart-range-ribbon i { position: absolute; top: 0; bottom: 0; background: var(--accent); }
+.chart-range-none { position: absolute; inset: 0 12px; display: flex; align-items: center; justify-content: center; text-align: center; font-size: var(--text-xs); color: var(--text-secondary); pointer-events: none; }
 .chart-range-chip-x { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); color: var(--bg-modal); }
 /* What the range leaves out: fine diagonal stripes in the lost-contact grey, over the grid and the line. */
 .chart-range-hatch-bg { fill: var(--status-lost); opacity: 0.05; }
