@@ -1,3 +1,16 @@
+## 2.496.546
+
+What you will see:
+- A device's history chart no longer grows when you filter it: the range you keep shows as a small green chip on the
+  line above the chart, right under the period buttons ("273–514 W", "≥ 220 W"). Tap the chip to show everything again.
+- The slider beside the chart is slimmer and has no value bubbles, so the chart keeps its full width. Each handle goes
+  anywhere along the axis; pushed to the very top or bottom, it means no limit on that side.
+- A day (or hour) with nothing in your range sits on the limit its readings passed: on the upper limit when they were
+  above it, on the lower one when below. It no longer drops to 0. This works for negative readings too (a Wi-Fi signal).
+- A small icon at the bottom left of every line chart, by the 0, shows how the axis is drawn: from 0, or fitted. Tap it,
+  or the axis numbers, to switch every chart on this tablet. Fitted with a range set, the axis frames your range with a
+  little room, so both handles stay visible.
+
 ## 2.496.545
 
 What you will see:
