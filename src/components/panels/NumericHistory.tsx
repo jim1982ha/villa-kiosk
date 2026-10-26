@@ -53,7 +53,7 @@ export default function NumericHistory({ series, named = false }: {
   const dual = series.length === 2;
   // the charts with a slider: every one but the chart on two scales
   const slidable = dual ? [] : series;
-  const filtering = slidable.filter((s) => activeRange(filterOf(filters, scope, s.id), history[s.id]?.points ?? []));
+  const filtering = slidable.filter((s) => activeRange(filterOf(filters, scope, s.id)));
   const finerIds = filtering.map((s) => s.id);
   const { data: finer, status: finerStatus } = useHistorySource(
     finerIds.length ? { finer: { kind: "finer", ids: finerIds, hours: range.hours, period: range.period } } : null);
@@ -65,17 +65,17 @@ export default function NumericHistory({ series, named = false }: {
   const filtered = (s: NumericSeries): { lines: ReturnType<typeof line>[]; filter: ChartFilter } => {
     const base = history[s.id];
     const kept = filterOf(filters, scope, s.id);
-    const on = base ? activeRange(kept, base.points) : null;
+    const on = base ? activeRange(kept) : null;
     const f = finer?.finer?.[s.id];
     const ready = on && f && f.of === range.period && finerStatus === "ready" && status === "ready";
     const done = ready ? filterSeries(base!, f, range.grainMs, on) : null;
     const l = line(s);
     return {
-      lines: [done ? { ...l, pts: done.series.points } : l],
+      lines: [done ? { ...l, pts: done.points } : l],
       filter: {
         base: base?.points ?? [], range: kept,
         onChange: (r) => setFilters((st) => withFilter(st, scope, s.id, r)),
-        result: done ? { avg: done.avg, inRangeMs: done.inRangeMs } : finerStatus === "failed" ? "failed" : "loading",
+        state: done ? "ready" : finerStatus === "failed" ? "failed" : "loading",
       },
     };
   };

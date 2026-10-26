@@ -1,9 +1,12 @@
 // The range filter of a device's trend chart (owner, 2026-10-26): two handles beside the y-axis keep only the values
-// between them; each point is the average of ONLY its finer values inside [lo, hi], 0 when none is, and 0 counts in
-// the overall average. Driven through the pure module (utils/rangeFilter), the history source's "finer" request, and
-// the drawn chart (LineChart, ChartRangeSlider): its handles level with the axis' own ticks in both zero modes.
-import { h, draw, inside } from "../consistency/screen.mjs";
-import { parseTsx, elements } from "../consistency/jsx.mjs";
+// between them; each point is the average of ONLY its finer values inside [lo, hi]; a step with none inside sits on its
+// unfiltered value held inside the range (above it: the upper limit; below it: the lower one), never 0. A handle goes
+// anywhere on the axis; at its end it is no limit. The axis fit (from 0 / fitted) holds the limits, the slider stands
+// on it, the chip says the range on the unit line. Driven through the pure modules (utils/rangeFilter,
+// utils/chartGeometry), the history source's "finer" request, and the drawn chart (LineChart, ChartRangeSlider).
+import { h, draw, inside, text } from "../consistency/screen.mjs";
+import { parseTsx, elements, propText } from "../consistency/jsx.mjs";
+import { readFileSync } from "node:fs";
 import ts from "typescript";
 import { ck, done } from "../consistency/check.mjs";
 const R = await import("@/utils/rangeFilter");
@@ -14,10 +17,12 @@ const { chartGeometry } = await import("@/utils/chartGeometry");
 const { loadOne, historyKey } = await import("@/ha/historySource");
 const P = await import("@/utils/viewPrefs");
 const LineChart = (await import("@/components/panels/LineChart")).default;
-const { rangeWords } = await import("@/components/panels/LineChart");
+const { RangeChip, rangeWords } = await import("@/components/panels/ChartRangeSlider");
 
 const near = (a, b) => Math.abs(a - b) < 1e-9;
 const M = 60_000;
+const NONE = { lo: -Infinity, hi: Infinity };
+const FITS = ["zero", "fitted"];
 
 console.log("  the owner's example: daily averages of 7 days of hourly values");
 {
@@ -32,18 +37,51 @@ console.log("  the owner's example: daily averages of 7 days of hourly values");
   const day = (d) => points.filter((p) => p.t >= start + d * DAY_MS && p.t < start + (d + 1) * DAY_MS).reduce((a, p) => a + p.v, 0) / 24;
   const base = { points: Array.from({ length: 7 }, (_, d) => ({ t: start + d * DAY_MS, v: day(d) })), gaps: [], window };
   const run = (lo, hi) => R.filterSeries(base, finer, DAY_MS, { lo, hi });
-  const vals = (r) => r.series.points.map((p) => Math.round(p.v * 1000) / 1000).join();
+  const vals = (r) => r.points.map((p) => Math.round(p.v * 1000) / 1000).join();
   ck("unfiltered (today's chart), day 2 reads 500 / 24, about 21", near(base.points[1].v, 500 / 24) && Math.round(base.points[1].v) === 21);
   const all = run(-Infinity, Infinity);
-  ck("  ...and the rule over every value gives that same chart, point for point", all.series.points.every((p, i) => near(p.v, base.points[i].v)), vals(all));
-  const a = run(450, 550);
-  ck("kept 450 to 550: day 2 reads 500, every other day 0", vals(a) === "0,500,0,0,0,0,0" && a.inRangeMs === HOUR_MS, [vals(a), a.inRangeMs]);
-  const b = run(550, 1500);
-  ck("kept 550 to 1500: day 3 1000, day 4 1500, the others 0", vals(b) === "0,0,1000,1500,0,0,0" && b.inRangeMs === 25 * HOUR_MS, [vals(b), b.inRangeMs]);
+  ck("  ...and the rule with no limit gives that same chart, point for point", all.points.every((p, i) => near(p.v, base.points[i].v)), vals(all));
+  ck("kept 450 to 550: day 2 reads 500; a day with nothing in range sits on the limit its average passed: below on 450 (never 0), days 4 and 5 (1500, 583 on average) above on 550",
+     vals(run(450, 550)) === "450,500,450,550,550,450,450", vals(run(450, 550)));
+  ck("kept 550 to 1500: day 3 1000, day 4 1500, day 5 (only 0, 2000, 5000) its own 583 average, already inside; the others on 550",
+     vals(run(550, 1500)) === "550,550,1000,1500,583.333,550,550", vals(run(550, 1500)));
   const c = run(3000, 5000);
-  ck("kept 3000 to 5000: day 5 reads 5000 (its two 5000 hours, never 3500), the others 0", vals(c) === "0,0,0,0,5000,0,0", vals(c));
-  ck("  ...0 counts in the overall average (5000 / 7), and 2h in range", near(c.avg, 5000 / 7) && c.inRangeMs === 2 * HOUR_MS, [c.avg, c.inRangeMs]);
-  ck("  ...each point stays where the chart drew it", c.series.points.every((p, i) => p.t === base.points[i].t) && c.series.gaps === base.gaps);
+  ck("kept 3000 to 5000: day 5 reads 5000 (its two 5000 hours, never 3500), the others on 3000 (their averages are below)",
+     vals(c) === "3000,3000,3000,3000,5000,3000,3000", vals(c));
+  ck("  ...each point stays where the chart drew it", c.points.every((p, i) => p.t === base.points[i].t) && c.gaps === base.gaps);
+  ck("kept up to 10 (no lower limit): the 1500 day, all above, sits on 10; the quiet days read 0, their own",
+     vals(run(-Infinity, 10)) === "0,0,0,10,0,0,0", vals(run(-Infinity, 10)));
+}
+
+console.log("\n  the owner's pump, 273 to 514 W: a run day on 514, a quiet day on 273");
+{
+  const start = localMidnight(Date.UTC(2026, 5, 1, 12)), D = 6;
+  const window = { from: start, to: start + D * DAY_MS };
+  const runDay = (d) => d === 1 || d === 4;
+  // a quiet day rests at 120 to 250 W; a run day runs 18h at 900 W and rests 6h at 150 W
+  const hourly = (d, hr) => runDay(d) ? (hr >= 4 && hr < 22 ? 900 : 150) : 120 + ((hr * 37) % 131);
+  const points = [];
+  for (let d = 0; d < D; d++) for (let hr = 0; hr < 24; hr++) points.push({ t: start + d * DAY_MS + hr * HOUR_MS, v: hourly(d, hr) });
+  const avg = (d) => points.slice(d * 24, d * 24 + 24).reduce((a, p) => a + p.v, 0) / 24;
+  const base = { points: Array.from({ length: D }, (_, d) => ({ t: start + d * DAY_MS, v: avg(d) })), gaps: [], window };
+  const f = R.filterSeries(base, { of: "day", stepMs: HOUR_MS, series: { points, gaps: [], window } }, DAY_MS, { lo: 273, hi: 514 });
+  ck("nothing in range on any day: each run day (average above) reads 514, each quiet day (below) 273",
+     f.points.every((p, d) => p.v === (runDay(d) ? 514 : 273)), f.points.map((p) => p.v));
+}
+
+console.log("\n  a Wi-Fi signal, always negative (dBm): -75 and below");
+{
+  const start = localMidnight(Date.UTC(2026, 5, 1, 12)), D = 4;
+  const window = { from: start, to: start + D * DAY_MS };
+  const weak = (d) => d === 2;
+  const hourly = (d, hr) => weak(d) && hr < 12 ? -80 : -53;
+  const points = [];
+  for (let d = 0; d < D; d++) for (let hr = 0; hr < 24; hr++) points.push({ t: start + d * DAY_MS + hr * HOUR_MS, v: hourly(d, hr) });
+  const avg = (d) => points.slice(d * 24, d * 24 + 24).reduce((a, p) => a + p.v, 0) / 24;
+  const base = { points: Array.from({ length: D }, (_, d) => ({ t: start + d * DAY_MS, v: avg(d) })), gaps: [], window };
+  const f = R.filterSeries(base, { of: "day", stepMs: HOUR_MS, series: { points, gaps: [], window } }, DAY_MS, { lo: -Infinity, hi: -75 });
+  ck("the weak day reads -80 (its weak hours only); every other day, all above the range, sits on -75, never 0",
+     f.points.map((p) => p.v).join() === "-75,-75,-80,-75", f.points.map((p) => p.v));
 }
 
 console.log("\n  a five-minute step: the readings themselves, each weighted by how long it held");
@@ -55,99 +93,227 @@ console.log("\n  a five-minute step: the readings themselves, each weighted by h
     gaps: [{ from: t0 + 12 * M, to: t0 + 15 * M }], window };
   const base = intervalSeries(raw, 5 * M);
   const finer = { of: "5minute", series: raw };
-  const all = R.filterSeries(base, finer, 5 * M, { lo: -Infinity, hi: Infinity });
-  ck("over every value, the rule is the chart's own five-minute values (intervalSeries)",
-     all.series.points.length === base.points.length && all.series.points.every((p, i) => near(p.v, base.points[i].v)), [all.series.points, base.points]);
+  const all = R.filterSeries(base, finer, 5 * M, NONE);
+  ck("with no limit, the rule is the chart's own five-minute values (intervalSeries)",
+     all.points.length === base.points.length && all.points.every((p, i) => near(p.v, base.points[i].v)), [all.points, base.points]);
   const hi = R.filterSeries(base, finer, 5 * M, { lo: 50, hi: 150 });
   ck("kept 50 to 150: 10:00 reads 100 (its 2 min at 100), 10:05 100, 10:10 100 (2 min known before the outage)",
-     hi.series.points.map((p) => p.v).join() === "100,100,100", hi.series.points.map((p) => p.v));
-  ck("  ...and the time in range is the minutes at 100: 2 + 3 + 2 = 7min", hi.inRangeMs === 7 * M, hi.inRangeMs / M);
+     hi.points.map((p) => p.v).join() === "100,100,100", hi.points.map((p) => p.v));
   const lo = R.filterSeries(base, finer, 5 * M, { lo: 0, hi: 50 });
-  ck("kept 0 to 50: 10:00 reads 10, 10:05 10, 10:10 0 (no reading inside), weighted 3min + 2min",
-     lo.series.points.map((p) => p.v).join() === "10,10,0" && lo.inRangeMs === 5 * M, [lo.series.points.map((p) => p.v), lo.inRangeMs / M]);
-  // time weighting, not a count: 1 min at 20 and 4 min at 40 in one step, both kept
+  ck("kept 0 to 50: 10:00 reads 10, 10:05 10, 10:10 (only 100s, above) on 50",
+     lo.points.map((p) => p.v).join() === "10,10,50", lo.points.map((p) => p.v));
   const w = { points: [{ t: t0, v: 20 }, { t: t0 + M, v: 40 }], gaps: [], window: { from: t0, to: t0 + 5 * M } };
   const tw = R.filterSeries(intervalSeries(w, 5 * M), { of: "5minute", series: w }, 5 * M, { lo: 0, hi: 100 });
-  ck("  ...a reading counts for how long it held (1 min at 20, 4 at 40 → 36, not 30)", near(tw.series.points[0].v, 36), tw.series.points[0].v);
+  ck("  ...a reading counts for how long it held (1 min at 20, 4 at 40 → 36, not 30)", near(tw.points[0].v, 36), tw.points[0].v);
 }
 
-console.log("\n  the defaults are the chart unfiltered");
+const chart = (pts, extra = {}) => ({ lines: [{ pts, label: "x", unit: " W" }], window: { from: 0, to: 3000 }, status: "ready", label: "H",
+  stepMs: 300000, height: 110, ...extra });
+const filt = (base, range, state = "ready") => ({ base, range, onChange() {}, state });
+
+console.log("\n  no limit is the chart unfiltered");
 {
   const pts = [{ t: 0, v: 40 }, { t: 1000, v: 90 }, { t: 2000, v: 60 }];
-  const d = R.defaultRange(pts);
-  ck("the slider opens on the lowest and highest value the chart shows", d.lo === 40 && d.hi === 90, d);
-  ck("  ...at its defaults, or wider, nothing is filtered; any narrower side filters",
-     R.activeRange(d, pts) === null && R.activeRange({ lo: 0, hi: 200 }, pts) === null && R.activeRange(null, pts) === null
-       && R.activeRange({ lo: 41, hi: 90 }, pts) !== null && R.activeRange({ lo: 40, hi: 89 }, pts) !== null);
-  const props = { lines: [{ pts, label: "x", unit: " W" }], window: { from: 0, to: 3000 }, status: "ready", label: "H", stepMs: 300000, height: 110 };
-  const filt = (range, result = "loading") => ({ base: pts, range, onChange() {}, result });
-  for (const z of [true, false]) {
-    P.setChartsFromZero(z);
-    const plain = inside(draw(h(LineChart, props)), "weather-chart");
-    const atDefaults = draw(h(LineChart, { ...props, filter: filt(d) }));
-    const none = draw(h(LineChart, { ...props, filter: filt(null) }));
-    ck(`${z ? "from 0" : "zoomed"}: at its defaults the chart is drawn exactly as without a filter, no line above, no hatching`,
-       inside(atDefaults, "weather-chart") === plain && inside(none, "weather-chart") === plain
-         && !/chart-range-line|chart-range-out/.test(atDefaults + none) && /chart-range-thumb/.test(none));
+  ck("no limit on either side filters nothing; one limit filters", R.activeRange(NONE) === null && R.activeRange(null) === null
+     && R.activeRange({ lo: 41, hi: Infinity }) !== null && R.activeRange({ lo: -Infinity, hi: 89 }) !== null);
+  for (const fit of FITS) {
+    P.setChartFit(fit);
+    const plain = inside(draw(h(LineChart, chart(pts))), "weather-chart");
+    const none = draw(h(LineChart, chart(pts, { filter: filt(pts, null) })));
+    const open = draw(h(LineChart, chart(pts, { filter: filt(pts, NONE) })));
+    ck(`${fit}: with no limit the chart is drawn exactly as without a filter, no chip, no hatching, both handles at the axis' ends`,
+       inside(none, "weather-chart") === plain && inside(open, "weather-chart") === plain
+         && !/chart-range-chip|chart-range-out/.test(none + open) && /chart-range-thumb/.test(none)
+         && /aria-valuetext="No upper limit"/.test(none) && /aria-valuetext="No lower limit"/.test(none));
   }
-  P.setChartsFromZero(true);
 }
 
-console.log("\n  the handles stand on the left axis, level with their values, in both zero modes");
+const readChart = (html, plotH = 110) => {
+  const ax = inside(html, "chart-yaxis");
+  const ticks = [...ax.matchAll(/bottom:([-\d.e]+)%">([^<]+)</g)].map((m) => ({ v: Number(m[2]), y: plotH * (1 - Number(m[1]) / 100) }));
+  const thumbs = [...html.matchAll(/class="chart-range-thumb" data-k="(lo|hi)" style="top:([-\d.e]+)px"[^>]*aria-valuemin="([-\d.e]+)" aria-valuemax="([-\d.e]+)" aria-valuenow="([-\d.e]+)"/g)]
+    .map((m) => ({ k: m[1], y: Number(m[2]), min: Number(m[3]), max: Number(m[4]), v: Number(m[5]) }));
+  const axisY = (v) => { const [a, b] = ticks; return a.y + ((v - a.v) * (b.y - a.y)) / (b.v - a.v); };
+  return { ticks, thumbs, axisY };
+};
+
+console.log("\n  the handles stand on the left axis, level with their values, in both fits");
 {
   const base = [{ t: 0, v: 40 }, { t: 1000, v: 90 }, { t: 2000, v: 60 }];
-  const filtered = [{ t: 0, v: 0 }, { t: 1000, v: 70 }, { t: 2000, v: 60 }];   // a step with nothing in range: 0
-  const props = (pts, range) => ({ lines: [{ pts, label: "x", unit: " W" }], window: { from: 0, to: 3000 }, status: "ready", label: "H",
-    stepMs: 300000, height: 110, filter: { base, range, onChange() {}, result: { avg: 43, inRangeMs: 5 * M } } });
-  const read = (html) => {
-    const ax = inside(html, "chart-yaxis");
-    const ticks = [...ax.matchAll(/bottom:([\d.]+)%">([^<]+)</g)].map((m) => ({ v: Number(m[2]), y: 110 * (1 - Number(m[1]) / 100) }));
-    const thumbs = [...html.matchAll(/class="chart-range-thumb" data-k="(lo|hi)" style="top:([\d.]+)px"[^>]*aria-valuenow="([-\d.e]+)"/g)]
-      .map((m) => ({ k: m[1], y: Number(m[2]), v: Number(m[3]) }));
-    const axisY = (v) => { const [a, b] = ticks; return a.y + ((v - a.v) * (b.y - a.y)) / (b.v - a.v); };
-    return { ticks, thumbs, axisY };
-  };
-  for (const z of [true, false]) {
-    P.setChartsFromZero(z);
-    for (const [name, pts, range] of [["before the detail comes", base, { lo: 55, hi: 80 }], ["filtered, a point at 0", filtered, { lo: 55, hi: 80 }],
-      ["a handle at the axis' end", base, { lo: 40, hi: 75 }]]) {
-      const html = draw(h(LineChart, props(pts, range)));
-      const { ticks, thumbs, axisY } = read(html);
-      ck(`${z ? "from 0" : "zoomed"}, ${name}: each handle's y is its value's y on the axis drawn beside it`,
-         ticks.length >= 2 && thumbs.length === 2 && thumbs.every((t) => Math.abs(t.y - axisY(t.v)) < 1e-6)
-           && thumbs.find((t) => t.k === "lo").v === range.lo && thumbs.find((t) => t.k === "hi").v === range.hi, { ticks, thumbs });
+  const filtered = [{ t: 0, v: 55 }, { t: 1000, v: 70 }, { t: 2000, v: 60 }];
+  for (const fit of FITS) {
+    P.setChartFit(fit);
+    for (const [name, pts, range] of [["before the detail comes", base, { lo: 55, hi: 80 }], ["filtered", filtered, { lo: 55, hi: 80 }],
+      ["a limit past the values (200)", filtered, { lo: 55, hi: 200 }], ["one limit", filtered, { lo: 55, hi: Infinity }]]) {
+      const { ticks, thumbs, axisY } = readChart(draw(h(LineChart, chart(pts, { filter: filt(base, range, "loading") }))));
+      const lo = thumbs.find((t) => t.k === "lo"), hi = thumbs.find((t) => t.k === "hi");
+      const yOf = (t) => (t.v === t.max ? 12 : t.v === t.min ? 98 : axisY(t.v));
+      ck(`${fit}, ${name}: each limit's handle is at its value's y on the axis drawn beside it, strictly inside the axis; no limit at its end`,
+         ticks.length >= 2 && thumbs.length === 2 && thumbs.every((t) => Math.abs(t.y - yOf(t)) < 1e-6)
+           && lo.v === range.lo && lo.v > lo.min && lo.y < 98
+           && (Number.isFinite(range.hi) ? hi.v === range.hi && hi.v < hi.max && hi.y > 12 : hi.v === hi.max && hi.y === 12), { ticks, thumbs });
     }
-    const zeros = read(draw(h(LineChart, props(filtered, { lo: 55, hi: 80 }))));
-    ck(`${z ? "from 0" : "zoomed"}: a point the filter set to 0 is on the axis (it reaches 0), and the slider with it`,
-       zeros.ticks.some((t) => t.v <= 0) && zeros.axisY(0) <= 98 + 1e-6, zeros.ticks);
   }
-  P.setChartsFromZero(false);
-  const before = chartGeometry({ from: 0, to: 3 }, [{ pts: base, gaps: [] }], { left: 0, right: 100, top: 12, bottom: 98 }, 0.08, false).series[0];
-  const held = chartGeometry({ from: 0, to: 3 }, [{ pts: [{ t: 0, v: 60 }, { t: 1, v: 61 }], gaps: [], holds: [40, 90] }], { left: 0, right: 100, top: 12, bottom: 98 }, 0.08, false).series[0];
-  ck("filtered, the axis keeps the unfiltered values' span: the handles do not move as the line changes", near(held.lo, before.lo) && near(held.hi, before.hi), [held.lo, held.hi, before.lo, before.hi]);
-  P.setChartsFromZero(true);
-  const html = draw(h(LineChart, props(base, { lo: 55, hi: 80 })));
-  ck("the slider is not part of the axis: a tap on it never switches the zero mode", !/chart-range/.test(inside(html, "chart-yaxis")) && /chart-yaxis left zoomable/.test(html));
+  P.setChartFit("zero");
+  const html = draw(h(LineChart, chart(base, { filter: filt(base, { lo: 55, hi: 80 }) })));
+  ck("the slider is not part of the axis: a tap on it never switches the fit", !/chart-range/.test(inside(html, "chart-yaxis")) && /chart-yaxis left zoomable/.test(html));
   const out = inside(html, "chart-range-out");
-  ck("what is left out is hatched over the plot: above the top handle and below the bottom one, after the line",
+  ck("what is left out is hatched over the plot: above the upper limit and below the lower one, after the line",
      (out.match(/<rect x="0"/g) ?? []).length === 2 && html.indexOf("chart-range-out") > html.indexOf("chart-line") && /<pattern /.test(out));
+  const one = inside(draw(h(LineChart, chart(base, { filter: filt(base, { lo: 55, hi: Infinity }) }))), "chart-range-out");
+  ck("  ...only on a side that has a limit: 55 and up hatches below 55 only", (one.match(/<rect x="0"/g) ?? []).length === 1 && /y="([\d.]+)"[^>]*height="([\d.]+)"/.exec(one.slice(one.indexOf('<rect x="0"')))?.slice(1).reduce((a, b) => Number(a) + Number(b)) === 98, one);
 }
 
-console.log("\n  a handle follows the pointer, the keys, and never crosses the other");
+console.log("\n  the axis: unfiltered, filtered and every finite limit; fitted to a range with a margin");
+{
+  const w = { from: 0, to: 3 }, plot = { left: 0, right: 100, top: 12, bottom: 98 };
+  const g = (pts, fit, extra = {}) => chartGeometry(w, [{ pts, gaps: [], ...extra }], plot, 0.08, fit).series[0];
+  const filtered = [{ t: 0, v: 60 }, { t: 1, v: 61 }];
+  for (const fit of ["zero"]) {
+    const s = g(filtered, fit, { holds: [40, 90], limits: { lo: 30, hi: 200 } });
+    ck(`${fit}: the axis holds the values unfiltered (40, 90), filtered (60, 61) and both limits (30, 200), each limit inside it`,
+       s.lo < 30 && s.hi > 200 && s.lo <= 0, [s.lo, s.hi]);
+  }
+  const f = g(filtered, "fitted", { holds: [0, 900], limits: { lo: 273, hi: 514 } });
+  const span = 514 - 273;
+  ck("fitted with a range: the axis is its limits plus 8 % of their span each side (the handles inside, never on an end)",
+     near(f.lo, 273 - 0.08 * span) && near(f.hi, 514 + 0.08 * span), [f.lo, f.hi]);
+  const open = g([{ t: 0, v: 620 }, { t: 1, v: 910 }], "fitted", { holds: [100, 700], limits: { lo: 600, hi: Infinity } });
+  ck("  ...an open side is fitted to the values on that side (600 and up: to 910)", near(open.lo, 600 - 0.08 * 310) && near(open.hi, 910 + 0.08 * 310), [open.lo, open.hi]);
+  ck("  ...a value outside a fitted axis (a day at 0) is drawn on its edge", f.sy(0) === 98 && f.sy(900) === 12, [f.sy(0), f.sy(900)]);
+  const wifi = g([{ t: 0, v: -80 }, { t: 1, v: -75 }], "zero", { holds: [-86, -48], limits: { lo: -Infinity, hi: -75 } });
+  ck("from 0, a signal with a range: 0 at the top, the limit -75 inside", wifi.hi >= 0 && wifi.lo <= -86 && wifi.sy(-75) > 12, [wifi.lo, wifi.hi]);
+  const both = chartGeometry(w, [{ pts: filtered, gaps: [], limits: { lo: 0, hi: 1000 } }, { pts: filtered, gaps: [] }], plot, 0.08, "fitted").series[0];
+  ck("  ...limits shape only a scale their line is alone on (a slider stands on one axis)", both.hi < 100, [both.lo, both.hi]);
+}
+
+console.log("\n  a handle anywhere on the axis; at its end no limit; never crossing");
 {
   const axis = { lo: 0, hi: 100, step: 25 };
   const plot = { top: 12, bottom: 98 };
-  ck("the pointer's y is read on the axis (top 100, bottom 0, the middle 50), on a tenth of a tick step",
-     R.valueAtY(axis, plot, 12) === 100 && R.valueAtY(axis, plot, 98) === 0 && R.valueAtY(axis, plot, 55) === 50 && R.valueAtY(axis, plot, 50) === 55);
-  ck("  ...held on the axis past its ends", R.valueAtY(axis, plot, -40) === 100 && R.valueAtY(axis, plot, 400) === 0);
+  ck("the pointer's y is read on the axis exactly (no grain): the middle 50, 1px under it 48.837...",
+     R.valueAtY(axis, plot, 55) === 50 && near(R.valueAtY(axis, plot, 56), 50 - 100 / 86));
+  ck("  ...within a few px of an end, or past it, the end itself", R.valueAtY(axis, plot, 14) === 100 && R.valueAtY(axis, plot, -40) === 100
+     && R.valueAtY(axis, plot, 96) === 0 && R.valueAtY(axis, plot, 400) === 0);
+  ck("a handle goes to any value: 91 is 91, 37.3 is 37.3", R.moveHandle(null, "hi", 91, axis).hi === 91 && R.moveHandle(null, "lo", 37.3, axis).lo === 37.3);
+  ck("  ...at its own end it is no limit: the top is +Infinity, the bottom -Infinity",
+     R.moveHandle({ lo: 20, hi: 80 }, "hi", 100, axis).hi === Infinity && R.moveHandle({ lo: 20, hi: 80 }, "lo", 0, axis).lo === -Infinity
+       && R.moveHandle({ lo: 20, hi: 80 }, "hi", 130, axis).hi === Infinity);
   const r = { lo: 30, hi: 70 };
-  ck("the nearer handle takes the pointer", R.nearerHandle(r, 65) === "hi" && R.nearerHandle(r, 35) === "lo" && R.nearerHandle(r, 90) === "hi" && R.nearerHandle(r, 5) === "lo");
-  ck("a handle cannot cross the other", R.moveHandle(r, "lo", 90, axis).lo === 70 && R.moveHandle(r, "hi", 10, axis).hi === 30);
-  ck("arrow keys a grain, Page keys a tick, Home and End the axis' ends",
+  ck("the handles never cross nor meet: the lower stops under the upper, the upper over the lower",
+     R.moveHandle(r, "lo", 90, axis).lo === 70 - 2.5 && R.moveHandle(r, "hi", 10, axis).hi === 30 + 2.5
+       && R.moveHandle({ lo: 30, hi: Infinity }, "lo", 100, axis).lo === 97.5 && R.moveHandle({ lo: -Infinity, hi: 70 }, "hi", 0, axis).hi === 2.5);
+  ck("the nearer handle takes the pointer (an open side counts at its end)", R.nearerHandle(r, 65, axis) === "hi" && R.nearerHandle(r, 35, axis) === "lo"
+     && R.nearerHandle({ lo: -Infinity, hi: Infinity }, 60, axis) === "hi" && R.nearerHandle({ lo: -Infinity, hi: Infinity }, 40, axis) === "lo");
+  ck("a handle with no limit is drawn at its axis end", JSON.stringify(R.handleValues(null, axis)) === '{"lo":0,"hi":100}'
+     && R.handleValues({ lo: 20, hi: Infinity }, axis).hi === 100);
+  ck("arrow keys a tenth of a tick, Page keys a tick, End the top (no limit), Home the bottom (no limit)",
      R.keyMove(r, "hi", "ArrowUp", axis).hi === 72.5 && R.keyMove(r, "lo", "ArrowDown", axis).lo === 27.5 && R.keyMove(r, "hi", "PageDown", axis).hi === 45
-       && R.keyMove(r, "hi", "End", axis).hi === 100 && R.keyMove(r, "lo", "Home", axis).lo === 0 && R.keyMove(r, "lo", "Tab", axis) === null);
-  const p = R.pillTops(40, 46, 16);
-  ck("the two value pills are pushed apart when the handles meet", p.lo - p.hi === 16 && R.pillTops(10, 60, 16).hi === 10);
+       && R.keyMove(r, "hi", "End", axis).hi === Infinity && R.keyMove(r, "lo", "Home", axis).lo === -Infinity && R.keyMove(r, "lo", "Tab", axis) === null);
+}
+
+console.log("\n  the chip on the unit line; no line above the chart, no value pills");
+{
+  ck("what the chip says: 273–514 W, ≥ 220 W, ≤ -75 dBm, -86 to -75 dBm, 1.2k–3.4k W",
+     rangeWords({ lo: 273.4, hi: 514.2 }, 100, " W") === "273–514 W" && rangeWords({ lo: 220, hi: Infinity }, 100, " W") === "≥ 220 W"
+       && rangeWords({ lo: -Infinity, hi: -75 }, 10, " dBm") === "≤ -75 dBm" && rangeWords({ lo: -86, hi: -75 }, 10, " dBm") === "-86 to -75 dBm"
+       && rangeWords({ lo: 1234, hi: 3420 }, 1000, " W") === "1.2k–3.4k W",
+     [rangeWords({ lo: 273.4, hi: 514.2 }, 100, " W"), rangeWords({ lo: -86, hi: -75 }, 10, " dBm"), rangeWords({ lo: 1234, hi: 3420 }, 1000, " W")]);
+  const base = [{ t: 0, v: 200 }, { t: 1000, v: 600 }];
+  P.setChartFit("zero");
+  const plain = draw(h(LineChart, chart(base, { filter: filt(base, null) })));
+  const on = draw(h(LineChart, chart(base, { filter: filt(base, { lo: 273, hi: 514 }) })));
+  const line = inside(on, "chart-unit-line");
+  ck("filtered, the chip sits on the unit line, after the unit, right-aligned (the spacer before it)",
+     /chart-range-chip/.test(line) && text(line).includes("273–514 W") && line.indexOf("chart-unit-grow") < line.indexOf("chart-range-chip")
+       && line.indexOf('class="chart-unit"') < line.indexOf("chart-range-chip"), text(line));
+  const before = (html) => html.slice(0, html.indexOf("chart-with-axis"));
+  ck("  ...the same markup before the chart filtered or not but the chip, and no line or pill anywhere (the window never grows)",
+     before(on).replace(inside(on, "chart-range-chip"), "") === before(plain) && /chart-unit-line/.test(plain) && !/chart-range-line|chart-range-pill|>Show all</.test(on + plain), before(on));
+  const cleared = [];
+  const chip = RangeChip({ range: { lo: 273, hi: 514 }, step: 100, unit: " W", state: "ready", onClear: () => cleared.push(1) });
+  chip.props.onClick();
+  ck("  ...a tap on the chip (its ✕ is inside it) clears the range", cleared.length === 1 && chip.type === "button");
+  ck("  ...while the detail loads it is dimmed and says so; when it failed a warning says the chart is in full",
+     /chart-range-chip loading/.test(draw(h(LineChart, chart(base, { filter: filt(base, { lo: 273, hi: 514 }, "loading") }))))
+       && /couldn&#x27;t load the detail: shown in full/.test(draw(h(LineChart, chart(base, { filter: filt(base, { lo: 273, hi: 514 }, "failed") })))));
+  const lineTree = parseTsx("components/panels/LineChart.tsx"), sliderTree = parseTsx("components/panels/ChartRangeSlider.tsx");
+  const classes = (tree) => { const out = []; const v = (n) => { if (ts.isJsxAttribute(n) && n.name.getText() === "className") out.push(n.initializer.getText()); ts.forEachChild(n, v); }; v(tree); return out.join(" "); };
+  ck("  ...the markup has no summary line, no Show all, and the slider no value pills (jsx reader)",
+     !/chart-range-line|chart-range-reset/.test(classes(lineTree)) && !/pill/.test(classes(sliderTree)) && /chart-range-thumb/.test(classes(sliderTree))
+       && elements(lineTree, "RangeChip").length === 1 && elements(lineTree, "ChartUnitLine").length === 1);
+  const tight = text(inside(on, "chart-unit-line"));
+  ck("  ...the chip's words are short enough for a phone (at most 16 characters for a range of two 4-digit limits)",
+     rangeWords({ lo: -1234, hi: -1000 }, 100, " dBm").length <= 20 && rangeWords({ lo: 2730, hi: 5140 }, 1000, " W").length <= 16, tight);
+}
+
+console.log("\n  in the chart's columns: the unit over the axis numbers, the fit mark in the dates' row under the slider or the numbers");
+{
+  const css = readFileSync(new URL("../../src/styles/03-panels.css", import.meta.url), "utf8");
+  const rule = (sel) => { const m = new RegExp(`(^|\\n)${sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} \\{([^}]*)\\}`).exec(css); return m ? m[2] : ""; };
+  const prop = (sel, p) => (new RegExp(`(^|;|\\s)${p}:\\s*([^;]+);`).exec(rule(sel)) ?? [])[2]?.trim();
+  const basis = (sel) => prop(sel, "flex")?.split(/\s+/).slice(2).join(" ");
+  ck("the unit's column is the axis numbers' (same width at the same size), past a column as wide as the slider's",
+     basis(".chart-unit.left") === basis(".chart-yaxis") && prop(".chart-unit-line", "font-size") === prop(".chart-yaxis", "font-size")
+       && basis(".chart-unit-slider") === basis(".chart-range") && prop(".chart-unit-line", "gap") === prop(".chart-with-axis", "gap"),
+     [basis(".chart-unit.left"), basis(".chart-yaxis"), basis(".chart-unit-slider"), basis(".chart-range")]);
+  ck("  ...one fixed height, in the flow (filtered or not, nothing moves)", prop(".chart-unit-line", "height") === "22px" && !prop(".chart-unit-line", "position"));
+  // the corner: out of the row's flow, from the row's left edge back to the chart's left edge, one column wide
+  const terms = (calc) => (calc ?? "").replace(/^calc\(|\)$/g, "").split(/\s*\+\s*/).filter((t) => t !== "100%").sort().join(" + ");
+  const corner = (rowSel, cornerSel) => {
+    const right = terms(prop(cornerSel, "right")), width = prop(cornerSel, "width"), margin = terms(prop(rowSel, "margin-left"));
+    return { fills: terms(`calc(${[right, width].join(" + ")})`) === margin, right, width, margin };
+  };
+  const plain = corner(".weather-axis.under-yaxis", ".chart-fit-corner");
+  const slid = corner(".weather-axis.under-yaxis.beside-range", ".weather-axis.under-yaxis.beside-range .chart-fit-corner");
+  ck("the fit mark's corner is the dates' row's empty left part: under the axis numbers (2.6em), or under the slider",
+     plain.fills && plain.width === basis(".chart-yaxis") && slid.fills && slid.width === basis(".chart-range")
+       && prop(".chart-fit-corner", "position") === "absolute", { plain, slid });
+  const base = [{ t: 0, v: 200 }, { t: 1000, v: 600 }];
+  const html = draw(h(LineChart, chart(base, { filter: filt(base, null) })));
+  const row = inside(html, "weather-axis");
+  ck("  ...drawn there, before the dates; the slider before the axis; the unit once, on the line",
+     /weather-axis under-yaxis beside-range/.test(row) && row.indexOf("chart-fit-corner") < row.indexOf("<span>", row.indexOf("</button>"))
+       && /chart-fit-mark/.test(inside(row, "chart-fit-corner")) && !/chart-fit-mark/.test(inside(html, "chart-unit-line"))
+       && html.indexOf('class="chart-range"') < html.indexOf("chart-yaxis left") && /chart-unit-slider/.test(inside(html, "chart-unit-line"))
+       && text(inside(html, "chart-unit-line")).includes("W") && !/chart-yaxis-unit/.test(html), row);
+}
+
+console.log("\n  the finer values come from the one history source, only while a filter is set");
+{
+  const now = Date.UTC(2026, 9, 26, 12);
+  const asked = [];
+  const rows = Array.from({ length: 48 }, (_, i) => ({ state: String(i % 5), last_changed: new Date(now - (48 - i) * 30 * M).toISOString() }));
+  const port = (stats) => ({
+    stateRows: async () => { asked.push("readings"); return rows; },
+    getStatisticsDuringPeriod: async (ids, start, period) => {
+      asked.push(period);
+      return stats ? { [ids[0]]: [{ start: now - 2 * HOUR_MS, end: now - HOUR_MS, mean: 7 }] } : {};
+    },
+  });
+  const steps = [["5minute", "readings", undefined], ["hour", "5minute", 5 * M], ["day", "hour", HOUR_MS], ["week", "day", DAY_MS]];
+  for (const [period, source, stepMs] of steps) {
+    asked.length = 0;
+    const a = (await loadOne(port(true), { kind: "finer", ids: ["sensor.q"], hours: 24, period }, now))["sensor.q"];
+    ck(`a ${period} step reads ${source === "readings" ? "the readings themselves (time-weighted)" : `the ${source} figures, once each`}`,
+       asked.join() === source && a.of === period && a.stepMs === stepMs && a.series.points.length > 0, [asked, a.of, a.stepMs]);
+  }
+  asked.length = 0;
+  const none = (await loadOne(port(false), { kind: "finer", ids: ["sensor.q"], hours: 24, period: "day" }, now))["sensor.q"];
+  ck("  ...a device with no figures: every change kept, in the finer step (as its chart is made)",
+     asked.join() === "hour,readings" && none.stepMs === HOUR_MS && none.series.points.length > 0
+       && none.series.points.slice(1).every((p) => p.t === cellEdges(p.t, p.t + 1, HOUR_MS)[0]), asked);
+  ck("a different period is a different request", historyKey({ kind: "finer", ids: ["a"], hours: 24, period: "day" }) !== historyKey({ kind: "finer", ids: ["a"], hours: 24, period: "week" })
+     && historyKey({ kind: "finer", ids: ["a"], hours: 24, period: "day" }) !== historyKey({ kind: "trend", ids: ["a"], hours: 24, period: "day" }));
+  const tree = parseTsx("components/panels/NumericHistory.tsx");
+  const decl = (name) => { let d = null; const v = (n) => { if (ts.isVariableDeclaration(n) && n.name.getText() === name) d = n; ts.forEachChild(n, v); }; v(tree); return d?.initializer?.getText().replace(/\s+/g, " "); };
+  const calls = []; const vc = (n) => { if (ts.isCallExpression(n) && n.expression.getText() === "filterSeries") calls.push(n); ts.forEachChild(n, vc); }; vc(tree);
+  ck("NumericHistory filters each line with the range set on it (the one filter rule, rangeFilter.filterSeries)",
+     calls.length === 1 && calls[0].arguments[3]?.getText() === "on" && decl("on") === "base ? activeRange(kept) : null"
+       && decl("kept") === "filterOf(filters, scope, s.id)" && /^ready \? filterSeries\(/.test(decl("done") ?? ""), [calls.map((c) => c.getText()), decl("on"), decl("kept")]);
+  ck("NumericHistory asks for them only for the charts whose range leaves something out, else nothing",
+     /finerIds\.length \? \{ finer: \{ kind: "finer", ids: finerIds, hours: range\.hours, period: range\.period \} \} : null/.test(tree.text.replace(/\s+/g, " "))
+       && /const filtering = slidable\.filter\(\(s\) => activeRange\(filterOf\(filters, scope, s\.id\)\)\)/.test(tree.text));
 }
 
 console.log("\n  kept while the period changes, cleared for another reading");
@@ -185,57 +351,27 @@ console.log("\n  kept while the period changes, cleared for another reading");
   ck("the chart on two scales has no slider; every one-line chart has one",
      dual.length === 1 && spread(dual[0]).length === 0 && !/filter=/.test(dual[0].getText())
        && charts.length === 3 && charts.filter((el) => el !== dual[0]).every((el) => spread(el).some((s) => /^filtered\(/.test(s))), charts.map(spread));
-  const two = draw(h(LineChart, { lines: [{ pts: [{ t: 0, v: 1 }, { t: 1, v: 2 }], label: "a" }, { pts: [{ t: 0, v: 5 }, { t: 1, v: 9 }], label: "b", scale: "own" }],
+}
+
+console.log("\n  every line chart shows the fit mark, a bar chart none");
+{
+  const two = draw(h(LineChart, { lines: [{ pts: [{ t: 0, v: 1 }, { t: 1, v: 2 }], label: "a", unit: " °C" }, { pts: [{ t: 0, v: 5 }, { t: 1, v: 9 }], label: "b", unit: " %", scale: "own" }],
     window: { from: 0, to: 2 }, status: "ready", label: "H", stepMs: 300000,
-    filter: { base: [{ t: 0, v: 1 }, { t: 1, v: 2 }], range: { lo: 1.5, hi: 2 }, onChange() {}, result: "loading" } }));
-  ck("  ...and LineChart draws no slider for two lines, even if given a filter", !/chart-range/.test(two));
-}
-
-console.log("\n  the line above the chart");
-{
-  ck("filtered: what is kept, the average and the time in range, in the joined duration words",
-     rangeWords({ lo: 300, hi: 900 }, 250, " W", { avg: 412.4, inRangeMs: 6.5 * HOUR_MS }) === "Only 300 to 900 W: average 412 W, 6h 30min in range",
-     rangeWords({ lo: 300, hi: 900 }, 250, " W", { avg: 412.4, inRangeMs: 6.5 * HOUR_MS }));
-  ck("  ...none in range says so (never \"1s\")", /nothing in range$/.test(rangeWords({ lo: 3, hi: 4 }, 1, " W", { avg: 0, inRangeMs: 0 })));
-  ck("  ...while the detail loads the chart is unfiltered, and the line says so", /loading/.test(rangeWords({ lo: 3, hi: 4 }, 1, " W", "loading")));
-  ck("  ...no long dash in any of it", ![rangeWords({ lo: 3, hi: 4 }, 1, " W", "loading"), rangeWords({ lo: 3, hi: 4 }, 1, " W", "failed"),
-    rangeWords({ lo: 3, hi: 4 }, 1, " W", { avg: 1, inRangeMs: 1 })].some((t) => / — /.test(t)));
-  const pts = [{ t: 0, v: 40 }, { t: 1000, v: 90 }];
-  const html = draw(h(LineChart, { lines: [{ pts, label: "x", unit: " W" }], window: { from: 0, to: 3000 }, status: "ready", label: "H", stepMs: 300000,
-    filter: { base: pts, range: { lo: 50, hi: 90 }, onChange() {}, result: { avg: 30, inRangeMs: HOUR_MS } } }));
-  ck("  ...drawn above the chart, with Show all", html.indexOf("chart-range-line") < html.indexOf("chart-with-axis") && />Show all</.test(inside(html, "chart-range-line")));
-}
-
-console.log("\n  the finer values come from the one history source, only while a filter is set");
-{
-  const now = Date.UTC(2026, 9, 26, 12);
-  const asked = [];
-  const rows = Array.from({ length: 48 }, (_, i) => ({ state: String(i % 5), last_changed: new Date(now - (48 - i) * 30 * M).toISOString() }));
-  const port = (stats) => ({
-    stateRows: async () => { asked.push("readings"); return rows; },
-    getStatisticsDuringPeriod: async (ids, start, period) => {
-      asked.push(period);
-      return stats ? { [ids[0]]: [{ start: now - 2 * HOUR_MS, end: now - HOUR_MS, mean: 7 }] } : {};
-    },
-  });
-  const steps = [["5minute", "readings", undefined], ["hour", "5minute", 5 * M], ["day", "hour", HOUR_MS], ["week", "day", DAY_MS]];
-  for (const [period, source, stepMs] of steps) {
-    asked.length = 0;
-    const a = (await loadOne(port(true), { kind: "finer", ids: ["sensor.q"], hours: 24, period }, now))["sensor.q"];
-    ck(`a ${period} step reads ${source === "readings" ? "the readings themselves (time-weighted)" : `the ${source} figures, once each`}`,
-       asked.join() === source && a.of === period && a.stepMs === stepMs && a.series.points.length > 0, [asked, a.of, a.stepMs]);
-  }
-  asked.length = 0;
-  const none = (await loadOne(port(false), { kind: "finer", ids: ["sensor.q"], hours: 24, period: "day" }, now))["sensor.q"];
-  ck("  ...a device with no figures: every change kept, in the finer step (as its chart is made)",
-     asked.join() === "hour,readings" && none.stepMs === HOUR_MS && none.series.points.length > 0
-       && none.series.points.slice(1).every((p) => p.t === cellEdges(p.t, p.t + 1, HOUR_MS)[0]), asked);
-  ck("a different period is a different request", historyKey({ kind: "finer", ids: ["a"], hours: 24, period: "day" }) !== historyKey({ kind: "finer", ids: ["a"], hours: 24, period: "week" })
-     && historyKey({ kind: "finer", ids: ["a"], hours: 24, period: "day" }) !== historyKey({ kind: "trend", ids: ["a"], hours: 24, period: "day" }));
-  const tree = parseTsx("components/panels/NumericHistory.tsx");
-  ck("NumericHistory asks for them only for the charts whose range leaves something out, else nothing",
-     /finerIds\.length \? \{ finer: \{ kind: "finer", ids: finerIds, hours: range\.hours, period: range\.period \} \} : null/.test(tree.text.replace(/\s+/g, " "))
-       && /const filtering = slidable\.filter\(\(s\) => activeRange\(/.test(tree.text));
+    filter: { base: [{ t: 0, v: 1 }, { t: 1, v: 2 }], range: { lo: 1.5, hi: 2 }, onChange() {}, state: "loading" } }));
+  const line2 = inside(two, "chart-unit-line"), row2 = inside(two, "weather-axis");
+  ck("the chart on two scales: no slider nor chip even if given a filter; the fit mark under its left axis numbers; its units on the line, left and right",
+     !/chart-range|chart-unit-slider/.test(two) && /weather-axis under-yaxis right"/.test(row2) && /chart-fit-mark/.test(inside(row2, "chart-fit-corner"))
+       && text(inside(line2, "chart-unit left")).includes("°C") && line2.indexOf("chart-unit right") > line2.indexOf("chart-unit-grow")
+       && text(inside(line2, "chart-unit right")).includes("%") && !/chart-yaxis-unit/.test(two), [text(line2), row2.slice(0, 60)]);
+  const weather = draw(h(LineChart, { lines: [{ pts: [{ t: 0, v: 20 }, { t: 1, v: 24 }], label: "Temperature", unit: "°" }], window: { from: 0, to: 2 }, status: "ready", label: "W", stepMs: 3600000 }));
+  ck("  ...a Weather line chart (no filter): the fit mark under its axis numbers, the plot its full width (no slider column)",
+     /chart-fit-mark/.test(inside(inside(weather, "weather-axis"), "chart-fit-corner")) && !/beside-range|chart-range|chart-unit-slider/.test(weather));
+  const BarChart = (await import("@/components/panels/BarChart")).default;
+  const bars = draw(h(BarChart, { buckets: [{ t: 0, segs: [{ key: "a", label: "a", v: 3, cls: "out" }] }, { t: 1, segs: [{ key: "a", label: "a", v: 5, cls: "out" }] }], fmt: String, unit: "kWh", stamp: String, ticks: [], label: "E" }));
+  ck("  ...a bar chart (always from 0) has none, its unit on its axis", /chart-yaxis/.test(bars) && !/chart-fit-mark|chart-unit-line/.test(bars) && /chart-yaxis-unit/.test(bars));
+  const lineTree = parseTsx("components/panels/LineChart.tsx");
+  ck("  ...one place draws it for every line chart: the dates' row (TimeAxis), once", elements(lineTree, "FitMark").length === 1
+     && elements(parseTsx("components/panels/ChartAxis.tsx"), "FitMark").length === 0);
 }
 
 done("✅ a trend chart's range filter: the owner's rule, on the chart's own axis");

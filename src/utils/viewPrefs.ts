@@ -55,30 +55,46 @@ export function loadOverviewView(): OverviewViewSnapshot | null {
     typeof v === "object" && v !== null && ["alpha", "beta", "radius", "targetX", "targetY", "targetZ"].every((k) => Number.isFinite((v as Record<string, unknown>)[k])));
 }
 
-// ── Charts from 0 ───────────────────────────────────────────────────────────
+// ── How every chart's axis is fitted ────────────────────────────────────────
 // ⚠️ A TREND READS FROM 0 (owner, 2026-10-26: "show the 0 in the Y axis … so it is easier to read trends charts";
-// opening from 0, one tap on any chart's Y axis zooms every chart to its values, and back): a battery that went from
-// 40 to 91 % read as a cliff on a 40-90 axis. Per tablet, for every chart; absent (or no storage): from 0.
+// opening from 0, one tap on any chart's Y axis fits every chart, and back): a battery that went from 40 to 91 % read
+// as a cliff on a 40-90 axis. Two fits, one per tablet for every line chart: "zero" holds 0 (its top for negative
+// readings), "fitted" fits the values, or a range filter's limits when one is set (chartGeometry). Absent (or no
+// storage): from 0.
+// The key keeps its name and its values: "1" was "from 0", "0" was "zoomed to the values", which is "fitted" with no
+// range set, so a tablet's choice reads the same as before.
 
-const CHARTS_FROM_ZERO_KEY = "villa-kiosk:charts-from-zero";
-const chartZeroListeners = new Set<() => void>();
-let chartsZeroNow: boolean | null = null;
+const CHART_FIT_KEY = "villa-kiosk:charts-from-zero";
+const chartFitListeners = new Set<() => void>();
 
-/** Whether every line chart's y-axis starts at 0 on this tablet (the default), or is zoomed to its values. */
-export function chartsFromZero(): boolean {
-  if (chartsZeroNow === null) chartsZeroNow = readString(CHARTS_FROM_ZERO_KEY) !== "0";
-  return chartsZeroNow;
+export type ChartFit = "zero" | "fitted";
+let chartFitNow: ChartFit | null = null;
+
+/** The fit a stored value means: "0" fitted, anything else (absent: "1" or nothing) from 0. */
+export function fitOfStored(v: string | null): ChartFit {
+  return v === "0" ? "fitted" : "zero";
+}
+
+/** How every line chart's y-axis is fitted on this tablet: from 0 (the default), or fitted. */
+export function chartFit(): ChartFit {
+  if (chartFitNow === null) chartFitNow = fitOfStored(readString(CHART_FIT_KEY));
+  return chartFitNow;
 }
 
 /** Sets it for every chart on this tablet, and tells each chart shown now. */
-export function setChartsFromZero(on: boolean): void {
-  chartsZeroNow = on;
-  writeString(CHARTS_FROM_ZERO_KEY, on ? "1" : "0");
-  chartZeroListeners.forEach((l) => l());
+export function setChartFit(fit: ChartFit): void {
+  chartFitNow = fit;
+  writeString(CHART_FIT_KEY, fit === "zero" ? "1" : "0");
+  chartFitListeners.forEach((l) => l());
+}
+
+/** What a tap on a line chart's axis numbers or its fit mark does: "from 0" and "fitted" swap, for every chart. */
+export function toggleChartFit(): void {
+  setChartFit(chartFit() === "zero" ? "fitted" : "zero");
 }
 
 /** Calls `listener` whenever it changes; returns the unsubscribe (useSyncExternalStore's shape). */
-export function onChartsFromZero(listener: () => void): () => void {
-  chartZeroListeners.add(listener);
-  return () => { chartZeroListeners.delete(listener); };
+export function onChartFit(listener: () => void): () => void {
+  chartFitListeners.add(listener);
+  return () => { chartFitListeners.delete(listener); };
 }

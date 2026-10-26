@@ -6,13 +6,52 @@
 // ticks themselves are chartGeometry's (a line chart's series.ticks) or
 // barChart's (barLayout.ticks) — one rule, niceTicks, and one label, fmtAxis.
 
-import { useSyncExternalStore } from "react";
+import { useSyncExternalStore, type ReactNode } from "react";
+import { ArrowDownToLine, FoldVertical } from "lucide-react";
 import { fmtAxis } from "@/utils/chartGeometry";
-import { chartsFromZero, onChartsFromZero, setChartsFromZero } from "@/utils/viewPrefs";
+import { chartFit, onChartFit, toggleChartFit, type ChartFit } from "@/utils/viewPrefs";
 
-/** The tablet's "charts from 0" (viewPrefs), live: every chart shown re-draws when one axis is tapped. */
-export function useChartsFromZero(): boolean {
-  return useSyncExternalStore(onChartsFromZero, chartsFromZero, chartsFromZero);
+/** The tablet's axis fit (viewPrefs), live: every chart shown re-draws when one axis is tapped. */
+export function useChartFit(): ChartFit {
+  return useSyncExternalStore(onChartFit, chartFit, chartFit);
+}
+
+/** The axis fit, seen and tapped (owner, 2026-10-26): at the bottom of a line chart's axis, in the empty corner of
+ *  its dates' row (LineChart.TimeAxis), "from 0" an arrow down to a baseline with a 0, "fitted" two arrows closing in
+ *  on a line. A tap swaps the fit as a tap on the axis numbers does: the one setting, every line chart on this tablet.
+ *  A bar chart has none (always from 0). */
+export function FitMark() {
+  const fit = useChartFit();
+  const words = fit === "zero" ? "Axis from 0: tap to fit" : "Axis fitted: tap to show from 0";
+  return (
+    <button type="button" className={`chart-fit-mark ${fit}`} aria-label={words} title={words} onClick={toggleChartFit}>
+      {fit === "zero" ? <><ArrowDownToLine size={15} aria-hidden /><span className="chart-fit-zero" aria-hidden>0</span></>
+        : <FoldVertical size={15} aria-hidden />}
+    </button>
+  );
+}
+
+/** A unit on the line above a line chart, in its line's colour (its class, or its CSS colour). */
+export interface UnitCap { unit?: string; cls?: string; color?: string }
+
+const capClass = (c: UnitCap, side: string) => `chart-unit ${side}${c.cls ? ` tint-${c.cls}` : ""}`;
+
+/** The line above every line chart (owner, 2026-10-26), one height filtered or not, in the chart's own columns: the
+ *  left unit over the axis numbers (past the slider's column when there is one), a range's chip (`children`) at the
+ *  right, under the period buttons, and a right axis' unit over it. The axes draw no unit then. */
+export function ChartUnitLine({ left, right, slider, children }: {
+  left: UnitCap; right?: UnitCap | null; slider?: boolean; children?: ReactNode;
+}) {
+  const style = (c: UnitCap) => (c.color ? { color: c.color } : undefined);
+  return (
+    <div className="chart-unit-line">
+      {slider && <span className="chart-unit-slider" />}
+      <span className={capClass(left, "left")} style={style(left)}>{left.unit}</span>
+      <span className="chart-unit-grow" />
+      {children}
+      {right && <span className={capClass(right, "right")} style={style(right)}>{right.unit}</span>}
+    </div>
+  );
 }
 
 /** A tick in its drawing's own units: `y` down from the top, as SVG counts. */
@@ -27,17 +66,18 @@ export default function YAxis({ ticks, frame, side = "left", unit, height, cls, 
   cls?: string;
   /** Or its colour itself (a line drawn in a CSS colour, not a class). */
   color?: string;
-  /** A line chart's axis: a tap switches every chart on this tablet between "from 0" and zoomed to its values
-   *  (owner, 2026-10-26). A bar chart's axis is always from 0. */
+  /** A line chart's axis: a tap switches every chart on this tablet between "from 0" and fitted (owner, 2026-10-26).
+   *  A bar chart's axis is always from 0. */
   zoomable?: boolean;
 }) {
-  const fromZero = useChartsFromZero();
+  const fit = useChartFit();
+  const fromZero = fit === "zero";
   const tap = zoomable ? {
     role: "button", tabIndex: 0,
-    title: fromZero ? "Zoom to the values" : "Show from 0",
-    "aria-label": fromZero ? "Y axis from 0: tap to zoom to the values" : "Y axis zoomed: tap to show from 0",
-    onClick: () => setChartsFromZero(!fromZero),
-    onKeyDown: (e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setChartsFromZero(!fromZero); } },
+    title: fromZero ? "Fit to the values" : "Show from 0",
+    "aria-label": fromZero ? "Y axis from 0: tap to fit it to the values" : "Y axis fitted: tap to show from 0",
+    onClick: toggleChartFit,
+    onKeyDown: (e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleChartFit(); } },
   } : { "aria-hidden": true as const };
   // The ticks' own step, so every label is exact (fmtAxis).
   const step = ticks.length > 1 ? Math.abs(ticks[1].v - ticks[0].v) : undefined;

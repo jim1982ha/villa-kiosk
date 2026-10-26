@@ -1,7 +1,9 @@
 // src/utils/rangeFilter.ts
 // THE range filter of a trend chart (owner, 2026-10-26): two handles beside the chart's y-axis keep only the values
 // between them. Each point of the chart becomes the average of ONLY the finer values inside [lo, hi] within that
-// point's step; a point with none inside is 0, and counts as 0 in the overall average.
+// point's step; a step with none inside sits on its unfiltered value held inside the range: on the upper limit when
+// its values were above it, on the lower one when below (owner: "not to 0 but to the lower limit, and the same for the
+// higher limit"), never 0 and never a gap. A side with no limit is ±Infinity (a handle at that end of the axis).
 //
 // The finer values of a step (FINER): a five-minute step's are the readings themselves, each held until the next
 // reading or outage and weighted by how long it held (trendInterval.knownSpans, the weights the chart's own values are
@@ -10,17 +12,18 @@
 //
 // The owner's example (tests/oracles/range_filter.mjs): daily averages of 7 days of hourly values, all 0 but day 2
 // 500 for 1h, day 3 1000 for 1h, day 4 1500 all day, day 5 5000 for 2h and 2000 for 2h. Kept 3000 to 5000: day 5 reads
-// 5000 (only its two 5000 hours), never 3500, and every other day 0. Unfiltered, day 2 reads 500 / 24.
+// 5000 (only its two 5000 hours), never 3500, and every other day 3000 (their averages are below the range).
 //
-// Also here, pure, everything the slider decides: its defaults, when a range filters anything, where a handle goes
-// for a pointer or a key, and the state that keeps a range per chart while the period changes and forgets it when
-// another reading is opened. Pure: tests/oracles/range_filter.mjs.
+// Also here, pure, everything the slider decides: when a range filters anything, where a handle goes for a pointer or
+// a key, and the state that keeps a range per chart while the period changes and forgets it when another reading is
+// opened. Pure: tests/oracles/range_filter.mjs.
 
-import type { HistoryPoint, HistorySeries } from "@/types/ha.types";
+import type { HistorySeries } from "@/types/ha.types";
 import { cellEdges, cellIndex } from "./timelineCells";
 import { knownSpans } from "./trendInterval";
 import type { StatisticsPeriod } from "./statisticsSeries";
 
+/** The values kept: `lo` -Infinity is no lower limit, `hi` Infinity no upper one. */
 export interface ValueRange { lo: number; hi: number }
 
 /** Where a step's finer values come from: the readings themselves, or the recorder's figures of a finer period. */
@@ -42,136 +45,119 @@ export interface FinerSeries {
   stepMs?: number;
 }
 
-/** One chart step, filtered: the average of its finer values inside the range (0 when none is; null when the step has
- *  no finer value at all), and how long those inside lasted. */
-export interface StepInRange { v: number | null; inRangeMs: number }
-
 const inside = (v: number, r: ValueRange) => v >= r.lo && v <= r.hi;
 
+/** `v` held inside the range. */
+const holdIn = (v: number, r: ValueRange) => Math.max(r.lo, Math.min(r.hi, v));
+
 /**
- * Each step between `edges` (the chart's own step edges, timelineCells.cellEdges), filtered to `range`. `window`
- * clips the readings' spans to the chart's own window.
+ * Each step between `edges` (the chart's own step edges, timelineCells.cellEdges): the average of its finer values
+ * inside `range`, or null when none is. `window` clips the readings' spans to the chart's own window.
  */
 export function stepsInRange(finer: Pick<FinerSeries, "series" | "stepMs">, edges: readonly number[], range: ValueRange,
-  window?: { from: number; to: number }): StepInRange[] {
+  window?: { from: number; to: number }): (number | null)[] {
   const n = Math.max(0, edges.length - 1);
   const w = new Array<number>(n).fill(0), sum = new Array<number>(n).fill(0);
-  const ms = new Array<number>(n).fill(0), any = new Array<boolean>(n).fill(false);
   if (finer.stepMs === undefined) {
     // readings: each held span, cut on the step edges, weighted by its duration
     const from = window?.from ?? -Infinity, to = window?.to ?? Infinity;
     for (const sp of knownSpans(finer.series)) {
+      if (!inside(sp.v, range)) continue;
       const a0 = Math.max(sp.a, from), b0 = Math.min(sp.b, to);
       if (!(b0 > a0)) continue;
       for (let k = Math.max(0, cellIndex(edges, a0)); k < n && edges[k] < b0; k++) {
         const a = Math.max(a0, edges[k]), b = Math.min(b0, edges[k + 1]);
-        if (!(b > a)) continue;
-        any[k] = true;
-        if (inside(sp.v, range)) { w[k] += b - a; sum[k] += (b - a) * sp.v; ms[k] += b - a; }
+        if (b > a) { w[k] += b - a; sum[k] += (b - a) * sp.v; }
       }
     }
   } else {
     // figures: each value once, in the step its start falls in
     for (const p of finer.series.points) {
       const k = cellIndex(edges, p.t);
-      if (k < 0 || k >= n) continue;
-      any[k] = true;
-      if (inside(p.v, range)) { w[k] += 1; sum[k] += p.v; ms[k] += finer.stepMs; }
+      if (k < 0 || k >= n || !inside(p.v, range)) continue;
+      w[k] += 1; sum[k] += p.v;
     }
   }
-  return w.map((wk, k) => ({ v: wk > 0 ? sum[k] / wk : any[k] ? 0 : null, inRangeMs: ms[k] }));
+  return w.map((wk, k) => (wk > 0 ? sum[k] / wk : null));
 }
-
-/** A chart's series filtered: each of its points the average of its step's finer values in range (0 when none), the
- *  average of those points, and how long the finer values in range lasted. */
-export interface FilteredSeries { series: HistorySeries; avg: number; inRangeMs: number }
 
 /**
  * `base` (the chart as drawn unfiltered, in steps of `stepMs`) filtered to `range` from its finer values. Every point
- * of the chart stays where it is, with its new value; its outages are unchanged.
+ * of the chart stays where it is, with its new value: the average of its finer values in range, else its own value
+ * held inside the range. Its outages are unchanged.
  */
 export function filterSeries(base: HistorySeries, finer: Pick<FinerSeries, "series" | "stepMs">, stepMs: number,
-  range: ValueRange): FilteredSeries {
+  range: ValueRange): HistorySeries {
   const edges = cellEdges(base.window.from, base.window.to, stepMs);
   const steps = stepsInRange(finer, edges, range, base.window);
-  const counted = new Set<number>();
   const points = base.points.map((p) => {
     const k = cellIndex(edges, p.t);
-    const s = k >= 0 && k < steps.length ? steps[k] : null;
-    if (s) counted.add(k);
-    return { t: p.t, v: s?.v ?? 0 };
+    return { t: p.t, v: (k >= 0 && k < steps.length ? steps[k] : null) ?? holdIn(p.v, range) };
   });
-  let inRangeMs = 0;
-  for (const k of counted) inRangeMs += steps[k].inRangeMs;
-  const avg = points.length ? points.reduce((a, p) => a + p.v, 0) / points.length : 0;
-  return { series: { ...base, points }, avg, inRangeMs };
+  return { ...base, points };
 }
 
 // ── The slider ─────────────────────────────────────────────────────────────
 
-/** The range a chart opens on: the lowest and highest of the values it shows unfiltered; null with none. */
-export function defaultRange(points: readonly HistoryPoint[]): ValueRange | null {
-  if (points.length === 0) return null;
-  let lo = Infinity, hi = -Infinity;
-  for (const p of points) { if (p.v < lo) lo = p.v; if (p.v > hi) hi = p.v; }
-  return { lo, hi };
+/** The range when it limits either side, else null: with no limit (both handles at their ends) the chart is exactly
+ *  as it is unfiltered. */
+export function activeRange(range: ValueRange | null | undefined): ValueRange | null {
+  return range && (Number.isFinite(range.lo) || Number.isFinite(range.hi)) ? range : null;
 }
 
-/** The range when it leaves out any value the chart shows unfiltered, else null: at its defaults (or wider) the chart
- *  is exactly as it is unfiltered. */
-export function activeRange(range: ValueRange | null | undefined, points: readonly HistoryPoint[]): ValueRange | null {
-  const d = defaultRange(points);
-  if (!range || !d) return null;
-  return range.lo > d.lo || range.hi < d.hi ? range : null;
+/** The axis a slider stands on: chartGeometry's series[0] (its ends and its ticks' step). */
+export interface SliderAxis { lo: number; hi: number; step: number }
+
+/** Where each handle is drawn: its limit, or its end of the axis when it has none. */
+export function handleValues(range: ValueRange | null | undefined, axis: SliderAxis): ValueRange {
+  const r = range ?? { lo: -Infinity, hi: Infinity };
+  return { lo: Number.isFinite(r.lo) ? r.lo : axis.lo, hi: Number.isFinite(r.hi) ? r.hi : axis.hi };
 }
 
-/** The handles' values on an axis from `bounds.lo` to `bounds.hi`: the range (or the defaults), held on the axis. */
-export function shownRange(range: ValueRange | null | undefined, points: readonly HistoryPoint[],
-  bounds: ValueRange): ValueRange {
-  const r = range ?? defaultRange(points) ?? bounds;
-  const hold = (v: number) => Math.max(bounds.lo, Math.min(bounds.hi, v));
-  return { lo: hold(r.lo), hi: hold(r.hi) };
-}
+/** How close the two handles may come, as a fraction of the axis: they never cross, nor sit on each other. */
+export const HANDLE_GAP_OF_AXIS = 1 / 40;
 
-/** A drag lands on a tenth of the axis' tick step: a value the pill can say exactly. */
-export const HANDLE_GRAIN_OF_STEP = 1 / 10;
+/** A pointer this close (drawing px) to an end of the axis puts the handle AT that end: no limit on that side. */
+export const END_PX = 4;
 
-/** What a handle's value is read to on an axis whose ticks are `step` apart. */
+/** The arrow keys move a handle a tenth of the axis' tick step. */
 export function handleGrain(step: number): number {
-  return step * HANDLE_GRAIN_OF_STEP;
+  return step / 10;
 }
 
 /** The value at pixel `y` on an axis drawn from `axis.lo` at `plot.bottom` to `axis.hi` at `plot.top` (the inverse of
- *  chartGeometry's `sy`), on the grain, held on the axis. */
-export function valueAtY(axis: { lo: number; hi: number; step: number }, plot: { top: number; bottom: number },
-  y: number): number {
+ *  chartGeometry's `sy`), exact, held on the axis; within END_PX of an end, that end itself. */
+export function valueAtY(axis: SliderAxis, plot: { top: number; bottom: number }, y: number): number {
+  if (y <= plot.top + END_PX) return axis.hi;
+  if (y >= plot.bottom - END_PX) return axis.lo;
   const f = (plot.bottom - y) / ((plot.bottom - plot.top) || 1);
-  return holdOn(axis, axis.lo + f * (axis.hi - axis.lo));
-}
-
-/** `v` on the grain, held between the axis' ends (each end reachable exactly). */
-function holdOn(axis: { lo: number; hi: number; step: number }, v: number): number {
-  const g = handleGrain(axis.step);
-  const snapped = g > 0 ? Math.round(v / g) * g : v;
-  return Math.max(axis.lo, Math.min(axis.hi, Number(snapped.toPrecision(12))));
+  return axis.lo + f * (axis.hi - axis.lo);
 }
 
 /** The handle a pointer at value `v` takes: the nearer one (the upper from the middle up). */
-export function nearerHandle(r: ValueRange, v: number): "lo" | "hi" {
-  return v >= (r.lo + r.hi) / 2 ? "hi" : "lo";
+export function nearerHandle(range: ValueRange | null | undefined, v: number, axis: SliderAxis): "lo" | "hi" {
+  const at = handleValues(range, axis);
+  return v >= (at.lo + at.hi) / 2 ? "hi" : "lo";
 }
 
-/** One handle moved to `v`: on the axis, and never past the other. */
-export function moveHandle(r: ValueRange, which: "lo" | "hi", v: number,
-  axis: { lo: number; hi: number; step: number }): ValueRange {
-  const at = holdOn(axis, v);
-  return which === "lo" ? { lo: Math.min(at, r.hi), hi: r.hi } : { lo: r.lo, hi: Math.max(at, r.lo) };
+/**
+ * One handle moved to `v`: anywhere on the axis, exactly. At (or past) its own end of the axis it is no limit
+ * (±Infinity); it never comes nearer the other than HANDLE_GAP_OF_AXIS, so it never reaches the other's end.
+ * ⚠️ A HANDLE AT ITS END CUTS NOTHING (owner, 2026-10-26: a pump's daily averages top at 446 W while it runs at 900 W;
+ * a top handle at 446 cut every running hour out): the finer values reach past the averages the axis shows.
+ */
+export function moveHandle(range: ValueRange | null | undefined, which: "lo" | "hi", v: number,
+  axis: SliderAxis): ValueRange {
+  const r = range ?? { lo: -Infinity, hi: Infinity };
+  const at = handleValues(r, axis), gap = (axis.hi - axis.lo) * HANDLE_GAP_OF_AXIS;
+  if (which === "hi") return { lo: r.lo, hi: v >= axis.hi ? Infinity : Math.max(v, at.lo + gap) };
+  return { lo: v <= axis.lo ? -Infinity : Math.min(v, at.hi - gap), hi: r.hi };
 }
 
-/** A key on a handle: the arrows a grain, Page Up/Down a tick step, Home/End the axis' end. null: not a slider key. */
-export function keyMove(r: ValueRange, which: "lo" | "hi", key: string,
-  axis: { lo: number; hi: number; step: number }): ValueRange | null {
-  const v = r[which], g = handleGrain(axis.step);
+/** A key on a handle: the arrows a grain, Page Up/Down a tick step, Home/End the axis' ends. null: not a slider key. */
+export function keyMove(range: ValueRange | null | undefined, which: "lo" | "hi", key: string,
+  axis: SliderAxis): ValueRange | null {
+  const v = handleValues(range, axis)[which], g = handleGrain(axis.step);
   const to = key === "ArrowUp" || key === "ArrowRight" ? v + g
     : key === "ArrowDown" || key === "ArrowLeft" ? v - g
     : key === "PageUp" ? v + axis.step
@@ -179,13 +165,7 @@ export function keyMove(r: ValueRange, which: "lo" | "hi", key: string,
     : key === "Home" ? axis.lo
     : key === "End" ? axis.hi
     : null;
-  return to === null ? null : moveHandle(r, which, to, axis);
-}
-
-/** The two value pills' centres: beside their handles, pushed apart to `gap` px when the handles are closer. */
-export function pillTops(yHi: number, yLo: number, gap: number): { hi: number; lo: number } {
-  const short = gap - (yLo - yHi);
-  return short > 0 ? { hi: yHi - short / 2, lo: yLo + short / 2 } : { hi: yHi, lo: yLo };
+  return to === null ? null : moveHandle(range, which, to, axis);
 }
 
 // ── Kept per chart, for one window ─────────────────────────────────────────
