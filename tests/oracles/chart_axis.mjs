@@ -50,7 +50,7 @@ console.log("\n  one tick rule for every line chart — the geometry's:");
 }
 const lc = readFileSync(new URL("../../src/components/panels/LineChart.tsx", import.meta.url), "utf8");
 ck("the app's one line chart draws the geometry's ticks through the one axis (YAxis) — no hi/mid/lo of its own",
-   /const leftAxis: readonly AxisTick\[\] = g\.series\[0\]\.ticks;/.test(lc) && /<YAxis height=\{H\} frame=\{H\}/.test(lc)
+   /const leftAxis: readonly AxisTick\[\] = g\.series\[0\]\.ticks;/.test(lc) && /<YAxis zoomable height=\{H\} frame=\{H\}/.test(lc)
      && /ticks=\{g\.series\[ownAt\]\.ticks\}/.test(lc) && !/yTicks|\[ga\.hi, ga\.lo\]/.test(lc));
 
 console.log("\n  the callers:");
@@ -81,5 +81,32 @@ ck("  ...the legend says the same, and UV's colour has a line, a key and an axis
      && /\.chart-yaxis\.tint-uv \{/.test(css));
 ck("  ...and the right axis wears its line's colour (its class, or its CSS colour)",
    /ticks=\{g\.series\[ownAt\]\.ticks\}\s*cls=\{right\.cls\?\.split\(" "\)\[0\]\} color=\{right\.color\} \/>/.test(lc));
+
+console.log("\n  a trend reads from 0, one tap on any y-axis zooms every chart (owner, 2026-10-26):");
+{
+  const w = { from: 0, to: 10 }, plot = { left: 0, right: 100, top: 0, bottom: 100 };
+  const battery = [{ t: 0, v: 40 }, { t: 6, v: 91 }];                          // the owner's picture: 40 to 91 %
+  const z = G.chartGeometry(w, [{ pts: battery, gaps: [], unit: "%" }], plot, 0.08, true).series[0];
+  const zoomed = G.chartGeometry(w, [{ pts: battery, gaps: [], unit: "%" }], plot, 0.08, false).series[0];
+  ck("from 0: a battery from 40 to 91 % is drawn on 0 to its top, its ticks from 0", z.lo === 0 && z.hi >= 91 && z.ticks[0].v === 0, z.ticks);
+  ck("  ...zoomed: its values fill the plot (the old look), no 0", zoomed.lo > 30 && zoomed.ticks.every((t) => t.v > 0), zoomed.ticks);
+  const cold = G.chartGeometry(w, [{ pts: [{ t: 0, v: -4 }, { t: 5, v: 6 }], gaps: [] }], plot, 0.08, true).series[0];
+  ck("  ...a temperature below 0 keeps its floor (the axis holds 0 and every value)", cold.lo <= -4 && cold.hi >= 6, [cold.lo, cold.hi]);
+  const two = G.chartGeometry(w, [{ pts: [{ t: 0, v: 20 }, { t: 5, v: 22 }], gaps: [] }, { pts: [{ t: 0, v: 300 }, { t: 5, v: 900 }], gaps: [], scale: "own" }], plot, 0.08, true);
+  ck("  ...a line on its own scale too (the right axis)", two.series[0].lo === 0 && two.series[1].lo === 0, [two.series[0].lo, two.series[1].lo]);
+  const P = await import("@/utils/viewPrefs");
+  let told = 0;
+  const off = P.onChartsFromZero(() => told++);
+  const was = P.chartsFromZero();
+  P.setChartsFromZero(!was);
+  const flipped = P.chartsFromZero();
+  P.setChartsFromZero(was);
+  off();
+  ck("the setting opens from 0, one call flips it for every chart and tells each one shown", was === true && flipped === false && told === 2, { was, flipped, told });
+  const ax = read("../../src/components/panels/ChartAxis.tsx");
+  ck("  ...a line chart's axes are the tap (both sides), the chart draws with it; a bar chart's axis is not",
+     /<YAxis zoomable side="right"/.test(lc) && /const zero = useChartsFromZero\(\);/.test(lc) && /plot, 0\.08, zero\)/.test(lc)
+     && /onClick: \(\) => setChartsFromZero\(!fromZero\)/.test(ax) && !/zoomable/.test(barComp), null);
+}
 
 done("✅ every chart says what its values are");

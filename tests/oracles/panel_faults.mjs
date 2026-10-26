@@ -33,7 +33,7 @@ ck("  ...the most serious of them: an alarm (red) over a fault and an offline on
    sev([item("unavailable", "switch.pump_relay"), item("alarm", "sensor.pump_power")]) === "danger");
 ck("  ...another device's issue, or none: no warning — it goes by itself", sev([item("unavailable", "lock.door")]) === null && sev([]) === null);
 {
-  const villa = { devices: { deviceOf: (id) => id, ids: ["sensor.pump_power"], unavailable: ["sensor.pump_power"] },
+  const villa = { devices: { deviceOf: (id) => id, isHidden: () => false, ids: ["sensor.pump_power"], unavailable: ["sensor.pump_power"] },
     attentionItems: [item("unavailable", "sensor.pump_power")] };
   const seen = attentionFor(villa, (id) => id !== "sensor.pump_power");
   ck("  ...as THIS profile's Overview lists it: a card it does not see warns of nothing",

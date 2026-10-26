@@ -10,10 +10,14 @@
 // which never copied it, showed a smoke detector's "Smoke detected" as plain
 // grey text with no history. Every window now asks here.
 //
-// The MAP reads the same problem state (deviceActivity, alertStateFor): a
-// detection, an open door is red on both (owner, 2026-10-21).
+// ⚠️ THE WINDOW KEEPS RED WHERE THE MAP IS CALM (owner, 2026-10-26: "keep red
+// there"): a detection, an open door, a lock sensor unlocked is red here and in
+// its history bar, and in use on the map and in the Cockpit (the plain dot, no
+// line in "Needs attention"). It read "red on both" until 2.496.540. The two
+// are projections of one condition, side by side in config/deviceCondition
+// (conditionOf for the map, windowProblemState for this window).
 
-import { alertStateFor } from "./BinarySensorClasses";
+import { windowProblemState } from "./deviceCondition";
 import { binaryWord } from "./binarySensorWords";
 import { binaryStatus, STATUS_COLOR, STATUS_PILL_CLASS, type StatusKey } from "@/utils/stateColors";
 import { prettyState } from "@/utils/entityValue";
@@ -35,9 +39,9 @@ export interface BinaryLook {
 }
 
 export function binaryLook(entityId: string, deviceClass: string | undefined): BinaryLook {
-  // the class's problem state (alertStateFor): an open door, a detection stay red HERE, while the map and the Cockpit
-  // read them as in use (problemStateOf — owner, 2026-10-26: "keep red there")
-  const problem = alertStateFor(deviceClass);
+  // the class's problem state: an open door, a detection stay red HERE, while the map and the Cockpit read them as in
+  // use (deviceCondition.windowProblemState — owner, 2026-10-26: "keep red there")
+  const problem = windowProblemState(deviceClass);
   const status = (s: string) => binaryStatus(s, problem);
   const danger = (s: string) => problem !== undefined && s === problem;
   return {

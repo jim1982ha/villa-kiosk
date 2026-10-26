@@ -208,8 +208,9 @@ export function cockpitCard(group: AttentionGroup, cadence: AgentCadence | null,
 /** ⚠️ A FAULT BEING CONFIRMED IS NOT AN OPEN ISSUE (owner, 2026-10-23: kept in the Open issues list, LAST, and never
  *  counted as a problem). Its card, one per fault: titled by its device and its
  *  room as an open issue's is, its fault's title as its line and "Done on 25/10/2026 14:10 (JM) · VESTA confirms by 15:06" under it — no
- *  buttons (it is closed), no next-check pill (its line says when). Only the faults whose device `may` open (the
- *  profile's, as attentionFor filters the open issues); `confirming` from fm/faultConfirm.confirmingFaults. */
+ *  buttons (it is closed), no next-check pill (its line says when). Only the faults whose device `may` be shown: the
+ *  profile's own predicate (VillaAttention.shows, hidden devices out), passed by config/cockpitIssues, the one caller;
+ *  `confirming` from fm/faultConfirm.confirmingFaults. */
 export function confirmingCards(confirming: readonly ConfirmingFault[], opts: {
   devices: Pick<VillaDevices, "deviceOf">;
   entities: Record<string, HassEntity>;

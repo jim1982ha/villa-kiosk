@@ -13,7 +13,7 @@ import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const {
-  badgeMarkFor, deviceLook, drawsBadge, badgeOwnerOf, storeLookSource, mapLookSource,
+  badgeMarkFor, deviceLook, drawsBadge, badgeOwnerOf, storeLookSource, mapLookSource, pillOf,
 } = await import("@/utils/deviceActivity");
 const { STATUS_COLOR } = await import("@/utils/stateColors");
 const { markSurface, categorySurface } = await import("@/config/EntityCategories");
@@ -93,8 +93,9 @@ console.log("\n  in use is a plain dot, never the red \"!\" (owner, 2026-10-26: 
   ck("  ...at rest (locked, no motion): no dot at all, never a hollow one", L("lock.shut").mark === null && L("binary_sensor.pir_off").mark === null);
   ck("a leak, a low battery, a jammed lock: still the red \"!\"",
      L("binary_sensor.leak").mark === "alarm" && L("binary_sensor.batt").mark === "alarm" && L("lock.jam").mark === "alarm");
-  ck("  ...the dot has no colour or symbol of its own: drawn filled in the badge's colour, as a linked entity on",
-     markSurface("active").symbol === "" && /const plain = pill === "on" \|\| pill === "active";/.test(src("babylon/badgeIcons.ts")));
+  // the bake's fills are read back below (a recording canvas); here, the one place in use becomes that "on"
+  ck("  ...the dot has no colour or symbol of its own: drawn as a linked entity on (pillOf), filled in the badge's colour",
+     pillOf("active") === "on" && ["critical", "alarm", "fault", "lost", "asleep", "moving"].every((m) => pillOf(m) === m));
   const lockMap = { "lock.l": { entityId: "lock.l", type: "lock", linkedEntityId: "binary_sensor.door" } };
   const linked = deviceLook("lock.l", storeLookSource({ ...E, "lock.l": ent("lock.l", "locked") }, { entityMap: lockMap, isHidden: () => false }));
   ck("  ...a linked door open: the bottom-right pill filled (\"on\"), the one dot of both corners", linked.linkPill === "on", linked.linkPill);
@@ -172,7 +173,7 @@ console.log("\n  one corner per device — the bottom-right pill is the linked e
   ck("the bottom-right pill of the lock IS the door sensor's own top-right pill, whenever it has one (one precedence; in use: \"on\")", same);
   ck("  ...and the source says so: linkPillOf applies badgeMarkOf to the linked reading",
      /const mark = r\.link \? badgeMarkOf\(r\.link\) : null;/.test(src("utils/deviceActivity.ts"))
-     && /return mark \?\? \(r\.linkedOn \? "on" : "off"\);/.test(src("utils/deviceActivity.ts")));
+     && /return mark \? pillOf\(mark\) : r\.linkedOn \? "on" : "off";/.test(src("utils/deviceActivity.ts")));
 }
 
 console.log("\n  the two pills' size and place (the approved mock: a 56 px square, 28 px pills):");
@@ -195,7 +196,7 @@ console.log("\n  the two pills' size and place (the approved mock: a 56 px squar
   ck("  ...the lists' CSS scale is the map's (to 4 places)", Math.abs(v - PICTURE_SCALE) < 1e-4, v);
   const bi = src("babylon/badgeIcons.ts");
   ck("the bake paints the device's mark top-right and the linked pill bottom-right, through one painter (pin it)",
-     /if \(mark\) drawPill\(ctx, pills, pills\.top, mark, hue\);/.test(bi)
+     /if \(mark\) drawPill\(ctx, pills, pills\.top, pillOf\(mark\), hue\);/.test(bi)
      && /if \(linkPill\) drawPill\(ctx, pills, pills\.bottom, linkPill, hue\);/.test(bi)
      && /const px = bakeSizeFor\(pxHint \* PICTURE_SCALE\);/.test(bi));
   // owner, 2026-10-26 (picture: an eye badge with a WHITE top-right dot): the in-use dot is filled in the badge's colour,

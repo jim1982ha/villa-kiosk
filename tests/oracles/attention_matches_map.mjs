@@ -94,6 +94,8 @@ ck("the top-bar badge, the phone menu's \"Cockpit (N)\" and the Cockpit list all
    /const \{ attentionGroups, health \} = useVillaAttention\(\);/.test(hud) && /formatCountBadge\(attentionGroups\.length\)\}/.test(hud)
    && /Cockpit\{attentionGroups\.length > 0 \? ` \(\$\{formatCountBadge\(attentionGroups\.length\)\}\)` : ""\}/.test(hud)
    && !/attentionItems/.test(hud)
-   && /const \{ attentionGroups \} = useVillaAttention\(\);/.test(cockpit) && /Open issues\{attentionGroups\.length > 0 \? ` \(\$\{attentionGroups\.length\}\)` : ""\}/.test(cockpit));
+   // the Cockpit's list: one card per row of that same view (config/cockpitIssues; its count by value: fault_confirm)
+   && /const view = useVillaAttention\(\);/.test(src("components/cockpit/useVillaAttention.ts"))
+   && /const \{ open, watched \} = useCockpitIssues\(\);/.test(cockpit) && /Open issues\{open\.length > 0 \? ` \(\$\{open\.length\}\)` : ""\}/.test(cockpit));
 
 done("✅ a red badge is always in Needs attention");

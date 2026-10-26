@@ -8,7 +8,7 @@
 //
 // Pure: tests/oracles/room_glow_switch.mjs drives it (and motionPaint, through EntityVisuals' real painter).
 
-import { glowsRoom } from "@/config/BinarySensorClasses";
+import { glowsRoom } from "@/config/deviceCondition";
 import { roomKey } from "@/config/roomKey";
 import type { EntityType } from "@/types/scene.types";
 

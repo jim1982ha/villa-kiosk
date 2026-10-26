@@ -133,14 +133,43 @@ ck("an active fault keeps its look: no marker", /^<div class="fm-record-card">/.
      [!!listDiv, !!row, !!watchedCard, !!folded]);
   const title = elements(overview, "div").find((d) => propText(d, "className") === '"settings-section-title"');
   const head = elements(overview, "div").find((d) => propText(d, "className") === '"cockpit-issues-head"');
-  ck("  ...the count stays the open issues' (attentionGroups), and the head shows when only watched faults are",
-     !!title && /attentionGroups\.length/.test(title.getText()) && !/watched/.test(title.getText())
+  ck("  ...the count stays the open issues' (cockpitIssues' open cards), and the head shows when only watched faults are",
+     !!title && /open\.length/.test(title.getText()) && !/watched/.test(title.getText())
      && guardsOf(head).some((g) => /watched\.length > 0/.test(g)),
      [title?.getText(), guardsOf(head)]);
   const FoldedList = (await import("@/components/common/FoldedList")).default;
   const shut = draw(h(FoldedList, { title: "Watched", rows: [1, 2], unit: "watched fault", children: (n) => h("p", { key: n }, `card ${n}`) }));
   ck("  ...folded when the Cockpit opens: its name and count, no card", /Watched \(2\)/.test(shut) && !/card 1/.test(shut)
      && /aria-expanded="false"/.test(shut), shut);
+}
+
+console.log("\n  a hidden device: no card in any section (config/cockpitIssues, the cards the Overview draws):");
+{
+  // ⚠️ OWNER, 2026-10-25: "hidden means hidden everywhere". The open issues left a hidden device out; its CLOSED fault
+  // was still a Watched card, built beside them through the profile's visibility alone. Driven through the villa's
+  // items → the profile's view → cockpitIssues, the very path the Overview takes (useCockpitIssues).
+  const { cockpitIssues } = await import("@/config/cockpitIssues");
+  const jammed = { id: "h1", title: "Door jammed", status: "open", openedAt: at(-20), entityId: "lock.door", photoIds: [],
+    updates: [opened] };
+  const hdata = { ...data, tickets: [...data.tickets, jammed] };   // lock.door: w1 watched, h1 open
+  const issuesWith = (hidden) => {
+    const devs = devicesOf({ ids: ids.filter((id) => !hidden.has(id)), hidden });
+    const view = attentionFor({ devices: devs, attentionItems: buildAttentionItems({ devices: devs, entities, entityMap: {},
+      resolvedRooms: {}, fmData: hdata }) }, () => true);
+    return cockpitIssues(view, { fmData: hdata, cadence: CADENCE, now: new Date(NOW), entities, entityMap: {}, resolvedRooms: {} });
+  };
+  const about = (cards) => cards.filter((c) => c.entityId === "lock.door").map((c) => c.key);
+  const seen = issuesWith(new Set()), quiet = issuesWith(new Set(["lock.door"]));
+  ck("not hidden: the door has its open card and its watched card",
+     about(seen.open).join() === "device:lock.door" && about(seen.watched).join() === "watched:w1",
+     { open: about(seen.open), watched: about(seen.watched) });
+  ck("  ...hidden in the villa's system: no card about it, open or watched; every other card kept",
+     about(quiet.open).length === 0 && about(quiet.watched).length === 0
+     && quiet.watched.map((c) => c.key).join() === "watched:w3,watched:w2" && quiet.open.length === seen.open.length - 1,
+     { open: quiet.open.map((c) => c.key), watched: quiet.watched.map((c) => c.key) });
+  ck("  ...and the Overview draws exactly these, its list and its Watched rows from useCockpitIssues (the profile's view)",
+     /const \{ open, watched \} = useCockpitIssues\(\);/.test(readFileSync(new URL("../../src/components/cockpit/CockpitOverview.tsx", import.meta.url), "utf8"))
+     && /const view = useVillaAttention\(\);[\s\S]*cockpitIssues\(view, /.test(readFileSync(new URL("../../src/components/cockpit/useVillaAttention.ts", import.meta.url), "utf8")));
 }
 
 console.log("\n  gone or back as the Agent says:");

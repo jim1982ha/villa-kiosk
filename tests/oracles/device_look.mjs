@@ -12,12 +12,13 @@ import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { badgeKindFor, meshLookFor } = await import("@/utils/deviceActivity");
-const { alertStateFor } = await import("@/config/BinarySensorClasses");
+const { conditionOf } = await import("@/config/deviceCondition");
 
-const ent = (state, attrs = {}) => ({ entity_id: "x.y", state, attributes: attrs, last_changed: "", last_updated: "" });
+// its condition as the app reads it (readingOf → deviceCondition.conditionOf): an id of the type's own domain
+const ent = (type, state, attrs = {}) => ({ entity_id: `${type}.y`, state, attributes: attrs, last_changed: "", last_updated: "" });
 const read = (type, state, attrs = {}) => ({
-  type, entity: ent(state, attrs), linkedOn: false,
-  alertState: alertStateFor(attrs.device_class),
+  type, entity: ent(type, state, attrs), linkedOn: false,
+  condition: conditionOf(type, ent(type, state, attrs)),
 });
 
 console.log("  the cases the old mesh rule got wrong:");
@@ -32,8 +33,9 @@ console.log("  the cases the old mesh rule got wrong:");
   const oldPulse = (s) => s === "on";
   const motion = read("binary_sensor", "on", { device_class: "motion" });
   ck("the OLD sensor rule pulses a motion PIR that sees someone", oldPulse("on"));
-  // owner, 2026-10-21: "the entity badge to follow the state of the entity … everywhere"
-  ck("a motion PIR on: pulses, as its badge is red", meshLookFor(motion).on === true && badgeKindFor(motion) === "alert");
+  // owner, 2026-10-26: a detection is in use, no error ("reserve the ! for devices that are really in error"): its badge
+  // is "on" with the plain dot, so its object does not pulse like a leak either
+  ck("a motion PIR on: in use, no pulse, as its badge is calm", meshLookFor(motion).on === false && badgeKindFor(motion) === "on");
   const leak = read("binary_sensor", "on", { device_class: "moisture" });
   ck("a leak sensor on: pulses", meshLookFor(leak).on === true && badgeKindFor(leak) === "alert");
   const net = read("binary_sensor", "off", { device_class: "connectivity" });

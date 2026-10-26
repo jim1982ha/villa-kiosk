@@ -18,7 +18,7 @@
 
 import { AGENT_STAMP, type AgentCadence } from "@/agent/agentApi";
 import { clockTime, momentText } from "@/utils/dateText";
-import { fmtDuration } from "@/components/panels/chartUtils";
+import { withinLook } from "./faultTiming";
 import { isClearedStep, isTicketResolved, lastResolution } from "./fmEngine";
 import type { FmData, FmTicket } from "./fmTypes";
 
@@ -90,7 +90,7 @@ export function confirmParts(c: ConfirmingFault): { did: string; when: string; t
   const by = clockTime(c.at);
   return {
     did: `${c.word}${Number.isNaN(c.closedAt) ? "" : ` on ${momentText(c.closedAt)}`}${c.who ? ` (${c.who})` : ""}`,
-    when: c.due ? (c.lookMinutes ? `within ${fmtDuration(c.lookMinutes * 60_000)}` : by) : by,
+    when: c.due && c.lookMinutes ? withinLook({ checkMinutes: c.lookMinutes }) : by,
     tip: c.due ? "VESTA confirms it at its next look" : `VESTA confirms by ${by}`,
   };
 }

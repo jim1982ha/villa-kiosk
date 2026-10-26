@@ -239,7 +239,7 @@ export function categorySurface(category: Category, state: DeviceSurfaceState, o
 /** A badge's corner mark, as painted: its fill and its white symbol (deviceActivity.BadgeMark — the same red, amber,
  *  grey and teal every other surface paints those meanings in: utils/stateColors STATUS_COLOR, the Cockpit's
  *  severities). Resolved to literal colours, like categorySurface, for the canvas bake. */
-export function markSurface(mark: BadgeMark): { fill: string; symbol: string } {
+export function markSurface(mark: Exclude<BadgeMark, "active">): { fill: string; symbol: string } {
   switch (mark) {
     case "critical": return { fill: cssVar("--status-danger") || FALLBACK_DANGER, symbol: "?" };
     case "alarm": return { fill: cssVar("--status-danger") || FALLBACK_DANGER, symbol: "!" };
@@ -247,8 +247,8 @@ export function markSurface(mark: BadgeMark): { fill: string; symbol: string } {
     case "lost": return { fill: cssVar("--status-lost") || FALLBACK_LOST, symbol: "?" };
     case "asleep": return { fill: cssVar("--status-lost") || FALLBACK_LOST, symbol: "z" };
     case "moving": return { fill: cssVar("--status-pending") || FALLBACK_PENDING, symbol: "\u2026" };
-    // in use: no colour of its own — drawn filled in the badge's colour, no symbol (badgeIcons.drawPill)
-    case "active": return { fill: "", symbol: "" };
+    // in use has no surface of its own: it is drawn as the linked entity's "on", filled in the badge's colour
+    // (deviceActivity.pillOf)
   }
 }
 

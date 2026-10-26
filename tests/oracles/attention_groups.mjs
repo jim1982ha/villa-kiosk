@@ -233,9 +233,10 @@ ck("the villa model hands buildAttentionItems its device list (the fold and the 
   ck("  ...and how a card says its problems is cockpitCard's alone: attention exports no line, icon or button rule",
      ["cardActions", "itemActions", "attentionLineIn", "attentionLine", "lineIcon", "lineSources", "cardRecords", "healthClass"]
        .every((n) => !(n in att2)), Object.keys(att2));
-  ck("  ...and the Cockpit draws one card per group from it, asking attention for no part of a card",
-     /attentionGroups\.map\(\(group\) => \(\s*<CockpitAttentionRow key=\{group\.key\} group=\{group\}/.test(cockpit)
-     && (cockpit.match(/cockpitCard\(/g) ?? []).length === 1
+  // ⚠️ THE CARDS ARE config/cockpitIssues' (architecture review, 2026-10-26): one card per group, made there, drawn here
+  ck("  ...and the Cockpit draws the cards cockpitIssues made, one per group, asking attention for no part of a card",
+     /open\.map\(\(card\) => \(\s*<CockpitAttentionRow key=\{card\.key\} card=\{card\}/.test(cockpit)
+     && !/cockpitCard\(/.test(cockpit) && /cockpitIssues\(view, /.test(src("components/cockpit/useVillaAttention.ts"))
      && !/(cardActions|itemActions|attentionLineIn|lineIcon|lineSources|nextCheck)\(/.test(cockpit)
      && /actions=\{line\.actions\}/.test(cockpit) && /const acts = card\.actions;/.test(cockpit));
 }
